@@ -59,11 +59,18 @@ export function capture(bin: string, args: string[]): string {
 // Returns the exit code; throws only when the binary cannot be spawned.
 // opts.cwd runs the child from a specific directory (module-manager reconcile
 // runs a module's ./update.sh from the module directory, like the bash did).
-export function stream(bin: string, args: string[], opts?: { cwd?: string }): number {
+// opts.env is merged OVER configEnv() — for delegations that must plumb extra
+// environment down to the child (e.g. site-manager update forwarding
+// TAPPAAS_MODULE_FORCE / TAPPAAS_NO_GIT_PULL to the update sweep).
+export function stream(
+  bin: string,
+  args: string[],
+  opts?: { cwd?: string; env?: Record<string, string | undefined> },
+): number {
   const r = spawnSync(bin, args, {
     encoding: "utf8",
     stdio: "inherit",
-    env: configEnv(),
+    env: { ...configEnv(), ...(opts?.env ?? {}) },
     ...(opts?.cwd ? { cwd: opts.cwd } : {}),
   });
   if (r.error) throw new Error(`${bin} ${args[0] ?? ""}: ${r.error.message}`);

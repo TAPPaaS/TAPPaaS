@@ -41,7 +41,12 @@ Entities are the first arg (`<entity> <verb>`, as in `network-manager`):
 | `repository` | `list`, `add`, `delete`, `reconcile` | add/delete delegate to `repository.sh`; reconcile = repo-scoped converge |
 
 Top-level lifecycle verbs: `add` (create the singleton, = `create-site.sh`),
-`validate` (= `validate-site.sh`), `reconcile` (`[--apply] [--deep]`).
+`validate` (= `validate-site.sh`), `reconcile` (`[--apply] [--deep]`), and the
+fleet verbs (#588) `update` and `test` — thin delegations, same as `evacuate`:
+`update` → `update-tappaas` (always `--force` = run now; site-manager `--force`
+plumbs `TAPPAAS_MODULE_FORCE` for fleet-wide disruption, `--no-git-pull` plumbs
+`TAPPAAS_NO_GIT_PULL`); `test` iterates `module-manager list` and runs
+`module-manager test <m>` per module, forwarding `--deep`.
 
 Common options: `--config-dir`, `--json` (machine output for list/show),
 `--apply` (reconcile commits; default preview), `--deep`, `--force`.

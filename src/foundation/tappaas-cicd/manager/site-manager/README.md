@@ -40,7 +40,24 @@ repository         repository list [--json]
 top-level          add --name <site-code> [--organization <org>] [create-site options]  (= create-site.sh)
                    validate [FILE] [--schema-dir PATH]     (= validate-site.sh)
                    reconcile [--apply] [--deep]
+                   update [--dry-run] [--force] [--no-git-pull]   (= update-tappaas, #588)
+                   test [--deep]                                  (= module-manager test each, #588)
 ```
+
+`update` (#588) packages the whole-site update sweep: it delegates to
+`update-tappaas` and **always runs now** (`update-tappaas --force`, the
+scheduling override — the update window is ignored). Its own `--force` is a
+*different* axis: it authorizes a **disruptive** change (reboot / offline
+migrate) on **every** module (`TAPPAAS_MODULE_FORCE` → each `module modify
+--force`; legitimate under ADR-020 D8 because an operator is explicitly asking,
+not the unattended sweep). `--no-git-pull` (`TAPPAAS_NO_GIT_PULL`) updates
+whatever is checked out — pre-update.sh skips the per-repo pull — so local,
+not-yet-pushed changes can be tested. `--dry-run` previews the plan.
+
+`test` (#588) runs every deployed module's tests: it iterates
+`module-manager list` (foundation + apps, from every registered repository) and
+runs `module-manager test <m>`, forwarding `--deep`. Continue-on-failure; exits
+non-zero if any module test failed.
 
 Common options: `--config-dir DIR`, `--json` (machine output for list/show),
 `--apply` (reconcile commits; default is preview), `--deep` (reconcile cascade),

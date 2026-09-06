@@ -128,6 +128,20 @@ assert m.DEFERRED_CHANGES == [], "a clean converge must not invent deferrals"
 # A real failure is still a failure.
 m.subprocess.run = lambda argv, **kw: R(1, "", "boom")
 assert m.update_module("demo") is False, "a non-zero converge is a failed module"
+
+# TAPPAAS_MODULE_FORCE=1 (site-manager update --force, #588) — and ONLY then —
+# forwards --force to every module modify (operator-authorized fleet-wide
+# disruption). Env-gated so the unattended sweep above still never forces.
+m.subprocess.run = fake_run
+m.os.environ["TAPPAAS_MODULE_FORCE"] = "1"
+try:
+    m.update_module("demo")
+    assert "--force" in seen["argv"], "TAPPAAS_MODULE_FORCE=1 must forward --force: %r" % (seen["argv"],)
+finally:
+    del m.os.environ["TAPPAAS_MODULE_FORCE"]
+# ...and once the env is cleared it is gone again (no leak between modules).
+m.update_module("demo")
+assert "--force" not in seen["argv"], "force must not persist after the env is cleared: %r" % (seen["argv"],)
 PYDEFER
     then
         passed=$((passed + 1))

@@ -35,6 +35,8 @@ const ENVIRONMENT_BIN = (): string => process.env.SITE_ENVIRONMENT_BIN ?? "envir
 // The still-live bash tools `site add` / `repository <verb>` delegate to.
 const CREATE_SITE = (): string => process.env.SITE_CREATE_BIN ?? "create-site.sh";
 const REPOSITORY_SH = (): string => process.env.SITE_REPOSITORY_BIN ?? "repository.sh";
+// The update sweep `site-manager update` delegates to (#588).
+const UPDATE_TAPPAAS = (): string => process.env.SITE_UPDATE_BIN ?? "update-tappaas";
 
 export class CliSiteClient implements SiteClient {
   // The schema-dir to pass to validate-site.sh, if known.
@@ -184,5 +186,43 @@ export class CliSiteClient implements SiteClient {
     // repository.sh modify <name> [--url <u>] [--branch <b>] — re-points origin
     // (forge migration) / switches branch on the live checkout, then edits site.json.
     return runStreaming(REPOSITORY_SH(), ["modify", ...args]);
+  }
+
+  // ── (4) fleet verbs (#588) ───────────────────────────────────────────
+  runUpdate(dryRun: boolean, moduleForce: boolean, noGitPull: boolean): number {
+    // `site-manager update` always runs NOW: update-tappaas --force is the
+    // SCHEDULING override (ignore the update window), distinct from the
+    // per-module disruption force plumbed below via env.
+    const args = ["--force"];
+    if (dryRun) args.push("--dry-run");
+    const env: Record<string, string> = {};
+    if (moduleForce) env.TAPPAAS_MODULE_FORCE = "1";
+    if (noGitPull) env.TAPPAAS_NO_GIT_PULL = "1";
+    return runStreaming(UPDATE_TAPPAAS(), args, { env });
+  }
+
+  listModuleNames(): string[] | null {
+    // `module-manager list --json` is EITHER a bare module array (no live
+    // cluster) OR { modules: [...] } (live). Handle both, extract .name.
+    const r = captureResult(MODULE_BIN(), ["list", "--json"]);
+    if (!r.ran || r.rc !== 0) return null;
+    try {
+      const data = JSON.parse(r.stdout) as unknown;
+      const arr = Array.isArray(data)
+        ? data
+        : ((data as { modules?: unknown[] })?.modules ?? []);
+      const names = (arr as Array<{ name?: unknown }>)
+        .map((m) => m?.name)
+        .filter((n): n is string => typeof n === "string" && n.length > 0);
+      return names;
+    } catch {
+      return null;
+    }
+  }
+
+  testModule(module: string, deep: boolean): number {
+    const args = ["test", module];
+    if (deep) args.push("--deep");
+    return runStreaming(MODULE_BIN(), args);
   }
 }

@@ -109,4 +109,21 @@ export class FakeSiteClient implements SiteClient {
     this.log.push(`repository.sh remove ${name}${force ? " --force" : ""}`);
     return this.delegateRc;
   }
+  // Fleet verbs (#588). moduleNames is what listModuleNames() returns (null ⇒
+  // the list call failed); testRc scripts per-module test outcomes (absent ⇒ 0).
+  moduleNames: string[] | null = [];
+  testRc = new Map<string, number>();
+  runUpdate(dryRun: boolean, moduleForce: boolean, noGitPull: boolean): number {
+    this.log.push(
+      `update${dryRun ? " --dry-run" : ""}${moduleForce ? " --force" : ""}${noGitPull ? " --no-git-pull" : ""}`,
+    );
+    return this.delegateRc;
+  }
+  listModuleNames(): string[] | null {
+    return this.moduleNames === null ? null : [...this.moduleNames];
+  }
+  testModule(module: string, deep: boolean): number {
+    this.log.push(`test ${module}${deep ? " --deep" : ""}`);
+    return this.testRc.get(module) ?? 0;
+  }
 }

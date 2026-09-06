@@ -475,10 +475,19 @@ def update_module(module_name: str) -> bool:
     one as the other would let a routine hourly update reboot production guests,
     which is exactly the conflation ADR-020 D8 exists to prevent. Standing
     permission is expressed per module, by rebootOk, and honoured only because
-    TAPPAAS_SCHEDULED_PASS is exported below."""
+    TAPPAAS_SCHEDULED_PASS is exported below.
+
+    The ONE explicit exception: TAPPAAS_MODULE_FORCE=1 (set only by the
+    interactive `site-manager update --force`, #588) appends --force to every
+    `module modify`, authorizing disruption fleet-wide. That is an operator
+    standing at the terminal deliberately asking for it, not the unattended
+    sweep — so it does not reopen the D8 conflation."""
+    args = [MODULE_MANAGER_CMD, "module", "modify", module_name]
+    if os.environ.get("TAPPAAS_MODULE_FORCE") == "1":
+        args.append("--force")
     try:
         result = subprocess.run(
-            [MODULE_MANAGER_CMD, "module", "modify", module_name],
+            args,
             text=True,
             capture_output=True,
         )
@@ -799,10 +808,15 @@ def main():
 
     # Dry run: show the update plan
     if args.dry_run:
+        # TAPPAAS_MODULE_FORCE=1 (site-manager update --force) authorizes a
+        # disruptive change on every module — reflect that in the previewed command.
+        mf = " --force" if os.environ.get("TAPPAAS_MODULE_FORCE") == "1" else ""
         log.info("=== DRY RUN MODE ===")
+        if mf:
+            log.info("(module-force: every update authorized to apply DISRUPTIVE changes)")
         log.info("Phase 1 - Foundation update order:")
         for i, mod in enumerate(installed_foundation, 1):
-            log.info("  %d. module-manager module modify %s", i, mod)
+            log.info("  %d. module-manager module modify %s%s", i, mod, mf)
         log_skipped(skipped_foundation)
         not_installed = [m for m in FOUNDATION_MODULES if deployed_foundation_name(m) is None]
         if not_installed:
@@ -812,7 +826,7 @@ def main():
             for i, app in enumerate(sorted_apps, 1):
                 dep_providers = get_module_dependencies(app)
                 dep_str = f" (depends on: {', '.join(dep_providers)})" if dep_providers else ""
-                log.info("  %d. module-manager module modify %s%s", i, app, dep_str)
+                log.info("  %d. module-manager module modify %s%s%s", i, app, mf, dep_str)
         else:
             log.info("  (no app modules installed)")
         log_skipped(skipped_apps)

@@ -34,6 +34,12 @@ if [ -f "$CONFIG_FILE" ] && jq -e '.tappaas.upstreamGit' "$CONFIG_FILE" >/dev/nu
   info "  Migrated: upstreamGit=${OLD_URL} branch=${OLD_BRANCH} -> repositories[0]"
 fi
 
+# TAPPAAS_NO_GIT_PULL=1 (site-manager update --no-git-pull): update whatever is
+# checked out, without pulling. Lets an operator test local, not-yet-pushed
+# changes across the whole sweep before they reach Codeberg.
+if [ "${TAPPAAS_NO_GIT_PULL:-0}" = "1" ]; then
+  info "TAPPAAS_NO_GIT_PULL=1 — skipping repository pull; updating whatever is checked out."
+else
 REPOS_JSON="$(get_repositories)"
 REPO_COUNT=$(echo "$REPOS_JSON" | jq 'length' 2>/dev/null || echo "0")
 if [ "$REPO_COUNT" -gt 0 ]; then
@@ -79,6 +85,7 @@ else
   cd
   cd TAPPaaS || die "TAPPaaS directory not found!"
   git pull origin
+fi
 fi
 # get to the right directory
 cd /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd || die "TAPPaaS-CICD directory not found!"

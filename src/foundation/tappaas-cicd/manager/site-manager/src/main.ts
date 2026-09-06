@@ -77,6 +77,18 @@ const HELP: HelpSpec = {
         ["--apply", "Commit (default is preview)."],
         ["--deep", "Cascade people → network → (every) environment."],
       ] },
+    { usage: "update [--dry-run] [--force] [--no-git-pull]",
+      note: "(#588: run the whole-site update sweep NOW — packages update-tappaas)",
+      options: [
+        ["--dry-run", "Preview the update plan; change nothing."],
+        ["--force", "Authorize a DISRUPTIVE change (reboot / offline migrate) on EVERY module. Distinct from the implicit scheduling force — the sweep always runs now regardless."],
+        ["--no-git-pull", "Update whatever is checked out; skip pulling each repository (test local, not-yet-pushed changes)."],
+      ] },
+    { usage: "test [--deep]",
+      note: "(#588: run every deployed module's tests, from every repository)",
+      options: [
+        ["--deep", "Forward --deep to each module test (heavy / regression suite; creates real VMs)."],
+      ] },
   ],
   common: [
     ["--config-dir DIR", "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."],
@@ -116,7 +128,8 @@ interface Opts {
 
 // Flags that take NO value (everything else with a value is captured generically).
 const NOARG = new Set(["--apply", "--deep", "--force", "--json",
-  "--pxe", "--provision", "--config-only", "--yes", "--no-wan"]);
+  "--pxe", "--provision", "--config-only", "--yes", "--no-wan",
+  "--dry-run", "--no-git-pull"]);
 
 function parseOpts(args: string[]): Opts {
   const o: Opts = {
@@ -673,6 +686,54 @@ function printPlan(plan: { actions: { kind: string; target: string }[]; warnings
   }
 }
 
+// `update` — run the whole-site update sweep NOW (#588). Thin delegation to
+// update-tappaas, whose --force we ALWAYS pass: it is the SCHEDULING override
+// ("run now, ignore the update window"). site-manager's OWN --force is a
+// different axis — it authorizes a disruptive change (reboot / offline migrate)
+// on EVERY module, plumbed to the sweep as TAPPAAS_MODULE_FORCE (ADR-020 D8:
+// legitimate here because an operator is explicitly asking, not the unattended
+// sweep). --no-git-pull runs against whatever is checked out (test local,
+// not-yet-pushed changes); --dry-run previews.
+function cmdUpdate(o: Opts, client: SiteClient): number {
+  const dryRun = o.boolFlags.has("--dry-run");
+  const noGitPull = o.boolFlags.has("--no-git-pull");
+  if (o.force && !dryRun) {
+    warn(`${YW}--force: authorizing a DISRUPTIVE change (reboot / offline migrate) on EVERY module.${CL}`);
+  }
+  return client.runUpdate(dryRun, o.force === true, noGitPull);
+}
+
+// `test` — run every deployed module's tests (#588). Iterates the module-manager
+// module list (foundation + apps, from every registered repository) and runs
+// `module-manager test <m>`, forwarding --deep. Continue-on-failure: one
+// module's failure never stops the run; the summary + exit code report it.
+function cmdTest(o: Opts, client: SiteClient): number {
+  const names = client.listModuleNames();
+  if (names === null) {
+    warn(`${RD}Could not list deployed modules (module-manager list --json failed).${CL}`);
+    return 1;
+  }
+  if (names.length === 0) {
+    info("No deployed modules to test.");
+    return 0;
+  }
+  const deep = o.deep === true;
+  info(`Testing ${names.length} module(s)${deep ? " (deep)" : ""}: ${names.join(", ")}`);
+  const failed: string[] = [];
+  for (const name of names) {
+    info("");
+    info(`${GN}== test ${name}${deep ? " --deep" : ""} ==${CL}`);
+    if (client.testModule(name, deep) !== 0) failed.push(name);
+  }
+  info("");
+  if (failed.length > 0) {
+    warn(`${RD}${failed.length}/${names.length} module test(s) FAILED: ${failed.join(", ")}${CL}`);
+    return 1;
+  }
+  info(`${GN}✓ All ${names.length} module test(s) passed.${CL}`);
+  return 0;
+}
+
 // `add` — create the site singleton (= create-site.sh). Thin delegation: the
 // cluster-discovery write (ssh pvesh node/pool discovery, tz/locale detection,
 // version-from-git, Proxmox email discovery, force-preserve-on-rerun) stays in
@@ -717,6 +778,10 @@ export function run(argv: string[], client: SiteClient): number {
         return 0;
       case "reconcile":
         return cmdReconcile(o, client);
+      case "update":
+        return cmdUpdate(o, client);
+      case "test":
+        return cmdTest(o, client);
       default:
         usage();
         die(`Unknown command: ${cmd}`);
