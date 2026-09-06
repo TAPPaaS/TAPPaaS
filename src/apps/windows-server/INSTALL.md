@@ -44,21 +44,6 @@ The install (driven by the `cluster:vm` and `templates:windows` dependencies):
 8. Configures RDP per `windows.enableRDP`.
 9. Verifies the `tappaas` account.
 
-### Multiple instances
-
-Use `deploy-instances.sh` to spin up several Windows Server VMs from the same base config.
-It auto-assigns names (`windows-server`, `windows-server-2`, …) and finds the next free
-VMIDs within the 500–599 block:
-
-    deploy-instances.sh windows-server 3
-
-It prints a confirmation table before installing anything; already-running instances are
-never touched. For a completely custom name, copy the JSON and set `vmname` + `vmid`:
-
-    cp config/windows-server.json config/fileserver.json
-    # edit vmname → "fileserver", vmid → 501
-    install-module.sh fileserver
-
 ## Post-install
 
 None. To enable RDP later, set `windows.enableRDP: true` in the JSON and re-run

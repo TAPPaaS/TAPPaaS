@@ -26,7 +26,7 @@ A consumer module opts in by adding the capability to its `dependsOn`, e.g.:
 ## Firewall bootstrap (prebuilt image)
 
 The firewall is installed **during foundation bootstrap, before tappaas-cicd exists**.
-`config-firewall.sh` (issues #141, #182, #231) imports a **preconfigured OPNsense image**
+`config-firewall.sh` imports a **preconfigured OPNsense image**
 (built by GitHub Actions, published as a Release — see
 `.github/workflows/build-opnsense-image.yml`) that boots straight to a working firewall
 at `10.0.0.1` — LAN, DNS/DHCP, static hosts, hostname, API enabled — with **no GUI
@@ -40,7 +40,7 @@ well-known bootstrap SSH, then rebooting. The deployed config has SSH **off**, s
 bootstrap credentials die with the push; they are only ever reachable on the isolated
 bootstrap LAN. API credentials for cicd land in `~/.opnsense-credentials.txt`.
 
-The disk is an **expandable UFS** disk (32G, issue #182) — the earlier `nano` image's
+The disk is an **expandable UFS** disk (32G) — the earlier `nano` image's
 fixed raw layout could not be grown and caused disk-full update failures.
 
 ### Files
@@ -127,8 +127,8 @@ Every compiled rule carries a canonical description used for idempotent upsert a
 orphan detection. There are two prefixes:
 
 ```
-tappaas-module:<vmname>:<direction>:<peer>:<port>[/<protocol>]      # manual rules (#151)
-tappaas-svcdep:<consumer>:<service>:<provider>:<port>[/<protocol>]  # auto-pinholes (#173)
+tappaas-module:<vmname>:<direction>:<peer>:<port>[/<protocol>]      # manual rules
+tappaas-svcdep:<consumer>:<service>:<provider>:<port>[/<protocol>]  # auto-pinholes
 ```
 
 Examples:
@@ -141,7 +141,7 @@ The owner-module is always position 1; that's the consumer for `tappaas-svcdep` 
 rule-owning module for `tappaas-module`. `list-rules`, `verify-rules`, `reconcile`, and
 `remove-rules` recognise both prefixes.
 
-### Auto-pinholes from service dependencies (issue #173)
+### Auto-pinholes from service dependencies
 
 Manual `ingress` / `egress` entries cover bespoke firewall policy. For the common case —
 "this module just needs to talk to the service it depends on" — the network:rules
@@ -197,7 +197,7 @@ the consumer's teardown — regardless of the provider's state.
 | Band | Range | Source | Purpose |
 |------|-------|--------|---------|
 | 0 | 0–99 | OPNsense auto | Anti-lockout |
-| 1 | 100–999 | `zone-manager` | Infrastructure (DHCP, NTP, ICMP); Caddy reachability to the DMZ gateway `/32` on tcp/80+443 from every internet-capable zone (seq 990/991, #366) |
+| 1 | 100–999 | `zone-manager` | Infrastructure (DHCP, NTP, ICMP); Caddy reachability to the DMZ gateway `/32` on tcp/80+443 from every internet-capable zone (seq 990/991) |
 | 2 | 1000–9999 | `zone-manager` | Foundation deny defaults |
 | **3** | **10000–19999** | **`rules-manager` ingress** | Per-module pinholes |
 | **4** | **20000–29999** | **`rules-manager` egress** | Per-module egress exceptions |
@@ -211,7 +211,7 @@ stable hash of its `vmname`. Slot collisions are detected at compile time.
 Rules use `quick` (first match wins; **lower sequence = higher priority**). Band 5 sits
 *above* the module bands so a zone's rfc1918 catch-all block (which isolates a zone from
 unlisted internal networks) is evaluated *after* per-module pinholes — otherwise it would
-shadow them and silently break cross-zone module connectivity (#243). Within band 5 each
+shadow them and silently break cross-zone module connectivity. Within band 5 each
 zone gets a deterministic 100-slot range (stable hash of the zone name; cross-zone slot
 collisions are harmless since each zone's rules bind to its own interface). The
 intra-slot offsets are fixed — `base+0` gateway, `base+1..+89` one pass per `access-to`
@@ -272,8 +272,8 @@ into `~/bin`):
 | `network-manager reconcile` | orchestrator — runs every provider in order (`opnsense → proxmox → switch → ap`) |
 | `switch-controller` | physical switches (controllers / switches / ports → trunk + access VLANs) |
 | `ap-controller` | WiFi APs (SSID → VLAN via the vendor controller) |
-| `proxmox-controller` | node bridge-vids + per-VM trunks (#335) |
-| `setup-switches.sh` | interactive switch registration (bootstrap step #351) |
+| `proxmox-controller` | node bridge-vids + per-VM trunks |
+| `setup-switches.sh` | interactive switch registration (bootstrap step) |
 | `setup-wlan-secrets.sh` | set WiFi SSID names (in `zones.json`) + passphrases (0600 secrets file) |
 
 Each provider follows a 5-verb contract (`interrogate → update-desired → delta → apply →
@@ -284,7 +284,7 @@ confirm`) over two files in `~/config/`: `switch-configuration-actual.json` (rea
 **Full command reference, the inventory model, and how to add a switch brand:
 [`scripts/README.md`](scripts/README.md).**
 
-## Test network on a dedicated physical port (issue #225)
+## Test network on a dedicated physical port
 
 `test-network.sh` stands up a throwaway, isolated test network served on a **spare
 physical NIC** of the node running the firewall VM — separate from the VLAN trunk that
