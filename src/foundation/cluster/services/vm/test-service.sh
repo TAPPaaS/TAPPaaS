@@ -92,18 +92,34 @@ info "  ${BOLD}cluster:vm tests for ${BL}${VMNAME}${CL} (VMID ${VMID} on ${NODE}
 
 info "  Check 1: VM status in Proxmox"
 
-# Query cluster API to find VM status regardless of which node it's on
-vm_status=""
-for node_candidate in "${NODE}" $(get_all_node_hostnames); do
-    candidate_fqdn="${node_candidate}.${MGMT}.internal"
-    vm_status=$(ssh -o ConnectTimeout=5 -o BatchMode=yes -o LogLevel=ERROR \
-        "root@${candidate_fqdn}" \
-        "pvesh get /cluster/resources --type vm --output-format json" 2>/dev/null \
-        | jq -r --argjson id "${VMID}" \
-            '.[] | select(.vmid == $id and (.type == "qemu" or .type == "lxc")) | .status // empty' 2>/dev/null) || true
-    if [[ -n "${vm_status}" ]]; then
-        break
-    fi
+# Query the cluster API for the VM's status regardless of which node hosts it.
+query_vm_status() {
+    local node_candidate candidate_fqdn s=""
+    for node_candidate in "${NODE}" $(get_all_node_hostnames); do
+        candidate_fqdn="${node_candidate}.${MGMT}.internal"
+        s=$(ssh -o ConnectTimeout=5 -o BatchMode=yes -o LogLevel=ERROR \
+            "root@${candidate_fqdn}" \
+            "pvesh get /cluster/resources --type vm --output-format json" 2>/dev/null \
+            | jq -r --argjson id "${VMID}" \
+                '.[] | select(.vmid == $id and (.type == "qemu" or .type == "lxc")) | .status // empty' 2>/dev/null) || true
+        if [[ -n "${s}" ]]; then break; fi
+    done
+    printf '%s' "${s}"
+}
+
+# A VM being snapshotted passes through transient states (e.g. 'save-vm' while
+# its RAM is written). update-tappaas runs this test immediately after taking the
+# pre-update snapshot, so it can catch that window — and treating it as "not
+# running" fatally aborts an otherwise-healthy update, then skips cleanup so the
+# snapshot chain grows and the window widens (the podman-lab1 save-vm race).
+# Poll for the VM to settle back to 'running' before deciding.
+readonly VM_TRANSIENT_STATES=" save-vm savevm snapshot snapshot-delete prelaunch "
+vm_status="$(query_vm_status)"
+for _ in $(seq 1 15); do
+    [[ "${vm_status}" == "running" ]] && break
+    [[ "${VM_TRANSIENT_STATES}" == *" ${vm_status} "* ]] || break
+    sleep 4
+    vm_status="$(query_vm_status)"
 done
 
 if [[ "${vm_status}" == "running" ]]; then
