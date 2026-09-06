@@ -45,10 +45,11 @@ function check(cond: boolean, msg: string): void {
   );
 }
 
-// ── test: iterate every deployed module, forward --deep, continue-on-failure ──
+// ── test: iterate every LIVE module, forward --deep, continue-on-failure ──
+const live = (name: string): { name: string; status: string } => ({ name, status: "Production" });
 {
   const c = new FakeSiteClient();
-  c.moduleNames = ["nextcloud", "litellm"];
+  c.deployedModules = [live("nextcloud"), live("litellm")];
   const rc = run(["test"], c);
   check(rc === 0, "test all-pass → exit 0");
   check(
@@ -58,7 +59,7 @@ function check(cond: boolean, msg: string): void {
 }
 {
   const c = new FakeSiteClient();
-  c.moduleNames = ["a", "b"];
+  c.deployedModules = [live("a"), live("b")];
   run(["test", "--deep"], c);
   check(
     c.log.includes("test a --deep") && c.log.includes("test b --deep"),
@@ -67,21 +68,39 @@ function check(cond: boolean, msg: string): void {
 }
 {
   const c = new FakeSiteClient();
-  c.moduleNames = ["a", "b", "c"];
+  c.deployedModules = [live("a"), live("b"), live("c")];
   c.testRc.set("b", 1);
   const rc = run(["test"], c);
   check(rc === 1, "test with a failing module → exit 1");
   check(c.log.includes("test c"), "…and it CONTINUES past the failure (c still tested)");
 }
 {
+  // archived / external modules have no live VM — they are SKIPPED, never run,
+  // so they never produce a false failure (regression for the makerfloss
+  // portainer-lab1 finding).
   const c = new FakeSiteClient();
-  c.moduleNames = null;
+  c.deployedModules = [
+    live("a"),
+    { name: "portainer-lab1", status: "archived" },
+    { name: "ext1", status: "external" },
+  ];
+  const rc = run(["test"], c);
+  check(rc === 0, "test skips archived/external → the live module passes, exit 0");
+  check(
+    !c.log.includes("test portainer-lab1") && !c.log.includes("test ext1"),
+    "…and never invokes the test for a decommissioned module",
+  );
+  check(c.log.includes("test a"), "…but the live module IS tested");
+}
+{
+  const c = new FakeSiteClient();
+  c.deployedModules = null;
   const rc = run(["test"], c);
   check(rc === 1, "test → exit 1 when the module list cannot be read");
 }
 {
   const c = new FakeSiteClient();
-  c.moduleNames = [];
+  c.deployedModules = [];
   const rc = run(["test"], c);
   check(rc === 0, "test → exit 0 when there are no deployed modules");
 }

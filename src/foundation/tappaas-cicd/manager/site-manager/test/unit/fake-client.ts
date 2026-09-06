@@ -109,9 +109,10 @@ export class FakeSiteClient implements SiteClient {
     this.log.push(`repository.sh remove ${name}${force ? " --force" : ""}`);
     return this.delegateRc;
   }
-  // Fleet verbs (#588). moduleNames is what listModuleNames() returns (null ⇒
-  // the list call failed); testRc scripts per-module test outcomes (absent ⇒ 0).
-  moduleNames: string[] | null = [];
+  // Fleet verbs (#588). deployedModules is what listDeployedModules() returns
+  // (null ⇒ the list call failed); testRc scripts per-module test outcomes
+  // (absent ⇒ 0).
+  deployedModules: Array<{ name: string; status: string }> | null = [];
   testRc = new Map<string, number>();
   runUpdate(dryRun: boolean, moduleForce: boolean, noGitPull: boolean): number {
     this.log.push(
@@ -119,8 +120,8 @@ export class FakeSiteClient implements SiteClient {
     );
     return this.delegateRc;
   }
-  listModuleNames(): string[] | null {
-    return this.moduleNames === null ? null : [...this.moduleNames];
+  listDeployedModules(): Array<{ name: string; status: string }> | null {
+    return this.deployedModules === null ? null : this.deployedModules.map((m) => ({ ...m }));
   }
   testModule(module: string, deep: boolean): number {
     this.log.push(`test ${module}${deep ? " --deep" : ""}`);

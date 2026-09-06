@@ -216,9 +216,11 @@ export interface SiteClient {
   // TAPPAAS_NO_GIT_PULL=1 (pre-update.sh skips the repo pull, updating whatever
   // is checked out). Returns update-tappaas's exit code.
   runUpdate(dryRun: boolean, moduleForce: boolean, noGitPull: boolean): number;
-  // `site-manager test` — the deployed module names to iterate (module-manager
-  // list --json; foundation + apps, from every repository). null on failure.
-  listModuleNames(): string[] | null;
+  // `site-manager test` — the deployed modules to iterate (module-manager list
+  // --json; foundation + apps, from every repository), each with its lifecycle
+  // .status so decommissioned (archived/external) ones can be skipped. null on
+  // failure.
+  listDeployedModules(): Array<{ name: string; status: string }> | null;
   // Test ONE module via `module-manager test <m> [--deep]`. Returns its exit code.
   testModule(module: string, deep: boolean): number;
 }

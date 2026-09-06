@@ -703,15 +703,28 @@ function cmdUpdate(o: Opts, client: SiteClient): number {
   return client.runUpdate(dryRun, o.force === true, noGitPull);
 }
 
+// Modules with NO live lifecycle — decommissioned, their VM is gone — mirror
+// update-tappaas's NON_LIFECYCLE_STATUSES (#441). Testing them always fails
+// (dependency-service checks hit an absent VM), so they are skipped, not run.
+const NON_LIFECYCLE_STATUSES = new Set(["archived", "external"]);
+
 // `test` — run every deployed module's tests (#588). Iterates the module-manager
-// module list (foundation + apps, from every registered repository) and runs
-// `module-manager test <m>`, forwarding --deep. Continue-on-failure: one
-// module's failure never stops the run; the summary + exit code report it.
+// module list (foundation + apps, from every registered repository), SKIPPING
+// decommissioned (archived/external) modules, and runs `module-manager test
+// <m>`, forwarding --deep. Continue-on-failure: one module's failure never stops
+// the run; the summary + exit code report it.
 function cmdTest(o: Opts, client: SiteClient): number {
-  const names = client.listModuleNames();
-  if (names === null) {
+  const all = client.listDeployedModules();
+  if (all === null) {
     warn(`${RD}Could not list deployed modules (module-manager list --json failed).${CL}`);
     return 1;
+  }
+  const isDecommissioned = (m: { status: string }): boolean =>
+    NON_LIFECYCLE_STATUSES.has(m.status.trim().toLowerCase());
+  const skipped = all.filter(isDecommissioned);
+  const names = all.filter((m) => !isDecommissioned(m)).map((m) => m.name);
+  if (skipped.length > 0) {
+    info(`Skipping ${skipped.length} decommissioned module(s): ${skipped.map((m) => `${m.name} (${m.status})`).join(", ")}`);
   }
   if (names.length === 0) {
     info("No deployed modules to test.");

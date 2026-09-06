@@ -201,9 +201,10 @@ export class CliSiteClient implements SiteClient {
     return runStreaming(UPDATE_TAPPAAS(), args, { env });
   }
 
-  listModuleNames(): string[] | null {
+  listDeployedModules(): Array<{ name: string; status: string }> | null {
     // `module-manager list --json` is EITHER a bare module array (no live
-    // cluster) OR { modules: [...] } (live). Handle both, extract .name.
+    // cluster) OR { modules: [...] } (live). Handle both; keep name + status
+    // (status drives the archived/external skip in cmdTest).
     const r = captureResult(MODULE_BIN(), ["list", "--json"]);
     if (!r.ran || r.rc !== 0) return null;
     try {
@@ -211,10 +212,10 @@ export class CliSiteClient implements SiteClient {
       const arr = Array.isArray(data)
         ? data
         : ((data as { modules?: unknown[] })?.modules ?? []);
-      const names = (arr as Array<{ name?: unknown }>)
-        .map((m) => m?.name)
-        .filter((n): n is string => typeof n === "string" && n.length > 0);
-      return names;
+      return (arr as Array<{ name?: unknown; status?: unknown }>)
+        .filter((m): m is { name: string; status?: unknown } =>
+          typeof m?.name === "string" && m.name.length > 0)
+        .map((m) => ({ name: m.name, status: typeof m.status === "string" ? m.status : "" }));
     } catch {
       return null;
     }
