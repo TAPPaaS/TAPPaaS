@@ -50,7 +50,7 @@ named by the manager-naming convention below.
 
 A manager's own operations follow one of two forms depending on how it is built:
 
-- **TypeScript managers** are a single binary that takes the operation as its
+- **Single-binary managers** take the operation as their
   first argument: `people-manager validate`, `network-manager reconcile`, etc.
   `validate` is simply one verb among the others.
 - **Script (bash) managers** expose each operation as a separate
@@ -58,7 +58,7 @@ A manager's own operations follow one of two forms depending on how it is built:
   `validate-environment.sh`, `validate-site.sh`. So a script manager's validate
   operation is `validate-<manager>.sh`, **not** a generic `validate.sh`.
 
-The long-term direction is that all managers become TypeScript, at which point
+The long-term direction is that all managers become single-binary, at which point
 every operation — `validate` included — is a verb of the manager's binary.
 
 ## How the dispatcher runs the lifecycle verbs

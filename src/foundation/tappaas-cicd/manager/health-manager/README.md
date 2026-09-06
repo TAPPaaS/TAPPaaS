@@ -6,10 +6,10 @@ module config; it never authors a config domain of its own and never reconciles.
 Because of that, the CRUD verbs (`add`/`modify`/`delete`/`reconcile`) are **N/A**
 here, and `validate` carries a special meaning (see below).
 
-This is the TypeScript port (ADR-007 §Health, Remaining-outstanding #3). The
+This is the port (ADR-007 §Health). The
 remaining bash scripts (`check-disk-threshold.sh` — its auto-grow is not
 yet ported — and `update-os.sh`) remain in
-place and working; the TS manager re-implements the unambiguous read verbs on top
+place and working; the manager re-implements the unambiguous read verbs on top
 of a thin `ssh`/`pvesh`/`qm` shell-out boundary (no Proxmox logic is
 re-implemented). health-manager is a **read-mostly orchestrator** under the
 F12 runtime-state rule (see the "Runtime-state access rule" section in
@@ -26,7 +26,7 @@ health-manager update-os <name> <vmid> <node>
 
 > **MOVED (ADR-007):** the per-VM three-way drift inspect is no longer a
 > health-manager verb. It is now `module-manager reconcile <m>` (the read-only
-> report for one module) and `module-manager list --diff` (the rollup), native TS
+> report for one module) and `module-manager list --diff` (the rollup), native
 > in `module-manager/src/inspect.ts` — the port of the retired `inspect-vm.sh`.
 > The three sections below describe that behaviour and are kept here until the
 > prose is relocated to module-manager's README.
@@ -35,9 +35,9 @@ health-manager update-os <name> <vmid> <node>
 
 Read-only. Lists every running guest (VM/CT) across the Proxmox cluster (VMID,
 name, node, type, status) and classifies each against the module configs in
-`config/`: `managed` (in config), `[external]` (unmanaged guest, #216), or
+`config/`: `managed` (in config), `[external]` (unmanaged guest), or
 `NOT IN CONFIG`. It also lists configured modules whose VM is **not** running,
-distinguishing genuinely-missing from `[archived]` (#215) and `[external]`-down.
+distinguishing genuinely-missing from `[archived]` and `[external]`-down.
 This is a **report** — it does not exit non-zero on a discrepancy (that is what
 `validate` is for).
 
@@ -79,11 +79,11 @@ mutation and stays in the script (it is not part of the health assertion).
 ### `update-os <name> <vmid> <node>` — OS-patch action (special)
 
 `update-os` stays a distinct **action** verb (it patches the OS; not CRUD). The
-TS manager is a thin pass-through: it forwards `<name> <vmid> <node>` to
+manager is a thin pass-through: it forwards `<name> <vmid> <node>` to
 `update-os.sh` (overridable via `UPDATE_OS_BIN`) and propagates its exit code.
 The OS-patch logic (NixOS rebuild / apt, IP+SSH wait, DHCP-hostname fix,
 reboot guards, controller-self-reboot protection) lives in `update-os.sh` and is
-not re-implemented in TS.
+not re-implemented here.
 
 ## Common options
 
@@ -103,12 +103,10 @@ ping-probed and only reachable nodes are used.
 
 ## Build
 
-TypeScript, built with `tsc` (zero npm dependencies; the shared ambient
-`../../lib/ts/src/env.d.ts`), wrapped as a Node `bin/health-manager` via
-`default.nix` — a thin import of the shared `../../lib/nix/ts-manager.nix`
-builder. The CLI plumbing (colors, `info`/`die`, the `guarded()` error guard,
-the `--help` renderer) and the cluster ssh/pvesh helpers come from
-`../../lib/ts/src/` (`cli.ts`, `help.ts`, `cluster.ts`, `config-io.ts`).
+Built as `bin/health-manager` via `default.nix`. The CLI plumbing (colors,
+`info`/`die`, the `guarded()` error guard, the `--help` renderer) and the
+cluster ssh/pvesh helpers come from `../../lib/ts/src/` (`cli.ts`, `help.ts`,
+`cluster.ts`, `config-io.ts`).
 
 ```
 nix-build -A default default.nix
@@ -129,10 +127,10 @@ source:
   `vmnet_resolve_trunks`, `vmnet_zone_vlantag`: zone→VLAN resolution + `ALL`
   trunk-sentinel expansion). HANode / description rows fold in here too.
 - **Nested-config normalizer** — the retired `inspect-vm.sh` ran each JSON through
-  the bash `normalize_module_config` ("Pattern A → flat"); the TS port reads flat
+  the bash `normalize_module_config` ("Pattern A → flat"); the port reads flat
   keys only, so nested/variant-shaped configs are not yet flattened.
 - **`cluster` / `node` entities** — ADR-007 lists them alongside `vm`; their
   entity model (a node/cluster resource summary) is not yet defined.
 - **Guest-agent liveness** — the `service-liveness` gate currently checks
   `pvesh` running-state only; adding `qm guest cmd <vmid> ping` is a follow-up.
-- **Full `update-os` TS port** — today the verb shells out to `update-os.sh`.
+- **Full `update-os` port** — today the verb shells out to `update-os.sh`.

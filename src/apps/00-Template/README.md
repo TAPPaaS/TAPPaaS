@@ -59,9 +59,15 @@ Modify it to set good defaults for your module. Installers can further customize
     "imageType": "clone",
     "image": "9000",
     "zone0": "srv",
-    "cloudInit": "true"
+    "cloudInit": "true",
+    "dependsOn": ["cluster:vm", "templates:nixos", "backup:vm", "network:proxy", "network:rules"],
+    "provides": []
 }
 ```
+
+`dependsOn` is how the module composes with the rest of the platform — a VM,
+a template to clone, a backup job, a reverse-proxy entry, firewall rules. See
+[Dependencies and services](#dependencies-and-services) below for the full model.
 
 #### Common Configurations
 
@@ -133,12 +139,85 @@ NixOS configuration file for NixOS-based modules.
 - Used by the default `install.sh` to rebuild the VM configuration
 - Remove this file for non-NixOS modules
 
-## Providing a service
+## Dependencies and services
 
-Beyond installing itself, a module can **provide services** that *other* modules depend on (declared
-in its `provides`; consumed via another module's `dependsOn`). A provider implements lifecycle hooks
-under `services/<service-name>/`, which TAPPaaS runs **on the provider** whenever a dependent module
-is installed or updated.
+TAPPaaS modules compose through **services**. A service is a capability one module
+offers and another consumes, named by a `provider:service` **coordinate** — e.g.
+`cluster:vm`, `network:proxy`, `identity:identity`. A module declares the coordinates
+it needs; TAPPaaS derives install order from those declarations rather than hardcoding
+it ([ADR-003](<../../../docs/ADR/ADR-003 - Dependency management in TAPPaaS.md>)), then
+runs each provider's hooks to wire the dependent up.
+
+Three `<module>.json` fields express this:
+
+| Field | Meaning | If the provider is not installed |
+|-------|---------|----------------------------------|
+| `dependsOn` | **hard** requirement — the module cannot run without it | install is blocked |
+| `integratesWith` | **soft** — used if present | silently skipped; auto-wired if the provider is added later |
+| `provides` | the services **this** module offers to others (names only) | — |
+
+### Depending on other services — `dependsOn`
+
+Almost every VM-backed module needs a VM created, a template to clone, a backup job,
+and usually a reverse-proxy entry and firewall rules — declared as coordinates.
+Nextcloud, for example, consumes six services and provides one:
+
+```json
+{
+    "dependsOn": ["cluster:vm", "templates:nixos", "backup:vm", "network:proxy", "network:rules", "identity:identity"],
+    "provides": ["fileservice"]
+}
+```
+
+`module-manager module add nextcloud` installs each provider first (if it is not
+already present), then calls that provider's `install-service.sh` with `nextcloud`
+as its argument, so each one provisions exactly what nextcloud declared — a VM, a
+backup enrolment, a Caddy entry, firewall rules, an SSO client. `module modify` runs
+the `update-service.sh` counterparts; deletion runs the chain in reverse.
+
+### Optional integrations — `integratesWith`
+
+`integratesWith` is the **soft** counterpart to `dependsOn`: same `provider:service`
+shape, same `install`/`update`/`delete-service.sh` wiring — but a provider that is not
+installed is silently ignored instead of blocking, and when that provider is *later*
+installed it auto-wires the pre-existing integrators. Use it for a capability the
+module can run without — LiteLLM `integratesWith: ["vllm-amd:inference"]` uses a local
+inference backend if one exists and functions fine if none is deployed. A coordinate
+belongs in exactly one of the two lists.
+
+### Foundation services you can depend on
+
+The foundation layer offers these `provider:service` coordinates — the building blocks
+nearly every module composes from. Each links to its contract: what it does for a
+dependent, and which `<module>.json` fields the dependent passes to it.
+
+| Coordinate | What it does for your module |
+|------------|------------------------------|
+| [`cluster:vm`](../../foundation/cluster/services/vm/README.md) | Creates and converges the module's Proxmox QEMU guest — the VM most modules run in. |
+| [`cluster:lxc`](../../foundation/cluster/services/lxc/README.md) | Creates and converges a Proxmox LXC container instead of a full VM. |
+| [`cluster:ha`](../../foundation/cluster/services/ha/README.md) | Places the guest under Proxmox HA, with node-affinity and ZFS replication. |
+| [`backup:vm`](../../foundation/backup/services/vm/README.md) | Enrols the guest in the shared Proxmox Backup Server job. |
+| [`network:proxy`](../../foundation/network/services/proxy/README.md) | Publishes the module through Caddy — its public face and TLS termination. |
+| [`network:rules`](../../foundation/network/services/rules/README.md) | Compiles the module's declared firewall surface into OPNsense rules. |
+| [`network:dns`](../../foundation/network/services/dns/README.md) | Registers the module's DNS record on the resolver. |
+| [`network:nat`](../../foundation/network/services/nat/README.md) | Adds destination-NAT (port-forward) rules on OPNsense. |
+| [`network:discovery`](../../foundation/network/services/discovery/README.md) | Relays mDNS / broadcast discovery across zone boundaries. |
+| [`identity:identity`](../../foundation/identity/services/identity/README.md) | Wires the module into single sign-on — OIDC client, redirect URIs, group access. |
+| [`templates:windows`](../../foundation/templates/services/windows/README.md) | Windows VM lifecycle (OOBE and beyond) for Windows-based modules. |
+
+A few further coordinates have no standalone page yet — `templates:nixos` and
+`templates:debian` (the Linux template clones most modules use), `identity:accessControl`,
+and `backup:remote` / `backup:external` — documented on their parent module:
+[templates](../../foundation/templates/README.md), [identity](../../foundation/identity/README.md),
+[backup](../../foundation/backup/README.md). The full reference for every field a dependent
+can pass is [module-fields.json](../../foundation/schemas/module-fields.json).
+
+### Providing a service to others — `provides`
+
+Beyond installing itself, a module can **provide** services that *other* modules depend
+on: list the service names in `provides`, and implement lifecycle hooks under
+`services/<service-name>/`, which TAPPaaS runs **on the provider** whenever a dependent
+module is installed or updated.
 
 ```
 <module>/
@@ -156,16 +235,6 @@ is installed or updated.
 from `/home/tappaas/config/<dependent>.json`, provisions what the dependent needs, and configures the
 service to support it. `update-service.sh` is the same for updates. (Deletion runs the dependency
 chain in reverse — see [ADR-003](<../../../docs/ADR/ADR-003 - Dependency management in TAPPaaS.md>).)
-
-### Optional integrations — `integratesWith`
-
-`dependsOn` is a **hard** requirement: a provider that is not installed blocks the install.
-`integratesWith` (#501) is the **soft** counterpart — same `provider:service` shape, same
-`install/update/delete-service.sh` wiring — but a provider that is not installed is silently
-ignored instead of blocking, and when that provider is *later* installed it auto-wires the
-pre-existing integrators. Use it for a capability the module can run without (e.g. LiteLLM
-`integratesWith: ["vllm-amd:inference"]` — it uses a local inference backend if one exists,
-and functions fine if none is deployed). A coordinate belongs in exactly one of the two lists.
 
 Writing a service script:
 
@@ -201,9 +270,9 @@ Real examples to copy from: `cluster/services/vm/install-service.sh` (creates a 
 
 | Type | Directory |
 |------|-----------|
-| Foundation modules | `src/foundation/<NN>-<name>/` |
+| Foundation modules | `src/foundation/<name>/` |
 | Application modules | `src/apps/<name>/` |
-| Service modules | `src/modules/<name>/` |
+| Community modules | `src/<contributor>/<name>/` (in the `TAPPaaS/Community` repo) |
 
 ## Debugging VMs
 

@@ -31,7 +31,7 @@ installer) with `__ORG__` / `__USER__` / `__EMAIL__` / `__ROOT_EMAIL__`
 placeholders, seeded by `people-manager bootstrap`.
 
 `authentik Admins` is **Authentik's own built-in superuser group**, adopted by
-name rather than invented (issue #476). Membership in an `is_superuser` group is
+name rather than invented. Membership in an `is_superuser` group is
 the only thing that grants the Authentik admin UI — the `admin`/`root` *roles*
 are labels TAPPaaS passes to apps and confer nothing there. The installer (= the
 site / default-environment owner) is a member, so day-2 user administration does
@@ -79,7 +79,7 @@ Options:
 
 `add` / `modify` / `delete` write the validated JSON under
 `config/people/<dir>/<name>.json` **and then push it to the identity service**
-(issue #482) — a change is live when the command returns, with no second command
+— a change is live when the command returns, with no second command
 to remember. Admins thus drive everything through verbs and never hand-edit JSON
 — see `docs/design/ADR-007-verb-alignment.md` ("admins drive verbs, not JSON").
 
@@ -149,7 +149,7 @@ people-manager reconcile --apply                  # apply to the identity servic
 Copies `minimal-org/` into `config/people/`, substituting the placeholders
 (`__ORG__` / `__USER__` / `__EMAIL__` / `__ROOT_EMAIL__`) in both filenames and
 contents. Pure file bootstrap — makes no identity calls (run
-`people-manager reconcile --apply` afterwards). Native TypeScript since the
+`people-manager reconcile --apply` afterwards). Native since the
 ADR-007 refactor Phase 8.2 (the former `user-setup.sh` is retired; the flags
 are preserved, with `--people-dir` folded into the manager's `--config-dir`).
 
@@ -175,7 +175,7 @@ people-manager bootstrap --org acme --user alice --email alice@example.org
 
 ### `people-manager validate` — validate the People config
 
-The manager's `validate` operation is now a native TypeScript verb (ADR-007 #4 —
+The manager's `validate` operation is now a native verb (ADR-007 —
 the convention end-state). It loads `config/people/` and checks reference
 integrity (the same `validateRefs` gate `reconcile` runs), report-only — no
 identity-service calls. Exit 0 = valid, 1 = reference errors.

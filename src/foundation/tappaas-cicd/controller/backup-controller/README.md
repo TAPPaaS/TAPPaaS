@@ -30,7 +30,7 @@ A module name is resolved to its VMID via `CONFIG_DIR/<module>.json`.
 
 `job-status` / `list` / `namespaces` are **read-only queries**; with `--json`
 they emit a single machine-readable JSON object (including `{"reachable":
-false}` when PBS is offline) so the TypeScript `backup-manager` (`CliClient`)
+false}` when PBS is offline) so the `backup-manager` (`CliClient`)
 parses structured output instead of scraping human lines.
 
 `add-to-job` / `apply-schedule` are the **PBS mutations** that `backup-manager

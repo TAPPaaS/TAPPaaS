@@ -84,9 +84,10 @@ means "run the sweep now" and is never forwarded as permission to reboot.
 See `docs/design/ADR-007-verb-alignment.md` for the full verb/CRUD model and the
 reconcile cascade.
 
-## Attribution: contributor, author, maintainer (#338)
+## Attribution: contributor, author, maintainer
 
-Three roles, one home each — nothing duplicated:
+Three roles, one home each — nothing duplicated (see **ADR-015 — Community
+Governance and Contribution Files** for the repo/org-level contribution model):
 
 | Role | Definition | Recorded in |
 |------|------------|-------------|
@@ -94,12 +95,13 @@ Three roles, one home each — nothing duplicated:
 | **Author** | The copyright-bearing subset | optional per-module **`AUTHORS.md`** — additive lines of `<year> @<handle> — <role>` (template: `src/apps/00-Template/AUTHORS.md`) |
 | **Maintainer** | The current responsible party (moves on handover) | **`maintainer` in `<module>.json`** — the one machine-readable governance field, kept there so issues can be reported/routed automatically |
 
-Decisions (2026-07-11, from #338): authorship does **not** go into `<module>.json` —
-it is not needed to run the module. `AUTHORS.md` is optional. Per-file headers
-(`.nix` `# Author:` lines) are not authoritative and may be dropped when touched;
-the module-level `AUTHORS.md` covers every artifact in the module (DRY).
+Authorship does **not** go into `<module>.json` — it is not needed to run the
+module. `AUTHORS.md` is optional. Per-file headers (`.nix` `# Author:` lines) are
+not authoritative and may be dropped when touched; the module-level `AUTHORS.md`
+covers every artifact in the module (DRY).
 
-**AI assistance:** an AI tool is a **contributor** (provenance, recorded by the
-`Co-Authored-By:` git trailer as a transparency signal) — **never an author**:
-AI-generated output carries no copyright, so an AI never appears in `AUTHORS.md`
-and never holds `maintainer`.
+**AI assistance:** an AI tool is at most a **contributor** — AI-generated output
+carries no copyright, so an AI is **never an author** (it never appears in
+`AUTHORS.md`) and **never holds `maintainer`**. Per ADR-015 and Codeberg
+etiquette, a contribution is attributed to the **human** contributor: do **not**
+add an AI `Co-Authored-By:` trailer to commits or pull requests.

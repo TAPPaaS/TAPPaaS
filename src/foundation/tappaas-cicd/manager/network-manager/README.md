@@ -15,7 +15,7 @@ treated as zones). A zone records its `type` / `typeId`, `vlantag`, `ip` (CIDR),
 (`pinhole-allowed-from`), and optional `variant`/`SSID`. Auto-allocated VLANs use
 the 60–99 window within each type band; zone names must be camelCase.
 
-## Changing a zone's policy — `modify --set` (#538)
+## Changing a zone's policy — `modify --set`
 
 ```
 network-manager modify rossen --set access-to=internet,mgmt
@@ -117,7 +117,7 @@ network-manager add labNet --check          # preview
 network-manager delete labNet
 ```
 
-### `bind` — link a client or IoT zone to an environment (ADR-014 D2, #424)
+### `bind` — link a client or IoT zone to an environment (ADR-014 D2)
 
 A client zone reaches its services, and an IoT zone is reached by them. Writing
 that as a **literal** service-zone name does not survive install: `init` renames
@@ -155,7 +155,7 @@ environment file must not block authoring) but **fatal** to `reconcile` and an
 
 ### `enable` / `disable` / `manual` — atomic zone state change
 
-The operator state verbs (was `zone-state.sh`, #209): `enable` → `Active`,
+The operator state verbs (was `zone-state.sh`): `enable` → `Active`,
 `disable` → `Inactive`, `manual` → `Manual`. They mutate `zones.json`
 atomically and deliberately do **not** touch the planes — apply when ready with
 `network-manager reconcile --apply`. Guards: an unknown zone is refused (the
@@ -208,12 +208,12 @@ Properties, all unit-asserted:
   deactivates anything.
 - **Idempotent** — re-applying a profile is a byte-level no-op.
 - **Order-independent** — `core` then `iot` == `iot` then `core`.
-- **Non-destructive (#427)** — existing zones always win. A re-run can never
+- **Non-destructive** — existing zones always win. A re-run can never
   rebuild a live file from template defaults; operator zones, custom states and
   edited access lists survive. `--force` re-stamps *this profile's* zones from
   the template.
 - **`srv → <N>`** is the only rename, applied to keys, to every zone reference,
-  and to the `serves` placeholder. `home`/`guest` keep their names (#425): the
+  and to the `serves` placeholder. `home`/`guest` keep their names: the
   zone key drives the client DNS domain `<zone>.internal`.
 
 A site with no smart-home devices simply never runs `init iot` and never carries
@@ -247,7 +247,7 @@ switched off) are **never** retired.
 
 ### `validate` (alias `zones-check`) — offline consistency audit
 
-`validate` is the standardized verb (ADR-007 #4); `zones-check` is kept as an
+`validate` is the standardized verb (ADR-007); `zones-check` is kept as an
 alias. Both run the same read-only zones.json audit.
 
 ```bash
@@ -295,5 +295,5 @@ Only `zone-reconcile` is still linked onto `PATH` during the transition.
 `migrate-zone-keys-*.sh` is a one-shot migration helper, not an on-PATH tool.
 **Retired** (ADR-007 Phase 7.5 / post-implementation refactor):
 `apply-zones-merge.sh` → `network-manager merge` (alias `zones-merge`, ADR-007
-"Design A"); `zone-controller.sh` → `network-manager add`/`delete` (the TS zone
-lifecycle); `zone-state.sh` → `network-manager enable`/`disable`/`manual`.
+"Design A"); `zone-controller.sh` → `network-manager add`/`delete` (the native
+zone lifecycle); `zone-state.sh` → `network-manager enable`/`disable`/`manual`.

@@ -12,15 +12,15 @@ config. (Domain / DNS / identity are *per-environment*, owned by
 validated against `site-fields.json`. It also migrates the legacy
 `config/configuration.json` into `site.json`.
 
-## `site-manager` (TypeScript, ADR-007 verb-aligned)
+## `site-manager`
 
-The TypeScript `site-manager` bin is the verb-aligned front door (ADR-007, #3).
-It owns the Site as a **singleton** and the `node` / `repository` sub-entities,
-following the same `<entity> <verb>` shape as `network-manager`. The heavy
-git/cluster I/O stays in the still-live bash tools, invoked as thin delegations:
-`add` → `create-site.sh`, `repository add`/`delete` → `repository.sh`,
-`validate` → `validate-site.sh`. TS owns config CRUD (`site modify`, `node`
-CRUD, the `site.json` writes) + `validate` + `reconcile`.
+The `site-manager` bin is the front door. It owns the Site as a **singleton**
+and the `node` / `repository` sub-entities, following the same `<entity> <verb>`
+shape as `network-manager`. The heavy git/cluster I/O stays in the still-live
+bash tools, invoked as thin delegations: `add` → `create-site.sh`,
+`repository add`/`delete` → `repository.sh`, `validate` → `validate-site.sh`.
+The bin owns config CRUD (`site modify`, `node` CRUD, the `site.json` writes) +
+`validate` + `reconcile`.
 
 ### Entities and verbs
 
@@ -40,11 +40,11 @@ repository         repository list [--json]
 top-level          add --name <site-code> [--organization <org>] [create-site options]  (= create-site.sh)
                    validate [FILE] [--schema-dir PATH]     (= validate-site.sh)
                    reconcile [--apply] [--deep]
-                   update [--dry-run] [--force] [--no-git-pull]   (= update-tappaas, #588)
-                   test [--deep]                                  (= module-manager test each, #588)
+                   update [--dry-run] [--force] [--no-git-pull]   (= update-tappaas)
+                   test [--deep]                                  (= module-manager test each)
 ```
 
-`update` (#588) packages the whole-site update sweep: it delegates to
+`update` packages the whole-site update sweep: it delegates to
 `update-tappaas` and **always runs now** (`update-tappaas --force`, the
 scheduling override — the update window is ignored). Its own `--force` is a
 *different* axis: it authorizes a **disruptive** change (reboot / offline
@@ -54,7 +54,7 @@ not the unattended sweep). `--no-git-pull` (`TAPPAAS_NO_GIT_PULL`) updates
 whatever is checked out — pre-update.sh skips the per-repo pull — so local,
 not-yet-pushed changes can be tested. `--dry-run` previews the plan.
 
-`test` (#588) runs every deployed module's tests: it iterates
+`test` runs every deployed module's tests: it iterates
 `module-manager list` (foundation + apps, from every registered repository) and
 runs `module-manager test <m>`, forwarding `--deep`. Continue-on-failure; exits
 non-zero if any module test failed.
@@ -128,7 +128,7 @@ people/network are single bins; environments fan out — one deep reconcile per
 registered environment. The **network pass runs once for the whole site**:
 `network-manager reconcile` has no zone or environment filter, so letting each
 environment run its own would repeat the identical whole-platform operation once
-per environment (#461). Every leg is idempotent, so re-running is safe; this is
+per environment. Every leg is idempotent, so re-running is safe; this is
 the natural whole-platform converge after `update-tappaas`.
 
 A cascade that exits non-zero is reported by name and makes `site reconcile`
@@ -137,22 +137,21 @@ the rest.
 
 ### Build
 
-TypeScript, built with `tsc` (zero npm deps, ambient `src/env.d.ts`), wrapped by
-`default.nix` into `result/bin/site-manager` — mirroring `people-manager` /
-`network-manager`. `install.sh` is **not** yet wired to nix-build it (the bash
-tools below remain the installed entry points for now).
+Built by `default.nix` into `result/bin/site-manager` — mirroring
+`people-manager` / `network-manager`. `install.sh` is **not** yet wired to build
+it (the bash tools below remain the installed entry points for now).
 
 ## Commands (legacy bash tools — kept live until cutover)
 
 All scripts are bash, linked onto `PATH` by `install.sh`. `repository.sh` and
-`validate-site.sh` remain live and are the tools the TS `repository add`/`delete`
-and `validate` delegate to; `create-site.sh` backs the TS `add`.
+`validate-site.sh` remain live and are the tools the `repository add`/`delete`
+and `validate` verbs delegate to; `create-site.sh` backs the `add` verb.
 
 ### `repository.sh` — manage module repositories
 
 The current, supported tool for registering the external module repositories
 TAPPaaS pulls modules from (add / remove / modify / list). It stays until the
-TypeScript site-manager subsumes it as a verb. (It currently reads/writes the
+site-manager subsumes it as a verb. (It currently reads/writes the
 repository list in the legacy `configuration.json`; repointing it to
 `site.json .repositories` is pending — see DESIGN.md.)
 

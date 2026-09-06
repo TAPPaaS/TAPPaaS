@@ -155,7 +155,7 @@ Recover with the manual deployment above (or `update-module.sh tappaas-cicd`).
 - Endpoint: `/api/interfaces/interface_assign/addItem`
 - Status: ✅ Working in OPNsense 26.1
 - Fixed: February 2026
-- Full investigation log preserved in git history (`ISSUES/opnsense-26.1-interface-assignment.md`, ISSUES/ cleanup #317)
+- Full investigation log preserved in git history (`ISSUES/opnsense-26.1-interface-assignment.md`)
 
 ## Credits
 

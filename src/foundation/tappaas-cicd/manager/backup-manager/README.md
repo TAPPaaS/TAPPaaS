@@ -28,23 +28,22 @@ manager **owns the `.backup` writes** on the deployed module JSON (`modify` /
 unchanged — the manager does not duplicate it). The *live* PBS job membership
 converges on `reconcile`.
 
-## Verb / controller split (ADR-007 verb-alignment #3)
+## Verb / controller split (ADR-007 verb-alignment)
 
 **The manager resolves the cascade; the controller mutates PBS.** `backup-manager
 reconcile` resolves the Site→Environment→Module policy for every deployed module
 and calls the controller's mutation verbs (`add-to-job <vmid>`, `apply-schedule
 <spec>`) to make PBS match. The manager never talks to PBS directly.
 
-## TypeScript implementation
+## Implementation
 
-The manager is TypeScript under `src/` (built by `default.nix`, a thin
-wrapper over the shared `lib/nix/ts-manager.nix` builder: `tsc`, zero npm deps,
-ambient `lib/ts/src/env.d.ts`; shared CLI/help/exec/config-io helpers come from
-`lib/ts/src/` — mirrors `site-manager`). `install.sh` builds + links the
+The manager lives under `src/` (built by `default.nix`; shared
+CLI/help/exec/config-io helpers come from `lib/ts/src/` — mirrors
+`site-manager`). `install.sh` builds + links the
 `backup-manager` bin; the legacy bash entry scripts (`backup-manager.sh`,
 `backup-status.sh`, `backup-restore.sh`, `validate-backup.sh`,
 `lib-cascade.sh`) were **retired** in the ADR-007 post-implementation refactor,
-Phase 7.4. The TS `backup-manager` shells out to `backup-controller` via
+Phase 7.4. The `backup-manager` bin shells out to `backup-controller` via
 `CliClient` (`src/client.ts`, parsing `--json` output) — no PBS API is
 reimplemented.
 
@@ -82,7 +81,7 @@ backup-manager restore list <module> | restore <module> [opts] | list-all
         backup-controller (snapshot listing).
 ```
 
-The single entry point is the TS `backup-manager` bin (linked onto `PATH` by
+The single entry point is the `backup-manager` bin (linked onto `PATH` by
 `install.sh`). Legacy-name → verb mapping (Phase 7.4 retirements):
 
 | Retired script       | Replacement |
@@ -114,7 +113,7 @@ in-job modules require `site.backup.target`).
 ## Testing
 
 `test.sh` is fast + offline (fixtures, never the live config or PBS). It
-compiles the TS sources + unit tests, runs the unit suite under `test/unit/`
+compiles the sources + unit tests, runs the unit suite under `test/unit/`
 (a `FakeClient` for the controller boundary, fixtures under
 `test/fixtures/config/`): cascade resolution, `validate`, `list`/`show`, the
 `reconcile` plan (idempotent ensure-job-member + apply-schedule, and the

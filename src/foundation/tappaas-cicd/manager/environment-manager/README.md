@@ -17,15 +17,13 @@ on `mgmt` and the default environment alike when a site domain is known;
 `additionalProperties:false`, so an authored `tlsCertRefid` is **rejected** — a
 cert refid is runtime state, not authored config.
 
-## The `environment-manager` CLI (TypeScript, ADR-007 #3)
+## The `environment-manager` CLI (ADR-007)
 
-A first-pass TypeScript port presents the standardized ADR-007 verbs on the
+A first-pass port presents the standardized ADR-007 verbs on the
 `environment` entity. It is a thin orchestration boundary — it owns
 `config/environments/*.json` and shells out to the plane/module managers for
 reconcile; it reimplements no plane logic (exactly as `people-manager` shells
-out to `authentik-manager`). Built with `tsc` (zero npm deps, ambient
-`lib/ts/src/env.d.ts` from the shared TS library) and wrapped via `default.nix`
-(a thin import of `lib/nix/ts-manager.nix`). The bash scripts below stay live.
+out to `authentik-manager`). The bash scripts below stay live.
 
 ```
 environment-manager list [--json] [--config-dir DIR]
@@ -93,7 +91,7 @@ with bare defaults.
   [--apply]`. **This pass is system-wide, not scoped to the environment** —
   network-manager has no zone or environment filter, so it converges every zone
   on every plane; `<env>`'s zone is simply part of it. The plan tags the action
-  `[system-wide]` so the label matches what actually happens (#461).
+  `[system-wide]` so the label matches what actually happens.
 - **Deep** (`reconcile <env> --deep`): the above **plus** every deployed module
   that consumes this environment — `module-manager reconcile <module> [--apply]`
   per module. Consuming modules are enumerated as the deployed `config/*.json`

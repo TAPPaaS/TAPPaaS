@@ -19,25 +19,25 @@ drives the Proxmox cluster (over SSH) to provision and maintain the module's VM.
   before the tag fall back to a heuristic (any of `dependsOn`/`provides`/
   `location`); provider-only modules (e.g. `templates`, no vmid/vmname) are kept.
 
-## Standardized verbs (ADR-007 #3) — `module-manager`
+## Standardized verbs (ADR-007) — `module-manager`
 
-The `module-manager` TypeScript CLI presents the **standardized verbs** on entity
+The `module-manager` CLI presents the **standardized verbs** on entity
 `module` (the verb-alignment front door). It is a thin orchestrator: the
-CONFIG-layer verbs (`list`/`show`/`validate`) are pure TS over `config/*.json`;
+CONFIG-layer verbs (`list`/`show`/`validate`) run directly over `config/*.json`;
 the LIFECYCLE verbs delegate to the bash scripts below (which stay live until a
 later retire phase).
 
 | Verb | Maps to | Notes |
 |------|---------|-------|
-| `module list` | — (TS) | enumerate deployed modules (`--json` for the cascade) |
-| `module show <m>` | — (TS) | one deployed config in full (`--json`) |
-| `module resolve <m>` | `src/resolve.ts` (TS) | **desired state**: the config *plus* the schema defaults it does not declare (`--json`) |
-| `module drift <m>` | `src/converge.ts` (TS) | that desired state **vs the live guest**, per service. `--service cluster:vm --json` prints the record a converge applies |
-| `module validate [<m>]` | tier/source lint (TS) | all modules, or one; `--allow-fork` |
+| `module list` | — | enumerate deployed modules (`--json` for the cascade) |
+| `module show <m>` | — | one deployed config in full (`--json`) |
+| `module resolve <m>` | `src/resolve.ts` | **desired state**: the config *plus* the schema defaults it does not declare (`--json`) |
+| `module drift <m>` | `src/converge.ts` | that desired state **vs the live guest**, per service. `--service cluster:vm --json` prints the record a converge applies |
+| `module validate [<m>]` | tier/source lint | all modules, or one; `--allow-fork` |
 | `module add <m>` | `install-module.sh` | create + provision |
 | `module modify <m>` | `update-module.sh` | release update (snapshot + test + 3-way merge). `--set field=value` also **changes a declared field** first (ADR-020) |
 | `module delete <m>` | `delete-module.sh` | `--archive` (default) / `--remove` |
-| `module reconcile <m>` | `src/inspect.ts` (TS) | read-only drift report (default); `--apply` → **leaf converge** (`src/reconcile.ts`) |
+| `module reconcile <m>` | `src/inspect.ts` | read-only drift report (default); `--apply` → **leaf converge** (`src/reconcile.ts`) |
 | `module test <m>` | `test-module.sh` | `--deep`, `--vmid`, `--zone0` |
 | `module snapshot-vm <m>` | `snapshot-vm.sh` | special VM op (not CRUD) |
 
@@ -50,7 +50,7 @@ fields it does not declare are filled in. That resolved value is what a converge
 actually uses, so the two differ exactly where a field is undeclared: `show`
 omits `cputype`, `resolve` reports `host` (marked `default`). There is one
 resolver behind it, shared by the drift report and the apply path, so the
-reported desired value and the applied one cannot diverge (ADR-020 D1, #550).
+reported desired value and the applied one cannot diverge (ADR-020 D1).
 
 > Not to be confused with `resolve-module.sh`, which answers a different
 > question — *where* a module's source directory is. `list --resolution` is that
@@ -135,7 +135,7 @@ already-installed module and every service must ship one (enforced by `test.sh`)
 create-only work it simply `exec`s `update-service.sh`. There is no fallback from
 one to the other: `install-service.sh` has create semantics (`cluster:vm`'s calls
 `Create-TAPPaaS-VM.sh`, which refuses an existing VMID), which is why reconcile
-failed on every VM-backed module before #495.
+previously failed on every VM-backed module.
 
 **What `reconcile <m>` (no `--apply`) reports** — a read-only drift report in two
 parts:
@@ -147,7 +147,7 @@ parts:
    read-only `services/<service>/test-service.sh <module>` (the same verifier
    `module test` runs): declared firewall rules, NAT rules, discovery relays. For
    a policy-only module (no VM) this is the whole module, so without it a clean
-   field diff said nothing (#458). `--no-services` skips it.
+   field diff said nothing. `--no-services` skips it.
 
 Detected drift **exits 0** — this is a report, and `list --diff` plus the
 `--deep` cascade propagate the rc. A check that could not *run* (missing or
@@ -174,7 +174,7 @@ module-manager module list --diff --services             # fleet rollup, service
 ## Underlying scripts
 
 All bash, linked onto `PATH` by `install.sh`. These remain the source of truth
-(the TS verbs orchestrate them) until a later retire phase.
+(the manager verbs orchestrate them) until a later retire phase.
 
 ### `install-module.sh` — install a module
 

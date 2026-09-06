@@ -1,4 +1,4 @@
-# Building TAPPaaS
+# TAPPaaS Build Process
 
 How the artifacts that make up a TAPPaaS deployment are produced: the Proxmox
 install media, the prebuilt VM images (NixOS template, OPNsense firewall), and —

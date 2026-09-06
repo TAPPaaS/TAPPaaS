@@ -1,8 +1,8 @@
 # node-provisioner
 
 The **PXE provisioning controller** for TAPPaaS follow-on nodes — Phase N3 of
-[docs/design/node-provisioning.md](../../../../../docs/design/node-provisioning.md)
-(issue #404 item 2). It runs on tappaas-cicd and netboots the Proxmox VE
+[docs/design/node-provisioning.md](../../../../../docs/design/node-provisioning.md).
+It runs on tappaas-cicd and netboots the Proxmox VE
 automated installer for *registered* pending nodes: the box PXE-boots, the
 installer posts its system info, and the matching node gets a generated
 per-node `answer.toml` back — hands-free PVE install.
