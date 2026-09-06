@@ -11,11 +11,11 @@ with retention, restore tooling and off-site options.
 |------------|-------------|-----|
 | Daily automated VM backups (21:00) of every opted-in module plus the `alwaysBackup` foundation VMs (`network`, `firewall`, `tappaas-cicd`) | — | managed cluster backup job; modules opt in via `dependsOn: ["backup:vm"]` |
 | Retention (4 last / 14 daily / 8 weekly / 12 monthly / 6 yearly) with daily prune (02:00) and garbage collection (03:00) | tappaas-cicd | automatic; `backup-manage.sh prune` / `gc` on demand |
-| Integrity verification: every new backup verified on arrival, daily verify-job (04:00) re-verifies anything older than 30 days | tappaas-cicd | automatic (issue #228) |
+| Integrity verification: every new backup verified on arrival, daily verify-job (04:00) re-verifies anything older than 30 days | tappaas-cicd | automatic |
 | PBS web GUI | `mgmt` zone | `https://backup.mgmt.internal:8007` (root@pam, or tappaas@pbs for backup ops) |
 | VM restore, incl. to another node/storage | tappaas-cicd | `restore.sh --vmid <id> [--node <n>] [--storage <s>]` |
 | Manual/ad-hoc backups and job management | tappaas-cicd | `backup-manage.sh status \| run-now <vmid> \| run-now-all \| list-jobs \| verify <id>` |
-| Multi-source vault: pull a buddy's PBS (`remote/<name>`) or receive third-party pushes (`external/<name>`) in isolated namespaces | tappaas-cicd | `backup-manage.sh add-remote / add-external` (issue #227) |
+| Multi-source vault: pull a buddy's PBS (`remote/<name>`) or receive third-party pushes (`external/<name>`) in isolated namespaces | tappaas-cicd | `backup-manage.sh add-remote / add-external` |
 | Off-site push for storage-less sites (`remote-only` placement) and placement policies incl. a `shim` | tappaas-cicd | `backup.json .placement`; `backup-manage.sh add-push <n>` (ADR-012) |
 | Opt-in WORM-ish immutability (read-only ZFS snapshots of the datastore) | tappaas-cicd | `backup.json .immutableSnapshots` (ADR-012 §3.5) |
 

@@ -18,7 +18,7 @@ Primary audience: TAPPaaS admin.
 
 ```bash
 cd "${TAPPAAS_REPO:-/home/tappaas/TAPPaaS}"/src/apps/deconz
-install-module.sh deconz        # run FROM the module dir (install-module is pwd-based)
+module-manager module add deconz   # run FROM the module dir (install-module is pwd-based)
 ```
 
 This:
@@ -68,7 +68,7 @@ The `hue-bridge` is diyHue, started by the module. To pair it to the SysAP:
 ## Verification
 
 ```bash
-bash test.sh deconz                              # service + API health
+module-manager module test deconz                # service + API health
 bash services/zigbee/test-service.sh hass        # HA-side reachability + pinholes
 bash services/hue-bridge/test-service.sh sysap   # SysAP-side reachability + pinholes
 ```

@@ -17,7 +17,7 @@ for any Windows-based service on TAPPaaS.
 | Proxmox integration (QEMU-GA: snapshot, quiesce, IP report, shutdown) | Proxmox / cicd | `qm agent <vmid> ping` |
 | VirtIO paravirtual drivers (storage, network, balloon, guest agent) | in-VM | installed by the baseline |
 | C: volume extended to the configured `diskSize` | in-VM | automatic during install |
-| Security-only Windows Updates on demand | tappaas-cicd | `update-module.sh windows-server` (snapshots first) |
+| Security-only Windows Updates on demand | tappaas-cicd | `module-manager module modify windows-server` (snapshots first) |
 
 ## What is not included
 

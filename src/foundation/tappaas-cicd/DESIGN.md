@@ -2,7 +2,7 @@
 
 The TAPPaaS "mothership" control plane. This document describes the **internal
 component contract** and the **three-level dispatch** that drives every manager and
-controller uniformly (ADR-007 P10 deliverable #5). For the catalog entry see
+controller uniformly (ADR-007 P10 deliverable). For the catalog entry see
 [README.md](./README.md); for installation see [INSTALL.md](./INSTALL.md); for test
 coverage see [TEST.md](./TEST.md). How the mothership *pulls* its updates and the repository
 patterns behind it (basic / community / downstream / private, and the developer workflows) are a
@@ -143,11 +143,11 @@ slice only when `TAPPAAS_TEST_DEEP=1`**:
 
 The cicd module gate honours the split:
 
-- `test-module.sh tappaas-cicd` (**fast**, ~seconds) runs the quick checks plus
+- `module-manager module test tappaas-cicd` (**fast**, ~seconds) runs the quick checks plus
   **Test 11**, a lightweight per-component *smoke* using the already-built bins
   (validate schemas, CLI loads, config reads) — confirms basic functionality without
   touching anything.
-- `test-module.sh tappaas-cicd --deep` runs the VM/variant suites **and** the
+- `module-manager module test tappaas-cicd --deep` runs the VM/variant suites **and** the
   `manager/` + `controller/` dispatchers with `TAPPAAS_TEST_DEEP=1`, so every
   component's full suite (offline unit + live tiers) runs.
 

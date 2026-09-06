@@ -29,12 +29,12 @@ Primary audience: TAPPaaS admin.
 > before installing.
 
 Fields can also be overridden with flags at install time, e.g.
-`install-module.sh litellm --node tappaas1 --zone0 srvDev --vmid 399 --memory 8192`,
+`module-manager module add litellm --node tappaas1 --zone0 srvDev --vmid 399 --memory 8192`,
 or a named variant config (`--variant staging` reads `litellm-staging.json`).
 
 ## Install
 
-    install-module.sh litellm
+    module-manager module add litellm
 
 Duration: ~5–10 minutes on first run.
 
@@ -122,12 +122,12 @@ The SSO callback follows `PROXY_BASE_URL`, which `update.sh` derives from the
 module's resolved `proxyDomain` — so re-converge after any domain change or the
 redirect will point at the old host.
 
-This lives in the deployed config only: `install-module.sh litellm --reinstall`
+This lives in the deployed config only: `module-manager module add litellm --reinstall`
 reverts it.
 
 ## Verification
 
-    test-module.sh litellm
+    module-manager module test litellm
 
 All 10 tests should pass.
 

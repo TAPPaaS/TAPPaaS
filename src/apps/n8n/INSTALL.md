@@ -17,7 +17,7 @@ Primary audience: TAPPaaS admin.
 
 ## Install
 
-    install-module.sh n8n
+    module-manager module add n8n
 
 ## Post-install
 
@@ -25,7 +25,7 @@ None defined yet.
 
 ## Verification
 
-    test-module.sh n8n
+    module-manager module test n8n
 
 | Check | Expected |
 |-------|----------|
@@ -33,6 +33,6 @@ None defined yet.
 
 ## Troubleshooting
 
-**install-module.sh fails immediately**
+**module add fails immediately**
 
 Expected — the module is a placeholder with no `n8n.json` or install scripts.

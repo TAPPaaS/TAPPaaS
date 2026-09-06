@@ -53,7 +53,7 @@ Three inputs define your installation — pick them now:
 - [ ] **Site code** (`--name`): lowercase, ≤15 characters. A neutral code (e.g.
   `warmelo1` — place plus number) that becomes the Proxmox **cluster name** and
   `site.json .name`. It is set once at cluster creation and is not reused to name
-  anything else (#426).
+  anything else.
 - [ ] **Organisation name** (`--organization`): lowercase (hyphens allowed). Names
   your default **environment**, its network **zone**, and your default
   **organisation** in the identity provider. Defaults to the site code if omitted.

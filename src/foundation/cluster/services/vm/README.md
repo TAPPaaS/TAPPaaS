@@ -128,7 +128,7 @@ CPU type emulation for the VM
 
 **About the field.** Use 'host' for best performance, or a specific CPU model for migration compatibility
 
-**Why this change class.** Proxmox spells it 'cpu'. The undeclared default resolves to 'host' — from module-fields.json, via the one resolver, NOT from a cfg() ladder in this service (#550).
+**Why this change class.** Proxmox spells it 'cpu'. The undeclared default resolves to 'host' — from module-fields.json, via the one resolver, NOT from a cfg() ladder in this service.
 
 ### `bridge0`
 
@@ -166,7 +166,7 @@ Security zone for net0. Must exist in zones.json.
 | Reported as | `net0.tag` |
 | Composite input to | `net0` |
 
-**About the field.** Zone determines VLAN tag. 'mgmt' is untagged traffic. camelCase only — no underscores or hyphens (#278). ADR-007 P5: when zone0 is unset it DEFAULTS to the target environment's network.zone (read from config/environments/<env>.json); pre-cutover (no site.json/environments) it falls back to resolve_default_zone()'s behaviour. An explicit zone0 in the module JSON always wins.
+**About the field.** Zone determines VLAN tag. 'mgmt' is untagged traffic. camelCase only — no underscores or hyphens. ADR-007 P5: when zone0 is unset it DEFAULTS to the target environment's network.zone (read from config/environments/<env>.json); pre-cutover (no site.json/environments) it falls back to resolve_default_zone()'s behaviour. An explicit zone0 in the module JSON always wins.
 
 **Why this change class.** The zone resolves to net0's VLAN tag; a new tag is a new subnet, so the guest must renew DHCP and re-register DNS.
 
@@ -187,7 +187,7 @@ MAC address for the net0 network port
 | Reported as | `net0.mac` |
 | Composite input to | `net0` |
 
-**Why this change class.** A new MAC is a NEW IDENTITY on the wire: the guest takes a fresh DHCP lease, very likely a different address, and its DNS record must follow — exactly the reboot → wait-for-lease → re-register chain net0 already declares. Classed in-place until ADR-020 P6, inherited from a comment that grouped 'trunk- or MAC-only' changes as live; the two are not alike, because trunks is a BRIDGE-side allow-list the guest never sees while the MAC is the guest's own NIC. #194 already established that a netN property needing device re-creation (queues) is a disruptive hot-replug, and the MAC takes the same path. When the module pins no mac0 the field has no desired value at all and the LIVE MAC is carried across, which is why the manager assembles the finished netopts — so this only bites a module that deliberately re-MACs a guest.
+**Why this change class.** A new MAC is a NEW IDENTITY on the wire: the guest takes a fresh DHCP lease, very likely a different address, and its DNS record must follow — exactly the reboot → wait-for-lease → re-register chain net0 already declares. Classed in-place until ADR-020 P6, inherited from a comment that grouped 'trunk- or MAC-only' changes as live; the two are not alike, because trunks is a BRIDGE-side allow-list the guest never sees while the MAC is the guest's own NIC. A netN property needing device re-creation (queues) is a disruptive hot-replug, and the MAC takes the same path. When the module pins no mac0 the field has no desired value at all and the LIVE MAC is carried across, which is why the manager assembles the finished netopts — so this only bites a module that deliberately re-MACs a guest.
 
 ### `trunks0`
 
@@ -249,7 +249,7 @@ Security zone for net1. Must exist in zones.json.
 | Reported as | `net1.tag` |
 | Composite input to | `net1` |
 
-**About the field.** Only used if bridge1 is defined. Hyphens are NOT allowed — use underscores (#237).
+**About the field.** Only used if bridge1 is defined. Hyphens are NOT allowed — use underscores.
 
 ### `mac1`
 
@@ -393,7 +393,7 @@ Whether this template can be built fully automatically without operator input. U
 |---|---|
 | Type | `boolean` |
 | Default | `false` |
-| Allowed values | `true` — Fully unattended build — no console interaction required (e.g. tappaas-winserver with autounattend.xml)<br>`false` — Requires manual installation — operator must run install-module.sh and complete the setup (e.g. tappaas-nixos  |
+| Allowed values | `true` — Fully unattended build — no console interaction required (e.g. tappaas-winserver with autounattend.xml)<br>`false` — Requires manual installation — operator must run `module-manager module add` and complete the setup (e.g. tappaas-nixos  |
 | Required by | *(none)* |
 | Used by | `cluster:vm` |
 | Change class | `recreate` |
@@ -533,7 +533,7 @@ Built from `bridge0`, `zone0`, `mac0`, `trunks0`.
 | Hook | `update-net.sh` |
 | Side effects | `reboot`, `wait-ip`, `dns` |
 
-**Why this change class.** The primary NIC: one qm value 'virtio=<mac>,bridge=<b>,tag=<vlan>[,trunks=…][,queues=…]' assembled from four declared fields. The MANAGER builds the finished string because it must preserve two LIVE values the config never carries — the MAC when the module pins none, and queues, which must never change on a running NIC (#194). in-place-reboot is the CEILING: the runner escalates only when bridge0 or zone0 actually drifted; a MAC- or trunk-only change stays in-place, exactly as today.
+**Why this change class.** The primary NIC: one qm value 'virtio=<mac>,bridge=<b>,tag=<vlan>[,trunks=…][,queues=…]' assembled from four declared fields. The MANAGER builds the finished string because it must preserve two LIVE values the config never carries — the MAC when the module pins none, and queues, which must never change on a running NIC. in-place-reboot is the CEILING: the runner escalates only when bridge0 or zone0 actually drifted; a MAC- or trunk-only change stays in-place, exactly as today.
 
 ### `net1`
 

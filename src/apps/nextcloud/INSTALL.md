@@ -17,7 +17,7 @@ The public domain is derived as `<vmname>.<domain>` from the environment configu
 
 ## Install
 
-    install-module.sh nextcloud
+    module-manager module add nextcloud
 
 A first install takes roughly 9 minutes, dominated by the first NixOS rebuild (Nextcloud plus the
 eurooffice connector and `uppush` are built from source when uncached). The installer prints the
@@ -44,7 +44,7 @@ Nextcloud automatically via its dependency on `nextcloud:fileservice`.
 
 ## Verification
 
-    test-module.sh nextcloud
+    module-manager module test nextcloud
 
 | Check | Expected |
 |-------|----------|
@@ -62,7 +62,7 @@ The document-editing user test is owned by the euro-office connector
 
 ## Troubleshooting
 
-**`install-module.sh` exits with a dependency error**
+**`module add` exits with a dependency error**
 A required service is not installed (`cluster:vm`, `templates:nixos`, `backup:vm`,
 `network:proxy`, `network:rules`, `identity:identity`). Install the missing module first, then
 retry.
@@ -72,7 +72,7 @@ NixOS first-boot activation may still be running. Check from tappaas-cicd:
 
     ssh tappaas@nextcloud.srv.internal "sudo journalctl -u phpfpm-nextcloud -n 30"
 
-Wait 2–3 minutes, then run `test-module.sh nextcloud` again.
+Wait 2–3 minutes, then run `module-manager module test nextcloud` again.
 
 **Admin password unknown**
 It is saved to `/home/tappaas/secrets/nextcloud.env` on tappaas-cicd at install time; the source

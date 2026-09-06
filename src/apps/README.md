@@ -8,7 +8,7 @@ To create a new module, see [00-Template](./00-Template/README.md).
 ## Installing a module
 
 ```bash
-install-module.sh <module>
+module-manager module add <module>
 ```
 
 ## VM console screenshot

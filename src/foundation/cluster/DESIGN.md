@@ -22,16 +22,16 @@ A guest is **either** a VM **or** a container, never both.
 | File | Role |
 |------|------|
 | `install.sh` | Node bootstrap — run once per node from the Proxmox shell. Orchestrates the post-install + the three config phases below. Step [1/5] of `foundation/install.sh`. |
-| `config-network.sh` | Phase 2 — build the `lan`/`wan` bridges from the physical ports (issue #141); also `--swap-gateway` / `--drop-upstream`. |
+| `config-network.sh` | Phase 2 — build the `lan`/`wan` bridges from the physical ports; also `--swap-gateway` / `--drop-upstream`. |
 | `config-storage.sh` | Phase 3 — build the `tankXY` ZFS pools from the disks. |
 | `sanity-check.sh` | Post-firewall health checks (gateway, DNS, internet) once the node is on the management network. |
 | `install-platform.sh` | Run once on the first node after all nodes + firewall are up — imports the prebuilt NixOS template (vmid 8080) and builds the `tappaas-cicd` mothership (vmid 130). |
 | `make-install-media.sh` | Build a preconfigured Proxmox install USB stick on your laptop (answers baked in; only the boot disk is asked on the target). |
 | `Create-TAPPaaS-VM.sh` / `Create-TAPPaaS-LXC.sh` | Guest provisioners, distributed to every node and invoked by the `cluster:vm` / `cluster:lxc` services. |
 | `reconcile-storage-nodes.sh` | Reconcile PVE storage node lists with reality. |
-| `setup-ssd-lifecycle.sh` | Autotrim + TRIM/SMART cron jobs (#152). |
-| `setup-realtek-nic.sh` | Realtek RTL8127 10GbE driver fix for MS-S1 MAX nodes (#308) — hardware-gated, idempotent. See [Node hardware quirks](#node-hardware-quirks). |
-| `reboot-node.sh` / `reboot-cluster.sh` | Controlled HA node reboot (single node / orchestrated kernel-reboot pass) (#275). |
+| `setup-ssd-lifecycle.sh` | Autotrim + TRIM/SMART cron jobs. |
+| `setup-realtek-nic.sh` | Realtek RTL8127 10GbE driver fix for MS-S1 MAX nodes — hardware-gated, idempotent. See [Node hardware quirks](#node-hardware-quirks). |
+| `reboot-node.sh` / `reboot-cluster.sh` | Controlled HA node reboot (single node / orchestrated kernel-reboot pass). |
 | `capture.sh` | Capture helper. |
 | `update.sh` | Cluster module update — apt upgrade on all nodes and re-distribute the provisioners + `zones.json`; re-asserts the Realtek fix. |
 | `test.sh` | Cluster regression tests (see [TEST.md](./TEST.md)). |
@@ -85,7 +85,7 @@ other node joins it.
 
 ## Network (phase 2)
 
-`config-network.sh` (issue #141) establishes the TAPPaaS bridge model:
+`config-network.sh` establishes the TAPPaaS bridge model:
 
 - **`lan`** — VLAN-aware bridge (`bridge-vids 2-4094`) carrying the management network
   (untagged) plus every TAPPaaS VLAN as a trunk to the switch. Holds this node's
@@ -234,7 +234,7 @@ across all nodes.
 
 ## Node hardware quirks
 
-### Minisforum MS-S1 MAX — Realtek RTL8127 10GbE (issue #308)
+### Minisforum MS-S1 MAX — Realtek RTL8127 10GbE
 
 The MS-S1 MAX's two 10GbE ports are Realtek **RTL8127** `[10ec:8127]`. The in-tree
 **`r8169`** driver fails to re-initialise them across a **warm/soft reboot** — the NIC
@@ -253,7 +253,7 @@ Two steps the OS cannot do for you (the script detects and instructs):
    otherwise (or MOK-sign it). The MS-S1 MAX ships with Secure Boot **enabled**.
 2. **One power cycle** the first time — the node boots on `r8169`; only a full power
    cycle (drain), not a warm reboot, switches cleanly to `r8127`. After that, warm
-   reboots (incl. the `#275` automated kernel-reboot pass) are safe.
+   reboots (incl. the automated kernel-reboot pass) are safe.
 
 Because `update.sh` re-runs the enforcer every cycle and DKMS rebuilds `r8127` for each
 new kernel, ordinary updates **maintain** the fix rather than overwrite it; a
@@ -274,11 +274,11 @@ conditions; to verify by hand before rebooting a node after a kernel upgrade:
 dkms status -m r8127 | grep "$(uname -r)"
 ```
 
-## Related issues
+## Related work
 
-- #140 — automate cluster create/join in `install.sh`
-- #141 — `config-network.sh` (lan/wan bridge setup, gateway cutover)
-- #175 — robust downloads (`fetch()`): a failed download is now fatal, never a silent
+- automate cluster create/join in `install.sh`
+- `config-network.sh` (lan/wan bridge setup, gateway cutover)
+- robust downloads (`fetch()`): a failed download is now fatal, never a silent
   0-byte file reported as success
-- #275 — controlled HA node reboots (`reboot-node.sh` / `reboot-cluster.sh`)
-- #308 — Realtek RTL8127 NIC driver fix for MS-S1 MAX (`setup-realtek-nic.sh`)
+- controlled HA node reboots (`reboot-node.sh` / `reboot-cluster.sh`)
+- Realtek RTL8127 NIC driver fix for MS-S1 MAX (`setup-realtek-nic.sh`)

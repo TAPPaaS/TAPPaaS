@@ -11,9 +11,9 @@ Primary audience: TAPPaaS admin.
 > **Status:** runbook scaffold (ADR-010 P1). The `satellite-manager` flow it describes is
 > built in packages P2–P6; steps below are the target procedure.
 
-The satellite is **not** installed with `install-module.sh` — the operator front door is
-the `satellite-manager` CLI on `tappaas-cicd`. The module's `install.sh` merely delegates
-to it. Design reference:
+The satellite is **not** installed like an ordinary module (`module-manager module add`) —
+the operator front door is the `satellite-manager` CLI on `tappaas-cicd`. The module's
+`install.sh` merely delegates to it. Design reference:
 [ADR-010](../../../docs/ADR/ADR-010-vps-satellite-reverse-proxy-backup.md).
 
 ## Prerequisites

@@ -268,7 +268,7 @@ a five-phase chain — you run it once and watch:
       `install.sh`). The cicd's `install.sh` then **writes the system's
       configuration**, automatically:
       - **`site.json`** — the site singleton (nodes, email, repos), via
-        `create-site.sh --name <site-code> --organization <org>` (#426: the site
+        `create-site.sh --name <site-code> --organization <org>` (the site
         code is the neutral cluster name; the org names the default env/zone)
       - **`zones.json`** — the network zones, via `network-manager init`
       - the **`mgmt` + default `<org>` environments**, via
@@ -382,7 +382,7 @@ two certificate strategies below.
 
 The default TLS strategy (`proxyTls: dns01`) issues **one wildcard certificate per
 TAPPaaS domain** via ACME **DNS-01**, then binds it to every module's reverse-proxy
-entry through Caddy's `CustomCertificate` (issue #254). DNS-01 needs no
+entry through Caddy's `CustomCertificate`. DNS-01 needs no
 inbound :80 traffic, so internal-only services get a public cert too.
 
 > **Why not Caddy's own DNS-01?** Since os-caddy 2.0.0 the OPNsense build only
@@ -478,12 +478,12 @@ is skipped once `config/people/` exists, so it never disturbs people you've adde
 When it finishes you'll see a **"🎉 your TAPPaaS foundation is installed"** summary
 (nodes, firewall, mothership, domain/TLS, modules, organisation).
 
-> Prefer to do it by hand? `install-module.sh` is on the `PATH` but reads
+> Prefer to do it by hand? `module-manager module add` reads
 > `./<module>.json` from the current directory, so `cd` in first:
 > ```bash
-> cd ~/TAPPaaS/src/foundation/backup   && install-module.sh backup     #  Proxmox Backup Server
-> cd ~/TAPPaaS/src/foundation/identity && install-module.sh identity   #  Identity provider
-> cd ~/TAPPaaS/src/foundation/logging  && install-module.sh logging    #  Loki / Grafana / Promtail
+> cd ~/TAPPaaS/src/foundation/backup   && module-manager module add backup     #  Proxmox Backup Server
+> cd ~/TAPPaaS/src/foundation/identity && module-manager module add identity   #  Identity provider
+> cd ~/TAPPaaS/src/foundation/logging  && module-manager module add logging    #  Loki / Grafana / Promtail
 > ```
 > *(Module sizing/zones are defaults — see appendix.)*
 

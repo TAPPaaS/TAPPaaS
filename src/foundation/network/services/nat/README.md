@@ -3,7 +3,7 @@
 Provides destination-NAT (port-forward) rules on OPNsense so a module can
 expose an internal service port on the firewall's WAN interface.
 
-This is the foundation service behind issue #285: when a module needs a raw TCP
+This is the foundation service for when a module needs a raw TCP
 or UDP port reachable from the internet (e.g. SSH, not HTTP), it depends on
 `network:nat` and declares the port mappings. The reverse-proxy service
 (`network:proxy`) remains the right choice for HTTP(S) — use `network:nat`

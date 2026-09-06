@@ -40,16 +40,16 @@ copy lives at `${TAPPAAS_CONFIG:-/home/tappaas/config}/zones.json`.
 | `pinhole-allowed-from` | Zones that may open per-module pinholes into this zone. |
 | `tier` | Trust rank 0–6 in the strict lattice (0 = most trusted). `access-to` may only run **downward**. Optional; absent on `Overlay`/`WAN`. |
 | `isolated` | Inbound quarantine: accepts **no** zone-wide `access-to`; pinhole-only. Orthogonal to `tier`. Default `false`. |
-| `serves` | For a Client/IoT zone: the **environment** whose service zone it consumes. Symbolic — survives the `srv` → `<env>` rename (#424). |
+| `serves` | For a Client/IoT zone: the **environment** whose service zone it consumes. Symbolic — survives the `srv` → `<env>` rename. |
 | `DHCP-start` / `DHCP-end` | DHCP range offsets within the subnet (default 50–250). |
 | `description` | Human-readable purpose. |
 | `SSID` | Optional WiFi network name broadcast on this zone's VLAN. |
 
 Auto-allocated VLANs use the 60–99 window within each type band. Zone keys match
-`^[a-z][a-zA-Z0-9]*$` — **camelCase only, no hyphens or underscores** (#278), as in
+`^[a-z][a-zA-Z0-9]*$` — **camelCase only, no hyphens or underscores**, as in
 `srvHome` / `iotCams`. This is what `network-manager add` has always enforced; the
 schema previously advertised a hyphenated form that no code path would accept.
-The client role zones `home` / `guest` stay unprefixed (#425) — the zone key drives
+The client role zones `home` / `guest` stay unprefixed — the zone key drives
 the client DNS domain `<zone>.internal`, so renaming one re-domains every device.
 
 ### Zone types
@@ -160,7 +160,7 @@ which is also what invariant I4 checks against.
 ### `serves` — linking a client or IoT zone to an environment
 
 A client zone reaches its services, and an IoT zone is reached by them. Writing that as a
-**literal** service-zone name is what issue #424 is about: `network-manager init` renames
+**literal** service-zone name is the problem: `network-manager init` renames
 `srv` → `<defaultEnvironment>`, and every literal reference is stranded.
 
 `serves` names the **environment** instead, and is resolved on every reconcile:
@@ -246,13 +246,13 @@ never runs `init iot` and never carries those zones. Extra service zones, a
 second client segment and so on are generated on demand with
 `add --archetype …` or `environment add --create-zone` — **no dormant
 "Available" zones are shipped**, because dormant zones were pure surface area
-and the `srv*` ones were exactly the stale-reference surface of #424.
+and the `srv*` ones were exactly the stale-reference surface.
 
 Profiles are **additive** (a profile only adds its own zones, plus the
 `access-to` entries those zones need on zones from another profile),
 **idempotent** (re-applying is a byte-level no-op), **order-independent**, and
 **non-destructive** — existing zones always win, so an init re-run can never
-rebuild a live file from template defaults (#427).
+rebuild a live file from template defaults.
 
 ### The rename: `srv → <N>`, and nothing else
 
@@ -264,14 +264,14 @@ zone namespace:
 - **`home` and `guest` keep their names.** They are site-local client-*role*
   zones — there is one of each per site, so an org prefix would distinguish
   nothing, and the zone key drives the client DNS domain `<zone>.internal`, so
-  renaming one re-domains every device (#425);
+  renaming one re-domains every device;
 - **every zone-name reference is rewritten** through the same map — `access-to`,
   `pinhole-allowed-from`, and the `serves` placeholder.
 
 That last point is what makes a shipped client/IoT zone come out of `init`
 already bound: the template writes `serves: "srv"`, and after the rename it
 reads `serves: "<N>"` — the default *environment*, which shares its name with
-the default service zone by construction (ADR-007d/#426). No literal
+the default service zone by construction (ADR-007d). No literal
 service-zone reference is left to go stale.
 
 ### Retiring what a release stopped shipping

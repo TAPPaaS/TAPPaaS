@@ -27,7 +27,7 @@ Primary audience: TAPPaaS admin.
 
 ## Install
 
-    install-module.sh vllm-amd
+    module-manager module add vllm-amd
 
 `cluster:lxc` creates the container; the module installer then patches the host GPU
 (devices, render group, permissions, models directory) and installs Docker plus the vLLM
@@ -78,7 +78,7 @@ into the compose file and runs a smoke prompt in one go.
 
 ## Verification
 
-    test-module.sh vllm-amd
+    module-manager module test vllm-amd
 
 | Check | Expected |
 |-------|----------|

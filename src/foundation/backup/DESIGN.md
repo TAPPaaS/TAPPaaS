@@ -1,7 +1,7 @@
 # backup — Design notes
 
-Implementation detail for the backup module (created during the Diataxis restructure,
-issue #247). Catalog info: [README.md](./README.md); install: [INSTALL.md](./INSTALL.md);
+Implementation detail for the backup module (created during the Diataxis restructure).
+Catalog info: [README.md](./README.md); install: [INSTALL.md](./INSTALL.md);
 operations: [QUICKREF.md](./QUICKREF.md); test coverage: [TEST.md](./TEST.md). Design
 rationale: [ADR-012](../../../docs/ADR/ADR-012-backup-enhancement.md).
 
@@ -77,7 +77,7 @@ outcome is recorded as `.placementState`:
 Legacy deployments (pre-ADR-012, no placementState) are treated as `local` and the
 marker is backfilled by `update.sh` — never routed through promotion.
 
-## Managed backup job (issue #200)
+## Managed backup job
 
 No `--all` job is created. The cluster backup job is owned by the `backup:vm` service:
 each module that declares `dependsOn: ["backup:vm"]` adds its VMID to a single shared,
@@ -100,19 +100,19 @@ against a settled datastore:
 | 03:00 | GC     | Garbage-collect unreferenced chunks |
 | 04:00 | Verify | Integrity-check backups (re-verify if older than 30 days) |
 
-## Data integrity / bit-rot protection (issue #228)
+## Data integrity / bit-rot protection
 
 The datastore lives on ZFS, so silent bit-rot is a real risk. Two safeguards run
 automatically: the daily `verify-<datastore>` verify-job (`--ignore-verified true
 --outdated-after 30`, spreading load across the month) and `verify-new` (every backup
 verified on arrival). `update.sh` retrofits both on already-deployed servers.
 
-## Boot ordering (issue #230)
+## Boot ordering
 
 PBS services get `After=/Requires=zfs-mount.service` drop-ins so they never open the
 chunk store before the ZFS datastore mounts; `update.sh` re-creates them if missing.
 
-## Multi-source namespaces (issue #227)
+## Multi-source namespaces
 
 The single datastore is partitioned so it can safely hold more than local VM backups:
 
@@ -146,7 +146,7 @@ sender**:
 `add-push` registers the remote PBS as Proxmox storage `offsite-<n>`; `--make-default`
 routes the managed job there. We hold **write-no-delete** and the **remote owns
 prune/retention/immutability** — a local compromise cannot erase the off-site copy
-(compromise-isolation suite in [TEST.md](./TEST.md), #389).
+(compromise-isolation suite in [TEST.md](./TEST.md)).
 
 - **Subset (pull):** `.groupFilter` in `remote-<n>.json` (string or array, e.g.
   `"type:vm"` or `["group:vm/101","group:vm/102"]`) replicates only part of the source.

@@ -49,8 +49,8 @@ volume).
 ## Dependencies
 
 `dependsOn` is empty **by design**: the satellite is an external host, operator-driven
-via `satellite-manager`, not installed through `install-module.sh`, so it does not
-participate in the module dependency graph. Its real prerequisites are checked by
+via `satellite-manager`, not installed like an ordinary module (`module-manager module add`),
+so it does not participate in the module dependency graph. Its real prerequisites are checked by
 `satellite-manager` at install time:
 
 | Depends on | Purpose |

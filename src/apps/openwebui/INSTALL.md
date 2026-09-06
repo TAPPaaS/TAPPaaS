@@ -25,12 +25,12 @@ Primary audience: TAPPaaS admin.
 > before installing.
 
 Fields can also be overridden with flags at install time, e.g.
-`install-module.sh openwebui --node tappaas1 --zone0 srvDev --vmid 399`,
+`module-manager module add openwebui --node tappaas1 --zone0 srvDev --vmid 399`,
 or a named variant config (`--variant staging`).
 
 ## Install
 
-    install-module.sh openwebui
+    module-manager module add openwebui
 
 Duration: ~10–20 minutes on first run (NixOS rebuild + container pull ~1 GB).
 
@@ -115,7 +115,7 @@ Two caveats:
 - **A 502 immediately after the converge is usually transient.** The container is
   restarted to pick up new settings; Caddy returns 502 while it comes back. Check
   `curl http://127.0.0.1:8080/` on the VM — if that answers 200, just retry.
-- **This lives in the deployed config only.** `install-module.sh openwebui
+- **This lives in the deployed config only.** `module-manager module add openwebui
   --reinstall` re-copies the module source and reverts to `["home"]`. Re-apply
   afterwards, or change the authored `openwebui.json` if this site always wants
   it published — but note that changes the shipped default for every deployment
@@ -125,7 +125,7 @@ To narrow it again, set the zones back (e.g. `["home"]`) and reconcile.
 
 ## Verification
 
-    test-module.sh openwebui
+    module-manager module test openwebui
 
 | Check | Expected |
 |-------|----------|
@@ -152,7 +152,7 @@ Expect `OPENAI_API_BASE_URL`, `OPENAI_API_KEY`, and the `OAUTH_*` /
 These checks cover deployment failures only.
 For operational issues after a successful install see [ADMIN.md](./ADMIN.md).
 
-**install-module.sh exits with dependency error**
+**module add exits with dependency error**
 
 A required service is not installed. Check which `dependsOn` entry is unmet:
 
@@ -167,13 +167,13 @@ DNS or image pull failed during NixOS activation. Check from inside the VM:
     ssh tappaas@openwebui.srvWork.internal "sudo journalctl -u openwebui-wrapper -n 30"
 
 Common fix: wait 2–3 minutes for NixOS first-boot to complete, then run
-`test-module.sh openwebui`.
+`module-manager module test openwebui`.
 
 **Test shows LiteLLM unreachable**
 
 Firewall pinhole not applied. Re-run install:
 
-    install-module.sh openwebui --force
+    module-manager module add openwebui --force
 
 **Model list is empty (but sign-in works)**
 

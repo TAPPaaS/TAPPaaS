@@ -20,7 +20,7 @@ A "direct dependency" is one of:
   `network.json` (the renamed firewall config, read with a `firewall.json`
   fallback), or a module's own `<name>.json`.
 
-> **ADR-007 #3 — the 7 verb-aligned managers are the front doors.** Each is a
+> **ADR-007 — the 7 verb-aligned managers are the front doors.** Each is a
 > compiled TypeScript bin (one bin per manager, source = its `src/*.ts` tree,
 > built by `default.nix`, linked by `install.sh`):
 > `people-manager`, `network-manager`, `module-manager`, `site-manager`,
@@ -82,7 +82,7 @@ A "direct dependency" is one of:
 
 ## Key dependency chains (6 main flows)
 
-### 0. First-node install chain (the bootstrap; ADR-007 #380)
+### 0. First-node install chain (the bootstrap; ADR-007)
 
 `foundation/install.sh` is the ENTRY point (the URL the install guide downloads).
 It threads one `--name <orgname>` through the whole chain (cluster name = site.json
@@ -107,7 +107,7 @@ foundation/install.sh  --name <orgname> --domain <d>     <- entry orchestrator
 #   then people-manager bootstrap + reconcile => the <orgname> organisation.
 ```
 
-### 1. Module lifecycle through the manager (ADR-007 #3)
+### 1. Module lifecycle through the manager (ADR-007)
 
 ```
 module-manager (TS)                  <- the verb-aligned front door
@@ -349,7 +349,7 @@ graph TD
     FW --> CFG
 ```
 
-## Manager front-door adoption (ADR-007 #3/#5)
+## Manager front-door adoption (ADR-007)
 
 **Question:** are the 7 managers now the entry points, or are the legacy bash
 verb scripts still called directly (bypassing the manager)?

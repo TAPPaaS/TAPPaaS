@@ -137,7 +137,7 @@ One `*.client1.tappaas.org` certificate, shared by every service in the
 environment, issued via DNS-01:
 
 ```bash
-acme-setup.sh --environment client1        # never use --staging (see #329)
+acme-setup.sh --environment client1        # never use --staging
 ```
 
 This issues the wildcard cert on the firewall, and **also** registers the
@@ -146,7 +146,7 @@ in **Unbound** so internal clients resolve the environment's services to the rev
 proxy. (A wildcard is a single Unbound "redirect" zone with one target, so — unlike
 per-service, Option B — it cannot be self-traffic for *every* client zone at once;
 as an interim it points at the environment's own service-zone gateway rather than
-the DMZ gateway (#504), and a fully subnet-aware answer awaits Unbound
+the DMZ gateway, and a fully subnet-aware answer awaits Unbound
 `access-control-view`. It falls back to the DMZ gateway if the environment declares
 no resolvable zone.)
 
@@ -162,7 +162,7 @@ install (Step 4) makes Caddy issue that domain's own certificate via Let's Encry
 **HTTP-01**, and registers a per-service Unbound split-horizon override pointing at
 the service's authorized **client-zone gateway** — the firewall interface on that
 zone's own subnet, so the request is self-traffic and crosses no inter-zone rule
-(`nextcloud.client1.tappaas.org → <client-zone gateway>`; ADR-005 §6, #504). It is
+(`nextcloud.client1.tappaas.org → <client-zone gateway>`; ADR-005 §6). It is
 deliberately **not** the DMZ gateway, which client zones such as `home`/`work`
 cannot reach. No `acme-setup.sh`, no DNS API — but the names must be publicly
 reachable on `:80`.
@@ -171,23 +171,23 @@ reachable on `:80`.
 
 ## Step 4 — Install the two modules into the environment
 
-These Community modules live under `~/Community`. `install-module.sh` reads the
+These Community modules live under `~/Community`. `module-manager module add` reads the
 module JSON from the current directory, so `cd` into each module first.
 
 ```bash
 # Nextcloud first (euro-office depends on it)
 cd ~/Community/src/AndreasJe/nextcloud-hub/nextcloud
-install-module.sh nextcloud --environment client1
+module-manager module add nextcloud --environment client1
 
 # Then EURO Office — its nextcloud:vm dependency resolves to the ENVIRONMENT one
 cd ~/Community/src/AndreasJe/nextcloud-hub/euro-office
-install-module.sh euro-office --environment client1
+module-manager module add euro-office --environment client1
 ```
 
 > `--variant` is a **deprecated alias** for `--environment` (kept only until the
 > single production site is cut over). New work should use `--environment`.
 
-`install-module.sh` validates the environment exists, then for each module:
+`module-manager module add` validates the environment exists, then for each module:
 
 - derives the effective module name `<module>-client1` (the `-<env>` suffix is
   added for any non-default environment), sets `zone0` from the environment's
@@ -224,7 +224,7 @@ curl -fsSI https://nextcloud.client1.tappaas.org/ | head -1
 
 # Internal split-horizon: clients resolve to an internal firewall interface, not
 # the WAN — per-service resolves to each service's client-zone gateway; a wildcard
-# environment resolves to the environment's service-zone gateway (#504).
+# environment resolves to the environment's service-zone gateway.
 getent hosts nextcloud.client1.tappaas.org      # -> an internal gateway IP, not the WAN
 ```
 
@@ -237,8 +237,8 @@ isolated from your default services and from any other client environment.
 
 ```bash
 # Delete the deployed modules first (consumer before provider)
-delete-module.sh euro-office-client1
-delete-module.sh nextcloud-client1
+module-manager module delete euro-office-client1
+module-manager module delete nextcloud-client1
 
 # Remove the environment file
 environment-manager delete client1
@@ -248,7 +248,7 @@ environment-manager delete client1
 network-manager zone delete client1
 ```
 
-`delete-module.sh` removes the VMs, their Caddy entries and (per-service) DNS
+`module-manager module delete` removes the VMs, their Caddy entries and (per-service) DNS
 overrides. `environment-manager delete` removes `config/environments/client1.json`
 (it refuses while modules are still deployed unless you force it).
 `network-manager zone delete` deactivates the zone across every plane and then
@@ -299,7 +299,7 @@ acme-setup.sh --environment client1 --provider desec   # reads the token from ~/
   (`tappaas.org`). Do **not** register it as a delegated child zone — acme.sh writes the
   `_acme-challenge` TXT directly in the parent zone, which resolves and propagates fastest.
 - **Never use `--staging`.** os-acme-client keys the ACME account by name; staging flips the single
-  shared account to the staging CA, which then breaks production issuance and renewals (see #329).
+  shared account to the staging CA, which then breaks production issuance and renewals.
 
 ### Cert fails with `statusCode 400`
 
@@ -309,7 +309,7 @@ error is elsewhere:
 1. os-acme-client logs to **syslog tag `AcmeClient`** (not `acme.sh.log`).
 2. For the actual Let's Encrypt / DNS error, run acme.sh directly with `--debug 2` using the exact
    args from the syslog `AcmeClient: The shell command ...` line. It prints e.g. "Cannot find DNS
-   API hook" (#327), "No TXT record found" (dns_sleep, #328), or the LE problem document.
+   API hook", "No TXT record found" (dns_sleep), or the LE problem document.
 
 ### Guest in the environment zone gets no IP
 
@@ -317,5 +317,5 @@ A new environment VLAN `N` must be carried by **every** L2 layer, not just OPNse
 `network-manager zone add` / `reconcile` drives all four planes (OPNsense, Proxmox, switch, AP),
 but if a guest's DHCP DISCOVER never reaches OPNsense (check `netstat -I vlan0.N` Ipkts on the
 firewall) the VLAN is being dropped at an L2 layer — most often the firewall VM's Proxmox
-`net trunks=` (verify with `qm config <firewall-vmid> | grep ^net`; #335) or a switch/AP trunk
-profile (#333). Re-run `network-manager reconcile --apply` to converge the planes.
+`net trunks=` (verify with `qm config <firewall-vmid> | grep ^net`) or a switch/AP trunk
+profile. Re-run `network-manager reconcile --apply` to converge the planes.

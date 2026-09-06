@@ -6,7 +6,7 @@ Primary audience: TAPPaaS admin.
 
 1. Active network zone — the target zone (default `srvHome`) must be active in
    `zones.json` and configured in OPNsense. See `hass.json` for the configured `zone0`.
-2. HAOS image — downloaded automatically by `install-module.sh` from the URL in
+2. HAOS image — downloaded automatically by `module-manager module add` from the URL in
    `hass.json` (`config.cluster:vm.imageLocation`). No manual download needed.
 
 > To deviate from the defaults in `./hass.json` (target node, storage,
@@ -15,7 +15,7 @@ Primary audience: TAPPaaS admin.
 
 ## Install
 
-    install-module.sh hass
+    module-manager module add hass
 
 This creates the VM, imports the HAOS disk image, and configures automatically:
 
@@ -49,7 +49,7 @@ Remaining manual steps:
 
 ## Verification
 
-    test-module.sh hass
+    module-manager module test hass
 
 | Check | Expected |
 |-------|----------|
@@ -64,7 +64,7 @@ Remaining manual steps:
 ## Troubleshooting
 
 **`network:rules` fails during install**
-Zone name contains an underscore (e.g. `srv_home`) — see PR #278. Workaround: deploy to
+Zone name contains an underscore (e.g. `srv_home`). Workaround: deploy to
 a zone without underscores in the name (the default `srvHome` is fine).
 
 **Proxy returns 400 Bad Request**
@@ -75,9 +75,9 @@ the config step:
 
 **Sonos speakers not discovered**
 Verify the mDNS relay: `test-service.sh network:discovery hass`.
-If pinholes are missing, run `install-module.sh hass --force`.
+If pinholes are missing, run `module-manager module add hass --force`.
 
 **Internal access breaks when the proxy/firewall is down**
 `internal_url` must be the direct `.internal:8123` LAN URL, never the proxy domain —
 otherwise internal access couples to the external proxy (2026-06-13 incident).
-`test-module.sh hass` checks this.
+`module-manager module test hass` checks this.
