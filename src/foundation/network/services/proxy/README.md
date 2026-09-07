@@ -89,7 +89,7 @@ Reverse-proxy to an HTTPS upstream instead of plain HTTP. Set true for backends 
 
 ### `proxyUpstreamHttp1`
 
-Force HTTP/1.1 to the upstream (os-caddy HttpVersion=http1). Required for apps whose UI rides a WebSocket behind a TLS upstream — e.g. the UniFi OS console. Without it, Caddy negotiates HTTP/2 with the upstream, which cannot carry a WebSocket Upgrade and returns 500, so the SPA renders blank.
+Force HTTP/1.1 to the upstream (os-caddy HttpVersion=http1). Required for apps whose UI rides a WebSocket behind a TLS upstream — e.g. the UniFi OS console. Without it, Caddy negotiates HTTP/2 with the upstream, which cannot carry a WebSocket Upgrade and returns 500, so the SPA renders blank (issue #339).
 
 | Attribute | Value |
 |---|---|
@@ -106,7 +106,7 @@ Force HTTP/1.1 to the upstream (os-caddy HttpVersion=http1). Required for apps w
 
 ### `proxyPreserveHost`
 
-Force the upstream Host header to the public domain (Caddy header_up Host <domain>). Needed for apps that validate a WebSocket's Origin against the Host header — e.g. the UniFi OS console: Caddy otherwise sends the upstream's own hostname, so the browser's Origin (the public domain) ≠ Host and the WebSocket upgrade returns 500, leaving the SPA blank after login. Usually paired with proxyUpstreamHttp1 for WebSocket apps behind a TLS upstream.
+Force the upstream Host header to the public domain (Caddy header_up Host <domain>). Needed for apps that validate a WebSocket's Origin against the Host header — e.g. the UniFi OS console: Caddy otherwise sends the upstream's own hostname, so the browser's Origin (the public domain) ≠ Host and the WebSocket upgrade returns 500, leaving the SPA blank after login (issue #339). Usually paired with proxyUpstreamHttp1 for WebSocket apps behind a TLS upstream.
 
 | Attribute | Value |
 |---|---|
@@ -123,7 +123,7 @@ Force the upstream Host header to the public domain (Caddy header_up Host <domai
 
 ### `proxyTls`
 
-How network:proxy obtains the public TLS certificate for this domain. OMIT IT to inherit the environment's domains.dnsMode (config/environments/<env>.json) — that is the normal case and the only way one setting governs a whole environment. Set it only to override that environment-wide choice for this one module. 'dns01' binds the TAPPaaS-wide wildcard certificate issued by os-acme-client (acme-setup.sh) via Caddy's per-domain CustomCertificate, and requires a DNS provider that supports DNS-01 plus the wildcard already being in OPNsense Trust; until it is, the public HTTPS endpoint has no cert while the LAN endpoint still works. 'http01' uses classic ACME HTTP-01: Caddy obtains a per-domain cert via the :80 challenge, so the domain MUST be reachable from the internet on port 80, and no DNS API is needed.
+How network:proxy obtains the public TLS certificate for this domain. OMIT IT to inherit the environment's domains.dnsMode (config/environments/<env>.json) — that is the normal case and the only way one setting governs a whole environment. Set it only to override that environment-wide choice for this one module. 'dns01' binds the TAPPaaS-wide wildcard certificate issued by os-acme-client (acme-setup.sh, issue #254) via Caddy's per-domain CustomCertificate, and requires a DNS provider that supports DNS-01 plus the wildcard already being in OPNsense Trust; until it is, the public HTTPS endpoint has no cert while the LAN endpoint still works. 'http01' uses classic ACME HTTP-01: Caddy obtains a per-domain cert via the :80 challenge, so the domain MUST be reachable from the internet on port 80, and no DNS API is needed.
 
 | Attribute | Value |
 |---|---|
@@ -138,7 +138,7 @@ How network:proxy obtains the public TLS certificate for this domain. OMIT IT to
 
 ### `proxyAllowedZones`
 
-Zones (and the literal 'internet') permitted to reach this service through the reverse proxy. network:proxy compiles this into an os-caddy access list (allow-list by client subnet) attached to the handler; non-matching clients get HTTP 403.
+Zones (and the literal 'internet') permitted to reach this service through the reverse proxy (issue #206). network:proxy compiles this into an os-caddy access list (allow-list by client subnet) attached to the handler; non-matching clients get HTTP 403.
 
 | Attribute | Value |
 |---|---|

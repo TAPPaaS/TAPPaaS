@@ -34,7 +34,7 @@ Static IPv4 address of the device this module represents. Used by network:dns to
 | Change class | `in-place` |
 | Apply mode | `reconcile` |
 
-**About the field.** Hardware modules (no VM) declare this so their DNS entry is provisioned automatically at install time. The matching static DHCP reservation (MAC-based) remains a manual prerequisite.
+**About the field.** Hardware modules (no VM) declare this so their DNS entry is provisioned automatically at install time (issue #251). The matching static DHCP reservation (MAC-based) remains a manual prerequisite.
 
 **Why this change class.** The address the module's name resolves to. Re-pointing a record is a resolver update; nothing on the guest changes, so no reboot and no downtime. An absent ip means the module resolves from its DHCP lease via masqdns instead, which is the normal case.
 

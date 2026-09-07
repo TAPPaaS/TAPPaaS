@@ -32,7 +32,7 @@ only the cascade on `reconcile`.
 
 ### `backup`
 
-Module-level backup policy (ADR-007 P9). The leaf of the Site -> Environment -> Module backup cascade: backup-manager resolves the effective policy by merging site.json backup.defaultRetention, the environment's backup.retention/residency, then these module overrides. `module-manager module add` persists the resolved policy onto the deployed module config. Does NOT replace the dependsOn backup:vm wiring (which decides whether the VM is in the shared PBS job) — it records the resolved retention/exclude/enabled state.
+Module-level backup policy (ADR-007 P9). The leaf of the Site -> Environment -> Module backup cascade: backup-manager resolves the effective policy by merging site.json backup.defaultRetention, the environment's backup.retention/residency, then these module overrides. install-module.sh persists the resolved policy onto the deployed module config. Does NOT replace the dependsOn backup:vm wiring (which decides whether the VM is in the shared PBS job) — it records the resolved retention/exclude/enabled state.
 
 | Attribute | Value |
 |---|---|
@@ -85,7 +85,7 @@ Name of the Proxmox Backup Server datastore / Proxmox storage used for backups. 
 
 ### `immutableSnapshots`
 
-Backup module, optional WORM-ish immutability (ADR-012 §3.5 / ADR-010 §7.3). When enabled, periodic read-only ZFS snapshots of the datastore dataset are taken on the PBS node and pruned to `keep`, so backup history cannot be rewritten by a sync/push credential holder or PBS prune/GC — only by node-local root. The weaker of the two tiers; S3 Object Lock (ADR-010 satellite) is the stronger one and is provisioned satellite-side.
+Backup module, optional WORM-ish immutability (ADR-012 §3.5 / ADR-010 §7.3, #389). When enabled, periodic read-only ZFS snapshots of the datastore dataset are taken on the PBS node and pruned to `keep`, so backup history cannot be rewritten by a sync/push credential holder or PBS prune/GC — only by node-local root. The weaker of the two tiers; S3 Object Lock (ADR-010 satellite) is the stronger one and is provisioned satellite-side.
 
 | Attribute | Value |
 |---|---|
@@ -103,7 +103,7 @@ Backup module, optional WORM-ish immutability (ADR-012 §3.5 / ADR-010 §7.3). W
 
 ### `placement`
 
-Backup module placement policy (ADR-012). Decides WHERE (or whether) a local PBS datastore is realized. 'auto' discovers a tankc pool (preferred node .node first, then any node) and installs PBS there, falling back to a shim if none exists. 'node:<name>' pins PBS to that node's tankc. 'shim' records a datastore-less marker that still satisfies dependsOn:backup and is promotable later via `module-manager module modify backup`. 'remote-only' installs no local PBS (off-site push, ADR-012 P4). The resolved outcome is written back as .placementState (local|shim|remote-only).
+Backup module placement policy (ADR-012). Decides WHERE (or whether) a local PBS datastore is realized. 'auto' discovers a tankc pool (preferred node .node first, then any node) and installs PBS there, falling back to a shim if none exists. 'node:<name>' pins PBS to that node's tankc. 'shim' records a datastore-less marker that still satisfies dependsOn:backup and is promotable later via update-module.sh backup. 'remote-only' installs no local PBS (off-site push, ADR-012 P4). The resolved outcome is written back as .placementState (local|shim|remote-only).
 
 | Attribute | Value |
 |---|---|
