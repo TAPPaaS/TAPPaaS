@@ -154,6 +154,83 @@ class TestPruneDomainsByDescription(unittest.TestCase):
         mgr.delete_handler.assert_not_called()
 
 
+class TestPruneDomainsByDescriptionPrefix(unittest.TestCase):
+    """Sweep of removed proxyRoutes by description prefix (#597)."""
+
+    def _mgr(self, domains, handlers):
+        from opnsense_controller.caddy_manager import (  # noqa: PLC0415
+            CaddyDomainInfo,
+            CaddyHandlerInfo,
+        )
+        mgr = CaddyManager(config=MagicMock())
+        mgr._client = MagicMock()  # noqa: SLF001
+        mgr.list_domains = MagicMock(  # noqa: SLF001
+            return_value=[CaddyDomainInfo(*d) for d in domains]
+        )
+        mgr.list_handlers = MagicMock(  # noqa: SLF001
+            return_value=[CaddyHandlerInfo(**h) for h in handlers]
+        )
+        mgr.delete_domain = MagicMock(return_value={"result": "deleted"})  # noqa: SLF001
+        mgr.delete_handler = MagicMock(return_value={"result": "deleted"})  # noqa: SLF001
+        return mgr
+
+    def _handler(self, uuid, domain_uuid, description):
+        return dict(
+            uuid=uuid, domain_uuid=domain_uuid, upstream_domain="u",
+            upstream_port="80", description=description, enabled=True,
+        )
+
+    def test_removes_only_undeclared_routes(self):
+        # app declares routes admin + metrics; a stale 'old' route lingers and
+        # must go. The primary 'TAPPaaS: app' (no '#') is NOT matched by the
+        # prefix, and another module's route is untouched.
+        mgr = self._mgr(
+            domains=[
+                ("PRI", "app.example", "TAPPaaS: app", True),
+                ("ADM", "admin.example", "TAPPaaS: app#admin", True),
+                ("MET", "metrics.example", "TAPPaaS: app#metrics", True),
+                ("OLD", "old.example", "TAPPaaS: app#old", True),
+                ("OTH", "x.example", "TAPPaaS: other#admin", True),
+            ],
+            handlers=[
+                self._handler("HOLD", "OLD", "TAPPaaS: app#old"),
+                self._handler("HADM", "ADM", "TAPPaaS: app#admin"),
+            ],
+        )
+        removed = mgr.prune_domains_by_description_prefix(
+            "TAPPaaS: app#", ["admin.example", "metrics.example"]
+        )
+        self.assertEqual(removed, ["old.example"])
+        mgr.delete_domain.assert_called_once_with("OLD")
+        mgr.delete_handler.assert_called_once_with("HOLD")
+
+    def test_removes_all_routes_when_keep_empty(self):
+        # delete-service passes no keeps: every '#' route of the module goes,
+        # the primary stays (not matched by the '#' prefix).
+        mgr = self._mgr(
+            domains=[
+                ("PRI", "app.example", "TAPPaaS: app", True),
+                ("ADM", "admin.example", "TAPPaaS: app#admin", True),
+            ],
+            handlers=[self._handler("HADM", "ADM", "TAPPaaS: app#admin")],
+        )
+        removed = mgr.prune_domains_by_description_prefix("TAPPaaS: app#", [])
+        self.assertEqual(removed, ["admin.example"])
+        mgr.delete_domain.assert_called_once_with("ADM")
+
+    def test_noop_when_all_declared(self):
+        mgr = self._mgr(
+            domains=[("ADM", "admin.example", "TAPPaaS: app#admin", True)],
+            handlers=[self._handler("HADM", "ADM", "TAPPaaS: app#admin")],
+        )
+        self.assertEqual(
+            mgr.prune_domains_by_description_prefix("TAPPaaS: app#", ["admin.example"]),
+            [],
+        )
+        mgr.delete_domain.assert_not_called()
+        mgr.delete_handler.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()
 

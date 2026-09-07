@@ -5,7 +5,7 @@ hostname, the certificate, the upstream handler and the firewall alias that
 decides who may reach it. Nothing here touches a guest; the changes land on the
 proxy and the firewall, and the workload never notices.
 
-9 fields — all `in-place`, all `apply: "reconcile"`.
+10 fields — all `in-place`, all `apply: "reconcile"`.
 
 The module's public face. Nothing here touches a guest: the changes land on Caddy
 and the firewall, and the workload never notices.
@@ -28,7 +28,7 @@ trusted to have made config true. That is the blind spot recommendation 1 closes
 
 ## Fields
 
-`network:proxy` owns **9** declared field(s). Each table below carries the field's full definition and, where the service applies it, its ADR-020 change semantics.
+`network:proxy` owns **10** declared field(s). Each table below carries the field's full definition and, where the service applies it, its ADR-020 change semantics.
 
 ### `proxyDomain`
 
@@ -153,6 +153,24 @@ Zones (and the literal 'internet') permitted to reach this service through the r
 **About the field.** Zero-trust by default: when omitted, a service is reachable only from the internal trusted zones, never the internet. Add 'internet' to publish it publicly (no restriction). Zone names are resolved to subnets via zones.json. Changing this re-applies on the next install/update of the module.
 
 **Why this change class.** Which zones may reach the published name — the difference between an internal service and one exposed to the internet. A live firewall/Caddy change, and the field most worth being able to set through a verb rather than by hand.
+
+### `proxyRoutes`
+
+Additional reverse-proxy routes for a VM that serves several endpoints on different ports (#597). Each entry publishes <name>.<domain> — where <domain> is the environment's primary domain, the same suffix proxyDomain defaults to — forwarding to the module's upstream host on the entry's port. The primary proxyDomain/proxyPort route is unaffected. Extra routes inherit the primary route's access list (proxyAllowedZones), TLS strategy (proxyTls/dnsMode) and upstream flags (proxyUpstreamTls, proxyUpstreamHttp1, proxyPreserveHost).
+
+| Attribute | Value |
+|---|---|
+| Type | `array` |
+| Default | *(none)* |
+| Example | `[{"name": "admin", "port": 9090}, {"name": "metrics", "port": 3000}]` |
+| Required by | *(none)* |
+| Used by | `network:proxy` |
+| Change class | `in-place` |
+| Apply mode | `reconcile` |
+
+**About the field.** Each entry is { name: <DNS label, no dots>, port: <1-65535> }; the FQDN is <name>.<domain>. Each route gets its own Caddy handler keyed by 'TAPPaaS: <module>#<name>'. Adding an entry publishes it on the next install/update; removing one tears its route down.
+
+**Why this change class.** The extra hostnames a single VM publishes. Adding or removing an entry creates or prunes that route live; the primary route and the module itself are untouched.
 
 ### `firewallType`
 

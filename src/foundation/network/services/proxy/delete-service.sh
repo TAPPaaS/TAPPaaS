@@ -94,22 +94,24 @@ fi
 # ── Resolve proxy domain ────────────────────────────────────────────
 
 PROXY_DOMAIN=""
+TAPPAAS_DOMAIN=""
 if [[ -f "${MODULE_JSON}" ]]; then
     VMNAME=$(get_config_value 'vmname' '')
     if [[ -z "${VMNAME}" ]]; then
         VMNAME="${MODULE}"
     fi
 
+    # The environment's primary domain — needed both for the default proxyDomain
+    # and (independent of proxyDomain) as the suffix of every proxyRoutes FQDN.
+    _ENV=$(get_config_value 'environment' '' 2>/dev/null || echo '')
+    TAPPAAS_DOMAIN=$(jq -r '.domain // empty' <<<"$(get_variant_config "${_ENV}" 2>/dev/null || echo '{}')")
+    if [[ -z "${TAPPAAS_DOMAIN}" ]] && [[ -f "${SYSTEM_CONFIG}" ]]; then
+        TAPPAAS_DOMAIN=$(jq -r '.tappaas.domain // empty' "${SYSTEM_CONFIG}" 2>/dev/null) || TAPPAAS_DOMAIN=""
+    fi
+
     PROXY_DOMAIN=$(get_config_value 'proxyDomain' '')
-    if [[ -z "${PROXY_DOMAIN}" ]]; then
-        _ENV=$(get_config_value 'environment' '' 2>/dev/null || echo '')
-        TAPPAAS_DOMAIN=$(jq -r '.domain // empty' <<<"$(get_variant_config "${_ENV}" 2>/dev/null || echo '{}')")
-        if [[ -z "${TAPPAAS_DOMAIN}" ]] && [[ -f "${SYSTEM_CONFIG}" ]]; then
-            TAPPAAS_DOMAIN=$(jq -r '.tappaas.domain // empty' "${SYSTEM_CONFIG}" 2>/dev/null)
-        fi
-        if [[ -n "${TAPPAAS_DOMAIN}" ]]; then
-            PROXY_DOMAIN="${VMNAME}.${TAPPAAS_DOMAIN}"
-        fi
+    if [[ -z "${PROXY_DOMAIN}" && -n "${TAPPAAS_DOMAIN}" ]]; then
+        PROXY_DOMAIN="${VMNAME}.${TAPPAAS_DOMAIN}"
     fi
 fi
 
@@ -144,6 +146,20 @@ if [[ -n "${PROXY_DOMAIN}" ]]; then
     unbound_prune_host_override "${PROXY_DOMAIN%%.*}" "${PROXY_DOMAIN#*.}"
 else
     warn "Cannot determine proxy domain — manual cleanup may be needed"
+fi
+
+# ── Delete additional routes (proxyRoutes, #597) ────────────────────
+# Remove every extra route this module published (matched by description prefix,
+# so no route list is needed), then drop each route's per-service split-horizon
+# Unbound override (harmless no-op when none exists / wildcard mode).
+debug "  Deleting additional Caddy routes for ${MODULE}..."
+caddy-manager prune-domains --description-prefix "${DESCRIPTION}#" \
+    --no-ssl-verify || warn "Could not delete additional routes for ${MODULE}"
+if [[ -f "${MODULE_JSON}" && -n "${TAPPAAS_DOMAIN}" ]]; then
+    while IFS=$'\t' read -r _rname _rport; do
+        [[ -z "${_rname}" ]] && continue
+        unbound_prune_host_override "${_rname}" "${TAPPAAS_DOMAIN}"
+    done < <(echo "${JSON}" | jq -rc '.proxyRoutes // [] | .[] | [.name, (.port|tostring)] | @tsv')
 fi
 
 # ── Reconfigure Caddy ───────────────────────────────────────────────

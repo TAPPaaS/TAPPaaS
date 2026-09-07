@@ -450,29 +450,54 @@ def list_all(manager: CaddyManager) -> bool:
 
 def prune_domains_cmd(
     manager: CaddyManager,
-    description: str,
-    keep: str,
+    description: str | None,
+    keep: list[str],
     check_mode: bool = False,
+    description_prefix: str | None = None,
 ) -> bool:
-    """Delete stale routes for a module after a domain change (#474).
+    """Delete stale routes for a module. Idempotent.
 
-    Removes every domain (and its handler) whose description matches but whose
-    FQDN differs from `keep` — i.e. the old `<svc>.<olddomain>` left behind when
-    network:proxy re-adds `<svc>.<newdomain>`. Idempotent.
+    Two match modes:
+      * ``description`` (exact) — the old `<svc>.<olddomain>` left behind when
+        network:proxy re-adds `<svc>.<newdomain>` after a domain change (#474).
+      * ``description_prefix`` — sweep every `TAPPaaS: <module>#*` extra route
+        (proxyRoutes, #597) whose FQDN is no longer declared.
+
+    In both modes, a domain (and its handler) is removed when its description
+    matches and its FQDN is not among ``keep``.
     """
-    stale = [
-        d
-        for d in manager.list_domains()
-        if d.description == description and d.domain != keep
-    ]
+    keep = keep or []
+    if description_prefix is None and not keep:
+        # Exact-description prune with no --keep would delete the module's only
+        # route — refuse it so a forgotten flag can't wipe a live service (#474).
+        print("ERROR: --description requires at least one --keep", file=sys.stderr)
+        return False
+    keep_set = set(keep)
+    if description_prefix is not None:
+        match_desc = f"prefix '{description_prefix}'"
+        stale = [
+            d
+            for d in manager.list_domains()
+            if d.description.startswith(description_prefix) and d.domain not in keep_set
+        ]
+    else:
+        match_desc = f"'{description}'"
+        stale = [
+            d
+            for d in manager.list_domains()
+            if d.description == description and d.domain not in keep_set
+        ]
     if not stale:
-        print(f"No stale domains for '{description}' (keeping '{keep}')")
+        print(f"No stale domains for {match_desc} (keeping {sorted(keep_set)})")
         return True
     if check_mode:
         for d in stale:
             print(f"Would delete stale domain: {d.domain} (uuid={d.uuid}) (dry-run)")
         return True
-    removed = manager.prune_domains_by_description(description, keep)
+    if description_prefix is not None:
+        removed = manager.prune_domains_by_description_prefix(description_prefix, keep)
+    else:
+        removed = manager.prune_domains_by_description(description, keep[0])
     for r in removed:
         print(f"Deleted stale domain: {r}")
     return True
@@ -693,10 +718,15 @@ Examples:
     # prune-domains (remove stale <svc>.<olddomain> routes after a domain change, #474)
     prune_parser = subparsers.add_parser(
         "prune-domains", parents=[global_parser],
-        help="Delete domains+handlers with a description whose FQDN != --keep",
+        help="Delete domains+handlers matching a description whose FQDN is not in --keep",
     )
-    prune_parser.add_argument("--description", required=True, help="Module description to match (e.g. 'TAPPaaS: nextcloud')")
-    prune_parser.add_argument("--keep", required=True, help="The current FQDN to keep")
+    prune_match = prune_parser.add_mutually_exclusive_group(required=True)
+    prune_match.add_argument("--description", default=None, help="Exact module description to match (e.g. 'TAPPaaS: nextcloud')")
+    prune_match.add_argument("--description-prefix", dest="description_prefix", default=None,
+                             help="Match every description with this prefix (e.g. 'TAPPaaS: nextcloud#' — sweep proxyRoutes, #597)")
+    prune_parser.add_argument("--keep", action="append", default=None, metavar="FQDN",
+                              help="An FQDN to keep; repeat for several (e.g. --keep a.example.com --keep b.example.com). "
+                                   "Required with --description; may be omitted with --description-prefix to sweep every matching route.")
 
     # list
     subparsers.add_parser("list", parents=[global_parser], help="List all domains and handlers")
@@ -776,6 +806,7 @@ Examples:
             elif args.command == "prune-domains":
                 success = prune_domains_cmd(
                     manager, args.description, args.keep, args.check_mode,
+                    description_prefix=getattr(args, "description_prefix", None),
                 )
             elif args.command == "delete-handler":
                 success = delete_handler_cmd(

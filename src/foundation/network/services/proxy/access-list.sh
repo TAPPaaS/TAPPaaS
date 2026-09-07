@@ -194,3 +194,90 @@ proxy_split_horizon_gateway() {
     fi
     zone_gateway_ip "${primary}" "${zones_file}"
 }
+
+# proxy_add_routes <description> <domain> <upstream> <dns_mode>
+#
+# Publish the module's additional proxyRoutes (#597). Each {name, port} entry in
+# the module config becomes a route <name>.<domain> → <upstream>:<port> with its
+# own description "<description>#<name>" (the primary keeps the bare
+# "<description>"). Handlers are keyed by description, so a distinct one per route
+# is what stops route N from overwriting route 1's handler.
+#
+# Routes inherit the module's access list (ACL_ARGS) and TLS/domain settings
+# (CADDY_DOMAIN_ARGS) from the caller, and the proxyUpstream* upstream flags from
+# the module config. Under per-service TLS each route FQDN also gets a
+# split-horizon Unbound override, with the same wildcard-redirect-zone collision
+# guard as the primary (#474/#504). Finally any previously-published route no
+# longer declared is swept (prefix prune) — an empty proxyRoutes removes them all.
+#
+# Reads the module config from $JSON. Uses caller globals: MODULE, MODULE_JSON,
+# ZONES_FILE, ACL_ARGS, CADDY_DOMAIN_ARGS.
+proxy_add_routes() {
+    local description="$1" domain="$2" upstream="$3" dns_mode="$4"
+
+    # Upstream flags, re-derived from the module config so a route gets them even
+    # in code paths (update) that do not build them for the primary handler.
+    local -a tls_args=() http1_args=() preserve_args=()
+    [[ "$(get_config_value 'proxyUpstreamTls' 'false')" == "true" ]] && tls_args=(--upstream-tls)
+    [[ "$(get_config_value 'proxyUpstreamHttp1' 'false')" == "true" ]] && http1_args=(--upstream-http1)
+    [[ "$(get_config_value 'proxyPreserveHost' 'false')" == "true" ]] && preserve_args=(--preserve-host)
+
+    # The split-horizon gateway is the same for every route (same module/zones);
+    # resolve once, and only when per-service TLS needs it.
+    local gw=""
+    if [[ "${dns_mode}" == "per-service" ]]; then
+        gw="$(proxy_split_horizon_gateway "${MODULE_JSON}" "${ZONES_FILE}" 2>/dev/null || true)"
+    fi
+
+    local -a keep_fqdns=()
+    local name port fqdn route_desc
+    while IFS=$'\t' read -r name port; do
+        [[ -z "${name}" ]] && continue
+        # A malformed entry is a config error — fail loudly rather than push
+        # broken config to Caddy.
+        if [[ ! "${name}" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?$ ]]; then
+            die "Invalid proxyRoutes name '${name}' (must be a DNS label)"
+        fi
+        if [[ ! "${port}" =~ ^[0-9]+$ ]] || (( port < 1 || port > 65535 )); then
+            die "Invalid proxyRoutes port '${port}' for '${name}' (must be 1-65535)"
+        fi
+        fqdn="${name}.${domain}"
+        route_desc="${description}#${name}"
+        keep_fqdns+=(--keep "${fqdn}")
+        debug "  Additional route: ${BL}${fqdn}${CL} -> ${BL}${upstream}:${port}${CL} (${route_desc})"
+
+        if [[ "${dns_mode}" == "per-service" ]]; then
+            if unbound-manager --no-ssl-verify list 2>/dev/null \
+                 | awk -v z="${domain}" '$1=="*" && $2==z {f=1} END{exit !f}'; then
+                debug "    wildcard *.${domain} already covers ${name}.${domain} — skipping per-service override"
+            elif [[ -n "${gw}" ]]; then
+                unbound-manager --no-ssl-verify add "${name}" "${domain}" "${gw}" --description "${route_desc}" \
+                    || warn "    Could not register ${fqdn} in Unbound (register manually)"
+            else
+                warn "    No split-horizon gateway for ${fqdn} — register DNS manually"
+            fi
+        fi
+
+        run_caddy add-domain "${fqdn}" \
+            --description "${route_desc}" \
+            "${CADDY_DOMAIN_ARGS[@]+"${CADDY_DOMAIN_ARGS[@]}"}" \
+            --no-ssl-verify || die "Failed to create Caddy domain ${fqdn}"
+
+        run_caddy add-handler "${fqdn}" \
+            --upstream "${upstream}" \
+            --port "${port}" \
+            --description "${route_desc}" \
+            "${ACL_ARGS[@]+"${ACL_ARGS[@]}"}" \
+            "${tls_args[@]+"${tls_args[@]}"}" \
+            "${http1_args[@]+"${http1_args[@]}"}" \
+            "${preserve_args[@]+"${preserve_args[@]}"}" \
+            --no-ssl-verify || die "Failed to create Caddy handler ${fqdn}"
+    done < <(echo "${JSON}" | jq -rc '.proxyRoutes // [] | .[] | [.name, (.port|tostring)] | @tsv')
+
+    # Sweep any route this module previously published but no longer declares.
+    # Empty keep list (no proxyRoutes) removes every "<description>#*" route.
+    debug "  Pruning undeclared routes for ${MODULE} (prefix '${description}#')..."
+    run_caddy prune-domains --description-prefix "${description}#" \
+        "${keep_fqdns[@]+"${keep_fqdns[@]}"}" \
+        --no-ssl-verify || warn "Could not prune undeclared routes for ${MODULE} (non-fatal)"
+}
