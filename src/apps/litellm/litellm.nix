@@ -34,6 +34,11 @@
 # - Upgraded LiteLLM 1.81.14 → 1.85.0; switched registry GHCR → Docker Hub
 # - Upgraded PostgreSQL 15 → 17 (fresh DB, no migration needed)
 # - Added Redis AOF persistence (appendonly + appendfsync everysec)
+#
+# Changelog module v0.7.1:
+# - Redis self-heals a small corrupt AOF tail instead of refusing to start
+# - Redis gets a restart policy (previously none)
+# - podman-litellm no longer gets stuck once redis recovers on its own
 # ============================================================================
 
 { config, lib, pkgs, modulesPath, system, ... }:
@@ -235,12 +240,27 @@ in
       tcp-keepalive = 60;
       appendonly = "yes";
       appendfsync = "everysec";
+      # An ungraceful VM stop (host fence/reset, power loss) can interrupt the
+      # last AOF write mid-record. Without this, redis refuses to start at all
+      # on a corrupt tail, however small, and needs a manual redis-check-aof
+      # --fix. Below this size it self-repairs by truncating the incomplete
+      # record instead; above it, it still refuses so real corruption isn't
+      # silently swallowed.
+      aof-load-corrupt-tail-max-size = 65536;
     };
     save = [
       [900 1]      # Save after 900s if ≥1 key changed
       [300 10]     # Save after 300s if ≥10 keys changed
       [60 10000]   # Save after 60s if ≥10000 keys changed
     ];
+  };
+
+  # Redis has no restart policy by default. Give it one so a transient failure
+  # (including the corrupt-tail case above, once past the threshold) recovers
+  # on its own instead of sitting failed until someone notices.
+  systemd.services.redis-litellm.serviceConfig = {
+    Restart = "on-failure";
+    RestartSec = "5s";
   };
 
   # ============================================================================
@@ -366,9 +386,28 @@ EOF
   };
 
   # Ensure LiteLLM starts after dependencies are ready
+  #
+  # redis-litellm is `wants`, not `requires`: a hard Requires= that fails once
+  # fails this unit's own start job immediately, and systemd does not retry
+  # that job just because the required unit later recovers on its own restart
+  # policy — the container was observed sitting inactive with Restart=always
+  # already set, for exactly that reason. The ExecStartPre wait below makes
+  # redis-readiness this unit's OWN startup condition instead, so its restart
+  # policy actually engages if redis isn't ready yet.
   systemd.services.podman-litellm = {
     after = [ "postgresql.service" "redis-litellm.service" "litellm-integrations.service" ];
-    requires = [ "postgresql.service" "redis-litellm.service" "litellm-integrations.service" ];
+    wants = [ "redis-litellm.service" ];
+    requires = [ "postgresql.service" "litellm-integrations.service" ];
+    serviceConfig.ExecStartPre = [
+      "${pkgs.writeShellScript "litellm-wait-for-redis" ''
+        for _ in $(seq 1 30); do
+          ${versions.redisPkg}/bin/redis-cli -h 127.0.0.1 -p 6379 ping >/dev/null 2>&1 && exit 0
+          sleep 2
+        done
+        echo "redis-litellm not reachable after 60s" >&2
+        exit 1
+      ''}"
+    ];
   };
 
   # ============================================================================
