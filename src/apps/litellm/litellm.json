@@ -1,7 +1,7 @@
 {
   "description": "TAPPaaS LiteLLM",
-  "version": "0.7.0",
-  "releaseDate": "2026-07-02",
+  "version": "0.7.1",
+  "releaseDate": "2026-09-07",
   "maintainer": "@ErikDaniel007",
   "status": "Development",
   "tier": "app",
