@@ -602,3 +602,18 @@ class CaddyManager:
             API response dict.
         """
         return self._api_post("service", "reconfigure")
+
+    def service_status(self) -> dict:
+        """Return the caddy service runtime status, e.g. ``{"status": "running"}``.
+
+        Unlike reconfigure()'s response — which reports only that the API
+        ACCEPTED the request — this reflects whether the caddy daemon is actually
+        up. A refused Caddyfile leaves reconfigure returning ok while the service
+        stays stopped, taking every proxied vhost offline (#589). Reads
+        ``GET /api/caddy/service/status``.
+        """
+        return self._api_get("service", "status")
+
+    def is_running(self) -> bool:
+        """True iff the caddy service reports status 'running'."""
+        return str(self.service_status().get("status", "")).lower() == "running"

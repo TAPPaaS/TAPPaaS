@@ -478,15 +478,45 @@ def prune_domains_cmd(
     return True
 
 
+def _wait_service_running(
+    manager: CaddyManager, attempts: int = 5, delay: float = 2.0,
+) -> str:
+    """Poll the caddy service status until 'running', tolerating the restart a
+    reconfigure triggers (same reason the DNS post-write guard retries, #516).
+
+    Returns the last observed state (lowercased), e.g. "running" or "stopped",
+    or "unknown" if the status endpoint returned nothing.
+    """
+    state = "unknown"
+    for attempt in range(max(1, attempts)):
+        state = str(manager.service_status().get("status", "unknown")).lower()
+        if state == "running":
+            return state
+        if attempt < attempts - 1:
+            time.sleep(delay)
+    return state
+
+
+def status_cmd(manager: CaddyManager) -> bool:
+    """Report the caddy service runtime state on demand (#589).
+
+    Returns True (exit 0) only when the service is running, so it is scriptable.
+    """
+    state = str(manager.service_status().get("status", "unknown")).lower()
+    print(f"Caddy service: {state}")
+    return state == "running"
+
+
 def reconfigure_cmd(manager: CaddyManager, check_mode: bool = False) -> bool:
-    """Reconfigure Caddy (regenerate Caddyfile and reload).
+    """Reconfigure Caddy, then verify the service actually came back up (#589).
 
     Args:
         manager: CaddyManager instance.
         check_mode: If True, perform dry-run.
 
     Returns:
-        True if successful.
+        True only if the API accepted the reconfigure AND the caddy service is
+        running afterwards.
     """
     if check_mode:
         print("Would reconfigure Caddy (dry-run)")
@@ -495,16 +525,30 @@ def reconfigure_cmd(manager: CaddyManager, check_mode: bool = False) -> bool:
     print("Reconfiguring Caddy...")
     result = manager.reconfigure()
 
-    if result.get("status") == "ok":
-        print("  Caddy reconfigured successfully")
+    # The API response only tells us the request was ACCEPTED — it says nothing
+    # about whether caddy actually reloaded. Bail early if even that failed.
+    if result.get("status") != "ok" and "error" in str(result).lower():
+        print(f"ERROR: Reconfigure failed: {result}", file=sys.stderr)
+        return False
+
+    # A refused Caddyfile leaves the daemon STOPPED while the API still reports
+    # success, taking EVERY proxied domain offline at once (#589 — the #516
+    # failure class: a write to a shared service returns 0 while it is dead).
+    # Probe the real service state and fail loud if it is not running.
+    state = _wait_service_running(manager)
+    if state == "running":
+        print("  Caddy reconfigured successfully (service running)")
         return True
 
-    # Treat non-error as success
-    if "error" not in str(result).lower():
-        print("  Caddy reconfigured")
-        return True
-
-    print(f"ERROR: Reconfigure failed: {result}", file=sys.stderr)
+    print(
+        f"ERROR: Caddy reconfigure was accepted but the service is '{state}', "
+        f"not running — the generated configuration was refused and EVERY "
+        f"proxied domain is now offline (#589).\n"
+        f"  Inspect on the firewall: configctl caddy status ; "
+        f"tail -n50 /var/log/caddy/caddy.log\n"
+        f"  Re-check state via tooling: caddy-manager status",
+        file=sys.stderr,
+    )
     return False
 
 
@@ -660,6 +704,9 @@ Examples:
     # reconfigure
     subparsers.add_parser("reconfigure", parents=[global_parser], help="Reconfigure Caddy (apply changes)")
 
+    # status (#589)
+    subparsers.add_parser("status", parents=[global_parser], help="Report whether the Caddy service is running")
+
     # Seed the global-option defaults into the namespace before parsing. The
     # shared parent uses argument_default=SUPPRESS, so a global flag given on
     # EITHER side of the subcommand survives (argparse parents gotcha #379 —
@@ -741,6 +788,8 @@ Examples:
                 success = list_all(manager)
             elif args.command == "reconfigure":
                 success = reconfigure_cmd(manager, args.check_mode)
+            elif args.command == "status":
+                success = status_cmd(manager)
 
             sys.exit(0 if success else 1)
 

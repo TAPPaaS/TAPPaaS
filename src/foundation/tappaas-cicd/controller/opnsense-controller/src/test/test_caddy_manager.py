@@ -253,3 +253,100 @@ class TestListAllRendersScheme(unittest.TestCase):
             self._handler(upstream_http_version="http1", access_list_uuid="acl-uuid")
         )
         self.assertIn("[http1 acl]", out)
+
+
+class TestServiceStatusProbe(unittest.TestCase):
+    """#589 — a reconfigure that leaves the service stopped must fail, not
+    report success, and the service state must be queryable on demand."""
+
+    def test_service_status_reads_get_service_status(self):
+        captured: list = []
+        mgr = CaddyManager(config=MagicMock())
+        mgr._client = MagicMock()  # noqa: SLF001
+
+        def run_module(_module, **kwargs):
+            params = kwargs.get("params", {})
+            captured.append({
+                "controller": params.get("controller"),
+                "command": params.get("command"),
+                "action": params.get("action"),
+            })
+            return {"result": {"response": {"status": "running"}}}
+
+        mgr._client.run_module.side_effect = run_module  # noqa: SLF001
+        self.assertTrue(mgr.is_running())
+        self.assertEqual(captured[-1]["controller"], "service")
+        self.assertEqual(captured[-1]["command"], "status")
+        self.assertEqual(captured[-1]["action"], "get")
+
+    def test_is_running_false_when_stopped(self):
+        mgr = CaddyManager(config=MagicMock())
+        mgr._client = MagicMock()  # noqa: SLF001
+        mgr._client.run_module.return_value = {  # noqa: SLF001
+            "result": {"response": {"status": "stopped"}}}
+        self.assertFalse(mgr.is_running())
+
+
+class TestReconfigureVerifiesService(unittest.TestCase):
+    """#589 — reconfigure_cmd must probe the real service state afterwards."""
+
+    def _mgr(self, reconfigure_result, status_states):
+        mgr = MagicMock()
+        mgr.reconfigure.return_value = reconfigure_result
+        mgr.service_status.side_effect = [{"status": s} for s in status_states]
+        return mgr
+
+    def test_reconfigure_fails_when_service_stopped(self):
+        from opnsense_controller.caddy_cli import reconfigure_cmd  # noqa: PLC0415
+        from unittest.mock import patch  # noqa: PLC0415
+        # API says ok, but the service is stopped on every probe → must fail.
+        mgr = self._mgr({"status": "ok"}, ["stopped"] * 5)
+        with patch("opnsense_controller.caddy_cli.time.sleep"):
+            self.assertFalse(reconfigure_cmd(mgr))
+
+    def test_reconfigure_succeeds_when_service_running(self):
+        from opnsense_controller.caddy_cli import reconfigure_cmd  # noqa: PLC0415
+        mgr = self._mgr({"status": "ok"}, ["running"])
+        self.assertTrue(reconfigure_cmd(mgr))
+
+    def test_reconfigure_tolerates_restart_then_running(self):
+        from opnsense_controller.caddy_cli import reconfigure_cmd  # noqa: PLC0415
+        from unittest.mock import patch  # noqa: PLC0415
+        # Stopped on first probe (mid-restart), running on the second → success.
+        mgr = self._mgr({"status": "ok"}, ["stopped", "running"])
+        with patch("opnsense_controller.caddy_cli.time.sleep"):
+            self.assertTrue(reconfigure_cmd(mgr))
+
+    def test_reconfigure_bails_when_api_rejects(self):
+        from opnsense_controller.caddy_cli import reconfigure_cmd  # noqa: PLC0415
+        mgr = MagicMock()
+        mgr.reconfigure.return_value = {"status": "failed", "error": "bad config"}
+        self.assertFalse(reconfigure_cmd(mgr))
+        mgr.service_status.assert_not_called()
+
+    def test_check_mode_does_not_touch_the_service(self):
+        from opnsense_controller.caddy_cli import reconfigure_cmd  # noqa: PLC0415
+        mgr = MagicMock()
+        self.assertTrue(reconfigure_cmd(mgr, check_mode=True))
+        mgr.reconfigure.assert_not_called()
+        mgr.service_status.assert_not_called()
+
+
+class TestStatusCommand(unittest.TestCase):
+    """#589 — `caddy-manager status` reports state and exits accordingly."""
+
+    def test_status_cmd_true_when_running(self):
+        from opnsense_controller.caddy_cli import status_cmd  # noqa: PLC0415
+        mgr = MagicMock()
+        mgr.service_status.return_value = {"status": "running"}
+        self.assertTrue(status_cmd(mgr))
+
+    def test_status_cmd_false_when_stopped(self):
+        from opnsense_controller.caddy_cli import status_cmd  # noqa: PLC0415
+        mgr = MagicMock()
+        mgr.service_status.return_value = {"status": "stopped"}
+        self.assertFalse(status_cmd(mgr))
+
+
+if __name__ == "__main__":
+    unittest.main()
