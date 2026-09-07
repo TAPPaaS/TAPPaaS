@@ -275,6 +275,34 @@ else
     fi
 fi
 
+# ── Test 2b: Additional routes (proxyRoutes, #597) ──────────────────
+#
+# Each declared route must have BOTH a domain <name>.<domain> and a handler on
+# the same upstream host at the route's own port. This is what would catch
+# proxyRoutes silently not publishing — or a route wrongly pruned by the
+# primary's --keep. Same shape and cost as Checks 1/2, so it runs in fast mode
+# too and works against the recorded TAPPAAS_TEST_CADDY_LIST fixture.
+info "  Check 2b: Additional routes (proxyRoutes)"
+routes_tsv="$(read_module_config "${MODULE}" | jq -rc '.proxyRoutes // [] | .[] | [.name, (.port|tostring)] | @tsv' 2>/dev/null || true)"
+if [[ -z "${routes_tsv}" ]]; then
+    info "    none declared"
+elif [[ "${VHOST_EXPECTED}" -eq 0 ]]; then
+    warn "    No domain for this environment — updater skips the reconcile, no routes expected"
+else
+    while IFS=$'\t' read -r rname rport; do
+        [[ -z "${rname}" ]] && continue
+        rfqdn="${rname}.${TAPPAAS_DOMAIN}"
+        rfqdn_re="$(re_quote "${rfqdn}")"
+        if ! grep -qE "^[[:space:]]+${rfqdn_re}[[:space:]]+\[" <<<"${caddy_list}"; then
+            fail "Route domain '${rfqdn}' not found in Caddy"
+        elif grep -qE "^[[:space:]]*-> ([a-z]+://)?${UPSTREAM_RE}:${rport}[[:space:]]" <<<"${caddy_list}"; then
+            pass "Route '${rfqdn}' -> ${UPSTREAM}:${rport} exists in Caddy"
+        else
+            fail "Route '${rfqdn}' handler on ${UPSTREAM}:${rport} not found in Caddy"
+        fi
+    done <<<"${routes_tsv}"
+fi
+
 # ── Test 3: HTTPS endpoint responds ─────────────────────────────────
 
 info "  Check 3: HTTPS endpoint"

@@ -203,6 +203,21 @@ else
     fail "lib/test-reboot-node-lib.sh not found or not executable"
 fi
 
+# The kernel-prune keep/remove computation must never drop the RUNNING kernel
+# and must keep running + latest + latest-1 (#592). Pure logic on synthetic
+# package lists; no ssh/apt.
+info "${BOLD}Test 2c: kernel-prune keep/remove computation (#592)${CL}"
+if [[ -x "${SCRIPT_DIR}/lib/test-kernel-prune.sh" ]]; then
+    if kp_out=$("${SCRIPT_DIR}/lib/test-kernel-prune.sh" 2>&1); then
+        pass "$(tail -1 <<< "${kp_out}")"
+    else
+        fail "kernel-prune unit tests failed"
+        indent <<< "${kp_out}"
+    fi
+else
+    fail "lib/test-kernel-prune.sh not found or not executable"
+fi
+
 # ── Test 3: drift --check against an installed VM (read-only) ───────
 
 info "${BOLD}Test 3: Drift reconciler --check (read-only)${CL}"

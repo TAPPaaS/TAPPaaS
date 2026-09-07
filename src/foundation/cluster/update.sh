@@ -3,7 +3,8 @@
 # TAPPaaS Cluster Module Update
 #
 # Updates all Proxmox nodes in the cluster:
-#   1. Runs apt update && apt upgrade on each node
+#   1. Runs apt update && apt dist-upgrade on each node, then prunes superseded
+#      kernels (keeping running, latest and latest-1)
 #   2. Distributes Create-TAPPaaS-VM.sh, Create-TAPPaaS-LXC.sh and zones.json to each node
 #
 # Usage: ./update.sh [module-name]
@@ -34,20 +35,24 @@ NODES=$(ssh -o StrictHostKeyChecking=no root@"$NODE1_FQDN" \
     "pvesh get /cluster/resources --type node --output-format json | jq --raw-output '.[].node'")
 info "Found nodes: $(echo "$NODES" | tr '\n' ' ')"
 
-# Step 1: Run apt update && apt upgrade on all Proxmox nodes
+# Step 1: Run apt update && apt dist-upgrade on all Proxmox nodes
 info "${BOLD}Step 1: Updating Proxmox node packages${CL}"
 while read -r node; do
     NODE_FQDN="$node.$MGMTVLAN.internal"
     # One header for both apt phases; each phase renders its own line of progress
-    # dots (update, then upgrade) so the console stays compact (two dot lines).
-    info "Running apt update & upgrade on $node..."
+    # dots (update, then dist-upgrade) so the console stays compact (two dot lines).
+    # dist-upgrade, NOT upgrade: `apt upgrade` never installs a NEW package, and
+    # every Proxmox kernel bump ships a new package name (proxmox-kernel-<ver>),
+    # so plain upgrade held the kernel back on every run (#591). dist-upgrade
+    # matches install.sh and is the command Proxmox documents.
+    info "Running apt update & dist-upgrade on $node..."
     if [[ "${OPT_DEBUG:-0}" -eq 1 ]]; then
         if ! ssh -n -o StrictHostKeyChecking=no root@"$NODE_FQDN" "apt update"; then
             warn "apt update failed on $node"
             continue
         fi
-        if ! ssh -n -o StrictHostKeyChecking=no root@"$NODE_FQDN" "apt upgrade --assume-yes"; then
-            warn "apt upgrade failed on $node"
+        if ! ssh -n -o StrictHostKeyChecking=no root@"$NODE_FQDN" "apt dist-upgrade --assume-yes"; then
+            warn "apt dist-upgrade failed on $node"
             continue
         fi
     else
@@ -57,9 +62,9 @@ while read -r node; do
             continue
         fi
         echo ""
-        if ! ssh -n -o StrictHostKeyChecking=no root@"$NODE_FQDN" "apt upgrade --assume-yes" 2>&1 | while IFS= read -r _; do printf "."; done; then
+        if ! ssh -n -o StrictHostKeyChecking=no root@"$NODE_FQDN" "apt dist-upgrade --assume-yes" 2>&1 | while IFS= read -r _; do printf "."; done; then
             echo ""
-            warn "apt upgrade failed on $node"
+            warn "apt dist-upgrade failed on $node"
             continue
         fi
         echo ""
@@ -82,6 +87,28 @@ while read -r node; do
         warn "  Schedule a maintenance window and run:"
         warn "    reboot-node.sh --dry-run ${node}    # preview impact"
         warn "    reboot-node.sh --execute ${node}    # execute (HITL)"
+    fi
+
+    # ── Prune superseded kernels (#592) ──────────────────────────────
+    # dist-upgrade only ever ADDS kernels; nothing removed them, so /boot grew
+    # without bound. lib/prune-kernels.sh keeps the running, latest and
+    # latest-1 kernels and purges the rest — run node-side by piping the script
+    # over ssh. It never uses `apt autoremove` (which would remove the running
+    # kernel on a node that is behind); see the script header and #592. The
+    # same script is unit-tested by lib/test-kernel-prune.sh (test.sh Test 2c).
+    info "Pruning superseded kernels on $node (keep: running, latest, latest-1)..."
+    _prune_out="$(ssh -o StrictHostKeyChecking=no root@"$NODE_FQDN" 'bash -s' \
+        2>&1 < "${SCRIPT_DIR}/lib/prune-kernels.sh")" || true
+    _keep_line="$(printf '%s\n' "$_prune_out" | grep -m1 '^KEEP: ' || true)"
+    _rm_line="$(printf '%s\n' "$_prune_out" | grep -m1 '^REMOVE: ' || true)"
+    [[ -n "$_keep_line" ]] && info "  $node ${_keep_line}"
+    if [[ "$_rm_line" == "REMOVE: (none)" ]]; then
+        info "  $node no superseded kernels to prune"
+    elif [[ -n "$_rm_line" ]]; then
+        info "  $node pruned: ${_rm_line#REMOVE: }"
+    else
+        warn "  $node kernel prune produced no summary — check output"
+        [[ "${OPT_DEBUG:-0}" -eq 1 ]] && printf '%s\n' "$_prune_out"
     fi
 
 done <<< "$NODES"

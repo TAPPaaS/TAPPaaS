@@ -537,6 +537,33 @@ class CaddyManager:
             for d in self.list_domains()
             if d.description == description and d.domain != keep_domain
         ]
+        return self._delete_domains(stale)
+
+    def prune_domains_by_description_prefix(
+        self, description_prefix: str, keep_domains: list[str]
+    ) -> list[str]:
+        """Delete stale routes whose description starts with a prefix (#597).
+
+        A module that publishes several hostnames (proxyRoutes) gives each extra
+        route its own description ``TAPPaaS: <module>#<name>``. When a route is
+        removed from the module JSON — or the whole module is deleted — its
+        domain/handler must be swept even though no single exact description
+        identifies "all of this module's routes". This removes every domain whose
+        description starts with ``description_prefix`` and whose FQDN is not in
+        ``keep_domains`` (the routes still declared), along with any handler bound
+        to it. Idempotent: returns the FQDNs removed (empty = none).
+        """
+        keep = set(keep_domains)
+        stale = [
+            d
+            for d in self.list_domains()
+            if d.description.startswith(description_prefix) and d.domain not in keep
+        ]
+        return self._delete_domains(stale)
+
+    def _delete_domains(self, stale: list["CaddyDomainInfo"]) -> list[str]:
+        """Delete the given domains and any handler bound to them. Returns the
+        FQDNs removed. Shared by the prune-by-description and -prefix paths."""
         if not stale:
             return []
         handlers = self.list_handlers()
@@ -602,3 +629,18 @@ class CaddyManager:
             API response dict.
         """
         return self._api_post("service", "reconfigure")
+
+    def service_status(self) -> dict:
+        """Return the caddy service runtime status, e.g. ``{"status": "running"}``.
+
+        Unlike reconfigure()'s response — which reports only that the API
+        ACCEPTED the request — this reflects whether the caddy daemon is actually
+        up. A refused Caddyfile leaves reconfigure returning ok while the service
+        stays stopped, taking every proxied vhost offline (#589). Reads
+        ``GET /api/caddy/service/status``.
+        """
+        return self._api_get("service", "status")
+
+    def is_running(self) -> bool:
+        """True iff the caddy service reports status 'running'."""
+        return str(self.service_status().get("status", "")).lower() == "running"

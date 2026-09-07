@@ -450,43 +450,98 @@ def list_all(manager: CaddyManager) -> bool:
 
 def prune_domains_cmd(
     manager: CaddyManager,
-    description: str,
-    keep: str,
+    description: str | None,
+    keep: list[str],
     check_mode: bool = False,
+    description_prefix: str | None = None,
 ) -> bool:
-    """Delete stale routes for a module after a domain change (#474).
+    """Delete stale routes for a module. Idempotent.
 
-    Removes every domain (and its handler) whose description matches but whose
-    FQDN differs from `keep` — i.e. the old `<svc>.<olddomain>` left behind when
-    network:proxy re-adds `<svc>.<newdomain>`. Idempotent.
+    Two match modes:
+      * ``description`` (exact) — the old `<svc>.<olddomain>` left behind when
+        network:proxy re-adds `<svc>.<newdomain>` after a domain change (#474).
+      * ``description_prefix`` — sweep every `TAPPaaS: <module>#*` extra route
+        (proxyRoutes, #597) whose FQDN is no longer declared.
+
+    In both modes, a domain (and its handler) is removed when its description
+    matches and its FQDN is not among ``keep``.
     """
-    stale = [
-        d
-        for d in manager.list_domains()
-        if d.description == description and d.domain != keep
-    ]
+    keep = keep or []
+    if description_prefix is None and not keep:
+        # Exact-description prune with no --keep would delete the module's only
+        # route — refuse it so a forgotten flag can't wipe a live service (#474).
+        print("ERROR: --description requires at least one --keep", file=sys.stderr)
+        return False
+    keep_set = set(keep)
+    if description_prefix is not None:
+        match_desc = f"prefix '{description_prefix}'"
+        stale = [
+            d
+            for d in manager.list_domains()
+            if d.description.startswith(description_prefix) and d.domain not in keep_set
+        ]
+    else:
+        match_desc = f"'{description}'"
+        stale = [
+            d
+            for d in manager.list_domains()
+            if d.description == description and d.domain not in keep_set
+        ]
     if not stale:
-        print(f"No stale domains for '{description}' (keeping '{keep}')")
+        print(f"No stale domains for {match_desc} (keeping {sorted(keep_set)})")
         return True
     if check_mode:
         for d in stale:
             print(f"Would delete stale domain: {d.domain} (uuid={d.uuid}) (dry-run)")
         return True
-    removed = manager.prune_domains_by_description(description, keep)
+    if description_prefix is not None:
+        removed = manager.prune_domains_by_description_prefix(description_prefix, keep)
+    else:
+        removed = manager.prune_domains_by_description(description, keep[0])
     for r in removed:
         print(f"Deleted stale domain: {r}")
     return True
 
 
+def _wait_service_running(
+    manager: CaddyManager, attempts: int = 5, delay: float = 2.0,
+) -> str:
+    """Poll the caddy service status until 'running', tolerating the restart a
+    reconfigure triggers (same reason the DNS post-write guard retries, #516).
+
+    Returns the last observed state (lowercased), e.g. "running" or "stopped",
+    or "unknown" if the status endpoint returned nothing.
+    """
+    state = "unknown"
+    for attempt in range(max(1, attempts)):
+        state = str(manager.service_status().get("status", "unknown")).lower()
+        if state == "running":
+            return state
+        if attempt < attempts - 1:
+            time.sleep(delay)
+    return state
+
+
+def status_cmd(manager: CaddyManager) -> bool:
+    """Report the caddy service runtime state on demand (#589).
+
+    Returns True (exit 0) only when the service is running, so it is scriptable.
+    """
+    state = str(manager.service_status().get("status", "unknown")).lower()
+    print(f"Caddy service: {state}")
+    return state == "running"
+
+
 def reconfigure_cmd(manager: CaddyManager, check_mode: bool = False) -> bool:
-    """Reconfigure Caddy (regenerate Caddyfile and reload).
+    """Reconfigure Caddy, then verify the service actually came back up (#589).
 
     Args:
         manager: CaddyManager instance.
         check_mode: If True, perform dry-run.
 
     Returns:
-        True if successful.
+        True only if the API accepted the reconfigure AND the caddy service is
+        running afterwards.
     """
     if check_mode:
         print("Would reconfigure Caddy (dry-run)")
@@ -495,16 +550,30 @@ def reconfigure_cmd(manager: CaddyManager, check_mode: bool = False) -> bool:
     print("Reconfiguring Caddy...")
     result = manager.reconfigure()
 
-    if result.get("status") == "ok":
-        print("  Caddy reconfigured successfully")
+    # The API response only tells us the request was ACCEPTED — it says nothing
+    # about whether caddy actually reloaded. Bail early if even that failed.
+    if result.get("status") != "ok" and "error" in str(result).lower():
+        print(f"ERROR: Reconfigure failed: {result}", file=sys.stderr)
+        return False
+
+    # A refused Caddyfile leaves the daemon STOPPED while the API still reports
+    # success, taking EVERY proxied domain offline at once (#589 — the #516
+    # failure class: a write to a shared service returns 0 while it is dead).
+    # Probe the real service state and fail loud if it is not running.
+    state = _wait_service_running(manager)
+    if state == "running":
+        print("  Caddy reconfigured successfully (service running)")
         return True
 
-    # Treat non-error as success
-    if "error" not in str(result).lower():
-        print("  Caddy reconfigured")
-        return True
-
-    print(f"ERROR: Reconfigure failed: {result}", file=sys.stderr)
+    print(
+        f"ERROR: Caddy reconfigure was accepted but the service is '{state}', "
+        f"not running — the generated configuration was refused and EVERY "
+        f"proxied domain is now offline (#589).\n"
+        f"  Inspect on the firewall: configctl caddy status ; "
+        f"tail -n50 /var/log/caddy/caddy.log\n"
+        f"  Re-check state via tooling: caddy-manager status",
+        file=sys.stderr,
+    )
     return False
 
 
@@ -649,16 +718,24 @@ Examples:
     # prune-domains (remove stale <svc>.<olddomain> routes after a domain change, #474)
     prune_parser = subparsers.add_parser(
         "prune-domains", parents=[global_parser],
-        help="Delete domains+handlers with a description whose FQDN != --keep",
+        help="Delete domains+handlers matching a description whose FQDN is not in --keep",
     )
-    prune_parser.add_argument("--description", required=True, help="Module description to match (e.g. 'TAPPaaS: nextcloud')")
-    prune_parser.add_argument("--keep", required=True, help="The current FQDN to keep")
+    prune_match = prune_parser.add_mutually_exclusive_group(required=True)
+    prune_match.add_argument("--description", default=None, help="Exact module description to match (e.g. 'TAPPaaS: nextcloud')")
+    prune_match.add_argument("--description-prefix", dest="description_prefix", default=None,
+                             help="Match every description with this prefix (e.g. 'TAPPaaS: nextcloud#' — sweep proxyRoutes, #597)")
+    prune_parser.add_argument("--keep", action="append", default=None, metavar="FQDN",
+                              help="An FQDN to keep; repeat for several (e.g. --keep a.example.com --keep b.example.com). "
+                                   "Required with --description; may be omitted with --description-prefix to sweep every matching route.")
 
     # list
     subparsers.add_parser("list", parents=[global_parser], help="List all domains and handlers")
 
     # reconfigure
     subparsers.add_parser("reconfigure", parents=[global_parser], help="Reconfigure Caddy (apply changes)")
+
+    # status (#589)
+    subparsers.add_parser("status", parents=[global_parser], help="Report whether the Caddy service is running")
 
     # Seed the global-option defaults into the namespace before parsing. The
     # shared parent uses argument_default=SUPPRESS, so a global flag given on
@@ -729,6 +806,7 @@ Examples:
             elif args.command == "prune-domains":
                 success = prune_domains_cmd(
                     manager, args.description, args.keep, args.check_mode,
+                    description_prefix=getattr(args, "description_prefix", None),
                 )
             elif args.command == "delete-handler":
                 success = delete_handler_cmd(
@@ -741,6 +819,8 @@ Examples:
                 success = list_all(manager)
             elif args.command == "reconfigure":
                 success = reconfigure_cmd(manager, args.check_mode)
+            elif args.command == "status":
+                success = status_cmd(manager)
 
             sys.exit(0 if success else 1)
 

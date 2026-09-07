@@ -258,6 +258,11 @@ run_caddy add-handler "${PROXY_DOMAIN}" \
     --no-ssl-verify || die "Failed to reconcile Caddy handler"
 CHANGES_MADE=true
 
+# ── Additional routes (proxyRoutes, #597) ──────────────────────────
+# Reconcile the module's extra hostnames the same way as the primary route, and
+# sweep any route no longer declared. See proxy_add_routes in access-list.sh.
+proxy_add_routes "${DESCRIPTION}" "${TAPPAAS_DOMAIN}" "${UPSTREAM}" "${DNS_MODE}"
+
 # ── Reconfigure if changes were made ────────────────────────────────
 
 if [[ "${CHANGES_MADE}" == "true" ]]; then

@@ -154,6 +154,83 @@ class TestPruneDomainsByDescription(unittest.TestCase):
         mgr.delete_handler.assert_not_called()
 
 
+class TestPruneDomainsByDescriptionPrefix(unittest.TestCase):
+    """Sweep of removed proxyRoutes by description prefix (#597)."""
+
+    def _mgr(self, domains, handlers):
+        from opnsense_controller.caddy_manager import (  # noqa: PLC0415
+            CaddyDomainInfo,
+            CaddyHandlerInfo,
+        )
+        mgr = CaddyManager(config=MagicMock())
+        mgr._client = MagicMock()  # noqa: SLF001
+        mgr.list_domains = MagicMock(  # noqa: SLF001
+            return_value=[CaddyDomainInfo(*d) for d in domains]
+        )
+        mgr.list_handlers = MagicMock(  # noqa: SLF001
+            return_value=[CaddyHandlerInfo(**h) for h in handlers]
+        )
+        mgr.delete_domain = MagicMock(return_value={"result": "deleted"})  # noqa: SLF001
+        mgr.delete_handler = MagicMock(return_value={"result": "deleted"})  # noqa: SLF001
+        return mgr
+
+    def _handler(self, uuid, domain_uuid, description):
+        return dict(
+            uuid=uuid, domain_uuid=domain_uuid, upstream_domain="u",
+            upstream_port="80", description=description, enabled=True,
+        )
+
+    def test_removes_only_undeclared_routes(self):
+        # app declares routes admin + metrics; a stale 'old' route lingers and
+        # must go. The primary 'TAPPaaS: app' (no '#') is NOT matched by the
+        # prefix, and another module's route is untouched.
+        mgr = self._mgr(
+            domains=[
+                ("PRI", "app.example", "TAPPaaS: app", True),
+                ("ADM", "admin.example", "TAPPaaS: app#admin", True),
+                ("MET", "metrics.example", "TAPPaaS: app#metrics", True),
+                ("OLD", "old.example", "TAPPaaS: app#old", True),
+                ("OTH", "x.example", "TAPPaaS: other#admin", True),
+            ],
+            handlers=[
+                self._handler("HOLD", "OLD", "TAPPaaS: app#old"),
+                self._handler("HADM", "ADM", "TAPPaaS: app#admin"),
+            ],
+        )
+        removed = mgr.prune_domains_by_description_prefix(
+            "TAPPaaS: app#", ["admin.example", "metrics.example"]
+        )
+        self.assertEqual(removed, ["old.example"])
+        mgr.delete_domain.assert_called_once_with("OLD")
+        mgr.delete_handler.assert_called_once_with("HOLD")
+
+    def test_removes_all_routes_when_keep_empty(self):
+        # delete-service passes no keeps: every '#' route of the module goes,
+        # the primary stays (not matched by the '#' prefix).
+        mgr = self._mgr(
+            domains=[
+                ("PRI", "app.example", "TAPPaaS: app", True),
+                ("ADM", "admin.example", "TAPPaaS: app#admin", True),
+            ],
+            handlers=[self._handler("HADM", "ADM", "TAPPaaS: app#admin")],
+        )
+        removed = mgr.prune_domains_by_description_prefix("TAPPaaS: app#", [])
+        self.assertEqual(removed, ["admin.example"])
+        mgr.delete_domain.assert_called_once_with("ADM")
+
+    def test_noop_when_all_declared(self):
+        mgr = self._mgr(
+            domains=[("ADM", "admin.example", "TAPPaaS: app#admin", True)],
+            handlers=[self._handler("HADM", "ADM", "TAPPaaS: app#admin")],
+        )
+        self.assertEqual(
+            mgr.prune_domains_by_description_prefix("TAPPaaS: app#", ["admin.example"]),
+            [],
+        )
+        mgr.delete_domain.assert_not_called()
+        mgr.delete_handler.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()
 
@@ -253,3 +330,100 @@ class TestListAllRendersScheme(unittest.TestCase):
             self._handler(upstream_http_version="http1", access_list_uuid="acl-uuid")
         )
         self.assertIn("[http1 acl]", out)
+
+
+class TestServiceStatusProbe(unittest.TestCase):
+    """#589 — a reconfigure that leaves the service stopped must fail, not
+    report success, and the service state must be queryable on demand."""
+
+    def test_service_status_reads_get_service_status(self):
+        captured: list = []
+        mgr = CaddyManager(config=MagicMock())
+        mgr._client = MagicMock()  # noqa: SLF001
+
+        def run_module(_module, **kwargs):
+            params = kwargs.get("params", {})
+            captured.append({
+                "controller": params.get("controller"),
+                "command": params.get("command"),
+                "action": params.get("action"),
+            })
+            return {"result": {"response": {"status": "running"}}}
+
+        mgr._client.run_module.side_effect = run_module  # noqa: SLF001
+        self.assertTrue(mgr.is_running())
+        self.assertEqual(captured[-1]["controller"], "service")
+        self.assertEqual(captured[-1]["command"], "status")
+        self.assertEqual(captured[-1]["action"], "get")
+
+    def test_is_running_false_when_stopped(self):
+        mgr = CaddyManager(config=MagicMock())
+        mgr._client = MagicMock()  # noqa: SLF001
+        mgr._client.run_module.return_value = {  # noqa: SLF001
+            "result": {"response": {"status": "stopped"}}}
+        self.assertFalse(mgr.is_running())
+
+
+class TestReconfigureVerifiesService(unittest.TestCase):
+    """#589 — reconfigure_cmd must probe the real service state afterwards."""
+
+    def _mgr(self, reconfigure_result, status_states):
+        mgr = MagicMock()
+        mgr.reconfigure.return_value = reconfigure_result
+        mgr.service_status.side_effect = [{"status": s} for s in status_states]
+        return mgr
+
+    def test_reconfigure_fails_when_service_stopped(self):
+        from opnsense_controller.caddy_cli import reconfigure_cmd  # noqa: PLC0415
+        from unittest.mock import patch  # noqa: PLC0415
+        # API says ok, but the service is stopped on every probe → must fail.
+        mgr = self._mgr({"status": "ok"}, ["stopped"] * 5)
+        with patch("opnsense_controller.caddy_cli.time.sleep"):
+            self.assertFalse(reconfigure_cmd(mgr))
+
+    def test_reconfigure_succeeds_when_service_running(self):
+        from opnsense_controller.caddy_cli import reconfigure_cmd  # noqa: PLC0415
+        mgr = self._mgr({"status": "ok"}, ["running"])
+        self.assertTrue(reconfigure_cmd(mgr))
+
+    def test_reconfigure_tolerates_restart_then_running(self):
+        from opnsense_controller.caddy_cli import reconfigure_cmd  # noqa: PLC0415
+        from unittest.mock import patch  # noqa: PLC0415
+        # Stopped on first probe (mid-restart), running on the second → success.
+        mgr = self._mgr({"status": "ok"}, ["stopped", "running"])
+        with patch("opnsense_controller.caddy_cli.time.sleep"):
+            self.assertTrue(reconfigure_cmd(mgr))
+
+    def test_reconfigure_bails_when_api_rejects(self):
+        from opnsense_controller.caddy_cli import reconfigure_cmd  # noqa: PLC0415
+        mgr = MagicMock()
+        mgr.reconfigure.return_value = {"status": "failed", "error": "bad config"}
+        self.assertFalse(reconfigure_cmd(mgr))
+        mgr.service_status.assert_not_called()
+
+    def test_check_mode_does_not_touch_the_service(self):
+        from opnsense_controller.caddy_cli import reconfigure_cmd  # noqa: PLC0415
+        mgr = MagicMock()
+        self.assertTrue(reconfigure_cmd(mgr, check_mode=True))
+        mgr.reconfigure.assert_not_called()
+        mgr.service_status.assert_not_called()
+
+
+class TestStatusCommand(unittest.TestCase):
+    """#589 — `caddy-manager status` reports state and exits accordingly."""
+
+    def test_status_cmd_true_when_running(self):
+        from opnsense_controller.caddy_cli import status_cmd  # noqa: PLC0415
+        mgr = MagicMock()
+        mgr.service_status.return_value = {"status": "running"}
+        self.assertTrue(status_cmd(mgr))
+
+    def test_status_cmd_false_when_stopped(self):
+        from opnsense_controller.caddy_cli import status_cmd  # noqa: PLC0415
+        mgr = MagicMock()
+        mgr.service_status.return_value = {"status": "stopped"}
+        self.assertFalse(status_cmd(mgr))
+
+
+if __name__ == "__main__":
+    unittest.main()

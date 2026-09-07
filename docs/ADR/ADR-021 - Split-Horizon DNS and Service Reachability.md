@@ -8,7 +8,7 @@
 | **Author** | Lars Rossen |
 | **Parent** | [ADR-005 Variant/Domain Architecture](<ADR-005-variant-domain-architecture.md>) §6 (the split-horizon idea), [ADR-014 Zone and Environment Lifecycle](<ADR-014 - Zone and Environment Lifecycle.md>) (what a zone and an environment *are*) |
 | **Refines** | ADR-005 §6 — which stated the goal but never named the resolution rule, leaving three implementations to infer it differently. |
-| **Closes / addresses** | **#577** (wildcard split-horizon has two writers with different zone rules — three, in fact). Supersedes the interim reading of **#504** recorded in `acme-setup.sh` and `clients.ts`. Related: **#474** (a `redirect` zone permits local-data only at the apex), **#505** (wildcard supersedes per-service). |
+| **Closes / addresses** | **#577** (wildcard split-horizon has two writers with different zone rules — three, in fact) and **#594** (duplicate `*` rows read as converged — closed by the cardinality-aware D5 writer, see Appendix A). Supersedes the interim reading of **#504** recorded in `acme-setup.sh` and `clients.ts`. Related: **#474** (a `redirect` zone permits local-data only at the apex), **#505** (wildcard supersedes per-service). |
 | **Changelog** | v0.1 first stab: reachability invariant, one resolver, three cases. v0.2 (operator decision): the target is **the DMZ gateway, always** (D2), backed by a **zone invariant** (D3) — this replaces v0.1's client-zone-gateway rule, dissolves the one-apex-target problem, and answers three of v0.1's five open questions. Also: a wildcard **certificate** does not imply a wildcard **record** (D4), and R3's unpublished-service case is worked through as Case 4. v0.3 (operator simplification): D3's entitlement-set derivation is replaced by the invariant **`internet` implies `dmz`** — reaching published services is the same privilege as reaching the internet, which grants nothing new because an internet-capable zone can already reach the same Caddy via the WAN hairpin. Removes the `proxyAllowedZones`-derived entitlement set entirely and makes the rule authored (like the existing `mgmt.access-to` invariant) rather than validated. v0.4 (operator review): **D1 no longer claims reachability** — the invariant is only that the answer is Caddy; whether a caller can reach it is a per-zone question answered by D2/D3, and a zone without `internet`/`dmz` uses `.internal` + pinholes instead. **Case 3 is re-cast around identity**, not zone lists: both populations resolve and connect identically, and Authentik group membership decides entitlement — `proxyAllowedZones` is demoted to the coarse public/internal split it is good for. R3 gains the `access-to` row (published → `dmz`; unpublished → the service's own zone). |
 
 ## Context
@@ -547,6 +547,11 @@ Remaining:
   unpublished → `UNPUBLISHED`; no dmz zone → `ERROR`. Plus the D3 invariant as a pure function
   over `zones.json`: every zone with `internet` has `dmz`; a zone without `internet` has
   neither; applying it twice is a no-op (it is authored on every add/modify).
+- **Unit (fast) — the #594 cardinality invariant (required deliverable of D5).** The record
+  reconciler as a pure function over the current `*` rows: two identical rows in ⟹ exactly one
+  row planned out; one correct row in ⟹ no change; zero rows in ⟹ one row planned. It MUST plan
+  a rewrite on `count ≠ 1` even when the value already matches — the case today's value-only gate
+  misses. Applying the plan twice is a no-op.
 - **Contract (fast)** — a guard that fails if a second split-horizon implementation reappears,
   in the spirit of `test-tracked-exec-mode.sh`.
 - **`--deep`** — per case, register the record then assert reachability *from the zone in
@@ -559,3 +564,113 @@ Remaining:
 (`network:proxy` behaviour), `manager/environment-manager/README.md` (`dnsMode` = certificate
 strategy only, per D4), the `proxyAllowedZones` field docs (single meaning under D2), and
 `ZONES.md` (the D3 invariant).
+
+---
+
+## Appendix A — How the Unbound record is written (today, and under this ADR) — #594
+
+D5 says the *target* must come from one resolver. This appendix documents the other half: the
+Unbound override is also *written* by more than one code path, triggered by more than one
+lifecycle event, in **no fixed order**. #594 — two identical `*` rows that reconcile reads as
+converged and never flattens — is a direct consequence of that surface, not of any single
+writer. D5 must own writing (and its cardinality), not only target derivation, or the same class
+of defect returns.
+
+### A.1 The writers
+
+Three code paths write an Unbound override. Two of them write the shared `*` apex:
+
+| # | Writer | File | Writes | Mode | Coordinates with |
+|---|---|---|---|---|---|
+| W1 | `acme-setup.sh` (issuance) | `tappaas-cicd/scripts/acme-setup.sh:292` | the `*` apex (`add "*" domain WC_GW`) | wildcard only | nothing — appends via `unbound-manager add` |
+| W2 | `environment-manager` reconcile → `registerWildcard` | `environment-manager/src/clients.ts:248` | the `*` apex | wildcard only | itself, via `wildcardDnsState` — **value only, not row count (#594)** |
+| W3 | `network:proxy` install/update-service | `network/services/proxy/update-service.sh:181-205` | a per-service `host.domain`, or prunes one | per-service writes; wildcard prunes | reads `*` to decide skip/prune |
+
+W1 and W2 are **mutually exclusive within a single reconcile** — [reconcile.ts:119](../../src/foundation/tappaas-cicd/manager/environment-manager/src/reconcile.ts#L119) defers the DNS step to W1 while a cert is being issued, and only runs W2 when a cert already exists. They are **not** mutually exclusive across the *lifecycle*: a first pass issues (W1 writes) and a later pass reconciles (W2 may write). Neither reads the other's row *count*.
+
+### A.2 Two independent mode axes
+
+The combinations that make this hard are the product of two axes that vary independently:
+
+| Axis | Values | Set by | Consequence for the `*` row |
+|---|---|---|---|
+| **Certificate strategy** | `wildcard` \| `per-service` | env `dnsMode`, overridable per module by `proxyTls` (`dns01`→wildcard, `http01`→per-service — [update-service.sh:159-164](../../src/foundation/network/services/proxy/update-service.sh#L159)) | wildcard ⇒ a `*` apex exists and W3 is a no-op/prune; per-service ⇒ no `*`, W3 writes per host |
+| **Certificate automation** | automated \| manual | automated when `~/.acme-dns-credentials.txt` is present (env-manager runs `acme-setup.sh` itself — [clients.ts:310](../../src/foundation/tappaas-cicd/manager/environment-manager/src/clients.ts#L310)); manual when the operator runs `acme-setup.sh` by hand | decides *whether W1 fires from inside reconcile* or *out-of-band from a shell* — i.e. whether the two `*` writers are interleaved by one process or by two |
+
+Because `proxyTls` overrides `dnsMode` per module, a single environment can carry **both**
+strategies at once — some modules wildcard-bound, others per-service — so W3's skip/prune branch
+and the `*` apex coexist on the same domain.
+
+### A.3 Three triggers, non-deterministic order
+
+The writers are not invoked by one driver. Three lifecycle events call them, and the operator
+can run them in any order (and re-run any of them):
+
+```
+  platform install ─────────────┐
+    operator runs acme-setup.sh  │  (manual automation path)         ┐
+                                 ▼                                    │
+  environment install/reconcile ─── environment-manager reconcile    │  each may write / re-write
+    ├─ no cert  → plan issue → W1 (acme-setup.sh) writes `*`          │  the SAME `*` apex, at a
+    └─ cert ok  → W2 (registerWildcard) writes `*` (if value drifts)  │  time not ordered relative
+                                 ▲                                    │  to the others
+  module install / module update ── install-module / update-module   │
+    └─ network:proxy → W3 (per-service add / wildcard prune)          ┘
+```
+
+There is no barrier and no lock between these. `acme-setup.sh` is a **multi-minute** DNS-01
+issuance; a module install or an environment reconcile can run before, during, or after it, on a
+different day, by a different operator action.
+
+### A.4 Today — how a duplicate `*` is seeded and then frozen (#594)
+
+```
+  ── seeded (before add_override was delete-all-rewrite-one) ──
+  W1 acme-setup.sh   :  add "*" example.com 10.2.0.1     → row 1
+  W2 registerWildcard:  add "*" example.com 10.2.0.1     → row 2   (append, uncoordinated)
+
+  ── frozen (current reconcile logic) ──
+  wildcardDnsState() reads both rows, keeps last value only:
+        currentTarget = "10.2.0.1"        row COUNT discarded  (clients.ts:236)
+  computePlan(): currentTarget === gatewayIp && no collisions
+        → "already resolves … no DNS change"                   (reconcile.ts:134,148)
+        → registerWildcard never runs → the delete-all-rewrite-one flatten never fires
+  ⟹ two identical rows persist across every future reconcile, forever.
+```
+
+The OPNsense writer was fixed to delete-every-match-then-write-one, so W1/W2 *newly* run no
+longer append — but that flatten only executes when a writer is actually invoked, and the
+value-only gate above ensures it never is once the value is already correct. Existing duplicates
+are stranded. `state=absent` removes one row per call, so they do not self-heal from the delete
+side either.
+
+### A.5 Under this ADR — one writer, cardinality-aware (D5)
+
+D2 removes the *value* disagreement (every `*` is the DMZ gateway), and D5 collapses W1/W2 into
+one `network-manager split-horizon-target` call. The remaining requirement this appendix adds:
+
+> **D5 owns the record's cardinality, not only its value.** The single writer's state read MUST
+> report how many `*` rows exist, and the plan MUST converge on **exactly one** whenever
+> `count ≠ 1` — independently of whether the value already matches.
+
+```
+  ── future ──
+  split-horizon-target(domain) → (10.6.0.1, "dmz")      one derivation, all callers
+  state read                   → { value, rowCount }    count is first-class
+  plan                         → rewrite when  rowCount ≠ 1  OR  value ≠ target  OR  collisions
+        rewrite = delete-every-match + write-one         → converges to exactly one row
+  next reconcile               → rowCount == 1, value ok → no change   (idempotent)
+```
+
+This makes the invariant *"exactly one `*` override per domain"* a property the reconciler
+actively maintains, closing #594 for both stranded and future duplicates. It is testable as a
+pure function — the "applying it twice is a no-op" check the Testing section already asks of the
+D3 invariant applies verbatim to the record: two identical rows in ⟹ one row out ⟹ stable.
+
+> **Implementation requirement — not deferred.** #594 is **closed by this ADR, not alongside
+> it.** The D5 work MUST land the cardinality-aware read and plan (row count as first-class
+> state; converge on exactly one `*` when `count ≠ 1`) in the same change that introduces the
+> single resolver — because that rewrite touches the very `wildcardDnsState`/`computePlan` paths
+> where the bug lives, and shipping D5 without the count check would silently re-open #594. The
+> ADR is therefore not "done" until a reconcile against a domain carrying two identical `*` rows
+> flattens them to one. There is deliberately **no** separate/interim fix: it rides in with D5.

@@ -321,6 +321,14 @@ debug "  Pruning stale reverse-proxy routes for ${MODULE}..."
 run_caddy prune-domains --description "${DESCRIPTION}" --keep "${PROXY_DOMAIN}" \
     --no-ssl-verify || warn "Could not prune stale Caddy routes for ${MODULE} (non-fatal)"
 
+# ── Additional routes (proxyRoutes, #597) ──────────────────────────
+# One VM can publish several hostnames on different ports. Each {name, port}
+# entry becomes <name>.<domain> forwarding to the same upstream host on its own
+# port, inheriting the primary route's TLS, access list and upstream flags.
+# Handlers are keyed by description, so each route gets its own
+# "TAPPaaS: <module>#<name>" (the primary keeps the bare "TAPPaaS: <module>").
+proxy_add_routes "${DESCRIPTION}" "${TAPPAAS_DOMAIN}" "${UPSTREAM}" "${DNS_MODE}"
+
 # ── Reconfigure Caddy ───────────────────────────────────────────────
 
 debug "  Applying Caddy configuration..."
