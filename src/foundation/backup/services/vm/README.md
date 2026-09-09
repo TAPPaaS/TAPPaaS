@@ -30,26 +30,9 @@ only the cascade on `reconcile`.
 
 `backup:vm` owns **7** declared field(s). Each table below carries the field's full definition and, where the service applies it, its ADR-020 change semantics.
 
-### `backup`
-
-Module-level backup policy (ADR-007 P9). The leaf of the Site -> Environment -> Module backup cascade: backup-manager resolves the effective policy by merging site.json backup.defaultRetention, the environment's backup.retention/residency, then these module overrides. install-module.sh persists the resolved policy onto the deployed module config. Does NOT replace the dependsOn backup:vm wiring (which decides whether the VM is in the shared PBS job) — it records the resolved retention/exclude/enabled state.
-
-| Attribute | Value |
-|---|---|
-| Type | `object` |
-| Example | `{"enabled": true, "retention": "1y", "exclude": ["/var/cache"]}` |
-| Required by | *(none)* |
-| Used by | `backup:vm` |
-| Change class | `in-place` |
-| Apply mode | `reconcile` |
-
-**About the field.** Authored optionally in the source module JSON; the resolved (cascaded) value is written back into /home/tappaas/config/<name>.json at install time.
-
-**Why this change class.** The module's layer of the retention/exclude/enabled cascade. Changing it changes future backups only; nothing already stored is touched, and no guest is disturbed.
-
 ### `alwaysBackup`
 
-Set only on the backup module. List of module names whose VMs are always added to the PBS backup job, even though they do not (and cannot) declare dependsOn backup:vm — typically foundation VMs that bootstrap before the backup server (firewall, tappaas-cicd).
+DEPRECATED (ADR-012 §2.7) — being replaced by 'integratesWith: ["backup:vm"]' on the foundation modules that bootstrap before the backup server. Read for one release, then the field and its code path are removed; backup stays opt-in. Set only on the backup module. List of module names whose VMs are always added to the PBS backup job, even though they do not (and cannot) declare dependsOn backup:vm — typically foundation VMs that bootstrap before the backup server (firewall, tappaas-cicd).
 
 | Attribute | Value |
 |---|---|
@@ -85,7 +68,7 @@ Name of the Proxmox Backup Server datastore / Proxmox storage used for backups. 
 
 ### `immutableSnapshots`
 
-Backup module, optional WORM-ish immutability (ADR-012 §3.5 / ADR-010 §7.3, #389). When enabled, periodic read-only ZFS snapshots of the datastore dataset are taken on the PBS node and pruned to `keep`, so backup history cannot be rewritten by a sync/push credential holder or PBS prune/GC — only by node-local root. The weaker of the two tiers; S3 Object Lock (ADR-010 satellite) is the stronger one and is provisioned satellite-side.
+Backup module, optional WORM-ish immutability (ADR-012 §3.5 / ADR-010 §7.3). When enabled, periodic read-only ZFS snapshots of the datastore dataset are taken on the PBS node and pruned to `keep`, so backup history cannot be rewritten by a sync/push credential holder or PBS prune/GC — only by node-local root. The weaker of the two tiers; S3 Object Lock (ADR-010 satellite) is the stronger one and is provisioned satellite-side.
 
 | Attribute | Value |
 |---|---|
@@ -101,46 +84,27 @@ Backup module, optional WORM-ish immutability (ADR-012 §3.5 / ADR-010 §7.3, #3
 
 **Why this change class.** Periodic read-only ZFS snapshots of the datastore so backup history cannot be rewritten (ADR-012 §3.5). Enabling it provisions on the PBS node, not on the consuming guest.
 
-### `placement`
-
-Backup module placement policy (ADR-012). Decides WHERE (or whether) a local PBS datastore is realized. 'auto' discovers a tankc pool (preferred node .node first, then any node) and installs PBS there, falling back to a shim if none exists. 'node:<name>' pins PBS to that node's tankc. 'shim' records a datastore-less marker that still satisfies dependsOn:backup and is promotable later via update-module.sh backup. 'remote-only' installs no local PBS (off-site push, ADR-012 P4). The resolved outcome is written back as .placementState (local|shim|remote-only).
-
-| Attribute | Value |
-|---|---|
-| Type | `string` |
-| Default | `auto` |
-| Pattern | `^(auto|shim|remote-only|node:.+)$` |
-| Example | `auto` |
-| Required by | *(none)* |
-| Used by | `backup:vm` |
-| Change class | `in-place` |
-| Apply mode | `reconcile` |
-
-**About the field.** Set only on the backup module. Replaces the old hard node/storage literals as the source of placement truth; .node/.storage remain the preferred hints for 'auto'.
-
-**Why this change class.** Where the module's backups are allowed to live (auto / a named target).
-
 ### `placementState`
 
-Resolved backup placement, written by backup/install.sh|update.sh (ADR-012): 'local' (PBS realized on .node/.storage), 'shim' (no datastore), or 'remote-only'. Runtime state — not authored by hand; read by the shim guards and pbs-job.sh.
+Resolved backup placement (ADR-012 §2.1) and the single source of truth for where PBS lives. Ships EMPTY on the released module; backup/install.sh resolves it once and writes it back. Values: 'node:<name>' (PBS software + datastore realized on that node's tankc pool), 'shim' (no datastore anywhere — still satisfies dependsOn:backup:vm, promoted in place by `module-manager module modify backup` once storage appears), 'external' (an externally-managed PBS at .pbsUrl is consumed; nothing is provisioned — set at install time and permanent thereafter). The legacy values 'local' and 'remote-only' are accepted for one release and migrated in place by update.sh to 'node:<name>' / 'external' (§4.1).
 
 | Attribute | Value |
 |---|---|
 | Type | `string` |
-| Allowed values | `local`, `shim`, `remote-only` |
-| Example | `local` |
+| Pattern | `^$|^(shim|external|node:.+|local|remote-only)$` |
+| Example | `node:tappaas3` |
 | Required by | *(none)* |
 | Used by | `backup:vm` |
 | Change class | `in-place` |
 | Apply mode | `reconcile` |
 
-**About the field.** Set only on the backup module, at install/update time.
+**About the field.** Set only on the backup module, at install/update time — never hand-authored. The resolved NODE is carried by this state; .node is only the discovery constraint.
 
-**Why this change class.** The resolved outcome of that placement, recorded on the deployed config.
+**Why this change class.** Where the site's backups actually live. Resolved by install; forcing 'external' is an install-time action (`module-manager module add backup --placementState external --pbsUrl <url>`).
 
 ### `pushTarget`
 
-Backup module, remote-only placement only (ADR-012 P4). Name of the default off-site push target — a config/push-<name>.json describing a REMOTE PBS this cluster pushes its VM backups to when there is no local PBS. Empty/absent means no default; onboard with `backup-manage.sh add-push <name> --make-default`.
+DEPRECATED (ADR-012 v0.3) — subsumed by placementState:'external' + pbsUrl, which name the external PBS clients push to directly. Read for one release (update.sh seeds pbsUrl from this target's remoteHost when migrating a legacy remote-only install), then removed. Backup module, remote-only placement only (ADR-012 P4). Name of the default off-site push target — a config/push-<name>.json describing a REMOTE PBS this cluster pushes its VM backups to when there is no local PBS. Empty/absent means no default; onboard with `backup-manage.sh add-push <name> --make-default`.
 
 | Attribute | Value |
 |---|---|
@@ -155,5 +119,40 @@ Backup module, remote-only placement only (ADR-012 P4). Name of the default off-
 **About the field.** Set only on the backup module. The push credential is prompted at onboarding, never stored.
 
 **Why this change class.** An off-site datastore this module's backups are pushed to (ADR-010).
+
+### `pbsUrl`
+
+The PBS that backup clients push their snapshots to (ADR-012 §1.4/§2.1). Defaults to the local PBS DNS name; overridden to the externally-managed PBS's URL (a satellite's tunnel address, a public host, or a pre-existing LAN PBS) when placementState is 'external'. The credential for it is prompted at onboarding and never stored here.
+
+| Attribute | Value |
+|---|---|
+| Type | `string` |
+| Default | `backup.mgmt.internal` |
+| Example | `pbs.offsite.example` |
+| Required by | *(none)* |
+| Used by | `backup:vm` |
+| Change class | `in-place` |
+| Apply mode | `reconcile` |
+
+**About the field.** Set only on the backup module. Required (non-default) when placementState is 'external'.
+
+**Why this change class.** Which PBS the clients upload to. Changing it re-points future backups; nothing already stored moves.
+
+### `backup`
+
+Module-level backup policy (ADR-007 P9). The leaf of the Site -> Environment -> Module backup cascade: backup-manager resolves the effective policy by merging site.json backup.defaultRetention, the environment's backup.retention/residency, then these module overrides. `module-manager module add` persists the resolved policy onto the deployed module config. Does NOT replace the dependsOn backup:vm wiring (which decides whether the VM is in the shared PBS job) — it records the resolved retention/exclude/enabled state.
+
+| Attribute | Value |
+|---|---|
+| Type | `object` |
+| Example | `{"enabled": true, "retention": "1y", "schedule": "weekly", "exclude": ["/var/cache"], "filesystemPaths": ["/home/tappaas/config"]}` |
+| Required by | *(none)* |
+| Used by | `backup:vm`, `backup:filesystem` |
+| Change class | `in-place` |
+| Apply mode | `reconcile` |
+
+**About the field.** Authored optionally on any module, alongside the dependsOn/integratesWith relationship that opts it into backup. The resolved (cascaded) value is written back into /home/tappaas/config/<name>.json at install time. filesystemPaths is meaningful only for a module declaring backup:filesystem; the other sub-fields apply to both capabilities.
+
+**Why this change class.** The module's layer of the retention/exclude/enabled/schedule cascade. Changing it changes future backups only; nothing already stored is touched, and no guest is disturbed. A changed schedule MOVES the guest between bucket jobs (ADR-012 §3.2).
 
 <!-- END GENERATED FIELDS -->

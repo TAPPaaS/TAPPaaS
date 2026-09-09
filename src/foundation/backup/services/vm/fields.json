@@ -5,7 +5,7 @@
   "_note": "update-service.sh re-asserts membership in the shared job and migrates a legacy --all job to the managed model — a set operation over the job's vmid list, plus a schedule/retention apply. That is a reconcile with domain knowledge (see lib/pbs-job.sh, lib/pbs-placement.sh), not a per-field set, so every field is apply:'reconcile'. Backup policy is also a CASCADE (site → environment → module, ADR-007 P9): the effective value is resolved by backup-manager, and a per-field differ here would compare only the module layer and call the rest drift.",
   "fields": {
     "alwaysBackup": {
-      "description": "DEPRECATED (ADR-012 §2.7) — being replaced by 'integratesWith: [\"backup:vm\"]' on the foundation modules that bootstrap before the backup server (#501 landed the relationship). Read for one release, then the field and its code path are removed; backup stays opt-in. Set only on the backup module. List of module names whose VMs are always added to the PBS backup job, even though they do not (and cannot) declare dependsOn backup:vm — typically foundation VMs that bootstrap before the backup server (firewall, tappaas-cicd).",
+      "description": "DEPRECATED (ADR-012 §2.7) — being replaced by 'integratesWith: [\"backup:vm\"]' on the foundation modules that bootstrap before the backup server. Read for one release, then the field and its code path are removed; backup stays opt-in. Set only on the backup module. List of module names whose VMs are always added to the PBS backup job, even though they do not (and cannot) declare dependsOn backup:vm — typically foundation VMs that bootstrap before the backup server (firewall, tappaas-cicd).",
       "type": "array",
       "requiredBy": [],
       "usedBy": [
@@ -36,7 +36,7 @@
       "changeNote": "Which PBS datastore the job writes to."
     },
     "immutableSnapshots": {
-      "description": "Backup module, optional WORM-ish immutability (ADR-012 §3.5 / ADR-010 §7.3, #389). When enabled, periodic read-only ZFS snapshots of the datastore dataset are taken on the PBS node and pruned to `keep`, so backup history cannot be rewritten by a sync/push credential holder or PBS prune/GC — only by node-local root. The weaker of the two tiers; S3 Object Lock (ADR-010 satellite) is the stronger one and is provisioned satellite-side.",
+      "description": "Backup module, optional WORM-ish immutability (ADR-012 §3.5 / ADR-010 §7.3). When enabled, periodic read-only ZFS snapshots of the datastore dataset are taken on the PBS node and pruned to `keep`, so backup history cannot be rewritten by a sync/push credential holder or PBS prune/GC — only by node-local root. The weaker of the two tiers; S3 Object Lock (ADR-010 satellite) is the stronger one and is provisioned satellite-side.",
       "type": "object",
       "requiredBy": [],
       "usedBy": [
@@ -72,7 +72,7 @@
       "changeNote": "Periodic read-only ZFS snapshots of the datastore so backup history cannot be rewritten (ADR-012 §3.5). Enabling it provisions on the PBS node, not on the consuming guest."
     },
     "placementState": {
-      "description": "Resolved backup placement (ADR-012 §2.1) and the single source of truth for where PBS lives. Ships EMPTY on the released module; backup/install.sh resolves it once and writes it back. Values: 'node:<name>' (PBS software + datastore realized on that node's tankc pool), 'shim' (no datastore anywhere — still satisfies dependsOn:backup:vm, promoted in place by update-module.sh backup once storage appears), 'external' (an externally-managed PBS at .pbsUrl is consumed; nothing is provisioned — set at install time and permanent thereafter). The legacy values 'local' and 'remote-only' are accepted for one release and migrated in place by update.sh to 'node:<name>' / 'external' (§4.1).",
+      "description": "Resolved backup placement (ADR-012 §2.1) and the single source of truth for where PBS lives. Ships EMPTY on the released module; backup/install.sh resolves it once and writes it back. Values: 'node:<name>' (PBS software + datastore realized on that node's tankc pool), 'shim' (no datastore anywhere — still satisfies dependsOn:backup:vm, promoted in place by `module-manager module modify backup` once storage appears), 'external' (an externally-managed PBS at .pbsUrl is consumed; nothing is provisioned — set at install time and permanent thereafter). The legacy values 'local' and 'remote-only' are accepted for one release and migrated in place by update.sh to 'node:<name>' / 'external' (§4.1).",
       "type": "string",
       "requiredBy": [],
       "usedBy": [
@@ -83,7 +83,7 @@
       "note": "Set only on the backup module, at install/update time — never hand-authored. The resolved NODE is carried by this state; .node is only the discovery constraint.",
       "class": "in-place",
       "apply": "reconcile",
-      "changeNote": "Where the site's backups actually live. Resolved by install; forcing 'external' is an install-time action (install-module.sh backup --placementState external --pbsUrl <url>)."
+      "changeNote": "Where the site's backups actually live. Resolved by install; forcing 'external' is an install-time action (`module-manager module add backup --placementState external --pbsUrl <url>`)."
     },
     "pushTarget": {
       "description": "DEPRECATED (ADR-012 v0.3) — subsumed by placementState:'external' + pbsUrl, which name the external PBS clients push to directly. Read for one release (update.sh seeds pbsUrl from this target's remoteHost when migrating a legacy remote-only install), then removed. Backup module, remote-only placement only (ADR-012 P4). Name of the default off-site push target — a config/push-<name>.json describing a REMOTE PBS this cluster pushes its VM backups to when there is no local PBS. Empty/absent means no default; onboard with `backup-manage.sh add-push <name> --make-default`.",
@@ -100,7 +100,7 @@
       "changeNote": "An off-site datastore this module's backups are pushed to (ADR-010)."
     },
     "pbsUrl": {
-      "description": "The PBS that backup clients push their snapshots to (ADR-012 §1.4/§2.1). Defaults to the local PBS DNS name; overridden to the externally-managed PBS's URL (a satellite's tunnel address, a public host, or a pre-existing LAN PBS — #456) when placementState is 'external'. The credential for it is prompted at onboarding and never stored here.",
+      "description": "The PBS that backup clients push their snapshots to (ADR-012 §1.4/§2.1). Defaults to the local PBS DNS name; overridden to the externally-managed PBS's URL (a satellite's tunnel address, a public host, or a pre-existing LAN PBS) when placementState is 'external'. The credential for it is prompted at onboarding and never stored here.",
       "type": "string",
       "requiredBy": [],
       "usedBy": [

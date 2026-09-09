@@ -404,12 +404,33 @@ _TT_EXCLUDE=" test-install-overrides.sh "
 # The generated field sections in each service README must match the manifests
 # they come from. Generated docs that can drift are worse than none: they read
 # as authoritative (#567).
-if [[ -x "${SCRIPT_DIR}/scripts/gen-service-fields-doc.py" ]]; then
-    if "${SCRIPT_DIR}/scripts/gen-service-fields-doc.py" --check >/dev/null 2>&1; then
-        pass "service README field sections match their fields.json"
-    else
-        fail "service README field sections are stale — regenerate: scripts/gen-service-fields-doc.py"
+#
+# DEEP-only. This is a source-tree check — it compares two files in the repo and
+# says nothing about the running system. Failing it in the nightly aborts the
+# update of a healthy module over a docs edit, which is what happened for three
+# nights running: a commit touched a generated block, and the mothership stopped
+# updating itself. Drift belongs to whoever edits the tree, not to the machine
+# applying tonight's packages.
+if [[ "${DEEP}" == "1" ]]; then
+    if [[ -x "${SCRIPT_DIR}/scripts/gen-service-fields-doc.py" ]]; then
+        # Two failures, not one. Exit 1 is drift — a README disagrees with its
+        # manifest and regenerating settles it. Exit 2 is a COLLISION — two
+        # registered repositories define the same field, nothing could be
+        # composed, and no README was examined at all. The output carries which
+        # file and which field, so it is reported rather than discarded.
+        _gsf_out="$("${SCRIPT_DIR}/scripts/gen-service-fields-doc.py" --check 2>&1)" \
+            && _gsf_rc=0 || _gsf_rc=$?
+        case "${_gsf_rc}" in
+            0) pass "service README field sections match their manifests" ;;
+            2) fail "field collision across registered repositories — one definition, one home"
+               printf '%s\n' "${_gsf_out}" | while IFS= read -r _l; do info "      ${_l}"; done ;;
+            *) fail "service README field sections are stale — regenerate: scripts/gen-service-fields-doc.py"
+               printf '%s\n' "${_gsf_out}" | while IFS= read -r _l; do info "      ${_l}"; done ;;
+        esac
+        unset _gsf_out _gsf_rc
     fi
+else
+    skip "service README field sections (use --deep to run)"
 fi
 
 _tt_dir="${SCRIPT_DIR}/scripts/test"

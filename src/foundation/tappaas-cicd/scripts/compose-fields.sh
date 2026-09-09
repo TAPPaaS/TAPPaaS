@@ -17,7 +17,13 @@
 # fields.ts is the in-process twin for TypeScript callers; a unit test asserts
 # the two agree, because two implementations that disagree are worse than one.
 #
-# Usage: compose-fields.sh [<foundation-dir>]
+# Usage: compose-fields.sh [<foundation-dir>] [--list-tiers]
+#
+# --list-tiers prints the discovered tier files, one absolute path per line,
+# instead of the schema. Same discovery, same collision check: a consumer that
+# must visit the manifests themselves (gen-service-fields-doc.py) asks for the
+# list rather than re-deriving it, so there is one answer to "what is a manifest
+# here" and not two that drift.
 #
 # Note on WHERE this may run: nothing on a Proxmox node needs it. Node-side
 # scripts (Create-TAPPaaS-VM.sh and friends, shipped to /root/tappaas/) are
@@ -26,7 +32,16 @@
 # The schema is a mothership concern.
 set -euo pipefail
 
-FOUNDATION="${1:-/home/tappaas/TAPPaaS/src/foundation}"
+LIST_TIERS=0
+_args=()
+for _a in "$@"; do
+    case "${_a}" in
+        --list-tiers) LIST_TIERS=1 ;;
+        *)            _args+=("${_a}") ;;
+    esac
+done
+
+FOUNDATION="${_args[0]:-/home/tappaas/TAPPaaS/src/foundation}"
 # Normalised: the same file reached by two different path spellings (a caller
 # passing "<dir>/.." and the repo root from site.json) must dedup to ONE entry,
 # or it is reported as a field defined in two tiers.
@@ -125,6 +140,13 @@ if [[ -n "${dupes}" ]]; then
     echo "compose-fields.sh: field(s) defined in more than one tier —${dupes}" >&2
     echo "  One definition, one home. Remove the duplicate." >&2
     exit 1
+fi
+
+if [[ "${LIST_TIERS}" -eq 1 ]]; then
+    # After the collision check, not before: a caller listing the manifests is
+    # entitled to the same refusal as one composing them.
+    [[ "${#tier_files[@]}" -gt 0 ]] && printf '%s\n' "${tier_files[@]}"
+    exit 0
 fi
 
 jq . <<< "${merged}"

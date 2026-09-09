@@ -47,7 +47,7 @@
       "apply": "set",
       "liveKey": "cpu",
       "setFlag": "--cpu",
-      "changeNote": "Proxmox spells it 'cpu'. The undeclared default resolves to 'host' — from module-fields.json, via the one resolver, NOT from a cfg() ladder in this service (#550)."
+      "changeNote": "Proxmox spells it 'cpu'. The undeclared default resolves to 'host' — from module-fields.json, via the one resolver, NOT from a cfg() ladder in this service."
     },
     "bridge0": {
       "class": "in-place-reboot",
@@ -69,7 +69,7 @@
       "apply": "composite",
       "composite": "net0",
       "liveKey": "net0.mac",
-      "changeNote": "A new MAC is a NEW IDENTITY on the wire: the guest takes a fresh DHCP lease, very likely a different address, and its DNS record must follow — exactly the reboot → wait-for-lease → re-register chain net0 already declares. Classed in-place until ADR-020 P6, inherited from a comment that grouped 'trunk- or MAC-only' changes as live; the two are not alike, because trunks is a BRIDGE-side allow-list the guest never sees while the MAC is the guest's own NIC. #194 already established that a netN property needing device re-creation (queues) is a disruptive hot-replug, and the MAC takes the same path. When the module pins no mac0 the field has no desired value at all and the LIVE MAC is carried across, which is why the manager assembles the finished netopts — so this only bites a module that deliberately re-MACs a guest."
+      "changeNote": "A new MAC is a NEW IDENTITY on the wire: the guest takes a fresh DHCP lease, very likely a different address, and its DNS record must follow — exactly the reboot → wait-for-lease → re-register chain net0 already declares. Classed in-place until ADR-020 P6, inherited from a comment that grouped 'trunk- or MAC-only' changes as live; the two are not alike, because trunks is a BRIDGE-side allow-list the guest never sees while the MAC is the guest's own NIC. A netN property needing device re-creation (queues) is a disruptive hot-replug, and the MAC takes the same path. When the module pins no mac0 the field has no desired value at all and the LIVE MAC is carried across, which is why the manager assembles the finished netopts — so this only bites a module that deliberately re-MACs a guest."
     },
     "trunks0": {
       "class": "in-place",
@@ -105,7 +105,7 @@
       ],
       "default": "mgmt",
       "format": "^[a-z][a-zA-Z0-9]*$",
-      "note": "Only used if bridge1 is defined. Hyphens are NOT allowed — use underscores (#237).",
+      "note": "Only used if bridge1 is defined. Hyphens are NOT allowed — use underscores.",
       "class": "in-place-reboot",
       "apply": "composite",
       "composite": "net1",
@@ -222,7 +222,7 @@
       "default": false,
       "values": {
         "true": "Fully unattended build — no console interaction required (e.g. tappaas-winserver with autounattend.xml)",
-        "false": "Requires manual installation — operator must run install-module.sh and complete the setup (e.g. tappaas-nixos graphical installer)"
+        "false": "Requires manual installation — operator must run `module-manager module add` and complete the setup (e.g. tappaas-nixos graphical installer)"
       },
       "class": "recreate",
       "apply": "none",

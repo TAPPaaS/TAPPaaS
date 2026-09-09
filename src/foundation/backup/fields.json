@@ -5,7 +5,7 @@
   "_note": "MODULE TIER (#567). The per-module `backup` policy object is the leaf of the Site -> Environment -> Module cascade (ADR-007 P9, ADR-012 §3.2) and is read by BOTH backup capabilities: backup:vm takes enabled/retention/exclude/schedule, backup:filesystem takes those plus filesystemPaths. It therefore belongs to neither service alone. The change semantics stay here too — the object is applied by a reconcile with domain knowledge in either case, never a per-field set.",
   "fields": {
     "backup": {
-      "description": "Module-level backup policy (ADR-007 P9). The leaf of the Site -> Environment -> Module backup cascade: backup-manager resolves the effective policy by merging site.json backup.defaultRetention, the environment's backup.retention/residency, then these module overrides. install-module.sh persists the resolved policy onto the deployed module config. Does NOT replace the dependsOn backup:vm wiring (which decides whether the VM is in the shared PBS job) — it records the resolved retention/exclude/enabled state.",
+      "description": "Module-level backup policy (ADR-007 P9). The leaf of the Site -> Environment -> Module backup cascade: backup-manager resolves the effective policy by merging site.json backup.defaultRetention, the environment's backup.retention/residency, then these module overrides. `module-manager module add` persists the resolved policy onto the deployed module config. Does NOT replace the dependsOn backup:vm wiring (which decides whether the VM is in the shared PBS job) — it records the resolved retention/exclude/enabled state.",
       "type": "object",
       "requiredBy": [],
       "usedBy": [

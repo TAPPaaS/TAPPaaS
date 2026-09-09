@@ -129,19 +129,58 @@ def render(coord, manifest, schema):
     return "\n".join(body)
 
 
+def compose(*flags):
+    """Run compose-fields.sh, or exit 2 saying why it refused.
+
+    Exit 2 is not exit 1. Exit 1 means a README disagrees with its manifest and
+    regenerating fixes it; exit 2 means the manifests disagree with EACH OTHER
+    and no README is at fault. Reporting a field collision as stale docs sends
+    the reader to regenerate a file that is already correct.
+    """
+    import subprocess
+    composer = FOUNDATION / "tappaas-cicd" / "scripts" / "compose-fields.sh"
+    r = subprocess.run([str(composer), str(FOUNDATION), *flags],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        sys.stderr.write(r.stderr)
+        print("manifest collision — the schema could not be composed; "
+              "no README was checked", file=sys.stderr)
+        sys.exit(2)
+    return r.stdout
+
+
+def label(path):
+    """Name a file by the repository that registers it, not by this checkout.
+
+    Discovery spans every repo in site.json .repositories, so a bare relative
+    path is ambiguous the moment two of them own a services/ directory.
+    """
+    for anc in path.parents:
+        if (anc / "src" / "module-catalog.json").is_file():
+            return f"{anc.name}/{path.relative_to(anc)}"
+    return str(path)
+
+
 def main():
     check = "--check" in sys.argv
     # The COMPOSED view (#567): a service manifest now carries its own field
     # definitions inline, and schemas/module-fields.json holds only the generic
     # 19. Composing covers both — a field defined in the module tier
     # (cluster/fields.json) is still documented in the services that use it.
-    import subprocess
-    composer = FOUNDATION / "tappaas-cicd" / "scripts" / "compose-fields.sh"
-    schema = json.loads(subprocess.run(
-        [str(composer), str(FOUNDATION)], capture_output=True, text=True, check=True
-    ).stdout)["fields"]
+    schema = json.loads(compose())["fields"]
+
+    # Document what the SCHEMA is composed from: every service manifest in every
+    # repository site.json registers, asked of the one discovery that also
+    # builds the schema. Globbing this checkout's foundation/ instead would
+    # document a subset of what it validates against — a community module could
+    # contribute a field definition and never have its own README checked.
+    manifests = sorted(
+        pathlib.Path(line) for line in compose("--list-tiers").splitlines()
+        if line and pathlib.Path(line).parent.parent.name == "services"
+    )
+
     stale, wrote = [], 0
-    for mf in sorted(FOUNDATION.glob("*/services/*/fields.json")):
+    for mf in manifests:
         svc = json.load(open(mf))
         coord = svc.get("service") or svc.get("scope", "?")
         readme = mf.parent / "README.md"
@@ -161,7 +200,7 @@ def main():
 
         if new != old:
             if check:
-                stale.append(str(readme.relative_to(FOUNDATION)))
+                stale.append(label(readme))
             else:
                 readme.write_text(new)
                 wrote += 1

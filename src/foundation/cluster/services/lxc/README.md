@@ -163,7 +163,7 @@ Security zone for net0. Must exist in zones.json.
 | Reported as | `net0.tag` |
 | Composite input to | `net0` |
 
-**About the field.** Zone determines VLAN tag. 'mgmt' is untagged traffic. camelCase only — no underscores or hyphens (#278). ADR-007 P5: when zone0 is unset it DEFAULTS to the target environment's network.zone (read from config/environments/<env>.json); pre-cutover (no site.json/environments) it falls back to resolve_default_zone()'s behaviour. An explicit zone0 in the module JSON always wins.
+**About the field.** Zone determines VLAN tag. 'mgmt' is untagged traffic. camelCase only — no underscores or hyphens. ADR-007 P5: when zone0 is unset it DEFAULTS to the target environment's network.zone (read from config/environments/<env>.json); pre-cutover (no site.json/environments) it falls back to resolve_default_zone()'s behaviour. An explicit zone0 in the module JSON always wins.
 
 **Why this change class.** The zone resolves to net0's VLAN tag; a new tag is a new subnet, so the container restarts and re-registers DNS.
 
