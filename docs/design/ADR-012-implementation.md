@@ -2,7 +2,7 @@
 
 **Companion to:** [ADR-012 — Backup Enhancement](../ADR/ADR-012-backup-enhancement.md) (the *why* + the decided design)
 **Purpose of this doc:** a single place that (1) records **implementation-level decisions**, (2) breaks the work into **packages** with deliverables/dependencies/test-criteria, and (3) **tracks live execution state** — status, tests, commits — per package.
-**Status:** v0.2 packages **P1–P9 complete**. v0.3 packages **P10–P20 complete** (2026-09-09) — implemented, offline-green and live-verified on the 3-node reference cluster. The one deferred item is the **two-PBS** half of the #389 compromise-isolation suite, which needs a second datastore. See [v0.3 — remaining work](#v03--remaining-work-p10p20).
+**Status:** **Complete.** P1–P9 (v0.2) and P10–P20 (v0.3) are implemented, offline-green and live-verified on the 3-node reference cluster; the ADR moved to **Accepted — implemented** on 2026-09-09. Two things are deliberately left open and named as such: a genuinely separate off-site PBS **host** (a satellite over a tunnel), which no single-site test can cover, and the §4.3 **relocation-by-pull** runbook, which is written but not rehearsed. See [v0.3 — remaining work](#v03--remaining-work-p10p20).
 **Branch:** `main` — ADR-007 has landed; `backup-manager` / `backup-controller` and the named foundation layout are on `main`. (The v0.2 note below about building on `ADR007` is historical.)
 **Started:** 2026-07-04 · **v0.3 planning:** 2026-09-09
 
@@ -341,6 +341,49 @@ Five tiers. T0–T2 run on every package; T3–T4 run where the package touches 
 
 ## Package logs
 
+### 2026-09-09 — RESTORE.md, second pass (operator review)
+
+- **§1 restructured.** Restoring *in place* (1.2a) now comes before restoring *beside* (1.2b), and the two are lettered rather than numbered — the sequence 1.1 → 1.4 is linear, and these are two ways to do one step, not two steps. Both now read "This will:" followed by what actually happens.
+- **§2 uses the manager throughout.** The last `./restore.sh` is gone: `backup-manager restore restore <module> --vmid <in-backup> --target-vmid <installed>` covers it, because a later `--vmid` overrides the one the manager supplies. That was accidental parser behaviour; `restore.sh --help` now states it, so the documented command rests on a contract rather than a coincidence.
+- **`cd` dropped everywhere.** `module-manager` and `backup-manager` resolve a module by name from the deployed config or a repository catalog. The one real exception — installing a module that is in no catalog — is stated once instead of a `cd` on every example.
+- **§3.0 is new, and is the section the operator asked for.** A node dying does not mean its guests died: anything HA-managed was probably **already failed over**, and restoring it would give you two of it. The check is `module-manager list --json`, comparing each module's declared `node` against its live `actualNode` — the JSON exposes both, which the table does not. It matters most for `network` (nothing reaches the world without it) and `tappaas-cicd` (where the recovery commands run), so the section leads with those two and branches three ways: evacuated → migrate home later; not running anywhere → restore, firewall first; mothership gone → §5.2 before anything else.
+- **§3.3 answers "what ran on that node?"** with two commands and why they disagree: `module-manager list --json | jq 'select(.node=="<dead>")'` for the *declaration* (what should end up on the replacement), and `ls /etc/pve/nodes/<dead>/qemu-server/` for the *record* of what it was carrying — `/etc/pve` is cluster-replicated, so it survives the node and is readable from any survivor.
+- **§3.4 brings the evacuated modules home.** `module-manager migrate` realises the **declared** placement and takes no node argument (ADR-019), so the fix for "running in the wrong place" is to run it. Two cautions that are easy to learn the hard way: the mothership migrating itself moves the machine your shell is on, and if the dead node is not coming back the right fix is to change the declaration, not to migrate onto a node that no longer exists.
+
+Every command in the section was run against the live cluster before it was written down.
+
+### 2026-09-09 — RESTORE.md published, CLI help rewritten, and two more restore defects
+
+- **RESTORE.md is on the site.** The Documentation repo gained a sync rule (`src/foundation/backup/RESTORE.md` → `generated/disaster-recovery.md`) and a nav entry at the end of **Operate → Disaster Recovery**.
+- **Two new sections.** **`templates`** — rebuilt, never restored: templates are derived artifacts, and restoring an old one would hand every future install a stale base (clones are copies, so existing modules are unaffected by a rebuild). **Recovering from an off-site buddy** — what you need before you start (the key, and a read-only auth-id they must issue, because the pull direction means you hold no credential on them *by design*), pulling their copy back into a rebuilt local datastore, restoring directly from their PBS when there is no local one yet, and the symmetric case of being the buddy.
+- **The commands are the manager's now.** RESTORE.md documented `restore.sh` directly; it now uses `backup-manager restore`, which resolves a *module name* to its VMID and forwards the rest to the same script. `restore.sh` stays documented for the one case the manager cannot express: restoring a backup whose VMID is not the module's current one (§2).
+
+**Two defects, found by running the commands the document now recommends:**
+
+1. **`backup-manager restore` could not find `restore.sh` in the installed binary.** It resolved the path by walking seven directories up from `__dirname` — fine from a checkout, but from `/nix/store/<hash>-backup-manager/lib/...` that is `/`, so it looked for `/backup/restore.sh`, printed *"Would run: … (foundation restore.sh not found)"* and **exited 0**. The restore verb reported success and restored nothing. It now resolves from the module's own recorded `.location` in `config/backup.json` (the answer that works from anywhere), then the repo walk, then the conventional path — and a missing script is a **non-zero failure**, because a recovery verb that exits 0 having done nothing is the worst possible failure mode.
+2. **`restore list` printed raw unix timestamps.** `1788894052` is not something an operator picks a snapshot from, and the document told them to "note the date". Now rendered newest-first as `2026-09-08 19:00:52 UTC (today) 1788894052`, keeping the raw value because that is what the restore takes.
+
+**CLI help rewritten (both binaries).** `backup-manager --help` described 8 of its 13 verbs and pointed at ADR sections; someone asking a command for help should not be handed a document reference. Every verb now has a description written for the person running it, ADR shorthand is gone, and "(was backup-status)" archaeology with it. `backup-controller --help` was worse: `usage()` grepped **every** `^#` line in the file, so internal implementation notes appeared as help text. It now prints the header block only.
+
+**Wording** — removed "do not meet them for the first time during an incident" and "Knowing which is which before an incident is most of the recovery" per operator preference.
+
+### 2026-09-09 — Documentation consolidation: QUICKREF retired, RESTORE.md written
+
+Operator call: `QUICKREF.md` had drifted, and what a reader actually needs mid-incident is a document organised by **what broke**, not by which command exists.
+
+- **[backup/RESTORE.md](../../src/foundation/backup/RESTORE.md)** is new and is now the recovery document: a module rolled back (including the step everyone skips — re-applying the declaration afterwards, and confirming HA and replication came back), a module restored onto a system that never had it (declare first, restore second, because a backup carries disks and Proxmox config but not the module's TAPPaaS declaration), a lost node (evict from the cluster *before* re-adding the name, then restore its guests, then re-fold HA), the special cases, and relocating a datastore. Every procedure is labelled **rehearsed** or **unrehearsed** — the ones that have actually been run say so, and the ones written from the code admit it rather than implying a confidence nobody earned.
+- **The special cases are now decided rather than implied.** `network` is backed up but should usually be *rebuilt* — the firewall is the most declaratively-generated thing in the system (prebuilt image + rendered `config.xml` + zones/rules/DNS/proxy applied from declared state), so a restore reproduces a point in time including its drift; restore it only when it holds state TAPPaaS does not declare (GUI changes, VPN peers, DHCP reservations). `cluster`, `templates` and `backup` own no guest, so there is nothing to back up — recovery is node recovery plus reinstall. `tappaas-cicd` cannot be restored from itself: `restore.sh` runs *on* it, so restoring VMID 130 from VMID 130 destroys the machine running the command — the rebuild is driven from a node.
+- **`QUICKREF.md` deleted**, its surviving day-to-day content folded into `README.md` (coverage/datastore/peer/key commands, retention and the schedule table); `docs/design/backup-recovery-runbook.md` deleted too rather than left to drift alongside RESTORE.md. All referrers repointed — README, INSTALL, DESIGN, TEST, the filesystem service README, `00-Template`, ADR-010, and ADR-012's own Related/plan/acceptance rows.
+
+**Two defects found while writing it** — documenting a restore path meant reading it, and it did not survive the reading:
+
+1. **`restore.sh` repeated #434.** Its overwrite path did `qm stop; sleep 2; qm destroy`. On an HA-managed guest `qm stop` only *requests* a stop from the CRM — the exact race that left this site's gateway down for 7h41m and the reason `ha-vm-lib.sh` exists. It now drives HA through `havm_stop`, confirms the transition, hands the resource back to HA if the stop fails, and refuses to destroy anything it could not confirm stopped.
+2. **Restores could inherit an earlier incarnation's disks.** The destroy used a bare `--purge`, so volumes carrying the VMID that the config no longer references survived into the restored guest — one boots the machine while another quietly consumes the pool. Now `--purge --destroy-unreferenced-disks 1`.
+
+**Backup-policy change (#545).** The mothership's capture was `/home/tappaas/config` only; `/etc/secrets` is now captured too, so a rebuilt mothership gets its secrets back rather than only its declarations. Two credential files remain **outside** any capture and are documented as such in RESTORE.md §5.3 — `~/.opnsense-credentials.txt` and `~/.pbs-credentials.txt` — because a `.pxar` archive must be a directory and single files cannot simply be listed in `filesystemPaths`. Both are recoverable by reissuing the credential; the runbook says how.
+
+**Exec-mode slip, corrected.** The ADR-012 scripts were `git add`ed before their `chmod +x`, so eleven of them were committed **644** while every sibling is **755** — `./services/filesystem/update-service.sh` failed with *Permission denied* when run directly. Restored to 755 in the working tree (the repo's #565 deep test asserts the tracked mode is authoritative; it is a deep-tier test, which is why the normal run did not catch it).
+
 ### 2026-09-09 — #389: the compromise-isolation invariant, tested live
 
 The headline §1.4.1 claim — *a compromise of one system must not be able to delete, encrypt or tamper with a copy held on another* — was documented as a six-step checklist waiting for a second PBS. It does not need one to be worth testing: what makes the claim true is **credential scoping**, and that can be attacked on a single server.
@@ -386,7 +429,7 @@ Production is only ever a pull **source** and is never written to; the datastore
 2. **A restore that did nothing reported success.** `pvesh create … | tee` makes the pipeline exit with *tee's* status, so the remote `set -e` never fired and the only detection left was grepping output for the word "error". The first rehearsal printed *"Restore completed successfully!"* while creating no VM whatsoever. The exit code is now captured and authoritative, and the script **asks Proxmox whether the guest actually exists** before claiming success — a backup tool that reports a phantom restore is worse than one that fails.
    *(A third, smaller one: backticks inside an unquoted heredoc are command substitution — a comment mentioning `pvesh … | tee` was executed on the local side.)*
 
-**[backup-recovery-runbook.md](backup-recovery-runbook.md)** is the written path #545 asks for: what is covered and why, restoring `config/`, the mothership (both paths, and the DR ordering — key import **before** any restore that must decrypt), the firewall, and how to verify coverage without waiting for a disaster. Every procedure in it is one that was run.
+**[backup/RESTORE.md](../../src/foundation/backup/RESTORE.md)** is the written path #545 asks for (first written as `docs/design/backup-recovery-runbook.md`, then folded into the module doc when `QUICKREF.md` was retired): what is covered and why, restoring `config/`, the mothership (both paths, and the DR ordering — key import **before** any restore that must decrypt), the firewall, and how to verify coverage without waiting for a disaster. Every procedure in it is one that was run.
 
 ### 2026-09-09 — P19: the out-of-band encryption key (§2.5.1)
 

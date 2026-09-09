@@ -5,7 +5,7 @@
 // test/unit tsconfig.
 
 import { join } from "path";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import {
   listEnvironments,
@@ -20,7 +20,7 @@ import {
 } from "../../src/config";
 import { retentionValid, validate } from "../../src/validate";
 import { applyPlan, computePlan } from "../../src/reconcile";
-import { restoreList } from "../../src/restore";
+import { restoreList, restoreRun } from "../../src/restore";
 import { addToBackupJob, modifyBackup, removeFromBackupJob } from "../../src/modify";
 import { FakeClient } from "./fake-client";
 
@@ -325,6 +325,36 @@ check(!retentionValid("7") && !retentionValid("7x") && !retentionValid(""), "inv
   eq(moduleVmid(tmp, "stringy"), "341", "a string vmid still resolves");
   eq(moduleVmid(tmp, "none"), null, "a module with no vmid resolves to null");
   eq(moduleVmid(tmp, "absent"), null, "a missing config resolves to null");
+}
+
+// ── restore: finds its script, and fails loudly when it cannot ────────
+{
+  const tmp = mkdtempSync(join(tmpdir(), "bm-restore-"));
+  const modDir = join(tmp, "modsrc");
+  mkdirSync(modDir, { recursive: true });
+  const script = join(modDir, "restore.sh");
+  writeFileSync(script, "#!/usr/bin/env bash\necho restored\n", "utf8");
+  chmodSync(script, 0o755);   // spawning a non-executable file fails with EACCES
+
+  // The module's own config says where it lives — the only answer that works
+  // from the installed binary, whose __dirname is under /nix/store.
+  writeFileSync(join(tmp, "backup.json"), JSON.stringify({ location: modDir }), "utf8");
+  writeFileSync(join(tmp, "app.json"), JSON.stringify({ kind: "module", vmid: 340 }), "utf8");
+
+  const prevEnv = process.env.RESTORE_SH;
+  delete process.env.RESTORE_SH;
+  const client = new FakeClient();
+  const rc = restoreRun({ client, configDir: tmp }, "app", []);
+  check(rc === 0, "restore resolves restore.sh from the module's declared location");
+
+  // With the location pointing nowhere, this must FAIL — not print what it
+  // would have done and exit 0, which is how a broken restore reads as success.
+  writeFileSync(join(tmp, "backup.json"), JSON.stringify({ location: join(tmp, "gone") }), "utf8");
+  process.env.RESTORE_SH = join(tmp, "gone", "restore.sh");
+  const rcMissing = restoreRun({ client, configDir: tmp }, "app", []);
+  check(rcMissing !== 0, "a missing restore.sh is a non-zero failure, never a silent success");
+  if (prevEnv === undefined) delete process.env.RESTORE_SH;
+  else process.env.RESTORE_SH = prevEnv;
 }
 
 // ── #544: discovery is shape-based, not a deny-list ───────────────────

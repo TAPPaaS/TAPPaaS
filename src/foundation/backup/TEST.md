@@ -73,7 +73,7 @@ Elsewhere (run by their own components' `test.sh`):
 ## Live rehearsals (mutating; run deliberately, not by `test.sh`)
 
 These are the checks that only a real cluster can answer. Run them as described
-in [backup-recovery-runbook.md](../../../docs/design/backup-recovery-runbook.md);
+in [RESTORE.md](./RESTORE.md);
 the transcript of the first run is in the ADR-012 implementation tracker.
 
 1. **`config/` restore** — restore `fs/<module>` into a scratch dir, `diff -r`

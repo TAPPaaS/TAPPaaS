@@ -1,28 +1,67 @@
 # backup:vm service
 
-Enrols a module's guest in the shared **Proxmox Backup Server** job and resolves
-its retention from the site → environment → module cascade. Nothing here can make
-a running guest unhealthy: every change governs *future* backups, and already
-written snapshots are untouched.
+Enrols a module's guest in the managed **Proxmox Backup Server** job — a
+whole-guest snapshot — and resolves its retention and schedule from the site →
+environment → module cascade. Nothing here can make a running guest unhealthy:
+every change governs *future* backups, and already written snapshots are
+untouched.
+
+The broader half of the backup pair. Its sibling
+[`backup:filesystem`](../filesystem/README.md) captures named paths *inside* a
+guest instead; `backup:vm` is the safe general answer, and most modules want it.
 
 7 fields — all `in-place`, all `apply: "reconcile"`.
 
-A set operation over the shared PBS job's vmid list, plus a retention cascade
-resolved *above* the module.
+A set operation over a backup job's vmid list, plus a retention and schedule
+cascade resolved *above* the module.
 *See [recommendation 2](../../../tappaas-cicd/UPDATE-POLICY.md#2-split-backupvm--scalars-out-cascade-in).*
+
+## Two ways to opt in — and opting out is a real choice
+
+Backup is opt-in. A module joins a job by declaring the capability, and a module
+that declares neither relationship is in no job at all — which is what hardware
+and test modules should do, deliberately:
+
+- **`dependsOn: ["backup:vm"]`** — the normal case, a hard dependency with
+  install ordering.
+- **`integratesWith: ["backup:vm"]`** — for a module that comes up *before* the
+  backup server can exist and therefore cannot depend on it (#501): the
+  foundation VMs whose state is not reproducible from git. Same wiring, no
+  ordering constraint.
+
+Membership is the union of the two, and the backup module's own update
+reconciles it — so a module that declared the integration before there was a
+backup server is picked up once there is one.
+
+## One job per schedule, not one job
+
+Proxmox schedules a *job*, not a guest, so a per-module schedule only means
+something if a job carries it. Each distinct resolved frequency gets its own
+marker-tagged cluster job — a **bucket** (ADR-012 §3.2): `daily` (the original
+job, unchanged), `weekly`, `monthly`. Changing a module's schedule **moves** its
+guest between buckets rather than adding a second membership, which would back it
+up twice wherever the two cadences coincide.
+
+The cascade resolves `module.backup.schedule` > `environment.backup.schedule` >
+`site.backup.defaultSchedule` > `daily`, and **rejects anything sub-daily by
+name** rather than rounding it down — once a day is the maximum the platform
+backs anything up.
 
 ## Why every change is `in-place`
 
-None of these can make a running guest unhealthy. Changing retention or placement
+None of these can make a running guest unhealthy. Changing retention or schedule
 governs **future** backups; already-written snapshots are untouched, and a
 shortened retention prunes on the next PBS GC, not on the converge. The riskiest
-field is `backup` itself going false — the guest keeps running and simply stops
+field is `backup.enabled` going false — the guest keeps running and simply stops
 being protected, which is a policy decision, not a disruption.
 
-`placementState` is the odd one: it is the *resolved outcome* of `placement`
-written back onto the deployed config, so it is more a report than an input.
-Recommendation 2 proposes splitting the plain scalars out to `set` and leaving
-only the cascade on `reconcile`.
+`placementState` is the odd one out: it is not an input at all. It is the
+*resolved* answer to where PBS lives, written back onto the deployed config by
+the backup module's own install (ADR-012 §2.1) — a report, not a setting. Two
+fields here are on their way out: `alwaysBackup` is superseded by
+`integratesWith` and `pushTarget` by `placementState: external` + `pbsUrl`; both
+are read for one release. Recommendation 2 proposes splitting the plain scalars
+out to `set` and leaving only the cascade on `reconcile`.
 
 <!-- BEGIN GENERATED FIELDS -- edit the manifest, not this block -->
 

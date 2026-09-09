@@ -243,7 +243,7 @@ case "$COMMAND" in
 
     STATE="$(pbs_placement_state)"
     pbs_external_allowed "${STATE}" || die \
-      "backup already has a local PBS (placementState '${STATE}'). Consuming an external PBS is permanent and would orphan that datastore — relocate it first (QUICKREF: relocation-by-pull), or reinstall the module deliberately."
+      "backup already has a local PBS (placementState '${STATE}'). Consuming an external PBS is permanent and would orphan that datastore — relocate it first (RESTORE.md: relocating a datastore), or reinstall the module deliberately."
 
     EXT_STORE="$(pbs_external_datastore "${EXT_STORE}" "$(get_config_value 'pbsStorageName' 'tappaas_backup')")"
     SNAME="$(get_config_value 'pbsStorageName' 'tappaas_backup')"

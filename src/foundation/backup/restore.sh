@@ -11,7 +11,7 @@
 #
 # Usage: ./restore.sh [options]
 #   -v, --vmid <vmid>           VMID to restore (required)
-#   -n, --node <node>           Target Proxmox node (default: first node from configuration.json)
+#   -n, --node <node>           Target Proxmox node (default: the first mgmt node from site.json)
 #   -s, --storage <storage>     Target storage for VM (default: original)
 #   -b, --backup-id <id>        Specific backup ID to restore (default: latest)
 #   -t, --target-vmid <vmid>    Restore INTO a different (unused) VMID, leaving the
@@ -31,11 +31,14 @@ Usage: $0 [options]
 
 Options:
   -v, --vmid <vmid>           VMID to restore (required for restore)
-  -n, --node <node>           Target Proxmox node (default: first node from configuration.json)
+  -n, --node <node>           Target Proxmox node (default: the first mgmt node from site.json)
   -s, --storage <storage>     Target storage for VM (default: original)
   -b, --backup-id <id>        Specific backup ID to restore (default: latest)
   -t, --target-vmid <vmid>    Restore into a different, unused VMID (left STOPPED,
                               fresh MACs) instead of over the original
+                              A repeated --vmid overrides the earlier one, so a
+                              caller that already supplied one (backup-manager
+                              restore) can be pointed at a different SOURCE vmid
   -l, --list                  List available backups for a VMID (requires -v)
   --list-all                  List all available backups
   -h, --help                  Show this help message
@@ -79,6 +82,15 @@ trap cleanup EXIT
 
 # Source common routines and load backup module config
 . /home/tappaas/bin/common-install-routines.sh
+# ha-vm-lib (#434): stopping an HA resource safely. Installed copy first, repo
+# copy as the fallback so the script works from a checkout too.
+if [[ -r /home/tappaas/bin/ha-vm-lib.sh ]]; then
+    # shellcheck source=../tappaas-cicd/lib/ha-vm-lib.sh disable=SC1091
+    . /home/tappaas/bin/ha-vm-lib.sh
+elif [[ -r "$(dirname "${BASH_SOURCE[0]}")/../tappaas-cicd/lib/ha-vm-lib.sh" ]]; then
+    # shellcheck source=../tappaas-cicd/lib/ha-vm-lib.sh disable=SC1091
+    . "$(dirname "${BASH_SOURCE[0]}")/../tappaas-cicd/lib/ha-vm-lib.sh"
+fi
 JSON_CONFIG="${CONFIG_DIR}/backup.json"
 JSON=$(cat "${JSON_CONFIG}")
 
@@ -259,15 +271,33 @@ if [ "$VM_EXISTS" = "yes" ]; then
     echo "Restore cancelled by user"
     exit 0
   fi
+  # Stopping an HA-managed VM is NOT `qm stop; sleep`. `qm stop` hands a request
+  # to the CRM, which completes it on its own schedule — the exact race that
+  # left this site's gateway down for 7h41m (#434), which is why ha-vm-lib
+  # exists. Drive HA through ha-manager and CONFIRM the transition; only fall
+  # back to a direct stop when the resource is genuinely not HA-managed.
   info "Stopping and removing existing VM ${RESTORE_VMID}..."
-  ssh root@${TARGET_NODE}.${ZONE}.internal "bash -s" <<EOF
-set -e
-# Stop VM if running
-qm stop ${RESTORE_VMID} || true
-sleep 2
-# Destroy VM
-qm destroy ${RESTORE_VMID}
-EOF
+  if declare -F havm_stop >/dev/null 2>&1; then
+    if ! havm_stop "root@${TARGET_NODE}.${ZONE}.internal" "${RESTORE_VMID}" vm "${STOP_TIMEOUT:-180}"; then
+      # The resource may have been handed to HA as 'stopped' before the failure;
+      # give it back rather than leaving it parked.
+      [[ "${HAVM_LAST_STOP_WAS_HA:-0}" -eq 1 ]] \
+        && havm_release_ha_stop "root@${TARGET_NODE}.${ZONE}.internal" "vm:${RESTORE_VMID}"
+      die "Could not confirm VM ${RESTORE_VMID} stopped — refusing to destroy it. Nothing was changed."
+    fi
+  else
+    warn "ha-vm-lib not available — falling back to a direct stop (unsafe for an HA-managed VM, #434)"
+    ssh root@${TARGET_NODE}.${ZONE}.internal "qm stop ${RESTORE_VMID} || true"
+    sleep 5
+  fi
+
+  # --purge clears the VMID out of backup/replication jobs and HA;
+  # --destroy-unreferenced-disks removes disks carrying this VMID that the
+  # config no longer references, so a restore does not silently inherit an
+  # older incarnation's leftover volumes.
+  ssh root@${TARGET_NODE}.${ZONE}.internal \
+    "qm destroy ${RESTORE_VMID} --purge --destroy-unreferenced-disks 1" \
+    || die "Could not destroy VM ${RESTORE_VMID}"
 fi
 
 # Perform the restore

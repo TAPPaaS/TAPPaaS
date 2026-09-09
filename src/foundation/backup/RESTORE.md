@@ -6,7 +6,7 @@ Primary audience: TAPPaaS admin, mid-incident.
 **rehearsed** below has been run end to end on a live cluster; the transcript is
 in the [ADR-012 implementation tracker](../../../docs/design/ADR-012-implementation.md#package-logs).
 The ones marked **unrehearsed** are written from the code and are honestly
-labelled as such — do not meet them for the first time during an incident.
+labelled as such.
 
 ---
 
@@ -29,25 +29,39 @@ yourself just as well.
 ## What can be restored, and what is rebuilt instead
 
 Not everything should be restored from a backup — some things are cheaper and
-safer to regenerate from declared state. Knowing which is which *before* an
-incident is most of the recovery.
+safer to regenerate from declared state.
 
 | Module | Backed up? | How it comes back |
 |---|---|---|
 | App / data-bearing modules | `backup:vm` (opt-in) | restore the VM — [§1](#1-a-module-is-misbehaving--roll-it-back), [§2](#2-restoring-a-module-onto-a-system-that-never-had-it) |
 | `network` (the firewall) | `backup:vm` | **prefer rebuilding** from declared state — [§4](#4-network-rebuild-rather-than-restore) |
 | `tappaas-cicd` (mothership) | `backup:vm` **and** `backup:filesystem` | restore `config/` into a running one, or rebuild + restore the capture — [§5](#5-tappaas-cicd-the-machine-you-cannot-restore-from-itself) |
-| `cluster` | **no** — provider-only, owns no VM | a node comes back via [§3](#3-a-node-is-lost); the module is reinstalled |
-| `templates` | **no** — provider-only, owns no VM | reinstall; templates are rebuilt from source images |
-| `backup` itself | **no** — PBS is apt-on-a-node, not a VM | reinstall the module; the **datastore** is the thing that must survive |
+| `cluster` | **no** — provider-only, owns no VM | a node comes back via [§3](#3-a-node-is-lost); the module is reinstalled — [§6](#6-cluster-and-backup-nothing-to-restore) |
+| `templates` | **no** — provider-only, owns no VM | rebuild from source images — [§7](#7-templates-rebuilt-never-restored) |
+| `backup` itself | **no** — PBS is apt-on-a-node, not a VM | reinstall the module — [§6](#6-cluster-and-backup-nothing-to-restore). The **datastore** is what must survive; if it does not, recover from a buddy — [§8](#8-recovering-from-an-off-site-buddy) |
 | Hardware / test modules | **no**, deliberately (declare neither capability) | reinstall |
+
+**Use `backup-manager restore`**, not the module's `restore.sh` directly. The
+manager resolves a *module name* to its VMID from the deployed config and
+forwards everything else to the same tested script, so you name the thing you
+are recovering rather than a number you have to look up, and options after the
+module name pass straight through (`--node`, `--storage`, `--target-vmid`, and
+`--vmid` to read a *different* source VMID — see
+[§2](#2-restoring-a-module-onto-a-system-that-never-had-it)). `restore.sh` in
+the backup module remains the implementation underneath.
+
+`module-manager` and `backup-manager` resolve a module by name from the deployed
+config or a repository catalog, so none of these commands need you to be in a
+particular directory. The exception is installing a module that is in **no**
+catalog — then run `module-manager module add` from its source directory.
 
 Check any module's actual coverage rather than assuming:
 
 ```bash
-backup-manager list                 # IN-PBS-JOB per module, with effective policy
-backup-controller job-status        # the live jobs and their members
-./restore.sh --vmid <id> --list     # what snapshots exist for one guest
+backup-manager list                     # IN-PBS-JOB per module, with effective policy
+backup-manager restore list <module>    # what snapshots exist for one module
+backup-manager restore list-all         # every backup in the datastore
+backup-controller job-status            # the live jobs and their members
 ```
 
 ---
@@ -60,8 +74,8 @@ broke it, and you want yesterday back.
 ### 1.1 Look before you leap
 
 ```bash
-./restore.sh --vmid 340 --list        # pick a snapshot; note its date
-module-manager show nextcloud         # what the declared config says today
+backup-manager restore list nextcloud   # snapshots for this module; note the date
+module-manager show nextcloud           # what the declared config says today
 ```
 
 A restore rolls the guest back to what it was **at snapshot time**, including
@@ -69,38 +83,51 @@ anything the platform has configured inside it since. That is the point, and it
 is also the trap: the declared config in `config/` did *not* roll back, so the
 guest and its declaration are now out of step.
 
-### 1.2 Restore beside it first, if you can afford the disk
+### 1.2a Restore in place
+
+The direct route: overwrite the running guest with the snapshot.
 
 ```bash
-./restore.sh --vmid 340 --target-vmid 940 --node tappaas1 --storage tanka1
+backup-manager restore restore nextcloud     # prompts before overwriting
 ```
 
-Restores **alongside** the original — stopped, with fresh MAC addresses, and it
-refuses a VMID already in use. Inspect it, confirm the snapshot really contains
-the good state, then throw it away (`qm destroy 940 --purge`) and do the real
-restore. Never start a copy on the same network as its running original: two
-guests answering for one identity is worse than the guest being down.
+This will:
 
-### 1.3 Restore in place
-
-```bash
-./restore.sh --vmid 340               # prompts before overwriting
-```
-
-Three things this does that a hand-run `qmrestore` does not:
-
-- **Stops an HA-managed guest through the CRM and confirms it stopped.**
-  `qm stop` on an HA resource only *requests* a stop; a script that sleeps and
-  moves on is racing the cluster. That race (#434) once left this site's gateway
-  down for 7h41m.
-- **Destroys with `--purge --destroy-unreferenced-disks`**, so the VMID leaves
-  the backup/replication jobs and HA cleanly, and **no disks from the previous
-  incarnation are left behind**. A restore that inherits a stale volume gives
-  you a guest that boots from one disk while another quietly consumes the pool.
-- **Verifies the guest exists afterwards** instead of trusting the restore
+- **Stop an HA-managed guest through the CRM and confirm it stopped.** `qm stop`
+  on an HA resource only *requests* a stop; a script that sleeps and moves on is
+  racing the cluster. That race (#434) once left this site's gateway down for
+  7h41m. If the stop cannot be confirmed, nothing is destroyed.
+- **Destroy with `--purge --destroy-unreferenced-disks`**, so the VMID leaves the
+  backup/replication jobs and HA cleanly, and **no disks from the previous
+  incarnation are left behind**. A restore that inherits a stale volume gives you
+  a guest that boots from one disk while another quietly consumes the pool.
+- **Restore the snapshot** into that VMID, on the node and storage you name (or
+  the originals).
+- **Verify the guest exists afterwards**, rather than trusting the restore
   command's own report.
 
-### 1.4 Re-apply the declaration, then check it works
+### 1.2b Or restore beside it first, if you can afford the disk
+
+When you are not certain the snapshot holds the good state — or the guest is
+still limping along and you would rather not destroy it yet:
+
+```bash
+backup-manager restore restore nextcloud --target-vmid 940 --node tappaas1 --storage tanka1
+```
+
+This will:
+
+- restore into VMID **940** and leave the original untouched;
+- leave the copy **stopped**, and give it **fresh MAC addresses**;
+- refuse outright if 940 is already in use.
+
+Inspect it, confirm the snapshot is what you want, then discard it
+(`qm destroy 940 --purge`) and do the real restore with 1.2a.
+
+Never start a copy on the same network as its running original: two guests
+answering for one identity is worse than the guest being down.
+
+### 1.3 Re-apply the declaration, then check it works
 
 The restored guest is at snapshot state; `config/` is at today's state. Put them
 back in step — this is the step that is easiest to skip and most often the
@@ -116,7 +143,7 @@ module-manager module test nextcloud --deep
 re-publishes it, `identity` re-wires SSO), and the module's own `update.sh`
 re-asserts what it owns.
 
-### 1.5 Confirm HA and replication came back
+### 1.4 Confirm HA and replication came back
 
 `--purge` removed the VMID from HA and replication on the way out; the restore
 does not put them back. If the module declares `cluster:ha`:
@@ -148,24 +175,27 @@ So: **declare first, restore second.**
 
 ```bash
 # 1. Install the module normally — a bare-bones instance, correctly declared.
-cd ~/TAPPaaS/src/apps/nextcloud && module-manager module add nextcloud
+module-manager module add nextcloud
 #    Its VMID/node/zone now exist in config/nextcloud.json and on the cluster.
 
-# 2. Restore the backup OVER that fresh guest, into the VMID the install chose.
-cd ~/TAPPaaS/src/foundation/backup
-./restore.sh --vmid <VMID-IN-THE-BACKUP> --target-vmid <VMID-JUST-INSTALLED> \
-             --node <node> --storage <pool>
+# 2. Restore the backup OVER that fresh guest.
+#    --vmid names the SOURCE (the VMID inside the backup); --target-vmid names
+#    where it lands (the VMID the install just chose). Without --vmid the module
+#    would resolve to its new VMID and find no backup under it.
+backup-manager restore restore nextcloud \
+    --vmid <VMID-IN-THE-BACKUP> --target-vmid <VMID-JUST-INSTALLED>
 
-# 3. Re-apply the declaration and validate (§1.4, §1.5).
+# 3. Re-apply the declaration and validate (§1.3, §1.4).
 module-manager module modify nextcloud
 module-manager module test nextcloud --deep
 ```
 
 Two things to get right:
 
-- **The backup's VMID and the new VMID usually differ.** `--target-vmid` is what
-  bridges them. Restoring into the *installed* VMID keeps the platform's view
-  (config, DNS, proxy, firewall rules) intact and swaps only the disks.
+- **The backup's VMID and the new VMID usually differ.** `--vmid` and
+  `--target-vmid` together bridge them. Restoring into the *installed* VMID keeps
+  the platform's view (config, DNS, proxy, firewall rules) intact and swaps only
+  the disks.
 - **The restored guest carries the old system's identity inside it** — hostname,
   SSH host keys, certificates, and whatever the old site's IP was. `module
   modify` fixes what the platform declares; anything baked inside the guest is
@@ -177,8 +207,50 @@ Two things to get right:
 
 ## 3. A node is lost
 
-**Unrehearsed.** Recovering a node is three separate jobs, and they must happen
+**Unrehearsed.** Recovering a node is four separate jobs, and they must happen
 in this order.
+
+### 3.0 First: find out what is still running, and where
+
+**Do not assume the guests died with the node.** Anything HA-managed and
+replicated has most likely been **failed over to a surviving node already** —
+that is what HA is for, and restoring a guest that is running elsewhere gives you
+two of it.
+
+This matters most for the two modules a site cannot work without. If the lost
+node was the one hosting **`network`** (the firewall — everything reaches the
+world through it) or **`tappaas-cicd`** (the mothership — where these very
+commands run), then either they were evacuated and the site is limping along on
+another node, or they were not and you are recovering blind. Establish which
+before touching anything:
+
+```bash
+# Which modules are NOT where they are declared to be — i.e. what HA moved.
+# `node` is the declaration, `actualNode` is where the guest is really running.
+module-manager list --json \
+  | jq -r '.modules[] | select(.actualNode != null and .node != "" and .actualNode != .node)
+           | "\(.name): declared \(.node), running on \(.actualNode)"'
+
+# The same question asked of the cluster itself, for when the mothership's view
+# is stale or you are working from a node.
+ssh root@<surviving-node>.mgmt.internal \
+    "pvesh get /cluster/resources --type vm --output-format json" \
+    | jq -r '.[] | "\(.vmid)\t\(.name)\t\(.node)\t\(.status)"' | sort -n
+
+# What HA thinks it is managing, and where it placed each resource.
+ssh root@<surviving-node>.mgmt.internal "ha-manager status"
+```
+
+*(A module reported with `declared null` simply does not pin a node — that is a
+missing declaration, not a displacement.)*
+
+Three outcomes, and they lead to different work:
+
+| What you find | What it means | What to do |
+|---|---|---|
+| `network` / `tappaas-cicd` running on **another** node | HA evacuated them; the site is up, degraded | Do **not** restore them. Recover the node (§3.1–3.2), then migrate them **back** (§3.4) |
+| They are **not running anywhere** | They were not HA-managed, or HA could not place them | Restore them first (§3.3) — start with `network`, since nothing else is reachable without it |
+| The **mothership itself** is gone | You have no `module-manager`/`backup-manager` | Recover it first from a node — [§5.2](#52-rebuilding-a-lost-mothership) — then come back here |
 
 ### 3.1 Evict the dead node from the cluster
 
@@ -222,11 +294,31 @@ without that last step, VMs later placed there would silently have no backups.
 
 ### 3.3 Restore the guests that lived there
 
-For each VMID that was on the dead node — one at a time, validating each:
+**Which guests were those?** Two sources, and you want both:
 
 ```bash
-cd ~/TAPPaaS/src/foundation/backup
-./restore.sh --vmid <id> --node tappaas2 --storage tanka1
+# 1. What the platform DECLARES should run on that node — the recovery list.
+module-manager list --json \
+  | jq -r '.modules[] | select(.node=="tappaas2") | "\(.name)\t\(.vmid)"'
+
+# 2. What actually ran there, from the dead node's own guest configs. /etc/pve is
+#    cluster-replicated, so these survive the node being down and are readable
+#    from any surviving node.
+ssh root@tappaas1.mgmt.internal \
+    "ls /etc/pve/nodes/tappaas2/qemu-server/ /etc/pve/nodes/tappaas2/lxc/ 2>/dev/null"
+```
+
+The two can differ, and the difference is informative. The first is the
+declaration — what the platform intends to run there, and therefore what should
+end up back on the replacement. The second is the historical record of what the
+dead node was actually carrying, including anything that had been migrated onto
+it without the declaration being updated.
+
+**Skip anything §3.0 found running elsewhere.** For each remaining VMID — one at
+a time, validating each:
+
+```bash
+backup-manager restore restore <module> --node tappaas2 --storage tanka1
 module-manager module modify <module>
 module-manager module test <module> --deep
 ```
@@ -236,14 +328,40 @@ surviving node — the cluster failed them over, which is what HA is for. Do not
 restore those: check `ha-manager config` first. Restoring a guest that is running
 elsewhere gives you two of it.
 
-### 3.4 Re-establish HA and replication across the new topology
+### 3.4 Bring the evacuated modules home, and re-establish HA
 
-HA affinity and ZFS replication are declared per module and realised per
-topology, so they need re-applying once the node set has changed:
+The guests HA moved in §3.0 are still running on whichever node took them. They
+work there — but the site's declared placement says otherwise, and leaving them
+put means the next failure has fewer places to go.
+
+**Migrating is declaration-driven**: `module-manager migrate` realises the
+placement the module *declares* and takes no node argument, so the fix for "this
+is running in the wrong place" is to run it, not to name a destination:
+
+```bash
+module-manager migrate network          # back to its declared node
+module-manager migrate tappaas-cicd
+module-manager list                     # NODE now matches the declaration
+```
+
+Two cautions:
+
+- **The mothership migrating itself** moves the machine your shell is on. It is
+  a live migration, so the session normally survives — but do it when you can
+  afford to lose the connection, and not in the middle of another recovery.
+- **Check the declaration is what you still want** before migrating. If the node
+  that died is not coming back, the right fix is to change where the module is
+  declared to live (`module-manager modify <module> --set node=<other>`) rather
+  than migrating it onto a node that no longer exists.
+
+Then re-fold HA affinity and ZFS replication over the new node set — both are
+declared per module and realised per topology, so they need re-applying whenever
+the set changes:
 
 ```bash
 update-tappaas --force        # folds HA + replication over the new topology
 module-manager list --diff    # what is still out of step
+ssh root@tappaas1.mgmt.internal "ha-manager status; pvesh get /cluster/replication"
 ```
 
 ---
@@ -271,7 +389,7 @@ missing every zone or rule declared since.
 **Prefer:**
 
 ```bash
-cd ~/TAPPaaS/src/foundation/network && module-manager module modify network
+module-manager module modify network
 # and if the VM itself is gone, re-run the module install, then:
 update-tappaas --force        # re-applies every module's proxy/rules/dns/nat
 ```
@@ -363,14 +481,14 @@ key, or relocate them under `config/` so the capture covers them.
 
 ---
 
-## 6. `cluster`, `templates`, `backup`: nothing to restore
+## 6. `cluster` and `backup`: nothing to restore
 
 These three own no guest, so there is no VM backup and nothing to restore:
 
 - **`cluster`** provides `vm` / `lxc` / `ha` — it configures Proxmox itself.
   Recovering a node is [§3](#3-a-node-is-lost); the module is reinstalled.
-- **`templates`** provides the NixOS/Debian template clones. They are rebuilt
-  from source images — backing them up would store a derived artifact.
+- **`templates`** provides the NixOS/Debian template clones — rebuilt, never
+  restored; see [§7](#7-templates-rebuilt-never-restored).
 - **`backup`** is PBS installed by apt on a node, not a VM. Reinstalling it is
   routine; what must survive is the **datastore**, which lives on its own `tankc`
   pool precisely so a production-disk failure cannot touch it. If the datastore
@@ -379,11 +497,108 @@ These three own no guest, so there is no VM backup and nothing to restore:
 
 If the PBS node itself is lost, rebuild the node ([§3](#3-a-node-is-lost)),
 reinstall the module, and re-attach the datastore — the installer re-attaches an
-existing chunk store rather than refusing a non-empty path.
+existing chunk store rather than refusing a non-empty path. If the datastore
+itself is gone, the surviving copy is off-site:
+[§8](#8-recovering-from-an-off-site-buddy).
 
 ---
 
-## 7. Relocating the datastore without losing history
+## 7. `templates`: rebuilt, never restored
+
+**Rehearsed as a normal install** (it is the ordinary install path).
+
+The `templates` module owns the VM templates other modules clone — NixOS and
+Debian. They are **derived artifacts**: built from a published image plus the
+module's own configuration. Backing them up would store something the build
+already reproduces, and restoring an old template would hand every future module
+install a stale base.
+
+If a template is missing, corrupt, or simply out of date:
+
+```bash
+module-manager module modify templates          # re-asserts what is declared
+# or, if the template VM itself is gone:
+module-manager module add templates --force     # rebuild from source images
+module-manager module test templates --deep
+```
+
+Modules already cloned from an older template are **unaffected** — a clone is a
+copy, not a link. Rebuilding the template changes what the *next* install gets,
+which is usually the point.
+
+The same reasoning covers anything else derived rather than authored: the
+`backup` module's own installation, the manager binaries under `~/bin`, and the
+NixOS system closure. Rebuild them; do not carry them in a backup.
+
+---
+
+## 8. Recovering from an off-site buddy
+
+**Unrehearsed.** The case [§0](#0-before-anything-the-key) exists for: this
+site's datastore is gone — the `tankc` pool failed, the PBS node burned, the
+site was lost — and the surviving copy is the one a **buddy pulled** from you
+(ADR-012 §1.4).
+
+### 8.1 What you need before you start
+
+- **The encryption key.** The buddy holds *ciphertext*; they cannot read your
+  backups and neither can you without the key. This is the out-of-band copy from
+  §0. Without it, stop — there is nothing further to try.
+- **Read access to their datastore.** Off-site copies are pulled, so you hold no
+  credential on them by design. Ask the buddy's operator to grant a read-only
+  auth-id (`DatastoreReader`) on the namespace holding your copy, usually
+  `remote/<your-site>`.
+
+That asymmetry is deliberate: it is why a compromise of your site could not have
+deleted their copy, and it is why recovery needs their cooperation.
+
+### 8.2 Pull it back
+
+Recover *into* a working local PBS — rebuild the node and reinstall the `backup`
+module first ([§3](#3-a-node-is-lost), [§6](#6-cluster-and-backup-nothing-to-restore)),
+then pull the buddy in as a source and sync in the reverse direction:
+
+```bash
+# On the rebuilt system: register the buddy as a pull source.
+./backup-manage.sh add-remote buddy        # prompts for the read-only auth-id they issued
+./backup-manage.sh list-sources            # confirm the remote and its namespace
+
+# Sync their copy of your data into the local datastore, then verify it.
+ssh root@<pbs-node> proxmox-backup-manager sync-job run <job>
+ssh root@<pbs-node> proxmox-backup-manager verify <datastore>
+```
+
+Then restore guests from the local datastore exactly as in
+[§1](#1-a-module-is-misbehaving--roll-it-back) — by this point the data is local
+and nothing about the restore is special.
+
+### 8.3 If there is no local PBS to pull into yet
+
+You do not have to rebuild a datastore first. Point the site at the buddy's PBS
+as an **external** target and restore straight from it:
+
+```bash
+./backup-manage.sh use-external <buddy-pbs-url> --datastore <their-datastore>
+```
+
+This registers their PBS as Proxmox storage, so `qmrestore` and
+`backup-manager restore` can read it directly. Two cautions: the placement flip
+is **permanent** (§7 covers moving back to a local datastore afterwards, by
+pulling), and you are now restoring across whatever link separates you — a
+full-site restore over a domestic uplink is measured in hours or days, which is
+the argument for rebuilding a local datastore first if the hardware exists.
+
+### 8.4 Being the buddy
+
+Symmetrically, if you are the one holding a peer's copy: they will ask for a
+read-only auth-id on their namespace. Issue it scoped to that namespace only
+(`DatastoreReader` on `/datastore/<store>/remote/<their-site>`), and remove it
+when the recovery is done. Nothing else you hold is useful to them — the data is
+encrypted with their key, not yours.
+
+---
+
+## 9. Relocating the datastore without losing history
 
 **Unrehearsed.** When PBS itself moves — an old node to a new `tankc`, or an
 external PBS to a local one — the old snapshots must not be discarded. Seed the
@@ -408,11 +623,12 @@ history has been pulled across would orphan a datastore full of backups.
 
 ---
 
-## 8. Verifying, on a normal day
+## 10. Verifying, on a normal day
 
 ```bash
 backup-manager validate                       # the hierarchy is consistent
 backup-manager list                           # coverage, per module
+backup-manager restore list-all               # what is actually stored
 TAPPAAS_TEST_DEEP=1 ./test.sh                 # unit suites + live PBS reachability
 TAPPAAS_TEST_DEEP=1 ./services/vm/test-service.sh <module>          # backup age + job coverage
 TAPPAAS_TEST_DEEP=1 ./services/filesystem/test-service.sh <module>  # capture age

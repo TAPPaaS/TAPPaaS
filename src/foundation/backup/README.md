@@ -25,11 +25,10 @@ with retention, restore tooling and off-site options.
 
 Reference docs in this directory:
 
-- [QUICKREF.md](./QUICKREF.md) — day-to-day operations quick reference (status, restore,
-  maintenance, multi-source setup, ADR-012 features).
+- [RESTORE.md](./RESTORE.md) — **how to get a working system back**: a module rolled
+  back, a module restored onto a fresh system, a lost node, and the special cases
+  (`network`, `tappaas-cicd`, `cluster`/`templates`).
 - [TEST.md](./TEST.md) — what the module tests cover (fast and deep tiers).
-- [backup-recovery-runbook.md](../../../docs/design/backup-recovery-runbook.md) — the
-  **tested** recovery path for the firewall, the mothership and `config/` (#545).
 
 ## Architecture
 
@@ -41,25 +40,33 @@ flowchart TB
 
     subgraph BackupModule["backup module"]
         PBS[Proxmox Backup Server]
-        VMBackupService(["vm service — managed VM backup"])
-        RemoteService(["remote service — pull a buddy&#39;s PBS"])
-        ExternalService(["external service — receive third-party pushes"])
-        VMBackupService -.->|provided by| PBS
-        RemoteService -.->|provided by| PBS
-        ExternalService -.->|provided by| PBS
+        VMService(["backup:vm — whole-guest snapshot"])
+        FSService(["backup:filesystem — named paths inside a guest"])
+        VMService -.->|provided by| PBS
+        FSService -.->|provided by| PBS
+    end
+
+    subgraph Peers["off-site peers — runtime relationships, not capabilities"]
+        Pull(["pull a buddy&#39;s PBS — remote/&lt;n&gt;"])
+        Receive(["receive a third party&#39;s push — external/&lt;n&gt;"])
+        Send(["push out to a remote PBS — offsite-&lt;n&gt;"])
     end
 
     BackupCap -.->|realized by| PBS
+    PBS --- Pull
+    PBS --- Receive
+    PBS --- Send
 ```
 
-The Backup capability is realized by Proxmox Backup Server (installed natively on a
-cluster node), which provides two services (the `provides` in `backup.json`):
-**`backup:vm`** (whole-guest snapshots into the managed job) and
-**`backup:filesystem`** (named paths captured from inside a guest). The
-multi-source vault — pulling a buddy (`remote/<n>`), receiving a third-party
-push (`external/<n>`), sending our own (`offsite-<n>`) — is a set of **runtime
-peer relationships** registered with `backup-manage.sh`, not dependency
-capabilities: nothing ever declared `dependsOn: backup:remote`.
+The Backup capability is realized by Proxmox Backup Server installed **natively on a
+cluster node** — via apt on the Proxmox OS, not as a VM, because the datastore needs
+direct access to a `tankc` ZFS pool ([DESIGN.md](./DESIGN.md) weighs the four
+deployment options). Where it lands is not hardcoded: the install resolves it and
+records the answer, and a site with no suitable pool still installs, as a shim.
+
+What it offers modules is two capabilities; what it does with other PBS instances is
+a separate set of operator-registered relationships. Both are detailed under
+[Services provided](#services-provided).
 
 ## What is not included
 
@@ -72,7 +79,7 @@ capabilities: nothing ever declared `dependsOn: backup:remote`.
 - S3 Object Lock immutability — that stronger tier is provided by an ADR-010 `satellite`,
   not this module (local immutability is ZFS-snapshot based, opt-in).
 - Automated restore verification — test restores are an operator practice (see
-  [QUICKREF.md](./QUICKREF.md) and [TEST.md](./TEST.md)).
+  [RESTORE.md](./RESTORE.md) and [TEST.md](./TEST.md)).
 
 ## Requirements
 
@@ -85,17 +92,63 @@ capabilities: nothing ever declared `dependsOn: backup:remote`.
   `http://download.proxmox.com/debian/pbs`.
 - Zone: `mgmt` (DNS name `backup.mgmt.internal`).
 
-## Alternatives considered
+## Services provided
 
-- Dedicated bare-metal PBS — full separation of concerns, but more costly (hardware not
-  reusable), needs an extra machine in small systems, and is more complicated to deploy.
-- PBS as a VM — becomes "just another service", but disk access is very complicated,
-  restore after hardware failure is harder, and Proxmox does not recommend it.
-- PBS in an LXC — shares the kernel like the native install, but hard-disk passthrough
-  is more complicated and LXC is not the TAPPaaS default deployment.
+Two capabilities, and a module picks the one that matches what it needs restored.
+Declaring **neither** is a valid, deliberate choice — backup is opt-in, and
+hardware or test modules should take nothing.
 
-Chosen: native PBS install alongside PVE on a cluster node. Rationale + depth: see
-[DESIGN.md](./DESIGN.md).
+| Service | What it captures | A module opts in with |
+|---------|------------------|-----------------------|
+| [`backup:vm`](./services/vm/README.md) | the whole guest, as a PBS snapshot — the general answer | `dependsOn: ["backup:vm"]`, or `integratesWith` if it boots before the backup server (#501) |
+| [`backup:filesystem`](./services/filesystem/README.md) | named paths **inside** a guest, captured from within it | the same, plus `backup.filesystemPaths`. NixOS guests only |
+
+Both resolve retention and schedule through the Site → Environment → Module
+cascade, and both are `in-place`: a change governs *future* backups and never
+disturbs a running guest.
+
+### Off-site peers are not capabilities
+
+`services/remote/`, `services/external/` and `services/push/` implement the
+multi-source vault — pulling a buddy's PBS into `remote/<n>`, receiving a third
+party's push into `external/<n>`, sending our own out to `offsite-<n>`. They are
+**runtime relationships an operator registers**, not services a module can
+depend on: nothing ever declared `dependsOn: backup:remote`, and `backup.json`
+does not list them in `provides`. Onboard them with `backup-manage.sh
+add-remote | add-external | add-push` — see Day-to-day operations below.
+
+## Day-to-day operations
+
+```bash
+# Coverage and policy
+backup-manager list                  # every module: enabled, retention, in-job
+backup-manager resolve <module>      # one module's effective policy + schedule bucket
+backup-manager validate              # the site → environment → module hierarchy is sound
+backup-manager placement             # where PBS lives; peers with `backup-manager peers`
+
+# The datastore
+./backup-manage.sh status            # PBS overview      list-jobs   the scheduled jobs
+./backup-manage.sh run-now <vmid>    # back up one guest now (run-now-all for everything)
+./backup-manage.sh prune             # apply retention    gc          reclaim chunks
+./backup-manage.sh verify <id>       # integrity-check one backup
+./backup-manage.sh list-sources      # namespaces, buddies, push targets
+
+# Off-site peers (prompt for their credential; never stored in config)
+./backup-manage.sh add-remote <n>    # pull a buddy's PBS into remote/<n>
+./backup-manage.sh add-external <n>  # receive a third party's push into external/<n>
+./backup-manage.sh add-push <n>      # push ours out to offsite-<n>
+./backup-manage.sh use-external <url># consume a PBS this site did not provision (#456)
+
+# Keys — the out-of-band copy is mandatory (ADR-012 §2.5.1)
+backup-manager key list | key export <dest> | key import <src>
+```
+
+**Restoring anything is [RESTORE.md](./RESTORE.md).** PBS GUI:
+`https://backup.mgmt.internal:8007` (`root@pam`, or `tappaas@pbs` for backup ops).
+
+**Default retention** — 4 last · 14 daily · 8 weekly · 12 monthly · 6 yearly,
+pruned 02:00, GC 03:00, verify 04:00; VM jobs at 21:00 (weekly `sun 21:00`,
+monthly `*-*-01 21:00`), file captures 20:30.
 
 ## Dependencies
 
@@ -103,7 +156,12 @@ Chosen: native PBS install alongside PVE on a cluster node. Rationale + depth: s
 |------------|---------|
 | — | `dependsOn` is empty: backup is the first module `rest-of-foundation.sh` installs, before identity and logging |
 
-Provides the `vm`, `remote` and `external` services consumed by other modules
-(`backup:vm` is how a module opts into the managed backup job).
+## Where to read next
 
-For installation steps see [INSTALL.md](./INSTALL.md).
+| Document | For |
+|----------|-----|
+| [INSTALL.md](./INSTALL.md) | installing the module, and what the install actually does |
+| [RESTORE.md](./RESTORE.md) | getting a working system back — per scenario, with what is rehearsed and what is not |
+| [DESIGN.md](./DESIGN.md) | why it is built this way, incl. the deployment options weighed and rejected |
+| [TEST.md](./TEST.md) | what the tests cover, and the live rehearsals worth running |
+| [ADR-012](../../../docs/ADR/ADR-012-backup-enhancement.md) | the decisions behind placement, capabilities and schedules |

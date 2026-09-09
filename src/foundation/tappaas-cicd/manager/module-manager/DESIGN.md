@@ -180,9 +180,8 @@ Contracts worth keeping in mind:
   fail them. A check that could not RUN exits 1 (unknown ≠ clean), the same rule
   already applied to an unreachable Proxmox node.
 - **Never a silent pass.** A provider with no `test-service.sh` (today:
-  `backup:external`, `backup:push`, `backup:remote`, `identity:accessControl`,
-  `templates:debian`, `coturn:turn`, `vllm-amd:inference`) renders as *NOT
-  checked*, and a report that skipped the checks entirely names the deps it left
+  `identity:accessControl`, `templates:debian`, `coturn:turn`,
+  `vllm-amd:inference`) renders as *NOT checked*, and a report that skipped the checks entirely names the deps it left
   uncovered instead of printing a bare "no discrepancies found".
 - **Who pays.** One child process (usually one firewall API round-trip) per
   dependency: ON for a single `reconcile <module>`, OFF for `list --diff`

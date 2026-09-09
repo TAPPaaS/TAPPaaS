@@ -74,7 +74,7 @@ A "direct dependency" is one of:
 | `network/services/discovery/` | 4 |
 | `network/test-fixtures/` | 6 |
 | `cluster/` (+ `lib/`, `services/*`) | 27 |
-| `backup/` (+ `lib/`, `services/*`) | 22 |
+| `backup/` (+ `lib/`, `services/*`) | 45 |
 | `identity/` (+ `lib/`, `services/*`) | 10 |
 | `logging/` | 3 |
 | `templates/` (+ `services/*`, `winserver/`) | 11 |
@@ -208,12 +208,12 @@ health-manager (TS) checks.ts -> backup-manager list --json
 | `zones.json` | 30+ | network zone / VLAN source of truth (network-manager owns) |
 | `network.json` | 24 | firewall VM config (was `firewall.json`) |
 | `site.json` | 22 | site/system configuration (replaces `configuration.json`) |
+| `pbs-job.sh` | 22 | PBS backup job + schedule buckets (backup module) |
 | `config.py` | 18 | opnsense-controller shared API client/config |
 | `dns-manager` | 15 | DNS record CLI (opnsense-controller) |
 | `update-module.sh` | 14 | module update verb (wrapped by module-manager) |
 | `install-module.sh` | 13 | module install verb (wrapped by module-manager) |
 | `delete-module.sh` | 13 | module delete verb (wrapped by module-manager) |
-| `pbs-job.sh` | 12 | PBS backup job helper (backup module) |
 | `validate-site.sh` | 9 | site validation (wrapped by site-manager) |
 | `pbs-namespace.sh` | 8 | PBS namespace helper |
 | `vm-net.sh` | 6 | VM network helper (cluster/lib) |

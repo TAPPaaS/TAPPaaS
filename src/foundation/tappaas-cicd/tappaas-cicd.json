@@ -18,7 +18,8 @@
   ],
   "backup": {
     "filesystemPaths": [
-      "/home/tappaas/config"
+      "/home/tappaas/config",
+      "/etc/secrets"
     ]
   },
   "provides": [],

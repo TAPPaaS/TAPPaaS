@@ -76,29 +76,51 @@ const HELP: HelpSpec = {
     { usage: "restore list <module>", name: "restore list" },
     { usage: "restore restore <module> [opts...]", name: "restore restore" },
     { usage: "restore list-all", name: "restore list-all" },
-    { usage: "placement", name: "placement", note: "(ADR-012 — backup placement/state)" },
+    { usage: "placement", name: "placement", note: "(where PBS lives for this site)" },
     {
       usage: "key list|export <dest>|import <src>",
       name: "key",
-      note: "(ADR-012 §2.5.1 — the out-of-band encryption-key copy)",
+      note: "(the backup encryption keys, and the copy you keep off the machine)",
     },
-    { usage: "peers", name: "peers", note: "(ADR-012 — off-site pull/receive/push peers)" },
+    { usage: "peers", name: "peers", note: "(the off-site PBS relationships this site has)" },
   ],
   common: [
     ["--config-dir DIR", "Config root (default: $CONFIG_DIR or /home/tappaas/config)."],
     ["--json", "Machine output (JSON) for list/show/resolve/placement/peers."],
-    ["--pbs HOST", "ADR-012 P7: target a non-local PBS (e.g. a satellite) for controller ops."],
+    ["--pbs HOST", "Act on a different PBS (e.g. an off-site satellite) instead of this site's."],
   ],
   notes: [
     `Verbs:
-  validate    Backup hierarchy is well-formed + internally consistent.
-  list        Effective backup policy for every deployed module (was backup-status).
-  show        One module's effective policy (was backup-status <module>).
-  resolve     Cascade-resolve + print one module's policy (JSON).
-  modify      Write the module's .backup {enabled,retention,exclude} (atomic).
-  add/delete  Wire / un-wire the module into the shared PBS job (dependsOn backup:vm).
-  reconcile   Converge resolved policies → PBS (preview by default; --apply commits).
-  restore     SPECIAL — recovery action; delegates to foundation restore.sh / controller.`,
+  validate    Check the backup configuration is sound: every module resolves to a
+              valid retention and a supported schedule, residency rules hold, and
+              the site actually has somewhere to back up to.
+  list        Every deployed module with its effective policy — enabled, retention,
+              residency, and whether it is in the backup job. Start here.
+  show        The same, for one module.
+  resolve     One module's fully resolved policy as JSON, including which schedule
+              it lands on. Use it to answer "why is this module backed up like that?"
+  modify      Change a module's own backup policy (enabled / retention / exclude).
+              Site and environment defaults are edited with site-manager and
+              environment-manager; this is the per-module layer.
+  add         Opt a module into VM backup, and delete opts it back out. A module
+  delete      that has opted into neither is not backed up — which is deliberate
+              for hardware and test modules.
+  reconcile   Make the running PBS match the resolved policies: job membership and
+              schedules. Previews by default; --apply commits.
+  restore     Recover a module — 'restore list <module>' shows its snapshots,
+              'restore restore <module>' restores it, 'restore list-all' shows
+              everything stored. Options after the module name are passed through
+              (--node, --storage, --target-vmid).
+  placement   Where this site's PBS lives, and whether a datastore is realized at
+              all. A 'shim' means modules install but nothing is being backed up yet.
+  peers       Off-site relationships: PBS instances this site pulls from, receives
+              pushes from, or pushes to.
+  key         The client-side encryption keys. 'key export <dest>' writes them to
+              removable media — without a copy off this machine, a full-site restore
+              has nothing to decrypt with. 'key import <src>' loads them onto a
+              rebuilt mothership.
+
+Recovering a system is documented per scenario in the backup module's RESTORE.md.`,
   ],
 };
 function usage(): void {
@@ -365,7 +387,7 @@ function cmdRestore(opts: Opts, client: Client): number {
       return restoreRun(deps, module, opts.rest.slice(2));
     }
     case "list-all":
-      return restoreListAll();
+      return restoreListAll(opts.configDir);
     default:
       die("restore: expected 'list <module>', 'restore <module>', or 'list-all'");
   }

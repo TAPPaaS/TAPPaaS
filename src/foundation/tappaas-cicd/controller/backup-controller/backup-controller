@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# backup-controller — Proxmox Backup Server (PBS) operations for the backup
-# hierarchy (ADR-007 P9). Runtime-state controller: queries/triggers PBS for the
-# backup-manager and the operator. It REUSES the tested foundation PBS bash
-# logic (src/foundation/backup/lib/pbs-job.sh + pbs-namespace.sh) rather than
-# reimplementing the PBS API — see DESIGN.md for the "Python rewrite" aspiration.
+# backup-controller — Proxmox Backup Server (PBS) operations.
+#
+# The runtime half of backup: it queries and changes what PBS is actually doing,
+# for backup-manager and for the operator. backup-manager decides policy; this
+# carries it out. Most day-to-day work goes through backup-manager instead.
 #
 # Commands:
 #   job-status [--json]     Query the shared PBS backup job (vmid list, schedule)
@@ -11,23 +11,21 @@
 #   verify <module>         Trigger + report a PBS verify for a module's VM
 #   namespaces [--json]     List the datastore's namespaces
 #   add-to-job <vmid> [--retention <spec>] [--bucket daily|weekly|monthly]
-#                           Add <vmid> to the shared managed PBS backup job (PBS
-#                           mutation; reuses pbs_ensure_vmid). --retention is
-#                           accepted + echoed for the manager; per-job prune
-#                           wiring is a follow-up (the shared job + prune-job own
-#                           retention today).
+#                           Place <vmid> in the backup job for its schedule, and
+#                           remove it from the others — a guest belongs to exactly
+#                           one. --retention is recorded; the datastore prune-job
+#                           applies retention today.
 #   key list                List the escrowed client encryption keys
-#   key export <dest>       Copy the escrowed keys to removable media — the
-#                           MANDATORY out-of-band copy (ADR-012 §2.5.1). The
-#                           escrow lives inside the system being rebuilt, so it
-#                           cannot be the only copy: without an off-system key,
-#                           an encrypted off-site backup is unrecoverable.
-#   key import <src>        Load keys from that media back into the escrow on a
-#                           FRESH mothership — step two of full-site DR, before
-#                           any restore can decrypt anything.
-#   apply-schedule <spec>   Set the schedule of <spec>'s bucket job (PBS mutation;
-#                           e.g. "21:00"). Per-environment schedules are a
-#                           follow-up; this sets the single shared job's schedule.
+#   key export <dest>       Copy the encryption keys to removable media. Keep
+#                           this copy off the machine: the keys are stored on the
+#                           mothership, which is the thing a full rebuild
+#                           replaces, so without an off-system copy an encrypted
+#                           backup cannot be decrypted by anyone.
+#   key import <src>        Load keys from that media onto a rebuilt mothership.
+#                           Do this before restoring anything that must decrypt.
+#   apply-schedule <spec>   Set the schedule of the backup job that <spec> maps
+#                           to: daily | weekly | monthly, or a bare HH:MM meaning
+#                           daily at that time. Nothing more often than daily.
 #   help
 #
 # The mutation verbs (add-to-job / apply-schedule) are how backup-manager's
@@ -65,7 +63,12 @@ type info  >/dev/null 2>&1 || info()  { echo "[Info] $*"; }
 type warn  >/dev/null 2>&1 || warn()  { echo "[Warning] $*" >&2; }
 type error >/dev/null 2>&1 || error() { echo "[Error] $*" >&2; }
 
-usage() { grep '^#' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//; 1d'; }
+usage() {
+    # The HEADER block only — comment lines from line 2 until the first line
+    # that is not a comment. A blanket grep for '^#' pulled in every internal
+    # note further down the file, so `--help` read like source commentary.
+    awk 'NR > 1 { if ($0 !~ /^#/) exit; sub(/^# ?/, ""); print }' "${BASH_SOURCE[0]}"
+}
 
 # True if the PBS reuse libs loaded (functions present).
 have_pbs_libs() { type pbs_managed_job_id >/dev/null 2>&1; }

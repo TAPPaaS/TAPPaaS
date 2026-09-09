@@ -573,9 +573,27 @@ Manual switches always report as "needs-manual" on apply (they can't self-progra
 
 ## Next steps
 
-The foundation is complete. Everything from here is covered on the documentation
-site: **add environments**, **add a satellite**, **add stacks** (each module's
-install guide), and day-to-day **operation** — start at
+**Do this one first: take your backup encryption key off the machine.**
+
+```bash
+backup-manager key export /media/<your-usb-stick>
+```
+
+Backups are encrypted client-side, and the keys are escrowed on the mothership —
+which is inside the system a full rebuild would be recreating. Without a copy
+that lives somewhere else, a site-loss restore has nothing to decrypt with, and
+no amount of surviving backup data helps (ADR-012 §2.5.1). Store the media
+off-site. Everything else on this list can wait; this cannot, because the day you
+need it is the day you cannot make it.
+
+If your first node had no `tankc` pool, the backup module installed as a **shim**
+— dependencies are satisfied but nothing is being backed up yet. Add the pool and
+run `module-manager module modify backup`; it promotes in place. Check with
+`backup-manager placement`.
+
+The rest of the foundation is complete. Everything from here is covered on the
+documentation site: **add environments**, **add a satellite**, **add stacks**
+(each module's install guide), and day-to-day **operation** — start at
 <https://tappaas.org/installation/>.
 
 ## Network — cutting over to the firewall

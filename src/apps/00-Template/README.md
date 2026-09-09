@@ -240,7 +240,7 @@ Backup is **opt-in**: a module is backed up only if it asks to be.
   *longer* interval for a module whose state rarely changes.
 
 See [backup](../../foundation/backup/README.md) and its
-[QUICKREF](../../foundation/backup/QUICKREF.md) for the operator side.
+[RESTORE](../../foundation/backup/RESTORE.md) for recovery.
 
 ### Providing a service to others — `provides`
 
