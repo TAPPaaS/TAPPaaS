@@ -1,0 +1,196 @@
+"use strict";
+// cluster.ts — shared Proxmox-cluster query helpers (ADR-007 post-
+// implementation refactor, Phase 3). Deduplicates the ssh/reachableNodes/
+// clusterResources block that health-manager and module-manager used to
+// copy-paste (and that had already drifted: one copy hardcoded the mgmt
+// domain, the other made it overridable — the overridable variant wins).
+//
+// NOTE (F12, parked): these helpers ssh straight to the nodes (pvesh/qm) —
+// the documented manager→proxmox-controller boundary question is tracked in
+// docs/design/ADR007-post-implement-refactor.md §6 "Parked".
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.mgmtDomain = mgmtDomain;
+exports.operatorHome = operatorHome;
+exports.sshIdentity = sshIdentity;
+exports.ssh = ssh;
+exports.defaultNodeCandidates = defaultNodeCandidates;
+exports.reachableNodes = reachableNodes;
+exports.queryClusterNodes = queryClusterNodes;
+exports.queryNodeTankPools = queryNodeTankPools;
+exports.queryClusterGuests = queryClusterGuests;
+const child_process_1 = require("child_process");
+// The mgmt-zone DNS suffix nodes/guests are addressed under. Overridable for
+// tests and relocated sites (replaces module-manager's MM_MGMT_DOMAIN).
+function mgmtDomain() {
+    return process.env.TAPPAAS_MGMT_DOMAIN ?? "mgmt.internal";
+}
+// The operator whose on-disk SSH identity authorizes root@<node>. ssh() logs
+// in as root, but the key that authorizes that login belongs to the operator
+// who invoked sudo (SUDO_USER), not to root — root has none of its own.
+// Resolving this dynamically, rather than hardcoding one operator name, is
+// what keeps sshIdentity()'s default portable to a site whose operator
+// account isn't named "tappaas". TAPPAAS_OPERATOR_HOME overrides for tests /
+// relocated installs; SUDO_USER is exported by every sudo invocation. Returns
+// undefined when not under sudo, or when already running as root directly —
+// the inherited HOME is already correct and needs no resolution. Covered by
+// module-manager/test/unit/cluster.test.ts (unchanged by this fix — the
+// function's behavior is identical; only how ssh() uses it changed, below).
+function operatorHome() {
+    const override = process.env.TAPPAAS_OPERATOR_HOME;
+    if (override)
+        return override;
+    const sudoUser = process.env.SUDO_USER;
+    if (sudoUser && sudoUser !== "root")
+        return `/home/${sudoUser}`;
+    return undefined;
+}
+// The SSH identity ssh() authenticates outbound calls with. Explicit —
+// passed directly as -i, never left to SSH's own default identity-file
+// resolution. That resolution looks up the process's real UID in the passwd
+// database (getpwuid), not $HOME — confirmed live, and matches OpenSSH's own
+// documented tilde-expansion behavior. So overriding $HOME alone (this
+// module's own prior approach, via an sshEnv() that set HOME on the spawned
+// process) never redirects it: under `sudo -n` the effective UID is root,
+// and ssh always ends up back in /root/.ssh/, which holds no identity of its
+// own (only authorized_keys + known_hosts). An explicit -i bypasses that
+// lookup entirely — it is the only mechanism that actually works under
+// sudo -n. The default is derived from the invoking operator (operatorHome()),
+// so it isn't tied to one site's operator username — it falls back to the
+// same "tappaas" convention this codebase's other defaults already assume
+// (CONFIG_DIR, TAPPAAS_REPO, ...) only when not running under sudo. Still
+// overridable via TAPPAAS_SSH_IDENTITY for a site whose operator key isn't
+// ed25519, or isn't at the default path.
+function sshIdentity() {
+    const explicit = process.env.TAPPAAS_SSH_IDENTITY;
+    if (explicit)
+        return explicit;
+    const home = operatorHome() ?? "/home/tappaas";
+    return `${home}/.ssh/id_ed25519`;
+}
+function runLocal(cmd, args) {
+    const r = (0, child_process_1.spawnSync)(cmd, args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+    if (r.error)
+        return { rc: -1, stdout: "", stderr: r.error.message, ran: false };
+    return { rc: r.status ?? -1, stdout: r.stdout ?? "", stderr: r.stderr ?? "", ran: true };
+}
+// ssh <user>@<host> "<remote>" with a short connect timeout + batch mode (no
+// interactive prompts). host is a full hostname/FQDN — callers append
+// mgmtDomain() themselves where applicable.
+function ssh(user, host, remote) {
+    return runLocal("ssh", [
+        "-o",
+        "ConnectTimeout=5",
+        "-o",
+        "BatchMode=yes",
+        // accept-new: a freshly (re)installed node has an unknown host key and
+        // strict batch mode made every query against it fail (bit the N1 pool
+        // discovery twice). CHANGED keys are still rejected — a reprovisioned
+        // node needs its stale entry cleared (node add does this itself).
+        "-o",
+        "StrictHostKeyChecking=accept-new",
+        // Explicit identity (sshIdentity()) — see its own comment. IdentitiesOnly
+        // stops ssh from also offering a forwarded agent key first: under sudo -n
+        // an operator's own forwarded key gets offered, correctly rejected by the
+        // node (never authorized there), and only then does the client fall back
+        // to searching $HOME for a default identity — the exact failure this fix
+        // closes. Explicit -i without IdentitiesOnly would still race that same
+        // agent-offer-first behavior.
+        "-o",
+        "IdentitiesOnly=yes",
+        "-i",
+        sshIdentity(),
+        `${user}@${host}`,
+        remote,
+    ]);
+}
+// Ping-probe candidate node names (bare names, probed at <name>.<mgmtDomain>)
+// and return the reachable ones. When the caller has no site.json-derived
+// candidates, pass defaultNodeCandidates([]) to get the tappaas1..9 scan
+// fallback (mirrors inspect-cluster.sh).
+function defaultNodeCandidates(siteNames) {
+    if (siteNames.length > 0)
+        return siteNames;
+    return Array.from({ length: 9 }, (_, i) => `tappaas${i + 1}`);
+}
+function reachableNodes(candidates) {
+    const out = [];
+    for (const node of candidates) {
+        const r = runLocal("ping", ["-c", "1", "-W", "1", `${node}.${mgmtDomain()}`]);
+        if (r.ran && r.rc === 0)
+            out.push(node);
+    }
+    return out;
+}
+// Query the cluster's NODE membership via one reachable node. Returns the
+// node names, or null on ANY failure (no ssh, non-zero rc, bad JSON).
+// Uses /cluster/resources --type node — same endpoint family as the guest
+// query, so one API surface covers both.
+function queryClusterNodes(node) {
+    const r = ssh("root", `${node}.${mgmtDomain()}`, "pvesh get /cluster/resources --type node --output-format json");
+    if (!r.ran || r.rc !== 0)
+        return null;
+    let arr;
+    try {
+        arr = JSON.parse(r.stdout);
+    }
+    catch {
+        return null;
+    }
+    if (!Array.isArray(arr))
+        return null;
+    const out = [];
+    for (const e of arr) {
+        const o = e;
+        if (o.type === "node" && typeof o.node === "string" && o.node.length > 0) {
+            out.push(o.node);
+        }
+    }
+    return out.sort();
+}
+// The tankXY zpools physically present on a node (the TAPPaaS storagePools
+// naming convention) — mirrors create-site.sh's discovery: query the node
+// directly with `zpool list` (the cluster storage.cfg lists pools that may
+// not exist on every node). null on any failure.
+function queryNodeTankPools(node) {
+    const r = ssh("root", `${node}.${mgmtDomain()}`, "zpool list -H -o name 2>/dev/null");
+    if (!r.ran || r.rc !== 0)
+        return null;
+    return r.stdout
+        .split("\n")
+        .map((s) => s.trim())
+        .filter((s) => /^tank/.test(s))
+        .sort();
+}
+// Query the cluster's guest list via the first node. Returns null on ANY
+// failure (no ssh, non-zero rc, bad JSON) — callers choose whether that is
+// a throw (health-manager) or a degrade-to-empty (module-manager list).
+function queryClusterGuests(node) {
+    const r = ssh("root", `${node}.${mgmtDomain()}`, "pvesh get /cluster/resources --type vm --output-format json");
+    if (!r.ran || r.rc !== 0)
+        return null;
+    let arr;
+    try {
+        arr = JSON.parse(r.stdout);
+    }
+    catch {
+        return null;
+    }
+    if (!Array.isArray(arr))
+        return null;
+    const out = [];
+    for (const e of arr) {
+        const o = e;
+        const type = typeof o.type === "string" ? o.type : "";
+        if (type !== "qemu" && type !== "lxc")
+            continue;
+        out.push({
+            vmid: typeof o.vmid === "number" ? o.vmid : Number(o.vmid),
+            name: typeof o.name === "string" ? o.name : "unknown",
+            node: typeof o.node === "string" ? o.node : "unknown",
+            status: typeof o.status === "string" ? o.status : "unknown",
+            type: type,
+            template: o.template === 1 || o.template === true,
+        });
+    }
+    return out;
+}

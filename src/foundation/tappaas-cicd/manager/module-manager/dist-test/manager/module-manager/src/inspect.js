@@ -1,0 +1,686 @@
+"use strict";
+// inspect.ts — the read-only three-way drift report (`module reconcile` without
+// --apply, and per-module inside `list --diff`): the native TS port of the
+// retired inspect-vm.sh (ADR-007 post-implementation refactor, Phase 7.3).
+//
+// Generates a 3-column comparison table for a module's VM showing:
+//   1. Released (Git)     — from the source module JSON (the module's .location)
+//   2. Desired (~/config) — from config/<module>.json (deployed config)
+//   3. Actual             — from the running guest via Proxmox (ssh qm/pct/pvesh;
+//                           qm for a QEMU VM, pct for an LXC container — #465)
+//
+// Color coding (same rules as the bash):
+//   Yellow — Desired differs from Released (config drift; counts a warning)
+//   Red    — Actual differs from Desired  (VM drift; counts an error)
+//
+// A module WITHOUT a vmid (provider-only / non-VM module) degrades to a
+// two-way Released-vs-Desired config diff (Actual = N/A) and still exits 0 —
+// this is a report, not a failure. Drift never fails the command either (the
+// bash exited 0 after printing the summary); only a missing config, an
+// unreachable Proxmox node, or a dependency-service check that could not RUN
+// returns 1.
+//
+// Neither table covers the state a module's dependsOn providers provision
+// OUTSIDE the VM (firewall rules, NAT rules, discovery relays). For a
+// policy-only module that state is the ENTIRE module, so a field-clean report
+// read as "no drift" while declared rules were missing (#458). The
+// dependency-service section (src/services.ts, delegating to each provider's
+// read-only test-service.sh) closes that gap on BOTH paths; when the caller
+// opts out, the summary NAMES what it did not check instead of claiming clean.
+//
+// STRUCTURE: everything above the I/O line is PURE (string/JSON in → lines +
+// counters out) so the diff/render logic is unit-testable offline
+// (test/unit/inspect.test.ts); inspectModule() at the bottom is the only part
+// that touches the filesystem, ssh, and the test-service.sh children.
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.fmtVlan = fmtVlan;
+exports.gitSourceWarnings = gitSourceWarnings;
+exports.fieldSectionsFor = fieldSectionsFor;
+exports.buildConfigOnlyReport = buildConfigOnlyReport;
+exports.serviceDepsOf = serviceDepsOf;
+exports.guestTypeFromDeps = guestTypeFromDeps;
+exports.buildVmReport = buildVmReport;
+exports.inspectModule = inspectModule;
+const fs_1 = require("fs");
+const path_1 = require("path");
+const config_io_1 = require("../../../lib/ts/src/config-io");
+const desired_1 = require("../../../lib/ts/src/desired");
+const drift_1 = require("../../../lib/ts/src/drift");
+const report_1 = require("./report");
+const config_1 = require("./config");
+const services_1 = require("./services");
+const shlog_1 = require("./shlog");
+// ── the desired-state resolver: NOT here ───────────────────────────────
+// jqStr/getField/appliedDefault/resolveField and the ModuleFieldsSchema types
+// used to live in this file. ADR-020 D1 lifted them into lib/ts/src/desired.ts
+// so that the ACTING path resolves desired state the same way this REPORTING
+// path does — the root cause of #550 was that it did not. inspect is now one
+// consumer of that resolver, not its home.
+// ── the qm-config parsing and the normalizers: NOT here ────────────────
+//
+// This file used to hold a TypeScript port of cluster/lib/vm-net.sh — a
+// `qm config` parser, a netopts splitter, the zone→VLAN and trunk resolvers,
+// and the tag canonicaliser. Every one of them had a bash twin doing the same
+// job on the acting side, and the twins had already drifted apart: the bash
+// netopts parser did not understand a container's `hwaddr=` MAC, and the two
+// tag normalizers disagreed about duplicates and whitespace.
+//
+// ADR-020 D7 splits that work by WHO KNOWS WHAT, not by who happens to need it:
+//   - decoding a provider's own spelling  → the provider's report-service.sh
+//   - normalizing for comparison          → lib/ts/src/drift.ts, ONE copy,
+//                                           applied to both sides of the diff
+// inspect is now a consumer of both (Resolved Question 11). fmtVlan stays: it is
+// presentation, not comparison — "(untagged)" is how this table renders a 0.
+// Proxmox tag=0 means untagged — render 0/""/missing as "(untagged)" so they
+// never show up as spurious drift (issue #334).
+function fmtVlan(t) {
+    return !t || t === "0" ? "(untagged)" : t;
+}
+const pad = (s, n) => s.padEnd(n);
+// One table row with the bash print_row color rules. Argument order matches
+// the bash function (config=Desired, git=Released, actual) even though the
+// printed column order is Released, Desired, Actual.
+class Table {
+    lines = [];
+    warnings = 0;
+    errors = 0;
+    raw(text) {
+        this.lines.push({ kind: "raw", text });
+    }
+    header() {
+        this.raw(`  ${shlog_1.BOLD}${pad("Field", 18)}  ${pad("Released (Git)", 20)}  ` +
+            `${pad("Desired (~/config)", 20)}  ${pad("Actual", 20)}${shlog_1.CL}`);
+        this.raw(`  ${"-".repeat(18)}  ${"-".repeat(20)}  ${"-".repeat(20)}  ${"-".repeat(20)}`);
+    }
+    // configVal/gitVal/actualVal are RAW values (used for the drift comparison);
+    // opts carries the display + 3-way flags. Back-compatible: called with no opts
+    // it behaves exactly as before (raw values, no brackets, no suppression).
+    row(field, configVal, gitVal, actualVal, opts = {}) {
+        let cfgColor = shlog_1.CL;
+        let gitColor = shlog_1.CL;
+        let actColor = shlog_1.CL;
+        // Yellow: Desired differs from Released — UNLESS the field was overwritten at
+        // install (Desired ≠ .orig). Then the divergence is intentional and the
+        // update path will not reconcile Desired back to Released, so it is annotated
+        // rather than flagged as drift (#550, larsrossen's 3-way merge note).
+        //
+        // droppedByRelease is the case gitVal alone cannot express (#581): the
+        // release USED to declare this field (it is in .orig) and no longer does, so
+        // Released reads "-" and the plain comparison sees nothing to flag. It is
+        // real drift — the deployed config carries a value whose field no longer
+        // exists upstream — and it outranks notTracking, because "the field is gone"
+        // is a stronger fact than "you customized it".
+        const wouldYellow = gitVal !== "" && configVal !== gitVal;
+        const dropped = !!opts.droppedByRelease;
+        const suppressed = wouldYellow && !!opts.notTracking && !dropped;
+        if ((wouldYellow && !suppressed) || dropped) {
+            cfgColor = shlog_1.YW;
+            gitColor = shlog_1.YW;
+            this.warnings++;
+        }
+        // Red: Actual differs from Desired (both have real values). Desired may be a
+        // schema default — comparing it to the live VM is the whole point of #550.
+        if (actualVal !== "" && configVal !== "" && configVal !== "-" && actualVal !== configVal) {
+            actColor = shlog_1.RD;
+            cfgColor = shlog_1.RD;
+            this.errors++;
+        }
+        // A defaulted value is shown in <angle brackets> so an effective default is
+        // visibly distinct from a declared value; the comparison above used the RAW
+        // value, so the brackets never read as drift (#550).
+        const disp = (v, defaulted) => v === "" ? "-" : defaulted ? `<${v}>` : v;
+        const note = dropped
+            ? "  removed from the release — 'module-manager modify' prunes it"
+            : suppressed
+                ? "  desired state is not tracking release state on purpose"
+                : "";
+        this.raw(`  ${pad(field, 18)}  ${gitColor}${pad(disp(gitVal, opts.gitDefaulted), 20)}${shlog_1.CL}  ` +
+            `${cfgColor}${pad(disp(configVal, opts.cfgDefaulted), 20)}${shlog_1.CL}  ` +
+            `${actColor}${pad(actualVal || "-", 20)}${shlog_1.CL}${note}`);
+    }
+}
+// The two pre-table warnings when the git source JSON cannot be located.
+function gitSourceWarnings(gitFound, location) {
+    if (gitFound)
+        return [];
+    return [
+        { kind: "warn", text: `Git source JSON not found (location: ${location || "not set"})` },
+        { kind: "warn", text: "Git column will show 'N/A'" },
+    ];
+}
+// ── schema-driven field sections (#581) ────────────────────────────────
+//
+// The field diff used to walk a hand-written list — 13 literals here, a
+// sequence of hand-written rows on the VM path — so `Config fields match git`
+// meant only "none of the rows I chose to emit differed". Of the 74 fields the
+// composed schema defines, 51 were never compared in either direction, every
+// service-owned one among them: a removed or changed proxyPort, natRules,
+// ingress or backup field was invisible to the report while it claimed a match.
+//
+// The schema is the authority on what a field IS and who uses it, so it decides
+// what gets compared. Grouping follows `usedBy`, the same discriminator
+// appliedDefault already uses to decide whether a default is even in scope:
+// generic fields first, then ONE SECTION PER COORDINATE THE MODULE DECLARES.
+// A module that does not declare network:proxy is never asked about proxyPort.
+// Fields the DEPLOYED config owns rather than the release. Diffing them against
+// git reports a difference on every module forever: `location` is a path on this
+// mothership, `installTime`/`updateTime` are stamps, `kind` is applied at
+// install (ADR-007 #3), and `config` is the Pattern A container, not a field.
+// The same judgement apply-json-merge.sh makes in AUTO_FIELDS, for the same
+// reason — a field the merge will not reconcile is not one to report as drift.
+const DEPLOYMENT_OWNED = new Set(["location", "installTime", "updateTime", "kind", "config"]);
+// Group the schema fields this module actually has into their owning sections.
+// `exclude` drops fields another part of the report already renders (the VM
+// hardware table owns cores/memory/net0/… and shows them WITH an Actual column,
+// which these two-way rows cannot).
+function fieldSectionsFor(schema, deps, exclude = new Set()) {
+    const general = [];
+    const byCoord = new Map();
+    for (const c of deps)
+        byCoord.set(c, []);
+    for (const name of Object.keys(schema).sort()) {
+        if (DEPLOYMENT_OWNED.has(name) || exclude.has(name))
+            continue;
+        const fs = schema[name];
+        const usedBy = Array.isArray(fs?.usedBy) ? fs.usedBy : [];
+        if (usedBy.length === 0 || usedBy.includes("general")) {
+            general.push(name);
+            continue;
+        }
+        // First DECLARED coordinate wins — the rule copy-update-json.sh's
+        // field_destination uses to place a field in Pattern A, so the report groups
+        // a field where the config actually stores it. A field whose usedBy names
+        // only coordinates this module does not declare is not this module's field
+        // and is dropped entirely.
+        const owner = deps.find((d) => usedBy.includes(d));
+        if (owner)
+            byCoord.get(owner).push(name);
+    }
+    const out = [];
+    if (general.length > 0)
+        out.push({ title: "general", fields: general });
+    for (const c of deps) {
+        const f = byCoord.get(c);
+        if (f && f.length > 0)
+            out.push({ title: c, fields: f });
+    }
+    return out;
+}
+// Emit the sections as rows on `t`. Two-way: Released vs Desired, Actual empty —
+// the live value for a service-owned field lives in Caddy or OPNsense, not in
+// `qm config`, and inventing a third column would be worse than an honest dash.
+//
+// A row is emitted only when at least one side DECLARES the field literally. A
+// schema default that neither side declared is not a difference, and rendering
+// it would put 74 rows in front of the operator to say nothing.
+function emitFieldSections(t, sections, cfg, git, orig, deps, schema) {
+    for (const sec of sections) {
+        const rows = [];
+        for (const f of sec.fields) {
+            const cfgLit = (0, desired_1.getField)(cfg, f);
+            const gitLit = (0, desired_1.getField)(git, f);
+            if (cfgLit === "" && gitLit === "")
+                continue;
+            const c = (0, desired_1.resolveField)(cfg, f, deps, schema);
+            const g = git ? (0, desired_1.resolveField)(git, f, deps, schema) : { value: "", defaulted: false };
+            // The release dropped a field it used to declare: config has it, the
+            // release source no longer does, and the install-time pre-image shows it
+            // once did. Distinguishes that from an operator-added field, which is in
+            // config and in neither of the other two and is NOT drift.
+            const droppedByRelease = git !== null && cfgLit !== "" && gitLit === "" && orig !== null && (0, desired_1.getField)(orig, f) !== "";
+            rows.push(() => t.row(f, c.value, g.value, "", {
+                cfgDefaulted: c.defaulted,
+                gitDefaulted: g.defaulted,
+                notTracking: orig !== null && cfgLit !== (0, desired_1.getField)(orig, f),
+                droppedByRelease,
+            }));
+        }
+        if (rows.length === 0)
+            continue;
+        t.raw(`  ${shlog_1.BOLD}${sec.title}${shlog_1.CL}`);
+        for (const r of rows)
+            r();
+    }
+}
+// Config-only fallback for a NON-VM module (no vmid): two-way Released-vs-
+// Desired diff, Actual column N/A. Always rc 0.
+//
+// Kept as the DEGRADED path only: used when no schema is available, so the
+// report says something rather than nothing. It is the old hand-written list,
+// and the report announces when it is in use — a silently narrower check is how
+// #581 went unnoticed.
+const CONFIG_ONLY_FIELDS = [
+    "vmname", "node", "zone0", "zone1", "tier", "source", "status",
+    "environment", "cores", "memory", "diskSize", "storage", "description",
+];
+function buildConfigOnlyReport(module, cfg, git, svc = (0, services_1.buildServiceSection)(serviceDepsOf(cfg), null), opts = {}) {
+    const t = new Table();
+    t.lines.push({
+        kind: "info",
+        text: `${shlog_1.BOLD}TAPPaaS Module Inspection: ${shlog_1.BL}${module}${shlog_1.CL} (no VM — vmid not set)`,
+    });
+    t.raw("");
+    t.header();
+    const schema = opts.schema ?? {};
+    const deps = serviceDepsOf(cfg);
+    const sections = Object.keys(schema).length > 0 ? fieldSectionsFor(schema, deps) : [];
+    if (sections.length > 0) {
+        emitFieldSections(t, sections, cfg, git, opts.orig ?? null, deps, schema);
+    }
+    else {
+        // No schema on disk — fall back to the old hand-written list and SAY so.
+        // Reporting a narrower check as though it were the full one is #581.
+        for (const f of CONFIG_ONLY_FIELDS) {
+            const cfgV = (0, desired_1.getField)(cfg, f);
+            const gitV = (0, desired_1.getField)(git, f);
+            if (!cfgV && !gitV)
+                continue;
+            t.row(f, cfgV, gitV, "");
+        }
+        t.lines.push({
+            kind: "warn",
+            text: "module-fields.json unavailable — field diff limited to a fixed list; service-owned fields NOT compared",
+        });
+    }
+    t.raw("");
+    t.lines.push({
+        kind: "warn",
+        text: "no VM (vmid) — running/Actual column N/A (config-only Released-vs-Desired diff)",
+    });
+    t.lines.push(...svc.lines);
+    if (t.warnings > 0) {
+        t.lines.push({
+            kind: "warn",
+            text: `${t.warnings} field(s) differ between config and git (${shlog_1.YW}yellow${shlog_1.CL})`,
+        });
+    }
+    else if (svc.deps.length === 0) {
+        // Nothing outside the fields to cover — the historical wording still holds.
+        t.lines.push({
+            kind: "info",
+            text: `${shlog_1.GN}Config inspection passed — no config-vs-git discrepancies found${shlog_1.CL}`,
+        });
+    }
+    else {
+        // Deps exist, so the field verdict is only PART of the picture — say exactly
+        // that much and let the service summary below carry the rest (#458).
+        t.lines.push({ kind: "info", text: `${shlog_1.GN}Config fields match git${shlog_1.CL}` });
+    }
+    t.lines.push(...(0, services_1.serviceSummaryLines)(module, svc));
+    return {
+        lines: t.lines,
+        warnings: t.warnings,
+        errors: t.errors + svc.drift + svc.unknown,
+    };
+}
+// Every coordinate the dependency-service section reports on: hard deps first,
+// then optional integrations. An integration whose provider is not installed
+// simply shows as skipped (~ NOT checked), never a failure.
+function serviceDepsOf(cfg) {
+    return [...(0, desired_1.dependsOnOf)(cfg), ...(0, desired_1.integratesWithOf)(cfg)];
+}
+// FALLBACK discriminator, for when the cluster-resources query could not answer
+// (unreachable node, bad JSON, guest not in the cluster listing). The live
+// query is the authority — a module's declared dependsOn is a statement of
+// intent, not of what Proxmox actually holds. cluster:lxc is the only LXC
+// marker; every other form (cluster:vm, cluster:ha, or no cluster:* dep at all
+// — plenty of deployed modules declare none) keeps the qm path it has always
+// taken, so this is additive for every VM module.
+function guestTypeFromDeps(cfg) {
+    return (0, desired_1.dependsOnOf)(cfg).includes("cluster:lxc") ? "lxc" : "qemu";
+}
+function buildVmReport(inp) {
+    const { vmid, cfg, git, zones, actual, vmStatus, actualNode } = inp;
+    const guest = inp.guest ?? "qemu";
+    const isLxc = guest === "lxc";
+    const svc = inp.svc ?? (0, services_1.buildServiceSection)(serviceDepsOf(cfg), null);
+    // Desired/Released resolve each field to its literal value, or — when the
+    // module does not declare it — its module-fields.json default, marked with
+    // <angle brackets> (#550). The schema (`usedBy`) gates which defaults apply,
+    // so section fields default in only for a module that has that dependency.
+    // Omitting the schema (schema={}) yields NO defaults → literal values exactly
+    // as before. The git default only applies when a git source exists.
+    const deps = (0, desired_1.dependsOnOf)(cfg);
+    const schema = inp.schema ?? {};
+    const orig = inp.orig ?? null;
+    const rc = (k) => (0, desired_1.resolveField)(cfg, k, deps, schema);
+    const rg = (k) => (git ? (0, desired_1.resolveField)(git, k, deps, schema) : { value: "", defaulted: false });
+    // The deployed value overrode the release at install (differs from .orig), so
+    // Desired is intentionally off Released for this field (#550).
+    const notTrack = (k) => orig !== null && (0, desired_1.getField)(cfg, k) !== (0, desired_1.getField)(orig, k);
+    // Emit a resolved row: cfg + git defaults + the 3-way flags, for `actualVal`.
+    const R = (field, key, actualVal) => {
+        const c = rc(key);
+        const g = rg(key);
+        t.row(field, c.value, g.value, actualVal, {
+            cfgDefaulted: c.defaulted,
+            gitDefaulted: g.defaulted,
+            notTracking: notTrack(key),
+        });
+    };
+    const t = new Table();
+    t.header();
+    // VM identity
+    R("vmname", "vmname", (isLxc ? actual.hostname : actual.name) ?? "");
+    R("vmid", "vmid", vmid);
+    R("node", "node", actualNode);
+    t.row("status", "-", "-", vmStatus);
+    // CPU / memory
+    R("cores", "cores", actual.cores ?? "");
+    R("memory", "memory", actual.memory ?? "");
+    // Storage / disk. Which bus a guest boots from — scsi0/virtio0/ide0/sata0 for
+    // a VM, the single `rootfs` for a container (#465) — and how to pull the size
+    // out of it is PROVIDER knowledge, so report-service.sh does that and hands
+    // over a plain `diskSize`. This file no longer knows what a Proxmox disk
+    // string looks like (ADR-020 Resolved Question 11).
+    //
+    // `storage` keeps its empty Actual cell for now even though the reporter
+    // supplies it: surfacing it is a rendering change, and this step is a
+    // refactor whose whole point is that the report does not move.
+    R("diskSize", "diskSize", actual.diskSize ?? "");
+    R("storage", "storage", "");
+    // BIOS / CPU type — QEMU-only concepts. A container has neither (their schema
+    // usedBy is cluster:vm), so appliedDefault yields nothing for an LXC and the
+    // Actual cells stay EMPTY rather than a fabricated "seabios" (#465/#550).
+    R("bios", "bios", isLxc ? "" : actual.bios || "seabios");
+    R("cputype", "cputype", (isLxc ? "" : actual.cpu) ?? "");
+    // Network — net0 and net1 (TAPPaaS allows at most two NICs per VM). For each
+    // NIC: bridge, zone (by name AND by VLAN tag — two views of the same thing),
+    // the trunk allow-list resolved to VLAN tags, and the MAC (issue #334).
+    // The reporter splits each NIC into components ("net0.bridge", "net0.tag",
+    // "net0.trunks", "net0.mac") alongside the whole value, so nothing here parses
+    // a netopts string. That decoding — and the fact that a container spells its
+    // MAC `hwaddr=` where a VM uses the model token — lives once, in the
+    // provider's reporter, for every consumer (ADR-020 Resolved Question 11).
+    for (const i of [0, 1]) {
+        const actualNet = actual[`net${i}`] ?? "";
+        const nic = (part) => actual[`net${i}.${part}`] ?? "";
+        const cB = rc(`bridge${i}`);
+        const gB = rg(`bridge${i}`);
+        const cZ = rc(`zone${i}`);
+        const gZ = rg(`zone${i}`);
+        const cfgZone = cZ.value;
+        // NIC absent from config, git, AND the live VM → single "none" line (#334).
+        if (!actualNet && !cB.value && !gB.value) {
+            t.raw(`  ${pad(`nic${i}`, 18)}  ${pad("none", 20)}  ${pad("none", 20)}  ${pad("none", 20)}`);
+            continue;
+        }
+        t.row(`bridge${i}`, cB.value, gB.value, nic("bridge"), {
+            cfgDefaulted: cB.defaulted,
+            gitDefaulted: gB.defaulted,
+            notTracking: notTrack(`bridge${i}`),
+        });
+        // Zone shown two ways: the (tag) row carries the zone NAME and catches a
+        // config-vs-git name change; the (vlan) row carries the VLAN NUMBER and
+        // catches actual-vs-config drift (#334). The (vlan) row is derived, so it is
+        // never angle-bracketed.
+        const actualTag = nic("tag");
+        const cfgVlan = cfgZone ? (0, drift_1.normVlan)(cfgZone, zones) : "";
+        t.row(`zone${i} (tag)`, cfgZone, gZ.value, cfgZone, {
+            cfgDefaulted: cZ.defaulted,
+            gitDefaulted: gZ.defaulted,
+            notTracking: notTrack(`zone${i}`),
+        });
+        t.row(`zone${i} (vlan)`, fmtVlan(cfgVlan), fmtVlan(cfgVlan), fmtVlan(actualTag));
+        // Trunks — resolve the zone-name/sentinel config form to VLAN tags so it
+        // lines up with the live list, and normalize ordering on both sides. The
+        // value shown is the resolved VLAN list, not the raw field, so it is not
+        // angle-bracketed.
+        const cfgTrunksV = (0, drift_1.normTrunks)(rc(`trunks${i}`).value, zones);
+        const gitTrunksV = (0, drift_1.normTrunks)(rg(`trunks${i}`).value, zones);
+        const actTrunksV = (0, drift_1.normTrunks)(nic("trunks"), zones);
+        t.row(`trunks${i}`, cfgTrunksV, gitTrunksV, actTrunksV, { notTracking: notTrack(`trunks${i}`) });
+        R(`mac${i}`, `mac${i}`, nic("mac"));
+    }
+    // HA
+    R("HANode", "HANode", "");
+    // Description — Proxmox wraps it in HTML, so only config-vs-git is compared;
+    // the Actual cell is info-only.
+    const cfgDesc = rc("description").value;
+    const gitDesc = rg("description").value;
+    const descDrift = gitDesc !== "" && cfgDesc !== gitDesc && !notTrack("description");
+    const dColor = descDrift ? shlog_1.YW : shlog_1.CL;
+    const descNote = gitDesc !== "" && cfgDesc !== gitDesc && notTrack("description")
+        ? "  desired state is not tracking release state on purpose"
+        : "";
+    t.raw(`  ${pad("description", 18)}  ${dColor}${pad(gitDesc || "-", 20)}${shlog_1.CL}  ` +
+        `${dColor}${pad(cfgDesc || "-", 20)}${shlog_1.CL}  ${pad("(see Proxmox UI)", 20)}${descNote}`);
+    if (descDrift)
+        t.warnings++;
+    // Tags — Proxmox stores tags semicolon-separated lowercase sorted; when the
+    // normalized forms match, echo the config spelling so it never reads as drift.
+    const cTag = rc("vmtag");
+    const gTag = rg("vmtag");
+    const actualTags = actual.tags ?? "";
+    const tagOpts = {
+        cfgDefaulted: cTag.defaulted,
+        gitDefaulted: gTag.defaulted,
+        notTracking: notTrack("vmtag"),
+    };
+    if (cTag.value && actualTags && (0, drift_1.normTags)(cTag.value) === (0, drift_1.normTags)(actualTags)) {
+        t.row("vmtag", cTag.value, gTag.value, cTag.value, tagOpts);
+    }
+    else {
+        t.row("vmtag", cTag.value, gTag.value, actualTags, tagOpts);
+    }
+    // Service-owned fields (#581). The hardware rows above own the fields that
+    // have an Actual column; everything else the schema declares for the
+    // coordinates THIS module depends on is compared here, Released vs Desired.
+    // Without this a VM module's proxyPort, natRules, ingress or backup settings
+    // were never diffed at all, while the summary reported a match.
+    const shownAbove = new Set([
+        "vmname", "vmid", "node", "cores", "memory", "diskSize", "storage",
+        "bios", "cputype", "status", "HANode", "description", "vmtag",
+        "bridge0", "bridge1", "zone0", "zone1", "trunks0", "trunks1", "mac0", "mac1",
+    ]);
+    const svcSections = Object.keys(schema).length > 0
+        ? fieldSectionsFor(schema, serviceDepsOf(cfg), shownAbove)
+        : [];
+    if (svcSections.length > 0) {
+        t.raw("");
+        emitFieldSections(t, svcSections, cfg, git, orig, serviceDepsOf(cfg), schema);
+    }
+    t.raw("");
+    t.lines.push(...svc.lines);
+    // Summary
+    if (t.warnings === 0 && t.errors === 0) {
+        // A VM module's dependsOn services provision state outside the VM too, so
+        // the unqualified "no discrepancies" only holds when there is nothing else to
+        // cover, or when what there is was checked and came back clean (#458).
+        const svcClean = svc.checked && svc.drift === 0 && svc.unknown === 0;
+        t.lines.push({
+            kind: "info",
+            text: svc.deps.length === 0 || svcClean
+                ? `${shlog_1.GN}VM inspection passed — no discrepancies found${shlog_1.CL}`
+                : `${shlog_1.GN}VM inspection passed — no config/VM field discrepancies found${shlog_1.CL}`,
+        });
+    }
+    else {
+        if (t.warnings > 0) {
+            t.lines.push({
+                kind: "warn",
+                text: `${t.warnings} field(s) differ between config and git (${shlog_1.YW}yellow${shlog_1.CL})`,
+            });
+        }
+        if (t.errors > 0) {
+            t.lines.push({
+                kind: "error",
+                text: `${t.errors} field(s) differ between config and actual VM (${shlog_1.RD}red${shlog_1.CL})`,
+            });
+        }
+    }
+    t.lines.push(...(0, services_1.serviceSummaryLines)(inp.module, svc));
+    return {
+        lines: t.lines,
+        warnings: t.warnings,
+        errors: t.errors + svc.drift + svc.unknown,
+    };
+}
+// ── I/O: gather inputs (files + ssh) and print ─────────────────────────
+function emit(lines) {
+    for (const l of lines) {
+        if (l.kind === "raw")
+            console.log(l.text);
+        else if (l.kind === "info")
+            (0, shlog_1.info)(l.text);
+        else if (l.kind === "warn")
+            (0, shlog_1.warn)(l.text);
+        else
+            (0, shlog_1.error)(l.text);
+    }
+}
+// Read + normalize a module JSON; a present-but-malformed git source degrades
+// to an empty object (the bash get_git 2>/dev/null → empty values per key).
+function readNormalized(path) {
+    if (!(0, fs_1.existsSync)(path))
+        return null;
+    try {
+        const raw = JSON.parse((0, fs_1.readFileSync)(path, "utf8"));
+        if (raw === null || typeof raw !== "object" || Array.isArray(raw))
+            return {};
+        return (0, config_1.normalizeModuleConfig)(raw);
+    }
+    catch {
+        return {};
+    }
+}
+// The full inspect verb: prints the report, returns the exit code. Errors are
+// RETURNED (1), never thrown, so the `list --diff` rollup keeps iterating past
+// an unreachable module — matching the bash script's per-module exit code.
+//
+// opts.checkServices runs the dependency-service drift check (#458): ON for a
+// single `reconcile <module>`, OFF for the fleet rollup / cascade preview, which
+// would otherwise pay one firewall round-trip per dependency per module.
+function inspectModule(module, opts = {}) {
+    const configDir = (0, config_1.defaultConfigDir)();
+    const moduleJson = (0, path_1.join)(configDir, `${module}.json`);
+    if (!(0, fs_1.existsSync)(moduleJson)) {
+        (0, shlog_1.error)(`Module config not found: ${moduleJson} — is '${module}' installed?`);
+        return 1;
+    }
+    let rawCfg;
+    try {
+        rawCfg = (0, config_io_1.readJsonObject)(moduleJson);
+    }
+    catch (e) {
+        (0, shlog_1.error)(e instanceof Error ? e.message : String(e));
+        return 1;
+    }
+    if (!rawCfg) {
+        (0, shlog_1.error)(`Module config not found: ${moduleJson} — is '${module}' installed?`);
+        return 1;
+    }
+    const cfg = (0, config_1.normalizeModuleConfig)(rawCfg);
+    const vmid = (0, desired_1.getField)(cfg, "vmid");
+    const node = (0, desired_1.getField)(cfg, "node") || "tappaas1";
+    const vmname = (0, desired_1.getField)(cfg, "vmname") || module;
+    // Dependency-service drift. The CONSUMING module's persisted environment
+    // drives provider resolution, exactly as reconcile.ts does (#438) — reconcile
+    // is routinely invoked on an already-suffixed module name without
+    // --environment, and the persisted field is the authority either way.
+    // Deferred so the (slow, network-touching) verifiers run only after the rest
+    // of the report's inputs are gathered — i.e. in printed order. Optional
+    // integrations are reported alongside hard deps (#501).
+    const deps = serviceDepsOf(cfg);
+    const moduleEnvironment = (0, desired_1.getField)(cfg, "environment");
+    const serviceSection = () => opts.checkServices && deps.length > 0
+        ? (0, services_1.checkDependencyServices)(configDir, module, deps, moduleEnvironment)
+        : (0, services_1.buildServiceSection)(deps, null);
+    // Locate the git source JSON via the module's .location:
+    // <location>/<module>.json, else <location>/<vmname>.json.
+    const location = (0, desired_1.getField)(cfg, "location");
+    let git = null;
+    if (location) {
+        for (const cand of [(0, path_1.join)(location, `${module}.json`), (0, path_1.join)(location, `${vmname}.json`)]) {
+            const g = readNormalized(cand);
+            if (g) {
+                git = g;
+                break;
+            }
+        }
+    }
+    emit(gitSourceWarnings(git !== null, location));
+    // Schema (for Desired/Released defaults) and the install-time pre-image (for
+    // the 3-way "not tracking release on purpose" note) — both #550.
+    const schema = (0, desired_1.loadModuleFields)(configDir);
+    const orig = readNormalized((0, path_1.join)(configDir, `${module}.json.orig`));
+    // zones.json for the zone→VLAN and trunk resolution (null when absent).
+    let zones = null;
+    try {
+        zones = (0, config_io_1.readJsonObject)((0, path_1.join)(configDir, "zones.json"));
+    }
+    catch {
+        zones = null;
+    }
+    // ── Config-only fallback: NON-VM module (no vmid) ────────────────
+    // This is the policy-only case from #458: the field diff below is a small part
+    // of such a module, so the dependency-service section is the substance.
+    if (!vmid) {
+        const svc = serviceSection();
+        emit(buildConfigOnlyReport(module, cfg, git, svc, { schema, orig }).lines);
+        return (0, services_1.serviceExitCode)(svc);
+    }
+    // ACTUAL state comes from the provider's own reporter (ADR-020 D7). It
+    // locates the guest cluster-wide, reads its config on the node it is really
+    // on — which #526 showed can differ from config.node, because a migrate or an
+    // HA failover deliberately leaves .node unchanged — and returns one flat JSON
+    // object. This file no longer runs `qm config` or parses it (Resolved
+    // Question 11): the provider knows how it spells its own state, and every
+    // consumer of that state now reads the one answer.
+    const environment = (0, desired_1.getField)(cfg, "environment");
+    const declaredGuest = guestTypeFromDeps(cfg);
+    const { outcome, declaredGuest: wrongDeclaration } = (0, report_1.reportGuest)(configDir, module, declaredGuest, environment);
+    if (outcome.kind !== "ok") {
+        // The three causes the old single "Failed to get VM config" conflated
+        // (#526) are now three exit codes from the reporter, so each keeps its own
+        // diagnostic — and its own remedy.
+        switch (outcome.kind) {
+            case "cluster-unreachable":
+                (0, shlog_1.error)(`Could not query the cluster via ${node} to locate VMID ${vmid} — is ${node} reachable?`);
+                break;
+            case "not-present":
+                // An 'archived' module intends to have NO VM: delete-module.sh --archive
+                // removed the guest and kept the config as the archive record (#215). Its
+                // absence is the correct state, so report it as informational and stay
+                // green — the way vmid-less config-only modules already do (#556). Only
+                // 'archived' is exempt: 'external'/'Deprecated' etc. still expect a VM, so
+                // for them an absence remains a real error worth surfacing.
+                if (cfg.status === "archived") {
+                    (0, shlog_1.info)(`${shlog_1.YW}[archived]${shlog_1.CL} VMID ${vmid} not on any node — VM intentionally removed ` +
+                        `(delete-module.sh --archive); config kept as the archive record, no VM expected.`);
+                    return 0;
+                }
+                (0, shlog_1.error)(`VMID ${vmid} is not present on any node in the cluster (config declares ${node}) — is the VM created?`);
+                break;
+            case "unreadable":
+                (0, shlog_1.error)(`Failed to read the live config for VMID ${vmid} on the node the cluster reports it running`);
+                break;
+            case "no-reporter":
+                (0, shlog_1.error)(`No ${outcome.path} — this provider is not on the ADR-020 report contract yet`);
+                break;
+            default:
+                (0, shlog_1.error)(`report-service.sh failed for ${module} (rc ${outcome.rc}): ${outcome.detail}`);
+        }
+        return 1;
+    }
+    const actual = outcome.actual;
+    const guest = outcome.guest;
+    const actualNode = actual.node;
+    const liveNode = actualNode || node;
+    const vmStatus = actual.status || "unknown";
+    (0, shlog_1.info)(`${shlog_1.BOLD}TAPPaaS ${guest === "lxc" ? "LXC" : "VM"} Inspection: ` +
+        `${shlog_1.BL}${vmname}${shlog_1.CL} (VMID: ${vmid}) on ${liveNode}`);
+    console.log("");
+    // The guest is not the kind the module says it is. Worth saying out loud: the
+    // report below is correct — it describes the guest that exists — but the
+    // module's dependsOn is wrong, and every other path that trusts the
+    // declaration (install, converge, backup) will act on the wrong one.
+    if (wrongDeclaration) {
+        (0, shlog_1.warn)(`${module} declares cluster:${wrongDeclaration === "lxc" ? "lxc" : "vm"} but VMID ${vmid} is ` +
+            `a ${guest === "lxc" ? "container" : "VM"} — reporting the guest that exists; fix dependsOn`);
+    }
+    const svc = serviceSection();
+    emit(buildVmReport({ module, vmid, cfg, git, zones, actual, vmStatus, actualNode, guest, svc, schema, orig })
+        .lines);
+    return (0, services_1.serviceExitCode)(svc);
+}
