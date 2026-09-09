@@ -122,7 +122,7 @@ A TAPPaaS backup system therefore registers two lists — and there is **no push
 | **Pull buddies** — systems authorised to pull *from* me (my off-site copies) | the buddy pulls me | none on the buddy — I only *grant* it a read-only token on me (§2.5) |
 | **Pull sources** — remote systems I pull *from* (I am their off-site copy) | I pull them | a read-only token on each source (§2.5) |
 
-A local PBS plus a pulling satellite is a classic **3-2-1**.
+A local PBS plus a pulling satellite is a classic **3-2-1** — but only if the copy is genuinely elsewhere. **Off-site is a physical property, and it must be recorded rather than asserted.** A satellite or buddy used as an off-site copy declares a `location.country` (ISO 3166-1 alpha-2, the same field and format `site.json` already uses) that **differs from the Site's**. Country granularity is enough to make the claim checkable and cheap to keep true; finer levels are available where a deployment wants them, never required. Without it a satellite in the same building is indistinguishable in configuration from one in another country, and the guarantee the whole section rests on cannot be tested.
 
 #### 1.4.1 Why this is safe — and why no PBS→PBS push is needed
 
@@ -455,6 +455,7 @@ Backing up a Proxmox storage **dataset** — e.g. external NFS-served data that 
   - **Pull:** with the remote's read-only token, deleting/pruning the *local* datastore is denied.
   - **Push:** the local push credential can add a snapshot but **cannot delete or prune** the remote namespace; a delete attempt is refused.
   - A **simulated local-cluster compromise** cannot erase, encrypt, or rewrite the off-site history.
+- **Off-site is real (§1.4):** every target registered as an off-site copy declares a `location.country` differing from the Site's; a satellite with no location, or one matching the Site's country, is reported rather than silently accepted.
 - **Restore:** a restore **from the off-site copy** to a clean PBS succeeds *with* the encryption key and fails *without* it.
 - **Single-node (#389):** an `external` single node's clients back up directly to a remote/satellite and restore from it.
 - **Symmetry (§1.4):** a satellite PBS simultaneously *pulls* the home PBS and *receives the direct client backups* of a single-node `external` site, in separate namespaces, on one datastore.

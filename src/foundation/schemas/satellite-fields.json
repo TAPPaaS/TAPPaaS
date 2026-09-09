@@ -14,6 +14,8 @@
     "provider.type": { "type": "string", "values": { "hetzner": "Hetzner Cloud (reference)", "generic": "operator supplies a host + SSH; no API automation" } },
     "provider.allocation": { "type": "string", "default": "portal", "values": { "portal": "Tier A (default): operator creates the VPS in the console", "api": "Tier B (opt-in): satellite-manager creates it via the hcloud API token" } },
     "provider.location": { "type": "string", "required": false, "note": "Tier B (allocation=api) ONLY — hcloud region for `hcloud server create`. For Tier A you pick it in the console (satellite-manager doesn't use it)." },
+
+    "location.country": { "type": "string", "format": "ISO 3166-1 alpha-2", "required": false, "example": "DE", "note": "WHERE THIS SATELLITE PHYSICALLY IS — same meaning and format as site.json .location.country. NOT `provider.location`, which is an hcloud region used only to create the server (Tier B) and says nothing for a Tier A satellite. Off-site is a PHYSICAL guarantee (ADR-012 §1.4): a satellite used as an off-site copy declares a country differing from the Site's, so the separation can be checked from configuration instead of assumed." },
     "provider.serverType": { "type": "string", "example": "cx23", "required": false, "note": "Tier B (allocation=api) ONLY — x86 cx23 default; cax11 = ARM. For Tier A you pick it in the console." },
     "_provider_image": "dropped — the image is irrelevant (nixos-anywhere kexecs any stock image and reformats to NixOS); satellite-manager defaults it for Tier B.",
 
