@@ -30,7 +30,9 @@
 
 | Term | Definition |
 |------|------------|
-| **Node** | The physical Proxmox host (e.g. `tappaas1`). The `node` field in `module-fields.json` refers to this host. The VM is the **Module**. (Confirmed Erik⟷Lars 2026-06-16; ADR-009 Option B.) |
+| **Node** | ArchiMate: a computational or physical resource that hosts, manipulates or interacts with other such resources. A cluster member, a bare-metal host **and** a VM are all Nodes. |
+| **Cluster member** | A Node that belongs to the Proxmox cluster (e.g. `tappaas1`), declared in `site.json`. This is the narrow sense this entry previously called "Node". |
+| **Host** | The Node a Module runs on. The `node` field in `module-fields.json` names a Host; it does **not** assert cluster membership. (ADR-009 Option B — `node` field = physical host = ArchiMate *Device*, the Module is the VM. Confirmed Erik⟷Lars 2026-06-16.) |
 | **Module** | The atomic deployable unit: one VM, one `{name}.json`. *Module boundary = VM boundary.* |
 | **Component** | A composable unit inside a Module (recursive). ArchiMate Application Component. |
 | **Function** | Behaviour a Component realises. ArchiMate Application Function. |

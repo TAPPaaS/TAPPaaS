@@ -16,6 +16,12 @@ ADR-007 *classifies* (which classification domain), this ADR *composes* (how it 
 > direction** was confirmed in the Erik⟷Lars architecture review (2026-06-15) as **Option B** (node
 > field = physical host = Device; Module = the VM). The GitHub issue #171 remains open for community
 > discussion — the decision is owner-confirmed, not yet formally closed.
+>
+> **Amended 2026-09-09 (#599).** Option B is unchanged — the `node` field names the physical host,
+> and the Module is the VM. The Terms table had narrowed that host to *the physical Proxmox host* and
+> labelled it **Node**, which contradicts both the model block above ("physical host") and ArchiMate,
+> where a Node is any hosting resource and a physical machine is a **Device**. `Host` now names the
+> field's referent and `Cluster member` keeps the narrow sense; `Node` returns to the ArchiMate meaning.
 
 ## The model (ArchiMate-grounded)
 
@@ -36,7 +42,9 @@ decides on:
 
 | Term | Definition |
 |------|------------|
-| **Node** | The physical Proxmox host (e.g. `tappaas1`). The `node` field in `module-fields.json` refers to this host. The VM is the **Module**. (Option B confirmed Erik⟷Lars 2026-06-16. Prose docs aligned.) |
+| **Node** | ArchiMate: a computational or physical resource that hosts, manipulates or interacts with other such resources. A cluster member, a bare-metal host and a VM are all Nodes. |
+| **Cluster member** | A Node that belongs to the Proxmox cluster (e.g. `tappaas1`), declared in `site.json`. |
+| **Host** | The Node a Module runs on — the model's "physical host" above. The `node` field names a Host and does **not** assert cluster membership. (Option B confirmed Erik⟷Lars 2026-06-16.) |
 | **Module** | The atomic deployable unit: one VM, one `{name}.json`. *Module boundary = VM boundary.* |
 | **App** | The user-facing classification label for a Module in the **Apps** classification domain (ADR-007b). "App" and "Module" denote the same deployment unit — "App" is what the value stream calls it; "Module" is the technical/composition term. |
 | **Component** | A composable unit inside a Module (recursive). ArchiMate Application Component. |
