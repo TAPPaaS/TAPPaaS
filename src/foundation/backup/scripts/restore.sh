@@ -85,11 +85,11 @@ trap cleanup EXIT
 # ha-vm-lib (#434): stopping an HA resource safely. Installed copy first, repo
 # copy as the fallback so the script works from a checkout too.
 if [[ -r /home/tappaas/bin/ha-vm-lib.sh ]]; then
-    # shellcheck source=../tappaas-cicd/lib/ha-vm-lib.sh disable=SC1091
+    # shellcheck source=../../tappaas-cicd/lib/ha-vm-lib.sh disable=SC1091
     . /home/tappaas/bin/ha-vm-lib.sh
-elif [[ -r "$(dirname "${BASH_SOURCE[0]}")/../tappaas-cicd/lib/ha-vm-lib.sh" ]]; then
-    # shellcheck source=../tappaas-cicd/lib/ha-vm-lib.sh disable=SC1091
-    . "$(dirname "${BASH_SOURCE[0]}")/../tappaas-cicd/lib/ha-vm-lib.sh"
+elif [[ -r "$(dirname "${BASH_SOURCE[0]}")/../../tappaas-cicd/lib/ha-vm-lib.sh" ]]; then
+    # shellcheck source=../../tappaas-cicd/lib/ha-vm-lib.sh disable=SC1091
+    . "$(dirname "${BASH_SOURCE[0]}")/../../tappaas-cicd/lib/ha-vm-lib.sh"
 fi
 JSON_CONFIG="${CONFIG_DIR}/backup.json"
 JSON=$(cat "${JSON_CONFIG}")

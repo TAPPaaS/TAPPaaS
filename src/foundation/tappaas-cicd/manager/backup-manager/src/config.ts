@@ -248,15 +248,18 @@ export function readPlacement(configDir: string): Placement {
   };
 }
 
-// List off-site peers (ADR-012 §3.1) from the config dir: remote-<n> (pull),
-// external-<n> (receive) and push-<n> (send). Prompt-not-store means these
-// files carry host/namespace only — never credentials.
+// List the off-site peers (ADR-012 §1.4) from the config dir:
+//   pull-<n>     we pull a copy of their backups
+//   remote-<n>   they pull ours — where our off-site copies live
+//   receive-<n>  they push theirs into ours
+// Prompt-not-store means these files carry host/namespace only, never a
+// credential.
 export function listPeers(configDir: string): Peer[] {
   if (!existsSync(configDir)) return [];
   const prefixes: Array<[string, PeerRole]> = [
-    ["remote-", "pull"],
-    ["external-", "receive"],
-    ["push-", "push"],
+    ["pull-", "pull"],
+    ["remote-", "remote"],
+    ["receive-", "receive"],
   ];
   const out: Peer[] = [];
   for (const f of readdirSync(configDir)) {

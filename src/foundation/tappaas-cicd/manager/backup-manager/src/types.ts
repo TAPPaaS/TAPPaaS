@@ -80,10 +80,11 @@ export interface Placement {
 // ── Off-site peer (ADR-012 §3.1) — the symmetric pull / receive / push ─
 // A PBS is simultaneously a pull replicator (remote-<n>), a push receiver
 // (external-<n>), and/or a push sender (push-<n>). listPeers surfaces all three.
-export type PeerRole = "pull" | "receive" | "push";
+export type PeerRole = "pull" | "remote" | "receive";
 export interface Peer {
   name: string;
-  role: PeerRole; // pull=remote-<n>, receive=external-<n>, push=push-<n>
+  // pull: we pull theirs · remote: they pull ours · receive: they push into ours
+  role: PeerRole;
   remoteHost: string | null;
   namespace: string | null;
 }

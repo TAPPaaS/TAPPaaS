@@ -21,6 +21,14 @@ import {
 import { retentionValid, validate } from "../../src/validate";
 import { applyPlan, computePlan } from "../../src/reconcile";
 import { restoreList, restoreRun } from "../../src/restore";
+import {
+  findPeer,
+  findPeers,
+  normalizeKind,
+  peerScript,
+  removePeerConfig,
+  writePeerConfig,
+} from "../../src/peers";
 import { addToBackupJob, modifyBackup, removeFromBackupJob } from "../../src/modify";
 import { FakeClient } from "./fake-client";
 
@@ -327,6 +335,92 @@ check(!retentionValid("7") && !retentionValid("7x") && !retentionValid(""), "inv
   eq(moduleVmid(tmp, "absent"), null, "a missing config resolves to null");
 }
 
+// ── peer CRUD (ADR-012 §1.4): the three PBS relationships ────────────
+{
+  const tmp = mkdtempSync(join(tmpdir(), "bm-peers-"));
+  writeFileSync(join(tmp, "site.json"), JSON.stringify({ name: "mysite" }), "utf8");
+
+  eq(normalizeKind("pull"), "pull", "kind: pull — we pull theirs");
+  eq(normalizeKind("remote"), "remote", "kind: remote — they pull ours");
+  eq(normalizeKind("receive"), "receive", "kind: receive — they push into ours");
+  eq(normalizeKind("push"), null, "there is no 'push' kind: we never push to another PBS");
+  eq(normalizeKind("external"), null, "'external' is a PLACEMENT, not a peer");
+
+  // PULL: we hold a read-only login on them, so no secret here; removeVanished
+  // stays false — a compromised source must not make our copy disappear.
+  writePeerConfig(tmp, "pull", { name: "buddy", host: "pbs.buddy", groupFilter: "type:vm" });
+  const pull = JSON.parse(readFileSync(join(tmp, "pull-buddy.json"), "utf8"));
+  eq(pull.namespace, "pull/buddy", "pull lands in pull/<peer> on our datastore");
+  eq(pull.readAuthId, "", "pull config carries no credential");
+  eq(pull.removeVanished, false, "pull never removes vanished — a source cannot erase our copy");
+  eq(pull.groupFilter, "type:vm", "pull subset selector is written through");
+
+  // REMOTE: they pull OUR backups. No namespace of ours is created — this is a
+  // read grant on data we already hold, and it must not propagate.
+  writePeerConfig(tmp, "remote", { name: "buddy", authId: "buddy@pbs" });
+  const remote = JSON.parse(readFileSync(join(tmp, "remote-buddy.json"), "utf8"));
+  eq(remote.authId, "buddy@pbs", "remote records the login they pull with");
+  eq(remote.namespace, "", "remote defaults to the ROOT namespace — our VM backups");
+  eq(
+    remote.propagate,
+    false,
+    "remote does NOT propagate: a root grant would otherwise expose fs/ (config + secrets) and other peers",
+  );
+  check(remote.retention === undefined, "remote owns no retention — the copy is on their datastore");
+
+  writePeerConfig(tmp, "remote", { name: "wide", authId: "w@pbs", propagate: true });
+  eq(
+    JSON.parse(readFileSync(join(tmp, "remote-wide.json"), "utf8")).propagate,
+    true,
+    "…but propagation can be asked for explicitly",
+  );
+
+  // RECEIVE: they push into us; we issue the login and own the retention.
+  writePeerConfig(tmp, "receive", { name: "synology" });
+  const recv = JSON.parse(readFileSync(join(tmp, "receive-synology.json"), "utf8"));
+  eq(recv.namespace, "receive/synology", "receive lands in receive/<peer>");
+  check(recv.retention !== undefined, "receive owns its retention (the data is on our datastore)");
+
+  // One name, two relationships — the buddy pair. This is why delete needs the kind.
+  eq(
+    findPeers(tmp, "buddy").map((p) => p.kind).sort().join(","),
+    "pull,remote",
+    "a buddy is both: we pull theirs and they pull ours",
+  );
+  eq(findPeer(tmp, "pull", "buddy")?.kind ?? "none", "pull", "findPeer locates one relationship");
+  eq(findPeer(tmp, "receive", "buddy"), null, "…and does not match a different kind");
+
+  let threw = false;
+  try {
+    writePeerConfig(tmp, "pull", { name: "buddy", host: "other" });
+  } catch {
+    threw = true;
+  }
+  check(threw, "an existing peer is not silently overwritten");
+  writePeerConfig(tmp, "pull", { name: "buddy", host: "other" }, true);
+  eq(
+    JSON.parse(readFileSync(join(tmp, "pull-buddy.json"), "utf8")).remoteHost,
+    "other",
+    "--force overwrites deliberately",
+  );
+
+  eq(removePeerConfig(tmp, "remote", "buddy").kind, "remote", "delete targets the named kind");
+  eq(
+    findPeers(tmp, "buddy").map((p) => p.kind).join(","),
+    "pull",
+    "…and leaves the other relationship intact",
+  );
+
+  check(
+    peerScript("/mod", "pull", "onboard").endsWith("/mod/scripts/pull/onboard.sh"),
+    "peer scripts resolve under <module>/scripts/<kind>/",
+  );
+  check(
+    peerScript("/mod", "remote", "offboard").endsWith("/mod/scripts/remote/offboard.sh"),
+    "…and offboard likewise",
+  );
+}
+
 // ── restore: finds its script, and fails loudly when it cannot ────────
 {
   const tmp = mkdtempSync(join(tmpdir(), "bm-restore-"));
@@ -467,16 +561,17 @@ check(!retentionValid("7") && !retentionValid("7x") && !retentionValid(""), "inv
 
   // No peers yet.
   eq(listPeers(tmp).length, 0, "no peers when none configured");
-  // One of each role — pull/receive/push.
-  writeFileSync(join(tmp, "remote-buddy.json"), JSON.stringify({ remoteHost: "h1", namespace: "remote/buddy" }), "utf8");
-  writeFileSync(join(tmp, "external-nas.json"), JSON.stringify({ remoteHost: "h2", namespace: "external/nas" }), "utf8");
-  writeFileSync(join(tmp, "push-vault.json"), JSON.stringify({ remoteHost: "h3", namespace: "external/mysite" }), "utf8");
+  // One of each role — pull (we take theirs), remote (they take ours),
+  // receive (they push into ours).
+  writeFileSync(join(tmp, "pull-buddy.json"), JSON.stringify({ remoteHost: "h1", namespace: "pull/buddy" }), "utf8");
+  writeFileSync(join(tmp, "remote-buddy.json"), JSON.stringify({ authId: "buddy@pbs" }), "utf8");
+  writeFileSync(join(tmp, "receive-nas.json"), JSON.stringify({ namespace: "receive/nas" }), "utf8");
   const peers = listPeers(tmp);
   eq(peers.length, 3, "three peers listed");
-  eq(peers.filter((p) => p.role === "pull").length, 1, "one pull peer (remote-)");
-  eq(peers.filter((p) => p.role === "receive").length, 1, "one receive peer (external-)");
-  eq(peers.filter((p) => p.role === "push").length, 1, "one push peer (push-)");
-  eq(peers.find((p) => p.role === "push")?.name ?? "", "vault", "push peer name stripped of prefix");
+  eq(peers.filter((p) => p.role === "pull").length, 1, "one pull peer (pull-)");
+  eq(peers.filter((p) => p.role === "remote").length, 1, "one remote peer (remote-)");
+  eq(peers.filter((p) => p.role === "receive").length, 1, "one receive peer (receive-)");
+  eq(peers.find((p) => p.role === "receive")?.name ?? "", "nas", "peer name stripped of prefix");
   // Peers are NOT counted as modules.
   eq(listModules(tmp).length, 0, "peers/backup are not deployed modules");
 }

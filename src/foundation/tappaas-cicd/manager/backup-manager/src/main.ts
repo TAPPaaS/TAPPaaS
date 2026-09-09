@@ -32,9 +32,21 @@ import {
 import { CliClient } from "./client";
 import { addToBackupJob, modifyBackup, ModifyOpts, removeFromBackupJob } from "./modify";
 import { applyPlan, computePlan } from "./reconcile";
-import { restoreList, restoreListAll, restoreRun } from "./restore";
+import { restoreList, restoreListAll, restoreRun, moduleScriptDir } from "./restore";
+import {
+  PeerKind,
+  PeerSpec,
+  findPeer,
+  findPeers,
+  normalizeKind,
+  peerScript,
+  removePeerConfig,
+  writePeerConfig,
+} from "./peers";
 import { validate } from "./validate";
 import { HelpSpec, renderHelp } from "../../../lib/ts/src/help";
+import { existsSync } from "fs";
+import { stream } from "../../../lib/ts/src/exec";
 import { GN, CL, die, guarded, info, warn } from "../../../lib/ts/src/cli";
 import { BackupPolicyStatus, Client } from "./types";
 
@@ -83,6 +95,29 @@ const HELP: HelpSpec = {
       note: "(the backup encryption keys, and the copy you keep off the machine)",
     },
     { usage: "peers", name: "peers", note: "(the off-site PBS relationships this site has)" },
+    {
+      usage: "peer add pull|remote|receive <name> [--host H] [--store S] [--namespace NS] "
+        + "[--schedule SPEC] [--group-filter F] [--auth-id ID] [--propagate] [--force]",
+      name: "peer add",
+      options: [
+        ["--host H", "peer add pull: the PBS we pull from."],
+        ["--store S", "peer add pull: its datastore name (default tappaas_backup)."],
+        ["--namespace NS", "peer add: pull/receive — where the data lands here. remote — what they may read (default: the root namespace, our VM backups)."],
+        ["--schedule SPEC", "peer add pull: when to pull (default 04:00)."],
+        ["--group-filter F", "peer add pull: replicate only part of the source."],
+        ["--auth-id ID", "peer add remote: the login they pull with (we create it)."],
+        ["--propagate", "peer add remote: let the read grant reach child namespaces. Off by default — on the root that would expose fs/ (config + secrets) and other peers' data."],
+        ["--config-only", "peer add: write the config, skip onboarding (no PBS contact)."],
+        ["--force", "peer add: overwrite an existing peer config."],
+      ],
+    },
+    {
+      usage: "peer delete pull|remote|receive <name> [--purge] [--config-only]",
+      name: "peer delete",
+      options: [
+        ["--purge", "peer delete: also delete the data in the peer's namespace."],
+      ],
+    },
   ],
   common: [
     ["--config-dir DIR", "Config root (default: $CONFIG_DIR or /home/tappaas/config)."],
@@ -114,7 +149,26 @@ const HELP: HelpSpec = {
   placement   Where this site's PBS lives, and whether a datastore is realized at
               all. A 'shim' means modules install but nothing is being backed up yet.
   peers       Off-site relationships: PBS instances this site pulls from, receives
-              pushes from, or pushes to.
+              pushes from, or pushes to. 'peer add' and 'peer delete' create and
+              remove them.
+  peer        Set up a relationship with another PBS, credentials included:
+                pull <name>     we pull a copy of THEIR backups into ours
+                remote <name>   they pull OURS — this is where our off-site
+                                copies live. We grant a read-only login and
+                                hold nothing on them, so their copy cannot be
+                                erased from here.
+                receive <name>  they push THEIR backups into ours, for a system
+                                that has no PBS of its own
+              pull and remote are the same movement from opposite ends: to keep
+              a copy of our data with a buddy, we add 'remote' and they add
+              'pull'.
+              There is no verb for sending our backups to an external PBS: a
+              site with no local datastore configures that as PLACEMENT
+              (placementState external + pbsUrl on the backup module), and a
+              TAPPaaS PBS never pushes to another PBS.
+              'peer add' writes the config then onboards it, prompting for the
+              credential — never written to the config. 'peer delete' needs the
+              KIND too, since one name can hold two relationships at once.
   key         The client-side encryption keys. 'key export <dest>' writes them to
               removable media — without a copy off this machine, a full-site restore
               has nothing to decrypt with. 'key import <src>' loads them onto a
@@ -137,9 +191,31 @@ interface Opts {
   enabled?: boolean;
   retention?: string;
   exclude?: string[];
+  // peer flags
+  host?: string;
+  store?: string;
+  namespace?: string;
+  schedule?: string;
+  groupFilter?: string;
+  authId?: string;
+  propagate: boolean;
+  configOnly: boolean;
+  purge: boolean;
+  force: boolean;
   rest: string[];
 }
+// Peer flags that take a value. Collected generically so adding one is a
+// single-line change here rather than another else-if arm.
+const PEER_VALUE_FLAGS = new Set([
+  "--host", "--store", "--namespace", "--schedule", "--group-filter", "--auth-id",
+]);
+
 function parseOpts(args: string[]): Opts {
+  const peerFlags: Record<string, string> = {};
+  let propagate = false;
+  let configOnly = false;
+  let purge = false;
+  let force = false;
   let configDir = defaultConfigDir();
   let json = false;
   let apply = false;
@@ -189,11 +265,34 @@ function parseOpts(args: string[]): Opts {
       if (v === undefined) die("--exclude requires a comma-separated value");
       exclude = v === "" ? [] : v.split(",").map((s) => s.trim()).filter((s) => s.length > 0);
       i++;
+    } else if (PEER_VALUE_FLAGS.has(a)) {
+      const v = args[i + 1];
+      if (!v) die(`${a} requires a value`);
+      peerFlags[a] = v;
+      i++;
+    } else if (a === "--propagate") {
+      propagate = true;
+    } else if (a === "--config-only") {
+      configOnly = true;
+    } else if (a === "--purge") {
+      purge = true;
+    } else if (a === "--force") {
+      force = true;
     } else {
       rest.push(a);
     }
   }
-  return { configDir, json, apply, environment, disabledOnly, enabled, retention, exclude, rest };
+  return {
+    configDir, json, apply, environment, disabledOnly, enabled, retention, exclude,
+    host: peerFlags["--host"],
+    store: peerFlags["--store"],
+    namespace: peerFlags["--namespace"],
+    schedule: peerFlags["--schedule"],
+    groupFilter: peerFlags["--group-filter"],
+    authId: peerFlags["--auth-id"],
+    propagate, configOnly, purge, force,
+    rest,
+  };
 }
 
 // ── list / show: every module's resolved policy (+ PBS-job wiring) ─────
@@ -310,6 +409,132 @@ function cmdPlacement(opts: Opts): void {
   if (pl.pushTarget) info(`pushTarget:     ${pl.pushTarget}  (deprecated — see pbsUrl)`);
 }
 
+// ── peer CRUD (ADR-012 §1.4) ──────────────────────────────────────────
+//
+// The manager owns the config; the module's onboarding script owns the live PBS
+// work and the credential prompt. Splitting it the other way — reimplementing
+// namespace/user/ACL/sync-job calls in TypeScript — would duplicate tested bash
+// for no gain, and would put a credential through this process.
+function cmdPeer(opts: Opts): number {
+  const sub = opts.rest[0];
+  if (sub === "add") return cmdPeerAdd(opts);
+  if (sub === "delete" || sub === "remove") return cmdPeerDelete(opts);
+  die("peer: expected 'add <kind> <name>' or 'delete <name>'");
+  return 1;
+}
+
+function cmdPeerAdd(opts: Opts): number {
+  const kindArg = opts.rest[1];
+  const name = opts.rest[2];
+  if (!kindArg || !name) die("peer add: expected <kind> <name>, kind = pull | remote | receive");
+  const kind = normalizeKind(kindArg);
+  if (!kind) die(`peer add: unknown kind '${kindArg}' — use pull | remote | receive`);
+  if (!/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(name)) {
+    die(`peer add: '${name}' is not a usable peer name (letters, digits, - and _)`);
+  }
+
+  const k = kind as PeerKind;
+  // Say what cannot work now, rather than at onboarding when a credential has
+  // already been typed.
+  if (k === "pull" && !opts.host) {
+    die("peer add pull: --host is required (the PBS we pull from)");
+  }
+  if (k === "remote" && !opts.authId) {
+    die("peer add remote: --auth-id is required (the login they will pull with, " +
+        "e.g. buddy@pbs — we create it and grant it read-only access)");
+  }
+
+  const spec: PeerSpec = {
+    name,
+    host: opts.host,
+    store: opts.store,
+    namespace: opts.namespace,
+    schedule: opts.schedule,
+    groupFilter: opts.groupFilter,
+    authId: opts.authId,
+    propagate: opts.propagate,
+  };
+  const file = writePeerConfig(opts.configDir, k, spec, opts.force);
+  info(`${GN}✓${CL} wrote ${file}`);
+
+  if (opts.configOnly) {
+    info(`  --config-only: not onboarded. Run 'backup-manager peer add ${kindArg} ${name}' again`);
+    info(`  without it, or onboard by hand, when the PBS is reachable.`);
+    return 0;
+  }
+
+  const dir = moduleScriptDir(opts.configDir);
+  const script = peerScript(dir, k, "onboard");
+  if (!existsSync(script)) {
+    warn(`config written, but ${script} was not found — the peer is NOT onboarded.`);
+    warn(`Check config/backup.json .location points at the backup module.`);
+    return 1;
+  }
+  info(`Onboarding — you will be prompted for the credential (it is never stored in the config).`);
+  const rc = stream(script, [name]);
+  if (rc !== 0) {
+    warn(`Onboarding failed (rc ${rc}). The config remains at ${file};`);
+    warn(`fix the cause and re-run, or 'backup-manager peer delete ${name}' to drop it.`);
+  }
+  return rc;
+}
+
+function cmdPeerDelete(opts: Opts): number {
+  // The kind is REQUIRED, not inferred. One name can hold two relationships —
+  // a backup buddy is typically both a pull and a receive — so guessing would
+  // sooner or later tear down the wrong half of a working pair.
+  const kindArg = opts.rest[1];
+  const name = opts.rest[2];
+  if (!kindArg || !name) {
+    const stray = opts.rest[1] && !normalizeKind(opts.rest[1]) ? opts.rest[1] : null;
+    if (stray) {
+      const existing = findPeers(opts.configDir, stray);
+      if (existing.length > 0) {
+        die(
+          `peer delete: say which relationship — '${stray}' exists as ` +
+            `${existing.map((e) => e.kind).join(" and ")}. ` +
+            `Try: backup-manager peer delete ${existing[0].kind} ${stray}`,
+        );
+      }
+    }
+    die("peer delete: expected <kind> <name>, kind = pull | remote | receive");
+  }
+  const kind = normalizeKind(kindArg);
+  if (!kind) die(`peer delete: unknown kind '${kindArg}' — use pull | remote | receive`);
+  const hit = findPeer(opts.configDir, kind as PeerKind, name);
+  if (!hit) {
+    const other = findPeers(opts.configDir, name);
+    if (other.length > 0) {
+      die(
+        `peer delete: '${name}' is not a ${kindArg} peer — it exists as ` +
+          `${other.map((o) => o.kind).join(" and ")}.`,
+      );
+    }
+    die(`peer delete: no peer named '${name}'`);
+  }
+
+  // Offboard FIRST, while the config that describes the relationship still
+  // exists — the script reads it to know what to tear down.
+  const dir = moduleScriptDir(opts.configDir);
+  const script = peerScript(dir, hit.kind, "offboard");
+  let rc = 0;
+  if (opts.configOnly) {
+    info("  --config-only: the PBS side is left exactly as it is.");
+  } else if (existsSync(script)) {
+    rc = stream(script, opts.purge ? [name, "--purge"] : [name]);
+    if (rc !== 0) {
+      warn(`Offboarding reported rc ${rc}; the config is left in place so you can retry.`);
+      return rc;
+    }
+  } else {
+    warn(`${script} not found — removing the config only; the PBS side is untouched.`);
+  }
+  const removed = removePeerConfig(opts.configDir, kind as PeerKind, name);
+  info(`${GN}✓${CL} removed ${removed.file}`);
+  if (!opts.purge) info("  Data in its namespace was kept (--purge deletes it).");
+  return rc;
+}
+
 function cmdPeers(opts: Opts): void {
   const peers = listPeers(opts.configDir);
   if (opts.json) {
@@ -317,7 +542,7 @@ function cmdPeers(opts: Opts): void {
     return;
   }
   if (peers.length === 0) {
-    info("No off-site peers configured (remote-/external-/push-<name>.json).");
+    info("No peers configured. Add one with: backup-manager peer add pull|remote|receive <name>");
     return;
   }
   const pad = (s: string, n: number): string => (s.length >= n ? s : s + " ".repeat(n - s.length));
@@ -490,6 +715,8 @@ export function run(argv: string[], client: Client): number {
       case "peers":
         cmdPeers(opts);
         return 0;
+      case "peer":
+        return cmdPeer(opts);
       case "reconcile":
         cmdReconcile(opts, client);
         return 0;

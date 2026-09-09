@@ -8,7 +8,7 @@
 # (chunks arrive already encrypted at the source). The sync-job + prune-job are
 # admin-owned; the buddy never gets delete rights here.
 #
-# Invoked by `backup-manage.sh add-remote <name>`. Reads the buddy config from
+# Invoked by `backup-manager peer add pull <name>`. Reads the buddy config from
 # ${CONFIG_DIR}/remote-<name>.json; API credentials are prompted, never stored.
 #
 # Usage: install-service.sh <name>
@@ -28,8 +28,8 @@ readonly SCRIPT_DIR
 NAME="${1:-}"
 [[ -n "${NAME}" ]] || die "Usage: $0 <name>"
 
-CFG="${CONFIG_DIR}/remote-${NAME}.json"
-[[ -f "${CFG}" ]] || die "buddy config not found: ${CFG} (copy services/remote/remote.json there and edit)"
+CFG="${CONFIG_DIR}/pull-${NAME}.json"
+[[ -f "${CFG}" ]] || die "buddy config not found: ${CFG} (backup-manager peer add pull <name> and edit)"
 
 store="$(pbs_storage_name)"
 ns="$(jq -r '.namespace // empty' "${CFG}")"

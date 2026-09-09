@@ -341,6 +341,55 @@ Five tiers. T0–T2 run on every package; T3–T4 run where the package touches 
 
 ## Package logs
 
+### 2026-09-09 — the peer vocabulary settled: pull / remote / receive
+
+Operator review of #608 landed on names that say what each relationship *is*, and on one relationship that had no implementation at all. No migration was written: no deployment has a peer configured, which the operator confirmed and `backup-manager peers` agreed with.
+
+| Kind | What it is | Namespace here | Credential |
+|---|---|---|---|
+| **`pull`** | we pull a copy of **their** backups | `pull/<n>` | we hold a read-only login **on them** |
+| **`remote`** | **they** pull **ours** — where our off-site copies live | *none* — a read grant on data we already hold | we grant them read-only; we hold nothing on them |
+| **`receive`** | they push **theirs** into ours, having no PBS of their own | `receive/<n>` | we issue them write-no-delete; we own retention |
+
+- **`remote` is new.** The symmetric half of `pull` existed only as prose telling an operator to issue a token by hand (RESTORE.md §8.4). It is now `scripts/remote/{onboard,offboard}.sh` plus `peer add remote`.
+- **The `push` peer is retired**, scripts and lib with it. Sending this cluster's vzdump backups to a remote PBS is `placementState: external` + `pbsUrl` — a *placement*, not a peer — and keeping both mechanisms is why the word "external" meant two opposite things (a client pushing **into** us, and us consuming **someone else's** PBS). `pushTarget` was already deprecated as subsumed by exactly that; retiring the service follows the field.
+- **Files and namespaces follow the verbs**: `remote-<n>.json`/`remote/<n>` → `pull-<n>.json`/`pull/<n>`, `external-<n>.json`/`external/<n>` → `receive-<n>.json`/`receive/<n>`, freeing `remote-<n>.json` for its new meaning. `install.sh` creates the `pull` and `receive` parent namespaces; the old empty `remote`/`external` parents on an existing datastore are harmless and can be dropped by hand.
+- **`peer delete` requires the kind.** One name legitimately holds two relationships — a buddy is usually both a `pull` and a `remote` — so inferring it would eventually tear down the wrong half of a working pair. Omitting it now names what the peer actually is and suggests the right command.
+
+**The security shape of `remote`, which is the only operation that grants access to our own data.** It grants `DatastoreReader` — read-only, no write, no prune — and **non-propagating by default**. That default is load-bearing rather than tidy: PBS ACLs inherit into child namespaces, so a propagating grant on the root would hand a buddy `fs/tappaas-cicd` — this site's `config/` **and** `/etc/secrets` capture — plus every other peer's data, when the intent was "let them pull our VM backups". `pbs_acl_ensure` gained a propagate argument for it, onboarding warns when propagation is asked for explicitly, and the unit test asserts the default is off.
+
+Also removed from `backup-manage.sh`: the `add-remote`/`add-external`/`add-push` verbs, now that `backup-manager peer` is the operator surface and duplicating it in two CLIs is how the two drift apart.
+
+Suites: backup all-pass, backup-manager 26/0 with **143** TS asserts, module-manager 123/0, site-manager 13/0, backup-controller 18/0, tappaas-cicd 54/0. ADR §1.4 and §2.7C rewritten; changelog **v0.5**.
+
+### 2026-09-09 — `services/` tells the truth again, and peers get a manager (#608 follow-through)
+
+The question behind #608 turned out to be structural, not documentary: `services/remote|external|push` were never services. In this codebase `services/<name>/install-service.sh` means one specific thing — a provider coordinate `module-manager` invokes on a consuming module's behalf — and these three were invoked only by `backup-manage.sh`, on an operator's say-so. Nothing declared them, `provides` did not list them, and the dependency resolver never reached them. Documenting the disposition (last entry) explained the anomaly; it did not remove it.
+
+**Moved** to `backup/scripts/`, beside the module's other helper scripts, following the `tappaas-cicd/scripts/` convention:
+
+| Was | Now |
+|---|---|
+| `services/{remote,external,push}/install-service.sh` | `scripts/{remote,external,push}/onboard.sh` |
+| `…/delete-service.sh` | `…/offboard.sh` |
+| `…/update-service.sh` | `…/refresh.sh` (never invoked by anything, then or now) |
+| `backup/backup-manage.sh` | `scripts/backup-manage.sh` |
+| `backup/restore.sh` | `scripts/restore.sh` |
+
+`services/` now contains exactly `vm` and `filesystem` — a 1:1 map to `provides`, which is what the directory name has always claimed.
+
+**Peers became first-class manager CRUD.** New `src/peers.ts` owns the config; `backup-manager peer add pull|receive|push <name>` and `peer delete <name>` are the operator surface:
+
+- The **manager writes `config/<kind>-<n>.json`**, then runs the module's `scripts/<kind>/onboard.sh`, which prompts for the credential and does the live PBS work (namespace, user, ACL, sync-job, storage registration). That split is deliberate and matches `restore`: reimplementing those PBS calls in TypeScript would duplicate tested bash **and** route a credential through another process. The credential is still never written to any config (§2.5).
+- **`--config-only`** on both add and delete, for writing/removing the config when the far PBS is unreachable — and, on delete, for dropping a peer while deliberately leaving its PBS side alone.
+- Validation refuses what cannot work before a credential is typed: a pull/push peer with no `--host`, a push peer with no `--auth-id` (the login the *remote* issues by adding a receive peer for this site), an unknown kind, an unusable name, and an existing peer without `--force`.
+
+**A defect the tests caught in my own design.** The push peer's namespace lives on **their** datastore and is named after **us** — they created it by adding a receive peer for this site. My first implementation defaulted it to the *peer's* name, so `peer add push offsite` would have written into `external/offsite`, a namespace the remote never authorised. It now reads `site.json` `.name`, and the unit test asserts the namespace is named after this site rather than the peer.
+
+**Also:** `--host`/`--auth-id`/etc. are parsed through one flag table rather than another else-if arm each; `peer delete` offboards *before* removing the config, since the script reads that config to know what to tear down; and an offboard that fails leaves the config in place to retry rather than orphaning the PBS side.
+
+Docs, the ADR §2.7C table, `DEPENDENCIES.csv` and the generated service README all follow the new layout. Suites: backup all-pass, backup-manager 26/0 with **140** TS asserts (24 new, covering kind vocabulary, all three configs, the namespace rule, no-clobber, delete, and script resolution), module-manager 123/0, site-manager 13/0, backup-controller 18/0, tappaas-cicd 54/0.
+
 ### 2026-09-09 — RESTORE.md, second pass (operator review)
 
 - **§1 restructured.** Restoring *in place* (1.2a) now comes before restoring *beside* (1.2b), and the two are lettered rather than numbered — the sequence 1.1 → 1.4 is linear, and these are two ways to do one step, not two steps. Both now read "This will:" followed by what actually happens.

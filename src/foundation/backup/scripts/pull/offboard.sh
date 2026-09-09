@@ -26,7 +26,7 @@ PURGE="${2:-}"
 [[ -n "${NAME}" ]] || die "Usage: $0 <name> [--purge]"
 
 store="$(pbs_storage_name)"
-CFG="${CONFIG_DIR}/remote-${NAME}.json"
+CFG="${CONFIG_DIR}/pull-${NAME}.json"
 ns="$(jq -r '.namespace // empty' "${CFG}" 2>/dev/null || true)"
 [[ -n "${ns}" ]] || ns="remote/${NAME}"
 readauth="$(jq -r '.readAuthId // ""' "${CFG}" 2>/dev/null || true)"

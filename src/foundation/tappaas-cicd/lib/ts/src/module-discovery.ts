@@ -39,9 +39,10 @@ const NON_MODULE_BASENAMES = new Set<string>([
   "switch-configuration-desired",
 ]);
 
-// Prefixes of the off-site peer configs (ADR-012 §1.4): remote-<n> (pull),
-// external-<n> (receive), push-<n> (send). They are peers, not modules.
-const PEER_PREFIXES = ["remote-", "external-", "push-"];
+// Prefixes of the off-site peer configs (ADR-012 §1.4): pull-<n> (we pull
+// theirs), remote-<n> (they pull ours), receive-<n> (they push into ours).
+// They are peers, not modules.
+const PEER_PREFIXES = ["pull-", "remote-", "receive-"];
 
 /** True when a parsed config object is a deployed module. */
 export function isModuleConfig(raw: Record<string, unknown>): boolean {

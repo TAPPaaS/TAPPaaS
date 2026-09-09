@@ -25,7 +25,7 @@ PURGE="${2:-}"
 [[ -n "${NAME}" ]] || die "Usage: $0 <name> [--purge]"
 
 store="$(pbs_storage_name)"
-CFG="${CONFIG_DIR}/external-${NAME}.json"
+CFG="${CONFIG_DIR}/receive-${NAME}.json"
 ns="$(jq -r '.namespace // empty' "${CFG}" 2>/dev/null || true)"
 [[ -n "${ns}" ]] || ns="external/${NAME}"
 userid="${NAME}@pbs"

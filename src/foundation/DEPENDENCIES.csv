@@ -429,9 +429,7 @@ delete-service.sh,cluster/services/vm/,common-install-routines.sh; delete-module
 test-service.sh,cluster/services/vm/,common-install-routines.sh
 #
 # === backup ===
-backup-manage.sh,backup/,common-install-routines.sh; pbs-storage.sh; pbs-external.sh; pbs-placement.sh; pbs-client.sh; backup.json
 install.sh,backup/,common-install-routines.sh; pbs-job.sh; pbs-namespace.sh; pbs-placement.sh; pbs-client.sh; pbs-immutable.sh; dns-manager
-restore.sh,backup/,common-install-routines.sh; backup.json; site.json
 test-compromise-isolation.sh,backup/,
 test.sh,backup/,backup-controller
 update.sh,backup/,common-install-routines.sh; pbs-job.sh; pbs-placement.sh; pbs-client.sh; pbs-immutable.sh
@@ -444,7 +442,6 @@ pbs-immutable.sh,backup/lib/,backup.json
 pbs-job.sh,backup/lib/,backup.json
 pbs-namespace.sh,backup/lib/,
 pbs-placement.sh,backup/lib/,backup.json
-pbs-push.sh,backup/lib/,
 pbs-schedule.sh,backup/lib/,site.json; <module>.json
 pbs-storage.sh,backup/lib/,
 test-pbs-client.sh,backup/lib/,pbs-placement.sh; pbs-client.sh
@@ -456,13 +453,25 @@ test-pbs-membership.sh,backup/lib/,pbs-job.sh; backup.json
 test-pbs-migrate.sh,backup/lib/,pbs-placement.sh; backup.json
 test-pbs-namespace.sh,backup/lib/,pbs-namespace.sh
 test-pbs-placement.sh,backup/lib/,pbs-placement.sh; backup.json
-test-pbs-push.sh,backup/lib/,pbs-push.sh
 test-pbs-schedule.sh,backup/lib/,pbs-job.sh; site.json; pbs-schedule.sh
 #
-# === backup/services/external ===
-delete-service.sh,backup/services/external/,common-install-routines.sh; pbs-job.sh; pbs-namespace.sh
-install-service.sh,backup/services/external/,common-install-routines.sh; pbs-job.sh; pbs-namespace.sh
-update-service.sh,backup/services/external/,common-install-routines.sh; pbs-job.sh; pbs-namespace.sh
+# === backup/scripts ===
+backup-manage.sh,backup/scripts/,common-install-routines.sh; pbs-storage.sh; pbs-external.sh; pbs-placement.sh; pbs-client.sh; backup-manager; backup.json
+restore.sh,backup/scripts/,common-install-routines.sh; ha-vm-lib.sh; backup-manager; backup.json; site.json
+#
+# === backup/scripts/pull ===
+offboard.sh,backup/scripts/pull/,common-install-routines.sh; pbs-job.sh; pbs-namespace.sh
+onboard.sh,backup/scripts/pull/,common-install-routines.sh; pbs-job.sh; pbs-namespace.sh; backup-manager
+refresh.sh,backup/scripts/pull/,common-install-routines.sh; pbs-job.sh; pbs-namespace.sh
+#
+# === backup/scripts/receive ===
+offboard.sh,backup/scripts/receive/,common-install-routines.sh; pbs-job.sh; pbs-namespace.sh
+onboard.sh,backup/scripts/receive/,common-install-routines.sh; pbs-job.sh; pbs-namespace.sh; backup-manager
+refresh.sh,backup/scripts/receive/,common-install-routines.sh; pbs-job.sh; pbs-namespace.sh
+#
+# === backup/scripts/remote ===
+offboard.sh,backup/scripts/remote/,common-install-routines.sh; pbs-job.sh; pbs-namespace.sh
+onboard.sh,backup/scripts/remote/,common-install-routines.sh; pbs-job.sh; pbs-namespace.sh; backup-manager
 #
 # === backup/services/filesystem ===
 delete-service.sh,backup/services/filesystem/,common-install-routines.sh; pbs-job.sh; pbs-namespace.sh; pbs-fs.sh; backup.json; <module>.json
@@ -470,16 +479,6 @@ install-service.sh,backup/services/filesystem/,common-install-routines.sh; pbs-j
 tappaas-fs-backup.sh,backup/services/filesystem/,backup.json
 test-service.sh,backup/services/filesystem/,common-install-routines.sh; pbs-job.sh; pbs-namespace.sh; pbs-placement.sh; pbs-fs.sh; update-module.sh
 update-service.sh,backup/services/filesystem/,common-install-routines.sh; pbs-job.sh; pbs-namespace.sh; pbs-placement.sh; pbs-fs.sh; <module>.json
-#
-# === backup/services/push ===
-delete-service.sh,backup/services/push/,common-install-routines.sh; pbs-job.sh; pbs-storage.sh; pbs-push.sh; backup.json
-install-service.sh,backup/services/push/,common-install-routines.sh; pbs-job.sh; pbs-storage.sh; pbs-push.sh; backup.json
-update-service.sh,backup/services/push/,common-install-routines.sh; pbs-job.sh; pbs-storage.sh; pbs-push.sh; backup.json
-#
-# === backup/services/remote ===
-delete-service.sh,backup/services/remote/,common-install-routines.sh; pbs-job.sh; pbs-namespace.sh
-install-service.sh,backup/services/remote/,common-install-routines.sh; pbs-job.sh; pbs-namespace.sh
-update-service.sh,backup/services/remote/,common-install-routines.sh; pbs-job.sh; pbs-namespace.sh
 #
 # === backup/services/vm ===
 delete-service.sh,backup/services/vm/,common-install-routines.sh; pbs-job.sh; <module>.json

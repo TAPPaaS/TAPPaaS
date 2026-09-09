@@ -4,7 +4,7 @@
 #
 # Re-applies the buddy's namespace, sync-job schedule/remove-vanished and the
 # namespace-scoped prune-job from ${CONFIG_DIR}/remote-<name>.json. Does NOT
-# touch the stored remote credentials (re-run add-remote to rotate those).
+# touch the stored remote credentials (re-run `backup-manager peer add pull` to rotate those).
 # Idempotent.
 #
 # Usage: update-service.sh <name>
@@ -24,7 +24,7 @@ readonly SCRIPT_DIR
 NAME="${1:-}"
 [[ -n "${NAME}" ]] || die "Usage: $0 <name>"
 
-CFG="${CONFIG_DIR}/remote-${NAME}.json"
+CFG="${CONFIG_DIR}/pull-${NAME}.json"
 [[ -f "${CFG}" ]] || die "buddy config not found: ${CFG}"
 
 store="$(pbs_storage_name)"
@@ -41,7 +41,7 @@ if _pbs_syncjob_exists "sync-${NAME}"; then
     pbs_syncjob_ensure "sync-${NAME}" "${store}" "${ns}" "${NAME}" "" "" "${sched}" "${rv}"
     debug "  ${GN}✓${CL} sync-job sync-${NAME} schedule=${sched} remove-vanished=${rv}"
 else
-    warn "  sync-job sync-${NAME} missing — run 'backup-manage.sh add-remote ${NAME}' to (re)create it with credentials"
+    warn "  sync-job sync-${NAME} missing — run 'backup-manager peer add pull ${NAME}' to (re)create it with credentials"
 fi
 
 read -ra ret <<< "$(_pbs_retention_args "${retention}")"

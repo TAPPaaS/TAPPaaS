@@ -38,12 +38,7 @@ Commands:
 
 Multi-source datastore (issue #227):
   list-sources                List namespaces, buddies (remotes) and sync jobs
-  add-remote <name>           Onboard a TAPPaaS buddy (pull) from remote-<name>.json
-  remove-remote <name> [--purge]   Offboard a buddy (--purge also deletes its data)
-  add-external <name>         Onboard a third-party push client from external-<name>.json
-  remove-external <name> [--purge]  Offboard an external client (--purge deletes its data)
-  add-push <name> [--make-default]  Register an off-site push target WE push to (push-<name>.json)
-  remove-push <name>          Remove an off-site push target (local storage only; remote data untouched)
+  (peer relationships moved to the manager: backup-manager peer add|delete)
 
 Externally-managed PBS (ADR-012 §1.3, #456):
   use-external <url> [--datastore <ds>] [--namespace <ns>] [--fingerprint <fp>]
@@ -185,35 +180,11 @@ case "$COMMAND" in
     ssh root@${MGMT_NODE}.${ZONE}.internal "pvesm status" 2>/dev/null | awk 'NR==1 || $1 ~ /^offsite-/' || true
     ;;
 
-  add-remote)
-    [[ -n "${2:-}" ]] || die "Usage: $0 add-remote <name>"
-    "${SCRIPT_DIR}/services/remote/install-service.sh" "$2"
-    ;;
 
-  remove-remote)
-    [[ -n "${2:-}" ]] || die "Usage: $0 remove-remote <name> [--purge]"
-    "${SCRIPT_DIR}/services/remote/delete-service.sh" "$2" "${3:-}"
-    ;;
 
-  add-external)
-    [[ -n "${2:-}" ]] || die "Usage: $0 add-external <name>"
-    "${SCRIPT_DIR}/services/external/install-service.sh" "$2"
-    ;;
 
-  remove-external)
-    [[ -n "${2:-}" ]] || die "Usage: $0 remove-external <name> [--purge]"
-    "${SCRIPT_DIR}/services/external/delete-service.sh" "$2" "${3:-}"
-    ;;
 
-  add-push)
-    [[ -n "${2:-}" ]] || die "Usage: $0 add-push <name> [--make-default]"
-    "${SCRIPT_DIR}/services/push/install-service.sh" "$2" "${3:-}"
-    ;;
 
-  remove-push)
-    [[ -n "${2:-}" ]] || die "Usage: $0 remove-push <name>"
-    "${SCRIPT_DIR}/services/push/delete-service.sh" "$2"
-    ;;
 
   use-external)
     # Consume an externally-managed PBS (ADR-012 §1.3/§4.2, #456). Registers it
@@ -232,14 +203,14 @@ case "$COMMAND" in
       esac
     done
 
-    # shellcheck source=lib/pbs-storage.sh disable=SC1091
-    . "${SCRIPT_DIR}/lib/pbs-storage.sh"
-    # shellcheck source=lib/pbs-external.sh disable=SC1091
-    . "${SCRIPT_DIR}/lib/pbs-external.sh"
-    # shellcheck source=lib/pbs-placement.sh disable=SC1091
-    . "${SCRIPT_DIR}/lib/pbs-placement.sh"
-    # shellcheck source=lib/pbs-client.sh disable=SC1091
-    . "${SCRIPT_DIR}/lib/pbs-client.sh"
+    # shellcheck source=../lib/pbs-storage.sh disable=SC1091
+    . "${SCRIPT_DIR}/../lib/pbs-storage.sh"
+    # shellcheck source=../lib/pbs-external.sh disable=SC1091
+    . "${SCRIPT_DIR}/../lib/pbs-external.sh"
+    # shellcheck source=../lib/pbs-placement.sh disable=SC1091
+    . "${SCRIPT_DIR}/../lib/pbs-placement.sh"
+    # shellcheck source=../lib/pbs-client.sh disable=SC1091
+    . "${SCRIPT_DIR}/../lib/pbs-client.sh"
 
     STATE="$(pbs_placement_state)"
     pbs_external_allowed "${STATE}" || die \

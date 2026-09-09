@@ -1,0 +1,10 @@
+{
+    "_comment": "A REMOTE (ADR-012 §1.4): another PBS that PULLS our backups, so a copy of our data lives off-site with them. We grant them a read-only login and nothing more — they hold no write anywhere on our datastore, and we hold no credential on theirs. That asymmetry is what makes the off-site copy survive a compromise here. Created by: backup-manager peer add remote <name>. The login's password is prompted at onboarding and never stored.",
+    "name": "buddy",
+    "type": "remote",
+    "authId": "buddy@pbs",
+    "namespace": "",
+    "propagate": false,
+    "_namespace_note": "What they may read. Empty = the ROOT namespace, i.e. our VM backups. propagate:false keeps the grant off child namespaces — fs/ holds our config and secrets capture, and receive/ holds other peers' data.",
+    "_fingerprint_note": "They will need our PBS TLS fingerprint and hostname to configure their pull. Onboarding prints both."
+}

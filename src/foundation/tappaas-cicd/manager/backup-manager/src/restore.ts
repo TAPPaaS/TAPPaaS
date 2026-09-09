@@ -3,7 +3,7 @@
 // A recovery action, NOT CRUD — stays a distinct verb per ADR-007 verb-alignment
 // (#3, Table "backup restore stays special"). Thin operator-facing wrapper:
 // resolves a module → vmid from the deployed config and forwards to the tested
-// foundation restore script (src/foundation/backup/restore.sh); snapshot LISTING
+// foundation restore script (src/foundation/backup/scripts/restore.sh); snapshot LISTING
 // is delegated to backup-controller via the injected Client.
 //
 // Live PBS access is required for an actual restore; offline this prints what it
@@ -29,7 +29,7 @@ import { Client } from "./types";
 //
 // The walk alone used to be the whole implementation, and it is wrong for the
 // INSTALLED binary: from /nix/store/<hash>-backup-manager/lib/... seven levels
-// up is `/`, so it resolved to "/backup/restore.sh", reported "foundation
+// up is `/`, so it resolved to "/backup/scripts/restore.sh", reported "foundation
 // restore.sh not found" and exited 0 — `restore` looked like it worked and
 // restored nothing.
 function restoreScriptPath(configDir?: string): string {
@@ -38,18 +38,37 @@ function restoreScriptPath(configDir?: string): string {
   const dir = configDir ?? defaultConfigDir();
   const location = asString(readJsonObject(join(dir, "backup.json"))?.location);
   if (location) {
-    const fromConfig = join(location, "restore.sh");
-    if (existsSync(fromConfig)) return fromConfig;
+    // scripts/ since the helper-script move; the flat path is the pre-move
+    // layout, kept so an older deployed config still resolves.
+    for (const rel of ["scripts/restore.sh", "restore.sh"]) {
+      const fromConfig = join(location, rel);
+      if (existsSync(fromConfig)) return fromConfig;
+    }
   }
 
-  const walked = join(__dirname, "..", "..", "..", "..", "..", "..", "..", "backup", "restore.sh");
+  const walked = join(__dirname, "..", "..", "..", "..", "..", "..", "..",
+                      "backup", "scripts", "restore.sh");
   if (existsSync(walked)) return walked;
 
-  return "/home/tappaas/TAPPaaS/src/foundation/backup/restore.sh";
+  return "/home/tappaas/TAPPaaS/src/foundation/backup/scripts/restore.sh";
 }
 
 function asString(v: unknown): string | null {
   return typeof v === "string" && v !== "" ? v : null;
+}
+
+/**
+ * The backup module's own directory, from its deployed config's `.location`.
+ * Peer onboarding scripts live under `<moduleDir>/scripts/<kind>/`, so this is
+ * the same lookup restoreScriptPath does — one place that knows where the
+ * module is, rather than each caller walking up from __dirname and getting it
+ * wrong once installed.
+ */
+export function moduleScriptDir(configDir?: string): string {
+  const dir = configDir ?? defaultConfigDir();
+  const location = asString(readJsonObject(join(dir, "backup.json"))?.location);
+  if (location) return location;
+  return "/home/tappaas/TAPPaaS/src/foundation/backup";
 }
 
 function spawnInherit(bin: string, args: string[]): number {

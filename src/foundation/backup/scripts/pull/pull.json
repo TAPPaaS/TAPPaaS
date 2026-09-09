@@ -1,5 +1,5 @@
 {
-    "_comment": "Class A buddy (issue #227): another TAPPaaS PBS this server PULLS from. Copy to /home/tappaas/config/remote-<name>.json, edit, then: backup-manage.sh add-remote <name>. API credentials are NOT stored here — they are prompted at onboarding.",
+    "_comment": "A PULL peer (ADR-012 §1.4): another PBS whose backups we pull a copy of, into pull/<name> on our datastore. We hold a read-only login on THEM; our own prune owns the copy, so they cannot delete what we keep. Created by: backup-manager peer add pull <name>. Credentials are prompted at onboarding and never stored here.",
     "name": "lars",
     "type": "tappaas",
     "remoteHost": "backup.example.internal",

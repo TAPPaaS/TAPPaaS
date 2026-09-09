@@ -143,7 +143,7 @@ Resolved backup placement (ADR-012 §2.1) and the single source of truth for whe
 
 ### `pushTarget`
 
-DEPRECATED (ADR-012 v0.3) — subsumed by placementState:'external' + pbsUrl, which name the external PBS clients push to directly. Read for one release (update.sh seeds pbsUrl from this target's remoteHost when migrating a legacy remote-only install), then removed. Backup module, remote-only placement only (ADR-012 P4). Name of the default off-site push target — a config/push-<name>.json describing a REMOTE PBS this cluster pushes its VM backups to when there is no local PBS. Empty/absent means no default; onboard with `backup-manage.sh add-push <name> --make-default`.
+DEPRECATED (ADR-012 v0.3) — subsumed by placementState:'external' + pbsUrl, which name the external PBS clients push to directly. Read for one release (update.sh seeds pbsUrl from this target's remoteHost when migrating a legacy remote-only install), then removed. Backup module, remote-only placement only (ADR-012 P4). Name of the default off-site push target — a config/push-<name>.json describing a REMOTE PBS this cluster pushes its VM backups to when there is no local PBS. Empty/absent means no default; onboard with `backup-manager peer add push <name> …`.
 
 | Attribute | Value |
 |---|---|

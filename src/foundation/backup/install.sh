@@ -120,7 +120,7 @@ case "${MODE}" in
     # (#456); it needs the remote credential, which is prompt-not-store and so
     # an operator step — never an unattended hang here.
     warn "  Register the consumed PBS as Proxmox storage (prompts for its credential):"
-    warn "    backup-manage.sh use-external ${PBS_URL}"
+    warn "    scripts/backup-manage.sh use-external ${PBS_URL}"
     info "${GN}TAPPaaS backup external placement recorded.${CL}"
     exit 0
     ;;
@@ -316,14 +316,16 @@ EOF
 # verify new backups, so silent bit-rot is caught early (issue #228).
 pbs_ensure_verify
 
-# Create the top-level namespaces that isolate other backup sources from the
-# local VM backups (which stay in the root namespace): remote/<buddy> for
-# TAPPaaS buddies (pull) and external/<client> for third parties (push).
-# Per-source child namespaces are created on demand by backup-manage.sh
-# add-remote / add-external (issue #227).
+# Top-level namespaces that isolate other sources from our own VM backups (which
+# stay in the root namespace): pull/<peer> for a PBS we pull a copy of, and
+# receive/<peer> for a system that pushes its backups into ours. Per-peer
+# children are created on demand by `backup-manager peer add` (issue #227).
+#
+# `remote` peers (a PBS that pulls OURS) create no namespace here — that
+# relationship is a read grant on data we already hold.
 info "${BOLD}Ensuring multi-source backup namespaces (issue #227)${CL}"
-pbs_ns_ensure remote
-pbs_ns_ensure external
+pbs_ns_ensure pull
+pbs_ns_ensure receive
 
 # Optional WORM-ish immutability: opt-in ZFS snapshots of the datastore
 # (ADR-012 §3.5 / #389). No-op unless backup.json .immutableSnapshots.enabled.

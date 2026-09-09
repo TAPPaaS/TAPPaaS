@@ -1,0 +1,12 @@
+{
+    "_comment": "A RECEIVE peer (ADR-012 §1.4): a system with no PBS of its own — another TAPPaaS configured with an external PBS pointing at us, or a device (Synology, TrueNAS, laptop) — that PUSHES its backups into receive/<name> on our datastore. It authenticates as <name>@pbs with the DatastoreBackup role on that namespace only (write, no delete); we own the retention. Its client-side encryption is its own business — we hold ciphertext. Created by: backup-manager peer add receive <name>.",
+    "name": "synology",
+    "type": "external",
+    "namespace": "receive/synology",
+    "encryptionRequired": true,
+    "retention": {
+        "keepDaily": 7,
+        "keepWeekly": 4,
+        "keepMonthly": 3
+    }
+}

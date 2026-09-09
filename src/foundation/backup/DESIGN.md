@@ -184,21 +184,33 @@ chunk store before the ZFS datastore mounts; `update.sh` re-creates them if miss
 
 The single datastore is partitioned so it can safely hold more than local VM backups:
 
-    <datastore>/                 root      local TAPPaaS VM backups
+    <datastore>/                 root      our own VM backups
     <datastore>/fs/<module>      —         a module's file-level capture (§File-level backup)
-    <datastore>/remote/<name>    Class A   a TAPPaaS buddy's PBS, PULLED here
-    <datastore>/external/<name>  Class B   a third-party client, PUSHED here
+    <datastore>/pull/<name>      Class A   a copy of another PBS, PULLED here by us
+    <datastore>/receive/<name>   Class B   a system with no PBS, PUSHING its backups here
+
+A fourth relationship creates no namespace of ours: a **remote** is another PBS
+that pulls OUR backups, so the copy lives on THEIR datastore. All we hold is the
+read-only grant we issued them.
 
 - **Class A (pull):** `--remove-vanished false` so a source compromise can't erase our
   copy; encryption preserved end-to-end; admin-owned sync + prune.
-- **Class B (push):** the client authenticates as `<name>@pbs` with the
+- **Class B (receive):** the client authenticates as `<name>@pbs` with the
   **DatastoreBackup** role on its namespace only (write, no delete); an admin prune-job
   controls retention; the client encrypts with its **own** key — the operator cannot
   read the data.
+- **remote (they pull us):** a **DatastoreReader** grant, **non-propagating** by
+  default. That default is load-bearing: PBS ACLs inherit, so a propagating grant on
+  the root namespace would hand the peer `fs/` — our config and `/etc/secrets`
+  capture — and every other peer's data along with our VM backups.
 
-Parent namespaces are created at install; per-source children on demand by
-`backup-manage.sh add-remote / add-external` (config from `services/remote/remote.json`
-/ `services/external/external.json` copied to `~/config/`). Operations detail in
+Parent namespaces are created at install; per-source children on demand when a
+peer is onboarded. **The manager owns the peer config, the module's scripts own
+the PBS work**: `backup-manager peer add` writes `config/<kind>-<n>.json` and
+then runs `scripts/<kind>/onboard.sh`, which prompts for the credential and
+makes the namespace/user/ACL/sync-job. Reimplementing those PBS calls in the
+manager would duplicate tested bash and put a credential through another
+process. Operations detail in
 [README.md](./README.md).
 
 ## Off-site symmetry, subset, immutability (ADR-012)
@@ -208,19 +220,25 @@ sender**:
 
 | Role | Command | Namespace | Direction |
 |------|---------|-----------|-----------|
-| pull (Class A) | `backup-manage.sh add-remote <n>` | `remote/<n>` | this PBS pulls a buddy |
-| receive (Class B) | `backup-manage.sh add-external <n>` | `external/<n>` | a client pushes in |
-| send (P4) | `backup-manage.sh add-push <n> [--make-default]` | remote's `external/<us>` | we push out (a site with no local PBS) |
+| pull (Class A) | `backup-manager peer add pull <n>` | `pull/<n>` here | we pull a copy of theirs |
+| remote | `backup-manager peer add remote <n>` | none here — it is on theirs | they pull ours |
+| receive (Class B) | `backup-manager peer add receive <n>` | `receive/<n>` here | they push theirs in |
 
-`add-push` registers the remote PBS as Proxmox storage `offsite-<n>`; `--make-default`
-routes the managed job there. We hold **write-no-delete** and the **remote owns
-prune/retention/immutability** — a local compromise cannot erase the off-site copy
-(compromise-isolation suite in [TEST.md](./TEST.md)).
+We never push to another PBS. A site with no local datastore points its own
+clients at an external PBS via **placement** (`placementState: external` +
+`pbsUrl`), which is not a peer relationship — and between two PBS instances,
+every copy is a pull.
 
-- **Subset (pull):** `.groupFilter` in `remote-<n>.json` (string or array, e.g.
+The off-site copy of our own data is a **remote** peer: they pull, we grant
+read-only. We hold no credential on them, so a compromise here cannot erase what
+they keep — and there is no push credential to get wrong, because there is no
+push (compromise-isolation suite in [TEST.md](./TEST.md)).
+
+- **Subset (pull):** `.groupFilter` in `pull-<n>.json` (string or array, e.g.
   `"type:vm"` or `["group:vm/101","group:vm/102"]`) replicates only part of the source.
-- **Independent retention:** each `remote-`/`external-<n>.json` carries its own
-  `retention` → a namespace-scoped, destination-owned prune-job.
+- **Independent retention:** each `pull-`/`receive-<n>.json` carries its own
+  `retention` → a namespace-scoped, destination-owned prune-job. A `remote` peer
+  carries none: that copy lives on their datastore under their policy.
 - **Immutability (opt-in WORM):** `backup.json .immutableSnapshots` takes read-only ZFS
   snapshots of the datastore that no sync/push credential or PBS prune/GC can rewrite
   (only node-local root can):
@@ -237,5 +255,5 @@ prune/retention/immutability** — a local compromise cannot erase the off-site 
 The `tappaas@pbs` password resolution order (so installs can run unattended):
 `$TAPPAAS_PBS_PASSWORD` → interactive prompt (TTY) → generated from `/dev/urandom` and
 saved to `~/.pbs-credentials.txt` (mode 600). An empty/short password is rejected
-(PBS requires ≥8 chars). Off-site credentials are prompt-not-store: `add-remote` /
-`add-external` / `add-push` prompt at onboarding and never persist the secret in config.
+(PBS requires ≥8 chars). Peer credentials are prompt-not-store: `backup-manager peer
+add` prompts at onboarding and never persists the secret in the config it wrote.

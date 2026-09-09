@@ -17,9 +17,9 @@ with retention, restore tooling and off-site options.
 | PBS web GUI | `mgmt` zone | `https://backup.mgmt.internal:8007` (root@pam, or tappaas@pbs for backup ops) |
 | VM restore, incl. to another node/storage, or **alongside the original** for a rehearsal | tappaas-cicd | `restore.sh --vmid <id> [--node <n>] [--storage <s>] [--target-vmid <new>]` |
 | Manual/ad-hoc backups and job management | tappaas-cicd | `backup-manage.sh status \| run-now <vmid> \| run-now-all \| list-jobs \| verify <id>` |
-| Multi-source vault: pull a buddy's PBS (`remote/<name>`) or receive third-party pushes (`external/<name>`) in isolated namespaces | tappaas-cicd | `backup-manage.sh add-remote / add-external` |
+| Multi-source vault: pull a buddy's PBS (`pull/<name>`) or receive a push from a system with no PBS (`receive/<name>`), in isolated namespaces | tappaas-cicd | `backup-manager peer add pull \| receive` |
 | Placement that fits the site: PBS on a node, a datastore-less **shim** that still satisfies `dependsOn: backup`, or an **externally-managed PBS consumed by URL** (#456) | tappaas-cicd | install-resolved `placementState`; `backup-manage.sh use-external <url>` |
-| Off-site push for storage-less sites | tappaas-cicd | `backup-manage.sh add-push <n>`, or `placementState: external` + `pbsUrl` (ADR-012 §1.4) |
+| Off-site copies of our own data | tappaas-cicd | `backup-manager peer add remote <n>` — they pull from us; we never push to another PBS (ADR-012 §1.4.1) |
 | **Encryption-key escrow + the mandatory out-of-band copy** | tappaas-cicd | `backup-manager key list \| export <dest> \| import <src>` (ADR-012 §2.5.1) |
 | Opt-in WORM-ish immutability (read-only ZFS snapshots of the datastore) | tappaas-cicd | `backup.json .immutableSnapshots` (ADR-012 §3.5) |
 
@@ -47,15 +47,15 @@ flowchart TB
     end
 
     subgraph Peers["off-site peers — runtime relationships, not capabilities"]
-        Pull(["pull a buddy&#39;s PBS — remote/&lt;n&gt;"])
-        Receive(["receive a third party&#39;s push — external/&lt;n&gt;"])
-        Send(["push out to a remote PBS — offsite-&lt;n&gt;"])
+        Pull(["pull — we copy THEIR backups into pull/&lt;n&gt;"])
+        Remote(["remote — THEY pull ours; our off-site copy lives with them"])
+        Receive(["receive — they push THEIRS into receive/&lt;n&gt;"])
     end
 
     BackupCap -.->|realized by| PBS
     PBS --- Pull
+    PBS --- Remote
     PBS --- Receive
-    PBS --- Send
 ```
 
 The Backup capability is realized by Proxmox Backup Server installed **natively on a
@@ -107,15 +107,44 @@ Both resolve retention and schedule through the Site → Environment → Module
 cascade, and both are `in-place`: a change governs *future* backups and never
 disturbs a running guest.
 
-### Off-site peers are not capabilities
+### Off-site peers are relationships, not capabilities
 
-`services/remote/`, `services/external/` and `services/push/` implement the
-multi-source vault — pulling a buddy's PBS into `remote/<n>`, receiving a third
-party's push into `external/<n>`, sending our own out to `offsite-<n>`. They are
-**runtime relationships an operator registers**, not services a module can
-depend on: nothing ever declared `dependsOn: backup:remote`, and `backup.json`
-does not list them in `provides`. Onboard them with `backup-manage.sh
-add-remote | add-external | add-push` — see Day-to-day operations below.
+A peer is a relationship between **this site's PBS and someone else's**, set up
+once by an operator. It is not something a module can depend on, which is why
+`services/` no longer contains them: `services/` holds the two real capabilities
+(`vm`, `filesystem`) that `provides` lists and that module-manager invokes on a
+consuming module's behalf. The peer machinery lives in
+[`scripts/`](./scripts/) alongside the module's other helper scripts.
+
+| Kind | What it is | Namespace | Who holds which credential |
+|---|---|---|---|
+| **pull** | we pull a copy of **their** backups | `pull/<n>` on ours | we hold a **read-only** login on theirs |
+| **remote** | **they** pull **ours** — where our off-site copies live | none (a read grant on data we already hold) | we grant them a **read-only** login; we hold nothing on them |
+| **receive** | they **push** theirs into ours, having no PBS of their own | `receive/<n>` on ours | we **issue** them a write-no-delete login; we own the retention |
+
+`pull` and `remote` are the same movement from opposite ends: to keep a copy of
+our data with a buddy, we add **remote** and they add **pull**.
+
+There is deliberately **no verb for sending our backups to another PBS**. A site
+with no local datastore configures that as *placement* — `placementState:
+external` + `pbsUrl` — and a TAPPaaS PBS never pushes to another PBS at all:
+every inter-PBS copy is a pull, which is what makes the compromise isolation
+structural rather than a matter of credential hygiene (§1.4.1).
+
+```bash
+backup-manager peer add pull    <name> --host <their-pbs> [--group-filter type:vm]
+backup-manager peer add remote  <name> --auth-id <them>@pbs [--namespace NS]
+backup-manager peer add receive <name>
+backup-manager peer delete pull|remote|receive <name> [--purge]
+backup-manager peers                      # what exists today
+```
+
+`peer delete` takes the kind because one name can hold two relationships at
+once — a buddy is usually both a `pull` and a `remote`.
+
+`peer add` writes the config and then onboards it, prompting for the credential
+— which is **never** written to the config (§2.5). `--config-only` writes the
+config and stops, for when the far PBS is not reachable yet.
 
 ## Day-to-day operations
 
@@ -127,17 +156,16 @@ backup-manager validate              # the site → environment → module hiera
 backup-manager placement             # where PBS lives; peers with `backup-manager peers`
 
 # The datastore
-./backup-manage.sh status            # PBS overview      list-jobs   the scheduled jobs
-./backup-manage.sh run-now <vmid>    # back up one guest now (run-now-all for everything)
-./backup-manage.sh prune             # apply retention    gc          reclaim chunks
-./backup-manage.sh verify <id>       # integrity-check one backup
-./backup-manage.sh list-sources      # namespaces, buddies, push targets
+scripts/backup-manage.sh status            # PBS overview   list-jobs  the scheduled jobs
+scripts/backup-manage.sh run-now <vmid>    # back up one guest now (run-now-all for all)
+scripts/backup-manage.sh prune             # apply retention  gc       reclaim chunks
+scripts/backup-manage.sh verify <id>       # integrity-check one backup
+scripts/backup-manage.sh list-sources      # namespaces and sync jobs on the PBS
 
 # Off-site peers (prompt for their credential; never stored in config)
-./backup-manage.sh add-remote <n>    # pull a buddy's PBS into remote/<n>
-./backup-manage.sh add-external <n>  # receive a third party's push into external/<n>
-./backup-manage.sh add-push <n>      # push ours out to offsite-<n>
-./backup-manage.sh use-external <url># consume a PBS this site did not provision (#456)
+backup-manager peer add pull|remote|receive <name> …  # see "Off-site peers" above
+backup-manager peer delete pull|remote|receive <name> [--purge]
+scripts/backup-manage.sh use-external <url>          # consume a PBS this site did not provision (#456)
 
 # Keys — the out-of-band copy is mandatory (ADR-012 §2.5.1)
 backup-manager key list | key export <dest> | key import <src>

@@ -61,8 +61,8 @@ None for a normal local install. Optional follow-ups:
   this module's backup storage, creates no datastore and never touches what is
   already stored there. **Permanent** — it is refused from a live local PBS.
 - **Sites with no local PBS:** either the `external` route above (clients push
-  straight to that PBS), or a push target: `backup-manage.sh add-push <name>
-  --make-default`.
+  straight to that PBS), or a push target:
+  `backup-manager peer add push <name> --host <their-pbs> --auth-id <us>@pbs --make-default`.
 - **File-level capture** for a module that wants named paths rather than the whole
   guest: declare `backup:filesystem` + `backup.filesystemPaths` on it (NixOS guests).
 - **Export the encryption key** — mandatory, and easy to postpone until it is too

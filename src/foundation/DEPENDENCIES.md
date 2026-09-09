@@ -74,7 +74,7 @@ A "direct dependency" is one of:
 | `network/services/discovery/` | 4 |
 | `network/test-fixtures/` | 6 |
 | `cluster/` (+ `lib/`, `services/*`) | 27 |
-| `backup/` (+ `lib/`, `services/*`) | 45 |
+| `backup/` (+ `lib/`, `scripts/*`, `services/*`) | 42 |
 | `identity/` (+ `lib/`, `services/*`) | 10 |
 | `logging/` | 3 |
 | `templates/` (+ `services/*`, `winserver/`) | 11 |

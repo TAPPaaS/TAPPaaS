@@ -200,8 +200,20 @@ pbs_prunejob_delete() {
 }
 
 # ACL helpers (idempotent — acl update is set-semantics).
-pbs_acl_ensure() {  # path role auth-id
-    _pbs_node_run proxmox-backup-manager acl update "$1" "$2" --auth-id "$3"
+# path role auth-id [propagate]
+#
+# propagate defaults to PBS's own default (true) — an ACL on a namespace covers
+# its children. Pass "false" when the grant must NOT reach child namespaces: a
+# read grant on the ROOT namespace propagates into fs/ (our config and secrets
+# capture) and into every other peer's namespace, which is not what "let this
+# buddy pull our VM backups" is supposed to mean.
+pbs_acl_ensure() {
+    local propagate="${4:-}"
+    if [[ -n "${propagate}" ]]; then
+        _pbs_node_run proxmox-backup-manager acl update "$1" "$2" --auth-id "$3" --propagate "${propagate}"
+    else
+        _pbs_node_run proxmox-backup-manager acl update "$1" "$2" --auth-id "$3"
+    fi
 }
 pbs_acl_delete() {  # path role auth-id
     _pbs_node_run proxmox-backup-manager acl update "$1" "$2" --auth-id "$3" --delete 2>/dev/null || true

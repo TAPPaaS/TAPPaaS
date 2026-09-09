@@ -23,7 +23,7 @@ readonly SCRIPT_DIR
 NAME="${1:-}"
 [[ -n "${NAME}" ]] || die "Usage: $0 <name>"
 
-CFG="${CONFIG_DIR}/external-${NAME}.json"
+CFG="${CONFIG_DIR}/receive-${NAME}.json"
 [[ -f "${CFG}" ]] || die "external client config not found: ${CFG}"
 
 store="$(pbs_storage_name)"
@@ -39,7 +39,7 @@ if _pbs_user_exists "${userid}"; then
     pbs_acl_ensure "$(_pbs_ns_acl_path "${store}" "${ns}")" DatastoreBackup "${userid}"
     debug "  ${GN}✓${CL} ACL re-applied for ${userid}"
 else
-    warn "  user ${userid} missing — run 'backup-manage.sh add-external ${NAME}' to (re)create it"
+    warn "  user ${userid} missing — run 'backup-manager peer add receive ${NAME}' to (re)create it"
 fi
 
 read -ra ret <<< "$(_pbs_retention_args "${retention}")"

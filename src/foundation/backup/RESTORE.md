@@ -560,8 +560,8 @@ then pull the buddy in as a source and sync in the reverse direction:
 
 ```bash
 # On the rebuilt system: register the buddy as a pull source.
-./backup-manage.sh add-remote buddy        # prompts for the read-only auth-id they issued
-./backup-manage.sh list-sources            # confirm the remote and its namespace
+backup-manager peer add pull buddy        # prompts for the read-only auth-id they issued
+backup-manager peers                                    # confirm it and its namespace
 
 # Sync their copy of your data into the local datastore, then verify it.
 ssh root@<pbs-node> proxmox-backup-manager sync-job run <job>
@@ -578,7 +578,7 @@ You do not have to rebuild a datastore first. Point the site at the buddy's PBS
 as an **external** target and restore straight from it:
 
 ```bash
-./backup-manage.sh use-external <buddy-pbs-url> --datastore <their-datastore>
+scripts/backup-manage.sh use-external <buddy-pbs-url> --datastore <their-datastore>
 ```
 
 This registers their PBS as Proxmox storage, so `qmrestore` and
@@ -590,11 +590,19 @@ the argument for rebuilding a local datastore first if the hardware exists.
 
 ### 8.4 Being the buddy
 
-Symmetrically, if you are the one holding a peer's copy: they will ask for a
-read-only auth-id on their namespace. Issue it scoped to that namespace only
-(`DatastoreReader` on `/datastore/<store>/remote/<their-site>`), and remove it
-when the recovery is done. Nothing else you hold is useful to them — the data is
-encrypted with their key, not yours.
+Symmetrically, if you are the one holding a peer's copy, they need read-only
+access to pull it back. That is a **remote** peer, and it is a one-liner:
+
+```bash
+backup-manager peer add remote their-site --auth-id theirsite@pbs
+#   … recovery happens …
+backup-manager peer delete remote their-site --purge   # revoke, and drop the login
+```
+
+It grants `DatastoreReader` and nothing else, **non-propagating** by default, so
+the grant covers the namespace you name and not its children. Nothing else you
+hold is useful to them anyway — the data is encrypted with their key, not
+yours.
 
 ---
 
@@ -605,11 +613,11 @@ external PBS to a local one — the old snapshots must not be discarded. Seed th
 new datastore by **pulling** from the old one rather than starting empty:
 
 ```bash
-./backup-manage.sh add-remote old-pbs     # register the OLD PBS as a pull source
+backup-manager peer add pull old-pbs      # register the OLD PBS as a pull source
 #   … let the sync job run, then verify the snapshots arrived …
-./backup-manage.sh use-external <new-url> # or re-run the install to resolve node:<new>
+scripts/backup-manage.sh use-external <new-url> # or re-run the install to resolve node:<new>
 #   … restore something from the NEW target and confirm it works …
-./backup-manage.sh remove-remote old-pbs  # only now decommission the old datastore
+backup-manager peer delete old-pbs  # only now decommission the old datastore
 ```
 
 This is plain pull replication (ADR-012 §4.3) — there is no special migration

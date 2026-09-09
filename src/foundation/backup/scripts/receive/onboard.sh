@@ -10,7 +10,7 @@
 # Datastore-wide verify-new (issue #228) flags encryption-key swaps. Client-side
 # encryption is the client's responsibility (the operator cannot read the data).
 #
-# Invoked by `backup-manage.sh add-external <name>`. Reads the client config
+# Invoked by `backup-manager peer add receive <name>`. Reads the client config
 # from ${CONFIG_DIR}/external-<name>.json.
 #
 # Usage: install-service.sh <name>
@@ -30,8 +30,8 @@ readonly SCRIPT_DIR
 NAME="${1:-}"
 [[ -n "${NAME}" ]] || die "Usage: $0 <name>"
 
-CFG="${CONFIG_DIR}/external-${NAME}.json"
-[[ -f "${CFG}" ]] || die "external client config not found: ${CFG} (copy services/external/external.json there and edit)"
+CFG="${CONFIG_DIR}/receive-${NAME}.json"
+[[ -f "${CFG}" ]] || die "external client config not found: ${CFG} (backup-manager peer add receive <name> and edit)"
 
 store="$(pbs_storage_name)"
 ns="$(jq -r '.namespace // empty' "${CFG}")"
