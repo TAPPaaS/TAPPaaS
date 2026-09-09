@@ -154,9 +154,6 @@ run_quiet ssh root@${NODE}.$ZONE.internal bash -c "'
 # so they don't open the chunk store before ZFS is up on boot (issue #230).
 pbs_ensure_zfs_ordering
 
-# Create a backup directory on the storage tank
-sudo mkdir -p /${STORAGE}/tappaas_backups
-
 # Install proxmox-backup-client on ALL current Proxmox VE nodes (ADR-012 P3,
 # #382). Idempotent reconcile keyed on live cluster membership — the same
 # routine update.sh runs, so a node added later gets its client on update.
