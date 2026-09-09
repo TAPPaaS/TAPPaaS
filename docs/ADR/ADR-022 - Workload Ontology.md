@@ -1,0 +1,126 @@
+# ADR-022 — Workload Ontology (Overview)
+
+| | |
+|---|---|
+| **Status** | **Draft — for review** |
+| **Version** | 0.1 |
+| **Date** | 2026-09-09 |
+| **Author** | ErikDaniel007 |
+| **Deciders** | @ErikDaniel007, @LarsRossen (co-owned canon) |
+| **Related** | [ADR-007](<ADR-007 - TAPPaaS Taxonomy.md>) (classification, amended here); [ADR-007d](<ADR-007d - Site.md>) (Site, amended here); [ADR-009](<ADR-009 - Composition Meta-Model.md>) (`Node`, superseded in part here); [ADR-014](<ADR-014 - Zone and Environment Lifecycle.md>) (zones — owner, not amended); [ADR-023](<ADR-023 - Workload Classification.md>) (classification built on this vocabulary); [ADR-012](ADR-012-backup-enhancement.md) (first consumer); [GLOSSARY.md](../../GLOSSARY.md) (the vocabulary SSOT this ADR updates) |
+| **Changelog** | v0.1 — initial draft. Splits `Site` into three independent aspects, corrects `Node` to its ArchiMate meaning, adds `Location` and `Administrative Domain`, anchors `zone` to IEC 62443, and scopes the plane vocabulary to the network module. |
+
+One noun — `Site` — has been carrying three independent questions: **who runs it**, **where it physically is**, and **what it runs on**. Separating them is the whole of this ADR.
+
+---
+
+## TL;DR
+
+- A **Site** is one TAPPaaS installation. It is **exactly one Administrative Domain**, occupies **one or more Locations**, and contains **one or more Zones**. These three vary independently.
+- **`Node`** returns to its ArchiMate meaning — any computational or physical resource that hosts others. A cluster member, a bare-metal box and a VM are all Nodes. What the glossary called "Node" becomes **cluster member**.
+- **`Location`** is added, with the granularity the industry already uses: postal address → rack placement → part location.
+- **`Administrative Domain`** is added (RFC 4375). It is the aspect classification uses.
+- **`zone`** is anchored to IEC 62443 and stays owned by ADR-014. Not re-decided here.
+- Plane vocabulary (control / forwarding) is **scoped to the `network` module**, never to workloads.
+
+## Why this is decomposed
+
+Each of the three aspects has its own normative source, its own schema surface and its own migration. Carrying them in one document would repeat the mistake this ADR corrects. One rib per aspect:
+
+| Rib | Decides |
+|---|---|
+| [ADR-022a — Administrative Domain](<ADR-022a - Administrative Domain.md>) | Who is accountable for a resource, and what trust follows from that |
+| [ADR-022b — Location](<ADR-022b - Location.md>) | Where a resource physically is, at three granularities |
+| [ADR-022c — Node and Host](<ADR-022c - Node and Host.md>) | What a resource runs on, and what `kind` records |
+
+## The model — top view
+
+```
+Site  =  one Administrative Domain            (who runs it)      -> 022a
+      x  one or more Locations                (where it is)      -> 022b
+      x  one or more Zones                    (network position) -> ADR-014
+         each workload runs on a Node          (what it runs on)  -> 022c
+```
+
+The three are orthogonal. Two live cases prove it, and they point in opposite directions:
+
+| Case | Location | Zone | Administrative Domain |
+|---|---|---|---|
+| `tappaas1` | this rack | `mgmt` | this Site |
+| ADR-010 satellite | **a cloud datacenter** | `edge` | this Site |
+| Pre-existing local PBS (#456) | this rack | *(unmanaged)* | **not this Site** |
+| A buddy TAPPaaS | elsewhere | *(none of ours)* | **another Site** |
+
+A two-column model cannot express those four rows. That is the defect.
+
+## Delegated, not decided here
+
+- **Zones** — ADR-014 owns zone lifecycle, the trust lattice and enforcement. This ADR only records the definition zones already satisfy (IEC 62443) so other documents stop re-deriving it.
+- **Workload classification** — [ADR-023](<ADR-023 - Workload Classification.md>) decides how workloads are sorted by Administrative Domain, what `kind`'s values are, and where the inventory lives. This ADR supplies the vocabulary it uses.
+- **Backup placement** — ADR-012 is the first consumer. It states *where PBS runs*; it does not define the words.
+
+## Context
+
+Five collisions, all live on `main`:
+
+1. **`external` means five things** — a placement state that consumes a PBS by URL (ADR-012 §1.3); "not managed by this Site" (ADR-012 Appendix A); `kind: external-host`, whose two schema definitions **contradict each other** — `module-fields.json` says *"a non-module cluster guest"*, `satellite-fields.json` says *"an EXTERNAL host, NOT a Proxmox cluster:vm"*; a CLI flag in `identity/update.sh`; and *"semi-trusted external relay"* in the `edge` zone comment.
+2. **`Node` contradicts the standard it cites.** `GLOSSARY.md` §B declares itself ArchiMate-based, then defines Node as "the physical Proxmox host". ArchiMate: *"a computational or physical resource that hosts, manipulates, or interacts with other computational or physical resources."* Live config already breaks the narrow reading — `config/backup.json` carries `node: "backup"`, and `site.json` lists only `tappaas1` and `tappaas2`.
+3. **`Module boundary = VM boundary` has two live counterexamples** — `satellite.json` (`vmname: null`) and the `backup` module, which installs PBS on a host, not in a VM.
+4. **Physical location is unnamed and has two homes.** `site-fields.json.location` is well formed ("Physical/legal location of the site", ISO 3166-1 `country`, IANA `timezone`). A satellite has no equivalent — only `provider.location`, documented as an hcloud region used for `hcloud server create` and *unused* for console-provisioned satellites.
+5. **`tier` names three different things** — module lifecycle (`GLOSSARY.md` §A), zone trust (ADR-014 D5), and the Stack-promotion rule (`GLOSSARY.md` §C).
+
+## Trade-offs & risks
+
+- **Renaming `Node` touches the most-cited term in the composition model.** Mitigated: the *field* `node` keeps its name; only the glossary meaning widens, and `cluster member` is added for the narrow sense.
+- **`kind: external-host` → `host` is a live schema value.** Seven files (`satellite-fields.json`, `module-fields.json`, `satellite.json`, `satellite-manager/lib/provision.sh`, two `test.sh`, one `module-manager` fixture). Cheap, but it is Lars's satellite work.
+- **Adding `Location` to satellites is new required-ish data.** Kept to `country` at this ADR's level; finer granularity is available but not mandated.
+- **Doing nothing is not free.** ADR-012 §4.1 would otherwise write `node:backup` — a false statement — into every site's config.
+
+## Open questions / parking lot
+
+1. Should `zone.tier` be renamed to align with IEC 62443 **Security Level**? ADR-014 owns it; raised, not decided.
+2. Does `module.tier` deserve a clearer name (`lifecycle`), given `tier`'s three uses? Deferred — 22+ modules carry it.
+3. Should `backup:vm` become `backup:guest` once `kind` uses `guest`? **Recommended no** — 14 modules depend on it and the rename buys nothing. Recorded as known drift.
+
+## Consequences
+
+### Positive
+- One word, one meaning. `external` stops being a placement state, a management claim and a chassis fact at once.
+- ADR-012 can state where PBS runs without asserting cluster membership.
+- Off-site backup becomes checkable: a Location difference is data, not an assertion.
+- ADR-023 inherits settled vocabulary instead of re-coining it.
+
+### Negative / costs
+- Four new or amended documents plus a glossary rewrite, all needing joint acceptance.
+- A schema-value migration in the satellite module.
+
+### Neutral
+- No runtime behaviour changes. This ADR decides words; the code changes it implies are tracked separately.
+
+## Acceptance (overview)
+
+- [ ] `Site` redefined as one Administrative Domain × Locations × Zones (022a, 022b; amends ADR-007d)
+- [ ] `Node` corrected to ArchiMate; `cluster member` and `Host` added (022c; supersedes ADR-009's Node entry)
+- [ ] `Location` added with the three granularity levels (022b)
+- [ ] `Administrative Domain` added (022a)
+- [ ] `zone` anchored to IEC 62443, ownership left with ADR-014
+- [ ] `Module` boundary follows `kind` (022c)
+- [ ] Plane vocabulary scoped to the `network` module (022c)
+- [ ] `tier` namespaced: `module.tier` / `zone.tier`; the Stack-promotion rule renamed
+- [ ] `GLOSSARY.md` §A–§D rewritten to match; decision history and TODOs moved out of the vocabulary SSOT
+- [ ] ADR-023 drafted against this vocabulary
+
+## Appendix A — Normative sources
+
+| Term | Source |
+|---|---|
+| Node, Device, System Software, Grouping, Aggregation, Serving, Location, Facility, Capability, Artifact | [ArchiMate 3.x](https://pubs.opengroup.org/architecture/archimate3-doc/ch-Technology-Layer.html) |
+| Administrative Domain | [RFC 4375](https://www.rfc-editor.org/rfc/rfc4375.html), [RFC 1136](https://www.rfc-editor.org/rfc/rfc1136.html) |
+| Location granularity (PostalAddress / Placement / PartLocation) | [DMTF Redfish DSP0268](https://www.dmtf.org/sites/default/files/standards/documents/DSP0268_2025.4.html) |
+| Zone | [ISA/IEC 62443](https://gca.isa.org/blog/how-to-define-zones-and-conduits) |
+| Viewpoint | ISO/IEC 42010 |
+| Control / forwarding / management plane | [RFC 7426](https://www.rfc-editor.org/rfc/rfc7426.html) |
+| Managed Element | [MAPE-K](https://arxiv.org/pdf/1505.00903) |
+| `kind` as object-type marker | Kubernetes convention |
+| Site as a geographic level | [ISA-95 / IEC 62264-1](https://cdn.standards.iteh.ai/samples/16715/d49a9bbae3d54b639880eeb8ef21b8e8/IEC-62264-1-2013.pdf) — geographic only; does **not** cover the administrative aspect |
+| Tenant | [NIST SP 800-145](https://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-145.pdf) — checked; **no standalone definition exists**, local term retained |
