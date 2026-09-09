@@ -72,7 +72,12 @@ info "${BOLD}backup:filesystem: provisioning file capture for ${BL}${MODULE}${CL
 # 2. Namespace + write-no-delete login. The password is generated, handed to the
 #    guest and escrowed centrally — never echoed, never stored in config.
 ESCROW_DIR="/etc/secrets/backup-fs"
-FS_PW="$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 32)"
+# Bounded input, then slice — do NOT pipe /dev/urandom into `head`: head exits
+# after 32 bytes, tr dies of SIGPIPE, and under `pipefail` the substitution
+# returns non-zero, so `set -e` kills the script one line after generating a
+# perfectly good password.
+FS_PW="$(head -c 4096 /dev/urandom | LC_ALL=C tr -dc 'A-Za-z0-9')"
+FS_PW="${FS_PW:0:32}"
 [[ "${#FS_PW}" -ge 8 ]] || die "could not generate a PBS password"
 pbs_fs_ensure_target "${MODULE}" "${FS_PW}" || die "could not provision the PBS side for ${MODULE}"
 
@@ -85,14 +90,20 @@ pbs_fs_ensure_target "${MODULE}" "${FS_PW}" || die "could not provision the PBS 
 # argument would put it in the remote's process list.
 printf '%s' "${FS_PW}" | ssh -o ConnectTimeout=15 -o BatchMode=yes \
     -o StrictHostKeyChecking=accept-new "tappaas@${GUEST}" \
-    "sudo bash -c 'umask 077; mkdir -p /etc/secrets; cat > /etc/secrets/backup-fs.pw; chown tappaas:users /etc/secrets/backup-fs.pw'" \
+    "sudo bash -c 'mkdir -p /etc/secrets; chmod 755 /etc/secrets; umask 077; cat > /etc/secrets/backup-fs.pw; chown tappaas:users /etc/secrets/backup-fs.pw'" \
     || die "could not write the backup login password on ${GUEST}"
 
 ssh -o ConnectTimeout=15 -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
     "tappaas@${GUEST}" "sudo bash -s" <<'REMOTE' || die "could not prepare secrets on ${GUEST}"
 set -euo pipefail
-umask 077
+# The DIRECTORY must be traversable by the service user — the secrets inside it
+# are protected by their own 0600, not by an unreadable parent. Created under
+# `umask 077` it came out 0700 root, and the capture failed with a bare
+# "cannot read /etc/secrets/backup-fs.pw" that pointed at the file, not the
+# directory that was actually denying it.
 mkdir -p /etc/secrets
+chmod 755 /etc/secrets
+umask 077
 if [[ ! -s /etc/secrets/backup-fs.key ]]; then
     proxmox-backup-client key create /etc/secrets/backup-fs.key --kdf none
     echo "  created client encryption key"
@@ -116,7 +127,7 @@ fi
 
 # 4. Manifest + runner on the guest.
 SCHEDULE="$(pbs_schedule_resolve "${MODULE}")"
-pbs_fs_write_manifest "${MODULE}" "${REPO}" "${NS}" "${SCHEDULE}" "${FS_PATHS[@]}" \
+pbs_fs_write_manifest "${MODULE}" "${REPO}" "${NS}" "${SCHEDULE}" "$(pbs_fs_fingerprint)" "${FS_PATHS[@]}" \
     || die "could not write the capture manifest"
 
 MANIFEST="$(pbs_fs_manifest_path "${MODULE}")"

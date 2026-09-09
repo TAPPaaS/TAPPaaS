@@ -82,46 +82,55 @@ IMAGE_LOCATION="$(get_config_value 'imageLocation' 'http://download.proxmox.com/
 DESCRIPTION="$(get_config_value 'description' 'TAPPaaS APT installation')"
 ZONE="$(get_config_value 'zone0' 'mgmt')"
 
-# ── Placement (ADR-012 P1) ───────────────────────────────────────────
-# Decide WHERE (or whether) PBS is realized before doing any work. The old hard
-# node:tappaas3 / storage:tankc1 literals are now just the preferred hints for
-# `auto`; `auto` discovers a tankc pool and falls back to a shim if none exists.
-POLICY="$(placement_policy)"
-PREFERRED_NODE="$(get_config_value 'node' "$(get_node_hostname 0)")"
-info "${BOLD}Resolving backup placement (policy ${BGN}${POLICY}${CL}${BOLD}, preferred node ${BGN}${PREFERRED_NODE}${CL}${BOLD})...${CL}"
-read -r MODE NODE STORAGE < <(pbs_discover_placement "${POLICY}" "${PREFERRED_NODE}" "${ZONE}")
+# ── Placement (ADR-012 §2.1/§2.2) ────────────────────────────────────
+# Decide WHERE (or whether) PBS is realized before doing any work. There is no
+# `placement` policy field: `placementState` ships empty and is resolved here
+# once — external (forced, sticky) / node:<name> (a tankc was found) / shim.
+# Forcing external needs no flag of its own; install-module.sh stages it (D14):
+#   install-module.sh backup --force --placementState external --pbsUrl <url>
+LEGACY_NODE=""
+if [[ "$(pbs_placement_state)" == "local" ]]; then
+  LEGACY_NODE="$(pbs_legacy_pbs_node "${ZONE}")"
+fi
+pbs_migrate_placement_state "" "${LEGACY_NODE}" >/dev/null || warn "Could not migrate legacy placement state"
+CURRENT_STATE="$(pbs_placement_state)"
+NODE_CONSTRAINT="$(get_config_value 'node' '')"
+info "${BOLD}Resolving backup placement (state ${BGN}${CURRENT_STATE:-<empty>}${CL}${BOLD}, node constraint ${BGN}${NODE_CONSTRAINT:-<any>}${CL}${BOLD})...${CL}"
+read -r MODE STORAGE < <(pbs_resolve_placement_state "${CURRENT_STATE}" "${NODE_CONSTRAINT}" "${ZONE}" "$(get_node_hostname 0)")
+NODE="$(pbs_state_node "${MODE}" || true)"
 
 case "${MODE}" in
   shim)
     pbs_write_placement_state shim
-    warn "No usable 'tankc' pool found (policy ${POLICY}) — installing backup as a SHIM (no PBS datastore)."
+    warn "No usable 'tankc' pool found — installing backup as a SHIM (no PBS datastore)."
     warn "  dependsOn:backup is satisfied so dependent modules still install; promote later with:"
     warn "    update-module.sh backup      (once a tankc pool exists)"
     info "${GN}TAPPaaS backup shim recorded.${CL}"
     exit 0
     ;;
-  remote-only)
-    pbs_write_placement_state remote-only
-    PUSH_TARGET="$(get_config_value 'pushTarget' '')"
-    warn "Placement 'remote-only' — no local PBS datastore; VMs back up off-site by push (ADR-012 P4)."
-    # Off-site onboarding needs the remote credential (prompt-not-store), so it is
-    # an operator step (add-push), never auto-run unattended here. Point the way.
-    if [[ -n "${PUSH_TARGET}" && -f "${CONFIG_DIR:-/home/tappaas/config}/push-${PUSH_TARGET}.json" ]]; then
-      warn "  Push target '${PUSH_TARGET}' is configured — onboard it (prompts for the remote credential):"
-      warn "    backup-manage.sh add-push ${PUSH_TARGET} --make-default"
-    else
-      warn "  To enable it: copy services/push/push.json → config/push-<name>.json, edit, set .pushTarget, then:"
-      warn "    backup-manage.sh add-push <name> --make-default"
-    fi
-    info "${GN}TAPPaaS backup remote-only placement recorded.${CL}"
+  external)
+    PBS_URL="$(pbs_pbs_url)"
+    pbs_write_placement_state external
+    info "${BOLD}Placement ${BGN}external${CL}${BOLD} — consuming the PBS at ${BGN}${PBS_URL}${CL}${BOLD}; provisioning nothing.${CL}"
+    # Clients push to the external PBS exactly as they would to a local one
+    # (§1.4), so they still need the client package on every current node.
+    pbs_client_reconcile "${ZONE}" "${IMAGE_LOCATION}" \
+      || warn "One or more nodes could not be reconciled for proxmox-backup-client (see above)"
+    # Registering the consumed PBS as Proxmox storage + wiring the job is P11
+    # (#456); it needs the remote credential, which is prompt-not-store and so
+    # an operator step — never an unattended hang here.
+    warn "  Register the consumed PBS as Proxmox storage (prompts for its credential):"
+    warn "    backup-manage.sh use-external ${PBS_URL}"
+    info "${GN}TAPPaaS backup external placement recorded.${CL}"
     exit 0
     ;;
-  local)
+  node:*)
+    [[ -n "${STORAGE}" ]] || die "Placement resolved to ${MODE} but no active storage pool was found on ${NODE}"
     info "${BOLD}Creating TAPPaaS PBS on node ${BGN}${NODE}${CL}${BOLD}, storage ${BGN}${STORAGE}${CL}${BOLD}.${CL}"
-    pbs_write_placement_state local "${NODE}" "${STORAGE}"
+    pbs_write_placement_state "${MODE}" "${STORAGE}"
     ;;
   *)
-    die "Unexpected placement result: '${MODE}' (policy ${POLICY})"
+    die "Unexpected placement result: '${MODE}'"
     ;;
 esac
 
@@ -196,7 +205,11 @@ else
   # tappaas-cicd; a missing openssl here used to yield an EMPTY password and a
   # cryptic PBS "must be at least 8 characters" failure, notably on the ADR-012
   # shim→local promotion path which re-runs this installer non-interactively).
-  TAPPAAS_PASSWORD="$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 24)"
+  # Bounded read then slice, rather than piping /dev/urandom into `head`: head
+  # exits early, tr takes SIGPIPE, and under `pipefail` that would fail the
+  # assignment right after producing a good password.
+  TAPPAAS_PASSWORD="$(head -c 4096 /dev/urandom | LC_ALL=C tr -dc 'A-Za-z0-9')"
+  TAPPAAS_PASSWORD="${TAPPAAS_PASSWORD:0:24}"
   PBS_CRED_FILE="${HOME}/.pbs-credentials.txt"
   printf 'pbs_user=%s\npbs_password=%s\n' "${PBS_USER}" "${TAPPAAS_PASSWORD}" >"${PBS_CRED_FILE}"
   chmod 600 "${PBS_CRED_FILE}"
@@ -359,11 +372,12 @@ EOF
 # installed or updated (see lib/pbs-job.sh::pbs_migrate_all_job).
 info "Backup job is managed per-module via backup:vm (no --all job created)."
 
-# Register the alwaysBackup foundation VMs (firewall, tappaas-cicd) — they
-# bootstrap before this backup server so cannot dependsOn backup:vm, but should
-# still be backed up. Also migrates any legacy --all job. (issue #200)
-info "Registering alwaysBackup VMs in the managed backup job..."
-pbs_ensure_always || warn "Could not register some alwaysBackup VMs (check backup job)"
+# Register every VM that opted into backup — via dependsOn backup:vm, or via
+# integratesWith backup:vm for the foundation VMs that bootstrap before this
+# server and so cannot depend on it (#501, ADR-012 D18). Also migrates any
+# legacy --all job. (issue #200)
+info "Registering opted-in VMs in the managed backup job..."
+pbs_ensure_declared || warn "Could not register some VMs (check the backup job)"
 
 info "\n${GN}PBS configuration completed successfully!${CL}"
 echo

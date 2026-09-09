@@ -17,11 +17,12 @@
 #   1. Header-pinned (HEADER_PINNED below): stay at top.
 #   2. usedBy == ["general"]:                  stay at top.
 #   3. Field not present in schema:            stay at top + warn (unknown).
-#   4. usedBy ∩ dependsOn == ∅:                stay at top + warn (orphan),
+#   4. usedBy ∩ (dependsOn ∪ integratesWith) == ∅:  stay at top + warn (orphan),
 #      UNLESS a usedBy service is one the module `provides` (self-consumed: the
 #      module reads the field from the flattened top level and does not depend on
 #      its own service) — then stay at top, no warning.
-#   5. usedBy ∩ dependsOn has ≥1 match:        config.<first-match-in-dependsOn-order>
+#   5. usedBy ∩ (dependsOn ∪ integratesWith) has ≥1 match:
+#                                              config.<first match, in that order>
 #
 # After grouping, top-level keys are reordered per .fieldOrder in
 # module-fields.json; within each config block, keys are also reordered.
@@ -92,7 +93,12 @@ regroup_to_pattern_a() {
     local warnings
     warnings="$(jq -r --slurpfile schema "${_CONVERT_SCHEMA_FILE}" --argjson pinned "${_CONVERT_HEADER_PINNED}" '
         ($schema[0].fields) as $fields
-        | (.dependsOn // []) as $deps
+        # dependsOn AND integratesWith: #501 made integratesWith a real wiring
+        # relationship (the foundation VMs that bootstrap before a provider use
+        # it), and a module that integrates with backup:vm carries the fields of
+        # backup:vm just as legitimately as one that depends on it. Considering
+        # only dependsOn reported every such field as an orphan.
+        | ((.dependsOn // []) + (.integratesWith // [])) as $deps
         | (.provides // []) as $prov
         | [ keys[]
             | select(. as $k | ($pinned | index($k)) | not)

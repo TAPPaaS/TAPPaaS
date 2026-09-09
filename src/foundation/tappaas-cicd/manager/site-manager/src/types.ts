@@ -24,6 +24,8 @@ export interface SiteBackup {
   target?: string | null;
   offsite?: string | null;
   defaultRetention?: string;
+  // ADR-012 §3.2: base of the Site → Environment → Module schedule cascade.
+  defaultSchedule?: string;
   offsiteResidency?: "eu-only" | "global";
 }
 
@@ -76,6 +78,8 @@ export type SiteModifiableField =
   | "snapshotRetention"
   | "backupTarget"
   | "backupOffsite"
+  | "backupDefaultSchedule"
+  | "backupDefaultRetention"
   | "locationCountry"
   | "locationTimezone"
   | "locationLocale"

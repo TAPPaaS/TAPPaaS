@@ -100,7 +100,7 @@ const HELP: HelpSpec = {
       "tools; validate wraps validate-site.sh. TS owns config CRUD + validate + reconcile.",
     "site modify fields:\n" +
       "  --displayName --owner --email --automaticReboot --snapshotRetention\n" +
-      "  --backupTarget --backupOffsite\n" +
+      "  --backupTarget --backupOffsite --backupDefaultSchedule --backupDefaultRetention\n" +
       "  --locationCountry --locationTimezone --locationLocale\n" +
       "  --networkIsp --networkPublicIp\n" +
       "  --updateFrequency <daily|weekly|monthly|none> --updateWeekday <Day> --updateHour <0-23>",
@@ -264,6 +264,10 @@ function cmdSite(o: Opts): void {
     setInt("--snapshotRetention", ["snapshotRetention"]);
     setStr("--backupTarget", ["backup", "target"]);
     setStr("--backupOffsite", ["backup", "offsite"]);
+    // ADR-012 §3.2: the base of the Site → Environment → Module schedule
+    // cascade. daily | weekly | monthly | HH:MM; nothing sub-daily.
+    setStr("--backupDefaultSchedule", ["backup", "defaultSchedule"]);
+    setStr("--backupDefaultRetention", ["backup", "defaultRetention"]);
     setStr("--locationCountry", ["location", "country"]);
     setStr("--locationTimezone", ["location", "timezone"]);
     setStr("--locationLocale", ["location", "locale"]);

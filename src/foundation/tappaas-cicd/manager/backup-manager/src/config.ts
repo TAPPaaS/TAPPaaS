@@ -18,12 +18,14 @@
 //   exclude   : module.backup.exclude (default [])
 //   target    : site.backup.target
 //   offsite   : site.backup.offsite
-//   schedule  : environment.backup.schedule > null (inherit site job)
+//   schedule  : module.backup.schedule > environment.backup.schedule
+//               > site.backup.defaultSchedule > "daily"   (ADR-012 §3.2)
 
 import { existsSync, readdirSync } from "fs";
 import { join } from "path";
 import { defaultConfigDir, readJsonObject as readJson } from "../../../lib/ts/src/config-io";
-import { BackupPolicy, Peer, PeerRole, Placement } from "./types";
+import { declaresBackup, discoverModules } from "../../../lib/ts/src/module-discovery";
+import { BackupPolicy, Peer, PeerRole, Placement, PlacementKind, ScheduleBucket } from "./types";
 
 // The cascade reads the TARGET config root directly (it holds <module>.json,
 // site.json, environments/) — the lib's ONE config-root rule (TAPPAAS_CONFIG >
@@ -44,6 +46,25 @@ function asString(v: unknown): string | null {
 }
 function asStringArray(v: unknown): string[] {
   return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+}
+
+// ── Schedule vocabulary (ADR-012 §3.2, D16) ──────────────────────────
+//
+// daily | weekly | monthly, or a bare HH:MM meaning daily at that time (the
+// spelling existing site/environment configs already use). Everything else is
+// invalid — including every sub-daily request, which is the point: the ceiling
+// is only enforceable because the vocabulary is small enough to check.
+//
+// Mirrors pbs_schedule_bucket in backup/lib/pbs-schedule.sh.
+const HHMM = /^([01][0-9]|2[0-3]):[0-5][0-9]$/;
+
+export function scheduleBucket(spec: string | null | undefined): ScheduleBucket | null {
+  const s = (spec ?? "").trim().toLowerCase();
+  if (s === "" || s === "daily") return "daily";
+  if (s === "weekly") return "weekly";
+  if (s === "monthly") return "monthly";
+  if (HHMM.test(s)) return "daily";
+  return null;
 }
 
 // Resolve the environment name for a deployed module: explicit override, else
@@ -77,6 +98,13 @@ export function resolvePolicy(
   const envRet = asString(envBackup.retention) ?? siteRet;
   const retention = asString(mod.retention) ?? envRet;
 
+  // schedule: module > environment > site.defaultSchedule > "daily" (§3.2).
+  // Resolved, never null: "what does this module actually do?" should not
+  // require the reader to re-walk the cascade in their head. Mirrors
+  // pbs_schedule_resolve in backup/lib/pbs-schedule.sh — keep them in lock-step.
+  const schedule =
+    asString(mod.schedule) ?? asString(envBackup.schedule) ?? asString(site.defaultSchedule) ?? "daily";
+
   // residency: environment.backup.residency > environment.dataResidency > "eu-only"
   const residency = asString(envBackup.residency) ?? envDataResidency ?? "eu-only";
 
@@ -89,43 +117,66 @@ export function resolvePolicy(
     enabled,
     retention,
     residency,
-    schedule: asString(envBackup.schedule),
+    schedule,
+    scheduleBucket: scheduleBucket(schedule),
     target: asString(site.target),
     offsite: asString(site.offsite),
     exclude: asStringArray(mod.exclude),
   };
 }
 
-// True if <module> declares dependsOn backup:vm (wired into the shared PBS
-// job). Port of bc_module_in_pbs_job.
+// True if <module> has opted into VM backup, by EITHER relationship (ADR-012
+// D18): `dependsOn: backup:vm` (a hard dependency), or `integratesWith:
+// backup:vm` (#501 — the optional integration the foundation VMs that bootstrap
+// before the backup server use, since they cannot depend on it). Backup stays
+// opt-in: a module declaring neither is in no job. Mirrors pbs_optin_vmids in
+// backup/lib/pbs-job.sh — the two must agree on membership.
 export function moduleInPbsJob(configDir: string, module: string): boolean {
   const m = readJson(join(configDir, `${module}.json`));
   if (!m) return false;
-  const deps = asStringArray(m.dependsOn);
-  return deps.includes("backup:vm");
+  const declared = [...asStringArray(m.dependsOn), ...asStringArray(m.integratesWith)];
+  return declared.includes("backup:vm");
 }
 
-// Non-module config basenames the bash lib skips (bc_list_modules).
-const NON_MODULES = new Set(["site", "zones", "backup", "configuration", "module-catalog"]);
-
-// List deployed module config basenames (without .json). Port of bc_list_modules.
+// List deployed module config basenames (without .json).
+//
+// #544: this used to be a hand-maintained deny-list of five names, so every
+// non-module file in config/ that nobody had added to it — last-update-result,
+// module-fields, zones.effective, … — was reported AS a module. Discovery is
+// now the shared, SHAPE-based rule (lib/ts/src/module-discovery.ts), the same
+// one module-manager uses, so the two managers cannot drift apart again.
+//
+// `backup` itself is excluded: it is the provider, not one of its own targets.
 export function listModules(configDir: string): string[] {
-  if (!existsSync(configDir)) return [];
-  const out: string[] = [];
-  for (const f of readdirSync(configDir)) {
-    if (!f.endsWith(".json")) continue;
-    const b = f.slice(0, -".json".length);
-    if (NON_MODULES.has(b)) continue;
-    if (b.startsWith("remote-") || b.startsWith("external-") || b.startsWith("push-")) continue;
-    out.push(b);
-  }
-  return out.sort();
+  return discoverModules(configDir)
+    .map((m) => m.name)
+    .filter((n) => n !== "backup");
 }
 
-// Resolve a module name to its VMID from the deployed config (used by restore).
+// The subset that has actually opted into backup (ADR-012 §3.1): a module
+// declaring backup:vm or backup:filesystem under dependsOn or integratesWith.
+// `list`/`reconcile` speak about backup POLICY, so an opted-out module belongs
+// in neither — and #544 is only half-fixed if phantom files stop appearing but
+// hardware/test modules still do.
+export function listBackupModules(configDir: string): string[] {
+  return discoverModules(configDir)
+    .filter((m) => m.name !== "backup" && declaresBackup(m.raw))
+    .map((m) => m.name);
+}
+
+// Resolve a module name to its VMID from the deployed config (used by restore
+// and by reconcile to decide job membership).
+//
+// A deployed config writes vmid as a NUMBER (`"vmid": 340`); the test fixtures
+// and some hand-written configs use a string. Reading it as a string only meant
+// every live module resolved to "no vmid", so `reconcile` warned "wired into
+// the PBS job but has no vmid" for ALL of them and could never add anyone to
+// the job — the verb was inert against a real config dir while passing its
+// string-fixture tests. Accept both, normalize to string. (Found live 2026-09-09.)
 export function moduleVmid(configDir: string, module: string): string | null {
   const m = readJson(join(configDir, `${module}.json`));
   if (!m) return null;
+  if (typeof m.vmid === "number" && Number.isFinite(m.vmid)) return String(m.vmid);
   return asString(m.vmid);
 }
 
@@ -151,12 +202,47 @@ export function environmentRaw(configDir: string, env: string): Record<string, u
 
 // ── ADR-012: placement + off-site peers ───────────────────────────────
 
-// Read the backup module's placement (ADR-012) from backup.json.
+// Classify a placementState into what the reader actually cares about. The
+// legacy v0.2 values are folded in so a config that has not yet been through
+// the module's migrating update still reports honestly:
+//   node:<name> | local → local     (a datastore exists here)
+//   external | remote-only → external (a datastore exists elsewhere)
+//   shim → shim                     (no datastore anywhere)
+//   null/unknown → unresolved
+export function classifyPlacement(state: string | null): PlacementKind {
+  if (!state) return "unresolved";
+  if (state.startsWith("node:")) return "local";
+  switch (state) {
+    case "local":
+      return "local";
+    case "shim":
+      return "shim";
+    case "external":
+    case "remote-only":
+      return "external";
+    default:
+      return "unresolved";
+  }
+}
+
+// Read the backup module's placement (ADR-012 §2.1) from backup.json.
 export function readPlacement(configDir: string): Placement {
   const b = readJson(join(configDir, "backup.json")) ?? {};
+  const placementState = asString(b.placementState);
+  const kind = classifyPlacement(placementState);
+  // The resolved node lives in the state itself (node:<name>); `.node` is only
+  // the operator's discovery constraint, so it is a back-compat fallback for a
+  // legacy `local` state that has not been migrated yet.
+  const node = placementState?.startsWith("node:")
+    ? placementState.slice("node:".length)
+    : kind === "local"
+      ? asString(b.node)
+      : null;
   return {
-    placement: asString(b.placement) ?? "auto",
-    placementState: asString(b.placementState),
+    placementState,
+    kind,
+    node,
+    pbsUrl: asString(b.pbsUrl) ?? "backup.mgmt.internal",
     pbsStorageName: asString(b.pbsStorageName) ?? "tappaas_backup",
     pushTarget: asString(b.pushTarget),
   };

@@ -35,5 +35,9 @@ if [[ -z "${VMID}" ]]; then
 fi
 
 debug "${BOLD}backup:vm: removing ${BL}${VMNAME}${CL} (VMID ${VMID}) from PBS backup${CL}"
-pbs_remove_vmid "${VMID}"
+# Remove from every bucket: the guest is in exactly one, but which one depends
+# on a schedule that may have changed since it was placed (ADR-012 §3.2).
+while IFS= read -r _bucket; do
+    pbs_remove_vmid "${VMID}" "${_bucket}" quiet
+done < <(pbs_buckets)
 debug "  ${GN}✓${CL} backup:vm delete-service completed"

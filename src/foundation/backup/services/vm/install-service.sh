@@ -46,6 +46,11 @@ if [[ -z "${VMID}" ]]; then
     exit 0
 fi
 
-debug "${BOLD}backup:vm: registering ${BL}${VMNAME}${CL} (VMID ${VMID}) for PBS backup${CL}"
-pbs_ensure_vmid "${VMID}"
+# Which job the module belongs in is its resolved schedule (ADR-012 §3.2): one
+# cluster backup job per distinct frequency, and place puts the guest in exactly
+# one of them. An unsupported schedule fails here, at the module that declared
+# it, rather than silently landing in `daily`.
+BUCKET="$(pbs_module_bucket "${MODULE}")" || exit 1
+debug "${BOLD}backup:vm: registering ${BL}${VMNAME}${CL} (VMID ${VMID}) for ${BUCKET} PBS backup${CL}"
+pbs_place_vmid "${VMID}" "${BUCKET}"
 debug "  ${GN}✓${CL} backup:vm install-service completed"

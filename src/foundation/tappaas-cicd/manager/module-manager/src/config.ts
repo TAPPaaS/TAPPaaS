@@ -9,6 +9,7 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "fs";
 import { basename, dirname, join } from "path";
 import { defaultConfigDir } from "../../../lib/ts/src/config-io";
+import { discoverModules, isModuleConfig } from "../../../lib/ts/src/module-discovery";
 import { ModuleConfig, ModuleStatus } from "./types";
 
 // Config-root resolution comes from the shared lib (TAPPAAS_CONFIG, then
@@ -47,14 +48,6 @@ export function siteNodeHostnames(configDir: string): string[] {
 // NOTE: `templates` is NOT here — it IS a module (a provider-only module:
 // provides ["nixos","debian"], no vmid/vmname). Provider-only modules are kept
 // by the heuristic via their `provides`/`location`.
-const NON_MODULE_BASENAMES = new Set<string>([
-  "zones",
-  "site",
-  "module-fields",
-  "cert-refids",
-  "switch-configuration-actual",
-  "switch-configuration-desired",
-]);
 
 function asString(v: unknown): string | undefined {
   return typeof v === "string" ? v : undefined;
@@ -67,23 +60,10 @@ function asNumberOrNull(v: unknown): number | null {
   return typeof v === "number" ? v : null;
 }
 
-// Module selection (ADR-007 #3). The AUTHORITATIVE marker is `"kind":"module"`,
-// written onto every deployed config by install-module.sh. For configs not yet
-// re-installed (pre-tag), fall back to a heuristic: a module config carries at
-// least one of the module-shaped fields (dependsOn / provides / location).
-//
-// NOTE: provider-only modules (e.g. `templates`: provides ["nixos","debian"])
-// have NO vmid/vmname — so the heuristic must NOT require vmname, otherwise such
-// modules would be dropped from `list`. We require a module-shaped field instead.
-function isModuleConfig(raw: Record<string, unknown>): boolean {
-  if (raw.kind === "module") return true;
-  return (
-    Array.isArray(raw.dependsOn) ||
-    Array.isArray(raw.integratesWith) ||
-    Array.isArray(raw.provides) ||
-    typeof raw.location === "string"
-  );
-}
+// Module selection lives in lib/ts/src/module-discovery.ts (#544) — the single
+// rule every manager shares. Re-exported here so this module's own readers keep
+// their import site.
+export { isModuleConfig };
 
 function toModuleConfig(name: string, raw: Record<string, unknown>): ModuleConfig {
   return {
@@ -123,24 +103,7 @@ export function loadModule(configDir: string, name: string): ModuleConfig | null
 // Skips *.orig backups, the explicit non-module deny-list, and anything that is
 // not a module (no kind=="module" tag and no module-shaped field).
 export function listModules(configDir: string): ModuleConfig[] {
-  if (!existsSync(configDir)) return [];
-  const out: ModuleConfig[] = [];
-  for (const f of readdirSync(configDir)) {
-    if (!f.endsWith(".json")) continue;
-    if (f.endsWith(".orig")) continue;
-    const name = basename(f, ".json");
-    if (NON_MODULE_BASENAMES.has(name)) continue;
-    let raw: Record<string, unknown>;
-    try {
-      raw = JSON.parse(readFileSync(join(configDir, f), "utf8")) as Record<string, unknown>;
-    } catch {
-      continue; // not parseable as JSON → not a module config
-    }
-    if (!isModuleConfig(raw)) continue;
-    out.push(toModuleConfig(name, raw));
-  }
-  out.sort((a, b) => a.name.localeCompare(b.name));
-  return out;
+  return discoverModules(configDir).map((m) => toModuleConfig(m.name, m.raw));
 }
 
 // ── Environment / effective-name resolution (ported from install/update) ─

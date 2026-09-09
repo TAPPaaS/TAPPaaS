@@ -90,6 +90,69 @@ else
 fi
 rm -rf "${FIX}"
 
+
+# ── ADR-012 §2.5.1: encryption-key escrow export / import ─────────────
+# The escrow lives inside the system a full-site DR is rebuilding, so it cannot
+# be the only copy of a key. These verbs are the out-of-band copy and its way
+# back in — tested end to end against a throwaway escrow, never the real one.
+echo ""
+echo "== key escrow: export -> media -> import onto a fresh escrow =="
+_ke_src="$(mktemp -d)"; _ke_media="$(mktemp -d)"; _ke_dst="$(mktemp -d)/escrow"
+printf 'FAKE-KEY-CONTENT\n' > "${_ke_src}/demo.key"
+chmod 600 "${_ke_src}/demo.key"
+
+_ke_out="$(TAPPAAS_KEY_ESCROW="${_ke_src}" "${BC}" key list 2>&1)"
+if grep -q "demo" <<<"${_ke_out}"; then
+    ok "key list names the escrowed key"
+else
+    bad "key list did not report the escrowed key [got: ${_ke_out}]"
+fi
+
+if TAPPAAS_KEY_ESCROW="${_ke_src}" "${BC}" key export "${_ke_media}" >/dev/null 2>&1 \
+   && [[ -s "${_ke_media}/tappaas-backup-keys/demo.key" ]]; then
+    ok "key export copies the key to the media"
+else
+    bad "key export did not produce ${_ke_media}/tappaas-backup-keys/demo.key"
+fi
+
+# The media must carry instructions: whoever needs them is rebuilding a site and
+# will not have the repository to hand.
+if grep -q "key import" "${_ke_media}/tappaas-backup-keys/README.txt" 2>/dev/null; then
+    ok "the media carries restore instructions"
+else
+    bad "the exported media has no README naming the import step"
+fi
+
+if [[ "$(stat -c %a "${_ke_media}/tappaas-backup-keys/demo.key" 2>/dev/null)" == "600" ]]; then
+    ok "the exported key is mode 600"
+else
+    bad "the exported key is not mode 600"
+fi
+
+if TAPPAAS_KEY_ESCROW="${_ke_dst}" "${BC}" key import "${_ke_media}" >/dev/null 2>&1 \
+   && sudo cmp -s "${_ke_dst}/demo.key" "${_ke_src}/demo.key"; then
+    ok "key import restores the key byte-identically onto a fresh escrow"
+else
+    bad "key import did not restore the key"
+fi
+
+# Re-importing must never silently replace an escrowed key: anywhere but a fresh
+# mothership, that could strand every backup made with the key it replaced.
+printf 'DIFFERENT\n' > "${_ke_media}/tappaas-backup-keys/demo.key"
+TAPPAAS_KEY_ESCROW="${_ke_dst}" "${BC}" key import "${_ke_media}" >/dev/null 2>&1
+if sudo cmp -s "${_ke_dst}/demo.key" "${_ke_src}/demo.key"; then
+    ok "re-import leaves an already-escrowed key untouched"
+else
+    bad "re-import OVERWROTE an escrowed key — backups made with the old one would be unreadable"
+fi
+
+if "${BC}" key bogus >/dev/null 2>&1; then
+    bad "an unknown key subcommand is accepted"
+else
+    ok "an unknown key subcommand is rejected"
+fi
+sudo rm -rf "${_ke_src}" "${_ke_media}" "${_ke_dst}"
+
 echo ""
 echo "backup-controller test: ${pass} passed, ${fail} failed"
 [[ "$fail" -eq 0 ]]

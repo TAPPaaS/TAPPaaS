@@ -5,15 +5,10 @@
   "status": "Testing",
   "vmname": "backup",
   "vmtag": "TAPPaaS,Foundation",
-  "placement": "auto",
-  "node": "tappaas3",
+  "node": "",
   "storage": "tankc1",
   "pbsStorageName": "tappaas_backup",
-  "alwaysBackup": [
-    "network",
-    "firewall",
-    "tappaas-cicd"
-  ],
+  "pbsUrl": "backup.mgmt.internal",
   "imageType": "apt",
   "image": "pbs",
   "imageLocation": "http://download.proxmox.com/debian/pbs",
@@ -21,7 +16,6 @@
   "dependsOn": [],
   "provides": [
     "vm",
-    "remote",
-    "external"
+    "filesystem"
   ]
 }

@@ -58,13 +58,16 @@ ck "paths: no such module → empty" "" "$(pbs_fs_paths ghost)"
 # ── the manifest the guest-side runner reads ─────────────────────────
 PBS_FS_CONFIG_DIR="${CONFIG_DIR}"
 ck "manifest path" "${CONFIG_DIR}/m.fsbackup.json" "$(pbs_fs_manifest_path m)"
-pbs_fs_write_manifest m "u@pbs@host:store" "fs/m" "weekly" /home/tappaas/config /etc/secrets
+pbs_fs_write_manifest m "u@pbs@host:store" "fs/m" "weekly" "aa:bb:cc" /home/tappaas/config /etc/secrets
 M="${CONFIG_DIR}/m.fsbackup.json"
 ck "manifest: valid json"    "yes"    "$(jq -e . "${M}" >/dev/null 2>&1 && echo yes || echo no)"
 ck "manifest: module"        "m"      "$(jq -r .module "${M}")"
 ck "manifest: repository"    "u@pbs@host:store" "$(jq -r .repository "${M}")"
 ck "manifest: namespace"     "fs/m"   "$(jq -r .namespace "${M}")"
 ck "manifest: schedule"      "weekly" "$(jq -r .schedule "${M}")"
+# The PBS cert fingerprint is PUBLIC and belongs in the manifest: without it the
+# client refuses the self-signed certificate and every capture fails at connect.
+ck "manifest: fingerprint"   "aa:bb:cc" "$(jq -r .fingerprint "${M}")"
 ck "manifest: paths kept in order" $'/home/tappaas/config\n/etc/secrets' "$(jq -r '.paths[]' "${M}")"
 # A manifest is config, not a secret store (§2.5): it must never carry one.
 ck "manifest: carries no credential" "no" \

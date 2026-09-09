@@ -83,6 +83,16 @@ export function validate(configDir: string): ValidateResult {
     if (!retentionValid(pol.retention)) {
       err(`module '${module}' resolves to invalid retention '${pol.retention}'`);
     }
+    // ADR-012 §3.2: once a day is the maximum frequency the platform backs
+    // anything up, and the vocabulary is daily|weekly|monthly|HH:MM. An
+    // unsupported spec is an ERROR, not a silent fall back to daily — a module
+    // that asked for hourly must be told it cannot have it.
+    if (!pol.scheduleBucket) {
+      err(
+        `module '${module}' resolves to unsupported backup schedule '${pol.schedule}' — ` +
+          `use daily | weekly | monthly | HH:MM (never more often than once a day)`,
+      );
+    }
     if (!pol.enabled) {
       ok(`module '${module}' backup disabled (honoured)`);
     }

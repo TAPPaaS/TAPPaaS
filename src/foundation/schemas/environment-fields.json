@@ -117,7 +117,7 @@
           "default": "eu-only"
         },
         "schedule": {
-          "description": "Environment-specific backup schedule (cron expression / PBS calendar event). null inherits the site-wide job schedule.",
+          "description": "Backup frequency for this environment — the middle layer of the ADR-012 §3.2 cascade. 'daily' | 'weekly' | 'monthly', or a bare 'HH:MM' (daily at that time). null inherits site.backup.defaultSchedule. Never more frequent than once a day.",
           "type": [
             "string",
             "null"

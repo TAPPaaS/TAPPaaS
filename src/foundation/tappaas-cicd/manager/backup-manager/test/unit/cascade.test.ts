@@ -9,6 +9,7 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import {
   listEnvironments,
+  listBackupModules,
   listModules,
   listPeers,
   moduleEnvironment,
@@ -268,25 +269,171 @@ check(!retentionValid("7") && !retentionValid("7x") && !retentionValid(""), "inv
   check(threw, "modify throws on a missing module");
 }
 
+// ── ADR-012 §3.2: the schedule cascade and its once/day ceiling ───────
+{
+  const tmp = mkdtempSync(join(tmpdir(), "bm-schedule-"));
+  mkdirSync(join(tmp, "environments"), { recursive: true });
+  const site = (o: unknown) => writeFileSync(join(tmp, "site.json"), JSON.stringify(o), "utf8");
+  const env = (n: string, o: unknown) =>
+    writeFileSync(join(tmp, "environments", `${n}.json`), JSON.stringify(o), "utf8");
+  const mod = (n: string, o: unknown) => writeFileSync(join(tmp, `${n}.json`), JSON.stringify(o), "utf8");
+
+  site({});
+  env("prod", {});
+  mod("app", { kind: "module", environment: "prod", dependsOn: ["backup:vm"] });
+  eq(resolvePolicy(tmp, "app").schedule, "daily", "schedule defaults to daily");
+  eq(resolvePolicy(tmp, "app").scheduleBucket, "daily", "…and to the daily bucket");
+
+  site({ backup: { defaultSchedule: "weekly" } });
+  eq(resolvePolicy(tmp, "app").schedule, "weekly", "site default applies when nothing overrides");
+
+  env("prod", { backup: { schedule: "daily" } });
+  eq(resolvePolicy(tmp, "app").schedule, "daily", "environment overrides the site");
+
+  mod("app", { kind: "module", environment: "prod", dependsOn: ["backup:vm"], backup: { schedule: "monthly" } });
+  eq(resolvePolicy(tmp, "app").schedule, "monthly", "module overrides the environment");
+  eq(resolvePolicy(tmp, "app").scheduleBucket, "monthly", "…into the monthly bucket");
+
+  // The ceiling: unsupported specs classify to null so validate can reject them
+  // by name, rather than being rounded down to daily behind the operator's back.
+  for (const bad of ["hourly", "*:00", "06,18:00", "mon,thu 06:00", "24:00", "9:00"]) {
+    mod("app", { kind: "module", dependsOn: ["backup:vm"], backup: { schedule: bad } });
+    eq(resolvePolicy(tmp, "app").scheduleBucket, null, `'${bad}' is not a supported schedule`);
+  }
+  for (const good of ["daily", "weekly", "monthly", "21:00", "00:00", "23:59", "Weekly"]) {
+    mod("app", { kind: "module", dependsOn: ["backup:vm"], backup: { schedule: good } });
+    check(resolvePolicy(tmp, "app").scheduleBucket !== null, `'${good}' is a supported schedule`);
+  }
+
+  // validate reports the ceiling breach as an ERROR naming the module.
+  site({ backup: { target: "backup.mgmt.internal" } });
+  mod("app", { kind: "module", vmid: 900, dependsOn: ["backup:vm"], backup: { schedule: "hourly" } });
+  const res = validate(tmp);
+  check(
+    res.errors.some((e) => e.includes("app") && e.includes("hourly")),
+    "validate rejects a sub-daily schedule, naming the module and the spec",
+  );
+}
+
+// ── vmid is a NUMBER in a deployed config, a string in fixtures ───────
+{
+  const tmp = mkdtempSync(join(tmpdir(), "bm-vmid-"));
+  writeFileSync(join(tmp, "numeric.json"), JSON.stringify({ kind: "module", vmid: 340 }), "utf8");
+  writeFileSync(join(tmp, "stringy.json"), JSON.stringify({ kind: "module", vmid: "341" }), "utf8");
+  writeFileSync(join(tmp, "none.json"), JSON.stringify({ kind: "module" }), "utf8");
+  eq(moduleVmid(tmp, "numeric"), "340", "a numeric vmid resolves (what deployed configs write)");
+  eq(moduleVmid(tmp, "stringy"), "341", "a string vmid still resolves");
+  eq(moduleVmid(tmp, "none"), null, "a module with no vmid resolves to null");
+  eq(moduleVmid(tmp, "absent"), null, "a missing config resolves to null");
+}
+
+// ── #544: discovery is shape-based, not a deny-list ───────────────────
+{
+  const tmp = mkdtempSync(join(tmpdir(), "bm-discovery-"));
+  const w = (f: string, o: unknown) =>
+    writeFileSync(join(tmp, f), typeof o === "string" ? o : JSON.stringify(o), "utf8");
+
+  // Real modules — including a provider-only one with no vmid/vmname.
+  w("nextcloud.json", { kind: "module", vmname: "nextcloud", vmid: "340", dependsOn: ["backup:vm"] });
+  w("tappaas-cicd.json", { kind: "module", vmname: "tappaas-cicd", vmid: "130", integratesWith: ["backup:vm"] });
+  w("templates.json", { provides: ["nixos", "debian"] });
+  w("unifi-os.json", { kind: "module", vmname: "unifi-os", vmid: "811", dependsOn: ["cluster:vm"] });
+
+  // The files #544 is about: state and cache files that a deny-list had to
+  // know about by name, and so classified as modules the moment one was added.
+  w("last-update-result.json", { started: "2026-09-09", modules: 12, failed: 0 });
+  w("zones.effective.json", { mgmt: { vlan: 1 } });
+  w("module-fields.json", { fields: {} });
+  w("site.json", { name: "rossen" });
+  w("nextcloud.json.orig", { kind: "module", vmname: "nextcloud" });
+  w("broken.json", "{ not valid json");
+  w("array.json", [1, 2, 3]);
+  // Off-site peers are peers, not modules.
+  w("remote-buddy.json", { remoteHost: "h1" });
+  w("push-vault.json", { remoteHost: "h3" });
+
+  const found = listModules(tmp);
+  eq(found.join(","), "nextcloud,tappaas-cicd,templates,unifi-os", "only real modules are discovered");
+  check(!found.includes("last-update-result"), "#544: a run-result file is not a module");
+  check(!found.includes("zones.effective"), "#544: zone state is not a module");
+  check(!found.includes("module-fields"), "#544: the schema cache is not a module");
+  check(!found.includes("broken"), "unparseable JSON is skipped, not thrown on");
+  check(!found.includes("array"), "a JSON array is not a module config");
+  check(!found.includes("remote-buddy") && !found.includes("push-vault"), "peers are not modules");
+  check(found.includes("templates"), "a provider-only module (no vmid/vmname) is still a module");
+
+  // Target discovery narrows to the opted-in set.
+  eq(listBackupModules(tmp).join(","), "nextcloud,tappaas-cicd", "backup targets = modules that opted in");
+  check(!listBackupModules(tmp).includes("unifi-os"), "a module declaring neither is not a backup target");
+}
+
+// ── ADR-012 D18: PBS-job membership is dependsOn OR integratesWith ────
+{
+  const tmp = mkdtempSync(join(tmpdir(), "bm-membership-"));
+  const mod = (name: string, o: Record<string, unknown>) =>
+    writeFileSync(join(tmp, `${name}.json`), JSON.stringify({ vmname: name, vmid: "900", ...o }), "utf8");
+
+  mod("app", { dependsOn: ["backup:vm"] });
+  mod("mothership", { dependsOn: ["cluster:vm"], integratesWith: ["backup:vm"] });
+  mod("hardware", { dependsOn: ["cluster:vm"] });
+  mod("other", { dependsOn: ["backup:filesystem"], integratesWith: ["network:proxy"] });
+
+  check(moduleInPbsJob(tmp, "app"), "dependsOn backup:vm is in the job");
+  check(moduleInPbsJob(tmp, "mothership"), "integratesWith backup:vm is in the job (#501, D18)");
+  check(!moduleInPbsJob(tmp, "hardware"), "declaring neither stays OUT — backup is opt-in");
+  check(!moduleInPbsJob(tmp, "other"), "an unrelated integration does not opt a module in");
+  check(!moduleInPbsJob(tmp, "absent"), "a module with no config is not in the job");
+}
+
 // ── ADR-012: placement + off-site peers ───────────────────────────────
 {
   const tmp = mkdtempSync(join(tmpdir(), "bm-placement-"));
-  // Default (no backup.json) → auto / unset / defaults.
+  // Default (no backup.json) → unresolved / defaults.
   const def = readPlacement(tmp);
-  eq(def.placement, "auto", "placement default auto");
   eq(def.placementState, null, "placementState null when unset");
+  eq(def.kind, "unresolved", "kind unresolved when unset");
+  eq(def.node, null, "node null when unresolved");
+  eq(def.pbsUrl, "backup.mgmt.internal", "pbsUrl default");
   eq(def.pbsStorageName, "tappaas_backup", "pbsStorageName default");
   eq(def.pushTarget, null, "pushTarget null default");
 
-  writeFileSync(
-    join(tmp, "backup.json"),
-    JSON.stringify({ placement: "remote-only", placementState: "shim", pushTarget: "offsite" }),
-    "utf8",
-  );
-  const pl = readPlacement(tmp);
-  eq(pl.placement, "remote-only", "placement read");
-  eq(pl.placementState, "shim", "placementState read");
-  eq(pl.pushTarget, "offsite", "pushTarget read");
+  const writeBackup = (o: Record<string, unknown>) =>
+    writeFileSync(join(tmp, "backup.json"), JSON.stringify(o), "utf8");
+
+  // node:<name> — a local PBS; the resolved node comes from the state itself.
+  writeBackup({ placementState: "node:tappaas3", storage: "tankc1", node: "" });
+  let pl = readPlacement(tmp);
+  eq(pl.placementState, "node:tappaas3", "placementState read");
+  eq(pl.kind, "local", "node:<name> classifies as local");
+  eq(pl.node, "tappaas3", "resolved node parsed out of the state");
+
+  // shim — no datastore anywhere.
+  writeBackup({ placementState: "shim" });
+  pl = readPlacement(tmp);
+  eq(pl.kind, "shim", "shim classifies as shim");
+  eq(pl.node, null, "shim has no node");
+
+  // external — a datastore elsewhere, named by pbsUrl.
+  writeBackup({ placementState: "external", pbsUrl: "pbs.offsite.example" });
+  pl = readPlacement(tmp);
+  eq(pl.kind, "external", "external classifies as external");
+  eq(pl.pbsUrl, "pbs.offsite.example", "pbsUrl read");
+
+  // Legacy v0.2 states still read honestly until the module's next update
+  // migrates them (§4.1): local → local (node from the legacy .node),
+  // remote-only → external.
+  writeBackup({ placementState: "local", node: "tappaas3", pbsStorageName: "pbs" });
+  pl = readPlacement(tmp);
+  eq(pl.kind, "local", "legacy local classifies as local");
+  eq(pl.node, "tappaas3", "legacy local takes its node from .node");
+  eq(pl.pbsStorageName, "pbs", "pbsStorageName override read");
+
+  writeBackup({ placementState: "remote-only", pushTarget: "offsite" });
+  pl = readPlacement(tmp);
+  eq(pl.kind, "external", "legacy remote-only classifies as external");
+  eq(pl.pushTarget, "offsite", "deprecated pushTarget still read");
+
+  writeBackup({ placementState: "shim" });
 
   // No peers yet.
   eq(listPeers(tmp).length, 0, "no peers when none configured");

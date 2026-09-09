@@ -12,6 +12,15 @@
     "cluster:vm",
     "cluster:ha"
   ],
+  "integratesWith": [
+    "backup:vm",
+    "backup:filesystem"
+  ],
+  "backup": {
+    "filesystemPaths": [
+      "/home/tappaas/config"
+    ]
+  },
   "provides": [],
   "config": {
     "cluster:vm": {

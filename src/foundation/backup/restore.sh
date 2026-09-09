@@ -14,6 +14,11 @@
 #   -n, --node <node>           Target Proxmox node (default: first node from configuration.json)
 #   -s, --storage <storage>     Target storage for VM (default: original)
 #   -b, --backup-id <id>        Specific backup ID to restore (default: latest)
+#   -t, --target-vmid <vmid>    Restore INTO a different (unused) VMID, leaving the
+#                               original untouched. The restored guest is left
+#                               STOPPED with fresh MACs. This is how a recovery
+#                               path is rehearsed, and how you compare a restore
+#                               against a running original before committing.
 #   -l, --list                  List available backups for a VMID
 #   --list-all                  List all available backups
 #   -h, --help                  Show this help message
@@ -29,6 +34,8 @@ Options:
   -n, --node <node>           Target Proxmox node (default: first node from configuration.json)
   -s, --storage <storage>     Target storage for VM (default: original)
   -b, --backup-id <id>        Specific backup ID to restore (default: latest)
+  -t, --target-vmid <vmid>    Restore into a different, unused VMID (left STOPPED,
+                              fresh MACs) instead of over the original
   -l, --list                  List available backups for a VMID (requires -v)
   --list-all                  List all available backups
   -h, --help                  Show this help message
@@ -75,7 +82,11 @@ trap cleanup EXIT
 JSON_CONFIG="${CONFIG_DIR}/backup.json"
 JSON=$(cat "${JSON_CONFIG}")
 
-PBS_NODE="$(get_config_value 'node' "$(get_node_hostname 0)")"
+# The node PBS runs on. ADR-012 §2.1: the RESOLVED node is carried by the
+# placement state (`placementState: node:<name>`); `.node` is only the operator's
+# discovery constraint and may be empty, so it is a back-compat fallback.
+PBS_NODE="$(jq -r '.placementState // empty' "${JSON_CONFIG}" 2>/dev/null | sed -n 's/^node://p')"
+[[ -n "${PBS_NODE}" ]] || PBS_NODE="$(get_config_value 'node' "$(get_node_hostname 0)")"
 ZONE="$(get_config_value 'zone0' 'mgmt')"
 STORAGE_NAME="$(get_config_value 'pbsStorageName' 'tappaas_backup')"  # configurable, issue #199
 
@@ -84,6 +95,7 @@ TARGET_NODE="$(get_node_hostname 0)"
 VMID=""
 TARGET_STORAGE=""
 BACKUP_ID=""
+TARGET_VMID=""
 LIST_MODE=false
 LIST_ALL_MODE=false
 
@@ -104,6 +116,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     -b|--backup-id)
       BACKUP_ID="$2"
+      shift 2
+      ;;
+    -t|--target-vmid)
+      TARGET_VMID="$2"
       shift 2
       ;;
     -l|--list)
@@ -191,13 +207,23 @@ pushd $TEMP_DIR >/dev/null
 # If no specific backup ID provided, find the latest
 if [ -z "$BACKUP_ID" ]; then
   info "Finding latest backup for VMID ${VMID}..."
-  BACKUP_ID=$(ssh root@${TARGET_NODE}.${ZONE}.internal "bash -s" <<EOF
-set -e
-# Get the latest backup volume name
-pvesh get /nodes/${TARGET_NODE}/storage/${STORAGE_NAME}/content --vmid ${VMID} \
-  | grep volid | tail -1 | awk '{print \$3}' | tr -d ',"'
-EOF
-)
+  # --output-format json, NOT the human table. The old form was
+  #   pvesh get ... | grep volid | tail -1 | awk '{print $3}'
+  # and `grep volid` matched the TABLE HEADER — the only line containing the
+  # word — so it extracted a box-drawing character and restored from a volid
+  # that could not exist. The restore then reported success (see below), which
+  # is how a backup system convinces you it works while restoring nothing.
+  # Newest = highest ctime, not "last line".
+  BACKUP_ID=$(ssh -n root@${TARGET_NODE}.${ZONE}.internal \
+    "pvesh get /nodes/${TARGET_NODE}/storage/${STORAGE_NAME}/content --vmid ${VMID} --output-format json" \
+    | jq -r 'sort_by(.ctime) | last | .volid // empty')
+
+  # A volid always looks like <storage>:backup/<type>/<vmid>/<time>. Anything
+  # else means the lookup failed, and restoring from it must not be attempted.
+  if [ -n "${BACKUP_ID}" ] && ! printf '%s' "${BACKUP_ID}" | grep -qE '^[A-Za-z0-9_.-]+:backup/'; then
+    echo "${RD}Error: backup lookup returned something that is not a volume id: '${BACKUP_ID}'${CL}"
+    exit 1
+  fi
 
   if [ -z "$BACKUP_ID" ]; then
     echo "${RD}Error: No backups found for VMID ${VMID}${CL}"
@@ -208,39 +234,60 @@ else
   info "Using specified backup: ${BACKUP_ID}"
 fi
 
-# Check if VM already exists
-info "Checking if VMID ${VMID} already exists..."
-VM_EXISTS=$(ssh root@${TARGET_NODE}.${ZONE}.internal "qm status ${VMID} 2>&1 >/dev/null && echo 'yes' || echo 'no'")
+# From here on, VMID is the SOURCE (whose backup we read) and RESTORE_VMID is
+# the DESTINATION. They differ only for --target-vmid, whose whole point is to
+# leave the original alone — so a rehearsal can never eat the thing it is
+# rehearsing the recovery of.
+RESTORE_VMID="${TARGET_VMID:-${VMID}}"
+if [ -n "${TARGET_VMID}" ]; then
+  info "Restoring INTO VMID ${RESTORE_VMID} (source VM ${VMID} is left untouched)"
+fi
+
+# Check if the DESTINATION VM already exists
+info "Checking if VMID ${RESTORE_VMID} already exists..."
+VM_EXISTS=$(ssh root@${TARGET_NODE}.${ZONE}.internal "qm status ${RESTORE_VMID} 2>&1 >/dev/null && echo 'yes' || echo 'no'")
 
 if [ "$VM_EXISTS" = "yes" ]; then
-  info "VM ${VMID} already exists on ${TARGET_NODE}"
+  if [ -n "${TARGET_VMID}" ]; then
+    echo "${RD}Error: target VMID ${RESTORE_VMID} is already in use${CL}"
+    echo "Pick an unused VMID — --target-vmid exists to avoid destroying anything."
+    exit 1
+  fi
+  info "VM ${RESTORE_VMID} already exists on ${TARGET_NODE}"
   read -p "Do you want to overwrite it? (yes/no): " CONFIRM
   if [ "$CONFIRM" != "yes" ]; then
     echo "Restore cancelled by user"
     exit 0
   fi
-  info "Stopping and removing existing VM ${VMID}..."
+  info "Stopping and removing existing VM ${RESTORE_VMID}..."
   ssh root@${TARGET_NODE}.${ZONE}.internal "bash -s" <<EOF
 set -e
 # Stop VM if running
-qm stop ${VMID} || true
+qm stop ${RESTORE_VMID} || true
 sleep 2
 # Destroy VM
-qm destroy ${VMID}
+qm destroy ${RESTORE_VMID}
 EOF
 fi
 
 # Perform the restore
-info "Restoring VM ${VMID} from backup..."
+info "Restoring VM ${VMID} from backup into VMID ${RESTORE_VMID}..."
 
-# Construct the volume ID (format: storage:backup/path)
-# If BACKUP_ID doesn't start with "backup/", add it
-if [[ "${BACKUP_ID}" == backup/* ]]; then
-  VOLID="${STORAGE_NAME}:${BACKUP_ID}"
-else
-  VOLID="${STORAGE_NAME}:backup/${BACKUP_ID}"
-fi
+# Normalize whatever form of backup identifier we were given into a volid:
+#   tappaas_backup:backup/vm/110/…  already a volid (what --list prints)
+#   backup/vm/110/…                 storage-relative path
+#   vm/110/…                        the bare snapshot triple
+case "${BACKUP_ID}" in
+  *:backup/*) VOLID="${BACKUP_ID}" ;;
+  backup/*)   VOLID="${STORAGE_NAME}:${BACKUP_ID}" ;;
+  *)          VOLID="${STORAGE_NAME}:backup/${BACKUP_ID}" ;;
+esac
 info "Using volume ID: ${VOLID}"
+
+# A copy restored alongside its original MUST get fresh MAC addresses, or two
+# guests answer for the same address the moment either is started.
+UNIQUE_OPT=""
+[ -n "${TARGET_VMID}" ] && UNIQUE_OPT="--unique 1"
 
 # Build restore options
 RESTORE_OPTS=""
@@ -255,24 +302,34 @@ RESTORE_OUTPUT=$(ssh root@${TARGET_NODE}.${ZONE}.internal "bash -s" <<EOF
 set -e
 
 # Clean up any stale lock files for this VMID
-if [ -f /var/lock/qemu-server/lock-${VMID}.conf ]; then
-  echo "Removing stale lock file for VM ${VMID}..."
-  rm -f /var/lock/qemu-server/lock-${VMID}.conf
+if [ -f /var/lock/qemu-server/lock-${RESTORE_VMID}.conf ]; then
+  echo "Removing stale lock file for VM ${RESTORE_VMID}..."
+  rm -f /var/lock/qemu-server/lock-${RESTORE_VMID}.conf
 fi
 
 # Unlock the VM if it's locked
-if qm status ${VMID} >/dev/null 2>&1; then
-  echo "Unlocking VM ${VMID}..."
-  qm unlock ${VMID} 2>/dev/null || true
+if qm status ${RESTORE_VMID} >/dev/null 2>&1; then
+  echo "Unlocking VM ${RESTORE_VMID}..."
+  qm unlock ${RESTORE_VMID} 2>/dev/null || true
 fi
 
-# Capture restore output for error checking
+# Capture restore output AND its real exit code. Piping pvesh into tee used to
+# hide the failure: a pipeline exits with tee status, so the remote set -e never
+# fired and the only detection left was grepping the output for the word
+# "error". A restore that did nothing at all reported success.
+# (No backticks in this comment: the heredoc is unquoted, so they would be
+# command substitution executed on THIS side.)
 RESTORE_TMP=\$(mktemp)
+RESTORE_RC=0
 
 if [ -n "${TARGET_STORAGE}" ]; then
-  pvesh create /nodes/${TARGET_NODE}/qemu --vmid ${VMID} --archive ${VOLID} --storage ${TARGET_STORAGE} --force 1 2>&1 | tee \$RESTORE_TMP
+  pvesh create /nodes/${TARGET_NODE}/qemu --vmid ${RESTORE_VMID} --archive ${VOLID} --storage ${TARGET_STORAGE} --force 1 ${UNIQUE_OPT} > \$RESTORE_TMP 2>&1 || RESTORE_RC=\$?
 else
-  pvesh create /nodes/${TARGET_NODE}/qemu --vmid ${VMID} --archive ${VOLID} --force 1 2>&1 | tee \$RESTORE_TMP
+  pvesh create /nodes/${TARGET_NODE}/qemu --vmid ${RESTORE_VMID} --archive ${VOLID} --force 1 ${UNIQUE_OPT} > \$RESTORE_TMP 2>&1 || RESTORE_RC=\$?
+fi
+cat \$RESTORE_TMP
+if [ "\$RESTORE_RC" -ne 0 ]; then
+  echo "RESTORE_FAILED_RC=\$RESTORE_RC"
 fi
 
 # Check for errors in restore output
@@ -287,7 +344,15 @@ rm -f \$RESTORE_TMP
 EOF
 )
 
-# Check for errors
+# Check for errors. The rc marker is authoritative; the text grep below stays
+# as a second net for the cases where pvesh reports trouble but exits 0.
+if echo "$RESTORE_OUTPUT" | grep -q "RESTORE_FAILED_RC="; then
+  echo "${RD}Error: the restore command failed${CL} ($(echo "$RESTORE_OUTPUT" | grep -o 'RESTORE_FAILED_RC=[0-9]*'))"
+  echo "$RESTORE_OUTPUT" | grep -v RESTORE_FAILED_RC | tail -15
+  echo
+  echo "Nothing was restored into VMID ${RESTORE_VMID}."
+  exit 1
+fi
 if echo "$RESTORE_OUTPUT" | grep -q "STORAGE_LOCK_ERROR"; then
   echo "${RD}Error: Storage lock timeout during restore${CL}"
   echo "The target storage '${TARGET_STORAGE}' is currently locked by another operation."
@@ -297,8 +362,8 @@ if echo "$RESTORE_OUTPUT" | grep -q "STORAGE_LOCK_ERROR"; then
   echo "  2. Try without --storage option to use original storage location"
   echo "  3. Choose a different target storage"
   echo ""
-  echo "Note: VM ${VMID} was partially created but disks were not fully restored."
-  echo "You may need to run: ssh root@${TARGET_NODE}.${ZONE}.internal qm destroy ${VMID}"
+  echo "Note: VM ${RESTORE_VMID} was partially created but disks were not fully restored."
+  echo "You may need to run: ssh root@${TARGET_NODE}.${ZONE}.internal qm destroy ${RESTORE_VMID}"
   exit 1
 elif echo "$RESTORE_OUTPUT" | grep -q "RESTORE_ERRORS_DETECTED"; then
   echo "${RD}Error: Restore completed with errors${CL}"
@@ -307,14 +372,30 @@ elif echo "$RESTORE_OUTPUT" | grep -q "RESTORE_ERRORS_DETECTED"; then
   exit 1
 fi
 
+# Trust, then verify: ask Proxmox whether the guest is really there. A restore
+# that reports success without producing a VM is the one failure mode a backup
+# system must never have.
+if ! ssh -n root@${TARGET_NODE}.${ZONE}.internal "qm config ${RESTORE_VMID}" >/dev/null 2>&1; then
+  echo "${RD}Error: restore reported success but VMID ${RESTORE_VMID} does not exist on ${TARGET_NODE}${CL}"
+  exit 1
+fi
+
 info "\n${GN}Restore completed successfully!${CL}"
 echo
-echo "VM ${VMID} has been restored to ${TARGET_NODE}"
+echo "VM ${VMID} has been restored to ${TARGET_NODE} as VMID ${RESTORE_VMID}"
 echo
+if [ -n "${TARGET_VMID}" ]; then
+  echo "It is STOPPED and has fresh MAC addresses. Starting a restored COPY on the"
+  echo "same network as its original is how you get two guests answering for one"
+  echo "identity — inspect it, then start it deliberately if that is what you want:"
+  echo "  ssh root@${TARGET_NODE}.${ZONE}.internal qm start ${RESTORE_VMID}"
+  echo "  ssh root@${TARGET_NODE}.${ZONE}.internal qm destroy ${RESTORE_VMID}   # when done"
+  exit 0
+fi
 read -p "Do you want to start the VM now? (yes/no): " START_VM
 if [ "$START_VM" = "yes" ]; then
   info "Starting VM ${VMID}..."
-  ssh root@${TARGET_NODE}.${ZONE}.internal "qm start ${VMID}"
+  ssh root@${TARGET_NODE}.${ZONE}.internal "qm start ${RESTORE_VMID}"
   echo "${GN}VM ${VMID} started successfully${CL}"
 else
   echo "VM ${VMID} is ready but not started. Start it manually when ready."

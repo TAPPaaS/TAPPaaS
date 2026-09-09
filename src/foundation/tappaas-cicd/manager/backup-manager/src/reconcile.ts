@@ -14,7 +14,7 @@
 // default; --apply commits. It is idempotent (the controller's add-to-job is a
 // no-op when the vmid is already covered), so it is safe to run anytime.
 
-import { listModules, moduleInPbsJob, moduleVmid, resolvePolicy } from "./config";
+import { listBackupModules, moduleInPbsJob, moduleVmid, resolvePolicy } from "./config";
 import { Action, Client, JobStatus, Plan } from "./types";
 
 export function computePlan(configDir: string, job: JobStatus): Plan {
@@ -27,15 +27,19 @@ export function computePlan(configDir: string, job: JobStatus): Plan {
 
   const liveVmids = new Set(job.vmids);
 
-  // Track schedules requested by enabled modules so we apply the shared job's
-  // start time once (the controller's apply-schedule sets the single shared
-  // job; per-environment schedules are a follow-up).
-  const schedules = new Set<string>();
+  // Each module's resolved schedule decides WHICH job it belongs in — one
+  // cluster backup job per distinct frequency (ADR-012 D16). The controller's
+  // add-to-job carries the bucket, so a schedule change is a move between jobs.
+  const buckets = new Set<string>();
 
-  for (const module of listModules(configDir)) {
+  // Target discovery is the opted-in set (#544): real modules, shape-detected,
+  // that declare a backup capability under dependsOn or integratesWith. It used
+  // to be every *.json in config/ minus a five-name deny-list, which swept up
+  // state files as phantom modules.
+  for (const module of listBackupModules(configDir)) {
     const pol = resolvePolicy(configDir, module);
     if (!pol.enabled) continue; // disabled modules are not job members
-    if (!moduleInPbsJob(configDir, module)) continue; // only dependsOn backup:vm modules join
+    if (!moduleInPbsJob(configDir, module)) continue; // backup:vm opt-in only (not filesystem)
 
     const vmid = moduleVmid(configDir, module);
     if (!vmid) {
@@ -43,37 +47,37 @@ export function computePlan(configDir: string, job: JobStatus): Plan {
       continue;
     }
 
-    if (pol.schedule) schedules.add(pol.schedule);
+    if (!pol.scheduleBucket) {
+      warnings.push(
+        `module '${module}' has unsupported schedule '${pol.schedule}' — skipped ` +
+          `(use daily | weekly | monthly | HH:MM; see 'backup-manager validate')`,
+      );
+      continue;
+    }
+    buckets.add(pol.scheduleBucket);
 
     // ensure-job-member: idempotent. If the live job already covers this vmid
     // (and PBS is reachable so we know the live list), skip the action.
-    if (job.reachable && liveVmids.has(vmid)) continue;
+    // The live vmid set we can see is the DAILY job's, so this skip is only
+    // safe for a module that resolves to daily; anything else must be placed
+    // explicitly so a schedule change actually moves it.
+    if (job.reachable && liveVmids.has(vmid) && pol.scheduleBucket === "daily") continue;
 
     actions.push({
       kind: "ensure-job-member",
-      target: `module '${module}' (vmid ${vmid}) → PBS job member (retention ${pol.retention})`,
-      apply: (client: Client) => client.addToJob(vmid, pol.retention),
+      target: `module '${module}' (vmid ${vmid}) → ${pol.scheduleBucket} PBS job (retention ${pol.retention})`,
+      apply: (client: Client) => client.addToJob(vmid, pol.retention, pol.scheduleBucket ?? "daily"),
     });
   }
 
-  // One apply-schedule per distinct resolved schedule. Today the shared job
-  // carries a single start time, so >1 distinct schedule is reported as a
-  // warning (per-environment schedules are the documented follow-up) and the
-  // first is applied for determinism.
-  const scheduleList = Array.from(schedules).sort();
-  if (scheduleList.length > 1) {
-    warnings.push(
-      `modules resolve ${scheduleList.length} distinct schedules (${scheduleList.join(", ")}); ` +
-        `the shared PBS job carries one start time — applying '${scheduleList[0]}' ` +
-        `(per-environment schedules are a follow-up)`,
-    );
-  }
-  if (scheduleList.length >= 1) {
-    const spec = scheduleList[0];
+  // Each distinct bucket in use gets its schedule asserted on its own job.
+  // Several distinct schedules is now the NORMAL case, not a warning — that is
+  // what buckets are for.
+  for (const bucket of Array.from(buckets).sort()) {
     actions.push({
       kind: "apply-schedule",
-      target: `shared PBS job start time → '${spec}'`,
-      apply: (client: Client) => client.applySchedule(spec),
+      target: `${bucket} PBS job schedule`,
+      apply: (client: Client) => client.applySchedule(bucket),
     });
   }
 

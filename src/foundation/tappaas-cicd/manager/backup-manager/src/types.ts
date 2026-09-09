@@ -33,16 +33,23 @@ export interface ModuleBackup {
   exclude?: string[];
 }
 
+// A resolved schedule maps to exactly one cluster backup job (ADR-012 D16).
+export type ScheduleBucket = "daily" | "weekly" | "monthly";
+
 // ── The resolved effective policy (the CRUD entity) ───────────────────
 // One object per module — the JSON `bc_resolve` prints. residency has no
-// module layer; schedule/target/offsite inherit from env/site.
+// module layer; target/offsite come from the site.
 export interface BackupPolicy {
   module: string;
   environment: string | null;
   enabled: boolean;
   retention: string;
   residency: string;
-  schedule: string | null;
+  // Always resolved (ADR-012 §3.2): module > environment > site > "daily".
+  schedule: string;
+  // The job this resolves to; null when the schedule is not a supported one,
+  // which `validate` reports as an error rather than defaulting away.
+  scheduleBucket: ScheduleBucket | null;
   target: string | null;
   offsite: string | null;
   exclude: string[];
@@ -53,14 +60,21 @@ export interface BackupPolicyStatus extends BackupPolicy {
   inPbsJob: boolean; // module declares dependsOn backup:vm
 }
 
-// ── Placement (ADR-012) — where/whether the local PBS is realized ─────
-// Read from backup.json; the manager surfaces it (validate warns on a shim) so
-// operators can see when backups have no datastore yet.
+// ── Placement (ADR-012 §2.1) — where/whether PBS is realized ──────────
+// Read from backup.json. There is no `placement` policy field: placementState
+// is the single source of truth, install-resolved. The manager surfaces it
+// (validate warns on a shim) so operators can see when backups have no
+// datastore yet.
+export type PlacementKind = "shim" | "external" | "local" | "unresolved";
 export interface Placement {
-  placement: string; // policy: auto | node:<n> | shim | remote-only
-  placementState: string | null; // resolved: local | shim | remote-only (null = legacy/unset)
+  // node:<name> | shim | external — or a legacy local | remote-only until the
+  // module's next update migrates it; null when never resolved.
+  placementState: string | null;
+  kind: PlacementKind; // classified state, legacy values folded in
+  node: string | null; // the node PBS runs on, when kind is "local"
+  pbsUrl: string; // the PBS clients push to (default backup.mgmt.internal)
   pbsStorageName: string; // datastore / pvesm storage the managed job targets
-  pushTarget: string | null; // remote-only default push target name (or null)
+  pushTarget: string | null; // DEPRECATED — legacy remote-only push target
 }
 
 // ── Off-site peer (ADR-012 §3.1) — the symmetric pull / receive / push ─
@@ -94,9 +108,12 @@ export interface Client {
   // ── PBS mutations (reconcile apply → controller owns the PBS write) ──
   // backup-controller add-to-job <vmid> [--retention <spec>] — ensure a vmid
   // is a member of the shared managed PBS backup job.
-  addToJob(vmid: string, retention?: string): void;
+  addToJob(vmid: string, retention?: string, bucket?: string): void;
   // backup-controller apply-schedule <spec> — set the shared job's start time.
   applySchedule(spec: string): void;
+  keyList(): void;
+  keyExport(dest: string): void;
+  keyImport(src: string): void;
 }
 
 // ── Reconcile plan ────────────────────────────────────────────────────

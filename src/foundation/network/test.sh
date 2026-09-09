@@ -321,11 +321,14 @@ for f in "${CONFIG_DIR}"/*.json; do
         network_alias_count=$((network_alias_count + 1))
         continue
     fi
-    # ADR-012: a datastore-less backup (placementState shim / remote-only)
-    # realizes no local host, so it has no <vmname> DNS record by design —
-    # exclude it, mirroring the aliasType=network exclusion above.
+    # ADR-012 §2.1: a backup module that realizes no LOCAL PBS — a shim (no
+    # datastore anywhere) or external (the datastore is someone else's, reached
+    # by URL) — has no <vmname> host and so no DNS record by design. Exclude it,
+    # mirroring the aliasType=network exclusion above. `remote-only` is the
+    # legacy spelling of external, still seen until the module's next update.
     placement_state=$(jq -r '.placementState // empty' "${f}" 2>/dev/null)
-    if [[ "${placement_state}" == "shim" || "${placement_state}" == "remote-only" ]]; then
+    if [[ "${placement_state}" == "shim" || "${placement_state}" == "external" \
+       || "${placement_state}" == "remote-only" ]]; then
         hostless_count=$((hostless_count + 1))
         continue
     fi
@@ -338,7 +341,7 @@ if [[ "${network_alias_count}" -gt 0 ]]; then
 fi
 
 if [[ "${hostless_count}" -gt 0 ]]; then
-    skip "${hostless_count} module(s) excluded — datastore-less backup (shim/remote-only) has no DNS record by design"
+    skip "${hostless_count} module(s) excluded — backup with no local datastore (shim/external) has no DNS record by design"
 fi
 
 if [[ -z "${sample_modules}" ]]; then

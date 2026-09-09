@@ -373,6 +373,23 @@ function joinAndCapture(
     else warn(`  could not register ${o.name} on storage '${pool}': ${r.out.trim()} — fix with: pvesm set ${pool} --nodes <list>`);
   }
 
+  // backup client on the new node ------------------------------------------
+  // ADR-012 §2.4 (#382): the per-node proxmox-backup-client is an idempotent
+  // reconcile keyed on CURRENT cluster membership, and the backup module's
+  // update runs it. A node that joins after backup was installed therefore has
+  // no client until something triggers that reconcile — which is why this is an
+  // automatic step here and NOT a line in a runbook: a missed manual step means
+  // every VM on the new node silently has no backup.
+  //
+  // A failure is a warning, never a failed join: the node IS in the cluster by
+  // now, and the remedy is one idempotent command the operator can re-run.
+  step("reconciling the backup client onto the new node (ADR-012 §2.4)");
+  if (runStream("module-manager", ["modify", "backup", "--silent"]) !== 0) {
+    warn(`  could not reconcile the backup client onto ${o.name} — ` +
+         `run ${YW}module-manager modify backup${CL} once it is reachable, ` +
+         `or its VMs will not be backed up`);
+  }
+
   info(`\n${GN}✓ node '${o.name}' is in the cluster and captured${CL}`);
   info(`  next: run ${YW}update-tappaas --force${CL} to fold HA + replication over the new topology.`);
 }

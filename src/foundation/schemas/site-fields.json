@@ -164,6 +164,11 @@
             "global"
           ],
           "default": "eu-only"
+        },
+        "defaultSchedule": {
+          "description": "Site-wide default backup frequency and the base of the Site -> Environment -> Module schedule cascade (ADR-012 §3.2). One of 'daily' | 'weekly' | 'monthly', or a bare 'HH:MM' meaning daily at that time. Environments and modules may override it, but never with anything more frequent than once a day — that ceiling is the platform's, not a policy.",
+          "type": "string",
+          "default": "daily"
         }
       }
     },

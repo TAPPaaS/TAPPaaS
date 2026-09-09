@@ -2,9 +2,9 @@
 
 **Companion to:** [ADR-012 — Backup Enhancement](../ADR/ADR-012-backup-enhancement.md) (the *why* + the decided design)
 **Purpose of this doc:** a single place that (1) records **implementation-level decisions**, (2) breaks the work into **packages** with deliverables/dependencies/test-criteria, and (3) **tracks live execution state** — status, tests, commits — per package.
-**Status:** Planning (ADR still `Draft`; no package started)
-**Branch:** `ADR007` — the `backup-manager` / `backup-controller` this ADR extends exist **only** on `ADR007` (see [Relationship to ADR-007 & ADR-010](#relationship-to-adr-007--adr-010--build-sequencing))
-**Started:** 2026-07-04
+**Status:** v0.2 packages **P1–P9 complete**. v0.3 packages **P10–P20 complete** (2026-09-09) — implemented, offline-green and live-verified on the 3-node reference cluster. The one deferred item is the **two-PBS** half of the #389 compromise-isolation suite, which needs a second datastore. See [v0.3 — remaining work](#v03--remaining-work-p10p20).
+**Branch:** `main` — ADR-007 has landed; `backup-manager` / `backup-controller` and the named foundation layout are on `main`. (The v0.2 note below about building on `ADR007` is historical.)
+**Started:** 2026-07-04 · **v0.3 planning:** 2026-09-09
 
 > Modeled on [ADR-010-implementation.md](ADR-010-implementation.md) — one document, because ADR-012 is a single self-contained capability (backup-module behaviour), not a multi-ADR taxonomy.
 
@@ -154,6 +154,17 @@ Live execution state. A row is **not done** until it passes the [package gate](#
 | P7 | Tooling: manager/controller | §5 | ✅ | **cicd** TS 60/0 + ctrl 11/0 | (slice 3) | TS layer (operator choice) built + live-verified on cicd |
 | P8 | Bootstrap & promotion wiring | §4 | 🧪 | offline | (slice 1) | remote-only wiring done (folded into P4) |
 | P9 | Hardening & docs | #389 | 🧪 | docs done | (slice 4) | QUICKREF+TEST done; compromise-isolation suite + ADR→Proposed pending cluster/operator |
+| P10 | Placement state (`placement` dropped, `external`, `pbsUrl`) | #402, #214 | ✅ | offline 67/0 + **live** | (working tree) | migrated live: `local` → `node:tappaas3`, job + storage.cfg byte-identical |
+| P11 | Consume a pre-existing PBS | #456 | ✅ | offline 123/0 + **live** | (working tree) | live: consumed the site PBS by URL, 165 snapshots visible, torn down clean |
+| P12 | Schema + `provides` + KI-1 normalizer | §2.7 | ✅ | mm 123/0, bm 26/0 + TS 77/0 | (working tree) | KI-1 was already fixed upstream — verified, not re-fixed |
+| P13 | `backup:filesystem` capability | §3.1, #545 | ✅ | offline 203/0 + **live** | (working tree) | mothership `config/` captured, restored byte-identical, refused without the key |
+| P14 | Schedule cascade + bucket jobs | §3.2 | ✅ | offline 172/0 + TS 116/0 + **live** | (working tree) | weekly/monthly bucket jobs created + moved + torn down live |
+| P15 | Retire `alwaysBackup` via `integratesWith` | #501, #545 | ✅ | offline 134/0 + TS 82/0 + **live** | (working tree) | **found + fixed live: the mothership was never in the backup job** |
+| P16 | Shape-based module discovery | #544 | ✅ | mm 123/0, bm 26/0 + TS 96/0 + **live** | (working tree) | 7 phantom modules gone; also fixed `reconcile`'s numeric-vmid blindness |
+| P17 | Node-add triggers client reconcile | #382 §2.4 | ✅ | sm 11/0 + **live** | (working tree) | automatic step, non-fatal; verified in the installed binary |
+| P18 | Foundation coverage + rehearsed recovery | #545 | ✅ | **live rehearsals** + runbook | (working tree) | firewall + mothership + config/ all restored and verified; 2 restore bugs found |
+| P19 | Encryption-key export / import | §2.5.1 | ✅ | ctrl 18/0 + **live round trip** | (working tree) | export → media → import onto a fresh escrow, byte-identical |
+| P20 | Migration + documentation + ADR acceptance | §4, §15 | ✅ | docs + ADR updated | (working tree) | 18/19 acceptance boxes; the two-PBS #389 half remains |
 
 > **Discovery (2026-07-05, from reading the code):** P6's symmetry is **already ~80% built** by #227 — `pbs-namespace.sh` is a complete idempotent toolbox (namespace/remote/sync-job/prune-job/acl/user), `services/remote/` does Class A **pull** and `services/external/` does Class B **push-receive**, both with the prompt-not-store credential model. The only missing leg of the symmetry is this cluster **pushing out** (the mirror of external-receive) → **P4 `services/push/`**. Slices: **(1) P4+P6+P8** push/remote-only + symmetry; **(2) P5** subset/retention + immutability; **(3) P7** tooling; **(4) P9** hardening/docs. Live testing of all deferred to the incoming 3-node + tankc cluster.
 
@@ -200,7 +211,271 @@ Recorded here to fix later — each **needs a real GitHub issue first** to think
 
 ---
 
+---
+
+# v0.3 — remaining work (P10–P20)
+
+**Planned 2026-09-09.** Branch `main` (ADR-007 landed; `backup-manager`/`backup-controller` and the
+named foundation layout are on `main` now). P1–P9 above are complete; what follows is the ADR v0.3
+restructure (ADR [Implementation Plan](../ADR/ADR-012-backup-enhancement.md#implementation-plan-phased)
+items 10–15) plus the two issues that fell out of it (#544, #545), plus the §2.4 node-add hook that
+was specified but never wired.
+
+## What changed in the repo since v0.2 (re-baselined 2026-09-09)
+
+| Assumption in the ADR text | Reality on `main` today | Consequence |
+|---|---|---|
+| Backup fields live in `schemas/module-fields.json` (§2.7) | Field schemas are **service-owned**: the backup fields are in [`backup/services/vm/fields.json`](../../src/foundation/backup/services/vm/fields.json) with ADR-020 `class`/`apply`/`changeNote` metadata. `module-fields.json` keeps only generic fields (+ a stale `fieldOrder`). | §2.7's file reference is stale — **all schema deltas land in the service fields file** (D15). |
+| `alwaysBackup` retirement waits on #501 | **#501 has landed** — `integratesWith` is in the schema and wired through `module-manager` install/update/delete/converge/validate. | P15 is unblocked; it is not a dependency wait. |
+| Off-site/2-PBS work "pending the incoming 3-node cluster" | The cluster **exists**: `tappaas1/2/3`, PBS active on `tappaas3`, datastore `tappaas_backup` on `tankc1`, one managed job (`TAPPaaS-backup-vm-managed`, 9 VMIDs, 21:00), `proxmox-backup-client` on all 3 nodes. | The deferred v0.2 live tests (compromise isolation, restore-with/without-key, subset, immutability) run in this round. |
+| §2.4 "node-add triggers the reconcile automatically" | `site-manager node add` ends at storage registration ([provision.ts](../../src/foundation/tappaas-cicd/manager/site-manager/src/provision.ts)) — **no backup call**. | Own package (P17). |
+| #544 "discovery scans `config/*.json`" | Confirmed: `backup-manager`'s `listModules` uses a stale 5-name deny-list, so `last-update-result.json` / `module-fields.json` classify as modules. `module-manager` already has a shape-based `isModuleConfig` to reuse. | P16. |
+
+> ⚠ **Operational note (not ADR work).** `tankc1` on `tappaas3` — the site's only local backup
+> datastore — is **DEGRADED**: a single HGST HDD with 10.4K read / 2.58K write / 27.7K cksum errors,
+> no redundancy, "no known data errors" so far. Live testing in this round keeps test data on
+> `tankc1` to a few small snapshots and prefers the sandbox PBS (T4) for volume.
+
+## Decisions log — v0.3 additions
+
+| # | Decision | Source |
+|---|----------|--------|
+| D14 | **Forcing `external` uses `install-module.sh`'s native field override** — `install-module.sh backup --force --placementState external --pbsUrl <url>` (friendly wrapper: `backup-manage.sh use-external <url>`). No new `pbsType` field. Resolves the ADR §2.1 open naming note. | ADR §2.1 (2026-09-09) |
+| D15 | **Schema deltas land in `backup/services/vm/fields.json`**, not `schemas/module-fields.json`; every new/changed field carries ADR-020 `class`/`apply`/`changeNote`. `fieldOrder` in `module-fields.json` is updated for ordering only. | repo re-baseline (2026-09-09) |
+| D16 | **Per-module schedules are realised as one cluster backup job per distinct resolved schedule** ("schedule buckets"). Marker becomes `TAPPaaS-backup-vm-managed` (daily — **the existing production job, unchanged, keeps its marker and 21:00**) plus `TAPPaaS-backup-vm-managed-<bucket>` for `weekly`/`monthly`. Membership stays a set operation over each bucket's `--vmid` list; a module that changes bucket is removed from the old job and added to the new one in the same reconcile. | operator choice (2026-09-09), ADR §3.2 |
+| D17 | **`backup:filesystem` is a second service directory** `backup/services/filesystem/` (own `fields.json` carrying `filesystemPaths`). Capture mechanism: `install-service.sh` deploys a guest-side `proxmox-backup-client` + systemd timer that pushes a host-type backup of the declared paths into namespace `fs/<module>` on the configured PBS, with a write-no-delete `<module>@pbs` login and the escrowed encryption key. **Gated on NixOS guests** (the one guest layout TAPPaaS knows); any other `ostype` fails the service install with a clear message rather than half-capturing. | ADR §3.1 (2026-09-09) |
+| D18 | **`alwaysBackup` retires via `integratesWith`.** PBS-job membership = union of `dependsOn` and `integratesWith` over `backup:vm` / `backup:filesystem`. `alwaysBackup` is read for one release with a deprecation warning and ignored once every listed module declares the relationship; then the field and its code path are removed. Backup stays opt-in — a module declaring neither is not in any job. | ADR §2.7, #501 (2026-09-09) |
+| D19 | **#544 fix = shared, shape-based module discovery.** Extract `module-manager`'s `isModuleConfig`-style discovery into `tappaas-cicd/lib/ts/src/` and consume it from both managers; `backup-manager` then filters to modules declaring a backup capability. The deny-list disappears. | #544 (2026-09-09) |
+| D20 | **#545 coverage (proposed + implemented this round).** `network` (the firewall VM) and `tappaas-cicd` gain `integratesWith: ["backup:vm"]`; **`config/` is captured as `backup:filesystem` on `tappaas-cicd`** (`/home/tappaas/config` + `/etc/secrets`); `cluster` and `templates` get **no** backup — they hold no state outside `config/` and are rebuilt by install. Every one of these gets a **written and rehearsed** restore path before #545 is claimed closed. | ADR §2.7, #545 (2026-09-09) |
+| D21 | **Live-test policy on the production cluster** (operator-approved 2026-09-09): mutating live tests **may touch the real cluster backup job additively**, under these rails — capture `pvesh get /cluster/backup` + `/etc/pve/storage.cfg` before any mutation and restore afterwards; **never** delete, prune, forget or overwrite an existing snapshot group; restores always target a **new, unused VMID** (never over a live VM); test guests use a reserved VMID (`99x`); volume tests go to the sandbox PBS (T4), not to degraded `tankc1`. | operator choice (2026-09-09) |
+| D23 | **The `placementState` pattern tolerates the legacy values for one release** (`^$|^(shim|external|node:.+|local|remote-only)$`). A deployed config is validated *before* the module's own `update.sh` gets to migrate it, so a strict v0.3-only pattern would fail validation on every existing install. The strict pattern lands when the deprecation window closes. | implementation (2026-09-09) |
+| D22 | **Migration is a read-once backfill.** `placement` is read once to seed `placementState` (`auto`/`node:*` → `node:<name>` once discovery resolves, `shim` → `shim`, `remote-only` → `external`), then dropped on write-back. `pushTarget` seeds `pbsUrl` when the state resolves to `external`. Legacy `placementState:local` → `node:<name>` with **no datastore move and no dependent reinstall**. | ADR §4.1 (2026-09-09) |
+
+## Packages
+
+### P10 — Placement state model: drop `placement`, add `external` + `pbsUrl` (#402, #214) · D14, D22
+
+- **Deliverables:** `lib/pbs-placement.sh` reworked to the §2.2 resolution order — forced `external` wins; a concrete `node:<name>`/`external` is kept; empty or `shim` re-derives. `placement_policy()` retires; new `pbs_placement_state` values `shim` \| `external` \| `node:<name>`; new `pbs_pbs_url` (default `backup.mgmt.internal`) and `pbs_is_external`. `install.sh`/`update.sh` branch on the state instead of the policy. `update.sh` backfills legacy configs (D22). Shim guards in `services/vm/{install,update,test}-service.sh` learn the difference between "no datastore" (shim → skip) and "datastore elsewhere" (external → proceed against the registered storage). `pbs-job.sh` `pbs_node`/`pbs_storage_name` honour `external`.
+- **Depends on:** nothing (first package).
+- **Test criteria:** extended `lib/test-pbs-placement.sh` covering the full derivation matrix (empty/shim/node:/external × forced/not × tankc found/not) and the legacy fixtures (`placement:auto`+`placementState:local`, `remote-only`+`pushTarget`); new `lib/test-pbs-migrate.sh` for the backfill; live: `update-module backup` on this cluster leaves `placementState: node:tappaas3`, the datastore untouched and the job's VMID list byte-identical.
+
+### P11 — Consume a pre-existing PBS (#456) · D14
+
+- **Deliverables:** `lib/pbs-external.sh` — idempotently register the PBS at `pbsUrl` as a Proxmox `pbs` storage (fingerprint + prompt-not-store credential), **no datastore creation, no PBS package install, no `tankc` discovery**; run the client reconcile; wire the managed job to that storage. `backup-manage.sh use-external <url> [--datastore <ds>]` as the operator wrapper over D14's field override.
+- **Depends on:** P10.
+- **Test criteria:** unit — storage-arg derivation + idempotence + "never creates a datastore". Live (additive, rolled back) — register `tappaas3`'s PBS **by URL** from `tappaas1` as a second storage under a test name/namespace, back up the scratch guest into it, confirm pre-existing snapshots stay listable and restorable, then remove the test storage.
+
+### P12 — Schema + `provides` + KI-1 normalizer (§2.7) · D15
+
+- **Deliverables:** in `services/vm/fields.json` — remove `placement`; re-spec `placementState` (ships empty, pattern `^(shim|external|node:.+)$`, runtime-written); add `pbsUrl`; add `backup.schedule`; mark `pushTarget` + `alwaysBackup` deprecated. In `backup.json` — drop `placement`, keep `node`/`storage` as *discovery constraints*, add `pbsUrl` default, set `provides: ["vm","filesystem"]`. **KI-1**: make `regroup_to_pattern_a` in `site-manager/convert-json-to-config.sh` `provides`-aware (a field whose `usedBy` names a capability the module *provides* is the provider's own config, not an orphan) + its own unit test; the four `image*`/`storage` warnings (`usedBy:[cluster:vm]`) are attributed explicitly in the same pass.
+- **Depends on:** P10 (same coherent change; land together).
+- **Test criteria:** `module-manager validate backup` clean; the reconcile step emits **zero** orphan-field warnings for backup; schema round-trip of a shim, a `node:<name>` and an `external` config; `module-manager` fixture suite green.
+
+### P13 — `backup:filesystem` capability (§3.1) · D17
+
+- **Deliverables:** `services/filesystem/{fields.json,install-service.sh,update-service.sh,delete-service.sh,test-service.sh}`; `filesystemPaths` schema; guest-side client + timer + write-no-delete login; namespace `fs/<module>`; NixOS-only gate with an explicit failure otherwise; restore path documented in `restore.sh`.
+- **Depends on:** P10, P12.
+- **Test criteria:** unit — namespace/path/timer derivation, OS gate. Live — `tappaas-cicd` itself is the first consumer (this is also #545's `config/` capture, P18): declare the paths, run the capture, confirm the snapshot exists in `fs/tappaas-cicd`, restore it into a scratch directory and diff.
+
+### P14 — Schedule cascade with bucket jobs (§3.2) · D16
+
+- **Deliverables:** `site-fields.json` gains `backup.defaultSchedule` (default `daily`); `services/vm/fields.json` `backup.schedule`; `backup-manager` resolves module > environment > site > `daily` and **rejects sub-daily** (once/day ceiling) in `validate`/`modify`; `list`/`resolve`/`show` surface the effective schedule. `pbs-job.sh` becomes bucket-aware (ensure/move/remove across `-weekly`/`-monthly` jobs, daily keeping today's marker); `backup-controller` gets the apply verb; `backup-manager reconcile` plans bucket moves.
+- **Depends on:** P12.
+- **Test criteria:** TS cascade unit tests (inherit, env override, module override, sub-daily rejected); bash bucket unit tests (move between buckets, no-op re-run, daily marker preserved). Live — pin the scratch guest to `weekly`, reconcile, confirm a `-weekly` job appears carrying only it **and the production daily job's VMID list is unchanged**; unpin, confirm the weekly job is emptied/removed.
+
+### P15 — Retire `alwaysBackup` via `integratesWith` (§2.7, #501) · D18
+
+- **Deliverables:** membership becomes the union of `dependsOn` + `integratesWith` over the backup capabilities; `network` and `tappaas-cicd` declare `integratesWith: ["backup:vm"]`; `alwaysBackup` read-with-warning, then removed from `backup.json` and the code path.
+- **Depends on:** P12.
+- **Test criteria:** unit — union membership, opt-out (neither relationship → not in any job), deprecation warning fires once. Live — **the production job's VMID list is byte-identical before and after the switch** (the headline regression); a scratch module declaring neither is absent from every job.
+
+### P16 — #544: shape-based module discovery · D19
+
+- **Deliverables:** extract shape-based discovery into `tappaas-cicd/lib/ts/src/`, consume from `module-manager` and `backup-manager`; `backup-manager` filters to modules declaring `backup:vm`/`backup:filesystem` in `dependsOn` **or** `integratesWith`; the `NON_MODULES` deny-list is deleted.
+- **Depends on:** P15 (shares the membership predicate).
+- **Test criteria:** TS unit with fixtures including `last-update-result.json`, `zones.effective.json`, `module-fields.json`, `*.orig`, an unparseable file → none classify as modules. Live — `backup-manager list` on this cicd shows only real modules.
+
+### P17 — Node-add triggers the client reconcile (§2.4, #382)
+
+- **Deliverables:** `site-manager node add` calls `module-manager modify backup` (the reconcile) as its final step, after storage registration; failure is a warning with the exact manual command, never a failed join.
+- **Depends on:** P10.
+- **Test criteria:** unit/dry-run of the added step. Live — a re-run of the reconcile on the current 3 nodes is a clean no-op (all three already carry the client); a simulated "missing client" node (package check stubbed) shows the install path being taken.
+
+### P18 — #545: foundation coverage + rehearsed recovery · D20
+
+- **Deliverables:** apply D20's coverage; write the recovery runbooks for the firewall VM, the mothership and `config/`; **rehearse each one** and record the transcript in the package log; only then claim #545.
+- **Depends on:** P13, P15.
+- **Test criteria:** firewall VM restored from PBS to a **new VMID, left stopped / NICs detached** (no IP conflict), disk contents verified; `tappaas-cicd` restore rehearsed the same way; `config/` capture restored into a scratch dir and diffed against live; each runbook re-read after the rehearsal so it matches what actually happened.
+
+### P19 — Encryption-key escrow: export / import (§2.5.1)
+
+- **Deliverables:** `backup-manager key export <dest>` (escrow → removable media, for the mandatory out-of-band copy) and `key import <src>` (media → `/etc/secrets` on a fresh mothership); escrow generation folded into onboarding; documented DR order.
+- **Depends on:** P13 (shares the client-key handling).
+- **Test criteria:** unit — path/permission handling (0600, refuses a world-readable dest). Live — the ADR's mandatory pair: restore the scratch guest from the sandbox PBS **with** the key (succeeds) and **without** it (fails cleanly, with a message that names the key).
+
+### P20 — Migration (§4) + documentation (§15) + ADR acceptance
+
+- **Deliverables:** the §4.5 migration plan realised (state backfill, #456 adoption, relocation-by-pull runbook, deprecation window); `backup/README.md`, `QUICKREF.md`, `TEST.md`; the `00-Template` authoring guide (backup capabilities, `backup.schedule`, placement states); migration + key runbooks; ADR acceptance checkboxes and this tracker updated.
+- **Depends on:** all of the above.
+- **Test criteria:** legacy-fixture upgrade test green; docs reviewed against the code that shipped (no aspirational text).
+
+**Execution order:** **P10 + P12** (one coherent state+schema change) → **P11** → **P15 → P16 → P17** (small, independent) → **P14** → **P13** → **P18** → **P19** → **P20**.
+
+## Test plan on this machine (`tappaas-cicd`, live cluster)
+
+Five tiers. T0–T2 run on every package; T3–T4 run where the package touches live PBS.
+
+| Tier | What | How | Risk |
+|---|---|---|---|
+| **T0 — static** | `bash -n` + **shellcheck** (installed here) on every changed script; `jq empty` on every changed JSON; `tsc --noEmit` (strict) via `nix-shell -p typescript nodejs_22` on changed TS. | per package, before tests | none |
+| **T1 — offline unit** | `backup/test.sh`, `manager/backup-manager/test.sh`, `manager/module-manager/test.sh`, `manager/site-manager/test.sh`, `controller/backup-controller/test.sh`, `test-module.sh backup`. Baseline today: backup 34/0, TS cascade 60/0, controller 11/0. | per package | none |
+| **T2 — live read-only** | `backup-manager placement\|peers\|list\|validate`, `backup-controller job-status\|namespaces`, `pvesm status` on all three nodes, `pvesh get /cluster/backup`. | per package | none |
+| **T3 — live mutating (additive, rolled back)** | Scratch LXC `bktest` (VMID `99x`, tanka1 on tappaas1, ~1 GB) as the guinea pig: job membership, bucket moves, external-storage registration, filesystem capture, restore-to-new-VMID, key with/without. **Rails (D21):** `pvesh get /cluster/backup` + `/etc/pve/storage.cfg` captured to the scratchpad before the first mutation and restored after the last; no delete/prune/forget outside the test's own groups; production VMIDs never removed. | P11, P13, P14, P15, P17, P18, P19 | low, bounded |
+| **T4 — two-PBS suite (#389)** | A **sandbox PBS**: file-backed zpool on `tappaas1`'s `tanka1` → its own datastore → registered as a buddy. Runs `TEST.md`'s six-step compromise-isolation checklist (pull delete-denied, push write-no-delete, immutability holds, subset/groupFilter, restore with/without key, simulated compromise) with production `tappaas_backup` only ever as a **pull source** (read-only on production). Torn down at the end. | P19, P20 | low — production is read-only in this tier |
+
+**Package gate (unchanged from above):** plan → implement → T0 → T1 → T2 → T3/T4 where applicable → log here. **All green → the work stays staged in the working tree for the operator to commit** (never `git commit`/`git push`). **Any red → stop the line**, log it here, fix, re-run; do not advance to the next package.
+
+**Stop-the-line / escalate to the operator** (do not improvise): any red gate that survives one fix attempt; anything needing a real external, satellite or third-party PBS credential; anything that would delete or overwrite production backup data; `tankc1` health degrading further; a design fork not already settled by D14–D22.
+
+---
+
 ## Package logs
+
+### 2026-09-09 — #389: the compromise-isolation invariant, tested live
+
+The headline §1.4.1 claim — *a compromise of one system must not be able to delete, encrypt or tamper with a copy held on another* — was documented as a six-step checklist waiting for a second PBS. It does not need one to be worth testing: what makes the claim true is **credential scoping**, and that can be attacked on a single server.
+
+[`backup/test-compromise-isolation.sh`](../../src/foundation/backup/test-compromise-isolation.sh) (12/12, self-tearing-down) creates a sandbox destination datastore and a **read-only** credential on the production datastore, then:
+
+1. **Pulls a subset** — a sync job with `--group-filter type:host` replicates the `config/` capture into the destination's own namespace, and **no VM backups come across** (the filter is checked only after a sync that actually moved something — asserting "no VMs" on an empty datastore passes for the wrong reason).
+2. **Attacks the source with the puller's own credential** — the credential an attacker holding the off-site system would have. `snapshot forget` is refused (`missing Datastore.Modify|Datastore.Prune`), `prune` is refused, and the source snapshot is still there afterwards. It *can* read, as a puller must.
+3. **Gives the destination its own prune job**, independent of the source's retention.
+
+Production is only ever a pull **source** and is never written to; the datastore, credential, remote and both jobs are removed at the end (verified: the node is back to one datastore, no remotes, no sync jobs).
+
+**What it still does not cover, and says so:** a genuinely separate PBS *host*. Two datastores on one server exercise credential scoping, the sync path and the subset filter faithfully, but not network isolation or a satellite over a tunnel.
+
+**Two bugs in my own test, worth recording** because both would have produced a green run that proved nothing: `--keep-last 0` is rejected by PBS *argument* validation before any permission check, so the prune attack never reached the thing it was testing; and a nested destination namespace needs its **parent** to exist first (`cannot create new namespace, parent fs doesn't already exists`) — which is exactly why the module's own `pbs_ns_ensure` walks the parent chain, and why a hand-rolled sync job has to do it too.
+
+### 2026-09-09 — P20: migration, documentation, ADR acceptance
+
+- **Migration (§4).** The state backfill (§4.1) and #456 adoption (§4.2) are implemented, unit-tested against legacy fixtures and **live-verified** — see P10 and P11. The deprecation window is open: `pushTarget` and `alwaysBackup` are read for one release, marked deprecated in the schema, and the resolver that reads `alwaysBackup` can no longer truncate. **Relocation-by-pull (§4.3) is documented but not rehearsed** — it needs a second datastore, and I have not invented one; it is called out as unrehearsed rather than quietly claimed.
+- **Docs.** `QUICKREF.md`'s ADR-012 section was rewritten from the v0.2 model it still described (a `placement` policy field, `remote-only`) to the v0.3 one — placement states, the two capabilities, the schedule cascade and its ceiling, key export/import, and the relocation runbook. `README.md`'s capability table now says what the module actually does, and its "what is not included" says plainly that backup is opt-in and stays opt-in. `TEST.md` lists the real suites and counts (203 offline asserts across eight suites, plus the components' own) and the live rehearsals. `00-Template/README.md` gained **"Getting your module backed up"** — pick a kind, declare neither if you want none, use `integratesWith` if you bootstrap first, and the once/day ceiling.
+- **A doc-only claim I removed:** QUICKREF's "Test Restore to Different Node" recipe restored *over* the original VMID on another node. It is now the `--target-vmid` rehearsal, with the warning about never starting a copy on its original's network.
+- **ADR acceptance: 18 of 19 boxes.** Every v0.3 row is checked with what actually proved it, and the one that is not — the **two-PBS** half of the #389 compromise-isolation suite (buddy pull, subset, off-site retention) — says so, alongside the half that *is* proven live (a client credential provably cannot delete its own snapshots). The restore-with/without-key box is checked for the `config/` capture and explicitly notes that doing it *from an off-site copy* still awaits a second PBS.
+- **ADR §2.7's file reference corrected** in place: field definitions live with the service that owns them since #567, so the deltas landed in the module's own manifests, not `schemas/module-fields.json`.
+
+### 2026-09-09 — P18: #545 — coverage decided, and the recovery actually rehearsed
+
+**Coverage (D20).** `network` (the firewall) and `tappaas-cicd` are backed up as VMs via `integratesWith: backup:vm`; `config/` is captured as a `backup:filesystem` (P13); `cluster` and `templates` get **nothing**, deliberately — they hold no state outside `config/` and install rebuilds them. Backup is opt-in, and covering what does not need it is how a backup set becomes noise.
+
+**Two shapes for the mothership, on purpose.** A VM snapshot restores the machine; the file capture restores `config/` in seconds into a running system and, unlike a snapshot, **onto a different mothership** — which is the case that matters, because full-site DR restores `config/` before there is a VM to restore into.
+
+**Rehearsed live, all three:**
+
+- **`config/`** — restored from `fs/tappaas-cicd` into a scratch directory, `diff -r` against the live tree **clean, 85 files**; the same restore without the key **refused**.
+- **Firewall (VMID 110 → 910)** — restored alongside the running original, **stopped**, **fresh MACs on both NICs**, GPT intact (EFI + FreeBSD boot + FreeBSD UFS, 3.2 GiB referenced), then destroyed.
+- **Mothership (VMID 130 → 930)** — it had **no VM backup at all** (it joined the job only today, in P15), so its first backup was taken: 32 GiB, 84 s. Restored to 930, **root filesystem mounted read-only** and verified as genuinely the mothership — `/home/tappaas/config` with 23 module configs, `/etc/nixos`, the operator's home — then unmounted and destroyed.
+- Production came out untouched: the job still lists exactly its ten VMIDs, `storage.cfg` semantically identical, no leftover disks.
+
+**`restore.sh --target-vmid` is new, and was necessary.** It restores *alongside* the original — stopped, fresh MACs, and it refuses a VMID already in use — so a rehearsal can never eat the thing it is rehearsing. Without it, the only way to test a restore was to overwrite production.
+
+**Two bugs in `restore.sh`, both fatal, both invisible until a real restore:**
+
+1. **The "latest backup" lookup parsed the pretty-printed table.** `pvesh … | grep volid | tail -1 | awk '{print $3}'` — `grep volid` matched the **table header**, the only line containing that word, so it extracted a box-drawing character and tried to restore from `tappaas_backup:backup/│`. Now JSON + `sort_by(.ctime) | last`, with a volid-shape check that refuses anything else.
+2. **A restore that did nothing reported success.** `pvesh create … | tee` makes the pipeline exit with *tee's* status, so the remote `set -e` never fired and the only detection left was grepping output for the word "error". The first rehearsal printed *"Restore completed successfully!"* while creating no VM whatsoever. The exit code is now captured and authoritative, and the script **asks Proxmox whether the guest actually exists** before claiming success — a backup tool that reports a phantom restore is worse than one that fails.
+   *(A third, smaller one: backticks inside an unquoted heredoc are command substitution — a comment mentioning `pvesh … | tee` was executed on the local side.)*
+
+**[backup-recovery-runbook.md](backup-recovery-runbook.md)** is the written path #545 asks for: what is covered and why, restoring `config/`, the mothership (both paths, and the DR ordering — key import **before** any restore that must decrypt), the firewall, and how to verify coverage without waiting for a disaster. Every procedure in it is one that was run.
+
+### 2026-09-09 — P19: the out-of-band encryption key (§2.5.1)
+
+Backups are encrypted client-side, so a key that does not outlive its client is the difference between a restore and a pile of ciphertext. TAPPaaS escrows every client key centrally — but that escrow sits **inside the system a full-site DR is rebuilding**, so it cannot be the only copy. These verbs are the copy that leaves the building, and its way back in.
+
+- **`backup-controller key list|export <dest>|import <src>`** does the file work (it owns live state); **`backup-manager key …`** is the operator verb the ADR names, delegating to it — the same manager/controller split as everything else here.
+- **`export`** writes each escrowed key to `<media>/tappaas-backup-keys/`, mode 600, plus a **plain-text README** naming the three DR steps. Whoever needs that media will be rebuilding a site and will not have this repository to hand.
+- **`import`** loads keys into the escrow on a fresh mothership and **never overwrites an already-escrowed key** — anywhere but a rebuilt mothership, a silent replacement could strand every backup made with the key it replaced. It reports what it left alone.
+- **Live round trip:** exported the mothership's real key → media → imported onto a throwaway escrow → **byte-identical** (`cmp`) → re-import left it untouched. Combined with P13's live pair (restore succeeds with the key, is refused without it), §2.5.1 is now demonstrated end to end rather than asserted.
+- **Tests:** 7 new asserts in the controller suite against a throwaway escrow, never the real one — list, export, the README, the 0600 mode, byte-identical import, the no-overwrite rule, and rejection of an unknown subcommand (18/0).
+- **The `pipefail` trap again.** The first form of the list assertion was `cmd 2>&1 | grep -q "demo"`: `grep -q` exits on its first match, the controller takes SIGPIPE, and under `set -o pipefail` the whole pipeline reports failure — so a passing behaviour read as a failing test. Capturing the output first and matching against the variable is the form that says what it means. Same shape as the password-generator bug in P13; worth remembering that in this codebase every script runs under `pipefail`.
+
+### 2026-09-09 — P13: `backup:filesystem` — captured, restored and proven, live
+
+The second backup capability: named paths INSIDE a guest, rather than the whole guest. Only the guest can read its own files, so this is the one part of the backup system that runs *inside* a workload — a `proxmox-backup-client` push into `fs/<module>`, on a timer, with a **write-no-delete** login and a client-side encryption key. No new credential mechanics: it is §2.5's client shape, scoped to one namespace.
+
+- **`lib/pbs-fs.sh`** — namespace/archive/authid derivation, the guest-OS gate, PBS-side provisioning (namespace + a login that may write but not delete in it), and the capture manifest. **`services/filesystem/`** — install/update/delete/test-service plus **`tappaas-fs-backup.sh`**, the guest-side runner: deliberately tiny and dependency-free beyond `proxmox-backup-client` + `jq`, because a backup that only works while the rest of the platform is healthy is not much of a backup.
+- **Deliberate hard failures.** A guest OS TAPPaaS does not know the layout of is refused outright (NixOS today) rather than half-captured; a declared path that does not exist in the guest fails the capture rather than being skipped — a backup that silently stopped covering something is the exact failure this ADR exists to prevent.
+- **Deleting a module keeps its file backups.** `delete-service.sh` removes the manifest, the runner and the guest's write credential, and leaves the namespace, its snapshots and the escrowed key: removing a module is precisely when its backups matter.
+- **Schema tiers.** `backup` is now read by *both* capabilities, and the composer refuses a field defined in two tiers ("one definition, one home"), so the definition moved up to the module tier `backup/fields.json` with `filesystemPaths` folded in, while each service keeps only its own change semantics — the split #567 designed.
+- **First consumer: the mothership (#545/D20).** `tappaas-cicd` declares `integratesWith: ["backup:filesystem"]` with `filesystemPaths: ["/home/tappaas/config"]`; `tappaas-cicd.nix` gained `proxmox-backup-client` and a daily **20:30** timer (ahead of the 21:00 VM job, so a night's capture and snapshot describe the same state). Validated with `nixos-rebuild dry-build` before switching.
+- **Live, end to end:** provisioned → captured **634 KiB of `config/`, client-side encrypted** → **restored and `diff -r` against the live tree: identical, all 85 files** → **restore without the key refused** (`missing key - manifest was created with key e9:04:…`, 0 files) → **the capture credential could not erase its own history** (`permission check failed - missing Datastore.Modify|Datastore.Prune`), snapshot still present. That is §2.5.1's mandatory with-key/without-key pair and the write-no-delete invariant, demonstrated rather than asserted.
+- **Three bugs found by running it** (none reachable offline): a `set -o pipefail` + `head` password generator that killed the installer one line after producing a good password (the same idiom in `install.sh` hardened too); `/etc/secrets` created `0700 root` under `umask 077`, so the service user could not traverse it — the error named the file, not the directory actually denying it; and the missing **PBS certificate fingerprint**, without which every capture failed at connect. The fingerprint is public and now travels in the manifest, which carries no credential.
+- **Also fixed: the orphan-field check now honours `integratesWith`** (KI-1's family, reopened by #501 — a module that *integrates* with `backup:vm` carries its fields as legitimately as one that depends on it). All five sampled deployed configs normalize with **zero warnings**; two regression asserts added, including one that a genuinely orphaned field is still reported.
+- **Tests:** new `lib/test-pbs-fs.sh` (31) + `site-manager` 13/0; backup suite **203/0**; `services/filesystem/test-service.sh` 3/0 deep against the live capture. The deep check queries the datastore from the PBS node's own API — its first form used `proxmox-backup-client` without a repository spec or credential and reported "no capture found" while a capture sat right there.
+
+### 2026-09-09 — P14: the schedule cascade, realised as bucket jobs (§3.2, D16)
+
+Proxmox schedules a **job**, not a guest, so "this module is weekly" only means something if there is a weekly job. One cluster backup job per distinct resolved frequency — the buckets D16 chose.
+
+- **Vocabulary, deliberately small:** `daily | weekly | monthly`, or a bare `HH:MM` (daily at that time — the spelling site/environment configs already used, so nothing existing had to change). Everything else is refused. That smallness is what makes §3.2's ceiling enforceable at all: "at most once a day" cannot be checked against a free-form calendar expression without reimplementing systemd's parser.
+- **The ceiling is an error, not a rounding.** `hourly`, `*:00`, `06,18:00`, `mon,thu 06:00` and friends fail — at the module that declared them, naming the module, the spec and the allowed values. Silently giving a module that asked for hourly a daily backup would hide exactly the thing it needs to be told.
+- **Cascade:** `module.backup.schedule > environment.backup.schedule > site.backup.defaultSchedule > "daily"`, implemented twice — `pbs_schedule_resolve` (bash, for the module's own service scripts) and `resolvePolicy` (TS, for the manager) — as the repo already does for retention, with both unit-tested against the same precedence table.
+- **Buckets:** `daily` keeps the **original marker and start time**, so an installed site's nightly job is untouched by this change; `weekly` (`sun 21:00`) and `monthly` (`*-*-01 21:00`) get their own marker-tagged jobs, created on demand and deleted when they empty. `pbs_place_vmid` makes a schedule change a **move**: add to the new bucket, remove from every other — a guest in two jobs would be backed up twice where the cadences coincide. `delete-service.sh` now clears a guest from every bucket, since which one it was in depends on a schedule that may have changed.
+- **Schema:** `site.backup.defaultSchedule` (new), `environment.backup.schedule` (re-spec'd to the same vocabulary), `backup.schedule` on any module (new). `backup-controller add-to-job` gained `--bucket`; `apply-schedule` now asserts the calendar event on that bucket's job instead of setting one shared start time.
+- **Tests:** new `lib/test-pbs-schedule.sh` (38 — vocabulary, every sub-daily form refused, calendar events, markers, the full cascade, and the loud failure) plus 20 TS asserts incl. `validate` rejecting a sub-daily schedule by name. Backup suite **172/0**, TS **116/0**.
+- **Live:** placed a throwaway VMID in the weekly bucket → a `-weekly` job appeared with `sun 21:00`; moved it to monthly → the weekly job was **deleted as it emptied** and a `-monthly` job appeared with `*-*-01 21:00`; removed it → both gone. **The production daily job (10 VMIDs, 21:00) was byte-identical at every step.** `backup-manager resolve nextcloud` now reports `schedule: daily, scheduleBucket: daily`, and `reconcile --apply` asserts the daily job's schedule as a no-op.
+- **Fixed the pre-existing `validate` error** noted under P10: this site's `site.json` had `backup: null` while ten modules were in the job, so `backup-manager validate` failed on a dangling target. `site-manager site modify` gained `--backupDefaultSchedule` / `--backupDefaultRetention`, and the site now carries `{target: backup.mgmt.internal, defaultSchedule: daily}`. **`backup-manager validate` is green for the first time this session.**
+
+### 2026-09-09 — P17: node-add reconciles the backup client (§2.4, #382)
+
+§2.4 specifies this as a **triggered, automatic action, explicitly not a documented manual step** — and it had never been wired: `site-manager node add` ended at storage registration. A node joining after backup was installed therefore carried no `proxmox-backup-client`, so every VM later placed on it would have been silently unbacked.
+
+- `site-manager node add` now runs `module-manager modify backup` as its final step — after the join, the `node reconcile --apply` capture and the storage registration, so the reconcile sees the *new* membership rather than the old one.
+- A failure **warns and names the exact remedy** rather than failing the join: by that point the node is already in the cluster, and the fix is one idempotent command.
+- **Tests:** 3 asserts in `site-manager/test.sh` — that the call exists, that it is sequenced after node capture/storage registration, and that its failure path warns instead of dying (11/0).
+- **Live:** `module-manager modify backup` (the exact call) runs the client reconcile across all three nodes and the membership reconcile, rc=0, idempotent no-op on nodes that already have the client. Verified the step is present in the installed `site-manager` binary.
+
+### 2026-09-09 — P16: shape-based module discovery (#544) — plus a second inert-verb bug
+
+- **One discovery rule, shared.** New `lib/ts/src/module-discovery.ts` owns `isModuleConfig` / `discoverModules` / `declaresBackup`. `module-manager` now delegates to it (its own copy deleted) and `backup-manager`'s five-name deny-list is gone. A deny-list is the wrong shape for this: it fails open and silently, so every state file nobody thought to add classified as a module.
+- **`backup-manager` gains `listBackupModules`** — the opted-in subset (`backup:vm` / `backup:filesystem` under `dependsOn` **or** `integratesWith`) — and `reconcile` targets that instead of "every json in config/". `list` keeps showing every real module with its `IN-PBS-JOB` flag, which is what makes an opted-out module visible as opted-out.
+- **Live before → after:** `backup-manager list` reported **19 rows including 7 phantoms** (`last-update-result`, `module-fields`, `switch-configuration-actual`, `switch-configuration-desired`, `vllm-amd.meta`, `zones.effective`, `zones.rename`), each with a fabricated policy. It now reports **12 real modules**, with `network` and `tappaas-cicd` correctly showing `IN-PBS-JOB true` after P15.
+- **Second bug, found by the same live run.** `reconcile` warned *"module 'X' is wired into the PBS job but has no vmid — skipped"* for **every** module: `moduleVmid` read `.vmid` as a string, but a deployed config writes it as a **number** (the test fixtures used strings, so the unit tests passed while the verb was inert against any real config dir — it could never add anyone to the job). Fixed to accept both; `reconcile` now returns *"0 actions, 0 warnings"* against the live cluster, which is the true answer. Fixtures updated to carry `kind: "module"` as real deployed configs do.
+- **Build note:** the managers build through the **flake**, which only sees git-tracked files — a new untracked `.ts` under `lib/ts/` compiles locally but is invisible to `nix build`, surfacing as `TS7006 implicitly any` at the import site. New files must be `git add`ed (staged, not committed) before the component build sees them.
+- **Tests:** 12 new discovery asserts driven by the exact files #544 names, plus unparseable JSON, a JSON array, `.orig` backups, peer configs, and a provider-only module (`templates` — no vmid/vmname, must still be a module); 4 vmid-type asserts. TS **96/0**, module-manager **123/0**.
+
+### 2026-09-09 — P15: retire `alwaysBackup` via `integratesWith` — and a live bug it was hiding
+
+**The bug.** `pbs_always_vmids` ended each iteration with `[[ -n "$vmid" ]] && printf ...`. When an entry resolved to no deployed config that expression returns 1, and under the `set -euo pipefail` every caller runs with, the loop died — inside a process substitution, so the parent saw a clean EOF and carried on reporting success. `backup.json` shipped `alwaysBackup: ["network", "firewall", "tappaas-cicd"]`, and **`firewall` has no `config/firewall.json`** (a stale name — the firewall VM is the `network` module, VMID 110). So the list silently truncated after the first entry: **`tappaas-cicd` (VMID 130, the mothership) has never been in the backup job**, on a system whose config claimed it was, for as long as the field has existed. Confirmed live before the fix (`pbs_always_vmids` under `set -e` returns `110` alone; without it, `110 130`).
+
+- **Membership is now the opt-in union.** `pbs_optin_vmids` collects every deployed module declaring `backup:vm` under **`dependsOn` OR `integratesWith`** (#501, D18); `pbs_ensure_declared` reconciles the whole set into the job and — deliberately — never lets one unresolvable entry cost the others their backup. `pbs_ensure_always` stays as a one-release alias. The TS `moduleInPbsJob` mirrors the same predicate, so manager and module agree on who is in the job.
+- **`alwaysBackup` retired from the release.** `network` and `tappaas-cicd` now declare `integratesWith: ["backup:vm"]` — the relationship #501 added for exactly this case (a foundation VM that boots before the backup server and so cannot depend on it). The field stays in the schema, marked deprecated and read for one release, so an un-migrated deployment keeps its coverage; the resolver that reads it is no longer able to truncate.
+- **Backup stays opt-in.** A module declaring neither relationship is in no job — asserted directly, since "hardware and test modules must not be backed up" is the reason this is not simply default-on.
+- **Tests:** new `lib/test-pbs-membership.sh` (11), including the regression that would have caught this — `alwaysBackup` completeness **under `set -e`**, which is the only condition the bug appears under. Backup suite **134/0**, TS **82/0** (5 new membership asserts).
+- **Live:** adopted `integratesWith` into the two deployed configs with the standard 3-way merge (`apply-json-merge.sh` — config only, no service restart, diff was exactly the three added lines), then `update-module.sh backup`. The job went from 9 VMIDs to 10: **`130` added, all nine pre-existing VMIDs untouched**. The deployed `backup.json` lost `alwaysBackup` (the release no longer ships it) and membership is now purely opt-in, resolving to the same ten.
+- **Deviation from the plan's test criterion.** P15 was written to assert the job list comes out *byte-identical*. It does not, and must not: the pre-change list was wrong. The invariant actually worth asserting — and asserted — is that **no VMID was removed** and the only addition is the one the old list already intended.
+
+### 2026-09-09 — P11: consume a pre-existing PBS (#456) — live-verified
+
+- **The registration mechanic is now shared.** `lib/pbs-storage.sh` owns `pbs_storage_register` / `pbs_storage_unregister` / `_pbs_pvesm_has` plus the pure `_pbs_url_host`/`_pbs_url_port`. `pbs-push.sh` (which had its own copy) is now a two-line delegation that only supplies the `offsite-<name>` naming — the difference between a push target and a consumed PBS is the storage NAME and who owns the datastore, not the registration.
+- **`lib/pbs-external.sh`** consumes a PBS by URL: registers it under the module's own `pbsStorageName`, so `pbs-job.sh` targets it with **no further wiring** — a client pushing to an external PBS is indistinguishable downstream from one pushing to a local PBS (§1.4). It creates no datastore, installs nothing, and discovers no storage. `pbs_external_verify` is strictly read-only and reports how many existing backups are visible — the #456 "existing snapshots stay restorable" claim, checked rather than asserted.
+- **`backup-manage.sh use-external <url> [--datastore|--namespace|--fingerprint]`** is the operator verb: prompt-not-store credential (§2.5), register, verify, and only THEN record `placementState=external` + `pbsUrl` — a failed registration leaves the config untouched rather than claiming a PBS that was never wired. Guarded by `pbs_external_allowed`: refused from a live `node:<name>` (going external is permanent and would orphan a datastore full of backups); allowed from unresolved/shim/external.
+- **install.sh's external branch** records the state, reconciles clients (they push to the external PBS, §1.4) and points at `use-external` for the credentialed step — deliberately never prompting inside an install that may be unattended, the same rule the push path follows.
+- **Tests:** new `lib/test-pbs-external.sh` (20 — URL parsing incl. scheme/port/tunnel forms, the permanence guard from every state, datastore-name choice, refusal of an unparseable URL); backup suite **123/0 offline**.
+- **Live on the cluster:** consumed the site's own PBS **by URL** (`backup.mgmt.internal`) under a throwaway storage name — registered, active, **165 existing backups visible and restorable**, second register a no-op, then unregistered. `/etc/pve/storage.cfg` came back semantically identical (only Proxmox's own reordering of `content`/`nodes` lists differed) and the production job was untouched throughout.
+
+### 2026-09-09 — P10 + P12: placement state model + schema (live-verified)
+
+- **`lib/pbs-placement.sh` rewritten to the state model.** `placement_policy`/`pbs_discover_placement` are gone; `placementState` is the only source of truth, resolved by `pbs_resolve_placement_state` per §2.2 (external sticky → concrete `node:<name>` kept → empty/shim re-derived). New readers `pbs_pbs_url` (default `backup.mgmt.internal`), `pbs_state_node`, `pbs_is_external`, `pbs_is_local`; `pbs_migrate_placement_state` (§4.1 backfill) and `pbs_legacy_pbs_node` (finds where a legacy PBS actually runs).
+- **The resolved node moved into the state.** `node:<name>` carries it; `.node` is now only the §2.1 discovery constraint (shipped empty = search every node). This was forced by the 3-way merge: `.node` is a release field, so the merge resets it to the release default (#581 rule 4) *before* the module's `update.sh` runs — writing the resolved node there could not survive. `pbs_node()` (pbs-job.sh), `backup-controller`, `restore.sh` and `backup-manage.sh` all read the state first and fall back to `.node`.
+- **install.sh / update.sh** branch on the state: `external` records + reconciles clients + points at `use-external` (registration is P11); `node:<name>` realizes/keeps the datastore; `shim` warns and exits 0. `update.sh` migrates legacy state first, backfills a pre-ADR-012 install to `node:<name>` **without a promotion-reinstall**, and still promotes a shim in place.
+- **Schema (P12)** in `services/vm/fields.json` (D15 — *not* `module-fields.json`, which since #567 holds only the generic fields): `placement` removed; `placementState` re-spec'd (ships empty, pattern accepts the legacy `local`/`remote-only` for one release so a not-yet-migrated config still validates — **D23**); `pbsUrl` added; `pushTarget`/`alwaysBackup` marked deprecated. `backup.json`: `placement` gone, `node: ""`, `pbsUrl` default, `provides: ["vm"]` (`remote`/`external` were runtime peer roles nothing ever depended on; dropping `external` also clears the clash with the new state name).
+- **KI-1 was already fixed upstream** — `regroup_to_pattern_a` consults `provides` today, and a dry-run over the live and source `backup.json` emits zero orphan warnings. Verified, not re-fixed; the tracker's KI-1 entry is stale.
+- **TS manager** follows the model: `Placement` gains `kind`/`node`/`pbsUrl` (legacy values folded in by `classifyPlacement`), `validate` reports external/unresolved, `placement` prints the state.
+- **Tests:** `test-pbs-placement.sh` rewritten (44, was 20) + new `test-pbs-migrate.sh` (23) covering the whole derivation matrix and every legacy-fixture path; backup suite **103/0 offline**, module-manager **123/0**, backup-manager **26/0 + TS 77/0** (was 60), backup-controller **11/0**; shellcheck clean on all changed scripts (only pre-existing warnings remain).
+- **Live on the 3-node cluster** (`update-module.sh backup`): merge dropped `placement`, added `pbsUrl`, reset `node` to `""`; `placementState` migrated `local` → **`node:tappaas3`**; the cluster backup job (9 VMIDs, 21:00) and `/etc/pve/storage.cfg` came out **byte-identical**; consumer test (`nextcloud`) 4/0 with 17 backups, newest 13h old. `backup-manager placement/peers` and `backup-controller job-status/namespaces` verified against the migrated config.
+- **Gap found live** — the deep tier caught `backup-controller`'s own `pbs_node()` override still reading `.node`, which the merge had just blanked: PBS became unreachable to the controller. Fixed to read the state first; deep tier green afterwards. Offline tests could not have surfaced it (the override only exists in the installed controller).
+- **Pre-existing finding, not caused by this work:** `backup-manager validate` errors with *"modules have backup enabled and are wired into the PBS job, but site.backup.target is not set"* — this site's `site.json` has `backup: null` while 9 modules are in the job. P14 needs `site.backup` anyway (`defaultSchedule`), so it is fixed there.
 
 Append-only narrative per package. Add an entry when a package starts, blocks, or completes.
 

@@ -53,9 +53,14 @@ else bad "namespace ${NS} missing on $(pbs_storage_name)"; fi
 
 if [[ "${TAPPAAS_TEST_DEEP:-0}" == "1" ]]; then
     info "  Check 3 (deep): a capture exists and is recent"
-    snaps="$(_pbs_node_run proxmox-backup-client snapshot list \
-        --repository "$(pbs_storage_name)" --ns "${NS}" --output-format json 2>/dev/null \
-        | jq -r '.[]? | select(."backup-id"=="'"${MODULE}"'") | ."backup-time"' 2>/dev/null | sort -n | tail -1)"
+    # Query the datastore from the PBS NODE itself. Not `proxmox-backup-client`:
+    # that needs a user@host repository spec and a credential, neither of which
+    # a test on the mothership has — it silently returned nothing and reported
+    # "no capture found" while a capture sat right there.
+    snaps="$(_pbs_node_run proxmox-backup-debug api get \
+        "/admin/datastore/$(pbs_storage_name)/snapshots" --ns "${NS}" --output-format json 2>/dev/null \
+        | jq -r --arg m "${MODULE}" '.[]? | select(."backup-id"==$m) | ."backup-time"' 2>/dev/null \
+        | sort -n | tail -1)"
     if [[ -n "${snaps}" ]]; then
         age=$(( $(date +%s) - snaps ))
         if [[ "${age}" -lt 172800 ]]; then ok "most recent capture is $((age/3600))h old"

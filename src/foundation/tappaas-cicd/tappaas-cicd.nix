@@ -354,6 +354,54 @@ in
     };
   };
 
+  # ----------------------------------------
+  # config/ file backup (ADR-012 §3.1 / #545)
+  # ----------------------------------------
+  # The mothership's config/ IS the cluster's source of truth — the declared
+  # state every module is rebuilt from. A whole-VM backup covers it too, but a
+  # file capture restores in seconds into a running system and, unlike a VM
+  # snapshot, can be restored onto a DIFFERENT mothership during a rebuild.
+  # That is the case that matters: full-site DR restores config/ before there
+  # is a VM to restore into.
+  #
+  # The runner and its manifest are deployed by backup:filesystem's
+  # install-service.sh; this unit is only the trigger. ConditionPathExists keeps
+  # it inert until then, so a mothership whose backup is still a shim does not
+  # log a failure every day.
+  systemd.services.tappaas-fs-backup = {
+    description = "TAPPaaS file-level backup of the mothership's config/ (ADR-012 §3.1)";
+    unitConfig.ConditionPathExists = "/home/tappaas/bin/tappaas-fs-backup.sh";
+    serviceConfig = {
+      Type = "oneshot";
+      User = "tappaas";
+      ExecStart = "/home/tappaas/bin/tappaas-fs-backup.sh";
+      Environment = [
+        ("PATH=/home/tappaas/bin:/run/wrappers/bin:/home/tappaas/.nix-profile/bin"
+          + ":/etc/profiles/per-user/tappaas/bin:/nix/var/nix/profiles/default/bin"
+          + ":/run/current-system/sw/bin")
+      ];
+      # It reads /etc/secrets (its own write-no-delete login + encryption key)
+      # and the paths it captures; it writes nothing locally.
+      NoNewPrivileges = true;
+      PrivateTmp = true;
+      ProtectKernelTunables = true;
+      ProtectKernelModules = true;
+      ProtectControlGroups = true;
+    };
+  };
+
+  systemd.timers.tappaas-fs-backup = {
+    description = "Daily trigger for the mothership's config/ file backup";
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      # Ahead of the 21:00 VM job, so a night's capture and snapshot describe
+      # the same state rather than straddling a change.
+      OnCalendar = "20:30";
+      RandomizedDelaySec = "5min";
+      Persistent = true;          # catch up after downtime
+    };
+  };
+
   systemd.timers.check-ha-health = {
     description = "Periodic trigger for check-ha-health";
     wantedBy = [ "timers.target" ];
@@ -522,6 +570,10 @@ in
         # TFTP server for node-provisioner's PXE trap (runs tftp-only via
         # systemd-run when provisioning is enabled; node-provisioning.md N3)
         dnsmasq
+        # The mothership captures its own config/ as a backup:filesystem
+        # (ADR-012 §3.1 / #545): only the guest can read its own files, so the
+        # client belongs INSIDE it.
+        proxmox-backup-client
   ];
 
   # Enable automatic garbage collection

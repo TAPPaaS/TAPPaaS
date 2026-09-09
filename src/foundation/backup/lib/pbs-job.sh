@@ -15,15 +15,30 @@
 PBS_JOB_MARKER="TAPPaaS-backup-vm-managed"
 PBS_CONFIG_DIR="${CONFIG_DIR:-/home/tappaas/config}"
 
+# Schedule buckets (ADR-012 §3.2/D16) live in pbs-schedule.sh; this library owns
+# the jobs, that one owns which job a module belongs in. Source it here so every
+# existing caller of pbs-job.sh gets bucket support without changing its sourcing.
+if ! declare -F pbs_bucket_marker >/dev/null 2>&1; then
+    # shellcheck source=pbs-schedule.sh disable=SC1091
+    . "$(dirname "${BASH_SOURCE[0]}")/pbs-schedule.sh"
+fi
+
 # PBS datastore / Proxmox storage name (issue #199), default tappaas_backup.
 pbs_storage_name() {
     jq -r '.pbsStorageName // "tappaas_backup"' "${PBS_CONFIG_DIR}/backup.json" 2>/dev/null || echo "tappaas_backup"
 }
 
-# Hostname of the node PBS is installed on (backup.json's `node`). The PBS
-# datastore + services live here; fall back to the first mgmt node.
+# Hostname of the node PBS is installed on. The RESOLVED node is carried by the
+# placement state (ADR-012 §2.1: `placementState: node:<name>`); `.node` is only
+# the operator's discovery constraint and may legitimately be empty, so it is a
+# back-compat fallback for configs not yet migrated. Falls back to the first
+# mgmt node. The PBS datastore + services live on whatever this returns.
 pbs_node() {
-    local node
+    local state node
+    state="$(jq -r '.placementState // empty' "${PBS_CONFIG_DIR}/backup.json" 2>/dev/null)"
+    case "${state}" in
+        node:?*) printf '%s\n' "${state#node:}"; return 0 ;;
+    esac
     node="$(jq -r '.node // empty' "${PBS_CONFIG_DIR}/backup.json" 2>/dev/null)"
     [[ -n "$node" ]] && printf '%s\n' "$node" || get_node_hostname 0
 }
@@ -131,49 +146,88 @@ _pbs_csv_remove() {
 
 # ── Cluster queries ──────────────────────────────────────────────────
 
-# VMIDs from backup.json's alwaysBackup list (foundation VMs that bootstrap
-# before the backup server and so cannot dependsOn backup:vm). Each entry is a
-# module name resolved to its VMID via its deployed config. Space-separated.
+# DEPRECATED (ADR-012 §2.7, D18) — VMIDs from backup.json's alwaysBackup list.
+# Superseded by `integratesWith: ["backup:vm"]`, which #501 made possible: a
+# foundation VM that bootstraps before the backup server declares the
+# integration instead of being named in a central list. Read for one release so
+# an un-migrated deployment keeps its coverage; then this and the field go.
+#
+# An entry that resolves to no deployed config is WARNED about, not skipped in
+# silence — and emphatically not with `[[ -n "$vmid" ]] && printf`, whose false
+# branch returns 1 and, under the `set -e` every caller runs with, killed the
+# whole loop inside its process substitution. That is not hypothetical: the
+# stale entry `firewall` (no config/firewall.json) silently truncated the list
+# before `tappaas-cicd`, so the mothership was never in the backup job at all
+# while the list claimed it was. Found live, 2026-09-09.
 pbs_always_vmids() {
     local name vmid
     while IFS= read -r name; do
         [[ -n "$name" ]] || continue
-        vmid=$(jq -r '.vmid // empty' "${PBS_CONFIG_DIR}/${name}.json" 2>/dev/null)
-        [[ -n "$vmid" ]] && printf '%s\n' "$vmid"
-    done < <(jq -r '.alwaysBackup // [] | .[]' "${PBS_CONFIG_DIR}/backup.json" 2>/dev/null)
+        vmid=$(jq -r '.vmid // empty' "${PBS_CONFIG_DIR}/${name}.json" 2>/dev/null || true)
+        if [[ -n "$vmid" ]]; then
+            printf '%s\n' "$vmid"
+        else
+            warn "  alwaysBackup entry '${name}' has no deployed config/vmid — skipping it (deprecated field: declare integratesWith [\"backup:vm\"] on the module instead)" >&2
+        fi
+    done < <(jq -r '.alwaysBackup // [] | .[]' "${PBS_CONFIG_DIR}/backup.json" 2>/dev/null || true)
 }
 
-# CSV of every VMID that should be backed up: modules that dependsOn backup:vm,
-# plus backup.json's alwaysBackup set (sorted, unique).
-pbs_declared_vmids() {
+# Every deployed module that has opted into VM backup, by EITHER relationship:
+#   dependsOn      backup:vm   a hard dependency — install ordering enforced
+#   integratesWith backup:vm   an optional integration (#501) — no ordering, so
+#                              the foundation VMs that come up before the backup
+#                              server can still ask to be backed up (D18)
+# Backup stays opt-in: a module declaring neither is in no job. Echoes VMIDs.
+pbs_optin_vmids() {
     local f vmid
-    local -a out=()
     for f in "${PBS_CONFIG_DIR}"/*.json; do
         [[ -f "$f" ]] || continue
-        jq -e '(.dependsOn // []) | index("backup:vm")' "$f" >/dev/null 2>&1 || continue
-        vmid=$(jq -r '.vmid // empty' "$f" 2>/dev/null)
-        [[ -n "$vmid" ]] && out+=("$vmid")
+        jq -e '((.dependsOn // []) + (.integratesWith // [])) | index("backup:vm")' \
+            "$f" >/dev/null 2>&1 || continue
+        vmid=$(jq -r '.vmid // empty' "$f" 2>/dev/null || true)
+        [[ -n "$vmid" ]] && printf '%s\n' "$vmid"
     done
+    return 0
+}
+
+# CSV of every VMID that should be backed up: everything that opted in through
+# dependsOn/integratesWith backup:vm, plus the deprecated alwaysBackup set while
+# it is still read (sorted, unique).
+pbs_declared_vmids() {
+    local vmid
+    local -a out=()
+    while IFS= read -r vmid; do [[ -n "$vmid" ]] && out+=("$vmid"); done < <(pbs_optin_vmids)
     while IFS= read -r vmid; do [[ -n "$vmid" ]] && out+=("$vmid"); done < <(pbs_always_vmids)
     [[ ${#out[@]} -eq 0 ]] && return 0
     printf '%s\n' "${out[@]}" | sort -n -u | paste -sd',' -
 }
 
-# Ensure every alwaysBackup VMID is in the managed job. Called by the backup
-# module's install/update so foundation VMs (firewall, tappaas-cicd) are
-# registered once the backup server exists.
-pbs_ensure_always() {
-    local vmid
+# Ensure every opted-in VMID is in the managed job — the backup module's own
+# membership reconcile, run by its install/update. This is what closes the
+# bootstrap gap: a module that declared `integratesWith: backup:vm` before the
+# backup server existed is picked up here, once it does (#501 install-module
+# wires the reverse direction when the provider arrives; this heals the rest).
+# Deliberately a SET operation, never a truncating loop: one unresolvable entry
+# must not cost the others their backup.
+pbs_ensure_declared() {
+    local vmid rc=0
     while IFS= read -r vmid; do
         [[ -n "$vmid" ]] || continue
-        pbs_ensure_vmid "$vmid" || return 1
-    done < <(pbs_always_vmids)
+        pbs_ensure_vmid "$vmid" || rc=1
+    done < <({ pbs_optin_vmids; pbs_always_vmids; } | sort -n -u)
+    return "${rc}"
 }
 
-# UUID of the managed job (by marker comment); empty if none.
+# Deprecated name kept for one release: callers outside this module may still
+# use it. Same reconcile, wider set.
+pbs_ensure_always() { pbs_ensure_declared; }
+
+# UUID of a managed job by marker comment (default: the daily bucket's marker,
+# which is the original one — ADR-012 D16). Empty if that job does not exist.
 pbs_managed_job_id() {
+    local marker="${1:-$PBS_JOB_MARKER}"
     _pbs_ssh "pvesh get /cluster/backup --output-format json" 2>/dev/null \
-        | jq -r --arg m "$PBS_JOB_MARKER" '.[] | select((.comment // "")==$m) | .id' 2>/dev/null | head -1
+        | jq -r --arg m "$marker" '.[] | select((.comment // "")==$m) | .id' 2>/dev/null | head -1
 }
 
 # UUID of a legacy --all job on our storage that is NOT the managed one; empty if none.
@@ -207,53 +261,72 @@ pbs_migrate_all_job() {
         || { error "  Failed to migrate the --all backup job"; return 1; }
 }
 
-# Ensure <vmid> is in the managed backup job, creating the job if absent.
+# Ensure <vmid> is in the backup job of <bucket> (default daily), creating that
+# job if it does not exist yet. Creating a bucket job is what makes a per-module
+# schedule real — Proxmox schedules a JOB, not a guest (ADR-012 D16).
 pbs_ensure_vmid() {
-    local vmid="$1" id store cur newlist
+    local vmid="$1" bucket="${2:-daily}" id store cur newlist marker cal
     [[ -n "$vmid" ]] || { error "pbs_ensure_vmid: empty vmid"; return 1; }
+    marker="$(pbs_bucket_marker "$bucket")" || { error "pbs_ensure_vmid: unknown bucket '$bucket'"; return 1; }
 
     pbs_migrate_all_job || return 1
-    id="$(pbs_managed_job_id)"
+    id="$(pbs_managed_job_id "$marker")"
 
     if [[ -z "$id" ]]; then
         store="$(pbs_storage_name)"
-        info "  Creating managed PBS backup job on '${store}' (vmid ${vmid}, daily 21:00)"
-        _pbs_ssh "pvesh create /cluster/backup --storage '${store}' --vmid '${vmid}' --mode snapshot --compress zstd --starttime 21:00 --enabled 1 --mailnotification always --comment '${PBS_JOB_MARKER}'" >/dev/null \
-            || { error "  Failed to create the managed backup job"; return 1; }
+        cal="$(pbs_schedule_calendar "$bucket")"
+        info "  Creating managed PBS backup job on '${store}' (vmid ${vmid}, ${bucket} '${cal}')"
+        _pbs_ssh "pvesh create /cluster/backup --storage '${store}' --vmid '${vmid}' --mode snapshot --compress zstd --schedule '${cal}' --enabled 1 --mailnotification always --comment '${marker}'" >/dev/null \
+            || { error "  Failed to create the ${bucket} backup job"; return 1; }
         return 0
     fi
 
     cur="$(pbs_job_vmids "$id")"
     if _pbs_csv_has "$cur" "$vmid"; then
-        info "  ${GN}✓${CL} VMID ${vmid} already covered by the backup job"
+        info "  ${GN}✓${CL} VMID ${vmid} already covered by the ${bucket} backup job"
         return 0
     fi
     newlist="$(_pbs_csv_add "$cur" "$vmid")"
-    info "  Adding VMID ${vmid} to backup job → ${newlist}"
+    info "  Adding VMID ${vmid} to the ${bucket} backup job → ${newlist}"
     _pbs_ssh "pvesh set /cluster/backup/${id} --vmid '${newlist}'" >/dev/null \
-        || { error "  Failed to add VMID ${vmid} to the backup job"; return 1; }
+        || { error "  Failed to add VMID ${vmid} to the ${bucket} backup job"; return 1; }
 }
 
-# Remove <vmid> from the managed backup job; delete the job if it becomes empty.
-pbs_remove_vmid() {
-    local vmid="$1" id cur newlist
-    [[ -n "$vmid" ]] || { error "pbs_remove_vmid: empty vmid"; return 1; }
+# Place <vmid> in exactly one bucket: add it to <bucket> and remove it from
+# every other. A schedule change is a MOVE, never a second membership — a guest
+# in two jobs would be backed up twice on the days they coincide.
+pbs_place_vmid() {
+    local vmid="$1" bucket="${2:-daily}" b
+    pbs_ensure_vmid "$vmid" "$bucket" || return 1
+    while IFS= read -r b; do
+        [[ "$b" == "$bucket" ]] && continue
+        pbs_remove_vmid "$vmid" "$b" quiet || return 1
+    done < <(pbs_buckets)
+}
 
-    id="$(pbs_managed_job_id)"
-    [[ -z "$id" ]] && { info "  No managed backup job — nothing to remove"; return 0; }
+# Remove <vmid> from <bucket>'s backup job (default daily); delete that job if
+# it becomes empty. A third argument of "quiet" suppresses the not-present
+# chatter, for the sweep pbs_place_vmid does over the other buckets.
+pbs_remove_vmid() {
+    local vmid="$1" bucket="${2:-daily}" quiet="${3:-}" id cur newlist marker
+    [[ -n "$vmid" ]] || { error "pbs_remove_vmid: empty vmid"; return 1; }
+    marker="$(pbs_bucket_marker "$bucket")" || { error "pbs_remove_vmid: unknown bucket '$bucket'"; return 1; }
+
+    id="$(pbs_managed_job_id "$marker")"
+    [[ -z "$id" ]] && { [[ "$quiet" == "quiet" ]] || info "  No ${bucket} backup job — nothing to remove"; return 0; }
 
     cur="$(pbs_job_vmids "$id")"
     if ! _pbs_csv_has "$cur" "$vmid"; then
-        info "  VMID ${vmid} not in the backup job — nothing to remove"
+        [[ "$quiet" == "quiet" ]] || info "  VMID ${vmid} not in the ${bucket} backup job — nothing to remove"
         return 0
     fi
     newlist="$(_pbs_csv_remove "$cur" "$vmid")"
     if [[ -z "$newlist" ]]; then
-        info "  Removing VMID ${vmid} (last entry) → deleting the managed backup job"
+        info "  Removing VMID ${vmid} (last entry) → deleting the ${bucket} backup job"
         _pbs_ssh "pvesh delete /cluster/backup/${id}" >/dev/null \
             || { error "  Failed to delete the backup job"; return 1; }
     else
-        info "  Removing VMID ${vmid} from backup job → ${newlist}"
+        info "  Removing VMID ${vmid} from the ${bucket} backup job → ${newlist}"
         _pbs_ssh "pvesh set /cluster/backup/${id} --vmid '${newlist}'" >/dev/null \
             || { error "  Failed to update the backup job"; return 1; }
     fi

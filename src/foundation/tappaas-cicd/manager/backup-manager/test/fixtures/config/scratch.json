@@ -1,5 +1,6 @@
 {
   "name": "scratch",
+  "kind": "module",
   "vmid": "202",
   "environment": "prod",
   "backup": {

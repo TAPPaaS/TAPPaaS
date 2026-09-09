@@ -10,13 +10,22 @@
 #   list <module> [--json]  List snapshots for a module's VM (by vmid)
 #   verify <module>         Trigger + report a PBS verify for a module's VM
 #   namespaces [--json]     List the datastore's namespaces
-#   add-to-job <vmid> [--retention <spec>]
+#   add-to-job <vmid> [--retention <spec>] [--bucket daily|weekly|monthly]
 #                           Add <vmid> to the shared managed PBS backup job (PBS
 #                           mutation; reuses pbs_ensure_vmid). --retention is
 #                           accepted + echoed for the manager; per-job prune
 #                           wiring is a follow-up (the shared job + prune-job own
 #                           retention today).
-#   apply-schedule <spec>   Set the shared managed job's start time (PBS mutation;
+#   key list                List the escrowed client encryption keys
+#   key export <dest>       Copy the escrowed keys to removable media — the
+#                           MANDATORY out-of-band copy (ADR-012 §2.5.1). The
+#                           escrow lives inside the system being rebuilt, so it
+#                           cannot be the only copy: without an off-system key,
+#                           an encrypted off-site backup is unrecoverable.
+#   key import <src>        Load keys from that media back into the escrow on a
+#                           FRESH mothership — step two of full-site DR, before
+#                           any restore can decrypt anything.
+#   apply-schedule <spec>   Set the schedule of <spec>'s bucket job (PBS mutation;
 #                           e.g. "21:00"). Per-environment schedules are a
 #                           follow-up; this sets the single shared job's schedule.
 #   help
@@ -112,7 +121,15 @@ pbs_node() {
         printf '%s\n' "${PBS_ENDPOINT}"
         return 0
     fi
-    local n
+    # ADR-012 §2.1: the RESOLVED node is carried by the placement state
+    # (placementState: node:<name>). `.node` is only the operator's discovery
+    # constraint and is legitimately empty, so it is a back-compat fallback for
+    # a config that has not been through the migrating update yet.
+    local st n
+    st="$(jq -r '.placementState // empty' "${PBS_CONFIG_DIR:-/home/tappaas/config}/backup.json" 2>/dev/null)"
+    case "${st}" in
+        node:?*) printf '%s\n' "${st#node:}"; return 0 ;;
+    esac
     n="$(jq -r '.node // empty' "${PBS_CONFIG_DIR:-/home/tappaas/config}/backup.json" 2>/dev/null)"
     if [[ -n "$n" ]]; then printf '%s\n' "$n"; else get_node_hostname 0; fi
 }
@@ -210,40 +227,160 @@ cmd_namespaces() {
 }
 
 # ── PBS mutations (driven by backup-manager reconcile) ────────────────
-# add-to-job <vmid> [--retention <spec>] — ensure <vmid> is a member of the
-# shared managed PBS backup job. Reuses pbs_ensure_vmid (creates the job if
-# absent). --retention is recorded/echoed for the manager but per-job prune
-# wiring is a follow-up; the shared job + the foundation prune-job own retention.
+# add-to-job <vmid> [--retention <spec>] [--bucket daily|weekly|monthly] —
+# place <vmid> in the backup job for its resolved schedule (ADR-012 §3.2/D16),
+# creating that job if absent. `place`, not `add`: a guest belongs to exactly
+# one bucket, so this also removes it from the others — otherwise a schedule
+# change would leave it backed up on both cadences.
+# --retention is recorded/echoed for the manager but per-job prune wiring is a
+# follow-up; the shared job + the foundation prune-job own retention.
 cmd_add_to_job() {
-    local vmid="" retention=""
+    local vmid="" retention="" bucket="daily"
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --retention) retention="$2"; shift 2 ;;
+            --bucket) bucket="$2"; shift 2 ;;
             -*) error "add-to-job: unknown option $1"; return 2 ;;
             *) vmid="$1"; shift ;;
         esac
     done
     [[ -n "$vmid" ]] || { error "add-to-job: <vmid> required"; return 2; }
     have_pbs_libs || skip_offline "add-to-job (PBS libs not loaded)"
-    type pbs_ensure_vmid >/dev/null 2>&1 || skip_offline "add-to-job (pbs-job lib missing)"
+    type pbs_place_vmid >/dev/null 2>&1 || skip_offline "add-to-job (pbs-job lib missing)"
     pbs_reachable || skip_offline "add-to-job ${vmid}"
     [[ -n "$retention" ]] && info "  (retention '${retention}' noted; per-job prune wiring is a follow-up)"
-    pbs_ensure_vmid "$vmid"
+    pbs_place_vmid "$vmid" "$bucket"
 }
 
-# apply-schedule <spec> — set the shared managed backup job's start time
-# (e.g. "21:00"). Per-environment schedules are a follow-up; this sets the
-# single shared job's schedule via pvesh.
+# apply-schedule <spec> — assert the calendar event on the backup job for the
+# bucket <spec> resolves to (ADR-012 §3.2). <spec> is daily|weekly|monthly or a
+# bare HH:MM; the bucket's job is the one carrying that bucket's marker.
 cmd_apply_schedule() {
-    local spec="${1:?apply-schedule: <spec> required (e.g. 21:00)}"
+    local spec="${1:?apply-schedule: <spec> required (daily|weekly|monthly|HH:MM)}"
     have_pbs_libs || skip_offline "apply-schedule (PBS libs not loaded)"
     pbs_reachable || skip_offline "apply-schedule ${spec}"
-    local id
-    id="$(pbs_managed_job_id)"
-    [[ -n "$id" ]] || { info "No managed backup job yet — nothing to schedule"; return 0; }
-    info "Setting managed backup job ${id} start time → ${spec}"
-    _pbs_ssh "pvesh set /cluster/backup/${id} --starttime '${spec}'" >/dev/null \
-        || { error "Failed to set start time for job ${id}"; return 1; }
+    local bucket cal id marker
+    bucket="$(pbs_schedule_bucket "$spec")" || {
+        error "apply-schedule: '${spec}' is not a supported schedule — use daily | weekly | monthly | HH:MM (never more often than once a day)"
+        return 2
+    }
+    cal="$(pbs_schedule_calendar "$bucket" "$(pbs_schedule_starttime "$spec")")"
+    marker="$(pbs_bucket_marker "$bucket")"
+    id="$(pbs_managed_job_id "$marker")"
+    [[ -n "$id" ]] || { info "No ${bucket} backup job yet — nothing to schedule"; return 0; }
+    info "Setting ${bucket} backup job ${id} schedule → ${cal}"
+    _pbs_ssh "pvesh set /cluster/backup/${id} --schedule '${cal}'" >/dev/null \
+        || { error "Failed to set the schedule for job ${id}"; return 1; }
+}
+
+# ── Encryption-key escrow (ADR-012 §2.5.1) ───────────────────────────
+#
+# Backups are encrypted client-side, so a key that outlives the client is the
+# difference between a restore and a pile of ciphertext. TAPPaaS escrows every
+# client key centrally on the mothership — but that escrow sits INSIDE the
+# system a full-site DR is rebuilding, so it cannot be the only copy. These
+# verbs are the out-of-band copy and its way back in.
+KEY_ESCROW_DIR="${TAPPAAS_KEY_ESCROW:-/etc/secrets/backup-fs}"
+
+cmd_key() {
+    local sub="${1:-list}"; [[ $# -gt 0 ]] && shift || true
+    case "${sub}" in
+        list)   _key_list ;;
+        export) _key_export "$@" ;;
+        import) _key_import "$@" ;;
+        *) error "key: expected 'list' | 'export <dest>' | 'import <src>'"; return 2 ;;
+    esac
+}
+
+_key_names() { sudo find "${KEY_ESCROW_DIR}" -maxdepth 1 -name '*.key' -printf '%f\n' 2>/dev/null | sort; }
+
+_key_list() {
+    local n count=0
+    if [[ "$JSON_OUT" -eq 1 ]]; then
+        _key_names | jq -R . | jq -s --arg d "${KEY_ESCROW_DIR}" '{escrow: $d, keys: .}'
+        return 0
+    fi
+    info "Escrowed client encryption keys (${KEY_ESCROW_DIR}):"
+    while IFS= read -r n; do
+        [[ -n "$n" ]] || continue
+        info "  ${n%.key}"
+        count=$((count + 1))
+    done < <(_key_names)
+    if [[ "${count}" -eq 0 ]]; then
+        warn "  none — no client-side encrypted backups are configured yet"
+    else
+        warn "  Hold an OUT-OF-BAND copy: backup-controller key export <dest>"
+    fi
+}
+
+_key_export() {
+    local dest="${1:-}"
+    [[ -n "${dest}" ]] || { error "key export: <dest> required (a directory on removable media)"; return 2; }
+    [[ -d "${dest}" ]] || { error "key export: '${dest}' is not a directory — mount the media first"; return 2; }
+    local names; names="$(_key_names)"
+    [[ -n "${names}" ]] || { error "key export: no keys in ${KEY_ESCROW_DIR}"; return 1; }
+
+    local out="${dest%/}/tappaas-backup-keys"
+    mkdir -p "${out}" || { error "key export: cannot create ${out}"; return 1; }
+    chmod 700 "${out}"
+    local n
+    while IFS= read -r n; do
+        [[ -n "$n" ]] || continue
+        # The redirect is deliberately UNprivileged: sudo reads the escrowed key
+        # (root, 0600) and the shell writes it to the operator's media as the
+        # operator. shellcheck reads this as the usual sudo-redirect mistake.
+        # shellcheck disable=SC2024
+        sudo cat "${KEY_ESCROW_DIR}/${n}" > "${out}/${n}" || { error "key export: could not read ${n}"; return 1; }
+        chmod 600 "${out}/${n}"
+        info "  exported ${n%.key}"
+    done <<< "${names}"
+
+    # A plain-text README on the media, because the person who needs it will be
+    # rebuilding a site and will not have this repository to hand.
+    cat > "${out}/README.txt" <<'READMEEOF'
+TAPPaaS backup encryption keys — KEEP THIS MEDIA SAFE AND OFF-SITE.
+
+These keys decrypt this site's backups. Anyone holding them plus a copy of the
+backup data can read it; anyone WITHOUT them cannot restore, no matter what
+else survives.
+
+To restore onto a rebuilt mothership (ADR-012 §2.5.1):
+  1. Rebuild tappaas-cicd.
+  2. backup-controller key import <this-directory>
+  3. Restore from the off-site copy; it will decrypt.
+READMEEOF
+    chmod 600 "${out}/README.txt"
+    info "${GN}✓${CL} keys exported to ${out} (mode 600)"
+    warn "  Store this media somewhere safe and OFF-SITE. Losing every copy of a key"
+    warn "  makes the backups it encrypted permanently unreadable."
+}
+
+_key_import() {
+    local src="${1:-}"
+    [[ -n "${src}" ]] || { error "key import: <src> required (the directory holding exported keys)"; return 2; }
+    [[ -d "${src}" ]] || { error "key import: '${src}' is not a directory"; return 2; }
+    # Accept either the media root or the exported subdirectory.
+    [[ -d "${src%/}/tappaas-backup-keys" ]] && src="${src%/}/tappaas-backup-keys"
+
+    local found=0 f base
+    sudo mkdir -p "${KEY_ESCROW_DIR}" && sudo chmod 755 "${KEY_ESCROW_DIR}"
+    for f in "${src%/}"/*.key; do
+        [[ -f "$f" ]] || continue
+        base="$(basename "$f")"
+        # Never overwrite an escrowed key: on a rebuilt mothership there is
+        # nothing to overwrite, and anywhere else a silent replacement could
+        # strand every backup made with the key it replaced.
+        if sudo test -s "${KEY_ESCROW_DIR}/${base}"; then
+            warn "  ${base%.key}: already escrowed — left as-is"
+            continue
+        fi
+        sudo cp "$f" "${KEY_ESCROW_DIR}/${base}" && sudo chmod 600 "${KEY_ESCROW_DIR}/${base}" \
+            || { error "key import: could not install ${base}"; return 1; }
+        info "  imported ${base%.key}"
+        found=$((found + 1))
+    done
+    [[ "${found}" -gt 0 ]] || { warn "key import: nothing new to import from ${src}"; return 0; }
+    info "${GN}✓${CL} ${found} key(s) imported into ${KEY_ESCROW_DIR}"
 }
 
 # Pure-function self-test (no cluster) — exercised by test.sh.
@@ -274,6 +411,7 @@ main() {
         namespaces)     cmd_namespaces "$@" ;;
         add-to-job)     cmd_add_to_job "$@" ;;
         apply-schedule) cmd_apply_schedule "$@" ;;
+        key)            cmd_key "$@" ;;
         --selftest)     selftest ;;
         help|-h|--help) usage ;;
         *) error "Unknown command: ${cmd}"; usage >&2; return 2 ;;

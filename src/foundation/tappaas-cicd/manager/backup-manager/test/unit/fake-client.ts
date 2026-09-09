@@ -27,13 +27,24 @@ export class FakeClient implements Client {
     this.log.push(`list ${module}`);
     return [...(this.snapshots.get(module) ?? [])];
   }
-  addToJob(vmid: string, retention?: string): void {
+  addToJob(vmid: string, retention?: string, bucket?: string): void {
     if (this.failOn.has("addToJob")) throw new Error("simulated addToJob failure");
-    this.log.push(`add-to-job ${vmid}${retention ? ` retention=${retention}` : ""}`);
+    this.log.push(
+      `add-to-job ${vmid}${retention ? ` retention=${retention}` : ""}${bucket ? ` bucket=${bucket}` : ""}`,
+    );
     if (!this.job.vmids.includes(vmid)) this.job.vmids = [...this.job.vmids, vmid];
   }
   applySchedule(spec: string): void {
     if (this.failOn.has("applySchedule")) throw new Error("simulated applySchedule failure");
     this.log.push(`apply-schedule ${spec}`);
+  }
+  keyList(): void {
+    this.log.push("key list");
+  }
+  keyExport(dest: string): void {
+    this.log.push(`key export ${dest}`);
+  }
+  keyImport(src: string): void {
+    this.log.push(`key import ${src}`);
   }
 }

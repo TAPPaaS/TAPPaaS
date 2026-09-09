@@ -196,7 +196,8 @@ dependent, and which `<module>.json` fields the dependent passes to it.
 | [`cluster:vm`](../../foundation/cluster/services/vm/README.md) | Creates and converges the module's Proxmox QEMU guest — the VM most modules run in. |
 | [`cluster:lxc`](../../foundation/cluster/services/lxc/README.md) | Creates and converges a Proxmox LXC container instead of a full VM. |
 | [`cluster:ha`](../../foundation/cluster/services/ha/README.md) | Places the guest under Proxmox HA, with node-affinity and ZFS replication. |
-| [`backup:vm`](../../foundation/backup/services/vm/README.md) | Enrols the guest in the shared Proxmox Backup Server job. |
+| [`backup:vm`](../../foundation/backup/services/vm/README.md) | Enrols the guest in the managed Proxmox Backup Server job — a whole-guest snapshot. |
+| [`backup:filesystem`](../../foundation/backup/services/filesystem/) | Captures **named paths inside** the guest instead of the whole guest. Needs `backup.filesystemPaths`; NixOS guests only. |
 | [`network:proxy`](../../foundation/network/services/proxy/README.md) | Publishes the module through Caddy — its public face and TLS termination. |
 | [`network:rules`](../../foundation/network/services/rules/README.md) | Compiles the module's declared firewall surface into OPNsense rules. |
 | [`network:dns`](../../foundation/network/services/dns/README.md) | Registers the module's DNS record on the resolver. |
@@ -206,11 +207,40 @@ dependent, and which `<module>.json` fields the dependent passes to it.
 | [`templates:windows`](../../foundation/templates/services/windows/README.md) | Windows VM lifecycle (OOBE and beyond) for Windows-based modules. |
 
 A few further coordinates have no standalone page yet — `templates:nixos` and
-`templates:debian` (the Linux template clones most modules use), `identity:accessControl`,
-and `backup:remote` / `backup:external` — documented on their parent module:
+`templates:debian` (the Linux template clones most modules use) and
+`identity:accessControl` — documented on their parent module:
 [templates](../../foundation/templates/README.md), [identity](../../foundation/identity/README.md),
 [backup](../../foundation/backup/README.md). The full reference for every field a dependent
 can pass is [module-fields.json](../../foundation/schemas/module-fields.json).
+
+### Getting your module backed up
+
+Backup is **opt-in**: a module is backed up only if it asks to be.
+
+```jsonc
+"dependsOn": ["backup:vm"],            // the whole guest, the usual choice
+"backup": {
+  "schedule": "weekly",                // daily | weekly | monthly | HH:MM
+  "retention": "1y",                   // overrides the environment/site default
+  "exclude": ["/var/cache"]
+}
+```
+
+- **Pick a kind.** `backup:vm` snapshots the whole guest. `backup:filesystem`
+  captures only `backup.filesystemPaths` from inside it — narrower and faster to
+  restore, but only where TAPPaaS knows the guest layout (NixOS).
+- **Declare neither if you want no backup.** Hardware modules and scratch/test
+  modules should not be in a backup job; that is a deliberate choice, not an
+  oversight, and nothing will add them behind your back.
+- **`integratesWith` instead of `dependsOn`** when your module must come up
+  *before* the backup server can exist (the foundation VMs). It wires the same
+  service without imposing install ordering (#501).
+- **Schedules resolve Site → Environment → Module**, and are **capped at once a
+  day** — a sub-daily request is rejected by name, not rounded down. Set a
+  *longer* interval for a module whose state rarely changes.
+
+See [backup](../../foundation/backup/README.md) and its
+[QUICKREF](../../foundation/backup/QUICKREF.md) for the operator side.
 
 ### Providing a service to others — `provides`
 

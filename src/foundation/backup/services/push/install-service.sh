@@ -26,6 +26,8 @@ readonly SCRIPT_DIR
 . /home/tappaas/bin/common-install-routines.sh
 # shellcheck source=../../lib/pbs-job.sh disable=SC1091
 . "${SCRIPT_DIR}/../../lib/pbs-job.sh"
+# shellcheck source=../../lib/pbs-storage.sh disable=SC1091
+. "${SCRIPT_DIR}/../../lib/pbs-storage.sh"
 # shellcheck source=../../lib/pbs-push.sh disable=SC1091
 . "${SCRIPT_DIR}/../../lib/pbs-push.sh"
 

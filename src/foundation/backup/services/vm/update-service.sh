@@ -43,6 +43,9 @@ if [[ -z "${VMID}" ]]; then
     exit 0
 fi
 
-debug "${BOLD}backup:vm: ensuring ${BL}${VMNAME}${CL} (VMID ${VMID}) is covered by PBS backup${CL}"
-pbs_ensure_vmid "${VMID}"
+# Re-assert membership in the bucket the CURRENT schedule resolves to, so a
+# changed schedule moves the guest between jobs on the normal update cadence.
+BUCKET="$(pbs_module_bucket "${MODULE}")" || exit 1
+debug "${BOLD}backup:vm: ensuring ${BL}${VMNAME}${CL} (VMID ${VMID}) is covered by ${BUCKET} PBS backup${CL}"
+pbs_place_vmid "${VMID}" "${BUCKET}"
 debug "  ${GN}✓${CL} backup:vm update-service completed"

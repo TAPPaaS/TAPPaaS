@@ -55,6 +55,18 @@ cd ~/TAPPaaS/src/foundation/backup
 # 3. Start VM when prompted (or manually later)
 ```
 
+### Test Restore alongside the original (rehearsing recovery)
+
+```bash
+# Restore into an UNUSED vmid: stopped, fresh MACs, original untouched.
+./restore.sh --vmid 110 --target-vmid 910 --node tappaas1 --storage tanka1
+ssh root@tappaas1.mgmt.internal qm config 910      # inspect it
+ssh root@tappaas1.mgmt.internal qm destroy 910     # when done
+```
+
+Never start a restored copy on the same network as its running original — two
+guests answering for one identity is worse than the guest being down.
+
 ### Test Restore to Different Node
 ```bash
 # Restore to secondary node for testing without affecting production
@@ -191,27 +203,127 @@ proxmox-backup-client backup data.pxar:/path \
 # Fingerprint: ssh root@backup.mgmt.internal "proxmox-backup-manager cert info | grep Fingerprint"
 ```
 
-## ADR-012 — Placement, off-site push, subset, immutability
+## ADR-012 — Placement, capabilities, schedules, off-site
 
-### Placement (where/whether PBS lives)
+### Placement: where (or whether) PBS lives
 
-`backup.json` `.placement` decides placement; the resolved outcome is recorded as
-`.placementState`:
+There is **no `placement` policy field**. `placementState` is the single source
+of truth: it ships empty, `install.sh` resolves it once, and the resolved value
+is written back so it is inspectable and idempotent.
 
-| Policy | Meaning |
-|--------|---------|
-| `auto` (default) | discover a `tankc` pool (preferred `.node` first, then any node) and install PBS there; **falls back to a `shim` if none is found** |
-| `node:<name>` | pin PBS to that node's `tankc` |
-| `shim` | no datastore — a marker that still satisfies `dependsOn:backup`; dependent modules install and their `backup:vm` install/update/test **skip gracefully**. Promote later once storage exists |
-| `remote-only` | no local PBS; back up off-site by **push** (below) |
+| `placementState` | How it gets there | Meaning |
+|---|---|---|
+| *(empty)* | the released default | unresolved — install derives it |
+| `node:<name>` | a `tankc` pool was found on `<name>` | PBS software + datastore live on that node's Proxmox OS (not a VM) |
+| `shim` | no `tankc` anywhere | marker only, no datastore. Still satisfies `dependsOn: backup:vm`, so dependents install and their `backup:vm` install/update/test **skip gracefully**. Promoted in place later |
+| `external` | forced at install, with a `pbsUrl` | a PBS this site does **not** provision is consumed by URL. **Permanent** |
+
+Two operator inputs shape resolution, both on `backup.json`:
+
+- **`.node`** *(optional)* — restrict `tankc` discovery to one named node.
+  Empty (the default) searches every node.
+- **`.pbsUrl`** — the PBS clients push to. Defaults to `backup.mgmt.internal`.
 
 ```bash
-backup-manager placement           # show placement + state (--json for machine)
-backup-manager peers               # list off-site peers (pull/receive/push)
-backup-manager validate            # warns loudly when placement is a shim
-# Promote a shim → real PBS once a tankc pool appears (idempotent):
-update-module.sh backup
+backup-manager placement           # state, kind, node, pbsUrl (--json for machine)
+backup-manager peers               # off-site peers (pull/receive/push)
+backup-manager validate            # loud about a shim or an unresolved state
+update-module.sh backup            # re-derives empty/shim → promotes in place
 ```
+
+**Forcing `external`** needs no special flag — install-module stages the fields:
+
+```bash
+install-module.sh backup --force --placementState external --pbsUrl pbs.lan.example
+backup-manage.sh use-external pbs.lan.example [--datastore <ds>]   # friendlier
+```
+
+`use-external` registers that PBS as the module's backup storage (so the
+existing job machinery targets it unchanged), verifies it, and only then records
+the placement. It **creates no datastore and never touches what is already
+stored there** — a site's existing snapshots stay listable and restorable
+(#456). It refuses to run from a live `node:<name>`, which would orphan a
+datastore full of backups.
+
+**Legacy states migrate in place** on the next `update-module.sh backup`:
+`local` → `node:<name>` (the datastore is **not** moved) and `remote-only` →
+`external`, seeding `pbsUrl` from the old push target.
+
+### What a module backs up: two capabilities
+
+Backup is **opt-in**. A module declares the kind it wants — or neither, which is
+how hardware and test modules stay out of every job:
+
+| Declared | Captures | Notes |
+|---|---|---|
+| `dependsOn: ["backup:vm"]` | the whole guest, as a PBS snapshot | the general case |
+| `integratesWith: ["backup:vm"]` | same | for the foundation VMs that boot **before** the backup server and so cannot depend on it (#501) |
+| `dependsOn`/`integratesWith` `["backup:filesystem"]` | named paths **inside** the guest | needs `backup.filesystemPaths`; **NixOS guests only** — the service install fails loudly on any other OS rather than capturing something half-right |
+| *neither* | nothing | deliberate |
+
+A file capture runs *inside* the guest (only it can read its own files): a
+`proxmox-backup-client` push into `fs/<module>`, on a timer, with a
+**write-no-delete** login scoped to that namespace and a client-side encryption
+key. Deleting a module keeps its file backups — that is exactly when they matter.
+
+```json
+"integratesWith": ["backup:filesystem"],
+"backup": { "filesystemPaths": ["/home/tappaas/config"] }
+```
+
+### Schedules: the cascade, and the ceiling
+
+`module.backup.schedule` > `environment.backup.schedule` >
+`site.backup.defaultSchedule` > `daily`.
+
+Vocabulary: **`daily` | `weekly` | `monthly`**, or a bare **`HH:MM`** (daily at
+that time). **Nothing sub-daily** — once a day is the maximum the platform backs
+anything up, and a request for anything more frequent is rejected by name rather
+than quietly rounded down.
+
+Proxmox schedules a *job*, not a guest, so each distinct frequency gets its own
+cluster backup job (a **bucket**). The daily bucket is the pre-existing job,
+marker and start time unchanged; `weekly` (`sun 21:00`) and `monthly`
+(`*-*-01 21:00`) are created on demand and deleted when they empty. Changing a
+module's schedule **moves** it between jobs — never leaves it in two.
+
+```bash
+site-manager site modify --backupDefaultSchedule weekly   # the site's base
+backup-manager resolve <module>       # effective policy incl. schedule + bucket
+backup-manager reconcile [--apply]    # converge memberships + bucket schedules
+```
+
+### Encryption keys — the out-of-band copy (§2.5.1)
+
+Backups are encrypted client-side and the keys are escrowed on the mothership —
+which is *inside* the system a full-site rebuild recreates, so that cannot be
+the only copy:
+
+```bash
+backup-manager key list
+backup-manager key export /media/usb-stick    # mandatory, store off-site
+backup-manager key import /media/usb-stick    # onto a rebuilt mothership, BEFORE restoring
+```
+
+Losing every copy of a key makes the backups it encrypted permanently
+unreadable. See [backup-recovery-runbook.md](../../../docs/design/backup-recovery-runbook.md).
+
+### Relocating a datastore without losing history
+
+When PBS itself moves (old node → a new `tankc`, or external → a new local PBS),
+seed the new datastore by **pulling** from the old one rather than starting
+empty:
+
+```bash
+backup-manage.sh add-remote old-pbs      # the old PBS as a temporary pull source
+#   … let the sync job complete, then verify …
+backup-manage.sh use-external <new-url>  # or re-run install to resolve node:<new>
+#   … confirm a TEST RESTORE from the new target succeeds …
+backup-manage.sh remove-remote old-pbs   # only now decommission the old datastore
+```
+
+Decommission only once the pull **and a test restore** are green. This is plain
+pull replication — there is no special migration path, and nothing is rewritten.
 
 ### Off-site symmetry (one PBS is all three)
 
@@ -227,6 +339,10 @@ sender** — namespace-partitioned, one prompt-not-store credential model:
 `add-push` registers the remote PBS as a Proxmox storage `offsite-<n>`; `--make-default`
 routes the managed backup job there. We hold **write-no-delete** and the **remote owns
 prune/retention/immutability** — a compromise here cannot erase the off-site copy.
+
+> A site with **no local PBS** does not need `add-push`: it sets
+> `placementState: external` + `pbsUrl` and its clients push to that PBS
+> directly, with the same write-no-delete credential (§1.4).
 
 ### Subset + independent retention (off-site ≠ 1:1)
 

@@ -146,6 +146,80 @@ if [[ "${TAPPAAS_TEST_DEEP:-0}" == "1" ]]; then
     fi
 fi
 
+# ── #501/#567: the orphan check honours integratesWith, not just dependsOn ──
+# A module that INTEGRATES with a provider carries that provider's fields just
+# as legitimately as one that depends on it — considering only dependsOn made
+# every such field look orphaned (the KI-1 family of warning, reopened the
+# moment #501 landed and the foundation VMs started using integratesWith).
+echo ""
+echo "== normalizer: integratesWith fields are not orphans (#501) =="
+_cjc="${HERE}/convert-json-to-config.sh"
+if [[ -f "${_cjc}" ]] && [[ -f "${CONFIG_DIR:-/home/tappaas/config}/module-fields.json" ]]; then
+    _tmpdir="$(mktemp -d)"
+    cat > "${_tmpdir}/m.json" <<'JSON'
+{
+  "vmname": "m",
+  "vmid": 900,
+  "kind": "module",
+  "dependsOn": ["cluster:vm"],
+  "integratesWith": ["backup:vm"],
+  "backup": { "enabled": true }
+}
+JSON
+    _out="$(bash "${_cjc}" --dry-run "${_tmpdir}/m.json" 2>&1)"
+    if grep -q "is usedBy=.* but the module does not depend" <<<"${_out}"; then
+        bad "a field owned by an integratesWith provider is reported as an orphan (#501)"
+    else
+        ok "a field owned by an integratesWith provider is NOT an orphan"
+    fi
+    # And the opposite still holds: a module wired to NEITHER still warns.
+    cat > "${_tmpdir}/n.json" <<'JSON'
+{ "vmname": "n", "vmid": 901, "kind": "module", "dependsOn": ["cluster:vm"], "backup": { "enabled": true } }
+JSON
+    _out="$(bash "${_cjc}" --dry-run "${_tmpdir}/n.json" 2>&1)"
+    if grep -q "is usedBy=.* but the module does not depend" <<<"${_out}"; then
+        ok "a genuinely orphaned field is still reported"
+    else
+        bad "the orphan check no longer reports a genuinely orphaned field"
+    fi
+    rm -rf "${_tmpdir}"
+else
+    echo "  SKIP: convert-json-to-config.sh or the composed schema not available"
+fi
+
+# ── ADR-012 §2.4 (#382): node-add reconciles the backup client ────────
+# A node that joins after backup was installed has no proxmox-backup-client
+# until the backup module's reconcile runs, so every VM placed on it would be
+# silently unbacked. The ADR requires this to be an AUTOMATIC step in node-add,
+# explicitly not a documented manual follow-up — assert it is wired that way,
+# in the right place, and non-fatal.
+echo ""
+echo "== node-add wires the backup client reconcile (ADR-012 §2.4, #382) =="
+_prov="${HERE}/src/provision.ts"
+if [[ -f "${_prov}" ]]; then
+    if grep -q '"module-manager", \["modify", "backup"' "${_prov}"; then
+        ok "node add calls 'module-manager modify backup' (the client reconcile)"
+    else
+        bad "node add does NOT reconcile the backup client — a new node's VMs would go unbacked (#382)"
+    fi
+    # After the join + capture + storage registration: reconciling before the
+    # node is actually in the cluster would reconcile the OLD membership.
+    _n_storage="$(grep -n "registering the node in its pools" "${_prov}" | head -1 | cut -d: -f1)"
+    _n_backup="$(grep -n 'modify", "backup"' "${_prov}" | head -1 | cut -d: -f1)"
+    if [[ -n "${_n_storage}" && -n "${_n_backup}" && "${_n_backup}" -gt "${_n_storage}" ]]; then
+        ok "the reconcile runs after the node is joined, captured and storage-registered"
+    else
+        bad "the backup reconcile is not sequenced after node capture/storage registration"
+    fi
+    if grep -A 4 'modify", "backup"' "${_prov}" | grep -q "warn("; then
+        ok "a failed reconcile warns (the node is already joined — it must not fail the join)"
+    else
+        bad "a failed backup reconcile is fatal to node add — it should warn and name the remedy"
+    fi
+else
+    echo "  SKIP: src/provision.ts not found"
+fi
+
 echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed"
 [[ "$FAIL" -eq 0 ]]

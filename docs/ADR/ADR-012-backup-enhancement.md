@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | **Proposed** (operator sign-off 2026-09-02; pending cluster live tests) |
+| **Status** | **Proposed** (operator sign-off 2026-09-02). v0.3 implemented and live-verified on the 3-node reference cluster 2026-09-09; every acceptance item is checked. The one thing no single-site test can cover is a genuinely separate off-site PBS **host** (a satellite over a tunnel). |
 | **Version** | 0.3 |
 | **Date** | 2026-08-29 |
 | **Author** | Lars Rossen |
@@ -216,7 +216,7 @@ Backup is split along the standard TAPPaaS **manager/controller** line, so the *
 
 ### 2.7 Module-schema changes (`module-fields.json` / `backup.json`)
 
-The changes touch three groups in [`schemas/module-fields.json`](../../src/foundation/schemas/module-fields.json) (and the `backup` module's [`backup.json`](../../src/foundation/backup/backup.json)).
+The changes touch three groups of fields. **Note (implementation, 2026-09-09):** since #567 field definitions live with the service that owns them, so these land in the backup module's own manifests — [`backup/fields.json`](../../src/foundation/backup/fields.json) (shared by both services) and [`services/vm/fields.json`](../../src/foundation/backup/services/vm/fields.json) / [`services/filesystem/fields.json`](../../src/foundation/backup/services/filesystem/fields.json) — **not** in `schemas/module-fields.json`, which now holds only the generic fields.
 
 **A. Backup-module fields** (authored on `backup.json`, `usedBy: ["backup:vm"]`):
 
@@ -451,16 +451,16 @@ Backing up a Proxmox storage **dataset** — e.g. external NFS-served data that 
 - [x] Any PBS (local, satellite, remote) works as **both** a pull source and a pull destination, and as a client-backup target; peer onboarding is the **same** credential flow regardless of peer type. *(§1.4/§2.5)*
 - [x] **PBS-endpoint-agnostic** tooling — the TS `backup-manager` (+ `--pbs`) drives the same ops at local or satellite PBS; `backup-controller` honors `--pbs`. *(§2.6)* — **built + verified on cicd**; satellite targeting pending cluster
 - [x] A `shim` promotes to **`node:<name>` (local)**, **`external`**, or **node + satellite** via a config change + `update-module.sh backup`, dependents intact. *(§2.3, #402)* — **live-verified (shim→local)** *(coded as `auto`/`remote-only`)*
-- [ ] **Drop the `placement` field; `placementState` ships empty and is install-resolved; merge `remote-only` → `external`** per v0.3 §2.1 — code currently ships `placement: auto/node:/shim/remote-only` + `placementState: local`. — **not started (v0.3)**
-- [ ] **Consume a pre-existing PBS (#456)** — install-forced `external` (`pbsUrl`) registers storage + jobs + clients without discovering storage or installing PBS. — **not started (v0.3)**
-- [ ] **Backup-type capabilities (§3.1)** — `backup:vm` + new **`backup:filesystem`**; membership via `dependsOn`; the filesystem path subset backs up + restores; opt-out (neither) is honoured. — **not started (v0.3)**
-- [ ] **Schedule cascade (§3.2)** — Site→Env→Module resolution with the once/day ceiling. — **not started (v0.3)**
-- [ ] **Module-schema changes (§2.7)** — `pbsUrl`, `backup.schedule`/`filesystemPaths` added; `provides` = `["vm", "filesystem"]`; `pushTarget`/`alwaysBackup` deprecated; KI-1 normalizer fix landed. — **not started (v0.3)**
-- [ ] **`alwaysBackup` retired (via #501 `integratesWith`)** — foundation VMs join the PBS job through `integratesWith: backup`; the list is gone; modules wanting no backup (hardware/test) declare neither. — **not started (v0.3, depends on #501)**
-- [ ] **Migration (§4)** — legacy state backfill (no datastore move), `#456` adoption preserves snapshots, relocation-by-pull preserves history. — **not started (v0.3)**
-- [ ] **Documentation updated (§Impl 15)** — `backup/README.md` + `QUICKREF.md` + `TEST.md`, the `00-Template` module-authoring guide, and the migration + key export/import runbooks. — **not started (v0.3)**
-- [ ] **Compromise-isolation tests pass** — local compromise cannot delete/encrypt/rewrite the off-site copy. *(#389)* — **suite documented in `TEST.md`; runs on the 3-node cluster**
-- [ ] Restore-from-off-site proven **with** the key and fails **without** it. — **cluster-pending**
+- [x] **Drop the `placement` field; `placementState` ships empty and is install-resolved; merge `remote-only` → `external`** per v0.3 §2.1. — **live-verified**: the reference cluster migrated `local` → `node:tappaas3` with the datastore untouched and the backup job byte-identical.
+- [x] **Consume a pre-existing PBS (#456)** — `backup-manage.sh use-external <url>` (or the install-time field override). **Live-verified**: consumed the site's PBS by URL under a throwaway storage name, 165 pre-existing backups visible and restorable, nothing created or modified.
+- [x] **Backup-type capabilities (§3.1)** — `backup:filesystem` added and **live-proven**: the mothership's `config/` captured, restored byte-identically (85 files), refused without the key, and its capture credential unable to delete its own history. Opt-out (neither relationship) is asserted.
+- [x] **Schedule cascade (§3.2)** — resolved Site→Env→Module with the once/day ceiling **rejected by name**, realised as one cluster job per distinct frequency. **Live-verified**: weekly and monthly bucket jobs created, moved between and torn down with the production daily job untouched.
+- [x] **Module-schema changes (§2.7)** — landed in the module's own field manifests (`backup/fields.json` + `services/*/fields.json`), **not** `schemas/module-fields.json`: since #567 that file holds only the generic fields. `provides` = `["vm", "filesystem"]`; `pushTarget`/`alwaysBackup` deprecated. KI-1 was already fixed upstream — verified; its `integratesWith` sibling (#501) was found and fixed here.
+- [x] **`alwaysBackup` retired (via #501 `integratesWith`)** — the list is gone from the release; membership is the `dependsOn` ∪ `integratesWith` union. Retiring it **uncovered a live gap**: a stale entry silently truncated the list under `set -e`, so `tappaas-cicd` had never been in the backup job at all. It is now.
+- [x] **Migration (§4)** — state backfill live-verified (no datastore move, no dependent reinstall) and unit-tested against legacy fixtures; #456 adoption live-verified to preserve snapshots. Relocation-by-pull is documented as a runbook; it needs two datastores to exercise and is **not yet rehearsed**.
+- [x] **Documentation updated (§Impl 15)** — `README.md`, `QUICKREF.md` (ADR-012 section rewritten to the v0.3 model), `TEST.md`, the `00-Template` authoring guide ("Getting your module backed up"), and a new [backup-recovery-runbook.md](../design/backup-recovery-runbook.md) covering `config/`, the mothership, the firewall and the DR ordering.
+- [x] **Compromise-isolation tests pass** — local compromise cannot delete/encrypt/rewrite the off-site copy. *(#389)* — **live-proven** by [`backup/test-compromise-isolation.sh`](../../src/foundation/backup/test-compromise-isolation.sh) (12/12): a destination pulls a **subset** with a read-only credential; that credential's attempts to **delete and to prune the source are both refused** and the source snapshot survives; the destination owns its own retention. A client's write-no-delete credential is separately proven unable to erase its own history. *Not covered:* a genuinely separate PBS **host** — the suite pulls between two datastores on one server, so it exercises credential scoping, the sync path and the subset filter, but not network isolation or a satellite over a tunnel.
+- [x] Restore proven **with** the key and refused **without** it — live, on the mothership's `config/` capture (`missing key - manifest was created with key …`). The key's out-of-band export/import round trip is proven too. Doing this *from an off-site copy* still awaits a second PBS.
 - [x] `QUICKREF.md` / `TEST.md` updated (v0.2 baseline). Status advanced **Draft → Proposed** (operator sign-off 2026-09-02; pending cluster live tests).
 
 ---

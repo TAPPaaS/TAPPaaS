@@ -36,6 +36,9 @@
     "cluster:ha",
     "network:proxy"
   ],
+  "integratesWith": [
+    "backup:vm"
+  ],
   "provides": [
     "proxy",
     "rules",

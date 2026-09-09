@@ -51,7 +51,7 @@ pbs_fs_ensure_target "${MODULE}" || die "could not re-assert the PBS side for ${
 SCHEDULE="$(pbs_schedule_resolve "${MODULE}")"
 NS="$(pbs_fs_namespace "${MODULE}")"
 REPO="$(pbs_fs_authid "${MODULE}")@$(pbs_pbs_url):$(pbs_storage_name)"
-pbs_fs_write_manifest "${MODULE}" "${REPO}" "${NS}" "${SCHEDULE}" "${FS_PATHS[@]}" \
+pbs_fs_write_manifest "${MODULE}" "${REPO}" "${NS}" "${SCHEDULE}" "$(pbs_fs_fingerprint)" "${FS_PATHS[@]}" \
     || die "could not update the capture manifest"
 
 MANIFEST="$(pbs_fs_manifest_path "${MODULE}")"

@@ -77,6 +77,11 @@ const HELP: HelpSpec = {
     { usage: "restore restore <module> [opts...]", name: "restore restore" },
     { usage: "restore list-all", name: "restore list-all" },
     { usage: "placement", name: "placement", note: "(ADR-012 — backup placement/state)" },
+    {
+      usage: "key list|export <dest>|import <src>",
+      name: "key",
+      note: "(ADR-012 §2.5.1 — the out-of-band encryption-key copy)",
+    },
     { usage: "peers", name: "peers", note: "(ADR-012 — off-site pull/receive/push peers)" },
   ],
   common: [
@@ -249,12 +254,16 @@ function cmdValidate(opts: Opts): void {
   for (const o of res.oks) info(`  ok: ${o}`);
   // ADR-012: surface placement so a datastore-less shim is visible, not silent.
   const pl = readPlacement(opts.configDir);
-  if (pl.placementState === "shim") {
+  if (pl.kind === "shim") {
     warn(
       "backup placement is a SHIM (no datastore) — modules install but are NOT backed up until promoted: update-module.sh backup",
     );
-  } else if (pl.placementState === "remote-only") {
-    info(`  ok: placement remote-only (off-site push${pl.pushTarget ? ` via '${pl.pushTarget}'` : ""})`);
+  } else if (pl.kind === "external") {
+    info(`  ok: placement external — clients push to the PBS at '${pl.pbsUrl}'`);
+  } else if (pl.kind === "unresolved") {
+    warn(
+      "backup placement is UNRESOLVED (no placementState) — run 'update-module.sh backup' to resolve it",
+    );
   }
   for (const e of res.errors) console.error(`  ERROR: ${e}`);
   info("");
@@ -272,10 +281,11 @@ function cmdPlacement(opts: Opts): void {
     info(JSON.stringify(pl, null, 2));
     return;
   }
-  info(`placement:      ${pl.placement}`);
-  info(`placementState: ${pl.placementState ?? "(unset/legacy → local)"}`);
+  info(`placementState: ${pl.placementState ?? "(unresolved)"}`);
+  info(`kind:           ${pl.kind}${pl.node ? ` (node ${pl.node})` : ""}`);
+  info(`pbsUrl:         ${pl.pbsUrl}`);
   info(`pbsStorageName: ${pl.pbsStorageName}`);
-  info(`pushTarget:     ${pl.pushTarget ?? "-"}`);
+  if (pl.pushTarget) info(`pushTarget:     ${pl.pushTarget}  (deprecated — see pbsUrl)`);
 }
 
 function cmdPeers(opts: Opts): void {
@@ -436,6 +446,22 @@ export function run(argv: string[], client: Client): number {
       case "resolve":
         cmdResolve(opts);
         return 0;
+      case "key": {
+        // The escrow sits inside the system a full-site DR is rebuilding, so it
+        // cannot be the only copy of a key: without an off-system copy, an
+        // encrypted off-site backup is unrecoverable (§2.5.1).
+        const sub = opts.rest[0] ?? "list";
+        const arg = opts.rest[1];
+        if (sub === "list") client.keyList();
+        else if (sub === "export") {
+          if (!arg) die("key export: <dest> required (a directory on removable media)");
+          client.keyExport(arg);
+        } else if (sub === "import") {
+          if (!arg) die("key import: <src> required (the directory holding exported keys)");
+          client.keyImport(arg);
+        } else die(`key: expected 'list' | 'export <dest>' | 'import <src>', got '${sub}'`);
+        return 0;
+      }
       case "placement":
         cmdPlacement(opts);
         return 0;

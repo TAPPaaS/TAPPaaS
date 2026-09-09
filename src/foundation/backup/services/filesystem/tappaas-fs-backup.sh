@@ -38,6 +38,7 @@ command -v proxmox-backup-client >/dev/null 2>&1 \
     || die "proxmox-backup-client is not installed in this guest"
 
 MODULE="$(jq -r '.module // empty'     "${MANIFEST}")"
+FINGERPRINT="$(jq -r '.fingerprint // empty' "${MANIFEST}")"
 REPO="$(jq -r '.repository // empty'   "${MANIFEST}")"
 NS="$(jq -r '.namespace // empty'      "${MANIFEST}")"
 mapfile -t PATHS < <(jq -r '.paths // [] | .[]' "${MANIFEST}")
@@ -67,7 +68,11 @@ if [[ "${DRY_RUN}" -eq 1 ]]; then
     exit 0
 fi
 
+# PBS_FINGERPRINT confirms the server's self-signed certificate. It is public
+# (the cert's own sha256), lives in the manifest, and without it every capture
+# fails at connect with "Certificate fingerprint was not confirmed".
 PBS_PASSWORD="$(cat "${PW_FILE}")" \
+PBS_FINGERPRINT="${FINGERPRINT}" \
 PBS_ENCRYPTION_PASSWORD="" \
 proxmox-backup-client backup "${args[@]}" \
     --repository "${REPO}" \

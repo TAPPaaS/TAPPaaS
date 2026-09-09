@@ -83,13 +83,32 @@ export class CliClient implements Client {
     return asStringArray(o.snapshots);
   }
 
-  addToJob(vmid: string, retention?: string): void {
+  addToJob(vmid: string, retention?: string, bucket?: string): void {
     const args = [...this.ep(), "add-to-job", vmid];
     if (retention) args.push("--retention", retention);
+    if (bucket) args.push("--bucket", bucket);
     run(args);
   }
 
   applySchedule(spec: string): void {
     run([...this.ep(), "apply-schedule", spec]);
+  }
+
+  // Encryption-key escrow (ADR-012 §2.5.1). The controller owns the files;
+  // this is the operator-facing surface the ADR names.
+  //
+  // These PRINT the controller's output rather than swallowing it: every other
+  // verb here is a machine call whose result the manager interprets, but these
+  // three are read by a person — the list of keys they hold, and the warnings
+  // about what losing them costs. Captured and discarded, `key list` printed
+  // nothing at all.
+  keyList(): void {
+    process.stdout.write(run([...this.ep(), "key", "list"]));
+  }
+  keyExport(dest: string): void {
+    process.stdout.write(run([...this.ep(), "key", "export", dest]));
+  }
+  keyImport(src: string): void {
+    process.stdout.write(run([...this.ep(), "key", "import", src]));
   }
 }

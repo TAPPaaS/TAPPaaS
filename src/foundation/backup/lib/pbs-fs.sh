@@ -99,18 +99,28 @@ pbs_fs_ensure_target() {
     info "  ${GN}✓${CL} ${authid} may write (not delete) in ${BL}${ns}${CL}"
 }
 
+# The PBS server certificate fingerprint. NOT a secret — it is the public half
+# of the TLS identity, and the client needs it because a TAPPaaS PBS serves a
+# self-signed certificate. Without it the capture fails at connect with
+# "Certificate fingerprint was not confirmed".
+pbs_fs_fingerprint() {
+    _pbs_node_run proxmox-backup-manager cert info 2>/dev/null \
+        | sed -n 's/^Fingerprint (sha256): //p' | head -1
+}
+
 # Write the capture manifest the guest-side runner reads. Carries no secret:
 # the login's password and the encryption key live in the guest's /etc/secrets
-# and are escrowed centrally (§2.5.1), never in config.
-# Args: <module> <repository> <namespace> <schedule> <path>...
+# and are escrowed centrally (§2.5.1), never in config. The fingerprint is
+# public and belongs here — it is configuration, not a credential.
+# Args: <module> <repository> <namespace> <schedule> <fingerprint> <path>...
 pbs_fs_write_manifest() {
-    local module="$1" repo="$2" ns="$3" schedule="$4"; shift 4
+    local module="$1" repo="$2" ns="$3" schedule="$4" fp="$5"; shift 5
     local f tmp
     f="$(pbs_fs_manifest_path "${module}")"
     tmp="$(mktemp)"
     printf '%s\n' "$@" | jq -R . | jq -s \
-        --arg m "${module}" --arg r "${repo}" --arg n "${ns}" --arg s "${schedule}" \
-        '{module: $m, repository: $r, namespace: $n, schedule: $s, paths: .}' >"${tmp}" \
+        --arg m "${module}" --arg r "${repo}" --arg n "${ns}" --arg s "${schedule}" --arg fp "${fp}" \
+        '{module: $m, repository: $r, namespace: $n, schedule: $s, fingerprint: $fp, paths: .}' >"${tmp}" \
         && mv "${tmp}" "${f}" || { rm -f "${tmp}"; return 1; }
     chmod 644 "${f}"
     info "  ${GN}✓${CL} capture manifest → ${f}"

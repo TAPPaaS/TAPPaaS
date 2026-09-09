@@ -3,9 +3,9 @@
 # TAPPaaS Backup Module Update
 #
 # Three jobs (ADR-012):
-#   * P2 — promote a shim to a real PBS in place once a tankc pool appears
-#          (re-resolves the configured placement policy; auto/node: promote,
-#          an explicit `shim` policy stays a shim).
+#   * §2.2/§2.3 — migrate a legacy placement state in place (local → node:<name>,
+#          remote-only → external), backfill a pre-ADR-012 install, and promote a
+#          shim to a real PBS once a tankc pool appears.
 #   * P3 — reconcile proxmox-backup-client across CURRENT cluster membership so
 #          a node added after install gets its client (#382).
 #   * Keep the managed PBS job consistent: alwaysBackup VMs, ZFS-mount ordering
@@ -33,48 +33,64 @@ readonly MODULE_DIR
 . "${MODULE_DIR}/lib/pbs-immutable.sh"
 
 ZONE="$(get_config_value 'zone0' 'mgmt')"
+IMAGE_LOCATION="$(get_config_value 'imageLocation' 'http://download.proxmox.com/debian/pbs')"
+
+# Migrate a legacy state in place before anything reads it (ADR-012 §4.1, D22):
+# local → node:<name> (datastore untouched), remote-only → external. A
+# pre-ADR-012 install has no marker at all and is handled below.
+LEGACY_NODE=""
+if [[ "$(pbs_placement_state)" == "local" ]]; then
+  LEGACY_NODE="$(pbs_legacy_pbs_node "${ZONE}")"
+fi
+pbs_migrate_placement_state "" "${LEGACY_NODE}" >/dev/null || warn "Could not migrate legacy placement state"
 STATE="$(pbs_placement_state)"
 
-# ── remote-only: no local PBS to touch (off-site push is P4) ──────────
-if [[ "${STATE}" == "remote-only" ]]; then
-    info "Backup placement is ${BL}remote-only${CL} — no local PBS to update (off-site push is ADR-012 P4)."
+# ── external: no local PBS to touch; clients push to the consumed PBS ──
+if [[ "${STATE}" == "external" ]]; then
+    info "Backup placement is ${BL}external${CL} (${BGN}$(pbs_pbs_url)${CL}) — no local PBS to update."
+    # Clients still push to it (§1.4), so keep client coverage in step with
+    # current cluster membership (#382).
+    pbs_client_reconcile "${ZONE}" "${IMAGE_LOCATION}" \
+        || warn "One or more nodes could not be reconciled for proxmox-backup-client (see above)"
     exit 0
 fi
 
-# Legacy deployments (installed before ADR-012) have no placementState. They were
-# always a real local PBS — treat empty as local and backfill the marker. Do NOT
-# route them through promotion (that would re-run a full install unnecessarily).
+# ── empty or shim: (re-)derive the state (§2.2 rule 3) ────────────────
+# Empty = a pre-ADR-012 install (a real local PBS with no marker) or a fresh
+# config; shim = a placeholder waiting for storage. Both re-derive on every
+# update, so a shim promotes in place the moment a tankc pool appears — and a
+# legacy install is backfilled to node:<name> without a promotion-reinstall.
 if [[ -z "${STATE}" ]]; then
-    info "No placement state recorded — treating as an existing local PBS (backfilling marker)."
-    pbs_write_placement_state local
-    STATE="local"
+    # Pre-ADR-012 install: a real local PBS with no marker. Name the node it
+    # actually runs on and record it — no discovery, no move, no reinstall.
+    PNODE="$(pbs_legacy_pbs_node "${ZONE}")"
+    info "No placement state recorded — backfilling to ${BGN}node:${PNODE}${CL}; the datastore is left where it is."
+    pbs_write_placement_state "node:${PNODE}"
+    STATE="node:${PNODE}"
 fi
 
-# ── P2: promote a shim → real PBS once a tankc pool appears ───────────
-# Only an explicit shim promotes. Re-resolve the CONFIGURED policy: auto/node:
-# now find storage and promote; an explicitly-chosen `shim` policy stays a shim.
 if [[ "${STATE}" == "shim" ]]; then
-    POLICY="$(placement_policy)"
-    PREFERRED_NODE="$(get_config_value 'node' "$(get_node_hostname 0)")"
-    read -r MODE PNODE PSTORAGE < <(pbs_discover_placement "${POLICY}" "${PREFERRED_NODE}" "${ZONE}")
-    if [[ "${MODE}" == "local" ]]; then
-        info "${BOLD}Storage now available (${BGN}${PNODE}:${PSTORAGE}${CL}${BOLD}) — promoting shim → local PBS${CL}"
-        # install.sh is idempotent: it realizes the datastore + reconciles clients
-        # and rewrites .placementState=local. Dependent modules (dependsOn:backup)
-        # are untouched. (Run via `bash` — install.sh's shebang isn't on line 1.)
+    NODE_CONSTRAINT="$(get_config_value 'node' '')"
+    read -r MODE PSTORAGE < <(pbs_resolve_placement_state "${STATE}" "${NODE_CONSTRAINT}" "${ZONE}" "$(get_node_hostname 0)")
+    if PNODE="$(pbs_state_node "${MODE}")"; then
+        info "${BOLD}Storage now available (${BGN}${PNODE}:${PSTORAGE}${CL}${BOLD}) — promoting shim → real PBS${CL}"
+        # install.sh is idempotent: it realizes the datastore + reconciles
+        # clients and rewrites .placementState. Dependent modules
+        # (dependsOn:backup) are untouched. (Run via `bash` — install.sh's
+        # shebang isn't on line 1.)
         exec bash "${MODULE_DIR}/install.sh" backup
+    else
+        warn "Backup is still a shim (no usable tankc pool found) — nothing to update."
+        exit 0
     fi
-    warn "Backup is still a shim (policy ${POLICY}: no usable tankc pool found) — nothing to update."
-    exit 0
 fi
 
 # ── local PBS: heal client coverage (P3), then keep the job consistent ──
-IMAGE_LOCATION="$(get_config_value 'imageLocation' 'http://download.proxmox.com/debian/pbs')"
 pbs_client_reconcile "${ZONE}" "${IMAGE_LOCATION}" \
     || warn "One or more nodes could not be reconciled for proxmox-backup-client (see above)"
 
-info "${BOLD}Ensuring alwaysBackup VMs are registered in the managed backup job${CL}"
-pbs_ensure_always
+info "${BOLD}Ensuring every opted-in VM is registered in the managed backup job${CL}"
+pbs_ensure_declared
 
 # Retrofit the ZFS-mount ordering on already-deployed PBS servers (issue #230);
 # idempotent, so this is a no-op once the drop-ins are in place.
