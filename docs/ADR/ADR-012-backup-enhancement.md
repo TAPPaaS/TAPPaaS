@@ -64,7 +64,7 @@ A site's backup is described by **where its primary PBS datastore lives and who 
 |---|---|---|---|---|
 | **Shim** (§1.1) | no | no | state `shim` — no `tankc` found (and not forced external) | first boot, testing, before storage exists |
 | **Local PBS on a Site-managed host** (§1.2) | **yes** — installed on that host's OS (not a VM) | yes | state `host:<name>` — a datastore pool is found on `<name>` | reference 2–3-node cluster; also a Site-managed host outside the cluster |
-| **Externally-managed PBS** (§1.3) | no — **consumed** by URL | depends on flavor | state `external` — operator forces it + gives a URL | single-node, off-site-only, or a site that already runs PBS (#456) |
+| **Externally-managed PBS** (§1.3) | no — **consumed** by URL | depends on flavor | state `consumed:<url>` — operator names a PBS to consume | single-node, off-site-only, or a site that already runs PBS (#456) |
 
 Only the **local PBS** case realises PBS software and a datastore; shim and external-PBS both provision the module without any PBS software of their own. Off-site *relationships* between PBS instances (a satellite pulling the home PBS, a buddy) layer on top and are covered in **§1.4**.
 
@@ -90,6 +90,8 @@ The host **may or may not be a Proxmox cluster member**. A cluster member is the
 A local PBS can also participate in **buddy relationships** with other PBS instances — including acting as a **pull source** for another TAPPaaS system. Those cross-PBS relationships are covered in **§1.4**.
 
 ### 1.3 Externally-managed PBS (consumed by URL)
+
+*State name: `consumed:<url>`. The three flavours below differ only in **reachability** — tunnel, public network, LAN. They do not share an ownership meaning: a satellite is provisioned and managed by this Site, a third party's PBS by nobody here, a buddy's by another Site. The state records what the module does with the target — register the URL, provision nothing — not who runs it.*
 
 The module can use a PBS it **does not provision**. The single knob is a **URL** to that PBS (plus a credential, §2.5); the flavor is orthogonal:
 
@@ -152,7 +154,7 @@ There is **no `placement` policy field.** The released module ships with `placem
 | *(empty)*, module **already deployed** | an install that predates `placementState` | **an existing local PBS** — backfill the marker from the serving host; do **not** re-derive | §1.2 |
 | `host:<name>` | not external, a datastore pool found on host `<name>` | install PBS on `<name>`'s OS + own the datastore. `<name>` need not be a cluster member. | §1.2 |
 | `shim` | not external, and **no `tankc` found** | catch-all fallback: marker only, no datastore | §1.1 |
-| `external` | **install told to force external** (+ a `pbsUrl`) | consume the externally-managed PBS; provision nothing. **Permanent once set.** | §1.3 |
+| `consumed:<url>` | **install told to consume an existing PBS** (+ a `pbsUrl`) | register the PBS at that URL as storage; provision nothing. **Sticky — see §2.3 for the exit.** | §1.3 |
 
 Two operator inputs shape resolution, both on `backup.json`:
 
@@ -161,20 +163,22 @@ Two operator inputs shape resolution, both on `backup.json`:
 
 Forcing `external` is an **install-time action** (an install argument + `pbsUrl`), not a config policy field — it *overwrites* `placementState` to `external`, and that is then the **permanent** state. This one state covers every externally-managed flavour — satellite, public external, or a pre-existing LAN PBS (#456) — because the module's behaviour is identical (provision nothing, register the PBS at `pbsUrl` as storage, clients push there). *(It subsumes the earlier `remote-only`, which was indistinguishable.)*
 
-> **Naming note (open):** #214 introduced a `pbsType`/`external` notion for bare-metal PBS. How the install-time "force external" is spelled (a dedicated flag, `pbsType`, …) is an implementation detail for the tracker — the **decision here** is: no `placement` policy field; `placementState` ships empty and is install-resolved; `external` is set at install (with `pbsUrl`) and is permanent.
+> **Naming note (open):** #214 introduced a `pbsType`/`external` notion for bare-metal PBS. How the install-time "consume this PBS" is spelled (a dedicated flag, `pbsType`, …) is an implementation detail for the tracker — the **decision here** is: no `placement` policy field; `placementState` ships empty and is install-resolved; `consumed:<url>` is set at install (with `pbsUrl`) and is sticky.
+>
+> The state is **not** called `external`. That word already carries the ADR-012 Appendix A sense ("tracked but not managed by this Site"), the `kind: external-host` sense, and the `external/<name>` PBS namespace — and a satellite consumed this way *is* managed by this Site, so naming the state for ownership misdescribes the commonest case. `consumed:` names what the module does.
 
 ### 2.2 The resolution order
 
 At install/update, `install.sh` resolves `placementState`:
 
-1. **Told to force `external`?** → `placementState = external` (requires `pbsUrl`). No discovery, nothing provisioned. Sticky thereafter.
-2. Already a concrete state (`host:<name>` or `external`) → **keep it** (idempotent).
+1. **Told to consume an existing PBS?** → `placementState = consumed:<url>` (requires `pbsUrl`). No discovery, nothing provisioned. Sticky thereafter — deliberate operator intent is not re-derived away.
+2. Already a concrete state (`host:<name>` or `consumed:<url>`) → **keep it** (idempotent).
 3. Empty on an **already-deployed** module → **backfill, do not derive**: the module is a real local PBS whose install predates the field, so record `host:<name>` for the host already serving it. This matches `update.sh` today, which treats an empty state as local rather than routing it through promotion.
 4. Empty *(released default, never installed)* or `shim` → **derive auto**: discover a datastore pool — probing **`backup.json.node`** first when set, then cluster members. Found on host `<name>` → `placementState = host:<name>` (install PBS there); **not found → `shim`** (the catch-all fallback; lay the marker, warn).
 
 **Derivation never relocates a live datastore.** If a datastore is already reachable at the configured `pbsUrl`, resolution must not select a different host: on a site whose PBS runs outside the cluster, a Proxmox-only probe finds nothing there, walks the cluster, and would otherwise resolve onto a cluster member — standing up a second PBS beside the working one.
 
-So `node` is a *discovery constraint* (which host to probe first) and `host:<name>` is the *state* that results when a pool is actually found. **`backup.json.node` may name a host that is not a cluster member**, and discovery must not assume otherwise: the probe cannot rely on a Proxmox-only command, or a Site-managed PBS outside the cluster is invisible to it. An empty state and a `shim` are both re-derived on every update (so a `shim` promotes to `host:<name>` the moment a pool appears); `external` and `host:<name>` are kept.
+So `node` is a *discovery constraint* (which host to probe first) and `host:<name>` is the *state* that results when a pool is actually found. **`backup.json.node` may name a host that is not a cluster member**, and discovery must not assume otherwise: the probe cannot rely on a Proxmox-only command, or a Site-managed PBS outside the cluster is invisible to it. An empty state and a `shim` are both re-derived on every update (so a `shim` promotes to `host:<name>` the moment a pool appears); `consumed:<url>` and `host:<name>` are kept.
 
 ### 2.3 Shim & promotion
 
@@ -183,7 +187,7 @@ So `node` is a *discovery constraint* (which host to probe first) and `host:<nam
 | From `shim` to… | Trigger | Effect of `update.sh` |
 |---|---|---|
 | **`host:<name>`** (local PBS) | a pool now exists (on `node`, or on a cluster member if unpinned) | re-derives to `host:<name>`; creates the datastore + per-node clients; the shim marker becomes a real datastore |
-| **`external`** | operator re-runs install/update **forcing external** + `pbsUrl` | overwrites to `external` (permanent); registers the consumed PBS as storage + wires jobs; provisions nothing |
+| **`consumed:<url>`** | operator re-runs install/update **naming a PBS to consume** + `pbsUrl` | overwrites to `consumed:<url>`; registers that PBS as storage + wires jobs; provisions nothing |
 
 The **same command that heals node membership (§2.4) also advances backup from `shim` to a real state.** This is the concrete answer to #402's "allow backup to be reinstalled later and ensure existing `dependsOn` modules then work."
 
@@ -238,9 +242,9 @@ The changes touch three groups in [`schemas/module-fields.json`](../../src/found
 | `placement` | **remove** | The current `placement` policy field is deleted — its job is now the install-resolved `placementState` (§2.1). A legacy value is read *once* during migration (§4) to seed the state, then dropped. |
 | `node` | **repurpose** | From an `auto` *hint* to a **discovery constraint**: when set, only this node is searched for `tankc`; when unset, all nodes are. |
 | `storage` | keep | The `tankc` pool name to find/use (default `tankc1`). |
-| `placementState` | **change values + ships empty** | The single source of truth (§2.1). Was `local\|shim\|remote-only`; now **empty (released default)** or pattern `^(shim\|external\|host:.+)$`. Install-written, never hand-authored. Migration: legacy `local` → `host:<name>`, `remote-only` → `external`. |
-| `pbsUrl` | **new** | The PBS the clients push to (§1.4). **Default `backup.mgmt.internal`** (local PBS DNS); overridden to the external PBS's URL when `placementState:external` (§1.3). Credential prompted-not-stored. |
-| `pushTarget` | **deprecate** | Subsumed by `placementState:external` + `pbsUrl` — the external PBS is simply the configured target clients push to. Read for one release, then removed. |
+| `placementState` | **change values + ships empty** | The single source of truth (§2.1). Was `local\|shim\|remote-only`; now **empty (released default)** or pattern `^(shim\|consumed:.+\|host:.+)$`. Install-written, never hand-authored. Migration: legacy `local` → `host:<name>`, `remote-only` → `consumed:<url>`. |
+| `pbsUrl` | **new** | The PBS the clients push to (§1.4). **Default `backup.mgmt.internal`** (local PBS DNS); overridden to the consumed PBS's URL when `placementState: consumed:<url>` (§1.3). Credential prompted-not-stored. |
+| `pushTarget` | **deprecate** | Subsumed by `placementState: consumed:<url>` + `pbsUrl` — the consumed PBS is simply the configured target clients push to. Read for one release, then removed. |
 | `pbsStorageName` | keep | PBS datastore / Proxmox storage name. |
 | `alwaysBackup` | **deprecate** | See the note below. |
 
@@ -258,7 +262,7 @@ There is **no `type` field** — the backup kind is a `dependsOn` capability (`b
 **C. `provides` capabilities** (on `backup.json`):
 
 - Today `["vm", "remote", "external"]`. A repo-wide check shows **only `backup:vm` is ever depended on** — nothing declares `dependsOn: backup:remote` or `backup:external`.
-- **Change to `provides: ["vm", "filesystem"]`.** Add **`filesystem`** so a module can `dependsOn: backup:filesystem` (§3.1). Drop `remote`/`external`: those are **runtime peer relationships** registered via `backup-manage.sh` (§1.4/§2.6), not dependency capabilities — and dropping `external` also removes the clash with the new `placementState: external`. All states (`host:<name>`/`shim`/`external`) still provide both, which is what lets a **shim satisfy `dependsOn: backup:vm`/`backup:filesystem`** (§1.1).
+- **Change to `provides: ["vm", "filesystem"]`.** Add **`filesystem`** so a module can `dependsOn: backup:filesystem` (§3.1). Drop `remote`/`external`: those are **runtime peer relationships** registered via `backup-manage.sh` (§1.4/§2.6), not dependency capabilities — and dropping `external` also removes the clash the old `placementState: external` created — a clash the rename to `consumed:<url>` now settles on both sides. All states (`host:<name>`/`shim`/`consumed:<url>`) still provide both, which is what lets a **shim satisfy `dependsOn: backup:vm`/`backup:filesystem`** (§1.1).
 
 **Schema hygiene (KI-1).** Land the `provides`-aware normalizer fix (implementation-doc KI-1) with these edits — otherwise the `backup:vm` self-capability fields (`placementState`, `pbsUrl`, `pbsStorageName`, …) keep tripping the false "orphan field" warnings.
 
@@ -319,7 +323,7 @@ A deployment rarely starts empty. There are four starting points to migrate from
 Pre-ADR-012 installs pin `node:tappaas3` / `storage:tankc1` and carry `placementState:local` (or empty on the oldest installs). Some carry a `node` that is **not** a cluster member — a Site-managed PBS host — which the new state describes directly. `update-module.sh backup` **backfills the state in place, never a promotion-reinstall**:
 
 - `placementState:local` (or empty) → `host:<name>`, where `<name>` is the host currently serving PBS, cluster member or not — **the datastore is left exactly where it is**, no move, no dependent reinstall.
-- `placementState:remote-only` → `external`, synthesising `pbsUrl` from the old push-target config.
+- `placementState:remote-only` → `consumed:<url>`, synthesising `pbsUrl` from the old push-target config.
 - The deprecated `pushTarget` / `alwaysBackup` fields are **read for one release**, honoured, then dropped on write-back once their behaviour is covered by `pbsUrl` / the opt-out `backup` policy (§2.7).
 
 ### 4.2 Adopting a pre-existing local or external PBS (#456)
@@ -344,7 +348,7 @@ When the PBS itself moves (old node → a new `tankc`, or external → a new loc
 ### 4.5 Migration implementation plan
 
 1. **State backfill** — `update.sh` maps legacy `placementState`/`placement` values to the new states (§4.1); idempotent; covered by a unit test with legacy fixtures.
-2. **`#456` adoption path** — install-forced `external` + `pbsUrl` registers an existing PBS as storage without provisioning; verify existing snapshots remain restorable (§4.2).
+2. **`#456` adoption path** — install-time `consumed:<url>` + `pbsUrl` registers an existing PBS as storage without provisioning; verify existing snapshots remain restorable (§4.2).
 3. **Relocation runbook** — document + script the pull-seed → cut-over → decommission flow (§4.3) in `QUICKREF.md`; gate decommission on a test restore.
 4. **Deprecation window** — `pushTarget`/`alwaysBackup` read-then-drop; emit a one-line deprecation notice on update; remove the fields and the `alwaysBackup` code path once `integratesWith` (#501) covers the foundation VMs (§2.7).
 5. **Migration tests** — legacy-fixture upgrade, #456 adoption preserving snapshots, and relocation-by-pull preserving history (see §Testing).
@@ -389,7 +393,7 @@ Backing up a Proxmox storage **dataset** — e.g. external NFS-served data that 
 
 ### Negative / costs
 
-- **More placement states to reason about** (`host:<name>` / `shim` / `external`) and to test.
+- **More placement states to reason about** (`host:<name>` / `shim` / `consumed:<url>`) and to test.
 - **Shim → real-PBS promotion** is a new lifecycle transition that must be idempotent and dependency-safe.
 - **The single-node `external` case hands a client a credential to an external PBS** that must be provably delete-incapable (write-no-delete, PBS-owned prune); getting that scope wrong would silently break the invariant, so it needs adversarial testing (§Testing).
 - **Two backup-target wirings** — clients pushing to a *local* PBS vs directly to an *external* PBS — are two code/test paths, on top of the buddy pull path.
@@ -427,7 +431,7 @@ Backing up a Proxmox storage **dataset** — e.g. external NFS-served data that 
 7. **Tooling (§2.6)** — extend `backup-manager` with placement (state + resolution), off-site peers, subset and per-peer retention in the cascade; make `backup-controller` **PBS-endpoint-agnostic**; keep `backup-manage.sh` as the thin operator CLI.
 8. **Bootstrap & promotion (§2.3)** — wire placement resolution into `install.sh`; make `update-module.sh backup` promote a shim to `host:<name>` / `external` / host+satellite without dependent reinstall.
 9. **Hardening (#389)** — the compromise-isolation test suite.
-10. **Consume a pre-existing PBS (#456)** — add the install-forced `external` placement state (URL via `pbsUrl`: satellite / external / local-external); register consumed storage + jobs + client rollout without discovering storage or installing PBS. *(new — v0.3)*
+10. **Consume a pre-existing PBS (#456)** — add the install-time `consumed:<url>` placement state (URL via `pbsUrl`: satellite / external / local-external); register consumed storage + jobs + client rollout without discovering storage or installing PBS. *(new — v0.3)*
 11. **Backup-type capabilities + schedule cascade (§3)** — add **`backup:filesystem`** to the module's `provides`; wire `dependsOn: backup:vm` / `backup:filesystem` to PBS-job membership + the filesystem path capture; implement the Site→Env→Module schedule cascade (default once/day, module override ≤ once/day). `userdata`/`dataset` deferred ([Future improvements](#future-improvements)). *(new — v0.3)*
 12. **Module-schema changes (§2.7)** — **remove the `placement` field**; make `placementState` ship empty with the new value set; add `pbsUrl` (default `backup.mgmt.internal`), `backup.schedule`/`filesystemPaths`; **set `provides` to `["vm", "filesystem"]`**; deprecate `pushTarget`/`alwaysBackup`; land the KI-1 `provides`-aware normalizer fix. *(new — v0.3)*
 13. **Retire `alwaysBackup` via `integratesWith` (§2.7, depends on #501)** — once #501 adds `integratesWith`, the foundation VMs that can't `dependsOn: backup:vm` join the PBS job by declaring `integratesWith: backup`; remove the `alwaysBackup` list + code path. Backup stays opt-in (hardware/test modules declare neither). *(new — v0.3)*
@@ -437,7 +441,7 @@ Backing up a Proxmox storage **dataset** — e.g. external NFS-served data that 
 ## Testing Strategy
 
 - **Placement:** with a pool → PBS on the right host; **a configured host that is not a cluster member and serves PBS resolves to `host:<name>`, not to a cluster member and not to a shim**; no pool → a **shim** (no VM), a warning, and a `dependsOn: backup` module still installs; adding `tankc` + re-running `update.sh` **promotes** the shim and the dependent module still works.
-- **Consume pre-existing PBS (#456):** install-forced `external` + a `pbsUrl` → the module registers storage + jobs and rolls out clients **without** discovering storage or installing PBS; a `dependsOn: backup` module backs up to the consumed datastore.
+- **Consume pre-existing PBS (#456):** install-time `consumed:<url>` + a `pbsUrl` → the module registers storage + jobs and rolls out clients **without** discovering storage or installing PBS; a `dependsOn: backup` module backs up to the consumed datastore.
 - **Client reconcile (#382):** add a node after backup is installed; `update-module.sh backup` installs the client on the new node only; re-running is a no-op.
 - **Off-site subset/retention (#389):** an off-site job replicates only the selected subset and applies a **different** (longer) retention than local.
 - **Compromise isolation (the headline #389 tests):**
@@ -466,8 +470,8 @@ Backing up a Proxmox storage **dataset** — e.g. external NFS-served data that 
 - [x] Any PBS (local, satellite, remote) works as **both** a pull source and a pull destination, and as a client-backup target; peer onboarding is the **same** credential flow regardless of peer type. *(§1.4/§2.5)*
 - [x] **PBS-endpoint-agnostic** tooling — the TS `backup-manager` (+ `--pbs`) drives the same ops at local or satellite PBS; `backup-controller` honors `--pbs`. *(§2.6)* — **built + verified on cicd**; satellite targeting pending cluster
 - [x] A `shim` promotes to **`node:<name>` (local)**, **`external`**, or **node + satellite** via a config change + `update-module.sh backup`, dependents intact. *(§2.3, #402)* — **live-verified (shim→local)** *(coded as `auto`/`remote-only`)*
-- [ ] **Drop the `placement` field; `placementState` ships empty and is install-resolved; merge `remote-only` → `external`** per v0.3 §2.1 — code currently ships `placement: auto/node:/shim/remote-only` + `placementState: local`. — **not started (v0.3)**
-- [ ] **Consume a pre-existing PBS (#456)** — install-forced `external` (`pbsUrl`) registers storage + jobs + clients without discovering storage or installing PBS. — **not started (v0.3)**
+- [ ] **Drop the `placement` field; `placementState` ships empty and is install-resolved; merge `remote-only` → `consumed:<url>`** per v0.3 §2.1 — code currently ships `placement: auto/node:/shim/remote-only` + `placementState: local`. — **not started (v0.3)**
+- [ ] **Consume a pre-existing PBS (#456)** — install-time `consumed:<url>` (`pbsUrl`) registers storage + jobs + clients without discovering storage or installing PBS. — **not started (v0.3)**
 - [ ] **Backup-type capabilities (§3.1)** — `backup:vm` + new **`backup:filesystem`**; membership via `dependsOn`; the filesystem path subset backs up + restores; opt-out (neither) is honoured. — **not started (v0.3)**
 - [ ] **Schedule cascade (§3.2)** — Site→Env→Module resolution with the once/day ceiling. — **not started (v0.3)**
 - [ ] **Module-schema changes (§2.7)** — `pbsUrl`, `backup.schedule`/`filesystemPaths` added; `provides` = `["vm", "filesystem"]`; `pushTarget`/`alwaysBackup` deprecated; KI-1 normalizer fix landed. — **not started (v0.3)**
