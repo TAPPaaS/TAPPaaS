@@ -76,6 +76,30 @@ fixture '{"placementState":"remote-only","pushTarget":"missing"}'
 ck "remote-only: unknown target → external" "external" "$(pbs_migrate_placement_state)"
 ck "remote-only: no pbsUrl invented"        ""         "$(field .pbsUrl)"
 
+# ── the standalone-PBS case: `local` on a host that is not in the cluster ──
+#
+# A legacy `local` state says "PBS is realized here", not "the host is a cluster
+# member". A site can run PBS on a standalone machine that merely answers at
+# backup.mgmt.internal — indistinguishable to the client modules, which is why
+# it survives unnoticed until a migration writes `node:<name>` and asserts a
+# membership that was never true.
+ck "member: node present in the list"      "0" "$(_pbs_node_in_list tappaas3 "$(printf 'tappaas1\ntappaas3')" && echo 0 || echo 1)"
+ck "member: node absent from the list"     "1" "$(_pbs_node_in_list backup   "$(printf 'tappaas1\ntappaas3')" && echo 0 || echo 1)"
+ck "member: no substring match"            "1" "$(_pbs_node_in_list tappaas  "$(printf 'tappaas1\ntappaas3')" && echo 0 || echo 1)"
+ck "member: empty list matches nothing"    "1" "$(_pbs_node_in_list tappaas1 "" && echo 0 || echo 1)"
+
+fixture '{"placementState":"local","node":"backup","pbsStorageName":"backup","placement":"auto","vmname":"backup"}'
+pbs_adopt_external_pbs "backup.mgmt.internal" >/dev/null
+ck "standalone: becomes external"          "external"              "$(field .placementState)"
+ck "standalone: pbsUrl is the DNS clients already use" "backup.mgmt.internal" "$(field .pbsUrl)"
+ck "standalone: the datastore name is untouched"       "backup"    "$(field .pbsStorageName)"
+ck "standalone: legacy .placement dropped"  ""                     "$(field .placement)"
+# Idempotent: running it again changes nothing, and the migration that follows
+# leaves `external` alone (it is sticky by design).
+pbs_adopt_external_pbs "backup.mgmt.internal" >/dev/null
+ck "standalone: adopting twice is a no-op" "external"              "$(field .placementState)"
+ck "standalone: migration keeps external"  "external"              "$(pbs_migrate_placement_state)"
+
 # ── already-migrated states are untouched (idempotent) ───────────────
 for s in shim external node:tappaas2; do
     fixture "{\"placementState\":\"${s}\"}"

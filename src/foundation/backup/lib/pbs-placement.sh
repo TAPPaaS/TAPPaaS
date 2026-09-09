@@ -140,7 +140,51 @@ pbs_migrate_placement_state() {
     printf '%s\n' "${new}"
 }
 
+# ── Is the recorded PBS host actually a cluster member? ──────────────
+#
+# A legacy `placementState: local` says only "PBS is realized here"; it does not
+# say the host is in the cluster. A site can perfectly well run PBS on a
+# STANDALONE machine registered in DNS (backup.mgmt.internal) — to the client
+# modules that is indistinguishable from an in-cluster PBS, which is why it went
+# unnoticed. Migrating such an install to `node:<name>` would assert cluster
+# membership that does not exist (ADR-022 raises the same objection about the
+# meaning of Node).
+#
+# Pure: does <node> ($1) appear in the newline-separated list ($2)?
+_pbs_node_in_list() {
+    local want="$1" line
+    while IFS= read -r line; do
+        [[ "${line}" == "${want}" ]] && return 0
+    done <<< "$2"
+    return 1
+}
+
 # ── Cluster probes (ssh — not unit-tested) ───────────────────────────
+
+# True when <node> is a member of this cluster. Unreachable cluster ⇒ we cannot
+# tell, and we say so by returning 2 rather than guessing: a false "not a
+# member" would rewrite a perfectly good local placement into an external one.
+pbs_node_is_cluster_member() {
+    local node="$1" zone="${2:-mgmt}" members
+    members="$(pbs_cluster_nodes "$(get_node_hostname 0)" "${zone}")"
+    [[ -n "${members}" ]] || return 2
+    _pbs_node_in_list "${node}" "${members}"
+}
+
+# Record an externally-managed PBS: the host we back up to is not ours to
+# manage, so `external` + the URL clients already use is the truthful state.
+# Idempotent. Args: <dns-name> [backup.json path]
+pbs_adopt_external_pbs() {
+    local url="$1" f tmp
+    f="$(_pbs_backup_json "${2:-}")"
+    [[ -f "$f" ]] || return 1
+    tmp="$(mktemp)"
+    jq --arg u "${url}" '
+        .placementState = "external"
+        | .pbsUrl = $u
+        | del(.placement)
+    ' "$f" >"$tmp" && mv "$tmp" "$f" || { rm -f "$tmp"; return 1; }
+}
 
 # Echo the active tankc storage id on <node> ($1) in <zone> ($2, default mgmt),
 # or empty. Unreachable node / no pvesm ⇒ empty (never fails — discovery just

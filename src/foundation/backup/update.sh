@@ -40,7 +40,37 @@ IMAGE_LOCATION="$(get_config_value 'imageLocation' 'http://download.proxmox.com/
 # pre-ADR-012 install has no marker at all and is handled below.
 LEGACY_NODE=""
 if [[ "$(pbs_placement_state)" == "local" ]]; then
-  LEGACY_NODE="$(pbs_legacy_pbs_node "${ZONE}")"
+    LEGACY_NODE="$(pbs_legacy_pbs_node "${ZONE}")"
+
+    # A legacy `local` state does not distinguish "PBS on a cluster node" from
+    # "PBS on a standalone host that happens to answer at backup.mgmt.internal".
+    # To the client modules those look identical, so the difference survives
+    # unnoticed until a migration writes `node:<name>` and asserts a cluster
+    # membership that was never true. Check before asserting it.
+    if [[ -n "${LEGACY_NODE}" ]]; then
+        pbs_node_is_cluster_member "${LEGACY_NODE}" "${ZONE}"; _member_rc=$?
+        case "${_member_rc}" in
+            0) : ;;   # a real cluster member — the ordinary node:<name> case
+            1)
+                # Not in the cluster: this PBS is not ours to place. `external`
+                # (consume it by URL) is the truthful state, and it is what the
+                # clients have been doing all along.
+                _pbs_dns="$(get_config_value 'vmname' 'backup').${ZONE}.internal"
+                warn "PBS host '${LEGACY_NODE}' is NOT a member of this cluster."
+                warn "  This is an externally-managed PBS, not one this module placed."
+                warn "  Recording it as ${BL}placementState:external${CL} with pbsUrl ${BL}${_pbs_dns}${CL}"
+                warn "  (nothing moves: the datastore, its contents and the backup job are untouched)."
+                pbs_adopt_external_pbs "${_pbs_dns}" \
+                    || warn "  Could not record the external placement — leaving the state as it was"
+                LEGACY_NODE=""
+                ;;
+            *)
+                warn "Could not reach the cluster to check whether '${LEGACY_NODE}' is a member —"
+                warn "  leaving the placement state alone rather than guessing. Re-run when it is reachable."
+                exit 0
+                ;;
+        esac
+    fi
 fi
 pbs_migrate_placement_state "" "${LEGACY_NODE}" >/dev/null || warn "Could not migrate legacy placement state"
 STATE="$(pbs_placement_state)"

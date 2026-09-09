@@ -341,6 +341,27 @@ Five tiers. T0–T2 run on every package; T3–T4 run where the package touches 
 
 ## Package logs
 
+### 2026-09-09 — legacy `local` on a host that is not a cluster member
+
+A second system's `config/backup.json` carries `placementState: "local"` with `node: "backup"` — its PBS runs on a **standalone host** that answers at `backup.mgmt.internal`, not on a cluster member. To the client modules that is indistinguishable from an in-cluster PBS, which is exactly why it went unnoticed; the §4.1 migration would have written **`node:backup`**, asserting a cluster membership that was never true. (ADR-022 raises the same objection about the meaning of Node, citing this config.)
+
+`update.sh` now checks before asserting it. On a legacy `local` state it resolves the PBS host as before, then asks whether that host is a cluster member:
+
+| Answer | What happens |
+|---|---|
+| **is a member** | the ordinary `node:<name>` migration, unchanged |
+| **is not a member** | recorded as **`placementState: external`** with `pbsUrl: <vmname>.<zone>.internal` — the truthful description, and the URL the clients have been using all along. Nothing moves: the datastore, its contents, the storage registration and the backup job are untouched |
+| **cannot tell** (cluster unreachable) | **nothing is rewritten** and the update exits, telling the operator to re-run. A false "not a member" would turn a perfectly good local placement into an external one, so an unreachable cluster must not be read as an absent node |
+
+Deliberately narrow: it recognises one situation and records the state that was already true. Placement for a standalone-but-ours PBS — ADR-022c's `host` that is not a cluster member — is a real gap this does *not* close, and is the general work it defers.
+
+**Two testing notes, both my own errors, both worth recording** because each produced a green-looking result that was wrong:
+
+1. The first reproduction ran the migration against the fixture *in place*, rewriting it. Every later case then started from `node:backup` and "passed" for the wrong reason. The fixture is now written fresh per case and `chmod 444`.
+2. The stubs that fake an unreachable cluster were defined **before** sourcing `pbs-placement.sh`, so the library's real ssh-backed `pbs_cluster_nodes` overrode them — the "unreachable" case silently queried the **live** cluster and reported the standalone verdict for the right reason by accident. Stubs now come after the source. The guard is verified: state left at `local`, nothing written.
+
+Tests: 10 new asserts in `lib/test-pbs-migrate.sh` (33 total) covering membership matching incl. no-substring, the adoption's effect on each field, idempotence, and that the following migration leaves `external` alone. Backup suite all-pass; this cluster's own config is already `node:tappaas3`, so it takes the ordinary path and `update-module.sh backup` was a no-op.
+
 ### 2026-09-09 — the peer vocabulary settled: pull / remote / receive
 
 Operator review of #608 landed on names that say what each relationship *is*, and on one relationship that had no implementation at all. No migration was written: no deployment has a peer configured, which the operator confirmed and `backup-manager peers` agreed with.
