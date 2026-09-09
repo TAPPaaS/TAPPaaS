@@ -189,6 +189,8 @@ So `node` is a *discovery constraint* (which host to probe first) and `host:<nam
 | **`host:<name>`** (local PBS) | a pool now exists (on `node`, or on a cluster member if unpinned) | re-derives to `host:<name>`; creates the datastore + per-node clients; the shim marker becomes a real datastore |
 | **`consumed:<url>`** | operator re-runs install/update **naming a PBS to consume** + `pbsUrl` | overwrites to `consumed:<url>`; registers that PBS as storage + wires jobs; provisions nothing |
 
+**Leaving `consumed:<url>`.** Stickiness protects a deliberate operator choice from being re-derived away; it is not a one-way door. A site that consumed an existing PBS and later stands up its own leaves the state by an **explicit install-time override** naming the new placement — the same action that set it, in reverse. Order matters, and it is §4.3's: seed the new datastore by **pulling** from the consumed one, verify, run a **test restore**, and only then cut the clients over and drop the old target. Clients get a new configured target and reissued credentials on cut-over (§2.5). Without the pull-and-restore gate this is data loss, which is why the exit is deliberate rather than automatic.
+
 The **same command that heals node membership (§2.4) also advances backup from `shim` to a real state.** This is the concrete answer to #402's "allow backup to be reinstalled later and ensure existing `dependsOn` modules then work."
 
 ### 2.4 Per-node client reconcile (#382)
@@ -263,6 +265,10 @@ There is **no `type` field** — the backup kind is a `dependsOn` capability (`b
 
 - Today `["vm", "remote", "external"]`. A repo-wide check shows **only `backup:vm` is ever depended on** — nothing declares `dependsOn: backup:remote` or `backup:external`.
 - **Change to `provides: ["vm", "filesystem"]`.** Add **`filesystem`** so a module can `dependsOn: backup:filesystem` (§3.1). Drop `remote`/`external`: those are **runtime peer relationships** registered via `backup-manage.sh` (§1.4/§2.6), not dependency capabilities — and dropping `external` also removes the clash the old `placementState: external` created — a clash the rename to `consumed:<url>` now settles on both sides. All states (`host:<name>`/`shim`/`consumed:<url>`) still provide both, which is what lets a **shim satisfy `dependsOn: backup:vm`/`backup:filesystem`** (§1.1).
+
+**The `services/` directories are unaffected.** `backup/services/` holds `external/`, `push/`, `remote/` and `vm/`. Dropping `remote` and `external` from `provides` removes them as **dependency capabilities**; `services/remote/` and `services/external/` remain as the **runtime peer wiring** `backup-manage.sh` drives (§1.4, §2.6), and keep the `remote/<name>` and `external/<name>` PBS namespace names from #227. A service directory and a `provides` entry are different things, and only the latter changes here.
+
+**`services/push/` outlives `pushTarget`.** The field is deprecated (§2.7A) because the consumed PBS is simply the configured target clients push to — the *push mechanics* the service implements are unchanged and still used, by every client, in every topology.
 
 **Schema hygiene (KI-1).** Land the `provides`-aware normalizer fix (implementation-doc KI-1) with these edits — otherwise the `backup:vm` self-capability fields (`placementState`, `pbsUrl`, `pbsStorageName`, …) keep tripping the false "orphan field" warnings.
 
@@ -339,6 +345,7 @@ When the PBS itself moves (old node → a new `tankc`, or external → a new loc
 
 - Seed the new datastore by **pulling** from the old PBS as a temporary pull source (`add-remote` → sync → verify, §1.4), then cut the clients' configured target over to the new PBS.
 - Decommission the old datastore only once the pull **and a test restore** are green. This is pure §1.4 pull — no special migration path.
+- The same sequence is the documented exit from a sticky `consumed:<url>` placement (§2.3).
 
 ### 4.4 Coming from a non-PBS / third-party backup
 
