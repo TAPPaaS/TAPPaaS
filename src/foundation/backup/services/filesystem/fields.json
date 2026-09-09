@@ -1,0 +1,39 @@
+{
+  "$schema": "../../../schemas/service-fields.json",
+  "service": "backup:filesystem",
+  "description": "File-level backup of named paths INSIDE a guest (ADR-012 §3.1) — the subset capability, as opposed to backup:vm's whole-guest snapshot.",
+  "_note": "install/update-service.sh provision the PBS side (namespace fs/<module>, a write-no-delete login scoped to it, the client-side encryption key) and deploy the guest-side runner + timer. That is a reconcile with domain knowledge (lib/pbs-fs.sh), not a per-field set, so every field is apply:'reconcile'. The capture schedule is the same Site -> Environment -> Module cascade backup:vm uses (backup.schedule, §3.2).",
+  "fields": {
+    "backup": {
+      "description": "The module-level backup policy object. Under backup:filesystem only `filesystemPaths` is service-specific; `enabled`, `retention`, `exclude` and `schedule` are the shared cascade fields also read by backup:vm.",
+      "type": "object",
+      "requiredBy": [],
+      "usedBy": [
+        "backup:filesystem"
+      ],
+      "properties": {
+        "filesystemPaths": {
+          "description": "Absolute paths inside the guest to capture (ADR-012 §2.7/§3.1). Each becomes one PBS archive in the module's fs/<module> namespace. Only meaningful for a module declaring backup:filesystem, and only supported on guest OS types TAPPaaS knows the layout of (NixOS today) — the service install fails loudly on any other, rather than capturing something half-right. A declared path that does not exist in the guest fails the capture: a backup that silently stopped covering something is the failure this ADR exists to prevent.",
+          "type": "array",
+          "items": "string",
+          "default": [],
+          "example": [
+            "/home/tappaas/config",
+            "/etc/secrets"
+          ]
+        }
+      },
+      "example": {
+        "enabled": true,
+        "schedule": "daily",
+        "filesystemPaths": [
+          "/home/tappaas/config"
+        ]
+      },
+      "note": "Authored on the consuming module, alongside the dependsOn/integratesWith backup:filesystem relationship that opts it in.",
+      "class": "in-place",
+      "apply": "reconcile",
+      "changeNote": "Which paths inside the guest are captured. Changing it changes future captures only; nothing already stored is touched, and the guest is not disturbed."
+    }
+  }
+}

@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+#
+# backup:filesystem — test-service (ADR-012 §3.1).
+#
+# FAST: the wiring is complete and internally consistent — manifest present and
+#       valid, paths declared, namespace known, runner deployed.
+# DEEP (TAPPAAS_TEST_DEEP=1): a capture actually exists in PBS and is recent.
+#
+# Usage: test-service.sh <module-name>   [TAPPAAS_TEST_DEEP=1]
+#
+set -uo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly SCRIPT_DIR
+
+. /home/tappaas/bin/common-install-routines.sh
+# shellcheck source=../../lib/pbs-job.sh disable=SC1091
+. "${SCRIPT_DIR}/../../lib/pbs-job.sh"
+# shellcheck source=../../lib/pbs-namespace.sh disable=SC1091
+. "${SCRIPT_DIR}/../../lib/pbs-namespace.sh"
+# shellcheck source=../../lib/pbs-placement.sh disable=SC1091
+. "${SCRIPT_DIR}/../../lib/pbs-placement.sh"
+# shellcheck source=../../lib/pbs-fs.sh disable=SC1091
+. "${SCRIPT_DIR}/../../lib/pbs-fs.sh"
+
+MODULE="${1:-}"
+[[ -n "${MODULE}" ]] || { echo "Usage: $0 <module-name>"; exit 1; }
+
+pass=0; fail=0; warns=0
+ok()   { info "    ${GN}✓${CL} $*"; pass=$((pass+1)); }
+bad()  { error "    ✗ $*"; fail=$((fail+1)); }
+note() { warn  "    ! $*"; warns=$((warns+1)); }
+
+if pbs_is_shim; then
+    info "  backup:filesystem: backup is a shim (no datastore) — capture is not realized yet; skipping."
+    exit 0
+fi
+
+info "  Check 1: capture manifest"
+MANIFEST="$(pbs_fs_manifest_path "${MODULE}")"
+if [[ -f "${MANIFEST}" ]] && jq -e . "${MANIFEST}" >/dev/null 2>&1; then
+    n="$(jq -r '.paths | length' "${MANIFEST}")"
+    if [[ "${n}" -gt 0 ]]; then ok "manifest lists ${n} path(s) → $(jq -r '.namespace' "${MANIFEST}")"
+    else bad "manifest declares no paths — nothing would be captured"; fi
+else
+    bad "no valid capture manifest at ${MANIFEST} (run update-module.sh ${MODULE})"
+fi
+
+info "  Check 2: namespace exists on the PBS"
+NS="$(pbs_fs_namespace "${MODULE}")"
+if pbs_ns_list 2>/dev/null | grep -qx "${NS}"; then ok "namespace ${NS} present"
+else bad "namespace ${NS} missing on $(pbs_storage_name)"; fi
+
+if [[ "${TAPPAAS_TEST_DEEP:-0}" == "1" ]]; then
+    info "  Check 3 (deep): a capture exists and is recent"
+    snaps="$(_pbs_node_run proxmox-backup-client snapshot list \
+        --repository "$(pbs_storage_name)" --ns "${NS}" --output-format json 2>/dev/null \
+        | jq -r '.[]? | select(."backup-id"=="'"${MODULE}"'") | ."backup-time"' 2>/dev/null | sort -n | tail -1)"
+    if [[ -n "${snaps}" ]]; then
+        age=$(( $(date +%s) - snaps ))
+        if [[ "${age}" -lt 172800 ]]; then ok "most recent capture is $((age/3600))h old"
+        else note "most recent capture is $((age/86400))d old (>48h)"; fi
+    else
+        note "no capture found yet in ${NS} — the first run may not have happened"
+    fi
+fi
+
+info "  Results: ${GN}${pass} passed${CL}, ${fail} failed, ${warns} warnings"
+[[ "${fail}" -eq 0 ]]

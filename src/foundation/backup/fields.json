@@ -1,0 +1,61 @@
+{
+  "$schema": "../schemas/fields-schema.json",
+  "scope": "module",
+  "description": "Fields shared by backup's services (backup:vm, backup:filesystem).",
+  "_note": "MODULE TIER (#567). The per-module `backup` policy object is the leaf of the Site -> Environment -> Module cascade (ADR-007 P9, ADR-012 §3.2) and is read by BOTH backup capabilities: backup:vm takes enabled/retention/exclude/schedule, backup:filesystem takes those plus filesystemPaths. It therefore belongs to neither service alone. The change semantics stay here too — the object is applied by a reconcile with domain knowledge in either case, never a per-field set.",
+  "fields": {
+    "backup": {
+      "description": "Module-level backup policy (ADR-007 P9). The leaf of the Site -> Environment -> Module backup cascade: backup-manager resolves the effective policy by merging site.json backup.defaultRetention, the environment's backup.retention/residency, then these module overrides. install-module.sh persists the resolved policy onto the deployed module config. Does NOT replace the dependsOn backup:vm wiring (which decides whether the VM is in the shared PBS job) — it records the resolved retention/exclude/enabled state.",
+      "type": "object",
+      "requiredBy": [],
+      "usedBy": [
+        "backup:vm",
+        "backup:filesystem"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "description": "Whether this module is backed up. false disables backup for the module regardless of site/environment policy.",
+          "type": "boolean",
+          "default": true
+        },
+        "retention": {
+          "description": "Module-specific retention period (e.g. 1y). Overrides the environment/site retention in the cascade. Empty/absent inherits.",
+          "type": "string"
+        },
+        "exclude": {
+          "description": "Paths to exclude from this module's backup.",
+          "type": "array",
+          "items": "string",
+          "default": []
+        },
+        "schedule": {
+          "description": "This module's own backup frequency (ADR-012 §3.2) — the leaf of the Site -> Environment -> Module cascade. 'daily' | 'weekly' | 'monthly', or a bare 'HH:MM' (daily at that time); absent inherits the environment's, then the site's, then 'daily'. Typically set to something LESS frequent for a module whose state rarely changes. A sub-daily request is rejected: once a day is the maximum the platform backs anything up. Modules with the same resolved schedule share one cluster backup job (a 'bucket'), so changing this moves the guest between jobs.",
+          "type": "string"
+        },
+        "filesystemPaths": {
+          "description": "Absolute paths inside the guest to capture (ADR-012 §2.7/§3.1). Each becomes one PBS archive in the module's fs/<module> namespace. Only meaningful for a module declaring backup:filesystem, and only supported on guest OS types TAPPaaS knows the layout of (NixOS today) — the service install fails loudly on any other, rather than capturing something half-right. A declared path that does not exist in the guest fails the capture: a backup that silently stopped covering something is the failure this ADR exists to prevent.",
+          "type": "array",
+          "items": "string",
+          "default": [],
+          "example": [
+            "/home/tappaas/config",
+            "/etc/secrets"
+          ]
+        }
+      },
+      "example": {
+        "enabled": true,
+        "retention": "1y",
+        "schedule": "weekly",
+        "exclude": [
+          "/var/cache"
+        ],
+        "filesystemPaths": [
+          "/home/tappaas/config"
+        ]
+      },
+      "note": "Authored optionally on any module, alongside the dependsOn/integratesWith relationship that opts it into backup. The resolved (cascaded) value is written back into /home/tappaas/config/<name>.json at install time. filesystemPaths is meaningful only for a module declaring backup:filesystem; the other sub-fields apply to both capabilities."
+    }
+  }
+}
