@@ -75,5 +75,45 @@ pbs_is_shim && r=0 || r=1; ck_rc "state: is shim when shim"   0 "$r"
 
 rm -rf "${TMP}"
 
+# ── probe: a PBS host outside the cluster is discovered, not skipped (#601) ──
+# `pvesm` is a Proxmox VE command. A Site-managed PBS host that is not a cluster
+# member has no Proxmox storage layer at all, so the PVE probe can never succeed
+# on it; without the native fallback the host is invisible to discovery and
+# resolution walks off to a cluster member instead.
+ssh() {
+    local host="" cmd=""
+    while [[ $# -gt 0 ]]; do
+        case "$1" in root@*) host="$1" ;; esac
+        cmd="$1"; shift
+    done
+    case "${host}" in
+        root@pvehost.mgmt.internal)
+            [[ "${cmd}" == *"pvesm status"* ]] && { printf '%s\n' "${PVESM}"; return 0; }
+            return 127 ;;
+        root@barepbs.mgmt.internal)                      # PBS on bare metal, no pvesm
+            [[ "${cmd}" == *"pvesm status"* ]]            && return 127
+            [[ "${cmd}" == *proxmox-backup-manager* ]]    && { echo "tankc1"; return 0; }
+            return 1 ;;
+        root@nopbs.mgmt.internal)                        # reachable, but not a PBS host
+            return 127 ;;
+        root@down.mgmt.internal) return 255 ;;           # ssh itself fails
+    esac
+    return 1
+}
+
+ck "probe: pve host via pvesm"          "tankc1" "$(pbs_probe_tankc pvehost mgmt)"
+ck "probe: non-pve PBS host natively"   "tankc1" "$(pbs_probe_tankc barepbs mgmt)"
+ck "probe: reachable non-PBS host"      ""       "$(pbs_probe_tankc nopbs   mgmt)"
+ck "probe: unreachable host"            ""       "$(pbs_probe_tankc down    mgmt)"
+
+# Acceptance test for the topology (ADR-012 §1.2): a configured host that is not
+# a cluster member and serves PBS resolves to that host — not to a cluster member,
+# and not to a shim.
+get_all_node_hostnames() { printf 'tappaas1\ntappaas2\n'; }
+ck "discover: non-member configured host wins" \
+   "local barepbs tankc1" "$(pbs_discover_placement auto barepbs mgmt)"
+ck "discover: no pool anywhere → shim" \
+   "shim" "$(pbs_discover_placement auto nopbs mgmt)"
+
 echo "RESULT: ${PASS} passed, ${FAIL} failed"
 [[ ${FAIL} -eq 0 ]]

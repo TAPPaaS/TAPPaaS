@@ -60,13 +60,37 @@ pbs_is_shim() { [[ "$(pbs_placement_state)" == "shim" ]]; }
 
 # ── Cluster probes (ssh — not unit-tested) ───────────────────────────
 
-# Echo the active tankc storage id on <node> ($1) in <zone> ($2, default mgmt),
-# or empty. Unreachable node / no pvesm ⇒ empty (never fails — auto tolerates it).
-pbs_probe_tankc() {
+# Echo the pool serving PBS on a host that has no Proxmox storage layer (#601).
+# A Site-managed PBS host outside the cluster has no `pvesm`, only a pool and a
+# datastore, so it is probed on its own terms: PBS present, and a pool or mount
+# whose name starts with <prefix>. Never fails.
+_pbs_probe_pool_native() {
     local node="$1" zone="${2:-mgmt}" prefix="${3:-tankc}" out
     out="$(ssh -n -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
-        "root@${node}.${zone}.internal" "pvesm status" 2>/dev/null)" || return 0
-    _tankc_pick "$out" "$prefix"
+        "root@${node}.${zone}.internal" "
+            command -v proxmox-backup-manager >/dev/null 2>&1 || exit 1
+            zfs list -H -o name 2>/dev/null | grep -m1 -E '^${prefix}[^/]*\$' && exit 0
+            for d in /${prefix}*; do [ -d \"\$d\" ] || continue; basename \"\$d\"; exit 0; done
+            exit 1
+        " 2>/dev/null)" || return 0
+    [[ -n "$out" ]] && printf '%s\n' "${out%%$'\n'*}"
+    return 0
+}
+
+# Echo the active tankc storage id on <node> ($1) in <zone> ($2, default mgmt),
+# or empty. Tries the Proxmox storage layer first; a host with no `pvesm` is
+# then probed natively (#601), so a Site-managed PBS outside the cluster is
+# discovered rather than silently skipped. Unreachable node ⇒ empty (never
+# fails — auto tolerates it).
+pbs_probe_tankc() {
+    local node="$1" zone="${2:-mgmt}" prefix="${3:-tankc}" out rc store
+    out="$(ssh -n -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+        "root@${node}.${zone}.internal" "pvesm status" 2>/dev/null)"; rc=$?
+    # 255 is ssh itself failing: the host is unreachable, nothing to probe.
+    [[ $rc -eq 255 ]] && return 0
+    store="$(_tankc_pick "$out" "$prefix")"
+    [[ -n "$store" ]] && { printf '%s\n' "$store"; return 0; }
+    _pbs_probe_pool_native "$node" "$zone" "$prefix"
 }
 
 # Current cluster node names (one per line): ask a reachable mgmt node's pvesh,
