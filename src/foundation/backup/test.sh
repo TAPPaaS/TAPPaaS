@@ -30,6 +30,22 @@ for t in "${here}"/lib/test-*.sh; do
     bash "${t}" || rc=1
 done
 
+# ── #604: nothing in install.sh touches the PBS host's filesystem locally ──
+# The datastore lives on the PBS node. A mkdir/rm/chown against a /<storage>
+# path without an ssh runs on the MOTHERSHIP instead, where that path is not a
+# mount — it silently creates a stray tree on the root filesystem, and (under
+# `set -e`, with a sudo that asks for a password) can abort the install outright.
+echo "== backup: no local filesystem writes to a PBS storage path (#604) =="
+_stray="$(grep -nE '^[[:space:]]*(sudo[[:space:]]+)?(mkdir|rm|chown|chmod|touch)[^|]*[[:space:]]/\$\{?STORAGE' \
+    "${here}/install.sh" "${here}/update.sh" 2>/dev/null || true)"
+if [[ -z "${_stray}" ]]; then
+    echo "  ok: install.sh/update.sh never write to /\${STORAGE} without ssh"
+else
+    echo "  FAIL: a local write to the PBS storage path — it would run on the mothership:"
+    printf '%s\n' "${_stray}" | sed 's/^/      /'
+    rc=1
+fi
+
 if [[ "${TAPPAAS_TEST_DEEP:-0}" == "1" ]]; then
     echo "== backup (deep): live PBS reachability =="
     if command -v backup-controller >/dev/null 2>&1; then

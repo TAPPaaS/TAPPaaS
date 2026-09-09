@@ -163,8 +163,10 @@ run_quiet ssh root@${NODE}.$ZONE.internal bash -c "'
 # so they don't open the chunk store before ZFS is up on boot (issue #230).
 pbs_ensure_zfs_ordering
 
-# Create a backup directory on the storage tank
-sudo mkdir -p /${STORAGE}/tappaas_backups
+# (The datastore DIRECTORY is created in Step 1 below, on the PBS host and at
+# the configured pbsStorageName path. A second mkdir used to live here without
+# an ssh, so it ran on the mothership and made /<storage>/tappaas_backups on its
+# root filesystem — wrong host, wrong name, used by nothing. Removed, #604.)
 
 # Install proxmox-backup-client on ALL current Proxmox VE nodes (ADR-012 P3,
 # #382). Idempotent reconcile keyed on live cluster membership — the same
