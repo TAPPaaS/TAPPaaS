@@ -148,7 +148,8 @@ There is **no `placement` policy field.** The released module ships with `placem
 
 | `placementState` | How it gets there | Meaning | Topology |
 |---|---|---|---|
-| *(empty)* | the released module default | **unresolved** — install derives it | — |
+| *(empty)*, module **not yet deployed** | the released module default | **unresolved** — install derives it | — |
+| *(empty)*, module **already deployed** | an install that predates `placementState` | **an existing local PBS** — backfill the marker from the serving host; do **not** re-derive | §1.2 |
 | `host:<name>` | not external, a datastore pool found on host `<name>` | install PBS on `<name>`'s OS + own the datastore. `<name>` need not be a cluster member. | §1.2 |
 | `shim` | not external, and **no `tankc` found** | catch-all fallback: marker only, no datastore | §1.1 |
 | `external` | **install told to force external** (+ a `pbsUrl`) | consume the externally-managed PBS; provision nothing. **Permanent once set.** | §1.3 |
@@ -168,7 +169,10 @@ At install/update, `install.sh` resolves `placementState`:
 
 1. **Told to force `external`?** → `placementState = external` (requires `pbsUrl`). No discovery, nothing provisioned. Sticky thereafter.
 2. Already a concrete state (`host:<name>` or `external`) → **keep it** (idempotent).
-3. Empty *(released default)* or `shim` → **derive auto**: discover a datastore pool — probing **`backup.json.node`** first when set, then cluster members. Found on host `<name>` → `placementState = host:<name>` (install PBS there); **not found → `shim`** (the catch-all fallback; lay the marker, warn).
+3. Empty on an **already-deployed** module → **backfill, do not derive**: the module is a real local PBS whose install predates the field, so record `host:<name>` for the host already serving it. This matches `update.sh` today, which treats an empty state as local rather than routing it through promotion.
+4. Empty *(released default, never installed)* or `shim` → **derive auto**: discover a datastore pool — probing **`backup.json.node`** first when set, then cluster members. Found on host `<name>` → `placementState = host:<name>` (install PBS there); **not found → `shim`** (the catch-all fallback; lay the marker, warn).
+
+**Derivation never relocates a live datastore.** If a datastore is already reachable at the configured `pbsUrl`, resolution must not select a different host: on a site whose PBS runs outside the cluster, a Proxmox-only probe finds nothing there, walks the cluster, and would otherwise resolve onto a cluster member — standing up a second PBS beside the working one.
 
 So `node` is a *discovery constraint* (which host to probe first) and `host:<name>` is the *state* that results when a pool is actually found. **`backup.json.node` may name a host that is not a cluster member**, and discovery must not assume otherwise: the probe cannot rely on a Proxmox-only command, or a Site-managed PBS outside the cluster is invisible to it. An empty state and a `shim` are both re-derived on every update (so a `shim` promotes to `host:<name>` the moment a pool appears); `external` and `host:<name>` are kept.
 
@@ -309,6 +313,8 @@ The off-site copy need not mirror the local set 1:1:
 A deployment rarely starts empty. There are four starting points to migrate from, and **none should lose backup history**. Migration reuses the mechanisms already decided above (state re-resolution §2.1–2.3, buddy pull §1.4) — it introduces no new machinery.
 
 ### 4.1 Upgrading an existing TAPPaaS backup (hardcoded → placement state)
+
+**An empty `placementState` on a deployed module means "an existing local PBS", not "unresolved".** Only the released, never-installed module ships genuinely unresolved (§2.1). Migration backfills the marker from the host already serving PBS; it does not re-run discovery, so it cannot relocate a working datastore.
 
 Pre-ADR-012 installs pin `node:tappaas3` / `storage:tankc1` and carry `placementState:local` (or empty on the oldest installs). Some carry a `node` that is **not** a cluster member — a Site-managed PBS host — which the new state describes directly. `update-module.sh backup` **backfills the state in place, never a promotion-reinstall**:
 
