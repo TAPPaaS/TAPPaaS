@@ -1,0 +1,45 @@
+{
+  "$schema": "../../../schemas/fields-schema.json",
+  "service": "network:snat",
+  "description": "Source NAT (masquerade) into the module's own zone, for devices that only accept sessions from their own subnet.",
+  "_note": "Declared here rather than in a module-local snat.json (ADR-016 D2 v0.1): a service's supported keys belong in its fields.json under ADR-020, which is also what renders this service's README. Moving the keys into the module JSON puts them in a namespace shared with every other service, so they carry the 'snat' prefix its siblings use (natRules, proxyDomain) rather than the bare masqueradeFrom the standalone-file design could afford. apply is 'reconcile' for the same reason network:nat is: dropping a zone from snatFrom must remove a live rule, and a removal cannot be expressed as a scalar diff.",
+  "fields": {
+    "snatFrom": {
+      "description": "Zones whose traffic to this module's zone0 is masqueraded to the zone0 gateway address, so the module's device sees a source inside its own subnet. Required by appliances whose firmware rejects sessions originating outside their /24 — the Alfen NG5 charger is the reference case. Each entry becomes one OPNsense source-NAT rule on the zone0 interface. The request is intersected with the target zone's snat-allowed-from gate in zones.json; naming a zone outside that gate is refused, not trimmed, because a module must never widen its own permission.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "requiredBy": [
+        "network:snat"
+      ],
+      "usedBy": [
+        "network:snat"
+      ],
+      "example": [
+        "home",
+        "srvHome"
+      ],
+      "note": "Zone names as spelled in zones.json (camelCase). The destination is always this module's zone0 — a module cannot masquerade into a zone it does not live in. An empty list is a no-op, not an error, so a module can carry the dependency without requesting anything yet.",
+      "class": "in-place",
+      "apply": "reconcile",
+      "changeNote": "Adding a zone starts rewriting the source address of every session it sends to this zone; removing one stops. It is a live firewall change — existing connections may reset, no guest is rebooted — so it needs no disruption authorization. The rule is only ENFORCED while the firewall's outbound mode is hybrid or advanced; network:snat reports the mode rather than assuming it, because a rule accepted into config under automatic mode is silently inert."
+    },
+    "snatReason": {
+      "description": "Why this module needs masquerade, in the operator's own words. Recorded because source NAT costs the target zone its client attribution: the device, and anything reading its logs, sees the zone gateway address instead of the real client for every masqueraded session. That loss is irreversible downstream, so the reason travels with the rule — it appears in snat list output and in the OPNsense rule description context, where the next operator will actually meet it.",
+      "type": "string",
+      "requiredBy": [
+        "network:snat"
+      ],
+      "usedBy": [
+        "network:snat"
+      ],
+      "example": "Alfen NG5 firmware rejects sessions sourced outside iotCloud",
+      "note": "Required whenever snatFrom is non-empty. Free text, one line; it is documentation, not a key, and nothing parses it.",
+      "class": "in-place",
+      "apply": "reconcile",
+      "changeNote": "Documentation carried alongside the rule. Rewriting it re-descriptions the live rules on the next reconcile and changes no traffic."
+    }
+  }
+}

@@ -898,9 +898,22 @@ cleanup_deep() {
     fi
     echo ""
     info "${BOLD}─── Deep cleanup ───${CL}"
+    # Restore the outbound-NAT mode this run found. Deep 12 flips it as a
+    # derived effect of applying a rule; leaving it flipped would silently
+    # change a firewall-wide setting on every deep run.
+    if [[ -n "${SNAT_MODE_BEFORE:-}" && "${SNAT_MODE_BEFORE}" != "?" ]] \
+        && command -v snat-manager >/dev/null 2>&1; then
+        _mode_now=$(snat-manager mode --json --no-ssl-verify 2>/dev/null | jq -r '.mode // "?"')
+        if [[ "${_mode_now}" != "${SNAT_MODE_BEFORE}" ]]; then
+            info "Restoring outbound-NAT mode ${_mode_now} -> ${SNAT_MODE_BEFORE}"
+            snat-manager mode --set "${SNAT_MODE_BEFORE}" --no-ssl-verify >/dev/null 2>&1 \
+                || warn "  could not restore outbound-NAT mode to ${SNAT_MODE_BEFORE}"
+        fi
+    fi
+
     # Delete order matters: test-fw-a depends on test-fw-c:web (#173), so
     # delete the consumer first to drop its auto-pinhole, then the provider.
-    for vm in test-fw-b test-fw-a test-fw-c; do
+    for vm in test-fw-svc test-fw-iot test-fw-b test-fw-a test-fw-c; do
         if [[ -f "${CONFIG_DIR}/${vm}.json" ]]; then
             info "Removing ${vm}..."
             /home/tappaas/bin/delete-module.sh "${vm}" --force >/dev/null 2>&1 \
@@ -943,21 +956,24 @@ cleanup_deep() {
         local tmp
         tmp=$(mktemp)
         jq --arg za "${TFW_A_ZONE}" --arg zb "${TFW_B_ZONE}" --arg zc "${TFW_C_ZONE}" \
-           '(.[$za].state = "Inactive") | (.[$zb].state = "Inactive") | (.[$zc].state = "Inactive")' \
+           --arg zi "${TFW_IOT_ZONE}" \
+           '(.[$za].state = "Inactive") | (.[$zb].state = "Inactive")
+            | (.[$zc].state = "Inactive") | (.[$zi].state = "Inactive")' \
             "${CONFIG_DIR}/zones.json" > "${tmp}" \
             && mv "${tmp}" "${CONFIG_DIR}/zones.json"
         zone-manager --no-ssl-verify --zones-file "${CONFIG_DIR}/zones.json" --execute \
             >/dev/null 2>&1 || warn "zone-manager teardown returned non-zero"
         tmp=$(mktemp)
         jq --arg za "${TFW_A_ZONE}" --arg zb "${TFW_B_ZONE}" --arg zc "${TFW_C_ZONE}" \
-           'del(.[$za]) | del(.[$zb]) | del(.[$zc])
+           --arg zi "${TFW_IOT_ZONE}" \
+           'del(.[$za]) | del(.[$zb]) | del(.[$zc]) | del(.[$zi])
             # Also withdraw the control-plane grant added for the run, or
             # mgmt.access-to keeps naming zones that no longer exist — the exact
             # dangling-reference class ADR-014 set out to eliminate.
-            | .mgmt["access-to"] = ((.mgmt["access-to"] // []) - [$za, $zb, $zc])' \
+            | .mgmt["access-to"] = ((.mgmt["access-to"] // []) - [$za, $zb, $zc, $zi])' \
             "${CONFIG_DIR}/zones.json" > "${tmp}" \
             && mv "${tmp}" "${CONFIG_DIR}/zones.json"
-        info "Deactivated and removed test zones ${TFW_A_ZONE}/${TFW_B_ZONE}/${TFW_C_ZONE} from deployed zones.json"
+        info "Deactivated and removed test zones ${TFW_A_ZONE}/${TFW_B_ZONE}/${TFW_C_ZONE}/${TFW_IOT_ZONE} from deployed zones.json"
     fi
     # Restore the firewall VM net0 trunks now that the test zones are gone, so the
     # NIC config is back to the production set (defect 1 — the old code never did
@@ -1270,8 +1286,22 @@ else
     TFW_A_ZONE=$(jq -r '.zone0 // empty' "${FIXTURES_DIR}/test-fw-a.json" 2>/dev/null)
     TFW_B_ZONE=$(jq -r '.zone0 // empty' "${FIXTURES_DIR}/test-fw-b.json" 2>/dev/null)
     TFW_C_ZONE=$(jq -r '.zone0 // empty' "${FIXTURES_DIR}/test-fw-c/test-fw-c.json" 2>/dev/null)
-    [[ -n "${TFW_A_ZONE}" && -n "${TFW_B_ZONE}" && -n "${TFW_C_ZONE}" ]] \
-        || die "Could not derive test zone names from fixtures (test-fw-{a,b,c} zone0)"
+    TFW_IOT_ZONE=$(jq -r '.zone0 // empty' "${FIXTURES_DIR}/test-fw-iot.json" 2>/dev/null)
+    [[ -n "${TFW_A_ZONE}" && -n "${TFW_B_ZONE}" && -n "${TFW_C_ZONE}" && -n "${TFW_IOT_ZONE}" ]] \
+        || die "Could not derive test zone names from fixtures (test-fw-{a,b,c,iot} zone0)"
+
+    # ADR-016: the source-NAT probe masquerades the DEFAULT ENVIRONMENT'S zone
+    # into the IoT probe zone, because that is the pairing the ADR exists for —
+    # a client zone reaching a device that filters by subnet. Derived from
+    # site.json rather than named here, for the same reason the fixture zones
+    # are: this file must carry no site-specific zone name (#306).
+    SNAT_ENV=$(jq -r '.defaultEnvironment // empty' "${CONFIG_DIR}/site.json" 2>/dev/null)
+    SNAT_SRC_ZONE=""
+    if [[ -n "${SNAT_ENV}" && -f "${CONFIG_DIR}/environments/${SNAT_ENV}.json" ]]; then
+        SNAT_SRC_ZONE=$(jq -r '.network.zone // empty' \
+            "${CONFIG_DIR}/environments/${SNAT_ENV}.json" 2>/dev/null)
+    fi
+    TFW_IOT_FQDN="test-fw-iot.${TFW_IOT_ZONE}.internal"
     TFW_A_FQDN="test-fw-a.${TFW_A_ZONE}.internal"
     TFW_B_FQDN="test-fw-b.${TFW_B_ZONE}.internal"
     TFW_C_FQDN="test-fw-c.${TFW_C_ZONE}.internal"
@@ -1281,9 +1311,9 @@ else
     # #306 regression guard: no fixture zone NAME may be hardcoded anywhere in
     # this script — everything must derive from the fixtures. Uses the
     # fixture-derived values, so it stays correct across future zone renames.
-    if grep -qE "${TFW_A_ZONE}|${TFW_B_ZONE}|${TFW_C_ZONE}" "${BASH_SOURCE[0]}"; then
+    if grep -qE "${TFW_A_ZONE}|${TFW_B_ZONE}|${TFW_C_ZONE}|${TFW_IOT_ZONE}" "${BASH_SOURCE[0]}"; then
         fail "hardcoded zone-name literal(s) in $(basename "${BASH_SOURCE[0]}") (#306) — derive from fixtures"
-        grep -nE "${TFW_A_ZONE}|${TFW_B_ZONE}|${TFW_C_ZONE}" "${BASH_SOURCE[0]}" | sed 's/^/      /'
+        grep -nE "${TFW_A_ZONE}|${TFW_B_ZONE}|${TFW_C_ZONE}|${TFW_IOT_ZONE}" "${BASH_SOURCE[0]}" | sed 's/^/      /'
     else
         pass "no hardcoded zone-name literals in $(basename "${BASH_SOURCE[0]}") (#306)"
     fi
@@ -1299,9 +1329,10 @@ else
     if [[ -f "${TEST_ZONES_FIXTURE}" && -f "${CONFIG_DIR}/zones.json" ]]; then
         tmp=$(mktemp)
         if jq --slurpfile src "${TEST_ZONES_FIXTURE}" \
-              --arg za "${TFW_A_ZONE}" --arg zb "${TFW_B_ZONE}" --arg zc "${TFW_C_ZONE}" '
+              --arg za "${TFW_A_ZONE}" --arg zb "${TFW_B_ZONE}" --arg zc "${TFW_C_ZONE}" \
+              --arg zi "${TFW_IOT_ZONE}" '
               ($src[0]) as $s
-              | reduce ([$za, $zb, $zc][]) as $z
+              | reduce ([$za, $zb, $zc, $zi][]) as $z
                   (.; .[$z] = (($s[$z] // {}) + { state: "Active" }))
               # The control plane must REACH the probe zones: this host drives the
               # installs over ssh (nixos-rebuild for the NixOS fixture), and that
@@ -1311,7 +1342,7 @@ else
               # template, so the test must now grant the reach itself instead of
               # inheriting it. Without this the VMs boot and get DHCP/DNS but ssh
               # times out, and every downstream assertion fails for the wrong reason.
-              | .mgmt["access-to"] = ((.mgmt["access-to"] // []) + [$za, $zb, $zc] | unique)' \
+              | .mgmt["access-to"] = ((.mgmt["access-to"] // []) + [$za, $zb, $zc, $zi] | unique)' \
               "${CONFIG_DIR}/zones.json" > "${tmp}" && jq empty "${tmp}" 2>/dev/null; then
             mv "${tmp}" "${CONFIG_DIR}/zones.json"
             info "Merged test zones ${TFW_A_ZONE}/${TFW_B_ZONE}/${TFW_C_ZONE} (Active) into deployed zones.json (runtime-only zones preserved)"
@@ -1889,6 +1920,220 @@ EVIDENCE
     # died) unwinds through the EXIT trap and used to report SUCCESS with no
     # summary at all — 13 counted failures vanished that way. A truncated run
     # must never be mistaken for a clean one.
+
+    section "Deep 12: source NAT — subnet-filtering device (ADR-016, #239)"
+
+    # The one test that would have caught #239. A device that accepts only its
+    # own /24 is unreachable from a client zone no matter what the firewall
+    # permits; masquerade is what fixes it, and NOTHING on the device changes
+    # between the two halves. Presence of a rule proves nothing here — the
+    # assertion is end-to-end traffic, twice, with opposite expected outcomes.
+    # Preconditions, checked before anything is provisioned. Each of these is a
+    # property of the DEPLOYED system, not of the code under test, so each is a
+    # skip with a named remedy rather than a failure — and each is checked
+    # explicitly because the alternative is a confusing install error four
+    # steps later (which is exactly how the first runs of this test read).
+    _snat_provided=$(jq -r '[.provides[]?] | index("snat") // empty' \
+        "${CONFIG_DIR}/network.json" 2>/dev/null)
+    if [[ -z "${SNAT_SRC_ZONE}" ]]; then
+        skip "source NAT (no defaultEnvironment/.network.zone in site.json)"
+    elif ! command -v snat-manager >/dev/null 2>&1; then
+        skip "source NAT (snat-manager CLI not installed — rebuild tappaas-cicd)"
+    elif [[ -z "${_snat_provided}" ]]; then
+        # The dependency resolver reads the DEPLOYED network.json, so shipping
+        # the service in the source tree is not enough: until the module's own
+        # config carries provides:[…,"snat"], every consumer is refused at
+        # Step 3 with "module 'network' does not provide service 'snat'".
+        skip "source NAT (deployed network.json does not provide 'snat' yet — run 'update-module.sh network')"
+    else
+        _snat_tmp=$(mktemp -d)
+        _iot_cidr=$(jq -r --arg z "${TFW_IOT_ZONE}" '.[$z].ip // empty' "${TEST_ZONES_FIXTURE}")
+        # Global, so cleanup_deep can put it back: the deep run flips the mode
+        # as a derived effect, and a test that leaves the firewall in a state it
+        # did not find it in is drift of its own. (ADR-016's auto-revert is not
+        # implemented yet; until it is, the harness reverts what it changed.)
+        SNAT_MODE_BEFORE=$(snat-manager mode --json --no-ssl-verify 2>/dev/null | jq -r '.mode // "?"')
+        _mode_before="${SNAT_MODE_BEFORE}"
+        info "  Outbound-NAT mode before: ${_mode_before}"
+
+        # The client fixture carries no zone name; give it the environment's.
+        jq --arg z "${SNAT_SRC_ZONE}" '.zone0 = $z' \
+            "${FIXTURES_DIR}/test-fw-svc.json" > "${_snat_tmp}/test-fw-svc.json"
+        cp "${FIXTURES_DIR}/test-fw-svc.nix" "${_snat_tmp}/"
+        # The device fixture learns which /24 it may answer, from the zone that
+        # defines it — never a second copy of the CIDR. Its ingress names the
+        # client zone for the same reason zone0 does on the client fixture.
+        #
+        # Both halves are needed and they are NOT the same thing: the ingress is
+        # PERMISSION (a pass rule), the masquerade is ADDRESS REWRITING. Run 5
+        # of this test applied a verified, enforced masquerade and the device
+        # stayed unreachable, because the packets were dropped by the filter
+        # before source NAT was ever consulted.
+        jq --arg s "${SNAT_SRC_ZONE}" '.ingress[0].from = $s' \
+            "${FIXTURES_DIR}/test-fw-iot.json" > "${_snat_tmp}/test-fw-iot.json"
+        sed "s|acceptOnlyFrom = \".*\"|acceptOnlyFrom = \"${_iot_cidr}\"|" \
+            "${FIXTURES_DIR}/test-fw-iot.nix" > "${_snat_tmp}/test-fw-iot.nix"
+        cp "${FIXTURES_DIR}/test-fw-webserver.nix" "${FIXTURES_DIR}/test-fw-subnet-filter.nix" "${_snat_tmp}/"
+
+        # Grant the zone gate BEFORE installing, not after. The device declares
+        # an ingress from the client zone, and rules-manager validates that at
+        # INSTALL time against pinhole-allowed-from — so a grant applied later
+        # is a grant that arrives after the only moment it was needed. Run 6
+        # failed exactly here, with rules-manager refusing the ingress because
+        # the probe zone's pinhole-allowed-from was still empty.
+        #
+        # Granting early does not weaken the first half of the test: that half
+        # turns on snatFrom being EMPTY, not on the gate being closed.
+        _zones_tmp=$(mktemp)
+        jq --arg z "${TFW_IOT_ZONE}" --arg s "${SNAT_SRC_ZONE}" \
+           '.[$z]["snat-allowed-from"] = [$s] | .[$z]["pinhole-allowed-from"] = ([.[$z]["pinhole-allowed-from"][]?, $s] | unique)' \
+           "${CONFIG_DIR}/zones.json" > "${_zones_tmp}" \
+            && mv "${_zones_tmp}" "${CONFIG_DIR}/zones.json"
+
+        install_with_retry test-fw-iot "${_snat_tmp}" || true
+        install_with_retry test-fw-svc "${_snat_tmp}" || true
+
+        _svc_fqdn="test-fw-svc.${SNAT_SRC_ZONE}.internal"
+        info "  Waiting up to 90s for both probe VMs in DNS..."
+        for _ in {1..18}; do
+            if getent hosts "${TFW_IOT_FQDN}" >/dev/null 2>&1 \
+               && getent hosts "${_svc_fqdn}" >/dev/null 2>&1; then
+                break
+            fi
+            sleep 5
+        done
+
+        # Probe FROM the client VM, not from this host: mgmt reaches everywhere
+        # by design, so a curl from the mothership would prove nothing about a
+        # client zone. --max-time separates "dropped" (timeout) from "refused".
+        _probe() {
+            ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no -o BatchMode=yes \
+                "tappaas@${_svc_fqdn}" \
+                "curl -fsS --max-time 8 http://${TFW_IOT_FQDN}:8080/ 2>/dev/null" 2>/dev/null
+        }
+
+        # ── control: the device must EXIST and be serving inside its own zone ──
+        #
+        # Without this the next assertion is vacuous. The first run of this test
+        # proved it: the probe zone was never activated, test-fw-iot failed to
+        # install, and "unreachable from the client zone" passed for a VM that
+        # did not exist. A negative assertion about a thing that is absent is
+        # not evidence — it is the same false green this whole ADR is about.
+        # Probe LOCALHOST, not the device's own FQDN. The job here is narrow:
+        # prove the webserver is actually up, so "unreachable from the client
+        # zone" is a statement about the filter rather than about an absent
+        # service. Asking over the zone address instead drags in DNS and the
+        # loopback-vs-zone-address routing path, and run 8 failed on exactly
+        # that while the masqueraded probe from the client zone succeeded —
+        # a control that contradicts the thing it is controlling for is worse
+        # than none.
+        #
+        # A filter that is not filtering is caught by the NEXT assertion, which
+        # fails when the device answers with no masquerade in place.
+        _iot_self=$(ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no -o BatchMode=yes \
+            "tappaas@${TFW_IOT_FQDN}" \
+            "curl -fsS --max-time 8 http://127.0.0.1:8080/ 2>/dev/null" 2>/dev/null || true)
+        if grep -q "tappaas-snat-test-iot-ok" <<<"${_iot_self}"; then
+            pass "device webserver is up (so an unreachable result means the filter, not an absent service)"
+            _iot_live=1
+        else
+            fail "device webserver is NOT up — every source-NAT assertion below would be vacuous"
+            _iot_live=0
+        fi
+
+        # ── half 1: no masquerade declared -> the device must NOT answer ──
+        if [[ "${_iot_live}" != "1" ]]; then
+            skip "source-NAT reachability (device never came up — see above)"
+        elif _probe | grep -q "tappaas-snat-test-iot-ok"; then
+            fail "device answered from ${SNAT_SRC_ZONE} WITHOUT masquerade — the subnet filter is not in effect, so the test proves nothing"
+        else
+            pass "device unreachable from ${SNAT_SRC_ZONE} without masquerade (the #239 symptom)"
+        fi
+
+        # ── grant + declare, then reconcile through the service hook ──
+        if snat-manager validate --no-ssl-verify >/dev/null 2>&1; then
+            pass "R1 holds: snat-allowed-from is a subset of pinhole-allowed-from"
+        else
+            fail "R1 violated after granting the gate"
+        fi
+
+        # An ungranted zone must be REFUSED, not trimmed (R3) — assert it while
+        # a real gate is in place, which is the only time the check is honest.
+        jq --arg s "${TFW_A_ZONE}" '.config."network:snat".snatFrom = [$s]' \
+            "${CONFIG_DIR}/test-fw-iot.json" > "${_snat_tmp}/refuse.json"
+        cp "${CONFIG_DIR}/test-fw-iot.json" "${_snat_tmp}/keep.json"
+        cp "${_snat_tmp}/refuse.json" "${CONFIG_DIR}/test-fw-iot.json"
+        # Assert the REASON, not just a non-zero exit. "zone not found",
+        # "no zone0", a missing config file and a genuine gate refusal all exit
+        # 1, so exit code alone would let this pass for the wrong reason — and
+        # it did, in the runs where the probe zone was never activated.
+        _r3=$(snat-manager apply-module test-fw-iot --check --no-ssl-verify 2>&1 || true)
+        if grep -q "does not permit masquerade from" <<<"${_r3}"; then
+            pass "ungranted zone refused, not trimmed (R3)"
+        elif grep -q "^  + " <<<"${_r3}"; then
+            fail "an ungranted zone was accepted — R3 requires a refusal, not a trim"
+        else
+            fail "R3 check failed for an unrelated reason: ${_r3}"
+        fi
+        cp "${_snat_tmp}/keep.json" "${CONFIG_DIR}/test-fw-iot.json"
+
+        # Now the real declaration, applied the way update-service.sh applies it.
+        jq --arg s "${SNAT_SRC_ZONE}" '.config."network:snat".snatFrom = [$s]' \
+            "${CONFIG_DIR}/test-fw-iot.json" > "${_snat_tmp}/declared.json" \
+            && mv "${_snat_tmp}/declared.json" "${CONFIG_DIR}/test-fw-iot.json"
+
+        if "${SCRIPT_DIR}/services/snat/update-service.sh" test-fw-iot >/dev/null 2>&1; then
+            pass "network:snat update-service applied the declaration"
+        else
+            fail "network:snat update-service failed to apply the declaration"
+        fi
+
+        _mode_after=$(snat-manager mode --json --no-ssl-verify 2>/dev/null | jq -r '.mode // "?"')
+        if [[ "${_mode_after}" == "hybrid" || "${_mode_after}" == "advanced" ]]; then
+            pass "outbound-NAT mode is enforcing (${_mode_before} -> ${_mode_after}, derived)"
+        else
+            fail "outbound-NAT mode is ${_mode_after} — a stored rule here is inert"
+        fi
+
+        if snat-manager verify-module test-fw-iot --no-ssl-verify >/dev/null 2>&1; then
+            pass "snat verify: declared == live AND enforced"
+        else
+            fail "snat verify reported drift after apply"
+        fi
+
+        # ── half 2: same device, same client, masquerade in place ──
+        if _probe | grep -q "tappaas-snat-test-iot-ok"; then
+            pass "device reachable from ${SNAT_SRC_ZONE} WITH masquerade (#239 closed)"
+        else
+            fail "device still unreachable from ${SNAT_SRC_ZONE} with masquerade applied"
+        fi
+
+        # ── removal is symmetric: empty the declaration, rule must go ──
+        #
+        # Assert the rule is THERE first. "no rules match" is trivially true
+        # when none were ever written, and the first run of this test passed
+        # this check for exactly that reason.
+        if snat-manager list-rules --search "test-fw-iot" --json --no-ssl-verify 2>/dev/null \
+                | jq -e '.rules | length > 0' >/dev/null 2>&1; then
+            pass "rule present before removal (the symmetry check has something to remove)"
+        else
+            fail "no rule to remove — the symmetry check below would pass vacuously"
+        fi
+
+        jq '.config."network:snat".snatFrom = []' \
+            "${CONFIG_DIR}/test-fw-iot.json" > "${_snat_tmp}/emptied.json" \
+            && mv "${_snat_tmp}/emptied.json" "${CONFIG_DIR}/test-fw-iot.json"
+        "${SCRIPT_DIR}/services/snat/update-service.sh" test-fw-iot >/dev/null 2>&1 || true
+        if snat-manager list-rules --search "test-fw-iot" --json --no-ssl-verify 2>/dev/null \
+                | jq -e '.rules | length == 0' >/dev/null 2>&1; then
+            pass "emptying snatFrom removed the rule (update is symmetric)"
+        else
+            fail "rule survived an emptied snatFrom — a stale rule outliving its declaration is the #239 shape"
+        fi
+
+        rm -rf "${_snat_tmp}"
+    fi
+
     DEEP_COMPLETED=1
 fi
 

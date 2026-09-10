@@ -44,7 +44,8 @@
     "rules",
     "discovery",
     "dns",
-    "nat"
+    "nat",
+    "snat"
   ],
   "config": {
     "cluster:vm": {

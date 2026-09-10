@@ -156,6 +156,16 @@
       "changeClass": "in-place",
       "changeNote": "Which zones may open port-specific pinholes into this one. Same cost as access-to: a rule swap."
     },
+    "snat-allowed-from": {
+      "description": "List of zones whose traffic into this zone may be source-NAT'd (masqueraded) to this zone's gateway address. The gate for network:snat: a module's snatFrom request is intersected with this list, and naming a zone outside it is refused, not trimmed. Absent or empty refuses every request, so masquerade is strictly opt-in per zone.",
+      "type": "array",
+      "required": false,
+      "default": [],
+      "items": "string",
+      "note": "MUST be a subset of pinhole-allowed-from (R1): masquerade without reachability is meaningless, and allowing it separately would make source NAT a second, weaker way into the zone. Enforced by network-manager validate. Every device in this zone loses client attribution for masqueraded sessions \u2014 the device, and anything reading its logs, sees the gateway address instead of the real client \u2014 so this is a zone-wide consent, not a per-module one.",
+      "changeClass": "in-place",
+      "changeNote": "Which zones may be masqueraded into this one. Same cost as pinhole-allowed-from: a rule swap. Removing a zone here strands any module still requesting it \u2014 the next network:snat reconcile refuses the request and removes the live rule."
+    },
     "tier": {
       "description": "Trust rank in the ADR-014 strict lattice (0 = most trusted). Governs the direction of 'access-to': an edge may only run downward. Authored (stamped by the archetype), never derived \u2014 it records declared security intent so a zone configured against its intent can be caught. Absent on the types listed in 'tier_exempt_types'.",
       "type": "integer",

@@ -67,6 +67,7 @@ import {
   parseSetArg,
   preGateZoneSet,
 } from "./zonemodify";
+import { cmdSnat } from "./snat";
 
 const VERSION = "0.1.0";
 
@@ -152,6 +153,20 @@ const HELP: HelpSpec = {
       options: [
         ["--force", 'allow leaving the "Mandatory" state (refused by default)'],
       ],
+    },
+    {
+      usage: "snat list | snat verify <module> | snat mode",
+      name: "snat (source NAT — read-only, ADR-016)",
+      options: [
+        ["list", "live source-NAT rules, their owning module, and the mode"],
+        ["verify <module>", "declared == live AND enforced (exit 1 on drift)"],
+        ["mode", "the firewall-wide outbound-NAT mode"],
+      ],
+      note:
+        "There is no `snat add|delete`: a module's source NAT follows its own\n" +
+        "declaration, so use `module-manager module add|modify|delete`. There is\n" +
+        "no `mode --set` either — the mode is DERIVED, and applying a module's\n" +
+        "snatFrom moves it to 'hybrid' when it is not already enforcing.",
     },
     {
       usage: "reconcile [--apply] [--only <plane>]",
@@ -1126,6 +1141,8 @@ export function run(argv: string[], client?: PlaneClient): number {
       case "distribute": // primary verb; zones-distribute kept as fall-through alias
       case "zones-distribute":
         return cmdZonesDistribute(opts);
+      case "snat": // ADR-016 D3: read-only here — no add/delete, no mode --set
+        return cmdSnat(opts.rest, opts.json === true);
       default:
         usage();
         die(`Unknown command: ${cmd}`);

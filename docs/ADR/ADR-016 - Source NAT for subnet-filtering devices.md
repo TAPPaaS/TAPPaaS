@@ -2,14 +2,15 @@
 
 | | |
 |---|---|
-| **Status** | **Proposed** — draft (not yet implemented) |
-| **Version** | 0.2 |
+| **Status** | **Accepted** — implemented (operator decision 2026-09-10; supersedes the #239 module-level ruling) |
+| **Version** | 0.3 |
 | **Date** | 2026-08-16 |
 | **Author** | Lars Rossen |
 | **Parent** | [ADR-009 Composition Meta-Model](<ADR-009 - Composition Meta-Model.md>) (`<module>:<service>` coordinates) |
 | **Refines** | [ADR-014 Zone ↔ Environment Lifecycle](<ADR-014 - Zone and Environment Lifecycle.md>) (zone-owned policy gates), ADR-002 (dynamic VLAN), [ADR-003 Dependency management](<ADR-003 - Dependency management in TAPPaaS.md>) (`dependsOn`-driven service hooks) |
+| **Implements** | **#623** (`snat_mode` invisible/unsettable — the live confirmation this ADR was waiting for) |
 | **Related** | **#239** (origin: Alfen Eve Pro rejects cross-subnet sessions), **TAPPaaS/Community#3** (module NAT install-service does not verify its apply), **#285** (`network:nat` destination-NAT service — the precedent this mirrors); **owner:** `network-manager` (policy + command surface), `opnsense-controller` (push) |
-| **Changelog** | v0.2 — mode enum corrected to the API's spelling (`advanced`, not `manual`); the `snat_mode` read verified against a live OPNsense and its option-dict shape recorded (refutes the "not exposed" report in #583). v0.1 — initial draft: zone-owned `snat-allowed-from` gate, module-local `snat.json`, `network-manager snat` verbs, `opnsense-controller` source-NAT push incl. the `snat_mode` prerequisite, module lifecycle hooks. |
+| **Changelog** | v0.3 (operator decisions, taken during implementation) — **D2 restated**: the request moves from a module-local `snat.json` into the service's own `fields.json` + `README.md`, the ADR-020 shape every other service now uses; `pinhole.json`, which D2 cited as the precedent, survives only in test fixtures. Fields gain the `snat` prefix its siblings carry (`snatFrom`, `snatReason`) because the module JSON is a shared namespace where a bare `masqueradeFrom` is not. **D3 restated**: lifecycle add/remove belongs to `module-manager`, not to a `network-manager snat add|delete`; `network-manager` keeps `snat list` and `snat verify`; `snat mode` becomes READ-ONLY there because the mode is DERIVED — declaring a module's snat is what ensures `hybrid`. The gate is implemented in Python beside `rules_manager`, which enforces the analogous `pinhole-allowed-from` in exactly that layer, rather than in TypeScript. **D4 restated**: listing reads the config model (`get` → `filter.snatrules`) instead of `searchRule`, which closes a latent defect in v0.2's own auto-revert gate (see D4). v0.2 — mode enum corrected to the API's spelling (`advanced`, not `manual`); the `snat_mode` read verified against a live OPNsense and its option-dict shape recorded (refutes the "not exposed" report in #583). v0.1 — initial draft: zone-owned `snat-allowed-from` gate, module-local `snat.json`, `network-manager snat` verbs, `opnsense-controller` source-NAT push incl. the `snat_mode` prerequisite, module lifecycle hooks. |
 
 ## Context
 
@@ -81,53 +82,96 @@ Rules:
 This resolves gap 2 at the level where the trade-off actually lives: masquerading into a
 zone affects every device in it, so the zone — not a module — must consent.
 
-### D2 — module-local `snat.json` declares intent
+### D2 — the service's `fields.json` declares the supported keys (v0.3)
 
-A module that needs masquerade ships `snat.json` beside its module JSON:
+**v0.1 put the request in a module-local `snat.json`, reasoning by analogy with
+`pinhole.json`. That analogy has expired**: since ADR-020 a service declares the keys it
+supports in its own `fields.json`, which is also what renders its `README.md`, and
+`pinhole.json` now survives only under `network/test-fixtures/`. A bespoke side-file would
+be the one service whose contract is invisible to the generated docs and to every reader
+that consumes the field schema.
+
+So `network:snat` ships `services/snat/fields.json` + `README.md` like every sibling, and a
+module declares the request in its own JSON:
 
 ```jsonc
-// src/.../alfen/snat.json
 {
-  "_comment": "Alfen NG5 firmware accepts TCP only from its own /24. Masquerade traffic from these zones to zone0 so the charger sees the zone0 gateway address.",
-  "masqueradeFrom": ["home", "srvHome"],
-  "reason": "Alfen NG5 firmware rejects sessions sourced outside iotCloud (#239)"
+  "vmname": "alfen",
+  "zone0": "iotCloud",
+  "dependsOn": ["network:rules", "network:snat"],
+  "config": {
+    "network:snat": {
+      "snatFrom": ["home", "srvHome"],
+      "snatReason": "Alfen NG5 firmware rejects sessions sourced outside iotCloud"
+    }
+  }
 }
 ```
 
-- `masqueradeFrom` — source zone names. Destination is always the module's `zone0`; a module
-  cannot masquerade into a zone it does not live in.
-- `reason` — required free text. It lands in the OPNsense rule description context and in
-  `snat list`, so the next operator learns *why* a zone lost client attribution.
-- The module adds `network:snat` to `dependsOn`. Absent `snat.json`, the hook is a no-op.
+- `snatFrom` — source zone names. Destination is always the module's `zone0`; a module
+  cannot masquerade into a zone it does not live in. Empty is a no-op, not an error.
+- `snatReason` — required free text whenever `snatFrom` is non-empty. It lands in the
+  OPNsense rule description context and in `snat list`, so the next operator learns *why* a
+  zone lost client attribution.
+- The module adds `network:snat` to `dependsOn`. Absent the fields, every hook is a no-op.
 
-`snat.json` is a **request**. The effective set is `masqueradeFrom ∩ zone.snat-allowed-from`,
+**The `snat` prefix is not decoration.** In a dedicated file, `masqueradeFrom` read
+unambiguously. In the module JSON the key shares a namespace with every other service's
+fields, which is precisely why the siblings spell theirs `natRules`, `proxyDomain`,
+`proxyTls`. Dropping the prefix here would make `network:snat` the only service whose keys
+cannot be read back to their owner.
+
+The declaration is a **request**. The effective set is `snatFrom ∩ zone.snat-allowed-from`,
 and a non-empty difference is a hard error (R3).
 
-### D3 — `network-manager snat` command surface
+### D3 — where each verb lives (v0.3)
 
-`network-manager` already owns `zones.json` and the reconcile loop; source NAT is zone
-policy, so it belongs there rather than in `rules-manager` (which compiles per-module filter
-rules) or `nat-manager` (destination NAT, #285).
+**v0.1 gave `network-manager` the whole surface, including `snat add|delete`. Two
+corrections.**
 
-```
-network-manager snat add <module> [--check]      # apply snat.json ∩ zone gate
-network-manager snat delete <module> [--check]   # remove this module's rules
-network-manager snat list [--json]               # live rules + owning module + reason
-network-manager snat verify <module>             # declared == live AND enforced
-network-manager snat mode [--set automatic|hybrid|advanced]  # read/set the OPNsense prerequisite
-```
+**Lifecycle add/remove is `module-manager`'s, not a NAT verb.** Adding or removing a
+module's source NAT is not an operation an operator performs against the NAT plane; it is a
+consequence of adding, modifying or deleting a *module*. `module-manager module add|modify|
+delete` already drives the module's `dependsOn` services through their hooks (D5), and
+`network:snat`'s hooks call the applier. A separate `network-manager snat add` would be a
+second way to reach the same state, reachable without the module's declaration and therefore
+able to disagree with it.
 
-- `add` is idempotent — rules are keyed by description (D4) and matched before insert.
-- `verify` checks **enforcement, not presence**: it fails when `snat_mode` is `automatic`
-  even though the rule exists. This is the specific hole that made #239 fail silently.
-- `--check` is dry-run everywhere, consistent with `network-manager add|delete`.
-- `snat` participates in `network-manager reconcile --only snat`, so drift is pruned like
-  every other plane — including, per D4, `snat_mode` itself in the safe direction.
-- `mode --set automatic` first calls `list` and **refuses if any live rule exists at all**
-  — owned or unowned. A still-declared, TAPPaaS-owned rule would silently stop being
-  enforced under `automatic` while looking present in config; that is the exact failure
-  class this ADR exists to close, so `automatic` is only safe to set when the rule set is
-  genuinely empty, not merely unowned-rule-free.
+**`snat mode` is readable, never settable, because the mode is DERIVED.** An operator does
+not choose `hybrid`; they declare that a module masquerades into a zone, and `hybrid`
+follows — `apply-module` ensures it when it is not already `hybrid` or `advanced`. Exposing
+a setter would invite the mode and the declarations to drift apart, which is the class of
+bug this ADR exists to close. The low-level escape hatch (`snat-manager mode --set`) remains
+in the controller for the operator who genuinely needs it; the *manager* surface does not
+offer one.
+
+| Verb | Owner | Notes |
+|---|---|---|
+| add / remove a module's SNAT | `module-manager module add\|modify\|delete` | via the `network:snat` hooks (D5) |
+| `network-manager snat list` | `network-manager` | live rules + owning module + reason + mode |
+| `network-manager snat verify <module>` | `network-manager` | declared == live **and enforced** |
+| `network-manager snat mode` | `network-manager` | **read-only** — derived state |
+| `snat-manager *-module`, `mode --set` | `opnsense-controller` | the implementation, and the escape hatch |
+
+`network-manager`'s verbs may shell out to `snat-manager`; there is one implementation, and
+the manager is a presentation layer over it.
+
+**The implementation is Python, beside `rules_manager`.** v0.1 argued source NAT belongs in
+`network-manager` because it "already owns zones.json and the reconcile loop". The directly
+analogous gate does not live there: `pinhole-allowed-from` is enforced in `rules_manager.py`,
+which reads `zones.json` through its own `DEFAULT_ZONES_FILE`. Putting `snat-allowed-from` in
+TypeScript would split two mirror-image gates across two languages, and would force `snat`
+into the `Plane` abstraction, whose members (`opnsense`, `proxmox`, `switch`, `ap`) are
+*devices to push zones to* rather than resource types. The gate is therefore
+`snat_policy.py` — pure functions over plain data, decidable and unit-testable with no
+firewall reachable.
+
+**`update-service.sh` is symmetric, and that is load-bearing.** The reconcile diffs the
+declaration against the live rules the module owns and applies BOTH directions: a zone added
+to `snatFrom` gains a rule, a zone removed from it loses one, and a zone revoked in the
+gate turns the next update into a refusal. An edited module JSON that only ever adds is how
+a stale rule outlives its declaration while every tool reports success — the #239 shape
+again, one layer up.
 
 ### D4 — Pushing to OPNsense via `opnsense-controller`
 
@@ -137,7 +181,7 @@ shape, different controller: `firewall/source_nat`.
 
 | Operation | API call |
 |---|---|
-| list | `POST firewall/source_nat/searchRule` |
+| list | `GET firewall/source_nat/get` → `.filter.snatrules.rule` (v0.3; **not** `searchRule`) |
 | add | `POST firewall/source_nat/addRule` |
 | delete | `POST firewall/source_nat/delRule/<uuid>` |
 | apply | `POST firewall/source_nat/apply` |
@@ -186,6 +230,26 @@ The description is the idempotency key and the ownership marker — `snat delete
 removes by the `tappaas-snat:<module>:` prefix, matching how `rules-manager` and
 `nat_manager` already scope their rules.
 
+**Listing reads the config model, not `searchRule` (v0.3).** `searchRule` returns the rules
+OPNsense *generates* merged with the ones stored in config, and #623 reports that under
+`snat_mode=automatic` it omits the stored ones entirely. That report could not be reproduced
+— the site it came from is unreachable, and the reference cluster has no custom source-NAT
+rule to make visible or hide — so it is neither confirmed nor refuted.
+
+It does not need to be. `.filter.snatrules.rule` is the stored model: it is what `config.xml`
+holds, whatever the mode, and automatically-generated rules never enter it. Reading it makes
+ownership and idempotency mode-independent **by construction rather than by assumption**,
+and it retires this ADR's own open question about whether `searchRule` separates the two
+cleanly — nothing depends on the answer any more.
+
+**This also closes a latent defect in v0.2.** The auto-revert gate below consults `snat list`
+to decide whether reverting `hybrid → automatic` is safe. Had `snat list` remained
+`searchRule`, and had #623 been right, then after any revert the next `list` would read empty
+while stored rules still existed — so the revert would look justified, the rules would sit in
+config permanently unenforced, and every tool would report nothing to do. That is the exact
+failure this ADR was written to eliminate, reintroduced by its own safety gate. Reading the
+config model removes the possibility rather than betting against it.
+
 **The `snat_mode` prerequisite is part of this decision, not a footnote.** `add` MUST:
 
 1. read `.filter.general.snat_mode`;
@@ -224,40 +288,31 @@ actually prunes and reverts. Rogue detection is therefore not only an internal s
 gate inside `mode --set automatic` — it is directly inspectable on demand, the same way
 every other plane's drift already is.
 
-### D5 — Module lifecycle hooks
+### D5 — Service lifecycle hooks (v0.3)
 
-The charger module calls `network-manager`; it never touches the OPNsense API. All three
-hooks are idempotent and safe to re-run.
+The module declares; `network:snat`'s own hooks apply. The module never calls a NAT verb and
+never touches the OPNsense API — `module-manager module add|modify|delete` drives the hooks
+through `dependsOn`, exactly as it does for every other service. All four are idempotent and
+safe to re-run.
 
-**`install.sh`** — after the VM/device config exists, before post-install tests:
+| Hook | Calls | Behaviour |
+|---|---|---|
+| `install-service.sh` | `snat-manager apply-module <m>` | **Fatal** on refusal |
+| `update-service.sh` | `snat-manager apply-module <m>` | Symmetric reconcile — adds *and* removes |
+| `delete-service.sh` | `snat-manager delete-module <m>` | Unconditional; warns rather than dies |
+| `test-service.sh` | `snat-manager verify-module <m>` | Asserts enforcement, not presence |
 
-```bash
-if [[ -f "${MODULE_DIR}/snat.json" ]]; then
-    info "  Requesting source NAT for ${MODULE}..."
-    network-manager snat add "${MODULE}" \
-        || die "source NAT request failed — see 'network-manager snat mode'"
-fi
-```
+**Install failing hard is deliberate.** A module whose only working path depends on the
+masquerade, installed "successfully" when the masquerade was refused, is exactly what
+produced #239's silent success.
 
-A failure here is **fatal**. Installing a module whose only working path depends on
-masquerade, and continuing when the masquerade was refused, is what produced #239's silent
-success.
+**Delete warning rather than dying is equally deliberate**, and the asymmetry is the point:
+a module removal that aborts over a leftover firewall rule leaves a worse mess than the rule
+does.
 
-**`update.sh`** — re-assert, picking up edits to `snat.json` or the zone gate:
-
-```bash
-[[ -f "${MODULE_DIR}/snat.json" ]] && network-manager snat add "${MODULE}"
-```
-
-**`delete.sh`** — unconditional, so a module removed after its `snat.json` was deleted still
-cleans up:
-
-```bash
-network-manager snat delete "${MODULE}" || warn "  Could not remove source NAT rules for ${MODULE}"
-```
-
-**`test.sh`** — `network-manager snat verify "${MODULE}"`, which asserts enforcement rather
-than presence.
+**Update is unconditional**, even when `snatFrom` is now empty — that is precisely the case
+where rules must be *removed*, and skipping the hook on an empty declaration is how a rule
+outlives the declaration that justified it.
 
 ## Alternatives considered
 
@@ -275,10 +330,13 @@ than presence.
   refused for that zone. Must be a subset of `pinhole-allowed-from` (R1).
 - **`schemas/zones-fields.json`** — add `snat-allowed-from` to `fields`; document alongside
   `pinhole-allowed-from` in `network-manager/ZONES.md` with the attribution-loss warning.
-- **`schemas/module-fields.json`** — no change. Intent lives in the module-local `snat.json`,
-  not in the module JSON, mirroring how `pinhole.json` sits beside a service.
-- **New file `<module>/snat.json`** — `masqueradeFrom` (array, required), `reason` (string,
-  required), `_comment` (optional). Validated by `network-manager snat add`.
+- **`schemas/module-fields.json`** — no change. `snatFrom`/`snatReason` are owned by a
+  service, so they are declared in that service's manifest, not in the generic tier.
+- **New `network/services/snat/fields.json`** (v0.3) — `snatFrom` (array) and `snatReason`
+  (string), both `requiredBy: ["network:snat"]`, `class: in-place`, `apply: reconcile`.
+  Validated by `schemas/fields-schema.json` like every other service manifest, and rendered
+  into `services/snat/README.md` by `gen-service-fields-doc.py`.
+- ~~New file `<module>/snat.json`~~ — dropped in v0.3; see D2.
 - **No `module-catalog` change.**
 
 ## Consequences
@@ -298,8 +356,8 @@ than presence.
 - **Existing hand-made rules** (`tappaas-nat:alfen:*` on sites that ran the Community
   implementation) are not adopted. `snat list` reports them as unowned; the migration is to
   delete them and re-run `install.sh` with this ADR's hook.
-- **Community `alfen/services/nat/` is retired** in favour of `snat.json` + `dependsOn:
-  network:snat`. Community#3 is resolved by D4's post-apply verification rather than by
+- **Community `alfen/services/nat/` is retired** in favour of `config."network:snat"` +
+  `dependsOn: network:snat`. Community#3 is resolved by D4's post-apply verification rather than by
   patching the module.
 - **`network:nat` (destination NAT, #285) is untouched** and remains the answer for exposing
   ports outward. The names are close; the ADR fixes the vocabulary as **destination NAT =
@@ -317,31 +375,40 @@ than presence.
 - **OPNsense firewall-log attribution** under SNAT (pre- vs post-translation addresses in
   the filter log shipped to `logging`) is unverified.
 - ~~Whether the mode is readable at all~~ — **closed**: verified live, see D4. The open
-  part is only the *write* path (`POST firewall/source_nat/set`), which is untested here.
-- **Whether `firewall/source_nat/searchRule` cleanly separates automatically-generated
-  per-interface rules from manually/API-added custom ones** is assumed from OPNsense's
-  documented Hybrid-mode semantics, not confirmed live against this instance — the rogue-
-  detection gate (`mode --set automatic`, `reconcile --only snat`'s auto-revert) depends on
-  this distinction being reliable. Verify empirically in a test/staging window before
-  relying on it in production.
+  part is only the *write* path (`POST firewall/source_nat/set`), which is **still
+  untested against real hardware** — no implementation step has flipped a live mode.
+- ~~Whether `firewall/source_nat/searchRule` cleanly separates automatically-generated
+  per-interface rules from manually/API-added custom ones~~ — **moot** (v0.3): listing reads
+  `.filter.snatrules.rule`, where generated rules never appear. Nothing depends on the
+  distinction any more, so it no longer has to be verified before production use.
+- **Whether `automatic → hybrid` is genuinely additive on a live TAPPaaS firewall** is
+  argued from OPNsense's documented semantics and from the reference cluster's ruleset
+  (20 generated `nat on <wan>` rules, all internal→WAN), but no TAPPaaS instance has yet
+  performed the flip. Capture `pfctl -sn` before and after the first one.
 
-## Acceptance (draft — becomes a checklist on Accepted)
+## Acceptance
 
-- [ ] `snat-allowed-from` in `zones-fields.json`; R1 enforced by `network-manager validate`.
-- [ ] `network-manager snat add|delete|list|verify|mode` implemented, `--check` on mutators.
-- [ ] `snat add` auto-flips `automatic` → `hybrid` (reported, not silent) and refuses only
-      on `disabled`, with a named error.
-- [ ] `snat add` verifies rule presence after `apply` and fails when absent.
-- [ ] `snat verify` fails on a present-but-unenforced rule.
-- [ ] `reconcile --only snat` prunes rules whose module or zone gate no longer declares them.
-- [ ] `snat mode --set automatic` refuses if any live rule exists at all, owned or
-      unowned — not only on an unowned one.
-- [ ] `reconcile --only snat` auto-reverts `hybrid` → `automatic` when no TAPPaaS-owned
-      rule remains and no unowned rule is present; otherwise warns and leaves the mode
-      unchanged.
-- [ ] `reconcile --only snat` **without** `--apply` reports the rogue-rule finding and the
-      would-be revert decision read-only, matching every other manager's inspect-vs-apply
-      convention.
-- [ ] A request naming a zone outside `snat-allowed-from` is refused, not trimmed.
-- [ ] `alfen` migrated to `snat.json`; `services/nat/` removed; #239 and Community#3 closed.
+Checked items are implemented and verified; the rest are the remaining work.
+
+- [x] `snat-allowed-from` in `zones-fields.json`, documented beside `pinhole-allowed-from`.
+- [x] R1 enforced offline by `snat-manager validate` (no firewall contact).
+- [x] A request naming a zone outside `snat-allowed-from` is refused, not trimmed.
+- [x] `network:snat` ships `fields.json` + `README.md`; the generated FIELDS block matches
+      the manifest (`gen-service-fields-doc.py --check`).
+- [x] `snat_mode` readable, and its option-dict shape unwrapped — verified live.
+- [x] `advanced` accepted, `manual` rejected with the API-vs-GUI spelling named.
+- [x] Listing reads `.filter.snatrules.rule`; generated rules never appear in it.
+- [x] `apply-module` reconciles symmetrically — a zone removed from `snatFrom` loses its rule.
+- [x] `verify-module` fails on a rule that is present but not enforced.
+- [x] The four service hooks call the applier and hold no policy of their own.
+- [ ] `network-manager snat list|verify|mode` (mode read-only) over the Python implementation.
+- [ ] `alfen` migrated to `config."network:snat"`; `services/nat/` removed; #239, #623 and
+      Community#3 closed.
 - [ ] Alfen reachable from `home` (phone app) and `srvHome` (HA) with no hand-made rules.
+- [ ] First live `automatic → hybrid` flip captured with `pfctl -sn` before and after.
+- [ ] `reconcile --only snat` auto-reverts `hybrid` → `automatic` when no TAPPaaS-owned rule
+      remains and no unowned rule is present; otherwise warns and leaves the mode unchanged.
+- [ ] `reconcile --only snat` **without** `--apply` reports the rogue-rule finding and the
+      would-be revert decision read-only.
+- [ ] A deep test that would have caught #239: a listener in the target zone that drops
+      non-local sources, proved unreachable without SNAT and reachable with it.

@@ -1,0 +1,44 @@
+{
+  "description": "Source-NAT test VM — subnet-filtering device in the testIot zone (network/test.sh --deep, ADR-016)",
+  "version": "0.1",
+  "vmname": "test-fw-iot",
+  "vmid": 924,
+  "vmtag": "TAPPaaS,Test,Firewall",
+  "node": "tappaas1",
+  "cores": 1,
+  "memory": 2048,
+  "diskSize": "16G",
+  "storage": "tanka1",
+  "imageType": "clone",
+  "image": "8080",
+  "bridge0": "lan",
+  "zone0": "testIot",
+  "ports": [
+    {
+      "port": 8080,
+      "protocol": "TCP",
+      "description": "Test webserver, reachable only from inside the zone's own /24"
+    }
+  ],
+  "config": {
+    "network:snat": {
+      "snatFrom": [],
+      "snatReason": "Deep test: imitates firmware that accepts TCP only from its own /24 (#239)"
+    }
+  },
+  "dependsOn": [
+    "cluster:vm",
+    "templates:nixos",
+    "network:rules",
+    "network:snat"
+  ],
+  "ingress": [
+    {
+      "from": "REPLACED_AT_INSTALL",
+      "ports": [
+        8080
+      ],
+      "description": "Client zone reaches the subnet-filtering device (source-NAT path, ADR-016)"
+    }
+  ]
+}

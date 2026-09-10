@@ -1,0 +1,22 @@
+{
+  "description": "Source-NAT test VM \u2014 client in the default environment's zone (network/test.sh --deep, ADR-016)",
+  "version": "0.1",
+  "vmname": "test-fw-svc",
+  "vmid": 925,
+  "vmtag": "TAPPaaS,Test,Firewall",
+  "node": "tappaas1",
+  "cores": 1,
+  "memory": 2048,
+  "diskSize": "16G",
+  "storage": "tanka1",
+  "imageType": "clone",
+  "image": "8080",
+  "bridge0": "lan",
+  "zone0": "REPLACED_AT_INSTALL",
+  "ports": [],
+  "dependsOn": [
+    "cluster:vm",
+    "templates:nixos",
+    "network:rules"
+  ]
+}
