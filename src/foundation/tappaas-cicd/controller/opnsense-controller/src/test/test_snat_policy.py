@@ -21,6 +21,7 @@ from pathlib import Path
 
 from opnsense_controller.snat_policy import (
     DESC_PREFIX,
+    reaches,
     SnatRequest,
     ZoneSpec,
     apply_gate,
@@ -31,12 +32,13 @@ from opnsense_controller.snat_policy import (
 )
 
 
-def zone(name, ip, *, vlan=0, pinhole=None, snat=None) -> ZoneSpec:
+def zone(name, ip, *, vlan=0, access=None, pinhole=None, snat=None) -> ZoneSpec:
     return ZoneSpec(
         name=name,
         ip_network=ip,
         bridge="lan",
         vlan_tag=vlan,
+        access_to=list(access or []),
         pinhole_allowed_from=list(pinhole or []),
         snat_allowed_from=list(snat or []),
     )
@@ -138,7 +140,10 @@ class TestValidateZoneGate(unittest.TestCase):
         zones = zones_fixture(snat_allowed=("home",), pinhole_allowed=("home", "srvHome"))
         self.assertEqual(validate_zone_gate(zones), [])
 
-    def test_snat_wider_than_pinhole_is_a_violation(self):
+    def test_source_with_neither_edge_nor_hole_is_a_violation(self):
+        """Was 'snat wider than pinhole'. The pinhole is no longer the whole
+        test — the fixture's zones carry no access-to, so this still fails, but
+        now for the right reason (#629)."""
         zones = zones_fixture(snat_allowed=("home", "srvHome"), pinhole_allowed=("home",))
         problems = validate_zone_gate(zones)
         self.assertEqual(len(problems), 1)
@@ -153,6 +158,71 @@ class TestValidateZoneGate(unittest.TestCase):
     def test_zones_without_the_field_are_clean(self):
         """R2 again, from the file's side: absent means absent, not invalid."""
         self.assertEqual(validate_zone_gate(zones_fixture(snat_allowed=())), [])
+
+
+class TestReachability(unittest.TestCase):
+    """R1's premise: reachable by an EDGE or by a HOLE, not the hole alone (#629)."""
+
+    def test_edge_counts_as_reachability(self):
+        src = zone("srvHome", "10.2.10.0/24", access=["internet", "iotCloud"])
+        self.assertTrue(reaches(src, "iotCloud"))
+
+    def test_wildcard_access_counts(self):
+        """`all` is a wildcard pass; a zone told it may reach everything has not
+        been told to skip this one (operator decision, #629)."""
+        self.assertTrue(reaches(zone("mgmt", "10.0.0.0/24", access=["all"]), "iotCloud"))
+
+    def test_internet_is_not_reachability_into_a_zone(self):
+        src = zone("home", "10.3.10.0/24", access=["internet"])
+        self.assertFalse(reaches(src, "iotCloud"))
+
+    def test_no_edge_is_not_reachability(self):
+        self.assertFalse(reaches(zone("guest", "10.5.10.0/24"), "iotCloud"))
+
+
+class TestR1AcceptsEitherMechanism(unittest.TestCase):
+    """The #629 regression: an access-to edge must satisfy R1 on its own."""
+
+    def _zones(self, *, srv_access, iot_pinhole, iot_snat):
+        return {
+            "home": zone("home", "10.3.10.0/24"),
+            "srvHome": zone("srvHome", "10.2.10.0/24", access=srv_access),
+            "iotCloud": zone("iotCloud", "10.4.20.0/24",
+                             pinhole=iot_pinhole, snat=iot_snat),
+        }
+
+    def test_edge_alone_satisfies_r1(self):
+        """srvHome reaches iotCloud zone-wide, so it needs no redundant pinhole.
+
+        This is the reported case: hassanova in srvHome already talks to the
+        charger over the zone edge, and R1 refused the masquerade grant because
+        srvHome was not ALSO in pinhole-allowed-from.
+        """
+        zones = self._zones(srv_access=["internet", "iotCloud"],
+                            iot_pinhole=["home"], iot_snat=["home", "srvHome"])
+        self.assertEqual(validate_zone_gate(zones), [])
+
+    def test_pinhole_alone_still_satisfies_r1(self):
+        zones = self._zones(srv_access=["internet"],
+                            iot_pinhole=["home", "srvHome"], iot_snat=["srvHome"])
+        self.assertEqual(validate_zone_gate(zones), [])
+
+    def test_neither_mechanism_is_still_a_violation(self):
+        """Widening R1 must not empty it: no edge and no hole is still refused."""
+        zones = self._zones(srv_access=["internet"],
+                            iot_pinhole=["home"], iot_snat=["srvHome"])
+        problems = validate_zone_gate(zones)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("cannot reach", problems[0])
+        # The message must name BOTH remedies, or it just redirects the same
+        # redundant-pinhole workaround the issue objected to.
+        self.assertIn("access-to", problems[0])
+        self.assertIn("pinhole-allowed-from", problems[0])
+
+    def test_wildcard_access_satisfies_r1(self):
+        zones = self._zones(srv_access=["all"],
+                            iot_pinhole=["home"], iot_snat=["srvHome"])
+        self.assertEqual(validate_zone_gate(zones), [])
 
 
 class TestRuleDescription(unittest.TestCase):

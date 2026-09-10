@@ -3,14 +3,14 @@
 | | |
 |---|---|
 | **Status** | Accepted — **implemented** and verified end-to-end (commit `a13a4e9`; `network/test.sh --deep` Deep 12 proves the device unreachable without masquerade and reachable with it). Supersedes the #239 module-level ruling. |
-| **Version** | 0.3 |
+| **Version** | 0.4 |
 | **Date** | 2026-08-16 |
 | **Author** | Lars Rossen |
 | **Parent** | [ADR-009 Composition Meta-Model](<ADR-009 - Composition Meta-Model.md>) (`<module>:<service>` coordinates) |
 | **Refines** | [ADR-014 Zone ↔ Environment Lifecycle](<ADR-014 - Zone and Environment Lifecycle.md>) (zone-owned policy gates), ADR-002 (dynamic VLAN), [ADR-003 Dependency management](<ADR-003 - Dependency management in TAPPaaS.md>) (`dependsOn`-driven service hooks) |
 | **Implements** | **#623** (`snat_mode` invisible/unsettable — the live confirmation this ADR was waiting for) |
 | **Related** | **#239** (origin: Alfen Eve Pro rejects cross-subnet sessions), **TAPPaaS/Community#3** (module NAT install-service does not verify its apply), **#285** (`network:nat` destination-NAT service — the precedent this mirrors); **owner:** `network-manager` (policy + command surface), `opnsense-controller` (push) |
-| **Changelog** | v0.3 (operator decisions, taken during implementation) — **D2 restated**: the request moves from a module-local `snat.json` into the service's own `fields.json` + `README.md`, the ADR-020 shape every other service now uses; `pinhole.json`, which D2 cited as the precedent, survives only in test fixtures. Fields gain the `snat` prefix its siblings carry (`snatFrom`, `snatReason`) because the module JSON is a shared namespace where a bare `masqueradeFrom` is not. **D3 restated**: lifecycle add/remove belongs to `module-manager`, not to a `network-manager snat add|delete`; `network-manager` keeps `snat list` and `snat verify`; `snat mode` becomes READ-ONLY there because the mode is DERIVED — declaring a module's snat is what ensures `hybrid`. The gate is implemented in Python beside `rules_manager`, which enforces the analogous `pinhole-allowed-from` in exactly that layer, rather than in TypeScript. **D4 restated**: listing reads the config model (`get` → `filter.snatrules`) instead of `searchRule`, which closes a latent defect in v0.2's own auto-revert gate (see D4). v0.2 — mode enum corrected to the API's spelling (`advanced`, not `manual`); the `snat_mode` read verified against a live OPNsense and its option-dict shape recorded (refutes the "not exposed" report in #583). v0.1 — initial draft: zone-owned `snat-allowed-from` gate, module-local `snat.json`, `network-manager snat` verbs, `opnsense-controller` source-NAT push incl. the `snat_mode` prerequisite, module lifecycle hooks. |
+| **Changelog** | v0.4 (#629) — R1 widened from `pinhole-allowed-from` alone to `access-to` UNION `pinhole-allowed-from`: an edge is BROADER than a pinhole, so the narrow test refused the stronger evidence of reachability and forced a redundant grant. `access-to: ["all"]` counts. The enforcement point is corrected to `snat-manager validate`; `network-manager validate` never read this gate. v0.3 (operator decisions, taken during implementation) — **D2 restated**: the request moves from a module-local `snat.json` into the service's own `fields.json` + `README.md`, the ADR-020 shape every other service now uses; `pinhole.json`, which D2 cited as the precedent, survives only in test fixtures. Fields gain the `snat` prefix its siblings carry (`snatFrom`, `snatReason`) because the module JSON is a shared namespace where a bare `masqueradeFrom` is not. **D3 restated**: lifecycle add/remove belongs to `module-manager`, not to a `network-manager snat add|delete`; `network-manager` keeps `snat list` and `snat verify`; `snat mode` becomes READ-ONLY there because the mode is DERIVED — declaring a module's snat is what ensures `hybrid`. The gate is implemented in Python beside `rules_manager`, which enforces the analogous `pinhole-allowed-from` in exactly that layer, rather than in TypeScript. **D4 restated**: listing reads the config model (`get` → `filter.snatrules`) instead of `searchRule`, which closes a latent defect in v0.2's own auto-revert gate (see D4). v0.2 — mode enum corrected to the API's spelling (`advanced`, not `manual`); the `snat_mode` read verified against a live OPNsense and its option-dict shape recorded (refutes the "not exposed" report in #583). v0.1 — initial draft: zone-owned `snat-allowed-from` gate, module-local `snat.json`, `network-manager snat` verbs, `opnsense-controller` source-NAT push incl. the `snat_mode` prerequisite, module lifecycle hooks. |
 
 ## Context
 
@@ -73,9 +73,15 @@ module can never widen its own permission.
 
 Rules:
 
-- **R1** — a zone in `snat-allowed-from` MUST also be in `pinhole-allowed-from`. Masquerade
-  without reachability is meaningless, and this keeps SNAT from becoming a second, weaker
-  path into a zone. Enforced by `network-manager validate`.
+- **R1** (v0.4, #629) — a zone in `snat-allowed-from` MUST already be able to REACH the
+  zone, by **either** mechanism: an `access-to` edge on the source, or an entry in the
+  destination's `pinhole-allowed-from`. Masquerade without reachability is meaningless, and
+  this keeps SNAT from becoming a second, weaker path into a zone.
+  `access-to: ["all"]` counts (a zone told it may reach everything has not been told to skip
+  this one); `internet` does not, being reach OUT rather than into a zone.
+  Enforced by `snat-manager validate` — **not** `network-manager validate`, which does not
+  read this gate. v0.3 tested the pinhole alone, which refused any source that already had a
+  broader zone edge and pushed operators to grant a redundant pinhole to satisfy the check.
 - **R2** — absent `snat-allowed-from` = today's behaviour (no masquerade possible). Opt-in.
 - **R3** — a module request naming a zone outside the gate is **refused**, not trimmed.
 

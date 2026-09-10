@@ -543,7 +543,11 @@ def cmd_verify_module(args) -> int:
 
 
 def cmd_validate(args) -> int:
-    """Check R1 across zones.json, offline. No firewall contact."""
+    """Check R1 across zones.json, offline. No firewall contact.
+
+    This is the enforcement point for the zone gate — network-manager validate
+    does not read it (#629).
+    """
     problems = validate_zone_gate(load_zones(_find_zones_file(args.zones_file)))
     if args.json:
         print(json.dumps({"ok": not problems, "problems": problems}, indent=2))
@@ -551,7 +555,7 @@ def cmd_validate(args) -> int:
         for p in problems:
             print(f"  {p}", file=sys.stderr)
     else:
-        print("zones.json: snat-allowed-from is consistent with pinhole-allowed-from")
+        print("zones.json: every snat-allowed-from source can reach its zone (R1)")
     return 1 if problems else 0
 
 

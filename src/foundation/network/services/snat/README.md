@@ -26,10 +26,21 @@ lives with the zone, exactly as `pinhole-allowed-from` does:
 ```jsonc
 // zones.json
 "iotCloud": {
-  "pinhole-allowed-from": ["srvHome", "home"],
-  "snat-allowed-from":    ["srvHome", "home"]   // must be a subset
+  "pinhole-allowed-from": ["home"],              // home has no zone edge
+  "snat-allowed-from":    ["srvHome", "home"]
 }
 ```
+
+Every zone named in `snat-allowed-from` must already be able to **reach** this
+one (R1) — but by *either* route. `home` reaches it through the pinhole above;
+`srvHome` reaches it through its own `access-to` edge and needs no pinhole. A
+grant added purely to satisfy the check would erode what `pinhole-allowed-from`
+means, so R1 consults both (#629). `access-to: ["all"]` counts; `internet` does
+not, being reach *out* rather than into a zone.
+
+`snat-manager validate` is what enforces this. `network-manager validate` does
+not read the gate — it will report a malformed `access-to` and stay silent on a
+malformed `snat-allowed-from`.
 
 A module's `snatFrom` is a *request*. The effective set is
 `snatFrom ∩ zone.snat-allowed-from`, and a zone named outside the gate is

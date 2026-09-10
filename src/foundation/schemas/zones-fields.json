@@ -162,7 +162,7 @@
       "required": false,
       "default": [],
       "items": "string",
-      "note": "MUST be a subset of pinhole-allowed-from (R1): masquerade without reachability is meaningless, and allowing it separately would make source NAT a second, weaker way into the zone. Enforced by network-manager validate. Every device in this zone loses client attribution for masqueraded sessions \u2014 the device, and anything reading its logs, sees the gateway address instead of the real client \u2014 so this is a zone-wide consent, not a per-module one.",
+      "note": "Every zone here MUST already be able to reach this one (R1), by either mechanism: an access-to edge on the source zone, or an entry in this zone's pinhole-allowed-from. Masquerade without reachability is meaningless, and allowing it separately would make source NAT a second, weaker way into the zone. access-to:[\"all\"] counts; \"internet\" does not, being reach out rather than into a zone. Enforced by 'snat-manager validate' \u2014 network-manager validate does not read this gate. Every device in this zone loses client attribution for masqueraded sessions \u2014 the device, and anything reading its logs, sees the gateway address instead of the real client \u2014 so this is a zone-wide consent, not a per-module one.",
       "changeClass": "in-place",
       "changeNote": "Which zones may be masqueraded into this one. Same cost as pinhole-allowed-from: a rule swap. Removing a zone here strands any module still requesting it \u2014 the next network:snat reconcile refuses the request and removes the live rule."
     },

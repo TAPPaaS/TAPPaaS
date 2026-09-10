@@ -14,9 +14,13 @@ the right place for the consent.
 
 Three rules from the ADR, and R3 is the one that matters most:
 
-* **R1** — ``snat-allowed-from`` MUST be a subset of ``pinhole-allowed-from``.
-  Masquerade without reachability is meaningless, and permitting it separately
-  would make source NAT a second, weaker way into a zone.
+* **R1** — every zone in ``snat-allowed-from`` must already be able to REACH
+  the zone, by either mechanism: an ``access-to`` edge on the source, or an
+  entry in the destination's ``pinhole-allowed-from``. Masquerade without
+  reachability is meaningless, and permitting it separately would make source
+  NAT a second, weaker way into a zone. Gating on the pinhole ALONE (as v0.3
+  did) refused sources that already had a broader zone edge and pushed
+  operators to grant a redundant pinhole to get past the check — #629.
 * **R2** — no ``snat-allowed-from`` means no masquerade. Opt-in, always.
 * **R3** — a request naming a zone outside the gate is **refused, not
   trimmed**. Silently narrowing it would hand back a half-working masquerade
@@ -47,6 +51,7 @@ class ZoneSpec:
     ip_network: str
     bridge: str
     vlan_tag: int
+    access_to: list[str] = field(default_factory=list)
     pinhole_allowed_from: list[str] = field(default_factory=list)
     snat_allowed_from: list[str] = field(default_factory=list)
 
@@ -94,6 +99,7 @@ def load_zones(path: Path) -> dict[str, ZoneSpec]:
             ip_network=entry.get("ip", "") or "",
             bridge=entry.get("bridge", "lan") or "lan",
             vlan_tag=int(entry.get("vlantag", 0) or 0),
+            access_to=entry.get("access-to", []) or [],
             pinhole_allowed_from=entry.get("pinhole-allowed-from", []) or [],
             snat_allowed_from=entry.get("snat-allowed-from", []) or [],
         )
@@ -136,8 +142,39 @@ def rule_description(module: str, from_zone: str, zone0: str) -> str:
     return f"{DESC_PREFIX}{module}:{from_zone}->{zone0}"
 
 
+# `access-to: ["all"]` is a wildcard pass to every destination. It counts as
+# reachability for R1 (operator decision, #629): a zone told it may reach
+# everything has not been told to skip this one.
+ACCESS_WILDCARD = "all"
+
+
+def reaches(source: ZoneSpec, dest_name: str) -> bool:
+    """Whether ``source`` can already reach ``dest_name``, by either mechanism.
+
+    A zone becomes reachable two ways and R1 must consult both (#629):
+
+    * a ZONE EDGE — ``source.access-to`` names the destination, so traffic is
+      permitted zone-wide and no per-module hole is needed;
+    * a PINHOLE — the destination's ``pinhole-allowed-from`` names the source,
+      which is how a zone with no edge lets specific modules in.
+
+    Note the asymmetry the first version of this got wrong: an edge is BROADER
+    than a pinhole, so testing only for the pinhole refuses the stronger
+    evidence of reachability while admitting the weaker. `internet` in
+    access-to is not reachability into another zone and does not count.
+    """
+    if ACCESS_WILDCARD in source.access_to:
+        return True
+    return dest_name in source.access_to
+
+
 def validate_zone_gate(zones: dict[str, ZoneSpec]) -> list[str]:
-    """Check R1 across every zone: snat-allowed-from subset of pinhole-allowed-from.
+    """Check R1 across every zone: every snat-allowed-from source is reachable.
+
+    R1 is "masquerade without reachability is meaningless", and reachability is
+    ``access-to`` UNION ``pinhole-allowed-from`` — not the pinhole alone. Gating
+    on the pinhole by itself forced a redundant grant for any source that
+    already had an edge, which erodes what pinhole-allowed-from means (#629).
 
     Returns one message per violation; an empty list means the file is
     consistent. Offered separately from the apply path so ``validate`` can run
@@ -151,14 +188,17 @@ def validate_zone_gate(zones: dict[str, ZoneSpec]) -> list[str]:
                     f"zone '{zone.name}': snat-allowed-from names '{src}', "
                     f"which is not a zone in zones.json"
                 )
-            elif src not in zone.pinhole_allowed_from:
-                problems.append(
-                    f"zone '{zone.name}': snat-allowed-from includes '{src}' but "
-                    f"pinhole-allowed-from does not (R1). Masquerade without "
-                    f"reachability is meaningless — add '{src}' to "
-                    f"{zone.name}.pinhole-allowed-from, or remove it from "
-                    f"snat-allowed-from."
-                )
+                continue
+            if src in zone.pinhole_allowed_from or reaches(zones[src], zone.name):
+                continue
+            problems.append(
+                f"zone '{zone.name}': snat-allowed-from includes '{src}', but "
+                f"'{src}' cannot reach '{zone.name}' by either mechanism (R1). "
+                f"Masquerade without reachability is meaningless — add "
+                f"'{zone.name}' to {src}.access-to for zone-wide reach, or "
+                f"'{src}' to {zone.name}.pinhole-allowed-from for per-module "
+                f"holes, or remove it from snat-allowed-from."
+            )
     return problems
 
 
