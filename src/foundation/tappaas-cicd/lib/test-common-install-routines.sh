@@ -127,6 +127,56 @@ rc=0; tappaas_ssh_guest tappaas@h true >/dev/null 2>&1 || rc=$?
 [[ "$rc" -eq 255 ]] && ok "non-hostkey failure preserved, no retry" || bad "non-hostkey preserved (rc=$rc)"
 
 unset -f ssh ssh-keygen ssh-keyscan ncalls; rm -f "$calls_f"
+
+echo
+echo "tappaas_scp_target_host tests:"
+
+ts() { # ts <expect> <desc> <argv...>
+    local want="$1" desc="$2"; shift 2
+    local got; got="$(tappaas_scp_target_host "$@" 2>/dev/null || echo '<none>')"
+    [[ "$got" == "$want" ]] && ok "$desc" || bad "$desc (want '$want' got '$got')"
+}
+# scp's destination is NOT "the first non-option" — that is the LOCAL source.
+ts host    "upload: remote is the 2nd operand"  -q /local/f.sh tappaas@host:/remote/f.sh
+ts host    "download: remote is the 1st operand" -q tappaas@host:/remote/f /local/f
+ts host    "separate -o values skipped"          -o BatchMode=yes /l/f tappaas@host:/r/
+ts host    "-P port value not read as host"      -P 2222 /l/f user@host:/r/
+ts host    "-i path value not read as host"      -i /k/id /l/f host:/r/
+ts host    "relative local source skipped"       ./f.sh host:/r/
+ts '<none>' "no remote operand -> rc 1"          -q /local/a /local/b
+
+echo
+echo "tappaas_scp_guest tests:"
+
+kh_home="$(mktemp -d)"; mkdir -p "$kh_home/.ssh"; HOME="$kh_home"
+printf 'stale\n' > "$kh_home/.ssh/known_hosts"
+ssh-keygen() { case "${1:-}" in -R) : > "$kh_home/.ssh/known_hosts" ;; -F) echo 'h ssh-ed25519 PINNED' ;; -lf) echo '256 SHA256:STUBFP h (ED25519)' ;; esac; return 0; }
+ssh-keyscan() { printf ' h ssh-ed25519 pinned-key\n'; }
+
+calls_f="$(mktemp)"; : > "$calls_f"
+ncalls() { wc -l < "$calls_f" | tr -d ' '; }
+scp() {
+    echo x >> "$calls_f"
+    if [[ "$(ncalls)" -eq 1 ]]; then
+        echo "Host key verification failed." >&2
+        return 255
+    fi
+    return 0
+}
+
+: > "$calls_f"
+rc=0; tappaas_scp_guest /l/f tappaas@h:/r/f >/dev/null 2>&1 || rc=$?
+[[ "$rc" -eq 0 ]]       && ok "changed key is healed, transfer retried" || bad "healed (rc=$rc)"
+[[ "$(ncalls)" -eq 2 ]] && ok "retried exactly once"                    || bad "retried once (calls=$(ncalls))"
+
+# The #626 shape: a transfer that fails for any other reason must stay failed,
+# so a caller cannot mistake it for a delivery.
+scp() { echo "scp: Connection closed" >&2; return 1; }
+: > "$calls_f"
+rc=0; tappaas_scp_guest /l/f tappaas@h:/r/f >/dev/null 2>&1 || rc=$?
+[[ "$rc" -ne 0 ]] && ok "non-hostkey failure preserved" || bad "non-hostkey preserved (rc=$rc)"
+
+unset -f scp ssh-keygen ssh-keyscan ncalls; rm -f "$calls_f"
 HOME="$OLD_HOME"; rm -rf "$kh_home"
 
 echo "----"

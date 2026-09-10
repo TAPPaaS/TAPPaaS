@@ -232,6 +232,65 @@
     MemoryMax = "95%";
   };
 
+  # ----------------------------------------
+  # backup:filesystem trigger (ADR-012 §3.1 / #626)
+  # ----------------------------------------
+  # The TRIGGER for a file-level capture lives in the baseline; the runner and
+  # its manifest are delivered per-module by backup:filesystem's
+  # install-service.sh. They are separated because they have to be:
+  # /etc/systemd/system on NixOS is a read-only symlink into the store, so a
+  # service script cannot place a unit on a guest no matter how much it would
+  # like to. The trigger must therefore be declarative.
+  #
+  # It belongs HERE, in the baseline every guest shares, and not in each
+  # module's own .nix. Only tappaas-cicd ever hand-wrote one, so any other
+  # module adopting backup:filesystem got a runner, a manifest, a PBS namespace
+  # and a write-no-delete login — and nothing to fire them. The capability
+  # looked wired and captured nothing (#626).
+  #
+  # ConditionPathExists is what makes it safe to give every guest: the unit is
+  # inert on the overwhelming majority that never adopt the capability, and
+  # arms itself the moment a runner lands. backup:filesystem's test-service.sh
+  # checks both halves, so a guest that predates this baseline fails its drift
+  # check instead of silently never capturing.
+  systemd.services.tappaas-fs-backup = {
+    description = "TAPPaaS file-level backup of this guest's declared paths (ADR-012 §3.1)";
+    unitConfig.ConditionPathExists = "/home/tappaas/bin/tappaas-fs-backup.sh";
+    serviceConfig = {
+      Type = "oneshot";
+      # Runs as ROOT (#626). A capture set routinely names paths its owner
+      # cannot read — /etc/secrets on the mothership holds the root-only escrow
+      # of every module's encryption key. Run unprivileged, the capture skipped
+      # them and proxmox-backup-client still exited 0, so the run reported a
+      # complete backup of a path it had not fully read.
+      ExecStart = "/home/tappaas/bin/tappaas-fs-backup.sh";
+      Environment = [
+        ("PATH=/home/tappaas/bin:/run/wrappers/bin:/home/tappaas/.nix-profile/bin"
+          + ":/etc/profiles/per-user/tappaas/bin:/nix/var/nix/profiles/default/bin"
+          + ":/run/current-system/sw/bin")
+      ];
+      # It reads /etc/secrets (its own write-no-delete login + encryption key)
+      # and the paths it captures; it writes nothing locally.
+      NoNewPrivileges = true;
+      PrivateTmp = true;
+      ProtectKernelTunables = true;
+      ProtectKernelModules = true;
+      ProtectControlGroups = true;
+    };
+  };
+
+  systemd.timers.tappaas-fs-backup = {
+    description = "Daily trigger for this guest's file-level backup";
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      # Ahead of the 21:00 VM job, so a night's capture and snapshot describe
+      # the same state rather than straddling a change.
+      OnCalendar = "20:30";
+      RandomizedDelaySec = "5min";
+      Persistent = true;          # catch up after downtime
+    };
+  };
+
   # System packages
   environment.systemPackages = with pkgs; [
         vim

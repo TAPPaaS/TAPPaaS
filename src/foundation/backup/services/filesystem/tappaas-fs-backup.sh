@@ -57,6 +57,15 @@ KEY_FILE="/etc/secrets/backup-fs.key"
 args=()
 for p in "${PATHS[@]}"; do
     [[ -e "${p}" ]] || die "declared path '${p}' does not exist in this guest"
+    # ...and neither is a path we cannot fully READ, for the same reason and a
+    # worse symptom: proxmox-backup-client logs one "access denied" line per
+    # unreadable file and still exits 0, so the capture omits it and the run
+    # reports success. That is how /etc/secrets/backup-fs/<module>.key — the
+    # escrowed key a restore of every OTHER module depends on (§2.5.1) — was
+    # absent from every mothership capture while each one reported complete
+    # (#626). Silence is the failure mode this ADR exists to prevent.
+    unreadable="$(find "${p}" ! -readable -print -quit 2>/dev/null)" || true
+    [[ -z "${unreadable}" ]] || die "declared path '${p}' holds entries this backup cannot read (first: ${unreadable}) — a partial capture is not a capture"
     name="${p#/}"; name="${name%/}"; name="${name//\//-}"
     name="$(printf '%s' "${name}" | tr -c 'A-Za-z0-9._-' '-')"
     args+=("${name}.pxar:${p}")

@@ -24,9 +24,18 @@ Declaring the capability and naming the paths is the whole interface:
 
 The service then provisions the PBS side (a namespace `fs/<module>` and a login
 scoped to it), generates a client-side encryption key, escrows it centrally, and
-deploys a small runner plus a capture manifest into the guest. A systemd timer
-in the guest's own configuration triggers it — captures run from inside, on the
-guest's schedule, and do not depend on the mothership being reachable.
+deploys a small runner plus a capture manifest into the guest — then checks on
+the guest that the runner actually arrived, because a delivery that failed used
+to be reported as a success (#626).
+
+The systemd timer that fires it is **declarative and comes from the TAPPaaS
+baseline** (`templates/tappaas-common.nix`), not from this service: NixOS keeps
+`/etc/systemd/system` a read-only symlink into the store, so no service script
+can place a unit on a guest. The unit is inert everywhere via
+`ConditionPathExists` and arms itself the moment a runner lands, so adopting the
+capability needs nothing in the module author's `.nix`. Captures run from inside
+the guest, on its own schedule, and do not depend on the mothership being
+reachable.
 
 Use `integratesWith` instead of `dependsOn` when the module boots *before* the
 backup server can exist (#501). The mothership does exactly this to capture
@@ -61,6 +70,14 @@ trust":
 - **A declared path that does not exist.** The capture aborts rather than
   skipping it. A path that silently stopped being captured — renamed, moved,
   never created — is precisely the failure that stays invisible until a restore.
+- **A declared path it cannot fully read.** Same reasoning, worse symptom:
+  `proxmox-backup-client` logs one "access denied" per unreadable file and still
+  exits 0, so the capture quietly omits it and the run reports success. The
+  runner therefore runs as **root** and refuses to start if anything under a
+  declared path is unreadable (#626).
+- **A runner that was not delivered.** The service step fails, and
+  `test-service.sh` checks both the runner and its timer on the guest, so a
+  capability that cannot run shows up as drift rather than as "no drift".
 
 ## What deleting the module does *not* delete
 

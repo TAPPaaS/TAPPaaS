@@ -1313,6 +1313,62 @@ tappaas_ssh_guest() {
     rm -f "${err}"
     return "${rc}"
 }
+
+# tappaas_scp_target_host <scp-argv...> — the REMOTE host in an scp argv. Unlike
+# ssh, the destination is not simply "the first non-option": scp takes operands
+# in either direction, so the remote one is the first operand of the form
+# [user@]host:path. A bare Windows-style or relative path never matches, because
+# a leading '/' or './' rules the colon out.
+tappaas_scp_target_host() {
+    local a operands_only=0
+    while (( $# )); do
+        a="$1"
+        if (( ! operands_only )); then
+            case "$a" in
+                --) operands_only=1; shift; continue ;;
+                # Same value-consuming options as ssh, plus scp's -S. The
+                # attached forms (-oFoo=bar, -i/path) fall through to -*.
+                -[cFiJloPS]) shift 2 || return 1; continue ;;
+                -*) shift; continue ;;
+            esac
+        fi
+        case "$a" in
+            /*|./*|../*) ;;                          # definitely a local path
+            *:*) a="${a#*@}"; printf '%s\n' "${a%%:*}"; return 0 ;;
+        esac
+        shift
+    done
+    return 1
+}
+
+# tappaas_scp_guest <scp-argv...> — scp, with the same self-healing host key as
+# tappaas_ssh_guest. Split out rather than folded in because the two differ only
+# in the binary and in how the destination is parsed, and because scp is the
+# call that actually DELIVERS things: a transfer that fails on a re-instantiated
+# guest's changed key leaves the caller believing a file was placed (#626).
+tappaas_scp_guest() {
+    local err rc=0 host
+    err="$(mktemp)" || { scp "$@"; return $?; }
+    scp "$@" 2>"${err}" || rc=$?
+    if (( rc != 0 )) && grep -qE 'Host key verification failed|REMOTE HOST IDENTIFICATION HAS CHANGED' "${err}"; then
+        host="$(tappaas_scp_target_host "$@" || true)"
+        if [[ -z "${host}" ]]; then
+            warn "SCP host key rejected but no destination could be parsed — not re-pinning" >&2
+        elif [[ "${TAPPAAS_SSH_NO_REPIN:-0}" == "1" ]]; then
+            warn "SSH host key for ${host} changed; TAPPAAS_SSH_NO_REPIN=1 — refusing to re-pin" >&2
+        else
+            warn "SSH host key for ${BL}${host}${CL} changed (guest recreated or re-instantiated)" >&2
+            if tappaas_ssh_repin_host "${host}"; then
+                rc=0
+                : >"${err}"
+                scp "$@" 2>"${err}" || rc=$?
+            fi
+        fi
+    fi
+    cat "${err}" >&2
+    rm -f "${err}"
+    return "${rc}"
+}
 # Apply a jq filter against a module's installed config and write the result
 # back atomically (#207). Always reads in Pattern A or flat, writes in the
 # canonical Pattern A form via convert-json-to-config.sh (sourced on demand).

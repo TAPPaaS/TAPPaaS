@@ -368,12 +368,23 @@ in
   # install-service.sh; this unit is only the trigger. ConditionPathExists keeps
   # it inert until then, so a mothership whose backup is still a shim does not
   # log a failure every day.
+  #
+  # This duplicates templates/tappaas-common.nix verbatim, because this config
+  # does not source the common baseline — remove it once #324 makes it do so.
+  # The trigger cannot live with the runner it triggers: /etc/systemd/system is
+  # a read-only store symlink on NixOS, so backup:filesystem has no way to
+  # deliver a unit imperatively and every guest must declare this one (#626).
   systemd.services.tappaas-fs-backup = {
     description = "TAPPaaS file-level backup of the mothership's config/ (ADR-012 §3.1)";
     unitConfig.ConditionPathExists = "/home/tappaas/bin/tappaas-fs-backup.sh";
     serviceConfig = {
       Type = "oneshot";
-      User = "tappaas";
+      # Runs as ROOT, not tappaas (#626). Its declared capture set includes
+      # /etc/secrets, and the escrow dir inside it is root-only 0600 — as it
+      # must be, it holds every module's encryption key. Run as tappaas the
+      # capture simply skipped those keys, and proxmox-backup-client exits 0
+      # after logging "access denied", so every run reported a complete backup
+      # of a path it had not fully read. A backup agent is privileged by nature.
       ExecStart = "/home/tappaas/bin/tappaas-fs-backup.sh";
       Environment = [
         ("PATH=/home/tappaas/bin:/run/wrappers/bin:/home/tappaas/.nix-profile/bin"

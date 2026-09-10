@@ -131,3 +131,49 @@ pbs_fs_paths() {
     jq -r '.backup.filesystemPaths // [] | .[]' \
         "${PBS_FS_CONFIG_DIR}/$1.json" 2>/dev/null || true
 }
+
+# Where the guest-side runner lives once delivered, and where it ships from.
+# Resolved from this library's own location so every caller agrees on it.
+PBS_FS_RUNNER_PATH="/home/tappaas/bin/tappaas-fs-backup.sh"
+PBS_FS_SERVICE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../services/filesystem" && pwd)"
+pbs_fs_runner_path() { printf '%s\n' "${PBS_FS_RUNNER_PATH}"; }
+
+# Deliver the runner + manifest to a guest and PROVE they arrived (#626).
+#
+# Both install-service.sh and update-service.sh call exactly this, so the two
+# cannot drift: the install path used to `die` on a failed transfer while the
+# update path only warned and then printed its success line, so a capture that
+# had never been delivered reported as re-applied.
+#
+# Two rules this encodes:
+#   * the transfer goes through tappaas_scp_guest / tappaas_ssh_guest, so a
+#     guest that legitimately changed its SSH host key (recreate, reinstall,
+#     cloud-init re-instantiation — #473) is re-pinned and retried rather than
+#     failing the delivery. These were the last raw scp call sites left after
+#     the helpers landed in 12b5fcf.
+#   * success is a PROPERTY OF THE GUEST, not an exit code. The runner must be
+#     executable at its target path and the manifest readable, checked on the
+#     guest after the copy, before any caller may claim the capture is wired.
+#
+# Args: <module> <guest-fqdn> <manifest-path>
+pbs_fs_deploy_runner() {
+    local module="$1" guest="$2" manifest="$3"
+    local runner="${PBS_FS_RUNNER_PATH}"
+    local src="${PBS_FS_SERVICE_DIR}/tappaas-fs-backup.sh"
+    [[ -f "${src}" ]] || { error "  backup:filesystem: runner source missing at ${src}"; return 1; }
+
+    tappaas_scp_guest -q -o BatchMode=yes "${src}" "tappaas@${guest}:${runner}" \
+        || { error "  could not deploy the capture runner to ${guest}"; return 1; }
+    tappaas_scp_guest -q -o BatchMode=yes "${manifest}" "tappaas@${guest}:/home/tappaas/config/" \
+        || { error "  could not deploy the capture manifest to ${guest}"; return 1; }
+    tappaas_ssh_guest -o BatchMode=yes "tappaas@${guest}" "chmod +x '${runner}'" \
+        || { error "  could not make the capture runner executable on ${guest}"; return 1; }
+
+    # The verification the success line was missing. `test -x` on the guest is
+    # the only thing that distinguishes "delivered" from "reported delivered".
+    tappaas_ssh_guest -o BatchMode=yes "tappaas@${guest}" \
+        "test -x '${runner}' && test -r '/home/tappaas/config/$(basename "${manifest}")'" \
+        || { error "  ${runner} is not present/executable on ${guest} after delivery"; return 1; }
+
+    info "  ${GN}✓${CL} runner + manifest deployed and verified on ${BL}${guest}${CL}"
+}

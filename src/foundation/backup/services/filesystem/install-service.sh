@@ -131,13 +131,13 @@ pbs_fs_write_manifest "${MODULE}" "${REPO}" "${NS}" "${SCHEDULE}" "$(pbs_fs_fing
     || die "could not write the capture manifest"
 
 MANIFEST="$(pbs_fs_manifest_path "${MODULE}")"
-scp -q -o BatchMode=yes "${SCRIPT_DIR}/tappaas-fs-backup.sh" "tappaas@${GUEST}:/home/tappaas/bin/" \
-    || die "could not deploy the capture runner to ${GUEST}"
-scp -q -o BatchMode=yes "${MANIFEST}" "tappaas@${GUEST}:/home/tappaas/config/" \
-    || die "could not deploy the capture manifest to ${GUEST}"
-ssh -o BatchMode=yes "tappaas@${GUEST}" "chmod +x /home/tappaas/bin/tappaas-fs-backup.sh"
-info "  ${GN}✓${CL} runner + manifest deployed to ${BL}${GUEST}${CL}"
+pbs_fs_deploy_runner "${MODULE}" "${GUEST}" "${MANIFEST}" \
+    || die "could not deliver the capture runner to ${GUEST} — backup:filesystem is NOT wired for ${MODULE}"
 
 info "  ${GN}✓${CL} backup:filesystem install-service completed for ${MODULE} (${SCHEDULE})"
-info "     The capture TIMER is declared in the guest's NixOS config (services/filesystem/fs-backup.nix);"
-info "     run it now with: ssh tappaas@${GUEST} tappaas-fs-backup.sh"
+info "     The capture TIMER is declared in the guest's own NixOS config, not by this"
+info "     script: /etc/systemd/system is a read-only store symlink on NixOS, so the"
+info "     trigger cannot be delivered imperatively. Every guest built from the TAPPaaS"
+info "     baseline (templates/tappaas-common.nix) carries an inert tappaas-fs-backup"
+info "     timer that arms itself once this runner lands; test-service.sh verifies it."
+info "     Run a capture now with: ssh tappaas@${GUEST} tappaas-fs-backup.sh"

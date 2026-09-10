@@ -35,9 +35,14 @@ MANIFEST="$(pbs_fs_manifest_path "${MODULE}")"
 [[ -f "${MANIFEST}" ]] && { rm -f "${MANIFEST}"; info "  removed capture manifest ${MANIFEST}"; }
 
 if [[ -n "${VMNAME}" ]]; then
+    # The runner itself goes too — the header has always said so, but it was
+    # left behind, so an un-wired module kept an executable whose timer would
+    # fire against a manifest that no longer exists (#626). Its systemd trigger
+    # is declarative and shared by every guest; it goes inert on its own once
+    # the runner is gone (ConditionPathExists).
     ssh -o ConnectTimeout=10 -o BatchMode=yes "tappaas@${VMNAME}.${ZONE}.internal" \
-        "rm -f /home/tappaas/config/${MODULE}.fsbackup.json; sudo rm -f /etc/secrets/backup-fs.pw" 2>/dev/null \
-        && info "  removed the runner's manifest + write credential from ${VMNAME}" \
+        "rm -f /home/tappaas/config/${MODULE}.fsbackup.json '$(pbs_fs_runner_path)'; sudo rm -f /etc/secrets/backup-fs.pw" 2>/dev/null \
+        && info "  removed the runner, its manifest + write credential from ${VMNAME}" \
         || warn "  could not clean up on ${VMNAME} (it may already be gone) — harmless"
 fi
 

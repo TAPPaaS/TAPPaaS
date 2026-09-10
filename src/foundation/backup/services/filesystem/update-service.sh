@@ -55,9 +55,11 @@ pbs_fs_write_manifest "${MODULE}" "${REPO}" "${NS}" "${SCHEDULE}" "$(pbs_fs_fing
     || die "could not update the capture manifest"
 
 MANIFEST="$(pbs_fs_manifest_path "${MODULE}")"
-scp -q -o BatchMode=yes "${SCRIPT_DIR}/tappaas-fs-backup.sh" "tappaas@${GUEST}:/home/tappaas/bin/" \
-    && scp -q -o BatchMode=yes "${MANIFEST}" "tappaas@${GUEST}:/home/tappaas/config/" \
-    && ssh -o BatchMode=yes "tappaas@${GUEST}" "chmod +x /home/tappaas/bin/tappaas-fs-backup.sh" \
-    || warn "  could not refresh the runner/manifest on ${GUEST} — the previous ones stay in place"
+# A failed delivery FAILS the step (#626). This used to warn and fall through to
+# the success line, so a runner that had never reached the guest at all was
+# reported as "re-applied" — and the warning's claim that "the previous ones
+# stay in place" is not true on a first wiring, where there is no previous one.
+pbs_fs_deploy_runner "${MODULE}" "${GUEST}" "${MANIFEST}" \
+    || die "could not refresh the capture runner on ${GUEST} — backup:filesystem is NOT converged for ${MODULE}"
 
 debug "  ${GN}✓${CL} backup:filesystem update-service completed for ${MODULE} (${SCHEDULE})"
