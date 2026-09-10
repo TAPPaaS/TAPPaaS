@@ -3,13 +3,13 @@
 | | |
 |---|---|
 | **Status** | **Draft for review** — v0.5 answers the #577 review; the Decision is a proposal, §Open questions lists what remains. |
-| **Version** | 0.5 |
+| **Version** | 0.6 |
 | **Date** | 2026-09-10 |
 | **Author** | Lars Rossen |
 | **Parent** | [ADR-005 Variant/Domain Architecture](<ADR-005-variant-domain-architecture.md>) §6 (the split-horizon idea), [ADR-014 Zone and Environment Lifecycle](<ADR-014 - Zone and Environment Lifecycle.md>) (what a zone and an environment *are*) |
 | **Refines** | ADR-005 §6 — which stated the goal but never named the resolution rule, leaving three implementations to infer it differently. |
-| **Closes / addresses** | **#577** (wildcard split-horizon has two writers with different zone rules — three, in fact) and **#594** (duplicate `*` rows read as converged — closed by the cardinality-aware D5 writer, see Appendix A). Supersedes the interim reading of **#504** recorded in `acme-setup.sh` and `clients.ts`. Related: **#474** (a `redirect` zone permits local-data only at the apex), **#505** (wildcard supersedes per-service). **Depends on #589** (closed 2026-09-07) — the tooling must be able to establish that Caddy is running before the DMZ gateway carries internal traffic too. |
-| **Changelog** | v0.1 first stab: reachability invariant, one resolver, three cases. v0.2 (operator decision): the target is **the DMZ gateway, always** (D2), backed by a **zone invariant** (D3) — this replaces v0.1's client-zone-gateway rule, dissolves the one-apex-target problem, and answers three of v0.1's five open questions. Also: a wildcard **certificate** does not imply a wildcard **record** (D4), and R3's unpublished-service case is worked through as Case 4. v0.3 (operator simplification): D3's entitlement-set derivation is replaced by the invariant **`internet` implies `dmz`** — reaching published services is the same privilege as reaching the internet, which grants nothing new because an internet-capable zone can already reach the same Caddy via the WAN hairpin. Removes the `proxyAllowedZones`-derived entitlement set entirely and makes the rule authored (like the existing `mgmt.access-to` invariant) rather than validated. v0.4 (operator review): **D1 no longer claims reachability** — the invariant is only that the answer is Caddy; whether a caller can reach it is a per-zone question answered by D2/D3, and a zone without `internet`/`dmz` uses `.internal` + pinholes instead. **Case 3 is re-cast around identity**, not zone lists: both populations resolve and connect identically, and Authentik group membership decides entitlement — `proxyAllowedZones` is demoted to the coarse public/internal split it is good for. R3 gains the `access-to` row (published → `dmz`; unpublished → the service's own zone). v0.5 (review response, #577): **D3 is withdrawn, not amended.** The reachability it asked for already ships as the **#366 caddy-reach rule** — a pass to the DMZ gateway `/32` on tcp/80+443, emitted per internet-capable zone by `zone_manager._configure_caddy_reachability` and live on the reference site. So no `access-to` grant is needed, no zone-wide widening happens, and the review's objection — that `access-to` grants a whole subnet, and the DMZ holds workloads — is answered by not using `access-to` at all. D3 now *states* the existing rule instead of inventing a second, wider one. **Overlay zones are the gap that remains**: `admin` has no `internet`, so it gets no rule and would lose the three records that sit on the mgmt gateway today — extending the rule to non-isolated Overlay zones (**D3a**) is a prerequisite of the cutover, not an open question. Also: #589 closed, so the blast-radius risk keeps its cost entry but no longer blocks; diagnosability joins D4's table. |
+| **Closes / addresses** | **#577** (wildcard split-horizon has two writers with different zone rules — three, in fact) and **#594** (duplicate `*` rows read as converged — closed by the cardinality-aware D5 writer, see Appendix A). Supersedes the interim reading of **#504** recorded in `acme-setup.sh` and `clients.ts`. Related: **#474** (a `redirect` zone permits local-data only at the apex), **#505** (wildcard supersedes per-service). **Also closes #618** (re-scoped to its DMZ instance — see D3b). **Depends on #589** (closed 2026-09-07) — the tooling must be able to establish that Caddy is running before the DMZ gateway carries internal traffic too. |
+| **Changelog** | v0.1 first stab: reachability invariant, one resolver, three cases. v0.2 (operator decision): the target is **the DMZ gateway, always** (D2), backed by a **zone invariant** (D3) — this replaces v0.1's client-zone-gateway rule, dissolves the one-apex-target problem, and answers three of v0.1's five open questions. Also: a wildcard **certificate** does not imply a wildcard **record** (D4), and R3's unpublished-service case is worked through as Case 4. v0.3 (operator simplification): D3's entitlement-set derivation is replaced by the invariant **`internet` implies `dmz`** — reaching published services is the same privilege as reaching the internet, which grants nothing new because an internet-capable zone can already reach the same Caddy via the WAN hairpin. Removes the `proxyAllowedZones`-derived entitlement set entirely and makes the rule authored (like the existing `mgmt.access-to` invariant) rather than validated. v0.4 (operator review): **D1 no longer claims reachability** — the invariant is only that the answer is Caddy; whether a caller can reach it is a per-zone question answered by D2/D3, and a zone without `internet`/`dmz` uses `.internal` + pinholes instead. **Case 3 is re-cast around identity**, not zone lists: both populations resolve and connect identically, and Authentik group membership decides entitlement — `proxyAllowedZones` is demoted to the coarse public/internal split it is good for. R3 gains the `access-to` row (published → `dmz`; unpublished → the service's own zone). v0.5 (review response, #577): **D3 is withdrawn, not amended.** The reachability it asked for already ships as the **#366 caddy-reach rule** — a pass to the DMZ gateway `/32` on tcp/80+443, emitted per internet-capable zone by `zone_manager._configure_caddy_reachability` and live on the reference site. So no `access-to` grant is needed, no zone-wide widening happens, and the review's objection — that `access-to` grants a whole subnet, and the DMZ holds workloads — is answered by not using `access-to` at all. D3 now *states* the existing rule instead of inventing a second, wider one. **Overlay zones are the gap that remains**: `admin` has no `internet`, so it gets no rule and would lose the three records that sit on the mgmt gateway today — extending the rule to non-isolated Overlay zones (**D3a**) is a prerequisite of the cutover, not an open question. Also: #589 closed, so the blast-radius risk keeps its cost entry but no longer blocks; diagnosability joins D4's table. v0.6 (#618): **D3b** picks up the two loose ends at the DMZ gateway that D2 is what makes matter, and **closes the re-scoped #618 as part of this ADR's implementation** rather than alongside it. The DMZ zone is excluded from the caddy-reach rule and leans on an unrestricted gateway rule that #399 exists to remove; and the Service archetype still seeds `access-to: ["internet","dmz"]`, the last `access-to` edge into the DMZ, which compiles to whole-subnet/all-ports and was probe-confirmed to reach the firewall GUI and SSH from a tier-1 service VM. Both are fixed here. Consequence for v0.5's "no `zones.json` edit at all": there is now exactly one, and it is a **removal**. |
 
 ## Context
 
@@ -224,6 +224,57 @@ on the overlay that is actually carrying traffic.
 > firewall today (no 100.64/10 route), and admitting an overlay to Caddy is a decision to take
 > when that overlay is terminated, not pre-emptively.
 
+#### D3b. The DMZ gateway's two loose ends — **closes #618**
+
+Both sit at `10.6.0.1`, both predate this ADR, and both are D2's problem now, because D2 is what
+points every internal client at that address.
+
+**(i) The DMZ zone is excluded from the caddy-reach rule.** The candidate filter skips it
+(`z.name != dmz.name`) on the reasoning that it "reaches the gateway locally". Live, "locally" is
+one rule — `Zone dmz -> gateway`, `10.6.0.1/32`, protocol **any**, no port — and #399 exists to
+restrict exactly that rule to DNS/NTP/DHCP/ICMP. When #399 lands, a DMZ-resident VM loses tcp/443
+to Caddy and with it every published name, and there is no second rule to fall back on. No DMZ
+workload is deployed on the reference site today, but `vaultwarden` and `coturn` are the two
+modules that declare `zone0: dmz`.
+
+> **Stop skipping `dmz`**: it gets the same `/32` + tcp/80,443 rule as every other zone. That is
+> strictly narrower than what it relies on today, and it makes #399 and this ADR independent
+> rather than a pair that must land together.
+
+**(ii) The Service archetype still seeds `access-to: ["internet", "dmz"]`** — `archetypes.ts:46`
+and `zones.ts:240` — which is the last `access-to` edge pointing into the DMZ and the one D3's
+withdrawal does not reach. It compiles to the whole subnet on every port, ahead of the block
+band:
+
+```
+opt1  rossen  36101  pass  any  →  10.6.0.0/24     Zone rossen -> dmz
+```
+
+`10.6.0.1` is inside that subnet, and `webgui.interfaces` / `ssh.interfaces` are unset, so the
+firewall GUI and SSH answer there. Probed from a service VM (`openwebui`, `10.2.0.163`) on
+2026-09-10: **`10.6.0.1:8443` and `:22` both open** — a tier-1 zone reaching the control plane,
+against `zones.json`'s own isolation invariant. #399's fix does not touch this rule, so it
+survives #399 intact.
+
+The grant is redundant for exactly the reason the client-zone grant was: `rossen` already carries
+`Zone rossen -> caddy https/http` to the `/32`.
+
+> **Drop `dmz` from the Service seed** in both the archetype and the new-zone default, and retire
+> it from existing Service zones on reconcile. A service VM that must reach a DMZ *workload*
+> declares a pinhole (`dmz.pinhole-allowed-from`) — the mechanism this repo already uses for that
+> — instead of a zone-wide grant that happens to include the firewall.
+
+> **Implementation requirement — not deferred.** **#618 is closed by this ADR, not alongside it**,
+> in the same sense as #594 in Appendix A. The D3 work already touches the caddy-reach candidate
+> set and the zone seed, which is where both halves live; shipping D3 without them leaves D2
+> depending on a rule #399 is about to remove, and leaves the control-plane exposure in place on
+> every site that has a Service zone. **The ADR is not "done" until (a) the `dmz` zone carries its
+> own caddy-reach rule and (b) no zone has `dmz` in `access-to`.**
+>
+> The **general** form of #618 — that *any* `access-to` edge reaches its target's gateway on all
+> ports, because the loop passes neither `protocol` nor `destination_port` (both of which
+> `_create_or_skip_rule` already accepts) — is wider than this ADR and stays with #399.
+
 ### D4. A wildcard certificate does not imply a wildcard record
 
 `dnsMode` selects the **certificate strategy** (R2). It does **not** dictate the Unbound record
@@ -333,12 +384,13 @@ never doing this work, it only ever looked like it was.
 |---|---|---|---|
 | `home` | `access-to` | `[internet]` — **unchanged** | reach to Caddy is the D3 rule, not an `access-to` entry |
 | `srv` | `type` | `Service` | environment binds a service segment (ADR-014) |
-| `srv` | `access-to` | `[internet]` — unchanged | ditto |
+| `srv` | `access-to` | `[internet]` — **`dmz` removed** (D3b) | the seed's `dmz` grant is redundant, and it reaches the firewall on 8443/22 |
 | `srv` | `pinhole-allowed-from` | `[dmz]` | Caddy's upstream hop into the VM |
 | `guest` | `access-to` | `[internet]` — unchanged | reaches Caddy by D3, refused by Caddy's ACL |
 | `iotLocal`, `iotCams` | `access-to` | `[]` — unchanged | no `internet`, so no caddy-reach rule: isolated as intended |
 
-> **This ADR asks for no `zones.json` edit at all.** Reachability comes from the D3 rule, which
+> **The only `zones.json` change this ADR asks for is a removal** — `dmz` leaves the Service
+> zone's `access-to` (D3b). Nothing gains a grant. Reachability comes from the D3 rule, which
 > `zone_manager` already derives from `internet`. The only authored policy is
 > `pinhole-allowed-from` on the service zone, and the module's `proxyAllowedZones`.
 
@@ -388,7 +440,7 @@ handler and a DNS record; it adds no new address and no new zone grant.
 | Zone | Setting | Value | Why |
 |---|---|---|---|
 | `srv2` | `type` | `Service` | second environment's segment |
-| `srv2` | `access-to` | `[internet]` — unchanged | caddy-reach comes from D3, not from `access-to` |
+| `srv2` | `access-to` | `[internet]` — no `dmz` (D3b) | caddy-reach comes from D3, not from `access-to` |
 | `srv2` | `pinhole-allowed-from` | `[dmz]` | Caddy's upstream hop into `srv2` |
 
 *Module rules* (`openwebui-work-env.json`)
@@ -524,17 +576,24 @@ Caddy hop to borrow.
   happened to return. One identity moving between `home`, `guest` Wi-Fi and the `netbird`
   overlay is one answer, not three.
 
-- **Radically less to implement, and no `zones.json` churn.** The resolver is a constant
-  lookup, the per-module input to DNS disappears entirely, and the firewall side is one already-
-  shipped rule plus a widened candidate set (D3a). Compare v0.1: a preference-ordered
-  client-zone search, a multi-zone warning path, and an unanswered service-to-service case; and
-  compare v0.3/v0.4, which additionally rewrote every internet-capable zone's `access-to`.
+- **Radically less to implement, and the only `zones.json` churn is a removal.** The resolver is
+  a constant lookup, the per-module input to DNS disappears entirely, and the firewall side is
+  one already-shipped rule plus a widened candidate set (D3a, D3b). Compare v0.1: a
+  preference-ordered client-zone search, a multi-zone warning path, and an unanswered
+  service-to-service case; and compare v0.3/v0.4, which additionally rewrote every
+  internet-capable zone's `access-to`.
+- **It closes a live control-plane exposure** (#618). Removing `dmz` from the Service seed takes
+  tcp/8443 and tcp/22 on the firewall away from every service VM — reach that exists today, on
+  this site, and that #399 alone would not have removed.
 
 **Costs / risks**
 
-- **No widening, and no zone diff.** v0.3/v0.4 carried a cost entry here for the
+- **No widening; the one zone diff is a narrowing.** v0.3/v0.4 carried a cost entry here for the
   `internet ⟹ dmz` grant. Withdrawing D3 removes it: reachability is a `/32` on two ports the
-  firewall already emits, so there is nothing in `zones.json` to review as a widening.
+  firewall already emits. What remains is D3b's *removal* of `dmz` from Service zones — which
+  should still be reviewed, because a service VM that today reaches a DMZ workload zone-wide
+  will need a declared pinhole instead. Nothing is deployed in the DMZ on the reference site,
+  so there is nothing to migrate there today.
 - **`guest` and internet-capable IoT zones reach Caddy — and already do.** They are refused by
   the access-list rather than by the firewall, which moves the boundary for those zones from the
   network layer to Caddy. That is the model working as designed, the refusal is legible and
@@ -576,9 +635,16 @@ without it.
 - **Unit (fast)** — the resolver as a pure function: published name → `(dmz_ip, "dmz")`;
   unpublished → `UNPUBLISHED`; no dmz zone → `ERROR`. Plus the **D3 candidate set** as a pure
   function over `zones.json`: every zone with `internet`, and every `type: Overlay` zone with a
-  non-empty `access-to`, is a caddy-reach candidate; an isolated zone, an empty-`access-to` zone
-  and `dmz` itself are not. And the negative that keeps the review's objection closed: **no
-  zone's `access-to` is modified by any of this.**
+  non-empty `access-to`, is a caddy-reach candidate; an isolated zone and an empty-`access-to`
+  zone are not; **and `dmz` now IS one** (D3b(i) — the case that flips from v0.5). And the
+  negative that keeps the #577 review's objection closed: **no zone's `access-to` gains anything
+  from any of this.**
+- **Unit (fast) — the #618 invariant (required deliverable of D3b).** As a pure function over
+  `zones.json`: **no zone lists `dmz` in `access-to`** — and specifically that the `service`
+  archetype and the new-zone default no longer seed it, so a freshly added Service zone does not
+  reintroduce the edge one install later. Paired with the candidate-set test above, this is what
+  makes "the DMZ gateway is reachable on two ports and nothing else" a checked property rather
+  than a claim.
 - **Unit (fast) — the #594 cardinality invariant (required deliverable of D5).** The record
   reconciler as a pure function over the current `*` rows: two identical rows in ⟹ exactly one
   row planned out; one correct row in ⟹ no change; zero rows in ⟹ one row planned. It MUST plan
@@ -590,15 +656,18 @@ without it.
   question*; and assert an unentitled zone (guest) is still denied. The existing zone-node test
   already proves an L2 probe can be placed on an arbitrary VLAN, which is the harness this needs.
   Plus one probe that is **not** a VLAN: from an `admin` WireGuard peer, assert `10.6.0.1:443`
-  answers — the D3a regression this ADR would otherwise ship. And the negative that the /32 is
-  really a /32: from the same probe, assert a DMZ *workload* address is still refused.
+  answers — the D3a regression this ADR would otherwise ship. And the negatives that keep #618
+  closed, run from a **service-zone** VM: `10.6.0.1:443` answers, while **`10.6.0.1:8443` and
+  `10.6.0.1:22` are refused**, and a DMZ *workload* address is refused. Those three are open
+  today (probed 2026-09-10) and are the regression test for D3b(ii).
 
 ## Documentation impact (ADR-013)
 
 `docs/design/` network overview (split-horizon section), `src/foundation/network/README.md`
 (`network:proxy` behaviour), `manager/environment-manager/README.md` (`dnsMode` = certificate
 strategy only, per D4), the `proxyAllowedZones` field docs (single meaning under D2), and
-`ZONES.md` (the caddy-reach rule, and why it is deliberately not an `access-to` entry).
+`ZONES.md` (the caddy-reach rule, and why it is deliberately not an `access-to` entry), and the
+`service` archetype's documented `access-to` seed, which loses `dmz` (D3b).
 
 ---
 
