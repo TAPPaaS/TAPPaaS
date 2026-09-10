@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | **Accepted** — implemented (operator decision 2026-09-10; supersedes the #239 module-level ruling) |
+| **Status** | Accepted — **implemented** and verified end-to-end (commit `a13a4e9`; `network/test.sh --deep` Deep 12 proves the device unreachable without masquerade and reachable with it). Supersedes the #239 module-level ruling. |
 | **Version** | 0.3 |
 | **Date** | 2026-08-16 |
 | **Author** | Lars Rossen |
@@ -375,8 +375,8 @@ outlives the declaration that justified it.
 - **OPNsense firewall-log attribution** under SNAT (pre- vs post-translation addresses in
   the filter log shipped to `logging`) is unverified.
 - ~~Whether the mode is readable at all~~ — **closed**: verified live, see D4. The open
-  part is only the *write* path (`POST firewall/source_nat/set`), which is **still
-  untested against real hardware** — no implementation step has flipped a live mode.
+  part was the *write* path (`POST firewall/source_nat/set`) — now exercised on real
+  hardware: `mode --set` flips the live setting and `apply-module` derives it. **Closed.**
 - ~~Whether `firewall/source_nat/searchRule` cleanly separates automatically-generated
   per-interface rules from manually/API-added custom ones~~ — **moot** (v0.3): listing reads
   `.filter.snatrules.rule`, where generated rules never appear. Nothing depends on the
@@ -401,14 +401,15 @@ Checked items are implemented and verified; the rest are the remaining work.
 - [x] `apply-module` reconciles symmetrically — a zone removed from `snatFrom` loses its rule.
 - [x] `verify-module` fails on a rule that is present but not enforced.
 - [x] The four service hooks call the applier and hold no policy of their own.
-- [ ] `network-manager snat list|verify|mode` (mode read-only) over the Python implementation.
+- [x] `network-manager snat list|verify|mode` (mode read-only) over the Python implementation.
 - [ ] `alfen` migrated to `config."network:snat"`; `services/nat/` removed; #239, #623 and
       Community#3 closed.
 - [ ] Alfen reachable from `home` (phone app) and `srvHome` (HA) with no hand-made rules.
-- [ ] First live `automatic → hybrid` flip captured with `pfctl -sn` before and after.
+- [x] First live `automatic → hybrid` flip captured with `pfctl -sn` before and after: 25 rules,
+      byte-identical. The transition is additive, measured rather than argued.
 - [ ] `reconcile --only snat` auto-reverts `hybrid` → `automatic` when no TAPPaaS-owned rule
       remains and no unowned rule is present; otherwise warns and leaves the mode unchanged.
 - [ ] `reconcile --only snat` **without** `--apply` reports the rogue-rule finding and the
       would-be revert decision read-only.
-- [ ] A deep test that would have caught #239: a listener in the target zone that drops
+- [x] A deep test that would have caught #239: a listener in the target zone that drops
       non-local sources, proved unreachable without SNAT and reachable with it.
