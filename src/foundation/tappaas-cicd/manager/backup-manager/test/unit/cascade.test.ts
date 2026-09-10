@@ -13,13 +13,14 @@ import {
   listModules,
   listPeers,
   moduleEnvironment,
-  moduleInPbsJob,
+  moduleArchived,
+  moduleOptedIntoVmBackup,
   moduleVmid,
   readPlacement,
   resolvePolicy,
 } from "../../src/config";
 import { retentionValid, validate } from "../../src/validate";
-import { applyPlan, computePlan } from "../../src/reconcile";
+import { applyPlan, computePlan, jobBucketIndex } from "../../src/reconcile";
 import { restoreList, restoreRun } from "../../src/restore";
 import {
   findPeer,
@@ -95,8 +96,8 @@ function eq<T>(got: T, want: T, msg: string): void {
 // ── listModules / wiring / vmid ───────────────────────────────────────
 eq(listModules(FIX), ["nextcloud", "scratch"], "listModules skips site/environments");
 eq(listEnvironments(FIX), ["prod"], "listEnvironments lists env files");
-check(moduleInPbsJob(FIX, "nextcloud"), "nextcloud is wired into PBS job (dependsOn backup:vm)");
-check(!moduleInPbsJob(FIX, "scratch"), "scratch is NOT wired into PBS job");
+check(moduleOptedIntoVmBackup(FIX, "nextcloud"), "nextcloud opted in (dependsOn backup:vm)");
+check(!moduleOptedIntoVmBackup(FIX, "scratch"), "scratch has NOT opted into backup");
 eq(moduleVmid(FIX, "nextcloud"), "201", "moduleVmid reads .vmid");
 
 // ── retentionValid ────────────────────────────────────────────────────
@@ -141,11 +142,26 @@ check(!retentionValid("7") && !retentionValid("7x") && !retentionValid(""), "inv
     jobId: "tappaas-backup",
     vmids: ["201"],
     storage: "tappaas_backup",
+    buckets: [{ bucket: "daily", jobId: "tappaas-backup", vmids: ["201"] }],
     reachable: true,
   });
   check(
     !plan.actions.some((a) => a.kind === "ensure-job-member"),
     "reconcile skips ensure-job-member when vmid already covered (idempotent)",
+  );
+  // #627 legacy fallback: a controller that predates `.buckets` reports only
+  // the daily vmid list. The manager must still see that member, or a manager
+  // newer than its controller re-adds every module on every reconcile.
+  const legacy = computePlan(FIX, {
+    jobId: "tappaas-backup",
+    vmids: ["201"],
+    storage: "tappaas_backup",
+    buckets: [],
+    reachable: true,
+  });
+  check(
+    !legacy.actions.some((a) => a.kind === "ensure-job-member"),
+    "reconcile honours a pre-buckets controller's daily vmid list (back-compat)",
   );
 }
 
@@ -167,7 +183,13 @@ check(!retentionValid("7") && !retentionValid("7x") && !retentionValid(""), "inv
 
 // reconcile offline → warns preview-only.
 {
-  const plan = computePlan(FIX, { jobId: null, vmids: [], storage: null, reachable: false });
+  const plan = computePlan(FIX, {
+    jobId: null,
+    vmids: [],
+    storage: null,
+    buckets: [],
+    reachable: false,
+  });
   check(
     plan.warnings.some((w) => w.includes("not reachable")),
     "reconcile warns when controller offline",
@@ -502,11 +524,69 @@ check(!retentionValid("7") && !retentionValid("7x") && !retentionValid(""), "inv
   mod("hardware", { dependsOn: ["cluster:vm"] });
   mod("other", { dependsOn: ["backup:filesystem"], integratesWith: ["network:proxy"] });
 
-  check(moduleInPbsJob(tmp, "app"), "dependsOn backup:vm is in the job");
-  check(moduleInPbsJob(tmp, "mothership"), "integratesWith backup:vm is in the job (#501, D18)");
-  check(!moduleInPbsJob(tmp, "hardware"), "declaring neither stays OUT — backup is opt-in");
-  check(!moduleInPbsJob(tmp, "other"), "an unrelated integration does not opt a module in");
-  check(!moduleInPbsJob(tmp, "absent"), "a module with no config is not in the job");
+  check(moduleOptedIntoVmBackup(tmp, "app"), "dependsOn backup:vm opts in");
+  check(moduleOptedIntoVmBackup(tmp, "mothership"), "integratesWith backup:vm opts in (#501, D18)");
+  check(!moduleOptedIntoVmBackup(tmp, "hardware"), "declaring neither stays OUT — backup is opt-in");
+  check(!moduleOptedIntoVmBackup(tmp, "other"), "an unrelated integration does not opt a module in");
+  check(!moduleOptedIntoVmBackup(tmp, "absent"), "a module with no config has not opted in");
+}
+
+// ── #627: the declaration is not job membership ───────────────────────
+// `IN-PBS-JOB` was computed from dependsOn/integratesWith and never read the
+// job. Both directions diverge; the dangerous half is false-true — reporting a
+// module as backed up when no snapshot can be taken.
+{
+  const tmp = mkdtempSync(join(tmpdir(), "bm-627-"));
+  const mod = (name: string, o: Record<string, unknown>) =>
+    writeFileSync(join(tmp, `${name}.json`), JSON.stringify({ vmname: name, ...o }), "utf8");
+
+  // live:     declared, in the daily job          → member
+  // weekly:   declared, in the WEEKLY job         → member (the bucket blind spot)
+  // gone:     declared but archived, VM destroyed → NOT a member, and intended
+  // pending:  declared, job has not caught up yet → NOT a member (bootstrap gap)
+  mod("live", { vmid: 340, dependsOn: ["backup:vm"] });
+  mod("weekly", { vmid: 341, dependsOn: ["backup:vm"], backup: { schedule: "weekly" } });
+  mod("gone", { vmid: 411, status: "archived", dependsOn: ["backup:vm"] });
+  mod("pending", { vmid: 500, integratesWith: ["backup:vm"] });
+
+  check(moduleArchived(tmp, "gone"), "status=archived is read off the config");
+  check(!moduleArchived(tmp, "live"), "a live module is not archived");
+  check(moduleOptedIntoVmBackup(tmp, "gone"), "an archived module still DECLARES backup:vm");
+
+  const fake = new FakeClient();
+  fake.seedBucket("daily", ["340"]);
+  fake.seedBucket("weekly", ["341"]);
+  const idx = jobBucketIndex(fake.jobStatus());
+  eq(idx.get("340"), "daily", "membership resolves from the daily job");
+  eq(idx.get("341"), "weekly", "membership resolves from the WEEKLY job too (#627)");
+  eq(idx.get("411"), undefined, "an archived module's destroyed VM is in no job");
+  eq(idx.get("500"), undefined, "a declared-but-not-yet-added VM is in no job");
+
+  // reconcile must not re-add the archived module: delete-service.sh removed
+  // its VMID on purpose, and vzdump errors on a job naming a missing guest.
+  const plan = computePlan(tmp, fake.jobStatus());
+  check(
+    !plan.actions.some((a) => a.target.includes("'gone'")),
+    "reconcile does NOT re-add an archived module (#627)",
+  );
+  check(
+    plan.actions.some((a) => a.target.includes("'pending'")),
+    "reconcile still adds a declared module the job has not caught up with",
+  );
+  check(
+    !plan.actions.some((a) => a.target.includes("'weekly'")),
+    "reconcile leaves a correctly-placed weekly member alone (no churn)",
+  );
+
+  // A member sitting in the WRONG bucket is a move, not a no-op.
+  const moved = new FakeClient();
+  moved.seedBucket("monthly", ["341"]);
+  check(
+    computePlan(tmp, moved.jobStatus()).actions.some(
+      (a) => a.target.includes("'weekly'") && a.target.includes("weekly PBS job"),
+    ),
+    "reconcile moves a member out of the wrong bucket",
+  );
 }
 
 // ── ADR-012: placement + off-site peers ───────────────────────────────

@@ -13,7 +13,7 @@
 // (other than the graceful offline skip) throws.
 
 import { captureResult } from "../../../lib/ts/src/exec";
-import { Client, JobStatus } from "./types";
+import { BucketMembership, Client, JobStatus, ScheduleBucket } from "./types";
 
 export class BackupControllerUnreachable extends Error {}
 
@@ -53,6 +53,25 @@ function asStringArray(v: unknown): string[] {
   return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
 }
 
+const BUCKETS: ScheduleBucket[] = ["daily", "weekly", "monthly"];
+
+// Parse the controller's `.buckets` array. An entry naming a bucket we do not
+// model, or carrying no job id, is dropped rather than coerced: a membership
+// list is used to answer "is this backed up?", so a half-understood entry must
+// not become a confident answer.
+function asBuckets(v: unknown): BucketMembership[] {
+  if (!Array.isArray(v)) return [];
+  const out: BucketMembership[] = [];
+  for (const e of v) {
+    if (!e || typeof e !== "object" || Array.isArray(e)) continue;
+    const o = e as Record<string, unknown>;
+    const bucket = BUCKETS.find((b) => b === o.bucket);
+    if (!bucket || typeof o.jobId !== "string" || o.jobId === "") continue;
+    out.push({ bucket, jobId: o.jobId, vmids: asStringArray(o.vmids) });
+  }
+  return out;
+}
+
 export class CliClient implements Client {
   // ADR-012 P7: endpoint-agnostic. When constructed with a PBS endpoint (e.g. a
   // satellite tunnel host), every controller call is prefixed `--pbs <endpoint>`
@@ -73,6 +92,7 @@ export class CliClient implements Client {
       jobId: typeof o.jobId === "string" ? o.jobId : null,
       vmids: asStringArray(o.vmids),
       storage: typeof o.storage === "string" ? o.storage : null,
+      buckets: asBuckets(o.buckets),
       reachable,
     };
   }

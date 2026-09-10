@@ -2,10 +2,10 @@
 // no PBS, no cluster). Records calls so tests can assert exactly what the manager
 // asked the controller to do. Mirrors people-manager/test/unit/fake-client.ts.
 
-import { Client, JobStatus } from "../../src/types";
+import { Client, JobStatus, ScheduleBucket } from "../../src/types";
 
 export class FakeClient implements Client {
-  job: JobStatus = { jobId: null, vmids: [], storage: null, reachable: true };
+  job: JobStatus = { jobId: null, vmids: [], storage: null, buckets: [], reachable: true };
   snapshots = new Map<string, string[]>();
   log: string[] = [];
   // Method names that throw when called — for failure-path tests (applyPlan
@@ -19,9 +19,23 @@ export class FakeClient implements Client {
     this.snapshots.set(module, snaps);
   }
 
+  // Seed a bucket job's membership (#627: coverage is the union over buckets,
+  // so a test that only seeds `vmids` is only testing daily).
+  seedBucket(bucket: ScheduleBucket, vmids: string[], jobId = `job-${bucket}`): void {
+    this.job = {
+      ...this.job,
+      buckets: [...this.job.buckets.filter((b) => b.bucket !== bucket), { bucket, jobId, vmids }],
+    };
+    if (bucket === "daily") this.job = { ...this.job, jobId, vmids: [...vmids] };
+  }
+
   jobStatus(): JobStatus {
     this.log.push("job-status");
-    return { ...this.job, vmids: [...this.job.vmids] };
+    return {
+      ...this.job,
+      vmids: [...this.job.vmids],
+      buckets: this.job.buckets.map((b) => ({ ...b, vmids: [...b.vmids] })),
+    };
   }
   listSnapshots(module: string): string[] {
     this.log.push(`list ${module}`);
@@ -32,7 +46,20 @@ export class FakeClient implements Client {
     this.log.push(
       `add-to-job ${vmid}${retention ? ` retention=${retention}` : ""}${bucket ? ` bucket=${bucket}` : ""}`,
     );
-    if (!this.job.vmids.includes(vmid)) this.job.vmids = [...this.job.vmids, vmid];
+    // Mirror pbs_place_vmid: a guest belongs to exactly ONE bucket, so an add
+    // is a move — otherwise a test could not tell a re-add from a placement.
+    const b = (bucket ?? "daily") as ScheduleBucket;
+    const others = this.job.buckets
+      .filter((x) => x.bucket !== b)
+      .map((x) => ({ ...x, vmids: x.vmids.filter((v) => v !== vmid) }));
+    const cur = this.job.buckets.find((x) => x.bucket === b);
+    const merged = cur && cur.vmids.includes(vmid) ? cur.vmids : [...(cur?.vmids ?? []), vmid];
+    this.job = {
+      ...this.job,
+      buckets: [...others, { bucket: b, jobId: cur?.jobId ?? `job-${b}`, vmids: merged }],
+    };
+    if (b === "daily") this.job = { ...this.job, vmids: merged };
+    else this.job = { ...this.job, vmids: this.job.vmids.filter((v) => v !== vmid) };
   }
   applySchedule(spec: string): void {
     if (this.failOn.has("applySchedule")) throw new Error("simulated applySchedule failure");

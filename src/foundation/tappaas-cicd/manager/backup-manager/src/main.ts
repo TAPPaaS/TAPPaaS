@@ -25,13 +25,15 @@ import {
   defaultConfigDir,
   listModules,
   listPeers,
-  moduleInPbsJob,
+  moduleArchived,
+  moduleOptedIntoVmBackup,
+  moduleVmid,
   readPlacement,
   resolvePolicy,
 } from "./config";
-import { CliClient } from "./client";
+import { BackupControllerUnreachable, CliClient } from "./client";
 import { addToBackupJob, modifyBackup, ModifyOpts, removeFromBackupJob } from "./modify";
-import { applyPlan, computePlan } from "./reconcile";
+import { applyPlan, computePlan, jobBucketIndex } from "./reconcile";
 import { restoreList, restoreListAll, restoreRun, moduleScriptDir } from "./restore";
 import {
   PeerKind,
@@ -48,7 +50,7 @@ import { HelpSpec, renderHelp } from "../../../lib/ts/src/help";
 import { existsSync } from "fs";
 import { stream } from "../../../lib/ts/src/exec";
 import { GN, CL, die, guarded, info, warn } from "../../../lib/ts/src/cli";
-import { BackupPolicyStatus, Client } from "./types";
+import { BackupPolicyStatus, Client, JobStatus, ScheduleBucket } from "./types";
 
 const VERSION = "0.1.0";
 
@@ -295,12 +297,66 @@ function parseOpts(args: string[]): Opts {
   };
 }
 
-// ── list / show: every module's resolved policy (+ PBS-job wiring) ─────
-function policiesFor(configDir: string): BackupPolicyStatus[] {
-  return listModules(configDir).map((module) => ({
+// ── list / show: every module's resolved policy (+ PBS-job membership) ─
+//
+// #627: `IN-PBS-JOB` used to be `moduleInPbsJob()` — the module's DECLARATION,
+// never the job. The two diverge in both directions, and the false-true one is
+// the dangerous half: an archived module keeps its backup:vm declaration after
+// delete-service.sh correctly drops its destroyed VM from the job, so the
+// column claimed coverage for a guest that cannot be snapshotted. Membership is
+// now read from the managed bucket jobs, with the declaration kept as its own
+// column so the gap between "asked for backup" and "is backed up" is visible
+// instead of collapsed into one boolean.
+
+// Ask the controller for job membership once per command, and degrade to the
+// declaration rather than to a confident `false` — an unreachable PBS is
+// unknown coverage, and reporting it as "not backed up" is its own false alarm.
+function readJobStatus(client: Client): JobStatus | null {
+  try {
+    const job = client.jobStatus();
+    return job.reachable ? job : null;
+  } catch (e) {
+    // The controller missing from PATH is the offline case, not a crash: `list`
+    // stays usable in a bare checkout and in the offline test suite.
+    if (e instanceof BackupControllerUnreachable) return null;
+    throw e;
+  }
+}
+
+function statusFor(
+  configDir: string,
+  module: string,
+  job: JobStatus | null,
+  idx: Map<string, ScheduleBucket>,
+): BackupPolicyStatus {
+  const optedIn = moduleOptedIntoVmBackup(configDir, module);
+  const archived = moduleArchived(configDir, module);
+  if (!job) {
+    return {
+      ...resolvePolicy(configDir, module),
+      optedIn,
+      archived,
+      inPbsJob: optedIn,
+      jobBucket: null,
+      membershipSource: "declaration",
+    };
+  }
+  const vmid = moduleVmid(configDir, module);
+  const jobBucket = vmid ? idx.get(vmid) ?? null : null;
+  return {
     ...resolvePolicy(configDir, module),
-    inPbsJob: moduleInPbsJob(configDir, module),
-  }));
+    optedIn,
+    archived,
+    inPbsJob: jobBucket !== null,
+    jobBucket,
+    membershipSource: "job",
+  };
+}
+
+function policiesFor(configDir: string, client: Client): BackupPolicyStatus[] {
+  const job = readJobStatus(client);
+  const idx = job ? jobBucketIndex(job) : new Map<string, ScheduleBucket>();
+  return listModules(configDir).map((module) => statusFor(configDir, module, job, idx));
 }
 
 function printTable(rows: BackupPolicyStatus[]): void {
@@ -319,6 +375,8 @@ function printTable(rows: BackupPolicyStatus[]): void {
       pad("RETENTION", 10) +
       " " +
       pad("RESIDENCY", 9) +
+      " " +
+      pad("OPTED-IN", 8) +
       " IN-PBS-JOB",
   );
   for (const r of rows) {
@@ -333,13 +391,34 @@ function printTable(rows: BackupPolicyStatus[]): void {
         " " +
         pad(r.residency, 9) +
         " " +
-        String(r.inPbsJob),
+        pad(String(r.optedIn), 8) +
+        " " +
+        membershipCell(r),
+    );
+  }
+  // Say which source the column speaks for. A declaration-sourced table looks
+  // identical to a job-sourced one, and that is exactly how #627 went unnoticed.
+  if (rows.some((r) => r.membershipSource === "declaration")) {
+    warn(
+      "PBS / cluster not reachable — IN-PBS-JOB shows the DECLARATION, not job " +
+        "membership (backup-controller job-status when it is back)",
     );
   }
 }
 
-function cmdList(opts: Opts): void {
-  let rows = policiesFor(opts.configDir);
+// The IN-PBS-JOB cell. Membership carries the bucket that holds it, because
+// "which job" is the next question an operator asks; a non-member says why when
+// the reason is known, so an archived module reads as intended state rather
+// than as drift. A declaration-sourced value is marked `?` — unknown, not read.
+function membershipCell(r: BackupPolicyStatus): string {
+  if (r.membershipSource === "declaration") return `${r.inPbsJob}?`;
+  if (r.inPbsJob) return `true (${r.jobBucket})`;
+  if (r.archived) return "false (archived)";
+  return "false";
+}
+
+function cmdList(opts: Opts, client: Client): void {
+  let rows = policiesFor(opts.configDir, client);
   if (opts.disabledOnly) rows = rows.filter((r) => !r.enabled);
   if (opts.json) {
     info(JSON.stringify(rows, null, 2));
@@ -348,13 +427,16 @@ function cmdList(opts: Opts): void {
   printTable(rows);
 }
 
-function cmdShow(opts: Opts): void {
+function cmdShow(opts: Opts, client: Client): void {
   const module = opts.rest[0];
   if (!module) die("show: <module> required");
-  const pol: BackupPolicyStatus = {
-    ...resolvePolicy(opts.configDir, module),
-    inPbsJob: moduleInPbsJob(opts.configDir, module),
-  };
+  const job = readJobStatus(client);
+  const pol: BackupPolicyStatus = statusFor(
+    opts.configDir,
+    module,
+    job,
+    job ? jobBucketIndex(job) : new Map(),
+  );
   if (opts.json) {
     info(JSON.stringify(pol, null, 2));
     return;
@@ -555,12 +637,12 @@ function cmdPeers(opts: Opts): void {
 }
 
 function cmdReconcile(opts: Opts, client: Client): void {
-  let job;
+  let job: JobStatus;
   try {
     job = client.jobStatus();
   } catch {
     // Controller unreachable → preview against an empty/offline job.
-    job = { jobId: null, vmids: [], storage: null, reachable: false };
+    job = { jobId: null, vmids: [], storage: null, buckets: [], reachable: false };
   }
   const plan = computePlan(opts.configDir, job);
 
@@ -685,10 +767,10 @@ export function run(argv: string[], client: Client): number {
         cmdValidate(opts);
         return 0;
       case "list":
-        cmdList(opts);
+        cmdList(opts, client);
         return 0;
       case "show":
-        cmdShow(opts);
+        cmdShow(opts, client);
         return 0;
       case "resolve":
         cmdResolve(opts);

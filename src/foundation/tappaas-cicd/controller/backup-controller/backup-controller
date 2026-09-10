@@ -6,7 +6,8 @@
 # carries it out. Most day-to-day work goes through backup-manager instead.
 #
 # Commands:
-#   job-status [--json]     Query the shared PBS backup job (vmid list, schedule)
+#   job-status [--json]     Query the managed PBS backup jobs: the daily job's vmid
+#                           list, plus every bucket job and its members (#627)
 #   list <module> [--json]  List snapshots for a module's VM (by vmid)
 #   verify <module>         Trigger + report a PBS verify for a module's VM
 #   namespaces [--json]     List the datastore's namespaces
@@ -165,14 +166,27 @@ cmd_job_status() {
         return 0
     fi
     vmids="$(pbs_job_vmids "$id")"
+    # `.buckets` carries every managed bucket job, `.vmids` stays the DAILY
+    # job's list. #627: a coverage answer needs the union over all buckets, but
+    # reconcile's "already a member of the right job" skip is per-bucket, so
+    # redefining .vmids as the union would make a daily module sitting in the
+    # weekly job look correctly placed. Two fields, two questions.
+    local buckets
+    buckets="$(pbs_bucket_jobs_json)"
     if [[ "$JSON_OUT" -eq 1 ]]; then
         jq -n --arg id "$id" --arg store "$store" --arg vmids "$vmids" \
+            --argjson buckets "$buckets" \
             '{reachable: true, jobId: $id, storage: $store,
-              vmids: ($vmids | split(",") | map(select(length > 0)))}'
+              vmids: ($vmids | split(",") | map(select(length > 0))),
+              buckets: $buckets}'
     else
         info "Managed backup job: ${id}"
         info "  vmids: ${vmids}"
         info "  storage: ${store}"
+        while IFS=$'\t' read -r _b _bid _bv; do
+            [[ -n "${_b}" ]] || continue
+            info "  ${_b} job ${_bid}: ${_bv:-<empty>}"
+        done < <(jq -r '.[] | "\(.bucket)\t\(.jobId)\t\(.vmids | join(","))"' <<<"${buckets}" 2>/dev/null)
     fi
 }
 

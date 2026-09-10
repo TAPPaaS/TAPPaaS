@@ -14,8 +14,37 @@
 // default; --apply commits. It is idempotent (the controller's add-to-job is a
 // no-op when the vmid is already covered), so it is safe to run anytime.
 
-import { listBackupModules, moduleInPbsJob, moduleVmid, resolvePolicy } from "./config";
-import { Action, Client, JobStatus, Plan } from "./types";
+import {
+  listBackupModules,
+  moduleArchived,
+  moduleOptedIntoVmBackup,
+  moduleVmid,
+  resolvePolicy,
+} from "./config";
+import { Action, Client, JobStatus, Plan, ScheduleBucket } from "./types";
+
+// vmid → the bucket job that holds it, over EVERY managed bucket (ADR-012 D16).
+// A coverage or idempotency question answered from the daily job alone reads
+// `false` for a weekly- or monthly-scheduled guest that is backed up perfectly
+// well — the second direction of #627.
+//
+// Legacy fallback: a backup-controller that predates `.buckets` reports only
+// the daily job's `vmids`. The manager and the controller are installed by
+// different modules, so the manager can be the newer one; reading an empty
+// bucket list as "nobody is in any job" would make it report every module as
+// unbacked and re-add them all. The daily list stands in until the controller
+// catches up.
+export function jobBucketIndex(job: JobStatus): Map<string, ScheduleBucket> {
+  const idx = new Map<string, ScheduleBucket>();
+  if (job.buckets.length === 0) {
+    for (const v of job.vmids) idx.set(v, "daily");
+    return idx;
+  }
+  for (const b of job.buckets) {
+    for (const v of b.vmids) idx.set(v, b.bucket);
+  }
+  return idx;
+}
 
 export function computePlan(configDir: string, job: JobStatus): Plan {
   const actions: Action[] = [];
@@ -25,7 +54,7 @@ export function computePlan(configDir: string, job: JobStatus): Plan {
     warnings.push("PBS / cluster not reachable — reconcile is preview-only (controller offline)");
   }
 
-  const liveVmids = new Set(job.vmids);
+  const liveBucketOf = jobBucketIndex(job);
 
   // Each module's resolved schedule decides WHICH job it belongs in — one
   // cluster backup job per distinct frequency (ADR-012 D16). The controller's
@@ -39,7 +68,11 @@ export function computePlan(configDir: string, job: JobStatus): Plan {
   for (const module of listBackupModules(configDir)) {
     const pol = resolvePolicy(configDir, module);
     if (!pol.enabled) continue; // disabled modules are not job members
-    if (!moduleInPbsJob(configDir, module)) continue; // backup:vm opt-in only (not filesystem)
+    if (!moduleOptedIntoVmBackup(configDir, module)) continue; // backup:vm opt-in (not filesystem)
+    // An archived module keeps its declaration so a restore re-wires itself,
+    // but its VM is gone — adding it back makes vzdump error on a missing
+    // guest (#627). delete-service.sh removed it on purpose; leave it out.
+    if (moduleArchived(configDir, module)) continue;
 
     const vmid = moduleVmid(configDir, module);
     if (!vmid) {
@@ -56,12 +89,10 @@ export function computePlan(configDir: string, job: JobStatus): Plan {
     }
     buckets.add(pol.scheduleBucket);
 
-    // ensure-job-member: idempotent. If the live job already covers this vmid
-    // (and PBS is reachable so we know the live list), skip the action.
-    // The live vmid set we can see is the DAILY job's, so this skip is only
-    // safe for a module that resolves to daily; anything else must be placed
-    // explicitly so a schedule change actually moves it.
-    if (job.reachable && liveVmids.has(vmid) && pol.scheduleBucket === "daily") continue;
+    // ensure-job-member: idempotent. Skip only when the vmid is already in the
+    // job it RESOLVES to — a member sitting in another bucket needs the move,
+    // which add-to-job performs (pbs_place_vmid adds here, removes there).
+    if (job.reachable && liveBucketOf.get(vmid) === pol.scheduleBucket) continue;
 
     actions.push({
       kind: "ensure-job-member",

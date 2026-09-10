@@ -125,17 +125,32 @@ export function resolvePolicy(
   };
 }
 
-// True if <module> has opted into VM backup, by EITHER relationship (ADR-012
+// True if <module> has DECLARED VM backup, by EITHER relationship (ADR-012
 // D18): `dependsOn: backup:vm` (a hard dependency), or `integratesWith:
 // backup:vm` (#501 — the optional integration the foundation VMs that bootstrap
 // before the backup server use, since they cannot depend on it). Backup stays
 // opt-in: a module declaring neither is in no job. Mirrors pbs_optin_vmids in
-// backup/lib/pbs-job.sh — the two must agree on membership.
-export function moduleInPbsJob(configDir: string, module: string): boolean {
+// backup/lib/pbs-job.sh — the two must agree on the opt-in set.
+//
+// This was `moduleInPbsJob`, and the name was the bug (#627): it never read the
+// job. Membership lives in PBS and is answered by Client.jobStatus().buckets;
+// this answers only what the module asked for. An archived module still
+// declares (its config is kept for restore), so the two legitimately differ —
+// see moduleArchived.
+export function moduleOptedIntoVmBackup(configDir: string, module: string): boolean {
   const m = readJson(join(configDir, `${module}.json`));
   if (!m) return false;
   const declared = [...asStringArray(m.dependsOn), ...asStringArray(m.integratesWith)];
   return declared.includes("backup:vm");
+}
+
+// True when <module> is archived: `module-manager module delete --archive`
+// removed the VM but kept the config, its PBS snapshots, and its backup:vm
+// declaration so a restore re-wires itself. There is no guest to snapshot, so
+// an archived module must not be reconciled back into the job — the TS twin of
+// the _pbs_is_archived guard in backup/lib/pbs-job.sh.
+export function moduleArchived(configDir: string, module: string): boolean {
+  return readJson(join(configDir, `${module}.json`))?.status === "archived";
 }
 
 // List deployed module config basenames (without .json).

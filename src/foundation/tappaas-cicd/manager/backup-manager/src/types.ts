@@ -55,9 +55,29 @@ export interface BackupPolicy {
   exclude: string[];
 }
 
-// Policy as enriched by `list`/`show`: adds the PBS-job wiring flag.
+// Where a membership answer came from — `list`/`show` say so rather than
+// letting the reader assume PBS was consulted (#627).
+//   "job"         read from the managed bucket jobs
+//   "declaration" PBS unreachable; the opt-in echoed as a fallback
+export type MembershipSource = "job" | "declaration";
+
+// Policy as enriched by `list`/`show`. The declaration and actual job
+// membership are SEPARATE fields, because they diverge and the divergence is
+// the interesting part (#627): `IN-PBS-JOB` used to be computed from the
+// declaration alone, so an archived module — VM destroyed, config and
+// declaration kept — reported as backed up when no snapshot could be taken.
 export interface BackupPolicyStatus extends BackupPolicy {
-  inPbsJob: boolean; // module declares dependsOn backup:vm
+  // The DECLARATION: dependsOn or integratesWith contains backup:vm.
+  optedIn: boolean;
+  // status=archived: the VM is gone, the config and its snapshots are kept.
+  // Explains a true/false split as intended state rather than drift.
+  archived: boolean;
+  // ACTUAL membership of a managed bucket job (the union over all buckets).
+  // Falls back to optedIn when PBS is unreachable — membershipSource says which.
+  inPbsJob: boolean;
+  // Which bucket job holds it; null when it is not a member (or unknown).
+  jobBucket: ScheduleBucket | null;
+  membershipSource: MembershipSource;
 }
 
 // ── Placement (ADR-012 §2.1) — where/whether PBS is realized ──────────
@@ -94,10 +114,20 @@ export interface Peer {
 // in-memory fake, production uses CliClient (spawnSync → `backup-controller`).
 // NO PBS API is reimplemented in TypeScript — exactly as people-manager shells
 // out to authentik-manager and network-manager to the plane controllers.
+// One managed bucket job (ADR-012 D16) and who is in it.
+export interface BucketMembership {
+  bucket: ScheduleBucket;
+  jobId: string;
+  vmids: string[];
+}
+
 export interface JobStatus {
-  jobId: string | null; // managed PBS job id, null when none created yet
-  vmids: string[]; // vmids covered by the shared job
+  jobId: string | null; // managed DAILY job id, null when none created yet
+  vmids: string[]; // vmids covered by the DAILY job (not the union — see buckets)
   storage: string | null;
+  // Every managed bucket job that exists. A coverage question is the union over
+  // these; `vmids` alone answers only for daily (#627). Empty when offline.
+  buckets: BucketMembership[];
   reachable: boolean; // false ⇒ PBS/cluster offline (controller skipped)
 }
 

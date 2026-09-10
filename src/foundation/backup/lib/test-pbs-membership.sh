@@ -14,6 +14,10 @@
 #   alwaysBackup              → deprecated, still read for one release, and now
 #                               robust: an entry with no deployed config warns
 #                               instead of silently truncating the whole list.
+#   status: archived          → OUT, whichever way it declared (#627). --archive
+#                               destroys the VM but keeps the config and the
+#                               declaration, so trusting the relationship alone
+#                               re-adds a VMID with no guest behind it.
 #
 # Usage: ./test-pbs-membership.sh   (exit 0 = all passed)
 #
@@ -70,6 +74,49 @@ printf '%s\n' '{"vmname":"novmid","dependsOn":["backup:vm"]}' > "${CONFIG_DIR}/n
 ck "opt-in: a module with no vmid is skipped, the rest survive" \
    "130,340" "$(sorted "$(pbs_optin_vmids)")"
 rm -f "${CONFIG_DIR}/novmid.json"
+
+# ── archived modules are OUT, however they declared (#627) ───────────
+# `module-manager module delete --archive` removes the VM and keeps the config,
+# its snapshots, and its backup:vm declaration — so a restore re-wires itself.
+# The declaration therefore outlives the guest. pbs_ensure_declared is a set
+# operation that never removes, so an archived VMID it still believes in gets
+# re-added on the backup module's next update, and vzdump then errors on a job
+# naming a missing guest — undoing what delete-service.sh (#200) removed.
+jq '.status = "archived"' "${CONFIG_DIR}/app.json" > "${CONFIG_DIR}/app.tmp" \
+    && mv "${CONFIG_DIR}/app.tmp" "${CONFIG_DIR}/app.json"
+ck "archived: a dependsOn module drops out of the opt-in set" \
+   "130" "$(sorted "$(pbs_optin_vmids)")"
+ck "archived: and out of the declared set (pbs_ensure_declared's input)" \
+   "130" "$(pbs_declared_vmids)"
+
+# Under `set -e`, and with the archived module FIRST alphabetically: skipping an
+# entry must not truncate the ones after it — the pbs_always_vmids lesson.
+ck "archived: skipping it leaves the rest intact under set -e" \
+   "130" "$(sorted "$(bash -c "
+        set -euo pipefail
+        info() { :; }; debug() { :; }; warn() { :; }; error() { :; }
+        get_node_hostname() { echo tappaas1; }
+        CONFIG_DIR='${CONFIG_DIR}'
+        . '${SCRIPT_DIR}/pbs-job.sh'
+        pbs_optin_vmids" 2>/dev/null)")"
+
+# A restore un-archives by clearing the status; the module comes straight back.
+jq 'del(.status)' "${CONFIG_DIR}/app.json" > "${CONFIG_DIR}/app.tmp" \
+    && mv "${CONFIG_DIR}/app.tmp" "${CONFIG_DIR}/app.json"
+ck "archived: clearing the status opts the module back in (restore)" \
+   "130,340" "$(sorted "$(pbs_optin_vmids)")"
+
+# The same guard on the deprecated path: an alwaysBackup entry naming an
+# archived module must not resurrect it either.
+jq '.status = "archived"' "${CONFIG_DIR}/hardware.json" > "${CONFIG_DIR}/hardware.tmp" \
+    && mv "${CONFIG_DIR}/hardware.tmp" "${CONFIG_DIR}/hardware.json"
+printf '%s\n' '{"pbsStorageName":"tappaas_backup","alwaysBackup":["hardware"]}' \
+    > "${CONFIG_DIR}/backup.json"
+ck "archived: an alwaysBackup entry naming it contributes nothing" \
+   "" "$(sorted "$(pbs_always_vmids 2>/dev/null)")"
+jq 'del(.status)' "${CONFIG_DIR}/hardware.json" > "${CONFIG_DIR}/hardware.tmp" \
+    && mv "${CONFIG_DIR}/hardware.tmp" "${CONFIG_DIR}/hardware.json"
+printf '%s\n' '{"pbsStorageName":"tappaas_backup"}' > "${CONFIG_DIR}/backup.json"
 
 # ── the deprecated alwaysBackup list ─────────────────────────────────
 # The regression that made this test exist: a stale entry with no deployed

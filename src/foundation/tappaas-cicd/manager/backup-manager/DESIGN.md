@@ -56,8 +56,10 @@ resolved policy after a deploy — that path is unchanged and not duplicated her
   `add` / `delete` verbs are the hand-free way to change the same `.backup` /
   wiring.
 - `health-manager`'s `backup-status` gate (`src/checks.ts`) spawns
-  `backup-manager list --json` and flags disabled / not-in-PBS-job modules
-  (read-only).
+  `backup-manager list --json` and flags disabled modules, plus modules that
+  opted into `backup:vm` and are NOT in a PBS job (read-only). It reads
+  `optedIn`/`archived` alongside `inPbsJob`: backup is opt-in, so a module that
+  never declared is not a coverage gap, and an archived one has no guest.
 
 ## Pending / aspirations
 

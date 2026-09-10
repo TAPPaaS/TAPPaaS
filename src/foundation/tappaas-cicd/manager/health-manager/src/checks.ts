@@ -67,10 +67,18 @@ export function checkDiskThreshold(
 
 // ── backup-status gate (was check-backup-status.sh) ───────────────────
 // Shells out to the TS `backup-manager list --json` (which replaced the retired
-// backup-status.sh — same JSON array of {module, environment, enabled,
-// retention, residency, inPbsJob}) and flags modules that are DISABLED or
-// enabled-but-not-in-the-PBS-job. Skips cleanly when the backup tooling is
+// backup-status.sh — a JSON array of {module, environment, enabled, retention,
+// residency, optedIn, archived, inPbsJob}) and flags modules that are DISABLED
+// or opted-in-but-not-in-the-PBS-job. Skips cleanly when the backup tooling is
 // unavailable (preserves the historical exit-0 behavior).
+//
+// #627 split the DECLARATION (optedIn) from real job membership (inPbsJob).
+// Before that this gate had only the merged flag, and read it as membership:
+// every module that had never declared backup:vm — `cluster`, `templates`,
+// anything provider-only — was reported "not in PBS job", so the gate stood
+// FAIL on a healthy cluster and the failure carried no information. Backup is
+// OPT-IN (ADR-012 §3.1); only a module that asked and did not get it is a
+// finding.
 const BACKUP_MANAGER_BIN = process.env.BACKUP_MANAGER_BIN ?? "backup-manager";
 
 export function checkBackupStatus(configDir: string): CheckResult {
@@ -90,13 +98,27 @@ export function checkBackupStatus(configDir: string): CheckResult {
   if (!Array.isArray(arr)) {
     return { name: "backup-status", status: "skip", detail: "no backup entries" };
   }
+  // A backup-manager that predates the split cannot answer this: its inPbsJob
+  // IS the declaration, so "opted in but not a member" is not expressible.
+  // Say so rather than passing an unasked question (or re-raising the old
+  // false FAIL).
+  if (arr.length > 0 && !("optedIn" in (arr[0] as Record<string, unknown>))) {
+    return {
+      name: "backup-status",
+      status: "skip",
+      detail: "backup status predates the optedIn/inPbsJob split (#627)",
+    };
+  }
   const disabled: string[] = [];
   const uncovered: string[] = [];
   for (const e of arr) {
     const o = e as Record<string, unknown>;
     const mod = typeof o.module === "string" ? o.module : "?";
     if (o.enabled === false) disabled.push(mod);
-    else if (o.enabled === true && o.inPbsJob === false) uncovered.push(mod);
+    // archived: the VM was deliberately destroyed and its snapshots kept, so
+    // absence from the job is the correct state, not a coverage gap.
+    else if (o.enabled === true && o.optedIn === true && o.archived !== true && o.inPbsJob === false)
+      uncovered.push(mod);
   }
   if (disabled.length === 0 && uncovered.length === 0) {
     return { name: "backup-status", status: "pass", detail: `${arr.length} module(s) covered` };

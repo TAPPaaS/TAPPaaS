@@ -55,6 +55,12 @@ backup-manager validate [--config-dir DIR]
 
 backup-manager list [--disabled-only] [--json] [--config-dir DIR]
         Effective policy for every deployed module (was backup-status).
+        OPTED-IN is the module's backup:vm declaration; IN-PBS-JOB is read
+        from the managed bucket jobs and names the bucket holding it. They
+        diverge — an archived module declares but has no guest, and a module
+        that declared before the backup server existed is not a member yet.
+        When PBS is unreachable the column falls back to the declaration and
+        is marked `?` (--json: membershipSource "declaration").
 
 backup-manager show <module> [--json] [--config-dir DIR]
         One module's effective policy (was backup-status <module>).

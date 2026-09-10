@@ -38,6 +38,12 @@ run_ts() {
     fi
 }
 
+# `list`/`show` read job membership from backup-controller (#627). This suite is
+# offline BY CONSTRUCTION, and on the mothership the real controller is on PATH
+# and PBS is reachable — so pin the binary to an absent path. Tests that want
+# the job-sourced path point this at a stub instead.
+export BACKUP_CONTROLLER_BIN="${HERE}/dist-test/no-such-controller"
+
 DIST_TEST="${HERE}/dist-test"
 # tsconfig rootDir is the tappaas-cicd root (shared lib/ts base), so the
 # compiled tree mirrors manager/backup-manager/ under dist-test.
@@ -147,8 +153,70 @@ cnt="$(jq 'length' <<<"$sj")"
 [[ "$cnt" == "4" ]] && ok "list --json lists 4 fixture modules" || bad "list count=${cnt} (expected 4)"
 [[ "$(jq -r '.[] | select(.module=="m-off") | .enabled' <<<"$sj")" == "false" ]] \
     && ok "list reflects disabled module" || bad "list disabled module"
+[[ "$(jq -r '.[] | select(.module=="m-site") | .optedIn' <<<"$sj")" == "true" ]] \
+    && ok "list reports the backup:vm opt-in" || bad "list optedIn"
+# #627: the fixtures have no PBS, so membership falls back to the declaration —
+# and SAYS so. An unlabelled fallback is the whole defect: the column read as
+# job membership while it only ever read the declaration.
+[[ "$(jq -r '.[] | select(.module=="m-site") | .membershipSource' <<<"$sj")" == "declaration" ]] \
+    && ok "list labels a PBS-unreachable membership as declaration-sourced" \
+    || bad "list membershipSource"
 [[ "$(jq -r '.[] | select(.module=="m-site") | .inPbsJob' <<<"$sj")" == "true" ]] \
-    && ok "list reports inPbsJob wiring" || bad "list inPbsJob"
+    && ok "list falls back to the opt-in when PBS is unreachable" || bad "list inPbsJob fallback"
+
+# An ARCHIVED module declares backup:vm but has no VM to snapshot. The two
+# columns must disagree — one boolean hid exactly this (#627).
+ARCH="$(mktemp -d "${TMPDIR:-/tmp}/bm-arch.XXXXXX")"
+cp "${FIX}/site.json" "${ARCH}/site.json"
+# vmid 411: deliberately NOT one the stub controller's job holds — an archived
+# module's guest is destroyed, so it must be absent from the job.
+jq '.status="archived" | .vmid=411' "${FIX}/m-site.json" > "${ARCH}/m-gone.json"
+aj="$(BM "list --json --config-dir '${ARCH}'")"
+[[ "$(jq -r '.[0].optedIn' <<<"$aj")" == "true" ]] \
+    && ok "archived module still reports its opt-in" || bad "archived optedIn"
+[[ "$(jq -r '.[0].archived' <<<"$aj")" == "true" ]] \
+    && ok "list surfaces status=archived" || bad "archived flag"
+BM "list --config-dir '${ARCH}'" 2>&1 | grep -q "OPTED-IN" \
+    && ok "list table has a separate OPTED-IN column" || bad "OPTED-IN column missing"
+
+# ── membership read from the JOB (the fix), via a stub controller ─────
+# m-site (201) is in the daily job, m-env (202) in the WEEKLY one, m-mod (203)
+# in neither. A weekly member reading `false` was the second half of #627, so
+# the stub covers a bucket the daily list cannot see.
+STUB="$(mktemp -d "${TMPDIR:-/tmp}/bm-stub.XXXXXX")"
+cat > "${STUB}/backup-controller" <<'STUBEOF'
+#!/usr/bin/env bash
+# Stub backup-controller: answers job-status only, from a fixed bucket layout.
+[[ "$1" == "job-status" ]] || exit 2
+cat <<'JSON'
+{"reachable":true,"jobId":"daily-job","storage":"tappaas_backup",
+ "vmids":["201"],
+ "buckets":[{"bucket":"daily","jobId":"daily-job","vmids":["201"]},
+            {"bucket":"weekly","jobId":"weekly-job","vmids":["202"]}]}
+JSON
+STUBEOF
+chmod +x "${STUB}/backup-controller"
+
+lj="$(BACKUP_CONTROLLER_BIN="${STUB}/backup-controller" BM "list --json --config-dir '${FIX}'")"
+[[ "$(jq -r '.[] | select(.module=="m-site") | .membershipSource' <<<"$lj")" == "job" ]] \
+    && ok "membership is labelled job-sourced when PBS answers" || bad "membershipSource=job"
+[[ "$(jq -r '.[] | select(.module=="m-site") | .jobBucket' <<<"$lj")" == "daily" ]] \
+    && ok "a daily member reports its bucket" || bad "daily jobBucket"
+[[ "$(jq -r '.[] | select(.module=="m-env") | .inPbsJob' <<<"$lj")" == "true" ]] \
+    && ok "a WEEKLY-bucket member reads true (#627 bucket blind spot)" || bad "weekly member inPbsJob"
+[[ "$(jq -r '.[] | select(.module=="m-env") | .jobBucket' <<<"$lj")" == "weekly" ]] \
+    && ok "a weekly member reports the weekly bucket" || bad "weekly jobBucket"
+[[ "$(jq -r '.[] | select(.module=="m-mod") | .inPbsJob' <<<"$lj")" == "false" ]] \
+    && ok "a declared module the job does not hold reads FALSE (was true)" || bad "m-mod inPbsJob"
+[[ "$(jq -r '.[] | select(.module=="m-mod") | .optedIn' <<<"$lj")" == "true" ]] \
+    && ok "and its opt-in still reads true — the gap is visible" || bad "m-mod optedIn"
+
+# The archived module against a live job: declared, not a member, and the table
+# says WHY rather than reading as drift.
+aj2="$(BACKUP_CONTROLLER_BIN="${STUB}/backup-controller" BM "list --config-dir '${ARCH}'" 2>&1)"
+grep -q "false (archived)" <<<"$aj2" \
+    && ok "an archived non-member is reported as archived, not bare false" || bad "archived cell"
+rm -rf "${STUB}" "${ARCH}"
 dis="$(BM "list --json --disabled-only --config-dir '${FIX}'" | jq 'length')"
 [[ "$dis" == "1" ]] && ok "list --disabled-only finds 1" || bad "disabled-only count=${dis}"
 

@@ -146,6 +146,18 @@ _pbs_csv_remove() {
 
 # ── Cluster queries ──────────────────────────────────────────────────
 
+# True when <config-file> is an ARCHIVED module (#627). `module-manager module
+# delete --archive` removes the VM but keeps the config, its PBS snapshots, and
+# its backup:vm declaration — deliberately, so a restore re-wires itself. The
+# declaration therefore outlives the guest, and a set operation that trusts it
+# re-adds a VMID that no longer exists: vzdump then errors on a missing guest,
+# the failure delete-service.sh (#200) removes it to prevent. Read the status,
+# not just the relationship.
+_pbs_is_archived() {
+    jq -e '.status == "archived"' "$1" >/dev/null 2>&1
+}
+
+
 # DEPRECATED (ADR-012 §2.7, D18) — VMIDs from backup.json's alwaysBackup list.
 # Superseded by `integratesWith: ["backup:vm"]`, which #501 made possible: a
 # foundation VM that bootstraps before the backup server declares the
@@ -163,6 +175,7 @@ pbs_always_vmids() {
     local name vmid
     while IFS= read -r name; do
         [[ -n "$name" ]] || continue
+        if _pbs_is_archived "${PBS_CONFIG_DIR}/${name}.json"; then continue; fi
         vmid=$(jq -r '.vmid // empty' "${PBS_CONFIG_DIR}/${name}.json" 2>/dev/null || true)
         if [[ -n "$vmid" ]]; then
             printf '%s\n' "$vmid"
@@ -177,13 +190,19 @@ pbs_always_vmids() {
 #   integratesWith backup:vm   an optional integration (#501) — no ordering, so
 #                              the foundation VMs that come up before the backup
 #                              server can still ask to be backed up (D18)
-# Backup stays opt-in: a module declaring neither is in no job. Echoes VMIDs.
+# Backup stays opt-in: a module declaring neither is in no job. An ARCHIVED
+# module is out regardless: it keeps the declaration for restore but has no
+# guest (#627). Echoes VMIDs.
 pbs_optin_vmids() {
     local f vmid
     for f in "${PBS_CONFIG_DIR}"/*.json; do
         [[ -f "$f" ]] || continue
         jq -e '((.dependsOn // []) + (.integratesWith // [])) | index("backup:vm")' \
             "$f" >/dev/null 2>&1 || continue
+        # An archived module keeps the declaration but has no guest (#627).
+        # `if`, not `&& continue`: a false `&&` list as the last statement in
+        # the loop body is what truncated pbs_always_vmids under `set -e`.
+        if _pbs_is_archived "$f"; then continue; fi
         vmid=$(jq -r '.vmid // empty' "$f" 2>/dev/null || true)
         [[ -n "$vmid" ]] && printf '%s\n' "$vmid"
     done
@@ -208,7 +227,9 @@ pbs_declared_vmids() {
 # backup server existed is picked up here, once it does (#501 install-module
 # wires the reverse direction when the provider arrives; this heals the rest).
 # Deliberately a SET operation, never a truncating loop: one unresolvable entry
-# must not cost the others their backup.
+# must not cost the others their backup. Because it never removes, its INPUT is
+# what has to be right — an archived module left in the opt-in set is re-added
+# here every update (#627), which is why pbs_optin_vmids reads the status.
 pbs_ensure_declared() {
     local vmid rc=0
     while IFS= read -r vmid; do
@@ -241,6 +262,33 @@ pbs_legacy_all_job_id() {
 # Current --vmid CSV of job <id>.
 pbs_job_vmids() {
     _pbs_ssh "pvesh get /cluster/backup/$1 --output-format json" 2>/dev/null | jq -r '.vmid // ""' 2>/dev/null
+}
+
+# JSON array of the managed BUCKET jobs that exist, membership included:
+#   [{"bucket":"daily","jobId":"...","vmids":["110","130"]}, ...]
+#
+# Membership is a per-bucket question, and asking it one bucket at a time was
+# the trap #627 fell into: `pbs_managed_job_id` defaults to the DAILY marker,
+# so "is this VMID in the backup job?" answered from it reads `false` for a
+# weekly- or monthly-scheduled guest that is backed up perfectly well. Any
+# coverage answer has to be the union over all three (ADR-012 D16).
+#
+# ONE pvesh call for all three buckets: coverage is asked often enough that
+# three ssh round trips to answer it is three times the latency, and the
+# markers are all derivable from the same /cluster/backup listing.
+# Prints `[]` (not an error) when the cluster is unreachable — the caller
+# decides what an unknown job list means.
+pbs_bucket_jobs_json() {
+    local json
+    json="$(_pbs_ssh "pvesh get /cluster/backup --output-format json" 2>/dev/null || true)"
+    [[ -n "$json" ]] || { printf '[]\n'; return 0; }
+    printf '%s' "$json" | jq -c --arg d "$PBS_JOB_MARKER" '
+        [ {daily: $d, weekly: "\($d)-weekly", monthly: "\($d)-monthly"} | to_entries[] ] as $b
+        | [ $b[] as $e
+            | ( [ .[] | select((.comment // "") == $e.value) ][0] // empty )
+            | { bucket: $e.key, jobId: .id,
+                vmids: ((.vmid // "") | split(",") | map(select(length > 0))) } ]
+    ' 2>/dev/null || printf '[]\n'
 }
 
 # ── Mutations ────────────────────────────────────────────────────────

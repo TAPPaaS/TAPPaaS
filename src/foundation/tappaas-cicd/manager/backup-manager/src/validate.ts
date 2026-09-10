@@ -14,7 +14,7 @@ import {
   environmentRaw,
   listEnvironments,
   listModules,
-  moduleInPbsJob,
+  moduleOptedIntoVmBackup,
   resolvePolicy,
   siteBackup,
 } from "./config";
@@ -96,7 +96,7 @@ export function validate(configDir: string): ValidateResult {
     if (!pol.enabled) {
       ok(`module '${module}' backup disabled (honoured)`);
     }
-    if (pol.enabled && moduleInPbsJob(configDir, module)) {
+    if (pol.enabled && moduleOptedIntoVmBackup(configDir, module)) {
       anyEnabledInJob = true;
     }
   }
