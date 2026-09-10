@@ -1228,6 +1228,91 @@ function _module_ports_open() {
       >/dev/null 2>&1
 }
 
+
+# ── Guest SSH with self-healing host keys ────────────────────────────
+# A TAPPaaS guest legitimately changes its SSH host key when it is recreated,
+# reinstalled, or (on cloud-init images) re-instantiated. Every caller that
+# ssh'd to a guest then failed with "Host key verification failed", because
+# StrictHostKeyChecking=accept-new pins the first key but REFUSES a changed
+# one. That was fixed four separate times at four call sites — cicd install,
+# identity, uninstall, update_nixos — and broke a fifth time on a Debian guest,
+# because the scrub was invoked at call sites instead of being a property of
+# how TAPPaaS opens a connection. These three helpers are that property.
+#
+# Trust model: this re-pins WITHOUT out-of-band verification, exactly as the
+# install paths' accept-new and update-os.sh's update_ssh_known_hosts already
+# do, and is bounded to the trusted mgmt/lan VLANs. It is deliberately LOUD —
+# both fingerprints are printed so a key change is auditable after the fact
+# rather than silent. Set TAPPAAS_SSH_NO_REPIN=1 to refuse instead of re-pin.
+
+# tappaas_ssh_target_host <ssh-argv...> — the destination host in an ssh argv,
+# skipping options and their values, with any user@ and :port stripped.
+tappaas_ssh_target_host() {
+    local a
+    while (( $# )); do
+        a="$1"
+        case "$a" in
+            --) shift; break ;;
+            # Options that consume a separate value; the attached forms
+            # (-oFoo=bar, -i/path) fall through to the single-shift case below.
+            -[bcDEeFIiJLlmOopQRSWw]) shift 2 || return 1; continue ;;
+            -*) shift; continue ;;
+            *) break ;;
+        esac
+    done
+    (( $# )) || return 1
+    a="${1#*@}"      # strip user@
+    printf '%s\n' "${a%%:*}"
+}
+
+# tappaas_ssh_repin_host <host-or-ip> — drop every known_hosts entry for a host
+# and pin what it presents now. The ssh-keyscan banner comments are stripped:
+# they are pure noise and had grown one operator's known_hosts to 90% comments.
+tappaas_ssh_repin_host() {
+    local host="${1:-}" kh="${HOME}/.ssh/known_hosts" old new
+    [[ -n "${host}" ]] || return 1
+    old="$(ssh-keygen -F "${host}" -f "${kh}" 2>/dev/null | grep -v '^#' \
+           | ssh-keygen -lf - 2>/dev/null | awk '{print $2}' | head -1)" || true
+    ssh-keygen -R "${host}" -f "${kh}" >/dev/null 2>&1 || true
+    ssh-keyscan -H -T 10 "${host}" 2>/dev/null | grep -v '^#' >> "${kh}" || true
+    new="$(ssh-keygen -F "${host}" -f "${kh}" 2>/dev/null | grep -v '^#' \
+           | ssh-keygen -lf - 2>/dev/null | awk '{print $2}' | head -1)" || true
+    # Narration goes to STDERR: these helpers are called inside command
+    # substitutions, and a [Warning] line on stdout would be captured as data.
+    [[ -n "${new}" ]] || { warn "  could not pin a host key for ${host}" >&2; return 1; }
+    info "  re-pinned ${BL}${host}${CL}: ${old:-<none>} -> ${new}" >&2
+    return 0
+}
+
+# tappaas_ssh_guest <ssh-argv...> — ssh, but a CHANGED host key is healed and
+# the command retried once instead of failing the caller. Options are passed
+# through untouched (ssh takes the first value for an option, so injecting our
+# own defaults would silently override the caller's). stdout is passed straight
+# through so callers may capture it; stderr is buffered only long enough to
+# recognise the host-key failure, then emitted.
+tappaas_ssh_guest() {
+    local err rc=0 host
+    err="$(mktemp)" || { ssh "$@"; return $?; }
+    ssh "$@" 2>"${err}" || rc=$?
+    if (( rc != 0 )) && grep -qE 'Host key verification failed|REMOTE HOST IDENTIFICATION HAS CHANGED' "${err}"; then
+        host="$(tappaas_ssh_target_host "$@" || true)"
+        if [[ -z "${host}" ]]; then
+            warn "SSH host key rejected but no destination could be parsed — not re-pinning" >&2
+        elif [[ "${TAPPAAS_SSH_NO_REPIN:-0}" == "1" ]]; then
+            warn "SSH host key for ${host} changed; TAPPAAS_SSH_NO_REPIN=1 — refusing to re-pin" >&2
+        else
+            warn "SSH host key for ${BL}${host}${CL} changed (guest recreated or re-instantiated)" >&2
+            if tappaas_ssh_repin_host "${host}"; then
+                rc=0
+                : >"${err}"
+                ssh "$@" 2>"${err}" || rc=$?
+            fi
+        fi
+    fi
+    cat "${err}" >&2
+    rm -f "${err}"
+    return "${rc}"
+}
 # Apply a jq filter against a module's installed config and write the result
 # back atomically (#207). Always reads in Pattern A or flat, writes in the
 # canonical Pattern A form via convert-json-to-config.sh (sourced on demand).

@@ -168,7 +168,10 @@ update_ssh_known_hosts() {
     # Best-effort: if the VM's sshd is mid-restart, ssh-keyscan returns non-zero
     # and the next wait_for_ssh/rebuild attempt will retry. Don't let a transient
     # failure here trip set -e and abort the retry loop.
-    ssh-keyscan -H "${ip}" >> ~/.ssh/known_hosts 2>/dev/null || true
+    # grep -v '^#': ssh-keyscan emits a "# <ip>:22 SSH-2.0-..." banner per key,
+    # which is never read back. Appending them every run had grown one operator's
+    # known_hosts to 5711 lines of which 90% were these comments.
+    ssh-keyscan -H "${ip}" 2>/dev/null | grep -v '^#' >> ~/.ssh/known_hosts || true
 }
 
 # Wait for SSH to become available (cloud-init may still be setting up keys)
@@ -486,31 +489,69 @@ update_nixos() {
     fi
 }
 
+# Stop cloud-init regenerating the guest's SSH host keys (root cause of the
+# "Host key verification failed" churn). Proxmox rewrites the NoCloud drive
+# whenever a module update touches the VM's cloud-init config, which changes
+# the instance-id; on the next boot cloud-init sees a NEW instance and re-runs
+# its per-instance modules, and cc_ssh regenerates /etc/ssh/ssh_host_*.
+#
+# The NixOS template has been immune since #226 (ssh_deletekeys = false in
+# tappaas-common.nix, set there to stop a first-boot race with sshd-keygen).
+# Debian guests never got the equivalent. This is it, as a drop-in so it
+# survives apt upgrades of cloud-init.
+#
+# Safe for a template: the image carries no host keys, so first boot still
+# generates a unique set per clone — this only stops the RE-generation.
+ensure_persistent_host_keys() {
+    local vm_ip="$1"
+    local dropin=/etc/cloud/cloud.cfg.d/99-tappaas-ssh-hostkeys.cfg
+
+    tappaas_ssh_guest -o BatchMode=yes -o ConnectTimeout=10 "tappaas@${vm_ip}" \
+        "test -f ${dropin}" 2>/dev/null && return 0
+
+    info "Pinning SSH host keys against cloud-init re-instantiation..."
+    if tappaas_ssh_guest -o BatchMode=yes -o ConnectTimeout=10 "tappaas@${vm_ip}" \
+        "printf '%s\n' '# TAPPaaS: keep host keys across cloud-init re-instantiation.' \
+                       'ssh_deletekeys: false' \
+         | sudo tee ${dropin} >/dev/null"; then
+        info "  ${GN}✓${CL} ${dropin} installed"
+    else
+        warn "  could not install ${dropin} — host keys may change on the next reboot"
+    fi
+}
+
 # Update Debian/Ubuntu VM
 update_debian() {
     local vm_ip="$1"
 
+    # BEFORE anything that ssh's: wait_for_cloud_init talks to the guest, so a
+    # host key that changed since we last spoke would fail there first. Heal it,
+    # then stop it recurring. Both are cheap and idempotent.
+    update_ssh_known_hosts "${vm_ip}"
+
     wait_for_cloud_init "${vm_ip}"
+
+    ensure_persistent_host_keys "${vm_ip}"
 
     info "Updating package lists..."
     if [[ "${OPT_DEBUG:-0}" -eq 1 ]]; then
-        ssh "tappaas@${vm_ip}" "sudo apt-get update" || die "apt-get update failed"
+        tappaas_ssh_guest "tappaas@${vm_ip}" "sudo apt-get update" || die "apt-get update failed"
     else
-        run_quiet "apt-get update" ssh "tappaas@${vm_ip}" "sudo apt-get update"
+        run_quiet "apt-get update" tappaas_ssh_guest "tappaas@${vm_ip}" "sudo apt-get update"
     fi
 
     info "Upgrading packages..."
     if [[ "${OPT_DEBUG:-0}" -eq 1 ]]; then
-        ssh "tappaas@${vm_ip}" "sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y" || die "apt-get upgrade failed"
+        tappaas_ssh_guest "tappaas@${vm_ip}" "sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y" || die "apt-get upgrade failed"
     else
-        run_quiet "apt-get upgrade" ssh "tappaas@${vm_ip}" "sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y"
+        run_quiet "apt-get upgrade" tappaas_ssh_guest "tappaas@${vm_ip}" "sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y"
     fi
 
     info "Installing/updating QEMU guest agent..."
     if [[ "${OPT_DEBUG:-0}" -eq 1 ]]; then
-        ssh "tappaas@${vm_ip}" "sudo apt-get install -y qemu-guest-agent && sudo systemctl enable --now qemu-guest-agent" || die "qemu-guest-agent install failed"
+        tappaas_ssh_guest "tappaas@${vm_ip}" "sudo apt-get install -y qemu-guest-agent && sudo systemctl enable --now qemu-guest-agent" || die "qemu-guest-agent install failed"
     else
-        run_quiet "qemu-guest-agent install" ssh "tappaas@${vm_ip}" "sudo apt-get install -y qemu-guest-agent && sudo systemctl enable --now qemu-guest-agent"
+        run_quiet "qemu-guest-agent install" tappaas_ssh_guest "tappaas@${vm_ip}" "sudo apt-get install -y qemu-guest-agent && sudo systemctl enable --now qemu-guest-agent"
     fi
 }
 
