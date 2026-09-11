@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | **Status** | **Draft — for review** |
-| **Version** | 0.3 |
-| **Date** | 2026-09-09 (v0.3: 2026-09-11) |
+| **Version** | 0.4 |
+| **Date** | 2026-09-09 (v0.4: 2026-09-11) |
 | **Author** | ErikDaniel007 |
 | **Deciders** | @ErikDaniel007, @LarsRossen (co-owned canon) |
 | **Related** | [ADR-007](<ADR-007 - TAPPaaS Taxonomy.md>) (classification, amended here); [ADR-007d](<ADR-007d - Site.md>) (Site, amended here); [ADR-009](<ADR-009 - Composition Meta-Model.md>) (`Node`, superseded in part here); [ADR-014](<ADR-014 - Zone and Environment Lifecycle.md>) (zones — owner, not amended); [ADR-022d](<ADR-022d - Workload Classification.md>) (`kind`, built on this vocabulary); [ADR-024](<ADR-024 - Site Fabric.md>) (inter-Site relationships, builds on 022a); [ADR-012](ADR-012-backup-enhancement.md) (first consumer); [GLOSSARY.md](../../GLOSSARY.md) (the vocabulary SSOT this ADR updates) |
-| **Changelog** | v0.1 — initial draft. Splits `Site` into three independent aspects, corrects `Node` to its ArchiMate meaning, adds `Location` and `Administrative Domain`, anchors `zone` to IEC 62443, and scopes the plane vocabulary to the network module. v0.2 — the classification rib is renamed ADR-023 → **ADR-022d** (2026-09-11 LR/EB sync), becoming a fourth rib beside 022a/b/c; the rib table and references below are updated to match. A new ADR-024 is noted as building on the Administrative-Domain aspect (022a) for inter-Site relationships — placeholder, not yet drafted at v0.2. **v0.3 corrects a boundary error in v0.2**: the "who administers it" taxonomy (`this-site`/`no-site`/`other-site`/`unknown`) had been left in ADR-022d, merely citing ADR-022a instead of living there — but 022a's own rib charter *is* "who is accountable for a resource," so the taxonomy has moved wholesale into ADR-022a D6 (with the Health consequence as D7). ADR-022d now owns exactly `kind`. Rib table and delegated-scope section below updated to match. |
+| **Changelog** | v0.1 — initial draft. Splits `Site` into three independent aspects, corrects `Node` to its ArchiMate meaning, adds `Location` and `Administrative Domain`, anchors `zone` to IEC 62443, and scopes the plane vocabulary to the network module. v0.2 — the classification rib is renamed ADR-023 → **ADR-022d** (2026-09-11 LR/EB sync), becoming a fourth rib beside 022a/b/c; the rib table and references below are updated to match. A new ADR-024 is noted as building on the Administrative-Domain aspect (022a) for inter-Site relationships — placeholder, not yet drafted at v0.2. **v0.3 corrects a boundary error in v0.2**: the "who administers it" taxonomy (`this-site`/`no-site`/`other-site`/`unknown`) had been left in ADR-022d, merely citing ADR-022a instead of living there — but 022a's own rib charter *is* "who is accountable for a resource," so the taxonomy has moved wholesale into ADR-022a D6 (with the Health consequence as D7). ADR-022d now owns exactly `kind`. Rib table and delegated-scope section below updated to match. **v0.4** moves the "Appendix A retires cleanly" mapping table here from ADR-022d — it draws on four things (022a's values, 022d's `kind`, `site.json`'s cluster-membership fact, and ADR-014/022b's zone), which makes it spine-level integration content, not any one rib's. |
 
 One noun — `Site` — has been carrying three independent questions: **who runs it**, **where it physically is**, and **what it runs on**. Separating them is the whole of this ADR.
 
@@ -70,6 +70,22 @@ Five collisions, all live on `main`:
 3. **`Module boundary = VM boundary` has two live counterexamples** — `satellite.json` (`vmname: null`) and the `backup` module, which installs PBS on a host, not in a VM.
 4. **Physical location is unnamed and has two homes.** `site-fields.json.location` is well formed ("Physical/legal location of the site", ISO 3166-1 `country`, IANA `timezone`). A satellite has no equivalent — only `provider.location`, documented as an hcloud region used for `hcloud server create` and *unused* for console-provisioned satellites.
 5. **`tier` names three different things** — module lifecycle (`GLOSSARY.md` §A), zone trust (ADR-014 D5), and the Stack-promotion rule (`GLOSSARY.md` §C).
+
+## Mapping — Appendix A retires cleanly
+
+This is the payoff of collision 1 above: ADR-012 Appendix A's six flat values, laid out against the ribs that retire them. The **Administrative Domain** column is [ADR-022a](<ADR-022a - Administrative Domain.md>) D6's values; **`kind`** is [ADR-022d](<ADR-022d - Workload Classification.md>)'s. Neither column is redefined here — this table is a lookup across both ribs plus `site.json` (cluster membership) and the zone (ADR-014/022b), which is why it lives on the spine rather than in either rib.
+
+| Appendix A | Administrative Domain (022a D6) | `kind` (022d) | Host is cluster member? | zone |
+|---|---|---|---|---|
+| `node` | `this-site` | `host` | yes | `mgmt` |
+| `standalone` | `this-site` | `host` | no | `mgmt` |
+| `satellite` | `this-site` | `host` | no | `edge` |
+| `external` | `no-site` | — | — | — |
+| `remote` | `other-site` | — | — | — |
+| `rogue` | `unknown` | — | — | — |
+| `shim` | — | — | — | `realized: false` |
+
+All six terms survive as coordinates. None is lost, and no value carries two questions.
 
 ## Trade-offs & risks
 

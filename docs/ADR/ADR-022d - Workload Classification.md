@@ -3,13 +3,13 @@
 | | |
 |---|---|
 | **Status** | **Draft — for review** |
-| **Version** | 0.3 |
-| **Date** | 2026-09-09 (v0.3: 2026-09-11) |
+| **Version** | 0.4 |
+| **Date** | 2026-09-09 (v0.4: 2026-09-11) |
 | **Author** | ErikDaniel007 |
 | **Deciders** | @ErikDaniel007, @LarsRossen |
 | **Parent** | [ADR-022 — Workload Ontology](<ADR-022 - Workload Ontology.md>) |
 | **Related** | [ADR-022a — Administrative Domain](<ADR-022a - Administrative Domain.md>) (D6 — the `this-site`/`no-site`/`other-site`/`unknown` values this ADR classifies against, once a workload is `this-site`; D7 — Health's inventory of everything else); [ADR-022c — Node and Host](<ADR-022c - Node and Host.md>) (`kind` as object-type marker); [ADR-012 Appendix A](ADR-012-backup-enhancement.md) (the taxonomy this replaces and retires); **#456** (origin — "do we agree on this?"); **#481** (the PR that landed Appendix A); [ADR-010](ADR-010-vps-satellite-reverse-proxy-backup.md) (satellite) |
-| **Changelog** | v0.1 — initial draft. Splits ADR-012 Appendix A's six flat values into two questions, decides `kind`'s values, and gives Health the inventory it needs to cover workloads TAPPaaS does not manage. v0.2 — renamed from ADR-023 to ADR-022d, becoming a fourth rib under the ADR-022 spine alongside 022a/b/c; Q1 rewritten to *cite* ADR-022a instead of re-deriving it; Q2 reworded to "what type of device/workload is this." **v0.3 corrects v0.2**: citing wasn't enough — ADR-022a's own charter already is "who is accountable for a resource," so v0.2's Q1 (the four-value table, its ranking, and the Health-inventory consequence) has **moved wholesale to ADR-022a D6/D7**, not merely cited from there. This document now decides exactly one thing: `kind` — what type of device/workload something is, once ADR-022a's D6 has already said it is `this-site`. Renumbered accordingly; open questions 1–2 (Health's inventory storage, `unknown` discovery) moved to ADR-022a as they were about D6's values, not `kind`. |
+| **Changelog** | v0.1 — initial draft. Splits ADR-012 Appendix A's six flat values into two questions, decides `kind`'s values, and gives Health the inventory it needs to cover workloads TAPPaaS does not manage. v0.2 — renamed from ADR-023 to ADR-022d, becoming a fourth rib under the ADR-022 spine alongside 022a/b/c; Q1 rewritten to *cite* ADR-022a instead of re-deriving it; Q2 reworded to "what type of device/workload is this." **v0.3 corrects v0.2**: citing wasn't enough — ADR-022a's own charter already is "who is accountable for a resource," so v0.2's Q1 (the four-value table, its ranking, and the Health-inventory consequence) has **moved wholesale to ADR-022a D6/D7**, not merely cited from there. This document now decides exactly one thing: `kind` — what type of device/workload something is, once ADR-022a's D6 has already said it is `this-site`. Renumbered accordingly; open questions 1–2 (Health's inventory storage, `unknown` discovery) moved to ADR-022a as they were about D6's values, not `kind`. v0.4 — the "Appendix A retires cleanly" mapping table moved to the spine, [ADR-022](<ADR-022 - Workload Ontology.md>) — it spans both ribs plus `site.json` and the zone, so it isn't this rib's content either. |
 
 What type of device or workload a `this-site` resource is — TAPPaaS's `kind`.
 
@@ -63,21 +63,7 @@ Two facts that Appendix A folded into its values are already recorded elsewhere,
 
 Whether a workload's storage or service is actually built is orthogonal to what it is. ADR-012's `shim` is `realized: false`. Expressing it as a peer value makes "placed on a host, not yet built" inexpressible. (Reconfirmed 2026-09-11 — see §1's `shim` rejection above.)
 
-## Mapping — Appendix A retires cleanly
-
-The Administrative-Domain column below is [ADR-022a](<ADR-022a - Administrative Domain.md>) D6's values, used here only to show how Appendix A's six flat terms decompose across both ADRs — not redefined.
-
-| Appendix A | Administrative Domain (022a D6) | `kind` (this ADR) | Host is cluster member? | zone |
-|---|---|---|---|---|
-| `node` | `this-site` | `host` | yes | `mgmt` |
-| `standalone` | `this-site` | `host` | no | `mgmt` |
-| `satellite` | `this-site` | `host` | no | `edge` |
-| `external` | `no-site` | — | — | — |
-| `remote` | `other-site` | — | — | — |
-| `rogue` | `unknown` | — | — | — |
-| `shim` | — | — | — | `realized: false` |
-
-All six terms survive as coordinates. None is lost, and no value carries two questions.
+The full retirement mapping (all six Appendix A terms against both this ADR's `kind` and ADR-022a D6 together) lives on the spine — [ADR-022 §Mapping](<ADR-022 - Workload Ontology.md#mapping--appendix-a-retires-cleanly>) — since it draws on both ribs plus `site.json` and the zone, not on this rib alone.
 
 ## Consequences
 

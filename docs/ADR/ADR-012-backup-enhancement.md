@@ -510,7 +510,7 @@ into the two questions it was answering at once: **who administers the
 workload** (ADR-022a D6: `this-site` / `no-site` / `other-site` / `unknown`)
 and, when it is ours, **what type of device/workload it is** (ADR-022d
 `kind`: `guest` / `host` / `cluster`, expanding). All six survive as
-coordinates in that model; none is lost. See ADR-022d's mapping table.
+coordinates in that model; none is lost. See ADR-022's mapping table (spine, not either rib).
 
 **What this ADR still decides**, and what ADR-022d does not touch: the backup
 module's own `placementState` (§2.1) — `node:<name>` / `shim` / `external`. That
