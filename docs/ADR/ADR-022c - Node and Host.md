@@ -3,13 +3,13 @@
 | | |
 |---|---|
 | **Status** | **Draft — for review** |
-| **Version** | 0.2 |
-| **Date** | 2026-09-09 (v0.2: 2026-09-11) |
+| **Version** | 0.3 |
+| **Date** | 2026-09-09 (v0.3: 2026-09-11) |
 | **Author** | ErikDaniel007 |
 | **Deciders** | @ErikDaniel007, @LarsRossen |
 | **Parent** | [ADR-022 — Workload Ontology](<ADR-022 - Workload Ontology.md>) |
 | **Supersedes in part** | [ADR-009](<ADR-009 - Composition Meta-Model.md>) — the `Node` entry |
-| **Changelog** | v0.1 — initial draft. v0.2 — D4's example updated: ADR-022d retired the combined `kind: guest` value for a `vm`/`lxc` split; D4 now names both. |
+| **Changelog** | v0.1 — initial draft. v0.2 — D4's example updated: ADR-022d retired the combined `kind: guest` value for a `vm`/`lxc` split; D4 now names both. v0.3 — Migration's file count corrected from seven to eight: the Community repo carries its own independent `kind: external-host` schema copy, found by inspection when validating ADR-022d against every real module in both repos. |
 
 What a resource runs on, and what `kind` records.
 
@@ -43,7 +43,7 @@ A cluster member, a bare-metal host and a VM are all Nodes. `GLOSSARY.md` §B de
 
 ## Migration
 
-`kind: external-host` appears in seven files: `satellite-fields.json`, `module-fields.json`, `satellite.json`, `satellite-manager/lib/provision.sh`, `satellite/test.sh`, `satellite-manager/test.sh`, and one `module-manager` fixture. The value change lands with ADR-022d, which decides the replacement.
+`kind: external-host` appears in seven files in this repo: `satellite-fields.json`, `module-fields.json`, `satellite.json`, `satellite-manager/lib/provision.sh`, `satellite/test.sh`, `satellite-manager/test.sh`, and one `module-manager` fixture — plus an eighth, found by inspection, in the Community repo (`AndreasJe/mailserver-hub/satellite-smtp-relay-additions/schemas/satellite-fields.json`, its own independent copy). The value change lands with ADR-022d, which decides the replacement.
 
 ## Acceptance
 
