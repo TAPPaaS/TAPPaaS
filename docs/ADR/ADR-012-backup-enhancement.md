@@ -496,18 +496,21 @@ Backing up a Proxmox storage **dataset** — e.g. external NFS-served data that 
 > **This taxonomy has left.** It was carried here as a companion reference
 > "destined for its own ADR"; that ADR now exists as
 > [ADR-022d — Workload Classification](<ADR-022d - Workload Classification.md>),
-> built on the vocabulary of [ADR-022 — Workload Ontology](<ADR-022 - Workload Ontology.md>).
-> **ADR-022d is the source; this section is a pointer.** The table that used to
-> sit here is not reproduced, because two copies of a classification drift, and
-> the drift is invisible until someone acts on the stale one.
+> together with [ADR-022a — Administrative Domain](<ADR-022a - Administrative Domain.md>)
+> D6/D7, both built on the vocabulary of
+> [ADR-022 — Workload Ontology](<ADR-022 - Workload Ontology.md>).
+> **ADR-022a + ADR-022d are the source; this section is a pointer.** The table
+> that used to sit here is not reproduced, because two copies of a
+> classification drift, and the drift is invisible until someone acts on the
+> stale one.
 
 The six values this appendix carried — `node` · `standalone` · `satellite` ·
-`external` · `remote` · `rogue` — are retired in ADR-022d by splitting the one
-flat list into the two questions it was answering at once: **who administers the
-workload** (`this-site` / `no-site` / `other-site` / `unknown`) and, when it is
-ours, **what type of device/workload it is** (`kind`: `guest` / `host` / `cluster`,
-expanding). All six survive as coordinates in that model; none is lost. See
-ADR-022d's mapping table.
+`external` · `remote` · `rogue` — are retired by splitting the one flat list
+into the two questions it was answering at once: **who administers the
+workload** (ADR-022a D6: `this-site` / `no-site` / `other-site` / `unknown`)
+and, when it is ours, **what type of device/workload it is** (ADR-022d
+`kind`: `guest` / `host` / `cluster`, expanding). All six survive as
+coordinates in that model; none is lost. See ADR-022d's mapping table.
 
 **What this ADR still decides**, and what ADR-022d does not touch: the backup
 module's own `placementState` (§2.1) — `node:<name>` / `shim` / `external`. That

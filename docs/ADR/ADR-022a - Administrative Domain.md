@@ -3,13 +3,13 @@
 | | |
 |---|---|
 | **Status** | **Draft — for review** |
-| **Version** | 0.2 |
-| **Date** | 2026-09-09 (v0.2: 2026-09-11) |
+| **Version** | 0.3 |
+| **Date** | 2026-09-09 (v0.3: 2026-09-11) |
 | **Author** | ErikDaniel007 |
 | **Deciders** | @ErikDaniel007, @LarsRossen |
 | **Parent** | [ADR-022 — Workload Ontology](<ADR-022 - Workload Ontology.md>) |
-| **Amends** | [ADR-007](<ADR-007 - TAPPaaS Taxonomy.md>) :43 (model diagram) · [ADR-007d](<ADR-007d - Site.md>) :13 (Decision) · [GLOSSARY.md](../../GLOSSARY.md) :20 — the phrase "physical + admin perimeter" appears in all three |
-| **Changelog** | v0.1 — initial draft. v0.2 — D5 gains a forward reference to [ADR-022d](<ADR-022d - Workload Classification.md>) as the place the `this-site`/`no-site`/`other-site`/`unknown` taxonomy is formally decided, closing a duplication caught live on the 2026-09-11 LR/EB sync: ADR-022d's Q1 had independently re-derived this document's D1/D3 instead of citing them. No change to D1–D4. |
+| **Amends** | [ADR-007](<ADR-007 - TAPPaaS Taxonomy.md>) :43 (model diagram) · [ADR-007d](<ADR-007d - Site.md>) :13 (Decision) · [ADR-007e](<ADR-007e - Health.md>) (Health, D7) · [GLOSSARY.md](../../GLOSSARY.md) :20 — the phrase "physical + admin perimeter" appears in all three |
+| **Changelog** | v0.1 — initial draft. v0.2 — D5 gained a forward reference to ADR-022d for the applied taxonomy, intended to close a duplication caught live on the 2026-09-11 LR/EB sync. **v0.3 corrects v0.2**: a citation wasn't enough — this rib's own charter *is* "who is accountable for a resource," so the applied taxonomy belongs here in full, not as a cross-reference from the classification rib. **D6 now contains the four-value taxonomy itself** (`this-site` / `no-site` / `other-site` / `unknown`, with the control-based ranking), moved wholesale from ADR-022d's former "Q1". **D7 (new)** moves the Health-inventory consequence here too, since it is a direct consequence of D6's values, not of `kind`. ADR-022d is corrected in step to contain only `kind` (device/workload type) — see its own v0.3 changelog. |
 
 Who is accountable for a resource — the aspect classification sorts by.
 
@@ -29,15 +29,28 @@ Who is accountable for a resource — the aspect classification sorts by.
 
 **D5. Never abbreviate it.** RFC 1136 uses `AD` as its own short form, but in an IT-operations estate `AD` reads as Active Directory — and `src/apps/windows-server/` deploys Windows Server 2025, for which Active Directory is the canonical first role. Because TAPPaaS decides one Site = one Administrative Domain, the working word in every other document is **Site**. The full term appears here, as the anchor, and nowhere else.
 
-**D6. The applied taxonomy is decided elsewhere, not here.** This ADR defines what an Administrative Domain *is* (D1) and how accountability differs from ownership (D3); it does not enumerate the values a workload's relationship to one takes. [ADR-022d — Workload Classification](<ADR-022d - Workload Classification.md>) Q1 owns that enumeration (`this-site` / `no-site` / `other-site` / `unknown`), built directly on D1/D3. Stating the values here as well, as v0.1 did in passing, is exactly the kind of duplication this ADR corrects one level up — one concept, one place.
+**D6. A workload's relationship to this Administrative Domain is one of four values.** Applies to every workload, ordered best-first by **control**: can this Site close the gap from its own side?
+
+| Value | Administered by | Can we close it? | Defect? |
+|---|---|---|---|
+| `this-site` | this Administrative Domain | already ours | — |
+| `no-site` | nobody TAPPaaS — third party, pre-existing | **yes** — adopt or migrate | yes, closable |
+| `other-site` | another TAPPaaS Site | no — never ours | no, by design |
+| `unknown` | not known to exist | find it first | yes, worst |
+
+`no-site` ranks above `other-site` because the criterion is goal achievement, not trust: an unmanaged workload in our own domain is a gap we can close; another Site's workload never is. The **Defect?** column keeps that from reading as a demotion.
+
+This is D1's definition and D3's accountability/ownership split, made concrete. [ADR-022d — Workload Classification](<ADR-022d - Workload Classification.md>) uses these four values — it does not define them, and only asks its own question (`kind`, what type of device/workload something is) once a workload is confirmed `this-site`.
+
+**D7. Health owns what falls outside `this-site`.** `no-site`, `other-site` and `unknown` have no module file and never will — they are observations about the estate, not managed configuration. Health is a **viewpoint** (ISO/IEC 42010) across every classification domain, and this is exactly the surface it exists for. This amends ADR-007e, which today scopes Health to *"all classification terms"* — i.e. what is catalogued — with no place to put what is not.
 
 ## Schema
 
-No new field at this level. `Site` = the AD; `site.json` is its record. Whether a workload outside this AD is tracked, and how, is [ADR-023](<ADR-023 - Workload Classification.md>).
+No new field at this level for D1–D5. `Site` = the AD; `site.json` is its record. D6's four values are a workload-level classification, realized against actual module/workload records by [ADR-022d](<ADR-022d - Workload Classification.md>); where D7's inventory of `no-site`/`other-site`/`unknown` observations lives is open (tracked in ADR-022d's open questions, since it is the document closest to Health's realization work).
 
 ## Migration
 
-Documentation only. `GLOSSARY.md` §A gains `Administrative Domain` and `owner`; `Site` is rewritten; ADR-007d §Decision gains a sentence naming the three aspects.
+Documentation only. `GLOSSARY.md` §A gains `Administrative Domain`, `owner`, and the four D6 values; `Site` is rewritten; ADR-007d §Decision gains a sentence naming the three aspects; ADR-007e gains D7's amendment.
 
 ## Acceptance
 
@@ -45,4 +58,6 @@ Documentation only. `GLOSSARY.md` §A gains `Administrative Domain` and `owner`;
 - [ ] `Site` redefined as one AD × Locations × Zones, in both `GLOSSARY.md` and ADR-007d
 - [ ] `owner` defined and distinguished from administrator
 - [ ] ADR-012 §1.4.1 cites RFC 1136 instead of re-deriving the trust posture
-- [ ] ADR-022d's Q1 cites D1/D3 rather than re-deriving them (D6)
+- [ ] D6's four values (`this-site` / `no-site` / `other-site` / `unknown`) defined in `GLOSSARY.md` §A, with the ranking and Defect column
+- [ ] ADR-007e amended per D7: Health covers unmanaged workloads
+- [ ] ADR-022d contains no independent definition of D6's values — only uses them
