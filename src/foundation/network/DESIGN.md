@@ -160,8 +160,8 @@ declaring the ports the service answers on:
 }
 ```
 
-A **consumer module** triggers the auto-pinhole simply by depending on the service and
-declaring `network:rules` in its own dependsOn:
+A **consumer module** triggers the auto-pinhole simply by declaring the service — in
+`dependsOn` or in `integratesWith` — and declaring `network:rules` in its own dependsOn:
 
 ```jsonc
 {
@@ -175,8 +175,9 @@ declaring `network:rules` in its own dependsOn:
 }
 ```
 
-When the consumer's install runs, `rules-manager` walks `dependsOn`, finds each
-provider's `pinhole.json`, and emits one auto-pinhole per declared port — **only** when:
+When the consumer's install runs, `rules-manager` walks **both** `dependsOn` and
+`integratesWith`, finds each provider's `pinhole.json`, and emits one auto-pinhole per
+declared port — **only** when:
 
 1. The two modules are in different zones (intra-zone traffic flows freely).
 2. The consumer's zone is **not already** in the provider zone's `access-to`
@@ -189,8 +190,23 @@ chose this trade-off on the original ticket: a missing zone policy should not bl
 install, just be loud about what wasn't done.
 
 Auto-pinholes are owned by the **consumer**: they're created when the consumer is
-installed, recomputed on `reconcile` (so a changed dependsOn re-applies), and removed on
-the consumer's teardown — regardless of the provider's state.
+installed, recomputed on `reconcile` (so a changed declaration re-applies), and removed
+on the consumer's teardown — regardless of the provider's state.
+
+**Hardness and reachability are separate properties (#632).** `dependsOn` and
+`integratesWith` differ in LIFECYCLE — whether a missing provider blocks the install —
+not in whether traffic may flow. A module can legitimately be optional-but-reachable,
+which is exactly what `integratesWith` exists to express, so both lists earn a pinhole
+and both are subject to the same three conditions above. Walking only the hard list
+meant a cross-zone optional integration got no path; worse, where a module had
+previously declared the coordinate as a hard dependency, the rule already in OPNsense
+became one nothing declared, and the next `reconcile --apply` pruned it as extra.
+
+The provider is resolved the way the installer resolves it — an environment's own
+`<provider>-<env>.json` wins over the shared `<provider>.json` — so a consumer in an
+environment reaches the provider deployed alongside it. Looking the provider up by its
+bare name silently emitted no rule for an environment-deployed provider, even for a hard
+dependency `install-module.sh` had already validated.
 
 ### Sequence bands
 

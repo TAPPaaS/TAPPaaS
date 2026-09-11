@@ -63,17 +63,26 @@ INGRESS_COUNT=$(read_module_config "${MODULE}" | jq -r '(.ingress // []) | lengt
 EGRESS_COUNT=$(read_module_config "${MODULE}" | jq -r '(.egress // []) | length')
 ALIAS_COUNT=$(read_module_config "${MODULE}" | jq -r '(.aliases // {}) | length')
 
-# Auto-pinholes (issue #173): even if the module has no manual ingress/egress/
-# aliases, rules-manager may still need to run when a dependsOn entry points
-# to a provider that ships a services/<svc>/pinhole.json. Detect that here so
-# we don't skip the apply step in the dependsOn-only case.
+# Auto-pinholes (#173): even if the module has no manual ingress/egress/
+# aliases, rules-manager may still need to run when a declared coordinate points
+# to a provider that ships a services/<svc>/pinhole.json. Detect that here so we
+# don't skip the apply step in the pinhole-only case.
+#
+# BOTH lists, and the installer's own provider resolution (#632). This gate read
+# `.dependsOn` alone and looked the provider up as `${provider}.json`, so it
+# disagreed with rules-manager twice over: a module whose only pinhole need came
+# from `integratesWith` skipped the apply entirely, and so did one whose provider
+# is deployed into an environment as `<provider>-<env>.json`. A gate that is
+# narrower than the compiler silently withholds rules the compiler would emit.
+MODULE_ENVIRONMENT=$(read_module_config "${MODULE}" | jq -r '.environment // empty')
 HAS_AUTO_PINHOLE=0
 while read -r dep; do
     [[ -z "$dep" ]] && continue
     provider="${dep%%:*}"
     service="${dep#*:}"
     [[ -z "$provider" || -z "$service" || "$provider" == "$service" ]] && continue
-    PROVIDER_JSON="${CONFIG_DIR}/${provider}.json"
+    provider_module="$(resolve_provider_module "${provider}" "${MODULE_ENVIRONMENT}")"
+    PROVIDER_JSON="${CONFIG_DIR}/${provider_module}.json"
     [[ -f "$PROVIDER_JSON" ]] || continue
     location=$(jq -r '.location // empty' "$PROVIDER_JSON")
     [[ -n "$location" ]] || continue
@@ -81,10 +90,10 @@ while read -r dep; do
         HAS_AUTO_PINHOLE=1
         break
     fi
-done < <(read_module_config "${MODULE}" | jq -r '(.dependsOn // [])[]')
+done < <(read_module_config "${MODULE}" | jq -r '((.dependsOn // []) + (.integratesWith // []))[]')
 
 if (( INGRESS_COUNT == 0 && EGRESS_COUNT == 0 && ALIAS_COUNT == 0 && HAS_AUTO_PINHOLE == 0 )); then
-    debug "  No ports/ingress/egress/aliases declared and no dependsOn pinholes — nothing to apply."
+    debug "  No ports/ingress/egress/aliases declared and no declared pinholes — nothing to apply."
     debug "${GN}network:rules install-service completed for ${MODULE} (no-op)${CL}"
     exit 0
 fi

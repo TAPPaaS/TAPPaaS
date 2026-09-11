@@ -290,7 +290,7 @@
       "example": [
         "vllm-amd:inference"
       ],
-      "note": "Soft counterpart to dependsOn: missing provider = skip (no error); installed provider = same install-service.sh logic. Do NOT list a coordinate in both dependsOn and integratesWith."
+      "note": "Soft counterpart to dependsOn: missing provider = skip (no error); installed provider = same install-service.sh logic. Do NOT list a coordinate in both dependsOn and integratesWith. The two differ in LIFECYCLE, not reachability (#632): a cross-zone coordinate here earns the same network:rules auto-pinhole a dependsOn entry would."
     },
     "provides": {
       "description": "List of services this module provides. Service names only (the module is implicit from the JSON filename).",

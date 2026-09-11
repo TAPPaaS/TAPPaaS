@@ -35,7 +35,7 @@ import os
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterable, Literal
+from typing import Callable, Iterable, Iterator, Literal
 
 from oxl_opnsense_client import Client
 
@@ -115,11 +115,22 @@ class ModuleSpec:
     # OPNsense alias type for tm_<vmname>: "host" (FQDN, default) or
     # "network" (zone0 subnet, for multi-device modules with no single FQDN — #241).
     alias_type: str = "host"
-    # `dependsOn` and `location` are needed by the auto-pinhole pass (issue #173).
-    # `location` is the absolute path of the module directory in the source tree
-    # (set by copy-update-json.sh); auto-pinhole reads
-    # <provider.location>/services/<service>/pinhole.json for each dependency.
+    # `dependsOn`, `integratesWith`, `environment` and `location` are needed by
+    # the auto-pinhole pass (issues #173, #632). `location` is the absolute path
+    # of the module directory in the source tree (set by copy-update-json.sh);
+    # auto-pinhole reads <provider.location>/services/<service>/pinhole.json for
+    # each declared coordinate.
+    #
+    # BOTH relationship lists are walked (#632). `integratesWith` is the OPTIONAL
+    # counterpart of `dependsOn` and carries the same `module:service` shape; the
+    # difference is lifecycle (a missing provider is skipped, not an error), not
+    # reachability. Walking only the hard list meant a cross-zone optional
+    # integration got no path — and where the module had previously declared the
+    # coordinate as a hard dependency, the rule already in OPNsense became one
+    # nothing declared, which the next `reconcile --apply` pruned.
     depends_on: list[str] = field(default_factory=list)
+    integrates_with: list[str] = field(default_factory=list)
+    environment: str = ""
     location: str = ""
 
 
@@ -259,6 +270,32 @@ def _canonical_description_svcdep(
     return base
 
 
+def resolve_provider_module(
+    modules_dir: Path, provider: str, environment: str = ""
+) -> str:
+    """The deployed config name for a provider, as the installer resolves it.
+
+    Mirrors ``resolve_provider_module`` in common-install-routines.sh and
+    ``resolveProviderModule`` in module-manager: an environment's own copy wins,
+    then the shared one, then the network<->firewall legacy counterpart.
+
+    The auto-pinhole pass used to look the provider up by its BARE name and
+    treat a miss as "install-module.sh already rejected this upstream". That
+    assumption does not hold for an environment-deployed provider: the installer
+    resolved `<provider>-<env>.json` and passed, this looked for
+    `<provider>.json`, found nothing, and silently emitted no rule — a HARD
+    cross-zone dependency with no path and no diagnostic (#632).
+    """
+    if environment and (modules_dir / f"{provider}-{environment}.json").is_file():
+        return f"{provider}-{environment}"
+    if (modules_dir / f"{provider}.json").is_file():
+        return provider
+    alias = {"network": "firewall", "firewall": "network"}.get(provider, "")
+    if alias and (modules_dir / f"{alias}.json").is_file():
+        return alias
+    return provider
+
+
 def _parse_dependency(dep: str) -> tuple[str, str] | None:
     """Parse a ``"<module>:<service>"`` dependsOn entry; return (module, service) or None."""
     if not dep or ":" not in dep:
@@ -359,6 +396,8 @@ def load_module(modules_dir: Path, name: str) -> ModuleSpec:
         firewall_type=data.get("firewallType", "opnsense"),
         alias_type=data.get("aliasType", "host") or "host",
         depends_on=data.get("dependsOn", []) or [],
+        integrates_with=data.get("integratesWith", []) or [],
+        environment=data.get("environment", "") or "",
         location=data.get("location", "") or "",
     )
 
@@ -841,10 +880,14 @@ class RulesManager:
     ) -> list[ModuleFirewallRule]:
         """Synthesise ingress pinhole rules from cross-zone service dependencies.
 
-        For each ``<provider>:<service>`` in ``module.dependsOn`` where the
-        provider ships a ``services/<service>/pinhole.json``: if the consumer's
-        zone differs from the provider's zone AND the consumer's zone is not
-        already in ``provider_zone.access-to``, emit one pinhole rule per port.
+        For each ``<provider>:<service>`` the module declares — in ``dependsOn``
+        or in ``integratesWith`` (#632) — where the provider ships a
+        ``services/<service>/pinhole.json``: if the consumer's zone differs from
+        the provider's zone AND the consumer's zone is not already in
+        ``provider_zone.access-to``, emit one pinhole rule per port.
+
+        The predicate itself lives in ``_auto_pinhole_candidates``, shared with
+        the NONE-mode report and the peer-name helper.
 
         Auto-pinholes share the consumer's ingress slot (band 3); the
         ``ingress_count_so_far`` argument is the number of manual ingress rules
@@ -855,7 +898,8 @@ class RulesManager:
         (per #173 design choice — warn-and-skip rather than hard-error).
         """
         rules: list[ModuleFirewallRule] = []
-        if not module.depends_on:
+        declarations = self._pinhole_declarations(module)
+        if not declarations:
             return rules
 
         consumer_zone = self.zones.get(module.zone0)
@@ -866,51 +910,21 @@ class RulesManager:
         interface = self._zone_to_interface(consumer_zone)
         consumer_self_alias = _module_alias_name(module.vmname)
 
-        for dep in module.depends_on:
-            parsed = _parse_dependency(dep)
-            if not parsed:
-                continue
-            provider_name, service = parsed
+        def _policy_blocked(dep, origin, provider, provider_zone):
+            warn(
+                f"{module.vmname}: {origin} '{dep}' would need a pinhole "
+                f"from zone '{module.zone0}' into '{provider.zone0}', but "
+                f"'{module.zone0}' is not in "
+                f"{provider.zone0}.pinhole-allowed-from = "
+                f"{provider_zone.pinhole_allowed_from}. "
+                f"Auto-pinhole skipped; add '{module.zone0}' to "
+                f"{provider.zone0}.pinhole-allowed-from in zones.json "
+                f"to enable it."
+            )
 
-            # Load the provider's manifest. If it's missing, install-module.sh
-            # has already failed validation upstream — skip silently here.
-            try:
-                provider = load_module(self.modules_dir, provider_name)
-            except FileNotFoundError:
-                continue
-
-            # Most services don't expose network ports (e.g. cluster:vm).
-            # No pinhole.json -> nothing to do.
-            port_specs = load_pinhole_ports(provider.location, service)
-            if not port_specs:
-                continue
-
-            # Intra-zone traffic already flows freely.
-            if module.zone0 == provider.zone0:
-                continue
-
-            provider_zone = self.zones.get(provider.zone0)
-            if not provider_zone:
-                continue
-
-            # Zone-level access-to already covers it.
-            if module.zone0 in provider_zone.access_to:
-                continue
-
-            # Policy gate.
-            if module.zone0 not in provider_zone.pinhole_allowed_from:
-                warn(
-                    f"{module.vmname}: dependsOn '{dep}' would need a pinhole "
-                    f"from zone '{module.zone0}' into '{provider.zone0}', but "
-                    f"'{module.zone0}' is not in "
-                    f"{provider.zone0}.pinhole-allowed-from = "
-                    f"{provider_zone.pinhole_allowed_from}. "
-                    f"Auto-pinhole skipped; add '{module.zone0}' to "
-                    f"{provider.zone0}.pinhole-allowed-from in zones.json "
-                    f"to enable it."
-                )
-                continue
-
+        for dep, _origin, provider, service, port_specs in self._auto_pinhole_candidates(
+            module, on_policy_block=_policy_blocked
+        ):
             dst_alias = _module_alias_name(provider.vmname)
 
             for spec in port_specs:
@@ -1184,27 +1198,66 @@ class RulesManager:
             names.append(_module_alias_name(provider_name))
         return names
 
-    def _auto_pinhole_provider_names(self, module: ModuleSpec) -> list[str]:
-        """Return providers whose dependsOn entry would emit an auto-pinhole.
+    # ── The auto-pinhole predicate, in ONE place ─────────────────────────
+    #
+    # This predicate had three copies — the compile pass, the NONE-mode report,
+    # and the peer-name helper — each re-deciding cross-zone/access-to/policy
+    # for itself. That is why #632 is a three-line bug in one place and a
+    # three-place bug in practice: teaching one walk about `integratesWith`
+    # would have left the other two answering differently about the same module.
+    # They now share this generator, so a rule that compiles is a rule the
+    # report predicts and a peer the alias pass provisions.
 
-        Applies the same predicate as ``_compile_auto_pinholes`` (cross-zone,
-        not already in ``access-to``, in ``pinhole-allowed-from``, pinhole.json
-        present) so callers — alias provisioning, orphan checks — see the
-        same peer set the compile pass sees.
+    def _pinhole_declarations(self, module: ModuleSpec) -> list[tuple[str, str]]:
+        """Every coordinate that may carry a network path, with the field it came from.
+
+        Both lists (#632): hardness is about lifecycle ordering and blocking,
+        reachability is a separate property, and `integratesWith` exists to
+        express optional-but-reachable.
         """
-        if not module.depends_on:
-            return []
-        names: list[str] = []
-        for dep in module.depends_on:
+        return (
+            [(dep, "dependsOn") for dep in module.depends_on]
+            + [(dep, "integratesWith") for dep in module.integrates_with]
+        )
+
+    def _auto_pinhole_candidates(
+        self,
+        module: ModuleSpec,
+        on_policy_block: "Callable[[str, str, ModuleSpec, ZoneSpec], None] | None" = None,
+    ) -> Iterator[tuple[str, str, ModuleSpec, str, list[dict]]]:
+        """Yield (dep, origin, provider, service, port_specs) for each coordinate
+        that clears every auto-pinhole precondition.
+
+        A coordinate is skipped when: it does not parse; the provider has no
+        deployed config; the service ships no pinhole.json (the normal case —
+        cluster:vm and friends expose no ports); consumer and provider share a
+        zone (intra-zone traffic already flows); the provider's zone is unknown;
+        zone-level `access-to` already covers it; or the consumer's zone is not
+        in the provider zone's `pinhole-allowed-from`.
+
+        Only that last one is a POLICY refusal rather than a "nothing to do", so
+        it is the only one the caller is told about — via `on_policy_block`,
+        because the compile pass and the dry-run report word it differently.
+        """
+        for dep, origin in self._pinhole_declarations(module):
             parsed = _parse_dependency(dep)
             if not parsed:
                 continue
             provider_name, service = parsed
+
+            # Resolve as the installer does, not by bare name (#632).
             try:
-                provider = load_module(self.modules_dir, provider_name)
+                provider = load_module(
+                    self.modules_dir,
+                    resolve_provider_module(self.modules_dir, provider_name, module.environment),
+                )
             except FileNotFoundError:
+                # dependsOn: install-module.sh refused the install already.
+                # integratesWith: an absent provider is the documented no-op.
                 continue
-            if not load_pinhole_ports(provider.location, service):
+
+            port_specs = load_pinhole_ports(provider.location, service)
+            if not port_specs:
                 continue
             if module.zone0 == provider.zone0:
                 continue
@@ -1214,8 +1267,24 @@ class RulesManager:
             if module.zone0 in provider_zone.access_to:
                 continue
             if module.zone0 not in provider_zone.pinhole_allowed_from:
+                if on_policy_block is not None:
+                    on_policy_block(dep, origin, provider, provider_zone)
                 continue
-            names.append(provider.vmname)
+
+            yield dep, origin, provider, service, port_specs
+
+    def _auto_pinhole_provider_names(self, module: ModuleSpec) -> list[str]:
+        """Return providers whose declared coordinate would emit an auto-pinhole.
+
+        Same predicate as the compile pass (shared generator), so callers —
+        alias provisioning, orphan checks — see the same peer set that is
+        actually installed. Silent on a policy block: this answers "which peers",
+        and the compile pass is what reports why one is missing.
+        """
+        names: list[str] = []
+        for _dep, _origin, provider, _service, _ports in self._auto_pinhole_candidates(module):
+            if provider.vmname not in names:
+                names.append(provider.vmname)
         return names
 
     def _alias_target_for(
@@ -1517,38 +1586,24 @@ class RulesManager:
                     f"\"{entry.get('description', '')}\""
                 )
 
-        # Auto-pinholes from dependsOn + provider's pinhole.json (issue #173).
-        # Apply the same predicate as _compile_auto_pinholes so NONE-mode
-        # output stays consistent with what would actually be installed.
+        # Auto-pinholes from the declared coordinates + the provider's
+        # pinhole.json (#173, #632). Shares _auto_pinhole_candidates with the
+        # compile pass, so NONE-mode output cannot drift from what would
+        # actually be installed — which is the whole point of this view.
         auto_descriptions: list[str] = []
-        for dep in module.depends_on:
-            parsed = _parse_dependency(dep)
-            if not parsed:
-                continue
-            provider_name, service = parsed
-            try:
-                provider = load_module(self.modules_dir, provider_name)
-            except FileNotFoundError:
-                continue
-            port_specs = load_pinhole_ports(provider.location, service)
-            if not port_specs:
-                continue
-            if module.zone0 == provider.zone0:
-                continue
-            provider_zone = self.zones.get(provider.zone0)
-            if not provider_zone:
-                continue
-            if module.zone0 in provider_zone.access_to:
-                continue
-            if module.zone0 not in provider_zone.pinhole_allowed_from:
-                warn(
-                    f"{module.vmname}: dependsOn '{dep}' would need a pinhole "
-                    f"from zone '{module.zone0}' into '{provider.zone0}', but "
-                    f"'{module.zone0}' is not in "
-                    f"{provider.zone0}.pinhole-allowed-from = "
-                    f"{provider_zone.pinhole_allowed_from}. Skipped."
-                )
-                continue
+
+        def _policy_blocked(dep, origin, provider, provider_zone):
+            warn(
+                f"{module.vmname}: {origin} '{dep}' would need a pinhole "
+                f"from zone '{module.zone0}' into '{provider.zone0}', but "
+                f"'{module.zone0}' is not in "
+                f"{provider.zone0}.pinhole-allowed-from = "
+                f"{provider_zone.pinhole_allowed_from}. Skipped."
+            )
+
+        for _dep, _origin, provider, service, port_specs in self._auto_pinhole_candidates(
+            module, on_policy_block=_policy_blocked
+        ):
             for spec in port_specs:
                 port = spec.get("port")
                 proto = _normalize_protocol(spec.get("protocol"))
@@ -1559,7 +1614,7 @@ class RulesManager:
                 )
         if auto_descriptions:
             info("")
-            info(f"AUTO-PINHOLES (dependsOn-derived, issue #173) for {module.vmname}:")
+            info(f"AUTO-PINHOLES (declaration-derived, #173/#632) for {module.vmname}:")
             for line in auto_descriptions:
                 info(line)
         info("")

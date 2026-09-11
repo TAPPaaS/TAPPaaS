@@ -9,6 +9,8 @@ Run with:
 
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import tempfile
 import unittest
@@ -718,8 +720,8 @@ class TestEmptyTableVerification(unittest.TestCase):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class TestAutoPinholes(unittest.TestCase):
-    """End-to-end-ish tests for the dependsOn-driven auto-pinhole compile path.
+class _PinholeFixtures:
+    """Fixture writers shared by the auto-pinhole suites.
 
     Each test builds a temp modules dir with a consumer+provider pair, optionally
     drops a pinhole.json under the provider's `location`, and exercises
@@ -782,13 +784,17 @@ class TestAutoPinholes(unittest.TestCase):
         *,
         vmname: str,
         zone0: str,
-        depends_on: list[str],
+        depends_on: list[str] | None = None,
+        integrates_with: list[str] | None = None,
+        environment: str = "",
     ):
         (dir_ / f"{vmname}.json").write_text(json.dumps({
             "vmname": vmname,
             "zone0": zone0,
             "bridge0": "lan",
-            "dependsOn": depends_on,
+            "dependsOn": depends_on or [],
+            "integratesWith": integrates_with or [],
+            "environment": environment,
         }))
 
     def setUp(self):
@@ -797,6 +803,15 @@ class TestAutoPinholes(unittest.TestCase):
 
     def tearDown(self):
         self.tmp.cleanup()
+
+
+class TestAutoPinholes(_PinholeFixtures, unittest.TestCase):
+    """End-to-end-ish tests for the declaration-driven auto-pinhole compile path.
+
+    Each test builds a temp modules dir with a consumer+provider pair, optionally
+    drops a pinhole.json under the provider's `location`, and exercises
+    ``_compile`` directly (no OPNsense connection needed).
+    """
 
     # ── happy path ───────────────────────────────────────────────────────
 
@@ -953,6 +968,158 @@ class TestAutoPinholes(unittest.TestCase):
 # ─────────────────────────────────────────────────────────────────────────────
 # Sequence allocation
 # ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestIntegratesWithPinholes(_PinholeFixtures, unittest.TestCase):
+    """#632 — an OPTIONAL coordinate carries a network path, and the provider is
+    resolved the way the installer resolves it.
+
+    Two independent defects with one root, both in the auto-pinhole pass:
+
+      * it walked `dependsOn` only, so a cross-zone `integratesWith` got no
+        rule. Where the module had previously declared the coordinate as a hard
+        dependency, the rule already in OPNsense became one nothing declared,
+        and the next `reconcile --apply` pruned it — inference stopped, with
+        nothing in the configuration to explain it.
+      * it loaded the provider by BARE name, so an environment-deployed provider
+        (`<name>-<env>.json`) was invisible — silently no rule even for a HARD
+        dependency the installer had already validated and passed.
+
+    Shares _PinholeFixtures with TestAutoPinholes; the zone topology and the
+    dmz→srvWork policy grant are the same.
+    """
+
+    def _svcdeps(self, mgr, consumer):
+        rules, errors = mgr._compile(load_module(self.dir, consumer))
+        self.assertEqual(errors, [])
+        return [r.description for r in rules
+                if r.description.startswith("tappaas-svcdep:")]
+
+    # ── the reported case ────────────────────────────────────────────────
+
+    def test_integrates_with_emits_the_same_pinhole_as_depends_on(self):
+        for field, label in (("depends_on", "dependsOn"), ("integrates_with", "integratesWith")):
+            with self.subTest(field=label):
+                self._write_provider(
+                    self.dir, vmname="api", zone0="srvWork",
+                    pinhole_ports=[{"port": 4000, "protocol": "TCP", "description": "API"}],
+                    service="rest",
+                )
+                self._write_consumer(self.dir, vmname="ui", zone0="dmz", **{field: ["api:rest"]})
+                mgr = _make_manager(zones=self._make_zones(), modules_dir=self.dir)
+                self.assertIn("tappaas-svcdep:ui:rest:api:4000", self._svcdeps(mgr, "ui"))
+
+    def test_both_lists_are_walked_together(self):
+        self._write_provider(
+            self.dir, vmname="api", zone0="srvWork",
+            pinhole_ports=[{"port": 4000, "protocol": "TCP", "description": "API"}],
+            service="rest")
+        self._write_provider(
+            self.dir, vmname="infer", zone0="srvWork",
+            pinhole_ports=[{"port": 8000, "protocol": "TCP", "description": "inference"}],
+            service="inference")
+        self._write_consumer(self.dir, vmname="ui", zone0="dmz",
+                             depends_on=["api:rest", "cluster:vm"],
+                             integrates_with=["infer:inference"])
+        mgr = _make_manager(zones=self._make_zones(), modules_dir=self.dir)
+        descs = self._svcdeps(mgr, "ui")
+        self.assertIn("tappaas-svcdep:ui:rest:api:4000", descs)
+        self.assertIn("tappaas-svcdep:ui:inference:infer:8000", descs)
+
+    def test_optional_provider_absent_is_a_silent_no_op(self):
+        # The documented contract for integratesWith: a provider that is not
+        # installed is skipped, never an error.
+        self._write_consumer(self.dir, vmname="ui", zone0="dmz",
+                             integrates_with=["nope:rest"])
+        mgr = _make_manager(zones=self._make_zones(), modules_dir=self.dir)
+        self.assertEqual(self._svcdeps(mgr, "ui"), [])
+
+    def test_same_zone_optional_needs_no_rule(self):
+        # Why this went unnoticed: intra-zone traffic already flows, so the
+        # release's own litellm/vllm-amd pair never drifted.
+        self._write_provider(
+            self.dir, vmname="api", zone0="dmz",
+            pinhole_ports=[{"port": 4000, "protocol": "TCP", "description": "API"}],
+            service="rest")
+        self._write_consumer(self.dir, vmname="ui", zone0="dmz",
+                             integrates_with=["api:rest"])
+        mgr = _make_manager(zones=self._make_zones(), modules_dir=self.dir)
+        self.assertEqual(self._svcdeps(mgr, "ui"), [])
+
+    def test_policy_gate_applies_to_optional_too(self):
+        # Withdraw home from srvWork.pinhole-allowed-from: policy refuses, and
+        # it refuses for EITHER list. Softness must not buy a pinhole that
+        # policy denies, and hardness must not be needed to earn one.
+        self._write_provider(
+            self.dir, vmname="api", zone0="srvWork",
+            pinhole_ports=[{"port": 4000, "protocol": "TCP", "description": "API"}],
+            service="rest")
+        self._write_consumer(self.dir, vmname="ui", zone0="home",
+                             integrates_with=["api:rest"])
+        zones = self._make_zones(srvWork={"pinhole_allowed_from": ["srvWork", "dmz"]})
+        mgr = _make_manager(zones=zones, modules_dir=self.dir)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            descs = self._svcdeps(mgr, "ui")
+        self.assertEqual(descs, [])
+        # The refusal must name the field it came from, or the operator is sent
+        # to look for a dependsOn entry that does not exist.
+        self.assertIn("integratesWith 'api:rest'", buf.getvalue())
+        self.assertIn("pinhole-allowed-from", buf.getvalue())
+
+    # ── provider resolution ──────────────────────────────────────────────
+
+    def test_environment_deployed_provider_is_resolved(self):
+        # The provider is deployed as api-dev.json; the consumer names it by
+        # its bare coordinate, as every module does. install-module.sh resolves
+        # this and passes — so must the pinhole pass.
+        self._write_provider(
+            self.dir, vmname="api-dev", zone0="srvWork",
+            pinhole_ports=[{"port": 4000, "protocol": "TCP", "description": "API"}],
+            service="rest")
+        self._write_consumer(self.dir, vmname="ui-dev", zone0="dmz",
+                             depends_on=["api:rest"], environment="dev")
+        mgr = _make_manager(zones=self._make_zones(), modules_dir=self.dir)
+        self.assertIn("tappaas-svcdep:ui-dev:rest:api-dev:4000", self._svcdeps(mgr, "ui-dev"))
+
+    def test_environment_copy_wins_over_the_shared_provider(self):
+        for vm, zone in (("api", "srvWork"), ("api-dev", "srvWork")):
+            self._write_provider(
+                self.dir, vmname=vm, zone0=zone,
+                pinhole_ports=[{"port": 4000, "protocol": "TCP", "description": "API"}],
+                service="rest")
+        self._write_consumer(self.dir, vmname="ui-dev", zone0="dmz",
+                             depends_on=["api:rest"], environment="dev")
+        mgr = _make_manager(zones=self._make_zones(), modules_dir=self.dir)
+        descs = self._svcdeps(mgr, "ui-dev")
+        self.assertIn("tappaas-svcdep:ui-dev:rest:api-dev:4000", descs)
+        self.assertNotIn("tappaas-svcdep:ui-dev:rest:api:4000", descs)
+
+    def test_shared_provider_still_resolves_without_an_environment(self):
+        self._write_provider(
+            self.dir, vmname="api", zone0="srvWork",
+            pinhole_ports=[{"port": 4000, "protocol": "TCP", "description": "API"}],
+            service="rest")
+        self._write_consumer(self.dir, vmname="ui", zone0="dmz", depends_on=["api:rest"])
+        mgr = _make_manager(zones=self._make_zones(), modules_dir=self.dir)
+        self.assertIn("tappaas-svcdep:ui:rest:api:4000", self._svcdeps(mgr, "ui"))
+
+    # ── the three walks agree ────────────────────────────────────────────
+
+    def test_peer_names_match_the_compiled_rules(self):
+        # _auto_pinhole_provider_names drives alias provisioning; when it
+        # disagreed with the compile pass a rule referenced an alias nothing
+        # created. Both now share one predicate.
+        self._write_provider(
+            self.dir, vmname="infer", zone0="srvWork",
+            pinhole_ports=[{"port": 8000, "protocol": "TCP", "description": "inference"}],
+            service="inference")
+        self._write_consumer(self.dir, vmname="ui", zone0="dmz",
+                             integrates_with=["infer:inference"])
+        mgr = _make_manager(zones=self._make_zones(), modules_dir=self.dir)
+        mod = load_module(self.dir, "ui")
+        self.assertEqual(mgr._auto_pinhole_provider_names(mod), ["infer"])
+        self.assertIn("tappaas-svcdep:ui:inference:infer:8000", self._svcdeps(mgr, "ui"))
 
 
 class TestSequenceAllocation(unittest.TestCase):
