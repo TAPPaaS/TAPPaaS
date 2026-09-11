@@ -23,14 +23,34 @@ update-tappaas --force
 
 ## How It Works
 
-When triggered (by schedule or `--force`), `update-tappaas` runs two phases:
+When triggered (by schedule or `--force`), `update-tappaas` runs a control-plane refresh
+and then two module phases:
+
+### Phase 0: Control-Plane Refresh
+
+`scripts/refresh-control-plane.sh` pulls the tracked repositories, relinks `~/bin`, and
+rebuilds every compiled component — before any module is touched.
+
+This is the mothership updating **itself**, and it is a prerequisite of the sweep rather
+than a step inside it. The work used to run inside tappaas-cicd's own module update, behind
+its pre-update test, so one failing check aborted the module update before the `git pull`
+ran — and the pull that would carry the fix was itself behind a test of the broken code.
+Three consecutive nightly sweeps stalled that way (#595).
+
+It is placed after the schedule gate, never before: the unit fires hourly and exits there
+on a not-due run, so an earlier placement would pull from the forge every hour.
+
+The outcome is reported as `control_plane=refreshed|stale|failed|skipped` in the summary
+line and in `last-update-result.json`. `stale` means the components did not rebuild and the
+shared manager binaries are the previous build — the sweep continues, but does not report
+success.
 
 ### Phase 1: Foundation Modules (Fixed Order)
 
 Foundation modules are updated in this order via `update-module.sh`:
 
 1. **cluster** - Runs `apt update && apt upgrade` on all Proxmox nodes, distributes VM creation scripts and zone definitions
-2. **tappaas-cicd** - Updates the mothership VM (pulls latest code, rebuilds tools)
+2. **tappaas-cicd** - Rebuilds the mothership VM's NixOS system (the code pull and tool rebuild moved to Phase 0)
 3. **template** - Updates NixOS/Debian VM templates
 4. **firewall** - Updates OPNsense firewall configuration
 5. **backup** - Updates Proxmox Backup Server

@@ -19,6 +19,7 @@ src/foundation/tappaas-cicd/
 ├── install.sh / update.sh / test.sh   # top-level entry scripts (drive the dispatchers)
 ├── bootstrap.sh                       # first-boot: clone repo + nixos-rebuild the VM
 ├── pre-update.sh                      # pre-update pass run by update-tappaas
+├── scripts/refresh-control-plane.sh   # self-refresh: pull + relink ~/bin + build components
 ├── tappaas-cicd.nix / flake.nix       # the cicd VM's NixOS configuration
 ├── manager/                           # domain-object lifecycle (CONFIG state)
 │   ├── install.sh / update.sh / test.sh   # dispatcher: loop child components
@@ -153,6 +154,47 @@ The cicd module gate honours the split:
 
 When adding a component: gate its disruptive tests behind
 `[[ "${TAPPAAS_TEST_DEEP:-0}" == "1" ]]`, and add a one-line smoke to Test 11.
+
+### A third axis: runtime vs source-tree
+
+Fast/deep is about *cost*. `--runtime-only` (`TAPPAAS_TEST_RUNTIME_ONLY=1`) is about
+*subject*, and it cuts across both. A check is **runtime** if it asks something about the
+running system (a bin loads, a timer is active, a node answers SSH) and **source-tree** if
+it asks something about the repository (an offline unit suite over temp fixtures, a
+generated-doc drift check, a grep guard over a tracked file).
+
+`update-module.sh`'s Step 2 pre-update test is a **gate on a mutation**, so it passes
+`--runtime-only`: a source-tree defect must never abort the update of a healthy module. A
+stale generated README did exactly that on three consecutive nightly sweeps
+(2026-09-07..09) — the mothership stopped updating itself and the fleet's shared manager
+binaries went unrebuilt (#595). Every other caller — an operator, the deep sweep, CI —
+runs everything.
+
+Keep new checks on the right side of that line, and put source-tree checks inside the
+guarded region rather than among the runtime ones.
+
+## Self-update: the control plane refreshes before the sweep, not inside it
+
+`scripts/refresh-control-plane.sh` is the mothership updating **itself**: pull the tracked
+repositories, relink `scripts/*.sh` + `lib/*.sh` into `~/bin`, and rebuild every compiled
+component through the `manager/` + `controller/` dispatchers.
+
+It runs as **`update-tappaas` Phase 0**, ahead of every module. That placement is the
+point. The work used to live inline in `pre-update.sh`, which `update-module.sh` runs at
+**Step 3** — *after* the Step 2 pre-update test. So the `git pull` sat behind a test of the
+code it would replace: a commit that broke a fast-mode check wedged the mothership, because
+the pull that would carry the fix could no longer run (#595).
+
+Two properties follow, and both matter:
+
+- **Idempotent**, so `pre-update.sh` still calls it (a standalone
+  `module modify tappaas-cicd` must be correct on its own) and the second run is a no-op.
+- **Exit code 10 means STALE**: the pull and relink succeeded, but a component failed to
+  *build*, so its bin is the previous one. Not fatal — the fleet update proceeds on working
+  binaries, and Test 11 is what surfaces a broken build — but never silent either. It
+  reaches the sweep summary and `last-update-result.json` as `control_plane`, and makes
+  `ok` false. A stale control plane is the root cause that otherwise presents as N
+  unrelated-looking module failures.
 
 ## Preferred language
 

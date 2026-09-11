@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # lib/repo-sync.sh — reconcile a managed git checkout to its site.json config.
 #
-# Shared by the routine update path (pre-update.sh) and the operator verb
+# Shared by the routine update path (scripts/refresh-control-plane.sh) and the operator verb
 # (site-manager repository modify) so BOTH apply a site.json repository change
 # — including a change of forge/provider (github.com -> codeberg.org) and/or
 # branch — the same, correct way.
@@ -91,7 +91,7 @@ repo_sync_at_risk_commits() {
 #
 # allow_discard=1 permits that hard reset to discard commits that exist only in
 # this checkout (they are snapshotted to a repo-sync/pre-reset-* branch first).
-# Default 0 — the unattended path (pre-update.sh) must never make an operator's
+# Default 0 — the unattended path (refresh-control-plane.sh) must never make an operator's
 # unpushed work unreachable on its own; only `site-manager repository modify
 # --force`, run by a person who has seen the warning, may.
 #

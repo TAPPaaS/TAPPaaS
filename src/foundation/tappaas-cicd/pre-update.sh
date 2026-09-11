@@ -5,146 +5,35 @@
 set -euo pipefail
 
 . /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/lib/common-install-routines.sh
-. /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/lib/repo-sync.sh
 
 VMNAME="$(get_config_value 'vmname' "$1")"
 NODE="$(get_config_value 'node' "$(get_node_hostname 0)")"
 info "Starting TAPPaaS-CICD module update for VM: $VMNAME on node: $NODE"
 
-# Pull all tracked repositories. The repository list is now canonical in
-# site.json .repositories; get_repositories() reads it there first and falls
-# back to the legacy configuration.json .tappaas.repositories while both files
-# coexist (so updates keep pulling after configuration.json is deleted).
-CONFIG_FILE="/home/tappaas/config/configuration.json"
-
-# Legacy one-shot migration: upstreamGit+branch -> .tappaas.repositories. This
-# is retired once configuration.json is gone, so it is fully guarded on the file
-# actually existing (must never error on a missing configuration.json).
-if [ -f "$CONFIG_FILE" ] && jq -e '.tappaas.upstreamGit' "$CONFIG_FILE" >/dev/null 2>&1; then
-  info "Migrating configuration.json from upstreamGit/branch to repositories format..."
-  OLD_URL=$(jq -r '.tappaas.upstreamGit' "$CONFIG_FILE")
-  OLD_BRANCH=$(jq -r '.tappaas.branch // "stable"' "$CONFIG_FILE")
-  OLD_NAME="${OLD_URL##*/}"
-  OLD_NAME="${OLD_NAME%.git}"
-  tmp_file=$(mktemp)
-  jq --arg name "$OLD_NAME" --arg url "$OLD_URL" --arg branch "$OLD_BRANCH" \
-    --arg path "/home/tappaas/${OLD_NAME}" \
-    '.tappaas.repositories = [{"name": $name, "url": $url, "branch": $branch, "path": $path}] | del(.tappaas.upstreamGit) | del(.tappaas.branch)' \
-    "$CONFIG_FILE" > "$tmp_file" && mv "$tmp_file" "$CONFIG_FILE"
-  info "  Migrated: upstreamGit=${OLD_URL} branch=${OLD_BRANCH} -> repositories[0]"
-fi
-
-# TAPPAAS_NO_GIT_PULL=1 (site-manager update --no-git-pull): update whatever is
-# checked out, without pulling. Lets an operator test local, not-yet-pushed
-# changes across the whole sweep before they reach Codeberg.
-if [ "${TAPPAAS_NO_GIT_PULL:-0}" = "1" ]; then
-  info "TAPPAAS_NO_GIT_PULL=1 — skipping repository pull; updating whatever is checked out."
-else
-REPOS_JSON="$(get_repositories)"
-REPO_COUNT=$(echo "$REPOS_JSON" | jq 'length' 2>/dev/null || echo "0")
-if [ "$REPO_COUNT" -gt 0 ]; then
-  info "Pulling latest changes from ${REPO_COUNT} repository/repositories..."
-  for i in $(seq 0 $(( REPO_COUNT - 1 ))); do
-    REPO_NAME=$(echo "$REPOS_JSON" | jq -r ".[$i].name")
-    REPO_PATH=$(echo "$REPOS_JSON" | jq -r ".[$i].path")
-    REPO_BRANCH=$(echo "$REPOS_JSON" | jq -r ".[$i].branch")
-    REPO_URL=$(echo "$REPOS_JSON" | jq -r ".[$i].url")
-    if [ -d "$REPO_PATH" ]; then
-      info "  Syncing ${REPO_NAME} -> ${REPO_URL} (branch: ${REPO_BRANCH})..."
-      # reconcile_repo_checkout (lib/repo-sync.sh) re-points `origin` when the
-      # site.json url changed forge/repo, then checks out the branch at the
-      # remote tip — so a hand-edited OR `repository modify`-driven change to the
-      # repo's url/branch is actually applied here (was: fetch+checkout+pull on
-      # the OLD origin, which silently pulled the wrong forge — Codeberg incident).
-      (
-        # allow_discard is NOT passed: an unattended run must never orphan commits
-        # that exist only in the checkout. rc 2 == blocked on that decision (#433);
-        # the repo is left untouched and re-reported every run until a human acts.
-        # `|| _rc=$?` (not a bare call) — set -e would abort the subshell on rc 2
-        # before we could tell "blocked" apart from "failed".
-        _rc=0
-        reconcile_repo_checkout "$REPO_PATH" "$REPO_URL" "$REPO_BRANCH" || _rc=$?
-        case "${_rc}" in
-          0) ;;
-          2) error "${REPO_NAME}: NOT synced — unpushed commits block the origin change (see above). Push them, or run: site-manager repository modify ${REPO_NAME} --url ${REPO_URL} --force" ;;
-          *) warn "Failed to sync ${REPO_NAME}" ;;
-        esac
-      ) 2>&1 | while IFS= read -r _l; do
-        # Keep tagged log lines ([Info]/[Warning]/[Error]); route raw git output to [Debug].
-        case "$_l" in
-          *'[Info]'*|*'[Warning]'*|*'[Error]'*) printf '%s\n' "$_l" ;;
-          *) debug "  $_l" ;;
-        esac
-      done
-    else
-      warn "Repository directory not found: ${REPO_PATH} (${REPO_NAME})"
-    fi
-  done
-else
-  info "No repositories configured — pulling TAPPaaS from default location..."
-  cd
-  cd TAPPaaS || die "TAPPaaS directory not found!"
-  git pull origin
-fi
-fi
-# get to the right directory
-cd /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd || die "TAPPaaS-CICD directory not found!"
-
-# --- Install scripts as symlinks into /home/tappaas/bin/ ---
-# NOTE: symlinks must be installed BEFORE refreshing config, so that
-# create-configuration.sh in ~/bin/ points to the updated repo version.
-info "Installing scripts to /home/tappaas/bin/..."
-# scripts/*.sh AND lib/*.sh — mirrors install.sh (ADR-007 S0 moved shared
-# sourced libraries to lib/; a system UPDATED across that relocation never
-# re-linked them, leaving e.g. apply-json-merge.sh missing from ~/bin and
-# every module update silently skipping the 3-way config merge — found on
-# the production cluster 2026-07-07).
-for script in scripts/*.sh lib/*.sh; do
-  if [ -f "$script" ]; then
-    script_name=$(basename "$script")
-    target="/home/tappaas/bin/$script_name"
-    # Remove the existing entry first — on NixOS it may be a symlink into a
-    # read-only /etc/static/ path (issue #184), which would otherwise make
-    # the subsequent chmod fail with EROFS.
-    rm -f "$target" 2>/dev/null || true
-    src="$(realpath "$script")"
-    # chmod the resolved source, not the symlink: chmod follows symlinks,
-    # so chmod'ing a /home/tappaas/bin/*.sh symlink that points into
-    # /etc/static would still fail. The source lives in the writable repo.
-    # #565: only chmod files the repo tracks executable — a sourced lib
-    # (linked here so it can be `.`-sourced from ~/bin) stays 100644.
-    if tappaas_should_be_executable "$src"; then chmod +x "$src"; fi
-    ln -s "$src" "$target"
-  fi
-done
-
-# --- ADR-007 S0/P10: two-level dispatch builds + links every component ---
-# The scripts/*.sh glob above only covers scripts NOT yet relocated. Every
-# manager/<x>/ and controller/<x>/ component builds and links its own bins via
-# its install.sh, driven by the per-directory dispatcher — including the
-# COMPILED components (the TS managers, opnsense-controller and
-# identity-controller nix builds; the whole-VM build blocks that used to live
-# further down in this file are gone). Idempotent: nix no-ops when inputs are
-# unchanged. A component build failure WARNS and the update continues with the
-# previous (stale) bins — the Test-11 smoke slice is what surfaces a broken
-# build, so a bad component never blocks the fleet update.
+# ── Control-plane refresh (pull + relink + component build) ──────────
+# Extracted to scripts/refresh-control-plane.sh and hoisted to update-tappaas
+# Phase 0, so a failing pre-update test can no longer block the mothership from
+# updating ITSELF (#595). Still called here so `module modify tappaas-cicd` is
+# correct standalone; idempotent, so the Phase 0 run makes this one a no-op.
+#
+# rc 10 == refreshed, but some component group failed to build (bins STALE).
+# Non-fatal here exactly as it was inline, and reported at the end of this file.
+_refresh="${TAPPAAS_CICD_DIR:-/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd}/scripts/refresh-control-plane.sh"
 _comp_failed=0
-for _disp in manager controller; do
-  if [ -x "${_disp}/install.sh" ]; then
-    info "  linking ${_disp}/ components..."
-    "./${_disp}/install.sh" || { warn "  ${_disp}/install.sh reported non-zero rc"; _comp_failed=$((_comp_failed + 1)); }
-  fi
-done
-
-# update-tappaas lives OUTSIDE manager/ + controller/ (it drives them), so no
-# dispatcher covers it — build + link it via its own contract install.sh.
-if [ -x update-tappaas/install.sh ]; then
-  ./update-tappaas/install.sh || { warn "  update-tappaas/install.sh reported non-zero rc"; _comp_failed=$((_comp_failed + 1)); }
+if [ -x "${_refresh}" ]; then
+  _rrc=0
+  "${_refresh}" || _rrc=$?
+  case "${_rrc}" in
+    0)  ;;
+    10) _comp_failed=1 ;;
+    *)  die "control-plane refresh failed (rc ${_rrc}) — the checkout is not usable" ;;
+  esac
+else
+  die "scripts/refresh-control-plane.sh not found — cannot refresh the control plane"
 fi
 
-# (The legacy zone-controller/zone-state bash scripts are retired — their verbs
-# are native in the network-manager TS bin linked by the dispatcher above:
-# `network-manager add/delete/enable/disable/manual`; ADR-007 Phase 7.5.)
+# get to the right directory (the rest of this file is relative to it)
+cd /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd || die "TAPPaaS-CICD directory not found!"
 
 # --- Refresh configuration.json (re-discover nodes, validate) ---
 # F2: ONLY refresh when the legacy configuration.json ALREADY exists (a system
@@ -289,12 +178,12 @@ fi
 # patch/plugin/credentials state into `opnsense-ensure-patches`, called above
 # before the zone-key migration — Phase 5 / D5.)
 
-# Report what actually happened. A failed component build stays non-fatal (see
-# the dispatch rationale above), but claiming success afterwards is what let
-# #467 run unnoticed: every nightly logged two warnings and then this ✓ line,
-# so the mothership's own managers went unbuilt for weeks with no visible signal.
+# Report what actually happened. The refresh already named a failed component
+# build; repeat it here so the pre-update hook never ends on a bare ✓ while the
+# mothership's own managers are stale — that silence is what let #467 run for
+# weeks.
 if [ "${_comp_failed}" -gt 0 ]; then
-  warn "TAPPaaS-CICD scripts installed, but ${_comp_failed} component group(s) failed to build — those bins are STALE (see warnings above)."
+  warn "TAPPaaS-CICD pre-update done, but the control-plane refresh left component bins STALE (see warnings above)."
 else
-  info "${GN}✓${CL} All TAPPaaS-CICD programs and scripts installed successfully."
+  info "${GN}✓${CL} TAPPaaS-CICD pre-update completed successfully."
 fi

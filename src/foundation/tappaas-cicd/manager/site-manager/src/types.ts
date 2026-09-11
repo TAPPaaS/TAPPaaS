@@ -217,7 +217,7 @@ export interface SiteClient {
   // `site-manager update` — run the update sweep NOW (always --force scheduling
   // override). moduleForce plumbs TAPPAAS_MODULE_FORCE=1 (each `module modify`
   // gets --force, authorizing disruption fleet-wide); noGitPull plumbs
-  // TAPPAAS_NO_GIT_PULL=1 (pre-update.sh skips the repo pull, updating whatever
+  // TAPPAAS_NO_GIT_PULL=1 (refresh-control-plane.sh skips the repo pull, updating whatever
   // is checked out). Returns update-tappaas's exit code.
   runUpdate(dryRun: boolean, moduleForce: boolean, noGitPull: boolean): number;
   // `site-manager test` — the deployed modules to iterate (module-manager list

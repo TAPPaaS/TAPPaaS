@@ -16,6 +16,7 @@
 # Options:
 #   -h, --help        Show this help message
 #   --deep            Run extended/heavy tests (exports TAPPAAS_TEST_DEEP=1)
+#   --runtime-only    Skip source-tree checks; test only the live system (#595)
 #   --vmid <id>       Test a non-default VM instance (exports
 #                     TAPPAAS_VMID_OVERRIDE; consistent with install-module.sh)
 #   --zone0 <zone>    Test against a non-default zone (exports
@@ -66,6 +67,13 @@ FATAL=false
 # from TAPPAAS_DEBUG and TAPPAAS_SILENT env vars. --debug/--silent flags
 # in main() override them before any output.
 OPT_DEEP="${TAPPAAS_TEST_DEEP:-0}"
+# --runtime-only: run ONLY checks that say something about the live system, and
+# skip a module's source-tree checks (offline unit suites, generated-doc drift,
+# grep guards over the repo). Set by the callers that use test.sh as a GATE on a
+# mutation — update-module.sh's pre-update test — where a source-tree defect
+# must not abort the update of a healthy module (#595). An operator running
+# test-module.sh by hand, and the deep sweep, still run everything.
+OPT_RUNTIME_ONLY="${TAPPAAS_TEST_RUNTIME_ONLY:-0}"
 
 # ── Test result helpers ───────────────────────────────────────────────
 
@@ -105,6 +113,7 @@ Arguments:
 Options:
     -h, --help        Show this help message
     --deep            Run extended/heavy tests (exports TAPPAAS_TEST_DEEP=1)
+    --runtime-only    Skip source-tree checks; test only the live system (#595)
     --vmid <id>       Test a non-default VM instance (override config vmid)
     --zone0 <zone>    Test against a non-default zone (override config zone0)
     --debug           Show Debug-level messages (also via TAPPAAS_DEBUG=1)
@@ -133,6 +142,7 @@ main() {
         case "$1" in
             -h|--help)   usage; exit 0 ;;
             --deep)      OPT_DEEP=1; shift ;;
+            --runtime-only) OPT_RUNTIME_ONLY=1; shift ;;
             --vmid)      [[ -n "${2:-}" ]] || { fatal "--vmid requires a value"; exit 2; }; opt_vmid="$2"; shift 2 ;;
             --zone0)     [[ -n "${2:-}" ]] || { fatal "--zone0 requires a value"; exit 2; }; opt_zone0="$2"; shift 2 ;;
             --debug)     OPT_DEBUG=1; shift ;;
@@ -166,6 +176,7 @@ main() {
     # module's own test.sh) can read them. The --vmid/--zone0 overrides let a
     # non-default instance be tested without editing the module config.
     export TAPPAAS_TEST_DEEP="${OPT_DEEP}"
+    export TAPPAAS_TEST_RUNTIME_ONLY="${OPT_RUNTIME_ONLY}"
     export TAPPAAS_DEBUG="${OPT_DEBUG}"
     [[ -n "${opt_vmid}" ]] && export TAPPAAS_VMID_OVERRIDE="${opt_vmid}"
     [[ -n "${opt_zone0}" ]] && export TAPPAAS_ZONE0_OVERRIDE="${opt_zone0}"

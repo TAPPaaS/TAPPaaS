@@ -328,5 +328,53 @@ else
     echo "  ⊘ #533 guard unit test skipped (source or env python not found)"
 fi
 
+# ── 6) Unit: Phase 0 control-plane refresh classification (#595) ─────
+# refresh_control_plane() maps the script's exit code to the word that reaches
+# the summary and last-update-result.json. rc 10 must read "stale" and NOT halt
+# the sweep; a missing script (a checkout predating it) must read "skipped", not
+# "failed" — the old pre-update.sh still does the refresh on such a system.
+if [[ -f "$main_py" && -x "$py" ]]; then
+    if "$py" - "$main_py" <<'PYCP'
+import importlib.util, sys, logging
+logging.disable(logging.CRITICAL)
+spec = importlib.util.spec_from_file_location("m", sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+
+class R:
+    def __init__(self, rc): self.returncode = rc
+
+m.os.path.exists = lambda p: True
+
+m.subprocess.run = lambda argv, **kw: R(0)
+assert m.refresh_control_plane() == "refreshed", "rc 0 is a clean refresh"
+
+# rc 10 == built, but a component group failed: the bins are STALE. Reported,
+# never fatal — the previous build still works and the sweep must go on.
+m.subprocess.run = lambda argv, **kw: R(m.REFRESH_RC_STALE)
+assert m.refresh_control_plane() == "stale", "rc 10 is stale, not failed"
+
+m.subprocess.run = lambda argv, **kw: R(1)
+assert m.refresh_control_plane() == "failed", "any other non-zero rc is a failure"
+
+def boom(argv, **kw): raise OSError("no such file")
+m.subprocess.run = boom
+assert m.refresh_control_plane() == "failed", "an unrunnable refresh is a failure"
+
+# A checkout that predates the script: not an error — the old pre-update.sh
+# still refreshes inline, and its pull is what puts the script on disk.
+m.os.path.exists = lambda p: False
+m.subprocess.run = lambda argv, **kw: R(0)
+assert m.refresh_control_plane() == "skipped", "a missing script is skipped, not failed"
+PYCP
+    then
+        passed=$((passed + 1))
+    else
+        echo "  ✗ #595 control-plane refresh classification unit test FAILED"
+        failed=$((failed + 1))
+    fi
+else
+    echo "  ⊘ #595 refresh classification unit test skipped (source or env python not found)"
+fi
+
 echo "update-tappaas test: $passed passed, $failed failed"
 [[ "$failed" -eq 0 ]]

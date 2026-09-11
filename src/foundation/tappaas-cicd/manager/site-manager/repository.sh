@@ -58,7 +58,7 @@ error() { echo -e "${RD}[ERROR]${CL} $*" >&2; }
 die()   { error "$@"; exit 1; }
 
 # Shared repo-checkout reconciler (re-point origin + checkout branch) — also used
-# by the routine update path (pre-update.sh) so `modify` and `update-tappaas`
+# by the routine update path (refresh-control-plane.sh) so `modify` and `update-tappaas`
 # apply a url/branch change identically. Sourced after logging so it reuses ours.
 _REPO_SYNC_LIB="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)/../../lib/repo-sync.sh"
 # shellcheck source=/dev/null

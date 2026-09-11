@@ -14,6 +14,11 @@
 #
 # Environment:
 #   TAPPAAS_TEST_DEEP=1  Run deep tests (VM creation suite) — or pass --deep
+#   TAPPAAS_TEST_RUNTIME_ONLY=1
+#                        Skip the source-tree checks (Tests 7-10b) and test only
+#                        the live system — or pass --runtime-only. Set by the
+#                        pre-update gate so a source-tree defect cannot abort a
+#                        healthy module's update (#595).
 #   TAPPAAS_DEBUG=1      Show debug output
 #
 
@@ -31,14 +36,24 @@ DEEP="${TAPPAAS_TEST_DEEP:-0}"
 # ran the FAST suite while reporting six deep tests as skipped — a run that looks
 # deep and is not. Exported, so the dispatched component suites inherit it (the
 # same contract test-module.sh --deep and network/test.sh already use).
+# --runtime-only (TAPPAAS_TEST_RUNTIME_ONLY=1, set by test-module.sh when this
+# file is used as update-module.sh's pre-update GATE): run only checks that say
+# something about the LIVE system, and skip the source-tree region below. See
+# the block comment at Test 7 for why.
+RUNTIME_ONLY="${TAPPAAS_TEST_RUNTIME_ONLY:-0}"
+
 for _arg in "$@"; do
     case "${_arg}" in
-        --deep)     DEEP=1 ;;
-        --help|-h)  echo "Usage: $0 [--deep]"; exit 0 ;;
-        *)          ;;
+        --deep)         DEEP=1 ;;
+        --runtime-only) RUNTIME_ONLY=1 ;;
+        --help|-h)      echo "Usage: $0 [--deep] [--runtime-only]"; exit 0 ;;
+        *)              ;;
     esac
 done
 [[ "${DEEP}" == "1" ]] && export TAPPAAS_TEST_DEEP=1
+# --deep runs everything: the deep sweep is a human-supervised regression run,
+# not a gate on a mutation, so the source-tree checks belong in it.
+[[ "${DEEP}" == "1" ]] && RUNTIME_ONLY=0
 PASS=0
 FAIL=0
 SKIP=0
@@ -198,6 +213,25 @@ else
     pass "no legacy update-tappaas cron entry"
 fi
 
+# ── Source-tree checks (Tests 7-10b) ────────────────────────────────────────
+# Everything from here to Test 11 is an OFFLINE check of the repository: unit
+# suites over temp fixtures, stubbed libraries, the scripts/test tabletop sweep,
+# and grep guards over tracked files. Not one of them contacts the running
+# system, so not one of them answers "is this module healthy enough to update".
+#
+# That distinction is the whole point. update-module.sh Step 2 runs this file as
+# a GATE on a mutation and passes --runtime-only; a source-tree defect there
+# aborts the update of a healthy module. A stale generated README did exactly
+# that on three consecutive nightly sweeps (2026-09-07..09): the mothership
+# stopped updating itself, and the shared manager binaries the whole fleet
+# reconciles through went unrebuilt (#595).
+#
+# So they are skipped for that one caller and run for every other — operator,
+# deep sweep, CI. The body below is intentionally left unindented so this guard
+# reads as a gate over existing tests rather than a rewrite of them.
+if [[ "${RUNTIME_ONLY}" == "1" ]]; then
+    skip "Tests 7-10b: source-tree unit + tabletop suites (--runtime-only gate, #595)"
+else
 # ── Test 7: Repository management ───────────────────────────────────
 
 info "${BOLD}Test 7: Repository management${CL}"
@@ -502,6 +536,7 @@ if [[ -x "${SCRIPT_DIR}/scripts/test/test-module-ready.sh" ]]; then
 else
     skip "scripts/test/test-module-ready.sh not found"
 fi
+fi   # end source-tree checks (Tests 7-10b)
 
 # ── Test 11: ADR-007 component smoke (lightweight, non-disruptive) ───────────
 # A sub-second sanity check that the new ADR-007 components' BASIC functionality
@@ -513,9 +548,10 @@ fi
 info "${BOLD}Test 11: ADR-007 component smoke (lightweight)${CL}"
 
 # opnsense-controller + update-tappaas: the linked CLIs load. This is the gate
-# that surfaces a broken compiled-component build — pre-update.sh's dispatcher
-# deliberately warns-and-continues on build failure (stale bins keep working),
-# so a build regression must fail HERE, not block the fleet update.
+# that surfaces a broken compiled-component build — refresh-control-plane.sh
+# deliberately reports a build failure as STALE rather than aborting (the
+# previous bins keep working), so a build regression must fail HERE, not block
+# the fleet update.
 if [[ -x /home/tappaas/bin/opnsense-controller ]]; then
     if /home/tappaas/bin/opnsense-controller --help >/dev/null 2>&1; then
         pass "opnsense-controller: linked CLI loads"

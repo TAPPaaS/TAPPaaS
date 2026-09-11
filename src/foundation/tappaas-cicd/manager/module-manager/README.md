@@ -38,7 +38,7 @@ later retire phase).
 | `module modify <m>` | `update-module.sh` | release update (snapshot + test + 3-way merge). `--set field=value` also **changes a declared field** first (ADR-020) |
 | `module delete <m>` | `delete-module.sh` | `--archive` (default) / `--remove` |
 | `module reconcile <m>` | `src/inspect.ts` | read-only drift report (default); `--apply` → **leaf converge** (`src/reconcile.ts`) |
-| `module test <m>` | `test-module.sh` | `--deep`, `--vmid`, `--zone0` |
+| `module test <m>` | `test-module.sh` | `--deep`, `--runtime-only`, `--vmid`, `--zone0` |
 | `module snapshot-vm <m>` | `snapshot-vm.sh` | special VM op (not CRUD) |
 
 Common options: `--config-dir <dir>`, `--json` (list/show/resolve/validate), `-h`.
@@ -208,7 +208,9 @@ update-module.sh [options] <module-name>
 - `--no-snapshot` — skip the pre-update snapshot / rollback.
 - `--debug`, `--silent`.
 
-It snapshots the VM, tests, updates, and rolls back on a fatal failure.
+It snapshots the VM, tests, updates, and rolls back on a fatal failure. The Step 2
+pre-update test runs `--runtime-only`: it gates a mutation, so it asks whether the
+module is healthy, not whether the source tree is correct (#595).
 
 ### `delete-module.sh` — delete a module
 
@@ -226,12 +228,18 @@ delete-module.sh <module-name> [--archive|--remove] [--vmid <id>]
 ### `test-module.sh` — run a module's tests
 
 ```
-test-module.sh [--deep] [--vmid <id>] [--zone0 <zone>] <module-name>
+test-module.sh [--deep] [--runtime-only] [--vmid <id>] [--zone0 <zone>] <module-name>
 ```
+
+`--runtime-only` skips a module's source-tree checks (offline unit suites, generated-doc
+drift, grep guards over the repo) and runs only what says something about the live system.
+`update-module.sh` passes it for the Step 2 pre-update test, so a source-tree defect cannot
+abort the update of a healthy module (#595). `--deep` runs everything regardless.
 
 ```bash
 test-module.sh openwebui
 test-module.sh --deep litellm
+test-module.sh --runtime-only tappaas-cicd   # what the pre-update gate runs
 ```
 
 ### `snapshot-vm.sh` — manage a module's VM snapshots

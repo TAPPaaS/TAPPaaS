@@ -496,8 +496,15 @@ main() {
     if [[ "${OPT_NO_SNAPSHOT}" -eq 1 ]]; then
         info "  Skipped (--no-snapshot)"
     else
+        # --runtime-only: this test is a GATE on a mutation, so it must ask
+        # "is this module healthy enough to update", not "is the source tree
+        # correct". A module's offline unit suites and generated-doc checks say
+        # nothing about the former, and failing one here aborts the update of a
+        # perfectly healthy module — which is how a stale generated README
+        # stopped the mothership updating itself for three nights (#595). Those
+        # checks still run for an operator, and in the deep sweep.
         local pre_test_exit=0
-        /home/tappaas/bin/test-module.sh "${module}" || pre_test_exit=$?
+        /home/tappaas/bin/test-module.sh --runtime-only "${module}" || pre_test_exit=$?
 
         if [[ "${pre_test_exit}" -eq 0 ]]; then
             debug "  ${GN}✓${CL} Pre-update tests passed"

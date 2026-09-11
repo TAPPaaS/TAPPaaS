@@ -51,7 +51,7 @@ scheduling override — the update window is ignored). Its own `--force` is a
 migrate) on **every** module (`TAPPAAS_MODULE_FORCE` → each `module modify
 --force`; legitimate under ADR-020 D8 because an operator is explicitly asking,
 not the unattended sweep). `--no-git-pull` (`TAPPAAS_NO_GIT_PULL`) updates
-whatever is checked out — pre-update.sh skips the per-repo pull — so local,
+whatever is checked out — refresh-control-plane.sh skips the per-repo pull — so local,
 not-yet-pushed changes can be tested. `--dry-run` previews the plan.
 
 `test` runs every deployed module's tests: it iterates

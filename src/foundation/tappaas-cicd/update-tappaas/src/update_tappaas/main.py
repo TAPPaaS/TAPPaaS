@@ -36,6 +36,19 @@ MODULE_MANAGER_CMD = os.environ.get("MODULE_MANAGER_CMD", "/home/tappaas/bin/mod
 # output) when the between-module check finds the resolver down (#516/#517).
 # Override for tests with UNBOUND_MANAGER_CMD.
 UNBOUND_MANAGER_CMD = os.environ.get("UNBOUND_MANAGER_CMD", "/home/tappaas/bin/unbound-manager")
+# The mothership's self-refresh: pull the tracked repositories, relink ~/bin, and
+# rebuild every compiled component. Run as Phase 0 — BEFORE any module is touched
+# — because the control plane is not a module like the others, it is the thing
+# running this sweep (#595). Invoked by repo path, not through ~/bin: the run that
+# first pulls this script is also the run that links it, so ~/bin cannot be
+# assumed to have it yet. Override for tests with REFRESH_CONTROL_PLANE_CMD.
+REFRESH_CONTROL_PLANE_CMD = os.environ.get(
+    "REFRESH_CONTROL_PLANE_CMD",
+    "/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/scripts/refresh-control-plane.sh",
+)
+# refresh-control-plane.sh's "built, but some component group failed" exit code:
+# the bins are STALE, not broken, so the sweep proceeds — loudly.
+REFRESH_RC_STALE = 10
 
 # Foundation modules in their required update order
 FOUNDATION_MODULES = [
@@ -708,6 +721,52 @@ def reboot_pass(automatic_reboot: bool, dry_run: bool) -> bool:
 # ── Result artefact ──────────────────────────────────────────────────
 
 
+def refresh_control_plane() -> str:
+    """Phase 0: refresh the control plane before any module is updated (#595).
+
+    This used to happen inside tappaas-cicd's OWN module update, at
+    pre-update.sh — i.e. behind update-module.sh's Step 2 pre-update test. One
+    failing check there aborted the module update before the `git pull` ran, so
+    the pull that would have carried the fix sat behind a test of the broken
+    code and the sweep stalled the same way every night (2026-09-07..09) until a
+    human intervened. Hoisting it out of the gated path is what breaks that
+    ratchet: the mothership can always update itself.
+
+    Returns one of "refreshed" | "stale" | "failed" | "skipped", recorded in the
+    sweep summary and in last-update-result.json. A stale/failed refresh does
+    NOT halt the sweep — the previous binaries still work — but it must never be
+    silent: #467 ran for weeks on exactly that silence, and the 14 downstream
+    "no module drift verb" failures of #595 were this condition seen from the
+    far end, one module at a time.
+    """
+    if not os.path.exists(REFRESH_CONTROL_PLANE_CMD):
+        # A checkout that predates this script: the OLD pre-update.sh still does
+        # the refresh inline, and the pull it performs is what puts this file on
+        # disk for the next run. Not an error, but say so.
+        log.warning("Control-plane refresh script not found at %s — this checkout "
+                    "predates it; the refresh falls back to pre-update.sh this run.",
+                    REFRESH_CONTROL_PLANE_CMD)
+        return "skipped"
+    try:
+        rc = subprocess.run([REFRESH_CONTROL_PLANE_CMD], text=True).returncode
+    except (subprocess.SubprocessError, OSError) as e:
+        log.error("Control-plane refresh could not run (%s) — shared manager "
+                  "binaries may be STALE for this whole sweep.", e)
+        return "failed"
+    if rc == 0:
+        return "refreshed"
+    if rc == REFRESH_RC_STALE:
+        log.error("Control-plane refresh incomplete: one or more component groups "
+                  "failed to BUILD. The shared manager/controller binaries every "
+                  "module reconciles through are STALE (previous build). Module "
+                  "failures below may be symptoms of this, not of the module.")
+        return "stale"
+    log.error("Control-plane refresh FAILED (rc=%d) — the repositories may not be "
+              "pulled and the shared manager binaries may be STALE for this whole "
+              "sweep.", rc)
+    return "failed"
+
+
 def write_result_artifact(result: dict) -> None:
     """Persist the outcome of a real sweep to a journal-free artefact (#506).
 
@@ -814,6 +873,8 @@ def main():
         log.info("=== DRY RUN MODE ===")
         if mf:
             log.info("(module-force: every update authorized to apply DISRUPTIVE changes)")
+        log.info("Phase 0 - Control-plane refresh (#595):")
+        log.info("  1. %s", REFRESH_CONTROL_PLANE_CMD)
         log.info("Phase 1 - Foundation update order:")
         for i, mod in enumerate(installed_foundation, 1):
             log.info("  %d. module-manager module modify %s%s", i, mod, mf)
@@ -836,6 +897,22 @@ def main():
         sys.exit(0)
 
     failed_modules = []
+
+    # Phase 0: refresh the control plane — pull the repositories, relink ~/bin,
+    # rebuild every compiled component — BEFORE any module is touched (#595).
+    #
+    # Placed AFTER the schedule gate above, never before it: this unit fires
+    # hourly and exits there on a not-due run, so hoisting the refresh any
+    # earlier would `git pull` against the forge every hour instead of once per
+    # scheduled sweep.
+    #
+    # This also settles an ordering inconsistency that predates the hoist: the
+    # pull used to happen inside tappaas-cicd's update, the SECOND foundation
+    # module, so `cluster` (the first) updated against the previous run's source
+    # while everything after it saw the new one. Now every module in the sweep
+    # runs against the same tree.
+    log.info("Phase 0: Refresh the control plane (repositories, ~/bin, components)")
+    control_plane = refresh_control_plane()
 
     # Phase 0.5: capture cluster membership into site.json (node-provisioning
     # design N1). A node joined via `install.sh --join` cannot register itself
@@ -923,10 +1000,10 @@ def main():
             "scheduled pass)"
         )
     log.info(
-        "update-tappaas completed: %s | total=%d succeeded=%d failed=%d "
-        "not_attempted=%d skipped=%d reboot=%s",
-        end_time, total, succeeded, len(failed_modules), len(not_attempted),
-        len(skipped_foundation) + len(skipped_apps),
+        "update-tappaas completed: %s | control_plane=%s total=%d succeeded=%d "
+        "failed=%d not_attempted=%d skipped=%d reboot=%s",
+        end_time, control_plane, total, succeeded, len(failed_modules),
+        len(not_attempted), len(skipped_foundation) + len(skipped_apps),
         "ok" if reboot_ok else "failed",
     )
 
@@ -944,12 +1021,17 @@ def main():
         "not_attempted": len(not_attempted),
         "skipped": len(skipped_foundation) + len(skipped_apps),
         "reboot": "ok" if reboot_ok else "failed",
+        # Whether the mothership managed to update ITSELF this run (#595). A
+        # sweep whose shared binaries are stale did not fully succeed, however
+        # green the per-module tally looks — same doctrine as #519.
+        "control_plane": control_plane,
         # Deferrals are recorded, not counted as failures (ADR-020 D8): the
         # converge did everything it was allowed to do. They belong in the
         # artefact so "what is still pending" survives the log.
         "deferred": len(DEFERRED_CHANGES),
         "deferred_changes": DEFERRED_CHANGES,
-        "ok": not failed_modules and not dep["down"] and reboot_ok,
+        "ok": (not failed_modules and not dep["down"] and reboot_ok
+               and control_plane in ("refreshed", "skipped")),
     }
     # When a shared service went down mid-sweep, carry the boundary so the run is
     # attributable to one root cause instead of N per-module symptoms (#517).
@@ -963,7 +1045,17 @@ def main():
         }
     write_result_artifact(artifact)
 
-    if failed_modules or dep["down"] or not reboot_ok:
+    control_plane_bad = control_plane in ("stale", "failed")
+    if failed_modules or dep["down"] or not reboot_ok or control_plane_bad:
+        if control_plane_bad:
+            # Named FIRST and as a candidate root cause: every module reconciles
+            # through the shared manager binaries, so a stale control plane
+            # shows up as N unrelated-looking module failures. That inversion —
+            # 14 symptoms reported, the one cause not — is #595.
+            log.error("Control plane is %s — the shared manager/controller "
+                      "binaries are not this checkout's. Any module failure "
+                      "above may be a symptom of that; rebuild with %s",
+                      control_plane.upper(), REFRESH_CONTROL_PLANE_CMD)
         if dep["down"]:
             detail = "; ".join(f["detail"] for f in dep["failures"])
             if dep["culprit"]:
@@ -977,7 +1069,7 @@ def main():
             log.error("Failed modules: %s", ", ".join(failed_modules))
         sys.exit(1)
 
-    log.info("All modules updated successfully")
+    log.info("All modules updated successfully (control plane %s)", control_plane)
 
 
 if __name__ == "__main__":
