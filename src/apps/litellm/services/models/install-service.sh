@@ -24,6 +24,12 @@ CONSUMING_MODULE=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --dry-run) DRY_RUN=1; shift ;;
+        # ADR-020 D8: accepted and ignored. Registering a model with LiteLLM
+        # needs no downtime, so there is nothing to authorize — but
+        # `module-manager reconcile --force` forwards --force to EVERY provider,
+        # so rejecting it failed every module that dependsOn litellm:models
+        # under `site-manager update --force`.
+        --force) shift ;;
         -*) die "unknown option: $1" ;;
         *) if [[ -z "${CONSUMING_MODULE}" ]]; then CONSUMING_MODULE="$1"; shift
            else die "unexpected argument: $1"; fi ;;

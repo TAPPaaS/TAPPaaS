@@ -73,7 +73,18 @@ MODULE=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --check)   CHECK_MODE=1 ;;
-        -h|--help) echo "Usage: $0 [--check] <module-name>"; exit 0 ;;
+        # ADR-020 D8: --force is DISRUPTION AUTHORIZATION, forwarded verbatim to
+        # every provider by `module-manager reconcile --force` so the decision is
+        # made once. HA registration reboots nothing, so this service accepts it
+        # and does nothing with it — but it MUST accept it: the catch-all below
+        # used to swallow it as the module name, so `update-service.sh <mod>
+        # --force` set MODULE=--force and died on config/--force.json, failing
+        # every module that dependsOn cluster:ha.
+        --force)   ;;
+        -h|--help) echo "Usage: $0 [--check] [--force] <module-name>"; exit 0 ;;
+        # Never let an unknown flag become the module name again. A loud refusal
+        # is recoverable; a silently misparsed positional is what cost a sweep.
+        -*)        echo "update-service.sh: unknown option '$1'" >&2; exit 1 ;;
         *)         MODULE="$1" ;;
     esac
     shift

@@ -114,16 +114,29 @@ export interface NetworkClient {
 // the reconcile engine materialize both. Reads are cheap enough for one
 // environment (they mirror what acme-setup already does); tests inject a fake.
 export interface WildcardDnsState {
-  // The IP the wildcard SHOULD resolve to: the environment's service-zone
-  // gateway (<subnet>.1), falling back to the dmz gateway. undefined ⇒ no subnet
-  // for the zone in zones.json, so no gateway could be derived.
+  // The IP the wildcard SHOULD resolve to, from the ONE resolver
+  // (`network-manager split-horizon-target`, ADR-021 D5) — the DMZ gateway, for
+  // every caller. undefined ⇒ the resolver could not answer, either because the
+  // domain is not published (see `unpublished`) or because the site has no dmz
+  // zone. This used to be derived here from the env's service zone, one of the
+  // three disagreeing transcriptions #577 found.
   gatewayIp?: string;
-  // The zone the gateway was derived from (the env's own zone, or "dmz"). Used
-  // only for the human description on the Unbound override.
+  // The zone the answer came from (always "dmz" under ADR-021 D2). Used only for
+  // the human description on the Unbound override.
   gatewayZone?: string;
+  // ADR-021 R3: the domain has no public DNS record, so no certificate can be
+  // issued and there is nothing to publish. A supported state, not a failure —
+  // the caller must not treat it as "could not derive a gateway".
+  unpublished?: boolean;
   // What the `*` override currently resolves to in Unbound, or undefined when no
   // wildcard override exists for this domain yet.
   currentTarget?: string;
+  // How many `*` rows exist for this domain. FIRST-CLASS, not derived from
+  // currentTarget (#594): two identical rows read as "already correct" under a
+  // value-only comparison, so the flatten never ran and the duplicates were
+  // frozen in place forever. The plan must converge on exactly one row whenever
+  // this is not 1, even when the value already matches.
+  rowCount: number;
   // Per-service host overrides under this domain (host names, excluding `*`).
   // A wildcard installs a `redirect` local-zone that permits local-data only at
   // the apex, so these collide and are FATAL to Unbound (#474) — they must be

@@ -1284,6 +1284,43 @@ tappaas_ssh_repin_host() {
     return 0
 }
 
+# tappaas_ssh_host_key_changed <host> — 0 when the host is pinned in
+# known_hosts and NONE of the keys it offers NOW matches that pin.
+#
+# The self-heal used to be decided by grepping ssh's stderr, which a caller's
+# -q silently emptied — so the heal never fired for the two -q call sites and
+# the failure surfaced as a bare "Connection closed" (#630). A quiet flag, a
+# locale, or an OpenSSH rewording each break a string match; a fingerprint
+# comparison breaks on none of them.
+#
+# Deliberately conservative — every "I cannot tell" answer is NOT-changed, so
+# this only ever ADDS a heal that the stderr match would have missed:
+#   nothing pinned      → accept-new territory, not a change
+#   host unreachable    → the connection failed for another reason entirely
+# Like tappaas_ssh_repin_host, it scans the default port.
+tappaas_ssh_host_key_changed() {
+    local host="${1:-}" kh="${HOME}/.ssh/known_hosts" pinned offered
+    [[ -n "${host}" && -r "${kh}" ]] || return 1
+    pinned="$(ssh-keygen -F "${host}" -f "${kh}" 2>/dev/null | grep -v '^#' \
+              | ssh-keygen -lf - 2>/dev/null | awk '{print $2}' | sort -u)" || true
+    [[ -n "${pinned}" ]] || return 1
+    offered="$(ssh-keyscan -T 10 "${host}" 2>/dev/null | grep -v '^#' \
+               | ssh-keygen -lf - 2>/dev/null | awk '{print $2}' | sort -u)" || true
+    [[ -n "${offered}" ]] || return 1
+    # Any overlap means the pin still matches something on offer (a host may
+    # present ed25519 + rsa while only one of them is pinned).
+    grep -qxF -f <(printf '%s\n' "${pinned}") <(printf '%s\n' "${offered}") && return 1
+    return 0
+}
+
+# _tappaas_is_hostkey_failure <stderr-file> <host> — did this failure come from
+# a changed host key? The stderr match is the cheap path (no network); the
+# fingerprint check is the one that still works when the caller passed -q.
+_tappaas_is_hostkey_failure() {
+    grep -qE 'Host key verification failed|REMOTE HOST IDENTIFICATION HAS CHANGED' "$1" && return 0
+    tappaas_ssh_host_key_changed "${2:-}"
+}
+
 # tappaas_ssh_guest <ssh-argv...> — ssh, but a CHANGED host key is healed and
 # the command retried once instead of failing the caller. Options are passed
 # through untouched (ssh takes the first value for an option, so injecting our
@@ -1291,11 +1328,14 @@ tappaas_ssh_repin_host() {
 # through so callers may capture it; stderr is buffered only long enough to
 # recognise the host-key failure, then emitted.
 tappaas_ssh_guest() {
-    local err rc=0 host
+    local err rc=0 host=""
     err="$(mktemp)" || { ssh "$@"; return $?; }
     ssh "$@" 2>"${err}" || rc=$?
-    if (( rc != 0 )) && grep -qE 'Host key verification failed|REMOTE HOST IDENTIFICATION HAS CHANGED' "${err}"; then
-        host="$(tappaas_ssh_target_host "$@" || true)"
+    # The destination is parsed before the verdict now, because the verdict may
+    # need it: with the caller's stderr silenced, the host itself is the only
+    # remaining evidence of what went wrong (#630).
+    (( rc == 0 )) || host="$(tappaas_ssh_target_host "$@" 2>/dev/null || true)"
+    if (( rc != 0 )) && _tappaas_is_hostkey_failure "${err}" "${host}"; then
         if [[ -z "${host}" ]]; then
             warn "SSH host key rejected but no destination could be parsed — not re-pinning" >&2
         elif [[ "${TAPPAAS_SSH_NO_REPIN:-0}" == "1" ]]; then
@@ -1347,11 +1387,14 @@ tappaas_scp_target_host() {
 # call that actually DELIVERS things: a transfer that fails on a re-instantiated
 # guest's changed key leaves the caller believing a file was placed (#626).
 tappaas_scp_guest() {
-    local err rc=0 host
+    local err rc=0 host=""
     err="$(mktemp)" || { scp "$@"; return $?; }
     scp "$@" 2>"${err}" || rc=$?
-    if (( rc != 0 )) && grep -qE 'Host key verification failed|REMOTE HOST IDENTIFICATION HAS CHANGED' "${err}"; then
-        host="$(tappaas_scp_target_host "$@" || true)"
+    # The destination is parsed before the verdict now, because the verdict may
+    # need it: with the caller's stderr silenced, the host itself is the only
+    # remaining evidence of what went wrong (#630).
+    (( rc == 0 )) || host="$(tappaas_scp_target_host "$@" 2>/dev/null || true)"
+    if (( rc != 0 )) && _tappaas_is_hostkey_failure "${err}" "${host}"; then
         if [[ -z "${host}" ]]; then
             warn "SCP host key rejected but no destination could be parsed — not re-pinning" >&2
         elif [[ "${TAPPAAS_SSH_NO_REPIN:-0}" == "1" ]]; then

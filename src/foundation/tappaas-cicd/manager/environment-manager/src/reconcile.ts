@@ -18,6 +18,7 @@
 // the NetworkClient / ModuleClient interfaces (injected) — pure planning, then
 // apply.
 
+import { CONTROL_PLANE_ZONE } from "../../../lib/ts/src/zones";
 import {
   Action,
   ApplyFailure,
@@ -123,23 +124,40 @@ function planWildcardState(
     return;
   }
   const st = dt.wildcardDnsState(domain, env.network.zone ?? "");
-  if (!st.gatewayIp) {
-    warnings.push(
-      `environment '${env.name}': could not derive a gateway IP for *.${domain} ` +
-        `(zone '${env.network.zone}' has no subnet in zones.json, and no dmz fallback) — ` +
-        `wildcard DNS not reconciled.`,
+  if (st.unpublished) {
+    // ADR-021 R3: a supported configuration, not an error. There is no public
+    // record, so DNS-01 could not have issued a wildcard cert and there is
+    // nothing for Caddy to serve — a NOTE, not a warning.
+    notes.push(
+      `*.${domain} is not published (no external DNS) — no wildcard record, ` +
+        `no certificate, and no identity gate. Services are reachable only at ` +
+        `<vmname>.<zone>.internal.`,
     );
     return;
   }
-  if (st.currentTarget !== st.gatewayIp || st.collidingHosts.length > 0) {
+  if (!st.gatewayIp) {
+    warnings.push(
+      `environment '${env.name}': the split-horizon resolver could not answer for ` +
+        `*.${domain} (no 'dmz' zone in zones.json?) — wildcard DNS not reconciled.`,
+    );
+    return;
+  }
+  // #594: rowCount is part of the gate, not just the value. Two identical `*`
+  // rows satisfy `currentTarget === gatewayIp`, so a value-only comparison
+  // reported "already resolves … no DNS change" and the delete-all-rewrite-one
+  // flatten never fired — the duplicates survived every future reconcile.
+  const wrongCardinality = st.rowCount !== 1;
+  if (wrongCardinality || st.currentTarget !== st.gatewayIp || st.collidingHosts.length > 0) {
     const collide =
       st.collidingHosts.length > 0
         ? `; prune ${st.collidingHosts.length} colliding per-service override(s)`
         : "";
+    const dupes =
+      st.rowCount > 1 ? `; flatten ${st.rowCount} duplicate '*' rows to one` : "";
     actions.push({
       kind: "register-wildcard-dns",
       scope: "environment",
-      target: `*.${domain} -> ${st.gatewayIp} (${st.gatewayZone} gateway, Unbound)${collide}`,
+      target: `*.${domain} -> ${st.gatewayIp} (${st.gatewayZone} gateway, Unbound)${dupes}${collide}`,
       value: st.gatewayIp,
       domain,
       zone: st.gatewayZone,
@@ -200,6 +218,22 @@ export function computePlan(
     notes.push(
       `zone '${zone}' does not exist and will be authored as a Service zone ` +
         `(ADR-014 D1). It converges in the network pass below.`,
+    );
+  } else if (zone === CONTROL_PLANE_ZONE) {
+    // The control plane is the third case this gate was never written for. The
+    // rule exists because a Client/IoT zone CONSUMES a service segment, so
+    // pointing an environment at one is a mistake. mgmt consumes nothing — its
+    // modules (backup, cluster, identity, logging, network, tappaas-cicd,
+    // templates) live in the mgmt zone, so the environment IS its own segment.
+    // Without this the whole mgmt environment was inert: cmdReconcile die()s on
+    // any plan error in preview as well as apply, so neither its DNS nor its
+    // cert step ever ran, and `site-manager reconcile --deep` failed with it.
+    // Exempt by NAME, like I1/I2/I5 — there is one control plane per site, and
+    // a second `type: Management` zone backing an environment should still be
+    // reported.
+    notes.push(
+      `environment '${env.name}' is bound to the ${CONTROL_PLANE_ZONE} control plane ` +
+        `(a ${net.zoneType(zone) ?? "Management"} zone) — exempt from the Service-zone rule.`,
     );
   } else {
     const t = net.zoneType(zone);

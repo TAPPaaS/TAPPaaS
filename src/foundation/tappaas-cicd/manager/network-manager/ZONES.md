@@ -94,7 +94,7 @@ machine-checked rather than reviewed by eye:
 | Tier | Name | `access-to` (downward baseline) | Reached from above via | Members |
 |---|---|---|---|---|
 | **0** | Control plane | all zones | *nothing — no inbound at all* | `mgmt` |
-| **1** | Service backend | ↓ internet, dmz, IoT-controlled | **pinhole** from clients + reverse proxy | `<defaultEnvironment>` |
+| **1** | Service backend | ↓ internet, IoT-controlled | **pinhole** from clients + reverse proxy | `<defaultEnvironment>` |
 | **2** | Trusted client | ↓ internet, own IoT-controlled | direct (its own devices) | `home`, `work` |
 | **3** | Untrusted edge | ↓ internet only | — | `guest`, `iotCloud`, `iotUntrust` |
 | **4** | DMZ (exposed) | ↓ internet only | **pinhole** from internet | `dmz` |
@@ -103,9 +103,14 @@ machine-checked rather than reviewed by eye:
 
 Two consequences worth stating plainly:
 
-- **DMZ is not a service peer.** A DMZ host is internet-exposed and assume-breach, so
-  it sits *below* an internal backend (tier 4, not 1). `service → dmz` is a legal
-  downward edge; `dmz` reaches nothing internal.
+- **DMZ is not a service peer, and no zone reaches it zone-wide.** A DMZ host is
+  internet-exposed and assume-breach, so it sits *below* an internal backend (tier 4,
+  not 1), and `dmz` reaches nothing internal. `service → dmz` used to be seeded as a
+  legal downward edge; **ADR-021 D3b removed it** (invariant **I5**). An `access-to`
+  edge grants the whole target subnet on every port, and the DMZ gateway is the
+  firewall itself — `webgui.interfaces` and `ssh.interfaces` are unset — so the edge
+  handed the admin GUI (8443) and SSH (22) to every host in the source zone (#618).
+  Reaching a DMZ *workload* is a per-module pinhole via `dmz.pinhole-allowed-from`.
 - **Service sits above trusted clients.** A client reaching its service is an **upward
   pinhole** (`home` → `<env>`:port), not a zone-wide `access-to`. The backend is the
   crown jewel; clients get specific ports, not the subnet.
@@ -144,7 +149,7 @@ not a copy-paste of a template block.
 | Archetype | type | tier | isolated | `access-to` seed | reference zone |
 |---|---|---|:---:|---|---|
 | `control` | Management | 0 | no | all | `mgmt` |
-| `service` | Service | 1 | no | internet, dmz | `srv` → `<env>` |
+| `service` | Service | 1 | no | internet (Caddy via the caddy-reach rule, **not** `dmz`) | `srv` → `<env>` |
 | `trusted-client` | Client | 2 | no | internet (service via **pinhole**) | `home`, `work` |
 | `guest` | Guest | 3 | no | internet | `guest` |
 | `iot-cloud` | IoT | 3 | no | internet | `iotCloud` |
@@ -152,6 +157,34 @@ not a copy-paste of a template block.
 | `dmz` | DMZ | 4 | no | internet (inbound via **pinhole**) | `dmz` |
 | `iot-local` | IoT | 6 | no | *(none)* | `iotLocal` |
 | `iot-cams` | IoT | 6 | **yes** | *(none)* | `iotCams` |
+
+### Reaching the reverse proxy — the caddy-reach rule (ADR-021 D3)
+
+Split-horizon DNS resolves every published name to the **DMZ gateway**, where
+`os-caddy` listens. No zone needs `access-to: dmz` to use it, and none should have it
+(**I5** above). Instead `zone-manager` emits, per candidate zone, a band-1 pass:
+
+```
+<zone subnet>  →  <dmz gateway>/32  :  tcp 80, 443
+```
+
+ordered ahead of that zone's RFC1918 block, so the packet reaches Caddy and nothing
+else in the DMZ. It is **L3 reachability only** — Caddy's `proxyAllowedZones` ACL and
+the Authentik identity gate remain the authorization, which is the whole point of
+ADR-021 D2: the address encodes no entitlement.
+
+A zone is a candidate when it:
+
+| | |
+|---|---|
+| has `internet` (or `all`) in `access-to` | it can already reach that Caddy the long way round, via the WAN hairpin, so this opens no new destination |
+| is an **Overlay** with a non-empty `access-to` (**D3a**) | overlay peers are not a routed segment and carry no `internet`, but they resolve the same answer. `admin` is the live case; a dormant overlay (empty `access-to`) stays out. Its `bridge` names the interface its peers arrive on, e.g. `wireguard` |
+| is the **`dmz` zone itself** (**D3b**) | it used to be skipped as "reaches the gateway locally", but that was the unrestricted `Zone dmz -> gateway` rule which #399 narrows to DNS/NTP/DHCP/ICMP — after which a DMZ workload would lose tcp/443 to Caddy |
+
+A fully-isolated zone (empty `access-to`, no `internet`) gets no rule and cannot reach
+a published name at all. That is the correct outcome for a deliberately isolated
+segment: it is cut off from published services by the same mechanism that cuts it off
+from the internet.
 
 The catalog is authoritative in
 [`schemas/zones-fields.json`](../../../schemas/zones-fields.json) (`archetypes.catalog`),

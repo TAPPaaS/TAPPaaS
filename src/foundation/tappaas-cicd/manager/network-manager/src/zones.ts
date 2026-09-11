@@ -237,7 +237,11 @@ export function authorZone(doc: ZonesDoc, name: string, opts: AddZoneOpts): Zone
     typeId = opts.typeId ?? "2";
     type = opts.type ?? "Service";
     bridge = "lan";
-    accessTo = ["internet", "dmz"];
+    // ADR-021 D3b: NOT ["internet", "dmz"]. A `dmz` edge grants the whole DMZ
+    // subnet — which holds workloads, and whose gateway is this firewall, so it
+    // handed every service VM the admin GUI and SSH (#618). Reaching Caddy is
+    // the zone_manager caddy-reach rule (DMZ gateway /32, tcp 80+443) instead.
+    accessTo = ["internet"];
     pinhole = [];
   }
 
@@ -301,6 +305,7 @@ export function authorZone(doc: ZonesDoc, name: string, opts: AddZoneOpts): Zone
   doc.raw[name] = stripName(zone);
   doc.zones.set(name, zone);
   ensureMgmtAccess(doc, name);
+  retireDmzAccess(doc);
   return zone;
 }
 
@@ -389,6 +394,32 @@ export function ensureMgmtAccess(doc: ZonesDoc, name: string): void {
   m["access-to"] = [...cur, name];
   const zm = doc.zones.get("mgmt");
   if (zm) zm["access-to"] = m["access-to"] as string[];
+}
+
+// ── DMZ retirement invariant (ADR-021 D3b / #618) ──
+// No zone may carry `dmz` in access-to. The edge compiles to the whole DMZ
+// subnet on every port, and the DMZ gateway is the firewall itself — so it
+// grants the admin GUI (8443) and SSH (22) to every host in the source zone.
+// Reachability to Caddy is the caddy-reach rule (DMZ gateway /32, tcp 80+443)
+// emitted by zone_manager; a service VM that must reach a DMZ *workload*
+// declares a pinhole. Authored on every add/modify, like ensureMgmtAccess.
+export function retireDmzAccess(doc: ZonesDoc): string[] {
+  const stripped: string[] = [];
+  for (const [name, raw] of Object.entries(doc.raw)) {
+    if (name.startsWith("_") || !raw || typeof raw !== "object") continue;
+    const r = raw as Record<string, unknown>;
+    const cur = Array.isArray(r["access-to"]) ? (r["access-to"] as string[]) : [];
+    if (!cur.includes("dmz")) continue;
+    // mgmt is the control plane and the documented exception to the isolation
+    // rules; it keeps its full visibility list.
+    if (name === "mgmt") continue;
+    const next = cur.filter((z) => z !== "dmz");
+    r["access-to"] = next;
+    const zm = doc.zones.get(name);
+    if (zm) zm["access-to"] = next;
+    stripped.push(name);
+  }
+  return stripped;
 }
 
 export function removeMgmtAccess(doc: ZonesDoc, name: string): void {

@@ -14,6 +14,7 @@
 // Tiny assert harness (no test framework).
 
 import { proxmoxNeedsRecheck, proxmoxStatus } from "../../src/planes";
+import { gatewayIpOf, resolveSplitHorizonTarget } from "../../src/splithorizon";
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
@@ -1271,6 +1272,23 @@ function tmpZones(): string {
       !r.lines.some((l) => l.includes("admin")), "P2 R2: exempt zones are not listed as untiered");
   }
 
+  // (d2) I5 — a zone-wide DMZ edge (ADR-021 D3b / #618). The edge compiles to
+  //      the whole DMZ subnet on every port, and the DMZ gateway is the firewall
+  //      itself, so it hands out the admin GUI (8443) and SSH (22).
+  {
+    const dmz = { type: "DMZ", state: "Mandatory", typeId: "6", subId: "0", vlantag: 610, ip: "10.6.0.0/24", tier: 4, "access-to": ["internet"], "pinhole-allowed-from": ["internet"] };
+    const r = run({ mgmt, dmz, acme: { ...svc, "access-to": ["internet", "dmz"] } });
+    check(hits(r, "I5") === 1, "P2 I5: a zone with 'dmz' in access-to is flagged (#618)");
+    const rs = run({ mgmt, dmz, acme: { ...svc, "access-to": ["internet", "dmz"] } }, true);
+    check(rs.errors > 0, "P2 I5: --strict promotes it to an error");
+    // …and the clean case stays clean.
+    const ok = run({ mgmt, dmz, acme: svc });
+    check(hits(ok, "I5") === 0, "P2 I5: a service zone without 'dmz' passes");
+    // mgmt keeps its full visibility list.
+    const m = run({ mgmt: { ...mgmt, "access-to": ["internet", "dmz", "acme"] }, dmz, acme: svc });
+    check(hits(m, "I5") === 0, "P2 I5: the mgmt control plane is exempt");
+  }
+
   // (e) I2 — an isolated zone in someone's access-to.
   {
     const r = run({
@@ -1925,6 +1943,55 @@ function tmpZones(): string {
     proxmoxStatus(ok(1), ok(0), null, true) === "error",
     "a hard error from either command wins over the other's success",
   );
+}
+
+
+// ── ADR-021 D5: the split-horizon resolver, as a pure function ────────
+{
+  console.log("");
+  console.log("== split-horizon-target (ADR-021 D5) ==");
+
+  check(gatewayIpOf("10.6.0.0/24") === "10.6.0.1", "D5: gateway of a /24 is .1");
+  check(gatewayIpOf("10.255.1.0/24") === "10.255.1.1", "D5: gateway of another /24");
+  check(gatewayIpOf("10.255.0.0/31") === "10.255.0.1", "D5: a /31 tunnel link still has a first host");
+  check(gatewayIpOf(undefined) === undefined, "D5: a missing CIDR has no gateway");
+  check(gatewayIpOf("not-a-cidr") === undefined, "D5: a malformed CIDR has no gateway");
+  check(gatewayIpOf("10.6.0.0/99") === undefined, "D5: an impossible prefix has no gateway");
+
+  const docOf = (zones: Record<string, unknown>) => ({
+    raw: zones,
+    zones: new Map(Object.entries(zones).map(([k, v]) => [k, { name: k, ...(v as object) }])),
+  }) as never;
+
+  const withDmz = docOf({ dmz: { type: "DMZ", ip: "10.6.0.0/24" } });
+
+  // Published → the DMZ gateway, for every caller. That is the whole rule (D2).
+  const ok1 = resolveSplitHorizonTarget(withDmz, "openwebui.example.org", true);
+  check(ok1.status === "ok" && ok1.ip === "10.6.0.1" && ok1.zone === "dmz",
+    "D5: a published name resolves to the DMZ gateway");
+  // …and it does not depend on the name: one answer, not one per service.
+  const ok2 = resolveSplitHorizonTarget(withDmz, "cloud.example.org", true);
+  check(ok2.status === "ok" && ok2.ip === "10.6.0.1",
+    "D5: a different published name gets the SAME address (no per-service derivation)");
+
+  // Not publicly resolvable → UNPUBLISHED, a supported state (R3), not an error.
+  const un = resolveSplitHorizonTarget(withDmz, "internal-only.example.org", false);
+  check(un.status === "unpublished", "D5: an unpublishable name is UNPUBLISHED, not an error");
+  check(un.status === "unpublished" && un.domain === "internal-only.example.org",
+    "D5: …and it names the domain it could not publish");
+
+  // No dmz zone at all → ERROR: the site cannot express an answer.
+  const noDmz = resolveSplitHorizonTarget(docOf({ srv: { ip: "10.2.0.0/24" } }), "x.example.org", true);
+  check(noDmz.status === "error", "D5: a site with no dmz zone is an ERROR");
+
+  // A dmz zone with an unusable ip is an error too — never a silent bad address.
+  const badIp = resolveSplitHorizonTarget(docOf({ dmz: { type: "DMZ", ip: "nonsense" } }), "x.example.org", true);
+  check(badIp.status === "error", "D5: a dmz zone with an unusable ip is an ERROR");
+
+  // UNPUBLISHED wins over a missing dmz: "this name is not published" is the
+  // more useful answer, and it is the one that must not read as breakage.
+  const both = resolveSplitHorizonTarget(docOf({}), "x.example.org", false);
+  check(both.status === "unpublished", "D5: unpublished is reported ahead of a site-level error");
 }
 
 console.log("");

@@ -21,10 +21,11 @@ export const TIER_INTERNET = 5;
 //   WAN     — the switch-internal ISP hand-off; no interface, DHCP or rules.
 export const TIER_EXEMPT_TYPES: ReadonlySet<string> = new Set(["Overlay", "WAN"]);
 
-// The control plane is the single exception to both I1 and I2: it reaches every
-// zone (including isolated ones) for operational visibility. Encoded here rather
-// than inline so the two checks cannot disagree about who is exempt.
-export const CONTROL_PLANE_ZONE = "mgmt";
+// The control plane is the standing exception to the zone invariants. It now
+// lives in the shared lib — environment-manager needs the same answer for its
+// own exemption, and a second copy of a constant is how two checks come to
+// disagree about who is exempt. Re-exported so importers here are unaffected.
+export { CONTROL_PLANE_ZONE } from "../../../lib/ts/src/zones";
 
 export interface Archetype {
   name: string;
@@ -43,7 +44,7 @@ export interface Archetype {
 
 export const ARCHETYPES: readonly Archetype[] = [
   { name: "control",        type: "Management", typeId: 0, tier: 0, isolated: false, accessTo: ["all"],             reference: "mgmt",       description: "Control plane: hypervisors, backup, firewall, identity, cicd" },
-  { name: "service",        type: "Service",    typeId: 2, tier: 1, isolated: false, accessTo: ["internet", "dmz"], reference: "srv",        description: "Application/service modules for one environment" },
+  { name: "service",        type: "Service",    typeId: 2, tier: 1, isolated: false, accessTo: ["internet"],        reference: "srv",        description: "Application/service modules for one environment" },
   { name: "trusted-client", type: "Client",     typeId: 3, tier: 2, isolated: false, accessTo: ["internet"],        reference: "home",       description: "Trusted end-user devices; reaches its service zone by pinhole" },
   { name: "guest",          type: "Guest",      typeId: 5, tier: 3, isolated: false, accessTo: ["internet"],        reference: "guest",      description: "Visitors: internet only, fully isolated" },
   { name: "iot-cloud",      type: "IoT",        typeId: 4, tier: 3, isolated: false, accessTo: ["internet"],        reference: "iotCloud",   description: "Internet-dependent trusted IoT: appliances, media, monitoring" },

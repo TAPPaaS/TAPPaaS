@@ -36,6 +36,8 @@ set -euo pipefail
 . /home/tappaas/bin/common-install-routines.sh
 # shellcheck source=../cluster/lib/vm-net.sh disable=SC1091
 . /home/tappaas/TAPPaaS/src/foundation/cluster/lib/vm-net.sh
+# shellcheck source=lib/dns-sample.sh disable=SC1091
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/dns-sample.sh"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_DIR
@@ -235,6 +237,19 @@ for ut in test-unifi-plugin.sh; do
     fi
 done
 
+section "Standard 1c: helper unit tests (lib/test-*.sh)"
+
+shopt -s nullglob
+for ut in "${SCRIPT_DIR}"/lib/test-*.sh; do
+    if ut_out=$(bash "${ut}" 2>&1); then
+        pass "$(basename "${ut}")"
+    else
+        fail "$(basename "${ut}")"
+        echo "${ut_out}" | sed 's/^/    /'
+    fi
+done
+shopt -u nullglob
+
 section "Standard 2: Schema files parse and validate"
 
 for file in "${ZONES_JSON}" "${ZONES_TEMPLATE}"; do
@@ -307,46 +322,41 @@ fi
 
 section "Standard 4: DNS for in-cluster modules"
 
-# Collect installed modules that have a single resolvable host. Modules with
-# aliasType=network (#241) represent a set of devices and have no <vmname>
-# DHCP/DNS record by design, so they must be excluded here (#255).
-sample_modules=""
-network_alias_count=0
-hostless_count=0
-for f in "${CONFIG_DIR}"/*.json; do
-    vmname=$(jq -r '.vmname // empty' "${f}" 2>/dev/null)
-    [[ -z "${vmname}" ]] && continue
-    alias_type=$(jq -r '.aliasType // "host"' "${f}" 2>/dev/null)
-    if [[ "${alias_type}" == "network" ]]; then
-        network_alias_count=$((network_alias_count + 1))
-        continue
-    fi
-    # ADR-012 §2.1: a backup module that realizes no LOCAL PBS — a shim (no
-    # datastore anywhere) or external (the datastore is someone else's, reached
-    # by URL) — has no <vmname> host and so no DNS record by design. Exclude it,
-    # mirroring the aliasType=network exclusion above. `remote-only` is the
-    # legacy spelling of external, still seen until the module's next update.
-    placement_state=$(jq -r '.placementState // empty' "${f}" 2>/dev/null)
-    if [[ "${placement_state}" == "shim" || "${placement_state}" == "external" \
-       || "${placement_state}" == "remote-only" ]]; then
-        hostless_count=$((hostless_count + 1))
-        continue
-    fi
-    sample_modules+="${vmname}"$'\n'
-done
-sample_modules=$(printf '%s' "${sample_modules}" | sort -u | head -3)
-
-if [[ "${network_alias_count}" -gt 0 ]]; then
-    skip "${network_alias_count} module(s) excluded — aliasType=network has no DNS record by design"
-fi
-
-if [[ "${hostless_count}" -gt 0 ]]; then
-    skip "${hostless_count} module(s) excluded — backup with no local datastore (shim/external) has no DNS record by design"
-fi
-
-if [[ -z "${sample_modules}" ]]; then
-    skip "no installed modules with a resolvable vmname — DNS resolution test skipped"
+# Which modules may be held to a DNS record, and why the rest may not, is
+# lib/dns-sample.sh — it is pure, and it has its own unit suite (Standard 1c).
+# The short version: a module answers at <vmname>.<zone>.internal only while a
+# guest of its own is running to take the lease.
+running_f="$(mktemp)"
+# shellcheck disable=SC2046  # word-splitting of hostnames is intended
+if dns_sample_running_vmids "$(jq -r '.node // empty' "${FIREWALL_JSON}" 2>/dev/null)" \
+                            $(get_all_node_hostnames) > "${running_f}" 2>/dev/null; then
+    runtime_known="${running_f}"
 else
+    runtime_known=""
+    skip "no cluster node answered — checking every module, including any with no running guest"
+fi
+
+dns_sample_select "${CONFIG_DIR}" "${runtime_known}"
+rm -f "${running_f}"
+
+if [[ "${DNS_SAMPLE_N_ALIAS}" -gt 0 ]]; then
+    skip "${DNS_SAMPLE_N_ALIAS} module(s) excluded — aliasType=network has no DNS record by design"
+fi
+
+if [[ "${DNS_SAMPLE_N_HOSTLESS}" -gt 0 ]]; then
+    skip "${DNS_SAMPLE_N_HOSTLESS} module(s) excluded — backup with no local datastore (shim/external) has no DNS record by design"
+fi
+
+if [[ "${DNS_SAMPLE_N_GUESTLESS}" -gt 0 ]]; then
+    skip "${DNS_SAMPLE_N_GUESTLESS} module(s) excluded — archived or not running, so no lease and no record by design (#631)"
+fi
+
+if [[ -z "${DNS_SAMPLE_MODULES}" ]]; then
+    skip "no installed modules with a running guest — DNS resolution test skipped"
+else
+    # Every remaining module, not a sample of three: the exclusions above are
+    # what made a sample necessary, and three checked out of forty-three was a
+    # green tick over forty unexamined names (#631).
     while IFS= read -r vmname; do
         [[ -z "${vmname}" ]] && continue
         zone=$(read_module_config "${vmname}" 2>/dev/null | jq -r '.zone0 // "srvHome"' 2>/dev/null || echo "srvHome")
@@ -356,7 +366,7 @@ else
         else
             fail "DNS cannot resolve ${fqdn}"
         fi
-    done <<< "${sample_modules}"
+    done <<< "${DNS_SAMPLE_MODULES}"
 fi
 
 section "Standard 5: zone-manager summary"
@@ -1920,6 +1930,82 @@ EVIDENCE
     # died) unwinds through the EXIT trap and used to report SUCCESS with no
     # summary at all — 13 counted failures vanished that way. A truncated run
     # must never be mistaken for a clean one.
+
+    section "Deep 11d: ADR-021 — the caddy-reach /32 is really a /32 (#618)"
+
+    # The assertion that closes #618, run from a probe VM inside a zone — not
+    # from the mothership, which sits in mgmt and is allowed everything anyway.
+    #
+    # Reaching Caddy must NOT come with reach to the firewall itself. Before
+    # ADR-021 D3b a Service zone carried `access-to: dmz`, which compiles to the
+    # whole DMZ subnet on every port — and the DMZ gateway IS the firewall, with
+    # `webgui.interfaces`/`ssh.interfaces` unset. A tier-1 VM could therefore
+    # open the admin GUI on 8443 and SSH on 22. Measured open on 2026-09-10;
+    # these three probes are what keep it shut.
+    _sh_dmz_gw="$(dmz_gateway_ip 2>/dev/null || echo '')"
+    if [[ -z "${_sh_dmz_gw}" ]]; then
+        skip "Deep 11d: no dmz zone in zones.json — nothing to probe"
+    else
+        # (a) tcp/443 MUST be open: this is the split-horizon answer itself.
+        if ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+                "tappaas@${TFW_A_FQDN}" \
+                "timeout 5 bash -c '</dev/tcp/${_sh_dmz_gw}/443'" 2>/dev/null; then
+            pass "Deep 11d-a: ${TFW_A_ZONE} → ${_sh_dmz_gw}:443 open (caddy-reach rule, ADR-021 D3)"
+        else
+            fail "Deep 11d-a: ${TFW_A_ZONE} cannot reach Caddy at ${_sh_dmz_gw}:443 — published names are unreachable from this zone"
+        fi
+
+        # (b)+(c) the firewall's own management ports MUST be refused. A pass
+        #         here is the #618 regression, and it is silent in every other
+        #         test: the service keeps working while the control plane is
+        #         exposed to it.
+        for _port in 8443 22; do
+            if ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+                    "tappaas@${TFW_A_FQDN}" \
+                    "timeout 5 bash -c '</dev/tcp/${_sh_dmz_gw}/${_port}'" 2>/dev/null; then
+                fail "Deep 11d: ${TFW_A_ZONE} → ${_sh_dmz_gw}:${_port} is OPEN — the firewall control plane is reachable from a service zone (#618). Check that no zone has 'dmz' in access-to (network-manager validate, invariant I5)."
+            else
+                pass "Deep 11d: ${TFW_A_ZONE} → ${_sh_dmz_gw}:${_port} refused (control plane not exposed)"
+            fi
+        done
+    fi
+
+    section "Deep 11e: ADR-021 D5 — one resolver, and R3 degrades cleanly"
+
+    # The resolver's contract, end to end against the live zones document.
+    # Exit codes ARE the interface: 0 publish / 3 unpublished / 1 error, and a
+    # caller that cannot tell 3 from 1 turns a deliberately-unpublished service
+    # back into an error — the behaviour R3 exists to remove.
+    _sh_eff="${TAPPAAS_CONFIG:-/home/tappaas/config}/zones.effective.json"
+    [[ -f "${_sh_eff}" ]] || _sh_eff="${TAPPAAS_CONFIG:-/home/tappaas/config}/zones.json"
+
+    if [[ -z "${DEF_DOMAIN}" || "${DEF_DOMAIN}" == CHANGE* ]]; then
+        skip "Deep 11e: no default-environment domain set"
+    else
+        # `|| rc=$?`, never a bare call: `set -e` is back on here (the deep
+        # section's `set +e` closed with Deep A), and every rc this block
+        # distinguishes is non-zero — so a bare call ends the suite on exactly
+        # the answers it exists to read (#625).
+        _sh_rc=0
+        _sh_out="$(network-manager split-horizon-target "${PROXY_FQDN}" --zones "${_sh_eff}" 2>/dev/null)" \
+            || _sh_rc=$?
+        if [[ ${_sh_rc} -eq 0 && "${_sh_out}" == "${_sh_dmz_gw}" ]]; then
+            pass "Deep 11e-a: resolver answers ${PROXY_FQDN} → ${_sh_out} (the DMZ gateway, ADR-021 D2)"
+        else
+            fail "Deep 11e-a: resolver returned rc=${_sh_rc} '${_sh_out:-none}', expected rc=0 '${_sh_dmz_gw}'"
+        fi
+
+        # A name that cannot resolve publicly must report UNPUBLISHED (rc 3),
+        # not an error. Use a name guaranteed not to exist under this domain.
+        _sh_rc=0
+        network-manager split-horizon-target "no-such-service-$$.${DEF_DOMAIN}" \
+            --zones "${_sh_eff}" >/dev/null 2>&1 || _sh_rc=$?
+        if [[ ${_sh_rc} -eq 3 ]]; then
+            pass "Deep 11e-b: an unpublishable name reports UNPUBLISHED (rc 3), not an error (R3)"
+        else
+            fail "Deep 11e-b: an unpublishable name gave rc=${_sh_rc}, expected 3 — R3 would read as a failure"
+        fi
+    fi
 
     section "Deep 12: source NAT — subnet-filtering device (ADR-016, #239)"
 

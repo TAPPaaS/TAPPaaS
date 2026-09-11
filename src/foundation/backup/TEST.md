@@ -30,20 +30,26 @@
 - The unit tests (`lib/test-pbs-*.sh`) have no deep tier and need no cluster.
 
 ## ADR-012 unit tests (fast; no cluster)
-Aggregated by `./test.sh` — 203 asserts across eight pure-helper suites:
+Aggregated by `./test.sh` — 229 asserts across eleven pure-helper suites:
 - `lib/test-pbs-placement.sh` (44) — the full state-resolution matrix (empty /
   `shim` / `node:<name>` / `external` × forced × storage found or not), `pbsUrl`
   defaulting, `tankc` selection and exact-storage probing from `pvesm status`,
   node-list parse, and the state write/read round-trip (including that `.node`,
   the operator's discovery constraint, is never overwritten).
-- `lib/test-pbs-migrate.sh` (23) — the §4.1 legacy backfill: `local` →
+- `lib/test-pbs-migrate.sh` (33) — the §4.1 legacy backfill: `local` →
   `node:<name>` (datastore untouched), `remote-only` → `external` with `pbsUrl`
   seeded from the old push target, `.placement` always dropped, idempotence, and
   a missing config file being a no-op rather than an error.
+- `lib/test-pbs-legacy-guard.sh` (14) — `update.sh`'s legacy-placement guard,
+  extracted from the real file and run in a child **`bash -e`** with stubbed
+  helpers: member → `node:<name>`, non-member → adopt `external`, unreachable →
+  stop, failed adopt → stop rather than fall through to the `node:<name>` write.
+  The sibling suites run without `-e` and call predicates inside `$( )`, where
+  the abort of #625 cannot happen — this suite is the one that reproduces it.
 - `lib/test-pbs-schedule.sh` (38) — the schedule vocabulary, **every sub-daily
   form refused** (the §3.2 ceiling), calendar events and bucket markers, the
   Site → Environment → Module cascade, and the loud failure on a bad spec.
-- `lib/test-pbs-membership.sh` (11) — job membership is `dependsOn` ∪
+- `lib/test-pbs-membership.sh` (16) — job membership is `dependsOn` ∪
   `integratesWith`; opting out is honoured; and the `alwaysBackup` regression
   that a stale entry must not truncate the list **under `set -e`** — the only
   condition the original bug appeared under.

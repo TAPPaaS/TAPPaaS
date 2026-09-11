@@ -16,8 +16,9 @@
 //   4. mgmt invariant   — a `mgmt` zone exists and is Active.
 //   5. Installation     — every zone named by an installed module config's
 //      consistency       `zone`/`zone0` field exists and is Active.
-//   6. Tier invariants  — the ADR-014 security gates I1-I4 (R1 monotonic
-//      (I1-I4)            access-to, R2 isolation floor, egress boundary,
+//   6. Tier invariants  — the ADR-014 security gates I1-I4 plus ADR-021's I5
+//      (I1-I5)            (R1 monotonic access-to, R2 isolation floor, egress
+//                         boundary, archetype conformance, no zone-wide DMZ),
 //                         archetype conformance). These promote what used to be
 //                         the human `_README.pr_review_checklist` into code.
 //                         WARN-only by default; `--strict` makes them errors.
@@ -420,6 +421,29 @@ function checkTierInvariants(doc: ZonesDoc, rep: Reporter): void {
         : `I2: isolation floor holds (${isolated.size} isolated zone(s) reachable only by pinhole)`,
     );
   }
+
+  // ── I5 — no zone reaches the DMZ zone-wide (ADR-021 D3b / #618). ──
+  // An access-to edge compiles to <source subnet> -> <target subnet> on every
+  // port, and the DMZ gateway is the firewall itself: `webgui.interfaces` and
+  // `ssh.interfaces` are unset, so the edge hands the admin GUI (8443) and SSH
+  // (22) to every host in the source zone. Reaching Caddy needs none of it —
+  // zone_manager emits a caddy-reach pass to the DMZ gateway /32 on tcp/80+443.
+  let i5 = 0;
+  for (const [name, z] of doc.zones) {
+    if (name === CONTROL_PLANE_ZONE) continue; // the documented exception
+    const arr = z["access-to"];
+    if (Array.isArray(arr) && arr.includes("dmz")) {
+      rep.warn(
+        `I5: zone '${name}' has 'dmz' in access-to — that grants the whole DMZ ` +
+          `subnet on every port, including the firewall's own GUI (8443) and SSH ` +
+          `(22) on the DMZ gateway (#618). Remove it: reaching the reverse proxy ` +
+          `is the caddy-reach rule (DMZ gateway /32, tcp 80+443), and reaching a ` +
+          `DMZ workload is a pinhole via 'dmz'.pinhole-allowed-from.`,
+      );
+      i5++;
+    }
+  }
+  if (i5 === 0) rep.ok("I5: no zone reaches the DMZ zone-wide (ADR-021 D3b)");
 
   // ── I3 — egress boundary: a tier-6 (no-egress) zone must not list internet. ──
   let i3 = 0;

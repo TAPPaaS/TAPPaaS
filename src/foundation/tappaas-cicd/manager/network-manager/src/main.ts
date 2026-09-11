@@ -56,6 +56,7 @@ import {
   refreshEffective,
 } from "./serves";
 import { distributeZones, shouldAutoDistribute } from "./distribute";
+import { isPubliclyResolvableSync, resolveSplitHorizonTarget } from "./splithorizon";
 import { runZonesMerge } from "./zonesmerge";
 import { HelpSpec, renderHelp } from "../../../lib/ts/src/help";
 import { CL, DieError, GN, RD, YW, die, guarded, info, warn } from "../../../lib/ts/src/cli";
@@ -281,6 +282,9 @@ interface Opts {
   diff: boolean;
   // read commands: structured vs human output
   json: boolean;
+  // ADR-021 D5: skip the public-DNS probe in split-horizon-target (offline
+  // installs and tests). Never a way to publish a name that has no cert.
+  assumePublished?: boolean;
   // list filters (ADR-014 D4). `type` is shared with `add` — harmless, the two
   // verbs never run together.
   state?: string;
@@ -417,6 +421,9 @@ function parseOpts(args: string[]): Opts {
         break;
       case "--diff":
         o.diff = true;
+        break;
+      case "--assume-published":
+        o.assumePublished = true;
         break;
       case "--json":
         o.json = true;
@@ -1022,6 +1029,51 @@ function cmdZonesDistribute(opts: Opts): number {
   return res.rc;
 }
 
+// ── split-horizon-target command (ADR-021 D5) ─────────────────────────
+// The single resolver every writer calls instead of deriving the address
+// itself: network:proxy, acme-setup.sh and environment-manager all shell out
+// here. Prints the bare IP on stdout so a caller can command-substitute it;
+// everything else goes to stderr.
+//
+// Exit codes are the interface — a caller MUST distinguish "not published"
+// from "broken", because the first is a supported configuration (ADR-021 R3)
+// and the second is a failure:
+//   0  published    → stdout is the address to register
+//   3  unpublished  → no public DNS; skip publishing, cleanly and silently
+//   1  error        → the site cannot express an answer; the caller should fail
+function cmdSplitHorizonTarget(opts: Opts): number {
+  const domain = opts.rest[0];
+  if (!domain) {
+    die("split-horizon-target needs a domain: split-horizon-target <domain>");
+  }
+  const doc = loadZones(opts.zonesFile);
+  const published = opts.assumePublished === true || isPubliclyResolvableSync(domain);
+  const r = resolveSplitHorizonTarget(doc, domain, published);
+  if (opts.json) {
+    process.stdout.write(JSON.stringify(r) + "\n");
+  } else if (r.status === "ok") {
+    process.stdout.write(r.ip + "\n");
+  }
+  // Diagnostics go to STDERR, deliberately not through info()/warn() — those
+  // console.log to stdout, and stdout here is the ADDRESS CHANNEL. A caller
+  // doing GW="$(network-manager split-horizon-target …)" would otherwise
+  // capture the human line too and hand Unbound a two-line "IP".
+  const say = (m: string): void => {
+    if (!opts.json) process.stderr.write(m + "\n");
+  };
+  switch (r.status) {
+    case "ok":
+      say(`split-horizon: ${domain} → ${r.ip} (${r.zone})`);
+      return 0;
+    case "unpublished":
+      say(`split-horizon: ${domain} is UNPUBLISHED — ${r.reason}`);
+      return 3;
+    default:
+      say(`split-horizon: ${r.reason}`);
+      return 1;
+  }
+}
+
 // ── zones-check command (offline consistency audit; read-only) ────────
 // Returns the check exit code (0 ok / warnings-only; 1 on hard errors).
 function cmdZonesCheck(opts: Opts): number {
@@ -1143,6 +1195,8 @@ export function run(argv: string[], client?: PlaneClient): number {
         return cmdZonesDistribute(opts);
       case "snat": // ADR-016 D3: read-only here — no add/delete, no mode --set
         return cmdSnat(opts.rest, opts.json === true);
+      case "split-horizon-target": // ADR-021 D5: the ONE resolver, for all writers
+        return cmdSplitHorizonTarget(opts);
       default:
         usage();
         die(`Unknown command: ${cmd}`);

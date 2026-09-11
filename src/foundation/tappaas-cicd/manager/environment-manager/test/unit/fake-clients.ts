@@ -98,6 +98,9 @@ export class FakeDnsTlsClient implements DnsTlsClient {
   seedWildcard(domain: string, target: string): void {
     this.wildcardTargets.set(domain, target);
   }
+  private unpublished = new Set<string>();
+  private wildcardRowCounts = new Map<string, number>();
+
   seedCollisions(domain: string, hosts: string[]): void {
     this.collisions.set(domain, hosts);
   }
@@ -108,17 +111,28 @@ export class FakeDnsTlsClient implements DnsTlsClient {
     this.refids.set(env, refid);
   }
 
-  wildcardDnsState(domain: string, zone: string): WildcardDnsState {
-    let gatewayZone: string | undefined = zone;
-    let gatewayIp = this.gateways.get(zone);
-    if (!gatewayIp) {
-      gatewayZone = "dmz";
-      gatewayIp = this.gateways.get("dmz");
+  // ADR-021 D5: the answer is the dmz gateway, whatever zone is passed —
+  // the fake mirrors the real resolver rather than the retired per-env rule.
+  seedUnpublished(domain: string): void {
+    this.unpublished.add(domain);
+  }
+  // #594: seed N duplicate `*` rows for a domain.
+  seedWildcardRows(domain: string, target: string, rows: number): void {
+    this.wildcardTargets.set(domain, target);
+    this.wildcardRowCounts.set(domain, rows);
+  }
+
+  wildcardDnsState(domain: string, _zone: string): WildcardDnsState {
+    if (this.unpublished.has(domain)) {
+      return { unpublished: true, rowCount: 0, collidingHosts: [] };
     }
+    const gatewayIp = this.gateways.get("dmz");
+    const current = this.wildcardTargets.get(domain);
     return {
       gatewayIp,
-      gatewayZone: gatewayIp ? gatewayZone : undefined,
-      currentTarget: this.wildcardTargets.get(domain),
+      gatewayZone: gatewayIp ? "dmz" : undefined,
+      currentTarget: current,
+      rowCount: this.wildcardRowCounts.get(domain) ?? (current ? 1 : 0),
       collidingHosts: [...(this.collisions.get(domain) ?? [])],
     };
   }
@@ -127,6 +141,8 @@ export class FakeDnsTlsClient implements DnsTlsClient {
     this.log.push(`register-wildcard ${domain} -> ${gatewayIp} (${zone}, ${envName}) prune=[${c.join(",")}]`);
     this.collisions.delete(domain);
     this.wildcardTargets.set(domain, gatewayIp);
+    // delete-all-rewrite-one converges on exactly one row (#594).
+    this.wildcardRowCounts.set(domain, 1);
   }
   issuedCertRefid(domain: string): string | undefined {
     return this.issuedRefids.get(domain);

@@ -170,28 +170,13 @@ export class CliModuleClient implements ModuleClient {
   }
 }
 
-// Derive a zone's OPNsense gateway IP — the first host of its subnet, <net>.1 —
-// from zones.json (e.g. "10.3.10.0/24" → "10.3.10.1"). Mirrors the bash
-// zone_gateway_ip (common-install-routines.sh): the firewall interface ON THE
-// CLIENT'S OWN SUBNET is self-traffic and crosses no inter-zone rule (#504).
-// Returns undefined when the zone (or its subnet) is absent from zones.json.
-function zoneGatewayIp(configDir: string, zone: string): string | undefined {
-  if (!zone) return undefined;
-  const zonesFile = join(configDir, "zones.json");
-  if (!existsSync(zonesFile)) return undefined;
-  let z: Record<string, unknown>;
-  try {
-    z = JSON.parse(readFileSync(zonesFile, "utf8")) as Record<string, unknown>;
-  } catch {
-    return undefined;
-  }
-  const entry = z[zone];
-  const ip = entry && typeof entry === "object" ? (entry as Record<string, unknown>).ip : undefined;
-  if (typeof ip !== "string" || ip === "") return undefined;
-  const octets = ip.split("/")[0].split(".");
-  if (octets.length < 3) return undefined;
-  return `${octets.slice(0, 3).join(".")}.1`;
-}
+// ADR-021 D5: the local `zoneGatewayIp()` that used to live here is GONE.
+// It derived the split-horizon address from the environment's service zone
+// while network:proxy derived it from a client zone and acme-setup.sh derived
+// it from a third — one rule, three transcriptions, and on a live site they
+// disagreed (#577). The address now comes from `network-manager
+// split-horizon-target`, which is the only implementation left. Do not
+// reintroduce a local derivation here, however small it looks.
 
 // CliDnsTlsClient — the wildcard DNS + cert-refid runtime-state boundary (#537).
 //
@@ -210,19 +195,29 @@ export class CliDnsTlsClient implements DnsTlsClient {
     return join(this.configDir, "cert-refids.json");
   }
 
-  wildcardDnsState(domain: string, zone: string): WildcardDnsState {
-    // Desired target: the env's own service-zone gateway, else the dmz gateway
-    // (ADR-005 §6, #504). undefined ⇒ neither could be derived.
-    let gatewayZone = zone;
-    let gatewayIp = zoneGatewayIp(this.configDir, zone);
-    if (!gatewayIp) {
+  wildcardDnsState(domain: string, _zone: string): WildcardDnsState {
+    // ADR-021 D5: ask the ONE resolver instead of deriving the address here.
+    // Exit codes are the contract — 0 published, 3 unpublished (R3), 1 error —
+    // and conflating 3 with 1 is exactly what turned "not published" into a
+    // scary warning before.
+    let gatewayIp: string | undefined;
+    let gatewayZone: string | undefined;
+    let unpublished = false;
+    const t = captureResult(NETWORK_MANAGER_BIN(), ["split-horizon-target", domain]);
+    if (!t.ran) {
+      throw new NetworkUnreachable(`${NETWORK_MANAGER_BIN()} split-horizon-target: ${t.stderr}`);
+    }
+    if (t.rc === 0) {
+      gatewayIp = t.stdout.trim() || undefined;
       gatewayZone = "dmz";
-      gatewayIp = zoneGatewayIp(this.configDir, "dmz");
+    } else if (t.rc === 3) {
+      unpublished = true;
     }
 
     // Current overrides. `unbound-manager list` prints a header row then
     // `HOST DOMAIN TYPE VALUE DESCRIPTION` (whitespace-aligned columns).
     let currentTarget: string | undefined;
+    let rowCount = 0;
     const collidingHosts: string[] = [];
     const r = captureResult(UNBOUND_MANAGER_BIN(), ["--no-ssl-verify", "list"]);
     if (!r.ran) throw new NetworkUnreachable(`${UNBOUND_MANAGER_BIN()} list: ${r.stderr}`);
@@ -233,14 +228,21 @@ export class CliDnsTlsClient implements DnsTlsClient {
         if (cols.length < 4) continue;
         const [host, dom, type, value] = cols;
         if (dom !== domain || !type.startsWith("A")) continue;
-        if (host === "*") currentTarget = value;
-        else collidingHosts.push(host);
+        if (host === "*") {
+          // Keep counting after the first: the COUNT is the signal (#594), and
+          // reading only the last value is what made two identical rows look
+          // converged.
+          currentTarget = value;
+          rowCount++;
+        } else collidingHosts.push(host);
       }
     }
     return {
-      gatewayIp: gatewayIp ?? undefined,
+      gatewayIp,
       gatewayZone: gatewayIp ? gatewayZone : undefined,
+      unpublished,
       currentTarget,
+      rowCount,
       collidingHosts,
     };
   }
@@ -256,6 +258,18 @@ export class CliDnsTlsClient implements DnsTlsClient {
       if (!d.ran) throw new NetworkUnreachable(`${UNBOUND_MANAGER_BIN()} delete: ${d.stderr}`);
       // A delete that fails (already gone) is non-fatal — the add below is what
       // matters; mirror acme-setup's `|| true` tolerance.
+    }
+    // #594: delete EVERY `*` row before writing one. `unbound-manager delete`
+    // removes a single row per call, so duplicates never self-heal from the
+    // delete side either — a domain carrying two identical rows kept them
+    // forever. Deleting down to zero and writing one is what makes "exactly one
+    // `*` override per domain" a property the reconciler actively maintains,
+    // rather than one it assumes.
+    for (let i = 0; i < st.rowCount; i++) {
+      const d = captureResult(UNBOUND_MANAGER_BIN(), ["--no-ssl-verify", "delete", "*", domain]);
+      if (!d.ran) throw new NetworkUnreachable(`${UNBOUND_MANAGER_BIN()} delete: ${d.stderr}`);
+      // A delete that fails (already gone) is non-fatal — the add below is what
+      // matters, and it converges either way.
     }
     run(UNBOUND_MANAGER_BIN(), [
       "--no-ssl-verify",

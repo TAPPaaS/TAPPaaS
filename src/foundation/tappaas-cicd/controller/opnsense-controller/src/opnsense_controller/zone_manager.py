@@ -686,16 +686,20 @@ class ZoneManager:
     ZONE_RULE_BLOCK_OFFSET = 90        # rfc1918 blocks at base+90/91/92
     ZONE_RULE_INTERNET_OFFSET = 99     # internet pass last (lowest priority)
 
-    # Caddy reverse-proxy reachability (#366). Split-horizon DNS resolves every
-    # proxied name to the DMZ gateway IP (where os-caddy listens on 0.0.0.0:443).
-    # Client zones such as home/work have no `access-to: dmz`, so their band-5
-    # rfc1918 block (base+90, 30000+) would drop traffic to that IP. We therefore
-    # emit a PASS to the DMZ gateway /32 on tcp/80+443 from every internet-capable
-    # zone, low in band 1 (100-999) so — under first-match-quick — it is evaluated
-    # *before* the rfc1918 block and lets the packet reach Caddy. This is L3
+    # Caddy reverse-proxy reachability (#366, extended by ADR-021 D3). Split-horizon
+    # DNS resolves every proxied name to the DMZ gateway IP (where os-caddy listens
+    # on 0.0.0.0:443). Client zones such as home/work have no `access-to: dmz`, so
+    # their band-5 rfc1918 block (base+90, 30000+) would drop traffic to that IP. We
+    # therefore emit a PASS to the DMZ gateway /32 on tcp/80+443 from every zone in
+    # the candidate set, low in band 1 (100-999) so — under first-match-quick — it is
+    # evaluated *before* the rfc1918 block and lets the packet reach Caddy. This is L3
     # reachability only (the DMZ gateway IP on Caddy's ports, not the DMZ subnet):
     # Caddy's own `proxyAllowedZones` ACL remains the real authorization gate, so
     # opening the path from all zones does not grant any zone access to a service.
+    #
+    # ADR-021 makes this rule the ONLY sanctioned way to reach Caddy: no zone gets
+    # `dmz` in its `access-to`, because that would grant the whole DMZ subnet — which
+    # holds workloads, and whose gateway is this firewall (#618).
     CADDY_REACH_SEQUENCE = 990         # band 1; https=990, http=991
     CADDY_REACH_SOURCE = "10.0.0.0/8"  # blanket internal source (rule is iface-bound)
     CADDY_REACH_PORTS = (("443", "https"), ("80", "http"))
@@ -1893,6 +1897,18 @@ class ZoneManager:
                 manager, existing_by_desc, results, check_mode
             )
 
+            # Reap rules this reconcile did not ask for (ADR-021 D3b / #618).
+            # Until now only a *disabled* zone had its rules torn down, so a zone
+            # that merely dropped a target from access-to kept the pass forever:
+            # removing `dmz` from a Service zone left `Zone <srv> -> dmz` live,
+            # and with it the whole DMZ subnet on every port — the very hole the
+            # removal was meant to close. The `Zone <name> ` prefix is this
+            # module's namespace (the disabled-zone cleanup already assumes so),
+            # so anything under it that is not in the desired set is drift.
+            self._reap_stale_zone_rules(
+                manager, existing_rules, isolated_zones, results, check_mode
+            )
+
             # Apply all changes at once if not in check mode
             if not check_mode:
                 debug("  Applying firewall changes...")
@@ -1911,12 +1927,88 @@ class ZoneManager:
             for zone in manual_zones:
                 if zone.access_to:
                     debug(f"  {zone.name}: Firewall rules skipped (manual zone)")
-                    results[zone.name] = {
+                    entry = {
                         "status": "skipped_manual",
                         "access_to": zone.access_to,
                     }
+                    # Keep anything the caddy-reach pass recorded. A manual zone
+                    # gets no access-to rules, but it DOES get the DMZ-gateway
+                    # pass (mgmt always; an Overlay under D3a), and overwriting
+                    # the entry wholesale hid those from every dry-run report —
+                    # they were created, but no plan ever showed them.
+                    prior = results.get(zone.name) or {}
+                    if prior.get("rules"):
+                        entry["rules"] = prior["rules"]
+                    results[zone.name] = entry
 
         return results
+
+    def _reap_stale_zone_rules(
+        self,
+        manager: FirewallManager,
+        existing_rules: list[FirewallRuleInfo],
+        isolated_zones: list["Zone"],
+        results: dict,
+        check_mode: bool,
+    ) -> None:
+        """Delete ``Zone <name> ...`` rules this reconcile did not ask for.
+
+        Zone rules are converged by description, but only ever *added*: dropping
+        a target from a zone's ``access-to`` stopped emitting the rule without
+        removing the one already on the firewall. It therefore kept passing —
+        ``Zone rossen -> dmz`` survived the ADR-021 D3b removal and went on
+        granting the whole DMZ subnet, gateway included, on every port (#618).
+
+        The desired set is what the passes above touched (each ``_create_or_skip_rule``
+        records its description in the zone's result list), plus nothing for a
+        fully-isolated zone. A zone that could not be processed — no interface,
+        or already torn down as disabled — is skipped rather than emptied.
+        """
+        desired: dict[str, set[str]] = {}
+        for zone_name, entry in results.items():
+            if not isinstance(entry, dict):
+                continue
+            # Only zones this run actually processed. "error" means we never
+            # resolved an interface, and a disabled zone was already reaped.
+            if entry.get("status") in ("error", "would_delete", "deleted"):
+                continue
+            rules = entry.get("rules")
+            if rules is None:
+                continue
+            desired[zone_name] = {
+                r.get("description", "") for r in rules if isinstance(r, dict)
+            }
+        # An enabled zone with an empty access-to is meant to have no rules at
+        # all, so its whole prefix is stale.
+        for zone in isolated_zones:
+            desired.setdefault(zone.name, set())
+
+        for zone_name, keep in desired.items():
+            prefix = f"Zone {zone_name} "
+            stale = [
+                r for r in existing_rules
+                if r.description.startswith(prefix) and r.description not in keep
+            ]
+            if not stale:
+                continue
+            zone_results = results.setdefault(
+                zone_name, {"status": "processed", "rules": []}
+            ).setdefault("rules", [])
+            for rule_info in stale:
+                info(
+                    f"  {zone_name}: removing stale rule "
+                    f"'{rule_info.description}' (no longer in access-to)"
+                )
+                if not check_mode:
+                    try:
+                        manager.delete_rule(rule_info.description, apply=False)
+                    except Exception as e:  # noqa: BLE001 - report, keep converging
+                        error(f"Deleting '{rule_info.description}': {e}")
+                        continue
+                zone_results.append({
+                    "description": rule_info.description,
+                    "status": "would_delete" if check_mode else "deleted",
+                })
 
     def _configure_caddy_reachability(
         self,
@@ -1935,11 +2027,13 @@ class ZoneManager:
         pure L3 reachability — Caddy's `proxyAllowedZones` ACL still authorizes per
         service, so no zone gains service access it would not otherwise have.
 
-        Scope: only zones that already have internet access (``access-to``
-        contains ``internet`` or ``all``) get the pass. A fully-isolated zone
-        (e.g. iotCams/iotLocal with empty ``access-to``) is deliberately left
-        unable to reach the reverse proxy. The destination is the DMZ gateway
-        ``/32`` on Caddy's ports only — never the DMZ subnet.
+        Scope (ADR-021 D3): a zone is a candidate when it has internet access
+        (``access-to`` contains ``internet`` or ``all``), when it is an Overlay
+        zone with a non-empty ``access-to`` (D3a), or when it is the dmz zone
+        itself (D3b). A fully-isolated zone (e.g. iotCams/iotLocal with empty
+        ``access-to``) is deliberately left unable to reach the reverse proxy.
+        The destination is the DMZ gateway ``/32`` on Caddy's ports only —
+        never the DMZ subnet.
 
         Rules are named ``Zone <name> -> caddy <proto>`` so the existing
         disabled-zone cleanup (which deletes by the ``Zone <name> `` prefix) tears
@@ -1955,23 +2049,55 @@ class ZoneManager:
             warn(f"  Caddy reachability (#366): cannot derive DMZ gateway: {e} — skipping")
             return
 
-        # Only zones that already have internet egress reach the proxy: a zone
-        # with internet access can already initiate outbound, so letting it reach
-        # Caddy adds no new exposure. Fully-isolated zones (empty access-to) are
-        # left unable to reach the reverse proxy. The dmz zone reaches the gateway
-        # locally and is skipped. Manual zones (e.g. mgmt) are included.
-        def _has_internet(z: "Zone") -> bool:
+        # ADR-021 D3/D3a/D3b — the candidate set is every zone whose clients may
+        # legitimately resolve a published name:
+        #
+        #   * internet egress — reaching Caddy adds no new destination, because
+        #     such a zone can already get there the long way round (the WAN
+        #     hairpin) and merely be refused by Caddy's ACL;
+        #   * an Overlay zone with a non-empty access-to (D3a) — overlay peers are
+        #     not a routed segment and carry no `internet`, but they resolve the
+        #     same split-horizon answer and would otherwise have no path to it.
+        #     `admin` is the live case: its only rule is admin->mgmt, so once the
+        #     published names move to the DMZ gateway a VPN peer loses them all.
+        #     An empty access-to means a dormant overlay and stays out;
+        #   * the dmz zone itself (D3b) — it used to be skipped as "reaches the
+        #     gateway locally", but "locally" is the unrestricted `Zone dmz ->
+        #     gateway` rule that #399 exists to narrow to DNS/NTP/DHCP/ICMP. Once
+        #     that lands a DMZ workload would lose tcp/443 to Caddy, and with it
+        #     every published name, so it gets the same explicit /32 as everyone.
+        #
+        # Fully-isolated zones (empty access-to, no internet) stay out. Manual
+        # zones (e.g. mgmt) are included.
+        def _is_candidate(z: "Zone") -> bool:
             targets = {t.lower() for t in z.access_to}
-            return "internet" in targets or "all" in targets
+            if "internet" in targets or "all" in targets:
+                return True
+            return z.zone_type == "Overlay" and bool(z.access_to)
 
         candidate_zones = [
             z for z in (self.get_enabled_zones() + self.get_manual_zones())
-            if z.name != dmz.name and _has_internet(z)
+            if _is_candidate(z)
         ]
 
         for zone in candidate_zones:
             zone_interface = self.get_zone_interface(zone)
             if not zone_interface:
+                continue
+            # An Overlay zone is not a VLAN, so get_zone_interface() falls back to
+            # its `bridge` — which for an overlay names the firewall interface its
+            # peers arrive on (e.g. "wireguard"), not a physical trunk. A shared
+            # trunk means the field was never set for this overlay: emitting there
+            # would put the rule on some other zone's interface, so say so and skip
+            # rather than create a rule that looks right and protects nothing.
+            if zone.zone_type == "Overlay" and zone_interface.lower() in ("lan", "wan"):
+                warn(
+                    f"  Caddy reachability (ADR-021 D3a): overlay zone "
+                    f"'{zone.name}' has bridge '{zone.bridge}', which is a shared "
+                    f"trunk, not an overlay interface — set its 'bridge' to the "
+                    f"OPNsense interface its peers arrive on (e.g. 'wireguard'). "
+                    f"Skipping; its peers cannot reach published names."
+                )
                 continue
             zone_results = results.setdefault(
                 zone.name, {"status": "processed", "rules": []}

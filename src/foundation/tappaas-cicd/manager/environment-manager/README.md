@@ -50,6 +50,24 @@ environment-manager reconcile <env> [--deep] [--apply] [--config-dir DIR]
 the cert strategy: `per-service` (default; Caddy per-host HTTP-01) or `wildcard`
 (one `*.<primary>` OPNsense-ACME cert for the environment). Validated against the
 schema enum; this closes the last field that previously required a hand-edit.
+
+**`dnsMode` is the CERTIFICATE strategy and nothing else** (ADR-021 D4). It does
+not decide the split-horizon **address** — that is always the DMZ gateway, from
+`network-manager split-horizon-target` (D2/D5) — and it does not dictate the
+Unbound **record shape** either. The two are independent, and since every record
+carries the same address, `*` and per-host entries resolve identically:
+
+| Certificate | Record shape | Verdict |
+|---|---|---|
+| wildcard | wildcard `*` | valid — fewest records |
+| **wildcard** | **per-service** | **valid, often preferable** — explicit records, no `redirect`-zone apex constraints (#474), no collision pruning (#505), and a name that is not published simply does not resolve (a wildcard answers for *every* name under the domain, including ones no Caddy handler serves) |
+| per-service | per-service | valid — the default |
+| per-service | wildcard | valid but pointless — publishes names Caddy cannot serve |
+
+A domain with **no public DNS record** is a supported configuration, not an error
+(ADR-021 R3): ACME cannot issue for it, so reconcile plans no wildcard record and
+reports it as a *note*, not a warning. Services stay reachable at
+`<vmname>.<zone>.internal`, without TLS and without the identity gate.
 | `delete <env>` | Remove an environment file — **guard-railed** (see below). |
 | `reconcile <env>` | Converge the environment → live. `--apply` commits (default = preview). `--deep` cascades (see below). Also **materializes a missing service zone** and **hard-errors on a wrongly-typed one** — see "Env ↔ service zone" below. |
 

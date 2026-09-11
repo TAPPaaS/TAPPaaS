@@ -218,17 +218,26 @@ if [[ "${DNS_MODE}" == "per-service" ]]; then
     if unbound-manager --no-ssl-verify list 2>/dev/null \
          | awk -v z="${DNS_ZONE}" '$1=="*" && $2==z {f=1} END{exit !f}'; then
         debug "  ${GN}✓${CL} wildcard *.${DNS_ZONE} already covers ${DNS_HOST}.${DNS_ZONE} — skipping per-service override"
-    # #504: resolve to the authorized client zone's OPNsense gateway (self-traffic
-    # for that zone's clients), NOT the DMZ gateway which home/work cannot reach.
-    elif GW="$(proxy_split_horizon_gateway "${MODULE_JSON}" "${ZONES_FILE}")"; then
-        if unbound-manager --no-ssl-verify add "${DNS_HOST}" "${DNS_ZONE}" "${GW}" --description "${DESCRIPTION}"; then
-            debug "  ${GN}✓${CL} split-horizon DNS ${DNS_HOST}.${DNS_ZONE} -> ${GW} (Unbound)"
-        else
-            warn "  Could not register ${PROXY_DOMAIN} in Unbound — register manually:"
-            warn "    unbound-manager --no-ssl-verify add '${DNS_HOST}' '${DNS_ZONE}' '${GW}'"
-        fi
+    # ADR-021 D2/D5: the answer is the DMZ gateway, from the ONE resolver.
+    # rc 3 is not a failure — it is R3's "this service is not published".
     else
-        warn "  Could not derive a split-horizon gateway for ${PROXY_DOMAIN} (no resolvable client zone) — register DNS manually"
+        SH_RC=0
+        GW="$(proxy_split_horizon_target "${PROXY_DOMAIN}" "${ZONES_FILE}")" || SH_RC=$?
+        if [[ ${SH_RC} -eq 0 ]]; then
+            if unbound-manager --no-ssl-verify add "${DNS_HOST}" "${DNS_ZONE}" "${GW}" --description "${DESCRIPTION}"; then
+                debug "  ${GN}✓${CL} split-horizon DNS ${DNS_HOST}.${DNS_ZONE} -> ${GW} (Unbound)"
+            else
+                warn "  Could not register ${PROXY_DOMAIN} in Unbound — register manually:"
+                warn "    unbound-manager --no-ssl-verify add '${DNS_HOST}' '${DNS_ZONE}' '${GW}'"
+            fi
+        elif [[ ${SH_RC} -eq 3 ]]; then
+            # ADR-021 R3: a supported configuration, not an error. Say what the
+            # operator loses, in one line, and carry on — the install succeeds.
+            info "  '${MODULE}' is not published (no external DNS for ${PROXY_DOMAIN})"
+            info "    reachable only at ${MODULE}.${ZONE}.internal, without TLS and without the identity gate"
+        else
+            warn "  Could not derive a split-horizon target for ${PROXY_DOMAIN} — register DNS manually"
+        fi
     fi
 else
     # wildcard: prefer the variant's refid (sourced from cert-refids.json via
