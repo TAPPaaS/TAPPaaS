@@ -18,6 +18,7 @@
 // the NetworkClient / ModuleClient interfaces (injected) — pure planning, then
 // apply.
 
+import { CONTROL_PLANE_ZONE } from "../../../lib/ts/src/zones";
 import {
   Action,
   ApplyFailure,
@@ -217,6 +218,22 @@ export function computePlan(
     notes.push(
       `zone '${zone}' does not exist and will be authored as a Service zone ` +
         `(ADR-014 D1). It converges in the network pass below.`,
+    );
+  } else if (zone === CONTROL_PLANE_ZONE) {
+    // The control plane is the third case this gate was never written for. The
+    // rule exists because a Client/IoT zone CONSUMES a service segment, so
+    // pointing an environment at one is a mistake. mgmt consumes nothing — its
+    // modules (backup, cluster, identity, logging, network, tappaas-cicd,
+    // templates) live in the mgmt zone, so the environment IS its own segment.
+    // Without this the whole mgmt environment was inert: cmdReconcile die()s on
+    // any plan error in preview as well as apply, so neither its DNS nor its
+    // cert step ever ran, and `site-manager reconcile --deep` failed with it.
+    // Exempt by NAME, like I1/I2/I5 — there is one control plane per site, and
+    // a second `type: Management` zone backing an environment should still be
+    // reported.
+    notes.push(
+      `environment '${env.name}' is bound to the ${CONTROL_PLANE_ZONE} control plane ` +
+        `(a ${net.zoneType(zone) ?? "Management"} zone) — exempt from the Service-zone rule.`,
     );
   } else {
     const t = net.zoneType(zone);

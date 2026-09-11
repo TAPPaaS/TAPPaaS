@@ -230,6 +230,44 @@ function envNoOwner(name: string, zone: string): Environment {
   check((plan.errors ?? []).length === 0, "D1: a missing zone is not an error — it is materialized");
 }
 
+// ADR-014 D1 + control-plane exemption: the mgmt environment binds the mgmt
+// zone, which is `type: Management`. That is NOT the mistake the rule guards
+// against — a Client/IoT zone CONSUMES a service segment, whereas the control
+// plane IS its own. Before the exemption the whole mgmt environment was inert:
+// cmdReconcile die()s on any plan error in preview as well as apply, so neither
+// its DNS nor its cert step ran, and `site-manager reconcile --deep` failed too.
+{
+  const net = new FakeNetworkClient();
+  net.seedZone("mgmt", "Management");
+  const mod = new FakeModuleClient();
+  const plan = computePlan(env("mgmt", "mgmt"), net, mod, { deep: false, skipNetwork: false });
+  check(
+    (plan.errors ?? []).length === 0,
+    "control plane: an environment bound to the mgmt zone is NOT an error",
+  );
+  check(
+    !plan.actions.some((a) => a.kind === "create-service-zone"),
+    "control plane: …and no second zone is minted underneath it",
+  );
+  check(
+    plan.notes.some((n) => n.includes("control plane")),
+    "control plane: the exemption is stated in the plan, not silent",
+  );
+}
+
+// …but the exemption is by NAME, not by type: a second Management zone backing
+// an environment is still the configuration mistake the rule is for.
+{
+  const net = new FakeNetworkClient();
+  net.seedZone("mgmt2", "Management");
+  const mod = new FakeModuleClient();
+  const plan = computePlan(env("mgmt2", "mgmt2"), net, mod, { deep: false, skipNetwork: false });
+  check(
+    (plan.errors ?? []).some((e) => e.includes("is a Management zone, not a Service zone")),
+    "control plane: a SECOND Management zone is still a hard ERROR (exempt by name, not type)",
+  );
+}
+
 // ADR-014 D1: an environment pointed at a NON-Service zone is a hard error.
 // This is the case the ADR calls out — reconcile must not paper over it by
 // minting a second zone underneath the operator.
