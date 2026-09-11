@@ -48,7 +48,12 @@ if [[ "$(pbs_placement_state)" == "local" ]]; then
     # unnoticed until a migration writes `node:<name>` and asserts a cluster
     # membership that was never true. Check before asserting it.
     if [[ -n "${LEGACY_NODE}" ]]; then
-        pbs_node_is_cluster_member "${LEGACY_NODE}" "${ZONE}"; _member_rc=$?
+        # Tested context (`|| rc=$?`), not a bare call: under `set -e` a bare
+        # call ends the script on the very returns this case exists to read —
+        # 1 (not a member) and 2 (cluster unreachable) — so only the 0) branch
+        # was ever reachable (#625).
+        _member_rc=0
+        pbs_node_is_cluster_member "${LEGACY_NODE}" "${ZONE}" || _member_rc=$?
         case "${_member_rc}" in
             0) : ;;   # a real cluster member — the ordinary node:<name> case
             1)
@@ -60,8 +65,13 @@ if [[ "$(pbs_placement_state)" == "local" ]]; then
                 warn "  This is an externally-managed PBS, not one this module placed."
                 warn "  Recording it as ${BL}placementState:external${CL} with pbsUrl ${BL}${_pbs_dns}${CL}"
                 warn "  (nothing moves: the datastore, its contents and the backup job are untouched)."
-                pbs_adopt_external_pbs "${_pbs_dns}" \
-                    || warn "  Could not record the external placement — leaving the state as it was"
+                # Leave on failure rather than falling through: the migrate
+                # below still sees `local` and would write the node:<name> this
+                # branch exists to prevent (or `shim`, when .node was blanked).
+                pbs_adopt_external_pbs "${_pbs_dns}" || {
+                    warn "  Could not record the external placement — leaving the state as it was."
+                    exit 0
+                }
                 LEGACY_NODE=""
                 ;;
             *)
