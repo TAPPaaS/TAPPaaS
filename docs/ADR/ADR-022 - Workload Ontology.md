@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | **Status** | **Draft — for review** |
-| **Version** | 0.1 |
-| **Date** | 2026-09-09 |
+| **Version** | 0.2 |
+| **Date** | 2026-09-09 (v0.2: 2026-09-11) |
 | **Author** | ErikDaniel007 |
 | **Deciders** | @ErikDaniel007, @LarsRossen (co-owned canon) |
-| **Related** | [ADR-007](<ADR-007 - TAPPaaS Taxonomy.md>) (classification, amended here); [ADR-007d](<ADR-007d - Site.md>) (Site, amended here); [ADR-009](<ADR-009 - Composition Meta-Model.md>) (`Node`, superseded in part here); [ADR-014](<ADR-014 - Zone and Environment Lifecycle.md>) (zones — owner, not amended); [ADR-023](<ADR-023 - Workload Classification.md>) (classification built on this vocabulary); [ADR-012](ADR-012-backup-enhancement.md) (first consumer); [GLOSSARY.md](../../GLOSSARY.md) (the vocabulary SSOT this ADR updates) |
-| **Changelog** | v0.1 — initial draft. Splits `Site` into three independent aspects, corrects `Node` to its ArchiMate meaning, adds `Location` and `Administrative Domain`, anchors `zone` to IEC 62443, and scopes the plane vocabulary to the network module. |
+| **Related** | [ADR-007](<ADR-007 - TAPPaaS Taxonomy.md>) (classification, amended here); [ADR-007d](<ADR-007d - Site.md>) (Site, amended here); [ADR-009](<ADR-009 - Composition Meta-Model.md>) (`Node`, superseded in part here); [ADR-014](<ADR-014 - Zone and Environment Lifecycle.md>) (zones — owner, not amended); [ADR-022d](<ADR-022d - Workload Classification.md>) (classification built on this vocabulary); [ADR-024](<ADR-024 - Site Fabric.md>) (inter-Site relationships, builds on 022a); [ADR-012](ADR-012-backup-enhancement.md) (first consumer); [GLOSSARY.md](../../GLOSSARY.md) (the vocabulary SSOT this ADR updates) |
+| **Changelog** | v0.1 — initial draft. Splits `Site` into three independent aspects, corrects `Node` to its ArchiMate meaning, adds `Location` and `Administrative Domain`, anchors `zone` to IEC 62443, and scopes the plane vocabulary to the network module. v0.2 — the classification rib is renamed ADR-023 → **ADR-022d** (2026-09-11 LR/EB sync), becoming a fourth rib beside 022a/b/c; the rib table and references below are updated to match. A new ADR-024 is noted as building on the Administrative-Domain aspect (022a) for inter-Site relationships — placeholder, not yet drafted at v0.2. |
 
 One noun — `Site` — has been carrying three independent questions: **who runs it**, **where it physically is**, and **what it runs on**. Separating them is the whole of this ADR.
 
@@ -32,6 +32,7 @@ Each of the three aspects has its own normative source, its own schema surface a
 | [ADR-022a — Administrative Domain](<ADR-022a - Administrative Domain.md>) | Who is accountable for a resource, and what trust follows from that |
 | [ADR-022b — Location](<ADR-022b - Location.md>) | Where a resource physically is, at three granularities |
 | [ADR-022c — Node and Host](<ADR-022c - Node and Host.md>) | What a resource runs on, and what `kind` records |
+| [ADR-022d — Workload Classification](<ADR-022d - Workload Classification.md>) | What `kind`'s values are, and how a workload is classified — by who administers it (built on 022a) and what device type it is |
 
 ## The model — top view
 
@@ -56,7 +57,7 @@ A two-column model cannot express those four rows. That is the defect.
 ## Delegated, not decided here
 
 - **Zones** — ADR-014 owns zone lifecycle, the trust lattice and enforcement. This ADR only records the definition zones already satisfy (IEC 62443) so other documents stop re-deriving it.
-- **Workload classification** — [ADR-023](<ADR-023 - Workload Classification.md>) decides how workloads are sorted by Administrative Domain, what `kind`'s values are, and where the inventory lives. This ADR supplies the vocabulary it uses.
+- **Workload classification** — [ADR-022d](<ADR-022d - Workload Classification.md>) decides how workloads are sorted by Administrative Domain, what `kind`'s values are, and where the inventory lives. This ADR supplies the vocabulary it uses.
 - **Backup placement** — ADR-012 is the first consumer. It states *where PBS runs*; it does not define the words.
 
 ## Context
@@ -88,7 +89,7 @@ Five collisions, all live on `main`:
 - One word, one meaning. `external` stops being a placement state, a management claim and a chassis fact at once.
 - ADR-012 can state where PBS runs without asserting cluster membership.
 - Off-site backup becomes checkable: a Location difference is data, not an assertion.
-- ADR-023 inherits settled vocabulary instead of re-coining it.
+- ADR-022d inherits settled vocabulary instead of re-coining it.
 
 ### Negative / costs
 - Four new or amended documents plus a glossary rewrite, all needing joint acceptance.
@@ -108,7 +109,7 @@ Five collisions, all live on `main`:
 - [ ] Plane vocabulary scoped to the `network` module (022c)
 - [ ] `tier` namespaced: `module.tier` / `zone.tier`; the Stack-promotion rule renamed
 - [ ] `GLOSSARY.md` §A–§D rewritten to match; decision history and TODOs moved out of the vocabulary SSOT
-- [ ] ADR-023 drafted against this vocabulary
+- [ ] ADR-022d drafted against this vocabulary
 
 ## Appendix A — Normative sources
 

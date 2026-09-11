@@ -26,7 +26,7 @@ A cluster member, a bare-metal host and a VM are all Nodes. `GLOSSARY.md` §B de
 
 **D4. Module boundary follows `kind`.** *"Module boundary = VM boundary"* has two live counterexamples — `satellite.json` (`vmname: null`) and the `backup` module, which apt-installs PBS on a host. Boundary is the VM for `kind: guest`, the host for `kind: host`.
 
-**D5. `kind` is the object-type marker**, tooling-written, never hand-authored — the Kubernetes convention TAPPaaS already follows. Its **values** are decided by [ADR-023](<ADR-023 - Workload Classification.md>), not here. What this ADR settles is that `external-host` cannot survive: `module-fields.json` defines it as *"a non-module cluster guest"* and `satellite-fields.json` as *"an EXTERNAL host, NOT a Proxmox cluster:vm"* — the same value, contradictory, both on `main`.
+**D5. `kind` is the object-type marker**, tooling-written, never hand-authored — the Kubernetes convention TAPPaaS already follows. Its **values** are decided by [ADR-022d](<ADR-022d - Workload Classification.md>), not here. What this ADR settles is that `external-host` cannot survive: `module-fields.json` defines it as *"a non-module cluster guest"* and `satellite-fields.json` as *"an EXTERNAL host, NOT a Proxmox cluster:vm"* — the same value, contradictory, both on `main`.
 
 **D6. Plane vocabulary is scoped to the `network` module.** [RFC 7426](https://www.rfc-editor.org/rfc/rfc7426.html) defines forwarding, operational, control, management and application planes, all in terms of *network devices* and *traffic*; "data plane" is not a defined term there, only a widely used nickname for the forwarding plane. TAPPaaS runs a real forwarding plane in OPNsense and the switches, so the words must not be reused for workloads. The general term for what the management plane acts on is **Managed Element** ([MAPE-K](https://arxiv.org/pdf/1505.00903)).
 
@@ -36,13 +36,13 @@ A cluster member, a bare-metal host and a VM are all Nodes. `GLOSSARY.md` §B de
 
 ## Schema
 
-- `module-fields.json` / `satellite-fields.json` — one definition of `kind`, values per ADR-023.
+- `module-fields.json` / `satellite-fields.json` — one definition of `kind`, values per ADR-022d.
 - `node` field — description amended: names a Host; does not imply cluster membership.
 - No field is renamed by this ADR.
 
 ## Migration
 
-`kind: external-host` appears in seven files: `satellite-fields.json`, `module-fields.json`, `satellite.json`, `satellite-manager/lib/provision.sh`, `satellite/test.sh`, `satellite-manager/test.sh`, and one `module-manager` fixture. The value change lands with ADR-023, which decides the replacement.
+`kind: external-host` appears in seven files: `satellite-fields.json`, `module-fields.json`, `satellite.json`, `satellite-manager/lib/provision.sh`, `satellite/test.sh`, `satellite-manager/test.sh`, and one `module-manager` fixture. The value change lands with ADR-022d, which decides the replacement.
 
 ## Acceptance
 
