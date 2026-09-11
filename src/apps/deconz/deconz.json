@@ -4,6 +4,7 @@
   "releaseDate": "2026-07-02",
   "maintainer": "@ErikDaniel007",
   "status": "Development",
+  "tier": "app",
   "vmname": "deconz",
   "vmid": 213,
   "vmtag": "TAPPaaS,App,HomeAutomation",
