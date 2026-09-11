@@ -509,7 +509,7 @@ The six values this appendix carried — `node` · `standalone` · `satellite` �
 into the two questions it was answering at once: **who administers the
 workload** (ADR-022a D6: `this-site` / `no-site` / `other-site` / `unknown`)
 and, when it is ours, **what type of device/workload it is** (ADR-022d
-`kind`: `guest` / `host` / `cluster`, expanding). All six survive as
+`kind`: `vm` / `lxc` / `host` / `cluster`, expanding). All six survive as
 coordinates in that model; none is lost. See ADR-022's mapping table (spine, not either rib).
 
 **What this ADR still decides**, and what ADR-022d does not touch: the backup
@@ -527,7 +527,7 @@ rather than by whichever document is read last:
    deployed `config/<module>.json`, and shape-based module discovery
    (`isModuleConfig`, the #544 fix) reads it to tell a module from the other
    JSON in `config/`. ADR-022d redefines `kind` as *what type of device/workload
-   it is* (`guest` / `host` / `cluster`, expanding), retiring `external-host`.
+   it is* (`vm` / `lxc` / `host` / `cluster`, expanding), retiring `external-host`.
    Those are answers to different
    questions. Discovery survives — it falls back to a module-shaped field when
    `kind` is not `"module"` — but the authoritative marker stops being

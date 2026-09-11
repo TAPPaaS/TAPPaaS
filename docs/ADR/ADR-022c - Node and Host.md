@@ -3,12 +3,13 @@
 | | |
 |---|---|
 | **Status** | **Draft — for review** |
-| **Version** | 0.1 |
-| **Date** | 2026-09-09 |
+| **Version** | 0.2 |
+| **Date** | 2026-09-09 (v0.2: 2026-09-11) |
 | **Author** | ErikDaniel007 |
 | **Deciders** | @ErikDaniel007, @LarsRossen |
 | **Parent** | [ADR-022 — Workload Ontology](<ADR-022 - Workload Ontology.md>) |
 | **Supersedes in part** | [ADR-009](<ADR-009 - Composition Meta-Model.md>) — the `Node` entry |
+| **Changelog** | v0.1 — initial draft. v0.2 — D4's example updated: ADR-022d retired the combined `kind: guest` value for a `vm`/`lxc` split; D4 now names both. |
 
 What a resource runs on, and what `kind` records.
 
@@ -24,7 +25,7 @@ A cluster member, a bare-metal host and a VM are all Nodes. `GLOSSARY.md` §B de
 
 **D3. Add `Host`** — the Node a Module runs on. The `node` **field** keeps its name for compatibility; it names a Host and does **not** assert cluster membership. Live evidence: `config/backup.json` carries `node: "backup"` while `site.json` lists only `tappaas1` and `tappaas2`.
 
-**D4. Module boundary follows `kind`.** *"Module boundary = VM boundary"* has two live counterexamples — `satellite.json` (`vmname: null`) and the `backup` module, which apt-installs PBS on a host. Boundary is the VM for `kind: guest`, the host for `kind: host`.
+**D4. Module boundary follows `kind`.** *"Module boundary = VM boundary"* has two live counterexamples — `satellite.json` (`vmname: null`) and the `backup` module, which apt-installs PBS on a host. Boundary is the VM for `kind: vm`, the container for `kind: lxc`, the host for `kind: host` (ADR-022d, which retired the earlier combined `kind: guest` value in favor of this split).
 
 **D5. `kind` is the object-type marker**, tooling-written, never hand-authored — the Kubernetes convention TAPPaaS already follows. Its **values** are decided by [ADR-022d](<ADR-022d - Workload Classification.md>), not here. What this ADR settles is that `external-host` cannot survive: `module-fields.json` defines it as *"a non-module cluster guest"* and `satellite-fields.json` as *"an EXTERNAL host, NOT a Proxmox cluster:vm"* — the same value, contradictory, both on `main`.
 
