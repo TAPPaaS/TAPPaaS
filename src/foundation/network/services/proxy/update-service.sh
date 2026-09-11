@@ -197,10 +197,18 @@ if [[ "${DNS_MODE}" == "per-service" ]]; then
                 warn "    unbound-manager --no-ssl-verify add '${DNS_HOST}' '${DNS_ZONE}' '${GW}'"
             fi
         elif [[ ${SH_RC} -eq 3 ]]; then
-            # ADR-021 R3: a supported configuration, not an error. Say what the
-            # operator loses, in one line, and carry on — the install succeeds.
+            # ADR-021 R3 / Case 4: a supported configuration, not an error. Say
+            # what the operator loses, in one line, and carry on — install succeeds.
             info "  '${MODULE}' is not published (no external DNS for ${PROXY_DOMAIN})"
             info "    reachable only at ${MODULE}.${ZONE}.internal, without TLS and without the identity gate"
+            # Case 4 says the split-horizon record for an unpublished service is
+            # "none" — so REMOVE one that is already there, don't merely decline
+            # to write it. A service that was published and no longer is (or one
+            # registered under the retired client-zone rule) otherwise keeps a
+            # record that resolves to a Caddy holding no certificate for it: the
+            # caller gets a TLS error instead of the NXDOMAIN that would tell
+            # them the truth (#593). Never touches the shared '*' wildcard.
+            unbound_prune_host_override "${DNS_HOST}" "${DNS_ZONE}"
         else
             warn "  Could not derive a split-horizon target for ${PROXY_DOMAIN} — register DNS manually"
         fi
