@@ -1972,8 +1972,13 @@ EVIDENCE
     if [[ -z "${DEF_DOMAIN}" || "${DEF_DOMAIN}" == CHANGE* ]]; then
         skip "Deep 11e: no default-environment domain set"
     else
-        _sh_out="$(network-manager split-horizon-target "${PROXY_FQDN}" --zones "${_sh_eff}" 2>/dev/null)"
-        _sh_rc=$?
+        # `|| rc=$?`, never a bare call: `set -e` is back on here (the deep
+        # section's `set +e` closed with Deep A), and every rc this block
+        # distinguishes is non-zero — so a bare call ends the suite on exactly
+        # the answers it exists to read (#625).
+        _sh_rc=0
+        _sh_out="$(network-manager split-horizon-target "${PROXY_FQDN}" --zones "${_sh_eff}" 2>/dev/null)" \
+            || _sh_rc=$?
         if [[ ${_sh_rc} -eq 0 && "${_sh_out}" == "${_sh_dmz_gw}" ]]; then
             pass "Deep 11e-a: resolver answers ${PROXY_FQDN} → ${_sh_out} (the DMZ gateway, ADR-021 D2)"
         else
@@ -1982,9 +1987,9 @@ EVIDENCE
 
         # A name that cannot resolve publicly must report UNPUBLISHED (rc 3),
         # not an error. Use a name guaranteed not to exist under this domain.
+        _sh_rc=0
         network-manager split-horizon-target "no-such-service-$$.${DEF_DOMAIN}" \
-            --zones "${_sh_eff}" >/dev/null 2>&1
-        _sh_rc=$?
+            --zones "${_sh_eff}" >/dev/null 2>&1 || _sh_rc=$?
         if [[ ${_sh_rc} -eq 3 ]]; then
             pass "Deep 11e-b: an unpublishable name reports UNPUBLISHED (rc 3), not an error (R3)"
         else
