@@ -162,9 +162,11 @@ pbs_fs_deploy_runner() {
     local src="${PBS_FS_SERVICE_DIR}/tappaas-fs-backup.sh"
     [[ -f "${src}" ]] || { error "  backup:filesystem: runner source missing at ${src}"; return 1; }
 
-    tappaas_scp_guest -q -o BatchMode=yes "${src}" "tappaas@${guest}:${runner}" \
+    # No -q: scp's progress meter is off for a non-tty anyway, so it bought
+    # nothing here and cost the operator the reason a transfer failed (#630).
+    tappaas_scp_guest -o BatchMode=yes "${src}" "tappaas@${guest}:${runner}" \
         || { error "  could not deploy the capture runner to ${guest}"; return 1; }
-    tappaas_scp_guest -q -o BatchMode=yes "${manifest}" "tappaas@${guest}:/home/tappaas/config/" \
+    tappaas_scp_guest -o BatchMode=yes "${manifest}" "tappaas@${guest}:/home/tappaas/config/" \
         || { error "  could not deploy the capture manifest to ${guest}"; return 1; }
     tappaas_ssh_guest -o BatchMode=yes "tappaas@${guest}" "chmod +x '${runner}'" \
         || { error "  could not make the capture runner executable on ${guest}"; return 1; }

@@ -368,6 +368,20 @@ else
     skip "lib/test-unbound-prune.sh not found"
 fi
 
+# Test 9f: the shared install/update helpers — host-key self-heal included. The
+# heal used to be decided by grepping ssh's stderr, which a caller's -q emptied
+# (#630), so this suite is also the one that keeps the -q call sites honest.
+info "${BOLD}Test 9f: common-install-routines helpers (#524, #630)${CL}"
+if [[ -x "${SCRIPT_DIR}/lib/test-common-install-routines.sh" ]]; then
+    if "${SCRIPT_DIR}/lib/test-common-install-routines.sh" >/dev/null 2>&1; then
+        pass "common-install-routines: script perms, ssh/scp target parsing, host-key self-heal"
+    else
+        fail "common-install-routines test failed (run lib/test-common-install-routines.sh)"
+    fi
+else
+    skip "lib/test-common-install-routines.sh not found"
+fi
+
 # update-module.sh wires cleanup into the success path (prune_snapshots calls
 # snapshot-vm.sh --cleanup); guard against the wiring silently disappearing.
 if grep -q 'snapshot-vm.sh.*--cleanup' /home/tappaas/bin/update-module.sh; then

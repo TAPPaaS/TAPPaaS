@@ -126,7 +126,76 @@ ssh() { echo "Permission denied (publickey)." >&2; return 255; }
 rc=0; tappaas_ssh_guest tappaas@h true >/dev/null 2>&1 || rc=$?
 [[ "$rc" -eq 255 ]] && ok "non-hostkey failure preserved, no retry" || bad "non-hostkey preserved (rc=$rc)"
 
+# #630: the caller passed -q, so ssh says NOTHING on stderr. The old wrapper
+# grepped that empty file, found no reason, and handed the caller a bare
+# failure. The pinned key no longer matches what the host offers, and THAT is
+# the evidence the heal must run on.
+ssh-keyscan() { printf ' h ssh-ed25519 a-brand-new-key\n'; }
+ssh-keygen() { # -F reports the pin, -lf fingerprints whatever it is handed
+    case "${1:-}" in
+        -R)  : > "$kh_home/.ssh/known_hosts" ;;
+        -F)  echo 'h ssh-ed25519 pinned-key' ;;
+        -lf) if grep -q 'a-brand-new-key'; then echo '256 SHA256:NEWFP h (ED25519)'
+             else echo '256 SHA256:OLDFP h (ED25519)'; fi ;;
+    esac
+    return 0
+}
+ssh() {
+    echo x >> "$calls_f"
+    [[ "$(ncalls)" -eq 1 ]] && return 255      # -q: no stderr, no reason given
+    echo "COMMAND-OUTPUT"; return 0
+}
+: > "$calls_f"
+rc=0; out="$(tappaas_ssh_guest -q tappaas@h true 2>/dev/null)" || rc=$?
+[[ "$rc" -eq 0 ]]       && ok "-q: changed key healed with no stderr to match (#630)" || bad "-q healed (rc=$rc)"
+[[ "$(ncalls)" -eq 2 ]] && ok "-q: retried exactly once"                              || bad "-q retried once (calls=$(ncalls))"
+
+# …and the mirror image: silent failure, but the pin still matches what the
+# host offers. Nothing to heal, so the failure must stand.
+ssh-keyscan() { printf ' h ssh-ed25519 pinned-key\n'; }
+: > "$calls_f"
+rc=0; tappaas_ssh_guest -q tappaas@h true >/dev/null 2>&1 || rc=$?
+[[ "$rc" -ne 0 ]]       && ok "-q: silent failure with a matching pin stays failed" || bad "-q matching pin stays failed (rc=$rc)"
+[[ "$(ncalls)" -eq 1 ]] && ok "-q: matching pin does not retry"                     || bad "-q no retry (calls=$(ncalls))"
+
 unset -f ssh ssh-keygen ssh-keyscan ncalls; rm -f "$calls_f"
+
+echo
+echo "tappaas_ssh_host_key_changed tests (#630):"
+
+hk_home="$(mktemp -d)"; mkdir -p "$hk_home/.ssh"; HOME="$hk_home"
+printf 'h ssh-ed25519 pinned-key\n' > "$hk_home/.ssh/known_hosts"
+ssh-keygen() {
+    local inp
+    case "${1:-}" in
+        -F)  cat "$hk_home/.ssh/known_hosts" ;;
+        # Fingerprint what it is HANDED — an empty stdin must fingerprint to
+        # nothing, or "no pin at all" is indistinguishable from a stale one.
+        -lf) inp="$(cat)"; [[ -n "$inp" ]] || return 0
+             if grep -q 'a-brand-new-key' <<<"$inp"; then echo '256 SHA256:NEWFP h (ED25519)'
+             else echo '256 SHA256:OLDFP h (ED25519)'; fi ;;
+    esac
+    return 0
+}
+
+ssh-keyscan() { printf ' h ssh-ed25519 a-brand-new-key\n'; }
+tappaas_ssh_host_key_changed h && ok "different key -> changed"        || bad "different key -> changed"
+
+ssh-keyscan() { printf ' h ssh-ed25519 pinned-key\n'; }
+tappaas_ssh_host_key_changed h && bad "same key -> not changed"        || ok "same key -> not changed"
+
+# The two "I cannot tell" answers are NOT-changed: they must never provoke a
+# re-pin, because neither is evidence that the key moved.
+ssh-keyscan() { return 1; }                                  # host unreachable
+tappaas_ssh_host_key_changed h && bad "unreachable -> not changed"     || ok "unreachable -> not changed"
+
+ssh-keyscan() { printf ' h ssh-ed25519 a-brand-new-key\n'; }
+: > "$hk_home/.ssh/known_hosts"                              # nothing pinned
+tappaas_ssh_host_key_changed h && bad "nothing pinned -> not changed"  || ok "nothing pinned -> not changed"
+
+tappaas_ssh_host_key_changed "" && bad "empty host -> not changed"     || ok "empty host -> not changed"
+
+unset -f ssh-keygen ssh-keyscan; HOME="$OLD_HOME"; rm -rf "$hk_home"
 
 echo
 echo "tappaas_scp_target_host tests:"
