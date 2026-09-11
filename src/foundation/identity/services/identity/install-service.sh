@@ -50,6 +50,12 @@ MODULE=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --dry-run) DRY_RUN=1; shift ;;
+        # ADR-020 D8: accepted and ignored. Authentik configuration needs no
+        # downtime, so there is nothing to authorize — but update-service.sh
+        # execs this script with "$@", so a rejected --force failed every module
+        # that dependsOn identity:identity whenever the operator ran
+        # `site-manager update --force`.
+        --force) shift ;;
         -*) die "unknown option: $1" ;;
         *) if [[ -z "${MODULE}" ]]; then MODULE="$1"; shift; else die "unexpected arg: $1"; fi ;;
     esac
