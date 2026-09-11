@@ -36,6 +36,8 @@ set -euo pipefail
 . /home/tappaas/bin/common-install-routines.sh
 # shellcheck source=../cluster/lib/vm-net.sh disable=SC1091
 . /home/tappaas/TAPPaaS/src/foundation/cluster/lib/vm-net.sh
+# shellcheck source=lib/dns-sample.sh disable=SC1091
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/dns-sample.sh"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_DIR
@@ -235,6 +237,19 @@ for ut in test-unifi-plugin.sh; do
     fi
 done
 
+section "Standard 1c: helper unit tests (lib/test-*.sh)"
+
+shopt -s nullglob
+for ut in "${SCRIPT_DIR}"/lib/test-*.sh; do
+    if ut_out=$(bash "${ut}" 2>&1); then
+        pass "$(basename "${ut}")"
+    else
+        fail "$(basename "${ut}")"
+        echo "${ut_out}" | sed 's/^/    /'
+    fi
+done
+shopt -u nullglob
+
 section "Standard 2: Schema files parse and validate"
 
 for file in "${ZONES_JSON}" "${ZONES_TEMPLATE}"; do
@@ -307,46 +322,41 @@ fi
 
 section "Standard 4: DNS for in-cluster modules"
 
-# Collect installed modules that have a single resolvable host. Modules with
-# aliasType=network (#241) represent a set of devices and have no <vmname>
-# DHCP/DNS record by design, so they must be excluded here (#255).
-sample_modules=""
-network_alias_count=0
-hostless_count=0
-for f in "${CONFIG_DIR}"/*.json; do
-    vmname=$(jq -r '.vmname // empty' "${f}" 2>/dev/null)
-    [[ -z "${vmname}" ]] && continue
-    alias_type=$(jq -r '.aliasType // "host"' "${f}" 2>/dev/null)
-    if [[ "${alias_type}" == "network" ]]; then
-        network_alias_count=$((network_alias_count + 1))
-        continue
-    fi
-    # ADR-012 §2.1: a backup module that realizes no LOCAL PBS — a shim (no
-    # datastore anywhere) or external (the datastore is someone else's, reached
-    # by URL) — has no <vmname> host and so no DNS record by design. Exclude it,
-    # mirroring the aliasType=network exclusion above. `remote-only` is the
-    # legacy spelling of external, still seen until the module's next update.
-    placement_state=$(jq -r '.placementState // empty' "${f}" 2>/dev/null)
-    if [[ "${placement_state}" == "shim" || "${placement_state}" == "external" \
-       || "${placement_state}" == "remote-only" ]]; then
-        hostless_count=$((hostless_count + 1))
-        continue
-    fi
-    sample_modules+="${vmname}"$'\n'
-done
-sample_modules=$(printf '%s' "${sample_modules}" | sort -u | head -3)
-
-if [[ "${network_alias_count}" -gt 0 ]]; then
-    skip "${network_alias_count} module(s) excluded — aliasType=network has no DNS record by design"
-fi
-
-if [[ "${hostless_count}" -gt 0 ]]; then
-    skip "${hostless_count} module(s) excluded — backup with no local datastore (shim/external) has no DNS record by design"
-fi
-
-if [[ -z "${sample_modules}" ]]; then
-    skip "no installed modules with a resolvable vmname — DNS resolution test skipped"
+# Which modules may be held to a DNS record, and why the rest may not, is
+# lib/dns-sample.sh — it is pure, and it has its own unit suite (Standard 1c).
+# The short version: a module answers at <vmname>.<zone>.internal only while a
+# guest of its own is running to take the lease.
+running_f="$(mktemp)"
+# shellcheck disable=SC2046  # word-splitting of hostnames is intended
+if dns_sample_running_vmids "$(jq -r '.node // empty' "${FIREWALL_JSON}" 2>/dev/null)" \
+                            $(get_all_node_hostnames) > "${running_f}" 2>/dev/null; then
+    runtime_known="${running_f}"
 else
+    runtime_known=""
+    skip "no cluster node answered — checking every module, including any with no running guest"
+fi
+
+dns_sample_select "${CONFIG_DIR}" "${runtime_known}"
+rm -f "${running_f}"
+
+if [[ "${DNS_SAMPLE_N_ALIAS}" -gt 0 ]]; then
+    skip "${DNS_SAMPLE_N_ALIAS} module(s) excluded — aliasType=network has no DNS record by design"
+fi
+
+if [[ "${DNS_SAMPLE_N_HOSTLESS}" -gt 0 ]]; then
+    skip "${DNS_SAMPLE_N_HOSTLESS} module(s) excluded — backup with no local datastore (shim/external) has no DNS record by design"
+fi
+
+if [[ "${DNS_SAMPLE_N_GUESTLESS}" -gt 0 ]]; then
+    skip "${DNS_SAMPLE_N_GUESTLESS} module(s) excluded — archived or not running, so no lease and no record by design (#631)"
+fi
+
+if [[ -z "${DNS_SAMPLE_MODULES}" ]]; then
+    skip "no installed modules with a running guest — DNS resolution test skipped"
+else
+    # Every remaining module, not a sample of three: the exclusions above are
+    # what made a sample necessary, and three checked out of forty-three was a
+    # green tick over forty unexamined names (#631).
     while IFS= read -r vmname; do
         [[ -z "${vmname}" ]] && continue
         zone=$(read_module_config "${vmname}" 2>/dev/null | jq -r '.zone0 // "srvHome"' 2>/dev/null || echo "srvHome")
@@ -356,7 +366,7 @@ else
         else
             fail "DNS cannot resolve ${fqdn}"
         fi
-    done <<< "${sample_modules}"
+    done <<< "${DNS_SAMPLE_MODULES}"
 fi
 
 section "Standard 5: zone-manager summary"
