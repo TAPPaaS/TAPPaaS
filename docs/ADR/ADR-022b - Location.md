@@ -3,12 +3,13 @@
 | | |
 |---|---|
 | **Status** | **Draft — for review** |
-| **Version** | 0.1 |
-| **Date** | 2026-09-09 |
+| **Version** | 0.2 |
+| **Date** | 2026-09-09 (v0.2: 2026-09-11) |
 | **Author** | ErikDaniel007 |
 | **Deciders** | @ErikDaniel007, @LarsRossen |
 | **Parent** | [ADR-022 — Workload Ontology](<ADR-022 - Workload Ontology.md>) |
 | **Related** | [ADR-010](ADR-010-vps-satellite-reverse-proxy-backup.md) (satellite); [ADR-012](ADR-012-backup-enhancement.md) §1.4 (the first consumer that needs it) |
+| **Changelog** | v0.1 — initial draft. **v0.2** retires D2 (`Facility`): flagged in review (#624) as overlapping Location and unused by any proposed field, no elaboration followed, so removed per Lars's follow-up rather than left ambiguous. |
 
 Where a resource physically is — distinct from where it sits on the network.
 
@@ -24,7 +25,7 @@ Where a resource physically is — distinct from where it sits on the network.
 
 Street address, rack address and rack slot are **one taxonomy at three granularities**, not three concepts.
 
-**D2. `Facility` names the building level** — ArchiMate: *"a physical structure or environment"* (office buildings, laboratories, **data centers**). It is a level inside Location, not a synonym for it.
+**D2.** ~~`Facility` names the building level — ArchiMate: *"a physical structure or environment"* (office buildings, laboratories, **data centers**). It is a level inside Location, not a synonym for it.~~ **Removed (v0.2)** — not used by D1's Redfish levels or by the Schema section below; the ArchiMate overlap with Location that Lars flagged (#624) was never elaborated, so removed rather than left unresolved.
 
 **D3. Location is orthogonal to zone.** IEC 62443 states it: zones are *"not geographically constrained and can span multiple physical locations."* A zone says nothing about where hardware sits, and a Location says nothing about network reach.
 
@@ -43,7 +44,7 @@ Additive. Existing satellites gain a `location` on next `satellite-manager` run 
 
 ## Acceptance
 
-- [ ] `Location` and `Facility` defined in `GLOSSARY.md` §A with the Redfish levels
+- [ ] `Location` defined in `GLOSSARY.md` §A with the Redfish levels
 - [ ] `satellite-fields.json` gains `location`, reusing the site shape — *the schema edit itself is tracked by the ADR-012 off-site issue; this ADR only fixes the shape*
 - [ ] ADR-012 §1.4 requires an off-site target to declare a `location.country` differing from the Site's
 - [ ] A check exists that every declared off-site target differs in country from the Site
