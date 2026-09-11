@@ -213,7 +213,7 @@ dependency `install-module.sh` had already validated.
 | Band | Range | Source | Purpose |
 |------|-------|--------|---------|
 | 0 | 0–99 | OPNsense auto | Anti-lockout |
-| 1 | 100–999 | `zone-manager` | Infrastructure (DHCP, NTP, ICMP); Caddy reachability to the DMZ gateway `/32` on tcp/80+443 from every internet-capable zone (seq 990/991) |
+| 1 | 100–999 | `zone-manager` | Infrastructure (DHCP, NTP, ICMP); **caddy-reach** — the DMZ gateway `/32` on tcp/80+443, seq 990/991 (see below) |
 | 2 | 1000–9999 | `zone-manager` | Foundation deny defaults |
 | **3** | **10000–19999** | **`rules-manager` ingress** | Per-module pinholes |
 | **4** | **20000–29999** | **`rules-manager` egress** | Per-module egress exceptions |
@@ -233,6 +233,29 @@ collisions are harmless since each zone's rules bind to its own interface). The
 intra-slot offsets are fixed — `base+0` gateway, `base+1..+89` one pass per `access-to`
 zone, `base+90..+92` rfc1918 block, `base+99` internet — so adding a zone to `access-to`
 never renumbers or collides with the block/internet rules.
+
+#### Why caddy-reach is in band 1 (#366, ADR-021 D3)
+
+Split-horizon DNS resolves every published name to the **DMZ gateway**, where `os-caddy`
+listens. A client zone has no `access-to: dmz` — and under ADR-021 D3b **must not**, since
+that would grant the whole DMZ subnet on every port, the firewall's own GUI and SSH
+included (#618) — so the zone's own band-5 rfc1918 block at `base+90` would drop that
+traffic. The pass therefore sits at **seq 990/991**, low in band 1, where first-match-quick
+evaluates it *before* the block. Band 1 is load-bearing here, not cosmetic: move this rule
+into band 5 and every published name stops resolving usefully from every client zone.
+
+It is **L3 reachability only** — a `/32` on two ports, never the DMZ subnet. Authorization
+stays where it can be expressed per service: Caddy's `proxyAllowedZones` access list and
+the Authentik identity gate. `zone_manager._configure_caddy_reachability` emits it for:
+
+| Candidate | Why |
+|---|---|
+| any zone with `internet` (or `all`) | it can already reach that Caddy the long way round, via the WAN hairpin, so this opens no new destination |
+| an **Overlay** zone with a non-empty `access-to` (D3a) | overlay peers are not a routed segment and carry no `internet`, yet resolve the same answer. `admin` is the live case; its `bridge` names the interface its peers arrive on (e.g. `wireguard`). A dormant overlay (empty `access-to`) stays out |
+| the **`dmz` zone itself** (D3b) | it was skipped as "reaches the gateway locally", but that was the unrestricted `Zone dmz -> gateway` rule which #399 narrows to DNS/NTP/DHCP/ICMP — after which a DMZ workload would lose tcp/443 to Caddy |
+
+A fully-isolated zone (empty `access-to`, no `internet`) gets no rule and cannot reach a
+published name — the correct outcome, by the same mechanism that denies it the internet.
 
 ### Validation
 

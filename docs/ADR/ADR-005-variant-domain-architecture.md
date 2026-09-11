@@ -6,8 +6,10 @@
 **Related:** #269, #270, #289, #290, #292, #299; **superseded by** ADR-007c (#318 renamed variant→Environment, closes #316)
 **Changelog:** 2026-06-30 — marked Superseded by ADR-007c (the "variant" model was renamed wholesale to "Environment"). 2026-06-17 — §6 amended: replace incorrect "route via DMZ gateway" split-horizon DNS prescription with correct "authorized-zone gateway (OPNsense self-traffic)" model (@ErikDaniel007, evidence: zones.json access-to audit + Lars 260616 worksession transcript)
 
-> **⚠ Superseded — the "variant" concept became "Environment" (kept as history; §6 DNS analysis still
-> useful).** Realized model: `variant-manager` → **`environment-manager`** (+ `network-manager` for the
+> **⚠ Superseded — the "variant" concept became "Environment" (kept as history; §6's DNS
+> *reachability* analysis is still worth reading, but its split-horizon PRESCRIPTION is itself
+> superseded by [ADR-021](<ADR-021 - Split-Horizon DNS and Service Reachability.md>) — see the
+> note at the head of §6).** Realized model: `variant-manager` → **`environment-manager`** (+ `network-manager` for the
 > zone/TLS/DNS planes); `--variant` is now a **deprecated alias** of `--environment`; the
 > `configuration.json .tappaas.variants` registry → per-file **`config/environments/<name>.json`**
 > (`schemas/environment-fields.json`); a variant's authored `tlsCertRefid` → **runtime** state
@@ -218,6 +220,31 @@ Use cases for `per-service`:
 - Testing with domains you don't fully control
 
 ### 6. Split-horizon DNS for Proxy Services (Fixes #269)
+
+> **⚠ SUPERSEDED 2026-09-11 by [ADR-021](<ADR-021 - Split-Horizon DNS and Service Reachability.md>).**
+> **The rule below is history. Do not implement from it.** The internal answer for a published
+> name is **the DMZ gateway, for every caller, always** (ADR-021 D2), and it comes from ONE
+> resolver — `network-manager split-horizon-target` (D5).
+>
+> Specifically, three prescriptions below are now wrong:
+>
+> | §6 says | ADR-021 |
+> |---|---|
+> | resolve to the authorized **client zone's** gateway | resolve to the **DMZ gateway**, from the single resolver |
+> | register **one override per client zone** | **one** record; one answer is correct for every zone at once |
+> | *"Replace `dmz_gateway_ip()` with a zone-aware lookup"* | the zone-aware lookup was the defect — it became `split-horizon-target` |
+>
+> **What §6 got right, and why the fix went the other way.** Its reasoning about *reachability* is
+> sound: a client reaching the OPNsense interface **on its own subnet** is self-traffic and crosses
+> no inter-zone rule, whereas `home → 10.6.0.1` does. §6 concluded the DNS answer must therefore
+> differ per zone. ADR-021 keeps the observation and rejects the conclusion: encoding *authorization*
+> in the *address* is what produced three writers that each derived it differently (#577), and it
+> made a wildcard record impossible on a multi-client-zone site — a wildcard is one `redirect` zone
+> with a single apex target. Reachability is instead a firewall rule (the #366 caddy-reach pass to
+> the DMZ gateway `/32` on tcp/80+443, ADR-021 D3), and authorization is Caddy's access list plus
+> the Authentik identity gate. DNS says "go to Caddy"; Caddy says "you may / you may not".
+>
+> The earlier amendment is kept below for the record.
 
 > **⚠ AMENDED 2026-06-17:** The original §6 prescribed routing via the *DMZ gateway IP* (10.6.0.x).
 > This was architecturally incorrect. See rationale below.

@@ -138,7 +138,7 @@ How network:proxy obtains the public TLS certificate for this domain. OMIT IT to
 
 ### `proxyAllowedZones`
 
-Zones (and the literal 'internet') permitted to reach this service through the reverse proxy. network:proxy compiles this into an os-caddy access list (allow-list by client subnet) attached to the handler; non-matching clients get HTTP 403.
+Zones (and the literal 'internet') permitted to reach this service through the reverse proxy. network:proxy compiles this into an os-caddy access list (allow-list by client subnet) attached to the handler; non-matching clients get HTTP 403. Under ADR-021 D2 this is the ONLY place a zone restricts a published service: split-horizon DNS returns the same address (the DMZ gateway) to every caller, so the answer encodes no entitlement and the access list is what narrows it.
 
 | Attribute | Value |
 |---|---|
@@ -150,7 +150,7 @@ Zones (and the literal 'internet') permitted to reach this service through the r
 | Change class | `in-place` |
 | Apply mode | `reconcile` |
 
-**About the field.** Zero-trust by default: when omitted, a service is reachable only from the internal trusted zones, never the internet. Add 'internet' to publish it publicly (no restriction). Zone names are resolved to subnets via zones.json. Changing this re-applies on the next install/update of the module.
+**About the field.** Zero-trust by default: when omitted, a service is reachable only from the internal trusted zones, never the internet. Add 'internet' to publish it publicly (no restriction). Zone names are resolved to subnets via zones.json. Changing this re-applies on the next install/update of the module. TWO values carry real consequence and the rest is belt-and-braces: leaving it UNSET is the normal, correct configuration for a published service, and adding 'internet' is what makes it publicly reachable. Narrowing to a specific list of internal zones filters IN FRONT OF the identity gate, it is not the mechanism protecting the service (ADR-021 Case 1/3) — a zone list that lets someone through still leaves them at an Authentik login, and one that shuts them out only saves them the round trip. Do not use it to separate two populations who are each entitled to a different environment: that binds entitlement to network position, which breaks the moment a legitimate user connects from another zone (the same person on a laptop in home, a phone on guest wifi and the netbird overlay is ONE identity in three zones). Authentik group membership is where that belongs.
 
 **Why this change class.** Which zones may reach the published name — the difference between an internal service and one exposed to the internet. A live firewall/Caddy change, and the field most worth being able to set through a verb rather than by hand.
 
