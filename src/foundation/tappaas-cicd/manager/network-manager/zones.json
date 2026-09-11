@@ -126,7 +126,7 @@
     "subId": "2",
     "vlantag": 0,
     "ip": "10.255.1.0/24",
-    "bridge": "lan",
+    "bridge": "wireguard",
     "access-to": [
       "mgmt"
     ],
@@ -156,8 +156,7 @@
     "ip": "10.2.0.0/24",
     "bridge": "lan",
     "access-to": [
-      "internet",
-      "dmz"
+      "internet"
     ],
     "pinhole-allowed-from": [
       "dmz"

@@ -518,7 +518,7 @@ function wildcardEnv(name: string, zone: string, domain: string): Environment {
   net.seedZone("foo");
   const mod = new FakeModuleClient();
   const dt = new FakeDnsTlsClient();
-  dt.seedGateway("foo", "10.9.0.1"); // DNS underived-target would otherwise plan
+  dt.seedGateway("dmz", "10.6.0.1"); // DNS underived-target would otherwise plan
   dt.credsPresent = true;
   const plan = computePlan(
     wildcardEnv("foo", "foo", "app.example.com"),
@@ -545,7 +545,7 @@ function wildcardEnv(name: string, zone: string, domain: string): Environment {
   net.seedZone("foo");
   const mod = new FakeModuleClient();
   const dt = new FakeDnsTlsClient();
-  dt.seedGateway("foo", "10.9.0.1"); // wildcard missing → DNS action expected
+  dt.seedGateway("dmz", "10.6.0.1"); // wildcard missing → DNS action expected
   const plan = computePlan(
     wildcardEnv("foo", "foo", "app.example.com"),
     net,
@@ -565,13 +565,14 @@ function wildcardEnv(name: string, zone: string, domain: string): Environment {
 }
 
 // DNS: wildcard override missing/wrong → a register-wildcard-dns action pointed
-// at the env's own service-zone gateway.
+// at the DMZ gateway. ADR-021 D2: ONE answer, for every caller and every
+// environment — the env's own service zone is no longer consulted.
 {
   const net = new FakeNetworkClient();
   net.seedZone("foo");
   const mod = new FakeModuleClient();
   const dt = new FakeDnsTlsClient();
-  dt.seedGateway("foo", "10.9.0.1");
+  dt.seedGateway("dmz", "10.6.0.1");
   dt.seedIssuedCert("app.example.com", "R"); // isolate: TLS already settled
   dt.seedRecordedRefid("foo", "R");
   const plan = computePlan(
@@ -583,8 +584,8 @@ function wildcardEnv(name: string, zone: string, domain: string): Environment {
   );
   const dns = plan.actions.find((a) => a.kind === "register-wildcard-dns");
   check(
-    dns !== undefined && dns.value === "10.9.0.1" && dns.zone === "foo" && dns.scope === "environment",
-    "a missing wildcard override plans register-wildcard-dns at the service-zone gateway",
+    dns !== undefined && dns.value === "10.6.0.1" && dns.zone === "dmz" && dns.scope === "environment",
+    "a missing wildcard override plans register-wildcard-dns at the DMZ gateway (D2)",
   );
 }
 
@@ -595,8 +596,8 @@ function wildcardEnv(name: string, zone: string, domain: string): Environment {
   net.seedZone("foo");
   const mod = new FakeModuleClient();
   const dt = new FakeDnsTlsClient();
-  dt.seedGateway("foo", "10.9.0.1");
-  dt.seedWildcard("app.example.com", "10.9.0.1"); // target already correct
+  dt.seedGateway("dmz", "10.6.0.1");
+  dt.seedWildcard("app.example.com", "10.6.0.1"); // target already correct
   dt.seedCollisions("app.example.com", ["logging"]); // but a collision lingers
   dt.seedIssuedCert("app.example.com", "R");
   dt.seedRecordedRefid("foo", "R");
@@ -620,8 +621,8 @@ function wildcardEnv(name: string, zone: string, domain: string): Environment {
   net.seedZone("foo");
   const mod = new FakeModuleClient();
   const dt = new FakeDnsTlsClient();
-  dt.seedGateway("foo", "10.9.0.1");
-  dt.seedWildcard("app.example.com", "10.9.0.1");
+  dt.seedGateway("dmz", "10.6.0.1");
+  dt.seedWildcard("app.example.com", "10.6.0.1");
   dt.seedIssuedCert("app.example.com", "R");
   dt.seedRecordedRefid("foo", "R");
   const plan = computePlan(
@@ -633,7 +634,7 @@ function wildcardEnv(name: string, zone: string, domain: string): Environment {
   );
   check(
     !plan.actions.some((a) => a.kind === "register-wildcard-dns") &&
-      plan.notes.some((n) => n.includes("already resolves to 10.9.0.1")),
+      plan.notes.some((n) => n.includes("already resolves to 10.6.0.1")),
     "an already-correct wildcard override plans no DNS action (idempotent)",
   );
 }
@@ -644,7 +645,7 @@ function wildcardEnv(name: string, zone: string, domain: string): Environment {
   const net = new FakeNetworkClient();
   net.seedZone("foo");
   const mod = new FakeModuleClient();
-  const dt = new FakeDnsTlsClient(); // no gateways seeded → underivable
+  const dt = new FakeDnsTlsClient(); // no dmz gateway seeded → resolver cannot answer
   dt.seedIssuedCert("app.example.com", "R");
   dt.seedRecordedRefid("foo", "R");
   const plan = computePlan(
@@ -656,8 +657,8 @@ function wildcardEnv(name: string, zone: string, domain: string): Environment {
   );
   check(
     !plan.actions.some((a) => a.kind === "register-wildcard-dns") &&
-      plan.warnings.some((w) => w.includes("could not derive a gateway IP")),
-    "an underivable gateway warns instead of planning a broken DNS record",
+      plan.warnings.some((w) => w.includes("split-horizon resolver could not answer")),
+    "a resolver that cannot answer warns instead of planning a broken DNS record",
   );
 }
 
@@ -719,13 +720,81 @@ function wildcardEnv(name: string, zone: string, domain: string): Environment {
   );
 }
 
+// #594: two identical `*` rows must be flattened, even though the VALUE is
+// already correct. The old gate compared only the value, so a duplicated row
+// read as converged, registerWildcard never ran, and the delete-all-rewrite-one
+// flatten never fired — the duplicates survived every future reconcile.
+{
+  const net = new FakeNetworkClient();
+  net.seedZone("foo");
+  const mod = new FakeModuleClient();
+  const dt = new FakeDnsTlsClient();
+  dt.seedGateway("dmz", "10.6.0.1");
+  dt.seedWildcardRows("app.example.com", "10.6.0.1", 2); // right value, wrong count
+  dt.seedIssuedCert("app.example.com", "R");
+  dt.seedRecordedRefid("foo", "R");
+  const plan = computePlan(
+    wildcardEnv("foo", "foo", "app.example.com"),
+    net, mod, { deep: false, skipNetwork: true }, dt,
+  );
+  const dns = plan.actions.find((a) => a.kind === "register-wildcard-dns");
+  check(
+    dns !== undefined && dns.target.includes("flatten 2 duplicate"),
+    "#594: duplicate '*' rows are planned for flattening even when the value matches",
+  );
+}
+
+// #594: and applying it converges to exactly one row, idempotently.
+{
+  const net = new FakeNetworkClient();
+  net.seedZone("foo");
+  const mod = new FakeModuleClient();
+  const dt = new FakeDnsTlsClient();
+  dt.seedGateway("dmz", "10.6.0.1");
+  dt.seedWildcardRows("app.example.com", "10.6.0.1", 2);
+  dt.seedIssuedCert("app.example.com", "R");
+  dt.seedRecordedRefid("foo", "R");
+  const e = wildcardEnv("foo", "foo", "app.example.com");
+  applyPlan(e, computePlan(e, net, mod, { deep: false, skipNetwork: true }, dt), net, mod, true, undefined, dt);
+  const after = computePlan(e, net, mod, { deep: false, skipNetwork: true }, dt);
+  check(
+    !after.actions.some((a) => a.kind === "register-wildcard-dns"),
+    "#594: applying the flatten converges — a second pass plans nothing (no-op)",
+  );
+}
+
+// ADR-021 R3: a domain with no public DNS is a supported state, not an error.
+// It must be a NOTE, and it must not plan a record that could never work.
+{
+  const net = new FakeNetworkClient();
+  net.seedZone("foo");
+  const mod = new FakeModuleClient();
+  const dt = new FakeDnsTlsClient();
+  dt.seedGateway("dmz", "10.6.0.1");
+  dt.seedUnpublished("app.example.com");
+  dt.seedIssuedCert("app.example.com", "R");
+  dt.seedRecordedRefid("foo", "R");
+  const plan = computePlan(
+    wildcardEnv("foo", "foo", "app.example.com"),
+    net, mod, { deep: false, skipNetwork: true }, dt,
+  );
+  check(
+    !plan.actions.some((a) => a.kind === "register-wildcard-dns"),
+    "R3: an unpublished domain plans no wildcard record",
+  );
+  check(
+    plan.warnings.length === 0 && plan.notes.some((n) => n.includes("is not published")),
+    "R3: …and it is reported as a note, never a warning",
+  );
+}
+
 // apply: register-wildcard-dns drives the client (prunes collisions + sets target).
 {
   const net = new FakeNetworkClient();
   net.seedZone("foo");
   const mod = new FakeModuleClient();
   const dt = new FakeDnsTlsClient();
-  dt.seedGateway("foo", "10.9.0.1");
+  dt.seedGateway("dmz", "10.6.0.1");
   dt.seedCollisions("app.example.com", ["logging"]);
   dt.seedIssuedCert("app.example.com", "R");
   dt.seedRecordedRefid("foo", "R");
@@ -734,7 +803,7 @@ function wildcardEnv(name: string, zone: string, domain: string): Environment {
   const res = applyPlan(e, plan, net, mod, true, undefined, dt);
   check(
     res.failures.length === 0 &&
-      dt.log.some((l) => l.startsWith("register-wildcard app.example.com -> 10.9.0.1")) &&
+      dt.log.some((l) => l.startsWith("register-wildcard app.example.com -> 10.6.0.1")) &&
       dt.log.some((l) => l.includes("prune=[logging]")),
     "apply registers the wildcard and prunes the colliding override",
   );

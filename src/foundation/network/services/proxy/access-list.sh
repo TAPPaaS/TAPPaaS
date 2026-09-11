@@ -154,45 +154,38 @@ proxy_resolve_access_list() {
     printf '%s' "${al_name}"
 }
 
-# proxy_split_horizon_gateway <module_json> <zones_file>
+# proxy_split_horizon_target <domain> [zones_file]
 #
-# Echo the split-horizon DNS target for a per-service module: the OPNsense
-# gateway IP of its PRIMARY authorized client zone (ADR-005 §6, #504) — NOT the
-# DMZ gateway, which home/work cannot reach. Primary = the first client zone in
-# proxyAllowedZones (author order); for the default (empty) set, home → work →
-# mgmt. "internet" and "netbird" are not subnets and are skipped.
+# Echo the split-horizon DNS target for a published name. This is a THIN
+# WRAPPER — the rule lives in one place, `network-manager split-horizon-target`
+# (ADR-021 D5), and every writer calls it rather than re-deriving the address.
 #
-# unbound-manager holds ONE IP per host, so only the primary zone gets a working
-# split-horizon entry. When more than one client zone is authorized we warn:
-# the rest need Unbound access-control-view (not yet implemented) and their
-# clients will 403 until then. Progress/warnings go to stderr so stdout carries
-# only the gateway IP. Returns non-zero if no client-zone gateway can be derived.
-proxy_split_horizon_gateway() {
-    local module_json="$1" zones_file="$2"
-    local -a zones=()
-    mapfile -t zones < <(normalize_module_config < "${module_json}" 2>/dev/null | jq -r '.proxyAllowedZones // [] | .[]' 2>/dev/null)
+# It used to derive the address here, from the module's primary authorized
+# CLIENT zone (#504, ADR-005 §6), while acme-setup.sh and environment-manager
+# each derived it from a SERVICE zone. Three transcriptions of one rule, and on
+# a live site they disagreed (#577). ADR-021 D2 replaced the rule itself: the
+# answer is the DMZ gateway, for every caller, always — reachability is the
+# firewall's caddy-reach rule (D3) and authorization is Caddy's ACL plus the
+# identity gate, neither of which belongs in a DNS answer.
+#
+# stdout carries only the IP. Exit code is the interface, and callers MUST tell
+# the two failures apart (ADR-021 R3):
+#   0  published    → stdout is the address to register
+#   3  unpublished  → no public DNS for this name: no cert, nothing to serve.
+#                     A supported configuration, NOT an error.
+#   1  error        → the site cannot express an answer (e.g. no dmz zone).
+proxy_split_horizon_target() {
+    local domain="$1" zones_file="${2:-}"
+    local -a args=(split-horizon-target "${domain}")
+    [[ -n "${zones_file}" ]] && args+=(--zones "${zones_file}")
 
-    local -a client=()
-    local z
-    if [[ ${#zones[@]} -eq 0 ]]; then
-        # Default set → prefer home, then work, then mgmt (ADR-005 §6 default).
-        for z in home work mgmt; do
-            [[ -n "$(jq -r --arg z "${z}" '.[$z].ip // empty' "${zones_file}" 2>/dev/null)" ]] && client+=("${z}")
-        done
-    else
-        for z in "${zones[@]}"; do
-            [[ "${z}" == "internet" || "${z}" == "netbird" ]] && continue
-            [[ -n "$(jq -r --arg z "${z}" '.[$z].ip // empty' "${zones_file}" 2>/dev/null)" ]] && client+=("${z}")
-        done
-    fi
-
-    [[ ${#client[@]} -eq 0 ]] && return 1
-
-    local primary="${client[0]}"
-    if [[ ${#client[@]} -gt 1 ]]; then
-        warn "  split-horizon: ${#client[@]} client zone(s) authorized (${client[*]}) but unbound holds one IP per host — registering only the primary '${primary}'. Other zones need Unbound access-control-view (not yet implemented) and will 403 until then." >&2
-    fi
-    zone_gateway_ip "${primary}" "${zones_file}"
+    # stdout is the address; network-manager already writes its diagnostics to
+    # stderr, so they flow straight through to the caller's log. Capture without
+    # tripping `set -e` on the non-zero exits that are part of the contract.
+    local out rc=0
+    out="$(network-manager "${args[@]}")" || rc=$?
+    [[ ${rc} -eq 0 ]] && printf '%s' "${out}"
+    return ${rc}
 }
 
 # proxy_add_routes <description> <domain> <upstream> <dns_mode>
@@ -226,7 +219,10 @@ proxy_add_routes() {
     # resolve once, and only when per-service TLS needs it.
     local gw=""
     if [[ "${dns_mode}" == "per-service" ]]; then
-        gw="$(proxy_split_horizon_gateway "${MODULE_JSON}" "${ZONES_FILE}" 2>/dev/null || true)"
+        # Every route lives under the same domain, so one lookup answers for all.
+        # An unpublished domain (rc 3) simply leaves gw empty and the per-route
+        # override below is skipped — same degraded path as the primary handler.
+        gw="$(proxy_split_horizon_target "${domain}" "${ZONES_FILE}" || true)"
     fi
 
     local -a keep_fqdns=()

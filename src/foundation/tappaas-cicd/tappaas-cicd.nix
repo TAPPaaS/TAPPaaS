@@ -310,12 +310,12 @@ in
   };
 
   systemd.timers.update-tappaas = {
-    description = "Hourly trigger for update-tappaas";
+    description = "Monthly trigger for update-tappaas";
     wantedBy = [ "timers.target" ];
     timerConfig = {
-      OnCalendar = "hourly";        # *-*-* *:00:00
+      OnCalendar = "monthly";       # *-*-01 00:00:00
       Persistent = true;            # catch up after downtime / reboots
-      RandomizedDelaySec = "5min";  # spread load if multiple things tick on the hour
+      RandomizedDelaySec = "5min";  # spread load if multiple things tick together
     };
   };
 

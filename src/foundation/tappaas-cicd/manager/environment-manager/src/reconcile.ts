@@ -123,23 +123,40 @@ function planWildcardState(
     return;
   }
   const st = dt.wildcardDnsState(domain, env.network.zone ?? "");
-  if (!st.gatewayIp) {
-    warnings.push(
-      `environment '${env.name}': could not derive a gateway IP for *.${domain} ` +
-        `(zone '${env.network.zone}' has no subnet in zones.json, and no dmz fallback) — ` +
-        `wildcard DNS not reconciled.`,
+  if (st.unpublished) {
+    // ADR-021 R3: a supported configuration, not an error. There is no public
+    // record, so DNS-01 could not have issued a wildcard cert and there is
+    // nothing for Caddy to serve — a NOTE, not a warning.
+    notes.push(
+      `*.${domain} is not published (no external DNS) — no wildcard record, ` +
+        `no certificate, and no identity gate. Services are reachable only at ` +
+        `<vmname>.<zone>.internal.`,
     );
     return;
   }
-  if (st.currentTarget !== st.gatewayIp || st.collidingHosts.length > 0) {
+  if (!st.gatewayIp) {
+    warnings.push(
+      `environment '${env.name}': the split-horizon resolver could not answer for ` +
+        `*.${domain} (no 'dmz' zone in zones.json?) — wildcard DNS not reconciled.`,
+    );
+    return;
+  }
+  // #594: rowCount is part of the gate, not just the value. Two identical `*`
+  // rows satisfy `currentTarget === gatewayIp`, so a value-only comparison
+  // reported "already resolves … no DNS change" and the delete-all-rewrite-one
+  // flatten never fired — the duplicates survived every future reconcile.
+  const wrongCardinality = st.rowCount !== 1;
+  if (wrongCardinality || st.currentTarget !== st.gatewayIp || st.collidingHosts.length > 0) {
     const collide =
       st.collidingHosts.length > 0
         ? `; prune ${st.collidingHosts.length} colliding per-service override(s)`
         : "";
+    const dupes =
+      st.rowCount > 1 ? `; flatten ${st.rowCount} duplicate '*' rows to one` : "";
     actions.push({
       kind: "register-wildcard-dns",
       scope: "environment",
-      target: `*.${domain} -> ${st.gatewayIp} (${st.gatewayZone} gateway, Unbound)${collide}`,
+      target: `*.${domain} -> ${st.gatewayIp} (${st.gatewayZone} gateway, Unbound)${dupes}${collide}`,
       value: st.gatewayIp,
       domain,
       zone: st.gatewayZone,

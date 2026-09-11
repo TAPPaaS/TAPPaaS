@@ -43,7 +43,7 @@ export interface Archetype {
 
 export const ARCHETYPES: readonly Archetype[] = [
   { name: "control",        type: "Management", typeId: 0, tier: 0, isolated: false, accessTo: ["all"],             reference: "mgmt",       description: "Control plane: hypervisors, backup, firewall, identity, cicd" },
-  { name: "service",        type: "Service",    typeId: 2, tier: 1, isolated: false, accessTo: ["internet", "dmz"], reference: "srv",        description: "Application/service modules for one environment" },
+  { name: "service",        type: "Service",    typeId: 2, tier: 1, isolated: false, accessTo: ["internet"],        reference: "srv",        description: "Application/service modules for one environment" },
   { name: "trusted-client", type: "Client",     typeId: 3, tier: 2, isolated: false, accessTo: ["internet"],        reference: "home",       description: "Trusted end-user devices; reaches its service zone by pinhole" },
   { name: "guest",          type: "Guest",      typeId: 5, tier: 3, isolated: false, accessTo: ["internet"],        reference: "guest",      description: "Visitors: internet only, fully isolated" },
   { name: "iot-cloud",      type: "IoT",        typeId: 4, tier: 3, isolated: false, accessTo: ["internet"],        reference: "iotCloud",   description: "Internet-dependent trusted IoT: appliances, media, monitoring" },

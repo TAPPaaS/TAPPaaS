@@ -120,7 +120,7 @@
       "changeNote": "The zone's subnet. Every guest in it is addressed from here, so a change re-addresses all of them; that is a migration, not a field edit."
     },
     "bridge": {
-      "description": "Network interface the zone is associated with (VLAN trunk)",
+      "description": "Network interface the zone is associated with. For a VLAN zone this is the physical trunk it rides. For a non-VLAN zone (vlantag 0 — Overlay/Manual) it is the OPNsense interface token its traffic arrives on, e.g. 'wireguard' for a WireGuard overlay; ADR-021 D3a needs it to place that overlay's caddy-reach rule",
       "type": "string",
       "required": true,
       "default": "lan",
@@ -128,7 +128,7 @@
         "lan": "Local area network interface",
         "wan": "Wide area network interface",
         "opt1": "Optional interface 1",
-        "opt2": "Optional interface 2"
+        "opt2": "Optional interface 2", "wireguard": "WireGuard group interface (Overlay zones)"
       },
       "changeClass": "immutable",
       "changeNote": "The physical trunk the zone rides. A change moves the whole zone to different hardware."
@@ -343,8 +343,7 @@
         "tier": 1,
         "isolated": false,
         "access-to": [
-          "internet",
-          "dmz"
+          "internet"
         ],
         "reference": "srv",
         "description": "Application/service modules for one environment"
@@ -449,6 +448,13 @@
       "rule": "Every zone's (type, tier, isolated) triple must match an entry in archetypes.catalog.",
       "exempt": "Types in tier_exempt_types; any zone with no authored tier.",
       "remedy": "Either correct the zone's fields to its declared intent, or create it with 'add --archetype <A>'."
+    },
+    "I5": {
+      "name": "No zone-wide DMZ reach",
+      "rule": "No zone may list 'dmz' in its access-to (ADR-021 D3b, issue #618).",
+      "why": "An access-to edge compiles to <source subnet> -> <target subnet> on every port, and the DMZ gateway is the firewall itself (webgui.interfaces and ssh.interfaces are unset), so the edge hands the admin GUI (8443) and SSH (22) to every host in the source zone. The DMZ also holds workloads, which the edge reaches zone-wide.",
+      "exempt": "'mgmt' only — the control plane keeps its full visibility list.",
+      "remedy": "Reaching the reverse proxy needs nothing: zone_manager emits a caddy-reach pass to the DMZ gateway /32 on tcp/80+443 for every candidate zone. Reaching a DMZ workload is a per-module pinhole via 'dmz'.pinhole-allowed-from."
     }
   },
   "zone_key": {

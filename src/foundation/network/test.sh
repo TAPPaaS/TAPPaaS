@@ -1921,6 +1921,77 @@ EVIDENCE
     # summary at all — 13 counted failures vanished that way. A truncated run
     # must never be mistaken for a clean one.
 
+    section "Deep 11d: ADR-021 — the caddy-reach /32 is really a /32 (#618)"
+
+    # The assertion that closes #618, run from a probe VM inside a zone — not
+    # from the mothership, which sits in mgmt and is allowed everything anyway.
+    #
+    # Reaching Caddy must NOT come with reach to the firewall itself. Before
+    # ADR-021 D3b a Service zone carried `access-to: dmz`, which compiles to the
+    # whole DMZ subnet on every port — and the DMZ gateway IS the firewall, with
+    # `webgui.interfaces`/`ssh.interfaces` unset. A tier-1 VM could therefore
+    # open the admin GUI on 8443 and SSH on 22. Measured open on 2026-09-10;
+    # these three probes are what keep it shut.
+    _sh_dmz_gw="$(dmz_gateway_ip 2>/dev/null || echo '')"
+    if [[ -z "${_sh_dmz_gw}" ]]; then
+        skip "Deep 11d: no dmz zone in zones.json — nothing to probe"
+    else
+        # (a) tcp/443 MUST be open: this is the split-horizon answer itself.
+        if ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+                "tappaas@${TFW_A_FQDN}" \
+                "timeout 5 bash -c '</dev/tcp/${_sh_dmz_gw}/443'" 2>/dev/null; then
+            pass "Deep 11d-a: ${TFW_A_ZONE} → ${_sh_dmz_gw}:443 open (caddy-reach rule, ADR-021 D3)"
+        else
+            fail "Deep 11d-a: ${TFW_A_ZONE} cannot reach Caddy at ${_sh_dmz_gw}:443 — published names are unreachable from this zone"
+        fi
+
+        # (b)+(c) the firewall's own management ports MUST be refused. A pass
+        #         here is the #618 regression, and it is silent in every other
+        #         test: the service keeps working while the control plane is
+        #         exposed to it.
+        for _port in 8443 22; do
+            if ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+                    "tappaas@${TFW_A_FQDN}" \
+                    "timeout 5 bash -c '</dev/tcp/${_sh_dmz_gw}/${_port}'" 2>/dev/null; then
+                fail "Deep 11d: ${TFW_A_ZONE} → ${_sh_dmz_gw}:${_port} is OPEN — the firewall control plane is reachable from a service zone (#618). Check that no zone has 'dmz' in access-to (network-manager validate, invariant I5)."
+            else
+                pass "Deep 11d: ${TFW_A_ZONE} → ${_sh_dmz_gw}:${_port} refused (control plane not exposed)"
+            fi
+        done
+    fi
+
+    section "Deep 11e: ADR-021 D5 — one resolver, and R3 degrades cleanly"
+
+    # The resolver's contract, end to end against the live zones document.
+    # Exit codes ARE the interface: 0 publish / 3 unpublished / 1 error, and a
+    # caller that cannot tell 3 from 1 turns a deliberately-unpublished service
+    # back into an error — the behaviour R3 exists to remove.
+    _sh_eff="${TAPPAAS_CONFIG:-/home/tappaas/config}/zones.effective.json"
+    [[ -f "${_sh_eff}" ]] || _sh_eff="${TAPPAAS_CONFIG:-/home/tappaas/config}/zones.json"
+
+    if [[ -z "${DEF_DOMAIN}" || "${DEF_DOMAIN}" == CHANGE* ]]; then
+        skip "Deep 11e: no default-environment domain set"
+    else
+        _sh_out="$(network-manager split-horizon-target "${PROXY_FQDN}" --zones "${_sh_eff}" 2>/dev/null)"
+        _sh_rc=$?
+        if [[ ${_sh_rc} -eq 0 && "${_sh_out}" == "${_sh_dmz_gw}" ]]; then
+            pass "Deep 11e-a: resolver answers ${PROXY_FQDN} → ${_sh_out} (the DMZ gateway, ADR-021 D2)"
+        else
+            fail "Deep 11e-a: resolver returned rc=${_sh_rc} '${_sh_out:-none}', expected rc=0 '${_sh_dmz_gw}'"
+        fi
+
+        # A name that cannot resolve publicly must report UNPUBLISHED (rc 3),
+        # not an error. Use a name guaranteed not to exist under this domain.
+        network-manager split-horizon-target "no-such-service-$$.${DEF_DOMAIN}" \
+            --zones "${_sh_eff}" >/dev/null 2>&1
+        _sh_rc=$?
+        if [[ ${_sh_rc} -eq 3 ]]; then
+            pass "Deep 11e-b: an unpublishable name reports UNPUBLISHED (rc 3), not an error (R3)"
+        else
+            fail "Deep 11e-b: an unpublishable name gave rc=${_sh_rc}, expected 3 — R3 would read as a failure"
+        fi
+    fi
+
     section "Deep 12: source NAT — subnet-filtering device (ADR-016, #239)"
 
     # The one test that would have caught #239. A device that accepts only its

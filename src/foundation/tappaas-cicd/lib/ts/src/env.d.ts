@@ -16,6 +16,10 @@ declare const console: {
 
 declare const process: {
   argv: string[];
+  // Absolute path to the node binary. Used to re-enter node for a blocking
+  // public-DNS probe (ADR-021 D5 split-horizon-target) without making every
+  // CLI verb async for one lookup.
+  execPath: string;
   env: Record<string, string | undefined>;
   exit(code?: number): never;
   pid: number;

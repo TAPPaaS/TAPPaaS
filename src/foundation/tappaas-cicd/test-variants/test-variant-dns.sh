@@ -70,34 +70,64 @@ else
     pass "zone_gateway_ip fails cleanly for an unknown zone"
 fi
 
-# ── proxy_split_horizon_gateway (#504) ───────────────────────────────
+# ── proxy_split_horizon_target (ADR-021 D5, supersedes #504) ─────────
+# The per-module client-zone rule these tests used to assert is GONE. It was one
+# of three transcriptions that disagreed on a live site (#577); ADR-021 D2
+# replaced it with a single answer — the DMZ gateway, for every caller — and D5
+# made `network-manager split-horizon-target` its only implementation. What is
+# left to test here is that the shell wrapper is a faithful pass-through of that
+# command's stdout and, crucially, of its exit codes: 0 publish / 3 unpublished
+# / 1 error. A caller that cannot tell 3 from 1 turns R3's supported
+# "not published" state back into an error, which is the behaviour ADR-021 R3
+# exists to remove.
 # shellcheck disable=SC1091
 . "${SCRIPT_DIR}/../../network/services/proxy/access-list.sh"
 ZF="${WORK}/zones.json"
-mk_mod() { printf '{ "config": { "network:proxy": { "proxyAllowedZones": %s } } }' "$1" > "${WORK}/mod.json"; }
 
-# Single client zone -> that zone's gateway (NOT the DMZ gateway, the #504 bug).
-mk_mod '["mgmt"]'
-assert_eq "$(proxy_split_horizon_gateway "${WORK}/mod.json" "${ZF}" 2>/dev/null)" "10.0.0.1" \
-    "per-service ['mgmt'] -> mgmt gateway, not DMZ"
+# Stub `network-manager` on PATH so the wrapper is tested, not the resolver
+# (the rule itself is unit-tested in network-manager's own suite).
+STUB="${WORK}/stub-bin"
+mkdir -p "${STUB}"
+mk_stub() {  # $1 = stdout, $2 = exit code
+    cat > "${STUB}/network-manager" <<STUBEOF
+#!/usr/bin/env bash
+[[ -n "$1" ]] && printf '%s\n' "$1"
+echo "split-horizon: diagnostic on stderr" >&2
+exit $2
+STUBEOF
+    chmod +x "${STUB}/network-manager"
+}
+PATH="${STUB}:${PATH}"
 
-# Multi-zone -> primary (first) zone's gateway; still succeeds (warns on stderr).
-mk_mod '["work","home"]'
-assert_eq "$(proxy_split_horizon_gateway "${WORK}/mod.json" "${ZF}" 2>/dev/null)" "10.3.20.1" \
-    "per-service ['work','home'] -> primary 'work' gateway"
+mk_stub "10.6.0.1" 0
+assert_eq "$(proxy_split_horizon_target openwebui.example.org "${ZF}" 2>/dev/null)" "10.6.0.1" \
+    "published -> the DMZ gateway is passed through on stdout"
 
-# Default (empty) -> home preferred.
-mk_mod '[]'
-assert_eq "$(proxy_split_horizon_gateway "${WORK}/mod.json" "${ZF}" 2>/dev/null)" "10.3.10.1" \
-    "per-service default -> home gateway"
+# A second name must get the SAME answer: one record, not one per service.
+assert_eq "$(proxy_split_horizon_target cloud.example.org "${ZF}" 2>/dev/null)" "10.6.0.1" \
+    "a different name gets the same address (no per-service derivation)"
 
-# internet-only -> no client zone -> non-zero (caller falls back / warns).
-mk_mod '["internet"]'
-if proxy_split_horizon_gateway "${WORK}/mod.json" "${ZF}" >/dev/null 2>&1; then
-    fail "proxy_split_horizon_gateway should fail for internet-only"
+mk_stub "" 3
+out="$(proxy_split_horizon_target internal.example.org "${ZF}" 2>/dev/null)"; rc=$?
+if [[ ${rc} -eq 3 && -z "${out}" ]]; then
+    pass "unpublished -> rc 3 and no address (R3: a state, not a failure)"
 else
-    pass "proxy_split_horizon_gateway fails cleanly for internet-only"
+    fail "unpublished should be rc 3 with empty stdout (got rc=${rc} out='${out}')"
 fi
+
+mk_stub "" 1
+out="$(proxy_split_horizon_target broken.example.org "${ZF}" 2>/dev/null)"; rc=$?
+if [[ ${rc} -eq 1 && -z "${out}" ]]; then
+    pass "error -> rc 1, distinct from unpublished"
+else
+    fail "error should be rc 1 with empty stdout (got rc=${rc} out='${out}')"
+fi
+
+# The wrapper must never print a stale address on a failing exit — a caller that
+# command-substitutes it would otherwise register a wrong record.
+mk_stub "10.6.0.1" 3
+assert_eq "$(proxy_split_horizon_target internal.example.org "${ZF}" 2>/dev/null)" "" \
+    "no address is emitted on a non-zero exit, even if the command printed one"
 
 # ── dnsMode surfaced by the environment files + cert-refids.json ─────
 mkdir -p "${WORK}/environments"
@@ -125,18 +155,27 @@ assert_eq "$(get_variant_config tenant   | jq -r '.dnsMode')" "per-service" "ten
 assert_eq "$(get_variant_config ""       | jq -r '.tlsCertRefid')" "abc"    "wildcard env carries a tlsCertRefid"
 assert_eq "$(get_variant_config tenant   | jq -r '.tlsCertRefid')" ""       "per-service env has no tlsCertRefid"
 
-# ── #504 interim: wildcard split-horizon = env service-zone gateway, not DMZ ──
-# acme-setup.sh derives the wildcard target as zone_gateway_ip(env's .network.zone).
-# Verify that composition against the home/work/mgmt/dmz zones.json from above.
+# ── ADR-021 D2: the wildcard target does NOT depend on the environment ───────
+# acme-setup.sh used to derive the wildcard target as
+# zone_gateway_ip(env's .network.zone) — the #504 interim rule, and one of the
+# three disagreeing transcriptions of #577. It now asks
+# `network-manager split-horizon-target`, which answers the DMZ gateway for every
+# domain. The environment still exposes its service zone (modules land there);
+# what changed is that the DNS answer no longer reads it.
 cat > "${WORK}/environments/wild.json" <<'JSON'
 { "name": "wild", "displayName": "Wild", "ownerOrg": "t",
   "domains": { "primary": "wild.example", "dnsMode": "wildcard" },
   "network": { "zone": "work" } }
 JSON
 WILD_ZONE="$(get_variant_config wild | jq -r '.zone')"
-assert_eq "${WILD_ZONE}" "work" "wildcard env exposes its service zone"
+assert_eq "${WILD_ZONE}" "work" "wildcard env still exposes its service zone (modules land there)"
+mk_stub "10.6.0.1" 0
+assert_eq "$(proxy_split_horizon_target wild.example "${ZF}" 2>/dev/null)" "10.6.0.1" \
+    "wildcard split-horizon -> the DMZ gateway, NOT the env service zone (ADR-021 D2)"
+# The env's own zone gateway is still derivable — it is simply no longer the
+# split-horizon answer. Asserting both keeps the distinction explicit.
 assert_eq "$(zone_gateway_ip "${WILD_ZONE}")" "10.3.20.1" \
-    "wildcard split-horizon -> env service-zone gateway (#504 interim), not the DMZ 10.6.0.1"
+    "the env service-zone gateway is still derivable, it is just not the DNS answer"
 
 echo "  Results: ${PASS} passed, ${FAIL} failed"
 [[ "${FAIL}" -eq 0 ]]

@@ -44,14 +44,17 @@ def _zone(
     *,
     access_to: list[str] | None = None,
     pinhole_allowed_from: list[str] | None = None,
+    zone_type: str = "Service",
+    state: str = "Active",
+    vlan_tag: int = 210,
 ) -> Zone:
     return Zone(
         name=name,
-        zone_type="Service",
-        state="Active",
+        zone_type=zone_type,
+        state=state,
         type_id="2",
         sub_id="10",
-        vlan_tag=210,
+        vlan_tag=vlan_tag,
         ip_network="10.2.10.0/24",
         bridge="lan",
         description=f"{name} zone",
@@ -598,6 +601,49 @@ class TestConfigureFirewallRulesSequencing(unittest.TestCase):
         self.assertGreaterEqual(recreated.sequence, 30000)
 
 
+class TestStaleZoneRuleReaping(TestConfigureFirewallRulesSequencing):
+    """A rule the reconcile did not ask for is drift and gets deleted (#618)."""
+
+    def test_dropped_access_to_target_is_reaped(self):
+        # ADR-021 D3b(ii): removing `dmz` from a Service zone's access-to must
+        # actually remove the pass. Until the reaper existed the rule survived,
+        # so the removal closed nothing — the whole DMZ subnet (gateway, hence
+        # the firewall GUI and SSH) stayed reachable.
+        first = self._run(_build_zones())
+        existing = [_to_info(r, uuid=f"u{i}") for i, r in enumerate(first.created)]
+        # srv drops dmz from access-to; everything else is unchanged.
+        second = self._run(_build_zones(srv={"access_to": ["internet"]}),
+                           existing=existing)
+        self.assertIn("Zone srv -> dmz", second.deleted)
+
+    def test_still_desired_rules_are_not_reaped(self):
+        # The reaper must converge, not churn: a second run with the same input
+        # deletes nothing.
+        first = self._run(_build_zones())
+        existing = [_to_info(r, uuid=f"u{i}") for i, r in enumerate(first.created)]
+        second = self._run(_build_zones(), existing=existing)
+        self.assertEqual(second.deleted, [])
+        self.assertEqual(second.created, [])
+
+    def test_caddy_rule_is_not_reaped(self):
+        # The caddy-reach rules are created after the access-to passes; the
+        # reaper must count them as desired or it would delete them every run.
+        first = self._run(_build_zones())
+        existing = [_to_info(r, uuid=f"u{i}") for i, r in enumerate(first.created)]
+        second = self._run(_build_zones(), existing=existing)
+        for d in second.deleted:
+            self.assertNotIn("-> caddy ", d)
+
+    def test_foreign_rules_are_left_alone(self):
+        # Only this module's `Zone <name> ` namespace is reaped.
+        first = self._run(_build_zones())
+        existing = [_to_info(r, uuid=f"u{i}") for i, r in enumerate(first.created)]
+        foreign = _to_info(first.created[0], uuid="uX")
+        foreign.description = "tappaas-module:nextcloud:egress:home:443"
+        second = self._run(_build_zones(), existing=existing + [foreign])
+        self.assertNotIn(foreign.description, second.deleted)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Caddy reverse-proxy reachability (issue #366)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -609,14 +655,53 @@ class TestCaddyReachability(TestConfigureFirewallRulesSequencing):
     def _caddy_rules(self, fake):
         return [r for r in fake.created if "-> caddy " in r.description]
 
-    def test_rule_emitted_per_non_dmz_zone(self):
+    def test_rule_emitted_per_zone_including_dmz(self):
         fake = self._run(_build_zones())
         descs = {r.description for r in self._caddy_rules(fake)}
-        # srv, home, locked-srv each get https + http; dmz itself is skipped.
-        for z in ("srv", "home", "locked-srv"):
+        # Every candidate zone gets https + http — dmz included (ADR-021 D3b).
+        for z in ("srv", "home", "locked-srv", "dmz"):
             self.assertIn(f"Zone {z} -> caddy https", descs)
             self.assertIn(f"Zone {z} -> caddy http", descs)
-        self.assertNotIn("Zone dmz -> caddy https", descs)
+
+    def test_dmz_zone_gets_its_own_rule(self):
+        # ADR-021 D3b(i). The dmz zone used to be skipped as "reaches the gateway
+        # locally" — but locally is the unrestricted `Zone dmz -> gateway` rule
+        # that #399 narrows to DNS/NTP/DHCP/ICMP. Without its own /32 a DMZ
+        # workload would lose tcp/443 to Caddy the moment #399 lands.
+        fake = self._run(_build_zones())
+        rules = {r.description: r for r in self._caddy_rules(fake)}
+        self.assertIn("Zone dmz -> caddy https", rules)
+        r = rules["Zone dmz -> caddy https"]
+        self.assertEqual(r.destination_net, "10.2.10.1/32")
+        self.assertEqual(r.destination_port, "443")
+        self.assertEqual(r.protocol, Protocol.TCP)
+
+    def test_overlay_zone_with_access_to_gets_rule(self):
+        # ADR-021 D3a. An Overlay zone carries no `internet` (it is not a routed
+        # segment) but its peers resolve the same split-horizon answer, so they
+        # need the same /32. `admin` is the live case.
+        zones = _build_zones()
+        zones["admin"] = _zone(
+            "admin", access_to=["mgmt"], zone_type="Overlay",
+            state="Manual", vlan_tag=0,
+        )
+        fake = self._run(zones)
+        descs = {r.description for r in self._caddy_rules(fake)}
+        self.assertIn("Zone admin -> caddy https", descs)
+        self.assertIn("Zone admin -> caddy http", descs)
+
+    def test_dormant_overlay_zone_gets_no_rule(self):
+        # An Overlay with an empty access-to is dormant (netbird/edge today) and
+        # stays out — admitting an overlay to Caddy is a decision to take when
+        # that overlay is actually terminated.
+        zones = _build_zones()
+        zones["netbird"] = _zone(
+            "netbird", access_to=[], zone_type="Overlay",
+            state="Manual", vlan_tag=0,
+        )
+        fake = self._run(zones)
+        descs = {r.description for r in self._caddy_rules(fake)}
+        self.assertNotIn("Zone netbird -> caddy https", descs)
 
     def test_targets_dmz_gateway_on_tcp_80_and_443(self):
         fake = self._run(_build_zones())

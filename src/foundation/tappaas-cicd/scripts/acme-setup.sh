@@ -261,20 +261,24 @@ DNS_MODE="$(jq -r '.dnsMode // "per-service"' <<<"$VCFG")"
 if [[ "$DNS_MODE" == "wildcard" ]]; then
     echo
     info "${BOLD}Registering split-horizon wildcard DNS (Unbound)${CL}"
-    # #504 (interim): resolve the wildcard to the environment's own service-zone
-    # gateway — the firewall interface on that zone's subnet, self-traffic for its
-    # clients — rather than the DMZ gateway, which client zones such as home/work
-    # cannot reach (ADR-005 §6). A wildcard is a single Unbound "redirect" zone
-    # with one apex target, so it still cannot be correct for EVERY client zone at
-    # once; a subnet-aware answer needs Unbound access-control-view (follow-up).
-    # This just stops pointing at a zone non-dmz clients cannot reach. Falls back
-    # to the DMZ gateway when the environment declares no resolvable zone.
-    WC_ZONE="$(jq -r '.zone // ""' <<<"$VCFG")"
+    # ADR-021 D2/D5: the wildcard resolves to the DMZ gateway, like every other
+    # split-horizon record, and the address comes from the ONE resolver rather
+    # than being derived here. This file used to derive it from the environment's
+    # SERVICE zone (falling back to dmz) while network:proxy derived it from a
+    # CLIENT zone — two of the three transcriptions #577 found disagreeing.
+    #
+    # Under D2 the one-apex-target problem disappears: a wildcard is a single
+    # Unbound "redirect" zone with one target, and one target is now all that is
+    # ever correct, for every client zone at once.
+    WC_ZONE="dmz"
     WC_GW=""
-    [[ -n "$WC_ZONE" ]] && WC_GW="$(zone_gateway_ip "$WC_ZONE" 2>/dev/null || true)"
-    if [[ -z "$WC_GW" ]]; then
-        WC_ZONE="dmz"
-        WC_GW="$(dmz_gateway_ip 2>/dev/null || true)"
+    WC_RC=0
+    WC_GW="$(network-manager split-horizon-target "${DOMAIN}")" || WC_RC=$?
+    if [[ ${WC_RC} -eq 3 ]]; then
+        # ADR-021 R3: the domain has no public DNS, so DNS-01 could not have
+        # issued a wildcard cert either. Nothing to publish; not an error.
+        info "  ${DOMAIN} is not published (no external DNS) — no wildcard record"
+        WC_GW=""
     fi
     if [[ -n "$WC_GW" ]]; then
         # The wildcard installs `local-zone: "<domain>" redirect`, and Unbound

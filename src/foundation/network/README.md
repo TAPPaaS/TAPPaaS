@@ -107,6 +107,44 @@ What → Principles). Depth: see [DESIGN.md](./DESIGN.md).
 | `cluster:ha` | High-availability placement of the firewall VM |
 | `network:proxy` | Registers the firewall's own GUI (`:8443`) behind Caddy |
 
+## Split-horizon DNS — `network:proxy` (ADR-021)
+
+A published service answers at **one URL** inside and out. Inside, Unbound holds the
+override, and the answer is **always the DMZ gateway** — where `os-caddy` listens —
+regardless of which zone asked (ADR-021 D2). One name, one answer, one writer.
+
+The address comes from **one resolver**, which every writer calls rather than deriving
+its own (D5):
+
+```
+network-manager split-horizon-target <domain>
+    exit 0  → stdout is the address to register
+    exit 3  → UNPUBLISHED: no public DNS for this name
+    exit 1  → error: the site cannot express an answer (no dmz zone)
+```
+
+Before this, three code paths each transcribed the rule and disagreed on a live site
+(#577): `network:proxy` resolved a *client* zone, while `acme-setup.sh` and
+`environment-manager` resolved a *service* zone. Do not reintroduce a local
+derivation, however small — that is precisely how the drift started.
+
+**Reachability is not encoded in the address.** A client reaches the DMZ gateway via
+the caddy-reach firewall rule (`/32`, tcp 80+443 — see network-manager's `ZONES.md`),
+and *authorization* is Caddy's `proxyAllowedZones` ACL plus the Authentik identity
+gate. No zone gets `access-to: dmz`; that would grant the whole DMZ subnet including
+the firewall's own GUI and SSH (#618).
+
+**A service with no public DNS record is supported, not broken** (R3). ACME cannot
+issue for a name that does not resolve publicly, so there is no certificate and
+nothing for Caddy to serve. Install and update **succeed**, publishing is skipped
+cleanly, and the operator gets one line saying what was lost:
+
+> `<module>` is not published (no external DNS for `<domain>`) — reachable only at
+> `<module>.<zone>.internal`, without TLS and without the identity gate.
+
+That is a different message from "I could not work out the address for a service that
+should be published", and the two must not be conflated.
+
 For installation steps see [INSTALL.md](./INSTALL.md).
 
 Design and implementation detail: [DESIGN.md](./DESIGN.md). Test coverage:
