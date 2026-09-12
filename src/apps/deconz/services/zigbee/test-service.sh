@@ -17,10 +17,10 @@ fi
 
 info "deconz:zigbee test-service for consumer: ${BL}${CONSUMER}${CL}"
 
-TARGET="$(dig +short deconz.srvHome.internal 2>/dev/null | head -1)"
+TARGET="$(dig +short deconz.iotCloud.internal 2>/dev/null | head -1)"
 if [[ -z "${TARGET}" ]]; then
-    warn "  deconz.srvHome.internal does not resolve — using FQDN directly"
-    TARGET="deconz.srvHome.internal"
+    warn "  deconz.iotCloud.internal does not resolve — using FQDN directly"
+    TARGET="deconz.iotCloud.internal"
 fi
 
 FAILURES=0
