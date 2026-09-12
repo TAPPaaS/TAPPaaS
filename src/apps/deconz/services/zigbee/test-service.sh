@@ -17,10 +17,15 @@ fi
 
 info "deconz:zigbee test-service for consumer: ${BL}${CONSUMER}${CL}"
 
-TARGET="$(dig +short deconz.srvHome.internal 2>/dev/null | head -1)"
+# zone0 read from deconz's own declared config (SSoT) rather than hardcoded,
+# so this stays correct if deconz's zone ever changes on a given site.
+ZONE0="$(read_module_config deconz 2>/dev/null | jq -r '.zone0 // "iotCloud"')"
+DECONZ_FQDN="deconz.${ZONE0}.internal"
+
+TARGET="$(dig +short "${DECONZ_FQDN}" 2>/dev/null | head -1)"
 if [[ -z "${TARGET}" ]]; then
-    warn "  deconz.srvHome.internal does not resolve — using FQDN directly"
-    TARGET="deconz.srvHome.internal"
+    warn "  ${DECONZ_FQDN} does not resolve — using FQDN directly"
+    TARGET="${DECONZ_FQDN}"
 fi
 
 FAILURES=0
