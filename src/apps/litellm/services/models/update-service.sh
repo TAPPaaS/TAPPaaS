@@ -76,7 +76,7 @@ LIST=\$(curl -sf "http://localhost:4000/key/list?return_full_object=true" \
     -H "Authorization: Bearer \${MASTER}" 2>/dev/null || echo '{}')
 FOUND=\$(echo "\${LIST}" | jq -r --arg a "\${ALIAS}" \
     '.keys[]? | select(.key_alias == \$a) | .token' 2>/dev/null | head -1)
-if [[ -n "\${FOUND}" && -f "\${KEYSTORE}" ]]; then echo "ok"
+if [[ -n "\${FOUND}" ]] && sudo test -f "\${KEYSTORE}"; then echo "ok"
 elif [[ -n "\${FOUND}" ]]; then echo "alias_no_file"
 else echo "missing"; fi
 EOSH

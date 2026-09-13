@@ -99,10 +99,10 @@ LIST=\$(curl -sf "http://localhost:4000/key/list?return_full_object=true" \
     -H "Authorization: Bearer \${MASTER}" 2>/dev/null || echo '{}')
 EXISTING=\$(echo "\${LIST}" | jq -r --arg a "\${ALIAS}" \
     '.keys[]? | select(.key_alias == \$a) | .token' 2>/dev/null | head -1)
-if [[ -n "\${EXISTING}" && -f "\${KEYSTORE}" ]]; then
+if [[ -n "\${EXISTING}" ]] && sudo test -f "\${KEYSTORE}"; then
     STORED_KEY=\$(sudo cat "\${KEYSTORE}")
     echo "EXISTING:\${STORED_KEY}"
-elif [[ -n "\${EXISTING}" && ! -f "\${KEYSTORE}" ]]; then
+elif [[ -n "\${EXISTING}" ]]; then
     echo "ALIAS_ONLY"
 else
     echo "NONE"
