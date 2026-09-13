@@ -971,7 +971,9 @@ cleanup_deep() {
             | (.[$zc].state = "Inactive") | (.[$zi].state = "Inactive")' \
             "${CONFIG_DIR}/zones.json" > "${tmp}" \
             && mv "${tmp}" "${CONFIG_DIR}/zones.json"
-        zone-manager --no-ssl-verify --zones-file "${CONFIG_DIR}/zones.json" --execute \
+        # Via network-manager so zone-manager sees zones.effective.json; the
+        # authored file lacks the `serves` edges and the reaper would drop them.
+        network-manager reconcile --zones "${CONFIG_DIR}/zones.json" --only opnsense --apply \
             >/dev/null 2>&1 || warn "zone-manager teardown returned non-zero"
         tmp=$(mktemp)
         jq --arg za "${TFW_A_ZONE}" --arg zb "${TFW_B_ZONE}" --arg zc "${TFW_C_ZONE}" \
@@ -1377,7 +1379,7 @@ else
         # (the test zones are Active by now, so they are included automatically).
         # Appending a zone NAME here used to mangle "ALL" and clobber the firewall
         # NIC to a single VLAN (defect 1 — now fixed).
-        if zone-manager --no-ssl-verify --zones-file "${CONFIG_DIR}/zones.json" --execute 2>&1 | tail -5; then
+        if network-manager reconcile --zones "${CONFIG_DIR}/zones.json" --only opnsense --apply 2>&1 | tail -5; then
             pass "zone-manager applied ${TFW_A_ZONE}+${TFW_B_ZONE} (VLAN+DHCP+rules)"
         else
             fail "zone-manager could not apply ${TFW_A_ZONE}+${TFW_B_ZONE}"
@@ -1991,6 +1993,11 @@ EVIDENCE
             || _sh_rc=$?
         if [[ ${_sh_rc} -eq 0 && "${_sh_out}" == "${_sh_dmz_gw}" ]]; then
             pass "Deep 11e-a: resolver answers ${PROXY_FQDN} → ${_sh_out} (the DMZ gateway, ADR-021 D2)"
+        elif [[ ${_sh_rc} -eq 3 ]]; then
+            # UNPUBLISHED: no public A/wildcard record for the probe name, so the
+            # publish path cannot be exercised on this site (same as Deep 11).
+            warn "    Deep 11e-a: ${PROXY_FQDN} has no public DNS record (resolver rc 3) — publish path not testable here (skipped)"
+            SKIP=$((SKIP + 1))
         else
             fail "Deep 11e-a: resolver returned rc=${_sh_rc} '${_sh_out:-none}', expected rc=0 '${_sh_dmz_gw}'"
         fi

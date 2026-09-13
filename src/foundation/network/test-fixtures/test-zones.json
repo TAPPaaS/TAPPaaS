@@ -2,7 +2,7 @@
   "_README": {
     "_comment": "Deep-test-only zone definitions for the firewall/network test suite. These four zones used to ship in the INSTALL template (manager/network-manager/zones.json); ADR-014 D7 removed them from it \u2014 a test probe has no business on a production install \u2014 and they live here instead, next to the test that activates them. network/test.sh --deep merges these into the DEPLOYED zones.json (state Active), runs the inter-zone rule validation, then removes the keys again in cleanup_deep. Nothing else reads this file.",
     "tier_note": "Typed and tiered like any other zone so the ADR-014 invariants (I1 monotonic access-to, I2 isolation floor, I4 archetype conformance) hold while they are temporarily live: testAllowA/B are trusted-client-shaped (tier 2) and testPinhole is a service-shaped target (tier 1) reached ONLY by pinhole \u2014 which is exactly the auto-pinhole path #173 exercises.",
-    "dmz_note": "testAllowA/B keep dmz in BOTH access-to and pinhole-allowed-from because the test-fw-a fixture declares `ingress from dmz` (the reverse-proxy path) and rules-manager validates every ingress against the target zone's pinhole-allowed-from. Dropping it makes test-fw-a un-installable \u2014 which is exactly what happened when these zones were first lifted out of the install template.",
+    "dmz_note": "testAllowA/B keep dmz in pinhole-allowed-from because the test-fw-a fixture declares `ingress from dmz` (the reverse-proxy path) and rules-manager validates every ingress against the target zone's pinhole-allowed-from. Dropping it makes test-fw-a un-installable \u2014 which is exactly what happened when these zones were first lifted out of the install template. dmz is NOT in their access-to (ADR-021 D3b): that grants the whole DMZ subnet including the firewall's GUI/SSH, which Deep 11d asserts is closed; the caddy-reach rule gives them tcp/80+443 to Caddy.",
     "snat_note": "testIot is the ADR-016 source-NAT probe. Its snat-allowed-from and pinhole-allowed-from are written by network/test.sh --deep from site.json's defaultEnvironment -> environments/<env>.json .network.zone, so no site-specific zone name is baked in here. IoT-typed at tier 3 so the client->IoT reach is the same shape the real Alfen case has, and the attribution loss the ADR warns about lands on a throwaway zone rather than a production one."
   },
   "testAllowA": {
@@ -15,8 +15,7 @@
     "bridge": "lan",
     "access-to": [
       "internet",
-      "testAllowB",
-      "dmz"
+      "testAllowB"
     ],
     "pinhole-allowed-from": [
       "testAllowB",
@@ -36,8 +35,7 @@
     "bridge": "lan",
     "access-to": [
       "internet",
-      "testAllowA",
-      "dmz"
+      "testAllowA"
     ],
     "pinhole-allowed-from": [
       "testAllowA",
