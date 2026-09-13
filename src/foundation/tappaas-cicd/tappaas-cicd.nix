@@ -236,6 +236,9 @@ in
         enable = true;
         settings = {
                 PasswordAuthentication = false;
+                # Key-only: don't offer keyboard-interactive/PAM either, so key-only
+                # doesn't hinge on the sshd PAM stack staying deny-only.
+                KbdInteractiveAuthentication = false;
                 PermitRootLogin = "no";
         };
   };

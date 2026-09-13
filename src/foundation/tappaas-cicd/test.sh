@@ -194,6 +194,26 @@ if [[ "${nodes_reachable}" -eq 0 ]]; then
     fail "No Proxmox nodes reachable via SSH"
 fi
 
+# ── Test 5b: sshd is key-only ───────────────────────────────────────
+# The mothership's sshd can be WAN-exposed, so password AND keyboard-interactive
+# (PAM) must both be off. Reads the generated config (world-readable; no sudo).
+# In the pre-update gate (--runtime-only) drift is reported, not failed: the
+# update's rebuild is what converges it, so failing here would block the fix.
+
+info "${BOLD}Test 5b: sshd key-only authentication${CL}"
+
+sshd_cfg=/etc/ssh/sshd_config
+for _opt in PasswordAuthentication KbdInteractiveAuthentication PermitRootLogin; do
+    _val=$(awk -v k="${_opt}" 'tolower($1) == tolower(k) { print $2; exit }' "${sshd_cfg}" 2>/dev/null || true)
+    if [[ "${_val}" == "no" ]]; then
+        pass "sshd ${_opt} no"
+    elif [[ "${RUNTIME_ONLY}" == "1" ]]; then
+        skip "sshd ${_opt} is '${_val:-unset}', not 'no' — this update's rebuild should converge it"
+    else
+        fail "sshd ${_opt} is '${_val:-unset}', expected 'no' (tappaas-cicd.nix services.openssh.settings)"
+    fi
+done
+
 # ── Test 6: Cron job ────────────────────────────────────────────────
 
 info "${BOLD}Test 6: Update scheduler (systemd timer)${CL}"
