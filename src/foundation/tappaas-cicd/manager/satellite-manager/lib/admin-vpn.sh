@@ -25,7 +25,7 @@ _here_av="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 : "${AV_WG_IFACE:=wireguard}"           # OPNsense WireGuard group interface token
 : "${AV_WAN_IFACE:=wan}"                # OPNsense WAN interface token
 : "${AV_RULE_DESC:=tappaas-admin admin->mgmt}"
-: "${AV_WAN_RULE_DESC:=tappaas-admin WAN :51821}"
+: "${AV_WAN_RULE_DESC:=tappaas-admin WAN :${SAT_ADMIN_WGPORT}}"
 : "${AV_KEEPALIVE:=25}"
 
 # ── WG server instance ───────────────────────────────────────────────────────
