@@ -173,7 +173,10 @@ fi
 # ── Apply zone configuration ────────────────────────────────────────
 
 info "Applying zone configuration..."
-/home/tappaas/bin/zone-manager --no-ssl-verify --zones-file /home/tappaas/config/zones.json --execute
+# Via network-manager: it renders zones.effective.json (the `serves`-derived
+# edges) and hands THAT to zone-manager. The authored zones.json lacks those
+# edges, so the stale-rule reaper would delete them on every update.
+/home/tappaas/bin/network-manager reconcile --only opnsense --apply
 
 # When zone-manager creates new opt interfaces (e.g. activating testAllowA/testAllowB),
 # OPNsense's auto-generated anti-lockout and bootp pass rules for those

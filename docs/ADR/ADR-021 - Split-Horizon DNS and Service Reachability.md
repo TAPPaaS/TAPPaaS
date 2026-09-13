@@ -224,6 +224,10 @@ on the overlay that is actually carrying traffic.
 > firewall today (no 100.64/10 route), and admitting an overlay to Caddy is a decision to take
 > when that overlay is terminated, not pre-emptively.
 
+An overlay's interface exists only where its tunnel is deployed: `admin` is the live case only on
+a site running admin-vpn. Elsewhere the template `admin` zone keeps its `access-to` but there is
+no `wireguard` interface, so the rule is skipped with a warning rather than attempted (#640).
+
 #### D3b. The DMZ gateway's two loose ends — **closes #618**
 
 Both sit at `10.6.0.1`, both predate this ADR, and both are D2's problem now, because D2 is what

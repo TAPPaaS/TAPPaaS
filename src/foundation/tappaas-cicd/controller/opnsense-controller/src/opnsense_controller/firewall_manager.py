@@ -281,6 +281,24 @@ class FirewallManager:
         )
         return result.get("result", {}).get("response", {})
 
+    def list_rule_interfaces(self) -> set[str]:
+        """Interfaces a filter rule may bind to, as OPNsense validates them.
+
+        The rule model's own option list, from a blank getRule. Unlike
+        interfacesInfo it includes interface groups such as ``wireguard``.
+        """
+        result = self.client.run_module(
+            "raw",
+            params={
+                "module": "firewall",
+                "controller": "filter",
+                "command": "getRule",
+                "action": "get",
+            },
+        )
+        rule = result.get("result", {}).get("response", {}).get("rule", {})
+        return set(rule.get("interface") or {})
+
     def get_rule_by_description(self, description: str) -> FirewallRuleInfo | None:
         """Find a rule by its description.
 

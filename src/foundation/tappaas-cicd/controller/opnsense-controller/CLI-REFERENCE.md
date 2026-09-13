@@ -598,6 +598,7 @@ The Zone Manager reads TAPPaaS zone definitions from `zones.json` and automatica
 ./result/bin/zone-manager --no-ssl-verify
 
 # Execute changes (creates VLANs, assigns interfaces, configures DHCP, and creates firewall rules)
+# Exits 1 if any step failed to converge (every [Error] line), 2 on a failed health gate
 ./result/bin/zone-manager --no-ssl-verify --execute
 
 # Configure only VLANs

@@ -26,8 +26,10 @@ from opnsense_controller.zone_manager import (
     ValidationMessage,
     ZoneManager,
     select_orphan_ranges,
+    select_orphan_zone_rules,
     _check_egress,
     discover_module_files,
+    main,
     postflight_checks,
     preflight_checks,
     validate_pinhole_allowed_from,
@@ -458,10 +460,14 @@ def _to_info(rule, uuid="u") -> FirewallRuleInfo:
 class _FakeFirewall:
     """Records create/delete calls instead of touching OPNsense."""
 
-    def __init__(self, existing=None):
+    def __init__(self, existing=None, rule_ifaces=None, fail_create=False,
+                 fail_apply=False):
         self._existing = list(existing or [])
         self.created = []   # list[FirewallRule]
         self.deleted = []   # list[str] (descriptions)
+        self.rule_ifaces = rule_ifaces      # None: the pre-check is unavailable
+        self.fail_create = fail_create
+        self.fail_apply = fail_apply
 
     def __enter__(self):
         return self
@@ -472,15 +478,28 @@ class _FakeFirewall:
     def list_rules(self):
         return list(self._existing)
 
+    def list_rule_interfaces(self):
+        if self.rule_ifaces is None:
+            raise RuntimeError("getRule unavailable")
+        return set(self.rule_ifaces)
+
     def create_rule(self, rule, apply=False):
+        if self.fail_create:
+            raise RuntimeError("'rule.interface': 'Option [wireguard] not in list.'")
         self.created.append(rule)
         return {"uuid": f"new-{len(self.created)}"}
 
     def delete_rule(self, description, apply=False):
         self.deleted.append(description)
 
+    def delete_rule_by_uuid(self, uuid, apply=False):
+        self.deleted.append(
+            next(r.description for r in self._existing if r.uuid == uuid)
+        )
+
     def apply_changes(self):
-        pass
+        if self.fail_apply:
+            raise RuntimeError("apply failed")
 
 
 class TestConfigureFirewallRulesSequencing(unittest.TestCase):
@@ -496,14 +515,15 @@ class TestConfigureFirewallRulesSequencing(unittest.TestCase):
         zm.get_zone_interface = lambda zone: f"opt_{zone.name}"
         return zm
 
-    def _run(self, zones, existing=None) -> _FakeFirewall:
+    def _run(self, zones, existing=None, check_mode=False, **fake_kw) -> _FakeFirewall:
         zm = self._manager(zones)
-        fake = _FakeFirewall(existing)
+        fake = _FakeFirewall(existing, **fake_kw)
         with patch(
             "opnsense_controller.zone_manager.FirewallManager",
             return_value=fake,
         ):
-            zm.configure_firewall_rules(check_mode=False)
+            self.results = zm.configure_firewall_rules(check_mode=check_mode)
+        self.zm = zm
         return fake
 
     def _seqs_by_desc(self, fake) -> dict[str, int]:
@@ -751,6 +771,141 @@ class TestCaddyReachability(TestConfigureFirewallRulesSequencing):
         existing = [_to_info(r, uuid=f"u{i}") for i, r in enumerate(first.created)]
         second = self._run(_build_zones(), existing=existing)
         self.assertEqual([r.description for r in self._caddy_rules(second)], [])
+
+    def _with_admin(self):
+        zones = _build_zones()
+        zones["admin"] = _zone(
+            "admin", access_to=["mgmt"], zone_type="Overlay",
+            state="Manual", vlan_tag=0,
+        )
+        return zones
+
+    def test_overlay_without_interface_is_skipped(self):
+        # #640: a site without admin-vpn has no 'wireguard' interface, and
+        # OPNsense rejected the admin caddy pair on every apply.
+        fake = self._run(self._with_admin(),
+                         rule_ifaces={"lan", "opt_srv", "opt_dmz"})
+        descs = {r.description for r in self._caddy_rules(fake)}
+        self.assertNotIn("Zone admin -> caddy https", descs)
+        self.assertIn("Zone srv -> caddy https", descs)
+        self.assertEqual(self.zm.failures, [])
+
+    def test_overlay_with_interface_gets_rule(self):
+        fake = self._run(self._with_admin(), rule_ifaces={"lan", "opt_admin"})
+        descs = {r.description for r in self._caddy_rules(fake)}
+        self.assertIn("Zone admin -> caddy https", descs)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Convergence failures fail the run (issue #639)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestConvergenceFailures(TestConfigureFirewallRulesSequencing):
+
+    def test_clean_run_records_no_failure(self):
+        self._run(_build_zones())
+        self.assertEqual(self.zm.failures, [])
+
+    def test_rejected_rule_is_a_failure(self):
+        self._run(_build_zones(), fail_create=True)
+        self.assertTrue(self.zm.failures)
+
+    def test_failed_apply_is_a_failure(self):
+        # Staged rules that never reach pf are not converged either.
+        self._run(_build_zones(), fail_apply=True)
+        self.assertTrue(any("Applying" in f for f in self.zm.failures))
+
+    def _main(self, failures):
+        def fake_rules(zm_self, check_mode=True):
+            zm_self.failures.extend(failures)
+            return {}
+        with patch("opnsense_controller.zone_manager.Config"), \
+                patch("opnsense_controller.rules_manager._find_zones_file",
+                      return_value=Path("/nonexistent.json")), \
+                patch.object(ZoneManager, "load_zones"), \
+                patch.object(ZoneManager, "print_zone_summary"), \
+                patch.object(ZoneManager, "configure_firewall_rules", fake_rules), \
+                patch("sys.argv", ["zone-manager", "--firewall-rules-only"]):
+            main()
+
+    def test_main_exits_nonzero_on_failure(self):
+        with self.assertRaises(SystemExit) as cm:
+            self._main(["Firewall rule 'Zone admin -> caddy https': rejected"])
+        self.assertEqual(cm.exception.code, 1)
+
+    def test_main_exits_zero_when_converged(self):
+        self._main([])  # no SystemExit
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Rules of zones no longer in zones.json (issue #641)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestSelectOrphanZoneRules(unittest.TestCase):
+
+    def test_groups_rules_of_absent_zones(self):
+        orphans, refusal = select_orphan_zone_rules(
+            ["Zone home -> internet", "Zone srv-home -> internet",
+             "Zone srv-home block rfc1918-10", "Zone guest -> gateway"],
+            {"home", "guest", "srvHome"},
+        )
+        self.assertEqual(refusal, "")
+        self.assertEqual(orphans, {"srv-home": [
+            "Zone srv-home -> internet", "Zone srv-home block rfc1918-10"]})
+
+    def test_other_shapes_are_not_ours(self):
+        orphans, _ = select_orphan_zone_rules(
+            ["Zone gone allow printer", "tappaas-admin admin->mgmt",
+             "Zone home -> internet"],
+            {"home"},
+        )
+        self.assertEqual(orphans, {})
+
+    def test_refuses_when_orphans_outnumber_live_zones(self):
+        # A wrong --zones-file makes most of the site look orphaned.
+        orphans, refusal = select_orphan_zone_rules(
+            ["Zone a -> internet", "Zone b -> internet", "Zone home -> internet"],
+            {"home"},
+        )
+        self.assertEqual(orphans, {})
+        self.assertIn("Refusing", refusal)
+
+
+class TestOrphanZoneRuleReaping(TestConfigureFirewallRulesSequencing):
+
+    def _existing_with(self, *descs):
+        first = self._run(_build_zones())
+        existing = [_to_info(r, uuid=f"u{i}") for i, r in enumerate(first.created)]
+        for i, d in enumerate(descs):
+            orphan = _to_info(first.created[0], uuid=f"o{i}")
+            orphan.description = d
+            orphan.interface = "opt2"  # an optN since reassigned (wg0 on-site)
+            existing.append(orphan)
+        return existing
+
+    def test_rules_of_renamed_zone_are_reaped(self):
+        existing = self._existing_with(
+            "Zone rossen-private -> internet", "Zone rossen-private block rfc1918-10",
+        )
+        fake = self._run(_build_zones(), existing=existing)
+        self.assertIn("Zone rossen-private -> internet", fake.deleted)
+        self.assertIn("Zone rossen-private block rfc1918-10", fake.deleted)
+        self.assertEqual(self.zm.failures, [])
+
+    def test_dry_run_lists_but_keeps_them(self):
+        existing = self._existing_with("Zone rossen-private -> internet")
+        fake = self._run(_build_zones(), existing=existing, check_mode=True)
+        self.assertEqual(fake.deleted, [])
+        rules = self.results["rossen-private"]["rules"]
+        self.assertEqual(rules[0]["status"], "would_delete")
+
+    def test_refusal_deletes_nothing_and_fails(self):
+        existing = self._existing_with(*(f"Zone gone{i} -> internet" for i in range(5)))
+        fake = self._run(_build_zones(), existing=existing)
+        self.assertFalse([d for d in fake.deleted if d.startswith("Zone gone")])
+        self.assertTrue(self.zm.failures)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

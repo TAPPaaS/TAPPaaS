@@ -279,9 +279,9 @@ Merge: 7 adopted, 30 pinned, 1 added, 0 kept (orphan), 0 possible rename(s)
 | `1` | source missing / IO failure |
 | `2` | bad arguments |
 
-After a merge that actually changed anything, push to OPNsense:
+After a merge that actually changed anything, push to OPNsense (renders `zones.effective.json` first, so `serves`-derived edges are kept):
 ```bash
-zone-manager --no-ssl-verify --zones-file /home/tappaas/config/zones.json --execute
+network-manager reconcile --only opnsense --apply
 ```
 
 ---

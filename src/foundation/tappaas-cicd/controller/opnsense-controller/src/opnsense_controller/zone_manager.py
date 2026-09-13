@@ -17,6 +17,7 @@ import hashlib
 import ipaddress
 import json
 import os
+import re
 import socket
 import sys
 import time
@@ -311,6 +312,46 @@ def select_orphan_ranges(
             "zone set loaded is probably not this site's. Check --zones-file "
             "(the live one is /home/tappaas/config/zones.json); "
             "no ranges were removed."
+        )
+    return orphans, ""
+
+
+# The rule shapes configure_firewall_rules writes. Only these are ours to reap
+# when their zone is gone; a hand-made "Zone ..." rule of any other shape is not.
+ZONE_RULE_RE = re.compile(r"^Zone (\S+) (?:-> \S|block rfc1918-)")
+
+
+def select_orphan_zone_rules(
+    existing_descriptions, known_zone_names
+) -> tuple[dict[str, list[str]], str]:
+    """Group zone rules whose zone is no longer in zones.json (#641).
+
+    A zone rename or removal leaves its ``Zone <old> ...`` rules behind: the
+    reaper only visits zones it loaded, so nothing ever looks at <old> again.
+    Those rules keep their old ``optN``, and once that id is reassigned (on the
+    reference site, to the WireGuard interface) they are live pf rules again.
+
+    Returns ({zone-name: [descriptions]}, refusal). When refusal is non-empty
+    the caller must delete NOTHING: more orphaned zones than live ones means the
+    zone set loaded is not this site's, the same guard as the DHCP sweep.
+    """
+    orphans: dict[str, list[str]] = {}
+    live: set[str] = set()
+    for desc in existing_descriptions:
+        m = ZONE_RULE_RE.match(desc)
+        if not m:
+            continue
+        name = m.group(1)
+        if name in known_zone_names:
+            live.add(name)
+        else:
+            orphans.setdefault(name, []).append(desc)
+    if len(orphans) > len(live):
+        return {}, (
+            f"Refusing to delete the rules of {len(orphans)} zone(s) absent from "
+            f"zones.json ({', '.join(sorted(orphans))}) — more than the "
+            f"{len(live)} zone(s) it does match, so the zone set loaded is "
+            "probably not this site's. Check --zones-file; no rules were removed."
         )
     return orphans, ""
 
@@ -730,6 +771,14 @@ class ZoneManager:
         self.interface = interface
         self.bridge_map = bridge_map or self.DEFAULT_BRIDGE_MAP.copy()
         self.zones: list[Zone] = []
+        # Every step that failed to converge; main() exits non-zero when any
+        # did, so a caller never reads a partial run as converged (#639).
+        self.failures: list[str] = []
+
+    def _fail(self, msg: str) -> None:
+        """Log an error and record it as a convergence failure."""
+        error(msg)
+        self.failures.append(msg)
 
     def get_interface_for_bridge(self, bridge: str) -> str:
         """Get the physical interface for a bridge name.
@@ -962,8 +1011,8 @@ class ZoneManager:
             return
 
         if not iface_id or not device:
-            error(f"  {zone.name}: cannot force-rename label — missing interface "
-                  f"identifier/device")
+            self._fail(f"  {zone.name}: cannot force-rename label — missing interface "
+                       f"identifier/device")
             results[zone.name] = {"status": "error",
                                   "error": "missing identifier/device for label rename"}
             return
@@ -993,7 +1042,7 @@ class ZoneManager:
                 "to": desired_label, "vlan": zone.vlan_tag,
             }
         except Exception as e:  # noqa: BLE001 - surface the API error
-            error(f"  {zone.name}: force-rename failed: {e}")
+            self._fail(f"  {zone.name}: force-rename failed: {e}")
             results[zone.name] = {"status": "error", "error": f"label rename failed: {e}"}
 
     def configure_vlans(
@@ -1079,10 +1128,10 @@ class ZoneManager:
                             error_msg = str(e)
                             # If deletion fails because interface is still assigned, provide helpful error
                             if "assigned as an interface" in error_msg.lower():
-                                error(f"VLAN is assigned to an interface but could not be unassigned automatically.")
+                                self._fail(f"{zone.name}: VLAN is assigned to an interface but could not be unassigned automatically.")
                                 error(f"Please manually delete the interface in OPNsense first, then re-run zone-manager.")
                             else:
-                                error(f"{zone.name}: {e}")
+                                self._fail(f"{zone.name}: {e}")
                             results[zone.name] = {"status": "error", "error": error_msg}
                 else:
                     debug(f"  {zone.name}: VLAN {zone.vlan_tag} not found (nothing to delete)")
@@ -1129,7 +1178,7 @@ class ZoneManager:
                                 }
                             except Exception as e:
                                 results[zone.name] = {"status": "error", "error": str(e)}
-                                error(f"{zone.name}: {e}")
+                                self._fail(f"{zone.name}: {e}")
                     else:
                         debug(f"  {zone.name}: VLAN {zone.vlan_tag} already exists (skipping)")
                         results[zone.name] = {
@@ -1205,7 +1254,7 @@ class ZoneManager:
 
                     except Exception as e:
                         results[zone.name] = {"status": "error", "error": str(e)}
-                        error(f"{zone.name}: {e}")
+                        self._fail(f"{zone.name}: {e}")
 
             # Report on manual zones (not created or deleted)
             for zone in manual_zones:
@@ -1394,7 +1443,7 @@ class ZoneManager:
                             results[zone.name] = {"status": "deleted", "result": result}
                         except Exception as e:
                             results[zone.name] = {"status": "error", "error": str(e)}
-                            error(f"{zone.name}: {e}")
+                            self._fail(f"{zone.name}: {e}")
                 else:
                     debug(f"  {zone.name}: DHCP range not found (nothing to delete)")
                     results[zone.name] = {"status": "not_found"}
@@ -1427,7 +1476,7 @@ class ZoneManager:
             known_descs = {z.dhcp_description for z in self.zones}
             orphans, refusal = select_orphan_ranges(existing_by_desc, known_descs)
             if refusal:
-                error(f"{refusal} (zones file: {self.zones_file})")
+                self._fail(f"{refusal} (zones file: {self.zones_file})")
 
             for desc in orphans:
                 existing = existing_by_desc[desc]
@@ -1453,7 +1502,7 @@ class ZoneManager:
                     )
                 except Exception as e:
                     results[f"orphan:{desc}"] = {"status": "error", "error": str(e)}
-                    error(f"orphan '{desc}': {e}")
+                    self._fail(f"orphan '{desc}': {e}")
 
             # Resolve every VLAN zone's interface up front — one interfacesInfo
             # read (with retry for stragglers, #574) instead of a connection
@@ -1501,7 +1550,7 @@ class ZoneManager:
                         boot_report = boot_result
                 except Exception as e:
                     boot_report = {"status": "error", "error": str(e)}
-                    error(f"{zone.name} boot options: {e}")
+                    self._fail(f"{zone.name} boot options: {e}")
 
                 existing = existing_by_desc.get(dhcp_desc)
                 existing_iface = (existing.get("interface") or "") if existing else ""
@@ -1562,7 +1611,7 @@ class ZoneManager:
                         # downgrading to an unbound range (the old fallback
                         # masked issue #179).
                         results[zone.name] = {"status": "error", "error": str(e)}
-                        error(f"{zone.name}: {e}")
+                        self._fail(f"{zone.name}: {e}")
 
                 if boot_report is not None:
                     results[zone.name]["boot_options"] = boot_report
@@ -1681,7 +1730,7 @@ class ZoneManager:
             try:
                 manager.delete_rule(existing.description, apply=False)
             except Exception as e:  # noqa: BLE001 - surface but continue to recreate
-                error(f"Reconciling '{description}': delete of stale rule failed: {e}")
+                self._fail(f"Reconciling '{description}': delete of stale rule failed: {e}")
 
         else:
             debug(f"    {action_str}: {description}")
@@ -1720,7 +1769,7 @@ class ZoneManager:
                     "status": "error",
                     "error": str(e),
                 })
-                error(f"Firewall rule '{description}': {e}")
+                self._fail(f"Firewall rule '{description}': {e}")
 
     def configure_firewall_rules(self, check_mode: bool = True) -> dict[str, dict]:
         """Configure firewall rules based on zone access-to definitions.
@@ -1782,7 +1831,7 @@ class ZoneManager:
                             try:
                                 manager.delete_rule(rule_info.description, apply=False)
                             except Exception as e:
-                                error(f"Deleting '{rule_info.description}': {e}")
+                                self._fail(f"Deleting '{rule_info.description}': {e}")
                     results[zone.name] = {
                         "status": "would_delete" if check_mode else "deleted",
                         "rules_deleted": len(matching),
@@ -1794,7 +1843,14 @@ class ZoneManager:
                 zone_interface = self.get_zone_interface(zone)
 
                 if not zone_interface:
-                    warn(f"{zone.name}: Cannot find interface (skipping)")
+                    # A dry-run legitimately precedes the interface a new zone
+                    # gets on apply; an apply that still has none left the
+                    # zone's rules unconverged.
+                    if check_mode:
+                        warn(f"{zone.name}: Cannot find interface (skipping)")
+                    else:
+                        self._fail(f"{zone.name}: Cannot find interface — its "
+                                   f"firewall rules were not reconciled")
                     results[zone.name] = {
                         "status": "error",
                         "error": "Interface not found",
@@ -1838,7 +1894,7 @@ class ZoneManager:
                     # occupy fixed offsets base+1 .. base+89, so the block band
                     # below stays put regardless of how many zones are listed.
                     if len(specific_targets) > self.ZONE_RULE_PASS_MAX:
-                        error(
+                        self._fail(
                             f"{zone.name}: {len(specific_targets)} access-to zones "
                             f"exceeds the {self.ZONE_RULE_PASS_MAX}-slot pass band; "
                             f"rules beyond that would collide with the block band"
@@ -1916,7 +1972,7 @@ class ZoneManager:
                     manager.apply_changes()
                     debug("  Changes applied successfully")
                 except Exception as e:
-                    error(f"Applying firewall changes: {e}")
+                    self._fail(f"Applying firewall changes: {e}")
 
             # Report on isolated zones (enabled but empty access-to)
             for zone in isolated_zones:
@@ -1962,7 +2018,8 @@ class ZoneManager:
         The desired set is what the passes above touched (each ``_create_or_skip_rule``
         records its description in the zone's result list), plus nothing for a
         fully-isolated zone. A zone that could not be processed — no interface,
-        or already torn down as disabled — is skipped rather than emptied.
+        or already torn down as disabled — is skipped rather than emptied. Rules
+        of a zone absent from zones.json are reaped whole, by uuid.
         """
         desired: dict[str, set[str]] = {}
         for zone_name, entry in results.items():
@@ -1996,14 +2053,41 @@ class ZoneManager:
             ).setdefault("rules", [])
             for rule_info in stale:
                 info(
-                    f"  {zone_name}: removing stale rule "
-                    f"'{rule_info.description}' (no longer in access-to)"
+                    f"  {zone_name}: {'would remove' if check_mode else 'removing'} "
+                    f"stale rule '{rule_info.description}' (no longer in access-to)"
                 )
                 if not check_mode:
                     try:
                         manager.delete_rule(rule_info.description, apply=False)
                     except Exception as e:  # noqa: BLE001 - report, keep converging
-                        error(f"Deleting '{rule_info.description}': {e}")
+                        self._fail(f"Deleting '{rule_info.description}': {e}")
+                        continue
+                zone_results.append({
+                    "description": rule_info.description,
+                    "status": "would_delete" if check_mode else "deleted",
+                })
+
+        # Rules of zones that are no longer in zones.json at all (#641) — the
+        # loop above only ever visits zones this run loaded.
+        orphans, refusal = select_orphan_zone_rules(
+            [r.description for r in existing_rules], {z.name for z in self.zones}
+        )
+        if refusal:
+            self._fail(f"{refusal} (zones file: {self.zones_file})")
+        for zone_name, descs in sorted(orphans.items()):
+            zone_results = []
+            results[zone_name] = {"status": "orphan", "rules": zone_results}
+            for rule_info in (r for r in existing_rules if r.description in descs):
+                info(
+                    f"  {zone_name}: {'would remove' if check_mode else 'removing'} "
+                    f"orphan rule '{rule_info.description}' on "
+                    f"'{rule_info.interface or '?'}' (zone not in zones.json)"
+                )
+                if not check_mode:
+                    try:
+                        manager.delete_rule_by_uuid(rule_info.uuid, apply=False)
+                    except Exception as e:  # noqa: BLE001 - report, keep converging
+                        self._fail(f"Deleting '{rule_info.description}': {e}")
                         continue
                 zone_results.append({
                     "description": rule_info.description,
@@ -2058,8 +2142,9 @@ class ZoneManager:
         #   * an Overlay zone with a non-empty access-to (D3a) — overlay peers are
         #     not a routed segment and carry no `internet`, but they resolve the
         #     same split-horizon answer and would otherwise have no path to it.
-        #     `admin` is the live case: its only rule is admin->mgmt, so once the
-        #     published names move to the DMZ gateway a VPN peer loses them all.
+        #     `admin` is the live case where admin-vpn is deployed: its only rule
+        #     is admin->mgmt, so once the published names move to the DMZ
+        #     gateway a VPN peer loses them all.
         #     An empty access-to means a dormant overlay and stays out;
         #   * the dmz zone itself (D3b) — it used to be skipped as "reaches the
         #     gateway locally", but "locally" is the unrestricted `Zone dmz ->
@@ -2080,6 +2165,17 @@ class ZoneManager:
             if _is_candidate(z)
         ]
 
+        # An overlay's interface exists only where its tunnel is deployed (admin
+        # -> 'wireguard' needs admin-vpn); elsewhere OPNsense rejects the rule
+        # (#640). Ask the rule model what it accepts. A failed read skips the
+        # check, and a bad interface then fails the create as before.
+        rule_ifaces: set[str] | None = None
+        if any(z.zone_type == "Overlay" for z in candidate_zones):
+            try:
+                rule_ifaces = manager.list_rule_interfaces() or None
+            except Exception as e:  # noqa: BLE001 - optional pre-check
+                debug(f"  Caddy reachability: interface list unavailable: {e}")
+
         for zone in candidate_zones:
             zone_interface = self.get_zone_interface(zone)
             if not zone_interface:
@@ -2097,6 +2193,14 @@ class ZoneManager:
                     f"trunk, not an overlay interface — set its 'bridge' to the "
                     f"OPNsense interface its peers arrive on (e.g. 'wireguard'). "
                     f"Skipping; its peers cannot reach published names."
+                )
+                continue
+            if (zone.zone_type == "Overlay" and rule_ifaces is not None
+                    and zone_interface not in rule_ifaces):
+                warn(
+                    f"  Caddy reachability (ADR-021 D3a): overlay zone "
+                    f"'{zone.name}' interface '{zone_interface}' does not exist "
+                    f"on the firewall (tunnel not deployed) — skipping."
                 )
                 continue
             zone_results = results.setdefault(
@@ -2159,7 +2263,7 @@ class ZoneManager:
                     unresolved=len(unresolved),
                 )
                 if refusal:
-                    error(refusal)
+                    self._fail(refusal)
                     return {
                         "status": "refused",
                         "interfaces": current,
@@ -2179,7 +2283,7 @@ class ZoneManager:
 
                 return {"status": "updated", "interfaces": interfaces, "result": result}
         except Exception as e:
-            error(f"Updating dnsmasq interfaces: {e}")
+            self._fail(f"Updating dnsmasq interfaces: {e}")
             return {"status": "error", "error": str(e)}
 
     def configure_all(
@@ -2683,6 +2787,13 @@ def main():
             error("Post-flight health check failed — zone changes degraded "
                   "DNS/egress. Recover via the firewall mgmt IP (10.0.0.1), not DNS.")
             sys.exit(2)
+
+    # A step that failed to converge fails the run (#639): callers (network-
+    # manager, network/update.sh) must not report a partial apply as converged.
+    if manager.failures:
+        error(f"{len(manager.failures)} step(s) failed to converge — see the "
+              "[Error] lines above.")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
