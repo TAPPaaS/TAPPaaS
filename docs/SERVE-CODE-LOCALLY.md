@@ -45,7 +45,7 @@ it with your server as `REPO`:
 ```bash
 curl -O http://<server-ip>:8000/ADR007/src/foundation/install.sh
 chmod +x install.sh
-./install.sh "http://<server-ip>:8000/" ADR007 --name <orgname> [--domain <d>] ...
+./install.sh "http://<server-ip>:8000/" ADR007 --name <site-code> [--organization <org>] [--domain <d>] ...
 ```
 
 Sanity check first (must print `HTTP/1.0 200 OK`):

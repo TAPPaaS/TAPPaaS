@@ -23,7 +23,7 @@ zone/proxy/rules layer is then configured by the tappaas-cicd install.
 
 Normally: nothing to run by hand — the first-node bootstrap does it all:
 
-    ./install.sh "$REPO" "$BRANCH" --name <orgname> --domain "yourdomain.com"
+    ./install.sh "$REPO" "$BRANCH" --name <site-code> --organization <org> --domain "yourdomain.com"
     # step [2/5] runs network/config-firewall.sh; step [5/5] installs tappaas-cicd,
     # whose install deploys config/network.json and runs update-module.sh network
 

@@ -85,26 +85,27 @@ A "direct dependency" is one of:
 ### 0. First-node install chain (the bootstrap; ADR-007)
 
 `foundation/install.sh` is the ENTRY point (the URL the install guide downloads).
-It threads one `--name <orgname>` through the whole chain (cluster name = site.json
-`.name` = default environment = organisation):
+It threads two names through the whole chain: `--name <site-code>` (cluster name =
+site.json `.name`) and `--organization <org>` (default environment = organisation;
+defaults to the site code):
 
 ```
-foundation/install.sh  --name <orgname> --domain <d>     <- entry orchestrator
-  [1/5] cluster/install.sh --name <orgname>   -> config-network.sh, config-storage.sh
-                                                 (pvecm create <orgname>; writes ~/tappaas/.cluster-role)
+foundation/install.sh  --name <site-code> [--organization <org>] --domain <d>   <- entry orchestrator
+  [1/5] cluster/install.sh --name <site-code>   -> config-network.sh, config-storage.sh
+                                                 (pvecm create <site-code>; writes ~/tappaas/.cluster-role)
   [2/5] config-firewall.sh        (prebuilt OPNsense @ 10.0.0.1)
   [3/5] config-network.sh --swap-gateway      (staged by [1/5])
   [4/5] sanity-check.sh
-  [5/5] install-platform.sh --name <orgname> --domain <d>
+  [5/5] install-platform.sh --name <site-code> --organization <org> --domain <d>
           -> tappaas-cicd/bootstrap.sh   (clone + nixos-rebuild)
-          -> tappaas-cicd/install.sh --name <orgname>   (the cicd platform install)
+          -> tappaas-cicd/install.sh --name <site-code> --organization <org>   (the cicd platform install)
                -> create-site.sh --name <site-code> --organization <org>   => site.json
-               -> network-manager init --name <orgname> => zones.json
-               -> environment-manager add --name <orgname>   => mgmt + <orgname> envs
+               -> network-manager init => zones.json (default zone <org>)
+               -> environment-manager add   => mgmt + <org> envs
                -> copy-update-json.sh + update-module.sh (cluster/templates/network/tappaas-cicd)
 # secondary node: [1/5] joins, then the chain stops (role != created).
 # later, from the mothership: rest-of-foundation.sh -> backup/identity/logging,
-#   then people-manager bootstrap + reconcile => the <orgname> organisation.
+#   then people-manager bootstrap + reconcile => the <org> organisation.
 ```
 
 ### 1. Module lifecycle through the manager (ADR-007)
@@ -251,7 +252,7 @@ foundation tree depends on them:
 
 ```mermaid
 graph TD
-    FI["foundation/install.sh<br/>(entry; --name orgname)"] --> CI["[1/5] cluster/install.sh<br/>(node; pvecm create orgname)"]
+    FI["foundation/install.sh<br/>(entry; --name site-code --organization org)"] --> CI["[1/5] cluster/install.sh<br/>(node; pvecm create site-code)"]
     CI --> CN["config-network.sh"]
     CI --> CS["config-storage.sh"]
     CI --> ROLE["~/tappaas/.cluster-role"]
@@ -259,13 +260,13 @@ graph TD
     FI --> FW["[2/5] config-firewall.sh"]
     FI --> CUT["[3/5] config-network.sh --swap-gateway"]
     FI --> SAN["[4/5] sanity-check.sh"]
-    FI --> IP["[5/5] install-platform.sh<br/>--name orgname"]
+    FI --> IP["[5/5] install-platform.sh<br/>--name site-code --organization org"]
     IP --> BS["tappaas-cicd/bootstrap.sh"]
-    IP --> CICD["tappaas-cicd/install.sh<br/>--name orgname"]
+    IP --> CICD["tappaas-cicd/install.sh<br/>--name site-code --organization org"]
     CICD --> CSITE["create-site.sh => site.json"]
     CICD --> ZI["network-manager init => zones.json"]
-    CICD --> CME["environment-manager add<br/>=> mgmt + orgname envs"]
-    ROF["rest-of-foundation.sh<br/>(later, from cicd)"] --> US["people-manager bootstrap + reconcile<br/>=> orgname organisation"]
+    CICD --> CME["environment-manager add<br/>=> mgmt + org envs"]
+    ROF["rest-of-foundation.sh<br/>(later, from cicd)"] --> US["people-manager bootstrap + reconcile<br/>=> org organisation"]
 ```
 
 ### Module lifecycle (module-manager front door)

@@ -133,13 +133,13 @@ while [ $# -gt 0 ]; do
     --pool)            POOL_ARGS+=("--pool" "${2:-}"); shift ;;
     --non-interactive) NONINTERACTIVE=1 ;;
     -h|--help)
-      echo "Usage: install.sh [REPO] [BRANCH] --name <orgname>"
+      echo "Usage: install.sh [REPO] [BRANCH] --name <site-code>"
       echo "                  [--cluster|--join|--no-cluster] [--skip-network] [--skip-storage]"
       echo "                  [--lan-port <if>] [--wan-port <if>] [--pool <name=topo:disks>]..."
       echo "                  [--non-interactive]"
       echo ""
       echo "The NODE step: Proxmox post-install, lan/wan bridges, cluster create"
-      echo "(named <orgname>) / join, ZFS pools. This is step [1/5] driven by the"
+      echo "(named <site-code>) / join, ZFS pools. This is step [1/5] driven by the"
       echo "orchestrator foundation/install.sh (which then runs the firewall, gateway"
       echo "cutover and platform). Writes ~/tappaas/.cluster-role for the orchestrator."
       echo "(--skip-firewall/--skip-platform/--domain are accepted for back-compat but"

@@ -35,7 +35,7 @@ check and platform:
     REPO="https://codeberg.org/TAPPaaS/TAPPaaS/raw/branch/"; BRANCH="main"
     curl -fsSL ${REPO}${BRANCH}/src/foundation/install.sh >install.sh
     chmod +x install.sh
-    ./install.sh "$REPO" "$BRANCH" --name <orgname> --domain "yourdomain.com"
+    ./install.sh "$REPO" "$BRANCH" --name <site-code> --organization <org> --domain "yourdomain.com"
 
 The node step alone (no firewall/platform chain) is `src/foundation/cluster/install.sh`
 with the same positional `REPO BRANCH` arguments.
@@ -81,7 +81,7 @@ On a freshly bootstrapped node, `sanity-check.sh` verifies gateway, DNS and inte
 
 | Check | Expected |
 |-------|----------|
-| `pvecm status` on a node | Cluster named `<orgname>`; all nodes listed with quorum |
+| `pvecm status` on a node | Cluster named `<site-code>`; all nodes listed with quorum |
 | `zpool list` on a node | The `tankXY` pools you defined, ONLINE |
 | `ip link show lan` / `ip link show wan` | Both bridges up; `lan` is VLAN-aware |
 | Proxmox UI `https://10.0.0.10:8006` | Reachable; node visible in the datacenter tree |

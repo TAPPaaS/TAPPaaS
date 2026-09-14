@@ -59,7 +59,7 @@ The base step is skipped on re-runs (delete `/var/log/tappaas.step1` to force it
 three config phases run every time and are individually idempotent.
 
 ```
-install.sh [REPO] [BRANCH] --name <orgname>
+install.sh [REPO] [BRANCH] --name <site-code>
            [--cluster|--join|--no-cluster] [--skip-network] [--skip-storage]
            [--lan-port <if>] [--wan-port <if>] [--pool <name=topo:disks>]...
            [--non-interactive]
@@ -128,7 +128,7 @@ created while the node already belongs to the cluster.
 | Situation | Behaviour |
 |-----------|-----------|
 | Already a member | Detected via `pvecm status` and skipped. |
-| `tappaas1` (or `--cluster`) | `pvecm create <orgname>` (fallback name `TAPPaaS`). |
+| `tappaas1` (or `--cluster`) | `pvecm create <site-code>` (fallback name `TAPPaaS`). |
 | Any other node (or `--join`) | **Interactive join**: prompts for an existing node's address (default `tappaas1.mgmt.internal`) and runs `pvecm add`, which prompts for that node's root password. |
 | `--no-cluster` | Skipped; node stays standalone. |
 

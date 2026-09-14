@@ -232,7 +232,7 @@ Notes:
 ```bash
 REPO="https://codeberg.org/TAPPaaS/TAPPaaS/raw/branch/"; BRANCH="main"
 curl -fsSL ${REPO}${BRANCH}/src/foundation/install.sh >install.sh
-chmod +x install.sh && ./install.sh "$REPO" "$BRANCH" --name <orgname> --domain "yourdomain.com"
+chmod +x install.sh && ./install.sh "$REPO" "$BRANCH" --name <site-code> --organization <org> --domain "yourdomain.com"
 ```
 
 > The install **re-launches itself inside a `tmux` session** (`tappaas-install`) so a
@@ -240,11 +240,14 @@ chmod +x install.sh && ./install.sh "$REPO" "$BRANCH" --name <orgname> --domain 
 > and can briefly cut your session. If you get disconnected, reconnect to the node and
 > run `tmux attach -t tappaas-install`. (Opt out with `--no-tmux`.)
 
-Pass two things up front:
-- **`--name <orgname>`** — your organisation / system name (lowercase, ≤15
-     chars). This is **the one name** for the whole install: it names the **Proxmox
-     cluster**, the **`site.json`**, the **default environment**, and (later) the
-     **organisation** in the identity provider. If omitted you'll be prompted.
+Pass three things up front:
+- **`--name <site-code>`** — the **site code** (lowercase, ≤15 chars). It names
+     the **Proxmox cluster** and `site.json` `.name`, and is fixed once the cluster
+     exists. If omitted you'll be prompted.
+- **`--organization <org>`** — your **organisation** name (lowercase). It names
+     the **default environment** / zone and (later) the **organisation** in the
+     identity provider. Optional: if omitted it defaults to the site code, without
+     prompting.
 - **`--domain`** — your **public domain**; the reverse proxy is configured for
      `<service>.yourdomain.com`. If omitted you'll be prompted. You don't need the
      domain's DNS-01 API token yet — that comes in Step 4.
@@ -254,7 +257,7 @@ a five-phase chain — you run it once and watch:
 
 1. **[1/5] Node** — Proxmox post-install, the `lan`/`wan` bridges (auto-detected:
       the install NIC with internet becomes **WAN**; the other, to your downstream
-      switch, becomes **LAN**), the Proxmox **cluster named `<orgname>`**, and the
+      switch, becomes **LAN**), the Proxmox **cluster named `<site-code>`**, and the
       ZFS pools.
 2. **[2/5] Firewall** — downloads and boots the **prebuilt OPNsense image** at
       `10.0.0.1`, self-configured with unique credentials (no GUI, no installer).
@@ -276,9 +279,10 @@ a five-phase chain — you run it once and watch:
       - the **foundation modules** (cluster, templates, network, tappaas-cicd) and
         the **Caddy** reverse proxy
 
-> **One name, everywhere:** `<orgname>` = the Proxmox cluster name = `site.json`
-> `.name` = the default environment name = your organisation name. You set it
-> once with `--name`; the **organisation itself** isn't created until Step 5
+> **Two names:** `<site-code>` = the Proxmox cluster name = `site.json` `.name`;
+> `<org>` = the default environment name = your organisation name (`site.json`
+> `.defaultEnvironment`). For a single-site install they are often the same — just
+> pass `--name`. The **organisation itself** isn't created until Step 5
 > (`rest-of-foundation.sh`, after the identity provider is up).
 
 The domain you passed configures the reverse proxy. To stop earlier, pass
@@ -468,10 +472,10 @@ rest-of-foundation.sh
    logging** — then runs a final system update + tests.
 2. **Bootstraps your people domain** — once the identity provider (Authentik) is
    up and `config/people/` is still empty (first install), it creates the
-   **organisation `<orgname>`** (the same name from Step 2), the `users` group and
+   **organisation `<org>`** (the `--organization` from Step 2), the `users` group and
    **your installer user** (from `site.json`'s email), and pushes them into
    Authentik. So **this is where your organisation is actually created** — the
-   earlier `--name` only reserved the name; the org entity is materialised here.
+   earlier `--organization` only reserved the name; the org entity is materialised here.
 
 It's idempotent — safe to re-run if a module needs attention (the people bootstrap
 is skipped once `config/people/` exists, so it never disturbs people you've added).
@@ -681,7 +685,8 @@ Defaults are chosen so the commands above "just work". Override as needed:
 | Branch `stable` | Pass a different branch as the 2nd arg to `install.sh` (e.g. `main`). |
 | Hostnames `tappaas1/2/3` | Set during the Proxmox install; the **first** node must be `tappaas1` (it creates the cluster). |
 | Management subnet `10.0.0.0/24`, gateway/firewall `10.0.0.1` | `config-network.sh --mgmt-ip <CIDR> --gateway <ip>`; firewall LAN lives in `src/foundation/network/firewall-config.xml.template`. |
-| Org / system / cluster name | `install.sh --name <orgname>` (the one name: Proxmox cluster, `site.json`, default environment, organisation; lowercase, ≤15 chars; prompted if omitted). |
+| Site code (cluster name) | `install.sh --name <site-code>` (Proxmox cluster + `site.json` `.name`; lowercase, ≤15 chars; prompted if omitted). |
+| Organisation (default environment) | `install.sh --organization <org>` (default environment/zone + organisation; lowercase; defaults to the site code, no prompt). |
 | Auto cluster create/join | `install.sh --cluster` / `--join` / `--no-cluster`. |
 | Chained first-node install (node→firewall→cutover→sanity→platform) | The entry point `foundation/install.sh` runs all 5 phases on the first node by default; stop earlier with `--skip-firewall` or `--skip-platform`. The node step alone is `cluster/install.sh`. |
 | Gateway cutover (route via firewall) | Done automatically by the bootstrap; manual: `config-network.sh --swap-gateway` (additive — keeps the upstream IP). |
@@ -779,11 +784,11 @@ Run the bootstrap command from Step 2:
 ```bash
 REPO="https://codeberg.org/TAPPaaS/TAPPaaS/raw/branch/"; BRANCH="main"
 curl -fsSL ${REPO}${BRANCH}/src/foundation/install.sh >install.sh
-chmod +x install.sh && ./install.sh "$REPO" "$BRANCH" --name <orgname> --domain "yourdomain.com"
+chmod +x install.sh && ./install.sh "$REPO" "$BRANCH" --name <site-code> --organization <org> --domain "yourdomain.com"
 ```
 
 Even if your SSH drops during network cutover, the install continues inside
-tmux. Reconnect with `tmux attach -t install` to see progress.
+tmux. Reconnect with `tmux attach -t tappaas-install` to see progress.
 
 ### 5. After install
 

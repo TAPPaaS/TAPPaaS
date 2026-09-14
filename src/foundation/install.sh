@@ -165,13 +165,12 @@ if [ "${#SITE_CODE}" -gt 15 ]; then
 fi
 
 # ── Resolve the ORGANIZATION (default env/zone/org; free-form) ──
-# Decoupled from the site code (#426). Defaults to the site code when omitted, so
-# a single-name install still works. Not the cluster name, so no 15-char cap.
+# Decoupled from the site code (#426). Defaults to the site code when omitted —
+# no prompt, since most sites use one name for both. Not the cluster name, so no
+# 15-char cap.
 if [ -z "$ORG" ]; then
-  if [ "$NONINTERACTIVE" = 0 ] && [ -t 0 ]; then
-    read -r -p "Default organization name (names the default environment/zone) [${SITE_CODE}]: " ORG
-  fi
-  [ -n "$ORG" ] || ORG="$SITE_CODE"
+  ORG="$SITE_CODE"
+  msg_ok "Organization: ${ORG} (defaulted to the site code; override with --organization)"
 fi
 if ! printf '%s' "$ORG" | grep -qE '^[a-z][a-z0-9-]*$'; then
   msg_error "organization '${ORG}' invalid — use lowercase letters/digits/hyphen, starting with a letter."
