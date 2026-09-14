@@ -248,8 +248,9 @@ test-module.sh --runtime-only tappaas-cicd   # what the pre-update gate runs
 snapshot-vm.sh <module-name> [--list | --cleanup <N> | --restore <N>]
 ```
 
-No action = create a snapshot. `--list` lists; `--cleanup <N>` keeps the last
-`N`; `--restore <N>` restores `N` steps back (1 = most recent).
+No action = create a snapshot. `--list` lists; `--cleanup <N>` keeps the newest
+`N` `tappaas-*` snapshots (hand-made ones are never pruned) and exits non-zero if
+a delete fails; `--restore <N>` restores `N` steps back (1 = most recent).
 
 ### `copy-update-json.sh` — copy/normalize a module JSON into config
 

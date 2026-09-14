@@ -195,8 +195,10 @@ for node in "${NODES[@]}"; do
                     # SC2086: SSH_OPTS is intentionally word-split.
                     # SC2029: ${volid} expanding client-side is intended — it is
                     # validated against VOLID_RE immediately above.
+                    # -n: the loop reads its list from stdin, which ssh would
+                    # otherwise swallow — only the first volume got freed.
                     # shellcheck disable=SC2086,SC2029
-                    if ssh ${SSH_OPTS} "root@${node}.mgmt.internal" \
+                    if ssh -n ${SSH_OPTS} "root@${node}.mgmt.internal" \
                            "pvesm free ${volid}" >/dev/null 2>&1; then
                         info "  ${GN}✓${CL} freed ${volid} (VM ${vmid} lives on ${owner})"
                         total_freed=$((total_freed + 1))

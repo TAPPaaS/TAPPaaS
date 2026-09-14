@@ -783,6 +783,47 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# Unit: snapshot-vm.sh --cleanup deletes the whole list, and only tappaas-*
+# snapshots (#646). The stubbed ssh reads stdin unless given -n, as the real
+# one does — that is what cut the delete loop short after one iteration.
+# ---------------------------------------------------------------------------
+_sv_tmp="$(mktemp -d)"
+mkdir -p "${_sv_tmp}/bin" "${_sv_tmp}/config"
+echo '{"vmid": 999, "node": "tappaas1", "vmname": "snaptest"}' > "${_sv_tmp}/config/snaptest.json"
+printf '%s\n' tappaas-20260901-010101 manual-before-upgrade tappaas-20260902-010101 \
+    tappaas-20260903-010101 tappaas-20260904-010101 tappaas-20260905-010101 \
+    tappaas-20260906-010101 > "${_sv_tmp}/snaps"
+cat > "${_sv_tmp}/bin/ssh" <<'EOF'
+#!/usr/bin/env bash
+[[ " $* " == *" -n "* ]] || cat > /dev/null
+case "$*" in
+    *"pvesh get /cluster/resources"*) echo '[{"vmid": 999, "type": "qemu"}]' ;;
+    *listsnapshot*) sed 's/^/`-> /' "${SV_SNAPS}"; echo '`-> current' ;;
+    *delsnapshot*) n="${!#}"; n="${n##* }"; n="${n//\'/}"
+                   grep -vxF -e "${n}" "${SV_SNAPS}" > "${SV_SNAPS}.new"
+                   mv "${SV_SNAPS}.new" "${SV_SNAPS}" ;;
+esac
+EOF
+chmod +x "${_sv_tmp}/bin/ssh"
+if SV_SNAPS="${_sv_tmp}/snaps" CONFIG_DIR="${_sv_tmp}/config" PATH="${_sv_tmp}/bin:${PATH}" \
+        bash "$SNAP" snaptest --cleanup 2 > "${_sv_tmp}/out" 2>&1; then
+    _sv_left="$(tr '\n' ' ' < "${_sv_tmp}/snaps")"
+    if [[ "${_sv_left}" == "manual-before-upgrade tappaas-20260905-010101 tappaas-20260906-010101 " ]]; then
+        ok "snapshot-vm.sh --cleanup 2 keeps the newest 2 tappaas snapshots and the manual one"
+    else
+        bad "snapshot-vm.sh --cleanup 2 left: ${_sv_left}(#646)"
+    fi
+    if grep -q '4 snapshot(s) removed' "${_sv_tmp}/out"; then
+        ok "snapshot-vm.sh --cleanup reports the deletions it made"
+    else
+        bad "snapshot-vm.sh --cleanup summary does not match the deletions (#646)"
+    fi
+else
+    bad "snapshot-vm.sh --cleanup failed against the stubbed node: $(tail -1 "${_sv_tmp}/out")"
+fi
+rm -rf "${_sv_tmp}"
+
+# ---------------------------------------------------------------------------
 # Unit: ADR-014 P7 / #419 — zone-reference resolution and the pre-flight gate.
 # Both helpers live in lib/common-install-routines.sh; extract and run them in
 # isolation with stubbed logging, exactly as resolve_default_zone is tested above.

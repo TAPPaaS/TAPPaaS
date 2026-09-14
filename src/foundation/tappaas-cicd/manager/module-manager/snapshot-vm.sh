@@ -12,7 +12,8 @@
 # Options:
 #   (none)          Create a new snapshot
 #   --list          List all snapshots on the VM
-#   --cleanup <N>   Delete all snapshots except the last N
+#   --cleanup <N>   Delete all tappaas-* snapshots except the newest N
+#                   (snapshots made by hand are never touched)
 #   --restore <N>   Restore snapshot N steps back in history (1 = most recent)
 #
 # Examples:
@@ -54,7 +55,8 @@ Usage: snapshot-vm.sh <module-name> [--list | --cleanup <N> | --restore <N>]
 Options:
     (none)          Create a new snapshot
     --list          List all snapshots on the VM
-    --cleanup <N>   Delete all snapshots except the last N
+    --cleanup <N>   Delete all tappaas-* snapshots except the newest N
+                    (snapshots made by hand are never touched)
     --restore <N>   Restore snapshot N steps back in history (1 = most recent)
     -h, --help      Show this help message
 EOF
@@ -101,7 +103,7 @@ fi
 NODE_FQDN="${NODE}.${MGMT}.internal"
 
 # Detect whether VMID is a QEMU VM or LXC container
-VM_TYPE=$(ssh -o ConnectTimeout=5 -o BatchMode=yes -o LogLevel=ERROR root@"${NODE_FQDN}" \
+VM_TYPE=$(ssh -n -o ConnectTimeout=5 -o BatchMode=yes -o LogLevel=ERROR root@"${NODE_FQDN}" \
     "pvesh get /cluster/resources --type vm --output-format json" 2>/dev/null \
     | jq -r --argjson id "${VMID}" \
         '.[] | select(.vmid == $id) | .type // empty' 2>/dev/null || true)
@@ -152,12 +154,19 @@ get_snapshot_names() {
     # qm/pct listsnapshot outputs lines like:
     #   `-> snapname   date   description
     # Filter out "current" which is not a real snapshot
-    ssh root@"${NODE_FQDN}" "${CMD} listsnapshot ${VMID}" 2>/dev/null \
+    ssh -n root@"${NODE_FQDN}" "${CMD} listsnapshot ${VMID}" 2>/dev/null \
         | grep -v '^\s*$' \
         | sed 's/^[[:space:]`|>+\-]*//g' \
         | awk '{print $1}' \
         | grep -v '^current$' \
         | grep -v '^$'
+}
+
+# The snapshots this script creates, oldest first. Their names embed the
+# timestamp, so a name sort is chronological — listsnapshot's tree order is not
+# once a restore further back than the newest has branched the tree.
+get_tappaas_snapshot_names() {
+    get_snapshot_names | grep -E '^tappaas-[0-9]{8}-[0-9]{6}$' | sort || true
 }
 
 # ── Actions ──────────────────────────────────────────────────────────
@@ -176,7 +185,7 @@ case "${ACTION}" in
         SNAP_NAME="tappaas-$(date +'%Y%m%d-%H%M%S')"
         SNAP_DESC="TAPPaaS snapshot for ${MODULE}"
         info "  Creating snapshot: ${BL}${SNAP_NAME}${CL}"
-        ssh root@"${NODE_FQDN}" "${CMD} snapshot ${VMID} '${SNAP_NAME}' --description '${SNAP_DESC}'" \
+        ssh -n root@"${NODE_FQDN}" "${CMD} snapshot ${VMID} '${SNAP_NAME}' --description '${SNAP_DESC}'" \
             || die "Failed to create snapshot"
         info "${GN}Snapshot '${SNAP_NAME}' created successfully${CL}"
         ;;
@@ -184,33 +193,43 @@ case "${ACTION}" in
     list)
         info "  Snapshots for VM ${VMNAME} (${VMID}):"
         echo ""
-        ssh root@"${NODE_FQDN}" "${CMD} listsnapshot ${VMID}" 2>/dev/null || die "Failed to list snapshots"
+        ssh -n root@"${NODE_FQDN}" "${CMD} listsnapshot ${VMID}" 2>/dev/null || die "Failed to list snapshots"
         echo ""
         ;;
 
     cleanup)
         KEEP="${ACTION_ARG}"
-        SNAPSHOTS=$(get_snapshot_names)
+        SNAPSHOTS=$(get_tappaas_snapshot_names)
         SNAP_COUNT=$(echo "${SNAPSHOTS}" | grep -c . || true)
 
         if [[ "${SNAP_COUNT}" -le "${KEEP}" ]]; then
-            info "  ${SNAP_COUNT} snapshot(s) found, keeping ${KEEP} — nothing to delete"
+            info "  ${SNAP_COUNT} tappaas snapshot(s) found, keeping ${KEEP} — nothing to delete"
             exit 0
         fi
 
         DELETE_COUNT=$((SNAP_COUNT - KEEP))
-        # Delete oldest snapshots (top of list = oldest)
         TO_DELETE=$(echo "${SNAPSHOTS}" | head -n "${DELETE_COUNT}")
 
-        info "  Found ${SNAP_COUNT} snapshots, keeping last ${KEEP}, deleting ${DELETE_COUNT}"
+        info "  Found ${SNAP_COUNT} tappaas snapshots, keeping last ${KEEP}, deleting ${DELETE_COUNT}"
+        # ssh -n: without it ssh reads the loop's stdin and swallows the rest of
+        # the list, so only the first snapshot was ever deleted (#646).
+        deleted=0
+        failed=0
         while IFS= read -r snap; do
             [[ -z "${snap}" ]] && continue
             info "  Deleting snapshot: ${BL}${snap}${CL}"
-            ssh root@"${NODE_FQDN}" "${CMD} delsnapshot ${VMID} '${snap}'" \
-                || warn "Failed to delete snapshot '${snap}'"
+            if ssh -n root@"${NODE_FQDN}" "${CMD} delsnapshot ${VMID} '${snap}'"; then
+                deleted=$((deleted + 1))
+            else
+                warn "Failed to delete snapshot '${snap}'"
+                failed=$((failed + 1))
+            fi
         done <<< "${TO_DELETE}"
 
-        info "${GN}Cleanup completed — ${DELETE_COUNT} snapshot(s) removed${CL}"
+        if [[ "${failed}" -gt 0 ]]; then
+            die "Cleanup incomplete — ${deleted} snapshot(s) removed, ${failed} failed"
+        fi
+        info "${GN}Cleanup completed — ${deleted} snapshot(s) removed${CL}"
         ;;
 
     restore)
@@ -262,7 +281,7 @@ case "${ACTION}" in
             || die "Failed to stop VM ${VMID} — NOT rolling back to '${TARGET}' (a rollback over a running VM fails or corrupts the disk)"
 
         info "  Rolling back to snapshot: ${BL}${TARGET}${CL}"
-        ssh root@"${NODE_FQDN}" "${CMD} rollback ${VMID} '${TARGET}'" \
+        ssh -n root@"${NODE_FQDN}" "${CMD} rollback ${VMID} '${TARGET}'" \
             || die "Failed to rollback to snapshot '${TARGET}'"
 
         info "  Starting VM ${VMID}..."
@@ -283,7 +302,7 @@ case "${ACTION}" in
         # LXC fall back to a fixed grace period.
         agent_on=0
         if [[ "${CMD}" == "qm" ]] \
-           && ssh root@"${NODE_FQDN}" "qm config ${VMID}" 2>/dev/null \
+           && ssh -n root@"${NODE_FQDN}" "qm config ${VMID}" 2>/dev/null \
                 | grep -q '^agent:.*1'; then
             agent_on=1
         fi
@@ -292,7 +311,7 @@ case "${ACTION}" in
             waited=0
             up=0
             while [[ "${waited}" -lt "${READY_TIMEOUT}" ]]; do
-                if ssh root@"${NODE_FQDN}" "qm guest cmd ${VMID} ping" >/dev/null 2>&1; then
+                if ssh -n root@"${NODE_FQDN}" "qm guest cmd ${VMID} ping" >/dev/null 2>&1; then
                     up=1
                     break
                 fi

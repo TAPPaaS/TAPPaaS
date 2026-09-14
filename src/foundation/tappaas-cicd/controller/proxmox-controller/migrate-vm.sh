@@ -379,8 +379,9 @@ restore_ha() {
 
             info "  Restoring HA rule: ${rname} (${rtype}${rnodes:+, nodes: ${rnodes}}${rstrict:+, strict=${rstrict}})"
             # printf %q so a comment with spaces/quotes survives the remote shell
-            # intact — the WAN-pin comment is a sentence, not a token.
-            ssh root@"${node}.${MGMT}.internal" \
+            # intact — the WAN-pin comment is a sentence, not a token. ssh -n, or
+            # it reads the loop's stdin and only the first rule is restored.
+            ssh -n root@"${node}.${MGMT}.internal" \
                 "pvesh create /cluster/ha/rules $(printf '%q ' "${args[@]}")" 2>/dev/null || {
                 warn "Could not restore HA rule '${rname}' — please recreate manually"
             }

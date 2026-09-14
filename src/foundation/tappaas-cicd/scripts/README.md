@@ -948,7 +948,7 @@ snapshot-vm.sh <module-name> [--list | --cleanup <N> | --restore <N>]
 |-----------|-------------|---------|
 | `module-name` | Name of the module (must have config in ~/config) | `vaultwarden` |
 | `--list` | List all snapshots on the VM | |
-| `--cleanup <N>` | Delete all snapshots except the last N | `--cleanup 3` |
+| `--cleanup <N>` | Delete all `tappaas-*` snapshots except the newest N (hand-made snapshots are kept) | `--cleanup 3` |
 | `--restore <N>` | Restore snapshot N steps back (1 = most recent) | `--restore 1` |
 
 **Example:**
