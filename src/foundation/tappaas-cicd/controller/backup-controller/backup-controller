@@ -29,6 +29,12 @@
 #                           daily at that time. Nothing more often than daily.
 #   help
 #
+# Global options, before the command:
+#   --pbs <host>            The PBS for datastore operations (list, verify,
+#                           namespaces), e.g. a satellite (ADR-012 P7). Cluster
+#                           backup jobs and the key escrow are always local.
+#   --json                  As --json after job-status / list / namespaces.
+#
 # The mutation verbs (add-to-job / apply-schedule) are how backup-manager's
 # `reconcile` pushes the RESOLVED cascade into PBS: the manager resolves the
 # Site->Environment->Module policy and calls these; the controller owns the PBS
@@ -115,11 +121,10 @@ JSON_OUT=0
 # Strip --json (and ADR-012 P7 --pbs <host>) from "$@", set JSON_OUT /
 # PBS_ENDPOINT, and store the remaining args in the global REST array. Must run
 # in the CURRENT shell so the globals propagate — callers do: parse_args "$@".
+# Values main() lifted from before the verb are kept.
 REST=()
 PBS_ENDPOINT=""
 parse_args() {
-    JSON_OUT=0
-    PBS_ENDPOINT=""
     REST=()
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -435,6 +440,18 @@ selftest() {
 }
 
 main() {
+    # Global options before the verb (ADR-012 P7): backup-manager's CliClient
+    # calls `backup-controller --pbs <host> <verb> …`.
+    while [[ "${1:-}" == "--pbs" || "${1:-}" == "--json" ]]; do
+        if [[ "$1" == "--json" ]]; then
+            JSON_OUT=1
+            shift
+        else
+            [[ -n "${2:-}" && "${2}" != -* ]] || { error "--pbs requires a host"; return 2; }
+            PBS_ENDPOINT="$2"
+            shift 2
+        fi
+    done
     local cmd="${1:-help}"
     cli_gate usage "${CLI_SPEC}" "$@"
     [[ $# -gt 0 ]] && shift || true

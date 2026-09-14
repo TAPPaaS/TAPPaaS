@@ -88,6 +88,24 @@ if CONFIG_DIR="${FIX}" run_offline list nope >/dev/null 2>&1; then
 else
     ok "list of missing module reports error"
 fi
+
+# ADR-012 P7: backup-manager's CliClient puts `--pbs <host>` BEFORE the verb.
+# Each call shape it emits must parse (it used to fail "Unknown command: --pbs").
+for _args in "job-status --json" "list foo --json" "add-to-job 321 --bucket weekly" "apply-schedule daily" "key list"; do
+    # shellcheck disable=SC2086  # word-split on purpose
+    _out="$(TAPPAAS_KEY_ESCROW="${FIX}" CONFIG_DIR="${FIX}" run_offline --pbs sat1 ${_args} 2>&1)" && _rc=0 || _rc=$?
+    if [[ ${_rc} -eq 0 ]] && ! grep -q 'Unknown command' <<<"${_out}"; then
+        ok "--pbs <host> ${_args} parses (client call shape)"
+    else
+        bad "--pbs <host> ${_args} failed (rc ${_rc}): ${_out##*$'\n'}"
+    fi
+done
+if run_offline --pbs sat1 job-status --json 2>/dev/null | jq -e '.reachable == false' >/dev/null; then
+    ok "--pbs before the verb keeps --json structured output"
+else
+    bad "--pbs before the verb lost the JSON offline marker"
+fi
+if run_offline --pbs >/dev/null 2>&1; then bad "--pbs without a host accepted"; else ok "--pbs without a host is refused"; fi
 rm -rf "${FIX}"
 
 
