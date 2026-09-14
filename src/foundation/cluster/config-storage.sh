@@ -225,7 +225,9 @@ release_holders() {
   if command -v pvs >/dev/null 2>&1; then
     local -A seen=()
     for n in "${nodes[@]}"; do
-      vg="$(pvs --noheadings -o vg_name "/dev/$n" 2>/dev/null | tr -d '[:space:]')"
+      # pvs exits non-zero for a node that is not a PV (the common case); under
+      # `set -e` + pipefail that would silently abort the whole script.
+      vg="$(pvs --noheadings -o vg_name "/dev/$n" 2>/dev/null | tr -d '[:space:]' || true)"
       [[ -n "$vg" && -z "${seen[$vg]:-}" ]] || continue
       seen[$vg]=1
       warn "    releasing LVM volume group '${vg}' (PV on /dev/${n}) before wipe"
