@@ -24,7 +24,7 @@
 
 import { defaultConfigDir, defaultSchemaDir, loadRaw, loadSite, writeSite } from "./config";
 import { CliSiteClient } from "./client";
-import { HelpSpec, renderHelp } from "../../../lib/ts/src/help";
+import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
 import { evacuateNode, evacuateExitCode } from "./evacuate";
 import { DieError, GN, RD, YW, CL, die, guarded, info, preflightGuard, warn } from "../../../lib/ts/src/cli";
 import { applyPlan, computePlan } from "./reconcile";
@@ -35,18 +35,48 @@ import { existsSync } from "fs";
 
 const VERSION = "0.1.0";
 
-const HELP: HelpSpec = {
+export const HELP: HelpSpec = {
   name: "site-manager",
   version: VERSION,
   tagline: "TAPPaaS Site manager (ADR-007 P2)",
   verbs: [
     { usage: "site show [--json]" },
-    { usage: "site modify --<field> <value> [...]" },
+    {
+      usage: "site modify <field options>",
+      name: "site modify (fields; at least one)",
+      options: [
+        ["--displayName <s>", "display name"],
+        ["--owner <org>", "owning organization"],
+        ["--email <addr>", "admin email"],
+        ["--automaticReboot true|false", "allow update reboots"],
+        ["--snapshotRetention <n>", "VM snapshots kept per module"],
+        ["--backupTarget <s>", "backup.target"],
+        ["--backupOffsite <s>", "backup.offsite"],
+        ["--backupDefaultSchedule <s>", "backup.defaultSchedule: daily | weekly | monthly | HH:MM"],
+        ["--backupDefaultRetention <s>", "backup.defaultRetention, e.g. 90d"],
+        ["--locationCountry <cc>", "location.country"],
+        ["--locationTimezone <tz>", "location.timezone"],
+        ["--locationLocale <l>", "location.locale"],
+        ["--networkIsp <s>", "network.isp"],
+        ["--networkPublicIp <ip>", "network.publicIp (or auto)"],
+        ["--updateFrequency <f>", "daily | weekly | monthly | none"],
+        ["--updateWeekday <Day>", "Monday … Sunday (weekly/monthly only)"],
+        ["--updateHour <0-23>", "hour of the update window"],
+      ],
+    },
     { usage: "node list [--json]" },
-    { usage: "node add <N> [--pxe] [--boot-disk <d>] [--mac <m>] [--wan-port <if>|--no-wan] [--pool <p>] [--ttl <s>] [--config-only]",
+    { usage: "node add <N> [--pxe] [--boot-disk <d>] [--mac <m>] [--wan-port <if>|--no-wan] [--pool <p>] [--ttl <s>] [--config-only] [--yes]",
+      hidden: ["--name <N>", "--provision"],
       options: [
         ["(default)", "Adopt a Proxmox already installed at the node's designated mgmt IP: join the cluster + capture."],
         ["--pxe", "Bare machine: PXE-install first, then join + capture. Omit --boot-disk to be asked on the NODE console; WAN port + pools are asked here."],
+        ["--boot-disk <d>", "--pxe: the disk to install Proxmox on."],
+        ["--mac <m>", "--pxe: the NIC that PXE-boots."],
+        ["--wan-port <if>", "the node's WAN interface."],
+        ["--no-wan", "the node has no WAN port."],
+        ["--pool <p>", "a storage pool on the node (more pools: extra positionals)."],
+        ["--ttl <s>", "--pxe: seconds the PXE offer stays open (default 7200)."],
+        ["--yes", "do not ask for confirmation."],
         ["--config-only", "Only write the site.json entry (no machine contact)."],
       ] },
     { usage: "node delete <name>" },
@@ -58,7 +88,12 @@ const HELP: HelpSpec = {
     { usage: "node reconcile [--apply]",
       options: [["--apply", "Register nodes that joined the cluster (default is preview)."]] },
     { usage: "repository list [--json]", note: "(alias: repo)" },
-    { usage: "repository add <url> [--branch <b>] [--managed full|tracked] [--catalog <p>]" },
+    { usage: "repository add <url> [--branch <b>] [--managed full|tracked] [--catalog <p>]",
+      options: [
+        ["--branch <b>", "Branch to check out (default stable)."],
+        ["--managed full|tracked", "full: update-tappaas updates it; tracked: only listed."],
+        ["--catalog <p>", "Path of the module catalog inside the repository."],
+      ] },
     { usage: "repository modify <name> [--url <u>] [--branch <b>]",
       options: [["--url <u>", "Re-point the repo at a new forge/URL in place (e.g. github.com→codeberg.org)."],
                 ["--branch <b>", "Switch the checked-out branch."]] },
@@ -70,8 +105,24 @@ const HELP: HelpSpec = {
       options: [["--force", "Forward to repository.sh remove --force."]] },
     { usage: "repository reconcile [--apply]",
       options: [["--apply", "Commit (default is preview)."]] },
-    { usage: "add --name <site-code> [--organization <org>] [create-site options]" },
-    { usage: "validate [FILE] [--schema-dir PATH]" },
+    { usage: "add --name <site-code> [--organization <org>] [create-site options]",
+      name: "add (create config/site.json from the running cluster — create-site.sh)",
+      hidden: ["--org <org>"],
+      options: [
+        ["--name <N>", "REQUIRED. Site code = the Proxmox cluster name."],
+        ["--organization <org>", "Default organization/environment/zone (default: --name)."],
+        ["--domain <d>", "Public domain (per environment; not written to site.json)."],
+        ["--branch <b>", "Git branch to track (default: stable)."],
+        ["--upstream-git <url>", "Module-catalog git repo (default: codeberg.org/TAPPaaS/TAPPaaS)."],
+        ["--email <addr>", "Admin email (default: Proxmox root@pam / existing)."],
+        ["--primary-node <fqdn>", "Node to discover the cluster from (default: tappaas1)."],
+        ["--schedule <f>", "Update frequency: monthly|weekly|daily|none (default: weekly)."],
+        ["--weekday <Day>", "Weekday for updates (default: Tuesday)."],
+        ["--hour <H>", "Hour of day 0-23 (default: 2)."],
+        ["--force", "Overwrite an existing site.json."],
+      ] },
+    { usage: "validate [FILE] [--schema-dir PATH]",
+      options: [["--schema-dir PATH", "Directory holding site-fields.json (default: derived)."]] },
     { usage: "reconcile [--apply] [--deep]",
       options: [
         ["--apply", "Commit (default is preview)."],
@@ -98,12 +149,6 @@ const HELP: HelpSpec = {
     "Owns config/site.json (the Site singleton). add (create-site.sh), repository\n" +
       "add/modify/delete (repository.sh) are thin delegations to the still-live bash\n" +
       "tools; validate wraps validate-site.sh. TS owns config CRUD + validate + reconcile.",
-    "site modify fields:\n" +
-      "  --displayName --owner --email --automaticReboot --snapshotRetention\n" +
-      "  --backupTarget --backupOffsite --backupDefaultSchedule --backupDefaultRetention\n" +
-      "  --locationCountry --locationTimezone --locationLocale\n" +
-      "  --networkIsp --networkPublicIp\n" +
-      "  --updateFrequency <daily|weekly|monthly|none> --updateWeekday <Day> --updateHour <0-23>",
   ],
 };
 
@@ -764,12 +809,17 @@ function cmdAdd(args: string[], client: SiteClient): void {
 
 // ── dispatch ───────────────────────────────────────────────────────────
 export function run(argv: string[], client: SiteClient): number {
-  if (argv.length === 0 || argv[0] === "-h" || argv[0] === "--help") {
+  if (argv.length === 0) {
     usage();
     return 0;
   }
-  const cmd = argv[0];
-  const o = parseOpts(argv.slice(1));
+  const args = argv[0] === "repo" ? ["repository", ...argv.slice(1)] : argv;
+  // #644: --help in any position prints help and runs nothing (`update --help`
+  // used to start the sweep); an option the verb does not take is refused.
+  const gate = checkArgs(HELP, args);
+  if (gate !== undefined) return gate;
+  const cmd = args[0];
+  const o = parseOpts(args.slice(1));
 
   return guarded(() => {
     preflightGuard(); // #533: refuse root; self-heal config/repo ownership
@@ -781,12 +831,11 @@ export function run(argv: string[], client: SiteClient): number {
         cmdNode(o, client);
         return 0;
       case "repository":
-      case "repo":
         cmdRepository(o, client);
         return 0;
       case "add":
         // create-site.sh has its own flag set — forward raw args, not parsed.
-        cmdAdd(argv.slice(1), client);
+        cmdAdd(args.slice(1), client);
         return 0;
       case "evacuate":
         return cmdEvacuate(o, client);

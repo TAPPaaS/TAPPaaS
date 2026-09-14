@@ -46,7 +46,7 @@ import {
   writePeerConfig,
 } from "./peers";
 import { validate } from "./validate";
-import { HelpSpec, renderHelp } from "../../../lib/ts/src/help";
+import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
 import { existsSync } from "fs";
 import { stream } from "../../../lib/ts/src/exec";
 import { GN, CL, die, guarded, info, warn } from "../../../lib/ts/src/cli";
@@ -54,7 +54,7 @@ import { BackupPolicyStatus, Client, JobStatus, ScheduleBucket } from "./types";
 
 const VERSION = "0.1.0";
 
-const HELP: HelpSpec = {
+export const HELP: HelpSpec = {
   name: "backup-manager",
   version: VERSION,
   tagline: "TAPPaaS backup-policy cascade manager",
@@ -88,11 +88,22 @@ const HELP: HelpSpec = {
       options: [["--apply", "reconcile: commit changes (default = preview)."]],
     },
     { usage: "restore list <module>", name: "restore list" },
-    { usage: "restore restore <module> [opts...]", name: "restore restore" },
+    {
+      usage: "restore restore <module> [--node N] [--storage S] [--backup-id ID] [--target-vmid ID]",
+      name: "restore restore",
+      hidden: ["-n N", "-s S", "-b ID", "-t ID"],
+      options: [
+        ["--node N", "Restore onto this node (default: the module's node)."],
+        ["--storage S", "Target storage pool."],
+        ["--backup-id ID", "The snapshot to restore (default: the latest; see 'restore list')."],
+        ["--target-vmid ID", "Restore as a new VM id instead of over the module's own."],
+      ],
+    },
     { usage: "restore list-all", name: "restore list-all" },
     { usage: "placement", name: "placement", note: "(where PBS lives for this site)" },
     {
       usage: "key list|export <dest>|import <src>",
+      verb: "key",
       name: "key",
       note: "(the backup encryption keys, and the copy you keep off the machine)",
     },
@@ -118,6 +129,7 @@ const HELP: HelpSpec = {
       name: "peer delete",
       options: [
         ["--purge", "peer delete: also delete the data in the peer's namespace."],
+        ["--config-only", "peer delete: remove the config only (no PBS contact)."],
       ],
     },
   ],
@@ -146,8 +158,8 @@ const HELP: HelpSpec = {
               schedules. Previews by default; --apply commits.
   restore     Recover a module — 'restore list <module>' shows its snapshots,
               'restore restore <module>' restores it, 'restore list-all' shows
-              everything stored. Options after the module name are passed through
-              (--node, --storage, --target-vmid).
+              everything stored. Options after the module name are passed to
+              restore.sh (--node, --storage, --backup-id, --target-vmid).
   placement   Where this site's PBS lives, and whether a datastore is realized at
               all. A 'shim' means modules install but nothing is being backed up yet.
   peers       Off-site relationships: PBS instances this site pulls from, receives
@@ -754,10 +766,15 @@ function cmdDelete(opts: Opts): void {
 }
 
 export function run(argv: string[], client: Client): number {
-  if (argv.length === 0 || argv[0] === "-h" || argv[0] === "--help") {
+  if (argv.length === 0) {
     usage();
     return 0;
   }
+  // #644: --help in any position prints that verb's help and runs nothing
+  // (`key export <dest> --help` used to write the keys); an option the verb
+  // does not take is refused.
+  const gate = checkArgs(HELP, argv);
+  if (gate !== undefined) return gate;
   const cmd = argv[0];
   const opts = parseOpts(argv.slice(1));
 

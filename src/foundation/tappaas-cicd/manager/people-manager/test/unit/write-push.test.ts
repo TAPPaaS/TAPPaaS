@@ -10,7 +10,8 @@
 import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
-import { run } from "../../src/main";
+import { HELP, run } from "../../src/main";
+import { undocumentedOptions } from "../../../../lib/ts/src/help";
 import { FakeClient } from "./fake-client";
 
 let passed = 0;
@@ -170,6 +171,45 @@ function quiet<T>(fn: () => T): T {
     existsSync(join(d, "users", "erin.json")),
     "a failing push leaves the written config in place — re-run reconcile, do not redo the edit",
   );
+}
+
+// ── #644: --help runs nothing; an option the verb does not take is refused ──
+// `user delete ann --help` used to delete ann and push the removal.
+{
+  const d = seed();
+  const call = (argv: string[]): { rc: number; out: string; err: string; log: number } => {
+    const log = console.log;
+    const error = console.error;
+    let out = "";
+    let err = "";
+    console.log = (...a: unknown[]): void => {
+      out += a.map(String).join(" ") + "\n";
+    };
+    console.error = (...a: unknown[]): void => {
+      err += a.map(String).join(" ") + "\n";
+    };
+    const c = new FakeClient();
+    try {
+      const rc = run([...argv, "--config-dir", d], c);
+      return { rc, out, err, log: c.log.length };
+    } finally {
+      console.log = log;
+      console.error = error;
+    }
+  };
+  for (const argv of [["user", "delete", "ann", "--help"], ["reconcile", "--apply", "-h"], ["group", "modify", "acme__users", "--roles", "admin", "--help"]]) {
+    const r = call(argv);
+    check(r.rc === 0 && r.out.includes("Usage:") && r.log === 0 && existsSync(join(d, "users", "ann.json")),
+      `${argv.join(" ")}: help, rc 0, nothing written or pushed`);
+  }
+  check(call(["user", "add", "x", "--help"]).out.includes("--add-groups"), "user add --help lists the field flags");
+  for (const argv of [["user", "delete", "ann", "--purge"], ["reconcile", "--aplly"], ["org", "list", "--force"]]) {
+    const r = call(argv);
+    check(r.rc === 1 && r.err.includes("unknown option") && r.log === 0 && existsSync(join(d, "users", "ann.json")),
+      `${argv.join(" ")}: refused, nothing written or pushed`);
+  }
+  check(call(["user", "modify", "ann", "--colour", "red"]).rc === 1, "a field flag the kind lacks is still refused (entity layer)");
+  check(undocumentedOptions(HELP).length === 0, `every usage option is described (${undocumentedOptions(HELP).join(", ")})`);
 }
 
 console.log("");

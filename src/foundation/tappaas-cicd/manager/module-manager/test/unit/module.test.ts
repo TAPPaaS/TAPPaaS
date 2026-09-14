@@ -28,7 +28,8 @@ import {
 } from "../../src/validate";
 import { AddOptions, DeleteOptions, ModuleConfig, ValidateFinding, ValidateReport } from "../../src/types";
 import { FakeModuleClient } from "./fake-client";
-import { run } from "../../src/main";
+import { HELP, run } from "../../src/main";
+import { undocumentedOptions } from "../../../../lib/ts/src/help";
 
 let passed = 0;
 let failed = 0;
@@ -831,6 +832,40 @@ function captureList(client: FakeModuleClient, extraArgs: string[] = []): string
       "modify --help renders modify's options (not add's)",
     );
   }
+
+  // #644: an option the verb does not take is refused before anything runs —
+  // `delete --dry-run` is not a dry run, it is a typo for a real delete.
+  const captureErr = (argv: string[]): { rc: number; err: string; log: number } => {
+    const real = console.error;
+    let err = "";
+    console.error = (...a: unknown[]): void => {
+      err += a.map(String).join(" ") + "\n";
+    };
+    try {
+      const r = captureRun(argv);
+      return { rc: r.rc, err, log: r.log };
+    } finally {
+      console.error = real;
+    }
+  };
+  for (const argv of [
+    ["delete", "nextcloud", "--dry-run"],
+    ["modify", "nextcloud", "--reinstall"],
+    ["reconcile", "nextcloud", "--aply"],
+    ["module", "test", "nextcloud", "--vmid=399"],
+  ]) {
+    const r = captureErr(argv);
+    check(r.rc === 1 && r.log === 0 && r.err.includes("unknown option"), `${argv.join(" ")}: refused, no write`);
+  }
+  {
+    const r = captureErr(["delete", "nextcloud", "-y", "--variant", "home", "--archive"]);
+    check(!r.err.includes("unknown option"), "delete -y / --variant: legacy spellings still pass the gate");
+  }
+  {
+    const r = captureErr(["add", "litellm", "--memory", "8192", "--zone0", "srvDev"]);
+    check(!r.err.includes("unknown option"), "add --<field> <value>: field overrides still pass through");
+  }
+  check(undocumentedOptions(HELP).length === 0, `every usage option is described (${undocumentedOptions(HELP).join(", ")})`);
 }
 
 console.log("");

@@ -33,7 +33,7 @@ import {
   listModules,
   loadModule,
 } from "./config";
-import { HelpSpec, renderHelp, renderVerbHelp } from "../../../lib/ts/src/help";
+import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
 import { CL, GN, RD, YW, die, guarded, info, preflightGuard, warn } from "../../../lib/ts/src/cli";
 import {
   AddOptions,
@@ -53,7 +53,7 @@ import { validateModules } from "./validate";
 
 const VERSION = "0.1.0";
 
-const HELP: HelpSpec = {
+export const HELP: HelpSpec = {
   name: "module-manager",
   version: VERSION,
   tagline: "TAPPaaS module lifecycle manager (ADR-007 #3)",
@@ -99,7 +99,7 @@ const HELP: HelpSpec = {
         ["--allow-fork", "Permit forked/non-canonical module sources."],
         ["--force", "Proceed despite warnings / overwrite an existing deployment."],
         ["--reinstall", "Reinstall even if the module is already deployed."],
-        ["--<field> <value>", "Override any config field, passed through to install-module.sh."],
+        ["--<field> <value>", "Override any config field, passed through to install-module.sh, which checks the name against module-fields.json."],
       ],
     },
     {
@@ -123,6 +123,7 @@ const HELP: HelpSpec = {
     {
       usage: "delete <module> [--archive|--remove] [--vmid ID] [--environment ENV] [--yes] [--force]",
       name: "delete",
+      hidden: ["-y"],
       options: [
         ["--archive", "Archive the module config (default; mutually exclusive with --remove)."],
         ["--remove", "Fully remove the module config (mutually exclusive with --archive)."],
@@ -149,6 +150,8 @@ const HELP: HelpSpec = {
         ["--environment ENV", "Target environment to reconcile."],
         ["--no-snapshot", "Skip any pre-change VM snapshot (--apply; leaf re-apply is idempotent)."],
         ["--no-services", "INSPECT only: skip the dependency-service drift check (declared firewall/NAT/discovery state), which is ON by default."],
+        ["--debug", "--apply: verbose diagnostic output."],
+        ["--silent", "--apply: suppress non-essential output."],
       ],
     },
     {
@@ -174,6 +177,7 @@ const HELP: HelpSpec = {
     ["--config-dir DIR", "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."],
     ["--json", "Machine-readable output (list / show / validate)."],
   ],
+  hidden: ["--variant <env>"], // deprecated spelling of --environment (ADR-007 P5)
   notes: [
     "The 'module' entity keyword is OPTIONAL (module is the only entity), so both\n" +
       "'module-manager list' and 'module-manager module list' work.",
@@ -919,17 +923,11 @@ export function run(argv: string[], client: ModuleClient): number {
     return 0;
   }
   const verb = rest[0];
-  // #534: a help request must NEVER mutate state, and must be honoured in ANY
-  // flag position. The argv[0] check above only catches a LEADING flag; placed
-  // after a verb (`modify <module> --help`) the flag used to fall through to
-  // parseOpts, which drops -h/--help into passthrough (or a positional for -h),
-  // and the verb then ran as a real write. Intercept it here — BEFORE
-  // preflightGuard and dispatch — and print that verb's usage. A bare help
-  // token (e.g. `module --help`) falls back to the full help via renderVerbHelp.
-  if (rest.some((a) => a === "-h" || a === "--help")) {
-    info(renderVerbHelp(HELP, verb));
-    return 0;
-  }
+  // #534/#644: a help request must NEVER mutate state, and must be honoured in
+  // ANY flag position; an option the verb does not take is refused. Both
+  // BEFORE preflightGuard and dispatch.
+  const gate = checkArgs(HELP, rest);
+  if (gate !== undefined) return gate;
   // guarded() maps THROWN errors the standard way (DieError → 1, already
   // printed; any other Error → a clean `[Error] <msg>` + 1). Child exit codes
   // are RETURNED by dispatch(), not thrown, so they propagate unchanged.

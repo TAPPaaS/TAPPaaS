@@ -31,7 +31,7 @@ The managers stay **zero-npm-dependency**: there is no package here, no
 |---|---|
 | `env.d.ts` | Ambient Node declarations (union of what all managers use) — the zero-`@types/node` trick. `spawnSync` stdout/stderr are truthfully `string \| null`; use `exec.ts` helpers rather than reading them raw. |
 | `cli.ts` | ANSI colors, `info`/`warn`/`die`/`DieError`, and `guarded()` — the standard `run()` catch: `DieError` → 1, other `Error` → clean `[Error]` line + 1. |
-| `help.ts` | The shared `HelpSpec`/`renderHelp` --help renderer (moved verbatim from the vendored copies). |
+| `help.ts` | The shared `HelpSpec`/`renderHelp` --help renderer, and `checkArgs()`, the argument gate every manager's `run()` calls first: `-h`/`--help` in any position prints that verb's help and runs nothing; an option the verb does not declare is refused (#644). A verb accepts what its usage line, `options`, `hidden` and the common options name — so every accepted option is documented. `undocumentedOptions()` lets a manager's tests assert each usage option is described. |
 | `config-io.ts` | `defaultConfigDir()` (the canonical `TAPPAAS_CONFIG ?? CONFIG_DIR ?? /home/tappaas/config` rule), `asString`/`asStringArray`, `readJsonObject` (absent → null; malformed → throws naming the file), `writeJsonAtomic`. |
 | `exec.ts` | `spawnSync` plumbing: `configEnv()`, `capture` (throw on failure, unified message), `captureResult` (rc/stdout/stderr, no throw), `stream` (stdio inherit). |
 

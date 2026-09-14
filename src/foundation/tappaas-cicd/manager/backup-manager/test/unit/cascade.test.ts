@@ -32,6 +32,8 @@ import {
 } from "../../src/peers";
 import { addToBackupJob, modifyBackup, removeFromBackupJob } from "../../src/modify";
 import { FakeClient } from "./fake-client";
+import { HELP, run } from "../../src/main";
+import { undocumentedOptions } from "../../../../lib/ts/src/help";
 
 // Fixtures are JSON in the SOURCE tree (test/fixtures/config), not compiled.
 // The compiled test runs from dist-test/manager/backup-manager/test/unit/
@@ -654,6 +656,47 @@ check(!retentionValid("7") && !retentionValid("7x") && !retentionValid(""), "inv
   eq(peers.find((p) => p.role === "receive")?.name ?? "", "nas", "peer name stripped of prefix");
   // Peers are NOT counted as modules.
   eq(listModules(tmp).length, 0, "peers/backup are not deployed modules");
+}
+
+// ── #644: --help runs nothing; an option the verb does not take is refused ──
+// `key export <dest> --help` used to write the keys to <dest>.
+{
+  const call = (argv: string[]): { rc: number; out: string; err: string; log: string[] } => {
+    const log = console.log;
+    const error = console.error;
+    let out = "";
+    let err = "";
+    console.log = (...a: unknown[]): void => {
+      out += a.map(String).join(" ") + "\n";
+    };
+    console.error = (...a: unknown[]): void => {
+      err += a.map(String).join(" ") + "\n";
+    };
+    const c = new FakeClient();
+    try {
+      const rc = run(argv, c);
+      return { rc, out, err, log: c.log };
+    } finally {
+      console.log = log;
+      console.error = error;
+    }
+  };
+  for (const argv of [
+    ["key", "export", "/mnt/usb", "--help"],
+    ["reconcile", "--apply", "-h"],
+    ["peer", "add", "remote", "buddy", "--auth-id", "us@pbs", "--help"],
+    ["restore", "restore", "nextcloud", "--node", "tappaas2", "--help"],
+  ]) {
+    const r = call(argv);
+    check(r.rc === 0 && r.out.includes("Usage:") && r.log.length === 0, `${argv.join(" ")}: help, rc 0, nothing run`);
+  }
+  check(call(["peer", "--help"]).out.includes("peer delete"), "peer --help lists the peer verbs");
+  check(call(["restore", "restore", "x", "--help"]).out.includes("--target-vmid"), "restore restore --help lists restore.sh's options");
+  for (const argv of [["reconcile", "--aply"], ["key", "export", "/mnt", "--force"], ["modify", "nextcloud", "--retention=90d"]]) {
+    const r = call(argv);
+    check(r.rc === 1 && r.err.includes("unknown option") && r.log.length === 0, `${argv.join(" ")}: refused, nothing run`);
+  }
+  check(undocumentedOptions(HELP).length === 0, `every usage option is described (${undocumentedOptions(HELP).join(", ")})`);
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

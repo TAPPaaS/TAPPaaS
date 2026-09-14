@@ -6,7 +6,9 @@
 // success. Tiny inline assert harness (mirrors reconcile.test.ts).
 //   node dist-test/manager/environment-manager/test/unit/main.test.js
 
-import { formatEnvironmentHuman, parseOpts } from "../../src/main";
+import { HELP, formatEnvironmentHuman, parseOpts, run } from "../../src/main";
+import { undocumentedOptions } from "../../../../lib/ts/src/help";
+import { FakeDnsTlsClient, FakeModuleClient, FakeNetworkClient } from "./fake-clients";
 import { DieError } from "../../../../lib/ts/src/cli";
 import { Environment } from "../../src/types";
 
@@ -74,6 +76,45 @@ throwsDie(() => parseOpts(["-x"]), "unknown short flag -x is rejected");
       out.includes("acme"),
     "show human output is an aligned field summary, not JSON",
   );
+}
+
+// ── #644: --help after a verb prints its help; unknown options are refused ──
+// `reconcile <env> --apply --help` used to die on "Unknown option: --help"
+// instead of printing help.
+{
+  const call = (argv: string[]): { rc: number; out: string; err: string; calls: number } => {
+    const log = console.log;
+    const error = console.error;
+    let out = "";
+    let err = "";
+    console.log = (...a: unknown[]): void => {
+      out += a.map(String).join(" ") + "\n";
+    };
+    console.error = (...a: unknown[]): void => {
+      err += a.map(String).join(" ") + "\n";
+    };
+    const net = new FakeNetworkClient();
+    const mod = new FakeModuleClient();
+    const dt = new FakeDnsTlsClient();
+    try {
+      const rc = run(argv, net, mod, dt);
+      return { rc, out, err, calls: net.log.length + mod.log.length + dt.log.length };
+    } finally {
+      console.log = log;
+      console.error = error;
+    }
+  };
+  for (const argv of [["reconcile", "home", "--apply", "--help"], ["delete", "home", "--force", "-h"], ["add", "lab", "--help"]]) {
+    const r = call(argv);
+    check(r.rc === 0 && r.out.includes("Usage:") && r.calls === 0, `${argv.join(" ")}: help, rc 0, nothing run`);
+  }
+  check(call(["reconcile", "--help"]).out.includes("--skip-network") && !call(["reconcile", "--help"]).out.includes("--create-zone"),
+    "reconcile --help prints reconcile's options only");
+  for (const argv of [["reconcile", "home", "--create-zone"], ["modify", "home", "--force"], ["list", "--domian", "x"]]) {
+    const r = call(argv);
+    check(r.rc === 1 && r.err.includes("unknown option") && r.calls === 0, `${argv.join(" ")}: refused, nothing run`);
+  }
+  check(undocumentedOptions(HELP).length === 0, `every usage option is described (${undocumentedOptions(HELP).join(", ")})`);
 }
 
 console.log(`\n${passed} passed, ${failed} failed.`);

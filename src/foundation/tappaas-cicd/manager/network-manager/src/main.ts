@@ -58,7 +58,7 @@ import {
 import { distributeZones, shouldAutoDistribute } from "./distribute";
 import { isPubliclyResolvableSync, resolveSplitHorizonTarget } from "./splithorizon";
 import { runZonesMerge } from "./zonesmerge";
-import { HelpSpec, renderHelp } from "../../../lib/ts/src/help";
+import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
 import { CL, DieError, GN, RD, YW, die, guarded, info, warn } from "../../../lib/ts/src/cli";
 import { writeJsonAtomic } from "../../../lib/ts/src/config-io";
 import {
@@ -72,7 +72,7 @@ import { cmdSnat } from "./snat";
 
 const VERSION = "0.1.0";
 
-const HELP: HelpSpec = {
+export const HELP: HelpSpec = {
   name: "network-manager",
   version: VERSION,
   tagline: "TAPPaaS network owner + orchestrator (ADR-007 P4 / ADR-008)",
@@ -91,8 +91,13 @@ const HELP: HelpSpec = {
         "is `enable|disable|manual <name>` — `list --state Inactive` is how you find\n" +
         "the candidates.",
     },
-    { usage: "exists <name>" },
-    { usage: "show <name> [--json]", note: "(alias: get)" },
+    { usage: "exists <name>", details: "Exit 0 when the zone exists, non-zero when it does not." },
+    {
+      usage: "show <name> [--json]",
+      note: "(alias: get)",
+      aliases: ["get"],
+      options: [["--json", "print the zone object as JSON"]],
+    },
     {
       usage: "add <name> [options]",
       name: "add",
@@ -111,9 +116,17 @@ const HELP: HelpSpec = {
         ["--bootfile-name <s>", "DHCP option 67 (boot file); both-or-neither with --tftp-server-name"],
         ["--no-activate", "author zones.json only; skip the all-plane reconcile"],
         ["--check", "dry-run: show actions, mutate nothing"],
+        ["--no-distribute", "skip the push of zones.json to the Proxmox nodes"],
       ],
     },
-    { usage: "delete <name> [--check]" },
+    {
+      usage: "delete <name> [--check] [--no-distribute]",
+      name: "delete",
+      options: [
+        ["--check", "dry-run: show actions, mutate nothing"],
+        ["--no-distribute", "skip the push of zones.json to the Proxmox nodes"],
+      ],
+    },
     {
       usage: "modify <name> --set field=value [--set field=value]...",
       name: "modify",
@@ -135,6 +148,7 @@ const HELP: HelpSpec = {
     {
       usage: "bind <zone> --environment <env> | --unbind",
       name: "bind (link a Client/IoT/Guest zone to an environment — ADR-014 D2)",
+      hidden: ["--env <env>"],
       options: [
         ["--environment <env>", "the environment whose service zone this zone consumes"],
         ["--unbind", "clear the link"],
@@ -156,12 +170,14 @@ const HELP: HelpSpec = {
       ],
     },
     {
-      usage: "snat list | snat verify <module> | snat mode",
+      usage: "snat list | snat verify <module> | snat mode  [--json]",
+      verb: "snat",
       name: "snat (source NAT — read-only, ADR-016)",
       options: [
         ["list", "live source-NAT rules, their owning module, and the mode"],
         ["verify <module>", "declared == live AND enforced (exit 1 on drift)"],
         ["mode", "the firewall-wide outbound-NAT mode"],
+        ["--json", "print the controller's answer as JSON"],
       ],
       note:
         "There is no `snat add|delete`: a module's source NAT follows its own\n" +
@@ -180,6 +196,7 @@ const HELP: HelpSpec = {
     {
       usage: "init [<profile>] --name <N> [--from <tpl>] [--out <f>] [--force]",
       note: "(alias: zones-init)",
+      aliases: ["zones-init"],
       name: "init (install-time profile bundles; offline, additive, idempotent)",
       options: [
         ["<profile>", "core (default) — mgmt, wan, overlays, <N>, home, guest, dmz\n" +
@@ -189,6 +206,8 @@ const HELP: HelpSpec = {
         ["--from <tpl>", "source template (default: zones.json shipped with the bin)"],
         ["--out <f>", "output file (default: $TAPPAAS_CONFIG/zones.json)"],
         ["--force", "re-stamp this profile's zones from the template (default:\n                existing zones always win — a re-run is non-destructive, #427)"],
+        ["--config-dir <dir>", "installed module configs, so an occupied zone stays Active\n                (default $TAPPAAS_CONFIG)"],
+        ["--no-distribute", "skip the push of zones.json to the Proxmox nodes"],
       ],
     },
     {
@@ -196,6 +215,8 @@ const HELP: HelpSpec = {
       name: "retire (remove zones a release stopped shipping — ADR-014 D7)",
       options: [
         ["--apply", "commit (default is a dry-run listing)"],
+        ["--config-dir <dir>", "installed module configs to check occupancy against\n                (default $TAPPAAS_CONFIG)"],
+        ["--no-distribute", "skip the push of zones.json to the Proxmox nodes"],
       ],
       note:
         "Removes " + RETIRED_ZONES.join(", ") + " —\n" +
@@ -207,6 +228,7 @@ const HELP: HelpSpec = {
     {
       usage: "merge [--diff] [--config-dir <dir>] [--template <tpl>]",
       note: "(alias: zones-merge)",
+      aliases: ["zones-merge"],
       name:
         "merge (rename-aware 3-way reconciliation; ADR-007 Design A;\n" +
         "replaces apply-zones-merge.sh — re-bases the repo template into THIS install's\n" +
@@ -222,6 +244,7 @@ const HELP: HelpSpec = {
     {
       usage: "validate [--zones <file>] [--config-dir <dir>] [--strict] [--effective]",
       note: "(alias: zones-check)",
+      aliases: ["zones-check"],
       name: "zones-check (offline consistency audit; read-only; run at update)",
       options: [
         ["--zones <file>", "zones.json to check (default $TAPPAAS_CONFIG/zones.json)"],
@@ -233,6 +256,7 @@ const HELP: HelpSpec = {
     {
       usage: "distribute [--zones <file>] [--dry-run]",
       note: "(alias: zones-distribute)",
+      aliases: ["zones-distribute"],
       name:
         "distribute (push the live zones.json to every Proxmox node so\n" +
         "node-side tooling can resolve a zone's VLAN — N3; runs automatically after a\n" +
@@ -240,11 +264,24 @@ const HELP: HelpSpec = {
       options: [
         ["--zones <file>", "zones.json to push (default $TAPPAAS_CONFIG/zones.json)"],
         ["--dry-run", "list the node targets that WOULD receive it; no scp"],
-        ["--no-distribute", "(on zone add/delete/init) skip the auto-push"],
       ],
     },
+    {
+      usage: "split-horizon-target <domain> [--json] [--assume-published]",
+      name: "split-horizon-target (the address a published name resolves to inside — ADR-021 D5)",
+      options: [
+        ["--json", "print the whole result as JSON"],
+        ["--assume-published", "skip the public-DNS probe (offline installs and tests)"],
+      ],
+      details:
+        "Prints the address on stdout. Exit 0 published, 3 unpublished (no public DNS),\n" +
+        "1 when the site cannot answer (no usable dmz zone).",
+    },
   ],
-  common: [["--zones-file <f>", "default $TAPPAAS_CONFIG/zones.json"]],
+  common: [["--zones-file <f>", "zones.json to act on (default $TAPPAAS_CONFIG/zones.json)"]],
+  // --zones: the per-verb spelling every verb has always accepted.
+  // --no-ssl-verify: a no-op kept from zone-controller.sh.
+  hidden: ["--zones <f>", "--no-ssl-verify"],
   notes: [
     "The `zone` keyword is an optional, legacy prefix — `add` and `zone add` are equivalent.",
     "Exit code is non-zero if any plane reports an error (or proxmox still drifts\nafter --apply).",
@@ -1134,20 +1171,17 @@ function cmdZonesMerge(opts: Opts): number {
 }
 
 export function run(argv: string[], client?: PlaneClient): number {
-  if (argv.length === 0 || argv[0] === "-h" || argv[0] === "--help") {
+  // `zone` is an OPTIONAL, legacy prefix — the whole manager is about zones, so
+  // `zone add x` and `add x` are equivalent. Strip a leading bare `zone`.
+  const args = argv[0] === "zone" ? argv.slice(1) : argv;
+  if (args.length === 0) {
     usage();
     return 0;
   }
-  // `zone` is an OPTIONAL, legacy prefix — the whole manager is about zones, so
-  // `zone add x` and `add x` are equivalent. Strip a leading bare `zone`.
-  let args = argv;
-  if (args[0] === "zone") {
-    args = args.slice(1);
-    if (args.length === 0) {
-      usage();
-      return 0;
-    }
-  }
+  // #644: --help in any position prints help and runs nothing; an option the
+  // verb does not take is refused before anything is parsed or run.
+  const gate = checkArgs(HELP, args);
+  if (gate !== undefined) return gate;
   const cmd = args[0];
   const opts = parseOpts(args.slice(1));
   return guarded(() => {

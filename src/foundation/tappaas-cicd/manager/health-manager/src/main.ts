@@ -23,7 +23,7 @@ import { defaultConfigDir } from "./config";
 import { CliClusterClient } from "./client";
 import { runHealthGates } from "./checks";
 import { ClusterClient } from "./types";
-import { HelpSpec, renderHelp } from "../../../lib/ts/src/help";
+import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
 import { CL, GN, RD, YW, die, guarded, info, preflightGuard } from "../../../lib/ts/src/cli";
 
 const VERSION = "0.1.0";
@@ -34,9 +34,9 @@ const BOLD = "\x1b[1m";
 
 const DEFAULT_THRESHOLD = 80; // disk-threshold gate default (check-disk-threshold uses an explicit arg)
 const DEFAULT_NODE = "tappaas1";
-const UPDATE_OS_BIN = process.env.UPDATE_OS_BIN ?? "update-os.sh"; // the special action verb's driver
+const UPDATE_OS_BIN = (): string => process.env.UPDATE_OS_BIN ?? "update-os.sh"; // the special action verb's driver
 
-const HELP: HelpSpec = {
+export const HELP: HelpSpec = {
   name: "health-manager",
   version: VERSION,
   tagline: "TAPPaaS cluster health manager (read-only)",
@@ -47,7 +47,10 @@ const HELP: HelpSpec = {
         ["--threshold PCT", `Disk-usage threshold percent (default ${DEFAULT_THRESHOLD}).`],
       ],
     },
-    { usage: "update-os <name> <vmid> <node>" },
+    {
+      usage: "update-os <name> <vmid> <node>",
+      details: "Patches the VM's OS (NixOS rebuild / apt) through update-os.sh; may reboot it.",
+    },
   ],
   common: [["--config-dir DIR", "Config root (default: $CONFIG_DIR or /home/tappaas/config)."]],
   notes: [
@@ -116,10 +119,15 @@ function cmdValidate(opts: Opts, client: ClusterClient): number {
 }
 
 export function run(argv: string[], client: ClusterClient): number {
-  if (argv.length === 0 || argv[0] === "-h" || argv[0] === "--help") {
+  if (argv.length === 0) {
     usage();
     return 0;
   }
+  // #644: --help in any position prints that verb's help and runs nothing
+  // (`update-os <name> <vmid> <node> --help` used to patch the VM); an option
+  // the verb does not take is refused.
+  const gate = checkArgs(HELP, argv);
+  if (gate !== undefined) return gate;
   const cmd = argv[0];
   const opts = parseOpts(argv.slice(1));
 
@@ -137,13 +145,13 @@ export function run(argv: string[], client: ClusterClient): number {
         if (passthru.length < 3) {
           die("update-os: expected <name> <vmid> <node>");
         }
-        const r = spawnSync(UPDATE_OS_BIN, passthru, {
+        const r = spawnSync(UPDATE_OS_BIN(), passthru, {
           encoding: "utf8",
           stdio: "inherit",
           maxBuffer: 64 * 1024 * 1024,
         });
         if (r.error) {
-          die(`update-os: failed to run ${UPDATE_OS_BIN} (${r.error.message})`);
+          die(`update-os: failed to run ${UPDATE_OS_BIN()} (${r.error.message})`);
         }
         return r.status ?? 1;
       }

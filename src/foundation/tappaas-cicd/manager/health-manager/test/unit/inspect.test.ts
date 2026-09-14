@@ -2,8 +2,11 @@
 // logic. No SSH, no Proxmox; a FakeClusterClient holds in-memory cluster state.
 // Tiny assert harness (no test framework). Run via test/unit tsconfig (see test.sh).
 
-import { existsSync, mkdtempSync, writeFileSync } from "fs";
+import { chmodSync, existsSync, mkdtempSync, writeFileSync } from "fs";
 import { join } from "path";
+import { tmpdir } from "os";
+import { HELP, run } from "../../src/main";
+import { undocumentedOptions } from "../../../../lib/ts/src/help";
 import { clusterDiff, inspectCluster, inspectVm } from "../../src/inspect";
 import { checkDiskThreshold, checkServiceLiveness } from "../../src/checks";
 import { siteNodeHostnames } from "../../src/config";
@@ -256,6 +259,47 @@ testGates();
 testGateStatusSelection();
 testClusterDiff();
 testSiteNodes();
+
+// #644: --help runs nothing; an option the verb does not take is refused.
+// update-os points at a fake that leaves a marker if it is ever run.
+function testArgGate(): void {
+  const dir = mkdtempSync(join(tmpdir(), "hm-gate-"));
+  const marker = join(dir, "update-os-was-run");
+  const fake = join(dir, "update-os.sh");
+  writeFileSync(fake, `#!/usr/bin/env bash\ntouch '${marker}'\n`);
+  chmodSync(fake, 0o755);
+  const prev = process.env.UPDATE_OS_BIN;
+  process.env.UPDATE_OS_BIN = fake;
+  const call = (argv: string[]): { rc: number; out: string; err: string } => {
+    const log = console.log;
+    const error = console.error;
+    let out = "";
+    let err = "";
+    console.log = (...a: unknown[]): void => {
+      out += a.map(String).join(" ") + "\n";
+    };
+    console.error = (...a: unknown[]): void => {
+      err += a.map(String).join(" ") + "\n";
+    };
+    try {
+      const rc = run(argv, new FakeClusterClient());
+      return { rc, out, err };
+    } finally {
+      console.log = log;
+      console.error = error;
+    }
+  };
+  const help = call(["update-os", "nextcloud", "301", "tappaas1", "--help"]);
+  check(help.rc === 0 && help.out.includes("update-os <name> <vmid> <node>") && !existsSync(marker),
+    "update-os <name> <vmid> <node> --help prints help and does not patch");
+  const bad = call(["update-os", "nextcloud", "301", "tappaas1", "--reboot"]);
+  check(bad.rc === 1 && bad.err.includes("unknown option") && !existsSync(marker), "update-os … --reboot is refused before update-os.sh runs");
+  check(call(["validate", "--treshold", "70"]).rc === 1, "validate --treshold (typo) is refused");
+  check(undocumentedOptions(HELP).length === 0, `every usage option is described (${undocumentedOptions(HELP).join(", ")})`);
+  if (prev === undefined) delete process.env.UPDATE_OS_BIN;
+  else process.env.UPDATE_OS_BIN = prev;
+}
+testArgGate();
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

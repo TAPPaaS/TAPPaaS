@@ -2,7 +2,8 @@
 // subprocesses: a FakeSiteClient records the delegation and scripts outcomes,
 // so this asserts the CLI's argument vectors + iteration/exit-code behaviour.
 
-import { run } from "../../src/main";
+import { HELP, run } from "../../src/main";
+import { undocumentedOptions } from "../../../../lib/ts/src/help";
 import { FakeSiteClient } from "./fake-client";
 
 let passed = 0;
@@ -103,6 +104,51 @@ const live = (name: string): { name: string; status: string } => ({ name, status
   c.deployedModules = [];
   const rc = run(["test"], c);
   check(rc === 0, "test → exit 0 when there are no deployed modules");
+}
+
+// ── #644: --help runs nothing; an option the verb does not take is refused ──
+// `update --help` used to start the whole-site sweep.
+{
+  const quiet = (argv: string[]): { rc: number; out: string; err: string; log: string[] } => {
+    const log = console.log;
+    const error = console.error;
+    let out = "";
+    let err = "";
+    console.log = (...a: unknown[]): void => {
+      out += a.map(String).join(" ") + "\n";
+    };
+    console.error = (...a: unknown[]): void => {
+      err += a.map(String).join(" ") + "\n";
+    };
+    const c = new FakeSiteClient();
+    try {
+      const rc = run(argv, c);
+      return { rc, out, err, log: c.log };
+    } finally {
+      console.log = log;
+      console.error = error;
+    }
+  };
+  for (const argv of [
+    ["update", "--help"],
+    ["update", "--force", "-h"],
+    ["test", "--deep", "--help"],
+    ["node", "add", "tappaas3", "--pxe", "--help"],
+    ["repo", "delete", "x", "--force", "--help"],
+    ["reconcile", "--apply", "--help"],
+  ]) {
+    const r = quiet(argv);
+    check(r.rc === 0 && r.out.includes("Usage:") && r.log.length === 0, `${argv.join(" ")}: help, rc 0, nothing delegated`);
+  }
+  check(quiet(["update", "--help"]).out.includes("--no-git-pull") && !quiet(["update", "--help"]).out.includes("--pxe"),
+    "update --help prints update's options, not node add's");
+  check(quiet(["node", "--help"]).out.includes("node reboot <name>"), "node --help lists every node verb");
+  for (const argv of [["update", "--dryrun"], ["test", "--force"], ["site", "modify", "--colour", "red"], ["repo", "list", "--url", "u"]]) {
+    const r = quiet(argv);
+    check(r.rc === 1 && r.err.includes("unknown option") && r.log.length === 0, `${argv.join(" ")}: refused, nothing delegated`);
+  }
+  check(quiet(["update", "--dry-run", "--no-git-pull"]).log.includes("update --dry-run --no-git-pull"), "declared options still pass");
+  check(undocumentedOptions(HELP).length === 0, `every usage option is described (${undocumentedOptions(HELP).join(", ")})`);
 }
 
 console.log(`fleet.test: ${passed} passed, ${failed} failed`);

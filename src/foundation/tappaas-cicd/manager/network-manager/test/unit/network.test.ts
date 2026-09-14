@@ -15,7 +15,9 @@
 
 import { proxmoxNeedsRecheck, proxmoxStatus } from "../../src/planes";
 import { gatewayIpOf, resolveSplitHorizonTarget } from "../../src/splithorizon";
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "fs";
+import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "fs";
+import { HELP, run } from "../../src/main";
+import { undocumentedOptions } from "../../../../lib/ts/src/help";
 import { join } from "path";
 import { tmpdir } from "os";
 import { PLANE_ORDER } from "../../src/types";
@@ -1992,6 +1994,108 @@ function tmpZones(): string {
   // more useful answer, and it is the one that must not read as breakage.
   const both = resolveSplitHorizonTarget(docOf({}), "x.example.org", false);
   check(both.status === "unpublished", "D5: unpublished is reported ahead of a site-level error");
+}
+
+// ── #644: --help never runs a verb; an unknown option is refused ─────
+// `distribute --help` used to push zones.json to every node. Every case runs
+// against a temp config dir whose zones.json must stay byte-identical, with a
+// FakePlaneClient that must record no call and an scp that must never run.
+{
+  console.log("");
+  console.log("== argument gate (#644) ==");
+
+  const cfg = mkdtempSync(join(tmpdir(), "nm-gate-"));
+  const zf = join(cfg, "zones.json");
+  copyFileSync(FIXTURE, zf);
+  writeFileSync(join(cfg, "configuration.json"), JSON.stringify({ "tappaas-nodes": [{ hostname: "tappaas1" }] }), "utf8");
+  const marker = join(cfg, "scp-was-run");
+  const fakeScp = join(cfg, "scp");
+  writeFileSync(fakeScp, `#!/usr/bin/env bash\ntouch '${marker}'\n`, "utf8");
+  chmodSync(fakeScp, 0o755);
+  const before = readFileSync(zf, "utf8");
+  const prevEnv = { cfg: process.env.TAPPAAS_CONFIG, scp: process.env.NM_SCP_BIN };
+  process.env.TAPPAAS_CONFIG = cfg;
+  process.env.NM_SCP_BIN = fakeScp;
+
+  const call = (argv: string[]): { rc: number; out: string; err: string; planes: number } => {
+    const log = console.log;
+    const error = console.error;
+    let out = "";
+    let err = "";
+    console.log = (...a: unknown[]): void => {
+      out += a.map(String).join(" ") + "\n";
+    };
+    console.error = (...a: unknown[]): void => {
+      err += a.map(String).join(" ") + "\n";
+    };
+    const c = new FakePlaneClient();
+    try {
+      const rc = run(argv, c);
+      return { rc, out, err, planes: c.calls.length };
+    } finally {
+      console.log = log;
+      console.error = error;
+    }
+  };
+  const untouched = (): boolean => readFileSync(zf, "utf8") === before && !existsSync(marker);
+
+  const helpCases: string[][] = [
+    ["reconcile", "--help"],
+    ["reconcile", "--apply", "-h"],
+    ["distribute", "--help"],
+    ["zones-distribute", "--zones", zf, "-h"],
+    ["add", "srvTenant", "--from-zone", "srvHome", "--help"],
+    ["delete", "dmz", "--help"],
+    ["modify", "dmz", "--set", "description=x", "-h"],
+    ["enable", "srvTest", "--help"],
+    ["bind", "home", "--environment", "srv", "--help"],
+    ["retire", "--apply", "--help"],
+    ["merge", "--help"],
+    ["zone", "add", "srvTenant", "--help"],
+    ["zone", "--help"],
+  ];
+  for (const argv of helpCases) {
+    const r = call(argv);
+    check(
+      r.rc === 0 && r.out.includes("Usage:") && r.planes === 0 && untouched(),
+      `'${argv.join(" ")}' prints help, rc 0, runs nothing (rc=${r.rc}, planes=${r.planes})`,
+    );
+  }
+
+  const dist = call(["distribute", "--help"]);
+  check(
+    dist.out.includes("distribute [--zones <file>] [--dry-run]") && !dist.out.includes("reconcile [--apply]"),
+    "'distribute --help' prints the distribute usage, not the whole manual",
+  );
+  check(call(["zones-distribute", "--help"]).out.includes("distribute [--zones"), "an alias prints its verb's help");
+  check(call(["snat", "--help"]).out.includes("snat verify <module>"), "'snat --help' prints the snat usage");
+  const bogus = call(["bogus", "--help"]);
+  check(bogus.rc === 0 && bogus.out.includes("reconcile [--apply]"), "an unknown verb with --help prints the full help");
+
+  const refused: Array<[string[], string]> = [
+    [["delete", "dmz", "--dry-run"], "--dry-run"], // delete's dry-run is --check
+    [["reconcile", "--aply"], "--aply"],
+    [["distribute", "--force"], "--force"],
+    [["add", "srvTenant", "--vlan=70"], "write '--vlan 70'"],
+  ];
+  for (const [argv, want] of refused) {
+    const r = call(argv);
+    check(
+      r.rc === 1 && r.err.includes(want) && r.planes === 0 && untouched(),
+      `'${argv.join(" ")}' is refused before anything runs (rc=${r.rc})`,
+    );
+  }
+
+  const rec = call(["reconcile", "--only", "switch", "--zones", zf]);
+  check(rec.rc === 0 && rec.planes === 1, "declared and hidden options still pass the gate (reconcile --only … --zones …)");
+  const tier = call(["list", "--tier", "-1", "--json"]);
+  check(!tier.err.includes("unknown option"), "an option value that starts with '-' is not taken for an option");
+  check(undocumentedOptions(HELP).length === 0, `every option in a usage line is described (${undocumentedOptions(HELP).join(", ")})`);
+
+  for (const [k, v] of [["TAPPAAS_CONFIG", prevEnv.cfg], ["NM_SCP_BIN", prevEnv.scp]] as const) {
+    if (v === undefined) delete process.env[k];
+    else process.env[k] = v;
+  }
 }
 
 console.log("");

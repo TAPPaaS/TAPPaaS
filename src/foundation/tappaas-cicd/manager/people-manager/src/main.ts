@@ -25,12 +25,22 @@ import { CliPrimitiveClient, AuthentikUnreachable } from "./primitives";
 import { childOrgs, deepGroup, deepOrg, groupsOfOrg, orgRoots, usersOfGroup } from "./queries";
 import { applyPlan, computePlan, pushEntityDeletion, snapshot } from "./reconcile";
 import { PeopleModel, PrimitiveClient } from "./types";
-import { HelpSpec, renderHelp } from "../../../lib/ts/src/help";
+import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
 import { CL, DieError, GN, RD, die, guarded, info, warn } from "../../../lib/ts/src/cli";
 
 const VERSION = "0.1.0";
 
-const HELP: HelpSpec = {
+// <kind> is the first word of the entity verbs.
+const KINDS = "role|org|organization|group|user";
+
+const FIELD_FLAGS = `Field flags (write the validated config, then push it to the identity service):
+  role:  --displayName V  --description V
+  org:   --displayName V  --type V  --owner USER  --parentOrg ORG
+  group: --displayName V  --type V  --ownerOrg ORG  --roles "a,b"  --add-roles R  --remove-roles R
+  user:  --displayName V  --email ADDR  --state planned|active|suspended|terminated
+         --roles "a,b"  --groups "g1,g2"  --add-roles R  --remove-roles R  --add-groups G  --remove-groups G`;
+
+export const HELP: HelpSpec = {
   name: "people-manager",
   version: VERSION,
   tagline: "TAPPaaS People → Authentik manager",
@@ -52,6 +62,7 @@ const HELP: HelpSpec = {
     {
       usage: "reconcile [--apply]",
       note: "(alias: sync, deprecated)",
+      aliases: ["sync"],
       options: [
         ["--apply", "push the plan to Authentik (default is PREVIEW)"],
         ["--dry-run", "deprecated no-op (preview is already the default)"],
@@ -60,6 +71,7 @@ const HELP: HelpSpec = {
     { usage: "validate" },
     {
       usage: "<kind> list [--json] [--deep]",
+      verb: `${KINDS} list`,
       name: "<kind> list",
       options: [
         ["--json", "structured output (default is human-readable)"],
@@ -68,18 +80,30 @@ const HELP: HelpSpec = {
     },
     {
       usage: "<kind> show <name> [--json]",
+      verb: `${KINDS} show`,
+      aliases: KINDS.split("|").map((k) => `${k} get`),
       name: "<kind> show",
       note: "(alias: get, deprecated)",
       options: [["--json", "structured output (default is human-readable)"]],
     },
     {
       usage: "<kind> add <name> [field flags] [--force] [--no-reconcile]",
+      verb: `${KINDS} add`,
       name: "<kind> add",
+      // Field flags differ per kind; the entity layer refuses one the kind lacks.
+      anyOption: true,
       options: [["--force", "overwrite an existing entity"]],
+      details: FIELD_FLAGS,
     },
-    { usage: "<kind> modify <name> [field flags] [--no-reconcile]" },
+    {
+      usage: "<kind> modify <name> [field flags] [--no-reconcile]",
+      verb: `${KINDS} modify`,
+      anyOption: true,
+      details: FIELD_FLAGS,
+    },
     {
       usage: "<kind> delete <name> [--force] [--no-reconcile]",
+      verb: `${KINDS} delete`,
       name: "<kind> delete",
       options: [["--force", "delete despite the reference guard"]],
     },
@@ -90,12 +114,7 @@ const HELP: HelpSpec = {
   ],
   notes: [
     "where <kind> is one of: role | org (alias organization) | group | user",
-    `Field flags (write the validated config, then push it to the identity service):
-  role:  --displayName V  --description V
-  org:   --displayName V  --type V  --owner USER  --parentOrg ORG
-  group: --displayName V  --type V  --ownerOrg ORG  --roles "a,b"  --add-roles R  --remove-roles R
-  user:  --displayName V  --email ADDR  --state planned|active|suspended|terminated
-         --roles "a,b"  --groups "g1,g2"  --add-roles R  --remove-roles R  --add-groups G  --remove-groups G`,
+    FIELD_FLAGS,
     "add/modify/delete RECONCILE by default — the change is live in the identity service when the command returns. Pass --no-reconcile to stage config only (then push with 'people-manager reconcile --apply').",
   ],
 };
@@ -518,10 +537,15 @@ function cmdEntity(kind: string, opts: Opts, client: PrimitiveClient): void {
 }
 
 export function run(argv: string[], client: PrimitiveClient): number {
-  if (argv.length === 0 || argv[0] === "-h" || argv[0] === "--help") {
+  if (argv.length === 0) {
     usage();
     return 0;
   }
+  // #644: --help in any position prints that verb's help and runs nothing
+  // (`user delete <name> --help` used to delete the user); an option the verb
+  // does not take is refused.
+  const gate = checkArgs(HELP, argv);
+  if (gate !== undefined) return gate;
   const cmd = argv[0];
   const opts = parseOpts(argv.slice(1));
 

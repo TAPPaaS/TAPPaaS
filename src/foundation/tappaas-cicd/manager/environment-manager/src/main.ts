@@ -37,7 +37,7 @@ import { CliDnsTlsClient, CliModuleClient, CliNetworkClient, NetworkUnreachable 
 import { applyPlan, computePlan } from "./reconcile";
 import { runValidate } from "./validate";
 import { DnsTlsClient, Environment, ModuleClient, NetworkClient } from "./types";
-import { HelpSpec, renderHelp } from "../../../lib/ts/src/help";
+import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
 import { RD, GN, CL, die, guarded, info, warn } from "../../../lib/ts/src/cli";
 import { existsSync, readFileSync, unlinkSync } from "fs";
 import { join } from "path";
@@ -50,7 +50,7 @@ const RESERVED_MGMT = "mgmt";
 
 const VERSION = "0.1.0";
 
-const HELP: HelpSpec = {
+export const HELP: HelpSpec = {
   name: "environment-manager",
   version: VERSION,
   tagline: "TAPPaaS Environment manager",
@@ -71,7 +71,9 @@ const HELP: HelpSpec = {
         "                          [--zone Z] [--create-zone] [--display D]\n" +
         "                          [--dns-mode M] [--force]",
       name: "add",
+      hidden: ["--dnsMode M"],
       options: [
+        ["--name N", "Name of the default environment when seeding the minimal set (default: site.json .defaultEnvironment)."],
         ["--domain D", "Public primary domain (add/modify)."],
         ["--owner ORG", "Owning organization (add/modify; default = first org)."],
         ["--zone Z", "network.zone reference (add/modify; default = <env>)."],
@@ -91,6 +93,7 @@ const HELP: HelpSpec = {
       usage: "modify <env> [--domain D] [--owner ORG] [--zone Z]\n" +
         "                          [--display D] [--dns-mode M]",
       name: "modify",
+      hidden: ["--dnsMode M"],
       options: [
         ["--domain D", "Public primary domain (add/modify)."],
         ["--owner ORG", "Owning organization (add/modify; default = first org)."],
@@ -600,10 +603,14 @@ function cmdReconcile(opts: Opts, net: NetworkClient, mod: ModuleClient, dt: Dns
 }
 
 export function run(argv: string[], net: NetworkClient, mod: ModuleClient, dt: DnsTlsClient): number {
-  if (argv.length === 0 || argv[0] === "-h" || argv[0] === "--help") {
+  if (argv.length === 0) {
     usage();
     return 0;
   }
+  // #644: --help in any position prints that verb's help and runs nothing; an
+  // option the verb does not take is refused.
+  const gate = checkArgs(HELP, argv);
+  if (gate !== undefined) return gate;
   const cmd = argv[0];
   const opts = parseOpts(argv.slice(1));
 
@@ -645,6 +652,9 @@ if (require.main === module) {
   process.exit(
     guarded(() => {
       const argv = process.argv.slice(2);
+      // The argument gate first: the early parseOpts below must not see --help.
+      const gate = argv.length > 0 ? checkArgs(HELP, argv) : undefined;
+      if (gate !== undefined) return gate;
       // Resolve config-dir early for the module client's discovery root.
       const opts = parseOpts(argv.slice(1));
       const net = new CliNetworkClient();
