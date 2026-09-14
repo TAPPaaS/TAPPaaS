@@ -347,6 +347,25 @@ else
     no "av_apply behaviour changed"
 fi
 
+# 28. #644: --help in any position runs nothing; an option the verb lacks is refused.
+# `remove <name> --help` used to delete the OPNsense WireGuard peer and server.
+rc=0; out="$(TAPPAAS_CONFIG_DIR="${tmp}" "${mgr}" remove t --help 2>&1)" || rc=$?
+if [[ "${rc}" -eq 0 ]] && grep -q 'remove *<name>' <<< "${out}" && ! grep -q 'install' <<< "${out}"; then
+    ok "remove <name> --help prints remove's usage only, rc 0"
+else
+    no "remove <name> --help rc=${rc}"
+fi
+rc=0; out="$(TAPPAAS_CONFIG_DIR="${tmp}" "${mgr}" install --help 2>&1)" || rc=$?
+if [[ "${rc}" -eq 0 ]] && grep -q -- '--s3-endpoint' <<< "${out}"; then ok "install --help lists the install options"; else no "install --help rc=${rc}"; fi
+rc=0; out="$(TAPPAAS_CONFIG_DIR="${tmp}" "${mgr}" admin remove-peer laptop --help 2>&1)" || rc=$?
+if [[ "${rc}" -eq 0 ]] && grep -q 'remove-peer' <<< "${out}"; then ok "admin remove-peer <n> --help prints the admin usage"; else no "admin remove-peer --help rc=${rc}"; fi
+for args in "status t --json" "admin add-peer --name n --pubkey k --force"; do
+    rc=0
+    # shellcheck disable=SC2086  # word-split on purpose
+    out="$(TAPPAAS_CONFIG_DIR="${tmp}" "${mgr}" ${args} 2>&1)" || rc=$?
+    if [[ "${rc}" -eq 1 ]] && grep -q 'unknown option' <<< "${out}"; then ok "'${args}' is refused"; else no "'${args}' rc=${rc}"; fi
+done
+
 echo ""
 echo "satellite-manager fast tests: ${pass} passed, ${fail} failed"
 [[ "${fail}" -eq 0 ]]

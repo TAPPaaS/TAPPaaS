@@ -100,6 +100,18 @@ ck "--help (rc)"                     "0"      "$(rc_of "${AM}" --help)"
 ck "unknown command (rc)"            "1"      "$(rc_of "${AM}" bogus)"
 ck "ssid on missing AP (rc)"         "1"      "$(rc_of "${AM}" ssid nope list)"
 
+# #644: --help in any position runs nothing; an option the verb lacks is refused
+before="$(md5sum < "${DES}")"
+ck "remove <ap> --help (rc)"         "0"      "$(rc_of "${AM}" remove ap-living --help)"
+ck "ssid <ap> remove <ssid> -h (rc)" "0"      "$(rc_of "${AM}" ssid ap-living remove TAPPaaS-Home -h)"
+ck "reconcile --apply --help (rc)"   "0"      "$(rc_of "${AM}" reconcile --apply --help)"
+ck "…and nothing changed"            "${before}" "$(md5sum < "${DES}")"
+ck "remove --help prints remove's usage" "yes" "$(has "$("${AM}" remove x --help)" 'remove <name>')"
+ck "reconcile --aply refused (rc)"   "1"      "$(rc_of "${AM}" reconcile --aply)"
+ck "remove <ap> --force refused (rc)" "1"     "$(rc_of "${AM}" remove ap-living --force)"
+ck "…and nothing changed"            "${before}" "$(md5sum < "${DES}")"
+ck "--help works without zones.json" "0"      "$(CONFIG_DIR=/nonexistent rc_of "${AM}" apply --help)"
+
 echo ""
 echo "test-ap-manager: ${PASS} passed, ${FAIL} failed"
 [[ "${FAIL}" -eq 0 ]]

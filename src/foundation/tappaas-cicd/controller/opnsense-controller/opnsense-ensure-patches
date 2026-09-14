@@ -28,10 +28,22 @@ set -uo pipefail
 here="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 PATCH_DIR="${here}/patches"
 
+usage() { awk 'NR > 1 { if ($0 !~ /^#/) exit; sub(/^# ?/, ""); print }' "${BASH_SOURCE[0]}"; }
+
+# #644: every argument is parsed before anything runs — `--help` used to be
+# ignored and the whole converge ran (credentials skeleton, patch push, plugins).
 FIREWALL_FQDN="${TAPPAAS_FIREWALL_FQDN:-firewall.mgmt.internal}"
-if [ "${1:-}" = "--firewall" ] && [ -n "${2:-}" ]; then
-    FIREWALL_FQDN="$2"
-fi
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --firewall)
+            [ -n "${2:-}" ] || { echo "[Error] --firewall requires a host" >&2; exit 1; }
+            FIREWALL_FQDN="$2"
+            shift 2
+            ;;
+        -h|--help) usage; exit 0 ;;
+        *) echo "[Error] opnsense-ensure-patches: unknown argument '$1' (see --help)" >&2; exit 1 ;;
+    esac
+done
 
 YW="\033[33m"; GN="\033[1;92m"; DGN="\033[32m"; BL="\033[34m"; CL="\033[m"
 # House style: every line carries its level. This script is a CONVERGE — on a

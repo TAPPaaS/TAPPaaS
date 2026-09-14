@@ -43,9 +43,31 @@ for _lib in tunnel opnsense-wg provision admin-vpn; do
     # shellcheck source=/dev/null
     [[ -f "${SCRIPT_DIR}/lib/${_lib}.sh" ]] && . "${SCRIPT_DIR}/lib/${_lib}.sh"
 done
+# shellcheck source=../../lib/cli-gate.sh
+. "${SCRIPT_DIR}/../../lib/cli-gate.sh"
 DRY_RUN=0
 
+# What each verb accepts (lib/cli-gate.sh; '=' marks an option with a value).
+readonly CLI_SPEC='
+*: --dry-run
+install: --provider= --public-ip= --publicip= --sshkey= --ssh-key= --bucket= --s3-endpoint= --roles= --os=
+update:
+status:
+remove:
+validate:
+admin setup:
+admin list:
+admin status:
+admin add-peer: --name= --pubkey= --ip= --endpoint=
+admin remove-peer:
+admin config:
+'
+
 usage() {
+    if [[ "${1:-}" == "admin" ]]; then
+        admin_usage
+        return
+    fi
     cat << EOF
 ${SCRIPT_NAME} ${VERSION} — TAPPaaS VPS satellite manager (ADR-010)
 
@@ -58,8 +80,7 @@ Usage:
   ${SCRIPT_NAME} admin <sub>                   Manage the admin-vpn (mgmt tunnel); see ADMIN-VPN.md
   ${SCRIPT_NAME} --help                        This help
 
-install options (satellite-manager writes the config from these — you don't hand-
-edit JSON):
+install options (satellite-manager writes the config from these; no hand-edited JSON):
   --public-ip IP     the satellite's public IPv4 (required to create)
   --sshkey KEY|FILE  operator out-of-band public key or a path to it (required;
                      NOT a tappaas-cicd key — §7.3)
@@ -334,6 +355,20 @@ not_implemented() {
 # admin-vpn management (ADR-010 §6, Q3). Terminates the operator's admin
 # WireGuard on OPNsense and routes it into mgmt; works with a satellite relay
 # OR a direct cluster public IP (the OPNsense side is identical). See ADMIN-VPN.md.
+admin_usage() {
+    cat <<EOF
+Usage: ${SCRIPT_NAME} admin <sub>
+  setup                                            ensure the OPNsense admin-WG server + admin->mgmt rule
+  add-peer --name N --pubkey K [--ip A] [--endpoint H:P]
+                                                   register an admin device (auto-assigns an admin IP) and
+                                                   print its client config. Endpoint: --endpoint wins, else a
+                                                   configured admin-vpn satellite's IP, else a placeholder
+  remove-peer <name>                               remove an admin device
+  list                                             show server pubkey, rule status, peers
+  config <ip/32> <host:port> [privkey]             re-print a client config for an existing peer
+EOF
+}
+
 cmd_admin() {
     command -v av_setup >/dev/null 2>&1 || die "admin-vpn lib not loaded (lib/admin-vpn.sh)"
     local sub="${1:-}"; shift || true
@@ -377,24 +412,13 @@ cmd_admin() {
             [[ $# -ge 2 ]] || die "admin config <peer-ip/32> <endpoint-host:port> [private-key]"
             av_client_config "$1" "$2" "${3:-}"
             ;;
-        ""|-h|--help)
-            cat <<EOF
-Usage: ${SCRIPT_NAME} admin <sub>
-  setup                                            ensure the OPNsense admin-WG server + admin->mgmt rule
-  add-peer --name N --pubkey K [--ip A] [--endpoint H:P]
-                                                   register an admin device (auto-assigns an admin IP) and
-                                                   print its client config. Endpoint: --endpoint wins, else a
-                                                   configured admin-vpn satellite's IP, else a placeholder
-  remove-peer <name>                               remove an admin device
-  list                                             show server pubkey, rule status, peers
-  config <ip/32> <host:port> [privkey]             re-print a client config for an existing peer
-EOF
-            ;;
+        ""|-h|--help) admin_usage ;;
         *) die "admin: unknown sub '${sub}' (setup|add-peer|remove-peer|list|config)" ;;
     esac
 }
 
 main() {
+    [[ $# -gt 0 ]] && cli_gate usage "${CLI_SPEC}" "$@"
     # filter --dry-run out of the args (order-independent)
     local args=()
     local a

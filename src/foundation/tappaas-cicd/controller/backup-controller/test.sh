@@ -151,6 +151,33 @@ if "${BC}" key bogus >/dev/null 2>&1; then
 else
     ok "an unknown key subcommand is rejected"
 fi
+
+# #644: --help in any position runs nothing (`key export <dest> --help` used to
+# write the keys to <dest>); an option the verb does not take is refused.
+_ke_help="$(mktemp -d "${TMPDIR:-/tmp}/bc-help.XXXXXX")"
+_rc=0; TAPPAAS_KEY_ESCROW="${_ke_src}" "${BC}" key export "${_ke_help}" --help >/dev/null 2>&1 || _rc=$?
+if [[ ${_rc} -eq 0 && ! -e "${_ke_help}/tappaas-backup-keys" ]]; then
+    ok "key export <dest> --help prints help and writes nothing"
+else
+    bad "key export <dest> --help wrote to <dest> or failed (rc ${_rc})"
+fi
+_rc=0; TAPPAAS_KEY_ESCROW="${_ke_src}" "${BC}" key export "${_ke_help}" --force >/dev/null 2>&1 || _rc=$?
+if [[ ${_rc} -ne 0 && ! -e "${_ke_help}/tappaas-backup-keys" ]]; then
+    ok "key export <dest> --force is refused before anything is written"
+else
+    bad "key export <dest> --force was not refused (rc ${_rc})"
+fi
+for _args in "apply-schedule daily --help" "add-to-job 100 --bucket weekly -h"; do
+    # shellcheck disable=SC2086  # word-split on purpose
+    if "${BC}" ${_args} >/dev/null 2>&1; then ok "'${_args}': help, rc 0"; else bad "'${_args}' did not print help"; fi
+done
+if "${BC}" add-to-job --help | grep -q -- '--retention'; then
+    ok "add-to-job --help prints add-to-job's usage"
+else
+    bad "add-to-job --help does not show its options"
+fi
+if "${BC}" job-status --jsn >/dev/null 2>&1; then bad "job-status --jsn accepted"; else ok "job-status --jsn is refused"; fi
+rm -rf "${_ke_help}"
 sudo rm -rf "${_ke_src}" "${_ke_media}" "${_ke_dst}"
 
 echo ""

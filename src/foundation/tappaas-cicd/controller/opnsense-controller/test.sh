@@ -32,6 +32,24 @@ fi
 echo "== unit tests (python -m unittest discover src/test) =="
 PYTHONPATH="${here}/src" "${py}" -m unittest discover -s "${here}/src/test" -v
 
+# ── opnsense-ensure-patches arguments (#644) ─────────────────────────────
+# --help used to be ignored and the converge ran. A throwaway HOME shows whether
+# step 1 (the credentials skeleton) ran.
+echo "== opnsense-ensure-patches: --help and unknown arguments run nothing =="
+_eh="$(mktemp -d)"
+if HOME="${_eh}" "${here}/opnsense-ensure-patches" --help | grep -q 'Usage: opnsense-ensure-patches' \
+   && [ ! -e "${_eh}/.opnsense-credentials.txt" ]; then
+    echo "  ok: --help prints usage and changes nothing"
+else
+    echo "  FAIL: --help did not print usage, or ran the converge" >&2; exit 1
+fi
+if HOME="${_eh}" "${here}/opnsense-ensure-patches" --frewall x >/dev/null 2>&1 \
+   || [ -e "${_eh}/.opnsense-credentials.txt" ]; then
+    echo "  FAIL: an unknown argument was accepted, or the converge ran" >&2; exit 1
+fi
+echo "  ok: an unknown argument is refused before anything runs"
+rm -rf "${_eh}"
+
 # ── DEEP: dhcp-manager pxe enable/disable round-trip (live firewall) ────
 # Self-cleaning regression guard for the N3 PXE DHCP verbs (node-provisioning
 # design): enable writes the TAPPaaS-tagged dnsmasq boot entry, status must

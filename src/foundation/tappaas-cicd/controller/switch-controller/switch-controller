@@ -42,6 +42,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 readonly SCRIPT_DIR
+# shellcheck source=../../lib/cli-gate.sh
+. "${SCRIPT_DIR}/../../lib/cli-gate.sh"
 # PLUGIN_DIR is env-overridable so tests can supply stub vendor plugins.
 PLUGIN_DIR="${PLUGIN_DIR:-/home/tappaas/TAPPaaS/src/foundation/network/scripts/plugins}"; readonly PLUGIN_DIR
 readonly ZONES_FILE="${CONFIG_DIR}/zones.json"
@@ -86,6 +88,27 @@ managed:manual switches are configured by hand (manual.sh prints what to tag);
 managed:auto switches are programmed by their vendor plugin.
 EOF
 }
+
+# What each verb accepts (lib/cli-gate.sh; '=' marks an option with a value).
+readonly PORT_OPTS='--type= --target= --target-port= --mode= --zone= --native= --tagged= --description='
+readonly CLI_SPEC="
+add-controller: --vendor= --ip= --managed=
+remove-controller:
+add-switch: --vendor= --ip= --managed= --controller= --model= --location= --description=
+remove-switch:
+add-port: ${PORT_OPTS}
+update-port: ${PORT_OPTS}
+remove-port:
+list:
+list-ports:
+show:
+interrogate:
+update-desired:
+delta:
+apply:
+confirm:
+reconcile: --apply
+"
 
 # ── State files ──────────────────────────────────────────────────────
 
@@ -604,7 +627,8 @@ cmd_reconcile() {
 
 main() {
     local cmd="${1:-}"
-    [[ -z "${cmd}" || "${cmd}" == "-h" || "${cmd}" == "--help" ]] && { usage; exit 0; }
+    [[ -z "${cmd}" ]] && { usage; exit 0; }
+    cli_gate usage "${CLI_SPEC}" "$@"
     shift || true
     [[ -f "${ZONES_FILE}" ]] || die "zones.json not found: ${ZONES_FILE}"
     ensure_files

@@ -71,6 +71,22 @@ usage() {
     awk 'NR > 1 { if ($0 !~ /^#/) exit; sub(/^# ?/, ""); print }' "${BASH_SOURCE[0]}"
 }
 
+# shellcheck source=../../lib/cli-gate.sh
+. "${HERE}/../../lib/cli-gate.sh"
+
+# What each verb accepts (lib/cli-gate.sh; '=' marks an option with a value).
+readonly CLI_SPEC='
+job-status: --json --pbs=
+list: --json --pbs=
+verify:
+namespaces: --json --pbs=
+add-to-job: --retention= --bucket=
+apply-schedule:
+key list:
+key export:
+key import:
+'
+
 # True if the PBS reuse libs loaded (functions present).
 have_pbs_libs() { type pbs_managed_job_id >/dev/null 2>&1; }
 
@@ -420,6 +436,7 @@ selftest() {
 
 main() {
     local cmd="${1:-help}"
+    cli_gate usage "${CLI_SPEC}" "$@"
     [[ $# -gt 0 ]] && shift || true
     case "$cmd" in
         job-status)     cmd_job_status "$@" ;;

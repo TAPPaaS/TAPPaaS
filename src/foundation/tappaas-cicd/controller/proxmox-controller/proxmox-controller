@@ -43,6 +43,9 @@ set -euo pipefail
 # shellcheck source=../../cluster/lib/vm-net.sh disable=SC1091
 . /home/tappaas/TAPPaaS/src/foundation/cluster/lib/vm-net.sh
 
+# shellcheck source=../../lib/cli-gate.sh
+. "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../../lib/cli-gate.sh"
+
 readonly ZONES_FILE="${CONFIG_DIR}/zones.json"
 readonly LAN_BRIDGE="lan"
 
@@ -69,6 +72,15 @@ Without --apply, commands report drift only (dry-run). Exit code is non-zero if
 drift remains after the command (so callers/CI can gate on convergence).
 EOF
 }
+
+# What each verb accepts (lib/cli-gate.sh).
+readonly CLI_SPEC='
+reconcile: --apply
+trunks: --apply
+bridge-vids: --apply
+show:
+live-ok:
+'
 
 # ── Cluster helpers ──────────────────────────────────────────────────
 
@@ -538,7 +550,8 @@ summary() {
 
 main() {
     local cmd="${1:-}"
-    [[ -z "${cmd}" || "${cmd}" == "-h" || "${cmd}" == "--help" ]] && { usage; exit 0; }
+    [[ -z "${cmd}" ]] && { usage; exit 0; }
+    cli_gate usage "${CLI_SPEC}" "$@"
     shift || true
 
     [[ -f "${ZONES_FILE}" ]] || die "zones.json not found: ${ZONES_FILE}"
@@ -547,7 +560,6 @@ main() {
     for arg in "$@"; do
         case "${arg}" in
             --apply) apply=1 ;;
-            -h|--help) usage; exit 0 ;;
             -*) die "Unknown option: ${arg}" ;;
             *) vmname="${arg}" ;;
         esac

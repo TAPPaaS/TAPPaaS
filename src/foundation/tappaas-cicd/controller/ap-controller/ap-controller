@@ -30,6 +30,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 readonly SCRIPT_DIR
+# shellcheck source=../../lib/cli-gate.sh
+. "${SCRIPT_DIR}/../../lib/cli-gate.sh"
 readonly PLUGIN_DIR="/home/tappaas/TAPPaaS/src/foundation/network/scripts/plugins"
 readonly ZONES_FILE="${CONFIG_DIR}/zones.json"
 readonly DESIRED="${CONFIG_DIR}/switch-configuration-desired.json"
@@ -66,6 +68,24 @@ Reconciliation (five-verb provider contract):
 security: open | wpa2-personal | wpa3-personal | wpa2-enterprise | wpa3-enterprise
 EOF
 }
+
+# What each verb accepts (lib/cli-gate.sh; '=' marks an option with a value).
+readonly CLI_SPEC='
+add: --vendor= --ip= --model= --location=
+remove:
+list:
+show:
+link: --switch= --port=
+ssid * add: --zone= --security= --vlan= --radius= --captive --disabled
+ssid * remove:
+ssid * list:
+update-desired:
+interrogate:
+delta:
+apply:
+confirm:
+reconcile: --apply
+'
 
 # ── State files ──────────────────────────────────────────────────────
 
@@ -408,7 +428,8 @@ cmd_reconcile() {
 
 main() {
     local cmd="${1:-}"
-    [[ -z "${cmd}" || "${cmd}" == "-h" || "${cmd}" == "--help" ]] && { usage; exit 0; }
+    [[ -z "${cmd}" ]] && { usage; exit 0; }
+    cli_gate usage "${CLI_SPEC}" "$@"
     shift || true
     [[ -f "${ZONES_FILE}" ]] || die "zones.json not found: ${ZONES_FILE}"
     ensure_files

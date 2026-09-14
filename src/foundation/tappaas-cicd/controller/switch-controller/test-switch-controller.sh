@@ -153,6 +153,20 @@ ck "bad response leaves switch intact" "node" "$(jq -r '.switches.StubSw.ports["
 ck "show switch"                     "tplink" "$("${SM}" show core | jq -r '.vendor')"
 ck "show controller"                 "unifi"  "$("${SM}" show ctrl1 | jq -r '.vendor')"
 ck "show missing (rc)"               "1"      "$(rc_of "${SM}" show nope)"
+
+# #644: --help in any position runs nothing; an option the verb lacks is refused
+before="$(md5sum < "${ACT}")$(md5sum < "${DES}")"
+ck "remove-switch <s> --help (rc)"   "0"      "$(rc_of "${SM}" remove-switch core --help)"
+ck "confirm <s> -h (rc)"             "0"      "$(rc_of "${SM}" confirm core -h)"
+ck "reconcile --apply --help (rc)"   "0"      "$(rc_of "${SM}" reconcile --apply --help)"
+ck "add-switch --help --vendor x (rc)" "0"    "$(rc_of "${SM}" add-switch --help --vendor x --managed manual)"
+ck "…and nothing changed"            "${before}" "$(md5sum < "${ACT}")$(md5sum < "${DES}")"
+ck "add-port --help prints add-port's usage" "yes" "$(grep -q -- '--target-port' <<<"$("${SM}" add-port --help)" && echo yes || echo no)"
+ck "reconcile --aply refused (rc)"   "1"      "$(rc_of "${SM}" reconcile --aply)"
+ck "remove-switch <s> --force refused (rc)" "1" "$(rc_of "${SM}" remove-switch core --force)"
+ck "…and nothing changed"            "${before}" "$(md5sum < "${ACT}")$(md5sum < "${DES}")"
+ck "--help works without zones.json" "0"      "$(CONFIG_DIR=/nonexistent rc_of "${SM}" interrogate --help)"
+
 "${SM}" remove-switch core >/dev/null 2>&1
 ck "remove-switch deletes"           "false"  "$(jq -e '.switches | has("core")' "${ACT}")"
 "${SM}" remove-controller ctrl1 >/dev/null 2>&1

@@ -68,6 +68,10 @@ ck "_desired_bridge_vids = active set" "200 310 610"  "$(_desired_bridge_vids)"
 "${PM}" >/dev/null 2>&1;        ck_rc "no args exits 0 (usage)" "0" "$?"
 "${PM}" bogus-cmd >/dev/null 2>&1; ck_rc "unknown command exits non-zero" "1" "$?"
 "${PM}" show no-such-module >/dev/null 2>&1; ck_rc "show missing module exits non-zero" "1" "$?"
+# #644: per-verb help, before the zones.json check; per-verb options
+CONFIG_DIR=/nonexistent "${PM}" trunks --apply --help >/dev/null 2>&1; ck_rc "trunks --apply --help exits 0 without zones.json" "0" "$?"
+ck "live-ok --help prints live-ok's usage" "yes" "$(grep -q 'live-ok <vmname> <node>' <<<"$("${PM}" live-ok --help)" && echo yes || echo no)"
+"${PM}" show some-vm --apply >/dev/null 2>&1; ck_rc "show --apply is refused" "1" "$?"
 
 # ── live-migration compatibility (ADR-019) ──────────────────────────
 #
