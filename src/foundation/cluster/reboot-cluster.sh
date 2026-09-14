@@ -13,6 +13,8 @@
 #   - before each node: re-assert HA quorum (>=2 active); reboot via the shared
 #     reboot_one_node routine; verify the new kernel.
 #   - ABORT the whole pass if any node fails to return (issue #275 requirement).
+#   - on a SINGLE-NODE cluster only report: there is no peer to drain onto, so
+#     a reboot is a full outage (firewall + this cicd VM included).
 #
 # Governed by tappaas.automaticReboot (configuration.json, default true). When
 # false, this script only reports which nodes need a reboot and exits 0 — the
@@ -82,6 +84,12 @@ for n in "${ALL_NODES[@]}"; do
 done
 [[ -n "$ENTRY" ]] || die "No cluster node is reachable over SSH"
 
+# Corosync member count (online or not). Falls back to the configured node list
+# if the query fails, so a flaky probe never silently skips a multi-node pass.
+CLUSTER_SIZE=$(rn_node_ssh "$ENTRY" "pvesh get /cluster/config/nodes --output-format json 2>/dev/null" 2>/dev/null \
+    | jq 'length' 2>/dev/null || true)
+[[ "$CLUSTER_SIZE" =~ ^[0-9]+$ && "$CLUSTER_SIZE" -gt 0 ]] || CLUSTER_SIZE="${#ALL_NODES[@]}"
+
 # Which node currently hosts the tappaas-cicd VM (this orchestrator runs inside
 # it). That node is rebooted LAST so HA live-migration keeps this run alive.
 CICD_VMID=$(jq -r '.vmid // 130' "${CONFIG_DIR}/tappaas-cicd.json" 2>/dev/null || echo 130)
@@ -125,6 +133,17 @@ if [[ "${#ORDER[@]}" -eq 0 ]]; then
 fi
 
 info "${BOLD}Reboot order:${CL} ${ORDER[*]}"
+
+# Single node: the controlled sequence (drain HA guests to a peer, reboot, fail
+# back) has nowhere to drain to, and this orchestrator runs in a VM on the node
+# it would reboot. Report it like automaticReboot=false instead of failing.
+if [[ "$CLUSTER_SIZE" -lt 2 ]]; then
+    warn "${BOLD}Single-node cluster${CL} — a reboot takes every guest down (firewall and tappaas-cicd included), so it is NOT done automatically:"
+    for n in "${ORDER[@]}"; do
+        warn "    ssh root@$(rn_node_fqdn "$n") reboot    (guests with onboot=1 restart on boot)"
+    done
+    exit 0
+fi
 
 ###############################################################################
 # Policy gate

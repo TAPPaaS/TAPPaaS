@@ -98,7 +98,7 @@ fi
 # dropping this one keeps the cluster quorate.
 ACTIVE_NODES=$(rn_ha_active_count "$NODE")
 info "  Alive cluster nodes: ${ACTIVE_NODES}"
-[[ "${ACTIVE_NODES:-0}" -ge 2 ]] || die "HA quorum check failed: fewer than 2 alive nodes. Aborting."
+[[ "${ACTIVE_NODES:-0}" -ge 2 ]] || die "HA quorum check failed: fewer than 2 alive nodes. Aborting. (Single-node cluster: there is nowhere to drain to — reboot it directly: ssh root@$(rn_node_fqdn "$NODE") reboot)"
 info "  ${GN}✓${CL} HA quorum OK"
 
 ###############################################################################
