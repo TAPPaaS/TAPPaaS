@@ -15,7 +15,7 @@ Usage:
 import argparse
 import sys
 
-from .cli_globals import parse_with_globals
+from .cli_globals import StrictArgumentParser, parse_with_globals
 from .config import Config
 from .syslog_manager import (
     LEVELS,
@@ -218,7 +218,7 @@ def main():
     global_parser.add_argument("--debug", action="store_true", help="Enable debug logging")
     global_parser.add_argument("--check-mode", action="store_true", help="Dry-run mode")
 
-    parser = argparse.ArgumentParser(
+    parser = StrictArgumentParser(
         description="Manage OPNsense built-in syslog destinations",
         parents=[global_parser],
         formatter_class=argparse.RawDescriptionHelpFormatter,

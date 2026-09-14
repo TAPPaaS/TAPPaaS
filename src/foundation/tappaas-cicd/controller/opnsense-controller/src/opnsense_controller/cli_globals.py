@@ -22,6 +22,20 @@ The fix has two parts, both required:
 import argparse
 
 
+class StrictArgumentParser(argparse.ArgumentParser):
+    """An ArgumentParser that takes an option only by its full name (#644).
+
+    argparse accepts any unique prefix by default (``--desc`` for
+    ``--description``), so a typo, or an option added later, can silently change
+    what a command does. Subparsers inherit the parser class, so using this for
+    the top-level parser covers every subcommand.
+    """
+
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault("allow_abbrev", False)
+        super().__init__(*args, **kwargs)
+
+
 def make_global_parent(add_help: bool = False) -> argparse.ArgumentParser:
     """Return a parent parser whose options don't write unless supplied.
 

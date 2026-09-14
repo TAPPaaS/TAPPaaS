@@ -813,6 +813,7 @@ def main():
     require_operator()  # #533: refuse root before touching config or spawning managers
 
     parser = argparse.ArgumentParser(
+        allow_abbrev=False,  # an option only by its full name (#644)
         description="TAPPaaS update scheduler - updates foundation and app modules across all nodes"
     )
     parser.add_argument(

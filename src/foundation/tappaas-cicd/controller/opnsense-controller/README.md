@@ -87,7 +87,7 @@ the resolver is rolled back.
 ### `caddy-manager` — reverse proxy
 
 ```
-caddy-manager add-domain <domain> [--description <d>] [--acme-dns | --cert-refid <id>]
+caddy-manager add-domain <domain> [--description <d>] [--dns-challenge | --custom-certificate <refid>]
 caddy-manager add-handler <domain> (--upstream <host> | --redir <url>)
         [--redir-path <p>] [--port <n>] [--description <d>] [--access-list <name>]
         [--upstream-tls] [--upstream-http1] [--preserve-host] [--forward-auth]
@@ -106,9 +106,9 @@ identity outpost), `--upstream-tls` (HTTPS upstream), `--upstream-http1` +
 ### `nat-manager` — destination-NAT / port-forward
 
 ```
-nat-manager add --description <d> --external-port <p> --target <ip> --target-port <p>
+nat-manager add-rule --description <d> --external-port <p> --target <ip> --internal-port <p>
         [--protocol tcp|udp] [--interface <if>] [--destination <addr>] [--source <addr>]
-        [--ip-version inet|inet6] [--disabled] [--no-apply]
+        [--ip-protocol inet|inet6|inet46] [--disabled] [--no-apply]
 nat-manager list-rules [--search <s>]
 nat-manager delete-rule (--description <d> | --uuid <u>) [--no-apply]
 nat-manager apply
@@ -170,8 +170,8 @@ syslog-manager reconfigure
 ### `test-network-manager` — isolated test network
 
 ```
-test-network-manager create [--guest-if <dev>] [--gateway <cidr>]
-        [--dhcp-start <ip>] [--dhcp-end <ip>] [--mgmt-net <cidr>] [--mgmt-if <if>]
+test-network-manager create --device <dev> [--cidr <gw/prefix>]
+        [--dhcp-start <ip>] [--dhcp-end <ip>] [--mgmt-net <cidr>] [--mgmt-iface <if>]
         [--domain test.internal] [--check-mode] [...]
 test-network-manager delete
 test-network-manager status

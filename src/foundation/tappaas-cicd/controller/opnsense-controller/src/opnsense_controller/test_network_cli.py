@@ -21,7 +21,7 @@ import json
 import os
 import sys
 
-from .cli_globals import make_global_parent, parse_with_globals
+from .cli_globals import StrictArgumentParser, make_global_parent, parse_with_globals
 from .config import Config
 from .test_network_manager import TestNetworkManager
 
@@ -156,7 +156,7 @@ def add_addressing_args(parser: argparse.ArgumentParser) -> None:
 
 def main():
     gp = make_globals()
-    parser = argparse.ArgumentParser(
+    parser = StrictArgumentParser(
         description="OPNsense test-network manager (TAPPaaS issue #225)",
         parents=[gp],
         formatter_class=argparse.RawDescriptionHelpFormatter,

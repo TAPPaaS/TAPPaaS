@@ -28,7 +28,7 @@ import sys
 
 from pathlib import Path
 
-from .cli_globals import make_global_parent, parse_with_globals
+from .cli_globals import StrictArgumentParser, make_global_parent, parse_with_globals
 from .config import Config
 from .snat_manager import MODES, SnatManager, SnatModeError, SnatRule
 from .snat_policy import (
@@ -588,7 +588,7 @@ def make_globals() -> argparse.ArgumentParser:
 def main():
     """Main entry point for the source-NAT CLI."""
     gp = make_globals()
-    parser = argparse.ArgumentParser(
+    parser = StrictArgumentParser(
         description="Manage OPNsense source-NAT (masquerade) rules",
         parents=[gp],
         formatter_class=argparse.RawDescriptionHelpFormatter,

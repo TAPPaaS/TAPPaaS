@@ -13,6 +13,7 @@ Phase N3 of docs/design/node-provisioning.md (#404 item 2). Operator flow:
 from __future__ import annotations
 
 import argparse
+import functools
 import sys
 
 from . import __version__, assets, server, service
@@ -129,8 +130,10 @@ def cmd_status(args) -> bool:
 
 
 def main():
+    # allow_abbrev=False: an option is taken only by its full name (#644).
     parser = argparse.ArgumentParser(
         prog="node-provisioner",
+        allow_abbrev=False,
         description="PXE provisioning service for follow-on TAPPaaS nodes "
                     "(design N3)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -148,7 +151,10 @@ placement is what scopes it (see README.md).
         """,
     )
     parser.add_argument("--version", action="version", version=__version__)
-    sub = parser.add_subparsers(dest="command", help="Command to execute")
+    sub = parser.add_subparsers(
+        dest="command", help="Command to execute",
+        parser_class=functools.partial(argparse.ArgumentParser, allow_abbrev=False),
+    )
 
     p = sub.add_parser("register", help="Register a pending node (allowlist)")
     p.add_argument("name", help="Node name (e.g. tappaas3)")

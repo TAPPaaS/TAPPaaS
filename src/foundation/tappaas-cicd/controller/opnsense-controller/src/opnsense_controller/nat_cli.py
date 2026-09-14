@@ -18,7 +18,7 @@ import json
 import os
 import sys
 
-from .cli_globals import make_global_parent, parse_with_globals
+from .cli_globals import StrictArgumentParser, make_global_parent, parse_with_globals
 from .config import Config
 from .nat_manager import NatManager, NatRule
 
@@ -229,7 +229,7 @@ def make_globals() -> argparse.ArgumentParser:
 def main():
     """Main entry point for the NAT CLI."""
     gp = make_globals()
-    parser = argparse.ArgumentParser(
+    parser = StrictArgumentParser(
         description="OPNsense Destination-NAT (Port Forward) Manager",
         parents=[gp],
         formatter_class=argparse.RawDescriptionHelpFormatter,

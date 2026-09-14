@@ -11,7 +11,7 @@ import time
 from urllib.parse import urlparse
 
 from .caddy_manager import CaddyDomain, CaddyHandler, CaddyManager
-from .cli_globals import parse_with_globals
+from .cli_globals import StrictArgumentParser, parse_with_globals
 from .config import Config
 
 
@@ -612,7 +612,7 @@ def main():
         help="Dry-run mode (don't make actual changes)",
     )
 
-    parser = argparse.ArgumentParser(
+    parser = StrictArgumentParser(
         description="Caddy Reverse Proxy Management for OPNsense",
         parents=[global_parser],
         formatter_class=argparse.RawDescriptionHelpFormatter,

@@ -16,7 +16,7 @@ import json
 import os
 import sys
 
-from .cli_globals import make_global_parent, parse_with_globals
+from .cli_globals import StrictArgumentParser, make_global_parent, parse_with_globals
 from .config import Config
 from .firewall_manager import (
     FirewallManager,
@@ -295,7 +295,7 @@ def make_globals() -> argparse.ArgumentParser:
 def main():
     """Main entry point for the firewall CLI."""
     gp = make_globals()
-    parser = argparse.ArgumentParser(
+    parser = StrictArgumentParser(
         description="OPNsense Firewall Rule Manager",
         parents=[gp],
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -362,7 +362,7 @@ def main():
         help="Destination port",
     )
     create_parser.add_argument(
-        "--log/--no-log",
+        "--log",
         dest="log",
         action=argparse.BooleanOptionalAction,
         default=True,

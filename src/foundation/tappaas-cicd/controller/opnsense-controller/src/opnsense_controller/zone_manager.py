@@ -4,11 +4,11 @@
 This module reads zone definitions from zones.json and configures:
 - VLANs for each enabled zone
 - DHCP ranges for each enabled zone (configurable via DHCP-start/DHCP-end, defaults: .50 to .250)
-- Firewall rules based on access-to field (optional, use --firewall-rules)
+- Firewall rules based on access-to field (on by default; --no-firewall-rules skips them)
 
 Usage:
     zone-manager --zones-file /path/to/zones.json --execute
-    zone-manager --zones-file /path/to/zones.json --execute --firewall-rules
+    zone-manager --zones-file /path/to/zones.json --execute --no-firewall-rules
     zone-manager --firewall-rules-only --execute
 """
 
@@ -24,6 +24,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+from .cli_globals import StrictArgumentParser
 from .config import Config
 from .service_health import check_unbound_dns
 
@@ -1036,7 +1037,7 @@ class ZoneManager:
                 except Exception:  # noqa: BLE001 - reload is best-effort
                     pass
             info(f"  {zone.name}: interface label renamed to '{desired_label}' "
-                 f"(re-run zone-manager --firewall-rules to refresh bound rules)")
+                 f"(re-run zone-manager --firewall-rules-only --execute to refresh bound rules)")
             results[zone.name] = {
                 "status": "renamed_label", "from": label,
                 "to": desired_label, "vlan": zone.vlan_tag,
@@ -2534,7 +2535,7 @@ class ZoneManager:
 
 def main():
     """Main entry point for zone-manager CLI."""
-    parser = argparse.ArgumentParser(
+    parser = StrictArgumentParser(
         description="TAPPaaS Zone Manager - Configure VLANs and DHCP from zones.json",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -2589,7 +2590,7 @@ def main():
         action="store_true",
         help="Reconcile a drifted interface label to the normalized (underscore) "
              "zone name via a DISRUPTIVE unassign+reassign API call (issue #213). "
-             "Default warns only. Re-run zone-manager --firewall-rules afterwards.",
+             "Default warns only. Re-run zone-manager --firewall-rules-only afterwards.",
     )
     parser.add_argument(
         "--vlans-only",

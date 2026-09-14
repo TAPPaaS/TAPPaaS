@@ -30,6 +30,7 @@ import os
 import sys
 from datetime import datetime
 
+from .cli_globals import StrictArgumentParser
 from .config import Config
 from .dhcp_manager import DhcpHost, DhcpManager, DhcpRange
 from .firewall_manager import FirewallManager, FirewallRule, Protocol, RuleAction
@@ -521,7 +522,7 @@ def example_firewall_block_rule(
 
 def main():
     """Run the OPNsense controller examples."""
-    parser = argparse.ArgumentParser(
+    parser = StrictArgumentParser(
         description="OPNsense Controller for TAPPaaS",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,

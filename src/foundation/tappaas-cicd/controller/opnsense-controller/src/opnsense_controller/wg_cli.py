@@ -17,11 +17,10 @@ Usage:
 
 from __future__ import annotations
 
-import argparse
 import json
 import sys
 
-from .cli_globals import make_global_parent, parse_with_globals
+from .cli_globals import StrictArgumentParser, make_global_parent, parse_with_globals
 from .config import Config
 from .wg_manager import WgPeer, WgServer, WireGuardManager
 
@@ -40,7 +39,7 @@ def main(argv=None) -> int:
     gp.add_argument("--no-ssl-verify", action="store_true")
     gp.add_argument("--debug", action="store_true")
 
-    p = argparse.ArgumentParser(prog="opnsense-wg", description="ADR-010 home-side WireGuard (scaffold)",
+    p = StrictArgumentParser(prog="opnsense-wg", description="ADR-010 home-side WireGuard (scaffold)",
                                 parents=[gp])
     p.add_argument("--dry-run", action="store_true", default=True,
                    help="record intended ops only (default; live binding pending P2 deep test)")

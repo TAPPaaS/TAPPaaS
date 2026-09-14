@@ -134,7 +134,7 @@
       "changeNote": "The physical trunk the zone rides. A change moves the whole zone to different hardware."
     },
     "access-to": {
-      "description": "List of zones this zone can connect to. Used by zone-manager with --firewall-rules to create pass rules.",
+      "description": "List of zones this zone can connect to. zone-manager creates pass rules from it (unless --no-firewall-rules).",
       "type": "array",
       "required": false,
       "default": [],

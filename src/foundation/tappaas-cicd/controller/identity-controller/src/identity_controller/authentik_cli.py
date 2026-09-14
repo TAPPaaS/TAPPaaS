@@ -42,6 +42,7 @@ See ``people_primitives.py`` for the Authentik role-mapping decision.
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import os
 import sys
@@ -363,8 +364,10 @@ def cmd_unassign_role(mgr: AuthentikManager, args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # allow_abbrev=False: an option is taken only by its full name (#644).
     p = argparse.ArgumentParser(
         prog="authentik-manager",
+        allow_abbrev=False,
         description="Drive Authentik over its REST API for TAPPaaS (issue #45).",
     )
     p.add_argument("--credential-file", default=str(DEFAULT_CRED_FILE),
@@ -376,7 +379,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--no-tls-verify", action="store_true",
                    help="skip TLS certificate verification")
 
-    sub = p.add_subparsers(dest="command", required=True)
+    sub = p.add_subparsers(
+        dest="command", required=True,
+        parser_class=functools.partial(argparse.ArgumentParser, allow_abbrev=False),
+    )
 
     sub.add_parser("test", help="verify the token + connectivity")\
        .set_defaults(handler=cmd_test)

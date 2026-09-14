@@ -19,7 +19,7 @@ import argparse
 import ipaddress
 import sys
 
-from .cli_globals import make_global_parent, parse_with_globals
+from .cli_globals import StrictArgumentParser, make_global_parent, parse_with_globals
 from .config import Config
 from .dhcp_manager import DhcpManager  # reused only as a connected-Client provider
 from .service_health import check_unbound_dns, unbound_checkconf, unbound_restart
@@ -360,7 +360,7 @@ def main():
     gp.add_argument("--debug", action="store_true", help="Enable debug logging")
     gp.add_argument("--check-mode", action="store_true", help="Dry-run (no changes)")
 
-    parser = argparse.ArgumentParser(
+    parser = StrictArgumentParser(
         description="OPNsense Unbound host-override management (split-horizon DNS)",
         parents=[gp],
         formatter_class=argparse.RawDescriptionHelpFormatter,

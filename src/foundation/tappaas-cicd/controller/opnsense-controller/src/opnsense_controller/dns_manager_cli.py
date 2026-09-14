@@ -9,7 +9,7 @@ import argparse
 import json
 import sys
 
-from .cli_globals import make_global_parent, parse_with_globals
+from .cli_globals import StrictArgumentParser, make_global_parent, parse_with_globals
 from .config import Config
 from .dhcp_manager import DhcpHost, DhcpManager
 
@@ -340,7 +340,7 @@ def main():
         help="Dry-run mode (don't make actual changes)",
     )
 
-    parser = argparse.ArgumentParser(
+    parser = StrictArgumentParser(
         description="DNS Host Management for OPNsense Dnsmasq",
         parents=[gp],
         formatter_class=argparse.RawDescriptionHelpFormatter,

@@ -39,7 +39,7 @@ from .acme_manager import (
     AcmeValidation,
     PluginDisabledError,
 )
-from .cli_globals import make_global_parent, parse_with_globals
+from .cli_globals import StrictArgumentParser, make_global_parent, parse_with_globals
 from .config import Config
 
 
@@ -228,7 +228,7 @@ def main(argv: list[str] | None = None) -> int:
     gp.add_argument("--no-ssl-verify", action="store_true")
     gp.add_argument("--debug", action="store_true")
 
-    parser = argparse.ArgumentParser(
+    parser = StrictArgumentParser(
         prog="acme-manager",
         description="Drive OPNsense os-acme-client end-to-end (issue #254).",
         parents=[gp],

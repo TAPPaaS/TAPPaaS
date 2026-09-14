@@ -30,7 +30,7 @@ import os
 import subprocess
 import sys
 
-from .cli_globals import make_global_parent, parse_with_globals
+from .cli_globals import StrictArgumentParser, make_global_parent, parse_with_globals
 from .config import Config
 from .dhcp_manager import DhcpManager
 from .firewall_identity import FIREWALL_KEY, firewall_key_present
@@ -327,7 +327,7 @@ def main():
         help="Dry-run mode (don't make actual changes)",
     )
 
-    parser = argparse.ArgumentParser(
+    parser = StrictArgumentParser(
         description="DHCP scope management for OPNsense Dnsmasq (PXE boot options)",
         parents=[gp],
         formatter_class=argparse.RawDescriptionHelpFormatter,

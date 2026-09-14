@@ -39,6 +39,7 @@ from typing import Callable, Iterable, Iterator, Literal
 
 from oxl_opnsense_client import Client
 
+from .cli_globals import StrictArgumentParser
 from .config import Config
 from .firewall_manager import (
     FirewallManager,
@@ -1808,7 +1809,7 @@ def main() -> int:
                                 help="Firewall type (opnsense applies; NONE prints manual instructions)")
     global_parser.add_argument("--debug", action="store_true", help="Enable debug output")
 
-    parser = argparse.ArgumentParser(
+    parser = StrictArgumentParser(
         prog="rules-manager",
         description="TAPPaaS per-module firewall rules manager",
         formatter_class=argparse.RawDescriptionHelpFormatter,
