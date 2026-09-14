@@ -118,7 +118,7 @@ things that make those migrations survivable go before it (Wave 0).
 | 4 | G4.4 Storage & physical devices | 4 | 2 | 2 | M |
 | 4 | G4.5 Governance, CI & sign-offs | 6 | 3 | 1 | L |
 
-Issue counts include Future Work items rolled in and the two new issues.
+Issue counts include the Future Work items rolled in.
 
 ```mermaid
 quadrantChart
@@ -155,7 +155,7 @@ later wave depends on.
 
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
-| new | Versioned config-migration step | 3 | 2 | H | Replace ad-hoc blocks in `pre-update.sh` with ordered, idempotent `migrations/NNNN-*.sh`: each backs up the files it touches, supports dry-run, and is recorded as applied in `config/`. A failed migration stops the sweep before any module update. |
+| #652 | Versioned config-migration step | 3 | 2 | H | Replace ad-hoc blocks in `pre-update.sh` with ordered, idempotent `migrations/NNNN-*.sh`: each backs up the files it touches, supports dry-run, and is recorded as applied in `config/`. A failed migration stops the sweep before any module update. |
 | #584 | Rollback in install/modify | 2 | 2 | M | `modify` Step 0 rewrites config before the snapshot and tests; snapshot `config/<module>.json` together with the VM |
 | #453 | `--force` overwrites deployed config | 3 | 2 | M | Decide `--force` vs `--reinstall` semantics first (Lars, 2026-08-17) |
 | #648 | `--unset` for stale fields | 4 | 1 | L | Option 2 chosen (2026-09-14): `--unset`, deep test, README |
@@ -213,7 +213,7 @@ to be solid before Wave 1 starts sending migrations through it.
 | #447 | site-manager cannot modify the schedule | 4 | 1 | L | |
 | #651 | A failed sweep notifies no one | 3 | 1 | L | Adds a site-level notification target (additive schema); #126 reuses it |
 | FW #357 | Define `updateWindow` / `updateChannel` | 4 | 1 | L | Roll in: design only, belongs next to ADR-017 |
-| new | Hold the scheduled pull on one site | 4 | 2 | L | A local, per-repository marker with a reason and an expiry makes the scheduled sweep behave like `site-manager update --no-git-pull` (skip the pull, run the rest). Lets the test site run uncommitted or unpushed changes through real sweeps. Shown by `site-manager`; an expired hold warns and pulls again |
+| #653 | Hold the scheduled pull on one site | 4 | 2 | L | A local, per-repository marker with a reason and an expiry makes the scheduled sweep behave like `site-manager update --no-git-pull` (skip the pull, run the rest). Lets the test site run uncommitted or unpushed changes through real sweeps. Shown by `site-manager`; an expired hold warns and pulls again |
 
 ---
 
@@ -517,8 +517,8 @@ New capabilities with low upgrade risk.
   #399 + #384, #385 + #222, #160 + #256, #624 + #637, #642 + #643,
   #444 + #582, #119 / #120 / #121.
 - **Close or park:** #622 (verify), #284, #154, #223 → *Parking lot*.
-- **Open new issues:** the versioned config-migration step (G0.1), the
-  scheduled-pull hold (G0.3), and one tracking issue per new ADR (§10.4).
+- **New issues:** the config-migration step is #652 (G0.1) and the scheduled-pull
+  hold #653 (G0.3); still to open: one tracking issue per new ADR (§10.4).
 - **Close the 2.0 milestones** once their 18 issues are moved per this plan.
 
 ---
