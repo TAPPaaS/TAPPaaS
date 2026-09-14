@@ -22,7 +22,7 @@ import sys
 from .cli_globals import make_global_parent, parse_with_globals
 from .config import Config
 from .dhcp_manager import DhcpManager  # reused only as a connected-Client provider
-from .service_health import check_unbound_dns, unbound_checkconf
+from .service_health import check_unbound_dns, unbound_checkconf, unbound_restart
 
 
 def _client(args):
@@ -88,8 +88,8 @@ def _resolver_probe_ip(firewall: str) -> str:
         return "10.0.0.1"
 
 
-def _find_a_overrides(mgr, hostname: str, domain: str) -> list:
-    """Existing A host-overrides for <hostname>.<domain>, newest API shape."""
+def _search_overrides(mgr) -> list:
+    """Every Unbound host-override row, newest API shape."""
     result = mgr.client.run_module(
         "raw",
         params={
@@ -99,7 +99,47 @@ def _find_a_overrides(mgr, hostname: str, domain: str) -> list:
             "action": "get",
         },
     )
-    rows = result.get("result", {}).get("response", {}).get("rows", []) or []
+    return result.get("result", {}).get("response", {}).get("rows", []) or []
+
+
+def _norm(name: str) -> str:
+    return (name or "").strip().rstrip(".").lower()
+
+
+def _fqdn(row: dict) -> str:
+    host, domain = _norm(row.get("hostname", "")), _norm(row.get("domain", ""))
+    return f"{host}.{domain}" if host else domain
+
+
+def _is_below(name: str, zone: str) -> bool:
+    """True when `name` is strictly below `zone` (a descendant, not the apex)."""
+    zone = _norm(zone)
+    return bool(zone) and _norm(name).endswith("." + zone)
+
+
+# A `*` override is rendered as `local-zone: "<domain>" redirect`, and a redirect
+# zone permits local-data ONLY at its apex. So any other record anywhere below
+# that domain — not just one label down — fails unbound-checkconf and stops the
+# resolver, taking cluster DNS down (#474, #649). These two checks refuse such a
+# write before it happens, in whichever order the records arrive.
+
+def _covering_wildcard(rows: list, hostname: str, domain: str):
+    """The deepest `*` override whose redirect zone contains <hostname>.<domain>."""
+    name = f"{hostname}.{domain}"
+    hits = [r for r in rows
+            if r.get("hostname") == "*" and _is_below(name, r.get("domain", ""))]
+    return max(hits, key=lambda r: len(_norm(r.get("domain", ""))), default=None)
+
+
+def _records_below(rows: list, domain: str) -> list:
+    """Non-wildcard overrides strictly below `domain` (would sit in its redirect zone)."""
+    return [r for r in rows
+            if r.get("hostname") != "*" and _is_below(_fqdn(r), domain)]
+
+
+def _find_a_overrides(mgr, hostname: str, domain: str) -> list:
+    """Existing A host-overrides for <hostname>.<domain>, newest API shape."""
+    rows = _search_overrides(mgr)
     return [
         r for r in rows
         if r.get("hostname") == hostname
@@ -135,9 +175,63 @@ def _delete_all_a_overrides(mgr, args, hostname: str, domain: str) -> int:
     return removed
 
 
+def _check_redirect_zone(rows: list, args):
+    """Pre-write guard against a redirect-zone collision (#474, #649).
+
+    Returns None when the write is safe, True when a wildcard already answers
+    for the name with the same IP (nothing to write), False when refused.
+    """
+    if args.hostname == "*":
+        below = _records_below(rows, args.domain)
+        if not below:
+            return None
+        print(f"ERROR: refusing *.{args.domain}: its redirect zone would contain "
+              f"{len(below)} existing record(s), which Unbound rejects (#649). "
+              f"Delete them first:", file=sys.stderr)
+        for r in below:
+            print(f"    unbound-manager delete '{r.get('hostname', '')}' "
+                  f"'{r.get('domain', '')}'", file=sys.stderr)
+        return False
+    wc = _covering_wildcard(rows, args.hostname, args.domain)
+    if wc is None:
+        return None
+    name = f"{args.hostname}.{args.domain}"
+    if wc.get("server") == args.ip:
+        print(f"Covered by wildcard *.{wc.get('domain')} -> {args.ip}: "
+              f"{name} resolves already, no override written (#649)")
+        return True
+    print(f"ERROR: refusing {name} -> {args.ip}: it lies inside the redirect zone "
+          f"of *.{wc.get('domain')} -> {wc.get('server')}, and Unbound cannot hold "
+          f"a different answer below a wildcard (#649).", file=sys.stderr)
+    return False
+
+
+def _rollback_add(args) -> None:
+    """Undo an add that stopped the resolver, so a rejected record costs one
+    failed call instead of a cluster-wide DNS outage (#649)."""
+    probe_ip = _resolver_probe_ip(args.firewall)
+    with _client(args) as mgr:
+        n = _delete_all_a_overrides(mgr, args, args.hostname, args.domain)
+    if not check_unbound_dns(host=probe_ip, label="ROLLBACK", retries=5, delay=2.0):
+        unbound_restart(probe_ip)
+    if check_unbound_dns(host=probe_ip, label="ROLLBACK", retries=5, delay=2.0):
+        print(f"ROLLED BACK: removed {args.hostname}.{args.domain} ({n} row(s)); "
+              f"Unbound answers again.", file=sys.stderr)
+    else:
+        print(f"ROLLBACK FAILED: removed {n} row(s) for {args.hostname}.{args.domain} "
+              f"but Unbound still does not answer — recover on {probe_ip}.",
+              file=sys.stderr)
+
+
 def add_override(args) -> bool:
     desc = args.description or f"{args.hostname}.{args.domain}"
     with _client(args) as mgr:
+        verdict = _check_redirect_zone(_search_overrides(mgr), args)
+        if verdict is not None:
+            return verdict
+        # Only roll back a write that broke a resolver which was answering.
+        was_up = check_unbound_dns(host=_resolver_probe_ip(args.firewall),
+                                   label="PRE-WRITE", retries=2)
         # Converge, do not accumulate. The underlying `unbound_host` module does
         # NOT reliably match an existing row on re-add — two identical calls
         # produce two rows with different uuids — so a caller that runs on every
@@ -178,9 +272,11 @@ def add_override(args) -> bool:
     print(f"{'Created/updated' if changed else 'Already up to date'}: "
           f"{args.hostname}.{args.domain} -> {args.ip} (Unbound host override)")
     # Only a real change can have broken the resolver; a no-op skips the probe.
-    if changed:
-        return _verify_resolver_after_write(
-            args.firewall, f"host override {args.hostname}.{args.domain} -> {args.ip}")
+    if changed and not _verify_resolver_after_write(
+            args.firewall, f"host override {args.hostname}.{args.domain} -> {args.ip}"):
+        if was_up and not args.check_mode:
+            _rollback_add(args)
+        return False
     return True
 
 

@@ -107,3 +107,17 @@ def unbound_checkconf(host: str) -> tuple[bool, str]:
         return False, f"could not run unbound-checkconf on {host}: {e}"
     out = ((r.stderr or "") + (r.stdout or "")).strip()
     return r.returncode == 0, out
+
+
+def unbound_restart(host: str) -> bool:
+    """Regenerate the Unbound config and (re)start the daemon on the firewall.
+
+    An API reconfigure after a failed config can leave the daemon stopped; this
+    is the "Apply and Start" step of the manual recovery, over ssh by IP.
+    Best-effort like unbound_checkconf: never raises, returns success.
+    """
+    try:
+        r = _firewall_ssh(host, "configctl unbound restart\n", timeout=60.0)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return r.returncode == 0

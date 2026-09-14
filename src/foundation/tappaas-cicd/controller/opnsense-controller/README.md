@@ -79,6 +79,10 @@ unbound-manager delete <hostname> <domain>
 unbound-manager list
 ```
 Use `*` as the hostname for a wildcard override. `--check-mode` for dry-run.
+A wildcard is an Unbound redirect zone, which may hold no other record below it:
+`add` skips a name a wildcard already answers with the same IP, and refuses any
+other nested record (or a wildcard over existing ones). A write that still stops
+the resolver is rolled back.
 
 ### `caddy-manager` — reverse proxy
 

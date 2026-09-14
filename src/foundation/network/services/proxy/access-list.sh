@@ -226,7 +226,7 @@ proxy_add_routes() {
     fi
 
     local -a keep_fqdns=()
-    local name port fqdn route_desc
+    local name port fqdn route_desc wc
     while IFS=$'\t' read -r name port; do
         [[ -z "${name}" ]] && continue
         # A malformed entry is a config error — fail loudly rather than push
@@ -243,9 +243,8 @@ proxy_add_routes() {
         debug "  Additional route: ${BL}${fqdn}${CL} -> ${BL}${upstream}:${port}${CL} (${route_desc})"
 
         if [[ "${dns_mode}" == "per-service" ]]; then
-            if unbound-manager --no-ssl-verify list 2>/dev/null \
-                 | awk -v z="${domain}" '$1=="*" && $2==z {f=1} END{exit !f}'; then
-                debug "    wildcard *.${domain} already covers ${name}.${domain} — skipping per-service override"
+            if wc="$(unbound_wildcard_covers "${name}" "${domain}")"; then
+                debug "    wildcard *.${wc} already covers ${fqdn} — skipping per-service override"
             elif [[ -n "${gw}" ]]; then
                 unbound-manager --no-ssl-verify add "${name}" "${domain}" "${gw}" --description "${route_desc}" \
                     || warn "    Could not register ${fqdn} in Unbound (register manually)"

@@ -214,10 +214,10 @@ if [[ "${DNS_MODE}" == "per-service" ]]; then
     # stops the resolver — taking cluster DNS down (#474). This happens when a
     # module resolves dnsMode=per-service but publishes on a domain the default
     # environment serves via a wildcard. The wildcard already resolves
-    # <host>.<zone>, so skip the colliding per-service entry.
-    if unbound-manager --no-ssl-verify list 2>/dev/null \
-         | awk -v z="${DNS_ZONE}" '$1=="*" && $2==z {f=1} END{exit !f}'; then
-        debug "  ${GN}✓${CL} wildcard *.${DNS_ZONE} already covers ${DNS_HOST}.${DNS_ZONE} — skipping per-service override"
+    # <host>.<zone>, so skip the colliding per-service entry. Any ancestor's
+    # wildcard counts, not just <zone>'s (#649).
+    if WC_DOMAIN="$(unbound_wildcard_covers "${DNS_HOST}" "${DNS_ZONE}")"; then
+        debug "  ${GN}✓${CL} wildcard *.${WC_DOMAIN} already covers ${PROXY_DOMAIN} — skipping per-service override"
     # ADR-021 D2/D5: the answer is the DMZ gateway, from the ONE resolver.
     # rc 3 is not a failure — it is R3's "this service is not published".
     else

@@ -177,10 +177,10 @@ if [[ "${DNS_MODE}" == "per-service" ]]; then
     # local-data only at the apex, so "<host>.<zone> IN A ..." fails
     # unbound-checkconf and stops the resolver — taking cluster DNS down.
     # The wildcard already resolves <host>.<zone>, so skip the colliding
-    # per-service entry. Mirrors the guard in install-service.sh.
-    if unbound-manager --no-ssl-verify list 2>/dev/null \
-         | awk -v z="${DNS_ZONE}" '$1=="*" && $2==z {f=1} END{exit !f}'; then
-        debug "  ${GN}✓${CL} wildcard *.${DNS_ZONE} already covers ${DNS_HOST}.${DNS_ZONE} — skipping per-service override"
+    # per-service entry. Any ancestor's wildcard counts, not just <zone>'s (#649).
+    # Mirrors the guard in install-service.sh.
+    if WC_DOMAIN="$(unbound_wildcard_covers "${DNS_HOST}" "${DNS_ZONE}")"; then
+        debug "  ${GN}✓${CL} wildcard *.${WC_DOMAIN} already covers ${PROXY_DOMAIN} — skipping per-service override"
         # #505: a wildcard covers this host, so any per-service record here is
         # stale and collides with the redirect zone — prune it if present.
         unbound_prune_host_override "${DNS_HOST}" "${DNS_ZONE}"

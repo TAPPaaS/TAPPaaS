@@ -23,7 +23,7 @@
 # Usage: test-service.sh <module-name>
 #
 # Env:
-#   TAPPAAS_TEST_DEEP=1        run the deep checks (4, 5)
+#   TAPPAAS_TEST_DEEP=1        run the deep checks (4, 5, 6)
 #   TAPPAAS_TEST_CADDY_LIST    file with a recorded `caddy-manager list` output
 #                              to use instead of querying the firewall (#580
 #                              regression fixtures; unset in production)
@@ -402,6 +402,33 @@ if [[ "${DEEP}" -eq 1 ]]; then
         pass "Upstream reachable from firewall (status ${upstream_code})"
     else
         fail "Upstream unreachable from firewall (status: ${upstream_code:-timeout})"
+    fi
+
+    # Test 6: no Unbound record inside a wildcard's redirect zone
+    #
+    # A '*' override renders as a redirect zone, which permits local-data only at
+    # its apex; any record below it, at any depth, fails unbound-checkconf the
+    # next time Unbound reloads and takes cluster DNS down (#474, #649). Catch
+    # the collision in the override set, before a reload turns it into an outage.
+    info "  Check 6: Unbound wildcard zones hold no nested records"
+    ub_list="$(unbound-manager --no-ssl-verify list 2>/dev/null)" || ub_list=""
+    if [[ -z "${ub_list}" ]]; then
+        warn "    Could not list Unbound host overrides — skipping"
+    else
+        nested="$(awk '
+            NR>1 { if ($1 == "*") wc[tolower($2)] = 1; else rec[NR] = tolower($1 "." $2) }
+            END {
+                for (i in rec) for (w in wc) {
+                    n = rec[i]
+                    if (length(n) > length(w) + 1 && substr(n, length(n) - length(w)) == "." w)
+                        printf "%s (under *.%s) ", n, w
+                }
+            }' <<<"${ub_list}")"
+        if [[ -z "${nested}" ]]; then
+            pass "No Unbound override sits inside a wildcard redirect zone"
+        else
+            fail "Unbound override(s) inside a wildcard redirect zone — fatal on reload: ${nested}"
+        fi
     fi
 fi
 

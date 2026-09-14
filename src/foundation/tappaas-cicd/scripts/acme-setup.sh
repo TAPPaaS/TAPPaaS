@@ -286,12 +286,17 @@ if [[ "$DNS_MODE" == "wildcard" ]]; then
         # apex). Pre-existing per-service overrides for this domain (e.g.
         # logging.<domain>, authored before wildcard mode) therefore make
         # unbound-checkconf fatal and stop the resolver — taking cluster DNS
-        # down. Drop them first; the wildcard supersedes them.
+        # down. Drop them first; the wildcard supersedes them. That includes
+        # records deeper down (svc.demo.<domain>), not only <host>.<domain> (#649).
         unbound-manager --no-ssl-verify list 2>/dev/null \
-            | awk -v d="${DOMAIN}" 'NR>1 && $2==d && $1!="*" {print $1}' \
-            | while read -r _h; do
-                info "  removing per-service override ${_h}.${DOMAIN} (wildcard supersedes)"
-                unbound-manager --no-ssl-verify delete "${_h}" "${DOMAIN}" >/dev/null 2>&1 || true
+            | awk -v d="$(tr '[:upper:]' '[:lower:]' <<<"${DOMAIN}")" '
+                NR>1 && $1!="*" {
+                    z = tolower($2)
+                    if (z == d || substr(z, length(z) - length(d)) == "." d) print $1, $2
+                }' \
+            | while read -r _h _z; do
+                info "  removing per-service override ${_h}.${_z} (wildcard supersedes)"
+                unbound-manager --no-ssl-verify delete "${_h}" "${_z}" >/dev/null 2>&1 || true
             done
         if unbound-manager --no-ssl-verify add "*" "${DOMAIN}" "${WC_GW}" \
                 --description "TAPPaaS: ${VARIANT:-default} wildcard -> Caddy (${WC_ZONE})"; then

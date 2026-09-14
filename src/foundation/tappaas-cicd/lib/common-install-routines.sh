@@ -541,6 +541,23 @@ unbound_prune_host_override() {
     fi
 }
 
+# Is <host>.<zone> inside the redirect zone of an existing '*' Unbound override?
+# Checks EVERY ancestor, not only <zone>: *.example.com also covers
+# svc.demo.example.com, and a per-service record there is just as fatal (#649).
+# Prints the covering wildcard's domain (the deepest one) and returns 0 if so.
+#   unbound_wildcard_covers <host> <zone>
+unbound_wildcard_covers() {
+    unbound-manager --no-ssl-verify list 2>/dev/null \
+        | awk -v n="$1.$2" '
+            BEGIN { n = tolower(n) }
+            $1 == "*" {
+                w = tolower($2)
+                if (length(n) > length(w) + 1 && substr(n, length(n) - length(w)) == "." w \
+                    && length(w) > length(best)) best = w
+            }
+            END { if (best == "") exit 1; print best }'
+}
+
 # Resolve a dependency's provider module name, honoring same-environment
 # preference (#292, ADR-005 §4; environment-driven since #438). Given a bare
 # provider name and the CONSUMING module's environment, prefer an installed
