@@ -575,6 +575,7 @@ in
         jq
         git
         gh          # GitHub CLI
+        tea         # Forgejo CLI for the Codeberg issue tracker
         dig
         shellcheck   # bash script linting for module *.sh validation (#265)
         # OPNsense controller tools (opnsense-controller, opnsense-firewall, zone-manager, dns-manager)

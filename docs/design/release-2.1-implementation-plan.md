@@ -62,7 +62,7 @@ things that make those migrations survivable go before it (Wave 0).
    Each wave also has an entry gate (decisions and ADR sign-offs) and an exit
    gate (tests, then `main` → `stable`), see §10. The plan proposes 8 new
    ADRs (§10.4).
-2. **Wave 0 — make upgrades safe (17 issues, mostly E3–4).** Rollback,
+2. **Wave 0 — make upgrades safe (18 issues, mostly E3–4).** Rollback,
    honest pre-update gates, fleet-wide `--force` semantics, failure
    notification, the ADR-017 update channel. #644 is an active hazard:
    `network-manager distribute --help` pushed zones.json for real.
@@ -98,7 +98,7 @@ things that make those migrations survivable go before it (Wave 0).
 |------|-------|-------:|:-:|:-:|:-:|
 | 0 | G0.1 Migration & rollback framework | 5 | 2 | 2 | H |
 | 0 | G0.2 Trustworthy gates | 8 | 4 | 2 | M |
-| 0 | G0.3 Update channel & failure notice | 4 | 3 | 3 | M |
+| 0 | G0.3 Update channel & failure notice | 5 | 3 | 3 | M |
 | 1 | G1.1 Vocabulary & classification (ADR-022 family) | 7 | 2 | 4 | H |
 | 1 | G1.2 Backup placement model (ADR-012 close-out) | 12 | 3 | 4 | H |
 | 1 | G1.3 Module contract & repo layout | 10 | 2 | 5 | H |
@@ -118,7 +118,7 @@ things that make those migrations survivable go before it (Wave 0).
 | 4 | G4.4 Storage & physical devices | 4 | 2 | 2 | M |
 | 4 | G4.5 Governance, CI & sign-offs | 6 | 3 | 1 | L |
 
-Issue counts include Future Work items rolled in and the one new issue.
+Issue counts include Future Work items rolled in and the two new issues.
 
 ```mermaid
 quadrantChart
@@ -213,6 +213,7 @@ to be solid before Wave 1 starts sending migrations through it.
 | #447 | site-manager cannot modify the schedule | 4 | 1 | L | |
 | #651 | A failed sweep notifies no one | 3 | 1 | L | Adds a site-level notification target (additive schema); #126 reuses it |
 | FW #357 | Define `updateWindow` / `updateChannel` | 4 | 1 | L | Roll in: design only, belongs next to ADR-017 |
+| new | Hold the scheduled pull on one site | 4 | 2 | L | A local, per-repository marker with a reason and an expiry makes the scheduled sweep behave like `site-manager update --no-git-pull` (skip the pull, run the rest). Lets the test site run uncommitted or unpushed changes through real sweeps. Shown by `site-manager`; an expired hold warns and pulls again |
 
 ---
 
@@ -516,8 +517,8 @@ New capabilities with low upgrade risk.
   #399 + #384, #385 + #222, #160 + #256, #624 + #637, #642 + #643,
   #444 + #582, #119 / #120 / #121.
 - **Close or park:** #622 (verify), #284, #154, #223 → *Parking lot*.
-- **Open new issues:** the versioned config-migration step (G0.1), and one
-  tracking issue per new ADR (§10.4).
+- **Open new issues:** the versioned config-migration step (G0.1), the
+  scheduled-pull hold (G0.3), and one tracking issue per new ADR (§10.4).
 - **Close the 2.0 milestones** once their 18 issues are moved per this plan.
 
 ---
@@ -532,9 +533,12 @@ default channel, `main` is for testing and staging. This section adds what
 is specific to the waves: how deeply each change is tested, and what must
 be true before a wave starts and before it reaches `stable`.
 
-Two sites are available for testing, hrossen.dk and makerfloss; both track
-`main` today. "Test system" below means the site chosen to follow wave
-branches; "canary" means the site that stays on `main`.
+Two sites are available for testing (decided 2026-09-14):
+
+- **Test system: hrossen.dk.** It follows wave branches and is the first
+  site to get every change. Unpushed work reaches it under a pull hold (G0.3).
+- **Canary: makerfloss.** It stays on `main` and gets a change only after
+  the operator has pushed it.
 
 ### 10.1 Test level by upgrade risk
 
@@ -591,7 +595,7 @@ open decisions from review, and the ADRs that have to be signed off first.
 
 | Wave · group | Decisions | ADR sign-off (entry) | Exit gate (before `stable`) |
 |--------------|-----------|----------------------|-----------------------------|
-| 0 | Migration framework ✅; `--force` vs `--reinstall` semantics (#453) | **New: Config migrations & upgrade path**; ADR-017 Proposed → Accepted, with Erik's v0.2 points (#471); ADR-020 Proposed → Accepted (D8 is what #635 reuses; #584, #648, #633); ADR-007e amended for the site notification target (#651) | Runner released with no migrations; #644 and #645 on `stable`; branch site and main site chosen (today both hrossen.dk and makerfloss track `main`, so every merge to `main` reaches both on their next sweep); every known site reports a clean sweep after the update |
+| 0 | Migration framework ✅; `--force` vs `--reinstall` semantics (#453) | **New: Config migrations & upgrade path**; ADR-017 Proposed → Accepted, with Erik's v0.2 points (#471); ADR-020 Proposed → Accepted (D8 is what #635 reuses; #584, #648, #633); ADR-007e amended for the site notification target (#651) | Runner released with no migrations; #644 and #645 on `stable`; hrossen.dk moved to its wave branch, makerfloss left on `main`; every known site reports a clean sweep after the update |
 | 1 (all) | Wave 0 on `stable` and applied everywhere | — | Per group: migrations passed §10.1 R4 on the test system and every canary; release notes list them |
 | 1 · G1.5 | none — runs first | none: #439 is a runbook in `docs/design/`; the #545 outcome (what is backed up, how) goes into ADR-012 §2.7 | `config/` restore rehearsed on the test system |
 | 1 · G1.1 | `module.tier` → `stack`, or keep both (#624) | ADR-022 and 022a–022d Draft → Accepted (#624, #637, #610, #611 is 022d, #599 is 022c); ADR-009 Proposed → amended or superseded by 022c; ADR-007a + ADR-006 amended for People → Identity (#628); ADR-007b amended for the tier/stack outcome | as Wave 1 |
