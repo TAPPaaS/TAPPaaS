@@ -188,10 +188,10 @@ later wave depends on.
 
 ### G0.2 Trustworthy gates — E4 · R2 · L-M
 
-Status: in progress — all eight issues on `wave0/g0.2` (ADR-020 v0.8 ddae6b99;
-#636 ed16f691, #555 7f7901fb, #645 0c408b1f + df7b8915, #560 d32ea443 + 422986f2, #620
-254bdcba, #635 8b86662a, #633 f73f705a + 082964af); T0–T2 green on hrossen;
-the T3 sweep on hrossen is still to do.
+Status: landed 2026-09-15 on local `main`, push pending — ADR-020 v0.8 ddae6b99;
+#636 ed16f691, #555 7f7901fb, #645 0c408b1f + df7b8915, #560 d32ea443 +
+422986f2, #620 254bdcba, #635 8b86662a, #633 f73f705a + 082964af; T3 on
+hrossen green (tappaas-cicd's #595 guard fixed in 747b2310).
 
 Tests that pass when they should fail, or fail when they should pass, make
 every later migration unverifiable.
