@@ -25,6 +25,10 @@
 #
 # Environment:
 #   TAPPAAS_NO_GIT_PULL=1   skip the pull; refresh whatever is checked out
+#   TAPPAAS_CONFIG_DIR      where .repo-hold/ lives (default $CONFIG_DIR, else ~/config)
+#
+# A repository with an active pull hold (#653, `site-manager repository hold`)
+# is not pulled; an expired hold is removed and the repository pulls again.
 #   TAPPAAS_CICD_DIR        override the cicd directory (tests)
 #   TAPPAAS_BIN             override the bin directory (tests)
 
@@ -38,6 +42,9 @@ BIN_DIR="${TAPPAAS_BIN:-/home/tappaas/bin}"
 . "${CICD_DIR}/lib/common-install-routines.sh"
 # shellcheck source=../lib/repo-sync.sh
 . "${CICD_DIR}/lib/repo-sync.sh"
+# shellcheck source=../lib/repo-hold.sh
+. "${CICD_DIR}/lib/repo-hold.sh"
+HOLD_DIR_CONFIG="${TAPPAAS_CONFIG_DIR:-${CONFIG_DIR:-/home/tappaas/config}}"
 
 # ── 1. Pull the tracked repositories ─────────────────────────────────
 # The repository list is canonical in site.json .repositories; get_repositories()
@@ -78,6 +85,15 @@ if [ "$REPO_COUNT" -gt 0 ]; then
     REPO_PATH=$(echo "$REPOS_JSON" | jq -r ".[$i].path")
     REPO_BRANCH=$(echo "$REPOS_JSON" | jq -r ".[$i].branch")
     REPO_URL=$(echo "$REPOS_JSON" | jq -r ".[$i].url")
+    HOLD="$(repo_hold_state "$REPO_NAME" "$HOLD_DIR_CONFIG")"
+    case "$HOLD" in
+      active*)
+        warn "  ${REPO_NAME}: pull HELD — ${HOLD#active } (#653); running on what is checked out"
+        continue ;;
+      expired*)
+        warn "  ${REPO_NAME}: the pull hold expired ${HOLD#expired } — removing it and pulling again"
+        repo_hold_clear "$REPO_NAME" "$HOLD_DIR_CONFIG" ;;
+    esac
     if [ -d "$REPO_PATH" ]; then
       info "  Syncing ${REPO_NAME} -> ${REPO_URL} (branch: ${REPO_BRANCH})..."
       # reconcile_repo_checkout (lib/repo-sync.sh) re-points `origin` when the

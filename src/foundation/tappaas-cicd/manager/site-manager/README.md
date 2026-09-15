@@ -37,6 +37,8 @@ repository         repository list [--json]
                    repository add <url> [--branch <b>] [--managed full|tracked] [--catalog <p>]
                    repository delete <name> [--force]
                    repository reconcile [--apply]
+                   repository hold <name> --reason <text> [--until <30m|12h|7d|date>]
+                   repository release <name>
 top-level          add --name <site-code> [--organization <org>] [create-site options]  (= create-site.sh)
                    validate [FILE] [--schema-dir PATH]     (= validate-site.sh)
                    reconcile [--apply] [--deep]
@@ -63,6 +65,12 @@ non-zero if any module test failed.
 Common options: `--config-dir DIR`, `--json` (machine output for list/show),
 `--apply` (reconcile commits; default is preview), `--deep` (reconcile cascade),
 `--force` (repository delete → `repository.sh remove --force`).
+
+`repository hold` stops the scheduled sweep from pulling one repository, so a test
+site can run changes that are not pushed yet (#653). The marker is
+`config/.repo-hold/<repo>.json`; every hold expires (default 24h), and an
+expired hold is removed by the next sweep, which then pulls again.
+`repository list` and `update` show active holds.
 
 `site modify` editable fields (scalar, site-wide): `--displayName`, `--owner`,
 `--email`, `--automaticReboot`, `--snapshotRetention`, `--backupTarget`,

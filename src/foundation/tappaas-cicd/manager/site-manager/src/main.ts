@@ -22,6 +22,7 @@
 //
 // Exit codes: ok=0, error=1.
 
+import { DEFAULT_HOLD, describeHold, makeHold, parseUntil, readHolds, releaseHold, writeHold } from "./hold";
 import { defaultConfigDir, defaultSchemaDir, loadRaw, loadSite, writeSite } from "./config";
 import { CliSiteClient } from "./client";
 import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
@@ -105,6 +106,11 @@ export const HELP: HelpSpec = {
       options: [["--force", "Forward to repository.sh remove --force."]] },
     { usage: "repository reconcile [--apply]",
       options: [["--apply", "Commit (default is preview)."]] },
+    { usage: "repository hold <name> --reason <text> [--until <30m|12h|7d|ISO date>]",
+      note: "(#653: the scheduled sweep skips this repository's pull until the hold expires)",
+      options: [["--reason <text>", "Why the pull is held (shown in every sweep log)."],
+                ["--until <when>", `When the hold expires (default ${DEFAULT_HOLD}); the next sweep then pulls again.`]] },
+    { usage: "repository release <name>", note: "(#653: end a hold now)" },
     { usage: "add --name <site-code> [--organization <org>] [create-site options]",
       name: "add (create config/site.json from the running cluster — create-site.sh)",
       hidden: ["--org <org>"],
@@ -544,7 +550,7 @@ function collectPools(o: Opts, name: string): string[] {
 // ── `repository` CRUD + reconcile ──────────────────────────────────────
 function cmdRepository(o: Opts, client: SiteClient): void {
   const sub = o.rest[0];
-  if (!sub) die("repository: expected 'list' | 'add' | 'modify' | 'delete' | 'reconcile'");
+  if (!sub) die("repository: expected 'list' | 'add' | 'modify' | 'delete' | 'reconcile' | 'hold' | 'release'");
   const siteFile = siteFileOf(o);
 
   if (sub === "list") {
@@ -554,8 +560,11 @@ function cmdRepository(o: Opts, client: SiteClient): void {
     } else if (site.repositories.length === 0) {
       info("(no repositories)");
     } else {
+      const holds = readHolds(o.configDir);
+      const now = Math.floor(Date.now() / 1000);
       for (const r of site.repositories) {
-        info(`${r.name}\t${r.url}\t${r.branch ?? "stable"}\t${r.managed ?? "full"}`);
+        const h = holds.get(r.name);
+        info(`${r.name}\t${r.url}\t${r.branch ?? "stable"}\t${r.managed ?? "full"}${h ? `\t${describeHold(h, now)}` : ""}`);
       }
     }
     return;
@@ -604,6 +613,38 @@ function cmdRepository(o: Opts, client: SiteClient): void {
     // rm -rf's the clone, and edits site.json. --force forwards through.
     const rc = client.repositoryRemove(name, o.force);
     if (rc !== 0) throw new DieError(`repository.sh remove exited ${rc}`);
+    return;
+  }
+
+  if (sub === "hold") {
+    const name = o.rest[1];
+    const reason = o.flags.get("--reason");
+    if (!name || !reason) die("repository hold: expected <name> --reason <text> [--until <when>]");
+    const site = loadSite(siteFile);
+    if (!site.repositories.some((r) => r.name === name)) {
+      die(`repository hold: '${name}' is not a repository in ${siteFile}`);
+    }
+    const now = Math.floor(Date.now() / 1000);
+    let until: number;
+    try {
+      until = parseUntil(o.flags.get("--until") ?? DEFAULT_HOLD, now);
+    } catch (e) {
+      die((e as Error).message);
+    }
+    const by = process.env.SUDO_USER || process.env.USER || "unknown";
+    const h = makeHold(name, reason, by, until!, now);
+    const f = writeHold(o.configDir, h);
+    info(`${name}: ${describeHold(h, now)}`);
+    info(`  marker: ${f} — release early with: site-manager repository release ${name}`);
+    return;
+  }
+
+  if (sub === "release") {
+    const name = o.rest[1];
+    if (!name) die("repository release: expected <name>");
+    info(releaseHold(o.configDir, name)
+      ? `${name}: hold released — the next sweep pulls it again`
+      : `${name}: no hold`);
     return;
   }
 
@@ -746,6 +787,10 @@ function printPlan(plan: { actions: { kind: string; target: string }[]; warnings
 function cmdUpdate(o: Opts, client: SiteClient): number {
   const dryRun = o.boolFlags.has("--dry-run");
   const noGitPull = o.boolFlags.has("--no-git-pull");
+  const now = Math.floor(Date.now() / 1000);
+  for (const h of readHolds(o.configDir).values()) {
+    info(`${YW}${h.repository}: ${describeHold(h, now)}${CL}`);
+  }
   if (o.force && !dryRun) {
     warn(`${YW}--force: modules with rebootOk may be rebooted / migrated offline now; the others keep disruptive changes deferred.${CL}`);
   }

@@ -53,7 +53,7 @@ git clone -q "${TMP}/origin.git" "${TMP}/checkout" >/dev/null 2>&1
 FIXTURE="${TMP}/cicd"
 mkdir -p "${FIXTURE}/scripts" "${FIXTURE}/lib" "${FIXTURE}/manager" "${FIXTURE}/controller"
 cp "${CICD_DIR}/scripts/refresh-control-plane.sh" "${FIXTURE}/scripts/"
-cp "${CICD_DIR}/lib/common-install-routines.sh" "${CICD_DIR}/lib/repo-sync.sh" "${FIXTURE}/lib/"
+cp "${CICD_DIR}/lib/common-install-routines.sh" "${CICD_DIR}/lib/repo-sync.sh" "${CICD_DIR}/lib/repo-hold.sh" "${FIXTURE}/lib/"
 # A script that must end up linked into the fixture's bin dir.
 printf '#!/usr/bin/env bash\necho marker\n' > "${FIXTURE}/scripts/marker-tool.sh"
 chmod +x "${FIXTURE}/scripts/marker-tool.sh"
