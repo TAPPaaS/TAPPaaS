@@ -2289,7 +2289,23 @@ class ZoneManager:
         debug(f"  Dnsmasq interfaces: {', '.join(interfaces)}")
 
         if check_mode:
-            return {"status": "would_update", "interfaces": interfaces}
+            # Compare with what dnsmasq has, through the same planner --execute
+            # uses: an unconditional "would_update" made every dry-run report
+            # drift (#645).
+            try:
+                with DhcpManager(self.config) as manager:
+                    current = manager.get_dnsmasq_interfaces()
+            except Exception as e:  # noqa: BLE001 - unknown is reported as pending
+                debug(f"  Could not read dnsmasq interfaces: {e}")
+                return {"status": "would_update", "interfaces": interfaces}
+            planned, refusal = plan_dnsmasq_interfaces(
+                current, interfaces, len(vlan_zones), unresolved=len(unresolved),
+            )
+            if refusal:
+                return {"status": "would_refuse", "interfaces": current, "reason": refusal}
+            if set(planned) == set(current):
+                return {"status": "in_sync", "interfaces": current}
+            return {"status": "would_update", "interfaces": planned, "from": current}
 
         # DEBUG: Check Unbound before set_dnsmasq_interfaces
         _check_unbound_dns("BEFORE set_dnsmasq_interfaces")

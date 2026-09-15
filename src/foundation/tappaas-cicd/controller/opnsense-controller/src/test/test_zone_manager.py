@@ -952,6 +952,36 @@ class TestDryRunRulePlan(TestConfigureFirewallRulesSequencing):
         self.assertEqual(sorted(home), sorted(
             r.description for r in existing if r.description.startswith("Zone home ")))
 
+    def _dnsmasq(self, current):
+        zm = self._manager(_build_zones())
+        zm.get_vlan_zones = lambda: list(zm.zones)
+        zm._resolve_zone_interfaces = lambda zones: (
+            {z.name: f"opt_{z.name}" for z in zones}, [])
+        fake = MagicMock()
+        fake.__enter__.return_value = fake
+        if isinstance(current, Exception):
+            fake.get_dnsmasq_interfaces.side_effect = current
+        else:
+            fake.get_dnsmasq_interfaces.return_value = current
+        with patch("opnsense_controller.zone_manager.DhcpManager", return_value=fake):
+            r = zm.update_dnsmasq_interfaces(check_mode=True)
+        fake.set_dnsmasq_interfaces.assert_not_called()
+        return r
+
+    def test_dnsmasq_in_sync_is_not_pending(self):
+        want = ["lan"] + [f"opt_{n}" for n in _build_zones()]
+        r = self._dnsmasq(list(reversed(want)))
+        self.assertEqual(r["status"], "in_sync")
+        self.assertEqual(pending_change_count({"dnsmasq_interfaces": r}), 0)
+
+    def test_dnsmasq_missing_interface_is_pending(self):
+        r = self._dnsmasq(["lan", "opt_srv"])
+        self.assertEqual(r["status"], "would_update")
+
+    def test_dnsmasq_unreadable_stays_pending(self):
+        r = self._dnsmasq(RuntimeError("api down"))
+        self.assertEqual(r["status"], "would_update")
+
     def test_vlan_and_dhcp_outcomes_count_as_pending(self):
         self.assertEqual(pending_change_count(
             {"vlans": {"x": {"status": "would_create"}},
