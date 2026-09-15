@@ -478,6 +478,13 @@ def topological_sort(apps: list[str]) -> list[str]:
 DEFERRED_CHANGES: list[str] = []
 _DEFERRED_PREFIX = "DEFERRED:"
 
+# Checks that failed before a module's update and still fail after it (#635).
+# update-module.sh lets such an update succeed — it did not cause them — and
+# prints one "TEST-WARN: <module>: …" line, kept apart from DEFERRED because the
+# remedy is fixing what the check points at, not authorizing a reboot.
+TEST_WARNINGS: list[str] = []
+_TEST_WARN_PREFIX = "TEST-WARN:"
+
 
 def update_module(module_name: str) -> bool:
     """Update a single module via `module-manager module modify` (which delegates
@@ -512,9 +519,11 @@ def update_module(module_name: str) -> bool:
         if result.stderr:
             sys.stderr.write(result.stderr)
         for line in (result.stdout or "").splitlines() + (result.stderr or "").splitlines():
-            idx = line.find(_DEFERRED_PREFIX)
-            if idx != -1:
-                DEFERRED_CHANGES.append(line[idx + len(_DEFERRED_PREFIX):].strip())
+            for prefix, sink in ((_DEFERRED_PREFIX, DEFERRED_CHANGES),
+                                 (_TEST_WARN_PREFIX, TEST_WARNINGS)):
+                idx = line.find(prefix)
+                if idx != -1:
+                    sink.append(line[idx + len(prefix):].strip())
         return result.returncode == 0
     except (subprocess.SubprocessError, FileNotFoundError) as e:
         log.error("Error running 'module-manager module modify %s': %s", module_name, e)
@@ -1000,6 +1009,13 @@ def main():
             "<module> --force   (or set rebootOk on the module to permit it in the "
             "scheduled pass)"
         )
+    if TEST_WARNINGS:
+        log.warning(
+            "%d module(s) updated with checks that were already failing before "
+            "the update (not caused by it):", len(TEST_WARNINGS),
+        )
+        for w in TEST_WARNINGS:
+            log.warning("  %s", w)
     log.info(
         "update-tappaas completed: %s | control_plane=%s total=%d succeeded=%d "
         "failed=%d not_attempted=%d skipped=%d reboot=%s",
@@ -1031,6 +1047,8 @@ def main():
         # artefact so "what is still pending" survives the log.
         "deferred": len(DEFERRED_CHANGES),
         "deferred_changes": DEFERRED_CHANGES,
+        # Recorded, not failed (#635): the update did not introduce them.
+        "test_warnings": TEST_WARNINGS,
         "ok": (not failed_modules and not dep["down"] and reboot_ok
                and control_plane in ("refreshed", "skipped")),
     }

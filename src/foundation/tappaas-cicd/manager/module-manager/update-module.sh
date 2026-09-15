@@ -62,6 +62,7 @@ tappaas_require_operator
 
 OPT_FORCE=0
 OPT_NO_SNAPSHOT=0
+OPT_IGNORE_TEST_FAILURE=0
 
 # ── Usage ────────────────────────────────────────────────────────────
 
@@ -81,8 +82,12 @@ Options:
                           <module>.json otherwise. Equivalent to naming the
                           suffixed module directly.
     --variant <name>      DEPRECATED alias for --environment.
-    --force           Proceed even if pre-update test fails, and authorize a
-                      disruptive converge (reboot / offline migrate)
+    --force           Authorize a disruptive converge (reboot / offline
+                      migrate); update an archived/external module anyway
+    --ignore-test-failure
+                      Update even when the pre-update test reports a fatal
+                      failure (exit 2). A non-fatal failure (exit 1) never
+                      blocks the update (#635)
     --no-snapshot     Skip pre-update test, snapshot, and rollback
     --debug           Show Debug-level messages
     --silent          Suppress Info-level messages
@@ -312,6 +317,29 @@ apply_dependson_delta() {
     done <<<"${deps_added}"
 }
 
+# ── Graded tests (#635) ──────────────────────────────────────────────
+
+# Pre-update test output, the baseline Step 6 compares against. Empty when the
+# pre-update test did not run (--no-snapshot): then every failure is new.
+PRE_TEST_LOG="$(mktemp)"
+trap 'rm -f "${PRE_TEST_LOG}"' EXIT
+
+# run_graded_test <log> <test-module.sh args...> — run it, show its output as
+# before, keep a copy in <log>; returns test-module.sh's exit code.
+run_graded_test() {
+    local log="$1"; shift
+    local rc=0
+    "${TAPPAAS_TEST_MODULE_BIN:-/home/tappaas/bin/test-module.sh}" "$@" \
+        > >(tee -a "${log}") 2> >(tee -a "${log}" >&2) || rc=$?
+    wait
+    return "${rc}"
+}
+
+# failed_checks <log> — the text of every ✗ line, colour and prefix removed, sorted.
+failed_checks() {
+    sed 's/\x1b\[[0-9;]*m//g' "$1" 2>/dev/null | sed -n 's/.*✗[[:space:]]*//p' | sort -u
+}
+
 # ── Main ─────────────────────────────────────────────────────────────
 
 main() {
@@ -324,6 +352,7 @@ main() {
             -h|--help)   usage; exit 0 ;;
             --force)        OPT_FORCE=1; shift ;;
             --no-snapshot)  OPT_NO_SNAPSHOT=1; shift ;;
+            --ignore-test-failure) OPT_IGNORE_TEST_FAILURE=1; shift ;;
             --debug)        OPT_DEBUG=1; export TAPPAAS_DEBUG=1; shift ;;
             --silent)    OPT_SILENT=1; export TAPPAAS_SILENT=1; shift ;;
             --environment)
@@ -503,16 +532,23 @@ main() {
         # perfectly healthy module — which is how a stale generated README
         # stopped the mothership updating itself for three nights (#595). Those
         # checks still run for an operator, and in the deep sweep.
+        #
+        # The gate honours the suite's own grading (#635): exit 2 is fatal and
+        # aborts; exit 1 is failed assertions, often in other modules' records,
+        # and the update proceeds. Those failures become the baseline Step 6
+        # compares against, so only a failure the update introduced fails it.
         local pre_test_exit=0
-        /home/tappaas/bin/test-module.sh --runtime-only "${module}" || pre_test_exit=$?
+        run_graded_test "${PRE_TEST_LOG}" --runtime-only "${module}" || pre_test_exit=$?
 
         if [[ "${pre_test_exit}" -eq 0 ]]; then
             debug "  ${GN}✓${CL} Pre-update tests passed"
-        elif [[ "${OPT_FORCE}" -eq 1 ]]; then
-            warn "Pre-update tests failed (exit ${pre_test_exit}) — continuing due to --force"
+        elif [[ "${pre_test_exit}" -eq 1 ]]; then
+            warn "Pre-update tests failed (exit 1, not fatal) — updating anyway; these failures are the baseline for the post-update test"
+        elif [[ "${OPT_IGNORE_TEST_FAILURE}" -eq 1 ]]; then
+            warn "Pre-update tests failed fatally (exit ${pre_test_exit}) — continuing due to --ignore-test-failure"
         else
-            fatal "Pre-update tests failed (exit ${pre_test_exit}) — aborting update"
-            error "  Use --force to override"
+            fatal "Pre-update tests failed fatally (exit ${pre_test_exit}) — aborting update"
+            error "  Use --ignore-test-failure to override"
             exit 2
         fi
     fi
@@ -620,14 +656,24 @@ main() {
     # ── Step 6: Post-update test ──────────────────────────────────────
     info "${BOLD}Update Step 6: Run post-update tests: ${BL}${module}${CL}"
 
-    local post_test_exit=0
-    /home/tappaas/bin/test-module.sh "${module}" || post_test_exit=$?
+    local post_test_exit=0 post_log new_failures old_failures
+    post_log="$(mktemp)"
+    run_graded_test "${post_log}" "${module}" || post_test_exit=$?
+    new_failures="$(comm -13 <(failed_checks "${PRE_TEST_LOG}") <(failed_checks "${post_log}"))"
+    old_failures="$(comm -12 <(failed_checks "${PRE_TEST_LOG}") <(failed_checks "${post_log}"))"
+    rm -f "${post_log}"
 
     if [[ "${post_test_exit}" -eq 0 ]]; then
         debug "  ${GN}✓${CL} Post-update tests passed"
     elif [[ "${post_test_exit}" -eq 2 ]]; then
         # Fatal test failure — roll back (shared helper, #307).
         fatal_with_rollback "${module}" "${snapshot_created}" "Post-update tests reported a fatal error"
+    elif [[ "${post_test_exit}" -eq 1 && -z "${new_failures}" && -n "${old_failures}" ]]; then
+        # Only checks that were already failing before the update (#635): the
+        # update is not what broke them. One machine-readable line for the
+        # sweep summary, then success.
+        warn "Post-update tests: only checks that already failed before the update are still failing"
+        echo "TEST-WARN: ${module}: $(wc -l <<<"${old_failures}" | tr -d ' ') check(s) failing before and after the update — $(paste -sd ';' <<<"${old_failures}")"
     else
         # Non-fatal test failure — warn but don't rollback
         warn "Post-update tests failed (exit ${post_test_exit}) — update completed but module may have issues"
@@ -643,4 +689,5 @@ main() {
     info "${GN}${BOLD}Module '${module}' updated successfully${CL}"
 }
 
-main "$@"
+# Sourced by the fast-tier tests for its helpers (run_graded_test, failed_checks).
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then main "$@"; fi

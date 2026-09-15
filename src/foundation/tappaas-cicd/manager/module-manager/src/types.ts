@@ -78,6 +78,7 @@ export interface AddOptions {
 export interface ModifyOptions {
   environment?: string;
   force?: boolean;
+  ignoreTestFailure?: boolean;
   noSnapshot?: boolean;
   debug?: boolean;
   silent?: boolean;

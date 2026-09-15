@@ -103,7 +103,7 @@ export const HELP: HelpSpec = {
       ],
     },
     {
-      usage: "modify <module> [--set field=value]... [--environment ENV] [--force] [--no-snapshot] [--debug] [--silent]",
+      usage: "modify <module> [--set field=value]... [--environment ENV] [--force] [--ignore-test-failure] [--no-snapshot] [--debug] [--silent]",
       name: "modify",
       options: [
         [
@@ -113,7 +113,11 @@ export const HELP: HelpSpec = {
         ["--environment ENV", "Target environment to modify."],
         [
           "--force",
-          "Proceed despite warnings during the re-apply, AND authorize a disruptive change (reboot / offline migrate).",
+          "Authorize a disruptive change (reboot / offline migrate) for this module; also updates an archived/external module.",
+        ],
+        [
+          "--ignore-test-failure",
+          "Update even when the pre-update test fails fatally (exit 2). A non-fatal failure never blocks the update.",
         ],
         ["--no-snapshot", "Skip the pre-change VM snapshot."],
         ["--debug", "Verbose diagnostic output."],
@@ -214,6 +218,7 @@ interface Opts {
   environment?: string;
   allowFork: boolean;
   force: boolean;
+  ignoreTestFailure: boolean;
   reinstall: boolean;
   noSnapshot: boolean;
   debug: boolean;
@@ -246,6 +251,7 @@ function parseOpts(args: string[]): Opts {
     allowFork: false,
     force: false,
     reinstall: false,
+    ignoreTestFailure: false,
     noSnapshot: false,
     debug: false,
     silent: false,
@@ -290,6 +296,8 @@ function parseOpts(args: string[]): Opts {
       o.allowFork = true;
     } else if (a === "--force") {
       o.force = true;
+    } else if (a === "--ignore-test-failure") {
+      o.ignoreTestFailure = true;
     } else if (a === "--reinstall") {
       o.reinstall = true;
     } else if (a === "--no-snapshot") {
@@ -723,6 +731,7 @@ function cmdModify(opts: Opts, client: ModuleClient): number {
   const m: ModifyOptions = {
     environment: opts.environment,
     force: opts.force,
+    ignoreTestFailure: opts.ignoreTestFailure,
     noSnapshot: opts.noSnapshot,
     debug: opts.debug,
     silent: opts.silent,
