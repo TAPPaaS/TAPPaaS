@@ -175,7 +175,7 @@
       "note": "Tier 5 is reserved for the 'internet' boundary token and is never authored on a real zone. See 'tier_model' and 'invariants.I1' below.",
       "example": 2,
       "changeClass": "in-place",
-      "changeNote": "Trust rank in the ADR-014 lattice. Changing it re-derives which access-to edges are legal, so a reconcile may DROP edges the new tier forbids. Reported by validate before it is applied."
+      "changeNote": "Trust rank in the ADR-014 lattice. Changing it re-derives which access-to edges are legal: validate warns (I1) about an edge the new tier forbids. No firewall rule reads it, so a reconcile changes nothing."
     },
     "isolated": {
       "description": "Inbound quarantine flag. An isolated zone accepts NO zone-wide 'access-to' from anyone (the 'mgmt' control-plane exception aside); inbound reach is granted exclusively per-module via 'pinhole-allowed-from'. Orthogonal to 'tier' \u2014 iotCams (tier 6) and iotUntrust (tier 3) are both isolated.",

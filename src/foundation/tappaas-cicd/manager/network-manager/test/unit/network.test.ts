@@ -1250,6 +1250,21 @@ function tmpZones(): string {
     check(rs.errors > 0, "P2 I1: --strict promotes it to an error");
   }
 
+  // (b2) #620 — an untiered zone's edges are counted as NOT checked, never as
+  //      clean: a lattice authored on a third of the zones must say so.
+  {
+    const r = run({
+      mgmt, acme: svc,
+      work: { type: "Client", state: "Active", typeId: "3", subId: "20", vlantag: 320, ip: "10.3.20.0/24", "access-to": ["internet", "acme"], "pinhole-allowed-from": [] },
+    });
+    const note = r.lines.find((l) => l.includes("not checked by I1")) ?? "";
+    check(note.includes("2 access-to edge(s)") && note.includes("work→acme") && note.includes("work→internet"),
+      "#620: edges with no tier at one end are named as not checked");
+    check(r.lines.some((l) => l.includes("I1:") && l.includes("1 checked, 2 not checked")),
+      "#620: the I1 verdict states its coverage");
+    check(hits(r, "I1") === 0, "#620: the coverage note is not itself an I1 finding");
+  }
+
   // (c) I1 — mgmt is exempt: it reaches everything by design.
   {
     const r = run({

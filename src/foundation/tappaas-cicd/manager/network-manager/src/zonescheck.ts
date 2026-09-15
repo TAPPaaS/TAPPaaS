@@ -354,17 +354,27 @@ function checkTierInvariants(doc: ZonesDoc, rep: Reporter): void {
     ref === "internet" ? TIER_INTERNET : tiers.get(ref);
 
   // ── I1 — monotonic access-to: tier(A) <= tier(B), never upward. ──
+  // Edges with no tier at one end cannot be evaluated; they are counted and
+  // named, because a check that saw almost nothing must not read as clean (#620).
   let i1 = 0;
+  let i1Checked = 0;
+  const i1Unchecked: string[] = [];
   for (const [name, z] of doc.zones) {
     if (name === CONTROL_PLANE_ZONE) continue; // control plane reaches everything
+    if (isTierExempt(z.type)) continue;
     const from = tiers.get(name);
-    if (from === undefined) continue;
     const arr = z["access-to"];
     if (!Array.isArray(arr)) continue;
     for (const ref of arr) {
       if (typeof ref !== "string" || ref === "all") continue;
+      const target = doc.zones.get(ref);
+      if (target && isTierExempt(target.type)) continue;
       const to = refTier(ref);
-      if (to === undefined) continue;
+      if (from === undefined || to === undefined) {
+        i1Unchecked.push(`${name}→${ref}`);
+        continue;
+      }
+      i1Checked++;
       if (from > to) {
         rep.warn(
           `I1: zone '${name}' (tier ${from}) has access-to '${ref}' (tier ${to}) — ` +
@@ -376,7 +386,18 @@ function checkTierInvariants(doc: ZonesDoc, rep: Reporter): void {
       }
     }
   }
-  if (i1 === 0) rep.ok("I1: every access-to edge flows downward (tier(A) <= tier(B))");
+  if (i1Unchecked.length > 0) {
+    rep.note(
+      `tier: ${i1Unchecked.length} access-to edge(s) not checked by I1 — no tier at one end: ` +
+        i1Unchecked.sort().join(", "),
+    );
+  }
+  if (i1 === 0) {
+    rep.ok(
+      `I1: every access-to edge flows downward (tier(A) <= tier(B)) — ${i1Checked} checked` +
+        (i1Unchecked.length > 0 ? `, ${i1Unchecked.length} not checked` : ""),
+    );
+  }
 
   // ── I2 — isolation floor: an isolated zone is in nobody's access-to. ──
   const isolated = new Set<string>();
@@ -458,7 +479,12 @@ function checkTierInvariants(doc: ZonesDoc, rep: Reporter): void {
       i3++;
     }
   }
-  if (i3 === 0) rep.ok("I3: no tier-6 (no-egress) zone claims internet egress");
+  if (i3 === 0) {
+    rep.ok(
+      `I3: no tier-6 (no-egress) zone claims internet egress — ${tiers.size} tiered zone(s) checked` +
+        (untiered.length > 0 ? `, ${untiered.length} untiered not checked` : ""),
+    );
+  }
 
   // ── I4 — archetype conformance on the (type, tier, isolated) triple. ──
   let i4 = 0;
@@ -477,7 +503,12 @@ function checkTierInvariants(doc: ZonesDoc, rep: Reporter): void {
       i4++;
     }
   }
-  if (i4 === 0) rep.ok("I4: every tiered zone conforms to a defined archetype");
+  if (i4 === 0) {
+    rep.ok(
+      `I4: every tiered zone conforms to a defined archetype — ${tiers.size} checked` +
+        (untiered.length > 0 ? `, ${untiered.length} untiered not checked` : ""),
+    );
+  }
 }
 
 // Index a RENDERED raw document the same way loadZones indexes a file, so the
