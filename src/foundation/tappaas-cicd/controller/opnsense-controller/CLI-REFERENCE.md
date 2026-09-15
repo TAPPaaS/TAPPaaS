@@ -639,6 +639,7 @@ The Zone Manager reads TAPPaaS zone definitions from `zones.json` and automatica
 | `--firewall-rules-only` | Only configure firewall rules, skip VLANs and DHCP |
 | `--summary` | Show the zone summary AND run the pinhole-allowed-from policy validator (issue #163); don't configure anything. Exit 0 if at most warnings; exit 2 on any schema error. |
 | `--list-config` | List current OPNsense VLAN and DHCP configuration |
+| `--detailed-exitcode` | In check mode (no `--execute`), exit 2 when `--execute` would change anything, 0 when in sync. Check mode lists every firewall rule it would create, update or delete (#645); `network-manager reconcile` uses this as its dry-run. |
 | `--modules-dir PATH` | Directory containing `<module>.json` files used by the `--summary` validator (default: `/home/tappaas/config`) |
 
 #### Programmatic Usage

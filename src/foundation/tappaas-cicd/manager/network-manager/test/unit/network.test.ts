@@ -13,7 +13,7 @@
 //
 // Tiny assert harness (no test framework).
 
-import { proxmoxNeedsRecheck, proxmoxStatus } from "../../src/planes";
+import { opnsenseDryRunResult, proxmoxNeedsRecheck, proxmoxStatus } from "../../src/planes";
 import { gatewayIpOf, resolveSplitHorizonTarget } from "../../src/splithorizon";
 import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "fs";
 import { HELP, run } from "../../src/main";
@@ -1945,6 +1945,20 @@ function tmpZones(): string {
     proxmoxStatus(ok(1), ok(0), null, true) === "error",
     "a hard error from either command wins over the other's success",
   );
+}
+
+// #645: the opnsense dry-run is zone-manager's check mode with
+// --detailed-exitcode, so pending rule changes surface as drift instead of the
+// old unconditional "reported (dry-run)".
+{
+  check(opnsenseDryRunResult("zm", 2, 0).status === "drift",
+    "#645: rule changes pending → the opnsense dry-run reports drift");
+  check(opnsenseDryRunResult("zm", 0, 0).status === "in-sync",
+    "#645: nothing pending → in sync");
+  check(opnsenseDryRunResult("zm", 1, 0).status === "error",
+    "#645: a failed check mode is an error, not in sync");
+  check(opnsenseDryRunResult("zm", 0, 2).status === "error",
+    "#645: pinhole-validator schema errors still fail the dry-run");
 }
 
 

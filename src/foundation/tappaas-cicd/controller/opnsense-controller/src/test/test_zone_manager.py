@@ -27,6 +27,8 @@ from opnsense_controller.zone_manager import (
     ZoneManager,
     select_orphan_ranges,
     select_orphan_zone_rules,
+    firewall_rule_plan,
+    pending_change_count,
     _check_egress,
     discover_module_files,
     main,
@@ -906,6 +908,54 @@ class TestOrphanZoneRuleReaping(TestConfigureFirewallRulesSequencing):
         fake = self._run(_build_zones(), existing=existing)
         self.assertFalse([d for d in fake.deleted if d.startswith("Zone gone")])
         self.assertTrue(self.zm.failures)
+
+
+class TestDryRunRulePlan(TestConfigureFirewallRulesSequencing):
+    """A check-mode run names every rule --execute would change (#645)."""
+
+    def _in_sync(self):
+        first = self._run(_build_zones())
+        return [_to_info(r, uuid=f"u{i}") for i, r in enumerate(first.created)]
+
+    def test_in_sync_plans_nothing(self):
+        self._run(_build_zones(), existing=self._in_sync(), check_mode=True)
+        self.assertEqual(firewall_rule_plan(self.results), [])
+        self.assertEqual(pending_change_count({"firewall": self.results}), 0)
+
+    def test_fresh_firewall_plans_creates_and_touches_nothing(self):
+        fake = self._run(_build_zones(), check_mode=True)
+        self.assertEqual(fake.created, [])
+        plan = firewall_rule_plan(self.results)
+        self.assertIn(("srv", "create", "Zone srv -> dmz"), plan)
+        self.assertEqual(pending_change_count({"firewall": self.results}), len(plan))
+
+    def test_dropped_target_is_planned_as_delete(self):
+        fake = self._run(_build_zones(srv={"access_to": ["internet"]}),
+                         existing=self._in_sync(), check_mode=True)
+        self.assertEqual(fake.deleted, [])
+        self.assertEqual(firewall_rule_plan(self.results),
+                         [("srv", "delete", "Zone srv -> dmz")])
+
+    def test_orphan_zone_rules_are_planned_as_delete(self):
+        existing = self._in_sync()
+        orphan = _to_info(existing[0], uuid="o1")
+        orphan.description = "Zone gone -> internet"
+        self._run(_build_zones(), existing=existing + [orphan], check_mode=True)
+        self.assertIn(("gone", "delete", "Zone gone -> internet"),
+                      firewall_rule_plan(self.results))
+
+    def test_disabled_zone_rules_are_listed_one_by_one(self):
+        existing = self._in_sync()
+        self._run(_build_zones(home={"state": "Disabled"}), existing=existing,
+                  check_mode=True)
+        home = [d for z, v, d in firewall_rule_plan(self.results) if z == "home"]
+        self.assertEqual(sorted(home), sorted(
+            r.description for r in existing if r.description.startswith("Zone home ")))
+
+    def test_vlan_and_dhcp_outcomes_count_as_pending(self):
+        self.assertEqual(pending_change_count(
+            {"vlans": {"x": {"status": "would_create"}},
+             "dhcp": {"x": {"status": "exists"}, "y": {"boot": "would_clear"}}}), 2)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

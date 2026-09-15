@@ -12,7 +12,8 @@
 //
 // Per-plane CLI contracts (from zone-reconcile):
 //   opnsense : zone-manager --no-ssl-verify --zones-file <ZONES> --execute   (apply)
-//              zone-manager --no-ssl-verify --zones-file <ZONES> --summary   (dry-run)
+//              zone-manager --no-ssl-verify --zones-file <ZONES> --detailed-exitcode
+//                + --summary (pinhole validator)                            (dry-run, #645)
 //   proxmox  : proxmox-controller reconcile [--apply]   (+ bridge-vids [--apply])
 //   switch   : switch-controller reconcile [--apply]
 //   ap       : ap-controller reconcile [--apply]
@@ -53,6 +54,25 @@ function runStreaming(bin: string, args: string[]): RunResult {
     return { rc: -1, stdout: "", stderr: r.error.message, ran: false };
   }
   return { rc: r.status ?? -1, stdout: r.stdout ?? "", stderr: r.stderr ?? "", ran: true };
+}
+
+function opnsenseSpawnError(bin: string, r: RunResult): PlaneResult {
+  return { plane: "opnsense", status: "error", rc: r.rc, message: `${bin} not on PATH or failed to spawn (${r.stderr})` };
+}
+
+// The opnsense dry-run verdict from its two calls: the check-mode plan
+// (--detailed-exitcode: 0 in sync, 2 changes pending, other = error) and the
+// pinhole validator (--summary: 0 at most warnings, 2 schema errors).
+export function opnsenseDryRunResult(bin: string, planRc: number, checkRc: number): PlaneResult {
+  if (planRc !== 0 && planRc !== 2) {
+    return { plane: "opnsense", status: "error", rc: planRc, message: `${bin} check mode failed (rc=${planRc})` };
+  }
+  if (checkRc !== 0) {
+    return { plane: "opnsense", status: "error", rc: checkRc, message: `${bin} --summary failed (rc=${checkRc})` };
+  }
+  return planRc === 2
+    ? { plane: "opnsense", status: "drift", rc: 2, message: "changes pending (listed above)" }
+    : { plane: "opnsense", status: "in-sync", rc: 0, message: "in sync (dry-run)" };
 }
 
 // Is a post-apply re-check worth doing? Only when both commands ran and neither
@@ -116,22 +136,22 @@ export class CliPlaneClient implements PlaneClient {
 
   private opnsense(apply: boolean, zonesFile: string): PlaneResult {
     const bin = PLANE_BIN.opnsense;
-    const mode = apply ? "--execute" : "--summary";
-    const r = runStreaming(bin, ["--no-ssl-verify", "--zones-file", zonesFile, mode]);
-    // zone-manager does not use the 0/2/1 convention — it is success/fail.
-    let status: PlaneStatus;
-    let message: string;
-    if (!r.ran) {
-      status = "error";
-      message = `${bin} not on PATH or failed to spawn (${r.stderr})`;
-    } else if (r.rc === 0) {
-      status = "in-sync";
-      message = apply ? "converged" : "reported (dry-run)";
-    } else {
-      status = "error";
-      message = `${bin} ${mode} failed (rc=${r.rc})`;
+    const base = ["--no-ssl-verify", "--zones-file", zonesFile];
+    if (apply) {
+      // zone-manager --execute is success/fail, not the 0/2/1 convention.
+      const r = runStreaming(bin, [...base, "--execute"]);
+      if (!r.ran) return opnsenseSpawnError(bin, r);
+      return r.rc === 0
+        ? { plane: "opnsense", status: "in-sync", rc: 0, message: "converged" }
+        : { plane: "opnsense", status: "error", rc: r.rc, message: `${bin} --execute failed (rc=${r.rc})` };
     }
-    return { plane: "opnsense", status, rc: r.rc, message };
+    // The dry-run is --execute's own check mode, which lists every rule it would
+    // create or delete (#645); --summary listed none. The pinhole validator that
+    // --summary ran still runs after it.
+    const plan = runStreaming(bin, [...base, "--detailed-exitcode"]);
+    if (!plan.ran) return opnsenseSpawnError(bin, plan);
+    const check = runStreaming(bin, [...base, "--summary"]);
+    return opnsenseDryRunResult(bin, plan.rc, check.ran ? check.rc : -1);
   }
 
   private proxmox(apply: boolean): PlaneResult {

@@ -357,6 +357,41 @@ def select_orphan_zone_rules(
     return orphans, ""
 
 
+_RULE_PLAN_VERB = {"would_create": "create", "would_update": "update",
+                   "would_delete": "delete"}
+
+
+def firewall_rule_plan(fw_results: dict) -> list[tuple[str, str, str]]:
+    """The rule changes a check-mode ``configure_firewall_rules`` found (#645).
+
+    Returns (zone, create|update|delete, description) sorted by zone, so a
+    dry-run can list what ``--execute`` would do — deletions included.
+    """
+    plan = []
+    for zone_name, entry in sorted(fw_results.items()):
+        if not isinstance(entry, dict):
+            continue
+        for rule in entry.get("rules") or []:
+            verb = _RULE_PLAN_VERB.get(rule.get("status", "")) if isinstance(rule, dict) else None
+            if verb:
+                plan.append((zone_name, verb, rule.get("description", "")))
+    return plan
+
+
+def pending_change_count(results) -> int:
+    """How many ``would_*`` outcomes a check-mode run recorded, at any depth."""
+    if isinstance(results, dict):
+        own = sum(1 for k in ("status", "boot")
+                  if str(results.get(k, "")).startswith("would_"))
+        # A zone entry that carries per-rule results is counted by its rules.
+        if results.get("rules"):
+            own = 0
+        return own + sum(pending_change_count(v) for v in results.values())
+    if isinstance(results, list):
+        return sum(pending_change_count(v) for v in results)
+    return 0
+
+
 # zones.json declares, per zone, which OTHER zones may open per-module pinholes
 # INTO it via the "pinhole-allowed-from" list. The rules_manager enforces this
 # at compile time when a module is installed; this validator does the same
@@ -1836,6 +1871,11 @@ class ZoneManager:
                     results[zone.name] = {
                         "status": "would_delete" if check_mode else "deleted",
                         "rules_deleted": len(matching),
+                        "rules": [
+                            {"description": r.description,
+                             "status": "would_delete" if check_mode else "deleted"}
+                            for r in matching
+                        ],
                     }
 
             # Create rules for enabled zones
@@ -2619,6 +2659,12 @@ def main():
               "policy validator (issue #163); don't configure anything"),
     )
     parser.add_argument(
+        "--detailed-exitcode",
+        action="store_true",
+        help="In check mode, exit 2 when --execute would change anything "
+             "(0 = in sync). network-manager reconcile's dry-run uses it.",
+    )
+    parser.add_argument(
         "--list-config", "--list",
         action="store_true",
         dest="list_config",
@@ -2779,6 +2825,17 @@ def main():
         info(f"  Firewall rules: {len(fw)} zones processed")
         for zone_name, result in fw.items():
             debug(f"    {zone_name}: {result.get('status', 'unknown')}")
+        # A dry-run that lists no rule is no review at all (#645): name every
+        # rule --execute would create, renumber or delete.
+        if check_mode:
+            plan = firewall_rule_plan(fw)
+            if plan:
+                info(f"  Firewall rule changes on --execute: {len(plan)}")
+                mark = {"create": "+", "update": "~", "delete": "-"}
+                for zone_name, verb, desc in plan:
+                    info(f"    {mark[verb]} {verb:<6} {desc}")
+            else:
+                info("  Firewall rule changes on --execute: none")
 
     # Post-flight health gate (#307): if the zone changes degraded DNS or egress,
     # exit non-zero so the deploy pipeline stops before shipping a broken
@@ -2795,6 +2852,9 @@ def main():
         error(f"{len(manager.failures)} step(s) failed to converge — see the "
               "[Error] lines above.")
         sys.exit(1)
+
+    if check_mode and args.detailed_exitcode and pending_change_count(results):
+        sys.exit(2)
 
 
 if __name__ == "__main__":
