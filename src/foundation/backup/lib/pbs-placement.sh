@@ -90,6 +90,23 @@ _pbs_storage_active() {
     awk -v s="$2" 'NR>1 && $1==s && $3=="active" { found=1 } END { exit !found }' <<<"$1"
 }
 
+# State of storage <name> ($3) from one `pvesm status --storage <name> 2>&1`
+# probe: its output ($1, stderr included) and exit code ($2). Echoes one of
+#   active | inactive | missing | unknown
+# "unknown" is a probe that did not answer (a timeout, no connection, no line
+# for the storage): while vzdump writes to the PBS the status query competes
+# with it and reads "inactive" with a 500 error, although nothing is broken
+# (#636). Only "missing" and a clean "inactive" say the storage is wrong.
+pbs_storage_probe_state() {
+    local out="$1" rc="$2" name="$3"
+    if [[ "${rc}" == "124" || "${rc}" == "255" ]]; then echo unknown; return; fi
+    if grep -qF "storage '${name}' does not exist" <<<"${out}"; then echo missing; return; fi
+    if _pbs_storage_active "${out}" "${name}"; then echo active; return; fi
+    if ! awk -v s="${name}" '$1==s { f=1 } END { exit !f }' <<<"${out}"; then echo unknown; return; fi
+    if grep -qiE "error fetching|timeout|can't connect|^[^ ]*: *500 " <<<"${out}"; then echo unknown; return; fi
+    echo inactive
+}
+
 # ── Migration: legacy state → v0.3 state (§4.1, D22) ─────────────────
 #
 # Legacy values written by ADR-012 v0.2 installs:

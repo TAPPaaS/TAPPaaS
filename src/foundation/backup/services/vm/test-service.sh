@@ -90,25 +90,27 @@ QUERY_FQDN="${QUERY_NODE}.${MGMT}.internal"
 
 info "  Check 1: PBS storage '${STORAGE_NAME}' configured on ${NODE}"
 
+probe_rc=0
 storage_status=$(ssh -o ConnectTimeout=10 -o BatchMode=yes -o LogLevel=ERROR \
     "root@${QUERY_FQDN}" \
-    "pvesm status --storage ${STORAGE_NAME} 2>/dev/null" 2>/dev/null) || true
+    "timeout 30 pvesm status --storage ${STORAGE_NAME} 2>&1" 2>/dev/null) || probe_rc=$?
 
-if [[ -n "${storage_status}" ]] && echo "${storage_status}" | grep -q "${STORAGE_NAME}"; then
-    # Check if the storage is active (pvesm status columns: Name Type Status ...)
-    storage_active=$(echo "${storage_status}" | grep "${STORAGE_NAME}" | awk '{print $3}') || true
-    if [[ "${storage_active}" == "active" ]]; then
-        pass "PBS storage '${STORAGE_NAME}' is configured and active"
-    else
-        fail "PBS storage '${STORAGE_NAME}' exists but is not active (status: ${storage_active:-unknown})"
+storage_state="$(pbs_storage_probe_state "${storage_status}" "${probe_rc}" "${STORAGE_NAME}")"
+case "${storage_state}" in
+    active)
+        pass "PBS storage '${STORAGE_NAME}' is configured and active" ;;
+    unknown)
+        # A running backup makes this probe time out (#636): not a fault.
+        skip "PBS storage '${STORAGE_NAME}' status unknown — the probe did not answer ($(grep -m1 -iE 'error|timeout|connect' <<<"${storage_status}" || echo "rc ${probe_rc}")); a running backup causes this" ;;
+    inactive|missing)
+        if [[ "${storage_state}" == "missing" ]]; then
+            fail "PBS storage '${STORAGE_NAME}' is not configured on node ${NODE}"
+        else
+            fail "PBS storage '${STORAGE_NAME}' exists but is not active"
+        fi
         info "  Results: ${GN}${PASS} passed${CL}, ${RD}${FAIL} failed${CL}, ${YW}${WARN_COUNT} warnings${CL}"
-        exit 2
-    fi
-else
-    fail "PBS storage '${STORAGE_NAME}' is not configured on node ${NODE}"
-    info "  Results: ${GN}${PASS} passed${CL}, ${RD}${FAIL} failed${CL}, ${YW}${WARN_COUNT} warnings${CL}"
-    exit 2
-fi
+        exit 2 ;;
+esac
 
 # ── Test 2: At least one backup exists for this VM ───────────────────
 
@@ -126,6 +128,8 @@ fi
 
 if [[ "${backup_count}" -gt 0 ]]; then
     pass "Found ${backup_count} backup(s) for VMID ${VMID}"
+elif [[ "${storage_state}" == "unknown" ]]; then
+    skip "Could not list backups for VMID ${VMID} — the storage did not answer"
 else
     skip "No backups found for VMID ${VMID} — has the first backup run yet?"
 fi

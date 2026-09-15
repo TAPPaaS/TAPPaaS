@@ -56,6 +56,26 @@ _pbs_storage_active "$PVESM" tankc1 && r=0 || r=1; ck_rc "storage_active: exact 
 _pbs_storage_active "$PVESM" tankc  && r=0 || r=1; ck_rc "storage_active: no prefix match" 1 "$r"
 _pbs_storage_active "$PVESM_INACTIVE" tankc1 && r=0 || r=1; ck_rc "storage_active: inactive is not active" 1 "$r"
 
+# ── pbs_storage_probe_state (#636: a busy PBS is not a broken one) ───
+HDR='Name     Type  Status   Total  Used  Available  %'
+ck "probe: active"   active   "$(pbs_storage_probe_state "$HDR
+backup   pbs   active   100    10    90         10" 0 backup)"
+ck "probe: 500 read timeout during vzdump → unknown" unknown "$(pbs_storage_probe_state "backup: error fetching datastores - 500 read timeout
+$HDR
+backup   pbs   inactive 0      0     0          0" 0 backup)"
+ck "probe: 500 Can't connect → unknown" unknown "$(pbs_storage_probe_state "backup: error fetching datastores - 500 Can't connect to 10.0.0.5:8007
+$HDR
+backup   pbs   inactive 0      0     0          0" 0 backup)"
+ck "probe: pvesm timed out → unknown"   unknown "$(pbs_storage_probe_state "" 124 backup)"
+ck "probe: ssh failed → unknown"        unknown "$(pbs_storage_probe_state "" 255 backup)"
+ck "probe: empty output → unknown"      unknown "$(pbs_storage_probe_state "" 0 backup)"
+ck "probe: not configured → missing"    missing "$(pbs_storage_probe_state "storage 'backup' does not exist" 2 backup)"
+ck "probe: clean inactive → inactive"   inactive "$(pbs_storage_probe_state "$HDR
+backup   pbs   inactive 0      0     0          0" 0 backup)"
+ck "probe: another storage's error is not ours" inactive "$(pbs_storage_probe_state "$HDR
+backup   pbs   inactive 0      0     0          0
+backupx  pbs   active   1      1     1          1" 0 backup)"
+
 # ── _pbs_nodes_from_json ─────────────────────────────────────────────
 ck "nodes from json" $'tappaas1\ntappaas2' "$(_pbs_nodes_from_json '[{"node":"tappaas1"},{"node":"tappaas2"}]')"
 ck "nodes from empty" "" "$(_pbs_nodes_from_json '[]')"
