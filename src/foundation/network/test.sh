@@ -884,6 +884,60 @@ EOF
 fi
 
 
+section "Standard 12: a dead HTTPS endpoint is graded by the certificate, not the refid (issue #555)"
+
+# Check 3 used to warn whenever no cert refid was recorded, so an environment
+# whose cert was issued but never recorded (#540) could not fail it. Now the
+# certificate store decides: issued → fail, none → warn, no answer → "NOT
+# verified". TAPPAAS_TEST_HTTPS_CODE and TAPPAAS_TEST_ACME_STATUS stand in for
+# the endpoint and for `acme-manager status`.
+_p555_mod=""
+for f in "${CONFIG_DIR}"/*.json; do
+    [[ -f "${f}" ]] || continue
+    if jq -e '([(.dependsOn // []), (.integratesWith // [])] | flatten | index("network:proxy"))
+              and ((.proxyAllowedZones // []) | index("internet"))' "${f}" >/dev/null 2>&1; then
+        _p555_mod="$(basename "${f}" .json)"
+        break
+    fi
+done
+
+if [[ -z "${_p555_mod}" ]]; then
+    skip "no deployed module is public through network:proxy — nothing to grade"
+else
+    _p555_dir="$(mktemp -d)"
+    printf 'name        : *.example.org\nstatusCode  : 200  (200 = issued)\ncertRefId   : 68a1\n' > "${_p555_dir}/issued"
+    printf "no certificate '*.example.org' configured\n" > "${_p555_dir}/none"
+    : > "${_p555_dir}/silent"
+    _p555_run() {
+        TAPPAAS_TEST_CADDY_LIST="${_p555_dir}/none" TAPPAAS_TEST_HTTPS_CODE=000 \
+            TAPPAAS_TEST_ACME_STATUS="${_p555_dir}/$1" \
+            bash "${PROXY_TS}" "${_p555_mod}" 2>&1 | _p580_strip || true
+    }
+    _p555_txt="$(_p555_run issued)"
+    if grep -q "No domain configured for this environment" <<<"${_p555_txt}"; then
+        skip "'${_p555_mod}' has no domain for its environment — Check 3 does not run"
+    else
+        if grep -q "HTTPS not responding.*certificate is issued" <<<"${_p555_txt}"; then
+            pass "cert issued + endpoint dead → Check 3 fails (${_p555_mod})"
+        else
+            fail "cert issued + endpoint dead was not a failure — the #555 blind spot is back"
+        fi
+        if grep -q "no issued public certificate" <<<"$(_p555_run none)"; then
+            pass "no cert in the store → warning, not a failure"
+        else
+            fail "no cert in the store was not reported as 'no issued public certificate'"
+        fi
+        _p555_txt="$(_p555_run silent)"
+        if grep -q "NOT verified" <<<"${_p555_txt}" || grep -q "certificate is issued" <<<"${_p555_txt}"; then
+            pass "store silent → 'NOT verified', or the recorded refid decides"
+        else
+            fail "store silent was reported as neither unverifiable nor failed"
+        fi
+    fi
+    rm -rf "${_p555_dir}"
+fi
+
+
 # ─────────────────────────────────────────────────────────────────────
 # Deep tests (--deep) — VM provisioning + inter-VM connectivity
 # ─────────────────────────────────────────────────────────────────────

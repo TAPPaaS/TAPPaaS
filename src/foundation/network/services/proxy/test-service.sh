@@ -27,6 +27,9 @@
 #   TAPPAAS_TEST_CADDY_LIST    file with a recorded `caddy-manager list` output
 #                              to use instead of querying the firewall (#580
 #                              regression fixtures; unset in production)
+#   TAPPAAS_TEST_HTTPS_CODE    stands in for Check 3's HTTP status (#555 fixtures)
+#   TAPPAAS_TEST_ACME_STATUS   file with a recorded `acme-manager status` output
+#                              (#555 fixtures; empty file = the store is silent)
 #
 # Exit codes:
 #   0  All checks passed (or firewallType=NONE / no domain for the env → skip)
@@ -119,12 +122,12 @@ if read_module_config "${MODULE}" | jq -e '(.proxyAllowedZones // []) | index("i
     PROXY_PUBLIC=1
 fi
 
-# Has public TLS/cert handling been set up yet? The proxy binds a wildcard cert
-# by refid (dns01 mode) resolved from the env config, then cert-refids.json, then
-# legacy configuration.json — the SAME cascade proxy install/update uses. When NO
-# refid is resolvable, acme-setup.sh has not run and Caddy cannot serve a valid
-# public cert, so a dead HTTPS endpoint is "not configured yet" (a warning), NOT a
-# failure that should block every proxy-dependent module's install/update.
+# The refid the proxy binds (dns01 mode), resolved by the SAME cascade proxy
+# install/update uses: env config, then cert-refids.json, then legacy
+# configuration.json. A recorded refid is evidence that a cert exists; a missing
+# one is not evidence that none does — acme-setup.sh can issue the cert and fail
+# before recording it (#540), which left every HTTPS check in that environment
+# unable to fail (#555). public_cert_state asks the certificate itself.
 TLS_CERT_REFID="$(jq -r '.tlsCertRefid // ""' <<<"$(get_variant_config "${_ENV}" 2>/dev/null || echo '{}')" 2>/dev/null || echo '')"
 if [[ -z "${TLS_CERT_REFID}" ]]; then
     _env_name="${_ENV:-$(default_environment_name 2>/dev/null || echo '')}"
@@ -133,8 +136,33 @@ fi
 if [[ -z "${TLS_CERT_REFID}" && -f "${SYSTEM_CONFIG}" ]]; then
     TLS_CERT_REFID="$(jq -r '.tappaas.tlsCertRefid // ""' "${SYSTEM_CONFIG}" 2>/dev/null || echo '')"
 fi
-TLS_CONFIGURED=0
-[[ -n "${TLS_CERT_REFID}" ]] && TLS_CONFIGURED=1
+
+# Echoes issued | none | unknown for the environment's wildcard cert, read from
+# OPNsense by `acme-manager status`. TAPPAAS_TEST_ACME_STATUS names a file with a
+# recorded status output (empty file = the probe failed), for offline fixtures.
+public_cert_state() {
+    local out rc=0
+    if [[ -n "${TAPPAAS_TEST_ACME_STATUS:-}" ]]; then
+        out="$(cat "${TAPPAAS_TEST_ACME_STATUS}" 2>/dev/null)" || out=""
+        [[ -n "${out}" ]] || rc=2
+        grep -q '^no certificate' <<<"${out}" && rc=1
+    elif [[ -z "${TAPPAAS_DOMAIN}" ]] || ! command -v acme-manager &>/dev/null; then
+        rc=2; out=""
+    else
+        out="$(timeout 30 acme-manager --no-ssl-verify status --domain "${TAPPAAS_DOMAIN}" 2>/dev/null)" || rc=$?
+    fi
+    if [[ "${rc}" -eq 0 ]] && grep -qE '^statusCode *: *200\b' <<<"${out}"; then
+        echo issued
+    elif [[ "${rc}" -eq 0 ]] && grep -qE '^statusCode *:' <<<"${out}"; then
+        echo none       # configured, never issued
+    elif [[ "${rc}" -eq 1 ]] && grep -q '^no certificate' <<<"${out}"; then
+        echo none
+    elif [[ -n "${TLS_CERT_REFID}" ]]; then
+        echo issued     # the store did not answer; the recorded refid still counts
+    else
+        echo unknown
+    fi
+}
 
 # Should this module have a reverse-proxy vhost AT ALL? This mirrors
 # update-service.sh's own early exits, so the test expects a vhost in exactly the
@@ -153,8 +181,8 @@ TLS_CONFIGURED=0
 # is passed; it never decides whether the vhost exists. Checks 1 and 2 used to
 # downgrade a missing domain/handler to a warning whenever no refid resolved,
 # which made a declared-but-never-provisioned proxy report healthy forever —
-# `no drift` for a module with zero domains and zero handlers (#580). The refid
-# still gates Checks 3/4, where it genuinely is about public TLS.
+# `no drift` for a module with zero domains and zero handlers (#580). Check 3
+# grades a dead endpoint by public_cert_state, where it is about public TLS.
 VHOST_EXPECTED=1
 [[ -z "${TAPPAAS_DOMAIN}" ]] && VHOST_EXPECTED=0
 
@@ -315,34 +343,40 @@ if [[ -z "${PROXY_DOMAIN}" ]]; then
     # environment's domain. Reading .environment made "mgmt" explicit, and this
     # hard fail then blocked every mgmt module that depends on network:proxy.
     warn "    No domain configured for this environment — skipping HTTPS check"
-elif [[ -z "${FIREWALL_IP}" ]]; then
+elif [[ -z "${FIREWALL_IP}" && -z "${TAPPAAS_TEST_HTTPS_CODE:-}" ]]; then
     # Without the firewall's internal IP we cannot reach Caddy without hitting
     # the un-hairpinned WAN IP, so skip rather than report a false failure.
     warn "    Cannot determine ${FIREWALL_FQDN} internal IP — skipping HTTPS check"
 else
     # Connect to Caddy on the firewall's internal interface; --resolve keeps the
     # SNI/Host as the public domain so Caddy selects the right vhost and cert.
-    http_code=$(curl -sk -o /dev/null -w '%{http_code}' \
-        --max-time 10 --resolve "${PROXY_DOMAIN}:443:${FIREWALL_IP}" \
-        "https://${PROXY_DOMAIN}/" 2>/dev/null) || true
+    # TAPPAAS_TEST_HTTPS_CODE stands in for the answer in offline fixtures.
+    if [[ -n "${TAPPAAS_TEST_HTTPS_CODE:-}" ]]; then
+        http_code="${TAPPAAS_TEST_HTTPS_CODE}"
+    else
+        http_code=$(curl -sk -o /dev/null -w '%{http_code}' \
+            --max-time 10 --resolve "${PROXY_DOMAIN}:443:${FIREWALL_IP}" \
+            "https://${PROXY_DOMAIN}/" 2>/dev/null) || true
+    fi
     if [[ "${http_code}" =~ ^(200|301|302|303|307|308)$ ]]; then
         pass "HTTPS responding (status ${http_code})"
     elif [[ -n "${http_code}" && "${http_code}" != "000" ]]; then
         # Got a response but not a redirect/success — warn but pass
         pass "HTTPS responding (status ${http_code} — may require auth)"
-    elif [[ "${PROXY_PUBLIC}" -eq 1 && "${TLS_CONFIGURED}" -eq 1 ]]; then
-        # Public service AND a public cert IS configured (acme-setup.sh has run) →
-        # a dead HTTPS endpoint is a genuine failure.
-        fail "HTTPS not responding (status: ${http_code:-timeout})"
-    elif [[ "${TLS_CONFIGURED}" -eq 0 ]]; then
-        # No public cert configured yet (acme-setup.sh not run): Caddy cannot serve
-        # valid public TLS, so a dead HTTPS endpoint is EXPECTED. Warn, never fail —
-        # otherwise every proxy-dependent module's install/update aborts here (#).
-        warn "    HTTPS not responding (status: ${http_code:-timeout}) — public TLS/cert handling not set up yet (run acme-setup.sh); warning, not a failure"
-    else
+    elif [[ "${PROXY_PUBLIC}" -eq 0 ]]; then
         # Internal-only service (cert may exist but it is not publicly exposed):
         # a missing/invalid public reachability must not block the install.
         warn "    HTTPS not responding (status: ${http_code:-timeout}) — internal-only service; not publicly exposed (warning, not a failure)"
+    else
+        case "$(public_cert_state)" in
+            issued)
+                fail "HTTPS not responding (status: ${http_code:-timeout}) — the public certificate is issued, so Caddy should serve it" ;;
+            none)
+                # Genuinely unconfigured: Caddy cannot serve valid public TLS yet.
+                warn "    HTTPS not responding (status: ${http_code:-timeout}) — no issued public certificate (run acme-setup.sh); warning, not a failure" ;;
+            *)
+                warn "    HTTPS not responding (status: ${http_code:-timeout}) — NOT verified: the certificate store did not answer, so a missing cert cannot be told from a broken endpoint" ;;
+        esac
     fi
 fi
 
