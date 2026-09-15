@@ -841,9 +841,13 @@ function cmdUpdate(o: Opts, client: SiteClient): number {
   }
   const result = client.unitResult();
   info(summaryLine(readResult(o.configDir)));
+  if (result !== "success") {
+    warn(`${UNIT} ended with result '${result}' — journalctl -u ${UNIT} -n 200; the site owner was notified (#651)`);
+    return 1;
+  }
   info("  verify:   jq .ok ~/config/last-update-result.json     → true");
   info("  verify:   site-manager update --dry-run               → no repository drift remains");
-  return result === "success" ? 0 : 1;
+  return 0;
 }
 
 // Modules with NO live lifecycle — decommissioned, their VM is gone — mirror
