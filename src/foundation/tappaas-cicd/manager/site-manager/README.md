@@ -46,11 +46,12 @@ top-level          add --name <site-code> [--organization <org>] [create-site op
 
 `update` packages the whole-site update sweep: it delegates to
 `update-tappaas` and **always runs now** (`update-tappaas --force`, the
-scheduling override — the update window is ignored). Its own `--force` is a
-*different* axis: it authorizes a **disruptive** change (reboot / offline
-migrate) on **every** module (`TAPPAAS_MODULE_FORCE` → each `module modify
---force`; legitimate under ADR-020 D8 because an operator is explicitly asking,
-not the unattended sweep). `--no-git-pull` (`TAPPAAS_NO_GIT_PULL`) updates
+scheduling override — the update window is ignored). Its own `--force` opens
+the disruption window for this run (`TAPPAAS_MODULE_FORCE`): a module with
+`rebootOk: true` may be rebooted or migrated offline now, and every other module
+keeps its disruptive changes deferred. It never overrides `rebootOk: false`; for
+one module, that is `module-manager module modify <module> --force` (ADR-020 D8,
+#633). `--no-git-pull` (`TAPPAAS_NO_GIT_PULL`) updates
 whatever is checked out — refresh-control-plane.sh skips the per-repo pull — so local,
 not-yet-pushed changes can be tested. `--dry-run` previews the plan.
 

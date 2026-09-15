@@ -129,19 +129,20 @@ assert m.DEFERRED_CHANGES == [], "a clean converge must not invent deferrals"
 m.subprocess.run = lambda argv, **kw: R(1, "", "boom")
 assert m.update_module("demo") is False, "a non-zero converge is a failed module"
 
-# TAPPAAS_MODULE_FORCE=1 (site-manager update --force, #588) — and ONLY then —
-# forwards --force to every module modify (operator-authorized fleet-wide
-# disruption). Env-gated so the unattended sweep above still never forces.
+# #633: site-manager update --force (TAPPAAS_MODULE_FORCE=1) runs every module
+# now; it must NOT reach `module modify` as --force, which would override
+# rebootOk:false on the whole fleet. It opens the window instead, so only
+# rebootOk modules may be disrupted.
 m.subprocess.run = fake_run
 m.os.environ["TAPPAAS_MODULE_FORCE"] = "1"
 try:
     m.update_module("demo")
-    assert "--force" in seen["argv"], "TAPPAAS_MODULE_FORCE=1 must forward --force: %r" % (seen["argv"],)
+    assert "--force" not in seen["argv"], "#633: the fleet --force must not reach module modify: %r" % (seen["argv"],)
+    assert m.disruption_window_open(False), "#633: a run-now opens the window even without automaticReboot"
 finally:
     del m.os.environ["TAPPAAS_MODULE_FORCE"]
-# ...and once the env is cleared it is gone again (no leak between modules).
-m.update_module("demo")
-assert "--force" not in seen["argv"], "force must not persist after the env is cleared: %r" % (seen["argv"],)
+assert m.disruption_window_open(True), "automaticReboot opens the window"
+assert not m.disruption_window_open(False), "no automaticReboot, no run-now: the window stays shut"
 PYDEFER
     then
         passed=$((passed + 1))

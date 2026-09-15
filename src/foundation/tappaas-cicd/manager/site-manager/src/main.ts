@@ -132,7 +132,7 @@ export const HELP: HelpSpec = {
       note: "(#588: run the whole-site update sweep NOW — packages update-tappaas)",
       options: [
         ["--dry-run", "Preview the update plan; change nothing."],
-        ["--force", "Authorize a DISRUPTIVE change (reboot / offline migrate) on EVERY module. Distinct from the implicit scheduling force — the sweep always runs now regardless."],
+        ["--force", "Open the disruption window now: modules with rebootOk may be rebooted / migrated offline; the others keep disruptive changes deferred (never overrides rebootOk:false). The sweep always runs now regardless."],
         ["--no-git-pull", "Update whatever is checked out; skip pulling each repository (test local, not-yet-pushed changes)."],
       ] },
     { usage: "test [--deep]",
@@ -737,17 +737,17 @@ function printPlan(plan: { actions: { kind: string; target: string }[]; warnings
 
 // `update` — run the whole-site update sweep NOW (#588). Thin delegation to
 // update-tappaas, whose --force we ALWAYS pass: it is the SCHEDULING override
-// ("run now, ignore the update window"). site-manager's OWN --force is a
-// different axis — it authorizes a disruptive change (reboot / offline migrate)
-// on EVERY module, plumbed to the sweep as TAPPAAS_MODULE_FORCE (ADR-020 D8:
-// legitimate here because an operator is explicitly asking, not the unattended
-// sweep). --no-git-pull runs against whatever is checked out (test local,
-// not-yet-pushed changes); --dry-run previews.
+// ("run now, ignore the update window"). site-manager's OWN --force, plumbed as
+// TAPPAAS_MODULE_FORCE, opens the disruption window for this run: a module with
+// rebootOk may be rebooted / migrated offline now, every other module keeps its
+// disruptive changes deferred (ADR-020 D8 v0.8, #633). --no-git-pull runs
+// against whatever is checked out (test local, not-yet-pushed changes);
+// --dry-run previews.
 function cmdUpdate(o: Opts, client: SiteClient): number {
   const dryRun = o.boolFlags.has("--dry-run");
   const noGitPull = o.boolFlags.has("--no-git-pull");
   if (o.force && !dryRun) {
-    warn(`${YW}--force: authorizing a DISRUPTIVE change (reboot / offline migrate) on EVERY module.${CL}`);
+    warn(`${YW}--force: modules with rebootOk may be rebooted / migrated offline now; the others keep disruptive changes deferred.${CL}`);
   }
   return client.runUpdate(dryRun, o.force === true, noGitPull);
 }

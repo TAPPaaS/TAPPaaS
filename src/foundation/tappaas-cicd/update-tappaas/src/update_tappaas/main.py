@@ -497,14 +497,10 @@ def update_module(module_name: str) -> bool:
     permission is expressed per module, by rebootOk, and honoured only because
     TAPPAAS_SCHEDULED_PASS is exported below.
 
-    The ONE explicit exception: TAPPAAS_MODULE_FORCE=1 (set only by the
-    interactive `site-manager update --force`, #588) appends --force to every
-    `module modify`, authorizing disruption fleet-wide. That is an operator
-    standing at the terminal deliberately asking for it, not the unattended
-    sweep — so it does not reopen the D8 conflation."""
+    `site-manager update --force` (TAPPAAS_MODULE_FORCE=1) does not change that:
+    it stands in for the window, never for a module's consent (ADR-020 D8
+    v0.8, #633). See disruption_window_open."""
     args = [MODULE_MANAGER_CMD, "module", "modify", module_name]
-    if os.environ.get("TAPPAAS_MODULE_FORCE") == "1":
-        args.append("--force")
     try:
         result = subprocess.run(
             args,
@@ -528,6 +524,18 @@ def update_module(module_name: str) -> bool:
     except (subprocess.SubprocessError, FileNotFoundError) as e:
         log.error("Error running 'module-manager module modify %s': %s", module_name, e)
         return False
+
+
+def disruption_window_open(automatic_reboot: bool) -> bool:
+    """May a module with rebootOk be disrupted in this sweep (ADR-020 D8)?
+
+    Yes when the site accepts downtime in its window (automaticReboot, the same
+    setting that gates the Phase 3 node reboots), or when the operator ran
+    `site-manager update --force` (TAPPAAS_MODULE_FORCE=1), which means "run
+    every module's update now". Either way only rebootOk modules are disrupted:
+    until #633 the operator's --force reached every `module modify` as --force
+    and overrode rebootOk:false on the whole fleet."""
+    return automatic_reboot or os.environ.get("TAPPAAS_MODULE_FORCE") == "1"
 
 
 # ── Between-module shared-dependency invariant (#517) ────────────────
@@ -877,17 +885,15 @@ def main():
 
     # Dry run: show the update plan
     if args.dry_run:
-        # TAPPAAS_MODULE_FORCE=1 (site-manager update --force) authorizes a
-        # disruptive change on every module — reflect that in the previewed command.
-        mf = " --force" if os.environ.get("TAPPAAS_MODULE_FORCE") == "1" else ""
         log.info("=== DRY RUN MODE ===")
-        if mf:
-            log.info("(module-force: every update authorized to apply DISRUPTIVE changes)")
+        if os.environ.get("TAPPAAS_MODULE_FORCE") == "1":
+            log.info("(run now: modules with rebootOk may have disruptive changes "
+                     "applied; the others keep them deferred)")
         log.info("Phase 0 - Control-plane refresh (#595):")
         log.info("  1. %s", REFRESH_CONTROL_PLANE_CMD)
         log.info("Phase 1 - Foundation update order:")
         for i, mod in enumerate(installed_foundation, 1):
-            log.info("  %d. module-manager module modify %s%s", i, mod, mf)
+            log.info("  %d. module-manager module modify %s", i, mod)
         log_skipped(skipped_foundation)
         not_installed = [m for m in FOUNDATION_MODULES if deployed_foundation_name(m) is None]
         if not_installed:
@@ -897,7 +903,7 @@ def main():
             for i, app in enumerate(sorted_apps, 1):
                 dep_providers = get_module_dependencies(app)
                 dep_str = f" (depends on: {', '.join(dep_providers)})" if dep_providers else ""
-                log.info("  %d. module-manager module modify %s%s%s", i, app, mf, dep_str)
+                log.info("  %d. module-manager module modify %s%s", i, app, dep_str)
         else:
             log.info("  (no app modules installed)")
         log_skipped(skipped_apps)
@@ -958,12 +964,10 @@ def main():
         if checkconf:
             log.error("unbound-checkconf on the firewall reports: %s", checkconf)
 
-    # ADR-020 D8: inside the unattended sweep, a module that declares rebootOk
-    # may have a disruptive change applied — but only because the SITE has
-    # already accepted downtime in this window (automaticReboot, the same
-    # setting that gates the Phase 3 node reboots). Both must be true; neither
-    # is `--force`, which stays a scheduling override.
-    if automatic_reboot:
+    # ADR-020 D8: a module that declares rebootOk may have a disruptive change
+    # applied only when the window is open (disruption_window_open). Never
+    # `update-tappaas --force`, which stays a scheduling override.
+    if disruption_window_open(automatic_reboot):
         os.environ["TAPPAAS_SCHEDULED_PASS"] = "1"
     else:
         os.environ.pop("TAPPAAS_SCHEDULED_PASS", None)

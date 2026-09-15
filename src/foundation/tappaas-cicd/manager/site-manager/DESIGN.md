@@ -44,7 +44,7 @@ Top-level lifecycle verbs: `add` (create the singleton, = `create-site.sh`),
 `validate` (= `validate-site.sh`), `reconcile` (`[--apply] [--deep]`), and the
 fleet verbs (#588) `update` and `test` — thin delegations, same as `evacuate`:
 `update` → `update-tappaas` (always `--force` = run now; site-manager `--force`
-plumbs `TAPPAAS_MODULE_FORCE` for fleet-wide disruption, `--no-git-pull` plumbs
+plumbs `TAPPAAS_MODULE_FORCE`, which opens the disruption window for `rebootOk` modules (#633), `--no-git-pull` plumbs
 `TAPPAAS_NO_GIT_PULL`); `test` iterates `module-manager list` and runs
 `module-manager test <m>` per module, forwarding `--deep`.
 

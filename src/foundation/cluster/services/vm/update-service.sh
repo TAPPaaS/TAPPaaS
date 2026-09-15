@@ -284,11 +284,11 @@ converge_side_effect_dns() {
 #
 #   --force            an operator, now. `module modify --force` and
 #                      `reconcile --apply --force` forward it here.
-#   rebootOk + the     a standing per-module permission, honoured only inside
-#   scheduled pass     the unattended sweep, where the site has already said
-#                      (site.json automaticReboot) that it accepts downtime in
-#                      the window. update-tappaas exports TAPPAAS_SCHEDULED_PASS
-#                      for exactly this.
+#   rebootOk + the     a standing per-module permission, honoured only when the
+#   scheduled pass     window is open: the site accepts downtime in it (site.json
+#                      automaticReboot), or the operator ran `site-manager
+#                      update --force` (run now, #633). update-tappaas exports
+#                      TAPPAAS_SCHEDULED_PASS for exactly this.
 #
 # `update-tappaas --force` is NOT one of them. It means "run the sweep now" — a
 # scheduling override — and forwarding it as disruption authority would let a

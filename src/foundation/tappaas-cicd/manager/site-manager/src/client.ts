@@ -192,7 +192,7 @@ export class CliSiteClient implements SiteClient {
   runUpdate(dryRun: boolean, moduleForce: boolean, noGitPull: boolean): number {
     // `site-manager update` always runs NOW: update-tappaas --force is the
     // SCHEDULING override (ignore the update window), distinct from the
-    // per-module disruption force plumbed below via env.
+    // disruption window opened below via env (rebootOk modules only, #633).
     const args = ["--force"];
     if (dryRun) args.push("--dry-run");
     const env: Record<string, string> = {};
