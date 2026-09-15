@@ -97,7 +97,16 @@ declare module "child_process" {
     stdout: string | null;
     stderr: string | null;
     error?: Error;
+    // The signal that ended the child, e.g. "SIGINT" when the operator pressed
+    // Ctrl-C (site-manager update's follow loop detaches on it).
+    signal?: string | null;
   }
+  export interface ChildProcess {
+    kill(signal?: string): boolean;
+  }
+  // Asynchronous start, for a child that runs alongside a synchronous loop
+  // (site-manager update streams journalctl while it polls the unit).
+  export function spawn(command: string, args: string[], options: SpawnSyncOptions): ChildProcess;
   export interface SpawnSyncOptions {
     encoding?: "utf8";
     env?: Record<string, string | undefined>;

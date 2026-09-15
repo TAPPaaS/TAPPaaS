@@ -23,6 +23,7 @@
 // Exit codes: ok=0, error=1.
 
 import { DEFAULT_HOLD, describeHold, makeHold, parseUntil, readHolds, releaseHold, writeHold } from "./hold";
+import { UNIT, buildRequest, dropRequest, readResult, repoStatusLine, summaryLine, writeRequest } from "./unitrun";
 import { defaultConfigDir, defaultSchemaDir, loadRaw, loadSite, writeSite } from "./config";
 import { CliSiteClient } from "./client";
 import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
@@ -776,27 +777,61 @@ function printPlan(plan: { actions: { kind: string; target: string }[]; warnings
   }
 }
 
-// `update` — run the whole-site update sweep NOW (#588). Thin delegation to
-// update-tappaas, whose --force we ALWAYS pass: it is the SCHEDULING override
-// ("run now, ignore the update window"). site-manager's OWN --force, plumbed as
-// TAPPAAS_MODULE_FORCE, updates every module even when its pre-update test fails
-// (each `module modify` gets --ignore-test-failure) and opens the disruption
-// window for this run: a module with rebootOk may be rebooted / migrated offline
-// now, every other module keeps its disruptive changes deferred (ADR-020 D8
-// v0.9, #633). --no-git-pull runs
-// against whatever is checked out (test local, not-yet-pushed changes);
-// --dry-run previews.
+// `update` — run the whole-site update now (#588) by starting update-tappaas.service,
+// the unit the timer starts too (ADR-017 D4), and following its journal. The
+// options travel in a one-shot request (unitrun.ts): --force updates every module
+// even when its pre-update test fails and opens the disruption window for
+// rebootOk modules only (ADR-020 D8); --no-git-pull runs on whatever is checked
+// out. --dry-run starts nothing: repository drift, then the sweep's plan.
 function cmdUpdate(o: Opts, client: SiteClient): number {
   const dryRun = o.boolFlags.has("--dry-run");
   const noGitPull = o.boolFlags.has("--no-git-pull");
-  const now = Math.floor(Date.now() / 1000);
-  for (const h of readHolds(o.configDir).values()) {
-    info(`${YW}${h.repository}: ${describeHold(h, now)}${CL}`);
+  const force = o.force === true;
+  const nowSec = Math.floor(Date.now() / 1000);
+  const holds = readHolds(o.configDir);
+
+  if (dryRun) {
+    // ADR-017 D4: starts nothing. Where each repository stands against its
+    // origin, then the sweep's plan.
+    const site = loadSite(siteFileOf(o));
+    info("Repositories:");
+    for (const r of site.repositories) {
+      const branch = r.branch ?? "stable";
+      const h = holds.get(r.name);
+      const hold = h ? describeHold(h, nowSec) : null;
+      const p = hold ? { head: null, tip: null, behind: null } : client.repoProbe(r.path ?? `/home/tappaas/${r.name}`, branch);
+      info(`  ${repoStatusLine(r.name, branch, p.head, p.tip, p.behind, hold)}`);
+    }
+    return client.runUpdateDryRun(force);
   }
-  if (o.force && !dryRun) {
+
+  for (const h of holds.values()) info(`${YW}${h.repository}: ${describeHold(h, nowSec)}${CL}`);
+  if (force) {
     warn(`${YW}--force: every module updates even if its pre-update test fails; modules with rebootOk may be rebooted / migrated offline now, the others keep disruptive changes deferred.${CL}`);
   }
-  return client.runUpdate(dryRun, o.force === true, noGitPull);
+  const state = client.unitState();
+  if (state === "active" || state === "activating" || state === "deactivating") {
+    die(`${UNIT} is already running (${state}) — follow it: journalctl -fu ${UNIT}`);
+  }
+  const by = process.env.SUDO_USER || process.env.USER || "unknown";
+  writeRequest(o.configDir, buildRequest(force, noGitPull, by, new Date()));
+  const started = client.startUnit();
+  if (!started.ok) {
+    dropRequest(o.configDir);
+    die(`could not start ${UNIT}: ${started.err}`);
+  }
+  info(`started ${UNIT} (this run continues if you detach — Ctrl-C only stops following)`);
+  info(`  follow:   journalctl -fu ${UNIT}`);
+  info(`  status:   systemctl status ${UNIT}`);
+  if (client.followUnit(started.invocationId) === "detached") {
+    info(`detached — the run continues: journalctl -fu ${UNIT}`);
+    return 0;
+  }
+  const result = client.unitResult();
+  info(summaryLine(readResult(o.configDir)));
+  info("  verify:   jq .ok ~/config/last-update-result.json     → true");
+  info("  verify:   site-manager update --dry-run               → no repository drift remains");
+  return result === "success" ? 0 : 1;
 }
 
 // Modules with NO live lifecycle — decommissioned, their VM is gone — mirror

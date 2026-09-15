@@ -114,10 +114,32 @@ export class FakeSiteClient implements SiteClient {
   // (absent ⇒ 0).
   deployedModules: Array<{ name: string; status: string }> | null = [];
   testRc = new Map<string, number>();
-  runUpdate(dryRun: boolean, moduleForce: boolean, noGitPull: boolean): number {
-    this.log.push(
-      `update${dryRun ? " --dry-run" : ""}${moduleForce ? " --force" : ""}${noGitPull ? " --no-git-pull" : ""}`,
-    );
+  // update-tappaas.service stand-ins (ADR-017 D4)
+  unitStateValue = "inactive";
+  startOk = true;
+  unitResultValue = "success";
+  detach = false;
+  probes = new Map<string, { head: string | null; tip: string | null; behind: number | null }>();
+  unitState(): string {
+    return this.unitStateValue;
+  }
+  startUnit(): { ok: boolean; invocationId: string; err: string } {
+    this.log.push("start-unit");
+    return this.startOk ? { ok: true, invocationId: "inv-1", err: "" } : { ok: false, invocationId: "", err: "denied" };
+  }
+  followUnit(invocationId: string): "finished" | "detached" {
+    this.log.push(`follow ${invocationId}`);
+    return this.detach ? "detached" : "finished";
+  }
+  unitResult(): string {
+    return this.unitResultValue;
+  }
+  repoProbe(path: string, branch: string): { head: string | null; tip: string | null; behind: number | null } {
+    this.log.push(`probe ${path} ${branch}`);
+    return this.probes.get(path) ?? { head: "aaaa", tip: "aaaa", behind: 0 };
+  }
+  runUpdateDryRun(moduleForce: boolean): number {
+    this.log.push(`update --dry-run${moduleForce ? " --force" : ""}`);
     return this.delegateRc;
   }
   listDeployedModules(): Array<{ name: string; status: string }> | null {

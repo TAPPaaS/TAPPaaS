@@ -5,6 +5,9 @@
 import { HELP, run } from "../../src/main";
 import { undocumentedOptions } from "../../../../lib/ts/src/help";
 import { FakeSiteClient } from "./fake-client";
+import { existsSync, mkdtempSync, readFileSync, unlinkSync, writeFileSync } from "fs";
+import { join } from "path";
+import { tmpdir } from "os";
 
 let passed = 0;
 let failed = 0;
@@ -16,34 +19,59 @@ function check(cond: boolean, msg: string): void {
   }
 }
 
-// ── update: always runs now (--force scheduling is implicit in the client) ──
+// ── update: starts update-tappaas.service with a one-shot request (ADR-017 D4) ──
+const cfg = mkdtempSync(join(tmpdir(), "upd-"));
+writeFileSync(join(cfg, "site.json"), JSON.stringify({
+  name: "t", repositories: [
+    { name: "TAPPaaS", url: "u", branch: "main", path: "/repo/tappaas" },
+    { name: "extra", url: "u2", branch: "stable", path: "/repo/extra" },
+  ],
+}));
+const req = () => JSON.parse(readFileSync(join(cfg, ".update-request.json"), "utf8"));
+const clean = () => { try { unlinkSync(join(cfg, ".update-request.json")); } catch { /* none */ } };
 {
-  const c = new FakeSiteClient();
-  const rc = run(["update"], c);
-  check(rc === 0 && c.log.includes("update"), "update delegates to the sweep with no extra flags");
+  const c = new FakeSiteClient(); clean();
+  const rc = run(["update", "--config-dir", cfg], c);
+  check(rc === 0 && c.log.includes("start-unit") && c.log.includes("follow inv-1"), "update starts the unit and follows this invocation");
+  check(req().force === false && req().noGitPull === false, "a plain update writes a request with neither option");
 }
 {
-  const c = new FakeSiteClient();
-  run(["update", "--dry-run"], c);
-  check(c.log.includes("update --dry-run"), "update --dry-run forwards --dry-run");
+  const c = new FakeSiteClient(); clean();
+  run(["update", "--force", "--no-git-pull", "--config-dir", cfg], c);
+  check(req().force === true && req().noGitPull === true, "--force and --no-git-pull travel in the request");
 }
 {
-  const c = new FakeSiteClient();
-  run(["update", "--force"], c);
-  check(c.log.includes("update --force"), "update --force → the sweep gets TAPPAAS_MODULE_FORCE (test override, rebootOk respected)");
+  const c = new FakeSiteClient(); clean();
+  c.unitStateValue = "activating";
+  const rc = run(["update", "--config-dir", cfg], c);
+  check(rc !== 0 && !c.log.includes("start-unit") && !existsSync(join(cfg, ".update-request.json")),
+    "a running update is refused and no request is left for the next timer run");
 }
 {
-  const c = new FakeSiteClient();
-  run(["update", "--no-git-pull"], c);
-  check(c.log.includes("update --no-git-pull"), "update --no-git-pull forwards the toggle");
+  const c = new FakeSiteClient(); clean();
+  c.startOk = false;
+  const rc = run(["update", "--config-dir", cfg], c);
+  check(rc !== 0 && !existsSync(join(cfg, ".update-request.json")), "a failed start drops the request");
 }
 {
-  const c = new FakeSiteClient();
-  run(["update", "--force", "--no-git-pull", "--dry-run"], c);
-  check(
-    c.log.includes("update --dry-run --force --no-git-pull"),
-    "update forwards all three flags together",
-  );
+  const c = new FakeSiteClient(); clean();
+  c.unitResultValue = "exit-code";
+  check(run(["update", "--config-dir", cfg], c) === 1, "a failed run is exit 1");
+}
+{
+  const c = new FakeSiteClient(); clean();
+  c.detach = true;
+  check(run(["update", "--config-dir", cfg], c) === 0, "Ctrl-C detaches with exit 0 (the run continues)");
+}
+{
+  const c = new FakeSiteClient(); clean();
+  run(["repository", "hold", "extra", "--reason", "testing", "--config-dir", cfg], c);
+  const rc = run(["update", "--dry-run", "--config-dir", cfg], c);
+  check(rc === 0 && !c.log.includes("start-unit"), "update --dry-run starts nothing");
+  check(c.log.includes("probe /repo/tappaas main") && !c.log.some((l) => l.startsWith("probe /repo/extra")),
+    "--dry-run probes each repository against origin, except a held one");
+  check(c.log.includes("update --dry-run"), "--dry-run prints the sweep plan");
+  check(!existsSync(join(cfg, ".update-request.json")), "--dry-run writes no request");
 }
 
 // ── test: iterate every LIVE module, forward --deep, continue-on-failure ──
@@ -147,7 +175,9 @@ const live = (name: string): { name: string; status: string } => ({ name, status
     const r = quiet(argv);
     check(r.rc === 1 && r.err.includes("unknown option") && r.log.length === 0, `${argv.join(" ")}: refused, nothing delegated`);
   }
-  check(quiet(["update", "--dry-run", "--no-git-pull"]).log.includes("update --dry-run --no-git-pull"), "declared options still pass");
+  clean();
+  check(quiet(["update", "--no-git-pull", "--force", "--config-dir", cfg]).log.includes("start-unit"), "declared options still pass");
+  clean();
   check(undocumentedOptions(HELP).length === 0, `every usage option is described (${undocumentedOptions(HELP).join(", ")})`);
 }
 

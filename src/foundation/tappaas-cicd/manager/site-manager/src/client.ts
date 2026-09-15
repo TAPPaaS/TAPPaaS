@@ -20,12 +20,16 @@ import { defaultConfigDir } from "../../../lib/ts/src/config-io";
 import { capture as run, captureResult, stream as runStreaming } from "../../../lib/ts/src/exec";
 import { loadRaw, writeSite } from "./config";
 import { SiteClient } from "./types";
+import { UNIT } from "./unitrun";
+import { spawn, spawnSync } from "child_process";
 
 // Bin names (overridable via env for tests / relocations). Resolved LAZILY, as
 // in environment-manager/src/clients.ts: a module-level const would freeze the
 // value at import time, so a test could not point a bin at a stub without
 // controlling import order.
 const GIT = (): string => process.env.SITE_GIT_BIN ?? "git";
+const SYSTEMCTL = (): string => process.env.SITE_SYSTEMCTL_BIN ?? "systemctl";
+const JOURNALCTL = (): string => process.env.SITE_JOURNALCTL_BIN ?? "journalctl";
 const VALIDATE_SITE = (): string => process.env.SITE_VALIDATE_BIN ?? "validate-site.sh";
 const PEOPLE_BIN = (): string => process.env.SITE_PEOPLE_BIN ?? "people-manager";
 const NETWORK_BIN = (): string => process.env.SITE_NETWORK_BIN ?? "network-manager";
@@ -189,18 +193,69 @@ export class CliSiteClient implements SiteClient {
   }
 
   // ── (4) fleet verbs (#588) ───────────────────────────────────────────
-  runUpdate(dryRun: boolean, moduleForce: boolean, noGitPull: boolean): number {
-    // `site-manager update` always runs NOW: update-tappaas --force is the
-    // SCHEDULING override (ignore the update window), distinct from the
-    // disruption window opened below via env (rebootOk modules only, #633).
-    const args = ["--force"];
-    if (dryRun) args.push("--dry-run");
-    const env: Record<string, string> = {};
-    // Always set, so a TAPPAAS_MODULE_FORCE exported in the caller's shell
-    // cannot open the disruption window without --force.
-    env.TAPPAAS_MODULE_FORCE = moduleForce ? "1" : "0";
-    if (noGitPull) env.TAPPAAS_NO_GIT_PULL = "1";
-    return runStreaming(UPDATE_TAPPAAS(), args, { env });
+  // ADR-017 D4: the operator path starts the unit — the one code path the timer
+  // takes too — rather than the script. No sudo: the #515 polkit rule lets
+  // tappaas manage units.
+  unitState(): string {
+    const r = captureResult(SYSTEMCTL(), ["show", "-p", "ActiveState", "--value", UNIT]);
+    return r.ran && r.rc === 0 ? r.stdout.trim() : "unknown";
+  }
+
+  startUnit(): { ok: boolean; invocationId: string; err: string } {
+    const r = captureResult(SYSTEMCTL(), ["start", "--no-block", UNIT]);
+    if (!r.ran || r.rc !== 0) return { ok: false, invocationId: "", err: r.stderr.trim() || `rc ${r.rc}` };
+    // --no-block returns once the job is queued; the invocation id appears as
+    // the unit enters activating.
+    for (let i = 0; i < 30; i++) {
+      const id = captureResult(SYSTEMCTL(), ["show", "-p", "InvocationID", "--value", UNIT]).stdout.trim();
+      const st = this.unitState();
+      if (id && (st === "activating" || st === "active")) return { ok: true, invocationId: id, err: "" };
+      if (st === "failed") return { ok: true, invocationId: id, err: "" };
+      spawnSync("sleep", ["1"], {});
+    }
+    return { ok: true, invocationId: "", err: "" };
+  }
+
+  followUnit(invocationId: string): "finished" | "detached" {
+    const filter = invocationId ? [`_SYSTEMD_INVOCATION_ID=${invocationId}`] : ["-u", UNIT];
+    const j = spawn(JOURNALCTL(), ["-f", "-o", "cat", ...filter], { stdio: "inherit" });
+    try {
+      for (;;) {
+        const st = this.unitState();
+        if (st !== "activating" && st !== "active" && st !== "deactivating") return "finished";
+        // Ctrl-C reaches sleep too; that is the only way this loop learns of it.
+        const s = spawnSync("sleep", ["2"], {});
+        if (s.signal === "SIGINT") return "detached";
+      }
+    } finally {
+      spawnSync("sleep", ["1"], {}); // let journalctl print the last lines
+      j.kill("SIGTERM");
+    }
+  }
+
+  unitResult(): string {
+    return captureResult(SYSTEMCTL(), ["show", "-p", "Result", "--value", UNIT]).stdout.trim();
+  }
+
+  repoProbe(path: string, branch: string): { head: string | null; tip: string | null; behind: number | null } {
+    const g = (...a: string[]) => captureResult(GIT(), ["-C", path, ...a]);
+    const head = g("rev-parse", "HEAD");
+    if (!head.ran || head.rc !== 0) return { head: null, tip: null, behind: null };
+    const ls = g("ls-remote", "origin", `refs/heads/${branch}`);
+    const tip = ls.ran && ls.rc === 0 ? (ls.stdout.split(/\s+/)[0] || null) : null;
+    let behind: number | null = null;
+    if (tip && g("cat-file", "-e", `${tip}^{commit}`).rc === 0) {
+      const c = g("rev-list", "--count", `HEAD..${tip}`);
+      behind = c.rc === 0 ? Number(c.stdout.trim()) : null;
+    }
+    return { head: head.stdout.trim(), tip, behind };
+  }
+
+  runUpdateDryRun(moduleForce: boolean): number {
+    // The plan only; nothing runs. update-tappaas's gate is skipped for --dry-run.
+    return runStreaming(UPDATE_TAPPAAS(), ["--dry-run"], {
+      env: { TAPPAAS_MODULE_FORCE: moduleForce ? "1" : "0" },
+    });
   }
 
   listDeployedModules(): Array<{ name: string; status: string }> | null {

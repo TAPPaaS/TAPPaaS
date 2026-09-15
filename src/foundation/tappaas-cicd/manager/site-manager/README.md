@@ -42,15 +42,17 @@ repository         repository list [--json]
 top-level          add --name <site-code> [--organization <org>] [create-site options]  (= create-site.sh)
                    validate [FILE] [--schema-dir PATH]     (= validate-site.sh)
                    reconcile [--apply] [--deep]
-                   update [--dry-run] [--force] [--no-git-pull]   (= update-tappaas)
+                   update [--dry-run] [--force] [--no-git-pull]   (starts update-tappaas.service)
                    test [--deep]                                  (= module-manager test each)
 ```
 
-`update` packages the whole-site update sweep: it delegates to
-`update-tappaas` and **always runs now** (`update-tappaas --force`, the
-scheduling override — the update window is ignored). Its own `--force`
-(`TAPPAAS_MODULE_FORCE`) updates every module even when its pre-update test
-fails (`module modify --ignore-test-failure`), and opens the disruption window
+`update` runs the whole-site update **now** by starting `update-tappaas.service`
+— the unit the timer starts, so the operator exercises the scheduled path
+(ADR-017 D4). It follows the run's journal; Ctrl-C only detaches. The options
+travel in a one-shot request, `config/.update-request.json`, which the unit
+claims. `--dry-run` starts nothing: it reports each repository against its
+origin, then the sweep's plan. `--force` updates every module even when its
+pre-update test fails (`module modify --ignore-test-failure`), and opens the disruption window
 for this run: a module with
 `rebootOk: true` may be rebooted or migrated offline now, and every other module
 keeps its disruptive changes deferred. It never overrides `rebootOk: false`; for
@@ -115,7 +117,7 @@ site-manager node add tappaas2 --pxe --boot-disk sda \
     --mac aa:bb:cc:dd:ee:ff --no-wan --pool 'tanka1=single:nvme0n1'
 ```
 
-Afterwards run `update-tappaas --force` to fold HA + replication.
+Afterwards run `site-manager update` to fold HA + replication.
 
 ### `reconcile` and the `--deep` cascade
 

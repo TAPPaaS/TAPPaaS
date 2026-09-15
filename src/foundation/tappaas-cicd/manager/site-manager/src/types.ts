@@ -214,13 +214,21 @@ export interface SiteClient {
   repositoryRemove(name: string, force: boolean): number;
 
   // ── (4) fleet verbs delegating to update-tappaas / module-manager (#588) ──
-  // `site-manager update` — run the update sweep NOW (always --force scheduling
-  // override). moduleForce plumbs TAPPAAS_MODULE_FORCE=1 (every module modify
-  // gets --ignore-test-failure; opens the disruption window for rebootOk modules
-  // only, #633); noGitPull plumbs
-  // TAPPAAS_NO_GIT_PULL=1 (refresh-control-plane.sh skips the repo pull, updating whatever
-  // is checked out). Returns update-tappaas's exit code.
-  runUpdate(dryRun: boolean, moduleForce: boolean, noGitPull: boolean): number;
+  // `site-manager update` drives update-tappaas.service (ADR-017 D4); the
+  // run's options travel in config/.update-request.json (unitrun.ts).
+  //   unitState     → ActiveState of update-tappaas.service ("inactive", "active", …)
+  //   startUnit     → systemctl start --no-block; the new run's InvocationID
+  //   followUnit    → stream that invocation's journal until the unit stops;
+  //                   "detached" when the operator pressed Ctrl-C
+  //   unitResult    → the unit's Result ("success", "exit-code", …)
+  //   repoProbe     → a checkout's HEAD, its origin tip, and commits behind
+  //   runUpdateDryRun → update-tappaas --dry-run (the sweep plan); its exit code
+  unitState(): string;
+  startUnit(): { ok: boolean; invocationId: string; err: string };
+  followUnit(invocationId: string): "finished" | "detached";
+  unitResult(): string;
+  repoProbe(path: string, branch: string): { head: string | null; tip: string | null; behind: number | null };
+  runUpdateDryRun(moduleForce: boolean): number;
   // `site-manager test` — the deployed modules to iterate (module-manager list
   // --json; foundation + apps, from every repository), each with its lifecycle
   // .status so decommissioned (archived/external) ones can be skipped. null on
