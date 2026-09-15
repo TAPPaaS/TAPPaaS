@@ -46,7 +46,8 @@ fi
 CREDS="${HOME}/.authentik-credentials.txt"
 URL="$(grep '^url=' "${CREDS}" | cut -d= -f2-)"
 TOKEN="$(grep '^token=' "${CREDS}" | cut -d= -f2-)"
-api() { curl -fsS -H "Authorization: Bearer ${TOKEN}" "${URL}/api/v3$1"; }
+# The token goes in on stdin, not argv, so `ps` never shows it.
+api() { curl -fsS -H @- "${URL}/api/v3$1" <<<"Authorization: Bearer ${TOKEN}"; }
 
 fail=0
 
@@ -77,12 +78,17 @@ MODULE_JSON="${CONFIG_DIR}/${MODULE}.json"
 JSON="$(normalize_module_config < "${MODULE_JSON}" 2>/dev/null || echo '{}')"
 VMNAME="$(jq -r '.vmname // empty' <<<"${JSON}")"
 ZONE0="$(jq -r '.zone0 // empty' <<<"${JSON}")"
-oidc_consumer_paths "${MODULE}" "$(jq -r '.environment // ""' <<<"${JSON}")" "${JSON}"
+paths_ok=1
+oidc_consumer_paths "${MODULE}" "$(jq -r '.environment // ""' <<<"${JSON}")" "${JSON}" || paths_ok=0
 SECRETS_ENV="${TAPPAAS_TEST_OIDC_SECRETS_ENV:-${OIDC_SECRETS_ENV}}"
+[[ "${SECRETS_ENV}" =~ ^/[A-Za-z0-9._/-]+$ ]] || paths_ok=0
 UPSTREAM="${VMNAME}.${ZONE0}.internal"
 vm() { ssh -o BatchMode=yes -o ConnectTimeout=10 -o LogLevel=ERROR "tappaas@${UPSTREAM}" "$@"; }
 
-if [[ -z "${VMNAME}" || -z "${ZONE0}" ]]; then
+if [[ "${paths_ok}" -eq 0 ]]; then
+    error "    ✗ identity.secretsEnv / identity.configureService is not a plain path / unit name — not checked"
+    fail=1
+elif [[ -z "${VMNAME}" || -z "${ZONE0}" ]]; then
     warn "    ⚠ consumer NOT verified — no vmname/zone0 for '${MODULE}'"
 elif ! vm true 2>/dev/null; then
     warn "    ⚠ consumer NOT verified — ${UPSTREAM} not reachable over ssh"
@@ -93,8 +99,8 @@ else
         prov="$(jq -r --arg s "${MODULE}" '.results[]? | select(.slug==$s) | .provider // empty' <<<"${APPS}")"
         [[ -n "${prov}" ]] && want_id="$( (api "/providers/oauth2/${prov}/" || echo '{}') | jq -r '.client_id // empty')"
     fi
-    keys="$(vm "sudo grep -o '^OIDC_[A-Z_]*=' '${SECRETS_ENV}' 2>/dev/null" || true)"
-    have_id="$(vm "sudo sed -n 's/^OIDC_CLIENT_ID=//p' '${SECRETS_ENV}' 2>/dev/null" || true)"
+    keys="$(vm "sudo grep -o '^OIDC_[A-Z_]*=' $(printf %q "${SECRETS_ENV}") 2>/dev/null" || true)"
+    have_id="$(vm "sudo sed -n 's/^OIDC_CLIENT_ID=//p' $(printf %q "${SECRETS_ENV}") 2>/dev/null" || true)"
     missing=""
     for k in OIDC_CLIENT_ID OIDC_CLIENT_SECRET OIDC_DISCOVERY_URI; do
         grep -q "^${k}=" <<<"${keys}" || missing+=" ${k}"
@@ -115,7 +121,7 @@ else
     if [[ -z "${OIDC_CONFIGURE_SERVICE}" ]]; then
         info "    configureService=none — the app registers the provider itself (not checked here)"
     else
-        unit="$(vm "systemctl show -p LoadState,Result,ExecMainStatus '${OIDC_CONFIGURE_SERVICE}'" 2>/dev/null || true)"
+        unit="$(vm "systemctl show -p LoadState,Result,ExecMainStatus $(printf %q "${OIDC_CONFIGURE_SERVICE}")" 2>/dev/null || true)"
         if grep -q '^LoadState=not-found' <<<"${unit}"; then
             error "    ✗ ${OIDC_CONFIGURE_SERVICE} does not exist on ${VMNAME} — nothing registers the provider in the app"
             fail=1

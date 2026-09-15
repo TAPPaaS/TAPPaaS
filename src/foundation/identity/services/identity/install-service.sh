@@ -101,7 +101,8 @@ mapfile -t OIDC_SCOPES   < <(echo "${JSON}" | jq -r '(.identity.scopes // [])[]'
 # A module that registers the provider itself (e.g. via the app's API, like
 # Portainer on a Debian VM) sets configureService to "none" to opt out — there is
 # no systemd unit to restart, so the default convention would only warn.
-oidc_consumer_paths "${MODULE}" "${ENVIRONMENT}" "${JSON}"
+oidc_consumer_paths "${MODULE}" "${ENVIRONMENT}" "${JSON}" \
+    || die "identity.secretsEnv / identity.configureService must be a plain absolute path / <name>.service"
 MODULE_BASE="${OIDC_MODULE_BASE}"
 SECRETS_ENV="${OIDC_SECRETS_ENV}"
 CONFIGURE_SERVICE="${OIDC_CONFIGURE_SERVICE}"
