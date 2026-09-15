@@ -209,6 +209,13 @@ every later migration unverifiable.
 
 ### G0.3 Update channel & failure notice — E3 · R3 · L-M
 
+Status: landed 2026-09-15 on local `main`, push pending — ADR-007e v1.3
+aab46270, ADR-020 v0.9 5c77a7ca, ADR-017 v0.2 2fb781fb (FW #357 settled, D7
+deferred to G0.1's runner); #653 aac924f0; #651 0b99af35; fleet `--force`
+bb3f07b6; #471 da38bc36 d6bac3d7 88b96379 4507936a + fixes e7dc61d2 d95e6891
+675a9779 1e1a4810; #447 ddbb1a66. T3 on hrossen green: bootstrap through the
+interim path, then a full sweep through the new unit (13/13, timer rendered).
+
 The update mechanism is how every later fix reaches an installation. It has
 to be solid before Wave 1 starts sending migrations through it.
 
@@ -600,7 +607,7 @@ open decisions from review, and the ADRs that have to be signed off first.
 
 | Wave · group | Decisions | ADR sign-off (entry) | Exit gate (before `stable`) |
 |--------------|-----------|----------------------|-----------------------------|
-| 0 | Migration framework ✅; `--force` vs `--reinstall` semantics (#453) | **New: Config migrations & upgrade path**; ADR-017 Proposed → Accepted, with Erik's v0.2 points (#471); ADR-020 Proposed → Accepted ✅ 2026-09-15, v0.8 (D8 is what #635 reuses; #584, #648, #633); ADR-007e amended for the site notification target (#651) | Runner released with no migrations; #644 and #645 on `stable`; hrossen.dk moved to its wave branch, makerfloss left on `main`; every known site reports a clean sweep after the update |
+| 0 | Migration framework ✅; `--force` vs `--reinstall` semantics (#453) | **New: Config migrations & upgrade path**; ADR-017 Proposed → Accepted, with Erik's v0.2 points (#471) ✅ 2026-09-15; ADR-020 Proposed → Accepted ✅ 2026-09-15, v0.8 (D8 is what #635 reuses; #584, #648, #633); ADR-007e amended for the site notification target (#651) ✅ v1.3 | Runner released with no migrations; #644 and #645 on `stable`; hrossen.dk moved to its wave branch, makerfloss left on `main`; every known site reports a clean sweep after the update |
 | 1 (all) | Wave 0 on `stable` and applied everywhere | — | Per group: migrations passed §10.1 R4 on the test system and every canary; release notes list them |
 | 1 · G1.5 | none — runs first | none: #439 is a runbook in `docs/design/`; the #545 outcome (what is backed up, how) goes into ADR-012 §2.7 | `config/` restore rehearsed on the test system |
 | 1 · G1.1 | `module.tier` → `stack`, or keep both (#624) | ADR-022 and 022a–022d Draft → Accepted (#624, #637, #610, #611 is 022d, #599 is 022c); ADR-009 Proposed → amended or superseded by 022c; ADR-007a + ADR-006 amended for People → Identity (#628); ADR-007b amended for the tier/stack outcome | as Wave 1 |
