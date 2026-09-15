@@ -35,6 +35,25 @@ breadcrumb() { printf '%s %s\n' "$(date -Is)" "$*" >> "${CONFIG_DIR}/update-tapp
 
 SITE="${CONFIG_DIR}/site.json"
 RESULT="${CONFIG_DIR}/last-update-result.json"
+# ── the stage it stopped in (ADR-017 D3) ─────────────────────────────
+# prepare / rebuild: the unit's ExecStartPre failed and no sweep ran, so the
+# result file still describes the previous sweep — record this failure there.
+stage="$(tr -d '[:space:]' < "${CONFIG_DIR}/.update-stage" 2>/dev/null || true)"
+case "${stage}" in
+    prepare|rebuild)
+        jq -n --arg stage "${stage}" --arg t "$(date -Is)" \
+            '{ok: false, stage: $stage, end_time: $t, failed: 0, failed_modules: [],
+              note: "stopped before the sweep (ADR-017 D3); no module was updated"}' \
+            > "${RESULT}.tmp" 2>/dev/null && mv -f "${RESULT}.tmp" "${RESULT}" || true ;;
+esac
+rm -f "${CONFIG_DIR}/.update-stage"
+case "${stage}" in
+    prepare) stage_line="Stopped in: the mothership's pull and builds (prepare), before any module was updated." ;;
+    rebuild) stage_line="Stopped in: the mothership's nixos-rebuild, before any module was updated." ;;
+    sweep)   stage_line="Stopped in: the module sweep." ;;
+    *)       stage_line="" ;;
+esac
+
 to="$(jq -r '.email // empty' "${SITE}" 2>/dev/null || true)"
 site_name="$(jq -r '.name // empty' "${SITE}" 2>/dev/null || true)"
 if [[ -z "${to}" ]]; then
@@ -77,6 +96,7 @@ body="$(cat <<EOF
 The scheduled TAPPaaS update on ${host} failed at $(date -Is).
 
 systemd: result=${MONITOR_SERVICE_RESULT:-?} exit=${MONITOR_EXIT_STATUS:-?}
+${stage_line}
 Last sweep result: ${result_line}${written:+ (written ${written})}
 ${detail}
 

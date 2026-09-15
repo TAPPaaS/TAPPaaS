@@ -140,11 +140,32 @@ try:
     m.update_module("demo")
     assert "--force" not in seen["argv"], "#633: the fleet --force must not reach module modify: %r" % (seen["argv"],)
     assert "--ignore-test-failure" in seen["argv"], "ADR-020 v0.9: the fleet --force updates past a failing test: %r" % (seen["argv"],)
-    assert m.disruption_window_open(False), "#633: a run-now opens the window even without automaticReboot"
+    assert m.disruption_window_open(False, False, True), "#633: --force opens the window even without automaticReboot"
 finally:
     del m.os.environ["TAPPAAS_MODULE_FORCE"]
-assert m.disruption_window_open(True), "automaticReboot opens the window"
-assert not m.disruption_window_open(False), "no automaticReboot, no run-now: the window stays shut"
+assert m.disruption_window_open(True, True, False), "the scheduled run with automaticReboot opens the window"
+assert not m.disruption_window_open(True, False, False), "ADR-017 v0.2 D8: a plain operator run opens no window"
+assert not m.disruption_window_open(False, True, False), "no automaticReboot, no --force: the window stays shut"
+
+# ADR-017 D3/D4: the unit path reads the prepare step's markers and the claimed
+# request; the legacy path claims config/.update-request.json itself, once.
+import tempfile, pathlib, json as _j, os as _os, time as _t
+_d = pathlib.Path(tempfile.mkdtemp())
+m.RUN_DIR = _d / "run"; m.RUN_DIR.mkdir()
+m.REQUEST_PATH = _d / ".update-request.json"; m.STAGE_PATH = _d / ".update-stage"
+ctx = m.run_context()
+assert ctx["path"] == "legacy" and ctx["request"] is None, ctx
+m.REQUEST_PATH.write_text(_j.dumps({"force": True, "noGitPull": False}))
+ctx = m.run_context()
+assert ctx["request"] == {"force": True, "noGitPull": False} and not m.REQUEST_PATH.exists(), "legacy claims the request once"
+m.REQUEST_PATH.write_text("{}"); _old = _t.time() - 3600; _os.utime(m.REQUEST_PATH, (_old, _old))
+assert m.run_context()["request"] is None and not m.REQUEST_PATH.exists(), "a stale request is discarded"
+(m.RUN_DIR / "prepared").touch(); (m.RUN_DIR / "control-plane").write_text("stale\n")
+(m.RUN_DIR / "request.json").write_text(_j.dumps({"force": False, "noGitPull": True}))
+ctx = m.run_context()
+assert ctx == {"path": "unit", "request": {"force": False, "noGitPull": True}, "control_plane": "stale"}, ctx
+m.set_stage("sweep"); assert m.STAGE_PATH.read_text().strip() == "sweep"
+m.set_stage(None); assert not m.STAGE_PATH.exists()
 PYDEFER
     then
         passed=$((passed + 1))

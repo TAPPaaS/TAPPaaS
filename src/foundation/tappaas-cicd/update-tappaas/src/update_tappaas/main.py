@@ -28,6 +28,14 @@ CONFIG_DIR = Path("/home/tappaas/config")
 # at the schedule gate before a sweep, so this file is never overwritten by a
 # no-op — unlike the systemd unit's Result, which the no-op clobbers to success.
 RESULT_PATH = CONFIG_DIR / "last-update-result.json"
+# ADR-017 D3/D4: update-tappaas.service's prepare step leaves its markers and the
+# claimed operator request in the unit's RuntimeDirectory; site-manager update
+# writes the request to config/.update-request.json; config/.update-stage names
+# the step a failed run stopped in, for the #651 notice.
+RUN_DIR = Path(os.environ.get("RUNTIME_DIRECTORY", "/run/update-tappaas"))
+REQUEST_PATH = CONFIG_DIR / ".update-request.json"
+STAGE_PATH = CONFIG_DIR / ".update-stage"
+REQUEST_MAX_AGE = 600
 # The verb-aligned front door (ADR-007 #3/#5). `module module modify <m>` delegates
 # to update-module.sh, so behaviour is unchanged — we just stop calling the script
 # directly. Override for tests with MODULE_MANAGER_CMD.
@@ -530,16 +538,76 @@ def update_module(module_name: str) -> bool:
         return False
 
 
-def disruption_window_open(automatic_reboot: bool) -> bool:
+def disruption_window_open(automatic_reboot: bool, scheduled: bool, force: bool) -> bool:
     """May a module with rebootOk be disrupted in this sweep (ADR-020 D8)?
 
-    Yes when the site accepts downtime in its window (automaticReboot, the same
-    setting that gates the Phase 3 node reboots), or when the operator ran
-    `site-manager update --force` (TAPPAAS_MODULE_FORCE=1), which means "run
-    every module's update now". Either way only rebootOk modules are disrupted:
-    until #633 the operator's --force reached every `module modify` as --force
-    and overrode rebootOk:false on the whole fleet."""
-    return automatic_reboot or os.environ.get("TAPPAAS_MODULE_FORCE") == "1"
+    Yes for the scheduled run when the site accepts downtime in its window
+    (automaticReboot, the same setting that gates the Phase 3 node reboots), and
+    for an operator run with `site-manager update --force`. A plain operator run
+    opens no window (ADR-017 v0.2 D8). Either way only rebootOk modules are
+    disrupted: until #633 the operator's --force reached every `module modify`
+    as --force and overrode rebootOk:false on the whole fleet."""
+    return force or (scheduled and automatic_reboot)
+
+
+def _read_json(path: Path) -> dict | None:
+    try:
+        with open(path) as f:
+            value = json.load(f)
+        return value if isinstance(value, dict) else None
+    except (OSError, ValueError):
+        return None
+
+
+def claim_request() -> dict | None:
+    """Claim site-manager update's one-shot request outside the new unit.
+
+    Under the new unit (ADR-017 D3) the prepare step has already moved it into
+    the RuntimeDirectory. Without that step — the old unit during the first
+    activation, or a bare run — this run claims it itself, so a request is still
+    used by exactly one run (ADR-017 Bootstrap)."""
+    if not REQUEST_PATH.exists():
+        return None
+    try:
+        age = time.time() - REQUEST_PATH.stat().st_mtime
+        request = _read_json(REQUEST_PATH)
+        REQUEST_PATH.unlink()
+    except OSError:
+        return None
+    if age > REQUEST_MAX_AGE:
+        log.warning("Discarding an operator request written %ds ago (older than %ds)",
+                    int(age), REQUEST_MAX_AGE)
+        return None
+    return request
+
+
+def run_context() -> dict:
+    """Which path this run takes (ADR-017 D3, Bootstrap).
+
+    "unit": started by update-tappaas.service after its prepare and rebuild
+    steps — no schedule check and no Phase 0 here, the control-plane state comes
+    from the prepare step. "legacy": the old unit or a bare run — R-1's
+    behaviour, schedule gate and Phase 0 included, kept until the interim path
+    goes."""
+    if (RUN_DIR / "prepared").exists():
+        try:
+            control_plane = (RUN_DIR / "control-plane").read_text().strip() or "refreshed"
+        except OSError:
+            control_plane = "refreshed"
+        return {"path": "unit", "request": _read_json(RUN_DIR / "request.json"),
+                "control_plane": control_plane}
+    return {"path": "legacy", "request": claim_request(), "control_plane": None}
+
+
+def set_stage(stage: str | None) -> None:
+    """Record the step a failed run stopped in (#651 notice); None clears it."""
+    try:
+        if stage is None:
+            STAGE_PATH.unlink(missing_ok=True)
+        else:
+            STAGE_PATH.write_text(stage + "\n")
+    except OSError:
+        pass
 
 
 # ── Between-module shared-dependency invariant (#517) ────────────────
@@ -839,7 +907,8 @@ def main():
     )
     parser.add_argument(
         "--force", action="store_true",
-        help="Force update regardless of schedule",
+        help="DEPRECATED (ADR-017 D5): no effect under update-tappaas.service; "
+             "run an update now with `site-manager update`",
     )
     parser.add_argument(
         "--dry-run", action="store_true",
@@ -857,10 +926,39 @@ def main():
         log.error("Could not load configuration — aborting")
         sys.exit(1)
 
-    log.info("Checking update schedule")
-    if not args.force and not should_update_now(config, current_hour):
-        log.info("Not scheduled for update at this time")
-        sys.exit(0)
+    ctx = run_context()
+    request = ctx["request"]
+    if args.force:
+        log.warning("update-tappaas --force is deprecated (ADR-017 D5)%s — run an "
+                    "update now with: site-manager update",
+                    "; it has no effect under update-tappaas.service" if ctx["path"] == "unit" else "")
+    if not UNDER_SYSTEMD and not args.dry_run:
+        log.warning("update-tappaas outside update-tappaas.service does not update the "
+                    "mothership itself (ADR-017 D3) — use: site-manager update")
+    if request:
+        log.info("Operator request: %s", json.dumps(request, sort_keys=True))
+
+    if ctx["path"] == "unit":
+        log.info("Started by update-tappaas.service after its prepare and rebuild "
+                 "steps (ADR-017 D3): no schedule check, control plane %s",
+                 ctx["control_plane"])
+    elif not (args.force or args.dry_run or request):
+        # The old unit's hourly timer (first activation, ADR-017 Bootstrap).
+        log.info("Checking update schedule")
+        if not should_update_now(config, current_hour):
+            log.info("Not scheduled for update at this time")
+            sys.exit(0)
+
+    # --force of `site-manager update` (the request, or the env of R-1's
+    # site-manager): every module passes a failing pre-update test, and the
+    # disruption window opens for rebootOk modules (ADR-020 D8).
+    module_force = bool(request and request.get("force")) \
+        or os.environ.get("TAPPAAS_MODULE_FORCE") == "1"
+    if module_force:
+        os.environ["TAPPAAS_MODULE_FORCE"] = "1"
+    scheduled = request is None and not args.force and UNDER_SYSTEMD
+    if not args.dry_run:
+        set_stage("sweep")
 
     # Backfill a missing site.json defaultEnvironment (ADR-007d #426) before any
     # module runs, so the tappaas-cicd post-update schema validation passes on
@@ -890,12 +988,14 @@ def main():
     # Dry run: show the update plan
     if args.dry_run:
         log.info("=== DRY RUN MODE ===")
-        if os.environ.get("TAPPAAS_MODULE_FORCE") == "1":
+        if module_force:
             log.info("(--force: every module updates even if its pre-update test fails; "
                      "modules with rebootOk may have disruptive changes applied now, "
                      "the others keep them deferred)")
-        log.info("Phase 0 - Control-plane refresh (#595):")
-        log.info("  1. %s", REFRESH_CONTROL_PLANE_CMD)
+        log.info("Before the sweep - update-tappaas.service ExecStartPre (ADR-017 D3):")
+        log.info("  pull (holds respected) + relink ~/bin + component builds: %s",
+                 REFRESH_CONTROL_PLANE_CMD)
+        log.info("  nixos-rebuild switch of the mothership (tappaas-self-rebuild.sh)")
         log.info("Phase 1 - Foundation update order:")
         for i, mod in enumerate(installed_foundation, 1):
             log.info("  %d. module-manager module modify %s", i, mod)
@@ -914,7 +1014,7 @@ def main():
         log_skipped(skipped_apps)
         log.info("Phase 3 - Node reboot pass (automaticReboot=%s):", automatic_reboot)
         reboot_pass(automatic_reboot, dry_run=True)
-        log.info("To run these updates: update-tappaas --force")
+        log.info("To run these updates: site-manager update")
         sys.exit(0)
 
     failed_modules = []
@@ -932,8 +1032,11 @@ def main():
     # module, so `cluster` (the first) updated against the previous run's source
     # while everything after it saw the new one. Now every module in the sweep
     # runs against the same tree.
-    log.info("Phase 0: Refresh the control plane (repositories, ~/bin, components)")
-    control_plane = refresh_control_plane()
+    if ctx["path"] == "unit":
+        control_plane = ctx["control_plane"]
+    else:
+        log.info("Phase 0: Refresh the control plane (repositories, ~/bin, components)")
+        control_plane = refresh_control_plane()
 
     # Phase 0.5: capture cluster membership into site.json (node-provisioning
     # design N1). A node joined via `install.sh --join` cannot register itself
@@ -970,9 +1073,9 @@ def main():
             log.error("unbound-checkconf on the firewall reports: %s", checkconf)
 
     # ADR-020 D8: a module that declares rebootOk may have a disruptive change
-    # applied only when the window is open (disruption_window_open). Never
-    # `update-tappaas --force`, which stays a scheduling override.
-    if disruption_window_open(automatic_reboot):
+    # applied only when the window is open (disruption_window_open): the
+    # scheduled run with automaticReboot, or an operator run with --force.
+    if disruption_window_open(automatic_reboot, scheduled, module_force):
         os.environ["TAPPAAS_SCHEDULED_PASS"] = "1"
     else:
         os.environ.pop("TAPPAAS_SCHEDULED_PASS", None)
@@ -1039,7 +1142,10 @@ def main():
     artifact = {
         "start_time": start_time,
         "end_time": end_time,
-        "forced": args.force,
+        # What started this run (ADR-017 D4): the operator's request, or none
+        # for the scheduled run; and which path it took (unit / legacy).
+        "request": request,
+        "path": ctx["path"],
         "total": total,
         "succeeded": succeeded,
         "failed": len(failed_modules),
@@ -1098,6 +1204,7 @@ def main():
         sys.exit(1)
 
     log.info("All modules updated successfully (control plane %s)", control_plane)
+    set_stage(None)
 
 
 if __name__ == "__main__":

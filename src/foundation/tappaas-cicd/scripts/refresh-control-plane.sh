@@ -21,6 +21,10 @@
 #       hard failure: a broken component must not block the fleet update (the
 #       Test-11 smoke slice is what surfaces it). Deliberately not silent
 #       either — #467 ran for weeks on exactly that silence.
+#   12  a repository did not sync (failed, or unpushed commits block it,
+#       #433) and holds no pull hold. Relink and builds still ran. The unit's
+#       prepare step (ADR-017 D3) treats it as fatal; older callers read it as
+#       a failure and continue, as they did before.
 #   1   hard failure — the checkout itself is not usable.
 #
 # Environment:
@@ -76,6 +80,8 @@ fi
 if [ "${TAPPAAS_NO_GIT_PULL:-0}" = "1" ]; then
   info "TAPPAAS_NO_GIT_PULL=1 — skipping repository pull; refreshing whatever is checked out."
 else
+_sync_failed="$(mktemp)"
+trap 'rm -f "${_sync_failed}"' EXIT
 REPOS_JSON="$(get_repositories)"
 REPO_COUNT=$(echo "$REPOS_JSON" | jq 'length' 2>/dev/null || echo "0")
 if [ "$REPO_COUNT" -gt 0 ]; then
@@ -111,8 +117,10 @@ if [ "$REPO_COUNT" -gt 0 ]; then
         reconcile_repo_checkout "$REPO_PATH" "$REPO_URL" "$REPO_BRANCH" || _rc=$?
         case "${_rc}" in
           0) ;;
-          2) error "${REPO_NAME}: NOT synced — unpushed commits block the origin change (see above). Push them, or run: site-manager repository modify ${REPO_NAME} --url ${REPO_URL} --force" ;;
-          *) warn "Failed to sync ${REPO_NAME}" ;;
+          2) error "${REPO_NAME}: NOT synced — unpushed commits block the origin change (see above). Push them, or run: site-manager repository modify ${REPO_NAME} --url ${REPO_URL} --force"
+             echo "${REPO_NAME}" >> "${_sync_failed}" ;;
+          *) warn "Failed to sync ${REPO_NAME}"
+             echo "${REPO_NAME}" >> "${_sync_failed}" ;;
         esac
       ) 2>&1 | while IFS= read -r _l; do
         # Keep tagged log lines ([Info]/[Warning]/[Error]); route raw git output to [Debug].
@@ -123,6 +131,7 @@ if [ "$REPO_COUNT" -gt 0 ]; then
       done
     else
       warn "Repository directory not found: ${REPO_PATH} (${REPO_NAME})"
+      echo "${REPO_NAME}" >> "${_sync_failed}"
     fi
   done
 else
@@ -193,6 +202,11 @@ fi
 # the dispatch rationale above), but claiming success afterwards is what let
 # #467 run unnoticed: every nightly logged two warnings and then a ✓ line, so
 # the mothership's own managers went unbuilt for weeks with no visible signal.
+if [ -s "${_sync_failed:-/dev/null}" ]; then
+  _stale=""; [ "${_comp_failed}" -gt 0 ] && _stale="; ${_comp_failed} component group(s) STALE"
+  error "Control plane NOT current: $(sort -u "${_sync_failed}" | paste -sd, -) did not sync (see above)${_stale}."
+  exit 12
+fi
 if [ "${_comp_failed}" -gt 0 ]; then
   warn "Control plane refreshed, but ${_comp_failed} component group(s) failed to build — those bins are STALE (see warnings above)."
   exit 10

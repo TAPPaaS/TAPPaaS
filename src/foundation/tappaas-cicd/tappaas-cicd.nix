@@ -141,9 +141,10 @@ in
   # shell produce a byte-identical polkit response.
   #
   # %i is the cicd VM name, so the flake attribute stays exactly what update.sh
-  # resolved from the module config. This is the INTERIM fix for #471; ADR-017
-  # replaces it with an `ExecStartPre=+` line on update-tappaas.service and
-  # removes this unit and its polkit rule.
+  # resolved from the module config. This was the INTERIM fix for #471. Since
+  # ADR-017 D3 the rebuild runs in update-tappaas.service's ExecStartPre; this
+  # unit stays only for the first activation (ADR-017 Bootstrap: the old unit
+  # still rebuilds through it) and goes with the legacy path in update-tappaas.
   systemd.services."tappaas-rebuild@" = {
     description = "TAPPaaS mothership NixOS rebuild for %i (privileged helper)";
     serviceConfig = {
@@ -195,23 +196,12 @@ in
     	directory = /home/tappaas/TAPPaaS
   '';
 
-  # Let tappaas start (only) the rebuild helper without an interactive agent.
-  # Scoped to the unit prefix and to the start verb: this grants the operator
-  # nothing it did not already have through passwordless sudo, it only makes it
-  # reachable from a NoNewPrivileges context.
+  # The rule that let tappaas start tappaas-rebuild@ was scoped to the interim
+  # rebuild path; ADR-017 D3 moved the rebuild into update-tappaas.service and
+  # the fallback that still uses the helper (Bootstrap) is covered by the wheel
+  # rule below (#515).
   security.polkit.enable = true;
   security.polkit.extraConfig = ''
-    polkit.addRule(function(action, subject) {
-      if (action.id == "org.freedesktop.systemd1.manage-units" &&
-          subject.user == "tappaas" &&
-          action.lookup("verb") == "start") {
-        var unit = action.lookup("unit");
-        if (unit && unit.indexOf("tappaas-rebuild@") == 0) {
-          return polkit.Result.YES;
-        }
-      }
-    });
-
     // Grant wheel polkit authority over systemd unit management, matching the
     // NOPASSWD sudo trust it already holds (security.sudo.wheelNeedsPassword =
     // false). Without this, `systemctl restart/stop/enable ...` as a wheel user
@@ -245,12 +235,13 @@ in
   programs.ssh.startAgent = true;
 
   # ----------------------------------------
-  # update-tappaas — systemd timer (cron was retired in issue #150)
+  # update-tappaas — the update sweep (cron was retired in issue #150)
   # ----------------------------------------
-  # Fires hourly; the script itself reads `tappaas.updateSchedule` from
-  # configuration.json and decides whether to actually do anything. Output
-  # flows through Python's logging module with systemd-priority prefixes,
-  # so journald (and Promtail → Loki) tag entries with the right severity.
+  # Started by update-tappaas.timer, which update-tappaas-schedule renders from
+  # site.json .updateSchedule (ADR-017 D1/D2), or by `site-manager update` (D4).
+  # Output flows through Python's logging module with systemd-priority
+  # prefixes, so journald (and Promtail → Loki) tag entries with the right
+  # severity.
   systemd.services.update-tappaas = {
     description = "TAPPaaS scheduler — update foundation and app modules";
     # #506: a failed sweep must stay visible without reading the journal.
@@ -259,6 +250,9 @@ in
     # unit's Result back to success. OnFailure fires on ANY non-zero exit and
     # leaves a durable breadcrumb the operator/monitoring can see.
     unitConfig.OnFailure = "update-tappaas-failure.service";
+    # The rebuild in ExecStartPre changes this very unit; a restart on switch
+    # would kill the run that is doing the switch (ADR-017 Open).
+    restartIfChanged = false;
     serviceConfig = {
       Type = "oneshot";
       User = "tappaas";
@@ -269,8 +263,22 @@ in
       # automated arm of the ownership guard — the managers refuse to run as
       # root, and this heals the drift that made anyone reach for sudo in the
       # first place. See scripts/tappaas-repair-ownership.sh.
-      ExecStartPre = "+-/home/tappaas/bin/tappaas-repair-ownership.sh";
+      #
+      # ADR-017 D3: the mothership updates itself here, before the sweep, so the
+      # sweep runs on current tooling and a failed pull or rebuild stops the
+      # unit before any module is touched (OnFailure then mails the owner,
+      # #651). prepare (tappaas, sandboxed): pull + relink + builds; rebuild
+      # (`+`, root, outside the sandbox): nixos-rebuild switch — the one step
+      # needing privilege, so no sudo and no polkit.
+      ExecStartPre = [
+        "+-/home/tappaas/bin/tappaas-repair-ownership.sh"
+        "/home/tappaas/bin/tappaas-self-prepare.sh"
+        "+/home/tappaas/bin/tappaas-self-rebuild.sh"
+      ];
       ExecStart = "/home/tappaas/bin/update-tappaas";
+      # Per-run state (the claimed request, the prepared/rebuilt markers);
+      # removed when the unit stops, so nothing leaks into the next run.
+      RuntimeDirectory = "update-tappaas";
       # Mirror the operator's login PATH. Without this the service runs with
       # NixOS's minimal default service PATH (no bash), so update-module.sh's
       # `#!/usr/bin/env bash` shebang fails with "env: 'bash': No such file or

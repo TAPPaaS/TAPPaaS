@@ -62,6 +62,14 @@ FAKE_DOWN="tappaas1" run; rc=$?
 FAKE_DOWN="tappaas1 tappaas2" run; rc=$?
 [[ ${rc} -eq 1 ]] && grep -q 'NOT sent: no node accepted' "${d}/config/update-tappaas.failures" && ok "no node: exit 1 and recorded" || bad "no node: rc=${rc}"
 
+# 4b. a run that stopped in the rebuild names it and records it
+echo rebuild > "${d}/config/.update-stage"
+run
+grep -q "Stopped in: the mothership's nixos-rebuild" "${FAKE_MAIL}" && ok "the notice names the rebuild stage" || bad "stage line"
+[[ "$(jq -r '.stage + " " + (.ok|tostring)' "${d}/config/last-update-result.json")" == "rebuild false" ]] \
+    && ok "the result file records the failed stage" || bad "result not rewritten: $(cat "${d}/config/last-update-result.json")"
+[[ ! -e "${d}/config/.update-stage" ]] && ok "the stage marker is consumed" || bad "stage marker left"
+
 # 5. no email, or not a plain address
 site ""; run; rc=$?
 [[ ${rc} -eq 0 && ! -s "${FAKE_LOG}" ]] && ok "no email: nothing sent, exit 0" || bad "no email: rc=${rc}"
