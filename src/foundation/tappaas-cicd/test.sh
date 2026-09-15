@@ -218,13 +218,28 @@ done
 
 info "${BOLD}Test 6: Update scheduler (systemd timer)${CL}"
 
-# cron was retired in issue #150; update-tappaas is scheduled by a systemd
-# timer declared in tappaas-cicd.nix. Confirm the timer is active and that no
-# stale crontab entry survives to re-create a dual scheduler.
-if systemctl is-active --quiet update-tappaas.timer; then
-    pass "update-tappaas.timer is active"
+# cron was retired in issue #150. Since ADR-017 D2 the timer is rendered from
+# site.json .updateSchedule into /run by update-tappaas-schedule.service; check
+# that it runs the schedule site.json asks for, and that no stale crontab entry
+# survives to re-create a dual scheduler.
+# shellcheck source=lib/update-schedule.sh
+. "${SCRIPT_DIR}/lib/update-schedule.sh"
+_want_cal="$(update_schedule_oncalendar "$(jq -c '.updateSchedule // null' /home/tappaas/config/site.json 2>/dev/null || echo null)" 2>/dev/null)" || _want_cal="?"
+_have_cal="$(systemctl cat update-tappaas.timer 2>/dev/null | sed -n 's/^OnCalendar=//p' | head -1)"
+if [[ "${_have_cal}" == "hourly" ]]; then
+    skip "update-tappaas.timer is still the hourly nix timer — rendered after the first self-rebuild (ADR-017 Bootstrap)"
+elif [[ -z "${_want_cal}" ]]; then
+    if systemctl is-active --quiet update-tappaas.timer; then
+        fail "updateSchedule is 'none' but update-tappaas.timer is active (re-run: systemctl start update-tappaas-schedule.service)"
+    else
+        pass "updateSchedule is 'none' — no update timer"
+    fi
+elif ! systemctl is-active --quiet update-tappaas.timer; then
+    fail "update-tappaas.timer not active (systemctl status update-tappaas-schedule.service)"
+elif [[ "${_have_cal}" == "${_want_cal}" ]]; then
+    pass "update-tappaas.timer is active with OnCalendar=${_have_cal} (from site.json)"
 else
-    fail "update-tappaas.timer not active (check tappaas-cicd.nix / nixos-rebuild)"
+    fail "update-tappaas.timer runs '${_have_cal}', site.json asks for '${_want_cal}' (systemctl start update-tappaas-schedule.service)"
 fi
 
 if crontab -l 2>/dev/null | grep -q "update-tappaas"; then

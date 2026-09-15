@@ -322,15 +322,22 @@ in
     };
   };
 
-  systemd.timers.update-tappaas = {
-    description = "Hourly trigger for update-tappaas";
+  # ADR-017 D2: the timer is no longer declared here. update-tappaas-schedule
+  # renders it from site.json .updateSchedule into /run at boot, after every
+  # self-rebuild and on every schedule change (Persistent=false, D1).
+  systemd.services.update-tappaas-schedule = {
+    description = "Render update-tappaas.timer from site.json (ADR-017 D2)";
     wantedBy = [ "timers.target" ];
-    timerConfig = {
-      OnCalendar = "hourly";        # *-*-* *:00:00
-      Persistent = true;            # catch up after downtime / reboots
-      RandomizedDelaySec = "5min";  # spread load if multiple things tick on the hour
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = "/home/tappaas/bin/update-tappaas-schedule.sh";
+      Environment = [
+        ("PATH=/home/tappaas/bin:/run/wrappers/bin:/nix/var/nix/profiles/default/bin"
+          + ":/run/current-system/sw/bin")
+      ];
     };
   };
+
 
   # ----------------------------------------
   # check-ha-health — systemd timer (issue #146)
