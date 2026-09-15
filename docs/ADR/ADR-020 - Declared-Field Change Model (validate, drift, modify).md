@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | **Accepted** (2026-09-15) — P0–P6, D8 and D9 built. Follow-ups: the D9 `adopt` verb; D10 enforcement (the pre-gate refusal, issue to open). |
+| **Status** | **Accepted** (2026-09-15) — P0–P6, D8 and D9 built. Follow-ups: the D9 `adopt` verb; D10 enforcement (the pre-gate refusal, #654). |
 | **Version** | 0.8 |
 | **Date** | 2026-09-15 |
 | **Author** | Lars Rossen |
@@ -228,7 +228,7 @@ The fix is the one D9 implies everywhere else: an automatic grow is a *declared-
 
 **Known cost — `vmtag`.** This is the one field where the decision makes the platform *more* intrusive. Today an undeclared `vmtag` is left alone; afterwards install records the default `TAPPaaS`, and a tag an operator adds through the Proxmox UI becomes `in-place` drift that the converge reverts. Tags are a namespace TAPPaaS shares with humans and other tooling, and `qm set --tags` replaces the whole list. That is at least deterministic and visible where the old behaviour was silent, and `adopt` is the escape — but if it proves annoying in practice, `vmtag` is the one field worth exempting from install-time recording.
 
-### D10. The module-level fields are declared too — enforcement deferred
+### D10. The module-level fields are declared too — enforcement deferred to #654
 
 D9 governs a field a *service* owns. The other 19 — `usedBy` empty or `general`, describing the module itself rather than anything a provider configures — had **no declaration at all**, and the asymmetry showed up first as a documentation problem: every service-owned field's classification sits beside a machine-readable manifest, while these could only be prose.
 
@@ -236,9 +236,9 @@ That was a symptom. The real gap is that the two managers built from this ADR to
 
 **Decided, and shipped now:** the 19 are declared in **`schemas/fields.json`**, a *module-scoped* manifest beside `module-fields.json`, using the same vocabulary as the per-service ones (`schemas/service-fields.json` gains a `scope: "module"` alternative to `service`, so one meta-schema covers both). Having no provider fixes two entries for every field, and the lint enforces both: `apply` is always `"none"` — writing the config *is* the change — and no entry carries a `liveKey`, because there is no reporter to ask and therefore no actual state and no drift. `class` is the honest cost: `immutable` for the six the tooling writes (plus retired `variant`), `manual` for the three wiring fields whose `--set` writes a declaration without wiring anything, `in-place` for the metadata.
 
-**Deliberately NOT shipped now:** the pre-gate still ignores it. Teaching `converge.ts` `network-manager`'s refusal is a follow-up issue, held until ADR-020 has landed across the estate, because it changes what `modify` accepts and that is disruptive to sequence with a rollout. The machinery is not new — the schema-level `changeClass` path already exists and is exercised by `network-manager`; #567 points it at a second manifest.
+**Deliberately NOT shipped now:** the pre-gate still ignores it. Teaching `converge.ts` `network-manager`'s refusal is **#654**, held until ADR-020 has landed across the estate, because it changes what `modify` accepts and that is disruptive to sequence with a rollout. The machinery is not new — the schema-level `changeClass` path already exists and is exercised by `network-manager`; #567 points it at a second manifest.
 
-One taxonomy question is deferred with it. `apply: "none"` plus `class: "in-place"` reads oddly for a field that no converge ever touches: it means "takes effect at once, nothing to refuse" rather than "the converge applies it live". `converge.ts` already labels this situation `config-only`, and that follow-up is the natural moment to decide whether that becomes an eighth class or stays a synthetic label.
+One taxonomy question is deferred with it. `apply: "none"` plus `class: "in-place"` reads oddly for a field that no converge ever touches: it means "takes effect at once, nothing to refuse" rather than "the converge applies it live". `converge.ts` already labels this situation `config-only`, and #654 is the natural moment to decide whether that becomes an eighth class or stays a synthetic label.
 
 ## Scenarios (module-manager)
 
