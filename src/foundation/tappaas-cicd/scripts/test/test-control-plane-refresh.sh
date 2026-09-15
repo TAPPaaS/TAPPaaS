@@ -171,7 +171,9 @@ else
 fi
 
 # ── 5. The pre-update gate is runtime-only, and test.sh honours it ──────────
-if grep -q 'test-module.sh --runtime-only' "${CICD_DIR}/manager/module-manager/update-module.sh"; then
+# Since #635 the gate calls test-module.sh through run_graded_test.
+if grep -qE 'test-module\.sh --runtime-only|run_graded_test "\$\{PRE_TEST_LOG\}" --runtime-only' \
+    "${CICD_DIR}/manager/module-manager/update-module.sh"; then
     pass "update-module.sh's pre-update gate asks for --runtime-only"
 else
     fail "#595: the pre-update gate still runs a module's source-tree checks"
