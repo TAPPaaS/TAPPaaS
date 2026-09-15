@@ -255,8 +255,11 @@ function cmdSite(o: Opts): void {
     const loc = site.location ?? ({} as Site["location"]);
     const net = site.network ?? {};
     const sched = Array.isArray(site.updateSchedule) ? site.updateSchedule : [];
+    // daily/none carry no weekday: one an older site.json stores is inert and
+    // not shown (#447, ADR-017 D7).
+    const inertDay = sched[0] === "daily" || sched[0] === "none";
     const schedStr = sched.length
-      ? [sched[0], sched[1], sched[2] != null ? `@ ${String(sched[2]).padStart(2, "0")}:00` : null]
+      ? [sched[0], inertDay ? null : sched[1], sched[2] != null && sched[0] !== "none" ? `@ ${String(sched[2]).padStart(2, "0")}:00` : null]
           .filter((x) => x != null && x !== "")
           .join(" ")
       : "(unset)";
@@ -362,6 +365,13 @@ function cmdSite(o: Opts): void {
     if (changed === 0) die("site modify: no recognised --<field> given (see --help)");
     writeSite(siteFile, raw);
     info(`${GN}✓${CL} site.json updated (${changed} field(s)) — run 'validate' to confirm`);
+    // ADR-017 D2: a new schedule takes effect now — re-render the timer. Only
+    // for the site's own config, never for a --config-dir copy.
+    if ((freq !== undefined || wday !== undefined || hour !== undefined) && o.configDir === defaultConfigDir()) {
+      const r = spawnSync(process.env.SITE_SYSTEMCTL_BIN ?? "systemctl", ["start", "update-tappaas-schedule.service"], { encoding: "utf8" });
+      if (r.status === 0) info("  update timer re-rendered from the new schedule");
+      else warn("  could not re-render the update timer — it takes effect at the next boot or update (systemctl start update-tappaas-schedule.service)");
+    }
     return;
   }
 

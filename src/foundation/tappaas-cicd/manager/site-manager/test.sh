@@ -105,6 +105,15 @@ cat > "$BAD" <<'JSON'
 JSON
 if run_validate "$BAD"; then bad "bad site.json wrongly passed validation"; else ok "bad site.json correctly fails validation"; fi
 
+# --- ADR-017 D6: validate reports the schedule with the renderer's mapping ---
+SCHED="${WORK}/sched-site.json"
+echo '{ "name": "s", "updateSchedule": ["daily", "Tuesday", 2] }' > "$SCHED"
+_out="$("$VALIDATE" --schema-dir "$SCHEMA_DIR" "$SCHED" 2>&1 || true)"
+grep -q "inert under 'daily'" <<<"$_out" && ok "validate reports a weekday under daily as inert" || bad "inert weekday not reported"
+echo '{ "name": "s", "updateSchedule": ["hourly", null, 2] }' > "$SCHED"
+_out="$("$VALIDATE" --schema-dir "$SCHEMA_DIR" "$SCHED" 2>&1 || true)"
+grep -q "VALIDATION: updateSchedule frequency 'hourly'" <<<"$_out" && ok "validate refuses an unknown frequency" || bad "unknown frequency not refused"
+
 # bad site.json: additionalProperties violation
 BAD2="${WORK}/bad-site2.json"
 cat > "$BAD2" <<'JSON'

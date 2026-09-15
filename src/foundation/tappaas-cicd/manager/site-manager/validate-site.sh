@@ -173,6 +173,30 @@ PY
     [[ "$missing" -eq 0 ]]
 }
 
+# ADR-017 D6: the schedule is checked with the renderer's own mapping
+# (lib/update-schedule.sh), and the expression it yields with systemd itself.
+validate_update_schedule() {
+    local lib cal warn_out rc=0
+    lib="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../.." && pwd)/lib/update-schedule.sh"
+    [[ -f "$lib" ]] || { validation_warn "updateSchedule not checked (${lib} missing)"; return 0; }
+    # shellcheck source=../../lib/update-schedule.sh disable=SC1091
+    . "$lib"
+    warn_out="$(update_schedule_oncalendar "$(jq -c '.updateSchedule // null' "$SITE_FILE")" 2>&1 >/dev/null)" || rc=$?
+    cal="$(update_schedule_oncalendar "$(jq -c '.updateSchedule // null' "$SITE_FILE")" 2>/dev/null)" || true
+    while IFS= read -r w; do
+        [[ -n "$w" ]] || continue
+        if [[ "$rc" -ne 0 ]]; then validation_error "${w#warn: }"; else validation_warn "${w#warn: }"; fi
+    done <<<"$warn_out"
+    [[ "$rc" -eq 0 ]] || return 0
+    if [[ -z "$cal" ]]; then
+        log_info "  updateSchedule: no scheduled update"
+    elif command -v systemd-analyze >/dev/null 2>&1 && ! systemd-analyze calendar "$cal" >/dev/null 2>&1; then
+        validation_error "updateSchedule maps to OnCalendar '${cal}', which systemd rejects"
+    else
+        log_info "  updateSchedule: OnCalendar=${cal}"
+    fi
+}
+
 main() {
     parse_args "$@"
 
@@ -188,6 +212,7 @@ main() {
     else
         detect_jsonschema || validation_warn "python3 jsonschema not available — falling back to jq required-field checks only (${JSONSCHEMA_WHY})"
         validate_against_schema "$SITE_FILE" "$schema" || true
+        validate_update_schedule
     fi
 
     echo ""
