@@ -306,6 +306,36 @@ proxy_fetch() {        # $1 = fqdn, $2 = attempts (default 12 -> ~60s)
     fi
 fi
 
+# ── 8. DEEP: identity:identity checks the consumer, not only the provider (#560) ──
+# Read-only against a deployed consumer: its real secrets env must pass, and the
+# same check pointed at an absent file must report the consumer as not wired.
+if [[ "${RUN_DEEP}" -eq 1 ]]; then
+    section "8: identity:identity reports an unwired consumer (#560)"
+    ID_TS="$(cd "$(dirname "$0")" && pwd)/services/identity/test-service.sh"
+    _c560=""
+    for f in "${CONFIG_DIR:-/home/tappaas/config}"/*.json; do
+        jq -e '(.dependsOn // []) | index("identity:identity")' "${f}" >/dev/null 2>&1 \
+            && { _c560="$(basename "${f}" .json)"; break; }
+    done
+    if [[ -z "${_c560}" ]]; then
+        skip "no deployed module depends on identity:identity"
+    else
+        _out="$(bash "${ID_TS}" "${_c560}" 2>&1 | sed 's/\x1b\[[0-9;]*m//g' || true)"
+        grep -q "consumer holds the OIDC client config" <<<"${_out}" \
+            && pass "${_c560}: wired consumer is recognised" \
+            || fail "${_c560}: consumer check did not pass on a deployed consumer"
+        _rc=0
+        _out="$(TAPPAAS_TEST_OIDC_SECRETS_ENV=/etc/secrets/.tappaas-560-absent.env \
+            bash "${ID_TS}" "${_c560}" 2>&1)" || _rc=$?
+        _out="$(sed 's/\x1b\[[0-9;]*m//g' <<<"${_out}")"
+        if grep -q "consumer not wired" <<<"${_out}" && [[ "${_rc}" -ne 0 ]]; then
+            pass "${_c560}: absent secrets env → 'consumer not wired', exit ${_rc}"
+        else
+            fail "${_c560}: absent secrets env was not reported — the #560 false green is back"
+        fi
+    fi
+fi
+
 # ── summary ─────────────────────────────────────────────────────────────────
 section "Summary"
 info "  ${GN}Passed:${CL} ${PASS}   ${RD:-}${BOLD}Failed:${CL} ${FAIL}   ${YW:-}Skipped:${CL:-} ${SKIP}"

@@ -42,6 +42,8 @@ set -euo pipefail
 _IDENTITY_SVC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=../../lib/ensure-authentik-creds.sh disable=SC1091
 . "${_IDENTITY_SVC_DIR}/../../lib/ensure-authentik-creds.sh"
+# shellcheck source=../../lib/oidc-consumer.sh disable=SC1091
+. "${_IDENTITY_SVC_DIR}/../../lib/oidc-consumer.sh"
 
 AUTHENTIK_MANAGER="${AUTHENTIK_MANAGER:-authentik-manager}"
 DRY_RUN=0
@@ -90,25 +92,19 @@ fi
 PROVIDES_ADMIN="$(echo "${JSON}" | jq -r '.identity.providesAdminRole // false')"
 mapfile -t REDIRECT_PATHS < <(echo "${JSON}" | jq -r '(.identity.oidcRedirectPaths // ["/apps/user_oidc/code"])[]')
 mapfile -t OIDC_SCOPES   < <(echo "${JSON}" | jq -r '(.identity.scopes // [])[]')
-CONFIGURE_SERVICE="$(echo "${JSON}" | jq -r '.identity.configureService // ""')"
 
 # The base module name (strip the -<environment> suffix) — used for the VM
 # secrets path and the module-admin group, so an environment install shares the
-# base name.
-MODULE_BASE="${MODULE}"
-[[ -n "${ENVIRONMENT}" && "${MODULE}" == *"-${ENVIRONMENT}" ]] && MODULE_BASE="${MODULE%-"${ENVIRONMENT}"}"
-SECRETS_ENV="$(echo "${JSON}" | jq -r --arg d "/etc/secrets/${MODULE_BASE}.env" '.identity.secretsEnv // $d')"
-# Default the configure unit to the convention <base>-configure-oidc.service so a
+# base name. The configure unit defaults to <base>-configure-oidc.service so a
 # module needn't declare it (Nextcloud ships nextcloud-configure-oidc.service).
 # Restart is best-effort (warns if absent → applies on next rebuild/boot).
 # A module that registers the provider itself (e.g. via the app's API, like
 # Portainer on a Debian VM) sets configureService to "none" to opt out — there is
 # no systemd unit to restart, so the default convention would only warn.
-if [[ "${CONFIGURE_SERVICE}" == "none" ]]; then
-    CONFIGURE_SERVICE=""
-elif [[ -z "${CONFIGURE_SERVICE}" ]]; then
-    CONFIGURE_SERVICE="${MODULE_BASE}-configure-oidc.service"
-fi
+oidc_consumer_paths "${MODULE}" "${ENVIRONMENT}" "${JSON}"
+MODULE_BASE="${OIDC_MODULE_BASE}"
+SECRETS_ENV="${OIDC_SECRETS_ENV}"
+CONFIGURE_SERVICE="${OIDC_CONFIGURE_SERVICE}"
 
 SLUG="${MODULE}"                                  # unique per variant
 UPSTREAM="${VMNAME}.${ZONE0}.internal"
