@@ -95,9 +95,9 @@ question from whether the change needs it, and it has exactly two answers:
   and only because the site already accepts downtime in that window
   (`automaticReboot`). Default `false`: silence never authorizes a reboot.
 
-**`update-tappaas --force` is neither.** It means "run the sweep now" — a
-scheduling override — and is deliberately never forwarded, or a routine hourly
-update could reboot production guests.
+**Running the sweep now is neither.** `site-manager update` never forwards
+`module modify --force`; its own `--force` opens the window for `rebootOk`
+modules only (ADR-020 D8). `update-tappaas --force` is deprecated (ADR-017 D5).
 
 When a disruptive change is not authorized the converge applies everything else,
 prints a machine-parseable line, and **still exits 0** — not applying a change is

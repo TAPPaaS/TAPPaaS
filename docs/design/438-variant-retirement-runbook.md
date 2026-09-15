@@ -152,7 +152,7 @@ ls ~/config/<provider>-<env>.json                      # the intended provider
 
 ```bash
 update-tappaas --dry-run
-update-tappaas --force
+site-manager update
 ```
 
 Watch a module that previously mis-resolved — your `litellm-tenant1` consumer, or

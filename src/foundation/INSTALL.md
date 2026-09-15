@@ -349,7 +349,7 @@ site-manager node add tappaas2 --pxe --boot-disk sda --mac aa:bb:cc:dd:ee:ff \
 Afterwards, fold the new topology into HA + replication:
 
 ```bash
-update-tappaas --force
+site-manager update
 ```
 
 > **Machine can't PXE-boot?** Write the staged netboot image to a stick —

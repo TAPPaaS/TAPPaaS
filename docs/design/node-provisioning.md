@@ -12,7 +12,7 @@ mothership-pull design.
 
 **P-a (hit today): a joining node is never captured in site.json.**
 `foundation/install.sh` on a secondary node joins the Proxmox cluster and
-stops ("run `update-tappaas --force` to fold this node into HA +
+stops ("run `site-manager update` to fold this node into HA +
 replication"). But HA/replication candidates come from
 `get_all_node_hostnames` → `site.json .hardware.nodes` — and *nothing ever
 adds the new node there*. The legacy path re-discovered nodes on every update
@@ -252,7 +252,7 @@ Ordered plan (each step gates the next; stage 1 skips step 1):
    answer, installs unattended.
 6. **Post-install:** confirm root ssh-key access (cicd + tappaas1 keys),
    run the join (`install.sh --join` — manual this round; N4 automates it),
-   then on cicd `update-tappaas --force` → Phase 0.5 captures tappaas4 WITH
+   then on cicd `site-manager update` → Phase 0.5 captures tappaas4 WITH
    its pools; `site-manager node list` shows it; deep suites green.
 7. **Teardown of the trap:** `node-provisioner disable` (or let the TTL
    fire) — `dhcp-manager pxe status` must report disabled.

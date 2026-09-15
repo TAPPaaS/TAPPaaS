@@ -50,7 +50,7 @@ network-manager validate                > "$BK"/before-validate.txt 2>&1
 ## Step 1 — take the release
 
 ```bash
-update-tappaas --force        # or wait for the schedule
+site-manager update        # or wait for the schedule
 ```
 
 `pre-update.sh` pulls, rebuilds the managers, then runs `network-manager merge`, which performs the
@@ -160,7 +160,7 @@ Point the repo back at the previous release and re-run the update:
 
 ```bash
 site-manager repository modify TAPPaaS --branch <previous-branch>
-update-tappaas --force
+site-manager update
 ```
 
 The Proxmox snapshot is the backstop if the config restore is not enough.

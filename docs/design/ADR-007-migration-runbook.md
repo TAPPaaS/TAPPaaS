@@ -132,7 +132,7 @@ manual action remains (the firewall cutover — §5), **1** = hard error.
 ### Step 3 — reconcile modules
 
 ```bash
-update-tappaas --force                  # now the ADR-007 build; converges every module
+site-manager update                  # now the ADR-007 build; converges every module
 ```
 
 > **Note (as-built finding):** the original "two `update-tappaas` passes" recipe
@@ -247,7 +247,7 @@ The migration is layered and reversible:
   snapshot-vm.sh tappaas-cicd --restore 1
   ```
 - **Branch:** re-pin `repositories[].branch` back to your previous branch
-  (e.g. `stable`) and run `update-tappaas --force` to return the toolchain.
+  (e.g. `stable`) and run `site-manager update` to return the toolchain.
 
 Because every step is idempotent, a partial run can simply be re-run after fixing
 the underlying issue rather than rolled back.
@@ -259,8 +259,8 @@ the underlying issue rather than rolled back.
 | Goal | Command |
 |---|---|
 | Pin branch | `jq '… .branch="ADR007"' configuration.json` (see §2) |
-| Bootstrap toolchain | `update-tappaas --force` (pass 1) |
-| Converge model | `update-tappaas --force` (pass 2) **or** `migrate-to-adr007.sh --yes` |
+| Bootstrap toolchain | `site-manager update` (pass 1) |
+| Converge model | `site-manager update` (pass 2) **or** `migrate-to-adr007.sh --yes` |
 | Preview migration | `migrate-to-adr007.sh --dry-run` |
 | Verify structure | `migrate-to-adr007.sh --dry-run`; `network-manager zones-check` |
 | Snapshot a VM | `snapshot-vm.sh <module>` |

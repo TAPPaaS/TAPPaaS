@@ -290,7 +290,7 @@ converge_side_effect_dns() {
 #                      update --force` (run now, #633). update-tappaas exports
 #                      TAPPAAS_SCHEDULED_PASS for exactly this.
 #
-# `update-tappaas --force` is NOT one of them. It means "run the sweep now" — a
+# Running the sweep now (`site-manager update`) is NOT one of them. It is a
 # scheduling override — and forwarding it as disruption authority would let a
 # routine update reboot production guests. update-tappaas therefore never passes
 # --force to `module modify`, and this script never reads its own environment

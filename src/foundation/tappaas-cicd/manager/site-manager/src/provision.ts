@@ -391,5 +391,5 @@ function joinAndCapture(
   }
 
   info(`\n${GN}✓ node '${o.name}' is in the cluster and captured${CL}`);
-  info(`  next: run ${YW}update-tappaas --force${CL} to fold HA + replication over the new topology.`);
+  info(`  next: run ${YW}site-manager update${CL} to fold HA + replication over the new topology.`);
 }

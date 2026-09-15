@@ -193,7 +193,7 @@ if [ "$ROLE" != "created" ]; then
   msg_ok "Node step complete (cluster role: ${ROLE:-unknown})."
   echo -e "  This node ${BOLD}joined${CL} an existing TAPPaaS cluster — the firewall, gateway"
   echo -e "  and platform already exist, so the chain stops here."
-  echo -e "  On ${BL}tappaas-cicd${CL} run ${BL}update-tappaas --force${CL} — it captures this node into"
+  echo -e "  On ${BL}tappaas-cicd${CL} run ${BL}site-manager update${CL} — it captures this node into"
   echo -e "  site.json (site-manager node reconcile) and folds it into HA + replication."
   echo -e "  Then declare its storage pools: ${BL}site-manager node list${CL} / edit site.json."
   exit 0
@@ -240,7 +240,7 @@ echo -e "  Organization / default environment: ${BL}${ORG}${CL}  (site.json .def
 echo ""
 echo -e "  ${BOLD}Next steps (from tappaas-cicd — ssh tappaas@tappaas-cicd):${CL}"
 echo -e "  1. Additional nodes: install PVE, re-run this installer on each (auto-joins),"
-echo -e "     then ${BL}update-tappaas --force${CL} to configure HA + replication."
+echo -e "     then ${BL}site-manager update${CL} to configure HA + replication."
 echo -e "  2. Physical switch(es): ${BL}setup-switches.sh${CL}"
 echo -e "  3. TLS certificates:    ${BL}acme-setup.sh${CL}"
 echo -e "  4. Rest of foundation:  ${BL}rest-of-foundation.sh${CL}"

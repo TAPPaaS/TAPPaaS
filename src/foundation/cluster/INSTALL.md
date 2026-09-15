@@ -45,7 +45,7 @@ the mothership with one command (network-boot, fully unattended):
 
     site-manager node add tappaas2 --pxe
 
-then fold the new topology into HA + replication with `update-tappaas --force`.
+then fold the new topology into HA + replication with `site-manager update`.
 
 Download-then-run (not `curl | bash`): the script is interactive and needs a real
 terminal on stdin. `install.sh` is safe to re-run — the base post-install step is skipped

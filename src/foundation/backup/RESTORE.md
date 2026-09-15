@@ -359,7 +359,7 @@ declared per module and realised per topology, so they need re-applying whenever
 the set changes:
 
 ```bash
-update-tappaas --force        # folds HA + replication over the new topology
+site-manager update        # folds HA + replication over the new topology
 module-manager list --diff    # what is still out of step
 ssh root@tappaas1.mgmt.internal "ha-manager status; pvesh get /cluster/replication"
 ```
@@ -391,7 +391,7 @@ missing every zone or rule declared since.
 ```bash
 module-manager module modify network
 # and if the VM itself is gone, re-run the module install, then:
-update-tappaas --force        # re-applies every module's proxy/rules/dns/nat
+site-manager update        # re-applies every module's proxy/rules/dns/nat
 ```
 
 **Restore the VM instead when** the OPNsense configuration contains state that
@@ -458,7 +458,7 @@ Then, on the rebuilt mothership, in this order:
    decrypt. Without the out-of-band key, the encrypted backups are unreadable.
 2. Restore `config/` (§5.1) if the VM snapshot is older than the file capture —
    the file capture usually is newer, and it is the site's source of truth.
-3. `update-tappaas --force` to re-converge the estate.
+3. `site-manager update` to re-converge the estate.
 
 ### 5.3 What the capture does *not* include
 

@@ -107,9 +107,8 @@ export interface ReconcileOptions {
   // to each provider's update-service.sh as --force. Without it such a change
   // is DEFERRED — applied nowhere, reported, and the converge still exits 0.
   //
-  // This is NOT `update-tappaas --force`, which means "run the sweep now" and
-  // is deliberately never forwarded here: a scheduling override must not become
-  // permission to reboot production guests.
+  // The sweep never forwards it: `site-manager update --force` passes
+  // --ignore-test-failure instead and respects rebootOk (ADR-020 D8).
   force?: boolean;
 }
 

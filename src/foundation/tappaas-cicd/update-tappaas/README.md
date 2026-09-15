@@ -4,22 +4,19 @@ TAPPaaS update scheduler that updates all foundation modules and app modules acr
 
 ## Usage
 
+`update-tappaas` is `ExecStart` of `update-tappaas.service`. The unit first
+updates the mothership itself (pull, relink, builds, `nixos-rebuild`; ADR-017
+D3), then runs this sweep. It is started by the timer that
+`update-tappaas-schedule` renders from `site.json` `updateSchedule`, or now:
+
 ```bash
-update-tappaas [--force] [--dry-run]
+site-manager update             # start the unit and follow it
+site-manager update --dry-run    # repository drift + this sweep's plan (update-tappaas --dry-run)
 ```
 
-**Options:**
-- `--force` - Force update regardless of schedule
-- `--dry-run` - Show what would be updated without actually running updates
-
-**Examples:**
-```bash
-# See the full update plan (without running)
-update-tappaas --force --dry-run
-
-# Force an immediate update of everything
-update-tappaas --force
-```
+`--force` of `update-tappaas` itself is deprecated (ADR-017 D5): it warns and has
+no effect under the unit. A bare `update-tappaas` outside the unit does not
+update the mothership.
 
 ## How It Works
 

@@ -126,14 +126,14 @@ fi
 # ── Final system update + regression tests ───────────────────────────
 if [[ "$SKIP_UPDATE" == "0" ]]; then
   echo ""
-  info "${BOLD}── Final system update + tests (update-tappaas) ──${CL}"
-  if command -v update-tappaas >/dev/null 2>&1; then
-    # --force: run now regardless of the configured update schedule — at install
-    # time we are almost always off-schedule, and update-tappaas would otherwise
-    # no-op (should_update_now) and skip the final update + regression tests.
-    update-tappaas --force || warn "update-tappaas reported issues — review the output above."
+  info "${BOLD}── Final system update + tests (site-manager update) ──${CL}"
+  if command -v site-manager >/dev/null 2>&1; then
+    # ADR-017 D4/D5: start update-tappaas.service now — the path the timer takes
+    # (pull, rebuild, sweep), so the install's final run is also the first test
+    # of the scheduled path. It runs regardless of the update schedule.
+    site-manager update || warn "the update reported issues — review the output above."
   else
-    warn "update-tappaas not found on PATH — skipping the final update."
+    warn "site-manager not found on PATH — skipping the final update."
   fi
 fi
 

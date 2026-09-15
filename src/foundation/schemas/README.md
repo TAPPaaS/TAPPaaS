@@ -59,8 +59,8 @@ README: `modify <module> --set field=value`, which refuses an `immutable` or
 `recreate` field before it writes anything and rejects a mixed `--set` whole; and
 the two — only two — ways to authorize a change that needs downtime, `modify
 --force` (an operator, now) and the per-module `rebootOk` (a standing permission
-honoured only in the scheduled sweep). `update-tappaas --force` is neither: it
-means "run the sweep now" and is never forwarded as permission to reboot.
+honoured in the scheduled sweep and in `site-manager update --force`). Running
+the sweep now is neither: the sweep never forwards `module modify --force`.
 
 ### Objects without a schema in this directory
 
