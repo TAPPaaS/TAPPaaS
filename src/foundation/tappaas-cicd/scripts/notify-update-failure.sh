@@ -38,7 +38,7 @@ RESULT="${CONFIG_DIR}/last-update-result.json"
 # ── the stage it stopped in (ADR-017 D3) ─────────────────────────────
 # prepare / rebuild: the unit's ExecStartPre failed and no sweep ran, so the
 # result file still describes the previous sweep — record this failure there.
-stage="$(tr -d '[:space:]' < "${CONFIG_DIR}/.update-stage" 2>/dev/null || true)"
+stage="$( { tr -d '[:space:]' < "${CONFIG_DIR}/.update-stage"; } 2>/dev/null || true)"
 case "${stage}" in
     prepare|rebuild)
         jq -n --arg stage "${stage}" --arg t "$(date -Is)" \
