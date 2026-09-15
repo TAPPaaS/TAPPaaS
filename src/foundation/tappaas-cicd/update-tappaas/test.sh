@@ -154,6 +154,60 @@ else
     echo "  ⊘ deferral unit test skipped (source or env python not found)"
 fi
 
+# ── 2c) Unit: a TEST-WARN line lands in TEST_WARNINGS, not DEFERRED (#635) ──
+# update-module.sh's post-update grading (#635) prints "TEST-WARN: <module>: …"
+# for checks that already failed before the update — a different remedy
+# (fix what the check points at) than a DEFERRED: line (authorize a disruptive
+# change), so the two must never share a bucket.
+if [[ -f "$main_py" && -x "$py" ]]; then
+    if "$py" - "$main_py" <<'PYWARN'
+import importlib.util, sys, logging
+logging.disable(logging.CRITICAL)
+spec = importlib.util.spec_from_file_location("m", sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+
+class R:
+    def __init__(self, rc=0, out="", err=""):
+        self.returncode, self.stdout, self.stderr = rc, out, err
+
+def fake_run_warn(argv, **kw):
+    return R(0,
+             "  applying cores\n"
+             "[Warning] TEST-WARN: demo: 1 check(s) failing before and after the update — some-check\n",
+             "")
+
+m.subprocess.run = fake_run_warn
+m.DEFERRED_CHANGES.clear()
+m.TEST_WARNINGS.clear()
+assert m.update_module("demo") is True, "a TEST-WARN is not a failure"
+assert len(m.TEST_WARNINGS) == 1, m.TEST_WARNINGS
+assert m.TEST_WARNINGS[0].startswith("demo:"), m.TEST_WARNINGS
+assert m.DEFERRED_CHANGES == [], "a TEST-WARN line must not also land in DEFERRED_CHANGES: %r" % (m.DEFERRED_CHANGES,)
+
+# A run with both kinds of line sorts each into its own bucket.
+def fake_run_both(argv, **kw):
+    return R(0,
+             "[Warning] DEFERRED: demo net0 needs a disruptive change that is not authorized\n"
+             "[Warning] TEST-WARN: demo: 1 check(s) failing before and after the update — other-check\n",
+             "")
+
+m.subprocess.run = fake_run_both
+m.DEFERRED_CHANGES.clear()
+m.TEST_WARNINGS.clear()
+m.update_module("demo")
+assert len(m.DEFERRED_CHANGES) == 1 and m.DEFERRED_CHANGES[0].startswith("demo net0"), m.DEFERRED_CHANGES
+assert len(m.TEST_WARNINGS) == 1 and m.TEST_WARNINGS[0].startswith("demo:"), m.TEST_WARNINGS
+PYWARN
+    then
+        passed=$((passed + 1))
+    else
+        echo "  ✗ TEST-WARN / DEFERRED bucket separation unit test FAILED (#635)"
+        failed=$((failed + 1))
+    fi
+else
+    echo "  ⊘ TEST-WARN bucket unit test skipped (source or env python not found)"
+fi
+
 # ── 3) Unit: decommissioned modules stay out of the sweep (#441) ─────
 # archived (#215) and external (#216) configs keep their kind/vmname, so the
 # module selectors still match them and they used to enter Phase 1/2 — where the

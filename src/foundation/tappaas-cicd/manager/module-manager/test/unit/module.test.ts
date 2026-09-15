@@ -26,7 +26,7 @@ import {
   validateModules,
   validateSourceLocation,
 } from "../../src/validate";
-import { AddOptions, DeleteOptions, ModuleConfig, ValidateFinding, ValidateReport } from "../../src/types";
+import { AddOptions, DeleteOptions, ModifyOptions, ModuleConfig, ValidateFinding, ValidateReport } from "../../src/types";
 import { FakeModuleClient } from "./fake-client";
 import { HELP, run } from "../../src/main";
 import { undocumentedOptions } from "../../../../lib/ts/src/help";
@@ -169,6 +169,37 @@ const CONFIG =
   check(
     a.passthrough.join(" ") === "--node tappaas2",
     "add captures unknown --field/value as passthrough to copy-update-json",
+  );
+}
+
+// ── 6b. modify forwards --ignore-test-failure to the client (#635), and
+// the help text documents it ────────────────────────────────────────────
+{
+  const c = new FakeModuleClient();
+  const rc = run(["module", "modify", "nextcloud", "--ignore-test-failure"], c);
+  check(rc === 0, "modify --ignore-test-failure returns the client rc (0)");
+  check(c.log.length === 1 && c.log[0].verb === "modify", "modify invoked once for nextcloud");
+  const m = c.log[0].opts as ModifyOptions;
+  check(m.ignoreTestFailure === true, "modify forwards --ignore-test-failure to ModifyOptions");
+  check(!m.force, "--ignore-test-failure does not also set --force (distinct authorities, #635)");
+
+  // Bare `modify` (no flag) must default to false — the flag has to be given
+  // explicitly, never inferred.
+  const c2 = new FakeModuleClient();
+  run(["module", "modify", "nextcloud"], c2);
+  check(
+    (c2.log[0].opts as ModifyOptions).ignoreTestFailure === false,
+    "modify without the flag leaves ignoreTestFailure false",
+  );
+
+  const modifyHelp = HELP.verbs.find((h) => h.name === "modify");
+  check(
+    !!modifyHelp && modifyHelp.usage.includes("--ignore-test-failure"),
+    "modify's usage line documents --ignore-test-failure",
+  );
+  check(
+    !!modifyHelp && (modifyHelp.options ?? []).some(([flag]) => flag === "--ignore-test-failure"),
+    "modify's option list documents --ignore-test-failure",
   );
 }
 

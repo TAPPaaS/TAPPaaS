@@ -1038,6 +1038,96 @@ else
     bad "(d) expected clean skip (rc=0, no markers); rc=${delta_rc}, markers=$(tr '\n' ';' < "${MARKER}" 2>/dev/null)"
 fi
 
+# ---------------------------------------------------------------------------
+# update-module.sh graded-test helpers (#635): run_graded_test + failed_checks,
+# plus the Step 6 baseline comparison ("same failures before and after → warn,
+# not fail"). Extracted with the same awk idiom as apply_dependson_delta above
+# — no cluster, no real test-module.sh; TAPPAAS_TEST_MODULE_BIN points at a
+# throwaway stub that prints canned ✗ lines and exits with a chosen code.
+# ---------------------------------------------------------------------------
+echo ""
+echo "== update-module.sh graded-test helpers (#635) =="
+GFN="${WORK}/graded.fn.sh"
+awk '/^run_graded_test\(\) \{/{f=1} f{print} f&&/^\}/{exit}' "$UPD_MOD" >  "$GFN"
+awk '/^failed_checks\(\) \{/{f=1} f{print} f&&/^\}/{exit}'    "$UPD_MOD" >> "$GFN"
+if [[ -s "$GFN" ]] && bash -n "$GFN" 2>/dev/null; then
+    ok "extracted run_graded_test + failed_checks from update-module.sh"
+else
+    bad "could not extract run_graded_test/failed_checks (#635 helpers missing?)"
+fi
+
+GW="${WORK}/graded"; mkdir -p "$GW"
+# Fake test-module.sh: `fake-test-module.sh --exit N line1 line2 ...` prints
+# each remaining arg on its own line, then exits N — enough to drive
+# run_graded_test without a real test-module.sh or module config.
+cat > "${GW}/fake-test-module.sh" <<'FAKE'
+#!/usr/bin/env bash
+rc=0
+out=()
+while [[ $# -gt 0 ]]; do
+    if [[ "$1" == "--exit" ]]; then rc="$2"; shift 2; else out+=("$1"); shift; fi
+done
+for l in "${out[@]}"; do printf '%s\n' "$l"; done
+exit "$rc"
+FAKE
+chmod +x "${GW}/fake-test-module.sh"
+
+run_g() {
+    local log="$1"; shift
+    TAPPAAS_TEST_MODULE_BIN="${GW}/fake-test-module.sh" bash -c '
+        set -uo pipefail
+        . "'"$GFN"'"
+        run_graded_test "$@"
+    ' _ "$log" "$@"
+}
+fc() { bash -c '. "'"$GFN"'"; failed_checks "$1"' _ "$1"; }
+
+# (1) run_graded_test forwards the fake bin's exit code.
+L1="${GW}/l1.log"
+run_g "$L1" --exit 1 '[Error]   ✗ check A failed'; g_rc=$?
+[[ "${g_rc}" -eq 1 ]] && ok "run_graded_test returns the wrapped test's exit code (1)" \
+                      || bad "run_graded_test: expected rc 1, got ${g_rc}"
+grep -q 'check A failed' "$L1" && ok "run_graded_test tees the wrapped test's output into the log" \
+                                || bad "run_graded_test: log missing the wrapped test's output"
+
+# (2) TAPPAAS_TEST_MODULE_BIN is honoured (not the hardcoded /home/tappaas/bin path).
+L2="${GW}/l2.log"
+run_g "$L2" --exit 0 'ok'; g_rc2=$?
+[[ "${g_rc2}" -eq 0 ]] && ok "run_graded_test honours TAPPAAS_TEST_MODULE_BIN (rc 0 from the stub)" \
+                       || bad "run_graded_test: expected rc 0 via TAPPAAS_TEST_MODULE_BIN, got ${g_rc2}"
+
+# (3) failed_checks extracts the text after ✗, strips ANSI colour, dedups+sorts.
+L3="${GW}/l3.log"
+printf '%s\n' \
+    $'\x1b[31m[Error]\x1b[0m   \xE2\x9c\x97 check B failed' \
+    '[Error]   ✗ check A failed' \
+    '[Error]   ✗ check A failed' \
+    'not a failure line' \
+    > "$L3"
+got_fc="$(fc "$L3" | tr '\n' ';')"
+[[ "${got_fc}" == "check A failed;check B failed;" ]] \
+    && ok "failed_checks strips ANSI, extracts text after ✗, dedups and sorts" \
+    || bad "failed_checks: expected 'check A failed;check B failed;', got '${got_fc}'"
+
+# (4) Step 6 baseline logic (comm -13/-12 over failed_checks): the SAME failure
+# before and after the update is an old failure, not a new one — this is what
+# lets update-module.sh warn instead of failing an update that did not
+# introduce the breakage. A genuinely NEW ✗ line must show up as new.
+PRE="${GW}/pre.log";  printf '%s\n' '[Error]   ✗ check A failed' > "$PRE"
+POST_SAME="${GW}/post-same.log"; printf '%s\n' '[Error]   ✗ check A failed' > "$POST_SAME"
+new_same="$(comm -13 <(fc "$PRE") <(fc "$POST_SAME"))"
+old_same="$(comm -12 <(fc "$PRE") <(fc "$POST_SAME"))"
+[[ -z "${new_same}" && -n "${old_same}" ]] \
+    && ok "baseline: an unchanged ✗ between pre/post is an OLD failure, not a new one" \
+    || bad "baseline: unchanged failure wrongly classified (new='${new_same}' old='${old_same}')"
+
+POST_NEW="${GW}/post-new.log"
+printf '%s\n' '[Error]   ✗ check A failed' '[Error]   ✗ check C failed' > "$POST_NEW"
+new_diff="$(comm -13 <(fc "$PRE") <(fc "$POST_NEW"))"
+[[ "${new_diff}" == "check C failed" ]] \
+    && ok "baseline: a genuinely new ✗ after the update is reported as new" \
+    || bad "baseline: expected new failure 'check C failed', got '${new_diff}'"
+
 # ── resolve-module.sh --field tier: an undeclared tier resolves to the
 # documented default (#561) ──────────────────────────────────────────
 #
