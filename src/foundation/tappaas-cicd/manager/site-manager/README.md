@@ -48,8 +48,10 @@ top-level          add --name <site-code> [--organization <org>] [create-site op
 
 `update` packages the whole-site update sweep: it delegates to
 `update-tappaas` and **always runs now** (`update-tappaas --force`, the
-scheduling override — the update window is ignored). Its own `--force` opens
-the disruption window for this run (`TAPPAAS_MODULE_FORCE`): a module with
+scheduling override — the update window is ignored). Its own `--force`
+(`TAPPAAS_MODULE_FORCE`) updates every module even when its pre-update test
+fails (`module modify --ignore-test-failure`), and opens the disruption window
+for this run: a module with
 `rebootOk: true` may be rebooted or migrated offline now, and every other module
 keeps its disruptive changes deferred. It never overrides `rebootOk: false`; for
 one module, that is `module-manager module modify <module> --force` (ADR-020 D8,

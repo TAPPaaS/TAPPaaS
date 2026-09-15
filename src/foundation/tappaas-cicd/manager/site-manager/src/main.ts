@@ -138,7 +138,7 @@ export const HELP: HelpSpec = {
       note: "(#588: run the whole-site update sweep NOW — packages update-tappaas)",
       options: [
         ["--dry-run", "Preview the update plan; change nothing."],
-        ["--force", "Open the disruption window now: modules with rebootOk may be rebooted / migrated offline; the others keep disruptive changes deferred (never overrides rebootOk:false). The sweep always runs now regardless."],
+        ["--force", "Update every module even if its pre-update test fails (module modify --ignore-test-failure), and open the disruption window now: modules with rebootOk may be rebooted / migrated offline, the others keep disruptive changes deferred (never overrides rebootOk:false)."],
         ["--no-git-pull", "Update whatever is checked out; skip pulling each repository (test local, not-yet-pushed changes)."],
       ] },
     { usage: "test [--deep]",
@@ -779,9 +779,11 @@ function printPlan(plan: { actions: { kind: string; target: string }[]; warnings
 // `update` — run the whole-site update sweep NOW (#588). Thin delegation to
 // update-tappaas, whose --force we ALWAYS pass: it is the SCHEDULING override
 // ("run now, ignore the update window"). site-manager's OWN --force, plumbed as
-// TAPPAAS_MODULE_FORCE, opens the disruption window for this run: a module with
-// rebootOk may be rebooted / migrated offline now, every other module keeps its
-// disruptive changes deferred (ADR-020 D8 v0.8, #633). --no-git-pull runs
+// TAPPAAS_MODULE_FORCE, updates every module even when its pre-update test fails
+// (each `module modify` gets --ignore-test-failure) and opens the disruption
+// window for this run: a module with rebootOk may be rebooted / migrated offline
+// now, every other module keeps its disruptive changes deferred (ADR-020 D8
+// v0.9, #633). --no-git-pull runs
 // against whatever is checked out (test local, not-yet-pushed changes);
 // --dry-run previews.
 function cmdUpdate(o: Opts, client: SiteClient): number {
@@ -792,7 +794,7 @@ function cmdUpdate(o: Opts, client: SiteClient): number {
     info(`${YW}${h.repository}: ${describeHold(h, now)}${CL}`);
   }
   if (o.force && !dryRun) {
-    warn(`${YW}--force: modules with rebootOk may be rebooted / migrated offline now; the others keep disruptive changes deferred.${CL}`);
+    warn(`${YW}--force: every module updates even if its pre-update test fails; modules with rebootOk may be rebooted / migrated offline now, the others keep disruptive changes deferred.${CL}`);
   }
   return client.runUpdate(dryRun, o.force === true, noGitPull);
 }

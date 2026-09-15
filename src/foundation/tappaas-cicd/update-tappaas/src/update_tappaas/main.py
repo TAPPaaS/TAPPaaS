@@ -499,8 +499,12 @@ def update_module(module_name: str) -> bool:
 
     `site-manager update --force` (TAPPAAS_MODULE_FORCE=1) does not change that:
     it stands in for the window, never for a module's consent (ADR-020 D8
-    v0.8, #633). See disruption_window_open."""
+    v0.8, #633; see disruption_window_open). What it does add is
+    --ignore-test-failure on every module: update even when the pre-update
+    test fails fatally (ADR-020 v0.9)."""
     args = [MODULE_MANAGER_CMD, "module", "modify", module_name]
+    if os.environ.get("TAPPAAS_MODULE_FORCE") == "1":
+        args.append("--ignore-test-failure")
     try:
         result = subprocess.run(
             args,
@@ -887,8 +891,9 @@ def main():
     if args.dry_run:
         log.info("=== DRY RUN MODE ===")
         if os.environ.get("TAPPAAS_MODULE_FORCE") == "1":
-            log.info("(run now: modules with rebootOk may have disruptive changes "
-                     "applied; the others keep them deferred)")
+            log.info("(--force: every module updates even if its pre-update test fails; "
+                     "modules with rebootOk may have disruptive changes applied now, "
+                     "the others keep them deferred)")
         log.info("Phase 0 - Control-plane refresh (#595):")
         log.info("  1. %s", REFRESH_CONTROL_PLANE_CMD)
         log.info("Phase 1 - Foundation update order:")

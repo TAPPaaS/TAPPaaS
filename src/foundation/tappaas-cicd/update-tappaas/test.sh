@@ -112,6 +112,7 @@ assert m.update_module("demo") is True, "a deferral is not a failure"
 
 argv = seen["argv"]
 assert "--force" not in argv, "update-tappaas must never forward --force: %r" % (argv,)
+assert "--ignore-test-failure" not in argv, "the unattended sweep never overrides a failing test: %r" % (argv,)
 assert argv[1:3] == ["module", "modify"], "unexpected invocation: %r" % (argv,)
 
 # Both streams are scanned: a provider may warn on either.
@@ -138,6 +139,7 @@ m.os.environ["TAPPAAS_MODULE_FORCE"] = "1"
 try:
     m.update_module("demo")
     assert "--force" not in seen["argv"], "#633: the fleet --force must not reach module modify: %r" % (seen["argv"],)
+    assert "--ignore-test-failure" in seen["argv"], "ADR-020 v0.9: the fleet --force updates past a failing test: %r" % (seen["argv"],)
     assert m.disruption_window_open(False), "#633: a run-now opens the window even without automaticReboot"
 finally:
     del m.os.environ["TAPPAAS_MODULE_FORCE"]

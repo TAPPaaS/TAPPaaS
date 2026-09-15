@@ -30,7 +30,7 @@ function check(cond: boolean, msg: string): void {
 {
   const c = new FakeSiteClient();
   run(["update", "--force"], c);
-  check(c.log.includes("update --force"), "update --force → per-module disruption force");
+  check(c.log.includes("update --force"), "update --force → the sweep gets TAPPAAS_MODULE_FORCE (test override, rebootOk respected)");
 }
 {
   const c = new FakeSiteClient();
