@@ -895,7 +895,7 @@ _p555_mod=""
 for f in "${CONFIG_DIR}"/*.json; do
     [[ -f "${f}" ]] || continue
     if jq -e '([(.dependsOn // []), (.integratesWith // [])] | flatten | index("network:proxy"))
-              and ((.proxyAllowedZones // []) | index("internet"))' "${f}" >/dev/null 2>&1; then
+              and ([.. | objects | .proxyAllowedZones? // empty] | flatten | index("internet"))' "${f}" >/dev/null 2>&1; then
         _p555_mod="$(basename "${f}" .json)"
         break
     fi
