@@ -39,7 +39,13 @@ if [[ -f "${REQUEST}" ]]; then
         log "operator request: $(jq -c . "${RUN_DIR}/request.json" 2>/dev/null || echo unreadable)"
     fi
 fi
-if [[ -f "${RUN_DIR}/request.json" ]] && [[ "$(jq -r '.noGitPull // false' "${RUN_DIR}/request.json" 2>/dev/null)" == "true" ]]; then
+if [[ "${TRIGGER_UNIT:-}" == "update-tappaas.timer" && -f "${RUN_DIR}/request.json" ]]; then
+    # The timer's run is the scheduled pass; a request it happened to claim
+    # belongs to an operator start and is not applied here.
+    log "WARNING: ignoring an operator request picked up by the timer's run"
+    rm -f "${RUN_DIR}/request.json"
+fi
+if [[ -f "${RUN_DIR}/request.json" ]] && [[ "$(jq -r '.noGitPull == true' "${RUN_DIR}/request.json" 2>/dev/null)" == "true" ]]; then
     export TAPPAAS_NO_GIT_PULL=1
 fi
 

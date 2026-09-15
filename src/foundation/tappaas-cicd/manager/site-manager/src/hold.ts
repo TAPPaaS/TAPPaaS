@@ -21,6 +21,12 @@ export interface RepoHold {
 
 export const DEFAULT_HOLD = "24h";
 
+// A repository name is a file name here: letters, digits, ., _ and -, no
+// leading dot — so neither `hold` nor `release` can reach outside .repo-hold/.
+export function validRepoName(name: string): boolean {
+  return /^[A-Za-z0-9_-][A-Za-z0-9._-]{0,63}$/.test(name);
+}
+
 export function holdDir(configDir: string): string {
   return join(configDir.replace(/\/$/, ""), ".repo-hold");
 }
@@ -60,6 +66,7 @@ export function isActive(h: RepoHold, nowSec: number): boolean {
 }
 
 export function writeHold(configDir: string, h: RepoHold): string {
+  if (!validRepoName(h.repository)) throw new Error(`not a repository name: ${h.repository}`);
   const dir = holdDir(configDir);
   mkdirSync(dir, { recursive: true });
   const f = join(dir, `${h.repository}.json`);
@@ -69,6 +76,7 @@ export function writeHold(configDir: string, h: RepoHold): string {
 
 // Removes the hold; returns false when there was none.
 export function releaseHold(configDir: string, repository: string): boolean {
+  if (!validRepoName(repository)) throw new Error(`not a repository name: ${repository}`);
   const f = join(holdDir(configDir), `${repository}.json`);
   if (!existsSync(f)) return false;
   unlinkSync(f);

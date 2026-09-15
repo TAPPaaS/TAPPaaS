@@ -45,6 +45,12 @@ ck "…moved into the run directory" lars "$(jq -r .requestedBy "${d}/run/reques
 ck "…and gone from config"         gone "$([[ -e "${d}/config/.update-request.json" ]] && echo left || echo gone)"
 ck "…noGitPull skips the pull"     1 "$(cat "${STUB_SEEN}")"
 
+# the timer's run is the scheduled pass: a request it meets is not applied
+echo '{"noGitPull": true}' > "${d}/config/.update-request.json"
+ck "a timer run ignores a request" 0 "$(TRIGGER_UNIT=update-tappaas.timer STUB_RC=0 run)"
+ck "…pull not skipped"             0 "$(cat "${STUB_SEEN}")"
+ck "…request not kept"             gone "$([[ -e "${d}/run/request.json" ]] && echo left || echo gone)"
+
 # a stale request is dropped
 echo '{"noGitPull": true}' > "${d}/config/.update-request.json"
 touch -d '-1 hour' "${d}/config/.update-request.json"

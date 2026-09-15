@@ -928,6 +928,14 @@ def main():
 
     ctx = run_context()
     request = ctx["request"]
+    # systemd names the unit that triggered this start (TRIGGER_UNIT, v254+):
+    # only the timer's start is the scheduled pass. A request that a timer run
+    # happened to claim belongs to the operator's own start, not to this run.
+    scheduled = os.environ.get("TRIGGER_UNIT") == "update-tappaas.timer"
+    if scheduled and request:
+        log.warning("Ignoring an operator request picked up by the timer's run: %s",
+                    json.dumps(request, sort_keys=True))
+        request = None
     if args.force:
         log.warning("update-tappaas --force is deprecated (ADR-017 D5)%s — run an "
                     "update now with: site-manager update",
@@ -952,11 +960,10 @@ def main():
     # --force of `site-manager update` (the request, or the env of R-1's
     # site-manager): every module passes a failing pre-update test, and the
     # disruption window opens for rebootOk modules (ADR-020 D8).
-    module_force = bool(request and request.get("force")) \
+    module_force = (request is not None and request.get("force") is True) \
         or os.environ.get("TAPPAAS_MODULE_FORCE") == "1"
     if module_force:
         os.environ["TAPPAAS_MODULE_FORCE"] = "1"
-    scheduled = request is None and not args.force and UNDER_SYSTEMD
     if not args.dry_run:
         set_stage("sweep")
 

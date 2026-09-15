@@ -57,6 +57,12 @@ check(run(["repository", "hold", "nosuch", "--reason", "x", "--config-dir", dir]
 check(run(["repository", "hold", "TAPPaaS", "--config-dir", dir], c) !== 0, "a hold without --reason is refused");
 check(run(["repository", "release", "TAPPaaS", "--config-dir", dir], c) === 0 && !existsSync(marker), "repository release removes the marker");
 
+// A name is never a path (security review: `release ../site` deleted site.json).
+writeFileSync(join(dir, "keep.json"), "{}");
+check(run(["repository", "release", "../keep", "--config-dir", dir], c) !== 0 && existsSync(join(dir, "keep.json")),
+  "release refuses a name that leaves .repo-hold/");
+check(run(["repository", "hold", "../keep", "--reason", "x", "--config-dir", dir], c) !== 0, "hold refuses a path");
+
 // Help documents both verbs and their options.
 const usages = HELP.verbs.map((v) => v.usage).join("\n");
 check(usages.includes("repository hold <name> --reason") && usages.includes("repository release <name>"), "help lists hold and release");

@@ -339,10 +339,11 @@ in
     serviceConfig = {
       Type = "oneshot";
       ExecStart = "/home/tappaas/bin/update-tappaas-schedule.sh";
-      Environment = [
-        ("PATH=/home/tappaas/bin:/run/wrappers/bin:/nix/var/nix/profiles/default/bin"
-          + ":/run/current-system/sw/bin")
-      ];
+      # It only writes the rendered timer; everything else stays read-only.
+      ProtectSystem = "strict";
+      ReadWritePaths = [ "/run/systemd/system" ];
+      PrivateTmp = true;
+      NoNewPrivileges = true;
     };
   };
 

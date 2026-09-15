@@ -13,6 +13,8 @@
 # Environment (tests): TAPPAAS_SITE_JSON, TAPPAAS_TIMER_FILE, TAPPAAS_NO_SYSTEMCTL=1
 
 set -euo pipefail
+# Runs as root: tools from root-only directories, never the operator's ~/bin.
+export PATH=/run/wrappers/bin:/run/current-system/sw/bin
 
 _here="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 # shellcheck source=../lib/update-schedule.sh

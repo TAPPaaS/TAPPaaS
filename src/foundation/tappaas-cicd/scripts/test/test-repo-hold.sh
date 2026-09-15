@@ -21,6 +21,9 @@ ck "expired at its end"    "expired 2030-01-01T00:00:00Z"                    "$(
 ck "no marker, no hold"    "none" "$(repo_hold_state other "${d}" 0)"
 echo 'not json' > "${d}/.repo-hold/broken.json"
 ck "an unreadable marker is no hold" "none" "$(repo_hold_state broken "${d}" 0)"
+printf '{"untilEpoch":1893456000,"until":"x","by":"y","reason":"z"}\n' > "${d}/outside.json"
+ck "a path is never a repository" "none" "$(repo_hold_state ../outside "${d}/.repo-hold/.." 0)"
+repo_hold_clear ../outside "${d}"; [[ -f "${d}/outside.json" ]] && ck "clear refuses a path" ok ok || ck "clear refuses a path" ok deleted
 repo_hold_clear TAPPaaS "${d}"
 ck "clear removes the marker" "none" "$(repo_hold_state TAPPaaS "${d}" 0)"
 

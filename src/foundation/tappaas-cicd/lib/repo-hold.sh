@@ -10,6 +10,7 @@
 repo_hold_state() {
     local repo="$1" dir="${2:-/home/tappaas/config}" now="${3:-$(date +%s)}"
     local f="${dir}/.repo-hold/${repo}.json" until_epoch
+    [[ "${repo}" =~ ^[A-Za-z0-9_-][A-Za-z0-9._-]*$ ]] || { echo none; return 0; }
     [[ -f "${f}" ]] || { echo none; return 0; }
     until_epoch="$(jq -r '.untilEpoch // empty' "${f}" 2>/dev/null)" || until_epoch=""
     [[ "${until_epoch}" =~ ^[0-9]+$ ]] || { echo none; return 0; }
@@ -22,5 +23,6 @@ repo_hold_state() {
 
 # repo_hold_clear <repo> [config-dir] — remove an expired marker.
 repo_hold_clear() {
+    [[ "${1}" =~ ^[A-Za-z0-9_-][A-Za-z0-9._-]*$ ]] || return 0
     rm -f "${2:-/home/tappaas/config}/.repo-hold/${1}.json"
 }

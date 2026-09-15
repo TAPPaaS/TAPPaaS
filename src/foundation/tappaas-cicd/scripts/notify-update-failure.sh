@@ -56,13 +56,15 @@ esac
 
 to="$(jq -r '.email // empty' "${SITE}" 2>/dev/null || true)"
 site_name="$(jq -r '.name // empty' "${SITE}" 2>/dev/null || true)"
+# It goes into the Subject header: a site code, or nothing.
+[[ "${site_name}" =~ ^[A-Za-z0-9_.-]{1,64}$ ]] || site_name=""
 if [[ -z "${to}" ]]; then
     log "site.json has no email — notice not sent (set one: site-manager site modify --email <address>)"
     breadcrumb "failure notice NOT sent: site.json has no email"
     exit 0
 fi
 # It becomes a mail header: one plain address or nothing.
-if ! [[ "${to}" =~ ^[^@[:space:]\<\>]+@[^@[:space:]\<\>]+$ ]]; then
+if ! [[ "${to}" =~ ^[^@[:space:]\<\>,\;\"\(\)]+@[^@[:space:]\<\>,\;\"\(\)]+$ ]]; then
     log "site.json email is not a single address — notice not sent"
     breadcrumb "failure notice NOT sent: site.json email is not a single address"
     exit 1
@@ -71,7 +73,7 @@ fi
 if [[ -n "${TAPPAAS_NOTIFY_NODES:-}" ]]; then
     read -r -a nodes <<<"${TAPPAAS_NOTIFY_NODES}"
 else
-    mapfile -t nodes < <(jq -r '.hardware.nodes[]?.name // empty' "${SITE}" 2>/dev/null)
+    mapfile -t nodes < <(jq -r '.hardware.nodes[]?.name // empty' "${SITE}" 2>/dev/null | grep -E '^[A-Za-z0-9_-]+$')
     [[ ${#nodes[@]} -gt 0 ]] || nodes=(tappaas1)
 fi
 
@@ -120,7 +122,7 @@ for node in "${nodes[@]}"; do
     from="$(ssh_node "${node}" "pvesh get /cluster/options --output-format json" 2>/dev/null \
             | jq -r '.email_from // empty' 2>/dev/null || true)"
     from_hdr=""
-    [[ -n "${from}" ]] && from_hdr="From: TAPPaaS <${from}>"$'\n'
+    [[ "${from}" =~ ^[^@[:space:]\<\>,\;\"\(\)]+@[^@[:space:]\<\>,\;\"\(\)]+$ ]] && from_hdr="From: TAPPaaS <${from}>"$'\n'
     mail="$(printf 'To: %s\n%sSubject: %s\nContent-Type: text/plain; charset=UTF-8\n\n%s\n' \
         "${to}" "${from_hdr}" "${subject}" "${body}")"
     if [[ "${DRY_RUN}" -eq 1 ]]; then

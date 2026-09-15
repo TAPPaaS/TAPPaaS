@@ -27,10 +27,11 @@ update_schedule_oncalendar() {
     freq="$(jq -r '.[0] // "" | ascii_downcase' <<<"${json}")"
     weekday="$(jq -r '.[1] // "" | ascii_downcase' <<<"${json}")"
     hour="$(jq -r '.[2] // 2' <<<"${json}")"
-    if ! [[ "${hour}" =~ ^[0-9]+$ ]] || (( hour > 23 )); then
+    if ! [[ "${hour}" =~ ^[0-9]{1,2}$ ]] || (( 10#${hour} > 23 )); then
         echo "warn: updateSchedule hour '${hour}' is not 0-23" >&2
         return 1
     fi
+    hour=$((10#${hour}))   # "08" is eight, not an octal error
     case "${weekday}" in
         monday) day=Mon ;; tuesday) day=Tue ;; wednesday) day=Wed ;; thursday) day=Thu ;;
         friday) day=Fri ;; saturday) day=Sat ;; sunday) day=Sun ;;

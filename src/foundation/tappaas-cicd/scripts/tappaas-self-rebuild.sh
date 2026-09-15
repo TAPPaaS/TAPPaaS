@@ -12,6 +12,9 @@
 # operator's checkout (nix's libgit2 reads it from $HOME/.gitconfig only).
 
 set -euo pipefail
+# Root must not resolve its tools from the unit's PATH, which starts with
+# tappaas-writable directories (~/bin, ~/.nix-profile).
+export PATH=/run/wrappers/bin:/run/current-system/sw/bin
 
 _here="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 CICD_DIR="$(dirname "${_here}")"
@@ -27,5 +30,7 @@ HOME=/var/lib/tappaas-rebuild nixos-rebuild switch --flake ".#${VMNAME}" --impur
 
 systemctl start update-tappaas-schedule.service \
     || echo "tappaas-self-rebuild: WARNING: could not re-render the update timer" >&2
-: > "${RUN_DIR}/rebuilt"
+# The run directory belongs to tappaas: never follow a link planted there.
+rm -f "${RUN_DIR}/rebuilt"
+( set -C; : > "${RUN_DIR}/rebuilt" )
 echo "tappaas-self-rebuild: generation $(readlink /nix/var/nix/profiles/system) active"

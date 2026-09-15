@@ -22,7 +22,7 @@
 //
 // Exit codes: ok=0, error=1.
 
-import { DEFAULT_HOLD, describeHold, makeHold, parseUntil, readHolds, releaseHold, writeHold } from "./hold";
+import { DEFAULT_HOLD, describeHold, makeHold, parseUntil, readHolds, releaseHold, validRepoName, writeHold } from "./hold";
 import { UNIT, buildRequest, dropRequest, readResult, repoStatusLine, summaryLine, writeRequest } from "./unitrun";
 import { defaultConfigDir, defaultSchemaDir, loadRaw, loadSite, writeSite } from "./config";
 import { CliSiteClient } from "./client";
@@ -631,6 +631,7 @@ function cmdRepository(o: Opts, client: SiteClient): void {
     const name = o.rest[1];
     const reason = o.flags.get("--reason");
     if (!name || !reason) die("repository hold: expected <name> --reason <text> [--until <when>]");
+    if (!validRepoName(name)) die(`repository hold: '${name}' is not a repository name`);
     const site = loadSite(siteFile);
     if (!site.repositories.some((r) => r.name === name)) {
       die(`repository hold: '${name}' is not a repository in ${siteFile}`);
@@ -653,6 +654,7 @@ function cmdRepository(o: Opts, client: SiteClient): void {
   if (sub === "release") {
     const name = o.rest[1];
     if (!name) die("repository release: expected <name>");
+    if (!validRepoName(name)) die(`repository release: '${name}' is not a repository name`);
     info(releaseHold(o.configDir, name)
       ? `${name}: hold released — the next sweep pulls it again`
       : `${name}: no hold`);

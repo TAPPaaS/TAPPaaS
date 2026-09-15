@@ -70,6 +70,12 @@ grep -q "Stopped in: the mothership's nixos-rebuild" "${FAKE_MAIL}" && ok "the n
     && ok "the result file records the failed stage" || bad "result not rewritten: $(cat "${d}/config/last-update-result.json")"
 [[ ! -e "${d}/config/.update-stage" ]] && ok "the stage marker is consumed" || bad "stage marker left"
 
+# 4c. a site name cannot add a header
+printf '{"name":"x\\nBcc: spy@example.org","email":"owner@example.org"}\n' > "${d}/config/site.json"
+run
+! grep -qi '^Bcc:' "${FAKE_MAIL}" && grep -q '^Subject: \[TAPPaaS\] update sweep FAILED' "${FAKE_MAIL}" \
+    && ok "a site name with a header in it is left out of the subject" || bad "site name reached the headers"
+
 # 5. no email, or not a plain address
 site ""; run; rc=$?
 [[ ${rc} -eq 0 && ! -s "${FAKE_LOG}" ]] && ok "no email: nothing sent, exit 0" || bad "no email: rc=${rc}"
