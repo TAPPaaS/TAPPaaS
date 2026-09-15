@@ -196,7 +196,9 @@ export class CliSiteClient implements SiteClient {
     const args = ["--force"];
     if (dryRun) args.push("--dry-run");
     const env: Record<string, string> = {};
-    if (moduleForce) env.TAPPAAS_MODULE_FORCE = "1";
+    // Always set, so a TAPPAAS_MODULE_FORCE exported in the caller's shell
+    // cannot open the disruption window without --force.
+    env.TAPPAAS_MODULE_FORCE = moduleForce ? "1" : "0";
     if (noGitPull) env.TAPPAAS_NO_GIT_PULL = "1";
     return runStreaming(UPDATE_TAPPAAS(), args, { env });
   }
