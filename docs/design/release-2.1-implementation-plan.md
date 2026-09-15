@@ -188,18 +188,23 @@ later wave depends on.
 
 ### G0.2 Trustworthy gates — E4 · R2 · L-M
 
+Status: in progress — all eight issues on `wave0/g0.2` (ADR-020 v0.8 ddae6b99;
+#636 ed16f691, #555 7f7901fb, #645 0c408b1f + df7b8915, #560 d32ea443 + 422986f2, #620
+254bdcba, #635 8b86662a, #633 f73f705a + 082964af); T0–T2 green on hrossen;
+the T3 sweep on hrossen is still to do.
+
 Tests that pass when they should fail, or fail when they should pass, make
 every later migration unverifiable.
 
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
 | #644 | `network-manager <verb> --help` runs the verb | 5 | 1 | L | **Do first.** `distribute --help` pushed zones.json for real (2026-09-14). Still open: `main.ts` checks only `argv[0]` |
-| #635 | Pre-update gate collapses test severity | 4 | 2 | M | exit 1 → warn and proceed with a `DEFERRED:` line (ADR-020 D8). Some updates that abort today will proceed |
-| #633 | `site-manager update --force` overrides every `rebootOk` | 3 | 2 | M | Fleet-wide reboot authority from one flag |
+| #635 | Pre-update gate collapses test severity | 4 | 2 | M | exit 1 → warn and proceed; the post-update test fails only on new failures and prints a `TEST-WARN:` line for old ones; `--ignore-test-failure` overrides a fatal pre-test (ADR-020 v0.8 D8). Some updates that abort today will proceed |
+| #633 | `site-manager update --force` overrides every `rebootOk` | 3 | 2 | M | Fleet-wide reboot authority from one flag. Decided 2026-09-15: `--force` = run now, respects `rebootOk` (ADR-020 v0.8) |
 | #636 | backup:vm Check 1 fatal while a backup runs | 4 | 1 | L | Timeout → "unknown", not fatal |
 | #555 | network:proxy checks cannot fail without a refid | 3 | 1 | L | |
 | #560 | identity:identity never checks the consumer side | 3 | 2 | L | Stricter test: existing silent SSO gaps turn red on first run (expected) |
-| #620 | Tier lattice authored on 9 of 26 zones | 4 | 2 | M | Authoring `tier` in deployed zones.json is a small migration; the check must report coverage |
+| #620 | Tier lattice authored on 9 of 26 zones | 4 | 2 | M | The check reports coverage. `tier` drives no rule; the repo already tiers every non-exempt zone, the untiered ones are site-local (retire them, or `modify <zone> --set tier=`), so no migration |
 | #645 | Reconcile dry-run hides firewall rule changes | 4 | 1 | L | Needed before the Wave 2 rule changes |
 
 ### G0.3 Update channel & failure notice — E3 · R3 · L-M
@@ -595,7 +600,7 @@ open decisions from review, and the ADRs that have to be signed off first.
 
 | Wave · group | Decisions | ADR sign-off (entry) | Exit gate (before `stable`) |
 |--------------|-----------|----------------------|-----------------------------|
-| 0 | Migration framework ✅; `--force` vs `--reinstall` semantics (#453) | **New: Config migrations & upgrade path**; ADR-017 Proposed → Accepted, with Erik's v0.2 points (#471); ADR-020 Proposed → Accepted (D8 is what #635 reuses; #584, #648, #633); ADR-007e amended for the site notification target (#651) | Runner released with no migrations; #644 and #645 on `stable`; hrossen.dk moved to its wave branch, makerfloss left on `main`; every known site reports a clean sweep after the update |
+| 0 | Migration framework ✅; `--force` vs `--reinstall` semantics (#453) | **New: Config migrations & upgrade path**; ADR-017 Proposed → Accepted, with Erik's v0.2 points (#471); ADR-020 Proposed → Accepted ✅ 2026-09-15, v0.8 (D8 is what #635 reuses; #584, #648, #633); ADR-007e amended for the site notification target (#651) | Runner released with no migrations; #644 and #645 on `stable`; hrossen.dk moved to its wave branch, makerfloss left on `main`; every known site reports a clean sweep after the update |
 | 1 (all) | Wave 0 on `stable` and applied everywhere | — | Per group: migrations passed §10.1 R4 on the test system and every canary; release notes list them |
 | 1 · G1.5 | none — runs first | none: #439 is a runbook in `docs/design/`; the #545 outcome (what is backed up, how) goes into ADR-012 §2.7 | `config/` restore rehearsed on the test system |
 | 1 · G1.1 | `module.tier` → `stack`, or keep both (#624) | ADR-022 and 022a–022d Draft → Accepted (#624, #637, #610, #611 is 022d, #599 is 022c); ADR-009 Proposed → amended or superseded by 022c; ADR-007a + ADR-006 amended for People → Identity (#628); ADR-007b amended for the tier/stack outcome | as Wave 1 |
