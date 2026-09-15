@@ -46,5 +46,15 @@ bash "${R}" >/dev/null 2>&1; r=$?
 ck "an unusable schedule fails the unit" 1 "${r}"
 ck "…and leaves the current timer"  'OnCalendar=*-*-* 02:00:00' "$(grep '^OnCalendar=' "${TAPPAAS_TIMER_FILE}")"
 
+# Every unit that execs one of our `#!/usr/bin/env bash` scripts needs a PATH
+# with bash: NixOS's default service PATH has none (the renderer failed exit 127
+# on its first activation, T3 2026-09-15).
+NIX="${CICD}/tappaas-cicd.nix"
+for svc in update-tappaas-schedule update-tappaas-failure update-tappaas; do
+    blk="$(sed -n "/systemd.services.${svc} = {/,/^  };/p" "${NIX}")"
+    if grep -q 'PATH=' <<<"${blk}"; then ck "${svc}.service declares a PATH" ok ok
+    else ck "${svc}.service declares a PATH" ok missing; fi
+done
+
 echo "── summary: ${pass} pass, ${fail} fail ──"
 [[ "${fail}" -eq 0 ]]
