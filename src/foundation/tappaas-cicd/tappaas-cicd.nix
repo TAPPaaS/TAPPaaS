@@ -297,8 +297,11 @@ in
   # line to config/update-tappaas.failures and logs to the journal, so a failed
   # (or crashed) sweep leaves a durable signal that the next hourly no-op run
   # cannot erase. The authoritative detail is config/last-update-result.json.
+  # #651: then mails site.json `email` through a Proxmox node's mailer
+  # (scripts/notify-update-failure.sh; ADR-007e v1.3). If no node takes the
+  # mail this unit fails too, so a lost notice is visible in `systemctl --failed`.
   systemd.services.update-tappaas-failure = {
-    description = "Surface a failed update-tappaas sweep (OnFailure handler, #506)";
+    description = "Surface a failed update-tappaas sweep (OnFailure handler, #506, #651)";
     serviceConfig = {
       Type = "oneshot";
       User = "tappaas";
@@ -306,7 +309,14 @@ in
         printf '%s update-tappaas.service FAILED — see config/last-update-result.json (journalctl -u update-tappaas for detail)\n' \
           "$(${pkgs.coreutils}/bin/date -Is)" >> /home/tappaas/config/update-tappaas.failures
         echo "update-tappaas sweep FAILED — see /home/tappaas/config/last-update-result.json" >&2
+        exec /home/tappaas/bin/notify-update-failure.sh
       '';
+      # The notice needs ssh and jq, like the sweep (see update-tappaas above).
+      Environment = [
+        ("PATH=/home/tappaas/bin:/run/wrappers/bin:/home/tappaas/.nix-profile/bin"
+          + ":/etc/profiles/per-user/tappaas/bin:/nix/var/nix/profiles/default/bin"
+          + ":/run/current-system/sw/bin")
+      ];
       ProtectSystem = "strict";
       ReadWritePaths = [ "/home/tappaas/config" ];
     };
