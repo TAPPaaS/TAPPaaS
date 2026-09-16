@@ -157,7 +157,9 @@ later wave depends on.
 |---|-------|:-:|:-:|:-:|------|
 | #652 | Versioned config-migration step | 3 | 2 | H | Replace ad-hoc blocks in `pre-update.sh` with ordered, idempotent `migrations/NNNN-*.sh`: each backs up the files it touches, supports dry-run, and is recorded as applied in `config/`. A failed migration stops the sweep before any module update. |
 | #584 | Rollback in install/modify | 2 | 2 | M | `modify` Step 0 rewrites config before the snapshot and tests; snapshot `config/<module>.json` together with the VM |
-| #453 | `--force` overwrites deployed config | 3 | 2 | M | Decide `--force` vs `--reinstall` semantics first (Lars, 2026-08-17) |
+| #453 | `--force` overwrites deployed config | 3 | 2 | M | **Decided 2026-09-16:** `add --force` refuses on a deployed module and names `module update` / `add --reinstall`; only `--reinstall` overwrites a deployed config (ADR-020 v0.10 D5) |
+| #655 | `module-manager update` verb | 3 | 2 | M | The release update gets its own word; `modify` is the field change. Bare `modify` stays an alias for one release (ADR-020 v0.10 D5) |
+| *(with #655)* | one meaning for `--force` | 3 | 2 | H | `--force` = proceed (failed pre-update test, archived/external) at every level; downtime is `--allow-disruption`; `--ignore-test-failure` retired (ADR-020 v0.10 D8, ADR-017 v0.3 D5) |
 | #648 | `--unset` for stale fields | 4 | 1 | L | Option 2 chosen (2026-09-14): `--unset`, deep test, README |
 | #572 | repo-sync auto-stash never restored | 4 | 1 | L | Pick pop or drop; warn with count |
 
@@ -627,7 +629,7 @@ Each is a design that should be agreed before its code starts.
 
 | New ADR | Covers | Gates | Why an ADR and not an issue |
 |---------|--------|-------|-----------------------------|
-| Config migrations & upgrade path | G0.1 framework; the rollout rules in §10.2 | Wave 0 | Binds every future release and every contributor who changes `config/` |
+| **ADR-025** Config migrations and the upgrade path | G0.1 framework; the rollout rules in §10.2 | Wave 0 | Binds every future release and every contributor who changes `config/`. Drafted 2026-09-16, **Proposed** — awaiting sign-off |
 | Module blueprint | #363 artifacts, #248 version/status, the NixOS baseline (#324, #390, #448, #472, FW #87), link to ADR-011 SBOM | G1.3, G1.4 | The contract every community module copies |
 | Stacks & solutions | #421 layout, #500 module move, the *solution* concept (2026-08-03) | G1.3 | Changes paths in every deployed config; amends ADR-004 and ADR-007b |
 | Controller pattern for app modules | #430 (Ansible first); later #170 | G1.3 | The issue is already written as an ADR proposal |
@@ -654,3 +656,5 @@ targets (an ADR-007e amendment).
 | 6 | Firewall rebuild (#439) | **Decided 2026-09-14:** only one installation runs the nano image; document the procedure, do not build or run it (G1.5) |
 | 7 | Scope of the 2.1 release | **Decided 2026-09-14:** not discussed here; the plan is organised by waves |
 | 8 | What gates a wave | **Decided 2026-09-14:** open decisions and ADR sign-offs are entry gates (§10.3); designs that need a new ADR are listed in §10.4 |
+| 9 | `--force` vs `--reinstall` (#453), and what `--force` means at each level | **Decided 2026-09-16:** one meaning everywhere — *proceed*, never reboot, never overwrite a deployed config. Downtime is `--allow-disruption`; `--ignore-test-failure` is retired into `--force`; `add --force` refuses on a deployed module. #655's `update` verb lands with it (ADR-020 v0.10) |
+| 10 | Rollback in install (#584) | **Decided 2026-09-16:** a failed `add` removes what that run created (config, and the VM if the run created it); `modify`/`update` snapshots `config/<module>.json` with the VM |

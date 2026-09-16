@@ -2,14 +2,14 @@
 
 | | |
 |---|---|
-| **Status** | **Accepted** (2026-09-15) — v0.2; implementation in G0.3 (#471). D7 is decided but ships with the G0.1 migration runner. |
-| **Version** | 0.2 |
-| **Date** | 2026-09-15 |
+| **Status** | **Accepted** (2026-09-15) — v0.3; implementation in G0.3 (#471). D7 is decided but ships with the G0.1 migration runner. |
+| **Version** | 0.3 |
+| **Date** | 2026-09-16 |
 | **Author** | Lars Rossen |
 | **Parent** | [ADR-009 Composition Meta-Model](<ADR-009 - Composition Meta-Model.md>) (`<module>:<service>` coordinates) |
 | **Refines** | [ADR-007d Site](<ADR-007d - Site.md>) (`site.json` as the site's single source of truth), [ADR-003 Dependency management](<ADR-003 - Dependency management in TAPPaaS.md>) (`dependsOn` ordering of the update loop) |
 | **Related** | **#471** (implementation reminder for this ADR), **#357** (update window / channel — settled by D8), **#447** (schedule editing and listing), **#588** (`site-manager update`), **#595** (Phase 0 control-plane refresh), **#533** (ownership repair `ExecStartPre`), **#653** (pull hold), **#651** (failure notice), **#635** / **#633** (`--force` semantics), **#150** (cron retired in favour of the systemd timer), **#467** (ambient `<nixpkgs>` — closed by `a65c6c61`), **#515** (wheel polkit rule); [ADR-020](<ADR-020 - Declared-Field Change Model (validate, drift, modify).md>) D8 owns the `--force` / `rebootOk` rule; [ADR-007e](<ADR-007e - Health.md>) v1.3 owns the notification target. **Owner:** `tappaas-cicd` (unit definitions, self-update), `site-manager` (schedule rendering, `update`) |
-| **Changelog** | v0.1 — initial draft: hoist the mothership self-update into the unit via `ExecStartPre=+`, render `OnCalendar` from `site.json`, delete the in-process schedule gate, deprecate `--force`, introduce `site-manager site update` (with progress/completeness reporting), restate `updateSchedule` as a named object in which `daily` carries no weekday. v0.2 — Erik Daniel's review on #471 (2026-08-19, 2026-09-01) and the operator's decisions of 2026-09-15, checked against `main`: D3 has three `ExecStartPre` lines (the #533 repair stays first), takes over Phase 0 (#595) and the hold-aware pull (#653), makes a failed pull or rebuild abort the run, and relies on the #651 notice; D1 pairs the gate deletion with `Persistent=false`; the operator path is the existing `site-manager update` (#588), which starts the unit and hands per-run options over in a one-shot request file; `update-tappaas --force` is deprecated and `site-manager update --force` adds `--ignore-test-failure` under ADR-020 D8's `rebootOk` rule; D6 targets `validate-site.sh`/`site-fields.json`, not the legacy validator; D7 keeps accepting the legacy triple and leaves the in-place rewrite to a G0.1 migration; new D8 settles #357; new *Bootstrap* section for the first activation; #467 recorded as closed by `a65c6c61`; counts and line references brought up to date. Accepted 2026-09-15 with two operator rulings: D7's object form and its rewrite are deferred to the G0.1 migration runner (this release keeps the triple); the disruption window opens only for the scheduled run or an operator run with `--force` (D8, ADR-020 D8). |
+| **Changelog** | v0.1 — initial draft: hoist the mothership self-update into the unit via `ExecStartPre=+`, render `OnCalendar` from `site.json`, delete the in-process schedule gate, deprecate `--force`, introduce `site-manager site update` (with progress/completeness reporting), restate `updateSchedule` as a named object in which `daily` carries no weekday. v0.2 — Erik Daniel's review on #471 (2026-08-19, 2026-09-01) and the operator's decisions of 2026-09-15, checked against `main`: D3 has three `ExecStartPre` lines (the #533 repair stays first), takes over Phase 0 (#595) and the hold-aware pull (#653), makes a failed pull or rebuild abort the run, and relies on the #651 notice; D1 pairs the gate deletion with `Persistent=false`; the operator path is the existing `site-manager update` (#588), which starts the unit and hands per-run options over in a one-shot request file; `update-tappaas --force` is deprecated and `site-manager update --force` adds `--ignore-test-failure` under ADR-020 D8's `rebootOk` rule; D6 targets `validate-site.sh`/`site-fields.json`, not the legacy validator; D7 keeps accepting the legacy triple and leaves the in-place rewrite to a G0.1 migration; new D8 settles #357; new *Bootstrap* section for the first activation; #467 recorded as closed by `a65c6c61`; counts and line references brought up to date. Accepted 2026-09-15 with two operator rulings: D7's object form and its rewrite are deferred to the G0.1 migration runner (this release keeps the triple); the disruption window opens only for the scheduled run or an operator run with `--force` (D8, ADR-020 D8). v0.3 (2026-09-16): D5 follows ADR-020 v0.10 — the fleet `--force` forwards `--force` (one meaning at every level), downtime is `--allow-disruption`, and `--ignore-test-failure` is retired. |
 
 ## Context
 
@@ -315,15 +315,18 @@ plan. The repository-reconcile planner checks only clone and branch today (`clon
 `update-tappaas --force` remains in `argparse`, logs a deprecation warning and has no effect:
 the gate it skipped is gone (D1). The flag is removed in a later release.
 
-`site-manager update --force` (carried by the request, D4) means, for that run:
+`site-manager update --force` (carried by the request, D4) forwards **`--force`** to every
+`module-manager module update` in that run: each module updates even when its pre-update test
+failed fatally, or its status is `archived`/`external`. It authorizes no downtime and
+overwrites no deployed config (ADR-020 v0.10 D5/D8).
 
-- every `module-manager module modify` gets `--ignore-test-failure`: a module updates even
-  when its pre-update test fails fatally (#635; `update-module.sh:547–551`);
-- the disruption window opens for `rebootOk: true` modules only; `rebootOk: false` keeps its
-  disruptive changes deferred (#633). The sweep never forwards `module modify --force`.
+Downtime is a separate flag with a name of its own: `site-manager update --allow-disruption`
+opens the window for modules that declare `rebootOk: true`, and `rebootOk: false` keeps its
+disruptive changes deferred (#633). `--ignore-test-failure`, introduced by #635 and never
+released to `stable`, is retired back into `--force`.
 
-**ADR-020 owns this rule** (D8; v0.9, `5c77a7ca`, adds the `--ignore-test-failure` half,
-which `bb3f07b6` implements in `update_module()`). ADR-017 only carries the flag to the unit.
+**ADR-020 owns this rule** (D8, v0.10 after the #453/#655 review). ADR-017 only carries the
+flags to the unit — `force` and `allowDisruption` are two booleans in the request (D4).
 
 **Call sites.** `update-tappaas.*--force` matches 55 lines in 31 files across `src/`, `docs/`
 and `release/` (this ADR excluded; `release/` has none):
@@ -575,7 +578,7 @@ the fallback the first activation needs, and are removed as *Bootstrap* describe
 - [ ] `site-manager update` starts the unit, streams this invocation's journal, prints the follow command on start and the summary plus the two completeness checks on exit; `Ctrl-C` detaches and says so; it refuses while a run is active.
 - [ ] `site-manager update --dry-run` starts nothing and reports commits behind origin per repository (holds shown) and the sweep plan.
 - [ ] `--force` and `--no-git-pull` reach the unit only through the request file; a timer run has none; a request never outlives its run; a stale request is discarded with a warning.
-- [ ] `site-manager update --force` adds `--ignore-test-failure` to every `module modify` and leaves `rebootOk: false` modules deferred (ADR-020 D8).
+- [ ] `site-manager update --force` forwards `--force` to every `module update` and opens no disruption window; `--allow-disruption` opens it for `rebootOk: true` modules only, and leaves `rebootOk: false` deferred (ADR-020 v0.10 D8).
 - [ ] `update-tappaas --force` warns and has no effect; no caller or operator document still passes it; `rest-of-foundation.sh` runs `site-manager update`.
 - [ ] The renderer and `site-manager validate` read the triple; a weekday under `daily`/`none` is reported as inert and never honoured. (D7's object form: with the G0.1 runner.)
 - [ ] A plain `site-manager update` opens no disruption window; the scheduled run (`automaticReboot`) and `--force` do.
