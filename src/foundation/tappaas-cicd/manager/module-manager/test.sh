@@ -1370,6 +1370,32 @@ else
     bad "--unset legacyField failed: $(tail -1 "${UDIR}/out")"
 fi
 
+# A refusal is exit 3 — "nothing was written" — so the manager does not tell the
+# operator to go looking for a half-applied change that cannot exist (T3 finding).
+write_ucfg
+TAPPAAS_CONFIG="${UDIR}/config" TAPPAAS_SCHEMA_FILE="${UDIR}/schema.json" \
+    bash "$SETF" unsettest --unset cores > "${UDIR}/out" 2>&1
+_rc=$?
+[[ "${_rc}" -eq 3 ]] && ok "a refused --unset exits 3 (refused, nothing written)" \
+                     || bad "a refused --unset exited ${_rc}, not 3 (#648)"
+write_ucfg
+TAPPAAS_CONFIG="${UDIR}/config" TAPPAAS_SCHEMA_FILE="${UDIR}/schema.json" \
+    bash "$SETF" unsettest --unset neverThere > "${UDIR}/out" 2>&1
+[[ $? -eq 3 ]] && ok "unsetting a field that is not there also exits 3" \
+               || bad "a missing field must be a refusal, not a write failure"
+# …and a --set type error before any write is a refusal too, while one AFTER a
+# successful write is a genuine partial change.
+write_ucfg
+TAPPAAS_CONFIG="${UDIR}/config" TAPPAAS_SCHEMA_FILE="${UDIR}/schema.json" \
+    bash "$SETF" unsettest --set cores=notanumber > "${UDIR}/out" 2>&1
+[[ $? -eq 3 ]] && ok "a --set type error before any write is a refusal (exit 3)" \
+               || bad "a type error with nothing written must be exit 3"
+write_ucfg
+TAPPAAS_CONFIG="${UDIR}/config" TAPPAAS_SCHEMA_FILE="${UDIR}/schema.json" \
+    bash "$SETF" unsettest --set cores=8 --set vmname=x --set cores=nope > "${UDIR}/out" 2>&1
+[[ $? -eq 1 ]] && ok "…but one after a write is exit 1 (genuinely partial)" \
+               || bad "a type error after a write must be exit 1, not a refusal"
+
 # A declared field has a meaning every reader expects: change it, don't delete it.
 run_unset cores \
     && bad "--unset accepted a declared field (#648)" \

@@ -37,7 +37,9 @@
 #
 # Usage: set-module-field.sh <module> [--set <field>=<value>]... [--unset <field>]...
 #
-# Exit: 0 written · 1 error · 2 usage
+# Exit: 0 written · 1 a write failed partway · 2 usage · 3 REFUSED before any
+#       write (the config is untouched — the caller must not tell the operator
+#       to go looking for a half-applied change that cannot exist)
 
 # The jq programs below are single-quoted on purpose: $f and $v are JQ variables
 # bound by --arg/--argjson, not shell expansions.
@@ -78,11 +80,11 @@ done
 # #533/#525: never run this as root — a root-owned config drops out of the sweep.
 if [[ "$(id -u)" -eq 0 ]]; then
     error "${SCRIPT_NAME} must run as the operator, not root — a root-owned config drops out of the update sweep (#525)"
-    exit 1
+    exit 3
 fi
 
 TARGET="${CONFIG_DIR}/${MODULE}.json"
-[[ -f "${TARGET}" ]] || { error "Module config not found: ${TARGET} — is '${MODULE}' deployed?"; exit 1; }
+[[ -f "${TARGET}" ]] || { error "Module config not found: ${TARGET} — is '${MODULE}' deployed?"; exit 3; }
 
 field_type() {
     jq -r --arg f "$1" '.fields[$f].type // "string"' "${SCHEMA_FILE}" 2>/dev/null || echo string
@@ -94,42 +96,47 @@ field_type() {
 if [[ ${#UNSETS[@]} -gt 0 ]]; then
     ORIG="${TARGET}.orig"
     unset_flat="$(normalize_module_config < "${TARGET}")" \
-        || { error "cannot read ${TARGET}"; exit 1; }
+        || { error "cannot read ${TARGET}"; exit 3; }
     unset_orig_flat="{}"
     [[ -f "${ORIG}" ]] && unset_orig_flat="$(normalize_module_config < "${ORIG}" 2>/dev/null || echo '{}')"
 
     for field in "${UNSETS[@]}"; do
         [[ "${field}" != *"="* ]] \
-            || { error "${SCRIPT_NAME}: '--unset ${field}' takes a field name, not field=value"; exit 1; }
+            || { error "${SCRIPT_NAME}: '--unset ${field}' takes a field name, not field=value"; exit 3; }
         jq -e --arg f "${field}" 'has($f)' >/dev/null <<< "${unset_flat}" \
-            || { error "${field} is not in ${TARGET} — nothing to unset"; exit 1; }
+            || { error "${field} is not in ${TARGET} — nothing to unset"; exit 3; }
         if jq -e --arg f "${field}" '.fields | has($f)' >/dev/null "${SCHEMA_FILE}" 2>/dev/null; then
             error "${field} is a declared field — change it with '--set ${field}=<value>' rather than removing it"
-            exit 1
+            exit 3
         fi
         if jq -e --arg f "${field}" 'has($f)' >/dev/null <<< "${unset_orig_flat}"; then
             error "${field} still comes from the module's release source — the next update re-adopts it; remove it in the source instead"
-            exit 1
+            exit 3
         fi
     done
 fi
 
+# 0 until the first successful write: it is what separates "refused, nothing
+# happened" from "stopped partway, go and look".
+WROTE=0
+refuse_or_fail() { [[ "${WROTE}" -eq 0 ]] && exit 3 || exit 1; }
+
 for pair in "${PAIRS[@]}"; do
     field="${pair%%=*}"
     value="${pair#*=}"
-    [[ -n "${field}" && "${pair}" == *"="* ]] || { error "${SCRIPT_NAME}: '--set ${pair}' is not field=value"; exit 1; }
+    [[ -n "${field}" && "${pair}" == *"="* ]] || { error "${SCRIPT_NAME}: '--set ${pair}' is not field=value"; refuse_or_fail; }
 
     case "$(field_type "${field}")" in
         integer|number)
             [[ "${value}" =~ ^-?[0-9]+$ ]] \
-                || { error "${field} is declared numeric in module-fields.json, but '${value}' is not a number"; exit 1; }
+                || { error "${field} is declared numeric in module-fields.json, but '${value}' is not a number"; refuse_or_fail; }
             jq_module_write "${MODULE}" '.[$f] = $v' --argjson v "${value}" --arg f "${field}" \
                 || { error "failed to set ${field}"; exit 1; }
             ;;
         boolean)
             case "${value}" in
                 true|false) ;;
-                *) error "${field} is declared boolean in module-fields.json, but '${value}' is neither true nor false"; exit 1 ;;
+                *) error "${field} is declared boolean in module-fields.json, but '${value}' is neither true nor false"; refuse_or_fail ;;
             esac
             jq_module_write "${MODULE}" '.[$f] = $v' --argjson v "${value}" --arg f "${field}" \
                 || { error "failed to set ${field}"; exit 1; }
@@ -138,7 +145,7 @@ for pair in "${PAIRS[@]}"; do
             # A container value must be given as JSON; anything else would land
             # as a string and silently fail to behave like a list.
             jq -e . >/dev/null 2>&1 <<< "${value}" \
-                || { error "${field} is a container field — give its value as JSON (got '${value}')"; exit 1; }
+                || { error "${field} is a container field — give its value as JSON (got '${value}')"; refuse_or_fail; }
             jq_module_write "${MODULE}" '.[$f] = $v' --argjson v "${value}" --arg f "${field}" \
                 || { error "failed to set ${field}"; exit 1; }
             ;;
@@ -147,6 +154,7 @@ for pair in "${PAIRS[@]}"; do
                 || { error "failed to set ${field}"; exit 1; }
             ;;
     esac
+    WROTE=1
     info "  set ${field}=${value} in ${TARGET}"
 done
 

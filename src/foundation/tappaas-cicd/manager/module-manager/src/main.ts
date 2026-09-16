@@ -817,6 +817,11 @@ function applyFieldChanges(module: string, opts: Opts): number {
   for (const p of gate.plan) args.push("--set", `${p.field}=${p.value}`);
   for (const f of opts.unsets) args.push("--unset", f);
   const rc = stream(process.env.TAPPAAS_SET_FIELD_BIN ?? "set-module-field.sh", args);
+  // Exit 3 is "refused, and nothing was written" — the writer has already said
+  // why, in terms of the field it refused. Adding "the config may be partially
+  // updated" to that sends an operator hunting for damage that cannot exist,
+  // which is worse than silence (found in T3, 2026-09-16).
+  if (rc === 3) return rc;
   if (rc !== 0) {
     console.error(
       `${RD}[Error]${CL} writing the field changes failed — the config may be partially updated; ` +
