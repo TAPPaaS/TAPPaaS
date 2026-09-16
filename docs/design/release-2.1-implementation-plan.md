@@ -629,7 +629,7 @@ Each is a design that should be agreed before its code starts.
 
 | New ADR | Covers | Gates | Why an ADR and not an issue |
 |---------|--------|-------|-----------------------------|
-| **ADR-025** Config migrations and the upgrade path | G0.1 framework; the rollout rules in §10.2 | Wave 0 | Binds every future release and every contributor who changes `config/`. Drafted 2026-09-16, **Proposed** — awaiting sign-off |
+| **ADR-025** Config migrations and the upgrade path | G0.1 framework; the rollout rules in §10.2 | Wave 0 | Binds every future release and every contributor who changes `config/`. **Accepted 2026-09-16** (v0.2); the runner is #652 |
 | Module blueprint | #363 artifacts, #248 version/status, the NixOS baseline (#324, #390, #448, #472, FW #87), link to ADR-011 SBOM | G1.3, G1.4 | The contract every community module copies |
 | Stacks & solutions | #421 layout, #500 module move, the *solution* concept (2026-08-03) | G1.3 | Changes paths in every deployed config; amends ADR-004 and ADR-007b |
 | Controller pattern for app modules | #430 (Ansible first); later #170 | G1.3 | The issue is already written as an ADR proposal |

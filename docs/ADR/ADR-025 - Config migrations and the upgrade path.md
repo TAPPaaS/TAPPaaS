@@ -2,14 +2,14 @@
 
 | | |
 |---|---|
-| **Status** | **Proposed** (2026-09-16) — v0.1; entry gate for Wave 0 (plan §10.3). Awaiting operator sign-off. |
-| **Version** | 0.1 |
+| **Status** | **Accepted** (2026-09-16) — v0.2; the runner is #652 (G0.1). |
+| **Version** | 0.2 |
 | **Date** | 2026-09-16 |
 | **Author** | Lars Rossen |
 | **Parent** | [ADR-007d Site](<ADR-007d - Site.md>) (`site.json` and the rest of `config/` as the site's own state) |
 | **Refines** | [ADR-017 Update scheduling and mothership self-update](<ADR-017 - Update scheduling and mothership self-update.md>) (D3's `ExecStartPre` chain is where the runner hooks in; D4's `--dry-run` is where pending migrations show; this ADR settles two of ADR-017's *Open* items), [ADR-003 Dependency management](<ADR-003 - Dependency management in TAPPaaS.md>) (why `pre-update.sh` cannot be "before any module") |
 | **Related** | **#652** (versioned config-migration step — the implementation issue); **#545** / [ADR-012](ADR-012-backup-enhancement.md) §2.7 D20 (`config/` is backed up as `backup:filesystem`, which is what makes `config/.migrations/` recoverable); **#651** (update-failure notice) and [ADR-007e](<ADR-007e - Health.md>) v1.3 (the notification target); **#584** (rollback in install/modify), **#453** (`--force` vs `--reinstall`), **#648** (`--unset`), **#572** (repo-sync auto-stash) — the rest of G0.1; [ADR-020](<ADR-020 - Declared-Field Change Model (validate, drift, modify).md>) (a *declared field* changes through `modify`; a *schema* changes through a migration); [release-2.1-implementation-plan](../design/release-2.1-implementation-plan.md) §3 G0.1, §10.1, §10.2, §10.3, §10.4. **Owner:** `tappaas-cicd` (the runner, the migration directory, the release tooling) |
-| **Changelog** | v0.1 — initial draft. Takes the framework decided 2026-09-14 (plan §3 G0.1) and the rollout rules (§10.2) verbatim and binds them; checks each clause against `main` at `dd80d495`; settles the runner's slot in favour of `tappaas-self-prepare.sh` over `pre-update.sh` (D2), answers ADR-017 *Bootstrap*'s "oldest supported upgrade source" (D10), and names ADR-017 D7's `updateSchedule` rewrite as migration `0003` (D12). |
+| **Changelog** | v0.1 — initial draft. Takes the framework decided 2026-09-14 (plan §3 G0.1) and the rollout rules (§10.2) verbatim and binds them; checks each clause against `main` at `dd80d495`; settles the runner's slot in favour of `tappaas-self-prepare.sh` over `pre-update.sh` (D2), answers ADR-017 *Bootstrap*'s "oldest supported upgrade source" (D10), and names ADR-017 D7's `updateSchedule` rewrite as migration `0003` (D12). v0.2 (2026-09-16, operator decisions): **D13** — a whole-`config/` snapshot before the first migration of a run, the last two backup sets kept and older ones pruned, a deliberate `--rerun` (migrations are idempotent by D3), state outside `config/` out of scope though one migration may back up more, and a missing backup never blocks a migration. Status → Accepted. |
 
 ## Context
 
@@ -327,6 +327,31 @@ Test 9z:
 | backup | any changed case | `config/.migrations/backup/0003/site.json` holds the pre-image |
 | unrecognised | `["fortnightly","Tuesday",2]` | exits non-zero; `site.json` unchanged |
 
+### D13 — what is backed up, how long it is kept, and re-running a migration
+
+Decided 2026-09-16, closing v0.1's open questions.
+
+- **A whole-`config/` snapshot precedes the first migration of a run**, in addition to the
+  per-migration backups of D3. `config/` is small — text files, kilobytes — so the cheapest
+  safety net is the one that catches what a migration did not know it touched. It lands in
+  `config/.migrations/backup/<run>/config/`.
+- **Retention: prune, keep the last two.** The runner deletes older backup sets once a run
+  finishes, keeping the two most recent. Two is enough to undo the release you just took and
+  the one before it; everything older is the backup module's job (#545), not the runner's.
+- **A migration may be re-run deliberately** (`--rerun NNNN`). D3 already requires
+  idempotence, so re-running is safe by construction, and the case it serves is real: a
+  hand-edit went wrong and the operator wants the migration's own result back. The ledger
+  records the re-run as another line rather than replacing the first, so the history stays
+  readable. The unattended sweep never re-runs an applied migration.
+- **State outside `config/` stays out of scope** — `/etc/secrets`, the firewall's own config,
+  a module's data. Each has its own restore path (ADR-012 §2.7, RESTORE.md). A single
+  migration that puts one of them at risk **may take its own extra backup** and says so in its
+  header; that is a migration's decision, not a rule for the runner.
+- **A missing or stale backup never blocks a migration.** Coupling the sweep to backup health
+  reads well and fails badly: a site without a recent backup is usually a deliberate choice —
+  a test machine — and refusing to update it would punish exactly the site that most wants the
+  new code. The runner reports what it found and proceeds.
+
 ## Alternatives considered
 
 | Alternative | Why not |
@@ -380,20 +405,17 @@ Test 9z:
 
 ## Open (deferred to implementation)
 
-- **Retention for `config/.migrations/backup/`.** Kept forever in v0.1. A rule ("the last N
-  migrations", or "prune on a successful sweep two releases later") needs a case first.
-- **Whether a migration may be re-run deliberately** once applied (a `--force` on the runner)
-  — useful after a hand-edit went wrong, and a footgun if it is the first thing anyone reaches
-  for. Not offered in v0.1.
-- **Whether `config/` should be snapshotted as a whole before the first migration of a run**,
-  in addition to the per-migration backups. #584 covers the neighbouring case for `modify`.
-- **Migrations for state that is not in `config/`** — `/etc/secrets`, the firewall's own
-  config. Out of scope in v0.1; both have their own restore paths (ADR-012 §2.7, RESTORE.md).
-- **Whether the runner should refuse to run when `config/` is not covered by a recent backup.**
-  Attractive, and it couples the sweep to backup health (ADR-007e) in a way that needs its own
-  argument.
+v0.1's five open questions were decided on 2026-09-16 and are now **D13**. What remains:
+
+- **Whether `scripts/migrate-drop-variant.sh` becomes a numbered migration.** Promoting it
+  would run it unattended on sites that never ran it; leaving it is a manual step nobody is
+  told to take. It needs the inventory of which sites still carry `variant`.
 
 ## Acceptance
+
+- [ ] A run snapshots `config/` before its first migration, and keeps only the last two backup sets (D13).
+- [ ] `--rerun NNNN` re-applies one applied migration and appends a second ledger line; the unattended sweep never re-runs one (D13).
+- [ ] A site with no recent `config/` backup still migrates, and the run says so (D13).
 
 - [ ] `src/foundation/tappaas-cicd/migrations/` exists and is empty in the release that
       introduces the runner; the Wave 0 exit gate is met (plan §10.3).
