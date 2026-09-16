@@ -166,8 +166,11 @@ later wave depends on.
 #### Migration framework (decided 2026-09-14)
 
 - **Where:** `src/foundation/tappaas-cicd/migrations/NNNN-<slug>.sh`, run in
-  numeric order by `pre-update.sh`, before the 3-way merge and before any
-  module update.
+  numeric order by `scripts/run-migrations.sh` from `tappaas-self-prepare.sh`
+  — after the control-plane refresh, before the `nixos-rebuild` and before any
+  module update. (ADR-025 D2 settled the slot: `pre-update.sh` runs inside the
+  sweep, after the modules `tappaas-cicd` depends on, so "before any module"
+  cannot be true there.)
 - **Contract per migration:** idempotent; `--check` reports what it would
   change and writes nothing; apply first copies every file it touches to
   `config/.migrations/backup/NNNN/`; exit non-zero on any doubt.
@@ -178,6 +181,11 @@ later wave depends on.
 - **Visibility:** `update-tappaas --dry-run` lists pending migrations;
   `release/changelog.sh` lists the migrations added between two tags, so
   release notes name them.
+
+Status: landed 2026-09-16 — 121cf82a (ADRs), 64cc90c3 (#655 + the `--force`
+rework), c69b3860 + 96ea83d3 (ADR-025), 21a81d84 (#453), d234e3bd (#584),
+51b63e5d (#648), 060f61a0 (#572), e46e4e45 (#652). Every issue in the table is
+implemented and green on hrossen at T0–T2; T3 is the group gate.
 - **Rule for reviews:** a change that renames or re-schemas anything under
   `config/` ships with its migration and a fixture test (config before →
   after) in the tappaas-cicd fast tier.
