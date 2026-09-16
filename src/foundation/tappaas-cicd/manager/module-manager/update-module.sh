@@ -137,6 +137,29 @@ resolve_effective_module_name() {
 # rollback must put back. Taken before the first write, restored beside the VM
 # snapshot (and on its own for a module that has no VM).
 CONFIG_BACKUP=""
+# resolve_base_module_name <effective> — the base module behind a deployed
+# config name. The inverse of resolve_effective_module_name above.
+#
+# The DECLARED ENVIRONMENTS are what make this decidable: `podman-lab1` is
+# `podman` in `lab1` because `lab1` is an environment, while `vllm-amd` stays
+# whole because `amd` is not one. String surgery alone could not tell those
+# apart — module names contain hyphens too (vllm-amd, euro-office, unifi-os).
+# Longest match wins, so an estate declaring both `lab` and `lab1` resolves
+# `podman-lab1` to `podman`, never to `podman-lab`.
+resolve_base_module_name() {
+    local eff="$1" env best="" f
+    local env_dir="${CONFIG_DIR}/environments"
+    if [[ -d "${env_dir}" ]]; then
+        for f in "${env_dir}"/*.json; do
+            [[ -f "${f}" ]] || continue
+            env="$(basename "${f}" .json)"
+            [[ -n "${env}" && "${eff}" == *"-${env}" ]] || continue
+            (( ${#env} > ${#best} )) && best="${env}"
+        done
+    fi
+    [[ -n "${best}" ]] && printf '%s' "${eff%-${best}}" || printf '%s' "${eff}"
+}
+
 # resolve_module_source_dir <module> — the module's source directory, or rc 1.
 #
 # TWO paths, because a module is located in more than one way (#460): the
@@ -155,9 +178,19 @@ resolve_module_source_dir() {
     fi
     local resolver="${TAPPAAS_RESOLVE_MODULE_BIN:-/home/tappaas/bin/resolve-module.sh}"
     [[ -x "${resolver}" ]] || return 1
-    dir="$("${resolver}" "${module}" --field dir 2>/dev/null || true)"
-    [[ -n "${dir}" && -d "${dir}" ]] || return 1
-    printf '%s' "${dir}"
+    # The deployed name first, then the base module behind it: the catalog is
+    # keyed by the module's own name, so an install in a non-default environment
+    # (`podman-lab1`) is only ever found under `podman`.
+    local candidate
+    for candidate in "${module}" "$(resolve_base_module_name "${module}")"; do
+        [[ -n "${candidate}" ]] || continue
+        dir="$("${resolver}" "${candidate}" --field dir 2>/dev/null || true)"
+        if [[ -n "${dir}" && -d "${dir}" ]]; then
+            printf '%s' "${dir}"
+            return 0
+        fi
+    done
+    return 1
 }
 
 backup_module_config() {

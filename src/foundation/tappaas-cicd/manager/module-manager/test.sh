@@ -1355,6 +1355,35 @@ exit 0
 EOF
 chmod +x "${RDIR}/resolver"
 
+# The inverse of the effective-name rule: a declared environment suffix is
+# stripped, anything else is left alone. This is what lets the catalog find a
+# module installed in a non-default environment (#659).
+awk '/^resolve_base_module_name\(\) \{/{f=1} f{print} f&&/^\}/{exit}' \
+    "${HERE}/update-module.sh" >> "${RDIR}/fn.sh"
+mkdir -p "${RDIR}/cfg/environments"
+for e in lab1 lab mgmt makerfloss omStaging; do echo '{}' > "${RDIR}/cfg/environments/${e}.json"; done
+base() { CONFIG_DIR="${RDIR}/cfg" bash -c '. "'"${RDIR}"'/fn.sh"; resolve_base_module_name "$1"' _ "$1"; }
+
+[[ "$(base podman-lab1)" == "podman" ]] \
+    && ok "base name: podman-lab1 → podman (lab1 is a declared environment)" \
+    || bad "base name: podman-lab1 must resolve to podman (got '$(base podman-lab1)')"
+[[ "$(base vllm-amd)" == "vllm-amd" ]] \
+    && ok "base name: vllm-amd is left whole ('amd' is not an environment)" \
+    || bad "base name: vllm-amd must not be split (got '$(base vllm-amd)')"
+[[ "$(base euro-office)" == "euro-office" ]] \
+    && ok "base name: a hyphenated module name survives" \
+    || bad "base name: euro-office must not be split (got '$(base euro-office)')"
+[[ "$(base signage-omStaging)" == "signage" ]] \
+    && ok "base name: a mixed-case environment is stripped" \
+    || bad "base name: signage-omStaging must resolve to signage (got '$(base signage-omStaging)')"
+# Longest match: with both 'lab' and 'lab1' declared, podman-lab1 is podman.
+[[ "$(base podman-lab1)" == "podman" ]] \
+    && ok "base name: the longest declared environment wins" \
+    || bad "base name: longest match must win (got '$(base podman-lab1)')"
+[[ "$(base backup)" == "backup" ]] \
+    && ok "base name: an unsuffixed module is unchanged" \
+    || bad "base name: backup must be unchanged (got '$(base backup)')"
+
 run_resolve() {  # <module> <location-stub-behaviour>
     LOC_DIR="$2" bash -c '
         . "'"${RDIR}"'/fn.sh"
