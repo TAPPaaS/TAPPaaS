@@ -24,7 +24,18 @@
 # JSON number and a boolean as a JSON boolean, so `--set cores=8` does not leave
 # a string where every reader expects a number.
 #
-# Usage: set-module-field.sh <module> --set <field>=<value> [--set <field>=<value>]...
+# `--unset <field>` removes a field instead (#648). It is for the one field the
+# 3-way merge cannot remove on its own: present in the deployed config, absent
+# from the release source and from .orig, and undeclared — merge rule 2b keeps
+# it forever and warns on every update. The two cases it refuses are the ones
+# where removal would not stick or would break a reader:
+#
+#   - a field declared in module-fields.json: it has a meaning every reader
+#     expects, so change it with --set rather than deleting it;
+#   - a field the release still defines (present in .json.orig): the next merge
+#     re-adopts it by rule 3, so the removal belongs in the source.
+#
+# Usage: set-module-field.sh <module> [--set <field>=<value>]... [--unset <field>]...
 #
 # Exit: 0 written · 1 error · 2 usage
 
@@ -44,23 +55,25 @@ readonly CONFIG_DIR="${TAPPAAS_CONFIG:-/home/tappaas/config}"
 readonly SCHEMA_FILE="$(tappaas_schema_file)"
 
 usage() {
-    echo "Usage: ${SCRIPT_NAME} <module> --set <field>=<value> [--set <field>=<value>]..." >&2
+    echo "Usage: ${SCRIPT_NAME} <module> [--set <field>=<value>]... [--unset <field>]..." >&2
     exit 2
 }
 
 MODULE=""
 declare -a PAIRS=()
+declare -a UNSETS=()
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --set)     [[ -n "${2:-}" ]] || usage; PAIRS+=("$2"); shift ;;
-        -h|--help) sed -n '2,29p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        --unset)   [[ -n "${2:-}" ]] || usage; UNSETS+=("$2"); shift ;;
+        -h|--help) sed -n '2,40p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         -*)        echo "${SCRIPT_NAME}: unknown option '$1'" >&2; usage ;;
         *)         MODULE="$1" ;;
     esac
     shift
 done
 
-[[ -n "${MODULE}" && ${#PAIRS[@]} -gt 0 ]] || usage
+[[ -n "${MODULE}" && $(( ${#PAIRS[@]} + ${#UNSETS[@]} )) -gt 0 ]] || usage
 
 # #533/#525: never run this as root — a root-owned config drops out of the sweep.
 if [[ "$(id -u)" -eq 0 ]]; then
@@ -74,6 +87,32 @@ TARGET="${CONFIG_DIR}/${MODULE}.json"
 field_type() {
     jq -r --arg f "$1" '.fields[$f].type // "string"' "${SCHEMA_FILE}" 2>/dev/null || echo string
 }
+
+# Gate every --unset BEFORE the first --set is written (#648): one modify either
+# applies the whole change or none of it, so a refusal here must not leave the
+# config carrying half of it.
+if [[ ${#UNSETS[@]} -gt 0 ]]; then
+    ORIG="${TARGET}.orig"
+    unset_flat="$(normalize_module_config < "${TARGET}")" \
+        || { error "cannot read ${TARGET}"; exit 1; }
+    unset_orig_flat="{}"
+    [[ -f "${ORIG}" ]] && unset_orig_flat="$(normalize_module_config < "${ORIG}" 2>/dev/null || echo '{}')"
+
+    for field in "${UNSETS[@]}"; do
+        [[ "${field}" != *"="* ]] \
+            || { error "${SCRIPT_NAME}: '--unset ${field}' takes a field name, not field=value"; exit 1; }
+        jq -e --arg f "${field}" 'has($f)' >/dev/null <<< "${unset_flat}" \
+            || { error "${field} is not in ${TARGET} — nothing to unset"; exit 1; }
+        if jq -e --arg f "${field}" '.fields | has($f)' >/dev/null "${SCHEMA_FILE}" 2>/dev/null; then
+            error "${field} is a declared field — change it with '--set ${field}=<value>' rather than removing it"
+            exit 1
+        fi
+        if jq -e --arg f "${field}" 'has($f)' >/dev/null <<< "${unset_orig_flat}"; then
+            error "${field} still comes from the module's release source — the next update re-adopts it; remove it in the source instead"
+            exit 1
+        fi
+    done
+fi
 
 for pair in "${PAIRS[@]}"; do
     field="${pair%%=*}"
@@ -110,5 +149,14 @@ for pair in "${PAIRS[@]}"; do
     esac
     info "  set ${field}=${value} in ${TARGET}"
 done
+
+if [[ ${#UNSETS[@]} -gt 0 ]]; then
+    for field in "${UNSETS[@]}"; do
+        # shellcheck disable=SC2016
+        jq_module_write "${MODULE}" 'del(.[$f])' --arg f "${field}" \
+            || { error "failed to unset ${field}"; exit 1; }
+        info "  unset ${field} in ${TARGET}"
+    done
+fi
 
 exit 0

@@ -121,13 +121,17 @@ export const HELP: HelpSpec = {
       ],
     },
     {
-      usage: "modify <module> --set field=value... [--environment ENV] [--force] [--allow-disruption] [--no-snapshot] [--debug] [--silent]",
+      usage: "modify <module> --set field=value... [--unset field]... [--environment ENV] [--force] [--allow-disruption] [--no-snapshot] [--debug] [--silent]",
       name: "modify",
       note: "(change a declared field, then converge; bare `modify` is the deprecated spelling of `update`)",
       options: [
         [
           "--set field=value",
           "Change a declared field, then converge (repeatable). Rejected up front if the field cannot change in place.",
+        ],
+        [
+          "--unset field",
+          "Remove a stale undeclared field the merge keeps forever (repeatable). Refused for a declared field and for one the release source still defines.",
         ],
         ["--environment ENV", "Target environment to modify."],
         ["--force", "As for `update`: proceed past a fatally failed pre-update test or an archived/external status."],
@@ -246,6 +250,9 @@ interface Opts {
   resolution: boolean;
   // `modify --set field=value`, repeatable (ADR-020 D2 step 0).
   sets: string[];
+  // `modify --unset field`, repeatable: remove a stale undeclared field the
+  // 3-way merge keeps forever (#648).
+  unsets: string[];
   // snapshot-vm sub-action
   snapList: boolean;
   snapCleanup?: number;
@@ -274,6 +281,7 @@ function parseOpts(args: string[]): Opts {
     remove: false,
     resolution: false,
     sets: [],
+    unsets: [],
     snapList: false,
     rest: [],
     passthrough: [],
@@ -317,6 +325,8 @@ function parseOpts(args: string[]): Opts {
       o.noSnapshot = true;
     } else if (a === "--set") {
       o.sets.push(next());
+    } else if (a === "--unset") {
+      o.unsets.push(next());
     } else if (a === "--service") {
       o.service = next();
     } else if (a === "--services") {
@@ -747,11 +757,14 @@ function cmdModify(opts: Opts, client: ModuleClient, verb: "update" | "modify"):
   if (verb === "update" && opts.sets.length > 0) {
     die("update takes no --set — change a field with: module-manager module modify <module> --set field=value");
   }
-  if (verb === "modify" && opts.sets.length === 0) {
+  if (verb === "update" && opts.unsets.length > 0) {
+    die("update takes no --unset — remove a stale field with: module-manager module modify <module> --unset field");
+  }
+  if (verb === "modify" && opts.sets.length === 0 && opts.unsets.length === 0) {
     warn("`modify` with no --set is the release update — say `module-manager module update` instead (#655)");
   }
-  if (opts.sets.length > 0) {
-    const rc = applySets(module, opts);
+  if (opts.sets.length > 0 || opts.unsets.length > 0) {
+    const rc = applyFieldChanges(module, opts);
     if (rc !== 0) return rc;
   }
 
@@ -766,9 +779,11 @@ function cmdModify(opts: Opts, client: ModuleClient, verb: "update" | "modify"):
   return client.modify(module, m);
 }
 
-// Pre-gate every --set, then write them all. Returns 0 to continue into the
-// converge, non-zero to stop with nothing written.
-function applySets(module: string, opts: Opts): number {
+// Pre-gate every --set, then write the whole change — sets and unsets — in one
+// call. Returns 0 to continue into the converge, non-zero to stop with nothing
+// written. The --unset gate is in set-module-field.sh, which is where the three
+// files it compares (config, .orig, schema) are already open (#648).
+function applyFieldChanges(module: string, opts: Opts): number {
   const requests = [];
   for (const raw of opts.sets) {
     const parsed = parseSetArg(raw);
@@ -800,10 +815,11 @@ function applySets(module: string, opts: Opts): number {
   // operator, never root (#525). See set-module-field.sh.
   const args = [module];
   for (const p of gate.plan) args.push("--set", `${p.field}=${p.value}`);
+  for (const f of opts.unsets) args.push("--unset", f);
   const rc = stream(process.env.TAPPAAS_SET_FIELD_BIN ?? "set-module-field.sh", args);
   if (rc !== 0) {
     console.error(
-      `${RD}[Error]${CL} writing the --set fields failed — the config may be partially updated; ` +
+      `${RD}[Error]${CL} writing the field changes failed — the config may be partially updated; ` +
         `check 'module-manager module show ${module}'`,
     );
     return rc;

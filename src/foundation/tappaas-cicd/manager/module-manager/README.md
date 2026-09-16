@@ -35,7 +35,8 @@ later retire phase).
 | `module drift <m>` | `src/converge.ts` | that desired state **vs the live guest**, per service. `--service cluster:vm --json` prints the record a converge applies |
 | `module validate [<m>]` | tier/source lint | all modules, or one; `--allow-fork` |
 | `module add <m>` | `install-module.sh` | create + provision |
-| `module modify <m>` | `update-module.sh` | release update (snapshot + test + 3-way merge). `--set field=value` also **changes a declared field** first (ADR-020) |
+| `module update <m>` | `update-module.sh` | **release update** (snapshot + test + 3-way merge) — what the sweep runs (#655) |
+| `module modify <m>` | `update-module.sh` | **change the config, then converge**: `--set field=value` (ADR-020) or `--unset field` (#648). Bare, it is the deprecated spelling of `update` |
 | `module delete <m>` | `delete-module.sh` | `--archive` (default) / `--remove` |
 | `module reconcile <m>` | `src/inspect.ts` | read-only drift report (default); `--apply` → **leaf converge** (`src/reconcile.ts`) |
 | `module test <m>` | `test-module.sh` | `--deep`, `--runtime-only`, `--vmid`, `--zone0` |
@@ -84,6 +85,29 @@ A `--set` naming an immutable field is rejected *whole* — if any field in one
 command cannot be applied, none of them are written, so config and cluster never
 move apart. A field none of the module's services use is also rejected: writing
 it would change the config and nothing else.
+
+### Removing a stale field: `modify --unset` (#648)
+
+```
+module-manager module modify nextcloud --unset legacyField
+```
+
+For the one field nothing else can remove: present in the deployed config,
+absent from the release source *and* from `<module>.json.orig`, and undeclared —
+the 3-way merge keeps it by rule 2b and warns `field '<f>' is not in the schema
+— kept at top level` on every single update. That rule exists to protect
+operator-added fields, so the merge cannot tell this case apart; saying `--unset`
+is how an operator does.
+
+Two refusals, both because the removal would not mean what it looks like:
+
+| The field is… | Why it is refused |
+|---|---|
+| declared in `module-fields.json` | every reader expects it — change it with `--set field=value` |
+| present in `<module>.json.orig` | the release still defines it, so the next merge re-adopts it — remove it in the source |
+
+`--unset` is gated before any `--set` in the same command is written, so one
+`modify` still applies the whole change or none of it.
 
 ### `--force` vs `rebootOk` — three levers that no longer collide
 

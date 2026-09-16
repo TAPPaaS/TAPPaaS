@@ -116,6 +116,14 @@ algorithm: write the value into the deployed config (`set-module-field.sh` —
 Pattern-A aware, typed from the schema, run as the operator so the file never
 becomes root-owned, #525), then converge as usual.
 
+`--unset field` is the same step with `del(.[$f])` instead of an assignment
+(#648). Its gate lives in `set-module-field.sh` rather than in `preGateSet`,
+because the three things it compares — the deployed config, `<module>.json.orig`
+and the composed schema — are the files that script already has open, and the
+same rule must hold when it is invoked directly. The gate runs before the first
+`--set` is written, keeping the whole-or-nothing property across a command that
+mixes the two.
+
 Two gates, and the division between them is the whole design:
 
 - The **static pre-gate** (`preGateSet` in `src/converge.ts`) refuses only what

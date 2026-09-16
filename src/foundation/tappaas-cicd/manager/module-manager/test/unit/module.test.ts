@@ -211,6 +211,17 @@ const CONFIG =
   check(!!modifyHelp && modifyHelp.usage.includes("--set field=value"), "modify's usage leads with --set");
 }
 
+// ── 6c. --unset is a modify, never an update (#648) ──────────────────────
+{
+  const c = new FakeModuleClient();
+  check(run(["module", "update", "nextcloud", "--unset", "legacyField"], c) !== 0 && c.log.length === 0,
+    "update refuses --unset and names modify");
+
+  const modifyHelp = HELP.verbs.find((h) => h.name === "modify");
+  check(!!modifyHelp && (modifyHelp.options ?? []).some(([f]) => f === "--unset field"),
+    "modify's options document --unset");
+}
+
 // ── 7. delete maps --remove/--force/--yes; mutual-exclusion guard ───────
 {
   const c = new FakeModuleClient();

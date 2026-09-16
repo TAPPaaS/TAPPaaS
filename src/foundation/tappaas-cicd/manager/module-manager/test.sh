@@ -1331,6 +1331,81 @@ grep -q "zzz" <<<"$out2" \
 
 rm -rf -- "$MDIR"
 
+# ---------------------------------------------------------------------------
+# Unit: set-module-field.sh --unset — the only way to remove the stale
+# undeclared field merge rule 2b keeps forever (#648). Against a temp config
+# dir and a fixture schema; no cluster, no module.
+# ---------------------------------------------------------------------------
+SETF="${HERE}/set-module-field.sh"
+UDIR="$(mktemp -d "${TMPDIR:-/tmp}/modmgr-unset.XXXXXX")"
+mkdir -p "${UDIR}/config"
+cat > "${UDIR}/schema.json" <<'JSON'
+{ "fields": { "cores": { "type": "integer" }, "vmname": { "type": "string" } } }
+JSON
+# Pattern A, so the write path is exercised where it actually has to find the
+# field: nested under .config."<module>:<service>", not at top level.
+write_ucfg() {
+    cat > "${UDIR}/config/unsettest.json" <<'JSON'
+{ "vmname": "unsettest", "cores": 2,
+  "config": { "unsettest:cluster:vm": { "legacyField": "stale", "fromRelease": "x" } } }
+JSON
+}
+printf '{"vmname":"unsettest","cores":2,"config":{"unsettest:cluster:vm":{"fromRelease":"x"}}}\n' \
+    > "${UDIR}/config/unsettest.json.orig"
+run_unset() {
+    write_ucfg
+    TAPPAAS_CONFIG="${UDIR}/config" TAPPAAS_SCHEMA_FILE="${UDIR}/schema.json" \
+        bash "$SETF" unsettest --unset "$1" > "${UDIR}/out" 2>&1
+}
+has_field() { jq -e --arg f "$1" '[paths] | any(.[-1] == $f)' "${UDIR}/config/unsettest.json" >/dev/null 2>&1; }
+
+if run_unset legacyField; then
+    has_field legacyField \
+        && bad "--unset left legacyField in the config (#648)" \
+        || ok "--unset removes a stale undeclared field"
+    has_field cores \
+        && ok "--unset leaves the other fields alone" \
+        || bad "--unset removed more than the named field (#648)"
+else
+    bad "--unset legacyField failed: $(tail -1 "${UDIR}/out")"
+fi
+
+# A declared field has a meaning every reader expects: change it, don't delete it.
+run_unset cores \
+    && bad "--unset accepted a declared field (#648)" \
+    || { grep -q -- "--set cores=" "${UDIR}/out" \
+            && ok "--unset refuses a declared field and names --set" \
+            || bad "--unset refused cores without naming --set (#648)"; }
+has_field cores || bad "--unset wrote although it refused (#648)"
+
+# Present in .orig: the release still defines it, so rule 3 re-adopts it next
+# merge — removing it here would look like it worked and silently come back.
+run_unset fromRelease \
+    && bad "--unset accepted a field the release source still defines (#648)" \
+    || { grep -qi 'release source' "${UDIR}/out" \
+            && ok "--unset refuses a field the release still defines" \
+            || bad "--unset refused fromRelease with an unclear reason (#648)"; }
+
+run_unset neverThere \
+    && bad "--unset accepted a field that is not in the config (#648)" \
+    || ok "--unset reports a field that is not there rather than succeeding"
+
+# Both halves of one modify travel together: a refused --unset must not leave
+# the --set applied.
+write_ucfg
+if TAPPAAS_CONFIG="${UDIR}/config" TAPPAAS_SCHEMA_FILE="${UDIR}/schema.json" \
+        bash "$SETF" unsettest --set cores=4 --unset cores > "${UDIR}/out" 2>&1; then
+    bad "--set with a refused --unset exited 0 (#648)"
+else
+    ok "--set with a refused --unset fails"
+fi
+
+grep -q -- '--unset <field>' <<< "$(TAPPAAS_CONFIG="${UDIR}/config" bash "$SETF" --help 2>&1)" \
+    && ok "set-module-field.sh --help documents --unset" \
+    || bad "set-module-field.sh --help does not document --unset (#648)"
+
+rm -rf -- "$UDIR"
+
 echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed"
 [[ "$FAIL" -eq 0 ]] || exit 1
