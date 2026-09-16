@@ -4,9 +4,26 @@ One-time rewrites of the **shape** a site's `config/` is written in — a rename
 changed type, a moved file (ADR-025). Changing a declared field's *value* is not a migration:
 that is `module-manager module modify --set` (ADR-020).
 
-This directory is **empty on purpose** in the release that introduces the runner: a site must
-receive the runner in one update before it receives anything for the runner to run
-(ADR-025 D9 rule 3, D11).
+> **This branch is held.** `0003-update-schedule-object.sh` must **not** merge to `main` until
+> the release carrying the runner is on `stable` (ADR-025 D9 rule 3): a site has to receive the
+> runner in one update before it receives anything for the runner to run. The gate is the
+> release process — there is no test that can enforce it, because from inside a checkout the
+> two cases look identical.
+
+The directory is **empty in the release that introduces the runner** (ADR-025 D11), which is
+the Wave 0 exit gate.
+
+## What ships here now
+
+| id | what it does | reversible |
+|---|---|---|
+| `0003-update-schedule-object.sh` | `site.json` `updateSchedule` becomes `{frequency, weekday, hour}` (ADR-017 D7). A weekday under `daily`/`none` was never read, so it is dropped — and **reported**, because it is the only trace of what the operator believed they had asked for. | yes — restore `.migrations/backup/0003/site.json` |
+
+Its readers accept both shapes: `lib/update-schedule.sh` (the timer renderer and
+`site-manager validate` share it) and `site-manager site show` / `site modify`. That is
+deliberate — a restored backup or a site on an older release can still hold the triple, and a
+reader that refused one would take that site's updates away. `site modify` always *writes* the
+object, so a modify cannot undo a migration the ledger says is done.
 
 ## Writing one
 

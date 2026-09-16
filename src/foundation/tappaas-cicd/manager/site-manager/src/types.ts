@@ -55,7 +55,9 @@ export interface Site {
   network?: SiteNetwork;
   hardware: { nodes: SiteNode[] };
   backup?: SiteBackup | null;
-  updateSchedule?: unknown[];
+  // ADR-017 D7: the named object, or the legacy [frequency, weekday, hour]
+  // triple that migration 0003 rewrites. Readers accept both (readSchedule).
+  updateSchedule?: unknown[] | Record<string, unknown>;
   automaticReboot?: boolean;
   snapshotRetention?: number;
   repositories: Repository[];

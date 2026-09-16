@@ -425,16 +425,24 @@ resolve_version() {
 }
 
 # ---------------------------------------------------------------------------
-# Build the updateSchedule array [period, day, hour] (mirrors site.json shape).
+# Build the updateSchedule object (ADR-017 D7; the triple was migration 0003).
+#
+# A new site is written in TODAY's shape, which is what lets install.sh stamp
+# 0003 as `baseline` instead of running it (ADR-025 D4). Writing the old triple
+# here would hand every fresh site a migration that its own installer has just
+# recorded as already applied.
+#
+# `weekday` is present only where a reader honours it: under `daily` and `none`
+# it was always inert, and carrying it was how a site came to believe in a
+# weekly update it was not getting.
 # ---------------------------------------------------------------------------
 build_schedule_json() {
-    if [[ "$UPDATE_SCHEDULE" == "daily" ]]; then
-        printf '["daily", null, %s]' "$UPDATE_HOUR"
-    elif [[ "$UPDATE_SCHEDULE" == "none" ]]; then
-        printf '["none", null, null]'
-    else
-        printf '["%s", "%s", %s]' "$UPDATE_SCHEDULE" "$UPDATE_WEEKDAY" "$UPDATE_HOUR"
-    fi
+    case "$UPDATE_SCHEDULE" in
+        none)  printf '{"frequency": "none"}' ;;
+        daily) printf '{"frequency": "daily", "hour": %s}' "$UPDATE_HOUR" ;;
+        *)     printf '{"frequency": "%s", "weekday": "%s", "hour": %s}' \
+                      "$UPDATE_SCHEDULE" "$UPDATE_WEEKDAY" "$UPDATE_HOUR" ;;
+    esac
 }
 
 # ---------------------------------------------------------------------------

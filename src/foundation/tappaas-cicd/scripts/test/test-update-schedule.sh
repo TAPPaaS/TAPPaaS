@@ -24,6 +24,36 @@ ck "none: no timer"             ''                        "$(cal '["none", null,
 ck "weekly without weekday: no timer (as the gate)" '' "$(cal '["weekly", null, 2]')"
 ck "unset: daily at 2 (as the gate)" '*-*-* 02:00:00'   "$(cal 'null')"
 ck "short triple: daily at 2"   '*-*-* 02:00:00'          "$(cal '["weekly"]')"
+# The object form (ADR-017 D7, written by migration 0003). Both shapes are read:
+# a restored backup or an older release can still hold the triple, and a reader
+# that refused one would take that site's updates away.
+ck "object: daily"              '*-*-* 02:00:00'          "$(cal '{"frequency":"daily","hour":2}')"
+ck "object: weekly"             'Tue *-*-* 04:00:00'      "$(cal '{"frequency":"weekly","weekday":"Tuesday","hour":4}')"
+ck "object: monthly"            'Thu *-*-01..07 02:00:00' "$(cal '{"frequency":"monthly","weekday":"Thursday","hour":2}')"
+ck "object: none"               ''                        "$(cal '{"frequency":"none"}')"
+ck "object: no hour is 02:00"   '*-*-* 02:00:00'          "$(cal '{"frequency":"daily"}')"
+ck "object: case-insensitive"   'Sun *-*-* 23:00:00'      "$(cal '{"frequency":"WEEKLY","weekday":"sunday","hour":23}')"
+ck "object: weekly without weekday: no timer" '' "$(cal '{"frequency":"weekly","hour":2}')"
+ck "object: no frequency is daily at 2" '*-*-* 02:00:00'  "$(cal '{"hour":2}')"
+ck "object: unknown frequency is unusable" 1 "$(rc '{"frequency":"hourly","hour":2}')"
+ck "object: hour 24 is unusable" 1 "$(rc '{"frequency":"daily","hour":24}')"
+[[ "$(warns '{"frequency":"weekly","weekday":"Tuesday","hour":4}')" == "" ]] \
+    && ck "a conforming object warns about nothing" ok ok || ck "a conforming object warns about nothing" ok noisy
+# ADR-017 D7: hour is written down, and a weekday is refused where nothing reads
+# it. Reported (so `site-manager validate` shows it), never fatal to the render —
+# leaving a site with no timer over a defaultable field is the worse failure.
+[[ "$(warns '{"frequency":"daily"}')" == *"no hour"* ]] \
+    && ck "a missing hour is reported" ok ok || ck "a missing hour is reported" ok missing
+[[ "$(warns '{"frequency":"daily","weekday":"Tuesday","hour":2}')" == *"no reader honours it"* ]] \
+    && ck "a weekday under daily is reported" ok ok || ck "a weekday under daily is reported" ok missing
+ck "…and still renders" '*-*-* 02:00:00' "$(cal '{"frequency":"daily","weekday":"Tuesday","hour":2}')"
+[[ "$(warns '{"frequency":"none","weekday":"Monday"}')" == *"no reader honours it"* ]] \
+    && ck "a weekday under none is reported" ok ok || ck "a weekday under none is reported" ok missing
+[[ "$(warns '["weekly", "Tuesday", 4]')" == *"0003"* ]] \
+    && ck "a legacy triple names the migration that renames it" ok ok \
+    || ck "a legacy triple names the migration that renames it" ok missing
+ck "a string is not a schedule"  '*-*-* 02:00:00'         "$(cal '"daily"')"
+
 ck "hour 24 is unusable"        1 "$(rc '["daily", null, 24]')"
 ck "unknown weekday is unusable" 1 "$(rc '["weekly", "Funday", 2]')"
 ck "unknown frequency is unusable" 1 "$(rc '["hourly", null, 2]')"

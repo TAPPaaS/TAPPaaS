@@ -84,13 +84,26 @@ if run_ts "tsc -p '${UNIT_TSCONFIG}'" >/dev/null 2>&1; then
     ok "TypeScript unit tests compile"
     # tsconfig rootDir is the tappaas-cicd root (shared lib/ts base), so the
     # compiled tree mirrors manager/site-manager/ under dist-test.
-    for t in reconcile client evacuate fleet hold unitrun; do
-        if run_ts "node '${DIST_TEST}/manager/site-manager/test/unit/${t}.test.js'" >/dev/null 2>&1; then
+    #
+    # A SWEEP over what compiled, not a list of six names: a list is how a test
+    # file comes to exist and run nowhere (the Test 9z lesson, one directory
+    # over). A new test/unit/<name>.test.ts runs the day it lands.
+    _ut_ran=0
+    for _utjs in "${DIST_TEST}/manager/site-manager/test/unit/"*.test.js; do
+        [[ -f "${_utjs}" ]] || continue
+        t="$(basename "${_utjs}" .test.js)"
+        _ut_ran=$((_ut_ran + 1))
+        if run_ts "node '${_utjs}'" >/dev/null 2>&1; then
             ok "TypeScript ${t} unit tests pass"
         else
-            bad "TypeScript ${t} unit tests FAILED"
+            bad "TypeScript ${t} unit tests FAILED (rerun: node ${_utjs})"
         fi
     done
+    if [[ "${_ut_ran}" -gt 0 ]]; then
+        ok "swept ${_ut_ran} unit test file(s) — a new one runs without being listed here"
+    else
+        bad "no compiled unit tests found to run"
+    fi
 else
     bad "TypeScript unit tests failed to compile"
 fi
@@ -113,6 +126,21 @@ grep -q "inert under 'daily'" <<<"$_out" && ok "validate reports a weekday under
 echo '{ "name": "s", "updateSchedule": ["hourly", null, 2] }' > "$SCHED"
 _out="$("$VALIDATE" --schema-dir "$SCHEMA_DIR" "$SCHED" 2>&1 || true)"
 grep -q "VALIDATION: updateSchedule frequency 'hourly'" <<<"$_out" && ok "validate refuses an unknown frequency" || bad "unknown frequency not refused"
+
+# The object form (ADR-017 D7 / migration 0003): validate reads it, and reads
+# the legacy triple too — a site can be restored from a backup that predates it.
+echo '{ "name": "s", "updateSchedule": {"frequency":"weekly","weekday":"Tuesday","hour":4} }' > "$SCHED"
+_out="$("$VALIDATE" --schema-dir "$SCHEMA_DIR" "$SCHED" 2>&1 || true)"
+grep -q 'OnCalendar=Tue \*-\*-\* 04:00:00' <<<"$_out" \
+    && ok "validate maps the object form to OnCalendar" || bad "object form not mapped: ${_out}"
+echo '{ "name": "s", "updateSchedule": {"frequency":"hourly","hour":2} }' > "$SCHED"
+_out="$("$VALIDATE" --schema-dir "$SCHEMA_DIR" "$SCHED" 2>&1 || true)"
+grep -q "updateSchedule frequency 'hourly'" <<<"$_out" \
+    && ok "validate refuses an unknown frequency in the object form" || bad "object unknown frequency not refused"
+echo '{ "name": "s", "updateSchedule": {"frequency":"none"} }' > "$SCHED"
+_out="$("$VALIDATE" --schema-dir "$SCHEMA_DIR" "$SCHED" 2>&1 || true)"
+grep -q 'no scheduled update' <<<"$_out" \
+    && ok "validate reports 'none' as no scheduled update" || bad "none not reported"
 
 # bad site.json: additionalProperties violation
 BAD2="${WORK}/bad-site2.json"

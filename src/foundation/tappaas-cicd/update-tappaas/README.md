@@ -71,33 +71,37 @@ The `updateSchedule` field in the `tappaas` section of the configuration control
 ### updateSchedule Format
 
 ```json
-"updateSchedule": ["frequency", "weekday", "hour"]
+"updateSchedule": { "frequency": "weekly", "weekday": "Tuesday", "hour": 2 }
 ```
 
 **Fields:**
-1. **frequency** - One of:
-   - `"none"` - Never update automatically
-   - `"daily"` - Run every day at the specified hour
-   - `"weekly"` - Run once per week on the specified weekday
-   - `"monthly"` - Run once per month on the first occurrence of the specified weekday (days 1-7)
 
-2. **weekday** - Day of week (ignored for daily):
-   - `"Monday"`, `"Tuesday"`, `"Wednesday"`, `"Thursday"`, `"Friday"`, `"Saturday"`, `"Sunday"`
-
-3. **hour** - Hour of day (0-23) when the update should run
+- **frequency** — `"none"` (never update automatically), `"daily"` (every day at `hour`),
+  `"weekly"` (once a week on `weekday`), `"monthly"` (the first `weekday` of the month, days 1-7).
+- **weekday** — `"Monday"` … `"Sunday"`. Read only for `weekly` and `monthly`; under `daily`
+  and `none` it means nothing, so it is not stored.
+- **hour** — 0-23, default 2.
 
 ### Examples
 
 ```json
 // Daily at 2am
-"updateSchedule": ["daily", null, 2]
+"updateSchedule": { "frequency": "daily", "hour": 2 }
 
 // Weekly on Wednesday at 3am
-"updateSchedule": ["weekly", "Wednesday", 3]
+"updateSchedule": { "frequency": "weekly", "weekday": "Wednesday", "hour": 3 }
 
-// Monthly on first Tuesday at 2am
-"updateSchedule": ["monthly", "Tuesday", 2]
+// Monthly on the first Tuesday at 2am
+"updateSchedule": { "frequency": "monthly", "weekday": "Tuesday", "hour": 2 }
+
+// Never
+"updateSchedule": { "frequency": "none" }
 ```
+
+> **The legacy triple.** `["weekly", "Tuesday", 2]` is still read, and migration `0003`
+> rewrites it in place the first time a site updates. It was retired because its second slot
+> was honoured only for `weekly` and `monthly`: a site holding `["daily", "Tuesday", 2]` was
+> stating a weekly update it was never getting, and nothing said so (ADR-017 D7).
 
 ## Configuration
 

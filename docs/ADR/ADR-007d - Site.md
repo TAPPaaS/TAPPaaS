@@ -52,7 +52,7 @@ of objects, and there is **no** site-wide domain/DNS/identityProvider (those are
   "network": { "isp": "<your-isp>", "publicIp": "auto" },
   "hardware": { "nodes": [ { "name": "tappaas1", "storagePools": ["tanka1"] } ] },
   "backup": null,
-  "updateSchedule": ["monthly", "Thursday", 2],
+  "updateSchedule": { "frequency": "monthly", "weekday": "Thursday", "hour": 2 },
   "automaticReboot": true,
   "snapshotRetention": 5,
   "repositories": [

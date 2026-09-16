@@ -284,9 +284,36 @@ else
     ck "a run that cannot snapshot still fails loudly" 1 "${rc}"
 fi
 
-# ── D11: the shipped directory is empty in this release ─────────────────────
-shipped="$(ls -1 "${CICD}/migrations"/[0-9][0-9][0-9][0-9]-*.sh 2>/dev/null | wc -l | tr -d ' ')"
-ck "the runner's own release carries no migrations (D11)" 0 "${shipped}"
+# ── D1/D7: every shipped migration is well-formed and has its fixture ───────
+#
+# This replaces the D11 "the directory is empty" assertion, which was true of
+# exactly one release — the one that introduced the runner (ADR-025 D9 rule 3:
+# a site must receive the runner before it receives anything for the runner to
+# run). THIS BRANCH ADDS 0003, so it must not merge until that release is on
+# `stable`; the gate for that is the release process, not a unit test, and it
+# is recorded in migrations/README.md and in the plan.
+#
+# What remains true forever is the shape: a migration the runner cannot see, or
+# one with no fixture test, is the failure D1 and D7 exist to prevent.
+_shipped=0
+for f in "${CICD}/migrations"/*.sh; do
+    [[ -f "${f}" ]] || continue
+    _shipped=$((_shipped + 1))
+    b="$(basename "${f}")"
+    [[ "${b}" =~ ^[0-9]{4}-[a-z0-9-]+\.sh$ ]] \
+        && ck "${b} is named NNNN-<slug>.sh" ok ok \
+        || ck "${b} is named NNNN-<slug>.sh" ok "not a name the runner will run"
+    [[ -x "${f}" ]] && ck "${b} is executable" ok ok || ck "${b} is executable" ok "commit it 100755"
+    _sum="$(sed -n '2p' "${f}" | sed 's/^# \{0,1\}//')"
+    [[ -n "${_sum}" && "${_sum}" == *" — "* ]] \
+        && ck "${b} carries a summary on line 2 (--list prints it)" ok ok \
+        || ck "${b} carries a summary on line 2 (--list prints it)" ok "got: ${_sum}"
+    _id="${b:0:4}"
+    ls "${CICD}/scripts/test/test-migration-${_id}-"*.sh >/dev/null 2>&1 \
+        && ck "${_id} ships a fixture test (D7)" ok ok \
+        || ck "${_id} ships a fixture test (D7)" ok "none in scripts/test/"
+done
+[[ "${_shipped}" -eq 0 ]] && echo "  (no migrations shipped yet — the runner's own release, D11)"
 
 # ── D2/D5: the wiring the runner depends on ─────────────────────────────────
 P="${CICD}/scripts/tappaas-self-prepare.sh"

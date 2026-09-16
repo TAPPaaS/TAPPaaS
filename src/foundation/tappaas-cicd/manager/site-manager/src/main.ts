@@ -255,12 +255,14 @@ function cmdSite(o: Opts): void {
     const site: Site = loadSite(siteFile);
     const loc = site.location ?? ({} as Site["location"]);
     const net = site.network ?? {};
-    const sched = Array.isArray(site.updateSchedule) ? site.updateSchedule : [];
-    // daily/none carry no weekday: one an older site.json stores is inert and
-    // not shown (#447, ADR-017 D7).
-    const inertDay = sched[0] === "daily" || sched[0] === "none";
-    const schedStr = sched.length
-      ? [sched[0], inertDay ? null : sched[1], sched[2] != null && sched[0] !== "none" ? `@ ${String(sched[2]).padStart(2, "0")}:00` : null]
+    // Either shape; daily/none carry no weekday (#447, ADR-017 D7).
+    const sched = readSchedule(site.updateSchedule);
+    const schedStr = sched.frequency
+      ? [
+          sched.frequency,
+          sched.weekday,
+          sched.hour != null && sched.frequency !== "none" ? `@ ${String(sched.hour).padStart(2, "0")}:00` : null,
+        ]
           .filter((x) => x != null && x !== "")
           .join(" ")
       : "(unset)";
@@ -337,10 +339,10 @@ function cmdSite(o: Opts): void {
     const wday = o.flags.get("--updateWeekday");
     const hour = o.flags.get("--updateHour");
     if (freq !== undefined || wday !== undefined || hour !== undefined) {
-      const cur = Array.isArray(raw.updateSchedule)
-        ? [...(raw.updateSchedule as unknown[])]
-        : ["monthly", "Thursday", 2];
-      let [f, d, h] = [cur[0], cur[1], cur[2]];
+      const cur = readSchedule(raw.updateSchedule);
+      let f: string = cur.frequency ?? "weekly";
+      let d: string | null = cur.weekday ?? null;
+      let h: number | undefined = cur.hour ?? 2;
       if (freq !== undefined) {
         const FREQS = ["daily", "weekly", "monthly", "none"];
         if (!FREQS.includes(freq)) die(`--updateFrequency must be one of: ${FREQS.join(", ")}`);
@@ -359,7 +361,9 @@ function cmdSite(o: Opts): void {
       // daily/none run every day / never — a weekday would be meaningless.
       if (f === "daily" || f === "none") d = null;
       else if (d == null || d === "") die(`--updateWeekday is required for a '${f}' schedule`);
-      setDeep(raw, ["updateSchedule"], [f, d, h]);
+      // Written in the object form, always: a modify that put the triple back
+      // on a migrated site would undo 0003, which the ledger says is done.
+      setDeep(raw, ["updateSchedule"], writeSchedule(f, d, h));
       changed++;
     }
 
@@ -380,6 +384,47 @@ function cmdSite(o: Opts): void {
 }
 
 // Set raw[path...] = value, creating intermediate objects.
+// updateSchedule in either shape (ADR-017 D7). The named object is what is
+// written from here on; the legacy [frequency, weekday, hour] triple is still
+// READ, because a restored backup or a site on an older release can hold one
+// and a reader that refused it would take that site's updates away. Migration
+// 0003 is what converts a site; this is what keeps the CLI honest until then.
+//
+// `weekday` comes back only where a reader honours it: under daily and none it
+// was always inert, and showing it is how a site came to believe in a weekly
+// update it was not getting (#447).
+export function readSchedule(v: unknown): { frequency?: string; weekday?: string | null; hour?: number } {
+  if (Array.isArray(v)) {
+    const [f, d, h] = v as unknown[];
+    const freq = typeof f === "string" ? f : undefined;
+    const inert = freq === "daily" || freq === "none";
+    return {
+      frequency: freq,
+      weekday: inert ? null : (typeof d === "string" ? d : null),
+      hour: typeof h === "number" ? h : (typeof h === "string" && /^\d+$/.test(h) ? parseInt(h, 10) : undefined),
+    };
+  }
+  if (v && typeof v === "object") {
+    const o = v as Record<string, unknown>;
+    const freq = typeof o.frequency === "string" ? o.frequency : undefined;
+    const inert = freq === "daily" || freq === "none";
+    return {
+      frequency: freq,
+      weekday: inert ? null : (typeof o.weekday === "string" ? o.weekday : null),
+      hour: typeof o.hour === "number" ? o.hour : undefined,
+    };
+  }
+  return {};
+}
+
+// The object a modify writes: no weekday under daily/none, no hour under none.
+export function writeSchedule(f: string, d: string | null, h: number | undefined): Record<string, unknown> {
+  const out: Record<string, unknown> = { frequency: f };
+  if (f !== "daily" && f !== "none" && d) out.weekday = d;
+  if (f !== "none") out.hour = h ?? 2;
+  return out;
+}
+
 function setDeep(obj: Record<string, unknown>, path: string[], value: unknown): void {
   let cur = obj;
   for (let i = 0; i < path.length - 1; i++) {

@@ -173,13 +173,13 @@
       }
     },
     "updateSchedule": {
-      "description": "Site-wide update schedule [period, day, hour] (e.g. [\"monthly\", \"Thursday\", 2]).",
-      "type": "array",
-      "default": [
-        "monthly",
-        "Thursday",
-        2
-      ]
+      "description": "Site-wide update schedule (ADR-017 D7). {frequency: none|daily|weekly|monthly, weekday: day name, hour: 0-23}. weekday is read only under weekly and monthly; hour defaults to 2. The legacy [period, day, hour] triple is still read, and migration 0003 rewrites it.",
+      "type": "object",
+      "default": {
+        "frequency": "weekly",
+        "weekday": "Thursday",
+        "hour": 2
+      }
     },
     "automaticReboot": {
       "description": "Whether updates may reboot automatically. Site-wide until P3 (then moves to Environment).",
