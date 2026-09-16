@@ -85,7 +85,8 @@ repo_sync_at_risk_commits() {
 # reconcile_repo_checkout <path> <url> <branch> [allow_discard]
 # Ensure the checkout at <path> has origin == <url> and is on <branch> at the
 # remote's tip. Re-points origin if <url> differs (provider/repo switch),
-# auto-stashes local changes, creates a tracking branch if needed, and converges
+# stashes local changes for the move and restores them afterwards (#572), creates
+# a tracking branch if needed, and converges
 # to the remote branch: hard-reset on a remote/branch switch (a managed checkout
 # must MIRROR upstream, not merge divergent histories), fast-forward otherwise.
 #
@@ -158,29 +159,96 @@ reconcile_repo_checkout() {
 
     git -C "${path}" fetch origin --prune || { warn "  repo-sync: fetch failed (${desired})"; return 1; }
 
-    # Auto-stash local changes so checkout/reset cannot be blocked. Preserved and
-    # recoverable via 'git -C <path> stash list'.
+    # Auto-stash local changes so checkout/reset cannot be blocked. The entry is
+    # transient: repo_sync_restore_stash puts it back below, whatever the sync
+    # did (#572). Only an entry that no longer applies is left behind, and then
+    # it is said out loud.
+    local stashed=""
     if [ -n "$(git -C "${path}" status --porcelain 2>/dev/null)" ]; then
-        warn "  repo-sync: local changes present — auto-stashing (recover via 'git -C ${path} stash list')"
-        git -C "${path}" stash push -u -m "tappaas repo-sync auto-stash $(date +%Y%m%d-%H%M%S)" \
-            || warn "  repo-sync: stash failed — checkout may not switch"
+        if git -C "${path}" stash push -u -m "tappaas repo-sync auto-stash $(date +%Y%m%d-%H%M%S)" >/dev/null; then
+            stashed="$(git -C "${path}" rev-parse --verify --quiet 'stash@{0}' 2>/dev/null || true)"
+            warn "  repo-sync: local changes stashed for the sync — restored afterwards"
+        else
+            warn "  repo-sync: stash failed — checkout may not switch"
+        fi
     fi
 
+    local rc=0
     # Ensure the target branch exists locally and tracks the (possibly new) origin.
     if git -C "${path}" show-ref --verify --quiet "refs/heads/${branch}"; then
-        git -C "${path}" checkout "${branch}" || { warn "  repo-sync: checkout ${branch} failed"; return 1; }
+        git -C "${path}" checkout "${branch}" || { warn "  repo-sync: checkout ${branch} failed"; rc=1; }
     else
         git -C "${path}" checkout -B "${branch}" --track "origin/${branch}" \
-            || { warn "  repo-sync: checkout --track ${branch} failed"; return 1; }
+            || { warn "  repo-sync: checkout --track ${branch} failed"; rc=1; }
     fi
 
     # Converge to the remote branch.
-    if [ "${remote_changed}" = "1" ]; then
-        git -C "${path}" reset --hard "origin/${branch}" || { warn "  repo-sync: reset to origin/${branch} failed"; return 1; }
-    else
-        git -C "${path}" pull --ff-only origin "${branch}" || { warn "  repo-sync: pull (ff-only) failed for ${branch}"; return 1; }
+    if [ "${rc}" = "0" ]; then
+        if [ "${remote_changed}" = "1" ]; then
+            git -C "${path}" reset --hard "origin/${branch}" || { warn "  repo-sync: reset to origin/${branch} failed"; rc=1; }
+        else
+            git -C "${path}" pull --ff-only origin "${branch}" || { warn "  repo-sync: pull (ff-only) failed for ${branch}"; rc=1; }
+        fi
     fi
+
+    # Before any early return: the operator's uncommitted work goes back into the
+    # tree whether the sync succeeded or failed.
+    repo_sync_restore_stash "${path}" "${stashed}"
+
+    [ "${rc}" = "0" ] || return "${rc}"
 
     git -C "${path}" branch --set-upstream-to="origin/${branch}" "${branch}" >/dev/null 2>&1 || true
     return 0
+}
+
+# repo_sync_restore_stash <path> [stash-sha]
+# Put a sync's auto-stash back (#572). The stash was a means of getting the
+# checkout to move, not a place to keep the operator's work: an entry that still
+# applies is restored and dropped, so the tree after a sweep looks the way the
+# operator left it plus whatever upstream brought.
+#
+# It is re-applied only when it applies cleanly — checked with `apply --check`
+# first, because a failing `stash pop` writes conflict markers into a managed
+# checkout and the next sweep would then refuse it. An entry that does not apply
+# stays, and is named with the command that recovers it.
+#
+# Always reports how many auto-stash entries the checkout still carries: 19 of
+# them accumulated unmentioned on one site, which is the failure this fixes.
+# repo_sync_stash_applies <path> <stash-sha>
+# True when the entry's diff applies to the tree as it now stands. --include-untracked
+# needs git >= 2.32; where it is not understood the tracked part is checked alone,
+# and `stash pop` still refuses on its own if an untracked file is in the way.
+repo_sync_stash_applies() {
+    local path="$1" sha="$2" diff=""
+    diff="$(git -C "${path}" stash show -p --include-untracked "${sha}" 2>/dev/null)" \
+        || diff="$(git -C "${path}" stash show -p "${sha}" 2>/dev/null)" \
+        || return 1
+    # An empty diff is nothing to conflict with: let the pop run.
+    [ -n "${diff}" ] || return 0
+    printf '%s\n' "${diff}" | git -C "${path}" apply --check - 2>/dev/null
+}
+
+repo_sync_restore_stash() {
+    local path="$1" sha="${2:-}" n=""
+    if [ -n "${sha}" ]; then
+        local top
+        top="$(git -C "${path}" rev-parse --verify --quiet 'stash@{0}' 2>/dev/null || true)"
+        if [ "${top}" != "${sha}" ]; then
+            warn "  repo-sync: the auto-stash is no longer on top of the stash list — left in place"
+        elif repo_sync_stash_applies "${path}" "${sha}"; then
+            if git -C "${path}" stash pop >/dev/null 2>&1; then
+                info "  repo-sync: local changes restored"
+            else
+                warn "  repo-sync: restoring the auto-stash failed — kept (git -C ${path} stash list)"
+            fi
+        else
+            warn "  repo-sync: local changes no longer apply on top of the new tip — KEPT as a stash entry"
+            warn "    recover with: git -C ${path} stash list   /   git -C ${path} stash pop"
+        fi
+    fi
+    n="$(git -C "${path}" stash list 2>/dev/null | grep -c 'tappaas repo-sync auto-stash' || true)"
+    if [ -n "${n}" ] && [ "${n}" -gt 0 ] 2>/dev/null; then
+        local word="entries"; [ "${n}" = "1" ] && word="entry"
+        warn "  repo-sync: ${n} auto-stash ${word} still held in ${path} (git -C ${path} stash list)"
+    fi
 }

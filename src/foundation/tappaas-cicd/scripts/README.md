@@ -934,6 +934,11 @@ repository.sh remove tappaas-community --force
 - **URL change**: Validates new repo has all currently-installed modules, re-clones, and updates module `location` fields
 
 **Notes:**
+- A checkout with uncommitted work is stashed so it can move, and the stash is
+  put back as soon as the sync is done — success or failure (#572). Only a change
+  that no longer applies on the new tip is left as a stash entry, and then it is
+  named with the command that recovers it. Every sync also reports how many
+  auto-stash entries the checkout still holds.
 - Repository URLs use the same format as `upstreamGit` (without `https://` prefix)
 - The main TAPPaaS repository is the first entry in the `repositories` array
 - All repositories are treated equally — no special handling for the main repo
