@@ -513,6 +513,39 @@ Output → journald → Promtail → Loki.
 
 ---
 
+### run-migrations.sh — config migrations (ADR-025)
+
+Applies the pending `migrations/NNNN-<slug>.sh` — one-time rewrites of the **shape** a
+site's `config/` is written in. Run by `tappaas-self-prepare.sh` after the control-plane
+refresh and before the `nixos-rebuild`, so the migrations are the ones just pulled and they
+land before the sweep touches its first module. A failure stops the unit: no rebuild, no
+sweep, and the #651 notice names the stage `migrate`.
+
+Changing a declared field's *value* is not a migration — that is
+`module-manager module modify --set` (ADR-020). See `migrations/README.md` for the contract
+a migration meets.
+
+```bash
+run-migrations.sh                # apply everything pending, in ascending order
+run-migrations.sh --list         # what is pending (writes nothing)
+run-migrations.sh --check        # each pending migration's own --check (writes nothing)
+run-migrations.sh --rerun 0003   # apply one again, deliberately
+run-migrations.sh --baseline     # a fresh install: stamp, do not run (install.sh does this)
+```
+
+**State it keeps, all under `config/`:**
+
+| Path | What |
+|---|---|
+| `.migrations/applied` | the ledger: `NNNN  <date>  <commit>  applied\|baseline\|rerun`, appended after success |
+| `.migrations/backup/NNNN/` | one migration's pre-image — restoring it is the rollback (there are no down-migrations) |
+| `.migrations/backup/run-*/config/` | the whole of `config/` before a run's first migration; the two most recent are kept |
+
+`site-manager update --dry-run` prints the same pending list, so an operator sees a
+migration before it happens.
+
+---
+
 ### check-disk-threshold.sh
 
 Checks if a VM's disk usage exceeds a threshold and automatically expands the disk by 50% if needed.

@@ -21,6 +21,8 @@ src/foundation/tappaas-cicd/
 ├── pre-update.sh                      # pre-update pass of the tappaas-cicd module
 ├── scripts/refresh-control-plane.sh   # self-refresh: pull + relink ~/bin + build components
 ├── scripts/tappaas-self-prepare.sh    # ExecStartPre 2: the refresh, before the sweep (ADR-017 D3)
+├── scripts/run-migrations.sh          # config migrations, between the refresh and the rebuild (ADR-025)
+├── migrations/                        # NNNN-<slug>.sh — one-time config rewrites (empty in this release)
 ├── scripts/tappaas-self-rebuild.sh    # ExecStartPre 3 (root): nixos-rebuild of the mothership
 ├── scripts/update-tappaas-schedule.sh # renders update-tappaas.timer from site.json (D2)
 ├── scripts/notify-update-failure.sh   # mails the site owner when a run fails (#651)
@@ -200,6 +202,30 @@ Two properties follow, and both matter:
   reaches the sweep summary and `last-update-result.json` as `control_plane`, and makes
   `ok` false. A stale control plane is the root cause that otherwise presents as N
   unrelated-looking module failures.
+
+## Config migrations run in that same step, before the rebuild
+
+`scripts/run-migrations.sh` applies the pending `migrations/NNNN-*.sh` (ADR-025) from inside
+`tappaas-self-prepare.sh`, immediately after the refresh above and before the hand-over. That
+slot is the whole design:
+
+- the migrations it runs are the ones the refresh **just pulled**;
+- it is before `tappaas-self-rebuild.sh`, so a migration may change config the new system
+  generation will read — `updateSchedule` is the first one that must (ADR-017 D7);
+- it is before the sweep's first module, `cluster` included, which `pre-update.sh` cannot be:
+  that hook runs inside the sweep, after the modules it depends on.
+
+The cost is a contract rather than a hazard: a migration runs before the rebuild and possibly
+after a refresh that returned STALE, so it may use only `bash`, `jq`, coreutils and the files
+under `config/` — no manager binary, nothing from the not-yet-switched generation.
+
+A failure stops the unit: no rebuild, no sweep, no module updated, and the #651 notice names
+the stage `migrate`. The site keeps running the old code with a `config/` that is untouched or
+restorable from `config/.migrations/backup/`. The ledger (`config/.migrations/applied`) is
+written after each success, so a migration interrupted mid-apply is simply re-run next sweep —
+which is safe because every migration is idempotent.
+
+`migrations/README.md` is the contract for writing one.
 
 ## Preferred language
 

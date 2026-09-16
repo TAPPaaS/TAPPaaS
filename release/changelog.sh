@@ -81,6 +81,28 @@ echo
 echo "_Changes in \`${RANGE}\` — ${NCOMMITS} commit(s), ${#ISSUES[@]} referenced issue(s)._"
 echo
 
+# Config migrations added in this range (ADR-025 D6). First, because a migration
+# is the part of a release an operator has to decide about: it rewrites the
+# site's config before any module is updated, and its rollback is a file restore.
+MIG_DIR_REL="src/foundation/tappaas-cicd/migrations"
+migs="$(git diff --name-only --diff-filter=A "${RANGE}" -- "${MIG_DIR_REL}/" 2>/dev/null \
+    | grep -E "/[0-9]{4}-.*\.sh$" || true)"
+if [[ -n "${migs}" ]]; then
+    echo "## Migrations"
+    echo
+    echo "_Applied automatically before the first module update; rollback is \`config/.migrations/backup/NNNN/\`._"
+    echo
+    while IFS= read -r m; do
+        [[ -n "${m}" ]] || continue
+        # The summary is line 2 of the migration's header, read from the range's
+        # end so a file deleted since still describes itself.
+        sum="$(git show "${RANGE##*..}:${m}" 2>/dev/null | sed -n '2p' | sed 's/^# \{0,1\}//')"
+        case "${sum}" in *' — '*) sum="${sum#*' — '}" ;; esac
+        echo "- \`$(basename "${m}" .sh)\` — ${sum:-no summary in its header}"
+    done <<<"${migs}"
+    echo
+fi
+
 # Grouped commit summary by Conventional-Commit type.
 declare -A TYPE_TITLE=(
     [feat]="Features" [fix]="Fixes" [docs]="Documentation"

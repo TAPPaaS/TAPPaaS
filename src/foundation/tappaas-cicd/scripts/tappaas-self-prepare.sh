@@ -9,11 +9,13 @@
 #   2. runs refresh-control-plane.sh (pull, hold-aware #653; relink ~/bin; builds)
 #      and maps its exit code: 0 refreshed, 10 stale (non-fatal, #595),
 #      12 a repository did not sync → fatal, 1 → fatal;
-#   3. leaves $RUNTIME_DIRECTORY/prepared and control-plane for update-tappaas.
+#   3. runs the config migrations the refresh just pulled (ADR-025 D2, #652);
+#   4. leaves $RUNTIME_DIRECTORY/prepared and control-plane for update-tappaas.
 # A non-zero exit stops the unit before the rebuild and the sweep; OnFailure
 # then mails the site owner (#651), naming the stage from config/.update-stage.
 #
-# Environment: RUNTIME_DIRECTORY (systemd), TAPPAAS_CONFIG_DIR, TAPPAAS_REFRESH_CMD (tests)
+# Environment: RUNTIME_DIRECTORY (systemd), TAPPAAS_CONFIG_DIR,
+#              TAPPAAS_REFRESH_CMD / TAPPAAS_MIGRATE_CMD (tests)
 
 set -euo pipefail
 
@@ -21,6 +23,7 @@ _here="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 CONFIG_DIR="${TAPPAAS_CONFIG_DIR:-/home/tappaas/config}"
 RUN_DIR="${RUNTIME_DIRECTORY:-/run/update-tappaas}"
 REFRESH="${TAPPAAS_REFRESH_CMD:-${_here}/refresh-control-plane.sh}"
+MIGRATE="${TAPPAAS_MIGRATE_CMD:-${_here}/run-migrations.sh}"
 REQUEST="${CONFIG_DIR}/.update-request.json"
 MAX_REQUEST_AGE=600
 
@@ -61,7 +64,18 @@ case "${rc}" in
         exit 1 ;;
 esac
 
-# ── 3. hand over ─────────────────────────────────────────────────────
+# ── 3. config migrations (ADR-025 D2) ────────────────────────────────
+# Here and nowhere else: the migrations are the ones the refresh above just
+# pulled, and this is the last point before the rebuild and before the sweep
+# reaches its first module. A failure stops the unit, so the site stays on the
+# old code with a config that is untouched or restorable (D5).
+echo migrate > "${CONFIG_DIR}/.update-stage"
+if ! TAPPAAS_CONFIG_DIR="${CONFIG_DIR}" "${MIGRATE}"; then
+    log "FATAL: a config migration failed — no rebuild, no sweep"
+    exit 1
+fi
+
+# ── 4. hand over ─────────────────────────────────────────────────────
 echo "${state}" > "${RUN_DIR}/control-plane"
 : > "${RUN_DIR}/prepared"
 echo rebuild > "${CONFIG_DIR}/.update-stage"

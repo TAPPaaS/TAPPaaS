@@ -18,7 +18,14 @@ echo "${TAPPAAS_NO_GIT_PULL:-0}" > "${STUB_SEEN}"
 exit "${STUB_RC:-0}"
 STUB
 chmod +x "${d}/refresh"
+cat > "${d}/migrate" <<'STUB'
+#!/usr/bin/env bash
+echo "${TAPPAAS_CONFIG_DIR}" > "${STUB_MIG_SEEN}"
+exit "${STUB_MIG_RC:-0}"
+STUB
+chmod +x "${d}/migrate"
 export TAPPAAS_CONFIG_DIR="${d}/config" TAPPAAS_REFRESH_CMD="${d}/refresh" STUB_SEEN="${d}/seen"
+export TAPPAAS_MIGRATE_CMD="${d}/migrate" STUB_MIG_SEEN="${d}/mig-seen"
 run() { rm -rf "${d}/run"; RUNTIME_DIRECTORY="${d}/run" bash "${P}" >/dev/null 2>&1; echo $?; }
 
 # refreshed, no request
@@ -27,6 +34,19 @@ ck "…and hands over 'refreshed'"   refreshed "$(cat "${d}/run/control-plane" 2
 ck "…with the prepared marker"     yes "$([[ -e "${d}/run/prepared" ]] && echo yes)"
 ck "…and the next stage recorded"  rebuild "$(cat "${d}/config/.update-stage")"
 ck "…and the pull is not skipped"  0 "$(cat "${STUB_SEEN}")"
+
+# the config migrations run between the refresh and the hand-over (ADR-025 D2)
+ck "…and the migrations ran"       "${d}/config" "$(cat "${d}/mig-seen" 2>/dev/null)"
+
+# a failed migration stops the unit before the rebuild and the sweep (D5)
+rm -f "${d}/mig-seen"
+ck "a failed migration fails the unit" 1 "$(STUB_MIG_RC=1 STUB_RC=0 run)"
+ck "…no prepared marker"           no "$([[ -e "${d}/run/prepared" ]] && echo yes || echo no)"
+ck "…stage stays 'migrate'"        migrate "$(cat "${d}/config/.update-stage")"
+rm -f "${d}/mig-seen"
+# a refresh that never succeeded must not reach the migrations
+ck "rc 12 → fails before the migrations" 1 "$(STUB_RC=12 run)"
+ck "…the migrations did not run"   no "$([[ -e "${d}/mig-seen" ]] && echo yes || echo no)"
 
 # stale builds are not fatal (#595)
 ck "rc 10 → succeeds"              0 "$(STUB_RC=10 run)"

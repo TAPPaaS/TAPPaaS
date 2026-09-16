@@ -54,6 +54,13 @@ REFRESH_CONTROL_PLANE_CMD = os.environ.get(
     "REFRESH_CONTROL_PLANE_CMD",
     "/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/scripts/refresh-control-plane.sh",
 )
+# The config-migration runner (ADR-025 D2). The sweep never runs it — it runs in
+# the same ExecStartPre chain, one step later — but --dry-run asks it what is
+# pending, so an operator sees a migration before it happens (D6).
+RUN_MIGRATIONS_CMD = os.environ.get(
+    "RUN_MIGRATIONS_CMD",
+    "/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/scripts/run-migrations.sh",
+)
 # refresh-control-plane.sh's "built, but some component group failed" exit code:
 # the bins are STALE, not broken, so the sweep proceeds — loudly.
 REFRESH_RC_STALE = 10
@@ -784,6 +791,29 @@ def reboot_cluster_script() -> Path | None:
     return script if script.is_file() else None
 
 
+def pending_migrations() -> list:
+    """The runner's --list output, indented for the dry-run plan (ADR-025 D6).
+
+    --list writes nothing and exits 0 whether or not anything is pending, so a
+    dry run can always ask. A runner that is missing (a site that has not yet
+    pulled this release) or that fails is reported in one line rather than
+    failing the preview: the plan is still worth printing.
+    """
+    if not os.path.exists(RUN_MIGRATIONS_CMD):
+        return ["  (the migration runner is not on this site yet)"]
+    try:
+        out = subprocess.run(
+            [RUN_MIGRATIONS_CMD, "--list"],
+            capture_output=True, text=True, timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        return [f"  (could not list pending migrations: {exc})"]
+    if out.returncode != 0:
+        return ["  (could not list pending migrations)"]
+    lines = [ln.rstrip() for ln in out.stdout.splitlines() if ln.strip()]
+    return ["  " + ln.strip() for ln in lines] or ["  no pending migrations"]
+
+
 def reboot_pass(automatic_reboot: bool, dry_run: bool) -> bool:
     """Run the controlled node reboot pass after all module updates.
 
@@ -1006,6 +1036,9 @@ def main():
         log.info("Before the sweep - update-tappaas.service ExecStartPre (ADR-017 D3):")
         log.info("  pull (holds respected) + relink ~/bin + component builds: %s",
                  REFRESH_CONTROL_PLANE_CMD)
+        log.info("  config migrations (ADR-025): %s", RUN_MIGRATIONS_CMD)
+        for line in pending_migrations():
+            log.info("  %s", line)
         log.info("  nixos-rebuild switch of the mothership (tappaas-self-rebuild.sh)")
         log.info("Phase 1 - Foundation update order:")
         for i, mod in enumerate(installed_foundation, 1):

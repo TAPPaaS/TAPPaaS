@@ -352,6 +352,17 @@ else
     warn "you will see manual configuration instructions for your firewall."
 fi
 
+# A fresh site is STAMPED at the current migration level, not migrated (ADR-025
+# D4): create-site.sh has just written a config/ with today's shapes, so every
+# shipped migration is already true of it. Recording them says so; running them
+# would be merely wasteful, and silence would leave the first sweep replaying
+# the whole history.
+_MIGRATE=/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/scripts/run-migrations.sh
+if [ -f "${_MIGRATE}" ]; then
+    bash "${_MIGRATE}" --baseline || \
+        _warn "could not stamp the migration baseline — the first update will run every shipped migration (they are idempotent)"
+fi
+
 # Completion marker. Written ONLY here, at the very end, so a re-run can tell a
 # finished install from one that wrote configuration.json early then failed later
 # (install-platform.sh Phase B keys its idempotent skip off this file).

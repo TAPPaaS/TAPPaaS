@@ -2,14 +2,14 @@
 
 | | |
 |---|---|
-| **Status** | **Accepted** (2026-09-16) — v0.3; the runner is #652 (G0.1). |
-| **Version** | 0.3 |
+| **Status** | **Accepted** (2026-09-16) — v0.4; the runner is #652 (G0.1), implemented. |
+| **Version** | 0.4 |
 | **Date** | 2026-09-16 |
 | **Author** | Lars Rossen |
 | **Parent** | [ADR-007d Site](<ADR-007d - Site.md>) (`site.json` and the rest of `config/` as the site's own state) |
 | **Refines** | [ADR-017 Update scheduling and mothership self-update](<ADR-017 - Update scheduling and mothership self-update.md>) (D3's `ExecStartPre` chain is where the runner hooks in; D4's `--dry-run` is where pending migrations show; this ADR settles two of ADR-017's *Open* items), [ADR-003 Dependency management](<ADR-003 - Dependency management in TAPPaaS.md>) (why `pre-update.sh` cannot be "before any module") |
 | **Related** | **#652** (versioned config-migration step — the implementation issue); **#545** / [ADR-012](ADR-012-backup-enhancement.md) §2.7 D20 (`config/` is backed up as `backup:filesystem`, which is what makes `config/.migrations/` recoverable); **#651** (update-failure notice) and [ADR-007e](<ADR-007e - Health.md>) v1.3 (the notification target); **#584** (rollback in install/modify), **#453** (`--force` vs `--reinstall`), **#648** (`--unset`), **#572** (repo-sync auto-stash) — the rest of G0.1; [ADR-020](<ADR-020 - Declared-Field Change Model (validate, drift, modify).md>) (a *declared field* changes through `modify`; a *schema* changes through a migration); [release-2.1-implementation-plan](../design/release-2.1-implementation-plan.md) §3 G0.1, §10.1, §10.2, §10.3, §10.4. **Owner:** `tappaas-cicd` (the runner, the migration directory, the release tooling) |
-| **Changelog** | v0.1 — initial draft. Takes the framework decided 2026-09-14 (plan §3 G0.1) and the rollout rules (§10.2) verbatim and binds them; checks each clause against `main` at `dd80d495`; settles the runner's slot in favour of `tappaas-self-prepare.sh` over `pre-update.sh` (D2), answers ADR-017 *Bootstrap*'s "oldest supported upgrade source" (D10), and names ADR-017 D7's `updateSchedule` rewrite as migration `0003` (D12). v0.2 (2026-09-16, operator decisions): **D13** — a whole-`config/` snapshot before the first migration of a run, the last two backup sets kept and older ones pruned, a deliberate `--rerun` (migrations are idempotent by D3), state outside `config/` out of scope though one migration may back up more, and a missing backup never blocks a migration. Status → Accepted. v0.3 (2026-09-16): a worked example of a nightly run that carries a migration — every step with how its failure is detected and what the site falls back to — the window between the migrations and the rebuild, and what happens when several migrations are pending at once. |
+| **Changelog** | v0.1 — initial draft. Takes the framework decided 2026-09-14 (plan §3 G0.1) and the rollout rules (§10.2) verbatim and binds them; checks each clause against `main` at `dd80d495`; settles the runner's slot in favour of `tappaas-self-prepare.sh` over `pre-update.sh` (D2), answers ADR-017 *Bootstrap*'s "oldest supported upgrade source" (D10), and names ADR-017 D7's `updateSchedule` rewrite as migration `0003` (D12). v0.2 (2026-09-16, operator decisions): **D13** — a whole-`config/` snapshot before the first migration of a run, the last two backup sets kept and older ones pruned, a deliberate `--rerun` (migrations are idempotent by D3), state outside `config/` out of scope though one migration may back up more, and a missing backup never blocks a migration. Status → Accepted. v0.3 (2026-09-16): a worked example of a nightly run that carries a migration — every step with how its failure is detected and what the site falls back to — the window between the migrations and the rebuild, and what happens when several migrations are pending at once. v0.4 (2026-09-16, #652 implemented): the stage marker is written by `tappaas-self-prepare.sh`, alongside the `prepare` and `rebuild` it already writes, so the runner run by hand never rewrites a sweep's stage; the delivered acceptance clauses are ticked. |
 
 ## Context
 
@@ -156,9 +156,10 @@ leaves no ledger entry and is re-run next sweep, which D3's idempotence makes sa
 
 ### D5 — a failed migration stops the run before anything is updated
 
-The runner writes `migrate` into `config/.update-stage` for its duration (the marker
-`tappaas-self-prepare.sh:28` and `:67` already maintain), and exits non-zero on the first
-migration that fails. The unit's `ExecStartPre` chain aborts: no `nixos-rebuild`, no
+`migrate` is written into `config/.update-stage` for the runner's duration by
+`tappaas-self-prepare.sh`, alongside the `prepare` and `rebuild` it already writes — the
+marker belongs to the step of the chain, not to the tool, so `run-migrations.sh` run by hand
+never rewrites a sweep's stage. The runner exits non-zero on the first migration that fails. The unit's `ExecStartPre` chain aborts: no `nixos-rebuild`, no
 `ExecStart`, no module touched.
 
 `scripts/notify-update-failure.sh` gains `migrate` in both of its `case` blocks — the one that
@@ -468,25 +469,26 @@ v0.1's five open questions were decided on 2026-09-16 and are now **D13**. What 
 
 ## Acceptance
 
-- [ ] A run snapshots `config/` before its first migration, and keeps only the last two backup sets (D13).
-- [ ] `--rerun NNNN` re-applies one applied migration and appends a second ledger line; the unattended sweep never re-runs one (D13).
+- [x] A run snapshots `config/` before its first migration, and keeps only the last two backup sets (D13).
+- [x] `--rerun NNNN` re-applies one applied migration and appends a second ledger line; the unattended sweep never re-runs one (D13).
 - [ ] A site with no recent `config/` backup still migrates, and the run says so (D13).
 
-- [ ] `src/foundation/tappaas-cicd/migrations/` exists and is empty in the release that
+- [x] `src/foundation/tappaas-cicd/migrations/` exists and is empty in the release that
       introduces the runner; the Wave 0 exit gate is met (plan §10.3).
-- [ ] The runner is invoked from `scripts/tappaas-self-prepare.sh`, after the refresh and
-      before the hand-over; nothing invokes it from `pre-update.sh` or from `main.py`.
-- [ ] Migrations run in ascending numeric order; an already-applied id is skipped; a
+- [x] The runner is invoked from `scripts/tappaas-self-prepare.sh`, after the refresh and
+      before the hand-over; nothing APPLIES migrations from `pre-update.sh` or from `main.py`
+      (the dry run asks the runner for its `--list`, D6).
+- [x] Migrations run in ascending numeric order; an already-applied id is skipped; a
       re-applied migration is a no-op.
 - [ ] `--check` on every shipped migration leaves `config/` byte-identical.
-- [ ] Applying a migration writes `config/.migrations/backup/NNNN/` before its first write, and
+- [x] Applying a migration writes `config/.migrations/backup/NNNN/` before its first write, and
       `config/.migrations/applied` only after it succeeds (id, date, commit).
-- [ ] A fresh install stamps every shipped id as `baseline` without running it.
-- [ ] A failing migration exits non-zero, stops the unit before `tappaas-self-rebuild.sh`, and
+- [x] A fresh install stamps every shipped id as `baseline` without running it.
+- [x] A failing migration exits non-zero, stops the unit before `tappaas-self-rebuild.sh`, and
       updates no module; `last-update-result.json` records `stage: "migrate"`; the #651 notice
       names the migration.
-- [ ] `site-manager update --dry-run` lists pending migrations and starts nothing.
-- [ ] `release/changelog.sh --from <tag> --to <tag>` lists the migrations added in the range.
+- [x] `site-manager update --dry-run` lists pending migrations and starts nothing.
+- [x] `release/changelog.sh --from <tag> --to <tag>` lists the migrations added in the range.
 - [ ] A fixture test exists under `scripts/test/` for every shipped migration and is picked up
       by `test.sh` Test 9z (fast tier), covering before → after, `--check`, idempotence, the
       backup, and an unrecognised input.

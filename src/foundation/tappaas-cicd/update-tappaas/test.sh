@@ -79,6 +79,49 @@ else
     echo "  ⊘ backfill unit test skipped (source or env python not found)"
 fi
 
+# ── 2b) Unit: the dry run asks the migration runner what is pending ──
+# ADR-025 D6: an operator sees a migration before it happens. A runner that is
+# missing or broken must degrade to one line, never fail the preview.
+if [[ -f "$main_py" && -x "$py" ]]; then
+    if "$py" - "$main_py" <<'PY2'
+import importlib.util, os, sys, tempfile, logging, stat
+from pathlib import Path
+logging.disable(logging.CRITICAL)
+d = Path(tempfile.mkdtemp())
+
+def load(cmd):
+    os.environ["RUN_MIGRATIONS_CMD"] = str(cmd)
+    spec = importlib.util.spec_from_file_location("m", sys.argv[1])
+    m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+    return m
+
+stub = d / "run-migrations.sh"
+stub.write_text("#!/usr/bin/env bash\necho '  0003  updateSchedule becomes an object'\n")
+stub.chmod(stub.stat().st_mode | stat.S_IEXEC)
+out = load(stub).pending_migrations()
+assert any("0003" in line for line in out), f"pending listed: {out}"
+
+# a runner this site has not pulled yet
+out = load(d / "nope.sh").pending_migrations()
+assert len(out) == 1 and "not on this site yet" in out[0], f"missing runner: {out}"
+
+# a runner that fails says so, and says nothing else
+bad = d / "bad.sh"
+bad.write_text("#!/usr/bin/env bash\nexit 3\n")
+bad.chmod(bad.stat().st_mode | stat.S_IEXEC)
+out = load(bad).pending_migrations()
+assert len(out) == 1 and "could not list" in out[0], f"failing runner: {out}"
+PY2
+    then
+        passed=$((passed + 1))
+    else
+        echo "  ✗ pending_migrations unit test FAILED"
+        failed=$((failed + 1))
+    fi
+else
+    echo "  ⊘ pending_migrations unit test skipped (source or env python not found)"
+fi
+
 # ── 2b) Unit: the ADR-020 D8 deferral contract ───────────────────────
 # Two invariants that are easy to break and expensive to notice:
 #   - update-tappaas NEVER passes --force to `module modify`. Its own --force
