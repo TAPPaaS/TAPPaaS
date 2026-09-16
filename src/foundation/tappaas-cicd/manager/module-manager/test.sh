@@ -1332,6 +1332,78 @@ grep -q "zzz" <<<"$out2" \
 rm -rf -- "$MDIR"
 
 # ---------------------------------------------------------------------------
+# Unit: resolve_module_source_dir — a module with no .location is still located
+# through the catalog, and an update that cannot reconcile REFUSES (#659).
+#
+# Extracted and run against stubs, the way the graded-test helpers are.
+# ---------------------------------------------------------------------------
+RDIR="$(mktemp -d "${TMPDIR:-/tmp}/modmgr-resolve.XXXXXX")"
+awk '/^resolve_module_source_dir\(\) \{/{f=1} f{print} f&&/^\}/{exit}' \
+    "${HERE}/update-module.sh" > "${RDIR}/fn.sh"
+if [[ -s "${RDIR}/fn.sh" ]]; then
+    ok "extracted resolve_module_source_dir from update-module.sh"
+else
+    bad "resolve_module_source_dir not found in update-module.sh (#659)"
+fi
+
+mkdir -p "${RDIR}/from-location" "${RDIR}/from-catalog"
+# A stub catalog resolver: prints the catalog dir for 'known', nothing otherwise.
+cat > "${RDIR}/resolver" <<EOF
+#!/usr/bin/env bash
+[[ "\$1" == known ]] && echo "${RDIR}/from-catalog"
+exit 0
+EOF
+chmod +x "${RDIR}/resolver"
+
+run_resolve() {  # <module> <location-stub-behaviour>
+    LOC_DIR="$2" bash -c '
+        . "'"${RDIR}"'/fn.sh"
+        get_module_dir() { [[ -n "${LOC_DIR}" ]] && { printf "%s" "${LOC_DIR}"; return 0; }; return 1; }
+        resolve_module_source_dir "$1" && echo
+    ' _ "$1" 2>/dev/null
+}
+export TAPPAAS_RESOLVE_MODULE_BIN="${RDIR}/resolver"
+
+out="$(run_resolve known "${RDIR}/from-location")"
+[[ "${out%$'\n'}" == "${RDIR}/from-location" ]] \
+    && ok ".location wins when it is recorded and exists" \
+    || bad ".location must win when present (got '${out}')"
+
+out="$(run_resolve known "")"
+[[ "${out%$'\n'}" == "${RDIR}/from-catalog" ]] \
+    && ok "a config with no .location resolves through the catalog (#659)" \
+    || bad "the catalog fallback did not resolve (got '${out}')"
+
+out="$(run_resolve unknown "")"
+[[ -z "${out//[[:space:]]/}" ]] \
+    && ok "a module neither located nor catalogued resolves to nothing" \
+    || bad "an unresolvable module must fail, not invent a directory (got '${out}')"
+
+# A stale .location (recorded, directory gone) must not be trusted either.
+out="$(run_resolve known "${RDIR}/was-deleted")"
+[[ "${out%$'\n'}" == "${RDIR}/from-catalog" ]] \
+    && ok "a .location whose directory is gone falls through to the catalog" \
+    || bad "a stale .location must not be used (got '${out}')"
+unset TAPPAAS_RESOLVE_MODULE_BIN
+
+# The three ways Step 0 can fail must all be fatal now — silence here is how a
+# module falls out of the release stream while every run reports success.
+for pat in \
+    "Refusing to report success for an update that reconciles nothing" \
+    "apply-json-merge.sh is not installed" \
+    "The 3-way merge failed for"; do
+    grep -qF "${pat}" "${HERE}/update-module.sh" \
+        && ok "Step 0 fails loudly: ${pat:0:40}…" \
+        || bad "Step 0 lost a fatal path (#659): ${pat}"
+done
+for pat in "skipping (first-update before location was set)" "continuing with current config unchanged" "skipping 3-way merge"; do
+    grep -qF "${pat}" "${HERE}/update-module.sh" \
+        && bad "Step 0 still skips silently (#659): ${pat}" \
+        || ok "the silent skip is gone: ${pat:0:34}…"
+done
+rm -rf -- "${RDIR}"
+
+# ---------------------------------------------------------------------------
 # Unit: set-module-field.sh --unset — the only way to remove the stale
 # undeclared field merge rule 2b keeps forever (#648). Against a temp config
 # dir and a fixture schema; no cluster, no module.

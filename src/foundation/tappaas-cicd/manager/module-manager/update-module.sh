@@ -137,6 +137,29 @@ resolve_effective_module_name() {
 # rollback must put back. Taken before the first write, restored beside the VM
 # snapshot (and on its own for a module that has no VM).
 CONFIG_BACKUP=""
+# resolve_module_source_dir <module> — the module's source directory, or rc 1.
+#
+# TWO paths, because a module is located in more than one way (#460): the
+# `.location` the installer recorded, and the module catalogs of the registered
+# repositories. `get_module_dir` knows only the first and returns 1 when the
+# field is empty — which used to mean the 3-way merge was skipped and the update
+# reported success anyway, so a config written before `.location` existed
+# silently never adopted ANY release change (#659). The config file's own name
+# identifies the module perfectly well; the catalog can find it from that.
+resolve_module_source_dir() {
+    local module="$1" dir="" rc=0
+    dir="$(get_module_dir "${module}" 2>/dev/null)" || rc=$?
+    if (( rc == 0 )) && [[ -n "${dir}" && -d "${dir}" ]]; then
+        printf '%s' "${dir}"
+        return 0
+    fi
+    local resolver="${TAPPAAS_RESOLVE_MODULE_BIN:-/home/tappaas/bin/resolve-module.sh}"
+    [[ -x "${resolver}" ]] || return 1
+    dir="$("${resolver}" "${module}" --field dir 2>/dev/null || true)"
+    [[ -n "${dir}" && -d "${dir}" ]] || return 1
+    printf '%s' "${dir}"
+}
+
 backup_module_config() {
     local module="$1"
     local src="${CONFIG_DIR}/${module}.json"
@@ -491,20 +514,31 @@ main() {
     # nor recreated, only the guard semantics change (#501).
     local deps_before
     deps_before="$(read_module_config "${module}" 2>/dev/null | jq -r '((.dependsOn // []) + (.integratesWith // [])) | .[]' 2>/dev/null || true)"
-    if module_dir_pre=$(get_module_dir "${module}" 2>/dev/null); then
-        if [[ -f /home/tappaas/bin/apply-json-merge.sh ]]; then
-            # shellcheck disable=SC1091
-            . /home/tappaas/bin/apply-json-merge.sh
-            if apply_three_way_merge "${module}" "${module_dir_pre}"; then
-                debug "  ${GN}✓${CL} Config reconciliation complete"
-            else
-                warn "  3-way merge reported an error — continuing with current config unchanged"
-            fi
-        else
-            warn "  apply-json-merge.sh not available — skipping 3-way merge"
-        fi
+    # None of the three ways this can go wrong is a "skip" any more (#659). An
+    # update whose Step 0 did not run has not reconciled the deployed config
+    # with the release, so reporting success for it tells the operator a change
+    # landed when it did not — and the next one will be just as invisible.
+    local module_dir_pre
+    if ! module_dir_pre="$(resolve_module_source_dir "${module}")"; then
+        error "Cannot locate the source of '${module}': its config records no ${BL}.location${CL} and no registered repository's catalog lists it."
+        error "  Step 0 (the 3-way merge) cannot run, so this update would not bring release changes into the deployed config."
+        error "  Refusing to report success for an update that reconciles nothing (#659)."
+        error "  Fix: add the repository the module comes from, or reinstall it from its source directory."
+        exit 1
+    fi
+    if [[ ! -f /home/tappaas/bin/apply-json-merge.sh ]]; then
+        error "apply-json-merge.sh is not installed — the 3-way merge cannot run for '${module}' (#659)"
+        exit 1
+    fi
+    # shellcheck disable=SC1091
+    . /home/tappaas/bin/apply-json-merge.sh
+    if apply_three_way_merge "${module}" "${module_dir_pre}"; then
+        debug "  ${GN}✓${CL} Config reconciliation complete"
     else
-        info "  Module location not resolved — skipping (first-update before location was set)"
+        error "The 3-way merge failed for '${module}' — the deployed config was NOT reconciled with the release."
+        error "  Refusing to continue: an update that keeps the old config and reports success is how a module"
+        error "  silently falls out of the release stream (#659)."
+        exit 1
     fi
 
     # dependsOn + integratesWith AFTER the merge — the delta vs deps_before is
