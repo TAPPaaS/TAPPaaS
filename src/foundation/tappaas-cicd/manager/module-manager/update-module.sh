@@ -132,6 +132,32 @@ resolve_effective_module_name() {
 # Update the module JSON: set updateTime and re-render in canonical Pattern A.
 # Field reordering is now handled by regroup_to_pattern_a (called inside
 # jq_module_write), so the explicit reorder step is no longer needed (#207).
+# #584: the deployed config is part of what an update changes — `--set` writes a
+# field, the 3-way merge folds in the new release — so it is part of what a
+# rollback must put back. Taken before the first write, restored beside the VM
+# snapshot (and on its own for a module that has no VM).
+CONFIG_BACKUP=""
+backup_module_config() {
+    local module="$1"
+    local src="${CONFIG_DIR}/${module}.json"
+    [[ -f "${src}" ]] || return 0
+    CONFIG_BACKUP="$(mktemp "/tmp/tappaas-config-${module}.XXXXXX")" || { CONFIG_BACKUP=""; return 0; }
+    cp -p "${src}" "${CONFIG_BACKUP}" || CONFIG_BACKUP=""
+    [[ -n "${CONFIG_BACKUP}" ]] && debug "  Config backed up to ${CONFIG_BACKUP}"
+    return 0
+}
+
+restore_module_config() {
+    local module="$1"
+    local dst="${CONFIG_DIR}/${module}.json"
+    [[ -n "${CONFIG_BACKUP}" && -f "${CONFIG_BACKUP}" ]] || { warn "No pre-update config copy — ${dst} left as it is"; return 1; }
+    if cp -p "${CONFIG_BACKUP}" "${dst}"; then
+        info "  ${GN}✓${CL} Config restored to its pre-update content (${dst})"
+    else
+        fatal "Could not restore ${dst} from ${CONFIG_BACKUP} — do it by hand"
+    fi
+}
+
 finalize_config() {
     local module="$1"
 
@@ -155,9 +181,11 @@ finalize_config() {
 # Args: <module> <snapshot_created: true|false>
 attempt_rollback() {
     local module="$1" snap_created="$2"
+    # The config comes back either way: it is this script's own write, and a
+    # module without a VM has nothing else to roll back (#584).
+    restore_module_config "${module}" || true
     if [[ "${OPT_NO_SNAPSHOT}" -eq 1 ]]; then
-        warn "Rollback skipped (--no-snapshot) — manual intervention required"
-        finalize_config "${module}"
+        warn "VM rollback skipped (--no-snapshot) — manual intervention required"
         return
     fi
     if [[ "${snap_created}" == true ]]; then
@@ -177,7 +205,7 @@ attempt_rollback() {
             fatal "Rollback failed — manual intervention required"
         fi
     else
-        error "  No snapshot available for rollback — manual intervention required"
+        error "  No VM snapshot available for rollback — manual intervention required"
     fi
 }
 
@@ -403,6 +431,9 @@ main() {
         fatal "Module config not found: ${module_json} — is the module installed?"
         exit 2
     fi
+
+    # Before the first write to it (#584).
+    backup_module_config "${module}"
 
     info "${BOLD}╔══════════════════════════════════════════════╗${CL}"
     info "${BOLD}║  TAPPaaS Module Update: ${BL}${module}${CL}"

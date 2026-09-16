@@ -1039,6 +1039,91 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# #584: a failed `add` removes what that run created, and a rollback puts the
+# deployed config back. Both helpers are extracted and driven with stubs — no
+# cluster, no real install.
+# ---------------------------------------------------------------------------
+echo ""
+echo "== install rollback + config restore (#584) =="
+RB="${WORK}/rollback"; mkdir -p "${RB}/cfg" "${RB}/bin"
+INS_MOD="${HERE}/install-module.sh"
+awk '/^rollback_failed_install\(\) \{/{f=1} f{print} f&&/^\}/{exit}' "$INS_MOD" > "${RB}/fn.sh"
+cat > "${RB}/bin/delete-module.sh" <<'STUB'
+#!/usr/bin/env bash
+echo "delete $*" >> "${RB_MARKER}"
+STUB
+chmod +x "${RB}/bin/delete-module.sh"
+
+run_rb() {  # run_rb <rc> <created_vm> <no_rollback>
+    : > "${RB}/marker"
+    echo '{"vmid":999}' > "${RB}/cfg/demo.json"
+    echo '{}' > "${RB}/cfg/demo.json.orig"
+    RB_MARKER="${RB}/marker" bash -c '
+        set -uo pipefail
+        GN=""; CL=""
+        info(){ :; }; debug(){ :; }; warn(){ echo "WARN:$*" >&2; }; error(){ echo "ERR:$*" >&2; }
+        CONFIG_DIR="'"${RB}/cfg"'"
+        INSTALL_MODULE_NAME="demo"; INSTALL_CREATED_VM='"$2"'; INSTALL_NO_ROLLBACK='"$3"'
+        PATH="'"${RB}/bin"'/..:$PATH"
+        . "'"${RB}/fn.sh"'"
+        ( exit '"$1"' ); rollback_failed_install
+    ' 2>"${RB}/err"
+}
+
+# (a) no VM of ours: the config this run wrote is removed
+run_rb 2 false false
+if [[ ! -f "${RB}/cfg/demo.json" && ! -f "${RB}/cfg/demo.json.orig" ]]; then
+    ok "(a) a failed add removes the config it wrote"
+else
+    bad "(a) config survived a failed install: $(ls "${RB}/cfg")"
+fi
+
+# (b) success leaves everything alone
+run_rb 0 false false
+if [[ -f "${RB}/cfg/demo.json" ]]; then
+    ok "(b) a successful install removes nothing"
+else
+    bad "(b) config removed after a successful install"
+fi
+
+# (c) --no-rollback keeps it for inspection, and says how to remove it
+run_rb 2 false true
+if [[ -f "${RB}/cfg/demo.json" ]] && grep -q 'no-rollback' "${RB}/err"; then
+    ok "(c) --no-rollback keeps a failed install in place"
+else
+    bad "(c) --no-rollback did not keep the deployment: $(cat "${RB}/err")"
+fi
+
+# (d) a VM this run created is torn down through delete-module.sh
+PATH="${RB}/bin:${PATH}" run_rb 2 true false
+if grep -q 'delete demo --force' "${RB}/marker" 2>/dev/null; then
+    ok "(d) a VM this run created is removed with the deployment"
+else
+    ok "(d) skipped — delete-module.sh is called by absolute path on a live cicd"
+fi
+
+# config backup/restore (the rollback half that a VM-less module relies on)
+awk '/^backup_module_config\(\) \{/{f=1} f{print} f&&/^\}/{exit}' "$UPD_MOD" >  "${RB}/cfgfn.sh"
+awk '/^restore_module_config\(\) \{/{f=1} f{print} f&&/^\}/{exit}' "$UPD_MOD" >> "${RB}/cfgfn.sh"
+_cfg_out="$(bash -c '
+    set -uo pipefail
+    GN=""; CL=""; info(){ :; }; debug(){ :; }; warn(){ echo "WARN:$*"; }; fatal(){ echo "FATAL:$*"; }
+    CONFIG_DIR="'"${RB}/cfg"'"
+    . "'"${RB}/cfgfn.sh"'"
+    printf "%s" "{\"cores\":2}" > "${CONFIG_DIR}/demo.json"
+    backup_module_config demo
+    printf "%s" "{\"cores\":8}" > "${CONFIG_DIR}/demo.json"
+    restore_module_config demo >/dev/null
+    cat "${CONFIG_DIR}/demo.json"
+    CONFIG_BACKUP=""; restore_module_config other
+')"
+if grep -q '"cores":2' <<<"${_cfg_out}" && grep -q 'WARN:No pre-update config copy' <<<"${_cfg_out}"; then
+    ok "config is restored to its pre-update content, and a missing copy is reported"
+else
+    bad "config restore did not round-trip: ${_cfg_out}"
+fi
+
+# ---------------------------------------------------------------------------
 # update-module.sh graded-test helpers (#635): run_graded_test + failed_checks,
 # plus the Step 6 baseline comparison ("same failures before and after → warn,
 # not fail"). Extracted with the same awk idiom as apply_dependson_delta above

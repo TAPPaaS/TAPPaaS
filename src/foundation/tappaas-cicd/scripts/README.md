@@ -775,6 +775,7 @@ install-module.sh <module-name> [--variant <name>] [--reinstall] [--<field> <val
 | `module-name` | Name of the module to install | `openwebui` |
 | `--variant <name>` | Install a variant of the module | `--variant staging` |
 | `--reinstall` | Delete the existing deployment first (`delete-module.sh --force`), then install fresh. Use to recover from a partial/broken install (issue #301). | |
+| `--no-rollback` | Keep a failed install in place instead of removing what the run created (#584) | |
 | `--<field> <value>` | Override a JSON field (passed to `copy-update-json.sh`) | `--node tappaas2` |
 
 > **There is no `--force`** (#453, ADR-020 v0.10 D5). It used to skip the
@@ -786,7 +787,8 @@ install-module.sh <module-name> [--variant <name>] [--reinstall] [--<field> <val
 > replaced only by `--reinstall`, which tears the deployment down first.
 
 **What it does:**
-1. Checks the module is not already installed — aborts early otherwise, naming `module update` / `--reinstall` (`--reinstall` first deletes the existing deployment). Detects an existing install by its config in `~/config`; for VM-backed modules (those that `dependsOn cluster:vm`) it also confirms the VM exists on the cluster, so a leftover config whose VM is gone is treated as not-installed.
+1. Checks the module is not already installed — aborts early otherwise, naming `module update` / `--reinstall` (`--reinstall` first deletes the existing deployment).
+   From the moment the config is written, a failure removes what this run created (#584): the whole deployment when it created the VM, the config otherwise. `--no-rollback` keeps it for inspection. Detects an existing install by its config in `~/config`; for VM-backed modules (those that `dependsOn cluster:vm`) it also confirms the VM exists on the cluster, so a leftover config whose VM is gone is treated as not-installed.
 2. Copies and validates the module JSON config (variant-aware via `copy-update-json.sh`)
 3. Checks that every `dependsOn` service is provided by an installed module
 4. Validates that the module has service scripts for each service it provides

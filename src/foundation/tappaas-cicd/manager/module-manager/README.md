@@ -192,6 +192,10 @@ install-module.sh <module-name> [--environment <name>] [--allow-fork]
 - `--reinstall` — delete then install: the only way to replace a deployed config
   (recovers a failed partial install too). There is no `--force`: an already
   deployed module is taken forward with `module update <m>` (#453).
+- `--no-rollback` — keep a failed install in place for inspection. By default an
+  `add` that fails removes what that run created — the deployment if it created
+  the VM, otherwise the config it wrote — so nothing half-installed is left
+  behind for the next update to trip over (#584).
 - `--<field> <value>` — override any module JSON field.
 
 ```bash

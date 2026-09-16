@@ -74,6 +74,8 @@ Options:
                              --environment wins if both are given.
     --allow-fork             Permit a foundation-tier module from a non-official
                              source (tier/source lint override).
+    --no-rollback            Keep a failed install in place for inspection
+                             (default: remove what the run created — #584)
     --reinstall              Delete the existing deployment first, then install
                              fresh (delete-module.sh --force, then install)
     --<field> <value>        Override a JSON field value
@@ -219,6 +221,42 @@ module_config_exists() {
     [[ -f "${CONFIG_DIR}/${1}.json" ]]
 }
 
+# ── Rollback of a failed install (#584) ──────────────────────────────
+#
+# An `add` that aborts after Step 2 used to leave the deployed config behind,
+# and with it a half-installed module that `module update` would then try to
+# converge. What this run created, this run removes: the whole deployment when
+# the VM is ours too, otherwise the config we wrote. Anything that existed
+# before is never touched, and --no-rollback keeps it all for inspection.
+INSTALL_MODULE_NAME=""     # effective name, set once the config is written
+INSTALL_CREATED_VM=false   # this run created the VM
+INSTALL_NO_ROLLBACK=false
+
+rollback_failed_install() {
+    local rc=$?
+    [[ "${rc}" -ne 0 ]] || return 0
+    [[ -n "${INSTALL_MODULE_NAME}" ]] || return 0
+    if [[ "${INSTALL_NO_ROLLBACK}" == true ]]; then
+        warn "Install failed — leaving '${INSTALL_MODULE_NAME}' in place (--no-rollback)."
+        warn "  Remove it with: module-manager module delete ${INSTALL_MODULE_NAME} --remove"
+        return 0
+    fi
+    echo "" >&2
+    warn "Install failed — removing what this run created (#584)."
+    if [[ "${INSTALL_CREATED_VM}" == true ]]; then
+        warn "  Deleting the VM and config of '${INSTALL_MODULE_NAME}'..."
+        if /home/tappaas/bin/delete-module.sh "${INSTALL_MODULE_NAME}" --force >/dev/null 2>&1; then
+            info "  ${GN}✓${CL} '${INSTALL_MODULE_NAME}' removed — the site is as it was"
+        else
+            error "  Could not remove '${INSTALL_MODULE_NAME}' — do it by hand: module-manager module delete ${INSTALL_MODULE_NAME} --remove"
+        fi
+    else
+        rm -f "${CONFIG_DIR}/${INSTALL_MODULE_NAME}.json" "${CONFIG_DIR}/${INSTALL_MODULE_NAME}.json.orig"
+        info "  ${GN}✓${CL} Deployed config of '${INSTALL_MODULE_NAME}' removed — nothing half-installed is left"
+    fi
+    warn "  Fix the cause and run the install again."
+}
+
 # ── Main ─────────────────────────────────────────────────────────────
 
 main() {
@@ -257,6 +295,10 @@ main() {
         case "$1" in
             --force)
                 die "install-module.sh has no --force (#453). An already-deployed module takes the release forward with 'module-manager module update ${1:-<module>}' (local modifications survive), or is replaced with --reinstall."
+                ;;
+            --no-rollback)
+                INSTALL_NO_ROLLBACK=true
+                shift
                 ;;
             --reinstall)
                 reinstall=true
@@ -465,6 +507,12 @@ main() {
 
     check_json "${CONFIG_DIR}/${effective_module}.json" || die "JSON validation failed for ${effective_module}"
 
+    # From here on this run owns the deployment: a failure removes what it made
+    # (#584). Step 1 refused to touch an existing one, so nothing pre-existing
+    # can be caught by this.
+    INSTALL_MODULE_NAME="${effective_module}"
+    trap rollback_failed_install EXIT
+
     local module_json="${CONFIG_DIR}/${effective_module}.json"
 
     # Tag the deployed config as a module (ADR-007 #3). module-manager's
@@ -643,6 +691,15 @@ main() {
     # ── Step 5: Call dependency install-service.sh scripts ───────────
     info "${BOLD}Step 5: Call dependency service installers${CL}"
 
+    # cluster:vm creates the guest in this step. Remember whether it was there
+    # first, so a rollback removes a VM this run created and leaves one it
+    # merely found (#584).
+    local _vm_before=false _vmid
+    _vmid="$(jq -r '(.config // .).vmid // empty' "${CONFIG_DIR}/${effective_module}.json" 2>/dev/null || true)"
+    if [[ -n "${_vmid}" ]] && vm_exists_on_cluster "${_vmid}" "$(get_node_fqdn 0)" >/dev/null 2>&1; then
+        _vm_before=true
+    fi
+
     if [[ -z "${depends_on}" ]]; then
         debug "  No dependency services to call"
     else
@@ -671,6 +728,12 @@ main() {
             "${svc_script}" "${effective_module}" || die "Service installer failed: ${dep}"
             info "  ${GN}✓${CL} ${dep} install-service completed"
         done
+    fi
+
+    if [[ "${_vm_before}" == false && -n "${_vmid}" ]] \
+       && vm_exists_on_cluster "${_vmid}" "$(get_node_fqdn 0)" >/dev/null 2>&1; then
+        INSTALL_CREATED_VM=true
+        debug "  VM ${_vmid} was created by this run — a rollback would remove it"
     fi
 
     # ── Step 5b: Wire this module's OPTIONAL integrations (#501) ──────
