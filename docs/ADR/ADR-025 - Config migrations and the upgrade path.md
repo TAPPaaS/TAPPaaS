@@ -2,14 +2,14 @@
 
 | | |
 |---|---|
-| **Status** | **Accepted** (2026-09-16) — v0.2; the runner is #652 (G0.1). |
-| **Version** | 0.2 |
+| **Status** | **Accepted** (2026-09-16) — v0.3; the runner is #652 (G0.1). |
+| **Version** | 0.3 |
 | **Date** | 2026-09-16 |
 | **Author** | Lars Rossen |
 | **Parent** | [ADR-007d Site](<ADR-007d - Site.md>) (`site.json` and the rest of `config/` as the site's own state) |
 | **Refines** | [ADR-017 Update scheduling and mothership self-update](<ADR-017 - Update scheduling and mothership self-update.md>) (D3's `ExecStartPre` chain is where the runner hooks in; D4's `--dry-run` is where pending migrations show; this ADR settles two of ADR-017's *Open* items), [ADR-003 Dependency management](<ADR-003 - Dependency management in TAPPaaS.md>) (why `pre-update.sh` cannot be "before any module") |
 | **Related** | **#652** (versioned config-migration step — the implementation issue); **#545** / [ADR-012](ADR-012-backup-enhancement.md) §2.7 D20 (`config/` is backed up as `backup:filesystem`, which is what makes `config/.migrations/` recoverable); **#651** (update-failure notice) and [ADR-007e](<ADR-007e - Health.md>) v1.3 (the notification target); **#584** (rollback in install/modify), **#453** (`--force` vs `--reinstall`), **#648** (`--unset`), **#572** (repo-sync auto-stash) — the rest of G0.1; [ADR-020](<ADR-020 - Declared-Field Change Model (validate, drift, modify).md>) (a *declared field* changes through `modify`; a *schema* changes through a migration); [release-2.1-implementation-plan](../design/release-2.1-implementation-plan.md) §3 G0.1, §10.1, §10.2, §10.3, §10.4. **Owner:** `tappaas-cicd` (the runner, the migration directory, the release tooling) |
-| **Changelog** | v0.1 — initial draft. Takes the framework decided 2026-09-14 (plan §3 G0.1) and the rollout rules (§10.2) verbatim and binds them; checks each clause against `main` at `dd80d495`; settles the runner's slot in favour of `tappaas-self-prepare.sh` over `pre-update.sh` (D2), answers ADR-017 *Bootstrap*'s "oldest supported upgrade source" (D10), and names ADR-017 D7's `updateSchedule` rewrite as migration `0003` (D12). v0.2 (2026-09-16, operator decisions): **D13** — a whole-`config/` snapshot before the first migration of a run, the last two backup sets kept and older ones pruned, a deliberate `--rerun` (migrations are idempotent by D3), state outside `config/` out of scope though one migration may back up more, and a missing backup never blocks a migration. Status → Accepted. |
+| **Changelog** | v0.1 — initial draft. Takes the framework decided 2026-09-14 (plan §3 G0.1) and the rollout rules (§10.2) verbatim and binds them; checks each clause against `main` at `dd80d495`; settles the runner's slot in favour of `tappaas-self-prepare.sh` over `pre-update.sh` (D2), answers ADR-017 *Bootstrap*'s "oldest supported upgrade source" (D10), and names ADR-017 D7's `updateSchedule` rewrite as migration `0003` (D12). v0.2 (2026-09-16, operator decisions): **D13** — a whole-`config/` snapshot before the first migration of a run, the last two backup sets kept and older ones pruned, a deliberate `--rerun` (migrations are idempotent by D3), state outside `config/` out of scope though one migration may back up more, and a missing backup never blocks a migration. Status → Accepted. v0.3 (2026-09-16): a worked example of a nightly run that carries a migration — every step with how its failure is detected and what the site falls back to — the window between the migrations and the rebuild, and what happens when several migrations are pending at once. |
 
 ## Context
 
@@ -351,6 +351,61 @@ Decided 2026-09-16, closing v0.1's open questions.
   reads well and fails badly: a site without a recent backup is usually a deliberate choice —
   a test machine — and refusing to update it would punish exactly the site that most wants the
   new code. The runner reports what it found and proceeds.
+
+## Worked example — a nightly run that carries a migration
+
+One night, on one site, with release R pending and one migration in it. Every step names how
+its failure is noticed and what the site falls back to. "Stops the run" means the unit's
+`ExecStartPre` chain aborts: no rebuild, no sweep, no module touched, and the #651 notice goes
+out naming the stage.
+
+| # | Step | Where | Failure is detected by | Fallback |
+|---|---|---|---|---|
+| 1 | The timer fires | `update-tappaas.timer`, rendered from `site.json` (ADR-017 D2) | Nothing fires: `systemctl list-timers` shows no next run | None needed — no change was made. `site-manager update` runs it by hand |
+| 2 | Ownership repair | `ExecStartPre` 1, root, `+-` | Non-fatal by design: it logs and the run continues | None — it heals drift, it is not a precondition |
+| 3 | **Pull the repositories** | `tappaas-self-prepare.sh` → `refresh-control-plane.sh` | rc 12 (a repository did not sync, and holds none), rc 1 (checkout unusable) | **Stops the run.** Nothing was pulled, so the site stays on the code and config it had. A held repository (#653) is skipped, never a failure |
+| 4 | **Detect pending migrations** | the runner, in the prepare step | `migrations/NNNN-*.sh` on disk versus `config/.migrations/applied`. An unreadable or unparseable ledger is **fatal** — the runner refuses to guess what has run | **Stops the run.** `config/` is untouched. The operator repairs the ledger from `config/.migrations/backup/` or from the `#545` backup |
+| 5 | **Save `config/`** | the runner, before the first migration | The whole-`config/` snapshot (D13) or a per-migration backup cannot be written | **Stops the run** before any migration executes. `config/` is untouched |
+| 6 | **Run the migrations** | the runner, numeric order | A migration exits non-zero, which its own `--check`/apply contract requires on any doubt (D3) | **Stops the run** at that migration. Earlier migrations in this run stay applied and are in the ledger; later ones are not attempted. `config/` is restorable from `config/.migrations/backup/NNNN/`, or wholesale from this run's snapshot |
+| 7 | Rebuild the mothership | `ExecStartPre` 3, root | `nixos-rebuild switch` exits non-zero | **Stops the run.** The previous generation stays active. `config/` is already migrated — see *the window* below |
+| 8 | **Pre-update, per module** | the sweep: `module update` → `pre-update.sh`, 3-way merge, pre-update test | The module's own test grades itself: exit 2 aborts that module, exit 1 proceeds (#635) | Per module, not per site: that module is rolled back from its pre-update snapshot and its config copy (#584); the sweep continues with the rest |
+| 9 | **The module updates** | the sweep, Phases 1–3 | Per-module exit codes; the between-module shared-dependency probe (#517) halts the sweep if DNS or the firewall goes down mid-run | Each failed module is rolled back on its own. `last-update-result.json` records `ok: false`, the failed modules, and any shared-dependency boundary |
+| 10 | **Cleanup** | the runner and the sweep | Pruning keeps the last two migration backup sets (D13) and the configured snapshot retention; a pruning failure is a warning | None needed: pruning never blocks a run that otherwise succeeded |
+
+**The window between step 6 and step 7.** Migrations run *before* the rebuild, because a
+migration exists to make `config/` match the release that is about to be installed — D12's
+`updateSchedule` object has to be in place before the new generation's renderer reads it. So
+between step 6 and a successful step 7 the site briefly has migrated `config/` and the previous
+generation's binaries. Nothing runs in that window: an `ExecStartPre` failure means `ExecStart`
+never starts, so no module update and no sweep sees the pair. The rule that keeps it safe is
+D3's **config-only** contract plus this: **a migration leaves `config/` readable by the release
+it migrates from**, or it says so in its header and the release notes name it. A failed rebuild
+is then fixed forward — the next run finds the migrations already applied (step 4 reads the
+ledger) and retries the rebuild alone.
+
+### Several pending migrations at once
+
+A site that skipped a release, was held (#653), or was simply off for a month arrives with
+more than one pending migration. They run **one at a time, in numeric order, in a single
+run**:
+
+- Each migration gets **its own backup directory** (`config/.migrations/backup/NNNN/`) before
+  its first write, under one whole-`config/` snapshot for the run (D13).
+- The ledger gains **one line per migration as it completes**, so a failure leaves an exact
+  record of how far the site got: `0007` and `0008` applied, `0009` failed, `0010` never
+  attempted.
+- A failure **stops the chain**. The later migrations are not attempted, because they were
+  written against the state the failed one was supposed to produce.
+- The next run **resumes at the first unapplied migration**. Re-running a migration that
+  failed half-way is safe by D3's idempotence, which is also why `--rerun` exists for the
+  deliberate case.
+- Migrations from **different waves never arrive in the same sweep** (D9): a release
+  candidate carries one wave's migrations, so the chain a site executes is always one
+  release's worth, however many releases it skipped — it walks them in order, release by
+  release, pull by pull.
+
+`site-manager update --dry-run` lists what is pending before any of this runs (D6), and each
+migration's own `--check` says what it would change without writing (D3).
 
 ## Alternatives considered
 
