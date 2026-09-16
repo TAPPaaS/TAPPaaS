@@ -2,14 +2,14 @@
 
 | | |
 |---|---|
-| **Status** | **Accepted** (2026-09-16) — v0.4; the runner is #652 (G0.1), implemented. |
-| **Version** | 0.4 |
+| **Status** | **Accepted** (2026-09-16) — v0.5; the runner is #652 (G0.1), implemented. |
+| **Version** | 0.5 |
 | **Date** | 2026-09-16 |
 | **Author** | Lars Rossen |
 | **Parent** | [ADR-007d Site](<ADR-007d - Site.md>) (`site.json` and the rest of `config/` as the site's own state) |
 | **Refines** | [ADR-017 Update scheduling and mothership self-update](<ADR-017 - Update scheduling and mothership self-update.md>) (D3's `ExecStartPre` chain is where the runner hooks in; D4's `--dry-run` is where pending migrations show; this ADR settles two of ADR-017's *Open* items), [ADR-003 Dependency management](<ADR-003 - Dependency management in TAPPaaS.md>) (why `pre-update.sh` cannot be "before any module") |
 | **Related** | **#652** (versioned config-migration step — the implementation issue); **#545** / [ADR-012](ADR-012-backup-enhancement.md) §2.7 D20 (`config/` is backed up as `backup:filesystem`, which is what makes `config/.migrations/` recoverable); **#651** (update-failure notice) and [ADR-007e](<ADR-007e - Health.md>) v1.3 (the notification target); **#584** (rollback in install/modify), **#453** (`--force` vs `--reinstall`), **#648** (`--unset`), **#572** (repo-sync auto-stash) — the rest of G0.1; [ADR-020](<ADR-020 - Declared-Field Change Model (validate, drift, modify).md>) (a *declared field* changes through `modify`; a *schema* changes through a migration); [release-2.1-implementation-plan](../design/release-2.1-implementation-plan.md) §3 G0.1, §10.1, §10.2, §10.3, §10.4. **Owner:** `tappaas-cicd` (the runner, the migration directory, the release tooling) |
-| **Changelog** | v0.1 — initial draft. Takes the framework decided 2026-09-14 (plan §3 G0.1) and the rollout rules (§10.2) verbatim and binds them; checks each clause against `main` at `dd80d495`; settles the runner's slot in favour of `tappaas-self-prepare.sh` over `pre-update.sh` (D2), answers ADR-017 *Bootstrap*'s "oldest supported upgrade source" (D10), and names ADR-017 D7's `updateSchedule` rewrite as migration `0003` (D12). v0.2 (2026-09-16, operator decisions): **D13** — a whole-`config/` snapshot before the first migration of a run, the last two backup sets kept and older ones pruned, a deliberate `--rerun` (migrations are idempotent by D3), state outside `config/` out of scope though one migration may back up more, and a missing backup never blocks a migration. Status → Accepted. v0.3 (2026-09-16): a worked example of a nightly run that carries a migration — every step with how its failure is detected and what the site falls back to — the window between the migrations and the rebuild, and what happens when several migrations are pending at once. v0.4 (2026-09-16, #652 implemented): the stage marker is written by `tappaas-self-prepare.sh`, alongside the `prepare` and `rebuild` it already writes, so the runner run by hand never rewrites a sweep's stage; the delivered acceptance clauses are ticked. |
+| **Changelog** | v0.1 — initial draft. Takes the framework decided 2026-09-14 (plan §3 G0.1) and the rollout rules (§10.2) verbatim and binds them; checks each clause against `main` at `dd80d495`; settles the runner's slot in favour of `tappaas-self-prepare.sh` over `pre-update.sh` (D2), answers ADR-017 *Bootstrap*'s "oldest supported upgrade source" (D10), and names ADR-017 D7's `updateSchedule` rewrite as migration `0003` (D12). v0.2 (2026-09-16, operator decisions): **D13** — a whole-`config/` snapshot before the first migration of a run, the last two backup sets kept and older ones pruned, a deliberate `--rerun` (migrations are idempotent by D3), state outside `config/` out of scope though one migration may back up more, and a missing backup never blocks a migration. Status → Accepted. v0.3 (2026-09-16): a worked example of a nightly run that carries a migration — every step with how its failure is detected and what the site falls back to — the window between the migrations and the rebuild, and what happens when several migrations are pending at once. v0.4 (2026-09-16, #652 implemented): the stage marker is written by `tappaas-self-prepare.sh`, alongside the `prepare` and `rebuild` it already writes, so the runner run by hand never rewrites a sweep's stage; the delivered acceptance clauses are ticked. v0.5 (2026-09-16, the worked example's failure modes injected as tests): a ledger that cannot be read or parsed stops the run (blank lines and comments tolerated; an entry with no file on disk does not, so a rolled-back site is not stranded); a ledger line is validated before it is written; a partial config snapshot is deleted rather than left looking like a backup. |
 
 ## Context
 
@@ -153,6 +153,18 @@ makes the difference visible.)
 
 The ledger is written **after** the migration succeeds. A migration interrupted mid-apply
 leaves no ledger entry and is re-run next sweep, which D3's idempotence makes safe.
+
+**A ledger the runner cannot read stops the run** (implementing #652, 2026-09-16). Concluding
+"nothing has been applied" from a permissions error or a truncated file would re-run every
+migration a site ever received; idempotence is a contract each migration keeps, not a licence
+to replay the whole history on the strength of an I/O error. Blank lines and `#` comments are
+tolerated — an operator repairing a ledger by hand must not be punished for annotating it —
+and each written line is validated **before** it is appended, because the failure that costs a
+site its next update is a line this reader will refuse tomorrow.
+
+**An entry naming a migration that is not on disk is NOT an error.** A site rolled back to an
+earlier release has exactly that, and refusing would strand the site it is meant to protect.
+It is reported and the run continues.
 
 ### D5 — a failed migration stops the run before anything is updated
 
@@ -336,6 +348,10 @@ Decided 2026-09-16, closing v0.1's open questions.
   per-migration backups of D3. `config/` is small — text files, kilobytes — so the cheapest
   safety net is the one that catches what a migration did not know it touched. It lands in
   `config/.migrations/backup/<run>/config/`.
+- **A snapshot with holes in it is removed, and the run stops** (implementing #652). If any
+  file under `config/` cannot be copied, the partial directory is deleted rather than left
+  behind: step 6's fallback is written on the assumption that directory is the whole of
+  `config/`, and a partial copy still looks like a backup to whoever reaches for it.
 - **Retention: prune, keep the last two.** The runner deletes older backup sets once a run
   finishes, keeping the two most recent. Two is enough to undo the release you just took and
   the one before it; everything older is the backup module's job (#545), not the runner's.

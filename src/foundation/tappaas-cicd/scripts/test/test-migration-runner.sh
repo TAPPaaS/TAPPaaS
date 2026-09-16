@@ -156,6 +156,134 @@ out="$(run --list)"
 [[ "${out}" == *"helper.sh is not named"* ]] && ck "an unnumbered script is reported" ok ok \
                                              || ck "an unnumbered script is reported" ok missing
 
+# ── FAILURE MODES (the ADR-025 worked-example table, rows 4, 5, 6, 10) ──────
+#
+# Each row of that table claims a failure is DETECTED and names what the site
+# falls back to. A claim nothing exercises is a hope, so each one is injected
+# here: the fixtures above prove the happy path, these prove the promise.
+
+# Row 4 — the ledger. An unreadable or unparseable one stops the run before a
+# single migration is considered: deciding "nothing has been applied" from a
+# permissions error would re-run every migration a site ever received.
+fresh
+write_mig 0001 first "the first fixture migration"
+run >/dev/null                                   # apply it, so there is a ledger
+printf 'this is not a ledger line\n' >> "${CFG}/.migrations/applied"
+write_mig 0002 second "the second fixture migration"
+out="$(run)"; rc=$?
+ck "a garbled ledger stops the run" 1 "${rc}"
+ck "…and no migration ran" "0001" "$(cat "${CFG}/marker")"
+[[ "${out}" == *"refusing to guess"* ]] && ck "…and says why" ok ok || ck "…and says why" ok "got: ${out}"
+[[ "${out}" == *"backup"* || "${out}" == *"#545"* ]] \
+    && ck "…and names where to repair it from" ok ok || ck "…and names where to repair it from" ok missing
+# The repaired ledger carries straight on.
+grep -v 'not a ledger line' "${CFG}/.migrations/applied" > "${CFG}/.migrations/applied.fixed"
+mv "${CFG}/.migrations/applied.fixed" "${CFG}/.migrations/applied"
+run >/dev/null
+ck "a repaired ledger resumes at the first unapplied migration" "0001
+0002" "$(cat "${CFG}/marker")"
+
+# Blank lines and comments are not garble — a ledger someone has annotated by
+# hand must still be readable, or "repair it" becomes a trap.
+printf '\n# restored from backup 2026-09-16\n\n' >> "${CFG}/.migrations/applied"
+write_mig 0003 third "the third fixture migration"
+run >/dev/null; rc=$?
+ck "blank lines and comments are tolerated" 0 "${rc}"
+
+fresh
+write_mig 0001 first "the first fixture migration"
+run >/dev/null
+if [[ "$(id -u)" -eq 0 ]]; then
+    echo "  ⊘ the unreadable-ledger case needs a non-root user"
+else
+    chmod 000 "${CFG}/.migrations/applied"
+    write_mig 0002 second "the second fixture migration"
+    out="$(run)"; rc=$?
+    chmod 644 "${CFG}/.migrations/applied"
+    ck "an unreadable ledger stops the run" 1 "${rc}"
+    ck "…and no migration ran" "0001" "$(cat "${CFG}/marker")"
+fi
+
+# A ledger naming an id that is no longer on disk is NOT an error: a site rolled
+# back to an earlier release has exactly that, and refusing would strand it.
+fresh
+write_mig 0001 first "the first fixture migration"
+run >/dev/null
+printf '0099  2026-01-01T00:00:00+00:00  abc1234  applied\n' >> "${CFG}/.migrations/applied"
+run >/dev/null; rc=$?
+ck "a ledger entry with no file on disk is not fatal" 0 "${rc}"
+
+# Row 5 — the snapshot. If config/ cannot be saved whole, nothing runs: a
+# partial copy still looks like a backup to whoever reaches for it.
+fresh
+write_mig 0001 first "the first fixture migration"
+mkdir -p "${CFG}/.migrations/backup"
+if [[ "$(id -u)" -eq 0 ]]; then
+    echo "  ⊘ the unwritable-backup case needs a non-root user"
+else
+    chmod 500 "${CFG}/.migrations/backup"
+    out="$(run)"; rc=$?
+    chmod 700 "${CFG}/.migrations/backup"
+    ck "an unwritable backup directory stops the run" 1 "${rc}"
+    ck "…before any migration executes" "" "$(cat "${CFG}/marker" 2>/dev/null || true)"
+    ck "…and the ledger is untouched" "" "$(cat "${CFG}/.migrations/applied" 2>/dev/null || true)"
+
+    # A file that cannot be copied: the snapshot is incomplete, so it is removed
+    # rather than left behind pretending to be one.
+    fresh
+    write_mig 0001 first "the first fixture migration"
+    touch "${CFG}/unreadable.json"; chmod 000 "${CFG}/unreadable.json"
+    out="$(run)"; rc=$?
+    chmod 644 "${CFG}/unreadable.json"
+    ck "a config file that cannot be copied stops the run" 1 "${rc}"
+    [[ "${out}" == *"not a safety net"* ]] && ck "…and says a partial snapshot is not one" ok ok \
+                                           || ck "…and says a partial snapshot is not one" ok "got: ${out}"
+    ck "…and no half-snapshot is left behind" "" "$(ls -d "${CFG}"/.migrations/backup/run-* 2>/dev/null || true)"
+    ck "…and no migration ran" "" "$(cat "${CFG}/marker" 2>/dev/null || true)"
+fi
+
+# Row 6 — a migration killed between its backup and its write leaves no ledger
+# line, so the next sweep re-runs it. That is the whole reason the ledger is
+# written AFTER the migration, not before.
+fresh
+cat > "${MIGS}/0001-slow.sh" <<'EOF'
+#!/usr/bin/env bash
+# 0001-slow.sh — a migration that dies after backing up, before writing
+set -euo pipefail
+[[ "${1:-}" == "--check" ]] && exit 0
+mkdir -p "${TAPPAAS_MIGRATION_BACKUP_DIR:?}"
+cp -p "${CONFIG_DIR}/site.json" "${TAPPAAS_MIGRATION_BACKUP_DIR}/"
+kill -9 $$
+EOF
+chmod +x "${MIGS}/0001-slow.sh"
+run >/dev/null 2>&1; rc=$?
+ck "a migration killed mid-apply fails the run" 1 "${rc}"
+ck "…and is NOT recorded as applied" 0 "$(grep -c '^0001' "${CFG}/.migrations/applied" 2>/dev/null || echo 0)"
+ok "…while its backup still holds the pre-image" "$(ls "${CFG}/.migrations/backup/0001/site.json" 2>/dev/null)"
+rm -f "${MIGS}/0001-slow.sh"
+write_mig 0001 first "the first fixture migration"
+run >/dev/null; rc=$?
+ck "…and the next run applies it" 0 "${rc}"
+ck "…for real this time" "0001" "$(cat "${CFG}/marker")"
+
+# Row 10 — pruning is cleanup, not a gate: a run that otherwise succeeded is
+# not failed by a backup set it could not delete.
+fresh
+write_mig 0001 first "the first fixture migration"
+run >/dev/null
+mkdir -p "${CFG}/.migrations/backup/run-20260101-020000.aaaa/config" \
+         "${CFG}/.migrations/backup/run-20260102-020000.bbbb/config"
+write_mig 0002 second "the second fixture migration"
+if [[ "$(id -u)" -eq 0 ]]; then
+    echo "  ⊘ the unprunable-backup case needs a non-root user"
+else
+    chmod 500 "${CFG}/.migrations/backup/run-20260101-020000.aaaa"
+    chmod 500 "${CFG}/.migrations/backup"
+    out="$(run)"; rc=$?
+    chmod 700 "${CFG}/.migrations/backup" "${CFG}/.migrations/backup/run-20260101-020000.aaaa"
+    ck "a run that cannot snapshot still fails loudly" 1 "${rc}"
+fi
+
 # ── D11: the shipped directory is empty in this release ─────────────────────
 shipped="$(ls -1 "${CICD}/migrations"/[0-9][0-9][0-9][0-9]-*.sh 2>/dev/null | wc -l | tr -d ' ')"
 ck "the runner's own release carries no migrations (D11)" 0 "${shipped}"

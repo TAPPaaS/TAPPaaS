@@ -91,14 +91,62 @@ summary_of() {
     case "${s}" in *' — '*) s="${s#*' — '}" ;; esac
     printf '%s' "${s}"
 }
-applied_ids() { [[ -f "${LEDGER}" ]] && awk '{print $1}' "${LEDGER}" | sort -u || true; }
-is_applied()  { applied_ids | grep -qx "$1"; }
+# ── the ledger ───────────────────────────────────────────────────────
+# Read ONCE, at startup, and never guessed at. A ledger that cannot be read or
+# that does not parse stops the run: concluding "nothing has been applied" from
+# an unreadable file would re-run every migration a site ever received, and
+# idempotence is a contract each migration keeps, not a licence to re-run the
+# whole history on the strength of a permissions error.
+#
+# Loaded at top level rather than inside a command substitution, because an
+# `exit` in a subshell would only end the subshell.
+LEDGER_IDS=""
+load_ledger() {
+    [[ -e "${LEDGER}" ]] || return 0          # fresh site: no ledger yet, not an error
+    [[ -r "${LEDGER}" && -f "${LEDGER}" ]] \
+        || { fail "FATAL: ${LEDGER} exists but cannot be read — refusing to guess which migrations have run"; exit 1; }
+    local line n=0
+    while IFS= read -r line || [[ -n "${line}" ]]; do
+        n=$((n + 1))
+        [[ -z "${line//[[:space:]]/}" ]] && continue
+        [[ "${line}" == \#* ]] && continue
+        if [[ ! "${line}" =~ ^[0-9]{4}[[:space:]]+[^[:space:]]+[[:space:]]+[^[:space:]]+[[:space:]]+[^[:space:]]+ ]]; then
+            fail "FATAL: ${LEDGER} line ${n} is not 'NNNN  <date>  <commit>  <reason>': ${line}"
+            fail "  refusing to guess which migrations have run — repair it from ${BACKUP_DIR}/ or the site backup (#545)"
+            exit 1
+        fi
+        LEDGER_IDS+="${line:0:4}"$'\n'
+    done < "${LEDGER}"
+}
+is_applied() { grep -qx "$1" <<< "${LEDGER_IDS}"; }
 
 site_commit() { git -C "${MIG_DIR}" rev-parse --short HEAD 2>/dev/null || echo unknown; }
+# `date -Is` is GNU; a host without it printed nothing and the ledger line came
+# out with an empty field, which the reader above then refuses to start from.
+# Every field is therefore filled or defaulted before it is written — a ledger
+# this script cannot parse is a site that cannot update.
+now_iso() { date -Is 2>/dev/null || date -u +%Y-%m-%dT%H:%M:%SZ; }
 record() {
-    mkdir -p "${STATE_DIR}"
-    printf '%s  %s  %s  %s\n' "$1" "$(date -Is)" "$(site_commit)" "$2" >> "${LEDGER}"
+    local when commit line
+    mkdir -p "${STATE_DIR}" \
+        || { fail "FATAL: cannot create ${STATE_DIR} to record migration $1"; exit 1; }
+    when="$(now_iso)"; [[ -n "${when}" ]] || when="unknown-time"
+    commit="$(site_commit)"; [[ -n "${commit}" ]] || commit="unknown"
+    line="$(printf '%s  %s  %s  %s' "$1" "${when}" "${commit}" "$2")"
+    # The line this run will not be able to read next time is caught now, while
+    # there is still someone to tell.
+    [[ "${line}" =~ ^[0-9]{4}[[:space:]]+[^[:space:]]+[[:space:]]+[^[:space:]]+[[:space:]]+[^[:space:]]+ ]] \
+        || { fail "FATAL: refusing to write an unparseable ledger line: ${line}"; exit 1; }
+    # A migration that ran and was not recorded would run again next sweep. That
+    # is safe by D3, but it is not something to discover later: stop here.
+    printf '%s\n' "${line}" >> "${LEDGER}" \
+        || { fail "FATAL: migration $1 succeeded but could not be recorded in ${LEDGER}"; exit 1; }
+    LEDGER_IDS+="$1"$'\n'
 }
+
+# Every mode below asks "has this run?", so the ledger is read before any of
+# them — and a bad one stops us here, before a single migration is considered.
+load_ledger
 
 pending() {
     local f id
@@ -122,12 +170,21 @@ snapshot_config() {
     mkdir -p "${dest}" || { fail "cannot create ${dest}"; return 1; }
     # The state dir holds the backups themselves — copying it into one would
     # nest every previous run inside this one.
-    local entry
+    local entry missed=0
     for entry in "${CONFIG_DIR}"/* "${CONFIG_DIR}"/.[!.]*; do
         [[ -e "${entry}" ]] || continue
         [[ "${entry}" == "${STATE_DIR}" ]] && continue
-        cp -a "${entry}" "${dest}/" 2>/dev/null || true
+        cp -a "${entry}" "${dest}/" 2>/dev/null || { missed=$((missed + 1)); fail "  cannot snapshot ${entry}"; }
     done
+    # A snapshot with holes in it is worse than none: step 6's fallback is
+    # written on the assumption this directory is the whole of config/, and a
+    # partial copy still LOOKS like a backup to whoever reaches for it. Remove
+    # it and stop, rather than leave that lying around.
+    if (( missed > 0 )); then
+        fail "could not snapshot ${missed} item(s) — a partial snapshot is not a safety net"
+        rm -rf -- "${run}"
+        return 1
+    fi
     log "config snapshotted to ${dest}"
 }
 prune_runs() {
