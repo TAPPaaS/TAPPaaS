@@ -42,8 +42,10 @@ network-manager validate                > "$BK"/before-validate.txt 2>&1
 ```
 
 > **Pause unattended updates while you work.** Set `updateSchedule` in `~/config/site.json` to
-> `["none", …]`; the hourly timer keeps ticking and logs "Updates disabled", which is a useful heartbeat.
-> Restore the frequency when you are done.
+> `["none", …]` — `site-manager site modify --updateFrequency none` re-renders the timer at
+> once, and `none` means no timer at all (ADR-017 D2), so nothing fires until you restore the
+> frequency. To keep the schedule but run on an unpushed checkout, hold the repository instead:
+> `site-manager repository hold TAPPaaS --reason "migration" --until 8h` (#653).
 
 ---
 

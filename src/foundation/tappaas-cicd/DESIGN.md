@@ -18,8 +18,12 @@ For the full rationale see
 src/foundation/tappaas-cicd/
 ├── install.sh / update.sh / test.sh   # top-level entry scripts (drive the dispatchers)
 ├── bootstrap.sh                       # first-boot: clone repo + nixos-rebuild the VM
-├── pre-update.sh                      # pre-update pass run by update-tappaas
+├── pre-update.sh                      # pre-update pass of the tappaas-cicd module
 ├── scripts/refresh-control-plane.sh   # self-refresh: pull + relink ~/bin + build components
+├── scripts/tappaas-self-prepare.sh    # ExecStartPre 2: the refresh, before the sweep (ADR-017 D3)
+├── scripts/tappaas-self-rebuild.sh    # ExecStartPre 3 (root): nixos-rebuild of the mothership
+├── scripts/update-tappaas-schedule.sh # renders update-tappaas.timer from site.json (D2)
+├── scripts/notify-update-failure.sh   # mails the site owner when a run fails (#651)
 ├── tappaas-cicd.nix / flake.nix       # the cicd VM's NixOS configuration
 ├── manager/                           # domain-object lifecycle (CONFIG state)
 │   ├── install.sh / update.sh / test.sh   # dispatcher: loop child components
@@ -179,8 +183,9 @@ guarded region rather than among the runtime ones.
 repositories, relink `scripts/*.sh` + `lib/*.sh` into `~/bin`, and rebuild every compiled
 component through the `manager/` + `controller/` dispatchers.
 
-It runs as **`update-tappaas` Phase 0**, ahead of every module. That placement is the
-point. The work used to live inline in `pre-update.sh`, which `update-module.sh` runs at
+It runs as the unit's **second `ExecStartPre` step** (`tappaas-self-prepare.sh`), ahead of
+every module and of the mothership's own `nixos-rebuild` (ADR-017 D3); `pre-update.sh` still
+calls it so `module modify tappaas-cicd` stands alone. That placement is the point. The work used to live inline in `pre-update.sh`, which `update-module.sh` runs at
 **Step 3** — *after* the Step 2 pre-update test. So the `git pull` sat behind a test of the
 code it would replace: a commit that broke a fast-mode check wedged the mothership, because
 the pull that would carry the fix could no longer run (#595).

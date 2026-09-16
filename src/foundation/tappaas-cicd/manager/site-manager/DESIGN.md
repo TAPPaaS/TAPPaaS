@@ -38,14 +38,17 @@ Entities are the first arg (`<entity> <verb>`, as in `network-manager`):
 |---|---|---|
 | `site` (singleton) | `show`, `modify` | one `site.json`; no add/delete |
 | `node` | `list`, `add`, `delete` | `hardware.nodes[]` CRUD |
-| `repository` | `list`, `add`, `delete`, `reconcile` | add/delete delegate to `repository.sh`; reconcile = repo-scoped converge |
+| `repository` | `list`, `add`, `delete`, `reconcile`, `hold`, `release` | add/delete delegate to `repository.sh`; reconcile = repo-scoped converge; hold/release stop and resume the scheduled pull of one repository (#653) |
 
 Top-level lifecycle verbs: `add` (create the singleton, = `create-site.sh`),
 `validate` (= `validate-site.sh`), `reconcile` (`[--apply] [--deep]`), and the
 fleet verbs (#588) `update` and `test` — thin delegations, same as `evacuate`:
-`update` → `update-tappaas` (always `--force` = run now; site-manager `--force`
-plumbs `TAPPAAS_MODULE_FORCE`, which opens the disruption window for `rebootOk` modules (#633), `--no-git-pull` plumbs
-`TAPPAAS_NO_GIT_PULL`); `test` iterates `module-manager list` and runs
+`update` starts `update-tappaas.service` (ADR-017 D4 — the unit the timer starts, so
+the operator exercises the scheduled path) and follows its journal; the run's options
+travel in a one-shot `config/.update-request.json`: `--force` gives every module
+`--ignore-test-failure` and opens the disruption window for `rebootOk` modules only
+(#633), `--no-git-pull` skips the pull. `--dry-run` starts nothing and reports
+repository drift plus the sweep plan. `test` iterates `module-manager list` and runs
 `module-manager test <m>` per module, forwarding `--deep`.
 
 Common options: `--config-dir`, `--json` (machine output for list/show),

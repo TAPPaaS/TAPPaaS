@@ -13,6 +13,11 @@ Every manager exposes a **`validate` operation** that checks its config for
 schema conformance and reference integrity (see "How a manager is named" below
 for how that operation is named).
 
+**Every manager and controller answers `--help` anywhere in its argv, before it
+does anything, and refuses an option the verb does not declare** (#644 — a
+`distribute --help` once pushed zones.json for real). What a verb accepts is its
+help entry, so an accepted option is a documented one.
+
 A **controller**, by contrast, owns *runtime / device state*: it talks to a live
 service or device (OPNsense, Authentik, a switch, Proxmox) and reconciles the
 real world toward the desired config a manager hands it. Controllers live under

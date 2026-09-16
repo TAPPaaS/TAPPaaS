@@ -17,6 +17,13 @@
   - asserts `install-service.sh` no longer invokes `roles-ensure`;
   - fails if `install-service.sh` is not found.
 
+- `services/identity/test-service.sh <module>` (live; run by `test-module.sh` for every module
+  that declares `identity:identity`) checks the provider AND the consumer (#560): the OIDC
+  application and its access binding exist in Authentik, the module VM's secrets env holds
+  `OIDC_CLIENT_ID` (matching the Authentik provider's client_id), `OIDC_CLIENT_SECRET` and
+  `OIDC_DISCOVERY_URI`, and the module's configure unit exists and last ran successfully.
+  A VM that cannot be reached is reported as NOT verified rather than passing.
+
 ## Deep tests (live; --deep)
 - Sections 6+7 install two throwaway fixture webserver VMs under `test-fixtures/` and verify the observable behavioural difference between the two identity modes. Skipped (with a warning, not a fail) if the default domain or `install-module.sh`/`delete-module.sh` are unavailable.
 - Section 6 — forward-auth (`identity:accessControl`) GATES the webserver: installs `test-idfa`, asserts an unauthenticated `curl` is redirected to an Authentik login (Authentik markup present, app marker `tappaas-idfa-ok` withheld), asserts the Authentik proxy app `test-idfa` exists, then tears the VM down. Live resources: VM install/teardown via install-module, HTTPS through Caddy, Authentik API.

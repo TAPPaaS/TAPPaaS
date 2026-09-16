@@ -20,7 +20,7 @@
   - `_pbs_ns_parents`: outermost-first parent chain for single/nested/deep namespaces.
   - `_pbs_retention_args`: full retention flags, partial set, and empty `{}` → empty string.
 - `services/vm/test-service.sh <module>` (live, queries a reachable Proxmox node by SSH):
-  - Check 1: asserts PBS storage (`backup.json` `pbsStorageName`, default `tappaas_backup`) is configured AND `active` via `pvesm status`; fatal exit 2 if missing/inactive.
+  - Check 1: asserts PBS storage (`backup.json` `pbsStorageName`, default `tappaas_backup`) is configured AND `active` via `pvesm status`. Fatal (exit 2) when the storage is missing, or reads `inactive` with no error. A probe that times out or returns a 500 — which is what a *running* backup does to it — is reported as **unknown**, a warning, not a failure (#636).
   - Check 2: counts backups for the VMID via `pvesh …/content`; ≥1 passes, 0 is a WARNING (not a failure) — first backup may not have run.
 
 ## Deep tests (live; TAPPAAS_TEST_DEEP=1)

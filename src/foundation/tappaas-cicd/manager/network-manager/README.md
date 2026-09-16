@@ -184,6 +184,12 @@ non-mutating dry-run. Exit `0` = in sync, `2` = drift reported (dry-run, not a
 failure), `1` = a hard error (a plane errored, or Proxmox still drifts after
 `--apply`).
 
+The opnsense plane's dry-run runs `zone-manager` in **check mode** with
+`--detailed-exitcode`, which lists every firewall rule `--apply` would create,
+renumber or delete — deletions by the orphan reaper included — and then the
+pinhole validator (#645). Before this, a dry-run listed no rule at all, so a
+deletion could not be reviewed before it happened.
+
 ### `init [<profile>]` (alias `zones-init`) — composable install profiles
 
 `init` applies an **additive, idempotent profile bundle** to `zones.json`

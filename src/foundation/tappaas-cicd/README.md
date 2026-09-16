@@ -12,7 +12,10 @@ configures every other module in the system.
 | Admin shell + module toolbox | mgmt zone | `ssh tappaas@tappaas-cicd`; `install-module.sh`, `update-module.sh`, `test-module.sh`, `delete-module.sh`, … in `~/bin` |
 | Domain managers (config state) | mothership CLI | `site-manager`, `environment-manager`, `module-manager`, `network-manager`, `people-manager`, `health-manager`, … |
 | Infrastructure controllers (runtime state) | mothership CLI | `opnsense-controller`, `proxmox-controller`, `switch-controller`, `identity-controller`, `node-provisioner`, … |
-| Scheduled system updates | automatic | `update-tappaas` systemd timer (logs → journald → Loki) |
+| Scheduled system updates | automatic | `update-tappaas.service`, started by a timer rendered from `site.json` `updateSchedule`; the unit updates the mothership itself first (logs → journald → Loki) |
+| Run an update now | mothership CLI | `site-manager update [--dry-run] [--force] [--no-git-pull]` — starts the unit and follows it |
+| Pause one repository's pull | mothership CLI | `site-manager repository hold <name> --reason … [--until …]` / `release` (#653) |
+| Failed-update notice | automatic | mail to `site.json` `email` through a Proxmox node, naming the step that failed (#651) |
 | System configuration store | mothership | `/home/tappaas/config` (`site.json`, `zones.json`, environments, module jsons) |
 | Unattended node adding (PXE) | mothership CLI | `site-manager node add <name> --pxe` (netboot assets staged at install) |
 | Admin VPN termination on OPNsense | anywhere (WireGuard) | set up at install; enrol devices per [ADMIN-VPN.md](./ADMIN-VPN.md) |

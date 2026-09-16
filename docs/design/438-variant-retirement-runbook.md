@@ -151,7 +151,7 @@ ls ~/config/<provider>-<env>.json                      # the intended provider
 ### 5. General update
 
 ```bash
-update-tappaas --dry-run
+site-manager update --dry-run
 site-manager update
 ```
 

@@ -61,8 +61,8 @@ If the firewall was unreachable at install time the platform was configured with
 | Check | Expected |
 |-------|----------|
 | `ssh tappaas@tappaas-cicd` | Login works (also via `10.0.0.x` address) |
-| Fast test run | Toolbox scripts present, `site.json` validates, SSH to nodes, `update-tappaas.timer` active |
-| `systemctl status update-tappaas.timer` on the VM | active (waiting) |
+| Fast test run | Toolbox scripts present, `site.json` validates, SSH to nodes, `update-tappaas.timer` carries the schedule from `site.json` |
+| `systemctl list-timers update-tappaas.timer` on the VM | active, with the `OnCalendar` that `site.json` `updateSchedule` maps to (rendered by `update-tappaas-schedule.service`, ADR-017 D2) |
 | `install-module.sh --help` | Toolbox on `PATH` |
 | `~/config/.tappaas-cicd-installed` | Exists (install ran to completion) |
 

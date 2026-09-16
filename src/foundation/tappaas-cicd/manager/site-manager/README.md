@@ -41,6 +41,7 @@ repository         repository list [--json]
                    repository release <name>
 top-level          add --name <site-code> [--organization <org>] [create-site options]  (= create-site.sh)
                    validate [FILE] [--schema-dir PATH]     (= validate-site.sh)
+                   (validate also checks updateSchedule and prints the OnCalendar it renders)
                    reconcile [--apply] [--deep]
                    update [--dry-run] [--force] [--no-git-pull]   (starts update-tappaas.service)
                    test [--deep]                                  (= module-manager test each)
@@ -69,6 +70,11 @@ non-zero if any module test failed.
 Common options: `--config-dir DIR`, `--json` (machine output for list/show),
 `--apply` (reconcile commits; default is preview), `--deep` (reconcile cascade),
 `--force` (repository delete → `repository.sh remove --force`).
+
+When a run fails, the site owner hears about it: `update-tappaas-failure.service` mails
+`site.json` `email` through a Proxmox node's mail system, naming the step that failed
+(#651; ADR-007e v1.3 owns the target). `site show` prints the schedule as it is meant —
+no weekday under `daily`/`none` (#447).
 
 `repository hold` stops the scheduled sweep from pulling one repository, so a test
 site can run changes that are not pushed yet (#653). The marker is

@@ -230,7 +230,7 @@ The checks below promote what used to be a human PR checklist into code. Each is
 
 | ID | Rule | Notes |
 |---|---|---|
-| **I1** | R1 — monotonic `access-to`: `tier(A) ≤ tier(B)` | `mgmt` exempt; `Overlay`/`WAN` skipped; a missing `tier` is a note, not a warning |
+| **I1** | R1 — monotonic `access-to`: `tier(A) ≤ tier(B)` | `mgmt` exempt; `Overlay`/`WAN` skipped. Its verdict states coverage — how many edges it checked, and it names every edge it could not evaluate because a zone at one end has no `tier` (#620), so a lattice authored on a third of the zones cannot read as clean |
 | **I2** | R2 — isolation floor: an `isolated` zone is in nobody's `access-to` | `mgmt` exempt |
 | **I3** | Egress boundary: a tier-6 zone must not list `internet` | `Overlay`/`WAN` skipped |
 | **I4** | Archetype conformance: `(type, tier, isolated)` matches a catalog entry | catches a zone configured against its declared intent |

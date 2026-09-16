@@ -56,8 +56,9 @@ repository slice (operator observation). N1 completes the engine:
 - Scoped subverbs mirror each other: **`node reconcile [--apply]`** is the
   node slice exactly as `repository reconcile` is the repo slice; the full
   `reconcile` runs both (+ `--deep` cascade).
-- **`update-tappaas` runs `site-manager node reconcile --apply` as Phase 0.5**
-  (before the foundation loop, non-fatal) — capture is automatic on every
+- **The sweep runs `site-manager node reconcile --apply` before the foundation
+  loop** (Phase 0.5, non-fatal; the mothership's own pull and rebuild happen
+  before the sweep, in the unit's `ExecStartPre` — ADR-017 D3) — capture is automatic on every
   update cycle; the `install.sh` secondary-node epilogue points at it.
 
 **Pools discovery added (operator feedback, same day):** registration alone

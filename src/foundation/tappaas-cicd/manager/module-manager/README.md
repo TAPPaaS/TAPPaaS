@@ -204,13 +204,25 @@ update-module.sh [options] <module-name>
 
 - `--environment <name>` — resolve the installed config name (deprecated alias
   `--variant`).
-- `--force` — proceed despite a failing pre-update test.
+- `--force` — authorize a disruptive change (reboot / offline migrate) for this
+  module, and update it even when its status is archived/external.
+- `--ignore-test-failure` — update even when the pre-update test fails *fatally*
+  (#635). A non-fatal failure never blocks the update, so this is only for exit 2.
 - `--no-snapshot` — skip the pre-update snapshot / rollback.
 - `--debug`, `--silent`.
 
 It snapshots the VM, tests, updates, and rolls back on a fatal failure. The Step 2
 pre-update test runs `--runtime-only`: it gates a mutation, so it asks whether the
 module is healthy, not whether the source tree is correct (#595).
+
+**The gate follows the suite's own grading** (#635). `test.sh` exits 2 for a fatal
+failure and 1 for failed assertions; the gate honours both. Exit 2 aborts the update
+(unless `--ignore-test-failure`); exit 1 warns and the update proceeds, and those
+failures become the baseline for Step 6: the post-update test fails the module only
+on checks that were **not** already failing, and otherwise prints one machine-readable
+`TEST-WARN:` line that `update-tappaas` collects into the sweep summary and
+`last-update-result.json` (`test_warnings`). A module whose update did not break
+anything is no longer failed by five unrelated DNS assertions it inherited.
 
 ### `delete-module.sh` — delete a module
 

@@ -20,22 +20,21 @@ update the mothership.
 
 ## How It Works
 
-When triggered (by schedule or `--force`), `update-tappaas` runs a control-plane refresh
-and then two module phases:
+`update-tappaas` is the **sweep**: the two module phases below. The mothership's own
+update happens before it, in the unit's `ExecStartPre` steps (ADR-017 D3), so the sweep
+always runs on current tooling and a failed self-update stops the run before any module
+is touched:
 
-### Phase 0: Control-Plane Refresh
+| step | as | does |
+|---|---|---|
+| `tappaas-repair-ownership.sh` | root, non-fatal | heals root-owned config/repo files (#533) |
+| `tappaas-self-prepare.sh` | tappaas | claims the operator's request, then `refresh-control-plane.sh`: pull (a held repository is skipped, #653), relink `~/bin`, rebuild every component |
+| `tappaas-self-rebuild.sh` | root | `nixos-rebuild switch` for the mothership, then re-renders the update timer |
 
-`scripts/refresh-control-plane.sh` pulls the tracked repositories, relinks `~/bin`, and
-rebuilds every compiled component — before any module is touched.
-
-This is the mothership updating **itself**, and it is a prerequisite of the sweep rather
-than a step inside it. The work used to run inside tappaas-cicd's own module update, behind
-its pre-update test, so one failing check aborted the module update before the `git pull`
-ran — and the pull that would carry the fix was itself behind a test of the broken code.
-Three consecutive nightly sweeps stalled that way (#595).
-
-It is placed after the schedule gate, never before: the unit fires hourly and exits there
-on a not-due run, so an earlier placement would pull from the forge every hour.
+This work used to run inside tappaas-cicd's own module update, behind its pre-update test,
+so one failing check aborted the module update before the `git pull` ran — and the pull that
+would carry the fix was itself behind a test of the broken code. Three consecutive nightly
+sweeps stalled that way (#595).
 
 The outcome is reported as `control_plane=refreshed|stale|failed|skipped` in the summary
 line and in `last-update-result.json`. `stale` means the components did not rebuild and the
@@ -47,7 +46,7 @@ success.
 Foundation modules are updated in this order via `update-module.sh`:
 
 1. **cluster** - Runs `apt update && apt upgrade` on all Proxmox nodes, distributes VM creation scripts and zone definitions
-2. **tappaas-cicd** - Rebuilds the mothership VM's NixOS system (the code pull and tool rebuild moved to Phase 0)
+2. **tappaas-cicd** - Converges the mothership's own module config (the pull, the component builds and the NixOS rebuild happen in `ExecStartPre`, before the sweep)
 3. **template** - Updates NixOS/Debian VM templates
 4. **firewall** - Updates OPNsense firewall configuration
 5. **backup** - Updates Proxmox Backup Server
@@ -102,36 +101,38 @@ The `updateSchedule` field in the `tappaas` section of the configuration control
 
 ## Configuration
 
-Reads from `/home/tappaas/config/configuration.json`:
-
-```json
-{
-    "tappaas": {
-        "version": "0.5",
-        "domain": "mytappaas.dev",
-        "updateSchedule": ["monthly", "Thursday", 2]
-    },
-    "tappaas-nodes": [
-        {
-            "hostname": "tappaas1",
-            "ip": "192.168.1.10"
-        }
-    ]
-}
-```
+Reads `/home/tappaas/config/site.json` — `.updateSchedule` (above), `.automaticReboot`
+(whether the scheduled run may reboot a guest that declares `rebootOk`), `.email` (where a
+failed sweep is reported, #651) and `.repositories`.
 
 ## Scheduling
 
-`update-tappaas` is scheduled by a **systemd timer** declared in
-`tappaas-cicd.nix` (`systemd.timers.update-tappaas`, `OnCalendar=hourly`).
-cron was retired in issue #150. The timer fires hourly; `update-tappaas` then
-checks the global `updateSchedule` to decide whether to actually run at that
-hour. Output flows through journald → Promtail → Loki for Grafana.
+The timer is **rendered from `site.json`**, not declared in nix (ADR-017 D2):
+`update-tappaas-schedule.service` maps `.updateSchedule` to an `OnCalendar` expression and
+writes `/run/systemd/system/update-tappaas.timer` with `Persistent=false` — at boot, after
+every self-rebuild, and whenever `site-manager site modify` changes the schedule. A
+`"none"` schedule renders no timer. There is no schedule decision left in Python: the timer
+fires when a run is due, and only then. cron was retired in issue #150. Output flows through
+journald → Promtail → Loki for Grafana.
 
 ```bash
-systemctl status update-tappaas.timer
+systemctl list-timers update-tappaas.timer     # what site.json currently asks for
 journalctl -u update-tappaas.service
+site-manager validate                          # checks the schedule, prints the OnCalendar
 ```
+
+## What a run leaves behind
+
+- **`config/last-update-result.json`** — the sweep's own record: `ok`, per-module tallies,
+  `control_plane`, `path` (`unit` or `legacy`), the operator `request`, `deferred_changes`
+  (disruptive changes held back for want of `rebootOk`, ADR-020 D8) and `test_warnings`
+  (checks that were already failing before a module's update, #635). A run that stopped in
+  `ExecStartPre` records the `stage` instead.
+- **`config/update-tappaas.failures`** — one line per failed run, and per failure notice
+  sent or not sent.
+- **A notice to the site owner** when the unit fails: `update-tappaas-failure.service` mails
+  `site.json` `email` through a Proxmox node's mail system, naming the step that failed
+  (#651, ADR-007e v1.3).
 
 ## Building
 

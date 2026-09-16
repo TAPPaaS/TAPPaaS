@@ -23,6 +23,16 @@
 - **Standard 9: Auto-pinhole compile (#177/#173)** — synthetic-fixture NONE-mode compile checks: AC-1 pinhole emitted with correct ports (TCP 9091/9092) + UDP protocol propagated; AC-3 pinhole-allowed-from violation warns-and-skips; AC-4 same-zone → no pinhole; bonus: zone access-to already covers it → no pinhole; missing `pinhole.json` → silent no-op.
 - **Standard 10: test-network tooling (#225)** — `test-network.sh` present/executable/`bash -n` clean/`--help` advertises `--delete`; `test-network-manager` CLI (or python module) exposes create/delete/status; offline rule-model check (test→internet allowed, mgmt→test allowed, RFC1918 blocked, internet-pass sequenced after all blocks).
 
+- **Standard 11–12: network:proxy drift and TLS grading** — `services/proxy/test-service.sh`
+  is the drift verdict for every module that declares `network:proxy`: Checks 1/2 fail when a
+  declared vhost or handler is missing (#580), and Check 3 grades a dead HTTPS endpoint by
+  asking the certificate store (`acme-manager status`), not by whether a cert refid happens to
+  be recorded (#555): an **issued** cert with a dead endpoint fails, **no issued cert** warns
+  ("run acme-setup.sh"), and a store that does not answer is reported as **NOT verified** so
+  "not configured" cannot be mistaken for "not checked". Both standards run against recorded
+  `caddy-manager list` / `acme-manager status` fixtures, so both directions are exercised
+  without the live firewall.
+
 ## Deep tests (live; --deep / TAPPAAS_TEST_DEEP=1)
 - **Deep A: switch-controller — zone add/change/remove across reconcile phases (#339)** — runs in an **isolated temp CONFIG_DIR** (copy of zones.json), hardware-free (`vendor generic` → manual plugin), so it never touches live zones or switch config. Exercises the five reconcile phases (update-desired / interrogate / delta / confirm / reconcile): added zones' VLANs enter `desired.json`; access-port nativeVlan tracks its zone; `actual.json` only changes after `confirm`; VLAN change (961→965) shows drift on trunk + access; removed zone drops out of desired; unknown vendor → manual instructions cite the right port/VLAN and `reconcile --apply` returns rc 2 (needs-manual) without falsely confirming.
 - **Deep B: ap-controller (ap-manager) — SSID tracking + cross-provider uplink validation (#339)** — same isolated temp dir: SSID VLAN auto-tracks its zone (965); `delta` reports create-ssid; uplink validation flags a switch port not carrying the SSID VLAN, then clears once the switch trunk carries it; manual AP instructions cite the SSID; `confirm` writes the SSID into `actual.json`.

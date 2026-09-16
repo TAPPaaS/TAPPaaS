@@ -492,24 +492,24 @@ update-os.sh myvm 610 tappaas1
 
 ---
 
-### update-tappaas scheduling (no script — systemd timer)
+### update-tappaas scheduling — `update-tappaas-schedule.sh`
 
-cron was retired in issue #150. The update scheduler is now driven by a
-**systemd timer** declared in `tappaas-cicd.nix`
-(`systemd.timers.update-tappaas`, `OnCalendar=hourly`, `Persistent=true`).
-There is no `update-cron.sh` anymore.
+cron was retired in issue #150, and since ADR-017 D2 the timer is no longer declared
+in nix either. `update-tappaas-schedule.service` runs this script as root and renders
+`/run/systemd/system/update-tappaas.timer` from `site.json` `.updateSchedule`
+(`Persistent=false`) — at boot, after every self-rebuild, and whenever
+`site-manager site modify` changes the schedule. `"none"` renders no timer. The timer
+fires when a run is due and only then; no schedule decision is left in Python.
 
 **Inspect:**
 ```bash
-systemctl status update-tappaas.timer
-systemctl list-timers update-tappaas.timer
+systemctl list-timers update-tappaas.timer     # what site.json currently asks for
+systemctl status update-tappaas-schedule.service
 journalctl -u update-tappaas.service
+site-manager update                            # run it now (starts the unit)
 ```
 
-**Why hourly?** The timer fires every hour; `update-tappaas` only performs
-updates when the current hour matches the global `updateSchedule`, so an
-hourly tick guarantees the scheduled hour is hit. Output → journald →
-Promtail → Loki.
+Output → journald → Promtail → Loki.
 
 ---
 
@@ -824,7 +824,8 @@ update-module.sh [options] <module-name>
 **Options:**
 | Option | Description |
 |--------|-------------|
-| `--force` | Proceed even if pre-update test fails |
+| `--force` | Authorize a disruptive change (reboot / offline migrate); update an archived/external module |
+| `--ignore-test-failure` | Update even when the pre-update test fails fatally (exit 2). A non-fatal failure (exit 1) never blocks it (#635) |
 | `--no-snapshot` | Skip pre-update test, snapshot, and rollback on failure |
 | `--debug` | Show Debug-level messages |
 | `--silent` | Suppress Info-level messages |
