@@ -15,9 +15,9 @@
 #
 # Options:
 #   --variant <name>   Install a variant of the module (see copy-update-json.sh)
-#   --force            Re-run the installer against the existing deployment even
-#                      if the module is already installed (skips the
-#                      already-installed precondition; does NOT remove anything)
+#                      (there is no --force: an already-deployed module is
+#                      updated with `module-manager module update`, or replaced
+#                      with --reinstall — ADR-020 v0.10 D5, #453)
 #   --reinstall        Delete the existing deployment first (delete-module.sh
 #                      --force), then install fresh. Use when a previous install
 #                      left a partial/broken deployment behind (issue #301).
@@ -31,7 +31,7 @@
 #   install-module.sh openwebui --variant dev --zone0 srv-dev --vmid 315
 #
 # The script performs these steps:
-#   1. Checks the module is not already installed (unless --force is given, or
+#   1. Checks the module is not already installed (unless
 #      --reinstall, which first deletes the existing deployment)
 #   2. Copies and validates the module JSON config (variant-aware)
 #   3. Checks that every dependsOn service is provided by an installed module
@@ -74,8 +74,6 @@ Options:
                              --environment wins if both are given.
     --allow-fork             Permit a foundation-tier module from a non-official
                              source (tier/source lint override).
-    --force                  Install even if the module already exists (re-runs
-                             against the existing deployment; removes nothing)
     --reinstall              Delete the existing deployment first, then install
                              fresh (delete-module.sh --force, then install)
     --<field> <value>        Override a JSON field value
@@ -94,7 +92,7 @@ Examples:
     ${SCRIPT_NAME} litellm --node tappaas2
     ${SCRIPT_NAME} nextcloud --environment foo
     ${SCRIPT_NAME} openwebui --variant staging
-    ${SCRIPT_NAME} identity --force
+    ${SCRIPT_NAME} identity --reinstall
     ${SCRIPT_NAME} homeassistant --reinstall
 EOF
 }
@@ -243,11 +241,10 @@ main() {
     info "${BOLD}║  TAPPaaS Module Install: ${BL}${module}${CL}"
     info "${BOLD}╚══════════════════════════════════════════════╝${CL}"
 
-    # Parse options: extract --force/--reinstall (consumed here) and capture
+    # Parse options: extract --reinstall (consumed here) and capture
     # --variant (needed for the early existence check). All other arguments are
     # passed through unchanged to copy-update-json.sh, which reads "$@" when
     # sourced.
-    local force=false
     local reinstall=false
     local variant=""
     local environment=""
@@ -259,7 +256,7 @@ main() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --force)
-                force=true
+                die "install-module.sh has no --force (#453). An already-deployed module takes the release forward with 'module-manager module update ${1:-<module>}' (local modifications survive), or is replaced with --reinstall."
                 ;;
             --reinstall)
                 reinstall=true
@@ -376,8 +373,8 @@ main() {
         if [[ -n "${environment}" && "${environment}" != "mgmt" ]]; then
             die "Foundation modules can only be installed in the 'mgmt' environment (got '${environment}')"
         fi
-        if module_config_exists "${module}" && [[ "${force}" != true && "${reinstall}" != true ]]; then
-            die "Foundation module '${module}' is already installed (single-instance). Use --reinstall to replace, or --force to re-run the installer."
+        if module_config_exists "${module}" && [[ "${reinstall}" != true ]]; then
+            die "Foundation module '${module}' is already installed (single-instance). Take the release forward with 'module-manager module update ${module}', or replace it with --reinstall."
         fi
     fi
 
@@ -429,11 +426,11 @@ main() {
             info "  ${GN}✓${CL} '${precheck_module}' is not installed — --reinstall proceeds as a normal install"
         fi
     elif module_exists "${precheck_module}"; then
-        if [[ "${force}" == true ]]; then
-            warn "  '${precheck_module}' is already installed — continuing anyway (--force)"
-        else
-            die "Module '${precheck_module}' is already installed. Run 'delete-module.sh ${precheck_module}' first, pass --reinstall to delete and re-install fresh, or pass --force to re-run the installer against the existing deployment."
-        fi
+        # #453 / ADR-020 v0.10 D5: `add` installs, it never re-writes a deployed
+        # config. --force used to skip this check and let Step 2 copy the
+        # catalog template over the site's own config: a custom environment and
+        # ip were lost and the version went backwards (2026-08-16).
+        die "Module '${precheck_module}' is already installed. Take the release forward with 'module-manager module update ${precheck_module}' (local modifications survive), change a field with 'module-manager module modify ${precheck_module} --set field=value', or replace it with --reinstall."
     else
         info "  ${GN}✓${CL} '${precheck_module}' is not yet installed"
     fi

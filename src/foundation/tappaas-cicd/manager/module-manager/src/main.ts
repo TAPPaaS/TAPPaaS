@@ -92,13 +92,12 @@ export const HELP: HelpSpec = {
       options: [["--allow-fork", "Permit forked/non-canonical module sources (relax tier/source lint)."]],
     },
     {
-      usage: "add <module> [--environment ENV] [--allow-fork] [--force] [--reinstall] [--<field> <value>]...",
+      usage: "add <module> [--environment ENV] [--allow-fork] [--reinstall] [--<field> <value>]...",
       name: "add",
       options: [
         ["--environment ENV", "Target environment to install into (default: foundation→mgmt, else the org env)."],
         ["--allow-fork", "Permit forked/non-canonical module sources."],
-        ["--force", "Proceed despite warnings / overwrite an existing deployment."],
-        ["--reinstall", "Reinstall even if the module is already deployed."],
+        ["--reinstall", "Delete the existing deployment first, then install fresh — the only way to replace a deployed config (#301, #453)."],
         ["--<field> <value>", "Override any config field, passed through to install-module.sh, which checks the name against module-fields.json."],
       ],
     },
@@ -692,10 +691,15 @@ function cmdValidate(opts: Opts): number {
 function cmdAdd(opts: Opts, client: ModuleClient): number {
   const module = opts.rest[0];
   if (!module) die("add: expected <module>");
+  // #453 / ADR-020 v0.10 D5: `add` installs; it never re-writes a deployed
+  // config. --force used to skip the already-installed check and let the copy
+  // step overwrite the site's own config with the catalog template.
+  if (opts.force) {
+    die(`add has no --force: take the release forward with 'module-manager module update ${module}' (local modifications survive), change a field with 'module modify ${module} --set field=value', or replace the deployment with 'add ${module} --reinstall'`);
+  }
   const a: AddOptions = {
     environment: opts.environment,
     allowFork: opts.allowFork,
-    force: opts.force,
     reinstall: opts.reinstall,
     passthrough: addFieldOverrides(opts),
   };

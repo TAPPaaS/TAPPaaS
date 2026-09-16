@@ -73,7 +73,6 @@ export class CliModuleClient implements ModuleClient {
     const args: string[] = [module];
     if (opts.environment) args.push("--environment", opts.environment);
     if (opts.allowFork) args.push("--allow-fork");
-    if (opts.force) args.push("--force");
     if (opts.reinstall) args.push("--reinstall");
     args.push(...opts.passthrough);
     return run(BIN.install, args);

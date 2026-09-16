@@ -182,15 +182,16 @@ All bash, linked onto `PATH` by `install.sh`. These remain the source of truth
 
 ```
 install-module.sh <module-name> [--environment <name>] [--allow-fork]
-                  [--force] [--reinstall] [--<field> <value>]...
+                  [--reinstall] [--<field> <value>]...
 ```
 
 - `--environment <name>` — target environment (sets the VM name and zone; default
   env → `<module>`, otherwise `<module>-<env>`). `--variant <name>` is a
   deprecated alias.
 - `--allow-fork` — permit a `tier:foundation` module from a non-`official` source.
-- `--force` — re-run against an existing install.
-- `--reinstall` — delete then install (recover a failed partial install).
+- `--reinstall` — delete then install: the only way to replace a deployed config
+  (recovers a failed partial install too). There is no `--force`: an already
+  deployed module is taken forward with `module update <m>` (#453).
 - `--<field> <value>` — override any module JSON field.
 
 ```bash

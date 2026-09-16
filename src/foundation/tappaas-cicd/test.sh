@@ -329,11 +329,24 @@ if me_run "novmid" gone; then pass "cluster:vm without vmid -> installed (trust 
 rm -rf "${me_tmp}"
 trap - EXIT
 
-# install-module.sh advertises the --force escape hatch
-if /home/tappaas/bin/install-module.sh --help 2>&1 | grep -q -- '--force'; then
-    pass "install-module.sh --help documents --force"
+# #453: `add` installs; it never re-writes a deployed config. --force is gone,
+# and the refusal names the paths that do exist.
+_IM="${SCRIPT_DIR}/manager/module-manager/install-module.sh"
+if "${_IM}" --help 2>&1 | grep -q -- '--reinstall'; then
+    pass "install-module.sh --help documents --reinstall"
 else
-    fail "install-module.sh --help missing --force"
+    fail "install-module.sh --help missing --reinstall"
+fi
+if "${_IM}" --help 2>&1 | grep -qE '^[[:space:]]+--force\b'; then
+    fail "install-module.sh still advertises --force (#453)"
+else
+    pass "install-module.sh no longer advertises --force (#453)"
+fi
+_if_out="$("${_IM}" nosuchmodule --force 2>&1 || true)"
+if grep -q 'no --force' <<<"${_if_out}" && grep -q 'module update' <<<"${_if_out}"; then
+    pass "install-module.sh --force is refused and names 'module update' (#453)"
+else
+    fail "install-module.sh --force not refused with the ADR-020 v0.10 message: ${_if_out}"
 fi
 
 # ── Test 9: snapshot_retention config reader (Issue #353) ───────────

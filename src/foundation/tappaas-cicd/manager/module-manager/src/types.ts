@@ -67,7 +67,6 @@ export interface RunningGuest {
 export interface AddOptions {
   environment?: string;
   allowFork?: boolean;
-  force?: boolean;
   reinstall?: boolean;
   // Arbitrary --<field> <value> overrides passed straight through to
   // install-module.sh / copy-update-json.sh (e.g. --node, --vmid, --zone0,

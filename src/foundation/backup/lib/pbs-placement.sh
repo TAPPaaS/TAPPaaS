@@ -20,7 +20,7 @@
 #
 # Forcing `external` needs no dedicated flag: install-module.sh's native field
 # override stages it before this module runs (D14) —
-#   install-module.sh backup --force --placementState external --pbsUrl <url>
+#   module-manager module modify backup --set placementState=external --set pbsUrl=<url>
 #
 # Two operator inputs shape resolution, both on backup.json:
 #   .node    optional — restrict tankc discovery to ONE named node ("" = all)

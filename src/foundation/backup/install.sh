@@ -87,7 +87,7 @@ ZONE="$(get_config_value 'zone0' 'mgmt')"
 # `placement` policy field: `placementState` ships empty and is resolved here
 # once — external (forced, sticky) / node:<name> (a tankc was found) / shim.
 # Forcing external needs no flag of its own; install-module.sh stages it (D14):
-#   install-module.sh backup --force --placementState external --pbsUrl <url>
+#   module-manager module modify backup --set placementState=external --set pbsUrl=<url>
 LEGACY_NODE=""
 if [[ "$(pbs_placement_state)" == "local" ]]; then
   LEGACY_NODE="$(pbs_legacy_pbs_node "${ZONE}")"
