@@ -13,7 +13,10 @@ import { join } from "path";
 export const UNIT = "update-tappaas.service";
 
 export interface UpdateRequest {
+  // ADR-020 v0.10 D8: force = proceed past a refusal; allowDisruption = open the
+  // downtime window for rebootOk modules. Two levers, never one.
   force: boolean;
+  allowDisruption: boolean;
   noGitPull: boolean;
   requestedBy: string;
   at: string; // ISO 8601
@@ -23,8 +26,8 @@ export function requestPath(configDir: string): string {
   return join(configDir.replace(/\/$/, ""), ".update-request.json");
 }
 
-export function buildRequest(force: boolean, noGitPull: boolean, by: string, now: Date): UpdateRequest {
-  return { force, noGitPull, requestedBy: by, at: now.toISOString() };
+export function buildRequest(force: boolean, allowDisruption: boolean, noGitPull: boolean, by: string, now: Date): UpdateRequest {
+  return { force, allowDisruption, noGitPull, requestedBy: by, at: now.toISOString() };
 }
 
 export function writeRequest(configDir: string, req: UpdateRequest): string {

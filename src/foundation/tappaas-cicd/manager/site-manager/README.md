@@ -53,12 +53,12 @@ top-level          add --name <site-code> [--organization <org>] [create-site op
 travel in a one-shot request, `config/.update-request.json`, which the unit
 claims. `--dry-run` starts nothing: it reports each repository against its
 origin, then the sweep's plan. `--force` updates every module even when its
-pre-update test fails (`module modify --ignore-test-failure`), and opens the disruption window
-for this run: a module with
-`rebootOk: true` may be rebooted or migrated offline now, and every other module
-keeps its disruptive changes deferred. It never overrides `rebootOk: false`; for
-one module, that is `module-manager module modify <module> --force` (ADR-020 D8,
-#633). `--no-git-pull` (`TAPPAAS_NO_GIT_PULL`) updates
+pre-update test failed fatally, and nothing more — it reboots nothing.
+`--allow-disruption` opens the downtime window for that run: a module with
+`rebootOk: true` may be rebooted or migrated offline, every other module keeps
+its disruptive changes deferred, and `rebootOk: false` is never overridden
+fleet-wide. For one module that is
+`module-manager module update <module> --allow-disruption` (ADR-020 v0.10 D8, #633). `--no-git-pull` (`TAPPAAS_NO_GIT_PULL`) updates
 whatever is checked out — refresh-control-plane.sh skips the per-repo pull — so local,
 not-yet-pushed changes can be tested. `--dry-run` previews the plan.
 

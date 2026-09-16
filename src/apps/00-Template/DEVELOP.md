@@ -58,7 +58,7 @@ image/OS choices, providing services, debugging, naming.
 ```bash
 module-manager module test myapp        # run your test.sh
 module-manager module reconcile myapp   # re-apply the current config to the VM
-module-manager module modify myapp      # release update: snapshot + test + merge
+module-manager module update myapp      # release update: snapshot + test + merge
 module-manager module delete myapp      # --archive by default
 ```
 

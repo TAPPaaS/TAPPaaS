@@ -200,7 +200,7 @@
       ],
       "default": false,
       "example": true,
-      "note": "Disruption is authorized iff 'module-manager module modify --force' was passed (an operator, now), OR rebootOk is true AND the window is open: the scheduled run with automaticReboot, or 'site-manager update --force' (ADR-020 D8). The sweep NEVER forwards 'module modify --force'. When a disruptive change is not authorized the converge applies everything else, prints a machine-parseable 'DEFERRED:' line and still exits 0; update-tappaas collects those into an end-of-sweep summary."
+      "note": "Disruption is authorized iff '--allow-disruption' was passed (an operator, now: 'module-manager module update <m> --allow-disruption', or 'site-manager update --allow-disruption' for a run), OR rebootOk is true AND the scheduled run has automaticReboot (ADR-020 v0.10 D8). '--force' is a different lever: it proceeds past a refusal and never reboots. When a disruptive change is not authorized the converge applies everything else, prints a machine-parseable 'DEFERRED:' line and still exits 0; update-tappaas collects those into an end-of-sweep summary."
     },
     "tier": {
       "description": "Lifecycle role of the module (ADR-007b). Answers 'Can it be uninstalled?'. Orthogonal to 'source' — never collapsed into one enum (MECE). 'foundation' modules are critical platform components: they may only be installed into the 'mgmt' environment, are single-instance, and require --force to delete. 'app' modules are tenant-facing and deploy into any environment.",

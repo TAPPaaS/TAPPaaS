@@ -138,8 +138,8 @@ export class FakeSiteClient implements SiteClient {
     this.log.push(`probe ${path} ${branch}`);
     return this.probes.get(path) ?? { head: "aaaa", tip: "aaaa", behind: 0 };
   }
-  runUpdateDryRun(moduleForce: boolean): number {
-    this.log.push(`update --dry-run${moduleForce ? " --force" : ""}`);
+  runUpdateDryRun(moduleForce: boolean, allowDisruption: boolean): number {
+    this.log.push(`update --dry-run${moduleForce ? " --force" : ""}${allowDisruption ? " --allow-disruption" : ""}`);
     return this.delegateRc;
   }
   listDeployedModules(): Array<{ name: string; status: string }> | null {

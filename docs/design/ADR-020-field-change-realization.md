@@ -150,9 +150,9 @@ Two ordering rules the runner enforces, both inherited from the imperative loop:
 
 | Lever | Means |
 |---|---|
-| `module modify --force` | an operator authorizing downtime, now |
-| `rebootOk` + `TAPPAAS_SCHEDULED_PASS` | standing per-module permission, honoured in the scheduled sweep when the site accepts downtime (`automaticReboot`), and in `site-manager update --force` |
-| `site-manager update [--force]` | **"run the sweep now"**; never forwards `module modify --force` (its `--force` gives each module `--ignore-test-failure` instead). `update-tappaas --force` is deprecated (ADR-017 D5) |
+| `module update <m> --allow-disruption` | an operator authorizing downtime, now — the only lever that overrides `rebootOk: false` |
+| `rebootOk` + `TAPPAAS_SCHEDULED_PASS` | standing per-module permission, honoured in the scheduled sweep when the site accepts downtime (`automaticReboot`), and in `site-manager update --allow-disruption` |
+| `--force` (any level) | **proceed past a refusal** — a fatally failed pre-update test, an archived/external module. Never downtime, never a config overwrite (ADR-020 v0.10 D8). `update-tappaas --force` is deprecated (ADR-017 D5) |
 
 An unauthorized disruptive change is **deferred, not failed**: everything else
 applies, a machine-parseable `DEFERRED:` line is printed, and the converge exits

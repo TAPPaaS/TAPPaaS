@@ -60,7 +60,7 @@ reported desired value and the applied one cannot diverge (ADR-020 D1).
 
 ```
 module-manager module modify nextcloud --set cores=8 --set memory=16384
-module-manager module modify nextcloud --set zone0=iot --force
+module-manager module modify nextcloud --set zone0=iot --allow-disruption   # subnet change reboots
 ```
 
 One verb, one algorithm. Bare, `modify` is the release update `update-tappaas`
@@ -95,9 +95,11 @@ question from whether the change needs it, and it has exactly two answers:
   and only because the site already accepts downtime in that window
   (`automaticReboot`). Default `false`: silence never authorizes a reboot.
 
-**Running the sweep now is neither.** `site-manager update` never forwards
-`module modify --force`; its own `--force` opens the window for `rebootOk`
-modules only (ADR-020 D8). `update-tappaas --force` is deprecated (ADR-017 D5).
+**`--force` is neither.** It proceeds past a refusal — a fatally failed
+pre-update test, an archived/external module — and never reboots anything;
+`site-manager update --force` forwards exactly that to every module. Downtime
+for a whole run is `site-manager update --allow-disruption`, which still honours
+`rebootOk` (ADR-020 v0.10 D8). `update-tappaas --force` is deprecated (ADR-017 D5).
 
 When a disruptive change is not authorized the converge applies everything else,
 prints a machine-parseable line, and **still exits 0** — not applying a change is
@@ -105,7 +107,7 @@ not a failure:
 
 ```
 ⚠ DEFERRED: nextcloud net0 needs a disruptive change (reboot/offline migrate) that is not authorized
-  Apply in a maintenance window:  module-manager module modify nextcloud --force
+  Apply in a maintenance window:  module-manager module update nextcloud --allow-disruption
 ```
 
 `update-tappaas` collects those and ends the sweep with one summary of what is
@@ -204,10 +206,11 @@ update-module.sh [options] <module-name>
 
 - `--environment <name>` — resolve the installed config name (deprecated alias
   `--variant`).
-- `--force` — authorize a disruptive change (reboot / offline migrate) for this
-  module, and update it even when its status is archived/external.
-- `--ignore-test-failure` — update even when the pre-update test fails *fatally*
-  (#635). A non-fatal failure never blocks the update, so this is only for exit 2.
+- `--force` — proceed although something says no: a pre-update test that failed
+  *fatally* (exit 2, #635), or a module whose status is archived/external. It
+  never reboots and never overwrites the deployed config (ADR-020 v0.10 D8).
+- `--allow-disruption` — authorize downtime for this module now: a reboot or an
+  offline migrate. Without it such a change is deferred, not applied.
 - `--no-snapshot` — skip the pre-update snapshot / rollback.
 - `--debug`, `--silent`.
 
@@ -217,7 +220,7 @@ module is healthy, not whether the source tree is correct (#595).
 
 **The gate follows the suite's own grading** (#635). `test.sh` exits 2 for a fatal
 failure and 1 for failed assertions; the gate honours both. Exit 2 aborts the update
-(unless `--ignore-test-failure`); exit 1 warns and the update proceeds, and those
+(unless `--force`); exit 1 warns and the update proceeds, and those
 failures become the baseline for Step 6: the post-update test fails the module only
 on checks that were **not** already failing, and otherwise prints one machine-readable
 `TEST-WARN:` line that `update-tappaas` collects into the sweep summary and

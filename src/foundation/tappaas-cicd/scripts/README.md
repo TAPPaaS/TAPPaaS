@@ -824,8 +824,8 @@ update-module.sh [options] <module-name>
 **Options:**
 | Option | Description |
 |--------|-------------|
-| `--force` | Authorize a disruptive change (reboot / offline migrate); update an archived/external module |
-| `--ignore-test-failure` | Update even when the pre-update test fails fatally (exit 2). A non-fatal failure (exit 1) never blocks it (#635) |
+| `--force` | Proceed past a refusal: a pre-update test that failed fatally (exit 2, #635), or an archived/external module. Never reboots, never overwrites the config |
+| `--allow-disruption` | Authorize downtime for this module now (reboot / offline migrate). Without it such a change is deferred |
 | `--no-snapshot` | Skip pre-update test, snapshot, and rollback on failure |
 | `--debug` | Show Debug-level messages |
 | `--silent` | Suppress Info-level messages |

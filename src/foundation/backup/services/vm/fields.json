@@ -72,7 +72,7 @@
       "changeNote": "Periodic read-only ZFS snapshots of the datastore so backup history cannot be rewritten (ADR-012 §3.5). Enabling it provisions on the PBS node, not on the consuming guest."
     },
     "placementState": {
-      "description": "Resolved backup placement (ADR-012 §2.1) and the single source of truth for where PBS lives. Ships EMPTY on the released module; backup/install.sh resolves it once and writes it back. Values: 'node:<name>' (PBS software + datastore realized on that node's tankc pool), 'shim' (no datastore anywhere — still satisfies dependsOn:backup:vm, promoted in place by `module-manager module modify backup` once storage appears), 'external' (an externally-managed PBS at .pbsUrl is consumed; nothing is provisioned — set at install time and permanent thereafter). The legacy values 'local' and 'remote-only' are accepted for one release and migrated in place by update.sh to 'node:<name>' / 'external' (§4.1).",
+      "description": "Resolved backup placement (ADR-012 §2.1) and the single source of truth for where PBS lives. Ships EMPTY on the released module; backup/install.sh resolves it once and writes it back. Values: 'node:<name>' (PBS software + datastore realized on that node's tankc pool), 'shim' (no datastore anywhere — still satisfies dependsOn:backup:vm, promoted in place by `module-manager module update backup` once storage appears), 'external' (an externally-managed PBS at .pbsUrl is consumed; nothing is provisioned — set at install time and permanent thereafter). The legacy values 'local' and 'remote-only' are accepted for one release and migrated in place by update.sh to 'node:<name>' / 'external' (§4.1).",
       "type": "string",
       "requiredBy": [],
       "usedBy": [

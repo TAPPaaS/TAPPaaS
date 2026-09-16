@@ -70,8 +70,10 @@ right: only the live disk knows it is a shrink, and the snapshot rolls the write
 back.
 
 **"Needs disruption auth?"** — only `in-place-reboot` and `migrate`. Authorized by
-`module modify --force` (an operator, now) **or** the module's own `rebootOk`
-inside the scheduled sweep. Unauthorized, the change is **deferred, not failed**:
+`--allow-disruption` (an operator, now — `module update <m> --allow-disruption`,
+or `site-manager update --allow-disruption` for a run) **or** the module's own
+`rebootOk` inside the scheduled sweep. `--force` is a different lever: it
+proceeds past a refusal and never reboots (ADR-020 v0.10 D8). Unauthorized, the change is **deferred, not failed**:
 everything else applies, a `DEFERRED:` line is printed, and the converge exits 0.
 Not applying a change is not a failure; pretending it applied would be.
 

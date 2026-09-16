@@ -11,8 +11,11 @@ function check(cond: boolean, msg: string): void {
   }
 }
 
-const r = buildRequest(true, false, "lars", new Date("2026-09-15T12:00:00Z"));
-check(r.force && !r.noGitPull && r.requestedBy === "lars" && r.at === "2026-09-15T12:00:00.000Z", "buildRequest records options, who and when");
+const r = buildRequest(true, false, false, "lars", new Date("2026-09-15T12:00:00Z"));
+check(r.force && !r.allowDisruption && !r.noGitPull && r.requestedBy === "lars" && r.at === "2026-09-15T12:00:00.000Z",
+  "buildRequest records options, who and when");
+check(buildRequest(false, true, false, "lars", new Date()).allowDisruption === true,
+  "--allow-disruption travels on its own, without --force");
 
 check(summaryLine(null).startsWith("no last-update-result.json"), "no result file is said plainly");
 check(summaryLine({ stage: "rebuild", end_time: "t" }).includes("FAILED in the rebuild step"), "a run that stopped before the sweep names the step");

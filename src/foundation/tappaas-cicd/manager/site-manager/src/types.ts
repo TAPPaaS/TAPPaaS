@@ -228,7 +228,7 @@ export interface SiteClient {
   followUnit(invocationId: string): "finished" | "detached";
   unitResult(): string;
   repoProbe(path: string, branch: string): { head: string | null; tip: string | null; behind: number | null };
-  runUpdateDryRun(moduleForce: boolean): number;
+  runUpdateDryRun(moduleForce: boolean, allowDisruption: boolean): number;
   // `site-manager test` — the deployed modules to iterate (module-manager list
   // --json; foundation + apps, from every repository), each with its lifecycle
   // .status so decommissioned (archived/external) ones can be skipped. null on

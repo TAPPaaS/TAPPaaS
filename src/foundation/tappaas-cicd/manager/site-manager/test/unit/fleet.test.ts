@@ -33,12 +33,18 @@ const clean = () => { try { unlinkSync(join(cfg, ".update-request.json")); } cat
   const c = new FakeSiteClient(); clean();
   const rc = run(["update", "--config-dir", cfg], c);
   check(rc === 0 && c.log.includes("start-unit") && c.log.includes("follow inv-1"), "update starts the unit and follows this invocation");
-  check(req().force === false && req().noGitPull === false, "a plain update writes a request with neither option");
+  check(req().force === false && req().allowDisruption === false && req().noGitPull === false, "a plain update writes a request with no option set");
 }
 {
   const c = new FakeSiteClient(); clean();
   run(["update", "--force", "--no-git-pull", "--config-dir", cfg], c);
   check(req().force === true && req().noGitPull === true, "--force and --no-git-pull travel in the request");
+  check(req().allowDisruption === false, "--force does not authorize downtime (ADR-020 v0.10 D8)");
+}
+{
+  const c = new FakeSiteClient(); clean();
+  run(["update", "--allow-disruption", "--config-dir", cfg], c);
+  check(req().allowDisruption === true && req().force === false, "--allow-disruption travels alone");
 }
 {
   const c = new FakeSiteClient(); clean();

@@ -134,7 +134,7 @@ back in step — this is the step that is easiest to skip and most often the
 reason a "successful" restore misbehaves:
 
 ```bash
-module-manager module modify nextcloud     # re-applies declared config, re-wires services
+module-manager module update nextcloud     # re-applies declared config, re-wires services
 module-manager module test nextcloud --deep
 ```
 
@@ -150,7 +150,7 @@ does not put them back. If the module declares `cluster:ha`:
 
 ```bash
 module-manager drift nextcloud --service cluster:ha    # what is missing
-module-manager module modify nextcloud                 # re-applies it (step 1.4 does this)
+module-manager module update nextcloud                 # re-applies it (step 1.4 does this)
 ssh root@tappaas1.mgmt.internal "ha-manager config; pvesh get /cluster/replication"
 ```
 
@@ -186,7 +186,7 @@ backup-manager restore restore nextcloud \
     --vmid <VMID-IN-THE-BACKUP> --target-vmid <VMID-JUST-INSTALLED>
 
 # 3. Re-apply the declaration and validate (§1.3, §1.4).
-module-manager module modify nextcloud
+module-manager module update nextcloud
 module-manager module test nextcloud --deep
 ```
 
@@ -319,7 +319,7 @@ a time, validating each:
 
 ```bash
 backup-manager restore restore <module> --node tappaas2 --storage tanka1
-module-manager module modify <module>
+module-manager module update <module>
 module-manager module test <module> --deep
 ```
 
@@ -389,7 +389,7 @@ missing every zone or rule declared since.
 **Prefer:**
 
 ```bash
-module-manager module modify network
+module-manager module update network
 # and if the VM itself is gone, re-run the module install, then:
 site-manager update        # re-applies every module's proxy/rules/dns/nat
 ```
@@ -516,7 +516,7 @@ install a stale base.
 If a template is missing, corrupt, or simply out of date:
 
 ```bash
-module-manager module modify templates          # re-asserts what is declared
+module-manager module update templates          # re-asserts what is declared
 # or, if the template VM itself is gone:
 module-manager module add templates --force     # rebuild from source images
 module-manager module test templates --deep

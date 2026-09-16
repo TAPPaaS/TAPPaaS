@@ -42,7 +42,7 @@ of its own** — confirmed by reading `main.py:377-499`. Its run is:
 2. **Phase 1 — foundation modules, fixed order** (`main.py:449-458`). The order is
    hardcoded (`FOUNDATION_MODULES`, `main.py:31-39`):
    `cluster → tappaas-cicd → templates → network → backup → identity → logging`.
-   Each is updated via `module-manager module modify <name>` (`main.py:326`).
+   Each is updated via `module-manager module update <name>` (`main.py:326`).
    `deployed_foundation_name()` (`main.py:51-63`) resolves `network`→`firewall.json`
    on a not-yet-migrated system.
 3. **Phase 2 — app modules, topologically sorted** (`main.py:460-472`). Discovered
@@ -53,7 +53,7 @@ of its own** — confirmed by reading `main.py:377-499`. Its run is:
    `--dry-run`).
 
 **The migration work is a side-effect of step 2 (modifying `tappaas-cicd`).**
-`module modify` → `update-module.sh` → runs the module's **`pre-update.sh`**. For
+`module update` → `update-module.sh` → runs the module's **`pre-update.sh`**. For
 `tappaas-cicd` that hook is the real migration engine.
 
 ### What `tappaas-cicd/pre-update.sh` does (the engine), in order
@@ -109,7 +109,7 @@ Read in full at `src/foundation/tappaas-cicd/pre-update.sh`:
   activation) never runs.
 - **Why the system still works anyway:** `install-module.sh` resolves a module's zone
   with a fallback chain that ends at **`mgmt`** and emits a *warning* rather than
-  failing (graceful degradation). So `module modify` keeps succeeding without
+  failing (graceful degradation). So `module update` keeps succeeding without
   environments — it just silently parks everything in `mgmt`.
 
 **Verdict:** **gap.** The environment model is never materialized on upgrade. The
@@ -125,7 +125,7 @@ system is "ADR-007 shaped" (`site.json` present) but environment-less.
   lifeline.
 - `update-tappaas` instead just keeps modifying whatever exists:
   `deployed_foundation_name("network")` (`main.py:51-63`) prefers `network.json` but
-  **falls back to `firewall.json`** → `module-manager module modify firewall`. It
+  **falls back to `firewall.json`** → `module-manager module update firewall`. It
   **never creates `network.json`** on a legacy system.
 - **Why apps still resolve:** the network module's `provides` lists `"firewall"`
   (`network/network.json`), and `common-install-routines.sh` `resolve_provider_module()`

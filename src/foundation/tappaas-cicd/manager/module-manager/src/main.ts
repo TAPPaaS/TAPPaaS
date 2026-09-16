@@ -103,22 +103,36 @@ export const HELP: HelpSpec = {
       ],
     },
     {
-      usage: "modify <module> [--set field=value]... [--environment ENV] [--force] [--ignore-test-failure] [--no-snapshot] [--debug] [--silent]",
+      usage: "update <module> [--environment ENV] [--force] [--allow-disruption] [--no-snapshot] [--debug] [--silent]",
+      name: "update",
+      note: "(#655: take the release forward; local modifications survive the 3-way merge)",
+      options: [
+        ["--environment ENV", "Target environment to update."],
+        [
+          "--force",
+          "Proceed although something says no: a pre-update test that failed fatally (exit 2), or an archived/external module. Never reboots, never overwrites the deployed config.",
+        ],
+        [
+          "--allow-disruption",
+          "Authorize downtime for this module now — a reboot or an offline migrate. Without it such a change is deferred, not applied.",
+        ],
+        ["--no-snapshot", "Skip the pre-change VM snapshot."],
+        ["--debug", "Verbose diagnostic output."],
+        ["--silent", "Suppress non-essential output."],
+      ],
+    },
+    {
+      usage: "modify <module> --set field=value... [--environment ENV] [--force] [--allow-disruption] [--no-snapshot] [--debug] [--silent]",
       name: "modify",
+      note: "(change a declared field, then converge; bare `modify` is the deprecated spelling of `update`)",
       options: [
         [
           "--set field=value",
           "Change a declared field, then converge (repeatable). Rejected up front if the field cannot change in place.",
         ],
         ["--environment ENV", "Target environment to modify."],
-        [
-          "--force",
-          "Authorize a disruptive change (reboot / offline migrate) for this module; also updates an archived/external module.",
-        ],
-        [
-          "--ignore-test-failure",
-          "Update even when the pre-update test fails fatally (exit 2). A non-fatal failure never blocks the update.",
-        ],
+        ["--force", "As for `update`: proceed past a fatally failed pre-update test or an archived/external status."],
+        ["--allow-disruption", "As for `update`: authorize downtime for this module now."],
         ["--no-snapshot", "Skip the pre-change VM snapshot."],
         ["--debug", "Verbose diagnostic output."],
         ["--silent", "Suppress non-essential output."],
@@ -146,11 +160,11 @@ export const HELP: HelpSpec = {
       ],
     },
     {
-      usage: "reconcile <module> [--apply] [--force] [--environment ENV] [--no-snapshot] [--no-services]",
+      usage: "reconcile <module> [--apply] [--allow-disruption] [--environment ENV] [--no-snapshot] [--no-services]",
       name: "reconcile",
       options: [
         ["--apply", "Converge the module's config → VM/service. Default is a read-only three-way (released/desired/running) drift INSPECT."],
-        ["--force", "--apply: authorize a disruptive change (reboot / offline migrate). Without it such a change is deferred, not applied."],
+        ["--allow-disruption", "--apply: authorize a disruptive change (reboot / offline migrate). Without it such a change is deferred, not applied."],
         ["--environment ENV", "Target environment to reconcile."],
         ["--no-snapshot", "Skip any pre-change VM snapshot (--apply; leaf re-apply is idempotent)."],
         ["--no-services", "INSPECT only: skip the dependency-service drift check (declared firewall/NAT/discovery state), which is ON by default."],
@@ -218,7 +232,7 @@ interface Opts {
   environment?: string;
   allowFork: boolean;
   force: boolean;
-  ignoreTestFailure: boolean;
+  allowDisruption: boolean;
   reinstall: boolean;
   noSnapshot: boolean;
   debug: boolean;
@@ -251,7 +265,7 @@ function parseOpts(args: string[]): Opts {
     allowFork: false,
     force: false,
     reinstall: false,
-    ignoreTestFailure: false,
+    allowDisruption: false,
     noSnapshot: false,
     debug: false,
     silent: false,
@@ -296,8 +310,8 @@ function parseOpts(args: string[]): Opts {
       o.allowFork = true;
     } else if (a === "--force") {
       o.force = true;
-    } else if (a === "--ignore-test-failure") {
-      o.ignoreTestFailure = true;
+    } else if (a === "--allow-disruption") {
+      o.allowDisruption = true;
     } else if (a === "--reinstall") {
       o.reinstall = true;
     } else if (a === "--no-snapshot") {
@@ -719,10 +733,19 @@ function addFieldOverrides(opts: Opts): string[] {
 // before a single byte is written, because config that claims something reality
 // can never match would drift forever; and a mixed --set is rejected WHOLE, so
 // config and cluster always move together (Resolved Questions 4 and 5).
-function cmdModify(opts: Opts, client: ModuleClient): number {
+// `update` and `modify` are one engine (ADR-020 v0.10 D5): the difference is
+// whether a field is written before the converge. Bare `modify` is the old
+// spelling of `update` and is accepted for one release.
+function cmdModify(opts: Opts, client: ModuleClient, verb: "update" | "modify"): number {
   const module = opts.rest[0];
-  if (!module) die("modify: expected <module>");
+  if (!module) die(`${verb}: expected <module>`);
 
+  if (verb === "update" && opts.sets.length > 0) {
+    die("update takes no --set — change a field with: module-manager module modify <module> --set field=value");
+  }
+  if (verb === "modify" && opts.sets.length === 0) {
+    warn("`modify` with no --set is the release update — say `module-manager module update` instead (#655)");
+  }
   if (opts.sets.length > 0) {
     const rc = applySets(module, opts);
     if (rc !== 0) return rc;
@@ -731,7 +754,7 @@ function cmdModify(opts: Opts, client: ModuleClient): number {
   const m: ModifyOptions = {
     environment: opts.environment,
     force: opts.force,
-    ignoreTestFailure: opts.ignoreTestFailure,
+    allowDisruption: opts.allowDisruption,
     noSnapshot: opts.noSnapshot,
     debug: opts.debug,
     silent: opts.silent,
@@ -841,7 +864,7 @@ function cmdReconcile(opts: Opts, client: ModuleClient): number {
     environment: opts.environment,
     debug: opts.debug,
     silent: opts.silent,
-    force: opts.force,
+    allowDisruption: opts.allowDisruption,
   };
   return client.reconcile(module, r);
 }
@@ -901,8 +924,10 @@ function dispatch(verb: string, opts: Opts, client: ModuleClient): number {
       return cmdValidate(opts);
     case "add":
       return cmdAdd(opts, client);
+    case "update":
+      return cmdModify(opts, client, "update");
     case "modify":
-      return cmdModify(opts, client);
+      return cmdModify(opts, client, "modify");
     case "delete":
       return cmdDelete(opts, client);
     case "reconcile":

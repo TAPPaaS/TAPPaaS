@@ -273,11 +273,11 @@ function doReconcile(moduleArg: string, opts: ReconcileOptions): void {
     }
 
     info(`  Re-applying ${BL}${dep}${CL} for '${module}'...`);
-    // --force is DISRUPTION AUTHORIZATION (ADR-020 D8), not "ignore errors":
-    // without it a change that needs a reboot or an offline migrate is deferred
-    // rather than applied. Forwarded verbatim so the decision is made once, by
-    // the operator, and every provider sees the same answer.
-    const svcArgs = opts.force ? [module, "--force"] : [module];
+    // --allow-disruption authorizes downtime (ADR-020 v0.10 D8), and is not
+    // "ignore errors": without it a change that needs a reboot or an offline
+    // migrate is deferred rather than applied. Forwarded verbatim so the
+    // decision is made once, by the operator, and every provider sees it.
+    const svcArgs = opts.allowDisruption ? [module, "--allow-disruption"] : [module];
     // Run from the module directory (#495) — same cwd update-module.sh uses.
     if (runScript(svcScript, svcArgs, moduleDir ?? undefined) === 0) {
       // "re-applied", NOT "converged" (#583). All this measures is that the

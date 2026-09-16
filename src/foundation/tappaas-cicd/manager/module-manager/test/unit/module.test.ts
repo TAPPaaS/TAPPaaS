@@ -172,35 +172,43 @@ const CONFIG =
   );
 }
 
-// ── 6b. modify forwards --ignore-test-failure to the client (#635), and
-// the help text documents it ────────────────────────────────────────────
+// ── 6b. update is the release update (#655); --force proceeds and
+// --allow-disruption authorizes downtime (ADR-020 v0.10 D8) ──────────────
 {
   const c = new FakeModuleClient();
-  const rc = run(["module", "modify", "nextcloud", "--ignore-test-failure"], c);
-  check(rc === 0, "modify --ignore-test-failure returns the client rc (0)");
-  check(c.log.length === 1 && c.log[0].verb === "modify", "modify invoked once for nextcloud");
+  const rc = run(["module", "update", "nextcloud", "--force"], c);
+  check(rc === 0 && c.log.length === 1 && c.log[0].verb === "modify", "update runs the module's update once");
   const m = c.log[0].opts as ModifyOptions;
-  check(m.ignoreTestFailure === true, "modify forwards --ignore-test-failure to ModifyOptions");
-  check(!m.force, "--ignore-test-failure does not also set --force (distinct authorities, #635)");
+  check(m.force === true && !m.allowDisruption, "--force is forwarded and does NOT authorize downtime");
 
-  // Bare `modify` (no flag) must default to false — the flag has to be given
-  // explicitly, never inferred.
   const c2 = new FakeModuleClient();
-  run(["module", "modify", "nextcloud"], c2);
-  check(
-    (c2.log[0].opts as ModifyOptions).ignoreTestFailure === false,
-    "modify without the flag leaves ignoreTestFailure false",
-  );
+  run(["module", "update", "nextcloud", "--allow-disruption"], c2);
+  const m2 = c2.log[0].opts as ModifyOptions;
+  check(m2.allowDisruption === true && !m2.force, "--allow-disruption is forwarded and does NOT imply --force");
 
+  const c3 = new FakeModuleClient();
+  run(["module", "update", "nextcloud"], c3);
+  const m3 = c3.log[0].opts as ModifyOptions;
+  check(!m3.force && !m3.allowDisruption, "a plain update neither proceeds past a refusal nor reboots");
+
+  // update takes no --set; modify without --set is the deprecated spelling.
+  const c4 = new FakeModuleClient();
+  check(run(["module", "update", "nextcloud", "--set", "cores=4"], c4) !== 0 && c4.log.length === 0,
+    "update refuses --set and names modify");
+  const c5 = new FakeModuleClient();
+  check(run(["module", "modify", "nextcloud"], c5) === 0 && c5.log.length === 1,
+    "bare modify still runs the release update (deprecated spelling)");
+
+  // The retired flag is refused like any undeclared option (#644).
+  const c6 = new FakeModuleClient();
+  check(run(["module", "update", "nextcloud", "--ignore-test-failure"], c6) !== 0 && c6.log.length === 0,
+    "--ignore-test-failure is retired into --force and refused");
+
+  const updateHelp = HELP.verbs.find((h) => h.name === "update");
+  check(!!updateHelp && updateHelp.usage.includes("--allow-disruption"), "update's usage documents --allow-disruption");
+  check(!!updateHelp && (updateHelp.options ?? []).some(([f]) => f === "--force"), "update's options document --force");
   const modifyHelp = HELP.verbs.find((h) => h.name === "modify");
-  check(
-    !!modifyHelp && modifyHelp.usage.includes("--ignore-test-failure"),
-    "modify's usage line documents --ignore-test-failure",
-  );
-  check(
-    !!modifyHelp && (modifyHelp.options ?? []).some(([flag]) => flag === "--ignore-test-failure"),
-    "modify's option list documents --ignore-test-failure",
-  );
+  check(!!modifyHelp && modifyHelp.usage.includes("--set field=value"), "modify's usage leads with --set");
 }
 
 // ── 7. delete maps --remove/--force/--yes; mutual-exclusion guard ───────

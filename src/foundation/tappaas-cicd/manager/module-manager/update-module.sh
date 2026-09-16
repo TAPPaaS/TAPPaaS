@@ -62,7 +62,7 @@ tappaas_require_operator
 
 OPT_FORCE=0
 OPT_NO_SNAPSHOT=0
-OPT_IGNORE_TEST_FAILURE=0
+OPT_ALLOW_DISRUPTION=0
 
 # ── Usage ────────────────────────────────────────────────────────────
 
@@ -82,12 +82,14 @@ Options:
                           <module>.json otherwise. Equivalent to naming the
                           suffixed module directly.
     --variant <name>      DEPRECATED alias for --environment.
-    --force           Authorize a disruptive converge (reboot / offline
-                      migrate); update an archived/external module anyway
-    --ignore-test-failure
-                      Update even when the pre-update test reports a fatal
-                      failure (exit 2). A non-fatal failure (exit 1) never
-                      blocks the update (#635)
+    --force           Proceed although something says no: a pre-update test
+                      that failed fatally (exit 2), or an archived/external
+                      module. Never reboots, never overwrites the deployed
+                      config (ADR-020 v0.10 D8). A non-fatal test failure
+                      (exit 1) never blocks the update anyway (#635)
+    --allow-disruption
+                      Authorize downtime for this module now — a reboot or an
+                      offline migrate. Without it such a change is deferred
     --no-snapshot     Skip pre-update test, snapshot, and rollback
     --debug           Show Debug-level messages
     --silent          Suppress Info-level messages
@@ -352,7 +354,7 @@ main() {
             -h|--help)   usage; exit 0 ;;
             --force)        OPT_FORCE=1; shift ;;
             --no-snapshot)  OPT_NO_SNAPSHOT=1; shift ;;
-            --ignore-test-failure) OPT_IGNORE_TEST_FAILURE=1; shift ;;
+            --allow-disruption) OPT_ALLOW_DISRUPTION=1; shift ;;
             --debug)        OPT_DEBUG=1; export TAPPAAS_DEBUG=1; shift ;;
             --silent)    OPT_SILENT=1; export TAPPAAS_SILENT=1; shift ;;
             --environment)
@@ -406,6 +408,9 @@ main() {
     info "${BOLD}║  TAPPaaS Module Update: ${BL}${module}${CL}"
     if [[ "${OPT_FORCE}" -eq 1 ]]; then
         info "${BOLD}║  Mode: ${YW}--force${CL}"
+    fi
+    if [[ "${OPT_ALLOW_DISRUPTION}" -eq 1 ]]; then
+        info "${BOLD}║  Mode: ${YW}--allow-disruption${CL}"
     fi
     if [[ "${OPT_NO_SNAPSHOT}" -eq 1 ]]; then
         info "${BOLD}║  Mode: ${YW}--no-snapshot${CL}"
@@ -544,11 +549,11 @@ main() {
             debug "  ${GN}✓${CL} Pre-update tests passed"
         elif [[ "${pre_test_exit}" -eq 1 ]]; then
             warn "Pre-update tests failed (exit 1, not fatal) — updating anyway; these failures are the baseline for the post-update test"
-        elif [[ "${OPT_IGNORE_TEST_FAILURE}" -eq 1 ]]; then
-            warn "Pre-update tests failed fatally (exit ${pre_test_exit}) — continuing due to --ignore-test-failure"
+        elif [[ "${OPT_FORCE}" -eq 1 ]]; then
+            warn "Pre-update tests failed fatally (exit ${pre_test_exit}) — continuing due to --force"
         else
             fatal "Pre-update tests failed fatally (exit ${pre_test_exit}) — aborting update"
-            error "  Use --ignore-test-failure to override"
+            error "  Use --force to override"
             exit 2
         fi
     fi
@@ -606,14 +611,14 @@ main() {
     # it is a config error, reported by `module validate`, not a runtime abort.
     info "${BOLD}Update Steps 4+5: Apply config via reconcile${CL}"
 
-    # --force here is the operator's DISRUPTION authorization (ADR-020 D8), not
-    # just "ignore a failing pre-test": forwarded, it lets a change whose class
-    # needs downtime — a subnet change that reboots, an offline migrate — apply
-    # now instead of being deferred to a maintenance window. update-tappaas
-    # deliberately does NOT pass --force to `module modify`, so an unattended
-    # sweep never acquires that authority by accident.
+    # --allow-disruption is the operator's DOWNTIME authorization (ADR-020 v0.10
+    # D8) — a different lever from --force ("proceed past a refusal"). Forwarded,
+    # it lets a change whose class needs downtime — a subnet change that reboots,
+    # an offline migrate — apply now instead of waiting for a maintenance window.
+    # The unattended sweep never passes it: a module that declares rebootOk is
+    # disrupted in the scheduled window, and nothing else is.
     reconcile_args=("${module}" --apply)
-    [[ "${OPT_FORCE}" -eq 1 ]] && reconcile_args+=(--force)
+    [[ "${OPT_ALLOW_DISRUPTION}" -eq 1 ]] && reconcile_args+=(--allow-disruption)
 
     if ! module-manager reconcile "${reconcile_args[@]}"; then
         fatal_with_rollback "${module}" "${snapshot_created}" \

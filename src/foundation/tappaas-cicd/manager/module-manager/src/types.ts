@@ -77,8 +77,10 @@ export interface AddOptions {
 
 export interface ModifyOptions {
   environment?: string;
+  // ADR-020 v0.10 D8: force = proceed (failed pre-update test, archived/external);
+  // allowDisruption = authorize downtime (reboot / offline migrate) for this module.
   force?: boolean;
-  ignoreTestFailure?: boolean;
+  allowDisruption?: boolean;
   noSnapshot?: boolean;
   debug?: boolean;
   silent?: boolean;
@@ -102,14 +104,14 @@ export interface ReconcileOptions {
   environment?: string;
   debug?: boolean;
   silent?: boolean;
-  // AUTHORIZE DISRUPTION (ADR-020 D8): let a converge reboot the guest or
+  // AUTHORIZE DISRUPTION (ADR-020 v0.10 D8): let a converge reboot the guest or
   // migrate it offline to apply a change whose class needs downtime. Forwarded
-  // to each provider's update-service.sh as --force. Without it such a change
-  // is DEFERRED — applied nowhere, reported, and the converge still exits 0.
+  // to each provider's update-service.sh as --allow-disruption. Without it such
+  // a change is DEFERRED — applied nowhere, reported, and the converge exits 0.
   //
-  // The sweep never forwards it: `site-manager update --force` passes
-  // --ignore-test-failure instead and respects rebootOk (ADR-020 D8).
-  force?: boolean;
+  // `--force` is a different lever and is never this one: it means proceed past
+  // a refusal (a failed pre-update test, an archived module), never downtime.
+  allowDisruption?: boolean;
 }
 
 // Options for the READ-ONLY inspect (`reconcile` without --apply, and each

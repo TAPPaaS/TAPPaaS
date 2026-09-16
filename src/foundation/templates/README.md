@@ -15,7 +15,7 @@ hooks that keep consumer VMs configured.
 | NixOS config apply on consumer VMs | module lifecycle | `services/nixos/*.sh` hooks (nixos-rebuild on the consumer VM) |
 | Debian/Ubuntu config apply on consumer VMs | module lifecycle | `services/debian/*.sh` hooks |
 | Windows baseline (OOBE, disk, updates, RDP, SSH) | module lifecycle | `services/windows/*.sh` hooks — see [services/windows/README.md](services/windows/README.md) |
-| Version-gated template refresh | TAPPaaS admin | `module-manager module modify templates` (only downloads when the pinned version changes) |
+| Version-gated template refresh | TAPPaaS admin | `module-manager module update templates` (only downloads when the pinned version changes) |
 
 ## What is not included
 

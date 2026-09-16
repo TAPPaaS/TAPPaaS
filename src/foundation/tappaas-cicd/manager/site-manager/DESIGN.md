@@ -45,9 +45,10 @@ Top-level lifecycle verbs: `add` (create the singleton, = `create-site.sh`),
 fleet verbs (#588) `update` and `test` — thin delegations, same as `evacuate`:
 `update` starts `update-tappaas.service` (ADR-017 D4 — the unit the timer starts, so
 the operator exercises the scheduled path) and follows its journal; the run's options
-travel in a one-shot `config/.update-request.json`: `--force` gives every module
-`--ignore-test-failure` and opens the disruption window for `rebootOk` modules only
-(#633), `--no-git-pull` skips the pull. `--dry-run` starts nothing and reports
+travel in a one-shot `config/.update-request.json`: `--force` forwards `--force`
+to every `module update` (proceed past a fatally failed pre-update test),
+`--allow-disruption` opens the downtime window for `rebootOk` modules (#633), and
+`--no-git-pull` skips the pull. `--dry-run` starts nothing and reports
 repository drift plus the sweep plan. `test` iterates `module-manager list` and runs
 `module-manager test <m>` per module, forwarding `--deep`.
 

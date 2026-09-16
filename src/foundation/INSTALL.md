@@ -592,7 +592,7 @@ need it is the day you cannot make it.
 
 If your first node had no `tankc` pool, the backup module installed as a **shim**
 — dependencies are satisfied but nothing is being backed up yet. Add the pool and
-run `module-manager module modify backup`; it promotes in place. Check with
+run `module-manager module update backup`; it promotes in place. Check with
 `backup-manager placement`.
 
 The rest of the foundation is complete. Everything from here is covered on the

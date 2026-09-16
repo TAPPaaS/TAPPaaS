@@ -44,7 +44,7 @@ under 5 minutes after the reboot).
 | File | Purpose |
 |------|---------|
 | `install-service.sh` | Full lifecycle: Phase 1 OOBE wait + Phase 2 baseline |
-| `update-service.sh` | Security-only Windows Updates (run by `module-manager module modify`) |
+| `update-service.sh` | Security-only Windows Updates (run by `module-manager module update`) |
 | `test-service.sh` | Checks SSH, QEMU-GA, tappaas account, and RDP state |
 
 ## Remote access

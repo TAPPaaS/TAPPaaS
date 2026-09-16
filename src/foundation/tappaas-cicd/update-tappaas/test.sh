@@ -112,8 +112,9 @@ assert m.update_module("demo") is True, "a deferral is not a failure"
 
 argv = seen["argv"]
 assert "--force" not in argv, "update-tappaas must never forward --force: %r" % (argv,)
-assert "--ignore-test-failure" not in argv, "the unattended sweep never overrides a failing test: %r" % (argv,)
-assert argv[1:3] == ["module", "modify"], "unexpected invocation: %r" % (argv,)
+assert "--allow-disruption" not in argv, "the unattended sweep never authorizes downtime per module: %r" % (argv,)
+assert argv[2] == "update", "the sweep calls the update verb (#655): %r" % (argv,)
+assert argv[1:3] == ["module", "update"], "unexpected invocation: %r" % (argv,)
 
 # Both streams are scanned: a provider may warn on either.
 assert len(m.DEFERRED_CHANGES) == 2, m.DEFERRED_CHANGES
@@ -138,14 +139,15 @@ m.subprocess.run = fake_run
 m.os.environ["TAPPAAS_MODULE_FORCE"] = "1"
 try:
     m.update_module("demo")
-    assert "--force" not in seen["argv"], "#633: the fleet --force must not reach module modify: %r" % (seen["argv"],)
-    assert "--ignore-test-failure" in seen["argv"], "ADR-020 v0.9: the fleet --force updates past a failing test: %r" % (seen["argv"],)
-    assert m.disruption_window_open(False, False, True), "#633: --force opens the window even without automaticReboot"
+    assert "--force" in seen["argv"], "ADR-020 v0.10: the fleet --force forwards --force: %r" % (seen["argv"],)
+    assert "--allow-disruption" not in seen["argv"], "--force must not authorize downtime: %r" % (seen["argv"],)
+    assert not m.disruption_window_open(False, False, False), "--force alone opens no disruption window"
+    assert m.disruption_window_open(False, False, True), "--allow-disruption opens the window even without automaticReboot"
 finally:
     del m.os.environ["TAPPAAS_MODULE_FORCE"]
 assert m.disruption_window_open(True, True, False), "the scheduled run with automaticReboot opens the window"
 assert not m.disruption_window_open(True, False, False), "ADR-017 v0.2 D8: a plain operator run opens no window"
-assert not m.disruption_window_open(False, True, False), "no automaticReboot, no --force: the window stays shut"
+assert not m.disruption_window_open(False, True, False), "no automaticReboot, no --allow-disruption: the window stays shut"
 
 # ADR-017 D3/D4: the unit path reads the prepare step's markers and the claimed
 # request; the legacy path claims config/.update-request.json itself, once.

@@ -59,8 +59,8 @@ README: `modify <module> --set field=value`, which refuses an `immutable` or
 `recreate` field before it writes anything and rejects a mixed `--set` whole; and
 the two — only two — ways to authorize a change that needs downtime, `modify
 --force` (an operator, now) and the per-module `rebootOk` (a standing permission
-honoured in the scheduled sweep and in `site-manager update --force`). Running
-the sweep now is neither: the sweep never forwards `module modify --force`.
+honoured in the scheduled sweep and in `site-manager update --allow-disruption`).
+`--force` is neither: it proceeds past a refusal and never reboots.
 
 ### Objects without a schema in this directory
 

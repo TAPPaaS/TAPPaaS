@@ -34,7 +34,7 @@
 #   vmid/image*/os/cloudInit -> immutable : fatal; implies reinstall
 #   node on HA modules -> deferred to cluster:ha (inside update-node.sh)
 #
-# Usage: update-service.sh [--check] [--apply-drift <file>] [--force] <module>
+# Usage: update-service.sh [--check] [--apply-drift <file>] [--allow-disruption] <module>
 #   --check              Report drift without applying (also via TAPPAAS_CHECK=1)
 #   --apply-drift FILE   Apply a drift record that was computed elsewhere. The
 #                        default is to ask the manager for one — every existing
@@ -83,8 +83,11 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --check)       CHECK_MODE=1 ;;
         --apply-drift) DRIFT_FILE="${2:-}"; shift ;;
+        --allow-disruption) FORCE=1 ;;
+        # ADR-020 v0.10 renamed the flag; --force stays accepted for one release
+        # so a not-yet-rebuilt module-manager keeps working.
         --force)       FORCE=1 ;;
-        -h|--help)     echo "Usage: $0 [--check] [--apply-drift <file>] [--force] <module-name>"; exit 0 ;;
+        -h|--help)     echo "Usage: $0 [--check] [--apply-drift <file>] [--allow-disruption] <module-name>"; exit 0 ;;
         -*)            echo "update-service.sh: unknown option '$1'" >&2; exit 1 ;;
         *)             MODULE="$1" ;;
     esac
@@ -92,7 +95,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "${MODULE}" ]]; then
-    echo "Usage: $0 [--check] [--apply-drift <file>] [--force] <module-name>"
+    echo "Usage: $0 [--check] [--apply-drift <file>] [--allow-disruption] <module-name>"
     exit 1
 fi
 

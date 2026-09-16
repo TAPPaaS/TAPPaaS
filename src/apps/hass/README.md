@@ -26,7 +26,7 @@ charging and audio from one interface, locally, without cloud dependency.
 - Centralised Authentik SSO (`identity:identity`) — not applicable to the sealed HAOS
   appliance; external access is gated at the proxy layer instead (see
   [DESIGN.md](./DESIGN.md)).
-- Updates via `module-manager module modify` — HAOS manages its own runtime updates via the web UI.
+- Updates via `module-manager module update` — HAOS manages its own runtime updates via the web UI.
   The module version tracks the initial image used at deploy time.
 
 ## Requirements

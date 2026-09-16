@@ -83,7 +83,7 @@ export class CliModuleClient implements ModuleClient {
     const args: string[] = [];
     if (opts.environment) args.push("--environment", opts.environment);
     if (opts.force) args.push("--force");
-    if (opts.ignoreTestFailure) args.push("--ignore-test-failure");
+    if (opts.allowDisruption) args.push("--allow-disruption");
     if (opts.noSnapshot) args.push("--no-snapshot");
     if (opts.debug) args.push("--debug");
     if (opts.silent) args.push("--silent");

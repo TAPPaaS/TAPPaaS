@@ -135,11 +135,12 @@ export const HELP: HelpSpec = {
         ["--apply", "Commit (default is preview)."],
         ["--deep", "Cascade people → network → (every) environment."],
       ] },
-    { usage: "update [--dry-run] [--force] [--no-git-pull]",
+    { usage: "update [--dry-run] [--force] [--allow-disruption] [--no-git-pull]",
       note: "(#588: run the whole-site update sweep NOW — packages update-tappaas)",
       options: [
         ["--dry-run", "Preview the update plan; change nothing."],
-        ["--force", "Update every module even if its pre-update test fails (module modify --ignore-test-failure), and open the disruption window now: modules with rebootOk may be rebooted / migrated offline, the others keep disruptive changes deferred (never overrides rebootOk:false)."],
+        ["--force", "Update every module even when its pre-update test failed fatally, or its status is archived/external. Never reboots anything (ADR-020 v0.10 D8)."],
+        ["--allow-disruption", "Open the downtime window for this run: a module with rebootOk may be rebooted or migrated offline, the others keep their disruptive changes deferred. Never overrides rebootOk:false — that is `module-manager module update <m> --allow-disruption`."],
         ["--no-git-pull", "Update whatever is checked out; skip pulling each repository (test local, not-yet-pushed changes)."],
       ] },
     { usage: "test [--deep]",
@@ -181,7 +182,7 @@ interface Opts {
 // Flags that take NO value (everything else with a value is captured generically).
 const NOARG = new Set(["--apply", "--deep", "--force", "--json",
   "--pxe", "--provision", "--config-only", "--yes", "--no-wan",
-  "--dry-run", "--no-git-pull"]);
+  "--dry-run", "--no-git-pull", "--allow-disruption"]);
 
 function parseOpts(args: string[]): Opts {
   const o: Opts = {
@@ -799,6 +800,7 @@ function cmdUpdate(o: Opts, client: SiteClient): number {
   const dryRun = o.boolFlags.has("--dry-run");
   const noGitPull = o.boolFlags.has("--no-git-pull");
   const force = o.force === true;
+  const allowDisruption = o.boolFlags.has("--allow-disruption");
   const nowSec = Math.floor(Date.now() / 1000);
   const holds = readHolds(o.configDir);
 
@@ -814,19 +816,22 @@ function cmdUpdate(o: Opts, client: SiteClient): number {
       const p = hold ? { head: null, tip: null, behind: null } : client.repoProbe(r.path ?? `/home/tappaas/${r.name}`, branch);
       info(`  ${repoStatusLine(r.name, branch, p.head, p.tip, p.behind, hold)}`);
     }
-    return client.runUpdateDryRun(force);
+    return client.runUpdateDryRun(force, allowDisruption);
   }
 
   for (const h of holds.values()) info(`${YW}${h.repository}: ${describeHold(h, nowSec)}${CL}`);
   if (force) {
-    warn(`${YW}--force: every module updates even if its pre-update test fails; modules with rebootOk may be rebooted / migrated offline now, the others keep disruptive changes deferred.${CL}`);
+    warn(`${YW}--force: every module updates even if its pre-update test failed fatally.${CL}`);
+  }
+  if (allowDisruption) {
+    warn(`${YW}--allow-disruption: modules with rebootOk may be rebooted or migrated offline now; the others keep disruptive changes deferred.${CL}`);
   }
   const state = client.unitState();
   if (state === "active" || state === "activating" || state === "deactivating") {
     die(`${UNIT} is already running (${state}) — follow it: journalctl -fu ${UNIT}`);
   }
   const by = process.env.SUDO_USER || process.env.USER || "unknown";
-  writeRequest(o.configDir, buildRequest(force, noGitPull, by, new Date()));
+  writeRequest(o.configDir, buildRequest(force, allowDisruption, noGitPull, by, new Date()));
   const started = client.startUnit();
   if (!started.ok) {
     dropRequest(o.configDir);

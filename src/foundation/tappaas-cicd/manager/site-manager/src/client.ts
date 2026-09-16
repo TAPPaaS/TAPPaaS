@@ -251,10 +251,13 @@ export class CliSiteClient implements SiteClient {
     return { head: head.stdout.trim(), tip, behind };
   }
 
-  runUpdateDryRun(moduleForce: boolean): number {
+  runUpdateDryRun(moduleForce: boolean, allowDisruption: boolean): number {
     // The plan only; nothing runs. update-tappaas's gate is skipped for --dry-run.
     return runStreaming(UPDATE_TAPPAAS(), ["--dry-run"], {
-      env: { TAPPAAS_MODULE_FORCE: moduleForce ? "1" : "0" },
+      env: {
+        TAPPAAS_MODULE_FORCE: moduleForce ? "1" : "0",
+        TAPPAAS_ALLOW_DISRUPTION: allowDisruption ? "1" : "0",
+      },
     });
   }
 
