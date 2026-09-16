@@ -184,8 +184,36 @@ later wave depends on.
 
 Status: landed 2026-09-16 — 121cf82a (ADRs), 64cc90c3 (#655 + the `--force`
 rework), c69b3860 + 96ea83d3 (ADR-025), 21a81d84 (#453), d234e3bd (#584),
-51b63e5d (#648), 060f61a0 (#572), e46e4e45 (#652). Every issue in the table is
-implemented and green on hrossen at T0–T2; T3 is the group gate.
+51b63e5d (#648), 060f61a0 (#572), e46e4e45 (#652), plus 99297d14, 1387038b and
+f44828af (see below). Every issue in the table is implemented.
+
+**T3 on hrossen: green.** A real sweep through `update-tappaas.service`, 13/13
+modules, no `--force`, no node reboot needed. The migration runner ran between
+the control-plane refresh and the rebuild, reported `no pending migrations`, and
+wrote nothing — no ledger, no snapshot (ADR-025 D11). The sweep invoked the new
+`module update` verb for all 13 modules and the bare-`modify` deprecation
+warning never fired, which is what proves #655 reached the path that matters.
+The #572 auto-stash restore was verified live on the shared checkout where the
+entries had accumulated.
+
+**Two failure injections**, run deliberately with the operator's approval, put
+the ADR-025 worked-example table on the record rather than on trust:
+
+- a migration that exits non-zero stopped the run at the migrate stage — no
+  rebuild, no sweep, module `updateTime`s unchanged, nothing recorded in the
+  ledger, the whole-`config/` snapshot taken first and complete, and the #651
+  notice naming the stage;
+- a migration that succeeds is recorded and is **not** re-applied on the next
+  run, which is what makes "fix forward after a failed rebuild" safe.
+
+**Three defects the live path found**, all fixed on the branch: a ledger that
+could not be read was treated as "nothing applied" and would have replayed every
+migration a site ever received; a `config/` snapshot with holes in it passed as a
+safety net; and `date -Is` (GNU-only) wrote a ledger line the reader would refuse
+the next night — caught only because the reader was tightened first (1387038b).
+A refused field change also told the operator the config "may be partially
+updated" when nothing had been written (f44828af). The always-red source-tree
+suites now skip with a reason instead of failing on every run (99297d14).
 - **Rule for reviews:** a change that renames or re-schemas anything under
   `config/` ships with its migration and a fixture test (config before →
   after) in the tappaas-cicd fast tier.
