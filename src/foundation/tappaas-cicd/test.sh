@@ -489,6 +489,14 @@ fi
 #
 # EXCLUSIONS are explicit and must carry a reason. An unexplained skip is the
 # same invisibility in a different costume.
+#
+# A suite may also skip ITSELF by exiting 77 with its reason as the last line —
+# for a check that needs something this environment does not have. The two
+# source-tree suites use it: they read the git checkout, and the test harness
+# ships a scratch COPY of the working tree, so they were failing on every run
+# through it. A permanent red teaches everyone to stop reading the result,
+# which costs more than the check is worth. 77 is for "cannot run here", never
+# for "would fail here".
 info "${BOLD}Test 9z: scripts/test tabletop suites${CL}"
 
 # test-install-overrides.sh: wraps test-vm-creation/test-variant.sh, 10 of whose
@@ -529,6 +537,26 @@ else
     skip "service README field sections (use --deep to run)"
 fi
 
+# tabletop_verdict <name> <rc> <output> — one suite's result.
+#
+# A function, not three lines inside the loop, so scripts/test/test-tabletop-sweep.sh
+# can exercise it directly: the sweep's own verdict is the one piece of this
+# suite that nothing else could reach.
+#
+# 77 = "I cannot run here, and here is why" (the automake convention), and the
+# reason — the suite's last line — is PRINTED. Any other non-zero is a failure.
+tabletop_verdict() {
+    local name="$1" rc="$2" out="$3"
+    if [[ "${rc}" -eq 0 ]]; then
+        pass "${name}"
+    elif [[ "${rc}" -eq 77 ]]; then
+        skip "${name} — $(printf '%s\n' "${out}" | tail -1)"
+    else
+        fail "${name} failed — rerun: scripts/test/${name}"
+        printf '%s\n' "${out}" | tail -12 | sed 's/^/      /' >&2
+    fi
+}
+
 _tt_dir="${SCRIPT_DIR}/scripts/test"
 if [[ ! -d "${_tt_dir}" ]]; then
     fail "scripts/test/ not found"
@@ -543,11 +571,9 @@ else
             # #565 made the tracked mode authoritative; a test committed 100644
             # would otherwise be skipped here and vanish from the count.
             fail "${_tt_name} is not executable (commit it 100755)"
-        elif _tt_out="$("${_tt}" 2>&1)"; then
-            pass "${_tt_name}"
         else
-            fail "${_tt_name} failed — rerun: scripts/test/${_tt_name}"
-            printf '%s\n' "${_tt_out}" | tail -12 | sed 's/^/      /' >&2
+            _tt_out="$("${_tt}" 2>&1)" && _tt_rc=0 || _tt_rc=$?
+            tabletop_verdict "${_tt_name}" "${_tt_rc}" "${_tt_out}"
         fi
     done
     if [[ "${_tt_ran}" -gt 0 ]]; then

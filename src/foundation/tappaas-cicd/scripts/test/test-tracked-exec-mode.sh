@@ -25,7 +25,20 @@
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(git -C "${SCRIPT_DIR}" rev-parse --show-toplevel)"
+# A SOURCE-TREE check: it reads what git records, so it needs the checkout, not
+# a copy of it. The test harness ships the working tree to a scratch directory
+# on the site, where there is no work tree to read — exit 77 (the sweep's
+# "cannot run here", test.sh Test 9z) with the reason on the last line, rather
+# than failing on every single run and training everyone to ignore red.
+REPO_ROOT="$(git -C "${SCRIPT_DIR}" rev-parse --show-toplevel 2>/dev/null || true)"
+# The second half matters as much as the first: a copy unpacked INSIDE some
+# other repository would resolve a toplevel that does not track this project,
+# and the check would then read a tree it knows nothing about.
+if [[ -z "${REPO_ROOT}" ]] || \
+   [[ -z "$(git -C "${REPO_ROOT}" ls-files -- src/foundation/tappaas-cicd/test.sh 2>/dev/null)" ]]; then
+    echo "no TAPPaaS git work tree here (a shipped copy, not a checkout) — this source-tree check runs on a clone"
+    exit 77
+fi
 cd "${REPO_ROOT}" || { echo "cannot cd to repo root" >&2; exit 1; }
 
 PASS=0
