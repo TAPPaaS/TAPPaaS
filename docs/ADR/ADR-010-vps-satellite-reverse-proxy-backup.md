@@ -3,8 +3,9 @@
 **Status:** **Accepted — implemented (Debian variant).** `reverse-proxy` and `admin-vpn` are live-validated (reference VPS `37.27.5.237`; makerfloss); the `backup` role is implemented (official PBS on Debian, pull model) with the full pull round-trip pending a live home-PBS test. Two *decided* designs below were reversed during implementation — see the banner and §3.4/§5/§7.3.
 **Date:** 2026-06-29
 **Deciders:** @LarsRossen
+**Refined by:** [ADR-022e](<ADR-022e - Module Scope.md>) (`scope` replaces `tier`) · [ADR-022f](<ADR-022f - Kind Values and Operating System.md>) (`kind: machine`, OS facet) · [ADR-022g](<ADR-022g - Management.md>) (`management`; *external* means outside the Administrative Domain) — see §8
 **Related:** [network/DESIGN.md](../../src/foundation/network/DESIGN.md) ("can function with no public IPv4"); [netbird-setup.md](../../src/foundation/firewall/docs/netbird-setup.md) (current remote-access overlay); [ADR-005](ADR-005-variant-domain-architecture.md) (variant/domain + split-horizon DNS, Caddy-on-OPNsense); [backup/README.md](../../src/foundation/backup/README.md) (PBS multi-source pull/push, #227); [ADR-012](ADR-012-backup-enhancement.md) (`backup` module: install-resolved placement states, an externally-managed PBS consumed by URL, subset/retention — consumes this satellite as a pull target, or as the `external` PBS a site with no local datastore pushes to); _TBD — open issue for satellite_
-**Changelog:** 2026-06-29 — skeleton + Context drafted; §2 TLS passthrough decided (terminate-at-satellite parked); §4 WireGuard tunnel (home dials out, satellite listens) + dedicated `edge` overlay zone decided; §4.4 all decided (`/31` `10.255.0.0/31`; :443 passthrough + :80 redirect-via-Caddy; wg `51820` default/configurable + `443/udp` fallback; automated DNS, split-horizon kept, no IPv6 v1); §5 provisioning/lifecycle drafted (NixOS via nixos-anywhere, `satellite-manager` on tappaas-cicd, optional `satellite` foundation module); §5.3 expanded with Hetzner Cloud reference, **Tier A (portal allocate) = default**, Tier B (hcloud API token) opt-in; nixos-anywhere kexec, no rescue/custom image; §3 Backup drafted — off-site PBS **pull** model (satellite pulls home, `--remove-vanished false`, client-side encryption key stays home, opt-in role + tunnel `edge→PBS:8007`); admin access reworked into the **`admin-vpn`** role (§6, Goal #5): WireGuard terminating on OPNsense → full management-plane reach, satellite as blind UDP relay (Option B); WG-hub rejected; SSH-only passthrough kept as minimal sub-mode; ports/firewall/roles updated throughout; **§7 secrets inventory (~11 creds) + compromise-isolation** added — pull-only data plane + no standing cicd root + ephemeral provisioning + one-directional mgmt + local immutable ZFS snapshots so a hacked cluster can't destroy the vault; §5.8 passthrough forwarder = **nginx `stream`** (HAProxy alt; Caddy-l4/Traefik rejected), PROXY-protocol-v2 required for client-IP, SNI only for future multi-site; §1 Role/trust-boundary summary written; closing sections fleshed out — Consequences, Alternatives, phased Implementation Plan, Testing Strategy, Acceptance (full first draft complete; status stays **draft** pending operator review). 2026-06-30 — module renamed `45-satellite` → `src/foundation/satellite/` and sibling refs de-numbered (`network`/`tappaas-cicd`/`identity`/`backup`) to match the ADR-007 named-module foundation. 2026-06-30 — §3.4 backup storage backend decided: **S3 object storage default** (Hetzner Object Storage, PBS 4.2+) with dedicated-volume alternative; immutability via **S3 Object Lock** (stronger than ZFS snapshots — §7.3); §5.9 added — `README.md`/`INSTALL.md` + conditional install-flow reference. 2026-09-02 — **reconciled to the shipped implementation** and promoted draft → Accepted (implemented, Debian variant): folded the two implementation reversals into the body — **OS NixOS → Debian by default** (impl-doc D19; `--os nixos` retained) and **backup immutability S3 Object Lock → the pull model** (impl-doc D13/D16/Q8; PBS has no working S3 Object Lock, Proxmox #6780) — and corrected §3.4, §5.1, §7.3, Consequences, the Implementation Plan/Testing/Acceptance, and the stale impl-doc/README headers
+**Changelog:** 2026-09-17 — §8 added: the satellite as an ordinary module under ADR-022 (`kind: machine`, `scope: site`, `management: managed`, OS facet), what is mechanically missing, and the instance-naming question. 2026-06-29 — skeleton + Context drafted; §2 TLS passthrough decided (terminate-at-satellite parked); §4 WireGuard tunnel (home dials out, satellite listens) + dedicated `edge` overlay zone decided; §4.4 all decided (`/31` `10.255.0.0/31`; :443 passthrough + :80 redirect-via-Caddy; wg `51820` default/configurable + `443/udp` fallback; automated DNS, split-horizon kept, no IPv6 v1); §5 provisioning/lifecycle drafted (NixOS via nixos-anywhere, `satellite-manager` on tappaas-cicd, optional `satellite` foundation module); §5.3 expanded with Hetzner Cloud reference, **Tier A (portal allocate) = default**, Tier B (hcloud API token) opt-in; nixos-anywhere kexec, no rescue/custom image; §3 Backup drafted — off-site PBS **pull** model (satellite pulls home, `--remove-vanished false`, client-side encryption key stays home, opt-in role + tunnel `edge→PBS:8007`); admin access reworked into the **`admin-vpn`** role (§6, Goal #5): WireGuard terminating on OPNsense → full management-plane reach, satellite as blind UDP relay (Option B); WG-hub rejected; SSH-only passthrough kept as minimal sub-mode; ports/firewall/roles updated throughout; **§7 secrets inventory (~11 creds) + compromise-isolation** added — pull-only data plane + no standing cicd root + ephemeral provisioning + one-directional mgmt + local immutable ZFS snapshots so a hacked cluster can't destroy the vault; §5.8 passthrough forwarder = **nginx `stream`** (HAProxy alt; Caddy-l4/Traefik rejected), PROXY-protocol-v2 required for client-IP, SNI only for future multi-site; §1 Role/trust-boundary summary written; closing sections fleshed out — Consequences, Alternatives, phased Implementation Plan, Testing Strategy, Acceptance (full first draft complete; status stays **draft** pending operator review). 2026-06-30 — module renamed `45-satellite` → `src/foundation/satellite/` and sibling refs de-numbered (`network`/`tappaas-cicd`/`identity`/`backup`) to match the ADR-007 named-module foundation. 2026-06-30 — §3.4 backup storage backend decided: **S3 object storage default** (Hetzner Object Storage, PBS 4.2+) with dedicated-volume alternative; immutability via **S3 Object Lock** (stronger than ZFS snapshots — §7.3); §5.9 added — `README.md`/`INSTALL.md` + conditional install-flow reference. 2026-09-02 — **reconciled to the shipped implementation** and promoted draft → Accepted (implemented, Debian variant): folded the two implementation reversals into the body — **OS NixOS → Debian by default** (impl-doc D19; `--os nixos` retained) and **backup immutability S3 Object Lock → the pull model** (impl-doc D13/D16/Q8; PBS has no working S3 Object Lock, Proxmox #6780) — and corrected §3.4, §5.1, §7.3, Consequences, the Implementation Plan/Testing/Acceptance, and the stale impl-doc/README headers
 
 ---
 
@@ -417,6 +418,72 @@ Plus, for the destroy-capable **Hetzner token (#9)**: it is **never standing on 
 **Result:** a total home-cluster compromise can, at worst, **stop new backups flowing** and read its own (already-held) data. It **cannot** reach back to delete, encrypt, or destroy the existing off-site history or the VPS. The vault survives the thing it exists to survive.
 
 > **Uniform application (decided).** These rules apply to **every satellite**, regardless of role — not just backup-role ones. Rationale: one mental model ("a satellite is always semi-trusted and self-managing; the cluster never holds standing root over it") is far easier to reason about and audit than per-role management trust, and it removes any risk of a relay satellite later gaining the backup role while still carrying relaxed, cluster-rootable management. This is a deliberate, accepted departure from goal #4's "managed from `tappaas-cicd`" convenience for **all** satellites.
+
+---
+
+### 8. Becoming a proper module (ADR-022)
+
+> Added 2026-09-17. §5.1 says the satellite "breaks the usual TAPPaaS module
+> mold" and ships "a config pair that mirrors the module convention". The
+> ADR-022 ontology removes the reason for the exception: there is now a `kind`
+> for what a satellite *is*, so it can be an ordinary module rather than a
+> near-module managed alongside the real ones.
+
+#### 8.1 What it is, in the new vocabulary
+
+**`kind: machine`** (ADR-022f D1, leaf 3: *owns a system with an OS that is not a
+Proxmox guest*). Note the word: 022f D2 renames the old `host` value to
+`machine`, keeping **Host** as the *role* a machine, vm or lxc fills. A satellite
+is a machine that fills a Host role for the `backup` application it carries.
+
+| Field | Today | Aligned | Why |
+|---|---|---|---|
+| `kind` | `external-host` | **`machine`** | 022f D1/D2. `external-host` is not in the vocabulary, and it welded a kind to a trust boundary |
+| `tier` | `foundation` | **`scope: site`** | 022e D1. It serves the whole Site and installs in `mgmt` |
+| `status` | `external` | **`management: managed`** | 022g D3: `external` was never a maturity. TAPPaaS provisions the satellite and runs its lifecycle, so it is *managed* |
+| `os` | `debian` | **`os.family: linux`, `os.id: debian`** | 022f D7, two levels |
+| `roles` | `[reverse-proxy, admin-vpn, backup]` | unchanged, as a **facet** | 022h. Roles are what this machine is *for*, not what it is |
+
+**A satellite is not `external`.** Under 022g D2 *external* means only "outside
+this Site's Administrative Domain", and the satellite is the Site's own off-site
+outpost — provisioned by it, keyed by it, wired into its `edge` zone. Off-site is
+a location (ADR-022b), not a domain boundary. This matters for backup: ADR-012
+§1.3 lists the satellite beside third-party PBS instances, and only the latter
+are external.
+
+#### 8.2 What is missing, mechanically
+
+The satellite already ships `install.sh`, `update.sh` and `test.sh`, so it meets
+the module contract. Three things keep it outside the model:
+
+1. **Its config is written by hand.** `install.sh` instructs the operator to
+   "Copy `satellite.json` → `~/config/satellite-<name>.json` and edit it",
+   bypassing `copy-update-json.sh` — which is why the deployed config records no
+   `.location` and no repository catalog entry, and why `module-manager list
+   --resolution` reports it as *unresolvable*. It should be created the way every
+   other module's config is.
+2. **Its name does not follow the convention.** Deployed configs are
+   `<module>` or `<module>-<environment>`, and `mgmt` takes no suffix — so a
+   satellite in `mgmt` should be `satellite.json`. It is
+   `satellite-satellite1.json`, where `satellite1` is an *instance*, a dimension
+   the convention does not have. **Open:** either the convention grows an
+   instance dimension, or a Site's satellites are one module with several hosts.
+   ADR-022e D4 says scope is not multiplicity and names `satellite` as the
+   example of a site-scoped module with several instances, so the question is
+   live and belongs with that rib.
+3. **It is skipped by the sweep.** Marked `status: external` on 2026-09-17 so the
+   update path steps over it (the archived/external check precedes the 3-way
+   merge). That was a stop-gap while #659 made an unreconciled update fatal; it
+   is removed by this alignment, not by another exception.
+
+#### 8.3 Order of work
+
+The field renames are a change to the *shape* of `config/`, so under ADR-025 D7
+they ship as a numbered migration with a before→after fixture — together with
+ADR-012's `placementState: consumed`, since a site with a satellite carries both.
+Registering the module (catalog entry or `.location`) and settling the instance
+naming are prerequisites: a migration that rewrites a config the resolver cannot
+find would leave the module exactly as stranded as it is now.
 
 ---
 
