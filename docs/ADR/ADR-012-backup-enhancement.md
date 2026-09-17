@@ -157,7 +157,7 @@ A TAPPaaS backup system therefore registers three peer relationships — and the
 
 `pull` and `remote` are the same movement seen from the two ends: to keep an off-site copy of this site's data with a buddy, this site adds a **`remote`** peer and the buddy adds a **`pull`** peer.
 
-**There is no peer kind for sending our backups to another PBS**, deliberately. A site with no local datastore points its own *clients* at an external PBS through **placement** (`placementState: consumed` + `pbsUrl`, §1.3) — a property of this module's installation, not a relationship with a peer. And a TAPPaaS PBS never pushes to another PBS at all: every inter-PBS copy is a pull, which is what makes §1.4.1 structural.
+**There is no peer kind for sending our backups to another PBS**, deliberately. A site with no local datastore points its own *clients* at a PBS it does not own through **placement** (`placementState: consumed` + `pbsUrl`, §1.3) — a property of this module's installation, not a relationship with a peer. And a TAPPaaS PBS never pushes to another PBS at all: every inter-PBS copy is a pull, which is what makes §1.4.1 structural.
 
 > **The `remote` grant does not propagate.** PBS ACLs inherit into child namespaces, so a `DatastoreReader` grant on the root namespace would hand the peer `fs/` — this site's `config/` and `/etc/secrets` capture — and every other peer's data, alongside the VM backups it was meant to cover. `remote` therefore grants **non-propagating** by default, and says so when an operator asks for propagation explicitly.
 
@@ -535,7 +535,7 @@ Backing up a Proxmox storage **dataset** — e.g. external NFS-served data that 
 - **Tooling (§2.6):** `backup-controller` performs the same operation against the local PBS and a satellite/external PBS with only endpoint/credential differing.
 - **Backup-type capabilities (§3.1):** a `dependsOn: backup:vm` module gets a full-guest backup+restore; a `dependsOn: backup:filesystem` module (supported guest OS) gets its named path subset backed up + restored; a module depending on **neither** is not in the PBS job.
 - **Schedule cascade (§3.2):** a module with no schedule inherits the site default; changing the site default to weekly makes unspecified modules weekly; a module override to weekly/monthly holds; a sub-daily request is **rejected** (once/day ceiling).
-- **Bootstrap/promotion (§2.3):** `shim → external` and `shim → node:<name>` (and `→ node+satellite`) via a config change + `update.sh` re-resolving `placementState`; dependents keep working throughout.
+- **Bootstrap/promotion (§2.3):** `shim → consumed` and `shim → node:<name>` (and `→ node+satellite`) via a config change + `update.sh` re-resolving `placementState`; dependents keep working throughout.
 - **Schema (§2.7):** a `backup.json` with the new fields + `provides:["vm"]` validates; a shim still `provides: backup:vm`; the `provides`-aware normalizer emits no false orphan warnings (KI-1).
 - **`alwaysBackup` retirement (§2.7 / #501):** foundation VMs join the PBS job via `integratesWith: backup` with **no** `alwaysBackup` list; a module declaring neither `dependsOn` nor `integratesWith` backup (hardware/test) is excluded.
 - **Migration (§4):** a legacy fixture (`placementState:local`, `pushTarget`, `alwaysBackup`) upgrades to `node:<name>` with the datastore untouched; a `#456` `consumed` adoption leaves the pre-existing snapshots restorable; a relocation-by-pull preserves history and only decommissions the old datastore after a test restore.
@@ -588,7 +588,7 @@ and, when it is ours, **what type of device/workload it is** (ADR-022d
 coordinates in that model; none is lost. See ADR-022's mapping table (spine, not either rib).
 
 **What this ADR still decides**, and what ADR-022d does not touch: the backup
-module's own `placementState` (§2.1) — `node:<name>` / `shim` / `external`. That
+module's own `placementState` (§2.1) — `node:<name>` / `shim` / `consumed`. That
 is where *this site's PBS* runs, and it stays the implemented mechanism.
 
 ### Open against ADR-022d (both drafts, raised not decided)
