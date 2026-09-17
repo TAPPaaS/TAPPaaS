@@ -21,11 +21,11 @@ CONFIG_FILE="${SCRIPT_DIR}/${VMNAME}.json"
 VMID="${TAPPAAS_VMID_OVERRIDE:-$(jq -r '.vmid' "${CONFIG_FILE}")}"
 
 _PRIMARY="tappaas1.mgmt.internal"
-LXC_NODE="$(ssh -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new "root@${_PRIMARY}" \
+LXC_NODE="$(ssh -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR "root@${_PRIMARY}" \
     "pvesh get /cluster/resources --type vm --output-format json 2>/dev/null" \
     | jq -r --argjson id "${VMID}" '.[] | select(.vmid==$id) | .node' 2>/dev/null)"
 [[ -n "${LXC_NODE:-}" ]] || { echo "ERROR: cannot resolve the node hosting LXC ${VMID}"; exit 1; }
-pct() { ssh -n -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new "root@${LXC_NODE}.mgmt.internal" pct "$@"; }
+pct() { ssh -n -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR "root@${LXC_NODE}.mgmt.internal" pct "$@"; }
 
 echo ""
 echo "=== vLLM AMD inspect (VMID: ${VMID} on ${LXC_NODE}) ==="

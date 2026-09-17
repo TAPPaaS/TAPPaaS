@@ -16,13 +16,13 @@ VMID="${TAPPAAS_VMID_OVERRIDE:-$(jq -r '.vmid' "$CONFIG_FILE")}"
 # `pct` only exists on PVE nodes, but this test is invoked on tappaas-cicd.
 # Resolve the node hosting the LXC and route every `pct` call there over ssh.
 _PRIMARY="tappaas1.mgmt.internal"
-LXC_NODE="$(ssh -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new "root@${_PRIMARY}" \
+LXC_NODE="$(ssh -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR "root@${_PRIMARY}" \
     "pvesh get /cluster/resources --type vm --output-format json 2>/dev/null" \
     | jq -r --argjson id "${VMID}" '.[] | select(.vmid==$id) | .node' 2>/dev/null)"
 [[ -n "${LXC_NODE:-}" ]] || { echo "ERROR: cannot resolve the node hosting LXC ${VMID}"; exit 1; }
 # -n: do not read the script's stdin (otherwise ssh consumes it and derails the
 # remaining test, and breaks any `... | while read` loops below).
-pct() { ssh -n -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new "root@${LXC_NODE}.mgmt.internal" pct "$@"; }
+pct() { ssh -n -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR "root@${LXC_NODE}.mgmt.internal" pct "$@"; }
 
 PASS=0
 FAIL=0
@@ -74,7 +74,7 @@ check "/dev/kfd device node present in LXC" "$?"
 pct exec "${VMID}" -- ls /dev/dri/renderD128 > /dev/null 2>&1
 check "/dev/dri/renderD128 device node present in LXC" "$?"
 
-_node() { ssh -n -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new "root@${LXC_NODE}.mgmt.internal" "$@"; }
+_node() { ssh -n -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR "root@${LXC_NODE}.mgmt.internal" "$@"; }
 
 KFD_HEX=$(_node stat -c '%t' /dev/kfd 2>/dev/null || echo "0")
 KFD_CGROUP_RC=0

@@ -106,19 +106,19 @@ echo "env_updated"
 EOSH
 )
 
-RESULT=$(ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 "tappaas@${LITELLM_HOST}" \
+RESULT=$(ssh -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR -o ConnectTimeout=10 "tappaas@${LITELLM_HOST}" \
     "sudo bash -s -- '${NEW_KEY}'" <<< "${STEP1_SCRIPT}") \
     || die "Step 1 failed: could not update ${SECRETS_FILE} on ${LITELLM_HOST}"
 echo "${RESULT}" | grep -q "env_updated" || die "Step 1 failed: sed did not confirm update"
 
-ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 "tappaas@${LITELLM_HOST}" \
+ssh -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR -o ConnectTimeout=10 "tappaas@${LITELLM_HOST}" \
     "sudo systemctl restart podman-litellm.service && sleep 5 && \
      sudo systemctl is-active podman-litellm.service" \
     || die "Step 1 failed: podman-litellm did not come back up after restart"
 info "  ${GN}✓${CL} Step 1 complete — env updated, service restarted"
 
 # ── Read master key (must happen AFTER service restart) ──────────────────────
-MASTER=$(ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
+MASTER=$(ssh -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR -o ConnectTimeout=10 \
     "tappaas@${LITELLM_HOST}" \
     "sudo grep '^LITELLM_MASTER_KEY=' /etc/secrets/litellm.env | cut -d= -f2-") \
     || die "could not read LITELLM_MASTER_KEY from ${LITELLM_HOST}"
@@ -128,7 +128,7 @@ MASTER=$(ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
 info "  ${BOLD}Step 2${CL}: rotating DB credential on ${LITELLM_HOST}"
 
 if [[ -z "${CREDENTIAL_NAME}" ]]; then
-    CRED_LIST=$(ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
+    CRED_LIST=$(ssh -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR -o ConnectTimeout=10 \
         "tappaas@${LITELLM_HOST}" \
         "curl -sf http://localhost:4000/credentials \
             -H 'Authorization: Bearer ${MASTER}'" 2>/dev/null) \
@@ -156,7 +156,7 @@ fi
 if [[ -n "${OWUI_SERVICE}" ]]; then
     info "  Post: restarting ${OWUI_SERVICE} (10s after LiteLLM)"
     sleep 10
-    if ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 "tappaas@${LITELLM_HOST}" \
+    if ssh -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR -o ConnectTimeout=10 "tappaas@${LITELLM_HOST}" \
         "sudo systemctl restart '${OWUI_SERVICE}' 2>/dev/null && echo ok" | grep -q ok; then
         info "  ${GN}✓${CL} ${OWUI_SERVICE} restarted"
     else

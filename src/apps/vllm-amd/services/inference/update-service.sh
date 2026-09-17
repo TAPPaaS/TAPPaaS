@@ -79,7 +79,7 @@ CONTENT="$(printf 'VLLM_BASE_URL=%s\nVLLM_MODEL_ID=%s\nVLLM_API_KEY=%s\n' \
     "${VLLM_BASE_URL}" "${MODEL_ID}" "${VLLM_KEY}")"
 
 if printf '%s\n' "${CONTENT}" | ssh -o BatchMode=yes -o ConnectTimeout=15 \
-        -o StrictHostKeyChecking=accept-new "tappaas@${CONSUMER_HOST}" \
+        -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR "tappaas@${CONSUMER_HOST}" \
         "sudo install -d -m 700 /etc/secrets && \
          sudo install -m600 -o root -g root /dev/stdin /etc/secrets/vllm-inference.env"
 then
@@ -99,7 +99,7 @@ fi
 # Let the consumer re-apply immediately when it ships a hook for it (LiteLLM
 # registers the model from this file). Absent or failing hook is not fatal here:
 # the consumer's own converge runs it too.
-ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new \
+ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR \
     "tappaas@${CONSUMER_HOST}" \
     "systemctl list-unit-files litellm-integrations.service >/dev/null 2>&1 && \
      sudo systemctl restart litellm-integrations.service" >/dev/null 2>&1 || true

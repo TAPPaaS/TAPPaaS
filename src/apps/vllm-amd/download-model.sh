@@ -53,10 +53,10 @@ if [[ ! -d /opt/vllm/models && -z "${TAPPAAS_IN_LXC:-}" ]]; then
     echo "Not inside the LXC — dispatching to ${_node} (LXC ${_vmid})..."
     # pct push the current script so the repo stays the single source of truth,
     # rather than relying on a stale copy inside the container.
-    scp -q -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+    scp -q -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR \
         "${BASH_SOURCE[0]}" "root@${_node}.mgmt.internal:/tmp/download-model.sh" || {
         echo "ERROR: could not copy the script to ${_node}" >&2; exit 1; }
-    exec ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new "root@${_node}.mgmt.internal" \
+    exec ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR "root@${_node}.mgmt.internal" \
         "pct push ${_vmid} /tmp/download-model.sh /root/download-model.sh --perms 755 && \
          pct exec ${_vmid} -- env TAPPAAS_IN_LXC=1 PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin \
            bash /root/download-model.sh $(printf '%q ' "$@")"

@@ -41,7 +41,7 @@ fi
 # Both endpoints in ONE ssh round-trip, so a slow start costs one connection per
 # poll rather than two. --max-time is shorter than test.sh's 15s because this is
 # polled every 5s: a hung request should fail the poll, not stall it.
-ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -o BatchMode=yes \
+ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR -o BatchMode=yes \
     "tappaas@${VM_IP}" '
         hc=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 \
              http://localhost/healthcheck) || exit 1

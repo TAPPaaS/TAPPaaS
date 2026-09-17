@@ -31,7 +31,7 @@ HPB_SECRETS_DIR="/var/lib/nextcloud-hpb/secrets"
 
 # Recreate-safe SSH: clear any stale host key for the (possibly redeployed) HPB VM,
 # then accept-new persists the current key — keeps verification, no strict-check trip.
-SSH_OPTS=(-o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new)
+SSH_OPTS=(-o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR)
 ssh-keygen -R "${HPB_HOST}" >/dev/null 2>&1 || true
 
 echo ""

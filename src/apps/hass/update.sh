@@ -57,7 +57,7 @@ configure_ha_trusted_proxy() {
     # Find the node currently hosting the VM (HA may have migrated it).
     local primary host_node node_fqdn
     primary="$(get_primary_node_fqdn 2>/dev/null || echo "$(get_node_hostname 0).mgmt.internal")"
-    host_node=$(ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new root@"${primary}" \
+    host_node=$(ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR root@"${primary}" \
         "pvesh get /cluster/resources --type vm --output-format json 2>/dev/null \
          | jq -r --arg id \"${VMID}\" '.[]|select(.vmid==(\$id|tonumber))|.node'" \
         2>/dev/null | head -1)
@@ -82,7 +82,7 @@ cp \"\$F\" \"\${F}.bak\" 2>/dev/null || true
 printf '\nhttp:\n  use_x_forwarded_for: true\n  trusted_proxies:\n    - ${gw}\n' >> \"\$F\"
 exit 10"
 
-    ge=$(ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new root@"${node_fqdn}" \
+    ge=$(ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR root@"${node_fqdn}" \
         "qm guest exec ${VMID} --timeout 30 -- /bin/sh -c $(printf '%q' "${remote_script}")" \
         2>/dev/null) || true
     ec=$(jq -r '.["exitcode"] // empty' <<<"${ge}" 2>/dev/null)

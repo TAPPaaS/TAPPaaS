@@ -82,7 +82,7 @@ HA_URL="http://${HA_IP}:8123"
 # Run a command INSIDE the HAOS guest (via the node's qm guest exec) and echo its
 # stdout. Used to read/write the VM-local secret store without SSH (#344).
 guest_run() {
-    ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new "root@${NODE_FQDN}" \
+    ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR "root@${NODE_FQDN}" \
         "qm guest exec ${VMID} -- bash -c $(printf '%q' "$1")" 2>/dev/null \
         | python3 -c "import sys,json
 try: sys.stdout.write(json.load(sys.stdin).get('out-data',''))

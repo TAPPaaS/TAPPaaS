@@ -9,7 +9,7 @@
 # `--all` job (the original "back up everything" model) is migrated in place
 # the first time a backup:vm module is installed/updated.
 #
-# Requires: common-install-routines.sh (info/warn/error, get_node_hostname,
+# Requires: common-install-routines.sh (info/warn/error/debug, get_node_hostname,
 # colour vars, CONFIG_DIR) sourced first. PBS storage name honours #199.
 
 PBS_JOB_MARKER="TAPPaaS-backup-vm-managed"
@@ -331,7 +331,11 @@ pbs_ensure_vmid() {
 
     cur="$(pbs_job_vmids "$id")"
     if _pbs_csv_has "$cur" "$vmid"; then
-        info "  ${GN}✓${CL} VMID ${vmid} already covered by the ${bucket} backup job"
+        # debug, not info: this is the idempotent no-op case and it prints once
+        # per VM on every sweep. The events worth reading are the other two —
+        # a VM being ADDED to the job, or the job being created — and a module
+        # that silently lost coverage shows up as an "Adding" line next sweep.
+        debug "  ${GN}✓${CL} VMID ${vmid} already covered by the ${bucket} backup job"
         return 0
     fi
     newlist="$(_pbs_csv_add "$cur" "$vmid")"

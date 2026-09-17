@@ -36,7 +36,7 @@ fi
 
 # curl without --fail exits 0 on any response, so a 401 (no API key) counts as
 # ready; only a connection failure or timeout is "still starting".
-ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -o BatchMode=yes \
+ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR -o BatchMode=yes \
     "tappaas@${VM_IP}" \
     "curl -s -o /dev/null --max-time 5 http://localhost:${LITELLM_PORT}/health" \
     >/dev/null 2>&1

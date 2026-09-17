@@ -53,7 +53,7 @@ fi
 # ── Read master key ───────────────────────────────────────────────────────────
 ssh-keygen -R "${LITELLM_HOST}" >/dev/null 2>&1 || true
 ssh-keygen -R "${CONSUMING_HOST}" >/dev/null 2>&1 || true
-SSH_OPTS=(-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10)
+SSH_OPTS=(-o StrictHostKeyChecking=accept-new -o LogLevel=ERROR -o ConnectTimeout=10)
 
 MASTER=$(ssh "${SSH_OPTS[@]}" "tappaas@${LITELLM_HOST}" 'bash -s' <<'EOSH'
 sudo grep '^LITELLM_MASTER_KEY=' /etc/secrets/litellm.env | cut -d= -f2-

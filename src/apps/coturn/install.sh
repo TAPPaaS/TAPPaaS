@@ -39,7 +39,7 @@ echo ""
 info "${BOLD}Detecting public IP from the coturn VM…${CL}"
 # Retry across providers AND rounds — a single curl can miss transiently even
 # when egress is healthy (declarative wait, like the secret read below).
-WAN_IP=$(ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new \
+WAN_IP=$(ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR \
     "tappaas@${COTURN_HOST}" '
     for _round in $(seq 1 6); do
         for u in https://checkip.amazonaws.com https://api.ipify.org https://ifconfig.me/ip; do
@@ -51,7 +51,7 @@ WAN_IP=$(ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=acce
 
 if [[ -n "${WAN_IP}" ]]; then
     info "  Detected public IP: ${WAN_IP}"
-    ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new "tappaas@${COTURN_HOST}" \
+    ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR "tappaas@${COTURN_HOST}" \
         "sudo sed -i 's/^COTURN_EXTERNAL_IP=.*/COTURN_EXTERNAL_IP=${WAN_IP}/' /etc/secrets/coturn.env && \
          sudo systemctl restart coturn.service" && \
         info "  COTURN_EXTERNAL_IP=${WAN_IP} set and coturn restarted." || \
@@ -80,7 +80,7 @@ info "${BOLD}Reading COTURN_SECRET from coturn VM…${CL}"
 # a re-run just re-reads) instead of failing on a fresh-VM startup race.
 COTURN_SECRET=""
 for _attempt in $(seq 1 30); do
-    COTURN_SECRET=$(ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new \
+    COTURN_SECRET=$(ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR \
         "tappaas@${COTURN_HOST}" \
         "sudo grep -h '^COTURN_SECRET=' /etc/secrets/coturn.env 2>/dev/null | cut -d= -f2-" 2>/dev/null || true)
     [[ -n "${COTURN_SECRET}" ]] && break

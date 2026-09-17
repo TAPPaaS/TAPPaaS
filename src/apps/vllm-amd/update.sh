@@ -44,7 +44,7 @@ VMID=$(jq -r '.vmid' "$CONFIG_FILE")
 
 # Resolve live node and wrap pct as SSH call (pct only exists on Proxmox nodes)
 _PRIMARY="tappaas1.mgmt.internal"
-LXC_NODE="$(ssh -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new "root@${_PRIMARY}" \
+LXC_NODE="$(ssh -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR "root@${_PRIMARY}" \
     "pvesh get /cluster/resources --type vm --output-format json 2>/dev/null" \
     | jq -r --argjson id "${VMID}" '.[] | select(.vmid==$id) | .node' 2>/dev/null)"
 [[ -n "${LXC_NODE:-}" ]] || { echo "ERROR: cannot resolve node for LXC ${VMID}"; exit 1; }
@@ -53,7 +53,7 @@ LXC_NODE="$(ssh -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new "root@${
 pct() {
     local q
     printf -v q '%q ' "$@"
-    ssh -n -o ConnectTimeout=30 -o StrictHostKeyChecking=accept-new \
+    ssh -n -o ConnectTimeout=30 -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR \
         "root@${LXC_NODE}.mgmt.internal" "pct ${q}"
 }
 
@@ -132,7 +132,7 @@ PINNED_IMAGE="kyuz0/vllm-therock-gfx1151@sha256:f56f8d66c3efcf2de024251f6ff2328c
 # which prints the node's MOTD — the Debian licence banner that used to appear
 # mid-update under this heading. Passing a command makes the session
 # non-interactive, so no MOTD, and the heredoc still arrives on stdin.
-{ ssh -T -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new \
+{ ssh -T -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR \
     "root@${LXC_NODE}.mgmt.internal" bash -s << NODEEOF
 if pct exec ${VMID} -- test -f /opt/vllm/docker-compose.yml 2>/dev/null; then
     pct exec ${VMID} -- sed -i 's|image: kyuz0/vllm-therock-gfx1151.*|image: ${PINNED_IMAGE}|' /opt/vllm/docker-compose.yml

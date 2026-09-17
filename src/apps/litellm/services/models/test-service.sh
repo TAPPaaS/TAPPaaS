@@ -47,7 +47,7 @@ info "${BOLD}litellm:models test-service${CL}: ${BL}${CONSUMING_MODULE}${CL}"
 # ── SSH setup ────────────────────────────────────────────────────────────────
 ssh-keygen -R "${LITELLM_HOST}" >/dev/null 2>&1 || true
 ssh-keygen -R "${CONSUMING_HOST}" >/dev/null 2>&1 || true
-SSH_OPTS=(-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10)
+SSH_OPTS=(-o StrictHostKeyChecking=accept-new -o LogLevel=ERROR -o ConnectTimeout=10)
 
 # ── Read master key ───────────────────────────────────────────────────────────
 MASTER=$(ssh "${SSH_OPTS[@]}" "tappaas@${LITELLM_HOST}" 'bash -s' <<'EOSH' 2>/dev/null
