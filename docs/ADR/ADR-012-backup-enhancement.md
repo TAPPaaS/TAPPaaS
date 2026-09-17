@@ -3,13 +3,14 @@
 | | |
 |---|---|
 | **Status** | **Accepted** — implemented and live-verified on the 3-node reference cluster (2026-09-09). All 19 acceptance items are checked; see [ADR-012-implementation.md](../design/ADR-012-implementation.md), packages P1–P20. The one thing no single-site test can cover is a genuinely separate off-site PBS **host** (a satellite over a tunnel), and the §4.3 relocation-by-pull runbook is written but not yet rehearsed — both are called out where they appear rather than implied to be done. |
-| **Version** | 0.6 |
-| **Date** | 2026-08-29 (v0.4: 2026-09-09; v0.6: 2026-09-11) |
+| **Version** | 0.7 |
+| **Date** | 2026-08-29 (v0.7: 2026-09-17) |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen |
 | **Related** | **#402** (flexible backup install on a cluster — origin); **#389** (remote/off-site backup setup + single-node); **#382** (adding a node does not install the backup client); **#456** (no placement policy for a pre-existing local PBS); **#214** (`pbsType`/external bare-metal PBS); **#501** (complement `dependsOn` with `integratesWith`); [ADR-010](ADR-010-vps-satellite-reverse-proxy-backup.md) (satellite off-site backup, pull model, compromise isolation); [ADR-007](<ADR-007 - TAPPaaS Taxonomy.md>) (named, not numbered foundation modules); [ADR-022](<ADR-022 - Workload Ontology.md>) + [ADR-022d](<ADR-022d - Workload Classification.md>) (the workload vocabulary and classification this ADR's Appendix A graduated into — draft, with two points open against §2.1); [backup/RESTORE.md](../../src/foundation/backup/RESTORE.md) (recovery per scenario) and [backup/README.md](../../src/foundation/backup/README.md) (PBS namespaces, multi-source pull/push — #227); **#544** (backup discovery scans `config/*.json` — misclassifies non-module state files; **resolved §2.7**); **#545** (backup + tested recovery for the foundation modules & `config/`; **resolved §2.7 / D20**) |
+| **Refined by** | [ADR-022d](<ADR-022d - Workload Classification.md>) (`kind`) · [ADR-022e](<ADR-022e - Module Scope.md>) (`scope` replaces `tier`) · [ADR-022f](<ADR-022f - Kind Values and Operating System.md>) (`application`, OS facet) · [ADR-022g](<ADR-022g - Management.md>) (`management`, `placementState: consumed`) |
 | **Implementation** | [ADR-012-implementation.md](../design/ADR-012-implementation.md) — plan, decisions log, package tracker |
-| **Changelog** | v0.1 — skeleton + Context, three decisions drafted; expanded with symmetric peers, unified credentials, placement policy, bootstrap/promotion, manager/controller tooling; implementation tracker started (Lars, 2026-07-04). v0.2 — P1–P9 implemented: P1/P2/P3 live-verified on tappaas1; P4/P5/P6/P8 offline-green; P7 (TS layer) built+verified on cicd; P9 docs + live test plan (Lars, 2026-07-05). v0.3 — **restructured** the Decision into three sections — (1) supported backup topologies, (2) configuring/detecting the Backup module, (3) configuring clients & backups; a single `backup` module is always provisioned, only the **local** case installs PBS software (now clarified to run **directly on the cluster node's Proxmox OS, not a VM**); backup-buddy / cross-PBS **pull roles** given their own §1.4 (compromise invariant demoted to §1.4.1); **simplified the push/pull model** — only two movements exist (clients *push* to their configured PBS with write-no-delete creds; off-site buddies *pull*), so **no PBS→PBS push / "append-only push receiver" is needed** and immutability is reframed as datastore-at-rest hardening, not push safety; reworked placement into a single install-resolved **`placementState`** (ships empty → `node:<name>` or `shim`; install-forced `external` is permanent), **dropping the `placement` policy field** and merging `remote-only` into `external`; `pbsUrl` (default `backup.mgmt.internal`) is the target clients push to; introduced backup-type **capabilities** (`dependsOn: backup:vm` / `backup:filesystem` — no `type` field; module `provides` gains `filesystem`) + the **schedule cascade**; added a **Future improvements** section holding the deferred, underspecified pieces — at-rest immutability (`immutableSnapshots`), `userdata` export, and `dataset` backup; folded in **#456** (consume an externally-managed PBS by URL — satellite / external / local-external); moved the **workload-placement taxonomy** to [Appendix A](#appendix-a--workload-placement-taxonomy-graduated--adr-022d), destined for its own ADR; added **§2.7 module-schema changes** (exact `module-fields.json`/`backup.json` deltas — new `pbsUrl`, `backup.schedule`/`filesystemPaths`, **`provides` = `["vm", "filesystem"]`**, `pushTarget`/`alwaysBackup` deprecated) with an analysis recommending **retiring `alwaysBackup`** once #501 adds an `integratesWith` relationship (backup stays opt-in — hardware/test modules take none); added **§4 migration** (existing-TAPPaaS upgrade, #456 adoption, datastore relocation-by-pull, non-PBS) with its own plan; and made the implementation plan **explicitly include documentation** updates. No decisions reversed; P1–P9 status unchanged (Lars, 2026-08-29). v0.4 — **Status Draft/Proposed → Accepted: implemented.** No decision changed; this records that the design was built and exercised. P10–P20 delivered the v0.3 scope — placement as an install-resolved state (`placement` field removed, `external` + `pbsUrl` added), `backup:filesystem`, the schedule cascade realised as one job per frequency, `alwaysBackup` retired via `integratesWith` (#501), shape-based discovery (#544), the node-add reconcile (§2.4), #545 coverage with a **rehearsed** recovery runbook, and key export/import (§2.5.1). Live testing found five defects no offline test could reach — most seriously that the mothership had never been in the backup job at all, and that `restore.sh` reported success while restoring nothing. Two implementation notes correct the ADR text where reality differed: §2.7 lands in the module’s own field manifests (since #567 `schemas/module-fields.json` holds only generic fields), and `placementState` tolerates the legacy `local`/`remote-only` for one release so deployed configs validate before their migrating update runs (Lars, 2026-09-09). v0.4a — §2.7C gained the **service-directory disposition table** (#608): `provides` and `services/` are deliberately no longer a 1:1 mirror, so the ADR now says which directories are kept, which are new, and that the peer directories (`remote`/`external`/`push`) remain the supported operator path even though their names left `provides`. Also records that deprecating `pushTarget` does not affect `services/push/`, which never read it (Lars, 2026-09-09). v0.5 — **peer vocabulary settled and made symmetric** (§1.4, operator review of #608). The three relationships another PBS can have with ours are now named for what they are: **`pull`** (we copy theirs), **`remote`** (they copy ours — where our off-site copies live), **`receive`** (they push theirs into ours, having no PBS). `remote` is **new**: the symmetric half of `pull` had no implementation, only prose telling an operator to issue a token by hand. The old `push` peer — this cluster sending vzdump backups to a remote PBS — is **retired**: that case is `placementState: external` + `pbsUrl`, a placement rather than a peer, and keeping both was the source of the word "external" meaning two opposite things. Config files and namespaces follow the verbs (`pull-<n>`/`pull/<n>`, `remote-<n>`, `receive-<n>`/`receive/<n>`); no migration, as no deployment had a peer configured. `peer delete` requires the kind, because one name legitimately holds two relationships at once — a buddy is usually both a `pull` and a `remote` (Lars, 2026-09-09). v0.5a — **Appendix A retired into [ADR-022d](<ADR-022d - Workload Classification.md>)** (renamed from ADR-023, 2026-09-11), which is the ADR it was always destined to become. The six-value table is not reproduced here: two copies of a classification drift, and the stale one is the one someone eventually acts on. Appendix A is now a pointer, and records the two places ADR-022d's draft would change something this ADR has already built and live-verified — `kind` acquiring a second, orthogonal meaning alongside the `kind: "module"` object-type marker that module discovery reads (#544), and `shim` becoming `realized: false` rather than a `placementState` value a live cluster is already migrated onto. Raised, not decided; both ADRs are drafts under review (Lars, 2026-09-09). v0.6 — **§2.7 now records the #544/#545 decisions instead of posing them as open questions.** Both were built and live-verified in v0.4, but the ADR text still read "#545 decides which of them need backup at all", so the ADR — the thing a reader consults — said nothing had been decided while D20 sat only in the implementation doc. §2.7 gains the **D20 coverage table** (`network` and `tappaas-cicd` via `integratesWith`; `config/` + `/etc/secrets` as `backup:filesystem`; `cluster` and `templates` deliberately uncovered), **why the mothership carries two backup shapes** (the VM snapshot restores the machine, the file capture restores `config/` onto a *different* mothership — the full-site-DR case), the **two stated limits** (the two credential files a `.pxar` cannot hold, and `fs/` being outside the non-propagating `remote` grant), and the **rehearsed** recovery path. The #544 half is corrected too: discovery is one shared *shape-based* rule imported by both managers, and narrowing to the opted-in set is a **separate** step — `list` reports every module and splits opt-in from job membership (#627), which the old text's "filter discovery to `backup:vm | backup:filesystem`" would have collapsed. Acceptance gains a bullet for each. No decision changed (Lars, 2026-09-11). |
+| **Changelog** | v0.7 (2026-09-17) — aligned to the ADR-022 vocabulary: `kind: application`, `scope: site`, `management`, `placementState: consumed`. v0.6 — backup-buddy relationship moved to ADR-024. v0.5 — off-site retention and the schedule cascade. v0.4 — as-built after the live verification on the reference cluster. v0.3 — unified credential model and promotion. v0.2 — placement resolved as state, per-node client reconcile (#382). v0.1 — skeleton: topologies, placement policy, off-site (#402, #389, #456). |
 
 Make the `backup` foundation module flexible about **where PBS lives** (or whether it lives in the cluster at all), keep the **per-node backup client** in step with cluster membership, give **off-site/remote backup** real setup, subsetting, and independent retention — without ever letting a compromised local cluster reach the off-site copy — and let a module declare **what kind** of backup it needs, not just on/off.
 
@@ -41,6 +42,40 @@ The PBS namespace model (#227) is documented in [backup/README.md](../../src/fou
 Earlier placement covered a PBS the module *installs* on a node (a `node:<name>` state) and a PBS that *doesn't exist yet* (a `shim`). Neither covers a site that **already runs its own PBS on the local network**, provisioned outside TAPPaaS: it has a real local datastore, so `shim` doesn't apply, and the module didn't place it, so a `node:<name>` state would describe work that never happened. The module needs a way to *consume* such a PBS — given its address (URL), register Proxmox storage and drive jobs/clients — without discovering storage or installing anything. (This ADR resolves it with the `external` state, §2.1.)
 
 This ADR decides the model for all four, plus a taxonomy of **what** each module backs up. It builds on ADR-010 (which owns the *satellite node itself*); ADR-012 is about the **`backup` module's behavior and configuration**.
+
+---
+
+## 0. Vocabulary (ADR-022)
+
+This ADR predates the ADR-022 ontology. The decisions below are unchanged; the
+words they use are now these.
+
+| This ADR said | ADR-022 says | Which rib |
+|---|---|---|
+| `tier: foundation` | **`scope: site`** — backup belongs to the Site and serves every Environment | 022e D1 |
+| (no field) | **`kind: application`** — backup installs PBS onto a Host and owns no system of its own | 022f D1, D3 |
+| `placementState: consumed` | **`placementState: consumed`** — the datastore is someone else's, reached by URL | 022g D5 |
+| `status: external` | **`management: unmanaged`** — registered, with no install/update/test/delete lifecycle | 022g D3 |
+| "externally-managed PBS" | a **consumed** PBS. *External* now means only "outside this Site's Administrative Domain" | 022g D2 |
+
+Three consequences worth stating, because each closes a question this ADR left open:
+
+**Backup is `kind: application` in every variant** (022f D4). The variants differ
+only in the Host the packages land on, and whether that Host is a cluster member
+is a fact about the Host, not about backup. Managing the application is
+independent of its Host (022f D5): the same packages, datastore, jobs and
+clients, whether the Host is in the cluster or beside it.
+
+**A consumed PBS is an `application` too — with `management: unmanaged`.** It is
+software on a Host; that TAPPaaS did not install it is a management fact, not a
+kind. This **amends ADR-022f D6**, which registers a consumed PBS as a `device`.
+`device` is reserved for something where only network reachability is configured
+(022f D1), and 022g D6 states the principle directly: *`device` is a kind, not a
+management level*. A PBS fails that test in both directions. Erik to confirm.
+
+**`scope` is not `stack`** (022e D5). Backup is `scope: site` and participates in
+whatever Stack aggregates the capability; the two are separate facets and neither
+replaces `tier`'s other meaning — `zone.tier` keeps that (022e D7).
 
 ---
 
@@ -80,7 +115,7 @@ The module **discovers** a `tankc` pool (configured node first, then any node �
 
 A local PBS can also participate in **buddy relationships** with other PBS instances — including acting as a **pull source** for another TAPPaaS system. Those cross-PBS relationships are covered in **§1.4**.
 
-### 1.3 Externally-managed PBS (consumed by URL)
+### 1.3 Consumed PBS (someone else installed it; we reach it by URL)
 
 The module can use a PBS it **does not provision**. The single knob is a **URL** to that PBS (plus a credential, §2.5); the flavor is orthogonal:
 
@@ -114,7 +149,7 @@ A TAPPaaS backup system therefore registers three peer relationships — and the
 
 `pull` and `remote` are the same movement seen from the two ends: to keep an off-site copy of this site's data with a buddy, this site adds a **`remote`** peer and the buddy adds a **`pull`** peer.
 
-**There is no peer kind for sending our backups to another PBS**, deliberately. A site with no local datastore points its own *clients* at an external PBS through **placement** (`placementState: external` + `pbsUrl`, §1.3) — a property of this module's installation, not a relationship with a peer. And a TAPPaaS PBS never pushes to another PBS at all: every inter-PBS copy is a pull, which is what makes §1.4.1 structural.
+**There is no peer kind for sending our backups to another PBS**, deliberately. A site with no local datastore points its own *clients* at an external PBS through **placement** (`placementState: consumed` + `pbsUrl`, §1.3) — a property of this module's installation, not a relationship with a peer. And a TAPPaaS PBS never pushes to another PBS at all: every inter-PBS copy is a pull, which is what makes §1.4.1 structural.
 
 > **The `remote` grant does not propagate.** PBS ACLs inherit into child namespaces, so a `DatastoreReader` grant on the root namespace would hand the peer `fs/` — this site's `config/` and `/etc/secrets` capture — and every other peer's data, alongside the VM backups it was meant to cover. `remote` therefore grants **non-propagating** by default, and says so when an operator asks for propagation explicitly.
 
@@ -156,15 +191,15 @@ Two operator inputs shape resolution, both on `backup.json`:
 - **`node`** *(optional)* — restrict `tankc` discovery to a **single named node**. If unset, all nodes are searched.
 - **`pbsUrl`** — the PBS the clients push to (§1.4). **Defaults to `backup.mgmt.internal`** (the local PBS DNS name). Overridden to the external PBS's URL (satellite tunnel addr / public host / LAN addr, §1.3) when going `external`.
 
-Forcing `external` is an **install-time action** (an install argument + `pbsUrl`), not a config policy field — it *overwrites* `placementState` to `external`, and that is then the **permanent** state. This one state covers every externally-managed flavour — satellite, public external, or a pre-existing LAN PBS (#456) — because the module's behaviour is identical (provision nothing, register the PBS at `pbsUrl` as storage, clients push there). *(It subsumes the earlier `remote-only`, which was indistinguishable.)*
+Forcing `consumed` is an **install-time action** (an install argument + `pbsUrl`), not a config policy field — it *overwrites* `placementState` to `consumed`, and that is then the **permanent** state. This one state covers every consumed flavour — satellite, public external, or a pre-existing LAN PBS (#456) — because the module's behaviour is identical (provision nothing, register the PBS at `pbsUrl` as storage, clients push there). *(It subsumes the earlier `remote-only`, which was indistinguishable.)*
 
-> **Naming note (open):** #214 introduced a `pbsType`/`external` notion for bare-metal PBS. How the install-time "force external" is spelled (a dedicated flag, `pbsType`, …) is an implementation detail for the tracker — the **decision here** is: no `placement` policy field; `placementState` ships empty and is install-resolved; `external` is set at install (with `pbsUrl`) and is permanent.
+> **Naming note (open):** #214 introduced a `pbsType`/`external` notion for bare-metal PBS (pre-ADR-022 wording). How the install-time "force consumed" is spelled (a dedicated flag, `pbsType`, …) is an implementation detail for the tracker — the **decision here** is: no `placement` policy field; `placementState` ships empty and is install-resolved; `consumed` is set at install (with `pbsUrl`) and is permanent.
 
 ### 2.2 The resolution order
 
 At install/update, `install.sh` resolves `placementState`:
 
-1. **Told to force `external`?** → `placementState = external` (requires `pbsUrl`). No discovery, nothing provisioned. Sticky thereafter.
+1. **Told to force `consumed`?** → `placementState = consumed` (requires `pbsUrl`). No discovery, nothing provisioned. Sticky thereafter.
 2. Already a concrete state (`node:<name>` or `external`) → **keep it** (idempotent).
 3. Empty *(released default)* or `shim` → **derive auto**: discover a `tankc` pool — searching **only `backup.json.node`** if set, otherwise **across all nodes**. Found on node `<name>` → `placementState = node:<name>` (install PBS there); **not found → `shim`** (the catch-all fallback; lay the marker, warn).
 
@@ -232,10 +267,13 @@ The changes touch three groups of fields. **Note (implementation, 2026-09-09):**
 | `placement` | **remove** | The current `placement` policy field is deleted — its job is now the install-resolved `placementState` (§2.1). A legacy value is read *once* during migration (§4) to seed the state, then dropped. |
 | `node` | **repurpose** | From an `auto` *hint* to a **discovery constraint**: when set, only this node is searched for `tankc`; when unset, all nodes are. |
 | `storage` | keep | The `tankc` pool name to find/use (default `tankc1`). |
-| `placementState` | **change values + ships empty** | The single source of truth (§2.1). Was `local\|shim\|remote-only`; now **empty (released default)** or pattern `^(shim\|external\|node:.+)$`. Install-written, never hand-authored. Migration: legacy `local` → `node:<name>`, `remote-only` → `external`. |
-| `pbsUrl` | **new** | The PBS the clients push to (§1.4). **Default `backup.mgmt.internal`** (local PBS DNS); overridden to the external PBS's URL when `placementState:external` (§1.3). Credential prompted-not-stored. |
-| `pushTarget` | **deprecate** | Subsumed by `placementState:external` + `pbsUrl` — the external PBS is simply the configured target clients push to. Read for one release, then removed. |
+| `placementState` | **change values + ships empty** | The single source of truth (§2.1). Was `local\|shim\|remote-only`; now **empty (released default)** or pattern `^(shim\|consumed\|node:.+)$`. Install-written, never hand-authored. Migration: legacy `local` → `node:<name>`, `remote-only` → `consumed`. |
+| `pbsUrl` | **new** | The PBS the clients push to (§1.4). **Default `backup.mgmt.internal`** (local PBS DNS); overridden to the consumed PBS's URL when `placementState:consumed` (§1.3). Credential prompted-not-stored. |
+| `pushTarget` | **deprecate** | Subsumed by `placementState:consumed` + `pbsUrl` — the consumed PBS is simply the configured target clients push to. Read for one release, then removed. |
 | `pbsStorageName` | keep | PBS datastore / Proxmox storage name. |
+| `kind` | **new** (ADR-022f) | `application` in every variant — backup installs PBS onto a Host and owns no system of its own. Not `device`: that is reserved for something where only network reachability is configured. |
+| `scope` | **new** (ADR-022e) | `site` — replaces `tier: foundation`. Installed in `mgmt`, serves every Environment. |
+| `management` | **new** (ADR-022g) | `managed` when TAPPaaS installs and maintains the PBS; `unmanaged` for a consumed one, which is registered so the Site knows it exists and has no install/update/test/delete lifecycle. |
 | `alwaysBackup` | **deprecate** | See the note below. |
 
 *(`immutableSnapshots` is **not** part of this change — at-rest immutability is deferred to [Future improvements](#future-improvements).)*
@@ -252,7 +290,7 @@ There is **no `type` field** — the backup kind is a `dependsOn` capability (`b
 **C. `provides` capabilities** (on `backup.json`):
 
 - Today `["vm", "remote", "external"]`. A repo-wide check shows **only `backup:vm` is ever depended on** — nothing declares `dependsOn: backup:remote` or `backup:external`.
-- **Change to `provides: ["vm", "filesystem"]`.** Add **`filesystem`** so a module can `dependsOn: backup:filesystem` (§3.1). Drop `remote`/`external`: those are **runtime peer relationships** registered via `backup-manage.sh` (§1.4/§2.6), not dependency capabilities — and dropping `external` also removes the clash with the new `placementState: external`. All states (`node:<name>`/`shim`/`external`) still provide both, which is what lets a **shim satisfy `dependsOn: backup:vm`/`backup:filesystem`** (§1.1).
+- **Change to `provides: ["vm", "filesystem"]`.** Add **`filesystem`** so a module can `dependsOn: backup:filesystem` (§3.1). Drop `remote`/`external`: those are **runtime peer relationships** registered via `backup-manage.sh` (§1.4/§2.6), not dependency capabilities — and dropping `external` also removes the clash with `placementState: consumed`. All states (`node:<name>`/`shim`/`consumed`) still provide both, which is what lets a **shim satisfy `dependsOn: backup:vm`/`backup:filesystem`** (§1.1).
 
 **What happens to the service directories (#608).** `provides` and `services/` stop being a 1:1 mirror, deliberately, so this states the disposition of each:
 
@@ -262,7 +300,7 @@ There is **no `type` field** — the backup kind is a `dependsOn` capability (`b
 | `services/filesystem/` | **new** — implements `backup:filesystem` | a capability a module depends on |
 | `services/remote/` | **moved + renamed** → `scripts/pull/` | not a service: nothing declares it and module-manager never invokes it. It is the operator's pull onboarding |
 | `services/external/` | **moved + renamed** → `scripts/receive/` | likewise, for a system that pushes its backups into ours |
-| `services/push/` | **retired** | it sent this cluster's vzdump backups to a remote PBS — the case `placementState: external` + `pbsUrl` now owns (§1.3). Keeping both was why "external" meant two opposite things |
+| `services/push/` | **retired** | it sent this cluster's vzdump backups to a remote PBS — the case `placementState: consumed` + `pbsUrl` now owns (§1.3). Keeping both was why "external" meant two opposite things |
 | *(new)* `scripts/remote/` | **added** | the symmetric half of `pull`: granting a peer read-only access so they can pull **our** backups (§1.4) |
 
 Dropping the three names from `provides` is exactly the intent: a **module** can no longer declare `dependsOn: backup:remote` (nothing ever did), while an **operator** can still onboard the peer.
@@ -271,7 +309,7 @@ Leaving them under `services/` was the deeper problem, and #608 is the symptom: 
 
 Deprecating `pushTarget` (§2.7A) is what retired `services/push/` with it: both described the same superseded mechanism.
 
-Deprecating `pushTarget` (§2.7A) does **not** affect `services/push/`, which never read it — it reads `.makeDefault` in its own `push-<n>.json`. `pushTarget` was only a pointer on `backup.json` naming a default push target, superseded by `placementState: external` + `pbsUrl`.
+Deprecating `pushTarget` (§2.7A) does **not** affect `services/push/`, which never read it — it reads `.makeDefault` in its own `push-<n>.json`. `pushTarget` was only a pointer on `backup.json` naming a default push target, superseded by `placementState: consumed` + `pbsUrl`.
 
 **Schema hygiene (KI-1).** Land the `provides`-aware normalizer fix (implementation-doc KI-1) with these edits — otherwise the `backup:vm` self-capability fields (`placementState`, `pbsUrl`, `pbsStorageName`, …) keep tripping the false "orphan field" warnings.
 
@@ -349,7 +387,7 @@ A deployment rarely starts empty. There are four starting points to migrate from
 Pre-ADR-012 installs pin `node:tappaas3` / `storage:tankc1` and carry `placementState:local` (or empty on the oldest installs). `update-module.sh backup` **backfills the state in place, never a promotion-reinstall**:
 
 - `placementState:local` (or empty) → `node:<name>`, where `<name>` is the node currently hosting the PBS — **the datastore is left exactly where it is**, no move, no dependent reinstall.
-- `placementState:remote-only` → `external`, synthesising `pbsUrl` from the old push-target config.
+- `placementState:remote-only` → `consumed`, synthesising `pbsUrl` from the old push-target config.
 - The deprecated `pushTarget` / `alwaysBackup` fields are **read for one release**, honoured, then dropped on write-back once their behaviour is covered by `pbsUrl` / the opt-out `backup` policy (§2.7).
 
 ### 4.2 Adopting a pre-existing local or external PBS (#456)
@@ -374,10 +412,18 @@ When the PBS itself moves (old node → a new `tankc`, or external → a new loc
 ### 4.5 Migration implementation plan
 
 1. **State backfill** — `update.sh` maps legacy `placementState`/`placement` values to the new states (§4.1); idempotent; covered by a unit test with legacy fixtures.
-2. **`#456` adoption path** — install-forced `external` + `pbsUrl` registers an existing PBS as storage without provisioning; verify existing snapshots remain restorable (§4.2).
+2. **`#456` adoption path** — install-forced `consumed` + `pbsUrl` registers an existing PBS as storage without provisioning; verify existing snapshots remain restorable (§4.2).
 3. **Relocation runbook** — document + script the pull-seed → cut-over → decommission flow (§4.3) in [`backup/RESTORE.md`](../../src/foundation/backup/RESTORE.md); gate decommission on a test restore.
 4. **Deprecation window** — `pushTarget`/`alwaysBackup` read-then-drop; emit a one-line deprecation notice on update; remove the fields and the `alwaysBackup` code path once `integratesWith` (#501) covers the foundation VMs (§2.7).
 5. **Migration tests** — legacy-fixture upgrade, #456 adoption preserving snapshots, and relocation-by-pull preserving history (see §Testing).
+6. **The ADR-022 vocabulary is a numbered migration** (added v0.7). Deployed
+   configs carry `placementState: external`, `tier: foundation` and no `kind`,
+   `scope` or `management`; this ADR now specifies `consumed`, `scope: site` and
+   the two new fields. That is a change to the *shape* of `config/`, so under
+   ADR-025 D7 it ships as a `migrations/NNNN-*.sh` with a before→after fixture
+   test, not as a hand edit — and it cannot merge to `main` until the migration
+   runner is on `stable`, which it now is. Until that migration exists, the code
+   still writes `external` and this ADR is ahead of it.
 
 ---
 
@@ -496,7 +542,7 @@ Backing up a Proxmox storage **dataset** — e.g. external NFS-served data that 
 - [x] Any PBS (local, satellite, remote) works as **both** a pull source and a pull destination, and as a client-backup target; peer onboarding is the **same** credential flow regardless of peer type. *(§1.4/§2.5)*
 - [x] **PBS-endpoint-agnostic** tooling — the TS `backup-manager` (+ `--pbs`) drives the same ops at local or satellite PBS; `backup-controller` honors `--pbs`. *(§2.6)* — **built + verified on cicd**; satellite targeting pending cluster
 - [x] A `shim` promotes to **`node:<name>` (local)**, **`external`**, or **node + satellite** via a config change + `update-module.sh backup`, dependents intact. *(§2.3, #402)* — **live-verified (shim→local)** *(coded as `auto`/`remote-only`)*
-- [x] **Drop the `placement` field; `placementState` ships empty and is install-resolved; merge `remote-only` → `external`** per v0.3 §2.1. — **live-verified**: the reference cluster migrated `local` → `node:tappaas3` with the datastore untouched and the backup job byte-identical.
+- [x] **Drop the `placement` field; `placementState` ships empty and is install-resolved; merge `remote-only` → `consumed`** per v0.3 §2.1. — **live-verified**: the reference cluster migrated `local` → `node:tappaas3` with the datastore untouched and the backup job byte-identical.
 - [x] **Consume a pre-existing PBS (#456)** — `backup-manage.sh use-external <url>` (or the install-time field override). **Live-verified**: consumed the site's PBS by URL under a throwaway storage name, 165 pre-existing backups visible and restorable, nothing created or modified.
 - [x] **Backup-type capabilities (§3.1)** — `backup:filesystem` added and **live-proven**: the mothership's `config/` captured, restored byte-identically (85 files), refused without the key, and its capture credential unable to delete its own history. Opt-out (neither relationship) is asserted.
 - [x] **Schedule cascade (§3.2)** — resolved Site→Env→Module with the once/day ceiling **rejected by name**, realised as one cluster job per distinct frequency. **Live-verified**: weekly and monthly bucket jobs created, moved between and torn down with the production daily job untouched.
