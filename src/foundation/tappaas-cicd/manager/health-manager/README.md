@@ -105,8 +105,11 @@ the guest's usage. That firewall read as 8.0G of 8.0G — "full" — while using
 guest figure can do. Printing that number would steer an operator away from the
 one VM on the system with real memory to reclaim.
 
-LXC guests need no agent: a container's memory is the host's own accounting, and
-its declared figure is a cgroup **limit**, not an allocation.
+LXC containers need no agent: their memory is the host's own accounting. Their
+declared figure is a **limit** they may never reach, not an allocation the host
+must find — so the report totals **VMs and LXC separately**. Summing them would
+describe nothing: on a live estate the combined figure read 106G where the VMs
+had actually been promised 60G.
 
 PVE **templates are excluded**: a template is the image a module is cloned from,
 holds no memory, and listing it as a stopped guest is noise.

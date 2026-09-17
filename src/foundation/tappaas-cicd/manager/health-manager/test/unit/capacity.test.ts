@@ -116,8 +116,8 @@ const withGuests = (gs: ReturnType<typeof guest>[]): NodeCapacity => ({
   check(/cicd\s+16\.0G\s+7\.3G\s+4\.9G/.test(rows), `each module gets declared/resident/used (got: ${rows})`);
   check(rows.indexOf("cicd") < rows.indexOf("nextcloud"), "rows are ordered largest gap first");
   // cicd 2.4 + nextcloud 0.5 = 2.9, NOT the 22.9 a declared-minus-used sum would give
-  check(/totals[\s\S]*reclaimable 2\.9G/.test(rows), `totals count resident-minus-used only (got: ${rows})`);
-  check(/── totals\s+24\.0G\s+8\.6G\s+5\.7G/.test(rows), `each column is totalled (got: ${rows})`);
+  check(/VM totals[\s\S]*reclaimable 2\.9G/.test(rows), `totals count allocated-minus-used only (got: ${rows})`);
+  check(/── VM totals\s+24\.0G\s+8\.6G\s+5\.7G/.test(rows), `each column is totalled (got: ${rows})`);
 }
 
 {
@@ -143,7 +143,9 @@ const withGuests = (gs: ReturnType<typeof guest>[]): NodeCapacity => ({
   const r = checkGuestMemory(c);
   const rows = (r.rows ?? []).map((x) => x.text).join("\n");
   check(r.status === "pass", "an LXC with a large unused limit is not a problem");
-  check(rows.includes("cgroup, not an allocation"), "an LXC row says its figure is a limit");
+  check(rows.includes("of its LXC limit"), "an LXC row says its figure is a limit");
+  check(rows.includes("── LXC totals"), "LXC is totalled separately from VMs");
+  check(!/── VM totals/.test(rows), "…and an LXC-only estate reports no VM total");
 }
 
 {
@@ -189,6 +191,16 @@ const withGuests = (gs: ReturnType<typeof guest>[]): NodeCapacity => ({
   c.capacity = [withGuests([guest("live", 4, 2, 1), guest("halted", 8, 0, 0, true, "qemu", "stopped")])];
   const rows = (checkGuestMemory(c).rows ?? []).map((x) => x.text).join("\n");
   check(rows.includes("halted") && rows.includes("(stopped)"), "a stopped module is still listed");
+}
+
+{
+  // Mixed estate: the VM total must not absorb the LXC limit. This is the
+  // number that read 106G when the VMs had been promised 60G.
+  const c = new FakeClusterClient();
+  c.capacity = [withGuests([guest("vm", 8, 4, 3), guest("ct", 46, 0, 2, true, "lxc")])];
+  const rows = (checkGuestMemory(c).rows ?? []).map((x) => x.text).join("\n");
+  check(/── VM totals\s+8\.0G/.test(rows), `the VM total excludes the LXC limit (got: ${rows})`);
+  check(/── LXC totals\s+46\.0G/.test(rows), "the LXC total carries it instead");
 }
 
 console.log(`capacity: ${passed} passed, ${failed} failed`);

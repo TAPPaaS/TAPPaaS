@@ -282,21 +282,32 @@ export function checkGuestMemory(client: ClusterClient): CheckResult {
     const note = !g.measured
       ? "  usage figure is the host's, not the guest's"
       : g.type === "lxc"
-        ? `  ${pct.toFixed(0)}% of limit (cgroup, not an allocation)`
+        ? `  ${pct.toFixed(0)}% of its LXC limit`
         : `  ${pct.toFixed(0)}% of declared, gap ${gib(gap)}G`;
     return { status, text: `${name}${col(g.declaredMem)}${col(g.residentMem)}${used}${note}` };
   });
 
+  // TWO totals, because the columns do not mean the same thing for both kinds.
+  // A VM's declared memory is an ALLOCATION the host must find; an LXC's is a
+  // LIMIT it may never reach. Adding them produces a number that describes
+  // nothing — 106G on an estate whose VMs were promised 60G.
   const run = rows.filter((r) => r.g.status === "running");
-  const sum = (f: (r: Row) => number): number => run.reduce((a, r) => a + f(r), 0);
-  const totDeclared = sum((r) => r.g.declaredMem);
-  const totResident = sum((r) => r.g.residentMem);
-  const totUsed = sum((r) => (r.g.measured ? r.g.usedMem : 0));
-  const totGap = sum((r) => r.gap);
-  out.push({
+  const vms = run.filter((r) => r.g.type !== "lxc");
+  const cts = run.filter((r) => r.g.type === "lxc");
+  const sum = (rs: Row[], f: (r: Row) => number): number => rs.reduce((a, r) => a + f(r), 0);
+  const line = (label: string, rs: Row[], tail: string): CheckRow => ({
     status: "pass",
-    text: `${pad("── totals", 16)}${col(totDeclared)}${col(totResident)}${col(totUsed)}  reclaimable ${gib(totGap)}G`,
+    text:
+      `${pad(label, 16)}${col(sum(rs, (r) => r.g.declaredMem))}` +
+      `${col(sum(rs, (r) => r.g.residentMem))}` +
+      `${col(sum(rs, (r) => (r.g.measured ? r.g.usedMem : 0)))}  ${tail}`,
   });
+  if (vms.length > 0) {
+    out.push(line("── VM totals", vms, `reclaimable ${gib(sum(vms, (r) => r.gap))}G`));
+  }
+  if (cts.length > 0) {
+    out.push(line("── LXC totals", cts, "declared is a limit, not an allocation"));
+  }
 
   // Nothing running means nothing measured — the rows still list what is there,
   // but the gate asserts nothing.
