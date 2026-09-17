@@ -3,13 +3,13 @@
 | | |
 |---|---|
 | **Status** | **Draft — placeholder.** Problem statement only; no schema, no field names, no storage decision. Explicitly deferred past 2.0. |
-| **Version** | 0.2 |
-| **Date** | 2026-09-11 (v0.2: 2026-09-11) |
+| **Version** | 0.3 |
+| **Date** | 2026-09-11 (v0.3: 2026-09-17) |
 | **Author** | ErikDaniel007 |
 | **Deciders** | @ErikDaniel007, @LarsRossen |
 | **Parent** | [ADR-022 — Workload Ontology](<ADR-022 - Workload Ontology.md>) — this ADR builds on the Administrative Domain aspect, it does not amend it |
-| **Related** | [ADR-022a — Administrative Domain](<ADR-022a - Administrative Domain.md>) (D6/D7 — the single-AD concept this ADR generalizes to a fabric of ADs); [ADR-012](ADR-012-backup-enhancement.md) §1.4 (the backup-buddy relationship — first live instance of the problem); satellite/`edge` zone case (ADR-010) |
-| **Changelog** | v0.1 — placeholder draft opened from the 2026-09-11 LR/EB sync, capturing the problem statement and scope boundary only. **v0.2** — style pass: removed verbatim meeting quotes in favor of the document's own voice (repo convention — see ADR-022d's v0.6 note); corrected two stale cross-references left over from before ADR-022a/022d's Q1 split (this ADR now points at ADR-022a D6/D7, not the retired "ADR-022d Q1/§4"). No content decided either version. |
+| **Related** | [ADR-022a — Administrative Domain](<ADR-022a - Administrative Domain.md>) (the single-Administrative-Domain concept this ADR generalizes to a fabric); [ADR-012](ADR-012-backup-enhancement.md) §1.4 (the backup-buddy relationship — first live instance of the problem); satellite/`edge` zone case (ADR-010) |
+| **Changelog** | v0.3 (2026-09-17) — references to ADR-022a D6/D7 removed (parked for 2.1). Placeholder; no content decided. Earlier drafts in git history. |
 
 How a Site relates to the rest of the world — other TAPPaaS Sites, and third-party services it exposes to or consumes from.
 
@@ -41,10 +41,10 @@ The IETF/BGP **Autonomous System** concept was raised as the closest existing mo
 ## Open questions (all of them — nothing below is decided)
 
 1. Where does a fabric relationship live — on the Site record, on the module that has the relationship, or a new artifact?
-2. How does a module register that it exposes a service, or consumes one, in a way Health (ADR-007e, amended by [ADR-022a](<ADR-022a - Administrative Domain.md>) D7) can see?
+2. How does a module register that it exposes a service, or consumes one, in a way Health (ADR-007e) can see?
 3. Does "Site brokers all exposure" become a Decision, or does per-module exposure stay legitimate for some cases?
 4. Is the AS/BGP anchor the right normative source, or does TAPPaaS need its own model here?
-5. How does this interact with [ADR-022a](<ADR-022a - Administrative Domain.md>) D6's `other-site` value — is `other-site` the fabric-scoped view of a workload this ADR would otherwise describe more richly?
+5. How does this interact with the workload-to-Administrative-Domain relationship taxonomy parked from [ADR-022a](<ADR-022a - Administrative Domain.md>) for 2.1 — is "another Site's workload" the fabric-scoped view this ADR would otherwise describe more richly?
 
 ## Acceptance
 

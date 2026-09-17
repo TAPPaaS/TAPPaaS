@@ -3,12 +3,13 @@
 | | |
 |---|---|
 | **Status** | Accepted — **implemented** (S0–S9 on the `ADR007` branch; the realization described here is built) |
-| **Version** | 1.0 |
+| **Version** | 1.0a |
 | **Date** | 2026-06-30 |
 | **Author** | Erik Daniel |
 | **Parent** | [ADR-007 Taxonomy (Overview)](<ADR-007 - TAPPaaS Taxonomy.md>) |
+| **Amended by** | [ADR-022c](<ADR-022c - Node and Host.md>) (receives the Stack-promotion rule from `GLOSSARY.md` §C) — draft |
 | **Related** | #320 (taxonomy); **composition:** [ADR-009](<ADR-009 - Composition Meta-Model.md>); [ADR-008](<ADR-008-switch-module-network-infrastructure.md>) (switch/control-points); ADR-004 (config cascade); **verbs:** [design/ADR-007-verb-alignment.md](<../design/ADR-007-verb-alignment.md>); **build state:** [design/ADR-007-implementation-tracker.md](<../design/ADR-007-implementation-tracker.md>); closed: #364 (split opnsense-controller) · #365 (Managers) |
-| **Changelog** | v1.0 — **as-built (2026-06-30):** the control plane is **realized**. The flat `scripts/` pile became **`tappaas-cicd/manager/` (7 TypeScript Managers with a uniform verb surface) + `tappaas-cicd/controller/` (6 Controllers doing live I/O) + `lib/`**. The mapping table below is rewritten to the built structure: `firewall`→**`network`** Module + `network-manager` (owns `zones.json` + reconciles 4 planes); People realized as `people-manager`→`identity-controller`; `module-manager` for Apps; `configuration-fields.json` retired → `site-fields.json` + `environment-fields.json`; per-domain `*-fields.json` schemas all present (People gap closed). v0.8 — Controller column added; Manager→Controller→Service chain explicit. v0.7 — Manager/Controller distinction. v0.6 — Schema column; People gap named. v0.5 — orchestrator layer; `repository.sh`→Site; `variant-manager.sh`=env-manager v0.1. v0.4 — Stack = Aggregation ≠ Serving. |
+| **Changelog** | v1.0a (2026-09-17) — header link to the ADR-022c draft that moves the Stack-promotion rule here; no body change. v1.0 — **as-built (2026-06-30):** the control plane is **realized**. The flat `scripts/` pile became **`tappaas-cicd/manager/` (7 TypeScript Managers with a uniform verb surface) + `tappaas-cicd/controller/` (6 Controllers doing live I/O) + `lib/`**. The mapping table below is rewritten to the built structure: `firewall`→**`network`** Module + `network-manager` (owns `zones.json` + reconciles 4 planes); People realized as `people-manager`→`identity-controller`; `module-manager` for Apps; `configuration-fields.json` retired → `site-fields.json` + `environment-fields.json`; per-domain `*-fields.json` schemas all present (People gap closed). v0.8 — Controller column added; Manager→Controller→Service chain explicit. v0.7 — Manager/Controller distinction. v0.6 — Schema column; People gap named. v0.5 — orchestrator layer; `repository.sh`→Site; `variant-manager.sh`=env-manager v0.1. v0.4 — Stack = Aggregation ≠ Serving. |
 
 The **SSOT mapping** from the ADR-007 classification (classification domains) to the **existing TAPPaaS foundation
 modules and control-plane scripts**. This ADR answers the question the flat `scripts/` pile cannot:

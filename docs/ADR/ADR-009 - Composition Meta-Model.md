@@ -3,11 +3,12 @@
 | | |
 |---|---|
 | **Status** | Proposed — Node/Device direction confirmed (Erik⟷Lars review 2026-06-15, Option B); #171 open for community discussion |
-| **Version** | 0.3 |
+| **Version** | 0.3a |
 | **Date** | 2026-06-16 |
 | **Author** | Erik Daniel |
+| **Superseded in part by** | [ADR-022c](<ADR-022c - Node and Host.md>) (the `Node` entry, the model line and Decision 1) · amended by [ADR-022d](<ADR-022d - Workload Classification.md>) (Module boundary) — drafts |
 | **Related** | **#171** (metamodel refine) · **#167** (component taxonomy) · #161, #151 (closed spikes) · #297 (catalog); **classification:** [ADR-007](<ADR-007 - TAPPaaS Taxonomy.md>); **glossary SSOT:** [GLOSSARY.md](<../../GLOSSARY.md>); **realization:** [ADR-007f](<ADR-007f - Realization.md>); **existing docs:** ArchiMate appendix + [foundation module-designs](https://tappaas.org/architecture/module-designs/foundation/) |
-| **Changelog** | v0.3 — Node/Device direction confirmed (Option B, meeting 2026-06-15); App≡Module equivalence added to Terms. v0.2 — glossary-SSOT link (ontology.md) + Terms selection; cross-links to ADR-007f and foundation module-designs |
+| **Changelog** | v0.3a (2026-09-17) — header link to the ADR-022c/022d drafts that supersede or amend parts of this ADR; no body change. v0.3 — Node/Device direction confirmed (Option B, meeting 2026-06-15); App≡Module equivalence added to Terms. v0.2 — glossary-SSOT link (ontology.md) + Terms selection; cross-links to ADR-007f and foundation module-designs |
 
 How a deployable unit is **built**. The companion to [ADR-007](<ADR-007 - TAPPaaS Taxonomy.md>):
 ADR-007 *classifies* (which classification domain), this ADR *composes* (how it is structured). Orthogonal — apply both.

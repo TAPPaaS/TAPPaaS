@@ -3,12 +3,13 @@
 | | |
 |---|---|
 | **Status** | Accepted — **implemented** (P5/S7 on the `ADR007` branch) |
-| **Version** | 1.3 |
+| **Version** | 1.3a |
 | **Date** | 2026-06-30 |
 | **Author** | Erik Daniel |
 | **Parent** | [ADR-007 Taxonomy (Overview)](<ADR-007 - TAPPaaS Taxonomy.md>) |
+| **Refined by** | [ADR-022c](<ADR-022c - Node and Host.md>) (amends the `node` note) · [ADR-022d](<ADR-022d - Workload Classification.md>) (`kind`) — drafts |
 | **Related** | #320; #297 (module-catalog stack/category); **schema:** `schemas/module-fields.json`; **manager:** `module-manager` (verbs add/modify/delete/list/show/validate); **composition:** [ADR-009](<ADR-009 - Composition Meta-Model.md>) + #171 |
-| **Changelog** | v1.3 — **as-built (2026-06-30):** module configs are **flat** `config/<name>.json` (no `modules/` folder); the foundation `firewall` module was **renamed `network`**; `environment` IS persisted on the *deployed* config (and the deployed name/VM is suffixed `<name>-<env>` for a non-default, non-mgmt environment); `tier:foundation` is enforced as **mgmt-only + single-instance + --force-to-delete**; the manager is `module-manager`. v1.2 — named `module-fields.json` as the App schema; catalog schema → Site-level; acceptance corrected. v1.1 — applied Erik⟷Lars review (CR-04 module=filename; CR-05 sourceMetadata→Site; CR-06/07 drop ownerGroup/environment; CR-03 local→issue) |
+| **Changelog** | v1.3a (2026-09-17) — header link to the ADR-022c/022d drafts that refine this ADR; no body change. v1.3 — **as-built (2026-06-30):** module configs are **flat** `config/<name>.json` (no `modules/` folder); the foundation `firewall` module was **renamed `network`**; `environment` IS persisted on the *deployed* config (and the deployed name/VM is suffixed `<name>-<env>` for a non-default, non-mgmt environment); `tier:foundation` is enforced as **mgmt-only + single-instance + --force-to-delete**; the manager is `module-manager`. v1.2 — named `module-fields.json` as the App schema; catalog schema → Site-level; acceptance corrected. v1.1 — applied Erik⟷Lars review (CR-04 module=filename; CR-05 sourceMetadata→Site; CR-06/07 drop ownerGroup/environment; CR-03 local→issue) |
 
 The **📦 Apps** classification domain. An App = a thing that runs (VM, container, service) with a lifecycle: install,
 update, test, backup, delete. Owned by a Group, lives in one Environment.
