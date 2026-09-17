@@ -163,7 +163,10 @@ debug "  pulling latest vLLM image..."
 pct exec "${VMID}" -- bash -c '
 cd /opt/vllm
 OLD_IMAGE=$(docker inspect vllm --format "{{.Image}}" 2>/dev/null || echo "none")
-docker compose pull -q
+# -q still writes "Pulling"/"Pulled" to STDERR, which lands untagged in the
+# sweep log. Silence it and check the status instead: a failed pull must not be
+# discovered later as a confusing "up" failure.
+docker compose pull -q >/dev/null 2>&1 || { echo "ERROR: docker compose pull failed"; exit 1; }
 
 # Recreate only if image changed
 NEW_IMAGE=$(docker compose images -q vllm 2>/dev/null || echo "new")

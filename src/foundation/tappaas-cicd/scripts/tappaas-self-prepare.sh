@@ -57,8 +57,8 @@ rc=0
 "${REFRESH}" || rc=$?
 case "${rc}" in
     0)  state=refreshed ;;
-    10) state=stale; log "WARNING: some components failed to build — their bins are STALE; the sweep continues (#595)" ;;
-    12) log "FATAL: a repository did not sync and holds no pull hold — no rebuild, no sweep on stale tooling (ADR-017 D3)"
+    10) state=stale; log "WARNING: some components failed to build — their bins are STALE; the sweep continues" ;;
+    12) log "FATAL: a repository did not sync and holds no pull hold — no rebuild, no sweep on stale tooling"
         exit 1 ;;
     *)  log "FATAL: refresh-control-plane.sh failed (rc ${rc}) — no rebuild, no sweep"
         exit 1 ;;

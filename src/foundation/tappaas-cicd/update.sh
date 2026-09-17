@@ -34,7 +34,7 @@ VMNAME="$(get_config_value 'vmname' "$1")"
 # /etc/nixos/hardware-configuration.nix (root/boot by-uuid). Both now live on
 # the unit's ExecStart.
 if [[ -f /run/update-tappaas/rebuilt ]]; then
-    info "  NixOS already rebuilt by update-tappaas.service (ADR-017 D3) — skipping"
+    info "  NixOS already rebuilt by update-tappaas.service — skipping"
     info "  ${GN}✓${CL} VM update completed successfully"
     exit 0
 fi

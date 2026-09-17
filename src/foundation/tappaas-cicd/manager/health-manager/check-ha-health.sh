@@ -186,8 +186,11 @@ if [[ "${wedged}" -eq 0 ]]; then
     exit 0
 fi
 
+# The upstream cause is Proxmox bugzilla #7608; tracked here as issue #146.
+# Kept out of the message: an operator reading a failed sweep needs the symptom
+# and the remedy, not our issue numbers.
 error "HA is not converging. Most common cause is a stale cloud-init volume"
-error "blocking failback — see issue #146 / Proxmox bugzilla #7608."
+error "blocking failback — detach or remove it, then let HA retry."
 
 if [[ "${REPAIR}" -eq 0 ]]; then
     warn "Run the sweep to check:  <cluster>/cloudinit-orphans.sh"

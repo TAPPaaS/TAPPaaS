@@ -93,7 +93,7 @@ if [[ " ${FAILED[*]} " != *" identity "* ]]; then
     inst_user="$(printf '%s' "$inst_user" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9-' '-' | sed 's/^-*//;s/-*$//')"
     if [[ -n "$inst_org" && -n "$inst_user" && -n "$inst_email" ]]; then
       echo ""
-      info "${BOLD}── People bootstrap (ADR-007): org=${inst_org} user=${inst_user} ──${CL}"
+      info "${BOLD}── People bootstrap: org=${inst_org} user=${inst_user} ──${CL}"
       if people-manager bootstrap --org "$inst_org" --user "$inst_user" --email "$inst_email"; then
         people-manager reconcile --apply || warn "  people-manager reconcile reported issues — review the output above."
         # Backfill the bootstrap environments' ownerOrg NOW that the org exists.

@@ -1103,10 +1103,14 @@ function cmdSplitHorizonTarget(opts: Opts): number {
       say(`split-horizon: ${domain} → ${r.ip} (${r.zone})`);
       return 0;
     case "unpublished":
-      say(`split-horizon: ${domain} is UNPUBLISHED — ${r.reason}`);
+      // Tagged in the TEXT, not routed through warn(): stdout is the address
+      // channel (see say() above), so the severity has to travel with the
+      // message. Untagged, this read as progress in a sweep log and an operator
+      // scanning for trouble slid straight past it.
+      say(`[Warning] split-horizon: ${domain} is UNPUBLISHED — ${r.reason}`);
       return 3;
     default:
-      say(`split-horizon: ${r.reason}`);
+      say(`[Error] split-horizon: ${r.reason}`);
       return 1;
   }
 }

@@ -79,7 +79,7 @@ done
 
 # #533/#525: never run this as root — a root-owned config drops out of the sweep.
 if [[ "$(id -u)" -eq 0 ]]; then
-    error "${SCRIPT_NAME} must run as the operator, not root — a root-owned config drops out of the update sweep (#525)"
+    error "${SCRIPT_NAME} must run as the operator, not root — a root-owned config drops out of the update sweep"
     exit 3
 fi
 

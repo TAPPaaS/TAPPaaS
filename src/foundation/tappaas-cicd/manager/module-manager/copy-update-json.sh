@@ -272,7 +272,7 @@ main() {
     if [[ -n "${variant}" ]]; then
         if [[ -z "${environment}" ]]; then
             environment="${variant}"
-            warn "  --variant is deprecated; treating '--variant ${variant}' as '--environment ${variant}' (ADR-007 Phase D)"
+            warn "  --variant is deprecated; treating '--variant ${variant}' as '--environment ${variant}'"
         else
             warn "  --variant ignored: --environment '${environment}' takes precedence"
         fi

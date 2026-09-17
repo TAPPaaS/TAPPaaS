@@ -411,7 +411,7 @@ fi
 # Test 9d: HA-aware stop/start (#434) — a stop against a slow CRM must be waited
 # out and confirmed, and a transition that never happens must fail rather than
 # report success. Stubbed cluster only; no ssh, no node, no VM.
-info "${BOLD}Test 9d: HA-aware VM stop/start (#434)${CL}"
+info "${BOLD}Test 9d: HA-aware VM stop/start${CL}"
 if [[ -x "${SCRIPT_DIR}/lib/test-ha-vm-lib.sh" ]]; then
     if "${SCRIPT_DIR}/lib/test-ha-vm-lib.sh" >/dev/null 2>&1; then
         pass "ha-vm-lib: CRM stop/start confirmed, timeouts fail loudly"
@@ -425,7 +425,7 @@ fi
 # Test 9dd: the ADR-020 drift-record runner — what it batches, what it
 # dispatches, in what order, and what verdict it returns. Stubbed provider
 # callbacks and stub hooks only; no cluster.
-info "${BOLD}Test 9dd: converge-lib drift-record runner (ADR-020)${CL}"
+info "${BOLD}Test 9dd: converge-lib drift-record runner${CL}"
 if [[ -x "${SCRIPT_DIR}/lib/test-converge-lib.sh" ]]; then
     if "${SCRIPT_DIR}/lib/test-converge-lib.sh" >/dev/null 2>&1; then
         pass "converge-lib: one batched set, migrate last, side effects once, deferral is not failure"
@@ -439,7 +439,7 @@ fi
 # Test 9e: stale per-service Unbound override pruning (#505) — a wildcard now
 # covering a host must have any leftover per-service <host>.<zone> record pruned,
 # without ever deleting the shared '*' wildcard. Stubbed unbound-manager only.
-info "${BOLD}Test 9e: Unbound stale per-service override pruning (#505)${CL}"
+info "${BOLD}Test 9e: Unbound stale per-service override pruning${CL}"
 if [[ -x "${SCRIPT_DIR}/lib/test-unbound-prune.sh" ]]; then
     if "${SCRIPT_DIR}/lib/test-unbound-prune.sh" >/dev/null 2>&1; then
         pass "unbound-prune: prunes stale <host>.<zone>, never the '*' wildcard"
@@ -453,7 +453,7 @@ fi
 # Test 9f: the shared install/update helpers — host-key self-heal included. The
 # heal used to be decided by grepping ssh's stderr, which a caller's -q emptied
 # (#630), so this suite is also the one that keeps the -q call sites honest.
-info "${BOLD}Test 9f: common-install-routines helpers (#524, #630)${CL}"
+info "${BOLD}Test 9f: common-install-routines helpers${CL}"
 if [[ -x "${SCRIPT_DIR}/lib/test-common-install-routines.sh" ]]; then
     if "${SCRIPT_DIR}/lib/test-common-install-routines.sh" >/dev/null 2>&1; then
         pass "common-install-routines: script perms, ssh/scp target parsing, host-key self-heal"
@@ -619,7 +619,7 @@ fi   # end source-tree checks (Tests 7-10b)
 # live Authentik tiers) run under --deep via the dispatchers below. Add new
 # fast/deep-aware components' smokes here as they land (see tappaas-cicd/README.md).
 
-info "${BOLD}Test 11: ADR-007 component smoke (lightweight)${CL}"
+info "${BOLD}Test 11: component smoke (lightweight)${CL}"
 
 # opnsense-controller + update-tappaas: the linked CLIs load. This is the gate
 # that surfaces a broken compiled-component build — refresh-control-plane.sh
@@ -776,7 +776,7 @@ if [[ "${DEEP}" -eq 1 ]]; then
     fi
 
     # ── Deep Test: variant architecture suite (ADR-005 / #316) ───────
-    info "${BOLD}Deep Test: variant architecture suite (ADR-005)${CL}"
+    info "${BOLD}Deep Test: variant architecture suite${CL}"
 
     if [[ -x test-variants/test.sh ]]; then
         if TAPPAAS_TEST_DEEP=1 test-variants/test.sh; then
@@ -817,7 +817,7 @@ else
     skip "update->rollback test (use --deep to run)"
     info "${BOLD}Deep Test: vmname alias-name length validation${CL}"
     skip "alias-name length validation test (use --deep to run)"
-    info "${BOLD}Deep Test: variant architecture suite (ADR-005)${CL}"
+    info "${BOLD}Deep Test: variant architecture suite${CL}"
     skip "variant architecture suite (use --deep to run)"
 fi
 
@@ -827,7 +827,7 @@ fi
 # (even one carrying a shebang) — widening shows as spurious `git` mode drift on
 # the control-plane checkout. Exercises the real ensure_scripts_executable in a
 # throwaway git repo, so it asserts behaviour, not just the tracked modes.
-info "${BOLD}Deep Test: tracked exec-mode is authoritative (#565)${CL}"
+info "${BOLD}Deep Test: tracked exec-mode is authoritative${CL}"
 if [[ "${DEEP}" == "1" ]]; then
     _e565="$(mktemp -d)"
     (

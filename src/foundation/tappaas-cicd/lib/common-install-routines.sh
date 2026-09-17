@@ -1433,6 +1433,34 @@ tappaas_scp_guest() {
 # back atomically (#207). Always reads in Pattern A or flat, writes in the
 # canonical Pattern A form via convert-json-to-config.sh (sourced on demand).
 # Usage: jq_module_write <module> <jq-filter> [jq-args...]
+# run_with_dots <logfile> <command...> — run a command, print one '.' per line
+# of its output, and keep the whole of it in <logfile>.
+#
+# For sub-command chatter an operator does not read: an image pull, a package
+# fetch, a build. The dots say "still working" without the log carrying 150
+# lines of blob hashes.
+#
+# A dot NEVER swallows an error: on a non-zero exit the tail of the log is
+# printed, and the command's own status is returned (not tee's). That is the
+# property the nix-build version of this pattern already has in
+# component-install-lib.sh; this is the same contract, shared.
+run_with_dots() {
+    local _rwd_log="$1"; shift
+    local _rwd_rc=0
+    "$@" 2>&1 | tee "${_rwd_log}" | {
+        _rwd_dots=0
+        while IFS= read -r _; do printf '.'; _rwd_dots=1; done
+        [ "${_rwd_dots}" -eq 1 ] && printf '\n'
+        true
+    }
+    _rwd_rc="${PIPESTATUS[0]}"
+    if [ "${_rwd_rc}" -ne 0 ]; then
+        error "  command failed (rc ${_rwd_rc}) — last lines of ${_rwd_log}:"
+        tail -8 "${_rwd_log}" >&2 2>/dev/null || true
+    fi
+    return "${_rwd_rc}"
+}
+
 function jq_module_write() {
   local m="$1"; shift
   local filter="$1"; shift
@@ -1628,7 +1656,7 @@ function check_json() {
     if [[ -n "$undeclared" ]]; then
       while IFS= read -r k; do
         [[ -z "$k" ]] && continue
-        error "  config block '${YW}${k}${CL}' is not a declared dependency — add it to dependsOn (#161)"
+        error "  config block '${YW}${k}${CL}' is not a declared dependency — add it to dependsOn"
         errors=$((errors + 1))
       done <<< "$undeclared"
     fi
@@ -1641,7 +1669,7 @@ function check_json() {
     if [[ -n "$collisions" ]]; then
       while IFS= read -r f; do
         [[ -z "$f" ]] && continue
-        error "  field '${YW}${f}${CL}' is set in both the header and a config block (or in two config blocks) — ambiguous (#161)"
+        error "  field '${YW}${f}${CL}' is set in both the header and a config block (or in two config blocks) — ambiguous"
         errors=$((errors + 1))
       done <<< "$collisions"
     fi

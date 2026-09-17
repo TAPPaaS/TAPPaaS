@@ -242,7 +242,7 @@ rollback_failed_install() {
         return 0
     fi
     echo "" >&2
-    warn "Install failed — removing what this run created (#584)."
+    warn "Install failed — removing what this run created."
     if [[ "${INSTALL_CREATED_VM}" == true ]]; then
         warn "  Deleting the VM and config of '${INSTALL_MODULE_NAME}'..."
         if /home/tappaas/bin/delete-module.sh "${INSTALL_MODULE_NAME}" --force >/dev/null 2>&1; then
@@ -333,7 +333,7 @@ main() {
     if [[ "${environment_explicit}" == false && -n "${variant}" ]]; then
         # Deprecated --variant alias → environment, registry-free P5 path.
         environment="${variant}"
-        warn "  --variant is deprecated; treating '--variant ${variant}' as '--environment ${variant}' (ADR-007 P5)"
+        warn "  --variant is deprecated; treating '--variant ${variant}' as '--environment ${variant}'"
     fi
     # ${variant} is consumed above (deprecated alias → environment) and is dead
     # from here on: the P5 environment path is registry-free, and dependency

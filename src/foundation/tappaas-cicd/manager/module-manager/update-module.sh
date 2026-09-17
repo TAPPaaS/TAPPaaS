@@ -447,7 +447,7 @@ main() {
             --variant)
                 [[ -n "${2:-}" ]] || { fatal "--variant requires a value"; exit 2; }
                 environment="$2"
-                warn "--variant is deprecated; treating as --environment ${2} (ADR-007 P5)"
+                warn "--variant is deprecated; treating as --environment ${2}"
                 shift 2 ;;
             -*)          fatal "Unknown option: $1"; usage; exit 2 ;;
             *)
@@ -555,12 +555,12 @@ main() {
     if ! module_dir_pre="$(resolve_module_source_dir "${module}")"; then
         error "Cannot locate the source of '${module}': its config records no ${BL}.location${CL} and no registered repository's catalog lists it."
         error "  Step 0 (the 3-way merge) cannot run, so this update would not bring release changes into the deployed config."
-        error "  Refusing to report success for an update that reconciles nothing (#659)."
+        error "  Refusing to report success for an update that reconciles nothing."
         error "  Fix: add the repository the module comes from, or reinstall it from its source directory."
         exit 1
     fi
     if [[ ! -f /home/tappaas/bin/apply-json-merge.sh ]]; then
-        error "apply-json-merge.sh is not installed — the 3-way merge cannot run for '${module}' (#659)"
+        error "apply-json-merge.sh is not installed — the 3-way merge cannot run for '${module}'"
         exit 1
     fi
     # shellcheck disable=SC1091
@@ -570,7 +570,7 @@ main() {
     else
         error "The 3-way merge failed for '${module}' — the deployed config was NOT reconciled with the release."
         error "  Refusing to continue: an update that keeps the old config and reports success is how a module"
-        error "  silently falls out of the release stream (#659)."
+        error "  silently falls out of the release stream."
         exit 1
     fi
 
@@ -603,7 +603,7 @@ main() {
         # and strand the VM for hours (same class as the #275 self-reboot guard).
         # Proceed WITHOUT a snapshot — so snapshot_created stays false and no later
         # rollback will try to stop/restore this VM from inside.
-        warn "  Skipping pre-update snapshot: ${self_vm} is THIS controller VM (#352)."
+        warn "  Skipping pre-update snapshot: ${self_vm} is THIS controller VM."
         warn "    Snapshotting it from inside fsfreezes its own root FS and can strand it."
         warn "    Continuing WITHOUT a rollback safety net (take a node-side snapshot under supervision if needed)."
     elif [[ "${has_vm}" == true ]]; then

@@ -94,7 +94,7 @@ if [ "$REPO_COUNT" -gt 0 ]; then
     HOLD="$(repo_hold_state "$REPO_NAME" "$HOLD_DIR_CONFIG")"
     case "$HOLD" in
       active*)
-        warn "  ${REPO_NAME}: pull HELD — ${HOLD#active } (#653); running on what is checked out"
+        warn "  ${REPO_NAME}: pull HELD — ${HOLD#active }; running on what is checked out"
         continue ;;
       expired*)
         warn "  ${REPO_NAME}: the pull hold expired ${HOLD#expired } — removing it and pulling again"

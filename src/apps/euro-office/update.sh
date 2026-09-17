@@ -39,7 +39,12 @@ info "  Image: ${CONTAINER_IMAGE}"
 # ── Step 1: Pull latest DocumentServer container image and restart ────────────
 echo ""
 info "${BOLD}Pulling DocumentServer image and restarting service…${CL}"
-if ssh -o StrictHostKeyChecking=accept-new -o BatchMode=yes -o ConnectTimeout=10 \
+# The pull writes a "Copying blob <sha>" line per layer, which is progress, not
+# news. Dots instead; the whole thing stays in the log, and run_with_dots prints
+# its tail if the pull fails. LogLevel=ERROR drops ssh's "Permanently added …
+# to the list of known hosts" chatter, which accept-new emits on first contact.
+if run_with_dots "/tmp/euro-office-pull.log" \
+    ssh -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR -o BatchMode=yes -o ConnectTimeout=10 \
     "tappaas@${VMNAME}.${ZONE0NAME}.internal" \
     "sudo podman pull ${CONTAINER_IMAGE} \
      && sudo systemctl restart podman-euro-office"; then

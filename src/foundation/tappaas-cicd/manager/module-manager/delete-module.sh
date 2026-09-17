@@ -218,7 +218,7 @@ main() {
             --variant)
                 [[ -n "${2:-}" ]] || die "--variant requires a value"
                 OPT_ENVIRONMENT="${2}"
-                warn "--variant is deprecated; treating as --environment ${2} (ADR-007 P5)"
+                warn "--variant is deprecated; treating as --environment ${2}"
                 shift ;;
             -*) die "Unknown option: ${1}" ;;
             *)

@@ -86,7 +86,7 @@ env_is_registered() {
     return 1
 }
 
-info "${BOLD}TAPPaaS .variant retirement (#438)${CL}"
+info "${BOLD}TAPPaaS .variant retirement${CL}"
 info "  config dir          : ${CONFIG_DIR}"
 info "  default environment : ${DEFAULT_ENV:-<none resolvable>}"
 info "  mode                : $([[ "${APPLY}" == true ]] && echo APPLY || echo 'DRY RUN (use --apply to write)')"
