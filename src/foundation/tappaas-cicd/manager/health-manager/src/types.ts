@@ -142,12 +142,23 @@ export interface ClusterClient {
 }
 
 // ── validate (health gate) result shapes ──────────────────────────────
-export type CheckStatus = "pass" | "fail" | "skip";
+// "warn" is reported and coloured but does NOT fail the assertion: it is the
+// band between healthy and critical, where an operator should look before the
+// machine makes them.
+export type CheckStatus = "pass" | "fail" | "warn" | "skip";
+
+// A gate that reports per-subject rather than per-cluster renders its rows
+// beneath its own line. The gate's status is the worst row's.
+export interface CheckRow {
+  status: CheckStatus;
+  text: string;
+}
 
 export interface CheckResult {
   name: string; // "disk-threshold", "backup-status", "service-liveness"
   status: CheckStatus;
   detail: string;
+  rows?: CheckRow[];
 }
 
 export interface HealthReport {

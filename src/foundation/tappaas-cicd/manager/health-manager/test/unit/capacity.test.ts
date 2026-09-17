@@ -111,10 +111,13 @@ const withGuests = (gs: ReturnType<typeof guest>[]): NodeCapacity => ({
   const c = new FakeClusterClient();
   c.capacity = [withGuests([guest("nextcloud", 8, 1.3, 0.8), guest("cicd", 16, 7.3, 4.9)])];
   const r = checkGuestMemory(c);
+  const rows = (r.rows ?? []).map((x) => x.text).join("\n");
   check(r.status === "pass", "a healthy estate passes");
-  check(r.detail.includes("cicd 16.0/7.3/4.9"), `declared/resident/used are all shown (got: ${r.detail})`);
+  check(/cicd\s+16\.0G\s+7\.3G\s+4\.9G/.test(rows), `each module gets declared/resident/used (got: ${rows})`);
+  check(rows.indexOf("cicd") < rows.indexOf("nextcloud"), "rows are ordered largest gap first");
   // cicd 2.4 + nextcloud 0.5 = 2.9, NOT the 22.9 a declared-minus-used sum would give
-  check(r.detail.includes("2.9G"), `the gap counts resident-minus-used only (got: ${r.detail})`);
+  check(/totals[\s\S]*reclaimable 2\.9G/.test(rows), `totals count resident-minus-used only (got: ${rows})`);
+  check(/── totals\s+24\.0G\s+8\.6G\s+5\.7G/.test(rows), `each column is totalled (got: ${rows})`);
 }
 
 {
@@ -125,9 +128,11 @@ const withGuests = (gs: ReturnType<typeof guest>[]): NodeCapacity => ({
   const c = new FakeClusterClient();
   c.capacity = [withGuests([guest("network", 8, 8, 8, false)])];
   const r = checkGuestMemory(c);
-  check(r.detail.includes("UNMEASURED"), "a guest reporting no memory statistics is called unmeasured");
-  check(r.detail.includes("host holds 8.0G"), "…reported as what the HOST holds");
-  check(!r.detail.includes("largest gaps: network"), "…and never counted as a reclaimable gap");
+  const rows = (r.rows ?? []).map((x) => x.text).join("\n");
+  check(rows.includes("unmeasured"), "a guest reporting no memory statistics is marked unmeasured");
+  check(rows.includes("host's, not the guest's"), "…and the row says whose figure it is");
+  check(/reclaimable 0\.0G/.test(rows), "…and is never counted as a reclaimable gap");
+  check(r.detail.includes("1 unmeasured"), "the summary line counts it");
 }
 
 {
@@ -135,8 +140,9 @@ const withGuests = (gs: ReturnType<typeof guest>[]): NodeCapacity => ({
   const c = new FakeClusterClient();
   c.capacity = [withGuests([guest("vllm", 46, 0, 2.1, true, "lxc")])];
   const r = checkGuestMemory(c);
+  const rows = (r.rows ?? []).map((x) => x.text).join("\n");
   check(r.status === "pass", "an LXC with a large unused limit is not a problem");
-  check(!r.detail.includes("UNMEASURED"), "an LXC is not flagged — it needs no agent to be measured");
+  check(rows.includes("cgroup, not an allocation"), "an LXC row says its figure is a limit");
 }
 
 {
@@ -149,10 +155,29 @@ const withGuests = (gs: ReturnType<typeof guest>[]): NodeCapacity => ({
 {
   const c = new FakeClusterClient();
   c.capacity = [withGuests([guest("off", 8, 0, 0, true, "qemu", "stopped")])];
-  check(checkGuestMemory(c).status === "skip", "no running guests skips");
+  const sr = checkGuestMemory(c);
+  check(sr.status === "skip", "nothing running: the gate asserts nothing");
+  check((sr.rows ?? []).some((x) => x.text.includes("(stopped)")), "…but a stopped module is still listed");
   const d = new FakeClusterClient();
   d.capacityThrows = "unreachable";
   check(checkGuestMemory(d).status === "skip", "an unreachable cluster skips");
+}
+
+{
+  // Short of memory is a MODULE problem; over-declared is not. The bands must
+  // read the guest's use against its own declaration, not against the node.
+  const c = new FakeClusterClient();
+  c.capacity = [withGuests([
+    guest("tight", 4, 3.8, 3.7),   // 92% — critical
+    guest("busy", 4, 3.2, 3.1),    // 78% — warn
+    guest("roomy", 8, 2.0, 1.0),   // 13% — fine
+  ])];
+  const r = checkGuestMemory(c);
+  const byName = (n: string) => (r.rows ?? []).find((x) => x.text.startsWith(n));
+  check(byName("tight")?.status === "fail", "a guest using 92% of its memory is critical");
+  check(byName("busy")?.status === "warn", "a guest at 78% warns");
+  check(byName("roomy")?.status === "pass", "a guest with room passes");
+  check(r.status === "fail", "the gate takes the worst row");
 }
 
 console.log(`capacity: ${passed} passed, ${failed} failed`);

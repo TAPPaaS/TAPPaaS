@@ -15,7 +15,7 @@
 import { spawnSync } from "child_process";
 import { join } from "path";
 import { isManaged, loadConfigModules, readModuleJson } from "./config";
-import { CheckResult, CheckStatus, ClusterClient, HealthReport, NodeCapacity } from "./types";
+import { CheckResult, CheckRow, CheckStatus, ClusterClient, HealthReport, NodeCapacity } from "./types";
 
 // Resolve a guest's `<vmname>.<zone0>.internal` target, as check-disk-threshold.sh
 // does (defaulting zone0 to "mgmt"). We only need it for the SSH disk probe.
@@ -247,43 +247,76 @@ export function checkGuestMemory(client: ClusterClient): CheckResult {
   } catch (e) {
     return { name: "guest-memory", status: "skip", detail: `unavailable: ${(e as Error).message}` };
   }
-  const guests = caps.flatMap((c) => c.guests).filter((g) => g.status === "running");
+  const guests = caps.flatMap((c) => c.guests);
   if (guests.length === 0) {
-    return { name: "guest-memory", status: "skip", detail: "no running guests" };
+    return { name: "guest-memory", status: "skip", detail: "no guests" };
   }
-  // Resident above declared is the one genuine anomaly: the host is holding
-  // more for a guest than the guest was ever promised.
-  const impossible = guests.filter((g) => g.residentMem > 0 && g.residentMem > g.declaredMem * 1.05);
-  if (impossible.length > 0) {
-    return {
-      name: "guest-memory",
-      status: "fail",
-      detail: `resident memory exceeds the declared limit: ${impossible
-        .map((g) => `${g.name} ${gib(g.residentMem)}G > ${gib(g.declaredMem)}G`)
-        .join(", ")}`,
-    };
-  }
-  const unmeasured = guests.filter((g) => !g.measured);
-  // Reclaimable = touched-then-freed, and only where we can trust `used`.
-  const reclaimable = guests
-    .filter((g) => g.measured && g.residentMem > g.usedMem)
-    .map((g) => ({ g, gap: g.residentMem - g.usedMem }))
-    .sort((a, b) => b.gap - a.gap);
-  const totalGap = reclaimable.reduce((a, x) => a + x.gap, 0);
-  const top = reclaimable
-    .slice(0, 3)
-    .map((x) => `${x.g.name} ${gib(x.g.declaredMem)}/${gib(x.g.residentMem)}/${gib(x.g.usedMem)}G`)
-    .join(", ");
-  const parts = [`${guests.length} running; declared→resident→used, largest gaps: ${top || "none"}`];
-  if (totalGap > 0) parts.push(`touched-then-freed total ${gib(totalGap)}G`);
-  if (unmeasured.length > 0) {
-    parts.push(
-      `UNMEASURED (guest reports no memory statistics — the usage figure is the host's view, not the guest's): ${unmeasured
-        .map((g) => `${g.name} declared ${gib(g.declaredMem)}G, host holds ${gib(g.residentMem)}G`)
-        .join(", ")}`,
-    );
-  }
-  return { name: "guest-memory", status: "pass", detail: parts.join(" | ") };
+
+  // A module is short of memory when it is USING most of what it was given.
+  // Over-declaring is waste, not danger, and must not be dressed as either.
+  const CRITICAL = 90;
+  const WARN = 75;
+  const pad = (t: string, n: number): string => (t.length >= n ? t : t + " ".repeat(n - t.length));
+  const col = (b: number): string => pad(`${gib(b)}G`, 8);
+
+  type Row = { g: (typeof guests)[number]; gap: number; pct: number; status: CheckStatus };
+  const rows: Row[] = guests.map((g) => {
+    const running = g.status === "running";
+    const gap = running && g.measured && g.residentMem > g.usedMem ? g.residentMem - g.usedMem : 0;
+    const pct = running && g.measured && g.declaredMem > 0 ? (100 * g.usedMem) / g.declaredMem : -1;
+    let status: CheckStatus = "pass";
+    if (!running) status = "skip";
+    else if (g.residentMem > 0 && g.residentMem > g.declaredMem * 1.05) status = "fail";
+    else if (!g.measured) status = "skip";
+    else if (pct >= CRITICAL) status = "fail";
+    else if (pct >= WARN) status = "warn";
+    return { g, gap, pct, status };
+  });
+  // Largest gap first: the reader's eye should land on the most reclaimable.
+  rows.sort((a, b) => b.gap - a.gap || b.g.declaredMem - a.g.declaredMem);
+
+  const out: CheckRow[] = rows.map(({ g, gap, pct, status }) => {
+    const name = pad(g.name || String(g.vmid), 16);
+    if (g.status !== "running") return { status, text: `${name}${pad("(stopped)", 30)}` };
+    const used = g.measured ? col(g.usedMem) : pad("unmeasured", 8);
+    const note = !g.measured
+      ? "  usage figure is the host's, not the guest's"
+      : g.type === "lxc"
+        ? `  ${pct.toFixed(0)}% of limit (cgroup, not an allocation)`
+        : `  ${pct.toFixed(0)}% of declared, gap ${gib(gap)}G`;
+    return { status, text: `${name}${col(g.declaredMem)}${col(g.residentMem)}${used}${note}` };
+  });
+
+  const run = rows.filter((r) => r.g.status === "running");
+  const sum = (f: (r: Row) => number): number => run.reduce((a, r) => a + f(r), 0);
+  const totDeclared = sum((r) => r.g.declaredMem);
+  const totResident = sum((r) => r.g.residentMem);
+  const totUsed = sum((r) => (r.g.measured ? r.g.usedMem : 0));
+  const totGap = sum((r) => r.gap);
+  out.push({
+    status: "pass",
+    text: `${pad("── totals", 16)}${col(totDeclared)}${col(totResident)}${col(totUsed)}  reclaimable ${gib(totGap)}G`,
+  });
+
+  // Nothing running means nothing measured — the rows still list what is there,
+  // but the gate asserts nothing.
+  const worst: CheckStatus =
+    run.length === 0
+      ? "skip"
+      : rows.some((r) => r.status === "fail")
+        ? "fail"
+        : rows.some((r) => r.status === "warn")
+          ? "warn"
+          : "pass";
+  const unmeasured = run.filter((r) => !r.g.measured).length;
+  const detail =
+    `${run.length} running (${rows.length - run.length} stopped)` +
+    `${unmeasured > 0 ? `, ${unmeasured} unmeasured` : ""}` +
+    ` — declared / host-resident / guest-used, largest gap first.` +
+    ` Gap = touched-then-freed, the only part ballooning could reclaim;` +
+    ` declared minus resident was never touched and costs nothing.` +
+    ` WARN at ${WARN}% of declared in use, FAIL at ${CRITICAL}%.`;
+  return { name: "guest-memory", status: worst, detail, rows: out };
 }
 
 export function runHealthGates(client: ClusterClient, opts: ValidateOpts): HealthReport {

@@ -118,10 +118,19 @@ function cmdValidate(opts: Opts, client: ClusterClient): number {
     memoryThreshold: opts.memoryThreshold,
   });
   info(`${BOLD}TAPPaaS Health Validation${CL}`);
+  const tagOf = (s: string): string =>
+    s === "pass"
+      ? `${GN}PASS${CL}`
+      : s === "fail"
+        ? `${RD}FAIL${CL}`
+        : s === "warn"
+          ? `${YW}WARN${CL}`
+          : `${YW}SKIP${CL}`;
   for (const c of report.checks) {
-    const tag =
-      c.status === "pass" ? `${GN}PASS${CL}` : c.status === "fail" ? `${RD}FAIL${CL}` : `${YW}SKIP${CL}`;
-    info(`  [${tag}] ${c.name}: ${c.detail}`);
+    info(`  [${tagOf(c.status)}] ${c.name}: ${c.detail}`);
+    // A per-subject gate prints one row per subject beneath its own line, so a
+    // long detail string does not have to carry a table.
+    for (const r of c.rows ?? []) info(`      [${tagOf(r.status)}] ${r.text}`);
   }
   info("");
   if (report.failed === 0) {

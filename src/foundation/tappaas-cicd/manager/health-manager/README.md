@@ -70,7 +70,7 @@ fails**:
 | `service-liveness` | `pvesh /cluster/resources` | a managed config module's VM is not `running` |
 | `disk-threshold` | SSH `df /` per guest | a reachable guest's `/` usage ≥ threshold (default **80%**, `--threshold PCT`) |
 | `memory-commitment` | one `pvesh /cluster/resources` | a node's COMMITTED memory ≥ threshold of its physical RAM (default **100%**, `--memory-threshold PCT`) |
-| `guest-memory` | `pvesh` + one `ps`/`qm status` per node | a guest whose HOST-RESIDENT memory exceeds what it was declared (otherwise reports, never fails) |
+| `guest-memory` | `pvesh` + one `ps`/`qm status` per node | a guest **using ≥ 90%** of its declared memory (**WARN** at 75%), or one whose host-resident memory exceeds its declared limit |
 | `backup-status` | `backup-manager list --json` | a module is backup-disabled, or enabled but not in the PBS job |
 
 A gate with nothing to check (e.g. no reachable guests, backup tooling absent)
@@ -88,6 +88,13 @@ Per running guest it reports **declared → resident → used**:
 Measured on a live estate: 60G declared, 31.9G resident, ~20G used. A report
 with only declared-and-used would have said "reclaim 40G"; the third column says
 most of it was never taken.
+
+It prints **one row per module, largest gap first**, and totals each column at
+the end. The row status answers a different question from the gap: **is this
+module short of memory?** — `used` against its own declaration, WARN at 75% and
+FAIL at 90%. Over-declaring is waste and never fails; running out is a fault and
+does. The first live run found `litellm` at 93% of 4G, which no amount of
+looking at the reclaimable column would have surfaced.
 
 **Unmeasured guests are named, never numbered.** The signal is whether the
 balloon statistics carry `free_mem`, *not* whether a guest agent answers: the
