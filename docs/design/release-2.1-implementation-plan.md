@@ -278,7 +278,8 @@ unfalsifiable on exactly the installs that need it most.
 |---|-------|:-:|:-:|:-:|------|
 | #659 | Step 0 skipped when a config has no `.location`, update still reports success | 4 | 3 | H | Three silent paths, not one: an unresolvable location, a missing `apply-json-merge.sh`, **and a merge that errors** — all logged at info/warn and all followed by `exit 0`. Fixed by resolving through the catalog as well as `.location` (#460's second tracking path) and making all three fatal |
 
-**HELD (2026-09-17), pending the satellite conversion.** Measured before landing:
+**Landed 2026-09-17** (bdf15dcf, 51d1bae3), once makerfloss's satellite was marked
+`status: external` — see below. Measured before landing:
 hrossen's 13 modules all resolve via `.location`, so the change is a no-op there.
 On makerfloss exactly one module is affected — `satellite-satellite1`, which has
 neither a `.location` nor a catalog entry and would REFUSE after this lands.
@@ -291,11 +292,14 @@ by a documented manual copy step in `src/foundation/satellite/install.sh`
 ("Copy satellite.json -> ~/config/satellite-<name>.json and edit it"), which is
 why it has no `.location` — the installer that would have recorded one was
 bypassed by design. It is therefore fixed by the satellite conversion (G1.2),
-not by this issue. Two ways to unblock, in order of preference:
-
-1. convert satellite into a proper `kind: host` module (G1.2) — the real fix;
-2. or record a `.location` on its deployed config, which takes one field and
-   makes the resolver find it today.
+not by this issue. Unblocked 2026-09-17 by marking it `status: external`, which the archived/external
+check skips before Step 0 — semantically true today, since the config is
+created outside the module lifecycle. Recording a `.location` instead was
+rejected: it would make satellite PARTICIPATE, and `reconcile` would then call
+`satellite/update.sh` with the module name `satellite-satellite1` while
+`satellite-manager` knows the satellite as `satellite1` — trading a silent skip
+for a nightly failure. The real fix stays the G1.2 conversion, which removes the
+`status: external` again.
 
 The branch also carries the inverse of the effective-name rule (76e27d9c): a
 deployed `podman-lab1` resolves to `podman` because `lab1` is a DECLARED

@@ -761,7 +761,20 @@ main() {
 
     local post_test_exit=0 post_log new_failures old_failures
     post_log="$(mktemp)"
-    run_graded_test "${post_log}" "${module}" || post_test_exit=$?
+    # --runtime-only, MATCHING THE BASELINE. Step 2's gate runs runtime-only
+    # (#595), so a source-tree check never appears in PRE_TEST_LOG — and the
+    # `comm -13` below therefore counted every source-tree failure as one this
+    # update introduced, however long it had been failing. #635's grading cannot
+    # classify what the baseline could not contain.
+    #
+    # Measured 2026-09-17 on makerfloss: `test-self-prepare.sh` fails whenever
+    # the suite runs inside a TIMER-triggered sweep, before and after the update
+    # alike. It was graded "new", the module was marked failed, and the site
+    # owner was mailed — for a defect the update did not cause and could not fix.
+    # Comparing like with like is what makes the verdict mean anything; the
+    # source-tree checks still run for an operator and in the deep sweep, which
+    # is where #595 put them.
+    run_graded_test "${post_log}" --runtime-only "${module}" || post_test_exit=$?
     new_failures="$(comm -13 <(failed_checks "${PRE_TEST_LOG}") <(failed_checks "${post_log}"))"
     old_failures="$(comm -12 <(failed_checks "${PRE_TEST_LOG}") <(failed_checks "${post_log}"))"
     rm -f "${post_log}"

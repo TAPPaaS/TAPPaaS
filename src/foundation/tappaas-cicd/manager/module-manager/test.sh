@@ -1332,6 +1332,22 @@ grep -q "zzz" <<<"$out2" \
 rm -rf -- "$MDIR"
 
 # ---------------------------------------------------------------------------
+# The pre-update GATE and the post-update GRADED run must cover the same checks.
+# Step 6 subtracts the baseline to decide what the update introduced; if the two
+# runs cover different sets, everything the baseline could not contain is
+# misread as new (makerfloss, 2026-09-17).
+# ---------------------------------------------------------------------------
+_pre_line="$(grep -n 'run_graded_test "${PRE_TEST_LOG}"' "${HERE}/update-module.sh" | head -1)"
+_post_line="$(grep -n 'run_graded_test "${post_log}"' "${HERE}/update-module.sh" | head -1)"
+if [[ "${_pre_line}" == *"--runtime-only"* && "${_post_line}" == *"--runtime-only"* ]]; then
+    ok "the pre-update gate and the post-update run use the same scope"
+else
+    bad "pre/post test scope differs — a source-tree failure will be graded as new (#595/#635)"
+    info "      pre:  ${_pre_line}"
+    info "      post: ${_post_line}"
+fi
+
+# ---------------------------------------------------------------------------
 # Unit: resolve_module_source_dir — a module with no .location is still located
 # through the catalog, and an update that cannot reconcile REFUSES (#659).
 #
