@@ -8,6 +8,7 @@
 // Gates ported here:
 //   - disk-threshold   (= check-disk-threshold.sh, READ-ONLY subset — see note)
 //   - memory-commitment (#569: physical RAM vs what running guests are entitled to)
+//   - guest-memory      (per guest: declared vs used vs host-resident)
 //   - backup-status    (was check-backup-status.sh; reads `backup-manager list --json`)
 //   - service-liveness (guest-agent ping / running-state — see TODO)
 
@@ -220,11 +221,77 @@ export function checkMemoryCommitment(client: ClusterClient, threshold: number):
   return { name: "memory-commitment", status: "pass", detail: parts.join("; ") };
 }
 
+// ── guest-memory report ───────────────────────────────────────────────
+// Three numbers per guest, because two cannot tell the cases apart:
+//
+//   declared - resident  memory the guest has NEVER TOUCHED. QEMU backs a page
+//                        on first write, so this costs nothing and ballooning
+//                        has nothing to reclaim from it.
+//   resident - used      memory the guest touched and then freed. The host was
+//                        never told, so it still holds it. THIS is the only
+//                        part a balloon driver could give back.
+//
+// Measured on hrossen: 60G declared, 31.9G resident, ~20G used. A two-column
+// report would have said "balloon everything"; the third column says most of
+// the gap was never taken in the first place.
+//
+// An UNMEASURED guest is reported as such and never as a number. Without an
+// agent Proxmox reports the host's own view as the guest's usage, so a FreeBSD
+// firewall using 1.15G of 8G read as 8.0G of 8.0G — "full", and precisely
+// backwards. Printing that figure would send an operator away from the one VM
+// on the system with real memory to reclaim.
+export function checkGuestMemory(client: ClusterClient): CheckResult {
+  let caps: NodeCapacity[];
+  try {
+    caps = client.nodeCapacity();
+  } catch (e) {
+    return { name: "guest-memory", status: "skip", detail: `unavailable: ${(e as Error).message}` };
+  }
+  const guests = caps.flatMap((c) => c.guests).filter((g) => g.status === "running");
+  if (guests.length === 0) {
+    return { name: "guest-memory", status: "skip", detail: "no running guests" };
+  }
+  // Resident above declared is the one genuine anomaly: the host is holding
+  // more for a guest than the guest was ever promised.
+  const impossible = guests.filter((g) => g.residentMem > 0 && g.residentMem > g.declaredMem * 1.05);
+  if (impossible.length > 0) {
+    return {
+      name: "guest-memory",
+      status: "fail",
+      detail: `resident memory exceeds the declared limit: ${impossible
+        .map((g) => `${g.name} ${gib(g.residentMem)}G > ${gib(g.declaredMem)}G`)
+        .join(", ")}`,
+    };
+  }
+  const unmeasured = guests.filter((g) => !g.measured);
+  // Reclaimable = touched-then-freed, and only where we can trust `used`.
+  const reclaimable = guests
+    .filter((g) => g.measured && g.residentMem > g.usedMem)
+    .map((g) => ({ g, gap: g.residentMem - g.usedMem }))
+    .sort((a, b) => b.gap - a.gap);
+  const totalGap = reclaimable.reduce((a, x) => a + x.gap, 0);
+  const top = reclaimable
+    .slice(0, 3)
+    .map((x) => `${x.g.name} ${gib(x.g.declaredMem)}/${gib(x.g.residentMem)}/${gib(x.g.usedMem)}G`)
+    .join(", ");
+  const parts = [`${guests.length} running; declared→resident→used, largest gaps: ${top || "none"}`];
+  if (totalGap > 0) parts.push(`touched-then-freed total ${gib(totalGap)}G`);
+  if (unmeasured.length > 0) {
+    parts.push(
+      `UNMEASURED (guest reports no memory statistics — the usage figure is the host's view, not the guest's): ${unmeasured
+        .map((g) => `${g.name} declared ${gib(g.declaredMem)}G, host holds ${gib(g.residentMem)}G`)
+        .join(", ")}`,
+    );
+  }
+  return { name: "guest-memory", status: "pass", detail: parts.join(" | ") };
+}
+
 export function runHealthGates(client: ClusterClient, opts: ValidateOpts): HealthReport {
   const checks: CheckResult[] = [
     checkServiceLiveness(client, opts.configDir, opts.defaultNode),
     checkDiskThreshold(client, opts.configDir, opts.defaultNode, opts.threshold),
     checkMemoryCommitment(client, opts.memoryThreshold),
+    checkGuestMemory(client),
     checkBackupStatus(opts.configDir),
   ];
   const failed = checks.filter((c: CheckResult): boolean => c.status === ("fail" as CheckStatus)).length;

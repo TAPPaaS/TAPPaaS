@@ -70,10 +70,37 @@ fails**:
 | `service-liveness` | `pvesh /cluster/resources` | a managed config module's VM is not `running` |
 | `disk-threshold` | SSH `df /` per guest | a reachable guest's `/` usage ≥ threshold (default **80%**, `--threshold PCT`) |
 | `memory-commitment` | one `pvesh /cluster/resources` | a node's COMMITTED memory ≥ threshold of its physical RAM (default **100%**, `--memory-threshold PCT`) |
+| `guest-memory` | `pvesh` + one `ps`/`qm status` per node | a guest whose HOST-RESIDENT memory exceeds what it was declared (otherwise reports, never fails) |
 | `backup-status` | `backup-manager list --json` | a module is backup-disabled, or enabled but not in the PBS job |
 
 A gate with nothing to check (e.g. no reachable guests, backup tooling absent)
 reports **SKIP**, not FAIL. `--threshold` applies cluster-wide. The disk gate is
+### `guest-memory` — three numbers, because two mislead
+
+Per running guest it reports **declared → resident → used**:
+
+- `declared − resident` is memory the guest has **never touched**. QEMU backs a
+  page on first write, so this costs nothing and there is nothing to reclaim.
+- `resident − used` is memory the guest **touched and then freed**. The host was
+  never told, so it still holds it. This — and only this — is what a balloon
+  driver could give back.
+
+Measured on a live estate: 60G declared, 31.9G resident, ~20G used. A report
+with only declared-and-used would have said "reclaim 40G"; the third column says
+most of it was never taken.
+
+**Unmeasured guests are named, never numbered.** The signal is whether the
+balloon statistics carry `free_mem`, *not* whether a guest agent answers: the
+FreeBSD agent on an OPNsense firewall answers `ping` and `get-osinfo` while
+providing no memory statistics, and Proxmox then reports the host's own view as
+the guest's usage. That firewall read as 8.0G of 8.0G — "full" — while using
+1.15G, with its reported `mem` exceeding its own `maxmem`, which no genuine
+guest figure can do. Printing that number would steer an operator away from the
+one VM on the system with real memory to reclaim.
+
+LXC guests need no agent: a container's memory is the host's own accounting, and
+its declared figure is a cgroup **limit**, not an allocation.
+
 ### What `memory-commitment` counts, and what it deliberately does not
 
 It reports, per node, the memory **committed to running guests** against the

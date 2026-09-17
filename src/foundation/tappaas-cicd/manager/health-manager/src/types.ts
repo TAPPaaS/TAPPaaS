@@ -111,8 +111,17 @@ export interface GuestMemory {
   name: string;
   node: string;
   status: string;
-  declaredMem: number; // bytes the guest is configured for
-  usedMem: number; // bytes the guest reports using
+  type: "qemu" | "lxc" | string;
+  declaredMem: number; // bytes the guest is configured for (a LIMIT for lxc)
+  usedMem: number; // bytes the guest reports using — only meaningful if `measured`
+  residentMem: number; // bytes the HOST actually has backed for it (0 = unknown)
+  // True only when the balloon statistics carry `free_mem` — i.e. the usage
+  // figure genuinely came from inside the guest. NOT the same as "an agent
+  // answered": the FreeBSD agent on an OPNsense firewall answers `ping` and
+  // `get-osinfo` while providing no memory statistics, and Proxmox then reports
+  // the HOST's view as the guest's. That is how a firewall using 1.15G read as
+  // 8.0G of 8.0G — its `mem` even exceeded its `maxmem`.
+  measured: boolean;
 }
 
 export interface ClusterClient {

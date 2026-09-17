@@ -140,11 +140,46 @@ export class CliClusterClient implements ClusterClient {
         name: str(row.name),
         node: str(row.node),
         status: str(row.status),
+        type,
         declaredMem: num(row.maxmem),
         usedMem: num(row.mem),
+        residentMem: 0,
+        measured: type === "lxc", // a container has no agent and needs none
       };
       cap.guests.push(g);
       if (g.status === "running") cap.committedMem += g.declaredMem;
+    }
+    // Per node, ONE ssh answers both remaining questions: how much the host has
+    // actually backed for each guest (RSS of its kvm process), and whether a
+    // guest agent is answering at all. Without the second, `usedMem` is the
+    // host's own view wearing the guest's clothes.
+    for (const cap of caps.values()) {
+      const vmids = cap.guests.filter((g) => g.type === "qemu" && g.status === "running").map((g) => g.vmid);
+      if (vmids.length === 0) continue;
+      // `free_mem` in the balloon statistics is the signal, NOT whether a guest
+      // agent answers. The FreeBSD agent on an OPNsense firewall answers `ping`
+      // and `get-osinfo` perfectly well while providing no memory statistics at
+      // all — Proxmox then reports the HOST's view as the guest's usage, which
+      // is how a VM using 1.15G read as 8.0G of 8.0G. Its `mem` even exceeded
+      // its `maxmem`, which no guest-reported figure can do.
+      const probe =
+        `ps -eo rss,args | awk '/[k]vm -id/{for(i=1;i<=NF;i++) if($i=="-id") v=$(i+1); print "rss " v " " $1}'; ` +
+        vmids
+          .map(
+            (v) =>
+              `(qm status ${v} --verbose 2>/dev/null | grep -qE '^[[:space:]]*free_mem' && echo "stats ${v} 1" || echo "stats ${v} 0")`,
+          )
+          .join("; ");
+      const r = ssh("root", `${cap.node}.${mgmtDomain()}`, probe);
+      if (r.rc !== 0) continue; // a node we cannot reach leaves its guests unmeasured
+      for (const line of r.stdout.split("\n")) {
+        const f = line.trim().split(/\s+/);
+        if (f.length !== 3) continue;
+        const g = cap.guests.find((x) => x.vmid === Number(f[1]));
+        if (!g) continue;
+        if (f[0] === "rss") g.residentMem = Number(f[2]) * 1024; // ps reports KiB
+        else if (f[0] === "stats") g.measured = f[2] === "1";
+      }
     }
     return [...caps.values()].sort((a, b) => a.node.localeCompare(b.node));
   }

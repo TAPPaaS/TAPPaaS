@@ -6,7 +6,7 @@
 // host overhead live outside any guest — which is why the gate must not be
 // written against `used`.
 
-import { checkMemoryCommitment } from "../../src/checks";
+import { checkGuestMemory, checkMemoryCommitment } from "../../src/checks";
 import { NodeCapacity } from "../../src/types";
 import { FakeClusterClient } from "./fake-client";
 
@@ -26,8 +26,8 @@ const node = (
   usedMem: used * G,
   committedMem: guests.filter((g) => g[2] === "running").reduce((a, g) => a + g[1] * G, 0),
   guests: guests.map((g, i) => ({
-    vmid: 100 + i, name: g[0], node: name, status: g[2],
-    declaredMem: g[1] * G, usedMem: 0,
+    vmid: 100 + i, name: g[0], node: name, status: g[2], type: "qemu",
+    declaredMem: g[1] * G, usedMem: 0, residentMem: 0, measured: true,
   })),
 });
 
@@ -91,6 +91,68 @@ const node = (
 
   const e = new FakeClusterClient();
   check(checkMemoryCommitment(e, 100).status === "skip", "no nodes reported skips");
+}
+
+// ── guest-memory: the three numbers, and the one we must not print ───
+// declared/resident/used, in GiB.
+const guest = (
+  name: string, declared: number, resident: number, used: number,
+  measured = true, type = "qemu", status = "running",
+) => ({
+  vmid: 900, name, node: "tappaas1", status, type,
+  declaredMem: declared * G, residentMem: resident * G, usedMem: used * G, measured,
+});
+const withGuests = (gs: ReturnType<typeof guest>[]): NodeCapacity => ({
+  node: "tappaas1", physicalMem: 64 * G, usedMem: 32 * G, committedMem: 0, guests: gs,
+});
+
+{
+  // Never-touched memory is not reclaimable; touched-then-freed is.
+  const c = new FakeClusterClient();
+  c.capacity = [withGuests([guest("nextcloud", 8, 1.3, 0.8), guest("cicd", 16, 7.3, 4.9)])];
+  const r = checkGuestMemory(c);
+  check(r.status === "pass", "a healthy estate passes");
+  check(r.detail.includes("cicd 16.0/7.3/4.9"), `declared/resident/used are all shown (got: ${r.detail})`);
+  // cicd 2.4 + nextcloud 0.5 = 2.9, NOT the 22.9 a declared-minus-used sum would give
+  check(r.detail.includes("2.9G"), `the gap counts resident-minus-used only (got: ${r.detail})`);
+}
+
+{
+  // The FreeBSD firewall. Its agent ANSWERS — ping, get-osinfo, all fine — but
+  // provides no memory statistics, so Proxmox reports the HOST's view as the
+  // guest's. Printing 8.0/8.0 would say "full" about a VM using 1.15G, which is
+  // why the signal is `free_mem` in the balloon stats, not agent liveness.
+  const c = new FakeClusterClient();
+  c.capacity = [withGuests([guest("network", 8, 8, 8, false)])];
+  const r = checkGuestMemory(c);
+  check(r.detail.includes("UNMEASURED"), "a guest reporting no memory statistics is called unmeasured");
+  check(r.detail.includes("host holds 8.0G"), "…reported as what the HOST holds");
+  check(!r.detail.includes("largest gaps: network"), "…and never counted as a reclaimable gap");
+}
+
+{
+  // An LXC limit is not an allocation and needs no agent.
+  const c = new FakeClusterClient();
+  c.capacity = [withGuests([guest("vllm", 46, 0, 2.1, true, "lxc")])];
+  const r = checkGuestMemory(c);
+  check(r.status === "pass", "an LXC with a large unused limit is not a problem");
+  check(!r.detail.includes("UNMEASURED"), "an LXC is not flagged — it needs no agent to be measured");
+}
+
+{
+  // Resident above declared is the one real anomaly.
+  const c = new FakeClusterClient();
+  c.capacity = [withGuests([guest("odd", 4, 8, 2)])];
+  check(checkGuestMemory(c).status === "fail", "resident above declared fails");
+}
+
+{
+  const c = new FakeClusterClient();
+  c.capacity = [withGuests([guest("off", 8, 0, 0, true, "qemu", "stopped")])];
+  check(checkGuestMemory(c).status === "skip", "no running guests skips");
+  const d = new FakeClusterClient();
+  d.capacityThrows = "unreachable";
+  check(checkGuestMemory(d).status === "skip", "an unreachable cluster skips");
 }
 
 console.log(`capacity: ${passed} passed, ${failed} failed`);
