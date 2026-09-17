@@ -407,7 +407,7 @@ Wave 1.
 |---|-------|:-:|:-:|:-:|------|
 | #58 | Secrets management (OpenBao) | 1 | 5 | H | **Proposal (G1.6 entry gate):** one secrets-access helper that every module uses instead of reading `/etc/secrets` directly. Swap in OpenBao later without touching modules |
 | #19 | Disable SSH password login on PVE nodes | 4 | 4 | M | Lockout risk: put the cicd key on every node first (FW #122) |
-| #128 | Security hardening (Proxmox hardening guide) | 2 | 3 | M | Node sshd/sysctl changes |
+| #128 | Security hardening (Proxmox hardening guide) | 2 | 3 | M | Decomposed 2026-09-17 against `docs/pve9-hardening-guide.md`, checked on a live node: seven gaps, each independently testable — host sshd (**absorbs #19**), `unattended-upgrades` on hosts, auditd on `/etc/pve`, microcode, Corosync ring1, client-side backup encryption, fail2ban. Already satisfied: segmentation (zones), KSM off, backup verification (#228/#230), off-site (satellite). NOT adopted: the PVE firewall (a second rule surface against `zones.json` — its own decision), Ceph, subscription repos, Secure Boot/LUKS (L3). See the issue for the table |
 | #142 | RFC: AI-agent access to cicd | 2 | 1 | M | Decision |
 | #378 | Default-on secret scanning on cicd | 4 | 1 | L | |
 
@@ -461,6 +461,7 @@ Low upgrade risk. Build continuously, in any order within a group.
 
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
+| #662 | PVE host configuration is not backed up | 4 | 2 | M | Guests and module paths are backed up; the hosts' own config is not — `/etc/pve`, `/etc/network/interfaces`, `/etc/ssh`, `/root`. A single node loss is survivable (pmxcfs replicates), a cluster-wide one is not. The Level 1 control from the hardening guide we have no equivalent for. Settle first how to capture `/etc/pve`: a pxar of the FUSE mount, or `/var/lib/pve-cluster/config.db`, or both — only one of them restores onto a node not yet in a cluster |
 | #392 | Never attempt a disk shrink | 5 | 1 | L | |
 | #393 | A failed migration must not block later steps | 4 | 2 | L | |
 | #531 | Detect hardware-spec drift | 4 | 3 | L | Once detected, pending changes get applied (reboots): gate on `rebootOk` |
