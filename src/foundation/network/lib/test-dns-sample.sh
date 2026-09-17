@@ -86,5 +86,35 @@ printf '%s\n' 999 > "${RUN}"
 dns_sample_select "${CFG}" "${RUN}"
 ck "nothing running: only the vmid-less module remains" "policy" "$(selected)"
 
+# ── #657: the zone travels with the vmname ───────────────────────────
+# The caller used to re-read the config keyed by vmname. For a config file
+# named differently from its vmname that read returned nothing, the zone fell
+# back to the literal "srvHome", and Standard 4 then failed a name the estate
+# never declared.
+records() { printf '%s' "${DNS_SAMPLE_RECORDS}" | tr '\n' ',' | sed 's/,$//'; }
+VAR="${TMP}/variant"; mkdir -p "${VAR}"
+# config FILE name differs from vmname, exactly the #657 case
+cat > "${VAR}/pai-EvB.json" <<'JSON'
+{ "vmname": "pai", "vmid": 500, "zone0": "srvWork" }
+JSON
+# Pattern A: the zone is nested under .config."<module>:<service>" (#555 shape)
+cat > "${VAR}/nested.json" <<'JSON'
+{ "vmname": "nested", "vmid": 501, "config": { "nested:cluster:vm": { "zone0": "iot" } } }
+JSON
+# declares no zone at all
+cat > "${VAR}/nozone.json" <<'JSON'
+{ "vmname": "nozone", "vmid": 502 }
+JSON
+printf '%s\n' 500 501 502 > "${TMP}/run-variant"
+dns_sample_select "${VAR}" "${TMP}/run-variant"
+ck "#657: the zone comes from the selected config, not a vmname lookup" \
+   "pai	srvWork" "$(grep '^pai	' <<<"${DNS_SAMPLE_RECORDS}")"
+ck "#657: a Pattern A zone is found by descent" \
+   "nested	iot" "$(grep '^nested	' <<<"${DNS_SAMPLE_RECORDS}")"
+ck "#657: no zone declared → empty, never the srvHome guess" \
+   "nozone	" "$(grep '^nozone' <<<"${DNS_SAMPLE_RECORDS}")"
+ck "#657: the vmname list is unchanged for existing callers" \
+   "nested,nozone,pai" "$(selected)"
+
 echo "RESULT: ${PASS} passed, ${FAIL} failed"
 [[ ${FAIL} -eq 0 ]]

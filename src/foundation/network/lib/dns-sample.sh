@@ -51,6 +51,17 @@ dns_sample_running_vmids() {
 # the tallies as well as the list:
 #
 #   DNS_SAMPLE_MODULES    newline-separated vmnames, sorted and deduped
+#   DNS_SAMPLE_RECORDS    newline-separated "<vmname>\t<zone0>", same selection.
+#                         The zone is read from the SAME config file the vmname
+#                         came from — which is the whole point (#657): the
+#                         caller used to re-read the config keyed by vmname, and
+#                         a module whose config file is named differently (a
+#                         variant, or an install in a non-default environment)
+#                         returned nothing, fell back to the literal "srvHome"
+#                         and was then failed on a name the estate never
+#                         declared. An empty zone means the config declares
+#                         none; the caller reports that rather than inventing
+#                         one.
 #   DNS_SAMPLE_N_ALIAS    excluded: aliasType=network
 #   DNS_SAMPLE_N_HOSTLESS excluded: backup with no local datastore
 #   DNS_SAMPLE_N_GUESTLESS excluded: no running guest
@@ -61,13 +72,15 @@ dns_sample_running_vmids() {
 # to an empty one.
 # shellcheck disable=SC2034  # read by the sourcing test script
 DNS_SAMPLE_MODULES=""
+# shellcheck disable=SC2034  # read by the sourcing test script
+DNS_SAMPLE_RECORDS=""
 DNS_SAMPLE_N_ALIAS=0
 DNS_SAMPLE_N_HOSTLESS=0
 DNS_SAMPLE_N_GUESTLESS=0
 
 dns_sample_select() {
     local config_dir="$1" running="${2:-}"
-    local f vmname alias_type placement_state status vmid picked=""
+    local f vmname alias_type placement_state status vmid zone picked="" picked_records=""
     DNS_SAMPLE_N_ALIAS=0; DNS_SAMPLE_N_HOSTLESS=0; DNS_SAMPLE_N_GUESTLESS=0
 
     for f in "${config_dir}"/*.json; do
@@ -109,9 +122,16 @@ dns_sample_select() {
             fi
         fi
 
+        # Pattern A nests fields under .config."<module>:<service>", so the zone
+        # is found by descent, not at the top level — the same shape that hid
+        # proxyAllowedZones from Standard 12 (#555).
+        zone="$(jq -r '[..|objects|select(has("zone0"))|.zone0] | map(select(. != null and . != "")) | first // empty' "${f}" 2>/dev/null || true)"
         picked+="${vmname}"$'\n'
+        picked_records+="${vmname}"$'\t'"${zone}"$'\n'
     done
 
     # shellcheck disable=SC2034  # read by the sourcing test script
     DNS_SAMPLE_MODULES="$(printf '%s' "${picked}" | sort -u)"
+    # shellcheck disable=SC2034  # read by the sourcing test script
+    DNS_SAMPLE_RECORDS="$(printf '%s' "${picked_records}" | sort -u)"
 }

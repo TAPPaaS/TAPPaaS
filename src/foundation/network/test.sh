@@ -357,16 +357,28 @@ else
     # Every remaining module, not a sample of three: the exclusions above are
     # what made a sample necessary, and three checked out of forty-three was a
     # green tick over forty unexamined names (#631).
-    while IFS= read -r vmname; do
+    # The zone comes from the config the SAMPLE selected, carried alongside the
+    # vmname (#657). Re-reading the config keyed by vmname was wrong for every
+    # module whose config file is named differently — a variant, or an install
+    # in a non-default environment — and the old `// "srvHome"` fallback then
+    # turned that miss into an assertion about a name the estate never declared
+    # (measured: pai-EvB, vmname `pai`, zone0 `srvWork`, failed as
+    # pai.srvHome.internal while resolving correctly at its real name).
+    while IFS=$'\t' read -r vmname zone; do
         [[ -z "${vmname}" ]] && continue
-        zone=$(read_module_config "${vmname}" 2>/dev/null | jq -r '.zone0 // "srvHome"' 2>/dev/null || echo "srvHome")
+        if [[ -z "${zone}" ]]; then
+            # No zone declared: the name cannot be formed. Say so — an invented
+            # FQDN is a failure nobody can act on, and it buries the real ones.
+            skip "${vmname}: no zone0 declared in its config — cannot form a name to check"
+            continue
+        fi
         fqdn="${vmname}.${zone}.internal"
         if getent hosts "${fqdn}" >/dev/null 2>&1; then
             pass "DNS resolves ${fqdn}"
         else
             fail "DNS cannot resolve ${fqdn}"
         fi
-    done <<< "${DNS_SAMPLE_MODULES}"
+    done <<< "${DNS_SAMPLE_RECORDS}"
 fi
 
 section "Standard 5: zone-manager summary"
