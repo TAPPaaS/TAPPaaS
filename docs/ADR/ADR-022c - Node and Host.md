@@ -3,15 +3,17 @@
 | | |
 |---|---|
 | **Status** | **Draft — for review** |
-| **Version** | 0.3 |
-| **Date** | 2026-09-09 (v0.3: 2026-09-11) |
+| **Version** | 0.4 |
+| **Date** | 2026-09-09 (v0.4: 2026-09-17) |
 | **Author** | ErikDaniel007 |
 | **Deciders** | @ErikDaniel007, @LarsRossen |
 | **Parent** | [ADR-022 — Workload Ontology](<ADR-022 - Workload Ontology.md>) |
-| **Supersedes in part** | [ADR-009](<ADR-009 - Composition Meta-Model.md>) — the `Node` entry |
-| **Changelog** | v0.1 — initial draft. v0.2 — D4's example updated: ADR-022d retired the combined `kind: guest` value for a `vm`/`lxc` split; D4 now names both. v0.3 — Migration's file count corrected from seven to eight: the Community repo carries its own independent `kind: external-host` schema copy, found by inspection when validating ADR-022d against every real module in both repos. |
+| **Refines** | [ADR-007d — Site](<ADR-007d - Site.md>) (`nodes`) · [ADR-007b — Apps](<ADR-007b - Apps.md>) (the `node` field) |
+| **Supersedes in part** | [ADR-009](<ADR-009 - Composition Meta-Model.md>) — the `Node` entry (:40), the model line (:26) and Decision 1 (:66–72, Node = physical host) |
+| **Amends** | [ADR-007b](<ADR-007b - Apps.md>) :95 (`node` note) · [ADR-007d](<ADR-007d - Site.md>) :30–33 (`nodes`) · [GLOSSARY.md](../../GLOSSARY.md) §B :33 (Node), §C :50–51 (Stack-promotion rule) · [ADR-007f](<ADR-007f - Realization.md>) (receives that rule) |
+| **Changelog** | v0.4 (2026-09-17) — review #624/#637: module boundary, `kind` marker and Host discovery removed (`kind` is ADR-022d's); D6/D7 renumbered D4/D5; supersedes and amends rows completed (ADR-009, ADR-007b, ADR-007d, GLOSSARY, ADR-007f). Earlier drafts in git history. |
 
-What a resource runs on, and what `kind` records.
+What a resource runs on.
 
 ## Decision
 
@@ -25,31 +27,23 @@ A cluster member, a bare-metal host and a VM are all Nodes. `GLOSSARY.md` §B de
 
 **D3. Add `Host`** — the Node a Module runs on. The `node` **field** keeps its name for compatibility; it names a Host and does **not** assert cluster membership. Live evidence: `config/backup.json` carries `node: "backup"` while `site.json` lists only `tappaas1` and `tappaas2`.
 
-**D4. Module boundary follows `kind`.** *"Module boundary = VM boundary"* has two live counterexamples — `satellite.json` (`vmname: null`) and the `backup` module, which apt-installs PBS on a host. Boundary is the VM for `kind: vm`, the container for `kind: lxc`, the host for `kind: host` (ADR-022d, which retired the earlier combined `kind: guest` value in favor of this split).
+**D4. Plane vocabulary is scoped to the `network` module.** [RFC 7426](https://www.rfc-editor.org/rfc/rfc7426.html) defines forwarding, operational, control, management and application planes, all in terms of *network devices* and *traffic*; "data plane" is not a defined term there, only a widely used nickname for the forwarding plane. TAPPaaS runs a real forwarding plane in OPNsense and the switches, so the words must not be reused for workloads. The general term for what the management plane acts on is **Managed Element** ([MAPE-K](https://arxiv.org/pdf/1505.00903)).
 
-**D5. `kind` is the object-type marker**, tooling-written, never hand-authored — the Kubernetes convention TAPPaaS already follows. Its **values** are decided by [ADR-022d](<ADR-022d - Workload Classification.md>), not here. What this ADR settles is that `external-host` cannot survive: `module-fields.json` defines it as *"a non-module cluster guest"* and `satellite-fields.json` as *"an EXTERNAL host, NOT a Proxmox cluster:vm"* — the same value, contradictory, both on `main`.
-
-**D6. Plane vocabulary is scoped to the `network` module.** [RFC 7426](https://www.rfc-editor.org/rfc/rfc7426.html) defines forwarding, operational, control, management and application planes, all in terms of *network devices* and *traffic*; "data plane" is not a defined term there, only a widely used nickname for the forwarding plane. TAPPaaS runs a real forwarding plane in OPNsense and the switches, so the words must not be reused for workloads. The general term for what the management plane acts on is **Managed Element** ([MAPE-K](https://arxiv.org/pdf/1505.00903)).
-
-**D7. `tier` is namespaced** — `module.tier` (lifecycle) and `zone.tier` (trust, ADR-014). The Stack-promotion rule in `GLOSSARY.md` §C is renamed and moved out of the vocabulary file; it is a rule, not a term.
-
-**D8. A Host that is not a cluster member must be discoverable on its own terms.** Defining `Host` is not enough if every probe assumes Proxmox VE. `backup/lib/pbs-placement.sh` discovers storage with `pvesm status` and enumerates candidates with `pvesh get /nodes`, so a Node outside the cluster can be *named* but never *found*. A term that tooling cannot detect is a term that gets worked around. The implementation is tracked as a `backup` issue; the requirement is recorded here so it is not lost.
+**D5. `tier` is namespaced** — `module.tier` (lifecycle) and `zone.tier` (trust, ADR-014). The Stack-promotion rule in `GLOSSARY.md` §C is renamed and moved out of the vocabulary file; it is a rule, not a term.
 
 ## Schema
 
-- `module-fields.json` / `satellite-fields.json` — one definition of `kind`, values per ADR-022d.
 - `node` field — description amended: names a Host; does not imply cluster membership.
 - No field is renamed by this ADR.
 
 ## Migration
 
-`kind: external-host` appears in seven files in this repo: `satellite-fields.json`, `module-fields.json`, `satellite.json`, `satellite-manager/lib/provision.sh`, `satellite/test.sh`, `satellite-manager/test.sh`, and one `module-manager` fixture — plus an eighth, found by inspection, in the Community repo (`AndreasJe/mailserver-hub/satellite-smtp-relay-additions/schemas/satellite-fields.json`, its own independent copy). The value change lands with ADR-022d, which decides the replacement.
+Documentation only. The `kind: external-host` retirement is listed in [ADR-022d](<ADR-022d - Workload Classification.md>).
 
 ## Acceptance
 
 - [ ] `Node`, `cluster member` and `Host` defined in `GLOSSARY.md` §B per D1–D3
 - [ ] ADR-009's `Node` entry marked superseded by this ADR
-- [ ] `Module` boundary defined as `kind`-dependent
-- [ ] `kind` defined once, in one place
+- [ ] ADR-007b's `node` note ("the physical Proxmox host") amended per D3
 - [ ] `Managed Element` and `forwarding plane` defined; plane vocabulary marked network-scoped
 - [ ] `module.tier` / `zone.tier` namespaced; Stack-promotion rule moved to ADR-007f
