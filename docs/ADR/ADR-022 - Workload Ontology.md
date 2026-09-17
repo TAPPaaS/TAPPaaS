@@ -9,7 +9,7 @@
 | **Deciders** | @ErikDaniel007, @LarsRossen |
 | **Refines** | [ADR-007d](<ADR-007d - Site.md>) (Site) · [ADR-007b](<ADR-007b - Apps.md>) (module type) |
 | **Related** | [ADR-007](<ADR-007 - TAPPaaS Taxonomy.md>) (classification); [ADR-009](<ADR-009 - Composition Meta-Model.md>) (`Node`, superseded in part); [ADR-014](<ADR-014 - Zone and Environment Lifecycle.md>) (zones — owner, not amended); [ADR-024](<ADR-024 - Site Fabric.md>) (inter-Site relationships); [ADR-012](ADR-012-backup-enhancement.md) (first consumer); [GLOSSARY.md](../../GLOSSARY.md) (the vocabulary SSOT this ADR updates) |
-| **Changelog** | v0.12 (2026-09-17) — review #624/#637: mapping section and answered question removed; open questions shortened; rib charters aligned with the ribs. Earlier drafts in git history. |
+| **Changelog** | v0.12 (2026-09-17) — review #624/#637: mapping section and answered question removed; open questions shortened; rib charters aligned; proposed ribs 022e–022h listed. Earlier drafts in git history. |
 
 One noun — `Site` — has been carrying three independent questions: **who runs it**, **where it physically is**, and **what it runs on**. Separating them is the whole of this ADR.
 
@@ -35,6 +35,10 @@ Each aspect has its own normative source, its own schema surface and its own mig
 | [ADR-022b — Location](<ADR-022b - Location.md>) | Where a resource physically is, at three granularities |
 | [ADR-022c — Node and Host](<ADR-022c - Node and Host.md>) | What a resource runs on |
 | [ADR-022d — Workload Classification](<ADR-022d - Workload Classification.md>) | What type of thing a module is (`kind`) |
+| [ADR-022e — Module Scope](<ADR-022e - Module Scope.md>) *(proposed)* | Whether a module belongs to the Site or to one Environment (replaces `module.tier`) |
+| [ADR-022f — Kind Values and Operating System](<ADR-022f - Kind Values and Operating System.md>) *(proposed)* | `application` and `machine` as `kind` values; operating system as a facet |
+| [ADR-022g — Management](<ADR-022g - Management.md>) *(proposed)* | Whether TAPPaaS tooling controls a resource; `external` reserved for the Administrative Domain |
+| [ADR-022h — Facet Register](<ADR-022h - Facet Register.md>) *(proposed)* | One register of facets and the tests a new facet must pass |
 
 ## The model — top view
 
