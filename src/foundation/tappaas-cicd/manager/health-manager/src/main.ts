@@ -10,7 +10,7 @@
 // the OS-patch action.
 //
 // Standardized verbs (ADR-007 §Health):
-//   health-manager validate [--threshold PCT] [--config-dir DIR]
+//   health-manager validate [--threshold PCT] [--memory-threshold PCT] [--config-dir DIR]
 //                            (special: ASSERTS the live system is healthy —
 //                             aggregates the health gates; exit 1 if any fail)
 //   health-manager update-os <name> <vmid> <node>        (special action; shells
@@ -33,6 +33,9 @@ const VERSION = "0.1.0";
 const BOLD = "\x1b[1m";
 
 const DEFAULT_THRESHOLD = 80; // disk-threshold gate default (check-disk-threshold uses an explicit arg)
+// 100%: a node may commit every byte it has, but not one more. Lower it to see
+// the headroom shrink before it runs out (#569).
+const DEFAULT_MEMORY_THRESHOLD = 100;
 const DEFAULT_NODE = "tappaas1";
 const UPDATE_OS_BIN = (): string => process.env.UPDATE_OS_BIN ?? "update-os.sh"; // the special action verb's driver
 
@@ -42,9 +45,10 @@ export const HELP: HelpSpec = {
   tagline: "TAPPaaS cluster health manager (read-only)",
   verbs: [
     {
-      usage: "validate [--threshold PCT] [--config-dir DIR]",
+      usage: "validate [--threshold PCT] [--memory-threshold PCT] [--config-dir DIR]",
       options: [
         ["--threshold PCT", `Disk-usage threshold percent (default ${DEFAULT_THRESHOLD}).`],
+        ["--memory-threshold PCT", `Committed-memory percent of a node's physical RAM before the gate fails (default ${DEFAULT_MEMORY_THRESHOLD}).`],
       ],
     },
     {
@@ -69,11 +73,13 @@ function usage(): void {
 interface Opts {
   configDir: string;
   threshold: number;
+  memoryThreshold: number;
   rest: string[];
 }
 function parseOpts(args: string[]): Opts {
   let configDir = defaultConfigDir();
   let threshold = DEFAULT_THRESHOLD;
+  let memoryThreshold = DEFAULT_MEMORY_THRESHOLD;
   const rest: string[] = [];
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -88,12 +94,19 @@ function parseOpts(args: string[]): Opts {
       const n = Number(v);
       if (!Number.isInteger(n) || n < 1 || n > 99) die(`--threshold must be 1..99, got '${v}'`);
       threshold = n;
+    } else if (a === "--memory-threshold") {
+      const v = args[i + 1];
+      if (!v) die("--memory-threshold requires a percentage argument");
+      const n = Number(v);
+      if (!Number.isInteger(n) || n < 1 || n > 500) die(`--memory-threshold must be 1..500, got '${v}'`);
+      memoryThreshold = n;
+      i++;
       i++;
     } else {
       rest.push(a);
     }
   }
-  return { configDir, threshold, rest };
+  return { configDir, threshold, memoryThreshold, rest };
 }
 
 // ── validate (health gate) ────────────────────────────────────────────
@@ -102,6 +115,7 @@ function cmdValidate(opts: Opts, client: ClusterClient): number {
     configDir: opts.configDir,
     defaultNode: DEFAULT_NODE,
     threshold: opts.threshold,
+    memoryThreshold: opts.memoryThreshold,
   });
   info(`${BOLD}TAPPaaS Health Validation${CL}`);
   for (const c of report.checks) {

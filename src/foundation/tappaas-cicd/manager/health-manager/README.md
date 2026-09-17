@@ -69,10 +69,28 @@ fails**:
 |------|--------|-----------|
 | `service-liveness` | `pvesh /cluster/resources` | a managed config module's VM is not `running` |
 | `disk-threshold` | SSH `df /` per guest | a reachable guest's `/` usage ≥ threshold (default **80%**, `--threshold PCT`) |
+| `memory-commitment` | one `pvesh /cluster/resources` | a node's COMMITTED memory ≥ threshold of its physical RAM (default **100%**, `--memory-threshold PCT`) |
 | `backup-status` | `backup-manager list --json` | a module is backup-disabled, or enabled but not in the PBS job |
 
 A gate with nothing to check (e.g. no reachable guests, backup tooling absent)
 reports **SKIP**, not FAIL. `--threshold` applies cluster-wide. The disk gate is
+### What `memory-commitment` counts, and what it deliberately does not
+
+It reports, per node, the memory **committed to running guests** against the
+node's physical RAM — the number that answers "will another guest fit". Three
+choices are worth knowing:
+
+- **Committed, not used.** Without ballooning a guest's declared memory is
+  pinned by the host whether the guest wants it or not, so committed is what
+  constrains placement. A node's *used* figure can exceed its committed one
+  perfectly legitimately, because ZFS ARC and host overhead are not guest
+  memory — a gate written against `used` would fail a healthy node with a warm
+  cache.
+- **Stopped guests hold nothing.** A stopped guest is not counted; counting it
+  would report an overcommit the node is not living with.
+- **An idle node is reported at 0%, not hidden.** An empty node beside a full
+  one is a placement problem, and the report is where you see it.
+
 **read-only** here — the auto-resize that `check-disk-threshold.sh` performs is a
 mutation and stays in the script (it is not part of the health assertion).
 

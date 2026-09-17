@@ -93,6 +93,28 @@ export interface ClusterDiff {
 // ── ClusterClient — one method per cluster primitive ──────────────────
 // The inspection logic depends ONLY on this interface; tests inject an
 // in-memory fake, production uses CliClusterClient (ssh + pvesh + qm).
+// ── node capacity (#569) ──────────────────────────────────────────────
+// Physical RAM against the memory COMMITTED to the guests running on it. The
+// distinction that matters: `committed` is what the guests are entitled to,
+// `used` is what the host has actually handed out. Without ballooning those
+// converge, which is exactly why the ratio is worth reporting.
+export interface NodeCapacity {
+  node: string;
+  physicalMem: number; // bytes
+  usedMem: number; // bytes the host reports in use (guests + ARC + overhead)
+  committedMem: number; // sum of maxmem over RUNNING guests
+  guests: GuestMemory[];
+}
+
+export interface GuestMemory {
+  vmid: number;
+  name: string;
+  node: string;
+  status: string;
+  declaredMem: number; // bytes the guest is configured for
+  usedMem: number; // bytes the guest reports using
+}
+
 export interface ClusterClient {
   // Hostnames of the reachable Proxmox nodes (ping-probed).
   reachableNodes(): string[];
@@ -106,6 +128,8 @@ export interface ClusterClient {
   actualNode(node: string, vmid: number): string;
   // Disk-usage percentage of `/` on a guest (via SSH); null if unreachable.
   diskUsagePct(target: string): number | null;
+  // Per-node physical/used/committed memory and the guests behind it (#569).
+  nodeCapacity(): NodeCapacity[];
 }
 
 // ── validate (health gate) result shapes ──────────────────────────────

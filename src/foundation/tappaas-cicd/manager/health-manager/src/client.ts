@@ -22,7 +22,7 @@ import {
   ssh,
 } from "../../../lib/ts/src/cluster";
 import { defaultConfigDir, siteNodeHostnames } from "./config";
-import { ClusterClient, RunningGuest } from "./types";
+import { ClusterClient, NodeCapacity, RunningGuest } from "./types";
 
 export class CliClusterClient implements ClusterClient {
   reachableNodes(): string[] {
@@ -98,6 +98,55 @@ export class CliClusterClient implements ClusterClient {
       return "";
     }
     return "";
+  }
+
+  // #569: one /cluster/resources call answers both halves — the node rows carry
+  // physical and used memory, the guest rows carry what each is configured for.
+  // COMMITTED counts running guests only: a stopped guest holds nothing, and
+  // counting it would report an overcommit the node is not living with.
+  nodeCapacity(): NodeCapacity[] {
+    const nodes = this.reachableNodes();
+    if (nodes.length === 0) throw new Error("No Proxmox nodes reachable");
+    const r = ssh("root", `${nodes[0]}.${mgmtDomain()}`,
+      "pvesh get /cluster/resources --output-format json");
+    if (r.rc !== 0) throw new Error("Failed to query cluster resources");
+    let rows: Record<string, unknown>[];
+    try {
+      rows = JSON.parse(r.stdout) as Record<string, unknown>[];
+    } catch {
+      throw new Error("Failed to parse cluster resources");
+    }
+    const num = (v: unknown): number => (typeof v === "number" ? v : 0);
+    const str = (v: unknown): string => (typeof v === "string" ? v : "");
+    const caps = new Map<string, NodeCapacity>();
+    for (const row of rows) {
+      if (str(row.type) !== "node") continue;
+      const n = str(row.node);
+      caps.set(n, {
+        node: n,
+        physicalMem: num(row.maxmem),
+        usedMem: num(row.mem),
+        committedMem: 0,
+        guests: [],
+      });
+    }
+    for (const row of rows) {
+      const type = str(row.type);
+      if (type !== "qemu" && type !== "lxc") continue;
+      const cap = caps.get(str(row.node));
+      if (!cap) continue;
+      const g = {
+        vmid: num(row.vmid),
+        name: str(row.name),
+        node: str(row.node),
+        status: str(row.status),
+        declaredMem: num(row.maxmem),
+        usedMem: num(row.mem),
+      };
+      cap.guests.push(g);
+      if (g.status === "running") cap.committedMem += g.declaredMem;
+    }
+    return [...caps.values()].sort((a, b) => a.node.localeCompare(b.node));
   }
 
   diskUsagePct(target: string): number | null {

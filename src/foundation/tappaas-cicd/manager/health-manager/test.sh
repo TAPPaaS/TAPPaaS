@@ -111,10 +111,20 @@ if [[ -f "$UNIT_TSCONFIG" ]]; then
         # dist-test mirrors the tree from the tappaas-cicd root (shared
         # lib/ts/tsconfig.base.json sets rootDir there), so the compiled test
         # lives under manager/health-manager/.
-        if run_ts "node '${DIST_TEST}/manager/health-manager/test/unit/inspect.test.js'"; then
-            ok "TypeScript inspect/gate unit tests pass"
+        _ht_ran=0
+        for _htjs in "${DIST_TEST}/manager/health-manager/test/unit/"*.test.js; do
+            [[ -f "${_htjs}" ]] || continue
+            _ht_ran=$((_ht_ran + 1))
+            if run_ts "node '${_htjs}'"; then
+                ok "TypeScript $(basename "${_htjs}" .test.js) unit tests pass"
+            else
+                bad "TypeScript $(basename "${_htjs}" .test.js) unit tests FAILED"
+            fi
+        done
+        if [[ "${_ht_ran}" -gt 0 ]]; then
+            ok "swept ${_ht_ran} unit test file(s) — a new one runs without being listed here"
         else
-            bad "TypeScript inspect/gate unit tests FAILED"
+            bad "no compiled unit tests found to run"
         fi
     else
         bad "TypeScript unit tests failed to compile"

@@ -7,13 +7,14 @@
 //
 // Gates ported here:
 //   - disk-threshold   (= check-disk-threshold.sh, READ-ONLY subset — see note)
+//   - memory-commitment (#569: physical RAM vs what running guests are entitled to)
 //   - backup-status    (was check-backup-status.sh; reads `backup-manager list --json`)
 //   - service-liveness (guest-agent ping / running-state — see TODO)
 
 import { spawnSync } from "child_process";
 import { join } from "path";
 import { isManaged, loadConfigModules, readModuleJson } from "./config";
-import { CheckResult, CheckStatus, ClusterClient, HealthReport } from "./types";
+import { CheckResult, CheckStatus, ClusterClient, HealthReport, NodeCapacity } from "./types";
 
 // Resolve a guest's `<vmname>.<zone0>.internal` target, as check-disk-threshold.sh
 // does (defaulting zone0 to "mgmt"). We only need it for the SSH disk probe.
@@ -166,13 +167,64 @@ export interface ValidateOpts {
   configDir: string;
   defaultNode: string;
   threshold: number;
+  // #569: percent of a node's physical RAM that committed memory may reach
+  // before the gate fails. 100 = "promised more than it has".
+  memoryThreshold: number;
 }
 
 // Aggregate all gates; `failed` counts FAIL (not skip). Caller maps failed>0 → exit 1.
+// ── memory-commitment gate (#569) ─────────────────────────────────────
+// Answering "is this node overcommitted, and by how much" needed raw SSH before
+// this: module-manager knows each module's declared memory but never aggregates
+// it, and site-manager lists nodes without their capacity.
+//
+// COMMITTED, not used. Without ballooning a guest's declared memory is pinned by
+// the host whether the guest wants it or not, so `committed` is the number that
+// decides whether another guest fits — and `used` can exceed it perfectly
+// legitimately, because ZFS ARC and host overhead live outside any guest.
+//
+// Over 100% is a FAIL: the node has promised more than it has. A node at 0% (no
+// running guests) is reported, not hidden — an empty node next to a full one is
+// a placement problem worth seeing.
+const GIB = 1024 ** 3;
+const gib = (b: number): string => (b / GIB).toFixed(1);
+
+export function checkMemoryCommitment(client: ClusterClient, threshold: number): CheckResult {
+  let caps: NodeCapacity[];
+  try {
+    caps = client.nodeCapacity();
+  } catch (e) {
+    return {
+      name: "memory-commitment",
+      status: "skip",
+      detail: `cluster capacity unavailable: ${(e as Error).message}`,
+    };
+  }
+  if (caps.length === 0) {
+    return { name: "memory-commitment", status: "skip", detail: "no nodes reported" };
+  }
+  const parts: string[] = [];
+  const over: string[] = [];
+  for (const c of caps) {
+    const pct = c.physicalMem > 0 ? (100 * c.committedMem) / c.physicalMem : 0;
+    parts.push(`${c.node} ${gib(c.committedMem)}/${gib(c.physicalMem)}G ${pct.toFixed(0)}%`);
+    if (pct >= threshold) over.push(`${c.node} at ${pct.toFixed(0)}%`);
+  }
+  if (over.length > 0) {
+    return {
+      name: "memory-commitment",
+      status: "fail",
+      detail: `committed memory at or over ${threshold}% of physical: ${over.join(", ")} — [${parts.join("; ")}]`,
+    };
+  }
+  return { name: "memory-commitment", status: "pass", detail: parts.join("; ") };
+}
+
 export function runHealthGates(client: ClusterClient, opts: ValidateOpts): HealthReport {
   const checks: CheckResult[] = [
     checkServiceLiveness(client, opts.configDir, opts.defaultNode),
     checkDiskThreshold(client, opts.configDir, opts.defaultNode, opts.threshold),
+    checkMemoryCommitment(client, opts.memoryThreshold),
     checkBackupStatus(opts.configDir),
   ];
   const failed = checks.filter((c: CheckResult): boolean => c.status === ("fail" as CheckStatus)).length;
