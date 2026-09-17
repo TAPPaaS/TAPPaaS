@@ -470,8 +470,8 @@ Low upgrade risk. Build continuously, in any order within a group.
 | #127 | Boot order: firewall (and secrets) first | 4 | 2 | L | |
 | #100 | Automatic storage extension | 3 | 2 | L | |
 | #403 | Install on the root disk; smarter placement | 3 | 2 | L | |
-| #569 | Node capacity / overcommit verb | 4 | 1 | L | |
-| #37 | Optimise RAM (ballooning, swap, ARC) | 3 | 3 | L | ARC limit on nodes; ballooning changes VM config |
+| #569 | Node capacity / overcommit verb | 4 | 1 | L | **Done 2026-09-17** (71799221): `health-manager validate` gained a `memory-commitment` gate beside `disk-threshold` — per node, committed vs physical, `--memory-threshold PCT`. Committed (not used), stopped guests excluded, idle nodes reported at 0% so a placement gap shows |
+| #37 | Optimise RAM (ballooning, swap) | 3 | 3 | L | **ARC part dropped 2026-09-17** after measuring six nodes: `zfs_arc_max` is already set to ~10.7% of RAM (the PVE 8.1+ installer default, not ZFS's 50%), and three of six nodes sit AT their cap — nothing to reclaim, and the proposed direction was backwards. hrossen tappaas2 looks like an exception (69G uncommitted) but is not: it shares GPU RAM with CPU RAM and runs the LLMs. What remains is the real gain — hrossen declares 110G across 11 guests with **no ballooning on any of them**, ~70G declared and unused (`vllm-amd` 46G→2.1G, though that one is GPU-bound and needs thought, not a reflex balloon). Monitoring is partly delivered by #569's `memory-commitment` gate |
 | #423 | `Create-TAPPaaS-LXC.sh` has no `debug()` | 5 | 1 | L | Verified still missing |
 
 ### G3.2 Identity & SSO wiring — E3 · R2 · L-L
