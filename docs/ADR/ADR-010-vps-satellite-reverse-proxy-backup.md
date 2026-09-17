@@ -229,7 +229,7 @@ The port is the **satellite's listening (destination) port**, which the **home e
 
 ### 5. Provisioning & lifecycle
 
-The satellite breaks the usual TAPPaaS module mold in one important way: **it is not a Proxmox VM the cluster hosts — it is an external host the cluster *reaches out to and manages***. Everything else (declarative NixOS, managed from `tappaas-cicd`, config-as-data) stays the same.
+The satellite breaks the usual TAPPaaS module mold in one important way: **it is not a Proxmox VM the cluster hosts — it is a machine the cluster *reaches out to and manages*** (`kind: machine`, ADR-022f; see §8 — and note it is not *external*, which now means only "outside this Site's Administrative Domain"). Everything else (declarative NixOS, managed from `tappaas-cicd`, config-as-data) stays the same.
 
 #### 5.1 What the node is — Debian by default (NixOS optional), minimal
 
@@ -242,7 +242,7 @@ The satellite is deliberately **minimal**: a WireGuard endpoint, an SNI-aware TC
 The satellite is **provisioned** from the **`tappaas-cicd` mothership** through a new **`satellite-manager`** CLI plus a config pair that mirrors the module convention. Note a deliberate departure from the usual model: `tappaas-cicd` does **not** retain standing root over *any* satellite after provisioning — see the compromise-isolation rules in §7.3 (applied uniformly to all roles).
 
 - `satellite.json` — declarative config: provider/label, public IP, SSH access, `wgPort` (infra tunnel), `adminWgPort` (admin-vpn relay), tunnel `/31`, the domain(s)/SNI names it fronts, and a `roles` list — any combination of `reverse-proxy`, `admin-vpn`, `backup`.
-- `satellite.nix` — the NixOS configuration deployed onto the external host.
+- `satellite.nix` — the NixOS configuration deployed onto the satellite machine.
 
 #### 5.3 Bootstrap flow — bare VPS → satellite
 
