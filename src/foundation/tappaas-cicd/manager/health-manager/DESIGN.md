@@ -42,13 +42,31 @@ the running cluster and **exits non-zero if any FAIL**.
 |------|--------|----------------|----------------|
 | `service-liveness` | `pvesh /cluster/resources` | a managed config module's VM is not `running` | — |
 | `disk-threshold` | SSH `df /` per managed guest | reachable guest `/` usage ≥ threshold (default **80%**) | no guest reachable |
+| `memory-commitment` | one `pvesh /cluster/resources` | a node's memory committed to RUNNING guests ≥ threshold of its physical RAM (default **100%**) | cluster unreachable / no nodes |
 | `backup-status` | `backup-manager list --json` | a module disabled, or enabled-but-not-in-PBS-job | backup tooling absent / unparseable |
 
-`--threshold` (default 80) applies cluster-wide. The disk gate is **read-only**:
-the 50%-auto-grow that `check-disk-threshold.sh` performs is a *mutation* and
-stays in the script — it is not part of the health assertion. The gate order is
-service-liveness → disk-threshold → backup-status; `validate` returns 0 only when
-zero gates FAIL (SKIP does not fail the assertion).
+`--threshold` (default 80) and `--memory-threshold` (default 100) apply
+cluster-wide. The disk gate is **read-only**: the 50%-auto-grow that
+`check-disk-threshold.sh` performs is a *mutation* and stays in the script — it
+is not part of the health assertion. The gate order is service-liveness →
+disk-threshold → memory-commitment → backup-status; `validate` returns 0 only
+when zero gates FAIL (SKIP does not fail the assertion).
+
+**Why the two thresholds differ.** A full disk stops a guest, so 80% leaves
+runway to act. Committed memory at 100% is not yet a fault: a node may promise
+every byte it physically has. It becomes one past that, where the node has
+promised memory it does not own — which is why the memory gate accepts 1..500
+rather than 1..99. A site running deliberate overcommit with ballooning can say
+so (`--memory-threshold 150`) instead of switching the gate off.
+
+**Committed, not used**, and the distinction is load-bearing: without ballooning
+a guest's declared memory is pinned by the host whether the guest wants it or
+not, so committed is what decides whether another guest fits. A node's *used*
+figure may legitimately exceed its committed one, because ZFS ARC and host
+overhead are not guest memory — a gate written against `used` would fail a
+healthy node with a warm cache. Stopped guests are excluded (they hold nothing),
+and an idle node is reported at 0% rather than omitted, so an empty node beside
+a full one shows up as the placement problem it is.
 
 ## Architecture (TS modules)
 
