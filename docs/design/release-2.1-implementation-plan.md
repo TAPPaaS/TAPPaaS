@@ -265,6 +265,44 @@ to be solid before Wave 1 starts sending migrations through it.
 | FW #357 | Define `updateWindow` / `updateChannel` | 4 | 1 | L | Roll in: design only, belongs next to ADR-017 |
 | #653 | Hold the scheduled pull on one site | 4 | 2 | L | A local, per-repository marker with a reason and an expiry makes the scheduled sweep behave like `site-manager update --no-git-pull` (skip the pull, run the rest). Lets the test site run uncommitted or unpushed changes through real sweeps. Shown by `site-manager`; an expired hold warns and pulls again |
 
+### G0.4 Merge trust — fast lane, added 2026-09-16
+
+Not a planned group: one issue, fast-laned ahead of Wave 1 on the operator's
+decision (2026-09-16), because every Wave 1 item is a config re-schema that
+reaches a deployed config **through** the 3-way merge. A module the merge skips
+will silently not receive Wave 1's changes either, while the migration ledger
+reports the site as migrated — the result of the whole wave would be
+unfalsifiable on exactly the installs that need it most.
+
+| # | Issue | E | R | L | Note |
+|---|-------|:-:|:-:|:-:|------|
+| #659 | Step 0 skipped when a config has no `.location`, update still reports success | 4 | 3 | H | Three silent paths, not one: an unresolvable location, a missing `apply-json-merge.sh`, **and a merge that errors** — all logged at info/warn and all followed by `exit 0`. Fixed by resolving through the catalog as well as `.location` (#460's second tracking path) and making all three fatal |
+
+**HELD (2026-09-17), pending the satellite conversion.** Measured before landing:
+hrossen's 13 modules all resolve via `.location`, so the change is a no-op there.
+On makerfloss exactly one module is affected — `satellite-satellite1`, which has
+neither a `.location` nor a catalog entry and would REFUSE after this lands.
+(`portainer-lab1` also has a broken `.location`, but it is `status: archived`
+and the archived check sits *before* Step 0, so it never reaches the new fatal
+path — an earlier note here said otherwise and was wrong.)
+
+The satellite config is not a module config at all: it is a host record written
+by a documented manual copy step in `src/foundation/satellite/install.sh`
+("Copy satellite.json -> ~/config/satellite-<name>.json and edit it"), which is
+why it has no `.location` — the installer that would have recorded one was
+bypassed by design. It is therefore fixed by the satellite conversion (G1.2),
+not by this issue. Two ways to unblock, in order of preference:
+
+1. convert satellite into a proper `kind: host` module (G1.2) — the real fix;
+2. or record a `.location` on its deployed config, which takes one field and
+   makes the resolver find it today.
+
+The branch also carries the inverse of the effective-name rule (76e27d9c): a
+deployed `podman-lab1` resolves to `podman` because `lab1` is a DECLARED
+environment, while `vllm-amd` stays whole because `amd` is not — the declared
+environment set is what makes that decidable, since module names contain
+hyphens too.
+
 ---
 
 ## 4. Wave 1 — the breaking-change window
@@ -395,6 +433,7 @@ dry-run to show the rule diff before `--apply`.
 | #160 | Overlap detection in the rules manager | 3 | 1 | L | Land with #256 |
 | #256 | Skip pinholes already covered by zone access | 3 | 2 | L | |
 | FW #162 | Persistent sequence-map artifact | 4 | 1 | L | Roll in with #160/#645 |
+| #660 | A declared `aliasType` change cannot be applied | 3 | 3 | M | `_upsert_alias` posts the new type and never reads the stored one; OPNsense refuses a type change and the apply dies with an unhandled error. A module with a referencing rule cannot be migrated by hand either (the delete is refused while referenced), so the recreate must detach, delete, create, reattach — that ordering is the work. Consequence is silent: the alias stays `host`, its pf table stays empty, the rule matches nothing and permitted traffic is dropped (#542). Also give `aliasType` a change class in the schema so ADR-020 classifies it as a recreate rather than leaving it unstated |
 | #223 | OPNsense 26.1 InterfaceAssignController | — | — | — | Park (agreed 2026-05-27); move to *Parking lot* |
 
 ### G2.2 DNS resolver robustness — E4 · R3 · L-M
@@ -406,6 +445,7 @@ dry-run to show the rule diff before `--apply`.
 | #263 | DNSSEC on Unbound | 4 | 3 | M | Internal split-horizon zones need `domain-insecure` |
 | #383 | Keep wildcard public DNS current on dynamic WAN | 3 | 2 | L | |
 | FW #157 | Default DNS blocklists (DNSBL / maltrail) | 3 | 3 | M | Stretch; only after #387 |
+| #657 | Standard 4 invents an FQDN when a config lookup fails | 5 | 1 | L | **Do now, out of band.** Test-only. Standard 4 re-reads the config by `vmname`, which is not the config's name for a variant, so the zone falls back to the literal `srvHome` and the test asserts a name the estate never declared. It marks `network` failed and buries real DNS faults among invented ones — the G0.2 class of defect, found after G0.2 closed |
 
 ---
 
@@ -452,6 +492,7 @@ Low upgrade risk. Build continuously, in any order within a group.
 | #283 | forgejo central logging (Community repo) | 4 | 1 | L | |
 | #284 | forgejo SQLite → PostgreSQL | — | — | — | Close: a module implementation choice (Lars, 2026-06-03) |
 | #622 | deconz probe uses a name that never resolves | 5 | 1 | L | Looks fixed on `main` (both services now resolve the deconz FQDN): verify and close |
+| #658 | nextcloud test 12 probes the browser URL from wherever it runs | 4 | 1 | L | Maintainer-owned (@ErikDaniel007). **Not** "treat 403 as pass" — that would mask a real access-list fault. The test should ask whether the host it runs from is inside the route's `proxyAllowedZones` and skip with a reason when it is not, the way `tappaas-cicd/test.sh` Test 9z now handles a suite that cannot run here (exit 77). Today it pushes an operator to widen a zone list to make a test pass — a security change caused by a test assumption |
 
 ### G3.4 AI stack maturity — E3 · R3 · L-L
 
@@ -493,6 +534,7 @@ New capabilities with low upgrade risk.
 |---|-------|:-:|:-:|:-:|------|
 | #642 | Limit a route to paths | 3 | 2 | L | ADR-023, approved by Erik 2026-09-14 |
 | #643 | Per-route allowed zones | 3 | 2 | L | Same ADR |
+| #656 | Limit a route to a provider's source ranges | 3 | 2 | L | **Split, and fold into ADR-023.** Today the only way to admit one SaaS caller is `internet`, which admits everyone, so the static half is an exposure *reduction* and belongs with #642/#643: a route names explicit CIDRs, compiled by the `remote_ip` matcher that already exists. The "list kept current from a provider's published feed" half is parked — see below |
 | #154 | `firewall:internal-proxy` | — | — | — | Close? Lars questioned the need (2026-05-31) |
 
 ### G4.3 Manager verb gaps — E3 · R2 · L-L
@@ -567,6 +609,13 @@ New capabilities with low upgrade risk.
   #399 + #384, #385 + #222, #160 + #256, #624 + #637, #642 + #643,
   #444 + #582, #119 / #120 / #121.
 - **Close or park:** #622 (verify), #284, #154, #223 → *Parking lot*.
+- **Parked, half of #656:** a proxy access list kept current from a provider's
+  published feed (e.g. an Azure service tag). It is not a field, it is a
+  subsystem: outbound fetch from the mothership on a schedule, a trust decision
+  about a third party deciding who may reach a site's services, and a defined
+  behaviour when the feed is unreachable or changes shape — fail open, fail
+  closed, or keep the last good copy. That needs its own decision in ADR-023,
+  not an implementation. The static CIDR half closes the reported problem.
 - **New issues:** the config-migration step is #652 (G0.1) and the scheduled-pull
   hold #653 (G0.3); still to open: one tracking issue per new ADR (§10.4).
 - **Close the 2.0 milestones** once their 18 issues are moved per this plan.
