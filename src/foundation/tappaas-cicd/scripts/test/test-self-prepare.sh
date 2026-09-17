@@ -10,6 +10,15 @@ P="${HERE}/../tappaas-self-prepare.sh"
 pass=0; fail=0
 ck() { if [[ "$2" == "$3" ]]; then echo "  ✓ $1"; pass=$((pass+1)); else echo "  ✗ $1 (expected '$2', got '$3')"; fail=$((fail+1)); fi; }
 
+# HERMETIC, deliberately. tappaas-self-prepare.sh reads both of these from the
+# environment, and this suite runs INSIDE update-tappaas.service during the
+# nightly sweep — where systemd sets TRIGGER_UNIT=update-tappaas.timer for a
+# timer-triggered run. The script then correctly discards the operator request
+# (ADR-017 D4), and the request cases below failed on every scheduled run while
+# passing every time a human started the unit by hand. One site's canary caught
+# it; nothing else would have.
+unset TRIGGER_UNIT TAPPAAS_NO_GIT_PULL
+
 d="$(mktemp -d)"; trap 'rm -rf "${d}"' EXIT
 mkdir -p "${d}/config"
 cat > "${d}/refresh" <<'STUB'
@@ -77,6 +86,14 @@ touch -d '-1 hour' "${d}/config/.update-request.json"
 ck "an old request is discarded"   0 "$(STUB_RC=0 run)"
 ck "…not applied"                  0 "$(cat "${STUB_SEEN}")"
 ck "…and removed"                  gone "$([[ -e "${d}/config/.update-request.json" ]] && echo left || echo gone)"
+
+# The regression itself: an ambient TRIGGER_UNIT must not reach the cases that
+# do not set one. Re-running the whole suite under it is the honest check, but a
+# single case carries the meaning — a claimed request survives a sweep-shaped
+# environment.
+echo '{"noGitPull": true, "requestedBy": "lars"}' > "${d}/config/.update-request.json"
+ck "an ambient TRIGGER_UNIT does not leak into a manual run" \
+   lars "$(TRIGGER_UNIT=update-tappaas.timer bash -c 'unset TRIGGER_UNIT; rm -rf "$1/run"; RUNTIME_DIRECTORY="$1/run" bash "$2" >/dev/null 2>&1; jq -r .requestedBy "$1/run/request.json" 2>/dev/null' _ "${d}" "${P}")"
 
 echo "── summary: ${pass} pass, ${fail} fail ──"
 [[ "${fail}" -eq 0 ]]
