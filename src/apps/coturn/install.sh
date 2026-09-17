@@ -103,7 +103,20 @@ echo ""
 warn "Ensure OPNsense has the following (not configured automatically):"
 warn "  - NAT rule: WAN:3478 (UDP+TCP) -> coturn DMZ IP:3478"
 warn "  - NAT rule: WAN:49152-65535 (UDP) -> coturn DMZ IP:49152-65535"
-warn "  - DNS A record: $(get_config_value publicDomain '') -> public WAN IP"
+# publicDomain is an OPTIONAL per-site override, not a schema field: coturn.json
+# does not define it, and nextcloud-hpb reads it with a deliberate fallback to
+# coturn's internal FQDN (nextcloud-hpb/install.sh:113-114, :135-137). So the
+# fix for #412 is not to invent the field — it is to stop printing an empty name
+# in an instruction the operator is being asked to carry out.
+_coturn_public="$(get_config_value publicDomain '')"
+if [[ -n "${_coturn_public}" ]]; then
+    warn "  - DNS A record: ${_coturn_public} -> public WAN IP"
+else
+    warn "  - DNS A record: <the public name clients will use for TURN> -> public WAN IP"
+    warn "    (no 'publicDomain' is set on this module. It is optional: nextcloud-hpb uses it"
+    warn "     as the TURN address when present and falls back to the internal FQDN otherwise,"
+    warn "     which only works for clients already inside the network.)"
+fi
 
 echo ""
 info "${GN}✓${CL} coturn installation completed successfully."

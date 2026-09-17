@@ -35,7 +35,17 @@ triggered by this module's `config["nextcloud:fileservice"].connector = "talk"`.
 coturn does only its own layer; there is no cross-VM SSH push from this module.
 `nextcloud-hpb` consumes `coturn:turn` automatically.
 
-## Deploy notes and known limitations (0.1.0)
+## `publicDomain` — optional, and who reads it
+
+Not a schema field and not declared in `coturn.json`: it is a per-site override
+naming the public address clients use for TURN. `nextcloud-hpb` reads it from
+coturn's deployed config and falls back to coturn's internal FQDN when it is
+absent — which serves clients already inside the network, and no one else. Set
+it on the deployed config when TURN is reached from outside; `install.sh` then
+names it in the DNS step instead of asking the operator to supply the name
+(#412).
+
+## Deploy notes and known limitations
 
 - Validated as a `dmz` test variant (test.sh 10/0/2). For real external Talk calls, set
   the public TURN endpoint (WAN IP / publicDomain:3478 + NAT) — the test variant has no
