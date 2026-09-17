@@ -70,22 +70,22 @@ fails**:
 | `service-liveness` | `pvesh /cluster/resources` | a managed config module's VM is not `running` |
 | `disk-threshold` | SSH `df /` per guest | a reachable guest's `/` usage ≥ threshold (default **80%**, `--threshold PCT`) |
 | `memory-commitment` | one `pvesh /cluster/resources` | a node's COMMITTED memory ≥ threshold of its physical RAM (default **100%**, `--memory-threshold PCT`) |
-| `guest-memory` | `pvesh` + one `ps`/`qm status` per node | a guest **using ≥ 90%** of its declared memory (**WARN** at 75%), or one whose host-resident memory exceeds its declared limit |
+| `guest-memory` | `pvesh` + one `ps`/`qm status` per node | a module **using ≥ 90%** of its declared memory (**WARN** at 75%), or one whose allocated memory exceeds its declared limit |
 | `backup-status` | `backup-manager list --json` | a module is backup-disabled, or enabled but not in the PBS job |
 
 A gate with nothing to check (e.g. no reachable guests, backup tooling absent)
 reports **SKIP**, not FAIL. `--threshold` applies cluster-wide. The disk gate is
 ### `guest-memory` — three numbers, because two mislead
 
-Per running guest it reports **declared → resident → used**:
+Per module it reports **declared → allocated → used**:
 
-- `declared − resident` is memory the guest has **never touched**. QEMU backs a
+- `declared − allocated` is memory the guest has **never touched**. QEMU backs a
   page on first write, so this costs nothing and there is nothing to reclaim.
-- `resident − used` is memory the guest **touched and then freed**. The host was
+- `allocated − used` is memory the guest **touched and then freed**. The host was
   never told, so it still holds it. This — and only this — is what a balloon
   driver could give back.
 
-Measured on a live estate: 60G declared, 31.9G resident, ~20G used. A report
+Measured on a live estate: 60G declared, 31.9G allocated, ~20G used. A report
 with only declared-and-used would have said "reclaim 40G"; the third column says
 most of it was never taken.
 
@@ -107,6 +107,9 @@ one VM on the system with real memory to reclaim.
 
 LXC guests need no agent: a container's memory is the host's own accounting, and
 its declared figure is a cgroup **limit**, not an allocation.
+
+PVE **templates are excluded**: a template is the image a module is cloned from,
+holds no memory, and listing it as a stopped guest is noise.
 
 ### What `memory-commitment` counts, and what it deliberately does not
 

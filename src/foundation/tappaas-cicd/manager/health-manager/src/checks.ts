@@ -8,7 +8,7 @@
 // Gates ported here:
 //   - disk-threshold   (= check-disk-threshold.sh, READ-ONLY subset — see note)
 //   - memory-commitment (#569: physical RAM vs what running guests are entitled to)
-//   - guest-memory      (per guest: declared vs used vs host-resident)
+//   - guest-memory      (per guest: declared vs allocated vs used)
 //   - backup-status    (was check-backup-status.sh; reads `backup-manager list --json`)
 //   - service-liveness (guest-agent ping / running-state — see TODO)
 
@@ -224,14 +224,14 @@ export function checkMemoryCommitment(client: ClusterClient, threshold: number):
 // ── guest-memory report ───────────────────────────────────────────────
 // Three numbers per guest, because two cannot tell the cases apart:
 //
-//   declared - resident  memory the guest has NEVER TOUCHED. QEMU backs a page
+//   declared - allocated memory the guest has NEVER TOUCHED. QEMU backs a page
 //                        on first write, so this costs nothing and ballooning
 //                        has nothing to reclaim from it.
-//   resident - used      memory the guest touched and then freed. The host was
+//   allocated - used     memory the guest touched and then freed. The host was
 //                        never told, so it still holds it. THIS is the only
 //                        part a balloon driver could give back.
 //
-// Measured on hrossen: 60G declared, 31.9G resident, ~20G used. A two-column
+// Measured on hrossen: 60G declared, 31.9G allocated, ~20G used. A two-column
 // report would have said "balloon everything"; the third column says most of
 // the gap was never taken in the first place.
 //
@@ -308,14 +308,10 @@ export function checkGuestMemory(client: ClusterClient): CheckResult {
         : rows.some((r) => r.status === "warn")
           ? "warn"
           : "pass";
-  const unmeasured = run.filter((r) => !r.g.measured).length;
-  const detail =
-    `${run.length} running (${rows.length - run.length} stopped)` +
-    `${unmeasured > 0 ? `, ${unmeasured} unmeasured` : ""}` +
-    ` — declared / host-resident / guest-used, largest gap first.` +
-    ` Gap = touched-then-freed, the only part ballooning could reclaim;` +
-    ` declared minus resident was never touched and costs nothing.` +
-    ` WARN at ${WARN}% of declared in use, FAIL at ${CRITICAL}%.`;
+  // The header names the columns and the ordering. What the numbers MEAN — why
+  // the gap is the only reclaimable part, where the WARN and FAIL bands sit —
+  // belongs in README/DESIGN, not in every run of the report.
+  const detail = "declared / allocated / used, largest gap first";
   return { name: "guest-memory", status: worst, detail, rows: out };
 }
 

@@ -132,7 +132,8 @@ const withGuests = (gs: ReturnType<typeof guest>[]): NodeCapacity => ({
   check(rows.includes("unmeasured"), "a guest reporting no memory statistics is marked unmeasured");
   check(rows.includes("host's, not the guest's"), "…and the row says whose figure it is");
   check(/reclaimable 0\.0G/.test(rows), "…and is never counted as a reclaimable gap");
-  check(r.detail.includes("1 unmeasured"), "the summary line counts it");
+  check(r.detail === "declared / allocated / used, largest gap first",
+    `the header names the columns and nothing else (got: ${r.detail})`);
 }
 
 {
@@ -178,6 +179,16 @@ const withGuests = (gs: ReturnType<typeof guest>[]): NodeCapacity => ({
   check(byName("busy")?.status === "warn", "a guest at 78% warns");
   check(byName("roomy")?.status === "pass", "a guest with room passes");
   check(r.status === "fail", "the gate takes the worst row");
+}
+
+{
+  // A PVE template is the image modules are cloned from. The client filters it
+  // out before the gate ever sees it, so this pins the gate's own behaviour:
+  // whatever reaches it is a module, and stopped modules still get a row.
+  const c = new FakeClusterClient();
+  c.capacity = [withGuests([guest("live", 4, 2, 1), guest("halted", 8, 0, 0, true, "qemu", "stopped")])];
+  const rows = (checkGuestMemory(c).rows ?? []).map((x) => x.text).join("\n");
+  check(rows.includes("halted") && rows.includes("(stopped)"), "a stopped module is still listed");
 }
 
 console.log(`capacity: ${passed} passed, ${failed} failed`);

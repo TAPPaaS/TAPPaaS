@@ -133,6 +133,9 @@ export class CliClusterClient implements ClusterClient {
     for (const row of rows) {
       const type = str(row.type);
       if (type !== "qemu" && type !== "lxc") continue;
+      // A PVE template is the image modules are cloned FROM, not a module. It
+      // holds no memory and reporting it as a stopped guest is noise.
+      if (num(row.template) === 1) continue;
       const cap = caps.get(str(row.node));
       if (!cap) continue;
       const g = {
