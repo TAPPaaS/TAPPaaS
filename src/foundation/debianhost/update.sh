@@ -56,4 +56,14 @@ for _ in $(seq 1 60); do                                 # up to 5 minutes
 done
 [[ -n "${now:-}" && "${now}" != "${before}" ]] || die "${INSTANCE} did not come back within 5 minutes of its reboot"
 dh_ssh 'test -f /var/run/reboot-required' && warn "  ${INSTANCE} still reports reboot-required after rebooting"
+
+# "Answers on SSH" is not "ready" (#468): the clock resyncs some seconds after
+# boot (37 s on the test machine), and the post-update test checks it. Wait for
+# it — up to 2 minutes — rather than fail an update that did exactly its job.
+for _ in $(seq 1 24); do
+    [[ "$(dh_ssh 'timedatectl show -p NTPSynchronized --value' 2>/dev/null)" == "yes" ]] && break
+    sleep 5
+done
+[[ "$(dh_ssh 'timedatectl show -p NTPSynchronized --value' 2>/dev/null)" == "yes" ]] \
+    || warn "  ${INSTANCE}'s clock is not synchronised 2 minutes after its reboot — test.sh will report it"
 info "${GN}✓${CL} ${INSTANCE} rebooted and back"
