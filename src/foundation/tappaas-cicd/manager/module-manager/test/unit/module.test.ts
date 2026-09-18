@@ -26,7 +26,7 @@ import {
   validateModules,
   validateSourceLocation,
 } from "../../src/validate";
-import { AddOptions, DeleteOptions, ModifyOptions, ModuleConfig, ValidateFinding, ValidateReport } from "../../src/types";
+import { AddOptions, AdoptOptions, DeleteOptions, ModifyOptions, ModuleConfig, ValidateFinding, ValidateReport } from "../../src/types";
 import { FakeModuleClient } from "./fake-client";
 import { HELP, run } from "../../src/main";
 import { undocumentedOptions } from "../../../../lib/ts/src/help";
@@ -220,6 +220,30 @@ const CONFIG =
   const modifyHelp = HELP.verbs.find((h) => h.name === "modify");
   check(!!modifyHelp && (modifyHelp.options ?? []).some(([f]) => f === "--unset field"),
     "modify's options document --unset");
+}
+
+// ── 6d. adopt hands the machine to adopt-module.sh (ADR-026 D8.1) ────────
+{
+  const c = new FakeModuleClient();
+  const rc = run(["module", "adopt", "10.0.0.90", "--instance", "dh-b", "--zone", "mgmt", "--wait", "30"], c);
+  check(rc === 0 && c.log.length === 1 && c.log[0].verb === "adopt" && c.log[0].module === "10.0.0.90",
+    "adopt runs adopt-module once for the address");
+  const a = c.log[0].opts as AdoptOptions;
+  check(a.instance === "dh-b" && a.zone === "mgmt" && a.wait === "30", "adopt forwards --instance, --zone and --wait");
+
+  const c2 = new FakeModuleClient();
+  run(["module", "adopt", "dh-test1"], c2);
+  const a2 = c2.log[0].opts as AdoptOptions;
+  check(!a2.instance && !a2.zone && !a2.wait, "a bare adopt overrides nothing — the script chooses");
+
+  const c3 = new FakeModuleClient();
+  check(run(["module", "adopt"], c3) !== 0 && c3.log.length === 0, "adopt without an address is refused");
+  const c4 = new FakeModuleClient();
+  check(run(["module", "adopt", "10.0.0.90", "--vmid", "990"], c4) !== 0 && c4.log.length === 0,
+    "adopt refuses an option it does not take (--vmid: a machine has none)");
+  const c5 = new FakeModuleClient();
+  check(run(["module", "adopt", "10.0.0.90", "--zone"], c5) !== 0 && c5.log.length === 0,
+    "adopt --zone without a value is refused");
 }
 
 // ── 7. delete maps --remove/--force/--yes; mutual-exclusion guard ───────

@@ -2,9 +2,6 @@
 
 Primary audience: TAPPaaS admin. What the automation cannot do for you.
 
-> `module-manager module adopt <address>` (ADR-026 D8.1) will do steps 1–3 for you: it reads the
-> machine's hostname, OS and zone itself. Until it exists, register a machine by hand as below.
-
 ## 1. Authorise the mothership's key on the machine
 
 On the mothership, print its public key:
@@ -34,15 +31,21 @@ Nothing else on the machine changes. Check it from the mothership:
 ssh -o BatchMode=yes root@<address> true && echo ok
 ```
 
-## 2. Register it
-
-Name the instance after the machine, give its address, and the zone its network interface is on:
+## 2. Adopt it
 
 ```bash
-module-manager module add debianhost --instance <hostname> --address <ip-or-fqdn> --zone0 <zone>
+module-manager module adopt <ip-or-fqdn>
 ```
 
-`install.sh` verifies it can log in and that the machine runs Debian — and changes nothing.
+`adopt` logs in, reads the machine's hostname and OS, names the instance after the hostname,
+takes the zone from the address, and registers it — changing nothing on the machine. If the key
+does not work yet, it prints the command from step 1 and waits for it (`--wait <seconds>`,
+default 300). Two cases it will not decide for you:
+
+- **The hostname is already an instance name** (another machine is called the same): name
+  this one with `--instance <name>`.
+- **The address is in no active zone** — the machine is off-site, reached through a tunnel, or
+  outside TAPPaaS altogether. If it belongs, name its zone with `--zone <zone>`.
 
 ## 3. Choose how reboots happen
 

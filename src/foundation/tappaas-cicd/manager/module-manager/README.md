@@ -35,6 +35,7 @@ later retire phase).
 | `module drift <m>` | `src/converge.ts` | that desired state **vs the live guest**, per service. `--service cluster:vm --json` prints the record a converge applies |
 | `module validate [<m>]` | tier/source lint | all modules, or one; `--allow-fork` |
 | `module add <m>` | `install-module.sh` | create + provision; `--instance NAME` names the instance (ADR-026 D6.4) |
+| `module adopt <address>` | `adopt-module.sh` | a machine that already runs becomes a module (ADR-026 D8.1); nothing on it is changed |
 | `module update <m>` | `update-module.sh` | **release update** (snapshot + test + 3-way merge) — what the sweep runs (#655) |
 | `module modify <m>` | `update-module.sh` | **change the config, then converge**: `--set field=value` (ADR-020) or `--unset field` (#648). Bare, it is the deprecated spelling of `update` |
 | `module delete <m>` | `delete-module.sh` | `--archive` (default) / `--remove` |
@@ -276,6 +277,28 @@ delete-module.sh <module-name> [--archive|--remove] [--vmid <id>]
 - `--environment <name>` (alias `--variant`).
 - `--yes` / `-y` — skip the confirmation prompt.
 - `--force` — skip dependency checks; **required** for `tier:foundation` modules.
+- A machine (`kind: machine`) is only **unregistered**: the config goes, the machine keeps
+  running untouched, and `--vmid` is refused (ADR-026 D8.1).
+
+### `adopt-module.sh` — a running machine becomes a module
+
+```
+adopt-module.sh <address> [--instance NAME] [--zone ZONE] [--wait SECONDS]
+```
+
+`<address>` is an IP address or a DNS name. It reaches the machine as `root` with the
+mothership's key; if that fails, it prints the one command that authorises the key and waits
+(`--wait`, default 300s, one try every 20s). It then reads the hostname and
+`/etc/os-release`, picks the module for that OS (`debian` → `debianhost`; any other OS is
+refused), names the instance after the hostname, takes `zone0` from the active zone whose
+subnet holds the address, and calls `install-module.sh <module> --instance … --address …
+--zone0 … --os …`. Adopting the same machine again changes nothing.
+
+Refused, with nothing written: a key that never works, an OS with no machine module, a
+Proxmox VE node (cluster nodes are registered through #665), an instance name another
+machine has (`--instance`), an address another instance already has, and an address in no
+active zone (`--zone`). It never changes how the machine is reached: key-only SSH is a
+separate step.
 
 ### `test-module.sh` — run a module's tests
 

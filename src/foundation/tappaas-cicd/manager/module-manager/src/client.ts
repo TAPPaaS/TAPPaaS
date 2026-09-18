@@ -24,6 +24,7 @@ import { inspectModule } from "./inspect";
 import { reconcileModule } from "./reconcile";
 import {
   AddOptions,
+  AdoptOptions,
   DeleteOptions,
   InspectOptions,
   ModifyOptions,
@@ -40,6 +41,7 @@ import {
 // be run from the module's source directory — same contract as the bash script.
 const BIN = {
   install: process.env.MM_INSTALL_BIN ?? "install-module.sh",
+  adopt: process.env.MM_ADOPT_BIN ?? "adopt-module.sh",
   update: process.env.MM_UPDATE_BIN ?? "update-module.sh",
   delete: process.env.MM_DELETE_BIN ?? "delete-module.sh",
   test: process.env.MM_TEST_BIN ?? "test-module.sh",
@@ -76,6 +78,14 @@ export class CliModuleClient implements ModuleClient {
     if (opts.reinstall) args.push("--reinstall");
     args.push(...opts.passthrough);
     return run(BIN.install, args);
+  }
+
+  adopt(address: string, opts: AdoptOptions): number {
+    const args: string[] = [address];
+    if (opts.instance) args.push("--instance", opts.instance);
+    if (opts.zone) args.push("--zone", opts.zone);
+    if (opts.wait) args.push("--wait", opts.wait);
+    return run(BIN.adopt, args);
   }
 
   modify(module: string, opts: ModifyOptions): number {

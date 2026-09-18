@@ -3,6 +3,7 @@
 // Presents the STANDARDIZED verbs on entity `module`:
 //
 //   module add <module>      = install-module.sh   (create + provision)
+//   module adopt <address>   = adopt-module.sh     (a running machine → a module)
 //   module modify <module>   = update-module.sh    (change config + re-apply)
 //   module delete <module>   = delete-module.sh    (archive/remove)
 //   module list              = enumerate deployed module configs    [NEW, TS]
@@ -37,6 +38,7 @@ import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
 import { CL, GN, RD, YW, die, guarded, info, preflightGuard, warn } from "../../../lib/ts/src/cli";
 import {
   AddOptions,
+  AdoptOptions,
   DeleteOptions,
   ModifyOptions,
   ModuleClient,
@@ -100,6 +102,16 @@ export const HELP: HelpSpec = {
         ["--allow-fork", "Permit forked/non-canonical module sources."],
         ["--reinstall", "Delete the existing deployment first, then install fresh — the only way to replace a deployed config (#301, #453)."],
         ["--<field> <value>", "Override any config field, passed through to install-module.sh, which checks the name against module-fields.json."],
+      ],
+    },
+    {
+      usage: "adopt <address> [--instance NAME] [--zone ZONE] [--wait SECONDS]",
+      name: "adopt",
+      note: "(ADR-026 D8.1: a machine that already runs becomes a module; nothing on it is changed)",
+      options: [
+        ["--instance NAME", "Name the instance instead of the machine's hostname — when that name is taken by another machine."],
+        ["--zone ZONE", "The zone it sits in, when its address is in no active zone (a Location reached through a tunnel)."],
+        ["--wait SECONDS", "How long to wait for root to accept the mothership's key (default 300); nothing is written until it does."],
       ],
     },
     {
@@ -717,6 +729,27 @@ function cmdAdd(opts: Opts, client: ModuleClient): number {
   return client.add(module, a);
 }
 
+// `adopt` hands the machine to adopt-module.sh, which reaches it, learns its
+// OS and hostname, and installs the module for that OS (ADR-026 D8.1). Its
+// three options arrive as passthrough (parseOpts knows them for no other verb).
+function cmdAdopt(opts: Opts, client: ModuleClient): number {
+  const address = opts.rest[0];
+  if (!address) die("adopt: expected <address> (an IP address or a DNS name)");
+  if (opts.rest.length > 1) die(`adopt: one address only (got ${opts.rest.join(", ")})`);
+  const a: AdoptOptions = {};
+  const p = opts.passthrough;
+  for (let i = 0; i < p.length; i++) {
+    const v = p[i + 1];
+    if (v === undefined || v.startsWith("--")) die(`adopt: ${p[i]} requires an argument`);
+    if (p[i] === "--instance") a.instance = v;
+    else if (p[i] === "--zone") a.zone = v;
+    else if (p[i] === "--wait") a.wait = v;
+    else die(`adopt: unknown option '${p[i]}'`);
+    i++;
+  }
+  return client.adopt(address, a);
+}
+
 // `add` takes `--<field> <value>` JSON overrides, which parseArgs collects into
 // opts.passthrough for every flag it does not recognise. Two schema fields are
 // ALSO recognised flags — `--vmid` and `--zone0`, both defined for `test`
@@ -950,6 +983,8 @@ function dispatch(verb: string, opts: Opts, client: ModuleClient): number {
       return cmdValidate(opts);
     case "add":
       return cmdAdd(opts, client);
+    case "adopt":
+      return cmdAdopt(opts, client);
     case "update":
       return cmdModify(opts, client, "update");
     case "modify":

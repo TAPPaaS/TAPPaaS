@@ -38,8 +38,8 @@ Expected afterwards:
 
 - `config/dh-test1.json`, named after the machine's hostname (ADR-026 D8.1 step 4);
 - `.location` → the `debianhost` module, so `module_of dh-test1` = `debianhost` (D6.3);
-- `kind: machine`, `os: {family: linux, id: debian}` (ADR-022f D7), `zone0: mgmt` (from the
-  address), `management: managed`;
+- `kind: machine`, `os: debian` (ADR-022f D7 as built: the family is derived), `zone0: mgmt`
+  (from the address), `management: managed`, and **no** `vmname`;
 - `debianhost`'s `install.sh` ran and verified;
 - the instance appears in `module-manager module list`, **with its module shown** — an
   instance named after a machine must be recognisable as a `debianhost`.
@@ -91,6 +91,21 @@ Install PBS on `dh-test1` — the setup Erik runs, and ADR-012's fourth topology
 the **first live test of #602's machine-hosted case**: with the backup module's placement
 empty, resolution must adopt `node:dh-test1` and install nothing on a cluster node. Until now
 that case was unit-tested only.
+
+## Results
+
+| Phase | Date | Result |
+|---|---|---|
+| 1 | 2026-09-18 | ✅ adopted as `dh-test1` (debianhost, zone `mgmt`, no `vmname`); key pre-seeded, and key arriving while `adopt` waits |
+| 2 | 2026-09-18 | ✅ live: run twice (config unchanged), name taken, address taken under another name, PVE node (`tappaas3`), unknown `--zone`, reserved name, key never arrives (nothing written). Unit-tested only (`scripts/test/test-adopt.sh`): Ubuntu, address in no zone |
+| 3 | 2026-09-18 | ✅ update deferred without consent, rebooted with `--allow-disruption` (boot id checked), waits for the clock; disk-fill test fails. **Open:** the nightly, `cicd-key.sh`, key-only SSH |
+| 4 | 2026-09-18 | ✅ `delete` unregisters (same boot id), `--vmid` refused |
+| 5, 6 | — | not started (D8a; ADR-012 §1.3) |
+
+**Found in phase 2:** Debian 13's OpenSSH penalises a source address for failed logins
+(`PerSourcePenalties`, 5s per failure, enforced from 15s, up to 10 min). `adopt` polling every
+5s locked the mothership out of the machine — the operator's own ssh from it included. It now
+tries every 20s.
 
 ## What each phase proves
 

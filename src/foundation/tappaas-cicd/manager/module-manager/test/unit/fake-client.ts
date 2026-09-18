@@ -8,6 +8,7 @@
 
 import {
   AddOptions,
+  AdoptOptions,
   DeleteOptions,
   InspectOptions,
   ModifyOptions,
@@ -20,12 +21,13 @@ import {
 } from "../../src/types";
 
 export interface Invocation {
-  verb: "add" | "modify" | "delete" | "reconcile" | "inspect" | "test" | "snapshot" | "migrate";
+  verb: "add" | "adopt" | "modify" | "delete" | "reconcile" | "inspect" | "test" | "snapshot" | "migrate";
   module: string;
   // The forwarded options, captured for assertions (for `inspect` that is the
   // dependency-service check decision, #458).
   opts?:
     | AddOptions
+    | AdoptOptions
     | ModifyOptions
     | DeleteOptions
     | InspectOptions
@@ -44,6 +46,10 @@ export class FakeModuleClient implements ModuleClient {
 
   add(module: string, opts: AddOptions): number {
     this.log.push({ verb: "add", module, opts });
+    return this.rc;
+  }
+  adopt(address: string, opts: AdoptOptions): number {
+    this.log.push({ verb: "adopt", module: address, opts });
     return this.rc;
   }
   modify(module: string, opts: ModifyOptions): number {

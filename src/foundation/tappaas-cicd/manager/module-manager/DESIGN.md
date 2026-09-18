@@ -31,6 +31,7 @@ injected `ModuleClient` (production `CliModuleClient`; tests inject a fake):
 | `resolve` | TS (config) | `src/resolve.ts` — the desired-state document: config + `module-fields.json` defaults + the `.orig` flags (ADR-020 D1) |
 | `validate` | TS (config) | tier/source lint (ported from `validate-module-tier-source.sh`) + the ADR-020 service field-manifest lint |
 | `add` | bash | `install-module.sh` |
+| `adopt` | bash | `adopt-module.sh` — reach, learn, choose the module by OS, then `install-module.sh` (ADR-026 D8.1) |
 | `modify` | bash | `update-module.sh` (release update) |
 | `delete` | bash | `delete-module.sh` |
 | `reconcile` | TS (lifecycle) | `src/inspect.ts` + `src/services.ts` (read-only drift report, default) / `src/reconcile.ts` (`--apply`: leaf converge) — see below |

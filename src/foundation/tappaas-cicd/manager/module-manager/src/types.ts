@@ -74,6 +74,14 @@ export interface AddOptions {
   passthrough: string[];
 }
 
+// `module adopt <address>` (ADR-026 D8.1): the machine is reached and learned by
+// adopt-module.sh; these only override what it would choose.
+export interface AdoptOptions {
+  instance?: string;
+  zone?: string;
+  wait?: string;
+}
+
 export interface ModifyOptions {
   environment?: string;
   // ADR-020 v0.10 D8: force = proceed (failed pre-update test, archived/external);
@@ -143,6 +151,8 @@ export interface MigrateOptions {
 export interface ModuleClient {
   // install-module.sh <module> [...]
   add(module: string, opts: AddOptions): number;
+  // adopt-module.sh <address> [...]  (a running machine becomes a module)
+  adopt(address: string, opts: AdoptOptions): number;
   // update-module.sh [opts] <module>  (release update: snapshot + test + merge)
   modify(module: string, opts: ModifyOptions): number;
   // delete-module.sh <module> [...]

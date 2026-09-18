@@ -279,6 +279,12 @@ from "a cluster node" to "any machine module", which is also what D4 stage 3 nee
    `install.sh` (for `debianhost`, D3: register and verify). From then on the machine is in
    the sweep like any other module.
 
+*As built (2026-09-18, `adopt-module.sh`):* also refused — a Proxmox VE node (cluster nodes
+come through #665, never as a plain `debianhost`) and an address another instance already has
+(compared by resolved IP). Zones whose `state` is `Inactive` or `Disabled` are not matched; the
+most specific subnet wins. Adopting the same machine again is a no-op. The key is retried every
+20s, not faster: Debian 13's `PerSourcePenalties` otherwise locks the mothership out.
+
 What `adopt` does **not** do (operator, 2026-09-18):
 
 - **It changes nothing about how the machine is reached.** Key-only SSH (#19) is a separate,
