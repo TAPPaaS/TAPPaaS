@@ -27,6 +27,12 @@ export function info(msg: string): void {
   console.log(`${DGN}[Info]${CL} ${msg}`);
 }
 
+// debug() is the bash helper's [Debug]: shown only under TAPPAAS_DEBUG=1.
+export function debug(msg: string): void {
+  if ((process.env.TAPPAAS_DEBUG ?? "0") !== "1") return;
+  console.log(`${BL}[Debug]${CL} ${msg}`);
+}
+
 export function warn(msg: string): void {
   console.log(`${YW}[Warning]${CL} ${msg}`);
 }

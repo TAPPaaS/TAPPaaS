@@ -53,7 +53,7 @@ import {
 import { ReconcileOptions } from "./types";
 import { OutLine } from "./inspect";
 import { checkDependencyServices, serviceSummaryLines } from "./services";
-import { BL, BOLD, CL, GN, error, info, warn } from "./shlog";
+import { BL, BOLD, CL, GN, debug, error, info, warn } from "./shlog";
 
 // die-equivalent: thrown to unwind to reconcileModule(), printed once there.
 class ReconcileFailure extends Error {}
@@ -200,7 +200,7 @@ function doReconcile(moduleArg: string, opts: ReconcileOptions): void {
     fail(`JSON validation failed for ${module}`);
   }
   if (!raw) fail(`JSON validation failed for ${module}`);
-  info(`  ${GN}✓${CL} ${moduleJson}`);
+  debug(`  ${GN}✓${CL} ${moduleJson}`);
 
   // The module directory is resolved BEFORE Step 2, not just for Step 3: the
   // dependency service scripts must run FROM it (#495). update-module.sh has
@@ -260,7 +260,7 @@ function doReconcile(moduleArg: string, opts: ReconcileOptions): void {
     const providerModule = resolveProviderModule(configDir, providerName, moduleEnvironment);
     const providerDir = getModuleDir(configDir, providerModule);
     if (!providerDir) {
-      if (optional) info(`  ${dep}: provider '${providerModule}' not installed — skipping optional integration`);
+      if (optional) debug(`  ${dep}: provider '${providerModule}' not installed — skipping optional integration`);
       else warn(`  Cannot find provider '${providerModule}' location — skipping ${dep}`);
       return;
     }
@@ -268,11 +268,11 @@ function doReconcile(moduleArg: string, opts: ReconcileOptions): void {
 
     const svcScript = join(providerDir, "services", serviceName, "update-service.sh");
     if (!existsSync(svcScript)) {
-      info(`  ${dep}: no update-service.sh — skipping`);
+      debug(`  ${dep}: no update-service.sh — skipping`);
       return;
     }
 
-    info(`  Re-applying ${BL}${dep}${CL} for '${module}'...`);
+    debug(`  Re-applying ${BL}${dep}${CL} for '${module}'...`);
     // --allow-disruption authorizes downtime (ADR-020 v0.10 D8), and is not
     // "ignore errors": without it a change that needs a reboot or an offline
     // migrate is deferred rather than applied. Forwarded verbatim so the
@@ -285,7 +285,7 @@ function doReconcile(moduleArg: string, opts: ReconcileOptions): void {
       // declared state is what the provider's test-service.sh answers, and that
       // runs in Step 4 — alfen:nat printed "converged" here while its own
       // verifier reported both rules MISSING in the same run.
-      info(`  ${GN}✓${CL} ${dep} re-applied`);
+      debug(`  ${GN}✓${CL} ${dep} re-applied`);
       applied.push(dep);
     } else {
       error(`  ✗ ${dep} re-apply failed`);
@@ -294,14 +294,14 @@ function doReconcile(moduleArg: string, opts: ReconcileOptions): void {
   };
 
   if (dependsOn.length === 0) {
-    info("  No dependency services to re-apply");
+    debug("  No dependency services to re-apply");
   } else {
     for (const dep of dependsOn) applyConverge(dep, false);
   }
   // Optional integrations converge with the same code path (#501); a provider
   // that is simply not installed is expected here, not an error.
   if (integratesWith.length > 0) {
-    info("  Optional integrations (integratesWith):");
+    debug("  Optional integrations (integratesWith):");
     for (const dep of integratesWith) applyConverge(dep, true);
   }
 
@@ -315,19 +315,19 @@ function doReconcile(moduleArg: string, opts: ReconcileOptions): void {
     // updateTime bump, NO snapshot, NO test — that is what makes this a
     // reconcile, not an update. Run from the module directory, as bash did.
     if (existsSync(join(moduleDir, "update.sh"))) {
-      info(`  Running ${moduleDir}/update.sh (converge)...`);
+      debug(`  Running ${moduleDir}/update.sh (converge)...`);
       if (runScript("./update.sh", [module], moduleDir) !== 0) {
         fail(stepFailure("Module update.sh failed during reconcile", depFailures));
       }
-      info(`  ${GN}✓${CL} module update.sh converged`);
+      debug(`  ${GN}✓${CL} module update.sh converged`);
     } else if (existsSync(join(moduleDir, "install.sh"))) {
-      info(`  No update.sh — running ${moduleDir}/install.sh (idempotent re-apply)...`);
+      debug(`  No update.sh — running ${moduleDir}/install.sh (idempotent re-apply)...`);
       if (runScript("./install.sh", [module], moduleDir) !== 0) {
         fail(stepFailure("Module install.sh failed during reconcile", depFailures));
       }
-      info(`  ${GN}✓${CL} module install.sh converged`);
+      debug(`  ${GN}✓${CL} module install.sh converged`);
     } else {
-      info("  No update.sh/install.sh in module directory — nothing to re-apply in-VM");
+      debug("  No update.sh/install.sh in module directory — nothing to re-apply in-VM");
     }
   } else if (moduleDirResult.kind === "missing-dir") {
     // #460: recorded but gone — a moved/removed checkout, not a module that
@@ -362,7 +362,7 @@ function doReconcile(moduleArg: string, opts: ReconcileOptions): void {
     const svc = checkDependencyServices(configDir, module, applied, moduleEnvironment);
     for (const l of svc.lines as OutLine[]) {
       if (l.kind === "raw") console.log(l.text);
-      else if (l.kind === "info") info(l.text);
+      else if (l.kind === "info") debug(l.text);
       else if (l.kind === "warn") warn(l.text);
       else error(l.text);
     }
