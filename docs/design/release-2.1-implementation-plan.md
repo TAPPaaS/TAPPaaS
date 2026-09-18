@@ -15,6 +15,11 @@ and few community modules depending on today's names, schemas and layouts.
 
 ## 1. How to read the scores
 
+**✅ in front of a row means done** — the issue is closed on the forge, or the question in that
+row is answered. A group heading carries ✅ only when every row under it does. Everything
+without a tick is still to do, so planning the next step is a matter of reading down a wave and
+stopping at the first unticked line. Refreshed 2026-09-18 against the forge.
+
 Every issue and every group has three scores.
 
 **Ease (E)** — how cheap it is to build.
@@ -96,9 +101,9 @@ things that make those migrations survivable go before it (Wave 0).
 
 | Wave | Group | Issues | E | R | L |
 |------|-------|-------:|:-:|:-:|:-:|
-| 0 | G0.1 Migration & rollback framework | 5 | 2 | 2 | H |
-| 0 | G0.2 Trustworthy gates | 8 | 4 | 2 | M |
-| 0 | G0.3 Update channel & failure notice | 5 | 3 | 3 | M |
+| 0 | ✅ G0.1 Migration & rollback framework | 5 | 2 | 2 | H |
+| 0 | ✅ G0.2 Trustworthy gates | 8 | 4 | 2 | M |
+| 0 | ✅ G0.3 Update channel & failure notice | 5 | 3 | 3 | M |
 | 1 | G1.1 Vocabulary & classification (ADR-022 family) | 7 | 2 | 4 | H |
 | 1 | G1.2 Backup placement model (ADR-012 close-out) | 12 | 3 | 4 | H |
 | 1 | G1.3 Module contract & repo layout | 10 | 2 | 5 | H |
@@ -151,17 +156,17 @@ Do this first. Apart from #620 (authoring `tier` in zones.json) and #471
 configuration; it changes how updates behave when they go wrong, which every
 later wave depends on.
 
-### G0.1 Migration & rollback framework — E2 · R2 · L-H
+### ✅ G0.1 Migration & rollback framework — E2 · R2 · L-H
 
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
-| #652 | Versioned config-migration step | 3 | 2 | H | Replace ad-hoc blocks in `pre-update.sh` with ordered, idempotent `migrations/NNNN-*.sh`: each backs up the files it touches, supports dry-run, and is recorded as applied in `config/`. A failed migration stops the sweep before any module update. |
-| #584 | Rollback in install/modify | 2 | 2 | M | `modify` Step 0 rewrites config before the snapshot and tests; snapshot `config/<module>.json` together with the VM |
-| #453 | `--force` overwrites deployed config | 3 | 2 | M | **Decided 2026-09-16:** `add --force` refuses on a deployed module and names `module update` / `add --reinstall`; only `--reinstall` overwrites a deployed config (ADR-020 v0.10 D5) |
-| #655 | `module-manager update` verb | 3 | 2 | M | The release update gets its own word; `modify` is the field change. Bare `modify` stays an alias for one release (ADR-020 v0.10 D5) |
-| *(with #655)* | one meaning for `--force` | 3 | 2 | H | `--force` = proceed (failed pre-update test, archived/external) at every level; downtime is `--allow-disruption`; `--ignore-test-failure` retired (ADR-020 v0.10 D8, ADR-017 v0.3 D5) |
-| #648 | `--unset` for stale fields | 4 | 1 | L | Option 2 chosen (2026-09-14): `--unset`, deep test, README |
-| #572 | repo-sync auto-stash never restored | 4 | 1 | L | Pick pop or drop; warn with count |
+| ✅ #652 | Versioned config-migration step | 3 | 2 | H | Replace ad-hoc blocks in `pre-update.sh` with ordered, idempotent `migrations/NNNN-*.sh`: each backs up the files it touches, supports dry-run, and is recorded as applied in `config/`. A failed migration stops the sweep before any module update. |
+| ✅ #584 | Rollback in install/modify | 2 | 2 | M | `modify` Step 0 rewrites config before the snapshot and tests; snapshot `config/<module>.json` together with the VM |
+| ✅ #453 | `--force` overwrites deployed config | 3 | 2 | M | **Decided 2026-09-16:** `add --force` refuses on a deployed module and names `module update` / `add --reinstall`; only `--reinstall` overwrites a deployed config (ADR-020 v0.10 D5) |
+| ✅ #655 | `module-manager update` verb | 3 | 2 | M | The release update gets its own word; `modify` is the field change. Bare `modify` stays an alias for one release (ADR-020 v0.10 D5) |
+| ✅ *(with #655)* | one meaning for `--force` | 3 | 2 | H | `--force` = proceed (failed pre-update test, archived/external) at every level; downtime is `--allow-disruption`; `--ignore-test-failure` retired (ADR-020 v0.10 D8, ADR-017 v0.3 D5) |
+| ✅ #648 | `--unset` for stale fields | 4 | 1 | L | Option 2 chosen (2026-09-14): `--unset`, deep test, README |
+| ✅ #572 | repo-sync auto-stash never restored | 4 | 1 | L | Pick pop or drop; warn with count |
 
 #### Migration framework (decided 2026-09-14)
 
@@ -224,7 +229,7 @@ suites now skip with a reason instead of failing on every run (99297d14).
   migrations; the existing blocks in `pre-update.sh` move into it later as
   `0001…`, since they are already idempotent.
 
-### G0.2 Trustworthy gates — E4 · R2 · L-M
+### ✅ G0.2 Trustworthy gates — E4 · R2 · L-M
 
 Status: landed 2026-09-15 on local `main`, push pending — ADR-020 v0.8 ddae6b99;
 #636 ed16f691, #555 7f7901fb, #645 0c408b1f + df7b8915, #560 d32ea443 +
@@ -236,16 +241,16 @@ every later migration unverifiable.
 
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
-| #644 | `network-manager <verb> --help` runs the verb | 5 | 1 | L | **Do first.** `distribute --help` pushed zones.json for real (2026-09-14). Still open: `main.ts` checks only `argv[0]` |
-| #635 | Pre-update gate collapses test severity | 4 | 2 | M | exit 1 → warn and proceed; the post-update test fails only on new failures and prints a `TEST-WARN:` line for old ones; `--ignore-test-failure` overrides a fatal pre-test (ADR-020 v0.8 D8). Some updates that abort today will proceed |
-| #633 | `site-manager update --force` overrides every `rebootOk` | 3 | 2 | M | Fleet-wide reboot authority from one flag. Decided 2026-09-15: `--force` = run now, respects `rebootOk` (ADR-020 v0.8) |
-| #636 | backup:vm Check 1 fatal while a backup runs | 4 | 1 | L | Timeout → "unknown", not fatal |
-| #555 | network:proxy checks cannot fail without a refid | 3 | 1 | L | |
-| #560 | identity:identity never checks the consumer side | 3 | 2 | L | Stricter test: existing silent SSO gaps turn red on first run (expected) |
-| #620 | Tier lattice authored on 9 of 26 zones | 4 | 2 | M | The check reports coverage. `tier` drives no rule; the repo already tiers every non-exempt zone, the untiered ones are site-local (retire them, or `modify <zone> --set tier=`), so no migration |
-| #645 | Reconcile dry-run hides firewall rule changes | 4 | 1 | L | Needed before the Wave 2 rule changes |
+| ✅ #644 | `network-manager <verb> --help` runs the verb | 5 | 1 | L | **Do first.** `distribute --help` pushed zones.json for real (2026-09-14). Still open: `main.ts` checks only `argv[0]` |
+| ✅ #635 | Pre-update gate collapses test severity | 4 | 2 | M | exit 1 → warn and proceed; the post-update test fails only on new failures and prints a `TEST-WARN:` line for old ones; `--ignore-test-failure` overrides a fatal pre-test (ADR-020 v0.8 D8). Some updates that abort today will proceed |
+| ✅ #633 | `site-manager update --force` overrides every `rebootOk` | 3 | 2 | M | Fleet-wide reboot authority from one flag. Decided 2026-09-15: `--force` = run now, respects `rebootOk` (ADR-020 v0.8) |
+| ✅ #636 | backup:vm Check 1 fatal while a backup runs | 4 | 1 | L | Timeout → "unknown", not fatal |
+| ✅ #555 | network:proxy checks cannot fail without a refid | 3 | 1 | L | |
+| ✅ #560 | identity:identity never checks the consumer side | 3 | 2 | L | Stricter test: existing silent SSO gaps turn red on first run (expected) |
+| ✅ #620 | Tier lattice authored on 9 of 26 zones | 4 | 2 | M | The check reports coverage. `tier` drives no rule; the repo already tiers every non-exempt zone, the untiered ones are site-local (retire them, or `modify <zone> --set tier=`), so no migration |
+| ✅ #645 | Reconcile dry-run hides firewall rule changes | 4 | 1 | L | Needed before the Wave 2 rule changes |
 
-### G0.3 Update channel & failure notice — E3 · R3 · L-M
+### ✅ G0.3 Update channel & failure notice — E3 · R3 · L-M
 
 Status: landed 2026-09-15 on local `main`, push pending — ADR-007e v1.3
 aab46270, ADR-020 v0.9 5c77a7ca, ADR-017 v0.2 2fb781fb (FW #357 settled, D7
@@ -259,13 +264,13 @@ to be solid before Wave 1 starts sending migrations through it.
 
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
-| #471 | ADR-017 update scheduling | 3 | 3 | M | Replaces the update unit on every cicd; mind the first-activation bootstrap gap (Erik, 2026-08-19) |
-| #447 | site-manager cannot modify the schedule | 4 | 1 | L | |
-| #651 | A failed sweep notifies no one | 3 | 1 | L | Adds a site-level notification target (additive schema); #126 reuses it |
+| ✅ #471 | ADR-017 update scheduling | 3 | 3 | M | Replaces the update unit on every cicd; mind the first-activation bootstrap gap (Erik, 2026-08-19) |
+| ✅ #447 | site-manager cannot modify the schedule | 4 | 1 | L | |
+| ✅ #651 | A failed sweep notifies no one | 3 | 1 | L | Adds a site-level notification target (additive schema); #126 reuses it |
 | FW #357 | Define `updateWindow` / `updateChannel` | 4 | 1 | L | Roll in: design only, belongs next to ADR-017 |
-| #653 | Hold the scheduled pull on one site | 4 | 2 | L | A local, per-repository marker with a reason and an expiry makes the scheduled sweep behave like `site-manager update --no-git-pull` (skip the pull, run the rest). Lets the test site run uncommitted or unpushed changes through real sweeps. Shown by `site-manager`; an expired hold warns and pulls again |
+| ✅ #653 | Hold the scheduled pull on one site | 4 | 2 | L | A local, per-repository marker with a reason and an expiry makes the scheduled sweep behave like `site-manager update --no-git-pull` (skip the pull, run the rest). Lets the test site run uncommitted or unpushed changes through real sweeps. Shown by `site-manager`; an expired hold warns and pulls again |
 
-### G0.4 Merge trust — fast lane, added 2026-09-16
+### ✅ G0.4 Merge trust — fast lane, added 2026-09-16
 
 Not a planned group: one issue, fast-laned ahead of Wave 1 on the operator's
 decision (2026-09-16), because every Wave 1 item is a config re-schema that
@@ -276,7 +281,7 @@ unfalsifiable on exactly the installs that need it most.
 
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
-| #659 | Step 0 skipped when a config has no `.location`, update still reports success | 4 | 3 | H | Three silent paths, not one: an unresolvable location, a missing `apply-json-merge.sh`, **and a merge that errors** — all logged at info/warn and all followed by `exit 0`. Fixed by resolving through the catalog as well as `.location` (#460's second tracking path) and making all three fatal |
+| ✅ #659 | Step 0 skipped when a config has no `.location`, update still reports success | 4 | 3 | H | Three silent paths, not one: an unresolvable location, a missing `apply-json-merge.sh`, **and a merge that errors** — all logged at info/warn and all followed by `exit 0`. Fixed by resolving through the catalog as well as `.location` (#460's second tracking path) and making all three fatal |
 
 **Landed 2026-09-17** (bdf15dcf, 51d1bae3), once makerfloss's satellite was marked
 `status: external` — see below. Measured before landing:
@@ -323,14 +328,14 @@ Settle the words before they spread further into schemas, CLI names and
 
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
-| #624 | ADR-022 review comments | 3 | 1 | H | **Applied 2026-09-17** in Erik's PR #664 — close |
-| #637 | ADR-022 comments (second pass) | 4 | 1 | H | **Applied 2026-09-17** in PR #664 (changelogs cut, Appendix A removed, `kind` defined, 022e–h proposed) — close |
-| #610 | Site = administrative domain × location × zone | 3 | 1 | H | **Decided**: ADR-022a separates the Administrative Domain, 022b the Location; the zone dimension stays ADR-014's. Close on the decision; anything left is implementation under #611 |
+| ✅ #624 | ADR-022 review comments | 3 | 1 | H | **Applied 2026-09-17** in Erik's PR #664 — close |
+| ✅ #637 | ADR-022 comments (second pass) | 4 | 1 | H | **Applied 2026-09-17** in PR #664 (changelogs cut, Appendix A removed, `kind` defined, 022e–h proposed) — close |
+| ✅ #610 | Site = administrative domain × location × zone | 3 | 1 | H | **Decided**: ADR-022a separates the Administrative Domain, 022b the Location; the zone dimension stays ADR-014's. Close on the decision; anything left is implementation under #611 |
 | #611 | `kind` values; retire `external-host` (ADR-022d/f) | 2 | 4 | H | **Decided, not implemented.** 022f D1 fixes the leaves (`vm`, `lxc`, `machine`, `application`, `device`); `external-host` is retired by ADR-010 §8. What remains is the schema and config change — a migration under ADR-025 D7. Stays open as the implementation |
-| #599 | Glossary: node vs host vs cluster member | 4 | 1 | H | **Done 2026-09-18**: ADR-022c D1/D2/D3 restore `Node` to its ArchiMate meaning and add **cluster member** and **Host**; `GLOSSARY.md` §B now carries all three — close |
+| ✅ #599 | Glossary: node vs host vs cluster member | 4 | 1 | H | **Done 2026-09-18**: ADR-022c D1/D2/D3 restore `Node` to its ArchiMate meaning and add **cluster member** and **Host**; `GLOSSARY.md` §B now carries all three — close |
 | #628 | People → Identity (`people-manager` → `identity-manager`) | 2 | 4 | H | 73 files reference `people-manager`; `config/people/` is a deployed path. Keep an alias for one stable cycle |
-| #422 | Glossary rewrite | 3 | 1 | L | **Done 2026-09-18**: `GLOSSARY.md` rewritten to the ADR-022 vocabulary, with a §E "what changed" table for reviewers — close |
-| *(in #624)* | `module.tier` → `stack`? | 3 | 4 | H | **Answered 2026-09-17 (ADR-022e)**: tier does **not** become stack. `module.tier` → **`scope: site \| environment`**; `Stack` stays the ArchiMate aggregation (022e D5); `tier` keeps only `zone.tier` (022e D7). The 35 JSON files are now a migration, not a question |
+| ✅ #422 | Glossary rewrite | 3 | 1 | L | **Done 2026-09-18**: `GLOSSARY.md` rewritten to the ADR-022 vocabulary, with a §E "what changed" table for reviewers — close |
+| ✅ *(in #624)* | `module.tier` → `stack`? | 3 | 4 | H | **Answered 2026-09-17 (ADR-022e)**: tier does **not** become stack. `module.tier` → **`scope: site \| environment`**; `Stack` stays the ArchiMate aggregation (022e D5); `tier` keeps only `zone.tier` (022e D7). The 35 JSON files are now a migration, not a question |
 
 ### G1.2 Backup placement model + managed machines (ADR-012, ADR-026) — E3 · R4 · L-H
 
@@ -346,7 +351,7 @@ the model can express and patch. The two are one piece of work because a backup
 | *(new)* | ADR-012 topology §1.3 verified | 3 | 2 | M | PBS installed and driven on a `kind: machine` host — Erik's setup, on a test machine first |
 | *(new)* | instance vs module name | 3 | 3 | M | **Settled 2026-09-18 by ADR-026 D6**, now implementation: `config/<instance>.json` is the instance, the module comes from `.location`, and a synthetic `module` field replaces every name-parse (including `resolve_base_module_name`, added for #659). Plus the `--instance` argument and its default. **Blocks #665** |
 | #665 | Register cluster nodes as machine modules | 3 | 2 | M | ADR-026 D4 stage 1 — registration only, inert. Stage 2 (node patching behind the module lifecycle) and stage 3 (the cluster install becomes module installs) are separate and high-blast-radius |
-| *(closed)* | `placementState` revisit | 4 | 2 | M | **Answered 2026-09-18**: ADR-012 v0.9 settles the backup case (`node` \| `shim` \| `external`); the general point is ADR-026 D6.5 — the `node` field names an *instance*, which coincides with a module name in almost every deployment but is not the same thing. No separate decision needed |
+| ✅ *(closed)* | `placementState` revisit | 4 | 2 | M | **Answered 2026-09-18**: ADR-012 v0.9 settles the backup case (`node` \| `shim` \| `external`); the general point is ADR-026 D6.5 — the `node` field names an *instance*, which coincides with a module name in almost every deployment but is not the same thing. No separate decision needed |
 
 #### ADR-012 close-out (original scope)
 
@@ -466,7 +471,7 @@ dry-run to show the rule diff before `--apply`.
 | #263 | DNSSEC on Unbound | 4 | 3 | M | Internal split-horizon zones need `domain-insecure` |
 | #383 | Keep wildcard public DNS current on dynamic WAN | 3 | 2 | L | |
 | FW #157 | Default DNS blocklists (DNSBL / maltrail) | 3 | 3 | M | Stretch; only after #387 |
-| #657 | Standard 4 invents an FQDN when a config lookup fails | 5 | 1 | L | **Done 2026-09-17.** Fixed at the source: `dns_sample_select` now carries the zone alongside the vmname (`DNS_SAMPLE_RECORDS`), read from the config file it selected, found by descent so a Pattern A nesting cannot hide it (#555's shape). A module that declares no zone is reported as such instead of being given the `srvHome` guess. Original note: Test-only. Standard 4 re-reads the config by `vmname`, which is not the config's name for a variant, so the zone falls back to the literal `srvHome` and the test asserts a name the estate never declared. It marks `network` failed and buries real DNS faults among invented ones — the G0.2 class of defect, found after G0.2 closed |
+| ✅ #657 | Standard 4 invents an FQDN when a config lookup fails | 5 | 1 | L | **Done 2026-09-17.** Fixed at the source: `dns_sample_select` now carries the zone alongside the vmname (`DNS_SAMPLE_RECORDS`), read from the config file it selected, found by descent so a Pattern A nesting cannot hide it (#555's shape). A module that declares no zone is reported as such instead of being given the `srvHome` guess. Original note: Test-only. Standard 4 re-reads the config by `vmname`, which is not the config's name for a variant, so the zone falls back to the literal `srvHome` and the test asserts a name the estate never declared. It marks `network` failed and buries real DNS faults among invented ones — the G0.2 class of defect, found after G0.2 closed |
 
 ---
 
@@ -488,7 +493,7 @@ Low upgrade risk. Build continuously, in any order within a group.
 | #127 | Boot order: firewall (and secrets) first | 4 | 2 | L | |
 | #100 | Automatic storage extension | 3 | 2 | L | |
 | #403 | Install on the root disk; smarter placement | 3 | 2 | L | |
-| #569 | Node capacity / overcommit verb | 4 | 1 | L | **Done 2026-09-17** (71799221): `health-manager validate` gained a `memory-commitment` gate beside `disk-threshold` — per node, committed vs physical, `--memory-threshold PCT`. Committed (not used), stopped guests excluded, idle nodes reported at 0% so a placement gap shows |
+| ✅ #569 | Node capacity / overcommit verb | 4 | 1 | L | **Done 2026-09-17** (71799221): `health-manager validate` gained a `memory-commitment` gate beside `disk-threshold` — per node, committed vs physical, `--memory-threshold PCT`. Committed (not used), stopped guests excluded, idle nodes reported at 0% so a placement gap shows |
 | #663 | Memory defaults are not based on measurement | 4 | 2 | M | The demand side of #37. Shipped defaults were never checked against use: 60G declared across hrossen's QEMU guests, 31.9G resident, ~20G used. Over-declaring costs **commitment** (what #569's gate reports and what decides placement), not RAM — except where a guest's allocator touches everything, as OPNsense/FreeBSD does. Applied on hrossen: `tappaas-cicd` 12G, `unifi-os` 5G. `network` 8G→4G is **parked until the operator has physical access** — the firewall is the route back into the site |
 | #37 | Optimise RAM (ballooning, swap) | 3 | 3 | L | **ARC part dropped 2026-09-17** after measuring six nodes: `zfs_arc_max` is already set to ~10.7% of RAM (the PVE 8.1+ installer default, not ZFS's 50%), and three of six nodes sit AT their cap — nothing to reclaim, and the proposed direction was backwards. hrossen tappaas2 looks like an exception (69G uncommitted) but is not: it shares GPU RAM with CPU RAM and runs the LLMs. What remains is the real gain — hrossen declares 110G across 11 guests with **no ballooning on any of them**, ~70G declared and unused (`vllm-amd` 46G→2.1G, though that one is GPU-bound and needs thought, not a reflex balloon). Monitoring is partly delivered by #569's `memory-commitment` gate |
 | #423 | `Create-TAPPaaS-LXC.sh` has no `debug()` | 5 | 1 | L | Verified still missing |
@@ -510,12 +515,12 @@ Low upgrade risk. Build continuously, in any order within a group.
 | #568 | hass: backup freeze leaves Frigate unhealthy | 3 | 1 | L | |
 | #571 | hassanova has no release baseline | 5 | 1 | L | |
 | #553 | litellm:models cannot reach an appliance consumer | 3 | 1 | L | |
-| #412 | coturn reads an undefined `publicDomain` | 5 | 1 | L | |
+| ✅ #412 | coturn reads an undefined `publicDomain` | 5 | 1 | L | |
 | #411 | windows-server: `deploy-instances.sh` missing | 4 | 1 | L | |
 | #332 | euro-office / Nextcloud install findings | 3 | 2 | L | |
 | #283 | forgejo central logging (Community repo) | 4 | 1 | L | |
 | #284 | forgejo SQLite → PostgreSQL | — | — | — | Close: a module implementation choice (Lars, 2026-06-03) |
-| #622 | deconz probe uses a name that never resolves | 5 | 1 | L | Looks fixed on `main` (both services now resolve the deconz FQDN): verify and close |
+| ✅ #622 | deconz probe uses a name that never resolves | 5 | 1 | L | Looks fixed on `main` (both services now resolve the deconz FQDN): verify and close |
 | #658 | nextcloud test 12 probes the browser URL from wherever it runs | 4 | 1 | L | Maintainer-owned (@ErikDaniel007). **Not** "treat 403 as pass" — that would mask a real access-list fault. The test should ask whether the host it runs from is inside the route's `proxyAllowedZones` and skip with a reason when it is not, the way `tappaas-cicd/test.sh` Test 9z now handles a suite that cannot run here (exit 77). Today it pushes an operator to widen a zone list to make a test pass — a security change caused by a test assumption |
 
 ### G3.4 AI stack maturity — E3 · R3 · L-L
