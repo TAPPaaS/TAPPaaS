@@ -55,6 +55,7 @@ import {
 } from "./services";
 import { InspectOptions } from "./types";
 import { BL, BOLD, CL, GN, RD, YW, error, info, warn } from "./shlog";
+import { moduleSourceJson } from "../../../lib/ts/src/instance";
 
 // ── the desired-state resolver: NOT here ───────────────────────────────
 // jqStr/getField/appliedDefault/resolveField and the ModuleFieldsSchema types
@@ -712,12 +713,13 @@ export function inspectModule(module: string, opts: InspectOptions = {}): number
       ? checkDependencyServices(configDir, module, deps, moduleEnvironment)
       : buildServiceSection(deps, null);
 
-  // Locate the git source JSON via the module's .location:
-  // <location>/<module>.json, else <location>/<vmname>.json.
+  // Locate the git source JSON via the instance's .location: the MODULE's JSON,
+  // named after its directory (ADR-026 D6.3), with the instance name only as a
+  // fallback. Never vmname — that is an instance name too.
   const location = getField(cfg, "location");
   let git: Record<string, unknown> | null = null;
   if (location) {
-    for (const cand of [join(location, `${module}.json`), join(location, `${vmname}.json`)]) {
+    for (const cand of [moduleSourceJson(location), join(location, `${module}.json`)]) {
       const g = readNormalized(cand);
       if (g) {
         git = g;

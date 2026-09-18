@@ -162,7 +162,13 @@ apply_three_way_merge() {
         base="${eff}"
     fi
 
-    local source="${module_dir}/${base}.json"
+    # The release source is the MODULE's JSON, named after its directory
+    # (ADR-026 D6.3) — not after the instance being merged. config/tappaas2.json
+    # is an instance of a module whose source is <dir>/<module>.json; deriving
+    # the file from "tappaas2" would find nothing. The name-based search below
+    # stays as a fallback for a layout that does not follow the convention.
+    local source="${module_dir}/$(basename "${module_dir}").json"
+    [[ -f "${source}" ]] && base="$(basename "${module_dir}")" || source="${module_dir}/${base}.json"
     if [[ ! -f "${source}" ]]; then
         # Fallback for variant naming: try stripping suffix until a source matches.
         local try="${eff}"

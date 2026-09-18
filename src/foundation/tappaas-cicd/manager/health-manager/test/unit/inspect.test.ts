@@ -2,14 +2,14 @@
 // logic. No SSH, no Proxmox; a FakeClusterClient holds in-memory cluster state.
 // Tiny assert harness (no test framework). Run via test/unit tsconfig (see test.sh).
 
-import { chmodSync, existsSync, mkdtempSync, writeFileSync } from "fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, writeFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 import { HELP, run } from "../../src/main";
 import { undocumentedOptions } from "../../../../lib/ts/src/help";
 import { clusterDiff, inspectCluster, inspectVm } from "../../src/inspect";
 import { checkDiskThreshold, checkServiceLiveness } from "../../src/checks";
-import { siteNodeHostnames } from "../../src/config";
+import { resolveGitJson, siteNodeHostnames } from "../../src/config";
 import { RunningGuest } from "../../src/types";
 import { FakeClusterClient } from "./fake-client";
 
@@ -300,6 +300,25 @@ function testArgGate(): void {
   else process.env.UPDATE_OS_BIN = prev;
 }
 testArgGate();
+
+// ── ADR-026 D6.3: the Released column is the MODULE's source ─────────
+// tappaas2 is an instance of module `pvenode`: its source is pvenode.json in
+// the module directory. A file named after vmname sits beside it as a decoy —
+// vmname is an instance name too, and must never select the source.
+function testResolveGitJsonInstance(): void {
+  const root = mkdtempSync(join(process.env.TMPDIR ?? "/tmp", "health-d63-"));
+  const src = join(root, "src", "pvenode");
+  const cfg = join(root, "config");
+  mkdirSync(src, { recursive: true });
+  mkdirSync(cfg, { recursive: true });
+  writeFileSync(join(src, "pvenode.json"), JSON.stringify({ cores: "8" }));
+  writeFileSync(join(src, "decoy.json"), JSON.stringify({ cores: "1" }));
+  writeFileSync(join(cfg, "tappaas2.json"), JSON.stringify({ vmname: "decoy", location: src }));
+  const g = resolveGitJson(cfg, "tappaas2");
+  check(g !== null && g.cores === "8", "D6.3: instance tappaas2 reads its module's pvenode.json");
+  check(!(g !== null && g.cores === "1"), "D6.3: a file named after vmname is never the source");
+}
+testResolveGitJsonInstance();
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

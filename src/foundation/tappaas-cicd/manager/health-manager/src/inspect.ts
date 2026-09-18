@@ -115,7 +115,7 @@ export function inspectVm(
   const node = asString(cfgRaw.node) || "tappaas1";
   const vmname = asString(cfgRaw.vmname) || module;
 
-  const git = resolveGitJson(configDir, module, vmname);
+  const git = resolveGitJson(configDir, module);
   const cfg = (k: string): string => asString(cfgRaw[k]);
   const gitv = (k: string): string => (git ? asString(git[k]) : "");
 

@@ -2,7 +2,7 @@
 #
 # Copy a module JSON file to config directory and update fields.
 #
-# Usage: copy-update-json.sh <module-name> [--environment <name>] [--<field> <value>]...
+# Usage: copy-update-json.sh <module-name> [--environment <name>] [--instance <name>] [--<field> <value>]...
 #
 # Example:
 #   copy-update-json.sh identity --node "tappaas2" --cores 4
@@ -228,6 +228,7 @@ main() {
     local variant=""
     local environment=""
     local default_env=""
+    local instance=""
     local filtered_args=()
 
     while [[ $# -gt 0 ]]; do
@@ -243,6 +244,17 @@ main() {
             --environment)
                 [[ -z "${2:-}" ]] && die "Option --environment requires a value"
                 environment="$2"
+                shift 2
+                ;;
+            --instance)
+                # ADR-026 D6.4: name the instance explicitly. config/<name>.json
+                # is written instead of the default <module>[-<environment>].json;
+                # the module stays identified by .location. Parsed here, before the
+                # generic --<field> branch, because `instance` is not a field.
+                [[ -z "${2:-}" ]] && die "Option --instance requires a name"
+                instance="$2"
+                instance_name_ok "${instance}" \
+                    || die "--instance '${instance}': not a usable instance name (a DNS label — lowercase letters, digits, hyphens — and not a name config/ already uses)"
                 shift 2
                 ;;
             --default-environment)
@@ -295,6 +307,14 @@ main() {
             effective_module="${module}-${environment}"
             debug "Environment mode: ${module} → ${effective_module} (environment '${environment}')"
         fi
+    fi
+
+    # An explicit instance name wins over the environment rule (ADR-026 D6.4):
+    # the default is the module name, suffixed for a non-default environment,
+    # and an operator may name the instance anything valid instead.
+    if [[ -n "${instance}" ]]; then
+        effective_module="${instance}"
+        debug "Instance mode: ${module} → ${effective_module}"
     fi
 
     # Export for callers that source this script (e.g., install-module.sh)

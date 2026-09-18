@@ -1348,18 +1348,18 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Unit: resolve_module_source_dir — a module with no .location is still located
+# Unit: module_source_dir — a module with no .location is still located
 # through the catalog, and an update that cannot reconcile REFUSES (#659).
 #
 # Extracted and run against stubs, the way the graded-test helpers are.
 # ---------------------------------------------------------------------------
 RDIR="$(mktemp -d "${TMPDIR:-/tmp}/modmgr-resolve.XXXXXX")"
-awk '/^resolve_module_source_dir\(\) \{/{f=1} f{print} f&&/^\}/{exit}' \
-    "${HERE}/update-module.sh" > "${RDIR}/fn.sh"
+awk '/^module_source_dir\(\) \{/{f=1} f{print} f&&/^\}/{exit}' \
+    "${HERE}/../../lib/common-install-routines.sh" > "${RDIR}/fn.sh"
 if [[ -s "${RDIR}/fn.sh" ]]; then
-    ok "extracted resolve_module_source_dir from update-module.sh"
+    ok "extracted module_source_dir from common-install-routines.sh"
 else
-    bad "resolve_module_source_dir not found in update-module.sh (#659)"
+    bad "module_source_dir not found in common-install-routines.sh (#659)"
 fi
 
 mkdir -p "${RDIR}/from-location" "${RDIR}/from-catalog"
@@ -1374,11 +1374,11 @@ chmod +x "${RDIR}/resolver"
 # The inverse of the effective-name rule: a declared environment suffix is
 # stripped, anything else is left alone. This is what lets the catalog find a
 # module installed in a non-default environment (#659).
-awk '/^resolve_base_module_name\(\) \{/{f=1} f{print} f&&/^\}/{exit}' \
-    "${HERE}/update-module.sh" >> "${RDIR}/fn.sh"
+awk '/^module_name_guess\(\) \{/{f=1} f{print} f&&/^\}/{exit}' \
+    "${HERE}/../../lib/common-install-routines.sh" >> "${RDIR}/fn.sh"
 mkdir -p "${RDIR}/cfg/environments"
 for e in lab1 lab mgmt makerfloss omStaging; do echo '{}' > "${RDIR}/cfg/environments/${e}.json"; done
-base() { CONFIG_DIR="${RDIR}/cfg" bash -c '. "'"${RDIR}"'/fn.sh"; resolve_base_module_name "$1"' _ "$1"; }
+base() { CONFIG_DIR="${RDIR}/cfg" bash -c '. "'"${RDIR}"'/fn.sh"; module_name_guess "$1"' _ "$1"; }
 
 [[ "$(base podman-lab1)" == "podman" ]] \
     && ok "base name: podman-lab1 → podman (lab1 is a declared environment)" \
@@ -1404,7 +1404,7 @@ run_resolve() {  # <module> <location-stub-behaviour>
     LOC_DIR="$2" bash -c '
         . "'"${RDIR}"'/fn.sh"
         get_module_dir() { [[ -n "${LOC_DIR}" ]] && { printf "%s" "${LOC_DIR}"; return 0; }; return 1; }
-        resolve_module_source_dir "$1" && echo
+        module_source_dir "$1" && echo
     ' _ "$1" 2>/dev/null
 }
 export TAPPAAS_RESOLVE_MODULE_BIN="${RDIR}/resolver"
@@ -1423,6 +1423,35 @@ out="$(run_resolve unknown "")"
 [[ -z "${out//[[:space:]]/}" ]] \
     && ok "a module neither located nor catalogued resolves to nothing" \
     || bad "an unresolvable module must fail, not invent a directory (got '${out}')"
+
+# ── module_of: the module an INSTANCE belongs to (ADR-026 D6.3) ──────────
+# The module is the basename of the source directory — never the instance
+# name parsed. tappaas2 is an instance of a machine module that is not called
+# tappaas2: exactly the case #665 registers, and the one name-parsing gets wrong.
+awk '/^module_of\(\) \{/{f=1} f{print} f&&/^\}/{exit}' \
+    "${HERE}/../../lib/common-install-routines.sh" >> "${RDIR}/fn.sh"
+mkdir -p "${RDIR}/src/foundation/pvenode" "${RDIR}/src/apps/podman"
+run_module_of() {  # <instance> <location-stub>
+    LOC_DIR="$2" bash -c '
+        . "'"${RDIR}"'/fn.sh"
+        get_module_dir() { [[ -n "${LOC_DIR}" ]] && { printf "%s" "${LOC_DIR}"; return 0; }; return 1; }
+        module_of "$1"
+    ' _ "$1" 2>/dev/null
+}
+[[ "$(run_module_of tappaas2 "${RDIR}/src/foundation/pvenode")" == "pvenode" ]] \
+    && ok "module_of: instance tappaas2 → module pvenode (from .location, not the name)" \
+    || bad "module_of: tappaas2 must resolve to pvenode (got '$(run_module_of tappaas2 "${RDIR}/src/foundation/pvenode")')"
+[[ "$(run_module_of podman-lab1 "${RDIR}/src/apps/podman")" == "podman" ]] \
+    && ok "module_of: the default <module>-<env> instance name still names its module" \
+    || bad "module_of: podman-lab1 must resolve to podman"
+[[ "$(run_module_of known "")" == "from-catalog" ]] \
+    && ok "module_of: no .location → the catalogue's directory names the module" \
+    || bad "module_of: the catalogue fallback must name the module (got '$(run_module_of known "")')"
+if run_module_of unknown "" >/dev/null; then
+    bad "module_of: an instance nothing identifies must fail (rc 1), not guess"
+else
+    ok "module_of: an instance nothing identifies fails rather than guessing"
+fi
 
 # A stale .location (recorded, directory gone) must not be trusted either.
 out="$(run_resolve known "${RDIR}/was-deleted")"

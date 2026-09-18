@@ -34,7 +34,7 @@ later retire phase).
 | `module resolve <m>` | `src/resolve.ts` | **desired state**: the config *plus* the schema defaults it does not declare (`--json`) |
 | `module drift <m>` | `src/converge.ts` | that desired state **vs the live guest**, per service. `--service cluster:vm --json` prints the record a converge applies |
 | `module validate [<m>]` | tier/source lint | all modules, or one; `--allow-fork` |
-| `module add <m>` | `install-module.sh` | create + provision |
+| `module add <m>` | `install-module.sh` | create + provision; `--instance NAME` names the instance (ADR-026 D6.4) |
 | `module update <m>` | `update-module.sh` | **release update** (snapshot + test + 3-way merge) — what the sweep runs (#655) |
 | `module modify <m>` | `update-module.sh` | **change the config, then converge**: `--set field=value` (ADR-020) or `--unset field` (#648). Bare, it is the deprecated spelling of `update` |
 | `module delete <m>` | `delete-module.sh` | `--archive` (default) / `--remove` |
@@ -205,13 +205,20 @@ All bash, linked onto `PATH` by `install.sh`. These remain the source of truth
 ### `install-module.sh` — install a module
 
 ```
-install-module.sh <module-name> [--environment <name>] [--allow-fork]
-                  [--reinstall] [--<field> <value>]...
+install-module.sh <module-name> [--environment <name>] [--instance <name>]
+                  [--allow-fork] [--reinstall] [--<field> <value>]...
 ```
 
 - `--environment <name>` — target environment (sets the VM name and zone; default
   env → `<module>`, otherwise `<module>-<env>`). `--variant <name>` is a
   deprecated alias.
+- `--instance <name>` — name the **instance** (ADR-026 D6.4): the config is
+  `config/<name>.json` instead of the default `<module>[-<env>].json`, and a VM, if
+  the module deploys one, is named after it. The module stays identified by the
+  config's `.location`, so tools ask *which module* with `module_of`, never by
+  parsing the name — three cluster nodes are three instances of one module. The
+  name must be a DNS label and not one `config/` already uses (`site`, `zones`,
+  peer configs…).
 - `--allow-fork` — permit a `tier:foundation` module from a non-`official` source.
 - `--reinstall` — delete then install: the only way to replace a deployed config
   (recovers a failed partial install too). There is no `--force`: an already
@@ -225,6 +232,7 @@ install-module.sh <module-name> [--environment <name>] [--allow-fork]
 ```bash
 install-module.sh nextcloud
 install-module.sh nextcloud --environment acme
+install-module.sh pvenode --instance tappaas2      # one of several instances of a module
 ```
 
 ### `update-module.sh` — update a module

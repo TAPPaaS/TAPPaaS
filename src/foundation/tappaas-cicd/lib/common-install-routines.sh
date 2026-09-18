@@ -316,6 +316,103 @@ get_module_dir() {
     return 0
 }
 
+# ── Instance vs module (ADR-026 D6) ─────────────────────────────────
+#
+# config/<instance>.json names an INSTANCE. The module it is an instance of is
+# named by its source directory — `.location`, or, for a config written before
+# .location existed, the catalogue — and the module's name is that directory's
+# basename. Code that means "which module is this" asks module_of; it never
+# parses the instance name, and never reads `vmname` (an instance name too).
+# The instance name EQUALS the module name only by default (D6.4): three
+# cluster nodes are three instances of one module.
+
+# module_name_guess <instance> — a GUESS at the module behind an instance
+# name: strip a declared environment suffix. It is right only while the name is
+# the D6.4 default, <module> or <module>-<environment>; an instance named
+# anything else (tappaas2) defeats it. So it is used for one thing only — the
+# catalogue's key for a config that has no .location (module_source_dir).
+#
+# The DECLARED ENVIRONMENTS are what make this decidable: `podman-lab1` is
+# `podman` in `lab1` because `lab1` is an environment, while `vllm-amd` stays
+# whole because `amd` is not one. String surgery alone could not tell those
+# apart — module names contain hyphens too (vllm-amd, euro-office, unifi-os).
+# Longest match wins, so an estate declaring both `lab` and `lab1` resolves
+# `podman-lab1` to `podman`, never to `podman-lab`.
+module_name_guess() {
+    local eff="$1" env best="" f
+    local env_dir="${CONFIG_DIR}/environments"
+    if [[ -d "${env_dir}" ]]; then
+        for f in "${env_dir}"/*.json; do
+            [[ -f "${f}" ]] || continue
+            env="$(basename "${f}" .json)"
+            [[ -n "${env}" && "${eff}" == *"-${env}" ]] || continue
+            (( ${#env} > ${#best} )) && best="${env}"
+        done
+    fi
+    [[ -n "${best}" ]] && printf '%s' "${eff%-${best}}" || printf '%s' "${eff}"
+}
+
+# module_source_dir <instance> — the source directory of the module an
+# instance belongs to, or rc 1.
+#
+# TWO paths, because a module is located in more than one way (#460): the
+# `.location` the installer recorded, and the module catalogs of the registered
+# repositories. `get_module_dir` knows only the first and returns 1 when the
+# field is empty — which used to mean the 3-way merge was skipped and the update
+# reported success anyway, so a config written before `.location` existed
+# silently never adopted ANY release change (#659). With no .location, the
+# instance name is the only clue left — the module name by default (D6.4) — so
+# the catalogue is asked for it, then for its guessed base.
+module_source_dir() {
+    local module="$1" dir="" rc=0
+    dir="$(get_module_dir "${module}" 2>/dev/null)" || rc=$?
+    if (( rc == 0 )) && [[ -n "${dir}" && -d "${dir}" ]]; then
+        printf '%s' "${dir}"
+        return 0
+    fi
+    local resolver="${TAPPAAS_RESOLVE_MODULE_BIN:-/home/tappaas/bin/resolve-module.sh}"
+    [[ -x "${resolver}" ]] || return 1
+    # The deployed name first, then the base module behind it: the catalog is
+    # keyed by the module's own name, so an install in a non-default environment
+    # (`podman-lab1`) is only ever found under `podman`.
+    local candidate
+    for candidate in "${module}" "$(module_name_guess "${module}")"; do
+        [[ -n "${candidate}" ]] || continue
+        dir="$("${resolver}" "${candidate}" --field dir 2>/dev/null || true)"
+        if [[ -n "${dir}" && -d "${dir}" ]]; then
+            printf '%s' "${dir}"
+            return 0
+        fi
+    done
+    return 1
+}
+
+# module_of <instance> — the module a deployed instance belongs to (D6.3): the
+# basename of its source directory, found by module_source_dir. rc 1 when
+# nothing identifies it — a config whose module cannot be named is not
+# updatable, and saying so beats guessing (#659).
+module_of() {
+    local dir
+    dir="$(module_source_dir "$1")" || return 1
+    [[ -n "${dir}" ]] || return 1
+    basename "${dir}"
+}
+
+# instance_name_ok <name> — may config/<name>.json hold a module instance (D6.4)?
+# It must be a DNS label (the name ends up in a hostname), and not one of the
+# names config/ already uses for things that are not instances — the same set
+# module discovery excludes (lib/ts/src/module-discovery.ts).
+instance_name_ok() {
+    local n="$1"
+    [[ "${n}" =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$ ]] || return 1
+    case "${n}" in
+        site|zones|module-fields|cert-refids|last-update-result) return 1 ;;
+        switch-configuration-actual|switch-configuration-desired) return 1 ;;
+        pull-*|remote-*|receive-*) return 1 ;;
+    esac
+    return 0
+}
+
 # Make all .sh scripts in a module directory executable.
 # Handles: root-level scripts (install.sh, update.sh, pre-update.sh, etc.)
 # and service scripts (services/*/install-service.sh, update-service.sh, etc.).

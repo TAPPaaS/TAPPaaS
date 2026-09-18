@@ -12,6 +12,7 @@ import { existsSync, readFileSync, readdirSync } from "fs";
 import { join } from "path";
 import { defaultConfigDir } from "../../../lib/ts/src/config-io";
 import { ConfigModule } from "./types";
+import { moduleSourceJson } from "../../../lib/ts/src/instance";
 
 export { defaultConfigDir };
 
@@ -102,18 +103,20 @@ export function isManaged(m: ConfigModule): boolean {
   return !UNMANAGED_STATUSES.has(m.status.trim().toLowerCase());
 }
 
-// Resolve the git source JSON for a module via its `location` field — the
-// Released column in the three-way diff. Tries <location>/<module>.json then
-// <location>/<vmname>.json (matching inspect-vm.sh). Returns null when absent.
+// Resolve the git source JSON for an instance via its `location` field — the
+// Released column in the three-way diff. The source is the MODULE's JSON,
+// <location>/<module>.json with the module named by the directory (ADR-026
+// D6.3); the instance name is tried only as a fallback for a layout that does
+// not follow the convention. Never `vmname`: that is an instance name too.
+// Returns null when absent.
 export function resolveGitJson(
   configDir: string,
-  module: string,
-  vmname: string,
+  instance: string,
 ): Record<string, unknown> | null {
-  const cfg = readModuleJson(join(configDir, `${module}.json`));
+  const cfg = readModuleJson(join(configDir, `${instance}.json`));
   const location = cfg ? asString(cfg.location) : "";
   if (!location) return null;
-  for (const cand of [join(location, `${module}.json`), join(location, `${vmname}.json`)]) {
+  for (const cand of [moduleSourceJson(location), join(location, `${instance}.json`)]) {
     const g = readModuleJson(cand);
     if (g) return g;
   }

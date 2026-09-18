@@ -137,61 +137,7 @@ resolve_effective_module_name() {
 # rollback must put back. Taken before the first write, restored beside the VM
 # snapshot (and on its own for a module that has no VM).
 CONFIG_BACKUP=""
-# resolve_base_module_name <effective> — the base module behind a deployed
-# config name. The inverse of resolve_effective_module_name above.
-#
-# The DECLARED ENVIRONMENTS are what make this decidable: `podman-lab1` is
-# `podman` in `lab1` because `lab1` is an environment, while `vllm-amd` stays
-# whole because `amd` is not one. String surgery alone could not tell those
-# apart — module names contain hyphens too (vllm-amd, euro-office, unifi-os).
-# Longest match wins, so an estate declaring both `lab` and `lab1` resolves
-# `podman-lab1` to `podman`, never to `podman-lab`.
-resolve_base_module_name() {
-    local eff="$1" env best="" f
-    local env_dir="${CONFIG_DIR}/environments"
-    if [[ -d "${env_dir}" ]]; then
-        for f in "${env_dir}"/*.json; do
-            [[ -f "${f}" ]] || continue
-            env="$(basename "${f}" .json)"
-            [[ -n "${env}" && "${eff}" == *"-${env}" ]] || continue
-            (( ${#env} > ${#best} )) && best="${env}"
-        done
-    fi
-    [[ -n "${best}" ]] && printf '%s' "${eff%-${best}}" || printf '%s' "${eff}"
-}
 
-# resolve_module_source_dir <module> — the module's source directory, or rc 1.
-#
-# TWO paths, because a module is located in more than one way (#460): the
-# `.location` the installer recorded, and the module catalogs of the registered
-# repositories. `get_module_dir` knows only the first and returns 1 when the
-# field is empty — which used to mean the 3-way merge was skipped and the update
-# reported success anyway, so a config written before `.location` existed
-# silently never adopted ANY release change (#659). The config file's own name
-# identifies the module perfectly well; the catalog can find it from that.
-resolve_module_source_dir() {
-    local module="$1" dir="" rc=0
-    dir="$(get_module_dir "${module}" 2>/dev/null)" || rc=$?
-    if (( rc == 0 )) && [[ -n "${dir}" && -d "${dir}" ]]; then
-        printf '%s' "${dir}"
-        return 0
-    fi
-    local resolver="${TAPPAAS_RESOLVE_MODULE_BIN:-/home/tappaas/bin/resolve-module.sh}"
-    [[ -x "${resolver}" ]] || return 1
-    # The deployed name first, then the base module behind it: the catalog is
-    # keyed by the module's own name, so an install in a non-default environment
-    # (`podman-lab1`) is only ever found under `podman`.
-    local candidate
-    for candidate in "${module}" "$(resolve_base_module_name "${module}")"; do
-        [[ -n "${candidate}" ]] || continue
-        dir="$("${resolver}" "${candidate}" --field dir 2>/dev/null || true)"
-        if [[ -n "${dir}" && -d "${dir}" ]]; then
-            printf '%s' "${dir}"
-            return 0
-        fi
-    done
-    return 1
-}
 
 backup_module_config() {
     local module="$1"
@@ -552,7 +498,7 @@ main() {
     # with the release, so reporting success for it tells the operator a change
     # landed when it did not — and the next one will be just as invisible.
     local module_dir_pre
-    if ! module_dir_pre="$(resolve_module_source_dir "${module}")"; then
+    if ! module_dir_pre="$(module_source_dir "${module}")"; then
         error "Cannot locate the source of '${module}': its config records no ${BL}.location${CL} and no registered repository's catalog lists it."
         error "  Step 0 (the 3-way merge) cannot run, so this update would not bring release changes into the deployed config."
         error "  Refusing to report success for an update that reconciles nothing."

@@ -92,10 +92,11 @@ export const HELP: HelpSpec = {
       options: [["--allow-fork", "Permit forked/non-canonical module sources (relax tier/source lint)."]],
     },
     {
-      usage: "add <module> [--environment ENV] [--allow-fork] [--reinstall] [--<field> <value>]...",
+      usage: "add <module> [--environment ENV] [--instance NAME] [--allow-fork] [--reinstall] [--<field> <value>]...",
       name: "add",
       options: [
         ["--environment ENV", "Target environment to install into (default: foundation→mgmt, else the org env)."],
+        ["--instance NAME", "Name the instance: config/NAME.json instead of the default <module>[-<environment>] — e.g. tappaas2 for one of several nodes (ADR-026 D6.4)."],
         ["--allow-fork", "Permit forked/non-canonical module sources."],
         ["--reinstall", "Delete the existing deployment first, then install fresh — the only way to replace a deployed config (#301, #453)."],
         ["--<field> <value>", "Override any config field, passed through to install-module.sh, which checks the name against module-fields.json."],

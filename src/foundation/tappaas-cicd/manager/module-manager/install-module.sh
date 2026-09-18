@@ -15,6 +15,8 @@
 #
 # Options:
 #   --variant <name>   Install a variant of the module (see copy-update-json.sh)
+#   --instance <name>  Name the instance: config/<name>.json instead of the default
+#                      <module>[-<environment>].json (ADR-026 D6.4)
 #                      (there is no --force: an already-deployed module is
 #                      updated with `module-manager module update`, or replaced
 #                      with --reinstall — ADR-020 v0.10 D5, #453)
@@ -288,6 +290,7 @@ main() {
     local environment=""
     local environment_explicit=false
     local env_user_specified=false   # user named an env via --environment or --variant
+    local instance=""                # ADR-026 D6.4: an explicit instance name
     local allow_fork=false
     local -a passthru=()
     shift  # drop the module name; re-added below
@@ -305,6 +308,13 @@ main() {
                 ;;
             --allow-fork)
                 allow_fork=true
+                ;;
+            --instance)
+                instance="${2:-}"
+                [[ -n "${instance}" ]] || die "--instance requires a name"
+                instance_name_ok "${instance}" \
+                    || die "--instance '${instance}': not a usable instance name (a DNS label — lowercase letters, digits, hyphens — and not a name config/ already uses)"
+                if [[ $# -ge 2 ]]; then shift; fi
                 ;;
             --environment)
                 environment="${2:-}"
@@ -444,6 +454,13 @@ main() {
         effective_module="${module}-${environment}"
         computed_vmname="${module}-${environment}"
     fi
+    # ADR-026 D6.4: an explicit instance name replaces the default. The config is
+    # config/<instance>.json; a VM is named after its instance, as a machine is
+    # named for itself (ADR-022f D2). The module stays identified by .location.
+    if [[ -n "${instance}" ]]; then
+        effective_module="${instance}"
+        computed_vmname="${instance}"
+    fi
     info "  effective module name = ${BL}${effective_module}${CL}; vmname = ${BL}${computed_vmname}${CL}"
 
     # ── Step 1: Check module not already installed ───────────────────
@@ -486,11 +503,20 @@ main() {
     # from the legacy --variant path). When no environment is selected we keep
     # the plain legacy behaviour (back-compat).
     local -a cuj_args=("${module}")
+    if [[ -n "${instance}" ]]; then
+        cuj_args+=("--instance" "${instance}")
+        # A module that deploys a guest gets the instance as its vmname, unless
+        # the operator named one; a machine or an application has no vmname.
+        if [[ " ${passthru[*]-} " != *" --vmname "* ]] && jq -e 'has("vmname")' "./${module}.json" >/dev/null 2>&1; then
+            cuj_args+=("--vmname" "${computed_vmname}")
+        fi
+    fi
     if [[ -n "${environment}" ]]; then
         cuj_args+=("--environment" "${environment}")
         [[ -n "${default_env}" ]] && cuj_args+=("--default-environment" "${default_env}")
-        # Computed vmname only when the operator did not pass an explicit one.
-        if [[ " ${passthru[*]-} " != *" --vmname "* ]]; then
+        # Computed vmname only when the operator did not pass an explicit one,
+        # and --instance has not already set it above.
+        if [[ " ${passthru[*]-} ${cuj_args[*]} " != *" --vmname "* ]]; then
             cuj_args+=("--vmname" "${computed_vmname}")
         fi
     fi
