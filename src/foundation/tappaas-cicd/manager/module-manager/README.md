@@ -17,7 +17,7 @@ drives the Proxmox cluster (over SSH) to provision and maintain the module's VM.
   the authoritative marker `list`/`show` use to tell a deployed module apart
   from the co-located state files (`zones.json`, `site.json`, …). Configs from
   before the tag fall back to a heuristic (any of `dependsOn`/`provides`/
-  `location`); provider-only modules (e.g. `templates`, no vmid/vmname) are kept.
+  `moduleSource`, or `location` before migration 0006); provider-only modules (e.g. `templates`, no vmid/vmname) are kept.
 
 ## Standardized verbs (ADR-007) — `module-manager`
 
@@ -216,7 +216,7 @@ install-module.sh <module-name> [--environment <name>] [--instance <name>]
 - `--instance <name>` — name the **instance** (ADR-026 D6.4): the config is
   `config/<name>.json` instead of the default `<module>[-<env>].json`, and a VM, if
   the module deploys one, is named after it. The module stays identified by the
-  config's `.location`, so tools ask *which module* with `module_of`, never by
+  config's `.moduleSource`, so tools ask *which module* with `module_of`, never by
   parsing the name — three cluster nodes are three instances of one module. The
   name must be a DNS label and not one `config/` already uses (`site`, `zones`,
   peer configs…).

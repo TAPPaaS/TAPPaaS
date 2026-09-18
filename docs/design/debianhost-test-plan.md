@@ -37,7 +37,7 @@ Primary audience: whoever builds and verifies ADR-026 D3 (`debianhost`) and D8 (
 Expected afterwards:
 
 - `config/dh-test1.json`, named after the machine's hostname (ADR-026 D8.1 step 4);
-- `.location` → the `debianhost` module, so `module_of dh-test1` = `debianhost` (D6.3);
+- `.moduleSource` → the `debianhost` module, so `module_of dh-test1` = `debianhost` (D6.3);
 - `kind: machine`, `os: debian` (ADR-022f D7 as built: the family is derived), `zone0: mgmt`
   (from the address), `management: managed`, and **no** `vmname`;
 - `debianhost`'s `install.sh` ran and verified;

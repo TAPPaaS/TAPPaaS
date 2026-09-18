@@ -24,6 +24,7 @@ import {
   parseServiceFieldManifest,
 } from "../../../lib/ts/src/service-fields";
 import { ServiceFs, parseDependency } from "./services";
+import { moduleSourceOf } from "../../../lib/ts/src/instance";
 import { MODULE_STATUS_VALUES, ModuleConfig, ValidateFinding, ValidateReport } from "./types";
 
 export const VALID_TIERS = ["foundation", "app"] as const;
@@ -118,10 +119,10 @@ export function validateModule(
 
 // A module's source REF, derived rather than stored.
 //
-// `.location` is set automatically by copy-update-json.sh and records WHERE the
+// `.moduleSource` is set automatically by copy-update-json.sh and records WHERE the
 // module directory is — an absolute path, never which ref it came from. A ref
 // exists one level up, on site.json `.repositories[].branch`, so it is
-// derivable exactly while `.location` resolves inside a declared repository,
+// derivable exactly while `.moduleSource` resolves inside a declared repository,
 // and unknowable when it does not.
 //
 // That distinction is invisible in a single-environment estate: one repository,
@@ -134,7 +135,7 @@ export function validateModule(
 // "deliberately app" and "never considered" (#561).
 //
 // Severity follows validate-module-tier-source.sh's rule — "can the tool
-// proceed correctly?". It can: the module resolves through `.location` and
+// proceed correctly?". It can: the module resolves through `.moduleSource` and
 // works. So this is a WARNING, and the error level stays reserved for a
 // location that resolves to nothing at all.
 export function validateSourceLocation(
@@ -143,8 +144,8 @@ export function validateSourceLocation(
   out: ValidateFinding[],
 ): void {
   const raw = m.raw as Record<string, unknown> | undefined;
-  const loc = typeof raw?.location === "string" ? raw.location : "";
-  // No .location at all: the module resolved through a repository catalog, and
+  const loc = moduleSourceOf(raw);
+  // No .moduleSource at all: the module resolved through a repository catalog, and
   // the catalog entry's repository supplies the ref. Not a finding.
   if (!loc) return;
 
@@ -271,7 +272,7 @@ export function validateDependsOn(
       out.push({
         module: m.name,
         severity: "error",
-        message: `dependsOn '${dep}' names provider '${providerModule}', which is not deployed (or its config has no .location) — this dependency is never applied`,
+        message: `dependsOn '${dep}' names provider '${providerModule}', which is not deployed (or its config has no .moduleSource) — this dependency is never applied`,
       });
       continue;
     }

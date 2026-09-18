@@ -5,6 +5,6 @@
   "source": "official",
   "zone0": "acme",
   "environment": "acme",
-  "location": "/nonexistent/src/apps/policyonly",
+  "moduleSource": "/nonexistent/src/apps/policyonly",
   "dependsOn": ["network:rules", "network:nat"]
 }

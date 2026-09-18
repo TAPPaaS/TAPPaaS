@@ -16,12 +16,13 @@ import { defaultConfigDir, moduleVmid } from "./config";
 import { readJsonObject } from "../../../lib/ts/src/config-io";
 import { stream } from "../../../lib/ts/src/exec";
 import { Client } from "./types";
+import { moduleSourceOf } from "../../../lib/ts/src/instance";
 
 // Foundation restore script (the tested VM-restore logic this verb drives).
 //
 // Resolution order, most authoritative first:
 //   1. $RESTORE_SH                     — explicit override (tests, relocation)
-//   2. config/backup.json .location    — where the module actually is. This is
+//   2. config/backup.json .moduleSource — where the module actually is. This is
 //      the module's own record of its source directory, written at install, and
 //      it is the only answer that survives being run from anywhere.
 //   3. a repo-relative walk             — for running out of a checkout
@@ -36,7 +37,7 @@ function restoreScriptPath(configDir?: string): string {
   if (process.env.RESTORE_SH) return process.env.RESTORE_SH;
 
   const dir = configDir ?? defaultConfigDir();
-  const location = asString(readJsonObject(join(dir, "backup.json"))?.location);
+  const location = moduleSourceOf(readJsonObject(join(dir, "backup.json")));
   if (location) {
     // scripts/ since the helper-script move; the flat path is the pre-move
     // layout, kept so an older deployed config still resolves.
@@ -53,12 +54,8 @@ function restoreScriptPath(configDir?: string): string {
   return "/home/tappaas/TAPPaaS/src/foundation/backup/scripts/restore.sh";
 }
 
-function asString(v: unknown): string | null {
-  return typeof v === "string" && v !== "" ? v : null;
-}
-
 /**
- * The backup module's own directory, from its deployed config's `.location`.
+ * The backup module's own directory, from its deployed config's `.moduleSource`.
  * Peer onboarding scripts live under `<moduleDir>/scripts/<kind>/`, so this is
  * the same lookup restoreScriptPath does — one place that knows where the
  * module is, rather than each caller walking up from __dirname and getting it
@@ -66,7 +63,7 @@ function asString(v: unknown): string | null {
  */
 export function moduleScriptDir(configDir?: string): string {
   const dir = configDir ?? defaultConfigDir();
-  const location = asString(readJsonObject(join(dir, "backup.json"))?.location);
+  const location = moduleSourceOf(readJsonObject(join(dir, "backup.json")));
   if (location) return location;
   return "/home/tappaas/TAPPaaS/src/foundation/backup";
 }
@@ -129,7 +126,7 @@ export function restoreRun(deps: RestoreDeps, module: string, opts: string[]): n
     // would have done and exits 0 reads as success to anyone (and any script)
     // that checks the exit code.
     console.error(`Cannot restore: ${script} not found. Set RESTORE_SH, or check`);
-    console.error(`config/backup.json .location points at the backup module.`);
+    console.error(`config/backup.json .moduleSource points at the backup module.`);
     return 1;
   }
   return spawnInherit(script, ["--vmid", vmid, ...opts]);
@@ -140,7 +137,7 @@ export function restoreListAll(configDir?: string): number {
   const script = restoreScriptPath(configDir);
   if (!existsSync(script)) {
     console.error(`Cannot list backups: ${script} not found. Set RESTORE_SH, or check`);
-    console.error(`config/backup.json .location points at the backup module.`);
+    console.error(`config/backup.json .moduleSource points at the backup module.`);
     return 1;
   }
   return spawnInherit(script, ["--list-all"]);

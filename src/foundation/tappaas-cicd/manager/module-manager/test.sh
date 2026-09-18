@@ -519,7 +519,7 @@ got="$("$RM" curmod --config-dir "${RW}/cfg" --field tier 2>/dev/null || true)"
     || bad "resolve-module: catalog tier fallback broken (got: '${got}')"
 
 # ---------------------------------------------------------------------------
-# get_module_dir exit codes (#460): 0 found, 1 no .location recorded,
+# get_module_dir exit codes (#460): 0 found, 1 no .moduleSource recorded,
 # 2 recorded but the directory is gone. 0/1 keep their historical meaning.
 # ---------------------------------------------------------------------------
 echo ""
@@ -533,7 +533,9 @@ GMD="${WORK}/gmd.sh"
 } > "$GMD"
 
 GW="${WORK}/gmd"; mkdir -p "${GW}/real"
-echo "{\"location\":\"${GW}/real\"}" > "${GW}/good.json"
+echo "{\"moduleSource\":\"${GW}/real\"}" > "${GW}/good.json"
+echo "{\"location\":\"${GW}/real\"}" > "${GW}/legacy.json"
+echo "{\"moduleSource\":\"${GW}/real\",\"location\":\"/old/elsewhere\"}" > "${GW}/both.json"
 echo '{"location":"/definitely/not/here"}'  > "${GW}/gone.json"
 echo '{"kind":"module"}'                     > "${GW}/noloc.json"
 
@@ -542,9 +544,19 @@ got="$(bash "$GMD" "$GW" good 2>/dev/null)"
     && ok "get_module_dir: existing directory → rc 0" \
     || bad "get_module_dir: expected rc 0, got '${got}'"
 
+got="$(bash "$GMD" "$GW" legacy 2>/dev/null)"
+[[ "$got" == "rc=0 out=${GW}/real" ]] \
+    && ok "get_module_dir: a legacy .location (before migration 0006) is still read" \
+    || bad "get_module_dir: legacy .location not read, got '${got}'"
+
+got="$(bash "$GMD" "$GW" both 2>/dev/null)"
+[[ "$got" == "rc=0 out=${GW}/real" ]] \
+    && ok "get_module_dir: .moduleSource wins over a stale .location" \
+    || bad "get_module_dir: expected .moduleSource to win, got '${got}'"
+
 got="$(bash "$GMD" "$GW" noloc 2>/dev/null)"
 [[ "$got" == "rc=1 out=" ]] \
-    && ok "get_module_dir: no .location recorded → rc 1 (unchanged)" \
+    && ok "get_module_dir: no .moduleSource recorded → rc 1 (unchanged)" \
     || bad "get_module_dir: expected rc 1, got '${got}'"
 
 got="$(bash "$GMD" "$GW" missing 2>/dev/null)"

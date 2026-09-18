@@ -5,7 +5,7 @@
   "zone0": "mgmt",
   "tier": "foundation",
   "source": "community",
-  "location": "/home/tappaas/TAPPaaS/src/apps/badfork",
+  "moduleSource": "/home/tappaas/TAPPaaS/src/apps/badfork",
   "dependsOn": ["cluster:vm"],
   "provides": []
 }

@@ -6,7 +6,7 @@
   "tier": "foundation",
   "source": "official",
   "status": "Development",
-  "location": "/home/tappaas/TAPPaaS/src/foundation/identity",
+  "moduleSource": "/home/tappaas/TAPPaaS/src/foundation/identity",
   "dependsOn": ["cluster:vm"],
   "provides": ["identity"]
 }

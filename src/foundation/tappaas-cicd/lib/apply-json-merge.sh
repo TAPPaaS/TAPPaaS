@@ -70,7 +70,7 @@ if [[ -z "${_MERGE_CONFIG_DIR:-}" ]]; then
     # Header fields never merged — always preserve the installed value.
     # Note: vmname/vmid/etc are NOT in this list — operator changes there ARE
     # meaningful and follow the standard pin-vs-adopt rule.
-    readonly _MERGE_AUTO_FIELDS='["location","installTime","updateTime","releaseDate","variant","environment"]'
+    readonly _MERGE_AUTO_FIELDS='["moduleSource","location","installTime","updateTime","releaseDate","variant","environment"]'
 fi
 
 # Load common log functions if not already provided.
@@ -397,7 +397,7 @@ _merge_cli() {
 Usage: ${SCRIPT_NAME} <effective-module>
 
 Run a 3-way merge for the named installed module. Resolves the module's source
-directory via its .location field, then reconciles against the new release.
+directory via its .moduleSource field, then reconciles against the new release.
 
 The merge:
   - adopts release changes for fields the operator hasn't touched,
@@ -429,9 +429,9 @@ EOF
         return 1
     fi
 
-    # Resolve module_dir from the installed .location field.
+    # Resolve module_dir from the installed .moduleSource field (.location before 0006).
     local module_dir
-    module_dir="$(jq -r '.location // ""' "${current}")"
+    module_dir="$(jq -r '.moduleSource // .location // ""' "${current}")"
     if [[ -z "${module_dir}" || ! -d "${module_dir}" ]]; then
         # Fall back to get_module_dir if common-install-routines is sourced.
         if declare -F get_module_dir >/dev/null 2>&1; then
@@ -439,7 +439,7 @@ EOF
         fi
     fi
     if [[ -z "${module_dir}" || ! -d "${module_dir}" ]]; then
-        error "Cannot resolve module directory for '${eff}' (no .location field)"
+        error "Cannot resolve module directory for '${eff}' (no .moduleSource field)"
         return 1
     fi
 

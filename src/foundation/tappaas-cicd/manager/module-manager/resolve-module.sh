@@ -15,8 +15,8 @@
 #
 # NOTE: the catalog is only ONE of the ways a module is located (#460).
 # install-module.sh takes the current directory first and records it as
-# .location in the deployed config, so a module installed from an unregistered
-# path resolves through .location alone and is legitimately absent here.
+# .moduleSource in the deployed config, so a module installed from an unregistered
+# path resolves through .moduleSource alone and is legitimately absent here.
 # `module-manager list --resolution` reports which path each module uses.
 #
 # Usage:
@@ -69,7 +69,7 @@ SITE="${CONFIG_DIR%/}/site.json"
 [[ -f "$SITE" ]] || { echo "resolve-module.sh: site.json not found: ${SITE}" >&2; exit 1; }
 
 # --field tier: the module's OWN deployed config is authoritative and is the
-# only source that works for a module resolved via .location rather than a
+# only source that works for a module resolved via .moduleSource rather than a
 # catalog (#460). install-module.sh already reads tier from the authored JSON
 # this way; catalog lookup below stays as the fallback.
 #

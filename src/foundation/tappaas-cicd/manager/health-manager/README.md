@@ -53,7 +53,7 @@ drift view.
 ### `show vm <name>` — three-way diff for one module (moved; now `module-manager reconcile <m>`)
 
 Prints a 3-column table for a module's VM: **Released** (the git source JSON via
-the module's `location`), **Desired** (`config/<module>.json`), and **Actual**
+the module's `moduleSource`), **Desired** (`config/<module>.json`), and **Actual**
 (the running VM, via Proxmox). Yellow = config-vs-git drift; red = actual-vs-config
 drift. This pass covers the scalar fields (identity, cores, memory, disk,
 storage, BIOS, CPU type, tags). NIC drift rows are a deferred follow-up (below).

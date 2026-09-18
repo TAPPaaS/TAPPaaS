@@ -84,7 +84,7 @@ while read -r dep; do
     provider_module="$(resolve_provider_module "${provider}" "${MODULE_ENVIRONMENT}")"
     PROVIDER_JSON="${CONFIG_DIR}/${provider_module}.json"
     [[ -f "$PROVIDER_JSON" ]] || continue
-    location=$(jq -r '.location // empty' "$PROVIDER_JSON")
+    location=$(jq -r '.moduleSource // .location // empty' "$PROVIDER_JSON")
     [[ -n "$location" ]] || continue
     if [[ -f "${location}/services/${service}/pinhole.json" ]]; then
         HAS_AUTO_PINHOLE=1

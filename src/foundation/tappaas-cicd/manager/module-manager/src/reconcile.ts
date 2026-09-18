@@ -208,7 +208,7 @@ function doReconcile(moduleArg: string, opts: ReconcileOptions): void {
   // the TS port dropped that, which is why templates:nixos could not find the
   // module's .nix unless reconcile happened to be invoked from the module's own
   // directory. The underlying resolver is fixed too (update-os.sh
-  // resolve_nixos_config now searches .location), but a converge must not depend
+  // resolve_nixos_config now searches .moduleSource), but a converge must not depend
   // on the caller's cwd in the first place.
   const moduleDirResult = getModuleDirResult(configDir, module);
   const moduleDir = moduleDirResult.kind === "found" ? moduleDirResult.dir : null;
@@ -349,7 +349,7 @@ function doReconcile(moduleArg: string, opts: ReconcileOptions): void {
     // fixable report and a shrug.
     warn(`Module directory recorded but missing: ${moduleDirResult.dir} — skipping in-VM re-apply`);
   } else {
-    warn("Cannot find module directory (no .location in config) — skipping in-VM re-apply");
+    warn("Cannot find module directory (no .moduleSource in config) — skipping in-VM re-apply");
   }
 
   // ── Step 4: Verify the planes that were re-applied (#583) ─────────

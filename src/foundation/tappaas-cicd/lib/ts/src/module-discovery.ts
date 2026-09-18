@@ -59,7 +59,8 @@ export function isModuleConfig(raw: Record<string, unknown>): boolean {
     Array.isArray(raw.dependsOn) ||
     Array.isArray(raw.integratesWith) ||
     Array.isArray(raw.provides) ||
-    typeof raw.location === "string"
+    typeof raw.moduleSource === "string" ||
+    typeof raw.location === "string" // its name before #609 (migration 0006)
   );
 }
 

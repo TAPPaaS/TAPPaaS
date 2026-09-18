@@ -60,7 +60,7 @@ export interface ServiceCheck {
 export interface ServiceFs {
   // Resolve a dependsOn provider name to its deployed module name + source dir
   // (the same resolution reconcile.ts does: environment-aware provider, then
-  // .location from the deployed config). dir === null = provider not locatable.
+  // .moduleSource from the deployed config). dir === null = provider not locatable.
   providerDir(provider: string, environment: string): { module: string; dir: string | null };
   exists(path: string): boolean;
   // Read a file, or null when it is absent/unreadable. Added for the ADR-020

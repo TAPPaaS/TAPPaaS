@@ -58,7 +58,7 @@ for f in ${files[@]+"${files[@]}"}; do
     case "$(jq -r '.kind // empty | tostring' "${f}")" in
         module)
             if jq -e '(.dependsOn | type) == "array" or (.integratesWith | type) == "array"
-                      or (.provides | type) == "array" or (.location | type) == "string"' "${f}" >/dev/null; then
+                      or (.provides | type) == "array" or (.location | type) == "string" or (.moduleSource | type) == "string"' "${f}" >/dev/null; then
                 drop+=("${f}")
             else
                 kept+=("${f}")

@@ -275,7 +275,9 @@ for _mcl in /home/tappaas/bin/module-catalog-lib.sh \
 done
 unset _mcl
 
-# Get the module directory from the .location field in its deployed config JSON.
+# Get the module directory from the .moduleSource field in its deployed config JSON
+# (#609: was .location, which is still read for a config migration 0006 has not
+# reached yet).
 # Arguments: <module-name>
 # Outputs the absolute directory path on success.
 #
@@ -284,8 +286,8 @@ unset _mcl
 # gone". 0 and 1 keep their historical meaning, so every existing
 # `if ! dir=$(get_module_dir "$m")` behaves exactly as before:
 #   0  found; directory path on stdout
-#   1  not resolvable: no deployed config, or no .location recorded
-#   2  .location IS recorded but that directory does not exist; the recorded
+#   1  not resolvable: no deployed config, or no .moduleSource recorded
+#   2  .moduleSource IS recorded but that directory does not exist; the recorded
 #      path is still echoed so the caller can name it in the error
 get_module_dir() {
     local module="$1"
@@ -296,7 +298,7 @@ get_module_dir() {
     fi
 
     local location
-    location=$(jq -r '.location // empty' "${module_json}" 2>/dev/null)
+    location=$(jq -r '.moduleSource // .location // empty' "${module_json}" 2>/dev/null)
 
     if [[ -z "${location}" ]]; then
         return 1
@@ -319,8 +321,8 @@ get_module_dir() {
 # ── Instance vs module (ADR-026 D6) ─────────────────────────────────
 #
 # config/<instance>.json names an INSTANCE. The module it is an instance of is
-# named by its source directory — `.location`, or, for a config written before
-# .location existed, the catalogue — and the module's name is that directory's
+# named by its source directory — `.moduleSource`, or, for a config written before
+# it existed, the catalogue — and the module's name is that directory's
 # basename. Code that means "which module is this" asks module_of; it never
 # parses the instance name, and never reads `vmname` (an instance name too).
 # The instance name EQUALS the module name only by default (D6.4): three
@@ -330,7 +332,7 @@ get_module_dir() {
 # name: strip a declared environment suffix. It is right only while the name is
 # the D6.4 default, <module> or <module>-<environment>; an instance named
 # anything else (tappaas2) defeats it. So it is used for one thing only — the
-# catalogue's key for a config that has no .location (module_source_dir).
+# catalogue's key for a config that has no .moduleSource (module_source_dir).
 #
 # The DECLARED ENVIRONMENTS are what make this decidable: `podman-lab1` is
 # `podman` in `lab1` because `lab1` is an environment, while `vllm-amd` stays
@@ -356,11 +358,11 @@ module_name_guess() {
 # instance belongs to, or rc 1.
 #
 # TWO paths, because a module is located in more than one way (#460): the
-# `.location` the installer recorded, and the module catalogs of the registered
+# `.moduleSource` the installer recorded, and the module catalogs of the registered
 # repositories. `get_module_dir` knows only the first and returns 1 when the
 # field is empty — which used to mean the 3-way merge was skipped and the update
-# reported success anyway, so a config written before `.location` existed
-# silently never adopted ANY release change (#659). With no .location, the
+# reported success anyway, so a config written before `.moduleSource` existed
+# silently never adopted ANY release change (#659). With no .moduleSource, the
 # instance name is the only clue left — the module name by default (D6.4) — so
 # the catalogue is asked for it, then for its guessed base.
 module_source_dir() {
@@ -420,7 +422,7 @@ instance_name_ok() {
 # (#565): a file committed 100755 is executable; 100644 is a sourced library
 # that must NOT be widened — widening it shows as spurious `git` mode drift on
 # the control-plane checkout. Falls back to shebang-presence when the file is
-# not under git (a module installed from a non-repo .location).
+# not under git (a module installed from a non-repo .moduleSource).
 tappaas_should_be_executable() {
     local file="$1" mode
     # -C the file's dir + match its BASENAME, so both absolute and relative
@@ -741,7 +743,7 @@ check_service_available() {
     # Check the provider has the service directory and scripts
     local provider_dir
     if ! provider_dir=$(get_module_dir "${provider_module}"); then
-        error "Dependency '${dep}': cannot find location for '${provider_module}' (missing .location in config)"
+        error "Dependency '${dep}': cannot find location for '${provider_module}' (missing .moduleSource in config)"
         return 1
     fi
 

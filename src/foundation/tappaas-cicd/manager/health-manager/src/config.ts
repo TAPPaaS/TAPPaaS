@@ -12,7 +12,7 @@ import { existsSync, readFileSync, readdirSync } from "fs";
 import { join } from "path";
 import { defaultConfigDir } from "../../../lib/ts/src/config-io";
 import { ConfigModule } from "./types";
-import { moduleSourceJson } from "../../../lib/ts/src/instance";
+import { moduleSourceJson, moduleSourceOf } from "../../../lib/ts/src/instance";
 
 export { defaultConfigDir };
 
@@ -114,7 +114,7 @@ export function resolveGitJson(
   instance: string,
 ): Record<string, unknown> | null {
   const cfg = readModuleJson(join(configDir, `${instance}.json`));
-  const location = cfg ? asString(cfg.location) : "";
+  const location = moduleSourceOf(cfg);
   if (!location) return null;
   for (const cand of [moduleSourceJson(location), join(location, `${instance}.json`)]) {
     const g = readModuleJson(cand);

@@ -4,7 +4,7 @@ Primary audience: module developers.
 
 ## One module, many instances (ADR-026 D6)
 
-Every machine is an instance of this one module: `config/<hostname>.json`, with `.location`
+Every machine is an instance of this one module: `config/<hostname>.json`, with `.moduleSource`
 pointing here, so `module_of <instance>` answers `debianhost` whatever the machine is called.
 Nothing parses the instance name. The machine is reached by its **`address`** field — never by a
 name derived from the instance, and never through Proxmox: every script talks to the machine

@@ -42,7 +42,7 @@ converge applies it live*. `converge.ts` already calls this situation
 | `provides` | manual | none | — | Authored in source module file. What other modules may declare a dependency on. Removing an entry breaks every consumer's resolution. |
 | `config` | in-place | none | — | Authored in source module file. Pattern-A nesting (#161). Normalized to the flat form at deploy and at validation, so it is an authoring convenience, not a distinct state. |
 | `environment` | immutable | none | — | Authored in tooling — `copy-update-json.sh --environment`. How `update-module.sh` and `delete-module.sh` resolve the source module file. A wrong value points the lifecycle at the wrong module. |
-| `location` | immutable | none | — | Authored in tooling — `copy-update-json.sh`. Absolute path to the module directory. `update-module.sh` finds `install.sh`, `update.sh` and the service scripts through it. |
+| `moduleSource` | immutable | none | — | Authored in tooling — `copy-update-json.sh`. Absolute path to the module directory (named `location` before #609; migration 0006 renames it). `update-module.sh` finds `install.sh`, `update.sh` and the service scripts through it. |
 | `kind` | immutable | none | — | Authored in tooling — `install-module.sh`. Stamped `module` so `module-manager list/show` can tell a deployed module from other objects in `config/`. |
 | `installTime` | immutable | none | — | Authored in tooling — `copy-update-json.sh`. Reporting only. |
 | `updateTime` | immutable | none | — | Authored in tooling — `update-module.sh`. Reporting only. |
@@ -61,8 +61,8 @@ kind=widget  (config-only)
 [Info]   set kind=widget in /home/tappaas/config/web.json
 ```
 
-`variant`, `installTime`, `location` and `environment` behave the same way. There
-is no operation that *needs* to write them by hand, and clobbering `location` or
+`variant`, `installTime`, `moduleSource` and `environment` behave the same way. There
+is no operation that *needs* to write them by hand, and clobbering `moduleSource` or
 `environment` breaks the module's own lifecycle scripts.
 
 **`--set dependsOn=…` declares without wiring.** `install-service.sh` and

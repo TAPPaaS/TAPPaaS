@@ -280,7 +280,7 @@ resolve_nixos_config() {
     [[ -f "${cfg}" ]] || return 1
 
     local location source_vmname candidate
-    location=$(jq -r '.location // empty' "${cfg}" 2>/dev/null)
+    location=$(jq -r '.moduleSource // .location // empty' "${cfg}" 2>/dev/null)
     if [[ -n "${location}" ]]; then
         source_vmname="$(basename "${location}")"
         # Location dir first (#495), then nix_dir (preserves the #440 behaviour
@@ -325,7 +325,7 @@ update_nixos() {
 
     local nix_config
     if ! nix_config=$(resolve_nixos_config "${vmname}" "."); then
-        die "NixOS configuration file not found for '${vmname}' (searched the module's .location directory, then ./${vmname}.nix, then the location-basename and -<environment> fallbacks)"
+        die "NixOS configuration file not found for '${vmname}' (searched the module's .moduleSource directory, then ./${vmname}.nix, then the location-basename and -<environment> fallbacks)"
     fi
     # Source module name (e.g. "hermes"), used below for the companion JSON
     # copied to the VM -- always the resolved .nix file's own basename, so it

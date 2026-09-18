@@ -2,8 +2,8 @@
 # test-instance-name.sh — an instance name is not a module name (ADR-026 D6.3/D6.4).
 #
 # The rule for what an instance may be called; `copy-update-json.sh --instance`
-# writing config/<instance>.json with .location on the module; module_of naming
-# the module from that .location; and the default (no --instance) unchanged.
+# writing config/<instance>.json with .moduleSource on the module; module_of naming
+# the module from that .moduleSource; and the default (no --instance) unchanged.
 # Uses THIS tree's lib and scripts, never /home/tappaas/bin.
 set -uo pipefail
 
@@ -49,10 +49,11 @@ ck "--instance: succeeds"                         0 "${rc}"
 ck "--instance: EFFECTIVE_MODULE is the instance" tappaas2 "${out}"
 [[ -f "${CFG}/tappaas2.json" ]] && ck "--instance: config/tappaas2.json written" ok ok || ck "--instance: config/tappaas2.json written" ok missing
 [[ ! -f "${CFG}/demo.json" ]] && ck "--instance: no config/demo.json beside it" ok ok || ck "--instance: no config/demo.json beside it" ok present
-ck "--instance: .location is the MODULE's directory" "${MOD}" "$(jq -r .location "${CFG}/tappaas2.json" 2>/dev/null)"
+ck "--instance: .moduleSource is the MODULE's directory" "${MOD}" "$(jq -r .moduleSource "${CFG}/tappaas2.json" 2>/dev/null)"
+ck "--instance: no legacy .location is written (#609)" false "$(jq 'has("location")' "${CFG}/tappaas2.json" 2>/dev/null)"
 ck "--instance: the module's fields came across"    0.1.0 "$(jq -r '[.. | objects | select(has("version")) | .version][0]' "${CFG}/tappaas2.json" 2>/dev/null)"
 
-# module_of names the module from .location, not from the instance name
+# module_of names the module from .moduleSource, not from the instance name
 mo="$(CONFIG_DIR="${CFG}" TAPPAAS_RESOLVE_MODULE_BIN=/nonexistent bash -c '. "$1" >/dev/null 2>&1; module_of "$2"' _ "${LIB}" tappaas2)"
 ck "module_of tappaas2 → demo"                    demo "${mo}"
 

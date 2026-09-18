@@ -74,10 +74,16 @@
       "apply": "none",
       "changeNote": "Written by copy-update-json.sh --environment (ADR-007 P5). `module-manager module modify` and `module-manager module delete` resolve the SOURCE module file through it, so a wrong value points the lifecycle at the wrong module."
     },
+    "moduleSource": {
+      "class": "immutable",
+      "apply": "none",
+      "changeNote": "Written by copy-update-json.sh (was `location`, #609). get_module_dir() reads it as the SOLE source of the module directory and returns success for any path that exists — so a wrong value does not fail loudly, it silently runs the lifecycle against the wrong directory."
+    },
     "location": {
       "class": "immutable",
       "apply": "none",
-      "changeNote": "Written by copy-update-json.sh. get_module_dir() reads it as the SOLE source of the module directory and returns success for any path that exists — so a wrong value does not fail loudly, it silently runs the lifecycle against the wrong directory."
+      "deprecated": true,
+      "changeNote": "Written by copy-update-json.sh — the pre-#609 name of moduleSource, read until migration 0006 has run. get_module_dir() reads it as the SOLE source of the module directory and returns success for any path that exists — so a wrong value does not fail loudly, it silently runs the lifecycle against the wrong directory."
     },
     "kind": {
       "class": "immutable",

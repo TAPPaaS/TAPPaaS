@@ -1,7 +1,7 @@
 {
   "description": "The TAPPaaS NixOS VM Template",
   "version": "1.2",
-  "location": "/home/tappaas/TAPPaaS/src/foundation/templates",
+  "moduleSource": "/home/tappaas/TAPPaaS/src/foundation/templates",
   "vmname": "tappaas-nixos",
   "vmid": 8080,
   "vmtag": "TAPPaaS,Foundation",

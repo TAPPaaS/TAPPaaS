@@ -159,7 +159,7 @@ Pattern-A-aware `jq_module_write`). `module list`/`show` select on
 the co-located state files (`zones.json`, `site.json`, `module-fields.json`,
 `switch-configuration-*`, `cert-refids.json`). For configs not yet re-installed
 (pre-tag) a **heuristic** fallback applies: any of `dependsOn`/`integratesWith`/
-`provides`/`location` present. The heuristic intentionally does **not** require `vmname`, so
+`provides`/`moduleSource` present (or `location`, its name before #609). The heuristic intentionally does **not** require `vmname`, so
 provider-only modules (e.g. `templates`: `provides:["nixos","debian"]`, no
 vmid/vmname) are still enumerated (shown without vmid/node, not filtered out).
 

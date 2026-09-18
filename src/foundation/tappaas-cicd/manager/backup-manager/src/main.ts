@@ -561,7 +561,7 @@ function cmdPeerAdd(opts: Opts): number {
   const script = peerScript(dir, k, "onboard");
   if (!existsSync(script)) {
     warn(`config written, but ${script} was not found — the peer is NOT onboarded.`);
-    warn(`Check config/backup.json .location points at the backup module.`);
+    warn(`Check config/backup.json .moduleSource points at the backup module.`);
     return 1;
   }
   info(`Onboarding — you will be prompted for the credential (it is never stored in the config).`);

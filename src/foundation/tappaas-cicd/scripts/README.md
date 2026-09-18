@@ -105,7 +105,7 @@ copy-update-json.sh openwebui --variant dev --zone0 srv-dev --vmid 315
 
 **What it does:**
 1. Copies `./<module>.json` from current directory to `/home/tappaas/config/` (or `<module>-<variant>.json` in variant mode)
-2. Automatically sets the `location` field to the module directory
+2. Automatically sets the `moduleSource` field to the module directory (and drops a legacy `location`)
 3. Validates field names against `module-fields.json` schema
 4. In variant mode, applies automatic field derivation (see below)
 5. Applies `--<field> <value>` modifications to the copied JSON
@@ -190,7 +190,7 @@ apply_three_way_merge <effective-module> <module-dir>
 - `source = <module_dir>/<base>.json` — new release source.
 
 **Per-leaf rule:**
-1. If the path's top-level key is in **AUTO_FIELDS** (`location`, `installTime`, `updateTime`, `releaseDate`, `variant`) → keep `current`.
+1. If the path's top-level key is in **AUTO_FIELDS** (`moduleSource`, legacy `location`, `installTime`, `updateTime`, `releaseDate`, `variant`) → keep `current`.
 2. Else if path absent in `source`, present in `current` → keep `current` (operator-added).
 3. Else if path absent in `current` → adopt `source` (new release field).
 4. Else if `current == orig` → adopt `source` (operator untouched → follow release).
@@ -958,13 +958,13 @@ repository.sh remove tappaas-community --force
 6. Updates `configuration.json` with the new repository entry
 
 **What `remove` does:**
-1. Checks that no installed modules have their `location` pointing into the repository
+1. Checks that no installed modules have their `moduleSource` pointing into the repository
 2. Removes the repository directory
 3. Updates `configuration.json` to remove the repository entry
 
 **What `modify` does:**
 - **Branch-only change**: Fetches and checks out the new branch in place
-- **URL change**: Validates new repo has all currently-installed modules, re-clones, and updates module `location` fields
+- **URL change**: Validates new repo has all currently-installed modules, re-clones, and updates module `moduleSource` fields
 
 **Notes:**
 - A checkout with uncommitted work is stashed so it can move, and the stash is

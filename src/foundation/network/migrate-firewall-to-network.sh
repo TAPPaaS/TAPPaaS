@@ -195,6 +195,9 @@ if [[ -f "${OLD_JSON}" ]]; then
                 | if (.location // "") | test("/firewall$")
                   then .location = (.location | sub("/firewall$"; "/network"))
                   else . end
+                | if (.moduleSource // "") | test("/firewall$")
+                  then .moduleSource = (.moduleSource | sub("/firewall$"; "/network"))
+                  else . end
                 | del(.legacyName)
             ' "${OLD_JSON}" > "${tmp}" || die "failed to transform ${OLD_JSON}"
             jq empty "${tmp}" || die "transformed config is not valid JSON"

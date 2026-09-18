@@ -40,7 +40,7 @@ export interface ModuleConfig {
   source?: string | null; // official | community | private | local (default official)
   status?: ModuleStatus | null; // permitted set: MODULE_STATUS_VALUES (validated in validate.ts)
   environment?: string | null;
-  location?: string | null; // module source dir (where install/update/test.sh live)
+  moduleSource?: string | null; // module source dir (was .location, #609) (where install/update/test.sh live)
   installTime?: string | null;
   updateTime?: string | null;
   dependsOn?: string[];

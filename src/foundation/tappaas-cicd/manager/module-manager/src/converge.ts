@@ -352,7 +352,7 @@ function failureLines(coordinate: string, f: DriftFailure): string[] {
     case "no-module":
       return [`${coordinate}: module config not found`];
     case "no-provider":
-      return [`${coordinate}: provider '${f.provider}' is not deployed (or its config has no .location)`];
+      return [`${coordinate}: provider '${f.provider}' is not deployed (or its config has no .moduleSource)`];
     case "no-manifest":
       return [`${coordinate}: no field manifest yet (${f.path}) — this service is not on the ADR-020 contract`];
     case "bad-manifest":

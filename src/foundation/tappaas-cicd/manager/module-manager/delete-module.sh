@@ -443,7 +443,7 @@ main() {
         # never had a directory. Say which, so the operator can restore it.
         warn "Module directory recorded but missing: ${module_dir} — skipping delete.sh"
     else
-        warn "Cannot find module directory (no .location in config) — skipping delete.sh"
+        warn "Cannot find module directory (no .moduleSource in config) — skipping delete.sh"
     fi
 
     # ── Step 5: Call dependency delete-service.sh scripts (reverse) ──

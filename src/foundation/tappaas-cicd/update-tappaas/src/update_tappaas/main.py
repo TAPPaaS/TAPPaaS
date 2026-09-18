@@ -782,7 +782,9 @@ def reboot_cluster_script() -> Path | None:
     """Resolve cluster/reboot-cluster.sh from the installed cluster module."""
     try:
         with open(CONFIG_DIR / "cluster.json") as f:
-            location = json.load(f).get("location", "")
+            cfg = json.load(f)
+        # .moduleSource since #609; .location until migration 0006 has run.
+        location = cfg.get("moduleSource") or cfg.get("location", "")
     except (FileNotFoundError, json.JSONDecodeError):
         return None
     if not location:

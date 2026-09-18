@@ -467,7 +467,7 @@ main() {
     fi
     # ADR-026 D6.4: an explicit instance name replaces the default. The config is
     # config/<instance>.json; a VM is named after its instance, as a machine is
-    # named for itself (ADR-022f D2). The module stays identified by .location.
+    # named for itself (ADR-022f D2). The module stays identified by .moduleSource.
     if [[ -n "${instance}" ]]; then
         effective_module="${instance}"
         computed_vmname="${instance}"
@@ -749,13 +749,13 @@ main() {
             local service_name="${dep##*:}"
             local provider_dir _gmd_rc=0
 
-            # get_module_dir exit: 1 = no .location recorded, 2 = recorded but
+            # get_module_dir exit: 1 = no .moduleSource recorded, 2 = recorded but
             # the directory is gone (#460). Both were a bare `set -e` abort with
             # no message before; name which one it is.
             provider_dir=$(get_module_dir "${provider_module}") || _gmd_rc=$?
             case "${_gmd_rc}" in
-                1) die "Cannot locate provider '${provider_module}' for dependency '${dep}': no .location recorded in ${CONFIG_DIR}/${provider_module}.json" ;;
-                2) die "Cannot locate provider '${provider_module}' for dependency '${dep}': recorded .location does not exist: ${provider_dir}" ;;
+                1) die "Cannot locate provider '${provider_module}' for dependency '${dep}': no .moduleSource recorded in ${CONFIG_DIR}/${provider_module}.json" ;;
+                2) die "Cannot locate provider '${provider_module}' for dependency '${dep}': recorded .moduleSource does not exist: ${provider_dir}" ;;
             esac
             ensure_scripts_executable "${provider_dir}"
             local svc_script="${provider_dir}/services/${service_name}/install-service.sh"

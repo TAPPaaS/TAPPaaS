@@ -16,6 +16,7 @@
     "kind",
     "management",
     "source",
+    "moduleSource",
     "location",
     "variant",
     "environment",
@@ -255,8 +256,19 @@
       "example": "official",
       "note": "Optional. Defaults to 'official'. Lint rule (validate-module-tier-source.sh): tier:foundation requires source:official unless --allow-fork is given."
     },
-    "location": {
+    "moduleSource": {
       "description": "Absolute path to the module directory containing install.sh, update.sh, etc.",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "example": "/home/tappaas/TAPPaaS/src/apps/nextcloud",
+      "note": "Automatically set by copy-update-json.sh based on the directory where the module JSON resides. Named `location` before #609; migration 0006 renames it."
+    },
+    "location": {
+      "description": "RETIRED — renamed to 'moduleSource' (#609); never write this field. Retained so a config migration 0006 has not reached is classified rather than reported unknown, and still read as the module directory until then.",
+      "deprecated": true,
       "type": "string",
       "requiredBy": [],
       "usedBy": [

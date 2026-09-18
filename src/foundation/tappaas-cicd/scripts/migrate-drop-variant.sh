@@ -110,8 +110,8 @@ for cfg in "${CONFIG_DIR}"/*.json; do
         switch-configuration-actual|switch-configuration-desired) continue ;;
     esac
 
-    # Not a module config (no .location) → leave alone.
-    jq -e 'has("location")' "${cfg}" >/dev/null 2>&1 || continue
+    # Not a module config (no .moduleSource, or .location before 0006) → leave alone.
+    jq -e 'has("moduleSource") or has("location")' "${cfg}" >/dev/null 2>&1 || continue
 
     variant="$(jq -r '.variant // ""' "${cfg}" 2>/dev/null || echo "")"
     environment="$(jq -r '.environment // ""' "${cfg}" 2>/dev/null || echo "")"
@@ -237,7 +237,7 @@ info "${BOLD}Verifying dependency resolution${CL}"
 unresolved=0
 shopt -s nullglob
 for cfg in "${CONFIG_DIR}"/*.json; do
-    jq -e 'has("location")' "${cfg}" >/dev/null 2>&1 || continue
+    jq -e 'has("moduleSource") or has("location")' "${cfg}" >/dev/null 2>&1 || continue
     module="$(basename "${cfg}" .json)"
     env="$(jq -r '.environment // ""' "${cfg}" 2>/dev/null || echo "")"
     while read -r dep; do

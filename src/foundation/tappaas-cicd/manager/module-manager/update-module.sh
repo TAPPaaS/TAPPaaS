@@ -499,7 +499,7 @@ main() {
     # landed when it did not — and the next one will be just as invisible.
     local module_dir_pre
     if ! module_dir_pre="$(module_source_dir "${module}")"; then
-        error "Cannot locate the source of '${module}': its config records no ${BL}.location${CL} and no registered repository's catalog lists it."
+        error "Cannot locate the source of '${module}': its config records no ${BL}.moduleSource${CL} and no registered repository's catalog lists it."
         error "  Step 0 (the 3-way merge) cannot run, so this update would not bring release changes into the deployed config."
         error "  Refusing to report success for an update that reconciles nothing."
         error "  Fix: add the repository the module comes from, or reinstall it from its source directory."

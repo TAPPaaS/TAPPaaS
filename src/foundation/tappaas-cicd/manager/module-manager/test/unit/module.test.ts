@@ -30,6 +30,8 @@ import { AddOptions, AdoptOptions, DeleteOptions, ModifyOptions, ModuleConfig, V
 import { FakeModuleClient } from "./fake-client";
 import { HELP, run } from "../../src/main";
 import { undocumentedOptions } from "../../../../lib/ts/src/help";
+import { moduleSourceOf } from "../../../../lib/ts/src/instance";
+import { isModuleConfig } from "../../../../lib/ts/src/module-discovery";
 
 let passed = 0;
 let failed = 0;
@@ -482,6 +484,18 @@ function captureList(client: FakeModuleClient, extraArgs: string[] = []): string
     "getModuleDir: still returns the recorded path when the directory is gone (back-compat)",
   );
   check(getModuleDir(cfg, "shelly-fleet") === null, "getModuleDir: still null with no .location");
+
+  // #609: .moduleSource is the name; .location is still read until migration
+  // 0006 has run, and a stale .location never outranks .moduleSource.
+  writeFileSync(join(cfg, "renamed.json"), JSON.stringify({ kind: "vm", tier: "app", moduleSource: elsewhere }));
+  writeFileSync(join(cfg, "both.json"), JSON.stringify({ kind: "vm", moduleSource: elsewhere, location: "/gone/old" }));
+  const rn = getModuleDirResult(cfg, "renamed");
+  check(rn.kind === "found" && rn.dir === elsewhere, "getModuleDirResult: .moduleSource → found");
+  const bo = getModuleDirResult(cfg, "both");
+  check(bo.kind === "found" && bo.dir === elsewhere, "getModuleDirResult: .moduleSource wins over a stale .location");
+  check(moduleSourceOf({ location: { country: "DK" } }) === "", "moduleSourceOf: a place-shaped location is not a directory");
+  check(isModuleConfig({ moduleSource: "/x" }) && isModuleConfig({ location: "/x" }) && !isModuleConfig({ location: { country: "DK" } }),
+    "discovery: moduleSource (or a legacy string location) marks a module; a place does not");
 
   // repoCatalogFile precedence: declared > convention > legacy.
   check(

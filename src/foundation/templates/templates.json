@@ -4,7 +4,7 @@
   "tier": "foundation",
   "status": "Production",
   "environment": "mgmt",
-  "location": "/home/tappaas/TAPPaaS/src/foundation/templates",
+  "moduleSource": "/home/tappaas/TAPPaaS/src/foundation/templates",
   "provides": [
     "nixos",
     "debian"

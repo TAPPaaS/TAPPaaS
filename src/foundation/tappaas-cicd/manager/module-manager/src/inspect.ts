@@ -3,7 +3,7 @@
 // retired inspect-vm.sh (ADR-007 post-implementation refactor, Phase 7.3).
 //
 // Generates a 3-column comparison table for a module's VM showing:
-//   1. Released (Git)     — from the source module JSON (the module's .location)
+//   1. Released (Git)     — from the source module JSON (the module's .moduleSource)
 //   2. Desired (~/config) — from config/<module>.json (deployed config)
 //   3. Actual             — from the running guest via Proxmox (ssh qm/pct/pvesh;
 //                           qm for a QEMU VM, pct for an LXC container — #465)
@@ -192,7 +192,7 @@ class Table {
 export function gitSourceWarnings(gitFound: boolean, location: string): OutLine[] {
   if (gitFound) return [];
   return [
-    { kind: "warn", text: `Git source JSON not found (location: ${location || "not set"})` },
+    { kind: "warn", text: `Git source JSON not found (moduleSource: ${location || "not set"})` },
     { kind: "warn", text: "Git column will show 'N/A'" },
   ];
 }
@@ -218,7 +218,7 @@ export function gitSourceWarnings(gitFound: boolean, location: string): OutLine[
 // install (ADR-007 #3), and `config` is the Pattern A container, not a field.
 // The same judgement apply-json-merge.sh makes in AUTO_FIELDS, for the same
 // reason — a field the merge will not reconcile is not one to report as drift.
-const DEPLOYMENT_OWNED = new Set(["location", "installTime", "updateTime", "kind", "config"]);
+const DEPLOYMENT_OWNED = new Set(["moduleSource", "location", "installTime", "updateTime", "kind", "config"]);
 
 export interface FieldSection {
   // "general", or the coordinate that owns these fields ("network:proxy").
@@ -713,10 +713,11 @@ export function inspectModule(module: string, opts: InspectOptions = {}): number
       ? checkDependencyServices(configDir, module, deps, moduleEnvironment)
       : buildServiceSection(deps, null);
 
-  // Locate the git source JSON via the instance's .location: the MODULE's JSON,
+  // Locate the git source JSON via the instance's .moduleSource: the MODULE's JSON,
   // named after its directory (ADR-026 D6.3), with the instance name only as a
   // fallback. Never vmname — that is an instance name too.
-  const location = getField(cfg, "location");
+  // getField, not moduleSourceOf: cfg may still be in the Pattern A shape.
+  const location = getField(cfg, "moduleSource") || getField(cfg, "location");
   let git: Record<string, unknown> | null = null;
   if (location) {
     for (const cand of [moduleSourceJson(location), join(location, `${module}.json`)]) {

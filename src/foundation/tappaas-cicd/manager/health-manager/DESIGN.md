@@ -82,7 +82,7 @@ a full one shows up as the placement problem it is.
   `DriftRow`, `VmInspection`, `ClusterDiff`, `CheckResult`, `HealthReport`) +
   the **`ClusterClient`** interface (the Proxmox/cluster boundary).
 - `src/config.ts` — loads module JSONs from `config/` (skips non-module configs
-  with no `vmid`), resolves the git source JSON via `location`, and reads the
+  with no `vmid`), resolves the git source JSON via `moduleSource`, and reads the
   `site.json` node list (`siteNodeHostnames`).
 - `src/inspect.ts` — pure inspection logic: `inspectCluster` (`list vm`),
   `inspectVm` (`show vm` three-way), `clusterDiff` (`list vm --diff` rollup).
@@ -100,7 +100,7 @@ a full one shows up as the placement problem it is.
   node list (with a `tappaas1..9` scan fallback).
 - **Zone config** `config/zones.json` — for the NIC-drift VLAN mapping (consumed
   by the deferred NIC follow-up, not the scalar diff in this pass).
-- **The git source JSON** (via the module's `location`) for the Released column.
+- **The git source JSON** (via the module's `moduleSource`) for the Released column.
 - **Live cluster state** via Proxmox over SSH.
 
 ## How it talks to the cluster

@@ -11,6 +11,7 @@ import { basename, dirname, join } from "path";
 import { defaultConfigDir } from "../../../lib/ts/src/config-io";
 import { discoverModules, isModuleConfig } from "../../../lib/ts/src/module-discovery";
 import { ModuleConfig, ModuleStatus } from "./types";
+import { moduleSourceOf } from "../../../lib/ts/src/instance";
 
 // Config-root resolution comes from the shared lib (TAPPAAS_CONFIG, then
 // CONFIG_DIR, then /home/tappaas/config). Re-exported for main.ts/client.ts.
@@ -81,7 +82,7 @@ function toModuleConfig(name: string, raw: Record<string, unknown>): ModuleConfi
     // MODULE_STATUS_VALUES rather than dropping it here.
     status: (asString(raw.status) ?? null) as ModuleStatus | null,
     environment: asString(raw.environment) ?? null,
-    location: asString(raw.location) ?? null,
+    moduleSource: moduleSourceOf(raw) || null,
     installTime: asString(raw.installTime) ?? null,
     updateTime: asString(raw.updateTime) ?? null,
     dependsOn: asStringArray(raw.dependsOn),
@@ -192,10 +193,10 @@ export function normalizeModuleConfig(raw: Record<string, unknown>): Record<stri
 }
 
 // ── Module source-directory resolution (bash get_module_dir port) ──────
-// Reads .location from the deployed config. ADR-007 P8: a not-yet-migrated
-// firewall.json may record .location=.../firewall while the source dir was
+// Reads .moduleSource (.location before migration 0006) from the deployed
+// config. ADR-007 P8: a not-yet-migrated firewall.json may record a source.../firewall while the source dir was
 // renamed to .../network — follow the rename when the recorded dir is gone.
-// Returns null when the config or its .location is absent (bash `return 1`).
+// Returns null when the config or its .moduleSource is absent (bash `return 1`).
 function isDirectory(p: string): boolean {
   try {
     return statSync(p).isDirectory();
@@ -223,7 +224,7 @@ export function getModuleDirResult(configDir: string, module: string): ModuleDir
   } catch {
     return { kind: "not-installed" };
   }
-  let location = typeof raw.location === "string" ? raw.location : "";
+  let location = moduleSourceOf(raw);
   if (!location) return { kind: "no-location" };
   if (!isDirectory(location) && location.endsWith("/firewall")) {
     const renamed = location.slice(0, -"/firewall".length) + "/network";
@@ -232,7 +233,7 @@ export function getModuleDirResult(configDir: string, module: string): ModuleDir
   return isDirectory(location) ? { kind: "found", dir: location } : { kind: "missing-dir", dir: location };
 }
 
-// Legacy signature, unchanged in behaviour: the recorded .location is returned
+// Legacy signature, unchanged in behaviour: the recorded .moduleSource is returned
 // whether or not the directory still exists (bash `get_module_dir` likewise
 // still ECHOES the path when it exits 2). Callers that need to tell the two
 // apart use getModuleDirResult; the rest keep working untouched.
@@ -272,7 +273,7 @@ export function resolveProviderModule(
 // only the first was ever described in site-fields.json:
 //
 //   A  the repository module catalogs   (resolve-module.sh, needs registration)
-//   B  the deployed config's .location  (install-module.sh records the CWD it
+//   B  the deployed config's .moduleSource  (install-module.sh records the CWD it
 //      installed from — works with no repository registered at all)
 //   C  neither — nothing can locate it, which today surfaces only when some
 //      operation finally needs the directory
@@ -366,10 +367,12 @@ export function resolveViaCatalog(configDir: string, module: string): CatalogHit
 }
 
 // Which path (if any) locates this module.
-//   location        .location resolves to a real directory
-//   catalog         no usable .location, but a repository catalog carries it
-//   broken-location .location recorded, directory gone, catalog does not cover it
-//   unresolvable    no .location and no catalog entry — nothing can find it
+// (the value names keep the field's pre-#609 name: they are `list --resolution
+// --json` output, and a consumer may match on them)
+//   location        .moduleSource resolves to a real directory
+//   catalog         no usable .moduleSource, but a repository catalog carries it
+//   broken-location .moduleSource recorded, directory gone, catalog does not cover it
+//   unresolvable    no .moduleSource and no catalog entry — nothing can find it
 export type ResolutionPath = "location" | "catalog" | "broken-location" | "unresolvable";
 
 export interface ModuleResolution {

@@ -12,7 +12,7 @@
 # This script:
 #   1. Copies <module>.json from current directory to /home/tappaas/config/
 #      (or <module>-<env>.json for a non-default --environment)
-#   2. Automatically sets the 'location' field to the module directory
+#   2. Automatically sets the 'moduleSource' field to the module directory
 #   3. Validates field names against module-fields.json schema
 #   4. Modifies the copied JSON based on --<field> <value> arguments
 #   5. Creates a .orig backup if modifications are made
@@ -94,7 +94,7 @@ Environment mode:
 
 Notes:
     - Source file must exist as ./<module-name>.json in current directory
-    - The 'location' field is automatically set to the current directory
+    - The 'moduleSource' field is automatically set to the current directory
     - Field names are validated against module-fields.json schema
     - Fields can be added even if not present in source JSON
     - If fields are modified, a .orig backup is created
@@ -249,7 +249,7 @@ main() {
             --instance)
                 # ADR-026 D6.4: name the instance explicitly. config/<name>.json
                 # is written instead of the default <module>[-<environment>].json;
-                # the module stays identified by .location. Parsed here, before the
+                # the module stays identified by .moduleSource. Parsed here, before the
                 # generic --<field> branch, because `instance` is not a field.
                 [[ -z "${2:-}" ]] && die "Option --instance requires a name"
                 instance="$2"
@@ -372,7 +372,9 @@ main() {
     local module_dir
     module_dir="$(cd "$(dirname "${source_json}")" && pwd)"
 
-    # Automatically set location, installTime, and releaseDate (if missing)
+    # Automatically set moduleSource, installTime, and releaseDate (if missing).
+    # .location is its name before #609; a source JSON that still authors it
+    # (or a re-install over an unmigrated config) must not leave both behind.
     local tmp_file install_time release_date
     install_time=$(date +'%Y%m%d-%H:%M:%S')
     release_date=$(date +'%Y-%m-%d')
@@ -380,13 +382,13 @@ main() {
     if ! jq --arg loc "${module_dir}" \
             --arg t "${install_time}" \
             --arg rd "${release_date}" \
-            '.location = $loc | .installTime = $t | if .releaseDate == null or .releaseDate == "" then .releaseDate = $rd else . end' \
+            '.moduleSource = $loc | del(.location) | .installTime = $t | if .releaseDate == null or .releaseDate == "" then .releaseDate = $rd else . end' \
             "${dest_json}" > "${tmp_file}"; then
         rm -f "${tmp_file}"
         die "Failed to set auto-populated fields"
     fi
     mv "${tmp_file}" "${dest_json}"
-    debug "  Set location = ${module_dir}"
+    debug "  Set moduleSource = ${module_dir}"
     debug "  Set installTime = ${install_time}"
     # Check if releaseDate was auto-populated
     if ! jq -e '.releaseDate' "${source_json}" >/dev/null 2>&1; then

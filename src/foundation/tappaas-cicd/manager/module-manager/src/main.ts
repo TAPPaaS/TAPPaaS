@@ -66,7 +66,7 @@ export const HELP: HelpSpec = {
       options: [
         ["--diff", "Per-module three-way (released/desired/running) drift rollup across every module."],
         ["--services", "--diff: also check each module's dependency-service state (one firewall/API round-trip per dependency — OFF by default across the fleet)."],
-        ["--resolution", "Which path locates each module's source directory (.location / repository catalog / neither). Offline; flags modules nothing can resolve."],
+        ["--resolution", "Which path locates each module's source directory (.moduleSource / repository catalog / neither). Offline; flags modules nothing can resolve."],
       ],
     },
     { usage: "show <module> [--json]", name: "show" },
@@ -391,8 +391,8 @@ function parseIntStrict(s: string, flag: string): number {
 //
 // site-fields.json described repositories[] as THE way modules are located,
 // but install-module.sh takes the current directory first and records it as
-// .location, so a module installed from an unregistered path is located by
-// .location alone. A module reachable by neither used to be invisible until
+// .moduleSource, so a module installed from an unregistered path is located by
+// .moduleSource alone. A module reachable by neither used to be invisible until
 // some operation finally needed its directory — this reports it up front, and
 // exits non-zero so a caller can gate on it.
 function cmdListResolution(opts: Opts): number {
@@ -446,7 +446,7 @@ function cmdListResolution(opts: Opts): number {
   if (broken.length > 0) {
     console.log("");
     warn(
-      `${broken.length} module(s) record a .location that no longer exists: ` +
+      `${broken.length} module(s) record a .moduleSource that no longer exists: ` +
         broken.map((r) => `${r.module} (${r.dir})`).join(", "),
     );
     warn("The checkout moved or was removed — restore it, or re-install the module.");
@@ -458,7 +458,7 @@ function cmdListResolution(opts: Opts): number {
         none.map((r) => r.module).join(", "),
     );
     warn(
-      "No .location recorded and no repository catalog entry. Any operation needing " +
+      "No .moduleSource recorded and no repository catalog entry. Any operation needing " +
         "the source directory will fail at that point rather than here (#460).",
     );
   }
