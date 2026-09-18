@@ -347,7 +347,7 @@ the model can express and patch. The two are one piece of work because a backup
 
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
-| *(new)* | `debianhost` module | 3 | 2 | M | ADR-026 D3 — `apt update/upgrade` under the sweep's rules, plus `install`/`test`. The landing point that makes topology §1.3 testable rather than asserted. **Do first**: small, self-contained, and everything below assumes it behaves |
+| *(new)* | `debianhost` module + `module-manager module adopt` | 3 | 2 | M | ADR-026 D3 + D8.1 — `apt update/upgrade` under the sweep's rules, plus `install`/`test`; brought in by `module adopt <fqdn|ip>` (key, OS facts, instance named after the machine, zone from its address). `module add --pxe` (D8.2) reuses site-manager's PXE model; Debian over PXE is open (D8a). The landing point that makes topology §1.3 testable rather than asserted. **Do first**: small, self-contained, and everything below assumes it behaves |
 | *(new)* | ADR-012 topology §1.3 verified | 3 | 2 | M | PBS installed and driven on a `kind: machine` host — Erik's setup, on a test machine first |
 | *(new)* | instance vs module name | 3 | 3 | M | **Settled 2026-09-18 by ADR-026 D6**, now implementation: `config/<instance>.json` is the instance, the module comes from `.location`, and a synthetic `module` field replaces every name-parse (including `resolve_base_module_name`, added for #659). Plus the `--instance` argument and its default. **Blocks #665** |
 | #665 | Register cluster nodes as machine modules | 3 | 2 | M | ADR-026 D4 stage 1 — registration only, inert. Stage 2 (node patching behind the module lifecycle) and stage 3 (the cluster install becomes module installs) are separate and high-blast-radius |
