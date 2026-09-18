@@ -85,6 +85,22 @@ backup-manager reconcile [--apply] [--config-dir DIR]
 backup-manager restore list <module> | restore <module> [opts] | list-all
         SPECIAL recovery verb — delegates to the foundation backup/restore.sh and
         backup-controller (snapshot listing).
+
+backup-manager placement [--json]
+        Where this site's PBS lives (placementState, pbsUrl, storage name).
+
+backup-manager placement reset [--peer NAME] [--yes] [--no-update]
+        Leave an external PBS for a local one (ADR-012 §2.3, #607). Refused unless
+        placementState is external and a tankc pool exists. Runs, in order:
+        backup-manage.sh reset-external (the old storage entry → <name>_former,
+        still restorable; placementState → shim; formerExternal recorded), writes
+        the old PBS as pull peer former-<host>, update-module.sh backup (the shim
+        becomes a local PBS; the nodes push there), then onboards the pull
+        (prompts for a read login on the old PBS). src/placement-reset.ts.
+
+backup-manager placement finish-reset [--yes]
+        Remove the <name>_former storage entry — after the pull and a test restore
+        from pull/<peer>. The old PBS is never touched.
 ```
 
 The single entry point is the `backup-manager` bin (linked onto `PATH` by

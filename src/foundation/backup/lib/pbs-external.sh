@@ -20,7 +20,7 @@
 # ── Pure helpers (no cluster access — unit-testable) ─────────────────
 
 # Whether `use-external` may flip this placement state. Consuming an external
-# PBS is PERMANENT (§2.1), so it is only offered where nothing local would be
+# PBS is sticky (§2.1; left only by `placement reset`, #607), so it is only offered where nothing local would be
 # orphaned by it: an unresolved config, a shim, or an already-external one.
 # A live local PBS (node:<name>) is refused — abandoning a datastore full of
 # backups must be a deliberate reinstall, not a one-word command.

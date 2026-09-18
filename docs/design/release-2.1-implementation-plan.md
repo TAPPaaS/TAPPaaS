@@ -377,7 +377,7 @@ is a migration.
 | #612 | `vmname` → the instance name, as a DNS alias; `shim` stays | 4 | 3 | M | **Decided (v1.0 §2.7):** backup is `kind: application`, so `vmname` names nothing; the PBS's DNS name is the backup instance's name (ADR-026 D6.1), registered as an **alias of the `node` Host** instead of an A record frozen at install; `pbsUrl` derives from it. Needs D6.3/D6.4 and #665 first, and a `dns-manager` alias verb |
 | #601 | Placement discovery is PVE-only | 3 | 2 | M | |
 | #456 | `external` placement for a pre-existing PBS | 3 | 2 | M | |
-| #607 | Exit from `external` placement | 4 | 1 | L | **Decided (v1.0 §2.3):** `backup-manager placement reset`, confirmed; the old external PBS stays registered as a `pull` peer so its history remains restorable |
+| #607 | Exit from `external` placement | 4 | 1 | L | **Built 2026-09-18** (`wave1/g1.2-module-source`): `backup-manager placement reset` / `finish-reset`. The old storage entry is renamed `<name>_former` (credential + key) so history stays restorable — left under the module's name, the local install would have kept pushing to the external PBS; state → `shim` (not empty: empty would stop on the old PBS as `unmanaged`); refused without a tankc pool; then the update, then the pull onboarding. Unit-tested; the rename live-verified on hrossen on a copy of the real entry. **Not rehearsed end to end** — needs an external PBS |
 | #457 | `pbs_node` uses placement, not the registered name | 4 | 2 | M | Caused a nightly failure on 2026-08-17 |
 | #603 | PBS on a non-PVE host has no update path | 3 | 2 | M | |
 | #554 | Reconcile creates duplicate job coverage | 3 | 2 | M | |

@@ -147,7 +147,7 @@ Proxmox bridge for the VM's first network interface (net0)
 
 ### `zone0`
 
-Security zone for net0. Must exist in zones.json.
+The security zone the FIRST network interface connects to; it must exist in zones.json. For a VM or LXC: which Proxmox bridge VLAN its virtual NIC is attached to. For a machine (kind: machine, ADR-026): which network its first physical NIC is cabled to — recorded, not yet enforced (connecting a machine's port on the switch is its own issue).
 
 | Attribute | Value |
 |---|---|
@@ -156,7 +156,7 @@ Security zone for net0. Must exist in zones.json.
 | Format | `^[a-z][a-zA-Z0-9]*$` |
 | Example | `srvHome` |
 | Required by | *(none)* |
-| Used by | `cluster:vm`, `cluster:lxc` |
+| Used by | `general`, `cluster:vm`, `cluster:lxc` |
 | Change class | `in-place-reboot` |
 | Apply mode | `composite` |
 | Normalizer | `vlan` |

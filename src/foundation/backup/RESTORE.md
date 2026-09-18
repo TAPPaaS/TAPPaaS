@@ -621,8 +621,8 @@ scripts/backup-manage.sh use-external <buddy-pbs-url> --datastore <their-datasto
 
 This registers their PBS as Proxmox storage, so `qmrestore` and
 `backup-manager restore` can read it directly. Two cautions: the placement flip
-is **permanent** (§7 covers moving back to a local datastore afterwards, by
-pulling), and you are now restoring across whatever link separates you — a
+is **sticky** — it is left only deliberately, with `backup-manager placement reset`
+once a local datastore exists (§9.1) — and you are now restoring across whatever link separates you — a
 full-site restore over a domestic uplink is measured in hours or days, which is
 the argument for rebuilding a local datastore first if the hardware exists.
 
@@ -651,11 +651,11 @@ external PBS to a local one — the old snapshots must not be discarded. Seed th
 new datastore by **pulling** from the old one rather than starting empty:
 
 ```bash
-backup-manager peer add pull old-pbs      # register the OLD PBS as a pull source
+backup-manager peer add pull old-pbs --host <old-pbs>   # register the OLD PBS as a pull source
 #   … let the sync job run, then verify the snapshots arrived …
 scripts/backup-manage.sh use-external <new-url> # or re-run the install to resolve node:<new>
 #   … restore something from the NEW target and confirm it works …
-backup-manager peer delete old-pbs  # only now decommission the old datastore
+backup-manager peer delete pull old-pbs          # only now decommission the old datastore
 ```
 
 This is plain pull replication (ADR-012 §4.3) — there is no special migration
@@ -664,8 +664,42 @@ restore are green**: a copied datastore that has never been restored from is a
 hypothesis, not a backup.
 
 This is also why `backup-manage.sh use-external` refuses to run from a live
-local PBS: switching to an external one is permanent, and doing it before the
-history has been pulled across would orphan a datastore full of backups.
+local PBS: doing it before the history has been pulled across would orphan a
+datastore full of backups.
+
+### 9.1 Leaving an external PBS for a local one (`placement reset`, #607)
+
+`external` is sticky — no update ever re-decides it — so leaving it is one deliberate
+command. It needs a `tankc` pool on some node (or on `backup.json` `.node`) for the local PBS;
+without one it refuses and changes nothing, because a site that trades a working external PBS
+for a shim has no backups at all.
+
+```bash
+backup-manager placement reset          # asks first; --yes to skip, --peer NAME to name the pull peer
+#   … the pull from the old PBS runs on its schedule (04:00 by default) …
+backup-manager restore list-all         # the history is under pull/<peer>; restore something from it
+backup-manager placement finish-reset   # only now drop the old storage entry
+```
+
+What `reset` does, in order:
+
+1. The old PBS's Proxmox storage entry is renamed `<pbsStorageName>_former`, with its login,
+   fingerprint, password and encryption key, so everything on the old PBS **stays
+   restorable from Proxmox the whole time**. (Leaving it under the module's own name would
+   keep the nodes pushing to the old PBS for ever: the local install would find that name
+   "already configured".) `backup.json` becomes `placementState: shim`, `pbsUrl` the local
+   default, and `formerExternal` records what was left behind.
+2. The old PBS is written down as a **pull** peer, `pull-former-<host>.json`.
+3. The backup module is updated: the shim becomes `node:<name>` on the `tankc` pool, the local
+   PBS is installed, and the nodes push there from the next backup on.
+4. The pull peer is onboarded — it asks for a **read** login on the old PBS — and its sync job
+   copies the history into `pull/<peer>` on the new datastore.
+
+Nothing on the old PBS is ever touched; retiring it, and its data, is its owner's decision.
+`finish-reset` removes only the `_former` storage entry, and only after it asks: run it after
+the pull **and** a test restore from `pull/<peer>` are green. If step 3 fails, nothing is backed
+up until `update-module.sh backup` succeeds — `reset` says so, and the old history is still in
+`_former`.
 
 ---
 

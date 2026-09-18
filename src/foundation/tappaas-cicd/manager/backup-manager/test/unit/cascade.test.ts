@@ -5,7 +5,7 @@
 // test/unit tsconfig.
 
 import { join } from "path";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, unlinkSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import {
   listEnvironments,
@@ -21,6 +21,7 @@ import {
 } from "../../src/config";
 import { retentionValid, validate } from "../../src/validate";
 import { asPlace, offsiteTargets, separation } from "../../src/offsite";
+import { placementFinishReset, placementReset, urlHost } from "../../src/placement-reset";
 import { applyPlan, computePlan, jobBucketIndex } from "../../src/reconcile";
 import { restoreList, restoreRun } from "../../src/restore";
 import {
@@ -704,6 +705,108 @@ check(!retentionValid("7") && !retentionValid("7x") && !retentionValid(""), "inv
   eq(JSON.stringify(buildPeerConfig("remote", { name: "b", authId: "b@pbs", physicalLocation: { country: "DE", city: "Berlin" } }).physicalLocation),
     '{"country":"DE","city":"Berlin"}', "peer add records the place it is given");
   eq(buildPeerConfig("pull", { name: "b", host: "h" }).physicalLocation, undefined, "…and invents none");
+}
+
+// ── #607: placement reset — the one door out of `external` ───────────
+{
+  const tmp = mkdtempSync(join(tmpdir(), "bm-reset-"));
+  const mod = join(tmp, "backupmod");
+  const bj = join(tmp, "backup.json");
+  const ext = { placementState: "external", pbsUrl: "https://pbs.lan.example:8007", pbsStorageName: "tappaas_backup" };
+  type Call = { bin: string; args: string[] };
+  const mk = (opts: { confirm?: boolean; updateRc?: number; updateLeaves?: string; resetRc?: number } = {}) => {
+    const calls: Call[] = [];
+    const msgs: string[] = [];
+    const deps = {
+      run: (bin: string, args: string[]): number => {
+        calls.push({ bin, args });
+        if (bin.endsWith("backup-manage.sh") && args[0] === "reset-external") {
+          if (opts.resetRc) return opts.resetRc;
+          // what the bash side does to backup.json
+          const b = JSON.parse(readFileSync(bj, "utf8"));
+          b.formerExternal = { pbsUrl: b.pbsUrl, storage: "tappaas_backup_former", datastore: "store1", namespace: "", peer: "former-pbs" };
+          b.placementState = "shim";
+          b.pbsUrl = "backup.mgmt.internal";
+          writeFileSync(bj, JSON.stringify(b));
+        }
+        if (bin === "update-module.sh") {
+          const b = JSON.parse(readFileSync(bj, "utf8"));
+          b.placementState = opts.updateLeaves ?? "node:tappaas2";
+          writeFileSync(bj, JSON.stringify(b));
+          return opts.updateRc ?? 0;
+        }
+        return 0;
+      },
+      confirm: (): boolean => opts.confirm ?? true,
+      info: (m: string): void => void msgs.push(m),
+      warn: (m: string): void => void msgs.push(`WARN ${m}`),
+    };
+    return { calls, msgs, deps };
+  };
+  const ro = (o: Partial<{ yes: boolean; noUpdate: boolean }> = {}) =>
+    ({ configDir: tmp, moduleDir: mod, yes: o.yes ?? false, noUpdate: o.noUpdate ?? false });
+  const fresh = (b: Record<string, unknown>) => {
+    for (const f of ["pull-former-pbs.json"]) { try { unlinkSync(join(tmp, f)); } catch { /* none */ } }
+    writeFileSync(bj, JSON.stringify(b));
+  };
+
+  fresh({ placementState: "node:tappaas3" });
+  let t = mk();
+  eq(placementReset(ro(), t.deps), 1, "reset refuses a placement that is not external");
+  eq(t.calls.length, 0, "…and runs nothing");
+
+  fresh(ext);
+  t = mk({ confirm: false });
+  eq(placementReset(ro(), t.deps), 1, "declining the confirmation stops it");
+  eq(t.calls.length, 0, "…before anything runs");
+
+  fresh(ext);
+  t = mk({ resetRc: 1 });
+  eq(placementReset(ro({ yes: true }), t.deps), 1, "a refused reset-external (no tankc) is passed on");
+  eq(t.calls.length, 1, "…and nothing runs after it");
+  check(!existsSync(join(tmp, "pull-former-pbs.json")), "…and no peer is written");
+
+  fresh(ext);
+  t = mk();
+  eq(placementReset(ro({ yes: true }), t.deps), 0, "reset: the whole door, in order");
+  eq(t.calls.map((c) => `${c.bin.split("/").slice(-2).join("/")} ${c.args.join(" ")}`).join(" | "),
+    "scripts/backup-manage.sh reset-external | update-module.sh backup | pull/onboard.sh former-pbs",
+    "reset-external → the update that promotes the shim → the pull onboarding");
+  const peer = JSON.parse(readFileSync(join(tmp, "pull-former-pbs.json"), "utf8"));
+  eq(`${peer.remoteHost} ${peer.remoteStore} ${peer.namespace}`, "pbs.lan.example store1 pull/former-pbs",
+    "the old PBS becomes a pull peer: its host (not URL), its datastore, landing in pull/<peer>");
+  check(t.msgs.some((m) => m.includes("placement finish-reset")), "…and says how to finish");
+
+  fresh(ext);
+  t = mk({ updateLeaves: "shim", updateRc: 0 });
+  check(placementReset(ro({ yes: true }), t.deps) !== 0, "an update that leaves no local PBS is a failure");
+  check(!t.calls.some((c) => c.bin.endsWith("onboard.sh")), "…the pull is not onboarded with nothing to pull into");
+  check(t.msgs.some((m) => m.startsWith("WARN") && m.includes("NOTHING IS BACKED UP")), "…and it says loudly that nothing is backed up");
+
+  fresh(ext);
+  t = mk();
+  eq(placementReset(ro({ yes: true, noUpdate: true }), t.deps), 0, "--no-update stops after the config");
+  eq(t.calls.length, 1, "…running only reset-external");
+  check(t.msgs.some((m) => m.startsWith("WARN") && m.includes("NOTHING IS BACKED UP")), "…with the warning that nothing is backed up yet");
+
+  // A second reset while one is unfinished is refused.
+  const b = JSON.parse(readFileSync(bj, "utf8"));
+  b.placementState = "external";
+  writeFileSync(bj, JSON.stringify(b));
+  eq(placementReset(ro({ yes: true }), mk().deps), 1, "reset refuses while a formerExternal is unfinished");
+
+  // finish-reset
+  fresh({ placementState: "node:tappaas2" });
+  t = mk();
+  eq(placementFinishReset(ro({ yes: true }), t.deps), 1, "finish-reset refuses with no formerExternal");
+  fresh({ placementState: "node:tappaas2", formerExternal: { storage: "tappaas_backup_former", pbsUrl: "pbs.lan", peer: "former-pbs" } });
+  t = mk({ confirm: false });
+  eq(placementFinishReset(ro(), t.deps), 1, "finish-reset: declining stops it");
+  eq(t.calls.length, 0, "…with nothing run");
+  t = mk();
+  eq(placementFinishReset(ro({ yes: true }), t.deps), 0, "finish-reset runs");
+  eq(t.calls.map((c) => c.args.join(" ")).join(" | "), "finish-reset", "…the module's finish-reset, nothing else");
+  eq(urlHost("https://pbs.example:8007/x"), "pbs.example", "urlHost strips scheme, port and path");
 }
 
 // ── #644: --help runs nothing; an option the verb does not take is refused ──

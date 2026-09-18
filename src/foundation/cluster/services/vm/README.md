@@ -150,7 +150,7 @@ Proxmox bridge for the VM's first network interface (net0)
 
 ### `zone0`
 
-Security zone for net0. Must exist in zones.json.
+The security zone the FIRST network interface connects to; it must exist in zones.json. For a VM or LXC: which Proxmox bridge VLAN its virtual NIC is attached to. For a machine (kind: machine, ADR-026): which network its first physical NIC is cabled to — recorded, not yet enforced (connecting a machine's port on the switch is its own issue).
 
 | Attribute | Value |
 |---|---|
@@ -159,7 +159,7 @@ Security zone for net0. Must exist in zones.json.
 | Format | `^[a-z][a-zA-Z0-9]*$` |
 | Example | `srvHome` |
 | Required by | *(none)* |
-| Used by | `cluster:vm`, `cluster:lxc` |
+| Used by | `general`, `cluster:vm`, `cluster:lxc` |
 | Change class | `in-place-reboot` |
 | Apply mode | `composite` |
 | Normalizer | `vlan` |
@@ -234,7 +234,7 @@ Proxmox bridge for the VM's second network interface (net1). The sentinel 'NONE'
 
 ### `zone1`
 
-Security zone for net1. Must exist in zones.json.
+The security zone the SECOND network interface connects to, if there is one; it must exist in zones.json. For a VM: which Proxmox bridge VLAN its second virtual NIC is attached to. For a machine: which network its second physical NIC is cabled to — recorded, not yet enforced.
 
 | Attribute | Value |
 |---|---|
@@ -242,7 +242,7 @@ Security zone for net1. Must exist in zones.json.
 | Default | `mgmt` |
 | Format | `^[a-z][a-zA-Z0-9]*$` |
 | Required by | *(none)* |
-| Used by | `cluster:vm` |
+| Used by | `general`, `cluster:vm` |
 | Change class | `in-place-reboot` |
 | Apply mode | `composite` |
 | Normalizer | `vlan` |
@@ -439,7 +439,7 @@ Unique VM ID across all TAPPaaS nodes
 
 ### `os`
 
-Operating system family of the VM. Drives OS-specific cloud-init bootstrapping (e.g. attaching the Debian vendor-data snippet that pre-installs qemu-guest-agent).
+The operating system a system runs — ADR-022f's OS facet, held as its `id` (the freedesktop os-release ID); the family follows from it: debian, ubuntu, nixos → linux; windows → windows. For a VM it also drives cloud-init bootstrapping (the Debian vendor-data snippet). For a machine, `module adopt` reads it from /etc/os-release, and it selects the machine module (ADR-026 D7).
 
 | Attribute | Value |
 |---|---|
@@ -448,7 +448,7 @@ Operating system family of the VM. Drives OS-specific cloud-init bootstrapping (
 | Allowed values | `debian` — Debian-family cloud image (apt). Receives the tappaas-debian vendor-data snippet.<br>`ubuntu` — Ubuntu-family cloud image (apt). Receives the tappaas-debian vendor-data snippet.<br>`nixos` — NixOS template VM. No vendor-data snippet.<br>`windows` — Windows Server clone VM. Create-TAPPaaS-VM.sh builds and attaches a per-VM OOBE answer ISO. No cloud-init.<br>`unknown` — OS family is unknown. No vendor-data snippet. |
 | Example | `debian` |
 | Required by | *(none)* |
-| Used by | `cluster:vm` |
+| Used by | `general`, `cluster:vm` |
 | Change class | `immutable` |
 | Apply mode | `none` |
 | Reported as | `os` |

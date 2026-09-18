@@ -46,6 +46,13 @@ Externally-managed PBS (ADR-012 §1.3, #456):
                               satellite, or a third party. Registers it as the module's backup
                               storage and records placementState=external + pbsUrl. Creates no
                               datastore and never touches what is already stored there.
+  reset-external [--peer <name>]
+                              Leave external (#607; run through 'backup-manager placement
+                              reset'): keeps the old PBS's storage entry as <name>_former,
+                              records it in formerExternal, placementState → shim. Refused
+                              unless there is a tankc pool to move to.
+  finish-reset                Remove the <name>_former storage entry once the history has been
+                              pulled and a test restore worked. The old PBS is not touched.
 
   help                        Show this help message
 
@@ -189,7 +196,8 @@ case "$COMMAND" in
   use-external)
     # Consume an externally-managed PBS (ADR-012 §1.3/§4.2, #456). Registers it
     # as the module's backup storage and flips placement to external — which is
-    # PERMANENT, so it is refused where a local datastore would be orphaned.
+    # sticky (left only by `backup-manager placement reset`, #607), so it is
+    # refused where a local datastore would be orphaned.
     URL="${2:-}"
     [[ -n "${URL}" ]] || die "Usage: $0 use-external <url> [--datastore <ds>] [--namespace <ns>] [--fingerprint <fp>]"
     shift 2
@@ -214,7 +222,7 @@ case "$COMMAND" in
 
     STATE="$(pbs_placement_state)"
     pbs_external_allowed "${STATE}" || die \
-      "backup already has a local PBS (placementState '${STATE}'). Consuming an external PBS is permanent and would orphan that datastore — relocate it first (RESTORE.md: relocating a datastore), or reinstall the module deliberately."
+      "backup already has a local PBS (placementState '${STATE}'). Consuming an external PBS would orphan that datastore — relocate it first (RESTORE.md: relocating a datastore), or reinstall the module deliberately."
 
     EXT_STORE="$(pbs_external_datastore "${EXT_STORE}" "$(get_config_value 'pbsStorageName' 'tappaas_backup')")"
     SNAME="$(get_config_value 'pbsStorageName' 'tappaas_backup')"
@@ -242,6 +250,65 @@ case "$COMMAND" in
     pbs_client_reconcile "${ZONE}" "$(get_config_value 'imageLocation' 'http://download.proxmox.com/debian/pbs')" \
       || warn "One or more nodes could not be reconciled for proxmox-backup-client"
     info "${GN}Consuming the externally-managed PBS at ${URL}.${CL} Existing snapshots there were not touched."
+    ;;
+
+  reset-external)
+    # Leave `external` (ADR-012 §2.3, #607). The TS verb confirms, then runs
+    # this, then the update that promotes the shim, then the pull onboarding.
+    shift
+    PEER=""
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --peer) PEER="${2:-}"; shift 2 ;;
+        *) die "reset-external: unknown option '$1'" ;;
+      esac
+    done
+    # shellcheck source=../lib/pbs-placement.sh disable=SC1091
+    . "${SCRIPT_DIR}/../lib/pbs-placement.sh"
+    # shellcheck source=../lib/pbs-reset.sh disable=SC1091
+    . "${SCRIPT_DIR}/../lib/pbs-reset.sh"
+
+    STATE="$(pbs_placement_state)"
+    [[ "${STATE}" == "external" ]] || die "reset-external: placementState is '${STATE:-empty}', not external — there is nothing to leave"
+    OLD_URL="$(pbs_pbs_url)"
+    PEER="${PEER:-$(pbs_reset_peer_name "${OLD_URL}")}"
+    [[ ! -e "${CONFIG_DIR}/pull-${PEER}.json" ]] || die "reset-external: a pull peer '${PEER}' already exists — name another with --peer"
+
+    # Where the local PBS will go — BEFORE anything is written. No tankc pool
+    # means the shim would back nothing up: refuse, and keep the working external.
+    info "${BOLD}Looking for storage to move to …${CL}"
+    read -r MODE _ < <(pbs_resolve_placement_state "shim" "$(get_config_value 'node' '')" "${ZONE}" "${MGMT_NODE}")
+    [[ "${MODE}" == node:* ]] || die "reset-external: no tankc pool on any node (or on .node) — a reset now would leave the site with NO backups. Add the storage first, then reset. Nothing was changed."
+    info "  ${GN}✓${CL} the local PBS will go on ${BGN}${MODE#node:}${CL}"
+
+    FORMER="$(pbs_reset_former_storage "${STORAGE_NAME}")"
+    OLDCFG="$(ssh -n -o ConnectTimeout=15 -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+      "root@${MGMT_NODE}.${ZONE}.internal" "pvesh get /storage/${STORAGE_NAME} --output-format json" 2>/dev/null)" \
+      || die "reset-external: cannot read storage ${STORAGE_NAME} — nothing was changed"
+    OLD_DS="$(jq -r '.datastore // empty' <<<"${OLDCFG}")"
+    OLD_NS="$(jq -r '.namespace // empty' <<<"${OLDCFG}")"
+
+    info "${BOLD}Keeping the old PBS's storage as ${BGN}${FORMER}${CL}${BOLD} (history stays restorable)${CL}"
+    pbs_storage_rename "${STORAGE_NAME}" "${FORMER}" "${OLDCFG}" "${ZONE}" \
+      || die "reset-external: could not rename storage ${STORAGE_NAME} → ${FORMER}; it is left as it was, and so is backup.json"
+
+    # Record the reset LAST: a failed rename leaves the config claiming external,
+    # which is still true.
+    pbs_reset_config_filter "${PBS_DEFAULT_URL}" "${FORMER}" "${OLD_DS}" "${OLD_NS}" "${PEER}" "$(date +%Y%m%d-%H:%M:%S)" \
+      < "${JSON_CONFIG}" > "${JSON_CONFIG}.tmp" && mv "${JSON_CONFIG}.tmp" "${JSON_CONFIG}"
+    info "  ${GN}✓${CL} placementState=shim, pbsUrl=${PBS_DEFAULT_URL}; formerExternal records ${OLD_URL} (datastore ${OLD_DS})"
+    ;;
+
+  finish-reset)
+    # The last step of leaving external (#607): drop the _former storage entry.
+    # Local only — the old PBS and everything on it are untouched.
+    # shellcheck source=../lib/pbs-storage.sh disable=SC1091
+    . "${SCRIPT_DIR}/../lib/pbs-storage.sh"
+    FORMER="$(jq -r '.formerExternal.storage // empty' "${JSON_CONFIG}")"
+    [[ -n "${FORMER}" ]] || die "finish-reset: backup.json records no formerExternal — nothing to finish"
+    pbs_storage_unregister "${FORMER}" "${ZONE}" || die "finish-reset: could not remove storage ${FORMER}"
+    jq 'del(.formerExternal)' "${JSON_CONFIG}" > "${JSON_CONFIG}.tmp" && mv "${JSON_CONFIG}.tmp" "${JSON_CONFIG}"
+    info "  ${GN}✓${CL} ${FORMER} removed; the old PBS keeps its data"
     ;;
 
   help|--help|-h)

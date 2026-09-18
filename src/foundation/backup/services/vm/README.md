@@ -125,7 +125,7 @@ Backup module, optional WORM-ish immutability (ADR-012 §3.5 / ADR-010 §7.3). W
 
 ### `placementState`
 
-Resolved backup placement (ADR-012 §2.1) and the single source of truth for where PBS lives. Ships EMPTY on the released module; backup/install.sh resolves it once and writes it back. Values: 'node:<name>' (PBS software + datastore realized on that node's tankc pool), 'shim' (no datastore anywhere — still satisfies dependsOn:backup:vm, promoted in place by `module-manager module update backup` once storage appears), 'external' (an externally-managed PBS at .pbsUrl is consumed; nothing is provisioned — set at install time and permanent thereafter). The legacy values 'local' and 'remote-only' are accepted for one release and migrated in place by update.sh to 'node:<name>' / 'external' (§4.1).
+Resolved backup placement (ADR-012 §2.1) and the single source of truth for where PBS lives. Ships EMPTY on the released module; backup/install.sh resolves it once and writes it back. Values: 'node:<name>' (PBS software + datastore realized on that node's tankc pool), 'shim' (no datastore anywhere — still satisfies dependsOn:backup:vm, promoted in place by `module-manager module update backup` once storage appears), 'external' (an externally-managed PBS at .pbsUrl is consumed; nothing is provisioned — set at install time and sticky thereafter — left only by `backup-manager placement reset`, #607). The legacy values 'local' and 'remote-only' are accepted for one release and migrated in place by update.sh to 'node:<name>' / 'external' (§4.1).
 
 | Attribute | Value |
 |---|---|

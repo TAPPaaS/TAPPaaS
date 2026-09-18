@@ -285,7 +285,7 @@ So the `node` **field** is a *discovery constraint* (which Host(s) to search) be
 | From `shim` to… | Trigger | Effect of `update.sh` |
 |---|---|---|
 | **`node`** (local PBS) | a `tankc` now exists (on `node`, or any node if unpinned) | re-derives to `node`; creates the datastore + per-node clients; the shim marker becomes a real datastore |
-| **`external`** | operator re-runs install/update **forcing external** + `pbsUrl` | overwrites to `external` (permanent); registers the external PBS as storage + wires jobs; provisions nothing |
+| **`external`** | operator re-runs install/update **forcing external** + `pbsUrl` | overwrites to `external` (sticky — left only by `placement reset`, below); registers the external PBS as storage + wires jobs; provisions nothing |
 
 **Leaving `external` (#607)** is the one move that is never automatic — the state is sticky
 precisely so that an operator's choice is not re-derived away — and it has one deliberate door:
@@ -637,7 +637,7 @@ run on hardware is a separate question, and one list answering both could never 
 **Added by v1.0, not built yet:**
 
 - [ ] §2.2 rule 3 in `install.sh` and `update.sh`: probe for a serving PBS before any discovery (#602).
-- [ ] `backup-manager placement reset` (#607).
+- [x] `backup-manager placement reset` (#607) — and `finish-reset`. Unit-tested (the order, every refusal); the storage rename live-verified on the reference cluster on a throwaway copy of the real entry (195 snapshots visible through `_former`). A full reset needs an external PBS and is **not yet rehearsed**.
 - [x] `physicalLocation` on the satellite and on peer PBS configs, and the separation check (#609) — `backup-manager validate` warns; unit-tested (`src/offsite.ts`).
 - [ ] `vmname` replaced by the instance name; `<instance>.<zone>.internal` registered as an alias of the `node` Host (#612) — after ADR-026 D6.3/D6.4 and #665.
 - [ ] The code writes `placementState: node` with the Host in `backup.json.node`, as §2.1 decides, instead of today's `node:<name>`; a migration rewrites existing sites (#600).

@@ -9,7 +9,8 @@
 #   shim           marker only, no datastore; satisfies dependsOn:backup and is
 #                  promoted in place later (update.sh re-derives)
 #   external       an externally-managed PBS at .pbsUrl is CONSUMED; nothing is
-#                  provisioned. Set at install time and PERMANENT thereafter.
+#                  provisioned. Set at install time and sticky thereafter:
+#                  left only by `backup-manager placement reset` (#607).
 #
 # Resolution order (§2.2), implemented by pbs_resolve_placement_state:
 #   1. state is already `external`               → keep (forced, sticky)

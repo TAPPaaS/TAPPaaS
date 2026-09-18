@@ -47,8 +47,10 @@ import {
 } from "./peers";
 import { validate } from "./validate";
 import { placeText } from "./offsite";
+import { placementFinishReset, placementReset, ResetDeps } from "./placement-reset";
 import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
 import { existsSync } from "fs";
+import { spawnSync } from "child_process";
 import { stream } from "../../../lib/ts/src/exec";
 import { GN, CL, die, guarded, info, warn } from "../../../lib/ts/src/cli";
 import { BackupPolicyStatus, Client, JobStatus, ScheduleBucket } from "./types";
@@ -102,6 +104,22 @@ export const HELP: HelpSpec = {
     },
     { usage: "restore list-all", name: "restore list-all" },
     { usage: "placement", name: "placement", note: "(where PBS lives for this site)" },
+    {
+      usage: "placement reset [--peer NAME] [--yes] [--no-update]",
+      name: "placement reset",
+      note: "(leave an external PBS for a local one — ADR-012 §2.3, #607)",
+      options: [
+        ["--peer NAME", "placement reset: the pull-peer name the old PBS gets (default former-<its host>)."],
+        ["--yes", "placement reset / finish-reset: do not ask for confirmation."],
+        ["--no-update", "placement reset: stop after the config — then NOTHING is backed up until 'update-module.sh backup' runs."],
+      ],
+    },
+    {
+      usage: "placement finish-reset [--yes]",
+      name: "placement finish-reset",
+      note: "(drop the old PBS's <name>_former storage entry, once its history is pulled and a restore worked)",
+      options: [["--yes", "placement finish-reset: do not ask for confirmation."]],
+    },
     {
       usage: "key list|export <dest>|import <src>",
       verb: "key",
@@ -167,6 +185,10 @@ export const HELP: HelpSpec = {
               restore.sh (--node, --storage, --backup-id, --target-vmid).
   placement   Where this site's PBS lives, and whether a datastore is realized at
               all. A 'shim' means modules install but nothing is being backed up yet.
+              'placement reset' leaves an external PBS for a local one: the old PBS is
+              kept as a pull peer and its storage as <name>_former, so no backup is
+              lost; 'placement finish-reset' drops that storage once the history
+              is pulled and a test restore worked (#607).
   peers       Off-site relationships: PBS instances this site pulls from, receives
               pushes from, or pushes to. 'peer add' and 'peer delete' create and
               remove them.
@@ -220,6 +242,9 @@ interface Opts {
   country?: string;
   city?: string;
   facility?: string;
+  peer?: string;
+  yes: boolean;
+  noUpdate: boolean;
   propagate: boolean;
   configOnly: boolean;
   purge: boolean;
@@ -230,7 +255,7 @@ interface Opts {
 // single-line change here rather than another else-if arm.
 const PEER_VALUE_FLAGS = new Set([
   "--host", "--store", "--namespace", "--schedule", "--group-filter", "--auth-id",
-  "--country", "--city", "--facility",
+  "--country", "--city", "--facility", "--peer",
 ]);
 
 function parseOpts(args: string[]): Opts {
@@ -238,6 +263,8 @@ function parseOpts(args: string[]): Opts {
   let propagate = false;
   let configOnly = false;
   let purge = false;
+  let yes = false;
+  let noUpdate = false;
   let force = false;
   let configDir = defaultConfigDir();
   let json = false;
@@ -299,6 +326,10 @@ function parseOpts(args: string[]): Opts {
       configOnly = true;
     } else if (a === "--purge") {
       purge = true;
+    } else if (a === "--yes" || a === "-y") {
+      yes = true;
+    } else if (a === "--no-update") {
+      noUpdate = true;
     } else if (a === "--force") {
       force = true;
     } else {
@@ -316,6 +347,8 @@ function parseOpts(args: string[]): Opts {
     country: peerFlags["--country"],
     city: peerFlags["--city"],
     facility: peerFlags["--facility"],
+    peer: peerFlags["--peer"],
+    yes, noUpdate,
     propagate, configOnly, purge, force,
     rest,
   };
@@ -503,6 +536,24 @@ function cmdValidate(opts: Opts): void {
 }
 
 // ── placement / peers (ADR-012) ───────────────────────────────────────
+// The real terminal for placement reset: scripts stream to it, and the
+// confirmation is read from /dev/tty (sync, like every TS manager's loop).
+const RESET_DEPS: ResetDeps = {
+  run: (bin, args) => {
+    const rc = stream(bin, args);
+    return rc === -1 ? 1 : rc; // killed by a signal
+  },
+  confirm: (q) => {
+    const r = spawnSync("bash", ["-c", 'printf "%s" "$1" > /dev/tty; IFS= read -r v < /dev/tty; printf "%s" "$v"', "--", q], {
+      encoding: "utf8",
+    });
+    if (r.status !== 0) die("cannot ask for confirmation (non-interactive session?) — pass --yes");
+    return /^y(es)?$/i.test((r.stdout ?? "").trim());
+  },
+  info,
+  warn,
+};
+
 function cmdPlacement(opts: Opts): void {
   const pl = readPlacement(opts.configDir);
   if (opts.json) {
@@ -832,9 +883,24 @@ export function run(argv: string[], client: Client): number {
         } else die(`key: expected 'list' | 'export <dest>' | 'import <src>', got '${sub}'`);
         return 0;
       }
-      case "placement":
-        cmdPlacement(opts);
-        return 0;
+      case "placement": {
+        const sub = opts.rest[0];
+        if (sub === undefined) {
+          cmdPlacement(opts);
+          return 0;
+        }
+        const ro = {
+          configDir: opts.configDir,
+          moduleDir: moduleScriptDir(opts.configDir),
+          peer: opts.peer,
+          yes: opts.yes,
+          noUpdate: opts.noUpdate,
+        };
+        if (sub === "reset") return placementReset(ro, RESET_DEPS);
+        if (sub === "finish-reset") return placementFinishReset(ro, RESET_DEPS);
+        die(`placement: expected no argument, 'reset' or 'finish-reset', got '${sub}'`);
+        return 1;
+      }
       case "peers":
         cmdPeers(opts);
         return 0;

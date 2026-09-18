@@ -59,7 +59,8 @@ None for a normal local install. Optional follow-ups:
 - **Adopt an existing PBS** (on the LAN, at a satellite, or a third party — #456):
   `backup-manage.sh use-external <url> [--datastore <ds>]`. It registers that PBS as
   this module's backup storage, creates no datastore and never touches what is
-  already stored there. **Permanent** — it is refused from a live local PBS.
+  already stored there. **Sticky** — refused from a live local PBS, and left only
+  deliberately with `backup-manager placement reset` (RESTORE.md §9.1, #607).
 - **Sites with no local PBS:** the `external` route above — clients push straight to
   that PBS. There is no push *peer*: a TAPPaaS PBS never pushes to another (ADR-012 §1.4.1).
 - **File-level capture** for a module that wants named paths rather than the whole
