@@ -77,7 +77,7 @@ sat_write_config() {
         --arg name "${name}" --arg provider "${provider}" --arg ip "${ip}" --arg key "${key}" --arg os "${os}" \
         --argjson roles "${roles_json}" --argjson backup "${backup_json}" \
         '{
-           kind:"external-host", tier:"foundation", name:$name, os:$os, roles:$roles, dependsOn:[],
+           kind:"machine", tier:"foundation", name:$name, os:$os, roles:$roles, dependsOn:[],
            provider:{type:$provider, allocation:"portal"},
            host:{publicIp:$ip, sshUser:"root", operatorSshKeys:[$key]}
          } + (if $backup != null then {backup:$backup} else {} end)' > "${out}"

@@ -663,6 +663,10 @@ rather than by whichever document is read last:
    `kind` is not `"module"` — but the authoritative marker stops being
    authoritative. Either `kind` needs to keep an object-type value, or the
    marker needs its own field.
+   **Resolved 2026-09-18 (#611, ADR-022d v0.18):** neither — the marker is
+   retired. `kind` names the workload (backup is `application`), discovery is
+   shape-based, and migration 0004 keeps the marker only where it is a config's
+   sole module signal.
 
 2. **`shim` as `realized: false`.** ADR-022d §3 argues `shim` is a *state* of a
    placement rather than a peer value of one, so that "placed on a host but not

@@ -1,5 +1,6 @@
 {
   "description": "The TAPPaaS mothership VM",
+  "kind": "vm",
   "version": "1.0",
   "tier": "foundation",
   "status": "Production",

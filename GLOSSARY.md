@@ -114,6 +114,7 @@ For review. Each row is a word whose meaning moved, so reading from memory will 
 | **Node** = the physical Proxmox host | **Node** = ArchiMate's meaning; the narrow sense is **cluster member** | 022c D1, D2 |
 | Module boundary = VM boundary | a module need not be a VM | 022d |
 | Stack-promotion rule lived here | moved to ADR-007f | 022c D5 |
+| `kind: module` — ADR-007's marker that a config is a module | **retired**: `kind` names the workload, discovery is shape-based (migration 0004) | 022d, #611 |
 
 **Still open, not glossary decisions:** `oci` and the grouping concepts `cluster` / `kubernetes`
 (ADR-022d, deferred to their own ADR); whether a consumed PBS is a `device` or an `application` with

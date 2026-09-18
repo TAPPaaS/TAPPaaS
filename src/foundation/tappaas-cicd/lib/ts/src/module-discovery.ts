@@ -17,7 +17,11 @@
 // rule lives here once, and both managers import it.
 //
 // The selection rule, in order:
-//   1. `kind: "module"` — the authoritative tag install-module.sh writes.
+//   1. A workload `kind` (ADR-022f: vm, lxc, machine, application, device) —
+//      what a module authors. Or the LEGACY marker `kind: "module"`, which
+//      install-module.sh stamped until #611: migration 0004 removes it wherever
+//      another signal exists, and keeps it where it is the only one, so the
+//      module does not vanish from discovery.
 //   2. Otherwise a module-shaped field: dependsOn / integratesWith / provides /
 //      location. Provider-only modules (e.g. `templates`) have no vmid or
 //      vmname, so requiring those would drop them — the shape is the wiring,
@@ -45,8 +49,12 @@ const NON_MODULE_BASENAMES = new Set<string>([
 const PEER_PREFIXES = ["pull-", "remote-", "receive-"];
 
 /** True when a parsed config object is a deployed module. */
+/** The workload kinds a module authors (ADR-022f D1). */
+export const WORKLOAD_KINDS = ["vm", "lxc", "machine", "application", "device"] as const;
+
 export function isModuleConfig(raw: Record<string, unknown>): boolean {
-  if (raw.kind === "module") return true;
+  if (raw.kind === "module") return true; // legacy marker (migration 0004)
+  if (typeof raw.kind === "string" && (WORKLOAD_KINDS as readonly string[]).includes(raw.kind)) return true;
   return (
     Array.isArray(raw.dependsOn) ||
     Array.isArray(raw.integratesWith) ||

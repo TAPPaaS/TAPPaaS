@@ -1,5 +1,6 @@
 {
   "description": "VaultWarden password manager (Bitwarden-compatible) in DMZ",
+  "kind": "vm",
   "version": "0.5.0",
   "releaseDate": "2026-02-17",
   "maintainer": "@larsrossen",

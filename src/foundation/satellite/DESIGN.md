@@ -46,7 +46,7 @@ destroy the off-site vault. See ADR-010 §7.
 
 The operator front door is the **`satellite-manager`** CLI on `tappaas-cicd`
 (`satellite-manager install|update|status|remove <name>`). The satellite has an empty
-`dependsOn` by design: as an `external-host` it is not installed through
+`dependsOn` by design: as a `machine` driven by `satellite-manager` it is not installed through
 `install-module.sh` and does not participate in the module dependency graph;
 `satellite-manager` checks its real prerequisites (`network`, `tappaas-cicd`, `backup`
 for the backup role) at install time.

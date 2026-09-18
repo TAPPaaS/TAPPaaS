@@ -30,7 +30,7 @@ done
 # 2. satellite.json valid + slim operator-facing shape (derived values are NOT here)
 if command -v jq >/dev/null 2>&1; then
     if jq empty "${here}/satellite.json" 2>/dev/null; then ok "satellite.json is valid JSON"; else no "satellite.json invalid JSON"; fi
-    [[ "$(jq -r '.kind' "${here}/satellite.json")" == "external-host" ]] && ok "kind=external-host" || no "kind"
+    [[ "$(jq -r '.kind' "${here}/satellite.json")" == "machine" ]] && ok "kind=machine" || no "kind"
     [[ "$(jq -r '.tier' "${here}/satellite.json")" == "foundation" ]] && ok "tier=foundation" || no "tier"
     [[ "$(jq -r '.roles | length' "${here}/satellite.json")" -ge 1 ]] && ok "roles present" || no "roles"
     [[ -n "$(jq -r '.host.publicIp // empty' "${here}/satellite.json")" ]] && ok "host.publicIp present" || no "host.publicIp"

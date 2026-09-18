@@ -1,5 +1,6 @@
 {
   "description": "Home Assistant OS (HAOS) - home automation platform",
+  "kind": "vm",
   "version": "0.2.0",
   "releaseDate": "2026-06-14",
   "maintainer": "@ErikDaniel007",

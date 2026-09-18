@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | **Draft — for review** |
-| **Version** | 0.17 |
+| **Version** | 0.18 |
 | **Date** | 2026-09-09 (v0.17: 2026-09-17) |
 | **Author** | ErikDaniel007 |
 | **Deciders** | @ErikDaniel007, @LarsRossen |
@@ -11,7 +11,7 @@
 | **Refines** | [ADR-007b — Apps](<ADR-007b - Apps.md>) (what type of thing a module is) |
 | **Amends** | [ADR-012](ADR-012-backup-enhancement.md) §1.1, §2.1 (`shim` becomes `realized: false`) · Appendix A (pointer) · [ADR-009](<ADR-009 - Composition Meta-Model.md>) :41 and [GLOSSARY.md](../../GLOSSARY.md) :34 (Module boundary = VM boundary) |
 | **Related** | [ADR-022c — Node and Host](<ADR-022c - Node and Host.md>); [ADR-007f — Realization](<ADR-007f - Realization.md>); [ADR-009](<ADR-009 - Composition Meta-Model.md>) (composition); [ADR-012](ADR-012-backup-enhancement.md) (first consumer); #611 |
-| **Changelog** | v0.17 (2026-09-17) — review #624/#637: reduced to the `kind` vocabulary in one table; `cluster`/`kubernetes` noted as grouping concepts; dispatch rationale kept; `kind` marker left open; open questions and parking lot removed, to be filed as issues; amended ADR-009, GLOSSARY and ADR-012 declared. Earlier drafts in git history. |
+| **Changelog** | v0.18 (2026-09-18) — `kind` marker resolved (#611): `kind` names the workload; the ADR-007 `module` marker is retired by migration 0004; `external-host` retired. · v0.17 (2026-09-17) — review #624/#637: reduced to the `kind` vocabulary in one table; `cluster`/`kubernetes` noted as grouping concepts; dispatch rationale kept; `kind` marker left open; open questions and parking lot removed, to be filed as issues; amended ADR-009, GLOSSARY and ADR-012 declared. Earlier drafts in git history. |
 
 What type of thing a module is — TAPPaaS's `kind`.
 
@@ -57,7 +57,7 @@ Each fact below has its own home and is never encoded in `kind`:
 
 `kind: external-host` appears in nine files in this repo — seven code or schema files (`schemas/satellite-fields.json`, `schemas/module-fields.json`, `satellite/satellite.json`, `satellite/test.sh`, `satellite-manager/lib/provision.sh`, `satellite-manager/test.sh`, the `module-manager` baseline fixture) and two docs (`satellite/README.md`, `satellite/DESIGN.md`) — plus copies in the Community repo (`satellite-fields.json`, `test.sh`, README).
 
-`module-fields.json` uses `kind` today as a deployment marker (`module`, stamped by `module-manager module add`). Open: whether `kind` keeps `module` as a reserved value beside the values above, or the marker gets a field of its own (see ADR-012, *Open against ADR-022d*).
+**Resolved 2026-09-18 (#611): `kind` names the workload, and the deployment marker is retired.** `kind` was also ADR-007's object-type marker (`module`, stamped by `install-module.sh`). The marker gets no field of its own because nothing needs one: module discovery (#544) already recognises a module by its shape, the marker was never the only signal on any measured site, and older installs never carried it. The stamping is removed, each module AUTHORS its `kind` in its source JSON, and migration 0004 removes `kind: "module"` from deployed configs so the 3-way merge can adopt the authored value — except where the marker is a config's only module signal, where it is kept (discovery still accepts it) so the module does not vanish. `cluster` and `templates` carry no `kind` until the grouping-concept ADR.
 
 ## Consequences
 
@@ -69,7 +69,7 @@ Each fact below has its own home and is never encoded in `kind`:
 
 - [ ] Accepted values `vm` / `lxc` / `host` / `device` defined in `GLOSSARY.md` with their anchors
 - [ ] Proposed values recorded as proposed
-- [ ] `external-host` retired across the files above
+- [x] `external-host` retired across the files above (#611; the Community repo's copies are that repository's to change)
 - [ ] `realized` defined as a state, replacing `shim` in ADR-012
-- [ ] Resolved: `kind` marker value vs. its own field
+- [x] Resolved: `kind` marker value vs. its own field — neither: the marker is retired (#611, migration 0004)
 - [ ] ADR-012 Appendix A replaced by a pointer to this ADR and to the parked administrative-domain relationship work

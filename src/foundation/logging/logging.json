@@ -1,5 +1,6 @@
 {
   "description": "Centralized log aggregation with Grafana Loki, Promtail and Grafana UI",
+  "kind": "vm",
   "version": "0.1.0",
   "releaseDate": "2026-05-14",
   "maintainer": "@larsrossen",

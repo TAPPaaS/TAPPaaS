@@ -82,7 +82,7 @@
     "kind": {
       "class": "immutable",
       "apply": "none",
-      "changeNote": "Stamped 'module' by `module-manager module add` so module-manager list/show can tell a deployed module from the other objects in config/. Absent from authored source JSON by design."
+      "changeNote": "Changing what type of workload a module is — a vm into an lxc — is a rebuild, not an edit, so `modify --set kind=…` is refused; change it in the module's source JSON. No provider reads it back from the live system, so the converge never compares it."
     },
     "installTime": {
       "class": "immutable",

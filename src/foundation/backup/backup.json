@@ -1,5 +1,6 @@
 {
   "description": "TAPPaaS Proxmox Backup Server configuration",
+  "kind": "application",
   "version": "1.0",
   "tier": "foundation",
   "status": "Testing",

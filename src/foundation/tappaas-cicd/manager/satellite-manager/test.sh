@@ -24,17 +24,17 @@ if "${mgr}" --help | grep -q "TAPPaaS VPS satellite manager"; then ok "--help pr
 # 3. validate accepts a good fixture
 tmp="$(mktemp -d)"; trap 'rm -rf "${tmp}"' EXIT
 cat > "${tmp}/satellite-t.json" << 'JSON'
-{ "kind": "external-host", "tier": "foundation", "name": "t",
+{ "kind": "machine", "tier": "foundation", "name": "t",
   "roles": ["reverse-proxy"], "host": { "publicIp": "203.0.113.10" } }
 JSON
 if TAPPAAS_CONFIG_DIR="${tmp}" "${mgr}" validate t >/dev/null; then ok "validate accepts a good config"; else no "validate good"; fi
 
 # 4. validate rejects missing roles
-echo '{ "kind":"external-host","tier":"foundation","name":"b","host":{"publicIp":"203.0.113.10"} }' > "${tmp}/satellite-b.json"
+echo '{ "kind":"machine","tier":"foundation","name":"b","host":{"publicIp":"203.0.113.10"} }' > "${tmp}/satellite-b.json"
 if TAPPAAS_CONFIG_DIR="${tmp}" "${mgr}" validate b >/dev/null 2>&1; then no "validate should reject missing roles"; else ok "validate rejects missing roles"; fi
 
 # 5. validate rejects missing publicIp
-echo '{ "kind":"external-host","tier":"foundation","name":"c","roles":["backup"] }' > "${tmp}/satellite-c.json"
+echo '{ "kind":"machine","tier":"foundation","name":"c","roles":["backup"] }' > "${tmp}/satellite-c.json"
 if TAPPAAS_CONFIG_DIR="${tmp}" "${mgr}" validate c >/dev/null 2>&1; then no "validate should reject missing publicIp"; else ok "validate rejects missing publicIp"; fi
 
 # 6. install --dry-run prints the provisioning plan (exit 0, no side effects).
@@ -170,7 +170,7 @@ else
 fi
 
 # 17. install --dry-run branches on os (debian => provision-debian, no nixos-anywhere)
-echo '{ "kind":"external-host","tier":"foundation","name":"dbg","os":"debian","roles":["reverse-proxy"],"host":{"publicIp":"203.0.113.9","operatorSshKeys":["ssh-ed25519 K o@w"]} }' > "${tmp}/satellite-dbg.json"
+echo '{ "kind":"machine","tier":"foundation","name":"dbg","os":"debian","roles":["reverse-proxy"],"host":{"publicIp":"203.0.113.9","operatorSshKeys":["ssh-ed25519 K o@w"]} }' > "${tmp}/satellite-dbg.json"
 rc=0; out="$(TAPPAAS_CONFIG_DIR="${tmp}" "${mgr}" install dbg --dry-run 2>&1)" || rc=$?
 if [[ "${rc}" -eq 0 ]] && grep -q "provision-debian.sh" <<< "${out}" && ! grep -q "nixos-anywhere" <<< "${out}"; then
     ok "install --dry-run (os=debian) plans the Debian path"
@@ -226,9 +226,9 @@ else
 fi
 
 # 21. install --dry-run: backup+debian plans the pull; backup+nixos is skipped
-echo '{ "kind":"external-host","tier":"foundation","name":"bd","os":"debian","roles":["backup"],"host":{"publicIp":"203.0.113.9","operatorSshKeys":["ssh-ed25519 K o@w"]},"backup":{"pull":{"homePbsHost":"10.0.0.20"}} }' > "${tmp}/satellite-bd.json"
+echo '{ "kind":"machine","tier":"foundation","name":"bd","os":"debian","roles":["backup"],"host":{"publicIp":"203.0.113.9","operatorSshKeys":["ssh-ed25519 K o@w"]},"backup":{"pull":{"homePbsHost":"10.0.0.20"}} }' > "${tmp}/satellite-bd.json"
 out="$(TAPPAAS_CONFIG_DIR="${tmp}" "${mgr}" install bd --dry-run 2>&1)" || true
-echo '{ "kind":"external-host","tier":"foundation","name":"bn","os":"nixos","roles":["backup"],"host":{"publicIp":"203.0.113.9","operatorSshKeys":["ssh-ed25519 K o@w"]} }' > "${tmp}/satellite-bn.json"
+echo '{ "kind":"machine","tier":"foundation","name":"bn","os":"nixos","roles":["backup"],"host":{"publicIp":"203.0.113.9","operatorSshKeys":["ssh-ed25519 K o@w"]} }' > "${tmp}/satellite-bn.json"
 outn="$(TAPPAAS_CONFIG_DIR="${tmp}" "${mgr}" install bn --dry-run 2>&1)" || true
 if grep -q "pull sync-job" <<< "${out}" && grep -qi "SKIPPED" <<< "${outn}"; then
     ok "install --dry-run backup: debian plans pull, nixos skipped"

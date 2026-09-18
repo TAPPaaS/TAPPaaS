@@ -515,16 +515,10 @@ main() {
 
     local module_json="${CONFIG_DIR}/${effective_module}.json"
 
-    # Tag the deployed config as a module (ADR-007 #3). module-manager's
-    # list/show select on .kind=="module" to distinguish a deployed module from
-    # the co-located state files (zones.json, site.json, …); a heuristic remains
-    # the fallback for not-yet-tagged configs. Pattern A-aware write; best-effort
-    # (a tag failure must not block the install).
-    if jq_module_write "${effective_module}" '.kind = "module"'; then
-        debug "  Tagged ${effective_module}.json with kind=module"
-    else
-        warn "  Could not tag ${effective_module}.json with kind=module (continuing)"
-    fi
+    # No object-type tag any more (#611). `kind` is the workload type the module
+    # AUTHORS (ADR-022f: vm, lxc, machine, application, device) and arrives with
+    # the copied source; module discovery recognises a module by its shape
+    # (lib/ts/src/module-discovery.ts), which a fresh install always has.
 
     # zone0 resolution (ADR-007 P5, reconciled with S6 N6): precedence is
     #   1. explicit .zone0 in the module JSON / --zone0 override  (always wins)

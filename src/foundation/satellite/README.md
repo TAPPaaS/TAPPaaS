@@ -28,8 +28,8 @@ volume).
 
 ## What is not included
 
-- **Not a Proxmox VM the cluster hosts** — the satellite is an external host
-  (`kind: external-host`) the cluster reaches out to and manages. It is optional and
+- **Not a Proxmox VM the cluster hosts** — the satellite is its own machine
+  (`kind: machine`, ADR-022f; ADR-010 §8) that the cluster reaches out to and manages. It is optional and
   never part of the mandatory install chain.
 - No TLS termination or cert keys on the satellite — Caddy at home terminates; the
   satellite relays ciphertext only (blind relay + blind vault trust model, ADR-010 §7).

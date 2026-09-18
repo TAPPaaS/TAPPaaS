@@ -1,10 +1,10 @@
 {
-  "_README": "Field reference for a TAPPaaS satellite config (ADR-010): ~/config/satellite-<name>.json. A satellite is an EXTERNAL host (kind=external-host), NOT a Proxmox cluster:vm. PRINCIPLE: this file exposes ONLY operator-facing choices; every derived value (tunnel, ports, per-role tuning, backup mechanics, update mode) is defaulted by satellite-manager (lib/provision.sh) — see 'derived' below. Secrets are never stored here.",
+  "_README": "Field reference for a TAPPaaS satellite config (ADR-010): ~/config/satellite-<name>.json. A satellite is its own machine (kind=machine, ADR-022f; ADR-010 §8), NOT a Proxmox cluster:vm. PRINCIPLE: this file exposes ONLY operator-facing choices; every derived value (tunnel, ports, per-role tuning, backup mechanics, update mode) is defaulted by satellite-manager (lib/provision.sh) — see 'derived' below. Secrets are never stored here.",
   "version": "0.2.0",
   "appliesTo": "src/foundation/satellite/satellite.json and ~/config/satellite-<name>.json",
 
   "fields": {
-    "kind": { "type": "string", "required": true, "values": { "external-host": "provisioned on an external host (only value)" } },
+    "kind": { "type": "string", "required": true, "values": { "machine": "its own system with an OS, provisioned by satellite-manager (ADR-010 §8, ADR-022f D2) — only value; was external-host before #611" } },
     "tier": { "type": "string", "required": true, "values": { "foundation": "foundation-grade but OPTIONAL (not in the mandatory install chain)" } },
     "name": { "type": "string", "required": true, "description": "satellite instance name (also the hostname); a site may run several" },
     "os": { "type": "string", "default": "debian", "required": false, "values": { "debian": "ADR-010 Option 3 (default): stock Debian 12/13 provisioned over SSH by satellite-manager (no nixos-anywhere); official proxmox-backup-server for the backup role; OS diversity protects the vault from a nixpkgs supply-chain compromise (§7.3)", "nixos": "declarative NixOS via nixos-anywhere (satellite.nix)" }, "note": "legacy configs without this field are treated as nixos" },

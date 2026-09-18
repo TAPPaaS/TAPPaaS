@@ -1,5 +1,6 @@
 {
   "description": "TAPPaaS LiteLLM",
+  "kind": "vm",
   "version": "0.7.1",
   "releaseDate": "2026-09-07",
   "maintainer": "@ErikDaniel007",

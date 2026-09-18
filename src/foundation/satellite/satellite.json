@@ -1,5 +1,5 @@
 {
-  "_README": "TAPPaaS satellite module config (ADR-010). An EXTERNAL host (kind=external-host) that tappaas-cicd provisions via nixos-anywhere and manages with `satellite-manager` — NOT a Proxmox cluster:vm. This file exposes ONLY the operator-facing choices; ALL derived values (tunnel /31 + ports, per-role tuning, backup mechanics, update mode) are computed with sensible defaults by satellite-manager at install time (see lib/provision.sh). Copy to ~/config/satellite-<name>.json and edit. Secrets are never stored here.",
+  "_README": "TAPPaaS satellite module config (ADR-010). A machine (kind=machine, ADR-022f; ADR-010 §8) that tappaas-cicd provisions via nixos-anywhere and manages with `satellite-manager` — NOT a Proxmox cluster:vm. This file exposes ONLY the operator-facing choices; ALL derived values (tunnel /31 + ports, per-role tuning, backup mechanics, update mode) are computed with sensible defaults by satellite-manager at install time (see lib/provision.sh). Copy to ~/config/satellite-<name>.json and edit. Secrets are never stored here.",
 
   "description": "Operator-owned VPS satellite: reverse-proxy frontend, admin VPN, and off-site backup for a cluster with no public IP",
   "version": "0.1.0",
@@ -7,13 +7,13 @@
   "maintainer": "@larsrossen",
   "status": "Development",
   "tier": "foundation",
-  "kind": "external-host",
+  "kind": "machine",
 
   "name": "satellite",
   "roles": ["reverse-proxy", "admin-vpn", "backup"],
 
   "dependsOn": [],
-  "_dependsOn_note": "Empty by design: the satellite is external-host and operator-driven (satellite-manager), NOT installed through install-module.sh, so it does not participate in the module dependency graph. Its real prerequisites — the `network` module (OPNsense) up, `tappaas-cicd` up, and the `backup` module (home PBS) for the backup role — are checked by satellite-manager at install time, not resolved here.",
+  "_dependsOn_note": "Empty by design: the satellite is a machine the operator drives with satellite-manager, NOT installed through install-module.sh, so it does not participate in the module dependency graph. Its real prerequisites — the `network` module (OPNsense) up, `tappaas-cicd` up, and the `backup` module (home PBS) for the backup role — are checked by satellite-manager at install time, not resolved here.",
 
   "provider": {
     "type": "hetzner",

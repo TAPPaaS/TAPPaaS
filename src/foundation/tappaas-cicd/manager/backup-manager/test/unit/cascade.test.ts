@@ -513,6 +513,18 @@ check(!retentionValid("7") && !retentionValid("7x") && !retentionValid(""), "inv
   // Target discovery narrows to the opted-in set.
   eq(listBackupModules(tmp).join(","), "nextcloud,tappaas-cicd", "backup targets = modules that opted in");
   check(!listBackupModules(tmp).includes("unifi-os"), "a module declaring neither is not a backup target");
+
+  // #611: `kind` names the workload (ADR-022f). A config that authors one is a
+  // module even with no other signal; the legacy marker alone still is —
+  // migration 0004 keeps it exactly there so the module does not vanish; and an
+  // unknown kind with no shape is not a module.
+  w("vm-only.json", { kind: "vm" });
+  w("marker-only.json", { kind: "module", vmid: "202" });
+  w("odd-kind.json", { kind: "spaceship" });
+  const f611 = listModules(tmp);
+  check(f611.includes("vm-only"), "#611: an authored workload kind makes a module");
+  check(f611.includes("marker-only"), "#611: the legacy marker alone still makes a module");
+  check(!f611.includes("odd-kind"), "#611: an unknown kind is not a module signal");
 }
 
 // ── ADR-012 D18: PBS-job membership is dependsOn OR integratesWith ────

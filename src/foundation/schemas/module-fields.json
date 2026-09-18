@@ -219,19 +219,22 @@
       "note": "Mandatory in authored module JSON (ADR-007b CR-04). The schema gives it a 'app' default so legacy module configs that predate ADR-007 still validate (back-compat); authored modules SHOULD set it explicitly."
     },
     "kind": {
-      "description": "Authoritative object-type marker (ADR-007), written by the tooling — NOT authored by hand. `module-manager module add` stamps '.kind = \"module\"' into every deployed /home/tappaas/config/<module>.json so module-manager list/show can distinguish a real deployed module from other config objects. It is absent from authored source JSON, which is why the reconcile flagged it as unknown before this field existed.",
+      "description": "What type of workload the module is (ADR-022f D1) — equivalently, which Controller builds it. AUTHORED in the module's source JSON and adopted by deployments through the 3-way merge. Not what it runs on: that is its Host, named in `node` (ADR-022c D3).",
       "type": "string",
       "requiredBy": [],
       "usedBy": [
         "general"
       ],
-      "default": "module",
       "values": {
-        "module": "A TAPPaaS module deployed via `module-manager module add` — the only value module-fields.json uses.",
-        "external-host": "A non-module cluster guest registered via satellite-manager; validated by satellite-fields.json, not this schema."
+        "vm": "A virtual machine (KVM/QEMU) on a cluster member.",
+        "lxc": "A Linux container on a cluster member.",
+        "machine": "Its own system with an OS, not a Proxmox guest (ADR-026) — e.g. the satellite.",
+        "application": "Software installed onto a Host, owning no system of its own; names its Host in `node` — e.g. backup.",
+        "device": "Only network reachability is configured — no SSH, no checks.",
+        "module": "LEGACY, never authored: ADR-007's object-type marker, once stamped into every deployed config. Migration 0004 removes it; it survives only where it is a config's sole module signal, so discovery can still find that module."
       },
-      "example": "module",
-      "note": "System-managed: set automatically by `module-manager module add` (jq '.kind = \"module\"'). Do not set it in authored module JSON."
+      "example": "vm",
+      "note": "Absent on modules ADR-022 does not classify yet — `cluster` and `templates` (the grouping concept is its own ADR); discovery finds them by their shape. Before #611 this field was the object-type marker, stamped \"module\" by install-module.sh; that stamping is gone."
     },
     "source": {
       "description": "Origin & trust of the catalog entry (ADR-007b). Answers 'Where does the catalog entry come from?'. Orthogonal to 'tier'. Normally INFERRED at deploy time from the repository the module is catalogued in (sourceMetadata lives in Site → repositories, CR-05); only set explicitly when the module file itself must pin it.",
