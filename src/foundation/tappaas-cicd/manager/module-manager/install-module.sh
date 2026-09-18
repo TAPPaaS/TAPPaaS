@@ -216,6 +216,17 @@ resolve_zone_for_environment() {
     jq -r '.network.zone // empty' "$env_file" 2>/dev/null
 }
 
+# True when the module (in the current directory) declares a `kind` that is NOT
+# a guest — machine, application, device (ADR-022f). Such a module has no VM, so
+# it must get no computed vmname: `module list` matches vmname against the
+# cluster's VMs, and a machine carrying one would be shown as whatever VM happens
+# to share its name (ADR-026 D6.3 — vmname names a VM, nothing else). Modules
+# without a kind keep the old behaviour.
+module_is_not_a_guest() {
+    jq -e '(.kind // "") as $k | ($k == "machine" or $k == "application" or $k == "device")' \
+        "./${module}.json" >/dev/null 2>&1
+}
+
 # True if a module config for <module> already exists in CONFIG_DIR (the
 # installed marker). Used for the foundation single-instance guard — offline,
 # config-only (never probes the cluster).
@@ -507,7 +518,7 @@ main() {
         cuj_args+=("--instance" "${instance}")
         # A module that deploys a guest gets the instance as its vmname, unless
         # the operator named one; a machine or an application has no vmname.
-        if [[ " ${passthru[*]-} " != *" --vmname "* ]] && jq -e 'has("vmname")' "./${module}.json" >/dev/null 2>&1; then
+        if [[ " ${passthru[*]-} " != *" --vmname "* ]] && ! module_is_not_a_guest; then
             cuj_args+=("--vmname" "${computed_vmname}")
         fi
     fi
@@ -515,8 +526,9 @@ main() {
         cuj_args+=("--environment" "${environment}")
         [[ -n "${default_env}" ]] && cuj_args+=("--default-environment" "${default_env}")
         # Computed vmname only when the operator did not pass an explicit one,
-        # and --instance has not already set it above.
-        if [[ " ${passthru[*]-} ${cuj_args[*]} " != *" --vmname "* ]]; then
+        # --instance has not already set it above, and the module deploys a
+        # guest at all — a machine, application or device has no VM to name.
+        if [[ " ${passthru[*]-} ${cuj_args[*]} " != *" --vmname "* ]] && ! module_is_not_a_guest; then
             cuj_args+=("--vmname" "${computed_vmname}")
         fi
     fi

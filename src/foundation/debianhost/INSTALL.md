@@ -20,6 +20,14 @@ mkdir -p /root/.ssh && chmod 700 /root/.ssh
 echo '<the key printed above>' >> /root/.ssh/authorized_keys
 ```
 
+If root already has an entry for the same key with a `command="…"` restriction — Debian's cloud
+images add one that answers *"Please login as the user "debian" rather than the user "root""* —
+appending is not enough: `sshd` uses the first line that matches. Replace the file instead:
+
+```bash
+install -d -m 700 /root/.ssh && echo '<the key printed above>' > /root/.ssh/authorized_keys && chmod 600 /root/.ssh/authorized_keys
+```
+
 Nothing else on the machine changes. Check it from the mothership:
 
 ```bash
