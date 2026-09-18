@@ -142,6 +142,17 @@ class R:
     def __init__(self, rc=0, out="", err=""):
         self.returncode, self.stdout, self.stderr = rc, out, err
 
+# update_module streams through Popen; wrap a run()-style fake into one whose
+# stdout yields its stdout then stderr lines (the real call merges the two).
+def as_popen(run):
+    class P:
+        def __init__(self, argv, **kw):
+            r = run(argv, **kw); self.returncode = r.returncode
+            self.stdout = iter((r.stdout + r.stderr).splitlines(True))
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+    return P
+
 def fake_run(argv, **kw):
     seen["argv"] = argv
     return R(0,
@@ -149,7 +160,7 @@ def fake_run(argv, **kw):
              "[Warning] DEFERRED: demo net0 needs a disruptive change that is not authorized\n",
              "[Warning] DEFERRED: demo node needs downtime\n")
 
-m.subprocess.run = fake_run
+m.subprocess.Popen = as_popen(fake_run)
 m.DEFERRED_CHANGES.clear()
 assert m.update_module("demo") is True, "a deferral is not a failure"
 
@@ -165,20 +176,20 @@ assert m.DEFERRED_CHANGES[0].startswith("demo net0"), m.DEFERRED_CHANGES
 assert any(d.startswith("demo node") for d in m.DEFERRED_CHANGES), m.DEFERRED_CHANGES
 
 # A clean converge adds nothing.
-m.subprocess.run = lambda argv, **kw: R(0, "  in sync\n", "")
+m.subprocess.Popen = as_popen(lambda argv, **kw: R(0, "  in sync\n", ""))
 m.DEFERRED_CHANGES.clear()
 m.update_module("demo")
 assert m.DEFERRED_CHANGES == [], "a clean converge must not invent deferrals"
 
 # A real failure is still a failure.
-m.subprocess.run = lambda argv, **kw: R(1, "", "boom")
+m.subprocess.Popen = as_popen(lambda argv, **kw: R(1, "", "boom"))
 assert m.update_module("demo") is False, "a non-zero converge is a failed module"
 
 # #633: site-manager update --force (TAPPAAS_MODULE_FORCE=1) runs every module
 # now; it must NOT reach `module modify` as --force, which would override
 # rebootOk:false on the whole fleet. It opens the window instead, so only
 # rebootOk modules may be disrupted.
-m.subprocess.run = fake_run
+m.subprocess.Popen = as_popen(fake_run)
 m.os.environ["TAPPAAS_MODULE_FORCE"] = "1"
 try:
     m.update_module("demo")
@@ -238,13 +249,24 @@ class R:
     def __init__(self, rc=0, out="", err=""):
         self.returncode, self.stdout, self.stderr = rc, out, err
 
+# update_module streams through Popen; wrap a run()-style fake into one whose
+# stdout yields its stdout then stderr lines (the real call merges the two).
+def as_popen(run):
+    class P:
+        def __init__(self, argv, **kw):
+            r = run(argv, **kw); self.returncode = r.returncode
+            self.stdout = iter((r.stdout + r.stderr).splitlines(True))
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+    return P
+
 def fake_run_warn(argv, **kw):
     return R(0,
              "  applying cores\n"
              "[Warning] TEST-WARN: demo: 1 check(s) failing before and after the update — some-check\n",
              "")
 
-m.subprocess.run = fake_run_warn
+m.subprocess.Popen = as_popen(fake_run_warn)
 m.DEFERRED_CHANGES.clear()
 m.TEST_WARNINGS.clear()
 assert m.update_module("demo") is True, "a TEST-WARN is not a failure"
@@ -259,7 +281,7 @@ def fake_run_both(argv, **kw):
              "[Warning] TEST-WARN: demo: 1 check(s) failing before and after the update — other-check\n",
              "")
 
-m.subprocess.run = fake_run_both
+m.subprocess.Popen = as_popen(fake_run_both)
 m.DEFERRED_CHANGES.clear()
 m.TEST_WARNINGS.clear()
 m.update_module("demo")

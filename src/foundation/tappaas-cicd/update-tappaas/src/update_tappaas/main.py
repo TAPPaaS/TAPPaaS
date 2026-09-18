@@ -548,25 +548,22 @@ def update_module(module_name: str) -> bool:
     if os.environ.get("TAPPAAS_MODULE_FORCE") == "1":
         args.append("--force")
     try:
-        result = subprocess.run(
-            args,
-            text=True,
-            capture_output=True,
-        )
-        # Stream through, exactly as before capture_output was needed: the
-        # operator watches this live and the per-module banners are the shape of
-        # the log.
-        if result.stdout:
-            sys.stdout.write(result.stdout)
-        if result.stderr:
-            sys.stderr.write(result.stderr)
-        for line in (result.stdout or "").splitlines() + (result.stderr or "").splitlines():
-            for prefix, sink in ((_DEFERRED_PREFIX, DEFERRED_CHANGES),
-                                 (_TEST_WARN_PREFIX, TEST_WARNINGS)):
-                idx = line.find(prefix)
-                if idx != -1:
-                    sink.append(line[idx + len(prefix):].strip())
-        return result.returncode == 0
+        # Stream line by line: the operator watches this live. Capturing the
+        # whole run and writing it afterwards left minutes of silence per module
+        # and moved every stderr line to the end of its block; stderr is merged
+        # so errors stay where they happened.
+        with subprocess.Popen(args, text=True, bufsize=1,
+                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT) as proc:
+            assert proc.stdout is not None
+            for line in proc.stdout:
+                sys.stdout.write(line)
+                sys.stdout.flush()
+                for prefix, sink in ((_DEFERRED_PREFIX, DEFERRED_CHANGES),
+                                     (_TEST_WARN_PREFIX, TEST_WARNINGS)):
+                    idx = line.find(prefix)
+                    if idx != -1:
+                        sink.append(line[idx + len(prefix):].strip())
+        return proc.returncode == 0
     except (subprocess.SubprocessError, FileNotFoundError) as e:
         log.error("Error running 'module-manager module modify %s': %s", module_name, e)
         return False
