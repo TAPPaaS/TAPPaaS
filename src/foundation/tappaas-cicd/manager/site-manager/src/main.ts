@@ -28,7 +28,7 @@ import { defaultConfigDir, defaultSchemaDir, loadRaw, loadSite, writeSite } from
 import { CliSiteClient } from "./client";
 import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
 import { evacuateNode, evacuateExitCode } from "./evacuate";
-import { DieError, GN, RD, YW, CL, die, guarded, info, preflightGuard, warn } from "../../../lib/ts/src/cli";
+import { DieError, GN, RD, YW, CL, debug, die, guarded, info, infoTagged, preflightGuard, warn } from "../../../lib/ts/src/cli";
 import { applyPlan, computePlan } from "./reconcile";
 import { adoptNode, provisionNode } from "./provision";
 import { Site, SiteClient, SiteNode } from "./types";
@@ -882,21 +882,22 @@ function cmdUpdate(o: Opts, client: SiteClient): number {
     dropRequest(o.configDir);
     die(`could not start ${UNIT}: ${started.err}`);
   }
-  info(`started ${UNIT} (this run continues if you detach — Ctrl-C only stops following)`);
-  info(`  follow:   journalctl -fu ${UNIT}`);
-  info(`  status:   systemctl status ${UNIT}`);
+  infoTagged(`started ${UNIT} (this run continues if you detach — Ctrl-C only stops following)`);
+  debug(`follow:   journalctl -fu ${UNIT}`);
+  debug(`status:   systemctl status ${UNIT}`);
   if (client.followUnit(started.invocationId) === "detached") {
-    info(`detached — the run continues: journalctl -fu ${UNIT}`);
+    infoTagged(`detached — the run continues: journalctl -fu ${UNIT}`);
     return 0;
   }
   const result = client.unitResult();
-  info(summaryLine(readResult(o.configDir)));
+  // On success update-tappaas's own last line, just followed, is this summary.
   if (result !== "success") {
+    infoTagged(summaryLine(readResult(o.configDir)));
     warn(`${UNIT} ended with result '${result}' — journalctl -u ${UNIT} -n 200; the site owner was notified (#651)`);
     return 1;
   }
-  info("  verify:   jq .ok ~/config/last-update-result.json     → true");
-  info("  verify:   site-manager update --dry-run               → no repository drift remains");
+  debug("verify:   jq .ok ~/config/last-update-result.json     → true");
+  debug("verify:   site-manager update --dry-run               → no repository drift remains");
   return 0;
 }
 
