@@ -14,6 +14,7 @@
     "rebootOk",
     "tier",
     "kind",
+    "management",
     "source",
     "location",
     "variant",
@@ -53,6 +54,7 @@
     "bridge1",
     "mac1",
     "zone1",
+    "address",
     "trunks1",
     "firewallType",
     "aliasType",
@@ -341,6 +343,75 @@
         }
       },
       "note": "Convert between forms with module-format.sh (to-flat | to-config). Backward compatible: flat modules are untouched."
+    },
+    "os": {
+      "description": "The operating system a system runs — ADR-022f's OS facet, held as its `id` (the freedesktop os-release ID); the family follows from it: debian, ubuntu, nixos → linux; windows → windows. For a VM it also drives cloud-init bootstrapping (the Debian vendor-data snippet). For a machine, `module adopt` reads it from /etc/os-release, and it selects the machine module (ADR-026 D7).",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "general",
+        "cluster:vm"
+      ],
+      "default": "<auto-detected from image filename: debian-*, ubuntu-*, *nixos* -> matching value; else unknown>",
+      "values": {
+        "debian": "Debian-family cloud image (apt). Receives the tappaas-debian vendor-data snippet.",
+        "ubuntu": "Ubuntu-family cloud image (apt). Receives the tappaas-debian vendor-data snippet.",
+        "nixos": "NixOS template VM. No vendor-data snippet.",
+        "windows": "Windows Server clone VM. Create-TAPPaaS-VM.sh builds and attaches a per-VM OOBE answer ISO. No cloud-init.",
+        "unknown": "OS family is unknown. No vendor-data snippet."
+      },
+      "example": "debian",
+      "note": "Optional. If omitted, Create-TAPPaaS-VM.sh falls back to sniffing the 'image' filename. Set explicitly to override the sniff."
+    },
+    "zone0": {
+      "description": "The security zone the FIRST network interface connects to; it must exist in zones.json. For a VM or LXC: which Proxmox bridge VLAN its virtual NIC is attached to. For a machine (kind: machine, ADR-026): which network its first physical NIC is cabled to — recorded, not yet enforced (connecting a machine's port on the switch is its own issue).",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "general",
+        "cluster:vm",
+        "cluster:lxc"
+      ],
+      "default": "mgmt",
+      "format": "^[a-z][a-zA-Z0-9]*$",
+      "example": "srvHome",
+      "note": "Zone determines VLAN tag. 'mgmt' is untagged traffic. camelCase only — no underscores or hyphens. ADR-007 P5: when zone0 is unset it DEFAULTS to the target environment's network.zone (read from config/environments/<env>.json); pre-cutover (no site.json/environments) it falls back to resolve_default_zone()'s behaviour. An explicit zone0 in the module JSON always wins."
+    },
+    "zone1": {
+      "description": "The security zone the SECOND network interface connects to, if there is one; it must exist in zones.json. For a VM: which Proxmox bridge VLAN its second virtual NIC is attached to. For a machine: which network its second physical NIC is cabled to — recorded, not yet enforced.",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "general",
+        "cluster:vm"
+      ],
+      "default": "mgmt",
+      "format": "^[a-z][a-zA-Z0-9]*$",
+      "note": "Only used if bridge1 is defined. Hyphens are NOT allowed — use underscores."
+    },
+    "address": {
+      "description": "How the mothership reaches a machine (kind: machine, ADR-026 D8.1): an IP address or FQDN, logged into as root with the mothership's key. Written by `module adopt`. A VM or LXC is reached by its name and zone instead and has no `address`.",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "example": "10.0.0.90",
+      "note": "Changing it records where the machine is now; it moves nothing."
+    },
+    "management": {
+      "description": "Whether TAPPaaS runs a lifecycle against this module (ADR-022g): `managed` — it installs, updates, tests and deletes it; `unmanaged` — registered so the Site knows it exists, with no lifecycle. Absent means managed.",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "default": "managed",
+      "values": {
+        "managed": "TAPPaaS runs the module's lifecycle",
+        "unmanaged": "registered only; no install, update, test or delete"
+      },
+      "note": "Recorded now; the sweep does not read it yet — it still takes a module out with `status: archived | external`."
     }
   },
   "module_structure": {

@@ -97,15 +97,6 @@
       "changeNote": "Also the ADD/REMOVE switch for the second NIC. Its module-fields.json default is the sentinel 'NONE', so an undeclared bridge1 resolves to 'no second NIC' — the same reading Create-TAPPaaS-VM.sh and update-service.sh have always had. 'NONE' with a live net1 means the NIC is removed, which likewise reboots."
     },
     "zone1": {
-      "description": "Security zone for net1. Must exist in zones.json.",
-      "type": "string",
-      "requiredBy": [],
-      "usedBy": [
-        "cluster:vm"
-      ],
-      "default": "mgmt",
-      "format": "^[a-z][a-zA-Z0-9]*$",
-      "note": "Only used if bridge1 is defined. Hyphens are NOT allowed — use underscores.",
       "class": "in-place-reboot",
       "apply": "composite",
       "composite": "net1",
@@ -253,22 +244,6 @@
       "changeNote": "The guest's identity. Changing it IS a different guest — delete + reinstall."
     },
     "os": {
-      "description": "Operating system family of the VM. Drives OS-specific cloud-init bootstrapping (e.g. attaching the Debian vendor-data snippet that pre-installs qemu-guest-agent).",
-      "type": "string",
-      "requiredBy": [],
-      "usedBy": [
-        "cluster:vm"
-      ],
-      "default": "<auto-detected from image filename: debian-*, ubuntu-*, *nixos* -> matching value; else unknown>",
-      "values": {
-        "debian": "Debian-family cloud image (apt). Receives the tappaas-debian vendor-data snippet.",
-        "ubuntu": "Ubuntu-family cloud image (apt). Receives the tappaas-debian vendor-data snippet.",
-        "nixos": "NixOS template VM. No vendor-data snippet.",
-        "windows": "Windows Server clone VM. Create-TAPPaaS-VM.sh builds and attaches a per-VM OOBE answer ISO. No cloud-init.",
-        "unknown": "OS family is unknown. No vendor-data snippet."
-      },
-      "example": "debian",
-      "note": "Optional. If omitted, Create-TAPPaaS-VM.sh falls back to sniffing the 'image' filename. Set explicitly to override the sniff.",
       "class": "immutable",
       "apply": "none",
       "changeNote": "Auto-detected from the image at install and never changed in place. Reported from the QEMU guest agent (get-osinfo), whose distro id the reporter maps into this schema's vocabulary — Windows spells itself 'mswindows'. The agent only answers for a RUNNING guest with the agent installed; otherwise the reporter omits the key and the field records as not-reported rather than drifting against an empty actual.",

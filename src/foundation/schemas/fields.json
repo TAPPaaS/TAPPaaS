@@ -98,6 +98,16 @@
       "class": "immutable",
       "apply": "none",
       "changeNote": "RETIRED, superseded by `environment`. Never write it; installs strip it (copy-update-json.sh del(.variant)). Retained in module-fields.json only so a pre-migration config carrying it is classified rather than reported unknown."
+    },
+    "address": {
+      "class": "in-place",
+      "apply": "none",
+      "changeNote": "Where the mothership reaches a machine; changing it re-points TAPPaaS, it does not move the machine."
+    },
+    "management": {
+      "class": "in-place",
+      "apply": "none",
+      "changeNote": "Takes a module in or out of TAPPaaS's lifecycle; nothing is applied to the module itself."
     }
   }
 }
