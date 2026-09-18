@@ -114,9 +114,9 @@ echo "== environment-manager FAST tests =="
 #    below resolve against.
 # ---------------------------------------------------------------------------
 CFG="${WORK}/config"
-mkdir -p "${CFG}/people/organizations"
+mkdir -p "${CFG}/identities/organizations"
 cp "${FIX}/zones.json" "${CFG}/zones.json"
-cp "${FIX}/people/organizations/test2.json" "${CFG}/people/organizations/test2.json"
+cp "${FIX}/identities/organizations/test2.json" "${CFG}/identities/organizations/test2.json"
 
 # ---------------------------------------------------------------------------
 # 4. Schema REJECTS an authored tlsCertRefid
@@ -179,8 +179,8 @@ fi
 # 6. `add` bootstrap --name <N> produces mgmt + <N> (ADR-007 S6 N6)
 # ---------------------------------------------------------------------------
 CFG2="${WORK}/bootstrap"
-mkdir -p "${CFG2}/people/organizations"
-cp "${FIX}/people/organizations/test2.json" "${CFG2}/people/organizations/test2.json"
+mkdir -p "${CFG2}/identities/organizations"
+cp "${FIX}/identities/organizations/test2.json" "${CFG2}/identities/organizations/test2.json"
 cp "${FIX}/zones.json" "${CFG2}/zones.json"
 # zones.json fixture has no 'acme' zone — add one so the default env validates.
 jq '. + {"acme":{"type":"Service","vlantag":210,"bridge":"lan","description":"acme (fixture)"}}' \
@@ -229,8 +229,8 @@ fi
 
 # 6b. --name omitted → derive from site.json '.defaultEnvironment' (#426; NOT .name)
 CFG3="${WORK}/bootstrap-site"
-mkdir -p "${CFG3}/people/organizations"
-cp "${FIX}/people/organizations/test2.json" "${CFG3}/people/organizations/test2.json"
+mkdir -p "${CFG3}/identities/organizations"
+cp "${FIX}/identities/organizations/test2.json" "${CFG3}/identities/organizations/test2.json"
 cp "${CFG2}/zones.json" "${CFG3}/zones.json"   # has acme + base zones
 # .name is the neutral site code; .defaultEnvironment names the default env (#426).
 cat > "${CFG3}/site.json" <<'JSON'
@@ -266,11 +266,11 @@ mgmt_after="$(cat "$M" 2>/dev/null || true)"
 # 8. P3 example shapes validate (foo/bar/default/mgmt from the ADR)
 # ---------------------------------------------------------------------------
 EX="${WORK}/examples"
-mkdir -p "${EX}/people/organizations"
+mkdir -p "${EX}/identities/organizations"
 cp "${FIX}/zones.json" "${EX}/zones.json"
 # add the orgs the examples reference + the example zones (foo, bar)
 for o in test2 foo-company bar-company myOrg; do
-    cat > "${EX}/people/organizations/${o}.json" <<JSON
+    cat > "${EX}/identities/organizations/${o}.json" <<JSON
 { "name": "${o}", "type": "company", "displayName": "${o}", "owner": "lars" }
 JSON
 done

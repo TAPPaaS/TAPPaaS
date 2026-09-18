@@ -1,8 +1,8 @@
-// entity.ts — config-only CRUD for the People domain (ADR-007 #5).
+// entity.ts — config-only CRUD for the Identity domain (ADR-007 #5).
 //
 // Admins drive verbs; they never hand-edit JSON. `add`/`modify`/`delete` WRITE
-// the validated config under config/people/<dir>/<name>.json — they do NOT call
-// Authentik. The operator runs `people-manager reconcile` afterwards to push
+// the validated config under config/identities/<dir>/<name>.json — they do NOT call
+// Authentik. The operator runs `identity-manager reconcile` afterwards to push
 // config → live. Writes are atomic (mktemp+rename) and gated by validateRefs.
 
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "fs";
@@ -298,7 +298,7 @@ export function referencesTo(model: PeopleModel, kind: Kind, name: string): stri
 
 // ── atomic write ───────────────────────────────────────────────────────
 // Exported for reuse by the bootstrap (src/bootstrap.ts) — the one JSON-writing
-// path for the People domain.
+// path for the Identity domain.
 export function atomicWrite(path: string, data: string): void {
   const dir = dirname(path);
   mkdirSync(dir, { recursive: true });

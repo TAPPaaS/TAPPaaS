@@ -18,7 +18,7 @@
 #                        environment, its zone, and the owner org  [schema: defaultEnvironment]
 #   displayName       <- --name                          [schema: displayName]
 #   owner             <- --organization (the owning org, keyed on the org name; an
-#                        org file may be created later by people-manager)  [schema: owner]
+#                        org file may be created later by identity-manager)  [schema: owner]
 #   email             <- --email / Proxmox root@pam user / existing  [schema: email]
 #   version           <- git describe of /home/tappaas/TAPPaaS, else "1.0"
 #   location.country  <- derived from system timezone region (fallback NL)
@@ -34,8 +34,8 @@
 #   snapshotRetention <- preserved from existing site.json, else 5
 #   repositories[]    <- built from --upstream-git/--branch (default TAPPaaS repo),
 #                        preserving any existing operator-set repositories
-#   organizations     <- [config/people/organizations/<org>.json]
-#                        (people-manager may extend this later)
+#   organizations     <- [config/identities/organizations/<org>.json]
+#                        (identity-manager may extend this later)
 #   (environments are NOT a site.json field — they are enumerated from
 #    config/environments/*.json; the site singleton keeps no list.)
 #
@@ -514,7 +514,7 @@ build_and_write_site() {
     displayName="$(jq -r --arg n "$NAME" '.displayName // $n' <<<"$existing")"
     backup="$(jq -c '.backup // null' <<<"$existing")"
     network="$(jq -c '.network // {isp: null, publicIp: "auto"}' <<<"$existing")"
-    organizations="$(jq -c --arg p "config/people/organizations/${owner}.json" 'if ((.organizations // []) | length) == 0 then [$p] else .organizations end' <<<"$existing")"
+    organizations="$(jq -c --arg p "config/identities/organizations/${owner}.json" 'if ((.organizations // []) | length) == 0 then [$p] else .organizations end' <<<"$existing")"
     # location: keep existing if present, else freshly-detected
     location="$(jq -c --arg c "$country" --arg t "$tz" --arg l "$locale" \
         '.location // {country: $c, timezone: $t, locale: $l}' <<<"$existing")"

@@ -271,7 +271,7 @@ export function computePlan(
 
   // ownerOrg backfill. The bootstrap writes "" because it runs before any
   // organization exists; the only other repair (rest-of-foundation.sh) is
-  // nested inside a "config/people is empty" guard, so it can fire exactly once
+  // nested inside a "config/identities is empty" guard, so it can fire exactly once
   // and never again. Nothing on the update path checks the field at all, which
   // is how an environment can stay schema-invalid indefinitely. Reconcile is
   // the convergence verb, so it is where the repair belongs.
@@ -286,7 +286,7 @@ export function computePlan(
     } else {
       warnings.push(
         `environment '${env.name}': ownerOrg is empty and no organization could be resolved ` +
-          `— create one under people/organizations/, or set it with ` +
+          `— create one under identities/organizations/, or set it with ` +
           `\`environment-manager modify ${env.name} --owner <org>\``,
       );
     }

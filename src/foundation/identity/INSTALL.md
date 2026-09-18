@@ -43,17 +43,17 @@ Everything is automated. Beyond creating the VM, the install:
 5. Adopts Authentik's built-in **`authentik Admins`** group (`is_superuser`) and puts the
    **site owner** in it (issue #476), so that person can administer users in the Authentik
    UI. On a fresh install the group + membership come from the people bootstrap; on an
-   existing install `update.sh` adds them to `config/people/` and applies the membership.
+   existing install `update.sh` adds them to `config/identities/` and applies the membership.
 
 Role groups (`user`/`admin`/`root`) and the `users` team group are reconciled into
-Authentik by `people-manager sync` — run by `rest-of-foundation.sh` at first install and
+Authentik by `identity-manager sync` — run by `rest-of-foundation.sh` at first install and
 on update.
 
 ## Post-install
 
 None. Log in to `https://identity.<domain>` as the **site owner** — the owner user of the
 organization that owns the default environment (`site.json` `.owner` →
-`config/people/organizations/<org>.json` `.owner`) — to reach the admin UI.
+`config/identities/organizations/<org>.json` `.owner`) — to reach the admin UI.
 
 Break-glass only: user `akadmin`, password in `/etc/secrets/authentik.env` on the identity
 VM (`AUTHENTIK_BOOTSTRAP_PASSWORD`). It is the sole admin if the owner account is lost.

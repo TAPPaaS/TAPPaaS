@@ -2,7 +2,7 @@
 // PlaneClient interface (the controller boundary network-manager reconciles
 // through), and the reconcile Plan/Delta shapes.
 //
-// Mirrors people-manager's split: the reconcile engine depends ONLY on the
+// Mirrors identity-manager's split: the reconcile engine depends ONLY on the
 // PlaneClient interface; production uses CliPlaneClient (spawnSync of the 4
 // plane bins), tests inject an in-memory FakePlaneClient.
 

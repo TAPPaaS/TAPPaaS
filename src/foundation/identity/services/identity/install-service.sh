@@ -11,7 +11,7 @@
 # Steps (all idempotent):
 #   1. If the module opts in (identity.providesAdminRole), ensure the opt-in
 #      <module>-admins group exists (group-ensure). The baseline role groups
-#      (user/admin/root) are owned + reconciled by people-manager (run at
+#      (user/admin/root) are owned + reconciled by identity-manager (run at
 #      foundation install and on update); this script no longer ensures them.
 #   2. Authentik: oidc-app-ensure — create/update an OAuth2/OpenID Provider +
 #      Application for the module; read back client_id/client_secret.
@@ -21,7 +21,7 @@
 #      module VM's secrets env file, and (if declared) restart its configure
 #      service so the app registers the provider.
 #
-# Access gate (ALLOW_GROUPS): the people-manager role groups user/admin/root
+# Access gate (ALLOW_GROUPS): the identity-manager role groups user/admin/root
 # (root = the platform superuser). A module that opts into its own admin role
 # adds <module>-admins on top.
 #
@@ -127,10 +127,10 @@ ensure_authentik_credentials
 # Access is gated by GROUP MEMBERSHIP — Authentik's OIDC groups claim carries the
 # user's group memberships, NOT the RBAC roles (admin/user/root are roles, not
 # groups; binding them does not gate access). The org membership group is `users`
-# (people-manager creates it; every org member — including the `root` superuser via
+# (identity-manager creates it; every org member — including the `root` superuser via
 # its membership — is in it). So general apps allow `users`. A module that declares
 # an admin role ALSO binds its `<module>-admins` membership group (for the app's own
-# admin recognition); admins are added to that group by people-manager. group-ensure
+# admin recognition); admins are added to that group by identity-manager. group-ensure
 # is an idempotent safety net (no dependency on configuration.json).
 declare -a ALLOW_GROUPS=("users")
 if [[ "${PROVIDES_ADMIN}" == "true" ]]; then
@@ -143,7 +143,7 @@ fi
 if [[ "${DRY_RUN}" -eq 0 ]]; then
     for g in "${ALLOW_GROUPS[@]}"; do
         ${AUTHENTIK_MANAGER} group-ensure "${g}" >/dev/null 2>&1 \
-            || warn "group-ensure ${g} failed; assuming people-manager already created it"
+            || warn "group-ensure ${g} failed; assuming identity-manager already created it"
     done
 fi
 

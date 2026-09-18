@@ -1,14 +1,14 @@
-// people-manager — TAPPaaS People → Authentik reconcile manager (ADR-007 P1).
+// identity-manager — TAPPaaS Identity → Authentik reconcile manager (ADR-007 P1).
 //
 // Holds the people→Authentik RECONCILE LOGIC and calls the identity-controller
 // PRIMITIVES (the `authentik-manager` CLI, S2b-2) over a thin spawnSync FFI.
 // NO Authentik HTTP is reimplemented here — see src/primitives.ts.
 //
 // Commands:
-//   people-manager bootstrap --org O --user U --email E [--config-dir DIR]
+//   identity-manager bootstrap --org O --user U --email E [--config-dir DIR]
 //                            (the retired user-setup.sh — Phase 8.2)
-//   people-manager reconcile [--apply] [--config-dir DIR]   (alias: sync, deprecated)
-//   people-manager role|org|group|user list|get [<name>] [--config-dir DIR]
+//   identity-manager reconcile [--apply] [--config-dir DIR]   (alias: sync, deprecated)
+//   identity-manager role|org|group|user list|get [<name>] [--config-dir DIR]
 //
 // Exit codes: ok=0, error=1.
 
@@ -41,9 +41,9 @@ const FIELD_FLAGS = `Field flags (write the validated config, then push it to th
          --roles "a,b"  --groups "g1,g2"  --add-roles R  --remove-roles R  --add-groups G  --remove-groups G`;
 
 export const HELP: HelpSpec = {
-  name: "people-manager",
+  name: "identity-manager",
   version: VERSION,
-  tagline: "TAPPaaS People → Authentik manager",
+  tagline: "TAPPaaS Identity → Authentik manager",
   verbs: [
     {
       usage: "bootstrap --org O --user U --email E [--minimal-org DIR]\n" +
@@ -57,7 +57,7 @@ export const HELP: HelpSpec = {
         ["--force", "overwrite a non-empty destination"],
         ["--skip-validate", "skip the post-copy reference validation"],
       ],
-      note: "(seeds config/people from minimal-org/ — the retired user-setup.sh)",
+      note: "(seeds config/identities from minimal-org/ — the retired user-setup.sh)",
     },
     {
       usage: "reconcile [--apply]",
@@ -109,13 +109,13 @@ export const HELP: HelpSpec = {
     },
   ],
   common: [
-    ["--config-dir DIR", "People directory (default: $TAPPAAS_CONFIG/people)"],
+    ["--config-dir DIR", "Identity directory (default: $TAPPAAS_CONFIG/identities)"],
     ["--no-reconcile", "add/modify/delete: write config only, do NOT push to identity"],
   ],
   notes: [
     "where <kind> is one of: role | org (alias organization) | group | user",
     FIELD_FLAGS,
-    "add/modify/delete RECONCILE by default — the change is live in the identity service when the command returns. Pass --no-reconcile to stage config only (then push with 'people-manager reconcile --apply').",
+    "add/modify/delete RECONCILE by default — the change is live in the identity service when the command returns. Pass --no-reconcile to stage config only (then push with 'identity-manager reconcile --apply').",
   ],
 };
 
@@ -168,9 +168,9 @@ function parseOpts(args: string[]): Opts {
   return { configDir, apply, dryRun, json, deep, noReconcile, rest };
 }
 
-// `bootstrap` — seed the minimal People domain from the minimal-org/ templates
+// `bootstrap` — seed the minimal Identity domain from the minimal-org/ templates
 // (the retired user-setup.sh, native — ADR-007 refactor Phase 8.2). Config-only:
-// run `people-manager reconcile --apply` afterwards to push to the identity
+// run `identity-manager reconcile --apply` afterwards to push to the identity
 // service. Refuses a non-empty destination unless --force (callers guard on
 // emptiness, so re-runs never disturb operator-added people). Exit 0 = success,
 // 1 = error (matching the bash).
@@ -217,7 +217,7 @@ function cmdBootstrap(opts: Opts): void {
   try {
     // Announce first (mirrors the bash), resolving the template dir the same
     // way bootstrapPeople will.
-    info("Bootstrapping People domain");
+    info("Bootstrapping Identity domain");
     info(`  org        = ${org}`);
     info(`  user       = ${user}`);
     info(`  email      = ${email}`);
@@ -247,12 +247,12 @@ function loadValidated(configDir: string): PeopleModel {
   const errs = validateRefs(model);
   if (errs.length > 0) {
     for (const e of errs) console.error(`${RD}[Error]${CL} VALIDATION: ${e}`);
-    die(`People config has ${errs.length} reference error(s) — refusing to sync`);
+    die(`Identity config has ${errs.length} reference error(s) — refusing to sync`);
   }
   return model;
 }
 
-// `validate` — load config/people/ and check reference integrity (the same
+// `validate` — load config/identities/ and check reference integrity (the same
 // validateRefs gate cmdSync runs), but report-only: no identity service calls.
 // Exit 0 = valid, 1 = reference errors. (ADR-007 #4 verb convention.)
 function cmdValidate(opts: Opts): number {
@@ -260,11 +260,11 @@ function cmdValidate(opts: Opts): number {
   const errs = validateRefs(model);
   if (errs.length > 0) {
     for (const e of errs) console.error(`${RD}[Error]${CL} VALIDATION: ${e}`);
-    console.error(`${RD}[Error]${CL} People config has ${errs.length} reference error(s)`);
+    console.error(`${RD}[Error]${CL} Identity config has ${errs.length} reference error(s)`);
     return 1;
   }
   info(
-    `People config valid: ${model.roles.size} roles, ${model.organizations.size} orgs, ` +
+    `Identity config valid: ${model.roles.size} roles, ${model.organizations.size} orgs, ` +
       `${model.groups.size} groups, ${model.users.size} users (from ${opts.configDir})`,
   );
   return 0;
@@ -273,7 +273,7 @@ function cmdValidate(opts: Opts): number {
 function cmdSync(opts: Opts, client: PrimitiveClient): void {
   const model = loadValidated(opts.configDir);
   info(
-    `Loaded people: ${model.roles.size} roles, ${model.organizations.size} orgs, ` +
+    `Loaded identities: ${model.roles.size} roles, ${model.organizations.size} orgs, ` +
       `${model.groups.size} groups, ${model.users.size} users (from ${opts.configDir})`,
   );
 
@@ -295,7 +295,7 @@ function cmdSync(opts: Opts, client: PrimitiveClient): void {
 
   // ── Readable plan output ──────────────────────────────────────────────
   info("");
-  info(`Reconciling config/people → Authentik (identity)${doApply ? "" : " — preview"}:`);
+  info(`Reconciling config/identities → Authentik (identity)${doApply ? "" : " — preview"}:`);
   for (const w of plan.warnings) warn(w);
 
   if (plan.actions.length === 0) {
@@ -379,7 +379,7 @@ function takeForce(args: string[]): { force: boolean; rest: string[] } {
 // have to remember. --no-reconcile keeps the old config-only behaviour for
 // staging several edits, or for editing while Authentik is down.
 //
-// The push is a full reconcile, not just this entity's actions: config/people is
+// The push is a full reconcile, not just this entity's actions: config/identities is
 // the desired state, so the one moment we are already talking to Authentik is
 // the right moment to converge all of it.
 //
@@ -394,7 +394,7 @@ function pushAfterWrite(
   info("");
   if (opts.noReconcile) {
     info(
-      `Config written (--no-reconcile). Run '${GN}people-manager reconcile --apply${CL}' ` +
+      `Config written (--no-reconcile). Run '${GN}identity-manager reconcile --apply${CL}' ` +
         `to push to the identity service.`,
     );
     return;
@@ -419,7 +419,7 @@ function pushAfterWrite(
     }
     die(
       `config was written, but pushing it to the identity service failed. ` +
-        `Re-run '${GN}people-manager reconcile --apply${CL}' once the identity service is reachable.`,
+        `Re-run '${GN}identity-manager reconcile --apply${CL}' once the identity service is reachable.`,
     );
   }
 }
@@ -558,7 +558,7 @@ export function run(argv: string[], client: PrimitiveClient): number {
         cmdSync(opts, client);
         return 0;
       case "sync": // deprecated alias for reconcile (kept for back-compat)
-        warn("'people-manager sync' is deprecated — use 'people-manager reconcile'");
+        warn("'identity-manager sync' is deprecated — use 'identity-manager reconcile'");
         cmdSync(opts, client);
         return 0;
       case "validate":

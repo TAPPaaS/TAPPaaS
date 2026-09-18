@@ -3,9 +3,9 @@
 // Thin FFI boundary. Repository clone/checkout shells out to `git`; site.json
 // validation shells out to `validate-site.sh` (the existing bash validate, kept
 // live until retire); the --deep cascade shells out to the dependent manager
-// bins (people-manager / network-manager / environment-manager) — NOT
+// bins (identity-manager / network-manager / environment-manager) — NOT
 // reimplemented here, exactly as network-manager shells out to its plane bins
-// and people-manager to authentik-manager. The heavy git/cluster I/O of
+// and identity-manager to authentik-manager. The heavy git/cluster I/O of
 // `site add` and `repository add`/`delete` stays in the still-live .sh tools
 // (create-site.sh / repository.sh), invoked here as thin delegations.
 
@@ -31,7 +31,8 @@ const GIT = (): string => process.env.SITE_GIT_BIN ?? "git";
 const SYSTEMCTL = (): string => process.env.SITE_SYSTEMCTL_BIN ?? "systemctl";
 const JOURNALCTL = (): string => process.env.SITE_JOURNALCTL_BIN ?? "journalctl";
 const VALIDATE_SITE = (): string => process.env.SITE_VALIDATE_BIN ?? "validate-site.sh";
-const PEOPLE_BIN = (): string => process.env.SITE_PEOPLE_BIN ?? "people-manager";
+// SITE_PEOPLE_BIN is the pre-#628 name of the override; honoured for one stable cycle.
+const IDENTITY_BIN = (): string => process.env.SITE_IDENTITY_BIN ?? process.env.SITE_PEOPLE_BIN ?? "identity-manager";
 const NETWORK_BIN = (): string => process.env.SITE_NETWORK_BIN ?? "network-manager";
 const MODULE_BIN = (): string => process.env.SITE_MODULE_BIN ?? "module-manager";
 // environment-manager exposes `reconcile <env> --deep` (verb-first, ADR-007).
@@ -124,9 +125,9 @@ export class CliSiteClient implements SiteClient {
   // ── (2) --deep cascade ──────────────────────────────────────────────
   cascade(manager: "people" | "network", apply: boolean): number {
     if (manager === "people") {
-      // people-manager reconcile: preview by DEFAULT, --apply commits (same as
+      // identity-manager reconcile: preview by DEFAULT, --apply commits (same as
       // network below and every other manager).
-      return runStreaming(PEOPLE_BIN(), apply ? ["reconcile", "--apply"] : ["reconcile"]);
+      return runStreaming(IDENTITY_BIN(), apply ? ["reconcile", "--apply"] : ["reconcile"]);
     }
     // network — system-wide (all zones, all planes). This is THE network pass
     // for the whole cascade; the per-environment legs skip theirs (#461).

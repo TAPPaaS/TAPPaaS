@@ -1,4 +1,4 @@
-# people-manager — design notes
+# identity-manager — design notes
 
 ## Language and build
 
@@ -9,25 +9,25 @@
 - **Build mechanism:** `install.sh` runs a Nix build (`nix-build -A default
   default.nix`; a thin import of the shared `../../lib/nix/ts-manager.nix`
   builder) which compiles the TypeScript and wraps it with `makeWrapper`
-  into `result/bin/people-manager` (a shell wrapper invoking
-  `node .../lib/manager/people-manager/src/main.js` on Node 22). It then
+  into `result/bin/identity-manager` (a shell wrapper invoking
+  `node .../lib/manager/identity-manager/src/main.js` on Node 22). It then
   `ln -sfn`s that into `~/bin`.
 - **`update.sh`** re-runs the same build + link (idempotent; a no-op when inputs
   are unchanged).
 - One bash helper is linked alongside the compiled bin:
   - `validate.sh` → `~/bin/validate-people.sh` — JSON-Schema + reference
-    validation in bash. A `people-manager validate` subcommand also exists
+    validation in bash. A `identity-manager validate` subcommand also exists
     (see "Validation" below for how the two overlap).
   - (`user-setup.sh` is retired — ADR-007 refactor Phase 8.2; its logic is the
-    native `people-manager bootstrap` verb, `src/bootstrap.ts`. `install.sh`
+    native `identity-manager bootstrap` verb, `src/bootstrap.ts`. `install.sh`
     removes the stale `~/bin/user-setup.sh` link from older installs.)
 
 ## Internal structure
 
 ```
 src/main.ts        CLI: arg parsing + subcommand dispatch
-src/bootstrap.ts   `bootstrap` — seed config/people from minimal-org/ (the retired user-setup.sh)
-src/config.ts      load config/people/* (per-kind decoders); reference-integrity checks (validateRefs)
+src/bootstrap.ts   `bootstrap` — seed config/identities from minimal-org/ (the retired user-setup.sh)
+src/config.ts      load config/identities/* (per-kind decoders); reference-integrity checks (validateRefs)
 src/entity.ts      entity CRUD (add/modify/delete) — validated atomic config writes
 src/queries.ts     pure relationship queries for the --deep list views
 src/types.ts       Role / Org / Group / User models + the PrimitiveClient interface
@@ -42,7 +42,7 @@ src/primitives.ts  CliPrimitiveClient — talks to the identity controller
 the config through them and never hand-edit JSON. Key properties:
 
 - **The write itself is config-only**, producing a validated JSON file under
-  `config/people/<dir>/<name>.json`. The *push* is `main.ts`'s job: since issue
+  `config/identities/<dir>/<name>.json`. The *push* is `main.ts`'s job: since issue
   #482 every successful write is followed by a reconcile, so an operator's change
   is live when the command returns. `--no-reconcile` stages the write instead.
   Keeping the two separable is what lets a rejected edit never reach Authentik,
@@ -70,18 +70,18 @@ in-memory fake (`test/unit/fake-client.ts`); production uses `CliPrimitiveClient
 ### Reconcile semantics
 
 - **Snapshot-and-plan:** fetch the identity service's current users/groups/roles
-  once, compute the desired state from `config/people/`, diff, then apply the
+  once, compute the desired state from `config/identities/`, diff, then apply the
   plan action-by-action.
 - **Entity existence is additive:** roles/groups are created if missing; they are
   never implicitly deleted. Attribute drift is a warning, not an action.
 - **Access is authoritative within the managed set:** managed group/role links
   are added or removed to match config, but entities not present in
-  `config/people/` are never touched (foreign-entity scope guard).
+  `config/identities/` are never touched (foreign-entity scope guard).
 - **Lifecycle:** `planned` users get no identity presence; `active` are present
   with full access; `suspended` are disabled and stripped of managed roles;
   `terminated` are deleted (the only governed deletion).
 - **Deletion is pushed separately (#482).** The plan is computed from what
-  `config/people/` *contains*, so an entity whose file was just deleted is not in
+  `config/identities/` *contains*, so an entity whose file was just deleted is not in
   the managed set at all — the plan cannot see it, and the foreign-entity guard
   would leave it in the identity service forever. `pushEntityDeletion` closes
   that gap: `<kind> delete` removes the entity explicitly (`delete-user` /
@@ -100,15 +100,15 @@ out (via `spawnSync`) to the identity controller's CLI, `authentik-manager`
 read primitives (`list-users`, `list-groups`, `list-roles`) and, when
 applying, mutating primitives (`ensure-user`, `disable-user`, `delete-user`,
 `ensure-group`, `ensure-role`, `delete-group`, `delete-role`,
-`add-member` / `remove-member`, `assign-role` / `unassign-role`). This keeps people-manager (config owner) and the
+`add-member` / `remove-member`, `assign-role` / `unassign-role`). This keeps identity-manager (config owner) and the
 identity controller (runtime owner) cleanly separated.
 
 ## Validation
 
 Two overlapping paths exist:
 
-- **`people-manager validate`** (the ADR-007 verb, implemented — `cmdValidate`
-  in `src/main.ts`): loads `config/people/` and runs the in-process
+- **`identity-manager validate`** (the ADR-007 verb, implemented — `cmdValidate`
+  in `src/main.ts`): loads `config/identities/` and runs the in-process
   `validateRefs` reference-integrity gate (the same gate `reconcile` and the
   entity CRUD use). It does **reference checks only** — no JSON-Schema
   validation.
@@ -129,7 +129,7 @@ Two overlapping paths exist:
   `tsc`, run with the in-memory fake client). No identity service, no cluster.
 - **Deep (`TAPPAAS_TEST_DEEP=1`):** a live, identity-mutating integration tier
   scoped to `zztest-*` names and self-cleaning. Skipped automatically when
-  `people-manager` is not on `PATH` or the identity controller is unreachable.
+  `identity-manager` is not on `PATH` or the identity controller is unreachable.
 
 ## Pending / not yet implemented
 
@@ -142,6 +142,6 @@ Two overlapping paths exist:
 - **Per-module admin groups** (`<scope>-<module>-admins`) are created on demand at
   module-install time, not by this manager.
 - **Install-time wiring** of the initial identity install is DONE:
-  `rest-of-foundation.sh` (fresh install) runs `people-manager bootstrap`
+  `rest-of-foundation.sh` (fresh install) runs `identity-manager bootstrap`
   then `reconcile --apply`, guarded to fire only
-  when `config/people/` is empty.
+  when `config/identities/` is empty.

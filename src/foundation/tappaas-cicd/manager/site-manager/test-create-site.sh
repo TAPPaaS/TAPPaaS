@@ -90,7 +90,7 @@ if run_validate "$SITE"; then ok "site.json validates against site-fields.json";
 
 # organizations reference the owner org file; environments are NOT a site field
 [[ "$(jqv "$SITE" 'has("environments")')" == "false" ]] && ok "no .environments field" || bad ".environments should not be written"
-[[ "$(jqv "$SITE" '.organizations[0]')" == "config/people/organizations/testsite.json" ]] && ok "organizations references the owner org file" || bad "organizations not keyed on owner (got '$(jqv "$SITE" '.organizations[0]')')"
+[[ "$(jqv "$SITE" '.organizations[0]')" == "config/identities/organizations/testsite.json" ]] && ok "organizations references the owner org file" || bad "organizations not keyed on owner (got '$(jqv "$SITE" '.organizations[0]')')"
 
 # hardware.nodes[] non-empty IFF cluster reachable, else skip
 NODE_COUNT="$(jqv "$SITE" '.hardware.nodes | length')"
@@ -134,7 +134,7 @@ if [[ -f "$S4" ]]; then ok "create-site --name + --organization writes site.json
 [[ "$(jqv "$S4" '.name')" == "warmelo1" ]]                                         && ok ".name == site code (warmelo1)"                 || bad ".name wrong (got '$(jqv "$S4" '.name')')"
 [[ "$(jqv "$S4" '.defaultEnvironment')" == "warmelo" ]]                            && ok ".defaultEnvironment == org (warmelo)"          || bad ".defaultEnvironment wrong (got '$(jqv "$S4" '.defaultEnvironment')')"
 [[ "$(jqv "$S4" '.owner')" == "warmelo" ]]                                         && ok ".owner == org (decoupled from .name)"          || bad ".owner wrong (got '$(jqv "$S4" '.owner')')"
-[[ "$(jqv "$S4" '.organizations[0]')" == "config/people/organizations/warmelo.json" ]] && ok "organizations keyed on org, not site code" || bad "organizations wrong (got '$(jqv "$S4" '.organizations[0]')')"
+[[ "$(jqv "$S4" '.organizations[0]')" == "config/identities/organizations/warmelo.json" ]] && ok "organizations keyed on org, not site code" || bad "organizations wrong (got '$(jqv "$S4" '.organizations[0]')')"
 [[ "$(jqv "$S4" '.displayName')" == "warmelo1" ]]                                  && ok ".displayName from site code"                  || bad ".displayName wrong"
 run_validate "$S4" && ok "decoupled site.json validates against site-fields.json" || bad "decoupled site.json failed schema validation"
 

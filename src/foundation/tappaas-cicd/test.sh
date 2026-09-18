@@ -645,27 +645,27 @@ else
     skip "update-tappaas not installed"
 fi
 
-_min_org="${SCRIPT_DIR}/manager/people-manager/minimal-org"
-_pm_fix="${SCRIPT_DIR}/manager/people-manager/test/fixtures/people"
+_min_org="${SCRIPT_DIR}/manager/identity-manager/minimal-org"
+_pm_fix="${SCRIPT_DIR}/manager/identity-manager/test/fixtures/people"
 # people: schemas + validator work (minimal-org validates) — catches schema breakage
-if [[ -x /home/tappaas/bin/validate-people.sh ]]; then
-    if /home/tappaas/bin/validate-people.sh --quiet "${_min_org}" >/dev/null 2>&1; then
+if [[ -x /home/tappaas/bin/validate-identities.sh ]]; then
+    if /home/tappaas/bin/validate-identities.sh --quiet "${_min_org}" >/dev/null 2>&1; then
         pass "people: schemas valid + minimal-org validates"
     else
         fail "people: validate-people on minimal-org failed"
     fi
 else
-    skip "validate-people.sh not installed"
+    skip "validate-identities.sh not installed"
 fi
-# people-manager TS bin loads + reads config (no Authentik contact)
-if command -v people-manager >/dev/null 2>&1; then
-    if people-manager role list --config-dir "${_pm_fix}" >/dev/null 2>&1; then
-        pass "people-manager CLI loads + reads config (role list)"
+# identity-manager TS bin loads + reads config (no Authentik contact)
+if command -v identity-manager >/dev/null 2>&1; then
+    if identity-manager role list --config-dir "${_pm_fix}" >/dev/null 2>&1; then
+        pass "identity-manager CLI loads + reads config (role list)"
     else
-        fail "people-manager role list failed"
+        fail "identity-manager role list failed"
     fi
 else
-    skip "people-manager not installed"
+    skip "identity-manager not installed"
 fi
 # identity-controller CLI loads
 if command -v authentik-manager >/dev/null 2>&1; then

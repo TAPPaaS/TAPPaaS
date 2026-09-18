@@ -9,14 +9,14 @@ reset a password. Reference (Diataxis) — the design rationale lives in
 forward-auth vs OIDC, the access gate). Issues #56, #320, #477.
 
 One person = **one Authentik login**. People are *declared as config* under
-`config/people/` and reconciled into Authentik by **`people-manager`**; the identity
+`config/identities/` and reconciled into Authentik by **`identity-manager`**; the identity
 controller CLI **`authentik-manager`** is the runtime path (passwords, ad-hoc
 inspection). SSO is automatic across modules; access to each app is gated per-app.
 
 > Two tools, two jobs:
-> **`people-manager`** owns *who exists and what they belong to* (config → Authentik).
+> **`identity-manager`** owns *who exists and what they belong to* (config → Authentik).
 > **`authentik-manager`** drives *the live Authentik service* (credentials, apps, raw
-> reads). Never hand-edit the JSON under `config/people/` — drive it through the verbs.
+> reads). Never hand-edit the JSON under `config/identities/` — drive it through the verbs.
 
 ## The model
 
@@ -35,7 +35,7 @@ A user's **effective roles** = their own `roles` ∪ the `roles` of every group 
 Config lives one JSON file per entity under `${TAPPAAS_CONFIG:-/home/tappaas/config}/people/`:
 
 ```
-config/people/
+config/identities/
   roles/*.json          # cross-cutting role labels
   organizations/*.json  # tenant / company / family
   groups/*.json         # teams, departments, access-sets (carry roles)
@@ -46,11 +46,11 @@ Every write is checked for **reference integrity** before it lands — an unknow
 dangling `memberOf`, an org whose owner is not a user is rejected and no file is written
 (the write is atomic, so a rejected edit leaves nothing behind). Full JSON-Schema
 validation against `src/foundation/schemas/{role,organization,group,user}-fields.json`
-is the separate `validate-people.sh` gate.
+is the separate `validate-identities.sh` gate.
 
 ## What a fresh install has
 
-`people-manager bootstrap` (run for you by `rest-of-foundation.sh` on a fresh install)
+`identity-manager bootstrap` (run for you by `rest-of-foundation.sh` on a fresh install)
 seeds the minimal org:
 
 - **roles** `root`, `admin`, `user`
@@ -69,19 +69,19 @@ Group names are free-form identifiers (internal spaces allowed, so an Authentik-
 group can be named). The bootstrap ships flat names (`users`); for org-scoped groups the
 convention is `<org>__<name>` — e.g. `acme__staff`.
 
-## Manage people — `people-manager`
+## Manage people — `identity-manager`
 
 One CLI, the ADR-007 verb vocabulary, for all four kinds
 (`role` · `org` (alias `organization`) · `group` · `user`):
 
 ```
-people-manager <kind> list   [--json] [--deep]
-people-manager <kind> show   <name> [--json]
-people-manager <kind> add    <name> [field flags] [--force]  [--no-reconcile]
-people-manager <kind> modify <name> [field flags]           [--no-reconcile]
-people-manager <kind> delete <name> [--force]               [--no-reconcile]
-people-manager reconcile [--apply]
-people-manager validate
+identity-manager <kind> list   [--json] [--deep]
+identity-manager <kind> show   <name> [--json]
+identity-manager <kind> add    <name> [field flags] [--force]  [--no-reconcile]
+identity-manager <kind> modify <name> [field flags]           [--no-reconcile]
+identity-manager <kind> delete <name> [--force]               [--no-reconcile]
+identity-manager reconcile [--apply]
+identity-manager validate
 ```
 
 Field flags:
@@ -100,8 +100,8 @@ the comma separates, so `--add-groups "authentik Admins"` is one member, not two
 ### Add someone
 
 ```bash
-people-manager user add jane --email jane@example.org --groups users                # ordinary user
-people-manager user add jane --email jane@example.org --groups users --roles admin  # …or an admin
+identity-manager user add jane --email jane@example.org --groups users                # ordinary user
+identity-manager user add jane --email jane@example.org --groups users --roles admin  # …or an admin
 authentik-manager user-set-password jane            # give them a password to log in with
 ```
 
@@ -116,20 +116,20 @@ password.
 ### Change what someone can reach
 
 ```bash
-people-manager user modify jane --add-roles admin           # grant a role directly
-people-manager user modify jane --add-groups acme__staff    # or (preferred) via a group
-people-manager user modify jane --remove-roles admin
-people-manager group modify acme__staff --add-roles editor  # every member inherits it
+identity-manager user modify jane --add-roles admin           # grant a role directly
+identity-manager user modify jane --add-groups acme__staff    # or (preferred) via a group
+identity-manager user modify jane --remove-roles admin
+identity-manager group modify acme__staff --add-roles editor  # every member inherits it
 ```
 
 ### Groups, roles, orgs
 
 ```bash
-people-manager org   add acme --displayName "Acme BV" --type company --owner jane
-people-manager group add acme__staff --displayName "Acme Staff" --ownerOrg acme --type team --roles user
-people-manager role  add editor --displayName "Editor" --description "May edit content"
-people-manager group delete acme__staff        # refused while a user is still a member
-people-manager role  delete editor --force     # delete despite references
+identity-manager org   add acme --displayName "Acme BV" --type company --owner jane
+identity-manager group add acme__staff --displayName "Acme Staff" --ownerOrg acme --type team --roles user
+identity-manager role  add editor --displayName "Editor" --description "May edit content"
+identity-manager group delete acme__staff        # refused while a user is still a member
+identity-manager role  delete editor --force     # delete despite references
 ```
 
 References must resolve, so create in dependency order: the org's `--owner` must already
@@ -140,7 +140,7 @@ be a user, a group's `--ownerOrg` must already be an org.
 `add` refuses to overwrite an existing entity without `--force`.
 
 ⚠️ A `--force`d delete *can* leave a dangling reference behind — and the integrity gate
-then rejects **every** subsequent write until you repair it (`people-manager group modify
+then rejects **every** subsequent write until you repair it (`identity-manager group modify
 acme__staff --remove-roles editor`). Prefer removing the references first.
 
 ## How a change reaches Authentik
@@ -154,13 +154,13 @@ Each write verb does three things, in this order:
    group or role from Authentik explicitly. An Organization has no Authentik object, so
    there is nothing to push. Groups Authentik ships itself (`authentik Admins`,
    `authentik Read-only`) are dropped from *config only* — never deleted from Authentik.
-3. **Reconcile everything.** Not just this entity: `config/people/` is the desired state,
+3. **Reconcile everything.** Not just this entity: `config/identities/` is the desired state,
    so the moment we are already talking to Authentik is the right moment to converge all
    of it. Anything else staged with `--no-reconcile` goes live too.
 
 **If the push fails** — identity service down, an action rejected — the command exits
 non-zero and says so, and **the config write stays on disk**. Fix the service, then re-run
-`people-manager reconcile --apply`. Do not redo the edit.
+`identity-manager reconcile --apply`. Do not redo the edit.
 
 ### Staging several edits — `--no-reconcile`
 
@@ -168,11 +168,11 @@ non-zero and says so, and **the config write stays on disk**. Fix the service, t
 batching a set of related changes into one push, or for editing while Authentik is down:
 
 ```bash
-people-manager user  add  jane --email jane@example.org --groups users --no-reconcile
-people-manager group add  acme__staff --displayName "Acme Staff" --ownerOrg acme --no-reconcile
-people-manager user  modify jane --add-groups acme__staff --no-reconcile
-people-manager reconcile              # preview the accumulated plan
-people-manager reconcile --apply      # push it all at once
+identity-manager user  add  jane --email jane@example.org --groups users --no-reconcile
+identity-manager group add  acme__staff --displayName "Acme Staff" --ownerOrg acme --no-reconcile
+identity-manager user  modify jane --add-groups acme__staff --no-reconcile
+identity-manager reconcile              # preview the accumulated plan
+identity-manager reconcile --apply      # push it all at once
 ```
 
 `reconcile` on its own is still how you inspect and repair drift: with no flag it prints
@@ -181,13 +181,13 @@ the plan, with `--apply` it converges Authentik to config.
 ### Inspect
 
 ```bash
-people-manager user list                 # names
-people-manager user show jane            # one entity, resolved
-people-manager group list --deep         # groups with their members
-people-manager org show acme --json
-people-manager reconcile                 # preview: what would change in Authentik
-people-manager validate                  # reference integrity of config/people
-validate-people.sh                       # deeper: JSON-Schema validation
+identity-manager user list                 # names
+identity-manager user show jane            # one entity, resolved
+identity-manager group list --deep         # groups with their members
+identity-manager org show acme --json
+identity-manager reconcile                 # preview: what would change in Authentik
+identity-manager validate                  # reference integrity of config/identities
+validate-identities.sh                       # deeper: JSON-Schema validation
 ```
 
 ## Lifecycle — suspend and offboard
@@ -202,12 +202,12 @@ validate-people.sh                       # deeper: JSON-Schema validation
 | `terminated` | the account is **deleted** — the one governed deletion |
 
 ```bash
-people-manager user modify jane --state suspended    # disabled in Authentik immediately
+identity-manager user modify jane --state suspended    # disabled in Authentik immediately
 ```
 
 Reconcile is **additive for existence** (roles/groups are created, never implicitly
 deleted) and **authoritative for access within the managed set** — memberships are added
-or removed to match config, but entities absent from `config/people/` are never touched.
+or removed to match config, but entities absent from `config/identities/` are never touched.
 
 ## Passwords and credentials
 
@@ -271,7 +271,7 @@ Check the connection with `authentik-manager test`.
 Access to each app is a **per-app allow-list**, independent of authentication. When a
 module installs, the identity service binds its Authentik Application to the `users`
 group — plus `<module>-admins` when the module declares an in-app admin role (created on
-demand at module-install time, not by `people-manager`).
+demand at module-install time, not by `identity-manager`).
 
 ⚠️ **Authentik fails open**: an Application with *no* policy binding admits every
 authenticated user. The binding at install is therefore mandatory — that is the access
@@ -291,9 +291,9 @@ Authentik only carries them.
 ## Authentik admin UI
 
 `https://identity.<domain>` — full user, group, application and flow administration for
-anyone in `authentik Admins`. Changes made there are *not* in `config/people/`, so for a
+anyone in `authentik Admins`. Changes made there are *not* in `config/identities/`, so for a
 managed entity the next reconcile may converge them away — and since every write verb now
-reconciles, that can be the very next `people-manager` command anyone runs.
+reconciles, that can be the very next `identity-manager` command anyone runs.
 Prefer the verbs; use the UI for inspection and for Authentik-native settings (flows,
 brands, stages) that TAPPaaS does not model.
 
@@ -305,5 +305,5 @@ authentik-manager list-users             # what Authentik actually has
 authentik-manager list-groups
 authentik-manager list-roles
 authentik-manager get-user --name jane
-people-manager reconcile                 # config vs live: the drift, as a plan
+identity-manager reconcile                 # config vs live: the drift, as a plan
 ```

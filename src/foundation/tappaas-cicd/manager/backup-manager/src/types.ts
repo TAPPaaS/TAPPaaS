@@ -112,7 +112,7 @@ export interface Peer {
 // ── Client — the backup-controller boundary ───────────────────────────
 // The reconcile/restore logic depends ONLY on this interface; tests inject an
 // in-memory fake, production uses CliClient (spawnSync → `backup-controller`).
-// NO PBS API is reimplemented in TypeScript — exactly as people-manager shells
+// NO PBS API is reimplemented in TypeScript — exactly as identity-manager shells
 // out to authentik-manager and network-manager to the plane controllers.
 // One managed bucket job (ADR-012 D16) and who is in it.
 export interface BucketMembership {

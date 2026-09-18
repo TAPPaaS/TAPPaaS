@@ -197,7 +197,7 @@ class TestPeoplePrimitivesLive(unittest.TestCase):
 
     def test_delete_group_and_role_remove_and_are_idempotent(self):
         """delete-group / delete-role (issue #482) — the verbs that let a
-        `people-manager group|role delete` actually reach Authentik."""
+        `identity-manager group|role delete` actually reach Authentik."""
         gname = f"{PREFIX}group-del"
         rname = f"{PREFIX}role-del"
         self.addCleanup(self._cleanup_group, gname)

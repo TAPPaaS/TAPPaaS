@@ -27,7 +27,7 @@ Subcommands:
   user-set-password <user> [--password …]   — set a password directly
   user-recovery-link <user>                 — one-time password-reset link (needs the flow above)
 
-People PRIMITIVES (S2b-2 — JSON to stdout, for the TypeScript people-manager):
+People PRIMITIVES (S2b-2 — JSON to stdout, for the TypeScript identity-manager):
   list-users | list-groups | list-roles    — JSON arrays
   get-user --name                           — one user object (or null)
   ensure-user --name --email --display [--inactive]
@@ -274,7 +274,7 @@ def cmd_oidc_app_ensure(mgr: AuthentikManager, args: argparse.Namespace) -> int:
 
 
 # ── People PRIMITIVES (S2b-2) — machine-readable JSON to stdout ──────────
-# Each does ONE thing and prints JSON the TypeScript people-manager parses.
+# Each does ONE thing and prints JSON the TypeScript identity-manager parses.
 # No reconcile/managed-set/lifecycle policy lives here.
 
 def _emit(obj) -> int:
@@ -490,7 +490,7 @@ def main(argv: list[str] | None = None) -> int:
     oe.add_argument("--show-secret", action="store_true", help="print the client_secret (sensitive)")
     oe.set_defaults(handler=cmd_oidc_app_ensure)
 
-    # ── People PRIMITIVES (S2b-2) — JSON to stdout for the TS people-manager ─
+    # ── People PRIMITIVES (S2b-2) — JSON to stdout for the TS identity-manager ─
     sub.add_parser("list-users", help="JSON array of users (name/active/email/displayName/groups/roles)")\
        .set_defaults(handler=cmd_list_users)
     sub.add_parser("list-groups", help="JSON array of {name, displayName} (excludes roles)")\

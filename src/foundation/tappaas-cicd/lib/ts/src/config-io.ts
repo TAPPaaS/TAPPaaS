@@ -12,6 +12,16 @@ export function defaultConfigDir(): string {
   return process.env.TAPPAAS_CONFIG ?? process.env.CONFIG_DIR ?? "/home/tappaas/config";
 }
 
+/** The Identity domain's directory under a config root (#628): `identities/`,
+ *  or the pre-#628 `people/` when only that exists — a site whose migration
+ *  0005 has not run yet, or a config restored from a backup taken before it.
+ *  One rule, for every manager that reads the domain. */
+export function identityDir(configRoot: string): string {
+  const now = join(configRoot, "identities");
+  const before = join(configRoot, "people");
+  return !existsSync(now) && existsSync(before) ? before : now;
+}
+
 export function asString(v: unknown): string {
   return typeof v === "string" ? v : "";
 }

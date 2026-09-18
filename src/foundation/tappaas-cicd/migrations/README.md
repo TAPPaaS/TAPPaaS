@@ -18,6 +18,7 @@ the Wave 0 exit gate.
 |---|---|---|
 | `0003-update-schedule-object.sh` | `site.json` `updateSchedule` becomes `{frequency, weekday, hour}` (ADR-017 D7). A weekday under `daily`/`none` was never read, so it is dropped — and **reported**, because it is the only trace of what the operator believed they had asked for. | yes — restore `.migrations/backup/0003/site.json` |
 | `0004-kind-names-the-workload.sh` | `kind` names the workload (ADR-022f: vm, lxc, machine, application, device), authored in each module's source; the ADR-007 marker `"kind": "module"` is removed from deployed configs so the next update's merge can adopt the authored value — except where it is a config's **only** module signal, where it is kept and named, since removing it would hide the module. `"external-host"` → `"machine"`. (#611) | yes — restore `.migrations/backup/0004/<file>` |
+| `0005-people-becomes-identities.sh` | `config/people/` becomes `config/identities/` (#628); `people` is left as a symlink to it for one stable cycle, the path's twin of the `people-manager` alias. Refuses when both are real directories — two copies of the domain are a person's to reconcile. | yes — remove the symlink, restore `.migrations/backup/0005/people/` |
 
 Its readers accept both shapes: `lib/update-schedule.sh` (the timer renderer and
 `site-manager validate` share it) and `site-manager site show` / `site modify`. That is

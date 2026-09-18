@@ -103,14 +103,14 @@ For both hooks, `update-service.sh` re-execs `install-service.sh` (fully idempot
 ## Role/user lifecycle ownership (ADR-007)
 
 The role groups (`user`/`admin`/`root`) and the team group `users` are owned and
-reconciled by `people-manager sync` (run at foundation install and on update from
-`config/people/`). The identity module's scripts no longer ensure them, and the legacy
+reconciled by `identity-manager sync` (run at foundation install and on update from
+`config/identities/`). The identity module's scripts no longer ensure them, and the legacy
 `roles-ensure.sh` / `user.sh` test tiers were removed (see [TEST.md](./TEST.md)).
 
 ### Who can administer Authentik (#476)
 
 Authentik grants its admin UI on exactly one condition: membership in a group flagged
-`is_superuser`. TAPPaaS roles do not qualify — `people-manager` creates every role and
+`is_superuser`. TAPPaaS roles do not qualify — `identity-manager` creates every role and
 group with `is_superuser: false`, because a role is a label forwarded to apps (OIDC
 `groups` claim / `X-Authentik-*` headers), not an identity-provider permission.
 
@@ -124,14 +124,14 @@ Ownership is split so neither half can silently fail:
 
 - `update.sh` runs `authentik-manager group-ensure "authentik Admins" --superuser`. This
   adopts the existing built-in group, and re-creates it **with** `is_superuser` if it was
-  deleted — without it, `people-manager`'s `ensure-group` would recreate a plain group of
+  deleted — without it, `identity-manager`'s `ensure-group` would recreate a plain group of
   the same name and the grant would become a silent no-op.
-- `config/people/` carries the group + the owner's `memberOf` entry, so every later
-  `people-manager reconcile` preserves the membership. Fresh installs get both from the
+- `config/identities/` carries the group + the owner's `memberOf` entry, so every later
+  `identity-manager reconcile` preserves the membership. Fresh installs get both from the
   `minimal-org` bootstrap; existing installs get them from `update.sh`, which also applies
   the membership directly (a targeted `add-member`, not a full `reconcile --apply` — a
-  module update must not push whatever else an operator has staged in `config/people/`).
+  module update must not push whatever else an operator has staged in `config/identities/`).
 
 Because the group name is Authentik's, it contains a space; `Group.name` and
-`User.memberOf` therefore permit internal spaces, and `people-manager`'s list flags split
+`User.memberOf` therefore permit internal spaces, and `identity-manager`'s list flags split
 on commas only.

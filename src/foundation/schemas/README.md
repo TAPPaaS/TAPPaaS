@@ -24,10 +24,10 @@ This directory holds the JSON-Schema (draft 2020-12) field definitions for every
 |--------|---------------------|------------------------------|------------------------------|
 | **Site** (singleton) | `site-fields.json` | `site.json` | **site-manager** — `site show`/`modify`; `node list`/`add`/`delete`; `repository list`/`add`/`delete`/`reconcile`; `validate`; `reconcile [--deep]` |
 | **Environment** | `environment-fields.json` | `environments/<env>.json` | **environment-manager** — `add`/`modify`/`delete`/`list`/`show`/`validate`; `reconcile [--deep]` (env + its zone via network; `--deep` → consuming modules). `--dns-mode per-service\|wildcard` |
-| **Organization** | `organization-fields.json` | `people/organizations/<name>.json` | **people-manager** — `org add`/`modify`/`delete`/`list`/`show` |
-| **Group** | `group-fields.json` | `people/groups/<name>.json` | **people-manager** — `group add`/`modify`/`delete`/`list`/`show` |
-| **Role** | `role-fields.json` | `people/roles/<name>.json` | **people-manager** — `role add`/`modify`/`delete`/`list`/`show` |
-| **User** | `user-fields.json` | `people/users/<name>.json` | **people-manager** — `user add`/`modify`/`delete`/`list`/`show`. People-wide: `reconcile` (push → Authentik; alias `sync`), `validate` |
+| **Organization** | `organization-fields.json` | `identities/organizations/<name>.json` | **identity-manager** — `org add`/`modify`/`delete`/`list`/`show` |
+| **Group** | `group-fields.json` | `people/groups/<name>.json` | **identity-manager** — `group add`/`modify`/`delete`/`list`/`show` |
+| **Role** | `role-fields.json` | `people/roles/<name>.json` | **identity-manager** — `role add`/`modify`/`delete`/`list`/`show` |
+| **User** | `user-fields.json` | `people/users/<name>.json` | **identity-manager** — `user add`/`modify`/`delete`/`list`/`show`. People-wide: `reconcile` (push → Authentik; alias `sync`), `validate` |
 | **Module** (deployed) | `module-fields.json` | `<module>.json` | **module-manager** — `module add`/`modify`/`delete`/`list`/`show`/`validate`/`reconcile`/`test`/`snapshot-vm`. `add`=deploy, `modify`=redeploy, `reconcile`=re-apply current config (leaf) |
 | **Module catalog** | `module-catalog-fields.json` | `src/module-catalog.json` (in each repo) | **site-manager** — `repository add`/`delete`/`list`/`reconcile` (registers/clones the repo that ships the catalog) |
 | **Zones** | `zones-fields.json` | `zones.json` | **network-manager** — `add`/`delete`/`list`/`show`/`exists` (the `zone` keyword is an optional legacy prefix); `validate` (alias `zones-check`); `init`/`merge`/`distribute` (aliases `zones-init`/`zones-merge`/`zones-distribute`); `reconcile [--apply] [--only <plane>]`. (No free-form `modify` — state + access-to are governed by the lifecycle + init/merge.) |

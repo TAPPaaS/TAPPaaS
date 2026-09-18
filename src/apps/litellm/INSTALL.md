@@ -14,13 +14,13 @@ Primary audience: TAPPaaS admin.
          curl -s http://<vllm-vmname>.<zone>.internal:8000/v1/models | jq -r '.data[].id'
 
    - **`identity`** (Authentik) — LiteLLM's admin UI signs in via SSO.
-2. The environment owner must exist in people-manager with a `primaryEmail`; that
+2. The environment owner must exist in identity-manager with a `primaryEmail`; that
    identity is promoted to LiteLLM `proxy_admin`. Resolution is
    `environments/<env>.json .ownerOrg` -> people org `.owner` -> user
    `.primaryEmail`:
 
-       people-manager org show "$(jq -r .ownerOrg /home/tappaas/config/environments/<env>.json)"
-       people-manager user show <owner>
+       identity-manager org show "$(jq -r .ownerOrg /home/tappaas/config/environments/<env>.json)"
+       identity-manager user show <owner>
 
 3. Verify `litellm.json` matches your environment (node, storage, zone).
 

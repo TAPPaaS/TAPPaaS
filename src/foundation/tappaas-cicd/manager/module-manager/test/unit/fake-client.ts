@@ -3,7 +3,7 @@
 // Records every lifecycle invocation (verb + module + the option flags it would
 // forward to the bash script) so tests can assert exactly what `module add` /
 // `delete` / etc. would shell out to, WITHOUT running any script or touching the
-// cluster. Mirrors people-manager's FakeClient pattern. The configurable `rc`
+// cluster. Mirrors identity-manager's FakeClient pattern. The configurable `rc`
 // lets a test simulate a script failure.
 
 import {

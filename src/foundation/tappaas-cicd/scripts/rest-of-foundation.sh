@@ -70,14 +70,14 @@ for m in "${FOUNDATION_MODULES[@]}"; do
 done
 
 # ── ADR-007 P1: bootstrap the minimum people domain (after identity) ─────
-# Once identity (Authentik) is up and config/people is still empty (first
+# Once identity (Authentik) is up and config/identities is still empty (first
 # install), create the minimal org + admin/users groups + installer user and
-# sync them into Authentik. Per ADR-007: `people-manager bootstrap` copies
-# minimal-org/ into ~tappaas/config/people with the installation name +
+# sync them into Authentik. Per ADR-007: `identity-manager bootstrap` copies
+# minimal-org/ into ~tappaas/config/identities with the installation name +
 # installer identity substituted (the retired user-setup.sh, native since the
-# ADR-007 refactor Phase 8.2); `people-manager reconcile --apply` then
+# ADR-007 refactor Phase 8.2); `identity-manager reconcile --apply` then
 # reconciles them into Authentik (via identity-controller). Idempotent: skipped
-# once config/people exists, so re-runs never disturb operator-added people.
+# once config/identities exists, so re-runs never disturb operator-added people.
 # (Supersedes the old ADR-006 roles-ensure bootstrap — ADR-007 is authoritative.)
 if [[ " ${FAILED[*]} " != *" identity "* ]]; then
   people_dir="${TAPPAAS_CONFIG:-${CONFIG_DIR}}/people"
@@ -94,8 +94,8 @@ if [[ " ${FAILED[*]} " != *" identity "* ]]; then
     if [[ -n "$inst_org" && -n "$inst_user" && -n "$inst_email" ]]; then
       echo ""
       info "${BOLD}── People bootstrap: org=${inst_org} user=${inst_user} ──${CL}"
-      if people-manager bootstrap --org "$inst_org" --user "$inst_user" --email "$inst_email"; then
-        people-manager reconcile --apply || warn "  people-manager reconcile reported issues — review the output above."
+      if identity-manager bootstrap --org "$inst_org" --user "$inst_user" --email "$inst_email"; then
+        identity-manager reconcile --apply || warn "  identity-manager reconcile reported issues — review the output above."
         # Backfill the bootstrap environments' ownerOrg NOW that the org exists.
         # The environment bootstrap (environment-manager add, in install.sh)
         # runs before any organization can exist,
@@ -113,13 +113,13 @@ if [[ " ${FAILED[*]} " != *" identity "* ]]; then
           fi
         done
       else
-        warn "  people-manager bootstrap failed — people bootstrap skipped (re-run rest-of-foundation.sh)."
+        warn "  identity-manager bootstrap failed — people bootstrap skipped (re-run rest-of-foundation.sh)."
       fi
     else
       warn "  Installer org/user/email not determinable from configuration.json — skipping people bootstrap."
     fi
   else
-    info "  config/people already populated — skipping people bootstrap (idempotent)."
+    info "  config/identities already populated — skipping people bootstrap (idempotent)."
   fi
 fi
 

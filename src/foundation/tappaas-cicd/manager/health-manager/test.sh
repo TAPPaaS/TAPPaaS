@@ -4,7 +4,7 @@
 # Two tiers:
 #   1. Bash smoke — every legacy entry script parses (bash -n) and resolves on PATH.
 #   2. TypeScript — `tsc --noEmit` clean (src) + the offline unit suite passes
-#      (FakeClusterClient; no SSH / no Proxmox). Mirrors people-manager/test.sh.
+#      (FakeClusterClient; no SSH / no Proxmox). Mirrors identity-manager/test.sh.
 # Exit non-zero on any failure.
 set -uo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

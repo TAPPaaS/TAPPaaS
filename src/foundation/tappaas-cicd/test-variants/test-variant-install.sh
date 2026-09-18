@@ -114,7 +114,7 @@ if [[ "${DEEP}" -eq 1 ]]; then
     # Author the vitest environment (the source of truth; no variant registry).
     mkdir -p "$(dirname "${ENV_FILE}")"
     owner="$(jq -r '.owner // empty' /home/tappaas/config/site.json 2>/dev/null)"
-    [[ -n "${owner}" ]] || owner="$(ls /home/tappaas/config/people/organizations/*.json 2>/dev/null | head -1 | xargs -r basename | sed 's/\.json$//')"
+    [[ -n "${owner}" ]] || owner="$(ls /home/tappaas/config/identities/organizations/*.json 2>/dev/null | head -1 | xargs -r basename | sed 's/\.json$//')"
     if jq -n --arg n "${VAR}" --arg owner "${owner}" --arg d "${VAR}.test2.tapaas.org" '
             { name: $n, displayName: $n, ownerOrg: $owner,
               domains: { primary: $d, dnsMode: "wildcard" },

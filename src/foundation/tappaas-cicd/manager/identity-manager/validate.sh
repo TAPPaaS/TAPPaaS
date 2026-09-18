@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
-# validate-people.sh — validate a People domain (roles/organizations/groups/users)
+# validate-people.sh — validate a Identity domain (roles/organizations/groups/users)
 #
-# Validates every JSON file under a config/people-style directory against the
+# Validates every JSON file under a config/identities-style directory against the
 # People JSON Schemas (src/foundation/schemas/{role,organization,group,user}-fields.json)
 # and checks cross-file reference integrity:
 #   - group.ownerOrg references an existing Organization
@@ -45,14 +45,14 @@ fi
 command -v jq >/dev/null 2>&1 || die "jq is required but not installed."
 
 # ---------------------------------------------------------------------------
-# Locate schemas relative to this script (manager/people-manager/ -> foundation/schemas)
+# Locate schemas relative to this script (manager/identity-manager/ -> foundation/schemas)
 # ---------------------------------------------------------------------------
 # Resolve the REAL script path: validate.sh is symlinked into /home/tappaas/bin
 # (as validate-people.sh), so BASH_SOURCE alone would point at the symlink dir
 # and the default schema dir wouldn't be found. readlink -f follows the link.
 _SELF="$(readlink -f "${BASH_SOURCE[0]}")"
 HERE="$(cd "$(dirname "${_SELF}")" && pwd)"
-# manager/people-manager -> manager -> tappaas-cicd -> foundation
+# manager/identity-manager -> manager -> tappaas-cicd -> foundation
 FOUNDATION_DIR="$(cd "${HERE}/../../.." && pwd)"
 SCHEMA_DIR="${SCHEMA_DIR:-${FOUNDATION_DIR}/schemas}"
 
@@ -66,7 +66,7 @@ usage() {
     cat << EOF
 Usage: $(basename "$0") [OPTIONS] [DIR]
 
-Validate a TAPPaaS People domain against the People schemas and check
+Validate a TAPPaaS Identity domain against the People schemas and check
 cross-file reference integrity.
 
 Arguments:
@@ -86,8 +86,8 @@ Exit Codes:
 
 Examples:
     $(basename "$0")
-    $(basename "$0") /home/tappaas/TAPPaaS/config/people
-    $(basename "$0") --quiet ./manager/people-manager/minimal-org
+    $(basename "$0") /home/tappaas/TAPPaaS/config/identities
+    $(basename "$0") --quiet ./manager/identity-manager/minimal-org
 EOF
 }
 
@@ -227,7 +227,7 @@ main() {
 
     PEOPLE_DIR="${PEOPLE_DIR%/}"
 
-    log_info "Validating People domain: ${PEOPLE_DIR}"
+    log_info "Validating Identity domain: ${PEOPLE_DIR}"
     log_info "Using schemas from: ${SCHEMA_DIR}"
 
     # Schema files must exist

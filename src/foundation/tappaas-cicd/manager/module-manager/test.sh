@@ -609,7 +609,7 @@ consnone="$(bash "$IWSH" "$IWC" find_integrateswith_consumers "vllm-amd" "others
 # TypeScript unit tests (the module-manager CLI itself: config-layer verbs, the
 # inspect report + the dependency-service drift check). Offline — a
 # FakeModuleClient and fixture configs, no cluster, no bash scripts. Same
-# run_ts/dist-test pattern people-manager/test.sh uses; tsc/node come from the
+# run_ts/dist-test pattern identity-manager/test.sh uses; tsc/node come from the
 # environment when present, else nix-shell.
 # ---------------------------------------------------------------------------
 echo ""

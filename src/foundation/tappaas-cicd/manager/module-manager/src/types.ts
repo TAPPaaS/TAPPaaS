@@ -2,7 +2,7 @@
 // bash-script boundary the manager orchestrates through) + the validate result
 // shapes.
 //
-// Mirrors people-manager / network-manager: the CONFIG-layer verbs (list / show
+// Mirrors identity-manager / network-manager: the CONFIG-layer verbs (list / show
 // / validate) operate on this in-process model; the LIFECYCLE verbs (add /
 // modify / delete / reconcile / test / snapshot-vm) delegate to the existing
 // bash scripts via the injected ModuleClient (production = CliModuleClient,

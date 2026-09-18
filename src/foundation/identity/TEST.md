@@ -8,7 +8,7 @@
 
 ## Standard (fast) tests
 - Section 1 — Connectivity: asserts `authentik-manager test` succeeds (can reach Authentik); fatal exit 2 otherwise.
-- Section 2 — Role groups present: for each of `user`, `admin`, `root`, runs `group-ensure` then asserts the group exists in Authentik (`/core/groups/`). These are the people-manager-reconciled role groups.
+- Section 2 — Role groups present: for each of `user`, `admin`, `root`, runs `group-ensure` then asserts the group exists in Authentik (`/core/groups/`). These are the identity-manager-reconciled role groups.
 - Section 2b — Authentik admin group (#476): asserts Authentik's built-in `authentik Admins` group exists **with `is_superuser=true`** (the only thing that grants the admin UI — a same-named group without the flag would be a silent no-op), then resolves the site owner (`site.json` `.owner` → `organizations/<org>.json` `.owner`) and asserts they are a member. The membership check warns-and-skips when no site owner resolves (people tree not bootstrapped yet); the group-flag check always runs.
 - Section 2c — Password recovery wired: asserts the default brand's `flow_recovery` is set and points at a flow with `designation=recovery`, and that the `tappaas-recovery-write` stage is `never_create` (an untokened visit to the flow URL must fail, never mint an account). Without this wiring `authentik-manager user-recovery-link` exits 2 and the only reset path is handing out a password. No token is minted by the test — it reads the API only.
 - Section 3 — OIDC allow-list (offline grep of `services/identity/install-service.sh`):
@@ -33,5 +33,5 @@
 ## Coverage notes
 - Has a real `test.sh` with both fast and deep tiers — the best-covered of the four modules.
 - Section 3 is a static grep of `install-service.sh` source, not a behavioural test — it verifies the allow-list literal is correct, not that Authentik actually enforces it (that is left to the deep tier).
-- The legacy `roles-ensure.sh` variant-scope and `user.sh` lifecycle test tiers (formerly sections 4+5) were removed; role/user lifecycle is now owned by `people-manager` and is NOT exercised by this module's tests.
+- The legacy `roles-ensure.sh` variant-scope and `user.sh` lifecycle test tiers (formerly sections 4+5) were removed; role/user lifecycle is now owned by `identity-manager` and is NOT exercised by this module's tests.
 - Deep tier depends on a working install/delete pipeline, default domain config, Caddy, and split-horizon DNS; it self-skips rather than failing when prerequisites are absent, so a green fast run does NOT imply the live OIDC/forward-auth path was verified.

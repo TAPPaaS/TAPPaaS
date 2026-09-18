@@ -36,7 +36,7 @@ IDENTITY_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/ensure-authentik-creds.sh disable=SC1091
 . "${IDENTITY_DIR}/lib/ensure-authentik-creds.sh"
 
-# authentik-manager and people-manager are operator CLIs too: their `==>` /
+# authentik-manager and identity-manager are operator CLIs too: their `==>` /
 # `[ok]` progress is right when a human runs them by hand, and noise when this
 # converge drives them. So the CALLER decides — pipe a call through this to give
 # every line a level. A [DRIFT]/WARNING:/ERROR: line is promoted to warn whatever
@@ -192,10 +192,10 @@ else
     warn "  recovery-flow-ensure failed — password resets fall back to 'authentik-manager user-set-password <user>'"
 fi
 
-# ── ADR-007: role groups are owned by people-manager ────────────────────────
+# ── ADR-007: role groups are owned by identity-manager ────────────────────────
 # The role groups (user/admin/root) and the team group `users` are reconciled
-# into Authentik by `people-manager sync` (run at foundation install and on
-# update from config/people/). This script no longer ensures them here.
+# into Authentik by `identity-manager sync` (run at foundation install and on
+# update from config/identities/). This script no longer ensures them here.
 
 # ── Authentik admin rights for the site owner (issue #476) ──────────────────
 # The ONLY thing that grants the Authentik admin UI is membership in a group
@@ -207,11 +207,11 @@ fi
 # Two halves, both idempotent and both safe to re-run:
 #   Authentik side  — group-ensure --superuser ADOPTS the built-in group, and
 #                     re-creates it WITH is_superuser if it was deleted. Without
-#                     this, people-manager's ensure-group would recreate a plain
+#                     this, identity-manager's ensure-group would recreate a plain
 #                     group of the same name and the grant would silently become
 #                     a no-op.
-#   config/people   — a FRESH install inherits the group + membership from
-#                     people-manager's minimal-org bootstrap (which runs later,
+#   config/identities   — a FRESH install inherits the group + membership from
+#                     identity-manager's minimal-org bootstrap (which runs later,
 #                     in rest-of-foundation.sh). An EXISTING install has neither,
 #                     so add them here through the manager verbs and converge the
 #                     membership now.
@@ -249,19 +249,19 @@ if [[ -d "${PEOPLE_DIR}/organizations" ]]; then
         # --no-reconcile (issue #482): a people write normally pushes itself, but
         # these two are incidental to a MODULE update, not an operator's people
         # edit — a module update must not push whatever else an operator has
-        # staged in config/people, nor reconcile while identity is mid-setup.
+        # staged in config/identities, nor reconcile while identity is mid-setup.
         if [[ ! -f "${PEOPLE_DIR}/groups/${AK_ADMIN_GROUP}.json" ]]; then
-            people-manager group add "${AK_ADMIN_GROUP}" --no-reconcile \
+            identity-manager group add "${AK_ADMIN_GROUP}" --no-reconcile \
                 --displayName "Authentik Admins" --type access-set --ownerOrg "${OWNER_ORG}" \
                 | _tag debug \
-                || warn "  people-manager group add '${AK_ADMIN_GROUP}' failed"
+                || warn "  identity-manager group add '${AK_ADMIN_GROUP}' failed"
         fi
-        # people-manager reports the config write and advises running its own
+        # identity-manager reports the config write and advises running its own
         # reconcile; both are incidental here (--no-reconcile is deliberate,
         # #482) and the ✓ below is the line that matters.
-        people-manager user modify "${OWNER_USER}" --add-groups "${AK_ADMIN_GROUP}" --no-reconcile \
+        identity-manager user modify "${OWNER_USER}" --add-groups "${AK_ADMIN_GROUP}" --no-reconcile \
             | _tag debug \
-            || warn "  people-manager user modify ${OWNER_USER} --add-groups failed"
+            || warn "  identity-manager user modify ${OWNER_USER} --add-groups failed"
         # Then converge just this membership in Authentik — the targeted call the
         # skipped reconcile would otherwise have made.
         if authentik-manager get-user --name "${OWNER_USER}" | jq -e '. != null' >/dev/null 2>&1; then
@@ -269,7 +269,7 @@ if [[ -d "${PEOPLE_DIR}/organizations" ]]; then
                 && info "  ${GN}✓${CL} ${OWNER_USER} ∈ ${AK_ADMIN_GROUP}" \
                 || warn "  add-member ${OWNER_USER} → ${AK_ADMIN_GROUP} failed"
         else
-            info "  ${OWNER_USER} not in Authentik yet — 'people-manager reconcile --apply' will create it and apply the membership"
+            info "  ${OWNER_USER} not in Authentik yet — 'identity-manager reconcile --apply' will create it and apply the membership"
         fi
     fi
 fi

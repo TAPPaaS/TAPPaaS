@@ -2,7 +2,7 @@
 //
 // CliNetworkClient shells out to `network-manager` (the network plane owner,
 // TS, ADR-007 P4). CliModuleClient enumerates deployed module configs on disk
-// and shells out to `module-manager` per module — exactly as people-manager
+// and shells out to `module-manager` per module — exactly as identity-manager
 // shells out to authentik-manager. NO plane/module logic is reimplemented here:
 // these are thin FFI boundaries.
 

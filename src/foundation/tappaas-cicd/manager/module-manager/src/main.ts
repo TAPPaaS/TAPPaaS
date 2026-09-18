@@ -933,7 +933,7 @@ function cmdSnapshot(opts: Opts, client: ModuleClient): number {
 // ── dispatch ───────────────────────────────────────────────────────────
 // Entity-first form: `module-manager module <verb> ...`. The `module` entity
 // keyword is optional (it is the only entity) so `module-manager list` also
-// works — matching how people-manager/network-manager keep the common verbs
+// works — matching how identity-manager/network-manager keep the common verbs
 // reachable.
 function dispatch(verb: string, opts: Opts, client: ModuleClient): number {
   switch (verb) {

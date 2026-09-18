@@ -1,8 +1,8 @@
 // write-push.test.ts — issue #482: a write verb PUSHES to the identity service.
 //
 // Drives the real CLI entry point (run()) against a FakeClient and a temp
-// config/people tree, so it asserts the end-to-end behaviour an operator sees:
-// `people-manager user add …` must leave the user present in Authentik, with no
+// config/identities tree, so it asserts the end-to-end behaviour an operator sees:
+// `identity-manager user add …` must leave the user present in Authentik, with no
 // second command. Also pins the escape hatch (--no-reconcile) and the delete
 // path, which reconcile alone cannot cover (a removed config file is invisible
 // to computePlan).
@@ -85,7 +85,7 @@ function quiet<T>(fn: () => T): T {
     "the pushed user carries the membership from the same command",
   );
   // The push is a full reconcile: the pre-existing config reaches Authentik too.
-  check(c.users.has("ann"), "the push reconciles the rest of config/people as well");
+  check(c.users.has("ann"), "the push reconciles the rest of config/identities as well");
   check(c.groups.has("acme__users") && c.roles.has("admin"), "groups and roles were ensured");
 }
 

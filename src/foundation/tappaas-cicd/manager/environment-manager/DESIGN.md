@@ -39,7 +39,7 @@ Standardized ADR-007 verbs, all on `config/environments/<env>.json`:
 - **`add`** — create an env (writes validated config). No positional `<env>`
   ⇒ seed the minimal set (`mgmt` + default `<N>`) via the bootstrap — `--name`
   gives `<N>` explicitly, else it derives from `site.json '.name'`; otherwise a
-  single env. `--owner` defaults to the first org under `people/organizations/`;
+  single env. `--owner` defaults to the first org under `identities/organizations/`;
   `--zone` defaults to `<env>`. **`--create-zone`** (ADR-014 D1) authors the
   Service zone before validating/writing the environment, so the pair is created
   in one command; opt-in, so a typo'd `--zone` cannot mint a stray zone.
@@ -102,7 +102,7 @@ underneath the operator would hide it. `Plan.errors` carries these (distinct fro
 on the shell-out seam — environment-manager never writes `zones.json`.
 
 - Cross-referenced state it validates against: `config/zones.json` (for
-  `network.zone`) and `config/people/organizations/*.json` (for `ownerOrg`).
+  `network.zone`) and `config/identities/organizations/*.json` (for `ownerOrg`).
 
 The `add` minimal-set bootstrap (`src/bootstrap.ts`) is the single owner of
 `mgmt.json` and the default `<N>.json`; downstream steps consume but do not
@@ -112,7 +112,7 @@ re-author them.
 
 It is a thin orchestration boundary — it owns `config/environments/*.json` and
 shells out for everything else (no plane/module logic is reimplemented, exactly
-as `people-manager` shells out to `authentik-manager`):
+as `identity-manager` shells out to `authentik-manager`):
 
 - **`reconcile`** → `network-manager` (`zone exists`, `reconcile [--apply]`) for
   the environment's zone, and `module-manager reconcile <module> [--apply]` per

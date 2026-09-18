@@ -13,14 +13,14 @@
 //       clone/checkout logic, expressed as idempotent reconcile actions.)
 //   (2) --deep cascade — shell out to the dependent manager bins in dependency
 //       order: people → network → (every) environment. We do NOT reimplement
-//       them (people-manager / network-manager / environment-manager own that
+//       them (identity-manager / network-manager / environment-manager own that
 //       logic). Environments are enumerated from the site (config/environments/
 //       *.json) and each is driven via `environment-manager reconcile <env>
 //       --deep --skip-network` — verb-first, and skipping the network pass the
 //       network leg above already ran system-wide (#461).
 //
 // The engine depends only on SiteClient (injected) — pure planning + apply,
-// exactly like people-manager/src/reconcile.ts.
+// exactly like identity-manager/src/reconcile.ts.
 
 import {
   Site,

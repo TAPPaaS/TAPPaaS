@@ -12,7 +12,7 @@
 //       assignments are AUTHORITATIVE and reconciled bidirectionally — links in
 //       the JSON but missing in Authentik are ADDED; managed links in Authentik
 //       but no longer in the JSON are REMOVED. Scope guard: removal only touches
-//       entities in the MANAGED SET (names present in config/people). A user's
+//       entities in the MANAGED SET (names present in config/identities). A user's
 //       membership in a FOREIGN group/role is never removed.
 //
 //   (3) State lifecycle:
@@ -22,7 +22,7 @@
 //                    role-conferring MANAGED group memberships (no access)
 //       terminated → deleted (the single governed deletion)
 //
-// Foreign entities (not in config/people) are first-class: never created,
+// Foreign entities (not in config/identities) are first-class: never created,
 // removed, modified, or flagged as drift.
 //
 // The engine depends only on PrimitiveClient (injected) — pure planning + apply.
@@ -78,7 +78,7 @@ export function computePlan(m: PeopleModel, snap: AkSnapshot): Plan {
   const byName = new Map<string, AkUser>();
   for (const u of current) byName.set(u.name, u);
 
-  // The managed set: every name present in config/people.
+  // The managed set: every name present in config/identities.
   const managedGroups = new Set(m.groups.keys());
   const managedRoles = new Set(m.roles.keys());
 
@@ -248,7 +248,7 @@ export function computePlan(m: PeopleModel, snap: AkSnapshot): Plan {
 // Groups Authentik ships itself are NEVER deleted from Authentik: `authentik
 // Admins` is the superuser group TAPPaaS adopts (issue #476) and holds akadmin,
 // so removing it would strip the last route into the admin UI. Dropping such a
-// group from config/people is allowed — it just stops being TAPPaaS-managed.
+// group from config/identities is allowed — it just stops being TAPPaaS-managed.
 export const AUTHENTIK_OWNED_GROUPS = new Set(["authentik Admins", "authentik Read-only"]);
 
 export interface DeletionPush {
@@ -267,7 +267,7 @@ export function pushEntityDeletion(
       return { pushed: true, reason: "" };
     case "group":
       if (AUTHENTIK_OWNED_GROUPS.has(name)) {
-        return { pushed: false, reason: `'${name}' is one of Authentik's own groups — removed from config/people only` };
+        return { pushed: false, reason: `'${name}' is one of Authentik's own groups — removed from config/identities only` };
       }
       client.deleteGroup(name);
       return { pushed: true, reason: "" };

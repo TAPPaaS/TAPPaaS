@@ -22,7 +22,7 @@ cert refid is runtime state, not authored config.
 A first-pass port presents the standardized ADR-007 verbs on the
 `environment` entity. It is a thin orchestration boundary — it owns
 `config/environments/*.json` and shells out to the plane/module managers for
-reconcile; it reimplements no plane logic (exactly as `people-manager` shells
+reconcile; it reimplements no plane logic (exactly as `identity-manager` shells
 out to `authentik-manager`). The bash scripts below stay live.
 
 ```
@@ -43,7 +43,7 @@ environment-manager reconcile <env> [--deep] [--apply] [--config-dir DIR]
 | `list` | Enumerate environments. `--json` emits the full objects as a JSON array; default prints `name (zone …)` per line. |
 | `show <env>` | One environment in detail (canonical pretty JSON; `--json` = compact). |
 | `validate [<file/dir>]` | The canonical schema + reference gate, implemented natively (src/validate.ts interprets `environment-fields.json` in-process — the former `validate-environment.sh` is retired). Checks full schema conformance (`additionalProperties:false`, `pattern`/`enum`/`minLength`, the `tlsCertRefid` rejection) **and** reference integrity (`network.zone` in `zones.json`, `ownerOrg` in the organizations). See "The `validate` gate" below. |
-| `add` | Create an environment (writes validated config). With **no** positional `<env>` it **seeds the minimal set** (`mgmt` + the default `<N>`) — the bootstrap that replaced the retired `create-minimal-environments.sh`; `--name <N>` gives the system name explicitly, else it derives from `site.json '.name'` (see "The minimal-set bootstrap" below). With a positional `<env>` it creates that single env. `--owner` defaults to the first org under `people/organizations/`; `--zone` defaults to `<env>`. |
+| `add` | Create an environment (writes validated config). With **no** positional `<env>` it **seeds the minimal set** (`mgmt` + the default `<N>`) — the bootstrap that replaced the retired `create-minimal-environments.sh`; `--name <N>` gives the system name explicitly, else it derives from `site.json '.name'` (see "The minimal-set bootstrap" below). With a positional `<env>` it creates that single env. `--owner` defaults to the first org under `identities/organizations/`; `--zone` defaults to `<env>`. |
 | `modify <env>` | Change an existing environment (preserves un-flagged fields; writes validated config). |
 
 `--dns-mode <per-service\|wildcard>` (on `add`/`modify`) sets `domains.dnsMode` —

@@ -3,9 +3,9 @@
 # TAPPaaS Identity — module tests (ADR-007 people/roles model).
 #
 # The role-group model (groups user/admin/root + the team group `users`) is now
-# owned by people-manager (reconciled from config/people/ via `people-manager
+# owned by identity-manager (reconciled from config/identities/ via `identity-manager
 # sync`); identity no longer ships roles-ensure.sh or user.sh. These tests assert
-# that the OIDC install allow-list points at the people-manager role groups
+# that the OIDC install allow-list points at the identity-manager role groups
 # (user/admin/root) and that the live OIDC / forward-auth wiring works end to end.
 #
 # Commands are taken from ~/bin by default; override for pre-deploy testing:
@@ -72,11 +72,11 @@ section "1: Authentik reachable"
 if ${AUTHENTIK_MANAGER} test >/dev/null 2>&1; then pass "authentik-manager connects"
 else error "authentik-manager cannot reach Authentik"; exit 2; fi
 
-# ── 2. people-manager role groups present ────────────────────────────────────
-# The baseline role groups user/admin/root are reconciled by `people-manager
+# ── 2. identity-manager role groups present ────────────────────────────────────
+# The baseline role groups user/admin/root are reconciled by `identity-manager
 # sync`. The OIDC install allow-list (install-service.sh) ensures they exist via
 # group-ensure as a safety net; assert they are present here.
-section "2: people-manager role groups (user/admin/root) exist"
+section "2: identity-manager role groups (user/admin/root) exist"
 for g in user admin root; do
     ${AUTHENTIK_MANAGER} group-ensure "$g" >/dev/null 2>&1 || true
     group_present "$g" && pass "group ${g} present" || fail "group ${g} missing"
@@ -144,7 +144,7 @@ else
 fi
 
 # ── 3. OIDC allow-list points at the role groups (offline assertion) ─────────
-# install-service.sh must gate OIDC apps on the people-manager role groups
+# install-service.sh must gate OIDC apps on the identity-manager role groups
 # the `users` membership group (the OIDC groups claim carries memberships, not the
 # RBAC roles), NOT the retired tappaas-* prefix groups.
 section "3: OIDC install allow-list = users (membership group)"
@@ -171,7 +171,7 @@ fi
 
 # ── 4+5. (retired) ───────────────────────────────────────────────────────────
 # The legacy roles-ensure.sh variant-scope and user.sh lifecycle tiers were
-# removed: people-manager now owns roles/users (see manager/people-manager).
+# removed: identity-manager now owns roles/users (see manager/identity-manager).
 
 # ── 6+7. DEEP integration: identity fronts a real webserver, both modes ──────
 # Installs two tiny self-contained webserver VMs (test-fixtures/) and checks the

@@ -10,13 +10,13 @@ Primary audience: TAPPaaS admin.
    means an empty model list (see Troubleshooting).
 2. Identity (Authentik) must be deployed (`identity:identity` dependency) —
    OpenWebUI signs users in via SSO.
-3. The environment owner must exist in people-manager with a `primaryEmail`,
+3. The environment owner must exist in identity-manager with a `primaryEmail`,
    because that identity becomes the OpenWebUI admin. Resolution is
    `environments/<env>.json .ownerOrg` -> people org `.owner` -> user
    `.primaryEmail`. Check with:
 
-       people-manager org show "$(jq -r .ownerOrg /home/tappaas/config/environments/<env>.json)"
-       people-manager user show <owner>
+       identity-manager org show "$(jq -r .ownerOrg /home/tappaas/config/environments/<env>.json)"
+       identity-manager user show <owner>
 
 4. Verify `openwebui.json` matches your environment (node, storage, zone).
 

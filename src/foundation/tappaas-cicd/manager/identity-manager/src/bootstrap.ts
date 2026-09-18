@@ -1,10 +1,10 @@
-// bootstrap.ts — bootstrap the minimal People domain (the user-setup.sh logic,
+// bootstrap.ts — bootstrap the minimal Identity domain (the user-setup.sh logic,
 // ported — the bash script is retired, ADR-007 refactor Phase 8.2).
 //
-// Copies the manager's minimal-org/ templates into config/people/, substituting
+// Copies the manager's minimal-org/ templates into config/identities/, substituting
 // the placeholders __ORG__ / __USER__ / __EMAIL__ / __ROOT_EMAIL__ in BOTH
 // filenames and file contents, then validates reference integrity (the same
-// validateRefs gate `people-manager validate` runs).
+// validateRefs gate `identity-manager validate` runs).
 //
 //   __ORG__        the organization name (= the install/system name)
 //   __USER__       the installer's username
@@ -12,7 +12,7 @@
 //   __ROOT_EMAIL__ root@<domain> where <domain> is the part of the email after '@'
 //
 // This is a thin bootstrap: it has no entity-creation logic of its own and it
-// does NOT push anything to Authentik (that is `people-manager reconcile`).
+// does NOT push anything to Authentik (that is `identity-manager reconcile`).
 //
 // Result (ADR-007 people model):
 //   * 1 organization  <ORG>            owner = <USER>
@@ -67,7 +67,7 @@ const EMAIL_RE = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
 // Resolve the minimal-org/ template dir:
 //   1. $PM_MINIMAL_ORG_DIR (tests / relocation);
 //   2. walk up from the compiled file — in-repo runs (dist/, dist-test/) pass
-//      the component dir (manager/people-manager/), which holds minimal-org/;
+//      the component dir (manager/identity-manager/), which holds minimal-org/;
 //   3. the mothership checkout (the nix-store binary contains only lib/ts +
 //      this component's compiled dist, so the templates cannot ship inside it —
 //      same situation as environment-manager's resolveSchemaDir and the retired
@@ -81,13 +81,13 @@ export function resolveMinimalOrgDir(): string {
     // known template file.
     const direct = join(d, "minimal-org");
     if (existsSync(join(direct, "roles", "root.json"))) return direct;
-    const viaTree = join(d, "manager", "people-manager", "minimal-org");
+    const viaTree = join(d, "manager", "identity-manager", "minimal-org");
     if (existsSync(join(viaTree, "roles", "root.json"))) return viaTree;
     const up = dirname(d);
     if (up === d) break;
     d = up;
   }
-  return "/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/manager/people-manager/minimal-org";
+  return "/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/manager/identity-manager/minimal-org";
 }
 
 // Substitute the placeholders in a string (used for both paths and contents).

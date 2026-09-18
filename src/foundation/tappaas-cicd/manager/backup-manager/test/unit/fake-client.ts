@@ -1,6 +1,6 @@
 // fake-client.ts — in-memory Client for offline unit tests (no backup-controller,
 // no PBS, no cluster). Records calls so tests can assert exactly what the manager
-// asked the controller to do. Mirrors people-manager/test/unit/fake-client.ts.
+// asked the controller to do. Mirrors identity-manager/test/unit/fake-client.ts.
 
 import { Client, JobStatus, ScheduleBucket } from "../../src/types";
 

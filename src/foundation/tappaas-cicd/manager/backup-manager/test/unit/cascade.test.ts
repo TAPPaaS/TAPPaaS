@@ -1,7 +1,7 @@
 // cascade.test.ts — offline unit tests for the backup-manager TS port. No PBS,
 // no cluster; pure config reads over the fixture tree under test/fixtures/config,
 // plus a FakeClient for the controller-facing paths. Tiny assert harness (no
-// framework), mirroring people-manager/test/unit/reconcile.test.ts. Run via the
+// framework), mirroring identity-manager/test/unit/reconcile.test.ts. Run via the
 // test/unit tsconfig.
 
 import { join } from "path";

@@ -1,7 +1,7 @@
 // reconcile.test.ts — unit tests for the environment reconcile engine.
 //
 // Tiny inline assert harness (no test framework, no node:assert) — mirrors the
-// people-manager zero-dep convention. Run after compiling via the test/unit
+// identity-manager zero-dep convention. Run after compiling via the test/unit
 // tsconfig (see test.sh):
 // (rootDir is the cicd root, so emit mirrors the tree):
 //   node dist-test/manager/environment-manager/test/unit/reconcile.test.js

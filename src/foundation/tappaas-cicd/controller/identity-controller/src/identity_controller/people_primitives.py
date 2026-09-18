@@ -1,10 +1,10 @@
 """Low-level Authentik PRIMITIVES for People (users/groups/roles/memberships).
 
-S2b-2 — this is the layer the TypeScript ``people-manager`` calls. It contains
+S2b-2 — this is the layer the TypeScript ``identity-manager`` calls. It contains
 **primitives only**: each function does ONE thing on EXACTLY the entity named,
 idempotent where natural (ensure = create-if-missing-else-noop). There is NO
 reconcile policy, NO managed-set logic, NO lifecycle decisions here — all of
-that lives in the people-manager (built later).
+that lives in the identity-manager (built later).
 
 Role mapping (decision)
 =======================

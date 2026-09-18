@@ -31,7 +31,7 @@
       "minLength": 1
     },
     "owner": {
-      "description": "Reference to the site-owner Organization.name (config/people/organizations/<owner>.json).",
+      "description": "Reference to the site-owner Organization.name (config/identities/organizations/<owner>.json).",
       "type": "string"
     },
     "email": {
@@ -242,7 +242,7 @@
       }
     },
     "organizations": {
-      "description": "Paths to organization JSON files (config/people/organizations/*.json).",
+      "description": "Paths to organization JSON files (config/identities/organizations/*.json).",
       "type": "array",
       "items": {
         "type": "string"

@@ -3,7 +3,7 @@
 ## Language and build
 
 - **Front door:** the `module-manager` **TypeScript** CLI (ADR-007 #3 verb
-  alignment) — a thin orchestrator mirroring `people-manager` / `network-manager`
+  alignment) — a thin orchestrator mirroring `identity-manager` / `network-manager`
   (zero npm deps, shared `lib/ts` helpers + ambient `lib/ts/src/env.d.ts`, built
   by `tsc` via the shared `lib/nix/ts-manager.nix` through `default.nix` into
   `result/bin/module-manager`). It owns the CONFIG-layer verbs in-process and
@@ -288,7 +288,7 @@ standalone `test-validate-module-tier-source.sh` lint suite, and it now also
 compiles and runs the **TypeScript unit tests** (`test/unit/module.test.ts`,
 `test/unit/inspect.test.ts` — the inspect report, the dependency-service drift
 check, and the CLI wiring that decides who pays for it) via the same
-`run_ts`/`dist-test` pattern `people-manager/test.sh` uses; before that they
+`run_ts`/`dist-test` pattern `identity-manager/test.sh` uses; before that they
 existed but were never executed by `test.sh`. The **deep**
 (`TAPPAAS_TEST_DEEP=1`) path currently runs the same checks — no live provisioning
 tier has been added yet.

@@ -1566,7 +1566,7 @@ tappaas_schema_file() {
 # `python3` off PATH is NOT a safe way to find an interpreter with a library.
 # update-tappaas is a nix-packaged Python app whose console-script wrapper
 # PREPENDS its own bare interpreter's bin to PATH, so every child it spawns —
-# validate-site.sh, people-manager validate.sh, test-fields-schema.sh — resolved
+# validate-site.sh, identity-manager validate.sh, test-fields-schema.sh — resolved
 # `python3` to an interpreter with no site-packages and concluded that jsonschema
 # was missing. It is not: /run/current-system/sw/bin/python3 has it. That is why
 # the probe fired on every update-tappaas run and passed on every hand-run, and

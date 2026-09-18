@@ -1,9 +1,9 @@
-// config.ts — load + validate the People domain from config/people/.
+// config.ts — load + validate the Identity domain from config/identities/.
 //
-// "config/" means the TARGET system (~tappaas/config/people), per the ADR-007
+// "config/" means the TARGET system (~tappaas/config/identities), per the ADR-007
 // "Convention: config/ means the target system" note. Default path resolves
 // from TAPPAAS_CONFIG (or /home/tappaas/config); tests pass an explicit dir
-// (the fixture tree under test/fixtures/people/).
+// (the fixture tree under test/fixtures/identities/).
 
 import { existsSync, readFileSync, readdirSync } from "fs";
 import { join } from "path";
@@ -11,13 +11,21 @@ import {
   asString,
   asStringArray,
   defaultConfigDir as configRoot,
+  identityDir,
 } from "../../../lib/ts/src/config-io";
 import { Group, Organization, PeopleModel, Role, User } from "./types";
 
-// The People domain lives in the "people" SUBDIR of the shared config root
-// (config-io.defaultConfigDir resolves TAPPAAS_CONFIG / CONFIG_DIR / target).
+// The Identity domain lives in the "identities" SUBDIR of the shared config
+// root (config-io.defaultConfigDir resolves TAPPAAS_CONFIG / CONFIG_DIR /
+// target). It was "people" until #628; migration 0005 renames it. Until then —
+// or on a config restored from a backup taken before 0005 ran — read the old
+// directory rather than an empty domain, and say so.
 export function defaultConfigDir(): string {
-  return join(configRoot(), "people");
+  const dir = identityDir(configRoot());
+  if (dir.endsWith("/people")) {
+    process.stderr.write(`identity-manager: reading ${dir} — migration 0005 renames it to identities/\n`);
+  }
+  return dir;
 }
 
 function readJsonFiles(dir: string): unknown[] {

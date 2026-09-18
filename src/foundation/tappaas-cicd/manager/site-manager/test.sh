@@ -11,7 +11,7 @@
 #   - dropped fields absent: domain / variants / nodeCount
 #   - email CARRIED to site.json .email (S3b reader cutover)
 #   - migration is idempotent (2nd run is a no-op; --force overwrites)
-#   - owner is derived from config/people/organizations/ when present
+#   - owner is derived from config/identities/organizations/ when present
 #   - a deliberately-bad site.json FAILS validate-site.sh
 #
 # DEEP (TAPPAAS_TEST_DEEP=1): no extra disruptive tests for this component — the

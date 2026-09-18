@@ -1,6 +1,6 @@
 // client.ts — CliClient: the real Client. Shells out to the `backup-controller`
 // bin on PATH for all PBS operations and parses its JSON output. NO PBS API is
-// reimplemented here — this is a thin FFI boundary, exactly as people-manager
+// reimplemented here — this is a thin FFI boundary, exactly as identity-manager
 // shells out to authentik-manager and network-manager to the plane controllers.
 //
 // backup-controller is BASH (controller/backup-controller/backup-controller).

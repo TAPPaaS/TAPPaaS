@@ -471,14 +471,14 @@ rest-of-foundation.sh
 1. **Installs the remaining foundation modules** in order — **backup → identity →
    logging** — then runs a final system update + tests.
 2. **Bootstraps your people domain** — once the identity provider (Authentik) is
-   up and `config/people/` is still empty (first install), it creates the
+   up and `config/identities/` is still empty (first install), it creates the
    **organisation `<org>`** (the `--organization` from Step 2), the `users` group and
    **your installer user** (from `site.json`'s email), and pushes them into
    Authentik. So **this is where your organisation is actually created** — the
    earlier `--organization` only reserved the name; the org entity is materialised here.
 
 It's idempotent — safe to re-run if a module needs attention (the people bootstrap
-is skipped once `config/people/` exists, so it never disturbs people you've added).
+is skipped once `config/identities/` exists, so it never disturbs people you've added).
 When it finishes you'll see a **"🎉 your TAPPaaS foundation is installed"** summary
 (nodes, firewall, mothership, domain/TLS, modules, organisation).
 

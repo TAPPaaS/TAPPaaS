@@ -204,16 +204,16 @@ REMOTE
 
     _owner_user=""
     if [[ -n "${_owner_org}" ]]; then
-        _owner_user="$(people-manager org show "${_owner_org}" 2>/dev/null \
+        _owner_user="$(identity-manager org show "${_owner_org}" 2>/dev/null \
             | awk -F': *' '/^[[:space:]]*owner:/{print $2; exit}' | tr -d '[:space:]')"
     fi
 
     if [[ -z "${_owner_user}" ]]; then
         warn "  Could not resolve an environment owner (env='${_env:-default}', org='${_owner_org:-unset}') — admin seeding skipped"
     else
-        _owner_email="$(people-manager user show "${_owner_user}" 2>/dev/null \
+        _owner_email="$(identity-manager user show "${_owner_user}" 2>/dev/null \
             | awk -F': *' '/^[[:space:]]*primaryEmail:/{print $2; exit}' | tr -d '[:space:]')"
-        _owner_name="$(people-manager user show "${_owner_user}" 2>/dev/null \
+        _owner_name="$(identity-manager user show "${_owner_user}" 2>/dev/null \
             | awk -F': *' '/^[[:space:]]*displayName:/{print $2; exit}' | sed 's/[[:space:]]*$//')"
         if [[ -z "${_owner_email}" ]]; then
             warn "  Owner '${_owner_user}' has no primaryEmail — admin seeding skipped"

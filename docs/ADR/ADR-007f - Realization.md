@@ -9,7 +9,7 @@
 | **Parent** | [ADR-007 Taxonomy (Overview)](<ADR-007 - TAPPaaS Taxonomy.md>) |
 | **Amended by** | [ADR-022c](<ADR-022c - Node and Host.md>) (receives the Stack-promotion rule from `GLOSSARY.md` §C) — draft |
 | **Related** | #320 (taxonomy); **composition:** [ADR-009](<ADR-009 - Composition Meta-Model.md>); [ADR-008](<ADR-008-switch-module-network-infrastructure.md>) (switch/control-points); ADR-004 (config cascade); **verbs:** [design/ADR-007-verb-alignment.md](<../design/ADR-007-verb-alignment.md>); **build state:** [design/ADR-007-implementation-tracker.md](<../design/ADR-007-implementation-tracker.md>); closed: #364 (split opnsense-controller) · #365 (Managers) |
-| **Changelog** | v1.0a (2026-09-17) — header link to the ADR-022c draft that moves the Stack-promotion rule here; no body change. v1.0 — **as-built (2026-06-30):** the control plane is **realized**. The flat `scripts/` pile became **`tappaas-cicd/manager/` (7 TypeScript Managers with a uniform verb surface) + `tappaas-cicd/controller/` (6 Controllers doing live I/O) + `lib/`**. The mapping table below is rewritten to the built structure: `firewall`→**`network`** Module + `network-manager` (owns `zones.json` + reconciles 4 planes); People realized as `people-manager`→`identity-controller`; `module-manager` for Apps; `configuration-fields.json` retired → `site-fields.json` + `environment-fields.json`; per-domain `*-fields.json` schemas all present (People gap closed). v0.8 — Controller column added; Manager→Controller→Service chain explicit. v0.7 — Manager/Controller distinction. v0.6 — Schema column; People gap named. v0.5 — orchestrator layer; `repository.sh`→Site; `variant-manager.sh`=env-manager v0.1. v0.4 — Stack = Aggregation ≠ Serving. |
+| **Changelog** | v1.0a (2026-09-17) — header link to the ADR-022c draft that moves the Stack-promotion rule here; no body change. v1.0 — **as-built (2026-06-30):** the control plane is **realized**. The flat `scripts/` pile became **`tappaas-cicd/manager/` (7 TypeScript Managers with a uniform verb surface) + `tappaas-cicd/controller/` (6 Controllers doing live I/O) + `lib/`**. The mapping table below is rewritten to the built structure: `firewall`→**`network`** Module + `network-manager` (owns `zones.json` + reconciles 4 planes); People realized as `identity-manager`→`identity-controller`; `module-manager` for Apps; `configuration-fields.json` retired → `site-fields.json` + `environment-fields.json`; per-domain `*-fields.json` schemas all present (People gap closed). v0.8 — Controller column added; Manager→Controller→Service chain explicit. v0.7 — Manager/Controller distinction. v0.6 — Schema column; People gap named. v0.5 — orchestrator layer; `repository.sh`→Site; `variant-manager.sh`=env-manager v0.1. v0.4 — Stack = Aggregation ≠ Serving. |
 
 The **SSOT mapping** from the ADR-007 classification (classification domains) to the **existing TAPPaaS foundation
 modules and control-plane scripts**. This ADR answers the question the flat `scripts/` pile cannot:
@@ -48,7 +48,7 @@ under `tappaas-cicd/`:
 The model originally said "one Manager per classification domain". As built it is **finer**: a domain may
 have **two** Managers when it owns two distinct config surfaces — Environments is realized by
 **`environment-manager`** (the `config/environments/*` lifecycle) **and** **`network-manager`** (owns
-`config/zones.json` end-to-end and reconciles the 4 network planes); People by **`people-manager`** (config)
+`config/zones.json` end-to-end and reconciles the 4 network planes); People by **`identity-manager`** (config)
 + the **`identity-controller`** (Authentik). Shared code lives in `lib/`.
 
 **Tiering rule — aggregation ≠ coordination.** Promote a classification domain to a **Stack** only on genuine
@@ -70,7 +70,7 @@ All Managers live under `tappaas-cicd/manager/<x>-manager/` (TypeScript); Contro
 
 | Classification domain | Manager(s) (TS) | Level | Module(s) | Schema (`schemas/`) | Controller(s) | Key services / scripts |
 |---|---|---|---|---|---|---|
-| 👥 **People** ([007a](<ADR-007a - People.md>)) | `people-manager` | Module | `identity` (Authentik) | `role`,`organization`,`group`,`user`-`fields.json` | **`identity-controller`** (Python; Authentik reconcile) | `user-setup.sh`, `minimal-org/`, `validate.sh` |
+| 👥 **People** ([007a](<ADR-007a - People.md>)) | `identity-manager` | Module | `identity` (Authentik) | `role`,`organization`,`group`,`user`-`fields.json` | **`identity-controller`** (Python; Authentik reconcile) | `user-setup.sh`, `minimal-org/`, `validate.sh` |
 | 📦 **Apps** ([007b](<ADR-007b - Apps.md>)) | `module-manager` | Module (lifecycle) | the App workloads | `module-fields.json` | *(uses the `cluster:vm` / `network:proxy` install-service hooks)* | `install-module.sh`, `update-module.sh`, `delete-module.sh`, `test-module.sh`, `copy-update-json.sh`; `lib/common-install-routines.sh` |
 | 🏠 **Environments** ([007c](<ADR-007c - Environments.md>)) | `environment-manager` (env files) **+** `network-manager` (owns `zones.json`, reconciles 4 planes) | **Stack** | `network` (OPNsense L3 — was `firewall`) | `environment-fields.json`, `zones-fields.json` | **`opnsense-controller`** (Python: firewall/DNS/Caddy/ACME), **`switch-controller`**, **`ap-controller`** | `init`/`merge`/`validate`, `reconcile [--only <plane>]`, `acme-setup.sh` |
 | 🏢 **Site** ([007d](<ADR-007d - Site.md>)) | `site-manager` **+** `backup-manager` | **Stack** | `cluster`, `backup` (PBS on node), `templates`, `tappaas-cicd` | `site-fields.json`, `module-catalog-fields.json` *(was `configuration-fields.json` — retired)* | **`proxmox-controller`**, **`backup-controller`** | `create-site.sh`, `migrate-configuration.sh`, `repository.sh`, backup LCM |
@@ -103,7 +103,7 @@ All schemas live in **`src/foundation/schemas/`** (JSON Schema 2020-12), one per
 (Environments), `site-fields.json` (Site). The earlier findings are resolved:
 
 - **People gap — CLOSED:** the four `role`/`organization`/`group`/`user` schemas now validate the People
-  domain (`people-manager validate`).
+  domain (`identity-manager validate`).
 - **Site transition — DONE:** `configuration-fields.json` is **retired**; `site.json` (`site-fields.json`)
   + `config/environments/*.json` (`environment-fields.json`) replaced it (ADR-007d / 007c).
 - **Health — consistent:** no schema, as expected for a lens.

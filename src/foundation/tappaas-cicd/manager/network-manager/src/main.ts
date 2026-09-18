@@ -4,7 +4,7 @@
 // reconciles all four planes by calling the plane-controller bins (opnsense via
 // zone-manager, proxmox via proxmox-manager, switch via switch-controller, ap
 // via ap-manager). It does NOT reimplement any plane's logic — it is a thin
-// orchestration boundary, exactly as people-manager shells out to
+// orchestration boundary, exactly as identity-manager shells out to
 // authentik-manager. This is `zone-reconcile` + `zone-controller.sh` ported to
 // TS, with the #335/#372/#373 fix: it calls the on-PATH bins (NOT the stale
 // firewall/scripts/ paths) and ALWAYS reconciles the switch plane on add/delete.

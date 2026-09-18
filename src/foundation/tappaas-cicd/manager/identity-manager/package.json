@@ -1,0 +1,13 @@
+{
+  "name": "identity-manager",
+  "version": "0.1.0",
+  "description": "TAPPaaS Identity → Authentik reconcile manager (ADR-007 P1, S2b-3) — TypeScript",
+  "license": "MIT",
+  "private": true,
+  "bin": {
+    "identity-manager": "dist/main.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  }
+}

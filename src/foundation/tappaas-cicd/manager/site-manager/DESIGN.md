@@ -5,7 +5,7 @@
 - **Language:** TypeScript for the verb-aligned `site-manager` bin (ADR-007 #3);
   Bash for the still-live operational tools it delegates to.
 - **TypeScript `site-manager`** — the ADR-007 front door. Structure mirrors
-  `people-manager` / `network-manager`: `src/main.ts` (verb dispatch + usage),
+  `identity-manager` / `network-manager`: `src/main.ts` (verb dispatch + usage),
   `src/types.ts` (the Site model + the injected `SiteClient` boundary +
   reconcile-plan shapes), `src/config.ts` (load/validate/write `site.json`),
   `src/reconcile.ts` (the pure engine, depends only on `SiteClient`),
@@ -69,7 +69,7 @@ drift). `--deep` walks the dependent managers in dependency order:
 
 ```
 site reconcile --deep
-  → people-manager  reconcile
+  → identity-manager  reconcile
   → network-manager reconcile          (ONE system-wide pass: all zones, all planes)
   → for each environment in config/environments/*.json:
        environment-manager reconcile <env> --deep --skip-network
@@ -81,7 +81,7 @@ the identical whole-platform operation — hence `--skip-network` on the
 per-environment legs (#461). That flag is only correct because the network leg
 above runs first: if `CASCADE_ORDER` ever drops `network`, it must go too.
 
-people/network are single bins (`people-manager reconcile` was renamed from
+people/network are single bins (`identity-manager reconcile` was renamed from
 `sync` and now exists); environments are enumerated from
 `config/environments/*.json` and each is driven with its own deep reconcile.
 Every leg is idempotent. The reconcile engine is pure and depends only on the
@@ -100,7 +100,7 @@ injected `SiteClient`; `CliSiteClient` performs the actual `spawnSync` calls.
 The migration maps the domain label to `name`, `tappaas-nodes` to
 `hardware.nodes`, and carries email / repositories / update schedule / reboot /
 snapshot-retention; it drops `domain`, `variants`, and `nodeCount`. The owner is
-derived from `config/people/organizations/`.
+derived from `config/identities/organizations/`.
 
 ## How it talks to controllers
 

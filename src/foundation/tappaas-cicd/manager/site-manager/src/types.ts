@@ -1,6 +1,6 @@
 // types.ts — the Site entity model (mirrors src/foundation/schemas/site-fields.json)
 // plus the client interfaces (the boundaries the engine depends on) and the
-// reconcile plan shapes. Mirrors people-manager/src/types.ts.
+// reconcile plan shapes. Mirrors identity-manager/src/types.ts.
 
 // ── Site config entities (site.json) ──────────────────────────────────
 export interface SiteLocation {
@@ -173,7 +173,7 @@ export interface SiteClient {
 
   // (2) --deep cascade — shell out to a dependent manager's `reconcile`.
   // `apply` toggles preview vs commit (maps to the manager's --apply/--dry-run).
-  //   people  → people-manager reconcile   (renamed from sync; now exists)
+  //   people  → identity-manager reconcile   (renamed from sync; now exists)
   //   network → network-manager reconcile  (system-wide: all zones, all planes)
   // Environments are enumerated then driven per-env via cascadeEnvironment().
   // Returns the child manager's exit code.

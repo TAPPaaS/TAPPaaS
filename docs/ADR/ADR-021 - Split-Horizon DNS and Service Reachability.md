@@ -508,7 +508,7 @@ distinguishes the two populations, and nothing should.
 |---|---|
 | who may use `openwebui.example.org` | an Authentik group bound to that application |
 | who may use `openwebui.work.example.org` | a different group, bound to the other application |
-| membership | `people-manager`, per person — not per zone |
+| membership | `identity-manager`, per person — not per zone |
 
 > **Do not use `proxyAllowedZones` to separate these.** It looks like it would work — it is why
 > v0.1 put the isolation there — but it binds entitlement to *network position*, which breaks

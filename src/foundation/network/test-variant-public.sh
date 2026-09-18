@@ -168,7 +168,7 @@ fi
 # legacy variant registry is retired — environments are the source of truth.
 mkdir -p "$(dirname "${ENV_FILE}")"
 ENV_OWNER="$(jq -r '.owner // empty' "${CONFIG_DIR}/site.json" 2>/dev/null)"
-[[ -n "${ENV_OWNER}" ]] || ENV_OWNER="$(ls "${CONFIG_DIR}/people/organizations"/*.json 2>/dev/null | head -1 | xargs -r basename | sed 's/\.json$//')"
+[[ -n "${ENV_OWNER}" ]] || ENV_OWNER="$(ls "${CONFIG_DIR}/identities/organizations"/*.json 2>/dev/null | head -1 | xargs -r basename | sed 's/\.json$//')"
 if jq -n --arg n "${VARIANT}" --arg owner "${ENV_OWNER}" --arg d "${VARIANT_DOMAIN}" --arg z "${VARIANT}" '
         { name: $n, displayName: $n, ownerOrg: $owner,
           domains: { primary: $d, dnsMode: "per-service" },

@@ -7,7 +7,7 @@
 #
 # Schema conformance is checked with the project's Python jsonschema when
 # available, with a jq-only required-field/type fallback otherwise — the same
-# mechanism used by validate-configuration.sh and the people-manager validate.sh.
+# mechanism used by validate-configuration.sh and the identity-manager validate.sh.
 #
 # Usage: validate-site.sh [OPTIONS] [FILE]
 #
@@ -51,7 +51,7 @@ command -v jq >/dev/null 2>&1 || die "jq is required but not installed."
 # Locate the schema relative to the REAL script path. validate-site.sh is
 # symlinked into /home/tappaas/bin, so BASH_SOURCE alone points at the symlink
 # dir and the schema would not be found. readlink -f follows the link (known
-# footgun — see people-manager/validate.sh).
+# footgun — see identity-manager/validate.sh).
 # ---------------------------------------------------------------------------
 _SELF="$(readlink -f "${BASH_SOURCE[0]}")"
 HERE="$(cd "$(dirname "${_SELF}")" && pwd)"

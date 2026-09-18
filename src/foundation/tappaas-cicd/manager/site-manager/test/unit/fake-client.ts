@@ -2,7 +2,7 @@
 //
 // Records mutations so tests can assert exactly what the engine did, and so a
 // second reconcile against the resulting state proves idempotency. Mirrors
-// people-manager/test/unit/fake-client.ts.
+// identity-manager/test/unit/fake-client.ts.
 
 import { SiteClient } from "../../src/types";
 

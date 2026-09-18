@@ -39,7 +39,7 @@ src/foundation/tappaas-cicd/
 
 - **`manager/`** — owns **config state**: JSON config files, schemas, and their
   validation. A manager may call controllers to realize that config. Managers ship a
-  `validate.sh`. Examples: `people-manager`, `site-manager`, `environment-manager`,
+  `validate.sh`. Examples: `identity-manager`, `site-manager`, `environment-manager`,
   `module-manager`, `network-manager`, `health-manager`.
 - **`controller/`** — owns **runtime state**: APIs, network devices, VMs. A controller
   does **not** ship a `validate.sh`. Examples: `opnsense-controller`,

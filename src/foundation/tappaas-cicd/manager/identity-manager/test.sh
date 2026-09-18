@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# test.sh — tests for people-manager (ADR-007 P1, S2b-3).
+# test.sh — tests for identity-manager (ADR-007 P1, S2b-3).
 #
 # Three tiers:
 #   A. OFFLINE bash tests (no Authentik, no cluster):
@@ -11,13 +11,13 @@
 #      - a user with multiple roles + membership across >1 org validates
 #   B. TypeScript UNIT tests (offline, fake in-memory PrimitiveClient) covering
 #      every ADR-007 P1 reconcile Test Criteria bullet — run via tsc + node.
-#      Includes bootstrap.test.ts (`people-manager bootstrap` — the retired
+#      Includes bootstrap.test.ts (`identity-manager bootstrap` — the retired
 #      user-setup.sh: copy + substitution shape, validateRefs, the non-empty
 #      guard, bad-args) plus a compiled-CLI drive of the bootstrap verb whose
 #      result must pass validate.sh, and write-push.test.ts (#482: add/modify/
 #      delete push to the identity service by default; --no-reconcile stages).
 #   C. LIVE integration test (scoped to zztest- names, self-cleaning) against
-#      real Authentik via `people-manager sync` + `authentik-manager`. SKIPS
+#      real Authentik via `identity-manager sync` + `authentik-manager`. SKIPS
 #      gracefully if Authentik is unreachable; NEVER touches non-zztest- entities.
 #
 # Prints "Results: N passed, M failed"; exits 1 on any failure.
@@ -38,8 +38,8 @@ FOUNDATION_DIR="$(cd "${HERE}/../../.." && pwd)"
 SCHEMA_DIR="${FOUNDATION_DIR}/schemas"
 # Example people domain (myOrg/foo/bar) — TEST FIXTURE ONLY, never committed as
 # runtime config. "config" = the target system's ~tappaas/config, created/edited
-# by the installer + people-manager, NOT stored in the repo.
-EXAMPLE_PEOPLE="${HERE}/test/fixtures/people"
+# by the installer + identity-manager, NOT stored in the repo.
+EXAMPLE_PEOPLE="${HERE}/test/fixtures/identities"
 
 PASS=0
 FAIL=0
@@ -97,7 +97,7 @@ JSON
 JSON
 }
 
-echo "== people-manager offline tests =="
+echo "== identity-manager offline tests =="
 
 # ---------------------------------------------------------------------------
 # 1. Committed example files validate
@@ -185,14 +185,14 @@ else
 fi
 
 # (The former user-setup.sh cases moved to the TS tier: the bootstrap verb is
-# native — `people-manager bootstrap` — covered by test/unit/bootstrap.test.ts
+# native — `identity-manager bootstrap` — covered by test/unit/bootstrap.test.ts
 # plus the compiled-CLI drive in section B below. ADR-007 refactor Phase 8.2.)
 
 # ===========================================================================
 # B. TypeScript UNIT tests (offline; fake in-memory PrimitiveClient)
 # ===========================================================================
 echo ""
-echo "== people-manager TypeScript unit tests =="
+echo "== identity-manager TypeScript unit tests =="
 
 run_ts() {
     # Run a command, preferring a tsc/node already on PATH, else nix-shell.
@@ -217,28 +217,28 @@ if [[ -f "$UNIT_TSCONFIG" ]]; then
     if run_ts "tsc -p '${UNIT_TSCONFIG}'" >/dev/null 2>&1; then
         ok "TypeScript unit tests compile"
         # tsconfig rootDir is the tappaas-cicd root (shared lib/ts base), so
-        # the compiled tree mirrors manager/people-manager/ under dist-test.
-        if run_ts "node '${DIST_TEST}/manager/people-manager/test/unit/reconcile.test.js'"; then
+        # the compiled tree mirrors manager/identity-manager/ under dist-test.
+        if run_ts "node '${DIST_TEST}/manager/identity-manager/test/unit/reconcile.test.js'"; then
             ok "TypeScript reconcile unit tests pass"
         else
             bad "TypeScript reconcile unit tests FAILED"
         fi
-        if run_ts "node '${DIST_TEST}/manager/people-manager/test/unit/entity.test.js'"; then
+        if run_ts "node '${DIST_TEST}/manager/identity-manager/test/unit/entity.test.js'"; then
             ok "TypeScript entity CRUD unit tests pass"
         else
             bad "TypeScript entity CRUD unit tests FAILED"
         fi
-        if run_ts "node '${DIST_TEST}/manager/people-manager/test/unit/queries.test.js'"; then
+        if run_ts "node '${DIST_TEST}/manager/identity-manager/test/unit/queries.test.js'"; then
             ok "TypeScript --deep query unit tests pass"
         else
             bad "TypeScript --deep query unit tests FAILED"
         fi
-        if run_ts "node '${DIST_TEST}/manager/people-manager/test/unit/bootstrap.test.js'"; then
+        if run_ts "node '${DIST_TEST}/manager/identity-manager/test/unit/bootstrap.test.js'"; then
             ok "TypeScript bootstrap unit tests pass"
         else
             bad "TypeScript bootstrap unit tests FAILED"
         fi
-        if run_ts "node '${DIST_TEST}/manager/people-manager/test/unit/write-push.test.js'"; then
+        if run_ts "node '${DIST_TEST}/manager/identity-manager/test/unit/write-push.test.js'"; then
             ok "TypeScript write-verb push unit tests pass (#482)"
         else
             bad "TypeScript write-verb push unit tests FAILED (#482)"
@@ -248,18 +248,18 @@ if [[ -f "$UNIT_TSCONFIG" ]]; then
         # ADR-007 refactor Phase 8.2). No PM_MINIMAL_ORG_DIR override: this also
         # exercises the default template-dir resolution from the compiled tree
         # (the successor of the old ~/bin symlink readlink regression case).
-        PM_JS="${DIST_TEST}/manager/people-manager/src/main.js"
+        PM_JS="${DIST_TEST}/manager/identity-manager/src/main.js"
         BOOT_DEST="${WORK}/bootstrap/people"
         if run_ts "node '${PM_JS}' bootstrap --org acme-site --user lars --email lars@example.com --config-dir '${BOOT_DEST}'" >/dev/null 2>&1; then
-            ok "people-manager bootstrap runs and self-validates"
+            ok "identity-manager bootstrap runs and self-validates"
         else
-            bad "people-manager bootstrap should succeed and self-validate"
+            bad "identity-manager bootstrap should succeed and self-validate"
         fi
         # the produced tree passes the deeper bash schema gate independently
         if run_validate "$BOOT_DEST"; then
-            ok "people-manager bootstrap result passes validate.sh"
+            ok "identity-manager bootstrap result passes validate.sh"
         else
-            bad "people-manager bootstrap result should pass validate.sh"
+            bad "identity-manager bootstrap result should pass validate.sh"
         fi
         # re-run without --force refuses the populated destination (exit 1)
         if run_ts "node '${PM_JS}' bootstrap --org acme-site --user lars --email lars@example.com --config-dir '${BOOT_DEST}'" >/dev/null 2>&1; then
@@ -285,9 +285,9 @@ fi
 # C. LIVE integration test (scoped to zztest- names; self-cleaning)
 # ===========================================================================
 echo ""
-echo "== people-manager live integration test (zztest- scope) =="
+echo "== identity-manager live integration test (zztest- scope) =="
 
-PM_BIN="${PEOPLE_MANAGER_BIN:-people-manager}"
+PM_BIN="${PEOPLE_MANAGER_BIN:-identity-manager}"
 AK_BIN="${AUTHENTIK_MANAGER_BIN:-authentik-manager}"
 ZUSER1="zztest-user-alpha"
 ZUSER2="zztest-user-beta"
@@ -334,7 +334,7 @@ zz_cleanup() {
 if [[ "${TAPPAAS_TEST_DEEP:-0}" != "1" ]]; then
     echo "  SKIP: live integration tier (fast mode — set TAPPAAS_TEST_DEEP=1 to run the live, Authentik-mutating tests)"
 elif ! command -v "$PM_BIN" >/dev/null 2>&1; then
-    echo "  SKIP: people-manager not on PATH (run install.sh first)"
+    echo "  SKIP: identity-manager not on PATH (run install.sh first)"
 elif ! "$AK_BIN" test >/dev/null 2>&1; then
     echo "  SKIP: Authentik unreachable (authentik-manager test failed) — live test skipped"
 else
@@ -369,9 +369,9 @@ JSON
 
     # 1. reconcile --apply (active alpha created; planned beta NOT created)
     if "$PM_BIN" reconcile --apply --config-dir "$CFG" >/dev/null 2>&1; then
-        ok "live: people-manager reconcile --apply applied"
+        ok "live: identity-manager reconcile --apply applied"
     else
-        bad "live: people-manager reconcile --apply failed"
+        bad "live: identity-manager reconcile --apply failed"
     fi
 
     users_json="$("$AK_BIN" list-users 2>/dev/null || echo '[]')"

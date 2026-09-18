@@ -23,7 +23,7 @@
       "minLength": 1
     },
     "ownerOrg": {
-      "description": "Reference to the owning Organization.name (config/people/organizations/<ownerOrg>.json), validated.",
+      "description": "Reference to the owning Organization.name (config/identities/organizations/<ownerOrg>.json), validated.",
       "type": "string",
       "pattern": "^[A-Za-z0-9_-]+$"
     },

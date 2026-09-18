@@ -23,6 +23,7 @@ import { basename, join } from "path";
 import { environmentsDir, serializeEnvironment } from "./config";
 import { Environment } from "./types";
 import { writeFileSync } from "fs";
+import { identityDir } from "../../../lib/ts/src/config-io";
 
 export interface BootstrapOptions {
   configDir: string;
@@ -39,11 +40,11 @@ export interface BootstrapResult {
   owner: string;
 }
 
-// First organization slug under config/people/organizations/ (sorted), else "".
+// First organization slug under config/identities/organizations/ (sorted), else "".
 // Exported as firstOrg for reuse as the `add --owner` default (matches the
 // bootstrap's ownerOrg derivation).
 export function firstOrg(configDir: string): string {
-  const dir = join(configDir, "people", "organizations");
+  const dir = join(identityDir(configDir), "organizations");
   if (!existsSync(dir)) return "";
   const names = readdirSync(dir)
     .filter((f) => f.endsWith(".json"))
@@ -136,7 +137,7 @@ export function bootstrap(opts: BootstrapOptions): BootstrapResult {
   const owner = firstOrg(configDir);
   if (!owner) {
     warnings.push(
-      `No organization found under ${configDir}/people/organizations/ — ownerOrg left empty in bootstrap environments.`,
+      `No organization found under ${configDir}/identities/organizations/ — ownerOrg left empty in bootstrap environments.`,
     );
   }
 

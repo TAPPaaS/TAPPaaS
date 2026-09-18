@@ -47,13 +47,13 @@ _owner_org="$(get_variant_config "${_env}" 2>/dev/null | jq -r '.ownerOrg // emp
 
 _owner_user=""
 if [[ -n "${_owner_org}" ]]; then
-    _owner_user="$(people-manager org show "${_owner_org}" 2>/dev/null \
+    _owner_user="$(identity-manager org show "${_owner_org}" 2>/dev/null \
         | awk -F': *' '/^[[:space:]]*owner:/{print $2; exit}' | tr -d '[:space:]')"
 fi
 
 _owner_email=""
 if [[ -n "${_owner_user}" ]]; then
-    _owner_email="$(people-manager user show "${_owner_user}" 2>/dev/null \
+    _owner_email="$(identity-manager user show "${_owner_user}" 2>/dev/null \
         | awk -F': *' '/^[[:space:]]*primaryEmail:/{print $2; exit}' | tr -d '[:space:]')"
 fi
 

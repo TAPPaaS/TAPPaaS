@@ -1,6 +1,6 @@
 // entity.test.ts — offline unit tests for config-only entity CRUD (ADR-007 #5).
 //
-// No Authentik, no cluster: everything operates on a temp config/people/ tree.
+// No Authentik, no cluster: everything operates on a temp config/identities/ tree.
 // Covers: add (create + read-back), validation-reject, ref-guard on delete,
 // modify list add/remove. Tiny assert harness (no test framework).
 

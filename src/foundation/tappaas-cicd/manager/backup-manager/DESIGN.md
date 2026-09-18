@@ -2,7 +2,7 @@
 
 ## Language / build
 
-**TypeScript (ADR-007 verb-alignment #3), matching `people-manager` /
+**TypeScript (ADR-007 verb-alignment #3), matching `identity-manager` /
 `network-manager` (all-managers-to-TS, #3).** The TS sources are under `src/`,
 built by `default.nix` via the shared `lib/nix/ts-manager.nix` builder with
 `tsc` (zero npm deps, ambient `lib/ts/src/env.d.ts`; help/CLI/exec/config-io

@@ -21,7 +21,7 @@
 // Reference-integrity checks (ported 1:1 from the bash):
 //   - network.zone must exist in zones.json (warning when zones.json absent)
 //   - ownerOrg (when present) must reference an existing Organization
-//     (config/people/organizations/<ownerOrg>.json)
+//     (config/identities/organizations/<ownerOrg>.json)
 //   - an authored tlsCertRefid ANYWHERE is REJECTED — it is runtime state, not
 //     authored config (belt-and-braces over additionalProperties:false)
 //
@@ -32,6 +32,7 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "fs";
 import { basename, dirname, join } from "path";
 import { hasTlsCertRefid } from "./config";
+import { identityDir } from "../../../lib/ts/src/config-io";
 
 // ── schema interpreter (draft-2020-12 subset) ─────────────────────────
 
@@ -312,7 +313,7 @@ function validateReferences(
   // ownerOrg (when non-empty) must reference an existing organization.
   const owner = typeof obj.ownerOrg === "string" ? obj.ownerOrg : "";
   if (owner) {
-    const orgfile = join(configDir, "people", "organizations", `${owner}.json`);
+    const orgfile = join(identityDir(configDir), "organizations", `${owner}.json`);
     if (!existsSync(orgfile)) {
       errors.push(`${base}: ownerOrg references unknown organization '${owner}' (no ${orgfile})`);
     }

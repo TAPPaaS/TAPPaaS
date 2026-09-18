@@ -8,7 +8,7 @@
 
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "fs";
 import { basename, join } from "path";
-import { asString, asStringArray, defaultConfigDir } from "../../../lib/ts/src/config-io";
+import { asString, asStringArray, defaultConfigDir, identityDir } from "../../../lib/ts/src/config-io";
 import {
   Environment,
   EnvironmentModel,
@@ -128,7 +128,7 @@ export function loadRefSources(configDir: string): RefSources {
   }
 
   const orgNames = new Set<string>();
-  const orgDir = join(configDir, "people", "organizations");
+  const orgDir = join(identityDir(configDir), "organizations");
   if (existsSync(orgDir)) {
     for (const f of readdirSync(orgDir)) {
       if (f.endsWith(".json")) orgNames.add(basename(f, ".json"));

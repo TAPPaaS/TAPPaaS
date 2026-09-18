@@ -30,7 +30,7 @@
       health-manager      = component ./manager/health-manager;
       module-manager      = component ./manager/module-manager;
       network-manager     = component ./manager/network-manager;
-      people-manager      = component ./manager/people-manager;
+      identity-manager      = component ./manager/identity-manager;
       site-manager        = component ./manager/site-manager;
       identity-controller = component ./controller/identity-controller;
       node-provisioner    = component ./controller/node-provisioner;

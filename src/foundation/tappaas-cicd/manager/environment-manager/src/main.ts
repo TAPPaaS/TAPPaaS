@@ -6,7 +6,7 @@
 // (#461); `--deep` additionally reconciles every module that consumes the
 // environment (shell out to module-manager). NO plane or module logic is
 // reimplemented — it is a thin orchestration boundary, exactly as
-// people-manager shells out to authentik-manager.
+// identity-manager shells out to authentik-manager.
 //
 // Entity: `environment`. Verbs:
 //   environment list
@@ -387,7 +387,7 @@ function cmdAdd(opts: Opts): void {
     die(`environment '${name}' already exists at ${path} (use --force to overwrite)`);
   }
   const display = opts.display ?? name.charAt(0).toUpperCase() + name.slice(1);
-  // --owner default: the first organization under people/organizations/ (matches
+  // --owner default: the first organization under identities/organizations/ (matches
   // the minimal-set bootstrap). Empty only when no org exists,
   // in which case the pre-write validation flags the missing ownerOrg.
   const owner = opts.owner ?? firstOrg(opts.configDir);

@@ -1,7 +1,7 @@
 // bootstrap.test.ts — offline unit tests for the People bootstrap (the retired
 // user-setup.sh, ported — ADR-007 refactor Phase 8.2).
 //
-// No Authentik, no cluster: bootstraps into a temp config/people/ tree from the
+// No Authentik, no cluster: bootstraps into a temp config/identities/ tree from the
 // REAL minimal-org/ templates (via PM_MINIMAL_ORG_DIR). Covers: the produced
 // shape (1 org / 1 group / 3 roles / 2 users, fully substituted), validateRefs
 // on the result, the non-empty-destination guard (+ --force), bad-args
@@ -36,7 +36,7 @@ function expectThrows(fn: () => void, msg: string): void {
 }
 
 // The real minimal-org fixtures: compiled test lives at
-// dist-test/manager/people-manager/test/unit/, the component dir is 5 up.
+// dist-test/manager/identity-manager/test/unit/, the component dir is 5 up.
 const MINIMAL_ORG = join(__dirname, "..", "..", "..", "..", "..", "minimal-org");
 check(existsSync(join(MINIMAL_ORG, "roles", "root.json")), "real minimal-org fixture dir found");
 process.env.PM_MINIMAL_ORG_DIR = MINIMAL_ORG;
@@ -45,7 +45,7 @@ const trees: string[] = [];
 function tmpPeople(): string {
   const parent = mkdtempSync(join(tmpdir(), "pm-bootstrap-"));
   trees.push(parent);
-  return join(parent, "people");
+  return join(parent, "identities");
 }
 
 const OPTS = {

@@ -135,7 +135,7 @@ fi
 # Author the environment file (the source of truth — no variant registry).
 mkdir -p "$(dirname "${ENV_FILE}")"
 _owner="$(jq -r '.owner // empty' "${CONFIG_DIR}/site.json" 2>/dev/null)"
-[[ -n "${_owner}" ]] || _owner="$(ls "${CONFIG_DIR}/people/organizations"/*.json 2>/dev/null | head -1 | xargs -r basename | sed 's/\.json$//')"
+[[ -n "${_owner}" ]] || _owner="$(ls "${CONFIG_DIR}/identities/organizations"/*.json 2>/dev/null | head -1 | xargs -r basename | sed 's/\.json$//')"
 if jq -n --arg n "${VAR}" --arg owner "${_owner}" --arg d "${DOMAIN}" --arg z "${VAR}" '
         { name: $n, displayName: $n, ownerOrg: $owner,
           domains: { primary: $d, dnsMode: "wildcard" },

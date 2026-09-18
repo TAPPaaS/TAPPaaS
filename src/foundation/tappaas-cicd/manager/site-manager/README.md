@@ -137,7 +137,7 @@ subset of the same engine.
 
 ```
 site reconcile --deep
-  → people-manager  reconcile          (people → Authentik)
+  → identity-manager  reconcile          (people → Authentik)
   → network-manager reconcile          (the 4 network planes — ONE system-wide pass)
   → for each environment in config/environments/*.json:
        environment-manager reconcile <env> --deep --skip-network
@@ -157,7 +157,7 @@ the rest.
 ### Build
 
 Built by `default.nix` into `result/bin/site-manager` — mirroring
-`people-manager` / `network-manager`. `install.sh` is **not** yet wired to build
+`identity-manager` / `network-manager`. `install.sh` is **not** yet wired to build
 it (the bash tools below remain the installed entry points for now).
 
 ## Commands (legacy bash tools — kept live until cutover)

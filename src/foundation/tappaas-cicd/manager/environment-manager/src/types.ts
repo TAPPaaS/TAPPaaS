@@ -61,7 +61,7 @@ export interface RefSources {
   // Whether zones.json was available at all (distinguishes "no zones" from
   // "couldn't read zones.json" → warning vs error, mirroring the bash script).
   zonesAvailable: boolean;
-  // The set of known People organization names (config/people/organizations/*).
+  // The set of known People organization names (config/identities/organizations/*).
   orgNames: Set<string>;
 }
 

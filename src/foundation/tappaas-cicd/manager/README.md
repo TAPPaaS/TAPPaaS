@@ -56,7 +56,7 @@ named by the manager-naming convention below.
 A manager's own operations follow one of two forms depending on how it is built:
 
 - **Single-binary managers** take the operation as their
-  first argument: `people-manager validate`, `network-manager reconcile`, etc.
+  first argument: `identity-manager validate`, `network-manager reconcile`, etc.
   `validate` is simply one verb among the others.
 - **Script (bash) managers** expose each operation as a separate
   `<verb>-<manager>.sh` script: `install-module.sh`, `update-module.sh`,
@@ -83,7 +83,7 @@ dispatcher.)
 
 | Manager | Owns / does |
 |---------|-------------|
-| [`people-manager`](people-manager/) | The People domain: Organizations, Groups, Users, and Roles. CRUD/read on `config/people/`, bootstrap of a minimal org, and a reconcile/`sync` engine that drives the identity (Authentik) controller. |
+| [`identity-manager`](identity-manager/) | The People domain: Organizations, Groups, Users, and Roles. CRUD/read on `config/identities/`, bootstrap of a minimal org, and a reconcile/`sync` engine that drives the identity (Authentik) controller. |
 | [`site-manager`](site-manager/) | The Site: site-wide identity, location, hardware (Proxmox nodes + storage pools), backup, update schedule, repositories. Owns `config/site.json` and migrates the legacy `configuration.json` into it. |
 | [`environment-manager`](environment-manager/) | The Environment taxonomy: per-tenant deployment contexts (public domain(s), DNS mode, network-zone reference, data residency, backup, legal). Owns `config/environments/*.json` and bootstraps the always-required `mgmt` + default environments. |
 | [`module-manager`](module-manager/) | The module lifecycle: install / update / delete / test / snapshot of TAPPaaS modules, with tier/source classification lint and environment-aware deployment. Owns the per-module JSON in `config/`. |
