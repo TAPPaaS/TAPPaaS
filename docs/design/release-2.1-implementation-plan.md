@@ -355,6 +355,16 @@ the model can express and patch. The two are one piece of work because a backup
 
 #### ADR-012 close-out (original scope)
 
+**Gate met 2026-09-18: ADR-012 v1.0 accepted** (operator, with the four design decisions below). The `docs(ADR-012)` issues are settled in the ADR; each row now says what is left to *build*.
+
+**Order (operator, 2026-09-18).** Machines-as-modules first, because it simplifies most of the backup rows — `node` becomes a pointer to a machine instance, and so does the PBS's DNS alias:
+1. ADR-026 D6.3/D6.4 — instance vs module name (the synthetic `module` field, `--instance`). Blocks #665.
+2. #665 stage 1 — tappaas1..3 registered as `kind: machine` instances (inert).
+3. #612 — `vmname` → instance name, DNS alias of the `node` Host.
+4. #600 — `placementState: node`, `.node` naming the machine instance (migration).
+5. `debianhost` + `module adopt` (ADR-026 D3/D8.1) → topology §1.3 verified → #603, #601.
+6. #607, #609, #457, #554, #456 as they fit. #602 (data safety) is done on `wave1/g1.2-backup`, independent of the rest.
+
 
 Most of the remaining 2.0 milestone. The placement *state* values are
 persisted in `config/backup.json` on every install, so the vocabulary change
@@ -362,17 +372,17 @@ is a migration.
 
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
-| #602 | Empty `placementState` resolves onto the wrong host | 4 | 4 | H | **Fix first**: can install a second PBS on a cluster node |
-| #600 | PBS on a non-cluster host; `node:` → `host:` | 3 | 4 | H | The migration in `52404b1d` never runs: `set -e` at `backup/update.sh:51` (Erik, 2026-09-10) |
-| #612 | `shim` → realized flag; drop `vmname` from backup.json | 3 | 4 | H | Depends on #611 |
+| #602 | Empty `placementState` resolves onto the wrong host | 4 | 4 | H | **Decided (v1.0 §2.2 rule 3):** an empty state never provisions over a PBS that already serves the Site — probe the `node` Host and `pbsUrl` on `:8007` for the datastore, adopt it, stop if it runs on an unmanaged host. **Build first**: data-safety, `install.sh` has no such probe today (the update path already backfills without discovery) |
+| #600 | PBS on a non-cluster host | 3 | 4 | H | **Answered by v1.0 §1.3** (machine topology; `node` names a Host, not a cluster member). **Left to build:** the code writes `node:<name>`, the ADR says `node` + `backup.json.node` — a migration. The `set -e` bug at `backup/update.sh:51` that stopped the old migration running is part of this |
+| #612 | `vmname` → the instance name, as a DNS alias; `shim` stays | 4 | 3 | M | **Decided (v1.0 §2.7):** backup is `kind: application`, so `vmname` names nothing; the PBS's DNS name is the backup instance's name (ADR-026 D6.1), registered as an **alias of the `node` Host** instead of an A record frozen at install; `pbsUrl` derives from it. Needs D6.3/D6.4 and #665 first, and a `dns-manager` alias verb |
 | #601 | Placement discovery is PVE-only | 3 | 2 | M | |
 | #456 | `external` placement for a pre-existing PBS | 3 | 2 | M | |
-| #607 | No exit from `external` placement | 4 | 1 | L | |
+| #607 | Exit from `external` placement | 4 | 1 | L | **Decided (v1.0 §2.3):** `backup-manager placement reset`, confirmed; the old external PBS stays registered as a `pull` peer so its history remains restorable |
 | #457 | `pbs_node` uses placement, not the registered name | 4 | 2 | M | Caused a nightly failure on 2026-08-17 |
 | #603 | PBS on a non-PVE host has no update path | 3 | 2 | M | |
 | #554 | Reconcile creates duplicate job coverage | 3 | 2 | M | |
-| #609 | Off-site location never recorded | 4 | 2 | M | Additive schema |
-| #605 | Split ADR-012 acceptance list | 5 | 1 | L | |
+| #609 | Off-site location recorded | 4 | 2 | M | **Decided (v1.0 §1.5):** every off-site target declares a `location` shaped like `site.json`'s (ADR-022b); a check flags one equal to the Site's or missing. Additive schema |
+| ✅ #605 | Split ADR-012 acceptance list | 5 | 1 | L | **Done in v1.0:** a Decision list (accepted) and an Implementation list (tracked in #407) |
 | #407 | ADR-012 3-node live validation gate | 2 | 1 | L | Sign-off gate |
 
 ### G1.3 Module contract & repo layout — E2 · R5 · L-H
