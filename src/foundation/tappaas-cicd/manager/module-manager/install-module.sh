@@ -472,7 +472,11 @@ main() {
         effective_module="${instance}"
         computed_vmname="${instance}"
     fi
-    info "  effective module name = ${BL}${effective_module}${CL}; vmname = ${BL}${computed_vmname}${CL}"
+    if module_is_not_a_guest; then
+        info "  effective module name = ${BL}${effective_module}${CL} (no VM: not a guest)"
+    else
+        info "  effective module name = ${BL}${effective_module}${CL}; vmname = ${BL}${computed_vmname}${CL}"
+    fi
 
     # ── Step 1: Check module not already installed ───────────────────
     info "${BOLD}Step 1: Check module not already installed${CL}"
