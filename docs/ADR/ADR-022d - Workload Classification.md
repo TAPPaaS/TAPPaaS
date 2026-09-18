@@ -2,16 +2,16 @@
 
 | | |
 |---|---|
-| **Status** | **Draft — for review** |
-| **Version** | 0.18 |
-| **Date** | 2026-09-09 (v0.17: 2026-09-17) |
+| **Status** | **Accepted** (2026-09-18) |
+| **Version** | 1.0 |
+| **Date** | 2026-09-09 (v1.0: 2026-09-18) |
 | **Author** | ErikDaniel007 |
 | **Deciders** | @ErikDaniel007, @LarsRossen |
 | **Parent** | [ADR-022 — Workload Ontology](<ADR-022 - Workload Ontology.md>) |
 | **Refines** | [ADR-007b — Apps](<ADR-007b - Apps.md>) (what type of thing a module is) |
-| **Amends** | [ADR-012](ADR-012-backup-enhancement.md) §1.1, §2.1 (`shim` becomes `realized: false`) · Appendix A (pointer) · [ADR-009](<ADR-009 - Composition Meta-Model.md>) :41 and [GLOSSARY.md](../../GLOSSARY.md) :34 (Module boundary = VM boundary) |
+| **Amends** | ~~[ADR-012](ADR-012-backup-enhancement.md) §1.1, §2.1 (`shim` becomes `realized: false`)~~ (declined, #612) · Appendix A (pointer) · [ADR-009](<ADR-009 - Composition Meta-Model.md>) :41 and [GLOSSARY.md](../../GLOSSARY.md) :34 (Module boundary = VM boundary) |
 | **Related** | [ADR-022c — Node and Host](<ADR-022c - Node and Host.md>); [ADR-007f — Realization](<ADR-007f - Realization.md>); [ADR-009](<ADR-009 - Composition Meta-Model.md>) (composition); [ADR-012](ADR-012-backup-enhancement.md) (first consumer); #611 |
-| **Changelog** | v0.18 (2026-09-18) — `kind` marker resolved (#611): `kind` names the workload; the ADR-007 `module` marker is retired by migration 0004; `external-host` retired. · v0.17 (2026-09-17) — review #624/#637: reduced to the `kind` vocabulary in one table; `cluster`/`kubernetes` noted as grouping concepts; dispatch rationale kept; `kind` marker left open; open questions and parking lot removed, to be filed as issues; amended ADR-009, GLOSSARY and ADR-012 declared. Earlier drafts in git history. |
+| **Changelog** | v1.0 (2026-09-18) — accepted (operator) with ADR-022f's values folded in (`machine`, `application`). The `realized` amendment to ADR-012 is **declined**: `shim` stays (ADR-012 v1.0, #612). · v0.18 (2026-09-18) — `kind` marker resolved (#611): `kind` names the workload; the ADR-007 `module` marker is retired by migration 0004; `external-host` retired. · v0.17 (2026-09-17) — review #624/#637: reduced to the `kind` vocabulary in one table; `cluster`/`kubernetes` noted as grouping concepts; dispatch rationale kept; `kind` marker left open; open questions and parking lot removed, to be filed as issues; amended ADR-009, GLOSSARY and ADR-012 declared. Earlier drafts in git history. |
 
 What type of thing a module is — TAPPaaS's `kind`.
 
@@ -45,7 +45,7 @@ Each fact below has its own home and is never encoded in `kind`:
 - **Cluster membership** — `site.json` ([ADR-022c](<ADR-022c - Node and Host.md>) D2).
 - **Location and network position** — [ADR-022b](<ADR-022b - Location.md>) and the zone ([ADR-014](<ADR-014 - Zone and Environment Lifecycle.md>)).
 - **Operating system** — a separate attribute.
-- **Realization** — `shim` is a state (`realized: false`), not a type.
+- **Realization** — `shim` is a state, not a type. *(Accepted without the `realized: false` rename: `shim` stays as ADR-012's placement value — ADR-012 v1.0, #612.)*
 - **Administrative relationship** — `external` is not a `kind` value.
 - **Guest internals** — software a `vm` or `lxc` runs inside (for example a podman container) is not the module's `kind`.
 
@@ -70,6 +70,6 @@ Each fact below has its own home and is never encoded in `kind`:
 - [ ] Accepted values `vm` / `lxc` / `host` / `device` defined in `GLOSSARY.md` with their anchors
 - [ ] Proposed values recorded as proposed
 - [x] `external-host` retired across the files above (#611; the Community repo's copies are that repository's to change)
-- [ ] `realized` defined as a state, replacing `shim` in ADR-012
+- [x] ~~`realized` defined as a state, replacing `shim` in ADR-012~~ — declined: `shim` stays (ADR-012 v1.0, #612)
 - [x] Resolved: `kind` marker value vs. its own field — neither: the marker is retired (#611, migration 0004)
 - [ ] ADR-012 Appendix A replaced by a pointer to this ADR and to the parked administrative-domain relationship work

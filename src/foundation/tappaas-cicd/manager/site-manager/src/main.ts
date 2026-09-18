@@ -60,7 +60,7 @@ export const HELP: HelpSpec = {
         ["--locationTimezone <tz>", "location.timezone"],
         ["--locationLocale <l>", "location.locale"],
         ["--locationCity <c>", "location.city — lets an off-site copy in the same country show it is elsewhere (#609)"],
-        ["--locationFacility <f>", "location.facility — the building or data centre (#609)"],
+        ["--locationBuilding <f>", "location.building — the building or data centre (#609)"],
         ["--networkIsp <s>", "network.isp"],
         ["--networkPublicIp <ip>", "network.publicIp (or auto)"],
         ["--updateFrequency <f>", "daily | weekly | monthly | none"],
@@ -332,7 +332,7 @@ function cmdSite(o: Opts): void {
     setStr("--locationTimezone", ["location", "timezone"]);
     setStr("--locationLocale", ["location", "locale"]);
     setStr("--locationCity", ["location", "city"]);
-    setStr("--locationFacility", ["location", "facility"]);
+    setStr("--locationBuilding", ["location", "building"]);
     setStr("--networkIsp", ["network", "isp"]);
     setStr("--networkPublicIp", ["network", "publicIp"]);
 

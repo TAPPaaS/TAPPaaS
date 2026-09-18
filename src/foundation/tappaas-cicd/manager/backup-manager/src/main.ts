@@ -130,7 +130,7 @@ export const HELP: HelpSpec = {
     {
       usage: "peer add pull|remote|receive <name> [--host H] [--store S] [--namespace NS] "
         + "[--schedule SPEC] [--group-filter F] [--auth-id ID] [--propagate] "
-        + "[--country CC] [--city C] [--facility F] [--force]",
+        + "[--country CC] [--city C] [--building B] [--force]",
       name: "peer add",
       options: [
         ["--host H", "peer add pull: the PBS we pull from."],
@@ -142,7 +142,7 @@ export const HELP: HelpSpec = {
         ["--propagate", "peer add remote: let the read grant reach child namespaces. Off by default — on the root that would expose fs/ (config + secrets) and other peers' data."],
         ["--country CC", "peer add: the country the peer's PBS is in (ISO code) — the evidence its copy is off-site (#609)."],
         ["--city C", "peer add: its city — needed to tell it apart from a Site in the same country."],
-        ["--facility F", "peer add: its building or data centre — needed when it shares the Site's city."],
+        ["--building B", "peer add: its building or data centre — needed when it shares the Site's city."],
         ["--config-only", "peer add: write the config, skip onboarding (no PBS contact)."],
         ["--force", "peer add: overwrite an existing peer config."],
       ],
@@ -241,7 +241,7 @@ interface Opts {
   authId?: string;
   country?: string;
   city?: string;
-  facility?: string;
+  building?: string;
   peer?: string;
   yes: boolean;
   noUpdate: boolean;
@@ -255,7 +255,7 @@ interface Opts {
 // single-line change here rather than another else-if arm.
 const PEER_VALUE_FLAGS = new Set([
   "--host", "--store", "--namespace", "--schedule", "--group-filter", "--auth-id",
-  "--country", "--city", "--facility", "--peer",
+  "--country", "--city", "--building", "--peer",
 ]);
 
 function parseOpts(args: string[]): Opts {
@@ -346,7 +346,7 @@ function parseOpts(args: string[]): Opts {
     authId: peerFlags["--auth-id"],
     country: peerFlags["--country"],
     city: peerFlags["--city"],
-    facility: peerFlags["--facility"],
+    building: peerFlags["--building"],
     peer: peerFlags["--peer"],
     yes, noUpdate,
     propagate, configOnly, purge, force,
@@ -616,9 +616,9 @@ function cmdPeerAdd(opts: Opts): number {
     if (!/^[A-Za-z]{2}$/.test(opts.country)) die(`peer add: --country takes an ISO 3166-1 alpha-2 code (e.g. DE), not '${opts.country}'`);
     spec.physicalLocation = { country: opts.country.toUpperCase() };
     if (opts.city) spec.physicalLocation.city = opts.city;
-    if (opts.facility) spec.physicalLocation.facility = opts.facility;
-  } else if (opts.city || opts.facility) {
-    die("peer add: --city and --facility need --country (the place is recorded from the country down)");
+    if (opts.building) spec.physicalLocation.building = opts.building;
+  } else if (opts.city || opts.building) {
+    die("peer add: --city and --building need --country (the place is recorded from the country down)");
   } else if (k !== "receive") {
     warn(`no --country: nothing will show this ${k} peer is off-site (validate warns until physicalLocation is recorded, #609)`);
   }

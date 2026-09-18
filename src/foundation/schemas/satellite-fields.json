@@ -17,7 +17,7 @@
     "provider.serverType": { "type": "string", "example": "cx23", "required": false, "note": "Tier B (allocation=api) ONLY — x86 cx23 default; cax11 = ARM. For Tier A you pick it in the console." },
     "physicalLocation.country": { "type": "string", "pattern": "^[A-Za-z]{2}$", "required": false, "note": "ISO 3166-1 alpha-2 country the satellite physically runs in (#609, ADR-012 §1.5) — the evidence its backup copy is off-site. NOT provider.location, which is only a provisioning parameter. `backup-manager validate` warns while it is missing." },
     "physicalLocation.city": { "type": "string", "required": false, "note": "needed to show separation from a Site in the same country" },
-    "physicalLocation.facility": { "type": "string", "required": false, "note": "data centre or building — needed when it shares the Site's city" },
+    "physicalLocation.building": { "type": "string", "required": false, "note": "data centre or building — needed when it shares the Site's city" },
     "_provider_image": "dropped — the image is irrelevant (nixos-anywhere kexecs any stock image and reformats to NixOS); satellite-manager defaults it for Tier B.",
 
     "host.publicIp": { "type": "string", "format": "ipv4", "required": true },

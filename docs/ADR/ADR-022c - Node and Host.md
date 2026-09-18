@@ -2,16 +2,16 @@
 
 | | |
 |---|---|
-| **Status** | **Draft — for review** |
-| **Version** | 0.4 |
-| **Date** | 2026-09-09 (v0.4: 2026-09-17) |
+| **Status** | **Accepted** (2026-09-18) |
+| **Version** | 1.0 |
+| **Date** | 2026-09-09 (v1.0: 2026-09-18) |
 | **Author** | ErikDaniel007 |
 | **Deciders** | @ErikDaniel007, @LarsRossen |
 | **Parent** | [ADR-022 — Workload Ontology](<ADR-022 - Workload Ontology.md>) |
 | **Refines** | [ADR-007d — Site](<ADR-007d - Site.md>) (`nodes`) · [ADR-007b — Apps](<ADR-007b - Apps.md>) (the `node` field) |
 | **Supersedes in part** | [ADR-009](<ADR-009 - Composition Meta-Model.md>) — the `Node` entry (:40), the model line (:26) and Decision 1 (:66–72, Node = physical host) |
 | **Amends** | [ADR-007b](<ADR-007b - Apps.md>) :95 (`node` note) · [ADR-007d](<ADR-007d - Site.md>) :30–33 (`nodes`) · [GLOSSARY.md](../../GLOSSARY.md) §B :33 (Node), §C :50–51 (Stack-promotion rule) · [ADR-007f](<ADR-007f - Realization.md>) (receives that rule) |
-| **Changelog** | v0.4 (2026-09-17) — review #624/#637: module boundary, `kind` marker and Host discovery removed (`kind` is ADR-022d's); D6/D7 renumbered D4/D5; supersedes and amends rows completed (ADR-009, ADR-007b, ADR-007d, GLOSSARY, ADR-007f). Earlier drafts in git history. |
+| **Changelog** | v1.0 (2026-09-18) — accepted (operator). · v0.4 (2026-09-17) — review #624/#637: module boundary, `kind` marker and Host discovery removed (`kind` is ADR-022d's); D6/D7 renumbered D4/D5; supersedes and amends rows completed (ADR-009, ADR-007b, ADR-007d, GLOSSARY, ADR-007f). Earlier drafts in git history. |
 
 What a resource runs on.
 

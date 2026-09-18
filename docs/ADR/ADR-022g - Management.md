@@ -2,15 +2,15 @@
 
 | | |
 |---|---|
-| **Status** | **Proposed** |
-| **Version** | 0.1 |
-| **Date** | 2026-09-17 |
+| **Status** | **Accepted** (2026-09-18) |
+| **Version** | 1.0 |
+| **Date** | 2026-09-17 (v1.0: 2026-09-18) |
 | **Author** | ErikDaniel007 |
 | **Deciders** | @ErikDaniel007, @LarsRossen |
 | **Parent** | [ADR-022 — Workload Ontology](<ADR-022 - Workload Ontology.md>) |
 | **Amends** | `schemas/module-fields.json` `status` and `schemas/module-catalog-fields.json` `status` · [ADR-022d](<ADR-022d - Workload Classification.md>) (`device` meaning) · [ADR-012](ADR-012-backup-enhancement.md) §1.3, §2.1–§2.3, §2.7, §4, Testing, Acceptance, Appendix A (`placementState: external` → `consumed`; the `backup-manage.sh use-external` verb) |
 | **Related** | [ADR-022a](<ADR-022a - Administrative Domain.md>) (Administrative Domain); [ADR-007e](<ADR-007e - Health.md>) (Health); [ADR-025](<ADR-025 - Config migrations and the upgrade path.md>); [ADR-022h](<ADR-022h - Facet Register.md>); #637, #614 |
-| **Changelog** | v0.1 (2026-09-17) — proposal: `management: managed \| unmanaged`; `external` kept for the administrative domain; `status` reduced to maturity. |
+| **Changelog** | v1.0 (2026-09-18) — accepted (operator), with D5 as amended by ADR-012 v0.9: `placementState` keeps `external`. `management` is recorded, not yet read by the sweep. · v0.1 (2026-09-17) — proposal: `management: managed \| unmanaged`; `external` kept for the administrative domain; `status` reduced to maturity. |
 
 Whether TAPPaaS tooling controls a resource.
 

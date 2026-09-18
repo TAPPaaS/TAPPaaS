@@ -403,7 +403,7 @@
       "note": "Only used if bridge1 is defined. Hyphens are NOT allowed — use underscores."
     },
     "physicalLocation": {
-      "description": "Where a machine physically is (#609, ADR-012 §1.5): the same shape as site.json's `location` — ISO country, optional city and facility. Recorded on an off-site machine such as a satellite, so the separation its backup copy depends on can be checked (`backup-manager validate`). Not `moduleSource`, which is where the module's code lives.",
+      "description": "Where a machine physically is (#609, ADR-012 §1.5): the same shape as site.json's `location` — ISO country, optional city and building. Recorded on an off-site machine such as a satellite, so the separation its backup copy depends on can be checked (`backup-manager validate`). Not `moduleSource`, which is where the module's code lives.",
       "type": "object",
       "requiredBy": [],
       "usedBy": [
@@ -412,7 +412,7 @@
       "properties": {
         "country": { "type": "string", "pattern": "^[A-Za-z]{2}$" },
         "city": { "type": "string" },
-        "facility": { "type": "string" }
+        "building": { "type": "string" }
       },
       "example": { "country": "FI", "city": "Helsinki" },
       "note": "Recorded, not enforced: nothing checks it against the machine itself."

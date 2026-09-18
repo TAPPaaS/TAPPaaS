@@ -2,15 +2,15 @@
 
 | | |
 |---|---|
-| **Status** | **Proposed** |
-| **Version** | 0.1 |
-| **Date** | 2026-09-17 |
+| **Status** | **Accepted** (2026-09-18) |
+| **Version** | 1.0 |
+| **Date** | 2026-09-17 (v1.0: 2026-09-18) |
 | **Author** | ErikDaniel007 |
 | **Deciders** | @ErikDaniel007, @LarsRossen |
 | **Parent** | [ADR-022 — Workload Ontology](<ADR-022 - Workload Ontology.md>) |
 | **Amends** | [ADR-007b](<ADR-007b - Apps.md>) §`tier` and :81 (single-instance) · [ADR-022c](<ADR-022c - Node and Host.md>) D5 (`tier` namespacing) · [ADR-007](<ADR-007 - TAPPaaS Taxonomy.md>) :46, :83 · [ADR-009](<ADR-009 - Composition Meta-Model.md>) :30 · [GLOSSARY.md](../../GLOSSARY.md) :25 |
 | **Related** | [ADR-007c — Environments](<ADR-007c - Environments.md>) (`mgmt` is an Environment); [ADR-014](<ADR-014 - Zone and Environment Lifecycle.md>) (`zone.tier`, unchanged); [ADR-009](<ADR-009 - Composition Meta-Model.md>) (Stack); [ADR-025](<ADR-025 - Config migrations and the upgrade path.md>) (migration runner); [ADR-022h](<ADR-022h - Facet Register.md>); #624, #637 |
-| **Changelog** | v0.1 (2026-09-17) — proposal: `module.tier` becomes `scope: site \| environment`. |
+| **Changelog** | v1.0 (2026-09-18) — accepted (operator). The `tier` → `scope` migration is implementation, tracked in the 2.1 plan (G1.1). · v0.1 (2026-09-17) — proposal: `module.tier` becomes `scope: site \| environment`. |
 
 At which level of the Site ⊃ Environment hierarchy a module belongs.
 

@@ -194,7 +194,7 @@ off-site* copy beside a local datastore, that is §1.5.
 **Off-site is recorded, not asserted (#609).** An off-site copy is worth having because a fire
 or a theft at the building does not reach it — a *physical* separation, which only data can
 show. Every off-site target therefore declares a **`physicalLocation`** in the same shape as
-the Site's own (`site.json` `location`: ISO country, optional city and facility — a Location in
+the Site's own (`site.json` `location`: ISO country, optional city and building — a Location in
 the sense of ADR-022b): the satellite as a field of its machine module (ADR-026), a peer PBS in
 its `pull-`/`remote-` config. *(As built: the field is `physicalLocation`, not `location`,
 which named a module's source directory; that became `moduleSource`, migration 0006.)* A check

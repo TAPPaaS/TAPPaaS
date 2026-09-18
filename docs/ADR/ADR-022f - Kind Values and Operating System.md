@@ -2,15 +2,15 @@
 
 | | |
 |---|---|
-| **Status** | **Proposed** |
-| **Version** | 0.1 |
-| **Date** | 2026-09-17 |
+| **Status** | **Accepted** (2026-09-18) |
+| **Version** | 1.0 |
+| **Date** | 2026-09-17 (v1.0: 2026-09-18) |
 | **Author** | ErikDaniel007 |
 | **Deciders** | @ErikDaniel007, @LarsRossen |
 | **Parent** | [ADR-022 — Workload Ontology](<ADR-022 - Workload Ontology.md>) |
 | **Amends** | [ADR-022d](<ADR-022d - Workload Classification.md>) (`kind` values — folded into it on acceptance) · [ADR-007b](<ADR-007b - Apps.md>) :17 ("App ≡ Module") · [ADR-009](<ADR-009 - Composition Meta-Model.md>) :42 (App) · [GLOSSARY.md](../../GLOSSARY.md) :22 (Apps) · [ADR-012](ADR-012-backup-enhancement.md) §1.3 (consumed PBS as a `device` record), §3.1 (`backup:filesystem` reads `os.id`) |
 | **Related** | [ADR-022c](<ADR-022c - Node and Host.md>) (Host); [ADR-012](ADR-012-backup-enhancement.md) (backup); [ADR-011](<ADR-011 - SBOM Governance.md>) (CycloneDX); [ADR-022h](<ADR-022h - Facet Register.md>); #637, #614 |
-| **Changelog** | v0.1 (2026-09-17) — proposal: `application` accepted, `host` → `machine`, operating system as a facet; backup as the worked example. |
+| **Changelog** | v1.0 (2026-09-18) — accepted as implemented (operator): `os` is a string holding `os.id`, the family derived (D7). · v0.1 (2026-09-17) — proposal: `application` accepted, `host` → `machine`, operating system as a facet; backup as the worked example. |
 
 Which unit a module realizes, and which operating system a system runs.
 

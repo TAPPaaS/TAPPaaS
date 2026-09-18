@@ -2,15 +2,15 @@
 
 | | |
 |---|---|
-| **Status** | **Draft — for review** |
-| **Version** | 0.4 |
-| **Date** | 2026-09-09 (v0.4: 2026-09-17) |
+| **Status** | **Accepted** (2026-09-18) |
+| **Version** | 1.0 |
+| **Date** | 2026-09-09 (v1.0: 2026-09-18) |
 | **Author** | ErikDaniel007 |
 | **Deciders** | @ErikDaniel007, @LarsRossen |
 | **Parent** | [ADR-022 — Workload Ontology](<ADR-022 - Workload Ontology.md>) |
 | **Refines** | [ADR-007d — Site](<ADR-007d - Site.md>) (what a Site is) |
 | **Amends** | [ADR-007](<ADR-007 - TAPPaaS Taxonomy.md>) :43 (model diagram) · [ADR-007d](<ADR-007d - Site.md>) :14–15 (intro), :34–35 (when to add a second Site) · [GLOSSARY.md](../../GLOSSARY.md) :20 — the phrase "physical + admin perimeter" appears in all three · [ADR-012](ADR-012-backup-enhancement.md) §1.4.1 (cite RFC 1136, D4) |
-| **Changelog** | v0.4 (2026-09-17) — review #624/#637: D6/D7 (relationship taxonomy, Health inventory) parked for 2.1; D5 wording; amended anchors in ADR-007d and ADR-012 declared. Earlier drafts in git history. |
+| **Changelog** | v1.0 (2026-09-18) — accepted (operator). D6/D7 stay parked for 2.1. · v0.4 (2026-09-17) — review #624/#637: D6/D7 (relationship taxonomy, Health inventory) parked for 2.1; D5 wording; amended anchors in ADR-007d and ADR-012 declared. Earlier drafts in git history. |
 
 Who is accountable for a resource.
 

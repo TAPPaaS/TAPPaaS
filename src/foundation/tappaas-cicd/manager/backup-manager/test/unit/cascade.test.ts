@@ -680,9 +680,9 @@ check(!retentionValid("7") && !retentionValid("7x") && !retentionValid(""), "inv
   eq(separation(DK, { country: "DE" }), "separate", "another country → separate");
   eq(separation(DK, { country: "dk", city: "Odense" }), "separate", "same country, other city → separate (case-insensitive)");
   eq(separation({ country: "DK" }, { country: "DK", city: "Odense" }), "unproven", "the Site records no city → unproven");
-  eq(separation(DK, { country: "DK", city: "aarhus" }), "unproven", "same city, no facility → unproven");
-  eq(separation({ ...DK, facility: "A" }, { ...DK, facility: "B" }), "separate", "same city, other facility → separate");
-  eq(separation({ ...DK, facility: "A" }, { ...DK, facility: "a" }), "same", "every level equal → same");
+  eq(separation(DK, { country: "DK", city: "aarhus" }), "unproven", "same city, no building → unproven");
+  eq(separation({ ...DK, building: "A" }, { ...DK, building: "B" }), "separate", "same city, other building → separate");
+  eq(separation({ ...DK, building: "A" }, { ...DK, building: "a" }), "same", "every level equal → same");
   eq(asPlace({ city: "Aarhus" }), null, "a place without a country is not recorded");
 
   const tmp = mkdtempSync(join(tmpdir(), "bm-offsite-"));

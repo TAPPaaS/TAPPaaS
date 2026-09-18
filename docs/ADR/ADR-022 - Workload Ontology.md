@@ -2,14 +2,14 @@
 
 | | |
 |---|---|
-| **Status** | **Draft — for review** |
-| **Version** | 0.12 |
-| **Date** | 2026-09-09 (v0.12: 2026-09-17) |
+| **Status** | **Accepted** (2026-09-18) |
+| **Version** | 1.0 |
+| **Date** | 2026-09-09 (v1.0: 2026-09-18) |
 | **Author** | ErikDaniel007 |
 | **Deciders** | @ErikDaniel007, @LarsRossen |
 | **Refines** | [ADR-007d](<ADR-007d - Site.md>) (Site) · [ADR-007b](<ADR-007b - Apps.md>) (module type) |
 | **Related** | [ADR-007](<ADR-007 - TAPPaaS Taxonomy.md>) (classification); [ADR-009](<ADR-009 - Composition Meta-Model.md>) (`Node`, superseded in part); [ADR-014](<ADR-014 - Zone and Environment Lifecycle.md>) (zones — owner, not amended); [ADR-024](<ADR-024 - Site Fabric.md>) (inter-Site relationships); [ADR-012](ADR-012-backup-enhancement.md) (first consumer); [GLOSSARY.md](../../GLOSSARY.md) (the vocabulary SSOT this ADR updates) |
-| **Changelog** | v0.12 (2026-09-17) — review #624/#637: mapping section and answered question removed; open questions shortened; rib charters aligned; proposed ribs 022e–022h listed. Earlier drafts in git history. |
+| **Changelog** | v1.0 (2026-09-18) — accepted with its ribs 022a–h (operator). Open question 2 answered by ADR-022e (`scope`); questions 1 and 3 stay open and block nothing. · v0.12 (2026-09-17) — review #624/#637: mapping section and answered question removed; open questions shortened; rib charters aligned; proposed ribs 022e–022h listed. Earlier drafts in git history. |
 
 One noun — `Site` — has been carrying three independent questions: **who runs it**, **where it physically is**, and **what it runs on**. Separating them is the whole of this ADR.
 
@@ -84,7 +84,7 @@ Four collisions, all live on `main`:
 ## Open questions
 
 1. Should `zone.tier` be renamed to align with IEC 62443 **Security Level**? ADR-014 owns it; raised, not decided.
-2. Should `module.tier` be replaced by `stack` (#624, #637)? [ADR-022e](<ADR-022e - Module Scope.md>) proposes `scope` instead.
+2. ~~Should `module.tier` be replaced by `stack` (#624, #637)?~~ **Answered:** no — it becomes `scope` ([ADR-022e](<ADR-022e - Module Scope.md>), accepted).
 3. Does `kind: device` need an **attachment** dimension (`wired` | `wireless`)? Raised in #624; not decided.
 
 ## Consequences

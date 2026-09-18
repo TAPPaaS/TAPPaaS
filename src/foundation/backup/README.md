@@ -147,7 +147,7 @@ once — a buddy is usually both a `pull` and a `remote`.
 — which is **never** written to the config (§2.5). `--config-only` writes the
 config and stops, for when the far PBS is not reachable yet.
 
-**Where it is (#609).** `--country` (and `--city`, `--facility` when they share the Site's)
+**Where it is (#609).** `--country` (and `--city`, `--building` when they share the Site's)
 records the peer's `physicalLocation`: an off-site copy is only worth having if it is
 somewhere else, and only data can show that. `backup-manager validate` compares every
 `pull`/`remote` peer and every satellite with `site.json`'s `location` — at the finest level

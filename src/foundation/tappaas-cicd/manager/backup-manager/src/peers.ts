@@ -79,7 +79,7 @@ export interface PeerSpec {
   authId?: string; // remote: the login they pull with
   propagate?: boolean; // remote: let the grant reach child namespaces (default no)
   // Where the peer physically is (#609) — the evidence its copy is off-site.
-  physicalLocation?: { country: string; city?: string; facility?: string };
+  physicalLocation?: { country: string; city?: string; building?: string };
   retention?: Record<string, number>;
 }
 

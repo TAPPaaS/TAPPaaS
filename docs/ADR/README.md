@@ -24,15 +24,15 @@ The vocabulary every other ADR now borrows: what a module *is*, where it sits, w
 
 | ADR | Status | Decides |
 |-----|--------|---------|
-| [ADR-022 — Workload Ontology](<ADR-022 - Workload Ontology.md>) | Draft — for review | The umbrella: why the ontology exists and how the ribs fit together. |
-| [ADR-022a — Administrative Domain](<ADR-022a - Administrative Domain.md>) | Draft — for review | The boundary of one administrative authority — what *external* is measured against. The relationship taxonomy (D6/D7) is parked for 2.1. |
-| [ADR-022b — Location](<ADR-022b - Location.md>) | Draft — for review | Where something physically is: Site ⊃ Building ⊃ Room ⊃ Rack. Facility removed. |
-| [ADR-022c — Node and Host](<ADR-022c - Node and Host.md>) | Draft — for review | `Node` returns to its ArchiMate meaning; adds **cluster member** and **Host**; namespaces `tier`. |
-| [ADR-022d — Workload Classification](<ADR-022d - Workload Classification.md>) | Draft — for review | `kind` — what type of thing a module is, and why it is a dispatch key. |
-| [ADR-022e — Module Scope](<ADR-022e - Module Scope.md>) | Proposed | `module.tier` becomes **`scope: site \| environment`**. Scope is not stack, not multiplicity, not a layer. |
-| [ADR-022f — Kind Values and OS](<ADR-022f - Kind Values and Operating System.md>) | Proposed | The `kind` leaves: `vm`, `lxc`, **`machine`** (was `host`), **`application`** (was `app`), `device` — plus the OS facet. |
-| [ADR-022g — Management](<ADR-022g - Management.md>) | Proposed | `management: managed \| unmanaged`; **`external` means only "outside the Administrative Domain"**. |
-| [ADR-022h — Facet Register](<ADR-022h - Facet Register.md>) | Proposed | Which attributes are facets beside the single-valued `kind`, and the gate a new one must pass. |
+| [ADR-022 — Workload Ontology](<ADR-022 - Workload Ontology.md>) | Accepted | The umbrella: why the ontology exists and how the ribs fit together. |
+| [ADR-022a — Administrative Domain](<ADR-022a - Administrative Domain.md>) | Accepted | The boundary of one administrative authority — what *external* is measured against. The relationship taxonomy (D6/D7) is parked for 2.1. |
+| [ADR-022b — Location](<ADR-022b - Location.md>) | Accepted | Where something physically is: Site ⊃ Building ⊃ Room ⊃ Rack. Facility removed. |
+| [ADR-022c — Node and Host](<ADR-022c - Node and Host.md>) | Accepted | `Node` returns to its ArchiMate meaning; adds **cluster member** and **Host**; namespaces `tier`. |
+| [ADR-022d — Workload Classification](<ADR-022d - Workload Classification.md>) | Accepted | `kind` — what type of thing a module is, and why it is a dispatch key. |
+| [ADR-022e — Module Scope](<ADR-022e - Module Scope.md>) | Accepted | `module.tier` becomes **`scope: site \| environment`**. Scope is not stack, not multiplicity, not a layer. |
+| [ADR-022f — Kind Values and OS](<ADR-022f - Kind Values and Operating System.md>) | Accepted | The `kind` leaves: `vm`, `lxc`, **`machine`** (was `host`), **`application`** (was `app`), `device` — plus the OS facet. |
+| [ADR-022g — Management](<ADR-022g - Management.md>) | Accepted | `management: managed \| unmanaged`; **`external` means only "outside the Administrative Domain"**. |
+| [ADR-022h — Facet Register](<ADR-022h - Facet Register.md>) | Accepted | Which attributes are facets beside the single-valued `kind`, and the gate a new one must pass. |
 
 ## Platform decisions
 

@@ -3,7 +3,7 @@
 // An off-site copy is worth having because a fire or a theft at the building
 // does not reach it — a PHYSICAL separation, which only data can show. Every
 // off-site target therefore records a `physicalLocation` shaped like the Site's
-// own `site.json` `location` (ISO country, optional city and facility):
+// own `site.json` `location` (ISO country, optional city and building):
 //
 //   config/satellite-<name>.json   a satellite pulls our PBS over the tunnel
 //   config/remote-<name>.json      a peer that pulls OUR backups
@@ -12,7 +12,7 @@
 // (`receive-` peers push into us; where they are is their concern, not ours.)
 //
 // Separation is judged at the finest level BOTH sides record: a different
-// country, city or facility at any level both declare is separate. Equal at
+// country, city or building at any level both declare is separate. Equal at
 // every level both declare is not shown to be separate — "same" when both
 // record all three, "unproven" when one of them stops short. Nothing here is
 // an error: an existing site's peers predate the field, and a peer in the same
@@ -24,12 +24,12 @@ import { join } from "path";
 export interface Place {
   country?: string;
   city?: string;
-  facility?: string;
+  building?: string;
 }
 
 export type Separation = "separate" | "same" | "unproven" | "unrecorded";
 
-const LEVELS = ["country", "city", "facility"] as const;
+const LEVELS = ["country", "city", "building"] as const;
 
 function norm(v: unknown): string {
   return typeof v === "string" ? v.trim().toLowerCase() : "";
@@ -42,7 +42,7 @@ export function asPlace(v: unknown): Place | null {
   if (!norm(o.country)) return null;
   const p: Place = { country: String(o.country) };
   if (norm(o.city)) p.city = String(o.city);
-  if (norm(o.facility)) p.facility = String(o.facility);
+  if (norm(o.building)) p.building = String(o.building);
   return p;
 }
 
@@ -60,7 +60,7 @@ export function separation(site: Place | null, target: Place | null): Separation
 
 export function placeText(p: Place | null): string {
   if (!p) return "-";
-  return [p.facility, p.city, p.country?.toUpperCase()].filter(Boolean).join(", ");
+  return [p.building, p.city, p.country?.toUpperCase()].filter(Boolean).join(", ");
 }
 
 export interface OffsiteTarget {
@@ -125,7 +125,7 @@ export function offsiteWarnings(configDir: string): string[] {
     } else if (t.separation === "unproven") {
       warnings.push(
         `${what} (${placeText(t.place)}) is not shown to be away from the Site (${placeText(site)}): ` +
-          `record the city, and if they share one the facility, on both`,
+          `record the city, and if they share one the building, on both`,
       );
     }
   }

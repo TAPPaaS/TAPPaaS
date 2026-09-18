@@ -135,7 +135,7 @@ in-job modules require `site.backup.target`).
 It also **warns** — never fails — about an off-site target not shown to be off-site (#609,
 ADR-012 §1.5; `src/offsite.ts`): a satellite, `remote-` or `pull-` peer whose
 `physicalLocation` is missing, or equal to `site.json`'s `location` at every level both record
-(country, city, facility). A peer that predates the field is not a broken configuration.
+(country, city, building). A peer that predates the field is not a broken configuration.
 
 ## Testing
 

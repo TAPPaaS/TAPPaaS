@@ -2,15 +2,15 @@
 
 | | |
 |---|---|
-| **Status** | **Proposed** |
-| **Version** | 0.1 |
-| **Date** | 2026-09-17 |
+| **Status** | **Accepted** (2026-09-18) |
+| **Version** | 1.0 |
+| **Date** | 2026-09-17 (v1.0: 2026-09-18) |
 | **Author** | ErikDaniel007 |
 | **Deciders** | @ErikDaniel007, @LarsRossen |
 | **Parent** | [ADR-022 — Workload Ontology](<ADR-022 - Workload Ontology.md>) |
 | **Amends** | [GLOSSARY.md](../../GLOSSARY.md) ("Three orthogonal axes") |
 | **Related** | [ADR-007](<ADR-007 - TAPPaaS Taxonomy.md>) (classification domains); [ADR-013](<ADR-013 - Documentation Structure and Standards.md>) (documentation); [ADR-022e](<ADR-022e - Module Scope.md>), [ADR-022f](<ADR-022f - Kind Values and Operating System.md>), [ADR-022g](<ADR-022g - Management.md>) |
-| **Changelog** | v0.1 (2026-09-17) — proposal: one register of facets, a six-test gate, schema values as the machine source. |
+| **Changelog** | v1.0 (2026-09-18) — accepted (operator). · v0.1 (2026-09-17) — proposal: one register of facets, a six-test gate, schema values as the machine source. |
 
 How TAPPaaS keeps the attributes that describe a resource mutually exclusive and defined once.
 

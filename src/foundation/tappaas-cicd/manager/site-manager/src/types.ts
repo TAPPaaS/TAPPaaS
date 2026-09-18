@@ -8,7 +8,7 @@ export interface SiteLocation {
   timezone: string;
   locale?: string;
   city?: string; // #609: where, finer than the country
-  facility?: string;
+  building?: string;
 }
 
 export interface SiteNetwork {
