@@ -1,0 +1,13 @@
+{
+  "description": "A Debian machine TAPPaaS manages: its OS kept patched under the sweep's reboot rules (ADR-026 D3)",
+  "kind": "machine",
+  "version": "0.1.0",
+  "releaseDate": "2026-09-18",
+  "status": "Development",
+  "tier": "foundation",
+  "source": "official",
+  "os": "debian",
+  "management": "managed",
+  "rebootOk": false,
+  "dependsOn": []
+}

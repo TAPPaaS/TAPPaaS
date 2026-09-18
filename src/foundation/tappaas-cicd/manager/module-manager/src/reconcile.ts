@@ -316,7 +316,21 @@ function doReconcile(moduleArg: string, opts: ReconcileOptions): void {
     // reconcile, not an update. Run from the module directory, as bash did.
     if (existsSync(join(moduleDir, "update.sh"))) {
       info(`  Running ${moduleDir}/update.sh (converge)...`);
-      if (runScript("./update.sh", [module], moduleDir) !== 0) {
+      // The dependency services get --allow-disruption as an argument (above);
+      // the module's own update.sh gets it as TAPPAAS_ALLOW_DISRUPTION=1, so a
+      // module that needs downtime to finish — a machine that must reboot after
+      // its upgrade (debianhost, ADR-026 D3) — can honour the same authorization
+      // (ADR-020 D8). Restored afterwards: it authorizes this step, not the rest.
+      const prevDisruption = process.env.TAPPAAS_ALLOW_DISRUPTION;
+      if (opts.allowDisruption) process.env.TAPPAAS_ALLOW_DISRUPTION = "1";
+      let rc: number;
+      try {
+        rc = runScript("./update.sh", [module], moduleDir);
+      } finally {
+        if (prevDisruption === undefined) delete process.env.TAPPAAS_ALLOW_DISRUPTION;
+        else process.env.TAPPAAS_ALLOW_DISRUPTION = prevDisruption;
+      }
+      if (rc !== 0) {
         fail(stepFailure("Module update.sh failed during reconcile", depFailures));
       }
       info(`  ${GN}✓${CL} module update.sh converged`);

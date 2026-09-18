@@ -131,6 +131,11 @@ Update script called periodically to keep the module updated.
 - Called with module name as argument
 - TAPPaaS calls this script on a periodic basis per the global `updateSchedule`
 - Should handle incremental updates to the module
+- A change that needs downtime to finish — a reboot, say — is taken only when authorized
+  (ADR-020 D8): `TAPPAAS_ALLOW_DISRUPTION=1` is set when the run has `--allow-disruption`, and
+  `TAPPAAS_SCHEDULED_PASS=1` in the scheduled pass, where the module's own `rebootOk` decides.
+  Otherwise print `DEFERRED: <module> <what> …` and exit 0 — the sweep collects those lines.
+  `src/foundation/debianhost/update.sh` is a worked example
 
 ### myModule.nix
 

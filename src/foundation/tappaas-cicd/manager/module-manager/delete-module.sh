@@ -302,7 +302,16 @@ main() {
     vmname=$(echo "${_cfg}" | jq -r '.vmname // empty')
     [[ -z "${vmname}" ]] && vmname="${module}"
 
-    if [[ -z "${config_vmid}" && -z "${OPT_VMID}" ]]; then
+    # A machine (ADR-026) is not a VM TAPPaaS created: deleting its instance
+    # UNREGISTERS it and never touches the machine. No VM lookup at all — and a
+    # --vmid is refused, because naming one could only destroy something the
+    # machine is not (a stand-in VM that happens to share its name, say).
+    if [[ "$(echo "${_cfg}" | jq -r '.kind // empty')" == "machine" ]]; then
+        [[ -z "${OPT_VMID}" ]] \
+            || die "'${module}' is a machine (kind: machine) — delete unregisters it and never destroys anything; --vmid does not apply (ADR-026)"
+        info "  '${module}' is a machine — unregistering only; the machine itself is left untouched"
+        config_vmid=""
+    elif [[ -z "${config_vmid}" && -z "${OPT_VMID}" ]]; then
         info "  Module declares no VMID — no VM to destroy (config-only delete)"
     else
         # Discover every cluster VM sharing this module's name.
