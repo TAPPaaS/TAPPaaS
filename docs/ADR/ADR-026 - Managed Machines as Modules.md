@@ -100,7 +100,7 @@ enough to get right, and everything below depends on it behaving.
 `site-manager node add` becomes: **add a `machine` module, then join it to the cluster.** The
 node is a module first and a cluster member second.
 
-- **Stage 1 — register.** Existing cluster nodes are declared as machine modules with
+- **Stage 1 — register (#665).** Existing cluster nodes are declared as machine modules with
   `management: managed`, `os.id: debian`. Nothing changes about how they are patched; the
   model simply stops pretending they are not machines.
 - **Stage 2 — lifecycle.** `update-os.sh` moves behind the module's `update.sh`, so a cluster

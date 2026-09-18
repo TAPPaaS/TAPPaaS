@@ -461,6 +461,7 @@ Low upgrade risk. Build continuously, in any order within a group.
 
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
+| #665 | Register cluster nodes as `kind: machine` modules | 3 | 2 | M | Stage 1 of ADR-026 D4 — registration only, inert: declare existing nodes as modules so every managed machine has one mechanism. Stage 2 (node patching behind the module lifecycle) is separate and high-blast-radius. Blocked on the instance-naming question (ADR-026 D6 / ADR-022e D4): `tappaas1..3` are three instances of one module in one Environment and the config convention has no room for that |
 | #662 | PVE host configuration is not backed up | 4 | 2 | M | Guests and module paths are backed up; the hosts' own config is not — `/etc/pve`, `/etc/network/interfaces`, `/etc/ssh`, `/root`. A single node loss is survivable (pmxcfs replicates), a cluster-wide one is not. The Level 1 control from the hardening guide we have no equivalent for. Settle first how to capture `/etc/pve`: a pxar of the FUSE mount, or `/var/lib/pve-cluster/config.db`, or both — only one of them restores onto a node not yet in a cluster |
 | #392 | Never attempt a disk shrink | 5 | 1 | L | |
 | #393 | A failed migration must not block later steps | 4 | 2 | L | |
