@@ -60,6 +60,7 @@
 | **cluster member** | A Node belonging to the Proxmox cluster, declared in `site.json` (ADR-022c D2). This is the narrow sense the glossary previously called "Node". |
 | **Host** | The Node a Module runs on (ADR-022c D3). The `node` **field** keeps its name for compatibility: it names a Host and does **not** assert cluster membership. |
 | **Module** | The atomic deployable unit: one `{name}.json`. *(The former "Module boundary = VM boundary" rule is amended by ADR-022d — a module need not be a VM: see `application`, `machine`, `device`.)* |
+| **instance** | One *deployment* of a Module: one `{name}.json` in `config/`, whose file name is the **instance name** (ADR-026 D6). A Module may have several instances in one Environment (`tappaas1`, `tappaas2`, `tappaas3`). The instance name defaults to the module name (plus the environment suffix where the convention calls for it) but is not derived from it — the module is named by `.location`. |
 | **Component** | A composable unit inside a Module (recursive). ArchiMate Application Component. |
 | **Function** | Behaviour a Component realises. ArchiMate Application Function. |
 | **Service** | A defined exposed interface (`provides`/`dependsOn`). ArchiMate Application Service. |
@@ -117,8 +118,8 @@ For review. Each row is a word whose meaning moved, so reading from memory will 
 **Still open, not glossary decisions:** `oci` and the grouping concepts `cluster` / `kubernetes`
 (ADR-022d, deferred to their own ADR); whether a consumed PBS is a `device` or an `application` with
 `management: unmanaged` (ADR-012 §0 argues the latter and amends ADR-022f D6 — Erik to confirm);
-and the instance-naming question for site-scoped modules with several instances (ADR-022e D4,
-ADR-010 §8.2).
+and how a dependency coordinate `<module>:<service>` names one instance when a Module has several
+(ADR-026 D6a — the instance/module distinction itself is settled by ADR-026 D6).
 
 > All terms here are **TAPPaaS-native**. Other organisations that consume this ontology map it via a
 > one-way crosswalk maintained on **their** side — never in this repository.

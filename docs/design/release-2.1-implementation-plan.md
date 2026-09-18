@@ -344,8 +344,8 @@ the model can express and patch. The two are one piece of work because a backup
 |---|-------|:-:|:-:|:-:|------|
 | *(new)* | `debianhost` module | 3 | 2 | M | ADR-026 D3 — `apt update/upgrade` under the sweep's rules, plus `install`/`test`. The landing point that makes topology §1.3 testable rather than asserted. **Do first**: small, self-contained, and everything below assumes it behaves |
 | *(new)* | ADR-012 topology §1.3 verified | 3 | 2 | M | PBS installed and driven on a `kind: machine` host — Erik's setup, on a test machine first |
-| *(open)* | instance naming | 2 | 4 | H | ADR-026 D6 / ADR-022e D4 — `tappaas1..3` are three instances of one module in one Environment and the config convention has no room for that. **Blocks #665** |
-| #665 | Register cluster nodes as machine modules | 3 | 2 | M | ADR-026 D4 stage 1 — registration only, inert. Stage 2 (node patching behind the module lifecycle) is a separate, high-blast-radius change |
+| *(new)* | instance vs module name | 3 | 3 | M | **Settled 2026-09-18 by ADR-026 D6**, now implementation: `config/<instance>.json` is the instance, the module comes from `.location`, and a synthetic `module` field replaces every name-parse (including `resolve_base_module_name`, added for #659). Plus the `--instance` argument and its default. **Blocks #665** |
+| #665 | Register cluster nodes as machine modules | 3 | 2 | M | ADR-026 D4 stage 1 — registration only, inert. Stage 2 (node patching behind the module lifecycle) and stage 3 (the cluster install becomes module installs) are separate and high-blast-radius |
 | *(open)* | `placementState` revisit | 4 | 2 | M | Flagged 2026-09-18: with a machine module as a Host, `node` and `external` may no longer partition the space cleanly. Deliberately not decided in ADR-012 v0.9 |
 
 #### ADR-012 close-out (original scope)
@@ -478,7 +478,7 @@ Low upgrade risk. Build continuously, in any order within a group.
 
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
-| #665 | Register cluster nodes as `kind: machine` modules | 3 | 2 | M | Stage 1 of ADR-026 D4 — registration only, inert: declare existing nodes as modules so every managed machine has one mechanism. Stage 2 (node patching behind the module lifecycle) is separate and high-blast-radius. Blocked on the instance-naming question (ADR-026 D6 / ADR-022e D4): `tappaas1..3` are three instances of one module in one Environment and the config convention has no room for that |
+| #665 | Register cluster nodes as `kind: machine` modules | 3 | 2 | M | Stage 1 of ADR-026 D4 — registration only, inert: declare existing nodes as modules so every managed machine has one mechanism. Stage 2 (node patching behind the module lifecycle) is separate and high-blast-radius. Blocked on the instance work (ADR-026 D6, decided 2026-09-18): `tappaas1..3` are three instances of one module in one Environment, so the synthetic `module` field and the `--instance` argument land first |
 | #662 | PVE host configuration is not backed up | 4 | 2 | M | Guests and module paths are backed up; the hosts' own config is not — `/etc/pve`, `/etc/network/interfaces`, `/etc/ssh`, `/root`. A single node loss is survivable (pmxcfs replicates), a cluster-wide one is not. The Level 1 control from the hardening guide we have no equivalent for. Settle first how to capture `/etc/pve`: a pxar of the FUSE mount, or `/var/lib/pve-cluster/config.db`, or both — only one of them restores onto a node not yet in a cluster |
 | #392 | Never attempt a disk shrink | 5 | 1 | L | |
 | #393 | A failed migration must not block later steps | 4 | 2 | L | |

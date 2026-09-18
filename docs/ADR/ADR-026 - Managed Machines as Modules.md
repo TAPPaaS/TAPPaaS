@@ -3,13 +3,13 @@
 | | |
 |---|---|
 | **Status** | **Proposed** (2026-09-18) |
-| **Version** | 0.1 |
+| **Version** | 0.2 |
 | **Date** | 2026-09-18 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen, @ErikDaniel007 |
 | **Refines** | [ADR-022c](<ADR-022c - Node and Host.md>) (Node, cluster member, Host) · [ADR-022f](<ADR-022f - Kind Values and Operating System.md>) (`kind: machine`, OS facet) · [ADR-022g](<ADR-022g - Management.md>) (`management`) · [ADR-022e](<ADR-022e - Module Scope.md>) (`scope`, D4 multiplicity) |
 | **Related** | [ADR-012](ADR-012-backup-enhancement.md) §1 (the fourth backup topology this enables) · [ADR-010](ADR-010-vps-satellite-reverse-proxy-backup.md) §8 (the satellite as a machine) · [ADR-007d](<ADR-007d - Site.md>) (`site.json hardware.nodes[]`) |
-| **Changelog** | v0.1 (2026-09-18) — proposal: every machine TAPPaaS manages is a module of `kind: machine`; `debianhost` supplies the OS lifecycle; cluster nodes and the satellite follow; several instances of one module in one Environment. |
+| **Changelog** | v0.2 (2026-09-18) — D4 gains stage 3 (the cluster install becomes module installs); D6 settles that an instance name is not a module name — `config/<instance>.json`, module from `.location`, a synthetic `module` field, and the defaults. · v0.1 (2026-09-18) — proposal: every machine TAPPaaS manages is a module of `kind: machine`; `debianhost` supplies the OS lifecycle; cluster nodes and the satellite follow; several instances of one module in one Environment. |
 
 A machine TAPPaaS manages is a **module**, not a special case.
 
@@ -95,7 +95,7 @@ It is the landing point that lets ADR-012's fourth topology be tested rather tha
 Building it first, on its own, is deliberate: a module that only patches a machine is small
 enough to get right, and everything below depends on it behaving.
 
-### D4 — Cluster nodes become machine modules too, in two stages
+### D4 — Cluster nodes become machine modules too, in three stages
 
 `site-manager node add` becomes: **add a `machine` module, then join it to the cluster.** The
 node is a module first and a cluster member second.
@@ -105,9 +105,17 @@ node is a module first and a cluster member second.
   model simply stops pretending they are not machines.
 - **Stage 2 — lifecycle.** `update-os.sh` moves behind the module's `update.sh`, so a cluster
   node and a Debian host are patched by the same path with the same consent rules.
+- **Stage 3 — install.** The cluster install is refactored to *install machines by installing
+  modules*: bringing a node up is `module-manager module install <instance>` against a
+  `machine` module, and joining the cluster is a step of that install rather than a separate
+  bootstrap path. At the end of stage 3 there is one way to bring a machine into a TAPPaaS —
+  the same way anything else arrives — and `site-manager` orchestrates module installs instead
+  of carrying its own provisioning code.
 
-Staging matters because stage 1 is inert — it adds configs — while stage 2 changes how every
-node in every installation gets patched.
+Staging matters because the stages differ by an order of magnitude in blast radius: stage 1 is
+inert — it adds configs; stage 2 changes how every node in every installation gets patched;
+stage 3 changes how every installation is *built*, so it lands last and behind stage 2's
+evidence that the module path patches a node correctly.
 
 ### D5 — The satellite starts `managed` and becomes `unmanaged`
 
@@ -130,24 +138,69 @@ prose.
 > its own (unattended-upgrades, per ADR-010 §5). D3's `debianhost` lifecycle therefore does
 > **not** apply to a running satellite, and must not be assumed to.
 
-### D6 — Several instances of one module in one Environment
+### D6 — An instance name is not a module name
 
 `tappaas1`, `tappaas2`, `tappaas3` are three instances of the same module in the same
 Environment. Today the deployed-config convention has no room for that: a config is
-`<module>` or `<module>-<environment>`, and `mgmt` takes no suffix (ADR-007b), so three
-cluster nodes would collide on one name.
+`<module>` or `<module>-<environment>` (ADR-007b), so three cluster nodes collide on one name.
+ADR-022e D4 already says scope is not multiplicity and names `satellite` as a site-scoped
+module with several instances. This ADR settles what the names mean.
 
-ADR-022e D4 already states that scope is not multiplicity and names `satellite` as a
-site-scoped module with several instances. This ADR makes the need concrete for machines and
-asks for the instance dimension to be settled:
+The starting point is that **the config file name is the instance**. What follows is not new
+syntax; it is what `config/` already holds, written down so that scripts stop guessing.
 
-- an **instance name** distinct from the environment suffix (`<module>@<instance>`,
-  `<module>.<instance>`, or a field with the file named from it); and
-- a rule for which one a dependency means when it names `<module>:<service>`.
+**D6.1 — `config/<instance>.json` names the instance, always.** Every config in `config/` is
+one instance of one module. The file name is the instance name and carries no other meaning.
+That the instance name today usually *equals* the module name is a default (D6.4), not a
+derivation rule, and the two must stop being conflated.
 
-> **Open (D6a):** the spelling, and whether the base-module resolution (`resolve_base_module_name`,
-> added for #659) derives the module from an instance-suffixed config the same way it derives
-> it from an environment-suffixed one.
+**D6.2 — the module is named by `.location`.** `.location` is the absolute path of the
+module's source directory — the one holding `install.sh`, `update.sh`, `test.sh`. It is the
+only field that points at the module, and it is therefore the single source of truth for
+module identity. Its basename is the module name.
+
+**D6.3 — a synthetic `module` field, derived from `.location`, used everywhere.** Derived, not
+authored: nothing writes `module` into a config, and an operator cannot set it. Every script
+and every TypeScript reader that means *"which module is this?"* reads that synthetic field
+rather than parsing a name. It resolves in this order:
+
+1. `basename(.location)` when `.location` is set — the normal case;
+2. the catalog entry that resolved the config when it is not (`.location` postdates some
+   configs; the catalog is #460's second resolution path);
+3. an error when neither answers. A config whose module cannot be identified is not
+   updatable — #659 made exactly that case fatal instead of a silent success.
+
+**Never derive the module from `vmname`.** `vmname` is an instance name too: it names the
+guest, and three instances of one module have three `vmname`s. The same caution applies to the
+config file's own name — see the consequence below.
+
+> **Consequence for `resolve_base_module_name()` (#659).** That helper derives a module name by
+> stripping a declared-environment suffix from the config name. It is correct only while the
+> instance name is `<module>` or `<module>-<environment>` — that is, only while D6.4's default
+> has not been overridden. Under this decision it is a **fallback** for a config that answers
+> neither 1 nor 2 above, not the rule; the primary path is D6.3. Its name should say what it
+> does — it guesses a module from a config name.
+
+**D6.4 — defaults, and an explicit argument.** When a module is created in, or added to, a
+system:
+
+| Given | Instance name | Example |
+|---|---|---|
+| nothing | the **module name**, with the environment appended where the deployment convention calls for it (`<module>-<environment>`, ADR-007b; `mgmt` takes no suffix) | `nextcloud` module → `config/nextcloud-lab1.json` |
+| an instance argument | that name, verbatim | `--instance tappaas2` → `config/tappaas2.json` |
+
+The default reproduces exactly today's names, which is why this decision migrates nothing on
+day one: every existing config is already an instance whose name happens to be the default.
+
+The three cluster nodes are then three configs — `tappaas1.json`, `tappaas2.json`,
+`tappaas3.json` — with the same `.location`, hence the same synthetic `module`, in the same
+Environment.
+
+> **Open (D6a):** how a *dependency* names an instance. The coordinate `<module>:<service>`
+> (GLOSSARY §D) resolves to a module, which is now one-to-many. It is ambiguous only when a
+> Site deploys two instances providing the same service; either `<instance>:<service>` or a
+> rule that an unqualified module name means "any instance of it" would settle it. Not decided
+> here.
 
 ## Consequences
 
@@ -156,8 +209,12 @@ satellite stops being a special case. A Host is an object the model can name, pa
 which is what `kind: application` assumes.
 
 **Costs.** Stage 2 of D4 changes how every installation patches its nodes — high blast radius,
-and it needs the `rebootOk` and window rules to be exactly right. D6 touches the naming
-convention, which is a migration (ADR-025 D7). `debianhost` is a new module to maintain.
+and it needs the `rebootOk` and window rules to be exactly right; stage 3 rewrites the install
+path itself. D6 renames no existing config — its default reproduces today's names — but the
+synthetic `module` field has to be threaded through every script and TypeScript reader that
+currently assumes a config's name is its module's name, and each of those is a place that was
+silently correct until an instance was named something else. `debianhost` is a new module to
+maintain.
 
 **Neutral.** Registering machines as modules makes `module-manager list` longer. That is the
 point: today those machines are invisible to it.
@@ -169,15 +226,17 @@ numbered migration with a before→after fixture. Order, because each step depen
 
 1. `debianhost` module built and tested against a real Debian machine (D3).
 2. ADR-012's fourth topology verified on it (PBS on a non-cluster machine).
-3. Instance naming settled (D6) — a prerequisite for registering three cluster nodes.
+3. The synthetic `module` field landed through the scripts and TypeScript (D6.3), and the
+   instance argument accepted (D6.4) — a prerequisite for registering three cluster nodes.
 4. Cluster nodes registered as modules, stage 1 only (D4).
 5. Satellite converted (ADR-010 §8.2), including its `managed → unmanaged` transition.
 6. Node patching moved behind the module lifecycle, stage 2 (D4).
+7. The cluster install refactored onto module installs, stage 3 (D4).
 
 ## Open questions
 
 - **D2a** — is cluster membership read from `site.json` or a facet on the machine module?
-- **D6a** — how an instance is spelled, and how dependencies name one.
+- **D6a** — how a dependency names one instance of a multi-instance module.
 - **`placementState`** — ADR-012's placement vocabulary was written when a PBS could only be
   on a cluster node or somewhere else entirely. With a machine module as a Host, `node:<name>`
   and "consumed" no longer partition the space. Flagged by the operator 2026-09-18 and
