@@ -3,13 +3,13 @@
 | | |
 |---|---|
 | **Status** | **Proposed** (2026-09-18) |
-| **Version** | 0.2 |
+| **Version** | 0.3 |
 | **Date** | 2026-09-18 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen, @ErikDaniel007 |
 | **Refines** | [ADR-022c](<ADR-022c - Node and Host.md>) (Node, cluster member, Host) · [ADR-022f](<ADR-022f - Kind Values and Operating System.md>) (`kind: machine`, OS facet) · [ADR-022g](<ADR-022g - Management.md>) (`management`) · [ADR-022e](<ADR-022e - Module Scope.md>) (`scope`, D4 multiplicity) |
 | **Related** | [ADR-012](ADR-012-backup-enhancement.md) §1 (the fourth backup topology this enables) · [ADR-010](ADR-010-vps-satellite-reverse-proxy-backup.md) §8 (the satellite as a machine) · [ADR-007d](<ADR-007d - Site.md>) (`site.json hardware.nodes[]`) |
-| **Changelog** | v0.2 (2026-09-18) — D4 gains stage 3 (the cluster install becomes module installs); D6 settles that an instance name is not a module name — `config/<instance>.json`, module from `.location`, a synthetic `module` field, and the defaults. · v0.1 (2026-09-18) — proposal: every machine TAPPaaS manages is a module of `kind: machine`; `debianhost` supplies the OS lifecycle; cluster nodes and the satellite follow; several instances of one module in one Environment. |
+| **Changelog** | v0.3 (2026-09-18) — operator answers folded in: D2a decided (membership from `site.json`), D6.5 (`node` names an instance), D6.6 (a dependency pins an instance via a field on the caller), D7 (one module type per OS; `templates:<os>` reuse deferred). · v0.2 (2026-09-18) — D4 gains stage 3 (the cluster install becomes module installs); D6 settles that an instance name is not a module name — `config/<instance>.json`, module from `.location`, a synthetic `module` field, and the defaults. · v0.1 (2026-09-18) — proposal: every machine TAPPaaS manages is a module of `kind: machine`; `debianhost` supplies the OS lifecycle; cluster nodes and the satellite follow; several instances of one module in one Environment. |
 
 A machine TAPPaaS manages is a **module**, not a special case.
 
@@ -76,9 +76,16 @@ names: a **cluster member** is a Node declared in `site.json`. A cluster node is
 that is a cluster member; a standalone PBS host is a `machine` that is not. Recording that as
 `os.id: pve` would encode a role in an OS field and then have to be undone.
 
-> **Open (D2a):** whether "is a cluster member" is read from `site.json` (where it lives
-> today) or becomes a facet on the machine module. Reading it from `site.json` keeps one
-> source of truth; a facet makes the module self-describing. Not decided here.
+**D2a — cluster membership is read from `site.json`, not carried on the module.** The
+alternative was a facet on the machine module, which would make the module self-describing at
+the cost of two places to look. `site.json` stays the one source of truth: a machine module
+says *what the machine is*, and membership is a property of the cluster, not of the machine.
+
+The direction of travel makes this the cheaper answer as well. A **`cluster` module** is
+already foreseen (ADR-022d leaves `cluster` as a grouping concept for its own ADR); when it
+exists it owns the register of which machines have been rolled into the cluster, and that
+register is `site.json`'s `hardware.nodes[]` grown up. Putting membership on the machine now
+would be a field to migrate away from later.
 
 ### D3 — `debianhost` supplies the OS lifecycle
 
@@ -196,11 +203,43 @@ The three cluster nodes are then three configs — `tappaas1.json`, `tappaas2.js
 `tappaas3.json` — with the same `.location`, hence the same synthetic `module`, in the same
 Environment.
 
-> **Open (D6a):** how a *dependency* names an instance. The coordinate `<module>:<service>`
-> (GLOSSARY §D) resolves to a module, which is now one-to-many. It is ambiguous only when a
-> Site deploys two instances providing the same service; either `<instance>:<service>` or a
-> rule that an unqualified module name means "any instance of it" would settle it. Not decided
-> here.
+**D6.5 — `node` names an instance.** The `node` field names the Host a module runs on
+(ADR-022c D3). Under D6 that Host is an **instance** of a module, not a module — `node:
+"tappaas2"` points at the instance `config/tappaas2.json`. In something like 99% of
+deployments the two names coincide, because D6.4's default makes them coincide, which is
+exactly why the field has read either way until now. It reads as an instance.
+
+**D6.6 — a dependency names an instance in the caller, not in the coordinate.** The coordinate
+`<module>:<service>` (GLOSSARY §D) resolves to a module, which is now one-to-many. It stays
+that way: the coordinate is not extended with an instance. When a `dependsOn` genuinely has to
+reach one particular instance, **the caller carries a field naming it** — the dependency says
+*which service*, the caller's own config says *which instance of it*. That keeps the
+service graph about services and leaves instance selection where the deployment decision is
+already made.
+
+> **Refine on a real example.** No module needs this today; the rule above is the shape, and
+> the field's name and how it is validated wait for the first actual case rather than being
+> invented ahead of one.
+
+### D7 — One module type per OS, not one that branches on the OS facet
+
+`debianhost` is Debian's. **NixOS does not share it, and Windows certainly does not.** The
+question was whether the `os` facet (022f D7) could select behaviour inside a single
+`machinehost` module; the answer is no. What a machine module *is* — its `install.sh`,
+`update.sh`, `test.sh` — is the OS's lifecycle, and `apt upgrade`, `nixos-rebuild` and Windows
+Update are not three branches of one procedure. A module that tried to be all three would be a
+`case` statement wearing a module's clothes, and every verb inside it would be written twice.
+
+The `os` facet keeps the job it has: it **describes** a machine, and lets a reader ask what is
+running where. It does not dispatch a lifecycle. Selecting the right module for a machine is
+the operator's declaration, the same way it is for anything else.
+
+> **Open (D7a):** whether a machine module can reuse the **`templates:<os>` dependency** that
+> VM modules use — `dependsOn: ["templates:nixos"]` with `imageType: "clone"`, the mechanism
+> that gives a VM its base image. A physical machine is not cloned from a Proxmox template, so
+> the reuse would be of the *OS-hooks* half of `templates` (`services/<os>/*.sh`) rather than
+> the image half. Worth doing if it falls out cleanly; **not in the first iteration** —
+> `debianhost` is built standalone (D3) precisely so that it is small enough to get right.
 
 ## Consequences
 
@@ -235,11 +274,17 @@ numbered migration with a before→after fixture. Order, because each step depen
 
 ## Open questions
 
-- **D2a** — is cluster membership read from `site.json` or a facet on the machine module?
-- **D6a** — how a dependency names one instance of a multi-instance module.
-- **`placementState`** — ADR-012's placement vocabulary was written when a PBS could only be
-  on a cluster node or somewhere else entirely. With a machine module as a Host, `node:<name>`
-  and "consumed" no longer partition the space. Flagged by the operator 2026-09-18 and
-  deliberately **not** decided here.
-- Whether a Windows machine (`os.family: windows`) needs its own module type beside
-  `debianhost`, or whether the OS facet is enough to select behaviour within one.
+Answered 2026-09-18 by the operator, and moved into the decisions: **D2a** (cluster membership
+is read from `site.json`; a future `cluster` module owns that register), **D6a** (a dependency
+names an instance through a field on the caller, not in the coordinate — D6.6), and the
+per-OS question (one module type per OS — D7). What remains:
+
+- **D6.6's field** — its name and validation, deliberately left until a module actually needs
+  to pin one instance of another.
+- **D7a** — whether a machine module can reuse the `templates:<os>` dependency VM modules use.
+  Not in the first iteration.
+- **`placementState`** — ADR-012 v0.9 settled the backup case (`node` \| `shim` \| `external`,
+  §1). The general point the operator made stands and is recorded as **D6.5**: the `node` field
+  names an *instance*, which coincides with a module name in almost every deployment but is not
+  the same thing. Any remaining placement vocabulary follows from that, not from a separate
+  decision here.

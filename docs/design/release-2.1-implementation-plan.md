@@ -346,7 +346,7 @@ the model can express and patch. The two are one piece of work because a backup
 | *(new)* | ADR-012 topology §1.3 verified | 3 | 2 | M | PBS installed and driven on a `kind: machine` host — Erik's setup, on a test machine first |
 | *(new)* | instance vs module name | 3 | 3 | M | **Settled 2026-09-18 by ADR-026 D6**, now implementation: `config/<instance>.json` is the instance, the module comes from `.location`, and a synthetic `module` field replaces every name-parse (including `resolve_base_module_name`, added for #659). Plus the `--instance` argument and its default. **Blocks #665** |
 | #665 | Register cluster nodes as machine modules | 3 | 2 | M | ADR-026 D4 stage 1 — registration only, inert. Stage 2 (node patching behind the module lifecycle) and stage 3 (the cluster install becomes module installs) are separate and high-blast-radius |
-| *(open)* | `placementState` revisit | 4 | 2 | M | Flagged 2026-09-18: with a machine module as a Host, `node` and `external` may no longer partition the space cleanly. Deliberately not decided in ADR-012 v0.9 |
+| *(closed)* | `placementState` revisit | 4 | 2 | M | **Answered 2026-09-18**: ADR-012 v0.9 settles the backup case (`node` \| `shim` \| `external`); the general point is ADR-026 D6.5 — the `node` field names an *instance*, which coincides with a module name in almost every deployment but is not the same thing. No separate decision needed |
 
 #### ADR-012 close-out (original scope)
 
