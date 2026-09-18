@@ -1,17 +1,28 @@
-// compose.test.ts — #567's safety net.
+// compose.test.ts — the composed field schema every reader trusts.
 //
-// The migration moves 55 field definitions out of a global file into the
-// services that own them. What makes that safe is not care, it is this: the
-// COMPOSED view must stay byte-identical to what every reader sees today, at
-// every step. Move a field, run this, and either nothing changed for any of the
-// 41 readers or the test says exactly which field broke.
+// Since #567 a field is defined where it is owned: schemas/module-fields.json
+// holds the generic fields, and each service's fields.json holds its own. The
+// readers — jq, Python and TypeScript alike — see the COMPOSED view. This test
+// asserts what has to stay true of that view as fields keep being added and
+// reworded:
 //
-// It is deliberately an equivalence test against a RECORDED baseline rather
-// than against the live file: comparing the file to itself would pass forever,
-// including after a field was moved and silently dropped.
+//   - no field is defined twice;
+//   - no service-owned field is defined in the global file (#567's rule, for
+//     every field added from now on, not only the ones it moved);
+//   - every field an authored module uses is defined — the loss that matters
+//     is a definition that disappears while something still sets the field;
+//   - the jq and TypeScript composers agree;
+//   - the catalogue, not the filesystem, decides which modules contribute.
+//
+// It used to compare the composed view to a snapshot of module-fields.json
+// taken before #567's move. That guarded the move while it happened; once the
+// move was done every legitimate schema edit turned it red, and because no
+// runner executed it nobody saw 25 of them. The snapshot is retired; these
+// checks have a live purpose.
 
 import { spawnSync } from "child_process";
-import { readFileSync } from "fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "fs";
+import { tmpdir } from "os";
 import { join } from "path";
 import { composeFields } from "../../../../lib/ts/src/compose-fields";
 
@@ -29,54 +40,85 @@ function check(cond: boolean, msg: string): void {
 
 const MODULE_MANAGER = join(__dirname, "..", "..", "..", "..", "..");
 const FOUNDATION = join(MODULE_MANAGER, "..", "..", "..");
+const REPO = join(FOUNDATION, "..", "..");
 
-// The BASELINE, not the live file. Comparing the live file to a view composed
-// partly from itself passes trivially — including after a field was moved and
-// dropped on the way. module-fields.baseline.json is the pre-migration schema,
-// recorded once; it goes away when #567 is finished.
-const live = JSON.parse(
-  readFileSync(join(MODULE_MANAGER, "test", "fixtures", "module-fields.baseline.json"), "utf8"),
-) as { fields: Record<string, unknown> };
-
-const r = composeFields(FOUNDATION);
-const composed = r.schema.fields as Record<string, unknown>;
+// Compose THIS tree. With a site.json present — on any mothership — both
+// composers read the repositories it lists, i.e. the INSTALLED checkout, not
+// the code under test. An empty config dir makes them fall back to this tree's
+// own catalogue, so the test asserts what it ships with.
+const OWN_TREE = mkdtempSync(join(tmpdir(), "compose-own-"));
+const r = composeFields(FOUNDATION, OWN_TREE);
+const composed = r.schema.fields as Record<string, { usedBy?: string[] }>;
 
 // ── the composition is sound ────────────────────────────────────────────
 check(r.findings.length === 0, `no field is defined twice (${r.findings.map((f) => f.field).join(", ") || "none"})`);
 
-// ── and it is COMPLETE: every field a reader can ask for is still there ──
-const liveNames = Object.keys(live.fields).filter((n) => !n.startsWith("_")).sort();
-const composedNames = Object.keys(composed).sort();
-const missing = liveNames.filter((n) => !composedNames.includes(n));
-const extra = composedNames.filter((n) => !liveNames.includes(n));
-check(missing.length === 0, `no field is lost by the move (missing: ${missing.join(", ") || "none"})`);
-check(extra.length === 0, `no field appears from nowhere (extra: ${extra.join(", ") || "none"})`);
-
-// ── and IDENTICAL, key for key. A default or a usedBy that shifts in the
-//    move is exactly the silent breakage this test exists to catch.
-const differing: string[] = [];
-for (const n of liveNames) {
-  if (!(n in composed)) continue;
-  if (JSON.stringify(live.fields[n]) !== JSON.stringify(composed[n])) differing.push(n);
+// ── #567's rule: a field is defined where it is owned ───────────────────
+// A field some service owns (usedBy names services, not "general") must live
+// in that service's fields.json. Defining it globally again is how the global
+// file grows back.
+{
+  const stillGlobal = Object.keys(composed).filter((n) => {
+    const u = composed[n].usedBy ?? [];
+    return u.length > 0 && !u.includes("general") && r.origin[n] === "schemas/module-fields.json";
+  });
+  check(stillGlobal.length === 0, `no service-owned field is defined globally (${stillGlobal.join(", ") || "none"})`);
 }
-check(
-  differing.length === 0,
-  `every definition survives the move unchanged (differing: ${differing.join(", ") || "none"})`,
-);
 
-// ── the tiering claim itself ────────────────────────────────────────────
-// Not decoration: it is what the issue asks for. A field owned by a service
-// must NOT still be defined globally once it has moved, or the global file has
-// not actually shrunk and #567 is unfinished.
-const owned = liveNames.filter((n) => {
-  const u = (live.fields[n] as { usedBy?: string[] }).usedBy ?? [];
-  return u.length > 0 && !u.includes("general");
-});
-const stillGlobal = owned.filter((n) => r.origin[n] === "schemas/module-fields.json");
-console.log(
-  `\n  progress: ${owned.length - stillGlobal.length}/${owned.length} service-owned definitions moved` +
-    `, ${stillGlobal.length} still global`,
-);
+// ── every field an authored module uses is defined ──────────────────────
+// The catalogue lists the modules. A field set at the top level or inside a
+// Pattern-A `config."<module>:<service>"` block must have a definition, or it
+// has no type, no allowed values and no ADR-020 change class — nothing says
+// what changing it costs. The satellite is not a module-fields module: its
+// fields are satellite-fields.json's (ADR-010).
+//
+// KNOWN_UNDEFINED is a list of debts, each with its issue. An entry that is no
+// longer needed — the field got defined, or nothing uses it — FAILS, so an
+// exception cannot outlive its fix.
+const KNOWN_UNDEFINED: Record<string, string> = {
+  connector: "#667 — nextcloud:fileservice declares no fields.json",
+};
+{
+  const catalog = JSON.parse(readFileSync(join(REPO, "src", "module-catalog.json"), "utf8")) as Record<string, unknown>;
+  const undefinedUse: Record<string, string[]> = {};
+  const staleEntries: string[] = [];
+  let checked = 0;
+  for (const section of ["foundationModules", "applicationModules", "proxmoxTemplates", "testModules"]) {
+    for (const e of (catalog[section] as { moduleJson?: string }[] | undefined) ?? []) {
+      if (!e.moduleJson) continue;
+      const path = join(REPO, e.moduleJson);
+      if (!existsSync(path)) { staleEntries.push(e.moduleJson); continue; } // a stale catalogue entry is #463's
+      if (e.moduleJson.includes("/satellite/")) continue;
+      const j = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+      const keys = new Set(Object.keys(j));
+      if (j.config && typeof j.config === "object") {
+        for (const svc of Object.values(j.config as Record<string, unknown>)) {
+          if (svc && typeof svc === "object") Object.keys(svc as object).forEach((k) => keys.add(k));
+        }
+      }
+      for (const k of keys) {
+        if (k.startsWith("_") || k === "config" || k in composed) continue;
+        (undefinedUse[k] ??= []).push(e.moduleJson.split("/").slice(-2, -1)[0]);
+      }
+      checked++;
+    }
+  }
+  const unexplained = Object.keys(undefinedUse).filter((k) => !(k in KNOWN_UNDEFINED));
+  check(
+    checked > 0 && unexplained.length === 0,
+    `every field ${checked} catalogued modules use is defined` +
+      (unexplained.length ? ` — undefined: ${unexplained.map((k) => `${k} (${undefinedUse[k].join(", ")})`).join("; ")}` : ""),
+  );
+  for (const [k, why] of Object.entries(KNOWN_UNDEFINED)) {
+    check(
+      k in undefinedUse && !(k in composed),
+      k in undefinedUse
+        ? `known debt still open: ${k}, used by ${undefinedUse[k].join(", ")} (${why})`
+        : `known debt ${k} is no longer needed — remove it from KNOWN_UNDEFINED (${why})`,
+    );
+  }
+  if (staleEntries.length) console.log(`  note: catalogue entries with no file, skipped (#463): ${staleEntries.join(", ")}`);
+}
 
 // ── the two composers must agree ────────────────────────────────────────
 //
@@ -88,7 +130,7 @@ console.log(
   const composer = join(FOUNDATION, "tappaas-cicd", "scripts", "compose-fields.sh");
   let shellFields: Record<string, unknown> | null = null;
   try {
-    const r = spawnSync(composer, [FOUNDATION], { encoding: "utf8" });
+    const r = spawnSync(composer, [FOUNDATION], { encoding: "utf8", env: { ...process.env, CONFIG_DIR: OWN_TREE } });
     shellFields = r.status === 0 && r.stdout
       ? (JSON.parse(r.stdout) as { fields: Record<string, unknown> }).fields
       : null;
@@ -155,4 +197,5 @@ console.log(
 
 console.log("");
 console.log(`Results: ${passed} passed, ${failed} failed`);
+rmSync(OWN_TREE, { recursive: true, force: true });
 process.exit(failed === 0 ? 0 : 1);
