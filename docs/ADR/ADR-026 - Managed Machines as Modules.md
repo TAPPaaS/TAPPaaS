@@ -3,13 +3,13 @@
 | | |
 |---|---|
 | **Status** | **Proposed** (2026-09-18) |
-| **Version** | 0.4 |
+| **Version** | 0.5 |
 | **Date** | 2026-09-18 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen, @ErikDaniel007 |
 | **Refines** | [ADR-022c](<ADR-022c - Node and Host.md>) (Node, cluster member, Host) · [ADR-022f](<ADR-022f - Kind Values and Operating System.md>) (`kind: machine`, OS facet) · [ADR-022g](<ADR-022g - Management.md>) (`management`) · [ADR-022e](<ADR-022e - Module Scope.md>) (`scope`, D4 multiplicity) |
 | **Related** | [ADR-012](ADR-012-backup-enhancement.md) §1 (the fourth backup topology this enables) · [ADR-010](ADR-010-vps-satellite-reverse-proxy-backup.md) §8 (the satellite as a machine) · [ADR-007d](<ADR-007d - Site.md>) (`site.json hardware.nodes[]`) |
-| **Changelog** | v0.4 (2026-09-18) — D8: a machine becomes a module by `module adopt <fqdn|ip>` (key, facts, module by OS, instance named after the machine, zone from its address) or `module add --pxe` (site-manager's PXE model); `node add` becomes their composition. · v0.3 (2026-09-18) — operator answers folded in: D2a decided (membership from `site.json`), D6.5 (`node` names an instance), D6.6 (a dependency pins an instance via a field on the caller), D7 (one module type per OS; `templates:<os>` reuse deferred). · v0.2 (2026-09-18) — D4 gains stage 3 (the cluster install becomes module installs); D6 settles that an instance name is not a module name — `config/<instance>.json`, module from `.location`, a synthetic `module` field, and the defaults. · v0.1 (2026-09-18) — proposal: every machine TAPPaaS manages is a module of `kind: machine`; `debianhost` supplies the OS lifecycle; cluster nodes and the satellite follow; several instances of one module in one Environment. |
+| **Changelog** | v0.5 (2026-09-18) — `adopt` logs in as `root`; key-only SSH is a separate step, never a side effect; `delete` of a machine unregisters and never wipes; `debianhost` before #665, with a test plan. · v0.4 (2026-09-18) — D8: a machine becomes a module by `module adopt <fqdn|ip>` (key, facts, module by OS, instance named after the machine, zone from its address) or `module add --pxe` (site-manager's PXE model); `node add` becomes their composition. · v0.3 (2026-09-18) — operator answers folded in: D2a decided (membership from `site.json`), D6.5 (`node` names an instance), D6.6 (a dependency pins an instance via a field on the caller), D7 (one module type per OS; `templates:<os>` reuse deferred). · v0.2 (2026-09-18) — D4 gains stage 3 (the cluster install becomes module installs); D6 settles that an instance name is not a module name — `config/<instance>.json`, module from `.location`, a synthetic `module` field, and the defaults. · v0.1 (2026-09-18) — proposal: every machine TAPPaaS manages is a module of `kind: machine`; `debianhost` supplies the OS lifecycle; cluster nodes and the satellite follow; several instances of one module in one Environment. |
 
 A machine TAPPaaS manages is a **module**, not a special case.
 
@@ -253,7 +253,9 @@ from "a cluster node" to "any machine module", which is also what D4 stage 3 nee
 
 1. **Reach.** Resolve the name, then print the mothership's public key with the one command
    that authorises it — on the machine's console, or `ssh-copy-id` from the operator's own
-   laptop — and wait until a key login works (`BatchMode`, no password). `adopt` never asks
+   laptop — and wait until a key login works (`BatchMode`, no password). The login is
+   **`root`**, as on the cluster nodes: the OS lifecycle (`apt`) needs it anyway, and one
+   convention for every machine keeps `cicd-key.sh` (#122) simple. `adopt` never asks
    for or handles a password: it cannot, since the nodes are key-only (#19), and it should
    not, since a password typed into the mothership is a credential the mothership then holds.
 2. **Learn.** Read `/etc/os-release` into the OS facet (`os.family`, `os.id`, ADR-022f D7),
@@ -274,6 +276,15 @@ from "a cluster node" to "any machine module", which is also what D4 stage 3 nee
    `kind: machine`, the OS facet, `zone0`, `management: managed` — and run the module's own
    `install.sh` (for `debianhost`, D3: register and verify). From then on the machine is in
    the sweep like any other module.
+
+What `adopt` does **not** do (operator, 2026-09-18):
+
+- **It changes nothing about how the machine is reached.** Key-only SSH (#19) is a separate,
+  explicit step an operator takes, never a side effect of adopting: a hand-built machine may be
+  someone's only way in by password.
+- **Its inverse removes nothing but TAPPaaS's record.** `module delete` of a machine instance
+  **unregisters** it — the config goes, the machine keeps running, untouched. For a machine,
+  *delete* never means *wipe*.
 
 **D8.2 — `module-manager module add <module> --pxe`: a machine that is bare.** The same
 outcome, reached by installing the OS first. It reuses `site-manager`'s model rather than a
@@ -319,7 +330,10 @@ The field changes are a change to the shape of `config/`, so under ADR-025 D7 ea
 numbered migration with a before→after fixture. Order, because each step depends on the last:
 
 1. `debianhost` module built and tested against a real Debian machine (D3), brought in by
-   `module-manager module adopt` (D8.1) — the first user of the verb.
+   `module-manager module adopt` (D8.1) — the first user of the verb. Test plan:
+   [debianhost-test-plan.md](../design/debianhost-test-plan.md), on stand-in VMs outside
+   TAPPaaS (VMID 990+) on the test site. This comes **before** #665 (operator, 2026-09-18):
+   `adopt` needs nothing from it, and #665 can then register the nodes *through* `adopt`.
 2. ADR-012's fourth topology verified on it (PBS on a non-cluster machine).
 3. The synthetic `module` field landed through the scripts and TypeScript (D6.3), and the
    instance argument accepted (D6.4) — a prerequisite for registering three cluster nodes.

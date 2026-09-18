@@ -1,0 +1,103 @@
+# `debianhost` and `module adopt` — test plan
+
+Primary audience: whoever builds and verifies ADR-026 D3 (`debianhost`) and D8 (`module adopt`,
+`module add --pxe`). Test site: **hrossen**. Nothing here runs on makerfloss.
+
+## Decisions this plan rests on (operator, 2026-09-18)
+
+- **Order:** `debianhost` + `module adopt` come **before** #665. Phases 1–4 need nothing from
+  #665, and #665 can then register the cluster nodes *through* `adopt`.
+- **`adopt` logs in as `root`** with the mothership's key — the same as the cluster nodes, and
+  what `apt` needs anyway.
+- **Key-only SSH (#19) is a separate, explicit step**, never a side effect of `adopt`: a
+  hand-built machine may be someone's only way in by password.
+
+## Test bed
+
+| VM | VMID | Made by | Stands in for |
+|---|---|---|---|
+| `dh-test1` | 990 | `qm create` over SSH on a node; Debian 13 cloud image; cloud-init sets hostname `dh-test1` and a static address in `mgmt` (10.0.0.0/24) | a machine that already runs (phases 1–4, 6) |
+| `dh-test2` | 991 | `qm create` with network boot first and an empty disk | a bare machine (phase 5) |
+
+- VMIDs from the test range `900–999` (`src/module-catalog.json` `vmidConventions`); hrossen uses
+  none of it.
+- Neither VM gets a `config/*.json` when it is created: to TAPPaaS they are machines it has
+  never heard of. 1 core, 1–2 GB RAM, 10 GB disk.
+- To Proxmox they are VMs; for the test they are machines. `adopt` only speaks SSH to them, and
+  the plan checks that nothing reaches for `qm` on them.
+- Teardown is `qm destroy` plus removing the config. Every phase can start over from a fresh VM.
+
+## Phase 1 — `module adopt`, happy path
+
+`module-manager module adopt 10.0.0.90`, twice:
+
+1. with the mothership's key **pre-seeded** by cloud-init (as if the operator ran the printed command);
+2. with **no key** — `adopt` must print the one command that authorises it, and wait.
+
+Expected afterwards:
+
+- `config/dh-test1.json`, named after the machine's hostname (ADR-026 D8.1 step 4);
+- `.location` → the `debianhost` module, so `module_of dh-test1` = `debianhost` (D6.3);
+- `kind: machine`, `os: {family: linux, id: debian}` (ADR-022f D7), `zone0: mgmt` (from the
+  address), `management: managed`;
+- `debianhost`'s `install.sh` ran and verified;
+- the instance appears in `module-manager module list`, **with its module shown** — an
+  instance named after a machine must be recognisable as a `debianhost`.
+
+## Phase 2 — `module adopt`, refusals
+
+| Case | Expected |
+|---|---|
+| `config/dh-test1.json` already exists | refused, naming the conflict; `--instance dh-test1b` succeeds |
+| the machine does not authorise the key | prints the command, waits, stops on timeout; **nothing written** |
+| an Ubuntu VM (`os.id: ubuntu`) | refused: no machine module for that OS (ADR-026 D7) — no near match |
+| an address in no zone | refused, naming the choice (off-site Location, or outside the Administrative Domain); `--zone` overrides. **Unit-tested** — an unreachable VM proves nothing live |
+| a cluster node's address | refused, or directed to #665 — never adopted as a plain `debianhost` by accident |
+| run twice | the second run changes nothing |
+
+## Phase 3 — lifecycle
+
+- **`update`** — install an older version of a package first, so `apt upgrade` has real work.
+  It is upgraded, under the sweep's rules.
+- **Reboot consent** — with `/var/run/reboot-required` present, the reboot is **deferred**
+  without `rebootOk`, and happens only with `rebootOk` plus `--allow-disruption`: the rule a
+  cluster node follows.
+- **`test`** — reachable, patched, no pending reboot, disk and time sane. Each check is proven by
+  **breaking it on purpose**: fill the disk, stop time sync, leave a reboot pending.
+- **The nightly** — after a `site-manager update`, `dh-test1` is in `last-update-result.json`
+  like any other module.
+- **The mothership key (#122)** — `cicd-key.sh status` and `rotate` cover adopted machines.
+  Today they know only nodes and VMs; this phase catches it if that is not closed first.
+- **Key-only SSH (#19), as its own step** — applied deliberately, then: password SSH refused,
+  key login works, and the console still takes the root password.
+
+## Phase 4 — removal is safe
+
+`module delete dh-test1` **unregisters only**: the config goes, the machine keeps running and
+is untouched. For a machine, *delete* must never mean *wipe*. ADR-026 states this before the
+verb is built; this phase proves it.
+
+## Phase 5 — PXE: create, then adopt
+
+`module add debianhost --pxe` with `dh-test2` booting from the network: the node-provisioner PXE
+trap serves a **Debian netboot and preseed that already carry the key** (ADR-026 D8a — today the
+trap installs only Proxmox). After the install it joins phase 1 at step 2, and phases 1–4 are
+rerun against this machine. The trap's time limit is tested too: a VM that never network-boots
+must not leave the trap armed.
+
+## Phase 6 — backup on a machine (ADR-012 §1.3)
+
+Install PBS on `dh-test1` — the setup Erik runs, and ADR-012's fourth topology. This is also
+the **first live test of #602's machine-hosted case**: with the backup module's placement
+empty, resolution must adopt `node:dh-test1` and install nothing on a cluster node. Until now
+that case was unit-tested only.
+
+## What each phase proves
+
+| Phase | Proves |
+|---|---|
+| 1–2 | `adopt` makes a module of a machine, and refuses everything it should (ADR-026 D8.1) |
+| 3 | `debianhost` gives a machine the OS lifecycle a cluster node has (D3) |
+| 4 | removing a machine from TAPPaaS never harms it |
+| 5 | `add --pxe` = create + adopt (D8.2) |
+| 6 | ADR-012 §1.3 works, and #602 holds on a machine |

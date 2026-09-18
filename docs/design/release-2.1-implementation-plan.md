@@ -358,11 +358,11 @@ the model can express and patch. The two are one piece of work because a backup
 **Gate met 2026-09-18: ADR-012 v1.0 accepted** (operator, with the four design decisions below). The `docs(ADR-012)` issues are settled in the ADR; each row now says what is left to *build*.
 
 **Order (operator, 2026-09-18).** Machines-as-modules first, because it simplifies most of the backup rows — `node` becomes a pointer to a machine instance, and so does the PBS's DNS alias:
-1. ADR-026 D6.3/D6.4 — instance vs module name (the synthetic `module` field, `--instance`). Blocks #665.
-2. #665 stage 1 — tappaas1..3 registered as `kind: machine` instances (inert).
-3. #612 — `vmname` → instance name, DNS alias of the `node` Host.
-4. #600 — `placementState: node`, `.node` naming the machine instance (migration).
-5. `debianhost` + `module adopt` (ADR-026 D3/D8.1) → topology §1.3 verified → #603, #601.
+1. ✅ ADR-026 D6.3/D6.4 — instance vs module name (`module_of`, `--instance`). Done 2026-09-18.
+2. `debianhost` + `module adopt` (ADR-026 D3/D8.1) — **moved ahead of #665** (operator, 2026-09-18): adopt needs nothing from #665, and #665 can then register the nodes through it. Test plan: [debianhost-test-plan.md](debianhost-test-plan.md), on stand-in VMs (VMID 990+) on hrossen; phase 6 verifies topology §1.3 and gives #602's machine case its first live test.
+3. #665 stage 1 — tappaas1..3 registered as `kind: machine` instances, through `adopt`.
+4. #612 — `vmname` → instance name, DNS alias of the `node` Host.
+5. #600 — `placementState: node`, `.node` naming the machine instance (migration); then #603, #601.
 6. #607, #609, #457, #554, #456 as they fit. #602 (data safety) is done on `wave1/g1.2-backup`, independent of the rest.
 
 
