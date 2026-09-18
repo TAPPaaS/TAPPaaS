@@ -246,6 +246,73 @@ pbs_legacy_pbs_node() {
     get_node_hostname 0
 }
 
+# ── A PBS that already serves this Site (§2.2 rule 3, #602) ──────────
+#
+# An empty placementState must never be a licence to provision over a PBS that
+# already runs. On a PVE node the pool probe (`pvesm status`) is one way to see
+# a datastore; on any other Host (§1.3) it sees nothing — which is how a second
+# PBS would be installed beside the real one. So before any discovery, ask the
+# candidate Hosts themselves.
+
+# Does <host> ($1, in <zone> $2) run a PBS holding datastore <name> ($3)?
+# Asked over the Host's own key with proxmox-backup-manager — authoritative for
+# "holds the datastore", which a bare :8007 answer is not. Echoes
+#   yes <hostname> | no | unreachable
+# (no = reachable, but no PBS or not that datastore). <hostname> is the Host's
+# OWN short name, because the name it was reached by may be an alias:
+# backup.mgmt.internal is typically a DNS alias for the node PBS runs on, and
+# recording "backup" would name a Host that does not exist.
+pbs_probe_serving() {
+    local host="$1" zone="${2:-mgmt}" store="$3" out rc name
+    out="$(ssh -n -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+        "root@${host}.${zone}.internal" \
+        "command -v proxmox-backup-manager >/dev/null 2>&1 || exit 3; hostname -s; proxmox-backup-manager datastore list --output-format json" 2>/dev/null)"
+    rc=$?
+    case ${rc} in
+        0) name="$(head -n1 <<<"${out}")"
+           tail -n +2 <<<"${out}" | jq -e --arg s "${store}" 'any(.[]?; .name == $s)' >/dev/null 2>&1 \
+               && echo "yes ${name:-${host}}" || echo no ;;
+        3) echo no ;;
+        *) echo unreachable ;;
+    esac
+}
+
+# Does anything answer as a PBS web service on https://<name>:8007? Used only to
+# tell "a PBS we cannot reach by key" from "no PBS at all". Echoes yes | no.
+pbs_port_answers() {
+    local code
+    code="$(curl -sk -o /dev/null -m 10 -w '%{http_code}' "https://$1:8007/" 2>/dev/null || true)"
+    [[ -n "${code}" && "${code}" != "000" ]] && echo yes || echo no
+}
+
+# The Host already serving this Site's datastore, if any. Candidates, in order:
+# the `node` Host (the operator's constraint / the recorded Host), the host
+# behind pbsUrl, then every cluster member. Echoes ONE line:
+#   <host>                a managed Host holds the datastore → adopt it
+#   unmanaged <pbsUrl>    pbsUrl answers as a PBS but no Host we manage holds it
+#                         — that is `external`, which must be forced (rule 1)
+# rc 1 when nothing serves (discovery may proceed).
+# Args: <constraint-node|""> <zone> [fallback-node]
+pbs_find_serving_pbs() {
+    local constraint="$1" zone="${2:-mgmt}" fallback="${3:-}" store url urlhost seen=" " h
+    store="$(jq -r '.pbsStorageName // "tappaas_backup"' "$(_pbs_backup_json)" 2>/dev/null || echo tappaas_backup)"
+    url="$(pbs_pbs_url)"
+    # pbsUrl is a DNS name like backup.mgmt.internal: its first label is the Host
+    # when it lives in this zone; anything else is not a Host we can name.
+    urlhost=""
+    [[ "${url}" == *".${zone}.internal" ]] && urlhost="${url%%.*}"
+    local ans
+    while IFS= read -r h; do
+        [[ -n "${h}" && "${seen}" != *" ${h} "* ]] || continue
+        seen+="${h} "
+        ans="$(pbs_probe_serving "${h}" "${zone}" "${store}")"
+        # The Host's own name, not the alias it was reached by.
+        [[ "${ans}" == yes\ * ]] && { printf '%s\n' "${ans#yes }"; return 0; }
+    done < <(printf '%s\n' "${constraint}" "${urlhost}"; pbs_cluster_nodes "${fallback:-$(get_node_hostname 0)}" "${zone}")
+    [[ "$(pbs_port_answers "${url}")" == yes ]] && { printf 'unmanaged %s\n' "${url}"; return 0; }
+    return 1
+}
+
 # Emit "<state>[ <storage>]" — no trailing space when there is no storage, so
 # the line is exactly what a caller's `read -r MODE STORAGE` expects either way.
 _pbs_emit_state() {
@@ -257,6 +324,8 @@ _pbs_emit_state() {
 #   "node:<name> <storage>"  → realize/keep PBS on <name>'s <storage>
 #   "shim"                   → no datastore anywhere
 #   "external"               → consume the PBS at .pbsUrl; provision nothing
+#   "unmanaged <url>"        → a PBS already answers at <url> on a host this Site
+#                              does not manage: stop — external is forced, not inferred
 # Args: <current-state> <constraint-node|""> <zone> [fallback-node]
 pbs_resolve_placement_state() {
     local state="$1" constraint="$2" zone="${3:-mgmt}" fallback="${4:-}" pinned store node
@@ -271,8 +340,20 @@ pbs_resolve_placement_state() {
         return 0
     fi
 
-    # 3. empty or shim → derive. A .node constraint restricts discovery to that
-    #    ONE node (§2.1); unset searches the whole cluster.
+    # 3. empty → first adopt a PBS that already serves this Site (#602). Never
+    #    provision over one: an unmanaged one stops resolution ("unmanaged
+    #    <url>" — force external, rule 1).
+    local serving
+    if [[ -z "${state}" ]] && serving="$(pbs_find_serving_pbs "${constraint}" "${zone}" "${fallback}")"; then
+        if [[ "${serving}" == unmanaged\ * ]]; then printf '%s
+' "${serving}"; return 0; fi
+        store="$(pbs_probe_tankc "${serving}" "${zone}")"
+        _pbs_emit_state "node:${serving}" "${store}"
+        return 0
+    fi
+
+    # 4. still empty (nothing serves) or shim → derive. A .node constraint
+    #    restricts discovery to that ONE node (§2.1); unset searches the cluster.
     if [[ -n "${constraint}" ]]; then
         store="$(pbs_probe_tankc "${constraint}" "${zone}")"
         [[ -n "${store}" ]] && { _pbs_emit_state "node:${constraint}" "${store}"; return 0; }

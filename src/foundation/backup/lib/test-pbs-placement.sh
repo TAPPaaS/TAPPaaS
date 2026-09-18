@@ -97,6 +97,20 @@ ck "state: node:<name> read"     "node:tappaas3"         "$(pbs_placement_state 
 declare -A STUB_TANKC=()
 pbs_probe_tankc()   { printf '%s\n' "${STUB_TANKC[$1]:-}"; }
 pbs_cluster_nodes() { printf 'tappaas1\ntappaas2\ntappaas3\n'; }
+# #602: which Hosts already serve the datastore, and whether pbsUrl answers.
+# Default: nothing serves, nothing answers — the cases below that predate #602
+# keep exactly the meaning they had.
+declare -A STUB_SERVING=() STUB_REALNAME=()
+PROBED=""
+# A serving Host answers with its OWN name, which differs from the probed one
+# when that is an alias (STUB_REALNAME).
+pbs_probe_serving() {
+    PROBED+="$1 "
+    if [[ "${STUB_SERVING[$1]:-no}" == yes ]]; then printf 'yes %s\n' "${STUB_REALNAME[$1]:-$1}"
+    else printf '%s\n' "${STUB_SERVING[$1]:-no}"; fi
+}
+STUB_PORT=no
+pbs_port_answers()  { printf '%s\n' "${STUB_PORT}"; }
 
 ck "resolve: external is sticky"   "external" "$(pbs_resolve_placement_state external '' mgmt)"
 ck "resolve: external ignores a node constraint" \
@@ -123,6 +137,54 @@ ck "resolve: nothing anywhere → shim"        "shim" "$(pbs_resolve_placement_s
 ck "resolve: shim stays shim without storage" "shim" "$(pbs_resolve_placement_state shim '' mgmt)"
 ck "resolve: node:<name> kept even with no storage (storage empty)" \
    "node:tappaas3" "$(pbs_resolve_placement_state 'node:tappaas3' '' mgmt)"
+
+# ── #602: an empty state never provisions over a PBS that already serves ──
+# The reported case: PBS runs on `backup`, a machine that is not a cluster
+# member; a tankc pool exists on tappaas3. Discovery alone would pick tappaas3
+# and install a SECOND PBS there.
+PBS_PLACEMENT_CONFIG_DIR="${TMP}"
+echo '{"pbsStorageName":"tappaas_backup","pbsUrl":"backup.mgmt.internal"}' > "${TMP}/backup.json"
+STUB_TANKC=([tappaas3]=tankc1)
+
+STUB_SERVING=([backup]=yes)
+ck "#602: empty + PBS serving on a non-cluster machine → adopted, not discovered" \
+   "node:backup" "$(pbs_resolve_placement_state '' backup mgmt)"
+ck "#602: …found through pbsUrl's host even with no node constraint" \
+   "node:backup" "$(pbs_resolve_placement_state '' '' mgmt)"
+
+STUB_SERVING=([tappaas2]=yes)
+ck "#602: empty + PBS serving on a cluster node → that node, with its pool" \
+   "node:tappaas2" "$(pbs_resolve_placement_state '' '' mgmt)"
+STUB_TANKC=([tappaas2]=tankc2 [tappaas3]=tankc1)
+ck "#602: …and its pool, not the first pool in cluster order" \
+   "node:tappaas2 tankc2" "$(pbs_resolve_placement_state '' '' mgmt)"
+
+# The makerfloss case: pbsUrl's host `backup` is a DNS alias for tappaas3, which
+# runs the PBS. It must be recorded as tappaas3 — "backup" is not a Host, and as a
+# non-member it would send install.sh down the adopted-machine path.
+STUB_SERVING=([backup]=yes [tappaas3]=yes); STUB_REALNAME=([backup]=tappaas3); STUB_TANKC=([tappaas3]=tankc1)
+ck "#602: an alias (pbsUrl → backup) resolves to the Host's own name" \
+   "node:tappaas3 tankc1" "$(pbs_resolve_placement_state '' '' mgmt)"
+STUB_REALNAME=()
+
+STUB_SERVING=(); STUB_PORT=yes; STUB_TANKC=([tappaas3]=tankc1)
+ck "#602: pbsUrl answers but no managed Host holds the datastore → unmanaged, stop" \
+   "unmanaged backup.mgmt.internal" "$(pbs_resolve_placement_state '' '' mgmt)"
+
+STUB_SERVING=(); STUB_PORT=no
+ck "#602: nothing serves anywhere → discovery as before" \
+   "node:tappaas3 tankc1" "$(pbs_resolve_placement_state '' '' mgmt)"
+
+STUB_SERVING=([tappaas2]=yes); PROBED=""
+ck "#602: a concrete state is never re-probed for a serving PBS" \
+   "node:tappaas3 tankc1" "$(pbs_resolve_placement_state 'node:tappaas3' '' mgmt)"
+pbs_resolve_placement_state 'node:tappaas3' '' mgmt >/dev/null
+ck "#602: …not even one probe" "" "${PROBED}"
+STUB_SERVING=([tappaas2]=yes)
+ck "#602: shim is not adopted — it re-derives by discovery (rule 4)" \
+   "node:tappaas3 tankc1" "$(pbs_resolve_placement_state shim '' mgmt)"
+
+STUB_SERVING=(); STUB_PORT=no; STUB_TANKC=()
 
 # ── placement-state write/read roundtrip + predicates ────────────────
 PBS_PLACEMENT_CONFIG_DIR="${TMP}"

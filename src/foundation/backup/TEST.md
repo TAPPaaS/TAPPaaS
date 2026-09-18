@@ -31,8 +31,13 @@
 
 ## ADR-012 unit tests (fast; no cluster)
 Aggregated by `./test.sh` — 229 asserts across eleven pure-helper suites:
-- `lib/test-pbs-placement.sh` (44) — the full state-resolution matrix (empty /
-  `shim` / `node:<name>` / `external` × forced × storage found or not), `pbsUrl`
+- `lib/test-pbs-placement.sh` (63) — the full state-resolution matrix (empty /
+  `shim` / `node:<name>` / `external` × forced × storage found or not); #602: an
+  empty state adopts a PBS already serving — on a machine that is not a cluster
+  member, found through `pbsUrl` (an alias such as `backup` is recorded as the Host's
+  own name, e.g. `tappaas3`), or on a cluster node with its own pool — ahead of
+  any discovery, stops as `unmanaged` when only an unmanaged host answers, and never
+  probes a concrete state; `pbsUrl`
   defaulting, `tankc` selection and exact-storage probing from `pvesm status`,
   node-list parse, and the state write/read round-trip (including that `.node`,
   the operator's discovery constraint, is never overwritten).

@@ -124,7 +124,30 @@ case "${MODE}" in
     info "${GN}TAPPaaS backup external placement recorded.${CL}"
     exit 0
     ;;
+  unmanaged)
+    # A PBS already answers at pbsUrl, but no Host this Site manages holds the
+    # datastore (§2.2 rule 3, #602). Installing one here would be a second PBS
+    # beside it. Using someone else's PBS is `external`, and that is forced by
+    # the operator, never inferred.
+    error "A PBS already answers at ${STORAGE} on a host this Site does not manage — not installing a second one (ADR-012 §2.2, #602)."
+    error "  To back up to it, force external:"
+    error "    module-manager module modify backup --set placementState=external --set pbsUrl=${STORAGE}"
+    exit 1
+    ;;
   node:*)
+    # An adopted PBS on a Host that is not a cluster member (§1.3): discovery
+    # only ever yields cluster members, so a node: result for anything else is
+    # the serving PBS found by §2.2 rule 3. Record it and provision NOTHING —
+    # the apt/ZFS steps below are for a Proxmox node, and its datastore already
+    # exists. Its own update path is #603.
+    if ! pbs_node_is_cluster_member "${NODE}" "${ZONE}"; then
+      pbs_write_placement_state "${MODE}" "${STORAGE}"
+      info "${BOLD}Adopted the PBS already serving on ${BGN}${NODE}${CL}${BOLD} (not a cluster member) — its datastore is left as it is; nothing provisioned.${CL}"
+      pbs_client_reconcile "${ZONE}" "${IMAGE_LOCATION}" \
+        || warn "One or more nodes could not be reconciled for proxmox-backup-client (see above)"
+      info "${GN}TAPPaaS backup placement recorded.${CL}"
+      exit 0
+    fi
     [[ -n "${STORAGE}" ]] || die "Placement resolved to ${MODE} but no active storage pool was found on ${NODE}"
     info "${BOLD}Creating TAPPaaS PBS on node ${BGN}${NODE}${CL}${BOLD}, storage ${BGN}${STORAGE}${CL}${BOLD}.${CL}"
     pbs_write_placement_state "${MODE}" "${STORAGE}"

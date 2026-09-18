@@ -62,7 +62,8 @@ The Backup capability is realized by Proxmox Backup Server installed **natively 
 cluster node** — via apt on the Proxmox OS, not as a VM, because the datastore needs
 direct access to a `tankc` ZFS pool ([DESIGN.md](./DESIGN.md) weighs the four
 deployment options). Where it lands is not hardcoded: the install resolves it and
-records the answer, and a site with no suitable pool still installs, as a shim.
+records the answer — adopting a PBS that already serves the site rather than installing a
+second one beside it (#602) — and a site with no suitable pool still installs, as a shim.
 
 What it offers modules is two capabilities; what it does with other PBS instances is
 a separate set of operator-registered relationships. Both are detailed under

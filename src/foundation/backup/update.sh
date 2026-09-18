@@ -101,9 +101,21 @@ fi
 # update, so a shim promotes in place the moment a tankc pool appears — and a
 # legacy install is backfilled to node:<name> without a promotion-reinstall.
 if [[ -z "${STATE}" ]]; then
-    # Pre-ADR-012 install: a real local PBS with no marker. Name the node it
+    # Pre-ADR-012 install: a real local PBS with no marker. Name the Host it
     # actually runs on and record it — no discovery, no move, no reinstall.
-    PNODE="$(pbs_legacy_pbs_node "${ZONE}")"
+    # Ask the Hosts themselves first (§2.2 rule 3, #602): the legacy guess below
+    # ends at "the first mgmt node", which is wrong for a PBS on a machine that
+    # is not a cluster member (§1.3).
+    if SERVING="$(pbs_find_serving_pbs "$(get_config_value 'node' '')" "${ZONE}" "$(get_node_hostname 0)")"; then
+        if [[ "${SERVING}" == unmanaged\ * ]]; then
+            error "A PBS answers at ${SERVING#unmanaged } but no Host this Site manages holds the datastore — not recording a placement (ADR-012 §2.2, #602)."
+            error "  If that is the PBS to use: module-manager module modify backup --set placementState=external --set pbsUrl=${SERVING#unmanaged }"
+            exit 1
+        fi
+        PNODE="${SERVING}"
+    else
+        PNODE="$(pbs_legacy_pbs_node "${ZONE}")"
+    fi
     info "No placement state recorded — backfilling to ${BGN}node:${PNODE}${CL}; the datastore is left where it is."
     pbs_write_placement_state "node:${PNODE}"
     STATE="node:${PNODE}"
