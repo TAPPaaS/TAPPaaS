@@ -171,8 +171,12 @@ distribute_cicd_key() {
   info "Authorising cicd's key on cluster node root accounts..."
   while read -r node; do
     [[ -n "$node" ]] || continue
+    # REPLACE, not append (#122): drop any other tappaas-cicd key first, so a
+    # reinstalled mothership does not leave its predecessor with root on every
+    # node. Edit the real file — /root/.ssh/authorized_keys is a symlink into
+    # /etc/pve, and renaming over the link would un-share this node's keys.
     if ssh -n "${CICD_SSH_OPTS[@]}" "root@${node}.mgmt.internal" \
-         "mkdir -p /root/.ssh && touch /root/.ssh/authorized_keys && chmod 700 /root/.ssh && chmod 600 /root/.ssh/authorized_keys && grep -qxF '${pub}' /root/.ssh/authorized_keys || echo '${pub}' >> /root/.ssh/authorized_keys" 2>/dev/null; then
+         "mkdir -p /root/.ssh && chmod 700 /root/.ssh && touch /root/.ssh/authorized_keys && f=\$(readlink -f /root/.ssh/authorized_keys) && { grep -v ' tappaas-cicd\$' \"\$f\" || true; echo '${pub}'; } > \"\$f.tappaas-new\" && mv \"\$f.tappaas-new\" \"\$f\"" 2>/dev/null; then
       info "  ${node}: cicd key authorised"
     else
       warn "  ${node}: could not authorise cicd key (install may prompt for its root password)"

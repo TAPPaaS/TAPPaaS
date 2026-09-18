@@ -20,6 +20,7 @@ configures every other module in the system.
 | Unattended node adding (PXE) | mothership CLI | `site-manager node add <name> --pxe` (netboot assets staged at install) |
 | Admin VPN termination on OPNsense | anywhere (WireGuard) | set up at install; enrol devices per [ADMIN-VPN.md](./ADMIN-VPN.md) |
 | Module store registration | mothership CLI | `repository.sh add <repo>` for community module stores |
+| The mothership's SSH key | mothership CLI | `cicd-key.sh status` (what it reaches, stale keys left behind) · `rotate` (new key, then revoke the old one everywhere) · `recover` (after a reinstall: install the new key on every VM through its guest agent) — #122 |
 
 ## Architecture
 

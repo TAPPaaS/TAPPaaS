@@ -479,6 +479,25 @@ Then, on the rebuilt mothership, in this order:
    the file capture usually is newer, and it is the site's source of truth.
 3. `site-manager update` to re-converge the estate.
 
+**Reinstalled instead of restored?** Then the mothership has a **new SSH key**,
+and nothing trusts it yet: the nodes are key-only (#19), and each VM received
+the old key once, through cloud-init, when it was created. Before step 3:
+
+1. Put the new key on the nodes — in any node's web-GUI *Shell* (the file is
+   cluster-wide, so once is enough):
+   ```bash
+   echo '<contents of ~tappaas/.ssh/id_ed25519.pub on the new mothership>' >> /etc/pve/priv/authorized_keys
+   ```
+2. On the mothership, **`cicd-key.sh recover`**. It reaches each VM through its
+   QEMU guest agent from the nodes — no SSH to the VM needed — installs the new
+   key, and removes every older mothership key, on the VMs and the nodes. A VM
+   whose agent does not answer, and a Windows VM, are named for a manual fix.
+   `cicd-key.sh recover --dry-run` shows the list first.
+
+If the old key may have been **exposed** — a leaked backup, a lost disk — run
+`cicd-key.sh rotate` instead, while it still works: it adds a new key
+everywhere, proves it, switches, and only then revokes the old one.
+
 ### 5.3 What the capture does *not* include
 
 `/home/tappaas/config` and `/etc/secrets` are captured. Two credential files sit
