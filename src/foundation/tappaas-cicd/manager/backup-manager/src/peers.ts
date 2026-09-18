@@ -78,6 +78,8 @@ export interface PeerSpec {
   groupFilter?: string; // pull: replicate only part of the source
   authId?: string; // remote: the login they pull with
   propagate?: boolean; // remote: let the grant reach child namespaces (default no)
+  // Where the peer physically is (#609) — the evidence its copy is off-site.
+  physicalLocation?: { country: string; city?: string; facility?: string };
   retention?: Record<string, number>;
 }
 
@@ -91,6 +93,7 @@ export function buildPeerConfig(
   siteName?: string,
 ): Record<string, unknown> {
   const ns = spec.namespace ?? defaultNamespace(kind, spec.name, siteName);
+  const place = spec.physicalLocation ? { physicalLocation: spec.physicalLocation } : {};
   if (kind === "pull") {
     return {
       name: spec.name,
@@ -105,6 +108,7 @@ export function buildPeerConfig(
       readAuthId: "", // prompted at onboarding, never stored
       groupFilter: spec.groupFilter ?? "",
       retention: spec.retention ?? { keepLast: 4, keepDaily: 14, keepWeekly: 8, keepMonthly: 12 },
+      ...place,
     };
   }
   if (kind === "receive") {
@@ -114,6 +118,7 @@ export function buildPeerConfig(
       namespace: ns,
       encryptionRequired: true,
       retention: spec.retention ?? { keepDaily: 7, keepWeekly: 4, keepMonthly: 3 },
+      ...place,
     };
   }
   // remote: they pull OUR backups. No namespace is created on our datastore —
@@ -128,6 +133,7 @@ export function buildPeerConfig(
     // namespace also exposes fs/ (our config and secrets capture) and every
     // other peer's data.
     propagate: spec.propagate ?? false,
+    ...place,
   };
 }
 

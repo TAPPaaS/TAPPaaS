@@ -85,7 +85,8 @@ expired hold is removed by the next sweep, which then pulls again.
 `site modify` editable fields (scalar, site-wide): `--displayName`, `--owner`,
 `--email`, `--automaticReboot`, `--snapshotRetention`, `--backupTarget`,
 `--backupOffsite`, `--locationCountry`, `--locationTimezone`,
-`--locationLocale`, `--networkIsp`, `--networkPublicIp`. The discovery-derived
+`--locationLocale`, `--locationCity`, `--locationFacility` (#609: what an off-site copy is compared
+with), `--networkIsp`, `--networkPublicIp`. The discovery-derived
 `hardware.nodes[]` (use `node …`) and the `repositories`/`environments`/
 `organizations` lists (own CRUD / own managers) are **not** modifiable here.
 

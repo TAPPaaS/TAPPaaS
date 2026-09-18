@@ -60,9 +60,8 @@ None for a normal local install. Optional follow-ups:
   `backup-manage.sh use-external <url> [--datastore <ds>]`. It registers that PBS as
   this module's backup storage, creates no datastore and never touches what is
   already stored there. **Permanent** — it is refused from a live local PBS.
-- **Sites with no local PBS:** either the `external` route above (clients push
-  straight to that PBS), or a push target:
-  `backup-manager peer add push <name> --host <their-pbs> --auth-id <us>@pbs --make-default`.
+- **Sites with no local PBS:** the `external` route above — clients push straight to
+  that PBS. There is no push *peer*: a TAPPaaS PBS never pushes to another (ADR-012 §1.4.1).
 - **File-level capture** for a module that wants named paths rather than the whole
   guest: declare `backup:filesystem` + `backup.filesystemPaths` on it (NixOS guests).
 - **Export the encryption key** — mandatory, and easy to postpone until it is too

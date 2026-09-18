@@ -56,6 +56,7 @@
     "mac1",
     "zone1",
     "address",
+    "physicalLocation",
     "trunks1",
     "firewallType",
     "aliasType",
@@ -400,6 +401,21 @@
       "default": "mgmt",
       "format": "^[a-z][a-zA-Z0-9]*$",
       "note": "Only used if bridge1 is defined. Hyphens are NOT allowed — use underscores."
+    },
+    "physicalLocation": {
+      "description": "Where a machine physically is (#609, ADR-012 §1.5): the same shape as site.json's `location` — ISO country, optional city and facility. Recorded on an off-site machine such as a satellite, so the separation its backup copy depends on can be checked (`backup-manager validate`). Not `moduleSource`, which is where the module's code lives.",
+      "type": "object",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "properties": {
+        "country": { "type": "string", "pattern": "^[A-Za-z]{2}$" },
+        "city": { "type": "string" },
+        "facility": { "type": "string" }
+      },
+      "example": { "country": "FI", "city": "Helsinki" },
+      "note": "Recorded, not enforced: nothing checks it against the machine itself."
     },
     "address": {
       "description": "How the mothership reaches a machine (kind: machine, ADR-026 D8.1): an IP address or FQDN, logged into as root with the mothership's key. Written by `module adopt`. A VM or LXC is reached by its name and zone instead and has no `address`.",

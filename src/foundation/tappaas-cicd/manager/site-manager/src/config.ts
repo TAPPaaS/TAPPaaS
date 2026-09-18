@@ -66,6 +66,8 @@ export function loadSite(siteFile: string): Site {
       country: asString(loc.country),
       timezone: asString(loc.timezone),
       locale: typeof loc.locale === "string" ? loc.locale : undefined,
+      city: typeof loc.city === "string" ? loc.city : undefined,
+      facility: typeof loc.facility === "string" ? loc.facility : undefined,
     },
     network: (raw.network ?? undefined) as Site["network"],
     hardware: { nodes },

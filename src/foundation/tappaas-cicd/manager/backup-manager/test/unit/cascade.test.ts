@@ -20,9 +20,11 @@ import {
   resolvePolicy,
 } from "../../src/config";
 import { retentionValid, validate } from "../../src/validate";
+import { asPlace, offsiteTargets, separation } from "../../src/offsite";
 import { applyPlan, computePlan, jobBucketIndex } from "../../src/reconcile";
 import { restoreList, restoreRun } from "../../src/restore";
 import {
+  buildPeerConfig,
   findPeer,
   findPeers,
   normalizeKind,
@@ -668,6 +670,40 @@ check(!retentionValid("7") && !retentionValid("7x") && !retentionValid(""), "inv
   eq(peers.find((p) => p.role === "receive")?.name ?? "", "nas", "peer name stripped of prefix");
   // Peers are NOT counted as modules.
   eq(listModules(tmp).length, 0, "peers/backup are not deployed modules");
+}
+
+// ── #609: an off-site copy is recorded, not asserted ─────────────────
+{
+  const DK = { country: "DK", city: "Aarhus" };
+  eq(separation(DK, null), "unrecorded", "no physicalLocation → unrecorded");
+  eq(separation(DK, { country: "DE" }), "separate", "another country → separate");
+  eq(separation(DK, { country: "dk", city: "Odense" }), "separate", "same country, other city → separate (case-insensitive)");
+  eq(separation({ country: "DK" }, { country: "DK", city: "Odense" }), "unproven", "the Site records no city → unproven");
+  eq(separation(DK, { country: "DK", city: "aarhus" }), "unproven", "same city, no facility → unproven");
+  eq(separation({ ...DK, facility: "A" }, { ...DK, facility: "B" }), "separate", "same city, other facility → separate");
+  eq(separation({ ...DK, facility: "A" }, { ...DK, facility: "a" }), "same", "every level equal → same");
+  eq(asPlace({ city: "Aarhus" }), null, "a place without a country is not recorded");
+
+  const tmp = mkdtempSync(join(tmpdir(), "bm-offsite-"));
+  writeFileSync(join(tmp, "site.json"), JSON.stringify({ name: "s", location: { country: "DK", timezone: "Europe/Copenhagen" } }));
+  writeFileSync(join(tmp, "satellite-hel.json"), JSON.stringify({ kind: "machine", physicalLocation: { country: "FI", city: "Helsinki" } }));
+  writeFileSync(join(tmp, "remote-buddy.json"), JSON.stringify({ authId: "buddy@pbs" }));
+  writeFileSync(join(tmp, "pull-neighbour.json"), JSON.stringify({ remoteHost: "h", physicalLocation: { country: "DK" } }));
+  writeFileSync(join(tmp, "receive-nas.json"), JSON.stringify({ namespace: "receive/nas" }));
+  const t = offsiteTargets(tmp);
+  eq(t.map((x) => `${x.role}:${x.name}:${x.separation}`).join(" "),
+    "pull:neighbour:unproven remote:buddy:unrecorded satellite:hel:separate",
+    "satellites, remote and pull peers are off-site targets; receive peers are not");
+  const w = validate(tmp).warnings;
+  eq(w.length, 2, "validate warns once per target not shown to be away");
+  check(w.some((x) => x.includes("remote 'buddy'") && x.includes("records no physicalLocation")), "…naming the unrecorded one");
+  check(w.some((x) => x.includes("pull 'neighbour'") && x.includes("record the city")), "…and saying what would settle the other");
+  eq(validate(tmp).errors.filter((e) => e.includes("physicalLocation")).length, 0, "…as warnings, never errors");
+  eq(listPeers(tmp).find((p) => p.name === "neighbour")?.physicalLocation?.country ?? "", "DK", "peers carry their physicalLocation");
+
+  eq(JSON.stringify(buildPeerConfig("remote", { name: "b", authId: "b@pbs", physicalLocation: { country: "DE", city: "Berlin" } }).physicalLocation),
+    '{"country":"DE","city":"Berlin"}', "peer add records the place it is given");
+  eq(buildPeerConfig("pull", { name: "b", host: "h" }).physicalLocation, undefined, "…and invents none");
 }
 
 // ── #644: --help runs nothing; an option the verb does not take is refused ──

@@ -133,8 +133,8 @@ every inter-PBS copy is a pull, which is what makes the compromise isolation
 structural rather than a matter of credential hygiene (§1.4.1).
 
 ```bash
-backup-manager peer add pull    <name> --host <their-pbs> [--group-filter type:vm]
-backup-manager peer add remote  <name> --auth-id <them>@pbs [--namespace NS]
+backup-manager peer add pull    <name> --host <their-pbs> --country CC [--city C] [--group-filter type:vm]
+backup-manager peer add remote  <name> --auth-id <them>@pbs --country CC [--city C] [--namespace NS]
 backup-manager peer add receive <name>
 backup-manager peer delete pull|remote|receive <name> [--purge]
 backup-manager peers                      # what exists today
@@ -146,6 +146,13 @@ once — a buddy is usually both a `pull` and a `remote`.
 `peer add` writes the config and then onboards it, prompting for the credential
 — which is **never** written to the config (§2.5). `--config-only` writes the
 config and stops, for when the far PBS is not reachable yet.
+
+**Where it is (#609).** `--country` (and `--city`, `--facility` when they share the Site's)
+records the peer's `physicalLocation`: an off-site copy is only worth having if it is
+somewhere else, and only data can show that. `backup-manager validate` compares every
+`pull`/`remote` peer and every satellite with `site.json`'s `location` — at the finest level
+both record — and warns about one it cannot show to be elsewhere, or that records nothing.
+Record the Site's own city with `site-manager site modify --locationCity <city>`.
 
 ## Day-to-day operations
 

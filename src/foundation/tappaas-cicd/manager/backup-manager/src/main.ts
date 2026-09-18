@@ -46,6 +46,7 @@ import {
   writePeerConfig,
 } from "./peers";
 import { validate } from "./validate";
+import { placeText } from "./offsite";
 import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
 import { existsSync } from "fs";
 import { stream } from "../../../lib/ts/src/exec";
@@ -110,7 +111,8 @@ export const HELP: HelpSpec = {
     { usage: "peers", name: "peers", note: "(the off-site PBS relationships this site has)" },
     {
       usage: "peer add pull|remote|receive <name> [--host H] [--store S] [--namespace NS] "
-        + "[--schedule SPEC] [--group-filter F] [--auth-id ID] [--propagate] [--force]",
+        + "[--schedule SPEC] [--group-filter F] [--auth-id ID] [--propagate] "
+        + "[--country CC] [--city C] [--facility F] [--force]",
       name: "peer add",
       options: [
         ["--host H", "peer add pull: the PBS we pull from."],
@@ -120,6 +122,9 @@ export const HELP: HelpSpec = {
         ["--group-filter F", "peer add pull: replicate only part of the source."],
         ["--auth-id ID", "peer add remote: the login they pull with (we create it)."],
         ["--propagate", "peer add remote: let the read grant reach child namespaces. Off by default — on the root that would expose fs/ (config + secrets) and other peers' data."],
+        ["--country CC", "peer add: the country the peer's PBS is in (ISO code) — the evidence its copy is off-site (#609)."],
+        ["--city C", "peer add: its city — needed to tell it apart from a Site in the same country."],
+        ["--facility F", "peer add: its building or data centre — needed when it shares the Site's city."],
         ["--config-only", "peer add: write the config, skip onboarding (no PBS contact)."],
         ["--force", "peer add: overwrite an existing peer config."],
       ],
@@ -212,6 +217,9 @@ interface Opts {
   schedule?: string;
   groupFilter?: string;
   authId?: string;
+  country?: string;
+  city?: string;
+  facility?: string;
   propagate: boolean;
   configOnly: boolean;
   purge: boolean;
@@ -222,6 +230,7 @@ interface Opts {
 // single-line change here rather than another else-if arm.
 const PEER_VALUE_FLAGS = new Set([
   "--host", "--store", "--namespace", "--schedule", "--group-filter", "--auth-id",
+  "--country", "--city", "--facility",
 ]);
 
 function parseOpts(args: string[]): Opts {
@@ -304,6 +313,9 @@ function parseOpts(args: string[]): Opts {
     schedule: peerFlags["--schedule"],
     groupFilter: peerFlags["--group-filter"],
     authId: peerFlags["--auth-id"],
+    country: peerFlags["--country"],
+    city: peerFlags["--city"],
+    facility: peerFlags["--facility"],
     propagate, configOnly, purge, force,
     rest,
   };
@@ -480,6 +492,7 @@ function cmdValidate(opts: Opts): void {
       "backup placement is UNRESOLVED (no placementState) — run 'update-module.sh backup' to resolve it",
     );
   }
+  for (const w of res.warnings) warn(w);
   for (const e of res.errors) console.error(`  ERROR: ${e}`);
   info("");
   if (res.errors.length > 0) {
@@ -548,6 +561,16 @@ function cmdPeerAdd(opts: Opts): number {
     authId: opts.authId,
     propagate: opts.propagate,
   };
+  if (opts.country) {
+    if (!/^[A-Za-z]{2}$/.test(opts.country)) die(`peer add: --country takes an ISO 3166-1 alpha-2 code (e.g. DE), not '${opts.country}'`);
+    spec.physicalLocation = { country: opts.country.toUpperCase() };
+    if (opts.city) spec.physicalLocation.city = opts.city;
+    if (opts.facility) spec.physicalLocation.facility = opts.facility;
+  } else if (opts.city || opts.facility) {
+    die("peer add: --city and --facility need --country (the place is recorded from the country down)");
+  } else if (k !== "receive") {
+    warn(`no --country: nothing will show this ${k} peer is off-site (validate warns until physicalLocation is recorded, #609)`);
+  }
   const file = writePeerConfig(opts.configDir, k, spec, opts.force);
   info(`${GN}✓${CL} wrote ${file}`);
 
@@ -640,10 +663,11 @@ function cmdPeers(opts: Opts): void {
     return;
   }
   const pad = (s: string, n: number): string => (s.length >= n ? s : s + " ".repeat(n - s.length));
-  info(pad("NAME", 20) + " " + pad("ROLE", 9) + " " + pad("HOST", 28) + " NAMESPACE");
+  info(pad("NAME", 20) + " " + pad("ROLE", 9) + " " + pad("HOST", 28) + " " + pad("NAMESPACE", 20) + " LOCATION");
   for (const p of peers) {
     info(
-      pad(p.name, 20) + " " + pad(p.role, 9) + " " + pad(p.remoteHost ?? "-", 28) + " " + (p.namespace ?? "-"),
+      pad(p.name, 20) + " " + pad(p.role, 9) + " " + pad(p.remoteHost ?? "-", 28) + " " +
+        pad(p.namespace ?? "-", 20) + " " + placeText(p.physicalLocation),
     );
   }
 }

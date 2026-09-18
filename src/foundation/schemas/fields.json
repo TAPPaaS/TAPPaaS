@@ -105,6 +105,11 @@
       "apply": "none",
       "changeNote": "RETIRED, superseded by `environment`. Never write it; installs strip it (copy-update-json.sh del(.variant)). Retained in module-fields.json only so a pre-migration config carrying it is classified rather than reported unknown."
     },
+    "physicalLocation": {
+      "class": "in-place",
+      "apply": "none",
+      "changeNote": "Records where a machine physically is (#609); changing it moves nothing, it only changes what the off-site check compares with the Site."
+    },
     "address": {
       "class": "in-place",
       "apply": "none",

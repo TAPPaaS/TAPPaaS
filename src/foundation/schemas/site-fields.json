@@ -66,6 +66,14 @@
           "description": "POSIX locale (e.g. nl_NL).",
           "type": "string",
           "default": "en_US"
+        },
+        "city": {
+          "description": "City the Site is in — lets an off-site copy in the same country show it is elsewhere (#609, ADR-012 §1.5).",
+          "type": "string"
+        },
+        "facility": {
+          "description": "Building or data centre — for an off-site copy in the same city (#609).",
+          "type": "string"
         }
       }
     },

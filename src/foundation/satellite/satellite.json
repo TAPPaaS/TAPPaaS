@@ -23,6 +23,9 @@
     "_api_only": { "location": "hel1", "serverType": "cx23" }
   },
 
+  "physicalLocation": { "country": "FI", "city": "Helsinki" },
+  "_physicalLocation_note": "Where the satellite physically runs (#609) — the evidence its backup copy is off-site; `backup-manager validate` compares it with site.json's location. EXAMPLE values: set your own. Not provider.location (a provisioning parameter).",
+
   "host": {
     "publicIp": "203.0.113.10",
     "_publicIp_note": "EXAMPLE placeholder — 203.0.113.10 is RFC 5737 TEST-NET-3. Replace with the real satellite public IP.",

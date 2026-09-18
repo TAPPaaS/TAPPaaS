@@ -107,6 +107,8 @@ export interface Peer {
   role: PeerRole;
   remoteHost: string | null;
   namespace: string | null;
+  // Where it physically is (#609): site.json's location shape, or null.
+  physicalLocation: { country?: string; city?: string; facility?: string } | null;
 }
 
 // ── Client — the backup-controller boundary ───────────────────────────

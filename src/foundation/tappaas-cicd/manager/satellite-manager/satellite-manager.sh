@@ -50,7 +50,7 @@ DRY_RUN=0
 # What each verb accepts (lib/cli-gate.sh; '=' marks an option with a value).
 readonly CLI_SPEC='
 *: --dry-run
-install: --provider= --public-ip= --publicip= --sshkey= --ssh-key= --bucket= --s3-endpoint= --roles= --os=
+install: --provider= --public-ip= --publicip= --sshkey= --ssh-key= --bucket= --s3-endpoint= --roles= --os= --country= --city=
 update:
 status:
 remove:
@@ -91,6 +91,9 @@ install options (satellite-manager writes the config from these; no hand-edited 
   --os debian|nixos  satellite OS (default: debian — ADR-010 Option 3). 'debian' ships a
                      stock Debian host over SSH (no nixos-anywhere; official PBS; OS diversity
                      for the vault, §7.3). 'nixos' uses the declarative nixos-anywhere path.
+  --country CC       where the satellite physically is (ISO code, e.g. FI) — the evidence its
+                     backup copy is off-site (#609); `backup-manager validate` checks it
+  --city NAME        its city (needed when the Site is in the same country)
   --dry-run          show the plan; write nothing
   (with no flags and an existing config, re-provisions from it.)
 
@@ -122,6 +125,13 @@ cmd_validate() {
     [[ -n "${ip}" ]] || die "host.publicIp is required"
     [[ -n "${roles}" ]] || die "at least one role is required (reverse-proxy|admin-vpn|backup)"
     info "${GN}✓${CL} ${cfg} — roles: ${roles}, publicIp: ${ip}"
+    # #609: a backup satellite is only an off-site copy if it is somewhere else,
+    # and only data can show that. Warned, not refused: the check that matters
+    # is `backup-manager validate`, which compares it with site.json.
+    if [[ ",${roles}," == *",backup,"* ]] \
+       && ! jq -e '(.physicalLocation.country // "") | test("^[A-Za-z]{2}$")' "${cfg}" >/dev/null 2>&1; then
+        warn "physicalLocation.country is not recorded — nothing shows this backup satellite is off-site (#609)"
+    fi
     # TODO[P1]: full field validation + cross-field rules (e.g. backup.s3.objectLock
     #           required when backend=s3; adminWgPort != wgPort).
 }
@@ -157,7 +167,7 @@ cmd_status() {
 
 cmd_install() {
     # Parse flags — the MANAGER owns the JSON: pass params, don't hand-edit files.
-    local name="" provider="hetzner" public_ip="" sshkey="" bucket="" s3ep="" roles_override="" os_override="debian"
+    local name="" provider="hetzner" public_ip="" sshkey="" bucket="" s3ep="" roles_override="" os_override="debian" country="" city=""
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --provider)              provider="$2"; shift 2 ;;
@@ -167,6 +177,8 @@ cmd_install() {
             --s3-endpoint)           s3ep="$2"; shift 2 ;;
             --roles)                 roles_override="$2"; shift 2 ;;
             --os)                    os_override="$2"; shift 2 ;;
+            --country)               country="$2"; shift 2 ;;
+            --city)                  city="$2"; shift 2 ;;
             --*)                     die "unknown option: $1" ;;
             *)                       if [[ -z "${name}" ]]; then name="$1"; else die "unexpected arg: $1"; fi; shift ;;
         esac
@@ -180,14 +192,16 @@ cmd_install() {
         [[ -n "${public_ip}" ]] || die "--public-ip is required to create a satellite config"
         [[ -n "${sshkey}" ]]    || die "--sshkey is required (the operator out-of-band key; NOT a cicd key)"
         [[ "${os_override}" == "debian" || "${os_override}" == "nixos" ]] || die "--os must be 'debian' (default) or 'nixos'"
+        [[ -z "${country}" || "${country}" =~ ^[A-Za-z]{2}$ ]] || die "--country takes an ISO 3166-1 alpha-2 code (e.g. FI), not '${country}'"
+        [[ -z "${city}" || -n "${country}" ]] || die "--city needs --country"
         local key_val="${sshkey}"; [[ -f "${sshkey}" ]] && key_val="$(cat "${sshkey}")"
         local roles="${roles_override:-reverse-proxy,admin-vpn}"
         [[ -z "${roles_override}" && -n "${bucket}" ]] && roles="${roles},backup"
         if [[ "${DRY_RUN}" == "1" ]]; then
-            cfg="$(mktemp)"; sat_write_config "${cfg}" "${name}" "${provider}" "${public_ip}" "${key_val}" "${roles}" "${bucket}" "${s3ep:-https://hel1.your-objectstorage.com}" "${os_override}"
+            cfg="$(mktemp)"; sat_write_config "${cfg}" "${name}" "${provider}" "${public_ip}" "${key_val}" "${roles}" "${bucket}" "${s3ep:-https://hel1.your-objectstorage.com}" "${os_override}" "${country}" "${city}"
             info "[dry-run] would write $(config_path "${name}") (os=${os_override})"
         else
-            sat_write_config "${cfg}" "${name}" "${provider}" "${public_ip}" "${key_val}" "${roles}" "${bucket}" "${s3ep:-https://hel1.your-objectstorage.com}" "${os_override}"
+            sat_write_config "${cfg}" "${name}" "${provider}" "${public_ip}" "${key_val}" "${roles}" "${bucket}" "${s3ep:-https://hel1.your-objectstorage.com}" "${os_override}" "${country}" "${city}"
             info "wrote ${cfg} (roles: ${roles}, os: ${os_override})"
         fi
     fi

@@ -169,6 +169,18 @@ else
     no "sat_write_config os field"
 fi
 
+# 16b. #609: --country/--city become physicalLocation; none given → none recorded
+(
+    . "${here}/lib/provision.sh" >/dev/null 2>&1
+    sat_write_config "${tmp}/pl.json" p hetzner 1.2.3.4 "ssh-ed25519 K o@w" "reverse-proxy,backup" b "" debian fi Helsinki
+)
+if [[ "$(jq -c .physicalLocation "${tmp}/pl.json" 2>/dev/null)" == '{"country":"FI","city":"Helsinki"}' \
+      && "$(jq 'has("physicalLocation")' "${tmp}/osd.json" 2>/dev/null)" == "false" ]]; then
+    ok "sat_write_config records physicalLocation (country upper-cased) and invents none (#609)"
+else
+    no "sat_write_config physicalLocation"
+fi
+
 # 17. install --dry-run branches on os (debian => provision-debian, no nixos-anywhere)
 echo '{ "kind":"machine","tier":"foundation","name":"dbg","os":"debian","roles":["reverse-proxy"],"host":{"publicIp":"203.0.113.9","operatorSshKeys":["ssh-ed25519 K o@w"]} }' > "${tmp}/satellite-dbg.json"
 rc=0; out="$(TAPPAAS_CONFIG_DIR="${tmp}" "${mgr}" install dbg --dry-run 2>&1)" || rc=$?

@@ -60,6 +60,7 @@ read-back (§7.3: cicd holds no standing key on the satellite):
         --public-ip <satellite-ip> \
         --sshkey ~/.ssh/<operator-key>.pub \
         [--bucket <s3-object-lock-bucket>]   # provide → enables the backup role
+        [--country <CC> [--city <city>]]    # where it physically is — see below
         [--provider hetzner] [--s3-endpoint <url>] [--roles reverse-proxy,admin-vpn]
 
 - **Sensible defaults:** roles = `reverse-proxy,admin-vpn` (+ `backup` automatically when
@@ -67,6 +68,10 @@ read-back (§7.3: cicd holds no standing key on the satellite):
   Add `--dry-run` to preview.
 - Re-running `satellite-manager install <name>` with no flags re-provisions from the
   saved config.
+- **`--country` / `--city` (#609):** where the satellite physically runs. A backup satellite
+  is only an off-site copy if it is somewhere else, and only the record shows that:
+  `backup-manager validate` compares it with `site.json`'s `location` and warns while it is
+  missing or matches. Give the city when the Site is in the same country.
 
 `satellite-manager` then:
 

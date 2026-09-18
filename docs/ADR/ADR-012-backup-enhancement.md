@@ -193,11 +193,13 @@ off-site* copy beside a local datastore, that is §1.5.
 
 **Off-site is recorded, not asserted (#609).** An off-site copy is worth having because a fire
 or a theft at the building does not reach it — a *physical* separation, which only data can
-show. Every off-site target therefore declares a **`location`** in the same shape as the Site's
-own (`site.json` `location`: ISO country, optional city and facility — a Location in the sense
-of ADR-022b): the satellite as a field of its machine module (ADR-026), a peer PBS in its
-`pull-`/`remote-` config. A check flags an "off-site" copy whose location equals the Site's,
-and one that declares none. Without it, a satellite in the same room as the cluster and one in
+show. Every off-site target therefore declares a **`physicalLocation`** in the same shape as
+the Site's own (`site.json` `location`: ISO country, optional city and facility — a Location in
+the sense of ADR-022b): the satellite as a field of its machine module (ADR-026), a peer PBS in
+its `pull-`/`remote-` config. *(As built: the field is `physicalLocation`, not `location`,
+which named a module's source directory; that became `moduleSource`, migration 0006.)* A check
+flags an "off-site" copy whose place equals the Site's at every level both record, and one that
+declares none — as a `validate` warning, since a peer that predates the field still works. Without it, a satellite in the same room as the cluster and one in
 another country are indistinguishable, and the 3-2-1 claim below cannot be tested.
 
 There are only **two** data movements in the whole model, and neither requires a PBS to push to another PBS:
@@ -398,7 +400,7 @@ Deprecating `pushTarget` (§2.7A) does **not** affect `services/push/`, which ne
 
 **Discovery & the foundation gap (#544, #545) — both resolved (v0.6).** Two issues fell out of this design and were resolved with it.
 
-**#544 — module discovery is shape-based, not a deny-list.** `backup-manager`'s target discovery scanned `config/*.json` behind a stale deny-list, so every non-module file nobody had thought to add (`last-update-result.json`, `zones.effective.json`, `module-fields.json`, …) was reported as a backup target — and the `backup-status` health gate then failed on files that were never modules. The rule now lives once, in [`lib/ts/src/module-discovery.ts`](../../src/foundation/tappaas-cicd/lib/ts/src/module-discovery.ts), imported by **both** `module-manager` and `backup-manager` so the two cannot drift apart again: a config is a module if it carries `kind: "module"` or a module-shaped field (`dependsOn` / `integratesWith` / `provides` / `location`) — never because a name is absent from a list. A deny-list was the wrong shape for this because it fails *open* and silently.
+**#544 — module discovery is shape-based, not a deny-list.** `backup-manager`'s target discovery scanned `config/*.json` behind a stale deny-list, so every non-module file nobody had thought to add (`last-update-result.json`, `zones.effective.json`, `module-fields.json`, …) was reported as a backup target — and the `backup-status` health gate then failed on files that were never modules. The rule now lives once, in [`lib/ts/src/module-discovery.ts`](../../src/foundation/tappaas-cicd/lib/ts/src/module-discovery.ts), imported by **both** `module-manager` and `backup-manager` so the two cannot drift apart again: a config is a module if it carries `kind: "module"` or a module-shaped field (`dependsOn` / `integratesWith` / `provides` / `moduleSource`) — never because a name is absent from a list. A deny-list was the wrong shape for this because it fails *open* and silently.
 
 Narrowing to the opted-in set (`backup:vm | backup:filesystem`) is a **second, separate** step (`listBackupModules`), used by `reconcile`. `list` deliberately reports every module and answers opt-in and job membership as two fields (#627): "never asked for backup" and "asked and did not get it" are different states, and only the second is a finding.
 
@@ -594,7 +596,7 @@ Backing up a Proxmox storage **dataset** — e.g. external NFS-served data that 
 ## Testing Strategy
 
 - **No second PBS (#602):** an empty `placementState` on a site whose PBS already runs — on a cluster node and on a non-PVE machine (§1.3) — adopts it; nothing is provisioned, even where a `tankc` pool exists elsewhere.
-- **Off-site separation (#609):** a copy declared off-site whose `location` equals the Site's, or is missing, is flagged.
+- **Off-site separation (#609):** a copy declared off-site whose `physicalLocation` equals the Site's, or is missing, is flagged.
 - **Leaving `external` (#607):** `placement reset` re-derives; the old external PBS is listed as a `pull` peer and a restore from it still works.
 - **Placement:** with `tankc` → PBS on the right node; no `tankc` → a **shim** (no VM), a warning, and a `dependsOn: backup` module still installs; adding `tankc` + re-running `update.sh` **promotes** the shim and the dependent module still works.
 - **Consume pre-existing PBS (#456):** install-forced `external` + a `pbsUrl` → the module registers storage + jobs and rolls out clients **without** discovering storage or installing PBS; a `dependsOn: backup` module backs up to the consumed datastore.
@@ -636,7 +638,7 @@ run on hardware is a separate question, and one list answering both could never 
 
 - [ ] §2.2 rule 3 in `install.sh` and `update.sh`: probe for a serving PBS before any discovery (#602).
 - [ ] `backup-manager placement reset` (#607).
-- [ ] `location` on the satellite and on peer PBS configs, and the separation check (#609).
+- [x] `physicalLocation` on the satellite and on peer PBS configs, and the separation check (#609) — `backup-manager validate` warns; unit-tested (`src/offsite.ts`).
 - [ ] `vmname` replaced by the instance name; `<instance>.<zone>.internal` registered as an alias of the `node` Host (#612) — after ADR-026 D6.3/D6.4 and #665.
 - [ ] The code writes `placementState: node` with the Host in `backup.json.node`, as §2.1 decides, instead of today's `node:<name>`; a migration rewrites existing sites (#600).
 

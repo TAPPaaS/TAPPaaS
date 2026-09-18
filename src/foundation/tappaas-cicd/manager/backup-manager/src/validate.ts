@@ -9,6 +9,9 @@
 //   4. module backup.enabled:false is honoured (resolves to disabled — reported)
 //   5. no dangling target: if any module has backup enabled AND is wired into
 //      the PBS job, site.backup.target must be set.
+//   6. every off-site target records a physicalLocation away from the Site's
+//      (#609, ADR-012 §1.5) — WARNINGS: a peer that predates the field, or one
+//      in the same city, is not a broken configuration.
 
 import {
   environmentRaw,
@@ -18,10 +21,12 @@ import {
   resolvePolicy,
   siteBackup,
 } from "./config";
+import { offsiteWarnings } from "./offsite";
 
 export interface ValidateResult {
   oks: string[];
   errors: string[];
+  warnings: string[];
 }
 
 // A retention string is N followed by a unit d/w/m/y (PBS-style shorthand).
@@ -110,5 +115,8 @@ export function validate(configDir: string): ValidateResult {
     ok(`site backup target '${target}' set`);
   }
 
-  return { oks, errors };
+  // ── 6. off-site copies are recorded, not asserted (#609) ─────────
+  const warnings = offsiteWarnings(configDir);
+
+  return { oks, errors, warnings };
 }

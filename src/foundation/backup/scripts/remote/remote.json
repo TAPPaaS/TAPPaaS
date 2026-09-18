@@ -5,6 +5,8 @@
     "authId": "buddy@pbs",
     "namespace": "",
     "propagate": false,
+    "physicalLocation": { "country": "DE", "city": "Berlin" },
+    "_physicalLocation_note": "Where THEIR PBS — the off-site copy of our data — physically is (#609); `backup-manager validate` compares it with site.json's location. EXAMPLE values.",
     "_namespace_note": "What they may read. Empty = the ROOT namespace, i.e. our VM backups. propagate:false keeps the grant off child namespaces — fs/ holds our config and secrets capture, and receive/ holds other peers' data.",
     "_fingerprint_note": "They will need our PBS TLS fingerprint and hostname to configure their pull. Onboarding prints both."
 }

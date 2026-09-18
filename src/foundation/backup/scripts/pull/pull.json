@@ -10,6 +10,8 @@
     "removeVanished": false,
     "encryptionRequired": true,
     "readAuthId": "",
+    "physicalLocation": { "country": "DE", "city": "Berlin" },
+    "_physicalLocation_note": "Where THEIR PBS physically is (#609) — our copy of their data is their off-site; `backup-manager validate` compares it with site.json's location. EXAMPLE values.",
     "_groupFilter_note": "ADR-012 §3.6 subset (#389): pull only PART of the source. A PBS group-filter as a string or array of strings, e.g. \"type:vm\" or [\"group:vm/101\",\"group:vm/102\"]. Empty/absent pulls everything.",
     "groupFilter": "",
     "retention": {

@@ -67,20 +67,24 @@ EOF
 
 # Write the operator-facing satellite config JSON (the MANAGER owns the JSON —
 # operators pass flags, not hand-edited files). Args:
-#   <out> <name> <provider> <publicIp> <sshKey> <roles-csv> [bucket] [s3-endpoint]
+#   <out> <name> <provider> <publicIp> <sshKey> <roles-csv> [bucket] [s3-endpoint] [os]
+#   [country] [city]   — physicalLocation (#609): where the satellite physically is
 sat_write_config() {
     local out="$1" name="$2" provider="$3" ip="$4" key="$5" roles="$6" bucket="${7:-}" s3ep="${8:-https://hel1.your-objectstorage.com}" os="${9:-debian}"
-    local roles_json backup_json='null'
+    local country="${10:-}" city="${11:-}"
+    local roles_json backup_json='null' place_json='null'
     roles_json="$(printf '%s' "${roles}" | jq -R 'split(",") | map(select(length>0))')"
+    [[ -n "${country}" ]] && place_json="$(jq -n --arg c "${country^^}" --arg t "${city}" '{country:$c} + (if $t != "" then {city:$t} else {} end)')"
     [[ -n "${bucket}" ]] && backup_json="$(jq -n --arg ep "${s3ep}" --arg b "${bucket}" '{s3:{endpoint:$ep,bucket:$b}}')"
     jq -n \
         --arg name "${name}" --arg provider "${provider}" --arg ip "${ip}" --arg key "${key}" --arg os "${os}" \
-        --argjson roles "${roles_json}" --argjson backup "${backup_json}" \
+        --argjson roles "${roles_json}" --argjson backup "${backup_json}" --argjson place "${place_json}" \
         '{
            kind:"machine", tier:"foundation", name:$name, os:$os, roles:$roles, dependsOn:[],
            provider:{type:$provider, allocation:"portal"},
            host:{publicIp:$ip, sshUser:"root", operatorSshKeys:[$key]}
-         } + (if $backup != null then {backup:$backup} else {} end)' > "${out}"
+         } + (if $place != null then {physicalLocation:$place} else {} end)
+           + (if $backup != null then {backup:$backup} else {} end)' > "${out}"
 }
 
 # Assemble a standalone deploy dir (flake + disko + satellite.nix + settings).

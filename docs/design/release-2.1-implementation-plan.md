@@ -381,7 +381,7 @@ is a migration.
 | #457 | `pbs_node` uses placement, not the registered name | 4 | 2 | M | Caused a nightly failure on 2026-08-17 |
 | #603 | PBS on a non-PVE host has no update path | 3 | 2 | M | |
 | #554 | Reconcile creates duplicate job coverage | 3 | 2 | M | |
-| #609 | Off-site location recorded | 4 | 2 | M | **Decided (v1.0 §1.5):** every off-site target declares a `location` shaped like `site.json`'s (ADR-022b); a check flags one equal to the Site's or missing. Additive schema |
+| #609 | Off-site location recorded | 4 | 2 | M | **Built 2026-09-18** (`wave1/g1.2-module-source`): the field is `physicalLocation` (operator: `location` was a module's source directory, renamed `moduleSource` with migration 0006, readers accept both for one stable cycle). Recorded by `backup-manager peer add --country/--city/--facility` and `satellite-manager install --country/--city`; `site.json` `location` gains `city`/`facility`; `backup-manager validate` warns about a satellite/`remote`/`pull` target not shown to be elsewhere |
 | ✅ #605 | Split ADR-012 acceptance list | 5 | 1 | L | **Done in v1.0:** a Decision list (accepted) and an Implementation list (tracked in #407) |
 | #407 | ADR-012 3-node live validation gate | 2 | 1 | L | Sign-off gate |
 

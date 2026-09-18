@@ -26,6 +26,7 @@ import { join } from "path";
 import { defaultConfigDir, readJsonObject as readJson } from "../../../lib/ts/src/config-io";
 import { declaresBackup, discoverModules } from "../../../lib/ts/src/module-discovery";
 import { BackupPolicy, Peer, PeerRole, Placement, PlacementKind, ScheduleBucket } from "./types";
+import { asPlace } from "./offsite";
 
 // The cascade reads the TARGET config root directly (it holds <module>.json,
 // site.json, environments/) — the lib's ONE config-root rule (TAPPAAS_CONFIG >
@@ -288,6 +289,7 @@ export function listPeers(configDir: string): Peer[] {
         role,
         remoteHost: asString(j.remoteHost),
         namespace: asString(j.namespace),
+        physicalLocation: asPlace(j.physicalLocation),
       });
       break;
     }
