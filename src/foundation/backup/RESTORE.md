@@ -437,6 +437,25 @@ diff -r /home/tappaas/config /tmp/restore     # look before you copy
 Copy back only what you meant to. Restoring the whole tree over a live `config/`
 rolls back every module installed or changed since the capture.
 
+`/etc/secrets` comes out of the **same snapshot** as a **second archive**, and it
+has to be restored **as root**:
+
+```bash
+sudo install -d -m 700 /tmp/restore-secrets
+sudo -E proxmox-backup-client restore host/tappaas-cicd/<TIME> etc-secrets.pxar /tmp/restore-secrets \
+    --repository "$REPO" --ns fs/tappaas-cicd --keyfile /etc/secrets/backup-fs.key
+
+sudo diff -r /etc/secrets /tmp/restore-secrets
+sudo rm -rf /tmp/restore-secrets        # it holds the site's secrets in the clear
+```
+
+`sudo` is needed because the archive carries root-owned files: run unprivileged,
+the extraction fails partway with `failed to set ownership: Operation not
+permitted`, leaves a **partial** tree behind and exits non-zero. `-E` is what
+carries `PBS_PASSWORD` and `PBS_FINGERPRINT` through sudo. `config/` has no such
+problem — every file under it is owned by `tappaas`, which is why the command
+above it needs no privilege.
+
 ### 5.2 Rebuilding a lost mothership
 
 **You cannot restore the mothership from itself** — `restore.sh` runs on
@@ -651,4 +670,7 @@ does not work"*, which is what a rehearsal is for.
 **Rehearse §1 and §5.1 at least once per release.** The first time these were
 rehearsed, three defects surfaced that were invisible from the outside: a backup
 lookup that parsed a table header, a failed restore that reported success, and a
-mothership that had never been in the backup job at all.
+mothership that had never been in the backup job at all. The second rehearsal
+(hrossen, 2026-09-18) found a fourth: `/etc/secrets` could not be restored by
+following this page, because the command for it was not here and the obvious
+adaptation of the `config/` one fails partway on file ownership (§5.1).

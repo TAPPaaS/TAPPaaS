@@ -416,7 +416,7 @@ Wave 1.
 
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
-| #545 | Foundation backup + tested recovery (incl. `config/`) | 2 | 2 | M | Do first: the safety net for every Wave 1 migration. The `backup:filesystem` service already exists |
+| ✅ #545 | Foundation backup + tested recovery (incl. `config/`) | 2 | 2 | M | **Done 2026-09-18**: design is ADR-012 D20 and is what is deployed (`backup-manager list` on hrossen: `network` + `tappaas-cicd` in the daily job, `cluster`/`templates` in neither); `config/` restore rehearsed on the test system — 173/173 files, clean but for post-capture `updateTime` stamps, and refused without the key. The rehearsal found one runbook defect (`/etc/secrets` needs a root restore), fixed in RESTORE.md §5.1 — **G1.5's exit gate is met** |
 | FW #122 | Reissue tappaas-cicd SSH keys | 3 | 3 | M | Roll in: needed for a cicd rebuild and by #19 |
 | #439 | Firewall rebuild: **document the procedure, do not run it** | 3 | 1 | L | Decided 2026-09-14: only one installation runs the nano image. Write a runbook (build alongside on a spare VMID, move config, cut over, keep the old VM for rollback) and note where the same steps apply to cicd and identity. No automation, no rebuild of the nano system as part of this work |
 | #43 | Test and document backup/restore | 3 | 1 | L | |
