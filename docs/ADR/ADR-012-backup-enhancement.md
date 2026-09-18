@@ -3,14 +3,14 @@
 | | |
 |---|---|
 | **Status** | **Accepted** — implemented and live-verified on the 3-node reference cluster (2026-09-09). All 19 acceptance items are checked; see [ADR-012-implementation.md](../design/ADR-012-implementation.md), packages P1–P20. The one thing no single-site test can cover is a genuinely separate off-site PBS **host** (a satellite over a tunnel), and the §4.3 relocation-by-pull runbook is written but not yet rehearsed — both are called out where they appear rather than implied to be done. |
-| **Version** | 0.7 |
-| **Date** | 2026-08-29 (v0.7: 2026-09-17) |
+| **Version** | 0.8 |
+| **Date** | 2026-08-29 (v0.8: 2026-09-18) |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen |
 | **Related** | **#402** (flexible backup install on a cluster — origin); **#389** (remote/off-site backup setup + single-node); **#382** (adding a node does not install the backup client); **#456** (no placement policy for a pre-existing local PBS); **#214** (`pbsType`/external bare-metal PBS); **#501** (complement `dependsOn` with `integratesWith`); [ADR-010](ADR-010-vps-satellite-reverse-proxy-backup.md) (satellite off-site backup, pull model, compromise isolation); [ADR-007](<ADR-007 - TAPPaaS Taxonomy.md>) (named, not numbered foundation modules); [ADR-022](<ADR-022 - Workload Ontology.md>) + [ADR-022d](<ADR-022d - Workload Classification.md>) (the workload vocabulary and classification this ADR's Appendix A graduated into — draft, with two points open against §2.1); [backup/RESTORE.md](../../src/foundation/backup/RESTORE.md) (recovery per scenario) and [backup/README.md](../../src/foundation/backup/README.md) (PBS namespaces, multi-source pull/push — #227); **#544** (backup discovery scans `config/*.json` — misclassifies non-module state files; **resolved §2.7**); **#545** (backup + tested recovery for the foundation modules & `config/`; **resolved §2.7 / D20**) |
-| **Refined by** | [ADR-022d](<ADR-022d - Workload Classification.md>) (`kind`) · [ADR-022e](<ADR-022e - Module Scope.md>) (`scope` replaces `tier`) · [ADR-022f](<ADR-022f - Kind Values and Operating System.md>) (`application`, OS facet) · [ADR-022g](<ADR-022g - Management.md>) (`management`, `placementState: consumed`) |
+| **Refined by** | [ADR-026](<ADR-026 - Managed Machines as Modules.md>) (the Host a PBS lands on is a module) · [ADR-022d](<ADR-022d - Workload Classification.md>) (`kind`) · [ADR-022e](<ADR-022e - Module Scope.md>) (`scope` replaces `tier`) · [ADR-022f](<ADR-022f - Kind Values and Operating System.md>) (`application`, OS facet) · [ADR-022g](<ADR-022g - Management.md>) (`management`, `placementState: consumed`) |
 | **Implementation** | [ADR-012-implementation.md](../design/ADR-012-implementation.md) — plan, decisions log, package tracker |
-| **Changelog** | v0.7 (2026-09-17) — aligned to the ADR-022 vocabulary: `kind: application`, `scope: site`, `management`, `placementState: consumed`. v0.6 — backup-buddy relationship moved to ADR-024. v0.5 — off-site retention and the schedule cascade. v0.4 — as-built after the live verification on the reference cluster. v0.3 — unified credential model and promotion. v0.2 — placement resolved as state, per-node client reconcile (#382). v0.1 — skeleton: topologies, placement policy, off-site (#402, #389, #456). |
+| **Changelog** | v0.8 (2026-09-18) — fourth topology: a local PBS on a machine that is not a cluster member (§1.2a), which ADR-026's `debianhost` makes patchable. v0.7 (2026-09-17) — aligned to the ADR-022 vocabulary: `kind: application`, `scope: site`, `management`, `placementState: consumed`. v0.6 — backup-buddy relationship moved to ADR-024. v0.5 — off-site retention and the schedule cascade. v0.4 — as-built after the live verification on the reference cluster. v0.3 — unified credential model and promotion. v0.2 — placement resolved as state, per-node client reconcile (#382). v0.1 — skeleton: topologies, placement policy, off-site (#402, #389, #456). |
 
 Make the `backup` foundation module flexible about **where PBS lives** (or whether it lives in the cluster at all), keep the **per-node backup client** in step with cluster membership, give **off-site/remote backup** real setup, subsetting, and independent retention — without ever letting a compromised local cluster reach the off-site copy — and let a module declare **what kind** of backup it needs, not just on/off.
 
@@ -93,15 +93,16 @@ The workload-placement taxonomy that earlier drafts carried inline (`node`/`stan
 
 ## 1. Supported backup topologies
 
-A site's backup is described by **where its primary PBS datastore lives and who manages it**. In **all three** topologies a **single `backup` module is provisioned** on `tappaas-cicd` — always installed, always satisfying `dependsOn: backup`. The difference is only whether that module also **provisions PBS software**:
+A site's backup is described by **where its primary PBS datastore lives and who manages it**. In **all four** topologies a **single `backup` module is provisioned** on `tappaas-cicd` — always installed, always satisfying `dependsOn: backup`. The difference is only whether that module also **provisions PBS software**:
 
 | Topology | PBS software provisioned by the module? | Local datastore? | How selected | Typical site |
 |---|---|---|---|---|
-| **Shim** (§1.1) | no | no | state `shim` — no `tankc` found (and not forced external) | first boot, testing, before storage exists |
+| **Shim** (§1.1) | no | no | state `shim` — no `tankc` found (and not forced `consumed`) | first boot, testing, before storage exists |
 | **Local PBS on a cluster node** (§1.2) | **yes** — installed on the node's Proxmox OS (not a VM) | yes | state `node:<name>` — a `tankc` is found | reference 2–3-node cluster |
-| **Externally-managed PBS** (§1.3) | no — **consumed** by URL | depends on flavor | state `external` — operator forces it + gives a URL | single-node, off-site-only, or a site that already runs PBS (#456) |
+| **Local PBS on a machine** (§1.2a) | **yes** — installed on a machine that is not a cluster member | yes | state `node:<name>`, where `<name>` is a `kind: machine` module | a site whose datastore lives off the cluster |
+| **Consumed PBS** (§1.3) | no — **consumed** by URL | depends on flavour | state `consumed` — operator forces it + gives a URL | single-node, off-site-only, or a site that already runs PBS (#456) |
 
-Only the **local PBS** case realises PBS software and a datastore; shim and external-PBS both provision the module without any PBS software of their own. Off-site *relationships* between PBS instances (a satellite pulling the home PBS, a buddy) layer on top and are covered in **§1.4**.
+Only the two **local PBS** cases realise PBS software and a datastore; shim and consumed both provision the module without any PBS software of their own. Off-site *relationships* between PBS instances (a satellite pulling the home PBS, a buddy) layer on top and are covered in **§1.4**.
 
 ### 1.1 Shim — no datastore (bootstrap / testing)
 
@@ -114,6 +115,31 @@ A shim is a **placeholder promoted in place later** (§2.3): once a `tankc` pool
 The module **discovers** a `tankc` pool (configured node first, then any node — see §2.2) and installs **PBS software directly on that cluster node's Proxmox OS** — via the Proxmox PBS package, it is **not** a separate guest VM — and owns the datastore on the node's `tankc` pool. This is the reference topology, now conditional on a `tankc` pool being present. The datastore it creates is the local backup target for the site's guests (§3).
 
 A local PBS can also participate in **buddy relationships** with other PBS instances — including acting as a **pull source** for another TAPPaaS system. Those cross-PBS relationships are covered in **§1.4**.
+
+#### 1.2a Local PBS on a machine that is not a cluster member
+
+The same topology as §1.2 with a different Host: the PBS packages land on a
+**`kind: machine` module** (ADR-022f) instead of on a cluster node. `placementState`
+is still `node:<name>` — the field names a **Host**, and ADR-022c D3 is explicit
+that it does not assert cluster membership. Live evidence predating this section:
+`config/backup.json` already carries `node: "backup"` while `site.json` lists only
+`tappaas1` and `tappaas2`.
+
+**Why this works at all:** a Proxmox node reports `ID=debian` (measured on
+`tappaas1`, 2026-09-18) — PVE is a package set and a kernel flavour on top of
+Debian, not a separate OS. So `proxmox-backup-server` installs identically on a
+cluster node and on a plain Debian machine, and backup manages the datastore,
+jobs and clients the same way on both (ADR-022f D5).
+
+**What differs is who patches the Host.** On a cluster node the `cluster` module
+does. A machine outside the cluster has no owner today — ADR-022f D5 calls this
+"a gap for the module model, not for backup" — which is why this topology depends
+on the `debianhost` module of **[ADR-026](<ADR-026 - Managed Machines as Modules.md>) D3**.
+Until that exists, a site can run this topology only by patching the machine by hand.
+
+**Management stays `managed`.** TAPPaaS installs the PBS and runs its lifecycle;
+that the Host is not a cluster member changes nothing about the application
+(022f D5). A PBS someone *else* installed on a machine is §1.3, not this.
 
 ### 1.3 Consumed PBS (someone else installed it; we reach it by URL)
 
