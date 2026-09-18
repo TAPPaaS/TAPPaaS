@@ -48,7 +48,7 @@ while read -r node; do
     # every Proxmox kernel bump ships a new package name (proxmox-kernel-<ver>),
     # so plain upgrade held the kernel back on every run (#591). dist-upgrade
     # matches install.sh and is the command Proxmox documents.
-    debug "Running apt update & dist-upgrade on $node..."
+    info "Running apt update & dist-upgrade on $node..."
     if [[ "${OPT_DEBUG:-0}" -eq 1 ]]; then
         if ! ssh -n -o StrictHostKeyChecking=no root@"$NODE_FQDN" "apt update"; then
             warn "apt update failed on $node"
@@ -108,7 +108,7 @@ while read -r node; do
     if [[ "$_rm_line" == "REMOVE: (none)" ]]; then
         debug "  $node no superseded kernels to prune"
     elif [[ -n "$_rm_line" ]]; then
-        debug "  $node pruned: ${_rm_line#REMOVE: }"
+        info "  $node pruned: ${_rm_line#REMOVE: }"
     else
         warn "  $node kernel prune produced no summary — check output"
         [[ "${OPT_DEBUG:-0}" -eq 1 ]] && printf '%s\n' "$_prune_out"
