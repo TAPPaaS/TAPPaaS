@@ -241,7 +241,7 @@ This section is the **module/server side**: how the module decides where PBS liv
 
 There is **no `placement` policy field.** The released module ships with `placementState` **empty**; `install.sh` resolves it once, and the resolved value is written back to `config/backup.json` so it is inspectable and idempotent. `placementState` is the single source of truth:
 
-| `placementState` | **change values + ships empty** | The single source of truth (§2.1). Was `local\|shim\|remote-only`; now **empty (released default)** or `^(shim\|external\|node)$`. Install-written, never hand-authored. Migration: legacy `local` → `node` (with `node` set to the host it was found on), `remote-only` → `external`. `node` names a **Host**, which since ADR-026 may be a cluster member or a `kind: machine` module. |
+| `placementState` | How it gets there | Meaning | Topology |
 |---|---|---|---|
 | *(empty)* | the released module default | **unresolved** — install derives it | — |
 | `node` | not forced `external`, a `tankc` is found | install PBS on the Host named by `node` + own the datastore | §1.2, §1.3 |
@@ -251,7 +251,7 @@ There is **no `placement` policy field.** The released module ships with `placem
 Two operator inputs shape resolution, both on `backup.json`:
 
 - **`node`** *(optional)* — restrict `tankc` discovery to a **single named node**. If unset, all nodes are searched.
-- **`pbsUrl`** — the PBS the clients push to (§1.5). **Defaults to `backup.mgmt.internal`** (the local PBS DNS name). Overridden to the consumed PBS's URL (satellite tunnel addr / public host / LAN addr, §1.3) when going `external`.
+- **`pbsUrl`** — the PBS the clients push to (§1.5). **Defaults to `backup.mgmt.internal`** (the local PBS DNS name). Overridden to the external PBS's URL (public host / LAN addr, §1.4) when going `external`.
 
 Forcing `external` is an **install-time action** (an install argument + `pbsUrl`), not a config policy field — it *overwrites* `placementState` to `external`, and that is then the **permanent** state. This one state covers every external flavour — satellite, public external, or a pre-existing LAN PBS (#456) — because the module's behaviour is identical (provision nothing, register the PBS at `pbsUrl` as storage, clients push there). *(It subsumes the earlier `remote-only`, which was indistinguishable.)*
 
@@ -262,7 +262,7 @@ At install/update, `install.sh` resolves `placementState`:
 
 1. **Told to force `external`?** → `placementState = external` (requires `pbsUrl`). No discovery, nothing provisioned. Sticky thereafter.
 2. Already a concrete state (`node` or `external`) → **keep it** (idempotent).
-3. Empty *(released default)* or `shim` → **derive auto**: discover a `tankc` pool — searching **only `backup.json.node`** if set, otherwise **across all nodes**. Found on node `<name>` → `placementState = `node`` (install PBS there); **not found → `shim`** (the catch-all fallback; lay the marker, warn).
+3. Empty *(released default)* or `shim` → **derive auto**: discover a `tankc` pool — searching **only `backup.json.node`** if set, otherwise **across all nodes**. Found on node `<name>` → `placementState = node` (install PBS there); **not found → `shim`** (the catch-all fallback; lay the marker, warn).
 
 So `node` is a *discovery constraint* (which node[s] to search) and `node` is the *state* that results when a `tankc` is actually found. An empty state and a `shim` are both re-derived on every update (so a `shim` promotes to `node` the moment a `tankc` appears); `external` and `node` are kept.
 
@@ -273,7 +273,7 @@ So `node` is a *discovery constraint* (which node[s] to search) and `node` is th
 | From `shim` to… | Trigger | Effect of `update.sh` |
 |---|---|---|
 | **`node`** (local PBS) | a `tankc` now exists (on `node`, or any node if unpinned) | re-derives to `node`; creates the datastore + per-node clients; the shim marker becomes a real datastore |
-| **`external`** | operator re-runs install/update **forcing external** + `pbsUrl` | overwrites to `external` (permanent); registers the consumed PBS as storage + wires jobs; provisions nothing |
+| **`external`** | operator re-runs install/update **forcing external** + `pbsUrl` | overwrites to `external` (permanent); registers the external PBS as storage + wires jobs; provisions nothing |
 
 The **same command that heals node membership (§2.4) also advances backup from `shim` to a real state.** This is the concrete answer to #402's "allow backup to be reinstalled later and ensure existing `dependsOn` modules then work."
 
@@ -328,8 +328,8 @@ The changes touch three groups of fields. **Note (implementation, 2026-09-09):**
 | `placement` | **remove** | The current `placement` policy field is deleted — its job is now the install-resolved `placementState` (§2.1). A legacy value is read *once* during migration (§4) to seed the state, then dropped. |
 | `node` | **repurpose** | Two jobs, in order. *Before* resolution it is a **discovery constraint**: when set, only this host is searched for `tankc`; when unset, all cluster members are. *After* resolution it names the **Host the PBS actually landed on** — which is what `placementState: node` refers to. Since ADR-026 that Host may be a cluster member or a `kind: machine` module; ADR-022c D3 is explicit that the field does not assert cluster membership. |
 | `storage` | keep | The `tankc` pool name to find/use (default `tankc1`). |
-| `placementState` | **change values + ships empty** | The single source of truth (§2.1). Was `local\|shim\|remote-only`; now **empty (released default)** or pattern `^(shim\|consumed\|node:.+)$`. Install-written, never hand-authored. Migration: legacy `local` → `node` (with `node` set to the host it was found on), `remote-only` → `consumed`. |
-| `pbsUrl` | **new** | The PBS the clients push to (§1.5). **Default `backup.mgmt.internal`** (local PBS DNS); overridden to the consumed PBS's URL when `placementState: external` (§1.3). Credential prompted-not-stored. |
+| `placementState` | **change values + ships empty** | The single source of truth (§2.1). Was `local\|shim\|remote-only`; now **empty (released default)** or `^(shim\|external\|node)$`. Install-written, never hand-authored. Migration: legacy `local` → `node` (with `node` set to the host it was found on), `remote-only` → `external`. `node` names a **Host**, which since ADR-026 may be a cluster member or a `kind: machine` module. |
+| `pbsUrl` | **new** | The PBS the clients push to (§1.5). **Default `backup.mgmt.internal`** (local PBS DNS); overridden to the external PBS's URL when `placementState: external` (§1.4). Credential prompted-not-stored. |
 | `pushTarget` | **deprecate** | Subsumed by `placementState: external` + `pbsUrl` — the external PBS is simply the configured target clients push to. Read for one release, then removed. |
 | `pbsStorageName` | keep | PBS datastore / Proxmox storage name. |
 | `kind` | **new** (ADR-022f) | `application` in every variant — backup installs PBS onto a Host and owns no system of its own. Not `device`: that is reserved for something where only network reachability is configured. |
@@ -351,7 +351,7 @@ There is **no `type` field** — the backup kind is a `dependsOn` capability (`b
 **C. `provides` capabilities** (on `backup.json`):
 
 - Today `["vm", "remote", "external"]`. A repo-wide check shows **only `backup:vm` is ever depended on** — nothing declares `dependsOn: backup:remote` or `backup:external`.
-- **Change to `provides: ["vm", "filesystem"]`.** Add **`filesystem`** so a module can `dependsOn: backup:filesystem` (§3.1). Drop `remote`/`external`: those are **runtime peer relationships** registered via `backup-manage.sh` (§1.5/§2.6), not dependency capabilities — and dropping `external` also removes the clash with `placementState: external`. All states (`node`/`shim`/`consumed`) still provide both, which is what lets a **shim satisfy `dependsOn: backup:vm`/`backup:filesystem`** (§1.1).
+- **Change to `provides: ["vm", "filesystem"]`.** Add **`filesystem`** so a module can `dependsOn: backup:filesystem` (§3.1). Drop `remote`/`external`: those are **runtime peer relationships** registered via `backup-manage.sh` (§1.5/§2.6), not dependency capabilities — and dropping `external` also removes the clash with `placementState: external`. All states (`node`/`shim`/`external`) still provide both, which is what lets a **shim satisfy `dependsOn: backup:vm`/`backup:filesystem`** (§1.1).
 
 **What happens to the service directories (#608).** `provides` and `services/` stop being a 1:1 mirror, deliberately, so this states the disposition of each:
 
