@@ -41,6 +41,8 @@ The code already separates the question this ADR names: `health-manager` classif
 
 Anchor: the Kubernetes recommended label `app.kubernetes.io/managed-by` (the tool that manages a resource); ITIL 4 configuration items under or outside configuration control.
 
+> **As implemented (2026-09-18):** `management` is a general module field, default `managed` (absent means managed). It is **recorded, not yet read**: the sweep still takes a module out of its lifecycle with `status: archived | external`, and moving that decision onto `management` is its own change.
+
 **D2. `external` means only: outside this Site's Administrative Domain** (RFC 4375, ADR-022a). It is never a management value, a `status` value, a `kind` or a placement.
 
 **D3. `status` answers maturity only** — `Development`, `Testing`, `Production`, `Deprecated` (Backstage `spec.lifecycle`). `archived` becomes a lifecycle state beside `realized` (ADR-022d §2); `external` becomes `management: unmanaged`. The catalog's `status` (`stable`, `beta`, `incomplete`, `deprecated`) answers the same question with other values; the two are merged into one enumeration.

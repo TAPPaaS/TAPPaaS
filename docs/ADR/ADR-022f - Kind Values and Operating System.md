@@ -54,13 +54,15 @@ A `machine` is named for itself, not for a service it hosts ([RFC 1178](https://
 
 An `application` inherits the OS of its Host; a `device` has none. For a VM, `ostype` stays the Proxmox hypervisor profile — a different question; for an LXC, `ostype` already names the distribution and becomes `os.id`.
 
+> **As implemented (operator, 2026-09-18):** the facet is held in the existing field **`os`, a string holding `os.id`** — `cluster:vm` already carried `os` with exactly this vocabulary (`debian`, `ubuntu`, `nixos`, `windows`, `unknown`). `os.family` is **derived**, never stored: `debian`, `ubuntu`, `nixos` → `linux`; `windows` → `windows`. So `os: "debian"` means `{family: linux, id: debian}`, no config needs a migration, and the field became a general one (every system has an OS). Where this ADR writes `os.family` / `os.id`, read the derived family and the stored string.
+
 **D8. The term is Module.** "App" remains a user-facing label, never a type or a field value (amends ADR-007b :17).
 
 ## Migration
 
 - ADR-022d table: `host` → `machine`; `app` → `application` (Accepted); backup examples per D4–D6.
 - `satellite`: `kind: external-host` → `machine` (the ADR-022d retirement list is unchanged).
-- VM `os` string → `os.family` + `os.id`; satellites and machines gain `os`; `backup:filesystem` reads `os.id`.
+- ~~VM `os` string → `os.family` + `os.id`~~ — not needed: the string **is** `os.id` and the family is derived (see D7, as implemented). Satellites and machines gain `os`; `backup:filesystem` reads it.
 
 ## Conflicts
 

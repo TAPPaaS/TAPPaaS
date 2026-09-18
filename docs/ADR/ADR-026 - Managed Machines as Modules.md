@@ -64,8 +64,10 @@ ADR-022f D7, whose anchor is the freedesktop `os-release` `ID`, both a cluster n
 standalone PBS machine are:
 
 ```json
-"os": { "family": "linux", "id": "debian" }
+"os": "debian"
 ```
+
+— the facet's `id`, with the family (`linux`) derived from it (ADR-022f D7, as implemented).
 
 **This is the reason the fourth topology works at all.** Proxmox VE is a superset of Debian,
 so `proxmox-backup-server` installs the same way on both — which is precisely what makes a
@@ -258,7 +260,7 @@ from "a cluster node" to "any machine module", which is also what D4 stage 3 nee
    convention for every machine keeps `cicd-key.sh` (#122) simple. `adopt` never asks
    for or handles a password: it cannot, since the nodes are key-only (#19), and it should
    not, since a password typed into the mothership is a credential the mothership then holds.
-2. **Learn.** Read `/etc/os-release` into the OS facet (`os.family`, `os.id`, ADR-022f D7),
+2. **Learn.** Read `/etc/os-release`'s `ID` into `os` (the family follows from it, ADR-022f D7),
    the machine's hostname, and its addresses.
 3. **Choose the module** by `os.id`, one module type per OS (D7): `debian` → `debianhost`. An
    OS with no machine module stops the adoption and says so; it does not fall back to a
