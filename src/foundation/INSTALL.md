@@ -741,6 +741,21 @@ Now you can SSH without a password:
 ssh root@<proxmox-ip>
 ```
 
+**Do this step — it is how you will reach the nodes from now on.** Once the
+install has finished, every node is **key-only**: no password logins over SSH,
+for any user (#19). Root keeps key login, which Proxmox itself and the
+mothership depend on. The **PVE web GUI** (its node *Shell* included) and the
+**physical console** do not use SSH and keep working with the root password —
+that is the way in when a key is missing.
+
+To add a key later (another laptop, a colleague), `ssh-copy-id` no longer works,
+because it needs a password. Open *Datacenter → <node> → Shell* in the web GUI
+and append the public key to the cluster-wide file, which every node reads:
+
+```bash
+echo 'ssh-ed25519 AAAA… you@laptop' >> /etc/pve/priv/authorized_keys
+```
+
 ### 2. Fix locale warnings
 
 Fresh Proxmox installs may show Perl locale warnings. Fix them:

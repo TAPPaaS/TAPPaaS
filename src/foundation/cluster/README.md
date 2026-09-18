@@ -16,6 +16,7 @@ VM, LXC and HA services every other TAPPaaS module builds on.
 | `lan`/`wan` bridge model (VLAN-aware trunk) | nodes | built by `config-network.sh` at install |
 | ZFS data pools (`tankXY`) | nodes | built by `config-storage.sh` at install |
 | Controlled node/cluster reboots | TAPPaaS admin | `reboot-node.sh` / `reboot-cluster.sh` |
+| Key-only SSH on every node (#19) | TAPPaaS admin | enforced by `update.sh` Step 5 (`setup-ssh-hardening.sh`). No password SSH for any user; root by key only. The web GUI, its node Shell and the physical console still take the root password |
 
 A guest is **either** a VM **or** an LXC container, never both.
 

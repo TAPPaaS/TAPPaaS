@@ -6,6 +6,9 @@
 #   1. Runs apt update && apt dist-upgrade on each node, then prunes superseded
 #      kernels (keeping running, latest and latest-1)
 #   2. Distributes Create-TAPPaaS-VM.sh, Create-TAPPaaS-LXC.sh and zones.json to each node
+#   3-4. Refreshes SSD lifecycle and the Realtek NIC fix on each node
+#   5. Makes each node's sshd key-only (#19) — only over a key connection
+#   6. Reconciles the storage node lists from site.json
 #
 # Usage: ./update.sh [module-name]
 #
@@ -204,11 +207,41 @@ while read -r node; do
 done <<< "$NODES"
 info "Realtek NIC driver fix refreshed on all Proxmox nodes."
 
-# Step 5: Drift-heal the cluster storage `nodes` lists from site.json.
+# Step 5: key-only SSH on every node (issue #19).
+#   No password SSH logins, for any user; root keeps key login, because PVE's
+#   own node-to-node Shell and migrations, and this mothership, log in as root
+#   with keys. The web GUI, its node Shell and the physical console are not
+#   sshd and keep working with the root password.
+#   Guard: a node is hardened only if it is reachable RIGHT NOW with a key and
+#   passwords refused. That is what makes it safe — hardening can never be the
+#   step that locks the mothership out, whatever state the node's keys are in.
+info "${BOLD}Step 5: Enforcing key-only SSH on Proxmox nodes${CL}"
+_ssh_hard_fail=0
+while read -r node; do
+    NODE_FQDN="$node.$MGMTVLAN.internal"
+    if ! ssh -n -o BatchMode=yes -o PasswordAuthentication=no -o KbdInteractiveAuthentication=no             -o ConnectTimeout=10 -o StrictHostKeyChecking=no root@"$NODE_FQDN" true 2>/dev/null; then
+        warn "$node: not reachable with a key — leaving its sshd alone (authorize the mothership's key, then re-run)"
+        _ssh_hard_fail=1
+        continue
+    fi
+    scp -q "${SCRIPT_DIR}/setup-ssh-hardening.sh" root@"$NODE_FQDN":/root/tappaas/
+    if _sh_out="$(ssh -n -o StrictHostKeyChecking=no root@"$NODE_FQDN" "/root/tappaas/setup-ssh-hardening.sh" 2>&1)"; then
+        debug "$node: ${_sh_out}"
+    else
+        printf '%s\n' "${_sh_out}" >&2
+        warn "$node: key-only SSH not enforced — see above"
+        _ssh_hard_fail=1
+    fi
+done <<< "$NODES"
+if [[ "${_ssh_hard_fail}" -eq 0 ]]; then
+    info "Key-only SSH enforced on all Proxmox nodes."
+fi
+
+# Step 6: Drift-heal the cluster storage `nodes` lists from site.json.
 # The lists have only one-shot writers (config-storage at pool creation,
 # site-manager node add after a join) — a node that joined by any other
 # path shows its pools 'disabled' until reconciled (node-provisioning §7.3).
-info "${BOLD}Step 5: Reconciling storage node lists from site.json${CL}"
+info "${BOLD}Step 6: Reconciling storage node lists from site.json${CL}"
 if ! bash "${SCRIPT_DIR}/reconcile-storage-nodes.sh"; then
     warn "storage nodes reconcile reported an error — run reconcile-storage-nodes.sh manually"
 fi

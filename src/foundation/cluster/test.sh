@@ -546,6 +546,39 @@ else
     fi
 fi
 
+# ── Test 4: every node's sshd is key-only (#19) ──────────────────────
+# Reads what sshd will actually enforce (sshd -T), not the config files, so an
+# sshd_config that overrides the TAPPaaS drop-in is caught. prohibit-password
+# prints under its older name, without-password.
+# In the pre-update gate (--runtime-only) a node that is not key-only yet is
+# reported, not failed: update.sh Step 5 is what converges it, so failing here
+# would block the very update that fixes it (same rule as tappaas-cicd Test 5b).
+
+info "${BOLD}Test 4: node sshd is key-only${CL}"
+
+RUNTIME_ONLY="${TAPPAAS_TEST_RUNTIME_ONLY:-0}"
+for _node in $(get_all_node_hostnames 2>/dev/null); do
+    # shellcheck disable=SC2086
+    _eff="$(ssh ${SSH_OPTS} "root@${_node}.${MGMT}.internal" "sshd -T" 2>/dev/null || true)"
+    if [[ -z "${_eff}" ]]; then
+        fail "${_node}: could not read sshd -T over a key login"
+        continue
+    fi
+    _bad=""
+    for _kv in "permitrootlogin without-password" "passwordauthentication no" "kbdinteractiveauthentication no"; do
+        _k="${_kv%% *}"; _want="${_kv#* }"
+        _got="$(awk -v k="${_k}" '$1 == k { print $2; exit }' <<< "${_eff}")"
+        [[ "${_got}" == "${_want}" ]] || _bad+="${_k}=${_got:-unset} "
+    done
+    if [[ -z "${_bad}" ]]; then
+        pass "${_node}: key-only (no password SSH; root by key only)"
+    elif [[ "${RUNTIME_ONLY}" == "1" ]]; then
+        skip "${_node}: not key-only yet (${_bad% }) — update.sh Step 5 converges it"
+    else
+        fail "${_node}: sshd accepts passwords (${_bad% }) — run: module-manager module update cluster"
+    fi
+done
+
 # ── Deep Test: create a VM, induce zone drift, verify reconcile ─────
 
 deep_cleanup() {
