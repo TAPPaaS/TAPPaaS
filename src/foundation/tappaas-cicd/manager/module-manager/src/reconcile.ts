@@ -186,7 +186,7 @@ function doReconcile(moduleArg: string, opts: ReconcileOptions): void {
 
   // ── Step 1: Validate module config ───────────────────────────────
   console.log("");
-  info(`${BOLD}Step 1: Validate module configuration${CL}`);
+  info(`${BOLD}Reconcile Step 1: Validate module configuration${CL}`);
   if (!existsSync(moduleJson)) {
     fail(
       `Module config not found: ${moduleJson} — is the module installed? ` +
@@ -215,7 +215,7 @@ function doReconcile(moduleArg: string, opts: ReconcileOptions): void {
 
   // ── Step 2: Re-apply dependency services (idempotent ensure/apply) ──
   console.log("");
-  info(`${BOLD}Step 2: Re-apply dependency services${CL}`);
+  info(`${BOLD}Reconcile Step 2: Re-apply dependency services${CL}`);
 
   const cfg = normalizeModuleConfig(raw);
   const asStrings = (v: unknown): string[] =>
@@ -307,7 +307,7 @@ function doReconcile(moduleArg: string, opts: ReconcileOptions): void {
 
   // ── Step 3: Re-apply the module itself (in-VM converge) ───────────
   console.log("");
-  info(`${BOLD}Step 3: Re-apply the module${CL}`);
+  info(`${BOLD}Reconcile Step 3: Re-apply the module${CL}`);
 
   if (moduleDir) {
     ensureScriptsExecutable(moduleDir);
@@ -358,7 +358,7 @@ function doReconcile(moduleArg: string, opts: ReconcileOptions): void {
   let verifyUnknown = 0;
   if (applied.length > 0) {
     console.log("");
-    info(`${BOLD}Step 4: Verify the re-applied services${CL}`);
+    info(`${BOLD}Reconcile Step 4: Verify the re-applied services${CL}`);
     const svc = checkDependencyServices(configDir, module, applied, moduleEnvironment);
     for (const l of svc.lines as OutLine[]) {
       if (l.kind === "raw") console.log(l.text);
