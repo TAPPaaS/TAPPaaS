@@ -12,6 +12,27 @@ The **Status** column tracks each decision's lifecycle — Draft → Proposed �
 |-----|--------|---------|
 | [ADR-007 — TAPPaaS Taxonomy](<ADR-007 - TAPPaaS Taxonomy.md>) | Accepted — implemented | The model everything hangs on: one **Site**, three classification domains (**People · Apps · Environments**), **Health** as a cross-cutting lens. Detailed per domain in sub-ADRs 007a–007e (007e partial), realization (managers/controllers) in 007f. |
 | [ADR-009 — Composition Meta-Model](<ADR-009 - Composition Meta-Model.md>) | Proposed | How a deployable unit is *built* (module = atomic deployable unit; `<module>:<service>` coordinates) — composition, as distinct from ADR-007's classification. |
+| [ADR-007b — Apps](<ADR-007b - Apps.md>) | Accepted — implemented | The Module rib of the taxonomy: what a module's config declares and where it lives. |
+| [ADR-007d — Site](<ADR-007d - Site.md>) | Accepted — implemented | `site.json` — the Site's own state: nodes, repositories, schedule, default environment. |
+| [ADR-007e — Health](<ADR-007e - Health.md>) | Accepted | Health as a cross-cutting lens, and the site notification target. |
+| [ADR-007f — Realization](<ADR-007f - Realization.md>) | Accepted — implemented | Manager → Controller → Service: how the control plane is built, and the Stack-promotion rule. |
+
+### The workload ontology — ADR-022 family
+
+The vocabulary every other ADR now borrows: what a module *is*, where it sits, who manages it.
+`GLOSSARY.md` at the repository root is the consolidated SSOT for these terms.
+
+| ADR | Status | Decides |
+|-----|--------|---------|
+| [ADR-022 — Workload Ontology](<ADR-022 - Workload Ontology.md>) | Draft — for review | The umbrella: why the ontology exists and how the ribs fit together. |
+| [ADR-022a — Administrative Domain](<ADR-022a - Administrative Domain.md>) | Draft — for review | The boundary of one administrative authority — what *external* is measured against. The relationship taxonomy (D6/D7) is parked for 2.1. |
+| [ADR-022b — Location](<ADR-022b - Location.md>) | Draft — for review | Where something physically is: Site ⊃ Building ⊃ Room ⊃ Rack. Facility removed. |
+| [ADR-022c — Node and Host](<ADR-022c - Node and Host.md>) | Draft — for review | `Node` returns to its ArchiMate meaning; adds **cluster member** and **Host**; namespaces `tier`. |
+| [ADR-022d — Workload Classification](<ADR-022d - Workload Classification.md>) | Draft — for review | `kind` — what type of thing a module is, and why it is a dispatch key. |
+| [ADR-022e — Module Scope](<ADR-022e - Module Scope.md>) | Proposed | `module.tier` becomes **`scope: site \| environment`**. Scope is not stack, not multiplicity, not a layer. |
+| [ADR-022f — Kind Values and OS](<ADR-022f - Kind Values and Operating System.md>) | Proposed | The `kind` leaves: `vm`, `lxc`, **`machine`** (was `host`), **`application`** (was `app`), `device` — plus the OS facet. |
+| [ADR-022g — Management](<ADR-022g - Management.md>) | Proposed | `management: managed \| unmanaged`; **`external` means only "outside the Administrative Domain"**. |
+| [ADR-022h — Facet Register](<ADR-022h - Facet Register.md>) | Proposed | Which attributes are facets beside the single-valued `kind`, and the gate a new one must pass. |
 
 ## Platform decisions
 
@@ -35,6 +56,8 @@ The **Status** column tracks each decision's lifecycle — Draft → Proposed �
 | [ADR-021 — Split-Horizon DNS and Service Reachability](<ADR-021 - Split-Horizon DNS and Service Reachability.md>) | Accepted — implemented | The internal answer for a published name is **always the DMZ gateway**, for every zone: DNS says "go to Caddy", Caddy + Authentik decide who gets in. Authorization moves out of the address (which caused the drift) and into identity. **One resolver** for all three writers (`network-manager split-horizon-target`, D5), ending the drift where three code paths resolved the answer from different zones (#577). Reaching Caddy is a **host-scoped firewall rule** — the DMZ gateway `/32` on tcp/80+443 (D3) — and **no zone may hold `dmz` in `access-to`** (D3b, invariant I5): that grant reached the whole DMZ subnet including the firewall's own GUI and SSH (#618). A wildcard **cert** no longer implies a wildcard **record** (D4), and a name with no public DNS degrades cleanly instead of failing (R3). |
 | [ADR-023 — Reverse Proxy Access Rules](<ADR-023 - Reverse Proxy Access Rules.md>) | Proposed | What Caddy lets through once a caller reaches it. Every route — the primary and each `proxyRoutes` entry — has its own default `proxyAllowedZones` plus optional `proxyAccess` path exceptions, so a module can publish one webhook path without publishing the whole app (#642, #643 merged). Unlisted paths fall back to the route's own access list; `none` denies all. Access lists sit on every handle, never on the domain, because Caddy tries path handles first. |
 | [ADR-025 — Config migrations and the upgrade path](<ADR-025 - Config migrations and the upgrade path.md>) | Accepted | How a release brings a site's `config/` forward, and what a release may assume about where a site is upgrading from. Ordered, idempotent `migrations/NNNN-<slug>.sh` run by `tappaas-self-prepare.sh` — before the rebuild and before **any** module, which `pre-update.sh` cannot be (D2) — each with `--check`, a backup under `config/.migrations/backup/NNNN/` and a ledger entry in `config/.migrations/applied` (#545 backs both up). A failed migration stops the run before anything is updated and is notified through #651. **The review rule:** a change that renames or re-schemas anything under `config/` ships with its migration and a before→after fixture test in the fast tier. No down-migrations — rollback is the backup. Every release names the oldest upgrade source it supports (D10), which is how interim code finally gets deleted. The runner's own release carries none; ADR-017 D7's `updateSchedule` object is the first (D12). |
+| [ADR-024 — Site Fabric](<ADR-024 - Site Fabric.md>) | Draft — placeholder | Several Administrative Domains cooperating — the backup-buddy case generalised. No content decided. |
+| [ADR-026 — Managed Machines as Modules](<ADR-026 - Managed Machines as Modules.md>) | Proposed | Every machine TAPPaaS manages is a module of `kind: machine` — cluster nodes, the satellite, and a Debian host carrying a PBS. Adds `debianhost` for the OS lifecycle. |
 
 ## Governance
 

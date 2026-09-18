@@ -323,16 +323,33 @@ Settle the words before they spread further into schemas, CLI names and
 
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
-| #624 | ADR-022 review comments | 3 | 1 | H | Decisions only; includes the `module.tier` → `stack` question |
-| #637 | ADR-022 comments (second pass) | 4 | 1 | H | Merge with #624 |
-| #610 | Site = administrative domain × location × zone | 3 | 1 | H | |
-| #611 | `kind` values; retire `external-host` (ADR-022d) | 2 | 4 | H | `module-fields.json` and `satellite-fields.json` define it in opposite terms; deployed satellite configs carry it |
-| #599 | Glossary: node vs host vs cluster member | 4 | 1 | H | Precondition for #600 |
+| #624 | ADR-022 review comments | 3 | 1 | H | **Applied 2026-09-17** in Erik's PR #664 — close |
+| #637 | ADR-022 comments (second pass) | 4 | 1 | H | **Applied 2026-09-17** in PR #664 (changelogs cut, Appendix A removed, `kind` defined, 022e–h proposed) — close |
+| #610 | Site = administrative domain × location × zone | 3 | 1 | H | **Decided**: ADR-022a separates the Administrative Domain, 022b the Location; the zone dimension stays ADR-014's. Close on the decision; anything left is implementation under #611 |
+| #611 | `kind` values; retire `external-host` (ADR-022d/f) | 2 | 4 | H | **Decided, not implemented.** 022f D1 fixes the leaves (`vm`, `lxc`, `machine`, `application`, `device`); `external-host` is retired by ADR-010 §8. What remains is the schema and config change — a migration under ADR-025 D7. Stays open as the implementation |
+| #599 | Glossary: node vs host vs cluster member | 4 | 1 | H | **Done 2026-09-18**: ADR-022c D1/D2/D3 restore `Node` to its ArchiMate meaning and add **cluster member** and **Host**; `GLOSSARY.md` §B now carries all three — close |
 | #628 | People → Identity (`people-manager` → `identity-manager`) | 2 | 4 | H | 73 files reference `people-manager`; `config/people/` is a deployed path. Keep an alias for one stable cycle |
-| #422 | Glossary rewrite | 3 | 1 | L | After the decisions above |
-| *(in #624)* | `module.tier` → `stack`? | 3 | 4 | H | 35 JSON files carry `tier`. Erik's point: tier is lifecycle, stack is domain. Decide before migrating |
+| #422 | Glossary rewrite | 3 | 1 | L | **Done 2026-09-18**: `GLOSSARY.md` rewritten to the ADR-022 vocabulary, with a §E "what changed" table for reviewers — close |
+| *(in #624)* | `module.tier` → `stack`? | 3 | 4 | H | **Answered 2026-09-17 (ADR-022e)**: tier does **not** become stack. `module.tier` → **`scope: site \| environment`**; `Stack` stays the ArchiMate aggregation (022e D5); `tier` keeps only `zone.tier` (022e D7). The 35 JSON files are now a migration, not a question |
 
-### G1.2 Backup placement model (ADR-012 close-out) — E3 · R4 · L-H
+### G1.2 Backup placement model + managed machines (ADR-012, ADR-026) — E3 · R4 · L-H
+
+**ADR-026 — managed machines as modules** joins this group (2026-09-18): every machine
+TAPPaaS manages becomes a module of `kind: machine`, which is what makes ADR-012's
+fourth topology — a local PBS on a machine that is not a cluster member — something
+the model can express and patch. The two are one piece of work because a backup
+`application` needs a Host the model knows.
+
+| # | Issue | E | R | L | Note |
+|---|-------|:-:|:-:|:-:|------|
+| *(new)* | `debianhost` module | 3 | 2 | M | ADR-026 D3 — `apt update/upgrade` under the sweep's rules, plus `install`/`test`. The landing point that makes topology §1.3 testable rather than asserted. **Do first**: small, self-contained, and everything below assumes it behaves |
+| *(new)* | ADR-012 topology §1.3 verified | 3 | 2 | M | PBS installed and driven on a `kind: machine` host — Erik's setup, on a test machine first |
+| *(open)* | instance naming | 2 | 4 | H | ADR-026 D6 / ADR-022e D4 — `tappaas1..3` are three instances of one module in one Environment and the config convention has no room for that. **Blocks #665** |
+| #665 | Register cluster nodes as machine modules | 3 | 2 | M | ADR-026 D4 stage 1 — registration only, inert. Stage 2 (node patching behind the module lifecycle) is a separate, high-blast-radius change |
+| *(open)* | `placementState` revisit | 4 | 2 | M | Flagged 2026-09-18: with a machine module as a Host, `node` and `external` may no longer partition the space cleanly. Deliberately not decided in ADR-012 v0.9 |
+
+#### ADR-012 close-out (original scope)
+
 
 Most of the remaining 2.0 milestone. The placement *state* values are
 persisted in `config/backup.json` on every install, so the vocabulary change
