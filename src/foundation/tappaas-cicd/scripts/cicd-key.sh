@@ -21,8 +21,8 @@
 #   rotate [--dry-run] [--skip-unreachable]
 #                     the current key still works: generate a new key, ADD it
 #                     everywhere, prove it reaches every target the old one did,
-#                     switch, then REVOKE every other tappaas-cicd key and delete
-#                     the private-key copies older installs left on the nodes.
+#                     switch, then REVOKE every other tappaas-cicd key, and
+#                     refresh the console debug copy on the nodes (below).
 #                     Aborts before the switch if the new key misses a target;
 #                     the old key is archived as ~/.ssh/id_ed25519.old-<time>.
 #                     Refuses to START while any VM is in doubt — a host key that
@@ -45,6 +45,13 @@
 # cloud-init config; it grants nothing unless that user-data changes, and then
 # only to a holder of the old private key. New VMs get the new key: they read
 # /root/tappaas/tappaas-cicd.pub on the node, which rotate refreshes.
+#
+# The console debug copy: the installer puts the mothership's PRIVATE key on the
+# nodes as /root/tappaas/tappaas-cicd.key, deliberately — from a node's console
+# or web-GUI Shell it reaches the mothership (and from there every VM) when
+# nothing else does. No script reads it. rotate and recover REFRESH it with the
+# current key on every node that has one; they never delete it — after recover
+# it would otherwise hold the key that was lost.
 #
 # Refuses to run while update-tappaas.service is active — the sweep holds SSH
 # sessions on the key being changed.
@@ -201,11 +208,15 @@ do_status() {
     done
     local s; s="$(stale_in "root@${PRIMARY}" "${CLUSTER_FILE}" | wc -l)"
     [[ "$s" -eq 0 ]] && info "  no stale mothership keys" || warn "  ${s} stale mothership key(s) still trusted as root on every node"
-    local priv=""
+    local dbg f
     for n in ${NODES}; do
-        ssh -n "${SSHO[@]}" "root@${n}.mgmt.internal" "test -f /root/tappaas/tappaas-cicd.key" 2>/dev/null && priv+="${n} "
+        f="$(ssh -n "${SSHO[@]}" "root@${n}.mgmt.internal" \
+            "test -f /root/tappaas/tappaas-cicd.key && ssh-keygen -y -f /root/tappaas/tappaas-cicd.key | ssh-keygen -lf - | awk '{print \$2}'" 2>/dev/null)"
+        if [[ -z "${f}" ]]; then dbg+="${n}: none  "
+        elif [[ "${f}" == "${CUR_FP}" ]]; then dbg+="${n}: current  "
+        else warn "  ${n}: console debug key is STALE (${f}) — rotate or recover refreshes it"; dbg+="${n}: stale  "; fi
     done
-    [[ -z "${priv}" ]] || warn "  private-key copy on: ${priv}(/root/tappaas/tappaas-cicd.key — used by nothing)"
+    info "  console debug key (/root/tappaas/tappaas-cicd.key): ${dbg}"
     info "${BOLD}VMs${CL} (tappaas, ${VM_FILE})"
     while read -r m vmid node tgt; do
         [[ -n "$m" ]] || continue
@@ -257,7 +268,7 @@ do_rotate() {
     info "  nodes: $(echo ${NODES}) · VMs: $(awk '{print $1}' <<< "${targets}" | tr '\n' ' ')"
     if [[ "${DRY}" -eq 1 ]]; then
         info "DRY RUN — would generate a new key, add it to ${CLUSTER_FILE} and to the $(grep -c . <<< "${targets}") VMs above,"
-        info "verify it, switch, then revoke every other tappaas-cicd key and delete /root/tappaas/tappaas-cicd.key on the nodes."
+        info "verify it, switch, then revoke every other tappaas-cicd key and refresh the console debug key on the nodes."
         return 0
     fi
 
@@ -309,8 +320,12 @@ revoke_everywhere() {
     for n in ${NODES}; do
         scp -q "${SSHO[@]}" "${KEY}.pub" "root@${n}.mgmt.internal:/root/tappaas/tappaas-cicd.pub" \
             || { error "  ${n}: could not refresh tappaas-cicd.pub"; FAILED=1; }
-        ssh -n "${SSHO[@]}" "root@${n}.mgmt.internal" "rm -f /root/tappaas/tappaas-cicd.key" \
-            || { error "  ${n}: could not delete the private-key copy"; FAILED=1; }
+        # The console debug copy: refresh it where one exists, never delete it.
+        if ssh -n "${SSHO[@]}" "root@${n}.mgmt.internal" "test -f /root/tappaas/tappaas-cicd.key" 2>/dev/null; then
+            scp -q "${SSHO[@]}" "${KEY}" "root@${n}.mgmt.internal:/root/tappaas/tappaas-cicd.key" \
+                && ssh -n "${SSHO[@]}" "root@${n}.mgmt.internal" "chmod 600 /root/tappaas/tappaas-cicd.key" \
+                || { error "  ${n}: could not refresh the console debug key"; FAILED=1; }
+        fi
     done
     while read -r m tgt; do
         [[ -n "$m" ]] || continue

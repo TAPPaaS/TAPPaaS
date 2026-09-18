@@ -70,9 +70,14 @@ ck "no such user: skip (exit 3), nothing created" "3 no" "${rc} $([[ -e /home/no
 grep -qE -- '--sshkey|qm set .*sshkey' "${SCRIPT}" && touches=yes || touches=no
 ck "cicd-key.sh never changes a VM's cloud-init sshkeys" no "${touches}"
 
-# The mothership's PRIVATE key is not copied to the nodes any more.
+# The console debug path: the installer puts the mothership's private key on the
+# nodes on purpose (a node console can then reach the mothership), and
+# cicd-key.sh refreshes that copy on rotate/recover — it must never delete it.
 grep -qE 'id_ed25519 +root@.*tappaas-cicd\.key' "${CICD}/install.sh" && copies=yes || copies=no
-ck "install.sh does not copy the private key to the nodes" no "${copies}"
+ck "install.sh puts the console debug key on the nodes" yes "${copies}"
+grep -qE 'rm -f[^|;]*tappaas-cicd\.key' "${SCRIPT}" && dels=yes || dels=no
+grep -qE 'scp .*"\$\{KEY\}" .*tappaas-cicd\.key' "${SCRIPT}" && refreshes=yes || refreshes=no
+ck "cicd-key.sh refreshes the console debug key, never deletes it" "no yes" "${dels} ${refreshes}"
 
 # distribute_cicd_key replaces the previous mothership key instead of appending,
 # and edits the real file behind the symlink.

@@ -87,11 +87,14 @@ while read -r node; do
   NODE_FQDN="$node.$MGMTVLAN.internal"
   printf "  %s " "$node"
   ssh-copy-id $SSH_ACCEPT -i /home/tappaas/.ssh/id_ed25519.pub root@"$NODE_FQDN" < /dev/null 2>&1 | while IFS= read -r _; do printf "."; done || echo " (failed or already installed)"
-  # also make the PUBLIC key available for the tappaas script that configure cloud-init on the vms.
-  # The private key is never copied to the nodes (#122): nothing reads it there, and a
-  # copy on a node would let anyone with root on that node act as the mothership.
+  # also make the key available for the tappaas script that configure cloud-init on the vms
   ssh -n $SSH_ACCEPT root@"$NODE_FQDN" "mkdir -p /root/tappaas" 2>/dev/null
   scp $SSH_ACCEPT /home/tappaas/.ssh/id_ed25519.pub root@"$NODE_FQDN":/root/tappaas/tappaas-cicd.pub < /dev/null 2>/dev/null
+  # The PRIVATE key too — deliberately. It is the console debug path: from a node's
+  # console or web-GUI Shell, `ssh -i /root/tappaas/tappaas-cicd.key tappaas@tappaas-cicd.mgmt.internal`
+  # reaches the mothership (and from there every VM) when nothing else does. No script
+  # reads it. cicd-key.sh rotate/recover refresh it, never delete it (#122).
+  scp $SSH_ACCEPT /home/tappaas/.ssh/id_ed25519 root@"$NODE_FQDN":/root/tappaas/tappaas-cicd.key < /dev/null 2>/dev/null
   echo " done"
 done < <(ssh -n $SSH_ACCEPT root@"$NODE1_FQDN" pvesh get /cluster/resources --type node --output-format json | jq --raw-output ".[].node" )
 

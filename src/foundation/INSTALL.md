@@ -746,7 +746,14 @@ install has finished, every node is **key-only**: no password logins over SSH,
 for any user (#19). Root keeps key login, which Proxmox itself and the
 mothership depend on. The **PVE web GUI** (its node *Shell* included) and the
 **physical console** do not use SSH and keep working with the root password —
-that is the way in when a key is missing.
+that is the way in when a key is missing. From that node Shell you can go on
+to the mothership, and from the mothership to every VM: the nodes present at
+install carry the mothership's key for exactly this, as
+`/root/tappaas/tappaas-cicd.key`:
+
+```bash
+ssh -i /root/tappaas/tappaas-cicd.key tappaas@tappaas-cicd.mgmt.internal
+```
 
 To add a key later (another laptop, a colleague), `ssh-copy-id` no longer works,
 because it needs a password. Open *Datacenter → <node> → Shell* in the web GUI
