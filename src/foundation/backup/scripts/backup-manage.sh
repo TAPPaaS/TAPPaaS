@@ -94,9 +94,10 @@ JSON_CONFIG="${CONFIG_DIR}/backup.json"
 JSON=$(cat "${JSON_CONFIG}")
 
 # The node PBS runs on. ADR-012 §2.1: the RESOLVED node is carried by the
-# placement state (`placementState: node:<name>`); `.node` is only the operator's
-# discovery constraint and may be empty, so it is a back-compat fallback.
-PBS_NODE="$(jq -r '.placementState // empty' "${JSON_CONFIG}" 2>/dev/null | sed -n 's/^node://p')"
+# placement (`placementState: node` + `.node`, §2.1/#600; the pre-#600
+# `node:<name>` form is still read). Otherwise `.node` is only a discovery
+# constraint, and the fallback.
+PBS_NODE="$(jq -r 'if .placementState == "node" then (.node // "") else ((.placementState // "") | if startswith("node:") then ltrimstr("node:") else "" end) end' "${JSON_CONFIG}" 2>/dev/null)"
 [[ -n "${PBS_NODE}" ]] || PBS_NODE="$(get_config_value 'node' "$(get_node_hostname 0)")"
 ZONE="$(get_config_value 'zone0' 'mgmt')"
 # PBS datastore / Proxmox storage name — configurable via backup.json (issue #199)

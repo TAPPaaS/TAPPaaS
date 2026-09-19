@@ -75,6 +75,15 @@ ck "runtime unknown: config exclusions still apply" "1" "${DNS_SAMPLE_N_ALIAS}"
 dns_sample_select "${CFG}" "${RUN}"
 ck "no vmid: kept, not excluded on an absence" "policy" "$(grep -o '\bpolicy\b' <<<"$(selected)")"
 
+# ── #612: backup has no vmname — sampled under its instance name ─────
+LOCALPBS="${TMP}/localpbs"; mkdir -p "${LOCALPBS}"
+echo '{"placementState":"node","node":"tappaas3","zone0":"mgmt"}' > "${LOCALPBS}/backup.json"
+echo '{"placementState":"shim"}'                                  > "${LOCALPBS}/pbs2.json"
+dns_sample_select "${LOCALPBS}" ""
+ck "#612: a local PBS with no vmname is sampled as its instance" "backup" "$(selected)"
+ck "#612: …in its zone"                    "$(printf 'backup\tmgmt')" "${DNS_SAMPLE_RECORDS}"
+ck "#612: a shim still has no host"        "1" "${DNS_SAMPLE_N_HOSTLESS}"
+
 # ── nothing installed at all ─────────────────────────────────────────
 EMPTY="${TMP}/empty"; mkdir -p "${EMPTY}"
 dns_sample_select "${EMPTY}" "${RUN}"

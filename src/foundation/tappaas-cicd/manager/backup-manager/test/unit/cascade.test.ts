@@ -628,6 +628,14 @@ check(!retentionValid("7") && !retentionValid("7x") && !retentionValid(""), "inv
   eq(pl.kind, "local", "node:<name> classifies as local");
   eq(pl.node, "tappaas3", "resolved node parsed out of the state");
 
+  // §2.1 as decided (#600): placementState "node", the Host in .node.
+  writeBackup({ placementState: "node", node: "dh-test1", storage: "tankc1" });
+  pl = readPlacement(tmp);
+  eq(pl.kind, "local", "#600: node + .node classifies as local");
+  eq(pl.node, "dh-test1", "#600: the Host is .node (a machine instance here)");
+  writeBackup({ placementState: "node", node: "" });
+  eq(readPlacement(tmp).kind, "unresolved", "#600: node naming no Host is unresolved");
+
   // shim — no datastore anywhere.
   writeBackup({ placementState: "shim" });
   pl = readPlacement(tmp);

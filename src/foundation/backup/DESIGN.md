@@ -84,7 +84,7 @@ written back so it is inspectable and idempotent.
 | `placementState` | How it gets there | Meaning |
 |---|---|---|
 | *(empty)* | the released default | unresolved. Resolution **first adopts a PBS already serving the site** — it asks the `.node` Host, `pbsUrl`'s host and every cluster member whether they hold the datastore — and **stops** if one answers only on a host this site does not manage (that is `external`, forced, never inferred). Only when nothing serves does it discover a pool (ADR-012 §2.2, #602) |
-| `node:<name>` | a PBS already serving there was adopted, or a `tankc` pool was found there | PBS software + datastore on that Host. On a cluster node: its Proxmox OS (not a VM). On a machine that is not a cluster member (ADR-012 §1.3) the adopted PBS is recorded and nothing is provisioned — its update path is #603 |
+| `node` (+ `.node` = the Host) | a PBS already serving there was adopted, or a `tankc` pool was found there | PBS software + datastore on the Host `.node` names. On a cluster node: its Proxmox OS (not a VM). On a machine that is not a cluster member (ADR-012 §1.3) the adopted PBS is recorded and nothing is provisioned — its update path is #603 |
 | `shim` | no `tankc` anywhere | marker only. Still satisfies `dependsOn: backup:vm`, so dependents install and their `backup:vm` hooks skip gracefully; re-derived on every update, so it promotes in place the moment storage appears |
 | `external` | forced at install, with a `pbsUrl` | a PBS this site does not provision, consumed by URL (#456). **Sticky**: never re-derived; ADR-012 v1.0 gives it one deliberate exit, `backup-manager placement reset` (#607 — not built yet) |
 
@@ -92,12 +92,15 @@ Two operator inputs shape resolution, both on `backup.json`: **`.node`** restric
 discovery to one named node (empty searches every node), and **`.pbsUrl`** is the PBS
 clients push to (default `backup.mgmt.internal`).
 
-The resolved *node* lives in the state itself (`node:<name>`), not in `.node` — `.node`
-is an operator input that the 3-way merge may legitimately reset to the release default,
-so a resolved value written there could not survive an update.
+After resolution **`.node` names the Host** the PBS runs on (ADR-012 §2.1, #600): state
+`node`, Host in `.node`. The 3-way merge keeps it — a resolved `.node` differs from the
+release's empty default, so it reads as set on this site (the migration 0007 fixture test
+proves it against the real merge). Inside the scripts the state is `node:<host>`
+(`pbs_placement_state`), which is also the pre-#600 on-disk form, read until migration 0007
+has rewritten it.
 
 Legacy states are migrated in place by `update.sh`, never by a promotion-reinstall:
-`local` → `node:<name>` (**the datastore is left exactly where it is**) and
+`local` → `node` with the Host in `.node` (**the datastore is left exactly where it is**) and
 `remote-only` → `external`, seeding `pbsUrl` from the old push target. A pre-ADR-012
 install with no state at all is backfilled the same way.
 

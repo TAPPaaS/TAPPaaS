@@ -192,8 +192,11 @@ echo '{"vmname":"backup","node":"tappaas9"}' > "${TMP}/backup.json"
 pbs_write_placement_state 'node:tappaas2' tankc1
 ck "write: state recorded"    "node:tappaas2" "$(pbs_placement_state)"
 ck "write: storage recorded"  "tankc1"        "$(jq -r '.storage' "${TMP}/backup.json")"
-ck "write: .node (the operator's discovery constraint) is NOT overwritten" \
-                              "tappaas9"      "$(jq -r '.node'    "${TMP}/backup.json")"
+# §2.1 (#600): after resolution .node names the Host — the constraint it
+# replaces was already acted on by the resolution that chose this Host.
+ck "write: stored as placementState node (#600)" "node" "$(jq -r '.placementState' "${TMP}/backup.json")"
+ck "write: .node is now the Host, not the old constraint" \
+                              "tappaas2"      "$(jq -r '.node'    "${TMP}/backup.json")"
 pbs_is_shim     && r=0 || r=1; ck_rc "predicate: not shim when node:"     1 "$r"
 pbs_is_external && r=0 || r=1; ck_rc "predicate: not external when node:" 1 "$r"
 pbs_is_local    && r=0 || r=1; ck_rc "predicate: is local when node:"     0 "$r"

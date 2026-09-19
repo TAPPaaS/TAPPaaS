@@ -27,8 +27,12 @@
 #   .node    optional — restrict tankc discovery to ONE named node ("" = all)
 #   .pbsUrl  the PBS clients push to (default backup.mgmt.internal)
 #
-# The RESOLVED node lives in the state itself (`node:<name>`) — not in `.node`,
-# which is an operator input the 3-way merge (#207/#581) may legitimately reset.
+# The RESOLVED node is stored as ADR-012 §2.1 decides (#600): `placementState:
+# "node"` with `.node` naming the Host — a cluster node or a `kind: machine`
+# instance. Before resolution `.node` is the operator's discovery constraint;
+# after it, the Host. The 3-way merge keeps it: a resolved `.node` differs from
+# the release's empty default, so it reads as set here, never as a release value.
+# (The pre-#600 form `node:<name>` in the state is read until migration 0007.)
 # `.storage` is written back as the resolved pool (merge-safe: it only differs
 # from the release default when discovery actually chose another pool).
 #
@@ -43,10 +47,17 @@ PBS_DEFAULT_URL="backup.mgmt.internal"
 
 # ── Pure helpers (no cluster access — unit-testable) ─────────────────
 
-# Resolved placement state recorded in config (.placementState); empty if unset.
+# jq: the placement state in its internal form. On disk the state is
+# `placementState: "node"` with `.node` naming the Host (ADR-012 §2.1, #600);
+# inside these scripts it is `node:<host>`, which is also the pre-#600 on-disk
+# form, still read until migration 0007 has run. `node` with no `.node` is a
+# state that names nothing, and reads as unresolved.
+PBS_JQ_STATE='if .placementState == "node" then (if (.node // "") != "" then "node:" + .node else "" end) else (.placementState // "") end'
+
+# Resolved placement state recorded in config; empty if unset.
 pbs_placement_state() {
     local f; f="$(_pbs_backup_json "${1:-}")"
-    jq -r '.placementState // empty' "$f" 2>/dev/null || true
+    jq -r "${PBS_JQ_STATE}" "$f" 2>/dev/null || true
 }
 
 # The PBS clients push to (§1.4/§2.1), default backup.mgmt.internal.
@@ -130,7 +141,7 @@ pbs_migrate_placement_state() {
     local f tmp state node target host new
     f="$(_pbs_backup_json "${1:-}")"
     [[ -f "$f" ]] || return 0
-    state="$(jq -r '.placementState // empty' "$f" 2>/dev/null || true)"
+    state="$(jq -r "${PBS_JQ_STATE}" "$f" 2>/dev/null || true)"
     # The node the legacy PBS actually runs on: passed in by the caller (which
     # can probe the cluster — pbs_legacy_pbs_node), else the config's .node.
     node="${2:-}"
@@ -150,9 +161,11 @@ pbs_migrate_placement_state() {
             ;;
     esac
     tmp="$(mktemp)"
+    # A resolved node is stored as §2.1 says: placementState "node" + .node.
     jq --arg s "${new}" --arg h "${host:-}" '
         del(.placement)
-        | (if $s != "" then .placementState = $s else . end)
+        | (if ($s | startswith("node:")) then .placementState = "node" | .node = ($s | ltrimstr("node:"))
+           elif $s != "" then .placementState = $s else . end)
         | (if $h != "" and ((.pbsUrl // "") == "") then .pbsUrl = $h else . end)
     ' "$f" >"$tmp" && mv "$tmp" "$f" || { rm -f "$tmp"; return 1; }
     printf '%s\n' "${new}"
@@ -368,10 +381,10 @@ pbs_resolve_placement_state() {
     printf 'shim\n'
 }
 
-# Persist the resolved state into config/backup.json: .placementState=<state>
-# and (for a local PBS) the resolved .storage. The resolved NODE is carried by
-# the state itself (node:<name>); .node stays the operator's discovery
-# constraint and is never overwritten here. Idempotent.
+# Persist the resolved state into config/backup.json (§2.1, #600): an internal
+# `node:<host>` is written as .placementState="node" + .node=<host>; shim and
+# external as themselves (.node untouched — it is still a discovery constraint
+# for a shim). For a local PBS the resolved .storage too. Idempotent.
 # Args: <state> [storage]
 pbs_write_placement_state() {
     local state="$1" storage="${2:-}" f tmp
@@ -379,7 +392,8 @@ pbs_write_placement_state() {
     [[ -f "$f" ]] || { warn "pbs_write_placement_state: ${f} missing"; return 1; }
     tmp="$(mktemp)"
     jq --arg m "$state" --arg s "$storage" '
-        .placementState = $m
+        (if ($m | startswith("node:")) then .placementState = "node" | .node = ($m | ltrimstr("node:"))
+         else .placementState = $m end)
         | (if $s != "" then .storage = $s else . end)
     ' "$f" >"$tmp" && mv "$tmp" "$f" || { rm -f "$tmp"; return 1; }
 }

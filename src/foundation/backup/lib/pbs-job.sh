@@ -29,15 +29,15 @@ pbs_storage_name() {
 }
 
 # Hostname of the node PBS is installed on. The RESOLVED node is carried by the
-# placement state (ADR-012 §2.1: `placementState: node:<name>`); `.node` is only
-# the operator's discovery constraint and may legitimately be empty, so it is a
-# back-compat fallback for configs not yet migrated. Falls back to the first
+# placement (ADR-012 §2.1, #600: `placementState: node` + `.node`; the pre-#600
+# `node:<name>` form is still read). Falls back to the first
 # mgmt node. The PBS datastore + services live on whatever this returns.
 pbs_node() {
     local state node
     state="$(jq -r '.placementState // empty' "${PBS_CONFIG_DIR}/backup.json" 2>/dev/null)"
     case "${state}" in
-        node:?*) printf '%s\n' "${state#node:}"; return 0 ;;
+        node:?*) printf '%s\n' "${state#node:}"; return 0 ;;   # pre-#600 form
+        node) ;;   # §2.1 (#600): the Host is .node, read below
     esac
     node="$(jq -r '.node // empty' "${PBS_CONFIG_DIR}/backup.json" 2>/dev/null)"
     [[ -n "$node" ]] && printf '%s\n' "$node" || get_node_hostname 0

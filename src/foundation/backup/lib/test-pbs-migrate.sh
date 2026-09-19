@@ -40,7 +40,8 @@ field()   { jq -r "$1 // empty" "${F}"; }
 # ── legacy local → node:<name> ───────────────────────────────────────
 fixture '{"placement":"auto","placementState":"local","node":"tappaas3","storage":"tankc1"}'
 ck "local: returns the new state"   "node:tappaas3" "$(pbs_migrate_placement_state)"
-ck "local: state written"           "node:tappaas3" "$(field .placementState)"
+ck "local: state written as §2.1 (#600)" "node"      "$(field .placementState)"
+ck "local: …the Host in .node"      "tappaas3"      "$(field .node)"
 ck "local: .placement removed"      ""              "$(field .placement)"
 ck "local: .node left alone"        "tappaas3"      "$(field .node)"
 ck "local: .storage untouched"      "tankc1"        "$(field .storage)"

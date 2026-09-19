@@ -653,7 +653,7 @@ new datastore by **pulling** from the old one rather than starting empty:
 ```bash
 backup-manager peer add pull old-pbs --host <old-pbs>   # register the OLD PBS as a pull source
 #   … let the sync job run, then verify the snapshots arrived …
-scripts/backup-manage.sh use-external <new-url> # or re-run the install to resolve node:<new>
+scripts/backup-manage.sh use-external <new-url> # or re-run the install to resolve node (.node = the new Host)
 #   … restore something from the NEW target and confirm it works …
 backup-manager peer delete pull old-pbs          # only now decommission the old datastore
 ```
@@ -690,7 +690,7 @@ What `reset` does, in order:
    "already configured".) `backup.json` becomes `placementState: shim`, `pbsUrl` the local
    default, and `formerExternal` records what was left behind.
 2. The old PBS is written down as a **pull** peer, `pull-former-<host>.json`.
-3. The backup module is updated: the shim becomes `node:<name>` on the `tankc` pool, the local
+3. The backup module is updated: the shim becomes `node` (the Host in `.node`) on the `tankc` pool, the local
    PBS is installed, and the nodes push there from the next backup on.
 4. The pull peer is onboarded — it asks for a **read** login on the old PBS — and its sync job
    copies the history into `pull/<peer>` on the new datastore.

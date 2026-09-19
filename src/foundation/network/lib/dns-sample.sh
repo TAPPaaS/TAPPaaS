@@ -86,6 +86,12 @@ dns_sample_select() {
     for f in "${config_dir}"/*.json; do
         [[ -f "${f}" ]] || continue
         vmname="$(jq -r '.vmname // empty' "${f}" 2>/dev/null)" || continue
+        # The backup module owns no VM and has no vmname (#612): its name is
+        # the instance's — <instance>.<zone>.internal, an alias of its Host —
+        # and it is sampled under that, not dropped for lacking a vmname.
+        if [[ -z "${vmname}" ]] && jq -e 'has("placementState")' "${f}" >/dev/null 2>&1; then
+            vmname="$(basename "${f}" .json)"
+        fi
         [[ -n "${vmname}" ]] || continue
 
         # #241/#255: a device-set alias has no <vmname> record by design.

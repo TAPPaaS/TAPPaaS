@@ -28,16 +28,17 @@
   - Check 3 — backup age: asserts the most recent backup's `ctime` is < 48h old; older-than-48h or unknown age is a WARNING, not a failure.
   - Check 4 — job coverage: asserts a cluster backup job (`pvesh get /cluster/backup`) covers this VMID (either `all==1` or VMID in its `vmid` list); none found is a WARNING, not a failure.
 - The unit tests (`lib/test-pbs-*.sh`) have no deep tier and need no cluster.
-- `lib/test-pbs-dns.sh` (11) — the PBS's DNS name (#612): the name is the instance's; a legacy
+- `lib/test-pbs-dns.sh` (15) — the PBS's DNS name (#612): the name is the instance's; a legacy
   A record is deleted before the alias is added; a machine Host gets a DNS entry first; an
-  unknown Host is refused with nothing changed (`dns-manager` stubbed, calls asserted in order).
+  unknown Host is refused with nothing changed; a dns-manager with no alias verb never touches the A
+  record, and a failed alias puts it back (`dns-manager` stubbed, calls asserted in order).
 - `lib/test-pbs-reset.sh` (19) — `placement reset` (#607): names, the `backup.json` rewrite,
   the `pvesm add` argv, and the order of the node-side storage rename.
 
 ## ADR-012 unit tests (fast; no cluster)
 Aggregated by `./test.sh` — 229 asserts across eleven pure-helper suites:
 - `lib/test-pbs-placement.sh` (63) — the full state-resolution matrix (empty /
-  `shim` / `node:<name>` / `external` × forced × storage found or not); #602: an
+  `shim` / `node` (+ `.node`) / `external` × forced × storage found or not); #602: an
   empty state adopts a PBS already serving — on a machine that is not a cluster
   member, found through `pbsUrl` (an alias such as `backup` is recorded as the Host's
   own name, e.g. `tappaas3`), or on a cluster node with its own pool — ahead of
@@ -47,13 +48,13 @@ Aggregated by `./test.sh` — 229 asserts across eleven pure-helper suites:
   node-list parse, and the state write/read round-trip (including that `.node`,
   the operator's discovery constraint, is never overwritten).
 - `lib/test-pbs-migrate.sh` (33) — the §4.1 legacy backfill: `local` →
-  `node:<name>` (datastore untouched), `remote-only` → `external` with `pbsUrl`
+  `node` (+ `.node`) (datastore untouched), `remote-only` → `external` with `pbsUrl`
   seeded from the old push target, `.placement` always dropped, idempotence, and
   a missing config file being a no-op rather than an error.
 - `lib/test-pbs-legacy-guard.sh` (14) — `update.sh`'s legacy-placement guard,
   extracted from the real file and run in a child **`bash -e`** with stubbed
-  helpers: member → `node:<name>`, non-member → adopt `external`, unreachable →
-  stop, failed adopt → stop rather than fall through to the `node:<name>` write.
+  helpers: member → `node` (+ `.node`), non-member → adopt `external`, unreachable →
+  stop, failed adopt → stop rather than fall through to the `node` (+ `.node`) write.
   The sibling suites run without `-e` and call predicates inside `$( )`, where
   the abort of #625 cannot happen — this suite is the one that reproduces it.
 - `lib/test-pbs-schedule.sh` (38) — the schedule vocabulary, **every sub-daily

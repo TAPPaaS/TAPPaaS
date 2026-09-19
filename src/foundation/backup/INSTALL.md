@@ -34,7 +34,7 @@ below also work stand-alone.
 
 1. Resolves `placementState` (ADR-012 §2.2): keeps an already-resolved state, else
    discovers a `tankc` pool (only `.node` if set, else every node) and records
-   `node:<name>` — or records a **`shim`** and stops there when there is none.
+   `node` with the Host in `.node` — or records a **`shim`** and stops there when there is none.
    An install told to go `external` records that instead and provisions nothing.
 2. Installs `proxmox-backup-server` + `proxmox-backup-client` via apt on the chosen
    node, and reconciles `proxmox-backup-client` onto **all** current PVE nodes.

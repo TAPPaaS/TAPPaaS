@@ -221,7 +221,7 @@ export function environmentRaw(configDir: string, env: string): Record<string, u
 // Classify a placementState into what the reader actually cares about. The
 // legacy v0.2 values are folded in so a config that has not yet been through
 // the module's migrating update still reports honestly:
-//   node:<name> | local → local     (a datastore exists here)
+//   node | node:<name> | local → local   (a datastore exists here)
 //   external | remote-only → external (a datastore exists elsewhere)
 //   shim → shim                     (no datastore anywhere)
 //   null/unknown → unresolved
@@ -229,6 +229,7 @@ export function classifyPlacement(state: string | null): PlacementKind {
   if (!state) return "unresolved";
   if (state.startsWith("node:")) return "local";
   switch (state) {
+    case "node": // §2.1 (#600): the Host is backup.json's .node
     case "local":
       return "local";
     case "shim":
@@ -245,10 +246,13 @@ export function classifyPlacement(state: string | null): PlacementKind {
 export function readPlacement(configDir: string): Placement {
   const b = readJson(join(configDir, "backup.json")) ?? {};
   const placementState = asString(b.placementState);
-  const kind = classifyPlacement(placementState);
-  // The resolved node lives in the state itself (node:<name>); `.node` is only
-  // the operator's discovery constraint, so it is a back-compat fallback for a
-  // legacy `local` state that has not been migrated yet.
+  // `node` naming no Host names nothing: unresolved, as the module's own
+  // reader (pbs-placement.sh) treats it — the next update re-finds the PBS.
+  const kind =
+    placementState === "node" && !asString(b.node) ? "unresolved" : classifyPlacement(placementState);
+  // ADR-012 §2.1 (#600): `placementState: node` with `.node` naming the Host.
+  // The pre-#600 form carries the Host in the state (`node:<name>`), read until
+  // migration 0007; a legacy `local` falls back to `.node` the same way.
   const node = placementState?.startsWith("node:")
     ? placementState.slice("node:".length)
     : kind === "local"
