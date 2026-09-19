@@ -28,19 +28,33 @@ pbs_storage_name() {
     jq -r '.pbsStorageName // "tappaas_backup"' "${PBS_CONFIG_DIR}/backup.json" 2>/dev/null || echo "tappaas_backup"
 }
 
-# Hostname of the node PBS is installed on. The RESOLVED node is carried by the
-# placement (ADR-012 §2.1, #600: `placementState: node` + `.node`; the pre-#600
-# `node:<name>` form is still read). Falls back to the first
-# mgmt node. The PBS datastore + services live on whatever this returns.
+# The Host PBS runs on (#457, ADR-012 §2.1): `placementState: node` + `.node`
+# (or the pre-#600 `node:<name>`); a legacy `local` falls back to `.node`. With
+# no Host recorded it FAILS, naming why — it used to fall back to the cluster's
+# first node, an address with no reference to where PBS actually runs.
 pbs_node() {
     local state node
     state="$(jq -r '.placementState // empty' "${PBS_CONFIG_DIR}/backup.json" 2>/dev/null)"
     case "${state}" in
         node:?*) printf '%s\n' "${state#node:}"; return 0 ;;   # pre-#600 form
-        node) ;;   # §2.1 (#600): the Host is .node, read below
     esac
     node="$(jq -r '.node // empty' "${PBS_CONFIG_DIR}/backup.json" 2>/dev/null)"
-    [[ -n "$node" ]] && printf '%s\n' "$node" || get_node_hostname 0
+    if [[ -n "${node}" ]]; then printf '%s\n' "${node}"; return 0; fi
+    error "No PBS Host recorded (placementState '${state:-empty}', no .node) — nothing to connect to; run: module-manager module update backup" >&2
+    return 1
+}
+
+# How to reach the PBS Host <node> — every ssh to the PBS goes through this, so
+# the backup module has one address for its PBS (#457). A `kind: machine`
+# instance is reached by its recorded `address` (it may have no DNS name); a
+# cluster node by <node>.mgmt.internal. The same rule as pbs_host_addr (#601).
+pbs_node_addr() {
+    local node="$1" addr
+    # Already a DNS name or an address (`backup-controller --pbs <host>`): as is.
+    [[ "${node}" == *.* ]] && { printf '%s\n' "${node}"; return 0; }
+    addr="$(jq -r 'if type == "object" and (.kind // "") == "machine" then (.address // "") else "" end' \
+        "${PBS_CONFIG_DIR}/${node}.json" 2>/dev/null || true)"
+    printf '%s\n' "${addr:-${node}.mgmt.internal}"
 }
 
 # Order proxmox-backup{,-proxy}.service After/Requires zfs-mount.service so PBS
@@ -55,7 +69,7 @@ pbs_ensure_zfs_ordering() {
     info "${BOLD}Ensuring PBS waits for ZFS mount on ${node} (issue #230)${CL}"
     # Route the remote script's per-unit output to [Debug]; surface it on failure.
     _out="$(ssh -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
-        "root@${node}.mgmt.internal" 'bash -s' 2>&1 <<'REMOTE'
+        "root@$(pbs_node_addr "${node}")" 'bash -s' 2>&1 <<'REMOTE'
 set -euo pipefail
 want='[Unit]
 After=zfs-mount.service
@@ -79,7 +93,12 @@ if [[ "$changed" -eq 1 ]]; then
 fi
 REMOTE
 )" && _rc=0 || _rc=$?
-    if [ -n "$_out" ]; then while IFS= read -r _l; do debug "  $_l"; done <<<"$_out"; fi
+    if [ "$_rc" -ne 0 ]; then
+        # Loud, with the output: the 2026-08-17 nightly died here in silence
+        # (#457) — ssh to a stale host, the error only ever at [Debug].
+        error "Could not reach the PBS host ${node} ($(pbs_node_addr "${node}")) to check its ZFS ordering (rc ${_rc}):"
+        [ -n "$_out" ] && printf '%s\n' "$_out" | sed 's/^/    /' >&2
+    elif [ -n "$_out" ]; then while IFS= read -r _l; do debug "  $_l"; done <<<"$_out"; fi
     return "$_rc"
 }
 
@@ -96,7 +115,7 @@ pbs_ensure_verify() {
     store="$(pbs_storage_name)"
     info "${BOLD}Ensuring PBS datastore verification on ${node} (issue #228)${CL}"
     ssh -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
-        "root@${node}.mgmt.internal" "bash -s -- '${store}'" <<'REMOTE'
+        "root@$(pbs_node_addr "${node}")" "bash -s -- '${store}'" <<'REMOTE'
 set -euo pipefail
 store="$1"
 job="verify-${store}"

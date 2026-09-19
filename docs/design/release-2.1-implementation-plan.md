@@ -354,7 +354,7 @@ the model can express and patch. The two are one piece of work because a backup
 Status: on `main` — ADR-026 D6 (8439c54f), #602 (31bec1b2). Built and **T3 green on
 hrossen 2026-09-18** on `wave1/g1.2-module-source` (merges to `main` after hrossen's
 nightly): `debianhost`, `module adopt`, `location` → `moduleSource` (migration 0006),
-#609, #607. #665 stage 1, #612, #600, #603 and #601 built 2026-09-19 (nodes are `pvenode`, operator). Next: #457, #554, #456; phase 6.
+#609, #607. #665 stage 1, #612, #600, #603, #601 and #457 built 2026-09-19 (nodes are `pvenode`, operator). Next: #554, #456; phase 6.
 
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
@@ -389,7 +389,7 @@ is a migration.
 | ✅ #601 | Placement discovery is PVE-only | 3 | 2 | M | **Built 2026-09-19** (`wave1/g1.2-module-source`): a machine Host is reached by its `address`; storage on a Host without Proxmox is found from its ZFS pools (`pvesm` path unchanged). `install.sh` adopts a PBS serving on a non-member Host and refuses — records nothing — when it has only a pool (it used to record an "adopted" placement with nothing behind it). **Not automated:** installing PBS onto a bare machine (test-plan phase 6) |
 | #456 | `external` placement for a pre-existing PBS | 3 | 2 | M | |
 | ✅ #607 | Exit from `external` placement | 4 | 1 | L | **Built 2026-09-18** (`wave1/g1.2-module-source`): `backup-manager placement reset` / `finish-reset`. The old storage entry is renamed `<name>_former` (credential + key) so history stays restorable — left under the module's name, the local install would have kept pushing to the external PBS; state → `shim` (not empty: empty would stop on the old PBS as `unmanaged`); refused without a tankc pool; then the update, then the pull onboarding. Unit-tested; the rename live-verified on hrossen on a copy of the real entry. **Not rehearsed end to end** — needs an external PBS |
-| #457 | `pbs_node` uses placement, not the registered name | 4 | 2 | M | Caused a nightly failure on 2026-08-17 |
+| ✅ #457 | `pbs_node` uses placement, not the registered name | 4 | 2 | M | Caused a nightly failure on 2026-08-17. **Built 2026-09-19** (`wave1/g1.2-module-source`): with #600/#612 the Host (`.node`) and the name (`backup.mgmt.internal`, an alias of it) cannot diverge; every PBS ssh goes through `pbs_node_addr` (a machine by its address); `pbs_node` fails instead of guessing the first node; the ZFS-ordering ssh failure is printed. backup-controller's override aligned |
 | ✅ #603 | PBS on a non-PVE host has no update path | 3 | 2 | M | **Built 2026-09-19** (`wave1/g1.2-module-source`): the Host's owner patches it — the cluster module for a node, the machine's `debianhost` instance in the sweep otherwise. Backup install/update checks the Host has an owner (`lib/pbs-host.sh`), adopts an unregistered machine, warns loudly when it cannot. Also closes a #612 gap: a PBS adopted on a machine now gets its DNS alias at install |
 | #554 | Reconcile creates duplicate job coverage | 3 | 2 | M | |
 | ✅ #609 | Off-site location recorded | 4 | 2 | M | **Built 2026-09-18** (`wave1/g1.2-module-source`): the field is `physicalLocation` (operator: `location` was a module's source directory, renamed `moduleSource` with migration 0006, readers accept both for one stable cycle). Recorded by `backup-manager peer add --country/--city/--building` and `satellite-manager install --country/--city`; `site.json` `location` gains `city`/`building`; `backup-manager validate` warns about a satellite/`remote`/`pull` target not shown to be elsewhere |

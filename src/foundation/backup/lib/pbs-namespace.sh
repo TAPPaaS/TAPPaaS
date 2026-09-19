@@ -65,7 +65,7 @@ pbs_ns_ensure() {
     store="$(pbs_storage_name)"
     node="$(pbs_node)"
     ssh -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
-        "root@${node}.mgmt.internal" "bash -s -- '${store}' '${ns}'" <<'REMOTE'
+        "root@$(pbs_node_addr "${node}")" "bash -s -- '${store}' '${ns}'" <<'REMOTE'
 set -euo pipefail
 store="$1"; ns="$2"
 parent=""
@@ -117,7 +117,7 @@ _pbs_node_run() {
     node="$(pbs_node)"
     printf -v cmd '%q ' "$@"
     ssh -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
-        "root@${node}.mgmt.internal" "${cmd}"
+        "root@$(pbs_node_addr "${node}")" "${cmd}"
 }
 
 # ── Class A: TAPPaaS buddy (pull model) ──────────────────────────────

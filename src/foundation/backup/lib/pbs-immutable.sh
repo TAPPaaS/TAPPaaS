@@ -43,7 +43,7 @@ pbs_immutable_ensure() {
     oncal="$(_pbs_immutable_oncalendar "$schedule")"
     info "${BOLD}Ensuring immutable ZFS snapshots on ${node} for ${BL}${dataset}${CL} (${oncal}, keep ${keep})${CL}"
     ssh -o ConnectTimeout=15 -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
-        "root@${node}.mgmt.internal" "bash -s -- '${dataset}' '${keep}' '${oncal}' '${SVC}'" <<'REMOTE'
+        "root@$(pbs_node_addr "${node}")" "bash -s -- '${dataset}' '${keep}' '${oncal}' '${SVC}'" <<'REMOTE'
 set -euo pipefail
 dataset="$1"; keep="$2"; oncal="$3"; svc="$4"
 install -d /usr/local/sbin
@@ -85,7 +85,7 @@ REMOTE
 pbs_immutable_disable() {
     local node; node="$(pbs_node)"
     ssh -o ConnectTimeout=15 -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
-        "root@${node}.mgmt.internal" "bash -s -- '${SVC}'" <<'REMOTE'
+        "root@$(pbs_node_addr "${node}")" "bash -s -- '${SVC}'" <<'REMOTE'
 set -uo pipefail
 svc="$1"
 systemctl disable --now "${svc}.timer" >/dev/null 2>&1 || true

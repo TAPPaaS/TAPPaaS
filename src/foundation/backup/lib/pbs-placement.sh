@@ -222,6 +222,7 @@ pbs_adopt_external_pbs() {
 # a cluster node — by <name>.<zone>.internal.
 pbs_host_addr() {
     local name="$1" zone="${2:-mgmt}" addr
+    [[ "${name}" == *.* ]] && { printf '%s\n' "${name}"; return 0; }   # already a name/address
     addr="$(jq -r 'if type == "object" and (.kind // "") == "machine" then (.address // "") else "" end' \
         "${PBS_PLACEMENT_CONFIG_DIR}/${name}.json" 2>/dev/null || true)"
     printf '%s\n' "${addr:-${name}.${zone}.internal}"

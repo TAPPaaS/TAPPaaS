@@ -42,5 +42,20 @@ ck "remove last→empty" ""                "$(_pbs_csv_remove "140" 140)"
 ck "remove absent"     "140,150"         "$(_pbs_csv_remove "140,150" 999)"
 ck "remove no substr"  "140"             "$(_pbs_csv_remove "140" 14)"   # 14 must not remove 140
 
+# ── #457: one Host, one address; no guessing ─────────────────────────
+PJ="$(mktemp -d)"; export PBS_CONFIG_DIR="${PJ}"   # read by pbs_node/pbs_node_addr
+echo '{"placementState":"node","node":"tappaas3"}'      > "${PJ}/backup.json"
+ck "pbs_node: the Host in .node"            "tappaas3" "$(pbs_node)"
+echo '{"placementState":"node:tappaas2","node":""}'     > "${PJ}/backup.json"
+ck "pbs_node: the pre-#600 form"             "tappaas2" "$(pbs_node)"
+echo '{"placementState":"shim"}'                        > "${PJ}/backup.json"
+pbs_node >/dev/null 2>&1 && ck "pbs_node: no Host → fails, never the first node" 1 0 \
+                          || ck "pbs_node: no Host → fails, never the first node" 1 1
+echo '{"kind":"machine","address":"10.0.0.90"}'         > "${PJ}/dh-test1.json"
+ck "addr: a machine → its address"          "10.0.0.90"              "$(pbs_node_addr dh-test1)"
+ck "addr: a node → <node>.mgmt.internal"    "tappaas3.mgmt.internal" "$(pbs_node_addr tappaas3)"
+ck "addr: a DNS name (--pbs) → as is"       "sat.example.org"        "$(pbs_node_addr sat.example.org)"
+rm -rf "${PJ}"
+
 echo "RESULT: ${PASS} passed, ${FAIL} failed"
 [[ ${FAIL} -eq 0 ]]

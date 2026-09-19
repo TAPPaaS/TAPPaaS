@@ -34,6 +34,9 @@
   record, and a failed alias puts it back (`dns-manager` stubbed, calls asserted in order).
 - `lib/test-pbs-placement.sh` also covers #601: the first ONLINE `tankc*` zpool on a Host
   without Proxmox, and a machine instance reached by its `address`.
+- `lib/test-pbs-job.sh` also covers #457: `pbs_node` reads `.node` (and the pre-#600 form)
+  and fails with no Host rather than guessing; `pbs_node_addr` reaches a machine by its
+  address, a node by `<node>.mgmt.internal`, a DNS name as is.
 - `lib/test-pbs-host.sh` (11) — who patches the PBS's Host (#603): a cluster node → the
   cluster module; a registered machine → its instance; an unregistered one is adopted
   (`--wait 0`); a failed adopt is `none`, warned with the command; an unreachable cluster is

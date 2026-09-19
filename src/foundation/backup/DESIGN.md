@@ -92,6 +92,14 @@ Two operator inputs shape resolution, both on `backup.json`: **`.node`** restric
 discovery to one named node (empty searches every node), and **`.pbsUrl`** is the PBS
 clients push to (default `backup.mgmt.internal`).
 
+**One Host, one address (#457).** Every PBS operation (datastore, namespaces, ACLs,
+verification, the ZFS-mount drop-ins) finds the Host with `pbs_node` — `.node`, or the
+pre-#600 state — and reaches it through `pbs_node_addr`: a machine by its `address`, a node
+as `<node>.mgmt.internal`. The clients' name, `backup.mgmt.internal`, is an alias of that same
+Host (#612), so the two cannot diverge. With no Host recorded `pbs_node` fails, naming why; it
+no longer falls back to the cluster's first node. A failed ssh in the ZFS-ordering step is
+printed with its output instead of dying at `[Debug]` (the 2026-08-17 nightly).
+
 **Discovery on a Host without Proxmox (#601).** A `kind: machine` Host is reached by its
 recorded `address` (`pbs_host_addr`), and its storage is found from its ZFS pools
 (`zpool list`, first ONLINE `tankc*`) where a Proxmox node is asked `pvesm status`. The

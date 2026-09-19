@@ -146,17 +146,18 @@ pbs_node() {
         printf '%s\n' "${PBS_ENDPOINT}"
         return 0
     fi
-    # ADR-012 §2.1: the RESOLVED node is carried by the placement state
-    # (placementState: node:<name>). `.node` is only the operator's discovery
-    # constraint and is legitimately empty, so it is a back-compat fallback for
-    # a config that has not been through the migrating update yet.
+    # ADR-012 §2.1 (#600): the Host is `.node` (state `node`), or carried in
+    # the pre-#600 state `node:<name>`. No Host recorded → fail, naming why;
+    # never the cluster's first node, which is not where PBS runs (#457).
     local st n
     st="$(jq -r '.placementState // empty' "${PBS_CONFIG_DIR:-/home/tappaas/config}/backup.json" 2>/dev/null)"
     case "${st}" in
         node:?*) printf '%s\n' "${st#node:}"; return 0 ;;
     esac
     n="$(jq -r '.node // empty' "${PBS_CONFIG_DIR:-/home/tappaas/config}/backup.json" 2>/dev/null)"
-    if [[ -n "$n" ]]; then printf '%s\n' "$n"; else get_node_hostname 0; fi
+    if [[ -n "$n" ]]; then printf '%s\n' "$n"; return 0; fi
+    error "No PBS Host recorded (placementState '${st:-empty}', no .node) — run: module-manager module update backup" >&2
+    return 1
 }
 
 # Skip-with-exit-0 helper for unreachable PBS (graceful degradation). In --json
@@ -220,7 +221,7 @@ cmd_list() {
     local node store snaps
     node="$(pbs_node)"; store="$(pbs_storage_name)"
     snaps="$(ssh -n -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
-        "root@${node}.mgmt.internal" \
+        "root@$(pbs_node_addr "${node}")" \
         "proxmox-backup-debug api get /admin/datastore/${store}/snapshots --output-format json 2>/dev/null" \
         | jq -r --arg vmid "$vmid" '.[]
               | select(.["backup-type"]=="vm" and (.["backup-id"]==$vmid))
