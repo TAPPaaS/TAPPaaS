@@ -155,6 +155,11 @@ compromise-isolation rule that keeps the off-site vault outside the blast radius
 cluster. Recording the transition makes that rule visible in the model rather than only in
 prose.
 
+> **Amended 2026-09-19 by [ADR-010 §8.4](ADR-010-vps-satellite-reverse-proxy-backup.md):** a
+> satellite stays `managed` — patched in the sweep like any machine — unless it is locked down
+> as a backup pull vault (`module modify <instance> --lockdown`); only then does it become
+> `unmanaged`. The table above describes the locked-down satellite.
+
 > **Consequence:** an `unmanaged` satellite is *not* patched by TAPPaaS. Its OS updates are
 > its own (unattended-upgrades, per ADR-010 §5). D3's `debianhost` lifecycle therefore does
 > **not** apply to a running satellite, and must not be assumed to.

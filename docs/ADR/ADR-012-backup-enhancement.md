@@ -167,6 +167,10 @@ a domain boundary. What is unusual about it is its `management` value, which sta
 `managed` during provisioning and becomes `unmanaged` once it is running, so that
 the vault stays independent of the home cluster (ADR-026 D5, ADR-010 §7.3). Either
 way the host is a module TAPPaaS knows, which is what puts it here.
+*Refined 2026-09-19 by ADR-010 §8.4:* a satellite is `managed` by default and can then be
+the Site's PBS Host (`node: <instance>`, clients push over the tunnel), which `validate` accepts
+only with a locked-down buddy pulling it elsewhere; a **locked-down** satellite is `unmanaged`,
+pulls, and is never the Site's placement `node`.
 
 ### 1.4 External PBS (a PBS outside this Site, reached by URL)
 
