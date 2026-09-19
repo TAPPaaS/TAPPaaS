@@ -110,6 +110,11 @@
       "apply": "none",
       "changeNote": "Records where a machine physically is (#609); changing it moves nothing, it only changes what the off-site check compares with the Site."
     },
+    "roles": {
+      "class": "manual",
+      "apply": "none",
+      "changeNote": "What a machine is for (ADR-022h). Nothing re-provisions the machine when it changes: a satellite's roles are rendered onto it at install, so a new set takes `module-manager module delete <instance> --decommission` and an add. The `backup` role is set by `module modify <instance> --lockdown`, never by --set (ADR-010 §8.4)."
+    },
     "address": {
       "class": "in-place",
       "apply": "none",
