@@ -413,6 +413,10 @@ fi
 echo "PBS Fingerprint: ${PBS_FINGERPRINT}"
 
 # Step 6: Add PBS storage to Proxmox datacenter (on primary node)
+# (The remote check below matches the storage name EXACTLY: a substring test
+# matched <name>_former, the entry placement reset keeps for the old PBS, and
+# skipped registering the new local storage, leaving the backup job with no
+# storage at all. Found in the #407 end-to-end reset test.)
 MGMT_NODE="$(get_node_hostname 0)"
 if [[ -z "${TAPPAAS_PASSWORD}" ]] && ! _pbs_pvesm_has "${DATASTORE_NAME}" "${ZONE}"; then
   die "The Proxmox storage ${DATASTORE_NAME} is missing and ${PBS_USER}'s password is not known here — re-run with \$TAPPAAS_PBS_PASSWORD set, or from a terminal."
@@ -425,7 +429,7 @@ set -e
 printf '%s' "${TAPPAAS_PASSWORD}" > /tmp/pbs_password.tmp
 
 # Add PBS storage using pvesm
-if ! pvesm status | grep -q ${DATASTORE_NAME}; then
+if ! pvesm status --storage ${DATASTORE_NAME} >/dev/null 2>&1; then
   pvesm add pbs ${DATASTORE_NAME} --server ${PBS_HOSTNAME} --datastore ${DATASTORE_NAME} --username "${PBS_USER}" --password "\$(cat /tmp/pbs_password.tmp)" --fingerprint "${PBS_FINGERPRINT}"
   echo "PBS storage added to Proxmox"
 else

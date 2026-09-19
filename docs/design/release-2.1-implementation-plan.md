@@ -396,7 +396,7 @@ is a migration.
 | ✅ #554 | Reconcile creates duplicate job coverage | 3 | 2 | M | **Built 2026-09-19** (`wave1/g1.2-module-source`): coverage is asked of every `/cluster/backup` job. A foreign job naming the VM by vmid → left alone, reported; an `--all`/pool job → reported, VM added anyway (else no PBS backup); disabled jobs and a silent cluster never block. New `backup-manager coverage <module>` (+ `backup-controller coverage`). Live on hrossen with a throwaway foreign job |
 | ✅ #609 | Off-site location recorded | 4 | 2 | M | **Built 2026-09-18** (`wave1/g1.2-module-source`): the field is `physicalLocation` (operator: `location` was a module's source directory, renamed `moduleSource` with migration 0006, readers accept both for one stable cycle). Recorded by `backup-manager peer add --country/--city/--building` and `satellite-manager install --country/--city`; `site.json` `location` gains `city`/`building`; `backup-manager validate` warns about a satellite/`remote`/`pull` target not shown to be elsewhere |
 | ✅ #605 | Split ADR-012 acceptance list | 5 | 1 | L | **Done in v1.0:** a Decision list (accepted) and an Implementation list (tracked in #407) |
-| #407 | ADR-012 3-node live validation gate | 2 | 1 | L | Sign-off gate |
+| #407 | ADR-012 3-node live validation gate | 2 | 1 | L | Sign-off gate. **Live suite green 2026-09-19** on hrossen with dh-test1's PBS as the second PBS: push write-no-delete, off-site restore ±key, relocation-by-pull, `placement reset` end to end (found + fixed a substring storage check). `node add` client: moot on PVE 9 (hard dependency). Left: immutability live (production ZFS only), **operator sign-off** |
 
 ### G1.3 Module contract & repo layout — E2 · R5 · L-H
 

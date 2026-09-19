@@ -341,6 +341,36 @@ Five tiers. T0–T2 run on every package; T3–T4 run where the package touches 
 
 ## Package logs
 
+### 2026-09-19 — #407 live suite on the 3-node reference cluster (hrossen)
+
+The second PBS the remaining items needed now exists: PBS 4.2.6 on `dh-test1` (a `debianhost`
+test VM, test plan phase 6). Every item ran against real infrastructure with throwaway users,
+storages, namespaces and datastores, all removed afterwards; the site's live backup
+(`node` = tappaas3, `tappaas_backup`) was never touched.
+
+- **Push, write-no-delete (§1.4, §2.5):** a VM backed up to the second PBS through a
+  `DatastoreBackup` login; with that same login, `snapshot forget` and `prune` were both
+  refused (`missing Datastore.Modify|Datastore.Prune`) and the snapshot stayed.
+- **Off-site restore with and without the key:** the second PBS pulled the encrypted
+  `config/` capture (`fs/tappaas-cicd`) with a read-only login on the home PBS; restored from
+  the off-site copy with the site key (293 files, `site.json` intact); refused without it
+  (`missing key`), nothing written.
+- **Relocation-by-pull (§4.3):** vm/150's full history (21 snapshots, 2026-08-16 → 09-18)
+  pulled into the second PBS; the newest restored from there to a new VMID (32 GB, 16 s).
+- **`placement reset` end to end (#607), in a sandbox `config/`:** `placement use-external`
+  consumed the second PBS (#456, live); `reset` renamed its storage `_former` (history still
+  listable); the update promoted the shim to a local datastore on tappaas3; the pull
+  onboarding brought the old history into `pull/former-10`; a test restore from it worked;
+  `finish-reset` removed only the `_former` entry; the old PBS kept its data.
+- **Found and fixed:** `install.sh` tested the Proxmox storage with a **substring** match, so
+  after a real reset `tappaas_backup_former` made it skip registering the new
+  `tappaas_backup` — every backup would have failed. Now an exact `pvesm status --storage`.
+- **`node add` installs the client (#382):** not testable by removal and not needed:
+  `proxmox-backup-client` is a hard dependency of Proxmox VE 9 (`libpve-storage-perl`,
+  `pve-container`); removing it removes `proxmox-ve`. Every PVE 9 node has the client.
+- **Not run:** datastore immutability (ZFS snapshots) live — it needs a ZFS datastore, and
+  the only one is production.
+
 ### 2026-09-09 — legacy `local` on a host that is not a cluster member
 
 A second system's `config/backup.json` carries `placementState: "local"` with `node: "backup"` — its PBS runs on a **standalone host** that answers at `backup.mgmt.internal`, not on a cluster member. To the client modules that is indistinguishable from an in-cluster PBS, which is exactly why it went unnoticed; the §4.1 migration would have written **`node:backup`**, asserting a cluster membership that was never true. (ADR-022 raises the same objection about the meaning of Node, citing this config.)
