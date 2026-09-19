@@ -72,12 +72,16 @@ run_quiet() {
 . "${MODULE_DIR}/lib/pbs-client.sh"
 # shellcheck source=lib/pbs-immutable.sh disable=SC1091
 . "${MODULE_DIR}/lib/pbs-immutable.sh"
+# shellcheck source=lib/pbs-dns.sh disable=SC1091
+. "${MODULE_DIR}/lib/pbs-dns.sh"
 
 # Now change to temp directory for the rest of the installation
 TEMP_DIR=$(mktemp -d)
 pushd $TEMP_DIR >/dev/null
 
-VMNAME="$(get_config_value 'vmname' "$1")"
+# The PBS's DNS name is the instance's name (ADR-012 §2.7, #612): backup owns no
+# VM, so there is no vmname — `backup` by default, <instance>.<zone>.internal.
+INSTANCE="$(pbs_instance "${1:-}")"
 IMAGE_LOCATION="$(get_config_value 'imageLocation' 'http://download.proxmox.com/debian/pbs')"
 DESCRIPTION="$(get_config_value 'description' 'TAPPaaS APT installation')"
 ZONE="$(get_config_value 'zone0' 'mgmt')"
@@ -203,9 +207,7 @@ echo "Proxmox Backup Server and client tools installed on:"
 echo "  - PBS Server: ${NODE}.${ZONE}.internal"
 echo "  - PBS Client: All Proxmox VE nodes"
 
-# Get the PBS node IP address
-PBS_NODE_IP=$(ssh root@${NODE}.${ZONE}.internal "hostname -I | awk '{print \$1}'")
-PBS_HOSTNAME="${VMNAME}.${ZONE}.internal"
+PBS_HOSTNAME="$(pbs_dns_name "${INSTANCE}" "${ZONE}")"
 # PBS datastore / Proxmox storage name — configurable via backup.json (issue #199)
 DATASTORE_NAME="$(get_config_value 'pbsStorageName' 'tappaas_backup')"
 DATASTORE_PATH="/${STORAGE}/${DATASTORE_NAME}"
@@ -248,15 +250,11 @@ if [[ "${#TAPPAAS_PASSWORD}" -lt 8 ]]; then
   die "Failed to obtain a PBS password (need ≥8 chars). Set \$TAPPAAS_PBS_PASSWORD and retry."
 fi
 
-# Step 0: Add DNS entry in OPNsense
-info "Adding DNS entry in OPNsense for ${VMNAME}.${ZONE}.internal..."
-if dns-manager --no-ssl-verify add "${VMNAME}" "${ZONE}.internal" "${PBS_NODE_IP}" --description "PBS Backup Server"; then
-  echo "DNS entry added successfully"
-else
-  warn "Failed to add DNS entry automatically. You may need to add it manually:"
-  echo "  Hostname: ${VMNAME}"
-  echo "  Domain: ${ZONE}.internal"
-  echo "  IP: ${PBS_NODE_IP}"
+# Step 0: the PBS's name, as an alias of the Host it runs on (#612)
+info "Pointing ${PBS_HOSTNAME} at ${NODE}.${ZONE}.internal in OPNsense..."
+if ! pbs_dns_ensure "${INSTANCE}" "${ZONE}" "${NODE}"; then
+  warn "Could not register ${PBS_HOSTNAME} automatically. Add it by hand:"
+  echo "  dns-manager alias add ${PBS_HOSTNAME} ${NODE} ${ZONE}.internal"
 fi
 
 # Step 1: Create datastore on PBS
@@ -409,6 +407,6 @@ pbs_ensure_declared || warn "Could not register some VMs (check the backup job)"
 info "\n${GN}PBS configuration completed successfully!${CL}"
 echo
 echo "Next steps:"
-echo "1. Access PBS GUI at https://${VMNAME}.${ZONE}.internal:8007"
+echo "1. Access PBS GUI at https://${PBS_HOSTNAME}:8007"
 echo "2. Consider setting up backup-of-backup to a remote PBS"
 echo

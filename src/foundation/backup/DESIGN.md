@@ -50,7 +50,12 @@ precisely so it can be restored *before* there is a VM to restore into.
 
 Unlike most foundation modules, PBS is installed **via apt directly on a Proxmox node**
 (`imageType: "apt"`), not as a VM — the datastore needs direct access to a `tankc` ZFS
-pool. The `backup.mgmt.internal` DNS name points at that node.
+pool. The `backup.mgmt.internal` DNS name points at that node — as a **CNAME on the node's own
+dnsmasq entry** (`lib/pbs-dns.sh`, #612), so it follows the node's address and moves with one
+call when the PBS moves. The name is the backup **instance's** (`<instance>.<zone>.internal`,
+default `backup`); the module has no `vmname`, because it owns no VM. Every update re-asserts
+the alias, and replaces the A record that installs before #612 wrote. A `debianhost` Host
+without a DNS entry gets one from its `address` first.
 
 ## Why native apt, not a VM
 

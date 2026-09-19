@@ -54,7 +54,9 @@ ZONE="mgmt"
 BOLD=""; CL=""; BL=""; GN=""; BGN=""
 info() { :; }; debug() { :; }; error() { echo "ERR: \$*"; }
 warn() { echo "warn: \$*"; }
-get_config_value() { case "\$1" in vmname) echo "backup" ;; *) echo "\${2:-}" ;; esac; }
+get_config_value() { echo "\${2:-}"; }
+. "${SCRIPT_DIR}/pbs-dns.sh"      # the DNS name is the instance's (#612)
+INSTANCE="backup"
 pbs_placement_state()       { echo "local"; }
 pbs_legacy_pbs_node()       { echo "tappaas3"; }
 pbs_node_is_cluster_member() { return $1; }

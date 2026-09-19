@@ -60,6 +60,10 @@ class DhcpHost:
     lease_time: int | None = None  # Lease time in seconds
     set_tag: str | None = None  # Tag to set for matching requests
     ignore: bool = False  # Ignore DHCP packets from this host
+    # CNAME aliases on this entry (#612). None = keep whatever the entry has:
+    # the ansible-style module resets a field it is not given, and re-adding a
+    # Host must never drop the aliases that follow it.
+    cnames: list[str] | None = None
 
 
 class DhcpManager:
@@ -537,6 +541,9 @@ class DhcpManager:
             params["set_tag"] = host.set_tag
         if host.ignore:
             params["ignore"] = host.ignore
+        cnames = host.cnames if host.cnames is not None else self._existing_cnames(host.host, host.domain)
+        if cnames:
+            params["cnames"] = cnames
 
         # Convert booleans to 0/1 for OPNsense API compatibility
         params = _convert_bools_to_int(params)
@@ -860,6 +867,135 @@ class DhcpManager:
         self.reconfigure()
         return {"changed": True,
                 "uuid": (existing or {}).get("uuid") or response.get("uuid")}
+
+    # ----- CNAME aliases (ADR-012 §2.7, #612) --------------------------------
+    #
+    # A name that must follow a Host — the PBS's `backup.mgmt.internal` follows
+    # the node it runs on — is a CNAME on the Host's own dnsmasq entry, not an
+    # A record of an address captured once: when the PBS moves, the alias moves
+    # with one call, and when the Host's address changes, nothing needs to.
+    # Written with the raw setHost API, which saves only the fields it is given,
+    # so the entry's IP, MACs and description are never touched.
+
+    @staticmethod
+    def _selected(field) -> list[str]:
+        """The selected values of a multi-select field from getHost."""
+        if isinstance(field, dict):
+            return [v.get("value", k) for k, v in field.items()
+                    if isinstance(v, dict) and v.get("selected") and (v.get("value") or k)]
+        if isinstance(field, str):
+            return [x for x in field.split(",") if x]
+        return list(field or [])
+
+    def _existing_cnames(self, host: str, domain: str | None) -> list[str]:
+        """The CNAMEs on an existing entry for host.domain; [] when none or unknown."""
+        try:
+            row = self.get_host_row(host, domain)
+            if not row or not row.get("uuid"):
+                return []
+            return self._selected(self.get_host_full(row["uuid"]).get("cnames"))
+        except Exception:  # a lookup failure must not block the add itself
+            return []
+
+    def get_host_full(self, uuid: str) -> dict:
+        """One dnsmasq host with every field (searchHost omits cnames)."""
+        result = self.client.run_module(
+            "raw",
+            params={"module": "dnsmasq", "controller": "settings",
+                    "command": "getHost", "params": [uuid], "action": "get"},
+        )
+        return result.get("result", {}).get("response", {}).get("host", {}) or {}
+
+    def list_host_rows(self) -> list[dict]:
+        result = self.client.run_module(
+            "raw",
+            params={"module": "dnsmasq", "controller": "settings",
+                    "command": "searchHost", "action": "get"},
+        )
+        return result.get("result", {}).get("response", {}).get("rows", []) or []
+
+    def list_cnames(self) -> list[dict]:
+        """Every CNAME alias: [{alias, host, domain, uuid}], sorted by alias."""
+        out = []
+        for row in self.list_host_rows():
+            uuid = row.get("uuid")
+            if not uuid:
+                continue
+            for alias in self._selected(self.get_host_full(uuid).get("cnames")):
+                out.append({"alias": alias, "host": row.get("host", ""),
+                            "domain": row.get("domain", ""), "uuid": uuid})
+        return sorted(out, key=lambda r: r["alias"])
+
+    def _set_cnames(self, uuid: str, cnames: list[str]) -> None:
+        result = self.client.run_module(
+            "raw",
+            params={"module": "dnsmasq", "controller": "settings",
+                    "command": "setHost", "params": [uuid], "action": "post",
+                    "data": {"host": {"cnames": ",".join(cnames)}}},
+        )
+        response = result.get("result", {}).get("response", {})
+        if response.get("result") != "saved":
+            raise RuntimeError(f"setHost (cnames) failed for {uuid}: {response}")
+
+    def set_cname(self, alias: str, host: str, domain: str, check_mode: bool = False) -> dict:
+        """Make <alias> (an FQDN) a CNAME of <host>.<domain>, and of nothing else.
+
+        Idempotent. The alias is removed from any other Host first — that is a
+        move, as when the PBS relocates. Refused when the target Host has no
+        dnsmasq entry (a CNAME to a name dnsmasq cannot answer resolves to
+        nothing), or when <alias> is itself a host entry: that is the old A
+        record, which the caller replaces deliberately.
+        """
+        alias = alias.rstrip(".").lower()
+        target = self.get_host_row(host, domain)
+        if not target or not target.get("uuid"):
+            raise RuntimeError(f"no DNS host entry for {host}.{domain} — a CNAME needs its target registered first")
+        a_host, _, a_domain = alias.partition(".")
+        if self.get_host_row(a_host, a_domain):
+            raise RuntimeError(f"{alias} is a host entry (an A record) — delete it before making it an alias")
+        # Off every other Host FIRST: OPNsense refuses a CNAME another entry
+        # still holds ("already in use by a host override"), so a move is
+        # remove-then-add, never the other way round.
+        changed = False
+        target_current: list[str] = []
+        for row in self.list_host_rows():
+            uuid = row.get("uuid")
+            if not uuid:
+                continue
+            current = self._selected(self.get_host_full(uuid).get("cnames"))
+            if uuid == target["uuid"]:
+                target_current = current
+                continue
+            wanted = [c for c in current if c.lower() != alias]
+            if wanted != current:
+                changed = True
+                if not check_mode:
+                    self._set_cnames(uuid, wanted)
+        if alias not in [c.lower() for c in target_current]:
+            changed = True
+            if not check_mode:
+                self._set_cnames(target["uuid"], target_current + [alias])
+        if changed and not check_mode:
+            self.reconfigure()
+        return {"changed": changed, "alias": alias, "target": f"{host}.{domain}"}
+
+    def delete_cname(self, alias: str, check_mode: bool = False) -> dict:
+        """Remove the CNAME <alias> wherever it is. Idempotent."""
+        alias = alias.rstrip(".").lower()
+        changed = False
+        for row in self.list_host_rows():
+            uuid = row.get("uuid")
+            if not uuid:
+                continue
+            current = self._selected(self.get_host_full(uuid).get("cnames"))
+            wanted = [c for c in current if c.lower() != alias]
+            if wanted != current:
+                changed = True
+                if not check_mode:
+                    self._set_cnames(uuid, wanted)
+        if changed and not check_mode:
+            self.reconfigure()
+        return {"changed": changed, "alias": alias}
 
     # ----- dhcp_tags + match options (iPXE chainload conditional) -----------
 

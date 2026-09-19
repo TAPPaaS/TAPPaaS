@@ -4,7 +4,6 @@
   "version": "1.0",
   "tier": "foundation",
   "status": "Testing",
-  "vmname": "backup",
   "vmtag": "TAPPaaS,Foundation",
   "node": "",
   "storage": "tankc1",

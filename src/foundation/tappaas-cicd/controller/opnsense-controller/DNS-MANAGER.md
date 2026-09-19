@@ -72,6 +72,9 @@ dns-manager --no-ssl-verify --check-mode add backup mgmt.internal 10.0.0.12
 | `add` | `<hostname> <domain> <ip>` | Add or update a DNS host entry |
 | `delete` | `<hostname> <domain>` | Delete a DNS host entry by hostname and domain (ignores description) |
 | `list` | - | List all DNS host entries |
+| `alias add` | `<alias-fqdn> <hostname> <domain>` | Make the alias a CNAME on the Host's own entry (and on no other — a move takes it off the old Host first). For a name that must follow a Host, like the PBS's (#612) |
+| `alias delete` | `<alias-fqdn>` | Remove the CNAME wherever it is |
+| `alias list` | - | Every CNAME alias and the Host it follows |
 
 ## Authentication
 

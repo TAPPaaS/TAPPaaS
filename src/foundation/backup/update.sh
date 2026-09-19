@@ -31,6 +31,10 @@ readonly MODULE_DIR
 . "${MODULE_DIR}/lib/pbs-client.sh"
 # shellcheck source=lib/pbs-immutable.sh disable=SC1091
 . "${MODULE_DIR}/lib/pbs-immutable.sh"
+# shellcheck source=lib/pbs-dns.sh disable=SC1091
+. "${MODULE_DIR}/lib/pbs-dns.sh"
+
+INSTANCE="$(pbs_instance "${1:-}")"
 
 ZONE="$(get_config_value 'zone0' 'mgmt')"
 IMAGE_LOCATION="$(get_config_value 'imageLocation' 'http://download.proxmox.com/debian/pbs')"
@@ -60,7 +64,7 @@ if [[ "$(pbs_placement_state)" == "local" ]]; then
                 # Not in the cluster: this PBS is not ours to place. `external`
                 # (consume it by URL) is the truthful state, and it is what the
                 # clients have been doing all along.
-                _pbs_dns="$(get_config_value 'vmname' 'backup').${ZONE}.internal"
+                _pbs_dns="$(pbs_dns_name "${INSTANCE}" "${ZONE}")"
                 warn "PBS host '${LEGACY_NODE}' is NOT a member of this cluster."
                 warn "  This is an externally-managed PBS, not one this module placed."
                 warn "  Recording it as ${BL}placementState:external${CL} with pbsUrl ${BL}${_pbs_dns}${CL}"
@@ -130,12 +134,18 @@ if [[ "${STATE}" == "shim" ]]; then
         # clients and rewrites .placementState. Dependent modules
         # (dependsOn:backup) are untouched. (Run via `bash` — install.sh's
         # shebang isn't on line 1.)
-        exec bash "${MODULE_DIR}/install.sh" backup
+        exec bash "${MODULE_DIR}/install.sh" "${INSTANCE}"
     else
         warn "Backup is still a shim (no usable tankc pool found) — nothing to update."
         exit 0
     fi
 fi
+
+# ── local PBS: its name follows its Host (#612) — also migrates the A record
+# every install before #612 wrote. Not fatal: clients keep resolving the old
+# record until it is replaced, and the next update retries.
+pbs_dns_ensure "${INSTANCE}" "${ZONE}" "$(pbs_state_node "$(pbs_placement_state)" || true)" \
+    || warn "The PBS DNS name was not updated (see above) — clients still reach it by the old record"
 
 # ── local PBS: heal client coverage (P3), then keep the job consistent ──
 pbs_client_reconcile "${ZONE}" "${IMAGE_LOCATION}" \

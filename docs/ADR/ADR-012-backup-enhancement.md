@@ -639,7 +639,7 @@ run on hardware is a separate question, and one list answering both could never 
 - [ ] §2.2 rule 3 in `install.sh` and `update.sh`: probe for a serving PBS before any discovery (#602).
 - [x] `backup-manager placement reset` (#607) — and `finish-reset`. Unit-tested (the order, every refusal); the storage rename live-verified on the reference cluster on a throwaway copy of the real entry (195 snapshots visible through `_former`). A full reset needs an external PBS and is **not yet rehearsed**.
 - [x] `physicalLocation` on the satellite and on peer PBS configs, and the separation check (#609) — `backup-manager validate` warns; unit-tested (`src/offsite.ts`).
-- [ ] `vmname` replaced by the instance name; `<instance>.<zone>.internal` registered as an alias of the `node` Host (#612) — after ADR-026 D6.3/D6.4 and #665.
+- [x] `vmname` replaced by the instance name; `<instance>.<zone>.internal` registered as an alias of the `node` Host (#612) — built 2026-09-19: a dnsmasq **CNAME** on the Host's entry (`dns-manager alias`), re-asserted every update, which also replaces the old A record; a `debianhost` Host gets a DNS entry from its `address` first. `pbsUrl`'s released default stays `backup.mgmt.internal`, the default instance's name.
 - [ ] The code writes `placementState: node` with the Host in `backup.json.node`, as §2.1 decides, instead of today's `node:<name>`; a migration rewrites existing sites (#600).
 
 **Built and verified:**

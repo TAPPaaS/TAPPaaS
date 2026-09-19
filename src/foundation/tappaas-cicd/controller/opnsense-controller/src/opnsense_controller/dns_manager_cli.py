@@ -307,6 +307,29 @@ def list_dhcp_leases(
     return True
 
 
+def run_alias(manager: DhcpManager, args) -> bool:
+    """`dns-manager alias add|delete|list` (ADR-012 §2.7, #612)."""
+    sub = getattr(args, "alias_command", None)
+    if sub == "add":
+        r = manager.set_cname(args.alias, args.hostname, args.domain, check_mode=args.check_mode)
+        verb = "would point" if args.check_mode else "points"
+        print(f"{r['alias']} {verb} at {r['target']}" + ("" if r["changed"] else " (already)"))
+        return True
+    if sub == "delete":
+        r = manager.delete_cname(args.alias, check_mode=args.check_mode)
+        print(f"{r['alias']} removed" if r["changed"] else f"{r['alias']} is not an alias — nothing to do")
+        return True
+    if sub == "list":
+        rows = manager.list_cnames()
+        if not rows:
+            print("No CNAME aliases.")
+        for r in rows:
+            print(f"  {r['alias']:<40} -> {r['host']}.{r['domain']}")
+        return True
+    print("alias: expected add | delete | list", file=sys.stderr)
+    return False
+
+
 def main():
     """Main entry point for DNS manager CLI."""
     # Global options work on either side of the subcommand (#379); see cli_globals.py.
@@ -361,6 +384,11 @@ Examples:
   # Check whether an IP is inside a DHCP pool (non-zero exit if it is)
   dns-manager check-range 10.2.20.25
 
+  # A name that follows a Host: a CNAME on the Host's own entry (#612)
+  dns-manager alias add backup.mgmt.internal tappaas3 mgmt.internal
+  dns-manager alias delete backup.mgmt.internal
+  dns-manager alias list
+
   # Dry-run mode (don't make changes)
   dns-manager add backup mgmt.internal 10.0.0.12 --check-mode
   dns-manager delete backup mgmt.internal --check-mode
@@ -393,6 +421,19 @@ Examples:
 
     # List command
     subparsers.add_parser("list", parents=[gp], help="List all DNS host entries")
+
+    # Alias command (ADR-012 §2.7, #612) — CNAMEs on a Host's own entry
+    alias_parser = subparsers.add_parser(
+        "alias", parents=[gp], help="Manage CNAME aliases that follow a Host (add | delete | list)"
+    )
+    alias_sub = alias_parser.add_subparsers(dest="alias_command")
+    alias_add = alias_sub.add_parser("add", parents=[gp], help="Make ALIAS (an FQDN) a CNAME of HOST.DOMAIN — and of nothing else")
+    alias_add.add_argument("alias", help="The alias FQDN (e.g., backup.mgmt.internal)")
+    alias_add.add_argument("hostname", help="The Host it follows, without domain (e.g., tappaas3)")
+    alias_add.add_argument("domain", help="The Host's domain (e.g., mgmt.internal)")
+    alias_del = alias_sub.add_parser("delete", parents=[gp], help="Remove the CNAME ALIAS wherever it is")
+    alias_del.add_argument("alias", help="The alias FQDN")
+    alias_sub.add_parser("list", parents=[gp], help="List every CNAME alias and the Host it follows")
 
     # Check-range command (issue #251)
     check_range_parser = subparsers.add_parser(
@@ -474,6 +515,8 @@ Examples:
                 )
             elif args.command == "list":
                 success = list_dns_hosts(manager)
+            elif args.command == "alias":
+                success = run_alias(manager, args)
             elif args.command == "check-range":
                 success = check_dns_range(manager, args.ip)
             elif args.command == "leases":

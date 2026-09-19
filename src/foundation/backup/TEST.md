@@ -28,6 +28,11 @@
   - Check 3 — backup age: asserts the most recent backup's `ctime` is < 48h old; older-than-48h or unknown age is a WARNING, not a failure.
   - Check 4 — job coverage: asserts a cluster backup job (`pvesh get /cluster/backup`) covers this VMID (either `all==1` or VMID in its `vmid` list); none found is a WARNING, not a failure.
 - The unit tests (`lib/test-pbs-*.sh`) have no deep tier and need no cluster.
+- `lib/test-pbs-dns.sh` (11) — the PBS's DNS name (#612): the name is the instance's; a legacy
+  A record is deleted before the alias is added; a machine Host gets a DNS entry first; an
+  unknown Host is refused with nothing changed (`dns-manager` stubbed, calls asserted in order).
+- `lib/test-pbs-reset.sh` (19) — `placement reset` (#607): names, the `backup.json` rewrite,
+  the `pvesm add` argv, and the order of the node-side storage rename.
 
 ## ADR-012 unit tests (fast; no cluster)
 Aggregated by `./test.sh` — 229 asserts across eleven pure-helper suites:

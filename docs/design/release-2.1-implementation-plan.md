@@ -354,7 +354,7 @@ the model can express and patch. The two are one piece of work because a backup
 Status: on `main` — ADR-026 D6 (8439c54f), #602 (31bec1b2). Built and **T3 green on
 hrossen 2026-09-18** on `wave1/g1.2-module-source` (merges to `main` after hrossen's
 nightly): `debianhost`, `module adopt`, `location` → `moduleSource` (migration 0006),
-#609, #607. #665 stage 1 built 2026-09-19 (nodes are `pvenode`, operator). Next: #612 → #600.
+#609, #607. #665 stage 1 and #612 built 2026-09-19 (nodes are `pvenode`, operator). Next: #600.
 
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
@@ -372,7 +372,7 @@ nightly): `debianhost`, `module adopt`, `location` → `moduleSource` (migration
 1. ✅ ADR-026 D6.3/D6.4 — instance vs module name (`module_of`, `--instance`). Done 2026-09-18.
 2. ✅ `debianhost` + `module adopt` (ADR-026 D3/D8.1) — built 2026-09-18, phases 1–4 green; **moved ahead of #665** (operator, 2026-09-18): adopt needs nothing from #665, and #665 can then register the nodes through it. Test plan: [debianhost-test-plan.md](debianhost-test-plan.md), on stand-in VMs (VMID 990+) on hrossen; phase 6 verifies topology §1.3 and gives #602's machine case its first live test.
 3. #665 stage 1 — tappaas1..3 registered as `pvenode` instances, through `adopt` — built 2026-09-19.
-4. #612 — `vmname` → instance name, DNS alias of the `node` Host.
+4. ✅ #612 — `vmname` → instance name, DNS alias of the `node` Host — built 2026-09-19.
 5. #600 — `placementState: node`, `.node` naming the machine instance (migration); then #603, #601.
 6. ✅ #607, ✅ #609 (built 2026-09-18); #457, #554, #456 as they fit. ✅ #602 (data safety) is on `main`, independent of the rest.
 
@@ -385,7 +385,7 @@ is a migration.
 |---|-------|:-:|:-:|:-:|------|
 | ✅ #602 | Empty `placementState` resolves onto the wrong host | 4 | 4 | H | **Built 2026-09-18**, on `main` (31bec1b2): before any discovery, an empty state asks the `node` Host, `pbsUrl`'s host and every cluster member whether they hold the datastore, adopts the one that does under **its own name** (an alias like `backup` is recorded as `tappaas3`), and stops as `unmanaged` when only an unmanaged host answers; same rule in `install.sh` and `update.sh`. 63 unit cases (4 fail on the old resolver, reproducing the second-PBS bug); read-only on makerfloss and hrossen, resolution from empty gives the recorded `node:tappaas3 tankc1`; **live on hrossen**, `update.sh` with the state cleared backfilled `node:tappaas3` and completed. The machine-hosted case (§1.3) is unit-tested only — no site has one yet |
 | #600 | PBS on a non-cluster host | 3 | 4 | H | **Answered by v1.0 §1.3** (machine topology; `node` names a Host, not a cluster member). **Left to build:** the code writes `node:<name>`, the ADR says `node` + `backup.json.node` — a migration. The `set -e` bug at `backup/update.sh:51` that stopped the old migration running is part of this |
-| #612 | `vmname` → the instance name, as a DNS alias; `shim` stays | 4 | 3 | M | **Decided (v1.0 §2.7):** backup is `kind: application`, so `vmname` names nothing; the PBS's DNS name is the backup instance's name (ADR-026 D6.1), registered as an **alias of the `node` Host** instead of an A record frozen at install; `pbsUrl` derives from it. Needs D6.3/D6.4 and #665 first, and a `dns-manager` alias verb |
+| ✅ #612 | `vmname` → the instance name, as a DNS alias; `shim` stays | 4 | 3 | M | **Built 2026-09-19** (`wave1/g1.2-module-source`): `dns-manager alias add|delete|list` (a CNAME on the Host's own dnsmasq entry; a move is remove-then-add, found live); backup's name is the instance's, registered as an alias of the `node` Host on install and every update, replacing the old A record; `vmname` gone from `backup.json`. **Decided (v1.0 §2.7):** backup is `kind: application`, so `vmname` names nothing; the PBS's DNS name is the backup instance's name (ADR-026 D6.1), registered as an **alias of the `node` Host** instead of an A record frozen at install; `pbsUrl` derives from it. Needs D6.3/D6.4 and #665 first, and a `dns-manager` alias verb |
 | #601 | Placement discovery is PVE-only | 3 | 2 | M | |
 | #456 | `external` placement for a pre-existing PBS | 3 | 2 | M | |
 | ✅ #607 | Exit from `external` placement | 4 | 1 | L | **Built 2026-09-18** (`wave1/g1.2-module-source`): `backup-manager placement reset` / `finish-reset`. The old storage entry is renamed `<name>_former` (credential + key) so history stays restorable — left under the module's name, the local install would have kept pushing to the external PBS; state → `shim` (not empty: empty would stop on the old PBS as `unmanaged`); refused without a tankc pool; then the update, then the pull onboarding. Unit-tested; the rename live-verified on hrossen on a copy of the real entry. **Not rehearsed end to end** — needs an external PBS |

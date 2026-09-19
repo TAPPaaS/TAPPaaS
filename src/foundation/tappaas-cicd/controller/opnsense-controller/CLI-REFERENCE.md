@@ -441,6 +441,11 @@ The DNS Manager provides a dedicated CLI for managing DNS host entries in OPNsen
 # List all DNS entries
 ./result/bin/dns-manager --no-ssl-verify list
 
+# A name that follows a Host: a CNAME on the Host's own entry (#612)
+./result/bin/dns-manager --no-ssl-verify alias add backup.mgmt.internal tappaas3 mgmt.internal
+./result/bin/dns-manager --no-ssl-verify alias delete backup.mgmt.internal
+./result/bin/dns-manager --no-ssl-verify alias list
+
 # Dry-run mode (don't make changes)
 ./result/bin/dns-manager --no-ssl-verify --check-mode add backup mgmt.internal 10.0.0.12
 
@@ -466,6 +471,12 @@ The DNS Manager provides a dedicated CLI for managing DNS host entries in OPNsen
 | `add <hostname> <domain> <ip>` | Add or update a DNS host entry |
 | `delete <hostname> <domain>` | Delete a DNS host entry by hostname and domain (ignores description) |
 | `list` | List all DNS host entries |
+| `alias add <alias-fqdn> <hostname> <domain>` | Make the alias a CNAME on the Host's own entry — and on no other; a move takes it off the old Host first. Refused when the Host has no entry, or the alias is itself a host entry (delete that A record first) |
+| `alias delete <alias-fqdn>` | Remove the CNAME wherever it is |
+| `alias list` | Every CNAME alias and the Host it follows |
+
+`add` keeps the CNAMEs already on an entry it updates, so re-registering a Host never drops the
+names that follow it.
 
 ### Caddy Manager (`caddy-manager` command)
 
