@@ -46,6 +46,10 @@ success.
 Foundation modules are updated in this order via `update-module.sh`:
 
 1. **cluster** - Runs `apt update && apt upgrade` on all Proxmox nodes, distributes VM creation scripts and zone definitions
+   - **foundation machines** - then every machine instance whose module is foundation-tier (`kind: machine`,
+     `tier: foundation`): the cluster nodes (`pvehost` instances, e.g. `tappaas1`) first, then other machines
+     (e.g. a `debianhost`, which may carry the PBS and so must precede `backup`), each group by name.
+     An instance is named after its host, never its module, so it can never match a name in this list (#665).
 2. **tappaas-cicd** - Converges the mothership's own module config (the pull, the component builds and the NixOS rebuild happen in `ExecStartPre`, before the sweep)
 3. **template** - Updates NixOS/Debian VM templates
 4. **firewall** - Updates OPNsense firewall configuration
@@ -56,7 +60,8 @@ Modules that are not installed (no JSON in `/home/tappaas/config/`) are skipped.
 
 ### Phase 2: App Modules (Dependency Order)
 
-All remaining installed modules (discovered from `/home/tappaas/config/*.json`) are updated in dependency order.
+All remaining installed modules (discovered from `/home/tappaas/config/*.json`) are updated in dependency order;
+foundation machines are not among them (Phase 1).
 A config is a module by the same shape rule as `module-manager`'s discovery: a workload `kind`
 (`vm`, `lxc`, `machine`, `application`, `device`), `dependsOn` / `integratesWith` / `provides`, or a
 `moduleSource` — so machine instances (`debianhost`, `pvehost`) are swept. Two exceptions: a module

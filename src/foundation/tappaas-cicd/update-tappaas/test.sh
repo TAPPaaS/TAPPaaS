@@ -95,8 +95,10 @@ m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
 d = Path(tempfile.mkdtemp())
 def w(name, obj): (d / name).write_text(json.dumps(obj))
 w("nextcloud.json",   {"kind": "vm", "vmname": "nextcloud", "moduleSource": "/x/nextcloud"})
-w("dh-test1.json",    {"kind": "machine", "address": "10.0.0.90", "moduleSource": "/x/debianhost"})
-w("tappaas2.json",    {"kind": "machine", "address": "tappaas2.mgmt.internal", "moduleSource": "/x/pvehost"})
+w("dh-test1.json",    {"kind": "machine", "address": "10.0.0.90", "moduleSource": "/x/debianhost", "tier": "foundation"})
+w("tappaas2.json",    {"kind": "machine", "address": "tappaas2.mgmt.internal", "moduleSource": "/x/pvehost", "tier": "foundation"})
+w("tappaas1.json",    {"kind": "machine", "address": "tappaas1.mgmt.internal", "moduleSource": "/x/pvehost", "tier": "foundation"})
+w("labbox.json",      {"kind": "machine", "address": "10.0.0.91", "moduleSource": "/x/debianhost"})   # no tier: an app
 w("old.json",         {"vmname": "old"})
 w("marker.json",      {"kind": "module"})
 w("provider.json",    {"provides": ["nixos"]})
@@ -109,11 +111,20 @@ w("list.json", ["not", "an", "object"])
 (d / "broken.json").write_text("{ broken")
 m.CONFIG_DIR = d
 got = sorted(m.get_installed_apps())
-want = sorted(["nextcloud", "dh-test1", "tappaas2", "old", "marker", "provider"])
+want = sorted(["nextcloud", "dh-test1", "tappaas1", "tappaas2", "labbox", "old", "marker", "provider"])
 assert got == want, f"modules: {got} != {want}"
 assert m._is_module_json(d / "satellite-s2.json"), "a satellite IS a module (resolution, module list)"
 to_update, skipped = m.partition_by_lifecycle(got)
 assert "dh-test1" in to_update and "tappaas2" in to_update, to_update
+
+# Foundation machines leave the app phase and run right after `cluster`:
+# cluster nodes (pvehost) first, then other machines, each group by name (#665).
+fm = m.foundation_machines(got)
+assert fm == ["tappaas1", "tappaas2", "dh-test1"], fm
+assert m.foundation_order(["cluster", "tappaas-cicd", "backup"], fm) == \
+    ["cluster", "tappaas1", "tappaas2", "dh-test1", "tappaas-cicd", "backup"]
+assert m.foundation_order(["tappaas-cicd"], fm) == fm + ["tappaas-cicd"], "no cluster: machines lead"
+assert "labbox" not in fm, "a machine without tier foundation stays an app"
 PYSEL
     then
         passed=$((passed + 1))
