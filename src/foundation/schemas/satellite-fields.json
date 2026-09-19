@@ -4,6 +4,7 @@
   "appliesTo": "src/foundation/satellite/satellite.json and ~/config/satellite-<name>.json",
 
   "fields": {
+    "moduleSource": { "type": "string", "required": false, "note": "absolute path of the satellite module's directory (src/foundation/satellite) — written by satellite-manager, backfilled on existing satellites by migration 0008; what module_of and `module list --resolution` name the module by (#609 renamed it from location)" },
     "kind": { "type": "string", "required": true, "values": { "machine": "its own system with an OS, provisioned by satellite-manager (ADR-010 §8, ADR-022f D2) — only value; was external-host before #611" } },
     "tier": { "type": "string", "required": true, "values": { "foundation": "foundation-grade but OPTIONAL (not in the mandatory install chain)" } },
     "name": { "type": "string", "required": true, "description": "satellite instance name (also the hostname); a site may run several" },

@@ -181,6 +181,19 @@ else
     no "sat_write_config physicalLocation"
 fi
 
+# 16c. the config records where the satellite module's code lives (moduleSource,
+#      #609) — absolute — so module_of / `module list --resolution` can name it.
+(
+    . "${here}/lib/provision.sh" >/dev/null 2>&1
+    SATELLITE_SRC="${tmp}/src/satellite"; mkdir -p "${SATELLITE_SRC}"
+    sat_write_config "${tmp}/ms.json" m hetzner 1.2.3.4 "ssh-ed25519 K o@w" "reverse-proxy" "" "" debian
+)
+if [[ "$(jq -r .moduleSource "${tmp}/ms.json" 2>/dev/null)" == "$(cd "${tmp}/src/satellite" && pwd)" ]]; then
+    ok "sat_write_config records moduleSource = the satellite module's directory"
+else
+    no "sat_write_config moduleSource ($(jq -r .moduleSource "${tmp}/ms.json" 2>/dev/null))"
+fi
+
 # 17. install --dry-run branches on os (debian => provision-debian, no nixos-anywhere)
 echo '{ "kind":"machine","tier":"foundation","name":"dbg","os":"debian","roles":["reverse-proxy"],"host":{"publicIp":"203.0.113.9","operatorSshKeys":["ssh-ed25519 K o@w"]} }' > "${tmp}/satellite-dbg.json"
 rc=0; out="$(TAPPAAS_CONFIG_DIR="${tmp}" "${mgr}" install dbg --dry-run 2>&1)" || rc=$?

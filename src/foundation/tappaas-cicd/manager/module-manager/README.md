@@ -278,7 +278,9 @@ delete-module.sh <module-name> [--archive|--remove] [--vmid <id>]
 - `--yes` / `-y` — skip the confirmation prompt.
 - `--force` — skip dependency checks; **required** for `tier:foundation` modules.
 - A machine (`kind: machine`) is only **unregistered**: the config goes, the machine keeps
-  running untouched, and `--vmid` is refused (ADR-026 D8.1).
+  running untouched, `--vmid` is refused, and the module's own `delete.sh` is **not** run — the
+  satellite's is a decommission (`satellite-manager remove`), which unregistering must never be
+  (ADR-026 D8.1).
 
 ### `adopt-module.sh` — a running machine becomes a module
 

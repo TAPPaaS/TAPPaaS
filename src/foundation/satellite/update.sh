@@ -10,7 +10,10 @@
 #
 set -euo pipefail
 
+# update-module.sh passes the INSTANCE (config/satellite-<name>.json →
+# satellite-<name>); satellite-manager takes the satellite's own <name>.
 NAME="${1:?usage: ./update.sh <name>}"
+NAME="${NAME#satellite-}"
 command -v satellite-manager >/dev/null 2>&1 \
     || { echo "satellite-manager not on PATH" >&2; exit 1; }
 exec satellite-manager update "${NAME}"

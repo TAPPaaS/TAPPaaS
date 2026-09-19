@@ -72,15 +72,20 @@ EOF
 sat_write_config() {
     local out="$1" name="$2" provider="$3" ip="$4" key="$5" roles="$6" bucket="${7:-}" s3ep="${8:-https://hel1.your-objectstorage.com}" os="${9:-debian}"
     local country="${10:-}" city="${11:-}"
-    local roles_json backup_json='null' place_json='null'
+    local roles_json backup_json='null' place_json='null' src
+    # Where the satellite module's code lives (#609's moduleSource), so the
+    # instance names its module like every other — module_of, resolution,
+    # `module list` (a satellite is a machine module, ADR-026). Absolute, as
+    # copy-update-json.sh records it for the others.
+    src="$(cd "${SATELLITE_SRC}" 2>/dev/null && pwd || printf '%s' "${SATELLITE_SRC}")"
     roles_json="$(printf '%s' "${roles}" | jq -R 'split(",") | map(select(length>0))')"
     [[ -n "${country}" ]] && place_json="$(jq -n --arg c "${country^^}" --arg t "${city}" '{country:$c} + (if $t != "" then {city:$t} else {} end)')"
     [[ -n "${bucket}" ]] && backup_json="$(jq -n --arg ep "${s3ep}" --arg b "${bucket}" '{s3:{endpoint:$ep,bucket:$b}}')"
     jq -n \
         --arg name "${name}" --arg provider "${provider}" --arg ip "${ip}" --arg key "${key}" --arg os "${os}" \
-        --argjson roles "${roles_json}" --argjson backup "${backup_json}" --argjson place "${place_json}" \
+        --argjson roles "${roles_json}" --argjson backup "${backup_json}" --argjson place "${place_json}" --arg src "${src}" \
         '{
-           kind:"machine", tier:"foundation", name:$name, os:$os, roles:$roles, dependsOn:[],
+           kind:"machine", tier:"foundation", moduleSource:$src, name:$name, os:$os, roles:$roles, dependsOn:[],
            provider:{type:$provider, allocation:"portal"},
            host:{publicIp:$ip, sshUser:"root", operatorSshKeys:[$key]}
          } + (if $place != null then {physicalLocation:$place} else {} end)

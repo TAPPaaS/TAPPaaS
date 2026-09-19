@@ -378,6 +378,8 @@ find_vms_by_name(){ :; }
 # (71207c0) and these cases assert the foundation --force gate, not who is
 # running. Without it both die at "command not found" with rc 127.
 tappaas_require_operator(){ :; }
+get_module_dir(){ local d; d="$(jq -r '.moduleSource // empty' "${CONFIG_DIR}/$1.json" 2>/dev/null)"; [[ -n "$d" ]] || return 1; echo "$d"; [[ -d "$d" ]] || return 2; }
+ensure_scripts_executable(){ :; }
 STUB
 DSTUB="${WORK}/del-stub.sh"
 sed -e "s#/home/tappaas/bin/common-install-routines.sh#${DWORK}/sbin/common-install-routines.sh#g" \
@@ -408,6 +410,20 @@ if ! echo "$del_app" | grep -qi "without --force"; then
     ok "delete: app module is not subject to the foundation --force gate"
 else
     bad "delete: app module wrongly hit the foundation gate"
+fi
+
+# A machine (ADR-026) is only ever UNREGISTERED: its module's delete.sh is not
+# run. The satellite's delete.sh is `satellite-manager remove` — a decommission —
+# and a satellite that records its moduleSource (#609) could otherwise reach it.
+mkdir -p "${DWORK}/src/satellite"
+printf '#!/usr/bin/env bash\ntouch "%s/DECOMMISSIONED"\n' "${DWORK}" > "${DWORK}/src/satellite/delete.sh"
+chmod +x "${DWORK}/src/satellite/delete.sh"
+printf '{"kind":"machine","tier":"app","moduleSource":"%s/src/satellite"}\n' "${DWORK}" > "${DWORK}/cfg/satellite-s1.json"
+del_m="$( bash "$DSTUB" satellite-s1 --remove --yes 2>&1 )"; del_m_rc=$?
+if [[ $del_m_rc -eq 0 && ! -e "${DWORK}/DECOMMISSIONED" && ! -e "${DWORK}/cfg/satellite-s1.json" ]]; then
+    ok "delete: a machine is unregistered and its module's delete.sh is NOT run (no decommission)"
+else
+    bad "delete: machine delete ran delete.sh or kept the config (rc=${del_m_rc}, decommissioned=$([[ -e ${DWORK}/DECOMMISSIONED ]] && echo yes || echo no)): ${del_m##*$'\n'}"
 fi
 
 # ---------------------------------------------------------------------------

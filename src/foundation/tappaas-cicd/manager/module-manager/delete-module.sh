@@ -295,7 +295,7 @@ main() {
     # ── Step 2: Resolve & confirm target VM (issue #195) ─────────────
     info "\n${BOLD}Step 2: Resolve and confirm target VM${CL}"
 
-    local config_vmid vmname target_vmid="" target_node="" vm_only=false
+    local config_vmid vmname target_vmid="" target_node="" vm_only=false is_machine=0
     local _cfg
     _cfg=$(read_module_config "${module}" 2>/dev/null) || _cfg=""
     config_vmid=$(echo "${_cfg}" | jq -r '.vmid // empty')
@@ -311,6 +311,7 @@ main() {
             || die "'${module}' is a machine (kind: machine) — delete unregisters it and never destroys anything; --vmid does not apply (ADR-026)"
         info "  '${module}' is a machine — unregistering only; the machine itself is left untouched"
         config_vmid=""
+        is_machine=1
     elif [[ -z "${config_vmid}" && -z "${OPT_VMID}" ]]; then
         info "  Module declares no VMID — no VM to destroy (config-only delete)"
     else
@@ -428,7 +429,13 @@ main() {
 
     local module_dir _gmd_rc=0
     module_dir=$(get_module_dir "${module}") || _gmd_rc=$?
-    if [[ "${_gmd_rc}" -eq 0 ]]; then
+    if [[ "${is_machine}" -eq 1 ]]; then
+        # A machine's delete.sh — where one exists — takes the MACHINE down: the
+        # satellite's is `satellite-manager remove`, a decommission. Deleting an
+        # instance only ever unregisters it (ADR-026 D8.1), so it is never run;
+        # decommissioning is that manager's own verb, run deliberately.
+        info "  a machine: its module's delete.sh is not run — unregistering never takes the machine down"
+    elif [[ "${_gmd_rc}" -eq 0 ]]; then
         ensure_scripts_executable "${module_dir}"
         if [[ -x "${module_dir}/delete.sh" ]]; then
             info "  Running ${module_dir}/delete.sh..."

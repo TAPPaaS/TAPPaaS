@@ -31,6 +31,11 @@ volume).
 - **Not a Proxmox VM the cluster hosts** — the satellite is its own machine
   (`kind: machine`, ADR-022f; ADR-010 §8) that the cluster reaches out to and manages. It is optional and
   never part of the mandatory install chain.
+- **Not driven by the nightly sweep** — `satellite-manager` provisions and updates it (pull-based,
+  ADR-010 §7.3). Its config records `moduleSource` (the satellite module's directory) so it is a
+  module like any other in `module-manager module list`, but `update-tappaas` leaves it alone.
+- **`module-manager module delete satellite-<name>` does not decommission it** — like any machine it
+  is only unregistered (ADR-026). Taking the satellite down is `satellite-manager remove <name>`.
 - No TLS termination or cert keys on the satellite — Caddy at home terminates; the
   satellite relays ciphertext only (blind relay + blind vault trust model, ADR-010 §7).
 - No standing root from `tappaas-cicd` over the satellite — only an ephemeral
