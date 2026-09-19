@@ -104,7 +104,7 @@ Run when the last phase using a test VM has a result; record it as a row of its 
 2. On the node holding it: check `qm config <vmid>` names `<vm>`, then
    `qm stop <vmid> && qm destroy <vmid> --purge 1 --destroy-unreferenced-disks 1`.
 3. `dns-manager delete <vm> mgmt.internal` — the Host entry a PBS placement created from the
-   machine's `address` (#612); step 1 does not remove it. Remove any `dns-manager alias` that
+   machine's `address` (#612); step 1 does not remove it (#672). Remove any `dns-manager alias` that
    still points at it (phase 6 used `pbs6`).
 4. On the mothership: `ssh-keygen -R <address>` (and `<vm>`, `<vm>.mgmt.internal`).
 5. **Check nothing is left:** no `config/<vm>*.json`; no guest in `900–999` on any node; no
@@ -137,7 +137,8 @@ tries every 20s.
 
 **Found in phase 7:** `module delete` of a machine leaves the dnsmasq Host entry that backup's
 PBS placement created from its `address` (#612) — nothing owns removing it. Harmless for a
-test VM torn down by hand; for a real machine taken out of TAPPaaS it is a stale DNS record.
+test VM torn down by hand; for a real machine taken out of TAPPaaS it is a stale DNS record
+(#672).
 
 ## What each phase proves
 
