@@ -100,12 +100,14 @@ Run when the last phase using a test VM has a result; record it as a row of its 
 (`dh-test1` = 990, `dh-test2` = 991), in this order:
 
 1. `module-manager delete <vm> --force` — unregisters (`--force` because the instance is
-   `tier: foundation`; it also implies `--remove`). The machine is not touched.
+   `tier: foundation`; it also implies `--remove`) and releases the DNS entry TAPPaaS made for
+   it (#672). The machine is not touched. It is refused while a module still names the VM as
+   its Host (`node`) — move or delete that first.
 2. On the node holding it: check `qm config <vmid>` names `<vm>`, then
    `qm stop <vmid> && qm destroy <vmid> --purge 1 --destroy-unreferenced-disks 1`.
-3. `dns-manager delete <vm> mgmt.internal` — the Host entry a PBS placement created from the
-   machine's `address` (#612); step 1 does not remove it (#672). Remove any `dns-manager alias` that
-   still points at it (phase 6 used `pbs6`).
+3. Only if step 1 reported the entry **kept**: remove what still holds it — a
+   `dns-manager alias` on it (phase 6 used `pbs6`), then `dns-manager release <vm> mgmt.internal`.
+   Never `dns-manager delete`: it removes the first entry of that name, reservation or not.
 4. On the mothership: `ssh-keygen -R <address>` (and `<vm>`, `<vm>.mgmt.internal`).
 5. **Check nothing is left:** no `config/<vm>*.json`; no guest in `900–999` on any node; no
    `dns-manager list` entry, and the name does not resolve; no `known_hosts` entry;
@@ -138,7 +140,8 @@ tries every 20s.
 **Found in phase 7:** `module delete` of a machine leaves the dnsmasq Host entry that backup's
 PBS placement created from its `address` (#612) — nothing owns removing it. Harmless for a
 test VM torn down by hand; for a real machine taken out of TAPPaaS it is a stale DNS record
-(#672).
+(#672 — fixed: backup releases the entry it made, and `module delete` refuses a machine that is
+still a Host and releases its entry).
 
 ## What each phase proves
 
