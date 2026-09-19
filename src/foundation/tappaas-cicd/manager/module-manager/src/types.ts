@@ -99,6 +99,7 @@ export interface DeleteOptions {
   vmid?: string;
   yes?: boolean;
   force?: boolean;
+  decommission?: boolean; // a machine: run its delete.sh (ADR-010 §8.4.5)
 }
 
 export interface TestOptions {

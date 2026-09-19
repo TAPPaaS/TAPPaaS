@@ -6,7 +6,7 @@
 # calling each dependency's delete-service.sh script in reverse order,
 # and then removing the module's configuration files.
 #
-# Usage: delete-module.sh <module-name> [--archive|--remove] [--vmid <id>] [--yes] [--force]
+# Usage: delete-module.sh <module-name> [--archive|--remove] [--vmid <id>] [--decommission] [--yes] [--force]
 #
 # Arguments:
 #   module-name   Name of the module to delete (must have a
@@ -30,6 +30,11 @@
 #   --yes, -y      Skip the destroy confirmation prompt (for automation)
 #   --force        Delete even if other modules depend on this module's
 #                  services; also implies --yes AND --remove
+#   --decommission A machine only (ADR-010 §8.4.5): also run the module's own
+#                  delete.sh, which takes the Site's side of it down (for a
+#                  satellite: the OPNsense peer, tunnel and edge rules). Without
+#                  it a machine is only unregistered. The machine itself is never
+#                  touched either way.
 #   -h, --help     Show this help message
 #
 # Examples:
@@ -62,6 +67,7 @@ OPT_VMID=""
 OPT_MODE="archive"        # archive (default, safe) | remove (destructive)
 OPT_MODE_EXPLICIT=false   # true once --archive/--remove is seen
 OPT_ENVIRONMENT=""        # ADR-007 P5: target environment
+OPT_DECOMMISSION=false    # ADR-010 §8.4.5: a machine's delete.sh runs only when asked
 
 # shellcheck source=common-install-routines.sh disable=SC1091
 . /home/tappaas/bin/common-install-routines.sh
@@ -74,7 +80,7 @@ tappaas_require_operator
 
 usage() {
     cat << EOF
-Usage: ${SCRIPT_NAME} <module-name> [--archive|--remove] [--vmid <id>] [--yes] [--force]
+Usage: ${SCRIPT_NAME} <module-name> [--archive|--remove] [--vmid <id>] [--decommission] [--yes] [--force]
 
 Delete a TAPPaaS module with dependency-aware service teardown.
 
@@ -98,6 +104,10 @@ Options:
     --yes, -y      Skip the destroy confirmation prompt (for automation)
     --force        Delete despite dependent modules; REQUIRED for tier:foundation
                    modules; also implies --yes AND --remove
+    --decommission A machine only: also run its module's delete.sh, which takes the
+                   Site's side of it down (a satellite: OPNsense peer, tunnel, edge
+                   rules). Without it a machine is only unregistered; the machine
+                   itself is never touched (ADR-026, ADR-010 §8.4.5).
     -h, --help     Show this help message
 
 Examples:
@@ -209,6 +219,7 @@ main() {
             -y|--yes) OPT_YES=true ;;
             --archive) OPT_MODE="archive"; OPT_MODE_EXPLICIT=true ;;
             --remove)  OPT_MODE="remove";  OPT_MODE_EXPLICIT=true ;;
+            --decommission) OPT_DECOMMISSION=true ;;
             --vmid)
                 [[ -n "${2:-}" ]] || die "--vmid requires a value"
                 OPT_VMID="${2}"; shift ;;
@@ -309,9 +320,15 @@ main() {
     if [[ "$(echo "${_cfg}" | jq -r '.kind // empty')" == "machine" ]]; then
         [[ -z "${OPT_VMID}" ]] \
             || die "'${module}' is a machine (kind: machine) — delete unregisters it and never destroys anything; --vmid does not apply (ADR-026)"
-        info "  '${module}' is a machine — unregistering only; the machine itself is left untouched"
+        if [[ "${OPT_DECOMMISSION}" == true ]]; then
+            info "  '${module}' is a machine — decommissioning the Site's side of it, then unregistering; the machine itself is left untouched"
+        else
+            info "  '${module}' is a machine — unregistering only; the machine itself is left untouched"
+        fi
         config_vmid=""
         is_machine=1
+    elif [[ "${OPT_DECOMMISSION}" == true ]]; then
+        die "--decommission is for a machine (kind: machine); '${module}' is not one — its delete already takes it down"
     elif [[ -z "${config_vmid}" && -z "${OPT_VMID}" ]]; then
         info "  Module declares no VMID — no VM to destroy (config-only delete)"
     else
@@ -429,12 +446,16 @@ main() {
 
     local module_dir _gmd_rc=0
     module_dir=$(get_module_dir "${module}") || _gmd_rc=$?
-    if [[ "${is_machine}" -eq 1 ]]; then
-        # A machine's delete.sh — where one exists — takes the MACHINE down: the
-        # satellite's is `satellite-manager remove`, a decommission. Deleting an
-        # instance only ever unregisters it (ADR-026 D8.1), so it is never run;
-        # decommissioning is that manager's own verb, run deliberately.
-        info "  a machine: its module's delete.sh is not run — unregistering never takes the machine down"
+    if [[ "${is_machine}" -eq 1 && "${OPT_DECOMMISSION}" != true ]]; then
+        # A machine's delete.sh — where one exists — decommissions it: the
+        # satellite's takes the Site's side down (OPNsense peer, tunnel, edge
+        # rules). Deleting an instance only ever unregisters it (ADR-026 D8.1),
+        # so it runs only when asked: --decommission (ADR-010 §8.4.5).
+        info "  a machine: its module's delete.sh is not run — unregistering never decommissions (use --decommission)"
+    elif [[ "${is_machine}" -eq 1 && "${_gmd_rc}" -ne 0 ]]; then
+        die "--decommission: cannot find ${module}'s module directory (${module_dir:-no .moduleSource}) — nothing decommissioned, nothing deleted"
+    elif [[ "${is_machine}" -eq 1 && ! -f "${module_dir}/delete.sh" ]]; then
+        die "--decommission: ${module}'s module has no delete.sh — there is nothing to decommission; delete without --decommission to unregister it"
     elif [[ "${_gmd_rc}" -eq 0 ]]; then
         ensure_scripts_executable "${module_dir}"
         if [[ -x "${module_dir}/delete.sh" ]]; then

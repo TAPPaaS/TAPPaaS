@@ -155,13 +155,14 @@ export const HELP: HelpSpec = {
       ],
     },
     {
-      usage: "delete <module> [--archive|--remove] [--vmid ID] [--environment ENV] [--yes] [--force]",
+      usage: "delete <module> [--archive|--remove] [--vmid ID] [--decommission] [--environment ENV] [--yes] [--force]",
       name: "delete",
       hidden: ["-y"],
       options: [
         ["--archive", "Archive the module config (default; mutually exclusive with --remove)."],
         ["--remove", "Fully remove the module config (mutually exclusive with --archive)."],
         ["--vmid ID", "Target a specific VM id."],
+        ["--decommission", "A machine only: also run its module's delete.sh, taking the Site's side of it down (a satellite: OPNsense peer, tunnel, edge rules). Without it a machine is only unregistered; the machine itself is never touched (ADR-010 §8.4.5)."],
         ["--environment ENV", "Target environment to delete from."],
         ["--yes", "Skip the VM-destroy confirmation prompt, for automation (also -y)."],
         ["--force", "Proceed despite warnings; also implies --yes + --remove."],
@@ -259,6 +260,7 @@ interface Opts {
   zone0?: string;
   archive: boolean;
   remove: boolean;
+  decommission: boolean; // delete: a machine's delete.sh runs (ADR-010 §8.4.5)
   // list --resolution: which of the three tracking paths locates each module (#460)
   resolution: boolean;
   // `modify --set field=value`, repeatable (ADR-020 D2 step 0).
@@ -292,6 +294,7 @@ function parseOpts(args: string[]): Opts {
     deep: false,
     archive: false,
     remove: false,
+    decommission: false,
     resolution: false,
     sets: [],
     unsets: [],
@@ -358,6 +361,8 @@ function parseOpts(args: string[]): Opts {
       o.archive = true;
     } else if (a === "--remove") {
       o.remove = true;
+    } else if (a === "--decommission") {
+      o.decommission = true;
     } else if (a === "--resolution") {
       o.resolution = true;
     } else if (a === "--list") {
@@ -876,6 +881,7 @@ function cmdDelete(opts: Opts, client: ModuleClient): number {
     vmid: opts.vmid,
     yes: opts.yes,
     force: opts.force,
+    decommission: opts.decommission,
   };
   return client.delete(module, d);
 }

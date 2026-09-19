@@ -413,8 +413,8 @@ else
 fi
 
 # A machine (ADR-026) is only ever UNREGISTERED: its module's delete.sh is not
-# run. The satellite's delete.sh is `satellite-manager remove` — a decommission —
-# and a satellite that records its moduleSource (#609) could otherwise reach it.
+# run. The satellite's delete.sh is a decommission (the OPNsense peer, tunnel and
+# edge rules go) — only `--decommission` may reach it (ADR-010 §8.4.5).
 mkdir -p "${DWORK}/src/satellite"
 printf '#!/usr/bin/env bash\ntouch "%s/DECOMMISSIONED"\n' "${DWORK}" > "${DWORK}/src/satellite/delete.sh"
 chmod +x "${DWORK}/src/satellite/delete.sh"
@@ -424,6 +424,36 @@ if [[ $del_m_rc -eq 0 && ! -e "${DWORK}/DECOMMISSIONED" && ! -e "${DWORK}/cfg/sa
     ok "delete: a machine is unregistered and its module's delete.sh is NOT run (no decommission)"
 else
     bad "delete: machine delete ran delete.sh or kept the config (rc=${del_m_rc}, decommissioned=$([[ -e ${DWORK}/DECOMMISSIONED ]] && echo yes || echo no)): ${del_m##*$'\n'}"
+fi
+
+# --decommission runs it, with the instance as its argument, then unregisters.
+printf '#!/usr/bin/env bash\necho "$1" > "%s/DECOMMISSIONED"\n' "${DWORK}" > "${DWORK}/src/satellite/delete.sh"
+printf '{"kind":"machine","tier":"app","moduleSource":"%s/src/satellite"}\n' "${DWORK}" > "${DWORK}/cfg/satellite.json"
+del_d="$( bash "$DSTUB" satellite --remove --yes --decommission 2>&1 )"; del_d_rc=$?
+if [[ $del_d_rc -eq 0 && "$(cat "${DWORK}/DECOMMISSIONED" 2>/dev/null)" == "satellite" && ! -e "${DWORK}/cfg/satellite.json" ]]; then
+    ok "delete --decommission: a machine's delete.sh runs for the instance, then it is unregistered"
+else
+    bad "delete --decommission (rc=${del_d_rc}): ${del_d##*$'\n'}"
+fi
+rm -f "${DWORK}/DECOMMISSIONED"
+
+# A failing decommission leaves the instance registered — nothing half-done.
+printf '#!/usr/bin/env bash\nexit 3\n' > "${DWORK}/src/satellite/delete.sh"
+printf '{"kind":"machine","tier":"app","moduleSource":"%s/src/satellite"}\n' "${DWORK}" > "${DWORK}/cfg/satellite.json"
+del_f="$( bash "$DSTUB" satellite --remove --yes --decommission 2>&1 )"; del_f_rc=$?
+if [[ $del_f_rc -ne 0 && -e "${DWORK}/cfg/satellite.json" ]]; then
+    ok "delete --decommission: a failed decommission keeps the instance registered"
+else
+    bad "delete --decommission failure (rc=${del_f_rc}, config kept=$([[ -e ${DWORK}/cfg/satellite.json ]] && echo yes || echo no))"
+fi
+rm -f "${DWORK}/cfg/satellite.json"
+
+# --decommission is refused for a module that is not a machine.
+del_g="$( bash "$DSTUB" amod --decommission 2>&1 )"; del_g_rc=$?
+if [[ $del_g_rc -ne 0 ]] && grep -q 'is for a machine' <<< "${del_g}"; then
+    ok "delete --decommission is refused for a module that is not a machine"
+else
+    bad "delete --decommission on a non-machine (rc=${del_g_rc}): ${del_g##*$'\n'}"
 fi
 
 # ---------------------------------------------------------------------------

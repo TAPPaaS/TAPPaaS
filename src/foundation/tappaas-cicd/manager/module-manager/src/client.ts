@@ -108,6 +108,7 @@ export class CliModuleClient implements ModuleClient {
     if (opts.environment) args.push("--environment", opts.environment);
     if (opts.yes) args.push("--yes");
     if (opts.force) args.push("--force");
+    if (opts.decommission) args.push("--decommission");
     return run(BIN.delete, args);
   }
 

@@ -38,7 +38,7 @@ later retire phase).
 | `module adopt <address>` | `adopt-module.sh` | a machine that already runs becomes a module (ADR-026 D8.1); nothing on it is changed |
 | `module update <m>` | `update-module.sh` | **release update** (snapshot + test + 3-way merge) — what the sweep runs (#655) |
 | `module modify <m>` | `update-module.sh` | **change the config, then converge**: `--set field=value` (ADR-020) or `--unset field` (#648). Bare, it is the deprecated spelling of `update` |
-| `module delete <m>` | `delete-module.sh` | `--archive` (default) / `--remove` |
+| `module delete <m>` | `delete-module.sh` | `--archive` (default) / `--remove`; `--decommission` (a machine) |
 | `module reconcile <m>` | `src/inspect.ts` | read-only drift report (default); `--apply` → **leaf converge** (`src/reconcile.ts`) |
 | `module test <m>` | `test-module.sh` | `--deep`, `--runtime-only`, `--vmid`, `--zone0` |
 | `module snapshot-vm <m>` | `snapshot-vm.sh` | special VM op (not CRUD) |
@@ -268,7 +268,7 @@ anything is no longer failed by five unrelated DNS assertions it inherited.
 ### `delete-module.sh` — delete a module
 
 ```
-delete-module.sh <module-name> [--archive|--remove] [--vmid <id>]
+delete-module.sh <module-name> [--archive|--remove] [--vmid <id>] [--decommission]
                  [--environment <name>] [--yes|-y] [--force]
 ```
 
@@ -278,9 +278,12 @@ delete-module.sh <module-name> [--archive|--remove] [--vmid <id>]
 - `--yes` / `-y` — skip the confirmation prompt.
 - `--force` — skip dependency checks; **required** for `tier:foundation` modules.
 - A machine (`kind: machine`) is only **unregistered**: the config goes, the machine keeps
-  running untouched, `--vmid` is refused, and the module's own `delete.sh` is **not** run — the
-  satellite's is a decommission (`satellite-manager remove`), which unregistering must never be
+  running untouched, `--vmid` is refused, and the module's own `delete.sh` is **not** run
   (ADR-026 D8.1).
+- `--decommission` — a machine only: run its module's `delete.sh` first, which takes the Site's
+  side of it down (a satellite: the OPNsense peer, tunnel server and edge rules), then
+  unregister. A failed decommission keeps the instance registered. The machine itself is still
+  never touched (ADR-010 §8.4.5). Refused for a module that is not a machine.
 
 ### `adopt-module.sh` — a running machine becomes a module
 
