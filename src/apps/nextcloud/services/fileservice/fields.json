@@ -1,0 +1,21 @@
+{
+  "$schema": "../../../../foundation/schemas/service-fields.json",
+  "service": "nextcloud:fileservice",
+  "description": "A consumer's integration with Nextcloud: which Nextcloud connector it is.",
+  "fields": {
+    "connector": {
+      "description": "The Nextcloud integration this consumer provides. update-service.sh re-applies 'onlyoffice' (the ADR-COM-0002 document-server wiring for euro-office); 'talk' (coturn) and 'hpb' (nextcloud-hpb) name the consumer's role and are not re-applied by this service.",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "nextcloud:fileservice"
+      ],
+      "default": null,
+      "format": "^(onlyoffice|talk|hpb)$",
+      "example": "onlyoffice",
+      "class": "in-place",
+      "apply": "reconcile",
+      "changeNote": "Which connector the consumer is. update-service.sh reconciles the onlyoffice wiring on every run; changing the value changes what that reconcile does, with no guest downtime."
+    }
+  }
+}
