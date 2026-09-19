@@ -54,8 +54,8 @@ CONSUMER_VMNAME="$(jq -r '.vmname' "${CONSUMER_JSON}")"
 CONSUMER_ZONE="$(jq -r '.zone0' "${CONSUMER_JSON}")"
 CONSUMER_HOST="${CONSUMER_VMNAME}.${CONSUMER_ZONE}.internal"
 
-info "vllm-amd:inference update-service for ${BL}${MODULE}${CL}"
-info "  provider: ${VLLM_HOST}:${VLLM_PORT}  consumer: ${CONSUMER_HOST}"
+debug "vllm-amd:inference update-service for ${BL}${MODULE}${CL}"
+debug "  provider: ${VLLM_HOST}:${VLLM_PORT}  consumer: ${CONSUMER_HOST}"
 
 # ── Read the served model id LIVE ────────────────────────────────────────────
 # vLLM serves whatever model it was started with; the id is not recorded in the
@@ -71,7 +71,7 @@ if [[ -z "${MODEL_ID}" ]]; then
     warn "  Writing endpoint anyway; re-converge once vLLM is serving to pick up the model id."
     MODEL_ID=""
 else
-    info "  ${GN}✓${CL} vLLM serves model ${BL}${MODEL_ID}${CL}"
+    debug "  ${GN}✓${CL} vLLM serves model ${BL}${MODEL_ID}${CL}"
 fi
 
 # ── Publish to the consumer ──────────────────────────────────────────────────
@@ -83,7 +83,7 @@ if printf '%s\n' "${CONTENT}" | ssh -o BatchMode=yes -o ConnectTimeout=15 \
         "sudo install -d -m 700 /etc/secrets && \
          sudo install -m600 -o root -g root /dev/stdin /etc/secrets/vllm-inference.env"
 then
-    info "  ${GN}✓${CL} wrote /etc/secrets/vllm-inference.env on ${CONSUMER_HOST}"
+    debug "  ${GN}✓${CL} wrote /etc/secrets/vllm-inference.env on ${CONSUMER_HOST}"
 else
     # Warn, don't die: this hook runs during a CONSUMER's reconcile --apply (it
     # depends on vllm-amd:inference), and a die here is fatal to that reconcile —
@@ -104,4 +104,4 @@ ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new -o
     "systemctl list-unit-files litellm-integrations.service >/dev/null 2>&1 && \
      sudo systemctl restart litellm-integrations.service" >/dev/null 2>&1 || true
 
-info "  ${GN}✓${CL} vllm-amd:inference wired for ${MODULE}"
+debug "  ${GN}✓${CL} vllm-amd:inference wired for ${MODULE}"

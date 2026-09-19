@@ -21,9 +21,16 @@ NODE="$(get_config_value 'node' "$(get_node_hostname 0)")"
 ZONE0NAME="$(get_config_value 'zone0' 'mgmt')"
 HANODE="$(get_config_value 'HANode' "$(get_default_ha_node "$NODE")")"
 
-echo ""
-info "${BOLD}Post-Install Configuration${CL}"
-info "  VM: ${VMNAME} (VMID: ${VMID})"
+# install.sh sources this file and wants its summary; an update (run as a
+# script) says it started and keeps the summary as detail.
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    summary() { debug "$@"; }
+    info "${BOLD}*** Starting litellm update${CL}"
+else
+    summary() { info "$@"; }
+fi
+summary "${BOLD}Post-Install Configuration${CL}"
+summary "  VM: ${VMNAME} (VMID: ${VMID})"
 
 # ── Environment owner + public URL → LiteLLM (#503) ──────────────────────────
 #
@@ -35,8 +42,7 @@ info "  VM: ${VMNAME} (VMID: ${VMID})"
 #
 # Chain: <module>.environment -> environments/<env>.json .ownerOrg
 #        -> people org .owner -> user .primaryEmail
-echo ""
-info "${BOLD}Environment owner + public URL${CL}"
+debug "Environment owner + public URL"
 
 _VM_HOST="${VMNAME}.${ZONE0NAME}.internal"
 _SSH_OPTS="-o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o BatchMode=yes"
@@ -68,8 +74,8 @@ fi
 if [[ -z "${_owner_email}" && -z "${_proxy_domain}" ]]; then
     warn "  Neither an environment owner nor a public URL could be resolved — skipping"
 else
-    [[ -n "${_owner_email}" ]] && info "  Owner: ${BL}${_owner_user}${CL} <${_owner_email}>"
-    [[ -n "${_proxy_domain}" ]] && info "  Public URL: ${BL}https://${_proxy_domain}${CL}"
+    [[ -n "${_owner_email}" ]] && debug "  Owner: ${BL}${_owner_user}${CL} <${_owner_email}>"
+    [[ -n "${_proxy_domain}" ]] && debug "  Public URL: ${BL}https://${_proxy_domain}${CL}"
 
     # `restart`, NOT `start`: these are Type=oneshot with RemainAfterExit, so once
     # they have run at boot `start` is a silent no-op and nothing re-applies.
@@ -82,17 +88,16 @@ else
              sudo systemctl restart litellm-register-vllm.service && \
              sudo systemctl restart litellm-seed-admin.service" 2>/dev/null
     then
-        info "  ${GN}✓${CL} owner + public URL applied (admin promoted, vLLM model registered)"
+        debug "  ${GN}✓${CL} owner + public URL applied (admin promoted, vLLM model registered)"
     else
         warn "  Could not apply owner/public URL on ${_VM_HOST} (is the VM up?)"
     fi
 fi
 
-echo ""
-info "${BOLD}Installation Complete${CL}"
-info "  VM: ${VMNAME} (VMID: ${VMID})"
-info "  Node: ${NODE}"
-info "  Zone: ${ZONE0NAME}"
+summary "${BOLD}Installation Complete${CL}"
+summary "  VM: ${VMNAME} (VMID: ${VMID})"
+summary "  Node: ${NODE}"
+summary "  Zone: ${ZONE0NAME}"
 if [[ -n "${HANODE}" ]]; then
-    info "  HA Node: ${HANODE}"
+    summary "  HA Node: ${HANODE}"
 fi
