@@ -351,10 +351,12 @@ fourth topology — a local PBS on a machine that is not a cluster member — so
 the model can express and patch. The two are one piece of work because a backup
 `application` needs a Host the model knows.
 
-Status: on `main` — ADR-026 D6 (8439c54f), #602 (31bec1b2). Built and **T3 green on
-hrossen 2026-09-18** on `wave1/g1.2-module-source` (merges to `main` after hrossen's
-nightly): `debianhost`, `module adopt`, `location` → `moduleSource` (migration 0006),
-#609, #607. #665 stage 1, #612, #600, #603, #601, #457, #554 and #456 built 2026-09-19 (nodes are `pvenode`, operator); §1.3 verified (phase 6). Left: merge to `main`, #407 sign-off.
+Status: **landed on `main` 2026-09-19** (1f57509b, fast-forward of `wave1/g1.2-module-source`):
+ADR-026 D6, #602, `debianhost` + `module adopt`, #665 stage 1 (`pvenode`), `location` →
+`moduleSource` (migration 0006), #609, #607, #612, #600 (migration 0007), #603, #601, #457,
+#554, #456; §1.3 verified (test plan phase 6). Rolled out on makerfloss the same day (both
+migrations applied, nodes registered, `backup.mgmt.internal` a CNAME, 9/9 modules updated).
+Left: #407 sign-off; stage 2 of ADR-026 D4 (node patching behind `pvenode`).
 
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
