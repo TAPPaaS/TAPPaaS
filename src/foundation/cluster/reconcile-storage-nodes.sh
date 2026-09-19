@@ -37,7 +37,7 @@ SSH_OPTS=(-o BatchMode=yes -o StrictHostKeyChecking=accept-new)
 # All pools declared by any node in site.json.
 mapfile -t POOLS < <(jq -r '[.hardware.nodes[].storagePools[]?] | unique | .[]' "$SITE_JSON")
 if [[ "${#POOLS[@]}" -eq 0 ]]; then
-    info "site.json declares no storage pools — nothing to reconcile"
+    debug "site.json declares no storage pools — nothing to reconcile"
     exit 0
 fi
 
@@ -96,5 +96,5 @@ done
 if [[ "$CHANGED" -gt 0 ]]; then
     info "Storage nodes lists reconciled (${CHANGED} pool(s) updated)"
 else
-    info "Storage nodes lists already match site.json"
+    debug "Storage nodes lists already match site.json"
 fi

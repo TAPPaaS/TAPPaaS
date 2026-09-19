@@ -27,7 +27,8 @@ MIGRATE="${TAPPAAS_MIGRATE_CMD:-${_here}/run-migrations.sh}"
 REQUEST="${CONFIG_DIR}/.update-request.json"
 MAX_REQUEST_AGE=600
 
-log() { echo "tappaas-self-prepare: $*"; }
+# shellcheck source=../lib/common-install-routines.sh
+. "$(dirname "${_here}")/lib/common-install-routines.sh"
 echo prepare > "${CONFIG_DIR}/.update-stage"
 mkdir -p "${RUN_DIR}"
 
@@ -35,17 +36,17 @@ mkdir -p "${RUN_DIR}"
 if [[ -f "${REQUEST}" ]]; then
     age=$(( $(date +%s) - $(stat -c %Y "${REQUEST}") ))
     if (( age > MAX_REQUEST_AGE )); then
-        log "WARNING: discarding a request written ${age}s ago (older than ${MAX_REQUEST_AGE}s): $(tr -d '\n' < "${REQUEST}")"
+        warn "discarding a request written ${age}s ago (older than ${MAX_REQUEST_AGE}s): $(tr -d '\n' < "${REQUEST}")"
         rm -f "${REQUEST}"
     else
         mv -f "${REQUEST}" "${RUN_DIR}/request.json"
-        log "operator request: $(jq -c . "${RUN_DIR}/request.json" 2>/dev/null || echo unreadable)"
+        debug "operator request: $(jq -c . "${RUN_DIR}/request.json" 2>/dev/null || echo unreadable)"
     fi
 fi
 if [[ "${TRIGGER_UNIT:-}" == "update-tappaas.timer" && -f "${RUN_DIR}/request.json" ]]; then
     # The timer's run is the scheduled pass; a request it happened to claim
     # belongs to an operator start and is not applied here.
-    log "WARNING: ignoring an operator request picked up by the timer's run"
+    warn "ignoring an operator request picked up by the timer's run"
     rm -f "${RUN_DIR}/request.json"
 fi
 if [[ -f "${RUN_DIR}/request.json" ]] && [[ "$(jq -r '.noGitPull == true' "${RUN_DIR}/request.json" 2>/dev/null)" == "true" ]]; then
@@ -57,10 +58,10 @@ rc=0
 "${REFRESH}" || rc=$?
 case "${rc}" in
     0)  state=refreshed ;;
-    10) state=stale; log "WARNING: some components failed to build — their bins are STALE; the sweep continues" ;;
-    12) log "FATAL: a repository did not sync and holds no pull hold — no rebuild, no sweep on stale tooling"
+    10) state=stale; warn "some components failed to build — their bins are STALE; the sweep continues" ;;
+    12) fatal "a repository did not sync and holds no pull hold — no rebuild, no sweep on stale tooling"
         exit 1 ;;
-    *)  log "FATAL: refresh-control-plane.sh failed (rc ${rc}) — no rebuild, no sweep"
+    *)  fatal "refresh-control-plane.sh failed (rc ${rc}) — no rebuild, no sweep"
         exit 1 ;;
 esac
 
@@ -71,7 +72,7 @@ esac
 # old code with a config that is untouched or restorable (D5).
 echo migrate > "${CONFIG_DIR}/.update-stage"
 if ! TAPPAAS_CONFIG_DIR="${CONFIG_DIR}" "${MIGRATE}"; then
-    log "FATAL: a config migration failed — no rebuild, no sweep"
+    fatal "a config migration failed — no rebuild, no sweep"
     exit 1
 fi
 
@@ -79,4 +80,4 @@ fi
 echo "${state}" > "${RUN_DIR}/control-plane"
 : > "${RUN_DIR}/prepared"
 echo rebuild > "${CONFIG_DIR}/.update-stage"
-log "control plane ${state}"
+debug "tappaas-self-prepare: control plane ${state}"

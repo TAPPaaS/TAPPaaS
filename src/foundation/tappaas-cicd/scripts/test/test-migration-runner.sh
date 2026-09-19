@@ -81,7 +81,7 @@ ck "the snapshot does not nest the backup directory" "" "$(ls -d "${CFG}"/.migra
 
 # ── D4: an applied migration is not re-run ──────────────────────────────────
 out="$(run)"
-[[ "${out}" == *"no pending migrations"* ]] && ck "a second run has nothing to do" ok ok \
+[[ "${out}" == *"Config migrations: none pending"* ]] && ck "a second run has nothing to do" ok ok \
                                             || ck "a second run has nothing to do" ok "got: ${out}"
 ck "…and the ledger did not grow" 2 "$(wc -l < "${CFG}/.migrations/applied" | tr -d ' ')"
 
@@ -147,7 +147,7 @@ ck "--baseline runs no migration" "" "$(cat "${CFG}/marker" 2>/dev/null || true)
 ck "--baseline stamps every shipped id" 2 "$(wc -l < "${CFG}/.migrations/applied" | tr -d ' ')"
 ok "…with the reason 'baseline'" "$(grep -c 'baseline' "${CFG}/.migrations/applied")"
 out="$(run)"
-[[ "${out}" == *"no pending migrations"* ]] && ck "a stamped site has nothing pending" ok ok \
+[[ "${out}" == *"Config migrations: none pending"* ]] && ck "a stamped site has nothing pending" ok ok \
                                             || ck "a stamped site has nothing pending" ok "got: ${out}"
 
 # ── D1: a file that is not NNNN-<slug>.sh is reported, not silently skipped ──

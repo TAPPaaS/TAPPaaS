@@ -47,8 +47,9 @@ LEDGER="${STATE_DIR}/applied"
 BACKUP_DIR="${STATE_DIR}/backup"
 KEEP_RUNS=2
 
-log()  { echo "${SCRIPT_NAME}: $*"; }
-fail() { echo "${SCRIPT_NAME}: $*" >&2; }
+# shellcheck source=../lib/common-install-routines.sh
+. "$(dirname "${_here}")/lib/common-install-routines.sh"
+fail() { error "${SCRIPT_NAME}: $*"; }
 
 MODE=apply
 RERUN_ID=""
@@ -80,7 +81,7 @@ migration_files() {
         if [[ "${base}" =~ ^[0-9]{4}- ]]; then
             printf '%s\n' "${f}"
         else
-            fail "WARNING: ${base} is not named NNNN-<slug>.sh and will never run"
+            warn "${SCRIPT_NAME}: ${base} is not named NNNN-<slug>.sh and will never run"
         fi
     done | sort
 }
@@ -104,14 +105,14 @@ LEDGER_IDS=""
 load_ledger() {
     [[ -e "${LEDGER}" ]] || return 0          # fresh site: no ledger yet, not an error
     [[ -r "${LEDGER}" && -f "${LEDGER}" ]] \
-        || { fail "FATAL: ${LEDGER} exists but cannot be read — refusing to guess which migrations have run"; exit 1; }
+        || { fatal "${SCRIPT_NAME}: ${LEDGER} exists but cannot be read — refusing to guess which migrations have run"; exit 1; }
     local line n=0
     while IFS= read -r line || [[ -n "${line}" ]]; do
         n=$((n + 1))
         [[ -z "${line//[[:space:]]/}" ]] && continue
         [[ "${line}" == \#* ]] && continue
         if [[ ! "${line}" =~ ^[0-9]{4}[[:space:]]+[^[:space:]]+[[:space:]]+[^[:space:]]+[[:space:]]+[^[:space:]]+ ]]; then
-            fail "FATAL: ${LEDGER} line ${n} is not 'NNNN  <date>  <commit>  <reason>': ${line}"
+            fatal "${SCRIPT_NAME}: ${LEDGER} line ${n} is not 'NNNN  <date>  <commit>  <reason>': ${line}"
             fail "  refusing to guess which migrations have run — repair it from ${BACKUP_DIR}/ or the site backup (#545)"
             exit 1
         fi
@@ -129,18 +130,18 @@ now_iso() { date -Is 2>/dev/null || date -u +%Y-%m-%dT%H:%M:%SZ; }
 record() {
     local when commit line
     mkdir -p "${STATE_DIR}" \
-        || { fail "FATAL: cannot create ${STATE_DIR} to record migration $1"; exit 1; }
+        || { fatal "${SCRIPT_NAME}: cannot create ${STATE_DIR} to record migration $1"; exit 1; }
     when="$(now_iso)"; [[ -n "${when}" ]] || when="unknown-time"
     commit="$(site_commit)"; [[ -n "${commit}" ]] || commit="unknown"
     line="$(printf '%s  %s  %s  %s' "$1" "${when}" "${commit}" "$2")"
     # The line this run will not be able to read next time is caught now, while
     # there is still someone to tell.
     [[ "${line}" =~ ^[0-9]{4}[[:space:]]+[^[:space:]]+[[:space:]]+[^[:space:]]+[[:space:]]+[^[:space:]]+ ]] \
-        || { fail "FATAL: refusing to write an unparseable ledger line: ${line}"; exit 1; }
+        || { fatal "${SCRIPT_NAME}: refusing to write an unparseable ledger line: ${line}"; exit 1; }
     # A migration that ran and was not recorded would run again next sweep. That
     # is safe by D3, but it is not something to discover later: stop here.
     printf '%s\n' "${line}" >> "${LEDGER}" \
-        || { fail "FATAL: migration $1 succeeded but could not be recorded in ${LEDGER}"; exit 1; }
+        || { fatal "${SCRIPT_NAME}: migration $1 succeeded but could not be recorded in ${LEDGER}"; exit 1; }
     LEDGER_IDS+="$1"$'\n'
 }
 
@@ -185,7 +186,7 @@ snapshot_config() {
         rm -rf -- "${run}"
         return 1
     fi
-    log "config snapshotted to ${dest}"
+    debug "config snapshotted to ${dest}"
 }
 prune_runs() {
     local old
@@ -197,7 +198,7 @@ prune_runs() {
     [[ -n "${old}" ]] || return 0
     while IFS= read -r d; do
         [[ -n "${d}" ]] || continue
-        rm -rf -- "${d}" && log "pruned old backup set $(basename "${d}")"
+        rm -rf -- "${d}" && debug "pruned old backup set $(basename "${d}")"
     done <<< "${old}"
 }
 
@@ -218,7 +219,7 @@ if [[ "${MODE}" == "list" || "${MODE}" == "check" ]]; then
             fi
         fi
     done < <(pending)
-    [[ "${n}" -gt 0 ]] || log "no pending migrations"
+    [[ "${n}" -gt 0 ]] || info "Config migrations: none pending"
     exit 0
 fi
 
@@ -232,7 +233,7 @@ if [[ "${MODE}" == "baseline" ]]; then
         record "${id}" baseline
         n=$((n + 1))
     done < <(migration_files)
-    log "stamped ${n} migration(s) as baseline — a fresh config already has these shapes"
+    info "stamped ${n} migration(s) as baseline — a fresh config already has these shapes"
     exit 0
 fi
 
@@ -244,12 +245,12 @@ if [[ "${MODE}" == "rerun" ]]; then
     done < <(migration_files)
     [[ -n "${target}" ]] || { fail "no migration ${RERUN_ID} in ${MIG_DIR}"; exit 1; }
     snapshot_config || exit 1
-    log "re-running ${RERUN_ID}: $(summary_of "${target}")"
+    info "re-running ${RERUN_ID}: $(summary_of "${target}")"
     if CONFIG_DIR="${CONFIG_DIR}" TAPPAAS_CONFIG_DIR="${CONFIG_DIR}" \
             TAPPAAS_MIGRATION_BACKUP_DIR="${BACKUP_DIR}/${RERUN_ID}" bash "${target}"; then
         record "${RERUN_ID}" rerun
         prune_runs
-        log "migration ${RERUN_ID} re-applied"
+        info "✓ config migration ${RERUN_ID} re-applied"
         exit 0
     fi
     fail "migration ${RERUN_ID} failed — config is restorable from ${BACKUP_DIR}"
@@ -259,12 +260,11 @@ fi
 # ── apply ────────────────────────────────────────────────────────────
 mapfile -t TODO < <(pending)
 if [[ "${#TODO[@]}" -eq 0 ]]; then
-    log "no pending migrations"
+    info "Config migrations: none pending"
     exit 0
 fi
 
-log "${#TODO[@]} pending migration(s):"
-for f in "${TODO[@]}"; do log "  $(id_of "${f}")  $(summary_of "${f}")"; done
+info "Config migrations: ${#TODO[@]} pending"
 
 # One snapshot for the run, before the first migration writes anything. A
 # missing or stale site backup never blocks this: a site without one is usually
@@ -274,17 +274,17 @@ snapshot_config || exit 1
 
 for f in "${TODO[@]}"; do
     id="$(id_of "${f}")"
-    log "applying ${id}: $(summary_of "${f}")"
+    info "  applying ${id}: $(summary_of "${f}")"
     if CONFIG_DIR="${CONFIG_DIR}" TAPPAAS_CONFIG_DIR="${CONFIG_DIR}" \
             TAPPAAS_MIGRATION_BACKUP_DIR="${BACKUP_DIR}/${id}" bash "${f}"; then
         record "${id}" applied
     else
         rc=$?
-        fail "FATAL: migration ${id} failed (rc ${rc}) — no rebuild, no sweep, no module updated"
+        fatal "${SCRIPT_NAME}: migration ${id} failed (rc ${rc}) — no rebuild, no sweep, no module updated"
         fail "  config/ is unchanged or restorable: ${BACKUP_DIR}/${id}/ (this migration) or ${BACKUP_DIR}/run-*/config/ (the whole run)"
         exit 1
     fi
 done
 
 prune_runs
-log "${#TODO[@]} migration(s) applied"
+info "✓ ${#TODO[@]} config migration(s) applied"

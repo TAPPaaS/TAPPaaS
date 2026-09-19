@@ -35,8 +35,11 @@ BACKUP_DIR="${TAPPAAS_MIGRATION_BACKUP_DIR:-${CONFIG_DIR}/.migrations/backup/000
 CHECK=0
 [[ "${1:-}" == "--check" ]] && CHECK=1
 
-say()  { echo "0005: $*"; }
-stop() { echo "0005: $*" >&2; exit 1; }
+# The update sweep's log levels (common-install-routines.sh), inlined: a
+# migration is self-contained. `note` is detail, shown under TAPPAAS_DEBUG=1.
+say()  { echo -e "\033[32m[Info]\033[m   0005: $*"; }
+note() { [[ "${TAPPAAS_DEBUG:-0}" == "1" ]] || return 0; echo -e "\033[36m[Debug]\033[m   0005: $*"; }
+stop() { echo -e "\033[01;31m[Error]\033[m 0005: $*" >&2; exit 1; }
 
 OLD="${CONFIG_DIR}/people"
 NEW="${CONFIG_DIR}/identities"
@@ -71,4 +74,5 @@ cp -Rp "${OLD}" "${BACKUP_DIR}/people" || stop "cannot back up config/people —
 # symlink is relative so the config tree stays movable (and restorable elsewhere).
 mv "${OLD}" "${NEW}" || stop "cannot move config/people — it is unchanged"
 ln -s identities "${OLD}" || stop "moved to config/identities/, but could not leave the config/people symlink — create it by hand: ln -s identities ${OLD}"
-say "config/people/ (${n} file(s)) → config/identities/; people → identities kept for one stable cycle (backup: ${BACKUP_DIR}/people)"
+say "config/people/ (${n} file(s)) → config/identities/"
+note "people → identities symlink kept for one stable cycle; backup: ${BACKUP_DIR}/people"

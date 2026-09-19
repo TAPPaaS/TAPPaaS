@@ -27,7 +27,7 @@ NODE1_FQDN="$(get_primary_node_fqdn)"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-info "Starting TAPPaaS Cluster module update..."
+info "${BOLD}*** Starting TAPPaaS Cluster module update${CL}"
 
 # (Removed: a legacy "Step 0" that ran validate-configuration.sh against the now-
 # retired config/configuration.json — warn-only, and spurious since that file is
@@ -38,7 +38,7 @@ info "Starting TAPPaaS Cluster module update..."
 debug "Discovering Proxmox cluster nodes..."
 NODES=$(ssh -o StrictHostKeyChecking=no root@"$NODE1_FQDN" \
     "pvesh get /cluster/resources --type node --output-format json | jq --raw-output '.[].node'")
-info "Found nodes: $(echo "$NODES" | tr '\n' ' ')"
+debug "Found nodes: $(echo "$NODES" | tr '\n' ' ')"
 
 # Step 1: Run apt update && apt dist-upgrade on all Proxmox nodes
 info "${BOLD}Step 1: Updating Proxmox node packages${CL}"
@@ -74,7 +74,7 @@ while read -r node; do
         fi
         echo ""
     fi
-    info "$node package update completed."
+    debug "$node package update completed."
 
     # Detect pending kernel reboot — Proxmox does not create /var/run/reboot-required.
     # Compare the running kernel with the newest installed kernel package. The
@@ -101,14 +101,14 @@ while read -r node; do
     # over ssh. It never uses `apt autoremove` (which would remove the running
     # kernel on a node that is behind); see the script header and #592. The
     # same script is unit-tested by lib/test-kernel-prune.sh (test.sh Test 2c).
-    info "Pruning superseded kernels on $node (keep: running, latest, latest-1)..."
+    debug "Pruning superseded kernels on $node (keep: running, latest, latest-1)..."
     _prune_out="$(ssh -o StrictHostKeyChecking=no root@"$NODE_FQDN" 'bash -s' \
         2>&1 < "${SCRIPT_DIR}/lib/prune-kernels.sh")" || true
     _keep_line="$(printf '%s\n' "$_prune_out" | grep -m1 '^KEEP: ' || true)"
     _rm_line="$(printf '%s\n' "$_prune_out" | grep -m1 '^REMOVE: ' || true)"
-    [[ -n "$_keep_line" ]] && info "  $node ${_keep_line}"
+    [[ -n "$_keep_line" ]] && debug "  $node ${_keep_line}"
     if [[ "$_rm_line" == "REMOVE: (none)" ]]; then
-        info "  $node no superseded kernels to prune"
+        debug "  $node no superseded kernels to prune"
     elif [[ -n "$_rm_line" ]]; then
         info "  $node pruned: ${_rm_line#REMOVE: }"
     else
@@ -123,7 +123,7 @@ debug "All Proxmox nodes package update completed."
 info "${BOLD}Step 2: Distributing files to all Proxmox nodes${CL}"
 while read -r node; do
     NODE_FQDN="$node.$MGMTVLAN.internal"
-    info "Copying zones.json and the VM/LXC provisioners to $node..."
+    debug "Copying zones.json and the VM/LXC provisioners to $node..."
     scp -q /home/tappaas/config/zones.json root@"$NODE_FQDN":/root/tappaas/
     scp -q "${SCRIPT_DIR}/Create-TAPPaaS-VM.sh" root@"$NODE_FQDN":/root/tappaas/
     scp -q "${SCRIPT_DIR}/Create-TAPPaaS-LXC.sh" root@"$NODE_FQDN":/root/tappaas/
@@ -141,7 +141,7 @@ while read -r node; do
 
     # Debian/Ubuntu cloud-init vendor-data snippet (issue #147). Must live at
     # /var/lib/vz/snippets/ to be referenced as 'local:snippets/...' in qm.
-    info "Deploying Debian vendor-data snippet to $node..."
+    debug "Deploying Debian vendor-data snippet to $node..."
     ssh -n -o StrictHostKeyChecking=no root@"$NODE_FQDN" "mkdir -p /var/lib/vz/snippets"
     scp -q "${SCRIPT_DIR}/snippets/tappaas-debian-vendor.yaml" \
         root@"$NODE_FQDN":/var/lib/vz/snippets/tappaas-debian-vendor.yaml
@@ -167,7 +167,7 @@ debug "Files distributed to all Proxmox nodes."
 info "${BOLD}Step 3: Refreshing SSD lifecycle configuration${CL}"
 while read -r node; do
     NODE_FQDN="$node.$MGMTVLAN.internal"
-    info "Deploying SSD lifecycle setup to $node..."
+    debug "Deploying SSD lifecycle setup to $node..."
     scp -q "${SCRIPT_DIR}/setup-ssd-lifecycle.sh" root@"$NODE_FQDN":/root/tappaas/
     # Capture the node-side script output: route it to [Debug] when green (it
     # would otherwise leak a bare "SSD lifecycle setup complete." line), surface
@@ -182,7 +182,7 @@ while read -r node; do
         continue
     fi
 done <<< "$NODES"
-info "SSD lifecycle configuration refreshed on all Proxmox nodes."
+debug "SSD lifecycle configuration refreshed on all Proxmox nodes."
 
 # Step 4: Realtek RTL8127 NIC driver fix on all nodes (issue #308).
 #   - Hardware-gated: a no-op on nodes without an RTL8127 (e.g. Intel-igc nodes).
@@ -193,21 +193,21 @@ info "SSD lifecycle configuration refreshed on all Proxmox nodes."
 info "${BOLD}Step 4: Refreshing Realtek RTL8127 NIC driver fix${CL}"
 while read -r node; do
     NODE_FQDN="$node.$MGMTVLAN.internal"
-    info "Deploying Realtek NIC setup to $node..."
+    debug "Deploying Realtek NIC setup to $node..."
     scp -q "${SCRIPT_DIR}/setup-realtek-nic.sh" root@"$NODE_FQDN":/root/tappaas/
     scp -q "${SCRIPT_DIR}/assets/r8127-dkms_11.015.00-1_all.deb" \
         root@"$NODE_FQDN":/root/tappaas/ 2>/dev/null || true
     # Capture the verbose apt/DKMS output; surface only a concise reason on
     # failure (not the whole dump). Keep the console clean per node.
     if _rt_out="$(ssh -n -o StrictHostKeyChecking=no root@"$NODE_FQDN" "/root/tappaas/setup-realtek-nic.sh" 2>&1)"; then
-        info "$node Realtek NIC setup complete."
+        debug "$node Realtek NIC setup complete."
     else
         _rt_reason="$(printf '%s\n' "${_rt_out}" | grep -iE '\[realtek-nic\]\[(error|warn)' | tail -1 | sed 's/^[[:space:]]*//')"
         warn "Realtek NIC setup issue on $node: ${_rt_reason:-see the node output} — continuing"
         continue
     fi
 done <<< "$NODES"
-info "Realtek NIC driver fix refreshed on all Proxmox nodes."
+debug "Realtek NIC driver fix refreshed on all Proxmox nodes."
 
 # Step 5: key-only SSH on every node (issue #19).
 #   No password SSH logins, for any user; root keeps key login, because PVE's
@@ -236,7 +236,7 @@ while read -r node; do
     fi
 done <<< "$NODES"
 if [[ "${_ssh_hard_fail}" -eq 0 ]]; then
-    info "Key-only SSH enforced on all Proxmox nodes."
+    debug "Key-only SSH enforced on all Proxmox nodes."
 fi
 
 # Step 6: Drift-heal the cluster storage `nodes` lists from site.json.

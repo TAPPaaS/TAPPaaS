@@ -34,8 +34,12 @@ SITE="${CONFIG_DIR}/site.json"
 CHECK=0
 [[ "${1:-}" == "--check" ]] && CHECK=1
 
-say()  { echo "0003: $*"; }
-stop() { echo "0003: $*" >&2; exit 1; }
+# The update sweep's log levels (common-install-routines.sh), inlined: a
+# migration is self-contained. `note` is detail, shown under TAPPAAS_DEBUG=1.
+say()  { echo -e "\033[32m[Info]\033[m   0003: $*"; }
+note() { [[ "${TAPPAAS_DEBUG:-0}" == "1" ]] || return 0; echo -e "\033[36m[Debug]\033[m   0003: $*"; }
+warn() { echo -e "\033[33m[Warning]\033[m 0003: $*"; }
+stop() { echo -e "\033[01;31m[Error]\033[m 0003: $*" >&2; exit 1; }
 
 [[ -f "${SITE}" ]] || { say "no ${SITE} — nothing to migrate"; exit 0; }
 jq empty "${SITE}" 2>/dev/null || stop "${SITE} is not valid JSON — refusing to touch it"
@@ -86,11 +90,11 @@ case "${freq}" in
             '{frequency: $f, weekday: $w, hour: $h}')" ;;
     daily)
         [[ -z "${weekday}" ]] \
-            || say "the weekday '${weekday_raw}' is dropped: it has never been read under 'daily' — this site updates every day at ${hour}:00"
+            || warn "the weekday '${weekday_raw}' is dropped: it has never been read under 'daily' — this site updates every day at ${hour}:00"
         new="$(jq -n --arg f "${freq}" --argjson h "${hour}" '{frequency: $f, hour: $h}')" ;;
     none)
         [[ -z "${weekday}" ]] \
-            || say "the weekday '${weekday_raw}' is dropped: nothing is scheduled under 'none'"
+            || warn "the weekday '${weekday_raw}' is dropped: nothing is scheduled under 'none'"
         new="$(jq -n '{frequency: "none"}')" ;;
 esac
 
@@ -112,4 +116,5 @@ jq empty "${tmp}" 2>/dev/null || { rm -f "${tmp}"; stop "the rewritten site.json
 # file being replaced only if we do not cross filesystems, and we do not.
 chmod --reference="${BACKUP_DIR}/site.json" "${tmp}" 2>/dev/null || true
 mv -f "${tmp}" "${SITE}"
-say "updateSchedule → $(jq -c . <<<"${new}") (backup: ${BACKUP_DIR}/site.json)"
+say "updateSchedule → $(jq -c . <<<"${new}")"
+note "backup: ${BACKUP_DIR}/site.json"

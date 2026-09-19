@@ -41,8 +41,12 @@ BACKUP_DIR="${TAPPAAS_MIGRATION_BACKUP_DIR:-${CONFIG_DIR}/.migrations/backup/000
 CHECK=0
 [[ "${1:-}" == "--check" ]] && CHECK=1
 
-say()  { echo "0004: $*"; }
-stop() { echo "0004: $*" >&2; exit 1; }
+# The update sweep's log levels (common-install-routines.sh), inlined: a
+# migration is self-contained. `note` is detail, shown under TAPPAAS_DEBUG=1.
+say()  { echo -e "\033[32m[Info]\033[m   0004: $*"; }
+note() { [[ "${TAPPAAS_DEBUG:-0}" == "1" ]] || return 0; echo -e "\033[36m[Debug]\033[m   0004: $*"; }
+warn() { echo -e "\033[33m[Warning]\033[m 0004: $*"; }
+stop() { echo -e "\033[01;31m[Error]\033[m 0004: $*" >&2; exit 1; }
 
 shopt -s nullglob
 files=("${CONFIG_DIR}"/*.json)
@@ -68,7 +72,7 @@ for f in ${files[@]+"${files[@]}"}; do
 done
 
 for f in ${kept[@]+"${kept[@]}"}; do
-    say "$(basename "${f}"): kind \"module\" KEPT — it is this config's only module signal (no dependsOn/integratesWith/provides/location); removing it would hide the module. Re-install or re-add the module to give it a location."
+    warn "$(basename "${f}"): kind \"module\" KEPT — it is this config's only module signal (no dependsOn/integratesWith/provides/location); removing it would hide the module. Re-install or re-add the module to give it a location."
 done
 
 if [[ $(( ${#drop[@]} + ${#rename[@]} )) -eq 0 ]]; then
@@ -97,8 +101,9 @@ rewrite() {   # rewrite <file> <jq program> <what>
     jq "$2" "${f}" > "${tmp}" || { rm -f "${tmp}"; stop "rewrite of $(basename "${f}") failed — it is unchanged; earlier files are restorable from ${BACKUP_DIR}"; }
     jq empty "${tmp}" 2>/dev/null || { rm -f "${tmp}"; stop "rewritten $(basename "${f}") is not valid JSON — it is unchanged"; }
     mv -f "${tmp}" "${f}"
-    say "$(basename "${f}"): $3"
+    note "$(basename "${f}"): $3"
 }
 for f in ${drop[@]+"${drop[@]}"};   do rewrite "${f}" 'del(.kind)' 'kind "module" removed — the next update adopts the kind the module authors'; done
 for f in ${rename[@]+"${rename[@]}"}; do rewrite "${f}" '.kind = "machine"' 'kind "external-host" → "machine"'; done
-say "$(( ${#drop[@]} + ${#rename[@]} )) config(s) migrated (backup: ${BACKUP_DIR})"
+say "$(( ${#drop[@]} + ${#rename[@]} )) config(s) migrated"
+note "backup: ${BACKUP_DIR}"

@@ -15,6 +15,7 @@ import argparse
 import json
 import logging
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -131,10 +132,11 @@ UNDER_SYSTEMD = bool(os.environ.get("JOURNAL_STREAM") or os.environ.get("INVOCAT
 
 
 class SystemdPriorityFormatter(logging.Formatter):
-    """Prefix records with `<N>` codes journald reads as syslog severity.
+    """Tag records [Info]/[Debug]/… like the bash helpers.
 
-    Only applied when running under systemd (so interactive `--dry-run` stays
-    readable).
+    Under systemd the `<N>` code journald reads as syslog severity goes in
+    front as well; the label stays, because `site-manager update` follows the
+    journal with `-o cat`, which shows no priority.
     """
 
     PRIORITY = {
@@ -169,26 +171,51 @@ class SystemdPriorityFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         body = super().format(record)
-        if UNDER_SYSTEMD:
-            return self.PRIORITY.get(record.levelno, "<6>") + body
         label = self.LABEL.get(record.levelno, "[Info]")
         color = self.LABEL_COLOR.get(record.levelno)
-        # Colorize only on a real TTY so captured/piped logs stay plain text.
-        if color and sys.stdout.isatty():
+        # Colorize on a real TTY, and in the journal, where the bash steps of
+        # the same unit write colored labels too; piped runs stay plain text.
+        if color and (UNDER_SYSTEMD or sys.stdout.isatty()):
             label = f"{color}{label}{self._CLEAR}"
-        return f"{label} {body}"
+        prio = self.PRIORITY.get(record.levelno, "<6>") if UNDER_SYSTEMD else ""
+        return f"{prio}{label} {body}"
 
 
 def setup_logging() -> None:
     handler = logging.StreamHandler(stream=sys.stdout)
     handler.setFormatter(SystemdPriorityFormatter("%(message)s"))
     root = logging.getLogger()
-    root.setLevel(logging.INFO)
+    # TAPPAAS_DEBUG=1 shows [Debug], as it does for the bash helpers.
+    root.setLevel(logging.DEBUG if os.environ.get("TAPPAAS_DEBUG") == "1" else logging.INFO)
     root.handlers.clear()
     root.addHandler(handler)
 
 
 log = logging.getLogger("update-tappaas")
+
+
+_ANSI = re.compile(r"\x1b\[[0-9;]*m")
+_LABELLED = {"[Warning]": logging.WARNING, "[Error]": logging.ERROR, "[Fatal]": logging.CRITICAL}
+
+
+def relog_output(text: str) -> None:
+    """Relog a manager's human output at the sweep's levels.
+
+    The TS managers' info() carries no label, so their lines arrive bare. Here
+    a line's own [Warning]/[Error] label is kept, action lines (indented) and
+    the closing summary go to [Info], and the rest (headers, blank lines) is
+    [Debug].
+    """
+    lines = [_ANSI.sub("", ln).rstrip() for ln in (text or "").splitlines()]
+    lines = [ln for ln in lines if ln.strip()]
+    for i, ln in enumerate(lines):
+        label, _, rest = ln.partition(" ")
+        if label in _LABELLED:
+            log.log(_LABELLED[label], "  %s", rest)
+        elif ln.startswith(" ") or i == len(lines) - 1:
+            log.info("  %s", ln.strip())
+        else:
+            log.debug("  %s", ln)
 
 
 # ── Config / schedule ────────────────────────────────────────────────
@@ -550,25 +577,22 @@ def update_module(module_name: str) -> bool:
     if os.environ.get("TAPPAAS_MODULE_FORCE") == "1":
         args.append("--force")
     try:
-        result = subprocess.run(
-            args,
-            text=True,
-            capture_output=True,
-        )
-        # Stream through, exactly as before capture_output was needed: the
-        # operator watches this live and the per-module banners are the shape of
-        # the log.
-        if result.stdout:
-            sys.stdout.write(result.stdout)
-        if result.stderr:
-            sys.stderr.write(result.stderr)
-        for line in (result.stdout or "").splitlines() + (result.stderr or "").splitlines():
-            for prefix, sink in ((_DEFERRED_PREFIX, DEFERRED_CHANGES),
-                                 (_TEST_WARN_PREFIX, TEST_WARNINGS)):
-                idx = line.find(prefix)
-                if idx != -1:
-                    sink.append(line[idx + len(prefix):].strip())
-        return result.returncode == 0
+        # Stream line by line: the operator watches this live. Capturing the
+        # whole run and writing it afterwards left minutes of silence per module
+        # and moved every stderr line to the end of its block; stderr is merged
+        # so errors stay where they happened.
+        with subprocess.Popen(args, text=True, bufsize=1,
+                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT) as proc:
+            assert proc.stdout is not None
+            for line in proc.stdout:
+                sys.stdout.write(line)
+                sys.stdout.flush()
+                for prefix, sink in ((_DEFERRED_PREFIX, DEFERRED_CHANGES),
+                                     (_TEST_WARN_PREFIX, TEST_WARNINGS)):
+                    idx = line.find(prefix)
+                    if idx != -1:
+                        sink.append(line[idx + len(prefix):].strip())
+        return proc.returncode == 0
     except (subprocess.SubprocessError, FileNotFoundError) as e:
         log.error("Error running 'module-manager module modify %s': %s", module_name, e)
         return False
@@ -1006,12 +1030,12 @@ def main():
         log.warning("update-tappaas outside update-tappaas.service does not update the "
                     "mothership itself (ADR-017 D3) — use: site-manager update")
     if request:
-        log.info("Operator request: %s", json.dumps(request, sort_keys=True))
+        log.debug("Operator request: %s", json.dumps(request, sort_keys=True))
 
     if ctx["path"] == "unit":
-        log.info("Started by update-tappaas.service after its prepare and rebuild "
-                 "steps (ADR-017 D3): no schedule check, control plane %s",
-                 ctx["control_plane"])
+        log.debug("Started by update-tappaas.service after its prepare and rebuild "
+                  "steps (ADR-017 D3): no schedule check, control plane %s",
+                  ctx["control_plane"])
     elif not (args.force or args.dry_run or request):
         # The old unit's hourly timer (first activation, ADR-017 Bootstrap).
         log.info("Checking update schedule")
@@ -1123,8 +1147,10 @@ def main():
     log.info("Phase 0.5: reconcile cluster node inventory into site.json")
     try:
         result = subprocess.run(
-            [site_manager_cmd, "node", "reconcile", "--apply"], text=True
+            [site_manager_cmd, "node", "reconcile", "--apply"], text=True,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
         )
+        relog_output(result.stdout)
         if result.returncode != 0:
             log.warning("site-manager node reconcile reported issues (rc=%d) — continuing", result.returncode)
     except (subprocess.SubprocessError, FileNotFoundError) as e:

@@ -15,6 +15,18 @@ export function info(msg: string): void {
   console.log(msg);
 }
 
+// infoTagged() is info() with the bash helper's green [Info] tag — for output
+// that lands between tagged lines, e.g. around a followed update-tappaas journal.
+export function infoTagged(msg: string): void {
+  console.log(`\x1b[32m[Info]${CL} ${msg}`);
+}
+
+// debug() shows under TAPPAAS_DEBUG=1, tagged like the bash helper's [Debug].
+export function debug(msg: string): void {
+  if ((process.env.TAPPAAS_DEBUG ?? "0") !== "1") return;
+  console.log(`\x1b[36m[Debug]${CL} ${msg}`);
+}
+
 export function warn(msg: string): void {
   console.log(`${YW}[Warning]${CL} ${msg}`);
 }
