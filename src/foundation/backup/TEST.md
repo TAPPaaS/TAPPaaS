@@ -32,6 +32,10 @@
   A record is deleted before the alias is added; a machine Host gets a DNS entry first; an
   unknown Host is refused with nothing changed; a dns-manager with no alias verb never touches the A
   record, and a failed alias puts it back (`dns-manager` stubbed, calls asserted in order).
+- `lib/test-pbs-host.sh` (11) — who patches the PBS's Host (#603): a cluster node → the
+  cluster module; a registered machine → its instance; an unregistered one is adopted
+  (`--wait 0`); a failed adopt is `none`, warned with the command; an unreachable cluster is
+  `unknown` and nothing is adopted on a guess.
 - `lib/test-pbs-reset.sh` (19) — `placement reset` (#607): names, the `backup.json` rewrite,
   the `pvesm add` argv, and the order of the node-side storage rename.
 

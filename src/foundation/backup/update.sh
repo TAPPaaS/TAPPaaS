@@ -33,6 +33,8 @@ readonly MODULE_DIR
 . "${MODULE_DIR}/lib/pbs-immutable.sh"
 # shellcheck source=lib/pbs-dns.sh disable=SC1091
 . "${MODULE_DIR}/lib/pbs-dns.sh"
+# shellcheck source=lib/pbs-host.sh disable=SC1091
+. "${MODULE_DIR}/lib/pbs-host.sh"
 
 INSTANCE="$(pbs_instance "${1:-}")"
 
@@ -146,6 +148,10 @@ fi
 # record until it is replaced, and the next update retries.
 pbs_dns_ensure "${INSTANCE}" "${ZONE}" "$(pbs_state_node "$(pbs_placement_state)" || true)" \
     || warn "The PBS DNS name was not updated (see above) — clients still reach it by the old record"
+
+# ── local PBS: something patches its Host (#603) — the cluster module for a
+# node, the Host's own debianhost instance for a machine (adopted if needed).
+pbs_host_ensure_patched "$(pbs_state_node "$(pbs_placement_state)" || true)" "${ZONE}" || true
 
 # ── local PBS: heal client coverage (P3), then keep the job consistent ──
 pbs_client_reconcile "${ZONE}" "${IMAGE_LOCATION}" \

@@ -141,7 +141,11 @@ jobs and clients the same way on both (ADR-022f D5).
 does. A machine outside the cluster has no owner today — ADR-022f D5 calls this
 "a gap for the module model, not for backup" — which is why this topology depends
 on the `debianhost` module of **[ADR-026](<ADR-026 - Managed Machines as Modules.md>) D3**.
-Until that exists, a site can run this topology only by patching the machine by hand.
+*As built (#603, 2026-09-19):* the Host's owner patches it — and with it the PBS packages,
+which are ordinary apt packages there: the cluster module for a node, the machine's own
+`debianhost` instance in the sweep for anything else. Every backup install and update checks
+that the Host has an owner, adopts an unregistered machine (registration only, ADR-026 D8.1),
+and warns loudly when it cannot — so no PBS host goes unpatched in silence.
 
 **Management stays `managed` for the application.** TAPPaaS installs the PBS and
 runs its lifecycle; that the Host is not a cluster member changes nothing about

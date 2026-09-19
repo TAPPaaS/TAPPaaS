@@ -74,6 +74,8 @@ run_quiet() {
 . "${MODULE_DIR}/lib/pbs-immutable.sh"
 # shellcheck source=lib/pbs-dns.sh disable=SC1091
 . "${MODULE_DIR}/lib/pbs-dns.sh"
+# shellcheck source=lib/pbs-host.sh disable=SC1091
+. "${MODULE_DIR}/lib/pbs-host.sh"
 
 # Now change to temp directory for the rest of the installation
 TEMP_DIR=$(mktemp -d)
@@ -143,10 +145,15 @@ case "${MODE}" in
     # only ever yields cluster members, so a node: result for anything else is
     # the serving PBS found by §2.2 rule 3. Record it and provision NOTHING —
     # the apt/ZFS steps below are for a Proxmox node, and its datastore already
-    # exists. Its own update path is #603.
+    # exists. Its OS — and the PBS packages on it — are patched by the Host's
+    # own module instance (a debianhost), which pbs_host_ensure_patched makes
+    # sure exists (#603); its name is an alias of that Host (#612).
     if ! pbs_node_is_cluster_member "${NODE}" "${ZONE}"; then
       pbs_write_placement_state "${MODE}" "${STORAGE}"
       info "${BOLD}Adopted the PBS already serving on ${BGN}${NODE}${CL}${BOLD} (not a cluster member) — its datastore is left as it is; nothing provisioned.${CL}"
+      pbs_dns_ensure "${INSTANCE}" "${ZONE}" "${NODE}" \
+        || warn "Could not point $(pbs_dns_name "${INSTANCE}" "${ZONE}") at ${NODE} (see above)"
+      pbs_host_ensure_patched "${NODE}" "${ZONE}" || true
       pbs_client_reconcile "${ZONE}" "${IMAGE_LOCATION}" \
         || warn "One or more nodes could not be reconciled for proxmox-backup-client (see above)"
       info "${GN}TAPPaaS backup placement recorded.${CL}"
