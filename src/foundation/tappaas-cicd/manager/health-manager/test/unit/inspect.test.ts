@@ -302,20 +302,20 @@ function testArgGate(): void {
 testArgGate();
 
 // ── ADR-026 D6.3: the Released column is the MODULE's source ─────────
-// tappaas2 is an instance of module `pvenode`: its source is pvenode.json in
+// tappaas2 is an instance of module `pvehost`: its source is pvehost.json in
 // the module directory. A file named after vmname sits beside it as a decoy —
 // vmname is an instance name too, and must never select the source.
 function testResolveGitJsonInstance(): void {
   const root = mkdtempSync(join(process.env.TMPDIR ?? "/tmp", "health-d63-"));
-  const src = join(root, "src", "pvenode");
+  const src = join(root, "src", "pvehost");
   const cfg = join(root, "config");
   mkdirSync(src, { recursive: true });
   mkdirSync(cfg, { recursive: true });
-  writeFileSync(join(src, "pvenode.json"), JSON.stringify({ cores: "8" }));
+  writeFileSync(join(src, "pvehost.json"), JSON.stringify({ cores: "8" }));
   writeFileSync(join(src, "decoy.json"), JSON.stringify({ cores: "1" }));
   writeFileSync(join(cfg, "tappaas2.json"), JSON.stringify({ vmname: "decoy", location: src }));
   const g = resolveGitJson(cfg, "tappaas2");
-  check(g !== null && g.cores === "8", "D6.3: instance tappaas2 reads its module's pvenode.json");
+  check(g !== null && g.cores === "8", "D6.3: instance tappaas2 reads its module's pvehost.json");
   check(!(g !== null && g.cores === "1"), "D6.3: a file named after vmname is never the source");
 }
 testResolveGitJsonInstance();

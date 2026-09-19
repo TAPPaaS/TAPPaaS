@@ -112,7 +112,7 @@ function readSiteName(): string {
   die("cannot read site name from site.json — is this a bootstrapped cicd?");
 }
 
-// A joined node becomes a module instance: config/<name>.json, module pvenode
+// A joined node becomes a module instance: config/<name>.json, module pvehost
 // (ADR-026 D4 stage 1). `module adopt` does it — the same path the cluster
 // module's update uses for nodes that joined before this existed. A failure is
 // a warning, never a failed join: the node is in the cluster already, and the
@@ -148,7 +148,7 @@ export function adoptNode(o: ProvisionOpts): void {
     info(`  ${o.name} is already in a cluster — skipping straight to capture`);
     step("capturing the node in site.json (node reconcile --apply)");
     runStream("site-manager", ["node", "reconcile", "--apply"]);
-    step("registering the node as a pvenode module instance (ADR-026 D4, #665)");
+    step("registering the node as a pvehost module instance (ADR-026 D4, #665)");
     registerNode(o.name);
     return;
   }
@@ -405,7 +405,7 @@ function joinAndCapture(
          `or its VMs will not be backed up`);
   }
 
-  step("registering the node as a pvenode module instance (ADR-026 D4, #665)");
+  step("registering the node as a pvehost module instance (ADR-026 D4, #665)");
   registerNode(o.name);
 
   info(`\n${GN}✓ node '${o.name}' is in the cluster and captured${CL}`);

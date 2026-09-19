@@ -1,4 +1,4 @@
-# pvenode — tests
+# pvehost — tests
 
 `test.sh <instance>`:
 
@@ -10,5 +10,5 @@
 6. (information) a pending reboot — the cluster module's reboot pass takes it, so it is not a
    failure here.
 
-Unit tests for the choice `adopt` makes (Proxmox → `pvenode`, membership in `site.json`) are in
+Unit tests for the choice `adopt` makes (Proxmox → `pvehost`, membership in `site.json`) are in
 `tappaas-cicd/scripts/test/test-adopt.sh`.

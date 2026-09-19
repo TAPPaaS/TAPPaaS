@@ -112,10 +112,11 @@ node is a module first and a cluster member second.
 - **Stage 1 — register (#665).** Existing cluster nodes are declared as machine modules with
   `management: managed`, `os.id: debian`. Nothing changes about how they are patched; the
   model simply stops pretending they are not machines.
-  *As built (2026-09-19):* the module is **`pvenode`** (operator decision), one instance per
-  node named after it. `adopt` chooses by OS and then by role — Debian with Proxmox VE →
-  `pvenode`, without → `debianhost` — which refines D7: the module follows the OS, and on
-  Debian also the Proxmox role, whose lifecycle stages 2 and 3 give to `pvenode` alone. A node
+  *As built (2026-09-19):* the module is **`pvehost`** (operator decision; built as `pvenode`
+  and renamed the same day, migration 0009), one instance per node named after it. `adopt`
+  chooses by OS and then by role — Debian with Proxmox VE → `pvehost`, without →
+  `debianhost` — which refines D7: the module follows the OS, and on Debian also the Proxmox
+  role, whose lifecycle stages 2 and 3 give to `pvehost` alone. A node
   is adopted only if `site.json` `hardware.nodes` lists it. The cluster module's update
   registers every unregistered node (Step 7), and `site-manager node add` registers a node it
   joins; no migration is needed, because nothing in an existing config changes.
@@ -297,7 +298,7 @@ from "a cluster node" to "any machine module", which is also what D4 stage 3 nee
    the sweep like any other module.
 
 *As built (2026-09-18, `adopt-module.sh`):* also refused — a Proxmox VE host outside this
-Site's cluster (a member becomes a `pvenode`, #665 — never a plain `debianhost`) and an address another instance already has
+Site's cluster (a member becomes a `pvehost`, #665 — never a plain `debianhost`) and an address another instance already has
 (compared by resolved IP). Zones whose `state` is `Inactive` or `Disabled` are not matched; the
 most specific subnet wins. Adopting the same machine again is a no-op. The key is retried every
 20s, not faster: Debian 13's `PerSourcePenalties` otherwise locks the mothership out.

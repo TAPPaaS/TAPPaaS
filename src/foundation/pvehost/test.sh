@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# pvenode test — the node is reachable, Proxmox, in the cluster, and healthy.
+# pvehost test — the node is reachable, Proxmox, in the cluster, and healthy.
 #
 #   1. root login by the mothership's key works
 #   2. it runs Proxmox VE, and calls itself by its instance name
@@ -12,7 +12,7 @@
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . /home/tappaas/bin/common-install-routines.sh
-. "${HERE}/lib/pvenode-lib.sh"
+. "${HERE}/lib/pvehost-lib.sh"
 
 PASS=0; FAIL=0
 pass() { info "  ${GN}✓${CL} $1"; PASS=$((PASS + 1)); }

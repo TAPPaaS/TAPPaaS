@@ -222,26 +222,26 @@ run_case "patternA-orig" \
 # A /home/tappaas/bin path is a symlink pre-update.sh refreshes and is not this
 # test's business; a path under the repo is.
 # ── An instance whose name is not its module's (ADR-026 D6.3) ──────────
-# config/tappaas2.json is an instance of module `pvenode`, whose release source
-# is <dir>/pvenode.json. Deriving the source from the instance name finds
+# config/tappaas2.json is an instance of module `pvehost`, whose release source
+# is <dir>/pvehost.json. Deriving the source from the instance name finds
 # nothing — and before D6.3 the merge refused ("source not found").
 echo "  Case: instance ≠ module — the source is the module's JSON"
-_d63="${WORKDIR}/d63"; mkdir -p "${_d63}/config" "${_d63}/src/foundation/pvenode"
-echo '{"location":"'"${_d63}"'/src/foundation/pvenode","cores":2,"note":"old"}' > "${_d63}/config/tappaas2.json"
+_d63="${WORKDIR}/d63"; mkdir -p "${_d63}/config" "${_d63}/src/foundation/pvehost"
+echo '{"location":"'"${_d63}"'/src/foundation/pvehost","cores":2,"note":"old"}' > "${_d63}/config/tappaas2.json"
 echo '{"cores":2,"note":"old"}'                                                > "${_d63}/config/tappaas2.json.orig"
-echo '{"cores":2,"note":"new"}'                                                > "${_d63}/src/foundation/pvenode/pvenode.json"
+echo '{"cores":2,"note":"new"}'                                                > "${_d63}/src/foundation/pvehost/pvehost.json"
 _out=$(
     TAPPAAS_MERGE_CONFIG_DIR="${_d63}/config" TAPPAAS_SCHEMA_FILE="${TAPPAAS_SCHEMA_FILE}" \
     bash -c '
         . "$1/tappaas-cicd/lib/common-install-routines.sh" >/dev/null 2>&1
         . "$1/tappaas-cicd/lib/apply-json-merge.sh"
         apply_three_way_merge tappaas2 "$2"
-    ' _ "${FOUNDATION_DIR}" "${_d63}/src/foundation/pvenode" 2>&1
+    ' _ "${FOUNDATION_DIR}" "${_d63}/src/foundation/pvehost" 2>&1
 ) && _rc=0 || _rc=$?
 if [[ "${_rc}" -eq 0 ]] && jq -e '[.. | objects | select(has("note")) | .note][0] == "new"' "${_d63}/config/tappaas2.json" >/dev/null 2>&1; then
-    pass "instance tappaas2 adopts the release change from pvenode.json"
+    pass "instance tappaas2 adopts the release change from pvehost.json"
 else
-    fail "instance tappaas2 did not merge from pvenode.json (rc ${_rc}): ${_out}"
+    fail "instance tappaas2 did not merge from pvehost.json (rc ${_rc}): ${_out}"
 fi
 
 echo "  Case: hard-coded converter paths resolve"

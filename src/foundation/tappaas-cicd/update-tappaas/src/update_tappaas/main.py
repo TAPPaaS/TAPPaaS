@@ -379,7 +379,7 @@ def _is_module_json(path) -> bool:
 
     It used to be `kind == "module" or vmname` only. #611 retired the marker and a
     `kind: machine` instance has no vmname, so every machine — a debianhost, a
-    pvenode — silently fell out of the sweep (found 2026-09-19). A satellite is a
+    pvehost — silently fell out of the sweep (found 2026-09-19). A satellite is a
     machine module too, swept while managed (ADR-010 §8.4)."""
     if path.name in NON_MODULE_JSONS or path.name.startswith(PEER_PREFIXES):
         return False
@@ -417,6 +417,42 @@ def get_installed_apps() -> list[str]:
             continue
         apps.append(module_name)
     return apps
+
+
+def _module_config(module_name: str) -> dict:
+    try:
+        with open(CONFIG_DIR / f"{module_name}.json") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def foundation_machines(modules: list[str]) -> list[str]:
+    """The discovered modules that are foundation machines, in sweep order.
+
+    A machine instance (kind: machine, tier: foundation) is named after the host,
+    not its module — tappaas1 is an instance of pvehost (ADR-026 D6) — so it never
+    matches a FOUNDATION_MODULES name and used to fall through to the app phase.
+    Its module says foundation; the sweep runs it right after `cluster`. Cluster
+    nodes (pvehost) go first, then other machines (a debianhost may carry the
+    PBS, so it must precede `backup`), each group by name."""
+    def is_pvehost(name: str) -> bool:
+        return os.path.basename(str(_module_config(name).get("moduleSource") or "").rstrip("/")) == "pvehost"
+    machines = [
+        m for m in modules
+        if _module_config(m).get("kind") == "machine" and _module_config(m).get("tier") == "foundation"
+    ]
+    return sorted(machines, key=lambda m: (not is_pvehost(m), m))
+
+
+def foundation_order(installed: list[str], machines: list[str]) -> list[str]:
+    """Insert the foundation machines right after `cluster` (at the front when no
+    cluster module is deployed)."""
+    if "cluster" in installed:
+        i = installed.index("cluster") + 1
+        return installed[:i] + machines + installed[i:]
+    return machines + installed
 
 
 # ── Update lifecycle membership (#441) ───────────────────────────────
@@ -1072,18 +1108,20 @@ def main():
     # Decommissioned modules (archived/external) are dropped BEFORE the
     # topological sort (#441), so a dependent of an archived provider simply
     # loses that edge instead of being ordered behind a module we never run.
-    apps, skipped_apps = partition_by_lifecycle(get_installed_apps())
+    discovered = get_installed_apps()
+    machines = foundation_machines(discovered)
+    apps, skipped_apps = partition_by_lifecycle([m for m in discovered if m not in machines])
     sorted_apps = topological_sort(apps)
 
     # Resolve each canonical foundation module to its deployed config name,
     # honouring the ADR-007 P8 legacy alias (network → firewall). The deployed name
     # is passed to `module-manager module modify` so a not-yet-migrated firewall.json
     # updates correctly in the network slot.
-    installed_foundation, skipped_foundation = partition_by_lifecycle([
+    installed_foundation, skipped_foundation = partition_by_lifecycle(foundation_order([
         name
         for m in FOUNDATION_MODULES
         if (name := deployed_foundation_name(m)) is not None
-    ])
+    ], machines))
 
     # automaticReboot (default true) gates the Phase 3 node reboot pass.
     # site.json is flat (ADR-007): .automaticReboot (was .tappaas.automaticReboot).
