@@ -208,6 +208,34 @@ confirm_destroy() {
 
 # ── Main ─────────────────────────────────────────────────────────────
 
+# machine_hosted_modules <machine> — the modules whose `node` names <machine>,
+# comma-separated; "" when none. Archived modules and the machine's own config
+# do not count.
+machine_hosted_modules() {
+    local machine="$1" f name out=()
+    for f in "${CONFIG_DIR}"/*.json; do
+        [[ -f "${f}" ]] || continue
+        name="$(basename "${f}" .json)"
+        [[ "${name}" == "${machine}" ]] && continue
+        jq -e --arg m "${machine}" \
+            'type == "object" and .node == $m and ((.status // "") | ascii_downcase) != "archived"' \
+            "${f}" >/dev/null 2>&1 && out+=("${name}")
+    done
+    local IFS=,
+    printf '%s' "${out[*]:-}"
+}
+
+# release_machine_dns <machine> <zone> — best effort; a failure is a stale
+# record, never a failed delete.
+release_machine_dns() {
+    local machine="$1" zone="$2" out
+    if out="$(dns-manager --no-ssl-verify release "${machine}" "${zone}.internal" 2>&1)"; then
+        info "  ${out##*$'\n'}"
+    else
+        warn "  could not release ${machine}.${zone}.internal — check it with: dns-manager release ${machine} ${zone}.internal"
+    fi
+}
+
 main() {
     local module=""
 
@@ -327,6 +355,14 @@ main() {
         fi
         config_vmid=""
         is_machine=1
+        # A machine that is still some module's Host (its `node`: a PBS placed
+        # on it, VMs on a cluster node) is not unregistered from under them —
+        # not even with --force, which every foundation-tier machine needs
+        # anyway (#672). Move or delete them first.
+        local _hosted
+        _hosted="$(machine_hosted_modules "${module}")"
+        [[ -z "${_hosted}" ]] \
+            || die "'${module}' is still the Host (node) of: ${_hosted} — move or delete them first; unregistering it now would leave them pointing at a machine TAPPaaS no longer knows (#672)"
     elif [[ "${OPT_DECOMMISSION}" == true ]]; then
         die "--decommission is for a machine (kind: machine); '${module}' is not one — its delete already takes it down"
     elif [[ -z "${config_vmid}" && -z "${OPT_VMID}" ]]; then
@@ -521,6 +557,14 @@ main() {
                 warn "${dep} delete-service returned non-zero (continuing)"
             fi
         done
+    fi
+
+    # ── Step 5b: A machine's Site-side DNS (#672) ────────────────────
+    # The Host entry backup made for it when a PBS was placed there. `release`
+    # removes only an entry TAPPaaS created ("TAPPaaS machine <name>") that is
+    # no DHCP reservation and carries no alias — anything else survives.
+    if [[ "${is_machine}" -eq 1 ]]; then
+        release_machine_dns "${module}" "$(echo "${_cfg}" | jq -r '.zone0 // "mgmt"')"
     fi
 
     # ── Step 6: Archive (keep config) or Remove (delete config) ──────

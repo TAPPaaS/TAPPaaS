@@ -380,6 +380,8 @@ find_vms_by_name(){ :; }
 tappaas_require_operator(){ :; }
 get_module_dir(){ local d; d="$(jq -r '.moduleSource // empty' "${CONFIG_DIR}/$1.json" 2>/dev/null)"; [[ -n "$d" ]] || return 1; echo "$d"; [[ -d "$d" ]] || return 2; }
 ensure_scripts_executable(){ :; }
+# #672: the firewall is never reached — calls are recorded in $DNS_CALLS.
+dns-manager(){ echo "$*" >> "${DNS_CALLS:-/dev/null}"; echo "released"; }
 STUB
 DSTUB="${WORK}/del-stub.sh"
 sed -e "s#/home/tappaas/bin/common-install-routines.sh#${DWORK}/sbin/common-install-routines.sh#g" \
@@ -436,6 +438,43 @@ else
     bad "delete --decommission (rc=${del_d_rc}): ${del_d##*$'\n'}"
 fi
 rm -f "${DWORK}/DECOMMISSIONED"
+
+# #672: a machine that is still some module's Host (its `node`) is not
+# unregistered from under it — not even with --force — and once free, its
+# Site-side DNS entry is released through the guarded `dns-manager release`.
+export DNS_CALLS="${DWORK}/dnscalls"; : > "${DNS_CALLS}"
+printf '{"kind":"machine","tier":"foundation","address":"10.0.0.90","zone0":"mgmt","moduleSource":"%s/src/debianhost"}\n' "${DWORK}" > "${DWORK}/cfg/hostm.json"
+printf '%s\n' '{"kind":"application","node":"hostm","tier":"foundation"}' > "${DWORK}/cfg/pbsx.json"
+del_h="$( bash "$DSTUB" hostm --force 2>&1 )"; del_h_rc=$?
+if [[ $del_h_rc -ne 0 && -e "${DWORK}/cfg/hostm.json" ]] && echo "$del_h" | grep -q "still the Host (node) of: pbsx"; then
+    ok "delete: a machine that is still a Host is refused (names its dependants), even with --force"
+else
+    bad "delete: a Host machine should be refused (rc=${del_h_rc}): ${del_h##*$'\n'}"
+fi
+[[ ! -s "${DNS_CALLS}" ]] && ok "…and no DNS is touched" || bad "…a refused delete touched DNS: $(cat "${DNS_CALLS}")"
+printf '%s\n' '{"kind":"application","node":"hostm","tier":"foundation","status":"archived"}' > "${DWORK}/cfg/pbsx.json"
+del_h2="$( bash "$DSTUB" hostm --force 2>&1 )"; del_h2_rc=$?
+if [[ $del_h2_rc -eq 0 && ! -e "${DWORK}/cfg/hostm.json" ]]; then
+    ok "delete: an archived dependant does not hold its Host"
+else
+    bad "delete: an archived dependant should not block (rc=${del_h2_rc}): ${del_h2##*$'\n'}"
+fi
+if [[ "$(cat "${DNS_CALLS}")" == "--no-ssl-verify release hostm mgmt.internal" ]]; then
+    ok "delete: the machine's DNS entry is released, guarded (release, never delete)"
+else
+    bad "delete: expected one 'release hostm mgmt.internal', got: $(tr '\n' '|' < "${DNS_CALLS}")"
+fi
+: > "${DNS_CALLS}"
+printf '{"kind":"machine","tier":"app","zone0":"srv","moduleSource":"%s/src/debianhost"}\n' "${DWORK}" > "${DWORK}/cfg/hosts.json"
+bash "$DSTUB" hosts --remove --yes >/dev/null 2>&1
+[[ "$(cat "${DNS_CALLS}")" == "--no-ssl-verify release hosts srv.internal" ]] \
+    && ok "delete: the release uses the machine's own zone" \
+    || bad "delete: release zone wrong: $(cat "${DNS_CALLS}")"
+: > "${DNS_CALLS}"
+printf '%s\n' '{"tier":"app","source":"official","vmname":"amod2"}' > "${DWORK}/cfg/amod2.json"
+bash "$DSTUB" amod2 --remove --yes >/dev/null 2>&1
+[[ ! -s "${DNS_CALLS}" ]] && ok "delete: a non-machine module releases nothing" || bad "delete: a VM module called dns-manager: $(cat "${DNS_CALLS}")"
+unset DNS_CALLS
 
 # A failing decommission leaves the instance registered — nothing half-done.
 printf '#!/usr/bin/env bash\nexit 3\n' > "${DWORK}/src/satellite/delete.sh"
