@@ -47,7 +47,7 @@ import {
 } from "./peers";
 import { validate } from "./validate";
 import { placeText } from "./offsite";
-import { placementFinishReset, placementReset, ResetDeps } from "./placement-reset";
+import { placementFinishReset, placementReset, placementUseExternal, ResetDeps } from "./placement-reset";
 import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
 import { existsSync } from "fs";
 import { spawnSync } from "child_process";
@@ -112,6 +112,16 @@ export const HELP: HelpSpec = {
         ["--peer NAME", "placement reset: the pull-peer name the old PBS gets (default former-<its host>)."],
         ["--yes", "placement reset / finish-reset: do not ask for confirmation."],
         ["--no-update", "placement reset: stop after the config — then NOTHING is backed up until 'update-module.sh backup' runs."],
+      ],
+    },
+    {
+      usage: "placement use-external <url> [--datastore D] [--namespace NS] [--fingerprint FP]",
+      name: "placement use-external",
+      note: "(back up to a PBS this site already runs, provisioning nothing — #456)",
+      options: [
+        ["--datastore D", "placement use-external: its datastore (default: pbsStorageName, tappaas_backup)."],
+        ["--namespace NS", "placement use-external: the namespace on it to push into."],
+        ["--fingerprint FP", "placement use-external: its TLS fingerprint, when its certificate is self-signed."],
       ],
     },
     {
@@ -244,6 +254,8 @@ interface Opts {
   city?: string;
   building?: string;
   peer?: string;
+  datastore?: string;
+  fingerprint?: string;
   yes: boolean;
   noUpdate: boolean;
   propagate: boolean;
@@ -256,7 +268,7 @@ interface Opts {
 // single-line change here rather than another else-if arm.
 const PEER_VALUE_FLAGS = new Set([
   "--host", "--store", "--namespace", "--schedule", "--group-filter", "--auth-id",
-  "--country", "--city", "--building", "--peer",
+  "--country", "--city", "--building", "--peer", "--datastore", "--fingerprint",
 ]);
 
 function parseOpts(args: string[]): Opts {
@@ -349,6 +361,8 @@ function parseOpts(args: string[]): Opts {
     city: peerFlags["--city"],
     building: peerFlags["--building"],
     peer: peerFlags["--peer"],
+    datastore: peerFlags["--datastore"],
+    fingerprint: peerFlags["--fingerprint"],
     yes, noUpdate,
     propagate, configOnly, purge, force,
     rest,
@@ -930,7 +944,14 @@ export function run(argv: string[], client: Client): number {
         };
         if (sub === "reset") return placementReset(ro, RESET_DEPS);
         if (sub === "finish-reset") return placementFinishReset(ro, RESET_DEPS);
-        die(`placement: expected no argument, 'reset' or 'finish-reset', got '${sub}'`);
+        if (sub === "use-external") {
+          return placementUseExternal(
+            { configDir: opts.configDir, moduleDir: ro.moduleDir, url: opts.rest[1] ?? "",
+              datastore: opts.datastore, namespace: opts.namespace, fingerprint: opts.fingerprint },
+            RESET_DEPS,
+          );
+        }
+        die(`placement: expected no argument, 'reset', 'finish-reset' or 'use-external', got '${sub}'`);
         return 1;
       }
       case "coverage":

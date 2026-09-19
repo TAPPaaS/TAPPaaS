@@ -76,6 +76,10 @@ run_quiet() {
 . "${MODULE_DIR}/lib/pbs-dns.sh"
 # shellcheck source=lib/pbs-host.sh disable=SC1091
 . "${MODULE_DIR}/lib/pbs-host.sh"
+# shellcheck source=lib/pbs-storage.sh disable=SC1091
+. "${MODULE_DIR}/lib/pbs-storage.sh"
+# shellcheck source=lib/pbs-external.sh disable=SC1091
+. "${MODULE_DIR}/lib/pbs-external.sh"
 
 # Now change to temp directory for the rest of the installation
 TEMP_DIR=$(mktemp -d)
@@ -93,7 +97,7 @@ ZONE="$(get_config_value 'zone0' 'mgmt')"
 # `placement` policy field: `placementState` ships empty and is resolved here
 # once — external (forced, sticky) / node:<name> (a tankc was found) / shim.
 # Forcing external needs no flag of its own; install-module.sh stages it (D14):
-#   module-manager module modify backup --set placementState=external --set pbsUrl=<url>
+#   backup-manager placement use-external <url>   (registers it too — #456)
 LEGACY_NODE=""
 if [[ "$(pbs_placement_state)" == "local" ]]; then
   LEGACY_NODE="$(pbs_legacy_pbs_node "${ZONE}")"
@@ -125,8 +129,13 @@ case "${MODE}" in
     # Registering the consumed PBS as Proxmox storage + wiring the job is P11
     # (#456); it needs the remote credential, which is prompt-not-store and so
     # an operator step — never an unattended hang here.
-    warn "  Register the consumed PBS as Proxmox storage (prompts for its credential):"
-    warn "    scripts/backup-manage.sh use-external ${PBS_URL}"
+    if _pbs_pvesm_has "$(get_config_value 'pbsStorageName' 'tappaas_backup')" "${ZONE}"; then
+      pbs_external_verify "$(get_config_value 'pbsStorageName' 'tappaas_backup')" "${ZONE}" \
+        || warn "  the registered storage for ${PBS_URL} is not usable (see above)"
+    else
+      warn "  Register the consumed PBS as Proxmox storage (prompts for its credential):"
+      warn "    backup-manager placement use-external ${PBS_URL}"
+    fi
     info "${GN}TAPPaaS backup external placement recorded.${CL}"
     exit 0
     ;;
@@ -136,8 +145,8 @@ case "${MODE}" in
     # beside it. Using someone else's PBS is `external`, and that is forced by
     # the operator, never inferred.
     error "A PBS already answers at ${STORAGE} on a host this Site does not manage — not installing a second one (ADR-012 §2.2, #602)."
-    error "  To back up to it, force external:"
-    error "    module-manager module modify backup --set placementState=external --set pbsUrl=${STORAGE}"
+    error "  To back up to it, consume it (prompts for its credential):"
+    error "    backup-manager placement use-external ${STORAGE}"
     exit 1
     ;;
   node:*)

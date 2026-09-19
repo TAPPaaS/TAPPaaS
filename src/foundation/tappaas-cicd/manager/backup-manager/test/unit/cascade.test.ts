@@ -21,7 +21,7 @@ import {
 } from "../../src/config";
 import { retentionValid, validate } from "../../src/validate";
 import { asPlace, offsiteTargets, separation } from "../../src/offsite";
-import { placementFinishReset, placementReset, urlHost } from "../../src/placement-reset";
+import { placementFinishReset, placementReset, placementUseExternal, urlHost } from "../../src/placement-reset";
 import { applyPlan, computePlan, jobBucketIndex } from "../../src/reconcile";
 import { restoreList, restoreRun } from "../../src/restore";
 import {
@@ -815,6 +815,17 @@ check(!retentionValid("7") && !retentionValid("7x") && !retentionValid(""), "inv
   eq(placementFinishReset(ro({ yes: true }), t.deps), 0, "finish-reset runs");
   eq(t.calls.map((c) => c.args.join(" ")).join(" | "), "finish-reset", "…the module's finish-reset, nothing else");
   eq(urlHost("https://pbs.example:8007/x"), "pbs.example", "urlHost strips scheme, port and path");
+
+  // use-external (#456): one command, delegated whole to the module's script.
+  t = mk();
+  eq(placementUseExternal({ configDir: tmp, moduleDir: mod, url: "pbs.lan", datastore: "ds1", fingerprint: "aa:bb" }, t.deps), 0,
+    "use-external runs");
+  eq(t.calls.map((c) => `${c.bin.split("/").slice(-2).join("/")} ${c.args.join(" ")}`).join(" | "),
+    "scripts/backup-manage.sh use-external pbs.lan --datastore ds1 --fingerprint aa:bb",
+    "…as backup-manage.sh use-external, with its options");
+  t = mk();
+  eq(placementUseExternal({ configDir: tmp, moduleDir: mod, url: "" }, t.deps), 1, "use-external without a URL is refused");
+  eq(t.calls.length, 0, "…and runs nothing");
 }
 
 // ── #554: coverage — which jobs back a module's VM up ─────────────────

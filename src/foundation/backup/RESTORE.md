@@ -616,7 +616,7 @@ You do not have to rebuild a datastore first. Point the site at the buddy's PBS
 as an **external** target and restore straight from it:
 
 ```bash
-scripts/backup-manage.sh use-external <buddy-pbs-url> --datastore <their-datastore>
+backup-manager placement use-external <buddy-pbs-url> --datastore <their-datastore>
 ```
 
 This registers their PBS as Proxmox storage, so `qmrestore` and
@@ -653,7 +653,7 @@ new datastore by **pulling** from the old one rather than starting empty:
 ```bash
 backup-manager peer add pull old-pbs --host <old-pbs>   # register the OLD PBS as a pull source
 #   … let the sync job run, then verify the snapshots arrived …
-scripts/backup-manage.sh use-external <new-url> # or re-run the install to resolve node (.node = the new Host)
+backup-manager placement use-external <new-url> # or re-run the install to resolve node (.node = the new Host)
 #   … restore something from the NEW target and confirm it works …
 backup-manager peer delete pull old-pbs          # only now decommission the old datastore
 ```
@@ -663,7 +663,7 @@ path and nothing is rewritten. **Decommission only after the pull *and* a test
 restore are green**: a copied datastore that has never been restored from is a
 hypothesis, not a backup.
 
-This is also why `backup-manage.sh use-external` refuses to run from a live
+This is also why `placement use-external` refuses to run from a live
 local PBS: doing it before the history has been pulled across would orphan a
 datastore full of backups.
 

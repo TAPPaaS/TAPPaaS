@@ -88,7 +88,7 @@ a separate set of operator-registered relationships. Both are detailed under
   node unless `backup.json` `.node` names one. Without any such pool the module
   installs a **shim** — no datastore, but `dependsOn: backup` stays satisfiable and it
   is promoted in place once storage appears. A site that already runs its own PBS can
-  skip all of this and **consume it by URL** (`backup-manage.sh use-external`, #456).
+  skip all of this and **consume it by URL** (`backup-manager placement use-external`, #456).
 - PBS is installed via apt **on the Proxmox node itself** (not a VM), from
   `http://download.proxmox.com/debian/pbs`.
 - Zone: `mgmt` (DNS name `backup.mgmt.internal`).
@@ -173,7 +173,7 @@ scripts/backup-manage.sh list-sources      # namespaces and sync jobs on the PBS
 # Off-site peers (prompt for their credential; never stored in config)
 backup-manager peer add pull|remote|receive <name> …  # see "Off-site peers" above
 backup-manager peer delete pull|remote|receive <name> [--purge]
-scripts/backup-manage.sh use-external <url>          # consume a PBS this site did not provision (#456)
+backup-manager placement use-external <url>          # consume a PBS this site did not provision (#456)
 
 # Keys — the out-of-band copy is mandatory (ADR-012 §2.5.1)
 backup-manager key list | key export <dest> | key import <src>

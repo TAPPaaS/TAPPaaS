@@ -33,6 +33,10 @@ readonly MODULE_DIR
 . "${MODULE_DIR}/lib/pbs-immutable.sh"
 # shellcheck source=lib/pbs-dns.sh disable=SC1091
 . "${MODULE_DIR}/lib/pbs-dns.sh"
+# shellcheck source=lib/pbs-storage.sh disable=SC1091
+. "${MODULE_DIR}/lib/pbs-storage.sh"
+# shellcheck source=lib/pbs-external.sh disable=SC1091
+. "${MODULE_DIR}/lib/pbs-external.sh"
 # shellcheck source=lib/pbs-host.sh disable=SC1091
 . "${MODULE_DIR}/lib/pbs-host.sh"
 
@@ -98,6 +102,17 @@ if [[ "${STATE}" == "external" ]]; then
     # current cluster membership (#382).
     pbs_client_reconcile "${ZONE}" "${IMAGE_LOCATION}" \
         || warn "One or more nodes could not be reconciled for proxmox-backup-client (see above)"
+    # The consumed PBS must actually be wired (#456): its storage registered and
+    # active, its contents listable. Otherwise every backup of every module fails
+    # at 21:00 while this update reports success — so it fails here, named.
+    _ext_store="$(get_config_value 'pbsStorageName' 'tappaas_backup')"
+    if ! _pbs_pvesm_has "${_ext_store}" "${ZONE}"; then
+        error "Placement is external (${BGN}$(pbs_pbs_url)${CL}) but storage ${_ext_store} is not registered — NOTHING IS BACKED UP."
+        error "  Register it (prompts for the PBS credential): backup-manager placement use-external $(pbs_pbs_url)"
+        exit 1
+    fi
+    pbs_external_verify "${_ext_store}" "${ZONE}" \
+        || { error "The external PBS storage ${_ext_store} is registered but not usable (see above) — backups to $(pbs_pbs_url) will fail."; exit 1; }
     exit 0
 fi
 
@@ -115,7 +130,7 @@ if [[ -z "${STATE}" ]]; then
     if SERVING="$(pbs_find_serving_pbs "$(get_config_value 'node' '')" "${ZONE}" "$(get_node_hostname 0)")"; then
         if [[ "${SERVING}" == unmanaged\ * ]]; then
             error "A PBS answers at ${SERVING#unmanaged } but no Host this Site manages holds the datastore — not recording a placement (ADR-012 §2.2, #602)."
-            error "  If that is the PBS to use: module-manager module modify backup --set placementState=external --set pbsUrl=${SERVING#unmanaged }"
+            error "  If that is the PBS to use: backup-manager placement use-external ${SERVING#unmanaged }"
             exit 1
         fi
         PNODE="${SERVING}"

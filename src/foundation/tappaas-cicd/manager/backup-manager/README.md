@@ -103,6 +103,14 @@ backup-manager placement reset [--peer NAME] [--yes] [--no-update]
         becomes a local PBS; the nodes push there), then onboards the pull
         (prompts for a read login on the old PBS). src/placement-reset.ts.
 
+backup-manager placement use-external <url> [--datastore D] [--namespace NS] [--fingerprint FP]
+        Back up to a PBS this site already runs — on the LAN, at a satellite, a
+        third party's — provisioning nothing (#456). Prompts for the credential
+        the remote issues, registers it as Proxmox storage, checks its existing
+        backups are listable, records placementState external + pbsUrl. Runs
+        the backup module's backup-manage.sh use-external. Every later update
+        fails, named, if that storage is gone or unusable.
+
 backup-manager placement finish-reset [--yes]
         Remove the <name>_former storage entry — after the pull and a test restore
         from pull/<peer>. The old PBS is never touched.

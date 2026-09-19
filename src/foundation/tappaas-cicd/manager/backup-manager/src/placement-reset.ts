@@ -133,6 +133,34 @@ export function placementReset(o: ResetOptions, d: ResetDeps): number {
   return rc4;
 }
 
+// `placement use-external <url>` (#456): consume a PBS this site already runs —
+// on the LAN, at a satellite, or a third party's. The module's own
+// `backup-manage.sh use-external` does the work: it refuses a live local PBS,
+// PROMPTS for the credential the remote issues (never stored in JSON, §2.5),
+// registers the storage, verifies the existing snapshots are listable, then
+// records placementState external + pbsUrl. One command, not a `--set` of the
+// state followed by a second, easily forgotten registration step.
+export interface UseExternalOptions {
+  configDir: string;
+  moduleDir: string;
+  url: string;
+  datastore?: string;
+  namespace?: string;
+  fingerprint?: string;
+}
+
+export function placementUseExternal(o: UseExternalOptions, d: ResetDeps): number {
+  if (!o.url) {
+    d.warn("placement use-external: <url> required — the PBS clients will push to (e.g. pbs.lan.example)");
+    return 1;
+  }
+  const args = ["use-external", o.url];
+  if (o.datastore) args.push("--datastore", o.datastore);
+  if (o.namespace) args.push("--namespace", o.namespace);
+  if (o.fingerprint) args.push("--fingerprint", o.fingerprint);
+  return d.run(join(o.moduleDir, "scripts", "backup-manage.sh"), args);
+}
+
 export function placementFinishReset(o: ResetOptions, d: ResetDeps): number {
   const fe = formerExternal(o.configDir);
   if (!fe?.storage) {

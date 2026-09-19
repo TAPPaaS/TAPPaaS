@@ -57,7 +57,7 @@ None for a normal local install. Optional follow-ups:
 
 - **Promote a shim** once a `tankc` pool exists: `update-module.sh backup` (idempotent).
 - **Adopt an existing PBS** (on the LAN, at a satellite, or a third party — #456):
-  `backup-manage.sh use-external <url> [--datastore <ds>]`. It registers that PBS as
+  `backup-manager placement use-external <url> [--datastore <ds>]`. It registers that PBS as
   this module's backup storage, creates no datastore and never touches what is
   already stored there. **Sticky** — refused from a live local PBS, and left only
   deliberately with `backup-manager placement reset` (RESTORE.md §9.1, #607).
