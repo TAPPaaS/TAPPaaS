@@ -528,6 +528,7 @@ function cmdList(opts: Opts, client: ModuleClient): number {
     // these); ADDITIVELY surface the live running/actual-node + the orphans.
     const summary = resolved.map((r) => ({
       name: r.m.name,
+      kind: r.m.kind ?? null,
       vmname: r.m.vmname ?? null,
       vmid: r.m.vmid ?? null,
       node: r.m.node ?? null,
@@ -557,10 +558,13 @@ function cmdList(opts: Opts, client: ModuleClient): number {
     return 0;
   }
 
-  // Column-aligned table. Columns: NAME ENV ZONE NODE VMID RUN STATE DEV STATUS.
-  const headers = ["NAME", "ENV", "ZONE", "NODE", "VMID", "RUN STATE", "DEV STATUS"];
+  // Column-aligned table. Columns: NAME KIND ENV ZONE NODE VMID RUN STATE DEV STATUS.
+  // KIND is the workload a module realizes (ADR-022f D1: vm, lxc, machine,
+  // application, device) — what tells a machine's row of "-" from a VM's (#669).
+  const headers = ["NAME", "KIND", "ENV", "ZONE", "NODE", "VMID", "RUN STATE", "DEV STATUS"];
   const modRows = resolved.map((r) => [
     r.m.name,
+    r.m.kind ?? "-",
     r.m.environment ?? "-",
     r.m.zone0 ?? "-",
     r.node,
@@ -569,7 +573,7 @@ function cmdList(opts: Opts, client: ModuleClient): number {
     r.m.status ?? "-",
   ]);
   // Template guests fold in as rows (no config → env/zone/dev status "-").
-  const tmplRows = templateGuests.map((g) => [g.name, "-", "-", g.node, String(g.vmid), "template", "-"]);
+  const tmplRows = templateGuests.map((g) => [g.name, "vm", "-", "-", g.node, String(g.vmid), "template", "-"]);
   const rows = [...modRows, ...tmplRows].sort((a, b) => a[0].localeCompare(b[0]));
   const w = headers.map((h, i) => Math.max(h.length, ...rows.map((r) => r[i].length)));
   const fmt = (cells: string[]): string => cells.map((c, i) => c.padEnd(w[i])).join("  ").trimEnd();
