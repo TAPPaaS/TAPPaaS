@@ -97,6 +97,12 @@ VMNAME=$(get_config_value 'vmname' '')
 [[ -z "${VMNAME}" ]] && VMNAME="${MODULE}"
 
 if [[ -z "${VMID}" ]]; then
+    # A machine/application/device owns no Proxmox guest (ADR-022f D1): say
+    # what it is rather than report a missing field (#669).
+    KIND=$(get_config_value 'kind' '')
+    case "${KIND}" in
+        machine|application|device) die "'${MODULE}' is a ${KIND} (kind: ${KIND}) — it has no Proxmox guest to snapshot" ;;
+    esac
     die "No vmid defined in ${MODULE_JSON}"
 fi
 

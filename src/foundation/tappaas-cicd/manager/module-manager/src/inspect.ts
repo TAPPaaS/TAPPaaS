@@ -330,9 +330,15 @@ export function buildConfigOnlyReport(
   opts: { schema?: ModuleFieldsSchema; orig?: Record<string, unknown> | null } = {},
 ): InspectReport {
   const t = new Table();
+  // A machine/application/device has no Proxmox guest by definition (ADR-022f
+  // D1); only for a vm/lxc — or a config with no kind — is a missing vmid news.
+  const kind = typeof cfg.kind === "string" ? cfg.kind : "";
+  const why = ["machine", "application", "device"].includes(kind)
+    ? `(${kind} — no Proxmox guest)`
+    : "(no VM — vmid not set)";
   t.lines.push({
     kind: "info",
-    text: `${BOLD}TAPPaaS Module Inspection: ${BL}${module}${CL} (no VM — vmid not set)`,
+    text: `${BOLD}TAPPaaS Module Inspection: ${BL}${module}${CL} ${why}`,
   });
   t.raw("");
   t.header();

@@ -322,6 +322,13 @@ function reportShape(
     /no config-vs-git discrepancies found/.test(text(bare.lines)),
     "a dependency-less module keeps the original clean summary",
   );
+  check(/\(no VM — vmid not set\)/.test(text(bare.lines)), "no kind: a missing vmid is still reported");
+
+  // #669: a machine/application has no Proxmox guest — the header says what it is.
+  const machine = buildConfigOnlyReport("tappaas1", { kind: "machine" }, { kind: "machine" });
+  check(/tappaas1\S* \(machine — no Proxmox guest\)/.test(text(machine.lines)), "a machine's inspect header names its kind");
+  const app = buildConfigOnlyReport("backup", { kind: "application" }, { kind: "application" });
+  check(/\(application — no Proxmox guest\)/.test(text(app.lines)), "an application's inspect header names its kind");
 
   // Checked + drifted: the drift is reported and folded into the error count.
   const svc = buildServiceSection(
