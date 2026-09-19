@@ -162,6 +162,13 @@ stub.chmod(stub.stat().st_mode | stat.S_IEXEC)
 out = load(stub).pending_migrations()
 assert any("0003" in line for line in out), f"pending listed: {out}"
 
+# a runner that labels its own line prints it once, without the label or colour
+lab = d / "labelled.sh"
+lab.write_text("#!/usr/bin/env bash\nprintf '\\033[32m[Info]\\033[m Config migrations: none pending\\n'\n")
+lab.chmod(lab.stat().st_mode | stat.S_IEXEC)
+out = load(lab).pending_migrations()
+assert out == ["  Config migrations: none pending"], f"labelled runner: {out}"
+
 # a runner this site has not pulled yet
 out = load(d / "nope.sh").pending_migrations()
 assert len(out) == 1 and "not on this site yet" in out[0], f"missing runner: {out}"

@@ -910,8 +910,11 @@ def pending_migrations() -> list:
         return [f"  (could not list pending migrations: {exc})"]
     if out.returncode != 0:
         return ["  (could not list pending migrations)"]
-    lines = [ln.rstrip() for ln in out.stdout.splitlines() if ln.strip()]
-    return ["  " + ln.strip() for ln in lines] or ["  no pending migrations"]
+    # The runner labels its own lines ([Info] …); this plan is logged at [Info]
+    # already, so the runner's label and colour would print twice.
+    lines = [_ANSI.sub("", ln).strip() for ln in out.stdout.splitlines() if ln.strip()]
+    lines = [ln[len("[Info]"):].strip() if ln.startswith("[Info]") else ln for ln in lines]
+    return ["  " + ln for ln in lines if ln] or ["  no pending migrations"]
 
 
 def reboot_pass(automatic_reboot: bool, dry_run: bool) -> bool:
