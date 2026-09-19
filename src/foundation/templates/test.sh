@@ -4,12 +4,12 @@
 #
 # FAST (default): validate the template config JSONs (templates.json + the
 #   per-template build configs) and parse the service scripts. Flags the known
-#   NixOS test-service.sh stub.
+#   NixOS and Debian test-service.sh stubs.
 # DEEP (TAPPAAS_TEST_DEEP=1): check the template VMs (by vmid) exist on the
 #   cluster's primary node.
 #
 # Note: services/<os>/test-service.sh are SERVICE tests run by test-module.sh for
-# each module that `dependsOn templates:nixos|windows` — they verify a CONSUMER
+# each module that `dependsOn templates:nixos|debian|windows` — they verify a CONSUMER
 # VM matches the baseline, so they belong to those modules, not here.
 #
 # Usage: ./test.sh        (fast) ; TAPPAAS_TEST_DEEP=1 ./test.sh   (+ live VMs)
@@ -42,11 +42,14 @@ for s in "${here}"/services/*/*.sh; do
     bash -n "$s" 2>/dev/null && pass "$(basename "$(dirname "$s")")/$(basename "$s") parses" \
         || fail "$s has a parse error"
 done
-# Known gap: the NixOS service test is a stub with no assertions (see TESTING.md).
-if grep -qiE "no tests implemented|stub" "${here}/services/nixos/test-service.sh" 2>/dev/null; then
-    echo "  ⚠ services/nixos/test-service.sh is a STUB (no assertions) — the NixOS"
-    echo "    base image is effectively unverified; implementing it is a tracked TODO."
-fi
+# Known gap: the NixOS and Debian service tests are stubs with no assertions
+# (see TESTING.md).
+for _os in nixos debian; do
+    if grep -qiE "no tests implemented|stub" "${here}/services/${_os}/test-service.sh" 2>/dev/null; then
+        echo "  ⚠ services/${_os}/test-service.sh is a STUB (no assertions) — the ${_os}"
+        echo "    base image is effectively unverified; implementing it is a tracked TODO."
+    fi
+done
 
 if [[ "${TAPPAAS_TEST_DEEP:-0}" == "1" ]]; then
     echo "== templates (deep): template VMs present on the cluster =="
