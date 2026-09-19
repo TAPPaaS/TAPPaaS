@@ -75,9 +75,7 @@ check(r.findings.length === 0, `no field is defined twice (${r.findings.map((f) 
 // KNOWN_UNDEFINED is a list of debts, each with its issue. An entry that is no
 // longer needed — the field got defined, or nothing uses it — FAILS, so an
 // exception cannot outlive its fix.
-const KNOWN_UNDEFINED: Record<string, string> = {
-  connector: "#667 — nextcloud:fileservice declares no fields.json",
-};
+const KNOWN_UNDEFINED: Record<string, string> = {};
 {
   const catalog = JSON.parse(readFileSync(join(REPO, "src", "module-catalog.json"), "utf8")) as Record<string, unknown>;
   const undefinedUse: Record<string, string[]> = {};
