@@ -759,8 +759,11 @@ class RulesManager:
             desired_descs = {r.description for r in rules}
 
             for r in rules:
-                self.fw.create_rule(self._to_firewall_rule(r), apply=False)
-                result.applied += 1
+                res = self.fw.create_rule(self._to_firewall_rule(r), apply=False)
+                # applied counts rules the firewall actually changed, not rules
+                # declared: an up-to-date module reports applied=0.
+                if ((res or {}).get("result") or {}).get("changed"):
+                    result.applied += 1
 
             if prune:
                 for live_rule in existing:

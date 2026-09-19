@@ -342,11 +342,13 @@ class FirewallManager:
             "reload": False,
         }
 
-        # Handle interface (can be single or multiple)
+        # Always a list: the rule module stores interface as a list and compares
+        # against it, so a string ("opt1" vs ["opt1"]) read as a change and
+        # rewrote every rule on every reconcile.
         if isinstance(rule.interface, list):
-            params["interface"] = ",".join(rule.interface)
+            params["interface"] = list(rule.interface)
         else:
-            params["interface"] = rule.interface
+            params["interface"] = [rule.interface]
 
         # Optional source port
         if rule.source_port:

@@ -527,11 +527,26 @@ class TestVerifyAndPruneSuffix(unittest.TestCase):
         fw.create_savepoint.return_value = "rev"
         deleted = []
         fw.delete_rule_by_uuid.side_effect = lambda uuid, apply=False: deleted.append(uuid)
+        fw.create_rule.return_value = {"result": {"changed": True}}
         self.mgr._fw = fw
         result = self.mgr._apply("litellm", prune=True)
         self.assertEqual(result.applied, len(desired))
         self.assertEqual(deleted, [])          # nothing pruned
         self.assertEqual(result.deleted, 0)
+
+    def test_reconcile_counts_only_changed_rules(self):
+        # applied is what the firewall changed, not what the module declares:
+        # an up-to-date module reconciles to applied=0 (the every-run applied=1).
+        desired, _ = self.mgr._compile(load_module(self.dir, "litellm"))
+        self.mgr._list_owned_rules = lambda name: _live_from_compiled(self.mgr, desired)
+        self.mgr._write_sequence_map = lambda *a, **k: None
+        fw = MagicMock()
+        fw.create_savepoint.return_value = "rev"
+        fw.create_rule.return_value = {"result": {"changed": False}}
+        self.mgr._fw = fw
+        result = self.mgr._apply("litellm", prune=True)
+        self.assertGreater(len(desired), 0)
+        self.assertEqual(result.applied, 0)
 
     def test_reconcile_prunes_a_truly_removed_rule(self):
         desired, _ = self.mgr._compile(load_module(self.dir, "litellm"))
