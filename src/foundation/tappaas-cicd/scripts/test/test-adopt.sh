@@ -48,6 +48,15 @@ ck "a missing zones.json → refused"                 "(none)" "$(adopt_zone_for
 
 mod() { adopt_module_for_os "$1" 2>/dev/null || echo "(none)"; }
 ck "debian → debianhost"                            debianhost "$(mod debian)"
+ck "debian + Proxmox VE → pvenode (#665)"           pvenode    "$(adopt_module_for_os debian pve 2>/dev/null || echo "(none)")"
+ck "debian, no Proxmox → debianhost"                debianhost "$(adopt_module_for_os debian - 2>/dev/null || echo "(none)")"
+ck "Proxmox on something else → no module"          "(none)"   "$(adopt_module_for_os ubuntu pve 2>/dev/null || echo "(none)")"
+
+SITE="${TMP}/site.json"
+echo '{"hardware":{"nodes":[{"name":"tappaas1"},{"name":"tappaas2"}]}}' > "${SITE}"
+adopt_site_member tappaas2 "${SITE}" && ck "a node site.json lists is a member" ok ok || ck "a node site.json lists is a member" ok no
+adopt_site_member tappaas9 "${SITE}" && ck "a node it does not list is not" no yes || ck "a node it does not list is not" no no
+adopt_site_member tappaas1 "${TMP}/none.json" && ck "no site.json → not a member" no yes || ck "no site.json → not a member" no no
 ck "ubuntu → no module (no near match)"             "(none)"   "$(mod ubuntu)"
 ck "nixos → no module (not adopted)"                "(none)"   "$(mod nixos)"
 ck "an empty ID → no module"                        "(none)"   "$(mod "")"

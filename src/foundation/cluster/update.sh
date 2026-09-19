@@ -9,6 +9,8 @@
 #   3-4. Refreshes SSD lifecycle and the Realtek NIC fix on each node
 #   5. Makes each node's sshd key-only (#19) — only over a key connection
 #   6. Reconciles the storage node lists from site.json
+#   7. Registers each node as a `pvenode` module instance, if it is not one yet
+#      (ADR-026 D4 stage 1, #665) — inert: nothing on the node changes
 #
 # Usage: ./update.sh [module-name]
 #
@@ -245,5 +247,31 @@ info "${BOLD}Step 6: Reconciling storage node lists from site.json${CL}"
 if ! bash "${SCRIPT_DIR}/reconcile-storage-nodes.sh"; then
     warn "storage nodes reconcile reported an error — run reconcile-storage-nodes.sh manually"
 fi
+
+# Step 7: every cluster node is a module instance (ADR-026 D4 stage 1, #665).
+#   `module adopt` registers a node that has no config yet: config/<node>.json,
+#   module pvenode, verified by its install.sh — which changes nothing on the
+#   node. Idempotent; a node already registered is left alone. A failure is a
+#   warning, never a failed cluster update: registration is bookkeeping, and the
+#   patching above does not depend on it (that is stage 2).
+info "${BOLD}Step 7: Registering cluster nodes as pvenode instances${CL}"
+while read -r node; do
+    [[ -n "${node}" ]] || continue
+    cfg="${CONFIG_DIR}/${node}.json"
+    if [[ -f "${cfg}" ]]; then
+        if [[ "$(module_of "${node}" 2>/dev/null)" == pvenode ]]; then
+            debug "  ${node}: already registered"
+        else
+            warn "  ${node}: config/${node}.json exists but is not a pvenode instance — not registering it"
+        fi
+        continue
+    fi
+    if adopt-module.sh "${node}.${MGMTVLAN}.internal" --wait 0 >/dev/null 2>"/tmp/adopt-${node}.err"; then
+        info "  ${GN}✓${CL} ${node} registered as a pvenode instance"
+    else
+        warn "  ${node}: not registered — $(tail -1 "/tmp/adopt-${node}.err" | sed 's/\x1b\[[0-9;]*m//g')"
+    fi
+    rm -f "/tmp/adopt-${node}.err"
+done <<< "$NODES"
 
 info "${GN}✓${CL} Cluster module update completed successfully."

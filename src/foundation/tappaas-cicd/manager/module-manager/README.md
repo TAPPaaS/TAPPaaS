@@ -289,13 +289,14 @@ adopt-module.sh <address> [--instance NAME] [--zone ZONE] [--wait SECONDS]
 `<address>` is an IP address or a DNS name. It reaches the machine as `root` with the
 mothership's key; if that fails, it prints the one command that authorises the key and waits
 (`--wait`, default 300s, one try every 20s). It then reads the hostname and
-`/etc/os-release`, picks the module for that OS (`debian` → `debianhost`; any other OS is
-refused), names the instance after the hostname, takes `zone0` from the active zone whose
+`/etc/os-release`, picks the module for that OS (`debian` → `debianhost`, and a Debian machine
+running Proxmox VE → `pvenode`, #665; any other OS is refused), names the instance after the hostname, takes `zone0` from the active zone whose
 subnet holds the address, and calls `install-module.sh <module> --instance … --address …
 --zone0 … --os …`. Adopting the same machine again changes nothing.
 
 Refused, with nothing written: a key that never works, an OS with no machine module, a
-Proxmox VE node (cluster nodes are registered through #665), an instance name another
+Proxmox VE host that is not in this Site's cluster (`site.json` `hardware.nodes` — join it with
+`site-manager node add`), an instance name another
 machine has (`--instance`), an address another instance already has, and an address in no
 active zone (`--zone`). It never changes how the machine is reached: key-only SSH is a
 separate step.

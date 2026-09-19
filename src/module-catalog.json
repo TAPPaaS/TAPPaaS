@@ -92,7 +92,8 @@
       "tier": "foundation",
       "source": "official"
     },
-    {"moduleName": "debianhost", "repo": "foundation", "moduleJson": "src/foundation/debianhost/debianhost.json", "vmid": 0, "stack": "foundation", "category": "platform", "status": "incomplete", "tier": "foundation", "source": "official"}
+    {"moduleName": "debianhost", "repo": "foundation", "moduleJson": "src/foundation/debianhost/debianhost.json", "vmid": 0, "stack": "foundation", "category": "platform", "status": "incomplete", "tier": "foundation", "source": "official"},
+    {"moduleName": "pvenode", "repo": "foundation", "moduleJson": "src/foundation/pvenode/pvenode.json", "vmid": 0, "stack": "foundation", "category": "platform", "status": "incomplete", "tier": "foundation", "source": "official"}
   ],
   "applicationModules": [
     {

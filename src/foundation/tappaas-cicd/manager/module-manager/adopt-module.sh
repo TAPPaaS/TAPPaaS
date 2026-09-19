@@ -10,8 +10,12 @@
 #                wait for it (--wait seconds, default 300); nothing is written
 #                until the key works.
 #   2. Learn   — hostname, /etc/os-release ID, whether it is a Proxmox node.
-#   3. Module  — one module per OS (ADR-026 D7): debian → debianhost. An OS with
+#   3. Module  — one module per OS (ADR-026 D7): debian → debianhost, and a
+#                Proxmox VE node (Debian underneath) → pvenode (#665). An OS with
 #                no machine module stops the adoption; there is no near match.
+#                A Proxmox node is adopted only if it is a member of THIS Site's
+#                cluster (site.json hardware.nodes) — joining is `site-manager
+#                node add`, never a side effect of adopting.
 #   4. Name    — the instance is named after the machine (ADR-022f D2); a name
 #                already taken by another machine is refused (--instance
 #                overrides). Adopting the same machine again changes nothing.
@@ -20,8 +24,8 @@
 #   6. Module  — install-module.sh <module> --instance --address --zone0 --os,
 #                which writes config/<instance>.json and runs the module's install.sh.
 #
-# Refused as well: a Proxmox VE node (cluster nodes are registered through #665,
-# never adopted as a plain machine), and an address another instance already has.
+# Refused as well: a Proxmox VE host that is not a member of this Site's
+# cluster, and an address another instance already has.
 #
 # Usage: adopt-module.sh <address> [--instance NAME] [--zone ZONE] [--wait SECONDS]
 # Exit:  0 adopted, or already adopted · 1 refused or failed (nothing written)
@@ -57,12 +61,20 @@ adopt_zone_for_ip() {
     printf '%s\n' "${best}"
 }
 
-# adopt_module_for_os <os-release ID> — the machine module for that OS (D7).
+# adopt_module_for_os <os-release ID> [pve] — the machine module for that OS
+# (D7). A Proxmox VE node reports ID=debian — PVE is a role on Debian, not an OS
+# (ADR-022f D7) — so the second argument says whether pveversion answered.
 adopt_module_for_os() {
-    case "$1" in
-        debian) echo debianhost ;;
+    case "$1:${2:-}" in
+        debian:pve) echo pvenode ;;
+        debian:*)   echo debianhost ;;
         *) return 1 ;;
     esac
+}
+
+# adopt_site_member <name> <site.json> — rc 0 when the Site's cluster lists <name>.
+adopt_site_member() {
+    jq -e --arg n "$1" 'any(.hardware.nodes[]?; .name == $n)' "$2" >/dev/null 2>&1
 }
 
 # adopt_ip_of <address> — an IPv4 address as is, a DNS name resolved (rc 1 when
@@ -137,13 +149,17 @@ main() {
     host="$(sed -n 1p <<< "${facts}" | tr '[:upper:]' '[:lower:]')"
     id="$(sed -n 2p <<< "${facts}")"; ver="$(sed -n 3p <<< "${facts}")"; pve="$(sed -n 4p <<< "${facts}")"
     info "  ${GN}✓${CL} ${host} — ${id:-unknown} ${ver}"
-    [[ "${pve}" != "pve" ]] \
-        || die "${ADDRESS} is a Proxmox VE node — cluster nodes are registered through #665, never adopted as a plain machine"
 
     # 3. Module
     local module
-    module="$(adopt_module_for_os "${id}")" \
+    module="$(adopt_module_for_os "${id}" "${pve}")" \
         || die "no machine module for os '${id:-unknown}' — one module per OS (ADR-026 D7); nothing was written"
+    if [[ "${module}" == pvenode ]]; then
+        adopt_site_member "${host}" "${CONFIG_DIR}/site.json" \
+            || die "${ADDRESS} is a Proxmox VE host that is not in this Site's cluster (site.json hardware.nodes) — join it with 'site-manager node add ${host}'; adopting never joins"
+        [[ -z "${instance}" || "${instance}" == "${host}" ]] \
+            || die "a cluster node's instance is its node name '${host}' — --instance does not apply"
+    fi
 
     # 4. Name
     instance="${instance:-${host}}"

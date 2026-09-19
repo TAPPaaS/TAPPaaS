@@ -112,6 +112,19 @@ function readSiteName(): string {
   die("cannot read site name from site.json — is this a bootstrapped cicd?");
 }
 
+// A joined node becomes a module instance: config/<name>.json, module pvenode
+// (ADR-026 D4 stage 1). `module adopt` does it — the same path the cluster
+// module's update uses for nodes that joined before this existed. A failure is
+// a warning, never a failed join: the node is in the cluster already, and the
+// next cluster update registers it anyway.
+function registerNode(name: string): void {
+  const addr = `${name}.${mgmtDomain()}`;
+  if (runStream("adopt-module.sh", [addr, "--wait", "0"]) !== 0) {
+    warn(`  ${name} is not registered as a module yet — run ${YW}module-manager module adopt ${addr}${CL}, ` +
+         `or let the next cluster update do it`);
+  }
+}
+
 // ── adopt: a Proxmox already runs at the designated IP ─────────────────
 
 export function adoptNode(o: ProvisionOpts): void {
@@ -135,6 +148,8 @@ export function adoptNode(o: ProvisionOpts): void {
     info(`  ${o.name} is already in a cluster — skipping straight to capture`);
     step("capturing the node in site.json (node reconcile --apply)");
     runStream("site-manager", ["node", "reconcile", "--apply"]);
+    step("registering the node as a pvenode module instance (ADR-026 D4, #665)");
+    registerNode(o.name);
     return;
   }
 
@@ -389,6 +404,9 @@ function joinAndCapture(
          `run ${YW}module-manager modify backup${CL} once it is reachable, ` +
          `or its VMs will not be backed up`);
   }
+
+  step("registering the node as a pvenode module instance (ADR-026 D4, #665)");
+  registerNode(o.name);
 
   info(`\n${GN}✓ node '${o.name}' is in the cluster and captured${CL}`);
   info(`  next: run ${YW}site-manager update${CL} to fold HA + replication over the new topology.`);

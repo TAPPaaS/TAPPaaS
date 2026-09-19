@@ -354,14 +354,14 @@ the model can express and patch. The two are one piece of work because a backup
 Status: on `main` — ADR-026 D6 (8439c54f), #602 (31bec1b2). Built and **T3 green on
 hrossen 2026-09-18** on `wave1/g1.2-module-source` (merges to `main` after hrossen's
 nightly): `debianhost`, `module adopt`, `location` → `moduleSource` (migration 0006),
-#609, #607. Next: #665 (needs the pvenode-vs-debianhost choice for nodes) → #612 → #600.
+#609, #607. #665 stage 1 built 2026-09-19 (nodes are `pvenode`, operator). Next: #612 → #600.
 
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
 | *(new)* | `debianhost` module + `module-manager module adopt` | 3 | 2 | M | **Built 2026-09-18**, test phases 1–4 green (`wave1/g1.2-module-source`): `install.sh` verifies (root by key, Debian) and changes nothing; `update.sh` apt full-upgrade, a pending reboot taken only when authorized, else `DEFERRED:`; `test.sh` reachable/Debian/no reboot pending/disk/clock. Along the way: `os`, `zone0`, `zone1` became general fields and `address`, `management` were added (ADR-022f/g, as implemented); the module's own `update.sh` now receives `--allow-disruption` as `TAPPAAS_ALLOW_DISRUPTION=1`; `delete` of a `kind: machine` instance unregisters only and refuses `--vmid`. **`module adopt` built 2026-09-18**: reach as root by key (prints the command and waits), learn hostname/OS, module by OS, instance = hostname, zone from the address; refuses PVE nodes, taken names and addresses, unknown OS, no zone. Test plan phases 1–4 green on hrossen. **Open:** nightly inclusion, `cicd-key.sh` coverage, key-only step, phases 5–6 |
 | *(new)* | ADR-012 topology §1.3 verified | 3 | 2 | M | PBS installed and driven on a `kind: machine` host — Erik's setup, on a test machine first |
 | ✅ *(new)* | instance vs module name | 3 | 3 | M | **Implemented 2026-09-18**, on `main` (8439c54f) (ADR-026 D6.3/D6.4). `module_of <instance>` (shared routines) = the basename of the module's source directory — `.location`, else the catalogue — replacing name parsing; `resolve_base_module_name` survives only as the catalogue's key (`module_name_guess`). The 3-way merge reads `<module_dir>/<module>.json`, not a file named after the instance; `health-manager` and `module-manager` find the Released source the same way and no longer by `vmname`. `module add --instance NAME` (install-module.sh, copy-update-json.sh) with a checked name. Tests: `module_of` (instance tappaas2 → module pvenode), a real merge for an instance ≠ module, `resolveGitJson` with a `vmname` decoy, `test-instance-name.sh` (28). **Unblocks #665** |
-| #665 | Register cluster nodes as machine modules | 3 | 2 | M | ADR-026 D4 stage 1 — registration only, inert. Stage 2 (node patching behind the module lifecycle) and stage 3 (the cluster install becomes module installs) are separate and high-blast-radius |
+| #665 | Register cluster nodes as machine modules | 3 | 2 | M | **Stage 1 built 2026-09-19** (`wave1/g1.2-module-source`): module **`pvenode`** (operator); `adopt` turns a Proxmox node that `site.json` lists into a `pvenode` instance named after it, and the cluster module's update (Step 7) and `site-manager node add` register nodes through it — no migration, no change on a node. Live on hrossen: tappaas1 adopted, 7/7 tests. ADR-026 D4 stage 1 — registration only, inert. Stage 2 (node patching behind the module lifecycle) and stage 3 (the cluster install becomes module installs) are separate and high-blast-radius |
 | ✅ *(closed)* | `placementState` revisit | 4 | 2 | M | **Answered 2026-09-18**: ADR-012 v0.9 settles the backup case (`node` \| `shim` \| `external`); the general point is ADR-026 D6.5 — the `node` field names an *instance*, which coincides with a module name in almost every deployment but is not the same thing. No separate decision needed |
 
 #### ADR-012 close-out (original scope)
@@ -371,7 +371,7 @@ nightly): `debianhost`, `module adopt`, `location` → `moduleSource` (migration
 **Order (operator, 2026-09-18).** Machines-as-modules first, because it simplifies most of the backup rows — `node` becomes a pointer to a machine instance, and so does the PBS's DNS alias:
 1. ✅ ADR-026 D6.3/D6.4 — instance vs module name (`module_of`, `--instance`). Done 2026-09-18.
 2. ✅ `debianhost` + `module adopt` (ADR-026 D3/D8.1) — built 2026-09-18, phases 1–4 green; **moved ahead of #665** (operator, 2026-09-18): adopt needs nothing from #665, and #665 can then register the nodes through it. Test plan: [debianhost-test-plan.md](debianhost-test-plan.md), on stand-in VMs (VMID 990+) on hrossen; phase 6 verifies topology §1.3 and gives #602's machine case its first live test.
-3. #665 stage 1 — tappaas1..3 registered as `kind: machine` instances, through `adopt`.
+3. #665 stage 1 — tappaas1..3 registered as `pvenode` instances, through `adopt` — built 2026-09-19.
 4. #612 — `vmname` → instance name, DNS alias of the `node` Host.
 5. #600 — `placementState: node`, `.node` naming the machine instance (migration); then #603, #601.
 6. ✅ #607, ✅ #609 (built 2026-09-18); #457, #554, #456 as they fit. ✅ #602 (data safety) is on `main`, independent of the rest.
