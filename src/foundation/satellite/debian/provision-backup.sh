@@ -13,7 +13,7 @@
 #   (PBS has no Object Lock; enabling it corrupts the datastore — Bugzilla #6780,
 #   see implementation-doc D16/Q8).
 #
-# Reads (rendered by satellite-manager `sat_gen_backup_config`, shipped alongside):
+# Reads (rendered by the satellite module's `sat_gen_backup_config`, shipped alongside):
 #   backup.env            non-secret config (datastore, home PBS host/store, authid, schedule)
 #   pbs-remote-token      the home PBS read-only token SECRET, 0600 (out-of-band;
 #                         NEVER committed). If absent, PBS + datastore are set up but
@@ -34,7 +34,7 @@ die()   { error "$*"; exit 1; }
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"; cd "${HERE}"
 [[ "$(id -u)" -eq 0 ]] || die "must run as root"
 command -v apt-get >/dev/null 2>&1 || die "apt-get not found — targets Debian 12/13"
-[[ -f backup.env ]] || die "backup.env not found — did satellite-manager render the backup config?"
+[[ -f backup.env ]] || die "backup.env not found — did the satellite module render the backup config?"
 # shellcheck source=/dev/null
 . ./backup.env
 
@@ -92,8 +92,8 @@ if [[ ! -s pbs-remote-token ]]; then
     proxmox-backup-manager user generate-token ${REMOTE_AUTHID%!*} ${REMOTE_AUTHID#*!}
     proxmox-backup-manager acl update /datastore/${HOME_PBS_DATASTORE} DatastoreReader \\
         --auth-id '${REMOTE_AUTHID}'
-  Then provide the printed token secret to satellite-manager (it ships it as the
-  0600 pbs-remote-token) and re-run the backup provisioning.
+  Then provide the printed token secret as TAPPAAS_SAT_PBS_TOKEN (it is shipped as
+  the 0600 pbs-remote-token) and re-run: module-manager module modify <instance> --lockdown
 RUNBOOK
     info "Backup role: datastore-only (pull pending home token) — done."
     exit 0

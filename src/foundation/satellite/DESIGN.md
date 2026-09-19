@@ -19,10 +19,13 @@ decrypt:
 | `admin-vpn` | Blind UDP relay of an admin WireGuard session that terminates on OPNsense | admin keys/traffic — admin↔OPNsense is end-to-end |
 | `backup` | An off-site PBS datastore the home PBS is **pulled** into (S3 Object-Lock by default) | backup plaintext or the decryption key — client-side encrypted at home |
 
-And the trust does not flow the other way: the cluster holds **no standing root** over
-the satellite (ephemeral provisioning credential, pull-based signed updates,
-one-directional management), so a compromise of the *home cluster* cannot reach out and
-destroy the off-site vault. See ADR-010 §7.
+For the relay roles that is the whole protection, and it needs nothing from the trust
+direction: a relay sees only ciphertext, so the mothership may hold root on it. A satellite
+is therefore **managed** by default — its key authorized, patched by the sweep (ADR-010
+§8.4.2). The vault is different: it must survive a compromised home. **Lockdown** (§8.4.4)
+removes the mothership's key, closes home-initiated administration and turns on
+self-patching; from then on the cluster holds **no standing root** over it and nothing at
+home can reach out to destroy the off-site copy (ADR-010 §7.3).
 
 ## Connectivity
 
@@ -37,32 +40,33 @@ destroy the off-site vault. See ADR-010 §7.
 
 | File | Purpose |
 | ---- | ------- |
-| `satellite.json` | Declarative satellite config (provider, public IP, roles, per-role settings). Operator-facing template only — all derived values (tunnel `/31` + ports, per-role tuning, backup mechanics, update mode) are computed by `satellite-manager` at install time. Satellite-specific schema (`schemas/satellite-fields.json`). |
-| `satellite.nix` | NixOS configuration deployed onto the external host via `nixos-anywhere` (the NixOS OS option). |
-| `debian/` | The stock-Debian alternative (default OS option) — `provision-debian.sh` / `provision-backup.sh`; see `debian/README.md`. |
-| `install.sh` / `update.sh` / `test.sh` / `delete.sh` | Module lifecycle verbs (delegate to `satellite-manager`). |
+| `satellite.json` | The template `module add` copies to `config/<instance>.json`: kind, OS, `management: managed`, `zone0: edge`, default roles. Nothing the operator supplies (address, key, location) is pre-filled. All derived values (tunnel `/31` + ports, per-role tuning, backup mechanics) are `lib/provision.sh`'s defaults. Field reference: `schemas/satellite-fields.json`. |
+| `install.sh` / `update.sh` / `test.sh` / `delete.sh` | The module contract, thin wrappers over `lib/satellite-lib.sh`: provision + wire; re-ensure edge rules + the `debianhost` update (managed only); config, OPNsense, machine checks (`test.sh <instance>`) or the offline suite (`test.sh`); decommission (only `module delete --decommission` runs it). |
+| `lib/satellite-lib.sh` | Loading an instance (a legacy `satellite-<name>.json` too), install, decommission, the operator-key and role rules. |
+| `lib/provision.sh` | Renders what goes onto the machine (Debian config files, or the NixOS flake), and the edge firewall rules. |
+| `lib/tunnel.sh` | Reads the satellite's tunnel key and handshake over SSH. |
+| `debian/` | The on-host installers — `provision-debian.sh` (base + relay roles; authorizes or removes the mothership's key by `MANAGEMENT`) and `provision-backup.sh` (the vault); see `debian/README.md`. |
+| `satellite.nix` | The NixOS option (`os: nixos`, via `nixos-anywhere`); such a satellite patches itself and is recorded `unmanaged`. |
 | `test-vm-creation/` | Deep-test fixture: installs `sat-hello`, probes end-to-end via the satellite public IP, tears down. |
-| `README.md` / `INSTALL.md` | Service-catalog overview + the install runbook. |
 
-The operator front door is the **`satellite-manager`** CLI on `tappaas-cicd`
-(`satellite-manager install|update|status|remove <name>`). The satellite has an empty
-`dependsOn` by design: as a `machine` driven by `satellite-manager` it is not installed through
-`install-module.sh` and does not participate in the module dependency graph;
-`satellite-manager` checks its real prerequisites (`network`, `tappaas-cicd`, `backup`
-for the backup role) at install time.
+The OPNsense side is `tappaas-cicd/lib/opnsense-wg.sh`, shared with the admin VPN
+(`network-manager wgvpn`). The instance's `name` (default: the instance name) names its
+OPNsense objects: server `tappaas-edge-<name>`, peer `tappaas-<name>`.
 
 ## Updates and decommissioning
 
-- Updates are **pull-based**: the satellite `autoUpgrade`s from a pinned/signed ref;
-  `tappaas-cicd` never SSHes in to push (ADR-010 §7.3). `update.sh` reconciles only the
-  home-side wiring.
-- `delete.sh <name>` / `satellite-manager remove <name>` decommissions: tears down the
-  OPNsense WireGuard peer, removes the `edge`/`admin` zones and rules, reverts DNS, and
-  forgets the secrets. Destroying the external VPS itself stays manual (operator's cloud
-  account) unless the Tier-B hcloud API token is configured (§5.6).
+- **Managed** (default): the sweep runs `update.sh`, which re-ensures the edge rules and
+  runs the `debianhost` update against `address` — `apt full-upgrade`, a reboot only when
+  authorized (`rebootOk` in the scheduled pass, or `--allow-disruption`), else `DEFERRED:`.
+  Unattended-upgrades is off, so no reboot bypasses that rule.
+- **Unmanaged** (locked down): the sweep skips it; it runs security-only unattended-upgrades
+  with a reboot window. `test.sh` checks it from OPNsense only.
+- `module delete <instance>` unregisters. `module delete <instance> --decommission` runs
+  `delete.sh`: the OPNsense peer and tunnel server go, and the edge rules when no other
+  satellite needs them. The machine itself is never touched (ADR-026: delete never wipes a
+  machine); destroying it is the operator's, in the provider's console.
 
 ## Status / roadmap
 
-This directory is **P1 scaffolding**; the tunnel, provisioning, and per-role behaviour
-land in P2–P6, hardening + docs in P7. See the
+Implemented on Debian; the module form (ADR-010 §8.4) is #670, its live test #671. See the
 [implementation tracker](../../../docs/design/ADR-010-implementation.md#stage-tracker).

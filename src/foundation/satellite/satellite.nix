@@ -11,7 +11,7 @@
 # Author: @larsrossen (TAPPaaS)
 #
 # Deployed onto an EXTERNAL host (a VPS or any machine with a public IP) by
-# `satellite-manager` via nixos-anywhere — NOT a Proxmox VM. Built by the flake
+# the satellite module via nixos-anywhere — NOT a Proxmox VM. Built by the flake
 # in this dir (flake.nix -> disko disk-config.nix + this module + the generated
 # satellite-settings.nix). Per-deployment values (roles, ports, peer keys,
 # addresses, operator key) live in satellite-settings.nix, regenerated per
@@ -27,8 +27,8 @@
 
 let
   # Per-deployment values (roles, ports, peer keys, addresses, operator SSH key)
-  # generated from satellite.json by satellite-manager. A committed default is
-  # shipped for reference/testing; satellite-manager regenerates it per install.
+  # generated from the instance config by the satellite module. A committed default is
+  # shipped for reference/testing; the module regenerates it per install.
   cfg = import ./satellite-settings.nix;
   hasRole = r: lib.elem r cfg.roles;
 in
@@ -85,7 +85,7 @@ in
   # ==========================================================================
   # The satellite's private key is GENERATED ON-HOST and never leaves it
   # (ADR-010 §7.1 #1): NixOS creates /etc/wireguard/wg-infra.key on first
-  # activation if absent. satellite-manager reads back only the PUBLIC key
+  # activation if absent. The module reads back only the PUBLIC key
   # (`wg show wg-infra public-key`) over SSH to configure the OPNsense peer.
   environment.systemPackages = [ pkgs.wireguard-tools ];
 

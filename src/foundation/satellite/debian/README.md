@@ -2,12 +2,12 @@
 
 An **alternative to the NixOS satellite** (`../satellite.nix` + `nixos-anywhere`): the
 satellite runs stock **Debian 12/13** instead. Selected per satellite with
-`satellite-manager install <name> --os debian` (the **default**).
+`os: debian` in the instance's config (the **default**).
 
 ## Why Debian for the satellite
 
 - **Trivial bootstrap** — Hetzner (and most providers) boot Debian directly, so there is
-  **no `nixos-anywhere` kexec/reformat**. `satellite-manager` just SSHes into the booted host
+  **no `nixos-anywhere` kexec/reformat**. The module just SSHes into the booted host
   and runs `provision-debian.sh`.
 - **OS diversity = a security win for the vault (§7.3).** The backup satellite is the one node
   that must survive a compromise of everything else. Running it on a *different, officially
@@ -18,11 +18,11 @@ satellite runs stock **Debian 12/13** instead. Selected per satellite with
 
 ## How it works
 
-`satellite-manager` (on `tappaas-cicd`) drives everything; the **home/OPNsense side is
+The satellite module (`module-manager module add satellite`, on `tappaas-cicd`) drives everything; the **home/OPNsense side is
 identical** to the NixOS path (same `edge` tunnel, same `admin` WG server, same
 `opnsense-wg.sh`/`admin-vpn.sh` tooling). Only the satellite half changes:
 
-1. `sat_gen_debian_configs` (in `manager/satellite-manager/lib/provision.sh`) renders the
+1. `sat_gen_debian_configs` (in `../lib/provision.sh`) renders the
    per-role config files from the same `SAT_*` derived defaults that generate
    `satellite-settings.nix`:
 
@@ -32,21 +32,29 @@ identical** to the NixOS path (same `edge` tunnel, same `admin` WG server, same
    | `nftables.conf` | always (+admin-vpn NAT) | `networking.firewall` + `networking.nftables.tables.adminvpn` |
    | `nginx-stream.conf` | reverse-proxy | `services.nginx.streamConfig` |
    | `99-tappaas-ipforward.conf` | admin-vpn | `boot.kernel.sysctl."net.ipv4.ip_forward"` |
-   | `20auto-upgrades` + `52tappaas-unattended-upgrades` | always | `system.autoUpgrade` (Debian: security-only + reboot window) |
+   | `20auto-upgrades` + `52tappaas-unattended-upgrades` | installed when unmanaged | `system.autoUpgrade` (Debian: security-only + reboot window) |
+   | `roles.env` | always | `ROLES` and `MANAGEMENT` (managed \| unmanaged) |
+   | `cicd_key.pub` | managed | the mothership's key, authorized so the sweep can patch the machine |
 
 2. `sat_assemble_debian_deploy` adds **`provision-debian.sh`** (this dir) to the rendered set.
-3. `sat_provision_debian` SSHes to `root@<ip>` (operator key via a forwarded agent — cicd holds
-   no standing key, §7.3), ships the deploy dir, and runs `provision-debian.sh`, which
-   `apt install`s the packages, installs the configs, generates the on-host WireGuard key
-   (never leaves the host), enables the services, and turns on unattended security upgrades.
+3. `sat_provision_debian` SSHes to `root@<ip>` (the operator key via a forwarded agent),
+   ships the deploy dir, and runs `provision-debian.sh`, which `apt install`s the packages,
+   installs the configs, generates the on-host WireGuard key (never leaves the host) and
+   enables the services. By `MANAGEMENT` it then either authorizes the mothership's key and
+   leaves unattended-upgrades off (**managed**, the default: the sweep patches it), or
+   removes that key and turns unattended security upgrades on (**unmanaged**, after
+   `--lockdown`).
 4. Back on cicd, the flow rejoins the shared path: read back the satellite's wg public key →
    wire the OPNsense peer → verify the handshake.
 
 ## Self-patching
 
-`unattended-upgrades` applies **security-origin updates only** (minimal churn — right for a
-set-and-forget vault) and auto-reboots in a window (`SAT_REBOOT_TIME`, default `03:30`). For a
-backup node, keep that window outside the pull-sync schedule so a reboot never interrupts a sync.
+Only a locked-down (unmanaged) satellite patches itself. `unattended-upgrades` applies
+**security-origin updates only** (minimal churn — right for a set-and-forget vault) and
+auto-reboots in a window (`SAT_REBOOT_TIME`, default `03:30`); keep that window outside the
+pull-sync schedule so a reboot never interrupts a sync. A managed satellite is patched by the
+nightly sweep instead (the `debianhost` update: `apt full-upgrade`, reboots per `rebootOk`),
+so unattended-upgrades is off there — an unattended reboot would bypass that rule.
 
 ## Backup role (P6) — the vault
 
@@ -61,19 +69,19 @@ compromised home cannot delete the off-site copies. The **client-side encryption
 home** (§3.2) — the satellite stores only ciphertext.
 
 `provision-backup.sh` (run after the base) installs PBS, creates the local datastore, and wires
-the `remote` + pull `sync-job`. `satellite-manager` also adds the OPNsense **`edge → home-PBS:8007`**
+the `remote` + pull `sync-job`. The module also adds the OPNsense **`edge → home-PBS:8007`**
 rule and widens the satellite's wg `AllowedIPs` to reach home PBS — and nothing else in the cluster.
 
 ### Home-side prerequisites (operator, one-time)
 
 1. **Reachability:** home PBS must be reachable at `backup.pull.homePbsHost` over the tunnel
-   (satellite-manager adds the `edge → PBS:8007` rule + AllowedIPs).
+   (the module adds the `edge → PBS:8007` rule + AllowedIPs).
 2. **Read-only token** on home PBS (so a compromised satellite can only *read* home's encrypted chunks):
    ```bash
    proxmox-backup-manager user generate-token satellite@pbs pull
    proxmox-backup-manager acl update /datastore/<home-store> DatastoreReader --auth-id 'satellite@pbs!pull'
    ```
-   Provide the printed **secret** to satellite-manager out-of-band — `TAPPAAS_SAT_PBS_TOKEN=<secret>`
+   Provide the printed **secret** out-of-band — `TAPPAAS_SAT_PBS_TOKEN=<secret>`
    (or `TAPPAAS_SAT_PBS_TOKEN_FILE=<path>`); it is shipped as a `0600` file and **never committed**.
 3. Put the non-secret pull config in the satellite JSON: `backup.pull.{homePbsHost,homeDatastore,authId,fingerprint,schedule}`.
 
@@ -89,6 +97,6 @@ provide the token and re-run to activate the pull.
 | `README.md` | this file |
 
 The rendered config files are **not committed** — they are generated per-deployment by
-`satellite-manager` from `~/config/satellite-<name>.json` (the manager owns the config).
+the satellite module from the instance's `~/config/<instance>.json`.
 Design reference: [ADR-010](../../../../docs/ADR/ADR-010-vps-satellite-reverse-proxy-backup.md),
 Q8 in the [implementation doc](../../../../docs/design/ADR-010-implementation.md).

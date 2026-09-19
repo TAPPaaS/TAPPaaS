@@ -5,122 +5,108 @@ Primary audience: TAPPaaS admin.
 > **When do I need this?** Only if your site has **no usable public IP** (CGNAT, dynamic
 > IP, no inbound port-forwarding) and you want to publish services, reach the management
 > plane remotely, or hold an off-site backup. A site with a real public IP does **not**
-> need a satellite. This step is **optional and conditional** — it is *referenced* from
-> the TAPPaaS install, never run automatically.
->
-> **Status:** runbook scaffold (ADR-010 P1). The `satellite-manager` flow it describes is
-> built in packages P2–P6; steps below are the target procedure.
+> need a satellite. This step is **optional** — the TAPPaaS install never runs it.
 
-The satellite is **not** installed like an ordinary module (`module-manager module add`) —
-the operator front door is the `satellite-manager` CLI on `tappaas-cicd`. The module's
-`install.sh` merely delegates to it. Design reference:
-[ADR-010](../../../docs/ADR/ADR-010-vps-satellite-reverse-proxy-backup.md).
+The satellite is a module like any other (ADR-010 §8.4): `module-manager module add`
+creates it, the nightly sweep patches it, `module-manager module test` checks it. Design
+reference: [ADR-010](../../../docs/ADR/ADR-010-vps-satellite-reverse-proxy-backup.md).
 
 ## Prerequisites
 
-1. A running TAPPaaS foundation (`network` + `tappaas-cicd`; plus `backup` if you want
-   the backup role). Do this **after** the foundation is up.
-2. Decide which **roles** you need: `reverse-proxy`, `admin-vpn`, `backup` (any
-   combination).
-3. Allocate a host with a **stable public IPv4** and root SSH (Tier A — portal, default):
-   1. In the Hetzner Cloud console create a server: image **Debian 12**, type **`cx23`**
-      (x86 Intel, cheapest current line; bump to cx33+ for a backup-heavy node —
-      `cax11` is the ARM alternative).
-   2. **SSH key — attach your OPERATOR key (your workstation), NOT a `tappaas-cicd`
-      key.** The key you attach becomes the satellite's standing root. Per ADR-010 §7.3
-      the satellite must NOT be rootable from `tappaas-cicd` (a compromised mothership
-      must never own the off-site vault). `tappaas-cicd` gets only an **ephemeral**
-      provisioning credential during install, which is revoked afterwards.
-   3. Note its **public IP**.
-4. Backup role only — create the S3 bucket **with Object Lock**:
-   1. Create a Hetzner **Object Storage** bucket **with Object Lock enabled at
-      creation** — this cannot be added later. Object Lock makes the off-site copy
-      immutable (WORM), so it survives even a satellite compromise.
-   2. Create S3 credentials scoped to that bucket.
+1. A running TAPPaaS foundation (`network` + `tappaas-cicd`).
+2. Decide which **roles** you need: `reverse-proxy` (public HTTPS ingress) and/or
+   `admin-vpn` (relay for the admin VPN). Both are the default.
+3. Allocate a host with a **stable public IPv4** and root SSH — in the Hetzner Cloud
+   console, for example:
+   1. Create a server: image **Debian 12 or 13**, type **`cx23`** (x86, cheapest current
+      line; `cax11` is the ARM alternative).
+   2. **SSH key — attach your OPERATOR key (your workstation), not a `tappaas-cicd`
+      key.** It is your out-of-band access; the install authorizes the mothership's key
+      itself.
+   3. Note its **public IP**, and where it is (country, city).
 
-> Tier B (opt-in, fully automated): instead of the portal, store a Hetzner **API token**
-> as a TAPPaaS secret and let `satellite-manager` create the server via the `hcloud`
-> API. The token can create **and destroy** servers — see ADR-010 §7.3 before enabling.
-
-> Alternative backup backend: a dedicated block **Volume** with a local ZFS datastore
-> (set `backup.backend = "volume"`). Weaker immutability (ZFS snapshots), must be
-> pre-sized.
-
-> Unlike other modules you do **not** hand-edit a json override: `satellite-manager`
-> **owns the config** — you pass parameters and it writes
-> `~/config/satellite-<name>.json` itself. `src/foundation/satellite/satellite.json` is
-> the operator-facing template of that file.
+> Tier B (opt-in): a Hetzner **API token** lets TAPPaaS create the server through the
+> `hcloud` API. The token can create **and destroy** servers — see ADR-010 §7.3 first.
 
 ## Install
 
-Run over `ssh -A` so your operator key is available for the post-provision pubkey
-read-back (§7.3: cicd holds no standing key on the satellite):
+Log in to `tappaas-cicd` with your agent forwarded (`ssh -A`) — the install reaches the new
+host with your operator key — then:
 
-    satellite-manager install <name> \
-        --public-ip <satellite-ip> \
-        --sshkey ~/.ssh/<operator-key>.pub \
-        [--bucket <s3-object-lock-bucket>]   # provide → enables the backup role
-        [--country <CC> [--city <city>]]    # where it physically is — see below
-        [--provider hetzner] [--s3-endpoint <url>] [--roles reverse-proxy,admin-vpn]
+    module-manager module add satellite \
+        --address <public-ip> \
+        --physicalLocation '{"country":"FI","city":"Helsinki"}'
 
-- **Sensible defaults:** roles = `reverse-proxy,admin-vpn` (+ `backup` automatically when
-  you pass `--bucket`). `--sshkey` takes a key string or a path to a `.pub` file.
-  Add `--dry-run` to preview.
-- Re-running `satellite-manager install <name>` with no flags re-provisions from the
-  saved config.
-- **`--country` / `--city` (#609):** where the satellite physically runs. A backup satellite
-  is only an off-site copy if it is somewhere else, and only the record shows that:
-  `backup-manager validate` compares it with `site.json`'s `location` and warns while it is
-  missing or matches. Give the city when the Site is in the same country.
+- **Instance name:** `satellite` (config `~/config/satellite.json`). A second satellite
+  needs `--instance <name>`, e.g. `--instance satellite-hel1`.
+- **Roles:** `reverse-proxy` and `admin-vpn` by default; one of them only with
+  `--roles '["reverse-proxy"]'`. The `backup` role is not given here — it comes with
+  locking the satellite down as a pull vault (ADR-010 §8.4.4).
+- **`--physicalLocation` (#609):** where the satellite physically runs. A backup copy is
+  only off-site if it is somewhere else, and only this record shows it:
+  `backup-manager validate` compares it with `site.json`'s `location`. Give the city when
+  the Site is in the same country.
+- **Operator key:** recorded from your forwarded agent (`ssh-add -L`) as
+  `host.operatorSshKeys`; set `TAPPAAS_OPERATOR_KEY` (a key or a `.pub` file) instead when
+  the agent holds other keys too. The mothership's own key is never recorded as one.
 
-`satellite-manager` then:
+The module then:
 
-1. Writes `~/config/satellite-<name>.json` from your parameters (the manager owns the
-   JSON).
-2. Deploys the OS onto the host — stock Debian provisioning by default, or NixOS via
-   `nixos-anywhere` (kexec from the stock image — no rescue mode); see `debian/README.md`.
-3. Brings up the WireGuard listener; the **home (OPNsense) end dials out** with
-   keepalive.
-4. Reads back the satellite's WireGuard **public** key (its private key never leaves the
-   host).
-5. Adds the `edge` (+ `admin`, for admin-vpn) overlay zone and the least-privilege,
-   role-gated firewall rules; reconciles.
-6. Points the public DNS record at the satellite; **revokes the provisioning credential**
-   (leaving only your operator key) and switches the host to pull-based `autoUpgrade`.
-7. For the backup role: registers the home PBS as a **pull remote** + configures the S3
-   datastore + Object-Lock.
+1. Creates the home end of the tunnel on OPNsense (`tappaas-edge-<name>`, the `edge` zone's
+   `/31`).
+2. Provisions Debian on the host over your key: WireGuard, the host firewall, nginx for
+   `reverse-proxy`, the UDP relay for `admin-vpn` (see `debian/README.md`).
+3. Reads back the satellite's WireGuard **public** key (its private key never leaves it)
+   and adds the peer `tappaas-<name>` on OPNsense, which dials out to it.
+4. Adds the role-gated `edge` firewall rules.
+5. **Authorizes the mothership's key** — the satellite is `managed`: the nightly sweep
+   patches it like any Debian machine (`debianhost`), reboots only when `rebootOk` or
+   `--allow-disruption` allows. Unattended-upgrades stays off.
 
-## Post-install
+A failed install removes the config it wrote. If OPNsense already has this satellite's
+tunnel, the install refuses: take it down first with `--decommission` (below).
 
-None. Updates are pull-based and automatic — the satellite `autoUpgrade`s from a
-pinned/signed ref (a satellite-manager default, not a config field); `tappaas-cicd`
-never SSHes in to push (ADR-010 §7.3). `update.sh` / `satellite-manager update <name>`
-only reconciles the home-side wiring and config.
+Point your public DNS records at the satellite's address yourself — they are in your DNS
+provider, not in TAPPaaS.
 
 ## Verification
 
-    satellite-manager status <name>
-
-(The module's `./test.sh` runs fast contract checks; a live reverse-proxy end-to-end
-test gates behind `TAPPAAS_TEST_DEEP=1` and self-skips when no satellite is present.)
+    module-manager module test satellite
 
 | Check | Expected |
 |-------|----------|
-| reverse-proxy: browse a published name from off-LAN | resolves to the satellite, served via Caddy at home; Caddy logs show the **real client IP** (PROXY protocol) |
-| admin-vpn: bring up your admin WireGuard peer | can reach a node `:8006`, the OPNsense UI, PBS `:8007`, and SSH to a host |
-| backup: `satellite-manager status <name>` | pull sync converged |
-| backup: test restore **with** the encryption key | succeeds — and **fails without** the key |
+| `module test` | OPNsense server + peer present, the mothership logs in, tunnel handshake under 5 minutes, nginx active (reverse-proxy), relay rules loaded (admin-vpn), the `debianhost` checks green |
+| reverse-proxy: browse a published name from off-LAN | resolves to the satellite, served by Caddy at home |
+| admin-vpn: `network-manager wgvpn add-peer --name <device> --pubkey <key>` | the printed config's Endpoint is the satellite; the device reaches a node `:8006`, the OPNsense UI and SSH |
 
-## Troubleshooting
+## Removing it
 
-**Do I still need the satellite?**
-Decommission with `satellite-manager remove <name>` — it tears down the OPNsense
-WireGuard peer, removes the `edge`/`admin` zones (reconcile), reverts DNS, and forgets
-the secrets, falling back cleanly to the prior reachability model. **Destroying the VPS
-itself stays manual** (your cloud account), unless the Tier-B API token is configured.
+- `module-manager module delete <instance>` **unregisters** it, like any machine: the tunnel
+  stays up and nothing is touched.
+- `module-manager module delete <instance> --decommission` also takes the Site's side down:
+  the OPNsense peer and tunnel server, and the `edge` rules when no other satellite needs
+  them. **The machine itself is never touched** — delete it in the provider's console.
 
-**Where does this fit in the TAPPaaS install?**
+## Converting an existing satellite
+
+A satellite set up with the retired `satellite-manager` is `config/satellite-<name>.json`,
+`status: external`. Migration 0008 already recorded its `moduleSource`. To make it a managed
+module (ADR-010 §8.4.7), on `tappaas-cicd`:
+
+1. Rename it, keeping the name so the OPNsense peer and tunnel keep theirs:
+   `mv ~/config/satellite-<name>.json ~/config/<name>.json`
+2. Record its address and management, drop the stop-gap status, add where it is:
+
+       jq '.address = .host.publicIp | .management = "managed" | del(.status)
+           | .physicalLocation = {"country":"FI","city":"Helsinki"}' \
+           ~/config/<name>.json > /tmp/sat.json && mv /tmp/sat.json ~/config/<name>.json
+
+3. Authorize the mothership's key on it, from your workstation:
+   `ssh root@<address> "cat >> ~/.ssh/authorized_keys" < <(ssh tappaas@<cicd> cat .ssh/id_ed25519.pub)`
+4. Check: `module-manager module list --resolution` names it `satellite`, and
+   `module-manager module test <name>` is green. From then on the sweep patches it.
+
+## Where does this fit in the TAPPaaS install?
+
 The main install does **not** run this. At the *"does this site need a satellite?"*
-decision point (after `network`/`tappaas-cicd`/`backup`), the install guide points here.
-Keeping it conditional is by design — the satellite is the first **optional** foundation
-module (ADR-010 §5.7).
+decision point (after `network` and `tappaas-cicd`), the install guide points here.

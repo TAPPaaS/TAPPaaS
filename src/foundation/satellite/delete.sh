@@ -1,22 +1,19 @@
 #!/usr/bin/env bash
 #
-# TAPPaaS satellite module delete (ADR-010)
+# TAPPaaS satellite module decommission (ADR-010 §8.4.5)
 #
-# Contract file called by delete-module.sh (if present). For the satellite this
-# is a DECOMMISSION: it delegates to `satellite-manager remove`, which tears down
-# the OPNsense tunnel side (WireGuard server/peer), the edge/admin zones + rules,
-# and reverts DNS. Destroying the external VPS itself stays MANUAL (the operator's
-# cloud account) unless the Tier-B hcloud API token is configured — §5.6.
+# Run only by `module-manager module delete <instance> --decommission`; a plain
+# `delete` unregisters a machine and never calls this. Takes the Site's side of
+# the satellite down — the OPNsense peer and tunnel server, and the edge rules
+# when no other satellite needs them. The machine itself is never touched:
+# destroying it is the operator's, in the provider's console.
 #
-# Usage: ./delete.sh <name> [--dry-run]
+# Usage: ./delete.sh <instance>
 #
 set -euo pipefail
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. /home/tappaas/bin/common-install-routines.sh
+. "${HERE}/lib/satellite-lib.sh"
 
-NAME="${1:-}"
-if [[ -z "${NAME}" ]]; then
-    echo "usage: ./delete.sh <name> [--dry-run]   (name = the satellite-<name>.json)" >&2
-    exit 1
-fi
-command -v satellite-manager >/dev/null 2>&1 \
-    || { echo "satellite-manager not on PATH — nothing to decommission" >&2; exit 1; }
-exec satellite-manager remove "$@"
+sat_load "${1:?usage: ./delete.sh <instance>}"
+sat_decommission

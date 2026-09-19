@@ -1,45 +1,36 @@
 {
-  "_README": "TAPPaaS satellite module config (ADR-010). A machine (kind=machine, ADR-022f; ADR-010 §8) that tappaas-cicd provisions via nixos-anywhere and manages with `satellite-manager` — NOT a Proxmox cluster:vm. This file exposes ONLY the operator-facing choices; ALL derived values (tunnel /31 + ports, per-role tuning, backup mechanics, update mode) are computed with sensible defaults by satellite-manager at install time (see lib/provision.sh). Copy to ~/config/satellite-<name>.json and edit. Secrets are never stored here.",
+  "_README": "TAPPaaS satellite module (ADR-010 §8.4): a machine with a public IPv4 — a VPS or any host — that gives a Site without one public ingress, the admin-VPN relay and, locked down, an off-site backup vault. Added like any module, over `ssh -A`: `module-manager module add satellite --address <public-ip> [--instance <name>] [--roles '[\"reverse-proxy\"]'] [--physicalLocation '{\"country\":\"FI\",\"city\":\"Helsinki\"}']`. Derived values (tunnel /31 + ports, per-role tuning, backup mechanics) are the module's defaults (lib/provision.sh). Secrets are never stored here.",
 
-  "description": "Operator-owned VPS satellite: reverse-proxy frontend, admin VPN, and off-site backup for a cluster with no public IP",
-  "version": "0.1.0",
-  "releaseDate": "2026-06-30",
+  "description": "A satellite: public ingress, admin-VPN relay and off-site backup for a Site with no public IP",
+  "version": "0.2.0",
+  "releaseDate": "2026-09-19",
   "maintainer": "@larsrossen",
   "status": "Development",
   "tier": "foundation",
+  "source": "official",
   "kind": "machine",
+  "os": "debian",
+  "management": "managed",
+  "_management_note": "managed (default): the mothership's key is authorized and the nightly sweep patches it like a debianhost. `module-manager module modify <instance> --lockdown` makes it the unmanaged pull vault: the backup role, unattended-upgrades, the mothership's key removed (ADR-010 §8.4.4).",
+  "rebootOk": false,
+  "zone0": "edge",
 
-  "name": "satellite",
-  "roles": ["reverse-proxy", "admin-vpn", "backup"],
+  "roles": ["reverse-proxy", "admin-vpn"],
+  "_roles_note": "reverse-proxy: L4 passthrough of :443/:80 to Caddy at home. admin-vpn: blind UDP relay for `network-manager wgvpn`. backup: set by --lockdown, never at add.",
 
   "dependsOn": [],
-  "_dependsOn_note": "Empty by design: the satellite is a machine the operator drives with satellite-manager, NOT installed through install-module.sh, so it does not participate in the module dependency graph. Its real prerequisites — the `network` module (OPNsense) up, `tappaas-cicd` up, and the `backup` module (home PBS) for the backup role — are checked by satellite-manager at install time, not resolved here.",
+  "_dependsOn_note": "Empty: nothing the satellite needs is a service another module provides through the dependency graph. Its prerequisites — the network module (OPNsense) and tappaas-cicd — are there on every Site.",
 
   "provider": {
     "type": "hetzner",
-    "_type_values": "hetzner | generic (operator supplies a host + SSH; no API automation)",
     "allocation": "portal",
-    "_allocation_values": "portal (Tier A, default: you create the VPS in the console — location/type/image are YOUR console choices, satellite-manager just needs host.publicIp) | api (Tier B, opt-in via an hcloud token: then add location + serverType below; image is irrelevant — nixos-anywhere reformats any stock image)",
-    "_api_only": { "location": "hel1", "serverType": "cx23" }
+    "_allocation_values": "portal (default: you create the VPS in the provider's console) | api (Tier B, opt-in via an hcloud token: add location + serverType)"
   },
-
-  "physicalLocation": { "country": "FI", "city": "Helsinki" },
-  "_physicalLocation_note": "Where the satellite physically runs (#609) — the evidence its backup copy is off-site; `backup-manager validate` compares it with site.json's location. EXAMPLE values: set your own. Not provider.location (a provisioning parameter).",
 
   "host": {
-    "publicIp": "203.0.113.10",
-    "_publicIp_note": "EXAMPLE placeholder — 203.0.113.10 is RFC 5737 TEST-NET-3. Replace with the real satellite public IP.",
     "sshUser": "root",
-    "operatorSshKeys": [
-      "ssh-ed25519 AAAA... operator@workstation"
-    ]
+    "_note": "operatorSshKeys is recorded at install from your forwarded agent (or TAPPAAS_OPERATOR_KEY): your out-of-band access, never the mothership's key."
   },
 
-  "backup": {
-    "_note": "Only used when 'backup' is in roles. The operator supplies the S3 target; everything else (pull direction, --remove-vanished false, client-side encryption, S3 Object-Lock + retention, namespace) is a sensible default in satellite-manager. Omit this block for a relay/admin-only satellite. For the dedicated-volume backend instead of S3, set backend:'volume' (advanced).",
-    "s3": {
-      "endpoint": "https://hel1.your-objectstorage.com",
-      "bucket": "tappaas-satellite-backup"
-    }
-  }
+  "_address_note": "`address` — the satellite's public IPv4 — is given at add (--address). `physicalLocation` — where it physically is (#609) — should be: `backup-manager validate` compares it with site.json's location."
 }

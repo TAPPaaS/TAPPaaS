@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # lib/tunnel.sh — satellite-side WireGuard infra-tunnel helpers (ADR-010 P2).
 #
-# Sourced by satellite-manager. These talk to the SATELLITE over SSH (the home
-# OPNsense side is handled by wg-manager in the opnsense-controller). The
+# Sourced by satellite-lib.sh. These talk to the SATELLITE over SSH (the home
+# OPNsense side is lib/opnsense-wg.sh in tappaas-cicd). The
 # satellite's private key never leaves the host — we only ever read its PUBLIC
 # key (ADR-010 §7.1 #1 / D19).
 #

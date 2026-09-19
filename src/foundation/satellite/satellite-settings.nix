@@ -1,6 +1,6 @@
 # satellite-settings.nix — per-deployment values for satellite.nix (ADR-010 P3).
 #
-# satellite-manager regenerates this from ~/config/satellite-<name>.json per
+# The satellite module regenerates this from ~/config/<instance>.json per
 # install. This committed copy is the reference/test deployment (the sat1 host).
 # Secrets are NOT here: the satellite's own WireGuard private key is generated
 # on-host; only the HOME (OPNsense) *public* key is referenced.
@@ -18,7 +18,7 @@
 
   # OPNsense infra-tunnel WireGuard PUBLIC key (home dials in). From the P2
   # live bring-up (server 'tappaas-edge-sat1'). The satellite generates its OWN
-  # key on first boot; satellite-manager reads it back to update the OPNsense peer.
+  # key on first boot; the module reads it back to update the OPNsense peer.
   homePublicKey = "Pj6B7Iz+ZTlWWkjToPbjRFai5Adhy+Dx6Q3Z/oG8rz8=";
 
   homeCaddyAddr = "10.255.0.1"; # reverse-proxy forward target (over the tunnel)

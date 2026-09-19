@@ -1,46 +1,46 @@
 {
-  "_README": "Field reference for a TAPPaaS satellite config (ADR-010): ~/config/satellite-<name>.json. A satellite is its own machine (kind=machine, ADR-022f; ADR-010 §8), NOT a Proxmox cluster:vm. PRINCIPLE: this file exposes ONLY operator-facing choices; every derived value (tunnel, ports, per-role tuning, backup mechanics, update mode) is defaulted by satellite-manager (lib/provision.sh) — see 'derived' below. Secrets are never stored here.",
-  "version": "0.2.0",
-  "appliesTo": "src/foundation/satellite/satellite.json and ~/config/satellite-<name>.json",
+  "_README": "Field reference for a TAPPaaS satellite instance (ADR-010 §8.4): ~/config/<instance>.json, written by `module-manager module add satellite` (a satellite from before §8.4 is ~/config/satellite-<name>.json). A satellite is its own machine (kind=machine, ADR-022f), NOT a Proxmox cluster:vm. General module fields (address, roles, management, rebootOk, physicalLocation, zone0) are in module-fields.json; this file adds the satellite's own. PRINCIPLE: only operator-facing choices; every derived value (tunnel, ports, per-role tuning, backup mechanics) is defaulted by the module (lib/provision.sh) — see 'derived' below. Secrets are never stored here.",
+  "version": "0.3.0",
+  "appliesTo": "src/foundation/satellite/satellite.json and ~/config/<instance>.json",
 
   "fields": {
-    "moduleSource": { "type": "string", "required": false, "note": "absolute path of the satellite module's directory (src/foundation/satellite) — written by satellite-manager, backfilled on existing satellites by migration 0008; what module_of and `module list --resolution` name the module by (#609 renamed it from location)" },
-    "kind": { "type": "string", "required": true, "values": { "machine": "its own system with an OS, provisioned by satellite-manager (ADR-010 §8, ADR-022f D2) — only value; was external-host before #611" } },
+    "moduleSource": { "type": "string", "required": false, "note": "absolute path of the satellite module's directory (src/foundation/satellite) — written by module add, backfilled on satellites from before ADR-010 §8.4 by migration 0008; what module_of and `module list --resolution` name the module by (#609 renamed it from location)" },
+    "kind": { "type": "string", "required": true, "values": { "machine": "its own system with an OS, provisioned by the satellite module (ADR-010 §8, ADR-022f D2) — only value; was external-host before #611" } },
     "tier": { "type": "string", "required": true, "values": { "foundation": "foundation-grade but OPTIONAL (not in the mandatory install chain)" } },
-    "name": { "type": "string", "required": true, "description": "satellite instance name (also the hostname); a site may run several" },
-    "os": { "type": "string", "default": "debian", "required": false, "values": { "debian": "ADR-010 Option 3 (default): stock Debian 12/13 provisioned over SSH by satellite-manager (no nixos-anywhere); official proxmox-backup-server for the backup role; OS diversity protects the vault from a nixpkgs supply-chain compromise (§7.3)", "nixos": "declarative NixOS via nixos-anywhere (satellite.nix)" }, "note": "legacy configs without this field are treated as nixos" },
-    "roles": { "type": "array<string>", "required": true, "values": { "reverse-proxy": "L4 passthrough of :443/:80 to Caddy-on-OPNsense", "admin-vpn": "blind UDP relay of an admin WireGuard session terminating on OPNsense", "backup": "off-site PBS pull target" }, "note": "any combination; order irrelevant" },
-    "dependsOn": { "type": "array<string>", "required": false, "note": "EMPTY by design — the satellite is operator-driven (satellite-manager), not resolved through install-module.sh. Real prerequisites (network/OPNsense, tappaas-cicd, and backup for the backup role) are checked by satellite-manager." },
+    "name": { "type": "string", "required": false, "description": "the name the OPNsense side knows it by (server tappaas-edge-<name>, peer tappaas-<name>); defaults to the instance name. A satellite from before §8.4 keeps its own (e.g. satellite1)." },
+    "os": { "type": "string", "default": "debian", "required": false, "values": { "debian": "ADR-010 Option 3 (default): stock Debian 12/13 provisioned over SSH by the module (no nixos-anywhere); official proxmox-backup-server for the backup role; OS diversity protects the vault from a nixpkgs supply-chain compromise (§7.3)", "nixos": "declarative NixOS via nixos-anywhere (satellite.nix); patches itself, so recorded unmanaged" } },
+    "roles": { "type": "array<string>", "required": true, "values": { "reverse-proxy": "L4 passthrough of :443/:80 to Caddy-on-OPNsense", "admin-vpn": "blind UDP relay of an admin WireGuard session terminating on OPNsense (`network-manager wgvpn`)", "backup": "off-site PBS pull vault — set by `module modify <instance> --lockdown`, refused at add" }, "note": "a general module field (module-fields.json); default [reverse-proxy, admin-vpn]" },
+    "dependsOn": { "type": "array<string>", "required": false, "note": "EMPTY: nothing the satellite needs is a service another module provides. It needs OPNsense (network) and tappaas-cicd, present on every Site." },
 
     "provider.type": { "type": "string", "values": { "hetzner": "Hetzner Cloud (reference)", "generic": "operator supplies a host + SSH; no API automation" } },
-    "provider.allocation": { "type": "string", "default": "portal", "values": { "portal": "Tier A (default): operator creates the VPS in the console", "api": "Tier B (opt-in): satellite-manager creates it via the hcloud API token" } },
-    "provider.location": { "type": "string", "required": false, "note": "Tier B (allocation=api) ONLY — hcloud region for `hcloud server create`. For Tier A you pick it in the console (satellite-manager doesn't use it)." },
+    "provider.allocation": { "type": "string", "default": "portal", "values": { "portal": "Tier A (default): operator creates the VPS in the console", "api": "Tier B (opt-in): TAPPaaS creates it via the hcloud API token" } },
+    "provider.location": { "type": "string", "required": false, "note": "Tier B (allocation=api) ONLY — hcloud region for `hcloud server create`. For Tier A you pick it in the console (the module does not use it)." },
     "provider.serverType": { "type": "string", "example": "cx23", "required": false, "note": "Tier B (allocation=api) ONLY — x86 cx23 default; cax11 = ARM. For Tier A you pick it in the console." },
     "physicalLocation.country": { "type": "string", "pattern": "^[A-Za-z]{2}$", "required": false, "note": "ISO 3166-1 alpha-2 country the satellite physically runs in (#609, ADR-012 §1.5) — the evidence its backup copy is off-site. NOT provider.location, which is only a provisioning parameter. `backup-manager validate` warns while it is missing." },
     "physicalLocation.city": { "type": "string", "required": false, "note": "needed to show separation from a Site in the same country" },
     "physicalLocation.building": { "type": "string", "required": false, "note": "data centre or building — needed when it shares the Site's city" },
-    "_provider_image": "dropped — the image is irrelevant (nixos-anywhere kexecs any stock image and reformats to NixOS); satellite-manager defaults it for Tier B.",
+    "_provider_image": "dropped — the image is irrelevant (Debian is provisioned in place; nixos-anywhere reformats any stock image); the module defaults it for Tier B.",
 
-    "host.publicIp": { "type": "string", "format": "ipv4", "required": true },
+    "host.publicIp": { "type": "string", "format": "ipv4", "required": false, "note": "before ADR-010 §8.4: the public address. Now the general `address` field (given at add, --address); still read when `address` is absent." },
     "host.sshUser": { "type": "string", "default": "root" },
-    "host.operatorSshKeys": { "type": "array<string>", "required": true, "note": "standing root SSH key(s) baked into the NixOS satellite (operator out-of-band key; NOT a tappaas-cicd key — §7.3)" },
+    "host.operatorSshKeys": { "type": "array<string>", "required": true, "note": "the operator's out-of-band root key(s) — recorded at install from the forwarded agent or TAPPAAS_OPERATOR_KEY; never the mothership's key, which a managed satellite authorizes separately and --lockdown removes (§8.4)" },
 
-    "backup.datastore.name": { "type": "string", "default": "tappaas-offsite", "required": false, "note": "backup role; local PBS datastore that receives the pull (default local ZFS/dir)" },
-    "backup.datastore.path": { "type": "string", "default": "/srv/pbs/tappaas-offsite", "required": false, "note": "backup role; datastore path (put on a ZFS dataset for a real vault — create the pool on the host first)" },
-    "backup.pull.homePbsHost": { "type": "string", "required": false, "note": "backup role; HOME PBS address reachable over the tunnel (the satellite PULLS from it). Added to wg AllowedIPs + an OPNsense edge->PBS:8007 rule." },
-    "backup.pull.homeDatastore": { "type": "string", "default": "tappaas", "required": false, "note": "backup role; the home datastore to pull" },
-    "backup.pull.authId": { "type": "string", "example": "satellite@pbs!pull", "required": false, "note": "backup role; the READ-ONLY home PBS API token id. The token SECRET is out-of-band (TAPPAAS_SAT_PBS_TOKEN[_FILE]), NEVER in this JSON (§7)." },
-    "backup.pull.fingerprint": { "type": "string", "required": false, "note": "backup role; home PBS TLS cert fingerprint" },
-    "backup.pull.schedule": { "type": "string", "default": "daily", "required": false, "note": "backup role; pull sync-job schedule (PBS calendar event)" },
-    "backup.s3": { "type": "object", "required": false, "note": "OPTIONAL alternative backend (endpoint/bucket) instead of a local ZFS datastore. NOTE: PBS does NOT support S3 Object Lock — enabling it CORRUPTS the datastore (Bugzilla #6780). Immutability comes from the PULL model, not Object Lock." }
+    "vault.datastore.name": { "type": "string", "default": "tappaas-offsite", "required": false, "note": "the vault (backup role, after --lockdown) — `vault`, not `backup`, which is every module's backup policy; a config from before §8.4 had these under `backup`, still read; local PBS datastore that receives the pull (default local ZFS/dir)" },
+    "vault.datastore.path": { "type": "string", "default": "/srv/pbs/tappaas-offsite", "required": false, "note": "the vault (backup role, after --lockdown); datastore path (put on a ZFS dataset for a real vault — create the pool on the host first)" },
+    "vault.pull.homePbsHost": { "type": "string", "required": false, "note": "the vault (backup role, after --lockdown); HOME PBS address reachable over the tunnel (the satellite PULLS from it). Added to wg AllowedIPs + an OPNsense edge->PBS:8007 rule." },
+    "vault.pull.homeDatastore": { "type": "string", "default": "tappaas", "required": false, "note": "the vault (backup role, after --lockdown); the home datastore to pull" },
+    "vault.pull.authId": { "type": "string", "example": "satellite@pbs!pull", "required": false, "note": "the vault (backup role, after --lockdown); the READ-ONLY home PBS API token id. The token SECRET is out-of-band (TAPPAAS_SAT_PBS_TOKEN[_FILE]), NEVER in this JSON (§7)." },
+    "vault.pull.fingerprint": { "type": "string", "required": false, "note": "the vault (backup role, after --lockdown); home PBS TLS cert fingerprint" },
+    "vault.pull.schedule": { "type": "string", "default": "daily", "required": false, "note": "the vault (backup role, after --lockdown); pull sync-job schedule (PBS calendar event)" },
+    "vault.s3": { "type": "object", "required": false, "note": "OPTIONAL alternative backend (endpoint/bucket) instead of a local ZFS datastore. NOTE: PBS does NOT support S3 Object Lock — enabling it CORRUPTS the datastore (Bugzilla #6780). Immutability comes from the PULL model, not Object Lock." }
   },
 
   "derived": {
-    "_note": "NOT operator config — satellite-manager (lib/provision.sh) computes these with sensible defaults and writes them into the generated satellite-settings.nix. Listed here for reference only.",
+    "_note": "NOT operator config — the module (lib/provision.sh) computes these with sensible defaults and renders them into the Debian config files (or satellite-settings.nix). Listed here for reference only.",
     "tunnel": "satelliteAddr/homeAddr = a dedicated /31 (default 10.255.0.0/31, auto-allocated per satellite); wgPort 51820 (config knob only if hostile egress needs 443/udp); PersistentKeepalive 25",
     "reverseProxy": "forwarder nginx stream; :80 redirect via Caddy; SNI '*' (single-site passthrough); proxyProtocol off until the Caddy side supports it (§2)",
     "adminVpn": "terminates on OPNsense (always) into the admin overlay zone; adminWgPort 51821; admin-side MTU ~1340",
     "backup": "PULL model (Debian satellite runs official PBS, pulls from home over the tunnel, owns prune/GC); --remove-vanished false; client-side encryption key stays home (§3.2); local datastore (default ZFS) into namespace remote/<name>; immutability = pull direction + destination-owned retention (NOT S3 Object Lock — PBS can't do it, #6780)",
-    "update": "mode always pull (autoUpgrade from a pinned/signed ref); the cluster never pushes (§7.3)"
+    "update": "managed (default): the nightly sweep patches it (the debianhost update; reboots per rebootOk), unattended-upgrades off. unmanaged (after --lockdown): security-only unattended-upgrades with a reboot window; the cluster holds no key (§7.3, §8.4)"
   }
 }

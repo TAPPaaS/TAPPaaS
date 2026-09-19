@@ -417,6 +417,14 @@
       "example": { "country": "FI", "city": "Helsinki" },
       "note": "Recorded, not enforced: nothing checks it against the machine itself."
     },
+    "roles": {
+      "description": "What a machine is for (ADR-022h: a facet, not what it is) — for a satellite, the roles it carries: `reverse-proxy`, `admin-vpn`, and `backup` once it is locked down as a pull vault (ADR-010 §8.4). Given at `module add` as a JSON array, e.g. --roles '[\"reverse-proxy\"]'.",
+      "type": "array",
+      "requiredBy": [],
+      "usedBy": ["general"],
+      "example": ["reverse-proxy", "admin-vpn"],
+      "note": "The module decides which roles it accepts; the satellite refuses `backup` at add — `module modify <instance> --lockdown` sets it."
+    },
     "address": {
       "description": "How the mothership reaches a machine (kind: machine, ADR-026 D8.1): an IP address or FQDN, logged into as root with the mothership's key. Written by `module adopt`. A VM or LXC is reached by its name and zone instead and has no `address`.",
       "type": "string",

@@ -41,3 +41,6 @@ link_bash "${here}/wgvpn/wgvpn.sh"      network-manager-wgvpn
 # Drop the retired symlinks so an upgraded install has no dangling ~/bin
 # entries pointing at the deleted scripts.
 rm -f "${bin}/zone-controller" "${bin}/zone-state.sh"
+# satellite-manager is retired (ADR-010 §8.4): its admin verb is `network-manager
+# wgvpn` (linked above), the satellite a module. Its link would dangle.
+rm -f "${bin}/satellite-manager"

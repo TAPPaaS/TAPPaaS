@@ -5,12 +5,14 @@
 # Touches: config/satellite-<name>.json that records no moduleSource (nor its old name, location).
 # Reversible: yes — restore config/.migrations/backup/0008/<file>.
 #
-# WHY. A satellite config is written by satellite-manager, not by the module
-# installer, so it never recorded where the satellite module's code lives. Since
+# WHY. A satellite config was written by satellite-manager (retired by ADR-010
+# §8.4), not by the module installer, so it never recorded where the satellite
+# module's code lives. Since
 # #611 it carries `kind: machine`, so discovery lists it as a module — and then
 # nothing can name its module: `module list --resolution` reports it
-# `unresolvable` (seen on makerfloss, 2026-09-19). satellite-manager now writes
-# `moduleSource` for a new satellite; this gives existing ones the same.
+# `unresolvable` (seen on makerfloss, 2026-09-19). A new satellite is added by
+# `module-manager module add`, which records `moduleSource`; this gives existing
+# ones the same.
 #
 #   satellite-*.json, no moduleSource/location → "moduleSource": "<repo>/src/foundation/satellite"
 #   anything else                             → untouched
