@@ -19,7 +19,7 @@
 
 # pbs_host_owner <host> <zone> — who patches <host>; echoes ONE word:
 #   cluster      a member of this cluster: the cluster module
-#   <module>     a registered machine instance (debianhost, pvenode, …)
+#   <module>     a registered machine instance (debianhost, pvehost, …)
 #   adopted      it was not registered; it now is (as debianhost, by adopt)
 #   none         nothing patches it (rc 1) — adopt failed, or it is not a machine
 #   unknown      the cluster did not answer, so membership is unknown (rc 2)

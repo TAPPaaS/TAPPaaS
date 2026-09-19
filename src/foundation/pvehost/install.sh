@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# pvenode install — register a Proxmox cluster node as a module (ADR-026 D4 stage 1, #665).
+# pvehost install — register a Proxmox cluster node as a module (ADR-026 D4 stage 1, #665).
 #
 # Proves, and changes NOTHING on the node: the mothership reaches it as root by
 # key; it runs Proxmox VE on Debian; its hostname is the instance name; and it is
@@ -11,7 +11,7 @@
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . /home/tappaas/bin/common-install-routines.sh
-. "${HERE}/lib/pvenode-lib.sh"
+. "${HERE}/lib/pvehost-lib.sh"
 
 pn_load "$1"
 info "${BOLD}Registering cluster node ${BL}${INSTANCE}${CL}${BOLD} at ${ADDRESS}${CL}"

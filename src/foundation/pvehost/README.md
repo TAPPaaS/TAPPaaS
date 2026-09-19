@@ -1,4 +1,4 @@
-# pvenode
+# pvehost
 
 Primary audience: TAPPaaS admin.
 

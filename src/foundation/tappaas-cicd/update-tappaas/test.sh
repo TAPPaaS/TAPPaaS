@@ -81,7 +81,7 @@ fi
 
 # ── 2a) Unit: which config/*.json the sweep treats as modules ─────────
 # The same shape rule as module-manager's discovery. A `kind: machine` instance
-# (a debianhost, a pvenode) has no vmname and, since #611, no `kind: module`
+# (a debianhost, a pvehost) has no vmname and, since #611, no `kind: module`
 # marker — the old `marker or vmname` rule dropped every one of them from the
 # sweep. A satellite is a module too, but satellite-manager drives it — never the
 # sweep, whatever its status says.
@@ -96,7 +96,7 @@ d = Path(tempfile.mkdtemp())
 def w(name, obj): (d / name).write_text(json.dumps(obj))
 w("nextcloud.json",   {"kind": "vm", "vmname": "nextcloud", "moduleSource": "/x/nextcloud"})
 w("dh-test1.json",    {"kind": "machine", "address": "10.0.0.90", "moduleSource": "/x/debianhost"})
-w("tappaas2.json",    {"kind": "machine", "address": "tappaas2.mgmt.internal", "moduleSource": "/x/pvenode"})
+w("tappaas2.json",    {"kind": "machine", "address": "tappaas2.mgmt.internal", "moduleSource": "/x/pvehost"})
 w("old.json",         {"vmname": "old"})
 w("marker.json",      {"kind": "module"})
 w("provider.json",    {"provides": ["nixos"]})

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# pvenode-lib.sh — what every pvenode script needs: the instance's config, a
+# pvehost-lib.sh — what every pvehost script needs: the instance's config, a
 # root shell on the node by the mothership's key, and the Site's own list of
 # cluster nodes. Sourced after common-install-routines.sh. pn_load sets
 # INSTANCE and ADDRESS.

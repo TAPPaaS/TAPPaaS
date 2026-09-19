@@ -196,7 +196,7 @@ echo '{"kind":"machine","address":"10.0.0.90"}'        > "${TMP}/dh-test1.json"
 echo '{"kind":"machine","address":"tappaas2.mgmt.internal"}' > "${TMP}/tappaas2.json"
 echo '{"kind":"vm","vmname":"nextcloud"}'              > "${TMP}/nextcloud.json"
 ck "addr: a machine instance → its address"    "10.0.0.90"               "$(pbs_host_addr dh-test1 mgmt)"
-ck "addr: a pvenode instance → its address"    "tappaas2.mgmt.internal"  "$(pbs_host_addr tappaas2 mgmt)"
+ck "addr: a pvehost instance → its address"    "tappaas2.mgmt.internal"  "$(pbs_host_addr tappaas2 mgmt)"
 ck "addr: not a machine → <name>.<zone>.internal" "nextcloud.mgmt.internal" "$(pbs_host_addr nextcloud mgmt)"
 ck "addr: no config → <name>.<zone>.internal"  "tappaas3.mgmt.internal"  "$(pbs_host_addr tappaas3 mgmt)"
 

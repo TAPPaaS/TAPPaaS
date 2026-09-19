@@ -59,7 +59,7 @@ Modules that are not installed (no JSON in `/home/tappaas/config/`) are skipped.
 All remaining installed modules (discovered from `/home/tappaas/config/*.json`) are updated in dependency order.
 A config is a module by the same shape rule as `module-manager`'s discovery: a workload `kind`
 (`vm`, `lxc`, `machine`, `application`, `device`), `dependsOn` / `integratesWith` / `provides`, or a
-`moduleSource` — so machine instances (`debianhost`, `pvenode`) are swept. Two exceptions: a module
+`moduleSource` — so machine instances (`debianhost`, `pvehost`) are swept. Two exceptions: a module
 whose status is `archived` or `external`, and a satellite (`satellite-<name>`), which satellite-manager
 drives.
 

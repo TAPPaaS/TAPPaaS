@@ -1458,7 +1458,7 @@ out="$(run_resolve unknown "")"
 # tappaas2: exactly the case #665 registers, and the one name-parsing gets wrong.
 awk '/^module_of\(\) \{/{f=1} f{print} f&&/^\}/{exit}' \
     "${HERE}/../../lib/common-install-routines.sh" >> "${RDIR}/fn.sh"
-mkdir -p "${RDIR}/src/foundation/pvenode" "${RDIR}/src/apps/podman"
+mkdir -p "${RDIR}/src/foundation/pvehost" "${RDIR}/src/apps/podman"
 run_module_of() {  # <instance> <location-stub>
     LOC_DIR="$2" bash -c '
         . "'"${RDIR}"'/fn.sh"
@@ -1466,9 +1466,9 @@ run_module_of() {  # <instance> <location-stub>
         module_of "$1"
     ' _ "$1" 2>/dev/null
 }
-[[ "$(run_module_of tappaas2 "${RDIR}/src/foundation/pvenode")" == "pvenode" ]] \
-    && ok "module_of: instance tappaas2 → module pvenode (from .location, not the name)" \
-    || bad "module_of: tappaas2 must resolve to pvenode (got '$(run_module_of tappaas2 "${RDIR}/src/foundation/pvenode")')"
+[[ "$(run_module_of tappaas2 "${RDIR}/src/foundation/pvehost")" == "pvehost" ]] \
+    && ok "module_of: instance tappaas2 → module pvehost (from .location, not the name)" \
+    || bad "module_of: tappaas2 must resolve to pvehost (got '$(run_module_of tappaas2 "${RDIR}/src/foundation/pvehost")')"
 [[ "$(run_module_of podman-lab1 "${RDIR}/src/apps/podman")" == "podman" ]] \
     && ok "module_of: the default <module>-<env> instance name still names its module" \
     || bad "module_of: podman-lab1 must resolve to podman"

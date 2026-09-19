@@ -383,7 +383,7 @@ def _is_module_json(path) -> bool:
 
     It used to be `kind == "module" or vmname` only. #611 retired the marker and a
     `kind: machine` instance has no vmname, so every machine — a debianhost, a
-    pvenode — silently fell out of the sweep (found 2026-09-19). A satellite is a
+    pvehost — silently fell out of the sweep (found 2026-09-19). A satellite is a
     machine too, and is a module; get_installed_apps leaves it to
     satellite-manager (SELF_MANAGED_PREFIXES)."""
     if path.name in NON_MODULE_JSONS or path.name.startswith(PEER_PREFIXES):

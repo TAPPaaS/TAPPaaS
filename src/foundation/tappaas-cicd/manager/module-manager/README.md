@@ -233,7 +233,7 @@ install-module.sh <module-name> [--environment <name>] [--instance <name>]
 ```bash
 install-module.sh nextcloud
 install-module.sh nextcloud --environment acme
-install-module.sh pvenode --instance tappaas2      # one of several instances of a module
+install-module.sh pvehost --instance tappaas2      # one of several instances of a module
 ```
 
 ### `update-module.sh` — update a module
@@ -292,7 +292,7 @@ adopt-module.sh <address> [--instance NAME] [--zone ZONE] [--wait SECONDS]
 mothership's key; if that fails, it prints the one command that authorises the key and waits
 (`--wait`, default 300s, one try every 20s). It then reads the hostname and
 `/etc/os-release`, picks the module for that OS (`debian` → `debianhost`, and a Debian machine
-running Proxmox VE → `pvenode`, #665; any other OS is refused), names the instance after the hostname, takes `zone0` from the active zone whose
+running Proxmox VE → `pvehost`, #665; any other OS is refused), names the instance after the hostname, takes `zone0` from the active zone whose
 subnet holds the address, and calls `install-module.sh <module> --instance … --address …
 --zone0 … --os …`. Adopting the same machine again changes nothing.
 

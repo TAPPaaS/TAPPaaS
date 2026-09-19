@@ -48,7 +48,7 @@ ck "a missing zones.json → refused"                 "(none)" "$(adopt_zone_for
 
 mod() { adopt_module_for_os "$1" 2>/dev/null || echo "(none)"; }
 ck "debian → debianhost"                            debianhost "$(mod debian)"
-ck "debian + Proxmox VE → pvenode (#665)"           pvenode    "$(adopt_module_for_os debian pve 2>/dev/null || echo "(none)")"
+ck "debian + Proxmox VE → pvehost (#665)"           pvehost    "$(adopt_module_for_os debian pve 2>/dev/null || echo "(none)")"
 ck "debian, no Proxmox → debianhost"                debianhost "$(adopt_module_for_os debian - 2>/dev/null || echo "(none)")"
 ck "Proxmox on something else → no module"          "(none)"   "$(adopt_module_for_os ubuntu pve 2>/dev/null || echo "(none)")"
 
