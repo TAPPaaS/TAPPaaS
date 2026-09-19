@@ -405,9 +405,13 @@ is a migration.
 
 What community modules copy and what deployed configs point at.
 
+Status: in progress — #500 built ahead of the entry gate (operator, 2026-09-19; recorded in
+ADR-025 D14). #421 waits for the operator's go (to be checked with Erik); the rest waits for
+the gate: decisions #294, #349, #250, and the Stacks & solutions ADR.
+
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
-| #500 | Automate moving a module (`migrating` status, `newRepo`) | 2 | 3 | H | Prerequisite for #421 |
+| #500 | Automate moving a module | 2 | 3 | H | **Built 2026-09-19** (`wave1/g1.3-module-contract`): not the `migrating`/`newRepo` catalogue status first proposed but a migration, as the operator's comment suggested — `scripts/move-module.sh <Repo>:<path> <Repo>:<path>` moves the files, rewrites the catalogue and writes `NNNN-modules-moved.sh` (ADR-025 D14; decisions: stop on an unregistered target repository, moves declared in TAPPaaS, `--rename` behind a dependency check). Prerequisite for #421 |
 | #421 | Restructure `src/apps` into stacks | 2 | 4 | H | Changes `.location` in every deployed config; after #500. Settle the *solution* concept (2026-08-03) |
 | #349 | Drop the zone tag from released modules | 3 | 3 | H | Direction set 2026-07-09 |
 | #566 | Legacy name → variant convention | 2 | 3 | H | Names get harder to change as installs grow |

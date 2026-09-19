@@ -9,7 +9,7 @@
 | **Parent** | [ADR-007d Site](<ADR-007d - Site.md>) (`site.json` and the rest of `config/` as the site's own state) |
 | **Refines** | [ADR-017 Update scheduling and mothership self-update](<ADR-017 - Update scheduling and mothership self-update.md>) (D3's `ExecStartPre` chain is where the runner hooks in; D4's `--dry-run` is where pending migrations show; this ADR settles two of ADR-017's *Open* items), [ADR-003 Dependency management](<ADR-003 - Dependency management in TAPPaaS.md>) (why `pre-update.sh` cannot be "before any module") |
 | **Related** | **#652** (versioned config-migration step — the implementation issue); **#545** / [ADR-012](ADR-012-backup-enhancement.md) §2.7 D20 (`config/` is backed up as `backup:filesystem`, which is what makes `config/.migrations/` recoverable); **#651** (update-failure notice) and [ADR-007e](<ADR-007e - Health.md>) v1.3 (the notification target); **#584** (rollback in install/modify), **#453** (`--force` vs `--reinstall`), **#648** (`--unset`), **#572** (repo-sync auto-stash) — the rest of G0.1; [ADR-020](<ADR-020 - Declared-Field Change Model (validate, drift, modify).md>) (a *declared field* changes through `modify`; a *schema* changes through a migration); [release-2.1-implementation-plan](../design/release-2.1-implementation-plan.md) §3 G0.1, §10.1, §10.2, §10.3, §10.4. **Owner:** `tappaas-cicd` (the runner, the migration directory, the release tooling) |
-| **Changelog** | v0.1 — initial draft. Takes the framework decided 2026-09-14 (plan §3 G0.1) and the rollout rules (§10.2) verbatim and binds them; checks each clause against `main` at `dd80d495`; settles the runner's slot in favour of `tappaas-self-prepare.sh` over `pre-update.sh` (D2), answers ADR-017 *Bootstrap*'s "oldest supported upgrade source" (D10), and names ADR-017 D7's `updateSchedule` rewrite as migration `0003` (D12). v0.2 (2026-09-16, operator decisions): **D13** — a whole-`config/` snapshot before the first migration of a run, the last two backup sets kept and older ones pruned, a deliberate `--rerun` (migrations are idempotent by D3), state outside `config/` out of scope though one migration may back up more, and a missing backup never blocks a migration. Status → Accepted. v0.3 (2026-09-16): a worked example of a nightly run that carries a migration — every step with how its failure is detected and what the site falls back to — the window between the migrations and the rebuild, and what happens when several migrations are pending at once. v0.4 (2026-09-16, #652 implemented): the stage marker is written by `tappaas-self-prepare.sh`, alongside the `prepare` and `rebuild` it already writes, so the runner run by hand never rewrites a sweep's stage; the delivered acceptance clauses are ticked. v0.5 (2026-09-16, the worked example's failure modes injected as tests): a ledger that cannot be read or parsed stops the run (blank lines and comments tolerated; an entry with no file on disk does not, so a rolled-back site is not stranded); a ledger line is validated before it is written; a partial config snapshot is deleted rather than left looking like a backup. |
+| **Changelog** | v0.1 — initial draft. Takes the framework decided 2026-09-14 (plan §3 G0.1) and the rollout rules (§10.2) verbatim and binds them; checks each clause against `main` at `dd80d495`; settles the runner's slot in favour of `tappaas-self-prepare.sh` over `pre-update.sh` (D2), answers ADR-017 *Bootstrap*'s "oldest supported upgrade source" (D10), and names ADR-017 D7's `updateSchedule` rewrite as migration `0003` (D12). v0.2 (2026-09-16, operator decisions): **D13** — a whole-`config/` snapshot before the first migration of a run, the last two backup sets kept and older ones pruned, a deliberate `--rerun` (migrations are idempotent by D3), state outside `config/` out of scope though one migration may back up more, and a missing backup never blocks a migration. Status → Accepted. v0.3 (2026-09-16): a worked example of a nightly run that carries a migration — every step with how its failure is detected and what the site falls back to — the window between the migrations and the rebuild, and what happens when several migrations are pending at once. v0.4 (2026-09-16, #652 implemented): the stage marker is written by `tappaas-self-prepare.sh`, alongside the `prepare` and `rebuild` it already writes, so the runner run by hand never rewrites a sweep's stage; the delivered acceptance clauses are ticked. v0.6 (2026-09-19): **D14** — moving a module is a migration written by `scripts/move-module.sh` (#500). v0.5 (2026-09-16, the worked example's failure modes injected as tests): a ledger that cannot be read or parsed stops the run (blank lines and comments tolerated; an entry with no file on disk does not, so a rolled-back site is not stranded); a ledger line is validated before it is written; a partial config snapshot is deleted rather than left looking like a backup. |
 
 ## Context
 
@@ -368,6 +368,32 @@ Decided 2026-09-16, closing v0.1's open questions.
   reads well and fails badly: a site without a recent backup is usually a deliberate choice —
   a test machine — and refusing to update it would punish exactly the site that most wants the
   new code. The runner reports what it found and proceeds.
+
+### D14 — moving a module is a migration, written by a tool (#500)
+
+Decided 2026-09-19 (operator). A deployed config names its module by the absolute path of the
+module's directory (`moduleSource`, ADR-026 D6.2), so moving a module — reorganising a
+repository (#421), promoting it from Community to TAPPaaS, a rename like `0009` — would leave
+every site that installed it pointing at a directory its next pull removes. The runner runs
+right after that pull (D2), so a migration that repoints the config is enough: no `migrating`
+catalogue status, no grace period with two copies, which #500 first proposed.
+
+- **One tool writes it:** `scripts/move-module.sh <Repo>:<path> <Repo>:<path>`. The repository
+  is named on both sides, as in `site.json` `repositories[].name`, so a move between
+  repositories reads like one within; each site resolves the name to its own checkout. It moves
+  the files (`git mv`, or between two given checkouts copy + remove), rewrites the catalogue
+  entry, and adds the move to `migrations/NNNN-modules-moved.sh` with its fixture test.
+- **One migration per session:** further moves join the migration while it is uncommitted; once
+  committed it is sealed and the next move starts a new number (D1). A module moved twice in one
+  session is one move — no site saw the middle.
+- **Moves are declared in the TAPPaaS repository** — the one whose `migrations/` every site runs
+  — whichever repositories they touch. One ledger; no per-repository runner.
+- **It stops on doubt (D3, D5):** a target repository the site has not registered, while a
+  config there uses the module, stops the update and names `site-manager repository add`;
+  skipping would leave the module pointing at nothing. So does a missing target directory.
+- **A rename needs `--rename`**, and is refused — by the tool in the checkouts it knows, by the
+  migration in the deployed configs — while anything names the old module in `dependsOn` or
+  `integratesWith`.
 
 ## Worked example — a nightly run that carries a migration
 

@@ -1,0 +1,127 @@
+#!/usr/bin/env bash
+# @@ID@@-modules-moved.sh — installed modules follow their module's new place in a repository
+#
+# Introduced: @@RELEASE@@.  Required by: #500 (moves made with scripts/move-module.sh).
+# Touches: config/*.json whose moduleSource (or its pre-#609 name, location) is a
+#          moved module's old directory.
+# Reversible: yes — restore config/.migrations/backup/@@ID@@/<file>.
+#
+# WHY. A deployed config names its module by the absolute path of the module's
+# source directory (moduleSource, ADR-026 D6.2). When a module moves — within a
+# repository, or from one repository to another — every site that installed it
+# would point at a directory the pull just removed. This migration runs right
+# after that pull (ADR-025 D2), so the site follows the move in the same update.
+#
+# A move is written <Repo>:<path> → <Repo>:<path>, the repository named as in
+# site.json `repositories[].name`; each site resolves the name to its own
+# checkout (`.path`). This file is written by scripts/move-module.sh, which adds
+# a move to the table below while the migration is uncommitted; once committed,
+# it is never changed again (a number never changes meaning, ADR-025 D1).
+#
+# WHAT IT REFUSES, rather than guessing (ADR-025 D3) — nothing is written then:
+#   * a config/*.json that is not valid JSON;
+#   * a move whose target repository is not registered on this site, while a
+#     config here uses the module — it would be left pointing at nothing. Add the
+#     repository (site-manager repository add …) and the update runs again;
+#   * a target directory that does not exist in this site's checkout;
+#   * a renamed module that another config still names in dependsOn or
+#     integratesWith — the coordinate would name a module that is gone.
+#
+# Usage: @@ID@@-modules-moved.sh [--check]
+# Exit:  0 applied, or nothing to do · 1 a state it will not guess at
+
+set -euo pipefail
+
+# ── BEGIN MOVES (scripts/move-module.sh adds here while uncommitted) ──
+MOVES=(
+)
+# ── END MOVES ──
+
+CONFIG_DIR="${CONFIG_DIR:-${TAPPAAS_CONFIG_DIR:-/home/tappaas/config}}"
+BACKUP_DIR="${TAPPAAS_MIGRATION_BACKUP_DIR:-${CONFIG_DIR}/.migrations/backup/@@ID@@}"
+CHECK=0
+[[ "${1:-}" == "--check" ]] && CHECK=1
+
+say()  { echo -e "\033[32m[Info]\033[m   @@ID@@: $*"; }
+note() { [[ "${TAPPAAS_DEBUG:-0}" == "1" ]] || return 0; echo -e "\033[36m[Debug]\033[m   @@ID@@: $*"; }
+stop() { echo -e "\033[01;31m[Error]\033[m @@ID@@: $*" >&2; exit 1; }
+
+SITE="${CONFIG_DIR}/site.json"
+[[ -f "${SITE}" ]] || stop "no config/site.json — cannot tell where this site's repositories are"
+jq empty "${SITE}" 2>/dev/null || stop "config/site.json is not valid JSON"
+
+# repo_path <name> — this site's checkout of a repository ('' when not registered)
+repo_path() {
+    jq -r --arg n "$1" '(.repositories // [])[] | select(.name == $n) | .path // empty' "${SITE}" | head -1 | sed 's:/*$::'
+}
+
+shopt -s nullglob
+files=("${CONFIG_DIR}"/*.json)
+for f in ${files[@]+"${files[@]}"}; do
+    jq empty "${f}" 2>/dev/null || stop "$(basename "${f}") is not valid JSON — a person should look at it"
+done
+
+# Work out every rewrite before writing any: file|new-source lines.
+plan=()
+for mv in ${MOVES[@]+"${MOVES[@]}"}; do
+    from="${mv%%|*}"; to="${mv#*|}"
+    frepo="${from%%:*}"; frel="${from#*:}"; trepo="${to%%:*}"; trel="${to#*:}"
+    fpath="$(repo_path "${frepo}")"
+    if [[ -z "${fpath}" ]]; then
+        note "${from}: repository ${frepo} is not registered here — no config can use it"
+        continue
+    fi
+    old="${fpath}/${frel%/}"
+    users=()
+    for f in ${files[@]+"${files[@]}"}; do
+        jq -e --arg o "${old}" 'type == "object" and
+            ((((.moduleSource // .location) | if type == "string" then sub("/+$"; "") else "" end)) == $o)' \
+            "${f}" >/dev/null && users+=("${f}")
+    done
+    [[ ${#users[@]} -gt 0 ]] || { note "${from}: not installed here"; continue; }
+    tpath="$(repo_path "${trepo}")"
+    [[ -n "${tpath}" ]] || stop "$(basename "${users[0]}") uses ${from}, which moved to ${to} — repository ${trepo} is not registered on this site. Add it: site-manager repository add ${trepo} … — nothing was changed"
+    new="${tpath}/${trel%/}"
+    [[ -d "${new}" ]] || stop "${from} moved to ${to}, but ${new} does not exist in this site's checkout — nothing was changed"
+    oname="${frel%/}"; oname="${oname##*/}"; nname="${trel%/}"; nname="${nname##*/}"
+    if [[ "${oname}" != "${nname}" ]]; then
+        for f in ${files[@]+"${files[@]}"}; do
+            if jq -e --arg m "${oname}" '((.dependsOn // []) + (.integratesWith // []))
+                   | map(select(type == "string" and startswith($m + ":"))) | length > 0' "${f}" >/dev/null 2>&1; then
+                stop "${oname} is renamed ${nname}, but $(basename "${f}") still names ${oname}: in dependsOn/integratesWith — nothing was changed"
+            fi
+        done
+    fi
+    for f in "${users[@]}"; do plan+=("${f}|${new}"); done
+done
+
+if [[ ${#plan[@]} -eq 0 ]]; then
+    say "no installed module uses a moved module's old place — nothing to migrate"
+    exit 0
+fi
+
+if [[ "${CHECK}" -eq 1 ]]; then
+    for p in "${plan[@]}"; do say "would point $(basename "${p%%|*}") at ${p#*|}"; done
+    exit 0
+fi
+
+mkdir -p "${BACKUP_DIR}" || stop "cannot create ${BACKUP_DIR} — refusing to write without a backup"
+for p in "${plan[@]}"; do
+    f="${p%%|*}"
+    cp -p "${f}" "${BACKUP_DIR}/$(basename "${f}")" || stop "cannot back up $(basename "${f}") — nothing has been written"
+done
+
+for p in "${plan[@]}"; do
+    f="${p%%|*}"; new="${p#*|}"
+    tmp="${f}.@@ID@@.tmp"
+    # Write INTO a copy of the original, so the result keeps its mode and owner (#525).
+    cp -p "${f}" "${tmp}" || stop "cannot stage $(basename "${f}") — it is unchanged"
+    jq --arg s "${new}" '.moduleSource = $s | if (.location | type) == "string" then del(.location) else . end' "${f}" > "${tmp}" \
+        || { rm -f "${tmp}"; stop "rewrite of $(basename "${f}") failed — it is unchanged; earlier files are restorable from ${BACKUP_DIR}"; }
+    jq -e --arg s "${new}" '.moduleSource == $s' "${tmp}" >/dev/null 2>&1 \
+        || { rm -f "${tmp}"; stop "rewritten $(basename "${f}") is not what was intended — it is unchanged"; }
+    mv -f "${tmp}" "${f}"
+    note "$(basename "${f}"): moduleSource = ${new}"
+done
+say "${#plan[@]} config(s) follow their module's move"
+note "backup: ${BACKUP_DIR}"

@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+# test-migration-@@ID@@-modules-moved.sh — fixture test for @@ID@@-modules-moved.sh
+# (ADR-025 D7; written by scripts/move-module.sh with the migration).
+#
+# For every move in the migration's table: a site with both repositories
+# registered, a config using the module at its old place and one that does not;
+# --check writes nothing; apply repoints exactly the user; a second apply changes
+# nothing. Then the refusals: the target repository not registered, and the
+# target directory missing — each leaves config/ untouched.
+set -uo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MIG="${HERE}/../../migrations/@@ID@@-modules-moved.sh"
+PASS=0; FAIL=0
+ck() { if [[ "$2" == "$3" ]]; then echo "  ✓ $1"; PASS=$((PASS + 1)); else echo "  ✗ $1 (expected '$2', got '$3')"; FAIL=$((FAIL + 1)); fi; }
+T="$(mktemp -d)"; trap 'rm -rf "${T}"' EXIT
+
+# The moves, read from the migration itself — the table is the test's input.
+MOVES=()
+while IFS= read -r l; do MOVES+=("${l}"); done < <(sed -n '/^MOVES=(/,/^)/p' "${MIG}" | sed -n 's/^ *"\(.*\)"$/\1/p')
+[[ ${#MOVES[@]} -gt 0 ]] || { echo "  ✗ the migration has no moves"; exit 1; }
+
+site() {  # <cfg-dir> <repo>... — site.json registering the given repositories under ${T}/repos
+    local d="$1"; shift
+    printf '%s\n' "$@" | jq -R . | jq -s --arg r "${T}/repos" '{name: "s", repositories: map({name: ., path: ($r + "/" + .)})}' > "${d}/site.json"
+}
+run() { CONFIG_DIR="$1" TAPPAAS_MIGRATION_BACKUP_DIR="$1/.migrations/backup/@@ID@@" bash "${MIG}" "${@:2}" >/dev/null 2>&1; echo $?; }
+
+i=0
+for mv in "${MOVES[@]}"; do
+    i=$((i + 1))
+    from="${mv%%|*}"; to="${mv#*|}"
+    frepo="${from%%:*}"; frel="${from#*:}"; trepo="${to%%:*}"; trel="${to#*:}"
+    c="${T}/c${i}"; mkdir -p "${c}" "${T}/repos/${trepo}/${trel}"
+    site "${c}" "${frepo}" "${trepo}"
+    old="${T}/repos/${frepo}/${frel}"; new="${T}/repos/${trepo}/${trel}"
+    echo "{\"kind\":\"vm\",\"moduleSource\":\"${old}\"}" > "${c}/user.json"
+    echo "{\"kind\":\"vm\",\"location\":\"${old}/\"}"   > "${c}/legacy.json"
+    echo "{\"kind\":\"vm\",\"moduleSource\":\"${T}/repos/${frepo}/src/apps/other\"}" > "${c}/other.json"
+    cp "${c}/other.json" "${T}/other.before"
+    echo "${from} → ${to}"
+
+    ck "--check exits 0"                     0 "$(run "${c}" --check)"
+    ck "--check writes nothing"              "${old}" "$(jq -r .moduleSource "${c}/user.json")"
+    ck "apply exits 0"                       0 "$(run "${c}")"
+    ck "the user follows the move"           "${new}" "$(jq -r .moduleSource "${c}/user.json")"
+    ck "a legacy location follows it too"    "${new}|null" "$(jq -r '"\(.moduleSource)|\(.location)"' "${c}/legacy.json")"
+    ck "another module is untouched"         "" "$(diff "${T}/other.before" "${c}/other.json")"
+    ck "the pre-image is backed up"          "${old}" "$(jq -r .moduleSource "${c}/.migrations/backup/@@ID@@/user.json")"
+    cp "${c}/user.json" "${T}/after"
+    ck "a second apply exits 0"              0 "$(run "${c}")"
+    ck "…and changes nothing"                "" "$(diff "${T}/after" "${c}/user.json")"
+
+    if [[ "${trepo}" != "${frepo}" ]]; then
+        r="${T}/r${i}"; mkdir -p "${r}"; site "${r}" "${frepo}"
+        echo "{\"kind\":\"vm\",\"moduleSource\":\"${old}\"}" > "${r}/user.json"
+        ck "target repository not registered: refused" 1 "$(run "${r}")"
+        ck "…and nothing written"                "${old}" "$(jq -r .moduleSource "${r}/user.json")"
+    fi
+    m="${T}/m${i}"; mkdir -p "${m}"; site "${m}" "${frepo}" "${trepo}"
+    rmdir "${new}" 2>/dev/null || true
+    echo "{\"kind\":\"vm\",\"moduleSource\":\"${old}\"}" > "${m}/user.json"
+    ck "target directory missing: refused"   1 "$(run "${m}")"
+    ck "…and nothing written"                "${old}" "$(jq -r .moduleSource "${m}/user.json")"
+done
+
+echo "── summary: ${PASS} pass, ${FAIL} fail ──"
+[[ "${FAIL}" -eq 0 ]]

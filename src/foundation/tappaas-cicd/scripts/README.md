@@ -546,6 +546,15 @@ migration before it happens.
 
 ---
 
+### move-module.sh — move a module, and make installed sites follow (#500)
+
+A developer tool, run from a TAPPaaS checkout:
+`move-module.sh <Repo>:<path> <Repo>:<path> [--rename] [--new] [--checkout <Repo>=<dir>]...`.
+It moves the module's files (within one checkout, or between two), rewrites its catalogue
+entry, and writes or extends the config migration `migrations/NNNN-modules-moved.sh` that points
+every installed site at the new place (ADR-025 D14). Templates: `move-module/`. Details:
+[`../migrations/README.md`](../migrations/README.md), "Moving a module".
+
 ### check-disk-threshold.sh
 
 Checks if a VM's disk usage exceeds a threshold and automatically expands the disk by 50% if needed.
