@@ -28,10 +28,12 @@
   - Check 3 — backup age: asserts the most recent backup's `ctime` is < 48h old; older-than-48h or unknown age is a WARNING, not a failure.
   - Check 4 — job coverage: asserts a cluster backup job (`pvesh get /cluster/backup`) covers this VMID (either `all==1` or VMID in its `vmid` list); none found is a WARNING, not a failure.
 - The unit tests (`lib/test-pbs-*.sh`) have no deep tier and need no cluster.
-- `lib/test-pbs-dns.sh` (15) — the PBS's DNS name (#612): the name is the instance's; a legacy
+- `lib/test-pbs-dns.sh` (21) — the PBS's DNS name (#612): the name is the instance's; a legacy
   A record is deleted before the alias is added; a machine Host gets a DNS entry first; an
   unknown Host is refused with nothing changed; a dns-manager with no alias verb never touches the A
-  record, and a failed alias puts it back (`dns-manager` stubbed, calls asserted in order).
+  record, and a failed alias puts it back. #672: a move releases the Host the alias left (only
+  after the move succeeded), and `pbs_dns_remove` (`delete.sh`) deletes the alias, then releases
+  its Host (`dns-manager` stubbed, calls asserted in order).
 - `lib/test-pbs-placement.sh` also covers #601: the first ONLINE `tankc*` zpool on a Host
   without Proxmox, and a machine instance reached by its `address`.
 - `lib/test-pbs-job.sh` also covers #457: `pbs_node` reads `.node` (and the pre-#600 form)

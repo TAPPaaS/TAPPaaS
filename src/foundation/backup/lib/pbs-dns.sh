@@ -12,11 +12,20 @@
 #
 #   pbs_dns_name <instance> <zone>          → <instance>.<zone>.internal
 #   pbs_dns_ensure <instance> <zone> <host> → the alias exists and points at <host>
+#   pbs_dns_remove <instance> <zone>        → the alias is gone, its Host released
+#   pbs_dns_release <host> <domain>         → the Host entry this file created, gone
+#
+# Cleanup is this file's, because creating is (#672): a Host entry made for a
+# machine is released when the alias leaves it — a move, or the instance's
+# delete.sh. `dns-manager release` is the guarded delete: it removes only an
+# entry described "TAPPaaS machine <host>" that is no DHCP reservation and
+# carries no alias, so a cluster node's entry, a PXE or cluster:vm reservation
+# and anything made by hand always survive it.
 #
 # `external` and `shim` register nothing: an external PBS is reached by its own
 # pbsUrl, and a shim has no PBS to name.
 #
-# Requires: common-install-routines.sh (info/warn/CONFIG_DIR) sourced first, and
+# Requires: common-install-routines.sh (info/warn/debug/CONFIG_DIR) sourced first, and
 # dns-manager on PATH.
 
 # ── Pure helpers ─────────────────────────────────────────────────────
@@ -52,6 +61,37 @@ _pbs_dns_ensure_host_entry() {
     dns-manager --no-ssl-verify add "${host}" "${zone}.internal" "${ip}" --description "TAPPaaS machine ${host}" >/dev/null
 }
 
+# The Host an alias follows now, as <host>.<domain>; "" when it is no alias.
+# `dns-manager alias list` prints "  <alias>  -> <host>.<domain>".
+_pbs_dns_alias_target() {
+    dns-manager --no-ssl-verify alias list 2>/dev/null | awk -v a="$1" '$1 == a {print $3; exit}'
+}
+
+# pbs_dns_release <host> <domain> — best effort, never fatal: a Host entry
+# left behind is a stale record, not a broken PBS.
+pbs_dns_release() {
+    local host="$1" domain="$2" out
+    [[ -n "${host}" && -n "${domain}" ]] || return 0
+    if out="$(dns-manager --no-ssl-verify release "${host}" "${domain}" 2>&1)"; then
+        debug "  ${out}"
+    else
+        warn "  could not release ${host}.${domain} (${out##*$'\n'}) — remove it with: dns-manager release ${host} ${domain}"
+    fi
+}
+
+# pbs_dns_remove <instance> <zone> — the instance is going: its alias goes, and
+# the Host it followed is released (kept by the guard when it is not ours).
+pbs_dns_remove() {
+    local name target
+    name="$(pbs_dns_name "$1" "$2")"
+    target="$(_pbs_dns_alias_target "${name}")"
+    [[ -n "${target}" ]] || { debug "  ${name} is no alias — nothing to remove"; return 0; }
+    dns-manager --no-ssl-verify alias delete "${name}" >/dev/null \
+        || { warn "  could not remove the alias ${name} → ${target}"; return 1; }
+    info "  removed ${name} (it followed ${target})"
+    pbs_dns_release "${target%%.*}" "${target#*.}"
+}
+
 # The IP a dnsmasq host entry <fqdn> points at, from `dns-manager list`.
 _pbs_dns_entry_ip() {
     dns-manager --no-ssl-verify list 2>/dev/null | awk -v f="$1" '$1 == f {print $3; exit}'
@@ -72,6 +112,8 @@ pbs_dns_ensure() {
     dns-manager --no-ssl-verify alias list >/dev/null 2>&1 \
         || { warn "  this dns-manager has no 'alias' verb yet (control plane not refreshed?) — ${name} left as it is"; return 1; }
     _pbs_dns_ensure_host_entry "${host}" "${zone}" || return 1
+    local previous
+    previous="$(_pbs_dns_alias_target "${name}")"
     if _pbs_dns_is_host_entry "${name}"; then
         old_ip="$(_pbs_dns_entry_ip "${name}")"
         info "  replacing the A record ${name} with an alias of ${host}.${zone}.internal (#612)"
@@ -88,4 +130,8 @@ pbs_dns_ensure() {
         return 1
     fi
     info "  ${GN}✓${CL} ${name} → ${host}.${zone}.internal"
+    # The alias moved: the Host it left may have an entry this file created for it.
+    if [[ -n "${previous}" && "${previous}" != "${host}.${zone}.internal" ]]; then
+        pbs_dns_release "${previous%%.*}" "${previous#*.}"
+    fi
 }

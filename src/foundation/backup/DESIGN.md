@@ -55,7 +55,12 @@ dnsmasq entry** (`lib/pbs-dns.sh`, #612), so it follows the node's address and m
 call when the PBS moves. The name is the backup **instance's** (`<instance>.<zone>.internal`,
 default `backup`); the module has no `vmname`, because it owns no VM. Every update re-asserts
 the alias, and replaces the A record that installs before #612 wrote. A `debianhost` Host
-without a DNS entry gets one from its `address` first.
+without a DNS entry gets one from its `address` first — and backup removes it again (#672):
+when the alias moves to another Host, and in `delete.sh`, which deletes the instance's alias.
+Both go through `dns-manager release`, which removes only an entry described
+`TAPPaaS machine <host>` that is no DHCP reservation and carries no alias; a cluster node's
+entry, a reservation and anything made by hand are never touched. `delete.sh` is DNS only: the
+PBS, its datastore and its jobs stay.
 
 ## Why native apt, not a VM
 
