@@ -25,7 +25,9 @@ Primary audience: whoever builds and verifies ADR-026 D3 (`debianhost`) and D8 (
   never heard of. 1 core, 1–2 GB RAM, 10 GB disk.
 - To Proxmox they are VMs; for the test they are machines. `adopt` only speaks SSH to them, and
   the plan checks that nothing reaches for `qm` on them.
-- Teardown is `qm destroy` plus removing the config. Every phase can start over from a fresh VM.
+- Every phase can start over from a fresh VM. **The plan is not finished until phase 7 has
+  torn the test bed down** — a test VM left running on the test site is swept, patched and
+  listed like a real machine (it was, for a day, as `dh-test1`).
 
 ## Phase 1 — `module adopt`, happy path
 
@@ -92,16 +94,35 @@ the **first live test of #602's machine-hosted case**: with the backup module's 
 empty, resolution must adopt `node:dh-test1` and install nothing on a cluster node. Until now
 that case was unit-tested only.
 
+## Phase 7 — teardown
+
+Run when the last phase using a test VM has a result; record it as a row of its own. Per VM
+(`dh-test1` = 990, `dh-test2` = 991), in this order:
+
+1. `module-manager delete <vm> --force` — unregisters (`--force` because the instance is
+   `tier: foundation`; it also implies `--remove`). The machine is not touched.
+2. On the node holding it: check `qm config <vmid>` names `<vm>`, then
+   `qm stop <vmid> && qm destroy <vmid> --purge 1 --destroy-unreferenced-disks 1`.
+3. `dns-manager delete <vm> mgmt.internal` — the Host entry a PBS placement created from the
+   machine's `address` (#612); step 1 does not remove it. Remove any `dns-manager alias` that
+   still points at it (phase 6 used `pbs6`).
+4. On the mothership: `ssh-keygen -R <address>` (and `<vm>`, `<vm>.mgmt.internal`).
+5. **Check nothing is left:** no `config/<vm>*.json`; no guest in `900–999` on any node; no
+   `dns-manager list` entry, and the name does not resolve; no `known_hosts` entry;
+   `module-manager list` shows neither the module nor an "Unexpected VM"; no backup of the
+   VMID on the PBS storage.
+
 ## Results
 
 | Phase | Date | Result |
 |---|---|---|
 | 1 | 2026-09-18 | ✅ adopted as `dh-test1` (debianhost, zone `mgmt`, no `vmname`); key pre-seeded, and key arriving while `adopt` waits |
 | 2 | 2026-09-18 | ✅ live: run twice (config unchanged), name taken, address taken under another name, PVE node (`tappaas3`), unknown `--zone`, reserved name, key never arrives (nothing written). Unit-tested only (`scripts/test/test-adopt.sh`): Ubuntu, address in no zone |
-| 3 | 2026-09-18 | ✅ update deferred without consent, rebooted with `--allow-disruption` (boot id checked), waits for the clock; disk-fill test fails. **Open:** `cicd-key.sh`, key-only SSH. **The nightly:** it never selected a machine instance (its module rule was the retired `kind: module` marker or a `vmname`) — fixed 2026-09-19; confirm `dh-test1` in `last-update-result.json` after the next nightly |
+| 3 | 2026-09-18 | ✅ update deferred without consent, rebooted with `--allow-disruption` (boot id checked), waits for the clock; disk-fill test fails. **Open:** `cicd-key.sh`, key-only SSH. **The nightly:** it never selected a machine instance (its module rule was the retired `kind: module` marker or a `vmname`) — fixed 2026-09-19; confirmed 2026-09-19: the sweep journal shows `Module 'dh-test1' updated successfully` in three runs (the criterion first written here, `last-update-result.json`, could never be met — it holds counts, never module names) |
 | 4 | 2026-09-18 | ✅ `delete` unregisters (same boot id), `--vmid` refused |
 | 5 | — | not started (D8a) |
 | 6 | 2026-09-19 | ✅ PBS 4.2.6 installed **by hand** on `dh-test1` (datastore on a directory). Run against a copy of `config/` with an empty placement and `.node = dh-test1`, under a second instance name (`pbs6`) so the live `backup.mgmt.internal` was never touched: resolution **adopted `node` = dh-test1** and provisioned nothing on a cluster node (#602's machine case, first live run); `pbs6.mgmt.internal` became a CNAME of dh-test1, which got a DNS entry from its `address` (#612); dh-test1 is its `debianhost` instance's to patch (#603); the update created the verify job on dh-test1's PBS; PBS came back after a reboot; the `debianhost` update upgraded 12 packages with PBS running. Not shown: a PBS package upgrade (it was freshly installed) |
+| 7 | 2026-09-19 | ✅ `dh-test1` torn down: unregistered, VM 990 destroyed on tappaas2 (with its hand-installed PBS and datastore), its dnsmasq entry and host key removed; the step-5 check found nothing left. No backup of 990 existed. `dh-test2` was never created (phase 5 not started) |
 
 **Found in phase 2:** Debian 13's OpenSSH penalises a source address for failed logins
 (`PerSourcePenalties`, 5s per failure, enforced from 15s, up to 10 min). `adopt` polling every
@@ -114,6 +135,10 @@ tries every 20s.
 - **`pbs_ensure_zfs_ordering` would have required `zfs-mount.service` on a host without it**, stopping PBS at boot. dh-test1 has it (PBS pulls in the ZFS utilities); the step now does nothing where it is absent.
 - **The backup module is effectively single-instance**: its placement libraries read `backup.json` whatever the instance name. Fine for a site-scoped module; recorded, not changed.
 
+**Found in phase 7:** `module delete` of a machine leaves the dnsmasq Host entry that backup's
+PBS placement created from its `address` (#612) — nothing owns removing it. Harmless for a
+test VM torn down by hand; for a real machine taken out of TAPPaaS it is a stale DNS record.
+
 ## What each phase proves
 
 | Phase | Proves |
@@ -123,3 +148,4 @@ tries every 20s.
 | 4 | removing a machine from TAPPaaS never harms it |
 | 5 | `add --pxe` = create + adopt (D8.2) |
 | 6 | ADR-012 §1.3 works, and #602 holds on a machine |
+| 7 | the test left nothing behind on the site |
