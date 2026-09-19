@@ -374,16 +374,23 @@ function doReconcile(moduleArg: string, opts: ReconcileOptions): void {
     console.log("");
     info(`${BOLD}Reconcile Step 4: Verify the re-applied services${CL}`);
     const svc = checkDependencyServices(configDir, module, applied, moduleEnvironment);
+    // All clean: the per-service ticks are detail. Drift or an unknown prints in
+    // full — that report is what the failure below points at.
+    const clean = svc.drift === 0 && svc.unknown === 0;
     for (const l of svc.lines as OutLine[]) {
-      if (l.kind === "raw") console.log(l.text);
-      else if (l.kind === "info") debug(l.text);
+      if (l.kind === "raw") {
+        if (!clean) console.log(l.text);
+        else if (l.text.trim() !== "") debug(l.text.trim());
+      } else if (l.kind === "info") debug(l.text);
       else if (l.kind === "warn") warn(l.text);
       else error(l.text);
     }
     for (const l of serviceSummaryLines(module, svc)) {
-      if (l.kind === "warn") warn(l.text);
-      else if (l.kind === "error") error(l.text);
-      else info(l.text);
+      if (l.kind === "error") error(l.text);
+      // A missing test-service.sh is coverage, not drift: the post-update test
+      // step warns about it (and `module inspect` reports it), so here it is
+      // detail, as is the clean count.
+      else debug(l.text);
     }
     verifyDrift = svc.drift;
     verifyUnknown = svc.unknown;

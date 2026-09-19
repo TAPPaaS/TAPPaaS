@@ -98,6 +98,11 @@ test_skip() {
     info "  ${YW}⊘${CL} $1 (skipped)"
     SKIP_COUNT=$((SKIP_COUNT + 1))
 }
+# A skip Test Step 2 has already warned about: counted, shown only as detail.
+test_skip_quiet() {
+    debug "  ${YW}⊘${CL} $1 (skipped)"
+    SKIP_COUNT=$((SKIP_COUNT + 1))
+}
 
 # ── Usage ────────────────────────────────────────────────────────────
 
@@ -250,7 +255,7 @@ main() {
             local provider_dir
 
             if ! provider_dir=$(get_module_dir "${provider_module}" 2>/dev/null); then
-                test_skip "${dep} — provider not found"
+                test_skip_quiet "${dep} — provider not found"
                 continue
             fi
 
@@ -258,11 +263,11 @@ main() {
             local svc_test="${provider_dir}/services/${service_name}/test-service.sh"
 
             if [[ ! -x "${svc_test}" ]]; then
-                test_skip "${dep} — no test-service.sh"
+                test_skip_quiet "${dep} — no test-service.sh"
                 continue
             fi
 
-            info "  Running ${BL}${dep}${CL} test-service.sh for '${module}'..."
+            debug "  Running ${BL}${dep}${CL} test-service.sh for '${module}'..."
             # Capture the service-test output: [Debug] when green, surfaced on failure.
             local _svc_out _svc_rc _sl
             _svc_out="$("${svc_test}" "${module}" 2>&1)" && _svc_rc=0 || _svc_rc=$?

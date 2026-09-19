@@ -174,8 +174,8 @@ _dns_rc=0
 DNS_RESULT="$(public_a_record "${PROXY_DOMAIN}")" || _dns_rc=$?
 case "${_dns_rc}" in
     0) debug "  public DNS A: ${BL}${DNS_RESULT}${CL}" ;;
-    1) warn "No PUBLIC DNS A record for ${PROXY_DOMAIN} (authoritative nameservers asked, not the local resolver)"
-       warn "  under dnsMode=per-service ACME HTTP-01 cannot validate, so no certificate will issue" ;;
+    1) warn "${PROXY_DOMAIN} has no public DNS A record — not published: no certificate under dnsMode=per-service; reachable only at ${MODULE}.${ZONE}.internal"
+       debug "  checked against the authoritative nameservers, not the local resolver" ;;
     *) debug "  public DNS A: not checked (no dig, or no resolver reachable)" ;;
 esac
 
@@ -233,8 +233,8 @@ if [[ "${DNS_MODE}" == "per-service" ]]; then
         elif [[ ${SH_RC} -eq 3 ]]; then
             # ADR-021 R3 / Case 4: a supported configuration, not an error. Say
             # what the operator loses, in one line, and carry on — install succeeds.
-            info "  '${MODULE}' is not published (no external DNS for ${PROXY_DOMAIN})"
-            info "    reachable only at ${MODULE}.${ZONE}.internal, without TLS and without the identity gate"
+            # The DNS validation above warns once, in the operator's terms.
+            debug "  '${MODULE}' is not published (no external DNS for ${PROXY_DOMAIN})"
             # Case 4 says the split-horizon record for an unpublished service is
             # "none" — so REMOVE one that is already there, don't merely decline
             # to write it. A service that was published and no longer is (or one

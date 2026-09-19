@@ -1908,7 +1908,9 @@ def _dispatch(args: argparse.Namespace, manager: RulesManager) -> int:
         result = manager.reconcile(args.module)
         if result.errors:
             return 1
-        info(
+        # aliases counts upserts, not changes: a run that applied and deleted
+        # no rule changed nothing an operator needs to read.
+        (info if result.applied or result.deleted else debug)(
             f"{result.module}: applied={result.applied} deleted={result.deleted} "
             f"aliases={result.aliases_created}"
         )

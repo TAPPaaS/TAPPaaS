@@ -179,11 +179,19 @@ proxy_split_horizon_target() {
     local -a args=(split-horizon-target "${domain}")
     [[ -n "${zones_file}" ]] && args+=(--zones "${zones_file}")
 
-    # stdout is the address; network-manager already writes its diagnostics to
-    # stderr, so they flow straight through to the caller's log. Capture without
-    # tripping `set -e` on the non-zero exits that are part of the contract.
-    local out rc=0
-    out="$(network-manager "${args[@]}")" || rc=$?
+    # stdout is the address; network-manager writes its diagnostics to stderr.
+    # For 0 and 3 they are detail — the caller reports the outcome in its own
+    # words — so they go to [Debug]; an error's diagnostics pass through as-is.
+    # Captured without tripping `set -e` on the exits that are the contract.
+    local out rc=0 err
+    err="$(mktemp)"
+    out="$(network-manager "${args[@]}" 2>"${err}")" || rc=$?
+    if [[ ${rc} -eq 0 || ${rc} -eq 3 ]]; then
+        while IFS= read -r _l; do debug "  ${_l}"; done < "${err}"
+    else
+        cat "${err}" >&2
+    fi
+    rm -f "${err}"
     [[ ${rc} -eq 0 ]] && printf '%s' "${out}"
     return ${rc}
 }
@@ -216,14 +224,10 @@ proxy_add_routes() {
     [[ "$(get_config_value 'proxyPreserveHost' 'false')" == "true" ]] && preserve_args=(--preserve-host)
 
     # The split-horizon gateway is the same for every route (same module/zones);
-    # resolve once, and only when per-service TLS needs it.
-    local gw=""
-    if [[ "${dns_mode}" == "per-service" ]]; then
-        # Every route lives under the same domain, so one lookup answers for all.
-        # An unpublished domain (rc 3) simply leaves gw empty and the per-route
-        # override below is skipped — same degraded path as the primary handler.
-        gw="$(proxy_split_horizon_target "${domain}" "${ZONES_FILE}" || true)"
-    fi
+    # resolved once, on the first route that needs it — a module without
+    # proxyRoutes never asks. An unpublished domain (rc 3) leaves gw empty and
+    # the per-route override below is skipped, as for the primary handler.
+    local gw="" gw_looked=0
 
     local -a keep_fqdns=()
     local name port fqdn route_desc wc
@@ -245,11 +249,17 @@ proxy_add_routes() {
         if [[ "${dns_mode}" == "per-service" ]]; then
             if wc="$(unbound_wildcard_covers "${name}" "${domain}")"; then
                 debug "    wildcard *.${wc} already covers ${fqdn} — skipping per-service override"
-            elif [[ -n "${gw}" ]]; then
-                unbound-manager --no-ssl-verify add "${name}" "${domain}" "${gw}" --description "${route_desc}" \
-                    || warn "    Could not register ${fqdn} in Unbound (register manually)"
             else
-                warn "    No split-horizon gateway for ${fqdn} — register DNS manually"
+                if (( ! gw_looked )); then
+                    gw="$(proxy_split_horizon_target "${domain}" "${ZONES_FILE}" || true)"
+                    gw_looked=1
+                fi
+                if [[ -n "${gw}" ]]; then
+                    unbound-manager --no-ssl-verify add "${name}" "${domain}" "${gw}" --description "${route_desc}" \
+                        || warn "    Could not register ${fqdn} in Unbound (register manually)"
+                else
+                    warn "    No split-horizon gateway for ${fqdn} — register DNS manually"
+                fi
             fi
         fi
 

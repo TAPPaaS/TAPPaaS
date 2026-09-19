@@ -235,9 +235,9 @@ prune_snapshots() {
     [[ "${snap_created}" == true ]] || return 0
     local keep
     keep="$(snapshot_retention)"
-    info "  Pruning old snapshots, keeping last ${keep}..."
+    debug "  Pruning old snapshots, keeping last ${keep}..."
     if /home/tappaas/bin/snapshot-vm.sh "${module}" --cleanup "${keep}"; then
-        info "  ${GN}✓${CL} Snapshot retention enforced (keeping last ${keep})"
+        debug "  ${GN}✓${CL} Snapshot retention enforced (keeping last ${keep})"
     else
         warn "Snapshot cleanup failed — old snapshots may remain (non-fatal)"
     fi

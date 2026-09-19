@@ -35,6 +35,9 @@ readonly MGMT="mgmt"
 # warn/error/die are unaffected, and the detail is still recoverable with
 # TAPPAAS_DEBUG=1. A standalone/operator run (health-manager update-os verb,
 # env unset) keeps the normal [Info] output.
+# announce() stays [Info] either way: the one line that says what the progress
+# dots below it are.
+announce() { [[ "${OPT_SILENT}" -eq 1 ]] || echo -e "${DGN}[Info]${CL} $*"; }
 if [[ "${TAPPAAS_OS_AS_DEBUG:-0}" == "1" ]]; then
     info() { debug "$@"; }
 fi
@@ -217,7 +220,8 @@ wait_for_cloud_init() {
     local ip="$1"
 
     info "Waiting for cloud-init to finish..."
-    ssh "tappaas@${ip}" "cloud-init status --wait" 2>/dev/null || true
+    # Its "status: done" is not ours to print.
+    ssh "tappaas@${ip}" "cloud-init status --wait" >/dev/null 2>&1 || true
 }
 
 # Wait until the VM is actually ready for privileged provisioning: cloud-init
@@ -666,6 +670,7 @@ main() {
     info "Detected OS: ${BL}${os_type}${CL}"
 
     # Perform OS-specific update
+    announce "OS update (${os_type}) on ${vmname}"
     case "${os_type}" in
         nixos)
             update_nixos "${vmname}" "${vmid}" "${node}" "${vm_ip}"

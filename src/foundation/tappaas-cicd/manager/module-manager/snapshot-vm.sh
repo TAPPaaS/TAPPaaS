@@ -146,7 +146,7 @@ if [[ -n "${1:-}" ]]; then
     esac
 fi
 
-info "snapshot-vm for ${BL}${VMNAME}${CL} (VMID: ${VMID}) on ${NODE} — action: ${BOLD}${ACTION}${CL}"
+debug "snapshot-vm for ${BL}${VMNAME}${CL} (VMID: ${VMID}) on ${NODE} — action: ${BOLD}${ACTION}${CL}"
 
 # ── Helper: get sorted snapshot names ────────────────────────────────
 
@@ -203,21 +203,21 @@ case "${ACTION}" in
         SNAP_COUNT=$(echo "${SNAPSHOTS}" | grep -c . || true)
 
         if [[ "${SNAP_COUNT}" -le "${KEEP}" ]]; then
-            info "  ${SNAP_COUNT} tappaas snapshot(s) found, keeping ${KEEP} — nothing to delete"
+            debug "  ${SNAP_COUNT} tappaas snapshot(s) found, keeping ${KEEP} — nothing to delete"
             exit 0
         fi
 
         DELETE_COUNT=$((SNAP_COUNT - KEEP))
         TO_DELETE=$(echo "${SNAPSHOTS}" | head -n "${DELETE_COUNT}")
 
-        info "  Found ${SNAP_COUNT} tappaas snapshots, keeping last ${KEEP}, deleting ${DELETE_COUNT}"
+        debug "  Found ${SNAP_COUNT} tappaas snapshots, keeping last ${KEEP}, deleting ${DELETE_COUNT}"
         # ssh -n: without it ssh reads the loop's stdin and swallows the rest of
         # the list, so only the first snapshot was ever deleted (#646).
         deleted=0
         failed=0
         while IFS= read -r snap; do
             [[ -z "${snap}" ]] && continue
-            info "  Deleting snapshot: ${BL}${snap}${CL}"
+            debug "  Deleting snapshot: ${BL}${snap}${CL}"
             if ssh -n root@"${NODE_FQDN}" "${CMD} delsnapshot ${VMID} '${snap}'"; then
                 deleted=$((deleted + 1))
             else
@@ -229,7 +229,7 @@ case "${ACTION}" in
         if [[ "${failed}" -gt 0 ]]; then
             die "Cleanup incomplete — ${deleted} snapshot(s) removed, ${failed} failed"
         fi
-        info "${GN}Cleanup completed — ${deleted} snapshot(s) removed${CL}"
+        info "${VMNAME}: ${deleted} old snapshot(s) removed (keeping last ${KEEP})"
         ;;
 
     restore)
