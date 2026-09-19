@@ -367,10 +367,6 @@ def should_update_now(config: dict, current_hour: int) -> bool:
 WORKLOAD_KINDS = {"vm", "lxc", "machine", "application", "device"}
 # Off-site peer configs (ADR-012 §1.4): peers, not modules.
 PEER_PREFIXES = ("pull-", "remote-", "receive-")
-# Modules with a manager of their own that the sweep must not drive: a satellite
-# (satellite-<name>.json) is a machine module, but it is provisioned and updated
-# by satellite-manager — pull-based, never pushed from here (ADR-010 §7.3).
-SELF_MANAGED_PREFIXES = ("satellite-",)
 
 
 def _is_module_json(path) -> bool:
@@ -384,8 +380,7 @@ def _is_module_json(path) -> bool:
     It used to be `kind == "module" or vmname` only. #611 retired the marker and a
     `kind: machine` instance has no vmname, so every machine — a debianhost, a
     pvenode — silently fell out of the sweep (found 2026-09-19). A satellite is a
-    machine too, and is a module; get_installed_apps leaves it to
-    satellite-manager (SELF_MANAGED_PREFIXES)."""
+    machine module too, swept while managed (ADR-010 §8.4)."""
     if path.name in NON_MODULE_JSONS or path.name.startswith(PEER_PREFIXES):
         return False
     try:
@@ -420,9 +415,6 @@ def get_installed_apps() -> list[str]:
         # files that slipped past NON_MODULE_JSONS are never treated as apps.
         if not _is_module_json(json_file):
             continue
-        if module_name.startswith(SELF_MANAGED_PREFIXES):
-            log.info("  (skipped: %s — driven by satellite-manager, not the sweep)", module_name)
-            continue
         apps.append(module_name)
     return apps
 
@@ -435,7 +427,12 @@ def get_installed_apps() -> list[str]:
 #   external (#216) — a guest managed OUTSIDE TAPPaaS; per module-fields.json,
 #                     "no install/update/test/delete lifecycle applies".
 #
-# Both keep `kind`/`vmname`, so the module selectors above still match them and
+#   management: unmanaged (ADR-022g) — registered, no lifecycle: a locked-down
+#                     satellite patches itself and admits no login from home
+#                     (ADR-010 §8.4.4). What takes it out is the field, not
+#                     what the module is.
+#
+# All keep `kind`/`vmname`, so the module selectors above still match them and
 # they used to enter Phase 1/2, where the pre-update snapshot found no VM and the
 # pre-update test then aborted the module with exit 2 — counting an intentionally
 # decommissioned module as a sweep FAILURE.
@@ -454,8 +451,18 @@ def module_status(module_name: str) -> str:
         return ""
 
 
+def module_management(module_name: str) -> str:
+    """Return a module's `.management`, lowercased. '' when absent (= managed)."""
+    try:
+        with open(CONFIG_DIR / f"{module_name}.json") as f:
+            return str(json.load(f).get("management") or "").strip().lower()
+    except (OSError, ValueError):
+        return ""
+
+
 def partition_by_lifecycle(modules: list[str]) -> tuple[list[str], list[tuple[str, str]]]:
-    """Split module names into (to_update, [(name, status), ...] skipped).
+    """Split module names into (to_update, [(name, reason), ...] skipped), the
+    reason being `status=<s>` or `management=unmanaged`.
 
     Status matching is case-insensitive: module-fields.json spells the lifecycle
     values lowercase (archived/external) but the development ones capitalised
@@ -466,17 +473,19 @@ def partition_by_lifecycle(modules: list[str]) -> tuple[list[str], list[tuple[st
     for name in modules:
         status = module_status(name)
         if status in NON_LIFECYCLE_STATUSES:
-            skipped.append((name, status))
+            skipped.append((name, f"status={status}"))
+        elif module_management(name) == "unmanaged":
+            skipped.append((name, "management=unmanaged"))
         else:
             active.append(name)
     return active, skipped
 
 
 def log_skipped(skipped: list[tuple[str, str]]) -> None:
-    """Report decommissioned modules. Skipping is visible, never silent — an
+    """Report modules out of the lifecycle. Skipping is visible, never silent — an
     operator reading the plan must still see that the module exists."""
-    for name, status in skipped:
-        log.info("  (skipped: %s — status=%s, not in the update lifecycle)", name, status)
+    for name, reason in skipped:
+        log.info("  (skipped: %s — %s, not in the update lifecycle)", name, reason)
 
 
 def get_module_dependencies(module_name: str) -> list[str]:

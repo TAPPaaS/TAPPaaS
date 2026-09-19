@@ -447,7 +447,7 @@
         "managed": "TAPPaaS runs the module's lifecycle",
         "unmanaged": "registered only; no install, update, test or delete"
       },
-      "note": "Recorded now; the sweep does not read it yet — it still takes a module out with `status: archived | external`."
+      "note": "The sweep skips an `unmanaged` module (logged `management=unmanaged`), as it does `status: archived | external`. A locked-down satellite is the case in use (ADR-010 §8.4.4)."
     }
   },
   "module_structure": {

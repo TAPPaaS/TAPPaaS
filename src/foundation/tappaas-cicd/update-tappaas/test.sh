@@ -83,8 +83,8 @@ fi
 # The same shape rule as module-manager's discovery. A `kind: machine` instance
 # (a debianhost, a pvenode) has no vmname and, since #611, no `kind: module`
 # marker — the old `marker or vmname` rule dropped every one of them from the
-# sweep. A satellite is a module too, but satellite-manager drives it — never the
-# sweep, whatever its status says.
+# sweep. A satellite is a machine module like them: swept while managed, out of
+# the lifecycle once locked down (management: unmanaged, ADR-010 §8.4).
 if [[ -f "$main_py" && -x "$py" ]]; then
     if "$py" - "$main_py" <<'PYSEL'
 import importlib.util, json, sys, tempfile, logging
@@ -100,8 +100,9 @@ w("tappaas2.json",    {"kind": "machine", "address": "tappaas2.mgmt.internal", "
 w("old.json",         {"vmname": "old"})
 w("marker.json",      {"kind": "module"})
 w("provider.json",    {"provides": ["nixos"]})
-w("satellite-s1.json",{"kind": "machine", "status": "external", "moduleSource": "/x/satellite"})
-w("satellite-s2.json",{"kind": "machine", "moduleSource": "/x/satellite"})   # a fresh one: no status
+w("satellite-s1.json",{"kind": "machine", "status": "external", "moduleSource": "/x/satellite"})  # before §8.4
+w("satellite.json",   {"kind": "machine", "management": "managed", "address": "203.0.113.7", "moduleSource": "/x/satellite"})
+w("vault.json",       {"kind": "machine", "management": "unmanaged", "address": "198.51.100.9", "moduleSource": "/x/satellite"})
 w("pull-buddy.json",  {"remoteHost": "h", "moduleSource": "/x"})
 w("site.json",        {"name": "site", "location": {"country": "DK"}})
 w("last-update-result.json", {"ok": True, "total": 3})
@@ -109,11 +110,14 @@ w("list.json", ["not", "an", "object"])
 (d / "broken.json").write_text("{ broken")
 m.CONFIG_DIR = d
 got = sorted(m.get_installed_apps())
-want = sorted(["nextcloud", "dh-test1", "tappaas2", "old", "marker", "provider"])
+want = sorted(["nextcloud", "dh-test1", "tappaas2", "old", "marker", "provider",
+               "satellite-s1", "satellite", "vault"])
 assert got == want, f"modules: {got} != {want}"
-assert m._is_module_json(d / "satellite-s2.json"), "a satellite IS a module (resolution, module list)"
 to_update, skipped = m.partition_by_lifecycle(got)
 assert "dh-test1" in to_update and "tappaas2" in to_update, to_update
+assert "satellite" in to_update, "a managed satellite is swept (ADR-010 §8.4.2)"
+assert ("vault", "management=unmanaged") in skipped, f"a locked-down one is not: {skipped}"
+assert ("satellite-s1", "status=external") in skipped, f"the pre-§8.4 stop-gap still holds: {skipped}"
 PYSEL
     then
         passed=$((passed + 1))
@@ -373,7 +377,7 @@ w("plain")                                    # no status at all
 apps, skipped = m.partition_by_lifecycle(m.get_installed_apps())
 assert sorted(apps) == ["beta", "nextcloud", "old", "plain"], f"apps kept: {sorted(apps)}"
 assert sorted(n for n, _ in skipped) == ["gone", "pfsense", "shouty"], f"skipped: {skipped}"
-assert all(s in ("archived", "external") for _, s in skipped), "skip reason is the status"
+assert all(r in ("status=archived", "status=external") for _, r in skipped), f"skip reason is the status: {skipped}"
 
 # Foundation loop is filtered by the same predicate (it selects on file
 # existence alone, so an archived foundation module entered Phase 1 too).
