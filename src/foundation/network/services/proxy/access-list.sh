@@ -187,7 +187,8 @@ proxy_split_horizon_target() {
     err="$(mktemp)"
     out="$(network-manager "${args[@]}" 2>"${err}")" || rc=$?
     if [[ ${rc} -eq 0 || ${rc} -eq 3 ]]; then
-        while IFS= read -r _l; do debug "  ${_l}"; done < "${err}"
+        # >&2: this function's stdout is the address its callers capture.
+        while IFS= read -r _l; do debug "  ${_l}" >&2; done < "${err}"
     else
         cat "${err}" >&2
     fi
