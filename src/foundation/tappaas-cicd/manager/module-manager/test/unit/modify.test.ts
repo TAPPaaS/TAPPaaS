@@ -334,6 +334,35 @@ try {
   );
 }
 
+// ── modify --lockdown (ADR-010 §8.4.4): the module's own lockdown.sh, alone ──
+{
+  const root = mkdtempSync(join(tmpdir(), "mm-lockdown-"));
+  const cfg = join(root, "config");
+  const sat = join(root, "satellite");
+  const dh = join(root, "debianhost");
+  for (const d of [cfg, sat, dh]) mkdirSync(d);
+  const marker = join(root, "locked");
+  writeFileSync(join(sat, "lockdown.sh"), `#!/usr/bin/env bash\necho "$1 $(pwd)" > "${marker}"\nexit 0\n`);
+  chmodSync(join(sat, "lockdown.sh"), 0o755);
+  writeFileSync(join(cfg, "vault.json"), JSON.stringify({ kind: "machine", moduleSource: sat }));
+  writeFileSync(join(cfg, "dh1.json"), JSON.stringify({ kind: "machine", moduleSource: dh }));
+
+  const c1 = new FakeModuleClient();
+  const rc1 = run(["modify", "vault", "--lockdown", "--config-dir", cfg], c1);
+  check(rc1 === 0 && existsSync(marker) && readFileSync(marker, "utf8").trim() === `vault ${sat}`,
+    "modify --lockdown runs the module's lockdown.sh for the instance, from the module's directory");
+  check(c1.log.length === 0, "…and nothing else: no converge after — the machine no longer admits the mothership");
+
+  rmSync(marker, { force: true });
+  check(run(["modify", "dh1", "--lockdown", "--config-dir", cfg], new FakeModuleClient()) !== 0,
+    "a module with no lockdown.sh has nothing to lock down — refused");
+  check(run(["modify", "vault", "--lockdown", "--set", "rebootOk=true", "--config-dir", cfg], new FakeModuleClient()) !== 0
+    && !existsSync(marker), "--lockdown with a --set is refused, and nothing runs");
+  check(run(["update", "vault", "--lockdown", "--config-dir", cfg], new FakeModuleClient()) !== 0
+    && !existsSync(marker), "update --lockdown is refused — a lockdown is a change, not a release update");
+  rmSync(root, { recursive: true, force: true });
+}
+
 console.log("");
 console.log(`Results: ${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

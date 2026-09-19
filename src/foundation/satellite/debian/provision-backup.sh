@@ -122,7 +122,11 @@ else
     _sj=(proxmox-backup-manager sync-job create "${SYNC_JOB_ID}"
          --store "${DATASTORE_NAME}" --ns "${SYNC_NS}"
          --remote "${REMOTE_NAME}" --remote-store "${HOME_PBS_DATASTORE}"
-         --remove-vanished "${REMOVE_VANISHED:-false}" --schedule "${SYNC_SCHEDULE:-daily}")
+         --remove-vanished "${REMOVE_VANISHED:-false}" --schedule "${SYNC_SCHEDULE:-daily}"
+         --max-depth 0)
+    # --max-depth 0: the home grant is DatastoreReader on ONE namespace, not
+    # propagated (the `remote` peer, ADR-012 §1.4) — a deeper sync would only
+    # meet namespaces it may not read (fs/, receive/).
     [[ -n "${HOME_PBS_NS:-}" ]] && _sj+=(--remote-ns "${HOME_PBS_NS}")
     "${_sj[@]}"
 fi

@@ -54,7 +54,21 @@ fi
 # The login exists only to be pulled with; create it if it is ours to create.
 # An auth-id in a realm we do not own (e.g. an API token they already hold) is
 # accepted as-is: we only attach the ACL.
-if [[ "${authid}" == *"@pbs" ]] && ! _pbs_user_exists "${authid}"; then
+#
+# TAPPAAS_REMOTE_PASSWORD is the non-interactive path, for a caller that hands the
+# same password to the puller itself — the satellite's lockdown (ADR-010 §8.4.4).
+# It SETS the password, on a login that already exists too, so a re-run leaves
+# the puller and the login agreeing.
+if [[ "${authid}" == *"@pbs" && -n "${TAPPAAS_REMOTE_PASSWORD:-}" ]]; then
+    if _pbs_user_exists "${authid}"; then
+        _pbs_node_run proxmox-backup-manager user update "${authid}" --password "${TAPPAAS_REMOTE_PASSWORD}" \
+            || die "could not set the password of ${authid}"
+        info "  ${GN}✓${CL} login ${authid} exists — its password is set to the one handed over"
+    else
+        pbs_user_ensure "${authid}" "${TAPPAAS_REMOTE_PASSWORD}" || die "could not create ${authid}"
+        info "  ${GN}✓${CL} created login ${authid}"
+    fi
+elif [[ "${authid}" == *"@pbs" ]] && ! _pbs_user_exists "${authid}"; then
     read -rsp "  Password for the new login ${authid}: " PW; echo
     [[ -n "${PW}" ]] || die "a password is required to create ${authid}"
     pbs_user_ensure "${authid}" "${PW}"

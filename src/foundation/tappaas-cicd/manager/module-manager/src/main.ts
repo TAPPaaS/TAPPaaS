@@ -25,12 +25,13 @@
 //
 // Exit codes: ok=0, error / non-zero child rc = that rc (1 for config errors).
 
-import { readFileSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { CliModuleClient } from "./client";
 import {
   classifyModuleResolution,
   defaultConfigDir,
+  getModuleDirResult,
   listModules,
   loadModule,
 } from "./config";
@@ -134,7 +135,7 @@ export const HELP: HelpSpec = {
       ],
     },
     {
-      usage: "modify <module> --set field=value... [--unset field]... [--environment ENV] [--force] [--allow-disruption] [--no-snapshot] [--debug] [--silent]",
+      usage: "modify <module> --set field=value... [--unset field]... [--lockdown] [--environment ENV] [--force] [--allow-disruption] [--no-snapshot] [--debug] [--silent]",
       name: "modify",
       note: "(change a declared field, then converge; bare `modify` is the deprecated spelling of `update`)",
       options: [
@@ -146,6 +147,7 @@ export const HELP: HelpSpec = {
           "--unset field",
           "Remove a stale undeclared field the merge keeps forever (repeatable). Refused for a declared field and for one the release source still defines.",
         ],
+        ["--lockdown", "Run the module's lockdown.sh, alone: for a satellite, make it the unmanaged off-site vault — it pulls the Site's PBS, patches itself, and the mothership's key is removed (ADR-010 §8.4.4). One-way."],
         ["--environment ENV", "Target environment to modify."],
         ["--force", "As for `update`: proceed past a fatally failed pre-update test or an archived/external status."],
         ["--allow-disruption", "As for `update`: authorize downtime for this module now."],
@@ -261,6 +263,7 @@ interface Opts {
   archive: boolean;
   remove: boolean;
   decommission: boolean; // delete: a machine's delete.sh runs (ADR-010 §8.4.5)
+  lockdown: boolean; // modify: run the module's lockdown.sh (ADR-010 §8.4.4)
   // list --resolution: which of the three tracking paths locates each module (#460)
   resolution: boolean;
   // `modify --set field=value`, repeatable (ADR-020 D2 step 0).
@@ -295,6 +298,7 @@ function parseOpts(args: string[]): Opts {
     archive: false,
     remove: false,
     decommission: false,
+    lockdown: false,
     resolution: false,
     sets: [],
     unsets: [],
@@ -363,6 +367,8 @@ function parseOpts(args: string[]): Opts {
       o.remove = true;
     } else if (a === "--decommission") {
       o.decommission = true;
+    } else if (a === "--lockdown") {
+      o.lockdown = true;
     } else if (a === "--resolution") {
       o.resolution = true;
     } else if (a === "--list") {
@@ -799,6 +805,7 @@ function cmdModify(opts: Opts, client: ModuleClient, verb: "update" | "modify"):
   if (verb === "update" && opts.unsets.length > 0) {
     die("update takes no --unset — remove a stale field with: module-manager module modify <module> --unset field");
   }
+  if (opts.lockdown) return cmdLockdown(module, opts, verb);
   if (verb === "modify" && opts.sets.length === 0 && opts.unsets.length === 0) {
     warn("`modify` with no --set is the release update — say `module-manager module update` instead (#655)");
   }
@@ -816,6 +823,25 @@ function cmdModify(opts: Opts, client: ModuleClient, verb: "update" | "modify"):
     silent: opts.silent,
   };
   return client.modify(module, m);
+}
+
+// `modify <instance> --lockdown` (ADR-010 §8.4.4): a deliberate, one-way change of
+// who manages a machine, which only the module knows how to make — so it is the
+// module's own lockdown.sh, run alone (no --set in the same call, no converge
+// after: the machine no longer admits the mothership). A module without one has
+// nothing to lock down.
+function cmdLockdown(module: string, opts: Opts, verb: "update" | "modify"): number {
+  if (verb !== "modify") die("--lockdown is a change: module-manager module modify <instance> --lockdown");
+  if (opts.sets.length > 0 || opts.unsets.length > 0) {
+    die("--lockdown runs alone — make the --set/--unset changes first, then lock down");
+  }
+  const r = getModuleDirResult(opts.configDir, module);
+  if (r.kind === "not-installed") die(`--lockdown: '${module}' is not installed (no config/${module}.json)`);
+  if (r.kind === "no-location") die(`--lockdown: '${module}' records no moduleSource — cannot find its module`);
+  if (r.kind === "missing-dir") die(`--lockdown: '${module}''s module directory is gone: ${r.dir}`);
+  const script = join(r.dir, "lockdown.sh");
+  if (!existsSync(script)) die(`--lockdown: ${r.dir} has no lockdown.sh — '${module}' has nothing to lock down`);
+  return stream(script, [module], { cwd: r.dir });
 }
 
 // Pre-gate every --set, then write the whole change — sets and unsets — in one

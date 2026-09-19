@@ -40,10 +40,10 @@ identical** to the NixOS path (same `edge` tunnel, same `admin` WG server, same
 3. `sat_provision_debian` SSHes to `root@<ip>` (the operator key via a forwarded agent),
    ships the deploy dir, and runs `provision-debian.sh`, which `apt install`s the packages,
    installs the configs, generates the on-host WireGuard key (never leaves the host) and
-   enables the services. By `MANAGEMENT` it then either authorizes the mothership's key and
-   leaves unattended-upgrades off (**managed**, the default: the sweep patches it), or
-   removes that key and turns unattended security upgrades on (**unmanaged**, after
-   `--lockdown`).
+   enables the services. `set-management.sh` then runs last and, by `MANAGEMENT`, either
+   authorizes the mothership's key and leaves unattended-upgrades off (**managed**, the
+   default: the sweep patches it), or turns unattended security upgrades on and removes that
+   key (**unmanaged**, after `--lockdown`).
 4. Back on cicd, the flow rejoins the shared path: read back the satellite's wg public key →
    wire the OPNsense peer → verify the handshake.
 
@@ -72,28 +72,24 @@ home** (§3.2) — the satellite stores only ciphertext.
 the `remote` + pull `sync-job`. The module also adds the OPNsense **`edge → home-PBS:8007`**
 rule and widens the satellite's wg `AllowedIPs` to reach home PBS — and nothing else in the cluster.
 
-### Home-side prerequisites (operator, one-time)
+### Home side — set up by the lockdown
 
-1. **Reachability:** home PBS must be reachable at `backup.pull.homePbsHost` over the tunnel
-   (the module adds the `edge → PBS:8007` rule + AllowedIPs).
-2. **Read-only token** on home PBS (so a compromised satellite can only *read* home's encrypted chunks):
-   ```bash
-   proxmox-backup-manager user generate-token satellite@pbs pull
-   proxmox-backup-manager acl update /datastore/<home-store> DatastoreReader --auth-id 'satellite@pbs!pull'
-   ```
-   Provide the printed **secret** out-of-band — `TAPPAAS_SAT_PBS_TOKEN=<secret>`
-   (or `TAPPAAS_SAT_PBS_TOKEN_FILE=<path>`); it is shipped as a `0600` file and **never committed**.
-3. Put the non-secret pull config in the satellite JSON: `backup.pull.{homePbsHost,homeDatastore,authId,fingerprint,schedule}`.
-
-Without the token, `provision-backup.sh` still installs PBS + the datastore and prints this runbook;
-provide the token and re-run to activate the pull.
+`module-manager module modify <instance> --lockdown` does what used to be operator steps:
+it creates the read-only login on the Site's PBS (a `remote` peer, `DatastoreReader` on the
+root namespace, not propagated), adds the OPNsense `edge → PBS:8007` rule and the PBS
+address to the tunnel's AllowedIPs, reads the PBS certificate's fingerprint, and hands the
+login's password to the satellite as the `0600` `pbs-remote-token` — never stored in a
+config. The non-secret pull settings are recorded in the instance's `vault.pull`
+(`homePbsHost`, `homeDatastore`, `authId`, `fingerprint`, optional `schedule`). See
+[../INSTALL.md](../INSTALL.md), "Locking it down as the off-site vault".
 
 ## Files
 
 | File | Purpose |
 | ---- | ------- |
 | `provision-debian.sh` | idempotent, role-gated on-host installer (base: tunnel/proxy/admin-vpn/patching) |
-| `provision-backup.sh` | backup role: official PBS install + datastore + pull remote/sync-job |
+| `provision-backup.sh` | backup role: official PBS install + datastore + pull remote/sync-job (run at lockdown) |
+| `set-management.sh` | runs last: `managed` authorizes the mothership's key, unattended-upgrades off; `unmanaged` turns self-patching on and removes that key, refusing if no operator key would remain |
 | `README.md` | this file |
 
 The rendered config files are **not committed** — they are generated per-deployment by

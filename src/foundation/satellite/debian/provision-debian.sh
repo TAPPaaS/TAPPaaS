@@ -22,10 +22,11 @@
 #   nftables.conf                   input firewall (+ admin-vpn NAT relay)  (always)
 #   nginx-stream.conf               L4 :443/:80 passthrough        (reverse-proxy)
 #   99-tappaas-ipforward.conf       net.ipv4.ip_forward=1               (admin-vpn)
-#   20auto-upgrades,52tappaas-unattended-upgrades   self-patching   (unmanaged)
 #   operator_authorized_keys        operator out-of-band key(s)         (optional)
-#   cicd_key.pub                    the mothership's key: authorized while managed,
-#                                   removed when unmanaged              (optional)
+#
+# Who patches the machine and whether the mothership may log in — MANAGEMENT — is
+# set-management.sh's, run after this (and after provision-backup.sh), so a
+# lockdown removes the mothership's key only once everything else is in place.
 #
 # Usage: ./provision-debian.sh            (run as root, from the deploy dir)
 set -euo pipefail
@@ -62,7 +63,7 @@ export DEBIAN_FRONTEND=noninteractive
 
 # ── 1. packages ──────────────────────────────────────────────────────────────
 # Base (every satellite): the infra tunnel + host firewall + self-patching.
-PKGS=(wireguard-tools nftables unattended-upgrades apt-listchanges ca-certificates)
+PKGS=(wireguard-tools nftables unattended-upgrades apt-listchanges ca-certificates jq curl)
 has_role reverse-proxy && PKGS+=(nginx libnginx-mod-stream)
 # backup role packages (proxmox-backup-server) are installed by a separate,
 # role-specific step (P6) — its apt source + key are added there, not here.
@@ -80,26 +81,6 @@ if [[ -f operator_authorized_keys ]]; then
         grep -qxF "${key}" /root/.ssh/authorized_keys || echo "${key}" >> /root/.ssh/authorized_keys
     done < operator_authorized_keys
     info "  operator SSH key(s) ensured in /root/.ssh/authorized_keys"
-fi
-
-# The mothership's key (ADR-010 §8.4.2/§8.4.4): a managed satellite is patched by
-# the nightly sweep, which logs in with it; a locked-down one must not accept it,
-# so a compromised home cannot reach the vault. Matched by the key itself (type
-# and base64), not the comment.
-if [[ -f cicd_key.pub ]]; then
-    install -d -m 0700 /root/.ssh
-    touch /root/.ssh/authorized_keys && chmod 0600 /root/.ssh/authorized_keys
-    _ck="$(awk 'NF>=2 {print $1" "$2; exit}' cicd_key.pub)"
-    [[ -n "${_ck}" ]] || die "cicd_key.pub holds no key"
-    if [[ "${MANAGEMENT}" == managed ]]; then
-        grep -qF "${_ck}" /root/.ssh/authorized_keys || cat cicd_key.pub >> /root/.ssh/authorized_keys
-        info "  the mothership's key is authorized (managed: the sweep patches this machine)"
-    else
-        grep -vF "${_ck}" /root/.ssh/authorized_keys > "${_tmp}/ak" || true
-        cat "${_tmp}/ak" > /root/.ssh/authorized_keys
-        grep -qF "${_ck}" /root/.ssh/authorized_keys && die "could not remove the mothership's key"
-        info "  the mothership's key is removed (unmanaged: nothing at home can log in here)"
-    fi
 fi
 
 # ── 3. WireGuard infra tunnel (always) ───────────────────────────────────────
@@ -138,27 +119,6 @@ if has_role reverse-proxy; then
     systemctl enable nginx >/dev/null 2>&1 || true
     systemctl restart nginx
     info "  nginx stream passthrough active (:443/:80 -> Caddy over the tunnel)"
-fi
-
-# ── 6. self-patching — unattended-upgrades (unmanaged only) ──────────────────
-# A managed satellite is patched by the sweep, whose reboots follow rebootOk; an
-# unattended reboot of its own would bypass that. A locked-down one patches itself.
-if [[ "${MANAGEMENT}" == unmanaged ]]; then
-    install -m 0644 20auto-upgrades /etc/apt/apt.conf.d/20auto-upgrades
-    install -m 0644 52tappaas-unattended-upgrades /etc/apt/apt.conf.d/52tappaas-unattended-upgrades
-    systemctl enable --now unattended-upgrades >/dev/null 2>&1 || true
-    # dry-run validates the config parses and the security origin resolves
-    if unattended-upgrade --dry-run --debug >"${_tmp}/uu.log" 2>&1; then
-        info "  unattended-upgrades enabled (security auto-patching; reboot window per config)"
-    else
-        warn "  unattended-upgrades dry-run reported issues (see below) — auto-patching may be degraded"
-        tail -5 "${_tmp}/uu.log" >&2 || true
-    fi
-else
-    rm -f /etc/apt/apt.conf.d/52tappaas-unattended-upgrades
-    printf 'APT::Periodic::Unattended-Upgrade "0";\n' > /etc/apt/apt.conf.d/20auto-upgrades
-    systemctl disable --now unattended-upgrades >/dev/null 2>&1 || true
-    info "  unattended-upgrades off (managed: the sweep patches this machine)"
 fi
 
 info "TAPPaaS satellite provisioning complete."

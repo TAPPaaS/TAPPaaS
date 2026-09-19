@@ -41,7 +41,7 @@ host with your operator key — then:
   needs `--instance <name>`, e.g. `--instance satellite-hel1`.
 - **Roles:** `reverse-proxy` and `admin-vpn` by default; one of them only with
   `--roles '["reverse-proxy"]'`. The `backup` role is not given here — it comes with
-  locking the satellite down as a pull vault (ADR-010 §8.4.4).
+  locking the satellite down as the vault (below).
 - **`--physicalLocation` (#609):** where the satellite physically runs. A backup copy is
   only off-site if it is somewhere else, and only this record shows it:
   `backup-manager validate` compares it with `site.json`'s `location`. Give the city when
@@ -79,13 +79,41 @@ provider, not in TAPPaaS.
 | reverse-proxy: browse a published name from off-LAN | resolves to the satellite, served by Caddy at home |
 | admin-vpn: `network-manager wgvpn add-peer --name <device> --pubkey <key>` | the printed config's Endpoint is the satellite; the device reaches a node `:8006`, the OPNsense UI and SSH |
 
+## Locking it down as the off-site vault
+
+A managed satellite can become the Site's **off-site backup vault**: it pulls the Site's PBS,
+and nothing at home can log in to it or delete its copy — the property ADR-010 §7.3 exists
+for. This is one-way:
+
+    module-manager module modify <instance> --lockdown
+
+It needs a PBS of the Site's own (backup placement `node`) to pull, an operator key recorded
+on the satellite, and the satellite must not be the Site's PBS Host itself. Then, over the
+mothership's key:
+
+1. On the Site's PBS: a read-only login `<name>@pbs`, granted like any `remote` peer —
+   `DatastoreReader` on the root namespace, not propagated, so `fs/` (config and secrets) and
+   other peers' data stay out of reach (`backup-manager peers` lists it).
+2. On OPNsense: `edge → <PBS>:8007`, so the satellite reaches the PBS through the tunnel.
+3. On the satellite: the official PBS, a datastore (`/srv/pbs/tappaas-offsite`), a daily pull
+   (`--remove-vanished false`: home deleting a snapshot never deletes the copy) and the vault's
+   own prune; security-only unattended-upgrades; and **last**, the mothership's key removed.
+4. It checks the mothership can no longer log in, then records `management: unmanaged`,
+   `roles` + `backup`, and `vault.pull`.
+
+A failure before the last step leaves a managed satellite: fix the cause and run
+`--lockdown` again. Afterwards the sweep skips it, `module test` checks it from OPNsense
+only, and only your operator key reaches it. Returning it to managed is by hand, on the
+machine, with that key.
+
 ## Removing it
 
 - `module-manager module delete <instance>` **unregisters** it, like any machine: the tunnel
   stays up and nothing is touched.
 - `module-manager module delete <instance> --decommission` also takes the Site's side down:
-  the OPNsense peer and tunnel server, and the `edge` rules when no other satellite needs
-  them. **The machine itself is never touched** — delete it in the provider's console.
+  the OPNsense peer and tunnel server, a vault's read access to the Site's PBS, and the
+  `edge` rules when no other satellite needs them. **The machine itself — and any copy a
+  vault holds — is never touched**: delete it in the provider's console.
 
 ## Converting an existing satellite
 

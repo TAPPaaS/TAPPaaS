@@ -706,6 +706,7 @@ check(!retentionValid("7") && !retentionValid("7x") && !retentionValid(""), "inv
   writeFileSync(join(tmp, "backup.json"), JSON.stringify({ placementState: "node", node: "pbshost" }));
   writeFileSync(join(tmp, "dh1.json"), JSON.stringify({ kind: "machine", moduleSource: "/repo/src/foundation/debianhost", roles: ["backup"] }));
   writeFileSync(join(tmp, "remote-buddy.json"), JSON.stringify({ authId: "buddy@pbs" }));
+  writeFileSync(join(tmp, "remote-vault.json"), JSON.stringify({ authId: "vault@pbs", physicalLocation: { country: "DE" } })); // the vault's own grant: counted once
   writeFileSync(join(tmp, "pull-neighbour.json"), JSON.stringify({ remoteHost: "h", physicalLocation: { country: "DK" } }));
   writeFileSync(join(tmp, "receive-nas.json"), JSON.stringify({ namespace: "receive/nas" }));
   const t = offsiteTargets(tmp);

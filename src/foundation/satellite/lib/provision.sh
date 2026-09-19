@@ -262,26 +262,36 @@ EOF
 # Assemble a Debian deploy dir: the rendered configs + the on-host installer.
 # Args: <configs-dir> ; echoes the deploy dir (== configs-dir, with the script added).
 sat_assemble_debian_deploy() {
-    local cfgdir="$1"
-    cp "${SATELLITE_DEBIAN_SRC}/provision-debian.sh" "${cfgdir}/provision-debian.sh"
-    chmod +x "${cfgdir}/provision-debian.sh"
+    local cfgdir="$1" f
+    for f in provision-debian.sh set-management.sh; do
+        cp "${SATELLITE_DEBIAN_SRC}/${f}" "${cfgdir}/${f}"
+        chmod +x "${cfgdir}/${f}"
+    done
     echo "${cfgdir}"
 }
 
-# Provision an already-booted Debian host: ship the deploy dir and run the
-# installer over SSH. No nixos-anywhere, no reformat. Uses the operator's key via
-# the ambient agent (run install over `ssh -A`); an explicit key may be passed.
-# Args: <deploy-dir> <root@ip> [key]
-sat_provision_debian() {
-    local d="$1" target="$2" key="${3:-}" ident=()
+# Ship a deploy dir to the satellite and run the given on-host scripts from it,
+# in order, in one session. Args: <deploy-dir> <root@ip> <key-or-""> <script>...
+sat_deploy_run() {
+    local d="$1" target="$2" key="$3" ident=() cmd="cd /root/tappaas-satellite" s
+    shift 3
     [[ -n "${key}" ]] && ident=(-i "${key}" -o IdentitiesOnly=yes)
     local sshopt=(-o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR)
     ssh "${ident[@]}" "${sshopt[@]}" "${target}" 'rm -rf /root/tappaas-satellite && mkdir -p /root/tappaas-satellite' \
         || { echo "ERROR: cannot reach ${target} over SSH" >&2; return 1; }
     scp "${ident[@]}" "${sshopt[@]}" -r "${d}/." "${target}:/root/tappaas-satellite/" >/dev/null \
         || { echo "ERROR: scp of the deploy dir to ${target} failed" >&2; return 1; }
-    ssh "${ident[@]}" "${sshopt[@]}" "${target}" \
-        'cd /root/tappaas-satellite && bash ./provision-debian.sh'
+    for s in "$@"; do cmd+=" && bash ./${s}"; done
+    ssh "${ident[@]}" "${sshopt[@]}" "${target}" "${cmd}"
+}
+
+# Provision an already-booted Debian host: ship the deploy dir and run the
+# installer over SSH. No nixos-anywhere, no reformat. Uses the operator's key via
+# the ambient agent (run install over `ssh -A`); an explicit key may be passed.
+# set-management.sh runs last: whether the mothership may log in is settled only
+# once the rest is in place (ADR-010 §8.4). Args: <deploy-dir> <root@ip> [key]
+sat_provision_debian() {
+    sat_deploy_run "$1" "$2" "${3:-}" provision-debian.sh set-management.sh
 }
 
 # Render the backup-role config (backup.env) from the satellite JSON + SAT_*

@@ -110,6 +110,14 @@ export function offsiteTargets(configDir: string): OffsiteTarget[] {
   if (!existsSync(configDir)) return [];
   const site = sitePlace(configDir);
   const pbsHost = readObj(join(configDir, "backup.json"))?.node;
+  // A locked-down satellite pulls through a `remote` peer of its own name
+  // (ADR-010 §8.4.4): one copy, counted once — as the satellite.
+  const satellites = new Set(
+    readdirSync(configDir)
+      .filter((f) => f.endsWith(".json") && !TARGET_PREFIXES.some(([p]) => f.startsWith(p)))
+      .filter((f) => { const c = readObj(join(configDir, f)); return !!c && isSatellite(join(configDir, f), c); })
+      .map((f) => f.slice(0, -".json".length)),
+  );
   const out: OffsiteTarget[] = [];
   for (const f of readdirSync(configDir).sort()) {
     if (!f.endsWith(".json")) continue;
@@ -117,6 +125,7 @@ export function offsiteTargets(configDir: string): OffsiteTarget[] {
     const file = join(configDir, f);
     const hit = TARGET_PREFIXES.find(([p]) => b.startsWith(p));
     if (hit) {
+      if (hit[1] === "remote" && satellites.has(b.slice(hit[0].length))) continue;
       const place = asPlace(readObj(file)?.physicalLocation);
       out.push({ role: hit[1], name: b.slice(hit[0].length), file, place, separation: separation(site, place) });
       continue;

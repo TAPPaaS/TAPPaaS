@@ -203,14 +203,23 @@ sat_install() {
 }
 
 # sat_decommission — take the Site's side of the satellite down (ADR-010 §8.4.5):
-# the OPNsense peer and tunnel server, and the edge rules when no other satellite
-# needs them. The machine itself is never touched.
+# the OPNsense peer and tunnel server, a vault's read access to the Site's PBS,
+# and the edge rules when no other satellite needs them. The machine itself — and
+# any copy a vault holds — is never touched.
 sat_decommission() {
     local cli srv
     cli="$(sat_opnsense_uuid client)"; srv="$(sat_opnsense_uuid server)"
     [[ -n "${cli}" ]] && { ow_del_client "${cli}"; info "  removed OPNsense peer tappaas-${SAT_NAME}"; }
     [[ -n "${srv}" ]] && { ow_del_server "${srv}"; info "  removed OPNsense server tappaas-edge-${SAT_NAME}"; }
     [[ -n "${cli}${srv}" ]] || info "  no OPNsense tunnel objects for ${SAT_NAME} — nothing to remove there"
+    # A vault's read access to the Site's PBS (the `remote` peer lockdown added).
+    if [[ -f "${CONFIG_DIR:-/home/tappaas/config}/remote-${SAT_NAME}.json" ]]; then
+        if backup-manager peer delete remote "${SAT_NAME}"; then
+            info "  revoked ${SAT_NAME}'s read access to the Site's PBS"
+        else
+            warn "  could not revoke ${SAT_NAME}'s read access to the Site's PBS — run: backup-manager peer delete remote ${SAT_NAME}"
+        fi
+    fi
     if [[ -z "$(sat_other_satellites)" ]]; then
         local d uuid
         for d in "tappaas-satellite edge->caddy 80" "tappaas-satellite edge->caddy 443" \
@@ -238,3 +247,112 @@ sat_other_satellites() {
         fi
     done
 }
+
+# sat_home_pbs_address — the address of the Site's PBS, as the vault reaches it
+# through the tunnel: vault.pull.homePbsHost when recorded, else the PBS's own
+# DNS name (backup's instance name in its zone, ADR-012 §2.7) resolved here — the
+# satellite resolves no home names, and its tunnel admits addresses only.
+sat_home_pbs_address() {
+    local dir="${CONFIG_DIR:-/home/tappaas/config}" h zone
+    h="$(jq -r '(.vault // .backup // {}).pull.homePbsHost // empty' "${SAT_CFG}")"
+    if [[ -z "${h}" ]]; then
+        zone="$(jq -r '.zone0 // "mgmt"' "${dir}/backup.json" 2>/dev/null)"
+        h="backup.${zone:-mgmt}.internal"
+    fi
+    if [[ "${h}" =~ ^[0-9]+(\.[0-9]+){3}$ ]]; then printf '%s' "${h}"; return 0; fi
+    getent ahostsv4 "${h}" 2>/dev/null | awk 'NR==1 {print $1}'
+}
+
+# sat_pbs_fingerprint <address> — the SHA-256 fingerprint of the PBS's TLS
+# certificate, as the PBS itself reports it, read over the mothership's root key
+# on its Host (as the `remote` peer's onboarding does): the vault pins it.
+sat_pbs_fingerprint() {
+    ssh -n -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR \
+        "root@$1" 'proxmox-backup-manager cert info' 2>/dev/null \
+        | sed -n 's/^Fingerprint (sha256): //p' | head -1
+}
+
+# sat_lockdown — make a managed satellite the Site's off-site vault (ADR-010
+# §8.4.4). Everything is done over the mothership's key, and removing that key is
+# the last thing that happens: until then a failure leaves a managed satellite
+# that can be fixed and locked down again.
+#   home: a read-only login on the Site's PBS, granted like any `remote` peer
+#         (DatastoreReader, one namespace, not propagated — ADR-012 §1.4)
+#   OPNsense: edge -> the PBS :8007
+#   satellite: the backup role (PBS, datastore, pull, prune), unattended
+#         security upgrades, and — last — the mothership's key removed
+# Recorded after: roles + backup, vault.pull, management: unmanaged.
+sat_lockdown() {
+    local dir="${CONFIG_DIR:-/home/tappaas/config}" bj
+    bj="${dir}/backup.json"
+    [[ "${SAT_MGMT}" == managed ]] || die "${INSTANCE} is already locked down (management: ${SAT_MGMT})"
+    [[ "${SAT_OS}" == debian ]] || die "${INSTANCE} runs ${SAT_OS}: the vault is the Debian satellite's (official PBS, ADR-010 D19)"
+    [[ -n "${ADDRESS}" ]] || die "${INSTANCE} records no address"
+    [[ -f "${bj}" ]] || die "no config/backup.json — there is no Site PBS for the vault to pull"
+    [[ "$(jq -r '.node // empty' "${bj}")" != "${INSTANCE}" ]] \
+        || die "${INSTANCE} is the Site's PBS Host (backup.json node) — the Site's only copy cannot also be its protected copy (ADR-010 §8.4.4)"
+    case "$(jq -r '.placementState // empty' "${bj}")" in
+        node|node:*|local) ;;
+        *) die "backup placement is '$(jq -r '.placementState // "empty"' "${bj}")' — the vault pulls a PBS of the Site's own; there is none (ADR-012 §1.2/§1.3)" ;;
+    esac
+    jq -e '(.host.operatorSshKeys // []) | length > 0' "${SAT_CFG}" >/dev/null \
+        || die "${INSTANCE} records no operator key — after lockdown nothing else could log in"
+    sat_ssh true || die "the mothership cannot log in to ${ADDRESS} — lockdown runs over its key"
+    command -v backup-manager >/dev/null || die "backup-manager not on PATH"
+
+    local pbs fp store authid="${SAT_NAME}@pbs" pw home_pub srv
+    pbs="$(sat_home_pbs_address)"
+    [[ -n "${pbs}" ]] || die "cannot resolve the Site's PBS to an address — set vault.pull.homePbsHost"
+    fp="$(sat_pbs_fingerprint "${pbs}")"
+    [[ -n "${fp}" ]] || die "cannot read the PBS certificate's fingerprint on ${pbs} (root by the mothership's key: proxmox-backup-manager cert info)"
+    store="$(jq -r '.pbsStorageName // "tappaas_backup"' "${bj}")"
+    srv="$(sat_opnsense_uuid server)"
+    [[ -n "${srv}" ]] || die "OPNsense has no tunnel server tappaas-edge-${SAT_NAME} — is ${INSTANCE} wired?"
+    home_pub="$(_ow_api "/api/wireguard/server/getServer/${srv}" | jq -r '.server.pubkey // empty')"
+    [[ -n "${home_pub}" ]] || die "cannot read the OPNsense end of the tunnel"
+    info "${BOLD}Locking ${BL}${INSTANCE}${CL}${BOLD} down as the off-site vault: pulls ${pbs}:${SAT_HOME_PBS_PORT} (${store}) as ${authid}${CL}"
+
+    # 1. home: the read-only login, as a `remote` peer of the satellite's name
+    pw="$(head -c 48 /dev/urandom | base64 | tr -d '/+=\n' | head -c 40)"
+    [[ ${#pw} -ge 32 ]] || die "could not generate a password for ${authid}"
+    local place=()
+    local c; c="$(jq -r '.physicalLocation.country // empty' "${SAT_CFG}")"
+    if [[ -n "${c}" ]]; then
+        place=(--country "${c}")
+        c="$(jq -r '.physicalLocation.city // empty' "${SAT_CFG}")"; [[ -n "${c}" ]] && place+=(--city "${c}")
+        c="$(jq -r '.physicalLocation.building // empty' "${SAT_CFG}")"; [[ -n "${c}" ]] && place+=(--building "${c}")
+    fi
+    info "  [1/4] the Site's PBS: read-only login ${authid}"
+    TAPPAAS_REMOTE_PASSWORD="${pw}" backup-manager peer add remote "${SAT_NAME}" --auth-id "${authid}" \
+        ${place[@]+"${place[@]}"} --force \
+        || die "could not grant ${authid} read access on the Site's PBS — nothing on the satellite changed"
+
+    # 2. what the satellite is told (rendered as the locked-down config)
+    sat_set '.vault = ((.vault // {}) + {pull: (((.vault // {}).pull // {}) + {homePbsHost: $h, homeDatastore: $st, authId: $a, fingerprint: $fp})})' \
+        --arg h "${pbs}" --arg st "${store}" --arg a "${authid}" --arg fp "${fp}"
+    local cdir tmpcfg; cdir="$(mktemp -d)"; tmpcfg="${cdir}/instance.json"
+    jq '.management = "unmanaged" | .roles = ((.roles // []) + ["backup"] | unique)' "${SAT_CFG}" > "${tmpcfg}"
+    sat_gen_debian_configs "${tmpcfg}" "${home_pub}" "${cdir}" "${SAT_CICD_PUB}" || die "config rendering failed"
+    TAPPAAS_SAT_PBS_TOKEN="${pw}" sat_gen_backup_config "${tmpcfg}" "${cdir}"
+    rm -f "${tmpcfg}"
+    sat_assemble_debian_deploy "${cdir}" >/dev/null
+    sat_assemble_backup_deploy "${cdir}"
+
+    info "  [2/4] OPNsense: edge -> ${pbs}:${SAT_HOME_PBS_PORT}"
+    sat_ensure_edge_pbs_rule "${pbs}" >/dev/null || die "could not add the edge -> PBS rule — nothing on the satellite changed"
+
+    info "  [3/4] the satellite: the vault, self-patching, and — last — the mothership's key removed"
+    sat_deploy_run "${cdir}" "${SAT_USER}@${ADDRESS}" "${SAT_CICD_PUB%.pub}" \
+        provision-debian.sh provision-backup.sh set-management.sh \
+        || die "provisioning the vault failed — see above. If the mothership still logs in, fix the cause and run --lockdown again"
+    rm -rf "${cdir}"
+
+    info "  [4/4] check and record"
+    if sat_ssh true 2>/dev/null; then
+        die "the mothership can still log in to ${ADDRESS} — the lockdown did not take; ${INSTANCE} stays managed"
+    fi
+    sat_set '.management = "unmanaged" | .roles = ((.roles // []) + ["backup"] | unique)'
+    info "${GN}✓${CL} ${INSTANCE} is locked down: it pulls the Site's PBS, patches itself, and admits no login from home"
+    info "  Only your operator key reaches it now. The sweep skips it; 'module-manager module test ${INSTANCE}' checks it from OPNsense."
+}
+

@@ -37,7 +37,7 @@ later retire phase).
 | `module add <m>` | `install-module.sh` | create + provision; `--instance NAME` names the instance (ADR-026 D6.4) |
 | `module adopt <address>` | `adopt-module.sh` | a machine that already runs becomes a module (ADR-026 D8.1); nothing on it is changed |
 | `module update <m>` | `update-module.sh` | **release update** (snapshot + test + 3-way merge) — what the sweep runs (#655) |
-| `module modify <m>` | `update-module.sh` | **change the config, then converge**: `--set field=value` (ADR-020) or `--unset field` (#648). Bare, it is the deprecated spelling of `update` |
+| `module modify <m>` | `update-module.sh` | **change the config, then converge**: `--set field=value` (ADR-020) or `--unset field` (#648). Bare, it is the deprecated spelling of `update`. `--lockdown` runs the module's own `lockdown.sh` instead (a satellite → the off-site vault) |
 | `module delete <m>` | `delete-module.sh` | `--archive` (default) / `--remove`; `--decommission` (a machine) |
 | `module reconcile <m>` | `src/inspect.ts` | read-only drift report (default); `--apply` → **leaf converge** (`src/reconcile.ts`) |
 | `module test <m>` | `test-module.sh` | `--deep`, `--runtime-only`, `--vmid`, `--zone0` |
@@ -86,6 +86,18 @@ A `--set` naming an immutable field is rejected *whole* — if any field in one
 command cannot be applied, none of them are written, so config and cluster never
 move apart. A field none of the module's services use is also rejected: writing
 it would change the config and nothing else.
+
+### A one-way change of management: `modify --lockdown` (ADR-010 §8.4.4)
+
+```bash
+module-manager module modify satellite --lockdown
+```
+
+Runs the module's own `lockdown.sh <instance>`, from its module directory, and nothing
+else — no `--set` in the same call, no converge afterwards (a locked-down machine no longer
+admits the mothership). For a satellite it makes the unmanaged off-site vault: a read-only
+login on the Site's PBS, the pull, self-patching, and the mothership's key removed last. A
+module without a `lockdown.sh` has nothing to lock down and is refused.
 
 ### Removing a stale field: `modify --unset` (#648)
 

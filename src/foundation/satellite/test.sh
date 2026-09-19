@@ -82,8 +82,9 @@ lib() {
 }
 
 # 1. contract files present, scripts parse
-for f in README.md INSTALL.md satellite.json satellite.nix install.sh update.sh test.sh delete.sh \
-         lib/satellite-lib.sh lib/provision.sh lib/tunnel.sh debian/provision-debian.sh debian/provision-backup.sh; do
+for f in README.md INSTALL.md satellite.json satellite.nix install.sh update.sh test.sh delete.sh lockdown.sh \
+         lib/satellite-lib.sh lib/provision.sh lib/tunnel.sh \
+         debian/provision-debian.sh debian/provision-backup.sh debian/set-management.sh; do
     [[ -f "${here}/${f}" ]] || { no "missing: ${f}"; continue; }
     [[ "${f}" == *.sh ]] && { bash -n "${here}/${f}" && ok "parses: ${f}" || no "syntax: ${f}"; }
 done
@@ -156,13 +157,30 @@ if grep -q 'MANAGEMENT="managed"' "${tmp}/ao/roles.env" && grep -q 'MANAGEMENT="
 else
     no "MANAGEMENT / cicd_key.pub rendering"
 fi
-# the on-host installer honours it: authorizes the key while managed, removes it
-# and turns self-patching on when unmanaged
-D="${here}/debian/provision-debian.sh"
-grep -q 'MANAGEMENT}" == managed' "${D}" && grep -q "grep -vF \"\${_ck}\"" "${D}" \
-   && grep -q 'systemctl disable --now unattended-upgrades' "${D}" \
-    && ok "provision-debian.sh: key authorized when managed, removed when not; self-patching only unmanaged" \
-    || no "provision-debian.sh management handling"
+# set-management.sh (run last on the machine), on a scratch tree: managed
+# authorizes the mothership's key and turns self-patching off; unmanaged turns it
+# on and removes that key — and refuses when no operator key would remain.
+sm() {  # <MANAGEMENT> <authorized_keys-content> → prints rc
+    local d="${tmp}/sm"; rm -rf "${d}"; mkdir -p "${d}/apt" "${d}/ssh"
+    cp "${here}/debian/set-management.sh" "${d}/"
+    printf 'MANAGEMENT="%s"\n' "$1" > "${d}/roles.env"
+    echo "ssh-ed25519 CICDKEY tappaas@cicd" > "${d}/cicd_key.pub"
+    echo "U" > "${d}/20auto-upgrades"; echo "P" > "${d}/52tappaas-unattended-upgrades"
+    printf '%s' "$2" > "${d}/ssh/authorized_keys"
+    SAT_SM_TEST=1 SAT_SM_AUTHORIZED_KEYS="${d}/ssh/authorized_keys" SAT_SM_APT_DIR="${d}/apt" \
+        bash "${d}/set-management.sh" >/dev/null 2>&1; echo $?
+}
+AKF="${tmp}/sm/ssh/authorized_keys"
+rc="$(sm managed $'ssh-ed25519 OPKEY op@laptop\n')"
+[[ "${rc}" == 0 ]] && grep -q CICDKEY "${AKF}" && grep -q OPKEY "${AKF}" && grep -q '"0"' "${tmp}/sm/apt/20auto-upgrades" \
+   && [[ ! -f "${tmp}/sm/apt/52tappaas-unattended-upgrades" ]] \
+    && ok "set-management managed: the mothership's key authorized, unattended-upgrades off" || no "set-management managed (rc=${rc})"
+rc="$(sm unmanaged $'ssh-ed25519 OPKEY op@laptop\nssh-ed25519 CICDKEY tappaas@cicd\n')"
+[[ "${rc}" == 0 ]] && ! grep -q CICDKEY "${AKF}" && grep -q OPKEY "${AKF}" && [[ -f "${tmp}/sm/apt/52tappaas-unattended-upgrades" ]] \
+    && ok "set-management unmanaged: self-patching on, the mothership's key removed, the operator's kept" || no "set-management unmanaged (rc=${rc})"
+rc="$(sm unmanaged $'ssh-ed25519 CICDKEY tappaas@cicd\n')"
+[[ "${rc}" != 0 ]] && grep -q CICDKEY "${AKF}" \
+    && ok "set-management unmanaged refuses — and keeps the key — when no operator key would remain" || no "set-management lock-out guard (rc=${rc})"
 
 # 7. the vault's pull config (from `vault`, and a legacy `backup` block) + 0600 token
 perm_bits() { stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1" 2>/dev/null; }
@@ -245,7 +263,72 @@ grep -q 'delClient/C1' "${DEC}" && grep -q 'delServer/S1' "${DEC}" && ! grep -q 
 dec 0
 grep -q 'delRule/R1' "${DEC}" && ok "decommission of the last satellite removes the edge rules" || no "decommission (last): $(tr '\n' ' ' < "${DEC}")"
 
-# 12. deep: reverse-proxy end-to-end through a live satellite (test-vm-creation/)
+# 12. lockdown (ADR-010 §8.4.4) — its refusals, before anything is touched
+L="${tmp}/lcfg"; mkdir -p "${L}"
+lk() {  # <backup.json> <instance.json> → the lockdown's output (lib stubbed; nothing real is reached)
+    printf '%s' "$1" > "${L}/backup.json"; printf '%s' "$2" > "${L}/v1.json"
+    ( lib; CONFIG_DIR="${L}"; sat_load v1
+      sat_ssh() { return 0; }; _ow_api() { echo '{}'; }; backup-manager() { echo "BM-CALLED"; }
+      sat_lockdown ) 2>&1
+}
+V='{"moduleSource":"/r/satellite","address":"203.0.113.7","roles":["reverse-proxy"],"host":{"operatorSshKeys":["ssh-ed25519 OP o"]}'
+out="$(lk '{"placementState":"node","node":"v1"}' "${V}}")"
+grep -q "the Site's PBS Host" <<< "${out}" && ! grep -q BM-CALLED <<< "${out}" && ok "lockdown refused when the satellite is the Site's PBS Host" || no "lockdown on the PBS Host: ${out}"
+out="$(lk '{"placementState":"external","pbsUrl":"x"}' "${V}}")"
+grep -q "a PBS of the Site's own" <<< "${out}" && ok "lockdown refused when the Site has no PBS of its own to pull" || no "lockdown without a Site PBS: ${out}"
+out="$(lk '{"placementState":"node","node":"tappaas3"}' '{"moduleSource":"/r/satellite","address":"203.0.113.7","host":{}}')"
+grep -q "no operator key" <<< "${out}" && ok "lockdown refused when no operator key is recorded (it would lock everyone out)" || no "lockdown without operator key: ${out}"
+out="$(lk '{"placementState":"node","node":"tappaas3"}' "${V},\"management\":\"unmanaged\"}")"
+grep -q "already locked down" <<< "${out}" && ok "lockdown refused when already unmanaged" || no "lockdown twice: ${out}"
+
+# 13. lockdown's happy path, every outside call stubbed: the grant is made with
+#     the password the vault is handed; the vault is rendered locked down; the
+#     three scripts run in order, set-management last; then it is recorded.
+LOG="${tmp}/lockdown.log"; : > "${LOG}"
+lkrun() {  # <still-reachable-after:0|1>
+    local still="$1"
+    printf '%s' '{"placementState":"node","node":"tappaas3","pbsStorageName":"tappaas_backup"}' > "${L}/backup.json"
+    printf '%s' "${V},\"physicalLocation\":{\"country\":\"FI\",\"city\":\"Helsinki\"}}" > "${L}/v1.json"
+    echo "ssh-ed25519 CICDKEY tappaas@cicd" > "${tmp}/cicd.pub"
+    # shellcheck disable=SC2034  # read by sat_lockdown
+    ( lib; CONFIG_DIR="${L}"; SAT_CICD_PUB="${tmp}/cicd.pub"; sat_load v1
+      n=0; sat_ssh() { n=$((n + 1)); [[ "${n}" -eq 1 || "${still}" == 1 ]]; }
+      sat_home_pbs_address() { echo 10.0.0.23; }
+      sat_pbs_fingerprint() { echo "aa:bb"; }
+      _ow_api() { case "$*" in *searchServer*) echo '{"rows":[{"name":"tappaas-edge-v1","uuid":"S1"}]}' ;;
+                               *getServer/S1*) echo '{"server":{"pubkey":"HOMEPUB="}}' ;;
+                               *searchRule*) echo '{"rows":[]}' ;; *) echo "API $*" >> "${LOG}" ;; esac; }
+      backup-manager() { echo "BM $* PW=${TAPPAAS_REMOTE_PASSWORD}" >> "${LOG}"; }
+      sat_deploy_run() {
+          echo "DEPLOY ${*:4}" >> "${LOG}"
+          grep -q 'MANAGEMENT="unmanaged"' "$1/roles.env" && grep -q backup "$1/roles.env" && echo "RENDER unmanaged+backup" >> "${LOG}"
+          grep -q CICDKEY "$1/cicd_key.pub" && echo "RENDER cicd-key" >> "${LOG}"
+          grep -q 'HOME_PBS_HOST="10.0.0.23"' "$1/backup.env" && grep -q 'REMOTE_AUTHID="v1@pbs"' "$1/backup.env" && echo "RENDER backup.env" >> "${LOG}"
+          grep -q 'AllowedIPs = 10.255.0.1/32, 10.0.0.23/32' "$1/wg-infra.conf" && echo "RENDER allowedips" >> "${LOG}"
+          echo "TOKEN $(cat "$1/pbs-remote-token")" >> "${LOG}"
+      }
+      sat_lockdown ) >/dev/null 2>&1
+    echo $?
+}
+rc="$(lkrun 0)"
+pw_bm="$(sed -n 's/^BM .* PW=//p' "${LOG}")"; pw_sat="$(sed -n 's/^TOKEN //p' "${LOG}")"
+if [[ "${rc}" == 0 ]] && grep -q '^BM peer add remote v1 --auth-id v1@pbs --country FI --city Helsinki --force' "${LOG}" \
+   && [[ -n "${pw_bm}" && "${pw_bm}" == "${pw_sat}" ]] \
+   && grep -q 'DEPLOY provision-debian.sh provision-backup.sh set-management.sh' "${LOG}" \
+   && grep -q 'RENDER unmanaged+backup' "${LOG}" && grep -q 'RENDER cicd-key' "${LOG}" \
+   && grep -q 'RENDER backup.env' "${LOG}" && grep -q 'RENDER allowedips' "${LOG}" && grep -q 'addRule' "${LOG}" \
+   && jq -e '.management == "unmanaged" and (.roles | index("backup")) and .vault.pull.homePbsHost == "10.0.0.23"
+             and .vault.pull.fingerprint == "aa:bb"' "${L}/v1.json" >/dev/null; then
+    ok "lockdown: read-only grant with the vault's own password, vault rendered locked down, set-management last, recorded unmanaged"
+else
+    no "lockdown happy path (rc=${rc}): $(tr '\n' '|' < "${LOG}")"
+fi
+: > "${LOG}"
+rc="$(lkrun 1)"
+[[ "${rc}" != 0 ]] && jq -e '.management != "unmanaged"' "${L}/v1.json" >/dev/null \
+    && ok "lockdown: when the mothership can still log in afterwards, it fails and stays managed" || no "lockdown stale key (rc=${rc})"
+
+# 14. deep: reverse-proxy end-to-end through a live satellite (test-vm-creation/)
 if [[ "${TAPPAAS_TEST_DEEP:-0}" == "1" ]]; then
     echo "  deep: reverse-proxy end-to-end (test-vm-creation/)"
     if [[ -x "${here}/test-vm-creation/test.sh" ]]; then

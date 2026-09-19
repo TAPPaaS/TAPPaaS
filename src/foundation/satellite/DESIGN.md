@@ -42,10 +42,11 @@ home can reach out to destroy the off-site copy (ADR-010 §7.3).
 | ---- | ------- |
 | `satellite.json` | The template `module add` copies to `config/<instance>.json`: kind, OS, `management: managed`, `zone0: edge`, default roles. Nothing the operator supplies (address, key, location) is pre-filled. All derived values (tunnel `/31` + ports, per-role tuning, backup mechanics) are `lib/provision.sh`'s defaults. Field reference: `schemas/satellite-fields.json`. |
 | `install.sh` / `update.sh` / `test.sh` / `delete.sh` | The module contract, thin wrappers over `lib/satellite-lib.sh`: provision + wire; re-ensure edge rules + the `debianhost` update (managed only); config, OPNsense, machine checks (`test.sh <instance>`) or the offline suite (`test.sh`); decommission (only `module delete --decommission` runs it). |
-| `lib/satellite-lib.sh` | Loading an instance (a legacy `satellite-<name>.json` too), install, decommission, the operator-key and role rules. |
+| `lockdown.sh` | Run by `module modify <instance> --lockdown`: the one-way step to the unmanaged vault (§8.4.4). |
+| `lib/satellite-lib.sh` | Loading an instance (a legacy `satellite-<name>.json` too), install, lockdown, decommission, the operator-key and role rules. |
 | `lib/provision.sh` | Renders what goes onto the machine (Debian config files, or the NixOS flake), and the edge firewall rules. |
 | `lib/tunnel.sh` | Reads the satellite's tunnel key and handshake over SSH. |
-| `debian/` | The on-host installers — `provision-debian.sh` (base + relay roles; authorizes or removes the mothership's key by `MANAGEMENT`) and `provision-backup.sh` (the vault); see `debian/README.md`. |
+| `debian/` | The on-host installers, run in order from one deploy dir — `provision-debian.sh` (base + relay roles), `provision-backup.sh` (the vault, at lockdown), `set-management.sh` (last: authorizes the mothership's key and turns self-patching off, or the reverse); see `debian/README.md`. |
 | `satellite.nix` | The NixOS option (`os: nixos`, via `nixos-anywhere`); such a satellite patches itself and is recorded `unmanaged`. |
 | `test-vm-creation/` | Deep-test fixture: installs `sat-hello`, probes end-to-end via the satellite public IP, tears down. |
 
@@ -59,6 +60,12 @@ OPNsense objects: server `tappaas-edge-<name>`, peer `tappaas-<name>`.
   runs the `debianhost` update against `address` — `apt full-upgrade`, a reboot only when
   authorized (`rebootOk` in the scheduled pass, or `--allow-disruption`), else `DEFERRED:`.
   Unattended-upgrades is off, so no reboot bypasses that rule.
+- **Lockdown** (`lockdown.sh`): a read-only `remote` login on the Site's PBS (ADR-012 §1.4,
+  non-propagating), the `edge → PBS:8007` rule, then on the machine `provision-debian.sh`,
+  `provision-backup.sh` and — last — `set-management.sh`, which removes the mothership's key.
+  Recorded `unmanaged` only once the mothership is verifiably shut out; a failure before that
+  leaves it managed and retryable. The pull syncs the root namespace only (`--max-depth 0`),
+  matching the grant.
 - **Unmanaged** (locked down): the sweep skips it; it runs security-only unattended-upgrades
   with a reboot window. `test.sh` checks it from OPNsense only.
 - `module delete <instance>` unregisters. `module delete <instance> --decommission` runs
