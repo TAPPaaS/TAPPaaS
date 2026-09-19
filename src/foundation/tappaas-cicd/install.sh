@@ -341,12 +341,13 @@ if [[ "$FIREWALL_AVAILABLE" == "true" ]]; then
     # silently drops any packet without a registered peer, so opening :51821 on
     # WAN is inert until a device is enrolled — and it hands sites with a public
     # IP direct (Topology-B) reach with no manual firewall step. Enrolling a
-    # device later is just `satellite-manager admin add-peer` (see ADMIN-VPN.md).
+    # device later is just `network-manager wgvpn add-peer` (see
+    # manager/network-manager/ADMIN-VPN.md).
     # Runs AFTER the network update so its rules are not reconciled away; kept
     # non-fatal like Caddy — admin-vpn is an operator convenience, not required.
-    debug "Setting up admin-vpn OPNsense termination (satellite-manager admin setup)..."
-    /home/tappaas/bin/satellite-manager admin setup || {
-        warn "admin-vpn setup encountered issues. Run 'satellite-manager admin setup' manually (see ADMIN-VPN.md)."
+    debug "Setting up admin-vpn OPNsense termination (network-manager wgvpn setup)..."
+    /home/tappaas/bin/network-manager wgvpn setup || {
+        warn "admin-vpn setup encountered issues. Run 'network-manager wgvpn setup' manually (see manager/network-manager/ADMIN-VPN.md)."
     }
 else
     echo ""

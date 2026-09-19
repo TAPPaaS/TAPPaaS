@@ -69,6 +69,10 @@ import {
   preGateZoneSet,
 } from "./zonemodify";
 import { cmdSnat } from "./snat";
+import { stream } from "../../../lib/ts/src/exec";
+
+// The admin VPN's bash tool, linked onto PATH by install.sh (overridable for tests).
+const WGVPN_BIN = process.env.NM_WGVPN_BIN ?? "network-manager-wgvpn";
 
 const VERSION = "0.1.0";
 
@@ -265,6 +269,19 @@ export const HELP: HelpSpec = {
         ["--zones <file>", "zones.json to push (default $TAPPAAS_CONFIG/zones.json)"],
         ["--dry-run", "list the node targets that WOULD receive it; no scp"],
       ],
+    },
+    {
+      usage: "wgvpn <setup|add-peer|remove-peer|list|config> [options]",
+      name: "wgvpn (the admin VPN: WireGuard into mgmt, terminating on OPNsense — ADR-010 §8.4.6)",
+      anyOption: true,
+      details:
+        "setup                                  ensure the OPNsense admin-WG server + admin->mgmt and WAN rules\n" +
+        "add-peer --name N --pubkey K [--ip A] [--endpoint H:P]\n" +
+        "                                       register a device and print its client config\n" +
+        "remove-peer <name>                     remove a device\n" +
+        "list                                   server key, rule status, peers\n" +
+        "config <ip/32> <host:port> [privkey]   print a device's client config again\n" +
+        "Works with no satellite (a Site with a public IP) or through one (CGNAT). Runbook: ADMIN-VPN.md.",
     },
     {
       usage: "split-horizon-target <domain> [--json] [--assume-published]",
@@ -1182,6 +1199,10 @@ export function run(argv: string[], client?: PlaneClient): number {
     usage();
     return 0;
   }
+  // `wgvpn` is the admin VPN's bash tool (ADR-010 §8.4.6): it takes its own
+  // sub-verbs and options and prints its own help, so it is handed over before
+  // this CLI's option gate and parser, which know neither.
+  if (args[0] === "wgvpn") return stream(WGVPN_BIN, args.slice(1));
   // #644: --help in any position prints help and runs nothing; an option the
   // verb does not take is refused before anything is parsed or run.
   const gate = checkArgs(HELP, args);

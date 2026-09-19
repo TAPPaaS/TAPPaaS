@@ -23,7 +23,7 @@ mkdir -p "${bin}"
 build_and_link_nix_component "${here}" "network-manager"
 
 # ── link the legacy bash entry programs (not retired yet) ─────────────
-# zone-reconcile only. (apply-zones-merge.sh was retired in favour of
+# zone-reconcile, and the admin VPN tool wgvpn.sh. (apply-zones-merge.sh was retired in favour of
 # `network-manager merge`; zone-controller.sh / zone-state.sh in favour of the
 # TS zone lifecycle + state verbs — ADR-007 Phase 7.5.)
 link_bash() {
@@ -35,6 +35,8 @@ link_bash() {
 }
 
 link_bash "${here}/zone-reconcile"      zone-reconcile
+# `network-manager wgvpn …` hands over to this (ADR-010 §8.4.6, the admin VPN).
+link_bash "${here}/wgvpn/wgvpn.sh"      network-manager-wgvpn
 
 # Drop the retired symlinks so an upgraded install has no dangling ~/bin
 # entries pointing at the deleted scripts.

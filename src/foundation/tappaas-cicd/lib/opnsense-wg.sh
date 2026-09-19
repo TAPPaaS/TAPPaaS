@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# lib/opnsense-wg.sh — home-side (OPNsense) WireGuard operations for the ADR-010
-# satellite infra tunnel. Encodes the recipe validated live 2026-07-01.
+# lib/opnsense-wg.sh — home-side (OPNsense) WireGuard operations, shared by the
+# satellite module's infra tunnel and network-manager's admin VPN (wgvpn/).
+# Encodes the recipe validated live 2026-07-01.
 #
 # OPNsense terms: "server" = the home WG instance (local interface); "client" =
 # the satellite peer (home dials out to it). The peer Endpoint is driven by

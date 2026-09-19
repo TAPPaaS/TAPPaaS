@@ -187,6 +187,21 @@ JSON
             bad "init to a temp --out attempted scp (should auto-skip non-live)"
         fi
         rm -rf -- "${ZD_DIR}"
+
+        # `network-manager wgvpn <sub> …` hands the whole argument list to the
+        # admin VPN tool, past this CLI's own option gate (ADR-010 §8.4.6): a
+        # fake bin records what it received and its exit code comes back.
+        WG_DIR="$(mktemp -d)"
+        printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$*" > "%s/args"\nexit 7\n' "${WG_DIR}" > "${WG_DIR}/wgvpn"
+        chmod +x "${WG_DIR}/wgvpn"
+        rc=0
+        run_ts "NM_WGVPN_BIN='${WG_DIR}/wgvpn' node '${DIST_TEST}/manager/network-manager/src/main.js' wgvpn add-peer --name laptop --pubkey K=" >/dev/null 2>&1 || rc=$?
+        if [[ "${rc}" -eq 7 && "$(cat "${WG_DIR}/args" 2>/dev/null)" == "add-peer --name laptop --pubkey K=" ]]; then
+            ok "wgvpn: hands its sub-verb and options to the admin VPN tool, and returns its exit code"
+        else
+            bad "wgvpn: rc=${rc} args='$(cat "${WG_DIR}/args" 2>/dev/null)'"
+        fi
+        rm -rf -- "${WG_DIR}"
     else
         bad "TypeScript unit tests failed to compile"
     fi
@@ -213,6 +228,135 @@ for bin in zone-manager proxmox-controller switch-controller ap-controller; do
         ok "plane bin '${bin}' resolves"
     fi
 done
+
+# ── B3. wgvpn — the admin VPN tool (offline; OPNsense API stubbed) ────
+# Moved here from satellite-manager's `admin` verb (ADR-010 §8.4.6).
+echo ""
+echo "== network-manager: wgvpn (admin VPN, offline) =="
+WG="${HERE}/wgvpn/wgvpn.sh"; WGLIB="${HERE}/wgvpn/wgvpn-lib.sh"
+wgtmp="$(mktemp -d)"
+bash -n "${WG}" && bash -n "${WGLIB}" && ok "wgvpn.sh and wgvpn-lib.sh parse" || bad "wgvpn scripts do not parse"
+
+rc=0; out="$(TAPPAAS_CONFIG_DIR="${wgtmp}" "${WG}" --help 2>&1)" || rc=$?
+if [[ "${rc}" -eq 0 ]] && grep -q "add-peer" <<< "${out}" && grep -q -- "--endpoint" <<< "${out}"; then
+    ok "wgvpn --help prints usage (incl. add-peer --endpoint)"
+else
+    bad "wgvpn --help rc=${rc}"
+fi
+
+# the client stanza (server pubkey + API mocked → offline)
+out="$( . "${WGLIB}" >/dev/null 2>&1
+        av_server_pubkey() { echo "FAKEKEY="; }
+        _ow_api() { :; }
+        av_client_config "10.255.1.7/32" "203.0.113.5:51821" "PRIVKEY" )"
+if grep -q 'Endpoint            = 203.0.113.5:51821' <<< "${out}" \
+   && grep -q 'PublicKey           = FAKEKEY=' <<< "${out}" \
+   && grep -q 'AllowedIPs          = 10.0.0.0/24' <<< "${out}" \
+   && grep -q 'MTU        = 1340' <<< "${out}"; then
+    ok "av_client_config renders a valid client stanza"
+else
+    bad "av_client_config format"
+fi
+
+# endpoint discovery: a satellite relaying admin-vpn — an instance of the
+# satellite module (config/<instance>.json) or a legacy satellite-<name>.json —
+# else a placeholder. A non-satellite with the role, or a satellite without it,
+# is not a relay.
+EPDIR="${wgtmp}/epcfg"; mkdir -p "${EPDIR}"
+disc() { ( . "${WGLIB}" >/dev/null 2>&1; av_discover_endpoint "${EPDIR}" ); }
+ep_none="$(disc)"
+printf '%s' '{"roles":["reverse-proxy"],"moduleSource":"/x/src/foundation/satellite","address":"9.9.9.9"}' > "${EPDIR}/satellite.json"
+printf '%s' '{"roles":["admin-vpn"],"moduleSource":"/x/src/foundation/debianhost","address":"8.8.8.8"}' > "${EPDIR}/dh1.json"
+ep_norole="$(disc)"
+printf '%s' '{"roles":["reverse-proxy","admin-vpn"],"moduleSource":"/x/src/foundation/satellite","address":"1.2.3.4"}' > "${EPDIR}/hel1.json"
+ep_found="$(disc)"
+rm -f "${EPDIR}/hel1.json"
+printf '%s' '{"name":"sat2","roles":["admin-vpn"],"host":{"publicIp":"5.6.7.8"}}' > "${EPDIR}/satellite-sat2.json"
+ep_legacy="$(disc)"
+if [[ "${ep_none}" == "<satellite-or-cluster-public-ip>:51821" \
+   && "${ep_norole}" == "<satellite-or-cluster-public-ip>:51821" \
+   && "${ep_found}" == "1.2.3.4:51821" && "${ep_legacy}" == "5.6.7.8:51821" ]]; then
+    ok "av_discover_endpoint: an admin-vpn satellite's address (instance or legacy), else placeholder"
+else
+    bad "av_discover_endpoint (none='${ep_none}' norole='${ep_norole}' found='${ep_found}' legacy='${ep_legacy}')"
+fi
+
+# the WAN :51821 rule goes through the opnsense-controller CLI, not raw REST
+WAN_OUT="${wgtmp}/wan_rule_args.txt"; : > "${WAN_OUT}"
+fakebin="${wgtmp}/fakebin"; mkdir -p "${fakebin}"
+printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$*" >> "%s"\n' "${WAN_OUT}" > "${fakebin}/opnsense-firewall"
+chmod +x "${fakebin}/opnsense-firewall"
+(
+    . "${WGLIB}" >/dev/null 2>&1
+    av_fw_cli() { printf '%s' "${fakebin}/opnsense-firewall"; }
+    _ow_api() { printf 'RAW-REST-CALLED\n' >> "${WAN_OUT}"; }
+    av_ensure_wan_rule >/dev/null 2>&1
+)
+if grep -q 'create-rule' "${WAN_OUT}" && grep -q -- '--interface wan' "${WAN_OUT}" \
+   && grep -q -- '--protocol udp' "${WAN_OUT}" && grep -q -- '--destination wanip' "${WAN_OUT}" \
+   && grep -q -- '--destination-port 51821' "${WAN_OUT}" && ! grep -q 'RAW-REST-CALLED' "${WAN_OUT}"; then
+    ok "av_ensure_wan_rule creates the WAN :51821 rule via the opnsense-controller CLI"
+else
+    bad "av_ensure_wan_rule controller invocation"
+fi
+
+# av_setup verifies the live rule set and enables WireGuard before binding a
+# rule to the `wireguard` group interface (a live cluster once reported "ready"
+# with admin->mgmt missing).
+_av_setup_probe() {  # <mgmt-rule-present:0|1> <wan-rule-present:0|1> <order-file>
+    local mgmt="$1" wan="$2" order="$3"
+    (
+        . "${WGLIB}" >/dev/null 2>&1
+        av_ensure_server()    { echo "uuid-1"; }
+        av_server_pubkey()    { echo "PUBKEY="; }
+        av_enable_wg()        { printf 'enable\n' >> "${order}"; echo enabled; }
+        av_ensure_mgmt_rule() { printf 'mgmt\n'   >> "${order}"; echo ok; }
+        av_ensure_wan_rule()  { printf 'wan\n'    >> "${order}"; echo ok; }
+        av_apply()            { printf 'apply\n'  >> "${order}"; echo applied; }
+        av_rule_uuid()        { [[ "${mgmt}" == 1 ]] && echo "r-uuid" || true; }
+        av_wan_rule_uuid()    { [[ "${wan}"  == 1 ]] && echo "w-uuid" || true; }
+        av_setup
+    )
+}
+ORDER="${wgtmp}/order_a"; : > "${ORDER}"
+rc=0; out="$(_av_setup_probe 0 1 "${ORDER}" 2>&1)" || rc=$?
+if [[ "${rc}" -ne 0 ]] && grep -q "setup incomplete" <<< "${out}" && grep -q "admin->mgmt" <<< "${out}" \
+   && grep -q "network-manager wgvpn setup" <<< "${out}" && ! grep -q "admin-vpn ready" <<< "${out}"; then
+    ok "av_setup fails loudly, naming the fix, when the admin->mgmt rule is absent"
+else
+    bad "av_setup should fail when admin->mgmt is missing (rc=${rc})"
+fi
+ORDER="${wgtmp}/order_b"; : > "${ORDER}"
+rc=0; out="$(_av_setup_probe 1 1 "${ORDER}" 2>&1)" || rc=$?
+if [[ "${rc}" -eq 0 ]] && grep -q "admin-vpn ready" <<< "${out}"; then
+    ok "av_setup succeeds when both rules are present"
+else
+    bad "av_setup should succeed when both rules exist (rc=${rc})"
+fi
+if [[ "$(grep -n -m1 '^enable$' "${ORDER}" | cut -d: -f1)" -lt "$(grep -n -m1 '^mgmt$' "${ORDER}" | cut -d: -f1)" ]]; then
+    ok "av_setup enables WireGuard before creating the admin->mgmt rule"
+else
+    bad "av_setup must enable WireGuard before the mgmt rule (order: $(tr '\n' ',' < "${ORDER}"))"
+fi
+APPLY_OUT="${wgtmp}/apply"; : > "${APPLY_OUT}"
+(
+    . "${WGLIB}" >/dev/null 2>&1
+    av_enable_wg() { printf 'enable\n' >> "${APPLY_OUT}"; }
+    _ow_api() { printf '%s\n' "$*" >> "${APPLY_OUT}"; }
+    av_apply >/dev/null 2>&1
+)
+if grep -q '^enable$' "${APPLY_OUT}" && grep -q 'filter/apply' "${APPLY_OUT}"; then
+    ok "av_apply enables WireGuard and applies filter changes"
+else
+    bad "av_apply behaviour changed"
+fi
+
+# #644: --help in any position runs nothing; an option a sub-verb lacks is refused.
+rc=0; out="$(TAPPAAS_CONFIG_DIR="${wgtmp}" "${WG}" remove-peer laptop --help 2>&1)" || rc=$?
+if [[ "${rc}" -eq 0 ]] && grep -q 'remove-peer' <<< "${out}"; then ok "wgvpn remove-peer <n> --help prints usage, runs nothing"; else bad "wgvpn remove-peer --help rc=${rc}"; fi
+rc=0; out="$(TAPPAAS_CONFIG_DIR="${wgtmp}" "${WG}" add-peer --name n --pubkey k --force 2>&1)" || rc=$?
+if [[ "${rc}" -eq 1 ]] && grep -q 'unknown option' <<< "${out}"; then ok "wgvpn add-peer --force is refused"; else bad "wgvpn add-peer --force rc=${rc}"; fi
+rm -rf -- "${wgtmp}"
 
 # ── C. DEEP: live reconcile dry-run (non-mutating) ────────────────────
 echo ""

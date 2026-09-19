@@ -18,7 +18,7 @@ configures every other module in the system.
 | Failed-update notice | automatic | mail to `site.json` `email` through a Proxmox node, naming the step that failed (#651) |
 | System configuration store | mothership | `/home/tappaas/config` (`site.json`, `zones.json`, environments, module jsons) |
 | Unattended node adding (PXE) | mothership CLI | `site-manager node add <name> --pxe` (netboot assets staged at install) |
-| Admin VPN termination on OPNsense | anywhere (WireGuard) | set up at install; enrol devices per [ADMIN-VPN.md](./ADMIN-VPN.md) |
+| Admin VPN termination on OPNsense | anywhere (WireGuard) | set up at install; enrol devices with `network-manager wgvpn` per [ADMIN-VPN.md](./manager/network-manager/ADMIN-VPN.md) |
 | Module store registration | mothership CLI | `repository.sh add <repo>` for community module stores |
 | The mothership's SSH key | mothership CLI | `cicd-key.sh status` (what it reaches, stale keys left behind) · `rotate` (new key, then revoke the old one everywhere) · `recover` (after a reinstall: install the new key on every VM through its guest agent) — #122 |
 
@@ -86,5 +86,5 @@ For installation steps see [INSTALL.md](./INSTALL.md).
 
 Design and implementation detail (component contract, manager/controller dispatch):
 [DESIGN.md](./DESIGN.md). Test coverage: [TEST.md](./TEST.md). Remote admin access:
-[ADMIN-VPN.md](./ADMIN-VPN.md). The `manager/` and `controller/` subtrees carry their
+[ADMIN-VPN.md](./manager/network-manager/ADMIN-VPN.md). The `manager/` and `controller/` subtrees carry their
 own READMEs.

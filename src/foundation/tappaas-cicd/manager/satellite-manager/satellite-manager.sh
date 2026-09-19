@@ -39,10 +39,12 @@ if command -v readlink >/dev/null 2>&1 && readlink -f "${_src}" >/dev/null 2>&1;
     _src="$(readlink -f "${_src}")"
 fi
 SCRIPT_DIR="$(cd "$(dirname "${_src}")" && pwd)"
-for _lib in tunnel opnsense-wg provision admin-vpn; do
+for _lib in tunnel provision; do
     # shellcheck source=/dev/null
     [[ -f "${SCRIPT_DIR}/lib/${_lib}.sh" ]] && . "${SCRIPT_DIR}/lib/${_lib}.sh"
 done
+# shellcheck source=../../lib/opnsense-wg.sh
+. "${SCRIPT_DIR}/../../lib/opnsense-wg.sh"
 # shellcheck source=../../lib/cli-gate.sh
 . "${SCRIPT_DIR}/../../lib/cli-gate.sh"
 DRY_RUN=0
@@ -55,19 +57,10 @@ update:
 status:
 remove:
 validate:
-admin setup:
-admin list:
-admin status:
-admin add-peer: --name= --pubkey= --ip= --endpoint=
-admin remove-peer:
-admin config:
+admin:
 '
 
 usage() {
-    if [[ "${1:-}" == "admin" ]]; then
-        admin_usage
-        return
-    fi
     cat << EOF
 ${SCRIPT_NAME} ${VERSION} — TAPPaaS VPS satellite manager (ADR-010)
 
@@ -77,7 +70,7 @@ Usage:
   ${SCRIPT_NAME} status   <name>               Tunnel / role / backup health
   ${SCRIPT_NAME} remove   <name> [--dry-run]   Decommission (tunnel side)
   ${SCRIPT_NAME} validate <name>               Validate satellite-<name>.json
-  ${SCRIPT_NAME} admin <sub>                   Manage the admin-vpn (mgmt tunnel); see ADMIN-VPN.md
+  (the admin VPN moved to: network-manager wgvpn <sub>)
   ${SCRIPT_NAME} --help                        This help
 
 install options (satellite-manager writes the config from these; no hand-edited JSON):
@@ -366,69 +359,10 @@ not_implemented() {
     exit 2
 }
 
-# admin-vpn management (ADR-010 §6, Q3). Terminates the operator's admin
-# WireGuard on OPNsense and routes it into mgmt; works with a satellite relay
-# OR a direct cluster public IP (the OPNsense side is identical). See ADMIN-VPN.md.
-admin_usage() {
-    cat <<EOF
-Usage: ${SCRIPT_NAME} admin <sub>
-  setup                                            ensure the OPNsense admin-WG server + admin->mgmt rule
-  add-peer --name N --pubkey K [--ip A] [--endpoint H:P]
-                                                   register an admin device (auto-assigns an admin IP) and
-                                                   print its client config. Endpoint: --endpoint wins, else a
-                                                   configured admin-vpn satellite's IP, else a placeholder
-  remove-peer <name>                               remove an admin device
-  list                                             show server pubkey, rule status, peers
-  config <ip/32> <host:port> [privkey]             re-print a client config for an existing peer
-EOF
-}
-
+# The admin VPN moved to network-manager (ADR-010 §8.4.6): it terminates on
+# OPNsense and needs no satellite.
 cmd_admin() {
-    command -v av_setup >/dev/null 2>&1 || die "admin-vpn lib not loaded (lib/admin-vpn.sh)"
-    local sub="${1:-}"; shift || true
-    case "${sub}" in
-        setup)   av_setup ;;
-        list|status) av_list ;;
-        add-peer)
-            local name="" pub="" ip="" endpoint=""
-            while [[ $# -gt 0 ]]; do case "$1" in
-                --name) name="$2"; shift 2 ;;
-                --pubkey) pub="$2"; shift 2 ;;
-                --ip) ip="$2"; shift 2 ;;
-                --endpoint) endpoint="$2"; shift 2 ;;
-                *) die "admin add-peer: unknown option $1" ;;
-            esac; done
-            [[ -n "${name}" && -n "${pub}" ]] || die "admin add-peer needs --name and --pubkey"
-            local got; got="$(av_add_peer "${name}" "${pub}" "${ip}")"
-            av_apply >/dev/null
-            info "peer '${name}' added at ${got}"
-            # A peer is only useful with a client config, so emit it right here
-            # (folds in the old separate `admin config` step). The config goes to
-            # stdout (info goes to stderr), so it redirects cleanly to a .conf.
-            # Endpoint: explicit --endpoint wins; else discover a configured
-            # admin-vpn satellite's recorded public IP; else a template placeholder.
-            [[ -n "${endpoint}" ]] || endpoint="$(av_discover_endpoint "${CONFIG_DIR}")"
-            info ""
-            if [[ "${endpoint}" == *"<"* ]]; then
-                info "client config for '${name}' — save as tappaas-admin.conf; fill in Endpoint + paste your private key:"
-            else
-                info "client config for '${name}' — save as tappaas-admin.conf; paste your private key (Endpoint = ${endpoint}):"
-            fi
-            av_client_config "${got}" "${endpoint}"
-            ;;
-        remove-peer)
-            local name="${1:-}"; [[ -n "${name}" ]] || die "admin remove-peer <name>"
-            av_remove_peer "${name}"; av_apply >/dev/null
-            info "peer '${name}' removed"
-            ;;
-        config)
-            # config <peer-ip/32> <endpoint-host:port> [private-key]
-            [[ $# -ge 2 ]] || die "admin config <peer-ip/32> <endpoint-host:port> [private-key]"
-            av_client_config "$1" "$2" "${3:-}"
-            ;;
-        ""|-h|--help) admin_usage ;;
-        *) die "admin: unknown sub '${sub}' (setup|add-peer|remove-peer|list|config)" ;;
-    esac
+    die "the admin VPN moved: network-manager wgvpn ${*:-<setup|add-peer|remove-peer|list|config>}"
 }
 
 main() {

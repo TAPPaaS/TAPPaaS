@@ -47,8 +47,8 @@ customised `zones.json`. Completion is marked by `~/config/.tappaas-cicd-install
    internal-only use.
 2. Install the rest of the foundation (backup → identity → logging) and bootstrap your
    organisation/user: `rest-of-foundation.sh` (idempotent).
-3. Optional: enrol your laptop in the admin VPN — `satellite-manager admin add-peer`
-   (the OPNsense termination is already up); see [ADMIN-VPN.md](./ADMIN-VPN.md).
+3. Optional: enrol your laptop in the admin VPN — `network-manager wgvpn add-peer`
+   (the OPNsense termination is already up); see [ADMIN-VPN.md](./manager/network-manager/ADMIN-VPN.md).
 
 If the firewall was unreachable at install time the platform was configured with
 `firewallType: "NONE"` — reverse proxy and firewall rules then need manual handling.
@@ -96,4 +96,4 @@ version upgrade: `prepare-netboot.sh --force`).
 **Firewall was down at install time**
 The network module was deployed with `firewallType: "NONE"` and Caddy/admin-vpn setup
 was skipped. Once the firewall is reachable, re-run `install.sh` (or `setup-caddy.sh` +
-`update-module.sh network` + `satellite-manager admin setup`).
+`update-module.sh network` + `network-manager wgvpn setup`).

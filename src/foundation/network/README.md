@@ -81,7 +81,7 @@ consumer modules depend on; the VM itself is created and kept highly available b
 - Vendor automation for switches/APs beyond the shipped plugins (UniFi; `manual.sh` is
   the by-hand fallback for everything else).
 - The admin VPN / satellite ingress — see the `satellite` module and
-  [../tappaas-cicd/ADMIN-VPN.md](../tappaas-cicd/ADMIN-VPN.md).
+  [ADMIN-VPN.md](../tappaas-cicd/manager/network-manager/ADMIN-VPN.md) (`network-manager wgvpn`).
 
 ## Requirements
 

@@ -30,13 +30,13 @@ Topology B — cluster HAS a public IP (direct)
 
 ## 0. Prerequisites
 
-- **The OPNsense termination is already up.** `satellite-manager admin setup` runs
+- **The OPNsense termination is already up.** `network-manager wgvpn setup` runs
   automatically during the tappaas-cicd bootstrap (right after the `network` module), so the
   `tappaas-admin` WireGuard server, the `admin → mgmt` rule, and the WAN `:51821` pass already
   exist. §1 is only for (re-)running it by hand — it is idempotent.
 - `tappaas-cicd` reachable (you run the peer commands there), with `~/.opnsense-credentials.txt`.
 - **Topology A only:** a provisioned satellite carrying the `admin-vpn` role
-  (`satellite-manager install <name> --roles reverse-proxy,admin-vpn …`) — this opens the
+  (`module-manager module add satellite …`, see [satellite/INSTALL.md](../../../satellite/INSTALL.md)) — this opens the
   `:51821` blind relay on the satellite and the `edge → admin-WG` allowance, giving a CGNAT
   site inbound reach.
 - **Topology B:** just a public IP on the cluster WAN — nothing to configure, bootstrap
@@ -52,8 +52,8 @@ The OPNsense termination is brought up automatically during the tappaas-cicd ins
 `tappaas-cicd`:
 
 ```bash
-satellite-manager admin setup      # idempotent
-satellite-manager admin list       # server pubkey, rule + WAN-rule status, peers
+network-manager wgvpn setup      # idempotent
+network-manager wgvpn list       # server pubkey, rule + WAN-rule status, peers
 ```
 
 `setup` ensures the `tappaas-admin` WireGuard **server** on OPNsense (port `51821`,
@@ -92,7 +92,7 @@ cat ~/tappaas-admin.pub   # copy this — you hand it to the server in §3
 placeholder. Pass `--endpoint <ip>:51821` to override (e.g. Topology B's cluster WAN IP):
 
 ```bash
-satellite-manager admin add-peer --name lars-mac \
+network-manager wgvpn add-peer --name lars-mac \
     --pubkey '<contents of tappaas-admin.pub>' \
     [--endpoint <cluster-or-satellite-public-ip>:51821]   # optional; auto-found for a satellite
 ```
@@ -115,7 +115,7 @@ PersistentKeepalive = 25                       # keeps the CGNAT pinhole open
 
 Paste your private key from `~/tappaas-admin.key` into `PrivateKey`. (Omit `--endpoint`
 and the config prints with an `Endpoint` placeholder to fill in yourself. To re-print an
-existing peer's config later: `satellite-manager admin config <ip/32> <host:port>`.)
+existing peer's config later: `network-manager wgvpn config <ip/32> <host:port>`.)
 
 ## 4. Bring the tunnel up
 
@@ -149,10 +149,10 @@ Then, from the workstation, reach the management plane:
 ## Managing peers
 
 ```bash
-satellite-manager admin list                         # server pubkey, rule, all peers
-satellite-manager admin add-peer --name <n> --pubkey <k> [--ip 10.255.1.N/32] [--endpoint <h:p>]
-satellite-manager admin remove-peer <n>
-satellite-manager admin config <ip/32> <h:p>         # re-print an existing peer's config
+network-manager wgvpn list                         # server pubkey, rule, all peers
+network-manager wgvpn add-peer --name <n> --pubkey <k> [--ip 10.255.1.N/32] [--endpoint <h:p>]
+network-manager wgvpn remove-peer <n>
+network-manager wgvpn config <ip/32> <h:p>         # re-print an existing peer's config
 ```
 Give each device its own peer (its own keypair + admin IP); `add-peer` prints its client
 config (pass `--endpoint`). Removing a peer revokes it immediately.
@@ -184,10 +184,10 @@ Keep it least-privilege — grant only the zones you actually administer.
 
 | Symptom | Check |
 | --- | --- |
-| No handshake (`wg show` blank) | `Endpoint` reachable? (A: satellite has the `admin-vpn` role + `:51821` open; B: cluster has a public IP and the bootstrap WAN rule is present — `satellite-manager admin list` → `wan: present`). Server pubkey correct? |
-| Handshake OK, can't reach mgmt | `satellite-manager admin list` shows `rule: present`? Re-run `satellite-manager admin setup`. `AllowedIPs` includes `10.0.0.0/24`? |
+| No handshake (`wg show` blank) | `Endpoint` reachable? (A: satellite has the `admin-vpn` role + `:51821` open; B: cluster has a public IP and the bootstrap WAN rule is present — `network-manager wgvpn list` → `wan: present`). Server pubkey correct? |
+| Handshake OK, can't reach mgmt | `network-manager wgvpn list` shows `rule: present`? Re-run `network-manager wgvpn setup`. `AllowedIPs` includes `10.0.0.0/24`? |
 | Connects then stalls / hangs | Lower `MTU` (try `1280`). Confirm `PersistentKeepalive = 25`. |
 | Works on LAN, not remotely | You're hitting split-horizon/local routes — verify `Endpoint` is the **public** IP, not an internal one. |
 
-Server-side implementation: `manager/satellite-manager/lib/admin-vpn.sh`
-(`satellite-manager admin …`). Design: [ADR-010 §6](../../../docs/ADR/ADR-010-vps-satellite-reverse-proxy-backup.md).
+Server-side implementation: `manager/network-manager/wgvpn/` (`network-manager wgvpn …`).
+Design: [ADR-010 §6, §8.4.6](../../../../../docs/ADR/ADR-010-vps-satellite-reverse-proxy-backup.md).

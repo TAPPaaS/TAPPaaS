@@ -1,21 +1,22 @@
 #!/usr/bin/env bash
-# lib/admin-vpn.sh — OPNsense admin-vpn termination (ADR-010 §6, implementation Q3).
+# wgvpn/wgvpn-lib.sh — the admin VPN's OPNsense side (ADR-010 §6, §8.4.6).
 #
 # Terminates the operator's admin WireGuard session ON OPNsense (a dedicated WG
 # server instance) and routes it into the `mgmt` zone via one least-privilege
 # firewall rule. This is identical whether the session arrives:
 #   • via a satellite blind-relay  (admin device Endpoint = <satellite-ip>:51821), or
 #   • direct to the cluster WAN     (admin device Endpoint = <cluster-public-ip>:51821).
-# The satellite only relays UDP; OPNsense is always the terminator (§6.1).
+# The satellite only relays UDP; OPNsense is always the terminator (§6.1). That is
+# why this lives with network-manager (`network-manager wgvpn`), not the satellite.
 #
-# Reuses opnsense-wg.sh's curl/creds/keygen helpers. All operations are
+# Reuses lib/opnsense-wg.sh's curl/creds/keygen helpers. All operations are
 # idempotent (find-by-name / find-by-description before create).
 # Validated live 2026-07-01 (server + peer handshake + admin->mgmt rule).
 #
 # shellcheck shell=bash
 # shellcheck source=/dev/null
 _here_av="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-. "${_here_av}/opnsense-wg.sh"
+. "${_here_av}/../../../lib/opnsense-wg.sh"
 
 : "${SAT_ADMIN_WGPORT:=51821}"          # OPNsense admin-WG listen port
 : "${AV_SERVER_NAME:=tappaas-admin}"    # WG server instance name
@@ -235,8 +236,8 @@ av_setup() {
     if (( ${#missing[@]} > 0 )); then
         echo "ERROR: admin-vpn setup incomplete -- server is up but these rules are absent:" >&2
         local m; for m in "${missing[@]}"; do echo "  - ${m}" >&2; done
-        echo "The tunnel would handshake and then reach nothing. Re-run 'satellite-manager admin setup'," >&2
-        echo "then confirm with 'satellite-manager admin list'." >&2
+        echo "The tunnel would handshake and then reach nothing. Re-run 'network-manager wgvpn setup'," >&2
+        echo "then confirm with 'network-manager wgvpn list'." >&2
         return 1
     fi
 
@@ -265,18 +266,24 @@ EOF
 }
 
 # Discover the client-config Endpoint (host:port) when the operator did not pass
-# one to `add-peer`. If a satellite carrying the admin-vpn role is configured, use
-# its recorded public IP — that satellite is what relays :51821 for a CGNAT site.
+# one to `add-peer`. If a satellite carrying the admin-vpn role is registered, use
+# its public address — that satellite is what relays :51821 for a CGNAT site.
 # Otherwise emit a template placeholder for the operator to fill in (direct /
 # Topology-B reach, or before any satellite exists). The port is always the admin
-# listener port. Arg: <config-dir> holding satellite-<name>.json. Echoes host:port.
+# listener port. A satellite is an instance of the `satellite` module
+# (config/<instance>.json, ADR-010 §8.4.1) or, before its conversion, a
+# config/satellite-<name>.json. Arg: <config-dir>. Echoes host:port.
 av_discover_endpoint() {
     local cfgdir="${1:-/home/tappaas/config}" port="${SAT_ADMIN_WGPORT}" cfg ip
-    for cfg in "${cfgdir}"/satellite-*.json; do
+    for cfg in "${cfgdir}"/*.json; do
         [[ -e "${cfg}" ]] || continue
+        if [[ "$(basename "${cfg}")" != satellite-*.json ]]; then
+            jq -e '((.moduleSource // .location // "") | split("/") | last) == "satellite"' \
+                "${cfg}" >/dev/null 2>&1 || continue
+        fi
         # role-gated: only a satellite that actually relays admin-vpn qualifies.
         jq -e '(.roles // []) | index("admin-vpn")' "${cfg}" >/dev/null 2>&1 || continue
-        ip="$(jq -r '.host.publicIp // empty' "${cfg}")"
+        ip="$(jq -r '.address // .host.publicIp // empty' "${cfg}")"
         [[ -n "${ip}" ]] || continue
         printf '%s:%s\n' "${ip}" "${port}"
         return 0

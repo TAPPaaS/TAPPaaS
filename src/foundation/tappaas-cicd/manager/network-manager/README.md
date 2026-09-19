@@ -61,6 +61,7 @@ network-manager validate    [--zones <file>] [--config-dir <dir>] [--strict]
                             [--effective]
 network-manager merge       [--diff] [--config-dir <dir>] [--template <tpl>]
 network-manager distribute  [--zones <file>] [--dry-run]
+network-manager wgvpn       <setup|add-peer|remove-peer|list|config> [options]
 network-manager -h | --help
 ```
 
@@ -295,9 +296,31 @@ network-manager distribute --dry-run  # list target nodes, no copy
 - `--zones <file>` — zones.json to distribute (default `$TAPPAAS_CONFIG/zones.json`).
 - `--dry-run` — list the nodes that would receive it; copy nothing.
 
+### `wgvpn` — the admin VPN (ADR-010 §6, §8.4.6)
+
+The operator's WireGuard session into the management plane. It terminates on
+OPNsense and lands in the `admin` overlay zone (`10.255.1.0/24`), which one
+least-privilege rule lets reach `mgmt`. No satellite is needed: a Site with a
+public IP is reached directly, a CGNAT Site through a satellite carrying the
+`admin-vpn` role, which only relays the UDP.
+
+```bash
+network-manager wgvpn setup                                   # idempotent; the cicd install runs it
+network-manager wgvpn add-peer --name laptop --pubkey <key>   # prints the device's client config
+network-manager wgvpn list
+network-manager wgvpn remove-peer laptop
+network-manager wgvpn config 10.255.1.2/32 <host:51821>       # print a config again
+```
+
+`add-peer`'s endpoint is `--endpoint` if given, else the address of a registered
+satellite with the `admin-vpn` role, else a placeholder. The tool is bash
+(`wgvpn/wgvpn.sh`, linked as `network-manager-wgvpn`); it was `satellite-manager
+admin`. Runbook for Mac and Linux devices: [ADMIN-VPN.md](./ADMIN-VPN.md).
+
 ## Legacy bash tools
 
-Only `zone-reconcile` is still linked onto `PATH` during the transition.
+Only `zone-reconcile` is still linked onto `PATH` during the transition (plus
+`network-manager-wgvpn`, which `network-manager wgvpn` runs).
 `migrate-zone-keys-*.sh` is a one-shot migration helper, not an on-PATH tool.
 **Retired** (ADR-007 Phase 7.5 / post-implementation refactor):
 `apply-zones-merge.sh` → `network-manager merge` (alias `zones-merge`, ADR-007
