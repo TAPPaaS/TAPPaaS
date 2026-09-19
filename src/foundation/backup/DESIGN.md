@@ -92,6 +92,13 @@ Two operator inputs shape resolution, both on `backup.json`: **`.node`** restric
 discovery to one named node (empty searches every node), and **`.pbsUrl`** is the PBS
 clients push to (default `backup.mgmt.internal`).
 
+**Discovery on a Host without Proxmox (#601).** A `kind: machine` Host is reached by its
+recorded `address` (`pbs_host_addr`), and its storage is found from its ZFS pools
+(`zpool list`, first ONLINE `tankc*`) where a Proxmox node is asked `pvesm status`. The
+serving-PBS probe (#602) already used `proxmox-backup-manager`, which works on any host.
+Installing PBS onto a bare machine is **not** automated: `install.sh` adopts a PBS already
+serving on a non-member Host, and refuses — recording nothing — when that Host has only a pool.
+
 After resolution **`.node` names the Host** the PBS runs on (ADR-012 §2.1, #600): state
 `node`, Host in `.node`. The 3-way merge keeps it — a resolved `.node` differs from the
 release's empty default, so it reads as set on this site (the migration 0007 fixture test

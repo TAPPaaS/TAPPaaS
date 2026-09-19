@@ -149,6 +149,18 @@ case "${MODE}" in
     # own module instance (a debianhost), which pbs_host_ensure_patched makes
     # sure exists (#603); its name is an alias of that Host (#612).
     if ! pbs_node_is_cluster_member "${NODE}" "${ZONE}"; then
+      # Adopt only a PBS that is really there. Discovery can also find a bare
+      # tankc pool on a machine (#601); installing PBS onto a non-Proxmox
+      # machine is not automated yet, and recording a placement with nothing
+      # behind it would be a silent lie — so say what to do instead.
+      _serves="$(pbs_probe_serving "${NODE}" "${ZONE}" "$(get_config_value 'pbsStorageName' 'tappaas_backup')")"
+      if [[ "${_serves}" != yes\ * ]]; then
+        error "${NODE} is not a cluster node and serves no PBS datastore yet (it has pool ${STORAGE:-?})."
+        error "  Installing PBS onto a machine is not automated yet: install proxmox-backup-server there"
+        error "  with a datastore '$(get_config_value 'pbsStorageName' 'tappaas_backup')' on ${STORAGE:-its pool}, then re-run — it is adopted as it stands."
+        error "  Or clear .node to let discovery choose a cluster node. Nothing was recorded."
+        exit 1
+      fi
       pbs_write_placement_state "${MODE}" "${STORAGE}"
       info "${BOLD}Adopted the PBS already serving on ${BGN}${NODE}${CL}${BOLD} (not a cluster member) — its datastore is left as it is; nothing provisioned.${CL}"
       pbs_dns_ensure "${INSTANCE}" "${ZONE}" "${NODE}" \

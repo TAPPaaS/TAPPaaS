@@ -146,6 +146,9 @@ which are ordinary apt packages there: the cluster module for a node, the machin
 `debianhost` instance in the sweep for anything else. Every backup install and update checks
 that the Host has an owner, adopts an unregistered machine (registration only, ADR-026 D8.1),
 and warns loudly when it cannot — so no PBS host goes unpatched in silence.
+Discovery reaches such a Host by its recorded address and finds its storage from its ZFS pools
+(#601). Installing PBS onto a bare machine is not automated yet: a PBS already serving there is
+adopted; a machine with only a pool is refused with the steps to take, never recorded.
 
 **Management stays `managed` for the application.** TAPPaaS installs the PBS and
 runs its lifecycle; that the Host is not a cluster member changes nothing about

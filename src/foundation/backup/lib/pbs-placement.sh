@@ -217,14 +217,38 @@ pbs_adopt_external_pbs() {
     ' "$f" >"$tmp" && mv "$tmp" "$f" || { rm -f "$tmp"; return 1; }
 }
 
-# Echo the active tankc storage id on <node> ($1) in <zone> ($2, default mgmt),
-# or empty. Unreachable node / no pvesm ⇒ empty (never fails — discovery just
-# moves on to the next node).
+# How to reach Host <name> (#601): a `kind: machine` instance by its recorded
+# `address` (ADR-026 D8.1 — it may have no DNS name at all), anything else —
+# a cluster node — by <name>.<zone>.internal.
+pbs_host_addr() {
+    local name="$1" zone="${2:-mgmt}" addr
+    addr="$(jq -r 'if type == "object" and (.kind // "") == "machine" then (.address // "") else "" end' \
+        "${PBS_PLACEMENT_CONFIG_DIR}/${name}.json" 2>/dev/null || true)"
+    printf '%s\n' "${addr:-${name}.${zone}.internal}"
+}
+
+# Pure: the first ONLINE zpool named <prefix>* in `zpool list -H -o name,health`
+# output — a Host without Proxmox has pools, not Proxmox storage entries (#601).
+_tankc_pick_zpool() {
+    awk -v p="$2" '$1 ~ "^"p && $2 == "ONLINE" {print $1; exit}' <<< "$1"
+}
+
+# Echo the active tankc storage on <node> ($1) in <zone> ($2, default mgmt), or
+# empty. A Proxmox node is asked for its storage (`pvesm status`, unchanged); a
+# Host without Proxmox — a debianhost machine, ADR-012 §1.3 — for its ZFS pools
+# (#601). Unreachable ⇒ empty (never fails — discovery moves on).
 pbs_probe_tankc() {
-    local node="$1" zone="${2:-mgmt}" prefix="${3:-tankc}" out
+    local node="$1" zone="${2:-mgmt}" prefix="${3:-tankc}" out kind
     out="$(ssh -n -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
-        "root@${node}.${zone}.internal" "pvesm status" 2>/dev/null)" || return 0
-    _tankc_pick "$out" "$prefix"
+        "root@$(pbs_host_addr "${node}" "${zone}")" \
+        'if command -v pvesm >/dev/null 2>&1; then echo PVE; pvesm status; else echo ZFS; zpool list -H -o name,health 2>/dev/null; fi' \
+        2>/dev/null)" || return 0
+    kind="$(head -n1 <<< "${out}")"
+    out="$(tail -n +2 <<< "${out}")"
+    case "${kind}" in
+        PVE) _tankc_pick "$out" "$prefix" ;;
+        ZFS) _tankc_pick_zpool "$out" "$prefix" ;;
+    esac
 }
 
 # Current cluster node names (one per line): ask a reachable mgmt node's pvesh,
@@ -279,7 +303,7 @@ pbs_legacy_pbs_node() {
 pbs_probe_serving() {
     local host="$1" zone="${2:-mgmt}" store="$3" out rc name
     out="$(ssh -n -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
-        "root@${host}.${zone}.internal" \
+        "root@$(pbs_host_addr "${host}" "${zone}")" \
         "command -v proxmox-backup-manager >/dev/null 2>&1 || exit 3; hostname -s; proxmox-backup-manager datastore list --output-format json" 2>/dev/null)"
     rc=$?
     case ${rc} in

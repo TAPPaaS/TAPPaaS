@@ -186,6 +186,20 @@ ck "#602: shim is not adopted — it re-derives by discovery (rule 4)" \
 
 STUB_SERVING=(); STUB_PORT=no; STUB_TANKC=()
 
+# ── #601: a Host without Proxmox — its pools, and its address ─────────
+ZP=$'rpool\tONLINE\ntankc1\tDEGRADED\ntankc2\tONLINE\ntank\tONLINE'
+ck "zpool: the first ONLINE tankc* pool"       "tankc2" "$(_tankc_pick_zpool "${ZP}" tankc)"
+ck "zpool: a DEGRADED pool is not chosen"      ""       "$(_tankc_pick_zpool $'tankc1\tDEGRADED' tankc)"
+ck "zpool: no match is empty"                  ""       "$(_tankc_pick_zpool $'rpool\tONLINE' tankc)"
+PBS_PLACEMENT_CONFIG_DIR="${TMP}"
+echo '{"kind":"machine","address":"10.0.0.90"}'        > "${TMP}/dh-test1.json"
+echo '{"kind":"machine","address":"tappaas2.mgmt.internal"}' > "${TMP}/tappaas2.json"
+echo '{"kind":"vm","vmname":"nextcloud"}'              > "${TMP}/nextcloud.json"
+ck "addr: a machine instance → its address"    "10.0.0.90"               "$(pbs_host_addr dh-test1 mgmt)"
+ck "addr: a pvenode instance → its address"    "tappaas2.mgmt.internal"  "$(pbs_host_addr tappaas2 mgmt)"
+ck "addr: not a machine → <name>.<zone>.internal" "nextcloud.mgmt.internal" "$(pbs_host_addr nextcloud mgmt)"
+ck "addr: no config → <name>.<zone>.internal"  "tappaas3.mgmt.internal"  "$(pbs_host_addr tappaas3 mgmt)"
+
 # ── placement-state write/read roundtrip + predicates ────────────────
 PBS_PLACEMENT_CONFIG_DIR="${TMP}"
 echo '{"vmname":"backup","node":"tappaas9"}' > "${TMP}/backup.json"
