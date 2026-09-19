@@ -9,4 +9,4 @@
 # Usage: update.sh <instance>
 set -euo pipefail
 . /home/tappaas/bin/common-install-routines.sh
-info "  ${1:-node}: OS patching is the cluster module's (update-os.sh) — nothing to do here (ADR-026 D4 stage 1)"
+debug "  ${1:-node}: OS patching is the cluster module's (update-os.sh) — nothing to do here (ADR-026 D4 stage 1)"

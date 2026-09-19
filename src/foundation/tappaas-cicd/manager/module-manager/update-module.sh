@@ -529,12 +529,17 @@ main() {
     integ_after="$(read_module_config "${module}" 2>/dev/null | jq -r '.integratesWith // [] | .[]' 2>/dev/null || true)"
 
     # ── Step 1: Pre-update snapshot (only for modules with a VM) ─────
-    info "${BOLD}Update Step 1: Create pre-update snapshot: ${BL}${module}${CL}"
-
     local snapshot_created=false
     local has_vm=false
     if read_module_config "${module}" | jq -e '.dependsOn // [] | index("cluster:vm")' &>/dev/null; then
         has_vm=true
+    fi
+    # A machine (or any module without a VM) has nothing to snapshot: no step
+    # header that promises one (#665).
+    if [[ "${has_vm}" == true ]]; then
+        info "${BOLD}Update Step 1: Create pre-update snapshot: ${BL}${module}${CL}"
+    else
+        debug "Update Step 1: no pre-update snapshot — ${module} has no VM"
     fi
 
     local self_vm; self_vm="$(read_module_config "${module}" | jq -r '.vmname // empty')"
@@ -564,8 +569,6 @@ main() {
             if [[ -n "${_snap_out}" ]]; then printf '%s\n' "${_snap_out}" >&2; fi
             warn "Snapshot failed — continuing without rollback safety net"
         fi
-    else
-        debug "  Skipped (module has no VM)"
     fi
 
     # ── Step 2: Pre-update test ───────────────────────────────────────
