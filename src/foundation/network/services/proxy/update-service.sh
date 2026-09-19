@@ -190,7 +190,7 @@ if [[ "${DNS_MODE}" == "per-service" ]]; then
         SH_RC=0
         GW="$(proxy_split_horizon_target "${PROXY_DOMAIN}" "${ZONES_FILE}")" || SH_RC=$?
         if [[ ${SH_RC} -eq 0 ]]; then
-            if unbound-manager --no-ssl-verify add "${DNS_HOST}" "${DNS_ZONE}" "${GW}" --description "${DESCRIPTION}"; then
+            if proxy_unbound_add "${DNS_HOST}" "${DNS_ZONE}" "${GW}" "${DESCRIPTION}"; then
                 debug "  ${GN}✓${CL} split-horizon DNS ${DNS_HOST}.${DNS_ZONE} -> ${GW} (Unbound)"
             else
                 warn "  Could not register ${PROXY_DOMAIN} in Unbound — register manually:"

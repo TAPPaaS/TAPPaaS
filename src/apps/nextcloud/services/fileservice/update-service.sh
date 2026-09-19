@@ -39,10 +39,10 @@ VMNAME=$(jq -r '.vmname' "${NEXTCLOUD_JSON}")
 ZONE=$(jq -r '.zone0' "${NEXTCLOUD_JSON}")
 INTERNAL_URL="http://${VMNAME}.${ZONE}.internal"
 
-info "nextcloud:fileservice update-service for module: ${MODULE}"
+debug "nextcloud:fileservice update-service for module: ${MODULE}"
 
 if curl -sf --max-time 10 "${INTERNAL_URL}/status.php" | grep -q '"installed":true'; then
-    info "  ${GN}✓${CL} Nextcloud is reachable at ${INTERNAL_URL}"
+    debug "  ${GN}✓${CL} Nextcloud is reachable at ${INTERNAL_URL}"
 else
     warn "  Nextcloud not responding at ${INTERNAL_URL}/status.php — connector sync may fail"
 fi
@@ -68,7 +68,7 @@ CONNECTOR=""
     CONNECTOR=$(jq -r '.config["nextcloud:fileservice"].connector // .connector // empty' "${CONSUMER_JSON}" 2>/dev/null || true)
 
 if [[ "${CONNECTOR}" == "onlyoffice" ]]; then
-    info "  ${MODULE} declares an onlyoffice connector — re-applying it (ADR-COM-0002)"
+    debug "  ${MODULE} declares an onlyoffice connector — re-applying it (ADR-COM-0002)"
 
     EO_VMNAME=$(jq -r '.vmname' "${CONSUMER_JSON}")
     EO_ZONE=$(jq -r '.zone0' "${CONSUMER_JSON}")
@@ -112,7 +112,7 @@ if [[ "${CONNECTOR}" == "onlyoffice" ]]; then
                 "sudo install -m600 -o root -g root /dev/stdin /etc/secrets/onlyoffice.env && \
                  sudo systemctl restart nextcloud-configure-eurooffice.service"
         then
-            info "${GN}✓${CL} onlyoffice connector wired for ${MODULE}"
+            debug "${GN}✓${CL} onlyoffice connector wired for ${MODULE}"
 
             # ── Verify the integration actually works ──────────────────────
             # Writing the env and restarting the configure service is NOT proof
@@ -146,7 +146,7 @@ if [[ "${CONNECTOR}" == "onlyoffice" ]]; then
             done
 
             if [[ -z "${_oo_err}" ]]; then
-                info "${GN}✓${CL} onlyoffice document server round-trip verified"
+                debug "${GN}✓${CL} onlyoffice document server round-trip verified"
 
                 # ── Point the document server's splash page at this Nextcloud ──
                 # The stock image serves a "Docs installed — now integrate me"
@@ -174,7 +174,7 @@ if [[ "${CONNECTOR}" == "onlyoffice" ]]; then
                             "sudo install -m644 -o root -g root /dev/stdin /etc/euro-office/ds-example.conf && \
                              sudo podman exec euro-office nginx -s reload" >/dev/null 2>&1
                     then
-                        info "  ${GN}✓${CL} document server splash redirects to https://${NEXTCLOUD_PUBLIC_URL}/"
+                        debug "  ${GN}✓${CL} document server splash redirects to https://${NEXTCLOUD_PUBLIC_URL}/"
                     else
                         # Non-fatal: cosmetic. The integration itself is verified above.
                         warn "  could not point the document server splash at Nextcloud on ${EO_HOST} (editing is unaffected)"

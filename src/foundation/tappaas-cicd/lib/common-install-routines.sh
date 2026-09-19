@@ -1288,7 +1288,7 @@ function wait_for_module_ready() {
   fi
 
   if [[ -n "${ready_hook}" ]]; then
-    info "Waiting for '${module}' to report ready (${ready_hook})..."
+    debug "Waiting for '${module}' to report ready (${ready_hook})..."
     while ! bash "${ready_hook}" "${module}" "${vm_ip}" >/dev/null 2>&1; do
       sleep "${interval}"
       waited=$((waited + interval))
@@ -1297,14 +1297,14 @@ function wait_for_module_ready() {
         return 1
       fi
     done
-    info "  ${module} is ready (${waited}s)"
+    debug "  ${module} is ready (${waited}s)"
     return 0
   fi
 
   local ports
   ports="$(module_ready_ports "${module}" | tr '\n' ' ')"
   ports="${ports% }"
-  info "Waiting for '${module}' ports to accept: ${ports}"
+  debug "Waiting for '${module}' ports to accept: ${ports}"
 
   while ! _module_ports_open "${vm_ip}" "${ports}"; do
     sleep "${interval}"
@@ -1314,7 +1314,7 @@ function wait_for_module_ready() {
       return 1
     fi
   done
-  info "  ${module} is ready (${waited}s)"
+  debug "  ${module} is ready (${waited}s)"
   return 0
 }
 

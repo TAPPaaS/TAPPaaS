@@ -29,16 +29,13 @@ HANODE="$(get_config_value 'HANode' "$(get_default_ha_node "$NODE")")"
 # refreshes the same immutable tag (idempotent for a pinned tag).
 CONTAINER_IMAGE="ghcr.io/euro-office/documentserver:v9.3.1"
 
-echo ""
-info "${BOLD}euro-office Update${CL}"
-info "  VM:    ${VMNAME} (VMID: ${VMID})"
-info "  Node:  ${NODE}"
-info "  Zone:  ${ZONE0NAME}"
-info "  Image: ${CONTAINER_IMAGE}"
+info "${BOLD}*** Starting euro-office update${CL} (${CONTAINER_IMAGE})"
+debug "  VM:    ${VMNAME} (VMID: ${VMID})"
+debug "  Node:  ${NODE}"
+debug "  Zone:  ${ZONE0NAME}"
 
 # ── Step 1: Pull latest DocumentServer container image and restart ────────────
-echo ""
-info "${BOLD}Pulling DocumentServer image and restarting service…${CL}"
+info "Pulling DocumentServer image and restarting service…"
 # The pull writes a "Copying blob <sha>" line per layer, which is progress, not
 # news. Dots instead; the whole thing stays in the log, and run_with_dots prints
 # its tail if the pull fails. LogLevel=ERROR drops ssh's "Permanently added …
@@ -48,17 +45,16 @@ if run_with_dots "/tmp/euro-office-pull.log" \
     "tappaas@${VMNAME}.${ZONE0NAME}.internal" \
     "sudo podman pull ${CONTAINER_IMAGE} \
      && sudo systemctl restart podman-euro-office"; then
-    info "  Container image updated and service restarted successfully."
+    debug "  Container image updated and service restarted successfully."
 else
     warn "  Failed to pull/restart euro-office container — service may be running on the previous image."
 fi
 
 # ── Summary ──────────────────────────────────────────────────────────────────
-echo ""
-info "${BOLD}Update Complete${CL}"
-info "  VM:   ${VMNAME} (VMID: ${VMID})"
-info "  Node: ${NODE}"
-info "  Zone: ${ZONE0NAME}"
+debug "${BOLD}Update Complete${CL}"
+debug "  VM:   ${VMNAME} (VMID: ${VMID})"
+debug "  Node: ${NODE}"
+debug "  Zone: ${ZONE0NAME}"
 if [[ -n "${HANODE}" ]]; then
-    info "  HA Node: ${HANODE}"
+    debug "  HA Node: ${HANODE}"
 fi

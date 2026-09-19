@@ -82,7 +82,7 @@ proxy_resolve_access_list() {
     local z
     for z in "${zones[@]}"; do
         if [[ "${z}" == "internet" ]]; then
-            info "  '${module}' is exposed to the ${BL}internet${CL} — no access restriction" >&2
+            debug "  '${module}' is exposed to the ${BL}internet${CL} — no access restriction" >&2
             caddy-manager delete-accesslist "${al_name}" --no-ssl-verify >/dev/null 2>&1 || true
             printf ''
             return 0
@@ -196,6 +196,22 @@ proxy_split_horizon_target() {
     return ${rc}
 }
 
+# proxy_unbound_add <host> <domain> <ip> <description>
+#
+# Register a split-horizon host override. unbound-manager narrates every call
+# ("Already up to date: …"); on success that is detail, so it goes to [Debug],
+# and on failure it is printed as-is for the caller's warning to point at.
+proxy_unbound_add() {
+    local out rc=0
+    out="$(unbound-manager --no-ssl-verify add "$1" "$2" "$3" --description "$4" 2>&1)" || rc=$?
+    if [[ ${rc} -eq 0 ]]; then
+        [[ -n "${out}" ]] && while IFS= read -r _l; do debug "    ${_l}"; done <<< "${out}"
+    else
+        printf '%s\n' "${out}" >&2
+    fi
+    return ${rc}
+}
+
 # proxy_add_routes <description> <domain> <upstream> <dns_mode>
 #
 # Publish the module's additional proxyRoutes (#597). Each {name, port} entry in
@@ -255,7 +271,7 @@ proxy_add_routes() {
                     gw_looked=1
                 fi
                 if [[ -n "${gw}" ]]; then
-                    unbound-manager --no-ssl-verify add "${name}" "${domain}" "${gw}" --description "${route_desc}" \
+                    proxy_unbound_add "${name}" "${domain}" "${gw}" "${route_desc}" \
                         || warn "    Could not register ${fqdn} in Unbound (register manually)"
                 else
                     warn "    No split-horizon gateway for ${fqdn} — register DNS manually"
