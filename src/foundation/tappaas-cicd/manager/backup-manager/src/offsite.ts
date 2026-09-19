@@ -5,7 +5,11 @@
 // off-site target therefore records a `physicalLocation` shaped like the Site's
 // own `site.json` `location` (ISO country, optional city and building):
 //
-//   config/satellite-<name>.json   a satellite pulls our PBS over the tunnel
+//   a satellite holding a copy     an instance of the satellite module
+//                                  (config/<instance>.json, or a pre-ADR-010
+//                                  §8.4 config/satellite-<name>.json) that
+//                                  carries the backup role — the pull vault — or
+//                                  is the Site's PBS Host (backup.json .node)
 //   config/remote-<name>.json      a peer that pulls OUR backups
 //   config/pull-<name>.json        a peer WE pull — our copy is THEIR off-site
 //
@@ -87,24 +91,42 @@ export function sitePlace(configDir: string): Place | null {
 }
 
 const TARGET_PREFIXES: Array<[string, string]> = [
-  ["satellite-", "satellite"],
   ["remote-", "remote"],
   ["pull-", "pull"],
 ];
 
-/** Every off-site target this site has, with how far it is shown to be away. */
+/** True when a config is an instance of the satellite module — by its
+ *  recorded source, or the file name satellite-manager used before §8.4. */
+function isSatellite(file: string, cfg: Record<string, unknown>): boolean {
+  const src = cfg.moduleSource ?? cfg.location;
+  if (typeof src === "string" && src.replace(/\/+$/, "").split("/").pop() === "satellite") return true;
+  return /(^|\/)satellite-[^/]*\.json$/.test(file);
+}
+
+/** Every off-site target this site has, with how far it is shown to be away. A
+ *  satellite counts only when it holds a copy: a relay (reverse-proxy,
+ *  admin-vpn) carries no backups, so where it is says nothing about them. */
 export function offsiteTargets(configDir: string): OffsiteTarget[] {
   if (!existsSync(configDir)) return [];
   const site = sitePlace(configDir);
+  const pbsHost = readObj(join(configDir, "backup.json"))?.node;
   const out: OffsiteTarget[] = [];
   for (const f of readdirSync(configDir).sort()) {
     if (!f.endsWith(".json")) continue;
     const b = f.slice(0, -".json".length);
-    const hit = TARGET_PREFIXES.find(([p]) => b.startsWith(p));
-    if (!hit) continue;
     const file = join(configDir, f);
-    const place = asPlace(readObj(file)?.physicalLocation);
-    out.push({ role: hit[1], name: b.slice(hit[0].length), file, place, separation: separation(site, place) });
+    const hit = TARGET_PREFIXES.find(([p]) => b.startsWith(p));
+    if (hit) {
+      const place = asPlace(readObj(file)?.physicalLocation);
+      out.push({ role: hit[1], name: b.slice(hit[0].length), file, place, separation: separation(site, place) });
+      continue;
+    }
+    const cfg = readObj(file);
+    if (!cfg || !isSatellite(file, cfg)) continue;
+    const roles = Array.isArray(cfg.roles) ? cfg.roles : [];
+    if (!roles.includes("backup") && pbsHost !== b) continue;
+    const place = asPlace(cfg.physicalLocation);
+    out.push({ role: "satellite", name: b, file, place, separation: separation(site, place) });
   }
   return out;
 }

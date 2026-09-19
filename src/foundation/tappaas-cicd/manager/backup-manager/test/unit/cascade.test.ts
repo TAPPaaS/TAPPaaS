@@ -695,16 +695,26 @@ check(!retentionValid("7") && !retentionValid("7x") && !retentionValid(""), "inv
 
   const tmp = mkdtempSync(join(tmpdir(), "bm-offsite-"));
   writeFileSync(join(tmp, "site.json"), JSON.stringify({ name: "s", location: { country: "DK", timezone: "Europe/Copenhagen" } }));
-  writeFileSync(join(tmp, "satellite-hel.json"), JSON.stringify({ kind: "machine", physicalLocation: { country: "FI", city: "Helsinki" } }));
+  // Satellites (ADR-010 §8.4): a pre-§8.4 satellite-<name>.json and an instance
+  // of the satellite module count when they hold a copy — the vault's backup
+  // role, or being the Site's PBS Host; a relay holds none and does not count.
+  const SAT = "/repo/src/foundation/satellite";
+  writeFileSync(join(tmp, "satellite-hel.json"), JSON.stringify({ kind: "machine", roles: ["backup"], physicalLocation: { country: "FI", city: "Helsinki" } }));
+  writeFileSync(join(tmp, "vault.json"), JSON.stringify({ kind: "machine", moduleSource: SAT, roles: ["reverse-proxy", "backup"], physicalLocation: { country: "DE" } }));
+  writeFileSync(join(tmp, "relay.json"), JSON.stringify({ kind: "machine", moduleSource: SAT, roles: ["reverse-proxy", "admin-vpn"] }));
+  writeFileSync(join(tmp, "pbshost.json"), JSON.stringify({ kind: "machine", moduleSource: SAT, roles: ["reverse-proxy"] }));
+  writeFileSync(join(tmp, "backup.json"), JSON.stringify({ placementState: "node", node: "pbshost" }));
+  writeFileSync(join(tmp, "dh1.json"), JSON.stringify({ kind: "machine", moduleSource: "/repo/src/foundation/debianhost", roles: ["backup"] }));
   writeFileSync(join(tmp, "remote-buddy.json"), JSON.stringify({ authId: "buddy@pbs" }));
   writeFileSync(join(tmp, "pull-neighbour.json"), JSON.stringify({ remoteHost: "h", physicalLocation: { country: "DK" } }));
   writeFileSync(join(tmp, "receive-nas.json"), JSON.stringify({ namespace: "receive/nas" }));
   const t = offsiteTargets(tmp);
   eq(t.map((x) => `${x.role}:${x.name}:${x.separation}`).join(" "),
-    "pull:neighbour:unproven remote:buddy:unrecorded satellite:hel:separate",
-    "satellites, remote and pull peers are off-site targets; receive peers are not");
+    "satellite:pbshost:unrecorded pull:neighbour:unproven remote:buddy:unrecorded satellite:satellite-hel:separate satellite:vault:separate",
+    "satellites holding a copy, remote and pull peers are off-site targets; a relay satellite, a non-satellite and receive peers are not");
   const w = validate(tmp).warnings;
-  eq(w.length, 2, "validate warns once per target not shown to be away");
+  eq(w.length, 3, "validate warns once per target not shown to be away");
+  check(w.some((x) => x.includes("satellite 'pbshost'") && x.includes("records no physicalLocation")), "…the satellite that is the PBS Host included");
   check(w.some((x) => x.includes("remote 'buddy'") && x.includes("records no physicalLocation")), "…naming the unrecorded one");
   check(w.some((x) => x.includes("pull 'neighbour'") && x.includes("record the city")), "…and saying what would settle the other");
   eq(validate(tmp).errors.filter((e) => e.includes("physicalLocation")).length, 0, "…as warnings, never errors");
