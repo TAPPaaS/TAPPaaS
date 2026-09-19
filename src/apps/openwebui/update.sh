@@ -68,12 +68,10 @@ main() {
         exit 1
     fi
 
-    echo ""
-    info "=== OpenWebUI Post-Update ==="
-    info "VM: ${VMNAME} (VMID: ${VMID}) at ${VM_HOST}"
+    info "${BOLD}*** Starting OpenWebUI update${CL}"
+    debug "VM: ${VMNAME} (VMID: ${VMID}) at ${VM_HOST}"
 
     # ── Step 1: PostgreSQL version migration (if needed) ─────────────
-    info ""
     info "Step 1: Check for PostgreSQL version migration"
 
     # shellcheck disable=SC2086
@@ -126,10 +124,10 @@ REMOTE
 
     case "${pg_migration_result}" in
         NO_MIGRATION_NEEDED)
-            info "  No PostgreSQL migration needed"
+            debug "  No PostgreSQL migration needed"
             ;;
         DATA_ALREADY_PRESENT:*)
-            info "  PostgreSQL already has data (${pg_migration_result#*:}) — skipping migration"
+            debug "  PostgreSQL already has data (${pg_migration_result#*:}) — skipping migration"
             ;;
         MIGRATING:*)
             info "  ${pg_migration_result}"
@@ -146,19 +144,22 @@ REMOTE
     esac
 
     # ── Step 2: Run health checks ─────────────────────────────────────
-    info ""
     info "Step 2: Verify upgrade health"
 
-    if "${SCRIPT_DIR}/test.sh" "${VMNAME}"; then
-        info "Health checks passed — upgrade confirmed healthy"
+    # The health check narrates every check; on success that is detail, shown
+    # under TAPPAAS_DEBUG=1, and on failure it is printed in full.
+    local _hc_out
+    if _hc_out="$("${SCRIPT_DIR}/test.sh" "${VMNAME}" 2>&1)"; then
+        [[ "${OPT_DEBUG:-0}" -eq 1 ]] && printf '%s\n' "${_hc_out}"
+        debug "Health checks passed — upgrade confirmed healthy"
     else
+        printf '%s\n' "${_hc_out}" >&2
         error "Health checks FAILED — skipping image prune to preserve rollback capability"
         error "Old container images retained on ${VM_HOST}"
         exit 1
     fi
 
     # ── Step 3: Prune unused container images ─────────────────────────
-    info ""
     info "Step 3: Prune unused container images"
 
     local prune_output
@@ -172,7 +173,7 @@ REMOTE
             info "  ${line}"
         done
     else
-        info "No unused images to prune"
+        debug "No unused images to prune"
     fi
 
     # ── Environment owner → OpenWebUI admin ───────────────────────────
@@ -194,7 +195,6 @@ REMOTE
     # so once they have run at boot they stay "active" and `systemctl start` is a
     # silent no-op. Seeding then never happens — the owner file lands on the VM
     # and nothing consumes it, with every step still reporting success.
-    echo ""
     info "Step 4: Push environment-owner identity"
 
     local _env _owner_org _owner_user _owner_email _owner_name
@@ -218,7 +218,7 @@ REMOTE
         if [[ -z "${_owner_email}" ]]; then
             warn "  Owner '${_owner_user}' has no primaryEmail — admin seeding skipped"
         else
-            info "  Owner: ${BL}${_owner_user}${CL} <${_owner_email}>"
+            debug "  Owner: ${BL}${_owner_user}${CL} <${_owner_email}>"
             if printf 'OPENWEBUI_OWNER_EMAIL=%s\nOPENWEBUI_OWNER_NAME=%s\n' \
                     "${_owner_email}" "${_owner_name:-${_owner_user}}" \
                 | ssh ${SSH_OPTS} "tappaas@${VM_HOST}" \
@@ -228,7 +228,7 @@ REMOTE
                      sudo systemctl restart openwebui-apply-connection.service && \
                      sudo systemctl restart openwebui-seed-admin.service" 2>/dev/null
             then
-                info "  ${GN}✓${CL} owner identity pushed; admin seeded if the instance has no accounts yet"
+                debug "  ${GN}✓${CL} owner identity pushed; admin seeded if the instance has no accounts yet"
             else
                 warn "  Could not push owner identity to ${VM_HOST} (is the VM up?)"
             fi
@@ -236,13 +236,12 @@ REMOTE
     fi
 
     # ── Done ──────────────────────────────────────────────────────────
-    echo ""
-    info "=== Update Complete ==="
-    info "VM: ${VMNAME} (VMID: ${VMID})"
-    info "Node: ${NODE}"
-    info "Zone: ${ZONE0NAME}"
+    debug "=== Update Complete ==="
+    debug "VM: ${VMNAME} (VMID: ${VMID})"
+    debug "Node: ${NODE}"
+    debug "Zone: ${ZONE0NAME}"
     if [[ -n "${HANODE}" ]]; then
-        info "HA Node: ${HANODE}"
+        debug "HA Node: ${HANODE}"
     fi
 }
 

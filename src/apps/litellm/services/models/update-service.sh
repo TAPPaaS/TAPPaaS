@@ -48,7 +48,7 @@ LITELLM_HOST="${LITELLM_VMNAME}.${LITELLM_ZONE}.internal"
 
 VK_ALIAS="litellm-svc-${CONSUMING_VMNAME}"
 
-info "${BOLD}litellm:models update-service${CL}: checking ${BL}${CONSUMING_MODULE}${CL}"
+debug "${BOLD}litellm:models update-service${CL}: checking ${BL}${CONSUMING_MODULE}${CL}"
 
 if [[ "${DRY_RUN}" -eq 1 ]]; then
     info "  ${YW}[dry-run]${CL} would verify VK '${VK_ALIAS}' on ${LITELLM_HOST}"
@@ -84,7 +84,7 @@ EOSH
 
 if [[ "${VK_STATUS}" == "ok" ]]; then
     VK_OK=1
-    info "  ${GN}✓${CL} VK '${VK_ALIAS}' exists with key file"
+    debug "  ${GN}✓${CL} VK '${VK_ALIAS}' exists with key file"
 elif [[ "${VK_STATUS}" == "alias_no_file" ]]; then
     warn "  VK alias found but key file missing on ${LITELLM_HOST}"
 elif [[ "${VK_STATUS}" == "missing" ]]; then
@@ -100,7 +100,7 @@ if [[ "${VK_OK}" -eq 0 ]]; then
 fi
 
 # ── DB-model api_key coverage check (Pattern 5) ──────────────────────────────
-info "  Checking DB-model api_key coverage on ${LITELLM_HOST}"
+debug "  Checking DB-model api_key coverage on ${LITELLM_HOST}"
 MODEL_CHECK=$(ssh "${SSH_OPTS[@]}" "tappaas@${LITELLM_HOST}" 'bash -s' <<EOSH
 MASTER="${MASTER}"
 curl -sf "http://localhost:4000/model/info" \
@@ -113,10 +113,11 @@ EOSH
 NO_KEY_COUNT=$(echo "${MODEL_CHECK}" | jq '[.[] | select(.has_key == false)] | length' 2>/dev/null || echo "0")
 if [[ "${NO_KEY_COUNT}" -gt 0 ]]; then
     warn "${NO_KEY_COUNT} DB model(s) have no explicit api_key — will 401 after key rotation:"
-    echo "${MODEL_CHECK}" | jq -r '.[] | select(.has_key == false) | "  - \(.name) (id: \(.id))"' || true
+    echo "${MODEL_CHECK}" | jq -r '.[] | select(.has_key == false) | "  - \(.name) (id: \(.id))"' \
+        | while IFS= read -r _m; do warn "${_m}"; done || true
     warn "Run scripts/rotate-provider-key.sh to fix (Step 3 of rotation SOP)"
 else
-    info "  ${GN}✓${CL} all DB models have explicit api_key"
+    debug "  ${GN}✓${CL} all DB models have explicit api_key"
 fi
 
-info "  ${GN}✓${CL} update-service complete for ${CONSUMING_MODULE}"
+debug "  ${GN}✓${CL} update-service complete for ${CONSUMING_MODULE}"

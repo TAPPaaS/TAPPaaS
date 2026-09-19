@@ -172,7 +172,12 @@ CLIENT_SECRET="$(echo "${OIDC_OUT}" | awk -F'client_secret=' '/client_secret=/{p
 debug "  Authentik: binding access groups (${ALLOW_GROUPS[*]})"
 declare -a bind_args=("app-bind-groups" "${SLUG}")
 for g in "${ALLOW_GROUPS[@]}"; do bind_args+=("--group" "${g}"); done
-${AUTHENTIK_MANAGER} "${bind_args[@]}" || die "app-bind-groups failed for ${SLUG}"
+_bind_out="$(${AUTHENTIK_MANAGER} "${bind_args[@]}")" || die "app-bind-groups failed for ${SLUG}"
+# "==> app '<slug>': N new group binding(s); M requested" — news only when N > 0.
+case "${_bind_out}" in
+    *": 0 new group binding"*) debug "  ${_bind_out}" ;;
+    *)                         info "  ${_bind_out}" ;;
+esac
 
 # ── Step 5: write the OIDC client config onto the module VM ──────────────────
 # 5a — verify the discovery URI is reachable from the module VM before writing.
@@ -182,7 +187,7 @@ ${AUTHENTIK_MANAGER} "${bind_args[@]}" || die "app-bind-groups failed for ${SLUG
 debug "  VM: verifying OIDC discovery URI reachable from ${UPSTREAM}"
 _oidc_ok=0
 for _attempt in 1 2 3; do
-    if ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 "tappaas@${UPSTREAM}" \
+    if ssh -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR -o ConnectTimeout=10 "tappaas@${UPSTREAM}" \
         "curl --silent --max-time 10 --output /dev/null --fail '${DISCOVERY_URI}' 2>/dev/null"; then
         _oidc_ok=1; break
     fi
@@ -206,7 +211,7 @@ ssh-keygen -R "${UPSTREAM}" >/dev/null 2>&1 || true
 debug "  VM: merging OIDC vars into ${SECRETS_ENV} on ${UPSTREAM} (mode 600)"
 ENV_CONTENT="$(printf 'OIDC_CLIENT_ID=%s\nOIDC_CLIENT_SECRET=%s\nOIDC_DISCOVERY_URI=%s\n' \
     "${CLIENT_ID}" "${CLIENT_SECRET}" "${DISCOVERY_URI}")"
-if ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 "tappaas@${UPSTREAM}" \
+if ssh -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR -o ConnectTimeout=10 "tappaas@${UPSTREAM}" \
     "sudo install -d -m 700 \"\$(dirname '${SECRETS_ENV}')\" && \
      sudo sh -c 'umask 077; t=\$(mktemp \"\$(dirname \"${SECRETS_ENV}\")/.oidc.XXXXXX\") || exit 1; \
        { [ -f \"${SECRETS_ENV}\" ] && grep -v \"^OIDC_\" \"${SECRETS_ENV}\"; \
@@ -219,7 +224,7 @@ fi
 
 if [[ -n "${CONFIGURE_SERVICE}" ]]; then
     debug "  VM: restarting ${CONFIGURE_SERVICE}"
-    ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 "tappaas@${UPSTREAM}" \
+    ssh -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR -o ConnectTimeout=10 "tappaas@${UPSTREAM}" \
         "sudo systemctl restart '${CONFIGURE_SERVICE}'" \
         || warn "could not restart ${CONFIGURE_SERVICE} — it applies on next nixos-rebuild/boot"
 fi
