@@ -100,12 +100,19 @@ that case was unit-tested only.
 | 2 | 2026-09-18 | ✅ live: run twice (config unchanged), name taken, address taken under another name, PVE node (`tappaas3`), unknown `--zone`, reserved name, key never arrives (nothing written). Unit-tested only (`scripts/test/test-adopt.sh`): Ubuntu, address in no zone |
 | 3 | 2026-09-18 | ✅ update deferred without consent, rebooted with `--allow-disruption` (boot id checked), waits for the clock; disk-fill test fails. **Open:** the nightly, `cicd-key.sh`, key-only SSH |
 | 4 | 2026-09-18 | ✅ `delete` unregisters (same boot id), `--vmid` refused |
-| 5, 6 | — | not started (D8a; ADR-012 §1.3) |
+| 5 | — | not started (D8a) |
+| 6 | 2026-09-19 | ✅ PBS 4.2.6 installed **by hand** on `dh-test1` (datastore on a directory). Run against a copy of `config/` with an empty placement and `.node = dh-test1`, under a second instance name (`pbs6`) so the live `backup.mgmt.internal` was never touched: resolution **adopted `node` = dh-test1** and provisioned nothing on a cluster node (#602's machine case, first live run); `pbs6.mgmt.internal` became a CNAME of dh-test1, which got a DNS entry from its `address` (#612); dh-test1 is its `debianhost` instance's to patch (#603); the update created the verify job on dh-test1's PBS; PBS came back after a reboot; the `debianhost` update upgraded 12 packages with PBS running. Not shown: a PBS package upgrade (it was freshly installed) |
 
 **Found in phase 2:** Debian 13's OpenSSH penalises a source address for failed logins
 (`PerSourcePenalties`, 5s per failure, enforced from 15s, up to 10 min). `adopt` polling every
 5s locked the mothership out of the machine — the operator's own ssh from it included. It now
 tries every 20s.
+
+**Found in phase 6:**
+- **The first run went to tappaas3** — the test's fault, not the code's: hrossen's checkout was behind (pre-#601 code reached `dh-test1.mgmt.internal`, which does not resolve), and under instance `pbs6` the shared `get_config_value` read `pbs6.json`, so the `.node` constraint was empty. It ran install's idempotent path against the real PBS; nothing there changed.
+- **It overwrote `~/.pbs-credentials.txt`** with a fresh, never-applied password — a real, older bug: `install.sh` generated and saved a password before checking whether `tappaas@pbs` existed. Fixed: an existing user's known password is used and the file is never rewritten; the file was restored from `/etc/pve/priv/storage/tappaas_backup.pw` and verified by login.
+- **`pbs_ensure_zfs_ordering` would have required `zfs-mount.service` on a host without it**, stopping PBS at boot. dh-test1 has it (PBS pulls in the ZFS utilities); the step now does nothing where it is absent.
+- **The backup module is effectively single-instance**: its placement libraries read `backup.json` whatever the instance name. Fine for a site-scoped module; recorded, not changed.
 
 ## What each phase proves
 

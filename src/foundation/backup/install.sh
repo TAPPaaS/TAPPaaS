@@ -243,18 +243,41 @@ PBS_USER="tappaas@pbs"
 
 info "${BOLD}Configuring Proxmox Backup Server...${CL}"
 
-# PBS tappaas@pbs password. Resolution order (so the module can install
-# UNATTENDED — F1: backup/install.sh used to hard-block on an interactive prompt):
+# PBS tappaas@pbs password. What is needed depends on whether the user exists.
+#
+# The user does NOT exist yet (a fresh PBS) — a password is chosen:
 #   1. $TAPPAAS_PBS_PASSWORD  (explicit; e.g. exported by an unattended installer)
 #   2. interactive prompt      (a TTY is attached)
 #   3. no TTY + no env var → generate a strong one and save it (mode 600), the
 #      same pattern config-firewall.sh uses, so a scripted run never hangs.
+#
+# The user ALREADY exists (a re-install, a shim promotion over a kept PBS) — its
+# password is not ours to choose, and a new one would never be applied: the
+# `user create` below is skipped. So the KNOWN one is used — $TAPPAAS_PBS_PASSWORD,
+# else ~/.pbs-credentials.txt, else a prompt — and the file is NEVER rewritten.
+# It used to be: every non-interactive re-install replaced the real password in
+# that file with a fresh, unused one (found in the ADR-012 phase 6 test).
+PBS_CRED_FILE="${HOME}/.pbs-credentials.txt"
+if ssh -n "root@${NODE}.${ZONE}.internal" "proxmox-backup-manager user list --output-format json" 2>/dev/null \
+     | jq -e --arg u "${PBS_USER}" 'any(.[]?; .userid == $u)' >/dev/null 2>&1; then
+  PBS_USER_EXISTS=1
+else
+  PBS_USER_EXISTS=0
+fi
 if [[ -n "${TAPPAAS_PBS_PASSWORD:-}" ]]; then
   TAPPAAS_PASSWORD="${TAPPAAS_PBS_PASSWORD}"
   info "Using PBS password from \$TAPPAAS_PBS_PASSWORD (non-interactive)."
+elif [[ "${PBS_USER_EXISTS}" -eq 1 && -r "${PBS_CRED_FILE}" ]]; then
+  TAPPAAS_PASSWORD="$(sed -n 's/^pbs_password=//p' "${PBS_CRED_FILE}" | head -1)"
+  info "${PBS_USER} exists — using its password from ${PBS_CRED_FILE} (left as it is)."
 elif [[ -t 0 ]]; then
-  read -rsp "Enter the password for tappaas user (this will be used for PBS): " TAPPAAS_PASSWORD
+  read -rsp "Enter the password for ${PBS_USER}$([[ "${PBS_USER_EXISTS}" -eq 1 ]] && echo " (it exists — its CURRENT password)"): " TAPPAAS_PASSWORD
   echo
+elif [[ "${PBS_USER_EXISTS}" -eq 1 ]]; then
+  # Nothing to generate: a new password would not be applied. Only a missing
+  # Proxmox storage entry needs it (below), and that step says so if it does.
+  TAPPAAS_PASSWORD=""
+  warn "${PBS_USER} exists and its password is not known here (no \$TAPPAAS_PBS_PASSWORD, no ${PBS_CRED_FILE}) — fine unless the Proxmox storage entry is missing."
 else
   # Generate from /dev/urandom (dependency-free — openssl is NOT guaranteed on
   # tappaas-cicd; a missing openssl here used to yield an EMPTY password and a
@@ -265,16 +288,15 @@ else
   # assignment right after producing a good password.
   TAPPAAS_PASSWORD="$(head -c 4096 /dev/urandom | LC_ALL=C tr -dc 'A-Za-z0-9')"
   TAPPAAS_PASSWORD="${TAPPAAS_PASSWORD:0:24}"
-  PBS_CRED_FILE="${HOME}/.pbs-credentials.txt"
   printf 'pbs_user=%s\npbs_password=%s\n' "${PBS_USER}" "${TAPPAAS_PASSWORD}" >"${PBS_CRED_FILE}"
   chmod 600 "${PBS_CRED_FILE}"
   warn "No TTY and \$TAPPAAS_PBS_PASSWORD unset — generated a PBS password and saved it to ${PBS_CRED_FILE} (mode 600)."
 fi
 
-# Never proceed with a too-short/empty password — PBS requires ≥8 chars, and a
-# silent empty value (e.g. a failed generator) otherwise fails deep inside the
-# user-create step with an opaque error.
-if [[ "${#TAPPAAS_PASSWORD}" -lt 8 ]]; then
+# Never create the user with a too-short/empty password — PBS requires ≥8
+# chars, and a silent empty value (e.g. a failed generator) otherwise fails deep
+# inside the user-create step with an opaque error.
+if [[ "${PBS_USER_EXISTS}" -eq 0 && "${#TAPPAAS_PASSWORD}" -lt 8 ]]; then
   die "Failed to obtain a PBS password (need ≥8 chars). Set \$TAPPAAS_PBS_PASSWORD and retry."
 fi
 
@@ -392,6 +414,9 @@ echo "PBS Fingerprint: ${PBS_FINGERPRINT}"
 
 # Step 6: Add PBS storage to Proxmox datacenter (on primary node)
 MGMT_NODE="$(get_node_hostname 0)"
+if [[ -z "${TAPPAAS_PASSWORD}" ]] && ! _pbs_pvesm_has "${DATASTORE_NAME}" "${ZONE}"; then
+  die "The Proxmox storage ${DATASTORE_NAME} is missing and ${PBS_USER}'s password is not known here — re-run with \$TAPPAAS_PBS_PASSWORD set, or from a terminal."
+fi
 info "Adding PBS storage to Proxmox datacenter on ${MGMT_NODE}..."
 ssh "root@${MGMT_NODE}.${ZONE}.internal" "bash -s" <<EOF
 set -e

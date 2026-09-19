@@ -149,6 +149,10 @@ and warns loudly when it cannot — so no PBS host goes unpatched in silence.
 Discovery reaches such a Host by its recorded address and finds its storage from its ZFS pools
 (#601). Installing PBS onto a bare machine is not automated yet: a PBS already serving there is
 adopted; a machine with only a pool is refused with the steps to take, never recorded.
+**Verified live 2026-09-19** (debianhost test plan, phase 6): a PBS installed by hand on a
+`debianhost` machine was adopted as `node` = that machine from an empty placement, with nothing
+provisioned on a cluster node; its name became a CNAME of the machine; the machine's
+`debianhost` instance patches it; PBS survived a reboot.
 
 **Management stays `managed` for the application.** TAPPaaS installs the PBS and
 runs its lifecycle; that the Host is not a cluster member changes nothing about

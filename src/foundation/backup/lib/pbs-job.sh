@@ -71,6 +71,12 @@ pbs_ensure_zfs_ordering() {
     _out="$(ssh -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
         "root@$(pbs_node_addr "${node}")" 'bash -s' 2>&1 <<'REMOTE'
 set -euo pipefail
+# A Host without ZFS (a debianhost whose datastore is a directory, ADR-012 §1.3)
+# has no zfs-mount.service: requiring it would stop PBS from starting at boot.
+if ! systemctl cat zfs-mount.service >/dev/null 2>&1; then
+    echo "  no ZFS on this host — nothing to order"
+    exit 0
+fi
 want='[Unit]
 After=zfs-mount.service
 Requires=zfs-mount.service'
