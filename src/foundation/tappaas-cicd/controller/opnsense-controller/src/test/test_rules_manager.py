@@ -533,6 +533,7 @@ class TestVerifyAndPruneSuffix(unittest.TestCase):
         self.assertEqual(result.applied, len(desired))
         self.assertEqual(deleted, [])          # nothing pruned
         self.assertEqual(result.deleted, 0)
+        fw.apply_changes.assert_called_once()  # a changed rule reloads the filter
 
     def test_reconcile_counts_only_changed_rules(self):
         # applied is what the firewall changed, not what the module declares:
@@ -547,6 +548,7 @@ class TestVerifyAndPruneSuffix(unittest.TestCase):
         result = self.mgr._apply("litellm", prune=True)
         self.assertGreater(len(desired), 0)
         self.assertEqual(result.applied, 0)
+        fw.apply_changes.assert_not_called()   # nothing changed: no filter reload
 
     def test_reconcile_prunes_a_truly_removed_rule(self):
         desired, _ = self.mgr._compile(load_module(self.dir, "litellm"))

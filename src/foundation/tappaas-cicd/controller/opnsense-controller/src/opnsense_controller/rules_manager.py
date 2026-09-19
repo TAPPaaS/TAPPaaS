@@ -519,7 +519,8 @@ class RulesManager:
                 if rule.description.startswith(owned_prefixes):
                     self.fw.delete_rule_by_uuid(rule.uuid, apply=False)
                     result.deleted += 1
-            self.fw.apply_changes()
+            if result.deleted:
+                self.fw.apply_changes()
         except Exception:
             self._revert(revision)
             raise
@@ -773,7 +774,14 @@ class RulesManager:
                         self.fw.delete_rule_by_uuid(live_rule.uuid, apply=False)
                         result.deleted += 1
 
-            self.fw.apply_changes()
+            # A filter reload per module per update, for rules that did not
+            # change, is churn on the firewall; reload only when something did.
+            # (apply_changes is a plain apply, not the savepoint's timed one, so
+            # skipping it leaves no rollback pending.)
+            if result.applied or result.deleted:
+                self.fw.apply_changes()
+            else:
+                debug(f"{module.vmname}: no rule changed — firewall not reloaded")
         except Exception:
             self._revert(revision)
             raise
