@@ -31,6 +31,7 @@ import { FakeModuleClient } from "./fake-client";
 import { HELP, run } from "../../src/main";
 import { undocumentedOptions } from "../../../../lib/ts/src/help";
 import { moduleSourceOf } from "../../../../lib/ts/src/instance";
+import { effectiveKind } from "../../../../lib/ts/src/kind";
 import { isModuleConfig } from "../../../../lib/ts/src/module-discovery";
 
 let passed = 0;
@@ -360,9 +361,8 @@ const CONFIG =
     "list --json includes vmid-less provider modules (vmid:null)",
   );
   check(
-    parsed.some((m) => m.name === "nextcloud" && m.kind === "module") &&
-      parsed.some((m) => m.name === "templates" && m.kind === null),
-    "list --json carries kind per module (null when absent) (#669)",
+    parsed.some((m) => m.name === "nextcloud" && m.kind === "module"),
+    "list --json carries kind per module (#669)",
   );
 }
 
@@ -401,7 +401,6 @@ function captureList(client: FakeModuleClient, extraArgs: string[] = []): string
   // #669: KIND is the second column, as the config declares it ("-" when absent).
   check(/^\S*NAME\s+KIND\s+ENV\b/m.test(out), "KIND is the second column");
   check(/^nextcloud\s+module\s/m.test(out), "a module's row shows its declared kind");
-  check(/^templates\s+-\s/m.test(out), "a module without a kind shows '-'");
   check(/^tappaas-nixos\s+vm\s/m.test(out), "a template guest (no config) is a vm");
   // Column order NAME KIND ENV ZONE NODE VMID RUN STATE: node tappaas2 then vmid 340 then running.
   check(
@@ -430,6 +429,34 @@ function captureList(client: FakeModuleClient, extraArgs: string[] = []): string
   );
   check(/nextcloud(\s+\S+){3}\s+\S+\s+340/.test(out), "config-only fallback still lists modules");
   check(!/Unexpected VMs/.test(out), "no orphan section when there is no live data");
+}
+
+// ── effectiveKind: authored, adopted, or the Community default (#669) ──
+// Against a repository built here, so the answer never depends on what the
+// machine running the test has checked out.
+{
+  const root = mkdtempSync(join(tmpdir(), "kind-"));
+  const mod = (rel: string, json: Record<string, unknown>): string => {
+    const dir = join(root, rel);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, `${rel.split("/").pop()}.json`), JSON.stringify(json));
+    return dir;
+  };
+  mkdirSync(join(root, "src"), { recursive: true });
+  writeFileSync(join(root, "src", "module-catalog.json"), JSON.stringify({ modules: [
+    { moduleName: "cluster", moduleJson: "src/foundation/cluster/cluster.json", source: "official" },
+    { moduleName: "oldfound", moduleJson: "src/foundation/oldfound/oldfound.json", source: "official" },
+    { moduleName: "hue", moduleJson: "src/lars/iot/hue/hue.json" },
+  ] }));
+  const cluster = mod("src/foundation/cluster", { kind: "application" });
+  const oldfound = mod("src/foundation/oldfound", {});
+  const hue = mod("src/lars/iot/hue", {});
+  check(effectiveKind({ kind: "lxc", moduleSource: hue }) === "lxc", "a deployed kind wins");
+  check(effectiveKind({ moduleSource: cluster }) === "application", "an authored kind is reported before the update adopts it");
+  check(effectiveKind({ moduleSource: hue }) === "vm", "a Community module without a kind is a vm");
+  check(effectiveKind({ moduleSource: oldfound }) === null, "an official module without a kind gets no default");
+  check(effectiveKind({ vmname: "legacy" }) === null, "a config with no moduleSource gets no default");
+  rmSync(root, { recursive: true, force: true });
 }
 
 // ── Module resolution: the three tracking paths (#459, #460) ────────────

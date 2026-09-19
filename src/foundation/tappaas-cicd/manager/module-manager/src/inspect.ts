@@ -56,6 +56,7 @@ import {
 import { InspectOptions } from "./types";
 import { BL, BOLD, CL, GN, RD, YW, error, info, warn } from "./shlog";
 import { moduleSourceJson } from "../../../lib/ts/src/instance";
+import { effectiveKind } from "../../../lib/ts/src/kind";
 
 // ── the desired-state resolver: NOT here ───────────────────────────────
 // jqStr/getField/appliedDefault/resolveField and the ModuleFieldsSchema types
@@ -332,7 +333,7 @@ export function buildConfigOnlyReport(
   const t = new Table();
   // A machine/application/device has no Proxmox guest by definition (ADR-022f
   // D1); only for a vm/lxc — or a config with no kind — is a missing vmid news.
-  const kind = typeof cfg.kind === "string" ? cfg.kind : "";
+  const kind = effectiveKind(cfg) ?? "";
   const why = ["machine", "application", "device"].includes(kind)
     ? `(${kind} — no Proxmox guest)`
     : "(no VM — vmid not set)";

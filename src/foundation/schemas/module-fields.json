@@ -238,7 +238,7 @@
         "module": "LEGACY, never authored: ADR-007's object-type marker, once stamped into every deployed config. Migration 0004 removes it; it survives only where it is a config's sole module signal, so discovery can still find that module."
       },
       "example": "vm",
-      "note": "Absent on modules ADR-022 does not classify yet — `cluster` and `templates` (the grouping concept is its own ADR); discovery finds them by their shape. Before #611 this field was the object-type marker, stamped \"module\" by install-module.sh; that stamping is gone."
+      "note": "Every official module declares it: `cluster` is an application (it configures the Proxmox cluster on the pvehost machines), `templates` a vm (it owns the template guests) (#669, operator decision 2026-09-19). A module that declares none and is not official — a Community module — is a vm (lib/ts/src/kind.ts effectiveKind). Before #611 this field was the object-type marker, stamped \"module\" by install-module.sh; that stamping is gone."
     },
     "source": {
       "description": "Origin & trust of the catalog entry (ADR-007b). Answers 'Where does the catalog entry come from?'. Orthogonal to 'tier'. Normally INFERRED at deploy time from the repository the module is catalogued in (sourceMetadata lives in Site → repositories, CR-05); only set explicitly when the module file itself must pin it.",

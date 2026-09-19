@@ -12,6 +12,7 @@ import { defaultConfigDir } from "../../../lib/ts/src/config-io";
 import { discoverModules, isModuleConfig } from "../../../lib/ts/src/module-discovery";
 import { ModuleConfig, ModuleStatus } from "./types";
 import { moduleSourceOf } from "../../../lib/ts/src/instance";
+import { effectiveKind } from "../../../lib/ts/src/kind";
 
 // Config-root resolution comes from the shared lib (TAPPAAS_CONFIG, then
 // CONFIG_DIR, then /home/tappaas/config). Re-exported for main.ts/client.ts.
@@ -69,7 +70,9 @@ export { isModuleConfig };
 function toModuleConfig(name: string, raw: Record<string, unknown>): ModuleConfig {
   return {
     name,
-    kind: asString(raw.kind),
+    // Effective, not raw: the source JSON's kind before the next update adopts
+    // it, and vm for a Community module that declares none (#669).
+    kind: effectiveKind(raw) ?? undefined,
     description: asString(raw.description),
     vmname: asString(raw.vmname),
     vmid: asNumberOrNull(raw.vmid),
