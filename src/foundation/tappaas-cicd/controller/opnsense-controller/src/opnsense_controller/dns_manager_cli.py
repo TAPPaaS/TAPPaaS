@@ -186,6 +186,72 @@ def delete_dns_host(
         return False
 
 
+# The description backup's pbs-dns.sh gives the Host entry it creates for a
+# machine (#612). It is the ONLY thing that marks an entry as TAPPaaS's to remove.
+MACHINE_ENTRY_DESCRIPTION = "TAPPaaS machine {host}"
+
+
+def release_machine_host(
+    manager: DhcpManager,
+    hostname: str,
+    domain: str,
+    check_mode: bool = False,
+) -> bool:
+    """Remove the Host entry TAPPaaS created for a machine — and nothing else (#672).
+
+    Deleted only when every guard holds; otherwise the entry is left and the
+    reason printed, which is not an error:
+
+    - its description is exactly ``TAPPaaS machine <host>`` — an entry an
+      operator, the cluster install or a PXE provisioning made is never ours;
+    - it carries no MAC: with one it is a DHCP static reservation (cluster:vm,
+      PXE, HAOS-style appliances), and deleting it would drop the reservation;
+    - it carries no CNAME: aliases live ON the entry, so deleting it would take
+      e.g. the PBS name along.
+
+    The MAC and CNAMEs are read from getHost: searchHost's rows do not carry the
+    MAC at all (hardware_addr comes back null even for a reservation), so a
+    check on the listing would wave every reservation through. DHCP leases — the
+    names dnsmasq generates itself — are not host entries and cannot be reached
+    from here.
+    """
+    fqdn = f"{hostname}.{domain}"
+    want = MACHINE_ENTRY_DESCRIPTION.format(host=hostname)
+    try:
+        rows = [h for h in manager.list_hosts()
+                if h.get("host") == hostname and h.get("domain") == domain]
+        ours = [h for h in rows if (h.get("description") or "") == want]
+        if not ours:
+            others = f" ({len(rows)} other entr{'y' if len(rows) == 1 else 'ies'} for it left alone)" if rows else ""
+            print(f"{fqdn}: no entry TAPPaaS created for this machine — nothing to release{others}")
+            return True
+        if len(ours) > 1:
+            print(f"{fqdn}: {len(ours)} entries carry '{want}' — ambiguous, all left alone")
+            return True
+        entry = ours[0]
+        full = manager.get_host_full(entry["uuid"])
+        macs = manager._selected(full.get("hwaddr"))
+        cnames = manager._selected(full.get("cnames"))
+        if macs:
+            print(f"{fqdn}: kept — it is a DHCP reservation ({', '.join(macs)})")
+            return True
+        if cnames:
+            print(f"{fqdn}: kept — aliases still point at it ({', '.join(cnames)})")
+            return True
+        if check_mode:
+            print(f"{fqdn}: would release it (dry-run mode)")
+            return True
+        result = manager.delete_host_by_uuid(entry["uuid"])
+        if result.get("changed"):
+            print(f"{fqdn}: released")
+            return True
+        print(f"ERROR: could not delete {fqdn}: {result.get('error')}", file=sys.stderr)
+        return False
+    except Exception as e:
+        print(f"ERROR: Failed to release {fqdn}: {e}", file=sys.stderr)
+        return False
+
+
 def list_dns_hosts(manager: DhcpManager) -> bool:
     """List all DNS host entries.
 
@@ -375,8 +441,14 @@ Examples:
   # Add with custom description
   dns-manager add backup mgmt.internal 10.0.0.12 --description "PBS Backup Server"
 
-  # Delete a DNS entry (by hostname and domain)
+  # Delete a DNS entry (by hostname and domain) — the FIRST entry matching,
+  # whatever its description or MAC: never use it to clean up what TAPPaaS
+  # may not own
   dns-manager delete backup mgmt.internal
+
+  # Remove the entry TAPPaaS created for a machine — never a DHCP
+  # reservation, an entry with aliases, or one it did not create (#672)
+  dns-manager release dh-test1 mgmt.internal
 
   # List all DNS entries
   dns-manager list
@@ -418,6 +490,15 @@ Examples:
     delete_parser = subparsers.add_parser("delete", parents=[gp], help="Delete a DNS host entry by hostname and domain")
     delete_parser.add_argument("hostname", help="Hostname without domain (e.g., backup)")
     delete_parser.add_argument("domain", help="Domain name (e.g., mgmt.internal)")
+
+    # Release command (#672) — the guarded delete for an entry TAPPaaS created
+    release_parser = subparsers.add_parser(
+        "release", parents=[gp],
+        help="Remove the Host entry TAPPaaS created for a machine — never a DHCP reservation, "
+             "an entry with aliases, or one TAPPaaS did not create",
+    )
+    release_parser.add_argument("hostname", help="The machine's hostname, without domain (e.g., dh-test1)")
+    release_parser.add_argument("domain", help="Domain name (e.g., mgmt.internal)")
 
     # List command
     subparsers.add_parser("list", parents=[gp], help="List all DNS host entries")
@@ -512,6 +593,10 @@ Examples:
                     args.domain,
                     args.check_mode,
                     args.debug,
+                )
+            elif args.command == "release":
+                success = release_machine_host(
+                    manager, args.hostname, args.domain, args.check_mode,
                 )
             elif args.command == "list":
                 success = list_dns_hosts(manager)
