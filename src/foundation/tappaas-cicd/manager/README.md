@@ -87,9 +87,13 @@ dispatcher.)
 | [`site-manager`](site-manager/) | The Site: site-wide identity, location, hardware (Proxmox nodes + storage pools), backup, update schedule, repositories. Owns `config/site.json` and migrates the legacy `configuration.json` into it. |
 | [`environment-manager`](environment-manager/) | The Environment taxonomy: per-tenant deployment contexts (public domain(s), DNS mode, network-zone reference, data residency, backup, legal). Owns `config/environments/*.json` and bootstraps the always-required `mgmt` + default environments. |
 | [`module-manager`](module-manager/) | The module lifecycle: install / update / delete / test / snapshot of TAPPaaS modules, with tier/source classification lint and environment-aware deployment. Owns the per-module JSON in `config/`. |
-| [`network-manager`](network-manager/) | The network front door: owns `zones.json` (CRUD + VLAN allocation) and reconciles four infrastructure planes (OPNsense, Proxmox, switch, access points) by orchestrating their controllers. |
+| [`network-manager`](network-manager/) | The network front door: owns `zones.json` (CRUD + VLAN allocation) and reconciles four infrastructure planes (OPNsense, Proxmox, switch, access points) by orchestrating their controllers. Also the admin VPN (`network-manager wgvpn`: WireGuard into mgmt, terminating on OPNsense — formerly `satellite-manager admin`). |
 | [`health-manager`](health-manager/) | Cluster / VM / disk / OS health and maintenance utilities: inspect the cluster, diff a VM against its config, grow disks over a threshold, update a VM's OS, and report backup health. Operational/read-mostly; owns no config, so it has no `validate` operation. |
 | [`backup-manager`](backup-manager/) | The backup hierarchy: the Site → Environment → Module backup-policy cascade. Resolves the effective backup policy (retention, residency, enabled, exclude) for any module, reports status across all modules, validates the hierarchy, and delegates restore/PBS ops to `backup-controller` + the foundation `restore.sh`. |
+
+The satellite has no manager of its own: `satellite-manager` was retired (ADR-010 §8.4) —
+the satellite is an ordinary module under `module-manager`, and its admin-VPN verbs are
+`network-manager wgvpn`.
 
 To build a new manager, copy the nearest real one and edit (see the
 "Scaffolding a new component" section in [`../README.md`](../README.md) — the
