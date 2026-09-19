@@ -420,6 +420,25 @@ main() {
         fi
     fi
 
+    # A foundation module lives in mgmt (#349). Its release names no zone0 — a
+    # released module names one only when it must live in a particular kind of
+    # zone (the satellite's edge) — so record where it goes here, the one path
+    # every config is written through: the bootstrap writes network,
+    # tappaas-cicd and templates with this script alone, before any environment
+    # exists, and every reader of zone0 then finds it. An explicit --zone0 below
+    # still overrides it; install-module.sh would resolve the same (a foundation
+    # module installs into the mgmt environment, whose zone is mgmt).
+    if jq -e '(.tier == "foundation") and ((.zone0 // "") == "")' "${dest_json}" >/dev/null 2>&1; then
+        tmp_file=$(mktemp)
+        if jq '.zone0 = "mgmt"' "${dest_json}" > "${tmp_file}"; then
+            mv "${tmp_file}" "${dest_json}"
+            debug "  zone0 = mgmt (a foundation module, #349)"
+        else
+            rm -f "${tmp_file}"
+            warn "  Could not record zone0 for a foundation module"
+        fi
+    fi
+
     # Parse and apply field modifications
     local has_modifications=true
 

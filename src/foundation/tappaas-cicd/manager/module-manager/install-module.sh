@@ -212,7 +212,9 @@ resolve_default_environment() {
 resolve_zone_for_environment() {
     local env="$1"
     local env_file="${CONFIG_DIR}/environments/${env}.json"
-    [[ -f "$env_file" ]] || { printf '%s\n' ""; return 0; }
+    # mgmt is the control plane: its zone is mgmt, file or not — the bootstrap
+    # installs foundation modules before environment-manager has written it (#349).
+    [[ -f "$env_file" ]] || { [[ "${env}" == mgmt ]] && printf 'mgmt\n' || printf '%s\n' ""; return 0; }
     jq -r '.network.zone // empty' "$env_file" 2>/dev/null
 }
 

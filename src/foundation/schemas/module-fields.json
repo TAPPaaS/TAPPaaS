@@ -388,7 +388,7 @@
       "default": "mgmt",
       "format": "^[a-z][a-zA-Z0-9]*$",
       "example": "srvHome",
-      "note": "Zone determines VLAN tag. 'mgmt' is untagged traffic. camelCase only — no underscores or hyphens. ADR-007 P5: when zone0 is unset it DEFAULTS to the target environment's network.zone (read from config/environments/<env>.json); pre-cutover (no site.json/environments) it falls back to resolve_default_zone()'s behaviour. An explicit zone0 in the module JSON always wins."
+      "note": "Zone determines VLAN tag. 'mgmt' is untagged traffic. camelCase only — no underscores or hyphens. ADR-007 P5: when zone0 is unset it DEFAULTS to the target environment's network.zone (read from config/environments/<env>.json); pre-cutover (no site.json/environments) it falls back to resolve_default_zone()'s behaviour. An explicit zone0 in the module JSON always wins. #349: a RELEASED module names zone0 only when it must live in a particular kind of zone (dmz, an IoT zone, edge); a foundation module that names none is recorded as mgmt by copy-update-json.sh. Once deployed it is the site's: the update merge keeps it (apply-json-merge.sh rule 1b) — move an install with module modify --set zone0=…"
     },
     "zone1": {
       "description": "The security zone the SECOND network interface connects to, if there is one; it must exist in zones.json. For a VM: which Proxmox bridge VLAN its second virtual NIC is attached to. For a machine: which network its second physical NIC is cabled to — recorded, not yet enforced.",

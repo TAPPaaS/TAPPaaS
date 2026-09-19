@@ -210,6 +210,44 @@ run_case "patternA-orig" \
     "a" "moda" \
     '.cores == 8'
 
+# Cases 12a-e: zone0 is the site's once deployed (#349, rule 1b).
+# A release that DROPS zone0 (the foundation modules, #349) keeps the installed
+# zone — without rule 1b, #581 would delete it and the converge would lose the
+# VM's network. Also inside a Pattern A block, where cluster:vm carries it.
+run_case "zone0-release-drops" \
+    '{"vmname":"a","zone0":"mgmt","cores":2}' \
+    '{"vmname":"a","zone0":"mgmt","cores":2}' \
+    '{"vmname":"a","cores":2}' \
+    "a" "moda" \
+    '.zone0 == "mgmt"'
+run_case "zone0-release-drops-patternA" \
+    '{"vmname":"a","dependsOn":["cluster:vm"],"config":{"cluster:vm":{"zone0":"mgmt","cores":2}}}' \
+    '{"vmname":"a","dependsOn":["cluster:vm"],"config":{"cluster:vm":{"zone0":"mgmt","cores":2}}}' \
+    '{"vmname":"a","dependsOn":["cluster:vm"],"config":{"cluster:vm":{"cores":2}}}' \
+    "a" "moda" \
+    '.zone0 == "mgmt"'
+# A release that CHANGES it does not move an install (untouched by the operator).
+run_case "zone0-release-changes" \
+    '{"vmname":"a","zone0":"dmz"}' \
+    '{"vmname":"a","zone0":"dmz"}' \
+    '{"vmname":"a","zone0":"home"}' \
+    "a" "moda" \
+    '.zone0 == "dmz"'
+# The zone install resolved (never in the release) stays when the release adds one.
+run_case "zone0-resolved-kept" \
+    '{"vmname":"a","zone0":"rossen"}' \
+    '{"vmname":"a"}' \
+    '{"vmname":"a","zone0":"dmz"}' \
+    "a" "moda" \
+    '.zone0 == "rossen"'
+# A config without one adopts the release's (rule 3, unchanged).
+run_case "zone0-absent-adopted" \
+    '{"vmname":"a"}' \
+    '{"vmname":"a"}' \
+    '{"vmname":"a","zone0":"dmz"}' \
+    "a" "moda" \
+    '.zone0 == "dmz"'
+
 # ── The converter paths the libraries hard-code must EXIST (#570) ───────
 #
 # This file aborted at load for releases on end because a source path was left

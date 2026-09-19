@@ -8,7 +8,7 @@
 | **Author** | Erik Daniel |
 | **Parent** | [ADR-007 Taxonomy (Overview)](<ADR-007 - TAPPaaS Taxonomy.md>) |
 | **Related** | #318 (rename "variant"→Environment); #299 (domain_groups — subsumed); #319 (zone deletion); #294 (zone-aligned VMID, out of scope); #313 (timezone→site); **manager:** `environment-manager`; **zones owned by** `network-manager` |
-| **Changelog** | v1.4 — **as-built (2026-06-30):** (1) `network.zones[]` reverted to **`network.zone`** (singular) — the realized schema binds an Environment to **one** zone; (2) added **`domains.dnsMode`** (`per-service`\|`wildcard`); (3) the TLS **cert refid is runtime state**, NOT an authored field — `domains.tlsCertRefid` is **rejected** by the schema and lives in `config/cert-refids.json` keyed by environment; (4) **`mgmt` is an Environment** (omits `domains`); (5) the **default Environment = the Site/org name** (`<N>`), and `configuration.json` is **retired** (no `tappaas.domain` fallback). v1.3 — (superseded) `network.zone` → `network.zones[]`. v1.2 — "bucket" → "classification domain". v1.1 — Erik⟷Lars review: ownerOrg→Organization ref (CR-08); vlan→zones.json (CR-09); drop identityOrganization/tenant (CR-11); updateWindow/Channel → issues (CR-12/13); backup cross-level (CR-14). Deferred: firewallPosture (CR-10), legal→own ADR (CR-15) |
+| **Changelog** | v1.5 (2026-09-19, #349) — who names `zone0`: a released module only when it must live in a particular kind of zone; otherwise install resolves it (foundation → `mgmt`), and once deployed the merge keeps it. v1.4 — **as-built (2026-06-30):** (1) `network.zones[]` reverted to **`network.zone`** (singular) — the realized schema binds an Environment to **one** zone; (2) added **`domains.dnsMode`** (`per-service`\|`wildcard`); (3) the TLS **cert refid is runtime state**, NOT an authored field — `domains.tlsCertRefid` is **rejected** by the schema and lives in `config/cert-refids.json` keyed by environment; (4) **`mgmt` is an Environment** (omits `domains`); (5) the **default Environment = the Site/org name** (`<N>`), and `configuration.json` is **retired** (no `tappaas.domain` fallback). v1.3 — (superseded) `network.zone` → `network.zones[]`. v1.2 — "bucket" → "classification domain". v1.1 — Erik⟷Lars review: ownerOrg→Organization ref (CR-08); vlan→zones.json (CR-09); drop identityOrganization/tenant (CR-11); updateWindow/Channel → issues (CR-12/13); backup cross-level (CR-14). Deferred: firewallPosture (CR-10), legal→own ADR (CR-15) |
 
 The **🏠 Environments** classification domain. An Environment = **where apps run**: network zones, domain, update
 window, security posture. Owned by **exactly one Organization** (`ownerOrg`).
@@ -41,6 +41,15 @@ It **subsumes** two earlier mechanisms so there is no overlapping config:
 
 - **MECE:** a module names its Environment (`--environment`, persisted as `.environment`) and its zone
   (`zone0`); a **default Environment** (`<N>`) covers the unspecified case, so coverage is exhaustive.
+- **Who names `zone0` (amended 2026-09-19, #349).** A *released* module names `zone0` only when it
+  must live in a particular kind of zone — a public service in `dmz` (coturn, vaultwarden), a
+  device bridge in an IoT zone (deconz), the satellite in `edge`. Every other module names none:
+  install resolves it — the environment's `network.zone`, and for a foundation module `mgmt`,
+  recorded by `copy-update-json.sh` so the bootstrap's configs carry it too. Once deployed,
+  `zone0` is the **site's**: the update merge keeps it whatever the release does (a site field,
+  `apply-json-merge.sh` rule 1b), so an update never moves an install; `module modify --set
+  zone0=…` does, deliberately. The earlier proposal — an abstract `srv` sentinel every install
+  must override — is not taken: the default must work without a choice.
 - **DRY — one derivation chain (as built):**
   `module.environment → environments/<env>.json .domains.primary (+ .dnsMode) → proxyDomain` (Caddy).
   There is **no `tappaas.domain` fallback** — `configuration.json` is retired; the environment file is the

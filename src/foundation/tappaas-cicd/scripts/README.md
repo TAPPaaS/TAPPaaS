@@ -191,6 +191,7 @@ apply_three_way_merge <effective-module> <module-dir>
 
 **Per-leaf rule:**
 1. If the path's top-level key is in **AUTO_FIELDS** (`moduleSource`, legacy `location`, `installTime`, `updateTime`, `releaseDate`, `variant`) → keep `current`.
+1b. If it is a **site field** (`zone0`, #349) and `current` has it → keep `current`, whether the release dropped, kept or changed it: install resolved where the module lives, and moving it is `module modify --set zone0=…`, never an update. Without one, the release's value is adopted.
 2. Else if path absent in `source`, present in `current` → keep `current` (operator-added).
 3. Else if path absent in `current` → adopt `source` (new release field).
 4. Else if `current == orig` → adopt `source` (operator untouched → follow release).

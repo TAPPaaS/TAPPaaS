@@ -406,14 +406,15 @@ is a migration.
 What community modules copy and what deployed configs point at.
 
 Status: in progress — #500 built ahead of the entry gate (operator, 2026-09-19; recorded in
-ADR-025 D14). #421 waits for the operator's go (to be checked with Erik); the rest waits for
-the gate: decisions #294, #349, #250, and the Stacks & solutions ADR.
+ADR-025 D14). #349 built (operator go, 2026-09-19; ADR-007c v1.5). #421 waits for the operator's
+go (to be checked with Erik); the rest waits for the gate: decisions #294, #250, and the
+Stacks & solutions ADR.
 
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
 | #500 | Automate moving a module | 2 | 3 | H | **Built 2026-09-19** (`wave1/g1.3-module-contract`): not the `migrating`/`newRepo` catalogue status first proposed but a migration, as the operator's comment suggested — `scripts/move-module.sh <Repo>:<path> <Repo>:<path>` moves the files, rewrites the catalogue and writes `NNNN-modules-moved.sh` (ADR-025 D14; decisions: stop on an unregistered target repository, moves declared in TAPPaaS, `--rename` behind a dependency check). Prerequisite for #421 |
 | #421 | Restructure `src/apps` into stacks | 2 | 4 | H | Changes `.location` in every deployed config; after #500. Settle the *solution* concept (2026-08-03) |
-| #349 | Drop the zone tag from released modules | 3 | 3 | H | Direction set 2026-07-09 |
+| #349 | Drop the zone tag from released modules | 3 | 3 | H | **Built 2026-09-19** (`wave1/g1.3-module-contract`): apps already named none; `zone0: mgmt` removed from the 7 foundation modules, recorded as `mgmt` by `copy-update-json.sh` (the bootstrap path) and resolved for `mgmt` before its env file exists; the five placed-by-role modules keep theirs (coturn, vaultwarden `dmz`, deconz `iotCloud`, netbird-client `home`, satellite `edge`). The update merge now keeps a deployed `zone0` (rule 1b) — without it #581 would have deleted it from every foundation config. ADR-007c v1.5 |
 | #566 | Legacy name → variant convention | 2 | 3 | H | Names get harder to change as installs grow |
 | #250 | `dependsOn` ownership for community modules | 3 | 2 | H | Option D (`dependsOn.sh`) |
 | #248 | Module version/status standard | 4 | 1 | M | Flag day across modules |

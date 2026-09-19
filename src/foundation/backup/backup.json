@@ -12,7 +12,6 @@
   "imageType": "apt",
   "image": "pbs",
   "imageLocation": "http://download.proxmox.com/debian/pbs",
-  "zone0": "mgmt",
   "dependsOn": [],
   "provides": [
     "vm",

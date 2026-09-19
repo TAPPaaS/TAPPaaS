@@ -219,7 +219,9 @@ export function gitSourceWarnings(gitFound: boolean, location: string): OutLine[
 // install (ADR-007 #3), and `config` is the Pattern A container, not a field.
 // The same judgement apply-json-merge.sh makes in AUTO_FIELDS, for the same
 // reason — a field the merge will not reconcile is not one to report as drift.
-const DEPLOYMENT_OWNED = new Set(["moduleSource", "location", "installTime", "updateTime", "kind", "config"]);
+// `zone0` is the site's placement once installed (#349, the merge's SITE_FIELDS):
+// most releases name none, so it would differ from git on every module.
+const DEPLOYMENT_OWNED = new Set(["moduleSource", "location", "installTime", "updateTime", "kind", "config", "zone0"]);
 
 export interface FieldSection {
   // "general", or the coordinate that owns these fields ("network:proxy").

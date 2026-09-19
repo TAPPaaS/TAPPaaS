@@ -8,7 +8,6 @@
   "vmname": "network",
   "vmid": 110,
   "vmtag": "TAPPaaS,Foundation",
-  "zone0": "mgmt",
   "zone1": "mgmt",
   "ports": [
     {

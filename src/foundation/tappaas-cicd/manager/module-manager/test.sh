@@ -259,6 +259,12 @@ znone="$(run_p5 "$EWORK" resolve_zone_for_environment ghost)"
 [[ -z "$znone" ]] && ok "missing env file → empty zone (caller falls back to resolve_default_zone)" \
                   || bad "expected empty zone for missing env file, got '${znone}'"
 
+# mgmt is the control plane: its zone is mgmt even before its env file exists —
+# the bootstrap installs foundation modules first (#349).
+zmg="$(run_p5 "${WORK}" resolve_zone_for_environment mgmt)"
+[[ "$zmg" == "mgmt" ]] && ok "mgmt with no env file → zone 'mgmt' (#349)" \
+                       || bad "expected zone 'mgmt' for mgmt without its env file, got '${zmg}'"
+
 # back-compat: no site.json, no environments → default env is empty (legacy path)
 BCW="${WORK}/bc"; mkdir -p "$BCW"
 def_bc="$(run_p5 "$BCW" resolve_default_environment)"

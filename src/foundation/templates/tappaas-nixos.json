@@ -5,7 +5,6 @@
   "vmname": "tappaas-nixos",
   "vmid": 8080,
   "vmtag": "TAPPaaS,Foundation",
-  "zone0": "mgmt",
   "dependsOn": [
     "cluster:vm"
   ],

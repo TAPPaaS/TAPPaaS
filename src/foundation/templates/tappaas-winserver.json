@@ -5,7 +5,6 @@
   "vmname": "tappaas-winserver",
   "vmid": 8081,
   "vmtag": "TAPPaaS,Foundation",
-  "zone0": "mgmt",
   "dependsOn": [
     "cluster:vm"
   ],

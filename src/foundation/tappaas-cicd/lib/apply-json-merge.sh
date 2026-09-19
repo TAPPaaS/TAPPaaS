@@ -16,6 +16,14 @@
 #
 #   1. If path[0] in AUTO_FIELDS (location, installTime, updateTime,
 #      releaseDate, variant):                                keep current
+#   1b. If path[0] in SITE_FIELDS (zone0) and present in current:
+#                                                            keep current
+#      The site's placement decision (#349): install resolves zone0 (the
+#      module's own, else its environment's zone) and writes it here, and a
+#      released module names it only when it must live in a particular kind of
+#      zone. So a release that drops or changes zone0 never moves an install —
+#      that is `module modify --set zone0=…`. Absent in current, the ordinary
+#      rules apply (a release value is adopted).
 #   2. Else if path absent in source, present in current:
 #        2a. …and present in orig:                           DROP (#581)
 #            The release once defined it and no longer does — the author
@@ -71,6 +79,8 @@ if [[ -z "${_MERGE_CONFIG_DIR:-}" ]]; then
     # Note: vmname/vmid/etc are NOT in this list — operator changes there ARE
     # meaningful and follow the standard pin-vs-adopt rule.
     readonly _MERGE_AUTO_FIELDS='["moduleSource","location","installTime","updateTime","releaseDate","variant","environment"]'
+    # Site-owned once deployed (#349): kept when present, adopted when absent.
+    readonly _MERGE_SITE_FIELDS='["zone0"]'
 fi
 
 # Load common log functions if not already provided.
@@ -214,7 +224,8 @@ apply_three_way_merge() {
         --argjson c "${c_n}" \
         --argjson o "${o_n}" \
         --argjson s "${s_n}" \
-        --argjson auto "${_MERGE_AUTO_FIELDS}" '
+        --argjson auto "${_MERGE_AUTO_FIELDS}" \
+        --argjson site "${_MERGE_SITE_FIELDS}" '
         # Collect every leaf path. "Leaf" = a path whose value is a scalar OR
         # an array. Objects are recursed into. Arrays are compared whole, so
         # paths inside arrays (containing a numeric segment) are excluded.
@@ -243,6 +254,11 @@ apply_three_way_merge() {
                 if $in_c then
                     .result = (.result | setpath($p; $cv))
                 else . end
+              elif ($site | index($top)) != null and $in_c then
+                # Rule 1b: site-owned (#349) — the installed value stands,
+                # whether the release dropped, kept or changed it.
+                .result = (.result | setpath($p; $cv))
+                | (if ($in_s | not) or $cv != $sv then .kept += [$p | join(".")] else . end)
               elif ($in_s | not) and $in_c then
                 # Rule 2: the source does not define this path but the deployed
                 # config has it. Which of the two reasons applies is decided by

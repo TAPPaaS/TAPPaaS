@@ -9,7 +9,6 @@
   "vmname": "identity",
   "vmid": 140,
   "vmtag": "TAPPaaS,Foundation",
-  "zone0": "mgmt",
   "dependsOn": [
     "cluster:vm",
     "cluster:ha",
