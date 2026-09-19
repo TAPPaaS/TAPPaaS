@@ -133,9 +133,22 @@ export interface JobStatus {
   reachable: boolean; // false ⇒ PBS/cluster offline (controller skipped)
 }
 
+// One cluster backup job that covers a VM (#554) — TAPPaaS's own or anyone else's.
+export interface JobCoverage {
+  jobId: string;
+  how: "explicit" | "all" | "pool"; // its --vmid list | --all | a pool selection
+  storage: string;
+  schedule: string;
+  enabled: boolean;
+  managed: boolean; // one of TAPPaaS's marked bucket jobs
+}
+
 export interface Client {
   // backup-controller job-status --json — the shared PBS backup job state.
   jobStatus(): JobStatus;
+  // backup-controller coverage <module> --json — every job covering its VM;
+  // null when the cluster did not answer (#554).
+  coverage(module: string): JobCoverage[] | null;
   // backup-controller list <module> --json — snapshot backup-times for a VM.
   listSnapshots(module: string): string[];
   // ── PBS mutations (reconcile apply → controller owns the PBS write) ──

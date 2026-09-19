@@ -92,6 +92,14 @@ Two operator inputs shape resolution, both on `backup.json`: **`.node`** restric
 discovery to one named node (empty searches every node), and **`.pbsUrl`** is the PBS
 clients push to (default `backup.mgmt.internal`).
 
+**Coverage is asked of every job (#554).** Before adding a VM to a managed job,
+`pbs_ensure_vmid` asks `/cluster/backup` for every job that covers it (`pbs_jobs_covering`).
+A job TAPPaaS did not create that names the VM by vmid is someone's deliberate choice: the VM
+is left alone and the conflict reported — never a second, concurrent job. An `--all` or pool
+job is not a choice about this VM, so the overlap is reported and the VM is added anyway (else
+nothing would put it on PBS). A disabled job blocks nothing; a silent cluster never causes a
+skip. `backup-manager coverage <module>` shows the whole answer.
+
 **One Host, one address (#457).** Every PBS operation (datastore, namespaces, ACLs,
 verification, the ZFS-mount drop-ins) finds the Host with `pbs_node` — `.node`, or the
 pre-#600 state — and reaches it through `pbs_node_addr`: a machine by its `address`, a node

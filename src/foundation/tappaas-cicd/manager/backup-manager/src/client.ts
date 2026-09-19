@@ -13,7 +13,7 @@
 // (other than the graceful offline skip) throws.
 
 import { captureResult } from "../../../lib/ts/src/exec";
-import { BucketMembership, Client, JobStatus, ScheduleBucket } from "./types";
+import { JobCoverage, BucketMembership, Client, JobStatus, ScheduleBucket } from "./types";
 
 export class BackupControllerUnreachable extends Error {}
 
@@ -95,6 +95,26 @@ export class CliClient implements Client {
       buckets: asBuckets(o.buckets),
       reachable,
     };
+  }
+
+  coverage(module: string): JobCoverage[] | null {
+    const o = runJson([...this.ep(), "coverage", module]);
+    if (o.reachable !== true || !Array.isArray(o.jobs)) return null;
+    const out: JobCoverage[] = [];
+    for (const e of o.jobs as unknown[]) {
+      if (!e || typeof e !== "object") continue;
+      const j = e as Record<string, unknown>;
+      if (typeof j.jobId !== "string" || !["explicit", "all", "pool"].includes(String(j.how))) continue;
+      out.push({
+        jobId: j.jobId,
+        how: j.how as JobCoverage["how"],
+        storage: typeof j.storage === "string" ? j.storage : "",
+        schedule: typeof j.schedule === "string" ? j.schedule : "",
+        enabled: j.enabled !== false,
+        managed: j.managed === true,
+      });
+    }
+    return out;
   }
 
   listSnapshots(module: string): string[] {

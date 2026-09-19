@@ -310,6 +310,65 @@ pbs_bucket_jobs_json() {
     ' 2>/dev/null || printf '[]\n'
 }
 
+# ── Coverage across EVERY cluster job (#554) ─────────────────────────
+#
+# The managed jobs are marked so TAPPaaS can tell them from jobs it did not
+# create — a pre-existing Proxmox environment, or an operator's own job. The add
+# path used to consult only its own marked job, so a VM already backed up by
+# someone else's job silently got a second one. Coverage is asked of every job.
+
+# Pure: every job in <jobs-json> (pvesh get /cluster/backup) that covers <vmid>,
+# as a JSON array of {jobId, how, storage, schedule, enabled, managed, comment}.
+# how: explicit (its --vmid list names it) | all (--all, not excluded) | pool
+# (a pool selection — membership is not resolved here, so it MAY cover it).
+pbs_jobs_covering() {
+    jq -c --arg v "$2" --arg m "${PBS_JOB_MARKER}" '
+        [ .[]? | select(type == "object")
+          | (.comment // "") as $c
+          | ($c == $m or $c == ($m + "-weekly") or $c == ($m + "-monthly")) as $managed
+          | ((.vmid // "") | tostring | split(",") | map(select(length > 0))) as $ids
+          | ((.exclude // "") | tostring | split(",")) as $ex
+          | (if ($ids | index($v)) != null then "explicit"
+             elif ((.all // 0) | tostring) == "1" and ($ex | index($v)) == null then "all"
+             elif (.pool // "") != "" then "pool"
+             else empty end) as $how
+          | {jobId: (.id // ""), how: $how, storage: (.storage // ""),
+             schedule: (.schedule // .starttime // ""),
+             enabled: (((.enabled // 1) | tostring) != "0"),
+             managed: $managed, comment: $c} ]' <<<"$1" 2>/dev/null || printf '[]\n'
+}
+
+# The same, asked of the cluster. rc 1 (and []) when it did not answer.
+pbs_job_coverage_json() {
+    local json
+    json="$(_pbs_ssh "pvesh get /cluster/backup --output-format json" 2>/dev/null)" && [[ -n "${json}" ]] \
+        || { printf '[]\n'; return 1; }
+    pbs_jobs_covering "${json}" "$1"
+}
+
+# Before TAPPaaS adds <vmid> to a managed job: rc 1 = leave it alone. A job
+# TAPPaaS did not create that names the VM EXPLICITLY is someone's deliberate
+# choice for it — adding a second, concurrent job is the silent duplicate #554
+# is about, so it is reported and skipped. An enabled `--all` or pool job is not
+# a choice about this VM: skipping would leave it with no PBS backup at all, so
+# the overlap is reported and the add goes ahead. Cluster silent → proceed as
+# before (never skip on a guess).
+_pbs_foreign_guard() {
+    local vmid="$1" cov hit
+    cov="$(pbs_job_coverage_json "${vmid}")" || return 0
+    hit="$(jq -r '[.[] | select(.enabled and (.managed | not) and .how == "explicit")][0]
+                  | if . == null then "" else "\(.jobId) (storage \(.storage), schedule \(.schedule))" end' <<<"${cov}")"
+    if [[ -n "${hit}" ]]; then
+        warn "  VMID ${vmid} is already backed up by job ${hit}, which TAPPaaS did not create — NOT adding a second job (#554)."
+        warn "    To let TAPPaaS manage it, remove VMID ${vmid} from that job; the next update adds it here."
+        return 1
+    fi
+    hit="$(jq -r '[.[] | select(.enabled and (.managed | not) and (.how == "all" or .how == "pool"))][0]
+                  | if . == null then "" else "\(.jobId) (\(.how), storage \(.storage), schedule \(.schedule))" end' <<<"${cov}")"
+    [[ -z "${hit}" ]] || warn "  VMID ${vmid} is also covered by job ${hit}, which TAPPaaS did not create — adding it to the managed job anyway, so it reaches PBS; the two overlap (#554)."
+    return 0
+}
+
 # ── Mutations ────────────────────────────────────────────────────────
 
 # Convert a legacy --all job into the managed job in place, seeded with every
@@ -340,6 +399,7 @@ pbs_ensure_vmid() {
     id="$(pbs_managed_job_id "$marker")"
 
     if [[ -z "$id" ]]; then
+        _pbs_foreign_guard "$vmid" || return 0
         store="$(pbs_storage_name)"
         cal="$(pbs_schedule_calendar "$bucket")"
         info "  Creating managed PBS backup job on '${store}' (vmid ${vmid}, ${bucket} '${cal}')"
@@ -357,6 +417,7 @@ pbs_ensure_vmid() {
         debug "  ${GN}✓${CL} VMID ${vmid} already covered by the ${bucket} backup job"
         return 0
     fi
+    _pbs_foreign_guard "$vmid" || return 0
     newlist="$(_pbs_csv_add "$cur" "$vmid")"
     info "  Adding VMID ${vmid} to the ${bucket} backup job → ${newlist}"
     _pbs_ssh "pvesh set /cluster/backup/${id} --vmid '${newlist}'" >/dev/null \

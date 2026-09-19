@@ -2,7 +2,7 @@
 // no PBS, no cluster). Records calls so tests can assert exactly what the manager
 // asked the controller to do. Mirrors identity-manager/test/unit/fake-client.ts.
 
-import { Client, JobStatus, ScheduleBucket } from "../../src/types";
+import { JobCoverage, Client, JobStatus, ScheduleBucket } from "../../src/types";
 
 export class FakeClient implements Client {
   job: JobStatus = { jobId: null, vmids: [], storage: null, buckets: [], reachable: true };
@@ -36,6 +36,11 @@ export class FakeClient implements Client {
       vmids: [...this.job.vmids],
       buckets: this.job.buckets.map((b) => ({ ...b, vmids: [...b.vmids] })),
     };
+  }
+  coverageOf = new Map<string, JobCoverage[] | null>();
+  coverage(module: string): JobCoverage[] | null {
+    this.log.push(`coverage ${module}`);
+    return this.coverageOf.has(module) ? this.coverageOf.get(module)! : [];
   }
   listSnapshots(module: string): string[] {
     this.log.push(`list ${module}`);

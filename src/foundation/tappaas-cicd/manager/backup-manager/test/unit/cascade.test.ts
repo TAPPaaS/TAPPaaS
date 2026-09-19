@@ -817,6 +817,33 @@ check(!retentionValid("7") && !retentionValid("7x") && !retentionValid(""), "inv
   eq(urlHost("https://pbs.example:8007/x"), "pbs.example", "urlHost strips scheme, port and path");
 }
 
+// ── #554: coverage — which jobs back a module's VM up ─────────────────
+{
+  const c = new FakeClient();
+  c.coverageOf.set("nextcloud", [
+    { jobId: "backup-mine", how: "explicit", storage: "tappaas_backup", schedule: "21:00", enabled: true, managed: true },
+    { jobId: "backup-ops", how: "explicit", storage: "nfs", schedule: "02:00", enabled: true, managed: false },
+  ]);
+  c.coverageOf.set("offline", null);
+  const lines: string[] = [];
+  const orig = console.log;
+  const origErr = console.error;
+  console.log = (...a: unknown[]) => void lines.push(a.join(" "));
+  console.error = (...a: unknown[]) => void lines.push(a.join(" "));
+  try {
+    eq(run(["coverage", "nextcloud"], c), 0, "coverage runs");
+    check(lines.some((l) => l.includes("backup-ops") && l.includes("not TAPPaaS")), "coverage lists a job TAPPaaS did not create");
+    check(lines.some((l) => l.includes("2 enabled jobs cover nextcloud")), "coverage flags the duplicate");
+    lines.length = 0;
+    eq(run(["coverage", "offline"], c), 0, "coverage with the cluster silent still exits 0");
+    check(lines.some((l) => l.includes("not reachable")), "…and says it cannot tell");
+    check(run(["coverage"], c) !== 0, "coverage without a module is refused");
+  } finally {
+    console.log = orig;
+    console.error = origErr;
+  }
+}
+
 // ── #644: --help runs nothing; an option the verb does not take is refused ──
 // `key export <dest> --help` used to write the keys to <dest>.
 {

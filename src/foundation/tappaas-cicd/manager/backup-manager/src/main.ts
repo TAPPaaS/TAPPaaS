@@ -126,6 +126,7 @@ export const HELP: HelpSpec = {
       name: "key",
       note: "(the backup encryption keys, and the copy you keep off the machine)",
     },
+    { usage: "coverage <module> [--json]", name: "coverage", note: "(every backup job covering the module's VM — TAPPaaS's own and any other, #554)" },
     { usage: "peers", name: "peers", note: "(the off-site PBS relationships this site has)" },
     {
       usage: "peer add pull|remote|receive <name> [--host H] [--store S] [--namespace NS] "
@@ -703,6 +704,37 @@ function cmdPeerDelete(opts: Opts): number {
   return rc;
 }
 
+// `coverage <module>` (#554): which cluster backup jobs back the module's VM up.
+// The managed jobs are only part of the answer: a job TAPPaaS did not create can
+// cover the same VM, and before #554 nothing could show that. Two enabled jobs
+// is a finding (backed up twice); none is a finding (not backed up).
+function cmdCoverage(opts: Opts, client: Client): number {
+  const module = opts.rest[0];
+  if (!module) die("coverage: <module> required");
+  const jobs = client.coverage(module);
+  if (jobs === null) {
+    if (opts.json) info(JSON.stringify({ reachable: false, module }));
+    else warn(`PBS / cluster not reachable — cannot tell which jobs cover ${module}`);
+    return 0;
+  }
+  if (opts.json) {
+    info(JSON.stringify({ reachable: true, module, jobs }, null, 2));
+    return 0;
+  }
+  const pad = (s: string, n: number): string => (s.length >= n ? s : s + " ".repeat(n - s.length));
+  info(pad("JOB", 22) + " " + pad("HOW", 9) + " " + pad("OWNER", 12) + " " + pad("STORAGE", 16) + " SCHEDULE");
+  for (const j of jobs) {
+    info(
+      pad(j.jobId, 22) + " " + pad(j.how, 9) + " " + pad(j.managed ? "TAPPaaS" : "not TAPPaaS", 12) + " " +
+        pad(j.storage, 16) + " " + j.schedule + (j.enabled ? "" : "  (disabled)"),
+    );
+  }
+  const on = jobs.filter((j) => j.enabled).length;
+  if (on === 0) warn(`no enabled job covers ${module}`);
+  if (on > 1) warn(`${on} enabled jobs cover ${module} — it is backed up more than once (#554)`);
+  return 0;
+}
+
 function cmdPeers(opts: Opts): void {
   const peers = listPeers(opts.configDir);
   if (opts.json) {
@@ -901,6 +933,8 @@ export function run(argv: string[], client: Client): number {
         die(`placement: expected no argument, 'reset' or 'finish-reset', got '${sub}'`);
         return 1;
       }
+      case "coverage":
+        return cmdCoverage(opts, client);
       case "peers":
         cmdPeers(opts);
         return 0;

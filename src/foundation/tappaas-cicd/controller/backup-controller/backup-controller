@@ -10,6 +10,9 @@
 #                           list, plus every bucket job and its members (#627)
 #   list <module> [--json]  List snapshots for a module's VM (by vmid)
 #   verify <module>         Trigger + report a PBS verify for a module's VM
+#   coverage <module> [--json]
+#                           Every cluster backup job that covers the module's VM —
+#                           TAPPaaS's own and any other — and how (#554)
 #   namespaces [--json]     List the datastore's namespaces
 #   add-to-job <vmid> [--retention <spec>] [--bucket daily|weekly|monthly]
 #                           Place <vmid> in the backup job for its schedule, and
@@ -84,6 +87,7 @@ usage() {
 readonly CLI_SPEC='
 job-status: --json --pbs=
 list: --json --pbs=
+coverage: --json
 verify:
 namespaces: --json --pbs=
 add-to-job: --retention= --bucket=
@@ -235,6 +239,28 @@ cmd_list() {
         info "Snapshots for ${module} (vmid ${vmid}) on ${store}:"
         [[ -n "$snaps" ]] && printf '%s\n' "$snaps"
     fi
+}
+
+# `coverage <module>` (#554): which jobs back this VM up — ours and anyone
+# else's — so a duplicate is visible, not silent. Asks /cluster/backup once.
+cmd_coverage() {
+    parse_args "$@"
+    local module="${REST[0]:?coverage: <module> required}" vmid cov
+    vmid="$(module_vmid "$module")" || return 1
+    [[ -n "$vmid" ]] || { error "Module '$module' has no vmid"; return 1; }
+    have_pbs_libs || skip_offline "coverage (PBS libs not loaded)"
+    pbs_reachable || skip_offline "coverage ${module} (vmid ${vmid})"
+    cov="$(pbs_job_coverage_json "$vmid")" || skip_offline "coverage ${module} (vmid ${vmid})"
+    if [[ "$JSON_OUT" -eq 1 ]]; then
+        jq -n --arg module "$module" --arg vmid "$vmid" --argjson jobs "$cov" \
+            '{reachable: true, module: $module, vmid: $vmid, jobs: $jobs}'
+        return 0
+    fi
+    info "Backup jobs covering ${module} (vmid ${vmid}):"
+    jq -r '.[] | "  \(.jobId)  \(.how)  \(if .managed then "TAPPaaS" else "not TAPPaaS" end)\(if .enabled then "" else " (disabled)" end)  storage \(.storage)  schedule \(.schedule)"' <<<"$cov"
+    local n; n="$(jq '[.[] | select(.enabled)] | length' <<<"$cov")"
+    [[ "$n" -gt 0 ]] || warn "  no enabled job covers it"
+    [[ "$n" -le 1 ]] || warn "  ${n} enabled jobs cover it — it is backed up more than once (#554)"
 }
 
 cmd_verify() {
@@ -460,6 +486,7 @@ main() {
         job-status)     cmd_job_status "$@" ;;
         list)           cmd_list "$@" ;;
         verify)         cmd_verify "$@" ;;
+        coverage)       cmd_coverage "$@" ;;
         namespaces)     cmd_namespaces "$@" ;;
         add-to-job)     cmd_add_to_job "$@" ;;
         apply-schedule) cmd_apply_schedule "$@" ;;

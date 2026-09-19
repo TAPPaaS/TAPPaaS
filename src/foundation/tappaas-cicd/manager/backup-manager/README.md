@@ -86,6 +86,11 @@ backup-manager restore list <module> | restore <module> [opts] | list-all
         SPECIAL recovery verb — delegates to the foundation backup/restore.sh and
         backup-controller (snapshot listing).
 
+backup-manager coverage <module> [--json]
+        Every cluster backup job that covers the module's VM — TAPPaaS's own
+        bucket jobs and any other — and how (by vmid, --all, or pool). Two
+        enabled jobs is a warning: the VM is backed up twice (#554).
+
 backup-manager placement [--json]
         Where this site's PBS lives (placementState, pbsUrl, storage name).
 

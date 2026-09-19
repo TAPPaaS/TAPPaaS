@@ -37,6 +37,9 @@
 - `lib/test-pbs-job.sh` also covers #457: `pbs_node` reads `.node` (and the pre-#600 form)
   and fails with no Host rather than guessing; `pbs_node_addr` reaches a machine by its
   address, a node by `<node>.mgmt.internal`, a DNS name as is.
+- `lib/test-pbs-job.sh` also covers #554: coverage across managed and foreign jobs (by vmid,
+  `--all` with its exclude, pool, disabled), and the guard — a foreign job naming the VM
+  blocks a second job, an `--all`/pool job does not, a silent cluster never skips.
 - `lib/test-pbs-host.sh` (11) — who patches the PBS's Host (#603): a cluster node → the
   cluster module; a registered machine → its instance; an unregistered one is adopted
   (`--wait 0`); a failed adopt is `none`, warned with the command; an unreachable cluster is

@@ -57,5 +57,32 @@ ck "addr: a node → <node>.mgmt.internal"    "tappaas3.mgmt.internal" "$(pbs_no
 ck "addr: a DNS name (--pbs) → as is"       "sat.example.org"        "$(pbs_node_addr sat.example.org)"
 rm -rf "${PJ}"
 
+# ── #554: coverage across EVERY cluster job ──────────────────────────
+JOBS='[
+ {"id":"backup-mine","comment":"TAPPaaS-backup-vm-managed","vmid":"110,130","storage":"tappaas_backup","schedule":"21:00"},
+ {"id":"backup-wk","comment":"TAPPaaS-backup-vm-managed-weekly","vmid":"340","storage":"tappaas_backup","schedule":"sat 21:00"},
+ {"id":"backup-ops","comment":"ops nightly","vmid":"340,500","storage":"nfs","schedule":"02:00"},
+ {"id":"backup-all","all":1,"exclude":"600","storage":"local","schedule":"sun 01:00"},
+ {"id":"backup-off","comment":"old","vmid":"700","enabled":0,"storage":"nfs"},
+ {"id":"backup-pool","pool":"lab","storage":"nfs","schedule":"03:00"}]'
+cov() { pbs_jobs_covering "${JOBS}" "$1" | jq -r 'map("\(.jobId):\(.how):\(if .managed then "m" else "f" end):\(if .enabled then "on" else "off" end)") | join(" ")'; }
+ck "coverage: managed + foreign explicit + all + pool" \
+   "backup-wk:explicit:m:on backup-ops:explicit:f:on backup-all:all:f:on backup-pool:pool:f:on" "$(cov 340)"
+ck "coverage: an --all exclude is honoured"  "backup-pool:pool:f:on" "$(cov 600)"
+ck "coverage: a disabled job is marked off"  "backup-all:all:f:on backup-off:explicit:f:off backup-pool:pool:f:on" "$(cov 700)"
+ck "coverage: 34 is not 340"                 "backup-all:all:f:on backup-pool:pool:f:on" "$(cov 34)"
+ck "coverage: unparseable input → []"        "[]" "$(pbs_jobs_covering 'not json' 1)"
+
+_pbs_ssh() { printf '%s\n' "${JOBS}"; }   # the cluster answers with JOBS
+_pbs_foreign_guard 500 2>/dev/null && ck "guard: a foreign job naming the VM → leave it alone" 1 0 \
+                                  || ck "guard: a foreign job naming the VM → leave it alone" 1 1
+_pbs_foreign_guard 800 >/dev/null 2>&1 && ck "guard: only an --all / pool job → add anyway" 0 0 \
+                                        || ck "guard: only an --all / pool job → add anyway" 0 1
+_pbs_foreign_guard 700 >/dev/null 2>&1 && ck "guard: a DISABLED foreign job does not block" 0 0 \
+                                        || ck "guard: a DISABLED foreign job does not block" 0 1
+_pbs_ssh() { return 255; }                 # the cluster is silent
+_pbs_foreign_guard 500 >/dev/null 2>&1 && ck "guard: cluster silent → proceed, never skip on a guess" 0 0 \
+                                        || ck "guard: cluster silent → proceed, never skip on a guess" 0 1
+
 echo "RESULT: ${PASS} passed, ${FAIL} failed"
 [[ ${FAIL} -eq 0 ]]
