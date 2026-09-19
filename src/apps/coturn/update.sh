@@ -23,21 +23,18 @@ VMID="$(get_config_value 'vmid')"
 NODE="$(get_config_value 'node' "$(get_node_hostname 0)")"
 ZONE0NAME="$(get_config_value 'zone0' 'dmz')"
 
-echo ""
-info "${BOLD}Module Update: coturn${CL}"
-info "  VM:   ${VMNAME} (VMID: ${VMID})"
-info "  Node: ${NODE}"
-info "  Zone: ${ZONE0NAME}"
+info "${BOLD}*** Starting coturn update${CL}"
+debug "  VM:   ${VMNAME} (VMID: ${VMID})"
+debug "  Node: ${NODE}"
+debug "  Zone: ${ZONE0NAME}"
 
 # NixOS OS update is handled by templates:nixos update-service.sh before this
 # script runs. No additional module-specific update steps are needed for
 # coturn beyond the NixOS rebuild.
-echo ""
-info "No module-specific update steps — NixOS OS update handled by dependency layer."
+debug "No module-specific update steps — NixOS OS update handled by dependency layer."
 
 # ── Summary ──────────────────────────────────────────────────────────────────
-echo ""
-info "${BOLD}Update Complete${CL}"
-info "  VM:   ${VMNAME} (VMID: ${VMID})"
-info "  Node: ${NODE}"
-info "  Zone: ${ZONE0NAME}"
+debug "Update Complete"
+debug "  VM:   ${VMNAME} (VMID: ${VMID})"
+debug "  Node: ${NODE}"
+debug "  Zone: ${ZONE0NAME}"

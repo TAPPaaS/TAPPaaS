@@ -34,15 +34,15 @@ HPB_SECRETS_DIR="/var/lib/nextcloud-hpb/secrets"
 SSH_OPTS=(-o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR)
 ssh-keygen -R "${HPB_HOST}" >/dev/null 2>&1 || true
 
-echo ""
-info "${BOLD}Module Update: nextcloud-hpb${CL}"
-info "  VM:   ${VMNAME} (VMID: ${VMID})"
-info "  Node: ${NODE}"
-info "  Zone: ${ZONE0NAME}"
+# install.sh sources this file (the TURN re-sync is needed at install too): the
+# start line belongs to an update only.
+[[ "${BASH_SOURCE[0]}" == "${0}" ]] && info "${BOLD}*** Starting nextcloud-hpb update${CL}"
+debug "  VM:   ${VMNAME} (VMID: ${VMID})"
+debug "  Node: ${NODE}"
+debug "  Zone: ${ZONE0NAME}"
 
 # ── Re-sync COTURN_SECRET from management plane → HPB VM (rotation-safe) ─────
-echo ""
-info "${BOLD}Re-syncing coturn TURN secret to HPB VM…${CL}"
+debug "Re-syncing coturn TURN secret to HPB VM…"
 
 COTURN_SECRET=""
 if [[ -f "${COTURN_MGMT_SECRETS}" ]]; then
@@ -57,7 +57,7 @@ if [[ -n "${COTURN_SECRET}" ]]; then
               ${HPB_SECRETS_DIR}/turn-secret \
          && sudo chmod 400 ${HPB_SECRETS_DIR}/turn-secret \
          && sudo systemctl restart nextcloud-spreed-signaling.service" && \
-        info "  TURN secret synced to runtime plane; nextcloud-spreed-signaling restarted." || \
+        debug "  TURN secret synced to runtime plane; nextcloud-spreed-signaling restarted." || \
         warn "  Failed to sync TURN secret — signaling will use stale secret until fixed."
 else
     warn "  COTURN_SECRET not found in ${COTURN_MGMT_SECRETS}."
@@ -65,8 +65,7 @@ else
 fi
 
 # ── Summary ──────────────────────────────────────────────────────────────────
-echo ""
-info "${GN}✓${CL} ${BOLD}Update Complete${CL}"
-info "  VM:   ${VMNAME} (VMID: ${VMID})"
-info "  Node: ${NODE}"
-info "  Zone: ${ZONE0NAME}"
+debug "Update Complete"
+debug "  VM:   ${VMNAME} (VMID: ${VMID})"
+debug "  Node: ${NODE}"
+debug "  Zone: ${ZONE0NAME}"
