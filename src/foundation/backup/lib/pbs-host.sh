@@ -56,3 +56,47 @@ pbs_host_ensure_patched() {
     esac
     return "${rc}"
 }
+
+# ── A PBS on a machine: reaching it, and installing it (ADR-012 §1.3) ──
+
+# pbs_host_path_ensure <host> — let the nodes reach the PBS on <host>. A Host's
+# module may ship `pbs-path.sh <instance> open`: a satellite does, since the
+# nodes reach it only through its tunnel (ADR-010 §8.4.3). A cluster node, or a
+# machine on the LAN (debianhost), needs nothing and has no such script.
+pbs_host_path_ensure() {
+    local host="$1" dir
+    [[ -n "${host}" && -f "${CONFIG_DIR:-/home/tappaas/config}/${host}.json" ]] || return 0
+    dir="$(get_module_dir "${host}" 2>/dev/null)" || return 0
+    [[ -x "${dir}/pbs-path.sh" ]] || return 0
+    info "  the PBS host ${host} is reached through its module (${dir##*/}): opening the path"
+    (cd "${dir}" && ./pbs-path.sh "${host}" open)
+}
+
+# pbs_install_on_machine <host> <zone> — the official PBS onto a Debian machine
+# that is not a cluster node (ADR-012 §1.3): the Proxmox repository key and the
+# pbs-no-subscription source, then proxmox-backup-server + -client. Idempotent. A
+# cluster node gets its packages from install.sh's PVE path instead (its keyring
+# is already there).
+pbs_install_on_machine() {
+    local host="$1" zone="${2:-mgmt}"
+    ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new \
+        "root@$(pbs_host_addr "${host}" "${zone}")" 'bash -s' <<'REMOTE'
+set -euo pipefail
+export DEBIAN_FRONTEND=noninteractive
+. /etc/os-release
+[ "${ID:-}" = debian ] || { echo "not Debian (${ID:-?}) — PBS installs on Debian only" >&2; exit 1; }
+if command -v proxmox-backup-manager >/dev/null 2>&1; then
+    echo "proxmox-backup-server already installed"; exit 0
+fi
+cn="${VERSION_CODENAME:-trixie}"
+apt-get -q update >/dev/null && apt-get -q -y install curl ca-certificates >/dev/null
+curl -fsSL "https://enterprise.proxmox.com/debian/proxmox-release-${cn}.gpg" -o /usr/share/keyrings/proxmox-archive-keyring.gpg \
+  || curl -fsSL "http://download.proxmox.com/debian/proxmox-release-${cn}.gpg" -o /usr/share/keyrings/proxmox-archive-keyring.gpg
+printf 'Types: deb\nURIs: http://download.proxmox.com/debian/pbs\nSuites: %s\nComponents: pbs-no-subscription\nSigned-By: /usr/share/keyrings/proxmox-archive-keyring.gpg\n' \
+    "${cn}" > /etc/apt/sources.list.d/proxmox.sources
+apt-get -q update >/dev/null
+apt-get -q -y install proxmox-backup-server proxmox-backup-client >/dev/null
+rm -f /etc/apt/sources.list.d/pbs-enterprise.sources
+echo "proxmox-backup-server installed: $(proxmox-backup-manager version 2>/dev/null | head -1)"
+REMOTE
+}

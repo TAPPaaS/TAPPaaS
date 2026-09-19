@@ -20,7 +20,7 @@ import {
   resolvePolicy,
 } from "../../src/config";
 import { retentionValid, validate } from "../../src/validate";
-import { asPlace, offsiteTargets, separation } from "../../src/offsite";
+import { asPlace, offsiteTargets, pbsOnSatelliteWarnings, separation } from "../../src/offsite";
 import { placementFinishReset, placementReset, placementUseExternal, urlHost } from "../../src/placement-reset";
 import { applyPlan, computePlan, jobBucketIndex } from "../../src/reconcile";
 import { restoreList, restoreRun } from "../../src/restore";
@@ -720,6 +720,26 @@ check(!retentionValid("7") && !retentionValid("7x") && !retentionValid(""), "inv
   check(w.some((x) => x.includes("pull 'neighbour'") && x.includes("record the city")), "…and saying what would settle the other");
   eq(validate(tmp).errors.filter((e) => e.includes("physicalLocation")).length, 0, "…as warnings, never errors");
   eq(listPeers(tmp).find((p) => p.name === "neighbour")?.physicalLocation?.country ?? "", "DK", "peers carry their physicalLocation");
+
+  // ADR-010 §8.4.3: a PBS on a managed satellite warns until something home
+  // cannot reach pulls it — a locked-down satellite (the vault) or a remote peer.
+  {
+    const d = mkdtempSync(join(tmpdir(), "bm-satpbs-"));
+    writeFileSync(join(d, "backup.json"), JSON.stringify({ placementState: "node", node: "sat1" }));
+    writeFileSync(join(d, "sat1.json"), JSON.stringify({ kind: "machine", moduleSource: SAT, management: "managed", roles: ["reverse-proxy"] }));
+    eq(pbsOnSatelliteWarnings(d).length, 1, "a PBS on a satellite with nothing pulling it elsewhere warns");
+    check(validate(d).warnings.some((x) => x.includes("no copy home cannot reach")), "…through validate");
+    writeFileSync(join(d, "vault.json"), JSON.stringify({ kind: "machine", moduleSource: SAT, management: "managed", roles: ["backup"] }));
+    eq(pbsOnSatelliteWarnings(d).length, 1, "…a vault that is still managed is not one (home can reach it)");
+    writeFileSync(join(d, "vault.json"), JSON.stringify({ kind: "machine", moduleSource: SAT, management: "unmanaged", roles: ["backup"] }));
+    eq(pbsOnSatelliteWarnings(d).length, 0, "…a locked-down vault settles it");
+    unlinkSync(join(d, "vault.json"));
+    writeFileSync(join(d, "remote-buddy.json"), JSON.stringify({ authId: "buddy@pbs" }));
+    eq(pbsOnSatelliteWarnings(d).length, 0, "…so does a remote peer pulling it");
+    writeFileSync(join(d, "backup.json"), JSON.stringify({ placementState: "node", node: "tappaas3" }));
+    unlinkSync(join(d, "remote-buddy.json"));
+    eq(pbsOnSatelliteWarnings(d).length, 0, "a PBS on a cluster node is not this case");
+  }
 
   eq(JSON.stringify(buildPeerConfig("remote", { name: "b", authId: "b@pbs", physicalLocation: { country: "DE", city: "Berlin" } }).physicalLocation),
     '{"country":"DE","city":"Berlin"}', "peer add records the place it is given");

@@ -112,8 +112,15 @@ printed with its output instead of dying at `[Debug]` (the 2026-08-17 nightly).
 recorded `address` (`pbs_host_addr`), and its storage is found from its ZFS pools
 (`zpool list`, first ONLINE `tankc*`) where a Proxmox node is asked `pvesm status`. The
 serving-PBS probe (#602) already used `proxmox-backup-manager`, which works on any host.
-Installing PBS onto a bare machine is **not** automated: `install.sh` adopts a PBS already
-serving on a non-member Host, and refuses — recording nothing — when that Host has only a pool.
+A PBS already serving on a non-member Host is adopted as it stands. A Host with only a pool
+gets one: `pbs_install_on_machine` adds the Proxmox key and the `pbs-no-subscription` source
+and installs `proxmox-backup-server` + `-client` (Debian only), and the ordinary datastore,
+user, prune, verify and storage steps follow — every one reaching the PBS at its Host's one
+address (`pbs_host_addr`). An unreachable cluster stops it, so a node is never mistaken for a
+machine. Before the PBS's name is registered, `pbs_host_path_ensure` runs the Host module's
+`pbs-path.sh <instance> open` when it ships one — a satellite does, since the nodes reach it
+only through its tunnel (ADR-010 §8.4.3); `update.sh` re-ensures it. A LAN machine or a node
+needs none.
 
 After resolution **`.node` names the Host** the PBS runs on (ADR-012 §2.1, #600): state
 `node`, Host in `.node`. The 3-way merge keeps it — a resolved `.node` differs from the

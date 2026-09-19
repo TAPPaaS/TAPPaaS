@@ -650,12 +650,19 @@ Built as decided, with these differences and gaps:
   with it is seen to fail. It needs a Site PBS (placement `node`) to pull.
 - **§8.4.5 — DNS.** Nothing in TAPPaaS points at a satellite: its public DNS records are in
   the operator's DNS provider. `--decommission` also revokes a vault's `remote` grant.
-- **§8.4.3 — not built.** A managed satellite as the Site's PBS Host needs three things this
-  section did not settle: where its datastore lives (a VPS has no `tankc` pool, which
-  placement discovery requires), what the PBS's DNS alias points at (a satellite has no
-  OPNsense host entry to alias), and the path from the nodes to it (today the `edge` zone
-  admits only satellite → home). Installing PBS onto a bare machine (ADR-012 §1.3) waits
-  with it.
+- **§8.4.3 — the three open points, decided with the operator and built.** The datastore is
+  a ZFS pool named `tankc*` on a volume attached to the VPS, so placement discovery treats it
+  as it treats any machine. The satellite registers `<name>.mgmt.internal` at its tunnel end
+  (`10.255.0.0`), so the PBS name aliases it unchanged and nodes push through the tunnel. The
+  path is opened only while it is the PBS Host: an OPNsense rule `mgmt → 10.255.0.0:8007`,
+  and the mgmt subnet admitted by the satellite's tunnel and host firewall to `:8007` only
+  (`pbs-path.sh <instance> open|close`, called by the backup module and converged by the
+  satellite's update). The backup module now installs PBS onto a bare machine (ADR-012 §1.3).
+  The flow is for a Site without a local PBS: with the backup module a shim,
+  `module-manager module modify backup --set node=<instance>` and its update install the PBS
+  on the satellite. Moving an existing local PBS to a satellite is a relocation and not
+  covered. Decommission is refused while the satellite is the PBS Host; `backup-manager
+  validate` warns until something home cannot reach pulls it.
 - The off-site check (`backup-manager validate`) finds a satellite by its module and counts
   it only when it holds a copy (the vault, or the PBS Host); a relay is not an off-site copy.
 

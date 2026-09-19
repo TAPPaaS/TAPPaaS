@@ -328,7 +328,76 @@ rc="$(lkrun 1)"
 [[ "${rc}" != 0 ]] && jq -e '.management != "unmanaged"' "${L}/v1.json" >/dev/null \
     && ok "lockdown: when the mothership can still log in afterwards, it fails and stays managed" || no "lockdown stale key (rc=${rc})"
 
-# 14. deep: reverse-proxy end-to-end through a live satellite (test-vm-creation/)
+# 14. the satellite as the Site's PBS Host (ADR-010 §8.4.3)
+#   rendering: the nodes' subnet joins the AllowedIPs and may reach :8007 — on
+#   the tunnel interface only; without it neither appears
+( lib
+  echo '{"os":"debian","roles":["reverse-proxy"],"host":{"operatorSshKeys":["k"]}}' > "${tmp}/p.json"
+  SAT_PBS_CLIENTS="10.0.0.0/24" sat_gen_debian_configs "${tmp}/p.json" "HPUB=" "${tmp}/po" ""
+  sat_gen_debian_configs "${tmp}/p.json" "HPUB=" "${tmp}/pn" "" )
+grep -q 'AllowedIPs = 10.255.0.1/32, 10.0.0.0/24' "${tmp}/po/wg-infra.conf" \
+   && grep -q 'iifname "wg-infra" ip saddr 10.0.0.0/24 tcp dport 8007 accept' "${tmp}/po/nftables.conf" \
+   && ! grep -q '8007' "${tmp}/pn/nftables.conf" && ! grep -q '10.0.0.0/24' "${tmp}/pn/wg-infra.conf" \
+    && ok "PBS Host rendering: the nodes admitted to :8007 through the tunnel only; a relay admits none" || no "PBS Host rendering"
+
+P="${tmp}/pcfg"; mkdir -p "${P}"
+echo '{"mgmt":{"ip":"10.0.0.0/24","bridge":"lan"}}' > "${P}/zones.json"
+echo '{"moduleSource":"/r/satellite","address":"203.0.113.7","roles":["reverse-proxy"],"host":{"operatorSshKeys":["k"]}}' > "${P}/sat1.json"
+isph() { printf '%s' "$1" > "${P}/backup.json"; ( lib; CONFIG_DIR="${P}"; sat_load sat1; sat_is_pbs_host ) && echo yes || echo no; }
+[[ "$(isph '{"placementState":"node","node":"sat1"}')" == yes && "$(isph '{"placementState":"node:sat1"}')" == yes \
+   && "$(isph '{"placementState":"node","node":"tappaas3"}')" == no && "$(isph '{"placementState":"shim","node":"sat1"}')" == no ]] \
+    && ok "sat_is_pbs_host: node (and the pre-#600 node:<name>) naming it; a shim constraint does not" || no "sat_is_pbs_host"
+
+#   the DNS entry is at the tunnel end: added when missing, replaced when it
+#   points elsewhere (the public address), left when right
+DNSLOG="${tmp}/dns.log"
+dnsrun() {  # <current-ip-or-empty>
+    : > "${DNSLOG}"
+    ( lib; CONFIG_DIR="${P}"; sat_load sat1
+      dns-manager() { case "$*" in *list*) if [[ -n "${_dns_cur}" ]]; then echo "  sat1.mgmt.internal  -> ${_dns_cur}  (x)"; fi ;; *) echo "$*" >> "${DNSLOG}" ;; esac; }
+      _dns_cur="$1"; sat_dns_ensure ) >/dev/null 2>&1
+    tr '\n' '|' < "${DNSLOG}"
+}
+[[ "$(dnsrun "")" == "--no-ssl-verify add sat1 mgmt.internal 10.255.0.0 --description TAPPaaS satellite sat1 (its tunnel end)|" \
+   && "$(dnsrun 203.0.113.7)" == "--no-ssl-verify delete sat1 mgmt.internal|--no-ssl-verify add sat1 mgmt.internal 10.255.0.0 --description TAPPaaS satellite sat1 (its tunnel end)|" \
+   && "$(dnsrun 10.255.0.0)" == "" ]] \
+    && ok "sat_dns_ensure: <name>.mgmt.internal at the tunnel end — added, corrected, or left" || no "sat_dns_ensure: '$(dnsrun "")' / '$(dnsrun 203.0.113.7)' / '$(dnsrun 10.255.0.0)'"
+
+#   opening and closing the path: the OPNsense rule, and a re-provision only on
+#   a change — with the nodes' subnet when opening, without when closing
+PLOG="${tmp}/path.log"
+pathrun() {  # <open|close> <rule-present:0|1> <satellite-open:0|1>
+    : > "${PLOG}"
+    local want="$1" rule="$2" sopen="$3"
+    # shellcheck disable=SC2034  # read by sat_pbs_path
+    ( lib; CONFIG_DIR="${P}"; SAT_CICD_PUB="${tmp}/cicd.pub"; sat_load sat1
+      sat_dns_ensure() { echo "DNS" >> "${PLOG}"; }
+      sat_pbs_path_is_open() { [[ "${sopen}" == 1 ]]; }
+      sat_home_pubkey() { echo HPUB=; }
+      _ow_api() { case "$*" in
+          *searchRule*) if [[ "${rule}" == 1 ]]; then echo '{"rows":[{"description":"tappaas-satellite mgmt->pbs sat1","uuid":"R7"}]}'; else echo '{"rows":[]}'; fi ;;
+          *addRule*) rule=1; echo "ADD $*" >> "${PLOG}" ;; *delRule*) echo "DEL $*" >> "${PLOG}" ;; esac; }
+      sat_deploy_run() { echo "DEPLOY ${*:4} $(grep -c 'dport 8007' "$1/nftables.conf")" >> "${PLOG}"; }
+      sat_pbs_path "${want}" ) >/dev/null 2>&1
+    echo "rc=$? $(tr '\n' '|' < "${PLOG}")"
+}
+o1="$(pathrun open 0 0)"; o2="$(pathrun open 1 1)"; c1="$(pathrun close 1 1)"; c2="$(pathrun close 0 0)"
+if [[ "${o1}" == rc=0\ DNS\|ADD*'"interface":"lan"'*'"source_net":"10.0.0.0/24"'*'"destination_net":"10.255.0.0"'*'"destination_port":"8007"'*\|DEPLOY\ provision-debian.sh\ set-management.sh\ 1\| ]] \
+   && [[ "${o2}" == "rc=0 DNS|" ]] \
+   && [[ "${c1}" == rc=0\ DEL*R7*\|DEPLOY\ provision-debian.sh\ set-management.sh\ 0\| ]] \
+   && [[ "${c2}" == "rc=0 " ]]; then
+    ok "sat_pbs_path: open adds the mgmt rule and re-provisions with :8007; close reverses it; nothing when already so"
+else
+    no "sat_pbs_path: open='${o1}' open-again='${o2}' close='${c1}' close-again='${c2}'"
+fi
+
+#   decommission refuses while it is the Site's PBS Host
+printf '%s' '{"placementState":"node","node":"sat1"}' > "${P}/backup.json"
+out="$( ( lib; CONFIG_DIR="${P}"; sat_load sat1; _ow_api() { echo "CALLED"; }; sat_decommission ) 2>&1 )"
+grep -q "the Site's PBS Host" <<< "${out}" && ! grep -q CALLED <<< "${out}" \
+    && ok "decommission refused while the satellite is the Site's PBS Host" || no "decommission of the PBS Host: ${out}"
+
+# 15. deep: reverse-proxy end-to-end through a live satellite (test-vm-creation/)
 if [[ "${TAPPAAS_TEST_DEEP:-0}" == "1" ]]; then
     echo "  deep: reverse-proxy end-to-end (test-vm-creation/)"
     if [[ -x "${here}/test-vm-creation/test.sh" ]]; then

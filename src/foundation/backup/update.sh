@@ -158,6 +158,11 @@ if [[ "${STATE}" == "shim" ]]; then
     fi
 fi
 
+# ── local PBS: the nodes can reach it — a satellite's is behind its tunnel
+# (ADR-010 §8.4.3); a no-op for a node or a LAN machine.
+pbs_host_path_ensure "$(pbs_state_node "$(pbs_placement_state)" || true)" \
+    || warn "The path from the nodes to the PBS could not be ensured (see above)"
+
 # ── local PBS: its name follows its Host (#612) — also migrates the A record
 # every install before #612 wrote. Not fatal: clients keep resolving the old
 # record until it is replaced, and the next update retries.

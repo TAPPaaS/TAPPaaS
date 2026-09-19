@@ -43,6 +43,7 @@ home can reach out to destroy the off-site copy (ADR-010 §7.3).
 | `satellite.json` | The template `module add` copies to `config/<instance>.json`: kind, OS, `management: managed`, `zone0: edge`, default roles. Nothing the operator supplies (address, key, location) is pre-filled. All derived values (tunnel `/31` + ports, per-role tuning, backup mechanics) are `lib/provision.sh`'s defaults. Field reference: `schemas/satellite-fields.json`. |
 | `install.sh` / `update.sh` / `test.sh` / `delete.sh` | The module contract, thin wrappers over `lib/satellite-lib.sh`: provision + wire; re-ensure edge rules + the `debianhost` update (managed only); config, OPNsense, machine checks (`test.sh <instance>`) or the offline suite (`test.sh`); decommission (only `module delete --decommission` runs it). |
 | `lockdown.sh` | Run by `module modify <instance> --lockdown`: the one-way step to the unmanaged vault (§8.4.4). |
+| `pbs-path.sh` | `<instance> open\|close`: the nodes' path to a PBS on the satellite (§8.4.3) — an OPNsense rule `mgmt → 10.255.0.0:8007`, and the satellite re-provisioned with the mgmt subnet admitted to `:8007` through the tunnel only. The backup module calls it (a PBS Host's module may ship one); the satellite's update converges it. |
 | `lib/satellite-lib.sh` | Loading an instance (a legacy `satellite-<name>.json` too), install, lockdown, decommission, the operator-key and role rules. |
 | `lib/provision.sh` | Renders what goes onto the machine (Debian config files, or the NixOS flake), and the edge firewall rules. |
 | `lib/tunnel.sh` | Reads the satellite's tunnel key and handshake over SSH. |
@@ -51,7 +52,9 @@ home can reach out to destroy the off-site copy (ADR-010 §7.3).
 | `test-vm-creation/` | Deep-test fixture: installs `sat-hello`, probes end-to-end via the satellite public IP, tears down. |
 
 The OPNsense side is `tappaas-cicd/lib/opnsense-wg.sh`, shared with the admin VPN
-(`network-manager wgvpn`). The instance's `name` (default: the instance name) names its
+(`network-manager wgvpn`). Every satellite has a DNS entry `<name>.mgmt.internal` at its
+tunnel end (`10.255.0.0`) — the address the Site reaches it at, and what the PBS name
+aliases when the satellite is the PBS Host; the mothership itself logs in at `address`. The instance's `name` (default: the instance name) names its
 OPNsense objects: server `tappaas-edge-<name>`, peer `tappaas-<name>`.
 
 ## Updates and decommissioning

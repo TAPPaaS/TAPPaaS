@@ -59,6 +59,24 @@ ck "…and nothing is adopted on a guess"              "" "$(cat "${ADOPTED}")"
 
 ck "no Host at all → none"                           "none rc=1"       "$(owner "" mgmt | tr -d '\n')"
 
+# pbs_host_path_ensure (ADR-010 §8.4.3): a PBS Host whose module ships
+# pbs-path.sh is asked to open the nodes' path; one without is left alone.
+mkdir -p "${TMP}/mods/satellite" "${TMP}/mods/debianhost"
+printf '#!/usr/bin/env bash\necho "$1 $2 $(pwd)" > "%s/path"\nexit ${PATH_RC:-0}\n' "${TMP}" > "${TMP}/mods/satellite/pbs-path.sh"
+chmod +x "${TMP}/mods/satellite/pbs-path.sh"
+get_module_dir() { jq -r '.moduleSource // empty' "${CONFIG_DIR}/$1.json"; }
+echo "{\"moduleSource\":\"${TMP}/mods/satellite\"}" > "${CONFIG_DIR}/sat1.json"
+echo "{\"moduleSource\":\"${TMP}/mods/debianhost\"}" > "${CONFIG_DIR}/dh2.json"
+pbs_host_path_ensure sat1 >/dev/null; rc=$?
+ck "a satellite Host: its pbs-path.sh opens the path, from its module dir" "sat1 open ${TMP}/mods/satellite rc=0" "$(cat "${TMP}/path" 2>/dev/null) rc=${rc}"
+rm -f "${TMP}/path"
+pbs_host_path_ensure dh2 >/dev/null; rc=$?
+ck "a Host whose module has no pbs-path.sh: nothing to do"   "absent rc=0" "$([[ -e "${TMP}/path" ]] && echo present || echo absent) rc=${rc}"
+pbs_host_path_ensure tappaas3 >/dev/null; rc=$?
+ck "a cluster node (no instance config): nothing to do"      "absent rc=0" "$([[ -e "${TMP}/path" ]] && echo present || echo absent) rc=${rc}"
+PATH_RC=3 pbs_host_path_ensure sat1 >/dev/null; rc=$?
+ck "a failed open is passed on"                              "3" "${rc}"
+
 echo ""
 echo "pbs-host: ${PASS} passed, ${FAIL} failed"
 [[ "${FAIL}" -eq 0 ]]

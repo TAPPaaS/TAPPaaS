@@ -19,6 +19,7 @@ rest of TAPPaaS assumes. It is a `kind: machine` module like any other (ADR-010 
 | Public HTTPS ingress (`reverse-proxy` role): L4 TCP passthrough of `:443`/`:80` to Caddy-on-OPNsense over the WireGuard tunnel | internet | published DNS names point at the satellite's public IP; TLS terminates at home |
 | Remote admin access (`admin-vpn` role): blind UDP relay of an admin WireGuard session terminating on OPNsense | admin device, anywhere | `network-manager wgvpn add-peer` prints a config whose Endpoint is the satellite |
 | Off-site backup vault (`backup` role, after `--lockdown`): a PBS the home PBS is pulled into | tappaas-cicd | pull-based sync, client-side encrypted at home; nothing at home can log in to it |
+| The Site's PBS (a managed satellite, for a Site with none of its own) | the Site's nodes, through the tunnel | `module-manager module modify backup --set node=<instance>` — PBS on a ZFS pool on an attached volume (ADR-010 §8.4.3) |
 | Lifecycle | tappaas-cicd | `module-manager module add\|update\|test\|delete satellite` — updates by the nightly sweep |
 
 A satellite starts **managed**: the mothership's key is authorized and the sweep patches it

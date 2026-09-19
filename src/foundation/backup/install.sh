@@ -150,28 +150,33 @@ case "${MODE}" in
     exit 1
     ;;
   node:*)
-    # An adopted PBS on a Host that is not a cluster member (§1.3): discovery
-    # only ever yields cluster members, so a node: result for anything else is
-    # the serving PBS found by §2.2 rule 3. Record it and provision NOTHING —
-    # the apt/ZFS steps below are for a Proxmox node, and its datastore already
-    # exists. Its OS — and the PBS packages on it — are patched by the Host's
-    # own module instance (a debianhost), which pbs_host_ensure_patched makes
-    # sure exists (#603); its name is an alias of that Host (#612).
-    if ! pbs_node_is_cluster_member "${NODE}" "${ZONE}"; then
-      # Adopt only a PBS that is really there. Discovery can also find a bare
-      # tankc pool on a machine (#601); installing PBS onto a non-Proxmox
-      # machine is not automated yet, and recording a placement with nothing
-      # behind it would be a silent lie — so say what to do instead.
+    # A PBS on a Host that is not a cluster member (§1.3) — a machine module
+    # instance: a debianhost on the LAN, or a managed satellite (ADR-010
+    # §8.4.3). Its OS — and the PBS packages on it — are patched by the Host's
+    # own module instance, which pbs_host_ensure_patched makes sure exists
+    # (#603); its name is an alias of that Host (#612).
+    MACHINE_HOST=0
+    _member_rc=0
+    pbs_node_is_cluster_member "${NODE}" "${ZONE}" || _member_rc=$?
+    [[ "${_member_rc}" -ne 2 ]] || die "Cannot reach the cluster to tell whether ${NODE} is a node or a machine — nothing was recorded; re-run when it answers."
+    if [[ "${_member_rc}" -ne 0 ]]; then
       _serves="$(pbs_probe_serving "${NODE}" "${ZONE}" "$(get_config_value 'pbsStorageName' 'tappaas_backup')")"
       if [[ "${_serves}" != yes\ * ]]; then
-        error "${NODE} is not a cluster node and serves no PBS datastore yet (it has pool ${STORAGE:-?})."
-        error "  Installing PBS onto a machine is not automated yet: install proxmox-backup-server there"
-        error "  with a datastore '$(get_config_value 'pbsStorageName' 'tappaas_backup')' on ${STORAGE:-its pool}, then re-run — it is adopted as it stands."
-        error "  Or clear .node to let discovery choose a cluster node. Nothing was recorded."
-        exit 1
+        # Nothing serves there yet: install it. The pool is required, as on a
+        # node — for a VPS, a ZFS pool named tankc* on an attached volume.
+        [[ -n "${STORAGE}" ]] || die "${NODE} has no ZFS pool named tankc* — create one (a VPS: on an attached volume), then re-run. Nothing was recorded."
+        info "${BOLD}Installing PBS onto the machine ${BGN}${NODE}${CL}${BOLD} (not a cluster node, ADR-012 §1.3), datastore on ${BGN}${STORAGE}${CL}"
+        pbs_install_on_machine "${NODE}" "${ZONE}" || die "Installing PBS on ${NODE} failed — nothing was recorded"
+        pbs_write_placement_state "${MODE}" "${STORAGE}"
+        MACHINE_HOST=1
       fi
+    fi
+    if [[ "${MACHINE_HOST}" -eq 0 && "${_member_rc}" -ne 0 ]]; then
+      # A PBS already serving on the machine is adopted as it stands: its
+      # datastore exists and nothing is provisioned.
       pbs_write_placement_state "${MODE}" "${STORAGE}"
       info "${BOLD}Adopted the PBS already serving on ${BGN}${NODE}${CL}${BOLD} (not a cluster member) — its datastore is left as it is; nothing provisioned.${CL}"
+      pbs_host_path_ensure "${NODE}" || warn "The nodes could not be given a path to the PBS on ${NODE} (see above)"
       pbs_dns_ensure "${INSTANCE}" "${ZONE}" "${NODE}" \
         || warn "Could not point $(pbs_dns_name "${INSTANCE}" "${ZONE}") at ${NODE} (see above)"
       pbs_host_ensure_patched "${NODE}" "${ZONE}" || true
@@ -181,16 +186,23 @@ case "${MODE}" in
       exit 0
     fi
     [[ -n "${STORAGE}" ]] || die "Placement resolved to ${MODE} but no active storage pool was found on ${NODE}"
-    info "${BOLD}Creating TAPPaaS PBS on node ${BGN}${NODE}${CL}${BOLD}, storage ${BGN}${STORAGE}${CL}${BOLD}.${CL}"
-    pbs_write_placement_state "${MODE}" "${STORAGE}"
+    if [[ "${MACHINE_HOST}" -eq 0 ]]; then
+      info "${BOLD}Creating TAPPaaS PBS on node ${BGN}${NODE}${CL}${BOLD}, storage ${BGN}${STORAGE}${CL}${BOLD}.${CL}"
+      pbs_write_placement_state "${MODE}" "${STORAGE}"
+    fi
     ;;
   *)
     die "Unexpected placement result: '${MODE}'"
     ;;
 esac
 
-# update the apt sources and install pbs
+# Every ssh to the PBS from here on goes to its Host's one address (#457): a
+# node by its name, a machine by its recorded address (it may have none).
+PBS_ADDR="$(pbs_host_addr "${NODE}" "${ZONE}")"
 
+# update the apt sources and install pbs — a cluster node's; a machine got its
+# packages above (pbs_install_on_machine).
+if [[ "${MACHINE_HOST}" -eq 0 ]]; then
 info "${BOLD}Test if apt $IMAGE_LOCATION repositories are registered ..."
 if ssh root@${NODE}.$ZONE.internal "cat /etc/apt/sources.list.d/proxmox.sources 2>/dev/null" | grep -q "$IMAGE_LOCATION"
 then
@@ -213,6 +225,7 @@ run_quiet ssh root@${NODE}.$ZONE.internal bash -c "'
   apt install -y proxmox-backup-server proxmox-backup-client
   rm -f /etc/apt/sources.list.d/pbs-enterprise.sources
 '" || die "PBS server installation failed on ${NODE}"
+fi
 
 # The PBS datastore lives on a ZFS pool; make the services wait for the mount
 # so they don't open the chunk store before ZFS is up on boot (issue #230).
@@ -232,7 +245,7 @@ pbs_client_reconcile "${ZONE}" "${IMAGE_LOCATION}" \
 info "\n${GN}TAPPaaS PBS installation completed successfully.${CL}"
 echo
 echo "Proxmox Backup Server and client tools installed on:"
-echo "  - PBS Server: ${NODE}.${ZONE}.internal"
+echo "  - PBS Server: ${NODE} (${PBS_ADDR})"
 echo "  - PBS Client: All Proxmox VE nodes"
 
 PBS_HOSTNAME="$(pbs_dns_name "${INSTANCE}" "${ZONE}")"
@@ -258,7 +271,7 @@ info "${BOLD}Configuring Proxmox Backup Server...${CL}"
 # It used to be: every non-interactive re-install replaced the real password in
 # that file with a fresh, unused one (found in the ADR-012 phase 6 test).
 PBS_CRED_FILE="${HOME}/.pbs-credentials.txt"
-if ssh -n "root@${NODE}.${ZONE}.internal" "proxmox-backup-manager user list --output-format json" 2>/dev/null \
+if ssh -n "root@${PBS_ADDR}" "proxmox-backup-manager user list --output-format json" 2>/dev/null \
      | jq -e --arg u "${PBS_USER}" 'any(.[]?; .userid == $u)' >/dev/null 2>&1; then
   PBS_USER_EXISTS=1
 else
@@ -300,6 +313,11 @@ if [[ "${PBS_USER_EXISTS}" -eq 0 && "${#TAPPAAS_PASSWORD}" -lt 8 ]]; then
   die "Failed to obtain a PBS password (need ≥8 chars). Set \$TAPPAAS_PBS_PASSWORD and retry."
 fi
 
+# The nodes must be able to reach it: a satellite's PBS is behind its tunnel
+# (ADR-010 §8.4.3). A no-op for a node or a LAN machine.
+pbs_host_path_ensure "${NODE}" || die "The nodes cannot be given a path to the PBS on ${NODE} (see above)"
+[[ "${MACHINE_HOST}" -eq 1 ]] && { pbs_host_ensure_patched "${NODE}" "${ZONE}" || true; }
+
 # Step 0: the PBS's name, as an alias of the Host it runs on (#612)
 info "Pointing ${PBS_HOSTNAME} at ${NODE}.${ZONE}.internal in OPNsense..."
 if ! pbs_dns_ensure "${INSTANCE}" "${ZONE}" "${NODE}"; then
@@ -309,7 +327,7 @@ fi
 
 # Step 1: Create datastore on PBS
 info "Creating datastore ${DATASTORE_NAME} at ${DATASTORE_PATH}..."
-ssh root@${NODE}.${ZONE}.internal "bash -s" <<EOF
+ssh "root@${PBS_ADDR}" "bash -s" <<EOF
 set -e
 # Create directory if it doesn't exist
 mkdir -p ${DATASTORE_PATH}
@@ -333,7 +351,7 @@ EOF
 
 # Step 2: Create PBS user
 info "Creating PBS user ${PBS_USER}..."
-ssh root@${NODE}.${ZONE}.internal "bash -s" <<EOF
+ssh "root@${PBS_ADDR}" "bash -s" <<EOF
 set -e
 # Check if user exists
 if ! proxmox-backup-manager user list | grep -q "${PBS_USER}"; then
@@ -348,7 +366,7 @@ EOF
 
 # Step 3: Set permissions for datastore
 info "Setting permissions for ${PBS_USER} on ${DATASTORE_NAME}..."
-ssh root@${NODE}.${ZONE}.internal "bash -s" <<EOF
+ssh "root@${PBS_ADDR}" "bash -s" <<EOF
 set -e
 # Add ACL permission for the user on the datastore
 proxmox-backup-manager acl update /datastore/${DATASTORE_NAME} Admin --auth-id ${PBS_USER} || true
@@ -357,7 +375,7 @@ EOF
 
 # Step 4: Configure retention policy and garbage collection
 info "Configuring retention policy and garbage collection..."
-ssh root@${NODE}.${ZONE}.internal "bash -s" <<EOF
+ssh "root@${PBS_ADDR}" "bash -s" <<EOF
 set -e
 # Create or update prune job with retention settings
 # Schedule: daily at 02:00
@@ -404,7 +422,7 @@ pbs_immutable_from_config "${STORAGE}" "${DATASTORE_NAME}" || warn "Could not co
 
 # Step 5: Get PBS fingerprint
 info "Getting PBS fingerprint..."
-PBS_FINGERPRINT=$(ssh root@${NODE}.${ZONE}.internal "proxmox-backup-manager cert info | grep 'Fingerprint (sha256)' | sed 's/^Fingerprint (sha256): //'")
+PBS_FINGERPRINT=$(ssh "root@${PBS_ADDR}" "proxmox-backup-manager cert info | grep 'Fingerprint (sha256)' | sed 's/^Fingerprint (sha256): //'")
 if [ -z "$PBS_FINGERPRINT" ]; then
   error "Failed to retrieve PBS fingerprint"
   echo "Please run manually on ${NODE}: proxmox-backup-manager cert info"

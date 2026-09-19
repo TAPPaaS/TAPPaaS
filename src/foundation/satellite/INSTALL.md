@@ -38,7 +38,8 @@ host with your operator key — then:
         --physicalLocation '{"country":"FI","city":"Helsinki"}'
 
 - **Instance name:** `satellite` (config `~/config/satellite.json`). A second satellite
-  needs `--instance <name>`, e.g. `--instance satellite-hel1`.
+  needs `--instance <name>`, e.g. `--instance satellite-hel1`. The install also registers
+  `<name>.mgmt.internal` at its tunnel end, `10.255.0.0`.
 - **Roles:** `reverse-proxy` and `admin-vpn` by default; one of them only with
   `--roles '["reverse-proxy"]'`. The `backup` role is not given here — it comes with
   locking the satellite down as the vault (below).
@@ -78,6 +79,29 @@ provider, not in TAPPaaS.
 | `module test` | OPNsense server + peer present, the mothership logs in, tunnel handshake under 5 minutes, nginx active (reverse-proxy), relay rules loaded (admin-vpn), the `debianhost` checks green |
 | reverse-proxy: browse a published name from off-LAN | resolves to the satellite, served by Caddy at home |
 | admin-vpn: `network-manager wgvpn add-peer --name <device> --pubkey <key>` | the printed config's Endpoint is the satellite; the device reaches a node `:8006`, the OPNsense UI and SSH |
+
+## The satellite as the Site's PBS
+
+A Site with no PBS of its own (the backup module a **shim**) can put it on a managed
+satellite: the nodes push their backups to it through the tunnel (ADR-010 §8.4.3).
+
+1. Attach a volume to the VPS in the provider's console, and make a ZFS pool on it named
+   `tankc…` (e.g. `zpool create tankc1 /dev/sdb` as root on the satellite) — the same rule
+   the backup module applies to every PBS Host.
+2. Point the backup module at the satellite and update it:
+
+       module-manager module modify backup --set node=<instance>
+
+   The update finds the pool, installs the official PBS on the satellite, opens the nodes'
+   path — an OPNsense rule `mgmt → 10.255.0.0:8007`, and the satellite's tunnel and firewall
+   admitting the mgmt subnet to `:8007` only — points `backup.mgmt.internal` at
+   `<instance>.mgmt.internal` (the tunnel end, `10.255.0.0`), and registers the storage.
+   The sweep keeps the path open while the satellite is the PBS Host, and closes it after.
+
+This is then the Site's **only** copy, and home can reach it: `backup-manager validate` warns
+until something home cannot reach pulls it — a second satellite, locked down (below), or a
+backup buddy (`backup-manager peer add remote …`). A satellite that is the PBS Host cannot
+itself be locked down, and cannot be decommissioned until the PBS is moved.
 
 ## Locking it down as the off-site vault
 

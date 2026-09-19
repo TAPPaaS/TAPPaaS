@@ -162,3 +162,28 @@ export function offsiteWarnings(configDir: string): string[] {
   }
   return warnings;
 }
+
+/** ADR-010 §8.4.3: a PBS on a managed satellite is the Site's ONLY copy, and home
+ *  can reach — so delete from — it. It is protected only once something pulls it
+ *  that home cannot reach: a locked-down satellite (the vault: `backup` role,
+ *  `management: unmanaged`) or a `remote` peer (a buddy that pulls us). One
+ *  warning until one exists; [] otherwise, and when the PBS is not on a satellite. */
+export function pbsOnSatelliteWarnings(configDir: string): string[] {
+  if (!existsSync(configDir)) return [];
+  const node = readObj(join(configDir, "backup.json"))?.node;
+  if (typeof node !== "string" || !node) return [];
+  const host = readObj(join(configDir, `${node}.json`));
+  if (!host || !isSatellite(join(configDir, `${node}.json`), host)) return [];
+  for (const f of readdirSync(configDir)) {
+    if (!f.endsWith(".json") || f === `${node}.json`) continue;
+    if (f.startsWith("remote-")) return [];
+    const c = readObj(join(configDir, f));
+    if (c && isSatellite(join(configDir, f), c) && c.management === "unmanaged"
+        && Array.isArray(c.roles) && c.roles.includes("backup")) return [];
+  }
+  return [
+    `the Site's PBS runs on the satellite '${node}', which home can reach — and so delete from: ` +
+      `there is no copy home cannot reach. Lock down a second satellite as the vault ` +
+      `(module-manager module modify <instance> --lockdown) or add a buddy that pulls it (backup-manager peer add remote …)`,
+  ];
+}

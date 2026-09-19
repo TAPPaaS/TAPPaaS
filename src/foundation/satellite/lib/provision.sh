@@ -119,6 +119,9 @@ sat_read_pubkey() {
 # Render the per-role Debian config files from the operator JSON + derived
 # SAT_* defaults + the home OPNsense pubkey, into <out-dir>. Only the files a
 # role needs are written (provision-debian.sh is role-gated to match).
+# SAT_PBS_CLIENTS (a CIDR, set while the satellite is the Site's PBS Host —
+# ADR-010 §8.4.3): the nodes that push to its PBS, admitted through the tunnel —
+# into the AllowedIPs, and to :8007 on the tunnel interface only.
 # MANAGEMENT in roles.env says who patches the machine (ADR-010 §8.4.2/§8.4.4):
 # `managed` — the sweep does, so the mothership's key (cicd_key.pub, when given)
 # is authorized and unattended-upgrades stays off; `unmanaged` — it patches
@@ -158,6 +161,7 @@ sat_gen_debian_configs() {
                 pbs_host="$(jq -r "${SAT_VAULT}.pull.homePbsHost // empty" "${cfg}")"
                 [[ -n "${pbs_host}" ]] && allowed="${allowed}, ${pbs_host}/32"
             fi
+            [[ -n "${SAT_PBS_CLIENTS:-}" ]] && allowed="${allowed}, ${SAT_PBS_CLIENTS}"
             echo ""
             echo "[Peer]"
             echo "PublicKey = ${home_pub}"
@@ -183,6 +187,7 @@ sat_gen_debian_configs() {
         echo "    udp dport ${SAT_WGPORT} accept       # infra tunnel"
         _sat_has_role reverse-proxy && echo "    tcp dport { 80, 443 } accept  # reverse-proxy passthrough"
         _sat_has_role admin-vpn     && echo "    udp dport ${SAT_ADMIN_WGPORT} accept       # admin-vpn relay"
+        [[ -n "${SAT_PBS_CLIENTS:-}" ]] && echo "    iifname \"wg-infra\" ip saddr ${SAT_PBS_CLIENTS} tcp dport ${SAT_HOME_PBS_PORT} accept  # the Site's PBS: its nodes push here (ADR-010 §8.4.3)"
         echo "  }"
         echo "  chain forward {"
         echo "    type filter hook forward priority filter; policy drop;"

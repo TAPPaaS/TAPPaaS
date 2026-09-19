@@ -190,8 +190,9 @@ sat_install() {
     ow_link_server_peer "${srv}" "${sname}" "${SAT_HOME_ADDR}/31" "${home_priv}" "${home_pub}" "${cli}" >/dev/null
     ow_enable_and_apply >/dev/null
 
-    info "  [6/6] OPNsense edge rules for ${SAT_ROLES}"
+    info "  [6/6] OPNsense edge rules for ${SAT_ROLES}; ${SAT_NAME}.${SAT_DNS_ZONE}.internal at the tunnel end"
     sat_edge_rules_ensure || warn "  edge rule setup reported an issue"
+    sat_dns_ensure || warn "  the satellite's DNS entry could not be registered"
     sleep 12
     info "  peer: $(ow_peer_status)"
 
@@ -208,10 +209,14 @@ sat_install() {
 # any copy a vault holds — is never touched.
 sat_decommission() {
     local cli srv
+    sat_is_pbs_host && die "${INSTANCE} is the Site's PBS Host (backup.json node) — taking it down would cut every backup; move the PBS first"
     cli="$(sat_opnsense_uuid client)"; srv="$(sat_opnsense_uuid server)"
     [[ -n "${cli}" ]] && { ow_del_client "${cli}"; info "  removed OPNsense peer tappaas-${SAT_NAME}"; }
     [[ -n "${srv}" ]] && { ow_del_server "${srv}"; info "  removed OPNsense server tappaas-edge-${SAT_NAME}"; }
     [[ -n "${cli}${srv}" ]] || info "  no OPNsense tunnel objects for ${SAT_NAME} — nothing to remove there"
+    local r; r="$(sat_pbs_rule_uuid)"
+    [[ -n "${r}" ]] && { _ow_api -X POST "/api/firewall/filter/delRule/${r}" >/dev/null; info "  removed $(sat_pbs_rule_desc)"; }
+    sat_dns_remove || true
     # A vault's read access to the Site's PBS (the `remote` peer lockdown added).
     if [[ -f "${CONFIG_DIR:-/home/tappaas/config}/remote-${SAT_NAME}.json" ]]; then
         if backup-manager peer delete remote "${SAT_NAME}"; then
@@ -356,3 +361,108 @@ sat_lockdown() {
     info "  Only your operator key reaches it now. The sweep skips it; 'module-manager module test ${INSTANCE}' checks it from OPNsense."
 }
 
+
+# ── The satellite as the Site's PBS Host (ADR-010 §8.4.3) ────────────
+#
+# The nodes reach a satellite only through its tunnel, so being the PBS Host
+# needs three things a relay does not: a DNS entry at its tunnel end (the PBS
+# name is an alias of it, ADR-012 §2.7), an OPNsense rule letting the nodes
+# reach it, and the tunnel and host firewall admitting them — to :8007 only.
+
+SAT_DNS_ZONE="${SAT_DNS_ZONE:-mgmt}"
+
+# sat_mgmt_subnet / sat_mgmt_iface — the nodes' zone, from zones.json.
+sat_mgmt_subnet() { jq -r '.mgmt.ip // "10.0.0.0/24"' "${CONFIG_DIR:-/home/tappaas/config}/zones.json" 2>/dev/null || echo 10.0.0.0/24; }
+sat_mgmt_iface()  { jq -r '.mgmt.bridge // "lan"' "${CONFIG_DIR:-/home/tappaas/config}/zones.json" 2>/dev/null || echo lan; }
+
+# sat_is_pbs_host — rc 0 when backup.json places the Site's PBS on this satellite.
+sat_is_pbs_host() {
+    local bj="${CONFIG_DIR:-/home/tappaas/config}/backup.json"
+    [[ -f "${bj}" ]] && jq -e --arg i "${INSTANCE}" \
+        '(.placementState == "node" and .node == $i) or .placementState == ("node:" + $i)' "${bj}" >/dev/null 2>&1
+}
+
+# sat_dns_ensure — <name>.<zone>.internal → the satellite's tunnel end, the
+# address the Site reaches it at (never its public one). Idempotent; an entry
+# pointing elsewhere is replaced.
+sat_dns_ensure() {
+    local fqdn="${SAT_NAME}.${SAT_DNS_ZONE}.internal" cur
+    command -v dns-manager >/dev/null || { warn "  dns-manager not on PATH — ${fqdn} not registered"; return 1; }
+    cur="$(dns-manager --no-ssl-verify list 2>/dev/null | awk -v f="${fqdn}" '$1 == f {print $3; exit}')"
+    [[ "${cur}" == "${SAT_SAT_ADDR}" ]] && return 0
+    if [[ -n "${cur}" ]]; then
+        dns-manager --no-ssl-verify delete "${SAT_NAME}" "${SAT_DNS_ZONE}.internal" >/dev/null \
+            || { warn "  could not replace ${fqdn} → ${cur}"; return 1; }
+    fi
+    dns-manager --no-ssl-verify add "${SAT_NAME}" "${SAT_DNS_ZONE}.internal" "${SAT_SAT_ADDR}" \
+        --description "TAPPaaS satellite ${SAT_NAME} (its tunnel end)" >/dev/null \
+        || { warn "  could not register ${fqdn} → ${SAT_SAT_ADDR}"; return 1; }
+    info "  ${fqdn} → ${SAT_SAT_ADDR} (the satellite's tunnel end)"
+}
+
+sat_dns_remove() {
+    command -v dns-manager >/dev/null || return 0
+    dns-manager --no-ssl-verify list 2>/dev/null | awk '{print $1}' | grep -qx "${SAT_NAME}.${SAT_DNS_ZONE}.internal" || return 0
+    dns-manager --no-ssl-verify delete "${SAT_NAME}" "${SAT_DNS_ZONE}.internal" >/dev/null \
+        && info "  removed ${SAT_NAME}.${SAT_DNS_ZONE}.internal"
+}
+
+# The OPNsense rule letting the nodes reach this satellite's PBS.
+sat_pbs_rule_desc() { printf 'tappaas-satellite mgmt->pbs %s' "${SAT_NAME}"; }
+sat_pbs_rule_uuid() {
+    _ow_api /api/firewall/filter/searchRule \
+        | jq -r --arg d "$(sat_pbs_rule_desc)" '.rows[]? | select(.description==$d) | .uuid' | head -1
+}
+
+# sat_home_pubkey — the OPNsense end of this satellite's tunnel.
+sat_home_pubkey() {
+    local srv; srv="$(sat_opnsense_uuid server)"
+    [[ -n "${srv}" ]] || return 1
+    _ow_api "/api/wireguard/server/getServer/${srv}" | jq -r '.server.pubkey // empty'
+}
+
+# sat_pbs_path_is_open — rc 0 when the satellite's firewall admits :8007 from the tunnel.
+sat_pbs_path_is_open() {
+    sat_ssh "nft list ruleset 2>/dev/null | grep -q 'tcp dport ${SAT_HOME_PBS_PORT} accept'"
+}
+
+# sat_pbs_path <open|close> — converge the path from the nodes to this
+# satellite's PBS. Open: the DNS entry, the OPNsense rule, and the satellite
+# re-provisioned with the nodes' subnet admitted. Close: the rule goes and the
+# satellite is re-provisioned without. Managed satellites only (a locked-down one
+# is never a PBS Host, and admits no login). Re-provisions only on a change.
+sat_pbs_path() {
+    local want="$1" subnet iface uuid pub cdir
+    [[ "${SAT_MGMT}" == managed ]] || { [[ "${want}" == close ]] && return 0; die "${INSTANCE} is locked down — it cannot be the Site's PBS Host"; }
+    subnet="$(sat_mgmt_subnet)"; iface="$(sat_mgmt_iface)"
+    uuid="$(sat_pbs_rule_uuid)"
+    if [[ "${want}" == open ]]; then
+        sat_dns_ensure || return 1
+        if [[ -z "${uuid}" ]]; then
+            _ow_api -X POST -H 'Content-Type: application/json' \
+                -d "{\"rule\":{\"enabled\":\"1\",\"action\":\"pass\",\"interface\":\"${iface}\",\"direction\":\"in\",\"ipprotocol\":\"inet\",\"protocol\":\"TCP\",\"source_net\":\"${subnet}\",\"destination_net\":\"${SAT_SAT_ADDR}\",\"destination_port\":\"${SAT_HOME_PBS_PORT}\",\"description\":\"$(sat_pbs_rule_desc)\"}}" \
+                /api/firewall/filter/addRule >/dev/null
+            _ow_api -X POST /api/firewall/filter/apply >/dev/null
+            [[ -n "$(sat_pbs_rule_uuid)" ]] || { warn "  could not add the OPNsense rule ${subnet} -> ${SAT_SAT_ADDR}:${SAT_HOME_PBS_PORT}"; return 1; }
+            info "  OPNsense: ${subnet} -> ${SAT_SAT_ADDR}:${SAT_HOME_PBS_PORT} on ${iface}"
+        fi
+        sat_pbs_path_is_open && return 0
+    else
+        if [[ -n "${uuid}" ]]; then
+            _ow_api -X POST "/api/firewall/filter/delRule/${uuid}" >/dev/null
+            _ow_api -X POST /api/firewall/filter/apply >/dev/null
+            info "  OPNsense: removed $(sat_pbs_rule_desc)"
+        fi
+        sat_pbs_path_is_open || return 0
+    fi
+    pub="$(sat_home_pubkey)" || die "cannot read the OPNsense end of ${INSTANCE}'s tunnel"
+    cdir="$(mktemp -d)"
+    local clients=""; [[ "${want}" == open ]] && clients="${subnet}"
+    SAT_PBS_CLIENTS="${clients}" sat_gen_debian_configs "${SAT_CFG}" "${pub}" "${cdir}" "${SAT_CICD_PUB}" \
+        || { rm -rf "${cdir}"; die "config rendering failed"; }
+    sat_assemble_debian_deploy "${cdir}" >/dev/null
+    info "  re-provisioning ${INSTANCE}: :${SAT_HOME_PBS_PORT} from ${subnet} through the tunnel $([[ "${want}" == open ]] && echo admitted || echo closed)"
+    sat_deploy_run "${cdir}" "${SAT_USER}@${ADDRESS}" "${SAT_CICD_PUB%.pub}" provision-debian.sh set-management.sh \
+        || { rm -rf "${cdir}"; die "re-provisioning ${INSTANCE} failed"; }
+    rm -rf "${cdir}"
+}

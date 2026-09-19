@@ -147,8 +147,9 @@ which are ordinary apt packages there: the cluster module for a node, the machin
 that the Host has an owner, adopts an unregistered machine (registration only, ADR-026 D8.1),
 and warns loudly when it cannot — so no PBS host goes unpatched in silence.
 Discovery reaches such a Host by its recorded address and finds its storage from its ZFS pools
-(#601). Installing PBS onto a bare machine is not automated yet: a PBS already serving there is
-adopted; a machine with only a pool is refused with the steps to take, never recorded.
+(#601). A PBS already serving there is adopted; a machine with only a pool gets the official
+PBS installed (ADR-010 §8.4.3, #670) — including a managed satellite, whose module opens the
+nodes' path through its tunnel.
 **Verified live 2026-09-19** (debianhost test plan, phase 6): a PBS installed by hand on a
 `debianhost` machine was adopted as `node` = that machine from an empty placement, with nothing
 provisioned on a cluster node; its name became a CNAME of the machine; the machine's

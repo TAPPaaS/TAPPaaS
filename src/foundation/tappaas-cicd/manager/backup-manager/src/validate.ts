@@ -21,7 +21,7 @@ import {
   resolvePolicy,
   siteBackup,
 } from "./config";
-import { offsiteWarnings } from "./offsite";
+import { offsiteWarnings, pbsOnSatelliteWarnings } from "./offsite";
 
 export interface ValidateResult {
   oks: string[];
@@ -116,7 +116,7 @@ export function validate(configDir: string): ValidateResult {
   }
 
   // ── 6. off-site copies are recorded, not asserted (#609) ─────────
-  const warnings = offsiteWarnings(configDir);
+  const warnings = [...offsiteWarnings(configDir), ...pbsOnSatelliteWarnings(configDir)];
 
   return { oks, errors, warnings };
 }
