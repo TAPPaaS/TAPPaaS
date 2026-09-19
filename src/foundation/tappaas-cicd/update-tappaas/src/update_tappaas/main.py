@@ -336,19 +336,45 @@ def should_update_now(config: dict, current_hour: int) -> bool:
 # ── Module discovery / ordering ──────────────────────────────────────
 
 
+# The workload kinds a module authors (ADR-022f D1) — as lib/ts/src/module-discovery.ts.
+WORKLOAD_KINDS = {"vm", "lxc", "machine", "application", "device"}
+# Off-site peer configs (ADR-012 §1.4): peers, not modules.
+PEER_PREFIXES = ("pull-", "remote-", "receive-")
+# Modules with a manager of their own that the sweep must not drive: a satellite
+# (satellite-<name>.json) is a machine module, but it is provisioned and updated
+# by satellite-manager — pull-based, never pushed from here (ADR-010 §7.3).
+SELF_MANAGED_PREFIXES = ("satellite-",)
+
+
 def _is_module_json(path) -> bool:
     """True if a config/*.json is an actual deployed MODULE, not a co-located
-    state file. Mirrors module-manager's selector (ADR-007 #3): the `kind:"module"`
-    tag (written by install-module.sh), with a `vmname` heuristic fallback for
-    not-yet-tagged configs. Excludes state files like
-    switch-configuration-{actual,desired}.json that `glob("*.json")` also matches."""
+    state file — the SAME shape rule as module-manager's discovery
+    (lib/ts/src/module-discovery.ts, #544): a workload `kind`, or the legacy
+    `kind: "module"` marker, or a module-shaped field (dependsOn / integratesWith
+    / provides / moduleSource, or its pre-#609 name location). A `vmname` is kept
+    as a last fallback for configs older than all of those.
+
+    It used to be `kind == "module" or vmname` only. #611 retired the marker and a
+    `kind: machine` instance has no vmname, so every machine — a debianhost, a
+    pvenode — silently fell out of the sweep (found 2026-09-19). A satellite is a
+    machine too, and is a module; get_installed_apps leaves it to
+    satellite-manager (SELF_MANAGED_PREFIXES)."""
+    if path.name in NON_MODULE_JSONS or path.name.startswith(PEER_PREFIXES):
+        return False
     try:
         data = json.loads(path.read_text())
     except (OSError, ValueError):
         return False
     if not isinstance(data, dict):
         return False
-    return data.get("kind") == "module" or bool(data.get("vmname"))
+    kind = data.get("kind")
+    if kind == "module" or kind in WORKLOAD_KINDS:
+        return True
+    if any(isinstance(data.get(f), list) for f in ("dependsOn", "integratesWith", "provides")):
+        return True
+    if any(isinstance(data.get(f), str) and data.get(f) for f in ("moduleSource", "location")):
+        return True
+    return bool(data.get("vmname"))
 
 
 def get_installed_apps() -> list[str]:
@@ -366,6 +392,9 @@ def get_installed_apps() -> list[str]:
         # Robust guard: only real modules (kind=module / has vmname), so state
         # files that slipped past NON_MODULE_JSONS are never treated as apps.
         if not _is_module_json(json_file):
+            continue
+        if module_name.startswith(SELF_MANAGED_PREFIXES):
+            log.info("  (skipped: %s — driven by satellite-manager, not the sweep)", module_name)
             continue
         apps.append(module_name)
     return apps

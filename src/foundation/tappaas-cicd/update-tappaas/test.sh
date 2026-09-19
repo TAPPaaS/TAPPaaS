@@ -79,6 +79,52 @@ else
     echo "  ⊘ backfill unit test skipped (source or env python not found)"
 fi
 
+# ── 2a) Unit: which config/*.json the sweep treats as modules ─────────
+# The same shape rule as module-manager's discovery. A `kind: machine` instance
+# (a debianhost, a pvenode) has no vmname and, since #611, no `kind: module`
+# marker — the old `marker or vmname` rule dropped every one of them from the
+# sweep. A satellite is a module too, but satellite-manager drives it — never the
+# sweep, whatever its status says.
+if [[ -f "$main_py" && -x "$py" ]]; then
+    if "$py" - "$main_py" <<'PYSEL'
+import importlib.util, json, sys, tempfile, logging
+from pathlib import Path
+logging.disable(logging.CRITICAL)
+spec = importlib.util.spec_from_file_location("m", sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+d = Path(tempfile.mkdtemp())
+def w(name, obj): (d / name).write_text(json.dumps(obj))
+w("nextcloud.json",   {"kind": "vm", "vmname": "nextcloud", "moduleSource": "/x/nextcloud"})
+w("dh-test1.json",    {"kind": "machine", "address": "10.0.0.90", "moduleSource": "/x/debianhost"})
+w("tappaas2.json",    {"kind": "machine", "address": "tappaas2.mgmt.internal", "moduleSource": "/x/pvenode"})
+w("old.json",         {"vmname": "old"})
+w("marker.json",      {"kind": "module"})
+w("provider.json",    {"provides": ["nixos"]})
+w("satellite-s1.json",{"kind": "machine", "status": "external", "moduleSource": "/x/satellite"})
+w("satellite-s2.json",{"kind": "machine", "moduleSource": "/x/satellite"})   # a fresh one: no status
+w("pull-buddy.json",  {"remoteHost": "h", "moduleSource": "/x"})
+w("site.json",        {"name": "site", "location": {"country": "DK"}})
+w("last-update-result.json", {"ok": True, "total": 3})
+w("list.json", ["not", "an", "object"])
+(d / "broken.json").write_text("{ broken")
+m.CONFIG_DIR = d
+got = sorted(m.get_installed_apps())
+want = sorted(["nextcloud", "dh-test1", "tappaas2", "old", "marker", "provider"])
+assert got == want, f"modules: {got} != {want}"
+assert m._is_module_json(d / "satellite-s2.json"), "a satellite IS a module (resolution, module list)"
+to_update, skipped = m.partition_by_lifecycle(got)
+assert "dh-test1" in to_update and "tappaas2" in to_update, to_update
+PYSEL
+    then
+        passed=$((passed + 1))
+    else
+        echo "  ✗ sweep module selection unit test FAILED"
+        failed=$((failed + 1))
+    fi
+else
+    echo "  ⊘ sweep module selection unit test skipped (source or env python not found)"
+fi
+
 # ── 2b) Unit: the dry run asks the migration runner what is pending ──
 # ADR-025 D6: an operator sees a migration before it happens. A runner that is
 # missing or broken must degrade to one line, never fail the preview.

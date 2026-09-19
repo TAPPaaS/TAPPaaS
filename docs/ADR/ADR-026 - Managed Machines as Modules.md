@@ -119,6 +119,11 @@ node is a module first and a cluster member second.
   is adopted only if `site.json` `hardware.nodes` lists it. The cluster module's update
   registers every unregistered node (Step 7), and `site-manager node add` registers a node it
   joins; no migration is needed, because nothing in an existing config changes.
+  *Found 2026-09-19:* the nightly sweep still selected modules by the retired `kind: "module"`
+  marker or a `vmname`, so no machine instance was swept — a `debianhost` was not patched by
+  the sweep as D3 intends. update-tappaas now uses discovery's shape rule; a satellite (a
+  machine module too, `moduleSource` since migration 0008) stays with satellite-manager, and
+  deleting any machine instance never runs its module's `delete.sh`.
 - **Stage 2 — lifecycle.** `update-os.sh` moves behind the module's `update.sh`, so a cluster
   node and a Debian host are patched by the same path with the same consent rules.
 - **Stage 3 — install.** The cluster install is refactored to *install machines by installing
