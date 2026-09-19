@@ -109,7 +109,7 @@ converge_nextcloud_domains() {
     domain="$(resolve_proxy_domain)"
 
     if [[ -z "${domain}" ]]; then
-        info "  No proxyDomain declared or derivable — skipping domain config."
+        debug "  No proxyDomain declared or derivable — skipping domain config."
         return 0
     fi
 
@@ -121,10 +121,10 @@ converge_nextcloud_domains() {
         return 0
     fi
 
-    info "${BOLD}Converging trusted domains + public URL…${CL}"
+    debug "Converging trusted domains + public URL…"
 
     if trusted_domain_present "${NEXTCLOUD_HOST}" "${domain}"; then
-        info "  ${GN}✓${CL} ${domain} already trusted — nothing to change."
+        debug "  ${GN}✓${CL} ${domain} already trusted — nothing to change."
         return 0
     fi
 
@@ -140,23 +140,22 @@ converge_nextcloud_domains() {
     return 1
 }
 
-echo ""
-info "${BOLD}Module Update: nextcloud${CL}"
-info "  VM:   ${VMNAME} (VMID: ${VMID})"
-info "  Node: ${NODE}"
-info "  Zone: ${ZONE0NAME}"
+# install.sh sources this file for its helpers and runs the converge itself:
+# the start line belongs to an update only.
+[[ "${BASH_SOURCE[0]}" == "${0}" ]] && info "${BOLD}*** Starting nextcloud update${CL}"
+debug "  VM:   ${VMNAME} (VMID: ${VMID})"
+debug "  Node: ${NODE}"
+debug "  Zone: ${ZONE0NAME}"
 
 # NixOS OS update is handled by templates:nixos update-service.sh before this
 # script runs. The domain converge below is the one module-specific step.
-echo ""
 converge_nextcloud_domains
 
 # ── Summary ──────────────────────────────────────────────────────────────────
-echo ""
-info "${BOLD}Update Complete${CL}"
-info "  VM:   ${VMNAME} (VMID: ${VMID})"
-info "  Node: ${NODE}"
-info "  Zone: ${ZONE0NAME}"
+debug "Update Complete"
+debug "  VM:   ${VMNAME} (VMID: ${VMID})"
+debug "  Node: ${NODE}"
+debug "  Zone: ${ZONE0NAME}"
 if [[ -n "${HANODE}" ]]; then
-    info "  HA Node: ${HANODE}"
+    debug "  HA Node: ${HANODE}"
 fi
