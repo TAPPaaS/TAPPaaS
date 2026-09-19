@@ -77,9 +77,17 @@ IDENTITY_PUBLIC="https://identity.${DOMAIN}"
 FIREWALL_FQDN="firewall.mgmt.internal"
 OPNSENSE_CREDS="${HOME}/.opnsense-credentials.txt"
 
-info "${BOLD}Post-Install / Update Configuration${CL}"
-info "  VM: ${VMNAME} (VMID: ${VMID})  Node: ${NODE}  Zone: ${ZONE0NAME}"
-[[ -n "${HANODE}" ]] && info "  HA Node: ${HANODE}"
+# install.sh sources this file and wants its summary; an update (run as a
+# script) says it started and keeps the summary as detail.
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    summary() { debug "$@"; }
+    info "${BOLD}*** Starting identity update${CL}"
+else
+    summary() { info "$@"; }
+fi
+summary "${BOLD}Post-Install / Update Configuration${CL}"
+summary "  VM: ${VMNAME} (VMID: ${VMID})  Node: ${NODE}  Zone: ${ZONE0NAME}"
+[[ -n "${HANODE}" ]] && summary "  HA Node: ${HANODE}"
 
 # ── Phase B step 1-4: bootstrap + verify the cicd-side Authentik credentials ─
 # Waits for the Authentik API, fetches AUTHENTIK_BOOTSTRAP_TOKEN from the
@@ -96,7 +104,7 @@ OPNSENSE_SECRET="$(grep '^secret=' "$OPNSENSE_CREDS" | cut -d= -f2-)"
 OPNSENSE_AUTH="${OPNSENSE_KEY}:${OPNSENSE_SECRET}"
 OPNSENSE_API="https://${FIREWALL_FQDN}:8443/api/caddy"
 
-info "${BOLD}Configuring Caddy global AuthProvider = Authentik${CL}"
+debug "Configuring Caddy global AuthProvider = Authentik"
 # NB: AuthToTls (OptionField) rejects every value form I tried — "http://",
 # "http", "1" all → "Option [] not in list" (caddy/general/set bug?). The
 # default is "http://" which is what we want for the Authentik outpost on the
@@ -111,7 +119,7 @@ curl -ksS -u "$OPNSENSE_AUTH" -X POST "${OPNSENSE_API}/general/set" \
 \"AuthToPort\":\"9000\",\
 \"AuthToUri\":\"/outpost.goauthentik.io/auth/caddy\"\
 }}}" | jq -r .result >/dev/null || die "Failed to set Caddy AuthProvider"
-info "  ${GN}✓${CL} AuthProvider set → ${IDENTITY_FQDN}:9000 /outpost.goauthentik.io/auth/caddy"
+debug "  ${GN}✓${CL} AuthProvider set → ${IDENTITY_FQDN}:9000 /outpost.goauthentik.io/auth/caddy"
 
 # The 12 X-Authentik-* headers per the issue. We add each only if absent
 # (HeaderType is the natural key — case-sensitive, must match Authentik's).
@@ -121,7 +129,7 @@ AUTHENTIK_HEADERS=(
     X-Authentik-Meta-Jwks X-Authentik-Meta-Outpost X-Authentik-Meta-Provider
     X-Authentik-Meta-App X-Authentik-Meta-Version
 )
-info "${BOLD}Ensuring 12 X-Authentik-* copy-headers (Caddy header model)${CL}"
+debug "Ensuring 12 X-Authentik-* copy-headers (Caddy header model)"
 # Snapshot existing rows once
 EXISTING_HEADERS="$(curl -ksS -u "$OPNSENSE_AUTH" "${OPNSENSE_API}/ReverseProxy/searchHeader")"
 declare -a HEADER_UUIDS=()
@@ -143,9 +151,9 @@ curl -ksS -u "$OPNSENSE_AUTH" -X POST "${OPNSENSE_API}/general/set" \
     -H 'Content-Type: application/json' \
     -d "{\"caddy\":{\"general\":{\"CopyHeaders\":\"${COPY_HEADERS_CSV}\"}}}" | jq -r .result >/dev/null \
     || die "Failed to attach CopyHeaders"
-info "  ${GN}✓${CL} CopyHeaders attached (${#HEADER_UUIDS[@]} headers)"
+debug "  ${GN}✓${CL} CopyHeaders attached (${#HEADER_UUIDS[@]} headers)"
 
-info "${BOLD}Applying Caddy config${CL}"
+debug "Applying Caddy config"
 curl -ksS -u "$OPNSENSE_AUTH" -X POST "${OPNSENSE_API}/service/reconfigure" | jq -r .status >/dev/null
 ssh -o StrictHostKeyChecking=accept-new "root@${FIREWALL_FQDN}" "/bin/sh -c 'configctl caddy reload'" >/dev/null 2>&1 || true
 
@@ -155,7 +163,7 @@ ssh -o StrictHostKeyChecking=accept-new "root@${FIREWALL_FQDN}" "/bin/sh -c 'con
 # external_host, oauth2 redirect_uris, outpost authentik_host) against the
 # expected public host BEFORE converging it, so a reconcile surfaces what a
 # domain change left stale (#474). Non-fatal: the ensures below fix it.
-info "${BOLD}Checking identity self-config for drift (expected ${IDENTITY_PUBLIC})${CL}"
+debug "Checking identity self-config for drift (expected ${IDENTITY_PUBLIC})"
 # Per-field findings go to stdout ([ok] when in sync, [DRIFT] when not) and the
 # drift summary to stderr. Only stdout is tagged: that keeps the in-sync case
 # quiet while _tag still promotes a [DRIFT] line to a warning, so the field that
@@ -187,7 +195,7 @@ authentik-manager proxy-app-ensure identity \
 # works.
 debug "  ensuring the password-recovery flow (brand.flow_recovery)..."
 if authentik-manager recovery-flow-ensure | _tag debug; then
-    info "  ${GN}✓${CL} 'authentik-manager user-recovery-link <user>' returns a reset link"
+    debug "  ${GN}✓${CL} 'authentik-manager user-recovery-link <user>' returns a reset link"
 else
     warn "  recovery-flow-ensure failed — password resets fall back to 'authentik-manager user-set-password <user>'"
 fi
@@ -217,7 +225,7 @@ fi
 #                     membership now.
 AK_ADMIN_GROUP="authentik Admins"
 
-info "${BOLD}Ensuring the Authentik admin group '${AK_ADMIN_GROUP}' (is_superuser)${CL}"
+debug "Ensuring the Authentik admin group '${AK_ADMIN_GROUP}' (is_superuser)"
 authentik-manager group-ensure "${AK_ADMIN_GROUP}" --superuser >/dev/null \
     || warn "  group-ensure '${AK_ADMIN_GROUP}' failed — the site owner will not get Authentik admin rights"
 
@@ -244,7 +252,7 @@ if [[ -d "${PEOPLE_DIR}/organizations" ]]; then
     if [[ -z "${OWNER_USER}" ]]; then
         warn "  no site-owner user resolved (site.json .owner → organizations/<org>.json .owner) — skipping the ${AK_ADMIN_GROUP} grant"
     else
-        info "${BOLD}Granting Authentik admin to the site owner '${OWNER_USER}'${CL}"
+        debug "Granting Authentik admin to the site owner '${OWNER_USER}'"
         # Config first, so the membership survives every later reconcile.
         # --no-reconcile (issue #482): a people write normally pushes itself, but
         # these two are incidental to a MODULE update, not an operator's people
@@ -266,7 +274,7 @@ if [[ -d "${PEOPLE_DIR}/organizations" ]]; then
         # skipped reconcile would otherwise have made.
         if authentik-manager get-user --name "${OWNER_USER}" | jq -e '. != null' >/dev/null 2>&1; then
             authentik-manager add-member --user "${OWNER_USER}" --group "${AK_ADMIN_GROUP}" >/dev/null \
-                && info "  ${GN}✓${CL} ${OWNER_USER} ∈ ${AK_ADMIN_GROUP}" \
+                && debug "  ${GN}✓${CL} ${OWNER_USER} ∈ ${AK_ADMIN_GROUP}" \
                 || warn "  add-member ${OWNER_USER} → ${AK_ADMIN_GROUP} failed"
         else
             info "  ${OWNER_USER} not in Authentik yet — 'identity-manager reconcile --apply' will create it and apply the membership"
@@ -274,11 +282,10 @@ if [[ -d "${PEOPLE_DIR}/organizations" ]]; then
     fi
 fi
 
-echo
-info "${BOLD}Installation Complete${CL}"
-info "  VM: ${VMNAME} (VMID: ${VMID})  Node: ${NODE}  Zone: ${ZONE0NAME}"
-[[ -n "${HANODE}" ]] && info "  HA Node: ${HANODE}"
-info "  Authentik UI : ${IDENTITY_PUBLIC}"
-info "  Admin login  : the site owner (member of '${AK_ADMIN_GROUP}') — break-glass: akadmin / (see /etc/secrets/authentik.env on ${IDENTITY_FQDN}: AUTHENTIK_BOOTSTRAP_PASSWORD)"
-info "  Per-app SSO  : every consumer with dependsOn: identity:accessControl gets forward-auth wired automatically"
-info "  Password reset: authentik-manager user-recovery-link <user>  (one-time link; the URL's host is the one the API was called on)"
+summary "${BOLD}Installation Complete${CL}"
+summary "  VM: ${VMNAME} (VMID: ${VMID})  Node: ${NODE}  Zone: ${ZONE0NAME}"
+[[ -n "${HANODE}" ]] && summary "  HA Node: ${HANODE}"
+summary "  Authentik UI : ${IDENTITY_PUBLIC}"
+summary "  Admin login  : the site owner (member of '${AK_ADMIN_GROUP}') — break-glass: akadmin / (see /etc/secrets/authentik.env on ${IDENTITY_FQDN}: AUTHENTIK_BOOTSTRAP_PASSWORD)"
+summary "  Per-app SSO  : every consumer with dependsOn: identity:accessControl gets forward-auth wired automatically"
+summary "  Password reset: authentik-manager user-recovery-link <user>  (one-time link; the URL's host is the one the API was called on)"
