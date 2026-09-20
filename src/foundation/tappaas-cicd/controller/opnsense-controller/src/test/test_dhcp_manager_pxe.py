@@ -347,7 +347,8 @@ class TestHostPinning(unittest.TestCase):
         return manager
 
     def test_pin_updates_shipped_entry_in_place(self):
-        # The firewall SHIPS tappaas1-9 host entries (DNS pin, no MAC).
+        # A node's host entry exists before the pin (DNS pin, no MAC): shipped
+        # for tappaas1, made by the cluster update for the rest (#673).
         manager = self._manager([
             {"uuid": "u4", "host": "tappaas4", "domain": "mgmt.internal",
              "ip": "10.0.0.13", "hwaddr": "", "descr": ""},

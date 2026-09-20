@@ -310,9 +310,11 @@ of the shipped flow (fixes marked ⚠ are still transient / pending):
 10. **Standard-IP reservation (operator review + static-bake subtlety)**: a fresh
    node used to come up on a random pool lease (10.0.0.100+) until the
    join re-IPs it. The answer server now pins the node's POSTed MACs to
-   its standard mgmt IP (`dhcp-manager host set` → the SHIPPED tappaas1-9
-   dnsmasq host entries gain a `hwaddr`, upgrading the DNS pin to a
-   dhcp-host reservation — outside the dynamic pool by design). The
+   its standard mgmt IP (`dhcp-manager host set` → the node's dnsmasq host
+   entry gains a `hwaddr`, upgrading the DNS pin to a dhcp-host reservation —
+   outside the dynamic pool by design; the entry is the one the firewall ships
+   for `tappaas1`, or the one the cluster update made when it registered the
+   node, #673). The
    installed node boots straight onto 10.0.0.1x and is reachable as
    `<name>.mgmt.internal`; `dhcp-manager host del <name>` clears the
    pinning (DNS entry kept). Note the ansible-style `dnsmasq_host` module

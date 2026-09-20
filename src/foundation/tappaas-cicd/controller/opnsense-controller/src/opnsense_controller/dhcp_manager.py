@@ -830,8 +830,9 @@ class DhcpManager:
                       description: str = "") -> dict:
         """Turn a hostname's dnsmasq host entry into a DHCP reservation.
 
-        The TAPPaaS firewall SHIPS host entries for tappaas1-9 (hostname +
-        standard IP, no MAC = DNS pin only). Setting ``hwaddr`` upgrades
+        A node's dnsmasq host entry (hostname + standard IP, no MAC = DNS pin
+        only) is shipped for tappaas1 and made by the cluster update for every
+        other node (#673). Setting ``hwaddr`` upgrades
         the entry to a dhcp-host reservation; clearing it (macs=[]) makes
         it DNS-only again. Existing entries are updated in place via the
         raw ``setHost`` API (the ansible-style dnsmasq_host module did not

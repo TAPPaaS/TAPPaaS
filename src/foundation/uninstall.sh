@@ -282,7 +282,10 @@ if step hostkeys; then
   # Named TAPPaaS hosts (short + .mgmt.internal + .internal): firewall, cicd, the
   # cluster nodes, and every TAPPaaS VM (names captured at inventory above).
   _hk_hosts=()
-  for n in firewall tappaas-cicd tappaas1 tappaas2 tappaas3 tappaas4 tappaas5 tappaas6 tappaas7 tappaas8 tappaas9 "${TAPPAAS_VM_NAMES[@]}"; do
+  # tappaasN is a sequence (#673): every name whose address fits below the mgmt
+  # DHCP pool (.10-.99 → tappaas1-90), not a list of nine.
+  _hk_nodes=(); for _i in $(seq 1 90); do _hk_nodes+=("tappaas${_i}"); done
+  for n in firewall tappaas-cicd "${_hk_nodes[@]}" "${TAPPAAS_VM_NAMES[@]}"; do
     [[ -n "$n" ]] && _hk_hosts+=("$n" "${n}.mgmt.internal" "${n}.internal")
   done
   # Plus every IP in the mgmt /24 (10.0.0.0/24): the firewall/cicd/mgmt-zone hosts
@@ -294,7 +297,7 @@ if step hostkeys; then
   if [[ ${#_hk_files[@]} -eq 0 ]]; then
     info "  no known_hosts files present — nothing to do."
   elif [[ $DRY_RUN -eq 1 ]]; then
-    info "  would remove host keys for firewall, tappaas-cicd, tappaas1-9, ${#TAPPAAS_VM_NAMES[@]} TAPPaaS VM(s) and 10.0.0.0/24"
+    info "  would remove host keys for firewall, tappaas-cicd, every tappaasN node name, ${#TAPPAAS_VM_NAMES[@]} TAPPaaS VM(s) and 10.0.0.0/24"
     info "  from: ${_hk_files[*]}"
   else
     for f in "${_hk_files[@]}"; do
