@@ -23,8 +23,9 @@ FN="$(sed -n '/^retire_node_placeholders() {/,/^}/p' "${SRC}")"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/nodeph.XXXXXX")"
 trap 'rm -rf "${TMP}"' EXIT INT TERM
 
-# The entries a three-node site carries after an install that shipped nine, plus
-# a VM and the firewall (neither is a tappaasN name).
+# The entries a three-node site carries after an install that shipped nine: some
+# untouched (no description), one left by a provisioning test ("TAPPaaS node …",
+# tappaas9), plus a VM and the firewall (neither is a tappaasN name).
 cat > "${TMP}/list" <<'LIST'
   firewall.mgmt.internal    -> 10.0.0.1   ()
   tappaas1.mgmt.internal    -> 10.0.0.10  (TAPPaaS node tappaas1)
@@ -32,7 +33,7 @@ cat > "${TMP}/list" <<'LIST'
   tappaas3.mgmt.internal    -> 10.0.0.12  (TAPPaaS node tappaas3)
   tappaas4.mgmt.internal    -> 10.0.0.13  ()
   tappaas5.mgmt.internal    -> 10.0.0.14  ()
-  tappaas9.mgmt.internal    -> 10.0.0.18  ()
+  tappaas9.mgmt.internal    -> 10.0.0.18  (TAPPaaS node tappaas9)
   nextcloud.rossen.internal -> 10.2.0.50  (TAPPaaS VM)
 LIST
 

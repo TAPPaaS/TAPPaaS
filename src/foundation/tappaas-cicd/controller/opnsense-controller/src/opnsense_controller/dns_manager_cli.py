@@ -189,6 +189,8 @@ def delete_dns_host(
 # The description backup's pbs-dns.sh gives the Host entry it creates for a
 # machine (#612). It is the ONLY thing that marks an entry as TAPPaaS's to remove.
 MACHINE_ENTRY_DESCRIPTION = "TAPPaaS machine {host}"
+# The description dhcp-manager gives a cluster node's entry (host set).
+NODE_ENTRY_DESCRIPTION = "TAPPaaS node {host}"
 
 
 def release_machine_host(
@@ -218,11 +220,13 @@ def release_machine_host(
     """
     fqdn = f"{hostname}.{domain}"
     want = MACHINE_ENTRY_DESCRIPTION.format(host=hostname)
-    # --placeholder also accepts the shape the firewall's base config ships for a
-    # node: the same name, no description at all (#673). Every other guard still
-    # applies, so a pinned MAC (a node waiting to be installed) or a CNAME keeps
-    # the entry.
-    accepted = (want, "") if placeholder else (want,)
+    # --placeholder widens the description test to the two shapes a node entry
+    # has when no node uses it (#673): the one the firewall's base config ships
+    # (no description at all) and the one dhcp-manager writes for a node
+    # ("TAPPaaS node <host>"). Every other guard still applies, so a pinned MAC
+    # (a node waiting to be installed) or a CNAME keeps the entry, and a
+    # description an operator wrote is never ours.
+    accepted = (want, "", NODE_ENTRY_DESCRIPTION.format(host=hostname)) if placeholder else (want,)
     try:
         rows = [h for h in manager.list_hosts()
                 if h.get("host") == hostname and h.get("domain") == domain]
@@ -508,8 +512,9 @@ Examples:
     release_parser.add_argument("domain", help="Domain name (e.g., mgmt.internal)")
     release_parser.add_argument(
         "--placeholder", action="store_true",
-        help="Also release an entry with NO description — the shape the firewall's base "
-             "config ships for a node (#673). Every other guard still applies.",
+        help="Also release an unused node entry: no description (the shape the firewall's "
+             "base config ships) or 'TAPPaaS node <host>' (the shape dhcp-manager writes). "
+             "Every other guard still applies (#673).",
     )
 
     # List command

@@ -317,10 +317,12 @@ done <<< "$NODES"
 # earlier installs left, on every site, at its own pace — the firewall is live
 # state, so it is converged here and not by a config migration (ADR-025 D3).
 #
-# Only a placeholder of a NON-MEMBER name goes, and `release --placeholder`
-# decides: no description (the shipped shape), no MAC, no CNAME, exactly one
-# entry. So a pinned MAC — a node waiting to be PXE-installed — keeps its entry,
-# as does anything an operator or another module made.
+# Only an entry of a NON-MEMBER name goes, and `release --placeholder` decides:
+# the description is the shipped shape (none) or the one dhcp-manager writes
+# ("TAPPaaS node <host>", left behind by a provisioning test), and it carries no
+# MAC, no CNAME, and is the only entry for that name. So a pinned MAC — a node
+# waiting to be PXE-installed — keeps its entry, as does anything an operator or
+# another module made.
 # retire_node_placeholders <zone> <members…> — one line per entry retired.
 retire_node_placeholders() {
     local zone="$1"; shift
