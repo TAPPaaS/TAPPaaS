@@ -3,11 +3,11 @@
 | | |
 |---|---|
 | **Status** | Draft — for review (Lars / Erik) |
-| **Version** | 0.1 |
+| **Version** | 0.2 |
 | **Date** | 2026-08-10 |
 | **Author** | drafted by Claude for Lars Rossen |
-| **Related** | **#363** (module lifecycle blueprint — the per-*module* required-artifact set; the **companion** to this ADR's repo/org-level files: `CONTRIBUTING.md` points contributors at #363's module contract, but the two scopes stay distinct); [ADR-013](<ADR-013 - Documentation Structure and Standards.md>) (doc taxonomy — governance files are the "meta" layer it doesn't cover); [ADR-011](<ADR-011 - SBOM Governance.md>) (supply-chain governance, referenced by SECURITY); [ADR-007](<ADR-007 - TAPPaaS Taxonomy.md>) (module/namespace model that CODEOWNERS routes); `docs/codeberg-migration.md` (forge = Codeberg); the external `CLAUDE.md` Codeberg-etiquette section (the human-facing form of which belongs in an in-repo `CONTRIBUTING.md`) |
-| **Changelog** | v0.1 — initial draft: gap analysis, canonical file set, per-repo placement, content outlines, phased rollout |
+| **Related** | [ADR-027](<ADR-027 - Module Blueprint.md>) (**#363**, the module blueprint — what a module is *made of*; the **companion** to this ADR and its mirror image: ADR-027 owns the executable structure and defers every document and contribution file to ADR-013 and to this ADR, while `CONTRIBUTING.md` points contributors at ADR-027 for the module contract); [ADR-013](<ADR-013 - Documentation Structure and Standards.md>) (doc taxonomy — governance files are the "meta" layer it doesn't cover); [ADR-011](<ADR-011 - SBOM Governance.md>) (supply-chain governance, referenced by SECURITY); [ADR-007](<ADR-007 - TAPPaaS Taxonomy.md>) (module/namespace model that CODEOWNERS routes); `docs/codeberg-migration.md` (forge = Codeberg); the external `CLAUDE.md` Codeberg-etiquette section (the human-facing form of which belongs in an in-repo `CONTRIBUTING.md`) |
+| **Changelog** | v0.2 (2026-09-20) — paired with ADR-027: this ADR owns the per-module `AUTHORS.md` as well as the repo-level files, and `CONTRIBUTING.md` points at ADR-027 rather than listing the module's artifacts itself · v0.1 — initial draft: gap analysis, canonical file set, per-repo placement, content outlines, phased rollout |
 
 ## Context
 
@@ -38,6 +38,12 @@ Two TAPPaaS-specific pressures make this a real gap, not a formality:
 
 ADR-013 fixed where *documentation* lives; it deliberately did **not** cover these
 governance/meta files. This ADR closes that gap.
+
+Scope, against its companion: **ADR-027** (the module blueprint) governs what a single
+module is *made of* — its JSON, its scripts, its service directories — and defers every
+document to ADR-013 and every contribution file to this ADR. So the **per-module
+`AUTHORS.md`** is governed here, beside the repository-level files, and not in ADR-027:
+attribution is one rule wherever it appears.
 
 ### Gap analysis (as of 2026-08-10)
 
@@ -80,6 +86,7 @@ UI still surfaces them — the root stays uncluttered.
 | `CODEOWNERS` | **`.forgejo/`** | each repo (paths differ) | **required** (namespace routing) | own |
 | `issue_template/`, `PULL_REQUEST_TEMPLATE.md` | **`.forgejo/`** | each repo | each repo | each repo |
 | `CHANGELOG.md` | `docs/` (or root) | `TAPPaaS/TAPPaaS` | optional | n/a |
+| `AUTHORS.md` (per module) | **the module's own directory** | each module that has contributors to name | own | n/a |
 
 > The existing root `LICENSE` file should be renamed to **`LICENSE.md`** (Forgejo detects
 > both; `.md` is chosen for consistency with the rest of the set).
@@ -103,8 +110,9 @@ UI still surfaces them — the root stays uncluttered.
 ### D3 — What goes in each file (content contract)
 
 - **`CONTRIBUTING.md`** — the substantive one. Sections: project layout (foundation vs
-  apps vs Community namespaces); the module contract (`<vm>.json` / `.nix` /
-  `install.sh` / `update.sh` / `test.sh`, per `apps/00-Template`); **catalog registration**
+  apps vs Community namespaces); **the module contract — what a module must carry —
+  by reference to [ADR-027](<ADR-027 - Module Blueprint.md>) and the `00-Template` copy of
+  it, never re-listed here where it would drift**; **catalog registration**
   (`src/module-catalog.json`); dev environment + how to run `test.sh`; **branch/PR
   workflow**; **Conventional-Commits** subjects; **Codeberg etiquette** promoted from
   `CLAUDE.md` (few concise commits, minimize forge load, **human attribution — no AI
@@ -128,6 +136,10 @@ UI still surfaces them — the root stays uncluttered.
 - **Issue/PR templates** — `bug_report`, `feature_request`, `new_module` (Community); PR
   template with a checklist (tests updated, docs updated, catalog entry if new module,
   concise Conventional-Commit title, no AI trailer).
+- **`AUTHORS.md` (per module)** — who wrote and maintains *this* module, in its own
+  directory. A module names its own people because that is where a reader of the module
+  looks; ADR-027 lists it as part of a module and points here for what it says. SHOULD
+  for every module, and the reviewer's to waive with a reason.
 - **`CHANGELOG.md`** — *Keep a Changelog* + SemVer; optional at first (git history +
   release notes may suffice until a formal release train exists).
 
@@ -169,7 +181,7 @@ UI still surfaces them — the root stays uncluttered.
       renamed to `LICENSE.md`.
 - [ ] Phase-1 prose files present under **`docs/`** in `TAPPaaS/TAPPaaS` and surfaced in the
       Codeberg repo UI.
-- [ ] `docs/CONTRIBUTING.md` documents the module contract (points to #363), catalog
+- [ ] `docs/CONTRIBUTING.md` documents the module contract (points to ADR-027), catalog
       registration, PR workflow, and the Codeberg-etiquette norms (human-attribution,
       concise commits, minimize load).
 - [ ] `docs/SECURITY.md` names a private disclosure channel and links ADR-011.
