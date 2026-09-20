@@ -2,6 +2,7 @@
   "description": "The TAPPaaS mothership VM",
   "kind": "vm",
   "version": "1.0.0",
+  "stack": "foundation",
   "tier": "foundation",
   "status": "Production",
   "environment": "mgmt",

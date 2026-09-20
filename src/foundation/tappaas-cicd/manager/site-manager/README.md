@@ -39,6 +39,7 @@ repository         repository list [--json]
                    repository reconcile [--apply]
                    repository hold <name> --reason <text> [--until <30m|12h|7d|date>]
                    repository release <name>
+                   repository validate-catalog [<name>] [--strict]   (#463)
 top-level          add --name <site-code> [--organization <org>] [create-site options]  (= create-site.sh)
                    validate [FILE] [--schema-dir PATH]     (= validate-site.sh)
                    (validate also checks updateSchedule and prints the OnCalendar it renders)
@@ -81,6 +82,14 @@ site can run changes that are not pushed yet (#653). The marker is
 `config/.repo-hold/<repo>.json`; every hold expires (default 24h), and an
 expired hold is removed by the next sweep, which then pulls again.
 `repository list` and `update` show active holds.
+
+`repository validate-catalog` checks that a repository's module catalogue says true
+things (#463): its shape and fields, a `moduleJson` that exists, `stack` and `vmid`
+agreeing with the module's own file, one name and one VMID per module, and no module in
+the tree left unlisted. With no argument it checks every `managed: full` repository. It
+reports and exits 0 — every catalogue predates the check, and a stale one is no reason to
+refuse a repository; `--strict` exits non-zero and is what CI and a contributor run before
+opening a pull request. `repository add` runs it too, as a report.
 
 `site modify` editable fields (scalar, site-wide): `--displayName`, `--owner`,
 `--email`, `--automaticReboot`, `--snapshotRetention`, `--backupTarget`,

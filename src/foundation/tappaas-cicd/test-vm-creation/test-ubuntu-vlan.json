@@ -1,5 +1,6 @@
 {
   "version": "0.5.1",
+  "stack": "test",
   "node": "tappaas3",
   "vmid": 905,
   "vmtag": "TAPPaaS,Test",

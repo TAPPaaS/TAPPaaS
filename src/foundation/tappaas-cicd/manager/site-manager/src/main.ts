@@ -643,6 +643,13 @@ function cmdRepository(o: Opts, client: SiteClient): void {
     return out;
   };
 
+  if (sub === "validate-catalog") {
+    // #463: the check lives beside repository.sh, which owns every catalog path.
+    const rest = o.rest.slice(1);
+    if (o.flags.has("--strict")) rest.push("--strict");
+    process.exit(client.repositoryValidateCatalog(rest));
+  }
+
   if (sub === "add") {
     // Thin delegation: repository.sh still owns URL validation, git clone +
     // checkout, catalog validation, and the VMID/name conflict scan, and writes

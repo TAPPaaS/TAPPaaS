@@ -211,6 +211,13 @@ else
         && cat "${mig}.tmp" > "${mig}" && rm -f "${mig}.tmp"
     info "migration: ${mig##*/} — added ${FROM} → ${TO}"
 fi
+# The catalogue just changed: say now if it stopped being true (#463).
+_vc="${ROOT}/src/foundation/tappaas-cicd/manager/site-manager/validate-catalog.sh"
+if [[ -x "${_vc}" ]]; then
+    info ""
+    "${_vc}" "${ROOT}" --quiet || true
+fi
+
 info ""
 info "Next: run ${TEST_DIR#${ROOT}/}/test-migration-$(basename "${mig}" | cut -c1-4)-modules-moved.sh, then commit the move,"
 info "the catalogue and the migration together. Until committed, further moves join the same migration."

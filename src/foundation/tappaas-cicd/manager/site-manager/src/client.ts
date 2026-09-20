@@ -181,6 +181,10 @@ export class CliSiteClient implements SiteClient {
     return runStreaming(REPOSITORY_SH(), ["add", ...args]);
   }
 
+  repositoryValidateCatalog(args: string[]): number {
+    return runStreaming(REPOSITORY_SH(), ["validate-catalog", ...args]);
+  }
+
   repositoryRemove(name: string, force: boolean): number {
     const args = ["remove", name];
     if (force) args.push("--force");

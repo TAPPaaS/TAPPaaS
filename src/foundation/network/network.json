@@ -2,6 +2,7 @@
   "description": "The TAPPaaS Network VM (OPNsense): routing, DNS, DHCP, NAT, firewall rules, reverse proxy",
   "kind": "vm",
   "version": "1.0.0",
+  "stack": "foundation",
   "tier": "foundation",
   "status": "Production",
   "environment": "mgmt",

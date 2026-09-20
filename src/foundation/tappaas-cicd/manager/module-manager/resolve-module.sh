@@ -56,7 +56,10 @@ command -v jq >/dev/null 2>&1 || { echo "resolve-module.sh: jq is required" >&2;
 
 # Catalog-location helpers (#459). Side-effect-free lib: no logging, no colors,
 # so it cannot disturb this script's own output contract.
-for _mcl in /home/tappaas/bin/module-catalog-lib.sh \
+# TAPPAAS_CATALOG_LIB first, for a test running THIS tree's library: the
+# installed copy is deliberately preferred otherwise (it is what a site runs),
+# which would otherwise make a test of new catalog handling exercise the old one.
+for _mcl in ${TAPPAAS_CATALOG_LIB:-} /home/tappaas/bin/module-catalog-lib.sh \
             "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../../lib/module-catalog-lib.sh"; do
   # shellcheck source=/dev/null
   if [[ -r "${_mcl}" ]]; then . "${_mcl}"; break; fi

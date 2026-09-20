@@ -1,6 +1,7 @@
 {
   "description": "Test: Debian image on mgmt zone (node tappaas1)",
   "version": "0.5",
+  "stack": "test",
   "vmname": "test-debian",
   "vmid": 901,
   "vmtag": "TAPPaaS,Test",

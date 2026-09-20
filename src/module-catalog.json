@@ -1,306 +1,205 @@
 {
-  "description": "TAPPaaS Module Registry - All known modules and their VMID assignments.",
+  "description": "TAPPaaS Module Registry (#463): every module this repository ships, in ONE list. An entry answers the two questions a catalogue exists for \u2014 where is the module (moduleJson, by moduleName or a legacyName it used to have), and which VMID block is taken (vmid). `stack` is repeated from the module's own JSON so a listing can group without opening every module file; everything else about a module \u2014 its tier, source, status, version \u2014 is read from that file, never restated here. The stack decides what a module is: `foundation` a foundation module, `template` a template to copy, `test` a fixture; anything else, or none, is an application module.",
   "vmidConventions": {
     "summary": "VMID ranges are allocated by module type. Numbers are assigned in increments of 10, giving each module a block of 10 VMIDs for the local TAPPaaS administrator to create multiple copies of the same module/app.",
     "ranges": {
       "100-200": "Foundation modules (core platform infrastructure)",
-      "201-499": "Application modules — NixOS/Linux-based services",
-      "500-599": "Application modules — Windows Server-based services",
-      "600-799": "Application modules — general services",
-      "800-899": "Application modules — network and infrastructure",
+      "201-499": "Application modules \u2014 NixOS/Linux-based services",
+      "500-599": "Application modules \u2014 Windows Server-based services",
+      "600-799": "Application modules \u2014 general services",
+      "800-899": "Application modules \u2014 network and infrastructure",
       "900-999": "Test modules (used for VM creation testing and templates)",
       "8000-9000": "Proxmox templates (VM templates used for cloning)"
     },
     "allocationRule": "VMIDs are allocated in increments of 10. For example, if an application like litellm is assigned VMID 310, then VMIDs 310-319 are reserved for that module. This allows the local administrator to deploy multiple instances of the same module."
   },
-  "foundationModules": [
+  "modules": [
     {
       "moduleName": "network",
       "legacyName": "firewall",
-      "repo": "foundation",
       "moduleJson": "src/foundation/network/network.json",
       "vmid": 110,
-      "stack": "foundation",
-      "category": "platform",
-      "status": "stable",
-      "tier": "foundation",
-      "source": "official"
+      "stack": "foundation"
     },
     {
       "moduleName": "tappaas-cicd",
-      "repo": "foundation",
       "moduleJson": "src/foundation/tappaas-cicd/tappaas-cicd.json",
       "vmid": 130,
-      "stack": "foundation",
-      "category": "platform",
-      "status": "stable",
-      "tier": "foundation",
-      "source": "official"
+      "stack": "foundation"
     },
     {
       "moduleName": "identity",
-      "repo": "foundation",
       "moduleJson": "src/foundation/identity/identity.json",
       "vmid": 140,
-      "stack": "security",
-      "category": "identity",
-      "status": "beta",
-      "tier": "foundation",
-      "source": "official"
+      "stack": "foundation"
     },
     {
       "moduleName": "logging",
-      "repo": "foundation",
       "moduleJson": "src/foundation/logging/logging.json",
       "vmid": 150,
-      "stack": "foundation",
-      "category": "observability",
-      "status": "beta",
-      "tier": "foundation",
-      "source": "official"
+      "stack": "foundation"
     },
     {
       "moduleName": "backup",
-      "repo": "foundation",
       "moduleJson": "src/foundation/backup/backup.json",
-      "vmid": 0,
-      "stack": "foundation",
-      "category": "backup",
-      "status": "stable",
-      "tier": "foundation",
-      "source": "official"
+      "stack": "foundation"
     },
     {
       "moduleName": "cluster",
-      "repo": "foundation",
       "moduleJson": "src/foundation/cluster/cluster.json",
-      "vmid": 0,
-      "stack": "foundation",
-      "category": "platform",
-      "status": "stable",
-      "tier": "foundation",
-      "source": "official"
+      "stack": "foundation"
     },
     {
       "moduleName": "templates",
-      "repo": "foundation",
       "moduleJson": "src/foundation/templates/templates.json",
-      "vmid": 0,
-      "stack": "foundation",
-      "category": "platform",
-      "status": "stable",
-      "tier": "foundation",
-      "source": "official"
+      "stack": "foundation"
     },
-    {"moduleName": "debianhost", "repo": "foundation", "moduleJson": "src/foundation/debianhost/debianhost.json", "vmid": 0, "stack": "foundation", "category": "platform", "status": "incomplete", "tier": "foundation", "source": "official"},
-    {"moduleName": "pvehost", "repo": "foundation", "moduleJson": "src/foundation/pvehost/pvehost.json", "vmid": 0, "stack": "foundation", "category": "platform", "status": "incomplete", "tier": "foundation", "source": "official"}
-  ],
-  "applicationModules": [
+    {
+      "moduleName": "debianhost",
+      "moduleJson": "src/foundation/debianhost/debianhost.json",
+      "stack": "foundation"
+    },
+    {
+      "moduleName": "pvehost",
+      "moduleJson": "src/foundation/pvehost/pvehost.json",
+      "stack": "foundation"
+    },
     {
       "moduleName": "hass",
-      "repo": "application",
       "moduleJson": "src/apps/hass/hass.json",
       "vmid": 210,
-      "stack": "home-automation",
-      "category": "automation",
-      "status": "beta",
-      "tier": "app",
-      "source": "official"
+      "stack": "home-automation"
     },
     {
       "moduleName": "litellm",
-      "repo": "application",
       "moduleJson": "src/apps/litellm/litellm.json",
       "vmid": 310,
-      "stack": "ai",
-      "category": "inference",
-      "status": "beta",
-      "tier": "app",
-      "source": "official"
+      "stack": "ai"
     },
     {
       "moduleName": "openwebui",
-      "repo": "application",
       "moduleJson": "src/apps/openwebui/openwebui.json",
       "vmid": 311,
-      "stack": "ai",
-      "category": "interface",
-      "status": "beta",
-      "tier": "app",
-      "source": "official"
+      "stack": "ai"
     },
     {
       "moduleName": "vllm-amd",
-      "repo": "application",
       "moduleJson": "src/apps/vllm-amd/vllm-amd.json",
       "vmid": 312,
-      "stack": "ai",
-      "category": "inference",
-      "status": "beta",
-      "tier": "app",
-      "source": "official"
+      "stack": "ai"
     },
     {
       "moduleName": "vaultwarden",
-      "repo": "application",
       "moduleJson": "src/apps/vaultwarden/vaultwarden.json",
       "vmid": 610,
-      "stack": "security",
-      "category": "credentials",
-      "status": "beta",
-      "tier": "app",
-      "source": "official"
+      "stack": "security"
     },
     {
       "moduleName": "windows-server",
-      "repo": "application",
       "moduleJson": "src/apps/windows-server/windows-server.json",
       "vmid": 500,
-      "stack": "application",
-      "category": "desktop",
-      "status": "beta",
-      "tier": "app",
-      "source": "official"
+      "stack": "application"
     },
     {
       "moduleName": "netbird-client",
-      "repo": "application",
       "moduleJson": "src/apps/netbird-client/netbird-client.json",
       "vmid": 800,
-      "stack": "infrastructure",
-      "category": "network",
-      "status": "beta",
-      "tier": "app",
-      "source": "official"
-    },
-    {
-      "moduleName": "unifi",
-      "repo": "application",
-      "moduleJson": "src/apps/unifi/unifi.json",
-      "vmid": 810,
-      "stack": "infrastructure",
-      "category": "network",
-      "status": "incomplete",
-      "tier": "app",
-      "source": "official"
+      "stack": "infrastructure"
     },
     {
       "moduleName": "nextcloud",
-      "repo": "application",
       "moduleJson": "src/apps/nextcloud/nextcloud.json",
       "vmid": 340,
-      "stack": "collaboration",
-      "category": "hub",
-      "status": "beta",
-      "tier": "app",
-      "source": "official"
+      "stack": "collaboration"
     },
     {
       "moduleName": "coturn",
-      "repo": "application",
       "moduleJson": "src/apps/coturn/coturn.json",
       "vmid": 341,
-      "stack": "collaboration",
-      "category": "turn",
-      "status": "beta",
-      "tier": "app",
-      "source": "official"
+      "stack": "collaboration"
     },
     {
       "moduleName": "nextcloud-hpb",
-      "repo": "application",
       "moduleJson": "src/apps/nextcloud-hpb/nextcloud-hpb.json",
       "vmid": 342,
-      "stack": "collaboration",
-      "category": "signaling",
-      "status": "beta",
-      "tier": "app",
-      "source": "official"
+      "stack": "collaboration"
     },
     {
       "moduleName": "euro-office",
-      "repo": "application",
       "moduleJson": "src/apps/euro-office/euro-office.json",
       "vmid": 343,
-      "stack": "collaboration",
-      "category": "office",
-      "status": "beta",
-      "tier": "app",
-      "source": "official"
-    }
-  ],
-  "proxmoxTemplates": [
+      "stack": "collaboration"
+    },
     {
-      "moduleName": "template",
-      "moduleJson": "src/foundation/templates/template.json",
+      "moduleName": "tappaas-nixos",
+      "moduleJson": "src/foundation/templates/tappaas-nixos.json",
       "vmid": 8080,
-      "tier": "foundation",
-      "source": "official"
+      "stack": "template"
     },
     {
       "moduleName": "tappaas-winserver",
       "moduleJson": "src/foundation/templates/tappaas-winserver.json",
       "vmid": 8081,
-      "tier": "foundation",
-      "source": "official"
-    }
-  ],
-  "testModules": [
+      "stack": "template"
+    },
     {
       "moduleName": "test-debian",
       "moduleJson": "src/foundation/tappaas-cicd/test-vm-creation/test-debian.json",
       "vmid": 901,
-      "tier": "app",
-      "source": "local"
+      "stack": "test"
     },
     {
       "moduleName": "test-deb-vlannode",
       "moduleJson": "src/foundation/tappaas-cicd/test-vm-creation/test-deb-vlannode.json",
       "vmid": 902,
-      "tier": "app",
-      "source": "local"
+      "stack": "test"
     },
     {
       "moduleName": "test-deb-nonode",
       "moduleJson": "src/foundation/tappaas-cicd/test-vm-creation/test-deb-nonode.json",
       "vmid": 903,
-      "tier": "app",
-      "source": "local"
+      "stack": "test"
     },
     {
       "moduleName": "test-deb-n3noha",
       "moduleJson": "src/foundation/tappaas-cicd/test-vm-creation/test-deb-n3noha.json",
       "vmid": 904,
-      "tier": "app",
-      "source": "local"
+      "stack": "test"
     },
     {
       "moduleName": "test-ubuntu-vlan",
       "moduleJson": "src/foundation/tappaas-cicd/test-vm-creation/test-ubuntu-vlan.json",
       "vmid": 905,
-      "tier": "app",
-      "source": "local"
+      "stack": "test"
     },
     {
       "moduleName": "test-nixos",
       "moduleJson": "src/foundation/tappaas-cicd/test-vm-creation/test-nixos.json",
       "vmid": 911,
-      "tier": "app",
-      "source": "local"
+      "stack": "test"
     },
     {
       "moduleName": "test-nix-vlannode",
       "moduleJson": "src/foundation/tappaas-cicd/test-vm-creation/test-nix-vlannode.json",
       "vmid": 912,
-      "tier": "app",
-      "source": "local"
+      "stack": "test"
     },
     {
       "moduleName": "template",
       "moduleJson": "src/apps/00-Template/template.json",
       "vmid": 999,
-      "tier": "app",
-      "source": "local"
+      "stack": "template"
+    },
+    {
+      "moduleName": "deconz",
+      "moduleJson": "src/apps/deconz/deconz.json",
+      "vmid": 213,
+      "stack": "home-automation"
+    },
+    {
+      "moduleName": "satellite",
+      "moduleJson": "src/foundation/satellite/satellite.json",
+      "stack": "foundation"
     }
   ]
 }

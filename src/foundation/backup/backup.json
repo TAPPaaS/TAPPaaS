@@ -2,6 +2,7 @@
   "description": "TAPPaaS Proxmox Backup Server configuration",
   "kind": "application",
   "version": "1.0.0",
+  "stack": "foundation",
   "tier": "foundation",
   "status": "Testing",
   "vmtag": "TAPPaaS,Foundation",

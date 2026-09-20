@@ -81,7 +81,9 @@ const KNOWN_UNDEFINED: Record<string, string> = {};
   const undefinedUse: Record<string, string[]> = {};
   const staleEntries: string[] = [];
   let checked = 0;
-  for (const section of ["foundationModules", "applicationModules", "proxmoxTemplates", "testModules"]) {
+  // #463: one `modules` list now; the four lists are the shape before it, still
+  // read here so a repository that has not migrated is still checked.
+  for (const section of ["modules", "foundationModules", "applicationModules", "proxmoxTemplates", "testModules"]) {
     for (const e of (catalog[section] as { moduleJson?: string }[] | undefined) ?? []) {
       if (!e.moduleJson) continue;
       const path = join(REPO, e.moduleJson);

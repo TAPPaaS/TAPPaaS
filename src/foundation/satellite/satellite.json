@@ -3,6 +3,7 @@
 
   "description": "A satellite: public ingress, admin-VPN relay and off-site backup for a Site with no public IP",
   "version": "0.2.0",
+  "stack": "foundation",
   "releaseDate": "2026-09-19",
   "maintainer": "@larsrossen",
   "status": "Development",

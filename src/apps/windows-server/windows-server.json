@@ -1,5 +1,6 @@
 {
   "description": "Barebone Windows Server 2025 VM. No roles or application software — a clean starting point for any Windows-based service.",
+  "stack": "application",
   "kind": "vm",
   "maintainer": "TAPPaaS",
   "tier": "app",

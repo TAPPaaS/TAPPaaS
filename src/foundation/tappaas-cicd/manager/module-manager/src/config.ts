@@ -350,19 +350,28 @@ export function resolveViaCatalog(configDir: string, module: string): CatalogHit
     } catch {
       continue;
     }
-    const entries = [
-      ...(Array.isArray(cat.foundationModules) ? cat.foundationModules : []),
-      ...(Array.isArray(cat.applicationModules) ? cat.applicationModules : []),
-    ];
+    // Two catalog shapes (#463): one `modules` list whose entries say what they
+    // are with `stack` — `foundation` a foundation module, `template`/`test`
+    // not a module to install — and, for a stable cycle, the older split into
+    // foundationModules / applicationModules with `tier` on each entry.
+    const flat = Array.isArray(cat.modules);
+    const entries = flat
+      ? (cat.modules as unknown[])
+      : [
+          ...(Array.isArray(cat.foundationModules) ? cat.foundationModules : []),
+          ...(Array.isArray(cat.applicationModules) ? cat.applicationModules : []),
+        ];
     for (const e of entries) {
       if (!e || typeof e !== "object") continue;
       const o = e as Record<string, unknown>;
       if (o.moduleName !== module && o.legacyName !== module) continue;
+      const stack = asString(o.stack) ?? "";
+      if (flat && (stack === "template" || stack === "test")) continue;
       const moduleJson = asString(o.moduleJson) ?? "";
       return {
         repo: repo.name,
         moduleJson: moduleJson ? join(repo.path.replace(/\/+$/, ""), moduleJson) : "",
-        tier: asString(o.tier) ?? "app",
+        tier: flat ? (stack === "foundation" ? "foundation" : "app") : asString(o.tier) ?? "app",
       };
     }
   }

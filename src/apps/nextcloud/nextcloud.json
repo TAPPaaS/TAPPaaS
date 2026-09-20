@@ -2,6 +2,7 @@
   "description": "Nextcloud file sharing and collaboration platform with Authentik SSO support.",
   "kind": "vm",
   "version": "0.2.0",
+  "stack": "collaboration",
   "releaseDate": "2026-06-12",
   "maintainer": "@ErikDaniel007",
   "status": "Testing",

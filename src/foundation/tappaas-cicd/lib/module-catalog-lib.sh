@@ -51,9 +51,17 @@ repo_catalog_file() {
 }
 
 # Look a module up in one catalog file, by moduleName OR legacyName.
-# Echoes "<moduleJson>\t<tier>" (tier defaulting to "app") and returns 0 on a
-# hit; returns 1 with no output when the module is not in this catalog or the
-# catalog is unreadable.
+# Echoes "<moduleJson>\t<tier>" and returns 0 on a hit; returns 1 with no output
+# when the module is not in this catalog or the catalog is unreadable.
+#
+# Two catalog shapes are read (#463). The current one is a single `modules` list
+# whose entries carry no tier: what a module IS comes from its `stack` —
+# `foundation` is a foundation module, `template` and `test` are not modules to
+# install at all (a template to copy, a fixture), anything else or nothing is an
+# application module. The shape before it split the same entries across
+# `foundationModules` / `applicationModules` (searched) and `proxmoxTemplates` /
+# `testModules` (not), with `tier` repeated on each entry; catalogs in other
+# repositories still have it, so it is read for a stable cycle.
 #
 # Arguments: <catalog-file> <module-name>
 repo_catalog_entry() {
@@ -61,10 +69,19 @@ repo_catalog_entry() {
 
     [[ -f "${catalog}" ]] || return 1
     entry="$(jq -r --arg m "${module}" '
-        (((.foundationModules // []) + (.applicationModules // []))
-         | map(select(.moduleName == $m or .legacyName == $m))
-         | .[0]) as $e
-        | if $e == null then empty else "\($e.moduleJson)\t\($e.tier // "app")" end
+        if (.modules | type) == "array" then
+            (.modules
+             | map(select((.moduleName == $m or .legacyName == $m)
+                          and ((.stack // "") as $s | $s != "template" and $s != "test")))
+             | .[0]) as $e
+            | if $e == null then empty
+              else "\($e.moduleJson)\t\(if (.modules | map(select(.moduleName == $m or .legacyName == $m)) | .[0].stack) == "foundation" then "foundation" else "app" end)" end
+        else
+            (((.foundationModules // []) + (.applicationModules // []))
+             | map(select(.moduleName == $m or .legacyName == $m))
+             | .[0]) as $e
+            | if $e == null then empty else "\($e.moduleJson)\t\($e.tier // "app")" end
+        end
       ' "${catalog}" 2>/dev/null || true)"
     [[ -n "${entry}" ]] || return 1
     printf '%s\n' "${entry}"

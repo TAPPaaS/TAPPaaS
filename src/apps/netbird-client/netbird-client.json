@@ -2,6 +2,7 @@
   "description": "TAPPaaS NetBird Client for accessing private zone (so you can operate as if you are local to TAPPaaS)",
   "kind": "vm",
   "version": "0.5.0",
+  "stack": "infrastructure",
   "tier": "app",
   "vmname": "netbird-client",
   "vmid": 800,

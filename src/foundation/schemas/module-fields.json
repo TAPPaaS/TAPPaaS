@@ -417,6 +417,15 @@
       "example": { "country": "FI", "city": "Helsinki" },
       "note": "Recorded, not enforced: nothing checks it against the machine itself."
     },
+    "stack": {
+      "description": "The group a module belongs to (#463): what a catalogue lists it under, and — once #421 lands — the directory it lives in. Free-form, except three reserved values that say what the module IS rather than what it is for: `foundation` (a foundation module), `template` (a template to copy, not a module to install — a Proxmox VM template, the module skeleton), `test` (a fixture the test suites install). A module with any other stack, or none, is an application module. Examples in use: ai, collaboration, home-automation, security, infrastructure.",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": ["general"],
+      "format": "^[a-z][a-z0-9-]*$",
+      "example": "collaboration",
+      "note": "A repository's catalogue repeats it so `repository list` can group without opening every module file; the catalogue check reports a disagreement. Leave it out when the placement is not settled — that reads as an application module and breaks nothing."
+    },
     "roles": {
       "description": "What a machine is for (ADR-022h: a facet, not what it is) — for a satellite, the roles it carries: `reverse-proxy`, `admin-vpn`, and `backup` once it is locked down as a pull vault (ADR-010 §8.4). Given at `module add` as a JSON array, e.g. --roles '[\"reverse-proxy\"]'.",
       "type": "array",

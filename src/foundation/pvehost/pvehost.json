@@ -2,6 +2,7 @@
   "description": "A Proxmox VE cluster node as a module: registered, visible and tested; its OS is still patched by the cluster module (ADR-026 D4 stage 1)",
   "kind": "machine",
   "version": "0.1.0",
+  "stack": "foundation",
   "releaseDate": "2026-09-19",
   "status": "Development",
   "tier": "foundation",

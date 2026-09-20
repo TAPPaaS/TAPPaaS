@@ -1,6 +1,7 @@
 {
   "description": "Test: NixOS clone on mgmt zone with HA failover to tappaas3",
   "version": "0.5",
+  "stack": "test",
   "vmname": "test-nixos",
   "vmid": 911,
   "vmtag": "TAPPaaS,Test",

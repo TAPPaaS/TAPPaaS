@@ -1,6 +1,7 @@
 {
   "description": "Test: Debian on tappaas3 with no HANode (no cluster:ha in dependsOn)",
   "version": "0.5",
+  "stack": "test",
   "vmname": "test-deb-n3noha",
   "vmid": 904,
   "vmtag": "TAPPaaS,Test",

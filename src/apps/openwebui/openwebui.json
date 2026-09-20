@@ -2,6 +2,7 @@
   "description": "TAPPaaS Open Webui",
   "kind": "vm",
   "version": "0.8.0",
+  "stack": "ai",
   "releaseDate": "2026-07-02",
   "maintainer": "@ErikDaniel007",
   "status": "Development",

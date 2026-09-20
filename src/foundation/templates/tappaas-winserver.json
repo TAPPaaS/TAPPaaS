@@ -1,6 +1,7 @@
 {
   "description": "The TAPPaaS Windows Server 2025 VM Template",
   "version": "0.1",
+  "stack": "template",
   "moduleSource": "/home/tappaas/TAPPaaS/src/foundation/templates",
   "vmname": "tappaas-winserver",
   "vmid": 8081,

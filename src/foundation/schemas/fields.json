@@ -110,6 +110,11 @@
       "apply": "none",
       "changeNote": "Records where a machine physically is (#609); changing it moves nothing, it only changes what the off-site check compares with the Site."
     },
+    "stack": {
+      "class": "in-place",
+      "apply": "none",
+      "changeNote": "Where a module is grouped (#463). Nothing on a deployed module reads it; moving a module between stacks is a repository change (and, after #421, a directory move — scripts/move-module.sh)."
+    },
     "roles": {
       "class": "manual",
       "apply": "none",

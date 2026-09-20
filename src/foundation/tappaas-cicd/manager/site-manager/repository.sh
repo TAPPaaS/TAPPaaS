@@ -18,6 +18,7 @@
 #   remove <name> [--force]            Remove a module repository
 #   modify <name> [--url <url>] [--branch <branch>] [--force]  Modify a repository
 #   list                               List all tracked repositories
+#   validate-catalog [<name>] [--strict]  Check a repository's module catalog (#463)
 #
 # Examples:
 #   repository.sh add github.com/someone/tappaas-community
@@ -112,6 +113,14 @@ Commands:
     list
         List all tracked repositories with name, URL, branch,
         and available module count.
+
+    validate-catalog [<name>|<path>] [--strict]
+        Does the repository's module catalog say true things (#463): the
+        shape, the fields, a moduleJson that exists, `stack` and `vmid`
+        agreeing with the module's own file, one name and one VMID per
+        module, and every module in the tree listed. With no argument,
+        every `managed: full` repository. Reports and exits 0; --strict
+        exits non-zero on any finding (for CI and before a pull request).
 
 Options:
     -h, --help    Show this help message
@@ -234,11 +243,11 @@ count_repo_modules() {
     local declared="${2:-}"
     local modules_json; modules_json="$(repo_catalog_file "${repo_path}" "${declared}")"
     if [[ -f "${modules_json}" ]]; then
-        jq '[
-            (.foundationModules // []),
-            (.applicationModules // []),
-            (.proxmoxTemplates // []),
-            (.testModules // [])
+        jq '[(.modules // []),
+             (.foundationModules // []),
+             (.applicationModules // []),
+             (.proxmoxTemplates // []),
+             (.testModules // [])
         ] | add | length' "${modules_json}" 2>/dev/null || echo "0"
     else
         echo "0"
@@ -253,16 +262,17 @@ list_repo_modules() {
     local declared="${2:-}"
     local modules_json; modules_json="$(repo_catalog_file "${repo_path}" "${declared}")"
     if [[ -f "${modules_json}" ]]; then
-        jq -r '[
-            (.foundationModules // []),
-            (.applicationModules // []),
-            (.proxmoxTemplates // []),
-            (.testModules // [])
+        jq -r '[(.modules // []),
+             (.foundationModules // []),
+             (.applicationModules // []),
+             (.proxmoxTemplates // []),
+             (.testModules // [])
         ] | add | .[].moduleName' "${modules_json}" 2>/dev/null
     fi
 }
 
-# Get all VMIDs from a repository's module catalog
+# Get all VMIDs from a repository's module catalog. Both catalog shapes (#463):
+# the `modules` list, and the four lists other repositories still carry.
 # Arguments: <repo-path> [declared-catalog]
 # Outputs: VMIDs (one per line)
 get_repo_vmids() {
@@ -270,11 +280,11 @@ get_repo_vmids() {
     local declared="${2:-}"
     local modules_json; modules_json="$(repo_catalog_file "${repo_path}" "${declared}")"
     if [[ -f "${modules_json}" ]]; then
-        jq -r '[
-            (.foundationModules // []),
-            (.applicationModules // []),
-            (.proxmoxTemplates // []),
-            (.testModules // [])
+        jq -r '[(.modules // []),
+             (.foundationModules // []),
+             (.applicationModules // []),
+             (.proxmoxTemplates // []),
+             (.testModules // [])
         ] | add | .[].vmid' "${modules_json}" 2>/dev/null
     fi
 }
@@ -442,6 +452,12 @@ cmd_add() {
             rm -rf "${repo_path}"
             die "Repository does not contain ${catalog:-src/module-catalog.json (or legacy src/modules.json)} — not a valid TAPPaaS module repository (use --managed tracked for a non-module repo)"
         fi
+
+        # #463: say what is wrong with the catalog now, while the operator is
+        # here — never refuse the repository for it (every catalog predates the
+        # check, and a stale catalog is not a reason to lock someone out).
+        _vc="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/validate-catalog.sh"
+        [[ -x "${_vc}" ]] && "${_vc}" "${repo_path}" --quiet || true
 
         if ! jq empty "${modules_json}" 2>/dev/null; then
             rm -rf "${repo_path}"
@@ -969,6 +985,37 @@ cmd_list() {
 
 # ── Main ─────────────────────────────────────────────────────────────
 
+# validate-catalog [<name>|<path>] [--strict] — does a repository's catalog say
+# true things (#463)? With no argument, every `managed: full` repository in
+# site.json. Reports; only --strict makes it fatal.
+cmd_validate_catalog() {
+    local target="" strict=() rc=0 vc
+    for a in "$@"; do
+        case "${a}" in
+            --strict) strict=(--strict) ;;
+            -*) die "validate-catalog: unknown option ${a}" ;;
+            *)  target="${a}" ;;
+        esac
+    done
+    vc="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/validate-catalog.sh"
+    [[ -x "${vc}" ]] || die "validate-catalog.sh not found beside repository.sh"
+    if [[ -n "${target}" ]]; then
+        [[ -d "${target}" || -f "${target}" ]] || target="$(jq -r --arg n "${target}" \
+            '.repositories[]? | select(.name == $n) | .path // empty' "${SITE_FILE}")"
+        [[ -n "${target}" ]] || die "validate-catalog: no such repository or path"
+        "${vc}" "${target}" "${strict[@]+"${strict[@]}"}" || rc=$?
+        return "${rc}"
+    fi
+    local name path managed
+    while IFS=$'\001' read -r name path managed; do
+        [[ -n "${path}" && "${path}" != null ]] || continue
+        [[ "${managed}" != "tracked" ]] || continue     # a tracked repo carries no catalog (ADR-004)
+        info "${BOLD:-}${name}${CL:-}"
+        "${vc}" "${path}" "${strict[@]+"${strict[@]}"}" || rc=$?
+    done < <(jq -r '.repositories[]? | [(.name // ""), (.path // ""), (.managed // "")] | join("\u0001")' "${SITE_FILE}" 2>/dev/null)
+    return "${rc}"
+}
+
 main() {
     # Handle help flag
     if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
@@ -999,6 +1046,7 @@ main() {
         remove) cmd_remove "$@" ;;
         modify) cmd_modify "$@" ;;
         list)   cmd_list ;;
+        validate-catalog) cmd_validate_catalog "$@" ;;
         -h|--help) usage; exit 0 ;;
         *)
             error "Unknown command: ${command}"

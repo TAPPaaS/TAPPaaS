@@ -1,6 +1,7 @@
 {
   "description": "Test: Debian with no explicit node or HANode (defaults from configuration.json)",
   "version": "0.5",
+  "stack": "test",
   "vmname": "test-deb-nonode",
   "vmid": 903,
   "vmtag": "TAPPaaS,Test",

@@ -119,9 +119,19 @@ Add cluster-wide timezone to `configuration.json`:
 
 ### Layer 2 — Module catalog: `src/module-catalog.json`  *(NEW: rename + taxonomy)*
 
-**Renamed** from `modules.json` (per #297 + #305). Every `managed: full` repo contains this file. Validated by `src/foundation/schemas/module-catalog-fields.json`.
+**Renamed** from `modules.json` (per #297 + #305). Every `managed: full` repo contains this file.
 
-Required fields per entry *(NEW: `stack`, `category`, `status`)*:
+> **Amended 2026-09-20 (#463).** The entry below is the *original* shape. What ships now is one
+> flat `modules` list whose entry carries only what the catalogue is for — `moduleName`,
+> `moduleJson`, an optional `legacyName`, the `vmid` it reserves, and `stack`. `tier`, `source`,
+> `status` and `category` are gone from it: they live in the module's own JSON and were drifting
+> in two places (the catalogue and the module disagreed on 15 of 18 entries). `stack` is
+> deliberately repeated — so a listing can group without opening every module file — and it also
+> says what a module IS: `foundation`, `template` and `test` are reserved, anything else or
+> nothing is an application module, which is why the four lists are no longer needed. Readers
+> accept the old shape for a stable cycle.
+
+Fields per entry, as originally specified:
 
 ```json
 {
@@ -134,9 +144,12 @@ Required fields per entry *(NEW: `stack`, `category`, `status`)*:
 }
 ```
 
-- `stack` + `category`: enable catalog-driven tooling and UI
-- `status`: single source of truth for module readiness
-- VMID uniqueness: enforced at commit time via `module-catalog-fields.json`
+- `stack`: groups the catalogue, and (since #463) says what the module is
+- ~~`category`, `status`~~: dropped by #463 — the module's own JSON carries them (#248)
+- VMID uniqueness: **not** enforceable by a schema across sibling arrays, and it was never
+  implemented — Community carried one VMID twice for months. Since #463 it is a check in
+  `site-manager repository validate-catalog`, which also verifies each `moduleJson` exists and
+  that `stack`/`vmid` agree with the module
 - Module field contract: see `src/foundation/schemas/module-fields.json`
 - Dependency graph: see `src/module-dependencies.md`
 

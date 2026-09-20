@@ -509,6 +509,8 @@ echo ""
 echo "== resolve-module.sh catalog/tier resolution (#459, #460) =="
 
 RM="${HERE}/resolve-module.sh"
+# Exercise THIS tree's catalog library, not the installed one (#463).
+export TAPPAAS_CATALOG_LIB="${HERE}/../../lib/module-catalog-lib.sh"
 RW="${WORK}/resolve"
 mkdir -p "${RW}/cfg" "${RW}/legacy/src/apps/legacymod" "${RW}/current/src/apps/curmod" "${RW}/custom/catalogs" "${RW}/custom/mods/custmod"
 
@@ -537,9 +539,22 @@ cat > "${RW}/cfg/site.json" <<EOF
   {"name":"Legacy","url":"x","path":"${RW}/legacy","managed":"full","catalog":"src/modules.json"},
   {"name":"Current","url":"x","path":"${RW}/current","managed":"full"},
   {"name":"Custom","url":"x","path":"${RW}/custom","managed":"full","catalog":"catalogs/mine.json"},
-  {"name":"Tracked","url":"x","path":"${RW}/legacy","managed":"tracked"}
+  {"name":"Tracked","url":"x","path":"${RW}/legacy","managed":"tracked"},
+  {"name":"Flat","url":"x","path":"${RW}/flat","managed":"full"}
 ]}
 EOF
+
+# A repo on the FLAT catalog (#463): one `modules` list, no per-entry tier —
+# `stack` says what each is, and template/test entries are not modules to resolve.
+mkdir -p "${RW}/flat/src/foundation/flatfnd" "${RW}/flat/src/apps/flatapp" "${RW}/flat/src/apps/flattest"
+cat > "${RW}/flat/src/module-catalog.json" <<'EOF'
+{"modules":[
+  {"moduleName":"flatfnd","legacyName":"oldfnd","moduleJson":"src/foundation/flatfnd/flatfnd.json","stack":"foundation"},
+  {"moduleName":"flatapp","moduleJson":"src/apps/flatapp/flatapp.json","vmid":321,"stack":"ai"},
+  {"moduleName":"flattest","moduleJson":"src/apps/flattest/flattest.json","stack":"test"}
+]}
+EOF
+for m in flatfnd flatapp flattest; do d="${RW}/flat/src/foundation/${m}"; [[ -d "${d}" ]] || d="${RW}/flat/src/apps/${m}"; echo "{\"description\":\"${m}\"}" > "${d}/${m}.json"; done
 
 got="$("$RM" legacymod --config-dir "${RW}/cfg" 2>/dev/null || true)"
 [[ "$got" == "${RW}/legacy/src/apps/legacymod" ]] \
@@ -555,6 +570,29 @@ got="$("$RM" curmod --config-dir "${RW}/cfg" 2>/dev/null || true)"
 [[ "$got" == "${RW}/current/src/apps/curmod" ]] \
     && ok "resolve-module: conventional catalog still resolves" \
     || bad "resolve-module: conventional catalog regressed (got: '${got}')"
+
+# The flat shape: resolution, tier from the stack, a legacy name, and a `test`
+# entry that is a fixture rather than a module to install (#463).
+got="$("$RM" flatapp --config-dir "${RW}/cfg" 2>/dev/null || true)"
+[[ "$got" == "${RW}/flat/src/apps/flatapp" ]] \
+    && ok "resolve-module: a flat catalog resolves (#463)" \
+    || bad "resolve-module: flat catalog not resolved (got: '${got}')"
+got="$("$RM" flatfnd --config-dir "${RW}/cfg" --field tier 2>/dev/null || true)"
+[[ "$got" == "foundation" ]] \
+    && ok "resolve-module: flat tier comes from stack: foundation" \
+    || bad "resolve-module: flat tier (got: '${got}')"
+got="$("$RM" flatapp --config-dir "${RW}/cfg" --field tier 2>/dev/null || true)"
+[[ "$got" == "app" ]] \
+    && ok "resolve-module: any other stack is an application module" \
+    || bad "resolve-module: flat app tier (got: '${got}')"
+got="$("$RM" oldfnd --config-dir "${RW}/cfg" 2>/dev/null || true)"
+[[ "$got" == "${RW}/flat/src/foundation/flatfnd" ]] \
+    && ok "resolve-module: a legacyName resolves in the flat shape too" \
+    || bad "resolve-module: flat legacyName (got: '${got}')"
+got="$("$RM" flattest --config-dir "${RW}/cfg" 2>/dev/null || true)"
+[[ -z "$got" ]] \
+    && ok "resolve-module: a stack:test entry is a fixture, not a module to install" \
+    || bad "resolve-module: stack:test should not resolve (got: '${got}')"
 
 got="$("$RM" oldmod --config-dir "${RW}/cfg" --field repo 2>/dev/null || true)"
 [[ "$got" == "Current" ]] \

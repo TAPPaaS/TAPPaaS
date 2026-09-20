@@ -2,6 +2,7 @@
   "description": "TAPPaaS template VM",
   "kind": "vm",
   "version": "0.5",
+  "stack": "template",
   "tier": "app",
   "vmname": "template",
   "vmid": 999,

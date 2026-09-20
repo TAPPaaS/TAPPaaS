@@ -2,6 +2,7 @@
   "description": "Nextcloud Talk High-Performance Backend - dedicated WebSocket signaling server (nextcloud-spreed-signaling).",
   "kind": "vm",
   "version": "0.2.0",
+  "stack": "collaboration",
   "releaseDate": "2026-06-12",
   "maintainer": "@ErikDaniel007",
   "status": "Testing",

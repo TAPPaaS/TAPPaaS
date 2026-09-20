@@ -2,113 +2,96 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "module-catalog-fields.json",
   "title": "TAPPaaS Module Catalog Schema",
-  "description": "Field schema for module-catalog.json (the per-repo TAPPaaS module registry; renamed from modules.json per #305). Defines the structure used for VMID allocation, catalog browsing, taxonomy and tooling. Every 'managed: full' repo carries a module-catalog.json validated against this schema.",
+  "description": "Field schema for module-catalog.json — the per-repository module registry (renamed from modules.json, #305). Every 'managed: full' repository carries one, and `repository validate-catalog` checks it against this schema (#463).\n\nA catalogue answers two questions and no others: WHERE is a module in this repository (moduleJson, found by moduleName or a legacyName it used to have), and WHICH VMID block is taken. Everything else about a module — tier, source, status, version, description — is read from the module's own JSON and is never restated here, because two copies of one fact drift (they had, by #463). The single exception is `stack`, repeated so a listing can group without opening every module file; the check reports a disagreement.\n\n`stack` also says what a module IS: `foundation` a foundation module, `template` a template to copy rather than install (a Proxmox VM template, the module skeleton), `test` a fixture the suites install. Any other value, or none, is an application module — so an author unsure where a module belongs leaves it out and nothing breaks.",
 
   "type": "object",
-  "required": ["foundationModules", "applicationModules"],
+  "required": ["modules"],
   "additionalProperties": true,
 
   "properties": {
     "description": { "type": "string" },
     "vmidConventions": { "type": "object" },
 
+    "modules": {
+      "type": "array",
+      "description": "Every module this repository ships, in one list (#463). The shape before it split these across foundationModules / applicationModules / proxmoxTemplates / testModules with `tier` on each entry; readers accept that for one stable cycle, and this schema still permits it below.",
+      "items": { "$ref": "#/$defs/entry" }
+    },
+
     "foundationModules": {
       "type": "array",
-      "items": { "$ref": "#/$defs/catalogEntry" }
+      "description": "DEPRECATED (#463) — the pre-flat shape, still read for a stable cycle. A repository on it should move its entries into `modules`, where `stack: foundation` says what this list said.",
+      "items": { "$ref": "#/$defs/legacyEntry" }
     },
     "applicationModules": {
       "type": "array",
-      "items": { "$ref": "#/$defs/catalogEntry" }
+      "description": "DEPRECATED (#463) — the pre-flat shape. In `modules`, an application module is any entry whose stack is not foundation, template or test.",
+      "items": { "$ref": "#/$defs/legacyEntry" }
     },
     "proxmoxTemplates": {
       "type": "array",
-      "items": { "$ref": "#/$defs/simpleEntry" }
+      "description": "DEPRECATED (#463) — now entries with `stack: template`.",
+      "items": { "$ref": "#/$defs/legacyEntry" }
     },
     "testModules": {
       "type": "array",
-      "items": { "$ref": "#/$defs/simpleEntry" }
+      "description": "DEPRECATED (#463) — now entries with `stack: test`.",
+      "items": { "$ref": "#/$defs/legacyEntry" }
     }
   },
 
   "$defs": {
-    "catalogEntry": {
+    "entry": {
       "type": "object",
-      "description": "A user-facing catalog module (foundation or application). Carries the full taxonomy (stack, category, status) for catalog-driven tooling and UI.",
-      "required": ["moduleName", "vmid", "moduleJson", "stack", "category", "status"],
+      "description": "One module in this repository.",
+      "required": ["moduleName", "moduleJson"],
       "additionalProperties": false,
       "properties": {
         "moduleName": {
           "type": "string",
-          "pattern": "^[a-zA-Z][a-zA-Z0-9-]*$",
-          "description": "Unique module identifier. Matches vmname in the module's JSON."
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+          "description": "The name this module is looked up by — the module's own directory name (ADR-026 D6.2)."
         },
-        "repo": {
+        "legacyName": {
           "type": "string",
-          "enum": ["foundation", "application", "community"],
-          "description": "Source repository tier. foundation=TAPPaaS core, application=TAPPaaS apps, community=Community repo."
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+          "description": "A name this module used to have, still matched by the resolver (firewall → network). Written when a module is renamed (scripts/move-module.sh --rename). Not in the module's own JSON: it is the repository's memory, not the module's."
         },
         "moduleJson": {
           "type": "string",
-          "description": "Relative path from repo root to the module's JSON declaration file."
+          "pattern": "^[^/].*\\.json$",
+          "description": "Path to the module's JSON, relative to the repository root. The answer the catalogue exists to give."
         },
         "vmid": {
-          "type": ["integer", "null"],
-          "minimum": 0,
-          "description": "Proxmox VM ID, unique across catalog entries in this repo. Use null (or 0) for modules with no dedicated VM — e.g. policy-only firewall modules, or a service that shares a node."
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 999999,
+          "description": "The VMID block this module reserves — a DELIBERATE duplication of the module's own vmid, documented as such: picking a free block, or finding a collision, must not mean opening every module JSON in every repository. Omitted by a module with no guest of its own (a machine, an application). The check reports a disagreement with the module's JSON, and any two entries sharing one."
         },
         "stack": {
           "type": "string",
-          "enum": [
-            "foundation",
-            "security",
-            "productivity",
-            "ai",
-            "home-automation",
-            "infrastructure",
-            "storage",
-            "entertainment",
-            "development",
-            "application"
-          ],
-          "description": "Deployment stack. Groups modules by functional domain for catalog browsing."
-        },
-        "category": {
-          "type": "string",
           "pattern": "^[a-z][a-z0-9-]*$",
-          "description": "Category within the stack. Free-form lowercase string."
-        },
-        "status": {
-          "type": "string",
-          "enum": ["stable", "beta", "incomplete", "deprecated"],
-          "description": "Single source of truth for module readiness. stable=production-ready; beta=usable, under active development; incomplete=not yet functional; deprecated=scheduled for removal."
+          "description": "The group this module belongs to — repeated from the module's own `stack` so a listing can group without opening every module file, and checked against it. `foundation`, `template` and `test` are reserved and say what the module is; any other value, or none, is an application module."
         }
       }
     },
 
-    "simpleEntry": {
+    "legacyEntry": {
       "type": "object",
-      "description": "A non-user-facing catalog entry (VM template or test fixture). VMID-register only — no taxonomy required.",
-      "required": ["moduleName", "vmid", "moduleJson"],
+      "description": "An entry in the pre-#463 shape. Permitted so a repository that has not migrated still validates; `tier`, `source`, `status`, `category` and `repo` are the restatements the flat shape drops.",
+      "required": ["moduleName", "moduleJson"],
       "additionalProperties": false,
       "properties": {
-        "moduleName": {
-          "type": "string",
-          "pattern": "^[a-zA-Z][a-zA-Z0-9-]*$",
-          "description": "Unique identifier for the template or test fixture."
-        },
-        "repo": {
-          "type": "string",
-          "enum": ["foundation", "application", "community"]
-        },
-        "moduleJson": {
-          "type": "string",
-          "description": "Relative path from repo root to the entry's JSON declaration file."
-        },
-        "vmid": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "Proxmox VM ID. Must be unique across all catalog entries in this repo."
-        }
+        "moduleName": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$" },
+        "legacyName": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$" },
+        "moduleJson": { "type": "string", "pattern": "^[^/].*\\.json$" },
+        "vmid": { "type": "integer", "minimum": 0, "maximum": 999999 },
+        "stack": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+        "category": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+        "status": { "type": "string" },
+        "tier": { "type": "string", "enum": ["foundation", "app"] },
+        "source": { "type": "string", "enum": ["official", "community", "private", "local"] },
+        "repo": { "type": "string" }
       }
     }
   }
