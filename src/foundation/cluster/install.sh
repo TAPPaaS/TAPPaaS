@@ -169,14 +169,18 @@ CLUSTER_ROLE=""
 # This node's management IP on the lan bridge (10.0.0.<9+N> for tappaasN). Must
 # match what config-network.sh placed on `lan`, so corosync binds to the stable
 # mgmt network from the start — then the gateway cutover needs no reboot.
+# The node number is a sequence (#673): the addresses run out where the mgmt
+# DHCP pool starts (.100 by convention), not at a fixed count of nodes.
 node_mgmt_ip() {
   local n; n="$(hostname -s | grep -oE '[0-9]+$' || true)"
-  if [ -n "$n" ] && [ "$n" -gt 9 ]; then
-    msg_error "Node number ${n} (tappaas${n}) exceeds the supported 9 nodes (tappaas1-9 → 10.0.0.10-18)."
-    msg_error "The firewall reserves DNS + static IPs only for nine nodes. Aborting."
+  [ -n "$n" ] || { echo "10.0.0.10"; return; }
+  local host=$((9 + n))
+  if [ "$host" -ge 100 ]; then
+    msg_error "Node ${n} (tappaas${n}) would take 10.0.0.${host}, which is inside the mgmt DHCP pool (from 10.0.0.100)."
+    msg_error "Assign one outside the pool with config-network.sh --mgmt-ip. Aborting."
     exit 1
   fi
-  if [ -n "$n" ]; then echo "10.0.0.$((9 + n))"; else echo "10.0.0.10"; fi
+  echo "10.0.0.${host}"
 }
 
 configure_cluster() {

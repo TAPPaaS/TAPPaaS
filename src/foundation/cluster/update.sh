@@ -255,6 +255,40 @@ fi
 #   warning, never a failed cluster update: registration is bookkeeping, and the
 #   patching above does not depend on it (that is stage 2).
 info "${BOLD}Step 7: Registering cluster nodes as pvehost instances${CL}"
+
+# A node is adopted BY NAME, so it has to resolve first. The firewall's base
+# config ships entries for the first nodes only; beyond those the entry is made
+# here, from the address the cluster itself reports — that is what makes the
+# node number a sequence rather than a list of nine (#673).
+#
+# Only when the name has NO entry at all: an entry that is already there (a
+# shipped one, a MAC reservation from PXE provisioning, an operator's own) is
+# left exactly as it is — `add` would otherwise create a second entry for the
+# same name, since it matches on description.
+_node_ips="$(ssh -n -o StrictHostKeyChecking=no root@"$NODE1_FQDN" \
+    "pvesh get /cluster/status --output-format json" 2>/dev/null \
+    | jq -r '.[] | select(.type == "node") | "\(.name) \(.ip)"' 2>/dev/null || true)"
+
+ensure_node_dns() {
+    local node="$1" fqdn="$1.${MGMTVLAN}.internal" ip
+    if dns-manager --no-ssl-verify list 2>/dev/null | awk '{print $1}' | grep -qx "${fqdn}"; then
+        debug "  ${node}: DNS entry present"
+        return 0
+    fi
+    ip="$(awk -v n="${node}" '$1 == n {print $2; exit}' <<< "${_node_ips}")"
+    if [[ -z "${ip}" ]]; then
+        warn "  ${node}: no address reported by the cluster — cannot create its DNS entry"
+        return 1
+    fi
+    if dns-manager --no-ssl-verify add "${node}" "${MGMTVLAN}.internal" "${ip}" \
+            --description "TAPPaaS node ${node}" >/dev/null 2>&1; then
+        info "  ${GN}✓${CL} ${node}: DNS entry ${fqdn} → ${ip}"
+    else
+        warn "  ${node}: could not create its DNS entry (${fqdn} → ${ip})"
+        return 1
+    fi
+}
+
 while read -r node; do
     [[ -n "${node}" ]] || continue
     cfg="${CONFIG_DIR}/${node}.json"
@@ -266,6 +300,7 @@ while read -r node; do
         fi
         continue
     fi
+    ensure_node_dns "${node}" || { warn "  ${node}: not registered — it does not resolve"; continue; }
     if adopt-module.sh "${node}.${MGMTVLAN}.internal" --wait 0 >/dev/null 2>"/tmp/adopt-${node}.err"; then
         info "  ${GN}✓${CL} ${node} registered as a pvehost instance"
     else

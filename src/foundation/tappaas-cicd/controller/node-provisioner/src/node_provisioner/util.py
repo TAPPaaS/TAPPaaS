@@ -97,19 +97,27 @@ def dhcp_manager_bin() -> str:
     return shutil.which("dhcp-manager") or "/home/tappaas/bin/dhcp-manager"
 
 
-def derive_node_ip(name: str, mgmt_ip: str) -> str | None:
-    """Standard mgmt IP for tappaasN: 10.0.0.(9+N), N in 1..9.
+# The mgmt DHCP pool starts here by convention; .10-.99 belong to the nodes.
+MGMT_POOL_START = 100
 
-    Mirrors config-network.sh node_mgmt_ip(): the firewall reserves
-    .10-.18 (outside the dynamic pool, which starts at .100) for exactly
-    these nine names. Returns None for any other name.
+
+def derive_node_ip(name: str, mgmt_ip: str) -> str | None:
+    """Standard mgmt IP for tappaasN: 10.0.0.(9+N), for any N (#673).
+
+    Mirrors config-network.sh node_mgmt_ip(): the node number is a sequence,
+    and the addresses run out where the dynamic pool begins (.100), which
+    leaves .10-.99 for nodes. Returns None for a name that is not tappaasN,
+    and for a number whose address would fall inside the pool.
     """
     import re
-    m = re.fullmatch(r"tappaas([1-9])", name)
+    m = re.fullmatch(r"tappaas([0-9]+)", name)
     if not m:
         return None
+    host = 9 + int(m.group(1))
+    if host < 10 or host >= MGMT_POOL_START:
+        return None
     subnet = mgmt_ip.rsplit(".", 1)[0]
-    return f"{subnet}.{9 + int(m.group(1))}"
+    return f"{subnet}.{host}"
 
 
 def detect_mgmt_ip(firewall: str = "firewall.mgmt.internal") -> str:

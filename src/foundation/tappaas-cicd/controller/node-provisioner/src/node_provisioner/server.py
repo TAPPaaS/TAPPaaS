@@ -85,8 +85,8 @@ def _reserve_standard_ip(name: str, macs: list, domain: str) -> None:
         warn(f"skipping IP reservation for {name}: {e}")
         return
     if not ip:
-        warn(f"'{name}' has no standard mgmt IP (tappaas1-9 only) — "
-             "skipping the DHCP reservation")
+        warn(f"'{name}' has no standard mgmt IP (tappaasN, up to the mgmt "
+             "DHCP pool) — skipping the DHCP reservation")
         return
     if not macs:
         warn(f"no MACs posted for {name} — skipping the DHCP reservation")

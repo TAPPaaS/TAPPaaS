@@ -132,8 +132,13 @@ created while the node already belongs to the cluster.
 | Any other node (or `--join`) | **Interactive join**: prompts for an existing node's address (default `tappaas1.mgmt.internal`) and runs `pvecm add`, which prompts for that node's root password. |
 | `--no-cluster` | Skipped; node stays standalone. |
 
-Node management IPs follow `tappaasN` → `10.0.0.<9+N>` (max 9 nodes — the firewall
-reserves DNS + static IPs for `tappaas1`–`tappaas9` only; higher numbers abort).
+Node management IPs follow `tappaasN` → `10.0.0.<9+N>`, for any N (#673): the
+number is a sequence, and the addresses run out where the mgmt DHCP pool begins
+(`.100`), which leaves `.10`–`.99` — ninety nodes. A number beyond that is
+refused, naming `--mgmt-ip` as the way to place one outside the pool. The
+firewall's base config ships the `tappaas1` entry (the first node must resolve
+before a control plane exists); every other node's dnsmasq entry is created by
+the cluster update when it registers the node.
 
 In `--non-interactive` mode a join cannot supply the password, so the script prints the
 `pvecm add tappaas1.mgmt.internal` command for you to run.

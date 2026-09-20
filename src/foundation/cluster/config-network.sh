@@ -63,6 +63,7 @@ readonly INTERFACES=/etc/network/interfaces
 readonly ROLLBACK_BIN=/usr/local/sbin/tappaas-net-rollback.sh
 readonly ROLLBACK_OK=/run/tappaas-net-ok
 readonly MGMT_SUBNET="10.0.0"   # /24 management network prefix
+readonly MGMT_POOL_START=100    # mgmt DHCP pool starts here: .10-.99 are the nodes' (#673)
 
 usage() { sed -n '2,/^set -euo/p' "$0" | sed 's/^# \{0,1\}//; /^set -euo/d'; }
 
@@ -97,17 +98,20 @@ HAVE_WHIPTAIL=0; command -v whiptail >/dev/null && HAVE_WHIPTAIL=1
 
 # ── Shared helpers ────────────────────────────────────────────────────
 
-# This node's management IP on the lan bridge: 10.0.0.<9+N> for tappaasN.
-# TAPPaaS reserves 10.0.0.10-18 for tappaas1-9 (the firewall ships DNS host
-# entries + static reservations for exactly those nine). A 10th+ node has no
-# reserved mgmt IP / DNS name, so refuse rather than silently mis-assign.
+# This node's management IP on the lan bridge: <mgmt subnet>.<9+N> for tappaasN
+# — a sequence, not a list (#673). The node numbers are unbounded; the ADDRESSES
+# run out where the mgmt zone's DHCP pool begins (MGMT_POOL_START, .100 by
+# convention), which leaves .10-.99 for nodes. Its DNS entry is created when the
+# node is registered (cluster/update.sh), not shipped in advance.
 node_mgmt_ip() {
   if [[ -n "$MGMT_IP" ]]; then echo "${MGMT_IP%/*}"; return; fi
   local n; n="$(hostname -s | grep -oE '[0-9]+$' || true)"
-  if [[ -n "$n" && "$n" -gt 9 ]]; then
-    die "Node number ${n} (tappaas${n}) exceeds the supported 9 nodes (tappaas1-9 → 10.0.0.10-18). Assign manually with --mgmt-ip and add a firewall DNS host entry."
+  [[ -n "$n" ]] || { echo "${MGMT_SUBNET}.10"; return; }
+  local host=$((9 + n))
+  if (( host >= MGMT_POOL_START )); then
+    die "Node ${n} (tappaas${n}) would take ${MGMT_SUBNET}.${host}, which is inside the mgmt DHCP pool (from ${MGMT_SUBNET}.${MGMT_POOL_START}). Assign one outside the pool with --mgmt-ip."
   fi
-  if [[ -n "$n" ]]; then echo "${MGMT_SUBNET}.$((9 + n))"; else echo "${MGMT_SUBNET}.10"; fi
+  echo "${MGMT_SUBNET}.${host}"
 }
 
 # Address currently held on bridge $1 (CIDR), empty if none.

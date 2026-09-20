@@ -119,6 +119,7 @@ required=(
     Create-TAPPaaS-VM.sh
     Create-TAPPaaS-LXC.sh
     lib/vm-net.sh
+    lib/test-node-mgmt-ip.sh
     lib/test-vm-net.sh
     services/vm/install-service.sh
     services/vm/update-service.sh
@@ -187,6 +188,20 @@ if [[ -x "${SCRIPT_DIR}/lib/test-vm-net.sh" ]]; then
     fi
 else
     fail "lib/test-vm-net.sh not found or not executable"
+fi
+
+# A node number is a sequence, not a list of nine (#673): tappaasN gets
+# <subnet>.<9+N> until the mgmt DHCP pool. No node, no console.
+info "${BOLD}Test 2a2: node mgmt IP is a sequence (#673)${CL}"
+if [[ -x "${SCRIPT_DIR}/lib/test-node-mgmt-ip.sh" ]]; then
+    if nm_out=$("${SCRIPT_DIR}/lib/test-node-mgmt-ip.sh" 2>&1); then
+        pass "$(tail -1 <<< "${nm_out}")"
+    else
+        fail "node-mgmt-ip unit tests failed"
+        indent <<< "${nm_out}"
+    fi
+else
+    fail "lib/test-node-mgmt-ip.sh not found or not executable"
 fi
 
 # reboot_one_node drain-timeout must disable HA maintenance mode, not strand the

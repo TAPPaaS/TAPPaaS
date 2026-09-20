@@ -9,7 +9,7 @@ VM, LXC and HA services every other TAPPaaS module builds on.
 
 | Capability | Access from | How |
 |------------|-------------|-----|
-| Proxmox VE cluster (1–9 nodes, `tappaas1`…`tappaas9`) | mgmt zone | `https://tappaas1.mgmt.internal:8006` (`10.0.0.10`) |
+| Proxmox VE cluster (`tappaas1`, `tappaas2`, … — `.10`+, up to the mgmt DHCP pool) | mgmt zone | `https://tappaas1.mgmt.internal:8006` (`10.0.0.10`) |
 | VM provisioning (`cluster:vm`) | consumer modules | `dependsOn: ["cluster:vm"]` → `services/vm/` hooks |
 | LXC provisioning (`cluster:lxc`) | consumer modules | `dependsOn: ["cluster:lxc"]` → `services/lxc/` hooks |
 | HA placement + replication (`cluster:ha`) | consumer modules | `dependsOn: ["cluster:ha"]` → `services/ha/` hooks |
@@ -53,7 +53,6 @@ provides the `vm`, `lxc` and `ha` services (the module's `provides` in
   (its VM runs on this cluster).
 - The VM base images — the [`templates`](../templates/README.md) module.
 - Backup, identity, logging — separate foundation modules.
-- More than 9 nodes (the firewall reserves IPs/DNS for `tappaas1`–`tappaas9` only).
 - General Proxmox administration guidance beyond the TAPPaaS conventions.
 
 ## Requirements
