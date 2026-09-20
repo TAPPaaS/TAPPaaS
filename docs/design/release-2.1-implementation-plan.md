@@ -106,7 +106,7 @@ things that make those migrations survivable go before it (Wave 0).
 | 0 | ✅ G0.3 Update channel & failure notice | 5 | 3 | 3 | M |
 | 1 | G1.1 Vocabulary & classification (ADR-022 family) | 7 | 2 | 4 | H |
 | 1 | G1.2 Backup placement model (ADR-012 close-out) | 12 | 3 | 4 | H |
-| 1 | G1.3 Module contract & repo layout | 10 | 2 | 5 | H |
+| 1 | G1.3 Module contract & repo layout | 9 | 2 | 5 | H |
 | 1 | G1.4 Common NixOS baseline | 8 | 2 | 4 | H |
 | 1 | G1.5 Rebuild & recovery paths | 6 | 3 | 4 | M |
 | 1 | G1.6 Secrets & privileged access | 5 | 1 | 5 | H |
@@ -407,9 +407,9 @@ What community modules copy and what deployed configs point at.
 
 Status: in progress — #500 built ahead of the entry gate (operator, 2026-09-19; recorded in
 ADR-025 D14). #349 built (operator go, 2026-09-19; ADR-007c v1.5). #566 built 2026-09-20
-(ADR-026 D6.4a). #421 waits for the operator's
-go (to be checked with Erik); the rest waits for the gate: decisions #294, #250, and the
-Stacks & solutions ADR.
+(ADR-026 D6.4a). **Parked until the operator has agreed them with Erik:** #421 (`src/apps`
+into stacks) and #294 (VMID scheme). #250 left the wave 2026-09-20 — Future Work. The rest
+waits for the gate: the Stacks & solutions and Module blueprint ADRs.
 
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
@@ -417,7 +417,6 @@ Stacks & solutions ADR.
 | #421 | Restructure `src/apps` into stacks | 2 | 4 | H | Changes `.location` in every deployed config; after #500. Settle the *solution* concept (2026-08-03) |
 | #349 | Drop the zone tag from released modules | 3 | 3 | H | **Built 2026-09-19** (`wave1/g1.3-module-contract`): apps already named none; `zone0: mgmt` removed from the 7 foundation modules, recorded as `mgmt` by `copy-update-json.sh` (the bootstrap path) and resolved for `mgmt` before its env file exists; the five placed-by-role modules keep theirs (coturn, vaultwarden `dmz`, deconz `iotCloud`, netbird-client `home`, satellite `edge`). The update merge now keeps a deployed `zone0` (rule 1b) — without it #581 would have deleted it from every foundation config. ADR-007c v1.5 |
 | #566 | Legacy name → variant convention | 2 | 3 | H | **Built 2026-09-20** (`wave1/g1.3-module-contract`): the breakage it reported (a legacy name never merged, so its updates failed) was already gone with ADR-026 D6.3 — pinned by a regression test. Added `module modify <instance> --set instance=<new>` (the operator's suggestion: the instance name as a settable field), which moves the config, its `.orig` and `.meta`, and repoints a `node` naming it; the guest keeps `vmname` (renaming it is separate and disruptive); a machine is refused. ADR-026 D6.4a. **Not built:** the issue's "flag an instance whose last good update lags" idea |
-| #250 | `dependsOn` ownership for community modules | 3 | 2 | H | Option D (`dependsOn.sh`) |
 | #248 | Module version/status standard | 4 | 1 | M | Flag day across modules |
 | #363 | Module lifecycle blueprint ADR | 3 | 1 | M | |
 | #463 | module-catalog schema is stale | 4 | 1 | M | Also `legacyName` and the Community repo drift |
@@ -647,6 +646,12 @@ New capabilities with low upgrade risk.
 **Optional roll-ins:** #157 (G2.2, after #387), #143 (G4.5), #158 (G4.4),
 #39 power saving (docs, alongside #37).
 
+**Moved out of a wave:**
+
+| # | Issue | From | When |
+|---|-------|------|------|
+| #250 | `dependsOn` ownership for community modules (option D, `dependsOn.sh`) | G1.3 | 2026-09-20 (operator) — Future Work |
+
 **Close or re-scope:**
 
 | # | Issue | Proposal |
@@ -760,7 +765,7 @@ open decisions from review, and the ADRs that have to be signed off first.
 | 1 · G1.5 | none — runs first | none: #439 is a runbook in `docs/design/`; the #545 outcome (what is backed up, how) goes into ADR-012 §2.7 | `config/` restore rehearsed on the test system |
 | 1 · G1.1 | ✅ answered: `scope` (ADR-022e) | ✅ ADR-022 and 022a–022h Accepted 2026-09-18; ADR-007a/006 assumed (implementation proceeds) — was: ADR-022 and 022a–022d Draft → Accepted (#624, #637, #610, #611 is 022d, #599 is 022c); ADR-009 Proposed → amended or superseded by 022c; ADR-007a + ADR-006 amended for People → Identity (#628); ADR-007b amended for the tier/stack outcome | as Wave 1 |
 | 1 · G1.2 | placement state names (#600) | ✅ ADR-012 v1.0 accepted 2026-09-18 (#600, #602, #607, #609, #612, #605 settled) | as Wave 1 |
-| 1 · G1.3 | VMID scheme: new installs only, or not at all (#294); `src/apps` restructure together with #500 (#421); zone0 direction (#349); dependsOn option D (#250) | **New: Stacks & solutions** (#421, #500; amends ADR-004 and ADR-007b); **New: Module blueprint** (#363, #248); **New: Controller pattern for app modules** (#430); **New: VMID convention** only if #294 is adopted; ADR-003 amended (#250); ADR-007c amended (#349) | as Wave 1 |
+| 1 · G1.3 | VMID scheme: new installs only, or not at all (#294 — parked for Erik); `src/apps` restructure together with #500 (#421 — parked for Erik); zone0 direction (#349 ✅) | **New: Stacks & solutions** (#421, #500; amends ADR-004 and ADR-007b); **New: Module blueprint** (#363, #248); **New: Controller pattern for app modules** (#430); **New: VMID convention** only if #294 is adopted; ADR-007c amended (#349, done) | as Wave 1 |
 | 1 · G1.4 | none | **New: Module blueprint** includes the NixOS baseline every VM must import (#324, #390, #448 interface naming, #472 / FW #87 time) | Every NixOS VM on the test system rebuilt once and deep-tested |
 | 1 · G1.6 | Secrets: an access interface first, OpenBao later (#58); #142 RFC outcome | **New: Secrets management** (#58, with FW #122 and #19); an ADR for #142 only if a REST API is chosen over SSH + sudo | as Wave 1 |
 | 2 | #645 dry-run diff on `stable`; #620 and #375 applied | ADR-014 amended: `all` sentinel (#375), `serves` as array (#576), anti-spoofing always on (#159), mDNS in zones.json (#257); ADR-021 amended: DNSSEC with split horizon (#263) and the IPv6 stance (#149) | Lockout check on the test system and each canary: mgmt and NetBird reach 8443 and 22, other zones do not |
@@ -796,9 +801,9 @@ targets (an ADR-007e amendment).
 |---|----------|---------|
 | 1 | Migration framework before Wave 1 | **Decided 2026-09-14:** yes (G0.1), and each wave documents how it is tested and rolled out (§10) |
 | 2 | `module.tier` → `stack`, or keep both | **Decided 2026-09-17/18:** neither — `module.tier` becomes `scope: site \| environment` (ADR-022e, accepted with the ADR-022 family 2026-09-18) |
-| 3 | VMID scheme (#294): new installs only, or not at all | Open → entry gate for G1.3 |
+| 3 | VMID scheme (#294): new installs only, or not at all | Open → **parked 2026-09-20** until the operator has agreed it with Erik |
 | 4 | Secrets (#58): is an access interface enough for now | Open → entry gate for G1.6 |
-| 5 | `src/apps` restructure (#421) together with #500 | Open → entry gate for G1.3 |
+| 5 | `src/apps` restructure (#421) together with #500 | #500 built 2026-09-19; the restructure itself **parked 2026-09-20** until the operator has agreed it with Erik |
 | 6 | Firewall rebuild (#439) | **Decided 2026-09-14:** only one installation runs the nano image; document the procedure, do not build or run it (G1.5) |
 | 7 | Scope of the 2.1 release | **Decided 2026-09-14:** not discussed here; the plan is organised by waves |
 | 8 | What gates a wave | **Decided 2026-09-14:** open decisions and ADR sign-offs are entry gates (§10.3); designs that need a new ADR are listed in §10.4 |
