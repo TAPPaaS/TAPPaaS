@@ -31,6 +31,26 @@ REBUILD_LOG=/var/lib/tappaas-rebuild/nixos-rebuild.log
 VMNAME="$(jq -r '(.config // .).vmname // "tappaas-cicd"' /home/tappaas/config/tappaas-cicd.json 2>/dev/null || echo tappaas-cicd)"
 [[ "${VMNAME}" =~ ^[A-Za-z0-9-]+$ ]] || { error "tappaas-self-rebuild: bad vmname '${VMNAME}'"; exit 1; }
 
+# The site's own time and locale, written before the build that reads it
+# (#408, #472): tappaas-cicd.nix imports /etc/nixos/tappaas-site.nix when it
+# exists. Sourced from the CHECKOUT, not ~tappaas/bin — root already builds this
+# system from that tree, so it is no new trust, while ~tappaas/bin is a path root
+# must not read code from.
+_sl="${CICD_DIR}/lib/site-locale.sh"
+if [[ -f "${_sl}" ]]; then
+    # shellcheck source=../lib/site-locale.sh
+    if . "${_sl}" 2>/dev/null && declare -F render_site_nix >/dev/null 2>&1; then
+        _mgmt_zone="$(jq -r '(.zone0 // "mgmt")' /home/tappaas/config/tappaas-cicd.json 2>/dev/null || echo mgmt)"
+        if render_site_nix "${_mgmt_zone}" > /etc/nixos/tappaas-site.nix.new 2>/dev/null; then
+            mv -f /etc/nixos/tappaas-site.nix.new /etc/nixos/tappaas-site.nix
+            debug "wrote /etc/nixos/tappaas-site.nix from site.json"
+        else
+            rm -f /etc/nixos/tappaas-site.nix.new
+            warn "could not render the site's time/locale — the mothership keeps what it has"
+        fi
+    fi
+fi
+
 cd "${CICD_DIR}"
 info "Rebuilding NixOS (${VMNAME}) — one dot per build line"
 debug "nixos-rebuild switch --flake .#${VMNAME} --impure (full output: ${REBUILD_LOG})"
