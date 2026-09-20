@@ -954,10 +954,13 @@ if SV_SNAPS="${_sv_tmp}/snaps" CONFIG_DIR="${_sv_tmp}/config" PATH="${_sv_tmp}/b
     else
         bad "snapshot-vm.sh --cleanup 2 left: ${_sv_left}(#646)"
     fi
-    if grep -q '4 snapshot(s) removed' "${_sv_tmp}/out"; then
+    # The COUNT is the assertion, not the prose around it: 67c24063 reworded this
+    # line while quieting the sweep, and a grep for the old sentence failed in the
+    # deep suite for a behaviour that was never broken.
+    if grep -qE '(^|[^0-9])4 (old )?snapshot\(s\) removed' "${_sv_tmp}/out"; then
         ok "snapshot-vm.sh --cleanup reports the deletions it made"
     else
-        bad "snapshot-vm.sh --cleanup summary does not match the deletions (#646)"
+        bad "snapshot-vm.sh --cleanup summary does not match the deletions (#646): $(grep -i removed "${_sv_tmp}/out" | head -1)"
     fi
 else
     bad "snapshot-vm.sh --cleanup failed against the stubbed node: $(tail -1 "${_sv_tmp}/out")"
