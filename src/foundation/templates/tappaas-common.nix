@@ -22,6 +22,13 @@
 { config, lib, pkgs, modulesPath, ... }:
 
 {
+  # The site's own time and locale (#408, #472). /etc/nixos/tappaas-site.nix is
+  # generated from config/site.json and written by update-os.sh before every
+  # rebuild; a VM that has not had one yet simply keeps the NixOS defaults, which
+  # is honest — nothing on the VM knows where the site is.
+  imports = lib.optional (builtins.pathExists /etc/nixos/tappaas-site.nix)
+    /etc/nixos/tappaas-site.nix;
+
   services.cloud-init = {
         enable = true;
         network.enable = false; # We handle networking ourselves with DHCP
@@ -162,8 +169,10 @@
   systemd.network.enable = lib.mkForce false;
   systemd.network.wait-online.enable = lib.mkForce false;
 
-  # Set your time zone.
-  time.timeZone = lib.mkDefault "Europe/Amsterdam";
+  # The time zone is NOT set here. It is the site's fact, not the baseline's:
+  # hard-coding it here is what made a Danish site run on Amsterdam while its
+  # own first node said Europe/Copenhagen (#472). It arrives through the
+  # generated tappaas-site.nix imported above.
 
   # Users
   users.users.tappaas = {

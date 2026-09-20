@@ -26,6 +26,10 @@ readonly MGMT="mgmt"
 
 # shellcheck source=common-install-routines.sh
 . /home/tappaas/bin/common-install-routines.sh
+# The site's time and locale, rendered per OS family (#472, #87). Optional: a
+# mothership that has not deployed it yet updates as before, without the facts.
+# shellcheck source=site-locale.sh
+[[ -f /home/tappaas/bin/site-locale.sh ]] && . /home/tappaas/bin/site-locale.sh
 
 # When invoked as a module-update sub-step (templates:nixos / templates:debian
 # update-service.sh set TAPPAAS_OS_AS_DEBUG=1), route this script's [Info]
@@ -398,6 +402,35 @@ update_nixos() {
         rm -f "${_flat_tmp}"
     fi
 
+    # The shared baseline every module imports (#324). It lives in the templates
+    # module on the mothership, so it is shipped like the module's own .nix —
+    # otherwise `imports = [ /etc/nixos/tappaas-common.nix ]` resolves to nothing
+    # and each module is left to reinvent the baseline, which is how they drifted.
+    local _common="/home/tappaas/TAPPaaS/src/foundation/templates/tappaas-common.nix"
+    [[ -f "${_common}" ]] || _common="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../../../templates/tappaas-common.nix"
+    if [[ -f "${_common}" ]]; then
+        info "Copying the common baseline to ${vm_ip}:/etc/nixos/tappaas-common.nix"
+        if scp -q -o StrictHostKeyChecking=accept-new -o BatchMode=yes "${_common}" "tappaas@${vm_ip}:/tmp/tappaas-common.nix"; then
+            ssh -o BatchMode=yes "tappaas@${vm_ip}" \
+                "sudo install -m 0644 /tmp/tappaas-common.nix /etc/nixos/tappaas-common.nix && rm -f /tmp/tappaas-common.nix" \
+                || warn "could not install the common baseline on ${vm_ip}"
+        else
+            warn "could not copy the common baseline to ${vm_ip}"
+        fi
+    else
+        warn "tappaas-common.nix not found on the mothership — the VM keeps whatever baseline it has"
+    fi
+
+    # The site's own time and locale, written where tappaas-common.nix imports it
+    # from (#472). Before the rebuild, so this run applies it rather than the next.
+    if declare -F apply_site_locale_nixos >/dev/null 2>&1; then
+        local _zone
+        _zone="$(jq -r '(.zone0 // (.config? // {} | to_entries[]?.value.zone0?)) // ""' "${CONFIG_DIR}/${vmname}.json" 2>/dev/null | head -1)"
+        info "Writing /etc/nixos/tappaas-site.nix (site time + locale)"
+        apply_site_locale_nixos "${vm_ip}" "${_zone}" \
+            || warn "could not write the site fragment on ${vm_ip} — the VM keeps its current time and locale"
+    fi
+
     # The prebuilt NixOS template ships without /etc/nixos/hardware-configuration.nix
     # — generate it on-demand so the module's `imports = [ /etc/nixos/hardware-configuration.nix ]`
     # resolves on the FIRST rebuild. Idempotent: bootstrap.sh follows the same
@@ -527,6 +560,7 @@ ensure_persistent_host_keys() {
 # Update Debian/Ubuntu VM
 update_debian() {
     local vm_ip="$1"
+    local vmname="${2:-}"    # for the site locale (#472): which config names this guest
 
     # BEFORE anything that ssh's: wait_for_cloud_init talks to the guest, so a
     # host key that changed since we last spoke would fail there first. Heal it,
@@ -549,6 +583,14 @@ update_debian() {
         tappaas_ssh_guest "tappaas@${vm_ip}" "sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y" || die "apt-get upgrade failed"
     else
         run_quiet "apt-get upgrade" tappaas_ssh_guest "tappaas@${vm_ip}" "sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y"
+    fi
+
+    # The site's time and locale, converged rather than declared (#472). A Debian
+    # guest has no baseline to import, so the sweep is what keeps it true.
+    if declare -F apply_site_locale_debian >/dev/null 2>&1; then
+        local _zone
+        _zone="$(jq -r '(.zone0 // (.config? // {} | to_entries[]?.value.zone0?)) // ""' "${CONFIG_DIR}/${vmname}.json" 2>/dev/null | head -1)"
+        apply_site_locale_debian "${vm_ip}" "${_zone}" || true
     fi
 
     info "Installing/updating QEMU guest agent..."
@@ -676,7 +718,7 @@ main() {
             update_nixos "${vmname}" "${vmid}" "${node}" "${vm_ip}"
             ;;
         debian)
-            update_debian "${vm_ip}"
+            update_debian "${vm_ip}" "${vmname}"
             ;;
         *)
             die "Unknown or unsupported OS type: ${os_type}"

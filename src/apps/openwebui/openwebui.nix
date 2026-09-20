@@ -56,7 +56,11 @@ in
   # ----------------------------------------
   # Imports
   # ----------------------------------------
-  imports = [ /etc/nixos/hardware-configuration.nix ];
+  imports = [ /etc/nixos/hardware-configuration.nix
+    # The shared TAPPaaS baseline (#324): cloud-init, ssh, the qemu agent, and
+    # the site's own time and locale through tappaas-site.nix. Shipped to
+    # /etc/nixos by update-os.sh on every update.
+    /etc/nixos/tappaas-common.nix ];
 
   # ----------------------------------------
   # Bootloader
@@ -102,7 +106,8 @@ in
   # ----------------------------------------
   # Timezone
   # ----------------------------------------
-  time.timeZone = lib.mkDefault "Europe/Amsterdam";
+  # No time zone here: it is the site's fact, not the module's (#472). It
+  # arrives through /etc/nixos/tappaas-site.nix, imported by the baseline.
 
   # ----------------------------------------
   # Users

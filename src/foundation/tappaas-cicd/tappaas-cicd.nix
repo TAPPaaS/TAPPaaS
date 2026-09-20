@@ -35,7 +35,13 @@ in
   imports =
     [
       /etc/nixos/hardware-configuration.nix
-    ];
+    ]
+    # The site's own time and locale (#408, #472). The mothership is IN the site,
+    # so it reads the same generated fragment every other guest does — written by
+    # tappaas-self-rebuild.sh just before this rebuild. Optional, because a
+    # bootstrap builds this system before config/site.json exists.
+    ++ lib.optional (builtins.pathExists /etc/nixos/tappaas-site.nix)
+      /etc/nixos/tappaas-site.nix;
 
   services.cloud-init = {
         enable = true;
@@ -107,7 +113,8 @@ in
   };
 
   # Set your time zone.
-  time.timeZone = lib.mkDefault "Europe/Amsterdam";
+  # No time zone here: it is the site's fact, not the mothership's (#472). It
+  # arrives through /etc/nixos/tappaas-site.nix, imported above.
 
   # Users
   users.users.tappaas = {

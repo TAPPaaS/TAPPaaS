@@ -192,3 +192,19 @@ source:
 - **Guest-agent liveness** — the `service-liveness` gate currently checks
   `pvesh` running-state only; adding `qm guest cmd <vmid> ping` is a follow-up.
 - **Full `update-os` port** — today the verb shells out to `update-os.sh`.
+
+## What `update-os` puts on a guest before it rebuilds
+
+Beyond the module's own `.nix`, its siblings and its companion JSON, two shared
+files land in `/etc/nixos` on every NixOS update (#324, #472):
+
+- **`tappaas-common.nix`** — the baseline from the `templates` module, copied
+  verbatim, so a module's `imports = [ /etc/nixos/tappaas-common.nix ]` resolves.
+- **`tappaas-site.nix`** — generated from `config/site.json` by
+  `lib/site-locale.sh`: time zone, locale, console keymap, and the zone gateway as
+  the time source (#87).
+
+A Debian guest has no baseline to import, so the same facts are *converged* there
+instead — `timedatectl`, `localectl` and a `systemd-timesyncd` drop-in — and each
+change is logged rather than made silently. Neither path invents a value: a site
+that records nothing leaves the guest as it is.
