@@ -371,7 +371,7 @@ try {
   writeFileSync(join(cfg, "hassanova.json"), JSON.stringify({ kind: "vm", moduleSource: "/r/hass" }));
   const marker = join(root, "renamed");
   const bin = join(root, "rename-instance.sh");
-  writeFileSync(bin, `#!/usr/bin/env bash\necho "$1 $2" > "${marker}"\nexit 0\n`);
+  writeFileSync(bin, `#!/usr/bin/env bash\necho "$@" > "${marker}"\nexit 0\n`);
   chmodSync(bin, 0o755);
   process.env.MM_RENAME_BIN = bin;
 
@@ -382,6 +382,16 @@ try {
   check(c1.log.length === 0, "…and nothing converges: the name it would converge under is gone");
 
   rmSync(marker, { force: true });
+  const rc2 = run(["modify", "hassanova", "--set", "instance=hass-delbuschy", "--dry-run", "--config-dir", cfg], new FakeModuleClient());
+  check(rc2 === 0 && readFileSync(marker, "utf8").trim() === "hassanova hass-delbuschy --dry-run",
+    "--dry-run reaches the rename script, which is the only thing that can preview it");
+
+  rmSync(marker, { force: true });
+  check(run(["modify", "hassanova", "--set", "cores=8", "--dry-run", "--config-dir", cfg], new FakeModuleClient()) !== 0,
+    "--dry-run on any other modify is refused — a converge has no preview to give");
+  check(run(["update", "hassanova", "--dry-run", "--config-dir", cfg], new FakeModuleClient()) !== 0,
+    "--dry-run on another verb is refused, not silently ignored");
+
   check(run(["modify", "hassanova", "--set", "instance=x", "--set", "cores=8", "--config-dir", cfg], new FakeModuleClient()) !== 0
     && !existsSync(marker), "--set instance with another --set is refused, and nothing runs");
   check(run(["update", "hassanova", "--set", "instance=x", "--config-dir", cfg], new FakeModuleClient()) !== 0

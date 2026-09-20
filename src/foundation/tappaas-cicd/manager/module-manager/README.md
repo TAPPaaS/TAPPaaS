@@ -123,6 +123,7 @@ reads the file next; no tool reads them, and the schema check passes over them.
 ### Renaming an instance: `modify --set instance=<new>` (#566)
 
 ```bash
+module-manager module modify hassanova --set instance=hass-delbuschy --dry-run   # what would move
 module-manager module modify hassanova --set instance=hass-delbuschy
 ```
 
@@ -132,7 +133,9 @@ its merge baseline `.orig` and its `.meta.json`, and repoints anything that name
 instance as its Host (`node`). Nothing on the guest changes: it keeps its own name
 (`vmname`), and with it its DNS record, firewall alias and proxy upstream — renaming
 the guest is a separate, disruptive change this verb does not make. The backup job
-follows the `vmid` and is unaffected.
+follows the `vmid` and is unaffected. `--dry-run` lists what would move and changes
+nothing; it is the only verb that has one, because every other change converges the
+module rather than rewriting names.
 
 It runs alone (no other `--set` in the same call) and refuses a name that is not a
 usable instance name or is already taken. A **machine** is refused: it is named after

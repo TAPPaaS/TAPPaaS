@@ -152,6 +152,7 @@ export const HELP: HelpSpec = {
           "--unset field",
           "Remove a stale undeclared field the merge keeps forever (repeatable). Refused for a declared field and for one the release source still defines.",
         ],
+        ["--dry-run", "With `--set instance=<new>`: say what the rename would move and repoint, and change nothing."],
         ["--lockdown", "Run the module's lockdown.sh, alone: for a satellite, make it the unmanaged off-site vault — it pulls the Site's PBS, patches itself, and the mothership's key is removed (ADR-010 §8.4.4). One-way."],
         ["--environment ENV", "Target environment to modify."],
         ["--force", "As for `update`: proceed past a fatally failed pre-update test or an archived/external status."],
@@ -269,6 +270,7 @@ interface Opts {
   remove: boolean;
   decommission: boolean; // delete: a machine's delete.sh runs (ADR-010 §8.4.5)
   lockdown: boolean; // modify: run the module's lockdown.sh (ADR-010 §8.4.4)
+  dryRun: boolean; // modify --set instance=: preview the rename (#566)
   // list --resolution: which of the three tracking paths locates each module (#460)
   resolution: boolean;
   // `modify --set field=value`, repeatable (ADR-020 D2 step 0).
@@ -304,6 +306,7 @@ function parseOpts(args: string[]): Opts {
     remove: false,
     decommission: false,
     lockdown: false,
+    dryRun: false,
     resolution: false,
     sets: [],
     unsets: [],
@@ -374,6 +377,8 @@ function parseOpts(args: string[]): Opts {
       o.decommission = true;
     } else if (a === "--lockdown") {
       o.lockdown = true;
+    } else if (a === "--dry-run") {
+      o.dryRun = true;
     } else if (a === "--resolution") {
       o.resolution = true;
     } else if (a === "--list") {
@@ -820,6 +825,9 @@ function cmdModify(opts: Opts, client: ModuleClient, verb: "update" | "modify"):
   // schema gate below can check. Its own script owns the rule (#566).
   const rename = opts.sets.filter((s) => /^instance=/.test(s));
   if (rename.length > 0) return cmdRenameInstance(module, rename, opts, verb);
+  if (opts.dryRun) {
+    die("--dry-run is only for `modify <instance> --set instance=<new>` — every other change converges the module, which has no preview");
+  }
   if (verb === "modify" && opts.sets.length === 0 && opts.unsets.length === 0) {
     warn("`modify` with no --set is the release update — say `module-manager module update` instead (#655)");
   }
@@ -872,7 +880,9 @@ function cmdRenameInstance(module: string, rename: string[], opts: Opts, verb: "
   const to = rename[0].slice("instance=".length);
   if (!to) die("--set instance=<new>: the new name is missing");
   // Read at call time, not at import: a test sets it after loading this module.
-  return stream(process.env.MM_RENAME_BIN ?? "rename-instance.sh", [module, to]);
+  const args = [module, to];
+  if (opts.dryRun) args.push("--dry-run");
+  return stream(process.env.MM_RENAME_BIN ?? "rename-instance.sh", args);
 }
 
 // Pre-gate every --set, then write the whole change — sets and unsets — in one
@@ -1033,6 +1043,11 @@ function cmdSnapshot(opts: Opts, client: ModuleClient): number {
 // works — matching how identity-manager/network-manager keep the common verbs
 // reachable.
 function dispatch(verb: string, opts: Opts, client: ModuleClient): number {
+  // --dry-run belongs to one change only: the instance rename (#566). Accepting
+  // it silently elsewhere would promise a preview no other verb can give.
+  if (opts.dryRun && verb !== "modify") {
+    die(`${verb} has no --dry-run — it is only for \`modify <instance> --set instance=<new>\``);
+  }
   switch (verb) {
     case "list":
       return cmdList(opts, client);
