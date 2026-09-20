@@ -122,11 +122,22 @@ fi
 [[ -n "$ISO" && -f "$ISO" ]] || die "--iso <proxmox-ve.iso> is required (download from proxmox.com)."
 
 # ── The four #404 operator answers (prompt for whatever is missing) ────
-prompt() { local v; read -r -p "  $1: " v; printf '%s' "$v"; }
-[[ -n "$EMAIL"    ]] || EMAIL="$(prompt 'Admin email (Proxmox mailto)')"
-[[ -n "$COUNTRY"  ]] || COUNTRY="$(prompt 'Country code (e.g. dk)')"
-[[ -n "$KEYBOARD" ]] || KEYBOARD="$(prompt 'Keyboard layout (e.g. en-us, dk)')"
-[[ -n "$TIMEZONE" ]] || TIMEZONE="$(prompt 'Timezone (e.g. Europe/Copenhagen)')"
+#
+# On the FIRST node there is no site yet, so these are asked and that answer
+# becomes the site's master data (#408). On a later USB install a site.json
+# exists, and its location is offered as the default — a second node that
+# silently came up with another layout is exactly what #408 reported.
+SITE_JSON="${TAPPAAS_CONFIG:-/home/tappaas/config}/site.json"
+site_location() { [[ -f "$SITE_JSON" ]] && jq -r --arg k "$1" '.location[$k] // ""' "$SITE_JSON" 2>/dev/null || true; }
+prompt() {
+  local v d="${2:-}"
+  if [[ -n "$d" ]]; then read -r -p "  $1 [$d]: " v; printf '%s' "${v:-$d}"
+  else read -r -p "  $1: " v; printf '%s' "$v"; fi
+}
+[[ -n "$EMAIL"    ]] || EMAIL="$(prompt 'Admin email (Proxmox mailto)' "$([[ -f "$SITE_JSON" ]] && jq -r '.email // ""' "$SITE_JSON" 2>/dev/null)")"
+[[ -n "$COUNTRY"  ]] || COUNTRY="$(prompt 'Country code (e.g. dk)' "$(site_location country)")"
+[[ -n "$KEYBOARD" ]] || KEYBOARD="$(prompt 'Keyboard layout (e.g. en-us, dk)' "$(site_location keyboard)")"
+[[ -n "$TIMEZONE" ]] || TIMEZONE="$(prompt 'Timezone (e.g. Europe/Copenhagen)' "$(site_location timezone)")"
 [[ -n "$FQDN"     ]] || FQDN="$(prompt 'Node FQDN (e.g. tappaas1.mgmt.internal)')"
 if [[ -n "$PASSWORD_FILE" ]]; then
   PASSWORD="$(<"$PASSWORD_FILE")"

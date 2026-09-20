@@ -7,8 +7,11 @@ export interface SiteLocation {
   country: string;
   timezone: string;
   locale?: string;
+  keyboard?: string; // #408: the first node's XKBLAYOUT — what every OS family is set from
   city?: string; // #609: where, finer than the country
   building?: string;
+  latitude?: number; // #408/#348: operator-set; no node knows the position
+  longitude?: number;
 }
 
 export interface SiteNetwork {

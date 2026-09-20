@@ -44,7 +44,7 @@
       "default": "1.0"
     },
     "location": {
-      "description": "Physical/legal location of the site.",
+      "description": "Physical/legal location of the site, and the master data every module reads for time and locale (#408). The operator answers country/keyboard/timezone once, on the first Proxmox install; that node is the source these are derived from, not the mothership's own clock — a NixOS template, which is how a Danish site came to record NL/Europe/Amsterdam.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -53,19 +53,24 @@
       ],
       "properties": {
         "country": {
-          "description": "ISO 3166-1 alpha-2 country code (e.g. NL).",
+          "description": "ISO 3166-1 alpha-2 country code (e.g. DK). Derived from the timezone: the installer uses it but no Proxmox node stores it, so the timezone is what it is read back from.",
           "type": "string",
           "pattern": "^[A-Za-z]{2}$"
         },
         "timezone": {
-          "description": "IANA timezone (e.g. Europe/Amsterdam).",
+          "description": "IANA timezone (e.g. Europe/Copenhagen), as set on the first node.",
           "type": "string",
           "minLength": 1
         },
         "locale": {
-          "description": "POSIX locale (e.g. nl_NL).",
+          "description": "POSIX locale (e.g. en_US), as set on the first node.",
           "type": "string",
           "default": "en_US"
+        },
+        "keyboard": {
+          "description": "Console keyboard layout (e.g. dk), as set on the first node — its XKBLAYOUT. The PXE answer file and every OS family read it from here (#408); before this field the provisioner used a built-in default, which is why a node added later came up with 'us'.",
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{2,16}$"
         },
         "city": {
           "description": "City the Site is in — lets an off-site copy in the same country show it is elsewhere (#609, ADR-012 §1.5).",
@@ -74,6 +79,18 @@
         "building": {
           "description": "Building or data centre — for an off-site copy in the same city (#609).",
           "type": "string"
+        },
+        "latitude": {
+          "description": "Decimal degrees, north positive. Set by the operator — no node knows it. Read by locale-aware modules that need a position rather than a country (#348: Home Assistant's core config).",
+          "type": "number",
+          "minimum": -90,
+          "maximum": 90
+        },
+        "longitude": {
+          "description": "Decimal degrees, east positive. Set by the operator — no node knows it. Read by locale-aware modules that need a position rather than a country (#348: Home Assistant's core config).",
+          "type": "number",
+          "minimum": -180,
+          "maximum": 180
         }
       }
     },

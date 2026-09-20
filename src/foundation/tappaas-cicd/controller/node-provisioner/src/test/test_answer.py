@@ -110,16 +110,40 @@ class TestRenderAnswer(unittest.TestCase):
 class TestAnswerSettingsFromSite(unittest.TestCase):
     def test_extracts_location_and_email(self):
         site = {"email": "admin@acme.example",
-                "location": {"country": "NL", "timezone": "Europe/Amsterdam"}}
+                "location": {"country": "DK", "timezone": "Europe/Copenhagen",
+                             "keyboard": "dk"}}
         self.assertEqual(
             answer_settings_from_site(site),
-            {"country": "NL", "tz": "Europe/Amsterdam",
+            {"country": "DK", "keyboard": "dk", "tz": "Europe/Copenhagen",
              "mailto": "admin@acme.example"},
         )
+
+    def test_keyboard_comes_from_the_site(self):
+        # #408: before this, every PXE-installed node got DEFAULT_KEYBOARD while
+        # the first node had the operator's layout — tappaas2/3 came up 'us'
+        # against tappaas1's 'dk'.
+        site = {"location": {"country": "DK", "timezone": "Europe/Copenhagen",
+                             "keyboard": "dk"}}
+        self.assertEqual(answer_settings_from_site(site)["keyboard"], "dk")
+
+    def test_keyboard_falls_back_for_a_site_that_predates_the_field(self):
+        site = {"location": {"country": "DK", "timezone": "Europe/Copenhagen"}}
+        self.assertEqual(answer_settings_from_site(site)["keyboard"], "en-us")
+
+    def test_settings_reach_the_rendered_answer(self):
+        site = {"location": {"country": "DK", "timezone": "Europe/Copenhagen",
+                             "keyboard": "dk"}}
+        out = render_answer(name="tappaas2", domain="mgmt.internal",
+                            root_password="pw", ssh_keys=["ssh-ed25519 AAAA"],
+                            pools=[POOL], **answer_settings_from_site(site))
+        self.assertIn('keyboard = "dk"', out)
+        self.assertIn('country = "dk"', out)
+        self.assertIn('timezone = "Europe/Copenhagen"', out)
 
     def test_defaults_on_empty_site(self):
         settings = answer_settings_from_site({})
         self.assertEqual(settings["country"], "us")
+        self.assertEqual(settings["keyboard"], "en-us")
         self.assertEqual(settings["tz"], "UTC")
 
 

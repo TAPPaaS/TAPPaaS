@@ -94,10 +94,30 @@ opening a pull request. `repository add` runs it too, as a report.
 `site modify` editable fields (scalar, site-wide): `--displayName`, `--owner`,
 `--email`, `--automaticReboot`, `--snapshotRetention`, `--backupTarget`,
 `--backupOffsite`, `--locationCountry`, `--locationTimezone`,
-`--locationLocale`, `--locationCity`, `--locationBuilding` (#609: what an off-site copy is compared
+`--locationLocale`, `--locationKeyboard`, `--locationLatitude`,
+`--locationLongitude`, `--locationCity`, `--locationBuilding` (#609: what an off-site copy is compared
 with), `--networkIsp`, `--networkPublicIp`. The discovery-derived
 `hardware.nodes[]` (use `node …`) and the `repositories`/`environments`/
 `organizations` lists (own CRUD / own managers) are **not** modifiable here.
+
+#### `location` is the site's master data for time and locale (#408)
+
+Country, keyboard and timezone are answered by the operator **once**, on the first
+Proxmox install, and that node is the only place the answers exist. `site add` reads
+them back from it — `timedatectl`, `XKBLAYOUT`, `LANG` — rather than from the
+mothership, which is a NixOS template whose clock says nothing about where the site is.
+The country is the exception: the installer asks for it and stores it nowhere, so it
+stays derived from the timezone.
+
+What is recorded here is what the rest of the estate is set from: the PXE answer file
+(`node add --pxe`), the USB installer's defaults (`make-install-media.sh`), and the
+per-OS convergence of guests and hosts. A value already in `site.json` is the operator's
+and is never overwritten — a `site add --force` re-run fills in what is *missing* (a
+site.json that predates `keyboard`) and warns when the recorded value and the master
+disagree, naming the `site modify` command that would adopt the master.
+
+`latitude` / `longitude` are operator-set: no node knows where it is. They exist for
+modules that need a position rather than a country (#348).
 
 ### `node add` — standing up a follow-on node (design N3/N4)
 
