@@ -46,6 +46,17 @@ out="$(load 'render_site_nix trusted' 'zone_gateway_ip() { echo 10.0.3.1; }')"
 has "$out" 'services.timesyncd.servers = [ "10.0.3.1" ];' "the zone gateway is the time source"
 has "$out" 'services.timesyncd.enable = lib.mkDefault true;' "timesyncd is enabled, as a default the guest may override"
 
+# Without common-install-routines.sh loaded — which is how tappaas-self-rebuild.sh
+# runs, as root, sourcing nothing from ~tappaas/bin — the gateway must still be
+# derived. The mothership was the one machine left on the public pool because of
+# this (found on the test site 2026-09-20).
+printf '%s' '{"mgmt":{"ip":"10.0.0.0/24"},"trusted":{"ip":"10.2.0.0/24"}}' > "${WORK}/config/zones.json"
+out="$(load 'render_site_nix mgmt')"
+has "$out" 'services.timesyncd.servers = [ "10.0.0.1" ];' "the gateway is derived from zones.json with no helper loaded"
+out="$(load 'render_site_nix trusted')"
+has "$out" 'services.timesyncd.servers = [ "10.2.0.1" ];' "…and it is that zone's gateway, not the first one"
+rm -f "${WORK}/config/zones.json"
+
 # A zone the gateway cannot be derived for must not produce a broken server line.
 out="$(load 'render_site_nix nosuchzone' 'zone_gateway_ip() { return 1; }')"
 hasnt "$out" 'services.timesyncd.servers'           "an underivable gateway leaves the guest's own default alone"

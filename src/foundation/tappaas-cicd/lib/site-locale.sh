@@ -43,13 +43,25 @@ _sl_locale_full() {
     printf '%s' "${l}"
 }
 
-# The zone's gateway is the site's time source (#87). zone_gateway_ip comes from
-# common-install-routines.sh; without it, or without a zone, there is no server.
+# The zone's gateway is the site's time source (#87): the first host of the
+# zone's subnet, which is the OPNsense interface on the client's own subnet.
+#
+# Prefer zone_gateway_ip from common-install-routines.sh, but derive it here when
+# that is not loaded — tappaas-self-rebuild.sh runs as root and deliberately
+# sources nothing from ~tappaas/bin, and without this fallback the MOTHERSHIP was
+# the one machine left syncing against the public pool.
 site_locale_ntp() {
     local zone="${1:-}"
     [[ -n "${zone}" ]] || return 0
-    declare -F zone_gateway_ip >/dev/null 2>&1 || return 0
-    zone_gateway_ip "${zone}" 2>/dev/null || true
+    if declare -F zone_gateway_ip >/dev/null 2>&1; then
+        zone_gateway_ip "${zone}" 2>/dev/null || true
+        return 0
+    fi
+    local zones="${_SL_CONFIG_DIR}/zones.json"
+    [[ -f "${zones}" ]] || return 0
+    jq -r --arg z "${zone}" \
+        '(.[$z].ip // "") | if . == "" then "" else (split("/")[0] | split(".") | .[0:3] | join(".") + ".1") end' \
+        "${zones}" 2>/dev/null || true
 }
 
 # The NixOS fragment. Plain assignments, not mkDefault: this is the site saying
