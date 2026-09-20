@@ -126,10 +126,17 @@ def render_answer(
 
 
 def answer_settings_from_site(site: dict) -> dict:
-    """Extract installer settings (country/timezone/mailto) from site.json."""
+    """Extract installer settings (country/keyboard/timezone/mailto) from site.json.
+
+    The keyboard comes from the site too (#408). It did not before, so every node
+    installed this way came up with DEFAULT_KEYBOARD while the first node — where
+    the operator actually answered the question — had their layout. A site.json
+    that predates `location.keyboard` still falls back to the default.
+    """
     location = site.get("location") or {}
     return {
         "country": (location.get("country") or DEFAULT_COUNTRY),
+        "keyboard": (location.get("keyboard") or DEFAULT_KEYBOARD),
         "tz": (location.get("timezone") or DEFAULT_TIMEZONE),
         "mailto": (site.get("email") or ""),
     }

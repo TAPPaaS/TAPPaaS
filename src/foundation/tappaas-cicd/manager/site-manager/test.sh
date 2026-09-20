@@ -155,6 +155,72 @@ cat > "$BAD2" <<'JSON'
 JSON
 if run_validate "$BAD2"; then bad "site.json with extra field wrongly passed"; else ok "site.json with extra field correctly fails"; fi
 
+# ---------------------------------------------------------------------------
+# #408 — the first node is the master for country / keyboard / timezone.
+# ---------------------------------------------------------------------------
+echo "== site master data (#408) =="
+
+_loc_site() {   # a minimal valid site.json carrying the given location object
+    printf '{"name":"s","displayName":"S","owner":"o","defaultEnvironment":"o","location":%s,"hardware":{"nodes":[]},"repositories":[]}' "$1"
+}
+
+GOODLOC="${WORK}/loc-good.json"
+_loc_site '{"country":"DK","timezone":"Europe/Copenhagen","locale":"en_US","keyboard":"dk","latitude":55.6761,"longitude":12.5683}' > "$GOODLOC"
+if run_validate "$GOODLOC"; then ok "location accepts keyboard + latitude/longitude"; else bad "location with keyboard/lat/lon wrongly rejected"; fi
+
+# A pattern and a numeric bound are only enforced by the real JSON-Schema
+# validator; the jq-only fallback checks required fields and types, so these two
+# say so rather than failing on a machine without python jsonschema.
+if python3 -c "import jsonschema" >/dev/null 2>&1; then
+    BADKB="${WORK}/loc-badkb.json"
+    _loc_site '{"country":"DK","timezone":"Europe/Copenhagen","keyboard":"not a layout!"}' > "$BADKB"
+    if run_validate "$BADKB"; then bad "a keyboard with spaces/punctuation wrongly passed"; else ok "keyboard must look like a layout"; fi
+
+    BADLAT="${WORK}/loc-badlat.json"
+    _loc_site '{"country":"DK","timezone":"Europe/Copenhagen","latitude":355.0}' > "$BADLAT"
+    if run_validate "$BADLAT"; then bad "latitude 355 wrongly passed"; else ok "latitude is bounded to +/-90"; fi
+else
+    echo "  skip: keyboard pattern + latitude bound (no python jsonschema here; the jq fallback checks neither)"
+fi
+
+# The helpers, with ssh stubbed: the node's answers win over this machine's, and
+# a node that cannot be reached leaves local detection in charge.
+_CS_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/create-site.sh"
+STUBDIR="${WORK}/stub"; mkdir -p "$STUBDIR"
+cat > "${STUBDIR}/ssh" <<'STUB'
+#!/usr/bin/env bash
+# Answers as tappaas1 would: timezone, XKBLAYOUT, LANG — one per line.
+[[ "${TAPPAAS_STUB_UNREACHABLE:-0}" == "1" ]] && exit 255
+printf 'Europe/Copenhagen\ndk\nen_DK.UTF-8\n'
+STUB
+chmod +x "${STUBDIR}/ssh"
+
+_master="$(PATH="${STUBDIR}:$PATH" TAPPAAS_CREATE_SITE_LIB=1 bash -c '
+    . '"${_CS_LIB}"'
+    detect_from_node tappaas1.mgmt.internal
+    printf "%s|%s|%s|%s" "$(master_timezone)" "$(master_keyboard)" "$(master_locale)" "$(country_from_timezone "$(master_timezone)")"' 2>/dev/null)"
+[[ "$_master" == "Europe/Copenhagen|dk|en_DK|DK" ]] \
+    && ok "master data read from the node (tz/keyboard/locale, country derived)" \
+    || bad "master data from the node wrong: got '${_master}'"
+
+_fallback="$(PATH="${STUBDIR}:$PATH" TAPPAAS_STUB_UNREACHABLE=1 TAPPAAS_CREATE_SITE_LIB=1 bash -c '
+    . '"${_CS_LIB}"'
+    detect_from_node tappaas1.mgmt.internal
+    printf "%s|%s" "$(master_timezone)" "$(master_keyboard)"' 2>/dev/null)"
+[[ -n "${_fallback%%|*}" && "${_fallback##*|}" == "" ]] \
+    && ok "an unreachable node falls back to local detection, and claims no keyboard" \
+    || bad "unreachable-node fallback wrong: got '${_fallback}'"
+
+# The merge rule: what the operator recorded wins; a fact never recorded is filled.
+_merged="$(jq -c --arg c DK --arg t Europe/Copenhagen --arg l en_US --arg k dk \
+    '(.location // {}) as $l0
+     | {country: $c, timezone: $t, locale: $l}
+       + (if $k == "" then {} else {keyboard: $k} end)
+       + $l0' <<<'{"location":{"country":"NL","timezone":"Europe/Amsterdam"}}')"
+[[ "$(jq -r '.country' <<<"$_merged")" == "NL" && "$(jq -r '.keyboard' <<<"$_merged")" == "dk" ]] \
+    && ok "merge keeps the operator's country and fills the missing keyboard" \
+    || bad "location merge wrong: ${_merged}"
+
 if [[ "${TAPPAAS_TEST_DEEP:-0}" == "1" ]]; then
     echo "== DEEP: live node-inventory reconcile (read-only preview; N1 regression) =="
     # Regression guard for docs/design/node-provisioning.md N1: the site's

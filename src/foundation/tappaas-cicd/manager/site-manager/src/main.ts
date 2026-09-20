@@ -59,6 +59,9 @@ export const HELP: HelpSpec = {
         ["--locationCountry <cc>", "location.country"],
         ["--locationTimezone <tz>", "location.timezone"],
         ["--locationLocale <l>", "location.locale"],
+        ["--locationKeyboard <kb>", "location.keyboard — the console layout every OS family is set from (#408)"],
+        ["--locationLatitude <deg>", "location.latitude, decimal degrees (#348)"],
+        ["--locationLongitude <deg>", "location.longitude, decimal degrees (#348)"],
         ["--locationCity <c>", "location.city — lets an off-site copy in the same country show it is elsewhere (#609)"],
         ["--locationBuilding <f>", "location.building — the building or data centre (#609)"],
         ["--networkIsp <s>", "network.isp"],
@@ -276,7 +279,10 @@ function cmdSite(o: Opts): void {
     info(`${lbl("Owner")}${site.owner || "(unset)"}`);
     info(`${lbl("Email")}${site.email || "(unset)"}`);
     info(`${lbl("Version")}${site.version || "(unset)"}`);
-    info(`${lbl("Location")}${[loc.country, loc.timezone, loc.locale].filter(Boolean).join(" / ") || "(unset)"}`);
+    info(`${lbl("Location")}${[loc.country, loc.timezone, loc.locale, loc.keyboard].filter(Boolean).join(" / ") || "(unset)"}`);
+    if (loc.latitude !== undefined || loc.longitude !== undefined) {
+      info(`${lbl("Position")}${[loc.latitude, loc.longitude].map((v) => (v === undefined ? "?" : String(v))).join(", ")}`);
+    }
     info(`${lbl("Network")}publicIp=${net.publicIp ?? "(unset)"}  isp=${net.isp ?? "(none)"}`);
     info(`${lbl("Update")}${schedStr}  (auto-reboot: ${site.automaticReboot ? "yes" : "no"}, keep ${site.snapshotRetention ?? "?"})`);
     info(`${lbl("Nodes")}${nodes.length ? nodes.map((n) => `${n.name} [${n.storagePools.join(", ")}]`).join("  ") : "(none)"}`);
@@ -316,6 +322,16 @@ function cmdSite(o: Opts): void {
       setDeep(raw, path, n);
       changed++;
     };
+    // A coordinate is not an integer: 55.6761 is the point of it (#408).
+    const setNum = (flag: string, path: string[], min: number, max: number): void => {
+      const v = o.flags.get(flag);
+      if (v === undefined) return;
+      const n = Number(v);
+      if (!Number.isFinite(n)) die(`${flag} must be a number, in decimal degrees`);
+      if (n < min || n > max) die(`${flag} must be between ${min} and ${max}`);
+      setDeep(raw, path, n);
+      changed++;
+    };
 
     setStr("--displayName", ["displayName"]);
     setStr("--owner", ["owner"]);
@@ -331,6 +347,9 @@ function cmdSite(o: Opts): void {
     setStr("--locationCountry", ["location", "country"]);
     setStr("--locationTimezone", ["location", "timezone"]);
     setStr("--locationLocale", ["location", "locale"]);
+    setStr("--locationKeyboard", ["location", "keyboard"]);
+    setNum("--locationLatitude", ["location", "latitude"], -90, 90);
+    setNum("--locationLongitude", ["location", "longitude"], -180, 180);
     setStr("--locationCity", ["location", "city"]);
     setStr("--locationBuilding", ["location", "building"]);
     setStr("--networkIsp", ["network", "isp"]);

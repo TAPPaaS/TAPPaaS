@@ -224,9 +224,38 @@ validate_inputs() {
 }
 
 # ---------------------------------------------------------------------------
-# System-fact derivation (timezone / country / locale) — same logic and
-# fallbacks the retired config->site migration used, kept for continuity.
+# System-fact derivation (timezone / keyboard / country / locale).
+#
+# THE FIRST NODE IS THE MASTER (#408). Country, keyboard and timezone are
+# answered by the operator exactly once — on the first Proxmox install — and
+# that node is the only place those answers exist. Deriving them from the
+# mothership instead reads a NixOS template's clock, which is how a Danish site
+# came to record NL / Europe/Amsterdam while tappaas1 said DK / Europe/Copenhagen
+# and every node PXE-installed afterwards inherited the wrong values.
+#
+# The node holds the timezone (timedatectl), the keyboard (XKBLAYOUT) and the
+# locale (LANG). It does NOT hold the country: the installer asks for it, uses it
+# for the mirror, and stores it nowhere — so country stays derived from the
+# timezone, which is the same answer by another route.
+#
+# Local detection remains the fallback for a node that cannot be reached, so
+# `site add` still works before ssh to the node is possible.
 # ---------------------------------------------------------------------------
+NODE_TZ="" NODE_KEYBOARD="" NODE_LOCALE=""
+detect_from_node() {
+    local node="$1" out
+    [[ -n "$node" ]] || return 0
+    out=$(ssh -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=accept-new "root@${node}" \
+        'timedatectl show -p Timezone --value 2>/dev/null; . /etc/default/keyboard 2>/dev/null && printf "%s\n" "${XKBLAYOUT:-}"; . /etc/default/locale 2>/dev/null && printf "%s\n" "${LANG:-}"' 2>/dev/null) || return 0
+    NODE_TZ="$(sed -n 1p <<<"$out")"
+    NODE_KEYBOARD="$(sed -n 2p <<<"$out")"
+    NODE_LOCALE="$(sed -n 3p <<<"$out")"
+    NODE_LOCALE="${NODE_LOCALE%%.*}"
+    [[ -n "${NODE_TZ}${NODE_KEYBOARD}${NODE_LOCALE}" ]] \
+        && debug "  Master data from ${node}: tz=${NODE_TZ:-?} keyboard=${NODE_KEYBOARD:-?} locale=${NODE_LOCALE:-?}"
+    return 0
+}
+
 detect_timezone() {
     local tz=""
     if command -v timedatectl >/dev/null 2>&1; then
@@ -244,6 +273,11 @@ detect_timezone() {
     [[ -n "$tz" ]] || tz="Europe/Amsterdam"
     printf '%s' "$tz"
 }
+
+# The node's answer, else this machine's. Same shape for each fact.
+master_timezone() { [[ -n "$NODE_TZ" ]] && { printf '%s' "$NODE_TZ"; return; }; detect_timezone; }
+master_locale()   { [[ -n "$NODE_LOCALE" ]] && { printf '%s' "$NODE_LOCALE"; return; }; detect_locale; }
+master_keyboard() { printf '%s' "$NODE_KEYBOARD"; }
 
 country_from_timezone() {
     case "$1" in
@@ -332,6 +366,9 @@ discover_cluster() {
     if [[ -z "$EMAIL" && -z "$EXISTING_EMAIL" ]]; then
         discover_node_email "$primary_node"
     fi
+
+    # The same node is the master for country/keyboard/timezone (#408).
+    detect_from_node "$primary_node"
 
     # Node list via pvesh JSON API (most reliable).
     local cluster_nodes=""
@@ -476,10 +513,11 @@ build_repos_json() {
 build_and_write_site() {
     info "Generating site.json..."
 
-    local tz country locale version nodes_json schedule_json repos_json email
-    tz="$(detect_timezone)"
+    local tz country locale keyboard version nodes_json schedule_json repos_json email
+    tz="$(master_timezone)"
     country="$(country_from_timezone "$tz")"
-    locale="$(detect_locale)"
+    locale="$(master_locale)"
+    keyboard="$(master_keyboard)"
     version="$(resolve_version)"
     nodes_json="$(build_nodes_json)"
     schedule_json="$(build_schedule_json)"
@@ -517,9 +555,31 @@ build_and_write_site() {
     backup="$(jq -c '.backup // null' <<<"$existing")"
     network="$(jq -c '.network // {isp: null, publicIp: "auto"}' <<<"$existing")"
     organizations="$(jq -c --arg p "config/identities/organizations/${owner}.json" 'if ((.organizations // []) | length) == 0 then [$p] else .organizations end' <<<"$existing")"
-    # location: keep existing if present, else freshly-detected
-    location="$(jq -c --arg c "$country" --arg t "$tz" --arg l "$locale" \
-        '.location // {country: $c, timezone: $t, locale: $l}' <<<"$existing")"
+    # location: the operator's values win, and a fact the site never recorded is
+    # filled from the master (#408) — so a --force re-run heals a site.json that
+    # predates `keyboard` without overwriting anything deliberately set.
+    location="$(jq -c --arg c "$country" --arg t "$tz" --arg l "$locale" --arg k "$keyboard" \
+        '(.location // {}) as $l0
+         | {country: $c, timezone: $t, locale: $l}
+           + (if $k == "" then {} else {keyboard: $k} end)
+           + $l0' <<<"$existing")"
+
+    # Recorded values are the operator's and are never overwritten — but a site
+    # that disagrees with its own master is worth saying out loud, because every
+    # node installed from site.json inherits what is recorded here (#408).
+    if [[ -n "${NODE_TZ}${NODE_KEYBOARD}" ]]; then
+        local _have_tz _have_kb
+        _have_tz="$(jq -r '.timezone // ""' <<<"$location")"
+        _have_kb="$(jq -r '.keyboard // ""' <<<"$location")"
+        if [[ -n "$NODE_TZ" && -n "$_have_tz" && "$NODE_TZ" != "$_have_tz" ]]; then
+            warn "  site.json says timezone ${_have_tz}, the master node says ${NODE_TZ}"
+            warn "    keep it, or adopt the master: site-manager site modify --locationTimezone ${NODE_TZ} --locationCountry $(country_from_timezone "$NODE_TZ")"
+        fi
+        if [[ -n "$NODE_KEYBOARD" && -n "$_have_kb" && "$NODE_KEYBOARD" != "$_have_kb" ]]; then
+            warn "  site.json says keyboard ${_have_kb}, the master node says ${NODE_KEYBOARD}"
+            warn "    keep it, or adopt the master: site-manager site modify --locationKeyboard ${NODE_KEYBOARD}"
+        fi
+    fi
 
     mkdir -p "$CONFIG_DIR"
     TMP_SITE="$(mktemp "${SITE_FILE}.XXXXXX")"
@@ -607,4 +667,7 @@ main() {
     info "  2. Create the mgmt + '${ORG}' environments (environment-manager add) with domain '${DOMAIN:-<set later>}'."
 }
 
-main "$@"
+# Sourceable for tests: TAPPAAS_CREATE_SITE_LIB=1 loads the helpers
+# (detect_from_node, the master_* accessors, country_from_timezone) without
+# creating a site.
+[[ "${TAPPAAS_CREATE_SITE_LIB:-0}" == "1" ]] || main "$@"
