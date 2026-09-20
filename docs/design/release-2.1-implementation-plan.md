@@ -436,15 +436,38 @@ Work.
 One shared baseline for every NixOS VM. Landing it rebuilds every VM once,
 so bundle all baseline changes into that one rebuild.
 
+**Approach (operator, 2026-09-20).** Locale and time are **one site fact, applied per OS
+family** — not a NixOS-only concern. Measured that day on the test site: `tappaas1` is
+`Europe/Copenhagen` + keyboard `dk` (the operator's install answers), `tappaas2` and
+`tappaas3` are `Europe/Amsterdam` + `us` (PXE-provisioned from a site.json the mothership's
+own clock produced), `site.json` says `NL` / `Europe/Amsterdam`, `tappaas-common.nix` hard-codes
+Amsterdam and `euro-office.nix` hard-codes UTC — which is #472's "two hours out". Nothing sets
+time or locale on a Debian guest, an adopted `debianhost`, or a Windows guest at all.
+
+1. `site.json .location` is the single source: it gains `keyboard`, `latitude` and `longitude`,
+   and `tappaas1` — where the operator answered once — is what it is derived from (#408).
+2. **NixOS:** a generated `/etc/nixos/tappaas-site.nix` (time zone, locale, keymap, NTP server)
+   imported by `tappaas-common.nix`, which **every module nix now imports — #324 is bundled
+   into #472's rebuild** rather than rebuilding every VM twice.
+3. **Debian/Ubuntu:** the same facts converged in the Debian branch of `update-os.sh`, so a
+   guest and an adopted host are corrected by every sweep instead of only being tested for a
+   ticking clock. For an **adopted machine the `management` field decides** (ADR-022g):
+   converge where TAPPaaS manages the host, report drift where it does not.
+4. **Proxmox nodes:** `node-provisioner/answer.py` takes the keyboard from `.location` too, and
+   `pvehost`'s `update.sh` converges an existing node — which is what fixes tappaas2 and
+   tappaas3 without reinstalling them.
+5. **Windows** is split out as **#678** (Future Work): one module, its own time-zone vocabulary
+   (`W. Europe Standard Time`, not IANA) and a Windows test, so it must not hold up the rest.
+
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
-| #324 | App VMs do not import `tappaas-common.nix` | 2 | 4 | H | Verified: only `tappaas-cicd.nix` and `templates/tappaas-nixos.nix` import it |
+| #324 | App VMs do not import `tappaas-common.nix` | 2 | 4 | H | **Bundled with #472** (one rebuild). Verified: only `tappaas-cicd.nix` and `templates/tappaas-nixos.nix` import it |
 | #390 | 00-Template fails canon C4/C7 | 5 | 1 | H | Every new module inherits it |
 | #448 | NIC rename race (kernel / udev / cloud-init) | 3 | 4 | M | A stable interface name is a network-config change on every VM |
-| #472 | NixOS clock two hours off | 4 | 2 | M | `tappaas-common.nix:166` hard-codes `mkDefault "Europe/Amsterdam"`; take it from site.json |
+| #472 | NixOS clock two hours off | 4 | 2 | M | **Root cause found 2026-09-20:** every module nix picks its own time zone — `euro-office.nix:96` is UTC while the rest inherit `tappaas-common.nix:166`'s `mkDefault "Europe/Amsterdam"`, and the master (`tappaas1`) is `Europe/Copenhagen`. Fixed by the site fragment + #324 + #87 in one rebuild. Take it from site.json |
 | #408 | Locale/keyboard: tappaas1 is the master | 3 | 2 | M | |
-| #348 | hass locale from site master data | 3 | 2 | L | After #408 |
-| FW #87 | NTP on OPNsense, consumed by modules | 4 | 2 | M | Roll in with #472 |
+| #348 | hass locale from site master data | 3 | 2 | L | After #408: `hass:config` completes `core_config` with `{}` today, so country, time zone, currency and language stay at defaults. Reads the same `.location`, which is why `latitude`/`longitude` go in with #408 |
+| #87 | NTP on OPNsense, consumed by modules | 4 | 2 | M | **Moved into Release 2.1 2026-09-20.** Nothing in the tree serves or consumes NTP today — no `timesyncd` servers, no chrony, no OPNsense service. Rolled into #472's rebuild |
 | #220 | Nix sandbox disabled on cicd | 4 | 2 | L | Re-test against current nixpkgs; remove the workaround |
 
 ### G1.5 Rebuild & recovery paths — E3 · R4 · L-M
@@ -570,6 +593,7 @@ Low upgrade risk. Build continuously, in any order within a group.
 | #119 | openwebui test coverage | 4 | 1 | L | |
 | #121 | litellm production-grade | 3 | 2 | L | Renamed backups: old backup files must still restore |
 | #621 | Bump litellm / openwebui | 3 | 3 | L | After #121 LLM-003 gives update.sh a health gate |
+| #677 | litellm's default workers do not fit its default 4 GB | 4 | 2 | M | **Found 2026-09-20** by `site-manager test --deep`: 43 MB available on an idle VM — ~1.0 GB for litellm plus four workers at ~620 MB of a 3912 MB guest, so the deep test fails and there is no headroom for a burst. Either the default memory covers the default worker count or the workers follow the memory |
 
 ### G3.5 Installer UX — E4 · R1 · L-L
 
@@ -645,7 +669,7 @@ New capabilities with low upgrade risk.
 | # | Issue | Group | Why now |
 |---|-------|-------|---------|
 | ✅ #357 | updateWindow / updateChannel design | G0.3 | Same code and ADR as #471 |
-| #87 | NTP server for TAPPaaS | G1.4 | Same rebuild as the #472 time fix |
+| ✅ #87 | NTP server for TAPPaaS | G1.4 | **Moved into Release 2.1 2026-09-20** — same rebuild as the #472 time fix |
 | ✅ #122 | Reissue cicd SSH keys | G1.5 | #439 and #19 both need it |
 | #162 | Firewall sequence-map artifact | G2.1 | Falls out of #160 / #645 |
 | #83 | Reuse downloaded images | G3.5 | Contained installer change |
