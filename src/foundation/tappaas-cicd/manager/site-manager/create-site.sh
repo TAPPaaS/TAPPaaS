@@ -353,7 +353,9 @@ discover_cluster() {
         return 0
     fi
 
-    info "  Found nodes: ${cluster_nodes}"
+    # One line: the node list is newline-separated, and every line after the
+    # first would otherwise print without its [Info] label.
+    info "  Found nodes: $(tr '\n' ' ' <<< "${cluster_nodes}" | sed 's/ *$//')"
 
     for node in $cluster_nodes; do
         if [[ ! "$node" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?$ ]]; then

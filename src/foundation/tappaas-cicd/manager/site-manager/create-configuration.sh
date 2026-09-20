@@ -338,7 +338,9 @@ discover_cluster_nodes() {
         cluster_nodes="$fallback_hostname"
     fi
 
-    info "  Found nodes: ${cluster_nodes}"
+    # One line: the node list is newline-separated, and every line after the
+    # first would otherwise print without its [Info] label.
+    info "  Found nodes: $(tr '\n' ' ' <<< "${cluster_nodes}" | sed 's/ *$//')"
 
     # Get IP addresses for each node
     for node in $cluster_nodes; do
