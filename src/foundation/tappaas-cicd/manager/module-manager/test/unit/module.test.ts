@@ -443,19 +443,41 @@ function captureList(client: FakeModuleClient, extraArgs: string[] = []): string
     return dir;
   };
   mkdirSync(join(root, "src"), { recursive: true });
-  writeFileSync(join(root, "src", "module-catalog.json"), JSON.stringify({ modules: [
-    { moduleName: "cluster", moduleJson: "src/foundation/cluster/cluster.json", source: "official" },
-    { moduleName: "oldfound", moduleJson: "src/foundation/oldfound/oldfound.json", source: "official" },
-    { moduleName: "hue", moduleJson: "src/lars/iot/hue/hue.json" },
+  // An official repository says so once, at the top of its catalogue (#463) —
+  // the entries carry no `source`, and nor do most module JSONs.
+  writeFileSync(join(root, "src", "module-catalog.json"), JSON.stringify({ source: "official", modules: [
+    { moduleName: "cluster", moduleJson: "src/foundation/cluster/cluster.json" },
+    { moduleName: "oldfound", moduleJson: "src/foundation/oldfound/oldfound.json" },
+    { moduleName: "fork", moduleJson: "src/foundation/fork/fork.json" },
   ] }));
   const cluster = mod("src/foundation/cluster", { kind: "application" });
   const oldfound = mod("src/foundation/oldfound", {});
-  const hue = mod("src/lars/iot/hue", {});
-  check(effectiveKind({ kind: "lxc", moduleSource: hue }) === "lxc", "a deployed kind wins");
+  const fork = mod("src/foundation/fork", { source: "community" });
   check(effectiveKind({ moduleSource: cluster }) === "application", "an authored kind is reported before the update adopts it");
-  check(effectiveKind({ moduleSource: hue }) === "vm", "a Community module without a kind is a vm");
   check(effectiveKind({ moduleSource: oldfound }) === null, "an official module without a kind gets no default");
+  check(effectiveKind({ moduleSource: fork }) === "vm", "a module's own source beats its repository's: a fork in an official repo is not official");
+
+  // A community repository states no source, and a pre-#463 catalogue states it
+  // per entry — both must keep answering.
+  const crt = mkdtempSync(join(tmpdir(), "kind-c-"));
+  mkdirSync(join(crt, "src"), { recursive: true });
+  writeFileSync(join(crt, "src", "module-catalog.json"), JSON.stringify({ applicationModules: [
+    { moduleName: "hue", moduleJson: "src/lars/iot/hue/hue.json" },
+    { moduleName: "oldstyle", moduleJson: "src/lars/iot/oldstyle/oldstyle.json", source: "official" },
+  ] }));
+  const cmod = (rel: string, json: Record<string, unknown>): string => {
+    const dir = join(crt, rel);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, `${rel.split("/").pop()}.json`), JSON.stringify(json));
+    return dir;
+  };
+  const hue = cmod("src/lars/iot/hue", {});
+  const oldstyle = cmod("src/lars/iot/oldstyle", {});
+  check(effectiveKind({ kind: "lxc", moduleSource: hue }) === "lxc", "a deployed kind wins");
+  check(effectiveKind({ moduleSource: hue }) === "vm", "a Community module without a kind is a vm");
+  check(effectiveKind({ moduleSource: oldstyle }) === null, "a pre-#463 catalogue's per-entry source is still read");
   check(effectiveKind({ vmname: "legacy" }) === null, "a config with no moduleSource gets no default");
+  rmSync(crt, { recursive: true, force: true });
   rmSync(root, { recursive: true, force: true });
 }
 

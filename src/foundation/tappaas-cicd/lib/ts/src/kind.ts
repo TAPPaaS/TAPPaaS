@@ -10,10 +10,11 @@
 //      declare no kind (operator decision 2026-09-19: they default to vm);
 //      every official module declares one, so the default never overrides it.
 //
-// "Official" is what the module's catalogue entry says (module-catalog.json
-// `source`); the Community catalogue records none, so its modules are not.
-// A config with no moduleSource (pre-#609, found by vmname only) has no
-// knowable origin and gets no default.
+// "Official" is the module's own `source` (ADR-007b) when it states one, else
+// its repository's: `source` at the top of module-catalog.json, stated once
+// rather than copied onto every entry (#463). The Community catalogue states
+// none, so its modules are not official. A config with no moduleSource
+// (pre-#609, found by vmname only) has no knowable origin and gets no default.
 
 import { existsSync, readFileSync } from "fs";
 import { dirname, join } from "path";
@@ -30,37 +31,47 @@ function readJson(file: string): Record<string, unknown> | null {
   }
 }
 
-// repo root → { module dir (relative to root) → catalogue `source` }
-const catalogCache = new Map<string, Map<string, string | null>>();
+// repo root → { repository source, module dir (relative to root) → entry `source` }
+// The per-entry source is the pre-#463 shape, still read for a stable cycle.
+const catalogCache = new Map<string, { repo: string | null; entries: Map<string, string | null> }>();
 
-function catalogOf(root: string): Map<string, string | null> {
+function catalogOf(root: string): { repo: string | null; entries: Map<string, string | null> } {
   const cached = catalogCache.get(root);
   if (cached) return cached;
-  const out = new Map<string, string | null>();
+  const entries = new Map<string, string | null>();
   const collect = (node: unknown): void => {
     if (Array.isArray(node)) {
       node.forEach(collect);
     } else if (node && typeof node === "object") {
       const o = node as Record<string, unknown>;
       if (typeof o.moduleJson === "string") {
-        out.set(dirname(o.moduleJson), typeof o.source === "string" ? o.source : null);
+        entries.set(dirname(o.moduleJson), typeof o.source === "string" ? o.source : null);
       }
       Object.values(o).forEach(collect);
     }
   };
-  collect(readJson(join(root, "src", "module-catalog.json")));
+  const cat = readJson(join(root, "src", "module-catalog.json"));
+  collect(cat);
+  const out = { repo: typeof cat?.source === "string" ? cat.source : null, entries };
   catalogCache.set(root, out);
   return out;
 }
 
-/** The catalogue `source` of the module at <location>, or null when no catalogue lists it. */
+/**
+ * Where the module at <location> comes from: its own `source` (ADR-007b), else
+ * its repository's — the catalogue's top-level `source`, or the entry's own in a
+ * pre-#463 catalogue. Null when nothing says.
+ */
 export function catalogSourceOf(location: string): string | null {
   const loc = location.replace(/\/+$/, "");
+  const own = readJson(moduleSourceJson(loc))?.source;
+  if (typeof own === "string" && own !== "") return own;
   let dir = loc;
   while (dir && dir !== "/" && dir !== ".") {
     if (existsSync(join(dir, "src", "module-catalog.json"))) {
+      const cat = catalogOf(dir);
       // dir is an ancestor of loc, so the module dir relative to the root is the rest.
-      return catalogOf(dir).get(loc.slice(dir.length + 1)) ?? null;
+      return cat.entries.get(loc.slice(dir.length + 1)) ?? cat.repo;
     }
     dir = dirname(dir);
   }

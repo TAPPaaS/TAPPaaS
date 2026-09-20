@@ -12,6 +12,12 @@
     "description": { "type": "string" },
     "vmidConventions": { "type": "object" },
 
+    "source": {
+      "type": "string",
+      "enum": ["official", "community", "private", "local"],
+      "description": "Where the modules in THIS repository come from (ADR-007b), stated once for the repository instead of on every entry — which is how the pre-#463 shape carried it. A module whose own JSON declares a `source` overrides it; a repository that states none is not official. Read by lib/ts/src/kind.ts, which defaults a non-official module with no authored `kind` to `vm`."
+    },
+
     "modules": {
       "type": "array",
       "description": "Every module this repository ships, in one list (#463). The shape before it split these across foundationModules / applicationModules / proxmoxTemplates / testModules with `tier` on each entry; readers accept that for one stable cycle, and this schema still permits it below.",

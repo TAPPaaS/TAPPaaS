@@ -1,5 +1,7 @@
 {
   "description": "TAPPaaS Module Registry (#463): every module this repository ships, in ONE list. An entry answers the two questions a catalogue exists for \u2014 where is the module (moduleJson, by moduleName or a legacyName it used to have), and which VMID block is taken (vmid). `stack` is repeated from the module's own JSON so a listing can group without opening every module file; everything else about a module \u2014 its tier, source, status, version \u2014 is read from that file, never restated here. The stack decides what a module is: `foundation` a foundation module, `template` a template to copy, `test` a fixture; anything else, or none, is an application module.",
+  "source": "official",
+  "_source": "ADR-007b: what a module in THIS repository is by default, stated once for the repository rather than copied onto every entry. A module whose own JSON says otherwise (source: community in an official repository, a fork) overrides it. A repository that says nothing is not official — which is what the Community catalogue, saying nothing, means.",
   "vmidConventions": {
     "summary": "VMID ranges are allocated by module type. Numbers are assigned in increments of 10, giving each module a block of 10 VMIDs for the local TAPPaaS administrator to create multiple copies of the same module/app.",
     "ranges": {
