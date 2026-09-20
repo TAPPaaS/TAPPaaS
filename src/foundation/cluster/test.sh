@@ -120,6 +120,7 @@ required=(
     Create-TAPPaaS-LXC.sh
     lib/vm-net.sh
     lib/test-node-mgmt-ip.sh
+    lib/test-node-placeholders.sh
     lib/test-vm-net.sh
     services/vm/install-service.sh
     services/vm/update-service.sh
@@ -202,6 +203,20 @@ if [[ -x "${SCRIPT_DIR}/lib/test-node-mgmt-ip.sh" ]]; then
     fi
 else
     fail "lib/test-node-mgmt-ip.sh not found or not executable"
+fi
+
+# The shipped node placeholders are retired on every site by the update, not by
+# a config migration — the firewall is live state (ADR-025 D3). Stubbed dns-manager.
+info "${BOLD}Test 2a3: unused node DNS placeholders are retired (#673)${CL}"
+if [[ -x "${SCRIPT_DIR}/lib/test-node-placeholders.sh" ]]; then
+    if np_out=$("${SCRIPT_DIR}/lib/test-node-placeholders.sh" 2>&1); then
+        pass "$(tail -1 <<< "${np_out}")"
+    else
+        fail "node-placeholders unit tests failed"
+        indent <<< "${np_out}"
+    fi
+else
+    fail "lib/test-node-placeholders.sh not found or not executable"
 fi
 
 # reboot_one_node drain-timeout must disable HA maintenance mode, not strand the

@@ -309,4 +309,42 @@ while read -r node; do
     rm -f "/tmp/adopt-${node}.err"
 done <<< "$NODES"
 
+# ── Step 8: retire the shipped node placeholders (#673) ──────────────
+#
+# The firewall's base config used to ship a dnsmasq entry for tappaas1-9,
+# whatever the site's size, so a three-node site carries six entries for
+# machines that do not exist. It ships tappaas1 only now; this clears what
+# earlier installs left, on every site, at its own pace — the firewall is live
+# state, so it is converged here and not by a config migration (ADR-025 D3).
+#
+# Only a placeholder of a NON-MEMBER name goes, and `release --placeholder`
+# decides: no description (the shipped shape), no MAC, no CNAME, exactly one
+# entry. So a pinned MAC — a node waiting to be PXE-installed — keeps its entry,
+# as does anything an operator or another module made.
+# retire_node_placeholders <zone> <members…> — one line per entry retired.
+retire_node_placeholders() {
+    local zone="$1"; shift
+    local members; members="$(printf '%s\n' "$@")"
+    local fqdn name out
+    while read -r fqdn; do
+        [[ -n "${fqdn}" ]] || continue
+        name="${fqdn%%.*}"
+        [[ "${name}" =~ ^tappaas[0-9]+$ ]] || continue
+        grep -qx "${name}" <<< "${members}" && continue     # a cluster member: keep
+        if ! out="$(dns-manager --no-ssl-verify release --placeholder "${name}" "${zone}.internal" 2>&1)"; then
+            warn "  ${name}: could not be retired (${out##*$'\n'})"
+            continue
+        fi
+        case "${out}" in
+            *released*) info "  ${GN}✓${CL} ${name}: unused placeholder entry retired" ;;
+            *)          debug "  ${out}" ;;
+        esac
+    done < <(dns-manager --no-ssl-verify list 2>/dev/null | awk '{print $1}' \
+             | grep -E "^tappaas[0-9]+\.${zone}\.internal$" || true)
+}
+
+info "${BOLD}Step 8: Retiring unused node DNS placeholders${CL}"
+# shellcheck disable=SC2086
+retire_node_placeholders "${MGMTVLAN}" ${NODES}
+
 info "${GN}✓${CL} Cluster module update completed successfully."

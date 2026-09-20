@@ -196,6 +196,7 @@ def release_machine_host(
     hostname: str,
     domain: str,
     check_mode: bool = False,
+    placeholder: bool = False,
 ) -> bool:
     """Remove the Host entry TAPPaaS created for a machine — and nothing else (#672).
 
@@ -217,13 +218,19 @@ def release_machine_host(
     """
     fqdn = f"{hostname}.{domain}"
     want = MACHINE_ENTRY_DESCRIPTION.format(host=hostname)
+    # --placeholder also accepts the shape the firewall's base config ships for a
+    # node: the same name, no description at all (#673). Every other guard still
+    # applies, so a pinned MAC (a node waiting to be installed) or a CNAME keeps
+    # the entry.
+    accepted = (want, "") if placeholder else (want,)
     try:
         rows = [h for h in manager.list_hosts()
                 if h.get("host") == hostname and h.get("domain") == domain]
-        ours = [h for h in rows if (h.get("description") or "") == want]
+        ours = [h for h in rows if (h.get("description") or "") in accepted]
         if not ours:
             others = f" ({len(rows)} other entr{'y' if len(rows) == 1 else 'ies'} for it left alone)" if rows else ""
-            print(f"{fqdn}: no entry TAPPaaS created for this machine — nothing to release{others}")
+            what = "TAPPaaS created or shipped" if placeholder else "TAPPaaS created for this machine"
+            print(f"{fqdn}: no entry {what} — nothing to release{others}")
             return True
         if len(ours) > 1:
             print(f"{fqdn}: {len(ours)} entries carry '{want}' — ambiguous, all left alone")
@@ -499,6 +506,11 @@ Examples:
     )
     release_parser.add_argument("hostname", help="The machine's hostname, without domain (e.g., dh-test1)")
     release_parser.add_argument("domain", help="Domain name (e.g., mgmt.internal)")
+    release_parser.add_argument(
+        "--placeholder", action="store_true",
+        help="Also release an entry with NO description — the shape the firewall's base "
+             "config ships for a node (#673). Every other guard still applies.",
+    )
 
     # List command
     subparsers.add_parser("list", parents=[gp], help="List all DNS host entries")
@@ -597,6 +609,7 @@ Examples:
             elif args.command == "release":
                 success = release_machine_host(
                     manager, args.hostname, args.domain, args.check_mode,
+                    placeholder=args.placeholder,
                 )
             elif args.command == "list":
                 success = list_dns_hosts(manager)

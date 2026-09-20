@@ -128,6 +128,33 @@ class TestReleaseMachineHost(unittest.TestCase):
         self.assertTrue(release_machine_host(m, "dh-test1", "mgmt.internal"))
         m.delete_host_by_uuid.assert_not_called()
 
+    # --placeholder (#673): the shipped node entries have NO description.
+    def test_a_placeholder_is_kept_without_the_flag(self):
+        m = _release_manager([_row("u1", "tappaas7", "")],
+                             {"u1": {"hwaddr": _sel(), "cnames": _sel()}})
+        self.assertTrue(release_machine_host(m, "tappaas7", "mgmt.internal"))
+        m.delete_host_by_uuid.assert_not_called()
+
+    def test_a_placeholder_is_released_with_the_flag(self):
+        m = _release_manager([_row("u1", "tappaas7", "")],
+                             {"u1": {"hwaddr": _sel(), "cnames": _sel()}})
+        self.assertTrue(release_machine_host(m, "tappaas7", "mgmt.internal", placeholder=True))
+        m.delete_host_by_uuid.assert_called_once_with("u1")
+
+    def test_a_placeholder_with_a_pinned_mac_is_kept(self):
+        # A MAC means someone pinned it — a node waiting to be PXE-installed.
+        m = _release_manager([_row("u1", "tappaas7", "")],
+                             {"u1": {"hwaddr": _sel("de:ad:be:ef:00:01"), "cnames": _sel()}})
+        self.assertTrue(release_machine_host(m, "tappaas7", "mgmt.internal", placeholder=True))
+        m.delete_host_by_uuid.assert_not_called()
+
+    def test_the_flag_does_not_widen_to_other_descriptions(self):
+        for descr in ("TAPPaaS node tappaas7", "operator's own", "PBS Backup Server"):
+            m = _release_manager([_row("u1", "tappaas7", descr)],
+                                 {"u1": {"hwaddr": _sel(), "cnames": _sel()}})
+            self.assertTrue(release_machine_host(m, "tappaas7", "mgmt.internal", placeholder=True))
+            m.delete_host_by_uuid.assert_not_called()
+
     def test_a_failed_delete_is_an_error(self):
         m = _release_manager([_row("u1", "dh-test1", "TAPPaaS machine dh-test1")],
                              {"u1": {"hwaddr": _sel(), "cnames": _sel()}})
