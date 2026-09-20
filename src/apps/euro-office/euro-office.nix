@@ -32,10 +32,14 @@
 
   imports = [
     /etc/nixos/hardware-configuration.nix
-    # The shared TAPPaaS baseline (#324): cloud-init, ssh, the qemu agent, and
-    # the site's own time and locale through tappaas-site.nix. Shipped to
-    # /etc/nixos by update-os.sh on every update.
-    /etc/nixos/tappaas-common.nix
+    # The site's own time, locale and time source (#472, #87), generated from
+    # config/site.json and shipped to /etc/nixos by update-os.sh on every update.
+    # A VM that has never had one simply keeps the NixOS defaults.
+    #
+    # NOT tappaas-common.nix: this module still carries its own copy of the
+    # baseline (ssh, cloud-init, users, nix settings), so importing the baseline
+    # would conflict on every one of them. De-duplicating that is #324.
+    /etc/nixos/tappaas-site.nix
   ];
 
   # ============================================================================
@@ -98,7 +102,7 @@
   # ============================================================================
 
   # No time zone here: it is the site's fact, not the module's (#472). It
-  # arrives through /etc/nixos/tappaas-site.nix, imported by the baseline.
+  # arrives through /etc/nixos/tappaas-site.nix, imported above.
 
   # ============================================================================
   # USERS & SECURITY

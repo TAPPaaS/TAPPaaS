@@ -84,22 +84,28 @@ See [TEST.md](./TEST.md). Known gap: `services/nixos/test-service.sh` is a stub 
 assertions — the NixOS baseline of consumer VMs is effectively unverified despite a
 green exit; implementing it is the tracked open item.
 
-## The baseline on a running VM (#324, #472)
+## The site's facts on a running VM (#472, #87)
 
-A module VM does not build from this directory. `update-os.sh` ships two files to
-`/etc/nixos` before every `nixos-rebuild switch` on the guest:
+A module VM does not build from this directory. Before every `nixos-rebuild
+switch` on the guest, `update-os.sh` ships one generated file to `/etc/nixos`:
 
 | File | Where it comes from | What it carries |
 |---|---|---|
-| `tappaas-common.nix` | this module, copied verbatim | the baseline every module's `.nix` imports |
 | `tappaas-site.nix` | generated from `config/site.json` by `lib/site-locale.sh` | the site's time zone, locale, console keymap and time source |
 
-So the baseline is one file with one copy on the mothership, and the site's own
-answers (ADR-007c; recorded per #408) reach every guest without any module
-restating them. A module that needs to differ says so with `lib.mkForce`, which a
-reviewer can see; before this, thirteen modules each hard-coded a time zone and
-six of them disagreed with the site.
+Each module's own `.nix` imports it, so the site's answers (recorded per #408)
+reach every guest without any module restating them. Before this, thirteen
+modules each hard-coded a time zone and six disagreed with the site.
 
-The mothership itself is built from the repository flake rather than by
-`update-os.sh`, so `tappaas-self-rebuild.sh` writes the same generated fragment
-before it rebuilds, and `tappaas-cicd.nix` imports it the same way.
+**The baseline itself is not shipped to guests yet.** Every module `.nix` still
+carries its own copy of what is here — ssh, cloud-init, the `tappaas` user, the
+nix settings, `system.stateVersion` — so importing `tappaas-common.nix` makes
+NixOS refuse the build with conflicting definitions at equal priority. Proven on
+the test site 2026-09-20: `system.stateVersion` is `25.11` here and `25.05` in
+every module. De-duplicating those copies so the baseline can be imported is
+**#324**; `tappaas-common.nix` imports `tappaas-site.nix` itself, so the manual
+and image paths already get the site's facts.
+
+The mothership is built from the repository flake rather than by `update-os.sh`,
+so `tappaas-self-rebuild.sh` writes the same generated fragment before it
+rebuilds, and `tappaas-cicd.nix` imports it the same way.

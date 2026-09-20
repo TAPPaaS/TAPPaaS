@@ -402,27 +402,11 @@ update_nixos() {
         rm -f "${_flat_tmp}"
     fi
 
-    # The shared baseline every module imports (#324). It lives in the templates
-    # module on the mothership, so it is shipped like the module's own .nix —
-    # otherwise `imports = [ /etc/nixos/tappaas-common.nix ]` resolves to nothing
-    # and each module is left to reinvent the baseline, which is how they drifted.
-    local _common="/home/tappaas/TAPPaaS/src/foundation/templates/tappaas-common.nix"
-    [[ -f "${_common}" ]] || _common="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../../../templates/tappaas-common.nix"
-    if [[ -f "${_common}" ]]; then
-        info "Copying the common baseline to ${vm_ip}:/etc/nixos/tappaas-common.nix"
-        if scp -q -o StrictHostKeyChecking=accept-new -o BatchMode=yes "${_common}" "tappaas@${vm_ip}:/tmp/tappaas-common.nix"; then
-            ssh -o BatchMode=yes "tappaas@${vm_ip}" \
-                "sudo install -m 0644 /tmp/tappaas-common.nix /etc/nixos/tappaas-common.nix && rm -f /tmp/tappaas-common.nix" \
-                || warn "could not install the common baseline on ${vm_ip}"
-        else
-            warn "could not copy the common baseline to ${vm_ip}"
-        fi
-    else
-        warn "tappaas-common.nix not found on the mothership — the VM keeps whatever baseline it has"
-    fi
-
-    # The site's own time and locale, written where tappaas-common.nix imports it
+    # The site's own time and locale, written where the module's .nix imports it
     # from (#472). Before the rebuild, so this run applies it rather than the next.
+    # The baseline itself (tappaas-common.nix) is NOT shipped yet: every module
+    # still inlines its own copy, so importing it conflicts option by option —
+    # that de-duplication is #324.
     if declare -F apply_site_locale_nixos >/dev/null 2>&1; then
         local _zone
         _zone="$(jq -r '(.zone0 // (.config? // {} | to_entries[]?.value.zone0?)) // ""' "${CONFIG_DIR}/${vmname}.json" 2>/dev/null | head -1)"
