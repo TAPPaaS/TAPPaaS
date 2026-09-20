@@ -627,25 +627,41 @@ main() {
     # component install.sh (the legacy backup-manager.sh fallback was retired in
     # the ADR-007 post-implementation refactor, Phase 7.4) — a missing bin is a
     # hard error, not a silent skip.
-    command -v backup-manager >/dev/null 2>&1 \
-        || die "backup-manager not found on PATH — run manager/backup-manager/install.sh (required to record the module's backup policy)"
-    local _bpol _btmp
-    if _bpol="$(backup-manager resolve "${effective_module}" --config-dir "${CONFIG_DIR}" 2>/dev/null)" \
-        && [[ -n "${_bpol}" ]]; then
-        # Persist only the module-relevant fields (enabled/retention/exclude);
-        # target/offsite/residency stay derived (site/env own them).
-        _btmp="$(mktemp "${module_json}.XXXXXX")"
-        if jq --argjson p "${_bpol}" \
-              '.backup = {enabled: $p.enabled, retention: $p.retention, exclude: $p.exclude}' \
-              "${module_json}" > "${_btmp}" 2>/dev/null; then
-            mv "${_btmp}" "${module_json}"
-            info "  backup policy resolved → retention=${BL}$(jq -r .retention <<<"${_bpol}")${CL} enabled=${BL}$(jq -r .enabled <<<"${_bpol}")${CL} residency=${BL}$(jq -r .residency <<<"${_bpol}")${CL}"
-        else
-            rm -f "${_btmp}"
-            warn "  could not persist resolved backup policy onto ${effective_module}.json (continuing)"
-        fi
+    #
+    # Only for a module that HAS a backup service: `backup` is usedBy=[backup:vm,
+    # backup:filesystem], so on a module that wires neither — a machine, say —
+    # the recorded policy backs nothing up, and the config merge warns
+    # "usedBy=[…] but the module does not depend on any of them — kept at top
+    # level" on every update (seen on tappaas1-3). The test is the converter's
+    # own (convert-json-to-config.sh): dependsOn OR integratesWith carries one of
+    # the coordinates, or the module PROVIDES the service (backup itself does).
+    if ! jq -e '((.dependsOn // []) + (.integratesWith // [])) as $d
+                | (.provides // []) as $p
+                | ($d | index("backup:vm") or index("backup:filesystem"))
+                  or ($p | index("vm") or index("filesystem"))' \
+            "${module_json}" >/dev/null 2>&1; then
+        debug "  no backup:vm / backup:filesystem dependency — no backup policy recorded"
     else
-        warn "  backup-manager resolve failed for ${effective_module} (continuing without persisted backup policy)"
+        command -v backup-manager >/dev/null 2>&1 \
+            || die "backup-manager not found on PATH — run manager/backup-manager/install.sh (required to record the module's backup policy)"
+        local _bpol _btmp
+        if _bpol="$(backup-manager resolve "${effective_module}" --config-dir "${CONFIG_DIR}" 2>/dev/null)" \
+            && [[ -n "${_bpol}" ]]; then
+            # Persist only the module-relevant fields (enabled/retention/exclude);
+            # target/offsite/residency stay derived (site/env own them).
+            _btmp="$(mktemp "${module_json}.XXXXXX")"
+            if jq --argjson p "${_bpol}" \
+                  '.backup = {enabled: $p.enabled, retention: $p.retention, exclude: $p.exclude}' \
+                  "${module_json}" > "${_btmp}" 2>/dev/null; then
+                mv "${_btmp}" "${module_json}"
+                info "  backup policy resolved → retention=${BL}$(jq -r .retention <<<"${_bpol}")${CL} enabled=${BL}$(jq -r .enabled <<<"${_bpol}")${CL} residency=${BL}$(jq -r .residency <<<"${_bpol}")${CL}"
+            else
+                rm -f "${_btmp}"
+                warn "  could not persist resolved backup policy onto ${effective_module}.json (continuing)"
+            fi
+        else
+            warn "  backup-manager resolve failed for ${effective_module} (continuing without persisted backup policy)"
+        fi
     fi
 
     # Announce the OPNsense firewall alias this vmname will get (#300, #316).
