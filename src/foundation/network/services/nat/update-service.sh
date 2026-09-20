@@ -23,6 +23,21 @@ set -euo pipefail
 # shellcheck source=common-install-routines.sh disable=SC1091
 . /home/tappaas/bin/common-install-routines.sh
 
+# nat_quiet <command...> — run a nat-manager call whose stdout is its own
+# narration ("Port-forward set: …", "Port-forward changes applied"): [Debug]
+# when it succeeds, printed when it does not. The service says what it is doing
+# itself, one line per rule.
+nat_quiet() {
+    local out rc=0 line
+    out="$("$@" 2>&1)" || rc=$?
+    if [[ ${rc} -eq 0 ]]; then
+        while IFS= read -r line; do [[ -n "${line}" ]] && debug "  ${line}"; done <<< "${out}"
+    else
+        printf '%s\n' "${out}" >&2
+    fi
+    return ${rc}
+}
+
 # ── Arguments ────────────────────────────────────────────────────────
 
 MODULE="${1:-}"
@@ -119,7 +134,7 @@ while IFS= read -r rule; do
     fi
 
     debug "  Creating port-forward: ${proto} WAN:${BL}${ext}${CL} -> ${BL}${TARGET}:${intp}${CL}"
-    nat-manager add-rule --no-ssl-verify --no-apply \
+    nat_quiet nat-manager add-rule --no-ssl-verify --no-apply \
         --description "${desc}" \
         --external-port "${ext}" \
         --target "${TARGET}" \
@@ -129,6 +144,6 @@ while IFS= read -r rule; do
 done < <(nat_rules_json)
 
 debug "  Applying NAT configuration..."
-nat-manager apply --no-ssl-verify || die "Failed to apply NAT configuration"
+nat_quiet nat-manager apply --no-ssl-verify || die "Failed to apply NAT configuration"
 
 debug "${GN}network:nat update-service completed for ${MODULE}${CL}"

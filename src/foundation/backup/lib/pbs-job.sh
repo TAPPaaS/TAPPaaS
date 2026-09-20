@@ -119,8 +119,11 @@ pbs_ensure_verify() {
     local node store
     node="$(pbs_node)"
     store="$(pbs_storage_name)"
-    info "${BOLD}Ensuring PBS datastore verification on ${node} (issue #228)${CL}"
-    ssh -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+    debug "Ensuring PBS datastore verification on ${node} (issue #228)"
+    # The remote script narrates; its steady state ("already exists", "verify-new
+    # enabled") is detail. A job it CREATES is news, and stays [Info].
+    local _out _rc=0 _l
+    _out="$(ssh -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
         "root@$(pbs_node_addr "${node}")" "bash -s -- '${store}'" <<'REMOTE'
 set -euo pipefail
 store="$1"
@@ -140,6 +143,18 @@ fi
 proxmox-backup-manager datastore update "${store}" --verify-new true
 echo "  verify-new enabled on ${store}"
 REMOTE
+)" || _rc=$?
+    if [[ ${_rc} -ne 0 ]]; then
+        printf '%s\n' "${_out}" >&2
+        return ${_rc}
+    fi
+    while IFS= read -r _l; do
+        [[ -n "${_l}" ]] || continue
+        case "${_l}" in
+            *"created verify-job"*) info "  ${_l#  }" ;;
+            *)                      debug "  ${_l}" ;;
+        esac
+    done <<< "${_out}"
 }
 
 # Run a command on a reachable mgmt node (where pvesh talks to the cluster).

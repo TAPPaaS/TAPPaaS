@@ -64,7 +64,10 @@ pbs_ns_ensure() {
     [[ -n "$ns" ]] || return 0
     store="$(pbs_storage_name)"
     node="$(pbs_node)"
-    ssh -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+    # The remote script narrates ("namespace fs/<m> ensured"): detail, [Debug]
+    # while it succeeds; shown in full when it does not.
+    local _out _rc=0 _l
+    _out="$(ssh -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
         "root@$(pbs_node_addr "${node}")" "bash -s -- '${store}' '${ns}'" <<'REMOTE'
 set -euo pipefail
 store="$1"; ns="$2"
@@ -79,6 +82,13 @@ for name in "${parts[@]}"; do
 done
 echo "  namespace ${ns} ensured"
 REMOTE
+)" || _rc=$?
+    if [[ ${_rc} -eq 0 ]]; then
+        while IFS= read -r _l; do [[ -n "${_l}" ]] && debug "  ${_l}"; done <<< "${_out}"
+    else
+        printf '%s\n' "${_out}" >&2
+    fi
+    return ${_rc}
 }
 
 # Print the datastore's namespaces, one full path per line (root prints empty).
