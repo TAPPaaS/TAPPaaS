@@ -106,7 +106,7 @@ things that make those migrations survivable go before it (Wave 0).
 | 0 | ✅ G0.3 Update channel & failure notice | 5 | 3 | 3 | M |
 | 1 | G1.1 Vocabulary & classification (ADR-022 family) | 7 | 2 | 4 | H |
 | 1 | G1.2 Backup placement model (ADR-012 close-out) | 12 | 3 | 4 | H |
-| 1 | G1.3 Module contract & repo layout | 9 | 2 | 5 | H |
+| 1 | G1.3 Module contract & repo layout | 10 | 2 | 5 | H |
 | 1 | G1.4 Common NixOS baseline | 8 | 2 | 4 | H |
 | 1 | G1.5 Rebuild & recovery paths | 6 | 3 | 4 | M |
 | 1 | G1.6 Secrets & privileged access | 5 | 1 | 5 | H |
@@ -120,7 +120,7 @@ things that make those migrations survivable go before it (Wave 0).
 | 4 | G4.1 Alerting & cluster resilience | 5 | 3 | 3 | M |
 | 4 | G4.2 Proxy & ingress | 3 | 3 | 2 | L |
 | 4 | G4.3 Manager verb gaps | 6 | 3 | 2 | L |
-| 4 | G4.4 Storage & physical devices | 4 | 2 | 2 | M |
+| 4 | G4.4 Storage & physical devices | 5 | 2 | 2 | M |
 | 4 | G4.5 Governance, CI & sign-offs | 6 | 3 | 1 | L |
 
 Issue counts include the Future Work items rolled in.
@@ -407,8 +407,8 @@ sweep on hrossen (16/16 modules; 124 bash + 394 TypeScript assertions). Built: #
 (ahead of the entry gate, operator 2026-09-19; ADR-025 D14), #349 (operator go,
 2026-09-19; ADR-007c v1.5), #566 (ADR-026 D6.4a), #248, #463 (ADR-004 amended). #363 is
 **Proposed** as ADR-027 (no Erik sign-off needed) with its estate sweep begun; **#674**
-tracks what remains of it — the blueprint check and the 15 incomplete service
-directories. Two defects found while assessing the merge and fixed on the branch: the
+(in the table below) tracks what remains of it — the blueprint check and the 15
+incomplete service directories. Two defects found while assessing the merge and fixed on the branch: the
 instance rename could not be previewed (`--dry-run` never reached `rename-instance.sh`),
 and #463 had removed the catalogue `source` that `kind.ts` used, which would have made
 every module with no authored `kind` a `vm` — a repository now states its source once.
@@ -425,6 +425,7 @@ Work.
 | ✅ #248 | Module version/status standard | 4 | 1 | M | **Built 2026-09-20** (`wave1/g1.3-module-contract`): the standard (SemVer 0.x until someone else has run it; Development → Testing → Production with the step that earns each) documented in module-fields.json and the manager README, and enforced by the classification lint — unknown status or a deployment state (`archived`/`external`) in a released module fails; version form, a missing claim and the two contradictions warn. Repo versions normalised to x.y.z. `_`-prefixed documentation keys stop being reported as unknown fields (the issue asked to delete them; they earn their place). **Left to the author:** cluster alone (status Production at 0.8.0 — a maturity claim, not a metadata gap); netbird-client and windows-server were given `Development` at 0.x on 2026-09-20. The Module blueprint ADR absorbs this text |
 | ✅ #363 | Module lifecycle blueprint ADR | 3 | 1 | M | **Drafted 2026-09-20** (`wave1/g1.3-module-contract`): [ADR-027 Module Blueprint](../ADR/<ADR-027 - Module Blueprint.md>) v0.3 (**Proposed**) — the executable artifact set (documents deferred to ADR-013, contribution files to ADR-015, which now point at each other), the service directory's six files, one severity for every module plus an estate sweep, a no-op `install.sh` instead of a declared exception, `00-Template` as the blueprint in files. Absorbs #248. **Proposed** 2026-09-20 (no further sign-off needed); `00-Template` now ships warning stubs and the four module-level gaps in the estate are filled. **Remaining, tracked by #674:** the blueprint check in `module-manager validate` + CI, a stubbed `services/` in the template, and the 15 incomplete service directories |
 | ✅ #463 | module-catalog schema is stale | 4 | 1 | M | **Built 2026-09-20** (`wave1/g1.3-module-contract`): not the proposed field patch but the operator's rule — a catalogue repeats nothing the module's own JSON says unless a catalogue function needs the join, and says so where it does. One flat `modules` list of `moduleName`, `moduleJson`, `legacyName`, `vmid`, `stack`; `tier`/`source`/`status`/`category`/`repo` dropped (the catalogue and the module disagreed on 15 of 18 entries). `stack` becomes a module field and decides what a module is (`foundation`/`template`/`test` reserved, anything else an application module), so the four lists go. `site-manager repository validate-catalog [--strict]` grounds the schema in code — run on `repository add` and after a module move — and found, on top of the issue's list: `unifi` listed but deleted, a `template` entry pointing at a file that no longer exists, `deconz` and `satellite` never listed, and Community's duplicate VMID 350. Readers take both shapes for a stable cycle; ADR-004 amended. Dropping the per-entry `source` broke `kind.ts`, which used it to tell an official module from a community one — fixed by stating it once per repository (`source` at the top of the catalogue), the module's own `source` winning |
+| #674 | Implement the ADR-027 blueprint check | 3 | 1 | M | **Opened 2026-09-20**, after ADR-027 was Proposed. `module-manager validate` reports the artifact set (D2) and a service directory's six files (D3) with D5's severities — a missing MUST an error, a missing SHOULD a warning, the same for every module — running in `validate` and in CI, **never at install time**. Plus the rest of the estate sweep: a stubbed `services/` in `00-Template` (D6) and the 15 service directories missing part of their set. The four module-level gaps and the template's warning stubs were done with #363 |
 | #430 | Controller/manager pattern for app modules | 3 | 1 | M | Decision (Ansible first) — **parked 2026-09-20** until the operator has agreed it with Erik |
 | #294 | Zone-aligned VMID ranges | 2 | 5 | H | Renumbering means backup/restore to a new VMID. **Proposal:** new scheme for new installs and variants only; never renumber in place. Spikes from 2026-06-04 still open |
 
@@ -619,7 +620,7 @@ New capabilities with low upgrade risk.
 |---|-------|:-:|:-:|:-:|------|
 | #388 | `cluster:storage` (NFS first) | 1 | 2 | M | The share schema in site.json becomes a contract |
 | #155 | Modules for physical devices | 5 | 1 | L | Docs and examples only (Lars, 2026-05-15) |
-| #236 | RADIUS MAB for dynamic VLANs | 2 | 2 | M | Adds a `mac` field to zones.json |
+| #668 | A machine's zone is recorded, not enforced | 2 | 3 | M | **Opened 2026-09-19.** A `vm`'s `zone0` decides a bridge VLAN and `cluster:vm` makes it true; a `machine`'s decides which network its **physical** NIC is cabled to, and nothing checks or sets the switch port. Record the switch and port per NIC, check the port's VLAN against `zone0`/`zone1` as drift, and apply a zone change under the same consent rules as a VM's NIC change. Touches the ADR-026 machine modules, `switch-controller`/`network-manager` and the field schema; sits beside #236 |
 | FW #158 | Multi-NIC module firewall rules | 3 | 1 | L | Optional roll-in |
 
 ### G4.5 Governance, CI & sign-offs — E3 · R1 · L-L
