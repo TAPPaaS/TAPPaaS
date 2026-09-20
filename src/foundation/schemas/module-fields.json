@@ -92,7 +92,7 @@
       "example": "Nextcloud file sharing and collaboration platform"
     },
     "version": {
-      "description": "Version of the module (not the TAPPaaS system). Used for tracking running versions and determining if upgrades exist.",
+      "description": "Version of the module (not the TAPPaaS system), SemVer x.y.z. Used for tracking running versions and determining if upgrades exist. #248: start at 0.1.0 and stay below 1.0.0 while only the author has run it — 0.x says pre-stable, and claiming 1.0.0 early is the misleading case this rule exists for. 1.0.0 is earned when an install other than the author's is confirmed working, the same step that takes status to Production.",
       "type": "string",
       "requiredBy": [],
       "usedBy": [
@@ -100,7 +100,7 @@
       ],
       "format": "^[0-9]+\\.[0-9]+(\\.[0-9]+)?$",
       "example": "0.5.3",
-      "note": "Major < 1 indicates module is not production-ready"
+      "note": "Major < 1 indicates the module is not production-ready. The two-part form (0.5) is accepted by the schema for modules written before #248; the classification lint warns and asks for 0.5.0."
     },
     "appVersion": {
       "description": "Upstream application version deployed by this module. Optional but recommended. Distinct from 'version' (module semver). Treated as an informational string — no format enforced.",
@@ -178,7 +178,7 @@
       "note": "Typically a GitHub username prefixed with @"
     },
     "status": {
-      "description": "Development status of the module",
+      "description": "How far the module has got (#248). A maturity the author claims, read by anyone deciding whether to install it — not a state of a deployment. Development → Testing when the author has run test-module.sh against a live install; Testing → Production when at least one install other than the author's is confirmed working. `archived` and `external` are not maturities: they are states a DEPLOYED config carries (ADR-022g moves them to `management`), and a released module naming one fails the classification lint.",
       "type": "string",
       "requiredBy": [],
       "usedBy": [

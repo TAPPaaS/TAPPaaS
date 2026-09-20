@@ -1,6 +1,6 @@
 {
   "description": "Test fixture: cluster:lxc provisioner + drift reconciler (issue #203). Disposable plain-Debian container (no GPU) used by ../test.sh --deep; safe to delete. zone0=srv-home (VLAN 210) — the only test VLAN this switch trunks cross-node.",
-  "version": "0.1",
+  "version": "0.1.0",
   "vmname": "test-lxcdrift",
   "vmid": 922,
   "vmtag": "TAPPaaS,Test",

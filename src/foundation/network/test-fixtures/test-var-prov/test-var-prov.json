@@ -1,6 +1,6 @@
 {
   "description": "Variant E2E test PROVIDER: webserver that provides 'svc' (firewall/test-variant-public.sh)",
-  "version": "0.1",
+  "version": "0.1.0",
   "vmname": "test-var-prov",
   "vmid": 926,
   "vmtag": "TAPPaaS,Test,Firewall,Variant",

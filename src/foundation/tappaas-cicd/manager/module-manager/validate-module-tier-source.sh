@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 #
-# validate-module-tier-source.sh — ADR-007b tier/source lint rule.
+# validate-module-tier-source.sh — the classification lint: ADR-007b tier/source,
+# and what a module's maturity claim means (#248).
 #
 # Validates a module JSON file's `tier` and `source` classification fields:
 #   - `tier`   (mandatory) must be one of: foundation | app
@@ -11,6 +12,20 @@
 #                given (the documented escape hatch for a foundation fork).
 #   - WARN: source:community emits a non-fatal warning (peer-reviewed, not
 #           officially supported) so install can surface it to the operator.
+#
+# and its maturity claim (#248), which a community user reads to judge whether a
+# module is worth installing:
+#   - `status`  must be a MATURITY: Development | Testing | Production | Deprecated.
+#               `archived` and `external` are states of a DEPLOYED config, not
+#               maturities a module may claim — in a released module they are an
+#               error (ADR-022g moves them to `management`).
+#   - `version` should be SemVer (x.y.z; warned, not refused — modules written
+#               before this rule use two parts). Below 1.0.0 says pre-stable,
+#               which is what "author-tested only" means; 1.0.0 is the claim
+#               that someone other than the author has run it.
+#   - WARN when the two contradict: 1.0.0+ while still Development, or
+#     Production below 1.0.0. Which is wrong is the author's to decide, so this
+#     never fails.
 #
 # Used standalone (operator/CI lint) and by install-module.sh at install time.
 #
@@ -65,6 +80,9 @@ WARNINGS=0
 
 readonly VALID_TIERS="foundation app"
 readonly VALID_SOURCES="official community private local"
+# #248: what a module may claim about itself. Deployment states are not here.
+readonly VALID_STATUSES="Development Testing Production Deprecated"
+readonly DEPLOYED_STATUSES="archived external"
 
 usage() {
     sed -n '2,30p' "$_SELF" | sed 's/^# \{0,1\}//'
@@ -143,11 +161,40 @@ main() {
         lint_warn "${base}: source:community — peer-reviewed but not officially supported (🟡)"
     fi
 
+    # ── maturity: status + version (#248) ────────────────────────────────
+    local status version major
+    status="$(jq -r '.status // empty' "$TARGET")"
+    version="$(jq -r '.version // empty' "$TARGET")"
+
+    if [[ -z "$status" ]]; then
+        lint_warn "${base}: no 'status' — a module says how far it has got: ${VALID_STATUSES// /, }"
+    elif in_set "$status" "$DEPLOYED_STATUSES"; then
+        lint_error "${base}: status '${status}' is a state of a DEPLOYED config, not a maturity a module claims (use ${VALID_STATUSES// /, })"
+    elif ! in_set "$status" "$VALID_STATUSES"; then
+        lint_error "${base}: invalid status '${status}' (must be one of: ${VALID_STATUSES})"
+    fi
+
+    if [[ -z "$version" ]]; then
+        lint_warn "${base}: no 'version' — start at 0.1.0 (pre-stable until someone else has run it)"
+    elif [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        # A warning, not an error: two-part versions are all over the modules
+        # written before this rule, and refusing to install them would punish
+        # the user for the author's typo.
+        lint_warn "${base}: version '${version}' is not SemVer x.y.z (0.5 is 0.5.0)"
+    else
+        major="${version%%.*}"
+        if [[ "$major" -ge 1 && "$status" == "Development" ]]; then
+            lint_warn "${base}: version ${version} claims stable while status is Development — one of the two is wrong"
+        elif [[ "$major" -lt 1 && "$status" == "Production" ]]; then
+            lint_warn "${base}: status Production below 1.0.0 — a validated module has earned 1.0.0"
+        fi
+    fi
+
     if [[ $ERRORS -gt 0 ]]; then
-        error "tier/source lint failed: $ERRORS error(s), $WARNINGS warning(s)"
+        error "classification lint failed: $ERRORS error(s), $WARNINGS warning(s)"
         exit 1
     fi
-    log_info "${GN:-}tier/source lint passed (tier=${tier}, source=${source}, ${WARNINGS} warning(s))${CL:-}"
+    log_info "${GN:-}classification lint passed (tier=${tier}, source=${source}, status=${status:-unset}, version=${version:-unset}, ${WARNINGS} warning(s))${CL:-}"
     exit 0
 }
 

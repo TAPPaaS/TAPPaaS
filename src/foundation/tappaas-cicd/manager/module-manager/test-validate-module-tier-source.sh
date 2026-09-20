@@ -57,6 +57,34 @@ run "$notier"  && ok "missing tier defaults to app (back-compat)" || bad "missin
 run "$badtier" && bad "invalid tier enum should FAIL"   || ok "invalid tier enum rejected"
 run "$badsrc"  && bad "invalid source enum should FAIL" || ok "invalid source enum rejected"
 
+# ── maturity: status + version (#248) ───────────────────────────────────────
+# What a module may claim about itself. A maturity out of range fails; a
+# deployment state in a released module fails; the version form and the two
+# contradictions warn (the author decides which side is wrong).
+warns() { "$LINT" "$@" 2>&1 | grep -c "TIER/SOURCE:.*\(version\|status\|claims stable\|earned\)" ; }
+
+m_ok="$(mkfix mat_ok     '{"tier":"app","status":"Testing","version":"0.2.0"}')"
+m_bad="$(mkfix mat_bad   '{"tier":"app","status":"Ready","version":"0.2.0"}')"
+m_arch="$(mkfix mat_arch '{"tier":"app","status":"archived","version":"0.2.0"}')"
+m_ext="$(mkfix mat_ext   '{"tier":"app","status":"external","version":"0.2.0"}')"
+m_two="$(mkfix mat_two   '{"tier":"app","status":"Testing","version":"0.2"}')"
+m_dev1="$(mkfix mat_dev1 '{"tier":"app","status":"Development","version":"1.2.0"}')"
+m_prod0="$(mkfix mat_p0  '{"tier":"app","status":"Production","version":"0.9.0"}')"
+m_none="$(mkfix mat_none '{"tier":"app"}')"
+
+run "$m_ok"    && ok "a maturity in range passes"                  || bad "Testing 0.2.0 should pass"
+run "$m_bad"   && bad "an unknown status should FAIL"              || ok "an unknown status is rejected"
+run "$m_arch"  && bad "status archived in a module should FAIL"    || ok "a deployment state (archived) is rejected in a module"
+run "$m_ext"   && bad "status external in a module should FAIL"    || ok "a deployment state (external) is rejected in a module"
+run "$m_two"   && ok "a two-part version passes (warned, not refused)" || bad "0.2 should warn, not fail"
+[[ "$(warns "$m_two")" -ge 1 ]]   && ok "…and is warned about"                   || bad "0.2 should be warned about"
+run "$m_dev1"  && ok "1.2.0 while Development passes"              || bad "the contradiction should warn, not fail"
+[[ "$(warns "$m_dev1")" -ge 1 ]]  && ok "…warned: stable version, Development status" || bad "no warning for 1.2.0 + Development"
+run "$m_prod0" && ok "Production below 1.0.0 passes"               || bad "the contradiction should warn, not fail"
+[[ "$(warns "$m_prod0")" -ge 1 ]] && ok "…warned: Production under 1.0.0"        || bad "no warning for Production 0.9.0"
+run "$m_none"  && ok "a module claiming neither passes (warned)"   || bad "missing status/version should warn, not fail"
+[[ "$(warns "$m_none")" -ge 2 ]]  && ok "…warned about both"                     || bad "missing status/version should warn twice"
+
 echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed"
 [[ "$FAIL" -eq 0 ]] || exit 1

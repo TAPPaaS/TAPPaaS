@@ -1,7 +1,7 @@
 {
   "description": "TAPPaaS Proxmox Cluster - provides VM, LXC and HA services",
   "kind": "application",
-  "version": "0.8",
+  "version": "0.8.0",
   "maintainer": "@TAPPaaS",
   "status": "Production",
   "tier": "foundation",

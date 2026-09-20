@@ -1,6 +1,6 @@
 {
   "description": "Firewall test VM C — webserver in testPinhole zone (used by firewall/test.sh --deep). Provider for the auto-pinhole (#173) live test: consumer test-fw-a in testAllowA depends on test-fw-c:web, which triggers a cross-zone pinhole into testPinhole because testAllowA is in testPinhole.pinhole-allowed-from but NOT in testPinhole.access-to.",
-  "version": "0.1",
+  "version": "0.1.0",
   "vmname": "test-fw-c",
   "vmid": 923,
   "vmtag": "TAPPaaS,Test,Firewall",

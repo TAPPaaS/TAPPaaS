@@ -87,6 +87,39 @@ command cannot be applied, none of them are written, so config and cluster never
 move apart. A field none of the module's services use is also rejected: writing
 it would change the config and nothing else.
 
+### What a module claims about itself: `version` and `status` (#248)
+
+A community user reads these two fields to decide whether a module is worth
+installing, so they mean something definite. Undercommit, overperform: a module
+does not claim to be more than it is.
+
+| `version` | What it says |
+|---|---|
+| `0.1.0` | first working version — the author has run it, nobody else |
+| `0.x.y` | still iterating; pre-stable, and SemVer says so |
+| `1.0.0` | an install other than the author's is confirmed working; breaking changes are versioned from here |
+
+| `status` | What it says | Reached when |
+|---|---|---|
+| `Development` | incomplete or untested; not ready for use | — |
+| `Testing` | feature complete, author-tested in a live install; wider validation wanted | the author has run `test-module.sh` against a live install |
+| `Production` | validated beyond its author | at least one independent install is confirmed working |
+| `Deprecated` | no longer maintained | — |
+
+The two move together: the step that takes `status` to `Production` is the step
+that earns `1.0.0`. `archived` and `external` are **not** maturities — they are
+states a deployed config carries (ADR-022g moves them to `management`), and a
+released module naming one fails the lint.
+
+`module-manager validate` (and every install) checks this: an unknown `status`,
+or a deployment state in a released module, fails. A version that is not SemVer,
+a missing claim, and the two contradictions — `1.0.0+` while `Development`,
+`Production` below `1.0.0` — warn, because which side is wrong is the author's
+to say.
+
+Keys beginning `_` (`_README`, `_note`, `_comment`) are documentation for whoever
+reads the file next; no tool reads them, and the schema check passes over them.
+
 ### Renaming an instance: `modify --set instance=<new>` (#566)
 
 ```bash

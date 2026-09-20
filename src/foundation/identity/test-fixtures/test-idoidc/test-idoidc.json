@@ -1,6 +1,6 @@
 {
   "description": "Identity OIDC test webserver (dependsOn identity:identity) — identity/test.sh --deep",
-  "version": "0.1",
+  "version": "0.1.0",
   "vmname": "test-idoidc",
   "vmid": 927,
   "vmtag": "TAPPaaS,Test,Identity",

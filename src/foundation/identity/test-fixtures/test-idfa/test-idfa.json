@@ -1,6 +1,6 @@
 {
   "description": "Identity forward-auth test webserver (dependsOn identity:accessControl) — identity/test.sh --deep",
-  "version": "0.1",
+  "version": "0.1.0",
   "vmname": "test-idfa",
   "vmid": 926,
   "vmtag": "TAPPaaS,Test,Identity",

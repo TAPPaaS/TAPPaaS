@@ -133,6 +133,25 @@ else
     fail "underscore zone0 (srv_home) NOT rejected — format pattern may not enforce camelCase"
 fi
 
+# Case 8: a documentation key is documentation, not an unknown field (#248).
+# `_README`/`_note`/`_comment` carry the why next to the what — module JSONs and
+# every schema use them — and a schema that does not know them is not a finding.
+F8="${WORK}/case8.json"; mkmod "${F8}"
+jq '. + {"_README":"why this module is shaped this way","_note":"and this field"}' "${F8}" > "${F8}.tmp" && mv "${F8}.tmp" "${F8}"
+out=$(cj "${F8}" "${SCHEMA}" || true)
+if ! echo "${out}" | grep -q "Unknown field"; then
+    pass "documentation keys (_README, _note) are not reported as unknown fields"
+else
+    fail "a documentation key was reported as an unknown field: $(echo "${out}" | grep 'Unknown field' | head -2 | tr '\n' ' ')"
+fi
+jq '. + {"realTypo":"x"}' "${F8}" > "${F8}.tmp" && mv "${F8}.tmp" "${F8}"
+out=$(cj "${F8}" "${SCHEMA}" || true)
+if echo "${out}" | grep -q "Unknown field.*realTypo"; then
+    pass "…while a field that is not documentation still is"
+else
+    fail "an unknown field is no longer reported"
+fi
+
 echo
 echo "── summary: ${PASS} pass, ${FAIL} fail ──"
 exit "${FAIL}"

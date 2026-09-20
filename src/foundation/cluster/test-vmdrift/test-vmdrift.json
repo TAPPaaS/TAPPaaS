@@ -1,6 +1,6 @@
 {
   "description": "Test fixture: cluster:vm drift reconciler (issue #192). Disposable NixOS clone used by ../test.sh --deep; safe to delete.",
-  "version": "0.1",
+  "version": "0.1.0",
   "vmname": "test-vmdrift",
   "vmid": 920,
   "vmtag": "TAPPaaS,Test",

@@ -1821,8 +1821,10 @@ function check_json() {
   json_keys=$(echo "$json_content" | jq -r 'keys[]')
 
   for key in $json_keys; do
-    # Skip comment fields (start with -)
-    if [[ "$key" == -* ]]; then
+    # Skip documentation fields: `_name` (the convention across TAPPaaS JSON —
+    # _README, _note, _comment) and the older `-name`. They are read by people,
+    # not by tooling, and a schema that does not know them is not a finding.
+    if [[ "$key" == -* || "$key" == _* ]]; then
       continue
     fi
 

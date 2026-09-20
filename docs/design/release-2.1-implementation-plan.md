@@ -407,7 +407,7 @@ What community modules copy and what deployed configs point at.
 
 Status: in progress — #500 built ahead of the entry gate (operator, 2026-09-19; recorded in
 ADR-025 D14). #349 built (operator go, 2026-09-19; ADR-007c v1.5). #566 built 2026-09-20
-(ADR-026 D6.4a). **Parked until the operator has agreed them with Erik:** #421 (`src/apps`
+(ADR-026 D6.4a). #248 built 2026-09-20. **Parked until the operator has agreed them with Erik:** #421 (`src/apps`
 into stacks) and #294 (VMID scheme). #250 left the wave 2026-09-20 — Future Work. The rest
 waits for the gate: the Stacks & solutions and Module blueprint ADRs.
 
@@ -417,7 +417,7 @@ waits for the gate: the Stacks & solutions and Module blueprint ADRs.
 | #421 | Restructure `src/apps` into stacks | 2 | 4 | H | Changes `.location` in every deployed config; after #500. Settle the *solution* concept (2026-08-03) |
 | #349 | Drop the zone tag from released modules | 3 | 3 | H | **Built 2026-09-19** (`wave1/g1.3-module-contract`): apps already named none; `zone0: mgmt` removed from the 7 foundation modules, recorded as `mgmt` by `copy-update-json.sh` (the bootstrap path) and resolved for `mgmt` before its env file exists; the five placed-by-role modules keep theirs (coturn, vaultwarden `dmz`, deconz `iotCloud`, netbird-client `home`, satellite `edge`). The update merge now keeps a deployed `zone0` (rule 1b) — without it #581 would have deleted it from every foundation config. ADR-007c v1.5 |
 | #566 | Legacy name → variant convention | 2 | 3 | H | **Built 2026-09-20** (`wave1/g1.3-module-contract`): the breakage it reported (a legacy name never merged, so its updates failed) was already gone with ADR-026 D6.3 — pinned by a regression test. Added `module modify <instance> --set instance=<new>` (the operator's suggestion: the instance name as a settable field), which moves the config, its `.orig` and `.meta`, and repoints a `node` naming it; the guest keeps `vmname` (renaming it is separate and disruptive); a machine is refused. ADR-026 D6.4a. **Not built:** the issue's "flag an instance whose last good update lags" idea |
-| #248 | Module version/status standard | 4 | 1 | M | Flag day across modules |
+| #248 | Module version/status standard | 4 | 1 | M | **Built 2026-09-20** (`wave1/g1.3-module-contract`): the standard (SemVer 0.x until someone else has run it; Development → Testing → Production with the step that earns each) documented in module-fields.json and the manager README, and enforced by the classification lint — unknown status or a deployment state (`archived`/`external`) in a released module fails; version form, a missing claim and the two contradictions warn. Repo versions normalised to x.y.z. `_`-prefixed documentation keys stop being reported as unknown fields (the issue asked to delete them; they earn their place). **Left to the author:** cluster (Production 0.8.0), netbird-client and windows-server (no status). The Module blueprint ADR absorbs this text |
 | #363 | Module lifecycle blueprint ADR | 3 | 1 | M | |
 | #463 | module-catalog schema is stale | 4 | 1 | M | Also `legacyName` and the Community repo drift |
 | #430 | Controller/manager pattern for app modules | 3 | 1 | M | Decision (Ansible first) |
