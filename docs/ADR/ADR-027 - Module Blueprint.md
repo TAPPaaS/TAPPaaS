@@ -2,12 +2,12 @@
 
 | | |
 |---|---|
-| **Status** | **Draft** (2026-09-20) — for @LarsRossen and @ErikDaniel007 to agree before sign-off |
-| **Version** | 0.2 |
+| **Status** | **Proposed** (2026-09-20) |
+| **Version** | 0.3 |
 | **Date** | 2026-09-20 |
 | **Author** | Lars Rossen |
 | **Related** | **#363** (origin: the artifact set) · **#248** (what `version` and `status` claim — built 2026-09-20) · [ADR-013](<ADR-013 - Documentation Structure and Standards.md>) (**the module's documents** — README, INSTALL, DESIGN, TEST: their audiences and obligation, not restated here) · [ADR-015](<ADR-015 - Community Governance and Contribution Files.md>) (**the contribution files** — AUTHORS and the community-health set: the companion to this ADR, which owns everything a module is made of that is *not* a document) · [ADR-011](<ADR-011 - SBOM Governance.md>) (the SBOM this blueprint will name once it is accepted) · [ADR-007](<ADR-007 - TAPPaaS Taxonomy.md>) (the module/manager/controller taxonomy and the verb dispatch) · [ADR-020](<ADR-020 - Declared-Field Change Model (validate, drift, modify).md>) (the service scripts and `fields.json` — what `update`, `modify` and `reconcile` do with them) · [ADR-026](<ADR-026 - Managed Machines as Modules.md>) D6 (a module is named by its directory; an instance is not a module) · [ADR-022](<ADR-022 - Workload Ontology.md>) / [ADR-022e](<ADR-022e - Module Scope.md>) (`kind`, `scope`, `management` — and `module.tier` retired in favour of `scope`) · `src/foundation/schemas/README.md` + `module-fields.json` (the field definitions themselves) |
-| **Changelog** | v0.2 (2026-09-20) — documents and contribution files handed to ADR-013/ADR-015 and no longer listed here; the service directory gets its own decision (D3); D4 points at the schemas instead of describing fields; `stack: foundation` replaces the retired `tier`; `provisionedBy` dropped for a no-op `install.sh`; `test.sh` is a SHOULD; one severity for every module, with a sweep to clear the estate; the five open questions answered. · v0.1 (2026-09-20) — first draft |
+| **Changelog** | v0.3 (2026-09-20) — Proposed; the answers folded into the decisions they belong to and the question list dropped; `00-Template` ships the stubs D6 describes, and they carry the warning an unimplemented script owes its operator. · v0.2 (2026-09-20) — documents and contribution files handed to ADR-013/ADR-015 and no longer listed here; the service directory gets its own decision (D3); D4 points at the schemas instead of describing fields; `stack: foundation` replaces the retired `tier`; `provisionedBy` dropped for a no-op `install.sh`; `test.sh` is a SHOULD; one severity for every module, with a sweep to clear the estate; the five open questions answered. · v0.1 (2026-09-20) — first draft |
 
 Every TAPPaaS module is the same shape, so tooling and people can rely on it.
 
@@ -26,11 +26,12 @@ contribution files, AUTHORS among them. This ADR is their companion and covers t
 **the executable structure** — the module's own JSON, its scripts, and its service
 directories. It does not restate a rule either of those two already makes.
 
-The estate shows the drift that the missing half allows. Of 22 modules today, `network`
-and `templates` carry no `install.sh` (the bootstrap and `cluster` create them),
-`netbird-client` and `vaultwarden` carry no `test.sh`, and only `backup` and `satellite`
-carry a `delete.sh`. Of 27 service directories, 15 are missing at least one of the six
-files a service is made of — `identity/services/accessControl` is missing three.
+The estate showed the drift that the missing half allows. Of 22 modules, `network` and
+`templates` carried no `install.sh` (the bootstrap creates them), `netbird-client` and
+`vaultwarden` no `test.sh`, and only `backup` and `satellite` a `delete.sh`. Of 27
+service directories, 15 are missing at least one of the six files a service is made of —
+`identity/services/accessControl` is missing three. The four module-level gaps are
+filled as of 2026-09-20 (D5); the service directories are the sweep's remaining work.
 
 Some of that variation is meaningful and some is drift, and nothing tells them apart.
 The consequences are concrete:
@@ -147,10 +148,12 @@ person who can fix it. The check runs in `module-manager validate` and in CI on 
 official repositories, which is where a module is held to the blueprint.
 
 Because the standard is uniform, **the estate is swept to meet it** as part of
-implementing this ADR, rather than grandfathered: the `install.sh` for `network` and
-`templates` (D2), a `test.sh` for the foundation modules that lack one, and the 15
-service directories missing part of their set (D3). What cannot be fixed in the sweep
-becomes an issue, not an exception in the rule.
+implementing this ADR, rather than grandfathered. Done 2026-09-20: the `install.sh` that
+names the bootstrap for `network` and `templates` (D2), and the stub `test.sh` for
+`netbird-client` and `vaultwarden` — which now say in an operator's log that they test
+nothing, instead of being silently absent. Remaining: the 15 service directories missing
+part of their set (D3), and whatever the check reports once it is built. What cannot be
+fixed in the sweep becomes an issue, not an exception in the rule.
 
 ### D6 — `00-Template` is the blueprint, in files
 
@@ -159,6 +162,18 @@ working stub: a `<module>.json` with `version: 0.1.0` and `status: Development` 
 new module has earned, #248), the scripts of D2, a `services/` with one stubbed service
 per D3, and the documents ADR-013 requires. The blueprint check runs on the template in
 CI, so the template cannot drift from the rule that describes it.
+
+**A stub says that it is one.** Each script warns — `install.sh has not been implemented
+for this module … please contact the module's developer` — and its comment block says
+what to replace it with and to delete the warning when you do. It exits 0: an
+unimplemented script must not block an install or an update, so the warning in the log is
+what tells the operator that nothing happened, rather than silence. These same stubs are
+what the D5 sweep drops into a module that is missing one, so "missing" becomes "visibly
+unimplemented" everywhere at once.
+
+A module whose work genuinely lives elsewhere says *that* instead, in the same place: the
+`install.sh` of `network` and `templates` names the bootstrap that provisions them and
+exits 0 (D2). It is not a stub and does not warn.
 
 ### D7 — what this ADR does not decide
 
@@ -201,20 +216,6 @@ CI, so the template cannot drift from the rule that describes it.
   that must be kept working; obligation without a reason is noise.
 - **Refuse to install an incomplete module.** Punishes the user for the author's
   omission, and TAPPaaS's whole point is that a module installs.
-
-## Decided 2026-09-20 (Lars — pending @ErikDaniel007)
-
-The five questions v0.1 left open:
-
-1. **`test.sh`** — a **SHOULD** for every module, foundation included; the sweep is what
-   settles the foundation modules that lack one (D2, D5).
-2. **`provisionedBy`** — **dropped**. `network` and `templates` get a no-op `install.sh`
-   instead (D2).
-3. **Severity split** — **no split**: one standard for every module, and a sweep to make
-   the estate meet it (D5).
-4. **SBOM** — **wait** for ADR-011; `MAY` until then (D2, D7).
-5. **`AUTHORS.md`** — **removed** from this ADR; it is ADR-015's, like the rest of the
-   contribution files (D2).
 
 ## Acceptance
 
