@@ -18,7 +18,7 @@ and few community modules depending on today's names, schemas and layouts.
 **✅ in front of a row means done** — the issue is closed on the forge, or the question in that
 row is answered. A group heading carries ✅ only when every row under it does. Everything
 without a tick is still to do, so planning the next step is a matter of reading down a wave and
-stopping at the first unticked line. Refreshed 2026-09-18 against the forge.
+stopping at the first unticked line. Refreshed 2026-09-20 against the forge.
 
 Every issue and every group has three scores.
 
@@ -267,7 +267,7 @@ to be solid before Wave 1 starts sending migrations through it.
 | ✅ #471 | ADR-017 update scheduling | 3 | 3 | M | Replaces the update unit on every cicd; mind the first-activation bootstrap gap (Erik, 2026-08-19) |
 | ✅ #447 | site-manager cannot modify the schedule | 4 | 1 | L | |
 | ✅ #651 | A failed sweep notifies no one | 3 | 1 | L | Adds a site-level notification target (additive schema); #126 reuses it |
-| FW #357 | Define `updateWindow` / `updateChannel` | 4 | 1 | L | Roll in: design only, belongs next to ADR-017 |
+| ✅ FW #357 | Define `updateWindow` / `updateChannel` | 4 | 1 | L | Roll in: design only, belongs next to ADR-017 |
 | ✅ #653 | Hold the scheduled pull on one site | 4 | 2 | L | A local, per-repository marker with a reason and an expiry makes the scheduled sweep behave like `site-manager update --no-git-pull` (skip the pull, run the rest). Lets the test site run uncommitted or unpushed changes through real sweeps. Shown by `site-manager`; an expired hold warns and pulls again |
 
 ### ✅ G0.4 Merge trust — fast lane, added 2026-09-16
@@ -356,16 +356,18 @@ ADR-026 D6, #602, `debianhost` + `module adopt`, #665 stage 1 (`pvehost`), `loca
 `moduleSource` (migration 0006), #609, #607, #612, #600 (migration 0007), #603, #601, #457,
 #554, #456; §1.3 verified (test plan phase 6). Rolled out on makerfloss the same day (both
 migrations applied, nodes registered, `backup.mgmt.internal` a CNAME, 9/9 modules updated).
-Left: #407 sign-off; stage 2 of ADR-026 D4 (node patching behind `pvehost`); the satellite as a
-module (#670, ADR-010 §8.4, ADR-026 D4 stage 5) and its deep test (#671, after the operator's travel).
+Left: #407 sign-off; stage 2 of ADR-026 D4 (node patching behind `pvehost`); phase 5 of the
+debianhost test plan (PXE). The satellite as a module (#670, ADR-010 §8.4, ADR-026 D4 stage 5)
+landed and was closed 2026-09-20; its deep test (#671, after the operator's travel) is the
+remaining validation.
 
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
 | *(new)* | `debianhost` module + `module-manager module adopt` | 3 | 2 | M | **Built 2026-09-18**, test phases 1–4 green (`wave1/g1.2-module-source`): `install.sh` verifies (root by key, Debian) and changes nothing; `update.sh` apt full-upgrade, a pending reboot taken only when authorized, else `DEFERRED:`; `test.sh` reachable/Debian/no reboot pending/disk/clock. Along the way: `os`, `zone0`, `zone1` became general fields and `address`, `management` were added (ADR-022f/g, as implemented); the module's own `update.sh` now receives `--allow-disruption` as `TAPPAAS_ALLOW_DISRUPTION=1`; `delete` of a `kind: machine` instance unregisters only and refuses `--vmid`. **`module adopt` built 2026-09-18**: reach as root by key (prints the command and waits), learn hostname/OS, module by OS, instance = hostname, zone from the address; refuses PVE nodes, taken names and addresses, unknown OS, no zone. Test plan phases 1–4, 6 and 7 green on hrossen (2026-09-18/19), and a machine module now updates in the nightly like any other (tappaas1–3 each sweep). **Open:** phase 5 (PXE: create, then adopt — not started, D8a), `cicd-key.sh` coverage, the key-only step |
 | ✅ *(new)* | ADR-012 topology §1.3 verified | 3 | 2 | M | **Verified 2026-09-19** on hrossen (test plan phase 6): PBS installed by hand on `dh-test1`, adopted from an empty placement as `node` = dh-test1, nothing provisioned on a cluster node, alias + `debianhost` patching + reboot all green. Found and fixed: `~/.pbs-credentials.txt` overwritten on every non-interactive re-install; ZFS ordering required on a host without ZFS. Installing PBS onto a bare machine stays manual |
 | ✅ *(new)* | instance vs module name | 3 | 3 | M | **Implemented 2026-09-18**, on `main` (8439c54f) (ADR-026 D6.3/D6.4). `module_of <instance>` (shared routines) = the basename of the module's source directory — `.location`, else the catalogue — replacing name parsing; `resolve_base_module_name` survives only as the catalogue's key (`module_name_guess`). The 3-way merge reads `<module_dir>/<module>.json`, not a file named after the instance; `health-manager` and `module-manager` find the Released source the same way and no longer by `vmname`. `module add --instance NAME` (install-module.sh, copy-update-json.sh) with a checked name. Tests: `module_of` (instance tappaas2 → module pvehost), a real merge for an instance ≠ module, `resolveGitJson` with a `vmname` decoy, `test-instance-name.sh` (28). **Unblocks #665** |
-| #665 | Register cluster nodes as machine modules | 3 | 2 | M | **Stage 1 built 2026-09-19** (`wave1/g1.2-module-source`): module **`pvehost`** (operator); `adopt` turns a Proxmox node that `site.json` lists into a `pvehost` instance named after it, and the cluster module's update (Step 7) and `site-manager node add` register nodes through it — no migration, no change on a node. Live on hrossen: tappaas1 adopted, 7/7 tests. ADR-026 D4 stage 1 — registration only, inert. Stage 2 (node patching behind the module lifecycle) and stage 3 (the cluster install becomes module installs) are separate and high-blast-radius |
-| #670 | Satellite as a module: retire `satellite-manager` | 3 | 3 | M | **Built 2026-09-19** on `wave1/g1.2-satellite` (unit-tested; live test #671): `network-manager wgvpn`; the module (install/update/test/delete, managed, patched by the sweep via the debianhost update); sweep skips `management: unmanaged`; `module delete --decommission`; `module modify --lockdown` (the vault); satellite-manager retired; off-site check finds satellites by module. §8.4.3 built too: the satellite as the Site's PBS Host (a `tankc` pool on an attached volume, `<name>.mgmt.internal` at the tunnel end, the nodes' path opened only while it is the Host) and PBS onto a bare machine (ADR-012 §1.3). **Open:** makerfloss conversion (by hand, with the operator); live test #671. **Decided 2026-09-19** (ADR-010 §8.4, ecdeaf5a): `module add satellite` (instance `satellite` by default, `config/<instance>.json`), **managed by default** and patched by the sweep; can be the Site's PBS Host (ADR-012 §1.3 — needs PBS install onto a bare machine); `module modify --lockdown` makes the unmanaged pull vault; `module delete --decommission`; admin VPN → `network-manager wgvpn`; makerfloss converted by hand. ADR-026 D4 stage 5 |
+| ✅ #665 | Register cluster nodes as machine modules | 3 | 2 | M | **Stage 1 built 2026-09-19** (`wave1/g1.2-module-source`): module **`pvehost`** (operator); `adopt` turns a Proxmox node that `site.json` lists into a `pvehost` instance named after it, and the cluster module's update (Step 7) and `site-manager node add` register nodes through it — no migration, no change on a node. Live on hrossen: tappaas1 adopted, 7/7 tests. ADR-026 D4 stage 1 — registration only, inert. Stage 2 (node patching behind the module lifecycle) and stage 3 (the cluster install becomes module installs) are separate and high-blast-radius |
+| ✅ #670 | Satellite as a module: retire `satellite-manager` | 3 | 3 | M | **Closed 2026-09-20.** Built 2026-09-19 on `wave1/g1.2-satellite` (unit-tested; live test #671): `network-manager wgvpn`; the module (install/update/test/delete, managed, patched by the sweep via the debianhost update); sweep skips `management: unmanaged`; `module delete --decommission`; `module modify --lockdown` (the vault); satellite-manager retired; off-site check finds satellites by module. §8.4.3 built too: the satellite as the Site's PBS Host (a `tankc` pool on an attached volume, `<name>.mgmt.internal` at the tunnel end, the nodes' path opened only while it is the Host) and PBS onto a bare machine (ADR-012 §1.3). **Open:** makerfloss conversion (by hand, with the operator); live test #671. **Decided 2026-09-19** (ADR-010 §8.4, ecdeaf5a): `module add satellite` (instance `satellite` by default, `config/<instance>.json`), **managed by default** and patched by the sweep; can be the Site's PBS Host (ADR-012 §1.3 — needs PBS install onto a bare machine); `module modify --lockdown` makes the unmanaged pull vault; `module delete --decommission`; admin VPN → `network-manager wgvpn`; makerfloss converted by hand. ADR-026 D4 stage 5 |
 | #671 | Deep test: satellite as a module on a real VPS | 2 | 1 | L | After #670 and the operator's travel; needs a fresh VPS. Phases: add managed, sweep patch, `wgvpn`, satellite as the Site's PBS, lockdown, delete/decommission, makerfloss conversion |
 | ✅ *(closed)* | `placementState` revisit | 4 | 2 | M | **Answered 2026-09-18**: ADR-012 v0.9 settles the backup case (`node` \| `shim` \| `external`); the general point is ADR-026 D6.5 — the `node` field names an *instance*, which coincides with a module name in almost every deployment but is not the same thing. No separate decision needed |
 
@@ -520,7 +522,7 @@ Low upgrade risk. Build continuously, in any order within a group.
 
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
-| #665 | Register cluster nodes as `kind: machine` modules | 3 | 2 | M | Stage 1 of ADR-026 D4 — registration only, inert: declare existing nodes as modules so every managed machine has one mechanism. Stage 2 (node patching behind the module lifecycle) is separate and high-blast-radius. Blocked on the instance work (ADR-026 D6, decided 2026-09-18): `tappaas1..3` are three instances of one module in one Environment, so the synthetic `module` field and the `--instance` argument land first |
+| ✅ #665 | Register cluster nodes as `kind: machine` modules | 3 | 2 | M | Stage 1 of ADR-026 D4 — registration only, inert: declare existing nodes as modules so every managed machine has one mechanism. Stage 2 (node patching behind the module lifecycle) is separate and high-blast-radius. Blocked on the instance work (ADR-026 D6, decided 2026-09-18): `tappaas1..3` are three instances of one module in one Environment, so the synthetic `module` field and the `--instance` argument land first |
 | #662 | PVE host configuration is not backed up | 4 | 2 | M | Guests and module paths are backed up; the hosts' own config is not — `/etc/pve`, `/etc/network/interfaces`, `/etc/ssh`, `/root`. A single node loss is survivable (pmxcfs replicates), a cluster-wide one is not. The Level 1 control from the hardening guide we have no equivalent for. Settle first how to capture `/etc/pve`: a pxar of the FUSE mount, or `/var/lib/pve-cluster/config.db`, or both — only one of them restores onto a node not yet in a cluster |
 | #392 | Never attempt a disk shrink | 5 | 1 | L | |
 | #393 | A failed migration must not block later steps | 4 | 2 | L | |
@@ -642,9 +644,9 @@ New capabilities with low upgrade risk.
 
 | # | Issue | Group | Why now |
 |---|-------|-------|---------|
-| #357 | updateWindow / updateChannel design | G0.3 | Same code and ADR as #471 |
+| ✅ #357 | updateWindow / updateChannel design | G0.3 | Same code and ADR as #471 |
 | #87 | NTP server for TAPPaaS | G1.4 | Same rebuild as the #472 time fix |
-| #122 | Reissue cicd SSH keys | G1.5 | #439 and #19 both need it |
+| ✅ #122 | Reissue cicd SSH keys | G1.5 | #439 and #19 both need it |
 | #162 | Firewall sequence-map artifact | G2.1 | Falls out of #160 / #645 |
 | #83 | Reuse downloaded images | G3.5 | Contained installer change |
 | #40 | Sync-network recipe | G4.1 | Documentation half of #590 |
