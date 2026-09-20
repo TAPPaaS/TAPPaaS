@@ -166,7 +166,7 @@ The security zone the FIRST network interface connects to; it must exist in zone
 | Reported as | `net0.tag` |
 | Composite input to | `net0` |
 
-**About the field.** Zone determines VLAN tag. 'mgmt' is untagged traffic. camelCase only — no underscores or hyphens. ADR-007 P5: when zone0 is unset it DEFAULTS to the target environment's network.zone (read from config/environments/<env>.json); pre-cutover (no site.json/environments) it falls back to resolve_default_zone()'s behaviour. An explicit zone0 in the module JSON always wins.
+**About the field.** Zone determines VLAN tag. 'mgmt' is untagged traffic. camelCase only — no underscores or hyphens. ADR-007 P5: when zone0 is unset it DEFAULTS to the target environment's network.zone (read from config/environments/<env>.json); pre-cutover (no site.json/environments) it falls back to resolve_default_zone()'s behaviour. An explicit zone0 in the module JSON always wins. #349: a RELEASED module names zone0 only when it must live in a particular kind of zone (dmz, an IoT zone, edge); a foundation module that names none is recorded as mgmt by copy-update-json.sh. Once deployed it is the site's: the update merge keeps it (apply-json-merge.sh rule 1b) — move an install with module modify --set zone0=…
 
 **Why this change class.** The zone resolves to net0's VLAN tag; a new tag is a new subnet, so the guest must renew DHCP and re-register DNS.
 
