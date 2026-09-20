@@ -195,16 +195,18 @@ source:
 
 ## What `update-os` puts on a guest before it rebuilds
 
-Beyond the module's own `.nix`, its siblings and its companion JSON, two shared
-files land in `/etc/nixos` on every NixOS update (#324, #472):
+Beyond the module's own `.nix`, its siblings and its companion JSON, one
+generated file lands in `/etc/nixos` on every NixOS update (#472):
 
-- **`tappaas-common.nix`** — the baseline from the `templates` module, copied
-  verbatim, so a module's `imports = [ /etc/nixos/tappaas-common.nix ]` resolves.
-- **`tappaas-site.nix`** — generated from `config/site.json` by
-  `lib/site-locale.sh`: time zone, locale, console keymap, and the zone gateway as
-  the time source (#87).
+- **`tappaas-site.nix`** — from `config/site.json` via `lib/site-locale.sh`: time
+  zone, locale, console keymap, and the zone gateway as the time source (#87).
+  The module's `.nix` imports it.
 
-A Debian guest has no baseline to import, so the same facts are *converged* there
+The shared baseline `tappaas-common.nix` is deliberately **not** shipped: modules
+still inline their own copies of it, so importing it fails the build on
+conflicting definitions (#324).
+
+A Debian guest has no fragment to import, so the same facts are *converged* there
 instead — `timedatectl`, `localectl` and a `systemd-timesyncd` drop-in — and each
 change is logged rather than made silently. Neither path invents a value: a site
 that records nothing leaves the guest as it is.
