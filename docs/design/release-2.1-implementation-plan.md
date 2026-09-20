@@ -446,9 +446,13 @@ time or locale on a Debian guest, an adopted `debianhost`, or a Windows guest at
 
 1. `site.json .location` is the single source: it gains `keyboard`, `latitude` and `longitude`,
    and `tappaas1` — where the operator answered once — is what it is derived from (#408).
-2. **NixOS:** a generated `/etc/nixos/tappaas-site.nix` (time zone, locale, keymap, NTP server)
-   imported by `tappaas-common.nix`, which **every module nix now imports — #324 is bundled
-   into #472's rebuild** rather than rebuilding every VM twice.
+2. **NixOS:** a generated `/etc/nixos/tappaas-site.nix` (time zone, locale, keymap, NTP server),
+   imported by each module's own `.nix` and by `tappaas-common.nix`. **#324 was bundled into
+   this rebuild and then split back out 2026-09-20**: the canary (`euro-office`) proved modules
+   are *copies* of the baseline, not consumers — importing `tappaas-common.nix` fails on
+   `system.stateVersion` (`25.11` vs every module's `25.05`) and on ~14 more options that 11–13
+   modules each restate. De-duplicating those is #324's real content and needs its own rebuild
+   cycle; the fragment collides with nothing and lands now.
 3. **Debian/Ubuntu:** the same facts converged in the Debian branch of `update-os.sh`, so a
    guest and an adopted host are corrected by every sweep instead of only being tested for a
    ticking clock. For an **adopted machine the `management` field decides** (ADR-022g):
@@ -461,7 +465,7 @@ time or locale on a Debian guest, an adopted `debianhost`, or a Windows guest at
 
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
-| #324 | App VMs do not import `tappaas-common.nix` | 2 | 4 | H | **Bundled with #472** (one rebuild). Verified: only `tappaas-cicd.nix` and `templates/tappaas-nixos.nix` import it |
+| #324 | App VMs do not import `tappaas-common.nix` | 2 | 4 | H | **Not an import line — a de-duplication** (proven on the test site 2026-09-20, see the issue): every module restates the baseline (`system.stateVersion`, `services.openssh`, `users.users.tappaas`, `cloud-init`, `nix.settings`…), so the import fails option by option until the copies go. `stateVersion` is the exception: existing VMs' state is `25.05` and must stay. Verified: only `tappaas-cicd.nix` and `templates/tappaas-nixos.nix` import it |
 | #390 | 00-Template fails canon C4/C7 | 5 | 1 | H | Every new module inherits it |
 | #448 | NIC rename race (kernel / udev / cloud-init) | 3 | 4 | M | A stable interface name is a network-config change on every VM |
 | #472 | NixOS clock two hours off | 4 | 2 | M | **Root cause found 2026-09-20:** every module nix picks its own time zone — `euro-office.nix:96` is UTC while the rest inherit `tappaas-common.nix:166`'s `mkDefault "Europe/Amsterdam"`, and the master (`tappaas1`) is `Europe/Copenhagen`. Fixed by the site fragment + #324 + #87 in one rebuild. Take it from site.json |
