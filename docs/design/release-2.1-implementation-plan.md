@@ -406,7 +406,8 @@ is a migration.
 What community modules copy and what deployed configs point at.
 
 Status: in progress — #500 built ahead of the entry gate (operator, 2026-09-19; recorded in
-ADR-025 D14). #349 built (operator go, 2026-09-19; ADR-007c v1.5). #421 waits for the operator's
+ADR-025 D14). #349 built (operator go, 2026-09-19; ADR-007c v1.5). #566 built 2026-09-20
+(ADR-026 D6.4a). #421 waits for the operator's
 go (to be checked with Erik); the rest waits for the gate: decisions #294, #250, and the
 Stacks & solutions ADR.
 
@@ -415,7 +416,7 @@ Stacks & solutions ADR.
 | #500 | Automate moving a module | 2 | 3 | H | **Built 2026-09-19** (`wave1/g1.3-module-contract`): not the `migrating`/`newRepo` catalogue status first proposed but a migration, as the operator's comment suggested — `scripts/move-module.sh <Repo>:<path> <Repo>:<path>` moves the files, rewrites the catalogue and writes `NNNN-modules-moved.sh` (ADR-025 D14; decisions: stop on an unregistered target repository, moves declared in TAPPaaS, `--rename` behind a dependency check). Prerequisite for #421 |
 | #421 | Restructure `src/apps` into stacks | 2 | 4 | H | Changes `.location` in every deployed config; after #500. Settle the *solution* concept (2026-08-03) |
 | #349 | Drop the zone tag from released modules | 3 | 3 | H | **Built 2026-09-19** (`wave1/g1.3-module-contract`): apps already named none; `zone0: mgmt` removed from the 7 foundation modules, recorded as `mgmt` by `copy-update-json.sh` (the bootstrap path) and resolved for `mgmt` before its env file exists; the five placed-by-role modules keep theirs (coturn, vaultwarden `dmz`, deconz `iotCloud`, netbird-client `home`, satellite `edge`). The update merge now keeps a deployed `zone0` (rule 1b) — without it #581 would have deleted it from every foundation config. ADR-007c v1.5 |
-| #566 | Legacy name → variant convention | 2 | 3 | H | Names get harder to change as installs grow |
+| #566 | Legacy name → variant convention | 2 | 3 | H | **Built 2026-09-20** (`wave1/g1.3-module-contract`): the breakage it reported (a legacy name never merged, so its updates failed) was already gone with ADR-026 D6.3 — pinned by a regression test. Added `module modify <instance> --set instance=<new>` (the operator's suggestion: the instance name as a settable field), which moves the config, its `.orig` and `.meta`, and repoints a `node` naming it; the guest keeps `vmname` (renaming it is separate and disruptive); a machine is refused. ADR-026 D6.4a. **Not built:** the issue's "flag an instance whose last good update lags" idea |
 | #250 | `dependsOn` ownership for community modules | 3 | 2 | H | Option D (`dependsOn.sh`) |
 | #248 | Module version/status standard | 4 | 1 | M | Flag day across modules |
 | #363 | Module lifecycle blueprint ADR | 3 | 1 | M | |

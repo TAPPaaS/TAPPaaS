@@ -223,6 +223,17 @@ The three cluster nodes are then three configs — `tappaas1.json`, `tappaas2.js
 `tappaas3.json` — with the same `.location`, hence the same synthetic `module`, in the same
 Environment.
 
+**D6.4a — an instance can be renamed, in place (#566).** The name is the config file's
+and nothing else depends on it — the module comes from `moduleSource` (D6.3), the guest
+from `vmname`, the backup job from the `vmid` — so `module-manager module modify
+<instance> --set instance=<new>` moves `config/<old>.json`, its `.orig` baseline and its
+`.meta.json`, and repoints a `node` that named it (D6.5). The guest keeps its own name:
+renaming *it* touches DNS, the firewall alias and the proxy upstream, and is not part of
+this. A machine is refused — it is named after the host it is (D8), so the host is
+renamed and re-adopted with `--instance`. This is what an instance whose name predates
+the `<module>-<environment>` default needs; such an instance is not broken (D6.4 is a
+default, not a rule) and updates like any other.
+
 **D6.5 — `node` names an instance.** The `node` field names the Host a module runs on
 (ADR-022c D3). Under D6 that Host is an **instance** of a module, not a module — `node:
 "tappaas2"` points at the instance `config/tappaas2.json`. In something like 99% of

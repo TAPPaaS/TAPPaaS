@@ -363,6 +363,33 @@ try {
   rmSync(root, { recursive: true, force: true });
 }
 
+// ── modify --set instance=<new>: the instance is renamed, alone (#566) ──
+{
+  const root = mkdtempSync(join(tmpdir(), "mm-rename-"));
+  const cfg = join(root, "config");
+  mkdirSync(cfg);
+  writeFileSync(join(cfg, "hassanova.json"), JSON.stringify({ kind: "vm", moduleSource: "/r/hass" }));
+  const marker = join(root, "renamed");
+  const bin = join(root, "rename-instance.sh");
+  writeFileSync(bin, `#!/usr/bin/env bash\necho "$1 $2" > "${marker}"\nexit 0\n`);
+  chmodSync(bin, 0o755);
+  process.env.MM_RENAME_BIN = bin;
+
+  const c1 = new FakeModuleClient();
+  const rc1 = run(["modify", "hassanova", "--set", "instance=hass-delbuschy", "--config-dir", cfg], c1);
+  check(rc1 === 0 && existsSync(marker) && readFileSync(marker, "utf8").trim() === "hassanova hass-delbuschy",
+    "modify --set instance=<new> renames the instance, old and new name given to the script");
+  check(c1.log.length === 0, "…and nothing converges: the name it would converge under is gone");
+
+  rmSync(marker, { force: true });
+  check(run(["modify", "hassanova", "--set", "instance=x", "--set", "cores=8", "--config-dir", cfg], new FakeModuleClient()) !== 0
+    && !existsSync(marker), "--set instance with another --set is refused, and nothing runs");
+  check(run(["update", "hassanova", "--set", "instance=x", "--config-dir", cfg], new FakeModuleClient()) !== 0
+    && !existsSync(marker), "update --set instance is refused — a rename is a change");
+  delete process.env.MM_RENAME_BIN;
+  rmSync(root, { recursive: true, force: true });
+}
+
 console.log("");
 console.log(`Results: ${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

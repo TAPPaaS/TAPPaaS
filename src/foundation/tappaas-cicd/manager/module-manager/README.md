@@ -37,7 +37,7 @@ later retire phase).
 | `module add <m>` | `install-module.sh` | create + provision; `--instance NAME` names the instance (ADR-026 D6.4) |
 | `module adopt <address>` | `adopt-module.sh` | a machine that already runs becomes a module (ADR-026 D8.1); nothing on it is changed |
 | `module update <m>` | `update-module.sh` | **release update** (snapshot + test + 3-way merge) — what the sweep runs (#655) |
-| `module modify <m>` | `update-module.sh` | **change the config, then converge**: `--set field=value` (ADR-020) or `--unset field` (#648). Bare, it is the deprecated spelling of `update`. `--lockdown` runs the module's own `lockdown.sh` instead (a satellite → the off-site vault) |
+| `module modify <m>` | `update-module.sh` | **change the config, then converge**: `--set field=value` (ADR-020) or `--unset field` (#648). Bare, it is the deprecated spelling of `update`. `--set instance=<new>` renames the instance instead (#566); `--lockdown` runs the module's own `lockdown.sh` (a satellite → the off-site vault) |
 | `module delete <m>` | `delete-module.sh` | `--archive` (default) / `--remove`; `--decommission` (a machine) |
 | `module reconcile <m>` | `src/inspect.ts` | read-only drift report (default); `--apply` → **leaf converge** (`src/reconcile.ts`) |
 | `module test <m>` | `test-module.sh` | `--deep`, `--runtime-only`, `--vmid`, `--zone0` |
@@ -86,6 +86,30 @@ A `--set` naming an immutable field is rejected *whole* — if any field in one
 command cannot be applied, none of them are written, so config and cluster never
 move apart. A field none of the module's services use is also rejected: writing
 it would change the config and nothing else.
+
+### Renaming an instance: `modify --set instance=<new>` (#566)
+
+```bash
+module-manager module modify hassanova --set instance=hass-delbuschy
+```
+
+The instance name is its config file's name (ADR-026 D6.1); the module it is an
+instance of is named by `moduleSource` (D6.2). So a rename moves `config/<old>.json`,
+its merge baseline `.orig` and its `.meta.json`, and repoints anything that named the
+instance as its Host (`node`). Nothing on the guest changes: it keeps its own name
+(`vmname`), and with it its DNS record, firewall alias and proxy upstream — renaming
+the guest is a separate, disruptive change this verb does not make. The backup job
+follows the `vmid` and is unaffected.
+
+It runs alone (no other `--set` in the same call) and refuses a name that is not a
+usable instance name or is already taken. A **machine** is refused: it is named after
+the host it is (ADR-026 D8), so rename the host and re-register it with
+`module-manager module adopt <address> --instance <new>`.
+
+A name off the `<module>-<environment>` convention is not a fault — the convention is
+the default when no name is given, and such an instance updates like any other (the
+release source is the module's own JSON, D6.3). This verb is for when the operator
+wants the convention back.
 
 ### A one-way change of management: `modify --lockdown` (ADR-010 §8.4.4)
 

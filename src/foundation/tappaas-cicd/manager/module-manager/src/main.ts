@@ -50,6 +50,7 @@ import {
 import { loadModuleFields } from "../../../lib/ts/src/desired";
 import { stream } from "../../../lib/ts/src/exec";
 import { cmdDrift, parseSetArg, preGateSet } from "./converge";
+
 import { cmdResolve } from "./resolve";
 import { realServiceFs } from "./services";
 import { validateModules } from "./validate";
@@ -142,6 +143,10 @@ export const HELP: HelpSpec = {
         [
           "--set field=value",
           "Change a declared field, then converge (repeatable). Rejected up front if the field cannot change in place.",
+        ],
+        [
+          "--set instance=<new>",
+          "Rename the instance itself (#566): its config files, and the `node` references other configs make to it. Runs alone. The guest keeps its own name (vmname) and everything keyed on it; a machine is refused (it is named after its host).",
         ],
         [
           "--unset field",
@@ -810,6 +815,11 @@ function cmdModify(opts: Opts, client: ModuleClient, verb: "update" | "modify"):
     die("update takes no --unset — remove a stale field with: module-manager module modify <module> --unset field");
   }
   if (opts.lockdown) return cmdLockdown(module, opts, verb);
+  // `--set instance=<new>` renames the instance itself — the config file IS the
+  // name (ADR-026 D6.1), so it is not a field in the config and not one the
+  // schema gate below can check. Its own script owns the rule (#566).
+  const rename = opts.sets.filter((s) => /^instance=/.test(s));
+  if (rename.length > 0) return cmdRenameInstance(module, rename, opts, verb);
   if (verb === "modify" && opts.sets.length === 0 && opts.unsets.length === 0) {
     warn("`modify` with no --set is the release update — say `module-manager module update` instead (#655)");
   }
@@ -846,6 +856,23 @@ function cmdLockdown(module: string, opts: Opts, verb: "update" | "modify"): num
   const script = join(r.dir, "lockdown.sh");
   if (!existsSync(script)) die(`--lockdown: ${r.dir} has no lockdown.sh — '${module}' has nothing to lock down`);
   return stream(script, [module], { cwd: r.dir });
+}
+
+// `modify <instance> --set instance=<new>` (#566): the instance is renamed in
+// place — its config files, and the `node` references other configs make to it.
+// It runs alone: every other --set writes INTO a config this one is moving, and
+// the converge afterwards would run under a name that no longer exists. The
+// guest keeps its own name (`vmname`); a machine is refused (ADR-026 D8).
+function cmdRenameInstance(module: string, rename: string[], opts: Opts, verb: "update" | "modify"): number {
+  if (verb !== "modify") die("--set instance=<new> is a change: module-manager module modify <instance> --set instance=<new>");
+  if (rename.length > 1) die("--set instance: give one new name");
+  if (opts.sets.length > 1 || opts.unsets.length > 0) {
+    die("--set instance=<new> runs alone — rename first, then change fields under the new name");
+  }
+  const to = rename[0].slice("instance=".length);
+  if (!to) die("--set instance=<new>: the new name is missing");
+  // Read at call time, not at import: a test sets it after loading this module.
+  return stream(process.env.MM_RENAME_BIN ?? "rename-instance.sh", [module, to]);
 }
 
 // Pre-gate every --set, then write the whole change — sets and unsets — in one

@@ -68,5 +68,28 @@ out="$(cuj demo)"
 ck "default: EFFECTIVE_MODULE is the module"      demo "${out}"
 [[ -f "${CFG}/demo.json" ]] && ck "default: config/demo.json written" ok ok || ck "default: config/demo.json written" ok missing
 
+# #566: an instance whose name is off the <module>-<environment> convention —
+# a legacy, unsuffixed one — still merges. The release source is the MODULE's
+# json (D6.3); before that it was derived by stripping the name at a hyphen, so
+# an unsuffixed name never resolved and every update of it failed.
+MERGE_MOD="${TMP}/src/apps/hass"; mkdir -p "${MERGE_MOD}"
+echo '{"description":"hass","cores":2}' > "${MERGE_MOD}/hass.json"
+MCFG="${TMP}/mconfig"; mkdir -p "${MCFG}"
+cat > "${MCFG}/hassanova.json" <<JSON
+{"kind":"vm","vmname":"hassanova","environment":"delbuschy","cores":4,"moduleSource":"${MERGE_MOD}"}
+JSON
+# .orig is the RELEASE baseline at install (cores 2), so cores 4 reads as the
+# operator's and is pinned; copying the current config here would make it adopt.
+cat > "${MCFG}/hassanova.json.orig" <<JSON
+{"kind":"vm","vmname":"hassanova","environment":"delbuschy","cores":2,"moduleSource":"${MERGE_MOD}"}
+JSON
+merge_rc=0
+TAPPAAS_MERGE_CONFIG_DIR="${MCFG}" TAPPAAS_SCHEMA_FILE="${S}" bash -c '
+    . "$1" >/dev/null 2>&1
+    . "$2"
+    apply_three_way_merge "$3" "$4"' _ "${LIB}" "${CICD}/lib/apply-json-merge.sh" hassanova "${MERGE_MOD}" >/dev/null 2>&1 || merge_rc=$?
+ck "a legacy-named instance merges against its module's source (#566)" 0 "${merge_rc}"
+ck "…keeping what the operator set"  4 "$(jq -r '[.. | objects | .cores? // empty] | first' "${MCFG}/hassanova.json")"
+
 echo "── summary: ${pass} pass, ${fail} fail ──"
 [[ "${fail}" -eq 0 ]]
