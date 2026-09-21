@@ -699,6 +699,65 @@ got="$(bash "$GMD" "$GW" gone 2>/dev/null)"
     || bad "get_module_dir: expected rc 2 with the path, got '${got}'"
 
 # ---------------------------------------------------------------------------
+# #684: the dependency test step walks BOTH relationship lists.
+#
+# rules-manager synthesises an auto-pinhole from dependsOn AND integratesWith
+# (#632), so a service wired either way can carry a live firewall rule; one the
+# tests never visit fails silently. Offline: test-module.sh runs against a stub
+# library and a fixture CONFIG_DIR, and each provider's test-service.sh leaves a
+# marker, so the assertion is "who was actually called".
+# ---------------------------------------------------------------------------
+echo ""
+echo "== dependency tests cover integratesWith (#684) =="
+
+TMW="${WORK}/tm"; mkdir -p "${TMW}/cfg" "${TMW}/sbin"
+cat > "${TMW}/sbin/common-install-routines.sh" <<'TMSTUB'
+: "${BOLD:=}"; : "${BL:=}"; : "${GN:=}"; : "${CL:=}"; : "${YW:=}"; : "${RD:=}"
+: "${OPT_DEBUG:=0}"; : "${OPT_SILENT:=0}"    # the real library sets these
+info(){ :; }; debug(){ :; }; warn(){ echo "WARN:$*"; }
+error(){ echo "ERROR:$*" >&2; }; fatal(){ echo "FATAL:$*" >&2; }
+die(){ echo "DIE:$*" >&2; exit 1; }
+check_json(){ return 0; }
+read_module_config(){ cat "${CONFIG_DIR}/$1.json" 2>/dev/null; }
+get_module_dir(){ local d; d="$(jq -r '.moduleSource // empty' "${CONFIG_DIR}/$1.json" 2>/dev/null)"; [[ -n "$d" && -d "$d" ]] || return 1; echo "$d"; }
+ensure_scripts_executable(){ :; }
+TMSTUB
+TMSTUB_SH="${WORK}/tm-stub.sh"
+sed -e "s#/home/tappaas/bin/common-install-routines.sh#${TMW}/sbin/common-install-routines.sh#g" \
+    -e "s#readonly CONFIG_DIR=\"/home/tappaas/config\"#CONFIG_DIR=\"${TMW}/cfg\"#g" \
+    "${HERE}/test-module.sh" > "${TMSTUB_SH}"
+
+# Two providers, each with a service that ships a test-service.sh marking that it ran.
+for p in prova provb; do
+    mkdir -p "${TMW}/src/${p}/services/svc"
+    printf '#!/usr/bin/env bash\ntouch "%s/ran-%s"\n' "${TMW}" "${p}" > "${TMW}/src/${p}/services/svc/test-service.sh"
+    chmod +x "${TMW}/src/${p}/services/svc/test-service.sh"
+    printf '{"moduleSource":"%s/src/%s","provides":["svc"]}\n' "${TMW}" "${p}" > "${TMW}/cfg/${p}.json"
+done
+# The consumer wires one provider as a dependency and the other as an integration,
+# and names a third that is not installed (the documented optional no-op).
+printf '{"moduleSource":"%s/src/prova","dependsOn":["prova:svc"],"integratesWith":["provb:svc","ghost:svc"]}\n' \
+    "${TMW}" > "${TMW}/cfg/consumer.json"
+
+rm -f "${TMW}/ran-prova" "${TMW}/ran-provb"
+tm_out="$(bash "${TMSTUB_SH}" consumer 2>&1)"; tm_rc=$?
+[[ -e "${TMW}/ran-prova" ]] \
+    && ok "test: a dependsOn service's test-service.sh runs" \
+    || bad "test: dependsOn provider was not tested (rc=${tm_rc})"
+[[ -e "${TMW}/ran-provb" ]] \
+    && ok "test: an integratesWith service's test-service.sh runs too (#684)" \
+    || bad "test: integratesWith provider was never tested (#684) (rc=${tm_rc})"
+grep -q "WARN:ghost:svc" <<< "${tm_out}" \
+    && bad "test: an absent optional provider must stay quiet (#501), got a warning" \
+    || ok "test: an absent integratesWith provider stays quiet (#501)"
+
+# A missing dependsOn provider is still named.
+printf '{"moduleSource":"%s/src/prova","dependsOn":["ghost:svc"]}\n' "${TMW}" > "${TMW}/cfg/hard.json"
+grep -q "WARN:ghost:svc" <<< "$(bash "${TMSTUB_SH}" hard 2>&1)" \
+    && ok "test: a missing dependsOn provider is still reported" \
+    || bad "test: a missing dependsOn provider should be reported"
+
+# ---------------------------------------------------------------------------
 # integratesWith helpers (#501): the soft-guard + reverse-lookup primitives.
 # Offline — pure functions over a fixture CONFIG_DIR, no cluster.
 # ---------------------------------------------------------------------------
