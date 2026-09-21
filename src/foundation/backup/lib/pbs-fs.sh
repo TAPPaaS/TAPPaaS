@@ -176,18 +176,43 @@ pbs_fs_write_manifest() {
     info "  ${GN}✓${CL} capture manifest → ${f}"
 }
 
-# The declared exclusions for <module>, one per line (empty when none). Read
-# from the same `backup` policy object as the paths (backup/fields.json).
-pbs_fs_exclude() {
-    jq -r '.backup.exclude // [] | .[]' \
-        "${PBS_FS_CONFIG_DIR}/$1.json" 2>/dev/null || true
+# The module's own release JSON, via .moduleSource (ADR-026 D6.2), or empty.
+_pbs_fs_release_json() {
+    local src
+    src="$(jq -r '.moduleSource // empty' "${PBS_FS_CONFIG_DIR}/$1.json" 2>/dev/null)"
+    [[ -n "${src}" && -f "${src}/$(basename "${src}").json" ]] || return 1
+    printf '%s/%s.json' "${src}" "$(basename "${src}")"
 }
 
-# The declared paths for <module>, one per line (empty when none).
-pbs_fs_paths() {
-    jq -r '.backup.filesystemPaths // [] | .[]' \
-        "${PBS_FS_CONFIG_DIR}/$1.json" 2>/dev/null || true
+# Read one field of the `backup` policy: the DEPLOYED config first, then the
+# module's own release JSON.
+#
+# The fallback is not belt-and-braces, it is the only way a release can
+# introduce this capability to a module that already exists. `backup` is
+# service-owned (usedBy backup:filesystem), and the Pattern A grouper drops a
+# service-owned field when the deployed `dependsOn` does not name that service
+# — while `dependsOn` is header-pinned, so a release cannot add itself there
+# either. The merge duly reports "added (new in release): backup.filesystemPaths"
+# and writes a config without it (#662). Same shape as kind.ts reading an
+# authored `kind` the deployed config has not adopted yet (#669).
+_pbs_fs_backup_field() {
+    local module="$1" field="$2" out rel
+    out="$(jq -r --arg f "${field}" '.backup[$f] // [] | .[]' \
+        "${PBS_FS_CONFIG_DIR}/${module}.json" 2>/dev/null || true)"
+    if [[ -z "${out}" ]] && rel="$(_pbs_fs_release_json "${module}")"; then
+        out="$(jq -r --arg f "${field}" '.backup[$f] // [] | .[]' "${rel}" 2>/dev/null || true)"
+    fi
+    printf '%s' "${out}"
+    [[ -n "${out}" ]] && printf '\n'
+    return 0
 }
+
+# The declared exclusions for <module>, one per line (empty when none). Read
+# from the same `backup` policy object as the paths (backup/fields.json).
+pbs_fs_exclude() { _pbs_fs_backup_field "$1" exclude; }
+
+# The declared paths for <module>, one per line (empty when none).
+pbs_fs_paths() { _pbs_fs_backup_field "$1" filesystemPaths; }
 
 # Where the guest-side runner lives once delivered, and where it ships from.
 # Resolved from this library's own location so every caller agrees on it.

@@ -126,6 +126,28 @@ pbs_fs_write_manifest nextcloud repo fs/nextcloud daily FP /var/lib/nextcloud >/
 ck "manifest: an empty exclude list is still an array" "0" \
    "$(jq -r '.exclude | length' "$(pbs_fs_manifest_path nextcloud)")"
 
+# The release fallback: a module whose deployed config never adopted the policy
+# (the grouper drops a service-owned field while dependsOn is pinned, #662) must
+# still capture what its release declares.
+mkdir -p "${CONFIG_DIR}/rel/pvehost"
+cat > "${CONFIG_DIR}/rel/pvehost/pvehost.json" <<'JSON'
+{ "kind": "machine",
+  "backup": { "filesystemPaths": ["/etc", "/root"], "exclude": ["/root/*.iso"] } }
+JSON
+cat > "${CONFIG_DIR}/tappaas2.json" <<JSON
+{ "kind": "machine", "address": "tappaas2.mgmt.internal",
+  "moduleSource": "${CONFIG_DIR}/rel/pvehost" }
+JSON
+ck "paths: fall back to the release when the config never adopted them" "/etc /root" \
+   "$(pbs_fs_paths tappaas2 | tr '\n' ' ' | sed 's/ $//')"
+ck "exclude: falls back the same way" "/root/*.iso" "$(pbs_fs_exclude tappaas2)"
+cat > "${CONFIG_DIR}/tappaas3.json" <<JSON
+{ "kind": "machine", "address": "tappaas3.mgmt.internal",
+  "moduleSource": "${CONFIG_DIR}/rel/pvehost",
+  "backup": { "filesystemPaths": ["/etc"] } }
+JSON
+ck "paths: the deployed config wins when it HAS them" "/etc" "$(pbs_fs_paths tappaas3)"
+
 # A path whose last segment has a dot derived a dotted archive NAME, which PBS
 # rejects outright ("parameter verification failed - 'backupspec'", #662).
 ck "archive name: dots are not allowed in the name" "var-lib-pve-cluster-config-db.pxar:/var/lib/pve-cluster/config.db" \
