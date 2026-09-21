@@ -125,9 +125,18 @@ pbs_fs_ensure_target() {
 
     pbs_ns_ensure "${ns}" || { error "  could not create namespace ${ns}"; return 1; }
 
+    # Whether the login already existed is the caller's business: the password
+    # it just generated is only the live one if the login was created here.
+    # Setting a password on an existing login is not an option — on PBS 4.2.6
+    # `user update --password` returns 0 and the new password does not
+    # authenticate, so a rotation that looks successful silently breaks every
+    # later capture (#662). Recreating is the only change that takes effect,
+    # and that is the caller's decision: pbs_fs_recreate_login.
+    PBS_FS_LOGIN_EXISTED=0
     if _pbs_node_run proxmox-backup-manager user list --output-format json 2>/dev/null \
         | jq -e --arg u "${authid}" '.[] | select(.userid==$u)' >/dev/null 2>&1; then
         info "  PBS login ${BL}${authid}${CL} already exists"
+        PBS_FS_LOGIN_EXISTED=1
     else
         [[ -n "${pw}" ]] || { error "  pbs_fs_ensure_target: a password is required to create ${authid}"; return 1; }
         _pbs_node_run proxmox-backup-manager user create "${authid}" --password "${pw}" \
@@ -135,8 +144,30 @@ pbs_fs_ensure_target() {
         info "  ${GN}✓${CL} created PBS login ${BL}${authid}${CL}"
     fi
 
-    # DatastoreBackup on this namespace only: create + read its own snapshots,
-    # no delete, no prune, nothing outside fs/<module>.
+    pbs_fs_grant_ns "${module}" || return 1
+}
+
+# Remove the login and create it again with <pw>. The only way to change a PBS
+# login's password that actually takes effect; the grant is re-applied after,
+# because removing the user drops its ACL entries with it.
+pbs_fs_recreate_login() {
+    local module="$1" pw="$2" authid
+    authid="$(pbs_fs_authid "${module}")"
+    [[ -n "${pw}" ]] || { error "  pbs_fs_recreate_login: no password given"; return 1; }
+    _pbs_node_run proxmox-backup-manager user remove "${authid}" >/dev/null 2>&1 || true
+    _pbs_node_run proxmox-backup-manager user create "${authid}" --password "${pw}" \
+        || { error "  could not re-create PBS login ${authid}"; return 1; }
+    info "  ${GN}✓${CL} re-created PBS login ${BL}${authid}${CL} (a password can only be set at creation)"
+    pbs_fs_grant_ns "${module}"
+}
+
+# DatastoreBackup on this module's namespace only: create + read its own
+# snapshots, no delete, no prune, nothing outside fs/<module>.
+pbs_fs_grant_ns() {
+    local module="$1" store ns authid
+    store="$(pbs_storage_name)"
+    ns="$(pbs_fs_namespace "${module}")"
+    authid="$(pbs_fs_authid "${module}")"
     _pbs_node_run proxmox-backup-manager acl update \
         "/datastore/${store}/${ns}" DatastoreBackup --auth-id "${authid}" \
         || { error "  could not grant DatastoreBackup on ${ns} to ${authid}"; return 1; }

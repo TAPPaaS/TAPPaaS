@@ -88,6 +88,26 @@ FS_PW="${FS_PW:0:32}"
 [[ "${#FS_PW}" -ge 8 ]] || die "could not generate a PBS password"
 pbs_fs_ensure_target "${MODULE}" "${FS_PW}" || die "could not provision the PBS side for ${MODULE}"
 
+# A password that PBS did not store is worse than no password: the capture
+# fails with "permission check failed", which reads like a missing privilege
+# and is not one (#662). So the generated password is only deployed when this
+# run created the login. If the login already existed, the target keeps the
+# password it has — unless it has none, in which case the login is recreated
+# so that both sides hold the same secret again.
+if [[ "${PBS_FS_LOGIN_EXISTED:-0}" -eq 1 ]]; then
+    if tappaas_ssh_guest -o BatchMode=yes "${TARGET}" \
+            "${SUDO}test -s /etc/secrets/backup-fs.pw" >/dev/null 2>&1; then
+        info "  ${MODULE} already holds its backup credential — left as it is"
+        DEPLOY_PW=0
+    else
+        warn "  ${MODULE} has no backup credential but the PBS login exists — re-creating the login"
+        pbs_fs_recreate_login "${MODULE}" "${FS_PW}" || die "could not re-provision the PBS login for ${MODULE}"
+        DEPLOY_PW=1
+    fi
+else
+    DEPLOY_PW=1
+fi
+
 # 3. Encryption key + escrow (§2.5.1). Generated on the guest so the plaintext
 #    key never transits the mothership's shell history; escrowed centrally so a
 #    restore is possible when the guest is gone. The out-of-band copy the
@@ -95,10 +115,12 @@ pbs_fs_ensure_target "${MODULE}" "${FS_PW}" || die "could not provision the PBS 
 # The password goes over the pipe, NOT through the remote shell: an
 # interpolated heredoc would put it in the remote's parsed script text, and an
 # argument would put it in the remote's process list.
+if [[ "${DEPLOY_PW}" -eq 1 ]]; then
 printf '%s' "${FS_PW}" | ssh -o ConnectTimeout=15 -o BatchMode=yes \
     -o StrictHostKeyChecking=accept-new "${TARGET}" \
     "${SUDO}bash -c 'mkdir -p /etc/secrets; chmod 755 /etc/secrets; umask 077; cat > /etc/secrets/backup-fs.pw; chown ${OWNER} /etc/secrets/backup-fs.pw'" \
     || die "could not write the backup login password on ${GUEST}"
+fi
 
 ssh -o ConnectTimeout=15 -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
     "${TARGET}" "${SUDO}bash -s" <<REMOTE || die "could not prepare secrets on ${GUEST}"
