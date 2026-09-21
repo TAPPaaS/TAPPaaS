@@ -11,12 +11,15 @@ credentials, **idempotently** sets up:
     value ``caddy-manager add-domain --custom-certificate <refid>`` consumes.
 
 Provider is selected with ``--provider`` (default ``cloudflare``); credential
-fields with ``--provider-field KEY=VALUE`` (repeatable). Cloudflare example:
+fields come from stdin with ``--provider-fields-stdin`` (preferred — keeps
+secrets out of the process command line) or, for compatibility, from
+``--provider-field KEY=VALUE`` (repeatable). Cloudflare example:
 
-    acme-manager setup --domain tapaas.org --email admin@example.com \\
-        --provider cloudflare \\
-        --provider-field dns_cf_token=<CF_TOKEN> \\
-        --no-ssl-verify
+    printf 'dns_cf_token=%s\\n' "$CF_TOKEN" \\
+      | acme-manager setup --domain tapaas.org --email admin@example.com \\
+            --provider cloudflare \\
+            --provider-fields-stdin \\
+            --no-ssl-verify
 
 For any of the other 120 os-acme-client DNS-API plugins (deSEC, Hetzner, OVH,
 Route 53, …) pass the right ``dns_<provider>_<field>`` keys — same flow.
@@ -86,6 +89,26 @@ def _parse_fields(items: list[str]) -> dict[str, str]:
     return out
 
 
+def _read_stdin_fields() -> list[str]:
+    """Read KEY=VALUE credential lines from stdin, one per line.
+
+    ``--provider-field`` puts the DNS-API secret on the command line, where
+    ``/proc/<pid>/cmdline`` — world-readable — exposes it to every local user
+    for the whole run (minutes, with dns_sleep). stdin leaves no such trace.
+
+    A leading ``#`` marks a comment line. An inline ``#`` is NOT a comment: it
+    is a legal character in a secret, and stripping it would silently truncate
+    the credential.
+    """
+    items: list[str] = []
+    for raw in sys.stdin.read().splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        items.append(line)
+    return items
+
+
 def cmd_setup(mgr: AcmeManager, args: argparse.Namespace) -> int:
     """Provision the full wildcard-cert chain (idempotent)."""
     # Enable os-acme-client if it shipped disabled (issue #475/#267); abort with
@@ -104,10 +127,22 @@ def cmd_setup(mgr: AcmeManager, args: argparse.Namespace) -> int:
     wildcard_cn = f"*.{domain}"
     ca = "letsencrypt_test" if args.staging else "letsencrypt"
     dns_service = _resolve_provider(args.provider)
+    # stdin wins over argv for any key set in both: the argv path is the legacy
+    # one and only survives for compatibility with callers not yet rebuilt.
     provider_fields = _parse_fields(args.provider_field)
+    if args.provider_field:
+        print(
+            "warning: --provider-field puts credentials in the process command "
+            "line, where /proc/<pid>/cmdline exposes them to every local user. "
+            "Prefer --provider-fields-stdin.",
+            file=sys.stderr,
+        )
+    if args.provider_fields_stdin:
+        provider_fields.update(_parse_fields(_read_stdin_fields()))
     if not provider_fields:
         print(
-            f"warning: no --provider-field set; os-acme-client may not be able to "
+            f"warning: no provider fields supplied (--provider-fields-stdin or "
+            f"--provider-field); os-acme-client may not be able to "
             f"authenticate against {dns_service}",
             file=sys.stderr,
         )
@@ -220,6 +255,15 @@ def cmd_status(mgr: AcmeManager, args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Keep progress visible when stdout is a pipe. acme-setup.sh runs us through
+    # `tee`, and Python block-buffers a non-TTY stdout — so a setup that takes
+    # minutes (dns_sleep 150 + issuance) printed NOTHING until it exited, and the
+    # "live progress below" the wrapper promises looked like a hang. Line
+    # buffering fixes every print() at once, including ones added later.
+    # hasattr guard: tests and embedders may replace stdout with a plain StringIO.
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(line_buffering=True)
+
     # Global options work on either side of the subcommand (#379); see cli_globals.py.
     gp = make_global_parent()
     gp.add_argument("--firewall")
@@ -250,8 +294,15 @@ def main(argv: list[str] | None = None) -> int:
                          help="DNS provider — friendly name (cloudflare/desec/hetzner/...) "
                          "or the os-acme-client key (dns_cf/dns_desec/...). Default: cloudflare.")
     p_setup.add_argument("--provider-field", action="append", default=[], metavar="KEY=VALUE",
-                         help="Provider credential field (e.g. dns_cf_token=...). "
-                         "Repeatable. Field names match os-acme-client's model.")
+                         help="DEPRECATED (leaks secrets via /proc/<pid>/cmdline — use "
+                         "--provider-fields-stdin). Provider credential field "
+                         "(e.g. dns_cf_token=...). Repeatable. Field names match "
+                         "os-acme-client's model.")
+    p_setup.add_argument("--provider-fields-stdin", action="store_true",
+                         help="Read provider credential fields (KEY=VALUE, one per line) "
+                         "from stdin instead of the command line, keeping secrets out of "
+                         "the world-readable /proc/<pid>/cmdline. Takes precedence over "
+                         "--provider-field for keys set in both.")
     p_setup.add_argument("--account-name", default="letsencrypt", help="ACME account name")
     p_setup.add_argument("--validation-name", default="acme-dns01", help="Validation name")
     p_setup.add_argument("--dns-sleep", type=int, default=150,
