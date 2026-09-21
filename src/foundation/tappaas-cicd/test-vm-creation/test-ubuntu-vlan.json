@@ -19,8 +19,7 @@
       "image": "ubuntu-24.04-server-cloudimg-amd64.img",
       "imageLocation": "https://cloud-images.ubuntu.com/releases/24.04/release",
       "imageType": "img",
-      "memory": "4096",
-      "storage": "tanka1"
+      "memory": "4096"
     }
   }
 }

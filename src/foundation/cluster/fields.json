@@ -100,7 +100,7 @@
       "note": "G=gigabytes, M=megabytes, K=kilobytes"
     },
     "storage": {
-      "description": "Name of the storage pool for the module",
+      "description": "Name of the storage pool for the module. Left undeclared, the pool is resolved against the target node at create time: 'tanka1' when that node has it, otherwise the node's first ZFS pool that can hold VM disks (#692).",
       "type": "string",
       "requiredBy": [],
       "usedBy": [
@@ -109,7 +109,7 @@
       ],
       "default": "tanka1",
       "example": "tanka1",
-      "note": "Storage pool must exist on the target node"
+      "note": "Must exist on the target node. A declared pool the node does not have is refused before the image is downloaded, naming the pools it does have (#692) — it is not silently replaced, because a declared pool is the operator's word."
     },
     "imageType": {
       "description": "How the guest's image/rootfs is sourced. Applies to both VMs (cluster:vm) and containers (cluster:lxc); whether the guest is a VM or an LXC is determined by dependsOn (cluster:vm vs cluster:lxc), not by this field.",

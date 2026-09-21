@@ -303,6 +303,96 @@ function zfs_recv_preflight() {
   debug "Pre-flight check passed — no stale ZFS state on ${node} (pool ${pool})"
 }
 
+# ── storage, resolved against the node it will live on (#692) ───────────────
+# `tanka1` used to be the fallback whatever node the guest landed on, and
+# nothing checked the node had it. On an estate with per-node pools — which
+# cluster/install.sh supports with --pool 'tankc1=…' — the guest was created,
+# a disk image was downloaded, and `qm importdisk` then failed with Proxmox's
+# own "storage 'tanka1' is not available on node 'tappaas3'". Late, expensive,
+# and naming a pool the operator never wrote down.
+#
+# Proxmox is the authority here, not site.json: this script runs on the node
+# and site.json lives on the mothership.
+
+# config_declares <key> — did the module actually write this field, or is the
+# value about to come from a default? Keeps a declared pool that cannot work a
+# refusal (the operator's word is not ours to overrule) while an undeclared one
+# is simply resolved to something the node has.
+config_declares() {
+  local key="$1"
+  echo "$JSON" | jq -e --arg K "$key" \
+    'has($K) or (((.config // {}) | to_entries | map(select(.value | has($K))) | length) > 0)' \
+    >/dev/null 2>&1
+}
+
+# node_storage_json <node> — the node's storage list, or non-zero when Proxmox
+# cannot be asked. "Could not ask" and "the node has none" are different answers
+# and must never be conflated: the first is a reason to carry on as before, the
+# second is a reason to refuse.
+node_storage_json() {
+  local raw=""
+  raw="$(pvesh get "/nodes/$1/storage" --output-format json 2>/dev/null)" || return 1
+  [ -n "${raw}" ] || return 1
+  printf '%s' "${raw}" | jq -e 'type == "array"' >/dev/null 2>&1 || return 1
+  printf '%s' "${raw}"
+}
+
+# image_pools <storage-json> [<type>] — the storages that can actually hold a VM
+# disk: content includes images, and the storage is active and enabled. With
+# <type> (zfspool) only that kind.
+image_pools() {
+  printf '%s' "$1" | jq -r --arg T "${2:-}" '
+      .[]
+      | select(((.content // "") | test("images")))
+      | select(((.active  // 1) | tonumber) != 0)
+      | select(((.enabled // 1) | tonumber) != 0)
+      | select($T == "" or .type == $T)
+      | .storage' 2>/dev/null || true
+}
+
+# resolve_storage <node> <schema-default> — the pool to build this guest on.
+resolve_storage() {
+  local node="$1" fallback="$2" raw="" pools="" zfs_pools="" declared="" chosen=""
+
+  if ! raw="$(node_storage_json "${node}")"; then
+    # Proxmox could not be asked. Carry on exactly as before rather than block a
+    # build that would have worked; the create path reports the truth either way.
+    printf '%s' "$(get_config_value 'storage' "${fallback}")"
+    return 0
+  fi
+  pools="$(image_pools "${raw}")"
+
+  if config_declares 'storage'; then
+    declared="$(get_config_value 'storage' "${fallback}")"
+    if ! printf '%s\n' "${pools}" | grep -qx -- "${declared}"; then
+      die "storage '${declared}' is declared for this guest but node '${node}' does not have it.
+      ${node} offers: $(printf '%s' "${pools}" | tr '\n' ' ')
+      Either declare one of those as 'storage', or place the guest on a node that has '${declared}'."
+    fi
+    printf '%s' "${declared}"
+    return 0
+  fi
+
+  # Undeclared: keep the schema default when the node has it, so every estate
+  # whose nodes share a pool name is unaffected. Otherwise take the node's first
+  # ZFS pool — TAPPaaS builds guests on zvols, so a directory storage is not a
+  # substitute even where Proxmox would accept the disk.
+  if printf '%s\n' "${pools}" | grep -qx -- "${fallback}"; then
+    printf '%s' "${fallback}"
+    return 0
+  fi
+  zfs_pools="$(image_pools "${raw}" zfspool)"
+  chosen="$(printf '%s' "${zfs_pools}" | head -1)"
+  if [ -n "${chosen}" ]; then
+    warn "No 'storage' declared and node '${node}' has no '${fallback}' — building on '${chosen}'"
+    printf '%s' "${chosen}"
+    return 0
+  fi
+  die "No 'storage' declared, and node '${node}' has no ZFS pool that can hold a VM disk.
+      ${node} offers: $(printf '%s' "${pools}" | tr '\n' ' ')
+      Declare a usable pool as 'storage', or create a ZFS pool on ${node}."
+}
+
 # generate some MAC addresses
 info "${BOLD}Creating TAPPaaS VM in proxmox...${CL}"
 NODE="$(get_config_value 'node' "$(hostname)")"
@@ -350,7 +440,9 @@ VM_OSTYPE="$(get_config_value 'ostype' 'l26')"
 CPU_TYPE="$(get_config_value 'cputype' 'host')"
 RAM_SIZE="$(get_config_value 'memory' '4096')"
 DISK_SIZE="$(get_config_value 'diskSize' '8G')"
-STORAGE="$(get_config_value 'storage' 'tanka1')"
+# #692: resolved against NODE, not assumed. 'tanka1' stays the preferred name,
+# so an estate whose nodes all carry it sees no change.
+STORAGE="$(resolve_storage "${NODE}" 'tanka1')"
 IMAGETYPE="$(get_config_value 'imageType')"
 IMAGE="$(get_config_value 'image' '8080')"
 if [ "${IMAGETYPE:-}" != "clone" ]; then

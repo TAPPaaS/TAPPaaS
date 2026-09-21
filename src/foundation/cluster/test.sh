@@ -121,6 +121,7 @@ required=(
     lib/vm-net.sh
     lib/test-node-mgmt-ip.sh
     lib/test-node-placeholders.sh
+    lib/test-storage-resolve.sh
     lib/test-vm-net.sh
     services/vm/install-service.sh
     services/vm/update-service.sh
@@ -203,6 +204,21 @@ if [[ -x "${SCRIPT_DIR}/lib/test-node-mgmt-ip.sh" ]]; then
     fi
 else
     fail "lib/test-node-mgmt-ip.sh not found or not executable"
+fi
+
+# A guest is built on a pool the target node actually has (#692). `tanka1` was
+# the fallback whatever node it landed on, and the mismatch only surfaced at
+# `qm importdisk`, after the image download. Stubbed pvesh, no cluster.
+info "${BOLD}Test 2a4: the storage pool is resolved against the node (#692)${CL}"
+if [[ -x "${SCRIPT_DIR}/lib/test-storage-resolve.sh" ]]; then
+    if st_out=$("${SCRIPT_DIR}/lib/test-storage-resolve.sh" 2>&1); then
+        pass "$(tail -1 <<< "${st_out}")"
+    else
+        fail "storage-resolve unit tests failed"
+        indent <<< "${st_out}"
+    fi
+else
+    fail "lib/test-storage-resolve.sh not found or not executable"
 fi
 
 # The shipped node placeholders are retired on every site by the update, not by

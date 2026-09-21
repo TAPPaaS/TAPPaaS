@@ -20,8 +20,7 @@
       "image": "debian-13-generic-amd64-20260112-2355.qcow2",
       "imageLocation": "https://cdimage.debian.org/cdimage/cloud/trixie/20260112-2355",
       "imageType": "img",
-      "memory": "1024",
-      "storage": "tanka1"
+      "memory": "1024"
     }
   }
 }
