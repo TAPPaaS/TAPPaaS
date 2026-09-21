@@ -229,6 +229,12 @@ ADR-007e v1.3 owns the target). The prepare and rebuild steps write their stage 
 into `last-update-result.json` before exiting non-zero, so the notice names the failing
 stage instead of quoting the previous sweep's result.
 
+The notice also names **which site** it is about: the subject leads with the site's public
+domain and the body carries `Site: <name> (<domain>) — host <host>`. The domain is the
+default environment's `domains.primary`, else `mgmt`'s, else the domain of the address the
+notice goes to — a site code and a host called `tappaas-cicd` look identical from every
+installation, so an operator running more than one site could not tell them apart.
+
 **#467 is already closed** — by `a65c6c61` (2026-08-17), not by v0.1's `pinned-pkgs.nix`.
 The 11 components are built as flake packages against `flake.lock`
 (`flake.nix:15–39`, `component-install-lib.sh:51–65`), so the build D3 hoists no longer reads
