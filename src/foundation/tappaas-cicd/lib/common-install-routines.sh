@@ -772,6 +772,81 @@ provider_module_installed() {
     [[ -f "${CONFIG_DIR}/${provider_module}.json" ]]
 }
 
+# ── Auto-pinhole expectations (#689) ─────────────────────────────────
+#
+# A provider's test-service.sh must not assert that a pinhole exists. Whether
+# one is DUE depends on the consumer's zone, the provider zone's `access-to` and
+# `pinhole-allowed-from`, and the service's own pinhole.json — and when a
+# legitimate combination means no rule, a test that asserts one fails a consumer
+# that is perfectly wired. Observed 2026-09-21: two consumers failed on rules
+# absent by design.
+#
+# These ask rules-manager, which owns the predicate in _auto_pinhole_candidates,
+# instead of restating it here. A second copy would not stay in step: #632 was a
+# three-line bug in one place and a three-place bug in practice, for exactly
+# that reason.
+
+# pinhole_expectation — what the compiler would write for one consumer/service.
+# Prints one line per outcome:
+#   rule <canonical rule description>   a pinhole IS due; assert this exact rule
+#   skip <reason>                       none is due, and why
+# Arguments: <consumer-module> <provider:service>
+pinhole_expectation() {
+    local consumer="$1" coordinate="$2" json
+    [[ -n "${consumer}" && -n "${coordinate}" ]] || {
+        error "pinhole_expectation: usage: <consumer-module> <provider:service>"
+        return 2
+    }
+    json="$(rules-manager --no-ssl-verify --output json expected-pinholes \
+                "${consumer}" --for "${coordinate}" 2>/dev/null)" || {
+        error "pinhole_expectation: rules-manager could not answer for '${consumer}' ${coordinate}"
+        return 2
+    }
+    jq -r '(.rules[]? | "rule \(.)"), (.skipped[]? | "skip \(.reason)")' <<<"${json}" 2>/dev/null
+}
+
+# check_service_pinholes — assert every pinhole due for one consumer/service,
+# and pass, with the reason, when none is. This is the whole of what a
+# test-service.sh needs to do about firewall rules; it exists once so the next
+# provider does not inherit the previous one's assumption.
+#
+# The rule strings come from the compiler, so a caller never rebuilds one — and
+# never grep -F's a bare port either: ':80' is a prefix of ':8080', which passed
+# a test for a rule that did not exist.
+#
+# Arguments: <consumer-module> <provider:service>
+# Returns: 0 all present (or none due), 1 one or more missing, 2 could not ask.
+check_service_pinholes() {
+    local consumer="$1" coordinate="$2"
+    local expectation live kind value missing=0
+
+    expectation="$(pinhole_expectation "${consumer}" "${coordinate}")" || return 2
+
+    # One firewall round-trip for every port of this service, not one per port.
+    live="$(rules-manager list-rules --no-ssl-verify 2>/dev/null)" || live=""
+
+    while read -r kind value; do
+        [[ -n "${kind}" ]] || continue
+        case "${kind}" in
+            rule)
+                # list-rules prints "<description> | <freetext>"; anchoring on
+                # the trailing separator makes this an exact-field match.
+                if grep -qF -- "${value} |" <<<"${live}"; then
+                    info "  Pinhole ${value}: ${GN}present${CL}"
+                else
+                    error "  Pinhole ${value}: ${RD}MISSING${CL}"
+                    missing=$((missing + 1))
+                fi
+                ;;
+            skip)
+                info "  Pinhole (${consumer} → ${coordinate}): ${GN}not required${CL} — ${value}"
+                ;;
+        esac
+    done <<<"${expectation}"
+
+    [[ "${missing}" -eq 0 ]]
+}
+
 # find_integrateswith_consumers — print the installed modules that OPTIONALLY
 # integrate with <provider_module>:<service> (#501). Environment-aware: each
 # consumer's own .environment resolves its provider name, so a base coordinate

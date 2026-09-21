@@ -163,5 +163,42 @@ script.
 
 ---
 
+## `test-service.sh` — what it must and must not assert
+
+The table above requires the file. What it has to *say* was never written down,
+so each new provider copied the previous one's assumptions — and one of those
+was wrong in all of them (#689).
+
+**Assert the wiring you own.** Your service registered something for this
+consumer: a key, an account, a share, an entry in your app's config. That is
+what `test-service.sh <consumer>` is for, and it is the part only you can check.
+
+**Do not assert that a firewall pinhole exists.** Whether one is due is not a
+property of your service. It depends on the consumer's zone, your zone's
+`access-to` and `pinhole-allowed-from`, and your `pinhole.json` — and for
+several legitimate combinations the answer is *no rule*, for ever. A consumer in
+your own zone is the common one: intra-zone traffic already flows, so
+rules-manager writes nothing, and a test that demands a rule fails a consumer
+that is correctly wired. Ask instead:
+
+```bash
+check_service_pinholes "${CONSUMER}" "mymodule:myservice" || (( FAILURES++ )) || true
+```
+
+It prints one line per port, passes with the reason when no rule is due, and
+takes the rule strings — ports, protocol suffix and all — from the same
+predicate that writes them. Never rebuild a `tappaas-svcdep:` name by hand.
+
+**Reachability is not a failure condition when the peer is a device.** A probe
+from the management zone says your service is listening; it says nothing about
+the consumer's path. For a service fronting hardware that sleeps, is unplugged,
+or answers only its paired controller, a failed probe is information, not a
+broken contract — report it and keep the exit code for the wiring.
+
+**Exit codes** follow the suite: `0` pass, `1` failed assertions, `2` fatal
+(could not run at all — `module update` rolls back on `2`, not on `1`).
+
+---
+
 Full detail, including the hook contract and the disruption model:
 [`docs/design/ADR-020-field-change-realization.md`](../../../docs/design/ADR-020-field-change-realization.md).

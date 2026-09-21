@@ -1348,3 +1348,140 @@ class TestAutoPinholeReadsModuleSource(unittest.TestCase):
     def test_no_source_at_all_yields_nothing(self):
         self._write("")
         self.assertEqual(self._candidates(), [])
+
+
+class TestExpectedPinholes(_PinholeFixtures, unittest.TestCase):
+    """`expected-pinholes`: the question a provider's test-service.sh asks (#689).
+
+    Every case here is one a test used to get wrong by assuming a rule was due:
+    the answer must distinguish "the rule is missing" from "no rule was ever
+    required", and it must hand back the rule STRING so no caller rebuilds one.
+    """
+
+    def _expect(self, consumer="ui", coordinate=None, **zone_overrides):
+        mgr = _make_manager(
+            zones=self._make_zones(**zone_overrides), modules_dir=self.dir
+        )
+        return mgr.expected_pinholes(consumer, coordinate)
+
+    def test_cross_zone_dependency_is_expected_with_its_rule_string(self):
+        self._write_provider(
+            self.dir, vmname="api", zone0="srvWork",
+            pinhole_ports=[{"port": 4000, "protocol": "TCP"}], service="rest",
+        )
+        self._write_consumer(self.dir, vmname="ui", zone0="dmz",
+                             depends_on=["api:rest"])
+        exp = self._expect()
+        self.assertEqual(exp.rules, ["tappaas-svcdep:ui:rest:api:4000"])
+        self.assertEqual(exp.skipped, [])
+
+    def test_same_zone_consumer_expects_nothing_and_says_why(self):
+        # The deconz:hue-bridge case: the SysAP consumes it from inside the
+        # provider's own zone, so rules-manager never writes a rule — and the
+        # provider's test called that MISSING.
+        self._write_provider(
+            self.dir, vmname="api", zone0="srvWork",
+            pinhole_ports=[{"port": 4000, "protocol": "TCP"}], service="rest",
+        )
+        self._write_consumer(self.dir, vmname="ui", zone0="srvWork",
+                             depends_on=["api:rest"])
+        exp = self._expect()
+        self.assertEqual(exp.rules, [])
+        self.assertEqual(len(exp.skipped), 1)
+        dep, reason = exp.skipped[0]
+        self.assertEqual(dep, "api:rest")
+        self.assertIn("intra-zone", reason)
+        self.assertIn("srvWork", reason)
+
+    def test_policy_refusal_is_reported_as_a_reason_not_a_rule(self):
+        # home is NOT in srvWork.pinhole-allowed-from once we clear it.
+        self._write_provider(
+            self.dir, vmname="api", zone0="srvWork",
+            pinhole_ports=[{"port": 4000, "protocol": "TCP"}], service="rest",
+        )
+        self._write_consumer(self.dir, vmname="ui", zone0="home",
+                             depends_on=["api:rest"])
+        exp = self._expect(srvWork={"pinhole_allowed_from": ["dmz"]})
+        self.assertEqual(exp.rules, [])
+        self.assertIn("pinhole-allowed-from", exp.skipped[0][1])
+
+    def test_zone_access_to_already_covers_it(self):
+        self._write_provider(
+            self.dir, vmname="api", zone0="srvWork",
+            pinhole_ports=[{"port": 4000, "protocol": "TCP"}], service="rest",
+        )
+        self._write_consumer(self.dir, vmname="ui", zone0="dmz",
+                             depends_on=["api:rest"])
+        exp = self._expect(srvWork={"access_to": ["dmz"]})
+        self.assertEqual(exp.rules, [])
+        self.assertIn("access-to", exp.skipped[0][1])
+
+    def test_provider_without_pinhole_json_expects_nothing(self):
+        self._write_provider(self.dir, vmname="api", zone0="srvWork",
+                             pinhole_ports=None, service="rest")
+        self._write_consumer(self.dir, vmname="ui", zone0="dmz",
+                             depends_on=["api:rest"])
+        exp = self._expect()
+        self.assertEqual(exp.rules, [])
+        self.assertIn("no pinhole.json", exp.skipped[0][1])
+
+    def test_undeployed_provider_expects_nothing(self):
+        self._write_consumer(self.dir, vmname="ui", zone0="dmz",
+                             integrates_with=["ghost:rest"])
+        exp = self._expect()
+        self.assertEqual(exp.rules, [])
+        self.assertIn("not deployed", exp.skipped[0][1])
+
+    def test_non_tcp_port_carries_the_protocol_suffix(self):
+        # A test that greps for ':1900' would also match ':19000'; the canonical
+        # string is handed back so the caller never guesses this form.
+        self._write_provider(
+            self.dir, vmname="api", zone0="srvWork",
+            pinhole_ports=[{"port": 1900, "protocol": "UDP"}], service="ssdp",
+        )
+        self._write_consumer(self.dir, vmname="ui", zone0="dmz",
+                             depends_on=["api:ssdp"])
+        self.assertEqual(self._expect().rules,
+                         ["tappaas-svcdep:ui:ssdp:api:1900/UDP"])
+
+    def test_coordinate_narrows_to_one_provider_service(self):
+        self._write_provider(
+            self.dir, vmname="api", zone0="srvWork",
+            pinhole_ports=[{"port": 80, "protocol": "TCP"}], service="web",
+        )
+        self._write_provider(
+            self.dir, vmname="db", zone0="srvWork",
+            pinhole_ports=[{"port": 5432, "protocol": "TCP"}], service="sql",
+        )
+        self._write_consumer(self.dir, vmname="ui", zone0="dmz",
+                             depends_on=["api:web", "db:sql"])
+        self.assertEqual(self._expect(coordinate="db:sql").rules,
+                         ["tappaas-svcdep:ui:sql:db:5432"])
+
+    def test_integrateswith_is_expected_too(self):
+        # #632: both relationship lists synthesise a pinhole, so a test that
+        # only knows about dependsOn reports a live rule as unverified.
+        self._write_provider(
+            self.dir, vmname="api", zone0="srvWork",
+            pinhole_ports=[{"port": 4000, "protocol": "TCP"}], service="rest",
+        )
+        self._write_consumer(self.dir, vmname="ui", zone0="dmz",
+                             integrates_with=["api:rest"])
+        self.assertEqual(self._expect().rules, ["tappaas-svcdep:ui:rest:api:4000"])
+
+    def test_the_answer_matches_what_compile_actually_writes(self):
+        # The point of the verb: one predicate, not two. If these ever diverge,
+        # a test-service.sh is asserting something the compile pass disagrees
+        # with — which is the whole of #689.
+        self._write_provider(
+            self.dir, vmname="api", zone0="srvWork",
+            pinhole_ports=[{"port": 80, "protocol": "TCP"},
+                           {"port": 1900, "protocol": "UDP"}],
+            service="web",
+        )
+        self._write_consumer(self.dir, vmname="ui", zone0="dmz",
+                             depends_on=["api:web"])
+        mgr = _make_manager(zones=self._make_zones(), modules_dir=self.dir)
+        compiled = {r.description for r in mgr._compile(load_module(self.dir, "ui"))[0]
+                    if r.description.startswith("tappaas-svcdep:")}
+        self.assertEqual(set(mgr.expected_pinholes("ui").rules), compiled)

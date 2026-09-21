@@ -41,15 +41,10 @@ for PORT in 8080 8443; do
 done
 
 # ── Pinhole rules ────────────────────────────────────────────────────
-for PORT in 8080 8443; do
-    RULE="tappaas-svcdep:${CONSUMER}:zigbee:deconz:${PORT}"
-    if rules-manager list-rules --no-ssl-verify 2>/dev/null | grep -qF "${RULE}"; then
-        info "  Pinhole ${PORT} (${CONSUMER}→deconz): ${GN}present${CL}"
-    else
-        error "  Pinhole ${PORT} (${CONSUMER}→deconz): ${RD}MISSING${CL}"
-        (( FAILURES++ )) || true
-    fi
-done
+# Ports and the question of whether a rule is due at all both come from
+# rules-manager (#689): deconz and its consumer are usually in different zones,
+# but a consumer that shares deconz's zone needs no rule and must not fail here.
+check_service_pinholes "${CONSUMER}" "deconz:zigbee" || (( FAILURES++ )) || true
 
 if (( FAILURES == 0 )); then
     info "${GN}deconz:zigbee test-service passed for ${CONSUMER}${CL}"
