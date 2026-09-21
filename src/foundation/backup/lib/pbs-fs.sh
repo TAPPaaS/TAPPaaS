@@ -226,12 +226,25 @@ _pbs_fs_release_json() {
 # either. The merge duly reports "added (new in release): backup.filesystemPaths"
 # and writes a config without it (#662). Same shape as kind.ts reading an
 # authored `kind` the deployed config has not adopted yet (#669).
+# Flatten Pattern A before reading: a service-owned field lives at the top level
+# OR under config.<service>, depending on how the module declares the capability
+# (#688). `backup` is usedBy backup:vm/backup:filesystem, so a consumer that
+# names the service in dependsOn gets its policy grouped under
+# config["backup:filesystem"] — and a reader that only looked at `.backup` saw
+# nothing, then reported "declares the capability but no backup.filesystemPaths"
+# about a config that declared them plainly.
+_pbs_fs_flat() {
+    jq '(if (.config | type) == "object"
+         then reduce (.config | to_entries[]) as $s (.; . * $s.value) | del(.config)
+         else . end)' "$1" 2>/dev/null
+}
+
 _pbs_fs_backup_field() {
     local module="$1" field="$2" out rel
-    out="$(jq -r --arg f "${field}" '.backup[$f] // [] | .[]' \
-        "${PBS_FS_CONFIG_DIR}/${module}.json" 2>/dev/null || true)"
+    out="$(_pbs_fs_flat "${PBS_FS_CONFIG_DIR}/${module}.json" \
+        | jq -r --arg f "${field}" '.backup[$f] // [] | .[]' 2>/dev/null || true)"
     if [[ -z "${out}" ]] && rel="$(_pbs_fs_release_json "${module}")"; then
-        out="$(jq -r --arg f "${field}" '.backup[$f] // [] | .[]' "${rel}" 2>/dev/null || true)"
+        out="$(_pbs_fs_flat "${rel}" | jq -r --arg f "${field}" '.backup[$f] // [] | .[]' 2>/dev/null || true)"
     fi
     printf '%s' "${out}"
     [[ -n "${out}" ]] && printf '\n'

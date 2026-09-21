@@ -148,6 +148,17 @@ cat > "${CONFIG_DIR}/tappaas3.json" <<JSON
 JSON
 ck "paths: the deployed config wins when it HAS them" "/etc" "$(pbs_fs_paths tappaas3)"
 
+# Pattern A: the same policy, grouped under the service because the module
+# names it in dependsOn (#688). The reader must find it either way.
+cat > "${CONFIG_DIR}/grouped.json" <<'JSON'
+{ "kind": "machine", "address": "g.h", "dependsOn": ["backup:filesystem"],
+  "config": { "backup:filesystem": { "backup": { "filesystemPaths": ["/etc", "/srv"],
+                                                 "exclude": ["*.iso"] } } } }
+JSON
+ck "paths: read when Pattern A grouped them under the service" "/etc /srv" \
+   "$(pbs_fs_paths grouped | tr '\n' ' ' | sed 's/ $//')"
+ck "exclude: read from the grouped form too" "*.iso" "$(pbs_fs_exclude grouped)"
+
 # A path whose last segment has a dot derived a dotted archive NAME, which PBS
 # rejects outright ("parameter verification failed - 'backupspec'", #662).
 ck "archive name: dots are not allowed in the name" "var-lib-pve-cluster-config-db.pxar:/var/lib/pve-cluster/config.db" \
