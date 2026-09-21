@@ -1,6 +1,6 @@
 """Caddy reverse proxy management operations for OPNsense."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from oxl_opnsense_client import Client
 
 from .config import Config
@@ -171,19 +171,57 @@ class CaddyHandlerInfo:
 
 @dataclass
 class CaddyAccessListInfo:
-    """Information about an existing Caddy access list (issue #206)."""
+    """Information about an existing Caddy access list (issue #206).
+
+    Every field `searchAccessList` returns (#696). This used to keep three of
+    them, which left no way to read a list back: `add-accesslist` writes the
+    whole object, so amending one meant knowing contents no command revealed —
+    and the empty deny message nobody could see stayed empty because nobody
+    could see it. The API hands all of this over in the search response, so
+    keeping it costs nothing but the attributes.
+    """
 
     uuid: str
     name: str
     description: str
+    client_ips: list[str] = field(default_factory=list)
+    invert: bool = False
+    matcher: str = ""
+    response_code: int | None = None
+    response_message: str = ""
 
     @classmethod
     def from_api_response(cls, data: dict) -> "CaddyAccessListInfo":
         """Create from OPNsense API search response row."""
+        raw_ips = data.get("clientIps", "") or ""
+        raw_code = str(data.get("HttpResponseCode", "") or "").strip()
         return cls(
             uuid=data.get("uuid", ""),
             name=data.get("accesslistName", ""),
             description=data.get("description", ""),
+            client_ips=[c.strip() for c in raw_ips.split(",") if c.strip()],
+            invert=str(data.get("accesslistInvert", "")) in ("1", "true", "True"),
+            # RequestMatcher comes back as a plain string here, unlike the
+            # selected-option dicts some other Caddy fields use.
+            matcher=_option_str(data.get("RequestMatcher", "")),
+            response_code=int(raw_code) if raw_code.isdigit() else None,
+            response_message=data.get("HttpResponseMessage", "") or "",
+        )
+
+    def to_access_list(self) -> "CaddyAccessList":
+        """The writable form of this list, so a caller can amend one field.
+
+        `setAccessList` replaces the whole object; without this a caller had to
+        rebuild every field from somewhere else, which is how they got lost.
+        """
+        return CaddyAccessList(
+            name=self.name,
+            client_ips=list(self.client_ips),
+            invert=self.invert,
+            matcher=self.matcher or "remote_ip",
+            response_code=self.response_code,
+            response_message=self.response_message,
+            description=self.description,
         )
 
 

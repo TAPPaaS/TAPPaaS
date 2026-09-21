@@ -134,17 +134,39 @@ proxy_resolve_access_list() {
     # Guard 2: add-accesslist is only available in caddy-manager >= 2.x.
     # If the subcommand is absent, degrade gracefully: warn and skip the
     # restriction rather than aborting the entire proxy install.
-    if ! caddy-manager add-accesslist --help >/dev/null 2>&1; then
+    local al_help
+    if ! al_help="$(caddy-manager add-accesslist --help 2>/dev/null)"; then
         warn "  caddy-manager does not support 'add-accesslist' — zone restriction skipped." >&2
         warn "  Update caddy-manager to enable per-domain IP allow-lists." >&2
         printf ''
         return 0
     fi
 
+    # A 403 with no body is a blank page, and a blank page is indistinguishable
+    # from the service being down — which is what every list on every estate
+    # served until now (#696). The text deliberately does NOT name the allowed
+    # zones: this body is served to whoever was refused, and the zone names are
+    # internal topology. An operator who wants the specifics sets
+    # TAPPAAS_ACCESS_DENIED_MESSAGE, or passes --message by hand.
+    #
+    # Same graceful degrade as Guard 2, one release narrower: the binary is
+    # rebuilt from this repo, but a converge can run against a manager from
+    # before the flag existed, and an unrecognised argument would fail the whole
+    # proxy install for the sake of a sentence.
+    local -a msg_arg=()
+    if [[ "${al_help}" == *--message* ]]; then
+        # No apostrophe in the default: inside "${var:-word}" bash takes it as
+        # an opening quote and swallows the rest of the file.
+        msg_arg=(--message "${TAPPAAS_ACCESS_DENIED_MESSAGE:-Access to this service is limited to approved networks. Connect from an allowed network, or over the site VPN, and try again.}")
+    else
+        warn "  caddy-manager has no --message — blocked clients will get an empty 403 body." >&2
+    fi
+
     if ! run_caddy add-accesslist "${al_name}" \
             --clients "${cidrs}" \
             --matcher remote_ip \
             --response-code 403 \
+            "${msg_arg[@]}" \
             --description "${description} (allowed zones)" \
             --no-ssl-verify; then
         error "Failed to create/update Caddy access list ${al_name}" >&2
