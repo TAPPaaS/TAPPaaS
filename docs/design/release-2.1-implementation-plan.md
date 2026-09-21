@@ -436,6 +436,19 @@ Work.
 One shared baseline for every NixOS VM. Landing it rebuilds every VM once,
 so bundle all baseline changes into that one rebuild.
 
+Status: in progress — **#408, #472 and #87 built and verified on hrossen 2026-09-21**
+(`wave1/g1.4-nixos-baseline`, merged to `main`). The site's own answers now reach every
+guest: `site.json .location` is derived from the first node and gained `keyboard`,
+`latitude`, `longitude`; a generated `/etc/nixos/tappaas-site.nix` carries time zone,
+locale, keymap and time source to each NixOS VM, with a converge path for Debian guests and
+adopted hosts keyed on `management`; thirteen hard-coded time zones are gone from the module
+`.nix` files. Evidence after the 2026-09-21 08:35 sweep (15/16, the one failure being #687):
+every guest on `Europe/Copenhagen`, syncing against its own zone's gateway — `10.0.0.1` for
+mgmt, `10.2.0.1` for rossen — the mothership included, where nothing had a time source
+before. #87 needed only the consuming half: OPNsense has been serving NTP (stratum 2) all
+along and no guest asked it. **#324 was pulled in and split back out** (see its row).
+**Remaining:** #390, #448, #472's sibling #348, #408's Windows half (#678, Future Work), #220.
+
 **Approach (operator, 2026-09-20).** Locale and time are **one site fact, applied per OS
 family** — not a NixOS-only concern. Measured that day on the test site: `tappaas1` is
 `Europe/Copenhagen` + keyboard `dk` (the operator's install answers), `tappaas2` and
@@ -468,10 +481,10 @@ time or locale on a Debian guest, an adopted `debianhost`, or a Windows guest at
 | #324 | App VMs do not import `tappaas-common.nix` | 2 | 4 | H | **Not an import line — a de-duplication** (proven on the test site 2026-09-20, see the issue): every module restates the baseline (`system.stateVersion`, `services.openssh`, `users.users.tappaas`, `cloud-init`, `nix.settings`…), so the import fails option by option until the copies go. `stateVersion` is the exception: existing VMs' state is `25.05` and must stay. Verified: only `tappaas-cicd.nix` and `templates/tappaas-nixos.nix` import it |
 | #390 | 00-Template fails canon C4/C7 | 5 | 1 | H | Every new module inherits it |
 | #448 | NIC rename race (kernel / udev / cloud-init) | 3 | 4 | M | A stable interface name is a network-config change on every VM |
-| #472 | NixOS clock two hours off | 4 | 2 | M | **Root cause found 2026-09-20:** every module nix picks its own time zone — `euro-office.nix:96` is UTC while the rest inherit `tappaas-common.nix:166`'s `mkDefault "Europe/Amsterdam"`, and the master (`tappaas1`) is `Europe/Copenhagen`. Fixed by the site fragment + #324 + #87 in one rebuild. Take it from site.json |
-| #408 | Locale/keyboard: tappaas1 is the master | 3 | 2 | M | |
+| ✅ #472 | NixOS clock two hours off | 4 | 2 | M | **Built and verified 2026-09-21.** **Root cause:** every module nix picks its own time zone — `euro-office.nix:96` is UTC while the rest inherit `tappaas-common.nix:166`'s `mkDefault "Europe/Amsterdam"`, and the master (`tappaas1`) is `Europe/Copenhagen`. Fixed by the site fragment + #324 + #87 in one rebuild. Take it from site.json |
+| ✅ #408 | Locale/keyboard: tappaas1 is the master | 3 | 2 | M | **Built 2026-09-21.** `site add` reads timezone/keyboard/locale back from the first node (`timedatectl`, `XKBLAYOUT`, `LANG`) instead of the mothership's template clock; country stays derived from the timezone because no Proxmox node stores it. `.location` gained `keyboard`, `latitude`, `longitude` with `site modify` flags; the PXE answer file takes the keyboard from the site (it used `DEFAULT_KEYBOARD`, which is why tappaas2/3 came up `us` against tappaas1's `dk`) and the USB installer offers the site's values as defaults. A recorded value is never overwritten: a re-run fills what is missing and warns when the site and its master disagree. hrossen corrected `NL/Europe/Amsterdam` → `DK/Europe/Copenhagen/dk` through the new flag |
 | #348 | hass locale from site master data | 3 | 2 | L | After #408: `hass:config` completes `core_config` with `{}` today, so country, time zone, currency and language stay at defaults. Reads the same `.location`, which is why `latitude`/`longitude` go in with #408 |
-| #87 | NTP on OPNsense, consumed by modules | 4 | 2 | M | **Moved into Release 2.1 2026-09-20.** Nothing in the tree serves or consumes NTP today — no `timesyncd` servers, no chrony, no OPNsense service. Rolled into #472's rebuild |
+| ✅ #87 | NTP on OPNsense, consumed by modules | 4 | 2 | M | **Built 2026-09-21** (moved into Release 2.1 2026-09-20). The server half already existed — the firewall answers as a stratum-2 NTP server — and nothing consumed it: every guest fell through to `*.nixos.pool.ntp.org` with `SystemNTPServers` empty. Now each guest is pointed at its own zone's gateway, by the fragment on NixOS and a `systemd-timesyncd` drop-in on Debian. DHCP option 42 is raised on the issue as belt-and-braces, not done. Nothing in the tree serves or consumes NTP today — no `timesyncd` servers, no chrony, no OPNsense service. Rolled into #472's rebuild |
 | #220 | Nix sandbox disabled on cicd | 4 | 2 | L | Re-test against current nixpkgs; remove the workaround |
 
 ### G1.5 Rebuild & recovery paths — E3 · R4 · L-M
