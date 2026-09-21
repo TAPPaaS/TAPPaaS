@@ -51,8 +51,7 @@
 
 > **`machine` is the kind; Host is the role.** ADR-022f D2 renamed the value `host` → `machine`
 > precisely because the two were one word. A `machine`, `vm` or `lxc` **fills** a Host role; an
-> `application` **runs on** one. ADR-022d's table still shows the old `host`/`app` spellings and is
-> superseded on those two names by ADR-022f D2/D3.
+> `application` **runs on** one.
 
 ## B. Composition terms (ADR-009 / ArchiMate, amended by ADR-022c)
 
