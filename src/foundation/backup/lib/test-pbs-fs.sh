@@ -76,6 +76,52 @@ ck "manifest: carries no credential" "no" \
 ck "manifest: is not module-shaped" "no" \
    "$(jq -e 'has("dependsOn") or has("provides") or has("location") or .kind == "module"' "${M}" >/dev/null 2>&1 && echo yes || echo no)"
 
+# ── a machine is a capture target too (#662) ────────────────────────
+# A Proxmox host has no vmname and no tappaas user, so every assumption the
+# service made about a guest has to resolve by kind instead.
+PBS_FS_CONFIG_DIR="${CONFIG_DIR}"
+cat > "${CONFIG_DIR}/tappaas1.json" <<'JSON'
+{ "kind": "machine", "address": "tappaas1.mgmt.internal", "os": "debian",
+  "backup": { "filesystemPaths": ["/etc", "/var/lib/pve-cluster/config.db", "/root"],
+              "exclude": ["/root/*.iso"] } }
+JSON
+cat > "${CONFIG_DIR}/nextcloud.json" <<'JSON'
+{ "kind": "vm", "vmname": "nextcloud", "zone0": "rossen", "os": "nixos",
+  "backup": { "filesystemPaths": ["/var/lib/nextcloud"] } }
+JSON
+
+ck "target: a machine is root at its address" "root@tappaas1.mgmt.internal" "$(pbs_fs_target tappaas1)"
+ck "target: a guest is tappaas at vmname.zone" "tappaas@nextcloud.rossen.internal" "$(pbs_fs_target nextcloud)"
+cat > "${CONFIG_DIR}/nowhere.json" <<'JSON'
+{ "kind": "vm" }
+JSON
+pbs_fs_target nowhere >/dev/null 2>&1; ck_rc "target: a module that says neither fails" 1 $?
+
+ck "sudo: a guest needs it"      "sudo " "$(pbs_fs_sudo nextcloud)"
+ck "sudo: root does not"         ""      "$(pbs_fs_sudo tappaas1)"
+ck "runner: a machine has no /home/tappaas" "/usr/local/sbin/tappaas-fs-backup.sh" "$(pbs_fs_runner_for tappaas1)"
+ck "runner: a guest keeps its path"         "/home/tappaas/bin/tappaas-fs-backup.sh" "$(pbs_fs_runner_for nextcloud)"
+ck "manifest dir: machine"       "/etc/tappaas"          "$(pbs_fs_manifest_dir_for tappaas1)"
+ck "manifest dir: guest"         "/home/tappaas/config"  "$(pbs_fs_manifest_dir_for nextcloud)"
+
+# The OS gate is about a guest whose paths TAPPaaS chose; a machine declares
+# its own, so Debian passes there and still fails for a guest.
+pbs_fs_os_supported debian machine; ck_rc "os gate: debian passes for a machine" 0 $?
+pbs_fs_os_supported debian;         ck_rc "os gate: debian still fails for a guest" 1 $?
+pbs_fs_os_supported nixos;          ck_rc "os gate: nixos passes as before" 0 $?
+
+# The exclusions travel in the manifest, or the host capture carries 3.2 GB of
+# rebuildable ISOs.
+ck "exclude: read from the policy" "/root/*.iso" "$(pbs_fs_exclude tappaas1)"
+ck "exclude: none declared is empty" "" "$(pbs_fs_exclude nextcloud)"
+pbs_fs_write_manifest tappaas1 repo fs/tappaas1 daily FP /etc /root >/dev/null
+MF="$(pbs_fs_manifest_path tappaas1)"
+ck "manifest: carries the paths"    "/etc /root"   "$(jq -r '.paths | join(" ")' "${MF}")"
+ck "manifest: carries the excludes" "/root/*.iso"  "$(jq -r '.exclude | join(" ")' "${MF}")"
+pbs_fs_write_manifest nextcloud repo fs/nextcloud daily FP /var/lib/nextcloud >/dev/null
+ck "manifest: an empty exclude list is still an array" "0" \
+   "$(jq -r '.exclude | length' "$(pbs_fs_manifest_path nextcloud)")"
+
 rm -rf "${CONFIG_DIR}"
 
 echo "RESULT: ${PASS} passed, ${FAIL} failed"

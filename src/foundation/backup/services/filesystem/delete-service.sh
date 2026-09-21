@@ -34,16 +34,22 @@ ZONE="$(jq -r '.zone0 // "mgmt"' "${CONFIG}" 2>/dev/null || echo mgmt)"
 MANIFEST="$(pbs_fs_manifest_path "${MODULE}")"
 [[ -f "${MANIFEST}" ]] && { rm -f "${MANIFEST}"; info "  removed capture manifest ${MANIFEST}"; }
 
-if [[ -n "${VMNAME}" ]]; then
+if TARGET="$(pbs_fs_target "${MODULE}")"; then
     # The runner itself goes too — the header has always said so, but it was
     # left behind, so an un-wired module kept an executable whose timer would
-    # fire against a manifest that no longer exists (#626). Its systemd trigger
-    # is declarative and shared by every guest; it goes inert on its own once
-    # the runner is gone (ConditionPathExists).
-    ssh -o ConnectTimeout=10 -o BatchMode=yes "tappaas@${VMNAME}.${ZONE}.internal" \
-        "rm -f /home/tappaas/config/${MODULE}.fsbackup.json '$(pbs_fs_runner_path)'; sudo rm -f /etc/secrets/backup-fs.pw" 2>/dev/null \
-        && info "  removed the runner, its manifest + write credential from ${VMNAME}" \
-        || warn "  could not clean up on ${VMNAME} (it may already be gone) — harmless"
+    # fire against a manifest that no longer exists (#626). A guest's systemd
+    # trigger is declarative and shared; it goes inert on its own once the
+    # runner is gone (ConditionPathExists). A machine's units were installed by
+    # this service (#662), so this is what takes them away again.
+    _host="${TARGET#*@}"
+    _sudo="$(pbs_fs_sudo "${MODULE}")"
+    _clean="rm -f '$(pbs_fs_manifest_dir_for "${MODULE}")/${MODULE}.fsbackup.json' '$(pbs_fs_runner_for "${MODULE}")'; ${_sudo}rm -f /etc/secrets/backup-fs.pw"
+    if [[ "$(pbs_fs_kind "${MODULE}")" == "machine" ]]; then
+        _clean+="; systemctl disable --now tappaas-fs-backup.timer 2>/dev/null; rm -f /etc/systemd/system/tappaas-fs-backup.{service,timer}; systemctl daemon-reload"
+    fi
+    ssh -o ConnectTimeout=10 -o BatchMode=yes "${TARGET}" "${_clean}" 2>/dev/null \
+        && info "  removed the runner, its manifest + write credential from ${_host}" \
+        || warn "  could not clean up on ${_host} (it may already be gone) — harmless"
 fi
 
 info "  ${GN}✓${CL} backup:filesystem un-wired for ${MODULE}"

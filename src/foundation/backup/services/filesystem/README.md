@@ -1,6 +1,7 @@
 # backup:filesystem service
 
-Captures **named paths inside** a module's guest, rather than the whole guest.
+Captures **named paths inside** a module's guest — or on a machine — rather than
+the whole guest.
 The narrower half of the backup pair: `backup:vm` snapshots a guest from the
 outside and needs nothing within it, while this service backs up a *subset* of
 what lives inside — which only the guest itself can read.
@@ -18,6 +19,7 @@ Declaring the capability and naming the paths is the whole interface:
 "dependsOn": ["backup:filesystem"],        // or integratesWith, see below
 "backup": {
   "filesystemPaths": ["/home/tappaas/config"],
+  "exclude": ["*.iso"],                    // optional; patterns inside those paths
   "schedule": "daily"                      // optional; inherits the cascade
 }
 ```
@@ -132,3 +134,37 @@ Module-level backup policy (ADR-007 P9). The leaf of the Site -> Environment -> 
 **Why this change class.** Which paths inside the guest are captured, and how often. Applied by re-writing the capture manifest and re-asserting the namespace/ACL — future captures change, nothing already stored is touched, and the guest keeps running.
 
 <!-- END GENERATED FIELDS -->
+
+## A machine, not only a guest (#662)
+
+A module of `kind: machine` (ADR-026 D8) is captured the same way, which is how
+a Proxmox node's own configuration is backed up. Three things differ, all
+resolved from the module's config so the service has one code path:
+
+| | guest | machine |
+|---|---|---|
+| reached as | `tappaas@<vmname>.<zone>.internal`, with `sudo` | `root@<address>`, no sudo — a PVE host has no `tappaas` user |
+| runner lives at | `/home/tappaas/bin/tappaas-fs-backup.sh` | `/usr/local/sbin/tappaas-fs-backup.sh` — there is no `/home/tappaas` |
+| manifest lives in | `/home/tappaas/config/` | `/etc/tappaas/` |
+| the timer comes from | `tappaas-common.nix`, declaratively | this service, which writes and enables the units |
+
+The OS gate is also about a *guest*: TAPPaaS only selects paths on behalf of a
+layout it knows (NixOS). A machine declares its own paths, so the gate accepts
+it whatever the distribution — the layout is the operator's statement, not an
+assumption.
+
+`proxmox-backup-client` ships with Proxmox VE, so nothing is installed on a node
+to make this work.
+
+### Exclusions
+
+`exclude` is a list of `proxmox-backup-client --exclude` patterns applied to the
+declared paths. It exists because a capture set is sometimes *nearly* right: a
+node's `/root` is worth keeping, but the netboot ISOs in it are 1.6 GB each,
+rebuildable by `make-install-media.sh` and still served upstream. Excluding them
+takes the node's capture from gigabytes to megabytes without narrowing what a
+restore actually needs.
+
+Exclusions are for rebuildable bulk, not for secrets: a path whose contents the
+capture cannot fully read is still fatal (#626), and that rule is what keeps a
+partial capture from reporting success.

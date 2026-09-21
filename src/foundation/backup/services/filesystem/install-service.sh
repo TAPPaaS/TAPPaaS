@@ -47,13 +47,20 @@ if pbs_is_shim; then
     exit 0
 fi
 
+KIND="$(pbs_fs_kind "${MODULE}")"
 VMNAME="$(jq -r '.vmname // empty' "${CONFIG}")"
 ZONE="$(jq -r '.zone0 // "mgmt"' "${CONFIG}")"
 OSTYPE_DECLARED="$(jq -r '.os // .ostype // "nixos"' "${CONFIG}")"
-[[ -n "${VMNAME}" ]] || { warn "backup:filesystem: ${MODULE} has no vmname — nothing to capture"; exit 0; }
+# Where the files are, and who we are when we get there: a guest by vmname, a
+# machine by address as root (#662). Both resolve through one helper so the
+# three service scripts cannot disagree about it.
+TARGET="$(pbs_fs_target "${MODULE}")" \
+    || { warn "backup:filesystem: ${MODULE} says neither a vmname nor an address — nothing to capture"; exit 0; }
+SUDO="$(pbs_fs_sudo "${MODULE}")"
+OWNER="tappaas:users"; [[ "${KIND}" == "machine" ]] && OWNER="root:root"
 
 # 1. Guest OS gate — fail loudly rather than capture something half-right.
-if ! pbs_fs_os_supported "${OSTYPE_DECLARED}"; then
+if ! pbs_fs_os_supported "${OSTYPE_DECLARED}" "${KIND}"; then
     die "backup:filesystem is only supported on guest OS types TAPPaaS knows the layout of (NixOS); '${MODULE}' declares '${OSTYPE_DECLARED}'. Use backup:vm for a whole-guest snapshot instead."
 fi
 
@@ -62,7 +69,7 @@ if [[ "${#FS_PATHS[@]}" -eq 0 ]]; then
     die "backup:filesystem: ${MODULE} declares the capability but no backup.filesystemPaths — nothing would be captured"
 fi
 
-GUEST="${VMNAME}.${ZONE}.internal"
+GUEST="${TARGET#*@}"
 NS="$(pbs_fs_namespace "${MODULE}")"
 AUTHID="$(pbs_fs_authid "${MODULE}")"
 REPO="${AUTHID}@$(pbs_pbs_url):$(pbs_storage_name)"
@@ -89,12 +96,12 @@ pbs_fs_ensure_target "${MODULE}" "${FS_PW}" || die "could not provision the PBS 
 # interpolated heredoc would put it in the remote's parsed script text, and an
 # argument would put it in the remote's process list.
 printf '%s' "${FS_PW}" | ssh -o ConnectTimeout=15 -o BatchMode=yes \
-    -o StrictHostKeyChecking=accept-new "tappaas@${GUEST}" \
-    "sudo bash -c 'mkdir -p /etc/secrets; chmod 755 /etc/secrets; umask 077; cat > /etc/secrets/backup-fs.pw; chown tappaas:users /etc/secrets/backup-fs.pw'" \
+    -o StrictHostKeyChecking=accept-new "${TARGET}" \
+    "${SUDO}bash -c 'mkdir -p /etc/secrets; chmod 755 /etc/secrets; umask 077; cat > /etc/secrets/backup-fs.pw; chown ${OWNER} /etc/secrets/backup-fs.pw'" \
     || die "could not write the backup login password on ${GUEST}"
 
 ssh -o ConnectTimeout=15 -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
-    "tappaas@${GUEST}" "sudo bash -s" <<'REMOTE' || die "could not prepare secrets on ${GUEST}"
+    "${TARGET}" "${SUDO}bash -s" <<REMOTE || die "could not prepare secrets on ${GUEST}"
 set -euo pipefail
 # The DIRECTORY must be traversable by the service user — the secrets inside it
 # are protected by their own 0600, not by an unreadable parent. Created under
@@ -111,12 +118,12 @@ else
     echo "  client encryption key already present"
 fi
 chmod 600 /etc/secrets/backup-fs.key /etc/secrets/backup-fs.pw
-chown tappaas:users /etc/secrets/backup-fs.key /etc/secrets/backup-fs.pw
+chown ${OWNER} /etc/secrets/backup-fs.key /etc/secrets/backup-fs.pw
 REMOTE
 info "  ${GN}✓${CL} guest secrets in place on ${BL}${GUEST}${CL}"
 
 sudo mkdir -p "${ESCROW_DIR}"
-if ssh -o BatchMode=yes "tappaas@${GUEST}" "sudo cat /etc/secrets/backup-fs.key" \
+if ssh -o BatchMode=yes "${TARGET}" "${SUDO}cat /etc/secrets/backup-fs.key" \
         | sudo tee "${ESCROW_DIR}/${MODULE}.key" >/dev/null; then
     sudo chmod 600 "${ESCROW_DIR}/${MODULE}.key"
     info "  ${GN}✓${CL} encryption key escrowed → ${ESCROW_DIR}/${MODULE}.key"
@@ -131,7 +138,14 @@ pbs_fs_write_manifest "${MODULE}" "${REPO}" "${NS}" "${SCHEDULE}" "$(pbs_fs_fing
     || die "could not write the capture manifest"
 
 MANIFEST="$(pbs_fs_manifest_path "${MODULE}")"
-pbs_fs_deploy_runner "${MODULE}" "${GUEST}" "${MANIFEST}" \
+# A guest's timer is declarative (tappaas-common.nix); a machine has no such
+# baseline, so the units are installed with the runner (#662).
+if [[ "${KIND}" == "machine" ]]; then
+    pbs_fs_install_timer "${MODULE}" "${TARGET}" \
+        || die "could not arm the capture timer on ${GUEST} — backup:filesystem is NOT wired for ${MODULE}"
+fi
+
+pbs_fs_deploy_runner "${MODULE}" "${TARGET}" "${MANIFEST}" \
     || die "could not deliver the capture runner to ${GUEST} — backup:filesystem is NOT wired for ${MODULE}"
 
 info "  ${GN}✓${CL} backup:filesystem install-service completed for ${MODULE} (${SCHEDULE})"
@@ -140,4 +154,4 @@ info "     script: /etc/systemd/system is a read-only store symlink on NixOS, so
 info "     trigger cannot be delivered imperatively. Every guest built from the TAPPaaS"
 info "     baseline (templates/tappaas-common.nix) carries an inert tappaas-fs-backup"
 info "     timer that arms itself once this runner lands; test-service.sh verifies it."
-info "     Run a capture now with: ssh tappaas@${GUEST} tappaas-fs-backup.sh"
+info "     Run a capture now with: ssh ${TARGET} $(pbs_fs_runner_for "${MODULE}")"

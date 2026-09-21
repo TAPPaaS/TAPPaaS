@@ -19,7 +19,11 @@
 #
 set -euo pipefail
 
+# A guest keeps its manifest in tappaas's config dir; a machine (a Proxmox host,
+# #662) has no /home/tappaas, so the same file lives under /etc/tappaas. Take
+# whichever exists — the runner is the same script in both places.
 MANIFEST="/home/tappaas/config/$(hostname).fsbackup.json"
+[[ -r "${MANIFEST}" ]] || MANIFEST="/etc/tappaas/$(hostname).fsbackup.json"
 DRY_RUN=0
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -42,6 +46,7 @@ FINGERPRINT="$(jq -r '.fingerprint // empty' "${MANIFEST}")"
 REPO="$(jq -r '.repository // empty'   "${MANIFEST}")"
 NS="$(jq -r '.namespace // empty'      "${MANIFEST}")"
 mapfile -t PATHS < <(jq -r '.paths // [] | .[]' "${MANIFEST}")
+mapfile -t EXCLUDE < <(jq -r '.exclude // [] | .[]' "${MANIFEST}")
 [[ -n "${MODULE}" && -n "${REPO}" && -n "${NS}" ]] || die "manifest ${MANIFEST} is incomplete"
 [[ "${#PATHS[@]}" -gt 0 ]] || die "manifest ${MANIFEST} declares no paths"
 
@@ -71,9 +76,18 @@ for p in "${PATHS[@]}"; do
     args+=("${name}.pxar:${p}")
 done
 
-log "capturing ${#args[@]} path(s) for ${MODULE} → ${REPO} ns ${NS}"
+# Exclusions are the module's own statement about what inside a declared path
+# is not worth storing — rebuildable artifacts, not secrets. proxmox-backup-client
+# takes one --exclude per pattern.
+excl_args=()
+for x in "${EXCLUDE[@]}"; do
+    [[ -n "${x}" ]] || continue
+    excl_args+=(--exclude "${x}")
+done
+
+log "capturing ${#args[@]} path(s) for ${MODULE} → ${REPO} ns ${NS}${EXCLUDE[0]:+ (excluding ${#excl_args[@]} pattern(s): ${EXCLUDE[*]})}"
 if [[ "${DRY_RUN}" -eq 1 ]]; then
-    log "dry run: proxmox-backup-client backup ${args[*]} --repository ${REPO} --ns ${NS} --backup-id ${MODULE}"
+    log "dry run: proxmox-backup-client backup ${args[*]} ${excl_args[*]} --repository ${REPO} --ns ${NS} --backup-id ${MODULE}"
     exit 0
 fi
 
@@ -84,6 +98,7 @@ PBS_PASSWORD="$(cat "${PW_FILE}")" \
 PBS_FINGERPRINT="${FINGERPRINT}" \
 PBS_ENCRYPTION_PASSWORD="" \
 proxmox-backup-client backup "${args[@]}" \
+    ${excl_args[@]+"${excl_args[@]}"} \
     --repository "${REPO}" \
     --ns "${NS}" \
     --backup-id "${MODULE}" \

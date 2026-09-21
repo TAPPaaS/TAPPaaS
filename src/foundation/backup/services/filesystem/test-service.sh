@@ -58,17 +58,16 @@ else bad "namespace ${NS} missing on $(pbs_storage_name)"; fi
 
 info "  Check 3: the runner is deployed on the guest"
 CONFIG="${CONFIG_DIR:-/home/tappaas/config}/${MODULE}.json"
-VMNAME="$(jq -r '.vmname // empty' "${CONFIG}" 2>/dev/null || true)"
-ZONE="$(jq -r '.zone0 // "mgmt"' "${CONFIG}" 2>/dev/null || echo mgmt)"
-RUNNER="$(pbs_fs_runner_path)"
-if [[ -z "${VMNAME}" ]]; then
-    bad "${MODULE} has no vmname — cannot check the guest"
+KIND="$(pbs_fs_kind "${MODULE}")"
+RUNNER="$(pbs_fs_runner_for "${MODULE}")"
+if ! TARGET="$(pbs_fs_target "${MODULE}")"; then
+    bad "${MODULE} says neither a vmname nor an address — cannot check its host"
 else
-    GUEST="${VMNAME}.${ZONE}.internal"
-    if ! tappaas_ssh_guest -o ConnectTimeout=10 -o BatchMode=yes "tappaas@${GUEST}" true >/dev/null 2>&1; then
+    GUEST="${TARGET#*@}"
+    if ! tappaas_ssh_guest -o ConnectTimeout=10 -o BatchMode=yes "${TARGET}" true >/dev/null 2>&1; then
         note "cannot reach ${GUEST} — runner and trigger not checked"
     else
-        if tappaas_ssh_guest -o BatchMode=yes "tappaas@${GUEST}" "test -x '${RUNNER}'" >/dev/null 2>&1; then
+        if tappaas_ssh_guest -o BatchMode=yes "${TARGET}" "test -x '${RUNNER}'" >/dev/null 2>&1; then
             ok "runner present and executable at ${RUNNER} on ${GUEST}"
         else
             bad "${RUNNER} is MISSING on ${GUEST} — the capture cannot run (re-run: update-module.sh ${MODULE})"
@@ -79,14 +78,18 @@ else
         # a guest whose config predates the TAPPaaS baseline simply has no unit —
         # a silent no-capture this check turns into a visible failure.
         info "  Check 4: the capture timer exists and is active on the guest"
-        if tappaas_ssh_guest -o BatchMode=yes "tappaas@${GUEST}" \
+        if tappaas_ssh_guest -o BatchMode=yes "${TARGET}" \
                 "systemctl is-active tappaas-fs-backup.timer" >/dev/null 2>&1; then
             ok "tappaas-fs-backup.timer is active on ${GUEST}"
-        elif tappaas_ssh_guest -o BatchMode=yes "tappaas@${GUEST}" \
+        elif tappaas_ssh_guest -o BatchMode=yes "${TARGET}" \
                 "systemctl cat tappaas-fs-backup.timer" >/dev/null 2>&1; then
             bad "tappaas-fs-backup.timer exists on ${GUEST} but is not active — nothing triggers the capture"
         else
-            bad "${GUEST} declares no tappaas-fs-backup.timer — the runner would never fire. Add the TAPPaaS baseline unit (templates/tappaas-common.nix) to this guest's NixOS config."
+            if [[ "${KIND}" == "machine" ]]; then
+                bad "${GUEST} has no tappaas-fs-backup.timer — the runner would never fire. backup:filesystem installs it on a machine: re-run update-module.sh ${MODULE}"
+            else
+                bad "${GUEST} declares no tappaas-fs-backup.timer — the runner would never fire. Add the TAPPaaS baseline unit (templates/tappaas-common.nix) to this guest's NixOS config."
+            fi
         fi
     fi
 fi

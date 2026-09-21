@@ -33,10 +33,12 @@ fi
 CONFIG="${CONFIG_DIR:-/home/tappaas/config}/${MODULE}.json"
 check_json "${CONFIG}" || exit 1
 
+KIND="$(pbs_fs_kind "${MODULE}")"
 VMNAME="$(jq -r '.vmname // empty' "${CONFIG}")"
 ZONE="$(jq -r '.zone0 // "mgmt"' "${CONFIG}")"
-[[ -n "${VMNAME}" ]] || { warn "backup:filesystem: ${MODULE} has no vmname"; exit 0; }
-GUEST="${VMNAME}.${ZONE}.internal"
+TARGET="$(pbs_fs_target "${MODULE}")" \
+    || { warn "backup:filesystem: ${MODULE} says neither a vmname nor an address"; exit 0; }
+GUEST="${TARGET#*@}"
 
 mapfile -t FS_PATHS < <(pbs_fs_paths "${MODULE}")
 if [[ "${#FS_PATHS[@]}" -eq 0 ]]; then
@@ -59,7 +61,7 @@ MANIFEST="$(pbs_fs_manifest_path "${MODULE}")"
 # the success line, so a runner that had never reached the guest at all was
 # reported as "re-applied" — and the warning's claim that "the previous ones
 # stay in place" is not true on a first wiring, where there is no previous one.
-pbs_fs_deploy_runner "${MODULE}" "${GUEST}" "${MANIFEST}" \
+pbs_fs_deploy_runner "${MODULE}" "${TARGET}" "${MANIFEST}" \
     || die "could not refresh the capture runner on ${GUEST} — backup:filesystem is NOT converged for ${MODULE}"
 
 debug "  ${GN}✓${CL} backup:filesystem update-service completed for ${MODULE} (${SCHEDULE})"
