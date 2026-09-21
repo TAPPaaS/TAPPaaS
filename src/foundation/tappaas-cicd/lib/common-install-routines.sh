@@ -2046,3 +2046,41 @@ function check_json() {
     return 0
   fi
 }
+
+# ── a guest that Proxmox has locked (#686) ───────────────────────────
+#
+# A backup holds a `lock: backup` on the guest for as long as it runs, and
+# every qm write — snapshot, reboot, set — is refused while it is there. That
+# is not a fault: it is two schedules meeting. Treating it as one cost two
+# modules a night's update, reported as FAILED although both had updated
+# correctly, with "manual intervention required" for nothing.
+#
+# `qm unlock` is NOT the answer for a live backup: it would clear a lock the
+# backup still needs. The answer is to wait, and then to defer.
+
+# The lock a guest currently holds (backup, snapshot, migrate, …), or empty.
+vm_lock_holder() {
+    local vmid="$1" node="$2"
+    [[ -n "${vmid}" && -n "${node}" ]] || return 0
+    ssh -o BatchMode=yes -o ConnectTimeout=10 "root@${node}.${MGMT:-mgmt}.internal" \
+        "qm config ${vmid} 2>/dev/null | sed -n 's/^lock: //p'" 2>/dev/null | head -1 | tr -d '[:space:]'
+}
+
+# Wait for <vmid> on <node> to become unlocked, up to <timeout> seconds
+# (default 600). rc 0 = free, rc 1 = still locked, and the holder is named.
+wait_for_vm_unlock() {
+    local vmid="$1" node="$2" timeout="${3:-600}" waited=0 holder
+    holder="$(vm_lock_holder "${vmid}" "${node}")"
+    [[ -n "${holder}" ]] || return 0
+    info "  VM ${vmid} is locked (${holder}) — waiting up to $((timeout / 60))m for it to finish"
+    while [[ -n "${holder}" && "${waited}" -lt "${timeout}" ]]; do
+        sleep 15; waited=$((waited + 15))
+        holder="$(vm_lock_holder "${vmid}" "${node}")"
+    done
+    if [[ -z "${holder}" ]]; then
+        info "  ${GN:-}✓${CL:-} VM ${vmid} is free again (waited ${waited}s)"
+        return 0
+    fi
+    warn "  VM ${vmid} is still locked (${holder}) after ${waited}s"
+    return 1
+}

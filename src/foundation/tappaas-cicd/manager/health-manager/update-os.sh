@@ -496,7 +496,23 @@ update_nixos() {
         warn "  Reboot under supervision when ready: ssh root@${node}.${MGMT}.internal 'qm reboot ${vmid}'"
     elif automatic_reboot_enabled; then
         info "Rebooting VM to apply configuration..."
-        ssh "root@${node}.${MGMT}.internal" "qm reboot ${vmid}"
+        # A backup holding the guest refuses the reboot (#686). The rebuild has
+        # already succeeded and the new generation is active, so a lock here is
+        # a postponed reboot, not a failed update — it used to fail the whole
+        # re-apply and report a correctly-updated module as FAILED.
+        if declare -F wait_for_vm_unlock >/dev/null 2>&1; then
+            wait_for_vm_unlock "${vmid}" "${node}" "${TAPPAAS_LOCK_WAIT:-600}" || true
+        fi
+        if ! ssh "root@${node}.${MGMT}.internal" "qm reboot ${vmid}"; then
+            local _holder=""
+            declare -F vm_lock_holder >/dev/null 2>&1 && _holder="$(vm_lock_holder "${vmid}" "${node}")"
+            if [[ -n "${_holder}" ]]; then
+                warn "Could not reboot ${vmname}: the VM is locked (${_holder}). The new generation IS active;"
+                warn "  the reboot is still pending — the next update takes it, or: ssh root@${node}.${MGMT}.internal 'qm reboot ${vmid}'"
+                return 0
+            fi
+            die "could not reboot ${vmname} (VM ${vmid}) after the rebuild"
+        fi
 
         # Wait for sshd to come back (replaces fixed sleep 60 — issue #376).
         update_ssh_known_hosts "${vm_ip}"

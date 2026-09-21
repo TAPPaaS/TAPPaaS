@@ -579,6 +579,21 @@ main() {
         warn "    Snapshotting it from inside fsfreezes its own root FS and can strand it."
         warn "    Continuing WITHOUT a rollback safety net (take a node-side snapshot under supervision if needed)."
     elif [[ "${has_vm}" == true ]]; then
+        # A guest a backup is holding cannot be snapshotted (#686). Wait for the
+        # lock rather than failing on it: the two schedules simply met.
+        local _vmid _node
+        _vmid="$(read_module_config "${module}" | jq -r '(.vmid // (.config? // {} | to_entries[]?.value.vmid?)) // empty' | head -1)"
+        _node="$(read_module_config "${module}" | jq -r '.node // empty')"
+        if [[ -n "${_vmid}" && -n "${_node}" ]] \
+            && declare -F wait_for_vm_unlock >/dev/null 2>&1 \
+            && ! wait_for_vm_unlock "${_vmid}" "${_node}" "${TAPPAAS_LOCK_WAIT:-600}"; then
+            # DEFERRED, not failed: nothing is wrong with the module, and an
+            # update without a rollback point is not worth taking tonight.
+            info "DEFERRED: ${module} — its VM is locked by another Proxmox task; no pre-update snapshot could be taken"
+            info "  It updates on the next sweep, when the lock is gone."
+            exit 0
+        fi
+
         # Capture snapshot-vm.sh (+ qm) output → [Debug] when green; surfaced on failure.
         local _snap_out _snap_rc _sl
         _snap_out="$(/home/tappaas/bin/snapshot-vm.sh "${module}" 2>&1)" && _snap_rc=0 || _snap_rc=$?
@@ -587,8 +602,13 @@ main() {
             debug "  ${GN}✓${CL} Snapshot created"
             snapshot_created=true
         else
+            # No snapshot means no way back. Updating anyway was the old
+            # behaviour and it is how a module ends up half-changed with
+            # "manual intervention required" and nothing to restore from.
             if [[ -n "${_snap_out}" ]]; then printf '%s\n' "${_snap_out}" >&2; fi
-            warn "Snapshot failed — continuing without rollback safety net"
+            info "DEFERRED: ${module} — its pre-update snapshot could not be taken, so the update was not started"
+            info "  Fix what stopped the snapshot, or run with --no-snapshot to update deliberately without one."
+            exit 0
         fi
     fi
 
