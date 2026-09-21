@@ -4,41 +4,49 @@ Primary audience: Nextcloud Talk users (installed by the TAPPaaS admin alongside
 
 Nextcloud Talk High-Performance Backend — a dedicated
 [nextcloud-spreed-signaling](https://github.com/strukturag/nextcloud-spreed-signaling) server
-that offloads Talk's WebSocket signaling from the Nextcloud VM, so calls scale to hundreds of
-concurrent connections.
+that offloads Talk's WebSocket signaling from the Nextcloud VM, plus a
+[Janus](https://janus.conf.meetecho.com/) SFU so group calls scale: every participant sends
+**one** stream to Janus, which fans it out. Without the SFU Talk runs group calls as a full
+mesh (each client uploads N−1 streams), which caps a video call at roughly 5-6 participants.
 
 ## What you get
 
 | Capability | Access from | How |
 |------------|-------------|-----|
-| Talk signaling backend | Nextcloud Talk clients | `wss://<proxyDomain>/spreed` (via Caddy) |
+| Talk signaling backend | Nextcloud Talk clients | `wss://<proxyDomain>/spreed` (via Caddy; internal zones unless opted in, see DESIGN.md) |
+| Group-call SFU (Janus) | Talk calls | One uplink per participant; ~30-way video calls |
 | High concurrency | Talk calls | Dedicated Go process, far lower latency than PHP signaling |
-| TURN-credential distribution | Talk clients | Served over WebSocket (from coturn's shared secret) |
+| TURN-credential distribution | Talk clients, Janus | Served over WebSocket / TURN REST API (from coturn's shared secret) |
 
 ## What is not included
 
-- **Media relay** — that is coturn's job (`coturn:turn`); HPB only does signaling.
+- **Media relay** — that is coturn's job (`coturn:turn`). Participants Janus cannot reach
+  directly (other client zones, the internet) relay through coturn.
 - **Standalone use** — it only serves the Nextcloud instance it is wired to.
-- **Public reachability for external calls** — multi-party calls with external participants
-  additionally require a publicly reachable coturn (WAN endpoint).
+- **Recording**, SIP, streaming — Janus plugins other than `videoroom` are disabled.
 
 ## Requirements
 
-- `srv` zone
-- VM sizing (defaults from `nextcloud-hpb.json`): 4 vCPU, 4 GB RAM, 16 GB disk on `tanka1`
-- `nextcloud` (`nextcloud:fileservice`) and `coturn` (`coturn:turn`) deployed
-- A public DNS record for the HPB proxy domain (external Talk clients)
+- **The Nextcloud zone.** Place the HPB in the same zone as the Nextcloud it serves (set
+  `zone0` in the deployed json to Nextcloud's). The default site zone has never carried a
+  guest on every node; a wrong zone shows up as a VM with no IPv4 and an installer that dies
+  at "does not resolve".
+- VM sizing (defaults from `nextcloud-hpb.json`): 4 vCPU, 4 GB RAM, 16 GB disk on `tanka1`.
+  Fine to ~30 video participants; for external attendees the **WAN uplink** is the ceiling
+  (a 30-way call is 30 × 29 downstream streams out of Janus), not the CPU.
+- `nextcloud` (`nextcloud:fileservice`) and `coturn` (`coturn:turn`) deployed.
+- A public DNS record for the HPB proxy domain (external Talk clients).
 
 ## Dependencies
 
 | Depends on | Purpose |
 |------------|---------|
 | `cluster:vm` | VM provisioning |
-| `templates:nixos` | NixOS base image |
+| `templates:nixos` | NixOS base image; ships the `.nix` + companion JSON and rebuilds with the platform pin |
 | `backup:vm` | VM registered with Proxmox Backup Server |
 | `network:proxy` | `wss://` reverse proxy via Caddy |
-| `network:rules` | Firewall pass rules (incl. callback egress to the Nextcloud proxy) |
-| `nextcloud:fileservice` | The Nextcloud instance whose Talk uses this backend |
-| `coturn:turn` | TURN relay whose credentials HPB distributes |
+| `network:rules` | Firewall pass rules (egress to the Caddy proxy in `dmz`) |
+| `nextcloud:fileservice` | The Nextcloud whose Talk uses this backend; stamps `nextcloudPublicUrl`, wires the `hpb` connector |
+| `coturn:turn` | TURN relay: shared secret via the management plane, `turnHost` stamped into this module's config |
 
 For installation steps see [INSTALL.md](./INSTALL.md).
