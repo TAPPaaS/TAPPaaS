@@ -2069,14 +2069,27 @@ EVIDENCE
         fi
 
         # A name that cannot resolve publicly must report UNPUBLISHED (rc 3),
-        # not an error. Use a name guaranteed not to exist under this domain.
-        _sh_rc=0
-        network-manager split-horizon-target "no-such-service-$$.${DEF_DOMAIN}" \
-            --zones "${_sh_eff}" >/dev/null 2>&1 || _sh_rc=$?
-        if [[ ${_sh_rc} -eq 3 ]]; then
-            pass "Deep 11e-b: an unpublishable name reports UNPUBLISHED (rc 3), not an error (R3)"
+        # not an error.
+        #
+        # "Guaranteed not to exist" is not guaranteed anywhere: a site whose
+        # domain answers every name — a split-horizon or public wildcard — has
+        # no unpublishable name to probe with, and the resolver is RIGHT to
+        # return the address (#693: on makerfloss every *.makerfloss.eu answers
+        # 10.6.0.1, so this read as a resolver fault when the resolver was
+        # obeying D5). Establish the premise before asserting on it.
+        _sh_probe="no-such-service-$$.${DEF_DOMAIN}"
+        if getent hosts "${_sh_probe}" >/dev/null 2>&1; then
+            warn "    Deep 11e-b: ${DEF_DOMAIN} resolves names that do not exist (wildcard) — D5's refusal path is not testable here (skipped)"
+            SKIP=$((SKIP + 1))
         else
-            fail "Deep 11e-b: an unpublishable name gave rc=${_sh_rc}, expected 3 — R3 would read as a failure"
+            _sh_rc=0
+            network-manager split-horizon-target "${_sh_probe}" \
+                --zones "${_sh_eff}" >/dev/null 2>&1 || _sh_rc=$?
+            if [[ ${_sh_rc} -eq 3 ]]; then
+                pass "Deep 11e-b: an unpublishable name reports UNPUBLISHED (rc 3), not an error (R3)"
+            else
+                fail "Deep 11e-b: an unpublishable name gave rc=${_sh_rc}, expected 3 — R3 would read as a failure"
+            fi
         fi
     fi
 
