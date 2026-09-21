@@ -219,7 +219,8 @@ export function normalizeValue(
 export type SkipReason =
   | "no-desired-value" // neither declared nor defaulted into scope
   | "self-reconciling" // apply:"reconcile" — the service converges it itself
-  | "not-reported"; // the service's reporter does not observe this field
+  | "not-reported" // the service's reporter does not observe this field
+  | "defaulted-unappliable"; // a schema default, in a class no converge applies (#679)
 
 export interface DriftField {
   field: string;
@@ -429,6 +430,22 @@ export function computeDrift(
         record.adopt.push(df);
         continue;
       }
+    }
+
+    // Changed, and the module never asked for it (#679). A desired value that
+    // came from a SCHEMA DEFAULT, in a class the converge can never apply, is
+    // not drift: it is a property of the guest the default does not describe,
+    // and reporting it as drift demands a rebuild to satisfy a value nobody
+    // declared. `cloudInit` is the case that showed it — it defaults to "true"
+    // while a guest with no cloud-init drive reports "false", so every module
+    // that omits the field (47 of 48 on one estate) failed its reconcile on
+    // every sweep, identically, with no path forward.
+    //
+    // A DECLARED value keeps the old verdict: asking for something the guest
+    // cannot become is exactly what the refusal is for.
+    if (df.defaulted && !CHANGE_CLASSES[entry.class]?.applies) {
+      record.skipped.push({ field, reason: "defaulted-unappliable" });
+      continue;
     }
 
     // Changed. A class the converge never applies is reported and refused, not

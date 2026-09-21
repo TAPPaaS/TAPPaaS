@@ -422,6 +422,54 @@ const skipReason = (r: DriftRecord, f: string): string | undefined =>
   );
 }
 
+// ── #679: a schema default never demands a rebuild ─────────────────────
+//
+// `cloudInit` is immutable with schema default "true", while a guest that has no
+// cloud-init drive reports "false". A module that declares nothing therefore
+// acquired a desired value it can never satisfy, and its reconcile failed on
+// every sweep — 47 of 48 modules on one estate omit the field. A DEFAULTED value
+// in a class the converge cannot apply is now a property of the guest, not drift.
+{
+  const M679 = parseServiceFieldManifest(
+    {
+      service: "t:svc",
+      fields: {
+        cloudInit: { class: "immutable", apply: "none", liveKey: "cloudInit" },
+        storage: { class: "manual", apply: "none", liveKey: "storage" },
+        cores: { class: "in-place", apply: "set", liveKey: "cores", normalize: "integer" },
+      },
+    },
+    [],
+  )!;
+  const S679: ModuleFieldsSchema = {
+    cloudInit: { default: "true", usedBy: ["t:svc"] },
+    storage: { default: "tanka1", usedBy: ["t:svc"] },
+    cores: { default: 2, usedBy: ["t:svc"] },
+  };
+  const d679 = (cfg: Record<string, unknown>, actual: Record<string, string>): DriftRecord =>
+    computeDrift(resolveModule("m", { dependsOn: ["t:svc"], ...cfg }, null, S679),
+      { manifest: M679, actual, zones: ZONES });
+
+  const defaulted = d679({}, { cloudInit: "false", storage: "tanka1", cores: "2" });
+  check(skipReason(defaulted, "cloudInit") === "defaulted-unappliable",
+    "an immutable field's schema default is not drift when the module declared nothing (#679)");
+  check(defaulted.unreconciled.length === 0,
+    "…so nothing is reported as unreconciled, and the reconcile converges");
+  check(!hasChanges(defaulted), "…and the module is in sync");
+
+  const declared = d679({ cloudInit: "true" }, { cloudInit: "false", storage: "tanka1", cores: "2" });
+  check(declared.unreconciled.map((f) => f.field).join() === "cloudInit",
+    "a DECLARED immutable value the guest cannot take is still refused");
+
+  const manual = d679({}, { cloudInit: "false", storage: "tankb1", cores: "2" });
+  check(skipReason(manual, "storage") === "defaulted-unappliable",
+    "the same holds for a manual field: an operator never asked for the default either");
+
+  const inPlace = d679({}, { cloudInit: "false", storage: "tanka1", cores: "4" });
+  check(inPlace.units.map((u) => u.name).join() === "cores",
+    "a defaulted value the converge CAN apply is still applied — the rule is scoped to what cannot");
+}
+
 console.log("");
 console.log(`Results: ${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);
