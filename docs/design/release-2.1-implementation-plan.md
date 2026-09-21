@@ -446,7 +446,9 @@ adopted hosts keyed on `management`; thirteen hard-coded time zones are gone fro
 every guest on `Europe/Copenhagen`, syncing against its own zone's gateway — `10.0.0.1` for
 mgmt, `10.2.0.1` for rossen — the mothership included, where nothing had a time source
 before. #87 needed only the consuming half: OPNsense has been serving NTP (stratum 2) all
-along and no guest asked it. **#324 was pulled in and split back out** (see its row).
+along and no guest asked it. **#324 was pulled in and split back out** (see its row). **#680 came here from §12 on
+2026-09-21** — its code half is built and verified on hrossen; what remains of it is a release
+decision, not code (who refreshes the baseline `flake.lock`, and how often).
 **Remaining:** #390, #448, #220; #348 parked (needs a site with hass) and #678 in Future Work.
 
 **Approach (operator, 2026-09-20).** Locale and time are **one site fact, applied per OS
@@ -486,6 +488,7 @@ time or locale on a Debian guest, an adopted `debianhost`, or a Windows guest at
 | #348 | hass locale from site master data | 3 | 2 | L | **Parked 2026-09-21** — no site we can test on runs hass, and an unverified change lands on someone else's Home Assistant. How to build it in the new setup is written on the issue: hass is HAOS, so the #472 fragment does not reach it; the fix is the `core_config` body at `lib/config.sh:158` **plus** a `config/core/update` converge for already-onboarded instances, sending only the keys the site actually has. After #408: `hass:config` completes `core_config` with `{}` today, so country, time zone, currency and language stay at defaults. Reads the same `.location`, which is why `latitude`/`longitude` go in with #408 |
 | ✅ #87 | NTP on OPNsense, consumed by modules | 4 | 2 | M | **Built 2026-09-21** (moved into Release 2.1 2026-09-20). The server half already existed — the firewall answers as a stratum-2 NTP server — and nothing consumed it: every guest fell through to `*.nixos.pool.ntp.org` with `SystemNTPServers` empty. Now each guest is pointed at its own zone's gateway, by the fragment on NixOS and a `systemd-timesyncd` drop-in on Debian. DHCP option 42 is raised on the issue as belt-and-braces, not done. Nothing in the tree serves or consumes NTP today — no `timesyncd` servers, no chrony, no OPNsense service. Rolled into #472's rebuild |
 | #220 | Nix sandbox disabled on cicd | 4 | 2 | L | Re-test against current nixpkgs; remove the workaround |
+| ✅ #680 | The baseline `flake.lock` decides every site's nixpkgs | 3 | 4 | H | **Built and verified on hrossen 2026-09-21** (`wave3/680-flake-lock`, moved here from §12). Since ADR-017 D3 the mothership builds from the checkout, so `tappaas-cicd/flake.lock` pins every site, and a host that pinned something newer moved **backwards** in silence — Erik logged kernel 6.12.92 → 6.12.90, curl 8.20 → 8.19 and six more, with the rebuild reporting success. `tappaas-self-rebuild.sh` now reads the lock's revision and date against the running system before switching: it records the pin on every rebuild and, when the rebuild would lower the revision, names both revisions and dates and says the kernel follows at the next boot. It still switches — every site is behind this lock today, so refusing would break the update path itself. The suite reports the pin's age and, past 90 days, how to refresh it, passing either way (failing there would abort a healthy mothership's update — the #694 lesson). **Still the operator's, not code:** who refreshes the baseline lock and at what cadence. `b77b3de8` is 122 days old; hrossen and makerfloss both run it, so nothing downgrades today and the guard protects the next site to adopt D3 |
 
 ### G1.5 Rebuild & recovery paths — E3 · R4 · L-M
 
@@ -873,11 +876,10 @@ targets (an ADR-007e amendment).
 
 ## 12. Open decisions from Erik's reports, 2026-09-20/21
 
-Six reports were triaged on 2026-09-21. Four were fixed the same day and now sit in their
-groups: #682 and #684 in G2.1, #679 in G3.1, #681 in G4.3. The two below are not code
-decisions, and want the operator's word before any code is written.
+Six reports were triaged on 2026-09-21. Five were fixed the same day and now sit in their
+groups: #682 and #684 in G2.1, #679 in G3.1, #681 in G4.3, #680 in G1.4. The one below is not
+a code decision, and wants the operator's word before any code is written.
 
 | # | What it is | E | R | Checked on `main` | The decision to take |
 |---|---|:-:|:-:|---|---|
-| #680 | Since ADR-017 D3 the mothership rebuilds from the checkout, so `tappaas-cicd/flake.lock` decides every site's nixpkgs.<br>That lock pins 2026-05-22, so a host that pinned something newer moves **backwards** on its first sanctioned rebuild, silently.<br>Erik logged kernel 6.12.92 → 6.12.90, curl 8.20 → 8.19 and six more, with the rebuild reporting success. | 3 | 4 | **Confirmed** — `flake.lock` nixpkgs is `b77b3de8`, 2026-05-22, four months old. | Release process, not code: who refreshes and reviews the baseline lock, and at what cadence. Then one code change follows from it — a rebuild that would **lower** the revision says so before switching. A §10.2 item |
 | #675 | `site.json .repositories` declares the repositories a site tracks and the sweep pulls them all, but the mothership's rebuild only ever builds the baseline flake.<br>A site that composes its own host-level NixOS modules loses them on every scheduled rebuild, while the unit reports success.<br>There is no extension point: `tappaas-cicd.nix` declares no option for it. | 2 | 3 | **Confirmed** — no `mkOption`/`extraModules`/`extraImports` anywhere in `tappaas-cicd.nix`. | Architectural, so an ADR first: what a managed repository may contribute to the control plane's own NixOS configuration, and what happens when that contribution fails to build. Implementation only after that is written down |
