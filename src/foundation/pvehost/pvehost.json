@@ -10,10 +10,11 @@
   "os": "debian",
   "management": "managed",
   "rebootOk": false,
-  "dependsOn": [
+  "_backup": "#662: a node's own configuration is captured by backup:filesystem, the same service a guest uses — a node has been a module since #665, so it consumes it like any other. /etc whole (5.7-5.9 MB, ~750 files on a live cluster) rather than a list of subdirectories that goes stale the first time Proxmox puts something important somewhere new; /var/lib/pve-cluster (the directory, not config.db alone: pxar captures a directory) because /etc/pve is a FUSE view of pmxcfs and copying those files back into a running cluster is not a restore; /root minus the netboot ISOs, which make-install-media.sh rebuilds and upstream still serves (3.2 GB of them on one node). Declared with integratesWith rather than dependsOn (#501): a node is registered on a fresh site long before a backup server exists, and a hard dependency would make the node's own registration wait on it — the mothership captures config/ the same way.",
+  "dependsOn": [],
+  "integratesWith": [
     "backup:filesystem"
   ],
-  "_backup": "#662: a node's own configuration is captured by backup:filesystem, the same service a guest uses — a node has been a module since #665, so it consumes it like any other. /etc whole (5.7-5.9 MB, ~750 files on a live cluster) rather than a list of subdirectories that goes stale the first time Proxmox puts something important somewhere new; /var/lib/pve-cluster (the directory, not config.db alone: pxar captures a directory) because /etc/pve is a FUSE view of pmxcfs and copying those files back into a running cluster is not a restore; /root minus the netboot ISOs, which make-install-media.sh rebuilds and upstream still serves (3.2 GB of them on one node).",
   "backup": {
     "filesystemPaths": [
       "/etc",
