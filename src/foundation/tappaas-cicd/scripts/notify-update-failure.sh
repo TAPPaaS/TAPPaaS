@@ -59,6 +59,24 @@ to="$(jq -r '.email // empty' "${SITE}" 2>/dev/null || true)"
 site_name="$(jq -r '.name // empty' "${SITE}" 2>/dev/null || true)"
 # It goes into the Subject header: a site code, or nothing.
 [[ "${site_name}" =~ ^[A-Za-z0-9_.-]{1,64}$ ]] || site_name=""
+
+# The site's public domain, which is what tells one site from another in an
+# inbox: a site code like "rossen" and a host like "tappaas-cicd" look the same
+# from every installation. It lives on the environments, not on the site — take
+# the default environment's primary domain, else mgmt's, else the domain of the
+# address the notice goes to.
+site_domain=""
+for _envname in "$(jq -r '.defaultEnvironment // empty' "${SITE}" 2>/dev/null || true)" mgmt; do
+    [[ -n "${_envname}" ]] || continue
+    _envfile="${CONFIG_DIR}/environments/${_envname}.json"
+    [[ -f "${_envfile}" ]] || continue
+    site_domain="$(jq -r '.domains.primary // empty' "${_envfile}" 2>/dev/null || true)"
+    # `[[ … ]] && break` would end the SCRIPT under set -e on the last iteration.
+    if [[ -n "${site_domain}" ]]; then break; fi
+done
+[[ -n "${site_domain}" ]] || site_domain="${to##*@}"
+# It becomes part of a mail header: a hostname, or nothing.
+[[ "${site_domain}" =~ ^[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?$ ]] || site_domain=""
 if [[ -z "${to}" ]]; then
     log "site.json has no email — notice not sent (set one: site-manager site modify --email <address>)"
     breadcrumb "failure notice NOT sent: site.json has no email"
@@ -94,8 +112,12 @@ if [[ -f "${RESULT}" ]]; then
 fi
 
 host="$(hostname 2>/dev/null || echo tappaas-cicd)"
-subject="[TAPPaaS${site_name:+ ${site_name}}] update sweep FAILED on ${host}"
+# The domain leads: it is the one part of this that names THIS installation.
+_label="${site_domain:-${site_name}}"
+subject="[TAPPaaS${_label:+ ${_label}}] update sweep FAILED on ${host}"
 body="$(cat <<EOF
+Site: ${site_name:-(unnamed)}${site_domain:+ (${site_domain})} — host ${host}
+
 The scheduled TAPPaaS update on ${host} failed at $(date -Is).
 
 systemd: result=${MONITOR_SERVICE_RESULT:-?} exit=${MONITOR_EXIT_STATUS:-?}
