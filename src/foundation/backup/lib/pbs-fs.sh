@@ -46,7 +46,10 @@ pbs_fs_archive_name() {
     local p="${1#/}"
     p="${p%/}"
     p="${p//\//-}"
-    p="$(printf '%s' "${p}" | tr -c 'A-Za-z0-9._-' '-')"
+    # No dot: PBS's backupspec is <name>.pxar:<path> and a dot in the NAME is
+    # rejected at parameter verification — /var/lib/pve-cluster/config.db
+    # derived one (#662). The runner applies the same rule; they must agree.
+    p="$(printf '%s' "${p}" | tr -c 'A-Za-z0-9_-' '-')"
     [[ -n "${p}" ]] || p="root"
     printf '%s\n' "${p}"
 }

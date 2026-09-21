@@ -35,7 +35,11 @@ ck "archive name: trailing slash" "etc-secrets"        "$(pbs_fs_archive_name /e
 ck "archive name: single segment" "srv"                "$(pbs_fs_archive_name /srv)"
 ck "archive name: root"           "root"               "$(pbs_fs_archive_name /)"
 ck "archive name: spaces folded"  "var-my-data"        "$(pbs_fs_archive_name '/var/my data')"
-ck "archive name: keeps dots"     "etc-my.conf.d"      "$(pbs_fs_archive_name /etc/my.conf.d)"
+# A dot in the archive NAME is rejected by proxmox-backup-client at parameter
+# verification ("'backupspec': value does not match the regex pattern" —
+# checked against client 4.2.6 on a node, #662). This asserted the opposite
+# until a path with a dotted last segment was finally declared.
+ck "archive name: dots become dashes, or PBS refuses the spec" "etc-my-conf-d" "$(pbs_fs_archive_name /etc/my.conf.d)"
 ck "archive spec"  "home-tappaas-config.pxar:/home/tappaas/config" "$(pbs_fs_archive_spec /home/tappaas/config)"
 
 # ── the guest OS gate ────────────────────────────────────────────────
@@ -121,6 +125,12 @@ ck "manifest: carries the excludes" "/root/*.iso"  "$(jq -r '.exclude | join(" "
 pbs_fs_write_manifest nextcloud repo fs/nextcloud daily FP /var/lib/nextcloud >/dev/null
 ck "manifest: an empty exclude list is still an array" "0" \
    "$(jq -r '.exclude | length' "$(pbs_fs_manifest_path nextcloud)")"
+
+# A path whose last segment has a dot derived a dotted archive NAME, which PBS
+# rejects outright ("parameter verification failed - 'backupspec'", #662).
+ck "archive name: dots are not allowed in the name" "var-lib-pve-cluster-config-db.pxar:/var/lib/pve-cluster/config.db" \
+   "$(pbs_fs_archive_spec /var/lib/pve-cluster/config.db)"
+ck "archive name: a plain directory is unchanged" "etc.pxar:/etc" "$(pbs_fs_archive_spec /etc)"
 
 rm -rf "${CONFIG_DIR}"
 

@@ -165,6 +165,14 @@ rebuildable by `make-install-media.sh` and still served upstream. Excluding them
 takes the node's capture from gigabytes to megabytes without narrowing what a
 restore actually needs.
 
+**Patterns are matched against each archive's own root**, not against the
+filesystem, so `proxmox-backup-client` reads `/root/*.iso` as `/root/root/*.iso`
+and matches nothing. The runner rewrites an absolute pattern that lies under a
+declared path to be relative to it (`/root/*.iso` → `/*.iso` for the `/root`
+archive) and passes anything else through as written, so the operator can write
+what they see. `test-exclude-rewrite.sh` pins that translation — the first live
+run without it uploaded 1.589 GiB of ISOs and reported success.
+
 Exclusions are for rebuildable bulk, not for secrets: a path whose contents the
 capture cannot fully read is still fatal (#626), and that rule is what keeps a
 partial capture from reporting success.

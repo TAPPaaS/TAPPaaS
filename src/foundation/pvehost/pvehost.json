@@ -13,11 +13,11 @@
   "dependsOn": [
     "backup:filesystem"
   ],
-  "_backup": "#662: a node's own configuration is captured by backup:filesystem, the same service a guest uses — a node has been a module since #665, so it consumes it like any other. /etc whole (5.7-5.9 MB, ~750 files on a live cluster) rather than a list of subdirectories that goes stale the first time Proxmox puts something important somewhere new; config.db because /etc/pve is a FUSE view of pmxcfs and copying those files back into a running cluster is not a restore; /root minus the netboot ISOs, which make-install-media.sh rebuilds and upstream still serves (3.2 GB of them on one node).",
+  "_backup": "#662: a node's own configuration is captured by backup:filesystem, the same service a guest uses — a node has been a module since #665, so it consumes it like any other. /etc whole (5.7-5.9 MB, ~750 files on a live cluster) rather than a list of subdirectories that goes stale the first time Proxmox puts something important somewhere new; /var/lib/pve-cluster (the directory, not config.db alone: pxar captures a directory) because /etc/pve is a FUSE view of pmxcfs and copying those files back into a running cluster is not a restore; /root minus the netboot ISOs, which make-install-media.sh rebuilds and upstream still serves (3.2 GB of them on one node).",
   "backup": {
     "filesystemPaths": [
       "/etc",
-      "/var/lib/pve-cluster/config.db",
+      "/var/lib/pve-cluster",
       "/root"
     ],
     "exclude": [

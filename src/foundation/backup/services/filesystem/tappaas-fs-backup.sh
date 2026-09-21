@@ -72,20 +72,41 @@ for p in "${PATHS[@]}"; do
     unreadable="$(find "${p}" ! -readable -print -quit 2>/dev/null)" || true
     [[ -z "${unreadable}" ]] || die "declared path '${p}' holds entries this backup cannot read (first: ${unreadable}) — a partial capture is not a capture"
     name="${p#/}"; name="${name%/}"; name="${name//\//-}"
-    name="$(printf '%s' "${name}" | tr -c 'A-Za-z0-9._-' '-')"
+    # PBS's backupspec is <name>.pxar:<path> and the NAME may not carry a dot —
+    # a path like /var/lib/pve-cluster/config.db derived one and the capture
+    # died on "parameter verification failed - 'backupspec'" (#662).
+    name="$(printf '%s' "${name}" | tr -c 'A-Za-z0-9_-' '-')"
     args+=("${name}.pxar:${p}")
 done
 
 # Exclusions are the module's own statement about what inside a declared path
-# is not worth storing — rebuildable artifacts, not secrets. proxmox-backup-client
-# takes one --exclude per pattern.
+# is not worth storing — rebuildable artifacts, not secrets.
+#
+# proxmox-backup-client matches an --exclude pattern against each archive's OWN
+# root, not against the filesystem: `/root/*.iso` anchored at the /root archive
+# means /root/root/*.iso and matches nothing, which is how a first run still
+# uploaded 1.6 GiB of netboot images while reporting success (#662). So an
+# absolute pattern that lies under a declared path is rewritten relative to it,
+# and anything else is passed through as the operator wrote it.
 excl_args=()
+effective=()
 for x in "${EXCLUDE[@]}"; do
     [[ -n "${x}" ]] || continue
-    excl_args+=(--exclude "${x}")
+    pat="${x}"
+    if [[ "${pat}" == /* ]]; then
+        for p in "${PATHS[@]}"; do
+            base="${p%/}"
+            if [[ "${pat}" == "${base}/"* ]]; then
+                pat="/${pat#"${base}/"}"
+                break
+            fi
+        done
+    fi
+    effective+=("${pat}")
+    excl_args+=(--exclude "${pat}")
 done
 
-log "capturing ${#args[@]} path(s) for ${MODULE} → ${REPO} ns ${NS}${EXCLUDE[0]:+ (excluding ${#excl_args[@]} pattern(s): ${EXCLUDE[*]})}"
+log "capturing ${#args[@]} path(s) for ${MODULE} → ${REPO} ns ${NS}${EXCLUDE[0]:+ (excluding ${#EXCLUDE[@]} pattern(s): ${effective[*]})}"
 if [[ "${DRY_RUN}" -eq 1 ]]; then
     log "dry run: proxmox-backup-client backup ${args[*]} ${excl_args[*]} --repository ${REPO} --ns ${NS} --backup-id ${MODULE}"
     exit 0

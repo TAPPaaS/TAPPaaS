@@ -149,9 +149,14 @@ pbs_fs_deploy_runner "${MODULE}" "${TARGET}" "${MANIFEST}" \
     || die "could not deliver the capture runner to ${GUEST} — backup:filesystem is NOT wired for ${MODULE}"
 
 info "  ${GN}✓${CL} backup:filesystem install-service completed for ${MODULE} (${SCHEDULE})"
-info "     The capture TIMER is declared in the guest's own NixOS config, not by this"
-info "     script: /etc/systemd/system is a read-only store symlink on NixOS, so the"
-info "     trigger cannot be delivered imperatively. Every guest built from the TAPPaaS"
-info "     baseline (templates/tappaas-common.nix) carries an inert tappaas-fs-backup"
-info "     timer that arms itself once this runner lands; test-service.sh verifies it."
+if [[ "${KIND}" == "machine" ]]; then
+    info "     The capture TIMER was installed by this script: a machine has no NixOS"
+    info "     baseline to declare one. It is enabled and armed for 20:30."
+else
+    info "     The capture TIMER is declared in the guest's own NixOS config, not by this"
+    info "     script: /etc/systemd/system is a read-only store symlink on NixOS, so the"
+    info "     trigger cannot be delivered imperatively. Every guest built from the TAPPaaS"
+    info "     baseline (templates/tappaas-common.nix) carries an inert tappaas-fs-backup"
+    info "     timer that arms itself once this runner lands; test-service.sh verifies it."
+fi
 info "     Run a capture now with: ssh ${TARGET} $(pbs_fs_runner_for "${MODULE}")"
