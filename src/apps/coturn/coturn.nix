@@ -21,7 +21,7 @@
 #
 # Network: DMZ zone (VMID 341, tappaas1), firewall ports:
 #   TCP  22 (SSH), 3478 (TURN/STUN)
-#   UDP  3478 (TURN/STUN), 49152-65535 (relay ports)
+#   UDP  3478 (TURN/STUN), 49152-50151 (relay ports)
 # Secrets: Auto-generated COTURN_SECRET (64-char hex) on first boot.
 #   COTURN_EXTERNAL_IP must be set manually before coturn will relay correctly.
 #
@@ -112,7 +112,7 @@ in
     ];
     # Relay port range — required for WebRTC media streams
     allowedUDPPortRanges = [
-      { from = 49152; to = 65535; }
+      { from = 49152; to = 50151; }
     ];
   };
 
@@ -273,7 +273,7 @@ in
         cat > "$CONFIG_FILE" <<CONF
 listening-port=3478
 min-port=49152
-max-port=65535
+max-port=50151
 realm=${config.networking.hostName}
 use-auth-secret
 static-auth-secret=$COTURN_SECRET

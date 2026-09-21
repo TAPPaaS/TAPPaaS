@@ -98,24 +98,22 @@ else
     die "Could not read COTURN_SECRET from ${COTURN_HOST}:/etc/secrets/coturn.env — NixOS first-boot secret generation may not have completed."
 fi
 
-# ── Remaining manual steps ────────────────────────────────────────────────────
+# ── The one TURN name, in every horizon (publicDomain + split-horizon) ───────
+# Shared with update.sh so the record converges on every sweep. See public-name.sh.
 echo ""
-warn "Ensure OPNsense has the following (not configured automatically):"
-warn "  - NAT rule: WAN:3478 (UDP+TCP) -> coturn DMZ IP:3478"
-warn "  - NAT rule: WAN:49152-65535 (UDP) -> coturn DMZ IP:49152-65535"
-# publicDomain is an OPTIONAL per-site override, not a schema field: coturn.json
-# does not define it, and nextcloud-hpb reads it with a deliberate fallback to
-# coturn's internal FQDN (nextcloud-hpb/install.sh:113-114, :135-137). So the
-# fix for #412 is not to invent the field — it is to stop printing an empty name
-# in an instruction the operator is being asked to carry out.
-_coturn_public="$(get_config_value publicDomain '')"
-if [[ -n "${_coturn_public}" ]]; then
-    warn "  - DNS A record: ${_coturn_public} -> public WAN IP"
-else
-    warn "  - DNS A record: <the public name clients will use for TURN> -> public WAN IP"
-    warn "    (no 'publicDomain' is set on this module. It is optional: nextcloud-hpb uses it"
-    warn "     as the TURN address when present and falls back to the internal FQDN otherwise,"
-    warn "     which only works for clients already inside the network.)"
+info "${BOLD}Converging the public TURN name…${CL}"
+# shellcheck source=public-name.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/public-name.sh"
+coturn_converge_public_name "${1:-coturn}" "${COTURN_HOST}"
+
+# ── Remaining manual step ─────────────────────────────────────────────────────
+# The WAN port-forwards (3478 TCP/UDP + the 49152-50151 UDP relay range) are
+# DECLARED in coturn.json (network:nat natRules) and applied by that service —
+# no longer a reminder the operator must act on. Only the public DNS record is.
+echo ""
+if [[ -n "${COTURN_PUBLIC:-}" ]]; then
+    warn "ACTION REQUIRED — public DNS record: ${COTURN_PUBLIC} -> ${WAN_IP:-<public WAN IP>}"
+    warn "  Talk's admin 'green checkmark' only tests port 3478; verify a REAL call from off-network."
 fi
 
 echo ""

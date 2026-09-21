@@ -61,6 +61,7 @@
     "firewallType",
     "aliasType",
     "ip",
+    "publicDomain",
     "proxyDomain",
     "proxyPort",
     "proxyUpstreamTls",
@@ -410,11 +411,21 @@
         "general"
       ],
       "properties": {
-        "country": { "type": "string", "pattern": "^[A-Za-z]{2}$" },
-        "city": { "type": "string" },
-        "building": { "type": "string" }
+        "country": {
+          "type": "string",
+          "pattern": "^[A-Za-z]{2}$"
+        },
+        "city": {
+          "type": "string"
+        },
+        "building": {
+          "type": "string"
+        }
       },
-      "example": { "country": "FI", "city": "Helsinki" },
+      "example": {
+        "country": "FI",
+        "city": "Helsinki"
+      },
       "note": "Recorded, not enforced: nothing checks it against the machine itself."
     },
     "stack": {
@@ -432,7 +443,9 @@
         "test": "A fixture the test suites install and remove; never part of a real site."
       },
       "requiredBy": [],
-      "usedBy": ["general"],
+      "usedBy": [
+        "general"
+      ],
       "format": "^[a-z][a-z0-9-]*$",
       "example": "collaboration",
       "note": "A repository's catalogue repeats it so `repository list` can group without opening every module file; the catalogue check reports a disagreement. A module with no stack reads as an application module and breaks nothing, but the value is not free-form: use `misc` rather than inventing one, so a catalogue cannot grow a group nobody declared. The list is kept deliberately short — a stack with a single member is usually `misc` in disguise. The list is descriptive — `module-manager validate` does not reject an unlisted value today."
@@ -441,8 +454,13 @@
       "description": "What a machine is for (ADR-022h: a facet, not what it is) — for a satellite, the roles it carries: `reverse-proxy`, `admin-vpn`, and `backup` once it is locked down as a pull vault (ADR-010 §8.4). Given at `module add` as a JSON array, e.g. --roles '[\"reverse-proxy\"]'.",
       "type": "array",
       "requiredBy": [],
-      "usedBy": ["general"],
-      "example": ["reverse-proxy", "admin-vpn"],
+      "usedBy": [
+        "general"
+      ],
+      "example": [
+        "reverse-proxy",
+        "admin-vpn"
+      ],
       "note": "The module decides which roles it accepts; the satellite refuses `backup` at add — `module modify <instance> --lockdown` sets it."
     },
     "address": {
@@ -468,6 +486,19 @@
         "unmanaged": "registered only; no install, update, test or delete"
       },
       "note": "The sweep skips an `unmanaged` module (logged `management=unmanaged`), as it does `status: archived | external`. A locked-down satellite is the case in use (ADR-010 §8.4.4)."
+    },
+    "publicDomain": {
+      "description": "Public FQDN for a NON-HTTP service the module exposes on the firewall's WAN interface through network:nat (TURN, SMTP, SSH, ...). network:proxy publishes HTTP(S) under proxyDomain; this is the counterpart for raw ports. The operator creates its public A record.",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "example": "turn.example.com",
+      "note": "Optional. A module may derive a default (coturn: turn.<site domain>) and persist it at install so every reader sees the same name.",
+      "class": "in-place",
+      "apply": "reconcile",
+      "changeNote": "A DNS name; changing it re-points consumers on their next converge and needs a new public A record. No guest is touched."
     }
   },
   "module_structure": {

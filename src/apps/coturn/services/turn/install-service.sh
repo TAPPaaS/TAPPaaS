@@ -51,7 +51,16 @@ if [[ -n "${COTURN_SECRET}" ]]; then
     mkdir -p "$(dirname "${MGMT_SECRETS}")"
     { grep -v '^COTURN_SECRET=' "${MGMT_SECRETS}" 2>/dev/null || true; printf 'COTURN_SECRET=%s\n' "${COTURN_SECRET}"; } > "${MGMT_SECRETS}.tmp"
     mv "${MGMT_SECRETS}.tmp" "${MGMT_SECRETS}"
+    chmod 600 "${MGMT_SECRETS}"
     info "${GN}✓${CL} COTURN_SECRET published to management plane for ${MODULE}"
 else
     warn "Could not read COTURN_SECRET from ${COTURN_HOST} — ${MODULE} may fail to align its TURN secret"
 fi
+
+# ── Stamp the TURN host the consumer advertises (services/turn/fields.json) ──
+# The consumer's .nix (nextcloud-hpb: turn.servers + Janus's ICE) reads it from
+# the companion JSON that templates:nixos ships next — which runs AFTER this
+# service in the dependsOn order, so the first rebuild already has it.
+# shellcheck source=turn-common.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/turn-common.sh"
+coturn_stamp_turn_host "${CONSUMER_JSON}" "$(coturn_turn_host "${COTURN_JSON}")"
