@@ -81,6 +81,15 @@ consumer_run() {
     ssh "${SSH_OPTS[@]}" "tappaas@${CONSUMING_HOST}" 'bash -s' "$@"
 }
 
+# ── Wait for the provider to be able to answer ───────────────────────────────
+# A VM restored from a snapshot reports running, and its guest agent answers,
+# well before LiteLLM serves its admin API (#690). Every call below then fails
+# for a provider that is merely still starting — which is the NORMAL state
+# during a sweep, not an exception. ready.sh gates on /health/readiness, so this
+# returns as soon as the database behind /key/generate is actually connected.
+wait_for_module_ready "${PROVIDER_MODULE}" "${LITELLM_HOST}" 180 hook-only \
+    || die "${PROVIDER_MODULE} on ${LITELLM_HOST} was not ready within 180s — not provisioning against a starting provider"
+
 # ── Read master key ───────────────────────────────────────────────────────────
 MASTER=$(litellm_run <<'EOSH'
 sudo grep '^LITELLM_MASTER_KEY=' /etc/secrets/litellm.env | cut -d= -f2-
@@ -94,39 +103,50 @@ FOUND=$(litellm_run <<EOSH
 MASTER="${MASTER}"
 ALIAS="${VK_ALIAS}"
 KEYSTORE="${LITELLM_KEYSTORE}"
-# /key/list requires return_full_object=true to get key_alias in the response
-LIST=\$(curl -sf "http://localhost:4000/key/list?return_full_object=true" \
-    -H "Authorization: Bearer \${MASTER}" 2>/dev/null || echo '{}')
-EXISTING=\$(echo "\${LIST}" | jq -r --arg a "\${ALIAS}" \
-    '.keys[]? | select(.key_alias == \$a) | .token' 2>/dev/null | head -1)
+# /key/list requires return_full_object=true to get key_alias in the response.
+# The status is kept rather than dropped: falling back to an empty JSON object
+# made an unreachable provider indistinguishable from one holding no keys (#690).
+BODY=\$(mktemp)
+CODE=\$(curl -s -o "\${BODY}" -w '%{http_code}' --max-time 15 \
+    "http://localhost:4000/key/list?return_full_object=true" \
+    -H "Authorization: Bearer \${MASTER}")
+if [[ "\${CODE}" != 2* ]]; then
+    rm -f "\${BODY}"; echo "UNAVAILABLE:\${CODE}"; exit 0
+fi
+EXISTING=\$(jq -r --arg a "\${ALIAS}" \
+    '.keys[]? | select(.key_alias == \$a) | .token' "\${BODY}" 2>/dev/null | head -1)
+rm -f "\${BODY}"
 if [[ -n "\${EXISTING}" ]] && sudo test -f "\${KEYSTORE}"; then
     STORED_KEY=\$(sudo cat "\${KEYSTORE}")
     echo "EXISTING:\${STORED_KEY}"
 elif [[ -n "\${EXISTING}" ]]; then
-    echo "ALIAS_ONLY"
+    echo "ALIAS_ONLY:\${EXISTING}"
 else
     echo "NONE"
 fi
 EOSH
 ) || die "failed to query VK list on ${LITELLM_HOST}"
 
-if [[ "${FOUND}" == EXISTING:* ]]; then
+if [[ "${FOUND}" == UNAVAILABLE:* ]]; then
+    # Readiness passed and the API still will not answer: that is a fault, and
+    # minting a second key for a consumer that may already hold a working one
+    # would overwrite the keystore and break it (#690).
+    die "litellm did not answer /key/list on ${LITELLM_HOST} (HTTP ${FOUND#UNAVAILABLE:}) — refusing to provision over an unknown key state"
+elif [[ "${FOUND}" == EXISTING:* ]]; then
     NEW_KEY="${FOUND#EXISTING:}"
     info "  ${GN}✓${CL} VK '${VK_ALIAS}' exists and key file found — reusing"
-elif [[ "${FOUND}" == "ALIAS_ONLY" ]]; then
-    # VK alias exists but key file missing — delete and regenerate
+elif [[ "${FOUND}" == ALIAS_ONLY:* ]]; then
+    # VK alias exists but key file missing — delete and regenerate. The token
+    # comes from the listing just made; re-listing to find it again was a second
+    # round-trip that could disagree with the first.
     warn "  VK '${VK_ALIAS}' alias found but key file missing — regenerating"
     litellm_run <<EOSH || true
 MASTER="${MASTER}"
-ALIAS="${VK_ALIAS}"
-LIST=\$(curl -sf "http://localhost:4000/key/list?return_full_object=true" \
-    -H "Authorization: Bearer \${MASTER}" 2>/dev/null || echo '{}')
-TOKEN=\$(echo "\${LIST}" | jq -r --arg a "\${ALIAS}" \
-    '.keys[]? | select(.key_alias == \$a) | .token' 2>/dev/null | head -1)
-[[ -n "\${TOKEN}" ]] && curl -sf -X POST http://localhost:4000/key/delete \
+TOKEN="${FOUND#ALIAS_ONLY:}"
+[[ -n "\${TOKEN}" ]] && curl -s -o /dev/null --max-time 15 -X POST http://localhost:4000/key/delete \
     -H "Authorization: Bearer \${MASTER}" \
     -H "Content-Type: application/json" \
-    --data-raw "{\"keys\": [\"\${TOKEN}\"]}" >/dev/null || true
+    --data-raw "{\"keys\": [\"\${TOKEN}\"]}" || true
 EOSH
 fi
 
@@ -137,14 +157,28 @@ if [[ -z "${NEW_KEY}" ]]; then
 MASTER="${MASTER}"
 ALIAS="${VK_ALIAS}"
 KEYSTORE="${LITELLM_KEYSTORE}"
-RESPONSE=\$(curl -sf -X POST http://localhost:4000/key/generate \
-    -H "Authorization: Bearer \${MASTER}" \
-    -H "Content-Type: application/json" \
-    --data-raw "{\"key_alias\": \"\${ALIAS}\", \"duration\": null}")
-KEY=\$(echo "\${RESPONSE}" | jq -r '.key // empty' 2>/dev/null)
-if [[ -z "\${KEY}" ]]; then
-    echo "ERROR: VK generation failed: \${RESPONSE}" >&2; exit 1
-fi
+# Retry a refusal that a moment more would fix. -f is NOT used: it discards the
+# body, which is the one thing worth keeping when the last attempt fails (#690).
+BODY=\$(mktemp)
+KEY=""
+for ATTEMPT in 1 2 3 4 5; do
+    CODE=\$(curl -s -o "\${BODY}" -w '%{http_code}' --max-time 30 \
+        -X POST http://localhost:4000/key/generate \
+        -H "Authorization: Bearer \${MASTER}" \
+        -H "Content-Type: application/json" \
+        --data-raw "{\"key_alias\": \"\${ALIAS}\", \"duration\": null}")
+    KEY=\$(jq -r '.key // empty' "\${BODY}" 2>/dev/null)
+    [[ -n "\${KEY}" ]] && break
+    # 000 = nothing answered, 429/5xx = busy or still settling. A 4xx is a
+    # refusal that will read the same in ten seconds, so it is not retried.
+    if [[ \${ATTEMPT} -lt 5 && ( "\${CODE}" == 000 || "\${CODE}" == 429 || "\${CODE}" == 5* ) ]]; then
+        sleep \$(( ATTEMPT * 3 ))
+        continue
+    fi
+    echo "ERROR: /key/generate failed after \${ATTEMPT} attempt(s) — HTTP \${CODE}: \$(cat "\${BODY}")" >&2
+    rm -f "\${BODY}"; exit 1
+done
+rm -f "\${BODY}"
 # Persist key on litellm VM for future idempotency checks
 sudo install -d -m 700 /etc/secrets
 printf '%s' "\${KEY}" | sudo tee "\${KEYSTORE}" > /dev/null

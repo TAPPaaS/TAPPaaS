@@ -89,6 +89,29 @@ log "Timestamp: $(date)"
 log "Target: tappaas@${TARGET}"
 log "Log file: ${LOG_FILE}"
 
+# ============================================================================
+# Source-tree checks
+# ============================================================================
+# The offline guards under scripts/ read this module's own source, so they need
+# no VM and run before the connectivity gate below — a provider that is down is
+# exactly when a contract regression matters. Skipped under --runtime-only
+# (#595): there test.sh is a gate on a mutation, and a source-tree defect must
+# not abort the update of a healthy module.
+if [ "${TAPPAAS_TEST_RUNTIME_ONLY:-0}" != "1" ]; then
+    header "Source-tree checks"
+    _MODULE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    for _check in "${_MODULE_DIR}"/scripts/test-*.sh; do
+        [ -x "${_check}" ] || continue
+        _name="$(basename "${_check}")"
+        if _out="$("${_check}" 2>&1)"; then
+            pass "${_name}"
+        else
+            fail "${_name}"
+            log "${_out}"
+        fi
+    done
+fi
+
 # Check if VM is reachable
 info "Checking connectivity to ${TARGET}..."
 if ! $SSH_CMD "exit 0" 2>/dev/null; then

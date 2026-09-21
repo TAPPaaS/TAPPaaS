@@ -56,10 +56,18 @@ if [[ "${DRY_RUN}" -eq 1 ]]; then
     exit 0
 fi
 
-# ── Read master key ───────────────────────────────────────────────────────────
 ssh-keygen -R "${LITELLM_HOST}" >/dev/null 2>&1 || true
 SSH_OPTS=(-o StrictHostKeyChecking=accept-new -o LogLevel=ERROR -o ConnectTimeout=10)
 
+# ── Wait for the provider to be able to answer ───────────────────────────────
+# This runs on every converge, so it is the script a sweep reaches first after a
+# provider restart — and the VM answers ssh long before LiteLLM serves its admin
+# API (#690). Without this gate the check below read "no keys" and re-provisioned
+# a key the consumer was still using.
+wait_for_module_ready "${PROVIDER_MODULE}" "${LITELLM_HOST}" 180 hook-only \
+    || die "${PROVIDER_MODULE} on ${LITELLM_HOST} was not ready within 180s — leaving the existing VK alone"
+
+# ── Read master key ───────────────────────────────────────────────────────────
 MASTER=$(ssh "${SSH_OPTS[@]}" "tappaas@${LITELLM_HOST}" 'bash -s' <<'EOSH'
 sudo grep '^LITELLM_MASTER_KEY=' /etc/secrets/litellm.env | cut -d= -f2-
 EOSH
@@ -72,10 +80,19 @@ VK_STATUS=$(ssh "${SSH_OPTS[@]}" "tappaas@${LITELLM_HOST}" 'bash -s' <<EOSH
 MASTER="${MASTER}"
 ALIAS="${VK_ALIAS}"
 KEYSTORE="${LITELLM_KEYSTORE}"
-LIST=\$(curl -sf "http://localhost:4000/key/list?return_full_object=true" \
-    -H "Authorization: Bearer \${MASTER}" 2>/dev/null || echo '{}')
-FOUND=\$(echo "\${LIST}" | jq -r --arg a "\${ALIAS}" \
-    '.keys[]? | select(.key_alias == \$a) | .token' 2>/dev/null | head -1)
+# Keep the status: falling back to an empty JSON object reported an empty key
+# list for a provider that never answered, and "no keys" is what drove the
+# needless re-provision (#690).
+BODY=\$(mktemp)
+CODE=\$(curl -s -o "\${BODY}" -w '%{http_code}' --max-time 15 \
+    "http://localhost:4000/key/list?return_full_object=true" \
+    -H "Authorization: Bearer \${MASTER}")
+if [[ "\${CODE}" != 2* ]]; then
+    rm -f "\${BODY}"; echo "unavailable:\${CODE}"; exit 0
+fi
+FOUND=\$(jq -r --arg a "\${ALIAS}" \
+    '.keys[]? | select(.key_alias == \$a) | .token' "\${BODY}" 2>/dev/null | head -1)
+rm -f "\${BODY}"
 if [[ -n "\${FOUND}" ]] && sudo test -f "\${KEYSTORE}"; then echo "ok"
 elif [[ -n "\${FOUND}" ]]; then echo "alias_no_file"
 else echo "missing"; fi
@@ -90,7 +107,10 @@ elif [[ "${VK_STATUS}" == "alias_no_file" ]]; then
 elif [[ "${VK_STATUS}" == "missing" ]]; then
     warn "  VK '${VK_ALIAS}' not found"
 else
-    warn "  VK check failed (${VK_STATUS})"
+    # unavailable:<code>, or an ssh that did not come back. Either way the key
+    # state is UNKNOWN, and re-provisioning on an unknown state is what rotated
+    # a working consumer's key and then failed the module (#690).
+    die "could not read the VK state from ${LITELLM_HOST} (${VK_STATUS}) — leaving '${VK_ALIAS}' untouched"
 fi
 
 if [[ "${VK_OK}" -eq 0 ]]; then

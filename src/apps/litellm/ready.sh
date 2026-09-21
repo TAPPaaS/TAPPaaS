@@ -8,12 +8,14 @@
 #
 # Why this exists instead of relying on the generic port probe: uvicorn binds
 # :4000 slightly before it serves, and "listening" was never what the
-# post-update tests needed — they need /health to answer. ANY HTTP status
-# counts, including the 401 the endpoint returns without an API key, which is
-# exactly what test.sh already scores as healthy (test.sh Test 2).
+# post-update tests needed.
 #
-# The port is held here in the same literal form as test.sh's health check, so
-# the probe and the test it protects stay in step.
+# Why /health/readiness and not /health (#690): /health answers 401 as soon as
+# uvicorn is up, which says nothing about the database behind it — and the admin
+# API the models service drives (/key/list, /key/generate) needs that database.
+# A provider restored from a snapshot therefore passed this probe seconds before
+# refusing to mint a key. /health/readiness needs no credential and answers 200
+# only once the DB is connected, so it gates what the callers actually do.
 #
 # Usage: ready.sh <module> <vm-ip>
 
@@ -34,9 +36,9 @@ if [[ -z "${VM_IP}" ]]; then
     exit 2
 fi
 
-# curl without --fail exits 0 on any response, so a 401 (no API key) counts as
-# ready; only a connection failure or timeout is "still starting".
+# --fail: anything but a 2xx is "still starting". While the DB is still coming up
+# LiteLLM answers this endpoint with 503, which is exactly the state to wait out.
 ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR -o BatchMode=yes \
     "tappaas@${VM_IP}" \
-    "curl -s -o /dev/null --max-time 5 http://localhost:${LITELLM_PORT}/health" \
+    "curl -sf -o /dev/null --max-time 5 http://localhost:${LITELLM_PORT}/health/readiness" \
     >/dev/null 2>&1
