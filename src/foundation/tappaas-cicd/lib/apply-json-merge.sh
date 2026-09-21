@@ -36,6 +36,10 @@
 #   4. Else if current == orig:                              adopt source
 #   5. Else:                                                 keep current (pinned)
 #
+# TAPPAAS_MERGE_TRACE=1 prints, per field, the verdict and the three values it
+# was reached from (current | orig | source). Counts alone cannot answer "why is
+# this field not in the file?", which is the question #688 was opened on.
+#
 # Arrays are compared whole — if the operator touched the array at all, the
 # whole array is pinned. (Documented limitation; revisit when a real module
 # needs path-level array merge.)
@@ -215,6 +219,13 @@ apply_three_way_merge() {
     o_n="$(normalize_module_config < "${orig}")"
     s_n="$(normalize_module_config < "${source}")"
 
+    if [[ "${TAPPAAS_MERGE_TRACE:-0}" == "1" ]]; then
+        printf '  trace INPUTS: source=%s\n' "${source}" >&2
+        printf '  trace KEYS  : current=%s\n' "$(jq -c 'keys' <<<"${c_n}")" >&2
+        printf '  trace KEYS  : orig   =%s\n' "$(jq -c 'keys' <<<"${o_n}")" >&2
+        printf '  trace KEYS  : source =%s\n' "$(jq -c 'keys' <<<"${s_n}")" >&2
+    fi
+
     # Run the 3-way merge in jq. Inputs are passed as --argjson so this is one
     # process. Output is the merged flat JSON + a summary object with
     # ".adopted" / ".pinned" / ".added" / ".removed" counts and field lists
@@ -329,6 +340,23 @@ apply_three_way_merge() {
     n_removed=$(jq '.removed | length' <<<"${merged_with_report}")
 
     debug "  Merge: ${n_adopted} adopted, ${n_pinned} pinned, ${n_added} added, ${n_kept} kept (orphan), ${n_removed} removed"
+
+    # TAPPAAS_MERGE_TRACE=1 prints the engine's own verdict per field, and the
+    # three values it judged. A merge that reports adopting a field the file
+    # does not end up with (#688) cannot be diagnosed from counts alone.
+    if [[ "${TAPPAAS_MERGE_TRACE:-0}" == "1" ]]; then
+        jq -r --argjson c "${c_n}" --argjson o "${o_n}" --argjson s "${s_n}" '
+            def show($p): [ ($c | getpath($p)), ($o | getpath($p)), ($s | getpath($p)) ]
+                          | map(if . == null then "-" else tojson end) | join("  |  ");
+            ( (.adopted // []) | map(if type == "object" then .field else . end) | map({v: "adopted", f: .}) )
+            + ( (.pinned  // []) | map({v: "pinned",  f: .}) )
+            + ( (.added   // []) | map({v: "added",   f: .}) )
+            + ( (.kept    // []) | map({v: "kept",    f: .}) )
+            + ( (.removed // []) | map({v: "removed", f: (if type == "object" then .field else . end)}) )
+            | .[]
+            | "  trace \(.v | ascii_upcase): \(.f)   [current | orig | source] = \(show(.f | split(".")))"
+        ' <<<"${merged_with_report}" >&2 || true
+    fi
 
     # #581: a field the release dropped is DELETED from the deployed config, so
     # say so with the value that went — never silently. A field the operator had

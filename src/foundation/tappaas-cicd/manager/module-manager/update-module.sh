@@ -137,6 +137,7 @@ resolve_effective_module_name() {
 # rollback must put back. Taken before the first write, restored beside the VM
 # snapshot (and on its own for a module that has no VM).
 CONFIG_BACKUP=""
+ORIG_BACKUP=""
 
 
 backup_module_config() {
@@ -146,6 +147,17 @@ backup_module_config() {
     CONFIG_BACKUP="$(mktemp "/tmp/tappaas-config-${module}.XXXXXX")" || { CONFIG_BACKUP=""; return 0; }
     cp -p "${src}" "${CONFIG_BACKUP}" || CONFIG_BACKUP=""
     [[ -n "${CONFIG_BACKUP}" ]] && debug "  Config backed up to ${CONFIG_BACKUP}"
+
+    # The merge baseline goes with it (#688). Step 0 advances <module>.json.orig
+    # to the release it just merged; restoring the config alone leaves the
+    # baseline claiming fields the config never received, and the NEXT merge
+    # reads that as "the operator removed them" — rule 2a then DROPS what the
+    # release still declares, or rule 5 pins a value the operator never chose.
+    ORIG_BACKUP=""
+    if [[ -f "${src}.orig" ]]; then
+        ORIG_BACKUP="$(mktemp "/tmp/tappaas-orig-${module}.XXXXXX")" || return 0
+        cp -p "${src}.orig" "${ORIG_BACKUP}" || ORIG_BACKUP=""
+    fi
     return 0
 }
 
@@ -155,6 +167,15 @@ restore_module_config() {
     [[ -n "${CONFIG_BACKUP}" && -f "${CONFIG_BACKUP}" ]] || { warn "No pre-update config copy — ${dst} left as it is"; return 1; }
     if cp -p "${CONFIG_BACKUP}" "${dst}"; then
         info "  ${GN}✓${CL} Config restored to its pre-update content (${dst})"
+        # …and with it the baseline, so the next merge judges against the state
+        # the config is actually in (#688).
+        if [[ -n "${ORIG_BACKUP}" && -f "${ORIG_BACKUP}" ]]; then
+            cp -p "${ORIG_BACKUP}" "${dst}.orig" \
+                && info "     …and its merge baseline, so the next update re-adopts what this one discarded" \
+                || warn "     could NOT restore ${dst}.orig — the next merge will judge against a baseline this config never reached"
+        elif [[ -f "${dst}.orig" ]]; then
+            warn "     no pre-update baseline was captured — ${dst}.orig may be ahead of the config"
+        fi
     else
         fatal "Could not restore ${dst} from ${CONFIG_BACKUP} — do it by hand"
     fi
