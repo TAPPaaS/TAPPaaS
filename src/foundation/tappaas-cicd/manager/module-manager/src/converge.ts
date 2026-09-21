@@ -344,6 +344,8 @@ export function preGateSet(
 const SKIP_REASON_TEXT: Record<string, string> = {
   "self-reconciling": "converged by the service itself, not diffed here",
   "no-desired-value": "this module declares no value, and no schema default applies",
+  "defaulted-unappliable":
+    "the value is a schema default this guest cannot take, and the field cannot be changed in place — a property of the guest, not drift (#679)",
   "not-reported": "the service's reporter does not observe it",
 };
 
