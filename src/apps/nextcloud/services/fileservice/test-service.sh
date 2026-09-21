@@ -108,7 +108,14 @@ if [[ "${EURO_INSTALLED}" == "true" ]]; then
     if [[ -z "${OO_ERR}" ]]; then
         pass "OnlyOffice connector reports no settings_error (editor available)"
     else
-        fail "OnlyOffice connector is wired but NOT working: ${OO_ERR} — Nextcloud hides the editor while this is set"
+        # This is a STORED verdict, written by the last check that completed —
+        # not a probe this test just ran (a read-only verifier must not mutate).
+        # It matters because the check can take many minutes and a run that does
+        # not finish leaves the previous answer in place: four nightlies in a row
+        # reported this same string after the connector had been fixed (#687).
+        fail "OnlyOffice connector's last check FAILED: ${OO_ERR} — Nextcloud hides the editor while this is set"
+        info "    (a stored verdict: the converge refreshes it, or by hand:"
+        info "     ssh tappaas@${VMNAME}.${ZONE}.internal sudo nextcloud-occ onlyoffice:documentserver --check)"
     fi
 else
     pass "OnlyOffice check skipped — euro-office not installed"

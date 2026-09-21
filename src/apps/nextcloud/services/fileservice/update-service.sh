@@ -131,11 +131,20 @@ if [[ "${CONNECTOR}" == "onlyoffice" ]]; then
             # exit code is not a reliable failure signal, so read the resulting
             # settings_error straight from the DB — the authoritative state, and
             # the same route test-service.sh already uses.
+            # BOUNDED: `onlyoffice:documentserver --check` can run for many
+            # minutes — measured at 8+ on the test site and still going (#687).
+            # Unbounded, three attempts of it stall the sweep, and because the
+            # stored verdict only changes when the check COMPLETES, a stuck
+            # check leaves the last error in place for ever: four consecutive
+            # nightlies failed on a string no run could refresh.
             _oo_err=""
+            _oo_refreshed=0
             for _attempt in 1 2 3; do
-                ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR \
-                    "tappaas@${NC_HOST}" "sudo nextcloud-occ onlyoffice:documentserver --check" \
-                    >/dev/null 2>&1 || true
+                if ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR \
+                    "tappaas@${NC_HOST}" "sudo timeout ${OO_CHECK_TIMEOUT:-120} nextcloud-occ onlyoffice:documentserver --check" \
+                    >/dev/null 2>&1; then
+                    _oo_refreshed=1
+                fi
                 _oo_err=$(ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR \
                     "tappaas@${NC_HOST}" \
                     "sudo -u postgres psql -d nextcloud -tAc \"SELECT configvalue FROM oc_appconfig WHERE appid='onlyoffice' AND configkey='settings_error'\"" \
@@ -144,6 +153,15 @@ if [[ "${CONNECTOR}" == "onlyoffice" ]]; then
                 # The document server may still be booting on a fresh install.
                 [[ "${_attempt}" -lt 3 ]] && sleep 15
             done
+
+            if [[ -n "${_oo_err}" && "${_oo_refreshed}" -eq 0 ]]; then
+                # The verdict below is whatever the LAST completed check wrote,
+                # and this run could not refresh it. Say that, rather than
+                # reporting an old failure as today's.
+                warn "  the onlyoffice check did not complete within ${OO_CHECK_TIMEOUT:-120}s — the error below is the last STORED verdict, not this run's:"
+                warn "    ${_oo_err}"
+                warn "  Refresh it by hand: ssh tappaas@${NC_HOST} sudo nextcloud-occ onlyoffice:documentserver --check"
+            fi
 
             if [[ -z "${_oo_err}" ]]; then
                 debug "${GN}✓${CL} onlyoffice document server round-trip verified"
