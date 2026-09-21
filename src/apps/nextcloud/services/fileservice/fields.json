@@ -15,7 +15,26 @@
       "example": "onlyoffice",
       "class": "in-place",
       "apply": "reconcile",
-      "changeNote": "Which connector the consumer is. update-service.sh reconciles the onlyoffice wiring on every run; changing the value changes what that reconcile does, with no guest downtime."
+      "changeNote": "Which connector the consumer is. update-service.sh reconciles the onlyoffice wiring on every run; changing the value changes what that reconcile does, with no guest downtime.",
+      "values": {
+        "onlyoffice": "Document editor (euro-office): DocumentServerUrl/StorageUrl + JWT into the onlyoffice app.",
+        "talk": "TURN/STUN relay (coturn): the shared TURN secret and the coturn turnHost into Talk's stun/turn servers (/etc/secrets/talk.env → nextcloud-configure-talk-turn.service).",
+        "hpb": "Talk High-Performance Backend (nextcloud-hpb): the signaling secret and wss:// URL into Talk's signaling servers (/etc/secrets/hpb.env → nextcloud-configure-hpb.service)."
+      }
+    },
+    "nextcloudPublicUrl": {
+      "description": "Nextcloud's PUBLIC base URL (https://<proxyDomain>), stamped into the consumer's deployed config by nextcloud:fileservice so the consumer's .nix can read it from its companion JSON. The HPB's signaling server validates Talk against this exact URL (an internal name is rejected with invalid_backend).",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "nextcloud:fileservice"
+      ],
+      "default": "<derived: https://<Nextcloud proxyDomain>>",
+      "example": "https://nextcloud.example.com",
+      "note": "Stamped, never authored. Re-derived on every update of the consumer.",
+      "class": "in-place",
+      "apply": "reconcile",
+      "changeNote": "A fact about the provider, refreshed on every converge."
     }
   }
 }

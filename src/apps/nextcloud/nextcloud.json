@@ -24,12 +24,12 @@
   ],
   "egress": [
     {
-      "to": "home",
+      "to": "dmz",
       "ports": [
         443
       ],
       "protocol": "TCP",
-      "description": "Nextcloud -> reverse proxy for Talk HPB signaling check + backend notify (consumer egress, ADR-COM-0002)"
+      "description": "Nextcloud -> the HPB's PUBLIC URL, which split-horizon DNS resolves to the Caddy proxy in dmz (Talk signaling check + backend notify). Redundant when Nextcloud's zone already reaches dmz."
     }
   ],
   "appVersion": "33",
