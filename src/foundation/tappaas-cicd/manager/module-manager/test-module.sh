@@ -94,6 +94,16 @@ test_fail() {
     FAIL_COUNT=$((FAIL_COUNT + 1))
 }
 
+# module_test_dependencies <module> — one "<coordinate> required|optional" line
+# per service relationship, in declaration order: dependsOn first, then
+# integratesWith. Both can synthesise a firewall rule (#632), so both are tested
+# (#684); only the origin differs, and with it what an absent provider means.
+module_test_dependencies() {
+    read_module_config "$1" 2>/dev/null | jq -r '
+        ((.dependsOn // [])      | .[] | "\(.) required"),
+        ((.integratesWith // []) | .[] | "\(.) optional")' 2>/dev/null
+}
+
 test_skip() {
     info "  ${YW}⊘${CL} $1 (skipped)"
     SKIP_COUNT=$((SKIP_COUNT + 1))
@@ -219,13 +229,20 @@ main() {
     # ── Step 2: Check dependency test-service.sh availability ────────
     info "${BOLD}Test Step 2: Check dependency test availability${CL}"
 
-    local depends_on
-    depends_on=$(read_module_config "${module}" 2>/dev/null | jq -r '.dependsOn // [] | .[]' 2>/dev/null)
+    # Both relationship lists (#684). rules-manager synthesises an auto-pinhole
+    # from dependsOn AND integratesWith (#632), so a service declared either way
+    # can carry a live firewall rule — and a rule no test visits is a rule that
+    # fails silently. They differ in one thing only: an integratesWith provider
+    # that is not installed is the documented no-op (#501), so it is quiet, where
+    # a missing dependsOn provider is a fault worth naming.
+    local dep_lines
+    dep_lines="$(module_test_dependencies "${module}")"
 
-    if [[ -z "${depends_on}" ]]; then
+    if [[ -z "${dep_lines}" ]]; then
         debug "  No dependencies declared"
     else
-        for dep in ${depends_on}; do
+        while read -r dep origin; do
+            [[ -n "${dep}" ]] || continue
             local provider_module="${dep%%:*}"
             local service_name="${dep##*:}"
             local provider_dir
@@ -237,19 +254,22 @@ main() {
                 else
                     warn "${dep} — no test-service.sh (will skip)"
                 fi
+            elif [[ "${origin}" == optional ]]; then
+                debug "  ${dep}: provider not installed — skipping optional integration"
             else
                 warn "${dep} — provider module directory not found (will skip)"
             fi
-        done
+        done <<< "${dep_lines}"
     fi
 
     # ── Step 3: Call dependency test-service.sh scripts ──────────────
     info "${BOLD}Test Step 3: Run dependency service tests${CL}"
 
-    if [[ -z "${depends_on}" ]]; then
+    if [[ -z "${dep_lines}" ]]; then
         debug "  No dependency services to test"
     else
-        for dep in ${depends_on}; do
+        while read -r dep origin; do
+            [[ -n "${dep}" ]] || continue
             local provider_module="${dep%%:*}"
             local service_name="${dep##*:}"
             local provider_dir
@@ -284,7 +304,7 @@ main() {
                 fi
                 test_fail "${dep} service tests failed"
             fi
-        done
+        done <<< "${dep_lines}"
     fi
 
     # ── Step 4: Call the module's own test.sh ────────────────────────
