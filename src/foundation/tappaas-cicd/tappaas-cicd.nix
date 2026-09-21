@@ -41,7 +41,11 @@ in
     # tappaas-self-rebuild.sh just before this rebuild. Optional, because a
     # bootstrap builds this system before config/site.json exists.
     ++ lib.optional (builtins.pathExists /etc/nixos/tappaas-site.nix)
-      /etc/nixos/tappaas-site.nix;
+      /etc/nixos/tappaas-site.nix
+    # When the mothership captures its own config/ (#691). Optional for the same
+    # reason: it is written by backup:filesystem, which runs after a bootstrap.
+    ++ lib.optional (builtins.pathExists /etc/nixos/tappaas-backup.nix)
+      /etc/nixos/tappaas-backup.nix;
 
   services.cloud-init = {
         enable = true;
@@ -447,7 +451,8 @@ in
     timerConfig = {
       # Ahead of the 21:00 VM job, so a night's capture and snapshot describe
       # the same state rather than straddling a change.
-      OnCalendar = "20:30";
+      # A fallback: the generated tappaas-backup.nix carries the real window (#691).
+      OnCalendar = lib.mkDefault "20:30";
       RandomizedDelaySec = "5min";
       Persistent = true;          # catch up after downtime
     };

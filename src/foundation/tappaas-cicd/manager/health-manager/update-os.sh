@@ -402,6 +402,13 @@ update_nixos() {
         rm -f "${_flat_tmp}"
     fi
 
+    # An empty capture-timer fragment so the module's fixed import resolves on a
+    # guest that captures nothing (#691). Never overwrites a real one:
+    # backup:filesystem writes that, and it must survive this step.
+    ssh -o BatchMode=yes "tappaas@${vm_ip}" \
+        "test -f /etc/nixos/tappaas-backup.nix || printf '{ }\n' | sudo tee /etc/nixos/tappaas-backup.nix >/dev/null" \
+        || warn "could not place the capture-timer placeholder on ${vm_ip}"
+
     # The site's own time and locale, written where the module's .nix imports it
     # from (#472). Before the rebuild, so this run applies it rather than the next.
     # The baseline itself (tappaas-common.nix) is NOT shipped yet: every module

@@ -160,11 +160,15 @@ pbs_fs_write_manifest "${MODULE}" "${REPO}" "${NS}" "${SCHEDULE}" "$(pbs_fs_fing
     || die "could not write the capture manifest"
 
 MANIFEST="$(pbs_fs_manifest_path "${MODULE}")"
-# A guest's timer is declarative (tappaas-common.nix); a machine has no such
-# baseline, so the units are installed with the runner (#662).
+# When this module captures, from the schedule cascade (#691) — written as
+# systemd units on a machine, and as a generated nix fragment for a guest,
+# which cannot take units imperatively.
 if [[ "${KIND}" == "machine" ]]; then
     pbs_fs_install_timer "${MODULE}" "${TARGET}" \
         || die "could not arm the capture timer on ${GUEST} — backup:filesystem is NOT wired for ${MODULE}"
+else
+    pbs_fs_install_timer_nix "${MODULE}" "${TARGET}" \
+        || die "could not write the capture timer for ${GUEST} — backup:filesystem is NOT wired for ${MODULE}"
 fi
 
 pbs_fs_deploy_runner "${MODULE}" "${TARGET}" "${MANIFEST}" \

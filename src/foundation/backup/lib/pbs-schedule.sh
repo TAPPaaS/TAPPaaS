@@ -131,3 +131,69 @@ pbs_module_bucket() {
     fi
     printf '%s\n' "${bucket}"
 }
+
+# ── the file-capture window (#691) ───────────────────────────────────
+#
+# A file capture runs BEFORE the whole-guest job, so a night's capture and
+# snapshot are not taken across the same change, and the two do not contend for
+# the backup server. That relationship used to be three separate literals
+# ("20:30" in tappaas-common.nix, in tappaas-cicd.nix and in pbs_fs_install_timer)
+# with nothing tying them to the VM job's own 21:00 — move the VM window and the
+# captures silently ended up after it. Now both come from here.
+#
+# The lead, in minutes, from the VM job's start back to the capture window.
+PBS_FS_LEAD_MINUTES="${PBS_FS_LEAD_MINUTES:-60}"
+# How far modules are spread within the window, and the margin left before the
+# VM job starts. spread + margin must be <= lead, which pbs_fs_window checks.
+PBS_FS_SPREAD_MINUTES="${PBS_FS_SPREAD_MINUTES:-45}"
+PBS_FS_MARGIN_MINUTES="${PBS_FS_MARGIN_MINUTES:-15}"
+
+# Minutes since midnight for HH:MM, and back again (wrapping at a day).
+_pbs_hm_to_min() { local h="${1%%:*}" m="${1##*:}"; printf '%s' "$((10#${h} * 60 + 10#${m}))"; }
+_pbs_min_to_hm() { local t="$(( ($1 % 1440 + 1440) % 1440 ))"; printf '%02d:%02d' "$((t / 60))" "$((t % 60))"; }
+
+# A module's own offset inside the window: DETERMINISTIC, from its name.
+#
+# Not a wide RandomizedDelaySec: with an hour of jitter a capture lands anywhere
+# up to the VM job, so "did it finish before the snapshot?" and "when does this
+# module run?" have different answers every night — the two questions an
+# operator asks precisely when a backup is missing. A hash gives every module a
+# fixed slot, no two collide by luck, and adding a module moves nobody else.
+pbs_fs_offset_minutes() {
+    local module="$1" spread="${2:-${PBS_FS_SPREAD_MINUTES}}" h
+    [[ "${spread}" -gt 0 ]] || { printf '0'; return 0; }
+    h="$(printf '%s' "${module}" | cksum | cut -d' ' -f1)"
+    printf '%s' "$(( h % spread ))"
+}
+
+# The capture time for <module>: HH:MM (rc 0), or rc 1 with a named error when
+# the window cannot hold the spread before the VM job starts.
+#
+# An explicit module schedule of HH:MM is the operator saying "not with the
+# others", and wins over the derived window.
+pbs_fs_window() {
+    local module="$1" dir="${2:-${PBS_SCHEDULE_CONFIG_DIR}}" spec vm_at start off
+    spec="$(pbs_schedule_resolve "${module}" "${dir}")"
+    if [[ "${spec}" =~ ^[0-2][0-9]:[0-5][0-9]$ ]]; then
+        printf '%s\n' "${spec}"; return 0
+    fi
+    if (( PBS_FS_SPREAD_MINUTES + PBS_FS_MARGIN_MINUTES > PBS_FS_LEAD_MINUTES )); then
+        error "backup:filesystem: the capture window (spread ${PBS_FS_SPREAD_MINUTES}m + margin ${PBS_FS_MARGIN_MINUTES}m) does not fit the ${PBS_FS_LEAD_MINUTES}m lead before the ${PBS_DEFAULT_STARTTIME} VM job — captures would run into it"
+        return 1
+    fi
+    vm_at="$(pbs_schedule_starttime "${spec}")"
+    start="$(( $(_pbs_hm_to_min "${vm_at}") - PBS_FS_LEAD_MINUTES ))"
+    off="$(pbs_fs_offset_minutes "${module}")"
+    _pbs_min_to_hm "$(( start + off ))"
+    printf '\n'
+}
+
+# The systemd OnCalendar for <module>'s capture: the resolved bucket (daily,
+# weekly, monthly) at this module's own time inside the window.
+pbs_fs_oncalendar() {
+    local module="$1" dir="${2:-${PBS_SCHEDULE_CONFIG_DIR}}" bucket at
+    bucket="$(pbs_schedule_bucket "$(pbs_schedule_resolve "${module}" "${dir}")")" || {
+        error "backup:filesystem: ${module} declares a schedule TAPPaaS will not run"; return 1; }
+    at="$(pbs_fs_window "${module}" "${dir}")" || return 1
+    pbs_schedule_calendar "${bucket}" "${at}"
+}

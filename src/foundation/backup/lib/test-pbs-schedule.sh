@@ -108,7 +108,43 @@ ck_rc "module bucket: an unsupported schedule FAILS (never silently daily)" 1 "$
 ck "module bucket: the error names the module and the allowed values" "yes" \
    "$(grep -q "module 'bad'" <<<"${ERRORS}" && grep -q "daily | weekly | monthly" <<<"${ERRORS}" && echo yes || echo no)"
 
+# ── the file-capture window (#691) ───────────────────────────────────
+# One renderer decides when a capture runs: the VM job's start, minus a lead,
+# plus this module's own deterministic slot.
+printf '%s' '{"backup":{"defaultSchedule":"daily"}}' > "${CONFIG_DIR}/site.json"
+printf '%s' '{"kind":"vm"}'                          > "${CONFIG_DIR}/alpha.json"
+printf '%s' '{"kind":"vm"}'                          > "${CONFIG_DIR}/beta.json"
+printf '%s' '{"kind":"vm","backup":{"schedule":"weekly"}}' > "${CONFIG_DIR}/gamma.json"
+printf '%s' '{"kind":"vm","backup":{"schedule":"03:30"}}'  > "${CONFIG_DIR}/delta.json"
+
+_w_alpha="$(pbs_fs_window alpha)"
+ck "window: before the VM job" "yes" \
+   "$([[ "$(_pbs_hm_to_min "${_w_alpha}")" -lt "$(_pbs_hm_to_min "${PBS_DEFAULT_STARTTIME}")" ]] && echo yes || echo no)"
+ck "window: inside the lead, with the margin kept" "yes" \
+   "$([[ "$(_pbs_hm_to_min "${_w_alpha}")" -ge "$(( $(_pbs_hm_to_min "${PBS_DEFAULT_STARTTIME}") - PBS_FS_LEAD_MINUTES ))" \
+      && "$(_pbs_hm_to_min "${_w_alpha}")" -le "$(( $(_pbs_hm_to_min "${PBS_DEFAULT_STARTTIME}") - PBS_FS_MARGIN_MINUTES ))" ]] && echo yes || echo no)"
+ck "window: the same module always gets the same slot" "${_w_alpha}" "$(pbs_fs_window alpha)"
+ck "window: two modules do not share a slot" "different" \
+   "$([[ "${_w_alpha}" != "$(pbs_fs_window beta)" ]] && echo different || echo same)"
+ck "window: an explicit HH:MM wins over the derived one" "03:30" "$(pbs_fs_window delta)"
+
+ck "oncalendar: daily is a bare time"    "${_w_alpha}"            "$(pbs_fs_oncalendar alpha)"
+ck "oncalendar: weekly keeps its day"    "sun $(pbs_fs_window gamma)" "$(pbs_fs_oncalendar gamma)"
+
+# The invariant is enforced, not hoped for: a spread that would run into the VM
+# job fails the render instead of scheduling a collision.
+( PBS_FS_SPREAD_MINUTES=50 PBS_FS_MARGIN_MINUTES=15 pbs_fs_window alpha >/dev/null 2>&1 )
+ck_rc "window: a spread that cannot fit the lead is refused" 1 $?
+
+# Moving the whole-guest job moves the captures with it — the relationship the
+# three hard-coded 20:30s never expressed.
+( PBS_DEFAULT_STARTTIME="02:00"
+  _early="$(pbs_fs_window alpha)"
+  [[ "$(_pbs_hm_to_min "${_early}")" -lt "$(_pbs_hm_to_min "02:00")" ]] ) 
+ck_rc "window: follows the VM job when it moves" 0 $?
+
 rm -rf "${CONFIG_DIR}"
+
 
 echo "RESULT: ${PASS} passed, ${FAIL} failed"
 [[ ${FAIL} -eq 0 ]]

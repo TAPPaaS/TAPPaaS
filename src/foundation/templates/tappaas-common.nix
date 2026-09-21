@@ -294,8 +294,10 @@
     timerConfig = {
       # Ahead of the 21:00 VM job, so a night's capture and snapshot describe
       # the same state rather than straddling a change.
-      OnCalendar = "20:30";
-      RandomizedDelaySec = "5min";
+      # A fallback only: when this guest captures, its own generated
+      # /etc/nixos/tappaas-backup.nix says so, from the schedule cascade (#691).
+      OnCalendar = lib.mkDefault "20:30";
+      RandomizedDelaySec = lib.mkDefault "5min";
       Persistent = true;          # catch up after downtime
     };
   };

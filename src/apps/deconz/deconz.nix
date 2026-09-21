@@ -63,6 +63,10 @@ in
     # baseline (ssh, cloud-init, users, nix settings), so importing the baseline
     # would conflict on every one of them. De-duplicating that is #324.
     /etc/nixos/tappaas-site.nix
+    # When this guest captures its declared paths, if it captures at all (#691).
+    # Always present: update-os.sh ships an empty one, and backup:filesystem
+    # overwrites it with the real trigger.
+    /etc/nixos/tappaas-backup.nix
   ];
 
   # ── BOOT ─────────────────────────────────────────────────────────────────--

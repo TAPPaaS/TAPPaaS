@@ -61,6 +61,14 @@ MANIFEST="$(pbs_fs_manifest_path "${MODULE}")"
 # the success line, so a runner that had never reached the guest at all was
 # reported as "re-applied" — and the warning's claim that "the previous ones
 # stay in place" is not true on a first wiring, where there is no previous one.
+# The window can move (a module gains its own schedule, the site moves the VM
+# job), so the trigger is re-asserted on every update, not only at install.
+if [[ "${KIND}" == "machine" ]]; then
+    pbs_fs_install_timer "${MODULE}" "${TARGET}" || warn "  could not re-assert the capture timer on ${GUEST}"
+else
+    pbs_fs_install_timer_nix "${MODULE}" "${TARGET}" || warn "  could not re-assert the capture timer for ${GUEST}"
+fi
+
 pbs_fs_deploy_runner "${MODULE}" "${TARGET}" "${MANIFEST}" \
     || die "could not refresh the capture runner on ${GUEST} — backup:filesystem is NOT converged for ${MODULE}"
 
