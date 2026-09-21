@@ -14,9 +14,18 @@
     "cluster:vm",
     "templates:nixos",
     "backup:vm",
-    "network:proxy"
+    "network:proxy",
+    "identity:identity"
   ],
   "provides": [],
+  "identity": {
+    "providesAdminRole": true,
+    "oidcRedirectPaths": [
+      "/login/generic_oauth"
+    ],
+    "secretsEnv": "/etc/secrets/logging.env",
+    "configureService": "logging-configure-oidc.service"
+  },
   "config": {
     "cluster:vm": {
       "cores": 2,

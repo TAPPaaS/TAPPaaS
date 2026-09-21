@@ -35,6 +35,25 @@ let
   syslogProxmoxPort  = 1515;   # Proxmox nodes → Promtail (source=proxmox)
   promtailHttp      = 9080;
   retentionHours    = "720h";  # 30 days
+
+  # The site's own values, not ours to guess: update-os.sh deploys the module's
+  # config beside this file as /etc/nixos/logging.json, so proxyDomain is
+  # available declaratively (same idiom as nextcloud.nix, #508). A site that has
+  # not published Grafana has no public URL and no OIDC redirect can exist, so
+  # everything below is conditional on it.
+  moduleCfg    = if builtins.pathExists ./logging.json
+                 then builtins.fromJSON (builtins.readFile ./logging.json)
+                 else {};
+  proxyCfg     = (moduleCfg.config or {})."network:proxy" or {};
+  proxyDomain  = proxyCfg.proxyDomain or (moduleCfg.proxyDomain or "");
+  published    = proxyDomain != "";
+
+  # Grafana substitutes $__file{path} into any setting, which is how the admin
+  # password already reaches it. The OIDC values arrive the same way, because
+  # they are only known once identity:identity has registered the application —
+  # long after this file is built.
+  oidcSecret   = name: "$__file{/etc/secrets/logging-oidc-${name}}";
+  oidcFiles    = [ "client-id" "client-secret" "auth-url" "token-url" "api-url" ];
 in
 {
   # ============================================================================
@@ -456,20 +475,25 @@ in
       server = {
         http_addr = "0.0.0.0";
         http_port = grafanaPort;
-        # root_url left to Grafana defaults; Caddy passes X-Forwarded-* headers
-        # so links resolve to the public proxyDomain. Override here if links break.
+        # Where the site publishes Grafana, root_url must say so EXPLICITLY:
+        # Grafana derives the OAuth redirect_uri from it, and that URI has to
+        # match the one identity:identity registered in Authentik character for
+        # character. X-Forwarded-* is enough for ordinary links and not enough
+        # for this. Unpublished, it stays at Grafana's default as before.
+      } // lib.optionalAttrs published {
+        root_url = "https://${proxyDomain}/";
       };
 
       security = {
         admin_user = "admin";
         admin_password = "$__file{/etc/secrets/grafana-admin-password}";
-        # cookie_secure = false for v1: this VM is reachable on internal
-        # http://logging.mgmt.internal:3000. With cookie_secure=true the
-        # browser refuses to persist the auth cookie over plain HTTP, so login
-        # appears to succeed then bounces back to /login.
-        # v2 (when HTTPS via Caddy + Let's Encrypt is live for every admin
-        # access path): set cookie_secure = true and access only through Caddy.
-        cookie_secure = false;
+        # Tied to the same fact, in both directions. On a site that publishes
+        # Grafana through Caddy the browser gets HTTPS and the auth cookie must
+        # be marked secure — without it the OIDC round trip appears to succeed
+        # and bounces straight back to /login. On a site that does not, access
+        # is plain http://logging.<zone>.internal:3000 and a secure cookie is
+        # never stored at all, which is the same failure from the other side.
+        cookie_secure = published;
         cookie_samesite = "lax";
       };
 
@@ -478,8 +502,38 @@ in
       analytics.check_for_updates = false;
       news.news_feed_enabled = false;
 
-      # v2: replace with OIDC against Authentik
-      # "auth.generic_oauth" = { ... };
+    } // lib.optionalAttrs published {
+      # ── Authentik OIDC (ADR-006) ──────────────────────────────────────────
+      # Only where Grafana is published: the redirect URI is built from the
+      # public domain, so without one there is nothing Authentik could call
+      # back to.
+      #
+      # Every value here is read from a file at RUNTIME rather than written in:
+      # the client id and secret because identity:identity mints them, and the
+      # three endpoints because they belong to the site's own Authentik, whose
+      # domain this file does not know. logging-configure-oidc.service below
+      # fills all five in from the discovery document.
+      "auth.generic_oauth" = {
+        enabled       = true;
+        name          = "Authentik";
+        client_id     = oidcSecret "client-id";
+        client_secret = oidcSecret "client-secret";
+        auth_url      = oidcSecret "auth-url";
+        token_url     = oidcSecret "token-url";
+        api_url       = oidcSecret "api-url";
+        # The groups claim rides on Authentik's own profile scope, so no extra
+        # scope mapping is requested (identity's field schema says so, and a
+        # scope that does not exist fails provider creation).
+        scopes        = "openid email profile";
+        use_pkce      = true;
+        allow_sign_up = true;
+        # logging-admins (created because logging.json sets
+        # identity.providesAdminRole) becomes GrafanaAdmin; everyone else who
+        # can sign in at all gets Viewer. Day-2 access is granted through
+        # Grafana's own permissions rather than by handing out Editor.
+        role_attribute_path       = "contains(groups[*], 'logging-admins') && 'GrafanaAdmin' || 'Viewer'";
+        allow_assign_grafana_admin = true;
+      };
     };
 
     provision = {
@@ -499,8 +553,122 @@ in
   };
 
   systemd.services.grafana = {
-    after = [ "loki.service" "generate-grafana-secrets.service" ];
-    requires = [ "generate-grafana-secrets.service" ];
+    after = [ "loki.service" "generate-grafana-secrets.service" ]
+            ++ lib.optional published "generate-logging-oidc-placeholder.service";
+    requires = [ "generate-grafana-secrets.service" ]
+               ++ lib.optional published "generate-logging-oidc-placeholder.service";
+  };
+
+  # ============================================================================
+  # AUTHENTIK OIDC INTEGRATION (ADR-006)
+  # ============================================================================
+  # identity:identity registers the application, then writes OIDC_CLIENT_ID,
+  # OIDC_CLIENT_SECRET and OIDC_DISCOVERY_URI into the secretsEnv path named in
+  # logging.json and restarts the configureService named there. Grafana reads
+  # each value from its own file, so these units split the env into files and
+  # resolve the endpoints from the discovery document.
+
+  # Grafana must be able to START before identity has wired anything: a setting
+  # whose $__file target is missing is a hard startup failure, not a disabled
+  # login. Placeholders make the first boot survivable; the sign-in button is
+  # present and refuses until the real values land.
+  systemd.services.generate-logging-oidc-placeholder = lib.mkIf published {
+    description = "Create placeholder Grafana OIDC files so Grafana can start unwired";
+    wantedBy    = [ "multi-user.target" ];
+    # After tmpfiles has made /etc/secrets 0750 root:grafana. Creating the
+    # directory here first can win the race and leave it 0700, at which point
+    # grafana — a group member, not the owner — cannot traverse it and
+    # crash-loops on its own admin-password file (seen live 2026-08-26).
+    after       = [ "local-fs.target" "systemd-tmpfiles-setup.service" ];
+    before      = [ "grafana.service" ];
+    unitConfig.ConditionPathExists = "!/etc/secrets/logging-oidc-client-secret";
+    serviceConfig = {
+      Type            = "oneshot";
+      RemainAfterExit = true;
+      ExecStart = pkgs.writeShellScript "generate-logging-oidc-placeholder" ''
+        set -euo pipefail
+        ${pkgs.coreutils}/bin/mkdir -p /etc/secrets
+        for f in ${lib.concatStringsSep " " (map (n: "logging-oidc-${n}") oidcFiles)}; do
+          [ -f "/etc/secrets/$f" ] || ${pkgs.coreutils}/bin/install -m 0600 -o grafana -g grafana             /dev/stdin "/etc/secrets/$f" <<< "unconfigured"
+        done
+      '';
+    };
+  };
+
+  systemd.services.logging-configure-oidc = lib.mkIf published {
+    description = "Configure Authentik OIDC login in Grafana";
+    wantedBy    = [ "multi-user.target" ];
+    after       = [ "generate-logging-oidc-placeholder.service" "network-online.target" ];
+    wants       = [ "network-online.target" ];
+    # Deliberately NOT before grafana.service: this unit restarts grafana to
+    # pick up the new files, and ordering it first deadlocks — systemd holds
+    # grafana until this unit exits while this unit waits on that same job.
+    # (The identical mistake was made on openwebui, 2026-08-25.)
+    serviceConfig = {
+      Type            = "oneshot";
+      RemainAfterExit = true;
+      ExecStart = pkgs.writeShellScript "logging-configure-oidc" ''
+        set -euo pipefail
+        # The unit always runs with these defaults. They are overridable only so
+        # the branches below can be exercised off the VM (test-grafana-oidc.sh)
+        # — the paths are not configuration and nothing else sets them.
+        ENV_FILE="''${LOGGING_OIDC_ENV:-/etc/secrets/logging.env}"
+        SECRETS_DIR="''${LOGGING_OIDC_SECRETS_DIR:-/etc/secrets}"
+
+        # `|| true`: a key that is absent is an answer, not a crash. Under
+        # `set -o pipefail` a bare grep miss kills the script, which made the
+        # "OIDC_DISCOVERY_URI missing" diagnostic below unreachable — the unit
+        # failed with no output at all.
+        readvar() { ${pkgs.gnugrep}/bin/grep "^$1=" "$ENV_FILE" | ${pkgs.coreutils}/bin/cut -d= -f2- || true; }
+
+        if ! ${pkgs.gnugrep}/bin/grep -q '^OIDC_CLIENT_ID=' "$ENV_FILE" 2>/dev/null; then
+          echo "No Authentik OIDC credentials in $ENV_FILE yet — identity:identity has not wired this module. Nothing to do."
+          exit 0
+        fi
+
+        CLIENT_ID="$(readvar OIDC_CLIENT_ID)"
+        CLIENT_SECRET="$(readvar OIDC_CLIENT_SECRET)"
+        DISCOVERY="$(readvar OIDC_DISCOVERY_URI)"
+
+        if [ -z "''${DISCOVERY:-}" ]; then
+          echo "OIDC_DISCOVERY_URI missing from $ENV_FILE — cannot resolve the Authentik endpoints." >&2
+          exit 1
+        fi
+
+        # The endpoints come from the provider itself. Deriving them by string
+        # surgery on the discovery URI would bake in Authentik's current URL
+        # layout, which is not ours to assume.
+        DOC="$(${pkgs.curl}/bin/curl -fsS --max-time 15 "$DISCOVERY")" || {
+          echo "Could not fetch the OIDC discovery document at $DISCOVERY" >&2
+          exit 1
+        }
+        AUTH_URL="$(${pkgs.jq}/bin/jq -r '.authorization_endpoint // empty' <<< "$DOC")"
+        TOKEN_URL="$(${pkgs.jq}/bin/jq -r '.token_endpoint // empty' <<< "$DOC")"
+        API_URL="$(${pkgs.jq}/bin/jq -r '.userinfo_endpoint // empty' <<< "$DOC")"
+        for v in "$AUTH_URL" "$TOKEN_URL" "$API_URL"; do
+          [ -n "$v" ] || { echo "The discovery document at $DISCOVERY names no authorization/token/userinfo endpoint." >&2; exit 1; }
+        done
+
+        # Owned by grafana because Grafana reads these itself. As root — which
+        # is how the unit runs — that ownership is applied; the unprivileged
+        # branch exists for the test, where no grafana user exists.
+        write() {
+          if [ "$(${pkgs.coreutils}/bin/id -u)" = 0 ]; then
+            ${pkgs.coreutils}/bin/install -m 0600 -o grafana -g grafana /dev/stdin "$SECRETS_DIR/$1" <<< "$2"
+          else
+            ${pkgs.coreutils}/bin/install -m 0600 /dev/stdin "$SECRETS_DIR/$1" <<< "$2"
+          fi
+        }
+        write logging-oidc-client-id     "$CLIENT_ID"
+        write logging-oidc-client-secret "$CLIENT_SECRET"
+        write logging-oidc-auth-url      "$AUTH_URL"
+        write logging-oidc-token-url     "$TOKEN_URL"
+        write logging-oidc-api-url       "$API_URL"
+
+        echo "Grafana OIDC login configured against $DISCOVERY"
+        ${pkgs.systemd}/bin/systemctl try-restart grafana.service || true
+      '';
+    };
   };
 
   # ============================================================================

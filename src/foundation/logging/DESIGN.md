@@ -221,8 +221,22 @@ Mitigations in place:
 - **Loki authentication**: turn on `auth_enabled = true` with per-tenant `X-Scope-OrgID`
   and either basic-auth or mTLS on tcp/3100. Promtail clients on each VM ship a tenant
   ID so spoofed-host labels are rejected.
-- **Grafana auth**: integrate OIDC against the `identity` module so admins use their
-  TAPPaaS SSO account; remove the local admin user.
+- **Grafana auth**: ✅ OIDC against `identity:identity` is wired (from AndreasJe's work
+  on pr-513, adapted). `logging.json` declares the contract — `providesAdminRole`, the
+  `/login/generic_oauth` redirect path, `secretsEnv` and `configureService`; Authentik
+  mints the client, `logging-configure-oidc.service` resolves the endpoints from the
+  provider's own discovery document, and Grafana reads all five values through its
+  `$__file{}` substitution. Members of `logging-admins` land in `GrafanaAdmin`, everyone
+  else who can sign in gets `Viewer`.
+
+  Two things follow from the public domain rather than being set independently: the
+  provider only exists where the site publishes Grafana (no `proxyDomain`, no redirect
+  URI for Authentik to call back to), and `cookie_secure` moves with it — a secure
+  cookie over plain `http://logging.<zone>.internal:3000` is never stored, and the login
+  bounces back to `/login` looking exactly like bad credentials.
+
+  Still open: the local `admin` user remains. Removing it is a separate step, and wants
+  a way back in when Authentik is the thing that is down.
 - **Syslog over TLS**: wire Promtail's syslog receiver with `tls_config` and expose
   6514/tcp; deprecate 1514/tcp once OPNsense is moved over.
 - **Automate OPNsense syslog target**: ✅ done in v1 — `syslog-manager` is wired into
