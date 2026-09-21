@@ -175,6 +175,18 @@ for test_entry in "${TESTS[@]}"; do
         if /home/tappaas/bin/install-module.sh "$TEST_NAME" > "$INSTALL_LOG" 2>&1; then
             INSTALL_STATUS="pass"
             echo -n "OK. "
+            # A fixture must not come back after a node reboot. Create-TAPPaaS-VM.sh
+            # sets onboot=1 for every guest, which is right for a module and wrong
+            # for a throwaway: the orphan in #695 was `onboot: 1`, so every reboot
+            # restarted a test VM nothing owned. Disarm it here — the suite's own
+            # guests, not the product's policy.
+            _ob_vmid="$(jq -r '.vmid // empty' "/home/tappaas/config/${TEST_NAME}.json" 2>/dev/null)"
+            _ob_node="$(jq -r '.node // empty' "/home/tappaas/config/${TEST_NAME}.json" 2>/dev/null)"
+            if [ -n "${_ob_vmid}" ] && [ -n "${_ob_node}" ]; then
+                ssh -o BatchMode=yes -o ConnectTimeout=10 "root@${_ob_node}.${MGMT:-mgmt}.internal" \
+                    "qm set ${_ob_vmid} --onboot 0" >/dev/null 2>&1 \
+                    || echo -n "(could not clear onboot) "
+            fi
         else
             INSTALL_STATUS="fail"
             echo -n "FAILED. "
@@ -297,9 +309,29 @@ if [ "$DELETE" = true ]; then
     for test_entry in "${TESTS[@]}"; do
         IFS=':' read -r TEST_NAME _ _ <<< "$test_entry"
 
-        # Check if the module config exists (it might not if install was skipped/failed)
+        # No config does NOT mean nothing to clean up — it is the case that
+        # leaves orphans (#695). An install that failed after creating the guest,
+        # or a run that was interrupted, leaves the VM on the node with no config
+        # here; skipping it meant the guest outlived every later run, and the
+        # next one failed on "VM with VMID 912 already exists" while reporting a
+        # rollback failure that had nothing to do with rollback.
         if [ ! -f "/home/tappaas/config/${TEST_NAME}.json" ]; then
-            echo "  Skipping ${TEST_NAME} (no config found)"
+            _fx="${SCRIPT_DIR}/${TEST_NAME}.json"
+            _fx_vmid="$(jq -r '.vmid // empty' "${_fx}" 2>/dev/null)"
+            if [ -n "${_fx_vmid}" ]; then
+                _orphan_node="$(vm_node_holding "${_fx_vmid}")"
+                if [ -n "${_orphan_node}" ]; then
+                    echo -n "  ${TEST_NAME} has no config but VM ${_fx_vmid} exists on ${_orphan_node} — removing the orphan... "
+                    if ssh -o BatchMode=yes -o ConnectTimeout=10 "root@${_orphan_node}.${MGMT:-mgmt}.internal" \
+                            "qm stop ${_fx_vmid} >/dev/null 2>&1; qm destroy ${_fx_vmid} --purge" >/dev/null 2>&1; then
+                        echo "OK"
+                    else
+                        echo "FAILED — remove it by hand: ssh root@${_orphan_node}.${MGMT:-mgmt}.internal 'qm destroy ${_fx_vmid} --purge'"
+                    fi
+                    continue
+                fi
+            fi
+            echo "  Skipping ${TEST_NAME} (no config, no guest)"
             continue
         fi
 

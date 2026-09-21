@@ -2084,3 +2084,21 @@ wait_for_vm_unlock() {
     warn "  VM ${vmid} is still locked (${holder}) after ${waited}s"
     return 1
 }
+
+# The cluster node currently holding <vmid>, or empty (#695).
+#
+# A test fixture whose config is gone but whose guest survived is invisible to
+# anything that looks up modules by config — and that is exactly how an orphan
+# outlives run after run until the next one fails on "VMID already exists".
+# Finding it needs the cluster, not config/.
+vm_node_holding() {
+    local vmid="$1" n
+    [[ -n "${vmid}" ]] || return 0
+    for n in $(jq -r '.hardware.nodes[]?.name // empty' "${CONFIG_DIR}/site.json" 2>/dev/null); do
+        if ssh -o BatchMode=yes -o ConnectTimeout=8 "root@${n}.${MGMT:-mgmt}.internal" \
+                "qm config ${vmid} >/dev/null 2>&1"; then
+            printf '%s' "${n}"; return 0
+        fi
+    done
+    return 0
+}

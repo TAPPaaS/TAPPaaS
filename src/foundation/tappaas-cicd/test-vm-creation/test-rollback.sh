@@ -114,6 +114,22 @@ if [[ -f "${CONFIG_DIR}/${MODULE}.json" ]]; then
     /home/tappaas/bin/delete-module.sh "${MODULE}" --force >/dev/null 2>&1 \
         || die "Could not clean pre-existing ${MODULE} — aborting test"
 fi
+
+# A guest can outlive its config (#695): an interrupted run leaves the VM on the
+# node with nothing in config/ pointing at it, and this fixture's VMID is then
+# taken. Without this, install-module.sh fails with "VMID already exists" and
+# the suite reports "cannot test rollback" — a rollback failure that is nothing
+# of the sort, with the real cause one line above.
+_rb_vmid="$(jq -r '.vmid // empty' "${FIXTURE_DIR}/${MODULE}.json" 2>/dev/null)"
+if [[ -n "${_rb_vmid}" ]] && declare -F vm_node_holding >/dev/null 2>&1; then
+    _rb_node="$(vm_node_holding "${_rb_vmid}")"
+    if [[ -n "${_rb_node}" ]]; then
+        warn "  VM ${_rb_vmid} exists on ${_rb_node} with no config — an orphan from an earlier run; removing it"
+        ssh -o BatchMode=yes -o ConnectTimeout=10 "root@${_rb_node}.${MGMT:-mgmt}.internal" \
+            "qm stop ${_rb_vmid} >/dev/null 2>&1; qm destroy ${_rb_vmid} --purge" >/dev/null 2>&1 \
+            || die "Could not remove the orphan VM ${_rb_vmid} on ${_rb_node} — remove it by hand and re-run"
+    fi
+fi
 info "  ${GN}✓${CL} clean slate"
 
 # ── Step 1: Install the fixture (healthy GOOD baseline) ──────────────
