@@ -247,7 +247,7 @@ Disk size with unit suffix
 
 ### `storage`
 
-Name of the storage pool for the module
+Name of the storage pool for the module. Left undeclared, the pool is resolved against the target node at create time: 'tanka1' when that node has it, otherwise the node's first ZFS pool that can hold VM disks (#692).
 
 | Attribute | Value |
 |---|---|
@@ -260,7 +260,7 @@ Name of the storage pool for the module
 | Apply mode | `none` |
 | Reported as | `storage` |
 
-**About the field.** Storage pool must exist on the target node
+**About the field.** Must exist on the target node. A declared pool the node does not have is refused before the image is downloaded, naming the pools it does have (#692) — it is not silently replaced, because a declared pool is the operator's word.
 
 **Why this change class.** As cluster:vm, and for a bind-mounted container this is not a move at all. The schema default 'tanka1' is what Create-TAPPaaS-LXC.sh builds on, so an undeclared container is in sync from install and the manual-class report is restored rather than suppressed (ADR-020 D9).
 

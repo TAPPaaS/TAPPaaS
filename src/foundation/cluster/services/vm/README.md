@@ -332,7 +332,7 @@ Name of the Proxmox/TAPPaaS node where the module should be installed. If null, 
 
 ### `storage`
 
-Name of the storage pool for the module
+Name of the storage pool for the module. Left undeclared, the pool is resolved against the target node at create time: 'tanka1' when that node has it, otherwise the node's first ZFS pool that can hold VM disks (#692).
 
 | Attribute | Value |
 |---|---|
@@ -345,9 +345,9 @@ Name of the storage pool for the module
 | Apply mode | `none` |
 | Reported as | `storage` |
 
-**About the field.** Storage pool must exist on the target node
+**About the field.** Must exist on the target node. A declared pool the node does not have is refused before the image is downloaded, naming the pools it does have (#692) — it is not silently replaced, because a declared pool is the operator's word.
 
-**Why this change class.** A storage change means moving the disk, and update-service.sh has always WARNED rather than acting, because an implicit qm move-disk is a long, IO-heavy operation an operator must schedule. Not pre-gated: writing the intended storage into config and reporting the gap is useful, so only the apply refuses. The schema default 'tanka1' is DESIRED state (ADR-020 D9) — it is what both create paths build on, so an undeclared guest is in sync from install. Nothing in TAPPaaS ever moves a disk, so this can only diverge when an operator runs qm move-disk by hand, and reporting exactly that is what the manual class is for; Excluding undeclared modules from the comparison suppressed exactly that report, which is the opposite of what manual means.
+**Why this change class.** A storage change means moving the disk, and update-service.sh has always WARNED rather than acting, because an implicit qm move-disk is a long, IO-heavy operation an operator must schedule. Not pre-gated: writing the intended storage into config and reporting the gap is useful, so only the apply refuses. The schema default 'tanka1' is DESIRED state (ADR-020 D9). Since #692 it is a PREFERENCE, not an assumption: both create paths build on it when the target node has that pool and otherwise on the node's own ZFS pool, so a guest on a node with per-node pools is created instead of failing at `qm importdisk`. An undeclared guest that landed elsewhere is therefore not drift — the field is still at its schema default and cannot be applied, which is exactly the case #679 records as skipped. Nothing in TAPPaaS ever moves a disk, so this can only diverge when an operator runs qm move-disk by hand, and reporting exactly that is what the manual class is for; Excluding undeclared modules from the comparison suppressed exactly that report, which is the opposite of what manual means.
 
 ### `bios`
 
