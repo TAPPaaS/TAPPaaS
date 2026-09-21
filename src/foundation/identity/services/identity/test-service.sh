@@ -38,6 +38,23 @@ MODULE="${1:-}"
 
 info "  ${BOLD}identity:identity tests for ${BL}${MODULE}${CL}"
 
+# Nothing to verify where nothing was registered. install-service.sh skips a
+# module the site publishes nowhere — no public domain means no redirect URI,
+# so no OIDC application exists — and this test must reach the same verdict
+# from the same predicate. Until #698 it did not: it reported "no OIDC
+# application with slug '<module>'" as drift, which made `reconcile --apply`
+# declare the module unconverged and roll the update back. Checked before
+# Authentik is contacted at all: an unpublished module has no business failing
+# on a provider it never used.
+_TS_JSON="$(normalize_module_config < "${CONFIG_DIR}/${MODULE}.json" 2>/dev/null || echo '{}')"
+_TS_DOMAIN="$(oidc_public_domain \
+    "$(jq -r '.vmname // empty' <<<"${_TS_JSON}")" \
+    "$(jq -r '.environment // ""' <<<"${_TS_JSON}")" "${_TS_JSON}")"
+if [[ -z "${_TS_DOMAIN}" ]]; then
+    info "    ${GN}✓${CL} not published (no domain for environment '$(jq -r '.environment // "default"' <<<"${_TS_JSON}")') — no SSO to verify"
+    exit 0
+fi
+
 if ! ${AUTHENTIK_MANAGER} test >/dev/null 2>&1; then
     error "  authentik-manager cannot reach Authentik"
     exit 2

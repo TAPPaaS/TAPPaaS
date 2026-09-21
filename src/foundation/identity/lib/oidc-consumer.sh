@@ -14,6 +14,33 @@
 # Returns 1 when either value is not a plain path / unit name: both are pasted
 # into a remote shell run under sudo on the VM, so a quote in module config
 # would otherwise run as root there.
+# oidc_public_domain <vmname> <environment> <normalized-module-json>
+#
+# Echoes the domain a browser reaches this module at, or "" when the site
+# publishes it nowhere — the one predicate that decides whether SSO can exist
+# at all, so install-service.sh, accessControl and test-service.sh must not each
+# have their own (#698: they disagreed, and the sweep rolled a module back).
+#
+# Explicit proxyDomain wins; otherwise it is <vmname>.<environment domain>, the
+# name network:proxy publishes at. A derived domain therefore counts as
+# published — treating it as unpublished would let a reachable app pass as
+# "nothing to protect". An environment with no domain at all (mgmt is the
+# standard internal-only case) yields "", and then there is no redirect URI, no
+# OIDC application, and nothing for any of the three to do.
+oidc_public_domain() {
+    local vmname="$1" environment="$2" json="$3" domain="" env_domain=""
+    domain="$(jq -r '.proxyDomain // ""' <<<"${json}")"
+    if [[ -z "${domain}" && -n "${vmname}" ]]; then
+        env_domain="$(get_variant_config "${environment}" 2>/dev/null | jq -r '.domain // empty')"
+        if [[ -n "${env_domain}" ]]; then
+            domain="${vmname}.${env_domain}"
+        fi
+    fi
+    # printf last, deliberately: callers assign this in a command substitution,
+    # where a failing test as the final command would abort them under `set -e`.
+    printf '%s' "${domain}"
+}
+
 oidc_consumer_paths() {
     local module="$1" environment="$2" json="$3" cs
     OIDC_MODULE_BASE="${module}"

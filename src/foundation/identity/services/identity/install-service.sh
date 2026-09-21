@@ -72,21 +72,15 @@ JSON="$(normalize_module_config < "${MODULE_JSON}")"
 
 VMNAME="$(get_config_value 'vmname' '')"
 ZONE0="$(get_config_value 'zone0' '')"
-PROXY_DOMAIN="$(get_config_value 'proxyDomain' '')"
 ENVIRONMENT="$(get_config_value 'environment' '')"
-# Derive proxyDomain when a module doesn't hardcode it — the Nextcloud pattern
-# ("no proxyDomain is hardcoded"; the public domain is <vmname>.<domain>). Mirror
-# network:proxy's derivation so the OIDC redirect URIs match the reverse proxy's
-# domain, taking <domain> from the module's environment (the default environment
-# for unsuffixed installs) to stay correct under ADR-007. Read .environment, not
-# the retired .variant (#438) — with the latter gone, this silently derived every
-# non-default module's OIDC redirect URIs from the DEFAULT environment's domain.
-if [[ -z "${PROXY_DOMAIN}" ]]; then
-    _DERIVED_DOMAIN="$(get_variant_config "${ENVIRONMENT}" 2>/dev/null | jq -r '.domain // empty')"
-    if [[ -n "${_DERIVED_DOMAIN}" && -n "${VMNAME}" ]]; then
-        PROXY_DOMAIN="${VMNAME}.${_DERIVED_DOMAIN}"
-    fi
-fi
+# Explicit proxyDomain, else <vmname>.<environment domain> — the Nextcloud
+# pattern ("no proxyDomain is hardcoded") and the name network:proxy publishes
+# at, so the OIDC redirect URIs match the reverse proxy character for character.
+# Taken from the module's own environment, not the default one (#438). The
+# predicate lives in the shared lib because test-service.sh must reach the same
+# verdict: when they disagreed, a module was registered and then reported as
+# drifted (#698).
+PROXY_DOMAIN="$(oidc_public_domain "${VMNAME}" "${ENVIRONMENT}" "${JSON}")"
 [[ -n "${VMNAME}" && -n "${ZONE0}" ]] \
     || die "module ${MODULE} must set vmname and zone0"
 

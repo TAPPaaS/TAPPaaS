@@ -32,6 +32,10 @@ set -euo pipefail
 _ACCESSCONTROL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=../../lib/ensure-authentik-creds.sh disable=SC1091
 . "${_ACCESSCONTROL_DIR}/../../lib/ensure-authentik-creds.sh"
+# oidc_public_domain — the shared "is this module published, and where?"
+# predicate (#698); identity:identity and its test-service read the same one.
+# shellcheck source=../../lib/oidc-consumer.sh disable=SC1091
+. "${_ACCESSCONTROL_DIR}/../../lib/oidc-consumer.sh"
 
 MODULE="${1:-}"
 [[ -n "${MODULE}" ]] || die "Usage: $0 <module-name>"
@@ -48,18 +52,15 @@ PROXY_PORT="$(get_config_value 'proxyPort' '')"
 DESCRIPTION="TAPPaaS: ${MODULE}"
 
 ENVIRONMENT="$(get_config_value 'environment' '')"
-# Same derivation network:proxy uses, for the same reason: a module that does not
-# hardcode proxyDomain is published at <vmname>.<environment domain>, and the
-# forward-auth we layer on must name the domain the handler was actually created
-# for. Deriving it here is what keeps the skip below honest — without it a
-# published module whose domain is only derived would look unpublished to us and
-# be left EXPOSED behind a proxy handler with ForwardAuth off (#698).
-if [[ -z "${PROXY_DOMAIN}" ]]; then
-    _DERIVED_DOMAIN="$(get_variant_config "${ENVIRONMENT}" 2>/dev/null | jq -r '.domain // empty')"
-    if [[ -n "${_DERIVED_DOMAIN}" && -n "${VMNAME}" ]]; then
-        PROXY_DOMAIN="${VMNAME}.${_DERIVED_DOMAIN}"
-    fi
-fi
+# The same predicate identity:identity uses, from the same lib: a module that
+# does not hardcode proxyDomain is still published at <vmname>.<environment
+# domain>, and the forward-auth we layer on must name the domain the handler was
+# actually created for. Deriving it is what keeps the skip below honest —
+# without it a published module whose domain is only derived would look
+# unpublished here and be left EXPOSED behind a handler with ForwardAuth off
+# (#698).
+PROXY_DOMAIN="$(oidc_public_domain "${VMNAME}" "${ENVIRONMENT}" \
+    "$(normalize_module_config < "${MODULE_JSON}")")"
 
 [[ -n "${VMNAME}" && -n "${ZONE0}" ]] \
     || die "module ${MODULE} must set vmname and zone0"

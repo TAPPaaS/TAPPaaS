@@ -92,6 +92,18 @@ run_svc accessControl
                     || bad "exited ${RC} (expected 0)"
 ckin "says forward-auth is skipped" "skipping forward-auth" "${OUT}"
 
+echo "── the verifier must agree with the installer ──"
+# The half that actually rolled makerfloss's logging back a second time: the
+# installer skipped, then test-service.sh reported the absent OIDC application
+# as drift, so `reconcile --apply` declared the module unconverged.
+CONFIG_DIR="${TMP}" timeout 45 "${IDENTITY_SVC}/identity/test-service.sh" logging \
+    > "${TMP}/test-out.txt" 2>&1
+RC=$?; OUT="$(cat "${TMP}/test-out.txt")"
+[[ "${RC}" -eq 0 ]] && ok "test-service reports no drift for an unpublished module" \
+                    || bad "test-service exited ${RC} (expected 0 — drift here fails the reconcile)"
+ckin "and says why there was nothing to check" "no SSO to verify" "${OUT}"
+cknot "does not report a missing OIDC application" "no OIDC application" "${OUT}"
+
 echo "── the exposure guard: a DERIVED domain still counts as published ──"
 # network:proxy publishes this module at logging.example.test even though the
 # module names no proxyDomain. Neither service may treat it as unpublished.
