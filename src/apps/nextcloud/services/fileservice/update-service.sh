@@ -330,22 +330,24 @@ nc_apply_env() {
 #           coturn's install.sh / its turn service.
 #   host:   coturn's publicDomain (one name in every horizon), else its
 #           internal FQDN — the same derivation coturn:turn stamps as turnHost.
+# Talk is given BOTH endpoints and lets ICE choose. A site's wildcard
+# split-horizon answers the public name with the reverse proxy, which runs no
+# TURN, so the public name alone strands internal callers and the internal name
+# alone strands external ones.
 if [[ "${CONNECTOR}" == "talk" ]]; then
     info "  ${MODULE} declares a talk connector — wiring the TURN/STUN relay into Talk (ADR-COM-0002)"
     COTURN_MGMT_SECRETS="/home/tappaas/secrets/coturn.env"
     COTURN_SECRET="$(grep -h '^COTURN_SECRET=' "${COTURN_MGMT_SECRETS}" 2>/dev/null | cut -d= -f2- || true)"
+    TURN_SERVER_INTERNAL="$(jq -r '.vmname // "coturn"' "${CONSUMER_JSON}").$(jq -r '.zone0 // "dmz"' "${CONSUMER_JSON}").internal:3478"
     _turn_pub="$(jq -r '.publicDomain // empty' "${CONSUMER_JSON}" 2>/dev/null || true)"
-    if [[ -n "${_turn_pub}" ]]; then
-        TURN_SERVER="${_turn_pub}:3478"
-    else
-        TURN_SERVER="$(jq -r '.vmname // "coturn"' "${CONSUMER_JSON}").$(jq -r '.zone0 // "dmz"' "${CONSUMER_JSON}").internal:3478"
-        warn "  ${MODULE} declares no publicDomain — Talk advertises ${TURN_SERVER}, which only in-network clients can resolve"
-    fi
+    TURN_SERVER="${_turn_pub:+${_turn_pub}:3478}"
+    [[ -n "${TURN_SERVER}" ]] || warn "  ${MODULE} declares no publicDomain — Talk gets the internal relay only, so calls from outside the network have none"
     if [[ -z "${COTURN_SECRET}" ]]; then
         warn "  COTURN_SECRET not in ${COTURN_MGMT_SECRETS} yet — relay left unconfigured; it wires on the next nextcloud sync once coturn has published it."
-    elif printf 'TURN_SERVER=%s\nTURN_SECRET=%s\n' "${TURN_SERVER}" "${COTURN_SECRET}" \
+    elif printf 'TURN_SERVER=%s\nTURN_SERVER_INTERNAL=%s\nTURN_SECRET=%s\n' \
+            "${TURN_SERVER}" "${TURN_SERVER_INTERNAL}" "${COTURN_SECRET}" \
             | nc_apply_env talk.env nextcloud-configure-talk-turn.service; then
-        info "${GN}✓${CL} talk connector wired: STUN/TURN ${TURN_SERVER} registered in Nextcloud Talk"
+        info "${GN}✓${CL} talk connector wired: STUN/TURN ${TURN_SERVER:-(none)} + ${TURN_SERVER_INTERNAL} registered in Nextcloud Talk"
     else
         warn "  failed to apply talk.env on ${NC_HOST} — re-run after both VMs are up"
     fi

@@ -564,6 +564,17 @@ main() {
     # the copied source; module discovery recognises a module by its shape
     # (lib/ts/src/module-discovery.ts), which a fresh install always has.
 
+    # Module pre-install hook: the deployed config exists, nothing has been
+    # provisioned yet, and zone0 is still unresolved — so a module can decide
+    # site-specific placement here (co-locating with a provider) and have the
+    # resolution below honour it as an explicit .zone0. Must stay idempotent:
+    # a re-install runs it again.
+    if [[ -x "./pre-install.sh" ]]; then
+        info "  Running ${module}/pre-install.sh..."
+        ./pre-install.sh "${effective_module}" \
+            || die "pre-install.sh failed for '${effective_module}' — nothing was provisioned"
+    fi
+
     # zone0 resolution (ADR-007 P5, reconciled with S6 N6): precedence is
     #   1. explicit .zone0 in the module JSON / --zone0 override  (always wins)
     #   2. the target environment's network.zone                 (env file exists)

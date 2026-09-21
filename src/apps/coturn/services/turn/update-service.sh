@@ -40,4 +40,4 @@ fi
 # the consumer's install reaches the consumer's .nix on the next rebuild.
 # shellcheck source=turn-common.sh
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/turn-common.sh"
-coturn_stamp_turn_host "${CONSUMER_JSON}" "$(coturn_turn_host "${COTURN_JSON}")"
+coturn_stamp_turn_host "${CONSUMER_JSON}" "$(coturn_turn_host "${COTURN_JSON}")" "$(coturn_turn_host_internal "${COTURN_JSON}")"

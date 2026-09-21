@@ -2,25 +2,17 @@
 #
 # TAPPaaS Module: coturn — the one TURN name, in every horizon (publicDomain)
 #
-# Sourced by install.sh and update.sh (never executed). Expects
-# common-install-routines.sh to be loaded and the module config to be loaded
-# ($JSON, i.e. get_config_value works).
+# Sourced by install.sh and update.sh. Expects common-install-routines.sh and a
+# loaded module config ($JSON).
 #
-# Clients must be handed a TURN host they can ALL resolve: a 5G phone cannot
-# resolve coturn.dmz.internal, and an office laptop that resolves the public
-# name to the WAN IP hairpins into a NAT that does not reflect. So coturn gets
-# ONE public name — `publicDomain`, defaulting to turn.<site domain> — with a
-# split-horizon record inside the site that answers with coturn's OWN DMZ
-# address (NOT the Caddy gateway network:proxy uses: TURN is not HTTP).
-# Consumers advertise this name: Nextcloud Talk through the `talk` connector,
-# the HPB and its Janus through coturn:turn's stamped `turnHost`.
+# Every client must resolve the same TURN host: a 5G phone cannot resolve
+# coturn.dmz.internal, and an internal client sent to the WAN IP hairpins into a
+# NAT that does not reflect. Hence one publicDomain plus a split-horizon record
+# answering with coturn's OWN address (not the Caddy gateway — TURN is not HTTP).
 #
 #   coturn_converge_public_name <effective-module-name> <coturn-internal-fqdn>
 #
-# Sets COTURN_PUBLIC (the name, or "" when no site domain is known). Idempotent:
-# persists the default into the deployed config once, re-asserts the resolver
-# record on every run (a record that was pruned or never written comes back on
-# the next converge).
+# Sets COTURN_PUBLIC ("" when no site domain is known). Idempotent.
 coturn_converge_public_name() {
     local module="$1" coturn_host="$2"
     local cfg="/home/tappaas/config/${module}.json"
@@ -33,9 +25,7 @@ coturn_converge_public_name() {
             site_domain="$(jq -r '.tappaas.domain // empty' /home/tappaas/config/configuration.json 2>/dev/null || true)"
         if [[ -n "${site_domain}" ]]; then
             COTURN_PUBLIC="turn.${site_domain}"
-            # Persist the default so every reader (consumers, tests, the next
-            # update) sees the SAME name; a site that wants another sets
-            # publicDomain itself (declared in module-fields.json).
+            # Persist it so every reader sees the same name.
             if [[ -f "${cfg}" ]]; then
                 tmp="$(mktemp "${cfg}.XXXXXX")"
                 if jq --arg d "${COTURN_PUBLIC}" '.publicDomain = $d' "${cfg}" > "${tmp}"; then
@@ -54,10 +44,6 @@ coturn_converge_public_name() {
         return 0
     fi
 
-    # Split-horizon: inside the site the public name answers with coturn's OWN
-    # address (media goes to the relay, not to a proxy). A plain host override
-    # on the site resolver, owned by this module — the same writer network:proxy
-    # uses for its per-service records (#577: one writer per record).
     coturn_ip="$(getent hosts "${coturn_host}" | awk '{print $1; exit}' || true)"
     if [[ -z "${coturn_ip}" ]]; then
         warn "  could not resolve ${coturn_host} — split-horizon record for ${COTURN_PUBLIC} not registered"
@@ -67,11 +53,13 @@ coturn_converge_public_name() {
         warn "  unbound-manager not on PATH — register manually: ${COTURN_PUBLIC} -> ${coturn_ip}"
         return 0
     fi
+    # A per-host override only helps where no wildcard covers the domain; under a
+    # wildcard Unbound refuses it outright (#649), and it is not needed: internal
+    # clients are given the internal TURN endpoint alongside the public one.
     if unbound-manager --no-ssl-verify add "${COTURN_PUBLIC%%.*}" "${COTURN_PUBLIC#*.}" "${coturn_ip}" \
             --description "TAPPaaS: ${module} TURN split-horizon" >/dev/null 2>&1; then
         info "  split-horizon DNS: ${COTURN_PUBLIC} -> ${coturn_ip} (Unbound)"
     else
-        warn "  could not register ${COTURN_PUBLIC} -> ${coturn_ip} in Unbound — internal clients will hairpin via the WAN IP; add it manually:"
-        warn "    unbound-manager --no-ssl-verify add '${COTURN_PUBLIC%%.*}' '${COTURN_PUBLIC#*.}' '${coturn_ip}'"
+        info "  no split-horizon record for ${COTURN_PUBLIC} (a wildcard covers the domain) — internal clients use the internal TURN endpoint"
     fi
 }

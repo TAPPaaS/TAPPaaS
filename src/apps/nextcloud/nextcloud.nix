@@ -735,9 +735,8 @@ in
   };
 
   # ── Talk: TURN/STUN relay (coturn) ────────────────────────────────────────
-  # The `talk` connector writes TURN_SERVER + TURN_SECRET to /etc/secrets/talk.env
-  # and restarts this unit. Its own unit, so a coturn-only site (no HPB) gets a
-  # relay too.
+  # Written by the `talk` connector (ADR-COM-0002). Its own unit and its own env
+  # file, so a coturn-only site gets a relay without an HPB.
   systemd.services.nextcloud-configure-talk-turn = {
     description = "Register the coturn TURN/STUN relay in Nextcloud Talk";
     wantedBy    = [ "multi-user.target" ];
@@ -754,20 +753,22 @@ in
         set -euo pipefail
         export PATH="/run/current-system/sw/bin:${pkgs.coreutils}/bin:$PATH"
 
-        # talk:turn:add appends, so clear first.
+        # talk:turn:add appends, so clear first or a re-run stacks duplicates.
         nextcloud-occ config:app:delete spreed turn_servers >/dev/null 2>&1 || true
         nextcloud-occ config:app:delete spreed stun_servers >/dev/null 2>&1 || true
-        nextcloud-occ talk:stun:add "$TURN_SERVER"
-        nextcloud-occ talk:turn:add turn "$TURN_SERVER" "udp,tcp" --secret="$TURN_SECRET"
+        for s in "''${TURN_SERVER:-}" "''${TURN_SERVER_INTERNAL:-}"; do
+          [ -n "$s" ] || continue
+          nextcloud-occ talk:stun:add "$s"
+          nextcloud-occ talk:turn:add turn "$s" "udp,tcp" --secret="$TURN_SECRET"
+        done
 
-        echo "Nextcloud Talk STUN/TURN relay configured: $TURN_SERVER"
+        echo "Nextcloud Talk STUN/TURN relay configured: ''${TURN_SERVER:-} ''${TURN_SERVER_INTERNAL:-}"
       '';
     };
   };
 
   # ── HPB: register Talk signaling backend ─────────────────────────────────
-  # install.sh writes HPB_SECRET to /etc/secrets/hpb.env and then triggers
-  # this service. Runs every boot so secret rotation propagates automatically.
+  # Written by the `hpb` connector. Signaling only — the relay is the unit above.
   systemd.services.nextcloud-configure-hpb = {
     description = "Register Nextcloud Talk HPB signaling backend";
     wantedBy    = [ "multi-user.target" ];

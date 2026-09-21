@@ -5,7 +5,7 @@
   "_note": "Provider-writes-consumer-FACTS, not consumer config: coturn's install/update-service derive turnHost from coturn's own publicDomain (else its internal FQDN) and write it to /home/tappaas/config/<consumer>.json. The consumer never authors it, and the merge keeps a deployed-only field. The shared secret is NOT a field — it stays in the management plane (/home/tappaas/secrets/coturn.env).",
   "fields": {
     "turnHost": {
-      "description": "host:port of the TURN/STUN relay this consumer advertises to its clients (Nextcloud Talk, the HPB's turn.servers, Janus's own ICE). Derived by coturn:turn: <publicDomain>:3478 when coturn declares a publicDomain — the same name in every horizon, split-horizon DNS resolving it to the coturn VM inside the site — else <vmname>.<zone0>.internal:3478, which only in-network clients can resolve.",
+      "description": "host:port of the TURN relay EXTERNAL clients use: coturn's publicDomain, which public DNS resolves to the WAN IP. A site's wildcard split-horizon answers that same name with the reverse proxy internally, which runs no TURN, so consumers advertise this alongside turnHostInternal and let ICE choose.",
       "type": "string",
       "requiredBy": [],
       "usedBy": [
@@ -17,6 +17,20 @@
       "class": "in-place",
       "apply": "reconcile",
       "changeNote": "A fact about the provider, refreshed on every converge; changing it re-points TURN in Talk and the HPB without touching any guest disk."
+    },
+    "turnHostInternal": {
+      "description": "host:port of the TURN relay for INTERNAL clients and server-side consumers (a Janus SFU): coturn's <vmname>.<zone0>.internal. Reachable from any zone with a pinhole into the DMZ.",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "coturn:turn"
+      ],
+      "default": "<derived: coturn <vmname>.<zone0>.internal, port 3478>",
+      "example": "coturn.dmz.internal:3478",
+      "note": "Stamped, never authored.",
+      "class": "in-place",
+      "apply": "reconcile",
+      "changeNote": "A fact about the provider, refreshed on every converge."
     }
   }
 }

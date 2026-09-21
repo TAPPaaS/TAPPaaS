@@ -14,29 +14,16 @@
 #          + Janus WebRTC gateway (the SFU that makes group calls scale)
 #
 # Architecture:
-# - services.nextcloud-spreed-signaling (Go, from nixpkgs), NATS loopback
-#   (in-process — no external NATS needed for a single node)
-# - Janus (janus-gateway, nixpkgs) as the signaling server's MCU: every
-#   participant sends ONE stream to Janus, which fans it out. Without it Talk
-#   runs group calls as a full mesh (N-1 uplinks per client), which caps a
-#   video call at roughly 5-6 participants.
-# - Signaling listens on 0.0.0.0:8080; Caddy on OPNsense proxies wss:// to it.
-#   Janus's WebSocket API is loopback-only (127.0.0.1:8188); its media ports
-#   (UDP 20000-20999) are open on the VM firewall.
-# - Secrets auto-generated in /var/lib/nextcloud-hpb/secrets/ on first boot;
-#   the coturn TURN secret is synced there by install.sh/update.sh.
+# - services.nextcloud-spreed-signaling (Go, from nixpkgs) + in-process NATS
+# - Janus as the signaling server's MCU: one uplink per participant instead of
+#   the N-1 mesh that caps a Talk video call at ~5-6 people
+# - Signaling on 0.0.0.0:8080 (Caddy proxies wss://); Janus's WebSocket API is
+#   loopback-only, its media on UDP 20000-20999
 #
-# Facts from PROVIDERS, read from the companion JSON (./nextcloud-hpb.json,
-# shipped to /etc/nixos by update-os.sh on every rebuild):
-#   turnHost           — stamped by coturn:turn        (<publicDomain>:3478)
-#   nextcloudPublicUrl — stamped by nextcloud:fileservice (https://<proxyDomain>)
-# Neither is authored in this module; both are re-derived on every converge.
-# This replaces the earlier `sed` of the deployed .nix followed by an
-# out-of-band `nixos-rebuild` (which bypassed the platform's nixpkgs pin).
+# turnHost (coturn:turn) and nextcloudPublicUrl (nextcloud:fileservice) are read
+# from the companion JSON that update-os.sh ships; neither is authored here.
 #
-# Network: the NEXTCLOUD zone (co-located; see INSTALL.md), proxyDomain: see
-# nextcloud-hpb.json. Firewall: TCP 22 (SSH), TCP 8080 (signaling, via Caddy),
-# UDP 20000-20999 (Janus media).
+# Network: the NEXTCLOUD zone (co-located; see INSTALL.md).
 # ============================================================================
 
 { config, lib, pkgs, modulesPath, system, ... }:
@@ -44,37 +31,33 @@
 let
   secretsDir = "/var/lib/nextcloud-hpb/secrets";
 
-  # ── Companion JSON: the deployed config, as update-os.sh ships it ──────────
   moduleCfg = if builtins.pathExists ./nextcloud-hpb.json
               then builtins.fromJSON (builtins.readFile ./nextcloud-hpb.json)
               else {};
 
-  # Provider-stamped facts (see header). Missing means "rebuilt outside the
-  # pipeline, or before the providers ran" — say so at evaluation time rather
-  # than shipping a backend Talk rejects with invalid_backend.
   turnHost           = moduleCfg.turnHost or "";
+  turnHostInternal   = moduleCfg.turnHostInternal or "";
   nextcloudPublicUrl = moduleCfg.nextcloudPublicUrl or "";
 
-  turnHostEff  = if turnHost != "" then turnHost else "coturn.dmz.internal:3478";
-  turnHostName = lib.head (lib.splitString ":" turnHostEff);
-  turnHostPort = lib.last (lib.splitString ":" turnHostEff);
+  # Janus is server-side and inside the network, so it always uses the internal
+  # endpoint. Browsers are given both and let ICE choose: under a wildcard
+  # split-horizon the public name answers with the reverse proxy internally.
+  turnInternalEff = if turnHostInternal != "" then turnHostInternal else "coturn.dmz.internal:3478";
+  turnHostName    = lib.head (lib.splitString ":" turnInternalEff);
+  turnHostPort    = lib.last (lib.splitString ":" turnInternalEff);
 
   turnServers = lib.warnIf (turnHost == "")
-    "nextcloud-hpb.nix: ./nextcloud-hpb.json carries no turnHost (coturn:turn stamps it) — advertising the internal coturn name, which external Talk clients cannot resolve"
-    [
-      "turn:${turnHostEff}?transport=udp"
-      "turn:${turnHostEff}?transport=tcp"
-    ];
+    "nextcloud-hpb.nix: ./nextcloud-hpb.json carries no turnHost (coturn:turn stamps it) — clients outside the network get no relay"
+    (lib.concatMap (h: [ "turn:${h}?transport=udp" "turn:${h}?transport=tcp" ])
+      (lib.unique (lib.filter (s: s != "") [ turnHost turnInternalEff ])));
 
   backendUrls = lib.warnIf (nextcloudPublicUrl == "")
     "nextcloud-hpb.nix: ./nextcloud-hpb.json carries no nextcloudPublicUrl (nextcloud:fileservice stamps it) — the backend allow-list is a placeholder and Talk WILL reject this HPB with invalid_backend; rebuild through update-os.sh after the provider services have run"
     [ (if nextcloudPublicUrl != "" then nextcloudPublicUrl else "https://nextcloud.invalid") ];
 
-  # ── Janus ──────────────────────────────────────────────────────────────────
-  janusPkg     = pkgs.janus-gateway;   # built with --enable-turn-rest-api in nixpkgs
+  janusPkg     = pkgs.janus-gateway;
   janusWsPort  = 8188;
-  # 1000 UDP ports ≈ 500 concurrent media legs — comfortably a 30-participant
-  # video call. Widen (and the firewall rule with it) for bigger single meetings.
+  # ~500 concurrent media legs; widen with the firewall rule for bigger meetings.
   janusRtpFrom = 20000;
   janusRtpTo   = 20999;
 in
@@ -143,9 +126,7 @@ in
       22    # SSH
       8080  # HPB WebSocket (proxied by Caddy on OPNsense)
     ];
-    # Janus media. Clients in a zone that reaches this one send RTP here
-    # directly; everyone else (other client zones, the internet) reaches Janus
-    # through coturn, whose relay candidates Janus obtains via the TURN REST API.
+    # Janus media. Clients that cannot reach this zone directly relay via coturn.
     allowedUDPPortRanges = [
       { from = janusRtpFrom; to = janusRtpTo; }
     ];
@@ -287,16 +268,10 @@ in
   # JANUS — the SFU behind the signaling server
   # ============================================================================
   #
-  # No NixOS module exists for Janus, so — like coturn — a custom unit renders
-  # the config at start from runtime secrets into /run/janus, and nothing
-  # secret lands in the Nix store. Rendering runs as root (the "+" prefix): the
-  # TURN REST API key is 0400 and owned by the signaling user.
-  #
-  # ICE: full trickle, NOT ice-lite. Janus sits behind the site's NAT; it needs
-  # TURN relay candidates of its own for participants it cannot reach directly
-  # (other client zones, the internet), and an ice-lite agent never uses TURN.
-  # The credentials come from the signaling server's TURN REST endpoint, so
-  # Janus and the browsers share coturn's HMAC secret without a copy here.
+  # No NixOS module exists, so (like coturn) a custom unit renders the config at
+  # start from runtime secrets — nothing secret reaches the Nix store. Full
+  # trickle ICE, not ice-lite: Janus is behind NAT and needs its own TURN relay
+  # candidates, which it fetches from the signaling server's REST endpoint.
 
   systemd.services.janus = {
     description = "Janus WebRTC gateway (SFU for Nextcloud Talk)";
@@ -427,36 +402,30 @@ JCFG
 
       clients.internalsecretFile = "${secretsDir}/internalsecret";
 
-      # The SFU. With an MCU configured every call — 1:1 included — is routed
-      # through Janus; Talk learns of it from the signaling hello, nothing to
-      # configure on the Nextcloud side.
+      # Talk learns of the SFU from the signaling hello; nothing to configure
+      # on the Nextcloud side.
       mcu = {
         type = "janus";
         url  = "ws://127.0.0.1:${toString janusWsPort}";
       };
 
       turn = {
-        # The name clients (and Janus) use for TURN, stamped by coturn:turn as
-        # `turnHost` in the companion JSON — coturn's publicDomain, one name in
-        # every horizon (split-horizon DNS answers with the coturn VM inside).
         servers = turnServers;
         apikeyFile = "${secretsDir}/turn-apikey";
-        # install.sh/update.sh write the real COTURN_SECRET here; placeholder on first boot
+        # install.sh/update.sh write the real COTURN_SECRET here.
         secretFile = "${secretsDir}/turn-secret";
       };
     };
 
     backends.nextcloud = {
-      # Nextcloud's PUBLIC URL, stamped by nextcloud:fileservice as
-      # `nextcloudPublicUrl`. Talk validates against exactly this URL; an
-      # internal name is rejected with invalid_backend.
+      # Talk validates against exactly this URL; an internal name is rejected
+      # with invalid_backend.
       urls       = backendUrls;
       secretFile = "${secretsDir}/hpb-secret";
     };
   };
 
-  # Secrets before the signaling server; Janus preferably up first, but a
-  # signaling server without its MCU still serves (it reconnects), so `wants`.
+  # A signaling server without its MCU still serves and reconnects, so `wants`.
   systemd.services.nextcloud-spreed-signaling = {
     after    = [ "hpb-init-secrets.service" "janus.service" ];
     requires = [ "hpb-init-secrets.service" ];
