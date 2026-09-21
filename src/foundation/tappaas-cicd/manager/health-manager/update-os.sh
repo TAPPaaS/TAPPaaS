@@ -219,6 +219,71 @@ detect_os_type() {
     echo "unknown"
 }
 
+# run_quiet, minus the die(): same progress dots and saved log, but RETURNS the
+# command's real exit code so the caller can classify it (a lost ssh session is
+# retried; nixos-rebuild's own verdict is not). The log path is left in
+# RUN_QUIET_LOG for the caller's diagnostics.
+#   run_quiet_rc <description> <command> [args...]
+RUN_QUIET_LOG=""
+run_quiet_rc() {
+    local desc="$1" rc
+    shift
+    RUN_QUIET_LOG="$(mktemp /tmp/tappaas-update-os.XXXXXX.log)"
+    set +e
+    "$@" 2>&1 | tee "${RUN_QUIET_LOG}" | while IFS= read -r _; do printf "."; done
+    rc=${PIPESTATUS[0]}
+    set -e
+    echo ""
+    if [[ "${rc}" -ne 0 ]]; then
+        error "${desc} failed (exit ${rc}) — last 20 lines of output:"
+        tail -n 20 "${RUN_QUIET_LOG}" | sed 's/^/    /' >&2
+        warn "Full output of the failed step saved to ${RUN_QUIET_LOG}"
+        return "${rc}"
+    fi
+    rm -f "${RUN_QUIET_LOG}"
+    RUN_QUIET_LOG=""
+    return 0
+}
+
+# What a non-zero `ssh … nixos-rebuild switch` exit code means, in one phrase.
+# 255 is ssh's own code (connection failed or dropped). Below that,
+# nixos-rebuild passes through nix (1) or switch-to-configuration, whose exit
+# is a bitmask: 1 = failed to update units? no — 2 = a unit failed to RELOAD,
+# 4 = a unit failed to START; both can be set at once (6).
+nixos_rebuild_exit_meaning() {
+    local rc="$1"
+    case "${rc}" in
+        255) echo "ssh connection failed or was dropped" ;;
+        1)   echo "nix evaluation/build error, or the command itself could not run (sudo, PATH)" ;;
+        2)   echo "activation: a unit failed to reload (switch-to-configuration bit 2)" ;;
+        4)   echo "activation: a unit failed to START (switch-to-configuration bit 4) — the new generation is active but a service is down" ;;
+        6)   echo "activation: units failed to reload AND to start (switch-to-configuration bits 2+4)" ;;
+        *)   echo "unclassified exit code" ;;
+    esac
+}
+
+# After a failed activation, show WHICH units failed and their last journal
+# lines — the information that names the real cause (e.g. nextcloud-setup:
+# "Downgrading Nextcloud … is not supported"). Best effort: the guest may be
+# unreachable, and this must never mask the original failure.
+report_failed_units() {
+    local ip="$1" units u
+    units="$(ssh -o BatchMode=yes -o ConnectTimeout=15 "tappaas@${ip}" \
+        "systemctl --failed --no-legend --plain 2>/dev/null | awk '{print \$1}'" 2>/dev/null || true)"
+    if [[ -z "${units}" ]]; then
+        warn "No failed units reported by ${ip} (or the guest is unreachable) — see the saved rebuild log above."
+        return 0
+    fi
+    error "Failed units on ${ip}:"
+    while IFS= read -r u; do
+        [[ -z "${u}" ]] && continue
+        error "  ── ${u} ──"
+        ssh -o BatchMode=yes -o ConnectTimeout=15 "tappaas@${ip}" \
+            "sudo journalctl -u '${u}' -n 40 --no-pager 2>/dev/null" 2>/dev/null \
+            | sed 's/^/    /' >&2 || true
+    done <<< "${units}"
+}
+
 # Wait for cloud-init to finish (Debian/Ubuntu)
 wait_for_cloud_init() {
     local ip="$1"
@@ -475,15 +540,39 @@ update_nixos() {
     if [[ -n "${pinned_rev}" ]]; then
         nixpkgs_arg="-I nixpkgs=https://github.com/NixOS/nixpkgs/archive/${pinned_rev}.tar.gz"
         info "Pinning nixpkgs to template rev ${pinned_rev:0:12} (reproducible — not the VM's channel)"
+        # #680: the pin decides every guest's nixpkgs, and it is refreshed on a
+        # human schedule. A guest that was last built from a NEWER revision
+        # (an out-of-band rebuild, a channel build) moves BACKWARDS on this
+        # switch — kernel, curl, and any application whose data ratchets
+        # forward (Nextcloud refuses to start on older code than its database).
+        # The switch itself reports success, so name the change here, before
+        # it happens. Which of the two is newer is not knowable from the
+        # tarball alone; the operator is, and #680 owns the refresh cadence.
+        local _running_rev
+        _running_rev="$(ssh -o BatchMode=yes -o ConnectTimeout=10 "tappaas@${vm_ip}" \
+            "nixos-version --json 2>/dev/null" 2>/dev/null | jq -r '.nixpkgsRevision // empty' 2>/dev/null || true)"
+        if [[ -n "${_running_rev}" && "${_running_rev}" != "${pinned_rev}" ]]; then
+            warn "nixpkgs revision changes on ${vmname}: running ${_running_rev:0:12} → pinned ${pinned_rev:0:12}"
+            warn "  If the running revision is the newer one this rebuild is a DOWNGRADE (#680); a service"
+            warn "  whose data ratchets forward (Nextcloud) will refuse to start — pin its package in its .nix."
+        fi
     else
         warn "Could not read pinned nixpkgs rev from ${flake_lock} — falling back to the VM's nix-channel"
     fi
 
-    # Retry: even with local builds, a freshly-cloned VM can hiccup on its
-    # first activation (services restart while sshd reloads, cloud-init
-    # finishing, growPartition). The build itself is idempotent (resumable
-    # via the nix store), so re-trying after a settle window recovers.
+    # Retry ONLY a lost connection. A freshly-cloned VM's first activation
+    # restarts sshd mid-run and drops the session (ssh exit 255); a second
+    # attempt after a settle window recovers that, and it is the one hiccup this
+    # loop exists for. Every other non-zero exit is nixos-rebuild's own verdict
+    # and is DETERMINISTIC — the same config fails the same way three times:
+    #   1     evaluation or build error (nix), or a sudo/PATH problem
+    #   2/4   switch-to-configuration's bitmask: units failed to reload / start
+    # Retrying those under an "ssh/host key" banner turned a `nextcloud-setup`
+    # refusing to downgrade its database into three identical failures reported
+    # as connectivity trouble (2026-09-01 → 09-15, every scheduled sweep).
+    # Classify first; retry the connection loss; diagnose and stop on the rest.
     local attempt rebuilt=0 rc staged=0 _move=""
+    local _rebuild_cmd="sudo nixos-rebuild switch ${nixpkgs_arg} -I nixos-config=${remote_nix_path}"
 
     # A release move is STAGED, not switched (#728) — as the mothership does it
     # (#725, tappaas-self-rebuild.sh). Across a nixpkgs release `switch` applies
@@ -503,26 +592,31 @@ update_nixos() {
 
     (( staged )) || for attempt in 1 2 3; do
         rc=0
-        # Wrap in a subshell so run_quiet's die() (exit 1) only kills the
-        # subshell — set -e in the parent would otherwise terminate before we
-        # reach the retry. Capture rc with || so set -e doesn't fire here.
         if [[ "${OPT_DEBUG:-0}" -eq 1 ]]; then
-            ( ssh -o BatchMode=yes "tappaas@${vm_ip}" "sudo nixos-rebuild switch ${nixpkgs_arg} -I nixos-config=${remote_nix_path}" ) || rc=$?
+            ssh -o BatchMode=yes "tappaas@${vm_ip}" "${_rebuild_cmd}" || rc=$?
         else
-            ( run_quiet "nixos-rebuild on ${vm_ip} (attempt ${attempt}/3)" \
-                ssh -o BatchMode=yes "tappaas@${vm_ip}" "sudo nixos-rebuild switch ${nixpkgs_arg} -I nixos-config=${remote_nix_path}" ) || rc=$?
+            # run_quiet_rc, not run_quiet: the latter die()s with exit 1 and would
+            # erase the real exit code this classification depends on.
+            run_quiet_rc "nixos-rebuild on ${vm_ip} (attempt ${attempt}/3)" \
+                ssh -o BatchMode=yes "tappaas@${vm_ip}" "${_rebuild_cmd}" || rc=$?
         fi
         if [[ "$rc" -eq 0 ]]; then
             rebuilt=1; break
         fi
+        if [[ "$rc" -ne 255 ]]; then
+            error "nixos-rebuild on ${vm_ip} failed with exit ${rc} — $(nixos_rebuild_exit_meaning "${rc}")."
+            error "Not retrying: this is the configuration's verdict, not a connection fault."
+            report_failed_units "${vm_ip}"
+            die "nixos-rebuild failed (exit ${rc}) on ${vmname}; fix the configuration and re-run"
+        fi
         [[ "$attempt" -lt 3 ]] || break
-        warn "nixos-rebuild attempt ${attempt} failed (exit ${rc}) — re-syncing host key and waiting for sshd..."
+        warn "nixos-rebuild attempt ${attempt}: ssh connection lost (exit 255) — re-syncing host key and waiting for sshd..."
         sleep 15  # let any in-flight reboot settle
         update_ssh_known_hosts "${vm_ip}"
         # Give sshd up to 90 s to come back before attempting the next rebuild.
         wait_for_ssh "${vm_ip}" 90 || warn "ssh still unreachable after 90 s — trying nixos-rebuild anyway"
     done
-    [[ "$rebuilt" == "1" ]] || die "nixos-rebuild failed after 3 attempts"
+    [[ "$rebuilt" == "1" ]] || die "nixos-rebuild failed after 3 attempts (ssh connection lost each time)"
 
     # nixos-rebuild switch already activated the new generation; the reboot
     # applies kernel/bootloader changes. Gated by tappaas.automaticReboot
