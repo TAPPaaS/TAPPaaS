@@ -12,7 +12,12 @@ from __future__ import annotations
 import unittest
 from unittest.mock import MagicMock
 
-from opnsense_controller.caddy_manager import CaddyDomain, CaddyManager
+from opnsense_controller.caddy_manager import (
+    CaddyAccessList,
+    CaddyAccessListInfo,
+    CaddyDomain,
+    CaddyManager,
+)
 
 
 def _make_manager(captured: list) -> CaddyManager:
@@ -231,6 +236,129 @@ class TestPruneDomainsByDescriptionPrefix(unittest.TestCase):
         mgr.delete_handler.assert_not_called()
 
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Access lists (issue #206 wiring, #696 message + read path)
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# None of this was covered, which is how a field serialised by the manager and
+# accepted by OPNsense stayed empty on every list on every estate: nothing
+# joined the CLI to the manager, and nothing read a list back to notice.
+
+
+def _al_row(**over) -> dict:
+    """A searchAccessList row in the shape a live os-caddy 2.1.0 returns."""
+    row = {
+        "uuid": "AL-UUID",
+        "accesslistName": "tappaas-network",
+        "clientIps": "10.0.0.0/24,10.2.10.0/24",
+        "accesslistInvert": "0",
+        "HttpResponseCode": "403",
+        "HttpResponseMessage": "",
+        "RequestMatcher": "remote_ip",
+        "description": "TAPPaaS: network (allowed zones)",
+    }
+    row.update(over)
+    return row
+
+
+class TestAccessListMessage(unittest.TestCase):
+    def test_message_reaches_the_api_body(self):
+        captured: list = []
+        mgr = _make_manager(captured)
+        mgr.add_access_list(CaddyAccessList(
+            name="tappaas-network", client_ips=["10.0.0.0/24"],
+            response_code=403, response_message="Restricted to approved networks.",
+        ))
+        body = captured[-1]["data"]["accesslist"]
+        self.assertEqual(body["HttpResponseMessage"], "Restricted to approved networks.")
+        self.assertEqual(body["HttpResponseCode"], "403")
+
+    def test_cli_passes_message_through(self):
+        # The join that did not exist: add_access_list_cmd built a
+        # CaddyAccessList without the field, so it was always "".
+        from opnsense_controller.caddy_cli import add_access_list_cmd  # noqa: PLC0415
+        mgr = MagicMock()
+        mgr.get_access_list_by_name.return_value = None
+        mgr.add_access_list.return_value = {"uuid": "NEW"}
+        self.assertTrue(add_access_list_cmd(
+            mgr, "tappaas-network", "10.0.0.0/24", response_code=403,
+            message="Restricted to approved networks.",
+        ))
+        self.assertEqual(
+            mgr.add_access_list.call_args[0][0].response_message,
+            "Restricted to approved networks.",
+        )
+
+    def test_cli_keeps_the_message_on_update_too(self):
+        # add-accesslist rewrites the whole object on every converge, so an
+        # update that dropped the text would wipe it once a sweep.
+        from opnsense_controller.caddy_cli import add_access_list_cmd  # noqa: PLC0415
+        mgr = MagicMock()
+        mgr.get_access_list_by_name.return_value = CaddyAccessListInfo(
+            uuid="AL-UUID", name="tappaas-network", description="",
+        )
+        mgr.update_access_list.return_value = {"result": "saved"}
+        self.assertTrue(add_access_list_cmd(
+            mgr, "tappaas-network", "10.0.0.0/24", response_code=403, message="Explained.",
+        ))
+        self.assertEqual(mgr.update_access_list.call_args[0][0], "AL-UUID")
+        self.assertEqual(mgr.update_access_list.call_args[0][1].response_message, "Explained.")
+
+    def test_message_without_response_code_is_refused(self):
+        # 'abort' closes the connection, so a body would be silently dropped.
+        from opnsense_controller.caddy_cli import add_access_list_cmd  # noqa: PLC0415
+        mgr = MagicMock()
+        self.assertFalse(add_access_list_cmd(
+            mgr, "al", "10.0.0.0/24", message="never delivered",
+        ))
+        mgr.add_access_list.assert_not_called()
+
+
+class TestAccessListInfoParse(unittest.TestCase):
+    def test_every_stored_field_survives_the_parse(self):
+        al = CaddyAccessListInfo.from_api_response(
+            _al_row(HttpResponseMessage="Approved networks only.")
+        )
+        self.assertEqual(al.name, "tappaas-network")
+        self.assertEqual(al.client_ips, ["10.0.0.0/24", "10.2.10.0/24"])
+        self.assertFalse(al.invert)
+        self.assertEqual(al.matcher, "remote_ip")
+        self.assertEqual(al.response_code, 403)
+        self.assertEqual(al.response_message, "Approved networks only.")
+
+    def test_an_empty_message_parses_as_empty_not_missing(self):
+        al = CaddyAccessListInfo.from_api_response(_al_row())
+        self.assertEqual(al.response_message, "")
+        self.assertEqual(al.response_code, 403)
+
+    def test_abort_lists_have_no_response_code(self):
+        al = CaddyAccessListInfo.from_api_response(_al_row(HttpResponseCode=""))
+        self.assertIsNone(al.response_code)
+
+    def test_invert_and_option_dict_matcher(self):
+        al = CaddyAccessListInfo.from_api_response(_al_row(
+            accesslistInvert="1",
+            RequestMatcher={"client_ip": {"selected": 1}, "remote_ip": {"selected": 0}},
+        ))
+        self.assertTrue(al.invert)
+        self.assertEqual(al.matcher, "client_ip")
+
+    def test_round_trip_preserves_the_object(self):
+        # Reading a list and writing it back unchanged must not lose a field —
+        # that is what makes "amend one setting" possible at all.
+        captured: list = []
+        mgr = _make_manager(captured)
+        info = CaddyAccessListInfo.from_api_response(_al_row(HttpResponseMessage="Keep me."))
+        mgr.update_access_list(info.uuid, info.to_access_list())
+        body = captured[-1]["data"]["accesslist"]
+        self.assertEqual(body["clientIps"], "10.0.0.0/24,10.2.10.0/24")
+        self.assertEqual(body["HttpResponseMessage"], "Keep me.")
+        self.assertEqual(body["HttpResponseCode"], "403")
+        self.assertEqual(body["RequestMatcher"], "remote_ip")
+        self.assertEqual(body["accesslistInvert"], "0")
+
+
 if __name__ == "__main__":
     unittest.main()
 
@@ -286,7 +414,7 @@ class TestHandlerInfoAppliedSettings(unittest.TestCase):
 class TestListAllRendersScheme(unittest.TestCase):
     """`list` is the state source every verifier greps, so it must show the scheme."""
 
-    def _mgr(self, handlers):
+    def _mgr(self, handlers, access_lists=None):
         from opnsense_controller.caddy_manager import (  # noqa: PLC0415
             CaddyDomainInfo,
             CaddyHandlerInfo,
@@ -297,6 +425,7 @@ class TestListAllRendersScheme(unittest.TestCase):
             return_value=[CaddyDomainInfo("d1", "app.example.org", "TAPPaaS: app", True)]
         )
         mgr.list_handlers = MagicMock(return_value=handlers)  # noqa: SLF001
+        mgr.list_access_lists = MagicMock(return_value=access_lists or [])  # noqa: SLF001
         return mgr
 
     def _handler(self, **over):
@@ -308,12 +437,12 @@ class TestListAllRendersScheme(unittest.TestCase):
         kw.update(over)
         return CaddyHandlerInfo(**kw)
 
-    def _render(self, handler):
+    def _render(self, handler, access_lists=None):
         from opnsense_controller.caddy_cli import list_all  # noqa: PLC0415
         import io as _io, contextlib  # noqa: PLC0415
         buf = _io.StringIO()
         with contextlib.redirect_stdout(buf):
-            list_all(self._mgr([handler]))
+            list_all(self._mgr([handler], access_lists))
         return buf.getvalue()
 
     def test_plain_upstream_renders_http(self):
@@ -326,10 +455,42 @@ class TestListAllRendersScheme(unittest.TestCase):
         )
 
     def test_flags_mark_http_version_and_access_list(self):
+        # The flag NAMES the list (#696): "acl" alone said access was
+        # restricted but not to what, and nothing else printed the list at all.
         out = self._render(
-            self._handler(upstream_http_version="http1", access_list_uuid="acl-uuid")
+            self._handler(upstream_http_version="http1", access_list_uuid="acl-uuid"),
+            [CaddyAccessListInfo(uuid="acl-uuid", name="tappaas-app", description="",
+                                 client_ips=["10.0.0.0/24"], matcher="remote_ip",
+                                 response_code=403, response_message="Explained.")],
         )
-        self.assertIn("[http1 acl]", out)
+        self.assertIn("[http1 acl:tappaas-app]", out)
+
+    def test_an_attached_list_that_no_longer_exists_is_marked(self):
+        out = self._render(self._handler(access_list_uuid="ghost"))
+        self.assertIn("acl:<unknown>", out)
+
+    def test_access_lists_are_printed_with_their_networks(self):
+        out = self._render(
+            self._handler(access_list_uuid="acl-uuid"),
+            [CaddyAccessListInfo(uuid="acl-uuid", name="tappaas-app", description="",
+                                 client_ips=["10.0.0.0/24", "10.2.10.0/24"],
+                                 matcher="remote_ip", response_code=403,
+                                 response_message="Explained.")],
+        )
+        self.assertIn("Access lists (1):", out)
+        self.assertIn("10.0.0.0/24,10.2.10.0/24", out)
+        self.assertIn("message: Explained.", out)
+
+    def test_an_empty_message_is_called_out_as_a_blank_page(self):
+        # The whole point: an operator must be able to SEE that a list denies
+        # with nothing in the body.
+        out = self._render(
+            self._handler(access_list_uuid="acl-uuid"),
+            [CaddyAccessListInfo(uuid="acl-uuid", name="tappaas-app", description="",
+                                 client_ips=["10.0.0.0/24"], matcher="remote_ip",
+                                 response_code=403, response_message="")],
+        )
+        self.assertIn("blank page", out)
 
 
 class TestServiceStatusProbe(unittest.TestCase):

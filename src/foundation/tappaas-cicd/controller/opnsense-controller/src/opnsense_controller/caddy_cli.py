@@ -244,6 +244,7 @@ def add_access_list_cmd(
     invert: bool = False,
     response_code: int | None = None,
     description: str = "",
+    message: str = "",
     check_mode: bool = False,
 ) -> bool:
     """Create or update a Caddy access list (issue #206).
@@ -256,6 +257,10 @@ def add_access_list_cmd(
         invert: False (default) = allow-list (only these pass); True = deny-list.
         response_code: HTTP code to return to blocked clients (None → abort).
         description: Description for the access list.
+        message: Body served with response_code. Without it a blocked client
+            gets the status and an empty page, which is indistinguishable from
+            the service being down (#696). Ignored when response_code is None,
+            since an aborted connection carries no body.
         check_mode: If True, perform dry-run.
     """
     from .caddy_manager import CaddyAccessList
@@ -265,9 +270,15 @@ def add_access_list_cmd(
         print("ERROR: --clients must contain at least one IP/CIDR", file=sys.stderr)
         return False
 
+    if message and response_code is None:
+        print("ERROR: --message needs --response-code; an aborted connection has no body",
+              file=sys.stderr)
+        return False
+
     al = CaddyAccessList(
         name=name, client_ips=client_ips, invert=invert, matcher=matcher,
         response_code=response_code, description=description,
+        response_message=message,
     )
 
     existing = manager.get_access_list_by_name(name)
@@ -412,10 +423,13 @@ def list_all(manager: CaddyManager) -> bool:
     """
     domains = manager.list_domains()
     handlers = manager.list_handlers()
+    access_lists = manager.list_access_lists()
 
     if not domains and not handlers:
         print("No Caddy reverse proxy entries configured")
         return True
+
+    acl_by_uuid = {al.uuid: al for al in access_lists}
 
     print(f"Domains ({len(domains)}):")
     for d in domains:
@@ -438,12 +452,29 @@ def list_all(manager: CaddyManager) -> bool:
         if h.upstream_http_version:
             flags.append(h.upstream_http_version)
         if h.access_list_uuid:
-            flags.append("acl")
+            # Name the list rather than saying only that one is attached: "acl"
+            # told a reader that access is restricted but not to what (#696).
+            attached = acl_by_uuid.get(h.access_list_uuid)
+            flags.append(f"acl:{attached.name}" if attached else "acl:<unknown>")
         flag_s = f"  [{' '.join(flags)}]" if flags else ""
         print(
             f"  -> {scheme}://{h.upstream_domain}:{h.upstream_port:5}  [{status}]  "
             f"({h.description}){flag_s}  uuid={h.uuid}"
         )
+
+    # The whole stored object (#696). `add-accesslist` replaces a list wholesale,
+    # so amending one means knowing what is in it; and an empty deny message —
+    # the blank page a blocked client gets — is only visible if it is printed.
+    if access_lists:
+        print(f"\nAccess lists ({len(access_lists)}):")
+        for al in access_lists:
+            mode = "block" if al.invert else "allow only"
+            deny = f"{al.response_code}" if al.response_code else "abort"
+            print(f"  {al.name:30} {mode} {al.matcher or 'remote_ip'} "
+                  f"{','.join(al.client_ips) or '(none)'}  -> {deny}  uuid={al.uuid}")
+            if al.response_code:
+                shown = al.response_message or "(empty — blocked clients get a blank page)"
+                print(f"  {'':30} message: {shown}")
 
     return True
 
@@ -700,6 +731,8 @@ Examples:
     add_al_parser.add_argument("--invert", action="store_true", help="Make it a deny-list (block the listed networks) instead of an allow-list")
     add_al_parser.add_argument("--response-code", type=int, default=None, help="HTTP code returned to blocked clients (default: abort the connection)")
     add_al_parser.add_argument("--description", default="", help="Description for the access list")
+    add_al_parser.add_argument("--message", default="",
+                                help="Body served to blocked clients with --response-code (default: empty, which renders a blank page)")
 
     # delete-accesslist (issue #206)
     del_al_parser = subparsers.add_parser("delete-accesslist", parents=[global_parser], help="Delete an access list by name")
@@ -797,7 +830,8 @@ Examples:
             elif args.command == "add-accesslist":
                 success = add_access_list_cmd(
                     manager, args.name, args.clients, args.matcher,
-                    args.invert, args.response_code, args.description, args.check_mode,
+                    args.invert, args.response_code, args.description,
+                    args.message, args.check_mode,
                 )
             elif args.command == "delete-accesslist":
                 success = delete_access_list_cmd(manager, args.name, args.check_mode)
