@@ -1267,3 +1267,84 @@ class TestGlobalFlagPosition(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# #682 — the provider directory is moduleSource, or the pre-#609 location
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# Reading only `location` made every provider path empty once migration 0006 had
+# run: no auto-pinhole compiled, and because reconcile prunes, the live ones were
+# deleted as orphans (24 rules across four consumers on one site).
+
+from opnsense_controller.instance import module_source_of  # noqa: E402
+
+
+class TestModuleSourceField(unittest.TestCase):
+    def test_module_source_is_read(self):
+        self.assertEqual(module_source_of({"moduleSource": "/x/litellm"}), "/x/litellm")
+
+    def test_the_pre_609_location_still_works(self):
+        self.assertEqual(module_source_of({"location": "/x/litellm"}), "/x/litellm")
+
+    def test_module_source_wins_over_location(self):
+        self.assertEqual(
+            module_source_of({"moduleSource": "/new/litellm", "location": "/old/litellm"}),
+            "/new/litellm",
+        )
+
+    def test_a_place_is_not_a_path(self):
+        # site.json's `location` is a physical place (ADR-026 D6.2).
+        self.assertEqual(module_source_of({"location": {"country": "DK"}}), "")
+
+    def test_neither_is_empty(self):
+        for data in ({}, {"location": ""}, {"moduleSource": ""}, None, []):
+            self.assertEqual(module_source_of(data), "")
+
+
+class TestAutoPinholeReadsModuleSource(unittest.TestCase):
+    """The regression itself: a pinhole compiles from a 0006-migrated config.
+
+    Zones are the fixture's: srvWork allows pinholes from dmz and does not
+    already grant it access, so the provider sits in srvWork and the consumer
+    in dmz — every precondition but the provider path is satisfied.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self.tmp.name)
+        src = self.dir / "src" / "nextcloud"
+        (src / "services" / "fileservice").mkdir(parents=True)
+        (src / "services" / "fileservice" / "pinhole.json").write_text(json.dumps(
+            {"ports": [{"port": 443, "protocol": "TCP", "description": "https"}]}))
+        self.src = src
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def _write(self, provider_field):
+        (self.dir / "nextcloud.json").write_text(json.dumps(
+            {"vmname": "nextcloud", "zone0": "srvWork", provider_field: str(self.src)}
+            if provider_field else {"vmname": "nextcloud", "zone0": "srvWork"}))
+        (self.dir / "litellm.json").write_text(json.dumps({
+            "vmname": "litellm", "zone0": "dmz",
+            "dependsOn": ["nextcloud:fileservice"]}))
+
+    def _candidates(self):
+        mgr = _make_manager(modules_dir=self.dir)
+        return list(mgr._auto_pinhole_candidates(load_module(self.dir, "litellm")))
+
+    def test_moduleSource_yields_the_pinhole(self):
+        self._write("moduleSource")
+        found = self._candidates()
+        self.assertEqual(len(found), 1, "a 0006-migrated provider must still compile (#682)")
+        self.assertEqual(found[0][3], "fileservice")
+        self.assertEqual(found[0][4][0]["port"], 443)
+
+    def test_the_pre_609_location_still_yields_it(self):
+        self._write("location")
+        self.assertEqual(len(self._candidates()), 1)
+
+    def test_no_source_at_all_yields_nothing(self):
+        self._write("")
+        self.assertEqual(self._candidates(), [])
