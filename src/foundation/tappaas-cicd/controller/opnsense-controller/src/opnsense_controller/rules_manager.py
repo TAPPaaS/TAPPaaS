@@ -50,6 +50,7 @@ from .firewall_manager import (
     RuleAction,
     RuleDirection,
 )
+from .instance import module_source_of
 from .log import debug, error, info, warn
 from .vlan_manager import VlanManager
 
@@ -399,7 +400,10 @@ def load_module(modules_dir: Path, name: str) -> ModuleSpec:
         depends_on=data.get("dependsOn", []) or [],
         integrates_with=data.get("integratesWith", []) or [],
         environment=data.get("environment", "") or "",
-        location=data.get("location", "") or "",
+        # moduleSource, or the pre-#609 location: reading only the old name made
+        # every provider path empty after migration 0006, so no auto-pinhole
+        # compiled and the prune deleted the live ones (#682).
+        location=module_source_of(data),
     )
 
 

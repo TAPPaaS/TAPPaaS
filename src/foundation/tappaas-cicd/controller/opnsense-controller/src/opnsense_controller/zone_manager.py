@@ -24,6 +24,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+from .instance import module_source_of
 from .cli_globals import StrictArgumentParser
 from .config import Config
 from .service_health import check_unbound_dns
@@ -668,7 +669,7 @@ def validate_pinhole_allowed_from(
                 continue
             if not isinstance(peer_data, dict):
                 continue
-            provider_location = peer_data.get("location", "")
+            provider_location = module_source_of(peer_data)   # or pre-#609 location (#682)
             ports = _load_pinhole_ports(provider_location, service)
             if not ports:
                 continue
