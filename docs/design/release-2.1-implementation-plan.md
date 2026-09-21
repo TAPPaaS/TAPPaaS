@@ -112,9 +112,9 @@ things that make those migrations survivable go before it (Wave 0).
 | 1 | G1.6 Secrets & privileged access | 5 | 1 | 5 | H |
 | 2 | G2.1 Firewall exposure & rule order | 14 | 3 | 4 | M |
 | 2 | G2.2 DNS resolver robustness | 5 | 4 | 3 | M |
-| 3 | G3.1 cluster:vm lifecycle & capacity | 11 | 4 | 3 | L |
+| 3 | G3.1 cluster:vm lifecycle & capacity | 12 | 4 | 3 | L |
 | 3 | G3.2 Identity & SSO wiring | 4 | 3 | 2 | L |
-| 3 | G3.3 App module fixes | 10 | 4 | 2 | L |
+| 3 | G3.3 App module fixes | 11 | 4 | 2 | L |
 | 3 | G3.4 AI stack maturity | 4 | 3 | 3 | L |
 | 3 | G3.5 Installer UX | 4 | 4 | 1 | L |
 | 4 | G4.1 Alerting & cluster resilience | 5 | 3 | 3 | M |
@@ -551,6 +551,7 @@ Low upgrade risk. Build continuously, in any order within a group.
 |---|-------|:-:|:-:|:-:|------|
 | ✅ #665 | Register cluster nodes as `kind: machine` modules | 3 | 2 | M | Stage 1 of ADR-026 D4 — registration only, inert: declare existing nodes as modules so every managed machine has one mechanism. Stage 2 (node patching behind the module lifecycle) is separate and high-blast-radius. Blocked on the instance work (ADR-026 D6, decided 2026-09-18): `tappaas1..3` are three instances of one module in one Environment, so the synthetic `module` field and the `--instance` argument land first |
 | #662 | PVE host configuration is not backed up | 4 | 2 | M | Guests and module paths are backed up; the hosts' own config is not — `/etc/pve`, `/etc/network/interfaces`, `/etc/ssh`, `/root`. A single node loss is survivable (pmxcfs replicates), a cluster-wide one is not. The Level 1 control from the hardening guide we have no equivalent for. Settle first how to capture `/etc/pve`: a pxar of the FUSE mount, or `/var/lib/pve-cluster/config.db`, or both — only one of them restores onto a node not yet in a cluster |
+| #686 | A backup lock fails an update that succeeded | 4 | 2 | M | **Found 2026-09-20** by the G1.4 sweep: a VM held by a running backup fails its pre-update snapshot, the update then proceeds *without a rollback point* ('continuing without rollback safety net'), and a post-rebuild `qm` call hitting the same lock marks the module FAILED — `identity` and `logging` were reported failed while both had in fact rebuilt correctly. A lock should be a bounded wait and then a **defer** (the sweep already has that outcome), never a snapshot-less update |
 | #392 | Never attempt a disk shrink | 5 | 1 | L | |
 | #393 | A failed migration must not block later steps | 4 | 2 | L | |
 | #531 | Detect hardware-spec drift | 4 | 3 | L | Once detected, pending changes get applied (reboots): gate on `rebootOk` |
@@ -581,6 +582,7 @@ Low upgrade risk. Build continuously, in any order within a group.
 | #568 | hass: backup freeze leaves Frigate unhealthy | 3 | 1 | L | |
 | #571 | hassanova has no release baseline | 5 | 1 | L | |
 | #553 | litellm:models cannot reach an appliance consumer | 3 | 1 | L | |
+| #687 | OnlyOffice: the document server cannot download from Nextcloud | 3 | 1 | M | **Found 2026-09-20**, not transient. Ruled out: the document server is running, euro-office reaches `https://nextcloud.hrossen.dk` (200), and the two clocks agree to a second (so not the #472 re-timing). Lead: the internal name has no TLS — `https://nextcloud.rossen.internal` gives 000 while `http://` gives 200 — so the storage URL handed to the document server is the likely culprit. Users lose document editing silently: Nextcloud hides the editor |
 | ✅ #412 | coturn reads an undefined `publicDomain` | 5 | 1 | L | |
 | #411 | windows-server: `deploy-instances.sh` missing | 4 | 1 | L | |
 | #332 | euro-office / Nextcloud install findings | 3 | 2 | L | |
