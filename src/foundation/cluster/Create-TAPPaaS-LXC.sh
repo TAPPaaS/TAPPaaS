@@ -221,7 +221,10 @@ resolve_storage() {
   zfs_pools="$(image_pools "${raw}" zfspool)"
   chosen="$(printf '%s' "${zfs_pools}" | head -1)"
   if [ -n "${chosen}" ]; then
-    warn "No 'storage' declared and node '${node}' has no '${fallback}' — building on '${chosen}'"
+    # To stderr: this function's stdout IS the pool name, and warn() prints to
+    # stdout everywhere else in this script. Without the redirect the warning
+    # text lands in $STORAGE and `qm disk import` reports "too many arguments".
+    warn "No 'storage' declared and node '${node}' has no '${fallback}' — building on '${chosen}'" >&2
     printf '%s' "${chosen}"
     return 0
   fi

@@ -26,14 +26,21 @@ FN="$(sed -n '/^config_declares() {/,/^}/p;/^node_storage_json() {/,/^}/p;/^imag
 [[ -n "${FN}" ]] || { echo "FAIL: the storage helpers are not in ${SRC}"; exit 1; }
 bash -n <(printf '%s' "${FN}") 2>/dev/null || { echo "FAIL: extracted helpers do not parse"; exit 1; }
 
-# run <node> <config-json> <pvesh-json>  → resolved pool on stdout, diagnostics on stderr
-run() {
+# run <node> <config-json> <pvesh-json>  → STDOUT ONLY.
+# This is the value the caller assigns to STORAGE, so it must be the pool name
+# and nothing else. run_msgs() below keeps everything the operator was told.
+run_raw() {
     local node="$1" cfg="$2" pve="$3"
     PVE_JSON="${pve}" JSON_IN="${cfg}" bash -c '
         JSON="${JSON_IN}"
         # Colour names the real script defines; unset here.
         RD=""; YW=""; DGN=""; CL=""; BOLD=""
-        warn() { echo "WARN: $*" >&2; }
+        # warn() prints to STDOUT, exactly as Create-TAPPaaS-VM.sh defines it.
+        # A helper whose stdout IS a value has to redirect its own chatter, and
+        # a stub that quietly sent this to stderr would hide that — it did,
+        # once: the warning text landed in $STORAGE and the live run failed
+        # with `qm disk import ... 400 too many arguments`.
+        warn() { echo "WARN: $*"; }
         error() { echo "ERROR: $*" >&2; }
         die() { error "$*"; exit 1; }
         get_config_value() {
@@ -56,8 +63,14 @@ run() {
         }
         '"${FN}"'
         resolve_storage "$1" tanka1
-    ' _ "${node}" 2>&1
+    ' _ "${node}"
 }
+
+# STDOUT only: the value STORAGE is assigned.
+run() { run_raw "$1" "$2" "$3" 2>/dev/null; }
+
+# Both streams: what the operator is actually told.
+run_msgs() { run_raw "$1" "$2" "$3" 2>&1; }
 
 # A cluster shaped like makerfloss: the third node has its own pool.
 PVE='{
@@ -82,28 +95,32 @@ ck "a declared tanka1 on that node is honoured" \
    "tanka1" "$(run tappaas1 "${DECLARED_A}" "${PVE}")"
 
 # ── the makerfloss shape: the node has a different pool ─────────────────────
-out="$(run tappaas3 "${NO_STORAGE}" "${PVE}")"
-ckin "an undeclared pool resolves to the node's own ZFS pool" "tankc1" "${out}"
-ckin "…and says so rather than switching silently"           "WARN"   "${out}"
+# Exact, not a substring: a warning printed on stdout would end up inside
+# STORAGE, and only an exact comparison sees that.
+ck   "an undeclared pool resolves to the node's own ZFS pool, and nothing else" \
+     "tankc1" "$(run tappaas3 "${NO_STORAGE}" "${PVE}")"
+ckin "…and says so rather than switching silently" \
+     "WARN" "$(run_msgs tappaas3 "${NO_STORAGE}" "${PVE}")"
 
 # A pool the operator DID write down is not quietly replaced: that is their word.
-out="$(run tappaas3 "${DECLARED_A}" "${PVE}")"
+out="$(run_msgs tappaas3 "${DECLARED_A}" "${PVE}")"
 ckin "a declared pool the node lacks is refused"        "does not have it" "${out}"
 ckin "…the refusal names the node"                      "tappaas3"         "${out}"
 ckin "…and lists what the node does offer"              "tankc1"           "${out}"
+ck   "…and it prints no pool for a caller to use"       ""  "$(run tappaas3 "${DECLARED_A}" "${PVE}")"
 ck   "a declared pool the node HAS is honoured"         "tankc1" "$(run tappaas3 "${DECLARED_C}" "${PVE}")"
 
 # Pattern A is not the only layout — a flat field is a declaration too.
-ckin "a flat declared pool is checked the same way" "does not have it" "$(run tappaas3 "${FLAT_A}" "${PVE}")"
+ckin "a flat declared pool is checked the same way" "does not have it" "$(run_msgs tappaas3 "${FLAT_A}" "${PVE}")"
 
 # ── nodes with nothing usable ───────────────────────────────────────────────
-out="$(run tappaas4 "${NO_STORAGE}" "${PVE}")"
+out="$(run_msgs tappaas4 "${NO_STORAGE}" "${PVE}")"
 ckin "a node with no ZFS pool for disks is refused, not guessed at" "no ZFS pool" "${out}"
 # 'rootdir' without 'images' cannot hold a VM disk; an inactive pool is not there.
-ckin "a pool that cannot hold images does not count"  "no ZFS pool" "$(run tappaas5 "${NO_STORAGE}" "${PVE}")"
-ckin "an inactive pool does not count"                "no ZFS pool" "$(run tappaas6 "${NO_STORAGE}" "${PVE}")"
+ckin "a pool that cannot hold images does not count"  "no ZFS pool" "$(run_msgs tappaas5 "${NO_STORAGE}" "${PVE}")"
+ckin "an inactive pool does not count"                "no ZFS pool" "$(run_msgs tappaas6 "${NO_STORAGE}" "${PVE}")"
 ckin "a node Proxmox lists no storage for is refused, not defaulted" \
-     "no ZFS pool" "$(run tappaas9 "${NO_STORAGE}" "${PVE}")"
+     "no ZFS pool" "$(run_msgs tappaas9 "${NO_STORAGE}" "${PVE}")"
 
 # ── Proxmox unreachable is not the same as "the node has nothing" ───────────
 # A query failure must not block a build that would have worked before.
