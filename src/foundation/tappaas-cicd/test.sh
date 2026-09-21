@@ -610,6 +610,39 @@ if [[ -x "${SCRIPT_DIR}/scripts/test/test-module-ready.sh" ]]; then
 else
     skip "scripts/test/test-module-ready.sh not found"
 fi
+# ── Test 10c: no test-service.sh hand-builds a pinhole rule (#689) ───────────
+# A provider's test asserted `tappaas-svcdep:<consumer>:…` directly, which
+# assumes a rule is due. Several legitimate topologies mean no rule is ever
+# written — a consumer in the provider's own zone, or one the zone's access-to
+# already covers — so a correctly-wired consumer failed, every sweep. The rule
+# name also had to be rebuilt by hand, and `grep -F ':80'` matches ':8080'.
+# check_service_pinholes asks rules-manager for both the verdict and the exact
+# rule strings; nothing should be constructing them locally any more.
+
+info "${BOLD}Test 10c: pinhole assertions go through the shared predicate${CL}"
+
+_svcdep_builders=""
+while IFS= read -r _t; do
+    # The prefix in a COMMENT is fine; an assignment or a grep argument is not.
+    grep -qE '^[^#]*tappaas-svcdep' "${_t}" && _svcdep_builders+="${_t}"$'\n'
+done < <(find "${SCRIPT_DIR}/../.." -name test-service.sh -not -path '*/.claude/*' 2>/dev/null)
+_svcdep_builders="${_svcdep_builders%$'\n'}"
+
+if [[ -z "${_svcdep_builders}" ]]; then
+    pass "no test-service.sh builds a tappaas-svcdep rule name itself"
+else
+    fail "test-service.sh scripts still hand-build pinhole rule names — use check_service_pinholes:"
+    while IFS= read -r _b; do
+        [[ -n "${_b}" ]] && info "    ${_b#"${SCRIPT_DIR}/../../"}"
+    done <<<"${_svcdep_builders}"
+fi
+
+if grep -q 'check_service_pinholes()' "${SCRIPT_DIR}/lib/common-install-routines.sh"; then
+    pass "check_service_pinholes is available to every provider test"
+else
+    fail "check_service_pinholes is missing from common-install-routines.sh"
+fi
+
 fi   # end source-tree checks (Tests 7-10b)
 
 # ── Test 11: ADR-007 component smoke (lightweight, non-disruptive) ───────────

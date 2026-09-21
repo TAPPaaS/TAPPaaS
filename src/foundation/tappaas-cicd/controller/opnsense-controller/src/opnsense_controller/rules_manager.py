@@ -200,6 +200,21 @@ class RemoveResult:
 
 
 @dataclass
+class PinholeExpectation:
+    """What the auto-pinhole predicate expects for one consumer (#689).
+
+    `rules` holds canonical rule descriptions — the exact strings the compile
+    pass would write, ports and protocol included, so a caller never has to
+    rebuild one. An empty `rules` with a non-empty `skipped` is a POSITIVE
+    answer: no pinhole is due, and each entry says why.
+    """
+
+    consumer: str
+    rules: list[str] = field(default_factory=list)
+    skipped: list[tuple[str, str]] = field(default_factory=list)
+
+
+@dataclass
 class VerifyResult:
     """Outcome of verify_rules."""
 
@@ -1240,6 +1255,7 @@ class RulesManager:
         self,
         module: ModuleSpec,
         on_policy_block: "Callable[[str, str, ModuleSpec, ZoneSpec], None] | None" = None,
+        on_skip: "Callable[[str, str, str], None] | None" = None,
     ) -> Iterator[tuple[str, str, ModuleSpec, str, list[dict]]]:
         """Yield (dep, origin, provider, service, port_specs) for each coordinate
         that clears every auto-pinhole precondition.
@@ -1252,12 +1268,20 @@ class RulesManager:
         in the provider zone's `pinhole-allowed-from`.
 
         Only that last one is a POLICY refusal rather than a "nothing to do", so
-        it is the only one the caller is told about — via `on_policy_block`,
-        because the compile pass and the dry-run report word it differently.
+        it is the only one `on_policy_block` is told about, because the compile
+        pass and the dry-run report word it differently.
+
+        `on_skip(dep, origin, reason)` reports EVERY skip, in the words a person
+        needs when the question is "why is there no rule" rather than "which
+        rules do I write" (#689). A provider's test-service.sh asserted that a
+        pinhole existed with no way to ask whether one was ever required, so a
+        rule that was correctly absent failed the consumer that did not need it.
         """
         for dep, origin in self._pinhole_declarations(module):
             parsed = _parse_dependency(dep)
             if not parsed:
+                if on_skip:
+                    on_skip(dep, origin, f"'{dep}' is not a provider:service coordinate")
                 continue
             provider_name, service = parsed
 
@@ -1270,24 +1294,105 @@ class RulesManager:
             except FileNotFoundError:
                 # dependsOn: install-module.sh refused the install already.
                 # integratesWith: an absent provider is the documented no-op.
+                if on_skip:
+                    on_skip(dep, origin, f"provider '{provider_name}' is not deployed")
                 continue
 
             port_specs = load_pinhole_ports(provider.location, service)
             if not port_specs:
+                if on_skip:
+                    on_skip(dep, origin,
+                            f"{provider.vmname}:{service} declares no pinhole.json — "
+                            "the service exposes no ports")
                 continue
             if module.zone0 == provider.zone0:
+                if on_skip:
+                    on_skip(dep, origin,
+                            f"consumer and {provider.vmname} are both in zone "
+                            f"'{module.zone0}' — intra-zone traffic needs no rule")
                 continue
             provider_zone = self.zones.get(provider.zone0)
             if not provider_zone:
+                if on_skip:
+                    on_skip(dep, origin,
+                            f"{provider.vmname} is in zone '{provider.zone0}', "
+                            "which is not in zones.json")
                 continue
             if module.zone0 in provider_zone.access_to:
+                if on_skip:
+                    on_skip(dep, origin,
+                            f"'{module.zone0}' is already in {provider.zone0}.access-to — "
+                            "the zone edge covers it")
                 continue
             if module.zone0 not in provider_zone.pinhole_allowed_from:
                 if on_policy_block is not None:
                     on_policy_block(dep, origin, provider, provider_zone)
+                if on_skip:
+                    on_skip(dep, origin,
+                            f"'{module.zone0}' is not in "
+                            f"{provider.zone0}.pinhole-allowed-from — policy refuses it")
                 continue
 
             yield dep, origin, provider, service, port_specs
+
+    def expected_pinholes(
+        self, module_name: str, coordinate: str | None = None
+    ) -> "PinholeExpectation":
+        """Which auto-pinhole rules a consumer SHOULD carry, and why any are not.
+
+        The answer comes from `_auto_pinhole_candidates` itself, so it is the
+        same predicate the compile pass applies — not a restatement of it. That
+        matters more than it looks: the tests that assert a pinhole exists used
+        to hard-code both the rule name and the assumption that a rule was due,
+        and #632 is the standing proof that a second copy of this predicate
+        answers differently from the first one within a release.
+
+        `coordinate` narrows the answer to one provider:service, which is what a
+        provider's own test-service.sh wants; it matches either the declared
+        spelling (`deconz:zigbee`) or the resolved one (`deconz-lab:zigbee`), so
+        an environment-deployed provider does not have to be spelled out.
+        """
+        module = load_module(self.modules_dir, module_name)
+        expectation = PinholeExpectation(consumer=module.vmname)
+
+        def _resolved(dep: str) -> str:
+            """A coordinate in the spelling the installer resolved it to."""
+            parsed = _parse_dependency(dep)
+            if not parsed:
+                return dep
+            provider_name, service = parsed
+            return "%s:%s" % (
+                resolve_provider_module(self.modules_dir, provider_name, module.environment),
+                service,
+            )
+
+        want = _resolved(coordinate) if coordinate else None
+
+        def _matches(dep: str, provider_vmname: str = "", service: str = "") -> bool:
+            if want is None:
+                return True
+            return want in (_resolved(dep),) or coordinate in (
+                dep, "%s:%s" % (provider_vmname, service) if provider_vmname else None
+            )
+
+        def _skipped(dep, origin, reason):
+            if _matches(dep):
+                expectation.skipped.append((dep, reason))
+
+        for dep, _origin, provider, service, port_specs in self._auto_pinhole_candidates(
+            module, on_skip=_skipped
+        ):
+            if not _matches(dep, provider.vmname, service):
+                continue
+            for spec in port_specs:
+                port = spec.get("port")
+                if port is None:
+                    continue
+                expectation.rules.append(_canonical_description_svcdep(
+                    module.vmname, service, provider.vmname, port,
+                    _normalize_protocol(spec.get("protocol")),
+                ))
+        return expectation
 
     def _auto_pinhole_provider_names(self, module: ModuleSpec) -> list[str]:
         """Return providers whose declared coordinate would emit an auto-pinhole.
@@ -1850,6 +1955,12 @@ def main() -> int:
     p_ver.add_argument("--deep", action="store_true",
                         help="Run connectivity probes in addition to rule presence")
 
+    p_ep = subparsers.add_parser("expected-pinholes", parents=[global_parser],
+                                   help="Which auto-pinhole rules a consumer should carry, and why any are not")
+    p_ep.add_argument("module", help="Consumer module name")
+    p_ep.add_argument("--for", dest="coordinate",
+                       help="Narrow to one provider:service coordinate (e.g. deconz:zigbee)")
+
     p_ls = subparsers.add_parser("list-rules", parents=[global_parser],
                                    help="List rules currently in OPNsense")
     p_ls.add_argument("--module", help="Filter by module name")
@@ -1961,6 +2072,20 @@ def _dispatch(args: argparse.Namespace, manager: RulesManager) -> int:
                   "extra": result.extra, "empty_tables": result.empty_tables,
                   "ok": result.ok}, args)
         return 0 if result.ok else 1
+
+    if cmd == "expected-pinholes":
+        # Read-only: this asks the compile-side predicate and makes no firewall
+        # query of its own. What SHOULD exist is a property of the configs and
+        # zones.json alone — asking the firewall would only tell us what does.
+        expectation = manager.expected_pinholes(args.module, args.coordinate)
+        for d in expectation.rules:
+            info(f"  expected: {d}")
+        for dep, reason in expectation.skipped:
+            info(f"  no pinhole for {dep}: {reason}")
+        _output({"consumer": expectation.consumer, "rules": expectation.rules,
+                  "skipped": [{"coordinate": d, "reason": r}
+                              for d, r in expectation.skipped]}, args)
+        return 0
 
     if cmd == "list-rules":
         rules = manager.list_rules(module_name=args.module, orphans=args.orphans)

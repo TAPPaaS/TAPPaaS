@@ -38,10 +38,10 @@ FAILURES=0
 
 # ── TCP reachability ─────────────────────────────────────────────────
 #
-# services/inference/pinhole.json declares exactly one port, TCP 8000, so the
-# probe and the pinhole loop below use the same single port. Do not widen either
-# without widening the pinhole first — a rule that is never declared can never
-# be found.
+# services/inference/pinhole.json declares exactly one port, TCP 8000, which is
+# the port probed here. The pinhole check below now reads that file rather than
+# repeating it, so widening the declaration widens the rules on its own — only
+# this probe still has to be widened by hand.
 #
 # What this probe does and does not prove: it runs from the management zone,
 # which reaches every zone by design, so a green line here says the service is
@@ -59,20 +59,15 @@ fi
 # ── Pinhole rules ────────────────────────────────────────────────────
 #
 # Both relationship lists synthesise an auto-pinhole: rules-manager walks
-# dependsOn AND integratesWith (#632), so a consumer that declares this service
-# either way carries a rule named below. module-manager's own dependency test
-# step walks dependsOn only, so a consumer of the integratesWith kind never
-# reaches this script — its rule exists and goes unverified.
+# dependsOn AND integratesWith (#632), and the helper below walks the same
+# generator, so either kind of consumer is answered the same way. module-manager
+# now tests both lists too (#684).
+#
+# The helper also answers when NO rule is due — a consumer in this zone, or one
+# the zone's access-to already covers — which a hard-coded assertion could only
+# report as MISSING (#689).
 
-for PORT in 8000; do
-    RULE="tappaas-svcdep:${CONSUMER}:inference:vllm-amd:${PORT}"
-    if rules-manager list-rules --no-ssl-verify 2>/dev/null | grep -qF "${RULE}"; then
-        info "  Pinhole ${PORT} (${CONSUMER}→vllm-amd): ${GN}present${CL}"
-    else
-        error "  Pinhole ${PORT} (${CONSUMER}→vllm-amd): ${RD}MISSING${CL}"
-        (( FAILURES++ )) || true
-    fi
-done
+check_service_pinholes "${CONSUMER}" "vllm-amd:inference" || (( FAILURES++ )) || true
 
 # ── Result ───────────────────────────────────────────────────────────
 

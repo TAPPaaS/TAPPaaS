@@ -42,17 +42,13 @@ for PORT in 80 443; do
     fi
 done
 
-# ── Pinhole rules (Hue API 80+443/TCP + SSDP 1900/UDP) ────────────────
-for SPEC in "80:tcp" "443:tcp" "1900:udp"; do
-    PORT="${SPEC%%:*}"
-    RULE="tappaas-svcdep:${CONSUMER}:hue-bridge:deconz:${PORT}"
-    if rules-manager list-rules --no-ssl-verify 2>/dev/null | grep -qF "${RULE}"; then
-        info "  Pinhole ${SPEC} (${CONSUMER}→deconz): ${GN}present${CL}"
-    else
-        error "  Pinhole ${SPEC} (${CONSUMER}→deconz): ${RD}MISSING${CL}"
-        (( FAILURES++ )) || true
-    fi
-done
+# ── Pinhole rules ────────────────────────────────────────────────────
+# This service is consumed INTRA-zone by the SysAP — both sit in iotCloud, so
+# rules-manager writes no rule and never did. Asserting three anyway is what
+# failed a correctly-wired consumer on every sweep (#689). Ask instead; the
+# ports come from services/hue-bridge/pinhole.json through the same predicate,
+# so the SSDP rule's '/UDP' suffix no longer has to be remembered here either.
+check_service_pinholes "${CONSUMER}" "deconz:hue-bridge" || (( FAILURES++ )) || true
 
 if (( FAILURES == 0 )); then
     info "${GN}deconz:hue-bridge test-service passed for ${CONSUMER}${CL}"
