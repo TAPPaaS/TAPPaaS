@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | **Status** | Accepted — **partially implemented** (the observability plane is built; status-badge UI is future) |
-| **Version** | 1.3 |
+| **Version** | 1.4 |
 | **Date** | 2026-09-15 |
 | **Author** | Erik Daniel |
 | **Parent** | [ADR-007 Taxonomy (Overview)](<ADR-007 - TAPPaaS Taxonomy.md>) |
 | **Related** | #320, #651 (failed-sweep notice), #126 (Proxmox notifications); **realized by:** the `logging` Module (Loki/Grafana/Promtail) + the read-only `health-manager` |
-| **Changelog** | v1.3 (2026-09-15, #651) — adds the **site notification target**: a failure that needs a person is mailed to `site.json` `email` through a Proxmox node's mail system; the failed update sweep is its first user. v1.2 — **as-built (2026-06-30):** the lens is realized by the **`logging` foundation Module** (Loki + Grafana + Promtail + syslog ingest from OPNsense and the PVE nodes) and a **read-only `health-manager`** (inspect/check verbs — no `add/modify/delete`, since a lens owns no entities). The per-artifact status-badge UI remains future work. v1.1 — "bucket" → "classification domain" throughout; Health = lens, not a classification domain (2026-06-17) |
+| **Changelog** | v1.4 (2026-09-22) — as built: the lens carries `validate` and `update-os`, not `inspect`/`check`. · v1.3 (2026-09-15, #651) — adds the **site notification target**: a failure that needs a person is mailed to `site.json` `email` through a Proxmox node's mail system; the failed update sweep is its first user. v1.2 — **as-built (2026-06-30):** the lens is realized by the **`logging` foundation Module** (Loki + Grafana + Promtail + syslog ingest from OPNsense and the PVE nodes) and a **read-only `health-manager`** (inspect/check verbs — no `add/modify/delete`, since a lens owns no entities). The per-artifact status-badge UI remains future work. v1.1 — "bucket" → "classification domain" throughout; Health = lens, not a classification domain (2026-06-17) |
 
 The **🩺 Health** lens. **Not a classification domain** — a cross-cutting *overlay* that shows status on People,
 Apps, and Environments.
@@ -21,8 +21,9 @@ prosumer UX (status on the thing it relates to) while preserving a cross-cutting
 
 > **As built.** The observability plane is the **`logging`** Module (Grafana dashboards over Loki; Promtail
 > + syslog receivers ingest the firewall and every PVE node's journal). The control-plane lens is
-> **`health-manager`** — deliberately **read-only** (`inspect`/`check`), with **no** `validate`/`add`/
-> `modify`/`delete` verbs, because a lens observes entities it does not own (see the verb-alignment doc).
+> **`health-manager`** — a lens observes entities it does not own, so it has **no** `add`/`modify`/
+> `delete` verbs. As built it carries `validate` (read-only: thresholds and drift) and the special
+> action verb `update-os` (see the verb-alignment doc).
 
 ## Site notification target (v1.3)
 

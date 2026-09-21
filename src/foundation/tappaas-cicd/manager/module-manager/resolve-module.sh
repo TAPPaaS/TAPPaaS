@@ -25,7 +25,7 @@
 # --field (default: dir):
 #   dir   absolute source DIRECTORY of the module (dirname of its <module>.json)
 #   json  absolute path to the module's <module>.json
-#   tier  the module's tier (foundation | official | app)
+#   tier  the module's tier (foundation | app)
 #   repo  the repository name it was resolved from
 #
 # Exit: 0 found; 1 not found / no site.json; 2 usage error.
