@@ -83,10 +83,29 @@ ENVIRONMENT="$(get_config_value 'environment' '')"
 # non-default module's OIDC redirect URIs from the DEFAULT environment's domain.
 if [[ -z "${PROXY_DOMAIN}" ]]; then
     _DERIVED_DOMAIN="$(get_variant_config "${ENVIRONMENT}" 2>/dev/null | jq -r '.domain // empty')"
-    [[ -n "${_DERIVED_DOMAIN}" && -n "${VMNAME}" ]] && PROXY_DOMAIN="${VMNAME}.${_DERIVED_DOMAIN}"
+    if [[ -n "${_DERIVED_DOMAIN}" && -n "${VMNAME}" ]]; then
+        PROXY_DOMAIN="${VMNAME}.${_DERIVED_DOMAIN}"
+    fi
 fi
-[[ -n "${VMNAME}" && -n "${ZONE0}" && -n "${PROXY_DOMAIN}" ]] \
-    || die "module ${MODULE} must set vmname, zone0, proxyDomain (or set the environment domain so it derives as <vmname>.<domain>)"
+[[ -n "${VMNAME}" && -n "${ZONE0}" ]] \
+    || die "module ${MODULE} must set vmname and zone0"
+
+# An environment with no domains.primary is internal-only and legitimate — the
+# schema does not require `domains` at all, and `mgmt` is the standard case:
+# its modules are reached at <vmname>.<zone>.internal and published nowhere. A
+# browser therefore has no URL to be redirected back to, so there is no OIDC
+# application to register. network:proxy already skips on exactly this fact
+# (#438); identity died on it instead, which failed the whole module update and
+# rolled it back — #698, found when `logging` gained identity:identity and the
+# scheduled sweep ran it against a site whose mgmt environment has no domain.
+# The module's own nix agrees: logging.nix sets `published = proxyDomain != ""`
+# and configures no OIDC when it is false.
+if [[ -z "${PROXY_DOMAIN}" ]]; then
+    warn "Environment '${ENVIRONMENT:-default}' publishes no domain, so '${MODULE}' is reachable only at ${VMNAME}.${ZONE0}.internal"
+    warn "  No OIDC redirect URI can exist for it — skipping identity registration (the module keeps its own login)."
+    warn "  To give it SSO, publish it: set proxyDomain on the module, or give the environment a domains.primary."
+    exit 0
+fi
 
 # identity.* contract (with Nextcloud-friendly defaults).
 PROVIDES_ADMIN="$(echo "${JSON}" | jq -r '.identity.providesAdminRole // false')"

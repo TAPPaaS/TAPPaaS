@@ -47,8 +47,37 @@ PROXY_PORT="$(get_config_value 'proxyPort' '')"
 # handler — that's the natural key we use to locate the row.
 DESCRIPTION="TAPPaaS: ${MODULE}"
 
-[[ -n "${VMNAME}" && -n "${ZONE0}" && -n "${PROXY_DOMAIN}" && -n "${PROXY_PORT}" ]] \
-    || die "module ${MODULE} must set vmname, zone0, proxyDomain, proxyPort"
+ENVIRONMENT="$(get_config_value 'environment' '')"
+# Same derivation network:proxy uses, for the same reason: a module that does not
+# hardcode proxyDomain is published at <vmname>.<environment domain>, and the
+# forward-auth we layer on must name the domain the handler was actually created
+# for. Deriving it here is what keeps the skip below honest — without it a
+# published module whose domain is only derived would look unpublished to us and
+# be left EXPOSED behind a proxy handler with ForwardAuth off (#698).
+if [[ -z "${PROXY_DOMAIN}" ]]; then
+    _DERIVED_DOMAIN="$(get_variant_config "${ENVIRONMENT}" 2>/dev/null | jq -r '.domain // empty')"
+    if [[ -n "${_DERIVED_DOMAIN}" && -n "${VMNAME}" ]]; then
+        PROXY_DOMAIN="${VMNAME}.${_DERIVED_DOMAIN}"
+    fi
+fi
+
+[[ -n "${VMNAME}" && -n "${ZONE0}" ]] \
+    || die "module ${MODULE} must set vmname and zone0"
+
+# No domain anywhere means network:proxy published nothing (it skips on the same
+# fact, #438) — an internal-only environment such as mgmt, reached at
+# <vmname>.<zone>.internal. There is no handler to flip ForwardAuth on and
+# nothing exposed to protect, so skip instead of failing the module update that
+# dependsOn us (#698). A domain WITH no proxyPort is a real misconfiguration:
+# the module says it is published but not where to forward, so that still dies.
+if [[ -z "${PROXY_DOMAIN}" ]]; then
+    warn "Environment '${ENVIRONMENT:-default}' publishes no domain, so '${MODULE}' is reachable only at ${VMNAME}.${ZONE0}.internal"
+    warn "  Nothing is exposed through the proxy — skipping forward-auth for it."
+    warn "  To protect a published instance, set proxyDomain on the module, or give the environment a domains.primary."
+    exit 0
+fi
+[[ -n "${PROXY_PORT}" ]] \
+    || die "module ${MODULE} is published at ${PROXY_DOMAIN} but sets no proxyPort — forward-auth has no upstream to protect"
 
 # The upstream is the consumer VM's internal DNS name in its primary zone.
 UPSTREAM="${VMNAME}.${ZONE0}.internal"
