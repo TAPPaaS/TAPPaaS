@@ -122,6 +122,13 @@ Commands:
         every `managed: full` repository. Reports and exits 0; --strict
         exits non-zero on any finding (for CI and before a pull request).
 
+    stash [list [<name>]|show <name> <sha>|restore <name> <sha>|discard <name> <sha> --force]
+        The local changes a sync had to set aside (#681). `list` names every
+        auto-stash entry held in a managed checkout with its age and files;
+        `show` prints its diff; `restore` puts it back when it still applies;
+        `discard` drops it, only with --force. Entries stashed by hand are
+        neither listed nor dropped.
+
 Options:
     -h, --help    Show this help message
 
@@ -983,6 +990,129 @@ cmd_list() {
     echo ""
 }
 
+# ── stash ────────────────────────────────────────────────────────────
+
+# When a managed checkout is dirty the sync stashes it so the pull can move
+# (#572). An entry that no longer applies is kept, and before #681 nothing ever
+# named it again: the sweep printed a count, and `git stash list` against a
+# checkout the operator is told not to touch was the only way to see what the
+# count meant. These verbs are that missing surface — every entry with its age,
+# its repository and its files, and a supported way to inspect, restore or
+# discard one.
+#
+# Only entries carrying the repo-sync tag are ever listed or dropped: an entry
+# an operator stashed by hand is not this code's to offer.
+
+# stash_repo_path <name> — the checkout path of a declared repository.
+stash_repo_path() {
+    local name="$1" path
+    path="$(get_repo_by_name "${name}" | jq -r 'select(. != "null") | .path // empty' 2>/dev/null)"
+    [[ -n "${path}" ]] || die "stash: no repository named '${name}' in ${SITE_FILE}"
+    [[ -d "${path}" ]] || die "stash: ${name}'s checkout is missing: ${path}"
+    printf '%s' "${path}"
+}
+
+# The entry a sha names, or a clear refusal. A prefix is enough, as with git.
+stash_resolve() {
+    local path="$1" sha="$2" ref
+    ref="$(repo_sync_stash_ref "${path}" "${sha}" 2>/dev/null || true)"
+    [[ -n "${ref}" ]] || die "stash: no auto-stash entry ${sha} in ${path} (see: ${SCRIPT_NAME} stash list)"
+    printf '%s' "${ref}"
+}
+
+cmd_stash_list() {
+    local only="${1:-}" count=0 name path
+    info "${BOLD}TAPPaaS repo-sync auto-stash entries${CL}"
+    echo ""
+    while IFS=$'\001' read -r name path; do
+        [[ -n "${path}" && "${path}" != "null" && -d "${path}" ]] || continue
+        [[ -z "${only}" || "${only}" == "${name}" ]] || continue
+        local sha ref age date _subj files n_files
+        while IFS=$'\001' read -r sha ref age date _subj; do
+            [[ -n "${sha}" ]] || continue
+            count=$((count + 1))
+            files="$(git -C "${path}" stash show --include-untracked --name-only "${ref}" 2>/dev/null \
+                     || git -C "${path}" stash show --name-only "${ref}" 2>/dev/null || true)"
+            n_files="$(printf '%s' "${files}" | grep -c . || true)"
+            printf "  ${BOLD}%s${CL}  %s\n" "${sha:0:12}" "${name}"
+            printf "    stashed %s (%s), %s file(s)\n" "${age}" "${date}" "${n_files}"
+            printf '%s\n' "${files}" | grep . | head -5 | while IFS= read -r f; do
+                printf "      %s\n" "${f}"
+            done
+            [[ "${n_files}" -le 5 ]] || printf "      ... and %s more\n" "$(( n_files - 5 ))"
+        done < <(repo_sync_stash_entries "${path}")
+    done < <(get_repositories | jq -r '.[] | [(.name // ""), (.path // "")] | join("")' 2>/dev/null)
+
+    if [[ "${count}" -eq 0 ]]; then
+        info "  No auto-stash entries held${only:+ in ${only}}."
+        return 0
+    fi
+    echo ""
+    info "  ${SCRIPT_NAME} stash show <repo> <sha>      the full diff"
+    info "  ${SCRIPT_NAME} stash restore <repo> <sha>   put it back in the tree"
+    info "  ${SCRIPT_NAME} stash discard <repo> <sha>   drop it (--force to confirm)"
+    echo ""
+}
+
+cmd_stash_show() {
+    local name="${1:-}" sha="${2:-}" path ref
+    [[ -n "${name}" && -n "${sha}" ]] || die "usage: ${SCRIPT_NAME} stash show <repo> <sha>"
+    path="$(stash_repo_path "${name}")"
+    ref="$(stash_resolve "${path}" "${sha}")"
+    git -C "${path}" stash show -p --include-untracked "${ref}" 2>/dev/null \
+        || git -C "${path}" stash show -p "${ref}"
+}
+
+# Restore is the same operation the sync itself performs: apply only when it
+# applies cleanly, then drop. A pop that half-applies would leave conflict
+# markers in a managed checkout, which the next sweep then refuses.
+cmd_stash_restore() {
+    local name="${1:-}" sha="${2:-}" path ref
+    [[ -n "${name}" && -n "${sha}" ]] || die "usage: ${SCRIPT_NAME} stash restore <repo> <sha>"
+    path="$(stash_repo_path "${name}")"
+    ref="$(stash_resolve "${path}" "${sha}")"
+    if ! repo_sync_stash_applies "${path}" "${ref}"; then
+        error "stash: ${sha} does not apply to ${name} as it now stands - nothing changed"
+        error "  see what it holds:  ${SCRIPT_NAME} stash show ${name} ${sha}"
+        return 1
+    fi
+    git -C "${path}" stash pop "${ref}" >/dev/null || die "stash: restoring ${sha} failed - entry kept"
+    info "Restored ${sha:0:12} into ${path}"
+}
+
+cmd_stash_discard() {
+    local name="" sha="" force=0 a path ref
+    for a in "$@"; do
+        case "${a}" in
+            --force) force=1 ;;
+            -*) die "stash discard: unknown option ${a}" ;;
+            *) if [[ -z "${name}" ]]; then name="${a}"; else sha="${a}"; fi ;;
+        esac
+    done
+    [[ -n "${name}" && -n "${sha}" ]] || die "usage: ${SCRIPT_NAME} stash discard <repo> <sha> --force"
+    path="$(stash_repo_path "${name}")"
+    ref="$(stash_resolve "${path}" "${sha}")"
+    if [[ "${force}" != "1" ]]; then
+        warn "stash: ${sha:0:12} in ${name} would be dropped permanently. Re-run with --force."
+        warn "  first look at it:  ${SCRIPT_NAME} stash show ${name} ${sha}"
+        return 1
+    fi
+    git -C "${path}" stash drop "${ref}" >/dev/null || die "stash: dropping ${sha} failed"
+    info "Dropped ${sha:0:12} from ${path}"
+}
+
+cmd_stash() {
+    local sub="${1:-list}"
+    shift || true
+    case "${sub}" in
+        list)    cmd_stash_list "${1:-}" ;;
+        show)    cmd_stash_show "$@" ;;
+        restore) cmd_stash_restore "$@" ;;
+        discard) cmd_stash_discard "$@" ;;
+        *)       die "stash: unknown subcommand '${sub}' (list|show|restore|discard)" ;;
+    esac
+}
+
 # ── Main ─────────────────────────────────────────────────────────────
 
 # validate-catalog [<name>|<path>] [--strict] — does a repository's catalog say
@@ -1047,6 +1177,7 @@ main() {
         modify) cmd_modify "$@" ;;
         list)   cmd_list ;;
         validate-catalog) cmd_validate_catalog "$@" ;;
+        stash)  cmd_stash "$@" ;;
         -h|--help) usage; exit 0 ;;
         *)
             error "Unknown command: ${command}"

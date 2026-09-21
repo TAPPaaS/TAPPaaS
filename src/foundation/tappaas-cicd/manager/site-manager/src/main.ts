@@ -110,6 +110,8 @@ export const HELP: HelpSpec = {
       options: [["--force", "authorize an OFFLINE move for guests that cannot migrate live"]] },
     { usage: "repository delete <name> [--force]",
       options: [["--force", "Forward to repository.sh remove --force."]] },
+    { usage: "repository stash [list [<name>] | show <name> <sha> | restore <name> <sha> | discard <name> <sha> --force]",
+      note: "(#681: the local changes a sync set aside — listed with their age, inspectable, restorable, discardable)" },
     { usage: "repository reconcile [--apply]",
       options: [["--apply", "Commit (default is preview)."]] },
     { usage: "repository hold <name> --reason <text> [--until <30m|12h|7d|ISO date>]",
@@ -630,7 +632,7 @@ function collectPools(o: Opts, name: string): string[] {
 // ── `repository` CRUD + reconcile ──────────────────────────────────────
 function cmdRepository(o: Opts, client: SiteClient): void {
   const sub = o.rest[0];
-  if (!sub) die("repository: expected 'list' | 'add' | 'modify' | 'delete' | 'reconcile' | 'hold' | 'release'");
+  if (!sub) die("repository: expected 'list' | 'add' | 'modify' | 'delete' | 'reconcile' | 'hold' | 'release' | 'stash'");
   const siteFile = siteFileOf(o);
 
   if (sub === "list") {
@@ -661,6 +663,15 @@ function cmdRepository(o: Opts, client: SiteClient): void {
     }
     return out;
   };
+
+  if (sub === "stash") {
+    // #681: what a sync had to set aside stays discoverable through the
+    // sanctioned surface, not only through `git stash list` in a checkout the
+    // operator is told not to edit. --force is a flag, so forward it explicitly.
+    const rest = o.rest.slice(1);
+    if (o.force) rest.push("--force");
+    process.exit(client.repositoryStash(rest));
+  }
 
   if (sub === "validate-catalog") {
     // #463: the check lives beside repository.sh, which owns every catalog path.

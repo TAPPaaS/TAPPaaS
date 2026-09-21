@@ -181,6 +181,13 @@ export class CliSiteClient implements SiteClient {
     return runStreaming(REPOSITORY_SH(), ["add", ...args]);
   }
 
+  repositoryStash(args: string[]): number {
+    // #681: the auto-stash entries a sync had to set aside — list/show/restore/
+    // discard. repository.sh owns them: it is where the checkout paths and the
+    // repo-sync lib already are.
+    return runStreaming(REPOSITORY_SH(), ["stash", ...args]);
+  }
+
   repositoryValidateCatalog(args: string[]): number {
     return runStreaming(REPOSITORY_SH(), ["validate-catalog", ...args]);
   }

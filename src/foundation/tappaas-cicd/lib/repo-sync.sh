@@ -12,6 +12,11 @@
 # the old forge's (stale) `main` — silently pulling the wrong tree. (Hit live
 # during the Codeberg migration: a 2.0 checkout reverted to GitHub's 1.x `main`.)
 #
+# The marker every auto-stash entry carries. It is what tells an entry this
+# code made apart from one the operator made by hand, in both directions: we
+# only ever list, restore or drop our own.
+REPO_SYNC_STASH_TAG="tappaas repo-sync auto-stash"
+
 # Callers define info()/warn()/error(); we only add fallbacks if they are missing.
 command -v info  >/dev/null 2>&1 || info()  { echo "$*"; }
 command -v warn  >/dev/null 2>&1 || warn()  { echo "WARN: $*" >&2; }
@@ -165,7 +170,7 @@ reconcile_repo_checkout() {
     # it is said out loud.
     local stashed=""
     if [ -n "$(git -C "${path}" status --porcelain 2>/dev/null)" ]; then
-        if git -C "${path}" stash push -u -m "tappaas repo-sync auto-stash $(date +%Y%m%d-%H%M%S)" >/dev/null; then
+        if git -C "${path}" stash push -u -m "${REPO_SYNC_STASH_TAG} $(date +%Y%m%d-%H%M%S)" >/dev/null; then
             stashed="$(git -C "${path}" rev-parse --verify --quiet 'stash@{0}' 2>/dev/null || true)"
             warn "  repo-sync: local changes stashed for the sync — restored afterwards"
         else
@@ -228,6 +233,31 @@ repo_sync_stash_applies() {
     printf '%s\n' "${diff}" | git -C "${path}" apply --check - 2>/dev/null
 }
 
+# repo_sync_stash_entries <path>
+# One line per auto-stash entry this code made, oldest LAST (git's own order):
+#   <sha>\001<stash@{n}>\001<relative age>\001<yyyy-mm-dd>\001<subject>
+# Entries the operator stashed by hand carry no tag and are never listed: the
+# verb built on this must not offer to drop someone else's work (#681).
+repo_sync_stash_entries() {
+    local path="$1"
+    [ -d "${path}/.git" ] || [ -f "${path}/.git" ] || return 0
+    git -C "${path}" stash list --format='%H%x01%gd%x01%cr%x01%cs%x01%gs' 2>/dev/null \
+        | grep -F "${REPO_SYNC_STASH_TAG}" || true
+}
+
+# repo_sync_stash_ref <path> <sha>
+# The stash@{n} that names <sha> right now. Indices shift as entries are
+# dropped, so everything downstream addresses an entry by sha and resolves it
+# here, at the moment it acts.
+repo_sync_stash_ref() {
+    local path="$1" want="$2" sha ref
+    while IFS=$'\001' read -r sha ref _; do
+        [ -n "${sha}" ] || continue
+        case "${sha}" in "${want}"*) printf '%s' "${ref}"; return 0 ;; esac
+    done < <(repo_sync_stash_entries "${path}")
+    return 1
+}
+
 repo_sync_restore_stash() {
     local path="$1" sha="${2:-}" n=""
     if [ -n "${sha}" ]; then
@@ -243,12 +273,19 @@ repo_sync_restore_stash() {
             fi
         else
             warn "  repo-sync: local changes no longer apply on top of the new tip — KEPT as a stash entry"
-            warn "    recover with: git -C ${path} stash list   /   git -C ${path} stash pop"
+            warn "    inspect and recover with: site-manager repository stash list"
         fi
     fi
-    n="$(git -C "${path}" stash list 2>/dev/null | grep -c 'tappaas repo-sync auto-stash' || true)"
+    # What is held is named, not just counted: a bare number is what let 19
+    # entries sit unread for three months (#681). The oldest one's age is the
+    # part that says whether this is today's sync or a years-old backlog.
+    local entries oldest
+    entries="$(repo_sync_stash_entries "${path}")"
+    n="$(printf '%s' "${entries}" | grep -c . || true)"
     if [ -n "${n}" ] && [ "${n}" -gt 0 ] 2>/dev/null; then
         local word="entries"; [ "${n}" = "1" ] && word="entry"
-        warn "  repo-sync: ${n} auto-stash ${word} still held in ${path} (git -C ${path} stash list)"
+        oldest="$(printf '%s\n' "${entries}" | tail -1 | cut -d$'\001' -f3)"
+        warn "  repo-sync: ${n} auto-stash ${word} still held in ${path} (oldest ${oldest:-unknown})"
+        warn "    list, inspect, restore or discard them with: site-manager repository stash list"
     fi
 }

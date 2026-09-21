@@ -40,6 +40,8 @@ repository         repository list [--json]
                    repository hold <name> --reason <text> [--until <30m|12h|7d|date>]
                    repository release <name>
                    repository validate-catalog [<name>] [--strict]   (#463)
+                   repository stash list [<name>]                    (#681)
+                   repository stash show|restore|discard <name> <sha> [--force]
 top-level          add --name <site-code> [--organization <org>] [create-site options]  (= create-site.sh)
                    validate [FILE] [--schema-dir PATH]     (= validate-site.sh)
                    (validate also checks updateSchedule and prints the OnCalendar it renders)
@@ -82,6 +84,17 @@ site can run changes that are not pushed yet (#653). The marker is
 `config/.repo-hold/<repo>.json`; every hold expires (default 24h), and an
 expired hold is removed by the next sweep, which then pulls again.
 `repository list` and `update` show active holds.
+
+`repository stash` is where the local changes a sync had to set aside go to be
+found (#681). A dirty managed checkout is stashed so the pull can move and the
+entry is put back afterwards; one that no longer applies is kept, and used to be
+reported only as a number — `git stash list`, run by hand in a checkout the
+operator is told not to edit, was the only way to see what the number meant. One
+estate carried 12 such entries. `stash list` names every entry with its
+repository, its age and the files it holds; `stash show` prints its diff;
+`stash restore` puts it back when it still applies; `stash discard --force`
+drops it. Entries an operator stashed by hand carry no repo-sync tag: they are
+never listed, restored or dropped.
 
 `repository validate-catalog` checks that a repository's module catalogue says true
 things (#463): its shape and fields, a `moduleJson` that exists, `stack` and `vmid`

@@ -15,6 +15,7 @@ configures every other module in the system.
 | Scheduled system updates | automatic | `update-tappaas.service`, started by a timer rendered from `site.json` `updateSchedule`; the unit updates the mothership itself first (logs → journald → Loki) |
 | Run an update now | mothership CLI | `site-manager update [--dry-run] [--force] [--no-git-pull]` — starts the unit and follows it |
 | Pause one repository's pull | mothership CLI | `site-manager repository hold <name> --reason … [--until …]` / `release` (#653) |
+| Local changes a sync set aside | mothership CLI | `site-manager repository stash list` — then `show` / `restore` / `discard --force` (#681) |
 | Failed-update notice | automatic | mail to `site.json` `email` through a Proxmox node, naming the step that failed (#651) |
 | System configuration store | mothership | `/home/tappaas/config` (`site.json`, `zones.json`, environments, module jsons) |
 | Unattended node adding (PXE) | mothership CLI | `site-manager node add <name> --pxe` (netboot assets staged at install) |

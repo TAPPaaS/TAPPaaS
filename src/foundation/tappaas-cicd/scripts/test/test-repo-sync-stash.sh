@@ -9,8 +9,11 @@
 #   1. uncommitted work is back in the tree after a successful sync, with no
 #      stash entry left behind;
 #   2. a change that no longer applies is KEPT and reported, not silently lost;
-#   3. entries that accumulated earlier are counted out loud;
-#   4. the restore also runs when the sync itself fails.
+#   3. entries that accumulated earlier are counted out loud, with the age of
+#      the oldest and the verb that resolves them (#681);
+#   4. the restore also runs when the sync itself fails;
+#   5. repo_sync_stash_entries lists OUR entries only — an entry the operator
+#      stashed by hand is not ours to offer for restore or discard (#681).
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -74,9 +77,9 @@ echo "local rewrite" > "${TMP}/checkout/file.txt"
 advance_origin four
 out="$(sync_it)"
 ck "a conflicting change is kept as a stash entry" 1 "$(stash_count)"
-[[ "${out}" == *"KEPT"* && "${out}" == *"stash pop"* ]] \
-    && ck "…and the recovery command is printed" ok ok \
-    || ck "…and the recovery command is printed" ok missing
+[[ "${out}" == *"KEPT"* && "${out}" == *"repository stash list"* ]] \
+    && ck "…and the sanctioned recovery verb is printed" ok ok \
+    || ck "…and the sanctioned recovery verb is printed" ok missing
 [[ "${out}" == *"1 auto-stash entry"* ]] \
     && ck "the remaining entry is counted" ok ok \
     || ck "the remaining entry is counted" ok missing
@@ -88,6 +91,39 @@ out="$(sync_it)"
 [[ "${out}" == *"auto-stash entry"* ]] \
     && ck "an old entry is reported on a later sweep too" ok ok \
     || ck "an old entry is reported on a later sweep too" ok missing
+# A bare count is what let 19 entries sit unread: the age of the oldest and the
+# verb that resolves them are part of the same line (#681).
+[[ "${out}" == *"oldest "* ]] \
+    && ck "the oldest entry's age is named" ok ok \
+    || ck "the oldest entry's age is named" ok missing
+[[ "${out}" == *"site-manager repository stash list"* ]] \
+    && ck "the verb that resolves them is named" ok ok \
+    || ck "the verb that resolves them is named" ok missing
+
+# ── 4b. the entries are addressable, one line each ─────────────────────────
+entries="$(repo_sync_stash_entries "${TMP}/checkout")"
+ck "one line per held entry" 1 "$(printf '%s\n' "${entries}" | grep -c .)"
+e_sha="$(printf '%s' "${entries}" | cut -d"$(printf '\001')" -f1)"
+e_ref="$(printf '%s' "${entries}" | cut -d"$(printf '\001')" -f2)"
+e_age="$(printf '%s' "${entries}" | cut -d"$(printf '\001')" -f3)"
+ck "it carries a sha"        40 "${#e_sha}"
+ck "it carries a stash ref"  "stash@{0}" "${e_ref}"
+[[ -n "${e_age}" ]] && ck "it carries an age" ok ok || ck "it carries an age" ok missing
+# A sha prefix resolves to the ref, as with git — that is what the verb addresses
+# entries by, because indices shift as entries are dropped.
+ck "a sha prefix resolves to its ref" "stash@{0}" "$(repo_sync_stash_ref "${TMP}/checkout" "${e_sha:0:12}")"
+if repo_sync_stash_ref "${TMP}/checkout" deadbeef >/dev/null 2>&1; then
+    ck "an unknown sha does not resolve" ok resolved
+else
+    ck "an unknown sha does not resolve" ok ok
+fi
+
+# ── 4c. an entry the operator stashed by hand is not ours ─────────────────
+echo "hand edit" >> "${TMP}/checkout/other.txt"
+git -C "${TMP}/checkout" stash push -q -m "operator: half-finished experiment"
+ck "a hand-made entry is not listed" 1 "$(repo_sync_stash_entries "${TMP}/checkout" | grep -c .)"
+ck "…and it is still on the stack"   2 "$(git -C "${TMP}/checkout" stash list | grep -c .)"
+git -C "${TMP}/checkout" stash drop -q 'stash@{0}'
 
 # ── 5. the restore runs even when the sync fails ────────────────────────────
 # An unreachable origin: the fetch fails before the stash, so nothing is stashed;
