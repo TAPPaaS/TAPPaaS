@@ -62,6 +62,29 @@ pass() { info "  ${GN}✓${CL} $1"; PASS=$((PASS + 1)); }
 fail() { error "  ✗ $1"; FAIL=$((FAIL + 1)); }
 skip() { info "  ${YW}⊘${CL} $1 (skipped)"; SKIP=$((SKIP + 1)); }
 
+# ── Test 0: how old is the nixpkgs this site would rebuild from? ─────
+#
+# One lock in this repository decides every D3 site's nixpkgs (#680), and a
+# lock only ever gets older. PASSES either way — a stale pin is a release
+# decision, not a broken system, and failing here would abort the update of a
+# healthy mothership over it. It is reported so that "nobody noticed" stops
+# being the reason it is four months old.
+_pin_lock="${SCRIPT_DIR}/flake.lock"
+if [[ -r "${_pin_lock}" ]] && command -v jq >/dev/null 2>&1; then
+    _pin_epoch="$(jq -r '.nodes.nixpkgs.locked.lastModified // empty' "${_pin_lock}" 2>/dev/null)"
+    _pin_rev="$(jq -r '.nodes.nixpkgs.locked.rev // empty' "${_pin_lock}" 2>/dev/null)"
+    if [[ -n "${_pin_epoch}" ]]; then
+        _pin_age=$(( ( $(date -u +%s) - _pin_epoch ) / 86400 ))
+        if [[ "${_pin_age}" -gt "${TAPPAAS_PIN_MAX_AGE_DAYS:-90}" ]]; then
+            info "  ${YW}⚠${CL} nixpkgs pin ${_pin_rev:0:12} is ${_pin_age} days old — every site on ADR-017 D3 builds from it (#680)"
+            info "      refresh it deliberately: nix flake update --flake ${SCRIPT_DIR}, then rebuild and deep-test a site"
+        fi
+        pass "nixpkgs pin recorded: ${_pin_rev:0:12} (${_pin_age}d old)"
+    fi
+    unset _pin_epoch _pin_rev _pin_age
+fi
+unset _pin_lock
+
 # ── Test 1: Required scripts in ~/bin ────────────────────────────────
 
 info "${BOLD}Test 1: Required scripts installed${CL}"

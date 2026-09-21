@@ -51,6 +51,42 @@ if [[ -f "${_sl}" ]]; then
     fi
 fi
 
+# ── what this rebuild pins, and whether that moves the system BACK (#680) ──
+#
+# Since ADR-017 D3 this script builds from the checkout's flake, so
+# src/foundation/tappaas-cicd/flake.lock decides the nixpkgs revision for every
+# site on the sanctioned path — an authority it acquired by accident, when it
+# was one VM's business. A host that used to build from its own, newer flake
+# moves BACKWARDS on its first rebuild here: packages downgrade immediately and
+# the kernel at the next boot, with the rebuild reporting plain success.
+#
+# So say it. The switch still happens — every site is behind this lock today and
+# refusing would stop the update path itself — but a downgrade is never silent
+# again, and the pin's age is on the record at every rebuild.
+_lock="${CICD_DIR}/flake.lock"
+if [[ -r "${_lock}" ]]; then
+    _lock_rev="$(jq -r '.nodes.nixpkgs.locked.rev // empty' "${_lock}" 2>/dev/null)"
+    _lock_epoch="$(jq -r '.nodes.nixpkgs.locked.lastModified // empty' "${_lock}" 2>/dev/null)"
+    _run_ver="$(nixos-version 2>/dev/null)"            # e.g. 25.11.20260522.b77b3de
+    _run_rev="$(nixos-version --json 2>/dev/null | jq -r '.nixpkgsRevision // empty' 2>/dev/null)"
+    _run_date="$(sed -n 's/^[0-9]*\.[0-9]*\.\([0-9]\{8\}\)\..*/\1/p' <<<"${_run_ver}")"
+    if [[ -n "${_lock_epoch}" ]]; then
+        # GNU date on the mothership, BSD date where a developer runs the test.
+        _lock_date="$(date -u -d "@${_lock_epoch}" +%Y%m%d 2>/dev/null \
+                      || date -u -r "${_lock_epoch}" +%Y%m%d 2>/dev/null || true)"
+        _age_days=$(( ( $(date -u +%s) - _lock_epoch ) / 86400 ))
+        info "nixpkgs pin: ${_lock_rev:0:12} (${_lock_date:-?}, ${_age_days}d old) — from ${_lock}"
+        if [[ -n "${_run_date}" && -n "${_lock_date}" && -n "${_run_rev}" \
+              && "${_run_rev}" != "${_lock_rev}" && "${_lock_date}" < "${_run_date}" ]]; then
+            warn "This rebuild moves nixpkgs BACKWARDS (#680):"
+            warn "  running now : ${_run_rev:0:12} (${_run_date})"
+            warn "  this flake  : ${_lock_rev:0:12} (${_lock_date})"
+            warn "  Packages downgrade on switch and the kernel at the next boot — security-relevant"
+            warn "  ones included. Update the baseline lock, or pin this host deliberately."
+        fi
+    fi
+fi
+
 cd "${CICD_DIR}"
 info "Rebuilding NixOS (${VMNAME}) — one dot per build line"
 debug "nixos-rebuild switch --flake .#${VMNAME} --impure (full output: ${REBUILD_LOG})"
