@@ -1,6 +1,6 @@
 # Debian satellite (ADR-010 Option 3)
 
-An **alternative to the NixOS satellite** (`../satellite.nix` + `nixos-anywhere`): the
+How every satellite is provisioned (the NixOS option was retired in #712): the
 satellite runs stock **Debian 12/13** instead. Selected per satellite with
 `os: debian` in the instance's config (the **default**).
 
@@ -26,7 +26,7 @@ identical** to the NixOS path (same `edge` tunnel, same `admin` WG server, same
    per-role config files from the same `SAT_*` derived defaults that generate
    `satellite-settings.nix`:
 
-   | File | Role | Replaces (in satellite.nix) |
+   | File | Role | What it configures |
    | ---- | ---- | --------------------------- |
    | `wg-infra.conf` | always | `networking.wireguard.interfaces.wg-infra` |
    | `nftables.conf` | always (+admin-vpn NAT) | `networking.firewall` + `networking.nftables.tables.adminvpn` |

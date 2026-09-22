@@ -84,7 +84,7 @@ if [[ -f operator_authorized_keys ]]; then
 fi
 
 # ── 3. WireGuard infra tunnel (always) ───────────────────────────────────────
-# Private key is generated ON-HOST and never leaves it (mirrors satellite.nix
+# Private key is generated ON-HOST and never leaves it (as the retired NixOS path did
 # privateKeyFile + generatePrivateKeyFile). wg-infra.conf carries NO private key
 # — it is injected via the interface's PostUp from the 0600 keyfile.
 install -d -m 0700 /etc/wireguard

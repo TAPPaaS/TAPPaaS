@@ -45,10 +45,9 @@ home can reach out to destroy the off-site copy (ADR-010 §7.3).
 | `lockdown.sh` | Run by `module modify <instance> --lockdown`: the one-way step to the unmanaged vault (§8.4.4). |
 | `pbs-path.sh` | `<instance> open\|close`: the nodes' path to a PBS on the satellite (§8.4.3) — an OPNsense rule `mgmt → 10.255.0.0:8007`, and the satellite re-provisioned with the mgmt subnet admitted to `:8007` through the tunnel only. The backup module calls it (a PBS Host's module may ship one); the satellite's update converges it. |
 | `lib/satellite-lib.sh` | Loading an instance (a legacy `satellite-<name>.json` too), install, lockdown, decommission, the operator-key and role rules. |
-| `lib/provision.sh` | Renders what goes onto the machine (Debian config files, or the NixOS flake), and the edge firewall rules. |
+| `lib/provision.sh` | Renders what goes onto the machine (the Debian config files) and the edge firewall rules. |
 | `lib/tunnel.sh` | Reads the satellite's tunnel key and handshake over SSH. |
 | `debian/` | The on-host installers, run in order from one deploy dir — `provision-debian.sh` (base + relay roles), `provision-backup.sh` (the vault, at lockdown), `set-management.sh` (last: authorizes the mothership's key and turns self-patching off, or the reverse); see `debian/README.md`. |
-| `satellite.nix` | The NixOS option (`os: nixos`, via `nixos-anywhere`); such a satellite patches itself and is recorded `unmanaged`. |
 | `test-vm-creation/` | Deep-test fixture: installs `sat-hello`, probes end-to-end via the satellite public IP, tears down. |
 
 The OPNsense side is `tappaas-cicd/lib/opnsense-wg.sh`, shared with the admin VPN

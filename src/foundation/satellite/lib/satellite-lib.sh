@@ -122,7 +122,11 @@ sat_opnsense_uuid() {
 # sat_install — provision the machine and wire the home side (ADR-010 §5, §8.4.1).
 sat_install() {
     [[ -n "${ADDRESS}" ]] || die "${INSTANCE}: no address — give the satellite's public IPv4: module-manager module add satellite --address <public-ip>"
-    [[ "${SAT_OS}" == debian || "${SAT_OS}" == nixos ]] || die "${INSTANCE}: os must be debian (default) or nixos, not '${SAT_OS}'"
+    # A satellite is Debian (ADR-010 §5.1). The NixOS option was retired in #712:
+    # it tracked an end-of-life branch with no lock, no test exercised it, and the
+    # vault role refused it outright — so selecting it got you an unpinned,
+    # untested machine that could not do the job most satellites exist for.
+    [[ "${SAT_OS}" == debian ]] || die "${INSTANCE}: os must be debian, not '${SAT_OS}' — the NixOS satellite was retired (#712)"
     sat_check_roles
     command -v jq >/dev/null || die "jq required"
 
@@ -139,21 +143,11 @@ sat_install() {
     fi
 
     info "${BOLD}Satellite ${BL}${INSTANCE}${CL}${BOLD}: ${ADDRESS}, os ${SAT_OS}, roles ${SAT_ROLES}, ${SAT_MGMT}${CL}"
-    if [[ "${SAT_OS}" == nixos ]]; then
-        # The NixOS option reformats the host and patches itself (autoUpgrade);
-        # it holds no mothership key, so it is recorded unmanaged.
-        command -v nix >/dev/null || die "nix required for os nixos"
-        [[ -f "${PROVISION_KEY}" ]] || { warn "generating provisioning key ${PROVISION_KEY}"; ssh-keygen -t ed25519 -f "${PROVISION_KEY}" -N "" -q; }
-        ssh -i "${PROVISION_KEY}" -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new \
-            -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 -o BatchMode=yes "${target}" true 2>/dev/null \
-            || die "cannot log in to ${target} with the provisioning key — add it to root's authorized_keys first: $(cat "${PROVISION_KEY}.pub")"
-    else
-        # Debian: the operator's key (forwarded agent) reaches the stock host.
-        ssh -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/dev/null \
-            -o LogLevel=ERROR -o ConnectTimeout=10 -o BatchMode=yes "${target}" true 2>/dev/null \
-            || die "cannot log in to ${target} — run 'module add' over 'ssh -A' so your operator key reaches it"
-        [[ "${SAT_MGMT}" != managed || -f "${SAT_CICD_PUB}" ]] || die "no ${SAT_CICD_PUB} — a managed satellite authorizes the mothership's key"
-    fi
+    # The operator's key (forwarded agent) reaches the stock Debian host.
+    ssh -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/dev/null \
+        -o LogLevel=ERROR -o ConnectTimeout=10 -o BatchMode=yes "${target}" true 2>/dev/null \
+        || die "cannot log in to ${target} — run 'module add' over 'ssh -A' so your operator key reaches it"
+    [[ "${SAT_MGMT}" != managed || -f "${SAT_CICD_PUB}" ]] || die "no ${SAT_CICD_PUB} — a managed satellite authorizes the mothership's key"
 
     info "  [1/6] OPNsense home WG server ${sname}"
     local kp home_priv home_pub srv
@@ -161,23 +155,13 @@ sat_install() {
     srv="$(ow_add_server "${sname}" "${SAT_HOME_ADDR}/31" "${home_priv}" "${home_pub}")"
     [[ -n "${srv}" ]] || die "OPNsense addServer failed"
 
-    if [[ "${SAT_OS}" == debian ]]; then
-        info "  [2/6] render Debian configs"
-        local cdir cicd_key=""; cdir="$(mktemp -d)"
-        [[ "${SAT_MGMT}" == managed ]] && cicd_key="${SAT_CICD_PUB}"
-        sat_gen_debian_configs "${SAT_CFG}" "${home_pub}" "${cdir}" "${cicd_key}" \
-            || die "Debian config generation failed"
-        info "  [3/6] provision Debian on ${target}"
-        sat_provision_debian "$(sat_assemble_debian_deploy "${cdir}")" "${target}" || die "Debian provisioning failed"
-    else
-        info "  [2/6] generate satellite-settings.nix"
-        local settings; settings="$(mktemp)"
-        sat_gen_settings "${SAT_CFG}" "${home_pub}" "${settings}" || die "settings generation failed"
-        info "  [3/6] nixos-anywhere -> ${target} (reformats to NixOS)"
-        sat_nixos_anywhere "$(sat_assemble_deploy "${settings}")" "${target}" || die "nixos-anywhere failed"
-        sat_set '.management = "unmanaged"'
-        SAT_MGMT=unmanaged
-    fi
+    info "  [2/6] render Debian configs"
+    local cdir cicd_key=""; cdir="$(mktemp -d)"
+    [[ "${SAT_MGMT}" == managed ]] && cicd_key="${SAT_CICD_PUB}"
+    sat_gen_debian_configs "${SAT_CFG}" "${home_pub}" "${cdir}" "${cicd_key}" \
+        || die "Debian config generation failed"
+    info "  [3/6] provision Debian on ${target}"
+    sat_provision_debian "$(sat_assemble_debian_deploy "${cdir}")" "${target}" || die "Debian provisioning failed"
 
     info "  [4/6] read back the satellite's tunnel key"
     local sat_pub

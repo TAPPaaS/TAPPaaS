@@ -82,11 +82,26 @@ lib() {
 }
 
 # 1. contract files present, scripts parse
-for f in README.md INSTALL.md satellite.json satellite.nix install.sh update.sh test.sh delete.sh lockdown.sh \
+for f in README.md INSTALL.md satellite.json install.sh update.sh test.sh delete.sh lockdown.sh \
          lib/satellite-lib.sh lib/provision.sh lib/tunnel.sh \
          debian/provision-debian.sh debian/provision-backup.sh debian/set-management.sh; do
     [[ -f "${here}/${f}" ]] || { no "missing: ${f}"; continue; }
     [[ "${f}" == *.sh ]] && { bash -n "${here}/${f}" && ok "parses: ${f}" || no "syntax: ${f}"; }
+done
+
+# 1b. the NixOS satellite is retired (#712): a satellite is Debian, and the files
+#     that backed `--os nixos` are gone. They tracked an EOL branch with no lock,
+#     no test exercised them, and the backup role refused that OS outright — so a
+#     satellite provisioned that way could not be the vault it exists to be.
+for f in flake.nix disk-config.nix satellite.nix satellite-settings.nix; do
+    [[ -e "${here}/${f}" ]] && no "retired NixOS file still present: ${f}" || ok "retired: ${f}"
+done
+# Not a grep for the message — the retired one read "os must be debian (default)
+# or nixos", which contains the new text. Assert the BRANCH is gone instead.
+grep -q '== nixos' "${here}/lib/satellite-lib.sh" \
+    && no "install still branches on os nixos" || ok "install refuses any os but debian"
+for fn in sat_nixos_anywhere sat_assemble_deploy sat_gen_settings; do
+    grep -q "^${fn}()" "${here}/lib/provision.sh" && no "dead NixOS helper remains: ${fn}" || ok "gone: ${fn}"
 done
 
 # 2. the template: a managed Debian machine in the edge zone, with nothing the

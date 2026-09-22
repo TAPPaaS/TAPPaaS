@@ -36,7 +36,7 @@
   },
 
   "derived": {
-    "_note": "NOT operator config — the module (lib/provision.sh) computes these with sensible defaults and renders them into the Debian config files (or satellite-settings.nix). Listed here for reference only.",
+    "_note": "NOT operator config — the module (lib/provision.sh) computes these with sensible defaults and renders them into the Debian config files. Listed here for reference only.",
     "tunnel": "satelliteAddr/homeAddr = a dedicated /31 (default 10.255.0.0/31, auto-allocated per satellite); wgPort 51820 (config knob only if hostile egress needs 443/udp); PersistentKeepalive 25",
     "reverseProxy": "forwarder nginx stream; :80 redirect via Caddy; SNI '*' (single-site passthrough); proxyProtocol off until the Caddy side supports it (§2)",
     "adminVpn": "terminates on OPNsense (always) into the admin overlay zone; adminWgPort 51821; admin-side MTU ~1340",
