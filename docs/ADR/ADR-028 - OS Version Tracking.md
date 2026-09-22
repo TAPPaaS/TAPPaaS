@@ -3,11 +3,11 @@
 | | |
 |---|---|
 | **Status** | **Proposed** (2026-09-22) |
-| **Version** | 0.2 |
+| **Version** | 0.3 |
 | **Date** | 2026-09-22 |
 | **Author** | Lars Rossen |
 | **Related** | **#712** (retire the satellite's `--os nixos` remains — raised by D7) · **#680** (the baseline lock decides every site's nixpkgs; its code half landed, its cadence half is this ADR) · **#709** (Nextcloud cannot advance past 33 on a frozen branch — the first concrete demand for a branch move) · **#324** (modules copy the baseline instead of importing it) · **#675** (no extension point for a site's own NixOS modules) · **#166** (the earlier single-path clock fix) · [ADR-017](<ADR-017 - Update scheduling and mothership self-update.md>) D3 (the mothership rebuilds itself from the checkout, before the sweep) · [ADR-020](<ADR-020 - Declared-Field Change Model (validate, drift, modify).md>) D8 (`rebootOk` — whether a kernel change may land) · [ADR-025](<ADR-025 - Config migrations and the upgrade path.md>) (how a release brings `config/` forward; this ADR is its counterpart for the OS) · [ADR-026](<ADR-026 - Managed Machines as Modules.md>) (`debianhost` and the machine OS lifecycle) |
-| **Changelog** | v0.2 (2026-09-22) — a primer on flake vs non-flake Nix and on patch vs version moves in both OS families, so the decisions read without prior Nix knowledge; D1 states why the mothership keeps its own flake (upgrade safety, four reasons); the satellite corrected to Debian and its `--os nixos` remains proposed for retirement (#712); D5 separated the three Debian patch paths. · v0.1 (2026-09-22) — first draft, from the operator's questions of 2026-09-22 and a read of the shipped code. |
+| **Changelog** | v0.3 (2026-09-22) — D2 collapsed to **one weekly rhythm** with a full `--deep` test, on a NixOS expert's advice relayed by the operator: a version move is a bigger weekly bump, not a separate cadence (the ~1-month backport overlap is slack, not licence to linger). New D9 (how a bump reaches `main`, and why `stable` takes the pin with its monthly release rather than by weekly cherry-pick) and D10 (the mothership has no rollback, goes first, and needs one before the cadence leans on it). · v0.2 (2026-09-22) — a primer on flake vs non-flake Nix and on patch vs version moves in both OS families, so the decisions read without prior Nix knowledge; D1 states why the mothership keeps its own flake (upgrade safety, four reasons); the satellite corrected to Debian and its `--os nixos` remains proposed for retirement (#712); D5 separated the three Debian patch paths. · v0.1 (2026-09-22) — first draft, from the operator's questions of 2026-09-22 and a read of the shipped code. |
 
 How a TAPPaaS system decides which operating-system bits it runs, when security patches arrive, and when a major version moves.
 
@@ -212,19 +212,35 @@ revision comes from, not how the system is built.
 So: **separate build path, shared pin.** Divergence becomes structurally impossible rather than
 something a check has to notice afterwards.
 
-### D2 — Two rhythms, and they are different rhythms
+### D2 — One rhythm: bump weekly, deep-test every time
 
-| Rhythm | What moves | Cadence | Why that cadence |
-|---|---|---|---|
-| **Patch** | `flake.lock` — a newer revision of the same branch | **monthly**, plus out-of-band for a high-severity CVE in an exposed component (kernel, openssl, nginx, sshd) | A lock bump is all-or-nothing across the estate: one cannot patch a single guest. Batching costs twelve reviewed upgrades a year instead of fifty-two, and every one of them should be read by a person. Quarterly would leave a 90-day window on internet-facing services, which is not defensible. |
-| **Branch** | `flake.nix` — the release branch itself | **within one month of each NixOS release**, i.e. roughly every six months, before the old branch goes EOL | NixOS ships twice a year and supports a release until about a month after its successor. Missing that window is what put us three months past EOL with no patch path at all. |
+**Weekly.** Every week, `nix flake update` on the estate pin, a full `--deep` test on the test
+site, then merge. Not a patch cadence and a separate branch cadence — **one beat**.
 
-A patch refresh is `nix flake update`, which rewrites the **lock** and never `flake.nix`. A
-branch move edits `flake.nix` and then updates the lock. Both are ordinary code changes: tested
-on the test site, committed, pushed, and picked up by each site's sweep through its normal pull.
+A **version** move (`flake.nix`, e.g. `nixos-25.11` → `nixos-26.05`) is not a different rhythm;
+it is the week where the bump is bigger, taken when the new release exists. Sitting on the old
+branch buys nothing: once the successor ships, the old branch stops receiving anything worth
+having, and the longer the wait the larger and more frightening the eventual move. Weekly bumps
+keep the diff small; a branch week is the one week the diff is large, and it is *still* the same
+process.
 
-**Severity overrides cadence.** The monthly beat covers the baseline; a serious CVE in an
-exposed component is bumped when it lands, not at month end.
+Two facts qualify this, neither of which changes the beat:
+
+- **The old branch's backports do not stop dead on release day.** NixOS keeps backporting to the
+  previous release for roughly a month after its successor ships. That overlap is slack for a
+  missed week around release time, not a reason to linger: at the end of it the branch is dead,
+  which is exactly how this estate ended up three months past EOL.
+- **A branch week may need code changes.** Options get renamed and packages get dropped between
+  releases, so a version bump can fail to build or to evaluate until modules are adjusted
+  (#709 is a live instance). That week's branch therefore may live a few days rather than an
+  afternoon. It is a longer week, not a second rhythm.
+
+**Why weekly is affordable, and why it is safer than monthly.** The test is automated — a sweep
+plus `site-manager test --deep` on the test site is about an hour, unattended. Small diffs fail
+in ways you can read; a month of accumulated nixpkgs changes fails in ways you bisect. And the
+estate already has the safety net that makes frequent bumps reasonable: a module update takes a
+snapshot, rebuilds, runs the module's tests, and rolls the guest back when they fail. **That net
+covers guests but not the control plane — see D10, which this cadence depends on.**
 
 ### D3 — The ref is always a channel branch, and the lock always a Hydra-built revision
 
@@ -329,6 +345,66 @@ must be planned with it — not left to whenever a module next happens to restar
 
 ---
 
+### D9 — How a bump reaches `main`, and how it reaches `stable`
+
+The weekly bump follows the ordinary path of §10.2 of the release plan, with one branch per
+bump:
+
+1. `pin/<yyyy>-w<ww>` off `main`; `nix flake update` (plus the `flake.nix` edit on a branch week).
+2. Point the test site at the branch; full `site-manager test --deep`. Any module fix the new
+   revision demands lands on the same branch — the pin and the fixes are one change.
+3. Merge to `main`, push. Canaries tracking `main` pick it up on their next sweep.
+
+**`stable` takes the pin with its monthly release, not separately.** This is the part worth
+arguing, because the tempting alternative — cherry-pick just the lock onto `stable` weekly, and
+let everything else wait for the month — quietly breaks the thing `stable` is for.
+
+**The pin and the code are not independent.** A nixpkgs revision that needs a renamed option or
+a replaced package is only safe next to the module changes made for it. Those changes live on
+`main`. Cherry-picking the lock alone onto `stable` pairs a revision with code that was never
+built against it — and the failure does not appear on the cherry-pick, it appears on somebody's
+site. `stable`'s value is precisely that its code and its pin were tested *together*.
+
+**The exception, and its price.** A CVE that cannot wait for the monthly train may go
+out-of-band:
+
+- cherry-pick the lock commit onto the release branch off `stable`;
+- **deep-test it against `stable`'s code** — not `main`'s — on a site running `stable`. This step
+  is the whole exception; without it the cherry-pick is a guess;
+- tag and fast-forward `stable` as usual (§10.2 rule 5: `stable` never moves backwards).
+
+If the cherry-pick needs code fixes to pass, it is not a cherry-pick any more and it goes through
+the normal release. A **branch move never goes out-of-band**: it is the change most likely to
+need module fixes, so it rides the monthly train by construction.
+
+**This requires a site running `stable` to test against.** Today the test site tracks branches
+and `main`, and the canary tracks `main`; nothing exercises `stable` before a site does. That is
+a gap the out-of-band path depends on and does not yet have.
+
+### D10 — The control plane needs a net before the cadence leans on one
+
+Weekly bumps are defensible because a bad revision is caught and undone. That is true of guests
+and **not** true of the mothership:
+
+| | on a bad revision |
+|---|---|
+| a guest | `update-module.sh` snapshots, rebuilds, runs the module's tests, and **rolls the guest back** when they fail |
+| the mothership | `tappaas-self-rebuild.sh` runs `nixos-rebuild switch`. A non-zero exit aborts the sweep and fires the failure notice — but a rebuild that **succeeds into a subtly broken system** is not noticed at all, and nothing rolls it back |
+
+The mothership also goes **first** — the self-rebuild is an `ExecStartPre` of the sweep (ADR-017
+D3) — so it is the machine most exposed to a new revision and the one with no net, fifty-two
+times a year instead of twelve.
+
+NixOS makes the net cheap, because the previous generation is already on disk. After the switch:
+run a health check (the control-plane checks the suite already has — managers answer, the
+config cascade resolves, the forge is reachable); on failure, `nixos-rebuild --rollback`, notify,
+and abort the sweep rather than running the estate from a system that just failed its own tests.
+
+**Until that exists, weekly is the wrong cadence for the mothership.** Either the net lands
+first, or the mothership's pin moves on the slower, human-watched beat while the guests move
+weekly — which reintroduces exactly the split D1 removes. The first option is the right one, and
+it is small.
+
 ## Consequences
 
 - One `nix flake update`, reviewed and tested once, patches the mothership and every guest on
@@ -359,12 +435,24 @@ after it happens, `follows` prevents it.
 
 ## Open questions for review
 
-1. **Cadence numbers.** Monthly patch / six-monthly branch is a recommendation, not a
-   measurement. If the hrossen sweep plus deep test proves reliable enough to run unattended,
-   fortnightly patching is affordable.
+1. **What cadence does `stable` actually run on, and does the calendar close?** D9 assumes
+   weekly bumps on `main` and a **monthly** `stable`. The alternative the operator raised —
+   alternating a development week with a stabilisation week, then pushing `stable` — is a train
+   model and a coherent one, but it pushes `stable` **every two weeks**, not monthly. Both are
+   defensible; they are different products. If `stable` is monthly, the train shape that fits is
+   three development weeks plus one stabilisation week, which keeps most of the month open for
+   work and still gives the freeze a name.
 2. **Who holds the calendar.** D2 only works if someone is answerable for it. The 45-day
    tripwire reports the slip; it does not assign it.
-3. **Retire the satellite's `--os nixos` path, or fund it?** D7 proposes deletion. It is
+3. **What runs `stable` so an out-of-band bump can be tested against it?** D9's exception
+   needs a site on `stable`'s code; today nothing between the canary and a customer runs it.
+   Either the test site gains a second role, or the out-of-band path is honest about being
+   untested and reserved for genuine emergencies.
+
+4. **Does D10 land before the cadence changes?** Weekly bumps assume a net the control plane
+   does not have. This is the one item that gates the rest.
+
+5. **Retire the satellite's `--os nixos` path, or fund it?** D7 proposes deletion. It is
    retained by ADR-010 §5.1, so retiring it amends that ADR — and the stated reason for keeping
    it was **OS diversity for the vault**: a nixpkgs or `nixos-anywhere` supply-chain compromise
    would hit the NixOS cluster but not a Debian vault (ADR-010 §7.3). That argument survives
