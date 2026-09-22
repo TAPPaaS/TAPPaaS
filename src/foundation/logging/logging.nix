@@ -595,7 +595,14 @@ in
     };
   };
 
-  systemd.services.logging-configure-oidc = lib.mkIf published {
+  # Defined unconditionally, unlike the placeholder above. logging.json names
+  # this unit as its identity.configureService, and identity:identity checks
+  # that the unit it was told to restart is actually there — a contract stated
+  # in config cannot be honoured only on some sites. Gating it on `published`
+  # made the module FAIL its update on every site that does not publish Grafana
+  # ("logging-configure-oidc.service does not exist on logging"). Where there is
+  # no public domain the unit runs and says why there is nothing to do.
+  systemd.services.logging-configure-oidc = {
     description = "Configure Authentik OIDC login in Grafana";
     wantedBy    = [ "multi-user.target" ];
     after       = [ "generate-logging-oidc-placeholder.service" "network-online.target" ];
@@ -607,7 +614,13 @@ in
     serviceConfig = {
       Type            = "oneshot";
       RemainAfterExit = true;
-      ExecStart = pkgs.writeShellScript "logging-configure-oidc" ''
+      ExecStart = pkgs.writeShellScript "logging-configure-oidc" (
+        if !published then ''
+        # No proxyDomain: no public name, so no redirect URI, so nothing for
+        # Authentik to call back to and no provider in Grafana's settings to
+        # configure. Present and honest rather than missing.
+        echo "Grafana is not published at this site (no proxyDomain) — no OIDC login to configure."
+        '' else ''
         set -euo pipefail
         # The unit always runs with these defaults. They are overridable only so
         # the branches below can be exercised off the VM (test-grafana-oidc.sh)
@@ -667,7 +680,7 @@ in
 
         echo "Grafana OIDC login configured against $DISCOVERY"
         ${pkgs.systemd}/bin/systemctl try-restart grafana.service || true
-      '';
+      '');
     };
   };
 

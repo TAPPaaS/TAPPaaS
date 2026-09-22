@@ -63,6 +63,17 @@ in {
   pub_auth     = (g ./pub)."auth.generic_oauth".auth_url;
   pub_scopes   = (g ./pub)."auth.generic_oauth".scopes;
   pub_role     = (g ./pub)."auth.generic_oauth".role_attribute_path;
+  # logging.json names logging-configure-oidc as its identity.configureService,
+  # and identity:identity checks the unit is there. A contract stated in config
+  # cannot hold only on sites that publish Grafana.
+  # `? unit` is useless here: lib.mkIf still creates the attribute, and the
+  # module system resolves it later. What distinguishes them is the wrapper —
+  # a mkIf value carries _type = "if", an unconditional one does not.
+  unpub_unit_conditional = (load ./unpub).systemd.services.logging-configure-oidc ? _type;
+  pub_unit_conditional   = (load ./pub).systemd.services.logging-configure-oidc ? _type;
+  # The placeholder is different: it exists only to satisfy the $__file{}
+  # targets the provider block references, so it stays tied to publication.
+  unpub_ph_conditional   = (load ./unpub).systemd.services.generate-logging-oidc-placeholder ? _type;
 }
 EOF
 EV="$(cd "${TMP}" && nix-instantiate --eval --strict --json ev.nix 2>"${TMP}/ev.err")"
@@ -83,6 +94,9 @@ ckin "the client id is read from a file"   "\$__file{/etc/secrets/logging-oidc-c
 ckin "the auth endpoint is read from a file" "\$__file{/etc/secrets/logging-oidc-auth-url}" "$(j .pub_auth)"
 ck   "no scope beyond what Authentik's profile already emits" "openid email profile" "$(j .pub_scopes)"
 ckin "logging-admins maps to GrafanaAdmin" "logging-admins" "$(j .pub_role)"
+ck "the configure unit is unconditional where published"       "false" "$(j .pub_unit_conditional)"
+ck "…and where NOT — identity checks for it either way"       "false" "$(j .unpub_unit_conditional)"
+ck "the placeholder stays tied to publication"                "true"  "$(j .unpub_ph_conditional)"
 
 # ── 2. the configure unit, in each state identity can leave it in ───────────
 SCRIPT="$(cd "${TMP}" && nix-build --no-out-link -E '
