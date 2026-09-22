@@ -869,6 +869,84 @@ class DhcpManager:
         return {"changed": True,
                 "uuid": (existing or {}).get("uuid") or response.get("uuid")}
 
+    def upsert_dns_host(self, host: str, domain: str, ip: str,
+                        description: str | None = None,
+                        mac: str | None = None,
+                        check_mode: bool = False) -> dict:
+        """Create or update the entry FOR THIS NAME. Identity is host+domain (#702).
+
+        The description is metadata, never the key. Keying on it — which
+        ``add`` did — meant a description that matched no entry created a
+        SECOND A-record for a name that already existed, and a description
+        reused across names made each add overwrite the previous name's entry.
+        Both printed "No changes made".
+
+        Updates go through the raw ``setHost`` API with only the fields that
+        actually change, which merges rather than replaces (``_set_cnames``
+        sends cnames alone and leaves everything else standing). So an entry's
+        CNAMEs and its DHCP reservation survive an address correction, and a
+        caller that passes no ``mac`` never clears one that is there.
+
+        Returns {"action": created|updated|unchanged|would-create|would-update,
+                 "changes": [...], "uuid": ...}.
+        """
+        existing = self.get_host_row(host, domain)
+
+        if existing is None:
+            if check_mode:
+                return {"action": "would-create", "changes": ["ip", "descr"], "uuid": None}
+            payload = {
+                "host": host,
+                "domain": domain or "",
+                "ip": ip,
+                "descr": description if description is not None else f"{host}.{domain}",
+            }
+            if mac:
+                payload["hwaddr"] = mac
+            return {"action": "created", "changes": sorted(payload),
+                    "uuid": self._save_host(None, payload, host)}
+
+        uuid = existing.get("uuid")
+        changes: dict[str, str] = {}
+        if ip and ip != (existing.get("ip") or ""):
+            changes["ip"] = ip
+        # Only a description the caller actually gave is a change. The CLI's
+        # default (host.domain) must not rewrite a description an operator
+        # chose, which is the same rule the guarded delete follows (#672).
+        if description is not None and description != (existing.get("descr") or ""):
+            changes["descr"] = description
+        if mac:
+            # searchHost reports no hwaddr — it is only visible through getHost
+            # (#672) — so the comparison has to fetch the full entry.
+            current_macs = self._selected(self.get_host_full(uuid).get("hwaddr")) if uuid else []
+            if [mac] != current_macs:
+                changes["hwaddr"] = mac
+
+        if not changes:
+            return {"action": "unchanged", "changes": [], "uuid": uuid}
+        if check_mode:
+            return {"action": "would-update", "changes": sorted(changes), "uuid": uuid}
+
+        payload = {"host": host, "domain": existing.get("domain") or (domain or "")}
+        payload.update(changes)
+        return {"action": "updated", "changes": sorted(changes),
+                "uuid": self._save_host(uuid, payload, host)}
+
+    def _save_host(self, uuid: str | None, payload: dict, host: str) -> str:
+        """addHost, or setHost on an existing uuid. Returns the entry's uuid."""
+        command, params = ("setHost", [uuid]) if uuid else ("addHost", [])
+        result = self.client.run_module(
+            "raw",
+            params={"module": "dnsmasq", "controller": "settings",
+                    "command": command, "params": params, "action": "post",
+                    "data": {"host": payload}},
+        )
+        response = result.get("result", {}).get("response", {})
+        if response.get("result") != "saved":
+            raise RuntimeError(f"{command} failed for '{host}': {response}")
+        self.reconfigure()
+        return uuid or response.get("uuid", "")
+
     # ----- CNAME aliases (ADR-012 §2.7, #612) --------------------------------
     #
     # A name that must follow a Host — the PBS's `backup.mgmt.internal` follows

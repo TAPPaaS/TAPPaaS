@@ -11,7 +11,7 @@ import sys
 
 from .cli_globals import StrictArgumentParser, make_global_parent, parse_with_globals
 from .config import Config
-from .dhcp_manager import DhcpHost, DhcpManager
+from .dhcp_manager import DhcpManager
 
 
 def format_ip(ip_raw) -> str:
@@ -58,57 +58,43 @@ def add_dns_host(
     Returns:
         True if successful, False otherwise
     """
-    if description is None:
-        description = f"{hostname}.{domain}"
-
-    # Check if entry already exists
-    existing = manager.get_host_by_description(description)
-    if existing:
-        print(f"DNS entry '{description}' already exists:")
-        print(f"  Host: {existing['host']}.{existing.get('domain', '')}")
-        print(f"  IP: {existing.get('ip', 'N/A')}")
-        if check_mode:
-            print("Would update entry (dry-run mode)")
-            return True
-        else:
-            print("Updating entry...")
-    else:
-        if check_mode:
-            print(f"Would create DNS entry: {hostname}.{domain} -> {ip_address} (dry-run mode)")
-            return True
-        else:
-            print(f"Creating DNS entry: {hostname}.{domain} -> {ip_address}")
-
-    # Create/update the DNS host entry. With a MAC it is a full static
-    # reservation (MAC -> IP) that also serves the hostname -> IP record, so the
-    # IP is locked and the DNS record cannot drift.
-    host = DhcpHost(
-        description=description,
-        host=hostname,
-        ip=[ip_address],
-        domain=domain,
-        hardware_addr=[mac] if mac else [],
-    )
+    # The entry is identified by hostname and domain (#702). It used to be
+    # found by description, so `--description` decided which record was
+    # written: an unmatched one added a second A-record for a name that already
+    # existed, and one reused across names moved each name's entry onto the
+    # last. Both reported "No changes made". The description is metadata on the
+    # entry, and only a description the caller gave is written — the default
+    # below must not overwrite one an operator chose.
     if mac:
         print(f"  (static DHCP reservation: {mac} -> {ip_address})")
 
     try:
-        result = manager.create_host(host, check_mode=check_mode)
-
-        if check_mode:
-            print("Dry-run completed successfully")
-            return True
-
-        if result.get("changed"):
-            print(f"✓ DNS entry created/updated successfully")
-            print(f"  {hostname}.{domain} -> {ip_address}")
-            return True
-        else:
-            print("No changes made (entry already up to date)")
-            return True
+        result = manager.upsert_dns_host(
+            host=hostname,
+            domain=domain,
+            ip=ip_address,
+            description=description,
+            mac=mac,
+            check_mode=check_mode,
+        )
     except Exception as e:
         print(f"ERROR: Failed to create/update DNS entry: {e}", file=sys.stderr)
         return False
+
+    name = f"{hostname}.{domain}"
+    action = result.get("action")
+    changed = ", ".join(result.get("changes") or [])
+    if action == "would-create":
+        print(f"Would create DNS entry: {name} -> {ip_address} (dry-run mode)")
+    elif action == "would-update":
+        print(f"Would update {name} ({changed}) (dry-run mode)")
+    elif action == "created":
+        print(f"✓ Created {name} -> {ip_address}")
+    elif action == "updated":
+        print(f"✓ Updated {name} ({changed})")
+    else:
+        print(f"{name} is already {ip_address} — no change")
+    return True
 
 
 def delete_dns_host(
