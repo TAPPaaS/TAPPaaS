@@ -188,11 +188,18 @@ if [[ -n "${GEN}" ]]; then
 else
     ck "generated: it is written at all" "yes" "MISSING"
 fi
-ck "generated: the timer is there"        "1" "$(grep -c 'systemd.timers.tappaas-fs-backup' <<< "${GEN}")"
-ck "generated: the schedule is the cascade's" "1" "$(grep -c 'OnCalendar = "20:04"' <<< "${GEN}")"
-# The one that mattered: no second definition of the service.
-ck "generated: it declares NO service"    "0" "$(grep -c 'systemd.services.tappaas-fs-backup' <<< "${GEN}")"
-ck "generated: and no ExecStart to go with it" "0" "$(grep -c 'ExecStart' <<< "${GEN}")"
+ck "generated: the schedule is the cascade's" "1" "$(grep -c 'timerConfig.OnCalendar = "20:04"' <<< "${GEN}")"
+# The whole point: it states ONE attribute. Anything else here is a second
+# definition of something the guest already declares, which nix refuses to
+# evaluate — it was the service's description first, then the timer's.
+ck "generated: no service block"          "0" "$(grep -c 'systemd.services' <<< "${GEN}")"
+ck "generated: no ExecStart"              "0" "$(grep -c 'ExecStart' <<< "${GEN}")"
+ck "generated: no description of its own" "0" "$(grep -c 'description =' <<< "${GEN}")"
+ck "generated: no wantedBy"               "0" "$(grep -c 'wantedBy' <<< "${GEN}")"
+# RandomizedDelaySec is mkDefault in tappaas-common.nix but PLAIN in
+# tappaas-cicd.nix, so restating it would break the mothership alone.
+ck "generated: no RandomizedDelaySec"     "0" "$(grep -c 'RandomizedDelaySec' <<< "${GEN}")"
+ck "generated: no Persistent"             "0" "$(grep -c 'Persistent' <<< "${GEN}")"
 rm -rf "${GEN_OUT}"
 
 rm -rf "${CONFIG_DIR}"

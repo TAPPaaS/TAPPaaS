@@ -338,14 +338,15 @@ EOF
 #
 # Takes effect at the guest's next nixos-rebuild, which the same update runs
 # a step later.
-# This file carries the TIMER and nothing else. The service is declared by the
+# This file carries ONE attribute: when the capture runs. The service is declared by the
 # guest's own configuration — templates/tappaas-common.nix for an ordinary
 # guest, tappaas-cicd.nix for the mothership — because a systemd unit has to be
 # declarative on NixOS, and that declaration carries an Environment PATH which
 # this generated file has no business restating.
 #
-# It used to emit the service too. Two definitions of one option at the same
-# priority is not a merge, it is an evaluation error:
+# It used to emit the whole service, and then the whole timer. Two definitions
+# of one option at the same priority is not a merge, it is an evaluation error
+# — first on the service's description, then on the timer's:
 #
 #   error: The option `systemd.services.tappaas-fs-backup.description' has
 #   conflicting definition values
@@ -356,9 +357,11 @@ EOF
 # single module was updated — on every site, every run. Each guest that adopts
 # filesystemPaths would have followed it.
 #
-# The timer here is deliberately NOT mkDefault: the schedule cascade is the
-# authority on when a guest captures, and the guest-side OnCalendar is
-# mkDefault precisely so this one wins.
+# OnCalendar alone is safe to state plainly, and it is the only one that is:
+# both guest-side declarations mark it lib.mkDefault precisely so the cascade
+# wins. RandomizedDelaySec is mkDefault in tappaas-common.nix but PLAIN in
+# tappaas-cicd.nix, so restating it here breaks the mothership and nothing
+# else — the asymmetry that makes "just override the timer" wrong.
 # Args: <module> <target user@host>
 pbs_fs_install_timer_nix() {
     local module="$1" target="$2" oncal host tmp
@@ -371,19 +374,13 @@ pbs_fs_install_timer_nix() {
 # When this guest captures its declared paths (#691). The time comes from the
 # backup schedule cascade (ADR-012 §3.2): this module's own slot inside the
 # window that ends before the whole-guest job starts.
-# The TRIGGER only — the service itself is declared by the guest's own
-# configuration, which is where a NixOS unit has to live (#626).
+# ONE attribute: the time. The unit and its timer are declared by the guest's
+# own configuration, which is where a NixOS unit has to live (#626); every
+# other attribute stated here would be a second definition of something the
+# guest already defines, and that is an evaluation error, not a merge.
 { lib, ... }:
 {
-  systemd.timers.tappaas-fs-backup = {
-    description = "Trigger for this guest's file-level backup";
-    wantedBy = [ "timers.target" ];
-    timerConfig = {
-      OnCalendar = "${oncal}";
-      RandomizedDelaySec = "2min";
-      Persistent = true;
-    };
-  };
+  systemd.timers.tappaas-fs-backup.timerConfig.OnCalendar = "${oncal}";
 }
 EOF
     if ! tappaas_scp_guest -o BatchMode=yes "${tmp}" "${target}:/tmp/tappaas-backup.nix"; then
