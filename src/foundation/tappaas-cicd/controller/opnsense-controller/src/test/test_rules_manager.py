@@ -1485,3 +1485,48 @@ class TestExpectedPinholes(_PinholeFixtures, unittest.TestCase):
         compiled = {r.description for r in mgr._compile(load_module(self.dir, "ui"))[0]
                     if r.description.startswith("tappaas-svcdep:")}
         self.assertEqual(set(mgr.expected_pinholes("ui").rules), compiled)
+
+
+class TestAliasAndFirewallTypeArePatternA(unittest.TestCase):
+    """aliasType/firewallType are read nested-first, like their neighbours (#704).
+
+    Both moved from network:proxy to network:rules, which is the service that
+    actually reads them out of a module's config. The converter therefore nests
+    them under config."network:rules" — and this reader used to look only at the
+    top level, so a nested value would have fallen back to the default in
+    silence: firewallType NONE becoming "opnsense" makes the controller program
+    a firewall it was told not to touch, and aliasType "network" becoming "host"
+    empties the alias table, leaving every rule that references it matching
+    nothing (#542, #660).
+    """
+
+    def _load(self, data: dict):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "sonos.json"
+            path.write_text(json.dumps(data))
+            return rm.load_module(Path(d), "sonos")
+
+    def test_nested_values_are_found(self):
+        spec = self._load({
+            "vmname": "sonos",
+            "dependsOn": ["network:rules"],
+            "config": {"network:rules": {"aliasType": "network",
+                                         "firewallType": "NONE"}},
+        })
+        self.assertEqual(spec.alias_type, "network")
+        self.assertEqual(spec.firewall_type, "NONE")
+
+    def test_top_level_still_wins_for_a_not_yet_converted_module(self):
+        spec = self._load({
+            "vmname": "sonos",
+            "dependsOn": ["network:rules"],
+            "aliasType": "network",
+            "firewallType": "NONE",
+        })
+        self.assertEqual(spec.alias_type, "network")
+        self.assertEqual(spec.firewall_type, "NONE")
+
+    def test_defaults_when_the_module_declares_neither(self):
+        spec = self._load({"vmname": "sonos", "dependsOn": ["network:rules"]})
+        self.assertEqual(spec.alias_type, "host")
+        self.assertEqual(spec.firewall_type, "opnsense")

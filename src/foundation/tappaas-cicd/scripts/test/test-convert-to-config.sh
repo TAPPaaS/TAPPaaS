@@ -76,6 +76,26 @@ run_case "orphan-field" \
     '{"vmname":"a","dependsOn":["cluster:vm"],"proxyDomain":"x.test","cores":2}' \
     '.proxyDomain == "x.test"'
 
+# Case 7b: aliasType/firewallType belong to network:rules, not network:proxy (#704).
+# A device module declares network:rules and never network:proxy. Under the old
+# attribution both fields were orphans — 27 of one site's 53 orphan warnings —
+# and the genuine ones drowned in them.
+run_case "rules-owns-aliastype" \
+    '{"vmname":"sonos","dependsOn":["network:rules"],"aliasType":"network","firewallType":"NONE"}' \
+    '.config["network:rules"].aliasType == "network" and .config["network:rules"].firewallType == "NONE" and (.aliasType // null) == null'
+
+# …and the conversion says nothing about them.
+_o704="$(echo '{"vmname":"sonos","dependsOn":["network:rules"],"aliasType":"network"}' \
+        | regroup_to_pattern_a 2>&1 >/dev/null)"
+if [[ "${_o704}" != *"aliasType"* ]]; then
+    pass "no orphan warning for a correctly declared device module"
+    PASS=$((PASS + 1))
+else
+    fail "no orphan warning for a correctly declared device module"
+    echo "  said: ${_o704}"
+    FAIL=$((FAIL + 1))
+fi
+
 # Case 8: lossless round-trip via flatten — normalize(convert(X)) == flatten(X)
 input='{"vmname":"a","dependsOn":["cluster:vm","network:proxy"],"cores":2,"memory":"4096","proxyDomain":"x.test","proxyPort":80}'
 flat_in=$(echo "${input}" | normalize_module_config)

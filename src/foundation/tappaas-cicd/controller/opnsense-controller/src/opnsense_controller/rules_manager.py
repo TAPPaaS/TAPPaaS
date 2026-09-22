@@ -410,8 +410,15 @@ def load_module(modules_dir: Path, name: str) -> ModuleSpec:
         ingress=data.get("ingress") or fr.get("ingress") or [],
         egress=data.get("egress") or fr.get("egress") or [],
         aliases=data.get("aliases") or fr.get("aliases") or {},
-        firewall_type=data.get("firewallType", "opnsense"),
-        alias_type=data.get("aliasType", "host") or "host",
+        # Read nested-first-then-top-level like their neighbours above (#704).
+        # Both fields moved to network:rules, so the converter now nests them
+        # under config."network:rules" — and a top-level-only read would have
+        # silently fallen back to the defaults: firewallType NONE becoming
+        # "opnsense" makes the controller program a firewall it was told not to
+        # touch, and aliasType "network" becoming "host" empties the alias table
+        # so every rule referencing it matches nothing (#542, #660).
+        firewall_type=data.get("firewallType") or fr.get("firewallType") or "opnsense",
+        alias_type=data.get("aliasType") or fr.get("aliasType") or "host",
         depends_on=data.get("dependsOn", []) or [],
         integrates_with=data.get("integratesWith", []) or [],
         environment=data.get("environment", "") or "",
