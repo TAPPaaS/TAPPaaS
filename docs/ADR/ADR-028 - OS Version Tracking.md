@@ -45,7 +45,7 @@ and `system.autoUpgrade` is `enable = false` wherever it appears.
 |---|---|---|---|
 | `templates/flake.lock` | `nixos-25.11` | `b77b3de87756`, 2026-05-22 | every NixOS **guest**, via `update-os.sh` |
 | `tappaas-cicd/flake.lock` | `nixos-25.11` | `b77b3de87756`, 2026-05-22 | the **mothership**, via `tappaas-self-rebuild.sh` |
-| `satellite/flake.nix` | `nixos-25.05` | **no lock file at all** | the **satellite** (the internet-facing VPS), via `nixos-anywhere` |
+| `satellite/flake.nix` | `nixos-25.05` | **no lock file at all** | nothing by default — the optional `--os nixos` path only (see D7) |
 
 Three observations, each of which a decision below answers:
 
@@ -55,8 +55,11 @@ Three observations, each of which a decision below answers:
    2026-06-30). We are running an unsupported branch, and have been for roughly three months.
    **A frozen branch cannot deliver a security backport, so the NixOS half of the estate has had
    no security patches since May.**
-3. The satellite — the most exposed machine we run — is on an older branch still, with no lock,
-   so each deployment resolves whatever that frozen branch last held.
+3. The satellite is **Debian**, not NixOS (ADR-010 §5.1, reversed during implementation as
+   impl-doc D19/Q8; `satellite.json` declares `"os": "debian"` and `satellite-lib.sh` defaults to
+   it). It therefore patches itself like any Debian machine and is *not* affected by the frozen
+   pin. The NixOS files in that module back the retained-but-unused `--os nixos` option, which
+   D7 addresses.
 
 ### What reaches an existing VM, and what does not
 
@@ -141,10 +144,22 @@ line in the sweep of 2026-09-21 *was* the EOL signal, read correctly for the fir
 
 ### D5 — Debian and Ubuntu: rolling patches, explicit releases
 
-**Security patches are automatic.** Every sweep runs `apt-get update` and
-`apt-get -y upgrade` on each Debian or Ubuntu guest and on each managed Debian host
-(ADR-026's `debianhost`). No pin, no cadence decision, no TAPPaaS release needed: the
-distribution's archive is the source of truth and its security team sets the pace.
+**Security patches are automatic**, by three paths that differ in more than spelling:
+
+| What | Command | Where |
+|---|---|---|
+| a Debian/Ubuntu **guest** (a VM the cluster hosts) | `apt-get update` + `apt-get -y upgrade` | `update-os.sh:583-592`, each sweep |
+| a managed **machine** — `debianhost`, and a managed satellite, which delegates to it | `apt-get update` + `apt-get -y full-upgrade`, keeping local config files (`--force-confdef`, `--force-confold`) | `debianhost/update.sh:28`, each sweep |
+| a **locked-down (unmanaged) satellite** — the off-site vault | `unattended-upgrades`, security-only, with its own reboot window | on the machine itself; nothing at home can log in to it (ADR-010 §7.3, §8.4.4) |
+
+The distinction between `upgrade` and `full-upgrade` is deliberate and worth keeping: `upgrade`
+never adds or removes a package, so it cannot resolve a changed dependency; `full-upgrade` will.
+A guest is a disposable workload we can rebuild; a machine is not, and its packages are expected
+to move as a set.
+
+No pin, no cadence decision, no TAPPaaS release is needed for any of the three: the
+distribution's archive is the source of truth and its security team sets the pace. The vault
+keeps patching itself even while it refuses every login from home — which is the point of it.
 
 **Distribution release upgrades are not automatic and must not become so.** `apt-get upgrade`
 never crosses a release boundary (it is deliberately not `dist-upgrade`, and not
@@ -176,8 +191,19 @@ Today a module cannot choose its nixpkgs: `update-os.sh` passes `-I nixpkgs=` an
 anything the guest declares. This is stated here because the opposite is a natural assumption,
 and advice to "bring your own flake" would silently not work.
 
-The satellite is the exception to fix rather than the precedent to follow: it carries its own
-branch and no lock, and should be brought onto the estate pin (D1) with the rest.
+**The satellite's `--os nixos` path is the one place a second base still exists, and it should
+go.** ADR-010 §5.1 retained it when the implementation reversed to Debian (impl-doc D19/Q8), and
+what is left of it has quietly rotted: `satellite/flake.nix` tracks `nixos-25.05` — a branch
+EOL since around the end of 2025 — with **no lock file**, so each deployment would resolve
+whatever that dead branch last held; the module's own test suite does not mention NixOS once;
+and the vault role refuses it outright (`satellite-lib.sh:294` — "the vault is the Debian
+satellite's"). A retained option that is untested, unpinned and unsupported by the role most
+people want is not an option, it is a trap for whoever tries it.
+
+The decision this ADR asks for: **retire `--os nixos`** — delete `flake.nix`, `disk-config.nix`,
+`satellite.nix`, `satellite-settings.nix` and the `nixos-anywhere` branch of
+`satellite-lib.sh`, and amend ADR-010 §5.1 accordingly — unless someone intends to test and pin
+it, in which case it joins the estate pin under D1 like everything else. It cannot stay as it is.
 
 Should a per-module base ever be introduced — a module declaring that it owns its own base — it
 comes with three obligations: the module owns its own security currency, the health output
@@ -231,9 +257,12 @@ after it happens, `follows` prevents it.
    fortnightly patching is affordable.
 2. **Who holds the calendar.** D2 only works if someone is answerable for it. The 45-day
    tripwire reports the slip; it does not assign it.
-3. **The satellite.** Bringing it onto the estate pin (D1/D7) means it rebuilds on the same
-   revision as everything else — but it is deployed by `nixos-anywhere`, not by the sweep, and
-   what updates it after installation is not settled here.
+3. **Retire the satellite's `--os nixos` path, or fund it?** D7 proposes deletion. It is
+   retained by ADR-010 §5.1, so retiring it amends that ADR — and the stated reason for keeping
+   it was **OS diversity for the vault**: a nixpkgs or `nixos-anywhere` supply-chain compromise
+   would hit the NixOS cluster but not a Debian vault (ADR-010 §7.3). That argument survives
+   deletion intact, because the default *is* Debian; what dies is only the ability to choose
+   NixOS for a satellite, which nothing tests and the vault role already refuses.
 4. **Whether 26.05 is the branch to move to**, or whether to wait for 26.11 given how late in the
    cycle we are. #709 needs 26.05 for Nextcloud 34/35; that is an argument for moving now and
    again in a few months, which makes the first performance of D2's branch rhythm unusually
