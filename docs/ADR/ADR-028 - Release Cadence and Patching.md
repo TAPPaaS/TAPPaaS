@@ -2,12 +2,12 @@
 
 | | |
 |---|---|
-| **Status** | **Accepted** (2026-09-23) — agreed by the operator. D2's cadence waits on D10, which is built and in review (#713). |
-| **Version** | 0.5 |
+| **Status** | **Accepted** (2026-09-23) — agreed by the operator. D10 is built (#713), so D2's cadence no longer leans on a gap. |
+| **Version** | 0.8 |
 | **Date** | 2026-09-22 |
 | **Author** | Lars Rossen |
-| **Related** | **#712** (retire the satellite's `--os nixos` remains — raised by D7) · **#680** (the baseline lock decides every site's nixpkgs; its code half landed, its cadence half is this ADR) · **#709** (Nextcloud cannot advance past 33 on a frozen branch — the first concrete demand for a branch move) · **#324** (modules copy the baseline instead of importing it) · **#675** (no extension point for a site's own NixOS modules) · **#166** (the earlier single-path clock fix) · [ADR-017](<ADR-017 - Update scheduling and mothership self-update.md>) D3 (the mothership rebuilds itself from the checkout, before the sweep) · [ADR-020](<ADR-020 - Declared-Field Change Model (validate, drift, modify).md>) D8 (`rebootOk` — whether a kernel change may land) · [ADR-025](<ADR-025 - Config migrations and the upgrade path.md>) (how a release brings `config/` forward; this ADR is its counterpart for the OS) · [ADR-026](<ADR-026 - Managed Machines as Modules.md>) (`debianhost` and the machine OS lifecycle) |
-| **Changelog** | v0.5 (2026-09-22) — retitled from *OS Version Tracking*: once the alpha/beta/stable train landed, the ADR was about release cadence and patching, of which the nixpkgs pin is one input. · v0.4 (2026-09-22) — the operator's train: three channels (alpha/beta/stable) on two-week boundaries, so `stable` is at most four weeks behind and a CVE **accelerates** the train instead of cherry-picking a pin onto code it was never built against; D9 gains the guest-first validation rule (a guest proves a revision before the mothership takes it, without reordering the sweep); D2's beat restated as the boundary. · v0.3 (2026-09-22) — D2 collapsed to **one weekly rhythm** with a full `--deep` test, on a NixOS expert's advice relayed by the operator: a version move is a bigger weekly bump, not a separate cadence (the ~1-month backport overlap is slack, not licence to linger). New D9 (how a bump reaches `main`, and why `stable` takes the pin with its monthly release rather than by weekly cherry-pick) and D10 (the mothership has no rollback, goes first, and needs one before the cadence leans on it). · v0.2 (2026-09-22) — a primer on flake vs non-flake Nix and on patch vs version moves in both OS families, so the decisions read without prior Nix knowledge; D1 states why the mothership keeps its own flake (upgrade safety, four reasons); the satellite corrected to Debian and its `--os nixos` remains proposed for retirement (#712); D5 separated the three Debian patch paths. · v0.1 (2026-09-22) — first draft, from the operator's questions of 2026-09-22 and a read of the shipped code. |
+| **Related** | **#713** (the control plane's missing verification and rollback — D10, built) · **#712** (retire the satellite's `--os nixos` remains — raised by D7) · **#680** (the baseline lock decides every site's nixpkgs; its code half landed, its cadence half is this ADR) · **#709** (Nextcloud cannot advance past 33 on a frozen branch — the first concrete demand for a branch move) · **#324** (modules copy the baseline instead of importing it) · **#675** (no extension point for a site's own NixOS modules) · **#166** (the earlier single-path clock fix) · [ADR-017](<ADR-017 - Update scheduling and mothership self-update.md>) D3 (the mothership rebuilds itself from the checkout, before the sweep) · [ADR-020](<ADR-020 - Declared-Field Change Model (validate, drift, modify).md>) D8 (`rebootOk` — whether a kernel change may land) · [ADR-025](<ADR-025 - Config migrations and the upgrade path.md>) (how a release brings `config/` forward; this ADR is its counterpart for the OS) · [ADR-026](<ADR-026 - Managed Machines as Modules.md>) (`debianhost` and the machine OS lifecycle) |
+| **Changelog** | **v0.8 (2026-09-23) — ACCEPTED.** Channels are named for what a site runs — **unstable**, **staging**, **production** — on the branches `main`, `staging` and `stable`; the two are named apart on purpose, because "stable" as a promise to an operator and `stable` as a ref are different statements. · v0.7 (2026-09-23) — the satellite's flake is deleted, not merely proposed for retirement (#712 landed), so Context names two pins and D7 records the deletion; adds what a bump costs, measured on the test site: a daily sweep re-downloads nothing (0.03 s to resolve a cached revision, 0.335 s to revalidate), while a pin change costs ~1 GB of fetches and ~10 GB of store across 22 guests, each fetching from GitHub on its own. · v0.6 (2026-09-22) — D10 built and verified on hrossen (#713): the control plane checks itself after a switch and rolls back the generation it replaced when that check fails. · v0.5 (2026-09-22) — retitled from *OS Version Tracking*: once the alpha/beta/stable train landed, the ADR was about release cadence and patching, of which the nixpkgs pin is one input. · v0.4 (2026-09-22) — the operator's train: three channels (alpha/beta/stable) on two-week boundaries, so `stable` is at most four weeks behind and a CVE **accelerates** the train instead of cherry-picking a pin onto code it was never built against; D9 gains the guest-first validation rule (a guest proves a revision before the mothership takes it, without reordering the sweep); D2's beat restated as the boundary. · v0.3 (2026-09-22) — D2 collapsed to **one weekly rhythm** with a full `--deep` test, on a NixOS expert's advice relayed by the operator: a version move is a bigger weekly bump, not a separate cadence (the ~1-month backport overlap is slack, not licence to linger). New D9 (how a bump reaches `main`, and why `stable` takes the pin with its monthly release rather than by weekly cherry-pick) and D10 (the mothership has no rollback, goes first, and needs one before the cadence leans on it). · v0.2 (2026-09-22) — a primer on flake vs non-flake Nix and on patch vs version moves in both OS families, so the decisions read without prior Nix knowledge; D1 states why the mothership keeps its own flake (upgrade safety, four reasons); the satellite corrected to Debian and its `--os nixos` remains proposed for retirement (#712); D5 separated the three Debian patch paths. · v0.1 (2026-09-22) — first draft, from the operator's questions of 2026-09-22 and a read of the shipped code. |
 
 When TAPPaaS releases, and how OS and software patches reach a site — the channels, the cadence, and what each OS family does between releases.
 
@@ -442,10 +442,18 @@ run a health check (the control-plane checks the suite already has — managers 
 config cascade resolves, the forge is reachable); on failure, `nixos-rebuild --rollback`, notify,
 and abort the sweep rather than running the estate from a system that just failed its own tests.
 
-**Until that exists, this cadence is the wrong one for the mothership.** Either the net lands
-first, or the mothership's pin moves on the slower, human-watched beat while the guests move
-weekly — which reintroduces exactly the split D1 removes. The first option is the right one, and
-it is small.
+**Built 2026-09-22 (#713).** `tappaas-selfcheck.sh` answers "does the control plane work?" in
+about a second — the seven managers this flake built still run, the module catalogue still
+resolves, and no unit failed that was not already failing (a delta against a baseline recorded
+before the switch, because a site can carry an unrelated failure for days; the sweep's own unit
+is excluded, since the check runs inside it). `tappaas-self-rebuild.sh` captures the outgoing
+generation by path *before* switching and, when the check fails, activates it again with its own
+`switch-to-configuration` and **aborts the sweep** — the estate is not updated from a control
+plane that just failed its own check. A rollback that itself fails is loud and prints the manual
+command rather than reporting recovery.
+
+With that in place the cadence of D2 is defensible for the mothership as well as the guests: it
+is the last machine in the estate to gain a way back, and it now has one.
 
 ## Consequences
 
@@ -487,9 +495,9 @@ after it happens, `follows` prevents it.
    field in `site.json`, naming `unstable` / `staging` / `production`), not held as a shared
    understanding.
 
-3. **Does D10 land before the cadence changes?** A fortnightly bump assumes a net the control
-   plane does not have. D9's guest-first rule reduces the exposure during validation; it does not
-   give the mothership a way back once it has switched. This is the one item that gates the rest.
+3. ~~**Does D10 land before the cadence changes?**~~ **Answered: it landed first** (#713,
+   2026-09-22). The remaining judgement is what else belongs in the check — it deliberately
+   avoids anything needing the network, so a provider outage cannot trigger a rollback.
 
 4. **What does a staging site do when it finds the fault?** The revision is already in staging and
    the next boundary is coming. Rolling `staging` back conflicts with "never move backwards";
