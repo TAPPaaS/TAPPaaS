@@ -273,13 +273,23 @@ if [[ "$DNS_MODE" == "wildcard" ]]; then
     WC_ZONE="dmz"
     WC_GW=""
     WC_RC=0
-    WC_GW="$(network-manager split-horizon-target "${DOMAIN}")" || WC_RC=$?
-    if [[ ${WC_RC} -eq 3 ]]; then
-        # ADR-021 R3: the domain has no public DNS, so DNS-01 could not have
-        # issued a wildcard cert either. Nothing to publish; not an error.
-        info "  ${DOMAIN} is not published (no external DNS) — no wildcard record"
-        WC_GW=""
-    fi
+    # --assume-published, because the certificate above IS the evidence (#703).
+    #
+    # The probe behind this verb is an A-record lookup on the name it is given,
+    # and this call used to hand it the bare apex. A DNS-01 wildcard is proven
+    # by a TXT record at _acme-challenge.<domain> and needs no A record on the
+    # apex at all, so an environment whose wildcard resolves publicly was read
+    # as UNPUBLISHED, the record was skipped, and every name the wildcard covers
+    # then resolved to the WAN address from inside — while Caddy held a valid
+    # certificate and a live handler for it.
+    #
+    # ADR-021 R3 asks "can a certificate exist for this name": by this line the
+    # script has already died unless acme-manager issued *.${DOMAIN} and a refid
+    # was captured, so the question is answered, and answered by a stronger
+    # source than a DNS probe. The flag's own contract — "never a way to publish
+    # a name that has no cert" — is satisfied, not bypassed.
+    WC_ERR="$(mktemp)"
+    WC_GW="$(network-manager split-horizon-target "${DOMAIN}" --assume-published 2>"${WC_ERR}")" || WC_RC=$?
     if [[ -n "$WC_GW" ]]; then
         # The wildcard installs `local-zone: "<domain>" redirect`, and Unbound
         # then rejects any per-name local-data in that zone (it must sit at the
@@ -306,11 +316,30 @@ if [[ "$DNS_MODE" == "wildcard" ]]; then
             warn "    unbound-manager --no-ssl-verify add '*' '${DOMAIN}' '${WC_GW}'"
         fi
     else
-        warn "  Skipped wildcard DNS — could not derive a gateway from zones.json"
+        # Say the reason the resolver gave, rather than a guess. With the probe
+        # answered above, the only ways to land here are the resolver's own
+        # errors — no dmz zone, or one with no usable ip — and the old wording
+        # ("could not derive a gateway from zones.json") was printed for every
+        # cause including the one that actually fired, pointing diagnosis at the
+        # wrong file (#703).
+        WC_SKIPPED=1
+        warn "  Skipped wildcard DNS — split-horizon-target gave no address (rc ${WC_RC}):"
+        while IFS= read -r _wl; do [[ -n "${_wl}" ]] && warn "    ${_wl}"; done < "${WC_ERR}"
+        warn "    reproduce: network-manager split-horizon-target ${DOMAIN} --assume-published --json"
     fi
+    rm -f "${WC_ERR}"
 fi
 
 echo
+if [[ "${WC_SKIPPED:-0}" == "1" ]]; then
+    # The certificate is real and the refid is stored, but in wildcard mode the
+    # Unbound record is what makes the names reachable from a client zone. A run
+    # that skipped it has not finished the job, and used to say it had (#703).
+    warn "${BOLD}ACME setup INCOMPLETE${CL} — the certificate is issued, the split-horizon record is not."
+    warn "  *.${DOMAIN} resolves publicly from inside until it is registered:"
+    warn "    unbound-manager --no-ssl-verify add '*' '${DOMAIN}' '<dmz-gateway>'"
+    exit 1
+fi
 info "${BOLD}${GN}✓${CL} ACME setup complete${BOLD}.${CL}"
 info "  • Wildcard *.${DOMAIN} is issued and lives in OPNsense Trust (refid ${REFID})"
 info "  • The 'caddy-reload' action will reload Caddy automatically on renewal"
