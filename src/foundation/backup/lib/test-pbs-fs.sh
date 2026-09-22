@@ -165,6 +165,36 @@ ck "archive name: dots are not allowed in the name" "var-lib-pve-cluster-config-
    "$(pbs_fs_archive_spec /var/lib/pve-cluster/config.db)"
 ck "archive name: a plain directory is unchanged" "etc.pxar:/etc" "$(pbs_fs_archive_spec /etc)"
 
+# ── the generated /etc/nixos/tappaas-backup.nix carries the TRIGGER only ────
+# It used to declare systemd.services.tappaas-fs-backup as well. The guest's own
+# configuration already declares that service (tappaas-common.nix, or
+# tappaas-cicd.nix on the mothership), so the option had two definitions at the
+# same priority — not a merge but an evaluation error, which failed the
+# mothership's rebuild and stopped every sweep before a single module updated.
+GEN_OUT="$(mktemp -d)"
+tappaas_scp_guest() { cp "${@: -2:1}" "${GEN_OUT}/generated.nix"; }
+tappaas_ssh_guest() { :; }
+pbs_fs_oncalendar() { echo "20:04"; }
+
+cat > "${CONFIG_DIR}/gen.json" <<'JSON'
+{ "kind": "vm", "dependsOn": ["backup:filesystem"],
+  "backup": { "filesystemPaths": ["/etc"] } }
+JSON
+pbs_fs_install_timer_nix gen tappaas@gen.h >/dev/null 2>&1
+GEN="$(cat "${GEN_OUT}/generated.nix" 2>/dev/null)"
+
+if [[ -n "${GEN}" ]]; then
+    ck "generated: it is written at all" "yes" "yes"
+else
+    ck "generated: it is written at all" "yes" "MISSING"
+fi
+ck "generated: the timer is there"        "1" "$(grep -c 'systemd.timers.tappaas-fs-backup' <<< "${GEN}")"
+ck "generated: the schedule is the cascade's" "1" "$(grep -c 'OnCalendar = "20:04"' <<< "${GEN}")"
+# The one that mattered: no second definition of the service.
+ck "generated: it declares NO service"    "0" "$(grep -c 'systemd.services.tappaas-fs-backup' <<< "${GEN}")"
+ck "generated: and no ExecStart to go with it" "0" "$(grep -c 'ExecStart' <<< "${GEN}")"
+rm -rf "${GEN_OUT}"
+
 rm -rf "${CONFIG_DIR}"
 
 echo "RESULT: ${PASS} passed, ${FAIL} failed"

@@ -338,6 +338,27 @@ EOF
 #
 # Takes effect at the guest's next nixos-rebuild, which the same update runs
 # a step later.
+# This file carries the TIMER and nothing else. The service is declared by the
+# guest's own configuration — templates/tappaas-common.nix for an ordinary
+# guest, tappaas-cicd.nix for the mothership — because a systemd unit has to be
+# declarative on NixOS, and that declaration carries an Environment PATH which
+# this generated file has no business restating.
+#
+# It used to emit the service too. Two definitions of one option at the same
+# priority is not a merge, it is an evaluation error:
+#
+#   error: The option `systemd.services.tappaas-fs-backup.description' has
+#   conflicting definition values
+#
+# The mothership was simply the first guest to declare filesystemPaths and so
+# the first to receive a real file rather than the `{ }` placeholder. Its own
+# nixos-rebuild then failed, and per ADR-017 D3 the sweep stopped before a
+# single module was updated — on every site, every run. Each guest that adopts
+# filesystemPaths would have followed it.
+#
+# The timer here is deliberately NOT mkDefault: the schedule cascade is the
+# authority on when a guest captures, and the guest-side OnCalendar is
+# mkDefault precisely so this one wins.
 # Args: <module> <target user@host>
 pbs_fs_install_timer_nix() {
     local module="$1" target="$2" oncal host tmp
@@ -350,23 +371,10 @@ pbs_fs_install_timer_nix() {
 # When this guest captures its declared paths (#691). The time comes from the
 # backup schedule cascade (ADR-012 §3.2): this module's own slot inside the
 # window that ends before the whole-guest job starts.
+# The TRIGGER only — the service itself is declared by the guest's own
+# configuration, which is where a NixOS unit has to live (#626).
 { lib, ... }:
 {
-  systemd.services.tappaas-fs-backup = {
-    description = "TAPPaaS file-level backup of this guest's declared paths (ADR-012 §3.1)";
-    unitConfig.ConditionPathExists = "${PBS_FS_RUNNER_PATH}";
-    serviceConfig = {
-      Type = "oneshot";
-      # Root: a capture set routinely names paths its owner cannot read, and an
-      # unprivileged run skips them while the client still exits 0 (#626).
-      ExecStart = "${PBS_FS_RUNNER_PATH}";
-      NoNewPrivileges = true;
-      PrivateTmp = true;
-      ProtectKernelTunables = true;
-      ProtectKernelModules = true;
-      ProtectControlGroups = true;
-    };
-  };
   systemd.timers.tappaas-fs-backup = {
     description = "Trigger for this guest's file-level backup";
     wantedBy = [ "timers.target" ];
