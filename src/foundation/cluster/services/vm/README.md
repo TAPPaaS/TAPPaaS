@@ -381,7 +381,7 @@ Proxmox guest OS profile. Controls QEMU clock, ACPI, and balloon-driver behaviou
 | Apply mode | `none` |
 | Reported as | `ostype` |
 
-**About the field.** Pick the value that matches your guest OS. Wrong ostype causes clock drift or incorrect power-management behaviour but does not prevent the VM from booting.
+**About the field.** Pick the value that matches your guest OS. It also decides how the guest reads the emulated hardware clock: a Windows ostype gets Proxmox's localtime=1, everything else keeps the RTC in UTC (#699). A wrong ostype therefore boots the guest a whole timezone offset away from real time until NTP walks it back, and changes power-management behaviour, but does not prevent the VM from booting.
 
 **Why this change class.** A creation-time hint that selects emulated hardware defaults; never reconciled on a live guest.
 

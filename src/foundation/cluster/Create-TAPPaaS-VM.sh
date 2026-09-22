@@ -440,6 +440,21 @@ case "$BIOS" in
 esac
 CORE_COUNT="$(get_config_value 'cores' '2')"
 VM_OSTYPE="$(get_config_value 'ostype' 'l26')"
+# Proxmox `localtime` says how the guest READS the emulated RTC, so it follows
+# the guest OS and nothing else. Windows expects the RTC in local time; Linux
+# and FreeBSD keep it in UTC (NixOS: boot.hardwareClockInLocalTime defaults to
+# false). Getting it wrong does not fail the boot — it boots the guest a whole
+# TZ offset AHEAD of real time, until NTP walks it back, which looks like a
+# healthy VM whose time-sensitive services are briefly wrong (#166, #699).
+#
+# It is derived here, once, because the four `qm create` calls below had four
+# independent literals: one was corrected by #166 and the other three were not,
+# so which clock a guest booted with depended on which creation path it took.
+# Every Proxmox Windows ostype starts with 'w' (win7…win11, wvista, wxp, w2k*).
+case "$VM_OSTYPE" in
+  w*) RTC_LOCALTIME=1 ;;
+  *)  RTC_LOCALTIME=0 ;;
+esac
 CPU_TYPE="$(get_config_value 'cputype' 'host')"
 RAM_SIZE="$(get_config_value 'memory' '4096')"
 DISK_SIZE="$(get_config_value 'diskSize' '8G')"
@@ -568,7 +583,7 @@ if [ "$IMAGETYPE" == "img" ]; then  # First use: this is used to stand up a fire
   # Proxmox/noVNC display, no usable terminal). serial0=socket gives the serial
   # console a sink and makes `qm terminal $VMID` work; VGA (std) remains as the
   # image's secondaryconsole=video.
-  qm create $VMID -agent 1 -tablet 0 -localtime 1 -serial0 socket \
+  qm create $VMID -agent 1 -tablet 0 -localtime $RTC_LOCALTIME -serial0 socket \
     -name $VMNAME  -onboot 1 -bios $BIOS -ostype $VM_OSTYPE -cpu "$CPU_TYPE" -scsihw virtio-scsi-single 1>/dev/null
   qm importdisk $VMID ${TARGET_IMAGE} $STORAGE  1>/dev/null   # OS image → vm-${VMID}-disk-0
   if [ "$BIOS" == "ovmf" ]; then
@@ -616,7 +631,7 @@ if [ "$IMAGETYPE" == "iso" ]; then # First use: this is used to stand up a templ
       pvesm free "${STORAGE}:vm-${VMID}-disk-${_stale_disk}" 2>/dev/null || true
     done
 
-    qm create $VMID --agent 1 --tablet 1 --localtime 1 --bios $BIOS \
+    qm create $VMID --agent 1 --tablet 1 --localtime $RTC_LOCALTIME --bios $BIOS \
       --machine q35 --vga std \
       --name $VMNAME --onboot 1 --ostype $VM_OSTYPE --cpu "$CPU_TYPE" --scsihw virtio-scsi-pci >/dev/null
     info " - Created base VM configuration (q35)"
@@ -682,7 +697,7 @@ STARTUP_NSH
     # expandable target disk plus the installer CD. The operator runs the short
     # OPNsense installer once (UFS, pick disk); config-firewall.sh then seeds
     # the config via the importer drive and flips the boot order to the disk.
-    qm create $VMID --agent 1 --tablet 0 --localtime 1 --bios seabios \
+    qm create $VMID --agent 1 --tablet 0 --localtime $RTC_LOCALTIME --bios seabios \
       --name $VMNAME --onboot 1 --ostype $VM_OSTYPE --cpu "$CPU_TYPE" --scsihw virtio-scsi-single >/dev/null
     qm set $VMID --scsi0 ${STORAGE}:${DISK_SIZE%G},discard=on,ssd=1 >/dev/null
     qm set $VMID --ide2 local:iso/${ISO_NAME},media=cdrom >/dev/null
@@ -693,7 +708,7 @@ STARTUP_NSH
     # --localtime 0: NixOS keeps the RTC in UTC (boot.hardwareClockInLocalTime
     # defaults to false). localtime 1 makes the guest read the clock as TZ-local
     # and boot ahead of real time until NTP corrects it (issue #166 fix #4).
-    qm create $VMID --agent 1 --tablet 0 --localtime 0 --bios $BIOS \
+    qm create $VMID --agent 1 --tablet 0 --localtime $RTC_LOCALTIME --bios $BIOS \
       --name $VMNAME --onboot 1 --ostype $VM_OSTYPE --cpu "$CPU_TYPE" --scsihw virtio-scsi-pci >/dev/null
     info " - Created base VM configuration"
     pvesm alloc $STORAGE $VMID $DISK0 4M  1>/dev/null

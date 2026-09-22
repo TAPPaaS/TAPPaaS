@@ -184,7 +184,7 @@
         "cluster:vm"
       ],
       "default": "l26",
-      "note": "Pick the value that matches your guest OS. Wrong ostype causes clock drift or incorrect power-management behaviour but does not prevent the VM from booting.",
+      "note": "Pick the value that matches your guest OS. It also decides how the guest reads the emulated hardware clock: a Windows ostype gets Proxmox's localtime=1, everything else keeps the RTC in UTC (#699). A wrong ostype therefore boots the guest a whole timezone offset away from real time until NTP walks it back, and changes power-management behaviour, but does not prevent the VM from booting.",
       "values": {
         "l26": "Linux kernel 2.6 and later — NixOS, Debian, Ubuntu, and any modern Linux distro. Enables KVM paravirtual clock, assumes UTC hardware clock. USE THIS for all TAPPaaS NixOS and Debian/Ubuntu VMs.",
         "l24": "Linux kernel 2.4 — legacy, rarely needed.",

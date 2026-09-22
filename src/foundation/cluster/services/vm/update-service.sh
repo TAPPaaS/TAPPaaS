@@ -316,5 +316,46 @@ fi
 
 converge_apply "${MODULE}" "${SCRIPT_DIR}" "${DRIFT_FILE}" "${CHECK_MODE}" "${ALLOW_DISRUPTION}" "${FORCE}" || exit 1
 
+# ── RTC interpretation, an invariant rather than a field (#699) ───────
+#
+# `localtime` says how the guest reads the emulated RTC, and exactly one value
+# is correct for a given ostype: Windows expects local time, Linux and FreeBSD
+# keep the RTC in UTC. Nobody authors it, so it is NOT a declared field — a
+# manifest entry would put a knob in the module contract that no operator
+# should ever turn, and would report drift against a value they cannot
+# meaningfully choose. It is repaired here instead, on the same footing as the
+# MAC address update-net preserves: a fact the provider owns.
+#
+# Guests created before #699 carry `localtime: 1` whatever they run, because
+# three of the four `qm create` paths passed a literal 1 (only the UEFI-ISO path
+# was corrected by #166). Such a guest boots a whole TZ offset ahead of real
+# time until NTP walks it back, which is how a healthy module fails its
+# pre-update health check (#700) and how Loki ends up with entries in the
+# future. Proxmox reads this at VM start, so the repair lands on the next boot;
+# nothing is restarted for it here.
+if [[ "${CHECK_MODE}" != "1" && -n "${VMID}" && -n "${NODE}" ]]; then
+    # One round-trip, one `qm config`: two reads could straddle a change and
+    # decide from a mixed picture.
+    _rtc_cfg="$(ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" \
+        "qm config ${VMID} 2>/dev/null" 2>/dev/null || true)"
+    _rtc_ostype="$(sed -n 's/^ostype: //p' <<<"${_rtc_cfg}")"
+    _rtc_actual="$(sed -n 's/^localtime: //p' <<<"${_rtc_cfg}")"
+    # Proxmox omits the line entirely when it is 0, so absent means 0.
+    [[ -n "${_rtc_actual}" ]] || _rtc_actual=0
+    case "${_rtc_ostype}" in
+        w*) _rtc_want=1 ;;
+        "") _rtc_want="${_rtc_actual}" ;;   # unreadable ostype: change nothing
+        *)  _rtc_want=0 ;;
+    esac
+    if [[ "${_rtc_actual}" != "${_rtc_want}" ]]; then
+        if ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" \
+               "qm set ${VMID} --localtime ${_rtc_want}" >/dev/null 2>&1; then
+            info "  ${GN}✓${CL} RTC interpretation corrected for ${MODULE} (localtime ${_rtc_actual} → ${_rtc_want}); applies at its next boot"
+        else
+            warn "  Could not set localtime=${_rtc_want} on VM ${VMID} — it will keep booting with a skewed clock (#699)"
+        fi
+    fi
+fi
+
 debug "  ${GN}✓${CL} cluster:vm update-service completed"
 exit 0
