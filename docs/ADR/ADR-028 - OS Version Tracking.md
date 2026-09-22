@@ -3,13 +3,98 @@
 | | |
 |---|---|
 | **Status** | **Proposed** (2026-09-22) |
-| **Version** | 0.1 |
+| **Version** | 0.2 |
 | **Date** | 2026-09-22 |
 | **Author** | Lars Rossen |
-| **Related** | **#680** (the baseline lock decides every site's nixpkgs; its code half landed, its cadence half is this ADR) · **#709** (Nextcloud cannot advance past 33 on a frozen branch — the first concrete demand for a branch move) · **#324** (modules copy the baseline instead of importing it) · **#675** (no extension point for a site's own NixOS modules) · **#166** (the earlier single-path clock fix) · [ADR-017](<ADR-017 - Update scheduling and mothership self-update.md>) D3 (the mothership rebuilds itself from the checkout, before the sweep) · [ADR-020](<ADR-020 - Declared-Field Change Model (validate, drift, modify).md>) D8 (`rebootOk` — whether a kernel change may land) · [ADR-025](<ADR-025 - Config migrations and the upgrade path.md>) (how a release brings `config/` forward; this ADR is its counterpart for the OS) · [ADR-026](<ADR-026 - Managed Machines as Modules.md>) (`debianhost` and the machine OS lifecycle) |
-| **Changelog** | v0.1 (2026-09-22) — first draft, from the operator's questions of 2026-09-22 and a read of the shipped code. |
+| **Related** | **#712** (retire the satellite's `--os nixos` remains — raised by D7) · **#680** (the baseline lock decides every site's nixpkgs; its code half landed, its cadence half is this ADR) · **#709** (Nextcloud cannot advance past 33 on a frozen branch — the first concrete demand for a branch move) · **#324** (modules copy the baseline instead of importing it) · **#675** (no extension point for a site's own NixOS modules) · **#166** (the earlier single-path clock fix) · [ADR-017](<ADR-017 - Update scheduling and mothership self-update.md>) D3 (the mothership rebuilds itself from the checkout, before the sweep) · [ADR-020](<ADR-020 - Declared-Field Change Model (validate, drift, modify).md>) D8 (`rebootOk` — whether a kernel change may land) · [ADR-025](<ADR-025 - Config migrations and the upgrade path.md>) (how a release brings `config/` forward; this ADR is its counterpart for the OS) · [ADR-026](<ADR-026 - Managed Machines as Modules.md>) (`debianhost` and the machine OS lifecycle) |
+| **Changelog** | v0.2 (2026-09-22) — a primer on flake vs non-flake Nix and on patch vs version moves in both OS families, so the decisions read without prior Nix knowledge; D1 states why the mothership keeps its own flake (upgrade safety, four reasons); the satellite corrected to Debian and its `--os nixos` remains proposed for retirement (#712); D5 separated the three Debian patch paths. · v0.1 (2026-09-22) — first draft, from the operator's questions of 2026-09-22 and a read of the shipped code. |
 
 How a TAPPaaS system decides which operating-system bits it runs, when security patches arrive, and when a major version moves.
+
+---
+
+## Primer — two ways a machine gets its versions
+
+*Skip this if you already know flakes. It is here because the rest of the ADR is unreadable
+without it, and because the two OS families in a TAPPaaS estate work by opposite principles.*
+
+### Debian: the system is a set of packages, changed in place
+
+A Debian machine *is* whatever `apt` has installed on it. The distribution publishes an archive
+that moves continuously, and `apt-get upgrade` pulls in whatever is current for the release the
+machine is on. The machine's state is the accumulated result of every upgrade it has ever run.
+
+- **Patch upgrade** — new package versions *within* the same release (`bookworm` stays
+  `bookworm`). This is where security fixes arrive, continuously, and it is what the sweep does.
+- **Version upgrade** — moving to the *next* release (`bookworm` → `trixie`). A different
+  operation entirely (`do-release-upgrade` / a `dist-upgrade` across pinned sources), done
+  deliberately, occasionally, and with a plan.
+
+### NixOS: the system is a build output, replaced whole
+
+A NixOS machine is **built**, not mutated. You describe the machine in a `.nix` file, a build
+turns that description plus a package set into a complete system ("a generation"), and switching
+activates it. Nothing is upgraded in place; a new system is built beside the old one and you move
+to it — which is why the previous generation is still there to roll back to.
+
+The consequence that matters here: **a NixOS machine's package versions are decided entirely by
+*which package set it was built against*.** That package set is nixpkgs, identified by a git
+revision. Same revision in, same system out — every time, forever.
+
+So "rebuild" and "upgrade" are different things on NixOS, and this is the single most important
+sentence in this ADR:
+
+> **Rebuilding a NixOS machine against the same nixpkgs revision changes nothing.** The nightly
+> sweep rebuilds every guest and delivers no patches at all, unless the revision has moved.
+
+On Debian the equivalent daily action *does* deliver patches, because the archive moved under it.
+Same sweep, opposite outcomes.
+
+### Naming a package set: with a flake, or without
+
+There are two ways to tell a NixOS build which nixpkgs to use, and TAPPaaS uses both — for
+different jobs.
+
+**Without a flake (the classic way).** nixpkgs comes either from a *channel* — a moving pointer
+the machine subscribes to and refreshes with `nix-channel --update` — or from an explicit path
+handed to the build: `nixos-rebuild switch -I nixpkgs=<url of an exact revision>`. A channel is
+mutable and machine-local, so the same command on two machines, or on the same machine next
+week, can produce different systems. The `-I` form is the opposite: whoever runs the build
+decides the revision, and it overrides the channel.
+
+**With a flake.** Two files work together, and the split between them is what readers most often
+miss:
+
+| File | Answers | Changed by |
+|---|---|---|
+| `flake.nix` | *Which branch do I follow?* e.g. `github:NixOS/nixpkgs/nixos-25.11` | a human, editing it — a **version** move |
+| `flake.lock` | *Which exact commit am I on right now?* e.g. `b77b3de8…` | `nix flake update`, which re-resolves the branch and rewrites **only this file** — a **patch** move |
+
+A build from a flake uses the locked commit, not "whatever the branch holds today". That is what
+makes it reproducible and reviewable: the version the estate runs is a line in git, with a
+history and a diff.
+
+### How TAPPaaS combines them
+
+- **Flakes decide and record** the revision. Two lock files exist, and between them they pin
+  everything (D1 reduces this to one).
+- **The non-flake `-I nixpkgs=` mechanism applies it.** Guests have no flake and no channel of
+  their own: the mothership reads the locked revision and passes it to each guest's rebuild.
+  A guest therefore cannot drift, and cannot opt out.
+
+### The two kinds of move, in both families
+
+| | Debian | NixOS |
+|---|---|---|
+| **Patch** | `apt-get upgrade` — automatic, every sweep, from the moving archive | `nix flake update` → new commit in `flake.lock` → rebuild. **A human action, or it never happens** |
+| **Version** | `bookworm` → `trixie`: an explicit release upgrade | `nixos-25.11` → `nixos-26.05`: edit `flake.nix`, then update the lock, then rebuild |
+| **Who initiates** | the distribution | us |
+| **Rollback** | restore from backup | boot the previous generation |
+
+`system.stateVersion` is not a version to chase. It records which NixOS release a machine's
+*mutable state* (databases, home directories, service data layouts) was first initialised for, so
+that later NixOS releases keep treating that state compatibly. It stays where it is across a
+version move.
 
 ---
 
@@ -94,16 +179,38 @@ inputs.templates.url = "path:../templates";
 inputs.nixpkgs.follows = "templates/nixpkgs";
 ```
 
-The mothership **keeps its own build path** — `nixos-rebuild switch --flake .#tappaas-cicd`,
-used by both `bootstrap.sh` and `tappaas-self-rebuild.sh`. That path needs only git and nix: not
-`update-os.sh`, not `module-manager`, not a working control plane. The mothership is the one
-machine that must be able to repair itself when the machinery it normally runs is broken, and a
-circular dependency there is not worth removing a file for.
+The mothership **keeps its own flake and its own build path** —
+`nixos-rebuild switch --flake .#tappaas-cicd`, used by both `bootstrap.sh` and
+`tappaas-self-rebuild.sh`. That is deliberate, and the reason is **upgrade safety**:
+
+1. **It upgrades itself without using the machinery it is upgrading.** The mothership is the
+   machine that performs every *other* machine's upgrade. If its own rebuild went through
+   `update-os.sh` and `module-manager`, then a bad upgrade could take out the very tools needed
+   to diagnose and repair it — and those tools are *built by this flake*, so they would be
+   broken by exactly the change that needs undoing. The flake path needs only git and nix: no
+   control plane, no config cascade, no manager binaries. It is the one build in the estate with
+   no dependency on TAPPaaS itself.
+
+2. **The mothership's OS and its own software move as one atomic build.** The flake produces
+   both `nixosConfigurations.tappaas-cicd` and the eleven managers and controllers as packages,
+   from the same pinned nixpkgs. So a rebuild can never leave managers compiled against one
+   package set running on a system built from another — a split that would be invisible until
+   something crashed at 2am. One build, one revision, both halves.
+
+3. **A failed upgrade is one rollback away.** Because this is an ordinary NixOS system build, the
+   previous generation is still on disk and bootable. The recovery story for the control plane is
+   "boot the last generation", not "restore the VM and hope".
+
+4. **The recovery path is the everyday path, so it cannot rot.** `bootstrap.sh` uses the same
+   command on day one that `tappaas-self-rebuild.sh` uses every night. A recovery mechanism
+   exercised only during recovery is a recovery mechanism that has quietly stopped working.
+
+What the mothership does *not* need is a second **pin**. Its flake can follow the estate's
+without giving up any of the four properties above: the `follows` line changes where the
+revision comes from, not how the system is built.
 
 So: **separate build path, shared pin.** Divergence becomes structurally impossible rather than
 something a check has to notice afterwards.
-
-The satellite joins the same pin (see D7).
 
 ### D2 — Two rhythms, and they are different rhythms
 
