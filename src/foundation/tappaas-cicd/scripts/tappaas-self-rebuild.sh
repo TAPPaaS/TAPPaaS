@@ -88,6 +88,29 @@ if [[ -r "${_lock}" ]]; then
 fi
 
 cd "${CICD_DIR}"
+
+# ── The way back, captured BEFORE the switch (#713, ADR-028 D10) ─────
+#
+# Every other machine in the estate has a net: update-module.sh snapshots a
+# guest, rebuilds it, runs its tests and rolls the guest back when they fail.
+# The mothership had none — and it rebuilds FIRST, so it is the machine most
+# exposed to a new nixpkgs revision. A `switch` that returns 0 into a control
+# plane that cannot resolve a config was simply not noticed.
+#
+# NixOS makes the net nearly free: the previous generation is already on disk,
+# and its own switch-to-configuration can put it back. Capture it by its real
+# path, not by "--rollback", so this rolls back to the generation WE replaced
+# even if something else has touched the profile since.
+SELFCHECK="${_here}/tappaas-selfcheck.sh"
+GEN_BEFORE="$(readlink -f /nix/var/nix/profiles/system 2>/dev/null || true)"
+UNITS_BEFORE="$(mktemp /var/lib/tappaas-rebuild/failed-units.XXXXXX 2>/dev/null \
+                || mktemp /tmp/tappaas-failed-units.XXXXXX)"
+if [[ -x "${SELFCHECK}" ]]; then
+    "${SELFCHECK}" --record "${UNITS_BEFORE}" || : > "${UNITS_BEFORE}"
+else
+    warn "no tappaas-selfcheck.sh beside this script — the rebuild will not be verified"
+fi
+
 info "Rebuilding NixOS (${VMNAME}) — one dot per build line"
 debug "nixos-rebuild switch --flake .#${VMNAME} --impure (full output: ${REBUILD_LOG})"
 # --impure only for the machine's /etc/nixos/hardware-configuration.nix;
@@ -104,6 +127,34 @@ if (( rc != 0 )); then
     tail -15 "${REBUILD_LOG}" >&2 || true
     exit "${rc}"
 fi
+
+# ── Verify the generation we just switched to, and undo it if it is bad ──
+#
+# The check is deliberately small and local (managers run, the catalogue
+# resolves, nothing newly failed): it must be cheap enough for every rebuild and
+# must not depend on the network, which would turn an outage into a rollback.
+if [[ -x "${SELFCHECK}" ]]; then
+    info "Verifying the new generation"
+    if ! "${SELFCHECK}" --baseline "${UNITS_BEFORE}"; then
+        error "The rebuilt control plane failed its own check — rolling back."
+        if [[ -n "${GEN_BEFORE}" && -x "${GEN_BEFORE}/bin/switch-to-configuration" ]]; then
+            if "${GEN_BEFORE}/bin/switch-to-configuration" switch >>"${REBUILD_LOG}" 2>&1; then
+                error "Rolled back to ${GEN_BEFORE##*/}. The sweep is ABORTED: the estate is not"
+                error "updated from a control plane that just failed its own check."
+                error "The kernel follows at the next boot if this rebuild changed it."
+            else
+                error "ROLLBACK FAILED — this mothership is running an unverified generation."
+                error "Recover by hand: boot the previous generation from the boot menu, or"
+                error "  ${GEN_BEFORE}/bin/switch-to-configuration switch"
+            fi
+        else
+            error "No previous generation to roll back to (${GEN_BEFORE:-none recorded})."
+        fi
+        rm -f "${UNITS_BEFORE}"
+        exit 1
+    fi
+fi
+rm -f "${UNITS_BEFORE}"
 
 systemctl start update-tappaas-schedule.service \
     || warn "tappaas-self-rebuild: could not re-render the update timer"
