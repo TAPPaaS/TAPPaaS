@@ -389,6 +389,10 @@ ensure_scripts_executable(){ :; }
 # #672: the firewall is never reached — calls are recorded in $DNS_CALLS.
 dns-manager(){ echo "$*" >> "${DNS_CALLS:-/dev/null}"; echo "released"; }
 STUB
+# The REAL provider resolver, not a stub of it (#718): what is under test is
+# that delete-module.sh asks it, and with which environment.
+sed -n '/^_legacy_module_alias() {/,/^}/p; /^resolve_provider_module() {/,/^}/p; /^find_integrateswith_consumers() {/,/^}/p' \
+    "${HERE}/../../lib/common-install-routines.sh" >> "${DWORK}/sbin/common-install-routines.sh"
 DSTUB="${WORK}/del-stub.sh"
 sed -e "s#/home/tappaas/bin/common-install-routines.sh#${DWORK}/sbin/common-install-routines.sh#g" \
     -e "s#readonly CONFIG_DIR=\"/home/tappaas/config\"#CONFIG_DIR=\"${DWORK}/cfg\"#g" \
@@ -500,6 +504,60 @@ if [[ $del_g_rc -ne 0 ]] && grep -q 'is for a machine' <<< "${del_g}"; then
 else
     bad "delete --decommission on a non-machine (rc=${del_g_rc}): ${del_g##*$'\n'}"
 fi
+
+# #718 (delete): the provider of a dependency, and the dependents of a
+# provider, are found through the consumer's environment. Matching literal
+# names missed an environment's provider both ways: its delete-service.sh was
+# skipped (wiring left behind), and deleting it was never blocked.
+mkdir -p "${DWORK}/src/ncmod/services/fs"
+printf '#!/usr/bin/env bash\necho "$1" > "%s/UNWIRED"\n' "${DWORK}" > "${DWORK}/src/ncmod/services/fs/delete-service.sh"
+chmod +x "${DWORK}/src/ncmod/services/fs/delete-service.sh"
+printf '{"tier":"app","moduleSource":"%s/src/ncmod","environment":"test","provides":["fs"]}\n' "${DWORK}" > "${DWORK}/cfg/ncmod-test.json"
+printf '{"tier":"app","moduleSource":"%s/src/ncmod","environment":"test","dependsOn":["ncmod:fs"]}\n' "${DWORK}" > "${DWORK}/cfg/cons-test.json"
+
+del_p="$( bash "$DSTUB" ncmod-test --remove --yes 2>&1 )"; del_p_rc=$?
+if [[ $del_p_rc -ne 0 && -e "${DWORK}/cfg/ncmod-test.json" ]] && grep -q "cons-test' depends on 'ncmod:fs'" <<< "${del_p}"; then
+    ok "delete (#718): an environment's provider with a dependent is refused, naming it"
+else
+    bad "delete (#718): deleting an in-use environment provider should be refused (rc=${del_p_rc}): ${del_p##*$'\n'}"
+fi
+
+printf '{"tier":"app","moduleSource":"%s/src/ncmod","provides":["fs"]}\n' "${DWORK}" > "${DWORK}/cfg/ncmod.json"
+del_b="$( bash "$DSTUB" ncmod --remove --yes 2>&1 )"; del_b_rc=$?
+if [[ $del_b_rc -eq 0 && ! -e "${DWORK}/cfg/ncmod.json" ]]; then
+    ok "delete (#718): the shared provider is not held by a consumer of the environment's"
+else
+    bad "delete (#718): the shared provider was blocked by another environment's consumer (rc=${del_b_rc}): ${del_b##*$'\n'}"
+fi
+
+# Only the environment's provider exists now: a bare-name lookup cannot find it.
+rm -f "${DWORK}/UNWIRED" "${DWORK}/cfg/ncmod.json"
+del_c="$( bash "$DSTUB" cons-test --remove --yes 2>&1 )"; del_c_rc=$?
+if [[ "$(cat "${DWORK}/UNWIRED" 2>/dev/null)" == "cons-test" ]]; then
+    ok "delete (#718): a consumer's environment provider has its delete-service.sh run"
+else
+    bad "delete (#718): environment provider's delete-service.sh not run (rc=${del_c_rc}): ${del_c##*$'\n'}"
+fi
+rm -f "${DWORK}/UNWIRED" "${DWORK}/cfg/ncmod-test.json" "${DWORK}/cfg/cons-test.json"
+
+# …and the shape of the bug stays gone: a provider taken as the coordinate's
+# bare prefix and used as a config name. Every site that turns a coordinate
+# into a provider goes through resolve_provider_module (install, update,
+# network:rules, the lib, and now test and delete). A deliberate bare use —
+# printing a dependency graph by module name — does not assign it this way.
+SRC_TREE="$(cd "${HERE}/../../../.." && pwd)"
+bare718="$(grep -rnE 'provider(_module)?="\$\{(dep|entry)%%:\*\}"|get_module_dir "\$\{(dep|entry)%%:\*\}"' \
+    --include='*.sh' "${SRC_TREE}" 2>/dev/null | grep -v '/manager/module-manager/test.sh:' \
+    | grep -v 'network/services/rules/install-service.sh:')"
+# network:rules assigns the bare prefix and resolves it on the next line — the
+# one legitimate form, excluded by name above and re-checked here.
+grep -A4 'provider="${dep%%:\*}"' "${SRC_TREE}/foundation/network/services/rules/install-service.sh" \
+    | grep -q 'resolve_provider_module "${provider}"' \
+    && ok "guard (#718): network:rules still resolves the prefix it takes" \
+    || bad "guard (#718): network:rules takes a bare provider prefix without resolving it"
+[[ -z "${bare718}" ]] \
+    && ok "guard (#718): no provider looked up by the coordinate's bare prefix" \
+    || bad "guard (#718): provider looked up by bare prefix: ${bare718}"
 
 # ---------------------------------------------------------------------------
 # resolve-module.sh — catalog resolution (#459) and tier resolution (#460).
@@ -722,6 +780,8 @@ read_module_config(){ cat "${CONFIG_DIR}/$1.json" 2>/dev/null; }
 get_module_dir(){ local d; d="$(jq -r '.moduleSource // empty' "${CONFIG_DIR}/$1.json" 2>/dev/null)"; [[ -n "$d" && -d "$d" ]] || return 1; echo "$d"; }
 ensure_scripts_executable(){ :; }
 TMSTUB
+sed -n '/^_legacy_module_alias() {/,/^}/p; /^resolve_provider_module() {/,/^}/p' \
+    "${HERE}/../../lib/common-install-routines.sh" >> "${TMW}/sbin/common-install-routines.sh"
 TMSTUB_SH="${WORK}/tm-stub.sh"
 sed -e "s#/home/tappaas/bin/common-install-routines.sh#${TMW}/sbin/common-install-routines.sh#g" \
     -e "s#readonly CONFIG_DIR=\"/home/tappaas/config\"#CONFIG_DIR=\"${TMW}/cfg\"#g" \
@@ -756,6 +816,41 @@ printf '{"moduleSource":"%s/src/prova","dependsOn":["ghost:svc"]}\n' "${TMW}" > 
 grep -q "WARN:ghost:svc" <<< "$(bash "${TMSTUB_SH}" hard 2>&1)" \
     && ok "test: a missing dependsOn provider is still reported" \
     || bad "test: a missing dependsOn provider should be reported"
+
+# #718: a provider deployed in an environment is <provider>-<env>.json. Looked
+# up by the coordinate's bare prefix it was "not found (will skip)" and the
+# consumer stayed green. Two source dirs, so WHICH provider ran is visible.
+for p in envonly envboth-base envboth-test; do
+    mkdir -p "${TMW}/src/${p}/services/fs"
+    printf '#!/usr/bin/env bash\necho "$1" > "%s/ran-%s"\n' "${TMW}" "${p}" > "${TMW}/src/${p}/services/fs/test-service.sh"
+    chmod +x "${TMW}/src/${p}/services/fs/test-service.sh"
+done
+printf '{"moduleSource":"%s/src/envonly","environment":"test","provides":["fs"]}\n' "${TMW}" > "${TMW}/cfg/nc-test.json"
+printf '{"moduleSource":"%s/src/envonly","environment":"test","dependsOn":["nc:fs"]}\n' "${TMW}" > "${TMW}/cfg/co-test.json"
+rm -f "${TMW}"/ran-env*
+tm718="$(bash "${TMSTUB_SH}" co-test 2>&1)"; tm718_rc=$?
+[[ "$(cat "${TMW}/ran-envonly" 2>/dev/null)" == "co-test" ]] \
+    && ok "test (#718): an environment's provider (<p>-<env>.json) has its test-service.sh run" \
+    || bad "test (#718): environment provider not tested (rc=${tm718_rc}): ${tm718}"
+grep -q "provider module directory not found" <<< "${tm718}" \
+    && bad "test (#718): an installed environment provider was reported missing" \
+    || ok "test (#718): …and is not reported missing"
+
+# Both deployed: each consumer reaches the provider of ITS environment.
+printf '{"moduleSource":"%s/src/envboth-base","provides":["fs"]}\n' "${TMW}" > "${TMW}/cfg/ncb.json"
+printf '{"moduleSource":"%s/src/envboth-test","environment":"test","provides":["fs"]}\n' "${TMW}" > "${TMW}/cfg/ncb-test.json"
+printf '{"moduleSource":"%s/src/envonly","environment":"test","dependsOn":["ncb:fs"]}\n' "${TMW}" > "${TMW}/cfg/cb-test.json"
+printf '{"moduleSource":"%s/src/envonly","dependsOn":["ncb:fs"]}\n' "${TMW}" > "${TMW}/cfg/cb.json"
+rm -f "${TMW}"/ran-env*
+bash "${TMSTUB_SH}" cb-test >/dev/null 2>&1
+[[ -e "${TMW}/ran-envboth-test" && ! -e "${TMW}/ran-envboth-base" ]] \
+    && ok "test (#718): with both deployed, an environment consumer tests its environment's provider" \
+    || bad "test (#718): environment consumer tested the wrong provider"
+rm -f "${TMW}"/ran-env*
+bash "${TMSTUB_SH}" cb >/dev/null 2>&1
+[[ -e "${TMW}/ran-envboth-base" && ! -e "${TMW}/ran-envboth-test" ]] \
+    && ok "test (#718): …and a default-environment consumer tests the shared one" \
+    || bad "test (#718): default consumer tested the wrong provider"
 
 # ---------------------------------------------------------------------------
 # integratesWith helpers (#501): the soft-guard + reverse-lookup primitives.

@@ -238,12 +238,20 @@ main() {
     local dep_lines
     dep_lines="$(module_test_dependencies "${module}")"
 
+    # A provider is found through the CONSUMER's environment (#718): a provider
+    # deployed as <provider>-<env>.json is not <provider>.json, and looking it up
+    # by the coordinate's bare prefix skipped its service test while the run
+    # stayed green. Same resolver install-module and update-module use (#438).
+    local environment
+    environment="$(read_module_config "${module}" 2>/dev/null | jq -r '.environment // empty' 2>/dev/null)" || environment=""
+
     if [[ -z "${dep_lines}" ]]; then
         debug "  No dependencies declared"
     else
         while read -r dep origin; do
             [[ -n "${dep}" ]] || continue
-            local provider_module="${dep%%:*}"
+            local provider_module
+            provider_module="$(resolve_provider_module "${dep%%:*}" "${environment}")"
             local service_name="${dep##*:}"
             local provider_dir
 
@@ -270,7 +278,8 @@ main() {
     else
         while read -r dep origin; do
             [[ -n "${dep}" ]] || continue
-            local provider_module="${dep%%:*}"
+            local provider_module
+            provider_module="$(resolve_provider_module "${dep%%:*}" "${environment}")"
             local service_name="${dep##*:}"
             local provider_dir
 

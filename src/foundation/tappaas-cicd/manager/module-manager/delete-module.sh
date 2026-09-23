@@ -153,13 +153,23 @@ check_reverse_dependencies() {
             continue
         fi
 
-        for service in ${provides}; do
-            local dep_ref="${module}:${service}"
-            if jq -e --arg dep "${dep_ref}" '.dependsOn // [] | index($dep) != null' "${config_file}" >/dev/null 2>&1; then
-                error "Module '${other_module}' depends on '${dep_ref}'"
+        # A dependent is a module whose dependsOn RESOLVES to this one, through
+        # its own environment (#718) — not one whose coordinate spells this
+        # module's config name. Consumers write the base name
+        # (nextcloud:fileservice); an environment's provider is nextcloud-test.
+        # Matching the literal "<module>:<service>" missed every consumer of an
+        # environment's provider, so deleting it was never blocked, and blamed
+        # the base provider for consumers that use the environment's.
+        local other_env entry
+        other_env="$(jq -r '.environment // ""' "${config_file}" 2>/dev/null)"
+        while IFS= read -r entry; do
+            [[ -n "${entry}" ]] || continue
+            grep -qxF "${entry##*:}" <<< "${provides}" || continue
+            if [[ "$(resolve_provider_module "${entry%%:*}" "${other_env}")" == "${module}" ]]; then
+                error "Module '${other_module}' depends on '${entry}' (provided by '${module}')"
                 ((dependents_found++))
             fi
-        done
+        done < <(jq -r '.dependsOn // [] | .[]' "${config_file}" 2>/dev/null)
     done
 
     return "${dependents_found}"
@@ -525,8 +535,16 @@ main() {
         local reversed_deps
         reversed_deps=$(echo "${depends_on}" | tac)
 
+        # The consumer's environment picks the provider (#718), as it did when
+        # install-module wired it: an environment's provider is
+        # <provider>-<env>.json, and the bare prefix skipped its delete-service.sh,
+        # leaving the provider-side wiring behind.
+        local dep_environment
+        dep_environment="$(read_module_config "${module}" 2>/dev/null | jq -r '.environment // empty' 2>/dev/null)" || dep_environment=""
+
         for dep in ${reversed_deps}; do
-            local provider_module="${dep%%:*}"
+            local provider_module
+            provider_module="$(resolve_provider_module "${dep%%:*}" "${dep_environment}")"
             local service_name="${dep##*:}"
             local provider_dir
 
