@@ -46,17 +46,24 @@ exit 0
 EOF
         chmod +x "${BIN}/${mgr}"
     done
-    cat > "${BIN}/systemctl" <<'EOF'
+    cat > "${BIN}/systemctl" <<EOF
 #!/usr/bin/env bash
-# only `--failed --no-legend --plain` is used by the script under test
-printf '%s\n' ${FAILED_UNITS:-}
+# \`show update-tappaas.service -p Environment --value\`: the unit's PATH, which
+# holds the managers; \`--failed --no-legend --plain\`: FAILED_UNITS.
+if [[ "\$1" == "show" ]]; then echo "LOCALE_ARCHIVE=/x PATH=${BIN}:/usr/bin:/bin TZDIR=/y"; exit 0; fi
+printf '%s\n' \${FAILED_UNITS:-}
 EOF
     chmod +x "${BIN}/systemctl"
     # `timeout` must stay real, but the stubs must win over the system managers.
+    # Faithful to the real runuser in the two ways that broke #713 on a live
+    # site: the child starts from ROOT's system-only PATH (no ~tappaas/bin),
+    # and argv is executed directly — no shell, so a builtin or a function
+    # passed through it does not exist.
     cat > "${BIN}/runuser" <<'EOF'
 #!/usr/bin/env bash
-# tests run as one user; strip `-u <user> --` and exec the rest
-shift 2; [[ "$1" == "--" ]] && shift; exec "$@"
+shift 2; [[ "$1" == "--" ]] && shift
+export PATH=/usr/bin:/bin
+exec "$@"
 EOF
     chmod +x "${BIN}/runuser"
 }
@@ -74,6 +81,26 @@ make_stubs 0 0
 : > "${TMP}/base"
 FAILED_UNITS="" run_check "${TMP}/base"
 [[ "${RC}" -eq 0 ]] && ok "exit 0 when everything answers" || bad "exit ${RC} on a healthy plane: ${OUT}"
+
+echo "── run as root: the managers are checked through runuser (#713) ──"
+# The rebuild runs this as root. The first live run (hrossen, 2026-09-23)
+# failed 8 of 9 checks on a healthy mothership — every manager "not on
+# tappaas's PATH" — rolled the generation back and aborted the sweep, because
+# the check passed a builtin and a function through runuser, into a child that
+# had root's PATH. Driven here with a different TAPPAAS_USER, so as_tappaas
+# takes the runuser branch the tests above never reached.
+make_stubs 0 0
+OUT="$(PATH="${BIN}:${PATH}" TAPPAAS_USER="not-$(id -un)" "${SELFCHECK}" --baseline "${TMP}/base" 2>&1)"; RC=$?
+[[ "${RC}" -eq 0 ]] && ok "a healthy control plane passes when checked through runuser" \
+                    || bad "healthy plane failed through runuser (exit ${RC}): ${OUT}"
+make_stubs 1 0
+OUT="$(PATH="${BIN}:${PATH}" TAPPAAS_USER="not-$(id -un)" "${SELFCHECK}" --baseline "${TMP}/base" 2>&1)"; RC=$?
+[[ "${RC}" -ne 0 && "${OUT}" == *"will not run"* ]] \
+    && ok "…and a dead manager still fails it there" \
+    || bad "dead manager passed through runuser (exit ${RC})"
+grep -qE 'as_tappaas (command|bounded)' "${SELFCHECK}" \
+    && bad "a builtin or function is passed to as_tappaas (runuser cannot run it)" \
+    || ok "only programs are passed to as_tappaas"
 
 echo "── a manager that will not run fails the check ──"
 # This is the shape a bad nixpkgs revision takes: the CLIs are built from the

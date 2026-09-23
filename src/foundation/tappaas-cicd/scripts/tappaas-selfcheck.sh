@@ -48,21 +48,41 @@ failed_units() {
 
 # `timeout` bounds a manager that hangs — a real failure mode for a CLI whose
 # backend is unreachable. It is coreutils, so it is always on the mothership;
-# guard anyway rather than turn its absence into seven false failures.
-if command -v timeout >/dev/null 2>&1; then
-    bounded() { timeout 60 "$@"; }
-else
-    bounded() { "$@"; }
-fi
+# guard anyway rather than turn its absence into seven false failures. A word
+# list, not a function: under runuser it has to be a PROGRAM (see below).
+BOUND=()
+command -v timeout >/dev/null 2>&1 && BOUND=(timeout 60)
 
-# Run a command as the tappaas user, whoever we are now.
+# The PATH the control plane runs with: update-tappaas.service's own (#713).
+# As root, the child runuser starts inherits root's system-only PATH above,
+# which does not hold ~tappaas/bin — every manager then read as "not on
+# tappaas's PATH", the check failed on a healthy mothership, and the rebuild
+# rolled back and aborted every sweep. Asked of the unit, so a change to it is
+# followed; the fallback is what that unit carries today.
+tappaas_path() {
+    local p home
+    p="$(systemctl show update-tappaas.service -p Environment --value 2>/dev/null \
+        | tr ' ' '\n' | sed -n 's/^PATH=//p' | head -1)"
+    if [[ -z "${p}" ]]; then
+        home="$(getent passwd "${TAPPAAS_USER}" 2>/dev/null | cut -d: -f6)"
+        home="${home:-/home/${TAPPAAS_USER}}"
+        p="${home}/bin:/run/wrappers/bin:${home}/.nix-profile/bin:/etc/profiles/per-user/${TAPPAAS_USER}/bin:/nix/var/nix/profiles/default/bin:/run/current-system/sw/bin"
+    fi
+    printf '%s' "${p}"
+}
+
+# Run a PROGRAM as the tappaas user, whoever we are now. runuser executes its
+# argument directly — no shell — so a builtin (`command -v`) or a function
+# cannot be passed through it; callers pass programs only (#713).
 as_tappaas() {
     if [[ "$(id -un)" == "${TAPPAAS_USER}" ]]; then
         "$@"
     else
-        runuser -u "${TAPPAAS_USER}" -- "$@"
+        runuser -u "${TAPPAAS_USER}" -- env PATH="${TAPPAAS_PATH}" "$@"
     fi
 }
+TAPPAAS_PATH=""
+[[ "$(id -un)" == "${TAPPAAS_USER}" ]] || TAPPAAS_PATH="$(tappaas_path)"
 
 MODE=check
 BASELINE=""
@@ -89,9 +109,9 @@ bad() { error "  ✗ $1"; FAIL=$((FAIL + 1)); }
 # revision as the system, so if the revision is bad they fail to start.
 for mgr in module-manager site-manager network-manager backup-manager \
            health-manager identity-manager environment-manager; do
-    if ! as_tappaas command -v "${mgr}" >/dev/null 2>&1; then
+    if ! as_tappaas bash -c 'command -v "$1"' _ "${mgr}" >/dev/null 2>&1; then
         bad "${mgr} is not on ${TAPPAAS_USER}'s PATH"
-    elif as_tappaas bounded "${mgr}" --help >/dev/null 2>&1; then
+    elif as_tappaas "${BOUND[@]}" "${mgr}" --help >/dev/null 2>&1; then
         ok "${mgr} runs"
     else
         bad "${mgr} is installed but will not run"
@@ -101,7 +121,7 @@ done
 # ── 2. The config cascade still resolves ─────────────────────────────
 # Reading a manager's --help proves the binary starts; this proves it can still
 # do its job against this site's data.
-if as_tappaas bounded module-manager module list >/dev/null 2>&1; then
+if as_tappaas "${BOUND[@]}" module-manager module list >/dev/null 2>&1; then
     ok "the module catalogue resolves"
 else
     bad "module-manager cannot list the site's modules — the config cascade does not resolve"
