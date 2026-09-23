@@ -188,7 +188,18 @@ rm -f "${UNITS_BEFORE}"
 
 systemctl start update-tappaas-schedule.service \
     || warn "tappaas-self-rebuild: could not re-render the update timer"
-# The run directory belongs to tappaas: never follow a link planted there.
-rm -f "${RUN_DIR}/rebuilt"
-( set -C; : > "${RUN_DIR}/rebuilt" )
+# The marker tells the tappaas-cicd module's update.sh, later in the SAME sweep,
+# that the rebuild is already done. Run by hand there is no sweep to tell and
+# $RUNTIME_DIRECTORY does not exist — so skip it rather than creating the
+# directory: a marker left lying outside a sweep would make the next one skip a
+# rebuild it has not performed. Without this the script died here under `set -e`,
+# after a successful rebuild, on a redirect into a directory that was never
+# supposed to exist yet.
+if [[ -d "${RUN_DIR}" ]]; then
+    # The run directory belongs to tappaas: never follow a link planted there.
+    rm -f "${RUN_DIR}/rebuilt"
+    ( set -C; : > "${RUN_DIR}/rebuilt" )
+else
+    info "  (not part of a sweep — leaving no rebuilt marker)"
+fi
 info "✓ NixOS rebuilt: generation $(readlink /nix/var/nix/profiles/system) active"
