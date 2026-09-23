@@ -130,6 +130,11 @@ built by Woodpecker CI; a source-sync step copies allow-listed `README.md` /
 `INSTALL.md` / `DESIGN.md` files out of *this* repo into the site at build time,
 so upstream docs stay canonical here and are never hand-copied.
 
+A push to `main` here that changes a synced file starts that build:
+[`.woodpecker/docs-trigger.yml`](.woodpecker/docs-trigger.yml) path-filters the
+push and asks Woodpecker for a run of the Documentation repo. A push that changes
+no synced file starts nothing, so there is no cron and no idle load on Codeberg.
+
 The full documentation build — the sync mechanism, the CI pipeline and the
 Pages hosting — is documented in the Documentation repo:
 
