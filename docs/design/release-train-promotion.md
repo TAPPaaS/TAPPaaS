@@ -105,7 +105,9 @@ checkout merely *parked* on the pin branch is reset back to `main` part-way thro
 module after the first guest is rebuilt against the **old** revision while the run reports
 progress. Measured on hrossen, 2026-09-23: the guest-first step ran on `nixos-26.05`, the sweep
 behind it silently did not. Phase 1 therefore publishes the pin branch (the site can only track
-what the forge has), phase 2 declares it with `site-manager repository modify`, and after the
+what the forge has, and it republishes with a lease, because a boundary blocked in phase 2 leaves
+that branch behind and a retry in the same week cuts the same name from a moved `main`), phase 2
+declares it with `site-manager repository modify`, and after the
 sweep the phase re-checks which branch the checkout is on — a sweep that moved it stops the
 boundary rather than deep-testing the old revision and calling it proof. Every exit from this
 phase restores the declaration to `main`, because a site left tracking a pin branch would take

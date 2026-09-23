@@ -430,8 +430,17 @@ setup_prove() {
     # update-module.sh: the guest-first step.
     printf '#!/usr/bin/env bash\nexit 0\n' > "${TMP}/bin2/update-module.sh"
     chmod +x "${TMP}/bin2/update-module.sh"
-    # site-manager: `repository modify --branch` moves BOTH the declaration and
-    # the checkout, exactly as the real one does.
+    # Every phase runs here: 1 moves the pin, 2 proves it, 3 lands it and puts
+    # the site back on main. The declaration's round trip is the point.
+    jq '.boundary.phasesDone = []' "${TMP}/cfg/release-train.json" > "${TMP}/x" \
+        && mv "${TMP}/x" "${TMP}/cfg/release-train.json"
+    setup_sm_ok
+}
+
+# site-manager: `repository modify --branch` moves BOTH the declaration and the
+# checkout, exactly as the real one does; `update` is repo-sync reconciling the
+# tree to whatever site.json declares.
+setup_sm_ok() {
     cat > "${TMP}/bin/site-manager" <<'STUB'
 #!/usr/bin/env bash
 W="${TAPPAAS_REPO_DIR}"
@@ -450,10 +459,6 @@ esac
 exit 0
 STUB
     chmod +x "${TMP}/bin/site-manager"
-    # Every phase runs here: 1 moves the pin, 2 proves it, 3 lands it and puts
-    # the site back on main. The declaration's round trip is the point.
-    jq '.boundary.phasesDone = []' "${TMP}/cfg/release-train.json" > "${TMP}/x" \
-        && mv "${TMP}/x" "${TMP}/cfg/release-train.json"
 }
 run_prove() {
     OUT="$(PATH="${TMP}/bin:${PATH}" TAPPAAS_BIN_DIR="${TMP}/bin2" \
@@ -474,6 +479,44 @@ FAKE_NOW=$(( 1790000000 + 20*86400 )) run_prove boundary --resume --to nixos-26.
     || bad "the site was left tracking $(jq -r .repositories[0].branch "${TMP}/cfg/site.json")"
 git -C "${TMP}/w" rev-parse --verify --quiet origin/main >/dev/null \
     && ok "main was published" || bad "main was not published"
+
+echo "── a boundary retried in the same week republishes its pin branch ──"
+# The situation this comes from: a boundary BLOCKED in phase 2 (#721) never
+# reaches phase 3, so the pin branch it published is still on the forge. The
+# retry cuts the same name from origin/main again, carrying a different commit
+# — and a plain push is refused as non-fast-forward, killing phase 1.
+setup_prove
+# A sweep that fails, so phase 3 (which would delete the branch) never runs.
+cat > "${TMP}/bin/site-manager" <<'STUB'
+#!/usr/bin/env bash
+case "$1 $2" in
+  "repository modify") exit 0 ;;
+  "update"*) exit 1 ;;
+  *) : ;;
+esac
+exit 0
+STUB
+chmod +x "${TMP}/bin/site-manager"
+FAKE_NOW=$(( 1790000000 + 20*86400 )) run_prove boundary --resume --to nixos-26.05 \
+    --staging-branch rehearse-staging --production-branch rehearse-prod
+[[ "${RC}" -ne 0 ]] && ok "a blocked boundary stops" || bad "the blocked boundary did not stop"
+git -C "${TMP}/w" rev-parse --verify --quiet "origin/pin/$(date -u +%Y-w%V)" >/dev/null \
+    && ok "…and its pin branch stays on the forge for the retry" \
+    || bad "the blocked run left no pin branch to clash with"
+
+# The retry: main has moved on (the fix landed), so the same branch name now
+# carries a different commit.
+echo fixed > "${TMP}/w/f"; git -C "${TMP}/w" checkout -q main
+git -C "${TMP}/w" add -A; git -C "${TMP}/w" commit -qm "the fix"
+git -C "${TMP}/w" push -q origin main; git -C "${TMP}/w" fetch -q origin
+jq '.boundary.phasesDone = []' "${TMP}/cfg/release-train.json" > "${TMP}/x" \
+    && mv "${TMP}/x" "${TMP}/cfg/release-train.json"
+setup_sm_ok    # a sweep that works again
+FAKE_NOW=$(( 1790000000 + 40*86400 )) run_prove boundary --resume --to nixos-26.05 \
+    --staging-branch rehearse-staging --production-branch rehearse-prod
+[[ "${OUT}" != *"could not publish"* ]] && ok "the retry publishes over its own branch" \
+    || bad "a same-week retry could not publish its pin branch"
+[[ "${RC}" -eq 0 ]] && ok "…and the retried boundary completes" || bad "the retry failed: ${OUT}"
 
 echo "── a sweep that resets the checkout is caught, not reported as proof ──"
 setup_prove

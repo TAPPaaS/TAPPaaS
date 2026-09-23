@@ -466,7 +466,13 @@ do_phase_branch() {
         || { error "could not commit the pin"; abandon_phase_branch "${br}"; return 1; }
     # The site can only TRACK a branch the forge has — repo-sync reconciles
     # against origin, not against whatever happens to be on this disk.
-    g push -q origin "${br}" \
+    #
+    # --force-with-lease, because this ref is the train's own scratch: it is cut
+    # from origin/main afresh every run, so a boundary retried in the SAME week
+    # (a blocked one, fixed and re-run) carries a different commit under the
+    # same name and a plain push is refused as non-fast-forward. The lease still
+    # refuses if the ref moved to something this run has not seen.
+    g push -q --force-with-lease origin "${br}" \
         || { error "could not publish ${br}"; abandon_phase_branch "${br}"; return 1; }
 
     local tmp="${STATE_FILE}.tmp.$$"
