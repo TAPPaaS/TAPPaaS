@@ -1,0 +1,44 @@
+# Rebuild the docs site (TAPPaaS/Documentation, Woodpecker repo 17589) when a
+# push to main touches a file the site syncs — and only then.
+#
+# The site's scripts/sync-source.py pulls a fixed set of files from this repo.
+# A push that changes none of them never starts this pipeline, so Codeberg sees
+# no load without an actual doc update (instead of a nightly cron).
+#
+# The path list mirrors sync-source.py (ALLOW_LIST + GLOB_RULES). src/**/*.md
+# is a little wider than the synced set; a stray rebuild is cheap, a missed one
+# is not. Add a line here when sync-source.py gains a new top-level file.
+#
+# Prerequisite (one-time): a Woodpecker secret `woodpecker_token` on this repo —
+# a personal token from ci.codeberg.org → user settings, limited to event `push`.
+
+when:
+  - event: push
+    branch: main
+    path:
+      include:
+        - INSTALL.md
+        - INSTALL-ENVIRONMENT.md
+        - hardware-selection.md
+        - preparation.md
+        - GLOSSARY.md
+        - BUILD.md
+        - docs/ADR/README.md
+        - src/**/*.md
+
+skip_clone: true
+
+steps:
+  - name: trigger-docs-build
+    image: docker.io/curlimages/curl:8.10.1
+    environment:
+      WOODPECKER_TOKEN:
+        from_secret: woodpecker_token
+    commands:
+      - >
+        curl -fsS -X POST
+        -H "Authorization: Bearer $${WOODPECKER_TOKEN}"
+        -H "Content-Type: application/json"
+        -d '{"branch":"main"}'
+        https://ci.codeberg.org/api/repos/17589/pipelines
+        -o /dev/null -w "docs pipeline trigger: HTTP %{http_code}\n"
