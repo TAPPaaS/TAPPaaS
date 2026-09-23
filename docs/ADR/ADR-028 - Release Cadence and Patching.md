@@ -130,7 +130,10 @@ and `system.autoUpgrade` is `enable = false` wherever it appears.
 |---|---|---|---|
 | `templates/flake.lock` | `nixos-25.11` | `b77b3de87756`, 2026-05-22 | every NixOS **guest**, via `update-os.sh` |
 | `tappaas-cicd/flake.lock` | `nixos-25.11` | `b77b3de87756`, 2026-05-22 | the **mothership**, via `tappaas-self-rebuild.sh` |
-| `satellite/flake.nix` | `nixos-25.05` | **no lock file at all** | nothing by default — the optional `--os nixos` path only (see D7) |
+
+**There are exactly two.** A third, `satellite/flake.nix`, tracked `nixos-25.05` with no lock
+file; it backed an `--os nixos` option nothing used, and #712 deleted it on 2026-09-22. A
+satellite is Debian.
 
 Three observations, each of which a decision below answers:
 
@@ -140,11 +143,35 @@ Three observations, each of which a decision below answers:
    2026-06-30). We are running an unsupported branch, and have been for roughly three months.
    **A frozen branch cannot deliver a security backport, so the NixOS half of the estate has had
    no security patches since May.**
-3. The satellite is **Debian**, not NixOS (ADR-010 §5.1, reversed during implementation as
-   impl-doc D19/Q8; `satellite.json` declares `"os": "debian"` and `satellite-lib.sh` defaults to
-   it). It therefore patches itself like any Debian machine and is *not* affected by the frozen
-   pin. The NixOS files in that module back the retained-but-unused `--os nixos` option, which
-   D7 addresses.
+3. The satellite is **Debian** (ADR-010 §5.1, reversed during implementation as impl-doc
+   D19/Q8). It patches itself like any Debian machine and is *not* affected by the frozen pin —
+   it is the one part of the estate that has been receiving security updates all along.
+
+### What a bump costs, measured
+
+`-I nixpkgs=<url>` is a real download, and the rebuild runs **on each guest** — the mothership
+does not fetch once and distribute. Measured on the test site, 2026-09-23:
+
+| | |
+|---|---|
+| the tarball | **48.3 MB** from `codeload.github.com`, ~5.6 s on the test site's link |
+| unpacked in each guest's store | **445 MB** |
+| each guest's fetch cache (`/root/.cache/nix`) | 61 MB |
+| resolving an already-fetched revision | **0.03 s**, no network |
+| resolving it with the TTL forced to zero | **0.335 s** — a revalidation, not a re-download |
+
+So a daily sweep over 22 NixOS guests does **not** re-download nixpkgs, even though `tarball-ttl`
+is an hour and the sweep runs a day apart: the revision is already in each guest's store, and
+the worst case is a sub-second revalidation. Roughly 1 GB a day of pointless traffic is the
+thing that does *not* happen.
+
+What a **pin change** costs, on the other hand, is real and should be said out loud, because the
+cadence in D2 decides how often it is paid: each guest fetches its own copy, so a bump is about
+**22 × 48 MB ≈ 1 GB** of downloads for the estate, and about **22 × 445 MB ≈ 10 GB** of new
+store content until the old revision is garbage-collected. (The packages themselves are a
+separate and larger download from `cache.nixos.org`.) Nothing shares a mirror: each guest goes to
+GitHub on its own. At a fortnightly cadence that is affordable; it is worth knowing before anyone
+proposes daily.
 
 ### What reaches an existing VM, and what does not
 
@@ -317,25 +344,13 @@ Today a module cannot choose its nixpkgs: `update-os.sh` passes `-I nixpkgs=` an
 anything the guest declares. This is stated here because the opposite is a natural assumption,
 and advice to "bring your own flake" would silently not work.
 
-**The satellite's `--os nixos` path is the one place a second base still exists, and it should
-go.** ADR-010 §5.1 retained it when the implementation reversed to Debian (impl-doc D19/Q8), and
-what is left of it has quietly rotted: `satellite/flake.nix` tracks `nixos-25.05` — a branch
-EOL since around the end of 2025 — with **no lock file**, so each deployment would resolve
-whatever that dead branch last held; the module's own test suite does not mention NixOS once;
-and the vault role refuses it outright (`satellite-lib.sh:294` — "the vault is the Debian
-satellite's"). A retained option that is untested, unpinned and unsupported by the role most
-people want is not an option, it is a trap for whoever tries it.
-
-The decision this ADR asks for: **retire `--os nixos`** — delete `flake.nix`, `disk-config.nix`,
-`satellite.nix`, `satellite-settings.nix` and the `nixos-anywhere` branch of
-`satellite-lib.sh`, and amend ADR-010 §5.1 accordingly — unless someone intends to test and pin
-it, in which case it joins the estate pin under D1 like everything else. It cannot stay as it is.
-
-Should a per-module base ever be introduced — a module declaring that it owns its own base — it
-comes with three obligations: the module owns its own security currency, the health output
-reports which guests are off the estate pin, and the divergence is visible in the site's own
-reporting rather than buried in a `.nix`. This is the same missing-extension-point family as
-#675 and should be decided with it, not separately.
+**The satellite's `--os nixos` path was the one place a second base still existed. It is gone**
+— retired on 2026-09-22 (#712), with `flake.nix`, `disk-config.nix`, `satellite.nix` and
+`satellite-settings.nix` deleted and `os` accepting only `debian`. It had tracked `nixos-25.05`
+with no lock file, no test in the module's suite exercised it, and the `backup` role refused it
+outright, so choosing it produced an unpinned, untested machine that could not be the vault a
+satellite mostly exists to be. ADR-010 §5.1 is amended to match; the diversity argument that
+originally kept it is untouched, because the default is Debian.
 
 ### D8 — A kernel change is not applied until the reboot
 
