@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | **Proposed** (2026-09-22) |
+| **Status** | **Accepted** (2026-09-23) — agreed by the operator. D2's cadence waits on D10, which is built and in review (#713). |
 | **Version** | 0.5 |
 | **Date** | 2026-09-22 |
 | **Author** | Lars Rossen |
@@ -240,7 +240,7 @@ something a check has to notice afterwards.
 
 **Every two weeks**, at the train boundary (D9): `nix flake update` on the estate pin, a full
 `--deep` test on the test site, then promote. Not a patch cadence and a separate branch cadence
-— **one beat**. Alpha may take a revision more often than that if there is reason to; the
+— **one beat**. The unstable channel may take a revision more often than that if there is reason to; the
 boundary is what *promotes*, and it is the only commitment being made here.
 
 A **version** move (`flake.nix`, e.g. `nixos-25.11` → `nixos-26.05`) is not a different rhythm;
@@ -386,40 +386,42 @@ order the *testing*, not to reorder the run.
 
 #### Between sites: the train does the rest of the staging
 
-Three channels, two-week boundaries:
+Three channels, two-week boundaries. **The channel is what a site runs; the branch is where the
+code sits** — they are named differently on purpose, because "stable" as a channel promise and
+`stable` as a git ref are not the same statement:
 
-| Channel | Who runs it | What it is |
-|---|---|---|
-| **alpha** | the test site | where development happens and where a new nixpkgs revision is first taken |
-| **beta** | a few production and pre-production sites | the previous alpha, soaking under real use |
-| **stable** | everyone else | the previous beta |
+| Channel | Git branch | Who runs it | What it is |
+|---|---|---|---|
+| **unstable** | `main` | the test site | where development happens and where a new nixpkgs revision is first taken |
+| **staging** | `staging` | a few production and pre-production sites | the previous *unstable*, soaking under real use |
+| **production** | `stable` | everyone else | the previous *staging* |
 
 At each two-week boundary, in order:
 
-1. **beta → stable.**
-2. **alpha takes the latest NixOS** (`nix flake update`, and `flake.nix` too when a new release
+1. **staging → production** (`staging` fast-forwards `stable`).
+2. **unstable takes the latest NixOS** (`nix flake update`, and `flake.nix` too when a new release
    exists) and gets a full `--deep` test, guest-first per the rule above.
-3. **alpha → beta.**
+3. **unstable → staging** (`main` fast-forwards `staging`).
 
-A revision therefore spends two weeks in beta under real load before any stable site sees it,
-and `stable` is at most **two boundaries — four weeks — behind** on patches. That is the
-compromise this ADR proposes: currency traded for two weeks of soak on sites whose operators
+A revision therefore spends two weeks in **staging** under real load before any production site
+sees it, and production is at most **two boundaries — four weeks — behind** on patches. That is
+the compromise this ADR proposes: currency traded for two weeks of soak on sites whose operators
 know they are soaking.
 
-**If step 2's `--deep` fails, the pin does not promote.** Beta is cut from alpha *without* the
-bump — the feature work still promotes, the revision waits, and the fix is worked in alpha for
-the next boundary. A failing revision must never be the reason a fortnight of work misses its
+**If step 2's `--deep` fails, the pin does not promote.** Staging is cut from unstable *without*
+the bump — the feature work still promotes, the revision waits, and the fix is worked in unstable
+for the next boundary. A failing revision must never be the reason a fortnight of work misses its
 train, and a fortnight of work must never drag a failing revision with it.
 
 **A high-severity CVE accelerates the train; it does not bypass it.** Pull the boundary forward
 and run the sequence early, rather than cherry-picking a lock onto `stable`. This is the better
 instrument for a reason worth stating: **a cherry-picked pin arrives next to code it was never
 built against.** A revision that needs a renamed option or a replaced package is only safe beside
-the module changes made for it, and those live on alpha. Moving the whole train keeps every
+the module changes made for it, and those live on `main`. Moving the whole train keeps every
 revision with the code that proved it — which is also why the earlier draft's worry ("nothing
-runs `stable`, so an out-of-band bump cannot be tested against it") disappears: nothing needs to
-be tested against `stable`'s code, because nothing lands on `stable` that did not arrive through
-beta.
+runs the production branch, so an out-of-band bump cannot be tested against it") disappears:
+nothing needs to be tested against `stable`'s code, because nothing lands on `stable` that did
+not arrive through staging.
 
 ### D10 — The control plane needs a net before the cadence leans on one
 
@@ -475,24 +477,25 @@ after it happens, `follows` prevents it.
 
 ## Open questions for review
 
-1. **Branch names and the existing release machinery.** D9 needs three refs. The natural mapping
-   is `main` = alpha, plus `beta` and `stable`, with promotion by fast-forward — which absorbs
-   the `rc/<ver>` step of §10.2 rule 2 into the beta channel. Whether `rc/<ver>` tags survive as
+1. **The existing release machinery.** D9's three refs — `main`, `staging`, `stable` — absorb the
+   `rc/<ver>` step of §10.2 rule 2 into the staging channel. Whether `rc/<ver>` tags survive as
    release markers, or the boundary itself becomes the release event, is not settled here.
 
-2. **Who runs beta, and do they know what they signed up for?** The plan's safety rests on "a few
-   production and pre-production sites" taking a revision two weeks before everyone else. That is
-   a real commitment by real operators, and it should be recorded per site (a channel field in
-   `site.json`), not held as a shared understanding.
+2. **Who runs staging, and do they know what they signed up for?** The plan's safety rests on "a
+   few production and pre-production sites" taking a revision two weeks before everyone else.
+   That is a real commitment by real operators, and it should be recorded per site (a channel
+   field in `site.json`, naming `unstable` / `staging` / `production`), not held as a shared
+   understanding.
 
 3. **Does D10 land before the cadence changes?** A fortnightly bump assumes a net the control
    plane does not have. D9's guest-first rule reduces the exposure during validation; it does not
    give the mothership a way back once it has switched. This is the one item that gates the rest.
 
-4. **What does a beta site do when it finds the fault?** The revision is already in beta and the
-   next boundary is coming. Rolling beta back conflicts with "never move backwards"; holding the
-   boundary delays a fortnight of feature work. The rule for a failure found *in* beta — as
-   opposed to one found in alpha's `--deep`, which D9 already answers — is the gap in this plan.
+4. **What does a staging site do when it finds the fault?** The revision is already in staging and
+   the next boundary is coming. Rolling `staging` back conflicts with "never move backwards";
+   holding the boundary delays a fortnight of feature work. The rule for a failure found *in*
+   staging — as opposed to one found in unstable's `--deep`, which D9 already answers — is the
+   gap in this plan.
 
 5. **Retire the satellite's `--os nixos` path, or fund it?** D7 proposes deletion (#712). It is
    retained by ADR-010 §5.1, so retiring it amends that ADR — and the stated reason for keeping
