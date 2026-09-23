@@ -15,6 +15,7 @@
 #                 [--staging-branch <b>]       use <b> as the staging channel — set both to
 #                                              throwaway refs to rehearse a whole boundary
 #                 [--guest <module>]           the guest that meets the new pin first
+#                 [--to <nixos-XX.YY>]         a VERSION move: change the release branch itself
 #   tappaas-train fault <what>             record a staging fault; blocks the next promotion
 #   tappaas-train fault --resolved <commit>  clear it — the commit must be on main
 #
@@ -365,6 +366,16 @@ promote_ref() {
 # ── phase 1: branch, and move the estate pin ─────────────────────────
 # One lock decides the estate (ADR-028 D1), so this is one command. The branch
 # exists so the move is reviewable and revertible before it reaches main.
+# Phase 1 leaves the checkout as it found it when it gives up. Preflight has
+# already refused a dirty tree (PF_BROKEN), so these two files are ours alone —
+# and a half-moved pin left behind would make the NEXT run's preflight refuse.
+abandon_phase_branch() {
+    g checkout -q -- src/foundation/templates/flake.nix src/foundation/templates/flake.lock
+    g checkout -q main
+    g branch -D "${1}" >/dev/null 2>&1
+    return 1
+}
+
 do_phase_branch() {
     local br; br="pin/$(date -u +%Y-w%V)"
     info "${BOLD}Phase 1: ${br} — refresh the estate pin${CL}"
@@ -373,22 +384,55 @@ do_phase_branch() {
 
     g rev-parse --verify --quiet "${br}" >/dev/null && g branch -D "${br}" >/dev/null 2>&1
     g checkout -q -b "${br}" origin/main || { error "could not branch ${br}"; return 1; }
+
+    # A version move edits the REF; a patch refresh only re-resolves it. Both
+    # then update the lock, which is why they are one rhythm and not two.
+    # Only templates/flake.nix carries a ref — the mothership follows it (D1).
+    local nixfile="${REPO_DIR}/src/foundation/templates/flake.nix"
+    if [[ -n "${TO_BRANCH}" ]]; then
+        local from_ref
+        from_ref="$(sed -n 's|.*github:NixOS/nixpkgs/\([^"]*\)".*|\1|p' "${nixfile}" | head -1)"
+        # Without a ref to replace, the substitution below would corrupt the
+        # file rather than fail, so read it as "I do not understand this flake".
+        [[ -n "${from_ref}" ]] \
+            || { error "no github:NixOS/nixpkgs/<ref> found in ${nixfile#"${REPO_DIR}/"}"
+                 abandon_phase_branch "${br}"; return 1; }
+        if [[ "${from_ref}" == "${TO_BRANCH}" ]]; then
+            info "  already tracking ${TO_BRANCH}"
+        else
+            info "  version move: ${from_ref} → ${TO_BRANCH}"
+            sed -i.bak "s|github:NixOS/nixpkgs/${from_ref}|github:NixOS/nixpkgs/${TO_BRANCH}|" "${nixfile}" \
+                && rm -f "${nixfile}.bak" \
+                || { error "could not rewrite ${nixfile##*/}"; abandon_phase_branch "${br}"; return 1; }
+        fi
+    fi
+
     ( cd "${REPO_DIR}/src/foundation/templates" \
       && nix flake update --extra-experimental-features "nix-command flakes" ) >/dev/null 2>&1 \
-        || { error "nix flake update failed"; return 1; }
+        || { error "nix flake update failed"; abandon_phase_branch "${br}"; return 1; }
     local after; after="$(jq -r '.nodes.nixpkgs.locked.rev // empty' "${PIN_LOCK}")"
     if [[ "${before}" == "${after}" ]]; then
         # A frozen branch, or one already current. Not an error — but an empty
         # commit would make the record claim a move that did not happen.
         warn "  the pin did not move (${before:0:12}) — the branch is likely frozen or already current"
-        info "  a version move edits templates/flake.nix first; this only refreshes within a branch"
-        g checkout -q main
+        info "  a frozen branch cannot refresh. Move the release instead: --to <nixos-XX.YY>"
+        abandon_phase_branch "${br}"
         return 1
     fi
     info "  pin ${before:0:12} → ${after:0:12}"
-    g add src/foundation/templates/flake.lock src/foundation/tappaas-cicd/flake.lock 2>/dev/null
-    g commit -q -m "chore(pin): estate nixpkgs ${before:0:12} -> ${after:0:12}" \
-        || { error "could not commit the pin"; return 1; }
+    # One pathspec that matches nothing makes `git add` stage NOTHING, and the
+    # commit below then fails with the pin already rewritten on disk — so each
+    # path is offered on its own.
+    local f
+    for f in src/foundation/templates/flake.nix \
+             src/foundation/templates/flake.lock \
+             src/foundation/tappaas-cicd/flake.lock; do
+        [[ -e "${REPO_DIR}/${f}" ]] && g add "${f}"
+    done
+    local msg="chore(pin): estate nixpkgs ${before:0:12} -> ${after:0:12}"
+    [[ -n "${TO_BRANCH}" ]] && msg="chore(pin): estate nixpkgs moves to ${TO_BRANCH}"
+    g commit -q -m "${msg}" \
+        || { error "could not commit the pin"; abandon_phase_branch "${br}"; return 1; }
     local tmp="${STATE_FILE}.tmp.$$"
     jq --arg b "${br}" --arg f "${before}" --arg t "${after}" \
        '.boundary = ((.boundary // {}) + {branch: $b, pinFrom: $f, pinTo: $t})' \
@@ -465,7 +509,11 @@ cmd_boundary() {
 
     echo
     info "${BOLD}Plan${CL}"
-    info "  1  branch pin/$(date -u +%Y-w%V), refresh the estate pin"
+    if [[ -n "${TO_BRANCH}" ]]; then
+        info "  1  branch pin/$(date -u +%Y-w%V), move the release to ${TO_BRANCH} (a VERSION move)"
+    else
+        info "  1  branch pin/$(date -u +%Y-w%V), refresh the estate pin"
+    fi
     info "  2  prove it here: $(pick_guest 2>/dev/null || echo "a guest") first, then the sweep, then --deep"
     info "  3  land on main (hours: the sweep reboots nodes, the deep test builds guests)"
     info "  4  promote ${STAGING_BRANCH} → ${PROD_BRANCH}   ($(g rev-list --count "origin/${PROD_BRANCH}..origin/staging" 2>/dev/null || echo "?") commits reach production)"
@@ -611,6 +659,12 @@ STAGING_BRANCH="staging"
 # plane stays able to investigate. Default: any module that dependsOn
 # templates:nixos — the reliable signal, since most guests declare no `os`.
 GUEST=""
+# A VERSION move: the nixpkgs release branch itself (e.g. nixos-26.05), as
+# opposed to a patch refresh within the current one. ADR-028 D2 calls this the
+# week where the diff is bigger, not a different rhythm — and D9 is explicit
+# that the script never picks a branch on its own, so this is only ever an
+# operator's word.
+TO_BRANCH=""
 _args=()
 for a in "$@"; do
     case "${a}" in
@@ -622,7 +676,8 @@ for a in "$@"; do
         --staging-branch=*)    STAGING_BRANCH="${a#*=}" ;;
         --staging-host=*)      STAGING_HOST="${a#*=}" ;;
         --guest=*)             GUEST="${a#*=}" ;;
-        --production-branch|--staging-branch|--staging-host|--guest) _want="${a}" ;;
+        --to=*)                TO_BRANCH="${a#*=}" ;;
+        --production-branch|--staging-branch|--staging-host|--guest|--to) _want="${a}" ;;
         *)
             if [[ -n "${_want:-}" ]]; then
                 case "${_want}" in
@@ -630,6 +685,7 @@ for a in "$@"; do
                     --staging-branch)    STAGING_BRANCH="${a}" ;;
                     --staging-host)      STAGING_HOST="${a}" ;;
                     --guest)             GUEST="${a}" ;;
+                    --to)                TO_BRANCH="${a}" ;;
                 esac
                 _want=""
             else

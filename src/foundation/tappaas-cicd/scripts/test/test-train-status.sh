@@ -303,5 +303,100 @@ FAKE_NOW=$(( 1790000000 + 40*86400 )) run boundary --resume \
 [[ "$(git -C "${TMP}/w" rev-parse origin/rehearse-prod 2>/dev/null)" == "${_real_staging:0:0}$(git -C "${TMP}/w" rev-parse origin/main)" ]] \
     && ok "production now takes what staging held" || bad "second boundary did not promote"
 
+echo "── --to: a VERSION move rewrites the release branch, not just the lock ──"
+# nixos-25.11 is frozen, so a plain refresh can never reach nextcloud34/35
+# (#709). The operator names the new release; the script never picks one.
+# A stub `nix` so phase 1 can run here: the real one would fetch a branch.
+mkdir -p "${TMP}/bin"
+cat > "${TMP}/bin/nix" <<'STUB'
+#!/usr/bin/env bash
+# `nix flake update` resolves whatever ref flake.nix names, and writes the rev
+# it found into flake.lock. Here: a rev derived from the ref, so the test can
+# tell "it re-read the file" from "it wrote a constant".
+[[ "$1" == "flake" && "$2" == "update" ]] || exit 0
+ref="$(sed -n 's|.*github:NixOS/nixpkgs/\([^"]*\)".*|\1|p' flake.nix | head -1)"
+[[ "${ref}" == "nixos-25.11" ]] && exit 0   # frozen: nothing new to resolve
+printf '{"nodes":{"nixpkgs":{"locked":{"rev":"%s","lastModified":1790000000}}}}\n' \
+    "$(printf '%s' "${ref}" | shasum | cut -c1-40)" > flake.lock
+STUB
+chmod +x "${TMP}/bin/nix"
+
+run_to() {  # phase 1 for real, everything else already done
+    OUT="$(PATH="${TMP}/bin:${PATH}" TAPPAAS_REPO_DIR="${TMP}/w" TAPPAAS_CONFIG_DIR="${TMP}/cfg" \
+           TAPPAAS_TRAIN_NOW="${FAKE_NOW:-}" "${TRAIN}" "$@" --no-fetch 2>&1)"
+    RC=$?
+}
+setup_to() {
+    make_train 3 2
+    printf '{\n  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";\n}\n' \
+        > "${TMP}/w/src/foundation/templates/flake.nix"
+    git -C "${TMP}/w" add -A && git -C "${TMP}/w" commit -qm "flake"
+    git -C "${TMP}/w" push -q origin main && git -C "${TMP}/w" fetch -q origin
+    FAKE_NOW=1790000000 run init >/dev/null
+    jq '.boundary.phasesDone = ["prove","main"]' "${TMP}/cfg/release-train.json" \
+        > "${TMP}/x" && mv "${TMP}/x" "${TMP}/cfg/release-train.json"
+}
+
+setup_to
+FAKE_NOW=$(( 1790000000 + 20*86400 )) run_to boundary --resume --to nixos-26.05 \
+    --staging-branch rehearse-staging --production-branch rehearse-prod
+[[ "${RC}" -eq 0 ]] && ok "a boundary with --to runs" || bad "--to boundary failed: ${OUT}"
+grep -q 'github:NixOS/nixpkgs/nixos-26.05' "${TMP}/w/src/foundation/templates/flake.nix" \
+    && ok "templates/flake.nix now names the new release" || bad "the ref was not rewritten"
+[[ "${OUT}" == *"nixos-25.11 → nixos-26.05"* ]] && ok "the move is reported both ways" \
+    || bad "the move was not reported: ${OUT}"
+# The rewrite is worthless if the lock still holds the frozen branch's rev.
+grep -q 'b77b3de8' "${TMP}/w/src/foundation/templates/flake.lock" \
+    && bad "the lock still holds the old rev" || ok "…and the lock was re-resolved against it"
+
+echo "── the pin commit carries the flake, not only the lock ──"
+# A lock whose rev came from a ref that was never committed is a pin nobody
+# else can reproduce.
+_files="$(git -C "${TMP}/w" show --stat --name-only --format= HEAD)"
+[[ "${_files}" == *"templates/flake.nix"* ]] && ok "flake.nix is in the pin commit" \
+    || bad "flake.nix was left uncommitted: ${_files}"
+[[ "${_files}" == *"templates/flake.lock"* ]] && ok "…together with the lock it produced" \
+    || bad "flake.lock missing from the pin commit"
+[[ "$(git -C "${TMP}/w" log -1 --format=%s)" == *"moves to nixos-26.05"* ]] \
+    && ok "the commit says which release it moved to" \
+    || bad "the commit subject hides the version move: $(git -C "${TMP}/w" log -1 --format=%s)"
+
+echo "── a frozen branch with no --to refuses rather than commit nothing ──"
+setup_to
+FAKE_NOW=$(( 1790000000 + 20*86400 )) run_to boundary --resume \
+    --staging-branch rehearse-staging --production-branch rehearse-prod
+[[ "${RC}" -ne 0 ]] && ok "a pin that cannot move stops the boundary" \
+    || bad "an unmoved pin was accepted"
+[[ "${OUT}" == *"--to <nixos-XX.YY>"* ]] && ok "…and says what to do about it" \
+    || bad "no advice for a frozen branch: ${OUT}"
+# A phase 1 that gives up half way must leave nothing behind: the next run's
+# preflight refuses a dirty checkout, so the failure would become sticky.
+[[ -z "$(git -C "${TMP}/w" status --porcelain)" ]] \
+    && ok "a refused phase 1 leaves the checkout clean" \
+    || bad "phase 1 left changes behind: $(git -C "${TMP}/w" status --porcelain)"
+[[ "$(git -C "${TMP}/w" rev-parse --abbrev-ref HEAD)" == "main" ]] \
+    && ok "…and back on main" || bad "left on $(git -C "${TMP}/w" rev-parse --abbrev-ref HEAD)"
+
+echo "── --to the release already in the tree is a no-op, not a rewrite ──"
+setup_to
+FAKE_NOW=$(( 1790000000 + 20*86400 )) run_to boundary --resume --to nixos-25.11 \
+    --staging-branch rehearse-staging --production-branch rehearse-prod
+[[ "${OUT}" == *"already tracking nixos-25.11"* ]] && ok "an unchanged ref is recognised" \
+    || bad "no-op --to was not recognised: ${OUT}"
+[[ "${RC}" -ne 0 ]] && ok "…and the frozen pin still refuses" || bad "a frozen no-op was accepted"
+
+echo "── a flake with no nixpkgs ref is refused, never rewritten blind ──"
+setup_to
+printf '{\n  inputs.nixpkgs.url = "git+https://example.invalid/np";\n}\n' \
+    > "${TMP}/w/src/foundation/templates/flake.nix"
+git -C "${TMP}/w" commit -qam "odd flake" && git -C "${TMP}/w" push -q origin main \
+    && git -C "${TMP}/w" fetch -q origin
+FAKE_NOW=$(( 1790000000 + 20*86400 )) run_to boundary --resume --to nixos-26.05 \
+    --staging-branch rehearse-staging --production-branch rehearse-prod
+[[ "${RC}" -ne 0 && "${OUT}" == *"no github:NixOS/nixpkgs/<ref> found"* ]] \
+    && ok "an unrecognised flake refuses the move" || bad "a blind rewrite was attempted: ${OUT}"
+grep -q 'example.invalid' "${TMP}/w/src/foundation/templates/flake.nix" \
+    && ok "…and left the file alone" || bad "the odd flake was modified"
+
 echo "── summary: ${PASS} pass, ${FAIL} fail ──"
 [[ "${FAIL}" -eq 0 ]]

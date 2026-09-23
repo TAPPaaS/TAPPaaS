@@ -80,7 +80,18 @@ rather than holding its own (ADR-028 D1, built 2026-09-23). Note the branch must
 checkout: the relative path input resolves against the git tree, so a `tar`-made copy cannot
 build the mothership's flake at all. Reports old → new revision with both dates and the age delta. If the lock does not
 move — a frozen branch, or an already-current one — it stops and says so rather than making an
-empty commit; `--allow-no-pin-change` continues for a feature-only boundary.
+empty commit, and points at `--to`.
+
+A **version move** — the nixpkgs release branch itself, `nixos-25.11 → nixos-26.05` — is the same
+phase with one extra step: `--to <nixos-XX.YY>` rewrites `inputs.nixpkgs.url` in
+`src/foundation/templates/flake.nix` *before* the update, so the lock is re-resolved against the
+new branch. Only that one file carries a ref (D1: the mothership follows it), and both files go
+into the pin commit — a lock whose rev came from a ref nobody committed is a pin nobody else can
+reproduce. This is the only way past a frozen branch: `nixos-25.11`'s last commit is 2026-06-30,
+so no refresh within it will ever produce `nextcloud34` (#709). The script refuses to guess the
+branch; `--to` is always the operator's word. If any step fails, the branch is deleted and the
+two files restored — the next run's preflight refuses a dirty checkout, so a half-moved pin left
+behind would be sticky.
 
 **2 — Prove it here, guest first.** ADR-028 D9's rule, and the order is the point: one
 representative NixOS guest is updated against the new pin *before* the mothership takes it, so a
@@ -197,7 +208,7 @@ requires this) — and on the first run, "elapsed" has no recorded start, so `in
 ## Deliberately not in scope
 
 - **Rolling anything back.** Patch forward is the whole rule.
-- **Choosing the nixpkgs branch.** A version move (`flake.nix`) is an operator decision taken in
-  phase 1 with `--to <branch>`; the script never picks a branch on its own.
+- **Choosing the nixpkgs branch.** The script performs a version move (`--to`, phase 1) but never
+  decides one: which release to move to is an operator judgement, taken from the release notes.
 - **Deciding the boundary date.** The interval is policy (ADR-028 D2); the script only checks it
   has elapsed.
