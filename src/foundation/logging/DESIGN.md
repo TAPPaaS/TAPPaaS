@@ -245,6 +245,12 @@ Mitigations in place:
   `generate-*-secrets.*`) and **scrub** common secret patterns (`token=`, `password=`,
   `Authorization:`, `curl -u`) before shipping to Loki.
 - Grafana admin password is generated to a root-only one-shot file, never to the journal.
+- Grafana's `secret_key` — which encrypts Grafana's own database secrets — is generated
+  per site into `/etc/secrets/grafana-secret-key` (0600 `grafana:grafana`) and read through
+  a `$__file{}` provider. 26.05 removed this option's default, which was one constant
+  shared by every NixOS install (#722). **It cannot be rotated**: a new key makes anything
+  already encrypted under the old one unreadable, and 26.05 ships no supported rotation
+  path. The module's `backup:vm` snapshot covers it.
 - Loki/Grafana/Alloy metrics endpoints bind to localhost where possible.
 
 ## Known limitations / v2 backlog

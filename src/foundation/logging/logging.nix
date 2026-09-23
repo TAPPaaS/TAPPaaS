@@ -204,12 +204,15 @@ in
   # ============================================================================
 
   systemd.services.generate-grafana-secrets = {
-    description = "Generate Grafana admin password if missing";
+    description = "Generate Grafana's admin password and secret key if missing";
     wantedBy = [ "multi-user.target" ];
     after = [ "local-fs.target" ];
     before = [ "grafana.service" ];
 
-    unitConfig.ConditionPathExists = "!/etc/secrets/grafana-admin-password";
+    # No ConditionPathExists: the unit now owns TWO secrets, and gating the
+    # whole unit on the first one would leave a site that already has an admin
+    # password without a secret key forever. Each file is generated only if it
+    # is absent, inside the script.
 
     # The script writes the cleartext password to a one-shot file at
     # /root/grafana-admin-password.initial (mode 0400, root-only) and NEVER
@@ -233,9 +236,29 @@ in
       ExecStart = pkgs.writeShellScript "generate-grafana-secrets" ''
         set -euo pipefail
 
+        ${pkgs.coreutils}/bin/mkdir -p /etc/secrets
+
+        # ── the secret key that encrypts Grafana's own database secrets ──
+        # 26.05 removed the built-in default, which was the same string in every
+        # NixOS install (#722). There is no supported way to rotate this: a new
+        # key makes anything already encrypted under the old one unreadable, so
+        # it is written ONCE and then left alone.
+        if [ ! -e /etc/secrets/grafana-secret-key ]; then
+          ${pkgs.coreutils}/bin/install -m 0600 -o grafana -g grafana \
+            /dev/stdin /etc/secrets/grafana-secret-key \
+            <<< "$(${pkgs.openssl}/bin/openssl rand -base64 32 | tr -d '\n')"
+          echo "Grafana secret key generated at /etc/secrets/grafana-secret-key."
+          echo "  It encrypts Grafana's database secrets and CANNOT be rotated;"
+          echo "  it is covered by this module's backup:vm snapshot."
+        fi
+
+        # ── the admin password ──
+        if [ -e /etc/secrets/grafana-admin-password ]; then
+          exit 0
+        fi
+
         ADMIN_PASSWORD="$(${pkgs.openssl}/bin/openssl rand -base64 24 | tr -d '\n')"
 
-        ${pkgs.coreutils}/bin/mkdir -p /etc/secrets
         # Grafana reads the password as the `grafana` user, so the file is owned
         # grafana:grafana with 0600 — group/world cannot read.
         ${pkgs.coreutils}/bin/install -m 0600 -o grafana -g grafana \
@@ -546,6 +569,11 @@ in
       security = {
         admin_user = "admin";
         admin_password = "$__file{/etc/secrets/grafana-admin-password}";
+        # 26.05 removed this option's default (#722). It encrypts Grafana's own
+        # database secrets and has no supported rotation path, so it is
+        # generated once per site beside the admin password rather than shared
+        # as a constant every TAPPaaS install would publish.
+        secret_key = "$__file{/etc/secrets/grafana-secret-key}";
         # Tied to the same fact, in both directions. On a site that publishes
         # Grafana through Caddy the browser gets HTTPS and the auth cookie must
         # be marked secure — without it the OIDC round trip appears to succeed
