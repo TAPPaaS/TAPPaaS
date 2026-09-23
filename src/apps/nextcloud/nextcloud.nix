@@ -340,10 +340,20 @@ in
   };
 
   # Apply DB password to PostgreSQL every boot (idempotent ALTER ROLE)
+  #
+  # After postgresql-setup, not merely after postgresql (#715). On NixOS 25.11
+  # the ensureDatabases/ensureUsers work moved out of postgresql's postStart into
+  # its own postgresql-setup.service, which runs CREATE USER "nextcloud" and then
+  # ALTER ROLE "nextcloud" — the same pg_authid row this unit alters. Ordered
+  # only after postgresql.service, the two ran concurrently and one lost:
+  #   ERROR:  tuple concurrently updated
+  # measured on hrossen on 2026-09-20, 09-21 and twice on 09-23. Ordering after
+  # setup also means the role exists by the time this runs.
   systemd.services.nextcloud-apply-db-pass = {
     description = "Apply Nextcloud DB password to PostgreSQL";
     wantedBy    = [ "multi-user.target" ];
-    after       = [ "postgresql.service" "nextcloud-init-secrets.service" ];
+    after       = [ "postgresql.service" "postgresql-setup.service" "nextcloud-init-secrets.service" ];
+    requires    = [ "postgresql-setup.service" ];
     before      = [ "nextcloud-setup.service" ];
 
     serviceConfig = {
@@ -352,7 +362,8 @@ in
       ExecStart = pkgs.writeShellScript "nextcloud-apply-db-pass" ''
         set -euo pipefail
         DB_PASS="$(${pkgs.coreutils}/bin/cat /var/lib/nextcloud/db-pass)"
-        # Wait for the nextcloud role to exist (ensureUsers runs in postgresql postStart)
+        # The role is created by postgresql-setup, which this unit is ordered
+        # after; the wait stays as a guard, not as the mechanism.
         for i in $(seq 1 10); do
           if ${pkgs.util-linux}/bin/runuser -u postgres -- \
               ${versions.postgresPkg}/bin/psql -tAc \
@@ -361,8 +372,10 @@ in
           fi
           sleep 2
         done
+        # ON_ERROR_STOP: without it psql exits 0 on an SQL error, so a failed
+        # ALTER ROLE reported success and left the password unapplied.
         ${pkgs.coreutils}/bin/printf "ALTER ROLE nextcloud WITH ENCRYPTED PASSWORD '%s';\n" "$DB_PASS" \
-          | ${pkgs.util-linux}/bin/runuser -u postgres -- ${versions.postgresPkg}/bin/psql
+          | ${pkgs.util-linux}/bin/runuser -u postgres -- ${versions.postgresPkg}/bin/psql -v ON_ERROR_STOP=1
       '';
     };
   };
@@ -571,10 +584,14 @@ in
   # Emergency bypass (if OIDC breaks): https://nextcloud.example.com/login?direct=1
 
   # Configure the Authentik OIDC provider — only runs when secrets file exists
+  # Every boot-time occ unit (the six nextcloud-configure-* and the preview
+  # backfill) requires nextcloud-setup, not only orders after it (#715): after
+  # alone ran them against a failed setup — seven failures masking one cause.
   systemd.services.nextcloud-configure-oidc = {
     description = "Configure Authentik OIDC provider in Nextcloud";
     wantedBy    = [ "multi-user.target" ];
     after       = [ "nextcloud-setup.service" ];
+    requires    = [ "nextcloud-setup.service" ];
 
     # Activated only once the operator has populated the secrets file
     unitConfig.ConditionPathExists = "/etc/secrets/nextcloud.env";
@@ -612,6 +629,7 @@ in
     description = "Configure Euro-Office connector in Nextcloud";
     wantedBy    = [ "multi-user.target" ];
     after       = [ "nextcloud-setup.service" ];
+    requires    = [ "nextcloud-setup.service" ];
 
     unitConfig.ConditionPathExists = "/etc/secrets/onlyoffice.env";
 
@@ -654,6 +672,7 @@ in
     description = "Configure Nextcloud Talk STUN/TURN servers";
     wantedBy    = [ "multi-user.target" ];
     after       = [ "nextcloud-setup.service" ];
+    requires    = [ "nextcloud-setup.service" ];
 
     # Activates whenever the coturn secrets file exists (runs on each boot to
     # keep config in sync with the secret — safe because occ set is idempotent)
@@ -687,6 +706,7 @@ in
     description = "Configure Nextcloud SMTP credentials";
     wantedBy    = [ "multi-user.target" ];
     after       = [ "nextcloud-setup.service" ];
+    requires    = [ "nextcloud-setup.service" ];
 
     unitConfig.ConditionPathExists = "/etc/secrets/mail.env";
 
@@ -720,7 +740,11 @@ in
   systemd.services.nextcloud-configure-hpb = {
     description = "Register Nextcloud Talk HPB signaling backend";
     wantedBy    = [ "multi-user.target" ];
-    after       = [ "nextcloud-setup.service" ];
+    # After configure-talk (#715): both write spreed turn_servers/stun_servers,
+    # talk in its legacy shape, this unit through talk:turn:add. Unordered, the
+    # boot-time winner was whichever finished last. HPB's is the complete one.
+    after       = [ "nextcloud-setup.service" "nextcloud-configure-talk.service" ];
+    requires    = [ "nextcloud-setup.service" ];
 
     unitConfig.ConditionPathExists = "/etc/secrets/hpb.env";
 
@@ -813,6 +837,7 @@ in
     description = "Configure Nextcloud Whiteboard backend URL and JWT secret";
     wantedBy    = [ "multi-user.target" ];
     after       = [ "nextcloud-setup.service" "whiteboard-init-secrets.service" ];
+    requires    = [ "nextcloud-setup.service" ];
 
     unitConfig.ConditionPathExists = "/etc/secrets/whiteboard.env";
 
@@ -850,6 +875,7 @@ in
     description = "One-time Nextcloud preview backfill for existing files";
     wantedBy    = [ "multi-user.target" ];
     after       = [ "nextcloud-setup.service" ];
+    requires    = [ "nextcloud-setup.service" ];
 
     # Never re-runs once the sentinel file exists
     unitConfig.ConditionPathExists = "!/var/lib/nextcloud/.preview-backfill-done";
