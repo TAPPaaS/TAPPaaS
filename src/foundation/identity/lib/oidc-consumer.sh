@@ -28,17 +28,14 @@
 # standard internal-only case) yields "", and then there is no redirect URI, no
 # OIDC application, and nothing for any of the three to do.
 oidc_public_domain() {
-    local vmname="$1" environment="$2" json="$3" domain="" env_domain=""
-    domain="$(jq -r '.proxyDomain // ""' <<<"${json}")"
-    if [[ -z "${domain}" && -n "${vmname}" ]]; then
-        env_domain="$(get_variant_config "${environment}" 2>/dev/null | jq -r '.domain // empty')"
-        if [[ -n "${env_domain}" ]]; then
-            domain="${vmname}.${env_domain}"
-        fi
-    fi
-    # printf last, deliberately: callers assign this in a command substitution,
-    # where a failing test as the final command would abort them under `set -e`.
-    printf '%s' "${domain}"
+    # Delegates to the platform's one derivation (#715), which is the proxy's:
+    # this predicate used to be a seventh copy, and it disagreed with what the
+    # proxy publishes in two ways — it read only a top-level proxyDomain (so a
+    # Pattern-A module published at cloud.<domain> came out as
+    # nextcloud.<domain>), and it ignored the legacy configuration.json domain
+    # (so on a site that still has one, mgmt modules Caddy serves were called
+    # unpublished and got no SSO). Verified against both sites' Caddyfiles.
+    module_public_domain "$1" "$2" "$3"
 }
 
 oidc_consumer_paths() {

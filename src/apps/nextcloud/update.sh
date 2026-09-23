@@ -30,24 +30,13 @@ NEXTCLOUD_CONFIG_PHP="/var/lib/nextcloud/config/config.php"
 # ── Public domain resolution ─────────────────────────────────────────────────
 # proxyDomain is the declared public route (network:proxy). When absent, mirror
 # the install-time derivation: <vmname>.<environment domain>.
+# One derivation, shared with network:proxy (the publisher), identity and the
+# nix side (#715) — this was one of six that disagreed.
 resolve_proxy_domain() {
-    local domain env tappaas_domain
-    domain="$(get_config_value 'proxyDomain' '')"
-    if [[ -n "${domain}" ]]; then
-        printf '%s\n' "${domain}"
-        return 0
-    fi
-    env="$(get_config_value 'environment' '')"
-    tappaas_domain=$(jq -r '.domain // empty' \
-        <<<"$(get_variant_config "${env}" 2>/dev/null || echo '{}')")
-    if [[ -z "${tappaas_domain}" ]]; then
-        tappaas_domain=$(jq -r '.tappaas.domain // empty' \
-            "/home/tappaas/config/configuration.json" 2>/dev/null || true)
-    fi
-    if [[ -z "${tappaas_domain}" ]]; then
-        return 0
-    fi
-    printf '%s\n' "${VMNAME}.${tappaas_domain}"
+    local domain
+    domain="$(module_public_domain "${VMNAME}" "$(get_config_value 'environment' '')" "${JSON}")"
+    [[ -n "${domain}" ]] && printf '%s\n' "${domain}"
+    return 0
 }
 
 # Is the domain actually accepted by Nextcloud? Probe it over HTTP rather than

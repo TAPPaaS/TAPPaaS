@@ -532,6 +532,76 @@ get_variant_config() {
     return 1
 }
 
+# module_public_domain <vmname> <environment> <module-json>
+# The public name network:proxy publishes a module at — the ONE derivation of
+# it (#715). There were six, and they disagreed:
+#
+#   network:proxy (the one that actually publishes) fell back to the retired
+#     configuration.json when the environment had no domain; identity's
+#     predicate did not, so on a site that still has one it called mgmt
+#     modules unpublished while Caddy was serving them;
+#   identity read only a top-level proxyDomain and missed the Pattern-A form,
+#     deriving nextcloud.<domain> for a module published at cloud.<domain>;
+#   the nix side saw only an explicit value, so a module published under its
+#     derived name looked unpublished to its own configuration — an empty
+#     trusted_domains (HTTP 400), and an SSO provider that never switched on.
+#
+# The rules are the proxy's, because the proxy's are what Caddy reflects
+# (verified against both sites' Caddyfiles, 2026-09-23):
+#   1. The base domain is the module's environment's domain — else, as a
+#      legacy fallback, configuration.json's .tappaas.domain.
+#   2. No base domain → nothing is published (the proxy skips such a module),
+#      even if a proxyDomain is written down.
+#   3. An explicit proxyDomain wins — nested under config."network:proxy" or at
+#      the top level.
+#   4. Otherwise <vmname>.<base domain>.
+# Prints the domain, or nothing. Never fails: callers assign this in a command
+# substitution under `set -e`.
+module_public_domain() {
+    local vmname="$1" environment="$2" json="${3:-}" base="" explicit="" legacy
+    [[ -n "${json}" ]] || json='{}'
+    legacy="${CONFIG_DIR:-/home/tappaas/config}/configuration.json"
+    base="$(get_variant_config "${environment}" 2>/dev/null | jq -r '.domain // empty' 2>/dev/null)" || base=""
+    if [[ -z "${base}" && -f "${legacy}" ]]; then
+        base="$(jq -r '.tappaas.domain // empty' "${legacy}" 2>/dev/null)" || base=""
+    fi
+    if [[ -z "${base}" ]]; then
+        return 0
+    fi
+    explicit="$(jq -r '.config["network:proxy"].proxyDomain // .proxyDomain // empty' <<<"${json}" 2>/dev/null)" || explicit=""
+    if [[ -n "${explicit}" ]]; then
+        printf '%s' "${explicit}"
+    elif [[ -n "${vmname}" ]]; then
+        printf '%s' "${vmname}.${base}"
+    fi
+    return 0
+}
+
+# with_public_domain <vmname> <flat-json-file>
+# Writes the module's public name into its companion JSON as .proxyDomain, when
+# network:proxy publishes it (#715). The nix side reads that file and nothing
+# else, so before this a module published under its DERIVED name looked
+# unpublished to its own configuration — nextcloud.nix built trusted_domains
+# without it (HTTP 400 on the public route), logging.nix never switched its SSO
+# provider on. Rewritten on every deploy and never stored in config/, so a site
+# whose domain changes cannot be left holding the old name. Silent no-op for a
+# module that does not depend on network:proxy, or that nothing publishes.
+with_public_domain() {
+    local vmname="$1" file="$2" env="" domain="" tmp=""
+    [[ -f "${file}" ]] || return 0
+    jq -e '((.dependsOn // []) | index("network:proxy")) != null' "${file}" >/dev/null 2>&1 || return 0
+    env="$(jq -r '.environment // empty' "${file}" 2>/dev/null)" || env=""
+    domain="$(module_public_domain "${vmname}" "${env}" "$(cat "${file}")")"
+    [[ -n "${domain}" ]] || return 0
+    tmp="$(mktemp)" || return 0
+    if jq --arg d "${domain}" '.proxyDomain = $d' "${file}" > "${tmp}" 2>/dev/null; then
+        mv "${tmp}" "${file}"
+    else
+        rm -f "${tmp}"
+    fi
+    return 0
+}
+
 # Resolve the PUBLIC A record for a name, deliberately bypassing the local
 # resolver.
 #

@@ -92,10 +92,9 @@ if [[ -z "${TAPPAAS_DOMAIN}" && -f "${SYSTEM_CONFIG}" ]]; then
     TAPPAAS_DOMAIN=$(jq -r '.tappaas.domain // empty' "${SYSTEM_CONFIG}" 2>/dev/null) || TAPPAAS_DOMAIN=""
 fi
 
-PROXY_DOMAIN=$(get_config_value 'proxyDomain' '')
-if [[ -z "${PROXY_DOMAIN}" && -n "${TAPPAAS_DOMAIN}" ]]; then
-    PROXY_DOMAIN="${VMNAME}.${TAPPAAS_DOMAIN}"
-fi
+# The one derivation, shared with install-service (#715): update, test and
+# delete must name exactly what install published, or they act on another route.
+PROXY_DOMAIN="$(module_public_domain "${VMNAME}" "${_ENV:-}" "${JSON}")"
 
 PROXY_PORT=$(get_config_value 'proxyPort' '80')
 UPSTREAM="${VMNAME}.${ZONE}.internal"

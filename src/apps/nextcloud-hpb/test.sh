@@ -22,8 +22,17 @@ NC_JSON="${CFG_DIR}/nextcloud.json"
 [[ -n "${ENVIRONMENT}" && -f "${CFG_DIR}/nextcloud-${ENVIRONMENT}.json" ]] && NC_JSON="${CFG_DIR}/nextcloud-${ENVIRONMENT}.json"
 NEXTCLOUD_HOST="$(jq -r '.vmname' "${NC_JSON}" 2>/dev/null || echo nextcloud).$(jq -r '.zone0' "${NC_JSON}" 2>/dev/null || echo srv).internal"
 SSH_CMD="ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o BatchMode=yes tappaas@${TARGET}"
-# proxyDomain lives in the network:proxy config block (variant registry sets it there); fall back to top-level.
-HPB_PROXY_DOMAIN="$(jq -r '.config["network:proxy"].proxyDomain // .proxyDomain // empty' "${EFF_JSON}")"
+# The public name, from the platform's one derivation (#715). Run in a subshell:
+# sourcing the shared routines here would replace this script's own
+# info/warn/error. `set --` first, or the lib would load <vmname>.json as $JSON.
+public_domain_of() {  # <vmname> <environment> <module-json-file>
+    local lib=/home/tappaas/bin/common-install-routines.sh
+    [[ -r "${lib}" ]] || lib="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../../foundation/tappaas-cicd/lib/common-install-routines.sh"
+    bash -c 'v="$1" e="$2" f="$3" lib="$4"; set --
+             . "${lib}" >/dev/null 2>&1 || exit 0
+             module_public_domain "$v" "$e" "$(cat "$f" 2>/dev/null)"' _ "$1" "$2" "$3" "${lib}" 2>/dev/null
+}
+HPB_PROXY_DOMAIN="$(public_domain_of "$(jq -r '.vmname' "${EFF_JSON}")" "${ENVIRONMENT:-}" "${EFF_JSON}")"
 TIMESTAMP=$(date '+%Y-%m-%d_%H%M%S')
 LOG_DIR="/home/tappaas/logs"
 LOG_FILE="${LOG_DIR}/nextcloud-hpb-test-${TIMESTAMP}.log"

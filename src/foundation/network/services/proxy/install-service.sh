@@ -115,11 +115,10 @@ if [[ -z "${TAPPAAS_DOMAIN}" ]]; then
     exit 0
 fi
 
-# Resolve proxyDomain: explicit in module JSON, or default to <vmname>.<domain>
-PROXY_DOMAIN=$(get_config_value 'proxyDomain' '')
-if [[ -z "${PROXY_DOMAIN}" && -n "${TAPPAAS_DOMAIN}" ]]; then
-    PROXY_DOMAIN="${VMNAME}.${TAPPAAS_DOMAIN}"
-fi
+# The public name, from the one derivation every reader shares (#715):
+# explicit proxyDomain, else <vmname>.<environment domain>. This is the
+# publisher, so its rules are the ones module_public_domain encodes.
+PROXY_DOMAIN="$(module_public_domain "${VMNAME}" "${_ENV_EARLY}" "${JSON}")"
 
 # Resolve proxyPort: explicit in module JSON, or default to 80
 PROXY_PORT=$(get_config_value 'proxyPort' '80')

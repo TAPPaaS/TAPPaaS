@@ -36,7 +36,11 @@ HPB_HOST="$(jq -r '.vmname' "${EFFECTIVE_JSON}").$(jq -r '.zone0' "${EFFECTIVE_J
 # until that field was retired (#438).
 NC_JSON="/home/tappaas/config/$(resolve_provider_module nextcloud "${ENVIRONMENT}").json"
 NEXTCLOUD_HOST="$(jq -r '.vmname' "${NC_JSON}" 2>/dev/null || echo nextcloud).$(jq -r '.zone0' "${NC_JSON}" 2>/dev/null || echo srv).internal"
-PROXY_DOMAIN="$(get_config_value 'proxyDomain')"
+# The HPB's public name, from the platform's one derivation (#715). Read as a
+# required key it failed every site that had not written proxyDomain by hand,
+# although network:proxy was publishing the module under its derived name.
+PROXY_DOMAIN="$(module_public_domain "$(jq -r '.vmname' "${EFFECTIVE_JSON}")" "${ENVIRONMENT:-}" "$(cat "${EFFECTIVE_JSON}")")"
+[[ -n "${PROXY_DOMAIN}" ]] || die "nextcloud-hpb has no public name: its environment '${ENVIRONMENT:-default}' has no domain, so network:proxy does not publish it — Talk's signaling server must be reachable at one"
 HPB_HOST_PART="${PROXY_DOMAIN%%.*}"
 HPB_DOMAIN_PART="${PROXY_DOMAIN#*.}"
 MGMT_SECRETS="/home/tappaas/secrets/nextcloud-hpb.env"

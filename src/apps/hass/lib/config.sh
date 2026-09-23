@@ -54,7 +54,8 @@ ZONE0="$(get_config_value 'zone0' 'srvHome')"
 _HASS_ENV="$(get_config_value 'environment' '')"
 TAPPAAS_DOMAIN="$(jq -r '.domain // empty' <<<"$(get_variant_config "${_HASS_ENV}" 2>/dev/null || echo '{}')")"
 [[ -z "${TAPPAAS_DOMAIN}" ]] && TAPPAAS_DOMAIN="$(jq -r '.tappaas.domain // empty' "${SYSTEM_CONFIG}")"
-PROXY_DOMAIN="$(get_config_value 'proxyDomain' "${VMNAME}.${TAPPAAS_DOMAIN}")"
+# The one derivation, shared with network:proxy (#715).
+PROXY_DOMAIN="$(module_public_domain "${VMNAME}" "${_HASS_ENV}" "${JSON}")"
 EXTERNAL_URL="https://${PROXY_DOMAIN}"
 
 _cidr_gw() { echo "$1" | sed 's|/.*||' | awk -F. '{print $1"."$2"."$3".1"}'; }

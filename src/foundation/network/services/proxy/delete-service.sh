@@ -55,18 +55,9 @@ if [[ "${FIREWALL_TYPE}" == "NONE" ]]; then
     if [[ -f "${MODULE_JSON}" ]] && [[ -f "${SYSTEM_CONFIG}" ]]; then
         VMNAME=$(get_config_value 'vmname' '')
         [[ -z "${VMNAME}" ]] && VMNAME="${MODULE}"
-        PROXY_DOMAIN=$(get_config_value 'proxyDomain' '')
-        if [[ -z "${PROXY_DOMAIN}" ]]; then
-            _ENV=$(get_config_value 'environment' '' 2>/dev/null || echo '')
-            TAPPAAS_DOMAIN=$(jq -r '.domain // empty' <<<"$(get_variant_config "${_ENV}" 2>/dev/null || echo '{}')")
-            # Legacy fallback: configuration.json is retired (ADR-007) and absent on
-            # a fresh install; guard with -f + `|| true` so a missing file cannot
-            # abort under set -e.
-            if [[ -z "${TAPPAAS_DOMAIN}" && -f "${SYSTEM_CONFIG}" ]]; then
-                TAPPAAS_DOMAIN=$(jq -r '.tappaas.domain // empty' "${SYSTEM_CONFIG}" 2>/dev/null) || TAPPAAS_DOMAIN=""
-            fi
-            [[ -n "${TAPPAAS_DOMAIN}" ]] && PROXY_DOMAIN="${VMNAME}.${TAPPAAS_DOMAIN}"
-        fi
+        # The one derivation (#715), so the reminder names the route install made.
+        PROXY_DOMAIN="$(module_public_domain "${VMNAME}" \
+            "$(get_config_value 'environment' '' 2>/dev/null || echo '')" "${JSON}")"
     fi
 
     warn "${BOLD}OPNsense firewall is not deployed (firewallType=NONE).${CL}"
@@ -109,10 +100,9 @@ if [[ -f "${MODULE_JSON}" ]]; then
         TAPPAAS_DOMAIN=$(jq -r '.tappaas.domain // empty' "${SYSTEM_CONFIG}" 2>/dev/null) || TAPPAAS_DOMAIN=""
     fi
 
-    PROXY_DOMAIN=$(get_config_value 'proxyDomain' '')
-    if [[ -z "${PROXY_DOMAIN}" && -n "${TAPPAAS_DOMAIN}" ]]; then
-        PROXY_DOMAIN="${VMNAME}.${TAPPAAS_DOMAIN}"
-    fi
+    # The one derivation, shared with install-service (#715): update, test and
+    # delete must name exactly what install published, or they act on another route.
+    PROXY_DOMAIN="$(module_public_domain "${VMNAME}" "${_ENV:-}" "${JSON}")"
 fi
 
 DESCRIPTION="TAPPaaS: ${MODULE}"

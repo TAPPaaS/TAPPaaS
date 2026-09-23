@@ -392,6 +392,17 @@ fi
 
 # ============================================================================
 # Test 12: OnlyOffice Connector URL Consistency (conditional)
+# The public name, from the platform's one derivation (#715). Run in a subshell:
+# sourcing the shared routines here would replace this script's own
+# info/warn/error. `set --` first, or the lib would load <vmname>.json as $JSON.
+public_domain_of() {  # <vmname> <environment> <module-json-file>
+    local lib=/home/tappaas/bin/common-install-routines.sh
+    [[ -r "${lib}" ]] || lib="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../../foundation/tappaas-cicd/lib/common-install-routines.sh"
+    bash -c 'v="$1" e="$2" f="$3" lib="$4"; set --
+             . "${lib}" >/dev/null 2>&1 || exit 0
+             module_public_domain "$v" "$e" "$(cat "$f" 2>/dev/null)"' _ "$1" "$2" "$3" "${lib}" 2>/dev/null
+}
+
 # ============================================================================
 # Server-side health (JWT, /healthcheck, commandservice) can be green while the
 # BROWSER still fails with "ONLYOFFICE cannot be reached" — when the public URLs
@@ -406,24 +417,7 @@ DS_URL=$(remote "sudo -u postgres psql -d nextcloud -tAc \"SELECT configvalue FR
 if [ -z "$DS_URL" ]; then
     skip "OnlyOffice: connector not configured (no DocumentServerUrl) — skipping"
 else
-    EXPECT_DOMAIN=$(jq -r '.config["network:proxy"].proxyDomain // .proxyDomain // empty' "${MODULE_JSON}" 2>/dev/null || echo "")
-    # proxyDomain is intentionally not stored — Nextcloud derives it as
-    # <vmname>.<domain> (see network:proxy / identity install-services). Mirror
-    # that derivation (environment-aware via the env file) so this check validates
-    # against the real public domain instead of an empty value.
-    if [ -z "${EXPECT_DOMAIN}" ]; then
-        _variant=$(jq -r '.environment // ""' "${MODULE_JSON}" 2>/dev/null || echo "")
-        # Domain from the env file (config/environments/<env>.json), where env is
-        # the persisted environment or the default env (site.json .name). The
-        # legacy configuration.json variant registry is retired (ADR-007 Phase D).
-        _env="${_variant}"
-        [ -z "${_env}" ] && _env=$(jq -r '.name // empty' "${CONFIG_DIR}/site.json" 2>/dev/null || echo "")
-        _dom=""
-        if [ -n "${_env}" ] && [ -f "${CONFIG_DIR}/environments/${_env}.json" ]; then
-            _dom=$(jq -r '.domains.primary // empty' "${CONFIG_DIR}/environments/${_env}.json" 2>/dev/null || echo "")
-        fi
-        [ -n "${_dom}" ] && EXPECT_DOMAIN="${VMNAME}.${_dom}"
-    fi
+    EXPECT_DOMAIN="$(public_domain_of "${VMNAME}" "$(jq -r '.environment // ""' "${MODULE_JSON}" 2>/dev/null)" "${MODULE_JSON}")"
     STORAGE_URL=$(remote "sudo -u postgres psql -d nextcloud -tAc \"SELECT configvalue FROM oc_appconfig WHERE appid='onlyoffice' AND configkey='StorageUrl'\" 2>/dev/null" | tr -d '\r ' || echo "")
     STORAGE_HOST=$(printf '%s' "$STORAGE_URL" | sed -E 's#^https?://##; s#[:/].*$##')
 
@@ -460,17 +454,7 @@ fi
 # converge, not only a first install.
 header "Test 13: Public Domain Is Trusted (trusted_domains)"
 
-TD_EXPECT=$(jq -r '.config["network:proxy"].proxyDomain // .proxyDomain // empty' "${MODULE_JSON}" 2>/dev/null || echo "")
-if [ -z "${TD_EXPECT}" ]; then
-    # Mirror the install-time derivation: <vmname>.<environment domain>.
-    _td_env=$(jq -r '.environment // ""' "${MODULE_JSON}" 2>/dev/null || echo "")
-    [ -z "${_td_env}" ] && _td_env=$(jq -r '.name // empty' "${CONFIG_DIR}/site.json" 2>/dev/null || echo "")
-    _td_dom=""
-    if [ -n "${_td_env}" ] && [ -f "${CONFIG_DIR}/environments/${_td_env}.json" ]; then
-        _td_dom=$(jq -r '.domains.primary // empty' "${CONFIG_DIR}/environments/${_td_env}.json" 2>/dev/null || echo "")
-    fi
-    [ -n "${_td_dom}" ] && TD_EXPECT="${VMNAME}.${_td_dom}"
-fi
+TD_EXPECT="$(public_domain_of "${VMNAME}" "$(jq -r '.environment // ""' "${MODULE_JSON}" 2>/dev/null)" "${MODULE_JSON}")"
 
 TD_CONF="/var/lib/nextcloud/config/config.php"
 TD_OVERRIDE="/var/lib/nextcloud/config/override.config.php"
