@@ -3,13 +3,13 @@
 | | |
 |---|---|
 | **Status** | **Accepted** — implemented (see [ADR-014-implementation.md](../design/ADR-014-implementation.md); branch `feat/adr-014-zone-lifecycle`, packages P0–P8) |
-| **Version** | 1.0 |
+| **Version** | 1.1 |
 | **Date** | 2026-08-23 (v0.3: 2026-08-06) |
 | **Author** | Lars Rossen |
 | **Parent** | [ADR-007 Taxonomy (Overview)](<ADR-007 - TAPPaaS Taxonomy.md>) |
 | **Refines** | [ADR-007c Environments](<ADR-007c - Environments.md>) (env↔zone binding), [ADR-007d Site](<ADR-007d - Site.md>) (`defaultEnvironment`, client-zone naming), [ADR-007f Realization](<ADR-007f - Realization.md>) (managers); ADR-001/002 (VLAN/zone model — the tier dimension) |
 | **Related** | **#258** (origin of the `tier_model` prose in `zones.json` — a documentation/isolation-invariant issue, never an ADR; this ADR is its first design record); #424 (client/IoT zones ↔ environments undefined); #425 (keep client-zone names — closed); #426 (decouple site.name — closed); ADR-002 (dynamic VLAN); ADR-008 (network infrastructure); **owner:** `network-manager` (zones), `environment-manager` (environments) |
-| **Changelog** | **v1.0 — ACCEPTED, reconciled with the implementation.** Three drafting decisions were settled by the operator: **`home` is KEPT** (the `home → private` rename is struck, with it the re-domaining and the generic rename-map machinery — F1); **D6 enforcement is phased** — I1–I4 ship warn-only and no gate is wired to `--strict` in this work (F2); **retired zones are auto-removed when unoccupied** by a new `retire` verb (F3). Four things the draft got wrong or left implicit were corrected while building: **D2's derivation is LOCAL, not symmetric** (the symmetric form invented firewall rules — see D2); **D1 keys on the zone's PRESENCE**, since a missing zone has no type to inspect; **D7 profiles need `grants`** to express the one edge a zone set cannot; and **`wan` belongs in `core`** (the draft omitted it). Adds **D8** (authored vs. effective documents) — the derivation has to be rendered, not written back, or the 3-way merge pins it. The D2 open question (where the back-fill runs) is resolved: inside `merge`. v0.3 — **recast `tier` as a strict trust lattice** (D5): `access-to` flows downward only (R1: `tier(A) ≤ tier(B)`), all upward reach is a `pinhole`; **DMZ drops out of the service class** to Tier 4 (internet-exposed) and **service sits above trusted clients** (client→service becomes a pinhole, #258-aligned); **isolation becomes an orthogonal `isolated` flag** (R2). D6 checks reduce to R1 + R2 + egress + archetype-conformance. Header now cites **#258** as the tier model's provenance. v0.2 — add the **zone tier model as first-class state** (D5: `tier` authored field + archetypes), **tier-based security invariants** in zones-check (D6, promoting the `_README` PR checklist to machine gates), and the **fresh-install default zone set + template cleanup** (D7). D3's IoT `--class` is subsumed by the D5 archetypes. v0.1 — initial draft: env↔service-zone binding (default / override / auto-create); symbolic `serves` link for client & IoT zones (rename-safe, fixes #424); guided IoT creation; filtered zone listing + confirmation that enable/disable already exist. |
+| **Changelog** | **v1.1 (2026-09-23)** — D5 states that `tier` is not an IEC 62443 Security Level and declines the mapping (#707): the scales run in opposite directions, they measure different things, and Tier 3's members would not share an SL. ADR-022's open question on renaming `tier` is answered by it. · **v1.0 — ACCEPTED, reconciled with the implementation.** Three drafting decisions were settled by the operator: **`home` is KEPT** (the `home → private` rename is struck, with it the re-domaining and the generic rename-map machinery — F1); **D6 enforcement is phased** — I1–I4 ship warn-only and no gate is wired to `--strict` in this work (F2); **retired zones are auto-removed when unoccupied** by a new `retire` verb (F3). Four things the draft got wrong or left implicit were corrected while building: **D2's derivation is LOCAL, not symmetric** (the symmetric form invented firewall rules — see D2); **D1 keys on the zone's PRESENCE**, since a missing zone has no type to inspect; **D7 profiles need `grants`** to express the one edge a zone set cannot; and **`wan` belongs in `core`** (the draft omitted it). Adds **D8** (authored vs. effective documents) — the derivation has to be rendered, not written back, or the 3-way merge pins it. The D2 open question (where the back-fill runs) is resolved: inside `merge`. v0.3 — **recast `tier` as a strict trust lattice** (D5): `access-to` flows downward only (R1: `tier(A) ≤ tier(B)`), all upward reach is a `pinhole`; **DMZ drops out of the service class** to Tier 4 (internet-exposed) and **service sits above trusted clients** (client→service becomes a pinhole, #258-aligned); **isolation becomes an orthogonal `isolated` flag** (R2). D6 checks reduce to R1 + R2 + egress + archetype-conformance. Header now cites **#258** as the tier model's provenance. v0.2 — add the **zone tier model as first-class state** (D5: `tier` authored field + archetypes), **tier-based security invariants** in zones-check (D6, promoting the `_README` PR checklist to machine gates), and the **fresh-install default zone set + template cleanup** (D7). D3's IoT `--class` is subsumed by the D5 archetypes. v0.1 — initial draft: env↔service-zone binding (default / override / auto-create); symbolic `serves` link for client & IoT zones (rename-safe, fixes #424); guided IoT creation; filtered zone listing + confirmation that enable/disable already exist. |
 
 ## Context
 
@@ -293,6 +293,35 @@ reaches it zone-wide (Home Assistant → local IoT), which R2 forbids for `iotCa
 > every client→service reach to per-module rules; (b) **`guest` and the internet-egress IoT zones share
 > Tier 3** — correct for the `access-to` rank (identical outbound, no inbound), and `type` still
 > separates them, but it breaks the old "one tier = one kind" reading. Both are recommended as written.
+
+#### `tier` is not an IEC 62443 Security Level, and is deliberately not mapped to one (#707)
+
+TAPPaaS zones are [ISA/IEC 62443](https://gca.isa.org/blog/how-to-define-zones-and-conduits) zones in
+the **partitioning** sense — that is the anchor ADR-022 records, and it stands. `tier` is **not** a
+Security Level, and this ADR claims no mapping between the two. Three reasons, any one of which
+would be enough:
+
+1. **They measure different things.** A Security Level states the *protection capability* a zone must
+   have against a class of adversary — SL 1 casual or accidental, up to SL 4 an attacker with
+   state-level resources. `tier` states a zone's *position in this site's trust ordering*, and its
+   only job is to decide which way an `access-to` edge may run (R1). One is a requirement derived from
+   a risk assessment; the other is a property of the architecture.
+2. **The scales run in opposite directions.** `tier` counts **down** to privilege — 0 is the most
+   trusted zone. SL counts **up** to protection — SL 4 is the most demanding. A reader who assumes the
+   two are the same scale inverts them, which is exactly the trap #707 was raised about.
+3. **They do not agree on membership.** Tier 3 holds `guest`, `iotCloud` and `iotUntrust` together
+   because their `access-to` rank is identical. Their Security Levels would not be identical: a guest
+   network and a cloud-dependent IoT segment face different threats and would be assessed apart.
+
+**What this means in practice.** No SL is claimed, assessed or implied for any zone TAPPaaS ships.
+Asserting a mapping would imply a 62443 risk assessment that nobody has performed, and a site
+subject to 62443 would have to redo it anyway — so the honest statement is the one that leaves them
+free to.
+
+Should a site perform such an assessment, an SL belongs on the zone as **its own field**, recorded
+next to `tier` and never derived from it. Renaming `tier` to align with 62443 — raised as an open
+question in ADR-022 — is therefore declined: the name would promise an equivalence that does not
+hold.
 
 ### D6 — Tier-based security invariants (promote the PR checklist to gates)
 

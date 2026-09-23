@@ -172,7 +172,7 @@
       "required": false,
       "minimum": 0,
       "maximum": 6,
-      "note": "Tier 5 is reserved for the 'internet' boundary token and is never authored on a real zone. See 'tier_model' and 'invariants.I1' below.",
+      "note": "Tier 5 is reserved for the 'internet' boundary token and is never authored on a real zone. See 'tier_model' and 'invariants.I1' below. NOT an IEC 62443 Security Level: tier counts DOWN to privilege (0 = most trusted) while SL counts UP to protection (SL 4 = most demanding), and the two measure different things — see ADR-014 D5, which declines the mapping (#707).",
       "example": 2,
       "changeClass": "in-place",
       "changeNote": "Trust rank in the ADR-014 lattice. Changing it re-derives which access-to edges are legal: validate warns (I1) about an edge the new tier forbids. No firewall rule reads it, so a reconcile changes nothing."

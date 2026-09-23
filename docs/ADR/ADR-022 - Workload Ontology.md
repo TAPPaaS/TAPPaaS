@@ -83,7 +83,7 @@ Four collisions, all live on `main`:
 
 ## Open questions
 
-1. Should `zone.tier` be renamed to align with IEC 62443 **Security Level**? ADR-014 owns it; raised, not decided.
+1. ~~Should `zone.tier` be renamed to align with IEC 62443 **Security Level**?~~ **Answered (#707, 2026-09-23): no.** ADR-014 D5 declines the mapping — the scales run in opposite directions and measure different things (protection capability against an adversary class, versus position in this site's trust ordering), so the name would promise an equivalence that does not hold. An assessed SL would be its own field beside `tier`.
 2. ~~Should `module.tier` be replaced by `stack` (#624, #637)?~~ **Answered:** no — it becomes `scope` ([ADR-022e](<ADR-022e - Module Scope.md>), accepted).
 3. Does `kind: device` need an **attachment** dimension (`wired` | `wireless`)? Raised in #624; not decided.
 
