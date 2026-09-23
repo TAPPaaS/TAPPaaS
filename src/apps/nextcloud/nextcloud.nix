@@ -652,51 +652,6 @@ in
     };
   };
 
-  # ============================================================================
-  # NEXTCLOUD TALK — coturn TURN/STUN integration
-  # ============================================================================
-  #
-  # SETUP:
-  #   1. Deploy the coturn module (VMID 630, DMZ zone).
-  #   2. On the coturn VM, confirm /etc/secrets/coturn.env has COTURN_SECRET set
-  #      and COTURN_EXTERNAL_IP populated.
-  #   3. Copy /etc/secrets/coturn.env from the coturn VM to this VM at the same
-  #      path (/etc/secrets/coturn.env, mode 0600, root:root).
-  #   4. The nextcloud-configure-talk service activates automatically on next boot.
-  #
-  # NOTE: COTURN_SECRET in /etc/secrets/coturn.env on THIS VM must match the
-  # secret on the coturn VM exactly — both files are copies of the same value.
-
-  # Configure Talk STUN/TURN servers — only runs when coturn secrets file exists
-  systemd.services.nextcloud-configure-talk = {
-    description = "Configure Nextcloud Talk STUN/TURN servers";
-    wantedBy    = [ "multi-user.target" ];
-    after       = [ "nextcloud-setup.service" ];
-    requires    = [ "nextcloud-setup.service" ];
-
-    # Activates whenever the coturn secrets file exists (runs on each boot to
-    # keep config in sync with the secret — safe because occ set is idempotent)
-    unitConfig.ConditionPathExists = "/etc/secrets/coturn.env";
-
-    serviceConfig = {
-      Type            = "oneshot";
-      RemainAfterExit = true;
-      EnvironmentFile = "/etc/secrets/coturn.env";
-      ExecStart = pkgs.writeShellScript "nextcloud-configure-talk" ''
-        set -euo pipefail
-        export PATH="/run/current-system/sw/bin:${pkgs.coreutils}/bin:$PATH"
-
-        nextcloud-occ config:app:set spreed stun_servers \
-          --value="[\"$COTURN_HOST:3478\"]"
-
-        nextcloud-occ config:app:set spreed turn_servers \
-          --value="[{\"server\":\"$COTURN_HOST:3478\",\"secret\":\"$COTURN_SECRET\",\"protocols\":\"udp,tcp\"}]"
-
-        echo "Nextcloud Talk STUN/TURN servers configured successfully."
-      '';
-    };
-  };
-
   # Configure SMTP credentials — runs on every boot when /etc/secrets/mail.env exists.
   # Populate /etc/secrets/mail.env (mode 0600, root:root) with:
   #   SMTP_USER=user@example.com
@@ -740,7 +695,7 @@ in
   systemd.services.nextcloud-configure-talk-turn = {
     description = "Register the coturn TURN/STUN relay in Nextcloud Talk";
     wantedBy    = [ "multi-user.target" ];
-    after       = [ "nextcloud-setup.service" "nextcloud-configure-talk.service" ];
+    after       = [ "nextcloud-setup.service" ];
     requires    = [ "nextcloud-setup.service" ];
 
     unitConfig.ConditionPathExists = "/etc/secrets/talk.env";
