@@ -27,10 +27,9 @@ mesh (each client uploads N−1 streams), which caps a video call at roughly 5-6
 
 ## Requirements
 
-- **The Nextcloud zone.** Place the HPB in the same zone as the Nextcloud it serves (set
-  `zone0` in the deployed json to Nextcloud's). The default site zone has never carried a
-  guest on every node; a wrong zone shows up as a VM with no IPv4 and an installer that dies
-  at "does not resolve".
+- **The Nextcloud zone.** The pre-install hook places the HPB in the zone of the Nextcloud it
+  serves, unless `zone0` is set explicitly. If the VM cannot get an address in its zone, the
+  installer stops at "does not resolve" and names the zone and VLAN.
 - VM sizing (defaults from `nextcloud-hpb.json`): 4 vCPU, 4 GB RAM, 16 GB disk on `tanka1`.
   Fine to ~30 video participants; for external attendees the **WAN uplink** is the ceiling
   (a 30-way call is 30 × 29 downstream streams out of Janus), not the CPU.
