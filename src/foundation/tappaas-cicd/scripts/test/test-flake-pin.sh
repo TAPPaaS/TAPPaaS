@@ -60,5 +60,34 @@ grep -q "BACKWARDS" <<<"${out}" && bad "warned about an upgrade" || ok "a newer 
 grep -q "nixpkgs pin: ccccccccccc3" <<<"${out}" && grep -qE "[0-9]+d old" <<<"${out}" \
     && ok "every rebuild records the pin and how old it is" || bad "pin/age not reported: ${out}"
 
+echo "── one pin for the estate (ADR-028 D1) ──"
+# The mothership must not hold a nixpkgs of its own: two locks refreshed by
+# hand are what D1 removes, and the only thing that keeps them together is that
+# one FOLLOWS the other. Asserted against the shipped files, because a
+# hand-edited flake.nix is exactly how the second pin comes back.
+_cicd_flake="${HERE}/../../flake.nix"
+_cicd_lock="${HERE}/../../flake.lock"
+_tmpl_lock="${HERE}/../../../templates/flake.lock"
+if [[ -r "${_cicd_flake}" && -r "${_cicd_lock}" && -r "${_tmpl_lock}" ]]; then
+    grep -q 'inputs.nixpkgs.follows = "templates/nixpkgs"' "${_cicd_flake}" \
+        && ok "the mothership's flake follows templates/nixpkgs" \
+        || bad "tappaas-cicd/flake.nix does not follow the estate pin"
+    grep -q 'inputs.nixpkgs.url' "${_cicd_flake}" \
+        && bad "tappaas-cicd/flake.nix still declares a nixpkgs url of its own" \
+        || ok "…and declares no nixpkgs url of its own"
+    _f="$(jq -r '(.nodes.root.inputs.nixpkgs | if type == "array" then join("/") else . end) // ""' "${_cicd_lock}")"
+    [[ "${_f}" == "templates/nixpkgs" ]] \
+        && ok "the lock records the follows, not a revision" \
+        || bad "tappaas-cicd/flake.lock resolves nixpkgs itself ('${_f}')"
+    # The guarantee in the form that matters: the same bits, both places.
+    _a="$(jq -r '.nodes.nixpkgs.locked.rev // ""' "${_cicd_lock}")"
+    _b="$(jq -r '.nodes.nixpkgs.locked.rev // ""' "${_tmpl_lock}")"
+    [[ -n "${_a}" && "${_a}" == "${_b}" ]] \
+        && ok "both locks name the same revision (${_a:0:12})" \
+        || bad "locks disagree: cicd=${_a:0:12} templates=${_b:0:12}"
+else
+    bad "flake files not found beside this suite"
+fi
+
 echo "── summary: ${pass} pass, ${fail} fail ──"
 [[ "${fail}" -eq 0 ]]

@@ -1,11 +1,19 @@
 {
   description = "TAPPaaS mothership (tappaas-cicd) NixOS system — version pinned in flake.lock";
 
-  # The NixOS release for the mothership. Bump this ref (and run `nix flake
-  # update`) to upgrade NixOS; flake.lock records the exact nixpkgs revision so
-  # the build is reproducible and the version is declared in git (not in the
-  # imperative root `nix-channel`). Do NOT bump system.stateVersion on upgrade.
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
+  # ONE pin for the estate (ADR-028 D1). The mothership does not choose its own
+  # nixpkgs: it follows the revision `templates/flake.lock` holds, which is what
+  # update-os.sh forces onto every NixOS guest. Two locks refreshed by hand
+  # could silently disagree — a relative path input makes that impossible
+  # instead of merely discouraged. `nix flake update` on templates/ moves the
+  # whole estate; this lock records the same revision, by construction.
+  #
+  # Relative path inputs resolve against the GIT TREE, so both flakes must stay
+  # in this repository — outside one, `path:../templates` resolves to
+  # /nix/store/templates and evaluation fails. Needs Nix >= 2.26 (2.31 here).
+  # Do NOT bump system.stateVersion on upgrade.
+  inputs.templates.url = "path:../templates";
+  inputs.nixpkgs.follows = "templates/nixpkgs";
 
   outputs = { self, nixpkgs, ... }:
     let

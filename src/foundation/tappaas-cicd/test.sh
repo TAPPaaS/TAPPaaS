@@ -64,26 +64,43 @@ skip() { info "  ${YW}⊘${CL} $1 (skipped)"; SKIP=$((SKIP + 1)); }
 
 # ── Test 0: how old is the nixpkgs this site would rebuild from? ─────
 #
-# One lock in this repository decides every D3 site's nixpkgs (#680), and a
-# lock only ever gets older. PASSES either way — a stale pin is a release
-# decision, not a broken system, and failing here would abort the update of a
-# healthy mothership over it. It is reported so that "nobody noticed" stops
-# being the reason it is four months old.
-_pin_lock="${SCRIPT_DIR}/flake.lock"
+# ONE lock decides the estate (ADR-028 D1): templates/flake.lock is what
+# update-os.sh forces onto every NixOS guest, and the mothership's flake now
+# FOLLOWS it rather than carrying a pin of its own. Both facts are checked here
+# — the age, because a lock only ever gets older, and the follows, because a
+# second pin re-added by hand is exactly the divergence D1 removes.
+#
+# The age PASSES either way: a stale pin is a release decision, not a broken
+# system, and failing here would abort the update of a healthy mothership over
+# it. It is reported so that "nobody noticed" stops being the reason it is four
+# months old. 45 days, not 90: the cadence is a fortnight (D2), and a tripwire
+# looser than the policy it guards can never catch a missed cycle.
+_pin_lock="${SCRIPT_DIR}/../templates/flake.lock"
+_cicd_lock="${SCRIPT_DIR}/flake.lock"
 if [[ -r "${_pin_lock}" ]] && command -v jq >/dev/null 2>&1; then
     _pin_epoch="$(jq -r '.nodes.nixpkgs.locked.lastModified // empty' "${_pin_lock}" 2>/dev/null)"
     _pin_rev="$(jq -r '.nodes.nixpkgs.locked.rev // empty' "${_pin_lock}" 2>/dev/null)"
     if [[ -n "${_pin_epoch}" ]]; then
         _pin_age=$(( ( $(date -u +%s) - _pin_epoch ) / 86400 ))
-        if [[ "${_pin_age}" -gt "${TAPPAAS_PIN_MAX_AGE_DAYS:-90}" ]]; then
-            info "  ${YW}⚠${CL} nixpkgs pin ${_pin_rev:0:12} is ${_pin_age} days old — every site on ADR-017 D3 builds from it (#680)"
-            info "      refresh it deliberately: nix flake update --flake ${SCRIPT_DIR}, then rebuild and deep-test a site"
+        if [[ "${_pin_age}" -gt "${TAPPAAS_PIN_MAX_AGE_DAYS:-45}" ]]; then
+            info "  ${YW}⚠${CL} the estate's nixpkgs pin ${_pin_rev:0:12} is ${_pin_age} days old — every NixOS guest and the mothership build from it"
+            info "      refresh it deliberately: nix flake update --flake ${SCRIPT_DIR}/../templates, then rebuild and deep-test a site"
         fi
-        pass "nixpkgs pin recorded: ${_pin_rev:0:12} (${_pin_age}d old)"
+        pass "estate nixpkgs pin recorded: ${_pin_rev:0:12} (${_pin_age}d old)"
+    fi
+    # D1: the mothership must FOLLOW that pin, never hold its own.
+    if [[ -r "${_cicd_lock}" ]]; then
+        _follows="$(jq -r '(.nodes.root.inputs.nixpkgs | if type == "array" then join("/") else . end) // ""' "${_cicd_lock}" 2>/dev/null)"
+        if [[ "${_follows}" == "templates/nixpkgs" ]]; then
+            pass "the mothership follows the estate pin (one lock, ADR-028 D1)"
+        else
+            fail "tappaas-cicd/flake.lock pins nixpkgs itself ('${_follows}') — two locks can diverge (ADR-028 D1)"
+        fi
+        unset _follows
     fi
     unset _pin_epoch _pin_rev _pin_age
 fi
-unset _pin_lock
+unset _pin_lock _cicd_lock
 
 # ── Test 1: Required scripts in ~/bin ────────────────────────────────
 

@@ -18,8 +18,26 @@
     },
     "root": {
       "inputs": {
-        "nixpkgs": "nixpkgs"
+        "nixpkgs": [
+          "templates",
+          "nixpkgs"
+        ],
+        "templates": "templates"
       }
+    },
+    "templates": {
+      "inputs": {
+        "nixpkgs": "nixpkgs"
+      },
+      "locked": {
+        "path": "../templates",
+        "type": "path"
+      },
+      "original": {
+        "path": "../templates",
+        "type": "path"
+      },
+      "parent": []
     }
   },
   "root": "root",
