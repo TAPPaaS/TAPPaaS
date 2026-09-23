@@ -243,7 +243,11 @@ Mitigations in place:
 - The journal scrapes on both `tappaas-cicd` and `logging` **drop** log lines from
   credential-handling units (`opnsense-controller.*`, `setup-caddy.*`,
   `generate-*-secrets.*`) and **scrub** common secret patterns (`token=`, `password=`,
-  `Authorization:`, `curl -u`) before shipping to Loki.
+  `Authorization:`, `curl -u`) before shipping to Loki. The scrub stages replace only
+  their capture group, which must be the secret itself — a `replace` value is taken
+  literally and `$1` is **not** expanded. Writing them the other way round is what made
+  them silently useless from their introduction until #724; the regression test for that
+  is a `logger` line with a known value, checked for by querying Loki.
 - Grafana admin password is generated to a root-only one-shot file, never to the journal.
 - Grafana's `secret_key` — which encrypts Grafana's own database secrets — is generated
   per site into `/etc/secrets/grafana-secret-key` (0600 `grafana:grafana`) and read through

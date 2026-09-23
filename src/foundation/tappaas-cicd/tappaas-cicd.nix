@@ -514,21 +514,31 @@ in
       }
 
       // 2. Belt-and-braces: scrub common secret assignments anywhere else.
+      //
+      // Only the CAPTURE GROUPS are replaced, and `replace` is used literally —
+      // there is no $1 expansion (#724). So each expression captures the SECRET
+      // and leaves the key outside the group: the key stays readable and only
+      // the value is destroyed.
+      //
+      // These deliberately over-match: "password: permission denied" loses the
+      // word "permission", because demanding the value hug the separator would
+      // miss the very common `token: abc123`. Redacting a word that was not a
+      // secret costs readability; missing one that was costs the secret.
       stage.replace {
-        expression = "(?i)\\b(token|secret|password|passwd|api[_-]?key)\\s*[:=]\\s*\\S+"
-        replace    = "$1=***REDACTED***"
+        expression = "(?i)\\b(?:token|secret|password|passwd|api[_-]?key)\\s*[:=]\\s*(\\S+)"
+        replace    = "***REDACTED***"
       }
 
       // 3. Scrub HTTP basic-auth in curl-like lines: -u "user:pass"
       stage.replace {
-        expression = "(-u[[:space:]]+[\"']?)[^\"' ]+:[^\"' ]+([\"']?)"
-        replace    = "$1***REDACTED***$2"
+        expression = "-u[[:space:]]+[\"']?([^\"' ]+:[^\"' ]+)[\"']?"
+        replace    = "***REDACTED***"
       }
 
       // 4. Scrub Authorization headers
       stage.replace {
-        expression = "(Authorization:[[:space:]]+(Basic|Bearer)[[:space:]]+)\\S+"
-        replace    = "$1***REDACTED***"
+        expression = "Authorization:[[:space:]]+(?:Basic|Bearer)[[:space:]]+(\\S+)"
+        replace    = "***REDACTED***"
       }
     }
 
