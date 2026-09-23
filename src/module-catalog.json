@@ -70,7 +70,7 @@
       "moduleName": "hass",
       "moduleJson": "src/apps/hass/hass.json",
       "vmid": 210,
-      "stack": "home-automation"
+      "stack": "home"
     },
     {
       "moduleName": "litellm",
@@ -100,13 +100,13 @@
       "moduleName": "windows-server",
       "moduleJson": "src/apps/windows-server/windows-server.json",
       "vmid": 500,
-      "stack": "application"
+      "stack": "misc"
     },
     {
       "moduleName": "netbird-client",
       "moduleJson": "src/apps/netbird-client/netbird-client.json",
       "vmid": 800,
-      "stack": "infrastructure"
+      "stack": "security"
     },
     {
       "moduleName": "nextcloud",
@@ -196,7 +196,7 @@
       "moduleName": "deconz",
       "moduleJson": "src/apps/deconz/deconz.json",
       "vmid": 213,
-      "stack": "home-automation"
+      "stack": "home"
     },
     {
       "moduleName": "satellite",

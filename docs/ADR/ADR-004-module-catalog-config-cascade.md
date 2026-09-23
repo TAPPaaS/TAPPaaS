@@ -138,13 +138,19 @@ Fields per entry, as originally specified:
   "moduleName": "forgejo",
   "vmid": 350,
   "moduleJson": "src/ErikDaniel007/development/forgejo/forgejo.json",
-  "stack": "foundation | application | community",
+  "stack": "foundation | ai | collaboration | … (the enumeration in module-fields.json)",
   "category": "git | monitoring | auth | media | ...",
   "status": "stable | beta | incomplete | deprecated"
 }
 ```
 
-- `stack`: groups the catalogue, and (since #463) says what the module is
+- `stack`: groups the catalogue, and (since #463) says what the module is. **An enumerated value, and
+  `schemas/module-fields.json` owns the list** (#708): a module carries exactly one stack, as a field in
+  its own JSON, and the catalogue entry repeats it so `repository list` can group without opening every
+  module file. Three values say what a module IS rather than what it is for — `foundation`, `template`,
+  `test`; the rest group application modules by purpose. Extend the schema's list rather than inventing a
+  value here: this ADR deliberately does not restate it, because restating it is how it came to have three
+  different definitions
 - ~~`category`, `status`~~: dropped by #463 — the module's own JSON carries them (#248)
 - VMID uniqueness: **not** enforceable by a schema across sibling arrays, and it was never
   implemented — Community carried one VMID twice for months. Since #463 it is a check in

@@ -16,7 +16,7 @@ T="$(mktemp -d)"; trap 'rm -rf "${T}"' EXIT
 # A repository: two modules, one of them with no guest (no vmid).
 mkrepo() {  # <dir> <catalog-json>
     local d="$1"; rm -rf "${d}"; mkdir -p "${d}/src/apps/hass" "${d}/src/foundation/backup"
-    echo '{"stack":"home-automation","vmid":210}' > "${d}/src/apps/hass/hass.json"
+    echo '{"stack":"home","vmid":210}' > "${d}/src/apps/hass/hass.json"
     echo '{"stack":"foundation","kind":"application"}' > "${d}/src/foundation/backup/backup.json"
     printf '%s\n' "$2" > "${d}/src/module-catalog.json"
 }
@@ -24,7 +24,7 @@ run()   { "${VC}" "$@" >"${T}/out" 2>&1; echo $?; }
 finds() { local n; n="$(grep -c '\[Warning\]' "${T}/out" 2>/dev/null)" || true; echo "${n:-0}"; }
 said()  { grep -q "$1" "${T}/out" && echo yes || echo no; }
 
-CLEAN='{"modules":[{"moduleName":"hass","moduleJson":"src/apps/hass/hass.json","vmid":210,"stack":"home-automation"},
+CLEAN='{"modules":[{"moduleName":"hass","moduleJson":"src/apps/hass/hass.json","vmid":210,"stack":"home"},
                    {"moduleName":"backup","moduleJson":"src/foundation/backup/backup.json","stack":"foundation"}]}'
 mkrepo "${T}/r" "${CLEAN}"
 ck "a catalog that says true things passes"     "0 0" "$(run "${T}/r") $(finds)"
@@ -42,21 +42,21 @@ run "${T}/r" >/dev/null; ck "a stack the module disagrees with is a finding" "ye
 mkrepo "${T}/r" "${CLEAN/\"vmid\":210/\"vmid\":999}"
 run "${T}/r" >/dev/null; ck "a vmid the module disagrees with is a finding" "yes" "$(said 'catalog vmid 999')"
 
-mkrepo "${T}/r" '{"modules":[{"moduleName":"hass","moduleJson":"src/apps/hass/hass.json","vmid":210,"stack":"home-automation"},
+mkrepo "${T}/r" '{"modules":[{"moduleName":"hass","moduleJson":"src/apps/hass/hass.json","vmid":210,"stack":"home"},
                              {"moduleName":"hass","moduleJson":"src/foundation/backup/backup.json","vmid":210,"stack":"foundation"}]}'
 run "${T}/r" >/dev/null
 ck "one name, twice, is a finding"  "yes" "$(said "appears 2 times")"
 ck "one VMID, twice, is a finding"  "yes" "$(said 'claimed by 2')"
 
-mkrepo "${T}/r" '{"modules":[{"moduleName":"hass","moduleJson":"src/apps/hass/hass.json","vmid":210,"stack":"home-automation"}]}'
+mkrepo "${T}/r" '{"modules":[{"moduleName":"hass","moduleJson":"src/apps/hass/hass.json","vmid":210,"stack":"home"}]}'
 run "${T}/r" >/dev/null; ck "a module the catalog does not list is a finding" "yes" "$(said 'catalog does not list')"
 
-mkrepo "${T}/r" '{"modules":[{"moduleName":"hass","moduleJson":"src/apps/hass/hass.json","vmid":210,"stack":"home-automation","status":"beta"},
+mkrepo "${T}/r" '{"modules":[{"moduleName":"hass","moduleJson":"src/apps/hass/hass.json","vmid":210,"stack":"home","status":"beta"},
                              {"moduleName":"backup","moduleJson":"src/foundation/backup/backup.json","stack":"foundation"}]}'
 run "${T}/r" >/dev/null; ck "a field the schema dropped is a finding" "yes" "$(said 'does not define: status')"
 
 mkrepo "${T}/r" '{"foundationModules":[{"moduleName":"backup","moduleJson":"src/foundation/backup/backup.json","tier":"foundation","source":"official","stack":"foundation"}],
-                  "applicationModules":[{"moduleName":"hass","moduleJson":"src/apps/hass/hass.json","vmid":210,"tier":"app","stack":"home-automation","category":"automation","status":"beta"}]}'
+                  "applicationModules":[{"moduleName":"hass","moduleJson":"src/apps/hass/hass.json","vmid":210,"tier":"app","stack":"home","category":"automation","status":"beta"}]}'
 ck "the pre-#463 shape is read, and said to be old" "0 yes" "$(run "${T}/r") $(said 'pre-#463 lists')"
 ck "…its tier/source/category are not findings"     1 "$(finds)"
 

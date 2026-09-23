@@ -1,6 +1,6 @@
 {
   "description": "Barebone Windows Server 2025 VM. No roles or application software — a clean starting point for any Windows-based service.",
-  "stack": "application",
+  "stack": "misc",
   "kind": "vm",
   "version": "0.1.0",
   "status": "Development",

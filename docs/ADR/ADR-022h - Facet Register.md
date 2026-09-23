@@ -19,12 +19,12 @@ How TAPPaaS keeps the attributes that describe a resource mutually exclusive and
 ADR-007 splits TAPPaaS into classification **domains** (People, Apps, Environments; Site as container). ADR-022 describes one resource along independent **facets** (who, where, on what, what type). Nothing lists the facets together, so the same defect keeps returning — one field answering several questions:
 
 - `tier` — "can it be uninstalled?" (ADR-007b) versus what the code enforces (Site or Environment)
-- `stack` — functional domains plus `foundation`
+- `stack` — functional domains plus `foundation` *(settled by #708: one enumeration, owned by `module-fields.json`)*
 - `status` — maturity, lifecycle and management
 - `external` — five meanings (ADR-022g)
 - VM `os` — family and distribution
 
-Enumerations are also copied: `tier` and `source` values live in ADR-007b, `GLOSSARY.md`, `module-fields.json`, `validate.ts` and `validate-module-tier-source.sh`. The owner of `stack` / `category` is named three different ways (ADR-007b, `GLOSSARY.md`, ADR-004).
+Enumerations are also copied: `tier` and `source` values live in ADR-007b, `GLOSSARY.md`, `module-fields.json`, `validate.ts` and `validate-module-tier-source.sh`. The owner of `stack` / `category` was named three different ways (ADR-007b, `GLOSSARY.md`, ADR-004); `stack` is settled — `schemas/module-fields.json` owns its enumeration and every other mention points at it (#708).
 
 ## Decision
 
