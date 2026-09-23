@@ -251,7 +251,7 @@ in
   # Started by update-tappaas.timer, which update-tappaas-schedule renders from
   # site.json .updateSchedule (ADR-017 D1/D2), or by `site-manager update` (D4).
   # Output flows through Python's logging module with systemd-priority
-  # prefixes, so journald (and Promtail → Loki) tag entries with the right
+  # prefixes, so journald (and Alloy → Loki) tag entries with the right
   # severity.
   systemd.services.update-tappaas = {
     description = "TAPPaaS scheduler — update foundation and app modules";
@@ -473,79 +473,97 @@ in
   services.cron.enable = false;
 
   # ----------------------------------------
-  # Promtail client → ship the mothership's journal to logging
+  # Alloy client → ship the mothership's journal to logging
   # ----------------------------------------
   # Lets you query update-tappaas / update-module.sh output in Grafana via the
-  # Loki datasource. Safe-if-target-missing: Promtail buffers locally and retries.
+  # Loki datasource. Safe-if-target-missing: Alloy buffers locally and retries.
+  #
+  # Grafana Alloy replaced Promtail here because 26.05 removed both the promtail
+  # NixOS module AND the package — promtail reached end of life (#721). Alloy
+  # embeds promtail's own pipeline, so every stage below means exactly what it
+  # meant before; the translation was made by `alloy convert --source-format=promtail`
+  # from the config this host was actually running, not rewritten by hand.
   #
   # SECURITY: this VM runs opnsense-controller and setup-caddy.sh, which handle
-  # OPNsense API credentials. The pipeline_stages below DROP journal entries
-  # from credential-handling units and SCRUB common secret patterns from
-  # everything else BEFORE the line leaves this host.
-  services.promtail = {
+  # OPNsense API credentials. The stages below DROP journal entries from
+  # credential-handling units and SCRUB common secret patterns from everything
+  # else BEFORE the line leaves this host.
+  services.alloy = {
     enable = true;
-    configuration = {
-      server = {
-        # bind to localhost — Promtail metrics must not leak across mgmt
-        http_listen_address = "127.0.0.1";
-        http_listen_port = 9080;
-        grpc_listen_port = 0;
-      };
-      positions.filename = "/var/lib/promtail/positions.yaml";
-      clients = [{
-        url = "http://logging.mgmt.internal:3100/loki/api/v1/push";
-      }];
-      scrape_configs = [{
-        job_name = "journal";
-        journal = {
-          max_age = "12h";
-          labels = {
-            job = "systemd-journal";
-            host = "tappaas-cicd";
-          };
-        };
-        relabel_configs = [
-          { source_labels = [ "__journal__systemd_unit" ]; target_label = "unit"; }
-          { source_labels = [ "__journal_priority_keyword" ]; target_label = "severity"; }
-        ];
-        pipeline_stages = [
-          # 1. Drop journal entries from units that handle credentials.
-          {
-            match = {
-              selector = ''{unit=~"opnsense-controller.*|setup-caddy.*|generate-.*-secrets.*"}'';
-              action = "drop";
-            };
-          }
-          # 2. Belt-and-braces: scrub common secret assignments anywhere else.
-          {
-            replace = {
-              expression = ''(?i)\b(token|secret|password|passwd|api[_-]?key)\s*[:=]\s*\S+'';
-              replace = "$1=***REDACTED***";
-            };
-          }
-          # 3. Scrub HTTP basic-auth in curl-like lines: -u "user:pass"
-          {
-            replace = {
-              expression = ''(-u[[:space:]]+["']?)[^"' ]+:[^"' ]+(["']?)'';
-              replace = "$1***REDACTED***$2";
-            };
-          }
-          # 4. Scrub Authorization headers
-          {
-            replace = {
-              expression = ''(Authorization:[[:space:]]+(Basic|Bearer)[[:space:]]+)\S+'';
-              replace = "$1***REDACTED***";
-            };
-          }
-        ];
-      }];
-    };
+    extraFlags = [
+      # Alloy's own HTTP server: metrics and the component UI. Localhost only —
+      # this must not be reachable across mgmt. (Alloy already defaults to
+      # 127.0.0.1, unlike promtail; stated here so it cannot drift.)
+      "--server.http.listen-addr=127.0.0.1:9080"
+      # Do not report the enabled component set to Grafana. A TAPPaaS site
+      # tells no one what it runs.
+      "--disable-reporting"
+    ];
   };
 
-  # Promtail's hardened unit declares ReadWritePaths=/var/lib/promtail; that
-  # dir must exist for the systemd mount-namespacing step to succeed.
+  # Written to /etc rather than the store so `alloy` can reload it in place;
+  # the module watches every alloy/*.alloy file and reloads on switch.
+  environment.etc."alloy/config.alloy".text = ''
+    loki.process "journal" {
+      forward_to = [loki.write.default.receiver]
+
+      // 1. Drop journal entries from units that handle credentials.
+      stage.match {
+        selector = "{unit=~\"opnsense-controller.*|setup-caddy.*|generate-.*-secrets.*\"}"
+        action   = "drop"
+      }
+
+      // 2. Belt-and-braces: scrub common secret assignments anywhere else.
+      stage.replace {
+        expression = "(?i)\\b(token|secret|password|passwd|api[_-]?key)\\s*[:=]\\s*\\S+"
+        replace    = "$1=***REDACTED***"
+      }
+
+      // 3. Scrub HTTP basic-auth in curl-like lines: -u "user:pass"
+      stage.replace {
+        expression = "(-u[[:space:]]+[\"']?)[^\"' ]+:[^\"' ]+([\"']?)"
+        replace    = "$1***REDACTED***$2"
+      }
+
+      // 4. Scrub Authorization headers
+      stage.replace {
+        expression = "(Authorization:[[:space:]]+(Basic|Bearer)[[:space:]]+)\\S+"
+        replace    = "$1***REDACTED***"
+      }
+    }
+
+    discovery.relabel "journal" {
+      targets = []
+
+      rule {
+        source_labels = ["__journal__systemd_unit"]
+        target_label  = "unit"
+      }
+
+      rule {
+        source_labels = ["__journal_priority_keyword"]
+        target_label  = "severity"
+      }
+    }
+
+    loki.source.journal "journal" {
+      max_age       = "12h0m0s"
+      relabel_rules = discovery.relabel.journal.rules
+      forward_to    = [loki.process.journal.receiver]
+      labels        = {
+        host = "tappaas-cicd",
+        job  = "systemd-journal",
+      }
+    }
+
+    loki.write "default" {
+      endpoint {
+        url = "http://logging.mgmt.internal:3100/loki/api/v1/push"
+      }
+    }
+  '';
+
   systemd.tmpfiles.rules = [
-    "d /var/lib/promtail 0750 promtail promtail -"
     # check-ha-health.sh records when each HA service entered a transitional
     # state, so it can alert on duration rather than on the state alone (#146).
     "d /var/lib/tappaas 0750 tappaas users -"

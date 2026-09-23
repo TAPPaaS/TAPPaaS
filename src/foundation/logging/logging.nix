@@ -10,15 +10,15 @@
 # Version: 0.1.0
 # Date: 2026-05-14
 # Author: @larsrossen (TAPPaaS)
-# Product: Grafana Loki + Promtail + Grafana
+# Product: Grafana Loki + Alloy + Grafana
 #
 # Architecture:
 # - Loki single-binary mode (log store, filesystem-backed, 30-day retention)
 # - Grafana (web UI, port 3000, behind Caddy)
-# - Promtail (local journal scrape + 2 syslog receivers: 1514 OPNsense, 1515 Proxmox)
+# - Alloy (local journal scrape + 2 syslog receivers: 1514 OPNsense, 1515 Proxmox)
 #
 # Ingest paths:
-# - Other TAPPaaS VMs run Promtail clients that push to this VM:3100
+# - Other TAPPaaS VMs run Alloy clients that push to this VM:3100
 # - OPNsense forwards RFC 5424 syslog over TCP to this VM:1514 (source=opnsense)
 # - Proxmox nodes' rsyslog forwards to this VM:1515 (source=proxmox)
 #
@@ -31,9 +31,9 @@
 let
   lokiPort          = 3100;
   grafanaPort       = 3000;
-  syslogOpnsensePort = 1514;   # OPNsense → Promtail (source=opnsense)
-  syslogProxmoxPort  = 1515;   # Proxmox nodes → Promtail (source=proxmox)
-  promtailHttp      = 9080;
+  syslogOpnsensePort = 1514;   # OPNsense → Alloy (source=opnsense)
+  syslogProxmoxPort  = 1515;   # Proxmox nodes → Alloy (source=proxmox)
+  alloyHttp         = 9080;
   retentionHours    = "720h";  # 30 days
 
   # The site's own values, not ours to guess: update-os.sh deploys the module's
@@ -124,7 +124,7 @@ in
     allowedTCPPorts = [
       22             # SSH
       grafanaPort    # Grafana web UI (3000) — fronted by Caddy
-      lokiPort       # Loki HTTP push/query (3100) — from mgmt zone Promtail clients
+      lokiPort       # Loki HTTP push/query (3100) — from mgmt zone Alloy clients
       syslogOpnsensePort     # Syslog ingest (1514) — from OPNsense
       syslogProxmoxPort      # Syslog ingest (1515) — from Proxmox nodes
     ];
@@ -315,7 +315,7 @@ in
         # journal can contain entries from before NTP synced (timestamps
         # appear either in the past or in the future depending on RTC
         # interpretation; Proxmox's `localtime: 1` flag causes a +TZ skew on
-        # boot until chrony corrects it). Accept whatever Promtail ships;
+        # boot until chrony corrects it). Accept whatever the shipper sends;
         # the real timestamps are still preserved on each entry.
         reject_old_samples = false;
         creation_grace_period = retentionHours;
@@ -361,114 +361,168 @@ in
   };
 
   # ============================================================================
-  # PROMTAIL — local receiver (journal + OPNsense syslog)
+  # ALLOY — local receiver (journal + OPNsense/Proxmox syslog)
   # ============================================================================
+  #
+  # Grafana Alloy replaced Promtail because 26.05 removed both the promtail
+  # NixOS module and the package — promtail reached end of life (#721). Alloy
+  # embeds promtail's own pipeline, so every stage here means what it meant
+  # before; `alloy convert --source-format=promtail` made the translation from
+  # the config this VM was actually running, rather than a hand rewrite.
 
-  services.promtail = {
+  services.alloy = {
     enable = true;
-    configuration = {
-      server = {
-        # bind to localhost — Promtail metrics must not leak across mgmt
-        http_listen_address = "127.0.0.1";
-        http_listen_port = promtailHttp;
-        grpc_listen_port = 0;
-      };
-
-      positions.filename = "/var/lib/promtail/positions.yaml";
-
-      clients = [{
-        url = "http://127.0.0.1:${toString lokiPort}/loki/api/v1/push";
-      }];
-
-      scrape_configs = [
-        {
-          job_name = "journal";
-          journal = {
-            # Only pick up the last 30 minutes of journal at promtail startup.
-            # Avoids dragging in pre-time-sync boot entries with skewed
-            # timestamps that Loki would treat as out-of-order.
-            max_age = "30m";
-            labels = {
-              job = "systemd-journal";
-              host = "logging";
-            };
-          };
-          relabel_configs = [
-            { source_labels = [ "__journal__systemd_unit" ]; target_label = "unit"; }
-            { source_labels = [ "__journal_priority_keyword" ]; target_label = "severity"; }
-          ];
-          # Same hardening as on tappaas-cicd: drop credential-handling units
-          # and scrub common secret patterns. Belt-and-braces: the
-          # generate-grafana-secrets unit no longer prints the password, but
-          # the drop rule means future regressions still won't leak.
-          pipeline_stages = [
-            {
-              match = {
-                selector = ''{unit=~"generate-.*-secrets.*"}'';
-                action = "drop";
-              };
-            }
-            {
-              replace = {
-                expression = ''(?i)\b(token|secret|password|passwd|api[_-]?key)\s*[:=]\s*\S+'';
-                replace = "$1=***REDACTED***";
-              };
-            }
-            {
-              replace = {
-                expression = ''(-u[[:space:]]+["']?)[^"' ]+:[^"' ]+(["']?)'';
-                replace = "$1***REDACTED***$2";
-              };
-            }
-            {
-              replace = {
-                expression = ''(Authorization:[[:space:]]+(Basic|Bearer)[[:space:]]+)\S+'';
-                replace = "$1***REDACTED***";
-              };
-            }
-          ];
-        }
-        {
-          job_name = "syslog-opnsense";
-          syslog = {
-            listen_address = "0.0.0.0:${toString syslogOpnsensePort}";
-            listen_protocol = "tcp";
-            idle_timeout = "60s";
-            label_structured_data = true;
-            labels = {
-              job = "syslog";
-              source = "opnsense";
-            };
-          };
-          relabel_configs = [
-            { source_labels = [ "__syslog_message_hostname" ];  target_label = "host"; }
-            { source_labels = [ "__syslog_message_app_name" ];  target_label = "unit"; }
-            { source_labels = [ "__syslog_message_severity" ]; target_label = "severity"; }
-            { source_labels = [ "__syslog_message_facility" ]; target_label = "facility"; }
-          ];
-        }
-        {
-          job_name = "syslog-proxmox";
-          syslog = {
-            listen_address = "0.0.0.0:${toString syslogProxmoxPort}";
-            listen_protocol = "tcp";
-            idle_timeout = "60s";
-            label_structured_data = true;
-            labels = {
-              job = "syslog";
-              source = "proxmox";
-            };
-          };
-          relabel_configs = [
-            { source_labels = [ "__syslog_message_hostname" ];  target_label = "host"; }
-            { source_labels = [ "__syslog_message_app_name" ];  target_label = "unit"; }
-            { source_labels = [ "__syslog_message_severity" ]; target_label = "severity"; }
-            { source_labels = [ "__syslog_message_facility" ]; target_label = "facility"; }
-          ];
-        }
-      ];
-    };
+    extraFlags = [
+      # Alloy's own HTTP server: metrics and the component UI. Localhost only —
+      # it must not leak across mgmt. (Alloy defaults to 127.0.0.1, unlike
+      # promtail; stated here so it cannot drift.)
+      "--server.http.listen-addr=127.0.0.1:${toString alloyHttp}"
+      # Do not report the enabled component set to Grafana. A TAPPaaS site
+      # tells no one what it runs.
+      "--disable-reporting"
+    ];
   };
+
+  # Written to /etc rather than the store so alloy can reload it in place; the
+  # module watches every alloy/*.alloy file and reloads on switch.
+  environment.etc."alloy/config.alloy".text = ''
+    // Same hardening as on tappaas-cicd: drop credential-handling units and
+    // scrub common secret patterns. Belt-and-braces: the generate-grafana-secrets
+    // unit no longer prints the password, but the drop rule means future
+    // regressions still won't leak.
+    loki.process "journal" {
+      forward_to = [loki.write.default.receiver]
+
+      stage.match {
+        selector = "{unit=~\"generate-.*-secrets.*\"}"
+        action   = "drop"
+      }
+
+      stage.replace {
+        expression = "(?i)\\b(token|secret|password|passwd|api[_-]?key)\\s*[:=]\\s*\\S+"
+        replace    = "$1=***REDACTED***"
+      }
+
+      stage.replace {
+        expression = "(-u[[:space:]]+[\"']?)[^\"' ]+:[^\"' ]+([\"']?)"
+        replace    = "$1***REDACTED***$2"
+      }
+
+      stage.replace {
+        expression = "(Authorization:[[:space:]]+(Basic|Bearer)[[:space:]]+)\\S+"
+        replace    = "$1***REDACTED***"
+      }
+    }
+
+    discovery.relabel "journal" {
+      targets = []
+
+      rule {
+        source_labels = ["__journal__systemd_unit"]
+        target_label  = "unit"
+      }
+
+      rule {
+        source_labels = ["__journal_priority_keyword"]
+        target_label  = "severity"
+      }
+    }
+
+    // Only the last 30 minutes of journal at startup: avoids dragging in
+    // pre-time-sync boot entries whose skewed timestamps Loki treats as
+    // out-of-order.
+    loki.source.journal "journal" {
+      max_age       = "30m0s"
+      relabel_rules = discovery.relabel.journal.rules
+      forward_to    = [loki.process.journal.receiver]
+      labels        = {
+        host = "logging",
+        job  = "systemd-journal",
+      }
+    }
+
+    discovery.relabel "syslog_opnsense" {
+      targets = []
+
+      rule {
+        source_labels = ["__syslog_message_hostname"]
+        target_label  = "host"
+      }
+
+      rule {
+        source_labels = ["__syslog_message_app_name"]
+        target_label  = "unit"
+      }
+
+      rule {
+        source_labels = ["__syslog_message_severity"]
+        target_label  = "severity"
+      }
+
+      rule {
+        source_labels = ["__syslog_message_facility"]
+        target_label  = "facility"
+      }
+    }
+
+    loki.source.syslog "syslog_opnsense" {
+      listener {
+        address               = "0.0.0.0:${toString syslogOpnsensePort}"
+        idle_timeout          = "1m0s"
+        label_structured_data = true
+        labels                = {
+          job    = "syslog",
+          source = "opnsense",
+        }
+      }
+      forward_to    = [loki.write.default.receiver]
+      relabel_rules = discovery.relabel.syslog_opnsense.rules
+    }
+
+    discovery.relabel "syslog_proxmox" {
+      targets = []
+
+      rule {
+        source_labels = ["__syslog_message_hostname"]
+        target_label  = "host"
+      }
+
+      rule {
+        source_labels = ["__syslog_message_app_name"]
+        target_label  = "unit"
+      }
+
+      rule {
+        source_labels = ["__syslog_message_severity"]
+        target_label  = "severity"
+      }
+
+      rule {
+        source_labels = ["__syslog_message_facility"]
+        target_label  = "facility"
+      }
+    }
+
+    loki.source.syslog "syslog_proxmox" {
+      listener {
+        address               = "0.0.0.0:${toString syslogProxmoxPort}"
+        idle_timeout          = "1m0s"
+        label_structured_data = true
+        labels                = {
+          job    = "syslog",
+          source = "proxmox",
+        }
+      }
+      forward_to    = [loki.write.default.receiver]
+      relabel_rules = discovery.relabel.syslog_proxmox.rules
+    }
+
+    loki.write "default" {
+      endpoint {
+        url = "http://127.0.0.1:${toString lokiPort}/loki/api/v1/push"
+      }
+    }
+  '';
 
   # ============================================================================
   # GRAFANA — web UI
@@ -710,7 +764,6 @@ in
     "d /var/lib/loki/chunks            0700 loki     loki     -"
     "d /var/lib/loki/rules             0700 loki     loki     -"
     "d /var/lib/loki/compactor         0700 loki     loki     -"
-    "d /var/lib/promtail               0750 promtail promtail -"
     "d /etc/secrets                    0750 root     grafana  -"
   ];
 

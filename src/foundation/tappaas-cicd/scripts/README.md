@@ -510,7 +510,7 @@ journalctl -u update-tappaas.service
 site-manager update                            # run it now (starts the unit)
 ```
 
-Output → journald → Promtail → Loki.
+Output → journald → Alloy → Loki.
 
 ---
 

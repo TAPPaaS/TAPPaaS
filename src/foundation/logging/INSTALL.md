@@ -37,8 +37,8 @@ one-shot file:
     # log in to https://logging.<your-domain>/, change the password, then:
     ssh tappaas@logging.mgmt.internal -- sudo rm /root/grafana-admin-password.initial
 
-Optional: add a Promtail client to any other VM you want shipped to Loki — the NixOS
-snippet is in [DESIGN.md](./DESIGN.md#setting-up-a-promtail-client-on-another-vm)
+Optional: add an Alloy client to any other VM you want shipped to Loki — the NixOS
+snippet is in [DESIGN.md](./DESIGN.md#setting-up-an-alloy-client-on-another-vm)
 (`tappaas-cicd` ships with it pre-installed).
 
 ## Verification
@@ -63,7 +63,7 @@ standard run is itself live; see [TEST.md](./TEST.md)).
 The forwarder is created by `update.sh` via `syslog-manager add-destination` (matched by
 description `tappaas-logging`; skipped entirely when `firewallType=NONE`). Inspect with
 `syslog-manager list --no-ssl-verify`, re-apply with `update-module.sh logging`. To
-verify ingest: `sudo journalctl -u promtail -f` on the VM, then `logger -t test hi` on
+verify ingest: `sudo journalctl -u alloy -f` on the VM, then `logger -t test hi` on
 the firewall.
 
 **No Proxmox logs (`{source="proxmox"}` empty)**

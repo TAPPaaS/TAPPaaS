@@ -646,7 +646,7 @@ New capabilities with low upgrade risk.
 |---|-------|:-:|:-:|:-:|------|
 | #126 | No alerts for quorum loss / node dropout | 3 | 1 | L | Reuse the #651 channel; Zabbix option discussed |
 | #125 | Mail relay via M365 Graph API | 3 | 2 | L | |
-| #165 | logging v2: Loki auth, Grafana OIDC | 2 | 3 | M | Turning on Loki auth breaks existing Promtail pushes unless clients change in the same sweep |
+| #165 | logging v2: Loki auth, Grafana OIDC | 2 | 3 | M | Turning on Loki auth breaks existing Alloy pushes unless clients change in the same sweep |
 | #590 | Second corosync link | 2 | 3 | M | |
 | FW #40 | Dedicated sync network recipe | 4 | 1 | L | Roll in with #590 |
 

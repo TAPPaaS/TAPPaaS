@@ -3,7 +3,7 @@
 
 Output goes through Python's `logging` module. When invoked by systemd (timer
 or `systemctl start`), records carry `<N>` priority prefixes that
-systemd-journald maps to syslog severities — Promtail then surfaces them as
+systemd-journald maps to syslog severities — Alloy then surfaces them as
 the `severity` label in Loki, so LogQL queries like
 `{unit="update-tappaas.service", severity="err"}` work.
 
@@ -74,7 +74,7 @@ FOUNDATION_MODULES = [
     "network",       # OPNsense network module (routing/DNS/DHCP/NAT/firewall rules/proxy)
     "backup",        # Proxmox Backup Server
     "identity",      # Authentik identity provider
-    "logging",       # Loki/Grafana/Promtail
+    "logging",       # Loki/Grafana/Alloy
 ]
 
 # ADR-007 P8 back-compat: the "firewall" module was renamed to "network". A fresh

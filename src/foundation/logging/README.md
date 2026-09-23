@@ -2,7 +2,7 @@
 
 Primary audience: TAPPaaS admin.
 
-Centralized log aggregation for the whole TAPPaaS system — a Loki + Grafana + Promtail
+Centralized log aggregation for the whole TAPPaaS system — a Loki + Grafana + Alloy
 VM that collects logs from every TAPPaaS VM, the Proxmox nodes and the OPNsense firewall.
 
 ## What you get
@@ -11,7 +11,7 @@ VM that collects logs from every TAPPaaS VM, the Proxmox nodes and the OPNsense 
 |------------|-------------|-----|
 | Grafana UI (dashboards, LogQL Explore) | mgmt zone (via Caddy) | `https://logging.<tappaas.domain>` |
 | Loki log store (30-day retention) | mgmt zone | HTTP push/query on `logging.mgmt.internal:3100` |
-| Journal shipping from TAPPaaS VMs | each VM | Promtail client pushing to `:3100` |
+| Journal shipping from TAPPaaS VMs | each VM | Alloy client pushing to `:3100` |
 | OPNsense firewall logs | firewall | syslog RFC 5424 → `tcp/1514` (`source=opnsense`) |
 | Proxmox node logs | nodes | rsyslog forwarder → `tcp/1515` (`source=proxmox`) |
 | CLI queries on the VM | mgmt admins (SSH) | `logcli` installed on the VM |
@@ -22,7 +22,7 @@ VM that collects logs from every TAPPaaS VM, the Proxmox nodes and the OPNsense 
 - Loki authentication — the mgmt zone is the trust boundary (v2 backlog).
 - Syslog over TLS — plain TCP inside mgmt today (v2 backlog).
 - A consumable `logging:*` service for other modules — `provides` is empty in v1;
-  consumer VMs add their own Promtail block (see [DESIGN.md](./DESIGN.md)). Firewall
+  consumer VMs add their own Alloy block (see [DESIGN.md](./DESIGN.md)). Firewall
   pinholes for non-mgmt-zone senders are also not yet automated.
 
 ## Requirements

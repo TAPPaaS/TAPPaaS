@@ -2,7 +2,7 @@
 """Syslog destination management CLI for OPNsense.
 
 Use this to point OPNsense's syslog at a remote sink (e.g. the TAPPaaS
-`logging` module's Promtail receiver on tcp/1514).
+`logging` module's Alloy syslog receiver on tcp/1514).
 
 Usage:
     syslog-manager list
@@ -250,7 +250,7 @@ Examples:
                        choices=sorted(TRANSPORTS),
                        help="Transport (default tcp4)")
     add_p.add_argument("--rfc5424", action="store_true",
-                       help="Emit RFC 5424 format (Promtail expects this)")
+                       help="Emit RFC 5424 format (the Alloy receiver expects this)")
     add_p.add_argument("--description", required=True,
                        help="Description — also the idempotency key")
     add_p.add_argument("--level", default="",

@@ -28,7 +28,7 @@ class SyslogDestination:
     hostname: str                       # required: target FQDN or IP
     port: int = 514                     # required: target port (default OPNsense pickf)
     transport: str = "tcp4"             # one of TRANSPORTS
-    rfc5424: bool = True                # use RFC 5424 format (Promtail wants this)
+    rfc5424: bool = True                # use RFC 5424 format (the Alloy receiver wants this)
     enabled: bool = True
     description: str = ""               # idempotency key — pick a stable string
     program: str = ""                   # comma-sep app filter; "" = all

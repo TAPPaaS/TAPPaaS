@@ -127,7 +127,7 @@ writes `/run/systemd/system/update-tappaas.timer` with `Persistent=false` — at
 every self-rebuild, and whenever `site-manager site modify` changes the schedule. A
 `"none"` schedule renders no timer. There is no schedule decision left in Python: the timer
 fires when a run is due, and only then. cron was retired in issue #150. Output flows through
-journald → Promtail → Loki for Grafana.
+journald → Alloy → Loki for Grafana.
 
 ```bash
 systemctl list-timers update-tappaas.timer     # what site.json currently asks for

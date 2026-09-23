@@ -8,7 +8,7 @@
 #
 #   backup    Proxmox Backup Server
 #   identity  Identity provider (SSO)
-#   logging   Loki / Grafana / Promtail
+#   logging   Loki / Grafana / Alloy
 #
 # Idempotent: install-module.sh and update-tappaas reconcile an already-installed
 # module rather than duplicating it, so this script is safe to re-run.

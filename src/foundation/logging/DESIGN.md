@@ -1,6 +1,6 @@
 # logging — Design notes
 
-Implementation and reference detail for the logging module (Loki + Grafana + Promtail).
+Implementation and reference detail for the logging module (Loki + Grafana + Alloy).
 For the catalog entry see [README.md](./README.md); for installation see
 [INSTALL.md](./INSTALL.md); for test coverage see [TEST.md](./TEST.md).
 
@@ -8,18 +8,23 @@ For the catalog entry see [README.md](./README.md); for installation see
 
 - **Grafana Loki** — log store, single-binary mode, filesystem-backed, 30-day retention.
 - **Grafana** — web UI, port 3000, fronted by Caddy at `logging.<tappaas.domain>`.
-- **Promtail** (on this VM) — tails the local journal **and** receives syslog from
-  OPNsense on tcp/1514.
-- **Promtail clients** (on every other VM) — push their journal to
+- **Grafana Alloy** (on this VM) — tails the local journal **and** receives syslog from
+  OPNsense on tcp/1514 and from the Proxmox nodes on tcp/1515.
+- **Alloy clients** (on every other VM) — push their journal to
   `http://logging.mgmt.internal:3100`.
+
+Alloy replaced Promtail in 2026-09 (#721): NixOS 26.05 removed both the promtail module
+and the package, promtail having reached end of life. Alloy embeds promtail's own
+pipeline, so the scrape, the relabelling and the redaction stages carry over unchanged —
+the configs were translated by `alloy convert --source-format=promtail`, not rewritten.
 
 ```
    ┌──────────────┐   journal     ┌────────────────────────────────┐
-   │ tappaas-cicd │──Promtail────►│                                │
+   │ tappaas-cicd │──Alloy───────►│                                │
    ├──────────────┤               │   logging (this VM)            │
-   │ identity     │──Promtail────►│   ┌──────────┐    ┌─────────┐  │
-   ├──────────────┤               │   │ Promtail │───►│  Loki   │  │
-   │ <app VMs>    │──Promtail────►│   └──────────┘    └────┬────┘  │
+   │ identity     │──Alloy───────►│   ┌──────────┐    ┌─────────┐  │
+   ├──────────────┤               │   │  Alloy   │───►│  Loki   │  │
+   │ <app VMs>    │──Alloy───────►│   └──────────┘    └────┬────┘  │
    ├──────────────┤               │                        ▼       │
    │ OPNsense     │──syslog 1514─►│                   ┌─────────┐  │
    │ (firewall)   │  RFC 5424 TCP │                   │ Grafana │◄─┼── admin
@@ -46,10 +51,10 @@ The whole stack is declared in [`logging.nix`](logging.nix).
 |---|---|---|---|
 | 22 | TCP | SSH | mgmt admins |
 | 3000 | TCP | Grafana UI | Caddy on the firewall |
-| 3100 | TCP | Loki HTTP push/query | Promtail clients on other VMs |
+| 3100 | TCP | Loki HTTP push/query | Alloy clients on other VMs |
 | 1514 | TCP | Syslog ingest (RFC 5424) → `source=opnsense` | OPNsense firewall |
 | 1515 | TCP | Syslog ingest (RFC 5424) → `source=proxmox` | Proxmox nodes (rsyslog) |
-| 9080 | TCP | Promtail metrics (localhost only) | local |
+| 9080 | TCP | Alloy metrics and component UI (localhost only) | local |
 
 ## Label scheme
 
@@ -99,9 +104,9 @@ syslog-manager reconfigure --no-ssl-verify
 To verify, on `logging`:
 
 ```
-sudo journalctl -u promtail -f
+sudo journalctl -u alloy -f
 # then trigger an OPNsense event (e.g. ssh into the firewall and `logger -t test hi`)
-# you should see Promtail accept the line and ship it to Loki
+# you should see Alloy accept the line and ship it to Loki
 ```
 
 In Grafana, query `{job="syslog"}` or `{job="syslog", source="opnsense"}`.
@@ -130,35 +135,61 @@ ssh root@<node>.mgmt.internal "rm /etc/rsyslog.d/99-tappaas-loki.conf && systemc
 > events, sshd auth attempts, and other sensitive data. Today both use plain TCP, which
 > is acceptable inside the `mgmt` zone with no rogue switches. Moving to RFC 5425 over
 > TLS on tcp/6514 is in the v2 backlog (needs a TLS cert on `logging.mgmt.internal` and
-> a `tls_config` block in Promtail's syslog receiver).
+> a `tls_config` block on Alloy's `loki.source.syslog` listener).
 
-## Setting up a Promtail client on another VM
+## Setting up an Alloy client on another VM
 
-Add to that VM's NixOS config:
+Add to that VM's NixOS config. Alloy's NixOS module is deliberately thin — it enables the
+service and points it at a config directory — so the pipeline itself is written in Alloy's
+own configuration language and placed in `/etc` (not the store), which lets Alloy reload it
+in place on a `nixos-rebuild switch`:
 
 ```nix
-services.promtail = {
+services.alloy = {
   enable = true;
-  configuration = {
-    server = { http_listen_port = 9080; grpc_listen_port = 0; };
-    positions.filename = "/var/lib/promtail/positions.yaml";
-    clients = [{
-      url = "http://logging.mgmt.internal:3100/loki/api/v1/push";
-    }];
-    scrape_configs = [{
-      job_name = "journal";
-      journal = {
-        max_age = "12h";
-        labels = { job = "systemd-journal"; host = "<this-vm-hostname>"; };
-      };
-      relabel_configs = [{
-        source_labels = [ "__journal__systemd_unit" ];
-        target_label = "unit";
-      }];
-    }];
-  };
+  # Localhost only: Alloy's HTTP server carries metrics and the component UI.
+  extraFlags = [
+    "--server.http.listen-addr=127.0.0.1:9080"
+    "--disable-reporting"
+  ];
 };
+
+environment.etc."alloy/config.alloy".text = ''
+  discovery.relabel "journal" {
+    targets = []
+
+    rule {
+      source_labels = ["__journal__systemd_unit"]
+      target_label  = "unit"
+    }
+  }
+
+  loki.source.journal "journal" {
+    max_age       = "12h0m0s"
+    relabel_rules = discovery.relabel.journal.rules
+    forward_to    = [loki.write.default.receiver]
+    labels        = {
+      host = "<this-vm-hostname>",
+      job  = "systemd-journal",
+    }
+  }
+
+  loki.write "default" {
+    endpoint {
+      url = "http://logging.mgmt.internal:3100/loki/api/v1/push"
+    }
+  }
+'';
 ```
+
+The service reads the journal through the module's `SupplementaryGroups = [ "systemd-journal" ]`
+and keeps its read positions under its systemd `StateDirectory` (`/var/lib/alloy`) — there is
+no positions file to declare, as there was with promtail.
+
+**Shipping credentials-handling units?** Add a `loki.process` between the source and the
+write, with `stage.match { action = "drop" }` for those units and `stage.replace` stages for
+secret patterns — see the blocks in `logging.nix` and `tappaas-cicd.nix`. Check any config
+before deploying it: `alloy validate /etc/alloy/config.alloy`.
 
 The `tappaas-cicd` mothership ships with this block pre-installed.
 
@@ -202,24 +233,24 @@ The mgmt zone is the trust boundary for the logging stack:
 - Loki accepts unauthenticated pushes on tcp/3100 from anything routable in the mgmt
   zone. A compromised mgmt-zone VM could write spoofed-label logs or query/delete
   arbitrary log history.
-- Promtail accepts unauthenticated RFC 5424 syslog on tcp/1514 from anywhere routable
+- Alloy accepts unauthenticated RFC 5424 syslog on tcp/1514 from anywhere routable
   in mgmt.
 - Grafana web UI is on tcp/3000; the only intended access path is through Caddy in the
   firewall VM at `logging.<tappaas.domain>`.
 
 Mitigations in place:
 
-- Promtail journal scrapes on both `tappaas-cicd` and `logging` **drop** log lines from
+- The journal scrapes on both `tappaas-cicd` and `logging` **drop** log lines from
   credential-handling units (`opnsense-controller.*`, `setup-caddy.*`,
   `generate-*-secrets.*`) and **scrub** common secret patterns (`token=`, `password=`,
   `Authorization:`, `curl -u`) before shipping to Loki.
 - Grafana admin password is generated to a root-only one-shot file, never to the journal.
-- Loki/Grafana/Promtail metrics endpoints bind to localhost where possible.
+- Loki/Grafana/Alloy metrics endpoints bind to localhost where possible.
 
 ## Known limitations / v2 backlog
 
 - **Loki authentication**: turn on `auth_enabled = true` with per-tenant `X-Scope-OrgID`
-  and either basic-auth or mTLS on tcp/3100. Promtail clients on each VM ship a tenant
+  and either basic-auth or mTLS on tcp/3100. Alloy clients on each VM ship a tenant
   ID so spoofed-host labels are rejected.
 - **Grafana auth**: ✅ OIDC against `identity:identity` is wired (from AndreasJe's work
   on pr-513, adapted). `logging.json` declares the contract — `providesAdminRole`, the
@@ -237,7 +268,7 @@ Mitigations in place:
 
   Still open: the local `admin` user remains. Removing it is a separate step, and wants
   a way back in when Authentik is the thing that is down.
-- **Syslog over TLS**: wire Promtail's syslog receiver with `tls_config` and expose
+- **Syslog over TLS**: wire Alloy's `loki.source.syslog` listener with `tls_config` and expose
   6514/tcp; deprecate 1514/tcp once OPNsense is moved over.
 - **Automate OPNsense syslog target**: ✅ done in v1 — `syslog-manager` is wired into
   `update.sh` and runs on every install/update.
@@ -245,11 +276,11 @@ Mitigations in place:
   alerting is added.
 - **`provides` is empty in v1**: the module does not yet expose a consumable logging
   service. v2 adds `provides: ["logging"]` alongside the service-hook scripts so other
-  modules can `dependsOn: ["logging:logging"]` and receive a Promtail client
+  modules can `dependsOn: ["logging:logging"]` and receive an Alloy client
   automatically.
 - **Service-hook scripts not yet written**: `services/logging/install-service.sh`,
   `update-service.sh`, `test-service.sh`, and `delete-service.sh` need to be authored so
-  consumers declaring `dependsOn: ["logging:logging"]` get the Promtail client installed
+  consumers declaring `dependsOn: ["logging:logging"]` get the Alloy client installed
   and verified automatically (same drop/scrub pipeline, per-consumer `host=` label).
 - **Service hooks must open firewall pinholes**: a consumer in a non-mgmt zone (e.g.
   `srv`, `dmz`) cannot reach `logging:3100` until an OPNsense rule permits it. The

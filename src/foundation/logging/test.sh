@@ -3,7 +3,7 @@
 # TAPPaaS logging Health & Regression Test
 #
 # Validates that the logging stack is running: SSH, Loki ready, Grafana
-# responding, Promtail metrics endpoint, and the syslog ingest port open.
+# responding, Alloy metrics endpoint, and the syslog ingest port open.
 #
 # Usage: ./test.sh <vmname>
 # Example: ./test.sh logging
@@ -139,16 +139,16 @@ check_grafana_health() {
     fi
 }
 
-check_promtail_metrics() {
-    info "Check 6: Promtail metrics endpoint"
+check_alloy_metrics() {
+    info "Check 6: Alloy metrics endpoint"
     local http_code
     # shellcheck disable=SC2086
     http_code=$(ssh ${SSH_OPTS} "tappaas@${VM_HOST}" \
         "curl -s -o /dev/null -w '%{http_code}' --max-time 10 http://127.0.0.1:9080/metrics" 2>/dev/null) || true
     if [[ "${http_code}" == "200" ]]; then
-        check_pass "Promtail metrics responding"
+        check_pass "Alloy metrics responding"
     else
-        check_fail "Promtail metrics not responding (status: ${http_code:-timeout})"
+        check_fail "Alloy metrics not responding (status: ${http_code:-timeout})"
     fi
 }
 
@@ -166,7 +166,7 @@ check_syslog_port() {
 check_loki_query() {
     info "Check 8: Loki has received at least one log line from the local journal"
     local count
-    # The promtail journal scrape ships local journal entries. After a fresh boot
+    # The Alloy journal scrape ships local journal entries. After a fresh boot
     # there should be at least one stream with job="systemd-journal".
     # shellcheck disable=SC2086
     count=$(ssh ${SSH_OPTS} "tappaas@${VM_HOST}" \
@@ -203,7 +203,7 @@ main() {
     check_loki_metrics
     check_grafana_http
     check_grafana_health
-    check_promtail_metrics
+    check_alloy_metrics
     check_syslog_port
     check_loki_query
 

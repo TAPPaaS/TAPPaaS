@@ -487,7 +487,7 @@ When it finishes you'll see a **"🎉 your TAPPaaS foundation is installed"** su
 > ```bash
 > cd ~/TAPPaaS/src/foundation/backup   && module-manager module add backup     #  Proxmox Backup Server
 > cd ~/TAPPaaS/src/foundation/identity && module-manager module add identity   #  Identity provider
-> cd ~/TAPPaaS/src/foundation/logging  && module-manager module add logging    #  Loki / Grafana / Promtail
+> cd ~/TAPPaaS/src/foundation/logging  && module-manager module add logging    #  Loki / Grafana / Alloy
 > ```
 > *(Module sizing/zones are defaults — see appendix.)*
 

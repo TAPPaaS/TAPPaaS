@@ -12,7 +12,7 @@
 - Check 3 — Loki metrics: asserts `http://127.0.0.1:3100/metrics` returns HTTP 200.
 - Check 4 — Grafana login: asserts `http://127.0.0.1:3000/login` returns HTTP 200 or 302.
 - Check 5 — Grafana health: asserts `http://127.0.0.1:3000/api/health` JSON shows `"database":…"ok"`.
-- Check 6 — Promtail metrics: asserts `http://127.0.0.1:9080/metrics` returns HTTP 200.
+- Check 6 — Alloy metrics: asserts `http://127.0.0.1:9080/metrics` returns HTTP 200.
 - Check 7 — Syslog port: asserts the syslog ingest port `tcp/1514` is in LISTEN state (`ss -lnt`).
 - Check 8 — Loki ingest: asserts Loki has ≥1 `job` label value (`/loki/api/v1/label/job/values`), i.e. at least one log stream from the local journal has been received.
 
