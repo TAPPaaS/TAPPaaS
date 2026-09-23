@@ -40,13 +40,20 @@ Two consequences worth knowing before reading a red test:
   verifier must not mutate, and `onlyoffice:documentserver --check` rewrites
   app config. So a failing test means "the last completed check failed", not
   necessarily "it is broken now".
-- **The refresh can take minutes.** `--check` performs the round trip through
-  the document server; on the test site it has been measured running **over
-  eight minutes** without returning. `update-service.sh` therefore bounds it
-  (`OO_CHECK_TIMEOUT`, 120s by default) and says plainly when a run could not
-  refresh the verdict — unbounded, a stuck check both stalls the sweep and
-  leaves the previous answer in place for ever, which is how four consecutive
-  nightlies reported a failure that no run could clear.
+- **It needs a TTY, or it does not run at all (#714).** The NixOS
+  `nextcloud-occ` wrapper execs `systemd-run --pty --wait`. Over a
+  non-interactive ssh the command prints nothing *and does nothing*, returning
+  0 — so `settings_error` is never refreshed and the last stored answer stands
+  for ever. That is what made several consecutive nightlies fail on a string no
+  run could clear, while the connector was healthy throughout. The earlier
+  reading of this — "measured running over eight minutes without returning" —
+  was the pty waiting, not the check working. `update-service.sh` uses
+  `ssh -tt`; with a TTY the check answers in about **1.5 seconds**.
+  `OO_CHECK_TIMEOUT` (120s) remains as a safety net, not as the normal path.
+- **Three outcomes, not two.** Working, broken, and *nobody could tell*. The
+  third is reported as a warning and leaves the module's status alone: a check
+  that did not run is not evidence of a fault. The stored row is cleared before
+  the check, so what is read back is that run's own answer.
 
 To refresh it by hand:
 

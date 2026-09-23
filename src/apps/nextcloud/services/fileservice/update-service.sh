@@ -126,44 +126,57 @@ if [[ "${CONNECTOR}" == "onlyoffice" ]]; then
             # allow: success reported over a broken integration.
             #
             # `onlyoffice:documentserver --check` re-runs the round trip and
-            # rewrites settings_error. Its stdout is swallowed by the NixOS
-            # nextcloud-occ wrapper (systemd-run) when there is no TTY, and its
-            # exit code is not a reliable failure signal, so read the resulting
-            # settings_error straight from the DB — the authoritative state, and
-            # the same route test-service.sh already uses.
-            # BOUNDED: `onlyoffice:documentserver --check` can run for many
-            # minutes — measured at 8+ on the test site and still going (#687).
-            # Unbounded, three attempts of it stall the sweep, and because the
-            # stored verdict only changes when the check COMPLETES, a stuck
-            # check leaves the last error in place for ever: four consecutive
-            # nightlies failed on a string no run could refresh.
+            # rewrites settings_error.
+            #
+            # It needs a TTY, and that is the whole of #714. The NixOS
+            # nextcloud-occ wrapper execs `systemd-run --pty --wait`; over a
+            # non-interactive ssh the command prints nothing AND DOES NOT RUN —
+            # it returns 0 having done nothing. settings_error was therefore
+            # never refreshed by a sweep, the last stored error stood for ever,
+            # and euro-office failed night after night on a string no run could
+            # change. The previous reading of this — "the check can run for many
+            # minutes, measured at 8+ and still going (#687)" — was the pty
+            # waiting, not the check working: given a TTY it answers in about
+            # 1.5 seconds. Hence `ssh -tt`, forced because the sweep's own stdin
+            # is not a terminal, and hence the timeout is now a safety net
+            # rather than the path every run takes.
+            #
+            # The verdict still comes from the DB rather than stdout: that is
+            # the authoritative state, and the same route test-service.sh uses.
+            # The row is CLEARED first so what comes back is THIS run's answer —
+            # an empty row then means "the check looked and found nothing wrong"
+            # rather than "nobody looked".
             _oo_err=""
-            _oo_refreshed=0
+            _oo_ran=0
             for _attempt in 1 2 3; do
-                if ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR \
+                ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR \
+                    "tappaas@${NC_HOST}" \
+                    "sudo -u postgres psql -d nextcloud -tAc \"DELETE FROM oc_appconfig WHERE appid='onlyoffice' AND configkey='settings_error'\"" \
+                    >/dev/null 2>&1 || true
+                if ssh -tt -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR \
                     "tappaas@${NC_HOST}" "sudo timeout ${OO_CHECK_TIMEOUT:-120} nextcloud-occ onlyoffice:documentserver --check" \
                     >/dev/null 2>&1; then
-                    _oo_refreshed=1
+                    _oo_ran=1
                 fi
                 _oo_err=$(ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR \
                     "tappaas@${NC_HOST}" \
                     "sudo -u postgres psql -d nextcloud -tAc \"SELECT configvalue FROM oc_appconfig WHERE appid='onlyoffice' AND configkey='settings_error'\"" \
                     2>/dev/null | tr -d '[:space:]') || _oo_err=""
-                [[ -z "${_oo_err}" ]] && break
+                [[ -n "${_oo_err}" ]] && break
+                [[ "${_oo_ran}" -eq 1 ]] && break
                 # The document server may still be booting on a fresh install.
                 [[ "${_attempt}" -lt 3 ]] && sleep 15
             done
 
-            if [[ -n "${_oo_err}" && "${_oo_refreshed}" -eq 0 ]]; then
-                # The verdict below is whatever the LAST completed check wrote,
-                # and this run could not refresh it. Say that, rather than
-                # reporting an old failure as today's.
-                warn "  the onlyoffice check did not complete within ${OO_CHECK_TIMEOUT:-120}s — the error below is the last STORED verdict, not this run's:"
-                warn "    ${_oo_err}"
-                warn "  Refresh it by hand: ssh tappaas@${NC_HOST} sudo nextcloud-occ onlyoffice:documentserver --check"
-            fi
-
-            if [[ -z "${_oo_err}" ]]; then
+            # Three outcomes, not two: working, broken, and nobody could tell.
+            # The third is NOT a failure — treating it as one is what made a
+            # healthy estate red every night.
+            if [[ "${_oo_ran}" -eq 0 ]]; then
+                warn "  could not determine whether the onlyoffice connector works:"
+                warn "    the check did not run on ${NC_HOST} (nextcloud-occ needs a TTY; this uses ssh -tt)"
+                warn "    by hand: ssh -t tappaas@${NC_HOST} sudo nextcloud-occ onlyoffice:documentserver --check"
+                warn "  Left as it is rather than called broken on an answer nobody got."
+            elif [[ -z "${_oo_err}" ]]; then
                 debug "${GN}✓${CL} onlyoffice document server round-trip verified"
 
                 # ── Point the document server's splash page at this Nextcloud ──
