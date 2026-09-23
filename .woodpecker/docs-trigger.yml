@@ -25,12 +25,15 @@ when:
         - BUILD.md
         - docs/ADR/README.md
         - src/**/*.md
+        # a change to this trigger proves itself on push
+        - .woodpecker/docs-trigger.yml
 
 skip_clone: true
 
 steps:
   - name: trigger-docs-build
-    image: docker.io/curlimages/curl:8.10.1
+    # runs as root: curlimages/curl's non-root user cannot enter the workspace
+    image: docker.io/alpine/curl:8.14.1
     environment:
       WOODPECKER_TOKEN:
         from_secret: woodpecker_token
