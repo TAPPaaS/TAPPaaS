@@ -370,7 +370,14 @@ promote_ref() {
 # already refused a dirty tree (PF_BROKEN), so these two files are ours alone —
 # and a half-moved pin left behind would make the NEXT run's preflight refuse.
 abandon_phase_branch() {
-    g checkout -q -- src/foundation/templates/flake.nix src/foundation/templates/flake.lock
+    # One at a time: a pathspec that matches nothing makes `git checkout --`
+    # restore nothing at all, which is the opposite of what this is for.
+    local f
+    for f in src/foundation/templates/flake.nix \
+             src/foundation/templates/flake.lock \
+             src/foundation/tappaas-cicd/flake.lock; do
+        [[ -e "${REPO_DIR}/${f}" ]] && g checkout -q -- "${f}"
+    done
     g checkout -q main
     g branch -D "${1}" >/dev/null 2>&1
     return 1
@@ -410,7 +417,29 @@ do_phase_branch() {
     ( cd "${REPO_DIR}/src/foundation/templates" \
       && nix flake update --extra-experimental-features "nix-command flakes" ) >/dev/null 2>&1 \
         || { error "nix flake update failed"; abandon_phase_branch "${br}"; return 1; }
+    # D1 says one pin, but `follows` only decides where the mothership LOOKS —
+    # its own lock keeps a copy of the node until it is re-locked (measured on
+    # hrossen 2026-09-23: templates moved to 26.05 and the mothership's flake
+    # still resolved the old revision). Two locks that disagree is the split
+    # pin #709 is about, so both move here or neither does.
+    local cicd_dir="${REPO_DIR}/src/foundation/tappaas-cicd"
+    if [[ -f "${cicd_dir}/flake.lock" ]]; then
+        ( cd "${cicd_dir}" \
+          && nix flake update --extra-experimental-features "nix-command flakes" ) >/dev/null 2>&1 \
+            || { error "the mothership lock could not follow the new pin"; abandon_phase_branch "${br}"; return 1; }
+    fi
+
     local after; after="$(jq -r '.nodes.nixpkgs.locked.rev // empty' "${PIN_LOCK}")"
+    if [[ -f "${cicd_dir}/flake.lock" ]]; then
+        local cicd_rev
+        cicd_rev="$(jq -r '.nodes.nixpkgs.locked.rev // empty' "${cicd_dir}/flake.lock")"
+        # Each update resolves the ref on its own, so a branch tip that moved
+        # between the two would leave the mothership on a different revision
+        # from every guest — silently, which is the whole danger.
+        [[ "${cicd_rev}" == "${after}" ]] || {
+            error "the two locks disagree: guests ${after:0:12}, mothership ${cicd_rev:0:12}"
+            abandon_phase_branch "${br}"; return 1; }
+    fi
     if [[ "${before}" == "${after}" ]]; then
         # A frozen branch, or one already current. Not an error — but an empty
         # commit would make the record claim a move that did not happen.

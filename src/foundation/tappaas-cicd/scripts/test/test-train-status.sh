@@ -315,6 +315,12 @@ cat > "${TMP}/bin/nix" <<'STUB'
 # tell "it re-read the file" from "it wrote a constant".
 [[ "$1" == "flake" && "$2" == "update" ]] || exit 0
 ref="$(sed -n 's|.*github:NixOS/nixpkgs/\([^"]*\)".*|\1|p' flake.nix | head -1)"
+if [[ -z "${ref}" ]]; then
+    # No ref of its own: this flake `follows` templates, so re-locking it just
+    # copies whatever templates resolved. That is the mothership (ADR-028 D1).
+    cp ../templates/flake.lock flake.lock 2>/dev/null
+    exit 0
+fi
 [[ "${ref}" == "nixos-25.11" ]] && exit 0   # frozen: nothing new to resolve
 printf '{"nodes":{"nixpkgs":{"locked":{"rev":"%s","lastModified":1790000000}}}}\n' \
     "$(printf '%s' "${ref}" | shasum | cut -c1-40)" > flake.lock
@@ -330,6 +336,10 @@ setup_to() {
     make_train 3 2
     printf '{\n  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";\n}\n' \
         > "${TMP}/w/src/foundation/templates/flake.nix"
+    mkdir -p "${TMP}/w/src/foundation/tappaas-cicd"
+    printf '{\n  inputs.nixpkgs.follows = "templates/nixpkgs";\n}\n' \
+        > "${TMP}/w/src/foundation/tappaas-cicd/flake.nix"
+    cp "${TMP}/w/src/foundation/templates/flake.lock" "${TMP}/w/src/foundation/tappaas-cicd/flake.lock"
     git -C "${TMP}/w" add -A && git -C "${TMP}/w" commit -qm "flake"
     git -C "${TMP}/w" push -q origin main && git -C "${TMP}/w" fetch -q origin
     FAKE_NOW=1790000000 run init >/dev/null
@@ -348,6 +358,13 @@ grep -q 'github:NixOS/nixpkgs/nixos-26.05' "${TMP}/w/src/foundation/templates/fl
 # The rewrite is worthless if the lock still holds the frozen branch's rev.
 grep -q 'b77b3de8' "${TMP}/w/src/foundation/templates/flake.lock" \
     && bad "the lock still holds the old rev" || ok "…and the lock was re-resolved against it"
+# `follows` decides where the mothership LOOKS, not what its own lock holds:
+# measured on hrossen, templates moved to 26.05 and the mothership still
+# resolved the old revision. One pin (D1) has to mean both files.
+[[ "$(jq -r .nodes.nixpkgs.locked.rev "${TMP}/w/src/foundation/tappaas-cicd/flake.lock")" \
+   == "$(jq -r .nodes.nixpkgs.locked.rev "${TMP}/w/src/foundation/templates/flake.lock")" ]] \
+    && ok "the mothership lock moved with the guests" \
+    || bad "the mothership was left on the old pin"
 
 echo "── the pin commit carries the flake, not only the lock ──"
 # A lock whose rev came from a ref that was never committed is a pin nobody

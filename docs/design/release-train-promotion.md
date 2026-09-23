@@ -74,9 +74,13 @@ release script nobody reads the output of.
 
 ## Phases 1–6
 
-**1 — Branch and move the pin.** `pin/<yyyy>-w<ww>` from `main`; `nix flake update --flake
-src/foundation/templates` — **one** command, because the mothership's flake follows that lock
-rather than holding its own (ADR-028 D1, built 2026-09-23). Note the branch must be a real git
+**1 — Branch and move the pin.** `pin/<yyyy>-w<ww>` from `main`; `nix flake update` in
+`src/foundation/templates`, then again in `src/foundation/tappaas-cicd`, and the two resolved
+revisions are compared. `follows` (ADR-028 D1) decides where the mothership *looks*, not what its
+own lock *holds* — measured on hrossen 2026-09-23: templates moved to `nixos-26.05` and the
+mothership's flake still resolved the May revision until it was re-locked. Each update resolves
+the ref independently, so if the branch tip moves between them the phase refuses rather than
+leave the control plane on a different revision from every guest. Note the branch must be a real git
 checkout: the relative path input resolves against the git tree, so a `tar`-made copy cannot
 build the mothership's flake at all. Reports old → new revision with both dates and the age delta. If the lock does not
 move — a frozen branch, or an already-current one — it stops and says so rather than making an
