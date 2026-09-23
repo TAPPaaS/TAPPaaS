@@ -180,7 +180,7 @@ for ATTEMPT in 1 2 3 4 5; do
 done
 rm -f "\${BODY}"
 # Persist key on litellm VM for future idempotency checks
-sudo install -d -m 700 /etc/secrets
+[ -d /etc/secrets ] || sudo install -d -m 700 /etc/secrets
 printf '%s' "\${KEY}" | sudo tee "\${KEYSTORE}" > /dev/null
 sudo chmod 600 "\${KEYSTORE}"
 echo "\${KEY}"
@@ -196,7 +196,7 @@ consumer_run <<EOSH || die "failed to write ${CONSUMER_SECRETS} on ${CONSUMING_H
 NEW_KEY="${NEW_KEY}"
 LITELLM_HOST="${LITELLM_HOST}"
 SECRETS_FILE="${CONSUMER_SECRETS}"
-sudo install -d -m 700 /etc/secrets
+[ -d /etc/secrets ] || sudo install -d -m 700 /etc/secrets
 CONTENT=\$(printf 'LITELLM_API_KEY=%s\nLITELLM_BASE_URL=http://%s:4000/v1\n' "\${NEW_KEY}" "\${LITELLM_HOST}")
 T=\$(sudo mktemp /etc/secrets/.litellm-svckey.XXXXXX)
 printf '%s' "\${CONTENT}" | sudo tee "\${T}" > /dev/null

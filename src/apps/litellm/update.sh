@@ -82,7 +82,7 @@ else
     if printf 'LITELLM_OWNER_EMAIL=%s\nLITELLM_PUBLIC_URL=%s\n' \
             "${_owner_email}" "${_proxy_domain:+https://${_proxy_domain}}" \
         | ssh ${_SSH_OPTS} "tappaas@${_VM_HOST}" \
-            "sudo install -d -m 700 /etc/secrets && \
+            "{ [ -d /etc/secrets ] || sudo install -d -m 700 /etc/secrets; } && \
              sudo install -m600 -o root -g root /dev/stdin /etc/secrets/litellm-owner.env && \
              sudo systemctl restart litellm-integrations.service && \
              sudo systemctl restart litellm-register-vllm.service && \

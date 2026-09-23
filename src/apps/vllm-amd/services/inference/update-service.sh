@@ -80,7 +80,7 @@ CONTENT="$(printf 'VLLM_BASE_URL=%s\nVLLM_MODEL_ID=%s\nVLLM_API_KEY=%s\n' \
 
 if printf '%s\n' "${CONTENT}" | ssh -o BatchMode=yes -o ConnectTimeout=15 \
         -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR "tappaas@${CONSUMER_HOST}" \
-        "sudo install -d -m 700 /etc/secrets && \
+        "{ [ -d /etc/secrets ] || sudo install -d -m 700 /etc/secrets; } && \
          sudo install -m600 -o root -g root /dev/stdin /etc/secrets/vllm-inference.env"
 then
     debug "  ${GN}✓${CL} wrote /etc/secrets/vllm-inference.env on ${CONSUMER_HOST}"

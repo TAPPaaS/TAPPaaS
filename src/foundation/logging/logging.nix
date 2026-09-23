@@ -562,6 +562,18 @@ in
             ++ lib.optional published "generate-logging-oidc-placeholder.service";
     requires = [ "generate-grafana-secrets.service" ]
                ++ lib.optional published "generate-logging-oidc-placeholder.service";
+    # Grafana reads its secrets as the grafana group, through /etc/secrets —
+    # a directory other writers share. One of them re-moding it 0700 (identity's
+    # OIDC delivery did, #715) crash-looped Grafana on its admin-password file,
+    # and only a rebuild or a reboot re-ran the tmpfiles rule below. So every
+    # start re-asserts THIS module's rule for that directory first, as root
+    # ("+"): Grafana cannot be locked out of its own secrets by any writer, and a
+    # site stuck in that loop recovers the next time the unit starts.
+    # mkBefore: ahead of the NixOS module's own grafana-pre-start, so nothing in
+    # Grafana's start runs against a directory it cannot enter.
+    serviceConfig.ExecStartPre = lib.mkBefore [
+      "+${pkgs.systemd}/bin/systemd-tmpfiles --create --prefix=/etc/secrets"
+    ];
   };
 
   # ============================================================================

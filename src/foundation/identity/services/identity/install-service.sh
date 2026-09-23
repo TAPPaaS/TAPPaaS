@@ -222,13 +222,21 @@ fi
 # the CHANGED key (same approach as update-os.sh update_ssh_known_hosts).
 ssh-keygen -R "${UPSTREAM}" >/dev/null 2>&1 || true
 debug "  VM: merging OIDC vars into ${SECRETS_ENV} on ${UPSTREAM} (mode 600)"
+# Two rules for the remote side (#715):
+#   - the credentials travel on STDIN. Interpolated into the command they were
+#     part of `sudo sh -c '…'`, and sudo logs every command line: the guest's
+#     journal held the client secret in clear.
+#   - the directory is created only when missing, never re-moded. It is shared,
+#     and its mode belongs to the module's own tmpfiles rule (logging.nix makes
+#     it 0750 root:grafana); `install -d -m 700` on an existing directory
+#     CHANGES it, and Grafana then crash-looped on its admin-password file.
 ENV_CONTENT="$(printf 'OIDC_CLIENT_ID=%s\nOIDC_CLIENT_SECRET=%s\nOIDC_DISCOVERY_URI=%s\n' \
     "${CLIENT_ID}" "${CLIENT_SECRET}" "${DISCOVERY_URI}")"
-if ssh -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR -o ConnectTimeout=10 "tappaas@${UPSTREAM}" \
-    "sudo install -d -m 700 \"\$(dirname '${SECRETS_ENV}')\" && \
+if printf '%s\n' "${ENV_CONTENT}" | \
+   ssh -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR -o ConnectTimeout=10 "tappaas@${UPSTREAM}" \
+    "d=\"\$(dirname '${SECRETS_ENV}')\"; { [ -d \"\$d\" ] || sudo install -d -m 700 \"\$d\"; } && \
      sudo sh -c 'umask 077; t=\$(mktemp \"\$(dirname \"${SECRETS_ENV}\")/.oidc.XXXXXX\") || exit 1; \
-       { [ -f \"${SECRETS_ENV}\" ] && grep -v \"^OIDC_\" \"${SECRETS_ENV}\"; \
-         printf \"%s\" \"${ENV_CONTENT}\"; } > \"\$t\" && \
+       { [ -f \"${SECRETS_ENV}\" ] && grep -v \"^OIDC_\" \"${SECRETS_ENV}\"; cat; } > \"\$t\" && \
        chmod 600 \"\$t\" && mv -f \"\$t\" \"${SECRETS_ENV}\"'"; then
     debug "  ${GN}✓${CL} merged OIDC vars into ${SECRETS_ENV}"
 else

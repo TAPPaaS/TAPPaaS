@@ -222,7 +222,7 @@ REMOTE
             if printf 'OPENWEBUI_OWNER_EMAIL=%s\nOPENWEBUI_OWNER_NAME=%s\n' \
                     "${_owner_email}" "${_owner_name:-${_owner_user}}" \
                 | ssh ${SSH_OPTS} "tappaas@${VM_HOST}" \
-                    "sudo install -d -m 700 /etc/secrets && \
+                    "{ [ -d /etc/secrets ] || sudo install -d -m 700 /etc/secrets; } && \
                      sudo install -m600 -o root -g root /dev/stdin /etc/secrets/openwebui-owner.env && \
                      sudo systemctl restart openwebui-integrations.service && \
                      sudo systemctl restart openwebui-apply-connection.service && \
