@@ -141,42 +141,74 @@ if [[ "${CONNECTOR}" == "onlyoffice" ]]; then
             # is not a terminal, and hence the timeout is now a safety net
             # rather than the path every run takes.
             #
-            # The verdict still comes from the DB rather than stdout: that is
-            # the authoritative state, and the same route test-service.sh uses.
-            # The row is CLEARED first so what comes back is THIS run's answer —
-            # an empty row then means "the check looked and found nothing wrong"
-            # rather than "nobody looked".
+            # It also has to wait for the document server. The sweep reaches
+            # this point straight after euro-office's own OS update, which
+            # restarts the container, and a check that lands in that window
+            # fails for real — the app writes the error into settings_error and
+            # test-service.sh then reads it back in Step 4. Measured on the test
+            # site, 2026-09-23: after a restart /healthcheck answers `true` at
+            # 22 s and the round trip succeeds at 23 s. So the gate is the
+            # healthcheck, polled from the Nextcloud side (the path the round
+            # trip actually takes), and the bound is a few times that.
+            #
+            # The verdict comes from what the check SAYS (DocumentServer.php):
+            #   "... is successfully connected"  → working  (returns 0)
+            #   "Error connection: <error>"       → broken   (returns 1, and
+            #                                        writes settings_error)
+            #   "Document server is not configured" → broken (returns 1)
+            #   anything else                      → it gave no verdict
+            # Not from the exit code alone: 1 is a verdict, not a failure to
+            # run — reading every non-zero as "did not run" (the first #714
+            # fix) reported a real outage as "could not determine". And not
+            # from the DB row alone: without a TTY the wrapper returns 0 having
+            # run nothing, so an unchanged row proves nothing either way.
             _oo_err=""
-            _oo_ran=0
-            for _attempt in 1 2 3; do
-                ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR \
-                    "tappaas@${NC_HOST}" \
-                    "sudo -u postgres psql -d nextcloud -tAc \"DELETE FROM oc_appconfig WHERE appid='onlyoffice' AND configkey='settings_error'\"" \
-                    >/dev/null 2>&1 || true
-                if ssh -tt -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR \
-                    "tappaas@${NC_HOST}" "sudo timeout ${OO_CHECK_TIMEOUT:-120} nextcloud-occ onlyoffice:documentserver --check" \
-                    >/dev/null 2>&1; then
-                    _oo_ran=1
+            _oo_verdict=""          # working | broken | unknown
+            _oo_why=""
+
+            # Gate: the document server answers its own healthcheck.
+            _oo_ready=0
+            _oo_deadline=$(( SECONDS + ${OO_READY_TIMEOUT:-120} ))
+            while (( SECONDS < _oo_deadline )); do
+                if ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR \
+                        "tappaas@${NC_HOST}" "curl -s -m 5 http://${EO_HOST}/healthcheck" 2>/dev/null \
+                        | grep -qx 'true'; then
+                    _oo_ready=1; break
                 fi
-                _oo_err=$(ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR \
-                    "tappaas@${NC_HOST}" \
-                    "sudo -u postgres psql -d nextcloud -tAc \"SELECT configvalue FROM oc_appconfig WHERE appid='onlyoffice' AND configkey='settings_error'\"" \
-                    2>/dev/null | tr -d '[:space:]') || _oo_err=""
-                [[ -n "${_oo_err}" ]] && break
-                [[ "${_oo_ran}" -eq 1 ]] && break
-                # The document server may still be booting on a fresh install.
-                [[ "${_attempt}" -lt 3 ]] && sleep 15
+                sleep 5
             done
+
+            if [[ "${_oo_ready}" -ne 1 ]]; then
+                _oo_verdict="unknown"
+                _oo_why="the document server at ${EO_HOST} did not report healthy within ${OO_READY_TIMEOUT:-120}s"
+            else
+                _oo_out=$(ssh -tt -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR \
+                    "tappaas@${NC_HOST}" \
+                    "sudo timeout ${OO_CHECK_TIMEOUT:-120} nextcloud-occ --no-ansi onlyoffice:documentserver --check" \
+                    < /dev/null 2>/dev/null | tr -d '\r') || true
+                if grep -q 'is successfully connected' <<< "${_oo_out}"; then
+                    _oo_verdict="working"
+                elif _oo_err=$(grep -m1 -o 'Error connection: .*' <<< "${_oo_out}"); then
+                    _oo_verdict="broken"
+                    _oo_err="${_oo_err#Error connection: }"
+                elif grep -q 'Document server is not configured' <<< "${_oo_out}"; then
+                    _oo_verdict="broken"
+                    _oo_err="the document server URL is not configured in Nextcloud"
+                else
+                    _oo_verdict="unknown"
+                    _oo_why="the check on ${NC_HOST} returned no verdict ($(head -c 120 <<< "${_oo_out:-no output}" | tr '\n' ' '))"
+                fi
+            fi
 
             # Three outcomes, not two: working, broken, and nobody could tell.
             # The third is NOT a failure — treating it as one is what made a
             # healthy estate red every night.
-            if [[ "${_oo_ran}" -eq 0 ]]; then
+            if [[ "${_oo_verdict}" == "unknown" ]]; then
                 warn "  could not determine whether the onlyoffice connector works:"
-                warn "    the check did not run on ${NC_HOST} (nextcloud-occ needs a TTY; this uses ssh -tt)"
+                warn "    ${_oo_why}"
                 warn "    by hand: ssh -t tappaas@${NC_HOST} sudo nextcloud-occ onlyoffice:documentserver --check"
                 warn "  Left as it is rather than called broken on an answer nobody got."
-            elif [[ -z "${_oo_err}" ]]; then
+            elif [[ "${_oo_verdict}" == "working" ]]; then
                 debug "${GN}✓${CL} onlyoffice document server round-trip verified"
 
                 # ── Point the document server's splash page at this Nextcloud ──

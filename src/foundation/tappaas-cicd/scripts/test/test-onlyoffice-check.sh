@@ -1,26 +1,25 @@
 #!/usr/bin/env bash
 #
-# test-onlyoffice-check.sh — the onlyoffice connector check must actually run,
-# and a check that did not run must not fail the module (#714).
+# test-onlyoffice-check.sh — nextcloud:fileservice's onlyoffice connector check
+# gives the verdict the run actually produced (#714).
 #
-# What happened: the NixOS `nextcloud-occ` wrapper execs
-# `systemd-run --pty --wait`, which needs a TTY. nextcloud:fileservice invoked
-# it over a non-interactive ssh, where it prints nothing AND DOES NOT RUN — it
-# returns 0 having done nothing. So `settings_error`, the row the code reads as
-# "the authoritative state", was never refreshed by a sweep. The last stored
-# error stood for ever and euro-office failed night after night on a string no
-# run could change, while the connector was healthy the whole time.
+# Three faults hid behind one symptom — euro-office failing the nightly on
+# "Error while downloading the document file to be converted":
 #
-# Measured on hrossen, 2026-09-23:
-#   ssh  tappaas@nextcloud … 'sudo nextcloud-occ status'   → rc=0, NO output
-#   ssh -tt tappaas@nextcloud … 'sudo nextcloud-occ status' → full output
-#   the real check with a TTY answered in 1.5s: "Document server … is
-#   successfully connected", and settings_error cleared.
+#   1. No TTY. nextcloud-occ execs `systemd-run --pty --wait`; over a
+#      non-interactive ssh it returns 0 having run nothing, so settings_error
+#      was never refreshed and the last stored error stood for ever.
+#   2. No readiness. The sweep reaches the check straight after euro-office's
+#      OS update restarts the document server. Measured on the test site
+#      (2026-09-23): /healthcheck answers `true` 22 s after a restart and the
+#      round trip succeeds at 23 s — a check inside that window fails for real.
+#   3. Exit code read as "did it run". The command returns 1 on a genuine
+#      failure (DocumentServer.php), so treating every non-zero as "did not
+#      run" reported a real outage as "could not determine". That was the first
+#      #714 fix; this suite exists partly because of it.
 #
-# This is a SOURCE-CONTRACT test: the block lives inside several layers of
-# conditionals in update-service.sh and cannot be executed without a Nextcloud
-# and a document server. It pins the three decisions that incident turned on.
-# The live behaviour is verified by the module's own test-service.sh.
+# The block is lifted out of update-service.sh and run with `ssh` stubbed, so
+# every outcome is exercised without a Nextcloud or a document server.
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -28,60 +27,82 @@ SRC="$(cd "${HERE}/../../../.." && pwd)/apps/nextcloud/services/fileservice/upda
 
 PASS=0; FAIL=0
 ck()   { if [[ "$2" == "$3" ]]; then echo "  ok: $1"; PASS=$((PASS+1)); else echo "  FAIL: $1 (expected '$2', got '$3')"; FAIL=$((FAIL+1)); fi; }
-ckin() { if [[ "$3" == *"$2"* ]]; then echo "  ok: $1"; PASS=$((PASS+1)); else echo "  FAIL: $1 (missing '$2')"; FAIL=$((FAIL+1)); fi; }
+ckin() { if [[ "$3" == *"$2"* ]]; then echo "  ok: $1"; PASS=$((PASS+1)); else echo "  FAIL: $1 (missing '$2' in: $3)"; FAIL=$((FAIL+1)); fi; }
 
 [[ -f "${SRC}" ]] || { echo "update-service.sh not found — cannot run here."; exit 77; }
-BODY="$(cat "${SRC}")"
 ck "the service script parses" "yes" "$(bash -n "${SRC}" 2>/dev/null && echo yes || echo no)"
 
-# ── 1. the check is invoked in a way that can actually run ─────────────────
-occ_line="$(grep -n 'nextcloud-occ onlyoffice:documentserver --check' "${SRC}" | grep -v '^\s*#' | head -1)"
-ckin "the check is invoked at all"              "onlyoffice:documentserver --check" "${occ_line}"
-# The whole incident in one assertion. Look only at the EXECUTED invocation —
-# the line that runs the check, and the ssh line continued into it — never at a
-# comment, several of which mention ssh -tt precisely because this matters.
-_exec_ln="$(grep -n 'nextcloud-occ onlyoffice:documentserver --check' "${SRC}" \
-            | grep -v ':[[:space:]]*#' | grep 'sudo timeout' | head -1 | cut -d: -f1)"
-if [[ -z "${_exec_ln}" ]]; then
-    ck "the executed check invocation was found" "yes" "no"
-    invoke=""
-else
-    invoke="$(sed -n "$((_exec_ln>2 ? _exec_ln-2 : 1)),${_exec_ln}p" "${SRC}" | grep -v '^[[:space:]]*#')"
-fi
-ckin "…over an ssh that forces a TTY (-tt)"     "ssh -tt" "${invoke}"
+TMP="$(mktemp -d "${TMPDIR:-/tmp}/oo-check.XXXXXX")"
+trap 'rm -rf "${TMP}"' EXIT INT TERM
 
-# A hand-run hint that omits the TTY sends the operator down the same hole.
-hint="$(grep -n 'by hand:' "${SRC}" | head -1)"
-ckin "the by-hand hint keeps the TTY"           "ssh -t " "${hint}"
+# The verdict block: from its first variable to the comment that opens the
+# three-way chain.
+awk '/^            _oo_err=""$/{f=1} f&&/# Three outcomes, not two/{exit} f{print}' "${SRC}" > "${TMP}/block.sh"
+[[ -s "${TMP}/block.sh" ]] || { echo "  FAIL: could not extract the verdict block"; exit 1; }
+bash -n "${TMP}/block.sh" 2>/dev/null && ck "the verdict block extracts and parses" "yes" "yes" \
+    || { ck "the verdict block extracts and parses" "yes" "no"; exit 1; }
 
-# ── 2. the row read back is this run's answer ──────────────────────────────
-ckin "settings_error is cleared before the check" \
-     "DELETE FROM oc_appconfig WHERE appid='onlyoffice' AND configkey='settings_error'" "${BODY}"
-# Order matters: clearing AFTER the check would erase the verdict it just wrote.
-_del="$(grep -n 'DELETE FROM oc_appconfig' "${SRC}" | head -1 | cut -d: -f1)"
-_chk="$(grep -n 'nextcloud-occ onlyoffice:documentserver --check' "${SRC}" | grep -v '#' | head -1 | cut -d: -f1)"
-if [[ -n "${_del}" && -n "${_chk}" && "${_del}" -lt "${_chk}" ]]; then
-    ck "…before it, not after" "yes" "yes"
-else
-    ck "…before it, not after" "yes" "no (delete at ${_del:-?}, check at ${_chk:-?})"
-fi
+# run <healthcheck-answer> <check-output>
+# Prints: verdict|err|why|ssh-invocations
+run() {
+    HC="$1" CHECK_OUT="$2" CALLS="${TMP}/calls" bash -c '
+        : > "${CALLS}"
+        NC_HOST="nextcloud.example.internal"
+        EO_HOST="euro-office.example.internal"
+        OO_READY_TIMEOUT=6          # keep the "never ready" case fast
+        sleep() { :; }
+        ssh() {
+            echo "ssh $*" >> "${CALLS}"
+            case "$*" in
+                *healthcheck*) printf "%s\n" "${HC}" ;;
+                *documentserver\ --check*) printf "%s\n" "${CHECK_OUT}" ;;
+            esac
+        }
+        . '"${TMP}"'/block.sh
+        printf "%s|%s|%s\n" "${_oo_verdict}" "${_oo_err}" "${_oo_why}"
+    ' 2>/dev/null
+}
 
-# ── 3. three outcomes, and only one of them fails the module ───────────────
-ckin "a run that could not determine says so"   "could not determine whether the onlyoffice connector works" "${BODY}"
-ckin "…and the chain starts with that case"     'if [[ "${_oo_ran}" -eq 0 ]]; then' "${BODY}"
-ckin "…the healthy case follows it"             'elif [[ -z "${_oo_err}" ]]; then' "${BODY}"
+# ── working ─────────────────────────────────────────────────────────────────
+out="$(run true $'Document server https://eo.example.org/ version 9.3.1.37 is successfully connected\r')"
+ck   "a successful round trip is WORKING"               "working" "${out%%|*}"
+calls="$(cat "${TMP}/calls")"
+ckin "…the check ran over an ssh that forces a TTY"      "ssh -tt" "$(grep -- '--check' <<< "${calls}")"
+ckin "…with --no-ansi, so the verdict text is plain"     "--no-ansi" "$(grep -- '--check' <<< "${calls}")"
+# The gate ran before the check, not after.
+first_hc="$(grep -n healthcheck <<< "${calls}" | head -1 | cut -d: -f1)"
+first_ck="$(grep -n -- '--check' <<< "${calls}" | head -1 | cut -d: -f1)"
+ck   "…and only after the document server was healthy"  "yes" "$([[ -n "${first_hc}" && -n "${first_ck}" && "${first_hc}" -lt "${first_ck}" ]] && echo yes || echo no)"
 
-# The undetermined branch must not exit: that is the regression, exactly.
-undet="$(awk '/if \[\[ "\$\{_oo_ran\}" -eq 0 \]\]; then/{f=1} f{print} f&&/^            elif/{exit}' "${SRC}")"
-ck "the undetermined branch does not fail the module" "0" "$(grep -c 'exit 1' <<< "${undet}")"
+# ── broken: a real verdict, with the error it named ─────────────────────────
+out="$(run true 'Error connection: Error occurred in the document service: Error while downloading the document file to be converted.')"
+ck   "an Error connection is BROKEN, not unknown"       "broken" "${out%%|*}"
+ckin "…carrying the error the check named"              "Error while downloading the document file" "${out}"
 
-# …while a verdict of "broken" still does.
+out="$(run true 'Document server is not configured')"
+ck   "an unconfigured document server is BROKEN"        "broken" "${out%%|*}"
+
+# ── unknown: no verdict was produced, so none is reported ───────────────────
+out="$(run false '')"
+ck   "a document server that never gets healthy is UNKNOWN" "unknown" "${out%%|*}"
+ckin "…and says what it waited for"                      "did not report healthy" "${out}"
+ck   "…without running a check that would only fail"     "0" "$(grep -c -- '--check' "${TMP}/calls")"
+
+# The wrapper without a TTY: rc 0, no output. That must never read as working.
+out="$(run true '')"
+ck   "a silent check is UNKNOWN, never WORKING"          "unknown" "${out%%|*}"
+ckin "…and says it returned no verdict"                  "returned no verdict" "${out}"
+
+# ── the chain: only BROKEN fails the module ─────────────────────────────────
+undet="$(awk '/_oo_verdict}" == "unknown" \]\]; then/{f=1} f{print} f&&/^            elif/{exit}' "${SRC}")"
+ck   "the unknown branch does not fail the module"       "0" "$(grep -c 'exit 1' <<< "${undet}")"
 broken="$(awk '/onlyoffice connector is wired but NOT working/{f=1} f{print} f&&/^            fi$/{exit}' "${SRC}")"
-ck "a real failure still fails it" "1" "$(grep -c 'exit 1' <<< "${broken}")"
+ck   "the broken branch still does"                      "1" "$(grep -c 'exit 1' <<< "${broken}")"
 
-# The stale-verdict wording is gone: it described a timeout that was not
-# happening, and pointed diagnosis at the wrong thing for four nights.
-ck "the old 'STORED verdict' wording is gone" "0" "$(grep -c 'STORED verdict' <<< "${BODY}")"
+# ── and the hints never send an operator into the silent no-op ──────────────
+ckin "update-service's by-hand hint keeps the TTY" "ssh -t " "$(grep 'by hand:' "${SRC}")"
+VERIFIER="$(dirname "${SRC}")/test-service.sh"
+ckin "test-service's by-hand hint keeps the TTY"   "ssh -t " "$(grep 'nextcloud-occ onlyoffice:documentserver --check' "${VERIFIER}")"
 
 echo "── ${PASS} passed, ${FAIL} failed ──"
 [[ "${FAIL}" -eq 0 ]]

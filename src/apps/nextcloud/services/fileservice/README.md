@@ -43,20 +43,26 @@ Two consequences worth knowing before reading a red test:
 - **It needs a TTY, or it does not run at all (#714).** The NixOS
   `nextcloud-occ` wrapper execs `systemd-run --pty --wait`. Over a
   non-interactive ssh the command prints nothing *and does nothing*, returning
-  0 — so `settings_error` is never refreshed and the last stored answer stands
-  for ever. That is what made several consecutive nightlies fail on a string no
-  run could clear, while the connector was healthy throughout. The earlier
-  reading of this — "measured running over eight minutes without returning" —
-  was the pty waiting, not the check working. `update-service.sh` uses
-  `ssh -tt`; with a TTY the check answers in about **1.5 seconds**.
-  `OO_CHECK_TIMEOUT` (120s) remains as a safety net, not as the normal path.
-- **Three outcomes, not two.** Working, broken, and *nobody could tell*. The
-  third is reported as a warning and leaves the module's status alone: a check
-  that did not run is not evidence of a fault. The stored row is cleared before
-  the check, so what is read back is that run's own answer.
+  0 — so `settings_error` was never refreshed and the last stored answer stood
+  for ever. The old reading of this, "measured running over eight minutes
+  without returning", was the pty waiting, not the check working.
+  `update-service.sh` uses `ssh -tt`; with a TTY the check answers in about
+  **1.5 seconds**.
+- **It has to wait for the document server.** The sweep reaches the check
+  straight after euro-office's OS update restarts the container. Measured on
+  the test site: after a restart `/healthcheck` answers `true` at **22 s** and
+  the round trip succeeds at **23 s**. A check inside that window fails for
+  real, writes the error, and the verifier reads it back. So the check is gated
+  on the healthcheck, polled from the Nextcloud side (`OO_READY_TIMEOUT`, 120s).
+- **The verdict comes from what the check says.** `… is successfully
+  connected` is working; `Error connection: …` or `Document server is not
+  configured` is broken; anything else is *no verdict*. Not from the exit code
+  alone — 1 is the command's way of saying "broken", not "did not run" — and
+  not from an unchanged DB row, which proves nothing when the wrapper ran
+  nothing. Only *broken* fails the module; *no verdict* is a warning.
 
 To refresh it by hand:
 
 ```bash
-ssh tappaas@<nextcloud>.<zone>.internal sudo nextcloud-occ onlyoffice:documentserver --check
+ssh -t tappaas@<nextcloud>.<zone>.internal sudo nextcloud-occ onlyoffice:documentserver --check
 ```
