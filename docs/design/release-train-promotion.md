@@ -97,7 +97,21 @@ branch; `--to` is always the operator's word. If any step fails, the branch is d
 two files restored — the next run's preflight refuses a dirty checkout, so a half-moved pin left
 behind would be sticky.
 
-**2 — Prove it here, guest first.** ADR-028 D9's rule, and the order is the point: one
+**2 — Point the site at the pin branch, then prove it here, guest first.**
+
+The declaration comes first, and it is not a formality. The sweep in this phase refreshes the
+control plane, and that reconciles the checkout to the branch **`site.json` declares** — so a
+checkout merely *parked* on the pin branch is reset back to `main` part-way through, and every
+module after the first guest is rebuilt against the **old** revision while the run reports
+progress. Measured on hrossen, 2026-09-23: the guest-first step ran on `nixos-26.05`, the sweep
+behind it silently did not. Phase 1 therefore publishes the pin branch (the site can only track
+what the forge has), phase 2 declares it with `site-manager repository modify`, and after the
+sweep the phase re-checks which branch the checkout is on — a sweep that moved it stops the
+boundary rather than deep-testing the old revision and calling it proof. Every exit from this
+phase restores the declaration to `main`, because a site left tracking a pin branch would take
+its next scheduled sweep from a branch nobody maintains.
+
+ADR-028 D9's rule, and the order is the point: one
 representative NixOS guest is updated against the new pin *before* the mothership takes it, so a
 bad revision is caught by a machine that can be rolled back (`update-module.sh` snapshots) rather
 than by the machine that would have to fix it. Then the full sweep, then `site-manager test
@@ -111,7 +125,9 @@ mothership was rebuilt and `site-manager` still did not know an option added in 
 Without the relink a boundary would test the *old* manager binaries against the new base, which
 is the one combination nobody will ever run.
 
-**3 — Land on `main`.** Fast-forward `main` to the branch, push, point this site back at `main`.
+**3 — Land on `main`.** Fast-forward `main` to the branch, push, point this site back at `main`,
+and delete the pin branch — its commit is an ancestor of `main` by then, so it holds nothing
+`main` does not, and left behind one accumulates every fortnight.
 
 **4 — `staging` → `stable`.** Fast-forward only. This promotes the revision that has been
 soaking for a fortnight — *not* the one just built.

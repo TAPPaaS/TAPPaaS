@@ -32,13 +32,14 @@
 #
 # Exit: 0 sound (or reported) · 1 the train is not promotable · 2 usage
 #
-# Environment (tests): TAPPAAS_CONFIG_DIR, TAPPAAS_REPO_DIR, TAPPAAS_TRAIN_NOW
+# Environment (tests): TAPPAAS_CONFIG_DIR, TAPPAAS_REPO_DIR, TAPPAAS_BIN_DIR, TAPPAAS_TRAIN_NOW
 
 set -uo pipefail
 
 SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
 CONFIG_DIR="${TAPPAAS_CONFIG_DIR:-/home/tappaas/config}"
 REPO_DIR="${TAPPAAS_REPO_DIR:-/home/tappaas/TAPPaaS}"
+BIN_DIR="${TAPPAAS_BIN_DIR:-/home/tappaas/bin}"
 SITE_FILE="${CONFIG_DIR}/site.json"
 STATE_FILE="${CONFIG_DIR}/release-train.json"
 # The boundary interval (ADR-028 D2). Policy, so it is named once.
@@ -463,6 +464,11 @@ do_phase_branch() {
     [[ -n "${TO_BRANCH}" ]] && msg="chore(pin): estate nixpkgs moves to ${TO_BRANCH}"
     g commit -q -m "${msg}" \
         || { error "could not commit the pin"; abandon_phase_branch "${br}"; return 1; }
+    # The site can only TRACK a branch the forge has — repo-sync reconciles
+    # against origin, not against whatever happens to be on this disk.
+    g push -q origin "${br}" \
+        || { error "could not publish ${br}"; abandon_phase_branch "${br}"; return 1; }
+
     local tmp="${STATE_FILE}.tmp.$$"
     jq --arg b "${br}" --arg f "${before}" --arg t "${after}" \
        '.boundary = ((.boundary // {}) + {branch: $b, pinFrom: $f, pinTo: $t})' \
@@ -474,6 +480,27 @@ do_phase_branch() {
 # The order is the point (ADR-028 D9): a guest that fails the new pin is
 # snapshot-rolled back by update-module.sh, and the control plane stays able to
 # investigate. The mothership meets the revision only after a guest has.
+# The site's own declaration of this checkout. `site.json` is what the sweep
+# reconciles the working tree to, so moving the checkout without moving this is
+# how the pin was silently reverted mid-boundary (measured 2026-09-23).
+tracked_repo() {
+    local f="${CONFIG_DIR}/site.json"
+    jq -r --arg p "${REPO_DIR}" \
+       '(.repositories // []) | map(select(.path == $p)) | .[0].name // empty' "${f}" 2>/dev/null
+}
+
+# Point the site's declaration at <branch>, so the sweep's repo-sync keeps the
+# checkout there instead of resetting it back to `main` half way through.
+declare_branch() {
+    local repo="$1" branch="$2"
+    [[ -n "${repo}" ]] || { error "no repository in site.json has path ${REPO_DIR}"; return 1; }
+    site-manager repository modify "${repo}" --branch "${branch}" >/dev/null 2>&1 \
+        || { error "could not point ${repo} at ${branch}"; return 1; }
+    local on; on="$(g rev-parse --abbrev-ref HEAD)"
+    [[ "${on}" == "${branch}" ]] || { error "declared ${branch} but the checkout is on ${on}"; return 1; }
+    return 0
+}
+
 pick_guest() {
     [[ -n "${GUEST}" ]] && { echo "${GUEST}"; return 0; }
     local f n
@@ -485,23 +512,49 @@ pick_guest() {
 }
 
 do_phase_prove() {
+    local br; br="$(jq -r '.boundary.branch // empty' "${STATE_FILE}")"
     info "${BOLD}Phase 2: prove the pin here${CL}"
     local guest; guest="$(pick_guest)" \
         || { error "no NixOS guest found to try first — name one with --guest"; return 1; }
     if [[ "${DRY_RUN}" == "1" ]]; then
-        info "  (dry run) would update ${guest} first, then sweep, then test --deep"
+        info "  (dry run) would track ${br:-the pin branch}, update ${guest} first, then sweep, then test --deep"
         return 0
     fi
+
+    # THE SITE MUST TRACK THE PIN BRANCH BEFORE ANYTHING SWEEPS.
+    # The sweep refreshes the control plane, and that reconciles the checkout to
+    # the branch site.json declares — so a checkout merely parked on the pin
+    # branch is reset back to `main` mid-phase, and everything after that point
+    # builds against the OLD revision while reporting success. Observed on
+    # hrossen 2026-09-23: only the guest-first step ran on the new pin; the
+    # whole sweep behind it silently did not.
+    local repo; repo="$(tracked_repo)"
+    [[ -n "${br}" ]] || { error "no branch recorded — re-run without --resume"; return 1; }
+    info "  the site now tracks ${br} (the sweep would otherwise reset it to main)"
+    declare_branch "${repo}" "${br}" || return 1
+
+    # From here every exit restores the declaration: a site left tracking a pin
+    # branch would take its next scheduled sweep from a branch nobody maintains.
+    _prove_fail() { warn "  restoring the site to main"; declare_branch "${repo}" main || true; return 1; }
+
     info "  ${guest} meets the new pin first (a failure there rolls that guest back, not the estate)"
-    if ! /home/tappaas/bin/update-module.sh "${guest}"; then
+    if ! "${BIN_DIR}/update-module.sh" "${guest}"; then
         error "${guest} failed on the new pin — the estate is untouched and the branch is intact."
         error "  Fix it, then: ${SCRIPT_NAME} boundary --resume"
-        return 1
+        _prove_fail; return 1
     fi
     info "  the guest is good; now the whole site"
-    site-manager update || { error "the sweep failed on the new pin"; return 1; }
+    site-manager update || { error "the sweep failed on the new pin"; _prove_fail; return 1; }
+
+    # The sweep is the thing that could have moved it back. Say so if it did,
+    # rather than testing the old revision and calling it proof.
+    local on; on="$(g rev-parse --abbrev-ref HEAD)"
+    [[ "${on}" == "${br}" ]] \
+        || { error "the sweep left the checkout on ${on}, not ${br} — nothing after the guest was proved"
+             _prove_fail; return 1; }
+
     info "  deep test — nothing is promoted unless this passes"
-    site-manager test --deep || { error "the deep test failed on the new pin"; return 1; }
+    site-manager test --deep || { error "the deep test failed on the new pin"; _prove_fail; return 1; }
     return 0
 }
 
@@ -516,6 +569,14 @@ do_phase_main() {
     g push origin main >/dev/null 2>&1 || { error "could not publish main"; return 1; }
     g fetch --quiet origin main
     info "  main is now $(g rev-parse --short origin/main)"
+
+    # Back to the channel this site runs. Until this happens its nightly sweep
+    # would pull from a pin branch nobody maintains.
+    declare_branch "$(tracked_repo)" main || return 1
+    # The commit is an ancestor of main now, so the branch holds nothing that
+    # main does not. Left behind, one accumulates every fortnight.
+    g push -q origin --delete "${br}" >/dev/null 2>&1
+    g branch -D "${br}" >/dev/null 2>&1
     return 0
 }
 

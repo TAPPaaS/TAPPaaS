@@ -54,7 +54,7 @@ EOF
     git -C "${TMP}/w" branch -f stable "HEAD~$(( ahead_staging + ahead_stable ))"
     git -C "${TMP}/w" push -q origin main staging stable
     git -C "${TMP}/w" fetch -q origin
-    printf '%s\n' '{"name":"testsite","channel":"unstable","repositories":[{"name":"TAPPaaS","branch":"main"}]}' \
+    printf '%s\n' '{"name":"testsite","channel":"unstable","repositories":[{"name":"TAPPaaS","branch":"main","path":"'"${TMP}/w"'"}]}' \
         > "${TMP}/cfg/site.json"
 }
 
@@ -414,6 +414,90 @@ FAKE_NOW=$(( 1790000000 + 20*86400 )) run_to boundary --resume --to nixos-26.05 
     && ok "an unrecognised flake refuses the move" || bad "a blind rewrite was attempted: ${OUT}"
 grep -q 'example.invalid' "${TMP}/w/src/foundation/templates/flake.nix" \
     && ok "…and left the file alone" || bad "the odd flake was modified"
+
+echo "── phase 2 makes the SITE track the pin branch, not just the checkout ──"
+# The failure this exists for, seen on hrossen 2026-09-23: the checkout was
+# parked on the pin branch, the sweep refreshed the control plane, repo-sync
+# reconciled the tree back to the branch site.json declares — and every module
+# after the first guest was rebuilt against the OLD revision while the run
+# reported progress. Only a DECLARED branch survives a sweep.
+setup_prove() {
+    setup_to
+    # A module the guest-first step can pick: the signal is dependsOn, since
+    # most guests declare no `os` field at all.
+    printf '%s\n' '{"name":"euro-office","dependsOn":["templates:nixos"]}' > "${TMP}/cfg/euro-office.json"
+    mkdir -p "${TMP}/bin2"
+    # update-module.sh: the guest-first step.
+    printf '#!/usr/bin/env bash\nexit 0\n' > "${TMP}/bin2/update-module.sh"
+    chmod +x "${TMP}/bin2/update-module.sh"
+    # site-manager: `repository modify --branch` moves BOTH the declaration and
+    # the checkout, exactly as the real one does.
+    cat > "${TMP}/bin/site-manager" <<'STUB'
+#!/usr/bin/env bash
+W="${TAPPAAS_REPO_DIR}"
+case "$1 $2" in
+  "repository modify")
+      br=""; for a in "$@"; do [[ "${_w:-}" == "1" ]] && { br="$a"; _w=0; }; [[ "$a" == "--branch" ]] && _w=1; done
+      jq --arg b "${br}" '.repositories[0].branch = $b' "${TAPPAAS_CONFIG_DIR}/site.json" > "${TAPPAAS_CONFIG_DIR}/.s" \
+        && mv "${TAPPAAS_CONFIG_DIR}/.s" "${TAPPAAS_CONFIG_DIR}/site.json"
+      git -C "${W}" checkout -q "${br}" 2>/dev/null ;;
+  "update"*)
+      # repo-sync: reconcile the tree to whatever site.json DECLARES.
+      d="$(jq -r '.repositories[0].branch' "${TAPPAAS_CONFIG_DIR}/site.json")"
+      git -C "${W}" checkout -q "${d}" 2>/dev/null ;;
+  *) : ;;
+esac
+exit 0
+STUB
+    chmod +x "${TMP}/bin/site-manager"
+    # Every phase runs here: 1 moves the pin, 2 proves it, 3 lands it and puts
+    # the site back on main. The declaration's round trip is the point.
+    jq '.boundary.phasesDone = []' "${TMP}/cfg/release-train.json" > "${TMP}/x" \
+        && mv "${TMP}/x" "${TMP}/cfg/release-train.json"
+}
+run_prove() {
+    OUT="$(PATH="${TMP}/bin:${PATH}" TAPPAAS_BIN_DIR="${TMP}/bin2" \
+           TAPPAAS_REPO_DIR="${TMP}/w" TAPPAAS_CONFIG_DIR="${TMP}/cfg" \
+           TAPPAAS_TRAIN_NOW="${FAKE_NOW:-}" "${TRAIN}" "$@" --no-fetch 2>&1)"
+    RC=$?
+}
+
+setup_prove
+FAKE_NOW=$(( 1790000000 + 20*86400 )) run_prove boundary --resume --to nixos-26.05 \
+    --staging-branch rehearse-staging --production-branch rehearse-prod
+[[ "${RC}" -eq 0 ]] && ok "a boundary that declares the branch survives its own sweep" \
+    || bad "phase 2 failed: ${OUT}"
+[[ "${OUT}" == *"the site now tracks pin/"* ]] && ok "phase 2 says it is moving the declaration" \
+    || bad "the branch declaration is invisible: ${OUT}"
+[[ "$(jq -r .repositories[0].branch "${TMP}/cfg/site.json")" == "main" ]] \
+    && ok "…and phase 3 puts the site back on main" \
+    || bad "the site was left tracking $(jq -r .repositories[0].branch "${TMP}/cfg/site.json")"
+git -C "${TMP}/w" rev-parse --verify --quiet origin/main >/dev/null \
+    && ok "main was published" || bad "main was not published"
+
+echo "── a sweep that resets the checkout is caught, not reported as proof ──"
+setup_prove
+# A site.json the train does not own — repo-sync then pulls the tree back to
+# main during the sweep, which is precisely what happened on hrossen.
+cat > "${TMP}/bin/site-manager" <<'STUB'
+#!/usr/bin/env bash
+W="${TAPPAAS_REPO_DIR}"
+case "$1 $2" in
+  "repository modify") exit 0 ;;                 # declaration ignored
+  "update"*) git -C "${W}" checkout -q main 2>/dev/null ;;
+  *) : ;;
+esac
+exit 0
+STUB
+chmod +x "${TMP}/bin/site-manager"
+FAKE_NOW=$(( 1790000000 + 20*86400 )) run_prove boundary --resume --to nixos-26.05 \
+    --staging-branch rehearse-staging --production-branch rehearse-prod
+[[ "${RC}" -ne 0 ]] && ok "a reverted checkout stops the boundary" \
+    || bad "the boundary proceeded on the old revision"
+[[ "${OUT}" == *"nothing after the guest was proved"* ]] \
+    && ok "…and says exactly what was and was not proved" || bad "the reason is not reported: ${OUT}"
+git -C "${TMP}/w" rev-parse --verify --quiet origin/rehearse-staging >/dev/null \
+    && bad "a failed proof still promoted" || ok "and promoted nothing"
 
 echo "── summary: ${PASS} pass, ${FAIL} fail ──"
 [[ "${FAIL}" -eq 0 ]]

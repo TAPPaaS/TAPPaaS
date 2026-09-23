@@ -54,11 +54,14 @@ Six phases, in this order:
    estate. Add `--to nixos-26.05` for a **version move** — the nixpkgs release branch itself
    rather than a refresh within it. That is the only way past a frozen branch, and the script
    never chooses one: `--to` is always your word.
-2. **Prove it here.** One NixOS guest meets the new revision *first*, so a bad pin is caught by a
-   machine that can be rolled back from a snapshot rather than by the machine that would have to
-   do the repairing. Then the full sweep, then `site-manager test --deep`. **This takes hours and
-   reboots nodes.**
-3. **Land on `main`.** Fast-forward and publish.
+2. **Prove it here.** The site is first pointed at the pin branch — the sweep reconciles the
+   checkout to whatever `site.json` declares, so a branch that is merely checked out gets reset
+   back to `main` half way through and the rest of the sweep quietly builds the old revision.
+   Then one NixOS guest meets the new revision *first*, so a bad pin is caught by a machine that
+   can be rolled back from a snapshot rather than by the machine that would have to do the
+   repairing. Then the full sweep, then `site-manager test --deep`. **This takes hours and
+   reboots nodes.** However it ends, the site is put back on `main`.
+3. **Land on `main`.** Fast-forward, publish, point the site back at `main`, delete the pin branch.
 4. **`staging` → `stable`.** The revision that has soaked for a fortnight reaches production.
 5. **`main` → `staging`.** The new revision starts its soak.
 6. **Verify the staging site** (`--staging-host <host>`), if you named one.
