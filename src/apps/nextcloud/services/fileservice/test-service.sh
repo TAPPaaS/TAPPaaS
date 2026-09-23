@@ -116,8 +116,9 @@ if [[ "${EURO_INSTALLED}" == "true" ]]; then
         fail "OnlyOffice connector's last check FAILED: ${OO_ERR} — Nextcloud hides the editor while this is set"
         info "    (a stored verdict: the converge refreshes it, or by hand:"
         info "     ssh -t tappaas@${VMNAME}.${ZONE}.internal sudo nextcloud-occ onlyoffice:documentserver --check)"
-        # -t is not optional: nextcloud-occ execs systemd-run --pty, and without
-        # a TTY it returns 0 having run nothing, leaving this row untouched (#714).
+        # -t matters: nextcloud-occ execs systemd-run --pty, and without a TTY
+        # the check still runs and rewrites this row but prints nothing, so the
+        # operator sees no verdict at all (#714, #715).
     fi
 else
     pass "OnlyOffice check skipped — euro-office not installed"

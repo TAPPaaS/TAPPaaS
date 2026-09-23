@@ -128,18 +128,25 @@ if [[ "${CONNECTOR}" == "onlyoffice" ]]; then
             # `onlyoffice:documentserver --check` re-runs the round trip and
             # rewrites settings_error.
             #
-            # It needs a TTY, and that is the whole of #714. The NixOS
-            # nextcloud-occ wrapper execs `systemd-run --pty --wait`; over a
-            # non-interactive ssh the command prints nothing AND DOES NOT RUN —
-            # it returns 0 having done nothing. settings_error was therefore
-            # never refreshed by a sweep, the last stored error stood for ever,
-            # and euro-office failed night after night on a string no run could
-            # change. The previous reading of this — "the check can run for many
-            # minutes, measured at 8+ and still going (#687)" — was the pty
-            # waiting, not the check working: given a TTY it answers in about
-            # 1.5 seconds. Hence `ssh -tt`, forced because the sweep's own stdin
-            # is not a terminal, and hence the timeout is now a safety net
-            # rather than the path every run takes.
+            # Its verdict needs a TTY. The NixOS nextcloud-occ wrapper execs
+            # `systemd-run --pty --wait`; over a non-interactive ssh the command
+            # RUNS — writes take effect, and this check rewrites settings_error
+            # — but its stdout is lost and it returns 0. Measured on the test
+            # site (#714, #715): a config:system:set without a TTY was read back
+            # correctly, and a --check without a TTY replaced a seeded sentinel
+            # in settings_error. What cannot be had without a TTY is what the
+            # check SAID, which is what the verdict below is built from. Hence
+            # `ssh -tt`, forced because the sweep's own stdin is not a terminal.
+            # With a TTY a passing check answers in about 1.5 seconds; the
+            # timeout is a safety net, not the path a healthy run takes.
+            #
+            # The nightly euro-office failures this was once blamed for were
+            # real, not replayed: each night's check ran and wrote a fresh error.
+            # On hrossen the cause was clock skew between the two guests (#716,
+            # met below by the JWT leeway in nextcloud.nix); on another site it
+            # was an HTTP 400 from an empty trusted_domains (#715). The same
+            # message covers both, which is why it took reading both sides' own
+            # logs to tell them apart.
             #
             # It also has to wait for the document server. The sweep reaches
             # this point straight after euro-office's own OS update, which

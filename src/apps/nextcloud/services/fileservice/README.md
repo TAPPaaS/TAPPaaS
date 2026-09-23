@@ -40,14 +40,17 @@ Two consequences worth knowing before reading a red test:
   verifier must not mutate, and `onlyoffice:documentserver --check` rewrites
   app config. So a failing test means "the last completed check failed", not
   necessarily "it is broken now".
-- **It needs a TTY, or it does not run at all (#714).** The NixOS
-  `nextcloud-occ` wrapper execs `systemd-run --pty --wait`. Over a
-  non-interactive ssh the command prints nothing *and does nothing*, returning
-  0 — so `settings_error` was never refreshed and the last stored answer stood
-  for ever. The old reading of this, "measured running over eight minutes
-  without returning", was the pty waiting, not the check working.
-  `update-service.sh` uses `ssh -tt`; with a TTY the check answers in about
+- **Its verdict needs a TTY (#714, #715).** The NixOS `nextcloud-occ` wrapper
+  execs `systemd-run --pty --wait`. Over a non-interactive ssh the command
+  *runs* — writes take effect, and `--check` does rewrite `settings_error` — but
+  its stdout is lost and it returns 0. So the verdict, which is read from what
+  the check says, needs `ssh -tt`. With a TTY a passing check answers in about
   **1.5 seconds**.
+  The nightly euro-office failures once blamed on this were real rather than
+  replayed: each night's check ran and wrote a fresh error. On the test site the
+  cause was clock skew between the two guests (#716, met by the JWT leeway in
+  `nextcloud.nix`); on another site it was an HTTP 400 from an empty
+  `trusted_domains` (#715). Both surface as the same message.
 - **It has to wait for the document server.** The sweep reaches the check
   straight after euro-office's OS update restarts the container. Measured on
   the test site: after a restart `/healthcheck` answers `true` at **22 s** and

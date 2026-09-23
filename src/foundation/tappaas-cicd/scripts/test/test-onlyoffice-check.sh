@@ -7,8 +7,10 @@
 # "Error while downloading the document file to be converted":
 #
 #   1. No TTY. nextcloud-occ execs `systemd-run --pty --wait`; over a
-#      non-interactive ssh it returns 0 having run nothing, so settings_error
-#      was never refreshed and the last stored error stood for ever.
+#      non-interactive ssh the check runs and rewrites settings_error, but its
+#      stdout is lost and it returns 0 — so nothing it SAID could be read.
+#      (Corrected 2026-09-23 after #715: an earlier version of this header
+#      claimed it did not run at all. It does; measured both ways.)
 #   2. No readiness. The sweep reaches the check straight after euro-office's
 #      OS update restarts the document server. Measured on the test site
 #      (2026-09-23): /healthcheck answers `true` 22 s after a restart and the
@@ -88,7 +90,8 @@ ck   "a document server that never gets healthy is UNKNOWN" "unknown" "${out%%|*
 ckin "…and says what it waited for"                      "did not report healthy" "${out}"
 ck   "…without running a check that would only fail"     "0" "$(grep -c -- '--check' "${TMP}/calls")"
 
-# The wrapper without a TTY: rc 0, no output. That must never read as working.
+# The wrapper without a TTY: it ran, but rc 0 and no output. With no words
+# to read, that must never be taken for WORKING.
 out="$(run true '')"
 ck   "a silent check is UNKNOWN, never WORKING"          "unknown" "${out%%|*}"
 ckin "…and says it returned no verdict"                  "returned no verdict" "${out}"
