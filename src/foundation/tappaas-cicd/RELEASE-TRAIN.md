@@ -61,6 +61,19 @@ Six phases, in this order:
    can be rolled back from a snapshot rather than by the machine that would have to do the
    repairing. Then the full sweep, then `site-manager test --deep`. **This takes hours and
    reboots nodes.** However it ends, the site is put back on `main`.
+
+   **A `--to` move reboots this mothership.** Across a nixpkgs release an in-place switch
+   cannot reload `dbus-broker`; it reports failure over it and the rollback live-locks
+   (#725). So the new generation is staged with `nixos-rebuild boot` and taken at the next
+   start. The boundary ends there — resume it once the machine is back:
+
+   ```bash
+   tappaas-train.sh boundary --resume --to <nixos-XX.YY> ...
+   ```
+
+   With `automaticReboot: false` in `site.json` the move is staged but not taken, and the
+   boundary stops with the pending generation named. Nothing is activated either way, so
+   the running system is untouched until it reboots.
 3. **Land on `main`.** Fast-forward, publish, point the site back at `main`, delete the pin branch.
 4. **`staging` → `stable`.** The revision that has soaked for a fortnight reaches production.
 5. **`main` → `staging`.** The new revision starts its soak.

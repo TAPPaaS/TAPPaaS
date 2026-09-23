@@ -119,6 +119,14 @@ bad revision is caught by a machine that can be rolled back (`update-module.sh` 
 than by the machine that would have to fix it. Then the full sweep, then `site-manager test
 --deep`. Any failure stops the boundary with the branch intact and the fault recorded.
 
+**A version move ends this phase in a reboot.** Across a nixpkgs release the mothership cannot be
+switched in place — `dbus-broker` will not reload, the switch reports failure over it, and the
+rollback live-locks (#725, ADR-028 D8). The sweep therefore stages the new generation with
+`nixos-rebuild boot` and reboots into it, which kills the boundary along with everything else on
+the machine. That is expected: phases are recorded, so the run resumes with `--resume` once the
+mothership is back, and picks up at the deep test. A patch refresh within one release still
+switches in place and does not reboot.
+
 **Relink before testing.** `~tappaas/bin/<manager>` is a symlink into a *specific* nix store
 path, planted by each component's `install.sh`. A `nixos-rebuild` updates the system closure and
 leaves those links pointing at the previous build — so "the mothership rebuilt" and "the

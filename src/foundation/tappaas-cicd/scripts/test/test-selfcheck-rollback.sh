@@ -244,5 +244,57 @@ _fail_block="$(sed -n '/if (( rc != 0 ))/,/^fi$/p' "${REBUILD}")"
     && ok "…while still refusing to sweep from a rebuild that reported failure" \
     || bad "a rebuild that reported failure could still drive a sweep"
 
+echo "── a release move is staged for a boot, never switched in place (#725) ──"
+# Both decisions run for real: release_of parses what it is given, and
+# reboot_authorized reads a real site.json.
+# release_of is a ONE-LINER, so a /start/,/^}/ range would run past it to the
+# next function's closing brace and duplicate everything between. Take it by
+# its own line, and only the multi-line function by a range.
+{ grep '^release_of()' "${REBUILD}"
+  sed -n '/^reboot_authorized()/,/^}/p' "${REBUILD}"; } > "${TMP}/rel.sh"
+mkdir -p "${TMP}/g2511" "${TMP}/g2605"
+echo "25.11.20260522.b77b3de" > "${TMP}/g2511/nixos-version"
+echo "26.05.20260922.1bc55b9" > "${TMP}/g2605/nixos-version"
+
+_rel() { bash -c '. "$1"; release_of "$2"' _ "${TMP}/rel.sh" "$1" 2>/dev/null; }
+[[ "$(_rel "${TMP}/g2511")" == "25.11" ]] && ok "the release is read off a generation" \
+    || bad "release_of returned '$(_rel "${TMP}/g2511")'"
+[[ -z "$(_rel "${TMP}/nowhere")" ]] && ok "an unreadable generation gives no release" \
+    || bad "release_of invented a release for a missing path"
+# Equal releases must NOT take the boot path, or every ordinary patch refresh
+# would start rebooting the control plane.
+[[ "$(_rel "${TMP}/g2511")" == "$(_rel "${TMP}/g2511")" ]] \
+    && ok "a patch refresh within one release compares equal" || bad "same release compared unequal"
+[[ "$(_rel "${TMP}/g2511")" != "$(_rel "${TMP}/g2605")" ]] \
+    && ok "…and a release move does not" || bad "25.11 and 26.05 compared equal"
+
+_auth() { bash -c '. "$1"; SITE_JSON="$2"; reboot_authorized' _ "${TMP}/rel.sh" "$1"; }
+printf '%s\n' '{"automaticReboot":false}' > "${TMP}/site-no.json"
+printf '%s\n' '{"automaticReboot":true}'  > "${TMP}/site-yes.json"
+printf '%s\n' '{}'                        > "${TMP}/site-silent.json"
+_auth "${TMP}/site-no.json"     && bad "automaticReboot=false still authorized a reboot" \
+                                || ok "automaticReboot=false refuses the reboot"
+_auth "${TMP}/site-yes.json"    && ok "automaticReboot=true authorizes it" \
+                                || bad "automaticReboot=true was refused"
+_auth "${TMP}/site-silent.json" && ok "…and an unset value keeps the documented default (enabled)" \
+                                || bad "a missing automaticReboot was read as false"
+
+echo "── and the wiring around those two decisions ──"
+_rm="$(sed -n '/a release move is a REBOOT/,/^# the tail of the log/p' "${REBUILD}")"
+[[ "${_rm}" == *"nixos-rebuild boot"* ]] && ok "a release move is staged with boot, not switch" \
+    || bad "a release move still switches in place"
+[[ "${_rm}" != *"nixos-rebuild switch"* ]] && ok "…and the switch path is not reached on that branch" \
+    || bad "the release-move branch also switches"
+[[ "${_rm}" == *"systemctl reboot"* ]] && ok "an authorized release move reboots into it" \
+    || bad "nothing takes the staged generation"
+[[ "${_rm}" == *"staged but NOT taken"* ]] && ok "…and an unauthorized one says what is pending" \
+    || bad "a refused reboot is silent about the staged generation"
+[[ "${_rm}" == *"boundary --resume"* ]] && ok "…and how to resume the boundary after the reboot" \
+    || bad "no route back into the interrupted boundary"
+# Staging activates nothing, so self-checking the OLD system would be a lie.
+[[ "${_rm}" == *"nothing to self-check yet"* ]] \
+    && ok "staging does not pretend to verify a generation that is not running" \
+    || bad "the staged path claims a verification it cannot have done"
+
 echo "── summary: ${PASS} pass, ${FAIL} fail ──"
 [[ "${FAIL}" -eq 0 ]]

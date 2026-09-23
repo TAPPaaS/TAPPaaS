@@ -162,6 +162,79 @@ info "Rebuilding NixOS (${VMNAME}) — one dot per build line"
 debug "nixos-rebuild switch --flake .#${VMNAME} --impure (full output: ${REBUILD_LOG})"
 # --impure only for the machine's /etc/nixos/hardware-configuration.nix;
 # nixpkgs stays pinned by flake.lock. A dot never swallows an error: on failure
+# ── a release move is a REBOOT, not a switch (#725, ADR-028 D8) ──
+#
+# Across a nixpkgs release, `switch` cannot reload dbus-broker in place: the
+# switch applies, exit 4 is reported over the failed reload, and the rollback
+# then live-locks trying to undo it (measured on hrossen 2026-09-23, both
+# directions). A BOOT has nothing to reload — it activates from scratch — so a
+# release move is staged with `nixos-rebuild boot` and taken at the next start.
+#
+# Overridable so the tabletop suite can drive these two decisions for real.
+SITE_JSON="${TAPPAAS_SITE_JSON:-/home/tappaas/config/site.json}"
+CURRENT_SYSTEM="${TAPPAAS_CURRENT_SYSTEM:-/run/current-system}"
+
+# "25.11" from "25.11.20260522.b77b3de". Empty when the file is absent, which
+# the caller treats as "cannot tell" and falls through to an ordinary switch.
+release_of() { cut -d. -f1,2 < "${1}/nixos-version" 2>/dev/null; }
+
+# The same gate the cluster reboot uses: site.json `automaticReboot`, enabled
+# unless explicitly false. Kept in step with
+# lib/common-install-routines.sh:automatic_reboot_enabled, which this script
+# deliberately does not source (see the note on log levels above).
+# NB: not `// true` in jq — `false // true` yields true.
+reboot_authorized() {
+    local val=""
+    [[ -f "${SITE_JSON}" ]] && val="$(jq -r '.automaticReboot' "${SITE_JSON}" 2>/dev/null || echo "")"
+    [[ "${val}" != "false" ]]
+}
+
+# Build first, purely to read which release we are about to move to. It is the
+# same derivation `nixos-rebuild` will use, so this costs a cache hit, not a
+# second build.
+NEW_TOPLEVEL="$(HOME=/var/lib/tappaas-rebuild nix --extra-experimental-features 'nix-command flakes' \
+    build --no-link --print-out-paths \
+    ".#nixosConfigurations.\"${VMNAME}\".config.system.build.toplevel" --impure 2>>"${REBUILD_LOG}")" \
+    || NEW_TOPLEVEL=""
+CUR_RELEASE="$(release_of "${CURRENT_SYSTEM}")"
+NEW_RELEASE="$(release_of "${NEW_TOPLEVEL:-/nonexistent}")"
+
+if [[ -n "${NEW_RELEASE}" && -n "${CUR_RELEASE}" && "${NEW_RELEASE}" != "${CUR_RELEASE}" ]]; then
+    info "Release move: ${CUR_RELEASE} -> ${NEW_RELEASE} — staging it for the next boot"
+    info "  (an in-place switch across a release cannot reload dbus-broker; #725)"
+    if ! HOME=/var/lib/tappaas-rebuild nixos-rebuild boot --flake ".#${VMNAME}" --impure \
+            >>"${REBUILD_LOG}" 2>&1; then
+        error "staging the release move failed — last lines of ${REBUILD_LOG}:"
+        tail -15 "${REBUILD_LOG}" >&2 || true
+        info "The machine did not move: it is still on ${GEN_BEFORE##*/}."
+        rm -f "${UNITS_BEFORE}"
+        exit 1
+    fi
+    info "  ✓ staged: $(readlink -f /nix/var/nix/profiles/system | sed 's|.*-nixos-system-||')"
+    # Nothing has been activated, so there is nothing to self-check yet: the
+    # check runs on the next start, against the generation actually running.
+    rm -f "${UNITS_BEFORE}"
+
+    # Silence never authorizes downtime — but here "no reboot" is safe either
+    # way: nothing has been activated, so the running system is untouched.
+    if ! reboot_authorized; then
+        warn "automaticReboot=false — the release move is staged but NOT taken."
+        warn "  It becomes live at the next boot of this mothership:"
+        warn "    ssh <this host> sudo reboot"
+        warn "  The sweep is ABORTED: the estate is not updated from a control plane"
+        warn "  running a different release from the one the estate is pinned to."
+        exit 1
+    fi
+    warn "Rebooting the mothership to take ${NEW_RELEASE}. This sweep ends here;"
+    warn "  resume the boundary afterwards: tappaas-train.sh boundary --resume"
+    systemctl reboot
+    # The shutdown kills this unit; the sleep is only so that a reboot which did
+    # NOT happen becomes a reported failure rather than a silent continuation.
+    sleep 300
+    error "reboot was requested ${SECONDS}s ago and this machine is still up."
+    exit 1
+fi
+
 # the tail of the log is shown and the unit stops (set -e).
 set +e
 HOME=/var/lib/tappaas-rebuild nixos-rebuild switch --flake ".#${VMNAME}" --impure 2>&1 \
