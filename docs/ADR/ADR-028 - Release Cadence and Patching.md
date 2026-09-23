@@ -135,17 +135,14 @@ and `system.autoUpgrade` is `enable = false` wherever it appears.
 file; it backed an `--os nixos` option nothing used, and #712 deleted it on 2026-09-22. A
 satellite is Debian.
 
-Three observations, each of which a decision below answers:
+Two observations, each of which a decision below answers:
 
-1. The first two are byte-identical today. Nothing keeps them so — they are two files, refreshed
-   by hand, and #709 proposes moving one of them.
+1. They are byte-identical today. Nothing keeps them so — they are two files, refreshed by hand,
+   and #709 proposes moving one of them.
 2. `nixos-25.11` went end-of-life around the end of June 2026 (its last commit is
    2026-06-30). We are running an unsupported branch, and have been for roughly three months.
    **A frozen branch cannot deliver a security backport, so the NixOS half of the estate has had
    no security patches since May.**
-3. The satellite is **Debian** (ADR-010 §5.1, reversed during implementation as impl-doc
-   D19/Q8). It patches itself like any Debian machine and is *not* affected by the frozen pin —
-   it is the one part of the estate that has been receiving security updates all along.
 
 ### What a bump costs, measured
 
