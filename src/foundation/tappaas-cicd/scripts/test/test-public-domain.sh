@@ -103,6 +103,37 @@ with_public_domain logging "$f"
 ck "nor does one whose environment publishes nothing" \
    "none" "$(jq -r '.proxyDomain // "none"' "$f")"
 
+# ── a name is not a published route (#715) ─────────────────────────────────
+# with_public_domain also records whether network:proxy SERVES the name, from
+# the one resolver (network-manager split-horizon-target). Stubbed here: 0 is
+# published, 1 resolves publicly on a site with no dmz zone, 3 has no public
+# record, and no resolver at all leaves the flag out.
+NMBIN="${TMP}/nmbin"; mkdir -p "${NMBIN}"
+printf '#!/usr/bin/env bash\n[[ "$1" == split-horizon-target ]] || exit 99\nexit "${NM_RC:-0}"\n' > "${NMBIN}/network-manager"
+chmod +x "${NMBIN}/network-manager"
+pubflag() {  # <rc or "none"> → the stamped .proxyPublished, "absent" when not written
+    local f="${TMP}/flag.json"
+    echo '{"vmname":"logging","environment":"prod","dependsOn":["network:proxy"],"proxyPublished":"stale"}' > "$f"
+    if [[ "$1" == none ]]; then
+        ( PATH="$(printf '%s' "${PATH}" | tr ':' '\n' | grep -v "^${NMBIN}$" | paste -sd: -)"
+          hash -r; command -v network-manager >/dev/null && exit 0; with_public_domain logging "$f" )
+    else
+        ( PATH="${NMBIN}:${PATH}" NM_RC="$1"; export NM_RC; with_public_domain logging "$f" )
+    fi
+    jq -r 'if has("proxyPublished") then (.proxyPublished|tostring) else "absent" end + " " + .proxyDomain' "$f"
+}
+ck "served (0): named, and marked published"                 "true logging.example.org"  "$(pubflag 0)"
+ck "no public record (3): named, and marked NOT published"   "false logging.example.org" "$(pubflag 3)"
+ck "resolves publicly, no dmz zone (1): still published"      "true logging.example.org"  "$(pubflag 1)"
+if command -v network-manager >/dev/null 2>&1; then
+    echo "  (skip: a real network-manager is on PATH — cannot test its absence here)"
+else
+    ck "no resolver: the flag is not written (and a stale one is dropped)" "absent logging.example.org" "$(pubflag none)"
+fi
+grep -q 'moduleCfg.proxyPublished or true' "${SRC_ROOT}/src/foundation/logging/logging.nix" \
+    && ck "logging.nix gates Grafana's published mode on it" "yes" "yes" \
+    || ck "logging.nix gates Grafana's published mode on it" "yes" "no"
+
 # ── the copies stay gone ────────────────────────────────────────────────────
 # Any shell script building "<vmname>.<some domain>" for a public name outside
 # the resolver is the problem coming back. The fileservice fallback that fires

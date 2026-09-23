@@ -44,6 +44,13 @@ trap 'rm -rf "${TMP}"' EXIT INT TERM
 cp -r "${LOGGING}" "${TMP}/unpub"
 cp -r "${LOGGING}" "${TMP}/pub"
 jq '. + {proxyDomain: "logging.example.org"}' "${LOGGING}/logging.json" > "${TMP}/pub/logging.json"
+# #715: a NAME with no public route — what update-os.sh now stamps for a
+# proxied module whose name has no public DNS record — and the same name when
+# the resolver says it is served.
+cp -r "${LOGGING}" "${TMP}/named"
+cp -r "${LOGGING}" "${TMP}/served"
+jq '. + {proxyDomain: "logging.example.org", proxyPublished: false}' "${LOGGING}/logging.json" > "${TMP}/named/logging.json"
+jq '. + {proxyDomain: "logging.example.org", proxyPublished: true}'  "${LOGGING}/logging.json" > "${TMP}/served/logging.json"
 
 # ── 1. the provider follows the public domain ───────────────────────────────
 cat > "${TMP}/ev.nix" <<'EOF'
@@ -74,6 +81,11 @@ in {
   # The placeholder is different: it exists only to satisfy the $__file{}
   # targets the provider block references, so it stays tied to publication.
   unpub_ph_conditional   = (load ./unpub).systemd.services.generate-logging-oidc-placeholder ? _type;
+  named_oauth   = (g ./named) ? "auth.generic_oauth";
+  named_cookie  = (g ./named).security.cookie_secure;
+  named_root    = (g ./named).server ? root_url;
+  served_oauth  = (g ./served) ? "auth.generic_oauth";
+  served_cookie = (g ./served).security.cookie_secure;
 }
 EOF
 EV="$(cd "${TMP}" && nix-instantiate --eval --strict --json ev.nix 2>"${TMP}/ev.err")"
@@ -97,6 +109,13 @@ ckin "logging-admins maps to GrafanaAdmin" "logging-admins" "$(j .pub_role)"
 ck "the configure unit is unconditional where published"       "false" "$(j .pub_unit_conditional)"
 ck "…and where NOT — identity checks for it either way"       "false" "$(j .unpub_unit_conditional)"
 ck "the placeholder stays tied to publication"                "true"  "$(j .unpub_ph_conditional)"
+# #715: a name the proxy does not serve (no public DNS record) must not turn
+# Grafana into its published self — on hrossen that left no way to log in.
+ck "named but not served: no Authentik provider"              "false" "$(j .named_oauth)"
+ck "named but not served: the cookie stays non-secure"        "false" "$(j .named_cookie)"
+ck "named but not served: root_url is left to Grafana"        "false" "$(j .named_root)"
+ck "named and served: the provider appears"                   "true"  "$(j .served_oauth)"
+ck "named and served: the cookie is secure"                   "true"  "$(j .served_cookie)"
 
 # ── 2. the configure unit, in each state identity can leave it in ───────────
 SCRIPT="$(cd "${TMP}" && nix-build --no-out-link -E '

@@ -46,7 +46,12 @@ let
                  else {};
   proxyCfg     = (moduleCfg.config or {})."network:proxy" or {};
   proxyDomain  = proxyCfg.proxyDomain or (moduleCfg.proxyDomain or "");
-  published    = proxyDomain != "";
+  # A name is not the same as a published route (#715). update-os.sh writes
+  # proxyPublished = false when the name has no public DNS record: no
+  # certificate, nothing served, so an https root URL, a secure-only cookie and
+  # an SSO redirect there leave Grafana with no working login at all (seen on
+  # hrossen, 2026-09-23). Absent, the name alone decides, as before.
+  published    = proxyDomain != "" && (moduleCfg.proxyPublished or true);
 
   # Grafana substitutes $__file{path} into any setting, which is how the admin
   # password already reaches it. The OIDC values arrive the same way, because
@@ -619,7 +624,7 @@ in
         # No proxyDomain: no public name, so no redirect URI, so nothing for
         # Authentik to call back to and no provider in Grafana's settings to
         # configure. Present and honest rather than missing.
-        echo "Grafana is not published at this site (no proxyDomain) — no OIDC login to configure."
+        echo "Grafana is not published at this site (no public name, or its name has no public DNS record) — no OIDC login to configure."
         '' else ''
         set -euo pipefail
         # The unit always runs with these defaults. They are overridable only so

@@ -578,8 +578,8 @@ module_public_domain() {
 }
 
 # with_public_domain <vmname> <flat-json-file>
-# Writes the module's public name into its companion JSON as .proxyDomain, when
-# network:proxy publishes it (#715). The nix side reads that file and nothing
+# Writes the module's public name into its companion JSON as .proxyDomain, and
+# whether it is actually served as .proxyPublished (#715). The nix side reads that file and nothing
 # else, so before this a module published under its DERIVED name looked
 # unpublished to its own configuration — nextcloud.nix built trusted_domains
 # without it (HTTP 400 on the public route), logging.nix never switched its SSO
@@ -593,8 +593,30 @@ with_public_domain() {
     env="$(jq -r '.environment // empty' "${file}" 2>/dev/null)" || env=""
     domain="$(module_public_domain "${vmname}" "${env}" "$(cat "${file}")")"
     [[ -n "${domain}" ]] || return 0
+    # …and whether network:proxy actually SERVES it (ADR-021 R3): a name with
+    # no public A record has no certificate and nothing behind it. The NAME is
+    # right either way (Caddy even holds a route for it); what a guest may do
+    # with it differs. Grafana built for a published name turns on SSO, a
+    # secure cookie and an https root URL — for logging.hrossen.dk, which does
+    # not resolve, that left no way to log in at all (#715, 2026-09-23). The
+    # verdict is the resolver's, the one ADR-021 D5 allows:
+    #   0 published · 1 resolves publicly, site has no dmz zone (still public)
+    #   3 no public record → false · anything else (no resolver) → not written,
+    #   and the guest keeps its pre-#715 reading: an explicit name is published.
+    # A lookup that fails transiently reads as unpublished — the direction
+    # ADR-021 calls safe; the next deploy corrects it.
+    local pub_rc=0 published=""
+    if command -v network-manager >/dev/null 2>&1; then
+        network-manager split-horizon-target "${domain}" >/dev/null 2>&1 || pub_rc=$?
+        case "${pub_rc}" in
+            0|1) published=true ;;
+            3)   published=false ;;
+        esac
+    fi
     tmp="$(mktemp)" || return 0
-    if jq --arg d "${domain}" '.proxyDomain = $d' "${file}" > "${tmp}" 2>/dev/null; then
+    if jq --arg d "${domain}" --arg p "${published}" \
+          '.proxyDomain = $d | if $p == "" then del(.proxyPublished) else .proxyPublished = ($p == "true") end' \
+          "${file}" > "${tmp}" 2>/dev/null; then
         mv "${tmp}" "${file}"
     else
         rm -f "${tmp}"
