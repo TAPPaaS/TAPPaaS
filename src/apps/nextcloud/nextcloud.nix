@@ -437,6 +437,28 @@ in
       # Required for Authentik (same srv zone) to be reachable as OIDC provider
       allow_local_remote_servers = true;
 
+      # JWT leeway for the onlyoffice/euro-office connector, in seconds (#714).
+      #
+      # The document server signs its request to download a file from Nextcloud
+      # with a JWT, and Nextcloud checks that token's `iat` against its OWN
+      # clock. The app's default leeway is 0, so a guest whose clock is a few
+      # seconds behind the document server's rejects every download:
+      #
+      #   Download empty with invalid jwt | Cannot handle token with iat
+      #   prior to 2026-09-23T06:06:10+0000        (Nextcloud's clock: 06:06:05)
+      #
+      # and the document server reports "Error while downloading the document
+      # file to be converted". That is what failed euro-office on hrossen: after
+      # its OS update this VM could not reach its NTP server (timesyncd timed out
+      # at 08:04:36, first synchronised at 08:21:46), and for those 17 minutes
+      # its clock ran 5-6 s behind. A minute of tolerance covers boot-time skew
+      # without touching what the token protects — the signature is still
+      # checked in full; leeway only relaxes the time claims. The app provides
+      # this knob for exactly this ("in case the system clock is a second off").
+      onlyoffice = {
+        jwt_leeway = 60;
+      };
+
       # trusted_domains: pinned here, derived from the module config above (#508).
       #
       # It used to be left to nextcloud-occ on the grounds that the public domain
