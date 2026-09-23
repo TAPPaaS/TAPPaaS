@@ -68,7 +68,8 @@ release script nobody reads the output of.
 | no sweep active here **or** on the staging site | a sweep mid-flight is reading the branch this is about to move |
 | both sites' `last-update-result.json` is `ok` | never promote on top of an estate that is already failing — the new pin would be blamed for it |
 | **no unresolved staging fault recorded** | ADR-028 D9's rule; see below |
-| `staging` and `stable` exist and are ancestors of `main` | the train is fast-forward-only; if they have diverged, something pushed sideways and a human must look |
+| `stable` ⊆ `staging` ⊆ `main` (each an ancestor of the one above) | the train is fast-forward-only; if they have diverged, something was pushed sideways into a channel and a human must look |
+| no site is pointed at a channel **behind the commit it already runs** | switching a live site to an older ref silently removes code it depends on. The migration floor does not catch this: a pure code difference changes no migration number (observed while putting makerfloss on `staging`, 2026-09-23) |
 | the soak is complete (≥ the boundary interval since the last promotion) | promoting early silently converts staging from a soak into a formality; `--force-boundary` overrides, and says so in the record |
 
 ## Phases 1–6
@@ -83,6 +84,14 @@ representative NixOS guest is updated against the new pin *before* the mothershi
 bad revision is caught by a machine that can be rolled back (`update-module.sh` snapshots) rather
 than by the machine that would have to fix it. Then the full sweep, then `site-manager test
 --deep`. Any failure stops the boundary with the branch intact and the fault recorded.
+
+**Relink before testing.** `~tappaas/bin/<manager>` is a symlink into a *specific* nix store
+path, planted by each component's `install.sh`. A `nixos-rebuild` updates the system closure and
+leaves those links pointing at the previous build — so "the mothership rebuilt" and "the
+operator's managers are new" are different facts (learned the hard way on 2026-09-23: the
+mothership was rebuilt and `site-manager` still did not know an option added in that commit).
+Without the relink a boundary would test the *old* manager binaries against the new base, which
+is the one combination nobody will ever run.
 
 **3 — Land on `main`.** Fast-forward `main` to the branch, push, point this site back at `main`.
 
@@ -139,17 +148,48 @@ staging soaked?"). A `fault` object carries what was seen, where, and the commit
 
 These are prerequisites, not nice-to-haves. The script cannot be written honestly without them:
 
-1. **A channel per site.** Today `site.json` records only a tracked *branch*, and **both sites
-   track `main`** — so there is no staging audience and no production audience. ADR-028 open
-   question 2 asks for a channel field; this script needs it, both to know where it may run and
-   to know which site to verify in phase 6.
-2. **The `staging` and `stable` branches.** Neither exists yet; `tappaas-train init` creates them
-   from `main` and is the only command allowed to create a channel ref.
+1. **A channel per site — done (2026-09-23).** `site.json` carries `channel`
+   (`unstable | staging | production`), and `site-manager site modify --channel` sets it, warning
+   when it disagrees with the tracked branch and refusing a move towards production without
+   `--force`. hrossen is `unstable` on `main`; makerfloss is `staging` on `staging`.
+2. **The three branches — they exist.** `main`, `staging` and `stable` are all on the forge.
+   `stable` has been there all along (`d796e254`, 2026-09-18); `staging` was cut on 2026-09-23.
+   So `tappaas-train init` does **not** create them — its job is to **verify** them, which is the
+   more useful check anyway:
+
+   > `stable` ⊆ `staging` ⊆ `main` — each channel ref an ancestor of the one above it.
+
+   That single assertion is what makes the train promotable: it proves every promotion is a
+   fast-forward and that nothing has been pushed sideways into a channel. `init` reports the
+   distance between them and refuses to do anything else while they have diverged.
 3. **D10's self-check** (#713), so phase 2's sweep cannot leave the test site's control plane
    broken and unnoticed half way through a boundary.
 4. **A push credential on the mothership.** Verified present on the test site — `git push
    --dry-run` authenticates. Worth stating plainly: this machine can move `stable`, so the
    fast-forward-only checks are a safety property, not a formality.
+
+## The first boundary is not a boundary
+
+Measured 2026-09-23: `stable` is **196 commits behind `main`** (`d796e254`, 2026-09-18), and a
+clean ancestor of it — so the promotion is mechanically a fast-forward with nothing to
+reconcile. That is the good news and also the trap.
+
+A routine boundary promotes one fortnight of reviewed work. The *first* one would promote five
+days of unusually dense change in a single step: the satellite's NixOS path retired, the RTC
+flag fixed on every guest, identity's SSO skip, the `stack` enumeration, the control plane's
+self-check and rollback, and the channel field itself. Every one of those has been tested, but
+**none of them has soaked anywhere**, which is precisely what the staging channel exists to
+provide.
+
+So the first run is a **migration into the train**, not an exercise of it:
+
+1. let `staging` (makerfloss) soak the current content for a full boundary, under real use;
+2. only then promote `staging → stable`, which is the first honest `production` release;
+3. from there the ordinary two-week rhythm applies.
+
+Running `tappaas-train boundary` today would be mechanically valid and operationally wrong. The
+script should therefore refuse a promotion whose soak has not elapsed (preflight already
+requires this) — and on the first run, "elapsed" has no recorded start, so `init` sets one.
 
 ## Deliberately not in scope
 
