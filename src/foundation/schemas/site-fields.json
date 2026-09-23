@@ -206,6 +206,13 @@
         "hour": 2
       }
     },
+    "channel": {
+      "description": "Which release channel this site takes, and therefore how much risk it accepts (ADR-028 D9). `unstable` is where development is proven, `staging` soaks a revision under real use for one boundary, `production` is what everyone else runs. The channel is a promise about risk; the branch each repository tracks is where the code sits — they are expected to agree (TAPPaaS: unstable=main, staging=staging, production=stable) and `site-manager` warns when they do not.",
+      "type": "string",
+      "enum": ["unstable", "staging", "production"],
+      "default": "production",
+      "note": "Changing it is allowed in both directions, but moving towards production takes the site to OLDER code: `site modify --channel` warns and requires --force, because ADR-025 config migrations are forward-only and a site that has applied a migration cannot run code that predates it."
+    },
     "automaticReboot": {
       "description": "Whether updates may reboot automatically. Site-wide until P3 (then moves to Environment).",
       "type": "boolean",

@@ -104,7 +104,7 @@ reports and exits 0 — every catalogue predates the check, and a stale one is n
 refuse a repository; `--strict` exits non-zero and is what CI and a contributor run before
 opening a pull request. `repository add` runs it too, as a report.
 
-`site modify` editable fields (scalar, site-wide): `--displayName`, `--owner`,
+`site modify` editable fields (scalar, site-wide): `--channel`, `--displayName`, `--owner`,
 `--email`, `--automaticReboot`, `--snapshotRetention`, `--backupTarget`,
 `--backupOffsite`, `--locationCountry`, `--locationTimezone`,
 `--locationLocale`, `--locationKeyboard`, `--locationLatitude`,
@@ -112,6 +112,46 @@ opening a pull request. `repository add` runs it too, as a report.
 with), `--networkIsp`, `--networkPublicIp`. The discovery-derived
 `hardware.nodes[]` (use `node …`) and the `repositories`/`environments`/
 `organizations` lists (own CRUD / own managers) are **not** modifiable here.
+
+### `channel` — which release the site takes (ADR-028 D9)
+
+A **channel is a promise about risk**; the **branch is where the code sits**. They are separate
+fields because they are separate statements, and an operator changing one before the other is a
+normal moment, not an error.
+
+| Channel | Branch (TAPPaaS repo) | What it means |
+|---|---|---|
+| `unstable` | `main` | development is proven here; the test site |
+| `staging` | `staging` | soaks a revision under real use for one boundary |
+| `production` | `stable` | what everyone else runs — the default for a new site |
+
+```bash
+site-manager site modify --channel staging          # the promise
+site-manager repository modify TAPPaaS --branch staging   # the code
+```
+
+Either order works. Whichever you do first, the other command **warns** that the two disagree
+and names the command that would settle it. It does not refuse: refusing would make the
+two-step move impossible.
+
+**Two moves need `--force`, because both take the site backwards:**
+
+- **Towards production** (`unstable → staging → production`) moves to *older* code. Config
+  migrations are forward-only (ADR-025), so a migration this site has already applied cannot be
+  undone by changing channel — the older code simply reads a config shape it does not know.
+  `site modify --channel` refuses without `--force` and says why.
+- **Onto a branch behind this site's migrations.** `repository modify --branch` reads the
+  target branch's `migrations/` directly from the forge — no checkout needed — and compares its
+  newest migration with the newest this site has applied (`config/.migrations/applied`). If the
+  branch is behind, it refuses without `--force`. This is the same fact as above, caught from
+  the branch side, and it also catches a hand-typed branch that belongs to no channel at all.
+
+Both gates are passable on purpose. A release tool that cannot be overridden gets worked around
+with a text editor, which is worse than an override that announces itself — and each one prints
+what it is doing when `--force` lifts it.
+
+Only the **TAPPaaS** repository is held to the train's branches: a community repository has no
+`staging` or `stable` to track, so its branch is whatever its publisher uses.
 
 #### `location` is the site's master data for time and locale (#408)
 

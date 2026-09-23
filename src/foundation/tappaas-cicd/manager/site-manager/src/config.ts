@@ -76,6 +76,9 @@ export function loadSite(siteFile: string): Site {
     hardware: { nodes },
     backup: (raw.backup ?? null) as Site["backup"],
     updateSchedule: Array.isArray(raw.updateSchedule) ? raw.updateSchedule : undefined,
+    channel: raw.channel === "unstable" || raw.channel === "staging" || raw.channel === "production"
+      ? raw.channel
+      : undefined,
     automaticReboot: typeof raw.automaticReboot === "boolean" ? raw.automaticReboot : undefined,
     snapshotRetention:
       typeof raw.snapshotRetention === "number" ? raw.snapshotRetention : undefined,

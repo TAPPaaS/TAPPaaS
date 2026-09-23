@@ -63,6 +63,9 @@ export interface Site {
   // ADR-017 D7: the named object, or the legacy [frequency, weekday, hour]
   // triple that migration 0003 rewrites. Readers accept both (readSchedule).
   updateSchedule?: unknown[] | Record<string, unknown>;
+  // ADR-028 D9: which release channel this site takes. The branch each
+  // repository tracks is where the code sits; this is the promise about risk.
+  channel?: "unstable" | "staging" | "production";
   automaticReboot?: boolean;
   snapshotRetention?: number;
   repositories: Repository[];
@@ -78,6 +81,7 @@ export interface Site {
 // own CRUD (repositories, organizations) are EXCLUDED here. (Environments are
 // not a site field — they are the config/environments/*.json files.)
 export type SiteModifiableField =
+  | "channel"
   | "displayName"
   | "owner"
   | "email"

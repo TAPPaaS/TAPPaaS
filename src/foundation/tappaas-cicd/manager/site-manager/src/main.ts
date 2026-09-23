@@ -47,6 +47,8 @@ export const HELP: HelpSpec = {
       usage: "site modify <field options>",
       name: "site modify (fields; at least one)",
       options: [
+        ["--channel <c>", "release channel: unstable | staging | production (ADR-028 D9). Warns when it disagrees with the tracked branch; moving towards production needs --force."],
+        ["--force", "authorize a channel move towards production — older code, and ADR-025 migrations do not run backwards."],
         ["--displayName <s>", "display name"],
         ["--owner <org>", "owning organization"],
         ["--email <addr>", "admin email"],
@@ -335,6 +337,55 @@ function cmdSite(o: Opts): void {
       setDeep(raw, path, n);
       changed++;
     };
+
+    // ── channel (ADR-028 D9) ───────────────────────────────────────────
+    // A promise about risk, not a location: the branch each repository tracks
+    // is where the code sits. They are expected to agree, and this warns when
+    // they do not rather than refusing — a site may legitimately sit between
+    // the two for a moment while the operator moves both.
+    const CHANNELS = ["unstable", "staging", "production"] as const;
+    const channelBranch: Record<string, string> = {
+      unstable: "main", staging: "staging", production: "stable",
+    };
+    const setChannel = (): void => {
+      const v = o.flags.get("--channel");
+      if (v === undefined) return;
+      if (!CHANNELS.includes(v as typeof CHANNELS[number])) {
+        die(`--channel must be one of: ${CHANNELS.join(" | ")}`);
+      }
+      const from = typeof raw.channel === "string" ? raw.channel : undefined;
+      // "Towards production" means towards OLDER code. ADR-025 migrations are
+      // forward-only, so a site that has applied one cannot run code that
+      // predates it — the move is allowed, but not by accident.
+      const rank = (c?: string): number => (c ? CHANNELS.indexOf(c as typeof CHANNELS[number]) : -1);
+      if (from && rank(v) > rank(from)) {
+        const forced = o.flags.has("--force");
+        const msg = `${from} → ${v} moves this site BACKWARDS, to older code. `
+          + `Config migrations (ADR-025) do not run backwards, so a migration this site has `
+          + `already applied cannot be undone by switching channel.`;
+        if (!forced) {
+          die(`${msg}\n       Re-run with --force if that is what you mean.`);
+        }
+        warn(msg);
+        warn(`--force given: setting the channel anyway.`);
+      }
+      setDeep(raw, ["channel"], v);
+      changed++;
+      // The branch is not changed here — repository modify owns it — but a
+      // disagreement is worth saying at the moment it is created.
+      const repos = Array.isArray(raw.repositories) ? raw.repositories : [];
+      const want = channelBranch[v];
+      for (const r of repos as Array<Record<string, unknown>>) {
+        const name = typeof r.name === "string" ? r.name : "?";
+        const br = typeof r.branch === "string" ? r.branch : undefined;
+        if (name !== "TAPPaaS") continue;   // only TAPPaaS runs the train
+        if (br && br !== want) {
+          warn(`channel ${v} expects the TAPPaaS repository on '${want}', but it tracks '${br}'.`);
+          warn(`  Bring them together: site-manager repository modify TAPPaaS --branch ${want}`);
+        }
+      }
+    };
+    setChannel();
 
     setStr("--displayName", ["displayName"]);
     setStr("--owner", ["owner"]);

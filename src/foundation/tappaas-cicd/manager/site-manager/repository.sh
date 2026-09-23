@@ -104,6 +104,11 @@ Commands:
     modify <name> [--url <new-url>] [--branch <new-branch>] [--force]
         Modify a repository's URL and/or branch. If only changing
         branch, fetches and checks out the new branch in place.
+        For the TAPPaaS repository it warns when the new branch
+        disagrees with the site's channel (ADR-028 D9: unstable=main,
+        staging=staging, production=stable), and REFUSES a branch whose
+        newest migration is older than the newest this site has applied
+        — migrations do not run backwards (ADR-025). --force lifts it.
         If changing URL, re-clones and updates module locations.
         A URL change converges the checkout with a hard reset; it is
         refused when the branch carries commits that exist only there
@@ -764,6 +769,47 @@ cmd_modify() {
         info "  Fetching from origin..."
         if ! (cd "${current_path}" && git fetch origin 2>&1 | sed 's/^/  /'); then
             die "Failed to fetch from origin"
+        fi
+
+        # ── Does the branch agree with the site's channel? (ADR-028 D9) ──
+        # A warning, not a refusal: an operator moving a site between channels
+        # changes two things, and for a moment they disagree. Only the TAPPaaS
+        # repository runs the train — a community repository has no staging or
+        # stable branch to track.
+        if [[ "${name}" == "TAPPaaS" ]]; then
+            local _chan _want
+            _chan="$(jq -r '.channel // empty' "${SITE_FILE}" 2>/dev/null)"
+            case "${_chan}" in
+                unstable)   _want=main ;;
+                staging)    _want=staging ;;
+                production) _want=stable ;;
+                *)          _want="" ;;
+            esac
+            if [[ -n "${_want}" && "${new_branch}" != "${_want}" ]]; then
+                warn "  This site's channel is '${_chan}', which expects branch '${_want}'."
+                warn "    Switching to '${new_branch}' leaves them disagreeing."
+                warn "    Bring them together: site-manager site modify --channel <c>"
+            fi
+        fi
+
+        # ── Would this branch take the site behind its migrations? (ADR-025) ──
+        # Config migrations are forward-only: a site that has applied 0010
+        # cannot be run by code whose newest migration is 0009 — that code does
+        # not know the shape its own config is now in. Checked against the
+        # branch as the forge has it, so no checkout is needed to find out.
+        local _applied _target_max
+        _applied="$(awk '$4 == "applied" {print $1}' "${CONFIG_DIR}/.migrations/applied" 2>/dev/null | sort -n | tail -1)"
+        _target_max="$(cd "${current_path}" && git ls-tree -r --name-only "origin/${new_branch}" \
+                        -- src/foundation/tappaas-cicd/migrations/ 2>/dev/null \
+                        | sed -n 's#.*/\([0-9][0-9][0-9][0-9]\)-.*#\1#p' | sort -n | tail -1)"
+        if [[ -n "${_applied}" && -n "${_target_max}" && "${_target_max}" -lt "${_applied}" ]]; then
+            warn "  '${new_branch}' carries migrations up to ${_target_max}, but this site has applied ${_applied}."
+            warn "    That code predates this site's config: migrations do not run backwards (ADR-025),"
+            warn "    so the older code cannot undo what ${_applied} did — it will read a shape it does not know."
+            if [[ "${force}" != "true" ]]; then
+                die "Refusing to move a site behind its own migrations. Re-run with --force if that is what you mean."
+            fi
+            warn "  --force given: switching anyway. Restore config/.migrations/backup/ if it goes wrong."
         fi
 
         info "  Checking out branch '${new_branch}'..."
