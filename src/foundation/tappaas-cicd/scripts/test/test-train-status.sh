@@ -194,5 +194,76 @@ run fault --resolved "$(git -C "${TMP}/w" rev-parse origin/main)"
 [[ "${RC}" -eq 0 && "$(jq -r '.fault' "${TMP}/cfg/release-train.json")" == "null" ]] \
     && ok "a fix on main clears the fault" || bad "fault not cleared: ${OUT}"
 
+echo "── --production-branch: rehearse a promotion without touching stable ──"
+make_train 3 2
+FAKE_NOW=1790000000 run init
+jq '.boundary.phasesDone = ["prove"]' "${TMP}/cfg/release-train.json" > "${TMP}/x" && mv "${TMP}/x" "${TMP}/cfg/release-train.json"
+_stable_untouched="$(git -C "${TMP}/w" rev-parse origin/stable)"
+_staging_was="$(git -C "${TMP}/w" rev-parse origin/staging)"
+FAKE_NOW=$(( 1790000000 + 20*86400 )) run boundary --resume --production-branch rehearsal
+[[ "${RC}" -eq 0 ]] && ok "a boundary onto an alternative branch runs" || bad "rehearsal failed: ${OUT}"
+[[ "$(git -C "${TMP}/w" rev-parse origin/rehearsal 2>/dev/null)" == "${_staging_was}" ]] \
+    && ok "the alternative branch is created at what staging was" || bad "rehearsal branch wrong"
+[[ "$(git -C "${TMP}/w" rev-parse origin/stable)" == "${_stable_untouched}" ]] \
+    && ok "…and stable was not touched" || bad "stable moved during a rehearsal"
+
+echo "── stable is never created by a promotion ──"
+# A production channel that appears because of a typo is the failure this
+# whole train exists to prevent, so promotion may create a named rehearsal
+# branch but never `stable` itself.
+make_train 3 2
+git -C "${TMP}/w" push -q origin --delete stable; git -C "${TMP}/w" fetch -q --prune origin
+FAKE_NOW=1790000000 run init
+[[ "${RC}" -ne 0 ]] && ok "init refuses when stable is missing" || bad "init accepted a missing stable"
+git -C "${TMP}/w" rev-parse --verify --quiet origin/stable >/dev/null \
+    && bad "stable was recreated" || ok "stable stayed absent"
+
+echo "── --staging-host: phase 6 reaches the other site, or says it cannot ──"
+make_train 3 2
+FAKE_NOW=1790000000 run init
+jq '.boundary.phasesDone = ["prove"]' "${TMP}/cfg/release-train.json" > "${TMP}/x" && mv "${TMP}/x" "${TMP}/cfg/release-train.json"
+# A stub "ssh" that answers as a healthy staging site would.
+cat > "${TMP}/fakessh" <<'STUB'
+#!/usr/bin/env bash
+shift                      # the host
+case "$*" in
+  *ActiveState*)            echo "inactive" ;;
+  *'.channel'*)             echo "staging" ;;
+  *'.ok'*)                  echo "true" ;;
+  *'site-manager update'*)  echo "update ok" ;;
+  *)                        : ;;
+esac
+STUB
+chmod +x "${TMP}/fakessh"
+TAPPAAS_TRAIN_SSH="${TMP}/fakessh" FAKE_NOW=$(( 1790000000 + 20*86400 )) \
+    run boundary --resume --staging-host staging.example
+[[ "${OUT}" == *"verifying the staging site"* ]] && ok "phase 6 runs when a host is named" \
+    || bad "phase 6 did not run: ${OUT}"
+[[ "${OUT}" == *"updated cleanly"* ]] && ok "…and reports the staging site's verdict" \
+    || bad "no verdict from the staging site"
+
+echo "── without a host, phase 6 is skipped LOUDLY ──"
+# Silence here would mean a boundary that moved code and learned nothing.
+make_train 3 2
+FAKE_NOW=1790000000 run init
+jq '.boundary.phasesDone = ["prove"]' "${TMP}/cfg/release-train.json" > "${TMP}/x" && mv "${TMP}/x" "${TMP}/cfg/release-train.json"
+FAKE_NOW=$(( 1790000000 + 20*86400 )) run boundary --resume
+[[ "${OUT}" == *"Phase 6 SKIPPED"* ]] && ok "a boundary without a staging host says so" \
+    || bad "phase 6 was skipped silently"
+
+echo "── an unreachable staging host is BROKEN, not a warning ──"
+make_train 3 2
+FAKE_NOW=1790000000 run init
+cat > "${TMP}/deadssh" <<'STUB'
+#!/usr/bin/env bash
+exit 255
+STUB
+chmod +x "${TMP}/deadssh"
+TAPPAAS_TRAIN_SSH="${TMP}/deadssh" FAKE_NOW=$(( 1790000000 + 20*86400 )) \
+    run boundary --dry-run --staging-host staging.example
+[[ "${RC}" -ne 0 && "${OUT}" == *"cannot reach the staging site"* ]] \
+    && ok "a named but unreachable staging site refuses the boundary" \
+    || bad "an unreachable staging site did not refuse: ${OUT}"
+
 echo "── summary: ${PASS} pass, ${FAIL} fail ──"
 [[ "${FAIL}" -eq 0 ]]

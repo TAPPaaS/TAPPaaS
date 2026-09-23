@@ -10,6 +10,8 @@
 #   tappaas-train init                     verify the train is promotable; start the soak clock
 #   tappaas-train boundary [--dry-run]     the boundary: promote staging→stable, main→staging
 #                 [--resume] [--force-boundary]
+#                 [--staging-host <host>]      verify the promotion on the staging site (phase 6)
+#                 [--production-branch <b>]    promote onto <b> instead of `stable` (rehearsal)
 #   tappaas-train fault <what>             record a staging fault; blocks the next promotion
 #   tappaas-train fault --resolved <commit>  clear it — the commit must be on main
 #
@@ -56,6 +58,10 @@ channel_branch() {
 
 now_epoch() { echo "${TAPPAAS_TRAIN_NOW:-$(date -u +%s)}"; }
 
+# ssh to another site. One place, so tests can replace it wholesale and phase 6
+# is exercised without a second mothership.
+sat_ssh() { ${TAPPAAS_TRAIN_SSH:-ssh -o BatchMode=yes -o ConnectTimeout=15} "$@"; }
+
 # git in the site's checkout, quietly.
 g() { git -C "${REPO_DIR}" "$@" 2>/dev/null; }
 
@@ -93,9 +99,13 @@ read_train() {
 # sideways into a channel. Sets ANCESTRY_OK and ANCESTRY_WHY.
 check_ancestry() {
     ANCESTRY_OK=1; ANCESTRY_WHY=""
-    if ! g merge-base --is-ancestor origin/stable origin/staging; then
+    # An alternative production branch that does not exist yet is not a
+    # divergence — it is a rehearsal target, and promote_ref creates it.
+    if ! g rev-parse --verify --quiet "origin/${PROD_BRANCH}" >/dev/null; then
+        [[ "${PROD_BRANCH}" == "stable" ]] && { ANCESTRY_OK=0; ANCESTRY_WHY="origin/stable does not exist"; }
+    elif ! g merge-base --is-ancestor "origin/${PROD_BRANCH}" origin/staging; then
         ANCESTRY_OK=0
-        ANCESTRY_WHY="stable is not an ancestor of staging — something was pushed to stable directly"
+        ANCESTRY_WHY="${PROD_BRANCH} is not an ancestor of staging — something was pushed to ${PROD_BRANCH} directly"
     elif ! g merge-base --is-ancestor origin/staging origin/main; then
         ANCESTRY_OK=0
         ANCESTRY_WHY="staging is not an ancestor of main — staging has commits main does not"
@@ -253,6 +263,21 @@ preflight() {
         PF_WAIT+=("a sweep is running here (${sweep}) — it is reading the branch this would move") ;;
     esac
 
+    # The design's "no sweep active HERE or on the staging site": a sweep there
+    # is reading the branch this is about to move under it. Only checkable when
+    # the operator has named the host — there is no cross-site registry.
+    if [[ -n "${STAGING_HOST}" ]]; then
+        local rsweep
+        rsweep="$(sat_ssh "${STAGING_HOST}" 'systemctl show -p ActiveState --value update-tappaas.service' 2>/dev/null)"
+        if [[ -z "${rsweep}" ]]; then
+            PF_BROKEN+=("cannot reach the staging site '${STAGING_HOST}' — phase 6 could not verify the promotion")
+        else
+            case "${rsweep}" in active|activating|reloading|deactivating)
+                PF_WAIT+=("a sweep is running on the staging site (${rsweep})") ;;
+            esac
+        fi
+    fi
+
     # Never promote on top of an estate that is already failing: the new pin
     # would be blamed for a failure that predates it.
     local last="${CONFIG_DIR}/last-update-result.json"
@@ -303,6 +328,20 @@ phase_pending() {   # 1 = still to do
 # else: a channel that would need a merge is a channel someone pushed to.
 promote_ref() {
     local from="$1" to="$2"
+    # A named alternative may not exist yet: creating it is the point of
+    # rehearsing a promotion. `stable` is never created here — a production
+    # channel that appears because of a typo is the failure this train prevents.
+    if ! g rev-parse --verify --quiet "origin/${to}" >/dev/null; then
+        if [[ "${to}" == "stable" ]]; then
+            error "origin/stable does not exist — create the production channel deliberately, not from a promotion"
+            return 1
+        fi
+        warn "  origin/${to} does not exist — creating it at ${from} (rehearsal target)"
+        [[ "${DRY_RUN}" == "1" ]] && { info "    (dry run: not pushed)"; return 0; }
+        g push origin "origin/${from}:refs/heads/${to}" >/dev/null 2>&1 \
+            || { error "could not create ${to}"; return 1; }
+        g fetch --quiet origin "${to}"; return 0
+    fi
     if ! g merge-base --is-ancestor "origin/${to}" "origin/${from}"; then
         error "origin/${to} is not an ancestor of origin/${from} — refusing a non-fast-forward promotion"
         return 1
@@ -342,7 +381,7 @@ cmd_boundary() {
     info "  1  branch pin/$(date -u +%Y-w%V), refresh the estate pin"
     info "  2  prove it here: one guest first, then the sweep, then --deep"
     info "  3  land on main"
-    info "  4  promote staging → stable   ($(g rev-list --count origin/stable..origin/staging) commits reach production)"
+    info "  4  promote staging → ${PROD_BRANCH}   ($(g rev-list --count "origin/${PROD_BRANCH}..origin/staging" 2>/dev/null || echo "?") commits reach production)"
     info "  5  promote main → staging"
     info "  6  verify the staging site"
     if [[ "${DRY_RUN}" == "1" ]]; then
@@ -363,7 +402,7 @@ cmd_boundary() {
     fi
 
     info "${BOLD}Promoting${CL}"
-    phase_pending "stable"  && { promote_ref staging stable  || return 1; phase_done "stable"; }
+    phase_pending "stable"  && { promote_ref staging "${PROD_BRANCH}" || return 1; phase_done "stable"; }
     phase_pending "staging" && { promote_ref main    staging || return 1; phase_done "staging"; }
 
     # The clock restarts from the promotion, not from when someone remembered.
@@ -372,13 +411,43 @@ cmd_boundary() {
        '.soakStartedAt = $now
         | .channels = {unstable: "'"$(g rev-parse --short origin/main)"'",
                        staging: "'"$(g rev-parse --short origin/staging)"'",
-                       production: "'"$(g rev-parse --short origin/stable)"'"}
+                       production: "'"$(g rev-parse --short "origin/${PROD_BRANCH}" 2>/dev/null)"'"}
         | .lastBoundary = {at: $now, forced: ($forced == "1")}
         | .boundary = null' "${STATE_FILE}" > "${tmp}" && mv -f "${tmp}" "${STATE_FILE}" || rm -f "${tmp}"
 
     echo
     info "${GN}Boundary complete.${CL} The next one is due in ${BOUNDARY_DAYS} days."
-    info "  Verify the staging site now: it is the only thing that can find what this promoted."
+
+    # Phase 6 — the staging site is the only thing that can find what this just
+    # promoted, so a boundary that skips it has moved code and learned nothing.
+    if [[ -z "${STAGING_HOST}" ]]; then
+        warn "  Phase 6 SKIPPED: no --staging-host given, and this site holds no record of where staging runs."
+        warn "    Verify it by hand, then record anything it finds: ${SCRIPT_NAME} fault <what>"
+        return 0
+    fi
+    info "${BOLD}Phase 6: verifying the staging site (${STAGING_HOST})${CL}"
+    local rchan
+    rchan="$(sat_ssh "${STAGING_HOST}" 'jq -r ".channel // empty" ~/config/site.json' 2>/dev/null)"
+    if [[ "${rchan}" != "staging" ]]; then
+        warn "  ${STAGING_HOST} declares channel '${rchan:-unset}', not 'staging' — verifying it anyway, but it is not the audience this promoted for"
+    fi
+    info "  pulling the new staging there…"
+    sat_ssh "${STAGING_HOST}" 'git -C ~/TAPPaaS pull --ff-only --quiet origin staging' >/dev/null 2>&1 \
+        || warn "  could not fast-forward its checkout — it may be mid-update, or have local commits"
+    info "  running its update (this is the soak beginning, and it takes a while)…"
+    if sat_ssh "${STAGING_HOST}" 'site-manager update' 2>&1 | tail -5; then
+        local rok
+        rok="$(sat_ssh "${STAGING_HOST}" 'jq -r ".ok // false" ~/config/last-update-result.json' 2>/dev/null)"
+        if [[ "${rok}" == "true" ]]; then
+            info "  ${GN}✓${CL} the staging site updated cleanly onto the new revision"
+        else
+            warn "  the staging site's update reported a failure."
+            warn "    That is staging doing its job. Record it, and production stays where it is:"
+            warn "      ${SCRIPT_NAME} fault <what went wrong>"
+        fi
+    else
+        warn "  could not run the update on ${STAGING_HOST} — verify by hand"
+    fi
     return 0
 }
 
@@ -430,6 +499,13 @@ usage() { sed -n '3,22p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 
 command -v jq >/dev/null 2>&1 || die "jq is required"
 NO_FETCH=0; DRY_RUN=0; RESUME=0; FORCE_BOUNDARY=0
+# Where production lives. `stable` unless told otherwise: an alternative lets a
+# promotion be rehearsed onto a throwaway ref without touching what sites run.
+PROD_BRANCH="stable"
+# The staging site, for phase 6. The train runs on the UNSTABLE site, which has
+# no configured knowledge that the staging site exists — there is no cross-site
+# registry — so the operator names it or phase 6 is skipped with a note.
+STAGING_HOST=""
 _args=()
 for a in "$@"; do
     case "${a}" in
@@ -437,9 +513,22 @@ for a in "$@"; do
         --dry-run)        DRY_RUN=1 ;;
         --resume)         RESUME=1 ;;
         --force-boundary) FORCE_BOUNDARY=1 ;;
-        *) _args+=("${a}") ;;
+        --production-branch=*) PROD_BRANCH="${a#*=}" ;;
+        --staging-host=*)      STAGING_HOST="${a#*=}" ;;
+        --production-branch|--staging-host) _want="${a}" ;;
+        *)
+            if [[ -n "${_want:-}" ]]; then
+                case "${_want}" in
+                    --production-branch) PROD_BRANCH="${a}" ;;
+                    --staging-host)      STAGING_HOST="${a}" ;;
+                esac
+                _want=""
+            else
+                _args+=("${a}")
+            fi ;;
     esac
 done
+[[ -z "${_want:-}" ]] || { echo "${_want} needs a value" >&2; exit 2; }
 set -- ${_args[@]+"${_args[@]}"}
 
 case "${1:-}" in
