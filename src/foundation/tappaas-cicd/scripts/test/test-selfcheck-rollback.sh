@@ -158,5 +158,33 @@ grep -q 'ROLLBACK FAILED' "${REBUILD}" \
     && ok "a failed rollback says so, with the manual command" \
     || bad "a failed rollback is silent"
 
+echo "── a failed switch may already have switched (hrossen, 2026-09-23) ──"
+# Proven on the mothership: a unit that fails during activation makes
+# `nixos-rebuild switch` exit 4 — AFTER it has activated. The machine moved to
+# the broken generation and the old code just aborted, leaving it there. The
+# clean failure needs the same way back as the subtle one.
+grep -q 'The rebuild failed after it had already switched' "${REBUILD}" \
+    && ok "a failed rebuild rolls back when the profile shows it switched" \
+    || bad "a failed rebuild leaves the machine on the generation it failed to build"
+grep -q 'did not switch — it is still on' "${REBUILD}" \
+    && ok "…and says so plainly when it did NOT switch" \
+    || bad "no distinction between switched-then-failed and never-switched"
+
+echo "── the profile must move with the running system ──"
+# switch-to-configuration activates and updates the bootloader but does NOT
+# move /nix/var/nix/profiles/system. Leave it naming the bad build and the NEXT
+# rebuild captures that as its way back — one bad night poisons the one after.
+grep -q 'nix-env --profile /nix/var/nix/profiles/system --set' "${REBUILD}" \
+    && ok "rollback moves the system profile, not just the running system" \
+    || bad "rollback leaves the profile pointing at the bad generation"
+grep -q 'still names the bad generation' "${REBUILD}" \
+    && ok "and warns, with the command, if the pointer could not be moved" \
+    || bad "a half-done rollback is silent"
+# One rollback, reached from both failure paths — not two that can drift.
+_rb="$(grep -c 'roll_back_to "\${GEN_BEFORE}"' "${REBUILD}")"
+[[ "${_rb}" -eq 2 ]] \
+    && ok "both failure paths call the one rollback (${_rb} call sites)" \
+    || bad "expected 2 calls to the shared rollback, found ${_rb}"
+
 echo "── summary: ${PASS} pass, ${FAIL} fail ──"
 [[ "${FAIL}" -eq 0 ]]

@@ -111,6 +111,38 @@ else
     warn "no tappaas-selfcheck.sh beside this script — the rebuild will not be verified"
 fi
 
+# Put the machine back on the generation we replaced.
+#
+# Two things must move, and only doing the first is a trap (#713, proven on
+# hrossen 2026-09-23): `switch-to-configuration switch` activates a
+# configuration and updates the bootloader, but it does NOT move
+# /nix/var/nix/profiles/system. Leave the profile naming the bad build and the
+# NEXT rebuild captures that as its way back — one bad night poisons the one
+# after it. `nix-env --set` is what moves the pointer, and it is why
+# `nixos-rebuild --rollback` does both.
+roll_back_to() {
+    local gen="$1" why="$2"
+    if [[ -z "${gen}" || ! -x "${gen}/bin/switch-to-configuration" ]]; then
+        error "No previous generation to roll back to (${gen:-none recorded})."
+        return 1
+    fi
+    error "${why} — rolling back to ${gen##*/}."
+    if ! "${gen}/bin/switch-to-configuration" switch >>"${REBUILD_LOG}" 2>&1; then
+        error "ROLLBACK FAILED — this mothership is running an unverified generation."
+        error "Recover by hand: boot the previous generation from the boot menu, or"
+        error "  ${gen}/bin/switch-to-configuration switch"
+        return 1
+    fi
+    # The pointer, not just the running system.
+    if ! nix-env --profile /nix/var/nix/profiles/system --set "${gen}" >>"${REBUILD_LOG}" 2>&1; then
+        warn "Rolled back, but the system profile still names the bad generation."
+        warn "  Fix before the next sweep: nix-env --profile /nix/var/nix/profiles/system --set ${gen}"
+    fi
+    error "Rolled back. The sweep is ABORTED: the estate is not updated from a"
+    error "control plane that just failed. The kernel follows at the next boot."
+    return 0
+}
+
 info "Rebuilding NixOS (${VMNAME}) — one dot per build line"
 debug "nixos-rebuild switch --flake .#${VMNAME} --impure (full output: ${REBUILD_LOG})"
 # --impure only for the machine's /etc/nixos/hardware-configuration.nix;
@@ -125,6 +157,17 @@ set -e
 if (( rc != 0 )); then
     error "nixos-rebuild failed (rc ${rc}) — last lines of ${REBUILD_LOG}:"
     tail -15 "${REBUILD_LOG}" >&2 || true
+    # A failed switch is NOT an unchanged machine. `switch-to-configuration`
+    # activates first and reports failure after, so a unit that fails to start
+    # leaves the new generation live and the profile pointing at it (observed on
+    # hrossen 2026-09-23: rc 4, and the machine had moved). The clean failure
+    # deserves the same way back as the subtle one.
+    if [[ "$(readlink -f /nix/var/nix/profiles/system 2>/dev/null)" != "${GEN_BEFORE}" ]]; then
+        roll_back_to "${GEN_BEFORE}" "The rebuild failed after it had already switched" || true
+    else
+        info "The machine did not switch — it is still on ${GEN_BEFORE##*/}."
+    fi
+    rm -f "${UNITS_BEFORE}"
     exit "${rc}"
 fi
 
@@ -136,20 +179,7 @@ fi
 if [[ -x "${SELFCHECK}" ]]; then
     info "Verifying the new generation"
     if ! "${SELFCHECK}" --baseline "${UNITS_BEFORE}"; then
-        error "The rebuilt control plane failed its own check — rolling back."
-        if [[ -n "${GEN_BEFORE}" && -x "${GEN_BEFORE}/bin/switch-to-configuration" ]]; then
-            if "${GEN_BEFORE}/bin/switch-to-configuration" switch >>"${REBUILD_LOG}" 2>&1; then
-                error "Rolled back to ${GEN_BEFORE##*/}. The sweep is ABORTED: the estate is not"
-                error "updated from a control plane that just failed its own check."
-                error "The kernel follows at the next boot if this rebuild changed it."
-            else
-                error "ROLLBACK FAILED — this mothership is running an unverified generation."
-                error "Recover by hand: boot the previous generation from the boot menu, or"
-                error "  ${GEN_BEFORE}/bin/switch-to-configuration switch"
-            fi
-        else
-            error "No previous generation to roll back to (${GEN_BEFORE:-none recorded})."
-        fi
+        roll_back_to "${GEN_BEFORE}" "The rebuilt control plane failed its own check" || true
         rm -f "${UNITS_BEFORE}"
         exit 1
     fi
