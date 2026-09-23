@@ -37,11 +37,16 @@ steps:
     environment:
       WOODPECKER_TOKEN:
         from_secret: woodpecker_token
+    # $$ keeps Woodpecker's own substitution off shell variables. A pasted
+    # secret can carry whitespace, so it is stripped; on failure the log shows
+    # Woodpecker's reply, since curl -f alone says only "error: 400".
     commands:
-      - >
-        curl -fsS -X POST
-        -H "Authorization: Bearer $${WOODPECKER_TOKEN}"
-        -H "Content-Type: application/json"
-        -d '{"branch":"main"}'
-        https://ci.codeberg.org/api/repos/17589/pipelines
-        -o /dev/null -w "docs pipeline trigger: HTTP %{http_code}\n"
+      - |
+        token=$$(printf '%s' "$${WOODPECKER_TOKEN}" | tr -d '[:space:]')
+        code=$$(curl -sS -o /tmp/reply -w '%{http_code}' -X POST \
+          -H "Authorization: Bearer $${token}" \
+          -H "Content-Type: application/json" \
+          -d '{"branch":"main"}' \
+          https://ci.codeberg.org/api/repos/17589/pipelines)
+        echo "docs pipeline trigger: HTTP $${code} (token length $${#token})"
+        case "$${code}" in 2*) ;; *) head -c 500 /tmp/reply; echo; exit 1 ;; esac
