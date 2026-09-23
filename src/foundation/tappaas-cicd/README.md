@@ -85,6 +85,10 @@ provides no `dependsOn` services of its own (`provides: []` in `tappaas-cicd.jso
 
 For installation steps see [INSTALL.md](./INSTALL.md).
 
+How a release reaches a site — the three channels, the two-week boundary and the
+`tappaas-train.sh` command that runs one: [RELEASE-TRAIN.md](./RELEASE-TRAIN.md). What the
+mothership updates on its own, and when: [UPDATE-POLICY.md](./UPDATE-POLICY.md).
+
 Design and implementation detail (component contract, manager/controller dispatch):
 [DESIGN.md](./DESIGN.md). Test coverage: [TEST.md](./TEST.md). Remote admin access:
 [ADMIN-VPN.md](./manager/network-manager/ADMIN-VPN.md). The `manager/` and `controller/` subtrees carry their

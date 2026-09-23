@@ -19,11 +19,12 @@
 #   tappaas-train fault <what>             record a staging fault; blocks the next promotion
 #   tappaas-train fault --resolved <commit>  clear it — the commit must be on main
 #
-# Phases 1-2 of a boundary (move the pin, prove it on this site) stay the
-# operator's own cycle: they run a sweep and a deep test that take hours and
-# want a human watching. What this automates is the part that must NOT be done
-# by hand — the promotions, in the right order, fast-forward only, with the
-# soak and the fault rule enforced. See docs/design/release-train-promotion.md.
+# One boundary is one command: move the pin, prove it here, land it on main,
+# then promote. Phases 1-2 take hours (a sweep that reboots nodes, then a deep
+# test), so a run that stops half way is picked up with --resume rather than
+# restarted. Nothing is promoted unless the deep test passed — a promotion is
+# never the consolation prize for a failed test.
+# Operator reference: ../RELEASE-TRAIN.md · design: docs/design/release-train-promotion.md
 #
 # NOT `site-manager repository release` — that verb means "release a pull HOLD"
 # (#653). Two unrelated operations must not share a name in the one place an
