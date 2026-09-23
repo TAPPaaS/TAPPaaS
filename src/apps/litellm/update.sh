@@ -63,13 +63,9 @@ if [[ -n "${_owner_user}" ]]; then
         | awk -F': *' '/^[[:space:]]*primaryEmail:/{print $2; exit}' | tr -d '[:space:]')"
 fi
 
-# Public URL: the module's resolved proxyDomain, else <vmname>.<env domain>.
-_proxy_domain="$(read_module_config "${VMNAME}" 2>/dev/null \
-    | jq -r '.config["network:proxy"].proxyDomain // .proxyDomain // empty' 2>/dev/null || true)"
-if [[ -z "${_proxy_domain}" ]]; then
-    _base_domain="$(get_variant_config "${_env}" 2>/dev/null | jq -r '.domain // empty' 2>/dev/null || true)"
-    [[ -n "${_base_domain}" ]] && _proxy_domain="${VMNAME}.${_base_domain}"
-fi
+# Public URL: the platform's one derivation of the module's public name (#715).
+_proxy_domain="$(module_public_domain "${VMNAME}" "${_env}" \
+    "$(read_module_config "${VMNAME}" 2>/dev/null || echo '{}')")"
 
 if [[ -z "${_owner_email}" && -z "${_proxy_domain}" ]]; then
     warn "  Neither an environment owner nor a public URL could be resolved — skipping"

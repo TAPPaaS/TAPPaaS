@@ -136,10 +136,19 @@ grep -q 'moduleCfg.proxyPublished or true' "${SRC_ROOT}/src/foundation/logging/l
 
 # ── the copies stay gone ────────────────────────────────────────────────────
 # Any shell script building "<vmname>.<some domain>" for a public name outside
-# the resolver is the problem coming back. The fileservice fallback that fires
-# only when nothing is published is the one allowed form.
-copies="$(cd "${SRC_ROOT}" && grep -rnE '\$\{?VMNAME\}?\.\$\{?(TAPPAAS_DOMAIN|tappaas_domain|_dom|_td_dom|env_domain)\}?' \
-            --include='*.sh' src 2>/dev/null | grep -v 'NC_PROXY:-' | grep -v '/test-public-domain.sh:')"
+# the resolver is the problem coming back. The pattern is any variable naming a
+# VM, a dot, any variable naming a domain: the first version of this guard
+# listed the domain variables it knew, and missed ${_nc_vm}.${_nc_dom} in
+# nextcloud-hpb and ${VMNAME}.${_base_domain} in litellm.
+# Allowed: the fileservice fallback that fires only when nothing is published
+# (${NC_PROXY:-…}, ${EO_PROXY:-…}), and INTERNAL names — the network:dns and
+# cluster:vm services register <vmname>.<zone>.internal, whose domain variable
+# is assigned "${ZONE}.internal" two lines up.
+copies="$(cd "${SRC_ROOT}" && grep -rnE '\$\{?[A-Za-z_]*(vm|VM)[A-Za-z_]*\}?\.\$\{?[A-Za-z_]*(dom|DOM)[A-Za-z_]*\}?' \
+            --include='*.sh' src 2>/dev/null \
+            | grep -v '_PROXY:-' | grep -v '/test-public-domain.sh:' \
+            | grep -v '^src/foundation/network/services/dns/' \
+            | grep -v '^src/foundation/cluster/services/vm/update-service.sh:')"
 ck "no public-name derivation outside module_public_domain" "" "${copies}"
 [[ -n "${copies}" ]] && sed 's/^/      /' <<< "${copies}"
 
