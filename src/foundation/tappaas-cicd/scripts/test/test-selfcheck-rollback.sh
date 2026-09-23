@@ -186,5 +186,63 @@ _rb="$(grep -c 'roll_back_to "\${GEN_BEFORE}"' "${REBUILD}")"
     && ok "both failure paths call the one rollback (${_rb} call sites)" \
     || bad "expected 2 calls to the shared rollback, found ${_rb}"
 
+echo "── a rollback that cannot finish is killed, not waited on ──"
+# hrossen 2026-09-23: rolling 26.05 back to 25.11, the OLD generation's
+# switch-to-configuration spun at 100% CPU and never returned, holding
+# /run/nixos/switch-to-configuration.lock. The operator saw a hang, not a
+# verdict. This runs the REAL function against a switch tool that never exits.
+if ! command -v timeout >/dev/null 2>&1; then
+    echo "  skip: no timeout(1) here"
+else
+    sed -n '/^roll_back_to()/,/^}/p' "${REBUILD}" > "${TMP}/rb.sh"
+    mkdir -p "${TMP}/gen/bin"
+    printf '#!/usr/bin/env bash\nwhile :; do :; done\n' > "${TMP}/gen/bin/switch-to-configuration"
+    chmod +x "${TMP}/gen/bin/switch-to-configuration"
+    cat > "${TMP}/rbtest.sh" <<'HARNESS'
+error() { echo "$*"; }
+warn()  { echo "$*"; }
+REBUILD_LOG=/dev/null
+ROLLBACK_TIMEOUT=3
+. "${1}"
+roll_back_to "${2}" "a deliberately unfinishable rollback"
+echo "returned rc=$?"
+HARNESS
+    _t0=$(date +%s)
+    # An outer bound, so a rollback that lost its own bound makes this suite
+    # FAIL rather than hang the run it is part of.
+    _out="$(timeout 30 bash "${TMP}/rbtest.sh" "${TMP}/rb.sh" "${TMP}/gen" 2>&1)"
+    _el=$(( $(date +%s) - _t0 ))
+    [[ "${_el}" -lt 30 ]] && ok "the rollback returns instead of spinning (${_el}s)" \
+        || bad "the rollback ran ${_el}s — it is not bounded"
+    [[ "${_out}" == *"ROLLBACK TIMED OUT"* ]] && ok "…and says it timed out" \
+        || bad "a killed rollback does not say so: ${_out}"
+    [[ "${_out}" == *"returned rc=1"* ]] && ok "…and reports failure to the caller" \
+        || bad "a killed rollback reported success"
+    [[ "${_out}" == *"boot the previous generation"* ]] \
+        && ok "…and tells the operator the one thing that still works" \
+        || bad "no manual recovery given for a timed-out rollback"
+    # The profile must NOT be moved when the rollback did not complete: that
+    # would name a generation the machine is not running.
+    [[ "${_out}" != *"--set"* ]] && ok "a timed-out rollback does not move the profile" \
+        || bad "the profile was moved after a rollback that never finished"
+fi
+
+echo "── rc 4 with a healthy control plane is not a reason to roll back ──"
+# `switch-to-configuration` exit 4 means SOME UNIT FAILED, not that the switch
+# did not happen. On a release move dbus-broker cannot be reloaded in place, so
+# the switch applies correctly and rc 4 is reported over it. Undoing a
+# generation that passes its own check is the more dangerous of the two moves —
+# and on hrossen the rollback then live-locked attempting exactly that.
+_fail_block="$(sed -n '/if (( rc != 0 ))/,/^fi$/p' "${REBUILD}")"
+[[ "${_fail_block}" == *'"${SELFCHECK}" --baseline'* ]] \
+    && ok "a failed rebuild consults the self-check before rolling back" \
+    || bad "a failed rebuild rolls back without asking whether the new plane works"
+[[ "${_fail_block}" == *"NOT rolling back"* ]] \
+    && ok "…and says plainly when it keeps the generation" \
+    || bad "keeping a verified generation is silent"
+[[ "${_fail_block}" == *"The sweep still stops"* ]] \
+    && ok "…while still refusing to sweep from a rebuild that reported failure" \
+    || bad "a rebuild that reported failure could still drive a sweep"
+
 echo "── summary: ${PASS} pass, ${FAIL} fail ──"
 [[ "${FAIL}" -eq 0 ]]

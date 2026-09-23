@@ -127,7 +127,22 @@ roll_back_to() {
         return 1
     fi
     error "${why} — rolling back to ${gen##*/}."
-    if ! "${gen}/bin/switch-to-configuration" switch >>"${REBUILD_LOG}" 2>&1; then
+    # A rollback that cannot finish is worse than no rollback: it holds
+    # /run/nixos/switch-to-configuration.lock and the operator gets a hang
+    # instead of a verdict. Measured on hrossen 2026-09-23 rolling 26.05 back
+    # to 25.11: the OLD generation's switch-to-configuration spun at 100% CPU
+    # and never returned. So it gets a deadline, and a hard kill after it.
+    local rb_rc=0
+    timeout -k 30 "${ROLLBACK_TIMEOUT:-300}" \
+        "${gen}/bin/switch-to-configuration" switch >>"${REBUILD_LOG}" 2>&1 || rb_rc=$?
+    if (( rb_rc == 124 || rb_rc == 137 )); then
+        error "ROLLBACK TIMED OUT after ${ROLLBACK_TIMEOUT:-300}s and was killed."
+        error "This mothership runs an unverified generation and the rollback did"
+        error "not finish — a switch ACROSS a nixpkgs release can live-lock."
+        error "Recover by hand: boot the previous generation from the boot menu."
+        return 1
+    fi
+    if (( rb_rc != 0 )); then
         error "ROLLBACK FAILED — this mothership is running an unverified generation."
         error "Recover by hand: boot the previous generation from the boot menu, or"
         error "  ${gen}/bin/switch-to-configuration switch"
@@ -163,7 +178,22 @@ if (( rc != 0 )); then
     # hrossen 2026-09-23: rc 4, and the machine had moved). The clean failure
     # deserves the same way back as the subtle one.
     if [[ "$(readlink -f /nix/var/nix/profiles/system 2>/dev/null)" != "${GEN_BEFORE}" ]]; then
-        roll_back_to "${GEN_BEFORE}" "The rebuild failed after it had already switched" || true
+        # The machine moved. Before undoing that, ASK — the self-check is the
+        # instrument for "did the new control plane come up?", and rolling back
+        # is the more dangerous of the two operations. rc 4 means some unit
+        # failed, NOT that the switch did not happen: on a release move
+        # (25.11 -> 26.05) dbus-broker cannot be reloaded in place, the switch
+        # applies correctly, and rc 4 is reported over it — observed on hrossen
+        # 2026-09-23, where undoing a generation that passed its own check was
+        # the wrong call, and the rollback then live-locked attempting it.
+        if [[ -x "${SELFCHECK}" ]] && "${SELFCHECK}" --baseline "${UNITS_BEFORE}"; then
+            warn "The rebuild reported rc ${rc}, but the new control plane passes its own check."
+            warn "  NOT rolling back: the generation is live and verified."
+            warn "  The sweep still stops — a unit failed and a person should read why:"
+            warn "    ${REBUILD_LOG}"
+        else
+            roll_back_to "${GEN_BEFORE}" "The rebuild failed after it had already switched" || true
+        fi
     else
         info "The machine did not switch — it is still on ${GEN_BEFORE##*/}."
     fi
