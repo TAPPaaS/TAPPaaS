@@ -132,10 +132,67 @@ FAKE_NOW=$(( 1790000000 + 14*86400 )) run status
     && ok "an unresolved staging fault blocks, and is quoted" || bad "fault not reported: ${OUT}"
 [[ "${OUT}" == *"Not promotable"* ]] && ok "…and the verdict says so" || bad "verdict ignored the fault"
 
-echo "── the unimplemented half says so plainly ──"
-run boundary
-[[ "${RC}" -eq 2 && "${OUT}" == *"not implemented yet"* ]] \
-    && ok "boundary refuses rather than pretending" || bad "boundary did something"
+echo "── a boundary refuses what it cannot promote ──"
+make_train 3 2
+FAKE_NOW=1790000000 run init
+# A FIXED clock: without it "now" is the wall clock and the soak's age depends
+# on the day the suite runs, which is how a test starts passing by accident.
+FAKE_NOW=1790000000 run boundary --dry-run
+[[ "${RC}" -ne 0 ]] && ok "a fresh soak refuses a boundary" || bad "boundary ran during the soak"
+[[ "${OUT}" == *"soak is 0 of 14 days"* ]] && ok "…and says it is a WAIT, not a fault" \
+    || bad "the soak refusal is not distinguished: ${OUT}"
+# WAIT is forceable; BROKEN is not. That distinction is the whole point.
+FAKE_NOW=1790000000 run boundary --dry-run --force-boundary
+[[ "${OUT}" == *"proceeding despite"* ]] && ok "--force-boundary lifts a WAIT, loudly" \
+    || bad "--force-boundary did not lift the soak"
+
+# Break the ancestry: BROKEN must survive --force-boundary.
+git -C "${TMP}/w" checkout -q stable
+echo x > "${TMP}/w/oops"; git -C "${TMP}/w" add -A; git -C "${TMP}/w" commit -qm sideways
+git -C "${TMP}/w" push -q -f origin stable; git -C "${TMP}/w" fetch -q origin; git -C "${TMP}/w" checkout -q main
+FAKE_NOW=$(( 1790000000 + 20*86400 )) run boundary --force-boundary
+[[ "${RC}" -ne 0 && "${OUT}" == *"does not lift these"* ]] \
+    && ok "a diverged channel is refused even with --force-boundary" \
+    || bad "force lifted a BROKEN check: ${OUT}"
+
+echo "── promotion is fast-forward only, and in order ──"
+make_train 3 2
+FAKE_NOW=1790000000 run init
+# Mark phases 1-2 done, as a real operator would after proving the pin here.
+jq '.boundary.phasesDone = ["prove"]' "${TMP}/cfg/release-train.json" > "${TMP}/x" && mv "${TMP}/x" "${TMP}/cfg/release-train.json"
+_stable_before="$(git -C "${TMP}/w" rev-parse origin/stable)"
+_staging_before="$(git -C "${TMP}/w" rev-parse origin/staging)"
+FAKE_NOW=$(( 1790000000 + 20*86400 )) run boundary --resume
+[[ "${RC}" -eq 0 ]] && ok "a due, proven boundary runs" || bad "boundary failed: ${OUT}"
+[[ "$(git -C "${TMP}/w" rev-parse origin/stable)" == "${_staging_before}" ]] \
+    && ok "stable became what staging WAS — the soaked revision, not the new one" \
+    || bad "stable did not take staging's old position"
+[[ "$(git -C "${TMP}/w" rev-parse origin/staging)" == "$(git -C "${TMP}/w" rev-parse origin/main)" ]] \
+    && ok "staging became main" || bad "staging did not advance to main"
+[[ "$(git -C "${TMP}/w" rev-parse origin/stable)" != "${_stable_before}" ]] \
+    && ok "production moved exactly one boundary" || bad "stable did not move"
+[[ "$(jq -r '.soakStartedAt' "${TMP}/cfg/release-train.json")" == "$(( 1790000000 + 20*86400 ))" ]] \
+    && ok "the soak clock restarts from the promotion" || bad "clock not restarted"
+
+echo "── the fault rule (ADR-028 D9) ──"
+make_train 3 2
+FAKE_NOW=1790000000 run init
+run fault "grafana lost its dashboards on staging"
+[[ "${RC}" -eq 0 && "$(jq -r '.fault.what' "${TMP}/cfg/release-train.json")" == "grafana lost its dashboards on staging" ]] \
+    && ok "a staging fault is recorded" || bad "fault not recorded"
+FAKE_NOW=$(( 1790000000 + 20*86400 )) run boundary --dry-run --force-boundary
+[[ "${RC}" -ne 0 ]] && ok "an unresolved fault blocks promotion, even forced" || bad "fault did not block"
+# "Resolved" must mean the fix is ON MAIN — a staging-only hotfix returns next boundary.
+git -C "${TMP}/w" checkout -q staging
+echo fix > "${TMP}/w/fix"; git -C "${TMP}/w" add -A; git -C "${TMP}/w" commit -qm "hotfix on staging only"
+_hotfix="$(git -C "${TMP}/w" rev-parse HEAD)"
+git -C "${TMP}/w" push -q origin staging; git -C "${TMP}/w" fetch -q origin; git -C "${TMP}/w" checkout -q main
+run fault --resolved "${_hotfix}"
+[[ "${RC}" -ne 0 && "${OUT}" == *"not on main"* ]] \
+    && ok "a fix that lives only on staging is not 'resolved'" || bad "accepted a staging-only fix"
+run fault --resolved "$(git -C "${TMP}/w" rev-parse origin/main)"
+[[ "${RC}" -eq 0 && "$(jq -r '.fault' "${TMP}/cfg/release-train.json")" == "null" ]] \
+    && ok "a fix on main clears the fault" || bad "fault not cleared: ${OUT}"
 
 echo "── summary: ${PASS} pass, ${FAIL} fail ──"
 [[ "${FAIL}" -eq 0 ]]
