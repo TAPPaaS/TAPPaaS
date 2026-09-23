@@ -158,8 +158,9 @@ FAKE_NOW=$(( 1790000000 + 20*86400 )) run boundary --force-boundary
 echo "── promotion is fast-forward only, and in order ──"
 make_train 3 2
 FAKE_NOW=1790000000 run init
-# Mark phases 1-2 done, as a real operator would after proving the pin here.
-jq '.boundary.phasesDone = ["prove"]' "${TMP}/cfg/release-train.json" > "${TMP}/x" && mv "${TMP}/x" "${TMP}/cfg/release-train.json"
+# Phases 1-3 already done: the pin moved, the deep test passed, main landed.
+# These fixtures exercise the promotions, which is what must not be done by hand.
+jq '.boundary.phasesDone = ["branch","prove","main"]' "${TMP}/cfg/release-train.json" > "${TMP}/x" && mv "${TMP}/x" "${TMP}/cfg/release-train.json"
 _stable_before="$(git -C "${TMP}/w" rev-parse origin/stable)"
 _staging_before="$(git -C "${TMP}/w" rev-parse origin/staging)"
 FAKE_NOW=$(( 1790000000 + 20*86400 )) run boundary --resume
@@ -197,7 +198,7 @@ run fault --resolved "$(git -C "${TMP}/w" rev-parse origin/main)"
 echo "── --production-branch: rehearse a promotion without touching stable ──"
 make_train 3 2
 FAKE_NOW=1790000000 run init
-jq '.boundary.phasesDone = ["prove"]' "${TMP}/cfg/release-train.json" > "${TMP}/x" && mv "${TMP}/x" "${TMP}/cfg/release-train.json"
+jq '.boundary.phasesDone = ["branch","prove","main"]' "${TMP}/cfg/release-train.json" > "${TMP}/x" && mv "${TMP}/x" "${TMP}/cfg/release-train.json"
 _stable_untouched="$(git -C "${TMP}/w" rev-parse origin/stable)"
 _staging_was="$(git -C "${TMP}/w" rev-parse origin/staging)"
 FAKE_NOW=$(( 1790000000 + 20*86400 )) run boundary --resume --production-branch rehearsal
@@ -221,7 +222,7 @@ git -C "${TMP}/w" rev-parse --verify --quiet origin/stable >/dev/null \
 echo "── --staging-host: phase 6 reaches the other site, or says it cannot ──"
 make_train 3 2
 FAKE_NOW=1790000000 run init
-jq '.boundary.phasesDone = ["prove"]' "${TMP}/cfg/release-train.json" > "${TMP}/x" && mv "${TMP}/x" "${TMP}/cfg/release-train.json"
+jq '.boundary.phasesDone = ["branch","prove","main"]' "${TMP}/cfg/release-train.json" > "${TMP}/x" && mv "${TMP}/x" "${TMP}/cfg/release-train.json"
 # A stub "ssh" that answers as a healthy staging site would.
 cat > "${TMP}/fakessh" <<'STUB'
 #!/usr/bin/env bash
@@ -246,7 +247,7 @@ echo "── without a host, phase 6 is skipped LOUDLY ──"
 # Silence here would mean a boundary that moved code and learned nothing.
 make_train 3 2
 FAKE_NOW=1790000000 run init
-jq '.boundary.phasesDone = ["prove"]' "${TMP}/cfg/release-train.json" > "${TMP}/x" && mv "${TMP}/x" "${TMP}/cfg/release-train.json"
+jq '.boundary.phasesDone = ["branch","prove","main"]' "${TMP}/cfg/release-train.json" > "${TMP}/x" && mv "${TMP}/x" "${TMP}/cfg/release-train.json"
 FAKE_NOW=$(( 1790000000 + 20*86400 )) run boundary --resume
 [[ "${OUT}" == *"Phase 6 SKIPPED"* ]] && ok "a boundary without a staging host says so" \
     || bad "phase 6 was skipped silently"
@@ -264,6 +265,43 @@ TAPPAAS_TRAIN_SSH="${TMP}/deadssh" FAKE_NOW=$(( 1790000000 + 20*86400 )) \
 [[ "${RC}" -ne 0 && "${OUT}" == *"cannot reach the staging site"* ]] \
     && ok "a named but unreachable staging site refuses the boundary" \
     || bad "an unreachable staging site did not refuse: ${OUT}"
+
+echo "── both flags together isolate a WHOLE boundary ──"
+# Redirecting only production would still advance the real staging channel,
+# which the staging site tracks — that is a real boundary with the production
+# step aimed sideways, not a rehearsal.
+make_train 3 2
+FAKE_NOW=1790000000 run init
+jq '.boundary.phasesDone = ["branch","prove","main"]' "${TMP}/cfg/release-train.json" > "${TMP}/x" && mv "${TMP}/x" "${TMP}/cfg/release-train.json"
+_real_staging="$(git -C "${TMP}/w" rev-parse origin/staging)"
+_real_stable="$(git -C "${TMP}/w" rev-parse origin/stable)"
+FAKE_NOW=$(( 1790000000 + 20*86400 )) run boundary --resume \
+    --staging-branch rehearse-staging --production-branch rehearse-prod
+[[ "${RC}" -eq 0 ]] && ok "a fully isolated boundary runs" || bad "isolated boundary failed: ${OUT}"
+[[ "$(git -C "${TMP}/w" rev-parse origin/staging)" == "${_real_staging}" ]] \
+    && ok "the real staging channel did not move" || bad "staging moved during a rehearsal"
+[[ "$(git -C "${TMP}/w" rev-parse origin/stable)" == "${_real_stable}" ]] \
+    && ok "…and neither did stable" || bad "stable moved during a rehearsal"
+[[ "$(git -C "${TMP}/w" rev-parse origin/rehearse-staging)" == "$(git -C "${TMP}/w" rev-parse origin/main)" ]] \
+    && ok "the throwaway staging ref took main" || bad "rehearsal staging ref wrong"
+
+echo "── a staging ref that does not exist yet skips the production push ──"
+# Nothing has soaked on a ref that was just invented, so there is nothing to
+# give production; only the staging promotion runs, creating it.
+[[ "${OUT}" == *"nothing has soaked, so no production push"* ]] \
+    && ok "the first rehearsal says why production was skipped" \
+    || bad "no explanation for the skipped production push: ${OUT}"
+git -C "${TMP}/w" rev-parse --verify --quiet origin/rehearse-prod >/dev/null \
+    && bad "production ref was created from nothing" \
+    || ok "…and created no production ref from nothing"
+
+echo "── the second boundary on the same refs does promote ──"
+# Now rehearse-staging exists and holds something, so production gets it.
+jq '.boundary.phasesDone = ["branch","prove","main"]' "${TMP}/cfg/release-train.json" > "${TMP}/x" && mv "${TMP}/x" "${TMP}/cfg/release-train.json"
+FAKE_NOW=$(( 1790000000 + 40*86400 )) run boundary --resume \
+    --staging-branch rehearse-staging --production-branch rehearse-prod
+[[ "$(git -C "${TMP}/w" rev-parse origin/rehearse-prod 2>/dev/null)" == "${_real_staging:0:0}$(git -C "${TMP}/w" rev-parse origin/main)" ]] \
+    && ok "production now takes what staging held" || bad "second boundary did not promote"
 
 echo "── summary: ${PASS} pass, ${FAIL} fail ──"
 [[ "${FAIL}" -eq 0 ]]

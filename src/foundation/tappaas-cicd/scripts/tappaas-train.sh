@@ -11,7 +11,10 @@
 #   tappaas-train boundary [--dry-run]     the boundary: promote staging→stable, main→staging
 #                 [--resume] [--force-boundary]
 #                 [--staging-host <host>]      verify the promotion on the staging site (phase 6)
-#                 [--production-branch <b>]    promote onto <b> instead of `stable` (rehearsal)
+#                 [--production-branch <b>]    promote onto <b> instead of `stable`
+#                 [--staging-branch <b>]       use <b> as the staging channel — set both to
+#                                              throwaway refs to rehearse a whole boundary
+#                 [--guest <module>]           the guest that meets the new pin first
 #   tappaas-train fault <what>             record a staging fault; blocks the next promotion
 #   tappaas-train fault --resolved <commit>  clear it — the commit must be on main
 #
@@ -103,12 +106,13 @@ check_ancestry() {
     # divergence — it is a rehearsal target, and promote_ref creates it.
     if ! g rev-parse --verify --quiet "origin/${PROD_BRANCH}" >/dev/null; then
         [[ "${PROD_BRANCH}" == "stable" ]] && { ANCESTRY_OK=0; ANCESTRY_WHY="origin/stable does not exist"; }
-    elif ! g merge-base --is-ancestor "origin/${PROD_BRANCH}" origin/staging; then
+    elif ! g merge-base --is-ancestor "origin/${PROD_BRANCH}" "origin/${STAGING_BRANCH}"; then
         ANCESTRY_OK=0
-        ANCESTRY_WHY="${PROD_BRANCH} is not an ancestor of staging — something was pushed to ${PROD_BRANCH} directly"
-    elif ! g merge-base --is-ancestor origin/staging origin/main; then
+        ANCESTRY_WHY="${PROD_BRANCH} is not an ancestor of ${STAGING_BRANCH} — something was pushed to ${PROD_BRANCH} directly"
+    elif g rev-parse --verify --quiet "origin/${STAGING_BRANCH}" >/dev/null \
+         && ! g merge-base --is-ancestor "origin/${STAGING_BRANCH}" origin/main; then
         ANCESTRY_OK=0
-        ANCESTRY_WHY="staging is not an ancestor of main — staging has commits main does not"
+        ANCESTRY_WHY="${STAGING_BRANCH} is not an ancestor of main — it has commits main does not"
     fi
 }
 
@@ -358,6 +362,89 @@ promote_ref() {
     return 0
 }
 
+# ── phase 1: branch, and move the estate pin ─────────────────────────
+# One lock decides the estate (ADR-028 D1), so this is one command. The branch
+# exists so the move is reviewable and revertible before it reaches main.
+do_phase_branch() {
+    local br; br="pin/$(date -u +%Y-w%V)"
+    info "${BOLD}Phase 1: ${br} — refresh the estate pin${CL}"
+    local before; before="$(jq -r '.nodes.nixpkgs.locked.rev // empty' "${PIN_LOCK}")"
+    [[ "${DRY_RUN}" == "1" ]] && { info "  (dry run) would branch ${br} and update ${PIN_LOCK##*/}"; return 0; }
+
+    g rev-parse --verify --quiet "${br}" >/dev/null && g branch -D "${br}" >/dev/null 2>&1
+    g checkout -q -b "${br}" origin/main || { error "could not branch ${br}"; return 1; }
+    ( cd "${REPO_DIR}/src/foundation/templates" \
+      && nix flake update --extra-experimental-features "nix-command flakes" ) >/dev/null 2>&1 \
+        || { error "nix flake update failed"; return 1; }
+    local after; after="$(jq -r '.nodes.nixpkgs.locked.rev // empty' "${PIN_LOCK}")"
+    if [[ "${before}" == "${after}" ]]; then
+        # A frozen branch, or one already current. Not an error — but an empty
+        # commit would make the record claim a move that did not happen.
+        warn "  the pin did not move (${before:0:12}) — the branch is likely frozen or already current"
+        info "  a version move edits templates/flake.nix first; this only refreshes within a branch"
+        g checkout -q main
+        return 1
+    fi
+    info "  pin ${before:0:12} → ${after:0:12}"
+    g add src/foundation/templates/flake.lock src/foundation/tappaas-cicd/flake.lock 2>/dev/null
+    g commit -q -m "chore(pin): estate nixpkgs ${before:0:12} -> ${after:0:12}" \
+        || { error "could not commit the pin"; return 1; }
+    local tmp="${STATE_FILE}.tmp.$$"
+    jq --arg b "${br}" --arg f "${before}" --arg t "${after}" \
+       '.boundary = ((.boundary // {}) + {branch: $b, pinFrom: $f, pinTo: $t})' \
+       "${STATE_FILE}" > "${tmp}" && mv -f "${tmp}" "${STATE_FILE}" || rm -f "${tmp}"
+    return 0
+}
+
+# ── phase 2: prove it HERE, guest first ──────────────────────────────
+# The order is the point (ADR-028 D9): a guest that fails the new pin is
+# snapshot-rolled back by update-module.sh, and the control plane stays able to
+# investigate. The mothership meets the revision only after a guest has.
+pick_guest() {
+    [[ -n "${GUEST}" ]] && { echo "${GUEST}"; return 0; }
+    local f n
+    for f in "${CONFIG_DIR}"/*.json; do
+        jq -e '(.dependsOn // []) | index("templates:nixos")' "${f}" >/dev/null 2>&1 || continue
+        n="$(basename "${f}" .json)"; echo "${n}"; return 0
+    done
+    return 1
+}
+
+do_phase_prove() {
+    info "${BOLD}Phase 2: prove the pin here${CL}"
+    local guest; guest="$(pick_guest)" \
+        || { error "no NixOS guest found to try first — name one with --guest"; return 1; }
+    if [[ "${DRY_RUN}" == "1" ]]; then
+        info "  (dry run) would update ${guest} first, then sweep, then test --deep"
+        return 0
+    fi
+    info "  ${guest} meets the new pin first (a failure there rolls that guest back, not the estate)"
+    if ! /home/tappaas/bin/update-module.sh "${guest}"; then
+        error "${guest} failed on the new pin — the estate is untouched and the branch is intact."
+        error "  Fix it, then: ${SCRIPT_NAME} boundary --resume"
+        return 1
+    fi
+    info "  the guest is good; now the whole site"
+    site-manager update || { error "the sweep failed on the new pin"; return 1; }
+    info "  deep test — nothing is promoted unless this passes"
+    site-manager test --deep || { error "the deep test failed on the new pin"; return 1; }
+    return 0
+}
+
+# ── phase 3: land it on main ─────────────────────────────────────────
+do_phase_main() {
+    local br; br="$(jq -r '.boundary.branch // empty' "${STATE_FILE}")"
+    [[ -n "${br}" ]] || { error "no branch recorded — re-run without --resume"; return 1; }
+    info "${BOLD}Phase 3: land ${br} on main${CL}"
+    [[ "${DRY_RUN}" == "1" ]] && { info "  (dry run) would fast-forward main to ${br} and publish it"; return 0; }
+    g checkout -q main || return 1
+    g merge --ff-only "${br}" >/dev/null 2>&1 || { error "main could not fast-forward to ${br}"; return 1; }
+    g push origin main >/dev/null 2>&1 || { error "could not publish main"; return 1; }
+    g fetch --quiet origin main
+    info "  main is now $(g rev-parse --short origin/main)"
+    return 0
+}
+
 cmd_boundary() {
     preflight
     echo
@@ -379,38 +466,46 @@ cmd_boundary() {
     echo
     info "${BOLD}Plan${CL}"
     info "  1  branch pin/$(date -u +%Y-w%V), refresh the estate pin"
-    info "  2  prove it here: one guest first, then the sweep, then --deep"
-    info "  3  land on main"
-    info "  4  promote staging → ${PROD_BRANCH}   ($(g rev-list --count "origin/${PROD_BRANCH}..origin/staging" 2>/dev/null || echo "?") commits reach production)"
-    info "  5  promote main → staging"
+    info "  2  prove it here: $(pick_guest 2>/dev/null || echo "a guest") first, then the sweep, then --deep"
+    info "  3  land on main (hours: the sweep reboots nodes, the deep test builds guests)"
+    info "  4  promote ${STAGING_BRANCH} → ${PROD_BRANCH}   ($(g rev-list --count "origin/${PROD_BRANCH}..origin/staging" 2>/dev/null || echo "?") commits reach production)"
+    info "  5  promote main → ${STAGING_BRANCH}"
     info "  6  verify the staging site"
     if [[ "${DRY_RUN}" == "1" ]]; then
         echo; info "Dry run: nothing was changed."
         return 0
     fi
 
-    # Phases 1-2 (the pin move and proving it here) are the operator's own
-    # cycle and are deliberately NOT automated yet: they run a sweep and a deep
-    # test that take hours and want a human watching. The boundary drives the
-    # promotion, which is the part that must not be done by hand.
-    warn "  phases 1-2 are not automated: move the pin and prove it here, then re-run with --resume"
-    if phase_pending "prove"; then
-        error "Refusing to promote what this site has not proved."
-        error "  nix flake update --flake ${REPO_DIR}/src/foundation/templates"
-        error "  ...test it, land it on main, then: ${SCRIPT_NAME} boundary --resume"
-        return 1
-    fi
+    # Phases 1-3: move the pin, prove it HERE, land it. Each is recorded, so a
+    # run that fails half way is resumed rather than restarted — re-running a
+    # push that already happened is how main and staging come to disagree.
+    phase_pending "branch" && { do_phase_branch || return 1; phase_done "branch"; }
+    phase_pending "prove"  && { do_phase_prove  || return 1; phase_done "prove";  }
+    phase_pending "main"   && { do_phase_main   || return 1; phase_done "main";   }
 
+    # Nothing is promoted unless the deep test passed. If it failed, the branch
+    # is intact, the estate is untouched, and the operator fixes it or promotes
+    # by hand — a promotion is never the consolation prize for a failed test.
+    echo
     info "${BOLD}Promoting${CL}"
-    phase_pending "stable"  && { promote_ref staging "${PROD_BRANCH}" || return 1; phase_done "stable"; }
-    phase_pending "staging" && { promote_ref main    staging || return 1; phase_done "staging"; }
+    if phase_pending "production"; then
+        if g rev-parse --verify --quiet "origin/${STAGING_BRANCH}" >/dev/null; then
+            promote_ref "${STAGING_BRANCH}" "${PROD_BRANCH}" || return 1
+        else
+            # Nothing has soaked on a ref that does not exist yet, so there is
+            # nothing to give production. The staging promotion below creates it.
+            warn "  origin/${STAGING_BRANCH} does not exist — nothing has soaked, so no production push"
+        fi
+        phase_done "production"
+    fi
+    phase_pending "staging" && { promote_ref main "${STAGING_BRANCH}" || return 1; phase_done "staging"; }
 
     # The clock restarts from the promotion, not from when someone remembered.
     local tmp="${STATE_FILE}.tmp.$$"
     jq --argjson now "$(now_epoch)" --arg forced "${forced}" \
        '.soakStartedAt = $now
         | .channels = {unstable: "'"$(g rev-parse --short origin/main)"'",
-                       staging: "'"$(g rev-parse --short origin/staging)"'",
+                       staging: "'"$(g rev-parse --short "origin/${STAGING_BRANCH}" 2>/dev/null)"'",
                        production: "'"$(g rev-parse --short "origin/${PROD_BRANCH}" 2>/dev/null)"'"}
         | .lastBoundary = {at: $now, forced: ($forced == "1")}
         | .boundary = null' "${STATE_FILE}" > "${tmp}" && mv -f "${tmp}" "${STATE_FILE}" || rm -f "${tmp}"
@@ -506,6 +601,16 @@ PROD_BRANCH="stable"
 # no configured knowledge that the staging site exists — there is no cross-site
 # registry — so the operator names it or phase 6 is skipped with a note.
 STAGING_HOST=""
+# The staging channel's ref. Overridable with --production-branch so a whole
+# boundary can be rehearsed onto throwaway refs — redirecting only one of the
+# two promotions would still move the real staging channel, which is not a
+# rehearsal at all.
+STAGING_BRANCH="staging"
+# The guest that meets a new pin BEFORE the mothership does (ADR-028 D9). A
+# guest that fails is snapshot-rolled back by update-module.sh; the control
+# plane stays able to investigate. Default: any module that dependsOn
+# templates:nixos — the reliable signal, since most guests declare no `os`.
+GUEST=""
 _args=()
 for a in "$@"; do
     case "${a}" in
@@ -514,13 +619,17 @@ for a in "$@"; do
         --resume)         RESUME=1 ;;
         --force-boundary) FORCE_BOUNDARY=1 ;;
         --production-branch=*) PROD_BRANCH="${a#*=}" ;;
+        --staging-branch=*)    STAGING_BRANCH="${a#*=}" ;;
         --staging-host=*)      STAGING_HOST="${a#*=}" ;;
-        --production-branch|--staging-host) _want="${a}" ;;
+        --guest=*)             GUEST="${a#*=}" ;;
+        --production-branch|--staging-branch|--staging-host|--guest) _want="${a}" ;;
         *)
             if [[ -n "${_want:-}" ]]; then
                 case "${_want}" in
                     --production-branch) PROD_BRANCH="${a}" ;;
+                    --staging-branch)    STAGING_BRANCH="${a}" ;;
                     --staging-host)      STAGING_HOST="${a}" ;;
+                    --guest)             GUEST="${a}" ;;
                 esac
                 _want=""
             else
