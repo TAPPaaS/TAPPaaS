@@ -150,14 +150,20 @@ A blocked train is a normal state, not an incident: it means staging did its job
 
 ```json
 {
-  "lastBoundary": "2026-09-23",
-  "pin": { "from": "b77b3de8…", "to": "…", "movedAt": "2026-09-23T09:12:00Z" },
-  "channels": { "unstable": "…", "staging": "…", "production": "…" },
-  "phasesPassed": ["preflight", "pin", "test-here", "main", "stable", "staging"],
-  "soakEnds": "2026-10-07",
+  "soakStartedAt": 1790178802,
+  "channels": { "unstable": "ede8f4c8", "staging": "4c9c846a", "production": "d796e254" },
+  "pin": "1bc55b9def8165e82073919945c3239903fe4dc2",
+  "lastBoundary": { "at": 1790178802, "forced": false },
   "fault": null
 }
 ```
+
+`soakStartedAt` is an epoch, and it restarts from the **promotion**, not from when someone
+remembered to run `init` — "has staging soaked?" must not be answerable by waiting to ask. While a
+boundary is in flight a `boundary` object is also present, carrying the pin branch, the revisions
+it moved between, and `phasesDone`; that is what `--resume` reads, and it is cleared when the
+boundary completes. `forced` records a `--force-boundary`, because a soak that was skipped should
+be visible afterwards rather than only in someone's memory.
 
 Backed up with the rest of `config/` (it is small, and losing it means losing the answer to "has
 staging soaked?"). A `fault` object carries what was seen, where, and the commit that resolved it.

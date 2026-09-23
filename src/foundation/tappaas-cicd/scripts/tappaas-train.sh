@@ -586,6 +586,7 @@ cmd_boundary() {
                        staging: "'"$(g rev-parse --short "origin/${STAGING_BRANCH}" 2>/dev/null)"'",
                        production: "'"$(g rev-parse --short "origin/${PROD_BRANCH}" 2>/dev/null)"'"}
         | .lastBoundary = {at: $now, forced: ($forced == "1")}
+        | .pin = "'"$(jq -r '.nodes.nixpkgs.locked.rev // empty' "${PIN_LOCK}" 2>/dev/null)"'"
         | .boundary = null' "${STATE_FILE}" > "${tmp}" && mv -f "${tmp}" "${STATE_FILE}" || rm -f "${tmp}"
 
     echo
