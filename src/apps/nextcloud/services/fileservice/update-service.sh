@@ -250,6 +250,24 @@ if [[ "${CONNECTOR}" == "onlyoffice" ]]; then
                 error "  the Nextcloud module can reach each other (network:rules egress, and"
                 error "  network:proxy proxyAllowedZones on BOTH, since the browser loads the"
                 error "  editor from the document server's own URL)."
+                # Capture both sides' own record NOW. This failure has been
+                # transient — it appeared mid-sweep, persisted for minutes and
+                # cleared with nothing changed — and the evidence went with the
+                # next container restart, which recreates the document server's
+                # logs. Neither side's reboot alone reproduces it (measured
+                # 2026-09-23: document server back in 35s, Nextcloud in 18s,
+                # neither producing this error), so the sweep that sees it is
+                # the only place its cause can be read.
+                error "  --- document server (${EO_HOST}), recent converter/docservice errors:"
+                ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR \
+                    "tappaas@${EO_HOST}" \
+                    "sudo podman exec euro-office sh -c 'tail -n 400 /var/log/euro-office/documentserver/converter/out.log /var/log/euro-office/documentserver/docservice/out.log 2>/dev/null | grep -iE \"error|download|ECONN|ETIMEDOUT|EAI_AGAIN|certificate|status\" | grep -v Sharp | tail -n 8'" \
+                    2>/dev/null | cut -c1-240 | while IFS= read -r _l; do error "    ${_l}"; done || true
+                error "  --- Nextcloud (${NC_HOST}), recent onlyoffice log entries:"
+                ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR \
+                    "tappaas@${NC_HOST}" \
+                    "sudo tail -n 400 /var/lib/nextcloud/data/nextcloud.log 2>/dev/null | grep -iE 'onlyoffice|eurooffice' | tail -n 5" \
+                    2>/dev/null | cut -c1-240 | while IFS= read -r _l; do error "    ${_l}"; done || true
                 exit 1
             fi
         else
