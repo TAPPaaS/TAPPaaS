@@ -38,15 +38,5 @@
       "connector": "hpb"
     }
   },
-  "appVersion": "2.1.1",
-  "egress": [
-    {
-      "to": "dmz",
-      "ports": [
-        443
-      ],
-      "protocol": "TCP",
-      "description": "HPB -> Nextcloud PUBLIC URL, which split-horizon DNS resolves to the Caddy proxy in dmz (backend validation + room notifications). Redundant when the HPB shares Nextcloud's zone and that zone already reaches dmz."
-    }
-  ]
+  "appVersion": "2.1.1"
 }

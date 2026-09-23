@@ -22,16 +22,6 @@
   "provides": [
     "fileservice"
   ],
-  "egress": [
-    {
-      "to": "dmz",
-      "ports": [
-        443
-      ],
-      "protocol": "TCP",
-      "description": "Nextcloud -> the HPB's PUBLIC URL, which split-horizon DNS resolves to the Caddy proxy in dmz (Talk signaling check + backend notify). Redundant when Nextcloud's zone already reaches dmz."
-    }
-  ],
   "appVersion": "33",
   "config": {
     "cluster:vm": {

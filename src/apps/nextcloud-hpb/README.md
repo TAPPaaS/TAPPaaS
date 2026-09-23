@@ -45,7 +45,7 @@ mesh (each client uploads N−1 streams), which caps a video call at roughly 5-6
 | `templates:nixos` | NixOS base image; ships the `.nix` + companion JSON and rebuilds with the platform pin |
 | `backup:vm` | VM registered with Proxmox Backup Server |
 | `network:proxy` | `wss://` reverse proxy via Caddy |
-| `network:rules` | Firewall pass rules (egress to the Caddy proxy in `dmz`) |
+| `network:rules` | Firewall pass rules |
 | `nextcloud:fileservice` | The Nextcloud whose Talk uses this backend; stamps `nextcloudPublicUrl`, wires the `hpb` connector |
 | `coturn:turn` | TURN relay: shared secret via the management plane, `turnHost` stamped into this module's config |
 

@@ -53,11 +53,11 @@ of out-of-band rebuild that let another module's data ratchet past its pin; it i
 
 ## Zone placement
 
-The HPB belongs in the Nextcloud zone. Two reasons: the HPB → Nextcloud path rides that
-zone's existing edge to the `dmz` proxy (the declared `egress to dmz:443` is then redundant),
-and the site's default service zone is not proven to carry guests on every node — the first
-deployment landed there with no IPv4 and failed three weeks of sweeps as "ssh errors".
-`install.sh` now fails fast, naming the zone and VLAN, when the VM does not resolve.
+The pre-install hook places the HPB in the zone of the Nextcloud it serves, unless the
+operator names one. Reaching the reverse proxy needs no egress either way — ADR-021's
+caddy-reach rule grants every zone the DMZ gateway on 443 — so co-location is about
+predictable placement rather than reachability. `install.sh` fails fast, naming the zone
+and VLAN, when the VM does not resolve.
 
 ## Secret planes
 

@@ -44,7 +44,7 @@ PowerPoint files in the browser, powered by
 | `templates:nixos` | NixOS base image |
 | `backup:vm` | Daily document backups (PBS) |
 | `network:proxy` | HTTPS reverse proxy for the public editor endpoint |
-| `network:rules` | Firewall pass rules, incl. the callback egress to Nextcloud (443) |
+| `network:rules` | Firewall pass rules |
 | `nextcloud:fileservice` | The Nextcloud instance served (connector `onlyoffice`) |
 
 For installation steps see [INSTALL.md](./INSTALL.md).
