@@ -34,6 +34,11 @@ BIN="${TMP}/bin"; mkdir -p "${BIN}"
 
 # A control plane that works: every manager answers --help, the catalogue lists,
 # systemctl reports whatever we put in FAILED_UNITS.
+# The system PATH as this machine really has it, minus the stub directory: on
+# NixOS /bin and /usr/bin hold `env` and no shell, so a fabricated
+# "/usr/bin:/bin" cannot start bash and every check fails for the wrong reason.
+SYS_PATH="$(printf '%s' "${PATH}" | tr ':' '\n' | grep -v "^${BIN}$" | paste -sd: -)"
+
 make_stubs() {
     local mgr_rc="${1:-0}" list_rc="${2:-0}"
     for mgr in module-manager site-manager network-manager backup-manager \
@@ -50,7 +55,7 @@ EOF
 #!/usr/bin/env bash
 # \`show update-tappaas.service -p Environment --value\`: the unit's PATH, which
 # holds the managers; \`--failed --no-legend --plain\`: FAILED_UNITS.
-if [[ "\$1" == "show" ]]; then echo "LOCALE_ARCHIVE=/x PATH=${BIN}:/usr/bin:/bin TZDIR=/y"; exit 0; fi
+if [[ "\$1" == "show" ]]; then echo "LOCALE_ARCHIVE=/x PATH=${BIN}:${SYS_PATH} TZDIR=/y"; exit 0; fi
 printf '%s\n' \${FAILED_UNITS:-}
 EOF
     chmod +x "${BIN}/systemctl"
@@ -59,11 +64,11 @@ EOF
     # site: the child starts from ROOT's system-only PATH (no ~tappaas/bin),
     # and argv is executed directly — no shell, so a builtin or a function
     # passed through it does not exist.
-    cat > "${BIN}/runuser" <<'EOF'
+    cat > "${BIN}/runuser" <<EOF
 #!/usr/bin/env bash
-shift 2; [[ "$1" == "--" ]] && shift
-export PATH=/usr/bin:/bin
-exec "$@"
+shift 2; [[ "\$1" == "--" ]] && shift
+export PATH=${SYS_PATH}
+exec "\$@"
 EOF
     chmod +x "${BIN}/runuser"
 }
