@@ -125,19 +125,19 @@ MODEL_CHECK=$(ssh "${SSH_OPTS[@]}" "tappaas@${LITELLM_HOST}" 'bash -s' <<EOSH
 MASTER="${MASTER}"
 curl -sf "http://localhost:4000/model/info" \
     -H "Authorization: Bearer \${MASTER}" 2>/dev/null \
-| jq '[.data[] | {name: .model_name, id: .model_info.id, has_key: (.litellm_params.api_key != null)}]' \
+| jq '[.data[] | {name: .model_name, id: .model_info.id, has_key: ((.litellm_params.api_key != null) or (.litellm_params.litellm_credential_name != null))}]' \
 2>/dev/null || echo "[]"
 EOSH
 ) || MODEL_CHECK="[]"
 
 NO_KEY_COUNT=$(echo "${MODEL_CHECK}" | jq '[.[] | select(.has_key == false)] | length' 2>/dev/null || echo "0")
 if [[ "${NO_KEY_COUNT}" -gt 0 ]]; then
-    warn "${NO_KEY_COUNT} DB model(s) have no explicit api_key — will 401 after key rotation:"
+    warn "${NO_KEY_COUNT} DB model(s) carry neither an api_key nor a named credential — will 401 after key rotation:"
     echo "${MODEL_CHECK}" | jq -r '.[] | select(.has_key == false) | "  - \(.name) (id: \(.id))"' \
         | while IFS= read -r _m; do warn "${_m}"; done || true
-    warn "Run scripts/rotate-provider-key.sh to fix (Step 3 of rotation SOP)"
+    warn "Wire each one to a credential: scripts/litellm-credentials.sh assign-model --model <model> --credential <name>"
 else
-    debug "  ${GN}✓${CL} all DB models have explicit api_key"
+    debug "  ${GN}✓${CL} every DB model resolves a key (api_key or named credential)"
 fi
 
 debug "  ${GN}✓${CL} update-service complete for ${CONSUMING_MODULE}"

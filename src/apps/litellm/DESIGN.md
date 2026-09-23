@@ -65,10 +65,13 @@ synthesise a cross-zone ingress pinhole for consumers in other zones.
 
 ## Provider key rotation
 
-`scripts/rotate-provider-key.sh` orchestrates the 3-step rotation SOP for a
+`scripts/rotate-provider-key.sh` orchestrates the 2-step rotation SOP for a
 provider key stored in `/etc/secrets/litellm.env` (e.g. `OPENROUTER_API_KEY`):
-update the env file and restart, PATCH the DB credential, then verify all
-DB-stored models carry an explicit `api_key`. See the script header for usage.
+update the env file and restart, then rotate the matching DB credential. Every
+model referencing that credential by name picks up the new value — no per-model
+action is needed. The former third step, which rewrote each model with the key
+embedded, was removed on 2026-07-02 once models referenced named credentials
+(`scripts/litellm-credentials.sh assign-model`). See the script header for usage.
 
 ## Backup and restore
 
