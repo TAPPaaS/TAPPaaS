@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # TAPPaaS Nextcloud Verification Test Script
 #
-# Runs all 10 verification tests for Nextcloud installation.
+# Runs all 15 verification tests for Nextcloud installation.
 # Must be run from tappaas-cicd as the tappaas user.
 #
 # Usage: ./test.sh
@@ -127,7 +127,7 @@ fi
 if [ "$CONNECTED" = "false" ]; then
     log ""
     log "${YW}[WARN]${CL} VM unreachable — skipping all remaining tests."
-    for i in 2 3 4 5 6 7 8 9 10 11; do
+    for i in $(seq 2 15); do
         skip "Test $i skipped (no connectivity)"
     done
     header "Test Summary"
@@ -395,12 +395,22 @@ fi
 # The public name, from the platform's one derivation (#715). Run in a subshell:
 # sourcing the shared routines here would replace this script's own
 # info/warn/error. `set --` first, or the lib would load <vmname>.json as $JSON.
+# The lib from this test's own checkout first, so the two are the same commit:
+# an installed /home/tappaas/bin copy can predate module_public_domain, and a
+# 127 here under set -e ended the suite silently mid-run. Never fails; empty
+# output means unpublished, or that no lib could answer.
 public_domain_of() {  # <vmname> <environment> <module-json-file>
-    local lib=/home/tappaas/bin/common-install-routines.sh
-    [[ -r "${lib}" ]] || lib="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../../foundation/tappaas-cicd/lib/common-install-routines.sh"
-    bash -c 'v="$1" e="$2" f="$3" lib="$4"; set --
-             . "${lib}" >/dev/null 2>&1 || exit 0
-             module_public_domain "$v" "$e" "$(cat "$f" 2>/dev/null)"' _ "$1" "$2" "$3" "${lib}" 2>/dev/null
+    local lib here
+    here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    for lib in "${here}/../../foundation/tappaas-cicd/lib/common-install-routines.sh" \
+               /home/tappaas/bin/common-install-routines.sh; do
+        [[ -r "${lib}" ]] || continue
+        bash -c 'v="$1" e="$2" f="$3" lib="$4"; set --
+                 . "${lib}" >/dev/null 2>&1 || exit 1
+                 declare -F module_public_domain >/dev/null || exit 1
+                 module_public_domain "$v" "$e" "$(cat "$f" 2>/dev/null)"' _ "$1" "$2" "$3" "${lib}" 2>/dev/null && return 0
+    done
+    return 0
 }
 
 # ============================================================================
@@ -467,18 +477,78 @@ if [ -z "${TD_EXPECT}" ]; then
 elif [ "${TD_READABLE}" != "ok" ]; then
     fail "Could not read ${TD_CONF} — cannot verify trusted_domains"
 elif [ -z "${TD_BLOCK}" ]; then
-    # WARN, not fail: update.sh converges trusted_domains (indices 1 and 2) on
-    # every run, but test.sh is also the PRE-update gate — a hard fail aborts
-    # the update before it reaches its own remedy, so a recoverable drift
-    # becomes a permanent outage of the public route (#508). The post-update
-    # run passes once update.sh has written them.
-    warn "trusted_domains is absent entirely — every public Host, including '${TD_EXPECT}', currently gets HTTP 400; nextcloud update.sh reconciles this"
+    # FAIL, not warn (#715). It warned so the PRE-update gate would not abort the
+    # update that fixes it (#508) — but since #635 the gate only aborts on exit
+    # 2, and a warning let the suite report zero failures while the public route
+    # answered HTTP 400. The update still runs; this failure is its baseline.
+    fail "trusted_domains is absent entirely — every public Host, including '${TD_EXPECT}', gets HTTP 400"
 elif printf '%s' "${TD_BLOCK}" | grep -qF "'${TD_EXPECT}'"; then
     pass "Public domain ${TD_EXPECT} is present in trusted_domains"
 else
-    # Same reconciled-by-update.sh rationale as the branch above (#508).
-    warn "Public domain '${TD_EXPECT}' is not yet in trusted_domains — nextcloud update.sh reconciles this"
+    fail "Public domain '${TD_EXPECT}' is not in trusted_domains — the public route gets HTTP 400"
     log "  trusted_domains currently: $(printf '%s' "${TD_BLOCK}" | tr -d '\n' | sed 's/  */ /g')"
+fi
+
+# ============================================================================
+# Test 14: Code and Database at the Same Version
+# Test 15: Every Declared App Enabled, at the Version Shipped
+# ============================================================================
+# A partial upgrade passed every test above (#715): Nextcloud treats its
+# version as one-way in the database, so new code over an un-upgraded database
+# (or an app the upgrade disabled) serves pages, holds a DB, and keeps its
+# timers, while the instance is in maintenance or an app is gone. These read
+# the truth on both sides: version.php of the package the override config
+# points at, config.php's version, and oc_appconfig for each app in nix-apps —
+# the apps nextcloud.nix declares. occ is not used: without a TTY its output
+# is lost (#714).
+header "Test 14: Code and Database at the Same Version"
+
+VERSION_PROBE=$($SSH_CMD "bash -s" 2>/dev/null <<'PROBE' || true
+PKG=$(sudo grep -o "'path' => '/nix/store/[^']*/nix-apps'" /var/lib/nextcloud/config/override.config.php 2>/dev/null | head -1 | sed "s#^'path' => '##; s#/nix-apps'\$##")
+echo "PKG|${PKG}"
+[ -n "${PKG}" ] || exit 0
+echo "CODE|$(sed -n 's/^\$OC_Version = array(\([0-9,]*\));.*/\1/p' "${PKG}/version.php" | tr ',' '.')"
+echo "DB|$(sudo grep -o "'version' => '[^']*'" /var/lib/nextcloud/config/config.php | head -1 | sed "s/.*=> '//; s/'\$//")"
+CFG=$(sudo -u postgres psql -d nextcloud -tAc "SELECT appid||'|'||configkey||'|'||configvalue FROM oc_appconfig WHERE configkey IN ('enabled','installed_version')")
+for d in "${PKG}"/nix-apps/*/; do
+  a=$(basename "${d}")
+  v=$(sed -n 's:.*<version>\([^<]*\)</version>.*:\1:p' "${d}appinfo/info.xml" 2>/dev/null | head -1)
+  e=$(printf '%s\n' "${CFG}" | awk -F'|' -v a="${a}" '$1==a && $2=="enabled"{print $3}')
+  i=$(printf '%s\n' "${CFG}" | awk -F'|' -v a="${a}" '$1==a && $2=="installed_version"{print $3}')
+  echo "APP|${a}|${v}|${e}|${i}"
+done
+PROBE
+)
+
+NC_CODE_VERSION=$(printf '%s\n' "${VERSION_PROBE}" | sed -n 's/^CODE|//p')
+NC_DB_VERSION=$(printf '%s\n' "${VERSION_PROBE}" | sed -n 's/^DB|//p')
+if [ -z "$(printf '%s\n' "${VERSION_PROBE}" | sed -n 's/^PKG|//p')" ]; then
+    fail "Could not find the deployed Nextcloud package (no nix-apps path in override.config.php)"
+elif [ -z "${NC_CODE_VERSION}" ] || [ -z "${NC_DB_VERSION}" ]; then
+    fail "Could not read both versions (code '${NC_CODE_VERSION}', database '${NC_DB_VERSION}')"
+elif [ "${NC_CODE_VERSION}" = "${NC_DB_VERSION}" ]; then
+    pass "Code and database both at ${NC_CODE_VERSION}"
+else
+    fail "Code is ${NC_CODE_VERSION} but the database is at ${NC_DB_VERSION} — the upgrade did not complete (nextcloud-setup / occ upgrade)"
+fi
+
+header "Test 15: Declared Apps Enabled, at the Version Shipped"
+
+APP_LINES=$(printf '%s\n' "${VERSION_PROBE}" | grep '^APP|' || true)
+if [ -z "${APP_LINES}" ]; then
+    fail "No declared apps found in the package's nix-apps — cannot verify apps"
+else
+    APPS_OK=0
+    while IFS='|' read -r _ app shipped enabled installed; do
+        if [ "${enabled}" != "yes" ]; then
+            fail "App ${app} is declared but not enabled (enabled='${enabled}')"
+        elif [ "${installed}" != "${shipped}" ]; then
+            fail "App ${app} ships ${shipped} but the database records ${installed:-nothing} — its upgrade did not run"
+        else
+            APPS_OK=$((APPS_OK + 1))
+        fi
+    done <<< "${APP_LINES}"
+    [ "${APPS_OK}" -gt 0 ] && pass "${APPS_OK} of $(wc -l <<< "${APP_LINES}" | tr -d ' ') declared apps enabled at their shipped version"
 fi
 
 # ============================================================================

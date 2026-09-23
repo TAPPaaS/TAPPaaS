@@ -25,12 +25,22 @@ SSH_CMD="ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o BatchMode=yes t
 # The public name, from the platform's one derivation (#715). Run in a subshell:
 # sourcing the shared routines here would replace this script's own
 # info/warn/error. `set --` first, or the lib would load <vmname>.json as $JSON.
+# The lib from this test's own checkout first, so the two are the same commit:
+# an installed /home/tappaas/bin copy can predate module_public_domain, and a
+# 127 here under set -e ended the suite silently mid-run. Never fails; empty
+# output means unpublished, or that no lib could answer.
 public_domain_of() {  # <vmname> <environment> <module-json-file>
-    local lib=/home/tappaas/bin/common-install-routines.sh
-    [[ -r "${lib}" ]] || lib="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../../foundation/tappaas-cicd/lib/common-install-routines.sh"
-    bash -c 'v="$1" e="$2" f="$3" lib="$4"; set --
-             . "${lib}" >/dev/null 2>&1 || exit 0
-             module_public_domain "$v" "$e" "$(cat "$f" 2>/dev/null)"' _ "$1" "$2" "$3" "${lib}" 2>/dev/null
+    local lib here
+    here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    for lib in "${here}/../../foundation/tappaas-cicd/lib/common-install-routines.sh" \
+               /home/tappaas/bin/common-install-routines.sh; do
+        [[ -r "${lib}" ]] || continue
+        bash -c 'v="$1" e="$2" f="$3" lib="$4"; set --
+                 . "${lib}" >/dev/null 2>&1 || exit 1
+                 declare -F module_public_domain >/dev/null || exit 1
+                 module_public_domain "$v" "$e" "$(cat "$f" 2>/dev/null)"' _ "$1" "$2" "$3" "${lib}" 2>/dev/null && return 0
+    done
+    return 0
 }
 HPB_PROXY_DOMAIN="$(public_domain_of "$(jq -r '.vmname' "${EFF_JSON}")" "${ENVIRONMENT:-}" "${EFF_JSON}")"
 TIMESTAMP=$(date '+%Y-%m-%d_%H%M%S')
@@ -203,7 +213,11 @@ if [ "$NC_REACHABLE" = "false" ]; then
 else
     SIG_CONF=$($NC_SSH "sudo nextcloud-occ \
         config:app:get spreed signaling_servers 2>/dev/null" || true)
-    if echo "${SIG_CONF}" | grep -q "${HPB_PROXY_DOMAIN}"; then
+    # An empty domain made this `grep -q ""`, which matches anything: the suite
+    # passed with no signaling server registered at all (#715).
+    if [ -z "${HPB_PROXY_DOMAIN}" ]; then
+        fail "No public name for ${MODULE} (not published through network:proxy?) — cannot verify the Talk signaling registration"
+    elif printf '%s' "${SIG_CONF}" | grep -qF "${HPB_PROXY_DOMAIN}"; then
         pass "Nextcloud Talk signaling_servers contains ${HPB_PROXY_DOMAIN}"
     else
         fail "Nextcloud Talk signaling_servers does not reference the HPB (${HPB_PROXY_DOMAIN}) — install.sh may not have run"
