@@ -7,7 +7,9 @@
 #
 # Tests:
 #   1. Nextcloud HTTP endpoint responds
-#   2. OnlyOffice connector configured with a DocumentServerUrl
+#   2. OnlyOffice connector (when this consumer's euro-office is deployed):
+#      DocumentServerUrl set, the document server healthy as seen from
+#      Nextcloud, and no stored settings_error
 #
 # Usage: test-service.sh <module-name>
 #
@@ -74,10 +76,12 @@ fi
 # ── Test 2: OnlyOffice connector (conditional — only if euro-office is installed) ──
 
 info "  Check 2: OnlyOffice connector (if euro-office installed)"
+# The euro-office this consumer pairs with, resolved like the Nextcloud above
+# (#715). A glob over euro-office*.json said "installed" for a consumer in one
+# environment because another environment had one.
+EO_JSON="${CONFIG_DIR}/$(resolve_provider_module euro-office "${CONSUMER_ENV}").json"
 EURO_INSTALLED=false
-for _eo in "${CONFIG_DIR}/euro-office.json" "${CONFIG_DIR}"/euro-office-*.json; do
-    [[ -f "${_eo}" ]] && EURO_INSTALLED=true && break
-done
+[[ -f "${EO_JSON}" ]] && EURO_INSTALLED=true
 
 if [[ "${EURO_INSTALLED}" == "true" ]]; then
     DOC_URL=$(ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=no \
@@ -105,6 +109,22 @@ if [[ "${EURO_INSTALLED}" == "true" ]]; then
         "sudo -u postgres psql -d nextcloud -tAc \
         \"SELECT configvalue FROM oc_appconfig WHERE appid='onlyoffice' AND configkey='settings_error'\" \
         2>/dev/null" 2>/dev/null | tr -d '[:space:]') || OO_ERR=""
+    # The stored row is the verdict of the last check that ran; it cannot say
+    # whether the document server answers NOW. update-service.sh gates its own
+    # check on this same probe — /healthcheck, from the Nextcloud side, the path
+    # the round trip takes — so the read-only verifier asks it too (#715:
+    # "the three-outcome logic only exists in update-service.sh"). Read-only:
+    # a GET, nothing written.
+    EO_HOST="$(jq -r '.vmname' "${EO_JSON}").$(jq -r '.zone0' "${EO_JSON}").internal"
+    OO_HEALTH=$(ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=no \
+        "tappaas@${VMNAME}.${ZONE}.internal" "curl -s -m 5 http://${EO_HOST}/healthcheck" \
+        2>/dev/null | tr -d '[:space:]') || OO_HEALTH=""
+    if [[ "${OO_HEALTH}" == "true" ]]; then
+        pass "Document server ${EO_HOST} answers its healthcheck from Nextcloud"
+    else
+        fail "Document server ${EO_HOST} does not answer its healthcheck from Nextcloud (got '${OO_HEALTH:-nothing}') — the editor cannot open documents"
+    fi
+
     if [[ -z "${OO_ERR}" ]]; then
         pass "OnlyOffice connector reports no settings_error (editor available)"
     else

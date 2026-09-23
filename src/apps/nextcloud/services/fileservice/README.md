@@ -38,8 +38,11 @@ Two consequences worth knowing before reading a red test:
 
 - **`test-service.sh` reads that value, it does not re-probe.** A read-only
   verifier must not mutate, and `onlyoffice:documentserver --check` rewrites
-  app config. So a failing test means "the last completed check failed", not
-  necessarily "it is broken now".
+  app config. So a failing `settings_error` test means "the last completed check
+  failed", not necessarily "it is broken now". What it can ask without writing,
+  it does: the document server's `/healthcheck`, from the Nextcloud VM — the
+  probe update-service.sh gates its own check on — so a server that is down now
+  fails the test even while the stored row is still clean (#715).
 - **Its verdict needs a TTY (#714, #715).** The NixOS `nextcloud-occ` wrapper
   execs `systemd-run --pty --wait`. Over a non-interactive ssh the command
   *runs* — writes take effect, and `--check` does rewrite `settings_error` — but
