@@ -462,31 +462,45 @@ fi
 # Only loopback is trusted automatically (Nextcloud admin manual, Trusted
 # Domains), so a proxyDomain must be written explicitly and must survive a
 # converge, not only a first install.
+#
+# Verified live rather than reasoned: with the list as occ reports it, the public
+# Host answers 200 and an unknown Host answers 400 — enforcement is real, and
+# this check is what stands between a converge and a public route that 400s.
 header "Test 13: Public Domain Is Trusted (trusted_domains)"
 
 TD_EXPECT="$(public_domain_of "${VMNAME}" "$(jq -r '.environment // ""' "${MODULE_JSON}" 2>/dev/null)" "${MODULE_JSON}")"
 
-TD_CONF="/var/lib/nextcloud/config/config.php"
-TD_OVERRIDE="/var/lib/nextcloud/config/override.config.php"
-TD_READABLE=$(remote "sudo -u nextcloud test -r ${TD_CONF} && echo ok" || echo "")
-# Search BOTH the mutable config and the Nix-managed override: either may carry the key.
-TD_BLOCK=$(remote "sudo -u nextcloud sed -n \"/'trusted_domains'/,/^[[:space:]]*)/p\" ${TD_CONF} ${TD_OVERRIDE} 2>/dev/null" || echo "")
+# ASK NEXTCLOUD, do not grep its files. The key is not reliably in either PHP
+# file: the NixOS module keeps `services.nextcloud.settings` in a JSON sidecar
+# that override.config.php loads with nix_decode_json_file(), so a grep of
+# config.php and override.config.php finds nothing while the value is set and
+# enforced (observed on the test site 2026-09-24: both files free of the string,
+# `occ` returning all three domains, the public Host answering 200 and an
+# unknown Host 400). `occ config:system:get` is the one answer that survives
+# upstream moving the storage again.
+#
+# occ prints warnings of its own (e.g. a Postgres collation-version mismatch
+# after a release move, #726) — those are not the value, so they are dropped.
+TD_RAW=$(remote "sudo nextcloud-occ config:system:get trusted_domains 2>/dev/null" || echo "")
+TD_LIST=$(printf '%s\n' "${TD_RAW}" | grep -vE '^(WARNING|DETAIL|HINT|NOTICE)' | sed '/^[[:space:]]*$/d')
+# "reachable" separates "Nextcloud says the list is empty" from "we could not ask".
+TD_OCC_OK=$(remote "sudo nextcloud-occ status --output=json 2>/dev/null | head -c 1" || echo "")
 
 if [ -z "${TD_EXPECT}" ]; then
     skip "No proxyDomain declared or derivable for ${MODULE} — no public route to verify"
-elif [ "${TD_READABLE}" != "ok" ]; then
-    fail "Could not read ${TD_CONF} — cannot verify trusted_domains"
-elif [ -z "${TD_BLOCK}" ]; then
+elif [ "${TD_OCC_OK}" != "{" ]; then
+    fail "Could not ask occ for trusted_domains — cannot verify the public route"
+elif [ -z "${TD_LIST}" ]; then
     # FAIL, not warn (#715). It warned so the PRE-update gate would not abort the
     # update that fixes it (#508) — but since #635 the gate only aborts on exit
     # 2, and a warning let the suite report zero failures while the public route
     # answered HTTP 400. The update still runs; this failure is its baseline.
-    fail "trusted_domains is absent entirely — every public Host, including '${TD_EXPECT}', gets HTTP 400"
-elif printf '%s' "${TD_BLOCK}" | grep -qF "'${TD_EXPECT}'"; then
+    fail "trusted_domains is empty — Nextcloud answers HTTP 400 for every Host but loopback"
+elif printf '%s\n' "${TD_LIST}" | grep -qxF "${TD_EXPECT}"; then
     pass "Public domain ${TD_EXPECT} is present in trusted_domains"
 else
     fail "Public domain '${TD_EXPECT}' is not in trusted_domains — the public route gets HTTP 400"
-    log "  trusted_domains currently: $(printf '%s' "${TD_BLOCK}" | tr -d '\n' | sed 's/  */ /g')"
+    log "  trusted_domains currently: $(printf '%s' "${TD_LIST}" | tr '\n' ' ')"
 fi
 
 # ============================================================================

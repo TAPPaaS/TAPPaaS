@@ -16,6 +16,7 @@
 #                                              throwaway refs to rehearse a whole boundary
 #                 [--guest <module>]           the guest that meets the new pin first
 #                 [--to <nixos-XX.YY>]         a VERSION move: change the release branch itself
+#                 [--allow-no-pin-change]      prove the pin already in the tree, without moving it
 #   tappaas-train fault <what>             record a staging fault; blocks the next promotion
 #   tappaas-train fault --resolved <commit>  clear it — the commit must be on main
 #
@@ -446,9 +447,23 @@ do_phase_branch() {
         # A frozen branch, or one already current. Not an error — but an empty
         # commit would make the record claim a move that did not happen.
         warn "  the pin did not move (${before:0:12}) — the branch is likely frozen or already current"
-        info "  a frozen branch cannot refresh. Move the release instead: --to <nixos-XX.YY>"
-        abandon_phase_branch "${br}"
-        return 1
+        if [[ "${ALLOW_NO_PIN_CHANGE}" != "1" ]]; then
+            info "  a frozen branch cannot refresh. Move the release instead: --to <nixos-XX.YY>"
+            info "  or prove what is already pinned: --allow-no-pin-change"
+            abandon_phase_branch "${br}"
+            return 1
+        fi
+        # The boundary's value here is the PROOF, not the move: the pin was
+        # landed by other means and this run exists to put it through the guest,
+        # the sweep and the deep test. There is nothing to branch, so the site
+        # proves `main` itself and phase 3 becomes a no-op.
+        info "  --allow-no-pin-change: proving what is already pinned, on main"
+        abandon_phase_branch "${br}" || true
+        local tmp0="${STATE_FILE}.tmp.$$"
+        jq --arg p "${before}" \
+           '.boundary = ((.boundary // {}) + {branch: "main", pinFrom: $p, pinTo: $p, noPinChange: true})' \
+           "${STATE_FILE}" > "${tmp0}" && mv -f "${tmp0}" "${STATE_FILE}" || rm -f "${tmp0}"
+        return 0
     fi
     info "  pin ${before:0:12} → ${after:0:12}"
     # One pathspec that matches nothing makes `git add` stage NOTHING, and the
@@ -568,6 +583,12 @@ do_phase_prove() {
 do_phase_main() {
     local br; br="$(jq -r '.boundary.branch // empty' "${STATE_FILE}")"
     [[ -n "${br}" ]] || { error "no branch recorded — re-run without --resume"; return 1; }
+    if [[ "${br}" == "main" ]]; then
+        # --allow-no-pin-change: nothing was branched, so there is nothing to
+        # land. main is already what was proved.
+        info "${BOLD}Phase 3: nothing to land — main is what was proved${CL}"
+        return 0
+    fi
     info "${BOLD}Phase 3: land ${br} on main${CL}"
     [[ "${DRY_RUN}" == "1" ]] && { info "  (dry run) would fast-forward main to ${br} and publish it"; return 0; }
     g checkout -q main || return 1
@@ -763,12 +784,17 @@ GUEST=""
 # that the script never picks a branch on its own, so this is only ever an
 # operator's word.
 TO_BRANCH=""
+# Run a boundary whose value is the PROOF rather than the move: the pin is
+# already where it should be (landed by hand, or a frozen branch) and this run
+# exists to put it through the guest, the sweep and the deep test.
+ALLOW_NO_PIN_CHANGE=0
 _args=()
 for a in "$@"; do
     case "${a}" in
         --no-fetch)       NO_FETCH=1 ;;
         --dry-run)        DRY_RUN=1 ;;
         --resume)         RESUME=1 ;;
+        --allow-no-pin-change) ALLOW_NO_PIN_CHANGE=1 ;;
         --force-boundary) FORCE_BOUNDARY=1 ;;
         --production-branch=*) PROD_BRANCH="${a#*=}" ;;
         --staging-branch=*)    STAGING_BRANCH="${a#*=}" ;;

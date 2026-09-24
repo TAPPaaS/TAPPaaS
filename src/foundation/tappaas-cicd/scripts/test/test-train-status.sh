@@ -542,5 +542,34 @@ FAKE_NOW=$(( 1790000000 + 20*86400 )) run_prove boundary --resume --to nixos-26.
 git -C "${TMP}/w" rev-parse --verify --quiet origin/rehearse-staging >/dev/null \
     && bad "a failed proof still promoted" || ok "and promoted nothing"
 
+echo "── --allow-no-pin-change: prove what is already pinned ──"
+# After a pin is landed by other means — or on a frozen branch — a boundary's
+# value is the PROOF, not the move. Without this the run dies at phase 1 and
+# the guest, the sweep and the deep test never happen.
+setup_prove
+FAKE_NOW=$(( 1790000000 + 20*86400 )) run_prove boundary --resume --allow-no-pin-change \
+    --staging-branch rehearse-staging --production-branch rehearse-prod
+[[ "${RC}" -eq 0 ]] && ok "a boundary runs with an unmoved pin when allowed" \
+    || bad "--allow-no-pin-change did not run: ${OUT}"
+[[ "${OUT}" == *"proving what is already pinned"* ]] && ok "…and says that is what it is doing" \
+    || bad "the run does not say the pin was not moved"
+[[ "${OUT}" == *"nothing to land"* ]] && ok "…and phase 3 lands nothing" \
+    || bad "phase 3 tried to land a branch that was never made"
+# The lie this must not tell: a pin commit for a move that did not happen.
+[[ "$(git -C "${TMP}/w" log -1 --format=%s)" != chore\(pin\)* ]] \
+    && ok "no pin commit is invented" || bad "an empty pin commit was made"
+[[ "$(jq -r .boundary.noPinChange "${TMP}/cfg/release-train.json" 2>/dev/null)" != "true" ]] \
+    && ok "…and the record is cleared when the boundary completes" \
+    || bad "the boundary record was left behind"
+
+echo "── without the flag an unmoved pin still stops the run ──"
+setup_prove
+FAKE_NOW=$(( 1790000000 + 20*86400 )) run_prove boundary --resume \
+    --staging-branch rehearse-staging --production-branch rehearse-prod
+[[ "${RC}" -ne 0 ]] && ok "silence does not authorize a boundary that proves nothing new" \
+    || bad "an unmoved pin was accepted without the flag"
+[[ "${OUT}" == *"--allow-no-pin-change"* ]] && ok "…and the refusal names the flag that would allow it" \
+    || bad "the refusal does not mention the flag"
+
 echo "── summary: ${PASS} pass, ${FAIL} fail ──"
 [[ "${FAIL}" -eq 0 ]]
