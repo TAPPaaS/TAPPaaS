@@ -297,9 +297,12 @@ NC_HOST="${VMNAME}.${ZONE}.internal"
 NC_PUBLIC_DOMAIN="$(module_public_domain "$(jq -r '.vmname // empty' "${NEXTCLOUD_JSON}")" "$(jq -r '.environment // empty' "${NEXTCLOUD_JSON}")" "$(cat "${NEXTCLOUD_JSON}")")"
 NEXTCLOUD_PUBLIC_URL="${NC_PUBLIC_DOMAIN:+https://${NC_PUBLIC_DOMAIN}}"
 if [[ "${CONNECTOR}" == "talk" || "${CONNECTOR}" == "hpb" ]] && [[ -n "${NEXTCLOUD_PUBLIC_URL}" && -f "${CONSUMER_JSON}" ]]; then
-    if [[ "$(jq -r '.nextcloudPublicUrl // empty' "${CONSUMER_JSON}")" != "${NEXTCLOUD_PUBLIC_URL}" ]]; then
+    # Into this service's own config block, never also the header: a field set in
+    # both fails the engine's validation as ambiguous.
+    if [[ "$(jq -r '.config["nextcloud:fileservice"].nextcloudPublicUrl // empty' "${CONSUMER_JSON}")" != "${NEXTCLOUD_PUBLIC_URL}" ]] \
+       || jq -e 'has("nextcloudPublicUrl")' "${CONSUMER_JSON}" >/dev/null; then
         _ncpu_tmp="$(mktemp "${CONSUMER_JSON}.XXXXXX")"
-        if jq --arg u "${NEXTCLOUD_PUBLIC_URL}" '.nextcloudPublicUrl = $u' "${CONSUMER_JSON}" > "${_ncpu_tmp}"; then
+        if jq --arg u "${NEXTCLOUD_PUBLIC_URL}" 'del(.nextcloudPublicUrl) | .config["nextcloud:fileservice"].nextcloudPublicUrl = $u' "${CONSUMER_JSON}" > "${_ncpu_tmp}"; then
             mv "${_ncpu_tmp}" "${CONSUMER_JSON}"
             info "  ${GN}✓${CL} nextcloudPublicUrl=${NEXTCLOUD_PUBLIC_URL} recorded in $(basename "${CONSUMER_JSON}")"
         else
