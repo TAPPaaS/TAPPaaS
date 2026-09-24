@@ -320,6 +320,30 @@ resolve_nixos_config() {
 }
 
 # Update NixOS VM
+# release_move_of <vm_ip> <nixpkgs_arg> <remote_nix_path>
+# Echoes "<running> <target>" (e.g. "25.11 26.05") and returns 0 when the system
+# this update would build is a different NixOS RELEASE from the one the guest
+# runs. Returns 1 when it is the same release, or when either side cannot be read
+# — the caller then switches as it always has, and a build error surfaces there.
+#
+# The build is the same derivation nixos-rebuild uses, so it costs nothing extra:
+# the switch or boot that follows is a store hit. Only the numeric release is
+# compared: a guest built from a nixpkgs tarball reports "26.05pre-git", one
+# installed from the flake-built template "26.05.20260922.1bc55b9" — the same
+# release, which must not read as a move (measured on hrossen's logging guest).
+release_move_of() {
+    local ip="$1" nixpkgs_arg="$2" cfg="$3" cur top new
+    cur="$(ssh -o BatchMode=yes "tappaas@${ip}" \
+        "grep -oE '^[0-9]+\\.[0-9]+' /run/current-system/nixos-version" 2>/dev/null)" || return 1
+    top="$(ssh -o BatchMode=yes "tappaas@${ip}" \
+        "sudo nix-build '<nixpkgs/nixos>' -A system ${nixpkgs_arg} -I nixos-config=${cfg} --no-out-link" \
+        2>/dev/null | tail -n 1)" || return 1
+    [[ "${top}" == /nix/store/* ]] || return 1
+    new="$(ssh -o BatchMode=yes "tappaas@${ip}" "grep -oE '^[0-9]+\\.[0-9]+' ${top}/nixos-version" 2>/dev/null)" || return 1
+    [[ -n "${cur}" && -n "${new}" && "${cur}" != "${new}" ]] || return 1
+    printf '%s %s' "${cur}" "${new}"
+}
+
 update_nixos() {
     local vmname="$1"
     local vmid="$2"
@@ -459,8 +483,25 @@ update_nixos() {
     # first activation (services restart while sshd reloads, cloud-init
     # finishing, growPartition). The build itself is idempotent (resumable
     # via the nix store), so re-trying after a settle window recovers.
-    local attempt rebuilt=0 rc
-    for attempt in 1 2 3; do
+    local attempt rebuilt=0 rc staged=0 _move=""
+
+    # A release move is STAGED, not switched (#728) — as the mothership does it
+    # (#725, tappaas-self-rebuild.sh). Across a nixpkgs release `switch` applies
+    # but cannot reload dbus-broker, and exits 4 (hrossen, 2026-09-24: Nextcloud,
+    # 25.11 -> 26.05). The retry below happened to rescue that — attempt 2 found
+    # nothing left to reload — but on another site all three attempts failed and
+    # the guest rolled back. A boot has nothing to reload: `nixos-rebuild boot`
+    # makes the new release the next generation, and the reboot below takes it.
+    info "Building the target system on ${vm_ip}..."
+    if _move="$(release_move_of "${vm_ip}" "${nixpkgs_arg}" "${remote_nix_path}")"; then
+        info "Release move on ${vmname}: ${_move% *} -> ${_move#* } — staging it for the next boot (#728)"
+        ( run_quiet "nixos-rebuild boot on ${vm_ip}" \
+            ssh -o BatchMode=yes "tappaas@${vm_ip}" "sudo nixos-rebuild boot ${nixpkgs_arg} -I nixos-config=${remote_nix_path}" ) \
+            || die "staging the release move on ${vmname} failed — it is still on ${_move% *}"
+        rebuilt=1; staged=1
+    fi
+
+    (( staged )) || for attempt in 1 2 3; do
         rc=0
         # Wrap in a subshell so run_quiet's die() (exit 1) only kills the
         # subshell — set -e in the parent would otherwise terminate before we
@@ -495,7 +536,11 @@ update_nixos() {
         # NixOS generation is already active; the operator reboots the controller
         # under supervision (the cicd is on local storage and can't live-migrate).
         warn "Skipping auto-reboot: ${vmname} is THIS controller VM — rebooting it from its own"
-        warn "  update would kill the updater (incident 2026-06-09). New generation is active."
+        if (( staged )); then
+            warn "  update would kill the updater (incident 2026-06-09). The release move is STAGED, not active."
+        else
+            warn "  update would kill the updater (incident 2026-06-09). New generation is active."
+        fi
         warn "  Reboot under supervision when ready: ssh root@${node}.${MGMT}.internal 'qm reboot ${vmid}'"
     elif automatic_reboot_enabled; then
         info "Rebooting VM to apply configuration..."
@@ -510,7 +555,11 @@ update_nixos() {
             local _holder=""
             declare -F vm_lock_holder >/dev/null 2>&1 && _holder="$(vm_lock_holder "${vmid}" "${node}")"
             if [[ -n "${_holder}" ]]; then
-                warn "Could not reboot ${vmname}: the VM is locked (${_holder}). The new generation IS active;"
+                if (( staged )); then
+                    warn "Could not reboot ${vmname}: the VM is locked (${_holder}). The release move is staged, not active;"
+                else
+                    warn "Could not reboot ${vmname}: the VM is locked (${_holder}). The new generation IS active;"
+                fi
                 warn "  the reboot is still pending — the next update takes it, or: ssh root@${node}.${MGMT}.internal 'qm reboot ${vmid}'"
                 return 0
             fi
@@ -527,7 +576,12 @@ update_nixos() {
             || warn "  post-update tests may run against a still-starting '${vmname}'"
     else
         warn "automaticReboot=false — skipping reboot of VM ${vmid} (${vmname})."
-        warn "  The new NixOS generation is active, but a reboot is needed to apply kernel/bootloader changes."
+        if (( staged )); then
+            warn "  The release move (${_move% *} -> ${_move#* }) is STAGED, not active: ${vmname} keeps running"
+            warn "  ${_move% *} until it reboots. Nothing was switched, so nothing is half-applied."
+        else
+            warn "  The new NixOS generation is active, but a reboot is needed to apply kernel/bootloader changes."
+        fi
         warn "  Reboot manually under supervision: ssh root@${node}.${MGMT}.internal 'qm reboot ${vmid}'"
         # sshd and networking restart during nixos switch activation even without a reboot.
         # Wait for SSH to stabilise before returning so subsequent service updaters can reach the VM.
