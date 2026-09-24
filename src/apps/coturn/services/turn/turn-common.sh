@@ -37,12 +37,17 @@ coturn_turn_host_internal() {
 coturn_stamp_turn_host() {
     local cfg="$1" host="$2" internal="$3" tmp
     [[ -f "${cfg}" ]] || return 0
-    if [[ "$(jq -r '.turnHost // empty' "${cfg}")" == "${host}" \
-       && "$(jq -r '.turnHostInternal // empty' "${cfg}")" == "${internal}" ]]; then
+    # Into this service's own config block, never also the header: a field set in
+    # both fails the engine's validation as ambiguous.
+    if [[ "$(jq -r '.config["coturn:turn"].turnHost // empty' "${cfg}")" == "${host}" \
+       && "$(jq -r '.config["coturn:turn"].turnHostInternal // empty' "${cfg}")" == "${internal}" ]] \
+       && ! jq -e 'has("turnHost") or has("turnHostInternal")' "${cfg}" >/dev/null; then
         return 0
     fi
     tmp="$(mktemp "${cfg}.XXXXXX")"
-    if jq --arg h "${host}" --arg i "${internal}" '.turnHost = $h | .turnHostInternal = $i' "${cfg}" > "${tmp}"; then
+    if jq --arg h "${host}" --arg i "${internal}" \
+        'del(.turnHost, .turnHostInternal) | .config["coturn:turn"].turnHost = $h | .config["coturn:turn"].turnHostInternal = $i' \
+        "${cfg}" > "${tmp}"; then
         mv "${tmp}" "${cfg}"
         info "  ${GN}✓${CL} turnHost=${host} (internal ${internal}) recorded in $(basename "${cfg}")"
     else

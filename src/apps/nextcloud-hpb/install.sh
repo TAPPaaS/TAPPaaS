@@ -109,7 +109,7 @@ else
 fi
 
 # ── Sanity: the facts the .nix was built from ─────────────────────────────────
-_turn_host="$(jq -r '.turnHost // empty' "${EFFECTIVE_JSON}")"
+_turn_host="$(jq -r '.config["coturn:turn"].turnHost // .turnHost // empty' "${EFFECTIVE_JSON}")"
 _nc_url="$(jq -r '.config["nextcloud:fileservice"].nextcloudPublicUrl // .nextcloudPublicUrl // empty' "${EFFECTIVE_JSON}")"
 [[ -n "${_turn_host}" ]] || warn "  turnHost is not stamped in ${EFFECTIVE_JSON} — coturn:turn did not run; the HPB advertises coturn's internal name"
 [[ -n "${_nc_url}"    ]] || warn "  nextcloudPublicUrl is not stamped in ${EFFECTIVE_JSON} — Talk will reject the HPB (invalid_backend); run 'update-module.sh ${EFFECTIVE}'"
