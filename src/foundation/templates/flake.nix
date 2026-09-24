@@ -2,7 +2,7 @@
   description = "TAPPaaS prebuilt NixOS VM template image (config baked in)";
 
   # Pinned to the same NixOS release as system.stateVersion in tappaas-common.nix.
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
 
   outputs = { self, nixpkgs, ... }:
     let
