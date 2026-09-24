@@ -60,14 +60,35 @@ Expected: `installed: true`, HTTP 200/302, PostgreSQL + Redis active, backup tim
 Edit the single `versions` block at the top of `nextcloud.nix`:
 
 ```nix
-ncMajor = 33;   # ← bump to 34 (drives both the package and its app-set)
+ncMajor = 35;   # drives both the package and its app-set
 ```
 
 `ncMajor` resolves `pkgs."nextcloud${ncMajor}"` and `pkgs."nextcloud${ncMajor}Packages".apps`, so the
 package and all bundled apps move together. Also:
 
-1. Bump `appVersion` in `nextcloud.json` to match (e.g. `"34"`).
+1. Bump `appVersion` in `nextcloud.json` to match (e.g. `"36"`).
 2. Ensure the **nixpkgs template rev** (pinned engine-side by `update-os.sh`) carries the new major.
 3. If a newer **eurooffice connector** is required, run `./update-eurooffice-app.sh` (recomputes the
    `rev` + npm/composer hashes in `eurooffice-nextcloud.nix`).
 4. Test on a variant (`install-module.sh nextcloud --variant test --vmid <free>`) before production.
+
+## 33 → 35 (2026-09-24): a clean install, not an upgrade
+
+The Qualiware site went from 33 straight to 35 by reinstalling the module: its data was disposable,
+so no `occ upgrade` ran and 34 was skipped. A site that must keep its data still has to step through
+every major (33 → 34 → 35), because Nextcloud refuses to skip one.
+
+What 35 changed in this module:
+
+- **App-store pins.** nixpkgs' `nextcloud35Packages` was last regenerated before these apps released
+  35 support, so `storeApps` in `nextcloud.nix` fetches them from the app store by hash:
+  `news` 29.0.0-beta.1 (a pre-release), `previewgenerator` 5.15.0, `uppush` 2.6.0. Drop each pin once
+  `nextcloud35Packages.apps` carries it. Keep `unpack = true`: it hashes the unpacked tree, so a
+  re-generated codeberg `/archive` tarball cannot break the hash.
+- **`quota_warning` dropped.** It has no release for 35 yet (1.24.0 declares `<35`). Re-add it to
+  `extraApps` once one exists.
+- **Connector v11.** v10 declared Nextcloud 33 only. v11 declares 33–35, **renames the app ID from
+  `onlyoffice` to `eurooffice`** (occ: `eurooffice:documentserver`, system config key `eurooffice`),
+  and needs `firebase/php-jwt` 7. The settings keys are unchanged. The TAPPaaS connector label
+  `connector: "onlyoffice"` and `/etc/secrets/onlyoffice.env` keep their names.
+

@@ -79,8 +79,8 @@ line, e.g.:
   is the canonical path; named-variant deploys depend on the foundation provider-variant
   resolution (see the `deploy-engine: pass resolved provider variant` upstream issue).
 - Measured install duration: ~9 min on a fresh VM (clean exit-0 deploy 2026-06-11, test variant
-  on srv), dominated by the first-time NixOS rebuild building Nextcloud, the eurooffice connector
-  and `uppush` from source (uncached). A stalled `uppush`/codeberg `/archive` fetch can inflate
-  this substantially (build-time SPOF — see backlog).
+  on srv), dominated by the first-time NixOS rebuild building Nextcloud and the eurooffice connector
+  from source (uncached). `news`, `previewgenerator` and `uppush` are fetched from the app store
+  (see UPGRADE.md), so a stalled store or codeberg download can inflate this.
 - External multi-party Talk calls additionally require a publicly reachable coturn (WAN
   endpoint).

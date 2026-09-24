@@ -41,34 +41,25 @@ let
   # so a major bump is one number. Majors must be sequential — Nextcloud refuses to skip
   # (33 → 34 → 35). The eurooffice connector pin lives in eurooffice-nextcloud.nix; the
   # nixpkgs template rev is pinned engine-side (update-os.sh). See UPGRADE.md.
-  ncMajor = 33;
-  # Codeberg re-generated its `archive/<tag>.tar.gz` tarballs, changing the
-  # container bytes (gzip/git version) while the tagged CONTENT is unchanged.
-  # Every nixpkgs pin that fetches such an archive by FILE hash therefore fails
-  # with a fixed-output hash mismatch — including uppush 2.4.0 pinned here, and
-  # (verified) nixpkgs master's own newer 2.5.0 pin, so bumping nixpkgs does not
-  # help. The served 2.4.0 tarball was checked against a fresh `git clone` of tag
-  # 2.4.0: 86 files, byte-identical content, pure repackaging.
-  #
-  # Fix the CLASS, not the instance: refetch via fetchFromGitea, which is a
-  # fetchzip — it hashes the UNPACKED tree, so archive repackaging cannot break
-  # it again. Drop this override once nixpkgs ships a fetcher that does the same.
-  uppushSrc = pkgs.fetchFromGitea {
-    domain = "codeberg.org";
-    owner  = "NextPush";
-    repo   = "uppush";
-    rev    = "2.4.0";
-    hash   = "sha256-vV/4A7fC8rfRWdeAbiW0lfTc3Ptxm9QWVH356xZKjTw=";
+  ncMajor = 35;
+  # Apps nixpkgs does not package for 35 yet: 35-compatible releases came out after its
+  # last app-list refresh. Same app-store source nixpkgs uses; drop each pin once
+  # nextcloud35Packages.apps carries it. unpack = true hashes the unpacked tree, so a
+  # re-generated codeberg /archive tarball (uppush) cannot break the hash again.
+  storeApp = url: hash: pkgs.fetchNextcloudApp { inherit url hash; unpack = true; license = "agpl3Plus"; };
+  storeApps = {
+    news             = storeApp "https://github.com/nextcloud/news/releases/download/29.0.0-beta.1/news.tar.gz"
+                                "sha256-ZT0FLb2u0vhuEX8tvUyHq2hW+hVuwW+1sArBiJQKGIw=";
+    previewgenerator = storeApp "https://github.com/nextcloud-releases/previewgenerator/releases/download/v5.15.0/previewgenerator-v5.15.0.tar.gz"
+                                "sha256-jXUX5hDNrZ7qFBQel+8IWAGu6WwMlMcpMf+YX5dKh/g=";
+    uppush           = storeApp "https://codeberg.org/NextPush/uppush/archive/2.6.0.tar.gz"
+                                "sha256-trpmBCuU4q4GXiSAT8gpP9pAz6q1Rdz/yIIB6Iem2is=";
   };
 
   versions = {
     postgresPkg   = pkgs.postgresql_15;
     nextcloudPkg  = pkgs."nextcloud${toString ncMajor}";
-    nextcloudApps = (pkgs."nextcloud${toString ncMajor}Packages".apps) // {
-      uppush = pkgs."nextcloud${toString ncMajor}Packages".apps.uppush.overrideAttrs (_: {
-        src = uppushSrc;
-      });
-    };
+    nextcloudApps = pkgs."nextcloud${toString ncMajor}Packages".apps // storeApps;
   };
 
   # ── trusted_domains, derived from the module config (#508) ────────────────
@@ -400,12 +391,11 @@ in
         # Collaboration & knowledge
         collectives tables groupfolders guests
         # Files & admin
-        previewgenerator quota_warning end_to_end_encryption
+        previewgenerator end_to_end_encryption
         # Integrations
         integration_openai
       ;
-      # eurooffice-nextcloud v10.0.0 still uses app ID "onlyoffice" for backward compat
-      onlyoffice = pkgs.callPackage ./eurooffice-nextcloud.nix {};
+      eurooffice = pkgs.callPackage ./eurooffice-nextcloud.nix {};
     };
     extraAppsEnable = true;
 
@@ -468,7 +458,7 @@ in
       # without touching what the token protects — the signature is still
       # checked in full; leeway only relaxes the time claims. The app provides
       # this knob for exactly this ("in case the system clock is a second off").
-      onlyoffice = {
+      eurooffice = {
         jwt_leeway = 60;
       };
 
@@ -641,11 +631,11 @@ in
         set -euo pipefail
         export PATH="/run/current-system/sw/bin:${pkgs.coreutils}/bin:$PATH"
 
-        nextcloud-occ config:app:set onlyoffice DocumentServerUrl         --value="$EURO_OFFICE_URL"
-        nextcloud-occ config:app:set onlyoffice DocumentServerInternalUrl --value="$EURO_OFFICE_INTERNAL_URL"
-        nextcloud-occ config:app:set onlyoffice StorageUrl                --value="https://$NEXTCLOUD_PUBLIC_URL/"
-        nextcloud-occ config:app:set onlyoffice jwt_secret                --value="$JWT_SECRET"
-        nextcloud-occ config:app:set onlyoffice jwt_header                --value="Authorization"
+        nextcloud-occ config:app:set eurooffice DocumentServerUrl         --value="$EURO_OFFICE_URL"
+        nextcloud-occ config:app:set eurooffice DocumentServerInternalUrl --value="$EURO_OFFICE_INTERNAL_URL"
+        nextcloud-occ config:app:set eurooffice StorageUrl                --value="https://$NEXTCLOUD_PUBLIC_URL/"
+        nextcloud-occ config:app:set eurooffice jwt_secret                --value="$JWT_SECRET"
+        nextcloud-occ config:app:set eurooffice jwt_header                --value="Authorization"
 
         echo "Euro-Office connector configured successfully."
       '';

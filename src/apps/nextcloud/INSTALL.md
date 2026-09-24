@@ -20,7 +20,7 @@ The public domain is derived as `<vmname>.<domain>` from the environment configu
     module-manager module add nextcloud
 
 A first install takes roughly 9 minutes, dominated by the first NixOS rebuild (Nextcloud plus the
-eurooffice connector and `uppush` are built from source when uncached). The installer prints the
+eurooffice connector is built from source when uncached). The installer prints the
 admin login at the end and saves the admin password to `/home/tappaas/secrets/nextcloud.env` on
 tappaas-cicd.
 
