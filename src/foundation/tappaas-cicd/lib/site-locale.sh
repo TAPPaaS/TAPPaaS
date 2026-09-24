@@ -16,9 +16,16 @@
 # reach. A zone with no derivable gateway simply gets no server line, leaving the
 # guest's own default alone rather than pointing it at nothing.
 #
+# The gateway is FIRST, not only (#716): where the zone may reach the internet,
+# two public pool servers follow it. timesyncd tries its servers in order and
+# moves on when one times out or reports too large a root distance — exactly
+# what the firewall's ntpd did for 17 minutes on 2026-09-23 while it had lost its
+# own upstream. A zone without internet access still gets the gateway alone.
+#
 # Sourceable only. Functions:
 #   site_locale_value <key> [default]   one field of .location
 #   site_locale_ntp <zone>              the NTP server for that zone, or ""
+#   site_locale_ntp_servers <zone>      all of the zone's NTP servers, in order
 #   render_site_nix <zone>              the NixOS fragment, on stdout
 #   apply_site_locale_nixos <ip> <zone> install the fragment (the caller rebuilds)
 #   apply_site_locale_debian <ip> <zone> converge a running Debian guest or host
@@ -64,6 +71,30 @@ site_locale_ntp() {
         "${zones}" 2>/dev/null || true
 }
 
+# The public servers a zone falls back to, when its access-to includes the
+# internet (#716). The NixOS pool, because it is the one every NixOS guest already
+# lists as its fallback, and two of them so the fallback is not a single host.
+SITE_NTP_PUBLIC=("0.nixos.pool.ntp.org" "1.nixos.pool.ntp.org")
+
+_sl_zone_has_internet() {
+    local zone="$1" zones="${_SL_CONFIG_DIR}/zones.json"
+    [[ -n "${zone}" && -f "${zones}" ]] || return 1
+    jq -e --arg z "${zone}" '((.[$z]["access-to"] // []) | index("internet")) != null' "${zones}" >/dev/null 2>&1
+}
+
+# All of the zone's NTP servers, gateway first, space-separated; "" when the
+# gateway cannot be derived (then the guest keeps its own default, as before).
+site_locale_ntp_servers() {
+    local zone="${1:-}" gw
+    gw="$(site_locale_ntp "${zone}")"
+    [[ -n "${gw}" ]] || return 0
+    if _sl_zone_has_internet "${zone}"; then
+        printf '%s %s' "${gw}" "${SITE_NTP_PUBLIC[*]}"
+    else
+        printf '%s' "${gw}"
+    fi
+}
+
 # The NixOS fragment. Plain assignments, not mkDefault: this is the site saying
 # where it is, and it must win over a baseline default. A module that genuinely
 # needs otherwise says so with lib.mkForce, which is then visible in review.
@@ -72,7 +103,7 @@ render_site_nix() {
     tz="$(site_locale_value timezone UTC)"
     locale="$(_sl_locale_full)"
     keymap="$(site_locale_value keyboard)"
-    ntp="$(site_locale_ntp "${zone}")"
+    ntp="$(site_locale_ntp_servers "${zone}")"
 
     cat <<EOF
 # tappaas-site.nix — GENERATED from site.json by TAPPaaS. Do not edit here.
@@ -87,12 +118,16 @@ render_site_nix() {
 EOF
     [[ -n "${keymap}" ]] && printf '  console.keyMap = "%s";\n' "${keymap}"
     if [[ -n "${ntp}" ]]; then
+        local list="" h
+        for h in ${ntp}; do list+="\"${h}\" "; done
         cat <<EOF
 
-  # The zone's gateway is the time source (#87) — the firewall serves it, so a
-  # guest never needs to reach a public pool through it.
+  # The zone's gateway is the time source (#87) — the firewall serves it. Where
+  # the zone may reach the internet, public servers follow it (#716), so a
+  # firewall ntpd that has lost its own upstream does not leave the guest with
+  # nothing; timesyncd moves down the list only when one fails.
   services.timesyncd.enable = lib.mkDefault true;
-  services.timesyncd.servers = [ "${ntp}" ];
+  services.timesyncd.servers = [ ${list}];
 EOF
     fi
     printf '}\n'
@@ -120,7 +155,7 @@ apply_site_locale_debian() {
     tz="$(site_locale_value timezone)"
     locale="$(_sl_locale_full)"
     keymap="$(site_locale_value keyboard)"
-    ntp="$(site_locale_ntp "${zone}")"
+    ntp="$(site_locale_ntp_servers "${zone}")"
 
     if [[ -n "${tz}" ]]; then
         cur="$(ssh -o BatchMode=yes "${user}@${ip}" 'timedatectl show -p Timezone --value' 2>/dev/null || true)"
@@ -156,10 +191,11 @@ apply_site_locale_debian() {
     fi
 
     # Time source: a drop-in, so the distribution's own timesyncd config stays
-    # as it is and the site's choice is one removable file.
+    # as it is and the site's choice is one removable file. NTP= holds the whole
+    # ordered list (#716): the gateway, then public servers where reachable.
     if [[ -n "${ntp}" ]]; then
         if ! ssh -o BatchMode=yes "${user}@${ip}" "grep -qs '^NTP=${ntp}\$' /etc/systemd/timesyncd.conf.d/tappaas.conf" 2>/dev/null; then
-            if ssh -o BatchMode=yes "${user}@${ip}" "sudo install -d -m 0755 /etc/systemd/timesyncd.conf.d && printf '# TAPPaaS (#87): the zone gateway is the time source.\n[Time]\nNTP=${ntp}\n' | sudo tee /etc/systemd/timesyncd.conf.d/tappaas.conf >/dev/null && sudo systemctl restart systemd-timesyncd" 2>/dev/null; then
+            if ssh -o BatchMode=yes "${user}@${ip}" "sudo install -d -m 0755 /etc/systemd/timesyncd.conf.d && printf '# TAPPaaS (#87, #716): the zone gateway first, public servers after it.\n[Time]\nNTP=${ntp}\n' | sudo tee /etc/systemd/timesyncd.conf.d/tappaas.conf >/dev/null && sudo systemctl restart systemd-timesyncd" 2>/dev/null; then
                 info "  time source → ${ntp}"; changed=1
             else
                 warn "  could not point ${ip} at the time source ${ntp}"

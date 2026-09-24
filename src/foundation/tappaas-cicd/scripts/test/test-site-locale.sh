@@ -57,6 +57,22 @@ out="$(load 'render_site_nix trusted')"
 has "$out" 'services.timesyncd.servers = [ "10.2.0.1" ];' "…and it is that zone's gateway, not the first one"
 rm -f "${WORK}/config/zones.json"
 
+# #716: the gateway first, and public servers after it where the zone may reach
+# the internet — so a firewall ntpd that lost its own upstream (orphaned, or not
+# answering) does not leave the guest with nothing. A zone without internet
+# access keeps the gateway alone: it could not reach a public server anyway.
+printf '%s' '{"rossen":{"ip":"10.2.0.0/24","access-to":["internet"]},"iotLocal":{"ip":"10.3.0.0/24","access-to":[]}}' > "${WORK}/config/zones.json"
+out="$(load 'render_site_nix rossen')"
+has "$out" 'services.timesyncd.servers = [ "10.2.0.1" "0.nixos.pool.ntp.org" "1.nixos.pool.ntp.org" ];' \
+    "a zone with internet access: the gateway first, then two public servers"
+out="$(load 'render_site_nix iotLocal')"
+has "$out" 'services.timesyncd.servers = [ "10.3.0.1" ];' "a zone without internet access: the gateway alone"
+is "the ordered list, for the Debian drop-in" "$(load 'site_locale_ntp_servers rossen')" "10.2.0.1 0.nixos.pool.ntp.org 1.nixos.pool.ntp.org"
+is "…and a zone the site does not know gets nothing" "$(load 'site_locale_ntp_servers nosuch')" ""
+grep -q 'NTP=${ntp}' "${LIB}" && grep -q 'site_locale_ntp_servers "${zone}"' <(sed -n '/^apply_site_locale_debian()/,/^}/p' "${LIB}") \
+    && ok "the Debian drop-in writes the same ordered list" || bad "the Debian drop-in does not use the ordered list"
+rm -f "${WORK}/config/zones.json"
+
 # A zone the gateway cannot be derived for must not produce a broken server line.
 out="$(load 'render_site_nix nosuchzone' 'zone_gateway_ip() { return 1; }')"
 hasnt "$out" 'services.timesyncd.servers'           "an underivable gateway leaves the guest's own default alone"
