@@ -734,16 +734,44 @@ in
     };
   };
 
+  # ── Talk: TURN/STUN relay (coturn) ────────────────────────────────────────
+  # The `talk` connector writes TURN_SERVER + TURN_SECRET to /etc/secrets/talk.env
+  # and restarts this unit. Its own unit, so a coturn-only site (no HPB) gets a
+  # relay too.
+  systemd.services.nextcloud-configure-talk-turn = {
+    description = "Register the coturn TURN/STUN relay in Nextcloud Talk";
+    wantedBy    = [ "multi-user.target" ];
+    after       = [ "nextcloud-setup.service" "nextcloud-configure-talk.service" ];
+    requires    = [ "nextcloud-setup.service" ];
+
+    unitConfig.ConditionPathExists = "/etc/secrets/talk.env";
+
+    serviceConfig = {
+      Type            = "oneshot";
+      RemainAfterExit = true;
+      EnvironmentFile = "/etc/secrets/talk.env";
+      ExecStart = pkgs.writeShellScript "nextcloud-configure-talk-turn" ''
+        set -euo pipefail
+        export PATH="/run/current-system/sw/bin:${pkgs.coreutils}/bin:$PATH"
+
+        # talk:turn:add appends, so clear first.
+        nextcloud-occ config:app:delete spreed turn_servers >/dev/null 2>&1 || true
+        nextcloud-occ config:app:delete spreed stun_servers >/dev/null 2>&1 || true
+        nextcloud-occ talk:stun:add "$TURN_SERVER"
+        nextcloud-occ talk:turn:add turn "$TURN_SERVER" "udp,tcp" --secret="$TURN_SECRET"
+
+        echo "Nextcloud Talk STUN/TURN relay configured: $TURN_SERVER"
+      '';
+    };
+  };
+
   # ── HPB: register Talk signaling backend ─────────────────────────────────
   # install.sh writes HPB_SECRET to /etc/secrets/hpb.env and then triggers
   # this service. Runs every boot so secret rotation propagates automatically.
   systemd.services.nextcloud-configure-hpb = {
     description = "Register Nextcloud Talk HPB signaling backend";
     wantedBy    = [ "multi-user.target" ];
-    # After configure-talk (#715): both write spreed turn_servers/stun_servers,
-    # talk in its legacy shape, this unit through talk:turn:add. Unordered, the
-    # boot-time winner was whichever finished last. HPB's is the complete one.
-    after       = [ "nextcloud-setup.service" "nextcloud-configure-talk.service" ];
+    after       = [ "nextcloud-setup.service" ];
     requires    = [ "nextcloud-setup.service" ];
 
     unitConfig.ConditionPathExists = "/etc/secrets/hpb.env";
@@ -767,16 +795,7 @@ in
         # itself. Including /spreed here makes the check hit /spreed/api/v1/welcome → 404.
         nextcloud-occ talk:signaling:add "wss://$HPB_URL" "$HPB_SECRET"
 
-        # TURN + STUN (coturn) — only when the consumer plumbed them into hpb.env.
-        # Without these, calls with >2 participants have no relay (admin warns).
-        if [ -n "''${TURN_SERVER:-}" ] && [ -n "''${TURN_SECRET:-}" ]; then
-          nextcloud-occ config:app:delete spreed turn_servers >/dev/null 2>&1 || true
-          nextcloud-occ config:app:delete spreed stun_servers >/dev/null 2>&1 || true
-          nextcloud-occ talk:stun:add "$TURN_SERVER"
-          nextcloud-occ talk:turn:add turn "$TURN_SERVER" "udp,tcp" --secret="$TURN_SECRET"
-        fi
-
-        echo "Nextcloud Talk HPB signaling backend configured."
+        echo "Nextcloud Talk HPB signaling backend configured: wss://$HPB_URL"
       '';
     };
   };

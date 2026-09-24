@@ -53,7 +53,7 @@ in {
     (n: !(builtins.elem "nextcloud-setup.service" ((u n).requires or []))) configure;
   configure_without_after = builtins.filter
     (n: !(builtins.elem "nextcloud-setup.service" ((u n).after or []))) configure;
-  hpb_after = (u "nextcloud-configure-hpb").after;
+  turn_after = (u "nextcloud-configure-talk-turn").after;
   talk_after = (u "nextcloud-configure-talk").after;
 }
 EOF
@@ -77,10 +77,12 @@ ck "every one is ordered after nextcloud-setup" "" "$(j '.configure_without_afte
 ck "every one requires nextcloud-setup" "" "$(j '.configure_without_requires | join(" ")')"
 
 echo "── 3. one writer wins the Talk keys, always the same one ──"
-ck "configure-hpb runs after configure-talk" "true" \
-    "$(j '.hpb_after | index("nextcloud-configure-talk.service") != null')"
+ck "configure-talk-turn runs after configure-talk" "true" \
+    "$(j '.turn_after | index("nextcloud-configure-talk.service") != null')"
 ck "…and not the other way round" "false" \
-    "$(j '.talk_after | index("nextcloud-configure-hpb.service") != null')"
+    "$(j '.talk_after | index("nextcloud-configure-talk-turn.service") != null')"
+HPB_SRC="$(sed -n '/systemd.services.nextcloud-configure-hpb = {/,/^  };/p' "${NC}/nextcloud.nix")"
+ck "configure-hpb no longer writes TURN" "0" "$(grep -c 'talk:turn:add' <<< "${HPB_SRC}")"
 
 echo
 echo "── ${PASS} passed, ${FAIL} failed ──"
