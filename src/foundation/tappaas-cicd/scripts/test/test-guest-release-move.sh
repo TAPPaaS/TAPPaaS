@@ -27,6 +27,9 @@ TMP="$(mktemp -d "${TMPDIR:-/tmp}/release-move.XXXXXX")"
 trap 'rm -rf "${TMP}"' EXIT INT TERM
 
 awk '/^run_quiet\(\) \{$/{f=1} f{print} f&&/^}$/{exit}' "${SRC}" > "${TMP}/run_quiet.sh"
+for fn in run_quiet_rc nixos_rebuild_exit_meaning; do
+    awk -v fn="${fn}" '$0 ~ "^"fn"\\(\\) \\{$"{f=1} f{print} f&&/^}$/{exit}' "${SRC}" >> "${TMP}/run_quiet.sh"
+done
 awk '/^release_move_of\(\) \{$/{f=1} f{print} f&&/^}$/{exit}' "${SRC}" > "${TMP}/release_move_of.sh"
 awk '/^    local attempt rebuilt=0 rc staged=0/{f=1} f{print} f&&/\[\[ "\$rebuilt" == "1" \]\] \|\| die/{exit}' "${SRC}" > "${TMP}/block.sh"
 ck "release_move_of extracts" "yes" "$(grep -q 'nixos-version' "${TMP}/release_move_of.sh" && echo yes || echo no)"
@@ -40,7 +43,7 @@ run() {
         : > "${T}/calls"
         info(){ echo "INFO $*"; }; warn(){ echo "WARN $*"; }; error(){ echo "ERROR $*"; }
         die(){ error "$@"; exit 1; }; debug(){ :; }
-        sleep(){ :; }; update_ssh_known_hosts(){ :; }; wait_for_ssh(){ return 0; }
+        sleep(){ :; }; update_ssh_known_hosts(){ :; }; wait_for_ssh(){ return 0; }; report_failed_units(){ :; }
         ssh() {
             local cmd="${*: -1}"
             case "${cmd}" in
@@ -84,8 +87,9 @@ echo "── only the numeric release counts ──"
 ck "flake-built 25.11.2026… vs tarball 25.11pre-git: no move" "0|staged=0|boots=0|switches=1" "$(run 25.11.20260522.b77b3de 25.11pre-git 0 0)"
 ck "25.11pre-git -> 26.05pre-git: a move" "0|staged=1|boots=1|switches=0" "$(run 25.11pre-git 26.05pre-git 0)"
 
-echo "── the old behaviour for ordinary failures is unchanged ──"
-ck "same release, switch fails once then works: retried" "0|staged=0|boots=0|switches=2" "$(run 26.05 26.05 0 1 0)"
+echo "── only a lost connection is retried; nixos-rebuild's own verdict is not ──"
+ck "same release, ssh drops once (255) then works: retried" "0|staged=0|boots=0|switches=2" "$(run 26.05 26.05 0 255 0)"
+ck "same release, switch fails (1): no retry, it stops" "1|staged=|boots=0|switches=1" "$(run 26.05 26.05 0 1 0)"
 
 echo "── the reboot messages tell a staged move from an active one ──"
 ckin "automaticReboot=false: 'STAGED, not active'" 'The release move (${_move% *} -> ${_move#* }) is STAGED, not active' "$(cat "${SRC}")"
