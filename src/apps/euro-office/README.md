@@ -24,7 +24,7 @@ PowerPoint files in the browser, powered by
 - Authentication of its own — trust is established with Nextcloud via a shared JWT secret
   (auto-generated, never leaves the VM).
 - The Nextcloud connector app — shipped by the `nextcloud` module (`eurooffice-nextcloud`,
-  app id `onlyoffice`).
+  app id `eurooffice`; it was `onlyoffice` before connector v11).
 - Euro-Office-branded client apps — the desktop/mobile clients are OnlyOffice's official
   products (free download: <https://www.onlyoffice.com/download-desktop.aspx>);
   compatibility is via the Nextcloud integration, not a Euro-Office build.

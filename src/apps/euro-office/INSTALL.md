@@ -66,7 +66,7 @@ does not require it.
 **Nextcloud shows a "public test server" banner**
 The Nextcloud `onlyoffice` app defaults to the public ONLYOFFICE demo server — the
 connector was not wired. Set it to euro-office. The 5 settings (also settable via
-`nextcloud-occ config:app:set onlyoffice <key>`):
+`nextcloud-occ config:app:set eurooffice <key>`):
 
 | Key | Value |
 |-----|-------|
