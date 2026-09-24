@@ -456,7 +456,7 @@ before. #87 needed only the consuming half: OPNsense has been serving NTP (strat
 along and no guest asked it. **#324 was pulled in and split back out** (see its row). **#680 came here from §12 on
 2026-09-21** — its code half is built and verified on hrossen; what remains of it is a release
 decision, not code (who refreshes the baseline `flake.lock`, and how often).
-**Remaining:** #390, #448, #716 (a booting guest's time source — #87's follow-on); #348 parked (needs a site with hass) and #678 in Future Work.
+**Remaining:** #448, #716 (a booting guest's time source — #87's follow-on); #348 parked (needs a site with hass) and #678 in Future Work.
 
 **Approach (operator, 2026-09-20).** Locale and time are **one site fact, applied per OS
 family** — not a NixOS-only concern. Measured that day on the test site: `tappaas1` is
@@ -488,7 +488,7 @@ time or locale on a Debian guest, an adopted `debianhost`, or a Windows guest at
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
 | #324 | App VMs do not import `tappaas-common.nix` | 2 | 4 | H | **Not an import line — a de-duplication** (proven on the test site 2026-09-20, see the issue): every module restates the baseline (`system.stateVersion`, `services.openssh`, `users.users.tappaas`, `cloud-init`, `nix.settings`…), so the import fails option by option until the copies go. `stateVersion` is the exception: existing VMs' state is `25.05` and must stay. Verified: only `tappaas-cicd.nix` and `templates/tappaas-nixos.nix` import it |
-| #390 | 00-Template fails canon C4/C7 | 5 | 1 | H | Every new module inherits it |
+| ✅ #390 | 00-Template fails canon C4/C7 | 5 | 1 | H | **Closed 2026-09-24.** C4 (networkd forced off) was already fixed with #446 (`4f6e6460`); C7: the template and the baseline (`tappaas-common.nix`) now declare the firewall explicitly (enabled, SSH 22), and `test-nixos-canon.sh` keeps both patterns, since the canon lint lives outside this repo. Supersedes PR #391 |
 | #448 | NIC rename race (kernel / udev / cloud-init) | 3 | 4 | M | A stable interface name is a network-config change on every VM |
 | ✅ #472 | NixOS clock two hours off | 4 | 2 | M | **Built and verified 2026-09-21.** **Root cause:** every module nix picks its own time zone — `euro-office.nix:96` is UTC while the rest inherit `tappaas-common.nix:166`'s `mkDefault "Europe/Amsterdam"`, and the master (`tappaas1`) is `Europe/Copenhagen`. Fixed by the site fragment + #324 + #87 in one rebuild. Take it from site.json |
 | ✅ #408 | Locale/keyboard: tappaas1 is the master | 3 | 2 | M | **Built 2026-09-21.** `site add` reads timezone/keyboard/locale back from the first node (`timedatectl`, `XKBLAYOUT`, `LANG`) instead of the mothership's template clock; country stays derived from the timezone because no Proxmox node stores it. `.location` gained `keyboard`, `latitude`, `longitude` with `site modify` flags; the PXE answer file takes the keyboard from the site (it used `DEFAULT_KEYBOARD`, which is why tappaas2/3 came up `us` against tappaas1's `dk`) and the USB installer offers the site's values as defaults. A recorded value is never overwritten: a re-run fills what is missing and warns when the site and its master disagree. hrossen corrected `NL/Europe/Amsterdam` → `DK/Europe/Copenhagen/dk` through the new flag |

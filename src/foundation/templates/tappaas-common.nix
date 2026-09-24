@@ -318,12 +318,14 @@
         options = "--delete-older-than 30d";
   };
 
-  # Firewall configuration
-  # Open ports in the firewall.
-  # networking.firewall.allowedTCPPorts = [ ... ];
-  # networking.firewall.allowedUDPPorts = [ ... ];
-  # Or disable the firewall altogether.
-  # networking.firewall.enable = false;
+  # Firewall: explicit, as every TAPPaaS module declares it (canon C7, #390).
+  # SSH is the one port every guest needs; the module importing this baseline
+  # adds its own ports (the lists merge). mkDefault on enable: this file is a
+  # baseline, so a config built on it can still decide otherwise.
+  networking.firewall = {
+    enable = lib.mkDefault true;
+    allowedTCPPorts = [ 22 ];
+  };
 
   # This option defines the first version of NixOS you have installed on this particular machine,
   # and is used to maintain compatibility with application data (e.g. databases) created on older NixOS versions.

@@ -162,12 +162,14 @@
 # TODO: the following service definitions are templates only, they need to be adopted/customized for tappaas use
 
 
-  # Firewall configuration
-  # Open ports in the firewall.
-  # networking.firewall.allowedTCPPorts = [ ... ];
-  # networking.firewall.allowedUDPPorts = [ ... ];
-  # Or disable the firewall altogether.
-  # networking.firewall.enable = false;
+  # Firewall: explicit, as every TAPPaaS module declares it (canon C7, #390).
+  # SSH is the one port every guest needs; a module adds its own service ports
+  # here (allowedTCPPorts / allowedUDPPorts are lists, so they merge). Who may
+  # reach those ports is the site's decision, made by network:rules.
+  networking.firewall = {
+    enable = true;
+    allowedTCPPorts = [ 22 ];
+  };
 
   # This option defines the first version of NixOS you have installed on this particular machine,
   # and is used to maintain compatibility with application data (e.g. databases) created on older NixOS versions.
