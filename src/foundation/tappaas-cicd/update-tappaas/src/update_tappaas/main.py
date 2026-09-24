@@ -1162,6 +1162,7 @@ def main():
             log.info("  (no app modules installed)")
         log_skipped(skipped_apps)
         log.info("Phase 3 - Node reboot pass (automaticReboot=%s):", automatic_reboot)
+        log.info("Phase 4 - Postgres collation reconciliation (#726)")
         reboot_pass(automatic_reboot, dry_run=True)
         log.info("To run these updates: site-manager update")
         sys.exit(0)
@@ -1252,6 +1253,32 @@ def main():
     if not reboot_ok:
         log.error("FAILED: node reboot pass")
 
+    # Phase 4: settle Postgres collation versions (#726).
+    # A nixpkgs release move changes glibc, and Postgres warns on every
+    # connection until the recorded version is refreshed — permanently, and
+    # loudly enough to drown out a future glibc bump that genuinely reorders
+    # text. The script earns each refresh by verifying that database's btree
+    # indexes first, and refuses where they do not verify, so this cannot
+    # silence a real problem. Cheap when there is nothing to do: one query per
+    # Postgres guest.
+    log.info("Phase 4: Postgres collation reconciliation")
+    collation_ok = True
+    _coll = Path("/home/tappaas/bin/tappaas-collation-reconcile.sh")
+    if _coll.exists():
+        _rc = subprocess.run([str(_coll), "--apply"], capture_output=True, text=True)
+        for _line in (_rc.stdout or "").splitlines():
+            log.info("  %s", _line)
+        if _rc.returncode != 0:
+            collation_ok = False
+            for _line in (_rc.stderr or "").splitlines():
+                log.warning("  %s", _line)
+            log.warning(
+                "collation reconciliation needs attention — a database's indexes did "
+                "not verify, so its recorded version was left alone on purpose (#726)"
+            )
+    else:
+        log.info("  tappaas-collation-reconcile.sh not installed — skipped")
+
     # Summary
     end_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     total = len(installed_foundation) + len(sorted_apps)
@@ -1281,10 +1308,11 @@ def main():
             log.warning("  %s", w)
     log.info(
         "update-tappaas completed: %s | control_plane=%s total=%d succeeded=%d "
-        "failed=%d not_attempted=%d skipped=%d reboot=%s",
+        "failed=%d not_attempted=%d skipped=%d reboot=%s collation=%s",
         end_time, control_plane, total, succeeded, len(failed_modules),
         len(not_attempted), len(skipped_foundation) + len(skipped_apps),
         "ok" if reboot_ok else "failed",
+        "ok" if collation_ok else "needs-attention",
     )
 
     # Persist a journal-free result artefact (#506). This is the durable,

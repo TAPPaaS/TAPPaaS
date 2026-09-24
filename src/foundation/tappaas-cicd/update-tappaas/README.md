@@ -74,6 +74,34 @@ recorded `management: unmanaged` (ADR-022g) — a locked-down satellite, which p
 
 Each module is updated via: `update-module.sh <module-name>`
 
+### Phase 3: Node Reboot Pass
+
+Governed by `automaticReboot` in `site.json`. See `cluster/reboot-cluster.sh`.
+
+### Phase 4: Postgres Collation Reconciliation
+
+A nixpkgs release move changes glibc, and Postgres then warns on **every connection** that the
+collation version its databases were created with no longer matches the one in force. The warning
+is usually benign — glibc's version string changes far more often than its ordering does — but left
+alone it becomes permanent, and it would be indistinguishable from a future bump that genuinely
+reorders text and therefore invalidates every text index.
+
+`tappaas-collation-reconcile.sh --apply` settles it, and **earns** each refresh: for every database
+whose recorded version has drifted, it verifies every btree index against the collation in force
+with `bt_index_check(heapallindexed => true)` and only then runs
+`ALTER DATABASE … REFRESH COLLATION VERSION`. A database whose indexes do not verify is reported
+and **left warning** — a `REINDEX` is a data decision for a person, and silencing the warning is
+precisely what must not happen there. The phase is cheap when there is nothing to do: one query per
+Postgres guest.
+
+Run it by hand any time; without `--apply` it reports and changes nothing:
+
+```
+tappaas-collation-reconcile.sh                  # report
+tappaas-collation-reconcile.sh --apply          # verify, then refresh what passes
+tappaas-collation-reconcile.sh --guest <fqdn>   # one guest
+```
+
 ## Scheduling
 
 The `updateSchedule` field in the `tappaas` section of the configuration controls when updates run.
