@@ -60,6 +60,11 @@ Two consequences worth knowing before reading a red test:
   the round trip succeeds at **23 s**. A check inside that window fails for
   real, writes the error, and the verifier reads it back. So the check is gated
   on the healthcheck, polled from the Nextcloud side (`OO_READY_TIMEOUT`, 120s).
+  **`test-service.sh` polls the same way, on the same variable.** It used to take
+  one 5-second sample, which inside that 22-second window reports a healthy
+  server as dead: on 2026-09-24 it did so twice, each time failing the module,
+  rolling the guest back and stopping the release boundary. The converge waited
+  and the verifier did not — an asymmetry with no reason behind it.
 - **The verdict comes from what the check says.** `… is successfully
   connected` is working; `Error connection: …` or `Document server is not
   configured` is broken; anything else is *no verdict*. Not from the exit code

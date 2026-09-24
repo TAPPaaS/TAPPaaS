@@ -116,13 +116,28 @@ if [[ "${EURO_INSTALLED}" == "true" ]]; then
     # "the three-outcome logic only exists in update-service.sh"). Read-only:
     # a GET, nothing written.
     EO_HOST="$(jq -r '.vmname' "${EO_JSON}").$(jq -r '.zone0' "${EO_JSON}").internal"
-    OO_HEALTH=$(ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=no \
-        "tappaas@${VMNAME}.${ZONE}.internal" "curl -s -m 5 http://${EO_HOST}/healthcheck" \
-        2>/dev/null | tr -d '[:space:]') || OO_HEALTH=""
+    # POLL, as update-service.sh already does, and on the same OO_READY_TIMEOUT:
+    # this verifier runs inside euro-office's own converge, moments after that
+    # converge restarted the container, and the README measured the document
+    # server answering `true` only at 22 s. A single 5-second sample therefore
+    # reports a healthy server as dead — observed twice on 2026-09-24, each time
+    # failing the module, rolling the guest back, and taking the release
+    # boundary with it. The converge waited and the verifier did not; that
+    # asymmetry was the whole defect. A server that is genuinely down still
+    # fails, just at the deadline instead of before it could have started.
+    OO_HEALTH=""
+    _oo_deadline=$(( SECONDS + ${OO_READY_TIMEOUT:-120} ))
+    while (( SECONDS < _oo_deadline )); do
+        OO_HEALTH=$(ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=no \
+            "tappaas@${VMNAME}.${ZONE}.internal" "curl -s -m 5 http://${EO_HOST}/healthcheck" \
+            2>/dev/null | tr -d '[:space:]') || OO_HEALTH=""
+        [[ "${OO_HEALTH}" == "true" ]] && break
+        sleep 5
+    done
     if [[ "${OO_HEALTH}" == "true" ]]; then
         pass "Document server ${EO_HOST} answers its healthcheck from Nextcloud"
     else
-        fail "Document server ${EO_HOST} does not answer its healthcheck from Nextcloud (got '${OO_HEALTH:-nothing}') — the editor cannot open documents"
+        fail "Document server ${EO_HOST} did not answer its healthcheck from Nextcloud within ${OO_READY_TIMEOUT:-120}s (got '${OO_HEALTH:-nothing}') — the editor cannot open documents"
     fi
 
     if [[ -z "${OO_ERR}" ]]; then
