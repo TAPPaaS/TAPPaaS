@@ -500,7 +500,7 @@ time or locale on a Debian guest, an adopted `debianhost`, or a Windows guest at
 | ✅ #699 | Guests created with `-localtime 1` boot two hours ahead | — | — | — | **Closed 2026-09-22** (`cd87f4dc`). Added in the 2026-09-24 issue sweep |
 | ✅ #721 | promtail is removed in nixos-26.05 | — | — | — | **Closed 2026-09-24** (`15ca633f`) — replaced by Grafana Alloy; closed in this sweep. Added in the 2026-09-24 issue sweep |
 | ✅ #722 | Grafana's `secret_key` has no default in 26.05 | — | — | — | **Closed 2026-09-24** (`c6e4db68`) — a per-site key beside the admin password; closed in this sweep. Added in the 2026-09-24 issue sweep |
-| #709 | Nextcloud cannot advance past 33 | — | — | — | **Open, not yet scored** — **partly done**: the train can move the nixpkgs release (`7b3af58f`) and the pin is on 26.05, which ships `nextcloud34`/`nextcloud35`; the module's `ncMajor` bump is still open. Added in the 2026-09-24 issue sweep |
+| ✅ #709 | Nextcloud cannot advance past 33 | — | — | — | **Closed 2026-09-24.** The train can move the nixpkgs release (`7b3af58f`), and the pin is on 26.05 (`3e07ca7d`), which ships `nextcloud33`/`34`/`35`. Moving the module's `ncMajor` is the Nextcloud maintainers' call, not this issue. Added in the 2026-09-24 issue sweep |
 
 ### G1.5 Rebuild & recovery paths — E3 · R4 · L-M
 
