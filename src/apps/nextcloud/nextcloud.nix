@@ -56,7 +56,7 @@ let
     # wrapper, so enabling it dies with a TypeError (upstream #124, open).
     uppush           = storeApp "https://codeberg.org/NextPush/uppush/archive/2.6.0.tar.gz"
                                 "sha256-trpmBCuU4q4GXiSAT8gpP9pAz6q1Rdz/yIIB6Iem2is="
-                                [ ./uppush-nc35-schema-table.patch ];
+                                [ (pkgs.callPackage ./uppush-nc35-patch.nix {}) ];
     # nixpkgs ships 1.3.3 (<=34) as both the app and the daemon; 1.4.1 supports 35.
     notify_push      = storeApp "https://github.com/nextcloud-releases/notify_push/releases/download/v1.4.1/notify_push-v1.4.1.tar.gz"
                                 "sha256-stMKO4B148w/AKF0CjT+OR+JDCiN5SfbTOp4j8K5txw=" [];
