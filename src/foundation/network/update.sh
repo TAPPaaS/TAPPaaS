@@ -316,4 +316,35 @@ else
     warn "  proxmox-manager not on PATH — skipping VM trunk sync"
 fi
 
+# ── Time service (#716) ─────────────────────────────────────────────
+#
+# The firewall's ntpd is every guest's first time source, and this update is
+# what knocks it over: while the steps above reconfigure OPNsense, its NTP
+# replies are held for seconds, the delayed samples poison ntpd's clock filter,
+# and it drops to orphan mode for up to an hour (measured on hrossen, 2026-09-24:
+# three unrelated servers at an identical −4246.9 ms). Two settings and a
+# restart keep guests on real time through that:
+#   orphan mode off — an unsynchronised ntpd then says so, and guests move on
+#                     to the public servers after their gateway (7f0a23df);
+#   iburst + a restart now — the poisoned samples are discarded and the
+#                     firewall is disciplined again within seconds.
+# Converged on every update (idempotent), so a site gets it at its next sweep.
+debug "Converging the firewall's time service (ntpd)..."
+_ntp_php="${SCRIPT_DIR}/scripts/ntpd-converge.php"
+if [[ -f "${_ntp_php}" ]]; then
+    _ntp_out="$(ssh root@"$FIREWALL_FQDN" /bin/sh -c 'php /dev/stdin' < "${_ntp_php}" 2>&1)" || true
+    case "${_ntp_out}" in
+        CHANGED*)   info "  firewall ntpd: ${_ntp_out#CHANGED }" ;;
+        UNCHANGED*) debug "  firewall ntpd settings already converged" ;;
+        *)          warn "  could not converge the firewall's ntpd settings: ${_ntp_out:-no output}" ;;
+    esac
+    if ssh root@"$FIREWALL_FQDN" "pluginctl -s ntpd restart" >/dev/null 2>&1; then
+        debug "  ntpd restarted (fresh associations after the reconfiguration)"
+    else
+        warn "  could not restart ntpd on the firewall — it recovers by itself within the hour"
+    fi
+else
+    warn "  ${_ntp_php} missing — firewall ntpd not converged"
+fi
+
 info "${GN}✓${CL} Firewall update completed"
