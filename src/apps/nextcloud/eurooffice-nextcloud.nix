@@ -7,9 +7,19 @@
 #   src.hash        nix-prefetch-git (fetchSubmodules = false)
 #   phpJwt.hash     nix-prefetch-url --unpack <github-archive-of-new-rev>
 #   npmDepsHash     prefetch-npm-deps <src-path>/npm-shrinkwrap.json
-#   composerClassLoader / composerInstalledVersions only change when nixpkgs
-#     bumps phpPackages.composer (currently 2.9.7 in nixpkgs 25.11)
-{ lib, stdenv, fetchgit, fetchurl, fetchNpmDeps, buildNpmPackage, nodejs_20 }:
+#   composerClassLoader / composerInstalledVersions are pinned to composer 2.9.7
+#     and are NOT coupled to nixpkgs' own phpPackages.composer (2.10.3 on 26.05).
+#     The vendor directory below is self-contained — one ClassLoader, one
+#     InstalledVersions, one hand-written autoloader, all from the same release —
+#     so it only needs refreshing if that layout changes, not when nixpkgs moves.
+#
+# NODE: pinned to nodejs_22, which builds on both nixos-25.11 and nixos-26.05.
+#   It was nodejs_20 until 26.05 marked that end-of-life and refused to evaluate
+#   it, which stopped the estate's release move dead (the connector is the only
+#   thing in the tree that pinned a Node). Do not "fix" a future refusal with
+#   nixpkgs.config.permittedInsecurePackages: that ships a runtime with known
+#   vulnerabilities to every site running Nextcloud, to avoid a version bump.
+{ lib, stdenv, fetchgit, fetchurl, fetchNpmDeps, buildNpmPackage, nodejs_22 }:
 
 let
   version = "10.0.0";
@@ -36,7 +46,7 @@ let
     brokenDeps = fetchNpmDeps {
       name = "eurooffice-nextcloud-js-${version}-npm-deps";
       inherit src;
-      nodejs = nodejs_20;
+      nodejs = nodejs_22;
       hash = "sha256-xgqwQSekV8nVrx34WHP1GpATWbJIPNxdBv4ZDTLx67k=";
     };
     # npm cacache path = hex(sha512(tgz)) — split bd/c2/rest per cacache layout
@@ -58,7 +68,7 @@ let
   jsBuild = buildNpmPackage {
     pname = "eurooffice-nextcloud-js";
     inherit version src;
-    nodejs = nodejs_20;
+    nodejs = nodejs_22;
     npmDeps = fixedNpmDeps;
     # npmDepsHash is unused when npmDeps is provided directly
     npmDepsHash = "sha256-xgqwQSekV8nVrx34WHP1GpATWbJIPNxdBv4ZDTLx67k=";
