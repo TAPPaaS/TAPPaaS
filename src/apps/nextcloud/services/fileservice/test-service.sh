@@ -79,9 +79,14 @@ info "  Check 2: OnlyOffice connector (if euro-office installed)"
 # The euro-office this consumer pairs with, resolved like the Nextcloud above
 # (#715). A glob over euro-office*.json said "installed" for a consumer in one
 # environment because another environment had one.
+# Only the onlyoffice consumer owns this wiring: checked for coturn or the HPB, it
+# failed their update whenever euro-office had not been re-wired yet.
+CONNECTOR=""
+[[ -f "${CONFIG_DIR}/${MODULE}.json" ]] && \
+    CONNECTOR=$(jq -r '.config["nextcloud:fileservice"].connector // .connector // empty' "${CONFIG_DIR}/${MODULE}.json" 2>/dev/null || true)
 EO_JSON="${CONFIG_DIR}/$(resolve_provider_module euro-office "${CONSUMER_ENV}").json"
 EURO_INSTALLED=false
-[[ -f "${EO_JSON}" ]] && EURO_INSTALLED=true
+[[ "${CONNECTOR}" == "onlyoffice" && -f "${EO_JSON}" ]] && EURO_INSTALLED=true
 
 if [[ "${EURO_INSTALLED}" == "true" ]]; then
     DOC_URL=$(ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=no \
