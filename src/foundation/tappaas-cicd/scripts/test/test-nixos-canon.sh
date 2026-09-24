@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # test-nixos-canon.sh — the module template and the NixOS baseline keep the two
-# canonical network patterns every TAPPaaS VM relies on (#390).
+# canonical network patterns every TAPPaaS VM relies on (#390, #448).
 #
 #   C4  NetworkManager owns the network: systemd-networkd and its wait-online
 #       are forced off, or both activate and fight over the interfaces.
@@ -49,6 +49,13 @@ for f in "${FILES[@]}"; do
     ck "C7: SSH (22) is opened explicitly" "yes" \
        "$(live "$f" | tr '\n' ' ' | grep -qE 'allowedTCPPorts[[:space:]]*=[[:space:]]*\[[^]]*\b22\b' && echo yes || echo no)"
 done
+
+# #448: the baseline turns cloud-init's network stage off, so it cannot rename
+# the NIC under NetworkManager. The template follows once modules import the
+# baseline (#324); until then this is the baseline's own guarantee.
+echo "── foundation/templates/tappaas-common.nix: cloud-init ──"
+ck "cloud-init's network stage is disabled (#448)" "yes" \
+   "$(live "${SRC}/foundation/templates/tappaas-common.nix" | grep -qE 'network\.config[[:space:]]*=[[:space:]]*"disabled"' && echo yes || echo no)"
 
 echo
 echo "── ${PASS} passed, ${FAIL} failed ──"

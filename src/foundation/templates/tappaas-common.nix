@@ -40,6 +40,16 @@
         settings = {
           ssh_deletekeys = false;
           ssh_genkeytypes = [ ];
+          # cloud-init's network stage off (#448). `network.enable = false` above
+          # only keeps systemd-networkd out; the stage itself still ran on every
+          # boot, applied Proxmox's `ipconfig0 ip=dhcp` by renaming ens18 -> eth0
+          # (down / rename / up), and when it won in the middle of NetworkManager's
+          # DHCP the guest came up with no address (logging, 2026-08-10: Loki down
+          # five days). NetworkManager is the one network owner: its profile
+          # matches by type, DHCP reservations are by MAC, and the hostname and
+          # SSH key still come from cloud-init's other modules. Reaches every
+          # module once they import this baseline (#324).
+          network.config = "disabled";
         };
   };
 
