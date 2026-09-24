@@ -145,6 +145,20 @@ function runScript(bin: string, args: string[], cwd?: string): number {
   }
 }
 
+// Run fn with TAPPAAS_ALLOW_DISRUPTION=1 when the operator authorized downtime,
+// and put the variable back exactly as it was afterwards: it authorizes this
+// one step, not whatever runs next in this process.
+function withDisruption<T>(allow: boolean | undefined, fn: () => T): T {
+  const prev = process.env.TAPPAAS_ALLOW_DISRUPTION;
+  if (allow) process.env.TAPPAAS_ALLOW_DISRUPTION = "1";
+  try {
+    return fn();
+  } finally {
+    if (prev === undefined) delete process.env.TAPPAAS_ALLOW_DISRUPTION;
+    else process.env.TAPPAAS_ALLOW_DISRUPTION = prev;
+  }
+}
+
 export function reconcileModule(moduleArg: string, opts: ReconcileOptions): number {
   // The bash exported these so every child script inherited the verbosity; the
   // TS port does the same (exec.configEnv() spreads process.env), and shlog's
@@ -275,11 +289,18 @@ function doReconcile(moduleArg: string, opts: ReconcileOptions): void {
     debug(`  Re-applying ${BL}${dep}${CL} for '${module}'...`);
     // --allow-disruption authorizes downtime (ADR-020 v0.10 D8), and is not
     // "ignore errors": without it a change that needs a reboot or an offline
-    // migrate is deferred rather than applied. Forwarded verbatim so the
-    // decision is made once, by the operator, and every provider sees it.
-    const svcArgs = opts.allowDisruption ? [module, "--allow-disruption"] : [module];
+    // migrate is deferred rather than applied. The decision is made once, by
+    // the operator, and every provider sees it — as TAPPAAS_ALLOW_DISRUPTION=1
+    // in its environment, the same contract the module's own update.sh gets
+    // below. NOT as an argument (#727): most services parse none, and those
+    // that parse strictly (identity:identity, litellm:models, cluster:ha, and
+    // any third-party provider) exited on it as an unknown option — which
+    // failed the re-apply and rolled a healthy module back to its snapshot.
+    const svcArgs = [module];
     // Run from the module directory (#495) — same cwd update-module.sh uses.
-    if (runScript(svcScript, svcArgs, moduleDir ?? undefined) === 0) {
+    const svcRc = withDisruption(opts.allowDisruption, () =>
+      runScript(svcScript, svcArgs, moduleDir ?? undefined));
+    if (svcRc === 0) {
       // "re-applied", NOT "converged" (#583). All this measures is that the
       // apply script exited 0. Whether the live plane actually reached the
       // declared state is what the provider's test-service.sh answers, and that
@@ -316,20 +337,12 @@ function doReconcile(moduleArg: string, opts: ReconcileOptions): void {
     // reconcile, not an update. Run from the module directory, as bash did.
     if (existsSync(join(moduleDir, "update.sh"))) {
       debug(`  Running ${moduleDir}/update.sh (converge)...`);
-      // The dependency services get --allow-disruption as an argument (above);
-      // the module's own update.sh gets it as TAPPAAS_ALLOW_DISRUPTION=1, so a
-      // module that needs downtime to finish — a machine that must reboot after
-      // its upgrade (debianhost, ADR-026 D3) — can honour the same authorization
-      // (ADR-020 D8). Restored afterwards: it authorizes this step, not the rest.
-      const prevDisruption = process.env.TAPPAAS_ALLOW_DISRUPTION;
-      if (opts.allowDisruption) process.env.TAPPAAS_ALLOW_DISRUPTION = "1";
-      let rc: number;
-      try {
-        rc = runScript("./update.sh", [module], moduleDir);
-      } finally {
-        if (prevDisruption === undefined) delete process.env.TAPPAAS_ALLOW_DISRUPTION;
-        else process.env.TAPPAAS_ALLOW_DISRUPTION = prevDisruption;
-      }
+      // The module's own update.sh gets the authorization the same way the
+      // dependency services do: TAPPAAS_ALLOW_DISRUPTION=1, so a module that
+      // needs downtime to finish — a machine that must reboot after its upgrade
+      // (debianhost, ADR-026 D3) — can honour it (ADR-020 D8).
+      const rc = withDisruption(opts.allowDisruption, () =>
+        runScript("./update.sh", [module], moduleDir));
       if (rc !== 0) {
         fail(stepFailure("Module update.sh failed during reconcile", depFailures));
       }

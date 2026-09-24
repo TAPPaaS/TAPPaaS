@@ -190,6 +190,43 @@ process.env.TAPPAAS_CONFIG = CONFIG;
   check(calls().length === 1 && calls()[0].startsWith("app-f:update.sh|"), "only Step 3 runs");
 }
 
+// ── 8. #727: --allow-disruption reaches providers without breaking them ─
+// It was forwarded as an argument, and a provider that parses strictly — as
+// identity:identity's install-service does — exited on it as an unknown option:
+// the re-apply failed and the module rolled back to its snapshot. It now travels
+// as TAPPAAS_ALLOW_DISRUPTION=1, the contract the module's update.sh already had.
+{
+  resetLog();
+  const dir = join(ROOT, "providers", "strictprov");
+  mkdirSync(join(dir, "services", "idp"), { recursive: true });
+  writeFileSync(join(CONFIG, "strictprov.json"), JSON.stringify({ location: dir }, null, 2));
+  const svc = join(dir, "services", "idp", SERVICE_SCRIPT);
+  writeFileSync(
+    svc,
+    `#!/usr/bin/env bash\nfor a in "$@"; do case "$a" in -*) echo "unknown option: $a" >&2; exit 1 ;; esac; done\n` +
+      `printf '%s|%s|env=%s\\n' "strictprov:idp" "$*" "\${TAPPAAS_ALLOW_DISRUPTION:-unset}" >> "${LOG}"\nexit 0\n`,
+  );
+  chmodSync(svc, 0o755);
+  const moduleDir = makeModule("app-g", ["strictprov:idp"]);
+  writeFileSync(
+    join(moduleDir, "update.sh"),
+    `#!/usr/bin/env bash\nprintf '%s|%s|env=%s\\n' "app-g:update.sh" "$*" "\${TAPPAAS_ALLOW_DISRUPTION:-unset}" >> "${LOG}"\n`,
+  );
+  chmodSync(join(moduleDir, "update.sh"), 0o755);
+  delete process.env.TAPPAAS_ALLOW_DISRUPTION;
+
+  const rc = reconcileModule("app-g", { ...OPTS, allowDisruption: true });
+  const c = calls();
+  check(rc === 0, "#727: --allow-disruption does not fail a strictly-parsing provider");
+  check(c.includes("strictprov:idp|app-g|env=1"), "#727: the provider gets only the module name, and the authorization in its environment");
+  check(c.includes("app-g:update.sh|app-g|env=1"), "#727: the module's own update.sh gets the same authorization");
+  check(process.env.TAPPAAS_ALLOW_DISRUPTION === undefined, "#727: the authorization does not outlive the reconcile");
+
+  resetLog();
+  reconcileModule("app-g", { ...OPTS });
+  check(calls().every((l) => l.endsWith("env=unset")), "#727: without the flag, nobody sees an authorization");
+}
+
 rmSync(ROOT, { recursive: true, force: true });
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

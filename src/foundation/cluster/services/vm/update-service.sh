@@ -93,6 +93,11 @@ while [[ $# -gt 0 ]]; do
     esac
     shift
 done
+# The operator's --allow-disruption reaches dependency services as
+# TAPPAAS_ALLOW_DISRUPTION=1 (#727): module-manager no longer forwards it as an
+# argument, which strict parsers elsewhere rejected. The flag above stays for
+# running this service by hand.
+[[ "${TAPPAAS_ALLOW_DISRUPTION:-0}" == "1" ]] && FORCE=1
 
 if [[ -z "${MODULE}" ]]; then
     echo "Usage: $0 [--check] [--apply-drift <file>] [--allow-disruption] <module-name>"
