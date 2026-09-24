@@ -1,0 +1,37 @@
+--- a/lib/Migration/Version020205.php
++++ b/lib/Migration/Version020205.php
+@@ -8,6 +8,7 @@
+ use Exception;
+ use DateTimeImmutable;
+ use Doctrine\DBAL\Schema\Table;
++use OCP\DB\Schema\ITable;
+ use Doctrine\DBAL\Types\Types;
+ use Doctrine\DBAL\Types\DateTimeImmutableType;
+ use OCA\UnifiedPushProvider\Utils;
+@@ -201,7 +202,7 @@
+ 		}
+ 	}
+ 
+-	function createDevicesTable(ISchemaWrapper $schema, string $suffix = ''): Table {
++	function createDevicesTable(ISchemaWrapper $schema, string $suffix = ''): Table|ITable {
+ 		$devicesTable = $schema->createTable('uppush_devices' . $suffix);
+ 		$devicesTable->addColumn('user_id', Types::STRING, [
+ 			'notnull' => true,
+@@ -221,7 +222,7 @@
+ 		return $devicesTable;
+ 	}
+ 
+-	function createApplicationsTable(ISchemaWrapper $schema, Table $devicesTable, string $suffix = ''): void {
++	function createApplicationsTable(ISchemaWrapper $schema, Table|ITable $devicesTable, string $suffix = ''): void {
+ 		$appTable = $schema->createTable('uppush_applications' . $suffix);
+ 		$appTable->addColumn('device_id', Types::STRING, [
+ 			'notnull' => true,
+@@ -258,7 +259,7 @@
+ 		}
+ 		$this->log("New apps table, using FK: " . $fk);
+ 		$appTable->addForeignKeyConstraint(
+-			$devicesTable,
++			$devicesTable->getName(),
+ 			['device_id'],
+ 			['device_id'],
+ 			["onDelete" => "CASCADE"],

@@ -46,15 +46,37 @@ let
   # last app-list refresh. Same app-store source nixpkgs uses; drop each pin once
   # nextcloud35Packages.apps carries it. unpack = true hashes the unpacked tree, so a
   # re-generated codeberg /archive tarball (uppush) cannot break the hash again.
-  storeApp = url: hash: pkgs.fetchNextcloudApp { inherit url hash; unpack = true; license = "agpl3Plus"; };
+  storeApp = url: hash: patches: pkgs.fetchNextcloudApp { inherit url hash patches; unpack = true; license = "agpl3Plus"; };
   storeApps = {
     news             = storeApp "https://github.com/nextcloud/news/releases/download/29.0.0-beta.1/news.tar.gz"
-                                "sha256-ZT0FLb2u0vhuEX8tvUyHq2hW+hVuwW+1sArBiJQKGIw=";
+                                "sha256-ZT0FLb2u0vhuEX8tvUyHq2hW+hVuwW+1sArBiJQKGIw=" [];
     previewgenerator = storeApp "https://github.com/nextcloud-releases/previewgenerator/releases/download/v5.15.0/previewgenerator-v5.15.0.tar.gz"
-                                "sha256-jXUX5hDNrZ7qFBQel+8IWAGu6WwMlMcpMf+YX5dKh/g=";
+                                "sha256-jXUX5hDNrZ7qFBQel+8IWAGu6WwMlMcpMf+YX5dKh/g=" [];
+    # 2.6.0's first migration types its tables as Doctrine's, but 35 hands out its own
+    # wrapper, so enabling it dies with a TypeError (upstream #124, open).
     uppush           = storeApp "https://codeberg.org/NextPush/uppush/archive/2.6.0.tar.gz"
-                                "sha256-trpmBCuU4q4GXiSAT8gpP9pAz6q1Rdz/yIIB6Iem2is=";
+                                "sha256-trpmBCuU4q4GXiSAT8gpP9pAz6q1Rdz/yIIB6Iem2is="
+                                [ ./uppush-nc35-schema-table.patch ];
+    # nixpkgs ships 1.3.3 (<=34) as both the app and the daemon; 1.4.1 supports 35.
+    notify_push      = storeApp "https://github.com/nextcloud-releases/notify_push/releases/download/v1.4.1/notify_push-v1.4.1.tar.gz"
+                                "sha256-stMKO4B148w/AKF0CjT+OR+JDCiN5SfbTOp4j8K5txw=" [];
   };
+
+  # The notify_push daemon must match its app, so it moves to 1.4.1 with it.
+  notifyPushPkg = pkgs.nextcloud-notify_push.overrideAttrs (old: rec {
+    version = "1.4.1";
+    src = pkgs.fetchFromGitHub {
+      owner = "nextcloud";
+      repo  = "notify_push";
+      tag   = "v${version}";
+      hash  = "sha256-lg/gffgfUJHLCL1TOPdYAw7DtRZeGDH+jO9deQSUbEY=";
+    };
+    cargoDeps = pkgs.rustPlatform.fetchCargoVendor {
+      inherit src;
+      name = "notify_push-${version}-vendor";
+      hash = "sha256-skKOCJBtpvtdc594eOxbvSIl+SucaH0jl1gFv9kfvNA=";
+    };
+  });
 
   versions = {
     postgresPkg   = pkgs.postgresql_15;
@@ -396,13 +418,16 @@ in
         integration_openai
       ;
       eurooffice = pkgs.callPackage ./eurooffice-nextcloud.nix {};
+      # The notify_push module adds its own (nixpkgs 1.3.3); this one wins.
+      notify_push = lib.mkForce versions.nextcloudApps.notify_push;
     };
     extraAppsEnable = true;
 
     # TLS terminated by Caddy; VM serves plain HTTP
     https = false;
 
-    notify_push.enable = true;
+    notify_push.enable  = true;
+    notify_push.package = notifyPushPkg;
 
     phpOptions = {
       "memory_limit"                   = lib.mkForce "512M";
