@@ -734,6 +734,15 @@ in
   # because the proxy replaces X-Forwarded-For). Browsers need the public endpoint instead:
   # the default hands them ws://<hostName>/push/ws, unresolvable and mixed content, so web
   # notifications fell back to slow polling. Setup runs every boot, so this re-applies.
+  #
+  # The key is DELETED before setup: notify_push:setup writes it as type mixed, occ can
+  # only write string, and Nextcloud refuses mixed over a stored string ("conflict
+  # between new type (mixed) and old type (string)"), so from the second boot on setup
+  # failed, and a switch that restarts it exits 4 (hrossen, 34.0.4). string over a fresh
+  # mixed is accepted, so delete -> setup -> set holds on every boot.
+  systemd.services.nextcloud-notify_push_setup.serviceConfig.ExecStartPre =
+    lib.mkIf (ncProxyDomain != "")
+      [ "-${lib.getExe config.services.nextcloud.occ} --no-interaction config:app:delete notify_push base_endpoint" ];
   systemd.services.nextcloud-notify_push_setup.serviceConfig.ExecStartPost =
     lib.mkIf (ncProxyDomain != "")
       "${lib.getExe config.services.nextcloud.occ} --no-interaction config:app:set notify_push base_endpoint --value=https://${ncProxyDomain}/push --type=string";

@@ -191,6 +191,21 @@ else
 fi
 
 # ============================================================================
+# Test 3b: No failed Nextcloud units
+# ============================================================================
+# The configure units are oneshots: when one fails, Nextcloud itself still answers,
+# so Tests 2-3 pass while a setting silently never applied — notify_push_setup failed
+# on every boot after the 34 step and nothing here noticed, until a later switch that
+# restarted it exited 4.
+header "Test 3b: No failed Nextcloud units"
+FAILED_UNITS=$(remote "systemctl --failed --no-legend --plain 2>/dev/null | awk '{print \$1}' | grep -E '^(nextcloud|phpfpm|nginx|redis|postgresql)' || true") || FAILED_UNITS=""
+if [[ -z "${FAILED_UNITS}" ]]; then
+    pass "No failed nextcloud/php-fpm/nginx/redis/postgresql units"
+else
+    fail "Failed units: $(echo "${FAILED_UNITS}" | paste -sd' ' -) — see journalctl -u <unit> on the VM"
+fi
+
+# ============================================================================
 # Test 4: PostgreSQL Service + Nextcloud Database
 # ============================================================================
 header "Test 4: PostgreSQL Service and Nextcloud Database"
