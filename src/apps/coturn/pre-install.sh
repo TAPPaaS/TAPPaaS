@@ -22,16 +22,15 @@ fi
 # they run before the module's own converge.
 MODULE="${1:-coturn}"
 CFG="/home/tappaas/config/${MODULE}.json"
+# shellcheck source=public-name.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/public-name.sh"
 if [[ -f "${CFG}" && -z "$(jq -r '.publicDomain // empty' "${CFG}" 2>/dev/null)" ]]; then
-    _env="$(jq -r '.environment // empty' "${CFG}" 2>/dev/null || true)"
-    _dom="$(jq -r '.domain // empty' <<<"$(get_variant_config "${_env}" 2>/dev/null || echo '{}')")"
-    [[ -z "${_dom}" && -f /home/tappaas/config/configuration.json ]] && \
-        _dom="$(jq -r '.tappaas.domain // empty' /home/tappaas/config/configuration.json 2>/dev/null || true)"
-    if [[ -n "${_dom}" ]]; then
+    _pub="$(coturn_default_public_name "$(jq -r '.environment // empty' "${CFG}" 2>/dev/null || true)")"
+    if [[ -n "${_pub}" ]]; then
         _tmp="$(mktemp "${CFG}.XXXXXX")"
-        if jq --arg d "turn.${_dom}" '.publicDomain = $d' "${CFG}" > "${_tmp}"; then
+        if jq --arg d "${_pub}" '.publicDomain = $d' "${CFG}" > "${_tmp}"; then
             mv "${_tmp}" "${CFG}"
-            info "  ${GN}✓${CL} publicDomain → turn.${_dom}"
+            info "  ${GN}✓${CL} publicDomain → ${_pub}"
         else
             rm -f "${_tmp}"
         fi

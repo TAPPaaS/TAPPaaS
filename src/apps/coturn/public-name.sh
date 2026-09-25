@@ -13,18 +13,25 @@
 #   coturn_converge_public_name <effective-module-name> <coturn-internal-fqdn>
 #
 # Sets COTURN_PUBLIC ("" when no site domain is known). Idempotent.
+
+# coturn_default_public_name <environment> — "turn.<domain>" for the environment's
+# domain (site.json, via get_variant_config), or nothing when it has none. The one
+# derivation: pre-install.sh settles the name with it before any consumer reads it.
+coturn_default_public_name() {
+    local domain
+    domain="$(jq -r '.domain // empty' <<<"$(get_variant_config "$1" 2>/dev/null || echo '{}')")"
+    [[ -z "${domain}" ]] || printf 'turn.%s' "${domain}"
+}
+
 coturn_converge_public_name() {
     local module="$1" coturn_host="$2"
     local cfg="/home/tappaas/config/${module}.json"
-    local site_domain tmp coturn_ip
+    local tmp coturn_ip
 
     COTURN_PUBLIC="$(get_config_value publicDomain '')"
     if [[ -z "${COTURN_PUBLIC}" ]]; then
-        site_domain="$(jq -r '.domain // empty' <<<"$(get_variant_config "$(get_config_value environment '')" 2>/dev/null || echo '{}')")"
-        [[ -z "${site_domain}" && -f /home/tappaas/config/configuration.json ]] && \
-            site_domain="$(jq -r '.tappaas.domain // empty' /home/tappaas/config/configuration.json 2>/dev/null || true)"
-        if [[ -n "${site_domain}" ]]; then
-            COTURN_PUBLIC="turn.${site_domain}"
+        COTURN_PUBLIC="$(coturn_default_public_name "$(get_config_value environment '')")"
+        if [[ -n "${COTURN_PUBLIC}" ]]; then
             # Persist it so every reader sees the same name.
             if [[ -f "${cfg}" ]]; then
                 tmp="$(mktemp "${cfg}.XXXXXX")"
