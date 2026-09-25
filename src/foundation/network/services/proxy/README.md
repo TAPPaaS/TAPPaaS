@@ -28,7 +28,7 @@ trusted to have made config true. That is the blind spot recommendation 1 closes
 
 ## Fields
 
-`network:proxy` owns **10** declared field(s). Each table below carries the field's full definition and, where the service applies it, its ADR-020 change semantics.
+`network:proxy` owns **8** declared field(s). Each table below carries the field's full definition and, where the service applies it, its ADR-020 change semantics.
 
 ### `proxyDomain`
 
@@ -171,43 +171,5 @@ Additional reverse-proxy routes for a VM that serves several endpoints on differ
 **About the field.** Each entry is { name: <DNS label, no dots>, port: <1-65535> }; the FQDN is <name>.<domain>. Each route gets its own Caddy handler keyed by 'TAPPaaS: <module>#<name>'. Adding an entry publishes it on the next install/update; removing one tears its route down.
 
 **Why this change class.** The extra hostnames a single VM publishes. Adding or removing an entry creates or prunes that route live; the primary route and the module itself are untouched.
-
-### `firewallType`
-
-Type of firewall in use. Set to 'NONE' when the TAPPaaS OPNsense firewall is not deployed (e.g. using pfSense, UniFi, Cisco, or no firewall).
-
-| Attribute | Value |
-|---|---|
-| Type | `string` |
-| Default | `opnsense` |
-| Allowed values | `opnsense` — TAPPaaS-managed OPNsense firewall (default)<br>`NONE` — No TAPPaaS firewall — manual reverse proxy and firewall rule configuration required |
-| Example | `NONE` |
-| Required by | *(none)* |
-| Used by | `network:proxy` |
-| Change class | `in-place` |
-| Apply mode | `reconcile` |
-
-**About the field.** When set to 'NONE', network:proxy prints manual configuration instructions instead of calling caddy-manager
-
-**Why this change class.** Which firewall implementation serves this estate. 'NONE' makes the service print manual instructions instead of calling a controller; that branch is the non-field logic update-service.sh keeps.
-
-### `aliasType`
-
-OPNsense alias type for the module's firewall alias (tappaas_module_<vmname>). 'host' (default) targets the FQDN <vmname>.<zone0>.internal resolved via Unbound/dnsmasq. 'network' targets the entire zone0 subnet from zones.json — use for modules representing multiple devices with no single resolvable hostname (e.g. an IoT speaker fleet, a set of physical appliances).
-
-| Attribute | Value |
-|---|---|
-| Type | `string` |
-| Default | `host` |
-| Allowed values | `host` — Host alias → <vmname>.<zone0>.internal FQDN (default, single-VM modules)<br>`network` — Network alias → zone0 subnet CIDR from zones.json (multi-device modules) |
-| Example | `network` |
-| Required by | *(none)* |
-| Used by | `network:proxy` |
-| Change class | `in-place` |
-| Apply mode | `reconcile` |
-
-**About the field.** When 'network', the alias content is derived from the zone0 subnet — no separate field is needed. The module's zone0 must define an 'ip' (subnet) in zones.json.
-
-**Why this change class.** How the module is addressed in the generated firewall alias (host vs network).
 
 <!-- END GENERATED FIELDS -->
