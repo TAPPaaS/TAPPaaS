@@ -32,6 +32,48 @@ Changing it warns when the channel and the tracked branch disagree, and refuses 
 production — or onto a branch behind the migrations your config has already applied — without
 `--force`. A site can sit on any branch; the channel says what you expect of it.
 
+### Which branch is which channel — `channels.json`
+
+The table above is *this* repository's mapping, and it is not hardcoded anywhere: each repository
+declares its own, in `channels.json` at its root (ADR-028 D11).
+
+```json
+{
+  "production": ["stable"],
+  "staging":    ["staging"],
+  "unstable":   ["main"]
+}
+```
+
+A **list** per channel, because a repository may realize one channel from more than one branch;
+usually there is a single entry. Two rules follow, both erring the same way:
+
+- **A branch listed in no channel is unstable.** An unrecognised branch — a `pin/2026-w39`, a
+  feature branch — is never mistaken for production.
+- **A repository with no `channels.json` is undeclared**, which reads as unstable throughout. That
+  is a *warning*, not a refusal: repositories predate this file, and a site tracking one must keep
+  working. But it is said out loud, every time, because the silence it replaces was a site claiming
+  `production` while tracking somebody's `main`.
+
+This matters because a site tracks **several** repositories — the TAPPaaS source, the Community
+modules, often its own — and the channel is a claim about all of them. So:
+
+```bash
+tappaas-train.sh status
+```
+
+lists every registered repository with the branch it is on, the channel that branch realizes, and a
+note where that disagrees with the site's channel or where nothing is declared. And:
+
+```bash
+site-manager site modify --channel production
+```
+
+checks the same thing at the moment you change it: for each repository it names the branch that
+repository declares for the new channel, says which ones do not match, and prints the
+`site-manager repository modify <name> --branch <b>` that would settle each. **It does not switch
+them.** A branch change is a code change to a live site, and when that happens is yours to decide.
+
 ## Running a boundary
 
 Only the `unstable` site drives a boundary. A production site promoting its own untested code is

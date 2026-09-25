@@ -113,7 +113,7 @@ with), `--networkIsp`, `--networkPublicIp`. The discovery-derived
 `hardware.nodes[]` (use `node …`) and the `repositories`/`environments`/
 `organizations` lists (own CRUD / own managers) are **not** modifiable here.
 
-### `channel` — which release the site takes (ADR-028 D9)
+### `channel` — which release the site takes (ADR-028 D9, D11)
 
 A **channel is a promise about risk**; the **branch is where the code sits**. They are separate
 fields because they are separate statements, and an operator changing one before the other is a
@@ -139,6 +139,13 @@ two-step move impossible.
 - **Towards production** (`unstable → staging → production`) moves to *older* code. Config
   migrations are forward-only (ADR-025), so a migration this site has already applied cannot be
   undone by changing channel — the older code simply reads a config shape it does not know.
+
+**It checks every repository, not just TAPPaaS (ADR-028 D11).** Which branch realizes which channel
+is declared by each repository in `channels.json` at its root, so setting a channel compares each
+registered repository's branch against what that repository says, warns where they disagree — or
+where no `channels.json` exists, in which case every branch in it reads as unstable — and prints the
+`site-manager repository modify <name> --branch <b>` that would settle each. It never switches a
+branch itself: that is a code change to a live site.
   `site modify --channel` refuses without `--force` and says why.
 - **Onto a branch behind this site's migrations.** `repository modify --branch` reads the
   target branch's `migrations/` directly from the forge — no checkout needed — and compares its

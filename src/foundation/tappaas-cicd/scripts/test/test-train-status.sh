@@ -584,5 +584,70 @@ H="$("${TRAIN}" --help 2>&1)"
     && ok "…and the range still reaches the last usage line" \
     || bad "--help is truncated: the sed range no longer covers the header"
 
+echo "── channels.json: a repository says which branch is which channel (D11) ──"
+CL_LIB="${HERE}/../../lib/channels-lib.sh"
+if [[ ! -r "${CL_LIB}" ]]; then
+    bad "channels-lib.sh not found beside the suite"
+else
+    . "${CL_LIB}"
+    mkdir -p "${TMP}/decl" "${TMP}/undecl"
+    printf '%s\n' '{"_README":"x","production":["stable"],"staging":["staging"],"unstable":["main"]}' \
+        > "${TMP}/decl/channels.json"
+
+    [[ "$(channel_branches "${TMP}/decl" production)" == "stable" ]] \
+        && ok "a channel resolves to its branch" || bad "channel_branches wrong"
+    [[ "$(branch_channel "${TMP}/decl" stable)" == "production" ]] \
+        && ok "a branch resolves to its channel" || bad "branch_channel wrong"
+    # The rule that keeps this safe: anything unlisted is unstable, never
+    # production. A pin branch must not read as a release channel.
+    [[ "$(branch_channel "${TMP}/decl" pin/2026-w39)" == "unstable" ]] \
+        && ok "an unlisted branch is unstable, not production" || bad "unlisted branch misclassified"
+    # Keys beginning with _ are prose, not channels.
+    [[ "$(branch_channel "${TMP}/decl" _README)" == "unstable" ]] \
+        && ok "…and a _README key is not a channel" || bad "_README treated as a channel"
+
+    channel_matches "${TMP}/decl" stable production \
+        && ok "stable matches production" || bad "stable should match production"
+    channel_matches "${TMP}/decl" main production \
+        && bad "main must NOT match production" || ok "main does not match production"
+
+    # Undeclared is distinguishable from unstable: "nobody said" is what the
+    # warning is about, and a repository that promises nothing never matches.
+    channels_declared "${TMP}/undecl" && bad "an empty dir read as declared" \
+        || ok "a repository without channels.json reads as undeclared"
+    [[ -z "$(branch_channel "${TMP}/undecl" main)" ]] \
+        && ok "…and returns nothing, so callers can tell it from 'unstable'" \
+        || bad "undeclared repo answered as if it had declared"
+    channel_matches "${TMP}/undecl" stable production \
+        && bad "an undeclared repo matched a channel" || ok "…and never matches a channel"
+
+    # Malformed JSON must read as undeclared, not crash a status run.
+    printf '%s\n' '{ this is not json' > "${TMP}/undecl/channels.json"
+    [[ -z "$(branch_channel "${TMP}/undecl" main)" ]] \
+        && ok "unreadable channels.json reads as undeclared" || bad "malformed json was trusted"
+    rm -f "${TMP}/undecl/channels.json"
+
+    # site_repos must yield every registered repository, not just TAPPaaS.
+    printf '%s\n' '{"repositories":[{"name":"TAPPaaS","branch":"main","path":"/a"},{"name":"Community","branch":"main","path":"/b"}]}' \
+        > "${TMP}/site-two.json"
+    [[ "$(site_repos "${TMP}/site-two.json" | wc -l | tr -d ' ')" == "2" ]] \
+        && ok "every registered repository is returned, not only TAPPaaS" \
+        || bad "site_repos did not return both repositories"
+fi
+
+echo "── this repository declares its own channels ──"
+# The file the rest of this depends on: if it goes missing, every site tracking
+# TAPPaaS silently reads as unstable.
+_CJ="${HERE}/../../../../../channels.json"
+if [[ -r "${_CJ}" ]]; then
+    ok "channels.json exists at the repository root"
+    [[ "$(jq -r '.production[0]' "${_CJ}")" == "stable" ]] \
+        && ok "…and names stable as production" || bad "production is not stable"
+    [[ "$(jq -r '.unstable[0]' "${_CJ}")" == "main" ]] \
+        && ok "…and main as unstable" || bad "unstable is not main"
+else
+    bad "channels.json missing from the repository root (${_CJ})"
+fi
+
 echo "── summary: ${PASS} pass, ${FAIL} fail ──"
 [[ "${FAIL}" -eq 0 ]]

@@ -46,6 +46,13 @@ SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
 CONFIG_DIR="${TAPPAAS_CONFIG_DIR:-/home/tappaas/config}"
 REPO_DIR="${TAPPAAS_REPO_DIR:-/home/tappaas/TAPPaaS}"
 BIN_DIR="${TAPPAAS_BIN_DIR:-/home/tappaas/bin}"
+
+# Which branch realizes which channel is the REPOSITORY's statement, not this
+# script's (ADR-028 D11). Sourced from beside this script so the tabletop suite
+# gets it too.
+_chan_lib="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)/../lib/channels-lib.sh"
+# shellcheck source=../lib/channels-lib.sh
+[[ -r "${_chan_lib}" ]] && . "${_chan_lib}"
 SITE_FILE="${CONFIG_DIR}/site.json"
 STATE_FILE="${CONFIG_DIR}/release-train.json"
 # The boundary interval (ADR-028 D2). Policy, so it is named once.
@@ -128,6 +135,9 @@ check_ancestry() {
 soak_started() { jq -r '.soakStartedAt // empty' "${STATE_FILE}" 2>/dev/null; }
 
 # ── status ───────────────────────────────────────────────────────────
+CHAN_UNDECLARED=0
+CHAN_MISMATCH=0
+
 cmd_status() {
     read_train
     check_ancestry
@@ -151,6 +161,34 @@ cmd_status() {
         fi
     else
         warn "  this site declares no channel — site-manager site modify --channel <c>"
+    fi
+
+    # Every registered repository, not just this one (ADR-028 D11). A site on
+    # `production` whose Community checkout sits on somebody's `main` is not a
+    # production site, and before D11 nothing could say so.
+    if declare -f site_repos >/dev/null 2>&1; then
+        echo
+        info "${BOLD}Repositories this site tracks${CL}"
+        printf '  %-14s %-18s %-11s %s\n' REPOSITORY BRANCH REALIZES NOTE
+        local _rn _rb _rp _real _note
+        while IFS=$'\t' read -r _rn _rb _rp; do
+            [[ -n "${_rn}" ]] || continue
+            _note=""
+            if ! channels_declared "${_rp}"; then
+                _real="?"
+                _note="no channels.json — every branch reads as unstable"
+                CHAN_UNDECLARED=$((CHAN_UNDECLARED + 1))
+            else
+                _real="$(branch_channel "${_rp}" "${_rb}")"
+                if [[ -n "${SITE_CHANNEL}" && "${_real}" != "${SITE_CHANNEL}" ]]; then
+                    _note="site claims '${SITE_CHANNEL}'"
+                    CHAN_MISMATCH=$((CHAN_MISMATCH + 1))
+                fi
+            fi
+            printf '  %-14s %-18s %-11s %s\n' "${_rn}" "${_rb}" "${_real}" "${_note}"
+        done < <(site_repos "${CONFIG_DIR}/site.json")
+        (( CHAN_UNDECLARED == 0 )) || warn "  ${CHAN_UNDECLARED} repository/repositories declare no channels.json (ADR-028 D11)"
+        (( CHAN_MISMATCH == 0 )) || warn "  ${CHAN_MISMATCH} repository/repositories are not on the branch this site's channel names"
     fi
 
     [[ -n "${PIN_REV}" ]] && info "  estate pin ${BL}${PIN_REV:0:12}${CL}, ${PIN_AGE} days old"

@@ -33,7 +33,7 @@ import { applyPlan, computePlan } from "./reconcile";
 import { adoptNode, provisionNode } from "./provision";
 import { Site, SiteClient, SiteNode } from "./types";
 import { spawnSync } from "child_process";
-import { existsSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 
 const VERSION = "0.1.0";
 
@@ -47,7 +47,7 @@ export const HELP: HelpSpec = {
       usage: "site modify <field options>",
       name: "site modify (fields; at least one)",
       options: [
-        ["--channel <c>", "release channel: unstable | staging | production (ADR-028 D9). Warns when it disagrees with the tracked branch; moving towards production needs --force."],
+        ["--channel <c>", "release channel: unstable | staging | production (ADR-028 D9). Checks EVERY registered repository against the branch it declares for that channel in its channels.json (D11), warns where they disagree or where none is declared, and proposes the fix; moving towards production needs --force."],
         ["--force", "authorize a channel move towards production — older code, and ADR-025 migrations do not run backwards."],
         ["--displayName <s>", "display name"],
         ["--owner <org>", "owning organization"],
@@ -344,8 +344,31 @@ function cmdSite(o: Opts): void {
     // they do not rather than refusing — a site may legitimately sit between
     // the two for a moment while the operator moves both.
     const CHANNELS = ["unstable", "staging", "production"] as const;
-    const channelBranch: Record<string, string> = {
-      unstable: "main", staging: "staging", production: "stable",
+
+    // Which branch realizes which channel is the REPOSITORY's statement, read
+    // from channels.json at its root (ADR-028 D11) — not a map hardcoded here,
+    // which was only ever true of the TAPPaaS source. Returns null when the
+    // repository declares nothing, so a caller can tell "unstable" from
+    // "nobody said"; the difference is the whole point of the warning.
+    const declaredChannels = (repoPath?: string): Record<string, string[]> | null => {
+      if (!repoPath) return null;
+      const f = `${repoPath}/channels.json`;
+      if (!existsSync(f)) return null;
+      try {
+        const j = JSON.parse(readFileSync(f, "utf8")) as Record<string, unknown>;
+        const out: Record<string, string[]> = {};
+        for (const [k, v] of Object.entries(j)) {
+          if (k.startsWith("_")) continue;        // _README and friends
+          if (Array.isArray(v)) out[k] = v.filter((x): x is string => typeof x === "string");
+        }
+        return out;
+      } catch { return null; }                     // unreadable reads as undeclared
+    };
+    // A branch listed in no channel is UNSTABLE — the safe direction, so an
+    // unrecognised branch is never mistaken for production.
+    const branchChannel = (decl: Record<string, string[]>, branch: string): string => {
+      for (const c of CHANNELS) if ((decl[c] ?? []).includes(branch)) return c;
+      return "unstable";
     };
     const setChannel = (): void => {
       const v = o.flags.get("--channel");
@@ -373,16 +396,38 @@ function cmdSite(o: Opts): void {
       changed++;
       // The branch is not changed here — repository modify owns it — but a
       // disagreement is worth saying at the moment it is created.
+      // EVERY registered repository, not just TAPPaaS (ADR-028 D11): the channel
+      // is a claim about everything this site tracks. A site on `production`
+      // whose Community checkout sits on somebody's `main` is not a production
+      // site. Nothing is switched here — repository modify owns the branch, and
+      // a branch change is a code change to a live site — but the disagreement
+      // is named at the moment it is created, with the command that settles it.
       const repos = Array.isArray(raw.repositories) ? raw.repositories : [];
-      const want = channelBranch[v];
+      let undeclared = 0, disagree = 0;
       for (const r of repos as Array<Record<string, unknown>>) {
         const name = typeof r.name === "string" ? r.name : "?";
         const br = typeof r.branch === "string" ? r.branch : undefined;
-        if (name !== "TAPPaaS") continue;   // only TAPPaaS runs the train
-        if (br && br !== want) {
-          warn(`channel ${v} expects the TAPPaaS repository on '${want}', but it tracks '${br}'.`);
-          warn(`  Bring them together: site-manager repository modify TAPPaaS --branch ${want}`);
+        const path = typeof r.path === "string" ? r.path : undefined;
+        const decl = declaredChannels(path);
+        if (decl === null) {
+          undeclared++;
+          warn(`${name} declares no channels.json — every branch in it reads as unstable (ADR-028 D11).`);
+          warn(`  Add one at its root, or accept that this site cannot claim '${v}' for it.`);
+          continue;
         }
+        const want = decl[v] ?? [];
+        if (br === undefined) continue;
+        if (want.includes(br)) continue;            // already right
+        disagree++;
+        if (want.length === 0) {
+          warn(`${name} declares no branch for channel '${v}' — it tracks '${br}' (${branchChannel(decl, br)}).`);
+        } else {
+          warn(`channel ${v} expects ${name} on '${want[0]}', but it tracks '${br}' (${branchChannel(decl, br)}).`);
+          warn(`  Bring them together: site-manager repository modify ${name} --branch ${want[0]}`);
+        }
+      }
+      if (undeclared > 0 || disagree > 0) {
+        warn(`The channel is set to '${v}', but ${undeclared + disagree} repository/repositories do not yet match it.`);
       }
     };
     setChannel();
