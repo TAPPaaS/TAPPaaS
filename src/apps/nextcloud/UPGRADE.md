@@ -16,13 +16,17 @@ Nextcloud's own database/app migration (`occ upgrade`) runs automatically on act
 
 ## Nextcloud major-version upgrades
 
-- Majors must be sequential — Nextcloud refuses to skip one (33 → 34 → 35, never 33 → 35). A
-  site that keeps its data must step through every major in turn.
-- The pinned major lives in `nextcloud.nix` (`ncMajor`); a maintainer bumps it (see below).
-  Once the new package is deployed, `services.nextcloud` performs the schema upgrade
-  automatically.
-- For a multi-major jump, deploy each major in turn: bump the pin, run
-  `update-module.sh nextcloud`, repeat.
+- Majors must be sequential — Nextcloud refuses to skip one (33 → 34 → 35, never 33 → 35).
+- **The module steps for you, one major per update.** `nc-major.nix` reads the installed major
+  from the guest's `config.php` and builds `min(targetMajor, installed + 1)`. A site on 33 goes
+  to 34 at its next update and to 35 at the one after, keeping its data; the scheduled sweep
+  does both, a night apart. To take both steps now, run `update-module.sh nextcloud` twice.
+- An intermediate step uses nixpkgs' own app set for that major; the release's app-store pins
+  and patches apply from `targetMajor` on.
+- A fresh install goes straight to `targetMajor`.
+- The build refuses, before anything changes, a site whose next major this nixpkgs does not
+  carry (reinstall it, or restore it into a release that does) and an installed major newer
+  than the release (Nextcloud cannot go back).
 
 ## PostgreSQL major upgrades
 
@@ -50,11 +54,13 @@ Expected: `installed: true`, HTTP 200/302, PostgreSQL and Redis active, backup t
 Edit the single `versions` block at the top of `nextcloud.nix`:
 
 ```nix
-ncMajor = 35;   # drives both the package and its app-set
+targetMajor = 35;   # the release's Nextcloud; each build installs min(this, installed + 1)
 ```
 
-`ncMajor` resolves `pkgs."nextcloud${ncMajor}"` and `pkgs."nextcloud${ncMajor}Packages".apps`,
-so the package and all bundled apps move together. Also:
+The installed major (`ncMajor`, from `nc-major.nix`) resolves `pkgs."nextcloud${ncMajor}"` and
+`pkgs."nextcloud${ncMajor}Packages".apps`, so the package and all bundled apps move together.
+The pinned nixpkgs must carry every major between the oldest supported site and the target,
+or those sites are refused. Also:
 
 1. Bump `appVersion` in `nextcloud.json` to match.
 2. Ensure the nixpkgs template revision (pinned engine-side, in `update-os.sh`) carries the new
@@ -84,3 +90,22 @@ so the package and all bundled apps move together. Also:
   (upstream issue #124, open); this module carries a small patch until upstream fixes it.
 - **notify_push's app and daemon must move together.** nixpkgs' notify_push package (1.3.3)
   does not support 35, so both the app and the daemon are pinned here to 1.4.1.
+
+## What an existing site gets with 35
+
+The sweep upgrades an existing site in place (33 → 34 → 35, above). On the way it also changes:
+
+- **User IDs are kept.** A new install names Authentik users by username (`--unique-uid=0`); a
+  site that already has the Authentik provider keeps what it has — hashed IDs, unless it was set
+  otherwise. Changing it later would give every user a new, empty account.
+- **Admin rights come from Authentik.** Members of the `nextcloud-admins` Authentik group become
+  Nextcloud admins at login. A user made admin by hand in Nextcloud and not in that group may
+  lose admin at their next login: add them to `nextcloud-admins` first.
+- **The login page goes straight to Authentik.** Local accounts still log in at
+  `/login?direct=1` (bookmark it for the local `admin`).
+- **The euro-office connector becomes `eurooffice`.** The old `onlyoffice` app is disabled and
+  its settings are rebuilt under the new ID from `/etc/secrets/onlyoffice.env`; connector
+  settings changed by hand in the Nextcloud UI are not carried over.
+- **Clients:** nothing to do while user IDs are kept. On a fresh install (new IDs), every app on
+  every device must remove and re-add its account, or failed logins trip brute-force
+  throttling (`occ security:bruteforce:reset <ip>` clears it).
