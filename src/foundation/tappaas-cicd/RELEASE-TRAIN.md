@@ -54,6 +54,10 @@ usually there is a single entry. Two rules follow, both erring the same way:
   is a *warning*, not a refusal: repositories predate this file, and a site tracking one must keep
   working. But it is said out loud, every time, because the silence it replaces was a site claiming
   `production` while tracking somebody's `main`.
+- **A repository that declares no branch for your channel** — only `unstable`, say, because it has
+  never cut a release — is reported separately from one that is merely on the wrong branch. There is
+  nothing to switch to, so "move to X" would be nonsense; the site simply cannot claim that channel
+  for that repository until a branch exists.
 
 This matters because a site tracks **several** repositories — the TAPPaaS source, the Community
 modules, often its own — and the channel is a claim about all of them. So:

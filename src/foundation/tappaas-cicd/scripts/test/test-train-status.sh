@@ -635,6 +635,21 @@ else
         || bad "site_repos did not return both repositories"
 fi
 
+echo "── a repository with no branch for the channel is its own case ──"
+# A site on `production` tracking a repo that only ever cut `main`. The
+# operator cannot fix this by switching branches — there is nothing to switch
+# to — so it must not be reported as "you are on the wrong branch".
+printf '%s\n' '{"unstable":["main"]}' > "${TMP}/decl/only-unstable.json"
+mkdir -p "${TMP}/nobranch" && cp "${TMP}/decl/only-unstable.json" "${TMP}/nobranch/channels.json"
+channels_declared "${TMP}/nobranch" \
+    && ok "it IS declared — this is not the undeclared case" || bad "should read as declared"
+[[ -z "$(channel_branches "${TMP}/nobranch" production)" ]] \
+    && ok "…and offers no branch for production" || bad "production resolved to something"
+[[ "$(branch_channel "${TMP}/nobranch" main)" == "unstable" ]] \
+    && ok "…while its main is honestly unstable" || bad "main misclassified"
+channel_matches "${TMP}/nobranch" main production \
+    && bad "main matched production" || ok "…so a production site cannot claim it"
+
 echo "── this repository declares its own channels ──"
 # The file the rest of this depends on: if it goes missing, every site tracking
 # TAPPaaS silently reads as unstable.
