@@ -245,6 +245,8 @@ module_config_exists() {
 # before is never touched, and --no-rollback keeps it all for inspection.
 INSTALL_MODULE_NAME=""     # effective name, set once the config is written
 INSTALL_CREATED_VM=false   # this run created the VM
+INSTALL_VMID=""            # the module's VMID, recorded before Step 5 creates it
+INSTALL_VM_BEFORE=true     # whether that VM already existed then (true = never ours)
 INSTALL_NO_ROLLBACK=false
 
 rollback_failed_install() {
@@ -258,6 +260,14 @@ rollback_failed_install() {
     fi
     echo "" >&2
     warn "Install failed — removing what this run created."
+    # A failure INSIDE Step 5 — a service after cluster:vm, such as network:nat —
+    # ends the run before INSTALL_CREATED_VM is set, so ask the cluster instead: a
+    # VM that was not there before and is there now is this run's. Asking only the
+    # flag left such a VM running while this said "nothing half-installed is left".
+    if [[ "${INSTALL_CREATED_VM}" != true && "${INSTALL_VM_BEFORE:-true}" == false && -n "${INSTALL_VMID:-}" ]] \
+       && vm_exists_on_cluster "${INSTALL_VMID}" "$(get_node_fqdn 0)" >/dev/null 2>&1; then
+        INSTALL_CREATED_VM=true
+    fi
     if [[ "${INSTALL_CREATED_VM}" == true ]]; then
         warn "  Deleting the VM and config of '${INSTALL_MODULE_NAME}'..."
         if /home/tappaas/bin/delete-module.sh "${INSTALL_MODULE_NAME}" --force >/dev/null 2>&1; then
@@ -764,6 +774,7 @@ main() {
     if [[ -n "${_vmid}" ]] && vm_exists_on_cluster "${_vmid}" "$(get_node_fqdn 0)" >/dev/null 2>&1; then
         _vm_before=true
     fi
+    INSTALL_VMID="${_vmid}"; INSTALL_VM_BEFORE="${_vm_before}"
 
     if [[ -z "${depends_on}" ]]; then
         debug "  No dependency services to call"

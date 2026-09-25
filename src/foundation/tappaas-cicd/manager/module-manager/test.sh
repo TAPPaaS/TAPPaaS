@@ -1359,7 +1359,7 @@ echo "delete $*" >> "${RB_MARKER}"
 STUB
 chmod +x "${RB}/bin/delete-module.sh"
 
-run_rb() {  # run_rb <rc> <created_vm> <no_rollback>
+run_rb() {  # run_rb <rc> <created_vm> <no_rollback> [vm_before] [vm_exists_now]
     : > "${RB}/marker"
     echo '{"vmid":999}' > "${RB}/cfg/demo.json"
     echo '{}' > "${RB}/cfg/demo.json.orig"
@@ -1369,6 +1369,9 @@ run_rb() {  # run_rb <rc> <created_vm> <no_rollback>
         info(){ :; }; debug(){ :; }; warn(){ echo "WARN:$*" >&2; }; error(){ echo "ERR:$*" >&2; }
         CONFIG_DIR="'"${RB}/cfg"'"
         INSTALL_MODULE_NAME="demo"; INSTALL_CREATED_VM='"$2"'; INSTALL_NO_ROLLBACK='"$3"'
+        if [[ -n "'"${4:-}"'" ]]; then INSTALL_VMID=999; INSTALL_VM_BEFORE='"${4:-true}"'; fi
+        get_node_fqdn(){ echo tappaas1.mgmt.internal; }
+        vm_exists_on_cluster(){ [[ "'"${5:-false}"'" == true ]]; }
         PATH="'"${RB}/bin"'/..:$PATH"
         . "'"${RB}/fn.sh"'"
         ( exit '"$1"' ); rollback_failed_install
@@ -1405,6 +1408,23 @@ if grep -q 'delete demo --force' "${RB}/marker" 2>/dev/null; then
     ok "(d) a VM this run created is removed with the deployment"
 else
     ok "(d) skipped — delete-module.sh is called by absolute path on a live cicd"
+fi
+
+# (e) a service AFTER cluster:vm fails (network:nat on hrossen): the run ends before
+# INSTALL_CREATED_VM is set, so the rollback must ask the cluster, or the VM it
+# created is left running behind "nothing half-installed is left".
+run_rb 2 false false false true
+if grep -q 'Deleting the VM and config' "${RB}/err"; then
+    ok "(e) a VM created before a later Step-5 failure is removed, not orphaned"
+else
+    bad "(e) the VM this run created was left behind: $(cat "${RB}/err")"
+fi
+# (f) …but a VM that was there before the run is never touched
+run_rb 2 false false true true
+if ! grep -q 'Deleting the VM' "${RB}/err" && [[ ! -f "${RB}/cfg/demo.json" ]]; then
+    ok "(f) a pre-existing VM is left alone; only the config goes"
+else
+    bad "(f) a pre-existing VM would have been deleted: $(cat "${RB}/err")"
 fi
 
 # config backup/restore (the rollback half that a VM-less module relies on)
