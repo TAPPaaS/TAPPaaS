@@ -215,17 +215,29 @@ esac
 # Writing unreachable OIDC vars causes silent worker crash loops in apps that
 # eagerly initialise SSO on startup. Fail here rather than produce a broken
 # deployment (issue #369).
+# A freshly (re)created or rebuilt VM can come back with a NEW host key under the
+# same name; clear any stale known_hosts entry first so StrictHostKeyChecking=
+# accept-new doesn't refuse the CHANGED key (same approach as update-os.sh
+# update_ssh_known_hosts). Done before the check, not only before the write: a
+# refused key made the check fail and blame the firewall (#738).
+ssh-keygen -R "${UPSTREAM}" >/dev/null 2>&1 || true
 debug "  VM: verifying OIDC discovery URI reachable from ${UPSTREAM}"
-_oidc_ok=0
+_oidc_ok=0 _oidc_rc=0
 for _attempt in 1 2 3; do
-    if ssh -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR -o ConnectTimeout=10 "tappaas@${UPSTREAM}" \
-        "curl --silent --max-time 10 --output /dev/null --fail '${DISCOVERY_URI}' 2>/dev/null"; then
+    _oidc_rc=0
+    ssh -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR -o ConnectTimeout=10 "tappaas@${UPSTREAM}" \
+        "curl --silent --max-time 10 --output /dev/null --fail '${DISCOVERY_URI}' 2>/dev/null" || _oidc_rc=$?
+    if [[ "${_oidc_rc}" -eq 0 ]]; then
         _oidc_ok=1; break
     fi
-    [[ "${_attempt}" -lt 3 ]] && { warn "  OIDC check attempt ${_attempt}/3 failed — waiting 15 s (network may still be settling after nixos activation)"; sleep 15; }
+    [[ "${_attempt}" -lt 3 ]] && { warn "  OIDC check attempt ${_attempt}/3 failed (exit ${_oidc_rc}) — waiting 15 s (network may still be settling after nixos activation)"; sleep 15; }
 done
 if [[ "${_oidc_ok}" -eq 0 ]]; then
-    die "OIDC discovery URI unreachable from ${UPSTREAM}: ${DISCOVERY_URI} — add a firewall rule allowing ${VMNAME} to reach Authentik, then re-run"
+    # ssh's own failure is exit 255; anything else is curl's verdict from the VM.
+    if [[ "${_oidc_rc}" -eq 255 ]]; then
+        die "cannot ssh to ${UPSTREAM} to check the OIDC discovery URI (ssh exit 255: host down, or its host key changed) — the firewall was not tested"
+    fi
+    die "OIDC discovery URI unreachable from ${UPSTREAM}: ${DISCOVERY_URI} (curl exit ${_oidc_rc}) — add a firewall rule allowing ${VMNAME} to reach Authentik, then re-run"
 fi
 
 # 5b — merge-write: strip any prior OIDC_ lines, append new values. Preserves
@@ -235,10 +247,6 @@ fi
 # read and truncate the secrets file in one pipeline (a `grep file | tee file`
 # race could let tee truncate before grep reads, silently dropping the very
 # co-managed keys we mean to preserve). The merge runs in a single `sudo sh -c`.
-# A freshly (re)created VM reuses the hostname with a NEW host key; clear any
-# stale known_hosts entry first so StrictHostKeyChecking=accept-new doesn't reject
-# the CHANGED key (same approach as update-os.sh update_ssh_known_hosts).
-ssh-keygen -R "${UPSTREAM}" >/dev/null 2>&1 || true
 debug "  VM: merging OIDC vars into ${SECRETS_ENV} on ${UPSTREAM} (mode 600)"
 # Two rules for the remote side (#715):
 #   - the credentials travel on STDIN. Interpolated into the command they were
