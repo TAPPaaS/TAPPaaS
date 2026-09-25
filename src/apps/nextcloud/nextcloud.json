@@ -40,6 +40,12 @@
     },
     "network:proxy": {
       "proxyPort": 80
+    },
+    "identity:identity": {
+      "identity": {
+        "providesAdminRole": true,
+        "adminGroupClaim": "admin"
+      }
     }
   }
 }

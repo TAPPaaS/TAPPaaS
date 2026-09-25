@@ -638,13 +638,15 @@ in
           --clientid="$OIDC_CLIENT_ID" \
           --clientsecret="$OIDC_CLIENT_SECRET" \
           --discoveryuri="$OIDC_DISCOVERY_URI" \
-          --scope="email profile nextcloud openid" \
+          --scope="email profile nextcloud openid groups" \
           --mapping-uid="preferred_username" \
           --unique-uid=0 \
           --mapping-display-name="name" \
           --mapping-email="email" \
           --mapping-quota="quota" \
           --mapping-groups="groups" \
+          --group-provisioning=1 \
+          --group-whitelist-regex="^admin$" \
           --check-bearer=1 \
           --send-id-token-hint=1
 
