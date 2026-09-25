@@ -18,7 +18,7 @@
 #   update-os.sh myvm 610 tappaas1   # Looks for ./myvm.nix if NixOS
 #
 
-set -euo pipefail
+set -Eeuo pipefail
 
 SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
 readonly SCRIPT_NAME
@@ -45,6 +45,27 @@ announce() { [[ "${OPT_SILENT}" -eq 1 ]] || echo -e "${DGN}[Info]${CL} $*"; }
 if [[ "${TAPPAAS_OS_AS_DEBUG:-0}" == "1" ]]; then
     info() { debug "$@"; }
 fi
+
+# An unguarded command that fails ends the script through `set -e`, printing
+# nothing: #711 saw exactly that — the announce line, then silence, then the
+# caller's bare "✗ templates:nixos re-apply failed", with no evidence left to
+# say how far it got or what broke. `set -E` above carries this trap into the
+# functions and subshells where the work actually happens; the trap only
+# REPORTS (it does not exit), so `set -e` still decides the outcome and a
+# `|| die` / `|| warn` path is untouched — those are not ERR events.
+trap 'tappaas_err_report $? "${LINENO}" "${BASH_COMMAND}"' ERR
+tappaas_err_report() {
+    local rc="$1" line="$2" cmd="$3"
+    # Report ONLY when errexit is still on, i.e. when this failure is about to
+    # end the script unannounced. `set +e` does not suppress an ERR trap, so
+    # without this check run_quiet's deliberate `set +e; <pipeline>; set -e`
+    # retry idiom — which reads PIPESTATUS itself — would print an error for
+    # every expected nixos-rebuild retry.
+    case "$-" in *e*) ;; *) return 0 ;; esac
+    # FUNCNAME[1] is the function the failing command ran in (FUNCNAME[0] is
+    # this reporter); "main" when it failed at the top level.
+    error "update-os.sh: ${FUNCNAME[1]:-main}() failed at line ${line} (exit ${rc}): ${cmd}"
+}
 
 # #533: managers run as the tappaas operator, never root — under sudo, SSH
 # resolves identity from /root/.ssh and fails (ADR-018). Refuse root up front.

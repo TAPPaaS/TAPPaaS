@@ -28,4 +28,14 @@ NODE="$(get_config_value 'node' "$(get_node_hostname 0)")"
 # routes update-os.sh's [Info] narration to [Debug] — as a module-update sub-step
 # the parent already announced this call, so only the progress dots and any
 # warnings/errors need to surface. Detail stays available with TAPPAAS_DEBUG=1.
-TAPPAAS_OS_AS_DEBUG=1 /home/tappaas/bin/update-os.sh "${VMNAME}" "${VMID}" "${NODE}"
+# Guarded, not bare (#711): as the last command its exit status was the whole
+# of what the caller learned, so a failure reached reconcile.ts as a number and
+# the operator as "✗ templates:nixos re-apply failed" with nothing to chase.
+# Name the VM and the status here, where both are known.
+rc=0
+TAPPAAS_OS_AS_DEBUG=1 /home/tappaas/bin/update-os.sh "${VMNAME}" "${VMID}" "${NODE}" || rc=$?
+if (( rc != 0 )); then
+    error "OS update of ${VMNAME} (vmid ${VMID}, node ${NODE}) failed: update-os.sh exited ${rc}"
+    error "  re-run with TAPPAAS_DEBUG=1 to see its per-step narration"
+    exit "${rc}"
+fi

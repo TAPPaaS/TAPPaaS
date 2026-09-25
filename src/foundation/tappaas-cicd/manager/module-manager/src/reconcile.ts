@@ -309,7 +309,13 @@ function doReconcile(moduleArg: string, opts: ReconcileOptions): void {
       debug(`  ${GN}✓${CL} ${dep} re-applied`);
       applied.push(dep);
     } else {
-      error(`  ✗ ${dep} re-apply failed`);
+      // #711: the bare mark said only that something went wrong — not what
+      // exited, with what status, or where to look. The child streams straight
+      // to this console (stdio: "inherit"), so when it printed nothing there is
+      // nothing more to quote; naming the script and the status at least gives
+      // the operator something to re-run.
+      error(`  ✗ ${dep} re-apply failed: ${svcScript} exited ${svcRc}`);
+      error(`    re-run with TAPPAAS_DEBUG=1 for its per-step narration`);
       depFailures.push(dep);
     }
   };
