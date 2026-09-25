@@ -91,6 +91,29 @@ Where each channel points, how far apart they are, the estate's nixpkgs pin, how
 has elapsed, and anything that would block a boundary. It changes nothing, so it is always safe.
 
 ```bash
+tappaas-train.sh init
+```
+
+**Run once, before the train's first boundary on a site.** It does two things, and refuses rather
+than repair:
+
+1. **Checks the train is usable.** All three refs — `main`, `staging`, `stable` — must exist on the
+   forge, and they must satisfy `stable ⊆ staging ⊆ main`. `init` does **not** create a missing
+   ref: a production channel that appears because a command invented it is exactly what this train
+   exists to prevent, so it names what is missing and stops. If the three have diverged, it stops
+   too — the train is fast-forward only, and a human has to reconcile that.
+2. **Starts the soak clock**, recording it in `config/release-train.json` along with where each
+   channel points and the estate pin.
+
+It is safe to re-run: with the clock already running it reports the date it started and changes
+nothing, so it never silently restarts a soak that is part-way through.
+
+The clock matters because the soak is what a boundary waits on. A site that has never run `init`
+has no start date, so `boundary` refuses — and this is one of the refusals `--force-boundary`
+**cannot** lift, unlike an incomplete soak. A soak that has not started is not a soak you can
+decide to cut short; there is nothing to cut short.
+
+```bash
 tappaas-train.sh boundary
 ```
 
