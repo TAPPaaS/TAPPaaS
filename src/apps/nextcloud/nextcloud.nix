@@ -650,6 +650,10 @@ in
           --check-bearer=1 \
           --send-id-token-hint=1
 
+        # Authentik is the only login backend, so the login page goes straight to
+        # it; a local account still logs in at /login?direct=1.
+        nextcloud-occ --no-interaction config:app:set user_oidc allow_multiple_user_backends --value=0 --type=string
+
         echo "Authentik OIDC provider configured successfully."
       '';
     };
