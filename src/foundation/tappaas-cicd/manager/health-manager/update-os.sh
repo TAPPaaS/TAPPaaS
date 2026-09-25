@@ -497,9 +497,11 @@ update_nixos() {
     ssh -o BatchMode=yes "tappaas@${vm_ip}" "sudo install -m 0644 /tmp/${nix_basename} ${remote_nix_path} && rm -f /tmp/${nix_basename}" \
         || die "failed to install ${remote_nix_path} on ${vm_ip}"
 
-    # Copy sibling .nix helpers the main .nix imports via pkgs.callPackage.
-    # Skips the already-copied main file. Failure is non-fatal. Fixes #286.
-    for _sib in ./*.nix; do
+    # Copy the siblings the main .nix references: .nix helpers it imports via
+    # pkgs.callPackage (#286), and patch files (./fix.patch) it applies (#740) —
+    # without them, evaluation on the guest fails with "path … does not exist".
+    # Skips the already-copied main file. Failure is non-fatal.
+    for _sib in ./*.nix ./*.patch ./*.diff; do
         [[ -f "${_sib}" ]] || continue
         local _sib_base
         _sib_base="$(basename "${_sib}")"
