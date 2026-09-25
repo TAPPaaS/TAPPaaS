@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # TAPPaaS Euro-Office DocumentServer Verification Test Script
 #
-# Runs all 10 verification tests for the Euro-Office DocumentServer installation.
+# Runs the verification tests for the Euro-Office DocumentServer installation.
 # Must be run from tappaas-cicd as the tappaas user.
 #
 # Usage: ./test.sh

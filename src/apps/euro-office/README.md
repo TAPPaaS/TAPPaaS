@@ -1,40 +1,32 @@
 # euro-office
 
-Primary audience: Nextcloud users who edit office documents; TAPPaaS admin.
+Primary audience: Nextcloud users who edit office documents online.
 
-Collaborative document editing for Nextcloud — real-time co-authoring of Word, Excel and
-PowerPoint files in the browser, powered by
-[Euro-Office DocumentServer](https://github.com/Euro-Office/DocumentServer)
-(an OnlyOffice-compatible server).
+Edit Word, Excel and PowerPoint documents in your browser, straight from Nextcloud —
+together with others, in real time.
 
 ## What you get
 
 | Capability | Access from | How |
 |------------|-------------|-----|
-| Edit `.docx`/`.xlsx`/`.pptx` | Nextcloud users | Open a document in Nextcloud Files |
-| Real-time co-authoring | Nextcloud users | Multiple users in one document |
-| Desktop and mobile editing | OnlyOffice desktop/mobile clients | Connect the client to Nextcloud |
-| OnlyOffice-compatible API | `srv` zone | `http://euro-office.srv.internal` (port 80) |
-| Public editor endpoint | Internet, via reverse proxy | `https://euro-office.<domain>` |
+| Edit Word, Excel and PowerPoint documents | Nextcloud users | Open a document in Nextcloud Files |
+| Real-time co-authoring | Nextcloud users | Multiple people can edit the same document at once |
+| Desktop and mobile editing | OnlyOffice desktop/mobile apps | Connect the app to your Nextcloud account |
 
 ## What is not included
 
-- Standalone access — the editor is reached through Nextcloud, not directly. The built-in
-  `/example/` test app is disabled (`EXAMPLE_ENABLED=false`).
-- Authentication of its own — trust is established with Nextcloud via a shared JWT secret
-  (auto-generated, never leaves the VM).
-- The Nextcloud connector app — shipped by the `nextcloud` module (`eurooffice-nextcloud`,
-  app id `eurooffice`; it was `onlyoffice` before connector v11).
+- Standalone access — the editor is reached through Nextcloud, not directly.
+- Authentication of its own — trust is established with Nextcloud via a shared secret,
+  set up automatically.
+- The Nextcloud connector app — shipped by the `nextcloud` module (app ID `eurooffice`,
+  settings page "Nextcloud Office").
 - Euro-Office-branded client apps — the desktop/mobile clients are OnlyOffice's official
   products (free download: <https://www.onlyoffice.com/download-desktop.aspx>);
   compatibility is via the Nextcloud integration, not a Euro-Office build.
 
 ## Requirements
 
-- `srv` zone (VLAN 210).
-- `nextcloud` deployed and reachable (`nextcloud:fileservice` dependency) — install it
-  first.
-- NixOS template (`templates:nixos`).
+- The `nextcloud` module, installed first.
 
 ## Dependencies
 
@@ -42,7 +34,7 @@ PowerPoint files in the browser, powered by
 |------------|---------|
 | `cluster:vm` | VM provisioning |
 | `templates:nixos` | NixOS base image |
-| `backup:vm` | Daily document backups (PBS) |
+| `backup:vm` | Full-VM backup (Proxmox Backup Server) |
 | `network:proxy` | HTTPS reverse proxy for the public editor endpoint |
 | `network:rules` | Firewall pass rules |
 | `nextcloud:fileservice` | The Nextcloud instance served (connector `onlyoffice`) |

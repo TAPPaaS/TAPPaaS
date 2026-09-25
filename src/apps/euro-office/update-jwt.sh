@@ -8,7 +8,7 @@
 # Run this after manually rotating the JWT_SECRET in /etc/secrets/euro-office.env
 # and restarting the podman-euro-office service.
 #
-# Usage: ./sync-jwt.sh
+# Usage: ./update-jwt.sh
 #
 
 set -euo pipefail
