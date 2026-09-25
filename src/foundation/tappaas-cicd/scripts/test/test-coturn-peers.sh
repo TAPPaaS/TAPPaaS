@@ -66,6 +66,23 @@ UNREACHABLE=1 coturn_forget_peer "${T}/coturn.json" other >/dev/null; rc=$?
 ck "an unreachable coturn is a failure, not 'no entry'" "1" "${rc}"
 ck "…and the entry is still there"         "other 10.2.0.77;" "$(peers)"
 
+echo "── a consumer whose DNS name appears late: waited for, under set -e ──"
+# The service scripts run with `set -euo pipefail`. A getent that fails until the
+# name exists used to END the script on the first lookup, silently.
+: > "${T}/allowed-peers"; : > "${T}/lookups"
+out="$(T="${T}" TC="${TC}" bash -c '
+    set -euo pipefail
+    info(){ :; }; warn(){ echo "WARN $*"; }; GN="" CL=""; sleep(){ :; }
+    getent(){ echo x >> "${T}/lookups"; (( $(wc -l < "${T}/lookups") > 2 )) || return 2; echo "10.2.0.66 hpb"; }
+    ssh(){ local s="${*: -1}"; s="${s//\/var\/lib\/coturn\/allowed-peers/${T}/allowed-peers}"
+           bash -c "sudo() { \"\$@\"; }; systemctl() { :; }; ${s}"; }
+    . "${TC}"
+    coturn_allow_peer "${T}/coturn.json" "${T}/nextcloud-hpb.json"
+    echo SURVIVED' 2>&1)"
+ck "the script survives the failing lookups"  "yes" "$(grep -q SURVIVED <<< "${out}" && echo yes || echo no)"
+ck "…and allow-lists the address it found"   "nextcloud-hpb 10.2.0.66;" "$(peers)"
+ck "…after waiting (3 lookups)"              "3" "$(wc -l < "${T}/lookups" | tr -d ' ')"
+
 echo
 echo "── ${PASS} passed, ${FAIL} failed ──"
 [[ "${FAIL}" -eq 0 ]]

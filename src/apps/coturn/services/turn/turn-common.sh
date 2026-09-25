@@ -71,7 +71,10 @@ coturn_allow_peer() {
     # A just-created consumer's DNS pin can lag a few seconds behind cluster:vm.
     local _try
     for _try in 1 2 3 4 5 6; do
-        ip="$(getent hosts "${host}" | awk '{print $1; exit}')"
+        # `|| true`: until the name exists getent fails, and under the callers'
+        # `set -euo pipefail` that failed assignment ended the whole service script
+        # on the first try — silently, with no wait at all (nextcloud-hpb install).
+        ip="$(getent hosts "${host}" | awk '{print $1; exit}' || true)"
         [[ "${ip}" =~ ^[0-9.]+$ ]] && break
         sleep 5
     done
