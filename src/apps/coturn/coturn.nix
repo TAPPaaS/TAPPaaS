@@ -23,10 +23,8 @@
 #   TCP  22 (SSH), 3478 (TURN/STUN)
 #   UDP  3478 (TURN/STUN), 49152-50151 (relay ports)
 # Secrets: Auto-generated COTURN_SECRET (64-char hex) on first boot.
-#   COTURN_EXTERNAL_IP must be set manually before coturn will relay correctly.
-#
-# FIRST-BOOT ACTION REQUIRED:
-#   Edit /etc/secrets/coturn.env, set COTURN_EXTERNAL_IP=<your public WAN IP>,
+#   COTURN_EXTERNAL_IP is detected by install.sh and written to
+#   /etc/secrets/coturn.env. Only if detection fails: set it there by hand,
 #   then run: systemctl restart coturn.service
 # ============================================================================
 
