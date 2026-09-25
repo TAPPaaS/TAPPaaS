@@ -66,11 +66,11 @@ local server needs no script change.
 Download the assets once into the serve dir:
 
 ```bash
-mkdir -p /tmp/tappaas-serve/images/{opnsense-firewall-v1.1,nixos-template-v1.2}
+mkdir -p /tmp/tappaas-serve/images/{opnsense-firewall-v1.1,nixos-template-v1.4}
 curl -fSLo /tmp/tappaas-serve/images/opnsense-firewall-v1.1/tappaas-firewall.qcow2.zst \
   https://github.com/TAPPaaS/TAPPaaS/releases/download/opnsense-firewall-v1.1/tappaas-firewall.qcow2.zst
-curl -fSLo /tmp/tappaas-serve/images/nixos-template-v1.2/tappaas-nixos.qcow2.zst \
-  https://github.com/TAPPaaS/TAPPaaS/releases/download/nixos-template-v1.2/tappaas-nixos.qcow2.zst
+curl -fSLo /tmp/tappaas-serve/images/nixos-template-v1.4/tappaas-nixos.qcow2.zst \
+  https://github.com/TAPPaaS/TAPPaaS/releases/download/nixos-template-v1.4/tappaas-nixos.qcow2.zst
 ```
 
 Then rewrite `imageLocation` in the **exported serve tree** (never the git
