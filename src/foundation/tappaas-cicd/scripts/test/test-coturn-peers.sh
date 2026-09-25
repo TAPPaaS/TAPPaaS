@@ -31,7 +31,7 @@ JSON
 
 info() { echo "INFO $*"; }; warn() { echo "WARN $*"; }
 # shellcheck disable=SC2034  # read by the sourced turn-common.sh
-GN=""; CL=""
+GN="" CL=""
 getent() { echo "10.2.0.55 nextcloud-hpb.srv.internal"; }
 sleep() { :; }
 # The coturn VM: its script runs locally, on the temp allow-list, with sudo and
