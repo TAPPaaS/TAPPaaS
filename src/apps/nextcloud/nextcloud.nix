@@ -483,6 +483,13 @@ in
       # without touching what the token protects — the signature is still
       # checked in full; leeway only relaxes the time claims. The app provides
       # this knob for exactly this ("in case the system clock is a second off").
+      # With --unique-uid=0 the user ID is the Authentik username, so an Authentik
+      # user named like a local account (admin) would sign in AS it. Refuse that
+      # ("User conflict") instead of adopting the local user.
+      user_oidc = {
+        soft_auto_provision = false;
+      };
+
       eurooffice = {
         jwt_leeway = 60;
       };
@@ -619,12 +626,16 @@ in
         set -euo pipefail
         export PATH="/run/current-system/sw/bin:${pkgs.coreutils}/bin:$PATH"
 
+        # --unique-uid=0: the user ID is the Authentik username (andreas), not a
+        # SHA-256 of it. Decide before first use: changing it later orphans every
+        # existing user's files, shares and client accounts.
         nextcloud-occ user_oidc:provider authentik \
           --clientid="$OIDC_CLIENT_ID" \
           --clientsecret="$OIDC_CLIENT_SECRET" \
           --discoveryuri="$OIDC_DISCOVERY_URI" \
           --scope="email profile nextcloud openid" \
           --mapping-uid="preferred_username" \
+          --unique-uid=0 \
           --mapping-display-name="name" \
           --mapping-email="email" \
           --mapping-quota="quota" \
