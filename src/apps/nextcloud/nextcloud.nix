@@ -701,6 +701,14 @@ in
         set -euo pipefail
         export PATH="/run/current-system/sw/bin:${pkgs.coreutils}/bin:$PATH"
 
+        # Connector v11 renamed the app onlyoffice -> eurooffice. The old app's code
+        # is gone (not in extraApps), but a site that had it still lists it as
+        # installed, and Nextcloud reports it as missing on every request. Its
+        # settings are rebuilt below under the new ID.
+        if nextcloud-occ config:app:get onlyoffice enabled >/dev/null 2>&1; then
+          nextcloud-occ app:disable onlyoffice || true
+        fi
+
         nextcloud-occ config:app:set eurooffice DocumentServerUrl         --value="$EURO_OFFICE_URL"
         nextcloud-occ config:app:set eurooffice DocumentServerInternalUrl --value="$EURO_OFFICE_INTERNAL_URL"
         nextcloud-occ config:app:set eurooffice StorageUrl                --value="https://$NEXTCLOUD_PUBLIC_URL/"
