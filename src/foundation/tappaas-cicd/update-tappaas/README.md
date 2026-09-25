@@ -65,8 +65,12 @@ foundation machines are not among them (Phase 1).
 A config is a module by the same shape rule as `module-manager`'s discovery: a workload `kind`
 (`vm`, `lxc`, `machine`, `application`, `device`), `dependsOn` / `integratesWith` / `provides`, or a
 `moduleSource` — so machine instances (`debianhost`, `pvehost`, a managed satellite) are swept. Out of
-the lifecycle, and logged as skipped: a module whose status is `archived` or `external`, and one
-recorded `management: unmanaged` (ADR-022g) — a locked-down satellite, which patches itself.
+the lifecycle, and logged as skipped: a module whose status is `archived` or `external`, one
+recorded `management: unmanaged` (ADR-022g) — a locked-down satellite, which patches itself — and
+one whose `stack` is `template` (#741): a Proxmox VM template to clone from, or the module
+skeleton. A template is discovered like any other config, and `module-manager list` shows it, but
+it has no source to reconcile against, so an update of it can never succeed; the skip is
+structural rather than a lifecycle choice, and holds whatever its status says.
 
 - The `dependsOn` field in each module's JSON config is used to build a dependency graph
 - Modules are topologically sorted so that dependencies are updated before their dependents

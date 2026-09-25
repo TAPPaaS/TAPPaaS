@@ -477,6 +477,13 @@ def foundation_order(installed: list[str], machines: list[str]) -> list[str]:
 # VM is still running and still needs its OS patches.
 NON_LIFECYCLE_STATUSES = {"archived", "external"}
 
+# `stack` values that say the config is not an installable module at all
+# (module-fields.json, reserved values): a Proxmox VM template to clone from,
+# or the module skeleton. Unlike a status, this is structural and permanent —
+# such a config has no source to reconcile against, so an update of it can
+# never succeed and must never be attempted (#741).
+NON_LIFECYCLE_STACKS = {"template"}
+
 
 def module_status(module_name: str) -> str:
     """Return a module's `.status`, lowercased. '' when absent or unreadable."""
@@ -496,19 +503,34 @@ def module_management(module_name: str) -> str:
         return ""
 
 
+def module_stack(module_name: str) -> str:
+    """Return a module's `.stack`, lowercased. '' when absent."""
+    try:
+        with open(CONFIG_DIR / f"{module_name}.json") as f:
+            return str(json.load(f).get("stack") or "").strip().lower()
+    except (OSError, ValueError):
+        return ""
+
+
 def partition_by_lifecycle(modules: list[str]) -> tuple[list[str], list[tuple[str, str]]]:
     """Split module names into (to_update, [(name, reason), ...] skipped), the
-    reason being `status=<s>` or `management=unmanaged`.
+    reason being `stack=<s>`, `status=<s>` or `management=unmanaged`.
 
     Status matching is case-insensitive: module-fields.json spells the lifecycle
     values lowercase (archived/external) but the development ones capitalised
     (Production/Testing/…), so neither casing can be assumed.
+
+    `stack` is tested first because it is structural, not a lifecycle choice: a
+    template is never installable, whatever its status says.
     """
     active: list[str] = []
     skipped: list[tuple[str, str]] = []
     for name in modules:
+        stack = module_stack(name)
         status = module_status(name)
-        if status in NON_LIFECYCLE_STATUSES:
+        if stack in NON_LIFECYCLE_STACKS:
+            skipped.append((name, f"stack={stack}"))
+        elif status in NON_LIFECYCLE_STATUSES:
             skipped.append((name, f"status={status}"))
         elif module_management(name) == "unmanaged":
             skipped.append((name, "management=unmanaged"))

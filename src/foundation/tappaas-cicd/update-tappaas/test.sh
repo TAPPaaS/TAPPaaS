@@ -106,6 +106,8 @@ w("satellite-s1.json",{"kind": "machine", "status": "external", "moduleSource": 
 w("satellite.json",   {"kind": "machine", "management": "managed", "address": "203.0.113.7", "moduleSource": "/x/satellite"})
 w("vault.json",       {"kind": "machine", "management": "unmanaged", "address": "198.51.100.9", "moduleSource": "/x/satellite"})
 w("pull-buddy.json",  {"remoteHost": "h", "moduleSource": "/x"})
+w("tappaas-nixos.json", {"stack": "template", "vmid": 8080, "vmname": "tappaas-nixos",
+                         "moduleSource": "/x/templates"})  # #741: a template to clone, not a module
 w("site.json",        {"name": "site", "location": {"country": "DK"}})
 w("last-update-result.json", {"ok": True, "total": 3})
 w("list.json", ["not", "an", "object"])
@@ -113,13 +115,18 @@ w("list.json", ["not", "an", "object"])
 m.CONFIG_DIR = d
 got = sorted(m.get_installed_apps())
 want = sorted(["nextcloud", "dh-test1", "tappaas1", "tappaas2", "labbox", "old", "marker", "provider",
-               "satellite-s1", "satellite", "vault"])
+               "satellite-s1", "satellite", "vault", "tappaas-nixos"])
 assert got == want, f"modules: {got} != {want}"
 to_update, skipped = m.partition_by_lifecycle(got)
 assert "dh-test1" in to_update and "tappaas2" in to_update, to_update
 assert "satellite" in to_update, "a managed satellite is swept (ADR-010 §8.4.2)"
 assert ("vault", "management=unmanaged") in skipped, f"a locked-down one is not: {skipped}"
 assert ("satellite-s1", "status=external") in skipped, f"the pre-§8.4 stop-gap still holds: {skipped}"
+# #741: a Proxmox VM template is discovered (module-manager lists it) but has no
+# source to reconcile, so it must never enter the update queue -- it failed every
+# sweep for 13 days on the reporter's site. `stack` is the declared signal.
+assert ("tappaas-nixos", "stack=template") in skipped, f"a VM template is not updatable: {skipped}"
+assert "tappaas-nixos" not in to_update, "a VM template must never be queued for update"
 
 # Foundation machines leave the app phase and run right after `cluster`:
 # cluster nodes (pvehost) first, then other machines, each group by name (#665).
