@@ -149,6 +149,40 @@ out="$("${AM}" apply 2>&1)"
 ck "spaced AP: apply reaches its plugin" "yes" "$(has "${out}" 'Nano HD')"
 "${AM}" remove "Nano HD" >/dev/null 2>&1
 
+# ── #734: placeholders, switched-off zones and the per-AP SSID ceiling ──
+T2="$(mktemp -d)"
+cat > "${T2}/zones.json" <<'JSON'
+{
+  "mgmt":  { "state":"Manual","vlantag":0 },
+  "home":  { "state":"Active","vlantag":310, "SSID":"HomeNet" },
+  "iot":   { "state":"Active","vlantag":410, "SSID":"<IOT_SSID>" },
+  "old":   { "state":"Inactive","vlantag":420, "SSID":"OldNet" },
+  "off":   { "state":"Disabled","vlantag":430, "SSID":"OffNet" },
+  "wired": { "state":"Active","vlantag":440, "SSID":null }
+}
+JSON
+am2() { CONFIG_DIR="${T2}" "${AM}" "$@"; }
+am2 add ap1 --vendor manual --ip 10.0.0.40 >/dev/null 2>&1
+am2 ssid ap1 add HomeNet --zone home --security wpa2-personal >/dev/null 2>&1
+out="$(am2 delta 2>&1)"
+ck "#734 a placeholder gets its own message" "yes" "$(has "${out}" "zone 'iot' still has the template SSID <IOT_SSID>")"
+ck "#734 …not the drift warning"          "no"  "$(has "${out}" "SSID '<IOT_SSID>' but no AP broadcasts it")"
+ck "#734 an Inactive zone is not demanded" "no" "$(has "${out}" "'old'")"
+ck "#734 a Disabled zone is not demanded" "no"  "$(has "${out}" "'off'")"
+ck "#734 SSID null = no WiFi, no warning" "no"  "$(has "${out}" "'wired'")"
+ck "#734 a real SSID that is served: no warning" "no" "$(has "${out}" "'home'")"
+for n in A B C; do am2 ssid ap1 add "Net${n}" --zone home --security wpa2-personal >/dev/null 2>&1; done
+ck "#734 four SSIDs: no ceiling warning"  "no"  "$(has "$(am2 delta 2>&1)" "AP 'ap1' broadcasts")"
+out="$(am2 ssid ap1 add NetD --zone home --security wpa2-personal 2>&1)"; rc=$?
+ck "#734 the add that crosses the ceiling still succeeds (rc)" "0" "${rc}"
+ck "#734 …and warns"                      "yes" "$(has "${out}" "AP 'ap1' broadcasts 5 SSIDs, more than 4")"
+ck "#734 delta counts it too"             "yes" "$(has "$(am2 delta 2>&1)" "AP 'ap1' broadcasts 5 SSIDs")"
+am2 ssid ap1 add NetE --zone home --security wpa2-personal --disabled >/dev/null 2>&1
+ck "#734 a disabled SSID does not count"  "yes" "$(has "$(am2 delta 2>&1)" "broadcasts 5 SSIDs")"
+jq '.accessPoints.ap1.maxSsids = 5' "${T2}/switch-configuration-desired.json" > "${T2}/d" && mv "${T2}/d" "${T2}/switch-configuration-desired.json"
+ck "#734 a per-AP maxSsids accepts it"    "no"  "$(has "$(am2 delta 2>&1)" "AP 'ap1' broadcasts")"
+rm -rf "${T2}"
+
 echo ""
 echo "test-ap-manager: ${PASS} passed, ${FAIL} failed"
 [[ "${FAIL}" -eq 0 ]]

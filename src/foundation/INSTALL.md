@@ -541,7 +541,8 @@ switch-controller reconcile --apply     # manual switch → prints the VLANs to 
 ### 6b — Wi-Fi access points
 
 First set the real SSID **names** and WPA **passphrases** (they replace the
-`<…_SSID>` placeholders in `zones.json`; secrets go to a 0600 file, never committed):
+`<…_SSID>` placeholders in `zones.json`; secrets go to a 0600 file, never committed).
+A zone that should have no WiFi gets `"SSID": null` instead of a name:
 
 ```bash
 setup-wlan-secrets.sh          # set SSID names + passphrases  (→ ~/.wlan-secrets.txt)

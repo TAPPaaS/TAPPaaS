@@ -30,6 +30,9 @@ set -euo pipefail
 
 # shellcheck source=../../tappaas-cicd/lib/common-install-routines.sh disable=SC1091
 . /home/tappaas/bin/common-install-routines.sh
+# is_placeholder, wlan_zones — shared with ap-controller (#734).
+# shellcheck source=../../lib/wlan-lib.sh
+. "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../../lib/wlan-lib.sh"
 
 # Both paths are env-injectable (defaults from CONFIG_DIR / WLAN_SECRETS) so the
 # offline tests can point them at fixtures.
@@ -54,8 +57,6 @@ A blank passphrase leaves the network open / unchanged (no secret stored).
 EOF
 }
 
-# A placeholder SSID is the shipped template value, e.g. <HOME_SSID>.
-is_placeholder() { [[ "$1" == \<*\> ]]; }
 
 # ── secrets file helpers (split on the FIRST '=') ───────────────────
 
@@ -106,11 +107,7 @@ set_zone_ssid() {
 }
 
 # Emit "zone<TAB>ssid<TAB>vlantag" for each ACTIVE zone declaring an SSID.
-ssid_zones() {
-    jq -r 'to_entries[]
-           | select((.value.SSID? != null) and ((.value.state // "Active") == "Active"))
-           | "\(.key)\t\(.value.SSID)\t\(.value.vlantag // 0)"' "${ZONES_FILE}"
-}
+ssid_zones() { wlan_zones "${ZONES_FILE}"; }
 
 # ── --list ──────────────────────────────────────────────────────────
 

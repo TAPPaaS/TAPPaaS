@@ -49,7 +49,7 @@ ap-controller <command> [args]
 |---------|---------|
 | `update-desired` | Track each SSID's VLAN from its zone (`zones.json` → desired). |
 | `interrogate` | Pull live AP state into `actual.json` (via the vendor plugin). An AP that cannot be read is left unchanged, the plugin's reason is shown (e.g. `UniFi login failed: HTTP 401 — …`), and the command exits 1. |
-| `delta` | Show desired-vs-actual differences plus zone/SSID/uplink validations. |
+| `delta` | Show desired-vs-actual differences plus zone/SSID/uplink validations: an Active zone's SSID that no AP broadcasts, a zone still on its template placeholder (`<HOME_SSID>`, named as such, not as drift), an AP over its SSID ceiling, an uplink port missing an SSID's VLAN. |
 | `apply` | Push the delta via the vendor plugin; the manual plugin prints the steps. |
 | `confirm` | Record the applied state into `actual.json`. |
 | `reconcile [--apply]` | Run all five in order; `--apply` pushes and confirms, otherwise it is a dry-run. If any AP could not be read, the delta is shown but **nothing is applied** (exit 1) — it would be computed from stale state. |
@@ -66,6 +66,17 @@ ap-controller ssid ap-living add Guest --zone guest --security wpa2-personal
 ap-controller reconcile
 ap-controller reconcile --apply
 ```
+
+### SSID ceiling per AP
+
+Every SSID beacons separately on every radio, so each one takes airtime from the
+rest; vendor guidance (Ubiquiti) puts the practical limit at about **4 per
+radio**. `ssid <ap> add` warns when an AP goes over its ceiling, and `delta`
+counts it as a validation warning — before `reconcile --apply` creates the SSIDs.
+Only enabled SSIDs count. The ceiling is 4 (`TAPPAAS_AP_MAX_SSIDS` changes the
+default); an AP that should carry more sets `maxSsids` on its entry in
+`switch-configuration-desired.json`. The rules shared with `setup-wlan-secrets.sh`
+(placeholders, active zones, the ceiling) live in `tappaas-cicd/lib/wlan-lib.sh`.
 
 ## Setup helper: `setup-wlan-secrets.sh`
 

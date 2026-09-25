@@ -457,6 +457,12 @@ that zone's VLAN. It is consumed by the ADR-008 WiFi tooling (see
 The passphrase and per-SSID security level are **not** stored here — only the
 SSID name and (via `vlantag`) its VLAN.
 
+- **A zone with no WiFi** omits `SSID` or sets it to `null`. Leaving the shipped
+  `<PLACEHOLDER>` means "not chosen yet": `ap-controller delta` names it as such
+  (`still has the template SSID …`) rather than as drift.
+- **Only an `Active` zone broadcasts.** An `Inactive` or `Disabled` zone keeps its
+  `SSID` for later, and nothing asks an AP to broadcast it.
+
 ## Field Reference
 
 For complete field definitions including all possible values, defaults, and

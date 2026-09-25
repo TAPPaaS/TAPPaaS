@@ -32,6 +32,9 @@ SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 readonly SCRIPT_DIR
 # shellcheck source=../../lib/cli-gate.sh
 . "${SCRIPT_DIR}/../../lib/cli-gate.sh"
+# is_placeholder, wlan_zones, the per-AP SSID ceiling — shared with setup-wlan-secrets.sh (#734).
+# shellcheck source=../../lib/wlan-lib.sh
+. "${SCRIPT_DIR}/../../lib/wlan-lib.sh"
 PLUGIN_DIR="${PLUGIN_DIR:-/home/tappaas/TAPPaaS/src/foundation/network/scripts/plugins}"; readonly PLUGIN_DIR
 readonly ZONES_FILE="${CONFIG_DIR}/zones.json"
 readonly DESIRED="${CONFIG_DIR}/switch-configuration-desired.json"
@@ -221,6 +224,19 @@ _ssid_add() {
          + (if $r!="" then {radiusServer:$r} else {} end)')
     jq_desired '.accessPoints[$n].ssids[$ssid] = $o' --arg n "${ap}" --arg ssid "${ssid}" --argjson o "${obj}"
     info "${GN}✓${CL} ${ap} SSID '${ssid}': $(jq -c . <<< "${obj}")"
+    warn_ssid_ceiling "${ap}" || true   # a warning here; delta counts it
+}
+
+# Say so when an AP broadcasts more SSIDs than its ceiling (wlan-lib.sh). Before
+# reconcile --apply creates them, not after. Returns 1 when over.
+warn_ssid_ceiling() {
+    local ap="$1" n max
+    n=$(wlan_ssid_count "${ap}" "${DESIRED}")
+    max=$(wlan_max_ssids "${ap}" "${DESIRED}")
+    [[ "${n}" -gt "${max}" ]] || return 0
+    warn "  AP '${ap}' broadcasts ${n} SSIDs, more than ${max}: each one beacons on every radio and takes airtime from the rest"
+    warn "    fold zones onto fewer SSIDs, or accept it for this AP: set .accessPoints[\"${ap}\"].maxSsids"
+    return 1
 }
 
 _ssid_remove() {
@@ -332,16 +348,30 @@ compute_delta() {
 # uplink switch port carries every SSID VLAN. Prints warnings; sets VALIDATION_WARN.
 validate() {
     VALIDATION_WARN=0
-    local zone ssid_name served
-    # zones with an SSID field must be broadcast somewhere
-    while IFS=$'\t' read -r zone ssid_name; do
+    local zone ssid_name served ap
+    # Active zones with an SSID must be broadcast somewhere. An Inactive or
+    # Disabled zone keeps its SSID but broadcasts nothing; a template placeholder
+    # was never chosen, so "no AP broadcasts it" would send the operator looking
+    # for drift that is not there (#734).
+    while IFS=$'\t' read -r zone ssid_name _; do
         [[ -z "${ssid_name}" || "${ssid_name}" == "null" ]] && continue
+        if is_placeholder "${ssid_name}"; then
+            warn "  zone '${zone}' still has the template SSID ${ssid_name}: set a real name (setup-wlan-secrets.sh), or remove SSID if the zone has no WiFi"
+            VALIDATION_WARN=$((VALIDATION_WARN + 1))
+            continue
+        fi
         served=$(jq -r --arg s "${ssid_name}" '[.accessPoints[]?.ssids // {} | has($s)] | any' "${DESIRED}")
         if [[ "${served}" != "true" ]]; then
             warn "  zone '${zone}' declares SSID '${ssid_name}' but no AP broadcasts it"
             VALIDATION_WARN=$((VALIDATION_WARN + 1))
         fi
-    done < <(jq -r 'to_entries[] | select(.value.SSID? != null) | "\(.key)\t\(.value.SSID)"' "${ZONES_FILE}")
+    done < <(wlan_zones "${ZONES_FILE}")
+
+    # No AP over its SSID ceiling (wlan-lib.sh).
+    while IFS= read -r ap; do
+        [[ -n "${ap}" ]] || continue
+        warn_ssid_ceiling "${ap}" || VALIDATION_WARN=$((VALIDATION_WARN + 1))
+    done < <(jq -r '.accessPoints // {} | keys[]' "${DESIRED}")
 
     # AP uplink port must carry each SSID's VLAN (cross-check against switch config)
     local ap up_sw up_port carried vlan ssid
