@@ -5,7 +5,7 @@
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, writeFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
-import { HELP, run } from "../../src/main";
+import { HELP, parseOpts, run } from "../../src/main";
 import { undocumentedOptions } from "../../../../lib/ts/src/help";
 import { clusterDiff, inspectCluster, inspectVm } from "../../src/inspect";
 import { checkDiskThreshold, checkServiceLiveness } from "../../src/checks";
@@ -319,6 +319,16 @@ function testResolveGitJsonInstance(): void {
   check(!(g !== null && g.cores === "1"), "D6.3: a file named after vmname is never the source");
 }
 testResolveGitJsonInstance();
+
+// A value option consumes exactly its value: --threshold left its number in
+// `rest`, and --memory-threshold swallowed the option after it.
+function testParseOpts(): void {
+  const o = parseOpts(["--threshold", "70", "--memory-threshold", "90", "--config-dir", "/cfg"]);
+  check(o.threshold === 70 && o.memoryThreshold === 90, "both thresholds are read");
+  check(o.configDir === "/cfg", "--memory-threshold does not swallow the next option");
+  check(o.rest.length === 0, `no value is left over as an argument (rest: ${o.rest.join(" ")})`);
+}
+testParseOpts();
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

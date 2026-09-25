@@ -70,13 +70,13 @@ function usage(): void {
   info(renderHelp(HELP));
 }
 
-interface Opts {
+export interface Opts {
   configDir: string;
   threshold: number;
   memoryThreshold: number;
   rest: string[];
 }
-function parseOpts(args: string[]): Opts {
+export function parseOpts(args: string[]): Opts {
   let configDir = defaultConfigDir();
   let threshold = DEFAULT_THRESHOLD;
   let memoryThreshold = DEFAULT_MEMORY_THRESHOLD;
@@ -94,13 +94,13 @@ function parseOpts(args: string[]): Opts {
       const n = Number(v);
       if (!Number.isInteger(n) || n < 1 || n > 99) die(`--threshold must be 1..99, got '${v}'`);
       threshold = n;
+      i++;
     } else if (a === "--memory-threshold") {
       const v = args[i + 1];
       if (!v) die("--memory-threshold requires a percentage argument");
       const n = Number(v);
       if (!Number.isInteger(n) || n < 1 || n > 500) die(`--memory-threshold must be 1..500, got '${v}'`);
       memoryThreshold = n;
-      i++;
       i++;
     } else {
       rest.push(a);
