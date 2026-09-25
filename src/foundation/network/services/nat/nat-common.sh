@@ -49,14 +49,21 @@ nat_resolve_target() {
     zone=$(get_config_value 'zone0' '')
     [[ -z "${zone}" ]] && return 1
     host="${vmname}.${zone}.internal"
-    if command -v dig &>/dev/null; then
-        ip=$(dig +short A "${host}" 2>/dev/null | head -1)
-    fi
-    if [[ -n "${ip}" ]]; then
-        echo "${ip}"
-        return 0
-    fi
-    return 1
+    command -v dig &>/dev/null || return 1
+    # A guest cluster:vm has just created registers its name only after its first
+    # DHCP lease, and network:nat can run before templates:nixos waits for that:
+    # coturn's install failed here on a name that resolved seconds later. Wait for
+    # it (NAT_DNS_WAIT seconds, default 60), as coturn does for its consumers.
+    local waited=0 limit="${NAT_DNS_WAIT:-60}"
+    while :; do
+        ip=$(dig +short A "${host}" 2>/dev/null | grep -E '^[0-9]+(\.[0-9]+){3}$' | head -1)
+        if [[ -n "${ip}" ]]; then
+            echo "${ip}"
+            return 0
+        fi
+        (( waited < limit )) || return 1
+        sleep 5; waited=$((waited + 5))
+    done
 }
 
 # Build the idempotency description for a rule (module + rule JSON object).
