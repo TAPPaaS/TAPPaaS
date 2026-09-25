@@ -1427,6 +1427,18 @@ else
     bad "(f) a pre-existing VM would have been deleted: $(cat "${RB}/err")"
 fi
 
+# (g) the VMID the rollback relies on is found in the config's real shape: at the
+# top level beside a .config block (coturn, nearly every module), not only in the
+# older nested one. Reading .config first made it empty, so (e) could never fire.
+awk '/^module_config_vmid\(\) \{/{f=1} f{print} f&&/^\}/{exit}' "$INS_MOD" > "${RB}/vmid.sh"
+echo '{"vmid":341,"config":{"cluster:vm":{"memory":"2048"}}}' > "${RB}/top.json"
+echo '{"config":{"vmid":342}}'                              > "${RB}/nested.json"
+echo '{"config":{"cluster:vm":{}}}'                         > "${RB}/none.json"
+got="$(bash -c ". '${RB}/vmid.sh'; for f in top nested none; do printf '%s,' \"\$(module_config_vmid '${RB}'/\$f.json)\"; done")"
+[[ "${got}" == "341,342,," ]] \
+    && ok "(g) the VMID is read at the top level, beside a .config block" \
+    || bad "(g) module_config_vmid read '${got}', expected '341,342,,'"
+
 # config backup/restore (the rollback half that a VM-less module relies on)
 awk '/^backup_module_config\(\) \{/{f=1} f{print} f&&/^\}/{exit}' "$UPD_MOD" >  "${RB}/cfgfn.sh"
 awk '/^restore_module_config\(\) \{/{f=1} f{print} f&&/^\}/{exit}' "$UPD_MOD" >> "${RB}/cfgfn.sh"

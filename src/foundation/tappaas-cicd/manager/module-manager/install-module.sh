@@ -249,6 +249,14 @@ INSTALL_VMID=""            # the module's VMID, recorded before Step 5 creates i
 INSTALL_VM_BEFORE=true     # whether that VM already existed then (true = never ours)
 INSTALL_NO_ROLLBACK=false
 
+# The VMID a module config records: top-level, as every current module writes it,
+# or inside .config on the older nested shape. `(.config // .).vmid` read the
+# config BLOCK whenever one existed — nearly every module has one — so the VMID
+# was always empty and a failed install could never tell it had created a VM.
+module_config_vmid() {
+    jq -r '.vmid // .config.vmid // empty' "$1" 2>/dev/null || true
+}
+
 rollback_failed_install() {
     local rc=$?
     [[ "${rc}" -ne 0 ]] || return 0
@@ -770,7 +778,7 @@ main() {
     # first, so a rollback removes a VM this run created and leaves one it
     # merely found (#584).
     local _vm_before=false _vmid
-    _vmid="$(jq -r '(.config // .).vmid // empty' "${CONFIG_DIR}/${effective_module}.json" 2>/dev/null || true)"
+    _vmid="$(module_config_vmid "${CONFIG_DIR}/${effective_module}.json")"
     if [[ -n "${_vmid}" ]] && vm_exists_on_cluster "${_vmid}" "$(get_node_fqdn 0)" >/dev/null 2>&1; then
         _vm_before=true
     fi
