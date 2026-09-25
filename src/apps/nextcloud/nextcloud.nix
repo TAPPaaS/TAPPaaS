@@ -694,6 +694,42 @@ in
   #   SMTP_USER=user@example.com
   #   SMTP_PASSWORD=<app password or account password>
   # The local part of SMTP_USER becomes the From address (user@example.com → "user").
+  # Mail app: Microsoft 365 sign-in. update.sh delivers the env file (MS_TENANT_ID,
+  # MS_CLIENT_ID, MS_CLIENT_SECRET) from the management plane when it exists there.
+  # The Mail app encrypts the client secret itself, so it goes through its admin
+  # endpoint; occ config:app:set would store it in clear and the app could not read it.
+  systemd.services.nextcloud-configure-mail-microsoft = {
+    description = "Configure Microsoft 365 sign-in for the Mail app";
+    wantedBy    = [ "multi-user.target" ];
+    after       = [ "nextcloud-setup.service" "phpfpm-nextcloud.service" "nginx.service" ];
+    requires    = [ "nextcloud-setup.service" ];
+
+    unitConfig.ConditionPathExists = "/etc/secrets/mail-microsoft.env";
+
+    serviceConfig = {
+      Type            = "oneshot";
+      RemainAfterExit = true;
+      EnvironmentFile = "/etc/secrets/mail-microsoft.env";
+      ExecStart = pkgs.writeShellScript "nextcloud-configure-mail-microsoft" ''
+        set -euo pipefail
+        export PATH="/run/current-system/sw/bin:${pkgs.coreutils}/bin:${pkgs.curl}/bin:${pkgs.jq}/bin:$PATH"
+
+        body=$(jq -n --arg t "$MS_TENANT_ID" --arg c "$MS_CLIENT_ID" --arg s "$MS_CLIENT_SECRET" \
+          '{tenantId: $t, clientId: $c, clientSecret: $s}')
+        # Credentials on stdin (-K -), not argv: the admin password stays out of ps.
+        code=$(printf 'user = "admin:%s"\n' "$(cat /var/lib/nextcloud/admin-pass)" \
+          | curl -s -o /dev/null -w '%{http_code}' -K - -X POST \
+              -H 'Content-Type: application/json' -H 'Host: ${config.networking.hostName}' \
+              --data "$body" http://127.0.0.1/apps/mail/api/integration/microsoft)
+        [ "$code" = 200 ] || { echo "Mail app refused the Microsoft settings (HTTP $code)" >&2; exit 1; }
+
+        stored=$(nextcloud-occ config:app:get mail microsoft_oauth_client_id || true)
+        [ "$stored" = "$MS_CLIENT_ID" ] || { echo "client id not stored (got '$stored')" >&2; exit 1; }
+        echo "Mail app: Microsoft 365 sign-in configured for tenant $MS_TENANT_ID"
+      '';
+    };
+  };
+
   systemd.services.nextcloud-configure-mail = {
     description = "Configure Nextcloud SMTP credentials";
     wantedBy    = [ "multi-user.target" ];
