@@ -3,11 +3,11 @@
 | | |
 |---|---|
 | **Status** | **Accepted** (2026-09-23) — agreed by the operator. D10 is built (#713), so D2's cadence no longer leans on a gap. |
-| **Version** | 1.2 |
+| **Version** | 1.3 |
 | **Date** | 2026-09-22 |
 | **Author** | Lars Rossen |
 | **Related** | **#713** (the control plane's missing verification and rollback — D10, built) · **#712** (retire the satellite's `--os nixos` remains — raised by D7) · **#680** (the baseline lock decides every site's nixpkgs; its code half landed, its cadence half is this ADR) · **#709** (Nextcloud cannot advance past 33 on a frozen branch — the first concrete demand for a branch move) · **#324** (modules copy the baseline instead of importing it) · **#675** (no extension point for a site's own NixOS modules) · **#166** (the earlier single-path clock fix) · [ADR-017](<ADR-017 - Update scheduling and mothership self-update.md>) D3 (the mothership rebuilds itself from the checkout, before the sweep) · [ADR-020](<ADR-020 - Declared-Field Change Model (validate, drift, modify).md>) D8 (`rebootOk` — whether a kernel change may land) · [ADR-025](<ADR-025 - Config migrations and the upgrade path.md>) (how a release brings `config/` forward; this ADR is its counterpart for the OS) · [ADR-026](<ADR-026 - Managed Machines as Modules.md>) (`debianhost` and the machine OS lifecycle) |
-| **Changelog** | **v1.2 (2026-09-23)** — D8 gains the release move: across a nixpkgs release an in-place switch cannot reload `dbus-broker`, reports exit 4 over it, and its rollback live-locks (#725), so the mothership stages a release move with `nixos-rebuild boot` and reboots into it. · **v1.1 (2026-09-23)** — D1 corrected on measurement: `follows` removes the mothership's *choice* of revision but not its lock's *copy* of it, so moving the estate re-locks both flakes and compares them; `--to` in `tappaas-train` phase 1 performs a version move (#709). · **v1.0 (2026-09-23)** — D1 and D4 built: the mothership follows the estate pin through a relative path input (same derivation before and after, verified as root), and the tripwire now watches `templates/flake.lock` at 45 days and fails if a second pin reappears. · v0.9 (2026-09-23) — D9 gains the rule for a fault found in staging: patch forward, block promotion until the fix is an ancestor of `main`, and never rewind a channel; the boundary itself is designed as one command in `docs/design/release-train-promotion.md`. · **v0.8 (2026-09-23) — ACCEPTED.** Channels are named for what a site runs — **unstable**, **staging**, **production** — on the branches `main`, `staging` and `stable`; the two are named apart on purpose, because "stable" as a promise to an operator and `stable` as a ref are different statements. · v0.7 (2026-09-23) — the satellite's flake is deleted, not merely proposed for retirement (#712 landed), so Context names two pins and D7 records the deletion; adds what a bump costs, measured on the test site: a daily sweep re-downloads nothing (0.03 s to resolve a cached revision, 0.335 s to revalidate), while a pin change costs ~1 GB of fetches and ~10 GB of store across 22 guests, each fetching from GitHub on its own. · v0.6 (2026-09-22) — D10 built and verified on hrossen (#713): the control plane checks itself after a switch and rolls back the generation it replaced when that check fails. · v0.5 (2026-09-22) — retitled from *OS Version Tracking*: once the alpha/beta/stable train landed, the ADR was about release cadence and patching, of which the nixpkgs pin is one input. · v0.4 (2026-09-22) — the operator's train: three channels (alpha/beta/stable) on two-week boundaries, so `stable` is at most four weeks behind and a CVE **accelerates** the train instead of cherry-picking a pin onto code it was never built against; D9 gains the guest-first validation rule (a guest proves a revision before the mothership takes it, without reordering the sweep); D2's beat restated as the boundary. · v0.3 (2026-09-22) — D2 collapsed to **one weekly rhythm** with a full `--deep` test, on a NixOS expert's advice relayed by the operator: a version move is a bigger weekly bump, not a separate cadence (the ~1-month backport overlap is slack, not licence to linger). New D9 (how a bump reaches `main`, and why `stable` takes the pin with its monthly release rather than by weekly cherry-pick) and D10 (the mothership has no rollback, goes first, and needs one before the cadence leans on it). · v0.2 (2026-09-22) — a primer on flake vs non-flake Nix and on patch vs version moves in both OS families, so the decisions read without prior Nix knowledge; D1 states why the mothership keeps its own flake (upgrade safety, four reasons); the satellite corrected to Debian and its `--os nixos` remains proposed for retirement (#712); D5 separated the three Debian patch paths. · v0.1 (2026-09-22) — first draft, from the operator's questions of 2026-09-22 and a read of the shipped code. |
+| **Changelog** | **v1.3 (2026-09-25)** — D11: a repository declares which of its branches are which channel, in `channels.json` at its root; a branch listed nowhere is unstable, a repository without the file is warned about rather than refused, and changing a site's channel now reports every registered repository that disagrees and proposes the fix. · **v1.2 (2026-09-23)** — D8 gains the release move: across a nixpkgs release an in-place switch cannot reload `dbus-broker`, reports exit 4 over it, and its rollback live-locks (#725), so the mothership stages a release move with `nixos-rebuild boot` and reboots into it. · **v1.1 (2026-09-23)** — D1 corrected on measurement: `follows` removes the mothership's *choice* of revision but not its lock's *copy* of it, so moving the estate re-locks both flakes and compares them; `--to` in `tappaas-train` phase 1 performs a version move (#709). · **v1.0 (2026-09-23)** — D1 and D4 built: the mothership follows the estate pin through a relative path input (same derivation before and after, verified as root), and the tripwire now watches `templates/flake.lock` at 45 days and fails if a second pin reappears. · v0.9 (2026-09-23) — D9 gains the rule for a fault found in staging: patch forward, block promotion until the fix is an ancestor of `main`, and never rewind a channel; the boundary itself is designed as one command in `docs/design/release-train-promotion.md`. · **v0.8 (2026-09-23) — ACCEPTED.** Channels are named for what a site runs — **unstable**, **staging**, **production** — on the branches `main`, `staging` and `stable`; the two are named apart on purpose, because "stable" as a promise to an operator and `stable` as a ref are different statements. · v0.7 (2026-09-23) — the satellite's flake is deleted, not merely proposed for retirement (#712 landed), so Context names two pins and D7 records the deletion; adds what a bump costs, measured on the test site: a daily sweep re-downloads nothing (0.03 s to resolve a cached revision, 0.335 s to revalidate), while a pin change costs ~1 GB of fetches and ~10 GB of store across 22 guests, each fetching from GitHub on its own. · v0.6 (2026-09-22) — D10 built and verified on hrossen (#713): the control plane checks itself after a switch and rolls back the generation it replaced when that check fails. · v0.5 (2026-09-22) — retitled from *OS Version Tracking*: once the alpha/beta/stable train landed, the ADR was about release cadence and patching, of which the nixpkgs pin is one input. · v0.4 (2026-09-22) — the operator's train: three channels (alpha/beta/stable) on two-week boundaries, so `stable` is at most four weeks behind and a CVE **accelerates** the train instead of cherry-picking a pin onto code it was never built against; D9 gains the guest-first validation rule (a guest proves a revision before the mothership takes it, without reordering the sweep); D2's beat restated as the boundary. · v0.3 (2026-09-22) — D2 collapsed to **one weekly rhythm** with a full `--deep` test, on a NixOS expert's advice relayed by the operator: a version move is a bigger weekly bump, not a separate cadence (the ~1-month backport overlap is slack, not licence to linger). New D9 (how a bump reaches `main`, and why `stable` takes the pin with its monthly release rather than by weekly cherry-pick) and D10 (the mothership has no rollback, goes first, and needs one before the cadence leans on it). · v0.2 (2026-09-22) — a primer on flake vs non-flake Nix and on patch vs version moves in both OS families, so the decisions read without prior Nix knowledge; D1 states why the mothership keeps its own flake (upgrade safety, four reasons); the satellite corrected to Debian and its `--os nixos` remains proposed for retirement (#712); D5 separated the three Debian patch paths. · v0.1 (2026-09-22) — first draft, from the operator's questions of 2026-09-22 and a read of the shipped code. |
 
 When TAPPaaS releases, and how OS and software patches reach a site — the channels, the cadence, and what each OS family does between releases.
 
@@ -515,6 +515,48 @@ command rather than reporting recovery.
 
 With that in place the cadence of D2 is defensible for the mothership as well as the guests: it
 is the last machine in the estate to gain a way back, and it now has one.
+
+### D11 — A repository declares which of its branches are which channel
+
+Until now the mapping `unstable→main`, `staging→staging`, `production→stable` lived in
+`tappaas-train.sh`, and it was only ever true of **this** repository. A site tracks several: the
+TAPPaaS source, the Community modules, and often a site's own. Each may name its branches
+differently, or have only one, and nothing said what a site on `production` should be tracking in
+any of them. So the channel was a promise the site made and the train could only check in one place.
+
+**Each repository declares the mapping itself, in `channels.json` at its root:**
+
+```json
+{
+  "production": ["stable"],
+  "staging":    ["staging"],
+  "unstable":   ["main"]
+}
+```
+
+Each channel maps to a **list** of branches, because a repository may realize one channel from more
+than one branch — a maintenance line alongside a release line, say. Typically each list has one
+entry, and the common case should read as the simple thing it is.
+
+**A branch that appears in no list is unstable.** That is the safe default in the direction that
+matters: an unrecognised branch is never silently treated as production. It also means a repository
+with no `channels.json` at all is coherent rather than broken — every branch in it is unstable,
+which is exactly what an undeclared repository deserves to be called.
+
+**A missing `channels.json` is a warning, not a refusal.** Repositories exist that predate this,
+including Community, and a site tracking one must keep working. But the warning has to be real and
+repeated — in `tappaas-train status`, and again whenever an operator changes a site's channel —
+because the silence it replaces was a site claiming `production` while tracking somebody's `main`.
+
+**Changing a site's channel is then a statement about every repository it tracks.**
+`site-manager site modify --channel <c>` compares, for each registered repository, the branch it is
+on against the branch that repository declares for `<c>`. Where they disagree it says so and
+proposes the command that would fix it. It does **not** switch them: a branch change is a code
+change to a live site, and the operator decides when. The same comparison is what `status` reports.
+
+This is the piece that makes a channel checkable rather than aspirational. A site on `production`
+whose Community checkout sits on `main` is not a production site, and before this nothing could say
+so.
 
 ## Consequences
 

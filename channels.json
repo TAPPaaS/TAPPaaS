@@ -1,0 +1,6 @@
+{
+  "_README": "Which of this repository's branches realize which release channel (ADR-028 D11). Each channel maps to a LIST of branches, because a repository may realize one channel from more than one branch; typically each list has a single entry. A branch that appears in no list is UNSTABLE — the safe default, so an unrecognised branch is never mistaken for production. `tappaas-train status` and `site-manager site modify --channel` read this to tell a site whether the branches it tracks match the channel it claims.",
+  "production": ["stable"],
+  "staging": ["staging"],
+  "unstable": ["main"]
+}
