@@ -438,6 +438,34 @@ class TestAppDelete(unittest.TestCase):
         self.assertFalse(any(c["method"] == "DELETE" for c in calls))
 
 
+class TestScopeMappings(unittest.TestCase):
+    ROWS = {"results": [
+        {"pk": "S-GENERIC", "name": "TAPPaaS OAuth Mapping: groups", "scope_name": "groups"},
+        {"pk": "S-NC", "name": "TAPPaaS OAuth Mapping: nextcloud groups", "scope_name": "groups"},
+        {"pk": "S-OPENID", "name": "authentik default OAuth Mapping: OpenID 'openid'", "scope_name": "openid"},
+    ]}
+
+    def test_a_mapping_name_beats_a_shared_scope_name(self):
+        mgr, _ = _make_manager({("GET", "/propertymappings/provider/scope/"): self.ROWS})
+        self.assertEqual(mgr._scope_mapping_pks(["openid", "TAPPaaS OAuth Mapping: nextcloud groups"]),
+                         ["S-OPENID", "S-NC"])
+
+    def test_ensure_creates_then_updates_by_name(self):
+        mgr, calls = _make_manager({
+            ("GET", "/propertymappings/provider/scope/"): {"results": []},
+            ("POST", "/propertymappings/provider/scope/"): {"pk": "NEW", "name": "m", "scope_name": "groups"},
+        })
+        mgr.scope_mapping_ensure("m", "groups", "return {}")
+        self.assertTrue(any(c["method"] == "POST" for c in calls))
+        mgr, calls = _make_manager({
+            ("GET", "/propertymappings/provider/scope/"): {"results": [{"pk": "OLD", "name": "m", "scope_name": "groups"}]},
+            ("PATCH", "/propertymappings/provider/scope/OLD/"): {"pk": "OLD", "name": "m", "scope_name": "groups"},
+        })
+        mgr.scope_mapping_ensure("m", "groups", "return {}")
+        patch = next(c for c in calls if c["method"] == "PATCH")
+        self.assertEqual(patch["json"]["expression"], "return {}")
+
+
 class TestOidcAppEnsure(unittest.TestCase):
     def test_create_provider_and_application(self):
         mgr, calls = _make_manager({
