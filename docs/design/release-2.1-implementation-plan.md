@@ -167,6 +167,8 @@ later wave depends on.
 | ✅ *(with #655)* | one meaning for `--force` | 3 | 2 | H | `--force` = proceed (failed pre-update test, archived/external) at every level; downtime is `--allow-disruption`; `--ignore-test-failure` retired (ADR-020 v0.10 D8, ADR-017 v0.3 D5) |
 | ✅ #648 | `--unset` for stale fields | 4 | 1 | L | Option 2 chosen (2026-09-14): `--unset`, deep test, README |
 | ✅ #572 | repo-sync auto-stash never restored | 4 | 1 | L | Pick pop or drop; warn with count |
+| #736 | update merge pins a field that a release moves to a new place | 3 | 3 | M | **Opened 2026-09-25 by @AndreasJe.** A release that moves a field (coturn's top-level `natRules` → `config["network:nat"].natRules`) leaves the old key in the deployed config and in neither `.orig` nor the source, so merge rule 5 (`lib/apply-json-merge.sh:37`, *keep current (pinned)*) reads it as an operator customization and pins it forever — coturn keeps the relay range at `49152-65535` after the release narrowed it to `49152-50151`. Workaround: delete the stale key once, then `update-module.sh`. A field move is a shape change, so it wants an ADR-025 migration (like 0006 `location` → `moduleSource`), or the merge adopts when a key is absent from `.orig` and moved in source. **Same root cause as #488** (parked) — see §9. **Parallel stream** (§13) — fixed on a separate branch, landing with @AndreasJe's PRs. |
+| ✅ #727 | `module-manager`: `--allow-disruption` reaches services that reject it | — | — | — | **Added in the 2026-09-25 issue sweep.** **Closed** (@ErikDaniel007). Disruption authorization is passed as `TAPPAAS_ALLOW_DISRUPTION=1` in the environment, not as an argument: most services parse no arguments, and the strict ones (`identity:identity`, `litellm:models`, `cluster:ha`, and any third-party provider) exited on it as an unknown option — failing the re-apply and rolling a healthy module back. Same rollback-on-a-healthy-guest shape as #711 |
 
 #### Migration framework (decided 2026-09-14)
 
@@ -347,6 +349,8 @@ Left: the `tier` → `scope` migration (ADR-022e) — **#676**, to be swept toge
 | ✅ #707 | ADR-014: zone.tier has no stated relation to IEC 62443 levels | — | — | — | **Closed 2026-09-23** (`972e5c22`). Added in the 2026-09-24 issue sweep |
 | ✅ #708 | ADR-004: stack is defined three times, with three value sets | — | — | — | **Closed 2026-09-23** (`469ce9a3`). Added in the 2026-09-24 issue sweep |
 | #705 | cluster and templates carry a kind ADR-022d denies them | — | — | — | **Open, not yet scored** — the vocabulary change this group owns. Added in the 2026-09-24 issue sweep |
+| ✅ #669 | `module-manager list` and other verbs should handle `Kind` | — | — | — | **Added in the 2026-09-25 issue sweep.** **Closed.** Part of the ADR-022d `kind` work with #611 |
+| ✅ #741 | `update-tappaas` sweeps a Proxmox VM template as if it were a module | — | — | — | **Added in the 2026-09-25 issue sweep.** **Closed 2026-09-25** (`912b50b9`). Lands here because the fix is a classification one: a config whose `stack` is `template` is not an installable module, and `partition_by_lifecycle` never read the field — so the template entered the update queue and failed identically on every sweep for 13 days on the reporter's site. Neither hrossen nor makerfloss could reproduce it (they deploy the module as `config/templates.json`), which is why it went unseen here. Related to #705 |
 
 ### G1.2 Backup placement model + managed machines (ADR-012, ADR-026) — E3 · R4 · L-H
 
@@ -376,7 +380,10 @@ remaining validation.
 | #671 | Deep test: satellite as a module on a real VPS | 2 | 1 | L | After #670 and the operator's travel; needs a fresh VPS. Phases: add managed, sweep patch, `wgvpn`, satellite as the Site's PBS, lockdown, delete/decommission, makerfloss conversion |
 | ✅ *(closed)* | `placementState` revisit | 4 | 2 | M | **Answered 2026-09-18**: ADR-012 v0.9 settles the backup case (`node` \| `shim` \| `external`); the general point is ADR-026 D6.5 — the `node` field names an *instance*, which coincides with a module name in almost every deployment but is not the same thing. No separate decision needed |
 | ✅ #691 | backup:filesystem ignores its schedule; every capture fires at once | — | — | — | **Closed 2026-09-21** (`a77c498c`). Added in the 2026-09-24 issue sweep |
+| #435 | backup: pass the required module argument in the deep PBS check | 5 | 1 | L | **Added in the 2026-09-25 issue sweep** (@ErikDaniel007, no milestone). A test-harness defect in the deep PBS check, not a backup fault. Cheap, and it sits with this group's live gates |
 | ✅ #712 | Retire the satellite's `--os nixos` path (unpinned, untested) | — | — | — | **Closed 2026-09-22** (`a1342322`). Added in the 2026-09-24 issue sweep |
+| #737 | `site.json` `backup: true` fails validation and has no migration | 4 | 2 | M | **Opened 2026-09-25 by @AndreasJe.** Older sites carry `"backup": true`; `schemas/site-fields.json:154` wants an object or null, so `site-manager validate` fails, and `backup/lib/pbs-schedule.sh:116` reads `.backup.defaultSchedule` with `jq`, which errors on a boolean. Nothing current writes the boolean and no migration (0003–0010) converts it — so only *older* sites are affected, and they fail validation silently until someone runs it. Wants migration 0011: `backup: true`/`false` → `null` (or `{}`), reported the way 0003 does. **Parallel stream** (§13) — fixed on a separate branch, landing with @AndreasJe's PRs. |
+| #742 | `backup:filesystem` update never creates a missing encryption key, so a capture can fail forever | 4 | 3 | M | **Opened 2026-09-25**, found while verifying makerfloss after the staging promotion. `update-service.sh` has no key handling at all; only `install-service.sh` creates `/etc/secrets/backup-fs.key`. Its header says the key is *left alone once they exist* — right about rotation, wrong about absence, so the absent case has no owner and no update can heal it. Hits sites whose mothership backup predates `backup:filesystem`: the unit and timer are there, the key never was. On makerfloss the capture has failed **every night since 2026-09-15 with zero successes** — the mothership `config/` has never been backed up. Data safety, and it is on the staging site, so it is on the path to production. The error also says *cannot read* when the file is absent |
 
 #### ADR-012 close-out (original scope)
 
@@ -396,7 +403,7 @@ is a migration.
 |---|-------|:-:|:-:|:-:|------|
 | ✅ #602 | Empty `placementState` resolves onto the wrong host | 4 | 4 | H | **Built 2026-09-18**, on `main` (31bec1b2): before any discovery, an empty state asks the `node` Host, `pbsUrl`'s host and every cluster member whether they hold the datastore, adopts the one that does under **its own name** (an alias like `backup` is recorded as `tappaas3`), and stops as `unmanaged` when only an unmanaged host answers; same rule in `install.sh` and `update.sh`. 63 unit cases (4 fail on the old resolver, reproducing the second-PBS bug); read-only on makerfloss and hrossen, resolution from empty gives the recorded `node:tappaas3 tankc1`; **live on hrossen**, `update.sh` with the state cleared backfilled `node:tappaas3` and completed. The machine-hosted case (§1.3) is unit-tested only — no site has one yet |
 | ✅ #600 | PBS on a non-cluster host | 3 | 4 | H | **Answered by v1.0 §1.3** (machine topology; `node` names a Host, not a cluster member). **Built 2026-09-19** (`wave1/g1.2-module-source`): stored as `placementState: node` + `.node` = the Host; migration 0007 rewrites `node:<host>`; readers accept both; the DNS sample checks backup under its instance name. The `set -e` bug at `backup/update.sh:51` was already fixed by #625 (tested form, covered by `test-pbs-legacy-guard.sh`) |
-| ✅ #612 | `vmname` → the instance name, as a DNS alias; `shim` stays | 4 | 3 | M | **Built 2026-09-19** (`wave1/g1.2-module-source`): `dns-manager alias add|delete|list` (a CNAME on the Host's own dnsmasq entry; a move is remove-then-add, found live); backup's name is the instance's, registered as an alias of the `node` Host on install and every update, replacing the old A record; `vmname` gone from `backup.json`. **Decided (v1.0 §2.7):** backup is `kind: application`, so `vmname` names nothing; the PBS's DNS name is the backup instance's name (ADR-026 D6.1), registered as an **alias of the `node` Host** instead of an A record frozen at install; `pbsUrl` derives from it. Needs D6.3/D6.4 and #665 first, and a `dns-manager` alias verb |
+| ✅ #612 | `vmname` → the instance name, as a DNS alias; `shim` stays | 4 | 3 | M | **Built 2026-09-19** (`wave1/g1.2-module-source`): `dns-manager alias add`/`delete`/`list` (a CNAME on the Host's own dnsmasq entry; a move is remove-then-add, found live); backup's name is the instance's, registered as an alias of the `node` Host on install and every update, replacing the old A record; `vmname` gone from `backup.json`. **Decided (v1.0 §2.7):** backup is `kind: application`, so `vmname` names nothing; the PBS's DNS name is the backup instance's name (ADR-026 D6.1), registered as an **alias of the `node` Host** instead of an A record frozen at install; `pbsUrl` derives from it. Needs D6.3/D6.4 and #665 first, and a `dns-manager` alias verb |
 | ✅ #601 | Placement discovery is PVE-only | 3 | 2 | M | **Built 2026-09-19** (`wave1/g1.2-module-source`): a machine Host is reached by its `address`; storage on a Host without Proxmox is found from its ZFS pools (`pvesm` path unchanged). `install.sh` adopts a PBS serving on a non-member Host and refuses — records nothing — when it has only a pool (it used to record an "adopted" placement with nothing behind it). **Not automated:** installing PBS onto a bare machine (test-plan phase 6) |
 | ✅ #456 | `external` placement for a pre-existing PBS | 3 | 2 | M | Consuming was built and live-verified with ADR-012 (`use-external`, 165 backups kept restorable). **Finished 2026-09-19** (`wave1/g1.2-module-source`): one operator verb, `backup-manager placement use-external <url>` (the `--set placementState=external` advice registered no storage); every update of an `external` placement fails, named, when its storage is missing or unusable (Erik's validation); ADR-012 §4.2 corrected |
 | ✅ #607 | Exit from `external` placement | 4 | 1 | L | **Built 2026-09-18** (`wave1/g1.2-module-source`): `backup-manager placement reset` / `finish-reset`. The old storage entry is renamed `<name>_former` (credential + key) so history stays restorable — left under the module's name, the local install would have kept pushing to the external PBS; state → `shim` (not empty: empty would stop on the old PBS as `unmanaged`); refused without a tankc pool; then the update, then the pull onboarding. Unit-tested; the rename live-verified on hrossen on a copy of the real entry. **Not rehearsed end to end** — needs an external PBS |
@@ -500,6 +507,9 @@ time or locale on a Debian guest, an adopted `debianhost`, or a Windows guest at
 | ✅ #699 | Guests created with `-localtime 1` boot two hours ahead | — | — | — | **Closed 2026-09-22** (`cd87f4dc`). Added in the 2026-09-24 issue sweep |
 | ✅ #721 | promtail is removed in nixos-26.05 | — | — | — | **Closed 2026-09-24** (`15ca633f`) — replaced by Grafana Alloy; closed in this sweep. Added in the 2026-09-24 issue sweep |
 | ✅ #722 | Grafana's `secret_key` has no default in 26.05 | — | — | — | **Closed 2026-09-24** (`c6e4db68`) — a per-site key beside the admin password; closed in this sweep. Added in the 2026-09-24 issue sweep |
+| #740 | `update-os.sh` ships only `*.nix` siblings, so a module cannot carry a patch or data file | 4 | 2 | L | **Opened 2026-09-25 by @AndreasJe.** `health-manager/update-os.sh:453` copies only `./*.nix` beside the module's main `.nix` into `/etc/nixos`, so a module referencing `./fix.patch` fails evaluation on the guest with *path … does not exist*. Nextcloud works around it by wrapping its patch in a `.nix` that returns it via `writeText`. Decide whether that is the contract; if not, ship a declared extra-file set (a `files/` directory, or a list in the module JSON). **Parallel stream** (§13) — fixed on a separate branch, landing with @AndreasJe's PRs. |
+| ✅ #726 | A release move leaves every Postgres guest permanently warning about collation | — | — | — | **Added in the 2026-09-25 issue sweep.** **Closed 2026-09-25.** A glibc change across the release makes `datcollversion` stale, so every guest warns forever. Reconciliation now runs in the sweep's Phase 4 and each refresh is *earned* by verifying that database's indexes first (`bt_index_check`), with a `FOUND == CHECKED` guard — an earlier cut refreshed two databases without checking anything, because `sudo -u postgres command psql` cannot exec a shell builtin and every query silently returned nothing |
+| ✅ #728 | update-os: guests switch across a nixpkgs release and fail on exit 4 | — | — | — | **Added in the 2026-09-25 issue sweep.** **Closed 2026-09-24** (`0afac5d5`). Across a release `switch` applies but cannot reload `dbus-broker`, so it exits 4 — the switch succeeded, the reload did not. A release move is now *staged* with `nixos-rebuild boot` and taken by the reboot, the way the mothership does it (#725). **This is also the likely root cause of #711**, which was reported two days earlier and whose own fix (`e5481865`) addressed only the fact that the failure left no evidence |
 | ✅ #709 | Nextcloud cannot advance past 33 | — | — | — | **Closed 2026-09-24.** The train can move the nixpkgs release (`7b3af58f`), and the pin is on 26.05 (`3e07ca7d`), which ships `nextcloud33`/`34`/`35`. Moving the module's `ncMajor` is the Nextcloud maintainers' call, not this issue. Added in the 2026-09-24 issue sweep |
 
 ### G1.5 Rebuild & recovery paths — E3 · R4 · L-M
@@ -611,6 +621,7 @@ Low upgrade risk. Build continuously, in any order within a group.
 | #663 | Memory defaults are not based on measurement | 4 | 2 | M | The demand side of #37. Shipped defaults were never checked against use: 60G declared across hrossen's QEMU guests, 31.9G resident, ~20G used. Over-declaring costs **commitment** (what #569's gate reports and what decides placement), not RAM — except where a guest's allocator touches everything, as OPNsense/FreeBSD does. Applied on hrossen: `tappaas-cicd` 12G, `unifi-os` 5G. `network` 8G→4G is **parked until the operator has physical access** — the firewall is the route back into the site |
 | #37 | Optimise RAM (ballooning, swap) | 3 | 3 | L | **ARC part dropped 2026-09-17** after measuring six nodes: `zfs_arc_max` is already set to ~10.7% of RAM (the PVE 8.1+ installer default, not ZFS's 50%), and three of six nodes sit AT their cap — nothing to reclaim, and the proposed direction was backwards. hrossen tappaas2 looks like an exception (69G uncommitted) but is not: it shares GPU RAM with CPU RAM and runs the LLMs. What remains is the real gain — hrossen declares 110G across 11 guests with **no ballooning on any of them**, ~70G declared and unused (`vllm-amd` 46G→2.1G, though that one is GPU-bound and needs thought, not a reflex balloon). Monitoring is partly delivered by #569's `memory-commitment` gate |
 | #423 | `Create-TAPPaaS-LXC.sh` has no `debug()` | 5 | 1 | L | Verified still missing |
+| ✅ #673 | Cluster nodes are a fixed list of nine, not a sequence | — | — | — | **Added in the 2026-09-25 issue sweep.** **Closed** |
 
 ### G3.2 Identity & SSO wiring — E3 · R2 · L-L
 
@@ -622,6 +633,7 @@ Low upgrade risk. Build continuously, in any order within a group.
 | #479 | Site-specific login page | 4 | 1 | L | |
 | ✅ #698 | logging update fails on makerfloss: the mgmt environment has no domain | — | — | — | **Closed 2026-09-21** (`c1cdf960`). Added in the 2026-09-24 issue sweep |
 | #701 | logging depends on identity though its own code makes SSO optional | — | — | — | **Open, not yet scored** — SSO is conditional on publication since `4c9c846a`. Added in the 2026-09-24 issue sweep |
+| #738 | `identity:identity` discovery check fails on a changed host key and blames the firewall | 4 | 2 | M | **Opened 2026-09-25 by @AndreasJe.** After a guest reboot or rebuild its ssh host key can change. `identity/services/identity/install-service.sh` clears a stale `known_hosts` entry before its write step (239–254) but not before the discovery check at 221, so `StrictHostKeyChecking=accept-new` refuses the changed key and line 228 dies with *OIDC discovery URI unreachable … add a firewall rule*. The firewall is fine; ssh never ran. A wrong diagnosis that sends an operator to widen the firewall. **Parallel stream** (§13) — fixed on a separate branch, landing with @AndreasJe's PRs. |
 
 ### G3.3 App module fixes — E4 · R2 · L-L
 
@@ -641,6 +653,7 @@ Low upgrade risk. Build continuously, in any order within a group.
 | ✅ #622 | deconz probe uses a name that never resolves | 5 | 1 | L | Looks fixed on `main` (both services now resolve the deconz FQDN): verify and close |
 | #658 | nextcloud test 12 probes the browser URL from wherever it runs | 4 | 1 | L | Maintainer-owned (@ErikDaniel007). **Not** "treat 403 as pass" — that would mask a real access-list fault. The test should ask whether the host it runs from is inside the route's `proxyAllowedZones` and skip with a reason when it is not, the way `tappaas-cicd/test.sh` Test 9z now handles a suite that cannot run here (exit 77). Today it pushes an operator to widen a zone list to make a test pass — a security change caused by a test assumption |
 | ✅ #714 | nextcloud:fileservice fails euro-office on a verdict the run could not make | — | — | — | **Closed 2026-09-23** (`287bad27`) — TTY, readiness gate, verdict from the check's own words, JWT leeway. Added in the 2026-09-24 issue sweep |
+| ✅ #667 | `nextcloud:fileservice` declares no fields, so its connector is undefined | — | — | — | **Added in the 2026-09-25 issue sweep.** **Closed.** Sits with #714, the other fileservice defect |
 
 ### G3.4 AI stack maturity — E3 · R3 · L-L
 
@@ -699,7 +712,11 @@ New capabilities with low upgrade risk.
 | #582 | Read back static reservations | 4 | 1 | L | Lars asked for a concrete need first (2026-09-05) |
 | ✅ #681 | Auto-stash entries nothing lists or resolves | 4 | 2 | L | **Done 2026-09-21** (ed6aa6a7). `repo-sync` stashes a dirty managed checkout so the pull can move and puts the entry back (#572); one that no longer applies was kept and only ever **counted**, leaving `git stash list` — by hand, in a checkout the operator is told not to edit — as the only way to see what the number meant. Erik saw 12 entries in TAPPaaS and 2 in Community; makerfloss carried 16, all mode-only artefacts from before #565, so nothing is accumulating now. `site-manager repository stash list/show/restore/discard` is the missing surface, and the sweep's line now names the oldest entry's age and that verb. An entry an operator stashed by hand carries no repo-sync tag and is never listed, restored or dropped |
 | #634 | Private repositories in `repository add` | 5 | 1 | L | Adopt-mode: won't fix; document the deploy-key method |
+| #654 | `module-manager`: the `--set` pre-gate ignores the module-level field declarations (ADR-020 D10) | 3 | 2 | M | **Added in the 2026-09-25 issue sweep** (no milestone). ADR-020 D10 says a module may declare its own field rules; the `--set` pre-gate does not read them, so a module-level declaration is silently inert. Belongs with the ADR-020 verb work that G0.1 started (#453, #655) |
+| ✅ #672 | `module delete` of a machine leaves its dnsmasq Host entry behind | — | — | — | **Added in the 2026-09-25 issue sweep.** **Closed.** A delete that does not finish is a drift source |
+| ✅ #730 | health-manager: no reboot verb, and pending reboots go unrecorded | — | — | — | **Added in the 2026-09-25 issue sweep.** **Closed** (@ErikDaniel007). A reboot that is not taken is now reported as a `DEFERRED:` line the sweep collects |
 | ✅ #718 | module-manager: the dependency test misses an environment's provider | — | — | — | **Closed 2026-09-23** (`6bc1f92e`) — delete-module's reverse check fixed with it. Added in the 2026-09-24 issue sweep |
+| #739 | After reinstalling a provider, `dependsOn` consumers stay unwired | 3 | 3 | M | **Opened 2026-09-25 by @AndreasJe.** `install-module.sh` Step 7 (862–883) re-wires only `integratesWith` consumers (`find_integrateswith_consumers`); `dependsOn` consumers are not. After `install-module.sh nextcloud --reinstall`, euro-office, coturn and nextcloud-hpb keep pointing at the old instance until each gets its own `update-module.sh`, and nothing reports it. Run the provider's `update-service.sh` for every installed `dependsOn` consumer after a (re)install, or at minimum list the consumers that need one. **Parallel stream** (§13) — fixed on a separate branch, landing with @AndreasJe's PRs. |
 
 ### G4.4 Storage & physical devices — E2 · R2 · L-M
 
@@ -709,6 +726,9 @@ New capabilities with low upgrade risk.
 | #155 | Modules for physical devices | 5 | 1 | L | Docs and examples only (Lars, 2026-05-15) |
 | #668 | A machine's zone is recorded, not enforced | 2 | 3 | M | **Opened 2026-09-19.** A `vm`'s `zone0` decides a bridge VLAN and `cluster:vm` makes it true; a `machine`'s decides which network its **physical** NIC is cabled to, and nothing checks or sets the switch port. Record the switch and port per NIC, check the port's VLAN against `zone0`/`zone1` as drift, and apply a zone change under the same consent rules as a VM's NIC change. Touches the ADR-026 machine modules, `switch-controller`/`network-manager` and the field schema; sits beside #236 |
 | #697 | Node `lan` trunks and their switch ports are set once at install, maintained by nothing | 3 | 4 | M | **Opened 2026-09-21** from the makerfloss deep sweep. `config-network.sh` writes `bridge-vids 2-4094` once; `proxmox-controller` later *narrows* it to the Active tags, and only `zone add`/`delete` ever trigger that — `enable`/`disable` just print a hint, the routine sweep runs `reconcile --only opnsense`, and no timer runs the proxmox or switch planes at all. Untagged mgmt is excluded from the desired set **by construction** (`vm-net.sh`: Active *and* `vlantag > 0`) and survives only on the kernel's default PVID 1, which nothing sets or asserts; the switch trunk has the same hole. Live proof: makerfloss's node bridges match its Active zones exactly, while `switch-configuration-*.json` hold `"switches": []` — which is why three VLAN variants created their VMs and then timed out waiting for DHCP on tag 200. The issue carries **five candidates to choose between**, not a plan to do all five: reconcile on zone state change; report plane drift in the sweep (dry-run — an unattended rewrite of a node's network config is an ADR-020 decision, not a freebie); declare the untagged/native VLAN; give `pvehost/test.sh` the trunk check that now belongs to it (#665 made a node a module, and its tests cover ssh, PVE, quorum, disk and clock but no bridge); and derive the switch port's target from `hardware.nodes`. **Decide as one sitting with #668** — same seam, and #668's "record the switch and port per NIC" is the precondition for the last of the five |
+| ✅ #734 | ap-controller: an unfilled placeholder SSID reads as live drift | — | — | — | **Added in the 2026-09-25 issue sweep.** **Closed** (@ErikDaniel007). **#732 is the same issue filed twice** — both are closed; worth confirming one was closed as a duplicate rather than fixed twice |
+| ✅ #733 | `unifi.sh`: one message covers four failure causes, and a `jq` crash | — | — | — | **Added in the 2026-09-25 issue sweep.** **Closed** (@ErikDaniel007). One error string for four distinct causes taught operators nothing; the `jq` crash made it worse |
+| #731 | Controller-architecture modules never register themselves, and inventory drift has no routine check | 3 | 2 | M | **Opened 2026-09-25 by @ErikDaniel007.** A vendor plugin declaring `plugin_arch() == "controller"` (today only `unifi.sh` via `unifi-os`) is not registered anywhere on install: `module-manager module add unifi-os` brings the VM up while `switch-controller list` and `ap-controller list` both report zero. Found live on the reference site — `unifi-os` had been Production since 2026-09-05 while two physical switches and four APs existed outside any inventory. Filed under G1.3's #430 (controller/manager pattern) on first read, but it belongs here with the rest of the unifi/controller cluster (#732, #733, #734) and the physical-inventory issues #668/#697; the drift half also touches #719's self-check honesty |
 | FW #158 | Multi-NIC module firewall rules | 3 | 1 | L | Optional roll-in |
 
 ### G4.5 Governance, CI & sign-offs — E3 · R1 · L-L
@@ -758,6 +778,13 @@ New capabilities with low upgrade risk.
 | #93 | App-level backups to PBS as pxar | Same as #71 |
 | #98 | Create the DevOps stack | Close, or keep as the stack epic: forgejo exists in the Community repo |
 
+**In the forge's *Parking lot*, and absent from this plan until the 2026-09-25 sweep:**
+
+| # | Issue | Note |
+|---|-------|------|
+| #488 | apply-json-merge pins fields the operator never changed | **The general case of #736.** #736 is one instance (a field the release *moved*); #488 is the whole class. Parking #488 while fixing #736 on a branch risks two different merge rules. Decide together — see §9 |
+| #464 | migrate-firewall-to-network: dry-run reports a step it cannot predict | A dry run that overstates what it will do. Low risk, but it is the kind of thing that teaches an operator to distrust dry runs |
+
 **Keep in Future Work:** #26 IPv6 (write the stance under #149), #51 Immich,
 #52 Jellyfin, #129 Project Nomad, #89 binary repository, #91 Backstage,
 #156 pfSense alias import, #170 LiteLLM declarative state (decide with #430),
@@ -769,7 +796,8 @@ New capabilities with low upgrade risk.
 
 - **Merge pairs** the issues themselves say belong together: #36 + #127,
   #399 + #384, #385 + #222, #160 + #256, #624 + #637, #642 + #643,
-  #444 + #582, #119 / #120 / #121.
+  #444 + #582, #119 / #120 / #121, **#488 + #736** (added 2026-09-25: the
+  same `apply-json-merge` pinning rule, one general and one instance).
 - **Close or park:** #622 (verify), #284, #154, #223 → *Parking lot*.
 - **Parked, half of #656:** a proxy access list kept current from a provider's
   published feed (e.g. an Azure service tag). It is not a field, it is a
@@ -915,3 +943,30 @@ a code decision, and wants the operator's word before any code is written.
 | # | What it is | E | R | Checked on `main` | The decision to take |
 |---|---|:-:|:-:|---|---|
 | #675 | `site.json .repositories` declares the repositories a site tracks and the sweep pulls them all, but the mothership's rebuild only ever builds the baseline flake.<br>A site that composes its own host-level NixOS modules loses them on every scheduled rebuild, while the unit reports success.<br>There is no extension point: `tappaas-cicd.nix` declares no option for it. | 2 | 3 | **Confirmed** — no `mkOption`/`extraModules`/`extraImports` anywhere in `tappaas-cicd.nix`. | Architectural, so an ADR first: what a managed repository may contribute to the control plane's own NixOS configuration, and what happens when that contribution fails to build. Implementation only after that is written down |
+
+---
+
+## 13. Parallel stream — @AndreasJe's reports, 2026-09-25 (#736–#740)
+
+Five issues opened on 2026-09-25 are being fixed **on a separate branch by a parallel
+session**, to land together with the associated PRs from @AndreasJe. They are listed in
+their own groups above so no group table is incomplete; this section is the coordination
+view — what the stream touches, and where it can collide.
+
+| # | Lands in | Touches | Collision risk |
+|---|----------|---------|----------------|
+| #736 | G0.1 | `lib/apply-json-merge.sh` (rule 5), and probably a new ADR-025 migration | **Decide with #488 first** (§8, §9) — #488 is the same rule in its general form. Two branches writing one merge rule is the thing to avoid |
+| #737 | G1.2 | `schemas/site-fields.json`, `backup/lib/pbs-schedule.sh`, migration 0011 | Low. Take the next free migration number at merge time, not at branch time — the number is the conflict, not the code |
+| #738 | G3.2 | `identity/services/identity/install-service.sh` | Low |
+| #739 | G1.3 area, tracked in G4.3 | `install-module.sh` Step 7 | Low, but it changes what a (re)install does to *other* modules — a T2 run should cover a provider reinstall with `dependsOn` consumers present |
+| #740 | G1.4 | `health-manager/update-os.sh:453` (the sibling-copy loop) | **Same file as #711's fix** (`e5481865`, on `main` 2026-09-25), which added `set -Eeuo` and an ERR trap near the top. Different region, so a textual conflict is unlikely — but rebase on `main` before merging, and re-run the guarded-path check, because a new unguarded command in that file now reports through the trap |
+
+**Merge coordination.** @AndreasJe's existing work sits on `AndreasJe/TAPPaaS_QW`
+`Qualiware-Prod` and the #715 row already records its state (behind `main`, commit
+messages that fail our `commit-msg` hook). The preferred path is unchanged: **a PR rebased
+on `main`**, so the hook runs and the diff is reviewable against what is actually released.
+That applies to this stream too — it is the difference between merging five fixes and
+merging a branch that also quietly reverts something.
+
+**Entry gate for the stream:** #488's disposition (§8). Everything else in it is
+independent and can land in any order.
