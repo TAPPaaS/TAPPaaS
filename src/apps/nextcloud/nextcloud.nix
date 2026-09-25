@@ -428,10 +428,6 @@ in
 
     notify_push.enable  = true;
     notify_push.package = notifyPushPkg;
-    # The URL is also the websocket base handed to browsers. The default,
-    # http://<hostName>, gave them ws://nextcloud/push/ws: unresolvable and mixed
-    # content, so web clients fell back to slow polling for every notification.
-    notify_push.nextcloudUrl = lib.mkIf (ncProxyDomain != "") "https://${ncProxyDomain}";
 
     phpOptions = {
       "memory_limit"                   = lib.mkForce "512M";
@@ -702,6 +698,15 @@ in
   # MS_CLIENT_ID, MS_CLIENT_SECRET) from the management plane when it exists there.
   # The Mail app encrypts the client secret itself, so it goes through its admin
   # endpoint; occ config:app:set would store it in clear and the app could not read it.
+  # notify_push: the daemon keeps reaching Nextcloud internally (the module's default
+  # URL, where its trusted-proxy self-test passes; through the reverse proxy the test fails
+  # because the proxy replaces X-Forwarded-For). Browsers need the public endpoint instead:
+  # the default hands them ws://<hostName>/push/ws, unresolvable and mixed content, so web
+  # notifications fell back to slow polling. Setup runs every boot, so this re-applies.
+  systemd.services.nextcloud-notify_push_setup.serviceConfig.ExecStartPost =
+    lib.mkIf (ncProxyDomain != "")
+      "${lib.getExe config.services.nextcloud.occ} --no-interaction config:app:set notify_push base_endpoint --value=https://${ncProxyDomain}/push --type=string";
+
   systemd.services.nextcloud-configure-mail-microsoft = {
     description = "Configure Microsoft 365 sign-in for the Mail app";
     wantedBy    = [ "multi-user.target" ];
