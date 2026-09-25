@@ -1295,9 +1295,9 @@ def main():
         for d in DEFERRED_CHANGES:
             log.warning("  %s", d)
         log.warning(
-            "Apply one in a maintenance window with: module-manager module modify "
-            "<module> --force   (or set rebootOk on the module to permit it in the "
-            "scheduled pass)"
+            "Apply one in a maintenance window with: module-manager module update "
+            "<module> --allow-disruption   (or set rebootOk on the module to permit "
+            "it in the scheduled pass)"
         )
     if TEST_WARNINGS:
         log.warning(

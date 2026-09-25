@@ -526,8 +526,12 @@ update_nixos() {
 
     # nixos-rebuild switch already activated the new generation; the reboot
     # applies kernel/bootloader changes. Gated by tappaas.automaticReboot
-    # (issue #275) — covers the identity VM and any other NixOS guest. When
-    # false the operator reboots manually under supervision.
+    # (issue #275) — covers the identity VM and any other NixOS guest — or by
+    # the operator authorizing disruption for this run (ADR-020 D8,
+    # --allow-disruption → TAPPAAS_ALLOW_DISRUPTION=1). A reboot not taken is
+    # reported as a DEFERRED: line, which the sweep collects (#730).
+    local _pending="the new NixOS generation"
+    (( staged )) && _pending="the staged release move ${_move% *} -> ${_move#* }"
     if [[ "${vmname}" == "$(hostname)" ]]; then
         # SELF-UPDATE GUARD (incident 2026-06-09): never reboot/stop the VM that
         # is running THIS updater — doing so kills the orchestrator mid-run, so
@@ -542,7 +546,8 @@ update_nixos() {
             warn "  update would kill the updater (incident 2026-06-09). New generation is active."
         fi
         warn "  Reboot under supervision when ready: ssh root@${node}.${MGMT}.internal 'qm reboot ${vmid}'"
-    elif automatic_reboot_enabled; then
+        warn "DEFERRED: ${vmname} reboot to take ${_pending} is pending — it runs this update, reboot it under supervision"
+    elif [[ "${TAPPAAS_ALLOW_DISRUPTION:-0}" == "1" ]] || automatic_reboot_enabled; then
         info "Rebooting VM to apply configuration..."
         # A backup holding the guest refuses the reboot (#686). The rebuild has
         # already succeeded and the new generation is active, so a lock here is
@@ -561,6 +566,7 @@ update_nixos() {
                     warn "Could not reboot ${vmname}: the VM is locked (${_holder}). The new generation IS active;"
                 fi
                 warn "  the reboot is still pending — the next update takes it, or: ssh root@${node}.${MGMT}.internal 'qm reboot ${vmid}'"
+                warn "DEFERRED: ${vmname} reboot to take ${_pending} is pending — the VM was locked (${_holder})"
                 return 0
             fi
             die "could not reboot ${vmname} (VM ${vmid}) after the rebuild"
@@ -583,6 +589,8 @@ update_nixos() {
             warn "  The new NixOS generation is active, but a reboot is needed to apply kernel/bootloader changes."
         fi
         warn "  Reboot manually under supervision: ssh root@${node}.${MGMT}.internal 'qm reboot ${vmid}'"
+        warn "  or authorize it for one run: module-manager module update ${vmname} --allow-disruption"
+        warn "DEFERRED: ${vmname} reboot to take ${_pending} needs a disruptive change that is not authorized"
         # sshd and networking restart during nixos switch activation even without a reboot.
         # Wait for SSH to stabilise before returning so subsequent service updaters can reach the VM.
         update_ssh_known_hosts "${vm_ip}"
