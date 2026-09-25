@@ -236,6 +236,14 @@ else
     else
         fail "/run/coturn/turnserver.conf has no denied-peer-ip entries — RFC-1918 blocking may be missing"
     fi
+
+    # An allowed-peer-ip host (the HPB) must be reachable over relayed UDP only:
+    # TCP relaying would open its ssh and signaling ports to any TURN user.
+    if remote "sudo grep -qx 'no-tcp-relay' /run/coturn/turnserver.conf" 2>/dev/null; then
+        pass "/run/coturn/turnserver.conf relays UDP only (no-tcp-relay)"
+    else
+        fail "/run/coturn/turnserver.conf lacks no-tcp-relay — TURN users could open TCP to allow-listed hosts"
+    fi
 fi
 
 # ============================================================================

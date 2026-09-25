@@ -93,3 +93,23 @@ coturn_allow_peer() {
     fi
 }
 
+# coturn_forget_peer <coturn-config.json> <module>
+#
+# The inverse of coturn_allow_peer, for a consumer being deleted: its IP must not
+# stay allow-listed for relaying once the host is gone or the address is reused.
+coturn_forget_peer() {
+    local coturn_cfg="$1" module="$2" turn out
+    [[ -f "${coturn_cfg}" && -n "${module}" ]] || return 0
+    turn="$(jq -r '.vmname' "${coturn_cfg}").$(jq -r '.zone0' "${coturn_cfg}").internal"
+    # shellcheck disable=SC2029  # module is expanded here on purpose
+    out="$(ssh -o BatchMode=yes -o ConnectTimeout=10 "tappaas@${turn}" "
+        f=/var/lib/coturn/allowed-peers
+        sudo grep -q '^${module} ' \$f 2>/dev/null || { echo absent; exit 0; }
+        { sudo grep -v '^${module} ' \$f || true; } | sudo tee \$f.new >/dev/null \
+            && sudo mv \$f.new \$f && sudo systemctl restart coturn.service && echo changed")" || return 1
+    case "${out}" in
+        *changed*) info "  ${GN}✓${CL} coturn no longer relays to ${module}; coturn restarted" ;;
+        *absent*)  info "  ${GN}✓${CL} coturn had no relay entry for ${module}" ;;
+        *)         return 1 ;;
+    esac
+}

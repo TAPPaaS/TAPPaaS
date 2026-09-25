@@ -277,6 +277,11 @@ use-auth-secret
 static-auth-secret=$COTURN_SECRET
 no-cli
 no-multicast-peers
+# UDP relaying only. Talk's and Janus's media is UDP; TCP relaying (RFC 6062) would
+# let any TURN user — Talk hands credentials to public-conversation guests — open
+# TCP connections to an allowed-peer-ip host (the HPB's ssh, its signaling port).
+# Clients still REACH this server over TCP; only the relayed leg is UDP.
+no-tcp-relay
 no-software-attribute
 fingerprint
 # RFC 1918 + special ranges — deny relay to private/loopback addresses (CRITICAL)
