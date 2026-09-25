@@ -428,6 +428,10 @@ in
 
     notify_push.enable  = true;
     notify_push.package = notifyPushPkg;
+    # The URL is also the websocket base handed to browsers. The default,
+    # http://<hostName>, gave them ws://nextcloud/push/ws: unresolvable and mixed
+    # content, so web clients fell back to slow polling for every notification.
+    notify_push.nextcloudUrl = lib.mkIf (ncProxyDomain != "") "https://${ncProxyDomain}";
 
     phpOptions = {
       "memory_limit"                   = lib.mkForce "512M";
