@@ -664,7 +664,7 @@ in
   };
 
   # Configure the Euro-Office connector — only runs when the secrets file exists.
-  # Secrets file (/etc/secrets/onlyoffice.env) is written by euro-office install-service.sh.
+  # Secrets file (/etc/secrets/onlyoffice.env) is written by this module's nextcloud:fileservice converge (the onlyoffice connector).
   # Format: JWT_SECRET=<hex>
   systemd.services.nextcloud-configure-eurooffice = {
     description = "Configure Euro-Office connector in Nextcloud";

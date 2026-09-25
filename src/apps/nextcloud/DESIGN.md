@@ -2,85 +2,157 @@
 
 Implementation and deployment detail moved out of README/INSTALL (Diataxis: explanation).
 
+## Why this exists
+
+Nextcloud is the platform's collaboration hub: files, document editing, calls/chat and
+productivity apps behind single sign-on. Document editing, the TURN relay and the call backend are separate
+modules — `euro-office`, `coturn`, `nextcloud-hpb` — that plug into Nextcloud through the
+`fileservice` service it provides.
+
 ## Architecture
 
-- NixOS native `services.nextcloud` (PHP-FPM + internal nginx), VM listens on port 80; Caddy on
-  OPNsense terminates TLS.
-- PostgreSQL (NixOS native, pinned `postgresql_15`) with a dedicated `nextcloud` database/user.
-- Redis (NixOS named server `nextcloud`) for file locking + APCu cache, via unix socket
+- NixOS native `services.nextcloud` (PHP-FPM + internal nginx); the VM listens on port 80,
+  Caddy (`network:proxy`) terminates TLS.
+- PostgreSQL 15 (`postgresql_15`, NixOS-native), a dedicated `nextcloud` database and user,
+  `dbhost = 127.0.0.1`, `database.createLocally = false`.
+- Redis (named server `nextcloud`) for file locking and APCu caching, via unix socket
   `/run/redis-nextcloud/redis.sock`.
+- Max upload size 16G.
+- Whiteboard: a co-located Node service (`nextcloud-whiteboard-server`, port 3002); nginx
+  proxies `/socket.io/` to it. Its JWT secret is auto-generated on first boot if absent, and
+  pushed into the app by `nextcloud-configure-whiteboard`.
+- Preview generation: `nextcloud-preview-backfill` renders thumbnails for existing files once;
+  `nextcloud-preview-generate` renders them incrementally on a daily timer.
 - Office editing is handled externally by the `euro-office` module (port 9980 is deliberately
   closed on this VM).
 - Version pinning: the single `ncMajor` value at the top of `nextcloud.nix` drives both the
-  Nextcloud package and its app-set. Majors must be bumped sequentially — see
+  Nextcloud package and its app-set selection (`pkgs."nextcloud${ncMajor}"` and
+  `pkgs."nextcloud${ncMajor}Packages".apps`). Majors must be bumped sequentially — see
   [UPGRADE.md](./UPGRADE.md).
+
+## Connectors
+
+Nextcloud offers three connector slots through `nextcloud:fileservice`, selected by the
+consuming module's own `connector` field (`onlyoffice`, `talk` or `hpb`). The wiring logic runs
+on this (the Nextcloud) side, not the consumer's:
+
+| Connector | Consumer module | Written on this VM | Applied by |
+|-----------|------------------|---------------------|------------|
+| `onlyoffice` | `euro-office` | `/etc/secrets/onlyoffice.env` (`JWT_SECRET`, `EURO_OFFICE_URL`, `EURO_OFFICE_INTERNAL_URL`, `NEXTCLOUD_PUBLIC_URL`) | `nextcloud-configure-eurooffice` (`occ config:app:set` on app id `eurooffice`) |
+| `talk` | `coturn` | `/etc/secrets/talk.env` (`TURN_SERVER`, `TURN_SERVER_INTERNAL`, `TURN_SECRET`) | `nextcloud-configure-talk-turn` (`occ talk:stun:add` / `talk:turn:add`) |
+| `hpb` | `nextcloud-hpb` | `/etc/secrets/hpb.env` (`HPB_SECRET`, `HPB_URL`) | `nextcloud-configure-hpb` (`occ talk:signaling:add`) |
+
+All three files are written by this module's own `services/fileservice/update-service.sh`, run
+over SSH against this VM, when the consumer module installs or updates. Each
+`nextcloud-configure-*` unit is gated on its secrets file existing (`ConditionPathExists`) and
+re-applies the connector on every boot.
+
+The connector's Nextcloud app ID is `eurooffice`, not `onlyoffice` — the app was renamed in
+connector v11. The TAPPaaS connector label and the `onlyoffice.env` filename keep the old name
+on purpose, for backward compatibility.
+
+`services/fileservice/install-service.sh` is fatal if `/status.php` does not report
+`"installed":true` before wiring a connector in; `update-service.sh` only warns if Nextcloud is
+unreachable, and still re-applies the wiring.
 
 ## Provided service
 
-| Provides | Consumed by |
-|----------|-------------|
-| `fileservice` | `coturn`, `nextcloud-hpb`, `euro-office` (each `dependsOn nextcloud:fileservice`) |
+| Service (`provider:service`) | What a dependent gets | Hook(s) |
+|-------------------------------|------------------------|---------|
+| `nextcloud:fileservice` | The core collaboration platform plus one of the three connectors above | `services/fileservice/{install,update}-service.sh` |
 
-Nextcloud is the core of the collaboration hub. Consumer wiring is applied by
-`services/fileservice/install-service.sh` when a consuming module installs (ADR-COM-0002); the
-Talk HPB/TURN connector wiring (signaling backend allow-list, egress to the reverse proxy) is
-config-derived at deploy time.
+Consumed by `coturn`, `nextcloud-hpb` and `euro-office` (each declares
+`dependsOn: nextcloud:fileservice`).
+
+## Dependencies rationale
+
+- `cluster:vm`, `templates:nixos` — VM and NixOS base image.
+- `backup:vm` — adds the VM to the platform's shared Proxmox Backup Server job (separate from
+  this module's own backup timers, see Backup & restore).
+- `network:proxy` — HTTPS reverse proxy; `proxyPort = 80`.
+- `network:rules` — firewall pass rules.
+- `identity:identity` — **required**, not optional. Authentik is the sole login backend:
+  `allow_multiple_user_backends` is set to `0`, so the login page goes straight to Authentik; a
+  local account remains reachable at `/login?direct=1`. `providesAdminRole` /
+  `adminGroupClaim: "admin"` maps Authentik's `admin` group onto Nextcloud's admin role, and
+  `--unique-uid=0` makes the Authentik username the Nextcloud user ID — decide this before
+  first use, since changing it later orphans every existing user's files, shares and client
+  accounts.
+
+## Configuration & install-time overrides
+
+- `ncMajor` (in `nextcloud.nix`) pins the Nextcloud major; see [UPGRADE.md](./UPGRADE.md).
+- `zone0` defaults to `srv`; `proxyPort` is `80`.
+- `trusted_domains` (internal FQDN + public domain) is declared in `nextcloud.nix` from the
+  companion JSON, so every rebuild writes it. `update.sh`'s `converge_nextcloud_domains` then
+  checks the public domain the way a client does — an HTTP request with that `Host` header —
+  and sets `trusted_domains` / `overwrite.cli.url` / `overwriteprotocol=https` with `occ` only
+  if it is missing. The request is the proof: Nextcloud keeps declared settings in a store JSON
+  that `override.config.php` merges at runtime, so `config.php` alone does not show them, and
+  `nextcloud-occ` over a non-TTY ssh session returns no output. `test-module.sh` checks the
+  public domain is trusted.
+- `proxyAllowedZones` defaults to the internal zones only —
+  never the internet. Add `"internet"` to publish Nextcloud publicly.
+- Any field can also be overridden on the command line, e.g.
+  `install-module.sh nextcloud --node <node> --zone0 srv --memory 8192`.
 
 ## Secrets
 
-- Admin and DB passwords are auto-generated on first boot into `/var/lib/nextcloud/admin-pass`
-  and `/var/lib/nextcloud/db-pass` (mode 0600). `install.sh` copies the admin password to
-  `/home/tappaas/secrets/nextcloud.env` on tappaas-cicd.
-- `pre-install.sh` pre-creates `/home/tappaas/secrets/nextcloud.env` (mode 0600) before the
-  dependency service installers run.
-- OIDC: `/etc/secrets/nextcloud.env` on the VM (`OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`,
-  `OIDC_DISCOVERY_URI`) activates `nextcloud-configure-oidc` on next boot.
-- euro-office connector: `services/nextcloud/install-service.sh` (in euro-office's flow) writes
-  `/etc/secrets/onlyoffice.env`; the declarative `nextcloud-configure-eurooffice` service applies
-  it. The `onlyoffice` app ships as a Nix `extraApp`.
+| File | Where | Holds | Populated by |
+|------|-------|-------|---------------|
+| `/var/lib/nextcloud/admin-pass`, `/var/lib/nextcloud/db-pass` | VM | Admin & DB passwords | auto-generated on first boot (`nextcloud-init-secrets`) if absent |
+| `/etc/secrets/nextcloud.env` | VM | `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `OIDC_DISCOVERY_URI` | the `identity:identity` service (creates the Authentik application and writes the file) |
+| `/etc/secrets/onlyoffice.env` | VM | euro-office connector JWT + URLs | `services/fileservice/update-service.sh` (see Connectors) |
+| `/etc/secrets/talk.env` | VM | coturn TURN relay credentials | `services/fileservice/update-service.sh` |
+| `/etc/secrets/hpb.env` | VM | HPB signaling secret + URL | `services/fileservice/update-service.sh` |
+| `/etc/secrets/mail.env` | VM | `SMTP_USER`, `SMTP_PASSWORD` (system outbound notification email) | operator |
+| `/etc/secrets/mail-microsoft.env` | VM | `MS_TENANT_ID`, `MS_CLIENT_ID`, `MS_CLIENT_SECRET` (Microsoft 365 sign-in for the Mail app) | copied by `update.sh`'s `converge_mail_microsoft` from `/home/tappaas/secrets/<vmname>-mail-microsoft.env` on the management host |
+| `/etc/secrets/whiteboard.env` | VM | Whiteboard JWT secret | auto-generated on first boot if absent |
+| `/home/tappaas/secrets/nextcloud.env` | management host | mirror of the admin password | `install.sh`, read from the VM over SSH |
 
-## Trusted domains and public URL
+`/etc/secrets` (0700 root:root) and `/var/lib/nextcloud` (0700 nextcloud:nextcloud) are created
+by `systemd.tmpfiles.rules`; individual files are mode 0600.
 
-`update.sh` sets `trusted_domains` (internal FQDN and public domain), `overwrite.cli.url` and
-`overwriteprotocol=https` via `nextcloud-occ`. `install.sh` sources `update.sh` and calls the same
-function once the VM is up. `localhost` is not written: loopback is always trusted.
+## Sizing
 
-**These occ values do not survive a NixOS rebuild.** Nix does not pin `trusted_domains`, but a
-rebuild rewrites `/var/lib/nextcloud/config/config.php` and the occ-set keys are lost. That is why
-the converge lives in `update.sh` rather than `install.sh`: `update-module.sh` runs the dependency
-updaters — including the `templates:nixos` rebuild — *before* the module's `update.sh`, so the
-domain is restored after every rebuild on the sanctioned update path. A path that rebuilds without
-running `update.sh` afterwards leaves the instance answering HTTP 400 "Access through untrusted
-domain" on its declared public route.
+Default: 4 cores / 8192 MB memory / 80G disk.
 
-The write is verified by reading `config.php` back, and the converge fails if the value is absent.
-`nextcloud-occ` exits 0 over a non-TTY SSH session while relaying no output at all, so its exit
-code is not evidence that anything was written. `test.sh` asserts the module's `proxyDomain` is
-present in `trusted_domains`, and `update-module.sh` runs that suite before and after every update.
+## Backup & restore
 
-`nextcloud-occ` must be called directly (it self-switches to the nextcloud user); wrapping it in
-`systemd-run` nests systemd-run as a non-root user and polkit denies it.
+Two independent mechanisms:
 
-## Backup design
+- **This module's own timers**: a PostgreSQL dump of the `nextcloud` database, daily at 02:00,
+  gzip, to `/var/backup/nextcloud/postgresql`; a tar of `/var/lib/nextcloud/data`, daily at
+  02:30, into `/var/backup/nextcloud/`; a monthly cleanup job deletes backups older than 30
+  days.
+- **The platform's PBS job**, via the `backup:vm` dependency: the whole VM is included in the
+  shared Proxmox Backup Server job. This is separate from, and does not replace, the timers
+  above.
 
-Daily automated backups via `backup:vm`: PostgreSQL dump at 02:00, data-dir tar at 02:30,
-30-day retention in `/var/backup/nextcloud/`.
+## Deploy notes & known limitations (0.2.0)
 
-## Install-time overrides
+- uppush 2.6.0 fails its first database migration on Nextcloud 35; a local patch works around
+  it until upstream fixes it (uppush issue #124, open).
+- notify_push's app and daemon must match; nixpkgs ships 1.3.3 (Nextcloud ≤34 only), so both
+  are pinned here to 1.4.1.
+- `news` (29.0.0-beta.1, a pre-release), `previewgenerator` and `uppush` are pinned from the
+  Nextcloud app store because nixpkgs' `nextcloud35Packages.apps` was last regenerated before
+  these apps shipped 35 support. Drop each pin once nixpkgs carries it.
+- `quota_warning` is not included: it has no release for Nextcloud 35 yet.
+- Talk's admin page may warn that the signaling server lacks the feature `changed-users`. It is
+  optional; calls still work. It goes away once a signaling-server release includes it.
+- After a user's Nextcloud user ID changes, every Nextcloud app on every device must remove and
+  re-add the account, or the resulting repeated failed logins trigger brute-force throttling
+  (`occ security:bruteforce:reset <ip>` clears it).
+- On Nextcloud 35, `occ config:app:set` for a setting an app declares as typed must pass the
+  type (e.g. `--type=string`), or Nextcloud silently ignores it — relevant when writing a new
+  `nextcloud-configure-*` unit.
+- Multi-party Talk calls from outside the site additionally require a publicly reachable
+  `coturn` (and `nextcloud-hpb` for larger calls): group video goes through the Janus SFU on
+  the HPB, and clients that cannot reach the HPB directly are relayed by coturn.
 
-Besides copying the json to `/home/tappaas/config`, any field can be overridden on the command
-line, e.g.:
+## Related documents
 
-    install-module.sh nextcloud --node tappaas1 --zone0 srv --vmid 340 --memory 8192
-
-## Deploy notes & known limitations (0.1.0)
-
-- Validated on the cluster via a named test variant (`--variant test`). A base/production deploy
-  is the canonical path; named-variant deploys depend on the foundation provider-variant
-  resolution (see the `deploy-engine: pass resolved provider variant` upstream issue).
-- Measured install duration: ~9 min on a fresh VM (clean exit-0 deploy 2026-06-11, test variant
-  on srv), dominated by the first-time NixOS rebuild building Nextcloud and the eurooffice connector
-  from source (uncached). `news`, `previewgenerator` and `uppush` are fetched from the app store
-  (see UPGRADE.md), so a stalled store or codeberg download can inflate this.
-- External multi-party Talk calls additionally require a publicly reachable coturn (WAN
-  endpoint).
+- [README.md](./README.md) — end-user overview (what you get)
+- [INSTALL.md](./INSTALL.md) — admin install / operate
+- [UPGRADE.md](./UPGRADE.md) — upgrade guide, including the Nextcloud-major pin
