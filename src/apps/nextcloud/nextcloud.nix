@@ -495,9 +495,10 @@ in
       # without touching what the token protects — the signature is still
       # checked in full; leeway only relaxes the time claims. The app provides
       # this knob for exactly this ("in case the system clock is a second off").
-      # With --unique-uid=0 the user ID is the Authentik username, so an Authentik
-      # user named like a local account (admin) would sign in AS it. Refuse that
-      # ("User conflict") instead of adopting the local user.
+      # Where the user ID is the Authentik username (--unique-uid=0: new installs),
+      # an Authentik user named like a local account (admin) would sign in AS it.
+      # Refuse that ("User conflict") instead of adopting the local user. Harmless
+      # on a site that keeps hashed IDs: a hash never names a local account.
       user_oidc = {
         soft_auto_provision = false;
       };
@@ -641,18 +642,28 @@ in
       EnvironmentFile = "/etc/secrets/nextcloud.env";
       ExecStart = pkgs.writeShellScript "nextcloud-configure-oidc" ''
         set -euo pipefail
-        export PATH="/run/current-system/sw/bin:${pkgs.coreutils}/bin:$PATH"
+        export PATH="/run/current-system/sw/bin:${pkgs.coreutils}/bin:${pkgs.jq}/bin:$PATH"
 
-        # --unique-uid=0: the user ID is the Authentik username (andreas), not a
-        # SHA-256 of it. Decide before first use: changing it later orphans every
-        # existing user's files, shares and client accounts.
+        # --unique-uid: the user ID is the Authentik username (0: andreas) or a
+        # SHA-256 of it (1). Decided ONCE, when the provider is created: changing it
+        # later gives every existing user a new, empty account and orphans their
+        # files, shares and client accounts. A new provider gets 0; an existing one
+        # keeps what it has — user_oidc's default, 1, when it was never set.
+        unique_uid=0
+        pid=$(nextcloud-occ user_oidc:provider --output=json 2>/dev/null \
+          | jq -r '.[]? | select(.identifier == "authentik") | .id' || true)
+        if [ -n "$pid" ]; then
+          unique_uid=$(nextcloud-occ config:app:get user_oidc "provider-$pid-uniqueUid" 2>/dev/null || true)
+          unique_uid=''${unique_uid:-1}
+        fi
+
         nextcloud-occ user_oidc:provider authentik \
           --clientid="$OIDC_CLIENT_ID" \
           --clientsecret="$OIDC_CLIENT_SECRET" \
           --discoveryuri="$OIDC_DISCOVERY_URI" \
           --scope="email profile nextcloud openid groups" \
           --mapping-uid="preferred_username" \
-          --unique-uid=0 \
+          --unique-uid="$unique_uid" \
           --mapping-display-name="name" \
           --mapping-email="email" \
           --mapping-quota="quota" \
