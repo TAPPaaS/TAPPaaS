@@ -55,3 +55,35 @@ coturn_stamp_turn_host() {
         warn "  could not record turnHost in ${cfg}"
     fi
 }
+
+# coturn_allow_peer <coturn-config.json> <consumer-config.json>
+#
+# coturn denies relaying to private addresses, which includes the consumer's own
+# media server (the HPB's Janus). Record the consumer's IP on the coturn VM so
+# coturn.nix emits an allowed-peer-ip for exactly that host, and restart coturn
+# only when the entry changed. Warns rather than fails: calls still work for
+# clients that reach the media server directly.
+coturn_allow_peer() {
+    local coturn_cfg="$1" cfg="$2" module host ip turn
+    [[ -f "${cfg}" ]] || return 0
+    module="$(basename "${cfg}" .json)"
+    host="$(jq -r '.vmname' "${cfg}").$(jq -r '.zone0' "${cfg}").internal"
+    ip="$(getent hosts "${host}" | awk '{print $1; exit}')"
+    turn="$(jq -r '.vmname' "${coturn_cfg}").$(jq -r '.zone0' "${coturn_cfg}").internal"
+    if [[ ! "${ip}" =~ ^[0-9.]+$ ]]; then
+        warn "  cannot resolve ${host} — coturn will not relay to ${module}'s media server"
+        return 0
+    fi
+    # shellcheck disable=SC2029  # module and ip are expanded here on purpose
+    if ssh -o BatchMode=yes -o ConnectTimeout=10 "tappaas@${turn}" "
+        f=/var/lib/coturn/allowed-peers
+        new=\$( { sudo grep -v '^${module} ' \$f 2>/dev/null || true; echo '${module} ${ip}'; } | sort )
+        if [ \"\$new\" != \"\$(sudo cat \$f 2>/dev/null)\" ]; then
+            printf '%s\\n' \"\$new\" | sudo tee \$f >/dev/null && sudo systemctl restart coturn.service && echo changed
+        fi" | grep -q changed; then
+        info "  ${GN}✓${CL} coturn may relay to ${module} (${ip}); coturn restarted"
+    else
+        info "  ${GN}✓${CL} coturn already relays to ${module} (${ip})"
+    fi
+}
+

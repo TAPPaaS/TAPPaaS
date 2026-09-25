@@ -295,6 +295,13 @@ denied-peer-ip=198.18.0.0-198.19.255.255
 denied-peer-ip=240.0.0.0-255.255.255.255
 CONF
 
+        # Media servers this relay must reach despite the deny list (the HPB's Janus
+        # on a private address). Written by the coturn:turn service, one
+        # "<module> <ip>" line per consumer; allowed-peer-ip takes precedence.
+        if [ -f /var/lib/coturn/allowed-peers ]; then
+          ${pkgs.gawk}/bin/awk '$2 ~ /^[0-9.]+$/ {print "allowed-peer-ip=" $2}' /var/lib/coturn/allowed-peers >> "$CONFIG_FILE"
+        fi
+
         # Append external-ip mapping only when the operator has configured it
         if [ -n "$COTURN_EXTERNAL_IP" ]; then
           echo "external-ip=$COTURN_EXTERNAL_IP/$LOCAL_IP" >> "$CONFIG_FILE"

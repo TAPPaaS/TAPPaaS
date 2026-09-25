@@ -323,7 +323,7 @@ nat: {
         turn_server = "${turnHostName}"
         turn_port = ${turnHostPort}
         turn_type = "udp"
-        turn_rest_api = "http://127.0.0.1:8080/turn"
+        turn_rest_api = "http://127.0.0.1:8080/turn/credentials"  # /turn is a 404
         turn_rest_api_key = "$TURN_APIKEY"
         turn_rest_api_method = "GET"
 }
