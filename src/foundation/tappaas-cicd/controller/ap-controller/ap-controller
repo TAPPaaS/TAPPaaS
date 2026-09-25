@@ -366,7 +366,10 @@ cmd_delta() {
     delta=$(compute_delta)
     info "${BOLD}delta${CL} (desired vs actual)"
     local ap
-    for ap in $(echo "${delta}" | jq -r 'keys[]'); do
+    # One AP per LINE: a name may contain a space ("Nano HD"), and a word-split
+    # loop saw two APs that exist nowhere — each reported in sync, so a real
+    # delta on the AP itself was never shown.
+    while IFS= read -r ap <&3; do
         local n r
         n=$(echo "${delta}" | jq -r --arg a "${ap}" '.[$a].changes | length')
         r=$(echo "${delta}" | jq -r --arg a "${ap}" '.[$a].removed | length')
@@ -378,7 +381,7 @@ cmd_delta() {
             info "  ${GN}✓${CL} ${ap}: SSIDs in sync"
         fi
         [[ "${r}" -gt 0 ]] && warn "  ${ap}: ${r} SSID(s) to remove: $(echo "${delta}" | jq -r --arg a "${ap}" '.[$a].removed | join(", ")')"
-    done
+    done 3< <(jq -r 'keys[]' <<< "${delta}")
     [[ "$(echo "${delta}" | jq -r 'keys|length')" -eq 0 ]] && info "  (no APs in inventory)"
     validate
     DELTA_TOTAL=$((total + VALIDATION_WARN))
@@ -391,7 +394,8 @@ cmd_apply() {
     local delta ap vendor changes plugin rc manual=0 applied=0
     delta=$(compute_delta)
     info "${BOLD}apply${CL}"
-    for ap in $(echo "${delta}" | jq -r 'keys[]'); do
+    # One AP per line, on fd 3 so a plugin reading stdin cannot eat the list.
+    while IFS= read -r ap <&3; do
         changes=$(echo "${delta}" | jq -c --arg a "${ap}" '{changes: .[$a].changes}')
         [[ "$(echo "${changes}" | jq '.changes|length')" -eq 0 ]] && continue
         vendor=$(jq -r --arg n "${ap}" '.accessPoints[$n].vendor' "${DESIRED}")
@@ -401,7 +405,7 @@ cmd_apply() {
         ( . "${plugin}"; plugin_ap_apply "${ap}" "${changes}" ) || rc=$?
         if [[ "${rc}" -eq 0 ]]; then info "  ${GN}✓${CL} ${ap}: applied via $(basename "${plugin}" .sh)"; applied=$((applied+1))
         else manual=$((manual+1)); fi
-    done
+    done 3< <(jq -r 'keys[]' <<< "${delta}")
     APPLY_MANUAL="${manual}"; APPLY_DONE="${applied}"
     return 0
 }

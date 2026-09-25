@@ -138,6 +138,17 @@ ck "#733 a good answer is merged (rc)" "0"   "$(PLUGIN_DIR="${STUB}" rc_of "${AM
 ck "#733 …into actual"                 "U7"  "$(jq -r '.accessPoints["ap-stub"].model' "${ACT}")"
 PLUGIN_DIR="${STUB}" "${AM}" remove ap-stub >/dev/null 2>&1
 
+# An AP name with a space is ONE AP: delta used to word-split "Nano HD" into two
+# APs that exist nowhere, each "in sync", hiding the real AP's changes.
+"${AM}" add "Nano HD" --vendor manual --ip 10.0.0.31 >/dev/null 2>&1
+"${AM}" ssid "Nano HD" add TAPPaaS-Home --zone home --security wpa2-personal >/dev/null 2>&1
+out="$("${AM}" delta 2>&1)"
+ck "spaced AP: its change is shown"     "yes" "$(has "${out}" 'Nano HD: 1 change(s)')"
+ck "…not split into 'Nano' and 'HD'"    "no"  "$(has "${out}" 'Nano: SSIDs in sync')"
+out="$("${AM}" apply 2>&1)"
+ck "spaced AP: apply reaches its plugin" "yes" "$(has "${out}" 'Nano HD')"
+"${AM}" remove "Nano HD" >/dev/null 2>&1
+
 echo ""
 echo "test-ap-manager: ${PASS} passed, ${FAIL} failed"
 [[ "${FAIL}" -eq 0 ]]
