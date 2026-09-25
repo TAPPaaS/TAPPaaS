@@ -37,11 +37,19 @@
 
 let
   # ── Version pins — single source of truth; bump here. ───────────────────────────
-  # `ncMajor` drives BOTH the Nextcloud package and its app-set (dynamic attr access),
-  # so a major bump is one number. Majors must be sequential — Nextcloud refuses to skip
-  # (33 → 34 → 35). The eurooffice connector pin lives in eurooffice-nextcloud.nix; the
-  # nixpkgs template rev is pinned engine-side (update-os.sh). See UPGRADE.md.
-  ncMajor = 35;
+  # `targetMajor` is the release's Nextcloud; `ncMajor` is what THIS build installs.
+  # Majors must be sequential — Nextcloud refuses to skip — so nc-major.nix reads the
+  # installed major on the guest and steps at most one per build: an existing 33 site
+  # goes 33 → 34 at one update and 34 → 35 at the next, keeping its data; a fresh
+  # install goes straight to targetMajor. The eurooffice connector pin lives in
+  # eurooffice-nextcloud.nix; the nixpkgs template rev is pinned engine-side
+  # (update-os.sh). See UPGRADE.md.
+  targetMajor = 35;
+  ncStep = import ./nc-major.nix {
+    inherit targetMajor;
+    available = m: pkgs ? "nextcloud${toString m}";
+  };
+  ncMajor = ncStep.major;
   # Apps nixpkgs does not package for 35 yet: 35-compatible releases came out after its
   # last app-list refresh. Same app-store source nixpkgs uses; drop each pin once
   # nextcloud35Packages.apps carries it. unpack = true hashes the unpacked tree, so a
@@ -81,7 +89,10 @@ let
   versions = {
     postgresPkg   = pkgs.postgresql_15;
     nextcloudPkg  = pkgs."nextcloud${toString ncMajor}";
-    nextcloudApps = pkgs."nextcloud${toString ncMajor}Packages".apps // storeApps;
+    # The store pins and the uppush patch are for targetMajor; an intermediate step
+    # takes nixpkgs' own app set for that major, which carries every app below.
+    nextcloudApps = pkgs."nextcloud${toString ncMajor}Packages".apps
+                    // lib.optionalAttrs ncStep.onTarget storeApps;
   };
 
   # ── trusted_domains, derived from the module config (#508) ────────────────
@@ -427,7 +438,8 @@ in
     https = false;
 
     notify_push.enable  = true;
-    notify_push.package = notifyPushPkg;
+    # 1.4.1 on targetMajor (35 needs it); nixpkgs' own 1.3.3 (<= 34) on a step.
+    notify_push.package = if ncStep.onTarget then notifyPushPkg else pkgs.nextcloud-notify_push;
 
     phpOptions = {
       "memory_limit"                   = lib.mkForce "512M";
