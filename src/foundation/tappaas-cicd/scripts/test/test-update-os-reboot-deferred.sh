@@ -25,10 +25,13 @@ ckout() { if [[ "$3" != *"$2"* ]]; then echo "  ok: $1"; PASS=$((PASS+1)); else 
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/reboot-deferred.XXXXXX")"
 trap 'rm -rf "${TMP}"' EXIT INT TERM
 
-# From the pending-reboot text to the end of the function.
+# From the pending-reboot text to the end of the function, and the reboot
+# path it shares with health-manager reboot.
 awk '/^    local _pending=/{f=1} f&&/^}$/{exit} f{print}' "${SRC}" > "${TMP}/block.sh"
+awk '/^reboot_guest\(\) \{$/{f=1} f{print} f&&/^}$/{exit}' "${SRC}" > "${TMP}/reboot_guest.sh"
 ck "the reboot block extracts" "yes" \
-   "$(grep -q 'automatic_reboot_enabled' "${TMP}/block.sh" && grep -q 'wait_for_module_ready' "${TMP}/block.sh" && echo yes || echo no)"
+   "$(grep -q 'automatic_reboot_enabled' "${TMP}/block.sh" && grep -q 'reboot_guest ' "${TMP}/block.sh" && echo yes || echo no)"
+ck "reboot_guest extracts" "yes" "$(grep -q 'wait_for_module_ready' "${TMP}/reboot_guest.sh" && echo yes || echo no)"
 
 # run <automaticReboot on|off> <allow 0|1> <reboot ok|locked|fail> <self 0|1> <staged 0|1>
 # Prints: <exit>|reboots=<n>|deferred=<n>; the log is in ${TMP}/out.
@@ -49,6 +52,7 @@ run() {
                 *) return 0 ;;
             esac
         }
+        source "${T}/reboot_guest.sh"
         [[ "${ALLOW}" == 1 ]] && export TAPPAAS_ALLOW_DISRUPTION=1
         vm_ip=10.2.0.9 vmname=guest vmid=310 node=tappaas2 MGMT=mgmt
         staged="${STAGED}" _move="25.11 26.05"
@@ -67,6 +71,7 @@ echo "── automaticReboot off: deferred, and reported ──"
 ck "gate off: no reboot, one DEFERRED" "0|reboots=0|deferred=1" "$(run off 0 ok 0 0)"
 ckin "  …a line the sweep collects" "DEFERRED: guest reboot to take the new NixOS generation needs a disruptive change that is not authorized" "$(cat "${TMP}/out")"
 ckin "  …and it says how to authorize it" "module-manager module update guest --allow-disruption" "$(cat "${TMP}/out")"
+ckin "  …or how to take it on its own" "health-manager reboot guest" "$(cat "${TMP}/out")"
 
 echo "── --allow-disruption authorizes the reboot with the gate off (ADR-020 D8) ──"
 ck "gate off + TAPPAAS_ALLOW_DISRUPTION=1: rebooted" "0|reboots=1|deferred=0" "$(run off 1 ok 0 0)"

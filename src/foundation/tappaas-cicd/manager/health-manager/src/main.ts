@@ -15,13 +15,17 @@
 //                             aggregates the health gates; exit 1 if any fail)
 //   health-manager update-os <name> <vmid> <node>        (special action; shells
 //                            out to update-os.sh — see the update-os case)
+//   health-manager reboot <module>                       (special action; the
+//                            same reboot + readiness wait, via reboot-guest.sh)
 //
 // Exit codes: ok=0, error / failed-health-gate = 1.
 
 import { spawnSync } from "child_process";
-import { defaultConfigDir } from "./config";
+import { hostname } from "os";
+import { join } from "path";
+import { defaultConfigDir, readModuleJson } from "./config";
 import { CliClusterClient } from "./client";
-import { runHealthGates } from "./checks";
+import { guestTarget, runHealthGates } from "./checks";
 import { ClusterClient } from "./types";
 import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
 import { CL, GN, RD, YW, die, guarded, info, preflightGuard } from "../../../lib/ts/src/cli";
@@ -38,6 +42,7 @@ const DEFAULT_THRESHOLD = 80; // disk-threshold gate default (check-disk-thresho
 const DEFAULT_MEMORY_THRESHOLD = 100;
 const DEFAULT_NODE = "tappaas1";
 const UPDATE_OS_BIN = (): string => process.env.UPDATE_OS_BIN ?? "update-os.sh"; // the special action verb's driver
+const REBOOT_BIN = (): string => process.env.REBOOT_BIN ?? "reboot-guest.sh"; // `reboot`'s driver (#730)
 
 export const HELP: HelpSpec = {
   name: "health-manager",
@@ -55,11 +60,18 @@ export const HELP: HelpSpec = {
       usage: "update-os <name> <vmid> <node>",
       details: "Patches the VM's OS (NixOS rebuild / apt) through update-os.sh; may reboot it.",
     },
+    {
+      usage: "reboot <module>",
+      details:
+        "Reboots the module's VM and waits until the module can serve — the reboot update-os takes\n" +
+        "after a rebuild, on demand, without updating. For a guest validate reports as pending-reboot.",
+    },
   ],
   common: [["--config-dir DIR", "Config root (default: $CONFIG_DIR or /home/tappaas/config)."]],
   notes: [
     "validate ASSERTS the live system is healthy (health gates); exit 1 on fail.\n" +
-      "update-os is the OS-patch action (special) — shells out to update-os.sh.",
+      "update-os is the OS-patch action (special) — shells out to update-os.sh.\n" +
+      "reboot takes a pending reboot (special) — shells out to reboot-guest.sh.",
     "Note: the per-VM three-way drift inspect (formerly 'show vm' / 'list vm --diff')\n" +
       "moved to module-manager: 'module-manager reconcile <m>' (read-only report) and\n" +
       "'module-manager list --diff' (per-module rollup).",
@@ -141,6 +153,51 @@ function cmdValidate(opts: Opts, client: ClusterClient): number {
   return 1;
 }
 
+// ── reboot (#730) ─────────────────────────────────────────────────────
+// Resolves the module to its VM where it RUNS (HA may have moved it), then
+// hands the reboot to reboot-guest.sh — update-os.sh's own reboot path, so the
+// two cannot drift apart. The pending state is read before and after, so the
+// operator sees what the reboot took and whether it took it.
+function cmdReboot(opts: Opts, client: ClusterClient): number {
+  if (opts.rest.length !== 1) die("reboot: expected <module>");
+  const module = opts.rest[0];
+  const raw = readModuleJson(join(opts.configDir, `${module}.json`));
+  if (!raw) die(`reboot: no deployed module '${module}' (${opts.configDir}/${module}.json)`);
+  const cfg = raw as Record<string, unknown>;
+  const vmid = Number(cfg.vmid);
+  if (!Number.isInteger(vmid) || vmid <= 0) die(`reboot: '${module}' has no VM to reboot`);
+  if (cfg.kind === "lxc") die(`reboot: '${module}' is a container — not supported, use: pct reboot ${vmid}`);
+  const vmname = typeof cfg.vmname === "string" && cfg.vmname ? cfg.vmname : module;
+  const declared = typeof cfg.node === "string" && cfg.node ? cfg.node : DEFAULT_NODE;
+  const node = client.actualNode(declared, vmid) || declared;
+  if (vmname === hostname()) {
+    die(
+      `reboot: '${module}' is this controller — reboot it from a node, under supervision:\n` +
+        `  ssh root@${node}.mgmt.internal 'qm reboot ${vmid}'`,
+    );
+  }
+
+  const target = guestTarget(opts.configDir, module);
+  const before = target ? client.pendingReboot(target) : null;
+  if (before?.pending) info(`  pending: booted ${before.booted || "?"}, next boot ${before.next || "?"}`);
+  else if (before) info("  no reboot was pending — rebooting anyway");
+
+  const r = spawnSync(REBOOT_BIN(), [vmname, String(vmid), node], { encoding: "utf8", stdio: "inherit" });
+  if (r.error) die(`reboot: failed to run ${REBOOT_BIN()} (${r.error.message})`);
+  if (r.status !== 0) return r.status ?? 1;
+
+  const after = target ? client.pendingReboot(target) : null;
+  if (after?.pending) {
+    console.error(
+      `${YW}[Warning]${CL} ${module} rebooted but still boots ${after.booted || "?"}, not ${after.next || "?"} — ` +
+        "check its boot loader",
+    );
+    return 1;
+  }
+  if (after?.booted) info(`${GN}✓${CL} ${module} runs ${after.booted}`);
+  return 0;
+}
+
 export function run(argv: string[], client: ClusterClient): number {
   if (argv.length === 0) {
     usage();
@@ -178,6 +235,8 @@ export function run(argv: string[], client: ClusterClient): number {
         }
         return r.status ?? 1;
       }
+      case "reboot":
+        return cmdReboot(opts, client);
       default:
         usage();
         die(`Unknown command: ${cmd}`);

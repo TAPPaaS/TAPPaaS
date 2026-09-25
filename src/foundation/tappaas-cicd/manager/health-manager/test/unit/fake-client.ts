@@ -2,7 +2,7 @@
 // tests. No SSH, no Proxmox; tests seed running guests + per-VM config and
 // disk-usage answers, then assert the classification the pure logic produces.
 
-import { ClusterClient, NodeCapacity, RunningGuest } from "../../src/types";
+import { ClusterClient, NodeCapacity, PendingReboot, RunningGuest } from "../../src/types";
 
 export class FakeClusterClient implements ClusterClient {
   nodes: string[] = ["tappaas1"];
@@ -13,6 +13,7 @@ export class FakeClusterClient implements ClusterClient {
   diskUsage = new Map<string, number | null>(); // target → pct (null = unreachable)
   capacity: NodeCapacity[] = []; // #569: seeded per-node memory picture
   capacityThrows: string | null = null; // simulate an unreachable cluster
+  reboots = new Map<string, PendingReboot | null>(); // target → pending state (null = unreachable)
 
   reachableNodes(): string[] {
     return [...this.nodes];
@@ -37,5 +38,9 @@ export class FakeClusterClient implements ClusterClient {
   nodeCapacity(): NodeCapacity[] {
     if (this.capacityThrows) throw new Error(this.capacityThrows);
     return this.capacity.map((c) => ({ ...c, guests: c.guests.map((g) => ({ ...g })) }));
+  }
+  pendingReboot(target: string): PendingReboot | null {
+    const p = this.reboots.get(target);
+    return p ? { ...p } : null;
   }
 }

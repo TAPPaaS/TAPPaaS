@@ -26,6 +26,7 @@ are **N/A**. The surface:
 | `show vm <name>` | — | **MOVED** → `module-manager reconcile <m>` (read-only), native `module-manager/src/inspect.ts` |
 | `validate` | the `check-*.sh` gates | **special**: asserts the *live* system is healthy (below) |
 | `update-os <name> <vmid> <node>` | `update-os.sh` | special **action**; thin pass-through to the script |
+| `reboot <module>` | `reboot-guest.sh` | special **action** (#730): resolves the module to its VMID and live node, then update-os.sh's own `reboot_guest` path |
 
 Common options: `--config-dir DIR` (config root), `--json` (machine output for
 `list`/`show`), `--diff` (`list vm` rollup), `--threshold PCT` (`validate` disk
@@ -45,12 +46,14 @@ the running cluster and **exits non-zero if any FAIL**.
 | `memory-commitment` | one `pvesh /cluster/resources` | a node's memory committed to RUNNING guests ≥ threshold of its physical RAM (default **100%**) | cluster unreachable / no nodes |
 | `guest-memory` | `pvesh` + one `ps` / `qm status` per node | a module using ≥ 90% of its declared memory (WARN ≥ 75%), or allocated above the declared limit | cluster unreachable / nothing running |
 | `backup-status` | `backup-manager list --json` | a module disabled, or enabled-but-not-in-PBS-job | backup tooling absent / unparseable |
+| `pending-reboot` | one SSH probe per guest (booted system vs profile; Debian `reboot-required`) | never — **WARN** per waiting guest (#730) | no reachable guest |
 
 `--threshold` (default 80) and `--memory-threshold` (default 100) apply
 cluster-wide. The disk gate is **read-only**: the 50%-auto-grow that
 `check-disk-threshold.sh` performs is a *mutation* and stays in the script — it
 is not part of the health assertion. The gate order is service-liveness →
-disk-threshold → memory-commitment → guest-memory → backup-status; `validate`
+disk-threshold → memory-commitment → guest-memory → backup-status →
+pending-reboot; `validate`
 returns 0 only when zero gates FAIL (SKIP does not fail the assertion).
 
 `guest-memory` renders one row per module beneath its own line (`CheckResult.rows`),

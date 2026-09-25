@@ -11,6 +11,7 @@
 //   - guest-memory      (per guest: declared vs allocated vs used)
 //   - backup-status    (was check-backup-status.sh; reads `backup-manager list --json`)
 //   - service-liveness (guest-agent ping / running-state — see TODO)
+//   - pending-reboot   (#730: guests whose update is waiting for a reboot)
 
 import { spawnSync } from "child_process";
 import { join } from "path";
@@ -18,8 +19,8 @@ import { isManaged, loadConfigModules, readModuleJson } from "./config";
 import { CheckResult, CheckRow, CheckStatus, ClusterClient, HealthReport, NodeCapacity } from "./types";
 
 // Resolve a guest's `<vmname>.<zone0>.internal` target, as check-disk-threshold.sh
-// does (defaulting zone0 to "mgmt"). We only need it for the SSH disk probe.
-function diskTarget(configDir: string, module: string): string | null {
+// does (defaulting zone0 to "mgmt"), for the gates that probe a guest over SSH.
+export function guestTarget(configDir: string, module: string): string | null {
   const raw = readModuleJson(join(configDir, `${module}.json`));
   if (!raw) return null;
   const vmname = typeof raw.vmname === "string" && raw.vmname ? raw.vmname : module;
@@ -43,7 +44,7 @@ export function checkDiskThreshold(
   const over: string[] = [];
   let probed = 0;
   for (const m of modules) {
-    const target = diskTarget(configDir, m.module);
+    const target = guestTarget(configDir, m.module);
     if (!target) continue;
     const pct = client.diskUsagePct(target);
     if (pct === null) continue; // unreachable → skip this guest
@@ -326,6 +327,59 @@ export function checkGuestMemory(client: ClusterClient): CheckResult {
   return { name: "guest-memory", status: worst, detail, rows: out };
 }
 
+// ── pending-reboot gate (#730) ─────────────────────────────────────────
+// A guest whose update is waiting for a reboot: automaticReboot=false, a backup
+// holding it, or the controller updating itself (update-os.sh skips all three
+// and says DEFERRED:). Since #728 that can be a whole release move staged for
+// the next boot, not just a kernel — the guest still RUNS the old release. A
+// switched one runs the new userspace on the old kernel; the row says which.
+//
+// WARN, never FAIL: a pending reboot is debt, not an outage, and a site that
+// reboots by hand in its own window is healthy while it waits. Derived on the
+// guest (see PendingReboot), so a reboot by any route clears it.
+const release = (v: string): string => /^\d+\.\d+/.exec(v)?.[0] ?? "";
+
+export function checkPendingReboot(
+  client: ClusterClient,
+  configDir: string,
+  defaultNode: string,
+): CheckResult {
+  const modules = loadConfigModules(configDir, defaultNode).filter(isManaged);
+  const rows: CheckRow[] = [];
+  let probed = 0;
+  for (const m of modules) {
+    const target = guestTarget(configDir, m.module);
+    if (!target) continue;
+    const p = client.pendingReboot(target);
+    if (p === null) continue; // unreachable → skip this guest
+    probed++;
+    if (!p.pending) continue;
+    const from = release(p.booted);
+    const to = release(p.next);
+    const what =
+      p.os !== "nixos"
+        ? "the OS asks for a reboot"
+        : from && to && from !== to
+          ? p.active
+            ? `release move ${from} -> ${to} active, still on the ${from} kernel`
+            : `release move ${from} -> ${to} staged, still running ${from}`
+          : `booted ${p.booted || "?"}, next boot ${p.next || "?"}`;
+    rows.push({ status: "warn", text: `${m.module.padEnd(16)}${what}` });
+  }
+  if (probed === 0) {
+    return { name: "pending-reboot", status: "skip", detail: "no reachable guests probed" };
+  }
+  if (rows.length === 0) {
+    return { name: "pending-reboot", status: "pass", detail: `${probed} guest(s) booted on their current system` };
+  }
+  return {
+    name: "pending-reboot",
+    status: "warn",
+    detail: `${rows.length} of ${probed} guest(s) waiting for a reboot — health-manager reboot <module>`,
+    rows,
+  };
+}
+
 export function runHealthGates(client: ClusterClient, opts: ValidateOpts): HealthReport {
   const checks: CheckResult[] = [
     checkServiceLiveness(client, opts.configDir, opts.defaultNode),
@@ -333,6 +387,7 @@ export function runHealthGates(client: ClusterClient, opts: ValidateOpts): Healt
     checkMemoryCommitment(client, opts.memoryThreshold),
     checkGuestMemory(client),
     checkBackupStatus(opts.configDir),
+    checkPendingReboot(client, opts.configDir, opts.defaultNode),
   ];
   const failed = checks.filter((c: CheckResult): boolean => c.status === ("fail" as CheckStatus)).length;
   return { checks, failed };

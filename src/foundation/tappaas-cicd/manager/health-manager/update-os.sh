@@ -200,6 +200,34 @@ wait_for_ssh() {
     return 0
 }
 
+# Reboot a guest and wait until its module can SERVE, not merely until sshd
+# answers (#468). The one reboot path: the post-rebuild reboot below and
+# `health-manager reboot` (reboot-guest.sh) both take it (#730).
+# A backup holding the guest refuses the reboot (#686). That is a postponed
+# reboot, not a failure: rc 3, with the lock holder in REBOOT_LOCK_HOLDER.
+REBOOT_LOCK_HOLDER=""
+reboot_guest() {
+    local vmname="$1" vmid="$2" node="$3" vm_ip="$4"
+    REBOOT_LOCK_HOLDER=""
+    if declare -F wait_for_vm_unlock >/dev/null 2>&1; then
+        wait_for_vm_unlock "${vmid}" "${node}" "${TAPPAAS_LOCK_WAIT:-600}" || true
+    fi
+    if ! ssh "root@${node}.${MGMT}.internal" "qm reboot ${vmid}"; then
+        declare -F vm_lock_holder >/dev/null 2>&1 && REBOOT_LOCK_HOLDER="$(vm_lock_holder "${vmid}" "${node}")"
+        [[ -z "${REBOOT_LOCK_HOLDER}" ]] || return 3
+        die "could not reboot ${vmname} (VM ${vmid})"
+    fi
+
+    # Wait for sshd to come back (replaces fixed sleep 60 — issue #376).
+    update_ssh_known_hosts "${vm_ip}"
+    wait_for_ssh "${vm_ip}" 120 || warn "sshd unreachable after 120 s — subsequent service updaters may fail"
+    # sshd answering is NOT the module being able to serve (#468): it comes
+    # up seconds after boot while the module's own service may need far
+    # longer, and the post-update tests run straight after this returns.
+    wait_for_module_ready "${vmname}" "${vm_ip}" 180 \
+        || warn "  post-update tests may run against a still-starting '${vmname}'"
+}
+
 # Detect OS type on the VM
 detect_os_type() {
     local ip="$1"
@@ -549,37 +577,21 @@ update_nixos() {
         warn "DEFERRED: ${vmname} reboot to take ${_pending} is pending — it runs this update, reboot it under supervision"
     elif [[ "${TAPPAAS_ALLOW_DISRUPTION:-0}" == "1" ]] || automatic_reboot_enabled; then
         info "Rebooting VM to apply configuration..."
-        # A backup holding the guest refuses the reboot (#686). The rebuild has
-        # already succeeded and the new generation is active, so a lock here is
-        # a postponed reboot, not a failed update — it used to fail the whole
-        # re-apply and report a correctly-updated module as FAILED.
-        if declare -F wait_for_vm_unlock >/dev/null 2>&1; then
-            wait_for_vm_unlock "${vmid}" "${node}" "${TAPPAAS_LOCK_WAIT:-600}" || true
-        fi
-        if ! ssh "root@${node}.${MGMT}.internal" "qm reboot ${vmid}"; then
-            local _holder=""
-            declare -F vm_lock_holder >/dev/null 2>&1 && _holder="$(vm_lock_holder "${vmid}" "${node}")"
-            if [[ -n "${_holder}" ]]; then
-                if (( staged )); then
-                    warn "Could not reboot ${vmname}: the VM is locked (${_holder}). The release move is staged, not active;"
-                else
-                    warn "Could not reboot ${vmname}: the VM is locked (${_holder}). The new generation IS active;"
-                fi
-                warn "  the reboot is still pending — the next update takes it, or: ssh root@${node}.${MGMT}.internal 'qm reboot ${vmid}'"
-                warn "DEFERRED: ${vmname} reboot to take ${_pending} is pending — the VM was locked (${_holder})"
-                return 0
+        # The rebuild has already succeeded, so a lock here is a postponed
+        # reboot, not a failed update — it used to fail the whole re-apply and
+        # report a correctly-updated module as FAILED (#686).
+        local _rrc=0
+        reboot_guest "${vmname}" "${vmid}" "${node}" "${vm_ip}" || _rrc=$?
+        if (( _rrc == 3 )); then
+            if (( staged )); then
+                warn "Could not reboot ${vmname}: the VM is locked (${REBOOT_LOCK_HOLDER}). The release move is staged, not active;"
+            else
+                warn "Could not reboot ${vmname}: the VM is locked (${REBOOT_LOCK_HOLDER}). The new generation IS active;"
             fi
-            die "could not reboot ${vmname} (VM ${vmid}) after the rebuild"
+            warn "  the reboot is still pending — the next update takes it, or: health-manager reboot ${vmname}"
+            warn "DEFERRED: ${vmname} reboot to take ${_pending} is pending — the VM was locked (${REBOOT_LOCK_HOLDER})"
+            return 0
         fi
-
-        # Wait for sshd to come back (replaces fixed sleep 60 — issue #376).
-        update_ssh_known_hosts "${vm_ip}"
-        wait_for_ssh "${vm_ip}" 120 || warn "sshd unreachable after 120 s — subsequent service updaters may fail"
-        # sshd answering is NOT the module being able to serve (#468): it comes
-        # up seconds after boot while the module's own service may need far
-        # longer, and the post-update tests run straight after this returns.
-        wait_for_module_ready "${vmname}" "${vm_ip}" 180 \
-            || warn "  post-update tests may run against a still-starting '${vmname}'"
     else
         warn "automaticReboot=false — skipping reboot of VM ${vmid} (${vmname})."
         if (( staged )); then
@@ -588,7 +600,7 @@ update_nixos() {
         else
             warn "  The new NixOS generation is active, but a reboot is needed to apply kernel/bootloader changes."
         fi
-        warn "  Reboot manually under supervision: ssh root@${node}.${MGMT}.internal 'qm reboot ${vmid}'"
+        warn "  Reboot it when convenient: health-manager reboot ${vmname}"
         warn "  or authorize it for one run: module-manager module update ${vmname} --allow-disruption"
         warn "DEFERRED: ${vmname} reboot to take ${_pending} needs a disruptive change that is not authorized"
         # sshd and networking restart during nixos switch activation even without a reboot.

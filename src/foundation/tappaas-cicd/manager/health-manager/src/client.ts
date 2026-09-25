@@ -13,6 +13,7 @@
 //   vmStatus()       : ssh root@<node> qm|pct status <vmid>       → status word
 //   actualNode()     : pvesh /cluster/resources | select vmid
 //   diskUsagePct()   : ssh tappaas@<target> df / | tail -1 | awk '{print $5}'
+//   pendingReboot()  : ssh tappaas@<target> booted-system vs system profile (#730)
 
 import {
   defaultNodeCandidates,
@@ -22,7 +23,7 @@ import {
   ssh,
 } from "../../../lib/ts/src/cluster";
 import { defaultConfigDir, siteNodeHostnames } from "./config";
-import { ClusterClient, NodeCapacity, RunningGuest } from "./types";
+import { ClusterClient, NodeCapacity, PendingReboot, RunningGuest } from "./types";
 
 export class CliClusterClient implements ClusterClient {
   reachableNodes(): string[] {
@@ -196,4 +197,32 @@ export class CliClusterClient implements ClusterClient {
     const pct = Number(r.stdout.trim().replace("%", ""));
     return Number.isFinite(pct) ? pct : null;
   }
+
+  // #730: one ssh answers it. On NixOS the booted system differs from the
+  // system profile until a reboot takes the new generation; the release of
+  // each says whether that is a release move (#728) or a kernel. Debian has
+  // /var/run/reboot-required.
+  pendingReboot(target: string): PendingReboot | null {
+    const probe =
+      "if [ -e /run/booted-system ]; then " +
+      "b=$(readlink -f /run/booted-system); p=$(readlink -f /nix/var/nix/profiles/system); " +
+      "c=$(readlink -f /run/current-system); " +
+      '[ "$b" = "$p" ] && s=0 || s=1; [ "$c" = "$p" ] && a=1 || a=0; ' +
+      'echo "nixos $s $(cat $b/nixos-version 2>/dev/null) $(cat $p/nixos-version 2>/dev/null) $a"; ' +
+      "elif [ -f /etc/debian_version ]; then " +
+      '[ -e /var/run/reboot-required ] && echo "debian 1" || echo "debian 0"; ' +
+      'else echo "other 0"; fi';
+    const r = ssh("tappaas", target, probe);
+    if (!r.ran || r.rc !== 0) return null;
+    return parsePendingReboot(r.stdout);
+  }
+}
+
+// `<os> <pending 0|1> [<booted> <next> <active 0|1>]` — the probe's last line
+// (a login banner may precede it).
+export function parsePendingReboot(out: string): PendingReboot | null {
+  const f = (out.trim().split("\n").pop() ?? "").trim().split(/\s+/);
+  if (f.length < 2 || (f[1] !== "0" && f[1] !== "1")) return null;
+  const os = f[0] === "nixos" || f[0] === "debian" ? f[0] : "other";
+  return { os, pending: f[1] === "1", booted: f[2] ?? "", next: f[3] ?? "", active: f[4] === "1" };
 }

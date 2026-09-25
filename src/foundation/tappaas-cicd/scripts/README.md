@@ -477,9 +477,14 @@ update-os.sh myvm 610 tappaas1
 2. Updates SSH known_hosts
 3. Detects OS type (NixOS or Debian/Ubuntu)
 4. For **NixOS**:
-   - Runs `nixos-rebuild` using `./<vmname>.nix` in current directory
-   - Reboots VM to apply configuration
-   - Waits for VM to come back up
+   - Runs `nixos-rebuild` using `./<vmname>.nix` in current directory (a nixpkgs release
+     move is staged with `nixos-rebuild boot` instead, #728)
+   - Reboots the VM and waits until the module can serve — when `automaticReboot` is on in
+     `site.json`, or the run was authorized with `--allow-disruption`
+     (`TAPPAAS_ALLOW_DISRUPTION=1`, ADR-020 D8). Otherwise, when a backup holds the VM, or
+     when the VM is the controller running the update, the reboot is skipped and reported
+     as a `DEFERRED:` line, which the update sweep collects (#730). Take it later with
+     `health-manager reboot <module>`.
 5. For **Debian/Ubuntu**:
    - Waits for cloud-init to complete
    - Runs `apt-get update && apt-get upgrade`

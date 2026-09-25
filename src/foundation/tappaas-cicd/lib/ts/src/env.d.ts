@@ -87,6 +87,7 @@ declare module "path" {
 // ── node:os (unit tests' writable temp trees) ──────────────────────────
 declare module "os" {
   export function tmpdir(): string;
+  export function hostname(): string;
 }
 
 // ── node:child_process (the manager → controller/bash FFI boundary) ────

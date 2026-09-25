@@ -167,7 +167,9 @@ site-manager validate                          # checks the schedule, prints the
 
 - **`config/last-update-result.json`** — the sweep's own record: `ok`, per-module tallies,
   `control_plane`, `path` (`unit` or `legacy`), the operator `request`, `deferred_changes`
-  (disruptive changes held back for want of `rebootOk`, ADR-020 D8) and `test_warnings`
+  (disruptive changes held back for want of `rebootOk`, ADR-020 D8 — including a NixOS guest
+  whose reboot `update-os.sh` did not take: `automaticReboot` off, a backup lock, or the
+  controller itself, #730; `health-manager validate` shows which are still waiting) and `test_warnings`
   (checks that were already failing before a module's update, #635). A run that stopped in
   `ExecStartPre` records the `stage` instead.
 - **`config/update-tappaas.failures`** — one line per failed run, and per failure notice

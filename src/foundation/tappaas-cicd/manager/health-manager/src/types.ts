@@ -139,6 +139,25 @@ export interface ClusterClient {
   diskUsagePct(target: string): number | null;
   // Per-node physical/used/committed memory and the guests behind it (#569).
   nodeCapacity(): NodeCapacity[];
+  // Whether a guest is waiting for a reboot (via SSH); null if unreachable (#730).
+  pendingReboot(target: string): PendingReboot | null;
+}
+
+// ── a guest waiting for a reboot (#730) ───────────────────────────────
+// DERIVED on the guest, never stored: a recorded flag goes stale the moment
+// someone reboots by hand, the derived one cannot. NixOS: the booted system is
+// not the system profile (a switched generation whose kernel is not running,
+// or a release move staged for the next boot, #728). Debian:
+// /var/run/reboot-required.
+export interface PendingReboot {
+  os: "nixos" | "debian" | "other";
+  pending: boolean;
+  booted: string; // NixOS system the guest booted ("" when not NixOS)
+  next: string; // NixOS system the next boot takes
+  // The next system is already ACTIVE (switched: its userspace runs, the kernel
+  // is the booted one's) — false when it is only staged for the next boot, as
+  // a release move is since #728, and the guest still runs `booted` entirely.
+  active: boolean;
 }
 
 // ── validate (health gate) result shapes ──────────────────────────────
