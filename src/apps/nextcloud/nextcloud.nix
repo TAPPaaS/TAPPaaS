@@ -857,16 +857,19 @@ in
         set -euo pipefail
         export PATH="/run/current-system/sw/bin:${pkgs.coreutils}/bin:$PATH"
 
-        # whiteboard.env provides only JWT_SECRET_KEY — NEXTCLOUD_PUBLIC_URL is not set there.
-        # Default to the internal host so activation never fails on `set -u`; the public collab
-        # backend URL is refined post-deploy (needs the proxy domain + cert, like the connector).
-        PUBLIC_URL="''${NEXTCLOUD_PUBLIC_URL:-http://${config.networking.hostName}}"
+        # The browser opens the collab socket at this URL, so it must be the public
+        # one; Caddy routes its /socket.io/ to the co-located server.
+        PUBLIC_URL="${if ncProxyDomain != "" then "https://" + ncProxyDomain else "http://" + config.networking.hostName}"
 
-        nextcloud-occ config:app:set whiteboard collabBackendUrl \
-          --value="$PUBLIC_URL"
+        # Whiteboard 2.x declares both keys in its config lexicon (string; the
+        # secret sensitive). Set untyped, occ declines the change with "Config
+        # value were not updated", still exits 0, and the socket runs without a
+        # secret: the board shows Offline. --no-interaction makes it never prompt.
+        nextcloud-occ --no-interaction config:app:set whiteboard collabBackendUrl \
+          --type=string --value="$PUBLIC_URL"
 
-        nextcloud-occ config:app:set whiteboard jwt_secret_key \
-          --value="$JWT_SECRET_KEY"
+        nextcloud-occ --no-interaction config:app:set whiteboard jwt_secret_key \
+          --type=string --sensitive --value="$JWT_SECRET_KEY"
 
         echo "Nextcloud Whiteboard backend configured successfully."
       '';
