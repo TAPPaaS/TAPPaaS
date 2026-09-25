@@ -40,7 +40,14 @@ run() {
         skip()   { echo "[SKIP] $1"; ((++SKIPPED)); }
         info()   { :; }; header() { :; }
         public_domain_of() { echo cloud.example.org; }
-        remote() { case "$1" in *"test -r"*) echo ok ;; *trusted_domains*) printf "%s\n" "${TD}" ;; esac; }
+        # Test 13 asks occ, not the config file (#724 follow-up): two calls, the
+        # value and a liveness probe. A stub that answers only the first makes a
+        # correctly configured site report "could not ask occ".
+        remote() { case "$1" in
+            *"test -r"*)            echo ok ;;
+            *"status --output=json"*) echo "{" ;;
+            *trusted_domains*)      printf "%s\n" "${TD}" ;;
+        esac; }
         fake_ssh() { cat >/dev/null; printf "%s\n" "${PROBE}"; }
         SSH_CMD=fake_ssh VMNAME=nextcloud MODULE=nextcloud MODULE_JSON=/dev/null
         . "${B}"
@@ -49,15 +56,11 @@ run() {
     sed -n 's/^RESULT //p' "${TMP}/out"
 }
 
-TD_OK="  'trusted_domains' =>
-  array (
-    0 => 'localhost',
-    1 => 'cloud.example.org',
-  ),"
-TD_OTHER="  'trusted_domains' =>
-  array (
-    0 => 'localhost',
-  ),"
+# As `occ config:system:get trusted_domains` prints it: one per line.
+TD_OK="localhost
+cloud.example.org"
+TD_OTHER="localhost
+other.example.org"
 APPS="APP|calendar|6.2.3|yes|6.2.3
 APP|spreed|23.0.4|yes|23.0.4"
 GOOD="PKG|/nix/store/x-nextcloud-33.0.3-with-apps

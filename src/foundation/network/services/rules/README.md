@@ -20,7 +20,7 @@ this module on every pass and deletes what is no longer declared.
 
 ## Fields
 
-`network:rules` owns **4** declared field(s). Each table below carries the field's full definition and, where the service applies it, its ADR-020 change semantics.
+`network:rules` owns **6** declared field(s). Each table below carries the field's full definition and, where the service applies it, its ADR-020 change semantics.
 
 ### `ingress`
 
@@ -93,5 +93,43 @@ Module-local OPNsense aliases that this module's ingress/egress rules reference 
 **About the field.** Aliases are created in OPNsense before referencing rules are applied, and removed on remove-rules unless still referenced by other modules.
 
 **Why this change class.** Named address/port groups the module's rules refer to. Changing one re-points every rule that uses it — still a live firewall change, still no downtime.
+
+### `aliasType`
+
+OPNsense alias type for the module's firewall alias (tappaas_module_<vmname>). 'host' (default) targets the FQDN <vmname>.<zone0>.internal resolved via Unbound/dnsmasq. 'network' targets the entire zone0 subnet from zones.json — use for modules representing multiple devices with no single resolvable hostname (e.g. an IoT speaker fleet, a set of physical appliances).
+
+| Attribute | Value |
+|---|---|
+| Type | `string` |
+| Default | `host` |
+| Allowed values | `host` — Host alias → <vmname>.<zone0>.internal FQDN (default, single-VM modules)<br>`network` — Network alias → zone0 subnet CIDR from zones.json (multi-device modules) |
+| Example | `network` |
+| Required by | *(none)* |
+| Used by | `network:rules` |
+| Change class | `in-place` |
+| Apply mode | `reconcile` |
+
+**About the field.** When 'network', the alias content is derived from the zone0 subnet — no separate field is needed. The module's zone0 must define an 'ip' (subnet) in zones.json. Owned by network:rules (#704): rules_manager.py builds and validates the alias, and network:proxy never reads this field at all — the old attribution made every device module that declares network:rules and not network:proxy warn as an orphan on each conversion.
+
+**Why this change class.** How the module is addressed in the generated firewall alias (host vs network).
+
+### `firewallType`
+
+Type of firewall in use. Set to 'NONE' when the TAPPaaS OPNsense firewall is not deployed (e.g. using pfSense, UniFi, Cisco, or no firewall).
+
+| Attribute | Value |
+|---|---|
+| Type | `string` |
+| Default | `opnsense` |
+| Allowed values | `opnsense` — TAPPaaS-managed OPNsense firewall (default)<br>`NONE` — No TAPPaaS firewall — manual reverse proxy and firewall rule configuration required |
+| Example | `NONE` |
+| Required by | *(none)* |
+| Used by | `network:rules` |
+| Change class | `in-place` |
+| Apply mode | `reconcile` |
+
+**About the field.** When set to 'NONE', network:proxy prints manual configuration instructions instead of calling caddy-manager. Owned by network:rules (#704), which is the only service that reads it from a MODULE's config. network:proxy's delete-service.sh reads a firewallType too, but from the estate's config/firewall.json — a different value in a different place, so it is not a usedBy of the module field.
+
+**Why this change class.** Which firewall implementation serves this estate. 'NONE' makes the service print manual instructions instead of calling a controller; that branch is the non-field logic update-service.sh keeps.
 
 <!-- END GENERATED FIELDS -->
