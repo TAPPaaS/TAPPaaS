@@ -49,6 +49,7 @@ fi
 # because update.sh is sourced BEFORE the VM exists, where it defers. This call
 # runs once the VM is up. The converge verifies its own write.
 converge_nextcloud_domains || warn "  Domain config failed — installation continues; see the error above."
+converge_mail_microsoft
 
 echo ""
 info "${GN}✓${CL} nextcloud installation completed successfully."

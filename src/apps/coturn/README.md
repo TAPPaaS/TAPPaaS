@@ -2,30 +2,27 @@
 
 Primary audience: Nextcloud Talk users (audio/video calls); TAPPaaS admin.
 
-TURN/STUN relay for Nextcloud Talk — relays WebRTC audio/video between peers behind
-different NATs, so calls connect even when a direct peer-to-peer path fails.
+TURN/STUN relay for Nextcloud Talk. It lets audio and video calls connect when someone is
+behind a firewall, on mobile data, or calling in from outside the site.
 
 ## What you get
 
 | Capability | Access from | How |
 |------------|-------------|-----|
-| TURN/STUN relay for Talk calls | Talk clients anywhere | UDP/TCP `coturn.dmz.internal:3478` |
-| Short-lived per-call credentials | Nextcloud Talk | HMAC from shared `COTURN_SECRET`, per call |
+| Calls connect across NATs and firewalls | Talk users anywhere — in the office, on mobile data, or off-site | Automatic: Nextcloud Talk uses this relay for every call |
+| Internal calls skip the internet | Users on the site's client network | Reachable directly, no detour through the WAN |
+| Call credentials | Every Talk call, one-to-one or group | Issued automatically; nothing for you to enter |
 
 ## What is not included
 
-- No HTTP/reverse proxy — coturn is reached directly on port 3478, not via Caddy.
-- No media storage — coturn only relays live streams, it never records.
-- Credentials are issued by Nextcloud (from the shared secret), not by coturn itself.
-- WAN NAT rules and the public DNS record are not configured automatically
-  (see [INSTALL.md](./INSTALL.md)).
+- No call recording — coturn only relays live audio and video; it never stores anything.
+- No public DNS record — the admin creates the `turn.<domain>` record; see [INSTALL.md](./INSTALL.md).
 
 ## Requirements
 
-- `dmz` zone (the VM is placed there; only port 3478 UDP/TCP is exposed).
-- Internet egress from the `dmz` zone — the installer detects the public IP from the VM.
-- A Nextcloud instance (`nextcloud:fileservice`) — Talk is the consumer of this relay.
-- For calls from external networks: a WAN IP and OPNsense NAT rules (manual post-install).
+- A Nextcloud instance with Talk — coturn has nothing to relay without it.
+- The site's firewall reachable from the internet — calls from outside the site need the
+  relay's ports open (see [INSTALL.md](./INSTALL.md)).
 
 ## Dependencies
 
@@ -33,8 +30,9 @@ different NATs, so calls connect even when a direct peer-to-peer path fails.
 |------------|---------|
 | `cluster:vm` | VM provisioning on Proxmox |
 | `templates:nixos` | NixOS base image for the VM |
-| `network:rules` | Firewall/zone pass rules (`dmz`) |
+| `network:nat` | WAN port-forwards for the relay |
+| `network:rules` | Firewall pass rules |
 | `backup:vm` | VM registered with Proxmox Backup Server |
-| `nextcloud:fileservice` | The Nextcloud instance whose Talk uses this relay (connector `talk`) |
+| `nextcloud:fileservice` | The Nextcloud instance whose Talk uses this relay |
 
 For installation steps see [INSTALL.md](./INSTALL.md).

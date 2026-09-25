@@ -191,6 +191,21 @@ else
 fi
 
 # ============================================================================
+# Test 3b: No failed Nextcloud units
+# ============================================================================
+# The configure units are oneshots: when one fails, Nextcloud itself still answers,
+# so Tests 2-3 pass while a setting silently never applied — notify_push_setup failed
+# on every boot after the 34 step and nothing here noticed, until a later switch that
+# restarted it exited 4.
+header "Test 3b: No failed Nextcloud units"
+FAILED_UNITS=$(remote "systemctl --failed --no-legend --plain 2>/dev/null | awk '{print \$1}' | grep -E '^(nextcloud|phpfpm|nginx|redis|postgresql)' || true") || FAILED_UNITS=""
+if [[ -z "${FAILED_UNITS}" ]]; then
+    pass "No failed nextcloud/php-fpm/nginx/redis/postgresql units"
+else
+    fail "Failed units: $(echo "${FAILED_UNITS}" | paste -sd' ' -) — see journalctl -u <unit> on the VM"
+fi
+
+# ============================================================================
 # Test 4: PostgreSQL Service + Nextcloud Database
 # ============================================================================
 header "Test 4: PostgreSQL Service and Nextcloud Database"
@@ -422,13 +437,13 @@ public_domain_of() {  # <vmname> <environment> <module-json-file>
 # browser surfaces it. This test catches the mismatch.
 header "Test 12: OnlyOffice Connector URL Consistency"
 
-DS_URL=$(remote "sudo -u postgres psql -d nextcloud -tAc \"SELECT configvalue FROM oc_appconfig WHERE appid='onlyoffice' AND configkey='DocumentServerUrl'\" 2>/dev/null" | tr -d '\r ' || echo "")
+DS_URL=$(remote "sudo -u postgres psql -d nextcloud -tAc \"SELECT configvalue FROM oc_appconfig WHERE appid='eurooffice' AND configkey='DocumentServerUrl'\" 2>/dev/null" | tr -d '\r ' || echo "")
 
 if [ -z "$DS_URL" ]; then
     skip "OnlyOffice: connector not configured (no DocumentServerUrl) — skipping"
 else
     EXPECT_DOMAIN="$(public_domain_of "${VMNAME}" "$(jq -r '.environment // ""' "${MODULE_JSON}" 2>/dev/null)" "${MODULE_JSON}")"
-    STORAGE_URL=$(remote "sudo -u postgres psql -d nextcloud -tAc \"SELECT configvalue FROM oc_appconfig WHERE appid='onlyoffice' AND configkey='StorageUrl'\" 2>/dev/null" | tr -d '\r ' || echo "")
+    STORAGE_URL=$(remote "sudo -u postgres psql -d nextcloud -tAc \"SELECT configvalue FROM oc_appconfig WHERE appid='eurooffice' AND configkey='StorageUrl'\" 2>/dev/null" | tr -d '\r ' || echo "")
     STORAGE_HOST=$(printf '%s' "$STORAGE_URL" | sed -E 's#^https?://##; s#[:/].*$##')
 
     # 1. StorageUrl host (the DocumentServer's callback target) must be this

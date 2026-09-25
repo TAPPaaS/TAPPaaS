@@ -391,7 +391,7 @@ dns-manager(){ echo "$*" >> "${DNS_CALLS:-/dev/null}"; echo "released"; }
 STUB
 # The REAL provider resolver, not a stub of it (#718): what is under test is
 # that delete-module.sh asks it, and with which environment.
-sed -n '/^_legacy_module_alias() {/,/^}/p; /^resolve_provider_module() {/,/^}/p; /^find_integrateswith_consumers() {/,/^}/p' \
+sed -n '/^_legacy_module_alias() {/,/^}/p; /^resolve_provider_module() {/,/^}/p; /^find_service_consumers() {/,/^}/p; /^find_integrateswith_consumers() {/,/^}/p' \
     "${HERE}/../../lib/common-install-routines.sh" >> "${DWORK}/sbin/common-install-routines.sh"
 DSTUB="${WORK}/del-stub.sh"
 sed -e "s#/home/tappaas/bin/common-install-routines.sh#${DWORK}/sbin/common-install-routines.sh#g" \
@@ -867,7 +867,9 @@ IWSH="${WORK}/iw.sh"
     sed -n '/^_legacy_module_alias() {/,/^}/p' "$IWLIB"
     sed -n '/^resolve_provider_module() {/,/^}/p' "$IWLIB"
     sed -n '/^provider_module_installed() {/,/^}/p' "$IWLIB"
+    sed -n '/^find_service_consumers() {/,/^}/p' "$IWLIB"
     sed -n '/^find_integrateswith_consumers() {/,/^}/p' "$IWLIB"
+    sed -n '/^find_dependson_consumers() {/,/^}/p' "$IWLIB"
     echo '"$@"'
 } > "$IWSH"
 
@@ -895,6 +897,11 @@ consdev="$(bash "$IWSH" "$IWC" find_integrateswith_consumers "vllm-amd-dev" "inf
 [[ "$consdev" == "litellm-dev " ]] \
     && ok "find_integrateswith_consumers: env-aware — a dev consumer matches vllm-amd-dev" \
     || bad "find_integrateswith_consumers: expected 'litellm-dev ', got '${consdev}'"
+# find_dependson_consumers (#739): the REQUIRED consumers — the mirror image.
+consdep="$(bash "$IWSH" "$IWC" find_dependson_consumers "vllm-amd" "inference" | tr '\n' ' ')"
+[[ "$consdep" == "hardconsumer " ]] \
+    && ok "find_dependson_consumers: finds the dependsOn consumer, ignores the integrators" \
+    || bad "find_dependson_consumers: expected 'hardconsumer ', got '${consdep}'"
 consnone="$(bash "$IWSH" "$IWC" find_integrateswith_consumers "vllm-amd" "othersvc" | tr '\n' ' ')"
 [[ -z "$consnone" ]] \
     && ok "find_integrateswith_consumers: a service mismatch yields no consumers" \
@@ -1352,7 +1359,7 @@ echo "delete $*" >> "${RB_MARKER}"
 STUB
 chmod +x "${RB}/bin/delete-module.sh"
 
-run_rb() {  # run_rb <rc> <created_vm> <no_rollback>
+run_rb() {  # run_rb <rc> <created_vm> <no_rollback> [vm_before] [vm_exists_now]
     : > "${RB}/marker"
     echo '{"vmid":999}' > "${RB}/cfg/demo.json"
     echo '{}' > "${RB}/cfg/demo.json.orig"
@@ -1362,6 +1369,9 @@ run_rb() {  # run_rb <rc> <created_vm> <no_rollback>
         info(){ :; }; debug(){ :; }; warn(){ echo "WARN:$*" >&2; }; error(){ echo "ERR:$*" >&2; }
         CONFIG_DIR="'"${RB}/cfg"'"
         INSTALL_MODULE_NAME="demo"; INSTALL_CREATED_VM='"$2"'; INSTALL_NO_ROLLBACK='"$3"'
+        if [[ -n "'"${4:-}"'" ]]; then INSTALL_VMID=999; INSTALL_VM_BEFORE='"${4:-true}"'; fi
+        get_node_fqdn(){ echo tappaas1.mgmt.internal; }
+        vm_exists_on_cluster(){ [[ "'"${5:-false}"'" == true ]]; }
         PATH="'"${RB}/bin"'/..:$PATH"
         . "'"${RB}/fn.sh"'"
         ( exit '"$1"' ); rollback_failed_install
@@ -1399,6 +1409,35 @@ if grep -q 'delete demo --force' "${RB}/marker" 2>/dev/null; then
 else
     ok "(d) skipped — delete-module.sh is called by absolute path on a live cicd"
 fi
+
+# (e) a service AFTER cluster:vm fails (network:nat on hrossen): the run ends before
+# INSTALL_CREATED_VM is set, so the rollback must ask the cluster, or the VM it
+# created is left running behind "nothing half-installed is left".
+run_rb 2 false false false true
+if grep -q 'Deleting the VM and config' "${RB}/err"; then
+    ok "(e) a VM created before a later Step-5 failure is removed, not orphaned"
+else
+    bad "(e) the VM this run created was left behind: $(cat "${RB}/err")"
+fi
+# (f) …but a VM that was there before the run is never touched
+run_rb 2 false false true true
+if ! grep -q 'Deleting the VM' "${RB}/err" && [[ ! -f "${RB}/cfg/demo.json" ]]; then
+    ok "(f) a pre-existing VM is left alone; only the config goes"
+else
+    bad "(f) a pre-existing VM would have been deleted: $(cat "${RB}/err")"
+fi
+
+# (g) the VMID the rollback relies on is found in the config's real shape: at the
+# top level beside a .config block (coturn, nearly every module), not only in the
+# older nested one. Reading .config first made it empty, so (e) could never fire.
+awk '/^module_config_vmid\(\) \{/{f=1} f{print} f&&/^\}/{exit}' "$INS_MOD" > "${RB}/vmid.sh"
+echo '{"vmid":341,"config":{"cluster:vm":{"memory":"2048"}}}' > "${RB}/top.json"
+echo '{"config":{"vmid":342}}'                              > "${RB}/nested.json"
+echo '{"config":{"cluster:vm":{}}}'                         > "${RB}/none.json"
+got="$(bash -c ". '${RB}/vmid.sh'; for f in top nested none; do printf '%s,' \"\$(module_config_vmid '${RB}'/\$f.json)\"; done")"
+[[ "${got}" == "341,342,," ]] \
+    && ok "(g) the VMID is read at the top level, beside a .config block" \
+    || bad "(g) module_config_vmid read '${got}', expected '341,342,,'"
 
 # config backup/restore (the rollback half that a VM-less module relies on)
 awk '/^backup_module_config\(\) \{/{f=1} f{print} f&&/^\}/{exit}' "$UPD_MOD" >  "${RB}/cfgfn.sh"

@@ -99,7 +99,7 @@ else
 fi
 
 if [ "$CONNECTED" = "false" ]; then
-    for i in 2 3 4 5 6 7 8; do skip "Test $i skipped (no connectivity)"; done
+    for i in 2 3 4 5 6 7 8 9 10 11; do skip "Test $i skipped (no connectivity)"; done
     header "Test Summary"
     log "  ${GN}Passed:${CL}  $PASSED / ${RD}Failed:${CL}  $FAILED / ${YW}Skipped:${CL} $SKIPPED"
     log "${RD}${BOLD}VM unreachable. No tests could run.${CL}"
@@ -210,17 +210,19 @@ fi
 
 if [ "$NC_REACHABLE" = "false" ]; then
     skip "Cannot SSH to ${NEXTCLOUD_HOST} — Nextcloud Talk config not verified"
-else
-    SIG_CONF=$($NC_SSH "sudo nextcloud-occ \
-        config:app:get spreed signaling_servers 2>/dev/null" || true)
+elif [ -z "${HPB_PROXY_DOMAIN}" ]; then
     # An empty domain made this `grep -q ""`, which matches anything: the suite
     # passed with no signaling server registered at all (#715).
-    if [ -z "${HPB_PROXY_DOMAIN}" ]; then
-        fail "No public name for ${MODULE} (not published through network:proxy?) — cannot verify the Talk signaling registration"
-    elif printf '%s' "${SIG_CONF}" | grep -qF "${HPB_PROXY_DOMAIN}"; then
+    fail "No public name for ${MODULE} (not published through network:proxy?) — cannot verify the Talk signaling registration"
+else
+    SIG_CONF=$($NC_SSH "sudo nextcloud-occ \
+        config:app:get spreed signaling_servers 2>/dev/null" | tr -d '\r' || true)
+    if [ -z "${SIG_CONF}" ]; then
+        fail "Nextcloud Talk has NO signaling server registered (signaling_servers is empty) — the hpb connector has not run"
+    elif echo "${SIG_CONF}" | grep -qF "${HPB_PROXY_DOMAIN}"; then
         pass "Nextcloud Talk signaling_servers contains ${HPB_PROXY_DOMAIN}"
     else
-        fail "Nextcloud Talk signaling_servers does not reference the HPB (${HPB_PROXY_DOMAIN}) — install.sh may not have run"
+        fail "Nextcloud Talk signaling_servers does not reference the HPB (${HPB_PROXY_DOMAIN}): $(echo "${SIG_CONF}" | tr -d '\n' | cut -c1-160)"
     fi
 fi
 
@@ -242,6 +244,65 @@ else
     else
         skip "Could not confirm Nextcloud Talk app status — check manually"
     fi
+fi
+
+# ============================================================================
+# Test 9: Janus SFU
+# ============================================================================
+header "Test 9: Janus SFU (janus.service)"
+info "Checking the Janus gateway is running and listening for the signaling server..."
+
+JANUS_STATUS=$(remote "systemctl is-active janus 2>/dev/null") || true
+JANUS_STATUS="${JANUS_STATUS:-unknown}"
+if [ "$JANUS_STATUS" = "active" ]; then
+    pass "janus.service is active"
+else
+    fail "janus.service is ${JANUS_STATUS} (expected active) — group calls fall back to nothing: the signaling server has an MCU configured"
+fi
+
+# Loopback only: the WebSocket API must be bound to 127.0.0.1, never a routable address.
+JANUS_LISTEN=$(remote "ss -ltnH 2>/dev/null | awk '{print \$4}' | grep ':8188\$' | head -3 | tr '\n' ' '" || true)
+if echo "${JANUS_LISTEN}" | grep -q '^127\.0\.0\.1:8188'; then
+    pass "Janus WebSocket API listens on 127.0.0.1:8188 only"
+elif [ -n "${JANUS_LISTEN}" ]; then
+    fail "Janus WebSocket API listens on ${JANUS_LISTEN} — must be loopback only"
+else
+    fail "Nothing listens on port 8188 — Janus websockets transport did not start"
+fi
+
+# ============================================================================
+# Test 10: Signaling server ↔ Janus
+# ============================================================================
+header "Test 10: Signaling Server Connected to Janus (MCU)"
+info "Checking nextcloud-spreed-signaling reports its Janus MCU..."
+
+MCU_LOG=$(remote "sudo journalctl -u nextcloud-spreed-signaling -b --no-pager 2>/dev/null | grep -iE 'janus|mcu' | tail -5" || true)
+if echo "${MCU_LOG}" | grep -qiE 'connected to janus|janus .*(version|ready)|using janus'; then
+    pass "Signaling server connected to Janus: $(echo "${MCU_LOG}" | grep -iE 'connected|version|ready|using' | tail -1 | cut -c1-140)"
+elif echo "${MCU_LOG}" | grep -qiE 'error|fail|refused'; then
+    fail "Signaling server cannot reach Janus: $(echo "${MCU_LOG}" | grep -iE 'error|fail|refused' | tail -1 | cut -c1-160)"
+else
+    fail "Signaling server log shows no Janus MCU connection this boot — is mcu.type=janus in server.conf?"
+fi
+
+# ============================================================================
+# Test 11: Provider facts the .nix was built from
+# ============================================================================
+header "Test 11: Companion JSON Facts (turnHost, nextcloudPublicUrl)"
+info "Checking the facts coturn:turn and nextcloud:fileservice stamp into /etc/nixos/${MODULE}.json..."
+
+FACTS=$(remote "sudo jq -r '[.turnHost // \"\", .nextcloudPublicUrl // \"\"] | @tsv' /etc/nixos/nextcloud-hpb.json 2>/dev/null" || true)
+FACT_TURN="$(printf '%s' "${FACTS}" | cut -f1)"
+FACT_NC="$(printf '%s' "${FACTS}" | cut -f2)"
+if [ -n "${FACT_TURN}" ]; then
+    pass "turnHost stamped: ${FACT_TURN}"
+else
+    fail "turnHost missing in the companion JSON — the HPB advertises coturn's internal name (coturn:turn did not run before the rebuild)"
+fi
+if [ -n "${FACT_NC}" ] && echo "${FACT_NC}" | grep -q '^https://'; then
+    pass "nextcloudPublicUrl stamped: ${FACT_NC}"
+else
+    fail "nextcloudPublicUrl missing in the companion JSON — Talk rejects the HPB with invalid_backend (nextcloud:fileservice did not run before the rebuild)"
 fi
 
 # ============================================================================

@@ -34,3 +34,11 @@ if nc -z -w5 "${VMNAME}.${ZONE}.internal" 3478 2>/dev/null; then
 else
     warn "  coturn not responding on port 3478 — TURN relay may be unavailable"
 fi
+
+# ── Converge the TURN host fact into the consumer (services/turn/fields.json) ──
+# Re-derived on every update, so a coturn publicDomain added or changed after
+# the consumer's install reaches the consumer's .nix on the next rebuild.
+# shellcheck source=turn-common.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/turn-common.sh"
+coturn_stamp_turn_host "${CONSUMER_JSON}" "$(coturn_turn_host "${COTURN_JSON}")" "$(coturn_turn_host_internal "${COTURN_JSON}")"
+coturn_allow_peer "${COTURN_JSON}" "${CONSUMER_JSON}"

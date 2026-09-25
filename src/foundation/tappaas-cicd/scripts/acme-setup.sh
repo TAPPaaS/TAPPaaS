@@ -200,21 +200,40 @@ if [[ $STAGING -eq 1 ]]; then
     ACCOUNT_ARG=(--account-name letsencrypt-staging)
 fi
 
+# Credentials go over stdin, not argv. /proc/<pid>/cmdline is world-readable,
+# so --provider-field published the DNS-API secret to every local user for the
+# whole run — minutes, with dns_sleep. Fall back to argv (loudly) when the
+# installed acme-manager predates --provider-fields-stdin, so an un-rebuilt
+# mothership keeps working instead of dying on an unknown option.
 PROV_ARGS=()
-for f in "${CRED_FIELDS[@]}"; do
-    PROV_ARGS+=(--provider-field "$f")
-done
+if acme-manager setup --help 2>/dev/null | grep -q -- '--provider-fields-stdin'; then
+    PROV_ARGS=(--provider-fields-stdin)
+else
+    warn "  installed acme-manager predates --provider-fields-stdin; passing"
+    warn "  credentials on the command line, where they are visible in \`ps\`."
+    warn "  Rebuild the control plane (update-tappaas) to close this."
+    for f in "${CRED_FIELDS[@]}"; do
+        PROV_ARGS+=(--provider-field "$f")
+    done
+fi
 
 echo
 info "${BOLD}Running acme-manager setup${CL}  (drives os-acme-client end-to-end; live progress below)"
 LOG_FILE="$(mktemp /tmp/acme-setup.XXXXXX.log)"
-trap 'rm -f "$LOG_FILE"' EXIT
 
 # --dns-sleep is the propagation wait os-acme-client applies BEFORE asking the
 # CA to validate; --timeout is only how long we then poll for the result. Passing
 # it to --timeout alone (the shape before this fix) left the validation object on
 # its 45s default, so raising the flag could not affect the outcome it documents.
-if ! acme-manager --firewall "$FIREWALL" --no-ssl-verify setup \
+#
+# PYTHONUNBUFFERED also line-buffers an acme-manager built before the CLI began
+# reconfiguring its own stdout — without it, `tee` makes Python block-buffer and
+# the run below prints nothing at all until it finishes, which reads as a hang.
+#
+# `set -o pipefail` (top of file) is what makes the `if !` see acme-manager's
+# exit status rather than tee's — do not remove it.
+if ! printf '%s\n' "${CRED_FIELDS[@]}" \
+    | PYTHONUNBUFFERED=1 acme-manager --firewall "$FIREWALL" --no-ssl-verify setup \
         --domain "$DOMAIN" --email "$EMAIL" \
         --provider "$PROVIDER" \
         --dns-sleep "$DNS_SLEEP" \
@@ -345,3 +364,8 @@ info "  • Wildcard *.${DOMAIN} is issued and lives in OPNsense Trust (refid ${
 info "  • The 'caddy-reload' action will reload Caddy automatically on renewal"
 info "  • From here, ${BL}rest-of-foundation.sh${CL} will install modules whose"
 info "    proxyTls=dns01 binds this refid via Caddy's CustomCertificate"
+# The transcript used to be deleted by an EXIT trap, which fired on the failure
+# path too — so `die "... (see $LOG_FILE)"` pointed at a file that no longer
+# existed, and a successful run left no record of what was issued. Keep it and
+# say where it is.
+info "  • Transcript: ${LOG_FILE}"

@@ -265,7 +265,8 @@ source:
 
 ## What `update-os` puts on a guest before it rebuilds
 
-Beyond the module's own `.nix`, its siblings and its companion JSON, one
+Beyond the module's own `.nix`, its sibling `.nix`, `.patch` and `.diff` files (#740) and its
+companion JSON, one
 generated file lands in `/etc/nixos` on every NixOS update (#472):
 
 - **`tappaas-site.nix`** — from `config/site.json` via `lib/site-locale.sh`: time

@@ -245,7 +245,17 @@ module_config_exists() {
 # before is never touched, and --no-rollback keeps it all for inspection.
 INSTALL_MODULE_NAME=""     # effective name, set once the config is written
 INSTALL_CREATED_VM=false   # this run created the VM
+INSTALL_VMID=""            # the module's VMID, recorded before Step 5 creates it
+INSTALL_VM_BEFORE=true     # whether that VM already existed then (true = never ours)
 INSTALL_NO_ROLLBACK=false
+
+# The VMID a module config records: top-level, as every current module writes it,
+# or inside .config on the older nested shape. `(.config // .).vmid` read the
+# config BLOCK whenever one existed — nearly every module has one — so the VMID
+# was always empty and a failed install could never tell it had created a VM.
+module_config_vmid() {
+    jq -r '.vmid // .config.vmid // empty' "$1" 2>/dev/null || true
+}
 
 rollback_failed_install() {
     local rc=$?
@@ -258,6 +268,14 @@ rollback_failed_install() {
     fi
     echo "" >&2
     warn "Install failed — removing what this run created."
+    # A failure INSIDE Step 5 — a service after cluster:vm, such as network:nat —
+    # ends the run before INSTALL_CREATED_VM is set, so ask the cluster instead: a
+    # VM that was not there before and is there now is this run's. Asking only the
+    # flag left such a VM running while this said "nothing half-installed is left".
+    if [[ "${INSTALL_CREATED_VM}" != true && "${INSTALL_VM_BEFORE:-true}" == false && -n "${INSTALL_VMID:-}" ]] \
+       && vm_exists_on_cluster "${INSTALL_VMID}" "$(get_node_fqdn 0)" >/dev/null 2>&1; then
+        INSTALL_CREATED_VM=true
+    fi
     if [[ "${INSTALL_CREATED_VM}" == true ]]; then
         warn "  Deleting the VM and config of '${INSTALL_MODULE_NAME}'..."
         if /home/tappaas/bin/delete-module.sh "${INSTALL_MODULE_NAME}" --force >/dev/null 2>&1; then
@@ -564,6 +582,17 @@ main() {
     # the copied source; module discovery recognises a module by its shape
     # (lib/ts/src/module-discovery.ts), which a fresh install always has.
 
+    # Module pre-install hook: the deployed config exists, nothing has been
+    # provisioned yet, and zone0 is still unresolved — so a module can decide
+    # site-specific placement here (co-locating with a provider) and have the
+    # resolution below honour it as an explicit .zone0. Must stay idempotent:
+    # a re-install runs it again.
+    if [[ -x "./pre-install.sh" ]]; then
+        info "  Running ${module}/pre-install.sh..."
+        ./pre-install.sh "${effective_module}" \
+            || die "pre-install.sh failed for '${effective_module}' — nothing was provisioned"
+    fi
+
     # zone0 resolution (ADR-007 P5, reconciled with S6 N6): precedence is
     #   1. explicit .zone0 in the module JSON / --zone0 override  (always wins)
     #   2. the target environment's network.zone                 (env file exists)
@@ -749,10 +778,11 @@ main() {
     # first, so a rollback removes a VM this run created and leaves one it
     # merely found (#584).
     local _vm_before=false _vmid
-    _vmid="$(jq -r '(.config // .).vmid // empty' "${CONFIG_DIR}/${effective_module}.json" 2>/dev/null || true)"
+    _vmid="$(module_config_vmid "${CONFIG_DIR}/${effective_module}.json")"
     if [[ -n "${_vmid}" ]] && vm_exists_on_cluster "${_vmid}" "$(get_node_fqdn 0)" >/dev/null 2>&1; then
         _vm_before=true
     fi
+    INSTALL_VMID="${_vmid}"; INSTALL_VM_BEFORE="${_vm_before}"
 
     if [[ -z "${depends_on}" ]]; then
         debug "  No dependency services to call"
@@ -854,7 +884,7 @@ main() {
     # on their behalf by calling OUR install-service.sh with the consumer's name.
     # Runs AFTER Step 6 so the provider is fully installed before integrators bind.
     if [[ -n "${provides}" ]]; then
-        info "${BOLD}Step 7: Wire pre-existing optional integrators${CL}"
+        info "${BOLD}Step 7: Wire pre-existing integrators and dependents${CL}"
         local wired_any=false
         for svc in ${provides}; do
             local rscript="${module_dir}/services/${svc}/install-service.sh"
@@ -872,6 +902,32 @@ main() {
             done < <(find_integrateswith_consumers "${effective_module}" "${svc}")
         done
         [[ "${wired_any}" == "false" ]] && info "  No pre-existing integrators found"
+
+        # Consumers that REQUIRE a service (dependsOn) can only pre-exist when this
+        # provider is being replaced (--reinstall): they are still wired to the
+        # instance that was deleted, and nothing re-wired them until each got an
+        # update of its own (#739). Re-apply each one's wiring through this
+        # provider's update-service.sh — what that consumer's own update would run.
+        local rewired_any=false
+        for svc in ${provides}; do
+            local uscript="${module_dir}/services/${svc}/update-service.sh"
+            local consumer
+            while IFS= read -r consumer; do
+                [[ -n "${consumer}" ]] || continue
+                rewired_any=true
+                if [[ ! -x "${uscript}" ]]; then
+                    warn "  '${consumer}' depends on ${effective_module}:${svc}, which has no update-service.sh — run: update-module.sh ${consumer}"
+                    continue
+                fi
+                info "  ${BL}${effective_module}:${svc}${CL} — re-wiring dependent '${consumer}'..."
+                if "${uscript}" "${consumer}"; then
+                    info "  ${GN}✓${CL} re-wired '${consumer}'"
+                else
+                    warn "  update-service.sh failed for dependent '${consumer}' — run: update-module.sh ${consumer}"
+                fi
+            done < <(find_dependson_consumers "${effective_module}" "${svc}")
+        done
+        [[ "${rewired_any}" == "false" ]] && info "  No dependent modules to re-wire"
     fi
 
     # ── Done ─────────────────────────────────────────────────────────

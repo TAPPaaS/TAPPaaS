@@ -29,9 +29,12 @@ debug "  Node: ${NODE}"
 debug "  Zone: ${ZONE0NAME}"
 
 # NixOS OS update is handled by templates:nixos update-service.sh before this
-# script runs. No additional module-specific update steps are needed for
-# coturn beyond the NixOS rebuild.
-debug "No module-specific update steps — NixOS OS update handled by dependency layer."
+# script runs. The module-specific converge is the public TURN name: its
+# default (turn.<site domain>), re-asserted every run.
+debug "Converging the public TURN name"
+# shellcheck source=public-name.sh
+. "${SCRIPT_DIR}/public-name.sh"
+coturn_converge_public_name "${1:-coturn}" "${VMNAME}.${ZONE0NAME}.internal"
 
 # ── Summary ──────────────────────────────────────────────────────────────────
 debug "Update Complete"

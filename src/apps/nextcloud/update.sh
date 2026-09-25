@@ -93,6 +93,31 @@ apply_domain_config() {
 # SSH session while relaying no output at all, so a zero exit code is not
 # evidence the value landed — trusting it is what let the original bug report
 # success while writing nothing.
+# ── Mail app: Microsoft 365 sign-in (optional) ─────────────────────────────────
+# /home/tappaas/secrets/<vmname>-mail-microsoft.env holds MS_TENANT_ID, MS_CLIENT_ID
+# and MS_CLIENT_SECRET (an Entra app registration with redirect URI
+# https://<domain>/apps/mail/integration/microsoft-auth). It goes to the VM over
+# stdin; nextcloud-configure-mail-microsoft hands it to the Mail app. No file: skip.
+converge_mail_microsoft() {
+    local src="/home/tappaas/secrets/${VMNAME}-mail-microsoft.env"
+    [[ -f "${src}" ]] || return 0
+    if ! grep -qE '^MS_CLIENT_SECRET=.+' "${src}"; then
+        warn "  ${src} has no MS_CLIENT_SECRET — Mail's Microsoft sign-in left unconfigured"
+        return 0
+    fi
+    if ! ssh -o BatchMode=yes -o ConnectTimeout=10 "tappaas@${NEXTCLOUD_HOST}" true >/dev/null 2>&1; then
+        info "  ${NEXTCLOUD_HOST} not reachable yet — deferring Mail's Microsoft sign-in."
+        return 0
+    fi
+    if ssh -o BatchMode=yes "tappaas@${NEXTCLOUD_HOST}" \
+        "sudo install -m600 -o root -g root /dev/stdin /etc/secrets/mail-microsoft.env && sudo systemctl restart nextcloud-configure-mail-microsoft.service" \
+        < "${src}"; then
+        info "  ${GN}✓${CL} Mail app: Microsoft 365 sign-in configured"
+    else
+        warn "  Mail's Microsoft sign-in failed — see: journalctl -u nextcloud-configure-mail-microsoft on ${NEXTCLOUD_HOST}"
+    fi
+}
+
 converge_nextcloud_domains() {
     local domain
     domain="$(resolve_proxy_domain)"
@@ -139,6 +164,7 @@ debug "  Zone: ${ZONE0NAME}"
 # NixOS OS update is handled by templates:nixos update-service.sh before this
 # script runs. The domain converge below is the one module-specific step.
 converge_nextcloud_domains
+converge_mail_microsoft
 
 # ── Summary ──────────────────────────────────────────────────────────────────
 debug "Update Complete"

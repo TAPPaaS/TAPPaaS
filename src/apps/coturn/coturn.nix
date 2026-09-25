@@ -21,12 +21,10 @@
 #
 # Network: DMZ zone (VMID 341, tappaas1), firewall ports:
 #   TCP  22 (SSH), 3478 (TURN/STUN)
-#   UDP  3478 (TURN/STUN), 49152-65535 (relay ports)
+#   UDP  3478 (TURN/STUN), 49152-50151 (relay ports)
 # Secrets: Auto-generated COTURN_SECRET (64-char hex) on first boot.
-#   COTURN_EXTERNAL_IP must be set manually before coturn will relay correctly.
-#
-# FIRST-BOOT ACTION REQUIRED:
-#   Edit /etc/secrets/coturn.env, set COTURN_EXTERNAL_IP=<your public WAN IP>,
+#   COTURN_EXTERNAL_IP is detected by install.sh and written to
+#   /etc/secrets/coturn.env. Only if detection fails: set it there by hand,
 #   then run: systemctl restart coturn.service
 # ============================================================================
 
@@ -112,7 +110,7 @@ in
     ];
     # Relay port range — required for WebRTC media streams
     allowedUDPPortRanges = [
-      { from = 49152; to = 65535; }
+      { from = 49152; to = 50151; }
     ];
   };
 
@@ -273,12 +271,17 @@ in
         cat > "$CONFIG_FILE" <<CONF
 listening-port=3478
 min-port=49152
-max-port=65535
+max-port=50151
 realm=${config.networking.hostName}
 use-auth-secret
 static-auth-secret=$COTURN_SECRET
 no-cli
 no-multicast-peers
+# UDP relaying only. Talk's and Janus's media is UDP; TCP relaying (RFC 6062) would
+# let any TURN user — Talk hands credentials to public-conversation guests — open
+# TCP connections to an allowed-peer-ip host (the HPB's ssh, its signaling port).
+# Clients still REACH this server over TCP; only the relayed leg is UDP.
+no-tcp-relay
 no-software-attribute
 fingerprint
 # RFC 1918 + special ranges — deny relay to private/loopback addresses (CRITICAL)
@@ -294,6 +297,13 @@ denied-peer-ip=192.168.0.0-192.168.255.255
 denied-peer-ip=198.18.0.0-198.19.255.255
 denied-peer-ip=240.0.0.0-255.255.255.255
 CONF
+
+        # Media servers this relay must reach despite the deny list (the HPB's Janus
+        # on a private address). Written by the coturn:turn service, one
+        # "<module> <ip>" line per consumer; allowed-peer-ip takes precedence.
+        if [ -f /var/lib/coturn/allowed-peers ]; then
+          ${pkgs.gawk}/bin/awk '$2 ~ /^[0-9.]+$/ {print "allowed-peer-ip=" $2}' /var/lib/coturn/allowed-peers >> "$CONFIG_FILE"
+        fi
 
         # Append external-ip mapping only when the operator has configured it
         if [ -n "$COTURN_EXTERNAL_IP" ]; then

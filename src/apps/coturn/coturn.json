@@ -1,9 +1,9 @@
 {
   "description": "coturn TURN/STUN server for Nextcloud Talk WebRTC audio/video calls.",
   "kind": "vm",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "stack": "collaboration",
-  "releaseDate": "2026-06-12",
+  "releaseDate": "2026-09-21",
   "maintainer": "@ErikDaniel007",
   "status": "Testing",
   "tier": "app",
@@ -15,6 +15,7 @@
   "dependsOn": [
     "backup:vm",
     "cluster:vm",
+    "network:nat",
     "network:rules",
     "nextcloud:fileservice",
     "templates:nixos"
@@ -24,7 +25,7 @@
   ],
   "config": {
     "cluster:vm": {
-      "cores": 1,
+      "cores": 2,
       "memory": "2048",
       "diskSize": "8G",
       "storage": "tanka1",
@@ -32,27 +33,55 @@
       "image": "8080",
       "bridge0": "lan"
     },
+    "network:nat": {
+      "natRules": [
+        {
+          "externalPort": 3478,
+          "protocol": "TCP/UDP",
+          "description": "TURN/STUN"
+        },
+        {
+          "externalPort": "49152-50151",
+          "internalPort": 49152,
+          "protocol": "UDP",
+          "description": "TURN relay range"
+        }
+      ]
+    },
     "nextcloud:fileservice": {
       "connector": "talk"
     }
   },
-  "appVersion": "4.9.0",
-  "ingress": [
+  "appVersion": "4.13.1",
+  "ports": [
     {
-      "from": "internet",
-      "ports": [
-        3478
-      ],
-      "protocol": "UDP",
-      "description": "Nextcloud Talk TURN/STUN (WAN)"
+      "port": 3478,
+      "protocol": "TCP/UDP",
+      "description": "TURN/STUN"
     },
     {
-      "from": "internet",
+      "port": "49152:50151",
+      "protocol": "UDP",
+      "description": "TURN relay range"
+    }
+  ],
+  "ingress": [
+    {
+      "from": "home",
+      "ports": [
+        3478,
+        "49152:50151"
+      ],
+      "protocol": "UDP",
+      "description": "Talk clients on client networks relay through coturn without hairpinning via the WAN IP"
+    },
+    {
+      "from": "home",
       "ports": [
         3478
       ],
       "protocol": "TCP",
-      "description": "Nextcloud Talk TURN/STUN TCP fallback (WAN)"
+      "description": "Talk clients on client networks: TURN TCP fallback"
     }
   ]
 }

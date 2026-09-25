@@ -37,38 +37,62 @@
 
 let
   # ── Version pins — single source of truth; bump here. ───────────────────────────
-  # `ncMajor` drives BOTH the Nextcloud package and its app-set (dynamic attr access),
-  # so a major bump is one number. Majors must be sequential — Nextcloud refuses to skip
-  # (33 → 34 → 35). The eurooffice connector pin lives in eurooffice-nextcloud.nix; the
-  # nixpkgs template rev is pinned engine-side (update-os.sh). See UPGRADE.md.
-  ncMajor = 33;
-  # Codeberg re-generated its `archive/<tag>.tar.gz` tarballs, changing the
-  # container bytes (gzip/git version) while the tagged CONTENT is unchanged.
-  # Every nixpkgs pin that fetches such an archive by FILE hash therefore fails
-  # with a fixed-output hash mismatch — including uppush 2.4.0 pinned here, and
-  # (verified) nixpkgs master's own newer 2.5.0 pin, so bumping nixpkgs does not
-  # help. The served 2.4.0 tarball was checked against a fresh `git clone` of tag
-  # 2.4.0: 86 files, byte-identical content, pure repackaging.
-  #
-  # Fix the CLASS, not the instance: refetch via fetchFromGitea, which is a
-  # fetchzip — it hashes the UNPACKED tree, so archive repackaging cannot break
-  # it again. Drop this override once nixpkgs ships a fetcher that does the same.
-  uppushSrc = pkgs.fetchFromGitea {
-    domain = "codeberg.org";
-    owner  = "NextPush";
-    repo   = "uppush";
-    rev    = "2.4.0";
-    hash   = "sha256-vV/4A7fC8rfRWdeAbiW0lfTc3Ptxm9QWVH356xZKjTw=";
+  # `targetMajor` is the release's Nextcloud; `ncMajor` is what THIS build installs.
+  # Majors must be sequential — Nextcloud refuses to skip — so nc-major.nix reads the
+  # installed major on the guest and steps at most one per build: an existing 33 site
+  # goes 33 → 34 at one update and 34 → 35 at the next, keeping its data; a fresh
+  # install goes straight to targetMajor. The eurooffice connector pin lives in
+  # eurooffice-nextcloud.nix; the nixpkgs template rev is pinned engine-side
+  # (update-os.sh). See UPGRADE.md.
+  targetMajor = 35;
+  ncStep = import ./nc-major.nix {
+    inherit targetMajor;
+    available = m: pkgs ? "nextcloud${toString m}";
   };
+  ncMajor = ncStep.major;
+  # Apps nixpkgs does not package for 35 yet: 35-compatible releases came out after its
+  # last app-list refresh. Same app-store source nixpkgs uses; drop each pin once
+  # nextcloud35Packages.apps carries it. unpack = true hashes the unpacked tree, so a
+  # re-generated codeberg /archive tarball (uppush) cannot break the hash again.
+  storeApp = url: hash: patches: pkgs.fetchNextcloudApp { inherit url hash patches; unpack = true; license = "agpl3Plus"; };
+  storeApps = {
+    news             = storeApp "https://github.com/nextcloud/news/releases/download/29.0.0-beta.1/news.tar.gz"
+                                "sha256-ZT0FLb2u0vhuEX8tvUyHq2hW+hVuwW+1sArBiJQKGIw=" [];
+    previewgenerator = storeApp "https://github.com/nextcloud-releases/previewgenerator/releases/download/v5.15.0/previewgenerator-v5.15.0.tar.gz"
+                                "sha256-jXUX5hDNrZ7qFBQel+8IWAGu6WwMlMcpMf+YX5dKh/g=" [];
+    # 2.6.0's first migration types its tables as Doctrine's, but 35 hands out its own
+    # wrapper, so enabling it dies with a TypeError (upstream #124, open).
+    uppush           = storeApp "https://codeberg.org/NextPush/uppush/archive/2.6.0.tar.gz"
+                                "sha256-trpmBCuU4q4GXiSAT8gpP9pAz6q1Rdz/yIIB6Iem2is="
+                                [ (pkgs.callPackage ./uppush-nc35-patch.nix {}) ];
+    # nixpkgs ships 1.3.3 (<=34) as both the app and the daemon; 1.4.1 supports 35.
+    notify_push      = storeApp "https://github.com/nextcloud-releases/notify_push/releases/download/v1.4.1/notify_push-v1.4.1.tar.gz"
+                                "sha256-stMKO4B148w/AKF0CjT+OR+JDCiN5SfbTOp4j8K5txw=" [];
+  };
+
+  # The notify_push daemon must match its app, so it moves to 1.4.1 with it.
+  notifyPushPkg = pkgs.nextcloud-notify_push.overrideAttrs (old: rec {
+    version = "1.4.1";
+    src = pkgs.fetchFromGitHub {
+      owner = "nextcloud";
+      repo  = "notify_push";
+      tag   = "v${version}";
+      hash  = "sha256-lg/gffgfUJHLCL1TOPdYAw7DtRZeGDH+jO9deQSUbEY=";
+    };
+    cargoDeps = pkgs.rustPlatform.fetchCargoVendor {
+      inherit src;
+      name = "notify_push-${version}-vendor";
+      hash = "sha256-skKOCJBtpvtdc594eOxbvSIl+SucaH0jl1gFv9kfvNA=";
+    };
+  });
 
   versions = {
     postgresPkg   = pkgs.postgresql_15;
     nextcloudPkg  = pkgs."nextcloud${toString ncMajor}";
-    nextcloudApps = (pkgs."nextcloud${toString ncMajor}Packages".apps) // {
-      uppush = pkgs."nextcloud${toString ncMajor}Packages".apps.uppush.overrideAttrs (_: {
-        src = uppushSrc;
-      });
-    };
+    # The store pins and the uppush patch are for targetMajor; an intermediate step
+    # takes nixpkgs' own app set for that major, which carries every app below.
+    nextcloudApps = pkgs."nextcloud${toString ncMajor}Packages".apps
+                    // lib.optionalAttrs ncStep.onTarget storeApps;
   };
 
   # ── trusted_domains, derived from the module config (#508) ────────────────
@@ -400,19 +424,22 @@ in
         # Collaboration & knowledge
         collectives tables groupfolders guests
         # Files & admin
-        previewgenerator quota_warning end_to_end_encryption
+        previewgenerator end_to_end_encryption
         # Integrations
         integration_openai
       ;
-      # eurooffice-nextcloud v10.0.0 still uses app ID "onlyoffice" for backward compat
-      onlyoffice = pkgs.callPackage ./eurooffice-nextcloud.nix {};
+      eurooffice = pkgs.callPackage ./eurooffice-nextcloud.nix {};
+      # The notify_push module adds its own (nixpkgs 1.3.3); this one wins.
+      notify_push = lib.mkForce versions.nextcloudApps.notify_push;
     };
     extraAppsEnable = true;
 
     # TLS terminated by Caddy; VM serves plain HTTP
     https = false;
 
-    notify_push.enable = true;
+    notify_push.enable  = true;
+    # 1.4.1 on targetMajor (35 needs it); nixpkgs' own 1.3.3 (<= 34) on a step.
+    notify_push.package = if ncStep.onTarget then notifyPushPkg else pkgs.nextcloud-notify_push;
 
     phpOptions = {
       "memory_limit"                   = lib.mkForce "512M";
@@ -468,7 +495,15 @@ in
       # without touching what the token protects — the signature is still
       # checked in full; leeway only relaxes the time claims. The app provides
       # this knob for exactly this ("in case the system clock is a second off").
-      onlyoffice = {
+      # Where the user ID is the Authentik username (--unique-uid=0: new installs),
+      # an Authentik user named like a local account (admin) would sign in AS it.
+      # Refuse that ("User conflict") instead of adopting the local user. Harmless
+      # on a site that keeps hashed IDs: a hash never names a local account.
+      user_oidc = {
+        soft_auto_provision = false;
+      };
+
+      eurooffice = {
         jwt_leeway = 60;
       };
 
@@ -497,9 +532,14 @@ in
       # gateway IP of every TAPPaaS zone (10.x.y.1). Including 10.0.0.0/8
       # covers all zones generically — safe in a private TAPPaaS deployment.
       # With a trusted proxy, Nextcloud reads the Host header directly, so
-      # overwritehost and overwrite.cli.url are not needed here.
+      # overwritehost is not needed. overwrite.cli.url is: occ and cron have no
+      # Host header, and without it Talk signs its HPB backend calls as
+      # https://localhost, which the HPB rejects ("Authentication check failed").
       trusted_proxies   = [ "127.0.0.1" "::1" "10.0.0.0/8" ];
       overwriteprotocol = "https";
+    } // lib.optionalAttrs (ncProxyDomain != "") {
+      "overwrite.cli.url" = "https://${ncProxyDomain}";
+    } // {
 
       # Maintenance window: 01:00 UTC — avoids peak usage hours
       maintenance_window_start = 1;
@@ -602,20 +642,40 @@ in
       EnvironmentFile = "/etc/secrets/nextcloud.env";
       ExecStart = pkgs.writeShellScript "nextcloud-configure-oidc" ''
         set -euo pipefail
-        export PATH="/run/current-system/sw/bin:${pkgs.coreutils}/bin:$PATH"
+        export PATH="/run/current-system/sw/bin:${pkgs.coreutils}/bin:${pkgs.jq}/bin:$PATH"
+
+        # --unique-uid: the user ID is the Authentik username (0: andreas) or a
+        # SHA-256 of it (1). Decided ONCE, when the provider is created: changing it
+        # later gives every existing user a new, empty account and orphans their
+        # files, shares and client accounts. A new provider gets 0; an existing one
+        # keeps what it has — user_oidc's default, 1, when it was never set.
+        unique_uid=0
+        pid=$(nextcloud-occ user_oidc:provider --output=json 2>/dev/null \
+          | jq -r '.[]? | select(.identifier == "authentik") | .id' || true)
+        if [ -n "$pid" ]; then
+          unique_uid=$(nextcloud-occ config:app:get user_oidc "provider-$pid-uniqueUid" 2>/dev/null || true)
+          unique_uid=''${unique_uid:-1}
+        fi
 
         nextcloud-occ user_oidc:provider authentik \
           --clientid="$OIDC_CLIENT_ID" \
           --clientsecret="$OIDC_CLIENT_SECRET" \
           --discoveryuri="$OIDC_DISCOVERY_URI" \
-          --scope="email profile nextcloud openid" \
+          --scope="email profile nextcloud openid groups" \
           --mapping-uid="preferred_username" \
+          --unique-uid="$unique_uid" \
           --mapping-display-name="name" \
           --mapping-email="email" \
           --mapping-quota="quota" \
           --mapping-groups="groups" \
+          --group-provisioning=1 \
+          --group-whitelist-regex="^admin$" \
           --check-bearer=1 \
           --send-id-token-hint=1
+
+        # Authentik is the only login backend, so the login page goes straight to
+        # it; a local account still logs in at /login?direct=1.
+        nextcloud-occ --no-interaction config:app:set user_oidc allow_multiple_user_backends --value=0 --type=string
 
         echo "Authentik OIDC provider configured successfully."
       '';
@@ -623,7 +683,7 @@ in
   };
 
   # Configure the Euro-Office connector — only runs when the secrets file exists.
-  # Secrets file (/etc/secrets/onlyoffice.env) is written by euro-office install-service.sh.
+  # Secrets file (/etc/secrets/onlyoffice.env) is written by this module's nextcloud:fileservice converge (the onlyoffice connector).
   # Format: JWT_SECRET=<hex>
   systemd.services.nextcloud-configure-eurooffice = {
     description = "Configure Euro-Office connector in Nextcloud";
@@ -641,58 +701,21 @@ in
         set -euo pipefail
         export PATH="/run/current-system/sw/bin:${pkgs.coreutils}/bin:$PATH"
 
-        nextcloud-occ config:app:set onlyoffice DocumentServerUrl         --value="$EURO_OFFICE_URL"
-        nextcloud-occ config:app:set onlyoffice DocumentServerInternalUrl --value="$EURO_OFFICE_INTERNAL_URL"
-        nextcloud-occ config:app:set onlyoffice StorageUrl                --value="https://$NEXTCLOUD_PUBLIC_URL/"
-        nextcloud-occ config:app:set onlyoffice jwt_secret                --value="$JWT_SECRET"
-        nextcloud-occ config:app:set onlyoffice jwt_header                --value="Authorization"
+        # Connector v11 renamed the app onlyoffice -> eurooffice. The old app's code
+        # is gone (not in extraApps), but a site that had it still lists it as
+        # installed, and Nextcloud reports it as missing on every request. Its
+        # settings are rebuilt below under the new ID.
+        if nextcloud-occ config:app:get onlyoffice enabled >/dev/null 2>&1; then
+          nextcloud-occ app:disable onlyoffice || true
+        fi
+
+        nextcloud-occ config:app:set eurooffice DocumentServerUrl         --value="$EURO_OFFICE_URL"
+        nextcloud-occ config:app:set eurooffice DocumentServerInternalUrl --value="$EURO_OFFICE_INTERNAL_URL"
+        nextcloud-occ config:app:set eurooffice StorageUrl                --value="https://$NEXTCLOUD_PUBLIC_URL/"
+        nextcloud-occ config:app:set eurooffice jwt_secret                --value="$JWT_SECRET"
+        nextcloud-occ config:app:set eurooffice jwt_header                --value="Authorization"
 
         echo "Euro-Office connector configured successfully."
-      '';
-    };
-  };
-
-  # ============================================================================
-  # NEXTCLOUD TALK — coturn TURN/STUN integration
-  # ============================================================================
-  #
-  # SETUP:
-  #   1. Deploy the coturn module (VMID 630, DMZ zone).
-  #   2. On the coturn VM, confirm /etc/secrets/coturn.env has COTURN_SECRET set
-  #      and COTURN_EXTERNAL_IP populated.
-  #   3. Copy /etc/secrets/coturn.env from the coturn VM to this VM at the same
-  #      path (/etc/secrets/coturn.env, mode 0600, root:root).
-  #   4. The nextcloud-configure-talk service activates automatically on next boot.
-  #
-  # NOTE: COTURN_SECRET in /etc/secrets/coturn.env on THIS VM must match the
-  # secret on the coturn VM exactly — both files are copies of the same value.
-
-  # Configure Talk STUN/TURN servers — only runs when coturn secrets file exists
-  systemd.services.nextcloud-configure-talk = {
-    description = "Configure Nextcloud Talk STUN/TURN servers";
-    wantedBy    = [ "multi-user.target" ];
-    after       = [ "nextcloud-setup.service" ];
-    requires    = [ "nextcloud-setup.service" ];
-
-    # Activates whenever the coturn secrets file exists (runs on each boot to
-    # keep config in sync with the secret — safe because occ set is idempotent)
-    unitConfig.ConditionPathExists = "/etc/secrets/coturn.env";
-
-    serviceConfig = {
-      Type            = "oneshot";
-      RemainAfterExit = true;
-      EnvironmentFile = "/etc/secrets/coturn.env";
-      ExecStart = pkgs.writeShellScript "nextcloud-configure-talk" ''
-        set -euo pipefail
-        export PATH="/run/current-system/sw/bin:${pkgs.coreutils}/bin:$PATH"
-
-        nextcloud-occ config:app:set spreed stun_servers \
-          --value="[\"$COTURN_HOST:3478\"]"
-
-        nextcloud-occ config:app:set spreed turn_servers \
-          --value="[{\"server\":\"$COTURN_HOST:3478\",\"secret\":\"$COTURN_SECRET\",\"protocols\":\"udp,tcp\"}]"
-
-        echo "Nextcloud Talk STUN/TURN servers configured successfully."
       '';
     };
   };
@@ -702,6 +725,65 @@ in
   #   SMTP_USER=user@example.com
   #   SMTP_PASSWORD=<app password or account password>
   # The local part of SMTP_USER becomes the From address (user@example.com → "user").
+  # Mail app: Microsoft 365 sign-in. update.sh delivers the env file (MS_TENANT_ID,
+  # MS_CLIENT_ID, MS_CLIENT_SECRET) from the management plane when it exists there.
+  # The Mail app encrypts the client secret itself, so it goes through its admin
+  # endpoint; occ config:app:set would store it in clear and the app could not read it.
+  # notify_push: the daemon keeps reaching Nextcloud internally (the module's default
+  # URL, where its trusted-proxy self-test passes; through the reverse proxy the test fails
+  # because the proxy replaces X-Forwarded-For). Browsers need the public endpoint instead:
+  # the default hands them ws://<hostName>/push/ws, unresolvable and mixed content, so web
+  # notifications fell back to slow polling. Setup runs every boot, so this re-applies.
+  #
+  # The key is DELETED before setup: notify_push:setup writes it as type mixed, occ can
+  # only write string, and Nextcloud refuses mixed over a stored string ("conflict
+  # between new type (mixed) and old type (string)"), so from the second boot on setup
+  # failed, and a switch that restarts it exits 4 (hrossen, 34.0.4). string over a fresh
+  # mixed is accepted, so delete -> setup -> set holds on every boot.
+  systemd.services.nextcloud-notify_push_setup.serviceConfig.ExecStartPre =
+    lib.mkIf (ncProxyDomain != "")
+      [ "-${lib.getExe config.services.nextcloud.occ} --no-interaction config:app:delete notify_push base_endpoint" ];
+  systemd.services.nextcloud-notify_push_setup.serviceConfig.ExecStartPost =
+    lib.mkIf (ncProxyDomain != "")
+      "${lib.getExe config.services.nextcloud.occ} --no-interaction config:app:set notify_push base_endpoint --value=https://${ncProxyDomain}/push --type=string";
+
+  systemd.services.nextcloud-configure-mail-microsoft = {
+    description = "Configure Microsoft 365 sign-in for the Mail app";
+    wantedBy    = [ "multi-user.target" ];
+    after       = [ "nextcloud-setup.service" "phpfpm-nextcloud.service" "nginx.service" ];
+    requires    = [ "nextcloud-setup.service" ];
+
+    unitConfig.ConditionPathExists = "/etc/secrets/mail-microsoft.env";
+
+    serviceConfig = {
+      Type            = "oneshot";
+      RemainAfterExit = true;
+      EnvironmentFile = "/etc/secrets/mail-microsoft.env";
+      ExecStart = pkgs.writeShellScript "nextcloud-configure-mail-microsoft" ''
+        set -euo pipefail
+        export PATH="/run/current-system/sw/bin:${pkgs.coreutils}/bin:${pkgs.curl}/bin:${pkgs.jq}/bin:$PATH"
+
+        # No secret in argv (ps shows argv to every user): jq reads the Microsoft
+        # settings from the environment (EnvironmentFile) into a 0600 file that curl
+        # sends by name, and the admin password goes to curl on stdin (-K -).
+        umask 077
+        body=$(mktemp)
+        trap 'rm -f "$body"' EXIT
+        jq -n '{tenantId: env.MS_TENANT_ID, clientId: env.MS_CLIENT_ID, clientSecret: env.MS_CLIENT_SECRET}' > "$body"
+        # OCS-APIRequest: a plain app route; without it Nextcloud wants a CSRF token (412).
+        code=$(printf 'user = "admin:%s"\n' "$(cat /var/lib/nextcloud/admin-pass)" \
+          | curl -s -o /dev/null -w '%{http_code}' -K - -X POST \
+              -H 'Content-Type: application/json' -H 'OCS-APIRequest: true' -H 'Host: ${config.networking.hostName}' \
+              --data @"$body" http://127.0.0.1/apps/mail/api/integration/microsoft)
+        [ "$code" = 200 ] || { echo "Mail app refused the Microsoft settings (HTTP $code)" >&2; exit 1; }
+
+        stored=$(nextcloud-occ config:app:get mail microsoft_oauth_client_id || true)
+        [ "$stored" = "$MS_CLIENT_ID" ] || { echo "client id not stored (got '$stored')" >&2; exit 1; }
+        echo "Mail app: Microsoft 365 sign-in configured for tenant $MS_TENANT_ID"
+      '';
+    };
+  };
+
   systemd.services.nextcloud-configure-mail = {
     description = "Configure Nextcloud SMTP credentials";
     wantedBy    = [ "multi-user.target" ];
@@ -734,16 +816,45 @@ in
     };
   };
 
+  # ── Talk: TURN/STUN relay (coturn) ────────────────────────────────────────
+  # Written by the `talk` connector (ADR-COM-0002). Its own unit and its own env
+  # file, so a coturn-only site gets a relay without an HPB.
+  systemd.services.nextcloud-configure-talk-turn = {
+    description = "Register the coturn TURN/STUN relay in Nextcloud Talk";
+    wantedBy    = [ "multi-user.target" ];
+    after       = [ "nextcloud-setup.service" ];
+    requires    = [ "nextcloud-setup.service" ];
+
+    unitConfig.ConditionPathExists = "/etc/secrets/talk.env";
+
+    serviceConfig = {
+      Type            = "oneshot";
+      RemainAfterExit = true;
+      EnvironmentFile = "/etc/secrets/talk.env";
+      ExecStart = pkgs.writeShellScript "nextcloud-configure-talk-turn" ''
+        set -euo pipefail
+        export PATH="/run/current-system/sw/bin:${pkgs.coreutils}/bin:$PATH"
+
+        # talk:turn:add appends, so clear first or a re-run stacks duplicates.
+        nextcloud-occ config:app:delete spreed turn_servers >/dev/null 2>&1 || true
+        nextcloud-occ config:app:delete spreed stun_servers >/dev/null 2>&1 || true
+        for s in "''${TURN_SERVER:-}" "''${TURN_SERVER_INTERNAL:-}"; do
+          [ -n "$s" ] || continue
+          nextcloud-occ talk:stun:add "$s"
+          nextcloud-occ talk:turn:add turn "$s" "udp,tcp" --secret="$TURN_SECRET"
+        done
+
+        echo "Nextcloud Talk STUN/TURN relay configured: ''${TURN_SERVER:-} ''${TURN_SERVER_INTERNAL:-}"
+      '';
+    };
+  };
+
   # ── HPB: register Talk signaling backend ─────────────────────────────────
-  # install.sh writes HPB_SECRET to /etc/secrets/hpb.env and then triggers
-  # this service. Runs every boot so secret rotation propagates automatically.
+  # Written by the `hpb` connector. Signaling only — the relay is the unit above.
   systemd.services.nextcloud-configure-hpb = {
     description = "Register Nextcloud Talk HPB signaling backend";
     wantedBy    = [ "multi-user.target" ];
-    # After configure-talk (#715): both write spreed turn_servers/stun_servers,
-    # talk in its legacy shape, this unit through talk:turn:add. Unordered, the
-    # boot-time winner was whichever finished last. HPB's is the complete one.
-    after       = [ "nextcloud-setup.service" "nextcloud-configure-talk.service" ];
+    after       = [ "nextcloud-setup.service" ];
     requires    = [ "nextcloud-setup.service" ];
 
     unitConfig.ConditionPathExists = "/etc/secrets/hpb.env";
@@ -767,16 +878,7 @@ in
         # itself. Including /spreed here makes the check hit /spreed/api/v1/welcome → 404.
         nextcloud-occ talk:signaling:add "wss://$HPB_URL" "$HPB_SECRET"
 
-        # TURN + STUN (coturn) — only when the consumer plumbed them into hpb.env.
-        # Without these, calls with >2 participants have no relay (admin warns).
-        if [ -n "''${TURN_SERVER:-}" ] && [ -n "''${TURN_SECRET:-}" ]; then
-          nextcloud-occ config:app:delete spreed turn_servers >/dev/null 2>&1 || true
-          nextcloud-occ config:app:delete spreed stun_servers >/dev/null 2>&1 || true
-          nextcloud-occ talk:stun:add "$TURN_SERVER"
-          nextcloud-occ talk:turn:add turn "$TURN_SERVER" "udp,tcp" --secret="$TURN_SECRET"
-        fi
-
-        echo "Nextcloud Talk HPB signaling backend configured."
+        echo "Nextcloud Talk HPB signaling backend configured: wss://$HPB_URL"
       '';
     };
   };
@@ -849,16 +951,19 @@ in
         set -euo pipefail
         export PATH="/run/current-system/sw/bin:${pkgs.coreutils}/bin:$PATH"
 
-        # whiteboard.env provides only JWT_SECRET_KEY — NEXTCLOUD_PUBLIC_URL is not set there.
-        # Default to the internal host so activation never fails on `set -u`; the public collab
-        # backend URL is refined post-deploy (needs the proxy domain + cert, like the connector).
-        PUBLIC_URL="''${NEXTCLOUD_PUBLIC_URL:-http://${config.networking.hostName}}"
+        # The browser opens the collab socket at this URL, so it must be the public
+        # one; Caddy routes its /socket.io/ to the co-located server.
+        PUBLIC_URL="${if ncProxyDomain != "" then "https://" + ncProxyDomain else "http://" + config.networking.hostName}"
 
-        nextcloud-occ config:app:set whiteboard collabBackendUrl \
-          --value="$PUBLIC_URL"
+        # Whiteboard 2.x declares both keys in its config lexicon (string; the
+        # secret sensitive). Set untyped, occ declines the change with "Config
+        # value were not updated", still exits 0, and the socket runs without a
+        # secret: the board shows Offline. --no-interaction makes it never prompt.
+        nextcloud-occ --no-interaction config:app:set whiteboard collabBackendUrl \
+          --type=string --value="$PUBLIC_URL"
 
-        nextcloud-occ config:app:set whiteboard jwt_secret_key \
-          --value="$JWT_SECRET_KEY"
+        nextcloud-occ --no-interaction config:app:set whiteboard jwt_secret_key \
+          --type=string --sensitive --value="$JWT_SECRET_KEY"
 
         echo "Nextcloud Whiteboard backend configured successfully."
       '';

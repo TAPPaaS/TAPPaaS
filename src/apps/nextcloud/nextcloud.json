@@ -22,17 +22,7 @@
   "provides": [
     "fileservice"
   ],
-  "egress": [
-    {
-      "to": "home",
-      "ports": [
-        443
-      ],
-      "protocol": "TCP",
-      "description": "Nextcloud -> reverse proxy for Talk HPB signaling check + backend notify (consumer egress, ADR-COM-0002)"
-    }
-  ],
-  "appVersion": "33",
+  "appVersion": "35",
   "config": {
     "cluster:vm": {
       "bios": "ovmf",
@@ -50,6 +40,12 @@
     },
     "network:proxy": {
       "proxyPort": 80
+    },
+    "identity:identity": {
+      "identity": {
+        "providesAdminRole": true,
+        "adminGroupClaim": "admin"
+      }
     }
   }
 }

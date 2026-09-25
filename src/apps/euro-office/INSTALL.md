@@ -15,32 +15,16 @@ Primary audience: TAPPaaS admin.
 
     install-module.sh euro-office
 
-Duration: ~10-20 minutes on first run (NixOS rebuild + container pull ~1.5 GB).
-
 ## Post-install
 
-None for document editing. On first boot the VM auto-generates a JWT secret and the
-`nextcloud` module wires the connector automatically (it writes
-`/etc/secrets/onlyoffice.env` with `JWT_SECRET`, `EURO_OFFICE_URL`,
-`EURO_OFFICE_INTERNAL_URL`, `NEXTCLOUD_PUBLIC_URL`; `nextcloud-configure-eurooffice`
-applies them).
+None for document editing. On first boot the VM generates a JWT secret automatically,
+and the `nextcloud` module applies the connector settings on its own: it writes
+`/etc/secrets/onlyoffice.env` on the Nextcloud VM (`JWT_SECRET`, `EURO_OFFICE_URL`,
+`EURO_OFFICE_INTERNAL_URL`, `NEXTCLOUD_PUBLIC_URL`) and restarts
+`nextcloud-configure-eurooffice` to apply them.
 
-Optional — Admin Panel (`/admin`) bootstrap: the server's Admin Panel needs a one-time
-bootstrap code to create the admin account. The code is logged inside the container and
-is valid only until the top of the next hour — fetch a fresh one when you need it (it is
-NOT auto-provisioned, by design):
-
-    ssh tappaas@euro-office.<zone>.internal
-    CID=$(sudo podman ps -q)
-    # Restart the admin panel to emit a fresh code, then read it:
-    sudo podman exec "$CID" supervisorctl restart adminpanel
-    sudo podman exec "$CID" grep -i 'Bootstrap code' \
-      /var/log/euro-office/documentserver/adminpanel/out.log | tail -1
-    # -> "Bootstrap code: XXXXXXXX | Expires: ... | Open: http://host/admin"
-
-Open `https://euro-office.<domain>/admin`, enter the code, and set an admin password.
-The Admin Panel is for server monitoring/config only — document editing via Nextcloud
-does not require it.
+An Admin Panel is also enabled on the document server (`/admin/`, server
+monitoring/configuration only) — document editing via Nextcloud does not require it.
 
 ## Verification
 
@@ -56,29 +40,39 @@ does not require it.
 | `/etc/secrets/euro-office.env` | Exists, mode 0600, `JWT_SECRET` non-empty |
 | `euro-office-backup.timer` | Active and scheduled |
 | `/var/lib/euro-office/data` | Exists |
-| Nextcloud -> Administration -> ONLYOFFICE | Points at this server; opening a `.docx` works |
+| Nextcloud -> Administration -> "Nextcloud Office" | Points at this server; opening a `.docx` works |
+| Connector check, from the Nextcloud VM (needs a TTY) | `ssh -t tappaas@nextcloud.<zone>.internal "sudo nextcloud-occ --no-ansi eurooffice:documentserver --check"` prints "is successfully connected" |
 
 ## Troubleshooting
 
 **`install-module.sh` exits with a dependency error**
 `nextcloud` is not installed or not reachable. Install it first, then retry.
 
+**Document server was just (re)started and checks fail**
+Give it roughly 20-40 seconds — it does not answer `/healthcheck` immediately after
+`podman-euro-office` (re)starts.
+
 **Nextcloud shows a "public test server" banner**
-The Nextcloud `onlyoffice` app defaults to the public ONLYOFFICE demo server — the
-connector was not wired. Set it to euro-office. The 5 settings (also settable via
-`nextcloud-occ config:app:set onlyoffice <key>`):
+The "Nextcloud Office" settings page (app `eurooffice`) defaults to the public demo
+server — the connector was not wired. Set it to euro-office. The 5 settings (also
+settable via `nextcloud-occ config:app:set eurooffice <key>`):
 
 | Key | Value |
 |-----|-------|
-| `DocumentServerUrl` | `http://euro-office.<zone>.internal/` (or the public HTTPS domain) |
+| `DocumentServerUrl` | `https://<euro-office public domain>/` |
 | `DocumentServerInternalUrl` | `http://euro-office.<zone>.internal/` |
-| `StorageUrl` | `http://nextcloud.<zone>.internal/` |
+| `StorageUrl` | `https://<nextcloud public domain>/` |
 | `jwt_secret` | the value of `JWT_SECRET` in euro-office's `/etc/secrets/euro-office.env` |
 | `jwt_header` | `Authorization` |
 
-Browser editing needs `DocumentServerUrl` reachable from the client without mixed
-content: use the internal `http://` URL when accessing Nextcloud over internal `http`,
-or a valid-cert `https://` domain when accessing Nextcloud over `https`.
+**Check whether Nextcloud sees the document server**
+Run on the Nextcloud VM (needs a TTY):
+
+    ssh -t tappaas@nextcloud.<zone>.internal "sudo nextcloud-occ --no-ansi eurooffice:documentserver --check"
+
+- "is successfully connected" — working.
+- "Error connection: ..." — broken; the error is shown.
+- "Document server is not configured" — connector not wired; see the settings above.
 
 **Container not running**
 
@@ -88,32 +82,23 @@ or a valid-cert `https://` domain when accessing Nextcloud over `https`.
 **Logs** (inside the container)
 
     CID=$(ssh tappaas@euro-office.srv.internal "sudo podman ps -q")
-    # DocService:  /var/log/onlyoffice/documentserver/docservice/out.log
-    # Converter:   /var/log/onlyoffice/documentserver/converter/err.log
-    # Nginx:       /var/log/onlyoffice/documentserver/nginx.error.log
+    # DocService:  /var/log/euro-office/documentserver/docservice/out.log
+    # Converter:   /var/log/euro-office/documentserver/converter/out.log
+    # Nginx:       /var/log/euro-office/documentserver/nginx.error.log
     ssh tappaas@euro-office.srv.internal \
-      "sudo podman exec $CID tail -100 /var/log/onlyoffice/documentserver/docservice/out.log"
+      "sudo podman exec $CID tail -100 /var/log/euro-office/documentserver/docservice/out.log"
 
 **"Document cannot be accessed right now"**
 A stale edit session blocks the file. Clear it (replace `KEY` with the document key):
 
     CID=$(ssh tappaas@euro-office.srv.internal "sudo podman ps -q")
     ssh tappaas@euro-office.srv.internal "sudo podman exec $CID su -s /bin/sh postgres \
-      -c \"psql -d onlyoffice -c \\\"DELETE FROM task_result WHERE id LIKE 'KEY%'\\\"\""
+      -c \"psql -d eurooffice -c \\\"DELETE FROM task_result WHERE id LIKE 'KEY%'\\\"\""
 
 **Rotate the JWT secret** (only if compromised)
-Regenerate on the VM, restart, then sync to Nextcloud:
+Regenerate it on the VM and restart the document server, then re-wire Nextcloud:
 
     ssh tappaas@euro-office.srv.internal \
       "echo JWT_SECRET=\$(openssl rand -hex 32) | sudo tee /etc/secrets/euro-office.env && \
        sudo systemctl restart podman-euro-office"
-    ./update-jwt.sh        # pushes the new secret + connector URLs into Nextcloud
-
-**`/hosting/discovery` returns 404**
-Expected and harmless. It is a WOPI endpoint OnlyOffice does not serve; the connector
-checks `/healthcheck` + `/coauthoring/CommandService.ashx`.
-
-**PDF rendering**
-Crashed on the old `nightly` build (`9.2.1`, `Aborted()` in `drawingfile.wasm`). The
-module is pinned to stable `v9.3.1`; re-test PDF before relying on it.
-`.docx`/`.xlsx`/`.pptx` are unaffected.
+    update-module.sh euro-office   # Nextcloud re-reads the secret and re-applies the connector

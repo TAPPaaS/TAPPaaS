@@ -178,6 +178,12 @@ def cmd_group_ensure(mgr: AuthentikManager, args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_scope_mapping_ensure(mgr: AuthentikManager, args: argparse.Namespace) -> int:
+    m = mgr.scope_mapping_ensure(args.name, args.scope_name, args.expression, args.description)
+    print(f"==> scope mapping '{m['name']}' pk={m['pk']} scope={m['scope_name']}")
+    return 0
+
+
 def cmd_user_ensure(mgr: AuthentikManager, args: argparse.Namespace) -> int:
     u = mgr.user_ensure(
         args.username,
@@ -440,6 +446,13 @@ def main(argv: list[str] | None = None) -> int:
     ge.add_argument("--attr", action="append", default=[], metavar="k=v",
                     help="group attribute (dotted keys nest, e.g. tappaas.variant=acme); repeatable")
     ge.set_defaults(handler=cmd_group_ensure)
+
+    sm = sub.add_parser("scope-mapping-ensure", help="create/update an OIDC scope mapping by name")
+    sm.add_argument("name")
+    sm.add_argument("--scope-name", required=True, help="the OIDC scope it answers, e.g. groups")
+    sm.add_argument("--expression", required=True, help="Authentik property-mapping Python expression")
+    sm.add_argument("--description", default="")
+    sm.set_defaults(handler=cmd_scope_mapping_ensure)
 
     ue = sub.add_parser("user-ensure", help="create/update a user (additive group membership)")
     ue.add_argument("username")

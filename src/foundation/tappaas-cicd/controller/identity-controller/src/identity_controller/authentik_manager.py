@@ -785,14 +785,29 @@ class AuthentikManager:
     def _scope_mapping_pks(self, names: list[str]) -> list[str]:
         """Resolve OIDC scope-mapping names → pks; skip unknown with a note."""
         rows = self._get_json("/propertymappings/provider/scope/", page_size=1000).get("results", [])
-        by_name = {r["scope_name"]: r["pk"] for r in rows}
+        # A mapping's own name first: several mappings can share a scope_name
+        # (two emit "groups"), and which one a scope_name picks is arbitrary.
+        by_mapping = {r["name"]: r["pk"] for r in rows if r.get("name")}
+        by_scope = {r["scope_name"]: r["pk"] for r in rows}
         pks, missing = [], []
         for n in names:
-            (pks.append(by_name[n]) if n in by_name else missing.append(n))
+            pk = by_mapping.get(n) or by_scope.get(n)
+            (pks.append(pk) if pk else missing.append(n))
         if missing:
             # Non-fatal: the app simply won't receive claims for these scopes.
             print(f"    warning: OIDC scope mapping(s) not found, skipping: {missing}")
         return pks
+
+    def scope_mapping_ensure(self, name: str, scope_name: str, expression: str,
+                             description: str = "") -> dict:
+        """Create or update an OIDC scope mapping by name (idempotent)."""
+        rows = self._get_json("/propertymappings/provider/scope/", page_size=1000).get("results", [])
+        body = {"name": name, "scope_name": scope_name, "expression": expression,
+                "description": description}
+        existing = self._find_by_name(rows, name)
+        if existing:
+            return self._patch_json(f"/propertymappings/provider/scope/{existing['pk']}/", body)
+        return self._post_json("/propertymappings/provider/scope/", body)
 
     def _default_signing_key_pk(self) -> str:
         """A certificate-key pair to sign ID tokens (Nextcloud validates via JWKS)."""

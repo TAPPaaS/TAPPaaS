@@ -323,16 +323,20 @@ EOF
 
         ${pkgs.coreutils}/bin/mkdir -p "$BACKUP_DIR"
 
-        echo "Stopping euro-office container for consistent snapshot..."
-        ${pkgs.podman}/bin/podman stop euro-office || true
+        # Stop and start the systemd unit, not the container: it runs with --rm, so
+        # `podman stop` deletes it and `podman start` had nothing to start. The trap
+        # brings the document server back on every exit, a failed backup included.
+        echo "Stopping euro-office for a consistent snapshot..."
+        ${pkgs.systemd}/bin/systemctl stop podman-euro-office.service
+        trap '${pkgs.systemd}/bin/systemctl start podman-euro-office.service' EXIT
 
+        # tar -z looks gzip up on PATH, which this unit does not have: every archive
+        # was 0 bytes. Name the compressor; write .part so a failure leaves no archive.
         echo "Archiving /var/lib/euro-office/data to $ARCHIVE ..."
-        ${pkgs.gnutar}/bin/tar -czf "$ARCHIVE" -C /var/lib/euro-office data
+        ${pkgs.gnutar}/bin/tar -I ${pkgs.gzip}/bin/gzip -cf "$ARCHIVE.part" -C /var/lib/euro-office data
+        ${pkgs.coreutils}/bin/chmod 600 "$ARCHIVE.part"
+        ${pkgs.coreutils}/bin/mv "$ARCHIVE.part" "$ARCHIVE"
 
-        ${pkgs.coreutils}/bin/chmod 600 "$ARCHIVE"
-
-        echo "Restarting euro-office container..."
-        ${pkgs.podman}/bin/podman start euro-office || true
         echo "Backup complete: $ARCHIVE"
       '';
       User = "root";

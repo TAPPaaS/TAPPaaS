@@ -22,7 +22,7 @@
 { lib, stdenv, fetchgit, fetchurl, fetchNpmDeps, buildNpmPackage, nodejs_22 }:
 
 let
-  version = "10.0.0";
+  version = "11.0.5";
 
   src = fetchgit {
     url = "https://github.com/Euro-Office/eurooffice-nextcloud";
@@ -30,38 +30,8 @@ let
     # fetchSubmodules causes submodule init to trigger git-lfs smudge on the
     # parent repo, which empties all files tracked by LFS. Fetch without
     # submodules so the main PHP/XML source files are present.
-    hash = "sha256-bhVlONWKB6KTd4gBpNnaJhmpV1MX4AG3SCj8o6XGOVc=";
+    hash = "sha256-+6QrWeHWPqwc0xmSXNlFjIhgXw5SDGLXHBC1yQr4ZD8=";
     fetchSubmodules = false;
-  };
-
-  # prefetch-npm-deps 0.1.0 truncates downloads at ~4 MB. typescript@5.4.5
-  # (5.8 MB) lands in the cache truncated; npm detects corruption at install
-  # time and fails. We build a patched npm-deps that replaces the bad entry.
-  correctTypescript = fetchurl {
-    url = "https://registry.npmjs.org/typescript/-/typescript-5.4.5.tgz";
-    hash = "sha256-FU+udxafBBVaxS1SGsWauwfJvinqN0RzKtv58Uq7JEA=";
-  };
-
-  fixedNpmDeps = let
-    brokenDeps = fetchNpmDeps {
-      name = "eurooffice-nextcloud-js-${version}-npm-deps";
-      inherit src;
-      nodejs = nodejs_22;
-      hash = "sha256-xgqwQSekV8nVrx34WHP1GpATWbJIPNxdBv4ZDTLx67k=";
-    };
-    # npm cacache path = hex(sha512(tgz)) — split bd/c2/rest per cacache layout
-    tsCachePath = "_cacache/content-v2/sha512/bd/c2/3852946083cd68211505c11d164881cab75d6727b48056560d22ef90a6a7b25cffa0a50272fd9e3e174686c5213832ac23c97bd6fd3ce090b031d80187c1";
-  in stdenv.mkDerivation {
-    name = "eurooffice-nextcloud-js-${version}-npm-deps-fixed";
-    dontUnpack = true;
-    dontConfigure = true;
-    dontBuild = true;
-    installPhase = ''
-      runHook preInstall
-      cp -r --no-preserve=mode ${brokenDeps} $out
-      cp ${correctTypescript} "$out/${tsCachePath}"
-      runHook postInstall
-    '';
   };
 
   # Build Vite JS assets (9 entry points → js/)
@@ -69,9 +39,7 @@ let
     pname = "eurooffice-nextcloud-js";
     inherit version src;
     nodejs = nodejs_22;
-    npmDeps = fixedNpmDeps;
-    # npmDepsHash is unused when npmDeps is provided directly
-    npmDepsHash = "sha256-xgqwQSekV8nVrx34WHP1GpATWbJIPNxdBv4ZDTLx67k=";
+    npmDepsHash = "sha256-pH+eIzkLDe2fhZX1bhDwbo4auPwJnv7RxdSiX9pli+4=";
     dontNpmInstall = true;
     buildPhase = "npm run build";
     # @nextcloud/vite-config outputs bundles to js/ — expose that as $out
@@ -80,7 +48,7 @@ let
 
   # assets/document-formats is a git submodule (ONLYOFFICE/document-formats).
   # fetchgit with fetchSubmodules=false leaves the directory empty; fetch separately.
-  # Commit 7d7576a matches onlyoffice-nextcloud v10.0.0 (all v9.x docserver tags point here).
+  # Commit 7d7576a is the submodule pin in v10.0.0 and v11.0.5 alike.
   documentFormats = builtins.fetchTarball {
     url = "https://github.com/ONLYOFFICE/document-formats/archive/7d7576a3fe2337c30f4c9b40fae70a69dc68ba08.tar.gz";
     sha256 = "01x4f8916lrwnhajx7nlg57l2nklq023v9ky3ihhwvf6wdbs348y";
@@ -88,7 +56,7 @@ let
 
   # assets/document-templates is a git submodule (ONLYOFFICE/document-templates).
   # Also left empty by fetchSubmodules=false; must be fetched separately.
-  # Commit 54f35867 matches onlyoffice-nextcloud v10.0.0.
+  # Commit 54f35867 is the submodule pin in v10.0.0 and v11.0.5 alike.
   # Contains default/new.docx (and .pdf/.pptx/.xlsx) served by the /empty endpoint
   # that euro-office uses during its health-check conversion round-trip.
   documentTemplates = builtins.fetchTarball {
@@ -96,12 +64,12 @@ let
     sha256 = "1r4m3xbx39n3b2nz4rfnzx83p255k0kzczk1bbll24963hndk6jn";
   };
 
-  # firebase/php-jwt v6.11.1 — pinned via composer.lock
+  # firebase/php-jwt v7.0.5 — pinned via composer.lock (v11 requires ^7.0)
   # Uses builtins.fetchTarball (Nix daemon HTTP) to bypass the nixpkgs 25.11
   # fetchurl curl bug (curl binary missing from nativeBuildInputs).
   phpJwt = builtins.fetchTarball {
-    url = "https://github.com/firebase/php-jwt/archive/d1e91ecf8c598d073d0995afa8cd5c75c6e19e66.tar.gz";
-    sha256 = "1nl7c2ypqv0c2j06f5yy1js1ghivdspgspmq52b7ms8kwwqps97r";
+    url = "https://github.com/firebase/php-jwt/archive/47ad26bab5e7c70ae8a6f08ed25ff83631121380.tar.gz";
+    sha256 = "1ln5fhcvs4s1hkmz7s5457sn7sppm4fzm2q908kn30mlg2qn2w1k";
   };
 
   # Composer 2.9.7 runtime files (matches nixpkgs 25.11 phpPackages.composer.version)
@@ -214,17 +182,17 @@ let
     {
         "packages": [{
             "name": "firebase/php-jwt",
-            "version": "v6.11.1",
-            "version_normalized": "6.11.1.0",
+            "version": "v7.0.5",
+            "version_normalized": "7.0.5.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/firebase/php-jwt.git",
-                "reference": "d1e91ecf8c598d073d0995afa8cd5c75c6e19e66"
+                "reference": "47ad26bab5e7c70ae8a6f08ed25ff83631121380"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/firebase/php-jwt/zipball/d1e91ecf8c598d073d0995afa8cd5c75c6e19e66",
-                "reference": "d1e91ecf8c598d073d0995afa8cd5c75c6e19e66",
+                "url": "https://api.github.com/repos/firebase/php-jwt/zipball/47ad26bab5e7c70ae8a6f08ed25ff83631121380",
+                "reference": "47ad26bab5e7c70ae8a6f08ed25ff83631121380",
                 "shasum": ""
             },
             "require": {"php": "^8.0"},
@@ -242,7 +210,7 @@ let
   vendorInstalledPhp = builtins.toFile "installed.php" ''
     <?php return array(
         'root' => array(
-            'name' => 'onlyoffice/onlyoffice-nextcloud',
+            'name' => 'eurooffice/eurooffice-nextcloud',
             'pretty_version' => 'dev-main',
             'version' => 'dev-main',
             'reference' => NULL,
@@ -253,15 +221,15 @@ let
         ),
         'versions' => array(
             'firebase/php-jwt' => array(
-                'pretty_version' => 'v6.11.1',
-                'version' => '6.11.1.0',
-                'reference' => 'd1e91ecf8c598d073d0995afa8cd5c75c6e19e66',
+                'pretty_version' => 'v7.0.5',
+                'version' => '7.0.5.0',
+                'reference' => '47ad26bab5e7c70ae8a6f08ed25ff83631121380',
                 'type' => 'library',
                 'install_path' => __DIR__ . '/../firebase/php-jwt',
                 'aliases' => array(),
                 'dev_requirement' => false,
             ),
-            'onlyoffice/onlyoffice-nextcloud' => array(
+            'eurooffice/eurooffice-nextcloud' => array(
                 'pretty_version' => 'dev-main',
                 'version' => 'dev-main',
                 'reference' => NULL,

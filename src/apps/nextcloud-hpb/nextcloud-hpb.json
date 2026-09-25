@@ -1,9 +1,9 @@
 {
-  "description": "Nextcloud Talk High-Performance Backend - dedicated WebSocket signaling server (nextcloud-spreed-signaling).",
+  "description": "Nextcloud Talk High-Performance Backend - dedicated WebSocket signaling server (nextcloud-spreed-signaling) with a Janus SFU for group calls.",
   "kind": "vm",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "stack": "collaboration",
-  "releaseDate": "2026-06-12",
+  "releaseDate": "2026-09-21",
   "maintainer": "@ErikDaniel007",
   "status": "Testing",
   "tier": "app",
@@ -39,14 +39,14 @@
     }
   },
   "appVersion": "2.1.1",
-  "egress": [
+  "ingress": [
     {
-      "to": "home",
+      "from": "dmz",
       "ports": [
-        443
+        "20000:20999"
       ],
-      "protocol": "TCP",
-      "description": "HPB signaling backend callback to Nextcloud reverse proxy (return path)"
+      "protocol": "UDP",
+      "description": "Janus media relayed by coturn (dmz): participants that cannot reach the HPB directly"
     }
   ]
 }

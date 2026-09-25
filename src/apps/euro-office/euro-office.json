@@ -37,15 +37,5 @@
     "nextcloud:fileservice": {
       "connector": "onlyoffice"
     }
-  },
-  "egress": [
-    {
-      "to": "home",
-      "ports": [
-        443
-      ],
-      "protocol": "TCP",
-      "description": "OnlyOffice document-server callback to Nextcloud reverse proxy (return path)"
-    }
-  ]
+  }
 }

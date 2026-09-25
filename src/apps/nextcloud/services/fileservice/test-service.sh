@@ -79,15 +79,20 @@ info "  Check 2: OnlyOffice connector (if euro-office installed)"
 # The euro-office this consumer pairs with, resolved like the Nextcloud above
 # (#715). A glob over euro-office*.json said "installed" for a consumer in one
 # environment because another environment had one.
+# Only the onlyoffice consumer owns this wiring: checked for coturn or the HPB, it
+# failed their update whenever euro-office had not been re-wired yet.
+CONNECTOR=""
+[[ -f "${CONFIG_DIR}/${MODULE}.json" ]] && \
+    CONNECTOR=$(jq -r '.config["nextcloud:fileservice"].connector // .connector // empty' "${CONFIG_DIR}/${MODULE}.json" 2>/dev/null || true)
 EO_JSON="${CONFIG_DIR}/$(resolve_provider_module euro-office "${CONSUMER_ENV}").json"
 EURO_INSTALLED=false
-[[ -f "${EO_JSON}" ]] && EURO_INSTALLED=true
+[[ "${CONNECTOR}" == "onlyoffice" && -f "${EO_JSON}" ]] && EURO_INSTALLED=true
 
 if [[ "${EURO_INSTALLED}" == "true" ]]; then
     DOC_URL=$(ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=no \
         "tappaas@${VMNAME}.${ZONE}.internal" \
         "sudo -u postgres psql -d nextcloud -tAc \
-        \"SELECT configvalue FROM oc_appconfig WHERE appid='onlyoffice' AND configkey='DocumentServerUrl'\" \
+        \"SELECT configvalue FROM oc_appconfig WHERE appid='eurooffice' AND configkey='DocumentServerUrl'\" \
         2>/dev/null" 2>/dev/null || echo "")
     DOC_URL="${DOC_URL// /}"
     if [[ -n "${DOC_URL}" ]]; then
@@ -102,12 +107,12 @@ if [[ "${EURO_INSTALLED}" == "true" ]]; then
     # user sees no "open in Euro-Office" action at all, while this test used to
     # report a clean pass on the URL alone. Read the error rather than re-running
     # the check: test-service.sh is the READ-ONLY verifier the drift report and
-    # `module test` call, and `onlyoffice:documentserver --check` would mutate
+    # `module test` call, and `eurooffice:documentserver --check` would mutate
     # state. The converge (update-service.sh) is what re-runs and clears it.
     OO_ERR=$(ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=no \
         "tappaas@${VMNAME}.${ZONE}.internal" \
         "sudo -u postgres psql -d nextcloud -tAc \
-        \"SELECT configvalue FROM oc_appconfig WHERE appid='onlyoffice' AND configkey='settings_error'\" \
+        \"SELECT configvalue FROM oc_appconfig WHERE appid='eurooffice' AND configkey='settings_error'\" \
         2>/dev/null" 2>/dev/null | tr -d '[:space:]') || OO_ERR=""
     # The stored row is the verdict of the last check that ran; it cannot say
     # whether the document server answers NOW. update-service.sh gates its own
@@ -150,7 +155,7 @@ if [[ "${EURO_INSTALLED}" == "true" ]]; then
         # reported this same string after the connector had been fixed (#687).
         fail "OnlyOffice connector's last check FAILED: ${OO_ERR} — Nextcloud hides the editor while this is set"
         info "    (a stored verdict: the converge refreshes it, or by hand:"
-        info "     ssh -t tappaas@${VMNAME}.${ZONE}.internal sudo nextcloud-occ onlyoffice:documentserver --check)"
+        info "     ssh -t tappaas@${VMNAME}.${ZONE}.internal sudo nextcloud-occ eurooffice:documentserver --check)"
         # -t matters: nextcloud-occ execs systemd-run --pty, and without a TTY
         # the check still runs and rewrites this row but prints nothing, so the
         # operator sees no verdict at all (#714, #715).

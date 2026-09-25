@@ -7,33 +7,59 @@
 # ============================================================================
 # TAPPaaS - nextcloud-hpb
 # ============================================================================
-# Version: 0.1.0
-# Date: 2026-05-14
+# Version: 0.3.0
+# Date: 2026-09-21
 # Author: @AndreasJe (TAPPaaS)
 # Product: nextcloud-spreed-signaling (Talk High-Performance Backend)
+#          + Janus WebRTC gateway (the SFU that makes group calls scale)
 #
 # Architecture:
-# - services.nextcloud-spreed-signaling (Go 2.1.1, from nixpkgs)
-# - NATS loopback (in-process — no external NATS needed for single node)
-# - Listens on 0.0.0.0:8080; Caddy on OPNsense proxies wss:// to this port
-# - Secrets auto-generated in /var/lib/nextcloud-hpb/secrets/ on first boot
-# - coturn TURN secret written by install.sh after VM creation
+# - services.nextcloud-spreed-signaling (Go, from nixpkgs) + in-process NATS
+# - Janus as the signaling server's MCU: one uplink per participant instead of
+#   the N-1 mesh that caps a Talk video call at ~5-6 people
+# - Signaling on 0.0.0.0:8080 (Caddy proxies wss://); Janus's WebSocket API is
+#   loopback-only, its media on UDP 20000-20999
 #
-# Network: srv zone (VMID 342, tappaas2), proxyDomain: see nextcloud-hpb.json
-# Firewall: TCP 22 (SSH) + 8080 (HPB WebSocket, proxied by Caddy)
+# turnHost (coturn:turn) and nextcloudPublicUrl (nextcloud:fileservice) are read
+# from the companion JSON that update-os.sh ships; neither is authored here.
 #
-# Nextcloud integration:
-#   install.sh writes HPB_SECRET to /etc/secrets/hpb.env on the Nextcloud VM.
-#   The nextcloud-configure-hpb.service in nextcloud.nix picks it up on next boot.
+# Network: the NEXTCLOUD zone (co-located; see INSTALL.md).
 # ============================================================================
 
 { config, lib, pkgs, modulesPath, system, ... }:
 
 let
-  # coturnHost and nextcloudUrl are runtime values — written into
-  # /etc/secrets/coturn.env and /etc/secrets/nextcloud-hpb.env by
-  # the respective module install.sh scripts. Read as env vars below.
   secretsDir = "/var/lib/nextcloud-hpb/secrets";
+
+  moduleCfg = if builtins.pathExists ./nextcloud-hpb.json
+              then builtins.fromJSON (builtins.readFile ./nextcloud-hpb.json)
+              else {};
+
+  turnHost           = moduleCfg.turnHost or "";
+  turnHostInternal   = moduleCfg.turnHostInternal or "";
+  nextcloudPublicUrl = moduleCfg.nextcloudPublicUrl or "";
+
+  # Janus is server-side and inside the network, so it always uses the internal
+  # endpoint. Browsers are given both and let ICE choose: under a wildcard
+  # split-horizon the public name answers with the reverse proxy internally.
+  turnInternalEff = if turnHostInternal != "" then turnHostInternal else "coturn.dmz.internal:3478";
+  turnHostName    = lib.head (lib.splitString ":" turnInternalEff);
+  turnHostPort    = lib.last (lib.splitString ":" turnInternalEff);
+
+  turnServers = lib.warnIf (turnHost == "")
+    "nextcloud-hpb.nix: ./nextcloud-hpb.json carries no turnHost (coturn:turn stamps it) — clients outside the network get no relay"
+    (lib.concatMap (h: [ "turn:${h}?transport=udp" "turn:${h}?transport=tcp" ])
+      (lib.unique (lib.filter (s: s != "") [ turnHost turnInternalEff ])));
+
+  backendUrls = lib.warnIf (nextcloudPublicUrl == "")
+    "nextcloud-hpb.nix: ./nextcloud-hpb.json carries no nextcloudPublicUrl (nextcloud:fileservice stamps it) — the backend allow-list is a placeholder and Talk WILL reject this HPB with invalid_backend; rebuild through update-os.sh after the provider services have run"
+    [ (if nextcloudPublicUrl != "" then nextcloudPublicUrl else "https://nextcloud.invalid") ];
+
+  janusPkg     = pkgs.janus-gateway;
+  janusWsPort  = 8188;
+  # ~500 concurrent media legs; widen with the firewall rule for bigger meetings.
+  janusRtpFrom = 20000;
+  janusRtpTo   = 20999;
 in
 {
   # ============================================================================
@@ -77,11 +103,7 @@ in
   # NETWORKING
   # ============================================================================
 
-  networking.hostName = let
-    cfg = if builtins.pathExists ./nextcloud-hpb.json
-          then builtins.fromJSON (builtins.readFile ./nextcloud-hpb.json)
-          else {};
-  in lib.mkDefault (cfg.vmname or "nextcloud-hpb");
+  networking.hostName = lib.mkDefault (moduleCfg.vmname or "nextcloud-hpb");
   networking.networkmanager.enable = true;
   networking.networkmanager.ensureProfiles.profiles.tappaas-ethernet = {
     connection = { id = "tappaas-ethernet"; type = "ethernet"; autoconnect = "true"; autoconnect-priority = "100"; };
@@ -104,6 +126,10 @@ in
       22    # SSH
       8080  # HPB WebSocket (proxied by Caddy on OPNsense)
     ];
+    # Janus media. Clients that cannot reach this zone directly relay via coturn.
+    allowedUDPPortRanges = [
+      { from = janusRtpFrom; to = janusRtpTo; }
+    ];
   };
 
   # ============================================================================
@@ -123,6 +149,13 @@ in
   };
 
   security.sudo.wheelNeedsPassword = false;
+
+  users.users.janus = {
+    isSystemUser = true;
+    group        = "janus";
+    description  = "Janus WebRTC gateway";
+  };
+  users.groups.janus = {};
 
   # ============================================================================
   # SYSTEM PACKAGES
@@ -178,7 +211,7 @@ in
   #
   # Runs once on first boot to create all signing/encryption secrets for the
   # signaling server. The TURN relay secret is NOT generated here — it is
-  # written by install.sh after reading it from the coturn VM, ensuring both
+  # written by install.sh/update.sh from the management plane, ensuring both
   # sides share the same HMAC secret.
 
   systemd.tmpfiles.rules = [
@@ -190,7 +223,7 @@ in
     description = "Generate nextcloud-hpb secrets if missing";
     wantedBy    = [ "multi-user.target" ];
     after       = [ "local-fs.target" "systemd-tmpfiles-setup.service" ];
-    before      = [ "nextcloud-spreed-signaling.service" ];
+    before      = [ "nextcloud-spreed-signaling.service" "janus.service" ];
     unitConfig.ConditionPathExists = "!${secretsDir}/hpb-secret";
 
     serviceConfig = {
@@ -211,8 +244,12 @@ in
         # Shared secret between this HPB and the Nextcloud backend
         ${pkgs.openssl}/bin/openssl rand -hex 32 > "$DIR/hpb-secret"
 
-        # TURN API key — protects the TURN credential REST endpoint (for MCU use)
+        # TURN API key — protects the TURN credential REST endpoint Janus calls
         ${pkgs.openssl}/bin/openssl rand -hex 32 > "$DIR/turn-apikey"
+
+        # Janus admin API secret (the admin transport is disabled; kept so the
+        # core has a secret should it ever be enabled for diagnostics)
+        ${pkgs.openssl}/bin/openssl rand -hex 32 > "$DIR/janus-admin"
 
         # TURN relay secret — placeholder until install.sh writes the real coturn secret.
         # The signaling server starts with this placeholder; install.sh overwrites it
@@ -224,6 +261,122 @@ in
 
         echo "HPB secrets generated at ${secretsDir}"
       '';
+    };
+  };
+
+  # ============================================================================
+  # JANUS — the SFU behind the signaling server
+  # ============================================================================
+  #
+  # No NixOS module exists, so (like coturn) a custom unit renders the config at
+  # start from runtime secrets — nothing secret reaches the Nix store. Full
+  # trickle ICE, not ice-lite: Janus is behind NAT and needs its own TURN relay
+  # candidates, which it fetches from the signaling server's REST endpoint.
+
+  systemd.services.janus = {
+    description = "Janus WebRTC gateway (SFU for Nextcloud Talk)";
+    wantedBy    = [ "multi-user.target" ];
+    after       = [ "network-online.target" "hpb-init-secrets.service" ];
+    wants       = [ "network-online.target" ];
+    requires    = [ "hpb-init-secrets.service" ];
+
+    serviceConfig = {
+      Type                 = "simple";
+      User                 = "janus";
+      Group                = "janus";
+      RuntimeDirectory     = "janus";
+      RuntimeDirectoryMode = "0750";
+
+      ExecStartPre = "+" + pkgs.writeShellScript "janus-write-config" ''
+        set -euo pipefail
+        CONF=/run/janus
+        SECRETS=${secretsDir}
+
+        # An HPB installed before this file existed has no janus-admin: make one.
+        if [ ! -s "$SECRETS/janus-admin" ]; then
+          ${pkgs.openssl}/bin/openssl rand -hex 32 > "$SECRETS/janus-admin"
+          ${pkgs.coreutils}/bin/chown nextcloud-spreed-signaling:nextcloud-spreed-signaling "$SECRETS/janus-admin"
+          ${pkgs.coreutils}/bin/chmod 400 "$SECRETS/janus-admin"
+        fi
+        TURN_APIKEY="$(${pkgs.coreutils}/bin/cat "$SECRETS/turn-apikey")"
+        ADMIN_SECRET="$(${pkgs.coreutils}/bin/cat "$SECRETS/janus-admin")"
+
+        ${pkgs.coreutils}/bin/cat > "$CONF/janus.jcfg" <<JCFG
+general: {
+        configs_folder = "/run/janus"
+        plugins_folder = "${janusPkg}/lib/janus/plugins"
+        transports_folder = "${janusPkg}/lib/janus/transports"
+        events_folder = "${janusPkg}/lib/janus/events"
+        loggers_folder = "${janusPkg}/lib/janus/loggers"
+        log_to_stdout = true
+        debug_level = 4
+        admin_secret = "$ADMIN_SECRET"
+}
+certificates: {
+}
+media: {
+        rtp_port_range = "${toString janusRtpFrom}-${toString janusRtpTo}"
+}
+nat: {
+        full_trickle = true
+        ignore_mdns = true
+        turn_server = "${turnHostName}"
+        turn_port = ${turnHostPort}
+        turn_type = "udp"
+        turn_rest_api = "http://127.0.0.1:8080/turn/credentials"  # /turn is a 404
+        turn_rest_api_key = "$TURN_APIKEY"
+        turn_rest_api_method = "GET"
+}
+plugins: {
+        disable = "libjanus_audiobridge.so,libjanus_echotest.so,libjanus_recordplay.so,libjanus_sip.so,libjanus_nosip.so,libjanus_streaming.so,libjanus_textroom.so,libjanus_videocall.so,libjanus_voicemail.so,libjanus_duktape.so,libjanus_lua.so"
+}
+transports: {
+        disable = "libjanus_http.so,libjanus_pfunix.so,libjanus_mqtt.so,libjanus_rabbitmq.so,libjanus_nanomsg.so"
+}
+events: {
+        broadcast = false
+}
+JCFG
+
+        # WebSocket API for the signaling server only — loopback, no TLS needed,
+        # admin API off entirely.
+        ${pkgs.coreutils}/bin/cat > "$CONF/janus.transport.websockets.jcfg" <<JCFG
+general: {
+        json = "indented"
+        ws = true
+        ws_port = ${toString janusWsPort}
+        ws_ip = "127.0.0.1"
+        wss = false
+}
+admin: {
+        admin_ws = false
+        admin_wss = false
+}
+JCFG
+
+        # The only plugin nextcloud-spreed-signaling drives. No static rooms:
+        # the signaling server creates one per Talk call.
+        ${pkgs.coreutils}/bin/cat > "$CONF/janus.plugin.videoroom.jcfg" <<JCFG
+general: {
+}
+JCFG
+
+        ${pkgs.coreutils}/bin/chown root:janus "$CONF"/*.jcfg
+        ${pkgs.coreutils}/bin/chmod 640 "$CONF"/*.jcfg
+      '';
+
+      ExecStart = "${janusPkg}/bin/janus --configs-folder=/run/janus";
+
+      Restart    = "on-failure";
+      RestartSec = "5s";
+
+      # Security hardening — Janus writes nothing but /run/janus (its config)
+      # and logs to stdout.
+      NoNewPrivileges = true;
+      PrivateTmp      = true;
+      ProtectSystem   = "strict";
+      ProtectHome     = true;
+      ReadWritePaths  = [ "/run/janus" ];
     };
   };
 
@@ -249,32 +402,34 @@ in
 
       clients.internalsecretFile = "${secretsDir}/internalsecret";
 
+      # Talk learns of the SFU from the signaling hello; nothing to configure
+      # on the Nextcloud side.
+      mcu = {
+        type = "janus";
+        url  = "ws://127.0.0.1:${toString janusWsPort}";
+      };
+
       turn = {
-        # TURN servers: coturn hostname derived from install.sh at deploy time.
-        # install.sh overwrites this config via nixos-rebuild with the actual host.
-        # Default points to co-deployed coturn in same TAPPaaS cluster.
-        servers = [
-          "turn:coturn.dmz.internal:3478?transport=udp"
-          "turn:coturn.dmz.internal:3478?transport=tcp"
-        ];
+        servers = turnServers;
         apikeyFile = "${secretsDir}/turn-apikey";
-        # install.sh writes the real COTURN_SECRET here; placeholder generated on first boot
+        # install.sh/update.sh write the real COTURN_SECRET here.
         secretFile = "${secretsDir}/turn-secret";
       };
     };
 
     backends.nextcloud = {
-      # Nextcloud URL: install.sh sets the actual URL via nixos-rebuild.
-      # Default: internal hostname of co-deployed nextcloud in same zone.
-      urls      = [ "https://nextcloud.srv_work.internal" ];
+      # Talk validates against exactly this URL; an internal name is rejected
+      # with invalid_backend.
+      urls       = backendUrls;
       secretFile = "${secretsDir}/hpb-secret";
     };
   };
 
-  # Ensure secrets exist before the signaling service starts
+  # A signaling server without its MCU still serves and reconnects, so `wants`.
   systemd.services.nextcloud-spreed-signaling = {
-    after    = [ "hpb-init-secrets.service" ];
+    after    = [ "hpb-init-secrets.service" "janus.service" ];
     requires = [ "hpb-init-secrets.service" ];
+    wants    = [ "janus.service" ];
   };
 
   # ============================================================================

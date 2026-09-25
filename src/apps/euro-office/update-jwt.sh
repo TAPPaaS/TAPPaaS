@@ -8,7 +8,7 @@
 # Run this after manually rotating the JWT_SECRET in /etc/secrets/euro-office.env
 # and restarting the podman-euro-office service.
 #
-# Usage: ./sync-jwt.sh
+# Usage: ./update-jwt.sh
 #
 
 set -euo pipefail
@@ -45,11 +45,11 @@ fi
 info "JWT_SECRET read (${#JWT_SECRET} characters). Writing to Nextcloud Euro-Office connector…"
 
 ssh -o BatchMode=yes -o ConnectTimeout=15 "tappaas@${NEXTCLOUD_HOST}" \
-    "sudo -u nextcloud nextcloud-occ config:app:set onlyoffice DocumentServerUrl         --value='${ONLYOFFICE_URL}' > /tmp/occ.out 2>&1
-     sudo -u nextcloud nextcloud-occ config:app:set onlyoffice DocumentServerInternalUrl --value='http://${EUROOFFICE_HOST}/' >> /tmp/occ.out 2>&1
-     sudo -u nextcloud nextcloud-occ config:app:set onlyoffice StorageUrl                --value='${NEXTCLOUD_URL}' >> /tmp/occ.out 2>&1
-     sudo -u nextcloud nextcloud-occ config:app:set onlyoffice jwt_secret                --value='${JWT_SECRET}' >> /tmp/occ.out 2>&1
-     sudo -u nextcloud nextcloud-occ config:app:set onlyoffice jwt_header                --value='Authorization' >> /tmp/occ.out 2>&1
+    "sudo -u nextcloud nextcloud-occ config:app:set eurooffice DocumentServerUrl         --value='${ONLYOFFICE_URL}' > /tmp/occ.out 2>&1
+     sudo -u nextcloud nextcloud-occ config:app:set eurooffice DocumentServerInternalUrl --value='http://${EUROOFFICE_HOST}/' >> /tmp/occ.out 2>&1
+     sudo -u nextcloud nextcloud-occ config:app:set eurooffice StorageUrl                --value='${NEXTCLOUD_URL}' >> /tmp/occ.out 2>&1
+     sudo -u nextcloud nextcloud-occ config:app:set eurooffice jwt_secret                --value='${JWT_SECRET}' >> /tmp/occ.out 2>&1
+     sudo -u nextcloud nextcloud-occ config:app:set eurooffice jwt_header                --value='Authorization' >> /tmp/occ.out 2>&1
      cat /tmp/occ.out" \
     && info "  JWT secret synced to Nextcloud successfully." \
     || { error "  Failed to sync JWT to Nextcloud."; exit 1; }
