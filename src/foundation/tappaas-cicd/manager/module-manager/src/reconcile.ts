@@ -434,6 +434,16 @@ function doReconcile(moduleArg: string, opts: ReconcileOptions): void {
   if (depFailures.length > 0) {
     // Step 3 ran regardless, so the module's own converge has had its chance —
     // but the dependency planes did not converge, so this is still a failure.
+    //
+    // #711 asked whether this should stand when the module's OWN rebuild
+    // succeeded in the same run — it looks like discarding healthy work, and
+    // it rolls the guest back to its pre-update snapshot. It should stand
+    // (operator decision 2026-09-25): a module whose dependency planes did not
+    // converge is not correct just because its own update.sh exited 0. Step 3
+    // runs to let a provider repair itself (#495), NOT to earn a pass. Do not
+    // "fix" this by passing when depFailures are non-empty; if the rollback is
+    // too blunt for a specific provider, narrow THAT provider's failure, not
+    // this verdict.
     fail(
       `${depFailures.length} dependency service(s) failed to re-apply ` +
         `(${depFailures.join(", ")}) — reconcile of '${module}' did not converge. ` +

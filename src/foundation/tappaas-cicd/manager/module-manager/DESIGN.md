@@ -226,6 +226,16 @@ rebuild rewrites in-VM state that only the module's `update.sh` restores — so
 bailing out mid-way left instances *less* converged than before the command ran.
 Failures are accumulated and reported after Step 3, and still exit non-zero.
 
+Step 3 running is not Step 3 *passing*: when a dependency failed, the reconcile is
+non-converged even if the module's own `update.sh` exited 0, and `update-module.sh`
+rolls the guest back to its pre-update snapshot. #711 questioned that — it can look
+like discarding a healthy VM's work, because Step 2 and Step 3 often do the same
+thing to the same guest (`templates:nixos` re-applies via `update-os.sh`, then the
+module rebuilds again), so Step 3 can succeed simply because Step 2's `switch` had
+already applied. It stands (operator decision 2026-09-25): a module whose dependency
+planes did not converge is not correct just because its own re-apply exited 0. Where
+the rollback is too blunt, narrow that provider's failure — not the verdict.
+
 **`integratesWith` — optional dependencies (#501).** A soft sibling of `dependsOn`:
 identical `provider:service` coordinates and the same `install/update/delete-service.sh`
 wiring, but with the guard **inverted from hard-fail to silent-skip**. The differences,
