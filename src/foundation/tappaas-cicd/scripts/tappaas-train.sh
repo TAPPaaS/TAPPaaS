@@ -6,6 +6,11 @@
 # (unstable | staging | production); where the code SITS is a branch
 # (main | staging | stable). Promotion is fast-forward only, in one direction.
 #
+# The PIN is the single nixpkgs revision every TAPPaaS NixOS system is built
+# from — one lock, templates/flake.lock, so moving it moves the whole estate.
+# The SOAK is the fortnight a revision must spend running on the staging site
+# before it may be promoted to production: evidence it survives real use.
+#
 #   tappaas-train status [--no-fetch]      where each channel points, and what blocks a boundary
 #   tappaas-train init                     verify the train is promotable; start the soak clock
 #   tappaas-train boundary [--dry-run]     the boundary: promote staging→stable, main→staging
@@ -757,7 +762,9 @@ cmd_fault() {
     return 0
 }
 
-usage() { sed -n '3,22p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+# The range must cover the whole header block above: extend it when the header
+# grows, or --help quietly stops before its last line.
+usage() { sed -n '3,26p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 
 command -v jq >/dev/null 2>&1 || die "jq is required"
 NO_FETCH=0; DRY_RUN=0; RESUME=0; FORCE_BOUNDARY=0

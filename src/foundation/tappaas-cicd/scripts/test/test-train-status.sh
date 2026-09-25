@@ -571,5 +571,18 @@ FAKE_NOW=$(( 1790000000 + 20*86400 )) run_prove boundary --resume \
 [[ "${OUT}" == *"--allow-no-pin-change"* ]] && ok "…and the refusal names the flag that would allow it" \
     || bad "the refusal does not mention the flag"
 
+echo "── --help explains the two words the whole train turns on ──"
+# An operator meeting this command needs to know what is being moved and what
+# is being waited for. Both were jargon until now.
+H="$("${TRAIN}" --help 2>&1)"
+[[ "${H}" == *"The PIN is"* ]] && ok "--help says what a pin is" || bad "--help does not define the pin"
+[[ "${H}" == *"The SOAK is"* ]] && ok "--help says what a soak is" || bad "--help does not define the soak"
+# usage() prints a fixed line RANGE of the header. Grow the header without
+# growing the range and the help silently loses its last lines — so assert the
+# range still reaches the end.
+[[ "${H}" == *"fault --resolved"* ]] \
+    && ok "…and the range still reaches the last usage line" \
+    || bad "--help is truncated: the sed range no longer covers the header"
+
 echo "── summary: ${PASS} pass, ${FAIL} fail ──"
 [[ "${FAIL}" -eq 0 ]]
