@@ -68,7 +68,13 @@ coturn_allow_peer() {
     [[ -f "${cfg}" ]] || return 0
     module="$(basename "${cfg}" .json)"
     host="$(jq -r '.vmname' "${cfg}").$(jq -r '.zone0' "${cfg}").internal"
-    ip="$(getent hosts "${host}" | awk '{print $1; exit}')"
+    # A just-created consumer's DNS pin can lag a few seconds behind cluster:vm.
+    local _try
+    for _try in 1 2 3 4 5 6; do
+        ip="$(getent hosts "${host}" | awk '{print $1; exit}')"
+        [[ "${ip}" =~ ^[0-9.]+$ ]] && break
+        sleep 5
+    done
     turn="$(jq -r '.vmname' "${coturn_cfg}").$(jq -r '.zone0' "${coturn_cfg}").internal"
     if [[ ! "${ip}" =~ ^[0-9.]+$ ]]; then
         warn "  cannot resolve ${host} — coturn will not relay to ${module}'s media server"
