@@ -18,7 +18,8 @@
 // No cluster, no bash, no config tree: the two JSON documents are read straight
 // from the repo, everything else is built inline.
 
-import { existsSync, readFileSync, readdirSync, statSync } from "fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, statSync } from "fs";
+import { tmpdir } from "os";
 import { basename, dirname, join } from "path";
 import { composeFields } from "../../../../lib/ts/src/compose-fields";
 import {
@@ -59,8 +60,12 @@ const FOUNDATION = join(MODULE_MANAGER, "..", "..", "..");
 // COMPOSED, not the raw file. Since #567 schemas/module-fields.json holds only
 // the 19 fields no service owns; linting a service manifest against it would
 // report every field it classifies as undeclared. The runtime composes too —
-// this is the same view module-manager sees.
-const COMPOSED = composeFields(FOUNDATION).schema as { fields: Record<string, unknown> };
+// this is the same view module-manager sees. Composed from THIS tree: with the
+// default config dir it would read the site's registered checkout instead, so on a
+// cicd a manifest that adds a field lints against the release it replaces and reads
+// as undeclared. An empty config dir makes composeFields use its own catalogue.
+const OWN_TREE = mkdtempSync(join(tmpdir(), "manifest-own-"));
+const COMPOSED = composeFields(FOUNDATION, OWN_TREE).schema as { fields: Record<string, unknown> };
 const MANIFEST_SCHEMA_FILE = join(FOUNDATION, "schemas", "service-fields.json");
 const VM_MANIFEST_FILE = join(FOUNDATION, "cluster", "services", "vm", "fields.json");
 const MODULE_MANIFEST_FILE = join(FOUNDATION, "schemas", "fields.json");
