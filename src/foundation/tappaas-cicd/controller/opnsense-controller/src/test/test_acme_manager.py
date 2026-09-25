@@ -7,10 +7,16 @@ exercised without a firewall.
 
 from __future__ import annotations
 
+import io
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
-from opnsense_controller.acme_cli import _parse_fields, _resolve_provider, PROVIDER_ALIASES
+from opnsense_controller.acme_cli import (
+    _parse_fields,
+    _read_stdin_fields,
+    _resolve_provider,
+    PROVIDER_ALIASES,
+)
 from opnsense_controller.acme_manager import (
     AcmeAccount,
     AcmeAction,
@@ -81,6 +87,42 @@ class TestProviderFields(unittest.TestCase):
     def test_malformed_errors(self):
         with self.assertRaises(SystemExit):
             _parse_fields(["just-a-key"])
+
+
+class TestStdinProviderFields(unittest.TestCase):
+    """Credentials arrive on stdin so they stay out of /proc/<pid>/cmdline."""
+
+    @staticmethod
+    def _read(text: str) -> list[str]:
+        with patch("sys.stdin", io.StringIO(text)):
+            return _read_stdin_fields()
+
+    def test_reads_one_field_per_line(self):
+        self.assertEqual(
+            self._read("dns_cf_token=abc\ndns_cf_account_id=def\n"),
+            ["dns_cf_token=abc", "dns_cf_account_id=def"],
+        )
+
+    def test_skips_blank_and_comment_lines(self):
+        self.assertEqual(
+            self._read("# provider creds\n\n  \ndns_cf_token=abc\n"),
+            ["dns_cf_token=abc"],
+        )
+
+    def test_inline_hash_is_kept(self):
+        # '#' is legal inside a secret; treating it as a comment would silently
+        # truncate the credential and produce a baffling auth failure.
+        self.assertEqual(
+            self._read("dns_azuredns_clientsecret=ZVq8Q~w#0r6IO\n"),
+            ["dns_azuredns_clientsecret=ZVq8Q~w#0r6IO"],
+        )
+
+    def test_empty_stdin_yields_nothing(self):
+        self.assertEqual(self._read(""), [])
+
+    def test_round_trips_through_parse_fields(self):
+        parsed = _parse_fields(self._read("dns_cf_token=AAA=BBB=\n"))
+        self.assertEqual(parsed, {"dns_cf_token": "AAA=BBB="})
 
 
 # ─────────────────────────────────────────────────────────────────────────────

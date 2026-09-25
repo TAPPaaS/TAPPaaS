@@ -282,10 +282,11 @@
       "internet"
     ],
     "pinhole-allowed-from": [
-      "internet"
+      "internet",
+      "home"
     ],
     "tier": 4,
-    "_comment": "Reverse proxy and internet-exposed services. Internet-only egress (ACME, upstream calls). Internet inbound via pinhole-allowed-from. Backends (srvWork, srvCust) expose themselves inbound via their own pinhole-allowed-from declarations.",
+    "_comment": "Reverse proxy and internet-exposed services. Internet-only egress (ACME, upstream calls). Internet inbound via pinhole-allowed-from. Backends (srvWork, srvCust) expose themselves inbound via their own pinhole-allowed-from declarations. home is listed so a dmz module may open a CLIENT-facing pinhole (coturn: Talk clients relay through TURN directly instead of hairpinning via the WAN IP, which NAT reflection does not support). The rule itself is still declared per module, in its ingress.",
     "description": "Public-facing: reverse proxy (Caddy), internet-exposed services"
   }
 }

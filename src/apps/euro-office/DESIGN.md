@@ -62,9 +62,8 @@ The VM itself is additionally covered by `backup:vm` (full-VM PBS backup).
 
 - Validated via test variant; the OnlyOffice <-> Nextcloud connector is proven end-to-end
   (N4 wiring, ADR-COM-0002).
-- The consumer egress (srv -> reverse proxy:443) is declared in this module;
-  named-variant deploys depend on the foundation egress-flattening + provider-variant
-  resolution fixes (upstream issue).
+- Reaching the reverse proxy needs no egress declaration: ADR-021's caddy-reach rule grants
+  every zone the DMZ gateway on 443.
 
 ## Superseded install-time customisation
 

@@ -286,3 +286,96 @@ if [[ "${CONNECTOR}" == "onlyoffice" ]]; then
         fi
     fi
 fi
+
+# ── Nextcloud's PUBLIC URL as a fact for any Talk consumer ─────────────────────
+# Stamped into the consumer's deployed config (services/fileservice/fields.json:
+# nextcloudPublicUrl) so the consumer's .nix reads it from the companion JSON
+# update-os.sh ships. The HPB's signaling server validates Talk against this
+# exact URL; the internal name is rejected with invalid_backend. Provider fact,
+# derived by the one shared rule (module_public_domain, #715).
+NC_HOST="${VMNAME}.${ZONE}.internal"
+NC_PUBLIC_DOMAIN="$(module_public_domain "$(jq -r '.vmname // empty' "${NEXTCLOUD_JSON}")" "$(jq -r '.environment // empty' "${NEXTCLOUD_JSON}")" "$(cat "${NEXTCLOUD_JSON}")")"
+NEXTCLOUD_PUBLIC_URL="${NC_PUBLIC_DOMAIN:+https://${NC_PUBLIC_DOMAIN}}"
+if [[ "${CONNECTOR}" == "talk" || "${CONNECTOR}" == "hpb" ]] && [[ -n "${NEXTCLOUD_PUBLIC_URL}" && -f "${CONSUMER_JSON}" ]]; then
+    # Into this service's own config block, never also the header: a field set in
+    # both fails the engine's validation as ambiguous.
+    if [[ "$(jq -r '.config["nextcloud:fileservice"].nextcloudPublicUrl // empty' "${CONSUMER_JSON}")" != "${NEXTCLOUD_PUBLIC_URL}" ]] \
+       || jq -e 'has("nextcloudPublicUrl")' "${CONSUMER_JSON}" >/dev/null; then
+        _ncpu_tmp="$(mktemp "${CONSUMER_JSON}.XXXXXX")"
+        if jq --arg u "${NEXTCLOUD_PUBLIC_URL}" 'del(.nextcloudPublicUrl) | .config["nextcloud:fileservice"].nextcloudPublicUrl = $u' "${CONSUMER_JSON}" > "${_ncpu_tmp}"; then
+            mv "${_ncpu_tmp}" "${CONSUMER_JSON}"
+            info "  ${GN}✓${CL} nextcloudPublicUrl=${NEXTCLOUD_PUBLIC_URL} recorded in $(basename "${CONSUMER_JSON}")"
+        else
+            rm -f "${_ncpu_tmp}"
+            warn "  could not record nextcloudPublicUrl in ${CONSUMER_JSON}"
+        fi
+    fi
+fi
+
+# Write a secrets env file on the Nextcloud VM and restart the declarative unit
+# that applies it via occ. Every configure unit is ConditionPathExists-gated on
+# its own file, so each connector converges on its own.
+#   nc_apply_env <file-basename> <unit> <content-on-stdin>
+nc_apply_env() {
+    local file="$1" unit="$2"
+    ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR \
+        "tappaas@${NC_HOST}" \
+        "sudo install -m600 -o root -g root /dev/stdin /etc/secrets/${file} && \
+         sudo systemctl restart ${unit}"
+}
+
+# ── talk connector: the coturn TURN/STUN relay into Nextcloud Talk ─────────────
+# The consumer is coturn itself (config["nextcloud:fileservice"].connector =
+# "talk"). Before this branch existed the declaration was a no-op — only the
+# HPB install wrote TURN into Talk, as a side effect, so a coturn-only site had
+# no relay and calls with more than two participants had nowhere to go.
+#   secret: management plane (/home/tappaas/secrets/coturn.env), published by
+#           coturn's install.sh / its turn service.
+#   host:   coturn's publicDomain (one name in every horizon), else its
+#           internal FQDN — the same derivation coturn:turn stamps as turnHost.
+# Talk is given BOTH endpoints and lets ICE choose. A site's wildcard
+# split-horizon answers the public name with the reverse proxy, which runs no
+# TURN, so the public name alone strands internal callers and the internal name
+# alone strands external ones.
+if [[ "${CONNECTOR}" == "talk" ]]; then
+    info "  ${MODULE} declares a talk connector — wiring the TURN/STUN relay into Talk (ADR-COM-0002)"
+    COTURN_MGMT_SECRETS="/home/tappaas/secrets/coturn.env"
+    COTURN_SECRET="$(grep -h '^COTURN_SECRET=' "${COTURN_MGMT_SECRETS}" 2>/dev/null | cut -d= -f2- || true)"
+    TURN_SERVER_INTERNAL="$(jq -r '.vmname // "coturn"' "${CONSUMER_JSON}").$(jq -r '.zone0 // "dmz"' "${CONSUMER_JSON}").internal:3478"
+    _turn_pub="$(jq -r '.publicDomain // empty' "${CONSUMER_JSON}" 2>/dev/null || true)"
+    TURN_SERVER="${_turn_pub:+${_turn_pub}:3478}"
+    [[ -n "${TURN_SERVER}" ]] || warn "  ${MODULE} declares no publicDomain — Talk gets the internal relay only, so calls from outside the network have none"
+    if [[ -z "${COTURN_SECRET}" ]]; then
+        warn "  COTURN_SECRET not in ${COTURN_MGMT_SECRETS} yet — relay left unconfigured; it wires on the next nextcloud sync once coturn has published it."
+    elif printf 'TURN_SERVER=%s\nTURN_SERVER_INTERNAL=%s\nTURN_SECRET=%s\n' \
+            "${TURN_SERVER}" "${TURN_SERVER_INTERNAL}" "${COTURN_SECRET}" \
+            | nc_apply_env talk.env nextcloud-configure-talk-turn.service; then
+        info "${GN}✓${CL} talk connector wired: STUN/TURN ${TURN_SERVER:-(none)} + ${TURN_SERVER_INTERNAL} registered in Nextcloud Talk"
+    else
+        warn "  failed to apply talk.env on ${NC_HOST} — re-run after both VMs are up"
+    fi
+fi
+
+# ── hpb connector: the Talk High-Performance Backend into Nextcloud Talk ───────
+# The consumer is nextcloud-hpb. Its signaling secret is generated on the HPB
+# VM on first boot and published to the management plane by nextcloud-hpb's
+# install.sh; at the consumer's INSTALL this service runs before that VM
+# exists, so an absent secret is "not yet", not an error — install.sh calls this
+# service again once the secret is published, and every update re-converges it.
+if [[ "${CONNECTOR}" == "hpb" ]]; then
+    info "  ${MODULE} declares an hpb connector — wiring the Talk signaling backend (ADR-COM-0002)"
+    HPB_MGMT_SECRETS="/home/tappaas/secrets/${MODULE}.env"
+    [[ -f "${HPB_MGMT_SECRETS}" ]] || HPB_MGMT_SECRETS="/home/tappaas/secrets/nextcloud-hpb.env"
+    HPB_SECRET="$(grep -h '^HPB_SECRET=' "${HPB_MGMT_SECRETS}" 2>/dev/null | cut -d= -f2- || true)"
+    HPB_URL="$(module_public_domain "$(jq -r '.vmname // empty' "${CONSUMER_JSON}")" "$(jq -r '.environment // empty' "${CONSUMER_JSON}")" "$(cat "${CONSUMER_JSON}")")"
+    if [[ -z "${HPB_URL}" ]]; then
+        warn "  ${MODULE} has no proxyDomain — cannot register a wss:// signaling URL"
+    elif [[ -z "${HPB_SECRET}" ]]; then
+        info "  HPB_SECRET not published yet (${HPB_MGMT_SECRETS}) — the HPB's install.sh wires it once its VM is up"
+    elif printf 'HPB_SECRET=%s\nHPB_URL=%s\n' "${HPB_SECRET}" "${HPB_URL}" \
+            | nc_apply_env hpb.env nextcloud-configure-hpb.service; then
+        info "${GN}✓${CL} hpb connector wired: wss://${HPB_URL} registered as Talk's signaling backend"
+    else
+        warn "  failed to apply hpb.env on ${NC_HOST} — re-run after both VMs are up"
+    fi
+fi
