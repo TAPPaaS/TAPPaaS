@@ -519,9 +519,14 @@ in
       # gateway IP of every TAPPaaS zone (10.x.y.1). Including 10.0.0.0/8
       # covers all zones generically — safe in a private TAPPaaS deployment.
       # With a trusted proxy, Nextcloud reads the Host header directly, so
-      # overwritehost and overwrite.cli.url are not needed here.
+      # overwritehost is not needed. overwrite.cli.url is: occ and cron have no
+      # Host header, and without it Talk signs its HPB backend calls as
+      # https://localhost, which the HPB rejects ("Authentication check failed").
       trusted_proxies   = [ "127.0.0.1" "::1" "10.0.0.0/8" ];
       overwriteprotocol = "https";
+    } // lib.optionalAttrs (ncProxyDomain != "") {
+      "overwrite.cli.url" = "https://${ncProxyDomain}";
+    } // {
 
       # Maintenance window: 01:00 UTC — avoids peak usage hours
       maintenance_window_start = 1;
