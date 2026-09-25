@@ -32,7 +32,7 @@ SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 readonly SCRIPT_DIR
 # shellcheck source=../../lib/cli-gate.sh
 . "${SCRIPT_DIR}/../../lib/cli-gate.sh"
-readonly PLUGIN_DIR="/home/tappaas/TAPPaaS/src/foundation/network/scripts/plugins"
+PLUGIN_DIR="${PLUGIN_DIR:-/home/tappaas/TAPPaaS/src/foundation/network/scripts/plugins}"; readonly PLUGIN_DIR
 readonly ZONES_FILE="${CONFIG_DIR}/zones.json"
 readonly DESIRED="${CONFIG_DIR}/switch-configuration-desired.json"
 readonly ACTUAL="${CONFIG_DIR}/switch-configuration-actual.json"
@@ -265,24 +265,40 @@ select_plugin() {
 cmd_interrogate() {
     info "${BOLD}interrogate${CL} (live APs → actual.json)"
     ensure_files
-    local names name vendor ip plugin state
+    local names name vendor ip plugin state prc tmp failed=0
     names=$(jq -r '.accessPoints // {} | keys[]' "${DESIRED}")
     if [[ -z "${names}" ]]; then info "  (no APs in inventory)"; return 0; fi
     while IFS= read -r name; do
         vendor=$(jq -r --arg n "${name}" '.accessPoints[$n].vendor' "${DESIRED}")
         ip=$(jq -r --arg n "${name}" '.accessPoints[$n].managementIp // ""' "${DESIRED}")
         plugin=$(select_plugin "${vendor}")
+        # The plugin's stderr is left alone: it says WHY a device could not be
+        # read (#733). Only stdout is its answer.
+        prc=0
         # shellcheck disable=SC1090
-        state=$( . "${plugin}"; plugin_ap_interrogate "${name}" "${ip}" 2>/dev/null )
+        state=$( . "${plugin}"; plugin_ap_interrogate "${name}" "${ip}" ) || prc=$?
+        if [[ "${prc}" -ne 0 ]] || ! jq -e 'type == "object"' >/dev/null 2>&1 <<< "${state}"; then
+            warn "  ${name}: not interrogated — actual left unchanged"
+            failed=$((failed + 1)); continue
+        fi
         info "  ${name}: interrogated via $(basename "${plugin}" .sh) plugin"
-        if [[ -n "${state}" && "${state}" != "{}" ]]; then
-            local tmp; tmp="$(mktemp)"
-            # Merge (not replace) so operator/auto-detected fields like
-            # uplinkSwitch/uplinkPort survive an interrogate that only reports
-            # vendor/model/managementIp/ssids.
-            jq --arg n "${name}" --argjson s "${state}" '.accessPoints[$n] = ((.accessPoints[$n] // {}) * $s)' "${ACTUAL}" > "${tmp}" && mv "${tmp}" "${ACTUAL}"
+        [[ "${state}" != "{}" ]] || continue
+        tmp="$(mktemp)"
+        # Merge (not replace) so operator/auto-detected fields like
+        # uplinkSwitch/uplinkPort survive an interrogate that only reports
+        # vendor/model/managementIp/ssids.
+        if jq --arg n "${name}" --argjson s "${state}" '.accessPoints[$n] = ((.accessPoints[$n] // {}) * $s)' "${ACTUAL}" > "${tmp}"; then
+            mv "${tmp}" "${ACTUAL}"
+        else
+            rm -f "${tmp}"
+            warn "  ${name}: its answer could not be merged into actual — left unchanged"
+            failed=$((failed + 1))
         fi
     done <<< "${names}"
+    if [[ "${failed}" -gt 0 ]]; then
+        error "interrogate: ${failed} AP(s) could not be read"
+        return 1
+    fi
     return 0
 }
 
@@ -403,8 +419,15 @@ cmd_reconcile() {
     local apply="$1"
     DELTA_TOTAL=0; APPLY_MANUAL=0; APPLY_DONE=0; VALIDATION_WARN=0
     cmd_update_desired; echo ""
-    cmd_interrogate; echo ""
+    local stale=0
+    cmd_interrogate || stale=1; echo ""
     cmd_delta; echo ""
+    # A delta against an actual that could not be refreshed is a report, not a
+    # plan: applying it would push changes on stale state (#733).
+    if [[ "${stale}" -eq 1 ]]; then
+        error "ap-manager: not all APs could be read — delta shown, nothing applied"
+        return 1
+    fi
     if [[ "${apply}" -eq 1 ]]; then
         cmd_apply; echo ""
         if [[ "${APPLY_MANUAL:-0}" -eq 0 ]]; then
@@ -433,6 +456,10 @@ main() {
     shift || true
     [[ -f "${ZONES_FILE}" ]] || die "zones.json not found: ${ZONES_FILE}"
     ensure_files
+    # One vendor login per run, shared by every AP's plugin subshell (#733).
+    UNIFI_SESSION="$(mktemp -d)"
+    export UNIFI_SESSION
+    trap 'rm -rf "${UNIFI_SESSION}"' EXIT
 
     case "${cmd}" in
         add)            cmd_add "$@" ;;

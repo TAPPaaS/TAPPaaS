@@ -515,6 +515,7 @@ function cmdInterrogate(): number {
   ensureFiles();
   let a = loadActual();
   let d = loadDesired();
+  let failed = 0;
 
   for (const name of Object.keys(obj(a.controllers))) {
     const ctrl = obj(obj(a.controllers)[name]);
@@ -526,9 +527,12 @@ function cmdInterrogate(): number {
       continue;
     }
     const res = pluginCall(plugin, "plugin_controller_interrogate", [name, ip]);
+    // The plugin's stderr says WHY a device could not be read (#733).
+    if (res.stderr.trim()) process.stderr.write(res.stderr);
     const state = parseJsonLoose(res.stdout);
-    if (state === undefined || !isObj(state)) {
-      warn(`  controller ${name}: no/invalid response (unreachable or rate-limited?) — left actual unchanged`);
+    if (res.status !== 0 || state === undefined || !isObj(state)) {
+      warn(`  controller ${name}: not interrogated — actual left unchanged`);
+      failed++;
       continue;
     }
     if (Object.keys(state).length === 0) {
@@ -597,9 +601,11 @@ function cmdInterrogate(): number {
     if (!pluginHasFn(plugin, "plugin_interrogate")) continue;
     const ip = str(obj(obj(a.switches)[name]).managementIp);
     const res = pluginCall(plugin, "plugin_interrogate", [name, ip]);
+    if (res.stderr.trim()) process.stderr.write(res.stderr);
     const state = parseJsonLoose(res.stdout);
-    if (state === undefined || !isObj(state)) {
-      warn(`  switch ${name}: no/invalid response — left actual unchanged`);
+    if (res.status !== 0 || state === undefined || !isObj(state)) {
+      warn(`  switch ${name}: not interrogated — actual left unchanged`);
+      failed++;
       continue;
     }
     if (Object.keys(state).length === 0) continue;
@@ -609,6 +615,10 @@ function cmdInterrogate(): number {
     saveActual(a);
     a = loadActual();
     info(`  switch ${name}: uploaded ${Object.keys(obj(state.ports)).length} port(s)`);
+  }
+  if (failed > 0) {
+    console.error(`${RD}[Error]${CL} interrogate: ${failed} controller(s)/switch(es) could not be read`);
+    return 1;
   }
   return 0;
 }
@@ -771,12 +781,18 @@ function cmdConfirm(): number {
 
 // ── reconcile (interrogate → update-desired → delta → apply → confirm) ─
 function cmdReconcile(apply: boolean): number {
-  cmdInterrogate();
+  const stale = cmdInterrogate() !== 0;
   info("");
   cmdUpdateDesired();
   info("");
   const d = cmdDelta();
   info("");
+  // A delta against an actual that could not be refreshed is a report, not a
+  // plan: applying it would program switches from stale state (#733).
+  if (stale) {
+    console.error(`${RD}[Error]${CL} switch-manager: not every device could be read — delta shown, nothing applied`);
+    return 1;
+  }
   if (apply) {
     const ap = cmdApply(true);
     info("");

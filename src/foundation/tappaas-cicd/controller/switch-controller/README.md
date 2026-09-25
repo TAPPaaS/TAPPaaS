@@ -47,12 +47,12 @@ and carry the full active VLAN set; `device` ports are access ports.
 
 | Command | Purpose |
 |---------|---------|
-| `interrogate` | Pull live config from controller/auto switches into `actual.json` (via the vendor plugin). |
+| `interrogate` | Pull live config from controller/auto switches into `actual.json` (via the vendor plugin). A controller or switch that cannot be read is left unchanged, the plugin's reason is shown, and the command exits 1. |
 | `update-desired` | Compute `desired.json` from the actual topology + `zones.json`. |
 | `delta` | Show the desired-vs-actual VLAN differences per port. |
 | `apply` | Push the delta via the vendor plugin; the manual plugin prints the steps to apply by hand. |
 | `confirm` | Record the applied VLAN config back into `actual.json`. |
-| `reconcile [--apply]` | Run all five in order. Without `--apply` it stops at `delta` (dry-run); with `--apply` it pushes and confirms. |
+| `reconcile [--apply]` | Run all five in order. Without `--apply` it stops at `delta` (dry-run); with `--apply` it pushes and confirms. If any device could not be read, the delta is shown but **nothing is applied** (exit 1). |
 
 ### Examples
 

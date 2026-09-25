@@ -364,9 +364,10 @@ plugin_for_switch() {
 cmd_interrogate() {
     info "${BOLD}interrogate${CL} (controllers + auto switches → actual.json)"
     ensure_files
-    local name vendor ip plugin state tmp
+    local name vendor ip plugin state tmp prc failed=0
 
-    # Controllers: upload their switches + ports.
+    # Controllers: upload their switches + ports. The plugin's stderr is left
+    # alone — it says WHY a device could not be read (#733); stdout is its answer.
     while IFS= read -r name; do
         [[ -z "${name}" ]] && continue
         vendor=$(jq -r --arg n "${name}" '.controllers[$n].vendor' "${ACTUAL}")
@@ -374,10 +375,12 @@ cmd_interrogate() {
         plugin=$(select_plugin "${vendor}")
         # shellcheck disable=SC1090
         ( . "${plugin}"; declare -F plugin_controller_interrogate >/dev/null ) || { info "  controller ${name}: ${vendor} plugin has no controller interrogate — skipped"; continue; }
+        prc=0
         # shellcheck disable=SC1090
-        state=$( . "${plugin}"; plugin_controller_interrogate "${name}" "${ip}" 2>/dev/null )
-        if [[ -z "${state}" ]] || ! echo "${state}" | jq -e . >/dev/null 2>&1; then
-            warn "  controller ${name}: no/invalid response (unreachable or rate-limited?) — left actual unchanged"; continue
+        state=$( . "${plugin}"; plugin_controller_interrogate "${name}" "${ip}" ) || prc=$?
+        if [[ "${prc}" -ne 0 ]] || ! jq -e 'type == "object"' >/dev/null 2>&1 <<< "${state}"; then
+            warn "  controller ${name}: not interrogated — actual left unchanged"
+            failed=$((failed + 1)); continue
         fi
         [[ "${state}" != "{}" ]] || { info "  controller ${name}: nothing uploaded"; continue; }
         tmp="$(mktemp)"
@@ -417,9 +420,13 @@ cmd_interrogate() {
         ip=$(jq -r --arg n "${name}" '.switches[$n].managementIp // ""' "${ACTUAL}")
         # shellcheck disable=SC1090
         ( . "${plugin}"; declare -F plugin_interrogate >/dev/null ) || continue
+        prc=0
         # shellcheck disable=SC1090
-        state=$( . "${plugin}"; plugin_interrogate "${name}" "${ip}" 2>/dev/null )
-        echo "${state}" | jq -e . >/dev/null 2>&1 || { warn "  switch ${name}: no/invalid response — left actual unchanged"; continue; }
+        state=$( . "${plugin}"; plugin_interrogate "${name}" "${ip}" ) || prc=$?
+        if [[ "${prc}" -ne 0 ]] || ! jq -e 'type == "object"' >/dev/null 2>&1 <<< "${state}"; then
+            warn "  switch ${name}: not interrogated — actual left unchanged"
+            failed=$((failed + 1)); continue
+        fi
         [[ "${state}" != "{}" ]] || continue
         tmp="$(mktemp)"
         jq --arg n "${name}" --argjson s "${state}" '
@@ -427,6 +434,10 @@ cmd_interrogate() {
             "${ACTUAL}" > "${tmp}" && mv "${tmp}" "${ACTUAL}"
         info "  switch ${name}: uploaded $(echo "${state}" | jq -r '.ports // {} | length') port(s)"
     done < <(jq -r '.switches // {} | to_entries[] | select(.value.controller == null) | .key' "${ACTUAL}")
+    if [[ "${failed}" -gt 0 ]]; then
+        error "interrogate: ${failed} controller(s)/switch(es) could not be read"
+        return 1
+    fi
     return 0
 }
 
@@ -588,9 +599,16 @@ cmd_confirm() {
 cmd_reconcile() {
     local apply="$1"
     DELTA_TOTAL=0; APPLY_MANUAL=0; APPLY_DONE=0
-    cmd_interrogate; echo ""
+    local stale=0
+    cmd_interrogate || stale=1; echo ""
     cmd_update_desired; echo ""
     cmd_delta; echo ""
+    # A delta against an actual that could not be refreshed is a report, not a
+    # plan: applying it would program switches from stale state (#733).
+    if [[ "${stale}" -eq 1 ]]; then
+        error "switch-controller: not every device could be read — delta shown, nothing applied"
+        return 1
+    fi
     if [[ "${apply}" -eq 1 ]]; then
         APPLY_APPLIED_SWITCHES=(); APPLY_MANUAL_SWITCHES=()
         SM_AUTOCONFIRM=1 cmd_apply; echo ""   # confirm runs right after → tell manual.sh not to ask for it
@@ -632,6 +650,10 @@ main() {
     shift || true
     [[ -f "${ZONES_FILE}" ]] || die "zones.json not found: ${ZONES_FILE}"
     ensure_files
+    # One vendor login per run, shared by every device's plugin subshell (#733).
+    UNIFI_SESSION="$(mktemp -d)"
+    export UNIFI_SESSION
+    trap 'rm -rf "${UNIFI_SESSION}"' EXIT
 
     case "${cmd}" in
         add-controller)    cmd_add_controller "$@" ;;

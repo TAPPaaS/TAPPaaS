@@ -26,11 +26,33 @@ _UNIFI_JAR=""
 _UNIFI_CSRF=""
 _UNIFI_URL=""
 
-_unifi_warn() { if command -v warn >/dev/null 2>&1; then warn "$*"; else echo "unifi.sh: $*" >&2; fi; }
+# Warnings go to STDERR: the callers capture stdout as the plugin's JSON, and the
+# caller's warn() prints to stdout — so a warning used to land inside that JSON,
+# fail the caller's parse and be replaced by a generic message (#733).
+_unifi_warn() { if command -v warn >/dev/null 2>&1; then warn "$*" >&2; else echo "unifi.sh: $*" >&2; fi; }
+
+# An HTTP status from the UniFi OS API, in words an operator can act on (#733).
+_unifi_http_reason() {
+    case "$1" in
+        000|"") echo "no connection to ${_UNIFI_URL:-the controller} (host down, wrong port in url=, or TLS failure)" ;;
+        401|403) echo "HTTP $1 — the controller rejected the credentials or the session; check the LOCAL admin (no SSO/MFA) in ${UNIFI_CRED} — setup-credentials.sh" ;;
+        404) echo "HTTP 404 — wrong url= in ${UNIFI_CRED}, or no site '${UNIFI_SITE}'" ;;
+        429) echo "HTTP 429 — the controller is rate-limiting; wait a minute and retry" ;;
+        *) echo "HTTP $1" ;;
+    esac
+}
 
 # Log in once per process; populates _UNIFI_URL/_UNIFI_JAR/_UNIFI_CSRF. Returns 1 on failure.
+#
+# A caller that runs the plugin once per device, each in its own subshell, sets
+# UNIFI_SESSION to a private directory (mktemp -d) for the run: the first login
+# leaves its cookie jar and CSRF token there and the rest reuse them. Without it
+# every device logged in afresh — enough logins in a row for UniFi OS to
+# rate-limit the next (#733).
 _unifi_login() {
     [[ -n "${_UNIFI_JAR}" && -s "${_UNIFI_JAR}" ]] && return 0
+    local session="${UNIFI_SESSION:-}"
+    [[ -n "${session}" && -d "${session}" ]] || session=""
     [[ -f "${UNIFI_CRED}" ]] || { _unifi_warn "credentials file ${UNIFI_CRED} not found"; return 1; }
     local url u p
     url=$(awk -F= '/^url=/{sub(/^url=/,"");print;exit}' "${UNIFI_CRED}")
@@ -38,7 +60,12 @@ _unifi_login() {
     p=$(awk -F= '/^password=/{sub(/^password=/,"");print;exit}' "${UNIFI_CRED}")
     [[ -n "${url}" && -n "${u}" && -n "${p}" ]] || { _unifi_warn "credentials incomplete in ${UNIFI_CRED} (run setup-credentials.sh)"; return 1; }
     _UNIFI_URL="${url%/}"
-    _UNIFI_JAR=$(mktemp)
+    if [[ -n "${session}" && -s "${session}/jar" ]]; then
+        _UNIFI_JAR="${session}/jar"
+        _UNIFI_CSRF=$(cat "${session}/csrf" 2>/dev/null || true)
+        return 0
+    fi
+    if [[ -n "${session}" ]]; then _UNIFI_JAR="${session}/jar"; else _UNIFI_JAR=$(mktemp); fi
     local hdr code
     hdr=$(mktemp)
     code=$(curl -sk -m 20 -c "${_UNIFI_JAR}" -D "${hdr}" -o /dev/null -w '%{http_code}' \
@@ -48,15 +75,34 @@ _unifi_login() {
     _UNIFI_CSRF=$(awk 'tolower($0) ~ /^x-csrf-token:/ {print $2}' "${hdr}" | tr -d '\r' | tail -1)
     rm -f "${hdr}"
     if [[ "${code}" != "200" ]]; then
-        _unifi_warn "UniFi login failed (HTTP ${code}) — use a LOCAL admin (no SSO/MFA); see setup-credentials.sh"
+        _unifi_warn "UniFi login failed: $(_unifi_http_reason "${code}")"
         rm -f "${_UNIFI_JAR}"; _UNIFI_JAR=""
         return 1
     fi
+    [[ -z "${session}" ]] || printf '%s' "${_UNIFI_CSRF}" > "${session}/csrf"
     return 0
 }
 
-# GET {site-base}{path}; POST/PUT with a JSON body.
-_unifi_get()  { curl -sk -m 20 -b "${_UNIFI_JAR}" ${_UNIFI_CSRF:+-H "X-CSRF-Token: ${_UNIFI_CSRF}"} "${_UNIFI_URL}/proxy/network/api/s/${UNIFI_SITE}$1" 2>/dev/null; }
+# GET {site-base}{path}. Prints the body when the API answers 2xx with JSON;
+# otherwise prints nothing and says why on stderr. The status used to be
+# dropped, so an expired session, a rate limit and a dead host read the same.
+_unifi_get() {
+    local out code body
+    out=$(curl -sk -m 20 -b "${_UNIFI_JAR}" ${_UNIFI_CSRF:+-H "X-CSRF-Token: ${_UNIFI_CSRF}"} \
+        -w '\n%{http_code}' "${_UNIFI_URL}/proxy/network/api/s/${UNIFI_SITE}$1" 2>/dev/null) || true
+    code="${out##*$'\n'}"
+    body="${out%$'\n'*}"
+    if [[ "${code}" != 2?? ]]; then
+        _unifi_warn "GET $1: $(_unifi_http_reason "${code}")"
+        return 0
+    fi
+    if ! jq -e . >/dev/null 2>&1 <<< "${body}"; then
+        _unifi_warn "GET $1: HTTP ${code} but the body is not JSON: $(head -c 80 <<< "${body}")"
+        return 0
+    fi
+    printf '%s\n' "${body}"
+}
+# POST/PUT with a JSON body.
 _unifi_send() { local m="$1" path="$2" body="$3"; curl -sk -m 25 -b "${_UNIFI_JAR}" ${_UNIFI_CSRF:+-H "X-CSRF-Token: ${_UNIFI_CSRF}"} -H "Content-Type: application/json" -X "${m}" -d "${body}" "${_UNIFI_URL}/proxy/network/api/s/${UNIFI_SITE}${path}" 2>/dev/null; }
 
 # ── Contract: supports + management metadata ────────────────────────
@@ -75,10 +121,10 @@ plugin_controller_module() { echo "unifi-os"; }
 # Match the UniFi device by management IP first, then by name.
 plugin_interrogate() {
     local name="$1" mgmt_ip="${2:-}"
-    _unifi_login || { echo "{}"; return 0; }
+    _unifi_login || { echo "{}"; return 1; }
     local devs nets
     devs=$(_unifi_get /stat/device)
-    echo "${devs}" | jq -e . >/dev/null 2>&1 || { _unifi_warn "no/invalid device list (unreachable or rate-limited?)"; echo "{}"; return 0; }
+    [[ -n "${devs}" ]] || { _unifi_warn "${name}: no device list from the controller"; echo "{}"; return 1; }
     nets=$(_unifi_get /rest/networkconf)
     echo "${nets}" | jq -e . >/dev/null 2>&1 || nets='{"data":[]}'
 
@@ -129,10 +175,10 @@ plugin_interrogate() {
 # operator port annotations (type/target/targetPort).
 plugin_controller_interrogate() {
     local name="$1" mgmt_ip="${2:-}"   # mgmt_ip unused: creds carry the URL
-    _unifi_login || { echo "{}"; return 0; }
+    _unifi_login || { echo "{}"; return 1; }
     local devs nets
     devs=$(_unifi_get /stat/device)
-    echo "${devs}" | jq -e . >/dev/null 2>&1 || { _unifi_warn "controller returned no/invalid device list (unreachable or rate-limited?)"; echo "{}"; return 0; }
+    [[ -n "${devs}" ]] || { _unifi_warn "${name}: no device list from the controller"; echo "{}"; return 1; }
     nets=$(_unifi_get /rest/networkconf)
     echo "${nets}" | jq -e . >/dev/null 2>&1 || nets='{"data":[]}'
 
@@ -330,10 +376,10 @@ _unifi_security_fields() {
 #   {vendor,model,managementIp,ssids:{ "<ssid>": {vlan,enabled,security} }}
 plugin_ap_interrogate() {
     local name="$1" mgmt_ip="${2:-}"
-    _unifi_login || { echo "{}"; return 0; }
+    _unifi_login || { echo "{}"; return 1; }
     local devs nets wlans
     devs=$(_unifi_get /stat/device)
-    echo "${devs}" | jq -e . >/dev/null 2>&1 || { _unifi_warn "no/invalid device list (unreachable or rate-limited?)"; echo "{}"; return 0; }
+    [[ -n "${devs}" ]] || { _unifi_warn "${name}: no device list from the controller"; echo "{}"; return 1; }
     nets=$(_unifi_get /rest/networkconf); echo "${nets}" | jq -e . >/dev/null 2>&1 || nets='{"data":[]}'
     wlans=$(_unifi_get /rest/wlanconf);   echo "${wlans}" | jq -e . >/dev/null 2>&1 || wlans='{"data":[]}'
 

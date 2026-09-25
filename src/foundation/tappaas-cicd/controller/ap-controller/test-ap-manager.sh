@@ -112,6 +112,32 @@ ck "remove <ap> --force refused (rc)" "1"     "$(rc_of "${AM}" remove ap-living 
 ck "…and nothing changed"            "${before}" "$(md5sum < "${DES}")"
 ck "--help works without zones.json" "0"      "$(CONFIG_DIR=/nonexistent rc_of "${AM}" apply --help)"
 
+# ── #733: an AP that cannot be read is reported, never merged or swallowed ──
+ACT="${TMP}/switch-configuration-actual.json"
+STUB="${TMP}/plugins"; mkdir -p "${STUB}"
+cp "/home/tappaas/TAPPaaS/src/foundation/network/scripts/plugins/manual.sh" "${STUB}/"
+stub() { printf 'plugin_supports() { [[ "$1" == "stub" ]]; }\nplugin_ap_interrogate() { %s; }\n' "$1" > "${STUB}/stub.sh"; }
+stub "echo '{}'"
+PLUGIN_DIR="${STUB}" "${AM}" add ap-stub --vendor stub --ip 10.0.0.30 >/dev/null 2>&1
+# The old failure: a warning on STDOUT ahead of the JSON. It used to crash the
+# merge ('jq: invalid JSON text passed to --argjson') and still exit 0.
+stub "echo '[Warning] something'; echo '{\"model\":\"U7\"}'"
+before="$(md5sum < "${ACT}")"
+out="$(PLUGIN_DIR="${STUB}" "${AM}" interrogate 2>&1)"; rc=$?
+ck "#733 polluted answer fails interrogate (rc)" "1" "${rc}"
+ck "#733 …no jq crash"                "no"  "$(has "${out}" 'invalid JSON text')"
+ck "#733 …names the AP"                "yes" "$(has "${out}" 'ap-stub: not interrogated')"
+ck "#733 …actual untouched"            "${before}" "$(md5sum < "${ACT}")"
+stub "echo 'UniFi login failed: HTTP 401 — check the LOCAL admin' >&2; echo '{}'; return 1"
+out="$(PLUGIN_DIR="${STUB}" "${AM}" interrogate 2>&1)"
+ck "#733 the plugin's reason is shown" "yes" "$(has "${out}" 'HTTP 401 — check the LOCAL admin')"
+ck "#733 reconcile --apply on stale actual (rc)" "1" "$(PLUGIN_DIR="${STUB}" rc_of "${AM}" reconcile --apply)"
+ck "#733 …applies nothing"             "${before}" "$(md5sum < "${ACT}")"
+stub "[[ -d \"\${UNIFI_SESSION:-}\" ]] || return 1; echo '{\"model\":\"U7\"}'"
+ck "#733 a good answer is merged (rc)" "0"   "$(PLUGIN_DIR="${STUB}" rc_of "${AM}" interrogate)"
+ck "#733 …into actual"                 "U7"  "$(jq -r '.accessPoints["ap-stub"].model' "${ACT}")"
+PLUGIN_DIR="${STUB}" "${AM}" remove ap-stub >/dev/null 2>&1
+
 echo ""
 echo "test-ap-manager: ${PASS} passed, ${FAIL} failed"
 [[ "${FAIL}" -eq 0 ]]

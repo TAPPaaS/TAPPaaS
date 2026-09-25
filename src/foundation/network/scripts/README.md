@@ -206,9 +206,21 @@ A plugin is sourced (not exec'd) and implements:
 | `plugin_apply <switch> <delta>` | push the desired port config (rc 1 ⇒ manual action required) |
 | `plugin_ap_interrogate` / `plugin_ap_apply` | AP/SSID equivalents (used by `ap-controller`) |
 
+An interrogate prints its JSON answer on **stdout and nothing else**; the
+controllers parse it. Warnings and errors go to **stderr**, which the controllers
+show. A device the plugin could not read answers `{}` with **rc 1**, so the
+controller leaves `actual.json` alone for it and exits non-zero; `manual.sh`
+answers `{}` with rc 0 (nothing to read, not a failure).
+
 Shipped plugins:
 - **`unifi.sh`** — UniFi OS (controller arch; module `unifi-os`). Maps ports to
   UniFi `port_overrides`, SSIDs to `wlanconf`, VLANs to VLAN-only networks.
+  A failed call names its cause: no connection (host, port in `url=`, TLS),
+  HTTP 401/403 (the credentials — a **local** admin, no SSO/MFA), 404 (`url=` or
+  site), 429 (rate-limited), or a 200 whose body is not JSON. The controllers
+  give every run a private `UNIFI_SESSION` directory, so all devices share one
+  login instead of logging in once each — which is what triggers UniFi OS's
+  login rate limit.
 - **`manual.sh`** — fallback; `interrogate` returns `{}`, `apply` prints the
   delta as copy-paste instructions.
 

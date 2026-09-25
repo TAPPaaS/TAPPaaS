@@ -159,6 +159,64 @@ ck "trunk overrides carry tagged_vlan_mgmt=custom (10.x prune)" "custom,custom" 
    "$(jq -rc '[.port_overrides[]|select(.forward=="customize")|.tagged_vlan_mgmt]|join(",")' "${APTMP}/put.json" 2>/dev/null)"
 rm -rf "${APTMP}"
 
+# ── #733: say WHY a call failed, on stderr, and log in once per run ──
+# Re-source: the sections above replaced _unifi_login/_unifi_get with fixtures.
+# shellcheck source=plugins/unifi.sh disable=SC1091
+. "${SCRIPT_DIR}/plugins/unifi.sh"
+ETMP="$(mktemp -d)"
+UNIFI_CRED="${ETMP}/cred"; printf 'url=https://ctl:11443\nusername=admin\npassword=pw\n' > "${UNIFI_CRED}"
+warn() { echo "[Warning] $*"; }   # the callers' warn prints to STDOUT
+# curl stub: CURL_LOGIN / CURL_GET = the HTTP status to answer; CURL_BODY = the GET body.
+curl() {
+    local a
+    for a in "$@"; do
+        if [[ "${a}" == */api/auth/login ]]; then
+            echo login >> "${ETMP}/calls"; printf '%s' "${CURL_LOGIN:-200}"; return 0
+        fi
+    done
+    [[ "${CURL_GET:-200}" == 000 ]] && { printf '\n000'; return 7; }
+    printf '%s\n%s' "${CURL_BODY:-{\}}" "${CURL_GET:-200}"
+}
+_UNIFI_URL="https://ctl:11443"; _UNIFI_JAR="${ETMP}/jar"; : > "${_UNIFI_JAR}"
+
+ck "a warning goes to stderr, never into the JSON" "" "$(_unifi_warn boom 2>/dev/null)"
+got() { CURL_GET="$1" CURL_BODY="${2:-{\}}" _unifi_get /stat/device 2>"${ETMP}/err"; }
+ck "GET 200 JSON: the body"                 '{"data":[]}' "$(got 200 '{"data":[]}')"
+ck "GET 401: no body"                       ""  "$(got 401)"
+ck "…and the credentials are named"         "yes" "$(grep -q 'HTTP 401 — the controller rejected the credentials' "${ETMP}/err" && echo yes || echo no)"
+got 429 >/dev/null
+ck "GET 429: rate limit named"              "yes" "$(grep -q 'HTTP 429 — the controller is rate-limiting' "${ETMP}/err" && echo yes || echo no)"
+got 000 >/dev/null
+ck "no connection: named, with the url"     "yes" "$(grep -q 'no connection to https://ctl:11443' "${ETMP}/err" && echo yes || echo no)"
+ck "GET 200 not JSON: no body"              ""  "$(got 200 '<html>oops</html>')"
+ck "…and said so"                           "yes" "$(grep -q 'HTTP 200 but the body is not JSON' "${ETMP}/err" && echo yes || echo no)"
+
+_UNIFI_JAR=""
+CURL_LOGIN=401 _unifi_login 2>"${ETMP}/err"; rc=$?
+ck "login 401 fails"                        "1" "${rc}"
+ck "…naming the credentials"                "yes" "$(grep -q 'UniFi login failed: HTTP 401' "${ETMP}/err" && echo yes || echo no)"
+
+# One login per run: three devices, three subshells, one shared session.
+export UNIFI_SESSION="${ETMP}/session"; mkdir -p "${UNIFI_SESSION}"; : > "${ETMP}/calls"
+_login_in_subshell() { ( _UNIFI_JAR=""; _unifi_login && echo tok > "${UNIFI_SESSION}/jar" ) 2>/dev/null; }
+for _ in 1 2 3; do _login_in_subshell; done
+ck "three subshells, one login"             "1" "$(grep -c login "${ETMP}/calls")"
+unset UNIFI_SESSION; : > "${ETMP}/calls"
+for _ in 1 2; do _login_in_subshell; done
+ck "without a session, each logs in"        "2" "$(grep -c login "${ETMP}/calls")"
+
+# An interrogate that could not read the device answers {} and FAILS.
+_UNIFI_JAR=""; _unifi_login() { return 1; }
+out="$(plugin_ap_interrogate ap1 10.0.0.9 2>/dev/null)"; rc=$?
+ck "failed login: interrogate answers {}"   "{}" "${out}"
+ck "…with rc 1"                             "1"  "${rc}"
+. "${SCRIPT_DIR}/plugins/unifi.sh"; _UNIFI_JAR="${ETMP}/jar"; _UNIFI_URL="https://ctl"
+_unifi_login() { return 0; }
+out="$(CURL_GET=401 plugin_controller_interrogate ctrl1 x 2>/dev/null)"; rc=$?
+ck "no device list: controller interrogate rc 1" "1" "${rc}"
+unset -f curl warn
+rm -rf "${ETMP}"
+
 echo ""
 echo "test-unifi-plugin: ${PASS} passed, ${FAIL} failed"
 [[ "${FAIL}" -eq 0 ]]

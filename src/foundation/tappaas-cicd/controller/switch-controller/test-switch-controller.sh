@@ -28,6 +28,7 @@ ACT="${TMP}/switch-configuration-actual.json"
 DES="${TMP}/switch-configuration-desired.json"
 PASS=0; FAIL=0
 ck() { local d="$1" e="$2" g="$3"; if [[ "$e" == "$g" ]]; then echo "  ok: $d"; PASS=$((PASS+1)); else echo "  FAIL: $d (expected '$e', got '$g')"; FAIL=$((FAIL+1)); fi; }
+has() { grep -q -- "$2" <<< "$1" && echo yes || echo no; }
 rc_of() { "$@" >/dev/null 2>&1; echo $?; }
 
 echo "test-switch-controller:"
@@ -139,14 +140,37 @@ ck "re-interrogate keeps target"     "tappaas3" "$(jq -r '.switches.StubSw.ports
 "${SM}" update-desired >/dev/null 2>&1
 ck "annotated port → active VLANs"   "200,310,610" "$(jq -rc '.switches.StubSw.ports["3"].taggedVlans|join(",")' "${DES}")"
 ck "un-annotated port stays bare"    ""       "$(jq -rc '.switches.StubSw.ports["1"].type // ""' "${DES}")"
-# robust to a non-JSON controller response (e.g. HTTP 429): warn, leave actual as-is, rc 0
+# A non-JSON controller response (e.g. HTTP 429): leave actual as-is, and SAY so
+# with rc 1 — a read that failed used to exit 0 (#733).
 cat > "${STUBDIR}/stub.sh" <<'EOF'
 plugin_supports() { [[ "$1" == "stub" ]]; }
 plugin_arch() { echo controller; }
 plugin_controller_interrogate() { echo '<html>429 Too Many Requests</html>'; }
 EOF
-ck "interrogate survives bad response" "0" "$(PLUGIN_DIR="${STUBDIR}" rc_of "${SM}" interrogate)"
+ck "a bad response fails interrogate (rc)" "1" "$(PLUGIN_DIR="${STUBDIR}" rc_of "${SM}" interrogate)"
 ck "bad response leaves switch intact" "node" "$(jq -r '.switches.StubSw.ports["3"].type' "${ACT}")"
+# The plugin's own reason (its stderr) reaches the operator instead of a
+# generic 'unreachable or rate-limited?' (#733).
+cat > "${STUBDIR}/stub.sh" <<'EOF'
+plugin_supports() { [[ "$1" == "stub" ]]; }
+plugin_arch() { echo controller; }
+plugin_controller_interrogate() { echo "UniFi login failed: HTTP 401 — check the LOCAL admin" >&2; echo '{}'; return 1; }
+EOF
+out="$(PLUGIN_DIR="${STUBDIR}" "${SM}" interrogate 2>&1)"
+ck "the plugin's reason is shown"      "yes" "$(has "${out}" 'HTTP 401 — check the LOCAL admin')"
+ck "…and no generic guess"             "no"  "$(has "${out}" 'unreachable or rate-limited')"
+ck "a failed plugin (rc 1) fails interrogate" "1" "$(PLUGIN_DIR="${STUBDIR}" rc_of "${SM}" interrogate)"
+before="$(md5sum < "${ACT}")"
+ck "reconcile --apply on stale actual (rc)" "1" "$(PLUGIN_DIR="${STUBDIR}" rc_of "${SM}" reconcile --apply)"
+ck "…applies nothing"                  "${before}" "$(md5sum < "${ACT}")"
+ck "…and says why" "yes" "$(has "$(PLUGIN_DIR="${STUBDIR}" "${SM}" reconcile --apply 2>&1)" 'nothing applied')"
+# One vendor login per run: every device's plugin subshell sees the same session dir.
+cat > "${STUBDIR}/stub.sh" <<'EOF'
+plugin_supports() { [[ "$1" == "stub" ]]; }
+plugin_arch() { echo controller; }
+plugin_controller_interrogate() { [[ -d "${UNIFI_SESSION:-}" ]] || return 1; echo '{}'; }
+EOF
+ck "the run's session reaches the plugin" "0" "$(PLUGIN_DIR="${STUBDIR}" rc_of "${SM}" interrogate)"
 "${SM}" remove-switch StubSw >/dev/null 2>&1; "${SM}" remove-controller cstub >/dev/null 2>&1
 
 # ── list / show / remove / guards ───────────────────────────────────

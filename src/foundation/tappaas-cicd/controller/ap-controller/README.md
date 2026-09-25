@@ -48,11 +48,11 @@ ap-controller <command> [args]
 | Command | Purpose |
 |---------|---------|
 | `update-desired` | Track each SSID's VLAN from its zone (`zones.json` → desired). |
-| `interrogate` | Pull live AP state into `actual.json` (via the vendor plugin). |
+| `interrogate` | Pull live AP state into `actual.json` (via the vendor plugin). An AP that cannot be read is left unchanged, the plugin's reason is shown (e.g. `UniFi login failed: HTTP 401 — …`), and the command exits 1. |
 | `delta` | Show desired-vs-actual differences plus zone/SSID/uplink validations. |
 | `apply` | Push the delta via the vendor plugin; the manual plugin prints the steps. |
 | `confirm` | Record the applied state into `actual.json`. |
-| `reconcile [--apply]` | Run all five in order; `--apply` pushes and confirms, otherwise it is a dry-run. |
+| `reconcile [--apply]` | Run all five in order; `--apply` pushes and confirms, otherwise it is a dry-run. If any AP could not be read, the delta is shown but **nothing is applied** (exit 1) — it would be computed from stale state. |
 
 ### Examples
 
