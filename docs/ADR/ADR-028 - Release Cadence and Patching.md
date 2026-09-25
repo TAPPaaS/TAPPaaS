@@ -554,6 +554,13 @@ on against the branch that repository declares for `<c>`. Where they disagree it
 proposes the command that would fix it. It does **not** switch them: a branch change is a code
 change to a live site, and the operator decides when. The same comparison is what `status` reports.
 
+**A repository with no branch for the channel is its own warning.** A site on `production` may track
+a repository that declares only `unstable` — a module collection that has never cut a release, say.
+That is not the operator being on the wrong branch: there is no branch to move to, so the advice
+"switch to X" would be nonsense. It is reported as what it is — *this repository declares no branch
+for `production`* — because the honest reading is that the site cannot claim that channel for that
+repository at all, and somebody has to either cut the branch or accept the gap knowingly.
+
 This is the piece that makes a channel checkable rather than aspirational. A site on `production`
 whose Community checkout sits on `main` is not a production site, and before this nothing could say
 so.

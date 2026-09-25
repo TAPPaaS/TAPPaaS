@@ -137,6 +137,7 @@ soak_started() { jq -r '.soakStartedAt // empty' "${STATE_FILE}" 2>/dev/null; }
 # ── status ───────────────────────────────────────────────────────────
 CHAN_UNDECLARED=0
 CHAN_MISMATCH=0
+CHAN_NOBRANCH=0
 
 cmd_status() {
     read_train
@@ -181,14 +182,29 @@ cmd_status() {
             else
                 _real="$(branch_channel "${_rp}" "${_rb}")"
                 if [[ -n "${SITE_CHANNEL}" && "${_real}" != "${SITE_CHANNEL}" ]]; then
-                    _note="site claims '${SITE_CHANNEL}'"
-                    CHAN_MISMATCH=$((CHAN_MISMATCH + 1))
+                    # Two different problems, and only one is fixable by moving
+                    # a branch. A repository that declares NO branch for this
+                    # channel cannot realize it at all — switching branches
+                    # inside it will never help, so say that instead of
+                    # implying the operator picked the wrong one.
+                    if [[ -z "$(channel_branches "${_rp}" "${SITE_CHANNEL}")" ]]; then
+                        _note="declares NO branch for '${SITE_CHANNEL}'"
+                        CHAN_NOBRANCH=$((CHAN_NOBRANCH + 1))
+                    else
+                        _note="site claims '${SITE_CHANNEL}' — expected $(channel_branches "${_rp}" "${SITE_CHANNEL}" | head -1)"
+                        CHAN_MISMATCH=$((CHAN_MISMATCH + 1))
+                    fi
                 fi
             fi
             printf '  %-14s %-18s %-11s %s\n' "${_rn}" "${_rb}" "${_real}" "${_note}"
         done < <(site_repos "${CONFIG_DIR}/site.json")
         (( CHAN_UNDECLARED == 0 )) || warn "  ${CHAN_UNDECLARED} repository/repositories declare no channels.json (ADR-028 D11)"
         (( CHAN_MISMATCH == 0 )) || warn "  ${CHAN_MISMATCH} repository/repositories are not on the branch this site's channel names"
+        # The one an operator cannot resolve by switching a branch.
+        if (( CHAN_NOBRANCH > 0 )); then
+            warn "  ${CHAN_NOBRANCH} repository/repositories have NO branch for '${SITE_CHANNEL}' —"
+            warn "    this site cannot honestly claim that channel for them until one exists."
+        fi
     fi
 
     [[ -n "${PIN_REV}" ]] && info "  estate pin ${BL}${PIN_REV:0:12}${CL}, ${PIN_AGE} days old"
