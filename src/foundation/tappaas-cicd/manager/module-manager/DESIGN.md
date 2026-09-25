@@ -247,7 +247,10 @@ all reusing the `dependsOn` machinery rather than forking it:
 - *Reverse auto-wire*: when a module that `provides: X` is installed, `install-module.sh`
   Step 7 scans installed configs for `integratesWith: <this>:X` (`find_integrateswith_consumers`,
   env-aware) and runs the provider's `install-service.sh` on each pre-existing integrator —
-  so install order does not matter.
+  so install order does not matter. It then finds the modules that `dependsOn: <this>:X`
+  (`find_dependson_consumers`), which can only pre-exist when the provider is being
+  reinstalled, and runs the provider's `update-service.sh` on each, so they are re-wired to
+  the new instance instead of waiting for their own next update (#739).
 - *Migration is a no-op*: `update-module.sh` computes its lifecycle delta over the
   **union** of `dependsOn` + `integratesWith`, so reclassifying a coordinate between the two
   (e.g. moving `vllm-amd:inference` to optional) neither tears down nor recreates the wiring

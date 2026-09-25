@@ -391,7 +391,7 @@ dns-manager(){ echo "$*" >> "${DNS_CALLS:-/dev/null}"; echo "released"; }
 STUB
 # The REAL provider resolver, not a stub of it (#718): what is under test is
 # that delete-module.sh asks it, and with which environment.
-sed -n '/^_legacy_module_alias() {/,/^}/p; /^resolve_provider_module() {/,/^}/p; /^find_integrateswith_consumers() {/,/^}/p' \
+sed -n '/^_legacy_module_alias() {/,/^}/p; /^resolve_provider_module() {/,/^}/p; /^find_service_consumers() {/,/^}/p; /^find_integrateswith_consumers() {/,/^}/p' \
     "${HERE}/../../lib/common-install-routines.sh" >> "${DWORK}/sbin/common-install-routines.sh"
 DSTUB="${WORK}/del-stub.sh"
 sed -e "s#/home/tappaas/bin/common-install-routines.sh#${DWORK}/sbin/common-install-routines.sh#g" \
@@ -867,7 +867,9 @@ IWSH="${WORK}/iw.sh"
     sed -n '/^_legacy_module_alias() {/,/^}/p' "$IWLIB"
     sed -n '/^resolve_provider_module() {/,/^}/p' "$IWLIB"
     sed -n '/^provider_module_installed() {/,/^}/p' "$IWLIB"
+    sed -n '/^find_service_consumers() {/,/^}/p' "$IWLIB"
     sed -n '/^find_integrateswith_consumers() {/,/^}/p' "$IWLIB"
+    sed -n '/^find_dependson_consumers() {/,/^}/p' "$IWLIB"
     echo '"$@"'
 } > "$IWSH"
 
@@ -895,6 +897,11 @@ consdev="$(bash "$IWSH" "$IWC" find_integrateswith_consumers "vllm-amd-dev" "inf
 [[ "$consdev" == "litellm-dev " ]] \
     && ok "find_integrateswith_consumers: env-aware — a dev consumer matches vllm-amd-dev" \
     || bad "find_integrateswith_consumers: expected 'litellm-dev ', got '${consdev}'"
+# find_dependson_consumers (#739): the REQUIRED consumers — the mirror image.
+consdep="$(bash "$IWSH" "$IWC" find_dependson_consumers "vllm-amd" "inference" | tr '\n' ' ')"
+[[ "$consdep" == "hardconsumer " ]] \
+    && ok "find_dependson_consumers: finds the dependsOn consumer, ignores the integrators" \
+    || bad "find_dependson_consumers: expected 'hardconsumer ', got '${consdep}'"
 consnone="$(bash "$IWSH" "$IWC" find_integrateswith_consumers "vllm-amd" "othersvc" | tr '\n' ' ')"
 [[ -z "$consnone" ]] \
     && ok "find_integrateswith_consumers: a service mismatch yields no consumers" \

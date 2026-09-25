@@ -939,22 +939,20 @@ check_service_pinholes() {
     [[ "${missing}" -eq 0 ]]
 }
 
-# find_integrateswith_consumers — print the installed modules that OPTIONALLY
-# integrate with <provider_module>:<service> (#501). Environment-aware: each
-# consumer's own .environment resolves its provider name, so a base coordinate
-# like "vllm-amd:inference" matches whichever env-specific provider is deployed.
-# Used to auto-wire pre-existing integrators when their provider is installed,
-# and to un-wire them before the provider is deleted.
-# Arguments: <provider_module> <service>   (one consumer name per line)
-find_integrateswith_consumers() {
-    local provider_module="$1" service="$2"
+# find_service_consumers <field> <provider_module> <service> — print the installed
+# modules whose <field> (integratesWith or dependsOn) names <provider_module>:<service>.
+# Environment-aware: each consumer's own .environment resolves its provider name,
+# so a base coordinate like "vllm-amd:inference" matches whichever env-specific
+# provider is deployed. One consumer name per line.
+find_service_consumers() {
+    local field="$1" provider_module="$2" service="$3"
     local config_file consumer c_env entry esvc eprov rprov
     for config_file in "${CONFIG_DIR}"/*.json; do
         [[ -f "${config_file}" ]] || continue
         [[ "${config_file}" == *.orig ]] && continue
         consumer="$(basename "${config_file}" .json)"
         [[ "${consumer}" == "${provider_module}" ]] && continue
-        jq -e '.integratesWith' "${config_file}" >/dev/null 2>&1 || continue
+        jq -e --arg f "${field}" '.[$f]' "${config_file}" >/dev/null 2>&1 || continue
         c_env="$(jq -r '.environment // ""' "${config_file}" 2>/dev/null)"
         while IFS= read -r entry; do
             [[ -n "${entry}" ]] || continue
@@ -966,8 +964,25 @@ find_integrateswith_consumers() {
                 echo "${consumer}"
                 break
             fi
-        done < <(jq -r '.integratesWith // [] | .[]' "${config_file}" 2>/dev/null)
+        done < <(jq -r --arg f "${field}" '.[$f] // [] | .[]' "${config_file}" 2>/dev/null)
     done
+}
+
+# find_integrateswith_consumers — the installed modules that OPTIONALLY integrate
+# with <provider_module>:<service> (#501). Used to auto-wire pre-existing
+# integrators when their provider is installed, and to un-wire them before the
+# provider is deleted.
+# Arguments: <provider_module> <service>   (one consumer name per line)
+find_integrateswith_consumers() {
+    find_service_consumers integratesWith "$@"
+}
+
+# find_dependson_consumers — the installed modules that REQUIRE
+# <provider_module>:<service>. Used to re-wire them after the provider is
+# (re)installed (#739): a reinstall leaves them pointing at the old instance.
+# Arguments: <provider_module> <service>   (one consumer name per line)
+find_dependson_consumers() {
+    find_service_consumers dependsOn "$@"
 }
 
 # Check whether a VM with the given VMID exists anywhere in the Proxmox cluster.

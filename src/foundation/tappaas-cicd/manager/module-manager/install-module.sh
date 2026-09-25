@@ -865,7 +865,7 @@ main() {
     # on their behalf by calling OUR install-service.sh with the consumer's name.
     # Runs AFTER Step 6 so the provider is fully installed before integrators bind.
     if [[ -n "${provides}" ]]; then
-        info "${BOLD}Step 7: Wire pre-existing optional integrators${CL}"
+        info "${BOLD}Step 7: Wire pre-existing integrators and dependents${CL}"
         local wired_any=false
         for svc in ${provides}; do
             local rscript="${module_dir}/services/${svc}/install-service.sh"
@@ -883,6 +883,32 @@ main() {
             done < <(find_integrateswith_consumers "${effective_module}" "${svc}")
         done
         [[ "${wired_any}" == "false" ]] && info "  No pre-existing integrators found"
+
+        # Consumers that REQUIRE a service (dependsOn) can only pre-exist when this
+        # provider is being replaced (--reinstall): they are still wired to the
+        # instance that was deleted, and nothing re-wired them until each got an
+        # update of its own (#739). Re-apply each one's wiring through this
+        # provider's update-service.sh — what that consumer's own update would run.
+        local rewired_any=false
+        for svc in ${provides}; do
+            local uscript="${module_dir}/services/${svc}/update-service.sh"
+            local consumer
+            while IFS= read -r consumer; do
+                [[ -n "${consumer}" ]] || continue
+                rewired_any=true
+                if [[ ! -x "${uscript}" ]]; then
+                    warn "  '${consumer}' depends on ${effective_module}:${svc}, which has no update-service.sh — run: update-module.sh ${consumer}"
+                    continue
+                fi
+                info "  ${BL}${effective_module}:${svc}${CL} — re-wiring dependent '${consumer}'..."
+                if "${uscript}" "${consumer}"; then
+                    info "  ${GN}✓${CL} re-wired '${consumer}'"
+                else
+                    warn "  update-service.sh failed for dependent '${consumer}' — run: update-module.sh ${consumer}"
+                fi
+            done < <(find_dependson_consumers "${effective_module}" "${svc}")
+        done
+        [[ "${rewired_any}" == "false" ]] && info "  No dependent modules to re-wire"
     fi
 
     # ── Done ─────────────────────────────────────────────────────────
