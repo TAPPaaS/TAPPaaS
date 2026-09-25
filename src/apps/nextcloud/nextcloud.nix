@@ -726,9 +726,10 @@ in
         body=$(jq -n --arg t "$MS_TENANT_ID" --arg c "$MS_CLIENT_ID" --arg s "$MS_CLIENT_SECRET" \
           '{tenantId: $t, clientId: $c, clientSecret: $s}')
         # Credentials on stdin (-K -), not argv: the admin password stays out of ps.
+        # OCS-APIRequest: a plain app route; without it Nextcloud wants a CSRF token (412).
         code=$(printf 'user = "admin:%s"\n' "$(cat /var/lib/nextcloud/admin-pass)" \
           | curl -s -o /dev/null -w '%{http_code}' -K - -X POST \
-              -H 'Content-Type: application/json' -H 'Host: ${config.networking.hostName}' \
+              -H 'Content-Type: application/json' -H 'OCS-APIRequest: true' -H 'Host: ${config.networking.hostName}' \
               --data "$body" http://127.0.0.1/apps/mail/api/integration/microsoft)
         [ "$code" = 200 ] || { echo "Mail app refused the Microsoft settings (HTTP $code)" >&2; exit 1; }
 
