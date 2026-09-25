@@ -746,14 +746,18 @@ in
         set -euo pipefail
         export PATH="/run/current-system/sw/bin:${pkgs.coreutils}/bin:${pkgs.curl}/bin:${pkgs.jq}/bin:$PATH"
 
-        body=$(jq -n --arg t "$MS_TENANT_ID" --arg c "$MS_CLIENT_ID" --arg s "$MS_CLIENT_SECRET" \
-          '{tenantId: $t, clientId: $c, clientSecret: $s}')
-        # Credentials on stdin (-K -), not argv: the admin password stays out of ps.
+        # No secret in argv (ps shows argv to every user): jq reads the Microsoft
+        # settings from the environment (EnvironmentFile) into a 0600 file that curl
+        # sends by name, and the admin password goes to curl on stdin (-K -).
+        umask 077
+        body=$(mktemp)
+        trap 'rm -f "$body"' EXIT
+        jq -n '{tenantId: env.MS_TENANT_ID, clientId: env.MS_CLIENT_ID, clientSecret: env.MS_CLIENT_SECRET}' > "$body"
         # OCS-APIRequest: a plain app route; without it Nextcloud wants a CSRF token (412).
         code=$(printf 'user = "admin:%s"\n' "$(cat /var/lib/nextcloud/admin-pass)" \
           | curl -s -o /dev/null -w '%{http_code}' -K - -X POST \
               -H 'Content-Type: application/json' -H 'OCS-APIRequest: true' -H 'Host: ${config.networking.hostName}' \
-              --data "$body" http://127.0.0.1/apps/mail/api/integration/microsoft)
+              --data @"$body" http://127.0.0.1/apps/mail/api/integration/microsoft)
         [ "$code" = 200 ] || { echo "Mail app refused the Microsoft settings (HTTP $code)" >&2; exit 1; }
 
         stored=$(nextcloud-occ config:app:get mail microsoft_oauth_client_id || true)
