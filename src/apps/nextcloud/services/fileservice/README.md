@@ -30,14 +30,14 @@ The Nextcloud integration this consumer provides. update-service.sh re-applies '
 ## The OnlyOffice verdict is stored, not probed (#687)
 
 Nextcloud's OnlyOffice app keeps its last self-check in `oc_appconfig`
-(`appid='onlyoffice'`, `configkey='settings_error'`), and hides the editor
+(`appid='eurooffice'`, `configkey='settings_error'`), and hides the editor
 entirely while that value is set — the user sees no "open in Euro-Office"
 action at all, with nothing else failing.
 
 Two consequences worth knowing before reading a red test:
 
 - **`test-service.sh` reads that value, it does not re-probe.** A read-only
-  verifier must not mutate, and `onlyoffice:documentserver --check` rewrites
+  verifier must not mutate, and `eurooffice:documentserver --check` rewrites
   app config. So a failing `settings_error` test means "the last completed check
   failed", not necessarily "it is broken now". What it can ask without writing,
   it does: the document server's `/healthcheck`, from the Nextcloud VM — the
@@ -75,5 +75,5 @@ Two consequences worth knowing before reading a red test:
 To refresh it by hand:
 
 ```bash
-ssh -t tappaas@<nextcloud>.<zone>.internal sudo nextcloud-occ onlyoffice:documentserver --check
+ssh -t tappaas@<nextcloud>.<zone>.internal sudo nextcloud-occ eurooffice:documentserver --check
 ```

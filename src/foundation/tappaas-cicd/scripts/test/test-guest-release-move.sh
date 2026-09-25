@@ -47,11 +47,13 @@ run() {
         ssh() {
             local cmd="${*: -1}"
             case "${cmd}" in
-                *"/run/current-system/nixos-version"*) printf "%s\n" "${CUR}" | grep -oE "^[0-9]+\.[0-9]+" ;;
+                *"/run/current-system/nixos-version"*) printf "%s\n" "${CUR}" > "${T}/cur-version"
+                    bash -c "${cmd//\/run\/current-system\/nixos-version/${T}/cur-version}" ;;
                 *"nix-build"*) echo "these 3 derivations will be built:" >&2
                                [[ "${NEW}" == FAIL ]] && return 1
                                echo "/nix/store/abc-nixos-system-guest-${NEW}.20260924" ;;
-                *"/nix/store/abc-nixos-system-guest-"*"/nixos-version"*) printf "%s\n" "${NEW}" | grep -oE "^[0-9]+\.[0-9]+" ;;
+                *"/nix/store/abc-nixos-system-guest-"*"/nixos-version"*) printf "%s\n" "${NEW}" > "${T}/new-version"
+                    bash -c "$(sed -E "s#/nix/store/abc-nixos-system-guest-[^ ]*/nixos-version#${T}/new-version#" <<< "${cmd}")" ;;
                 *"nixos-rebuild boot"*)   echo boot >> "${T}/calls"; return "${BOOT_RC}" ;;
                 *"nixos-rebuild switch"*) echo switch >> "${T}/calls"
                     local n; n=$(grep -c switch "${T}/calls"); local rcs=(${SWITCH})
@@ -86,6 +88,8 @@ ck "no running release: the switch loop runs" "0|staged=0|boots=0|switches=1" "$
 echo "── only the numeric release counts ──"
 ck "flake-built 25.11.2026… vs tarball 25.11pre-git: no move" "0|staged=0|boots=0|switches=1" "$(run 25.11.20260522.b77b3de 25.11pre-git 0 0)"
 ck "25.11pre-git -> 26.05pre-git: a move" "0|staged=1|boots=1|switches=0" "$(run 25.11pre-git 26.05pre-git 0)"
+ck "fresh template clone efi-qcow2-25.11… -> 26.05pre-git: a move" "0|staged=1|boots=1|switches=0" "$(run efi-qcow2-25.11.20260522.b77b3de 26.05pre-git 0)"
+ck "efi-qcow2-26.05… -> 26.05pre-git: no move" "0|staged=0|boots=0|switches=1" "$(run efi-qcow2-26.05.20260922.1bc55b9 26.05pre-git 0 0)"
 
 echo "── only a lost connection is retried; nixos-rebuild's own verdict is not ──"
 ck "same release, ssh drops once (255) then works: retried" "0|staged=0|boots=0|switches=2" "$(run 26.05 26.05 0 255 0)"

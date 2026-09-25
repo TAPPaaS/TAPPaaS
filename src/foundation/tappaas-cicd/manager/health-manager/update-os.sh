@@ -437,15 +437,18 @@ resolve_nixos_config() {
 # compared: a guest built from a nixpkgs tarball reports "26.05pre-git", one
 # installed from the flake-built template "26.05.20260922.1bc55b9" — the same
 # release, which must not read as a move (measured on hrossen's logging guest).
+# The release is the first NN.NN anywhere in the line: a fresh clone of the image
+# template reports "efi-qcow2-25.11.20260522.b77b3de", and a match anchored at the
+# start read nothing there, so every fresh install switched across the release.
 release_move_of() {
     local ip="$1" nixpkgs_arg="$2" cfg="$3" cur top new
     cur="$(ssh -o BatchMode=yes "tappaas@${ip}" \
-        "grep -oE '^[0-9]+\\.[0-9]+' /run/current-system/nixos-version" 2>/dev/null)" || return 1
+        "grep -oE '[0-9]+\\.[0-9]+' /run/current-system/nixos-version | head -n 1" 2>/dev/null)" || return 1
     top="$(ssh -o BatchMode=yes "tappaas@${ip}" \
         "sudo nix-build '<nixpkgs/nixos>' -A system ${nixpkgs_arg} -I nixos-config=${cfg} --no-out-link" \
         2>/dev/null | tail -n 1)" || return 1
     [[ "${top}" == /nix/store/* ]] || return 1
-    new="$(ssh -o BatchMode=yes "tappaas@${ip}" "grep -oE '^[0-9]+\\.[0-9]+' ${top}/nixos-version" 2>/dev/null)" || return 1
+    new="$(ssh -o BatchMode=yes "tappaas@${ip}" "grep -oE '[0-9]+\\.[0-9]+' ${top}/nixos-version | head -n 1" 2>/dev/null)" || return 1
     [[ -n "${cur}" && -n "${new}" && "${cur}" != "${new}" ]] || return 1
     printf '%s %s' "${cur}" "${new}"
 }

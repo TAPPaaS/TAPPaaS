@@ -18,6 +18,11 @@
           "type": "boolean",
           "default": false
         },
+        "adminGroupClaim": {
+          "description": "With providesAdminRole: the OIDC groups claim carries this one group for members of <module>-admins, and nothing for anyone else (a dedicated Authentik scope mapping). For apps that grant admin to one literal group, e.g. Nextcloud: admin. Unset: no groups mapping is added.",
+          "type": "string",
+          "default": null
+        },
         "oidcRedirectPaths": {
           "description": "OIDC callback paths, each appended to https://<proxyDomain> to form a redirect URI. Default suits Nextcloud user_oidc.",
           "type": "array",

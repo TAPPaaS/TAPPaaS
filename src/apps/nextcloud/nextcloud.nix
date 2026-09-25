@@ -41,34 +41,47 @@ let
   # so a major bump is one number. Majors must be sequential — Nextcloud refuses to skip
   # (33 → 34 → 35). The eurooffice connector pin lives in eurooffice-nextcloud.nix; the
   # nixpkgs template rev is pinned engine-side (update-os.sh). See UPGRADE.md.
-  ncMajor = 33;
-  # Codeberg re-generated its `archive/<tag>.tar.gz` tarballs, changing the
-  # container bytes (gzip/git version) while the tagged CONTENT is unchanged.
-  # Every nixpkgs pin that fetches such an archive by FILE hash therefore fails
-  # with a fixed-output hash mismatch — including uppush 2.4.0 pinned here, and
-  # (verified) nixpkgs master's own newer 2.5.0 pin, so bumping nixpkgs does not
-  # help. The served 2.4.0 tarball was checked against a fresh `git clone` of tag
-  # 2.4.0: 86 files, byte-identical content, pure repackaging.
-  #
-  # Fix the CLASS, not the instance: refetch via fetchFromGitea, which is a
-  # fetchzip — it hashes the UNPACKED tree, so archive repackaging cannot break
-  # it again. Drop this override once nixpkgs ships a fetcher that does the same.
-  uppushSrc = pkgs.fetchFromGitea {
-    domain = "codeberg.org";
-    owner  = "NextPush";
-    repo   = "uppush";
-    rev    = "2.4.0";
-    hash   = "sha256-vV/4A7fC8rfRWdeAbiW0lfTc3Ptxm9QWVH356xZKjTw=";
+  ncMajor = 35;
+  # Apps nixpkgs does not package for 35 yet: 35-compatible releases came out after its
+  # last app-list refresh. Same app-store source nixpkgs uses; drop each pin once
+  # nextcloud35Packages.apps carries it. unpack = true hashes the unpacked tree, so a
+  # re-generated codeberg /archive tarball (uppush) cannot break the hash again.
+  storeApp = url: hash: patches: pkgs.fetchNextcloudApp { inherit url hash patches; unpack = true; license = "agpl3Plus"; };
+  storeApps = {
+    news             = storeApp "https://github.com/nextcloud/news/releases/download/29.0.0-beta.1/news.tar.gz"
+                                "sha256-ZT0FLb2u0vhuEX8tvUyHq2hW+hVuwW+1sArBiJQKGIw=" [];
+    previewgenerator = storeApp "https://github.com/nextcloud-releases/previewgenerator/releases/download/v5.15.0/previewgenerator-v5.15.0.tar.gz"
+                                "sha256-jXUX5hDNrZ7qFBQel+8IWAGu6WwMlMcpMf+YX5dKh/g=" [];
+    # 2.6.0's first migration types its tables as Doctrine's, but 35 hands out its own
+    # wrapper, so enabling it dies with a TypeError (upstream #124, open).
+    uppush           = storeApp "https://codeberg.org/NextPush/uppush/archive/2.6.0.tar.gz"
+                                "sha256-trpmBCuU4q4GXiSAT8gpP9pAz6q1Rdz/yIIB6Iem2is="
+                                [ (pkgs.callPackage ./uppush-nc35-patch.nix {}) ];
+    # nixpkgs ships 1.3.3 (<=34) as both the app and the daemon; 1.4.1 supports 35.
+    notify_push      = storeApp "https://github.com/nextcloud-releases/notify_push/releases/download/v1.4.1/notify_push-v1.4.1.tar.gz"
+                                "sha256-stMKO4B148w/AKF0CjT+OR+JDCiN5SfbTOp4j8K5txw=" [];
   };
+
+  # The notify_push daemon must match its app, so it moves to 1.4.1 with it.
+  notifyPushPkg = pkgs.nextcloud-notify_push.overrideAttrs (old: rec {
+    version = "1.4.1";
+    src = pkgs.fetchFromGitHub {
+      owner = "nextcloud";
+      repo  = "notify_push";
+      tag   = "v${version}";
+      hash  = "sha256-lg/gffgfUJHLCL1TOPdYAw7DtRZeGDH+jO9deQSUbEY=";
+    };
+    cargoDeps = pkgs.rustPlatform.fetchCargoVendor {
+      inherit src;
+      name = "notify_push-${version}-vendor";
+      hash = "sha256-skKOCJBtpvtdc594eOxbvSIl+SucaH0jl1gFv9kfvNA=";
+    };
+  });
 
   versions = {
     postgresPkg   = pkgs.postgresql_15;
     nextcloudPkg  = pkgs."nextcloud${toString ncMajor}";
-    nextcloudApps = (pkgs."nextcloud${toString ncMajor}Packages".apps) // {
-      uppush = pkgs."nextcloud${toString ncMajor}Packages".apps.uppush.overrideAttrs (_: {
-        src = uppushSrc;
-      });
-    };
+    nextcloudApps = pkgs."nextcloud${toString ncMajor}Packages".apps // storeApps;
   };
 
   # ── trusted_domains, derived from the module config (#508) ────────────────
@@ -400,19 +413,21 @@ in
         # Collaboration & knowledge
         collectives tables groupfolders guests
         # Files & admin
-        previewgenerator quota_warning end_to_end_encryption
+        previewgenerator end_to_end_encryption
         # Integrations
         integration_openai
       ;
-      # eurooffice-nextcloud v10.0.0 still uses app ID "onlyoffice" for backward compat
-      onlyoffice = pkgs.callPackage ./eurooffice-nextcloud.nix {};
+      eurooffice = pkgs.callPackage ./eurooffice-nextcloud.nix {};
+      # The notify_push module adds its own (nixpkgs 1.3.3); this one wins.
+      notify_push = lib.mkForce versions.nextcloudApps.notify_push;
     };
     extraAppsEnable = true;
 
     # TLS terminated by Caddy; VM serves plain HTTP
     https = false;
 
-    notify_push.enable = true;
+    notify_push.enable  = true;
+    notify_push.package = notifyPushPkg;
 
     phpOptions = {
       "memory_limit"                   = lib.mkForce "512M";
@@ -468,7 +483,14 @@ in
       # without touching what the token protects — the signature is still
       # checked in full; leeway only relaxes the time claims. The app provides
       # this knob for exactly this ("in case the system clock is a second off").
-      onlyoffice = {
+      # With --unique-uid=0 the user ID is the Authentik username, so an Authentik
+      # user named like a local account (admin) would sign in AS it. Refuse that
+      # ("User conflict") instead of adopting the local user.
+      user_oidc = {
+        soft_auto_provision = false;
+      };
+
+      eurooffice = {
         jwt_leeway = 60;
       };
 
@@ -497,9 +519,14 @@ in
       # gateway IP of every TAPPaaS zone (10.x.y.1). Including 10.0.0.0/8
       # covers all zones generically — safe in a private TAPPaaS deployment.
       # With a trusted proxy, Nextcloud reads the Host header directly, so
-      # overwritehost and overwrite.cli.url are not needed here.
+      # overwritehost is not needed. overwrite.cli.url is: occ and cron have no
+      # Host header, and without it Talk signs its HPB backend calls as
+      # https://localhost, which the HPB rejects ("Authentication check failed").
       trusted_proxies   = [ "127.0.0.1" "::1" "10.0.0.0/8" ];
       overwriteprotocol = "https";
+    } // lib.optionalAttrs (ncProxyDomain != "") {
+      "overwrite.cli.url" = "https://${ncProxyDomain}";
+    } // {
 
       # Maintenance window: 01:00 UTC — avoids peak usage hours
       maintenance_window_start = 1;
@@ -604,18 +631,28 @@ in
         set -euo pipefail
         export PATH="/run/current-system/sw/bin:${pkgs.coreutils}/bin:$PATH"
 
+        # --unique-uid=0: the user ID is the Authentik username (andreas), not a
+        # SHA-256 of it. Decide before first use: changing it later orphans every
+        # existing user's files, shares and client accounts.
         nextcloud-occ user_oidc:provider authentik \
           --clientid="$OIDC_CLIENT_ID" \
           --clientsecret="$OIDC_CLIENT_SECRET" \
           --discoveryuri="$OIDC_DISCOVERY_URI" \
-          --scope="email profile nextcloud openid" \
+          --scope="email profile nextcloud openid groups" \
           --mapping-uid="preferred_username" \
+          --unique-uid=0 \
           --mapping-display-name="name" \
           --mapping-email="email" \
           --mapping-quota="quota" \
           --mapping-groups="groups" \
+          --group-provisioning=1 \
+          --group-whitelist-regex="^admin$" \
           --check-bearer=1 \
           --send-id-token-hint=1
+
+        # Authentik is the only login backend, so the login page goes straight to
+        # it; a local account still logs in at /login?direct=1.
+        nextcloud-occ --no-interaction config:app:set user_oidc allow_multiple_user_backends --value=0 --type=string
 
         echo "Authentik OIDC provider configured successfully."
       '';
@@ -623,7 +660,7 @@ in
   };
 
   # Configure the Euro-Office connector — only runs when the secrets file exists.
-  # Secrets file (/etc/secrets/onlyoffice.env) is written by euro-office install-service.sh.
+  # Secrets file (/etc/secrets/onlyoffice.env) is written by this module's nextcloud:fileservice converge (the onlyoffice connector).
   # Format: JWT_SECRET=<hex>
   systemd.services.nextcloud-configure-eurooffice = {
     description = "Configure Euro-Office connector in Nextcloud";
@@ -641,11 +678,11 @@ in
         set -euo pipefail
         export PATH="/run/current-system/sw/bin:${pkgs.coreutils}/bin:$PATH"
 
-        nextcloud-occ config:app:set onlyoffice DocumentServerUrl         --value="$EURO_OFFICE_URL"
-        nextcloud-occ config:app:set onlyoffice DocumentServerInternalUrl --value="$EURO_OFFICE_INTERNAL_URL"
-        nextcloud-occ config:app:set onlyoffice StorageUrl                --value="https://$NEXTCLOUD_PUBLIC_URL/"
-        nextcloud-occ config:app:set onlyoffice jwt_secret                --value="$JWT_SECRET"
-        nextcloud-occ config:app:set onlyoffice jwt_header                --value="Authorization"
+        nextcloud-occ config:app:set eurooffice DocumentServerUrl         --value="$EURO_OFFICE_URL"
+        nextcloud-occ config:app:set eurooffice DocumentServerInternalUrl --value="$EURO_OFFICE_INTERNAL_URL"
+        nextcloud-occ config:app:set eurooffice StorageUrl                --value="https://$NEXTCLOUD_PUBLIC_URL/"
+        nextcloud-occ config:app:set eurooffice jwt_secret                --value="$JWT_SECRET"
+        nextcloud-occ config:app:set eurooffice jwt_header                --value="Authorization"
 
         echo "Euro-Office connector configured successfully."
       '';
@@ -657,6 +694,52 @@ in
   #   SMTP_USER=user@example.com
   #   SMTP_PASSWORD=<app password or account password>
   # The local part of SMTP_USER becomes the From address (user@example.com → "user").
+  # Mail app: Microsoft 365 sign-in. update.sh delivers the env file (MS_TENANT_ID,
+  # MS_CLIENT_ID, MS_CLIENT_SECRET) from the management plane when it exists there.
+  # The Mail app encrypts the client secret itself, so it goes through its admin
+  # endpoint; occ config:app:set would store it in clear and the app could not read it.
+  # notify_push: the daemon keeps reaching Nextcloud internally (the module's default
+  # URL, where its trusted-proxy self-test passes; through the reverse proxy the test fails
+  # because the proxy replaces X-Forwarded-For). Browsers need the public endpoint instead:
+  # the default hands them ws://<hostName>/push/ws, unresolvable and mixed content, so web
+  # notifications fell back to slow polling. Setup runs every boot, so this re-applies.
+  systemd.services.nextcloud-notify_push_setup.serviceConfig.ExecStartPost =
+    lib.mkIf (ncProxyDomain != "")
+      "${lib.getExe config.services.nextcloud.occ} --no-interaction config:app:set notify_push base_endpoint --value=https://${ncProxyDomain}/push --type=string";
+
+  systemd.services.nextcloud-configure-mail-microsoft = {
+    description = "Configure Microsoft 365 sign-in for the Mail app";
+    wantedBy    = [ "multi-user.target" ];
+    after       = [ "nextcloud-setup.service" "phpfpm-nextcloud.service" "nginx.service" ];
+    requires    = [ "nextcloud-setup.service" ];
+
+    unitConfig.ConditionPathExists = "/etc/secrets/mail-microsoft.env";
+
+    serviceConfig = {
+      Type            = "oneshot";
+      RemainAfterExit = true;
+      EnvironmentFile = "/etc/secrets/mail-microsoft.env";
+      ExecStart = pkgs.writeShellScript "nextcloud-configure-mail-microsoft" ''
+        set -euo pipefail
+        export PATH="/run/current-system/sw/bin:${pkgs.coreutils}/bin:${pkgs.curl}/bin:${pkgs.jq}/bin:$PATH"
+
+        body=$(jq -n --arg t "$MS_TENANT_ID" --arg c "$MS_CLIENT_ID" --arg s "$MS_CLIENT_SECRET" \
+          '{tenantId: $t, clientId: $c, clientSecret: $s}')
+        # Credentials on stdin (-K -), not argv: the admin password stays out of ps.
+        # OCS-APIRequest: a plain app route; without it Nextcloud wants a CSRF token (412).
+        code=$(printf 'user = "admin:%s"\n' "$(cat /var/lib/nextcloud/admin-pass)" \
+          | curl -s -o /dev/null -w '%{http_code}' -K - -X POST \
+              -H 'Content-Type: application/json' -H 'OCS-APIRequest: true' -H 'Host: ${config.networking.hostName}' \
+              --data "$body" http://127.0.0.1/apps/mail/api/integration/microsoft)
+        [ "$code" = 200 ] || { echo "Mail app refused the Microsoft settings (HTTP $code)" >&2; exit 1; }
+
+        stored=$(nextcloud-occ config:app:get mail microsoft_oauth_client_id || true)
+        [ "$stored" = "$MS_CLIENT_ID" ] || { echo "client id not stored (got '$stored')" >&2; exit 1; }
+        echo "Mail app: Microsoft 365 sign-in configured for tenant $MS_TENANT_ID"
+      '';
+    };
+  };
+
   systemd.services.nextcloud-configure-mail = {
     description = "Configure Nextcloud SMTP credentials";
     wantedBy    = [ "multi-user.target" ];
@@ -824,16 +907,19 @@ in
         set -euo pipefail
         export PATH="/run/current-system/sw/bin:${pkgs.coreutils}/bin:$PATH"
 
-        # whiteboard.env provides only JWT_SECRET_KEY — NEXTCLOUD_PUBLIC_URL is not set there.
-        # Default to the internal host so activation never fails on `set -u`; the public collab
-        # backend URL is refined post-deploy (needs the proxy domain + cert, like the connector).
-        PUBLIC_URL="''${NEXTCLOUD_PUBLIC_URL:-http://${config.networking.hostName}}"
+        # The browser opens the collab socket at this URL, so it must be the public
+        # one; Caddy routes its /socket.io/ to the co-located server.
+        PUBLIC_URL="${if ncProxyDomain != "" then "https://" + ncProxyDomain else "http://" + config.networking.hostName}"
 
-        nextcloud-occ config:app:set whiteboard collabBackendUrl \
-          --value="$PUBLIC_URL"
+        # Whiteboard 2.x declares both keys in its config lexicon (string; the
+        # secret sensitive). Set untyped, occ declines the change with "Config
+        # value were not updated", still exits 0, and the socket runs without a
+        # secret: the board shows Offline. --no-interaction makes it never prompt.
+        nextcloud-occ --no-interaction config:app:set whiteboard collabBackendUrl \
+          --type=string --value="$PUBLIC_URL"
 
-        nextcloud-occ config:app:set whiteboard jwt_secret_key \
-          --value="$JWT_SECRET_KEY"
+        nextcloud-occ --no-interaction config:app:set whiteboard jwt_secret_key \
+          --type=string --sensitive --value="$JWT_SECRET_KEY"
 
         echo "Nextcloud Whiteboard backend configured successfully."
       '';

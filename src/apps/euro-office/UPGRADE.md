@@ -1,7 +1,7 @@
-# Euro-Office — Upgrade Guide
+# euro-office — Upgrade Guide
 
 Operational upgrade guide for **operators**. To change the pinned document-server image, see
-"Maintainer: bumping the pin" at the bottom.
+"Maintainer: bumping the pinned image" at the bottom.
 
 ## Routine upgrade
 
@@ -10,26 +10,32 @@ cd /home/tappaas/TAPPaaS/src/apps/euro-office
 update-module.sh euro-office
 ```
 
-`update-module.sh` runs the safe-upgrade pipeline: snapshot → pre-test → `nixos-rebuild switch`
-(pulls the pinned container image) → `update.sh` → post-test → auto-rollback on failure.
+`update-module.sh` runs the safe-upgrade pipeline: snapshot -> pre-test -> `nixos-rebuild switch`
+(pulls the pinned container image) -> `update.sh` -> post-test -> auto-rollback on failure.
 
-Euro-Office runs as a **single pinned Podman container** (`ghcr.io/euro-office/documentserver:<tag>`),
-so an app upgrade is an image-tag bump — no in-place database migration in this module.
+Euro-Office runs as a single pinned Podman container
+(`ghcr.io/euro-office/documentserver:<tag>`), so an app upgrade is an image-tag bump — no
+in-place database migration in this module.
 
 ## Connector after upgrade
 
-The euro-office ↔ Nextcloud connector is owned by Nextcloud (ADR-COM-0002). No connector action is
-needed here on upgrade: Nextcloud's `services/nextcloud/install-service.sh` re-wires it from this
-module's manifest (`config["nextcloud:fileservice"].connector = "onlyoffice"`) and JWT. If the JWT
-secret rotates, re-run the Nextcloud module's update so it re-reads it.
+The euro-office <-> Nextcloud connector is owned by the `nextcloud` module. No separate step is
+needed: every install or update of this module runs the `nextcloud` module's
+`services/fileservice/update-service.sh`, which re-reads the JWT and re-applies the wiring
+(`config["nextcloud:fileservice"].connector = "onlyoffice"`). After rotating the JWT secret on
+this VM, run `update-module.sh euro-office` so Nextcloud picks it up.
+
+Known issue: connector v11 renamed the Nextcloud app ID from `onlyoffice` to `eurooffice`. The
+TAPPaaS connector label `onlyoffice` (`config["nextcloud:fileservice"].connector` in
+`euro-office.json`) is unchanged and needs no update. The connector requires Nextcloud >= 33.
 
 ## Rollback
 
-A failed `update-module.sh` auto-restores the pre-update snapshot, or manually:
-
 ```bash
-snapshot-vm.sh euro-office --restore
+snapshot-vm.sh euro-office --restore 1
 ```
+
+A failed `update-module.sh` also auto-restores the pre-update snapshot.
 
 ## Verify
 
@@ -40,18 +46,27 @@ cd /home/tappaas/TAPPaaS/src/apps/euro-office
 
 Expected: container running, `/healthcheck` 200, `/web-apps/.../api.js` 200, JWT secret present.
 
+To confirm Nextcloud itself sees the document server, run on the Nextcloud VM (needs a TTY):
+
+```bash
+ssh -t tappaas@nextcloud.<zone>.internal "sudo nextcloud-occ --no-ansi eurooffice:documentserver --check"
+```
+
+"is successfully connected" means the connector is working.
+
 ---
 
 ## Maintainer: bumping the pinned image
 
-The document-server image is pinned in `euro-office.nix`:
+The document-server image is pinned in `euro-office.nix`, and mirrored in `update.sh`:
 
 ```nix
 image = "ghcr.io/euro-office/documentserver:v9.3.1";   # immutable semver tag — never :latest/:nightly
 ```
 
 1. Pick a new **immutable** semver tag (verify it runs: `/healthcheck`, `/web-apps/.../api.js`).
-2. Update `image =` in `euro-office.nix` and `appVersion` in `euro-office.json` to match.
-3. If the connector app version must move with it, bump it on the Nextcloud side
-   (`update-eurooffice-app.sh` in the nextcloud module).
-4. Test on a variant before production.
+2. Update `image =` in `euro-office.nix`, the matching `CONTAINER_IMAGE` in `update.sh`, and
+   `appVersion` in `euro-office.json` — keep all three in sync.
+3. If the new server needs a newer connector, that pin lives in the `nextcloud` module
+   (`eurooffice-nextcloud.nix`) — bump it there separately.
+4. Test on a test environment before production.

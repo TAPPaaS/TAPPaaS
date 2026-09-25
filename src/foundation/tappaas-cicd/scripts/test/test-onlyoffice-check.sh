@@ -105,7 +105,7 @@ ck   "the broken branch still does"                      "1" "$(grep -c 'exit 1'
 # ── and the hints never send an operator into the silent no-op ──────────────
 ckin "update-service's by-hand hint keeps the TTY" "ssh -t " "$(grep 'by hand:' "${SRC}")"
 VERIFIER="$(dirname "${SRC}")/test-service.sh"
-ckin "test-service's by-hand hint keeps the TTY"   "ssh -t " "$(grep 'nextcloud-occ onlyoffice:documentserver --check' "${VERIFIER}")"
+ckin "test-service's by-hand hint keeps the TTY"   "ssh -t " "$(grep 'nextcloud-occ eurooffice:documentserver --check' "${VERIFIER}")"
 
 # ── Nextcloud tolerates clock skew on the connector's JWT ──────────────────
 # The document server signs its download request; Nextcloud checks the token's
@@ -114,7 +114,7 @@ ckin "test-service's by-hand hint keeps the TTY"   "ssh -t " "$(grep 'nextcloud-
 # unreachable) rejects every download — "Cannot handle token with iat prior
 # to …" — which surfaces as "Error while downloading the document file".
 NCNIX="$(cd "$(dirname "${SRC}")/../.." && pwd)/nextcloud.nix"
-leeway="$(awk '/^      onlyoffice = \{/{f=1} f&&/jwt_leeway/{gsub(/[^0-9]/,""); print; exit}' "${NCNIX}")"
+leeway="$(awk '/^      eurooffice = \{/{f=1} f&&/jwt_leeway/{gsub(/[^0-9]/,""); print; exit}' "${NCNIX}")"
 ck "nextcloud.nix sets a JWT leeway for the connector" "yes" "$([[ -n "${leeway}" && "${leeway}" -gt 0 ]] && echo yes || echo "no (${leeway:-unset})")"
 
 echo "── ${PASS} passed, ${FAIL} failed ──"

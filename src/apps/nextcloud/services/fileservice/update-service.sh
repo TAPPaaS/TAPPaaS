@@ -129,7 +129,7 @@ if [[ "${CONNECTOR}" == "onlyoffice" ]]; then
             # still internal-only), which is precisely what a converge must not
             # allow: success reported over a broken integration.
             #
-            # `onlyoffice:documentserver --check` re-runs the round trip and
+            # `eurooffice:documentserver --check` re-runs the round trip and
             # rewrites settings_error.
             #
             # Its verdict needs a TTY. The NixOS nextcloud-occ wrapper execs
@@ -195,7 +195,7 @@ if [[ "${CONNECTOR}" == "onlyoffice" ]]; then
             else
                 _oo_out=$(ssh -tt -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR \
                     "tappaas@${NC_HOST}" \
-                    "sudo timeout ${OO_CHECK_TIMEOUT:-120} nextcloud-occ --no-ansi onlyoffice:documentserver --check" \
+                    "sudo timeout ${OO_CHECK_TIMEOUT:-120} nextcloud-occ --no-ansi eurooffice:documentserver --check" \
                     < /dev/null 2>/dev/null | tr -d '\r') || true
                 if grep -q 'is successfully connected' <<< "${_oo_out}"; then
                     _oo_verdict="working"
@@ -217,7 +217,7 @@ if [[ "${CONNECTOR}" == "onlyoffice" ]]; then
             if [[ "${_oo_verdict}" == "unknown" ]]; then
                 warn "  could not determine whether the onlyoffice connector works:"
                 warn "    ${_oo_why}"
-                warn "    by hand: ssh -t tappaas@${NC_HOST} sudo nextcloud-occ onlyoffice:documentserver --check"
+                warn "    by hand: ssh -t tappaas@${NC_HOST} sudo nextcloud-occ eurooffice:documentserver --check"
                 warn "  Left as it is rather than called broken on an answer nobody got."
             elif [[ "${_oo_verdict}" == "working" ]]; then
                 debug "${GN}✓${CL} onlyoffice document server round-trip verified"

@@ -422,13 +422,13 @@ public_domain_of() {  # <vmname> <environment> <module-json-file>
 # browser surfaces it. This test catches the mismatch.
 header "Test 12: OnlyOffice Connector URL Consistency"
 
-DS_URL=$(remote "sudo -u postgres psql -d nextcloud -tAc \"SELECT configvalue FROM oc_appconfig WHERE appid='onlyoffice' AND configkey='DocumentServerUrl'\" 2>/dev/null" | tr -d '\r ' || echo "")
+DS_URL=$(remote "sudo -u postgres psql -d nextcloud -tAc \"SELECT configvalue FROM oc_appconfig WHERE appid='eurooffice' AND configkey='DocumentServerUrl'\" 2>/dev/null" | tr -d '\r ' || echo "")
 
 if [ -z "$DS_URL" ]; then
     skip "OnlyOffice: connector not configured (no DocumentServerUrl) — skipping"
 else
     EXPECT_DOMAIN="$(public_domain_of "${VMNAME}" "$(jq -r '.environment // ""' "${MODULE_JSON}" 2>/dev/null)" "${MODULE_JSON}")"
-    STORAGE_URL=$(remote "sudo -u postgres psql -d nextcloud -tAc \"SELECT configvalue FROM oc_appconfig WHERE appid='onlyoffice' AND configkey='StorageUrl'\" 2>/dev/null" | tr -d '\r ' || echo "")
+    STORAGE_URL=$(remote "sudo -u postgres psql -d nextcloud -tAc \"SELECT configvalue FROM oc_appconfig WHERE appid='eurooffice' AND configkey='StorageUrl'\" 2>/dev/null" | tr -d '\r ' || echo "")
     STORAGE_HOST=$(printf '%s' "$STORAGE_URL" | sed -E 's#^https?://##; s#[:/].*$##')
 
     # 1. StorageUrl host (the DocumentServer's callback target) must be this

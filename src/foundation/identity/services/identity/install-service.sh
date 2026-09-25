@@ -103,6 +103,7 @@ fi
 
 # identity.* contract (with Nextcloud-friendly defaults).
 PROVIDES_ADMIN="$(echo "${JSON}" | jq -r '.identity.providesAdminRole // false')"
+ADMIN_CLAIM="$(echo "${JSON}" | jq -r '.identity.adminGroupClaim // empty')"
 mapfile -t REDIRECT_PATHS < <(echo "${JSON}" | jq -r '(.identity.oidcRedirectPaths // ["/apps/user_oidc/code"])[]')
 mapfile -t OIDC_SCOPES   < <(echo "${JSON}" | jq -r '(.identity.scopes // [])[]')
 
@@ -152,6 +153,23 @@ if [[ "${PROVIDES_ADMIN}" == "true" ]]; then
     [[ "${DRY_RUN}" -eq 0 ]] && ${AUTHENTIK_MANAGER} group-ensure "${ADMIN_GROUP}" \
         --attr "tappaas.role=module-admin" --attr "tappaas.module=${MODULE_BASE}" >/dev/null
     ALLOW_GROUPS=("users" "${ADMIN_GROUP}")
+    # adminGroupClaim: members of <module>-admins get this group in the OIDC
+    # "groups" claim, and nobody else gets any. For apps that only honour one
+    # literal group (Nextcloud: admin), passing every Authentik group through
+    # would promote whoever sits in Authentik's own group of that name.
+    if [[ -n "${ADMIN_CLAIM}" ]]; then
+        [[ "${ADMIN_CLAIM}" =~ ^[A-Za-z0-9_-]+$ && "${ADMIN_GROUP}" =~ ^[A-Za-z0-9_-]+$ ]] \
+            || die "identity.adminGroupClaim and the admin group must be plain names (got '${ADMIN_CLAIM}', '${ADMIN_GROUP}')"
+        CLAIM_MAPPING="TAPPaaS OAuth Mapping: ${MODULE_BASE} groups"
+        CLAIM_EXPR="groups = [g.name for g in request.user.ak_groups.all()]
+return {\"groups\": [\"${ADMIN_CLAIM}\"] if \"${ADMIN_GROUP}\" in groups else []}"
+        debug "  ${ADMIN_GROUP} members get '${ADMIN_CLAIM}' in the groups claim (${CLAIM_MAPPING})"
+        [[ "${DRY_RUN}" -eq 0 ]] && ${AUTHENTIK_MANAGER} scope-mapping-ensure "${CLAIM_MAPPING}" \
+            --scope-name groups --expression "${CLAIM_EXPR}" \
+            --description "TAPPaaS: ${ADMIN_GROUP} -> ${ADMIN_CLAIM} for ${MODULE_BASE}" >/dev/null
+        [[ ${#OIDC_SCOPES[@]} -gt 0 ]] || OIDC_SCOPES=(openid email profile)
+        OIDC_SCOPES+=("${CLAIM_MAPPING}")
+    fi
 fi
 if [[ "${DRY_RUN}" -eq 0 ]]; then
     for g in "${ALLOW_GROUPS[@]}"; do
