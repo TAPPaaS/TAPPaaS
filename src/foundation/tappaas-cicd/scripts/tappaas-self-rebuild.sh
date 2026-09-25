@@ -28,7 +28,7 @@ CICD_DIR="$(dirname "${_here}")"
 RUN_DIR="${RUNTIME_DIRECTORY:-/run/update-tappaas}"
 # Root's own directory, not the tappaas-owned run dir: the full build output.
 REBUILD_LOG=/var/lib/tappaas-rebuild/nixos-rebuild.log
-VMNAME="$(jq -r '(.config // .).vmname // "tappaas-cicd"' /home/tappaas/config/tappaas-cicd.json 2>/dev/null || echo tappaas-cicd)"
+VMNAME="$(jq -r '.vmname // .config.vmname // "tappaas-cicd"' /home/tappaas/config/tappaas-cicd.json 2>/dev/null || echo tappaas-cicd)"
 [[ "${VMNAME}" =~ ^[A-Za-z0-9-]+$ ]] || { error "tappaas-self-rebuild: bad vmname '${VMNAME}'"; exit 1; }
 
 # The site's own time and locale, written before the build that reads it
