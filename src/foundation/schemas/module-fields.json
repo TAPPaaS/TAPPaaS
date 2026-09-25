@@ -495,10 +495,7 @@
         "general"
       ],
       "example": "turn.example.com",
-      "note": "Optional. A module may derive a default (coturn: turn.<site domain>) and persist it at install so every reader sees the same name.",
-      "class": "in-place",
-      "apply": "reconcile",
-      "changeNote": "A DNS name; changing it re-points consumers on their next converge and needs a new public A record. No guest is touched."
+      "note": "Optional. A module may derive a default (coturn: turn.<site domain>) and persist it at install so every reader sees the same name."
     }
   },
   "module_structure": {

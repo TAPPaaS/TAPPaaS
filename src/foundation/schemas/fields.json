@@ -129,6 +129,11 @@
       "class": "in-place",
       "apply": "none",
       "changeNote": "Takes a module in or out of TAPPaaS's lifecycle; nothing is applied to the module itself."
+    },
+    "publicDomain": {
+      "class": "in-place",
+      "apply": "none",
+      "changeNote": "A DNS name for a raw-port service (TURN, SMTP, …). Nothing on the cluster reflects it directly: the module that reads it (coturn) re-derives what its consumers see on their next converge, and the operator re-points the public A record. No guest is touched."
     }
   }
 }
