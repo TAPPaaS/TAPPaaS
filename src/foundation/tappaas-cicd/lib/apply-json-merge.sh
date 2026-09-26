@@ -34,7 +34,25 @@
 #            predates the field) — the case this rule exists to protect.
 #   3. Else if path absent in current:                       adopt source
 #   4. Else if current == orig:                              adopt source
-#   5. Else:                                                 keep current (pinned)
+#   5. Else:                                                 keep current
+#        5a. …and orig HAS the path:                          pinned
+#            The operator demonstrably diverged from a release value.
+#        5b. …and orig does NOT:                              pinned, unproven (#736)
+#            Nothing shows the operator ever chose this. The release did not
+#            define the path when orig was taken, so current came from
+#            elsewhere — by hand, or a service writing into the config it
+#            consumes. Keeping it is still correct (adopting would overwrite
+#            whatever put it there), but it is reported per field with the
+#            remedy, because the verdict is a decision nobody has taken yet.
+#            Previously indistinguishable from 5a and surfaced only as a debug
+#            COUNT, so a release that narrowed a coturn relay range was refused
+#            on every update for the life of the site and said nothing.
+#
+# Note on field MOVES: they are not a case here. All three sides are normalised
+# to flat first, so a field moving between top-level and a `config` block is the
+# same path to the merge — verified in both directions, adopted correctly when
+# orig knows the field. A move that looks like 5b is really a field the release
+# introduced that the deployed config already had from another source.
 #
 # TAPPAAS_MERGE_TRACE=1 prints, per field, the verdict and the three values it
 # was reached from (current | orig | source). Counts alone cannot answer "why is
@@ -248,7 +266,7 @@ apply_three_way_merge() {
         ( ($c | [leaves]) + ($o | [leaves]) + ($s | [leaves]) | unique ) as $paths
 
         | reduce $paths[] as $p (
-            { result: {}, adopted: [], pinned: [], added: [], kept: [], removed: [] };
+            { result: {}, adopted: [], pinned: [], pinned_unproven: [], added: [], kept: [], removed: [] };
 
             ($p[0]) as $top
             | (try ($c | getpath($p)) catch null) as $cv
@@ -312,11 +330,29 @@ apply_three_way_merge() {
                     | .adopted += [{ field: ($p | join(".")), before: $cv, after: $sv }]
                 end
               else
-                # Rule 5: operator-pinned (current diverged from orig, or no
-                # orig snapshot for this path — treat as pinned).
+                # Rule 5: keep current. Two different situations arrive here and
+                # they are NOT the same claim (#736, and #488 in general):
+                #
+                #   in orig, current != orig → the operator demonstrably diverged
+                #       from a release value. Pinning is their decision, recorded.
+                #   not in orig              → there is no evidence either way.
+                #       The release did not define this path when orig was taken,
+                #       so current came from somewhere else — the operator by hand,
+                #       or a service writing into the config it consumes. Keeping
+                #       it is still the SAFE verdict (adopting would silently
+                #       overwrite whatever put it there), but calling it "pinned"
+                #       states an operator intention that was never expressed.
+                #
+                # The second case is why a release that narrows the coturn relay
+                # range never reached a deployed guest: the merge refused it, was
+                # right to refuse it, and said so only at debug level as a count.
                 if $in_c then
                     .result = (.result | setpath($p; $cv))
-                    | (if $in_s and ($sv != $cv) then .pinned += [$p | join(".")] else . end)
+                    | (if $in_s and ($sv != $cv) then
+                          (if $in_o then .pinned += [$p | join(".")]
+                           else .pinned_unproven += [{ field: ($p | join(".")),
+                                                       kept: $cv, offered: $sv }] end)
+                       else . end)
                 else . end
               end
         )
@@ -332,14 +368,37 @@ apply_three_way_merge() {
     fi
 
     # Log a summary of what changed.
-    local n_adopted n_pinned n_added n_kept n_removed
+    local n_adopted n_pinned n_unproven n_added n_kept n_removed
     n_adopted=$(jq '.adopted | length' <<<"${merged_with_report}")
     n_pinned=$(jq  '.pinned  | length' <<<"${merged_with_report}")
+    n_unproven=$(jq '.pinned_unproven | length' <<<"${merged_with_report}")
     n_added=$(jq   '.added   | length' <<<"${merged_with_report}")
     n_kept=$(jq    '.kept    | length' <<<"${merged_with_report}")
     n_removed=$(jq '.removed | length' <<<"${merged_with_report}")
 
-    debug "  Merge: ${n_adopted} adopted, ${n_pinned} pinned, ${n_added} added, ${n_kept} kept (orphan), ${n_removed} removed"
+    debug "  Merge: ${n_adopted} adopted, ${n_pinned} pinned, ${n_unproven} pinned-unproven, ${n_added} added, ${n_kept} kept (orphan), ${n_removed} removed"
+
+    # A release value the merge REFUSED, where nothing shows the operator ever
+    # chose the value being kept (#736). Reported per field at info, not as a
+    # debug count: the coturn case sat on a deployed guest for as long as the
+    # site existed because a count at debug level is indistinguishable from
+    # nothing happening. Not a warning — keeping the value is correct, and the
+    # operator may well want it — but it is a decision somebody has to take,
+    # so it names the remedy.
+    if [[ "${n_unproven}" -gt 0 ]]; then
+        local _up_line
+        info "  ${n_unproven} field(s) the release changed were kept, with no record of a choice:"
+        while IFS= read -r _up_line; do
+            info "    ${_up_line}"
+        done < <(jq -r '
+            .pinned_unproven[]
+            | "\(.field): keeping \(.kept | tojson), release offers \(.offered | tojson)"
+        ' <<<"${merged_with_report}")
+        info "    Nothing recorded these as customized — the release did not define them when"
+        info "    .orig was taken, so they arrived by another route (by hand, or a service"
+        info "    writing into the config). To take the release value:"
+        info "      module-manager module modify <module> --unset <field>   then update again"
+    fi
 
     # TAPPAAS_MERGE_TRACE=1 prints the engine's own verdict per field, and the
     # three values it judged. A merge that reports adopting a field the file
