@@ -105,7 +105,7 @@ ck   "the broken branch still does"                      "1" "$(grep -c 'exit 1'
 # ── and the hints never send an operator into the silent no-op ──────────────
 ckin "update-service's by-hand hint keeps the TTY" "ssh -t " "$(grep 'by hand:' "${SRC}")"
 VERIFIER="$(dirname "${SRC}")/test-service.sh"
-ckin "test-service's by-hand hint keeps the TTY"   "ssh -t " "$(grep 'nextcloud-occ eurooffice:documentserver --check' "${VERIFIER}")"
+ckin "test-service's by-hand hint keeps the TTY"   "ssh -t " "$(grep 'documentserver --check)' "${VERIFIER}")"
 
 # ── Nextcloud tolerates clock skew on the connector's JWT ──────────────────
 # The document server signs its download request; Nextcloud checks the token's

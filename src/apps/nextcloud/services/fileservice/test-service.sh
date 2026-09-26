@@ -88,15 +88,28 @@ EO_JSON="${CONFIG_DIR}/$(resolve_provider_module euro-office "${CONSUMER_ENV}").
 EURO_INSTALLED=false
 [[ "${CONNECTOR}" == "onlyoffice" && -f "${EO_JSON}" ]] && EURO_INSTALLED=true
 
+# shellcheck source=connector-app.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/connector-app.sh"
+
 if [[ "${EURO_INSTALLED}" == "true" ]]; then
+    # The app the connector's settings live under: eurooffice (v11), or onlyoffice
+    # on a Nextcloud not yet updated past v10 (#743) — where the wiring works, so
+    # it passes, with the way to the release's connector named.
+    APPID="$(fileservice_connector_app "${VMNAME}.${ZONE}.internal")"
+    if [[ -z "${APPID}" ]]; then
+        fail "No document-server connector app (eurooffice or onlyoffice) is enabled in Nextcloud — euro-office installed but connector not set up"
+        APPID=eurooffice
+    elif [[ "${APPID}" == "onlyoffice" ]]; then
+        warn "    ${FILESERVICE_V10_HINT}"
+    fi
     DOC_URL=$(ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=no \
         "tappaas@${VMNAME}.${ZONE}.internal" \
         "sudo -u postgres psql -d nextcloud -tAc \
-        \"SELECT configvalue FROM oc_appconfig WHERE appid='eurooffice' AND configkey='DocumentServerUrl'\" \
+        \"SELECT configvalue FROM oc_appconfig WHERE appid='${APPID}' AND configkey='DocumentServerUrl'\" \
         2>/dev/null" 2>/dev/null || echo "")
     DOC_URL="${DOC_URL// /}"
     if [[ -n "${DOC_URL}" ]]; then
-        pass "OnlyOffice DocumentServerUrl is set (${DOC_URL})"
+        pass "OnlyOffice DocumentServerUrl is set (${DOC_URL}, app ${APPID})"
     else
         fail "OnlyOffice DocumentServerUrl not configured — euro-office installed but connector not set up"
     fi
@@ -112,7 +125,7 @@ if [[ "${EURO_INSTALLED}" == "true" ]]; then
     OO_ERR=$(ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=no \
         "tappaas@${VMNAME}.${ZONE}.internal" \
         "sudo -u postgres psql -d nextcloud -tAc \
-        \"SELECT configvalue FROM oc_appconfig WHERE appid='eurooffice' AND configkey='settings_error'\" \
+        \"SELECT configvalue FROM oc_appconfig WHERE appid='${APPID}' AND configkey='settings_error'\" \
         2>/dev/null" 2>/dev/null | tr -d '[:space:]') || OO_ERR=""
     # The stored row is the verdict of the last check that ran; it cannot say
     # whether the document server answers NOW. update-service.sh gates its own
@@ -155,7 +168,7 @@ if [[ "${EURO_INSTALLED}" == "true" ]]; then
         # reported this same string after the connector had been fixed (#687).
         fail "OnlyOffice connector's last check FAILED: ${OO_ERR} — Nextcloud hides the editor while this is set"
         info "    (a stored verdict: the converge refreshes it, or by hand:"
-        info "     ssh -t tappaas@${VMNAME}.${ZONE}.internal sudo nextcloud-occ eurooffice:documentserver --check)"
+        info "     ssh -t tappaas@${VMNAME}.${ZONE}.internal sudo nextcloud-occ ${APPID}:documentserver --check)"
         # -t matters: nextcloud-occ execs systemd-run --pty, and without a TTY
         # the check still runs and rewrites this row but prints nothing, so the
         # operator sees no verdict at all (#714, #715).

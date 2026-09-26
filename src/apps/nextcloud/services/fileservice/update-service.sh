@@ -104,8 +104,19 @@ if [[ "${CONNECTOR}" == "onlyoffice" ]]; then
         "tappaas@${EO_HOST}" \
         "sudo grep -h '^JWT_SECRET=' /etc/secrets/euro-office.env 2>/dev/null | cut -d= -f2-" 2>/dev/null || true)
 
+    # The wiring below is connector v11's: nextcloud-configure-eurooffice.service
+    # and `eurooffice:documentserver --check`. A Nextcloud not yet updated past
+    # the v10 connector (app `onlyoffice`) has neither, so restarting the unit
+    # failed and rolled euro-office back over what is Nextcloud's to fix (#743).
+    # Its existing wiring keeps working; say what to update, and leave it alone.
+    # shellcheck source=connector-app.sh
+    . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/connector-app.sh"
+    CONNECTOR_APP="$(fileservice_connector_app "${NC_HOST}")"
+
     if [[ -z "${JWT_SECRET}" ]]; then
         warn "  euro-office JWT not available yet on ${EO_HOST} — connector left unconfigured; it will wire on the next nextcloud sync once euro-office has booted."
+    elif [[ "${CONNECTOR_APP}" == "onlyoffice" ]]; then
+        warn "  ${FILESERVICE_V10_HINT} — connector re-wiring for ${MODULE} skipped; its current wiring is left as it is."
     else
         # Write the 4-var contract on the Nextcloud VM; the idempotent
         # nextcloud-configure-eurooffice.service applies it via occ.

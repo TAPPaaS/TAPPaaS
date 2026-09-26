@@ -25,9 +25,15 @@ needed: every install or update of this module runs the `nextcloud` module's
 (`config["nextcloud:fileservice"].connector = "onlyoffice"`). After rotating the JWT secret on
 this VM, run `update-module.sh euro-office` so Nextcloud picks it up.
 
-Known issue: connector v11 renamed the Nextcloud app ID from `onlyoffice` to `eurooffice`. The
-TAPPaaS connector label `onlyoffice` (`config["nextcloud:fileservice"].connector` in
-`euro-office.json`) is unchanged and needs no update. The connector requires Nextcloud >= 33.
+**Two different things are called `onlyoffice`.** Connector v11 renamed the **Nextcloud app ID**
+from `onlyoffice` to `eurooffice`; that change reaches a site when Nextcloud is updated, and the
+old app is disabled then. The **TAPPaaS connector label** `onlyoffice`
+(`config["nextcloud:fileservice"].connector` in `euro-office.json`) did not change and needs no
+update. The connector requires Nextcloud >= 33.
+
+Update Nextcloud before euro-office (the scheduled sweep does). Until Nextcloud runs v11,
+euro-office's checks say so and leave the working v10 wiring alone: "Nextcloud still runs the
+pre-v11 connector app 'onlyoffice': update Nextcloud first" (#743).
 
 ## Rollback
 
