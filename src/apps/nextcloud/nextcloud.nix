@@ -1011,7 +1011,10 @@ in
     description = "Nextcloud incremental preview pre-generation";
     serviceConfig = {
       Type  = "oneshot";
-      User  = "nextcloud";
+      # As root, like every other occ unit here: nextcloud-occ starts its own
+      # transient unit (systemd-run) as the nextcloud user, and polkit refuses that
+      # to a non-root caller ("requires interactive authentication"). With
+      # User = "nextcloud" this failed every night since the module was written.
       ExecStart = pkgs.writeShellScript "nextcloud-preview-generate" ''
         set -euo pipefail
         export PATH="/run/current-system/sw/bin:${pkgs.coreutils}/bin:$PATH"
