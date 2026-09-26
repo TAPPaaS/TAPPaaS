@@ -150,14 +150,51 @@ report_begin() {
         exit 5
     fi
 
-    # `qm/pct config` is NODE-LOCAL, so it must run where the guest actually is.
-    # The command embeds a locally-computed VMID that expands client-side.
+    # `qm/pct config|pending` is NODE-LOCAL, so it must run where the guest
+    # actually is. The command embeds a locally-computed VMID that expands
+    # client-side.
+    #
+    # `pending`, not `config` (#532). For a RUNNING guest whose change cannot be
+    # hot-applied — memory on a guest without memory hotplug is the common one —
+    # `qm set` writes the TARGET and Proxmox holds it until the guest restarts.
+    # `qm config` then reports the target, so "actual" claimed a value the guest
+    # was not running on, drift saw none, and the converge reported the change
+    # applied. Measured on hrossen (vmid 911, 2026-09-26):
+    #
+    #   qm set 911 --memory 4096   ->  qm config: memory: 4096   (the target)
+    #                                  balloon:   actual=2048    (the guest)
+    #                                  qm pending: cur memory: 2048
+    #                                              new memory: 4096
+    #
+    # `pending` lists every key with a `cur` line — verified identical to
+    # `config`'s key set (25/25, no difference either way) — so the `cur` lines
+    # are a drop-in whose values are what the guest is REALLY running on. Where
+    # nothing is pending the two agree, so this changes nothing for the common
+    # case; where something is, it stops lying.
+    #
+    # Falls back to `config` if `pending` cannot be read, so a Proxmox that does
+    # not offer it degrades to the old behaviour rather than failing the report.
     # shellcheck disable=SC2029
     REPORT_LIVE="$(ssh "${REPORT_SSH_OPTS[@]}" "root@${REPORT_NODE}.${REPORT_MGMT}.internal" \
-        "${REPORT_CLI} config ${REPORT_VMID}" 2>/dev/null)" || {
-        echo "$(basename "${0}"): failed to read '${REPORT_CLI} config ${REPORT_VMID}' on ${REPORT_NODE}" >&2
-        exit 6
-    }
+        "${REPORT_CLI} pending ${REPORT_VMID}" 2>/dev/null \
+        | sed -n 's/^cur //p')" || REPORT_LIVE=""
+    if [[ -z "${REPORT_LIVE}" ]]; then
+        # shellcheck disable=SC2029
+        REPORT_LIVE="$(ssh "${REPORT_SSH_OPTS[@]}" "root@${REPORT_NODE}.${REPORT_MGMT}.internal" \
+            "${REPORT_CLI} config ${REPORT_VMID}" 2>/dev/null)" || {
+            echo "$(basename "${0}"): failed to read '${REPORT_CLI} config ${REPORT_VMID}' on ${REPORT_NODE}" >&2
+            exit 6
+        }
+    fi
+}
+
+# Keys the hypervisor is holding until the guest restarts, one per line (#532).
+# Empty when nothing is pending — which is the normal case.
+report_pending_fields() {
+    # shellcheck disable=SC2029
+    ssh "${REPORT_SSH_OPTS[@]}" "root@${REPORT_NODE}.${REPORT_MGMT}.internal" \
+        "${REPORT_CLI} pending ${REPORT_VMID}" 2>/dev/null \
+        | sed -n 's/^new \([^:]*\):.*/\1/p'
 }
 
 # One key from the "key: value" config text. Empty when absent — a fact about

@@ -29,6 +29,12 @@
 #   converge_apply_set "<flag>" "<value>" ...   apply every batched `set` field
 #                                               in ONE call. Return non-zero to
 #                                               fail the converge.
+#   converge_pending_fields                     OPTIONAL. Print the field names
+#                                               the hypervisor is holding until
+#                                               the guest restarts, one per line
+#                                               (#532). Undefined = nothing is
+#                                               ever held, which is how every
+#                                               service behaved before.
 #   converge_side_effect_<name>                 perform one side effect
 #                                               (reboot / wait-ip / dns /
 #                                               ha-repoint). Return non-zero to
@@ -248,7 +254,27 @@ converge_apply() {
             return 1
         fi
         if converge_apply_set "${set_args[@]}"; then
-            CONVERGE_APPLIED=$((CONVERGE_APPLIED + ${#set_args[@]} / 2))
+            local _set_n=$(( ${#set_args[@]} / 2 ))
+            # A `set` that returned 0 has not necessarily taken effect (#532).
+            # Proxmox accepts a change it cannot hot-apply and holds it until the
+            # guest restarts, so counting all of them applied reported a change
+            # the guest was not running. Ask the provider what is still held and
+            # count those as deferred instead — the operator then knows a restart
+            # is owed, rather than being told it is done.
+            local _pending=""
+            if declare -F converge_pending_fields >/dev/null; then
+                _pending="$(converge_pending_fields 2>/dev/null || true)"
+            fi
+            if [[ -n "${_pending}" ]]; then
+                local _p_n; _p_n="$(printf '%s\n' "${_pending}" | grep -c . || true)"
+                local _p_list; _p_list="$(printf '%s\n' "${_pending}" | paste -sd, - | sed 's/,/, /g')"
+                warn "DEFERRED: ${module} — Proxmox is holding ${_p_list} until the guest restarts"
+                warn "  It accepted the change but cannot hot-apply it; the guest keeps running on its previous value."
+                CONVERGE_DEFERRED=$(( CONVERGE_DEFERRED + _p_n ))
+                (( _set_n -= _p_n )) || true
+                (( _set_n < 0 )) && _set_n=0
+            fi
+            CONVERGE_APPLIED=$(( CONVERGE_APPLIED + _set_n ))
         else
             error "  batched set failed"
             rc=1

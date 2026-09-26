@@ -110,6 +110,27 @@ RAM allocation in megabytes
 
 **About the field.** Value in MB (e.g., 4096 = 4GB)
 
+**Pending is not applied (#532).** For a running guest that cannot hot-apply the
+change — no `hotplug` line means Proxmox's default, which excludes memory —
+`qm set --memory` is *accepted* and then **held until the guest restarts**.
+`qm config` reports the target from that moment, so "actual" claimed a value the
+guest was not running on, drift saw nothing to do, and the converge reported the
+change applied. Measured on hrossen (vmid 911, 2026-09-26):
+
+| | value |
+|---|---|
+| `qm set 911 --memory 4096` | accepted |
+| `qm config 911` | `memory: 4096` — the target |
+| `info balloon` | `actual=2048` — the guest |
+| `qm pending 911` | `cur memory: 2048` / `new memory: 4096` |
+
+So `report-lib.sh` now builds the live view from `qm pending`'s `cur` lines
+rather than `qm config` (verified: identical key sets, 25/25, so it is a drop-in
+that only differs where something is held), and `converge_apply_set` is followed
+by the optional `converge_pending_fields` callback — anything still held is
+counted **deferred**, not applied, and named in a `DEFERRED:` line the sweep
+collects. A service that defines no callback behaves exactly as before.
+
 ### `cputype`
 
 CPU type emulation for the VM

@@ -167,6 +167,19 @@ converge_apply_set() {
         "qm set ${VMID} $(printf '%q ' "$@")" >/dev/null
 }
 
+# What Proxmox accepted but is holding until the guest restarts (#532).
+#
+# `qm set` returns 0 for a change it cannot hot-apply — memory on a guest without
+# memory hotplug is the everyday case — and `qm config` then reports the TARGET,
+# so the converge counted it applied while the guest kept running on the old
+# value. `qm pending` is the only thing that distinguishes them: it prints a
+# `cur` line for every key and a `new` line for each one still held.
+# shellcheck disable=SC2029
+converge_pending_fields() {
+    ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" \
+        "qm pending ${VMID}" 2>/dev/null | sed -n 's/^new \([^:]*\):.*/\1/p'
+}
+
 # shellcheck disable=SC2029
 converge_side_effect_reboot() {
     if [[ "${VMSTATUS}" != "running" ]]; then
