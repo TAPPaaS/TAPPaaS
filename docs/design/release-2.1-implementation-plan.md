@@ -639,7 +639,7 @@ Low upgrade risk. Build continuously, in any order within a group.
 
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
-| #552 | hass: a lost LLAT blocks every update | 4 | 1 | L | |
+| #552 | hass: a lost LLAT blocks every update | 4 | 1 | L | **Assigned to @ErikDaniel007 — do not fix (operator, 2026-09-26).** Excluded from the R=1 sweep. Verified 2026-09-26 only to the extent of confirming it is still open: `src/apps/hass/lib/ha-llat.sh` exists but carries no recovery path, so a lost token has no way back |
 | #568 | hass: backup freeze leaves Frigate unhealthy | 3 | 1 | L | |
 | #571 | hassanova has no release baseline | 5 | 3 | L | **Re-scored R=1 → R=3 on 2026-09-26.** The fix exists, unmerged: `origin/fix/hassanova-release-baseline` (`ed8a9799`, @ErikDaniel007, 2026-08-31 — one commit adding `src/apps/hass/hassanova.json`, still absent from `main`, valid JSON). But the issue records the baseline was *deliberately* withheld for blast-radius reasons, so landing it makes `apply_three_way_merge` reconcile a **Production** module (vmid 200) against a baseline for the first time — live-state change, not R=1. Needs its owner or an explicit decision; not sweepable |
 | #553 | litellm:models cannot reach an appliance consumer | 3 | 1 | L | |
@@ -708,8 +708,8 @@ New capabilities with low upgrade risk.
 | #428 | module-manager `suspend` | 3 | 2 | L | |
 | #429 | Migrate by modifying `.node` | 3 | 2 | L | Relates to ADR-019 and #498 |
 | #499 | `test` verbs on managers | 2 | 1 | L | |
-| #444 | IP → device lookup | 4 | 1 | L | Blocked on the MAC-pinning question (#582) |
-| #582 | Read back static reservations | 4 | 1 | L | Lars asked for a concrete need first (2026-09-05) |
+| #444 | IP → device lookup | 4 | 1 | L | Blocked on the MAC-pinning question (#582). **Do not implement (operator, 2026-09-26):** this and #582 need a discussion between Lars and @ErikDaniel007 first — the shape of the answer depends on what a reservation means to read back, and that is not settled. Excluded from the R=1 sweep |
+| #582 | Read back static reservations | 4 | 1 | L | Lars asked for a concrete need first (2026-09-05). **Do not implement (operator, 2026-09-26):** pending the same Lars/@ErikDaniel007 discussion as #444 — they are one question, not two. Excluded from the R=1 sweep. (Also verified: there is no `dhcp-manager` script at all; the DHCP surface lives inside `network-manager`, so "read back" has to be defined against dnsmasq's own state) |
 | ✅ #681 | Auto-stash entries nothing lists or resolves | 4 | 2 | L | **Done 2026-09-21** (ed6aa6a7). `repo-sync` stashes a dirty managed checkout so the pull can move and puts the entry back (#572); one that no longer applies was kept and only ever **counted**, leaving `git stash list` — by hand, in a checkout the operator is told not to edit — as the only way to see what the number meant. Erik saw 12 entries in TAPPaaS and 2 in Community; makerfloss carried 16, all mode-only artefacts from before #565, so nothing is accumulating now. `site-manager repository stash list/show/restore/discard` is the missing surface, and the sweep's line now names the oldest entry's age and that verb. An entry an operator stashed by hand carries no repo-sync tag and is never listed, restored or dropped |
 | #634 | Private repositories in `repository add` | 5 | 1 | L | Adopt-mode: won't fix; document the deploy-key method |
 | #654 | `module-manager`: the `--set` pre-gate ignores the module-level field declarations (ADR-020 D10) | 3 | 2 | M | **Added in the 2026-09-25 issue sweep** (no milestone). ADR-020 D10 says a module may declare its own field rules; the `--set` pre-gate does not read them, so a module-level declaration is silently inert. Belongs with the ADR-020 verb work that G0.1 started (#453, #655) |
@@ -796,7 +796,8 @@ New capabilities with low upgrade risk.
 
 - **Merge pairs** the issues themselves say belong together: #36 + #127,
   #399 + #384, #385 + #222, #160 + #256, #624 + #637, #642 + #643,
-  #444 + #582, #119 / #120 / #121, **#488 + #736** (added 2026-09-25: the
+  #444 + #582 (one question, and on hold for a Lars/@ErikDaniel007 discussion —
+  see their rows), #119 / #120 / #121, **#488 + #736** (added 2026-09-25: the
   same `apply-json-merge` pinning rule, one general and one instance).
 - **Close or park:** #622 (verify), #284, #154, #223 → *Parking lot*.
 - **Parked, half of #656:** a proxy access list kept current from a provider's
