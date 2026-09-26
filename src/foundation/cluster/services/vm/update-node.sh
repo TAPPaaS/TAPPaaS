@@ -154,7 +154,28 @@ fi
 
 # ── Migrate ──────────────────────────────────────────────────────────
 debug "  Migrating VM ${VMID} ${ACTUAL}→${DESIRED} (online=${online_flag})..."
-ssh "${SSH_OPTS[@]}" "root@${ACTUAL}.${MGMT}.internal" \
-    "qm migrate ${VMID} ${DESIRED} --online ${online_flag}" >/dev/null \
-    || { error "  qm migrate failed"; exit 1; }
+if ! ssh "${SSH_OPTS[@]}" "root@${ACTUAL}.${MGMT}.internal" \
+        "qm migrate ${VMID} ${DESIRED} --online ${online_flag}" >/dev/null; then
+    error "  qm migrate ${ACTUAL}→${DESIRED} failed for ${MODULE} (vmid ${VMID})"
+    # A failed migrate is not, by itself, a broken guest. Ask where the guest
+    # actually is before deciding (#393): a shared-storage check, a resource
+    # constraint or an HA lock can refuse the move while the guest carries on
+    # serving from the node it is already on. Reporting that as an error made
+    # the whole module update Fatal, and under D9 a dependency failure rolls the
+    # guest back to its pre-update snapshot — so a healthy guest lost its update
+    # because of where it happened to live.
+    # Ask the node itself, not the unit file: STATUS there is the pre-migrate
+    # snapshot, which is exactly the value that must not be trusted here.
+    post_status="$(ssh "${SSH_OPTS[@]}" "root@${ACTUAL}.${MGMT}.internal" \
+        "qm status ${VMID} 2>/dev/null" 2>/dev/null | awk '{print $2}')" || post_status=""
+    if [[ "${STATUS}" == "running" && "${post_status}" == "running" ]]; then
+        warn "  ${MODULE} is still running on ${ACTUAL} — leaving it there and continuing"
+        warn "  Node placement drift (${ACTUAL}→${DESIRED}) stays recorded; resolve it separately"
+        exit 11
+    fi
+    # Either it was not running to begin with, or the migrate left it down.
+    # The second is a real failure and must stay one.
+    error "  ${MODULE} is '${post_status:-unknown}' on ${ACTUAL} after the failed migrate"
+    exit 1
+fi
 exit 0

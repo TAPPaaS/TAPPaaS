@@ -47,6 +47,11 @@
 #
 #   exit 0   applied, or already in sync
 #   exit 10  would change, but the change needs disruption authorization
+#   exit 11  could not apply NOW, and the guest is healthy as it stands — the
+#            drift stays recorded for the operator (#393). Distinct from 10:
+#            nothing here is about authorizing downtime, so telling the operator
+#            to "rerun with --force" would be a lie. Distinct from 20: it is not
+#            refused forever, it just did not work this time.
 #   exit 20  refused (a shrink, an immutable value) — will never apply
 #   exit 1   error
 #
@@ -290,6 +295,14 @@ converge_apply() {
             0)  CONVERGE_APPLIED=$((CONVERGE_APPLIED + 1)) ;;
             10) CONVERGE_DEFERRED=$((CONVERGE_DEFERRED + 1))
                 warn "DEFERRED: ${module} ${name} needs disruption authorization — rerun with --force in a window" ;;
+            # 11 does NOT set rc: the run continues and nothing is rolled back.
+            # A `qm migrate` that fails while the guest keeps running on the node
+            # it is already on is a placement problem, not a guest problem — and
+            # under D9 a dependency failure rolls the guest back to its
+            # pre-update snapshot, so treating this as a failure discarded a
+            # healthy guest's update because of where it happened to live (#393).
+            11) CONVERGE_DEFERRED=$((CONVERGE_DEFERRED + 1))
+                warn "DEFERRED: ${module} ${name} could not be applied now; the guest is healthy as it stands and the drift stays recorded" ;;
             20) error "  ${name}: refused by ${hook} — this change cannot be applied"
                 rc=1 ;;
             *)  error "  ${name}: ${hook} failed (rc ${hook_rc})"

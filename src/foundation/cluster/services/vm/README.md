@@ -330,6 +330,27 @@ Name of the Proxmox/TAPPaaS node where the module should be installed. If null, 
 
 **Why this change class.** The ADR-019 bridge. The hook routes HA-vs-non-HA internally: a module that dependsOn cluster:ha has its node drift handled by the HA rule (re-point), a plain module by qm migrate. Live-OK decides whether the migrate needs downtime, so this refuses (exit 10) rather than migrating offline without --force. module-fields.json gives node NO default, so a module that declares none has no desired placement and is left where it runs. update-service.sh instead defaulted it to the FIRST site node, which would silently migrate an undeclared guest back to node 0 after any failover or manual move — a latent hazard that only stayed invisible because the estate's undeclared guests happen to sit on node 0. Expressing no placement is not the same as asking for node 0.
 
+**When the migrate itself fails (#393).** A shared-storage check, a resource
+constraint or an HA lock can refuse the move while the guest carries on serving
+from the node it is already on. That used to be `exit 1` — a hook error, which
+makes the module update Fatal, and under ADR-020 D9 a dependency failure rolls
+the guest back to its pre-update snapshot. A healthy guest therefore lost its
+update because of *where it happened to live*.
+
+So the hook now asks the node where the guest actually is, rather than trusting
+the pre-migrate snapshot in the unit, and splits the two cases:
+
+| after the failed migrate | verdict |
+|---|---|
+| it was running and still is | `exit 11` — deferred, drift stays recorded, run continues, nothing rolled back |
+| it was not running, or the migrate left it down, or the status cannot be read | `exit 1` — a real failure, unchanged |
+
+`exit 11` is its own code rather than a reuse of `10`: nothing here is about
+authorizing downtime, so telling the operator to "rerun with `--force`" would be
+a lie — and unlike `20` it is not refused forever, it simply did not work this
+time. The placement drift is still reported, so the operator resolves it
+deliberately instead of the platform discarding an update over it.
+
 ### `storage`
 
 Name of the storage pool for the module. Left undeclared, the pool is resolved against the target node at create time: 'tanka1' when that node has it, otherwise the node's first ZFS pool that can hold VM disks (#692).
