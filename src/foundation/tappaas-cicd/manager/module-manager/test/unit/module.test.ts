@@ -24,6 +24,7 @@ import {
   validateDependsOn,
   validateIntegratesWith,
   validateModules,
+  validateOrphanFields,
   validateSourceLocation,
 } from "../../src/validate";
 import { AddOptions, AdoptOptions, DeleteOptions, ModifyOptions, ModuleConfig, ValidateFinding, ValidateReport } from "../../src/types";
@@ -848,6 +849,63 @@ function captureList(client: FakeModuleClient, extraArgs: string[] = []): string
     const out: ValidateFinding[] = [];
     validateConfigBlock({ name: "x", dependsOn: [] } as never, out as never);
     check(out.length === 0, "validate: a ModuleConfig without raw is a safe no-op");
+  }
+
+  // #683 — a declared field whose consumer is not wired has no effect, and the
+  // report belongs here rather than in every three-way merge.
+  {
+    const SCHEMA = {
+      ports:   { usedBy: ["network:rules"] },
+      cores:   { usedBy: ["cluster:vm"] },
+      zone0:   { usedBy: ["general"] },
+      mystery: {},
+    };
+    const orphans = (raw: Record<string, unknown>): ValidateFinding[] => {
+      const out: ValidateFinding[] = [];
+      const m = {
+        name: "app",
+        dependsOn: Array.isArray(raw.dependsOn) ? raw.dependsOn : [],
+        integratesWith: Array.isArray(raw.integratesWith) ? raw.integratesWith : [],
+        provides: Array.isArray(raw.provides) ? raw.provides : [],
+        raw,
+      } as never;
+      validateOrphanFields(m, SCHEMA as never, out as never);
+      return out;
+    };
+
+    // The reported case: ports owned by network:rules, only network:proxy wired.
+    const f = orphans({ dependsOn: ["network:proxy"], ports: [9443, 8000] });
+    check(
+      f.length === 1 && f[0].severity === "warning" &&
+        f[0].message.includes("ports") && f[0].message.includes("network:rules") &&
+        f[0].message.includes("no effect"),
+      "validate: a field whose consumer is not wired warns (#683)",
+    );
+    // A warning, never an error — the field may be honest documentation, and
+    // failing validate on makerfloss's modules would be wrong.
+    check(f.every((x) => x.severity !== "error"), "validate: an unwired field is a warning, not an error (#683)");
+
+    check(orphans({ dependsOn: ["network:rules"], ports: [443] }).length === 0,
+      "validate: the consumer being wired is silent (#683)");
+    check(orphans({ dependsOn: ["cluster:vm"], cores: 4 }).length === 0,
+      "validate: an ordinary wired field is silent (#683)");
+    // Self-consumed: network declares ports and PROVIDES rules. Without this the
+    // provider of a service is told off for using its own field.
+    check(orphans({ dependsOn: ["cluster:vm"], provides: ["rules"], ports: [443] }).length === 0,
+      "validate: a self-consumed field is silent — the provider must not depend on itself (#683)");
+    // integratesWith counts as wired (#501): same coordinates, optional.
+    check(orphans({ integratesWith: ["network:rules"], ports: [443] }).length === 0,
+      "validate: integratesWith wires the consumer too (#683)");
+    check(orphans({ dependsOn: [], zone0: "rossen" }).length === 0,
+      "validate: a usedBy=[general] field is never an orphan (#683)");
+    // A field with no ownership, or none in the schema, is the converter's
+    // `unknown` case and stays there — this check must not double-report it.
+    check(orphans({ dependsOn: [], mystery: 1 }).length === 0,
+      "validate: a field with no usedBy is not this check's business (#683)");
+    check(orphans({ dependsOn: [], notInSchemaAtAll: 1 }).length === 0,
+      "validate: a field absent from the schema is left to the converter (#683)");
+    check(orphans({ dependsOn: ["network:proxy"], config: { "network:proxy": { x: 1 } } }).length === 0,
+      "validate: the config block itself is never treated as a field (#683)");
   }
   // End-to-end: validateModules now surfaces the config-block error.
   {

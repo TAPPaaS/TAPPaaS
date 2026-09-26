@@ -112,6 +112,10 @@ export function validateModule(
   // ADR-020 service field manifests — see validateFieldManifests.
   if (opts.fs && opts.schema) validateFieldManifests(m, opts.fs, opts.schema, out);
 
+  // #683 — a declared field whose consumer is not wired. Needs the schema's
+  // `usedBy` ownership, so it is SKIPPED without it rather than guessing.
+  if (opts.schema) validateOrphanFields(m, opts.schema, out);
+
   // TODO(question): the bash stub also intended a SCHEMA check (every field
   // against module-fields.json). PARKED — see main.ts. The reference-integrity
   // half of that TODO is now implemented above.
@@ -167,6 +171,61 @@ export function validateSourceLocation(
       `indistinguishable from a checkout left behind. Declare the repository ` +
       `(site-manager repository add) or redeploy the module from a declared path.`,
   });
+}
+
+// Fields nothing will ever read (#683).
+//
+// `usedBy` in module-fields.json says which provider:service consumes a field.
+// A module can declare one and wire no consumer — `ports` is the case that
+// prompted this: it is owned by `network:rules`, so a module that depends on
+// `network:proxy` but not `network:rules` gets no ingress validation and no
+// firewall rules from it. Nothing said so: `validate` reported ok, and the only
+// signal was the three-way merge repeating the same warning on EVERY update,
+// which an operator reading a sweep log can neither act on nor silence.
+//
+// So the report moves here, where a module author can act, and the converter
+// stops repeating it. Deliberately a WARNING, not an error: the field may be
+// honest documentation of what a proxy-published module listens on internally,
+// and failing validate on that would be wrong. What #683 still has to settle is
+// whether that documentary use is blessed — if it is, the field's `usedBy`
+// gains "general" and this check falls silent for it by construction.
+export function validateOrphanFields(
+  m: ModuleConfig,
+  schema: Record<string, { usedBy?: string[] } | undefined>,
+  out: ValidateFinding[],
+): void {
+  const raw = m.raw as Record<string, unknown> | undefined;
+  if (!raw || typeof raw !== "object") return;
+
+  const deps = new Set([
+    ...(Array.isArray(m.dependsOn) ? m.dependsOn : []),
+    ...(Array.isArray(m.integratesWith) ? m.integratesWith : []),
+  ]);
+  const provides = new Set(Array.isArray(m.provides) ? m.provides : []);
+
+  for (const field of Object.keys(raw)) {
+    if (field === "config") continue;
+    const usedBy = schema[field]?.usedBy;
+    // Not in the schema, or no ownership recorded: not this check's business.
+    // An unknown field is the converter's `unknown` warning, which stays there.
+    if (!usedBy || usedBy.length === 0) continue;
+    if (usedBy.includes("general")) continue;
+    if (usedBy.some((u) => deps.has(u))) continue;
+    // Self-consumed: a coordinate "<mod>:<svc>" whose <svc> this module itself
+    // provides. It reads the field from the flattened top level and must not
+    // depend on its own service — network declares `ports` and provides
+    // `rules`, and is correct. Without this the provider of a service would be
+    // told off for using it.
+    if (usedBy.some((u) => provides.has(u.split(":")[1] ?? ""))) continue;
+
+    out.push({
+      module: m.name,
+      severity: "warning",
+      message:
+        `field '${field}' is read only by ${usedBy.join(", ")}, none of which this module wires — ` +
+        `it has no effect. Add the dependency, or drop the field (#683)`,
+    });
+  }
 }
 
 // config-block structural rules (#549). module-fields.json declares these as

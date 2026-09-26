@@ -69,6 +69,12 @@ if ! _convert_have_log_funcs; then
     error() { echo "[Error] $*" >&2; }
     die()   { error "$@"; exit 1; }
 fi
+# debug is guarded on its OWN, not folded into the four above: a caller can
+# supply info/warn/error/die and no debug, and then a debug call here is
+# "command not found" at the moment it is trying to explain something (#423 was
+# exactly that, in Create-TAPPaaS-LXC.sh). Checking it separately also avoids
+# re-defining a caller's four when only debug is missing.
+declare -F debug >/dev/null 2>&1 || debug() { [[ "${TAPPAAS_DEBUG:-0}" -eq 1 ]] || return 0; echo "[Debug] $*" >&2; }
 
 # Public function: take flat JSON on stdin, emit Pattern A JSON on stdout.
 # All warnings go to stderr. Pre-existing config blocks are merged in (i.e.,
@@ -133,7 +139,16 @@ regroup_to_pattern_a() {
                     warn "  field '${field}' is not in the schema — kept at top level" >&2
                     ;;
                 orphan)
-                    warn "  field '${field}' is usedBy=[${used_by}] but the module does not depend on any of them — kept at top level" >&2
+                    # #683: SILENT here, on purpose. The classification is still
+                    # needed — an orphan stays at top level, which is what the
+                    # next line of this function does with it — but saying so is
+                    # not this function's job. It runs on every three-way merge,
+                    # so the warning repeated on every update of an affected
+                    # module, telling an operator reading a sweep log about a
+                    # module-authoring decision they cannot act on and cannot
+                    # silence. `module-manager validate` reports it now
+                    # (validateOrphanFields), once, to the person who can fix it.
+                    debug "  field '${field}' is usedBy=[${used_by}] and none is wired — kept at top level (#683; validate reports it)" >&2
                     ;;
             esac
         done <<<"${warnings}"

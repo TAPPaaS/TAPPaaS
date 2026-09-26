@@ -120,6 +120,24 @@ to say.
 Keys beginning `_` (`_README`, `_note`, `_comment`) are documentation for whoever
 reads the file next; no tool reads them, and the schema check passes over them.
 
+`validate` also reports a field **nothing will read** (#683). `module-fields.json`
+records which `provider:service` consumes each field, so a module can declare one
+and wire no consumer: `ports` is owned by `network:rules`, and a module that
+depends on `network:proxy` but not `network:rules` gets no ingress validation and
+no firewall rules from it. It is a **warning**, not an error — the field may be
+honest documentation of what a proxy-published module listens on internally — and
+it fires only where the author can act. Three cases are deliberately silent: a
+consumer wired through `integratesWith` counts as wired; a field whose `usedBy`
+includes `general` belongs to no one service; and a *self-consumed* field, where
+the coordinate's service is one this module `provides`, is correct as it stands
+(`network` declares `ports` and provides `rules`, and must not depend on itself).
+
+This used to be a warning from the three-way merge instead, which meant an
+operator saw it on **every** update of an affected module, in a sweep log, about
+a module-authoring decision they could neither act on nor silence. The merge
+still classifies the field the same way and still keeps it at top level; it just
+no longer says so out loud (`TAPPAAS_DEBUG=1` if you want the per-merge note).
+
 ### Renaming an instance: `modify --set instance=<new>` (#566)
 
 ```bash
