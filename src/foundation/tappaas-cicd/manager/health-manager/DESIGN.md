@@ -137,6 +137,34 @@ and reads `df /`. It drives no control-plane controller.
   model TBD.
 - **Guest-agent liveness** — extend `service-liveness` with `qm guest cmd <vmid>
   ping` beyond `pvesh` running-state.
+### How a guest rebuild classifies its own failure
+
+`update-os.sh` retries a rebuild **only** on a lost connection; every other exit is
+`nixos-rebuild`'s own deterministic verdict, and retrying it repeats the failure under a
+misleading connectivity banner.
+
+| exit | meaning | what happens |
+|---|---|---|
+| 0 | activated | done |
+| 255 | ssh lost the connection | probe, then retry (up to 3) |
+| 124 / 137 | **our** ceiling (`REBUILD_MAX_SECONDS`, default 3600) fired | treated as 255 |
+| anything else | the configuration was rejected — including exit 4, units that failed to reload | fails immediately, no retry |
+
+Two things make that work rather than hang (#720). The rebuild's ssh carries
+`ServerAliveInterval=30 ServerAliveCountMax=6`, because `ConnectTimeout` bounds only the
+handshake: once connected, ssh waits for a peer that is never coming, and a `switch` restarting
+sshd or dbus-broker is exactly how the peer stops coming. That stranded one guest for 93 minutes
+with no output, the retry unreachable because the attempt never ended. Keepalives turn the silence
+into a 255 within ~3 minutes, which is the case the retry already handled.
+
+And before calling a lost connection a failure it asks the guest what is activated, comparing
+`/run/current-system` against its value before the attempt. In #720 the remote had already printed
+*Done. The new configuration is …* — the switch had succeeded and only the connection was lost, so
+"done, connection lost" is the correct verdict, not "failed". `/run/current-system` is the right
+signal because a switch that reached activation moves it; comparing the running nixpkgs revision
+instead would lie whenever the guest was already on the pinned revision and only its config
+changed.
+
 - **Full `update-os` TS port** — today the verb pass-throughs to `update-os.sh`.
 - **`install.sh` → nix build** — link the compiled `health-manager` bin (kept on
   the `.sh` link path for now).

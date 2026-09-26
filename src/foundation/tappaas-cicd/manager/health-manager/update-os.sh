@@ -272,6 +272,22 @@ detect_os_type() {
 # classify it. Leaves the saved log path in RUN_QUIET_LOG.
 #   run_quiet_rc <description> <command> [args...]
 RUN_QUIET_LOG=""
+# A rebuild's ssh must be able to NOTICE a dead connection (#720).
+#
+# ConnectTimeout bounds only the handshake. Once connected, ssh will wait for a
+# peer that is never coming — and a `switch` that restarts sshd or dbus-broker is
+# exactly how the peer stops coming. On hrossen's first boundary that stranded one
+# guest for 93 minutes with no output: the remote nixos-rebuild had finished ("Done.
+# The new configuration is ...") and the connection simply never returned. The
+# retry below is correct and was unreachable, because the attempt never ended.
+#
+# Keepalives turn that silence into exit 255 in ~3 minutes, which is precisely the
+# case the retry already handles. REBUILD_MAX_SECONDS is a second, blunter net for
+# an ssh that wedges without the keepalive firing; it is deliberately generous —
+# a cross-release guest rebuild runs minutes, not an hour.
+SSH_REBUILD_OPTS=(-o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=6)
+REBUILD_MAX_SECONDS="${REBUILD_MAX_SECONDS:-3600}"
+
 run_quiet_rc() {
     local desc="$1" rc
     shift
@@ -618,23 +634,55 @@ update_nixos() {
     if _move="$(release_move_of "${vm_ip}" "${nixpkgs_arg}" "${remote_nix_path}")"; then
         info "Release move on ${vmname}: ${_move% *} -> ${_move#* } — staging it for the next boot (#728)"
         ( run_quiet "nixos-rebuild boot on ${vm_ip}" \
-            ssh -o BatchMode=yes "tappaas@${vm_ip}" "sudo nixos-rebuild boot ${nixpkgs_arg} -I nixos-config=${remote_nix_path}" ) \
+            timeout -k 30 "${REBUILD_MAX_SECONDS}" \
+            ssh "${SSH_REBUILD_OPTS[@]}" "tappaas@${vm_ip}" "sudo nixos-rebuild boot ${nixpkgs_arg} -I nixos-config=${remote_nix_path}" ) \
             || die "staging the release move on ${vmname} failed — it is still on ${_move% *}"
         rebuilt=1; staged=1
     fi
 
+    # What is activated right now, so a connection that dies mid-switch can be
+    # judged rather than guessed (#720). A `switch` that reached activation moves
+    # /run/current-system; one that did not, does not. Comparing the running
+    # nixpkgs revision instead would lie whenever the guest was already on the
+    # pinned revision and only its config changed.
+    local _sys_before
+    _sys_before="$(ssh -o BatchMode=yes -o ConnectTimeout=10 "tappaas@${vm_ip}" \
+        "readlink -f /run/current-system" 2>/dev/null || true)"
+
     (( staged )) || for attempt in 1 2 3; do
         rc=0
         if [[ "${OPT_DEBUG:-0}" -eq 1 ]]; then
-            ssh -o BatchMode=yes "tappaas@${vm_ip}" "${_rebuild_cmd}" || rc=$?
+            timeout -k 30 "${REBUILD_MAX_SECONDS}" \
+                ssh "${SSH_REBUILD_OPTS[@]}" "tappaas@${vm_ip}" "${_rebuild_cmd}" || rc=$?
         else
             # run_quiet_rc, not run_quiet: the latter die()s with exit 1 and would
             # erase the real exit code this classification depends on.
             run_quiet_rc "nixos-rebuild on ${vm_ip} (attempt ${attempt}/3)" \
-                ssh -o BatchMode=yes "tappaas@${vm_ip}" "${_rebuild_cmd}" || rc=$?
+                timeout -k 30 "${REBUILD_MAX_SECONDS}" \
+                ssh "${SSH_REBUILD_OPTS[@]}" "tappaas@${vm_ip}" "${_rebuild_cmd}" || rc=$?
         fi
         if [[ "$rc" -eq 0 ]]; then
             rebuilt=1; break
+        fi
+        # 124/137: OUR ceiling fired (timeout -k). That is a connection fault of
+        # our own making, not nixos-rebuild's verdict — without this it fell into
+        # the branch below and died claiming the configuration was rejected.
+        if [[ "$rc" -eq 124 || "$rc" -eq 137 ]]; then
+            warn "nixos-rebuild on ${vm_ip} exceeded ${REBUILD_MAX_SECONDS}s and was killed — treating it as a lost connection"
+            rc=255
+        fi
+        if [[ "$rc" -eq 255 && -n "${_sys_before}" ]]; then
+            # The remote may well have finished: the 93-minute hang in #720 ended
+            # with "Done. The new configuration is ..." already in the captured
+            # output. Ask the guest what is activated before calling this a failure.
+            local _sys_now
+            _sys_now="$(ssh -o BatchMode=yes -o ConnectTimeout=10 "tappaas@${vm_ip}" \
+                "readlink -f /run/current-system" 2>/dev/null || true)"
+            if [[ -n "${_sys_now}" && "${_sys_now}" != "${_sys_before}" ]]; then
+                info "  ${GN}✓${CL} the connection dropped, but ${vmname} activated the new system anyway"
+                info "      ${_sys_before##*-nixos-system-} -> ${_sys_now##*-nixos-system-}"
+                rebuilt=1; break
+            fi
         fi
         if [[ "$rc" -ne 255 ]]; then
             error "nixos-rebuild on ${vm_ip} failed with exit ${rc} — $(nixos_rebuild_exit_meaning "${rc}")."
