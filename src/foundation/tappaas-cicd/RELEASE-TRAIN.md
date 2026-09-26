@@ -195,6 +195,33 @@ nor `stable` is rewound; the fix lands on `main` and travels the train like ever
 was hotfixed on `staging`, it must be back-ported — `--resolved` requires the commit to be an
 ancestor of `main`, which is what makes "back-ported" a fact rather than an intention.
 
+## When a fix cannot wait for the boundary
+
+Rare, and deliberately hard to reach for: **data safety, a high-severity security CVE, or a
+service down with the fix already written** — each only when there is no workaround (ADR-028 D12).
+"It is finished" is not a reason; the soak is the test, not a queue.
+
+Author the fix on a branch off **the channel's own tip**, merge that branch into `main`, then
+fast-forward the channel onto it:
+
+```bash
+git checkout -b hotfix/<what> staging      # or stable, for production
+# ... the fix, tested ...
+git checkout main && git merge --no-ff hotfix/<what>
+git checkout staging && git merge --ff-only hotfix/<what>
+```
+
+The channel then gains **exactly** the fix, and its tip is still an ancestor of `main`, so
+`stable ⊆ staging ⊆ main` holds and `init` is satisfied. Cherry-picking straight onto the channel
+breaks that ancestry and `init` refuses; fast-forwarding the channel to `main`'s tip keeps the
+ancestry but promotes everything ahead of the fix, which abandons the soak rather than shortening
+it. Record it with `tappaas-train.sh fault --resolved <commit>` if a fault was open.
+
+**Do not patch a running site in place and stop there.** A site whose deployed scripts are ahead
+of its checkout is lying about what it runs: nothing reports the divergence, and the next
+control-plane refresh relinks `~/bin` from the checkout and reverts it silently. If you must, to
+stop active damage, treat it as a bridge to the channel move and not a substitute.
+
 ## What preflight refuses
 
 Every one of these is a refusal, not a warning:

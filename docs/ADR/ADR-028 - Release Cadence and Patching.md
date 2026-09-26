@@ -7,7 +7,7 @@
 | **Date** | 2026-09-22 |
 | **Author** | Lars Rossen |
 | **Related** | **#713** (the control plane's missing verification and rollback — D10, built) · **#712** (retire the satellite's `--os nixos` remains — raised by D7) · **#680** (the baseline lock decides every site's nixpkgs; its code half landed, its cadence half is this ADR) · **#709** (Nextcloud cannot advance past 33 on a frozen branch — the first concrete demand for a branch move) · **#324** (modules copy the baseline instead of importing it) · **#675** (no extension point for a site's own NixOS modules) · **#166** (the earlier single-path clock fix) · [ADR-017](<ADR-017 - Update scheduling and mothership self-update.md>) D3 (the mothership rebuilds itself from the checkout, before the sweep) · [ADR-020](<ADR-020 - Declared-Field Change Model (validate, drift, modify).md>) D8 (`rebootOk` — whether a kernel change may land) · [ADR-025](<ADR-025 - Config migrations and the upgrade path.md>) (how a release brings `config/` forward; this ADR is its counterpart for the OS) · [ADR-026](<ADR-026 - Managed Machines as Modules.md>) (`debianhost` and the machine OS lifecycle) |
-| **Changelog** | **v1.3 (2026-09-25)** — D11: a repository declares which of its branches are which channel, in `channels.json` at its root; a branch listed nowhere is unstable, a repository without the file is warned about rather than refused, and changing a site's channel now reports every registered repository that disagrees and proposes the fix. · **v1.2 (2026-09-23)** — D8 gains the release move: across a nixpkgs release an in-place switch cannot reload `dbus-broker`, reports exit 4 over it, and its rollback live-locks (#725), so the mothership stages a release move with `nixos-rebuild boot` and reboots into it. · **v1.1 (2026-09-23)** — D1 corrected on measurement: `follows` removes the mothership's *choice* of revision but not its lock's *copy* of it, so moving the estate re-locks both flakes and compares them; `--to` in `tappaas-train` phase 1 performs a version move (#709). · **v1.0 (2026-09-23)** — D1 and D4 built: the mothership follows the estate pin through a relative path input (same derivation before and after, verified as root), and the tripwire now watches `templates/flake.lock` at 45 days and fails if a second pin reappears. · v0.9 (2026-09-23) — D9 gains the rule for a fault found in staging: patch forward, block promotion until the fix is an ancestor of `main`, and never rewind a channel; the boundary itself is designed as one command in `docs/design/release-train-promotion.md`. · **v0.8 (2026-09-23) — ACCEPTED.** Channels are named for what a site runs — **unstable**, **staging**, **production** — on the branches `main`, `staging` and `stable`; the two are named apart on purpose, because "stable" as a promise to an operator and `stable` as a ref are different statements. · v0.7 (2026-09-23) — the satellite's flake is deleted, not merely proposed for retirement (#712 landed), so Context names two pins and D7 records the deletion; adds what a bump costs, measured on the test site: a daily sweep re-downloads nothing (0.03 s to resolve a cached revision, 0.335 s to revalidate), while a pin change costs ~1 GB of fetches and ~10 GB of store across 22 guests, each fetching from GitHub on its own. · v0.6 (2026-09-22) — D10 built and verified on hrossen (#713): the control plane checks itself after a switch and rolls back the generation it replaced when that check fails. · v0.5 (2026-09-22) — retitled from *OS Version Tracking*: once the alpha/beta/stable train landed, the ADR was about release cadence and patching, of which the nixpkgs pin is one input. · v0.4 (2026-09-22) — the operator's train: three channels (alpha/beta/stable) on two-week boundaries, so `stable` is at most four weeks behind and a CVE **accelerates** the train instead of cherry-picking a pin onto code it was never built against; D9 gains the guest-first validation rule (a guest proves a revision before the mothership takes it, without reordering the sweep); D2's beat restated as the boundary. · v0.3 (2026-09-22) — D2 collapsed to **one weekly rhythm** with a full `--deep` test, on a NixOS expert's advice relayed by the operator: a version move is a bigger weekly bump, not a separate cadence (the ~1-month backport overlap is slack, not licence to linger). New D9 (how a bump reaches `main`, and why `stable` takes the pin with its monthly release rather than by weekly cherry-pick) and D10 (the mothership has no rollback, goes first, and needs one before the cadence leans on it). · v0.2 (2026-09-22) — a primer on flake vs non-flake Nix and on patch vs version moves in both OS families, so the decisions read without prior Nix knowledge; D1 states why the mothership keeps its own flake (upgrade safety, four reasons); the satellite corrected to Debian and its `--os nixos` remains proposed for retirement (#712); D5 separated the three Debian patch paths. · v0.1 (2026-09-22) — first draft, from the operator's questions of 2026-09-22 and a read of the shipped code. |
+| **Changelog** | **v1.4 (2026-09-26)** — D12: an urgent fix may reach a channel before its boundary. What qualifies (data safety, a high-severity security CVE, a service down with the fix already written — each only with no workaround); how it moves (author off the channel's tip, merge to `main`, fast-forward the channel, so the channel gains exactly the fix and stays an ancestor of `main`); and that patching a running site in place without moving its channel leaves the deployed code ahead of the declared code, which nothing reports and the next control-plane refresh reverts. From the staging site's Grafana and never-captured mothership backup, 2026-09-25/26. · **v1.3 (2026-09-25)** — D11: a repository declares which of its branches are which channel, in `channels.json` at its root; a branch listed nowhere is unstable, a repository without the file is warned about rather than refused, and changing a site's channel now reports every registered repository that disagrees and proposes the fix. · **v1.2 (2026-09-23)** — D8 gains the release move: across a nixpkgs release an in-place switch cannot reload `dbus-broker`, reports exit 4 over it, and its rollback live-locks (#725), so the mothership stages a release move with `nixos-rebuild boot` and reboots into it. · **v1.1 (2026-09-23)** — D1 corrected on measurement: `follows` removes the mothership's *choice* of revision but not its lock's *copy* of it, so moving the estate re-locks both flakes and compares them; `--to` in `tappaas-train` phase 1 performs a version move (#709). · **v1.0 (2026-09-23)** — D1 and D4 built: the mothership follows the estate pin through a relative path input (same derivation before and after, verified as root), and the tripwire now watches `templates/flake.lock` at 45 days and fails if a second pin reappears. · v0.9 (2026-09-23) — D9 gains the rule for a fault found in staging: patch forward, block promotion until the fix is an ancestor of `main`, and never rewind a channel; the boundary itself is designed as one command in `docs/design/release-train-promotion.md`. · **v0.8 (2026-09-23) — ACCEPTED.** Channels are named for what a site runs — **unstable**, **staging**, **production** — on the branches `main`, `staging` and `stable`; the two are named apart on purpose, because "stable" as a promise to an operator and `stable` as a ref are different statements. · v0.7 (2026-09-23) — the satellite's flake is deleted, not merely proposed for retirement (#712 landed), so Context names two pins and D7 records the deletion; adds what a bump costs, measured on the test site: a daily sweep re-downloads nothing (0.03 s to resolve a cached revision, 0.335 s to revalidate), while a pin change costs ~1 GB of fetches and ~10 GB of store across 22 guests, each fetching from GitHub on its own. · v0.6 (2026-09-22) — D10 built and verified on hrossen (#713): the control plane checks itself after a switch and rolls back the generation it replaced when that check fails. · v0.5 (2026-09-22) — retitled from *OS Version Tracking*: once the alpha/beta/stable train landed, the ADR was about release cadence and patching, of which the nixpkgs pin is one input. · v0.4 (2026-09-22) — the operator's train: three channels (alpha/beta/stable) on two-week boundaries, so `stable` is at most four weeks behind and a CVE **accelerates** the train instead of cherry-picking a pin onto code it was never built against; D9 gains the guest-first validation rule (a guest proves a revision before the mothership takes it, without reordering the sweep); D2's beat restated as the boundary. · v0.3 (2026-09-22) — D2 collapsed to **one weekly rhythm** with a full `--deep` test, on a NixOS expert's advice relayed by the operator: a version move is a bigger weekly bump, not a separate cadence (the ~1-month backport overlap is slack, not licence to linger). New D9 (how a bump reaches `main`, and why `stable` takes the pin with its monthly release rather than by weekly cherry-pick) and D10 (the mothership has no rollback, goes first, and needs one before the cadence leans on it). · v0.2 (2026-09-22) — a primer on flake vs non-flake Nix and on patch vs version moves in both OS families, so the decisions read without prior Nix knowledge; D1 states why the mothership keeps its own flake (upgrade safety, four reasons); the satellite corrected to Debian and its `--os nixos` remains proposed for retirement (#712); D5 separated the three Debian patch paths. · v0.1 (2026-09-22) — first draft, from the operator's questions of 2026-09-22 and a read of the shipped code. |
 
 When TAPPaaS releases, and how OS and software patches reach a site — the channels, the cadence, and what each OS family does between releases.
 
@@ -564,6 +564,84 @@ repository at all, and somebody has to either cut the branch or accept the gap k
 This is the piece that makes a channel checkable rather than aspirational. A site on `production`
 whose Community checkout sits on `main` is not a production site, and before this nothing could say
 so.
+
+### D12 — An urgent fix may reach a channel before its boundary, forward and on the record
+
+D9 says a fault found in staging blocks promotion and is patched forward. It does not say what to
+do when the *fix already exists* and waiting for the next boundary is itself the damage. That gap
+was met in practice on 2026-09-25/26 and is worth settling rather than improvised again.
+
+**What happened.** The staging site's Grafana had been crash-looping since 2026-09-25 because
+`/etc/secrets` was `0700 root:grafana`, which the `grafana` user cannot traverse. The fix was
+already on the site's own checkout — it had arrived with the promotion — but the guest had last
+rebuilt *before* it, so nothing applied it. Separately, that site's mothership config had never
+once been captured: the `backup:filesystem` update never created a missing encryption key, so
+the capture failed on every run for ten days. Both were fixed by reaching into the site by hand.
+Neither could wait a fortnight, and neither was a reason to move the whole channel.
+
+#### What qualifies as urgent
+
+A test, not a feeling. A fix is urgent when **any** of these holds and there is **no workaround**:
+
+- **Data safety.** Data is being lost, or a backup that is believed to exist does not — a capture
+  that has never succeeded, an unescrowed key, a restore path that cannot work.
+- **A high-severity security CVE**, or any vulnerability that is remotely reachable or known to be
+  exploited. Severity is judged on this estate's exposure, not on the advisory's number alone.
+- **A service is down** and the fix is already known and written.
+
+And explicitly **not** urgent: a fix that merely happens to be ready; a defect with a documented
+workaround an operator can apply; anything cosmetic. "It is finished" is not a reason to skip a
+soak — the soak is not a queue, it is the test.
+
+#### How it moves: forward, and still an ancestor of `main`
+
+The train verifies `stable ⊆ staging ⊆ main`, and D9 forbids rewinding a channel. A cherry-pick
+straight onto `staging` breaks the first — the channel tip stops being an ancestor of `main` —
+and fast-forwarding the channel to `main`'s tip breaks the point of the soak, dragging in every
+unsoaked commit to deliver one. Neither is the answer.
+
+**Author the fix on a branch off the channel's own tip, merge that branch into `main`, then
+fast-forward the channel onto the fix.** The channel advances by exactly the fix and no more, and
+its new tip is an ancestor of `main` because `main` merged it. Both invariants hold, and
+"resolved" keeps D9's checkable meaning: *the fix is an ancestor of `main`*.
+
+The same shape serves production, branching from `stable` instead. A fix must never reach
+`stable` without also being on `main`; that is what stops the next boundary reintroducing it.
+
+Verified on a scratch repository with `stable`, `staging` and `main` two commits apart, against
+the two obvious alternatives:
+
+| | `stable ⊆ staging` | `staging ⊆ main` | channel advanced by | unsoaked work dragged in |
+|---|---|---|---|---|
+| **D12: off the channel tip, merge to `main`, fast-forward** | yes | **yes** | 1 commit | **0** |
+| Cherry-pick straight onto the channel | yes | **NO** — `init` refuses | 1 commit | 0 |
+| Fast-forward the channel to `main`'s tip | yes | yes | **3 commits** | 2 |
+
+The cherry-pick loses the invariant the train checks; the fast-forward keeps it but delivers one
+fix by promoting everything ahead of it, which is the soak abandoned rather than shortened.
+
+#### What must not be done, and why
+
+**Do not patch a running site in place and leave it there.** Deploying a corrected script to a
+site whose checkout still holds the old one leaves the site's *deployed* code ahead of its
+declared code. Nothing reports that divergence, and the next control-plane refresh relinks
+`~/bin` from the checkout and silently reverts it. That is exactly what was done on the staging
+site on 2026-09-26 as a stopgap, and it only survived because the underlying trigger was removed
+as well. It buys hours, it is not a fix, and a site left in that state is lying about what it runs.
+
+If a hand-patch is unavoidable to stop active damage, it is a bridge to the channel move, not a
+substitute for it, and it is recorded the same way.
+
+#### Who decides, and what is written down
+
+- **Staging:** the operator decides. Staging exists to absorb this.
+- **Production:** the operator decides, and records the trigger (which clause above), what moved,
+  and the commit — before the move, not after.
+- Either way the site records that it is carrying an expedited fix, so the next boundary can say
+  so and an operator reading the site later is not left guessing why its channel is where it is.
+
+The bar is deliberately set so this is rare. Every use of it is a fortnight of soak not taken,
+and a train whose boundaries are routinely bypassed is not a train.
 
 ## Consequences
 
