@@ -81,7 +81,14 @@ for p in "${PATHS[@]}"; do
     # escrowed key a restore of every OTHER module depends on (§2.5.1) — was
     # absent from every mothership capture while each one reported complete
     # (#626). Silence is the failure mode this ADR exists to prevent.
-    unreadable="$(find "${p}" ! -readable -print -quit 2>/dev/null)" || true
+    # `! -type l` because -readable uses access(2), which FOLLOWS the link: a
+    # symlink whose target has moved away tests the missing target and reads as
+    # unreadable, so one stale link refused an entire capture (#745 — three of
+    # them, all a module-fields.json left pointing at its pre-schemas/ path,
+    # blocked the mothership capture on a whole site). A symlink is captured as
+    # the link itself, so a dangling one loses nothing; and a target that lives
+    # inside a declared path is tested on its own account, right here.
+    unreadable="$(find "${p}" ! -type l ! -readable -print -quit 2>/dev/null)" || true
     [[ -z "${unreadable}" ]] || die "declared path '${p}' holds entries this backup cannot read (first: ${unreadable}) — a partial capture is not a capture"
     name="${p#/}"; name="${name%/}"; name="${name//\//-}"
     # PBS's backupspec is <name>.pxar:<path> and the NAME may not carry a dot —
