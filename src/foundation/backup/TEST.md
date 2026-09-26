@@ -3,8 +3,19 @@
 ## How to run
 - **`./test.sh`** (fast) — the module test.sh; aggregates the pure unit suites
   `lib/test-pbs-job.sh` + `lib/test-pbs-namespace.sh` (no cluster access).
-- **`TAPPAAS_TEST_DEEP=1 ./test.sh`** — adds a read-only live-PBS reachability check
-  (`backup-controller list`).
+- **`TAPPAAS_TEST_DEEP=1 ./test.sh`** — adds two read-only live-PBS checks: reachability
+  (`backup-controller job-status` + `namespaces`), and whether every `backup:filesystem`
+  consumer has ever actually captured.
+
+  The second asserts against PBS, not against the unit (#742). A capture that has **never**
+  succeeded and one that failed last night both leave only a failed unit, and on a mothership
+  the nightly rebuild clears that — so a site went ten days with no capture of its config
+  while reporting zero failed units and `ok: true`. An empty `fs/<module>` namespace cannot be
+  mistaken for either: no snapshot **fails**, a newest snapshot older than two daily windows
+  is a `TEST-WARN`, anything newer passes. It needs no per-module credential (the PBS admin
+  API on the node answers it), and if it cannot reach PBS at all it **skips** rather than
+  judging — a false "never captured" would fail every healthy site, which is worse than no
+  check.
 - Per-VM backup verification is a SERVICE test owned by the *consumer* modules
   (`dependsOn backup:vm`), invoked by `test-module.sh`:
   `./services/vm/test-service.sh <module-name>` (fast) /

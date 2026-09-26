@@ -186,6 +186,40 @@ pbs_fs_fingerprint() {
         | sed -n 's/^Fingerprint (sha256): //p' | head -1
 }
 
+# Print the unix time of <module>'s newest capture, or nothing if it has never
+# captured one.
+#
+# PBS is the authority here, and that is the point (#742). A capture that has
+# NEVER succeeded looked exactly like one that failed last night: the unit's own
+# state is all there was, and on a mothership the nightly rebuild resets that —
+# so the difference was invisible for eighteen hours a day, and a site whose
+# config had never once been backed up reported zero failed units. A namespace
+# with no snapshot in it cannot be mistaken for either.
+#
+# Read through the PBS admin API on the node, so it needs no per-module
+# credential — the module's own password lives on the guest, not here. A
+# namespace that does not exist errors, which prints nothing: never captured.
+pbs_fs_last_capture() {
+    local module="$1" store ns
+    store="$(pbs_storage_name)"
+    ns="$(pbs_fs_namespace "${module}")"
+    _pbs_node_run proxmox-backup-debug api get \
+        "/admin/datastore/${store}/snapshots" --ns "${ns}" --output-format json \
+        2>/dev/null | jq -r 'map(.["backup-time"]) | max // empty' 2>/dev/null
+}
+
+# Every installed module that declares backup:filesystem, one per line.
+pbs_fs_consumers() {
+    local j name
+    for j in "${PBS_FS_CONFIG_DIR}"/*.json; do
+        [[ -f "${j}" ]] || continue
+        name="$(basename "${j}" .json)"
+        jq -e '((.dependsOn // []) + (.integratesWith // []))
+               | index("backup:filesystem")' "${j}" >/dev/null 2>&1 \
+            && printf '%s\n' "${name}"
+    done
+}
+
 # Make sure the guest holds a client encryption key, and that it is escrowed.
 #
 # Create-if-absent, never rotate (#742). Only install-service.sh used to do this,

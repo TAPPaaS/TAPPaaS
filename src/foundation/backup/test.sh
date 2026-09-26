@@ -65,6 +65,54 @@ if [[ "${TAPPAAS_TEST_DEEP:-0}" == "1" ]]; then
     else
         echo "  SKIP: backup-controller not on PATH (run the module install first)"
     fi
+
+    # #742: has each backup:filesystem consumer ever actually captured?
+    #
+    # The unit's own state cannot answer this. A capture that has NEVER succeeded
+    # and one that failed last night both leave a failed unit, and on a mothership
+    # the nightly rebuild clears that — which is how a site went ten days with no
+    # capture of its config while reporting zero failed units and ok: true. PBS
+    # holds the only durable answer: an empty namespace means never.
+    echo "== backup (deep): has every filesystem capture ever run? =="
+    _fs_lib="${here}/lib/pbs-fs.sh"
+    if [[ -r "${_fs_lib}" ]] && command -v jq >/dev/null 2>&1; then
+        # shellcheck disable=SC1090
+        . "${here}/lib/pbs-job.sh" 2>/dev/null || true
+        # pbs-namespace.sh defines _pbs_node_run, which is how anything reaches
+        # the PBS node. Without it every query returns empty and an entirely
+        # healthy site reads as "never captured" — a false FAIL is worse than no
+        # check at all, so the guard below refuses to judge unless it loaded.
+        # shellcheck disable=SC1090
+        . "${here}/lib/pbs-namespace.sh" 2>/dev/null || true
+        # shellcheck disable=SC1090
+        . "${_fs_lib}" 2>/dev/null || true
+        if ! declare -F _pbs_node_run >/dev/null 2>&1; then
+            echo "  SKIP: _pbs_node_run not loaded — cannot reach PBS, so nothing is claimed"
+        elif declare -F pbs_fs_consumers >/dev/null 2>&1; then
+            _now="$(date +%s)"; _seen=0
+            while read -r _m; do
+                [[ -n "${_m}" ]] || continue
+                _seen=$(( _seen + 1 ))
+                _last="$(pbs_fs_last_capture "${_m}" 2>/dev/null)"
+                if [[ -z "${_last}" || "${_last}" == "null" ]]; then
+                    echo "  FAIL: ${_m} has NEVER captured — its namespace holds no snapshot"
+                    echo "        a missing encryption key does this silently (#742); try:"
+                    echo "        module-manager module update ${_m}"
+                    rc=1
+                elif (( _now - _last > 172800 )); then
+                    # Two daily windows: one missed run is a hiccup, two is a fault.
+                    echo "  TEST-WARN: ${_m}'s newest capture is $(( (_now - _last) / 86400 ))d old ($(date -d "@${_last}" '+%Y-%m-%d %H:%M' 2>/dev/null))"
+                else
+                    echo "  ✓ ${_m} captured $(date -d "@${_last}" '+%Y-%m-%d %H:%M' 2>/dev/null)"
+                fi
+            done < <(pbs_fs_consumers)
+            (( _seen > 0 )) || echo "  (no module declares backup:filesystem on this site)"
+        else
+            echo "  SKIP: pbs-fs.sh did not load its helpers"
+        fi
+    else
+        echo "  SKIP: lib/pbs-fs.sh not readable, or jq missing"
+    fi
 else
     echo "  (deep tier skipped — set TAPPAAS_TEST_DEEP=1 for the live PBS check)"
 fi

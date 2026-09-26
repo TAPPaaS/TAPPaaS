@@ -126,7 +126,11 @@ _pbs_node_run() {
     local node cmd
     node="$(pbs_node)"
     printf -v cmd '%q ' "$@"
-    ssh -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+    # -n: ssh reads stdin by default and would swallow the rest of a caller's
+    # `while read` input, so a loop over several modules ran exactly one
+    # iteration and the others silently looked absent. No caller feeds stdin in
+    # here — every use is a command with arguments whose output is captured.
+    ssh -n -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
         "root@$(pbs_node_addr "${node}")" "${cmd}"
 }
 
