@@ -72,6 +72,29 @@ skeleton. A template is discovered like any other config, and `module-manager li
 it has no source to reconcile against, so an update of it can never succeed; the skip is
 structural rather than a lifecycle choice, and holds whatever its status says.
 
+### A sweep cut short by a planned mothership reboot resumes (#744)
+
+When the control-plane rebuild crosses a nixpkgs release it is staged and the mothership
+reboots to take it (#725/#728), which ends the sweep before any module is touched. That part is
+deliberate; what used to follow was not. No result was written, so
+`config/last-update-result.json` still held the previous run and read as `ok: true` on a site
+that had done no module work for 24 hours. The timer, deactivated by the reboot, next elapsed a
+full day later. And `OnFailure` could not fire, because the shutdown it would report was
+already queued.
+
+So before requesting the reboot, `tappaas-self-rebuild.sh` now writes the result as
+`ok: false, complete: false, interrupted: …, resume: "pending"`, and drops a marker in
+`config/.update-resume` — in `config/`, not `/run`, because `/run` is cleared by the very
+reboot the marker must survive. At the next boot `update-tappaas-schedule.sh` consumes the
+marker and starts the sweep.
+
+This is a **resume of an interrupted planned run, not a catch-up of a missed schedule.**
+ADR-017 D1 keeps `Persistent=false` on purpose: a tick missed while the host was unexpectedly
+down must not fire at boot, because whatever took the host down could be compounded by running
+again immediately. Here the reboot was ours, deliberate, and it succeeded — the only unfinished
+business is the modules. The marker is consumed *before* the sweep starts, so one interrupted
+run earns exactly one resume and a sweep failing for some other reason cannot loop.
+
 - The `dependsOn` field in each module's JSON config is used to build a dependency graph
 - Modules are topologically sorted so that dependencies are updated before their dependents
 - Ties are broken alphabetically for deterministic ordering

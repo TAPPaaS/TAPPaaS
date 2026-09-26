@@ -350,13 +350,15 @@ in
     serviceConfig = {
       Type = "oneshot";
       ExecStart = "/home/tappaas/bin/update-tappaas-schedule.sh";
+      # It also consumes the #744 resume marker, which lives in config/ because
+      # /run is cleared by the very reboot the marker has to survive.
       # NixOS's default service PATH has no bash, so the script's
       # `#!/usr/bin/env bash` fails without this (exit 127, T3 2026-09-15).
       # Root-only directories: never the operator's ~/bin.
       Environment = [ "PATH=/run/wrappers/bin:/run/current-system/sw/bin" ];
       # It only writes the rendered timer; everything else stays read-only.
       ProtectSystem = "strict";
-      ReadWritePaths = [ "/run/systemd/system" ];
+      ReadWritePaths = [ "/run/systemd/system" "/home/tappaas/config" ];
       PrivateTmp = true;
       NoNewPrivileges = true;
     };

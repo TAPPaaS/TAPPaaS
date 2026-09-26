@@ -225,8 +225,41 @@ if [[ -n "${NEW_RELEASE}" && -n "${CUR_RELEASE}" && "${NEW_RELEASE}" != "${CUR_R
         warn "  running a different release from the one the estate is pinned to."
         exit 1
     fi
+    # Leave a record and a resume marker BEFORE asking for the reboot (#744).
+    #
+    # Two things used to go wrong here. The sweep died at phase 0 without writing
+    # a result, so config/last-update-result.json still held the PREVIOUS run and
+    # read as `ok: true` — a site that had done no module work for 24 hours looked
+    # healthy to anyone (or any script) checking that field. And OnFailure could
+    # not fire, because the shutdown it would report was already queued:
+    # "Transaction for update-tappaas-failure.service/start is destructive".
+    #
+    # The marker lives in config/, not /run: /run is cleared by the very reboot
+    # it has to survive. It is a RESUME of an interrupted planned run, which is a
+    # different thing from ADR-017 D1's catch-up of a missed schedule — D1 refuses
+    # to catch up because whatever caused unplanned downtime might be compounded
+    # by firing again at boot. Here the reboot is ours, deliberate, and it
+    # succeeded; the only unfinished business is the modules.
+    _resume_marker="${CONFIG_DIR:-/home/tappaas/config}/.update-resume"
+    _result="${CONFIG_DIR:-/home/tappaas/config}/last-update-result.json"
+    _now="$(date '+%Y-%m-%d %H:%M:%S')"
+    printf '{\n  "reason": "mothership-release-move",\n  "from": "%s",\n  "to": "%s",\n  "requested": "%s"\n}\n' \
+        "${CUR_RELEASE}" "${NEW_RELEASE}" "${_now}" > "${_resume_marker}.tmp" \
+        && mv -f "${_resume_marker}.tmp" "${_resume_marker}" \
+        || warn "could not write the resume marker — the sweep will wait for its next window"
+    # ok:false is the point: an interrupted sweep must not read as a success.
+    printf '{\n  "ok": false,\n  "complete": false,\n  "interrupted": "mothership-release-move %s -> %s",\n  "resume": "pending",\n  "phase": "control-plane",\n  "total": 0,\n  "failed": 0,\n  "start_time": null,\n  "end_time": "%s",\n  "control_plane": "refreshed"\n}\n' \
+        "${CUR_RELEASE}" "${NEW_RELEASE}" "${_now}" > "${_result}.tmp" \
+        && mv -f "${_result}.tmp" "${_result}" \
+        || warn "could not record the interrupted sweep in ${_result}"
+    # This step runs as root (ExecStartPre `+`, outside the sandbox), and config/
+    # belongs to the operator — leaving root-owned files here is exactly the
+    # drift #533's ownership guard exists to repair. Hand them over now.
+    chown tappaas:users "${_resume_marker}" "${_result}" 2>/dev/null || true
+
     warn "Rebooting the mothership to take ${NEW_RELEASE}. This sweep ends here;"
-    warn "  resume the boundary afterwards: tappaas-train.sh boundary --resume"
+    warn "  the modules were not touched — the sweep resumes automatically after the boot."
+    warn "  Recorded in ${_result} as interrupted (ok:false), resume marker in ${_resume_marker}."
     systemctl reboot
     # The shutdown kills this unit; the sleep is only so that a reboot which did
     # NOT happen becomes a reported failure rather than a silent continuation.

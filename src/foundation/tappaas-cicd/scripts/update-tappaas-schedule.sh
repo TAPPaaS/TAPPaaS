@@ -75,3 +75,31 @@ printf '%s\n' "${unit}" > "${TIMER}.tmp" && mv -f "${TIMER}.tmp" "${TIMER}"
 sysctl_ daemon-reload
 sysctl_ restart update-tappaas.timer
 echo "update-tappaas-schedule: update-tappaas.timer → OnCalendar=${calendar} (Persistent=false)"
+
+# Resume a sweep that a planned mothership reboot cut short (#744).
+#
+# NOT a catch-up. ADR-017 D1 keeps Persistent=false on purpose: a tick missed
+# while the host was unexpectedly down must not fire at boot, because whatever
+# took the host down could be compounded by running again immediately. This is
+# the other case — tappaas-self-rebuild.sh rebooted us itself, deliberately, to
+# take a nixpkgs release move, and it succeeded. The modules were never touched.
+# Waiting for the next window skipped a full day of updates on the staging site
+# and left a guest's dead Grafana unfixable for two further days, with the fix
+# already sitting in the site's own checkout.
+#
+# The marker is consumed BEFORE the sweep starts, so a sweep that dies for some
+# other reason cannot loop: one interrupted run earns exactly one resume.
+resume_marker="${CONFIG_DIR:-/home/tappaas/config}/.update-resume"
+if [[ -f "${resume_marker}" ]]; then
+    reason="$(sed -n 's/.*"reason"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "${resume_marker}" | head -1)"
+    rm -f "${resume_marker}"
+    echo "update-tappaas-schedule: resuming the sweep interrupted by ${reason:-a planned reboot} (#744)"
+    if [[ "${TAPPAAS_NO_SYSTEMCTL:-0}" == "1" ]] || [[ "${DRY_RUN}" -eq 1 ]]; then
+        echo "update-tappaas-schedule: (would start update-tappaas.service)"
+    else
+        # --no-block: this unit runs during boot, and the sweep takes many
+        # minutes; blocking here would hold up timers.target.
+        systemctl start --no-block update-tappaas.service \
+            || echo "update-tappaas-schedule: could not start the resumed sweep — it waits for its next window" >&2
+    fi
+fi
