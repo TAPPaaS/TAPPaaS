@@ -26,6 +26,15 @@ BGN=$'\033[4;92m'; GN=$'\033[1;92m'; DGN=$'\033[32m'; CL=$'\033[m'; BOLD=$'\033[
 info()  { echo -e "${DGN}[Info]${CL} $*"; }
 warn()  { echo -e "${YW}[Warning]${CL} $*"; }
 errln() { echo -e "${RD}[ERROR]${CL} $*" >&2; }
+# This script calls debug() twice (get_config_value, and the vlan reader) but never
+# defined it, so every container creation printed "debug: command not found" to
+# stderr — twice, on a path that also reports real configuration errors, which is
+# the worst place to add noise. Not fatal: the failed call is not the function's
+# last command, so its non-zero status never became the function's. Mirrors
+# Create-TAPPaaS-VM.sh:55 exactly, including the flag, because get_config_value
+# below already mirrors that script and the two are distributed to nodes together.
+# [Debug] lines are silent unless TAPPAAS_DEBUG=1 (matches the platform convention).
+debug() { [[ "${TAPPAAS_DEBUG:-0}" -eq 1 ]] || return 0; echo -e "${BL}[Debug]${CL} $*"; }
 # die: report and stop, with the ERR trap off so the message is not buried under
 # the generic handler (the VM path has the same helper).
 die()   { trap - ERR; errln "$*"; exit 1; }
