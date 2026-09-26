@@ -78,7 +78,7 @@ info "${BOLD}backup:filesystem: provisioning file capture for ${BL}${MODULE}${CL
 
 # 2. Namespace + write-no-delete login. The password is generated, handed to the
 #    guest and escrowed centrally — never echoed, never stored in config.
-ESCROW_DIR="/etc/secrets/backup-fs"
+# The escrow directory is PBS_FS_ESCROW_DIR in pbs-fs.sh (shared with update).
 # Bounded input, then slice — do NOT pipe /dev/urandom into `head`: head exits
 # after 32 bytes, tr dies of SIGPIPE, and under `pipefail` the substitution
 # returns non-zero, so `set -e` kills the script one line after generating a
@@ -122,37 +122,9 @@ printf '%s' "${FS_PW}" | ssh -o ConnectTimeout=15 -o BatchMode=yes \
     || die "could not write the backup login password on ${GUEST}"
 fi
 
-ssh -o ConnectTimeout=15 -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
-    "${TARGET}" "${SUDO}bash -s" <<REMOTE || die "could not prepare secrets on ${GUEST}"
-set -euo pipefail
-# The DIRECTORY must be traversable by the service user — the secrets inside it
-# are protected by their own 0600, not by an unreadable parent. Created under
-# `umask 077` it came out 0700 root, and the capture failed with a bare
-# "cannot read /etc/secrets/backup-fs.pw" that pointed at the file, not the
-# directory that was actually denying it.
-mkdir -p /etc/secrets
-chmod 755 /etc/secrets
-umask 077
-if [[ ! -s /etc/secrets/backup-fs.key ]]; then
-    proxmox-backup-client key create /etc/secrets/backup-fs.key --kdf none
-    echo "  created client encryption key"
-else
-    echo "  client encryption key already present"
-fi
-chmod 600 /etc/secrets/backup-fs.key /etc/secrets/backup-fs.pw
-chown ${OWNER} /etc/secrets/backup-fs.key /etc/secrets/backup-fs.pw
-REMOTE
+pbs_fs_ensure_key "${MODULE}" "${TARGET}" "${OWNER}" "${SUDO}" \
+    || die "could not put ${MODULE}'s encryption key in place on ${GUEST}"
 info "  ${GN}✓${CL} guest secrets in place on ${BL}${GUEST}${CL}"
-
-sudo mkdir -p "${ESCROW_DIR}"
-if ssh -o BatchMode=yes "${TARGET}" "${SUDO}cat /etc/secrets/backup-fs.key" \
-        | sudo tee "${ESCROW_DIR}/${MODULE}.key" >/dev/null; then
-    sudo chmod 600 "${ESCROW_DIR}/${MODULE}.key"
-    info "  ${GN}✓${CL} encryption key escrowed → ${ESCROW_DIR}/${MODULE}.key"
-    warn "  Take the mandatory OUT-OF-BAND copy now (§2.5.1): backup-manager key export <dest>"
-else
-    die "could not escrow ${MODULE}'s encryption key — a key held only by the guest cannot restore it"
-fi
 
 # 4. Manifest + runner on the guest.
 SCHEDULE="$(pbs_schedule_resolve "${MODULE}")"

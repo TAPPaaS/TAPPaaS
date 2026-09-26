@@ -28,6 +28,9 @@
 # sourced first.
 
 PBS_FS_CONFIG_DIR="${CONFIG_DIR:-/home/tappaas/config}"
+# Where the guest's encryption key is escrowed centrally (ADR-012 §2.5.1). A key
+# held only by the guest cannot restore that guest.
+PBS_FS_ESCROW_DIR="/etc/secrets/backup-fs"
 
 # Where a module's capture manifest lives: what to capture, where to send it.
 # Deliberately NOT a <module>.json — that namespace belongs to module configs.
@@ -181,6 +184,66 @@ pbs_fs_grant_ns() {
 pbs_fs_fingerprint() {
     _pbs_node_run proxmox-backup-manager cert info 2>/dev/null \
         | sed -n 's/^Fingerprint (sha256): //p' | head -1
+}
+
+# Make sure the guest holds a client encryption key, and that it is escrowed.
+#
+# Create-if-absent, never rotate (#742). Only install-service.sh used to do this,
+# so a guest that reached backup:filesystem by any other route — notably a
+# mothership whose capture predates the service — never got a key, and no amount
+# of updating could give it one: the capture then failed on every run, forever.
+# An existing key is left exactly alone; rotating one is a deliberate act with
+# its own verb, and silently replacing it would orphan every archive it wrote.
+#
+# Args: <module> <target> <owner-spec> <sudo-prefix>
+pbs_fs_ensure_key() {
+    local module="$1" target="$2" owner="$3" sudo_p="$4"
+    local guest="${target#*@}" created=0
+
+    # `created` comes back on stdout so the caller can say which happened; the
+    # remote block is otherwise quiet. The directory must stay traversable by the
+    # service user — the secrets are protected by their own 0600, not by the
+    # parent (the 0700 form produced a "cannot read <file>" that blamed the file).
+    created="$(ssh -o ConnectTimeout=15 -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+        "${target}" "${sudo_p}bash -s" <<REMOTE
+set -euo pipefail
+mkdir -p /etc/secrets
+chmod 755 /etc/secrets
+umask 077
+if [[ ! -s /etc/secrets/backup-fs.key ]]; then
+    proxmox-backup-client key create /etc/secrets/backup-fs.key --kdf none >/dev/null
+    printf created
+fi
+chmod 600 /etc/secrets/backup-fs.key
+chown ${owner} /etc/secrets/backup-fs.key
+# The password is the install's to write; only tidy its mode when it is there.
+if [[ -s /etc/secrets/backup-fs.pw ]]; then
+    chmod 600 /etc/secrets/backup-fs.pw
+    chown ${owner} /etc/secrets/backup-fs.pw
+fi
+REMOTE
+    )" || { warn "  could not ensure the encryption key on ${guest}"; return 1; }
+
+    [[ "${created}" == "created" ]] && info "  ${GN}✓${CL} created the client encryption key on ${BL}${guest}${CL}"
+
+    # Escrow it whenever the central copy is missing or differs — an unescrowed
+    # key is unrecoverable, and that is true of a key we just created and of one
+    # that was created before escrow existed.
+    sudo mkdir -p "${PBS_FS_ESCROW_DIR}"
+    local escrowed="${PBS_FS_ESCROW_DIR}/${module}.key"
+    local remote_key
+    remote_key="$(ssh -n -o BatchMode=yes "${target}" "${sudo_p}cat /etc/secrets/backup-fs.key" 2>/dev/null)" \
+        || { warn "  could not read ${guest}'s key back to escrow it"; return 1; }
+    [[ -n "${remote_key}" ]] || { warn "  ${guest}'s encryption key is empty"; return 1; }
+
+    if [[ ! -s "${escrowed}" ]] || [[ "${remote_key}" != "$(sudo cat "${escrowed}" 2>/dev/null)" ]]; then
+        printf '%s' "${remote_key}" | sudo tee "${escrowed}" >/dev/null \
+            || { warn "  could not escrow ${module}'s encryption key"; return 1; }
+        sudo chmod 600 "${escrowed}"
+        info "  ${GN}✓${CL} encryption key escrowed → ${escrowed}"
+        warn "  Take the mandatory OUT-OF-BAND copy now (§2.5.1): backup-manager key export <dest>"
+    fi
+    return 0
 }
 
 # Write the capture manifest the guest-side runner reads. Carries no secret:

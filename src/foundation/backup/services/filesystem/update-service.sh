@@ -1,9 +1,15 @@
 #!/usr/bin/env bash
 #
 # backup:filesystem — update-service (ADR-012 §3.1). Re-asserts the capture:
-# the namespace/ACL, the manifest (paths or schedule may have changed) and the
-# deployed runner. Idempotent; the credential and key are left alone once they
-# exist — rotating them is a deliberate act, not a side effect of an update.
+# the namespace/ACL, the encryption key, the manifest (paths or schedule may have
+# changed) and the deployed runner.
+#
+# Idempotent, and specific about what that means for the secrets (#742): a key
+# that EXISTS is left exactly alone, because rotating it is a deliberate act and
+# not a side effect of an update. A key that is ABSENT is created. Those are not
+# the same case, and reading the first as "never touch the key" left a guest with
+# no key unable to ever obtain one — its capture failed on every run, for as long
+# as the site existed, with nothing in the converge path able to heal it.
 #
 # Usage: update-service.sh <module-name>
 #
@@ -49,6 +55,14 @@ fi
 # The namespace + ACL are re-asserted without a password: the login exists by
 # now, and pbs_fs_ensure_target only needs one when it has to create it.
 pbs_fs_ensure_target "${MODULE}" || die "could not re-assert the PBS side for ${MODULE}"
+
+# The encryption key, created only if missing, and escrowed either way (#742).
+# A capture cannot run without it, so a failure here fails the step rather than
+# warning and falling through to the success line.
+OWNER="tappaas:users"; [[ "${KIND}" == "machine" ]] && OWNER="root:root"
+SUDO="$(pbs_fs_sudo "${MODULE}")"
+pbs_fs_ensure_key "${MODULE}" "${TARGET}" "${OWNER}" "${SUDO}" \
+    || die "could not converge ${MODULE}'s encryption key on ${GUEST} — the capture cannot run without it"
 
 SCHEDULE="$(pbs_schedule_resolve "${MODULE}")"
 NS="$(pbs_fs_namespace "${MODULE}")"

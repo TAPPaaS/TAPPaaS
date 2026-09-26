@@ -52,8 +52,20 @@ mapfile -t EXCLUDE < <(jq -r '.exclude // [] | .[]' "${MANIFEST}")
 
 PW_FILE="/etc/secrets/backup-fs.pw"
 KEY_FILE="/etc/secrets/backup-fs.key"
-[[ -r "${PW_FILE}" ]]  || die "cannot read ${PW_FILE} (the write-no-delete login's password)"
-[[ -r "${KEY_FILE}" ]] || die "cannot read ${KEY_FILE} — backups are encrypted client-side (ADR-012 §2.5) and will not run without the key"
+# Absent and unreadable are different faults with different fixes, and saying
+# "cannot read" for both sent an operator to check modes and ownership — a real
+# trap, /etc/secrets has had exactly that problem — when nothing had ever created
+# the file (#742). Name which it is.
+_secret_fault() {   # <path> <what it is>
+    if [[ ! -e "$1" ]]; then
+        die "$1 does not exist ($2) — nothing has created it; re-run the module's update to converge it"
+    fi
+    [[ -s "$1" ]] || die "$1 is empty ($2)"
+    die "$1 is not readable by $(id -un) ($2) — check its mode and the mode of $(dirname "$1")"
+}
+[[ -r "${PW_FILE}" && -s "${PW_FILE}" ]] || _secret_fault "${PW_FILE}" "the write-no-delete login's password"
+# Backups are encrypted client-side (ADR-012 §2.5) and will not run without the key.
+[[ -r "${KEY_FILE}" && -s "${KEY_FILE}" ]] || _secret_fault "${KEY_FILE}" "the client-side encryption key"
 
 # Build one <name>.pxar:<path> archive argument per declared path. A path that
 # does not exist is FATAL, not skipped: it means the module's declared capture

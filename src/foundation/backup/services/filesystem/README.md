@@ -102,6 +102,19 @@ only copy — take the out-of-band one with `backup-manager key export <dest>`
 (ADR-012 §2.5.1). Without a key, its backups are unreadable by anyone, including
 you.
 
+Both install and update **converge** the key: absent, it is created and escrowed;
+present, it is left exactly alone. Those are deliberately different cases (#742) —
+rotating a key is its own act, and silently replacing one would orphan every
+archive it wrote — but until they were told apart, a guest that reached this
+service without a key could never obtain one, and its capture failed on every run
+for as long as the site existed. If you see a capture reporting a missing key,
+`module-manager module update <module>` now heals it.
+
+The runner also says *which* fault it hit: a secret that does not exist, one that
+is empty, and one whose mode denies it are three different problems, and calling
+them all "cannot read" pointed operators at `/etc/secrets`' mode — a real trap in
+its own right — when nothing had ever written the file.
+
 ## See also
 
 - [backup module README](../../README.md) · [DESIGN](../../DESIGN.md) ·
