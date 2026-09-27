@@ -534,7 +534,7 @@ export interface SecurityIO {
   trivyRootfs(dir: string): RemoteResult;
   trivyImage(ref: string): RemoteResult;
   versions(): Record<string, string>;
-  freeBytes(path: string): number;
+  diskSpace(path: string): { free: number; total: number };
   cachesPresent(): boolean;
   hostname(): string;
 }
@@ -616,9 +616,9 @@ export class CliSecurityIO implements SecurityIO {
       /Version:\s+(\S+)/.exec(exec(cmd, args, undefined, MIN).stdout)?.[1] ?? "unavailable";
     return { grype: v("grype", ["version"]), trivy: v("trivy", ["--version"]) };
   }
-  freeBytes(path: string): number {
+  diskSpace(path: string): { free: number; total: number } {
     const s = statfsSync(path);
-    return s.bavail * s.bsize;
+    return { free: s.bavail * s.bsize, total: s.blocks * s.bsize };
   }
   cachesPresent(): boolean {
     return existsSync(join(this.home, ".cache", "grype")) && existsSync(join(this.home, ".cache", "trivy"));
@@ -634,11 +634,21 @@ function lastLine(s: string): string {
 }
 
 // ── the scan ───────────────────────────────────────────────────────────
-// The scanner databases need ~6 GB (measured on hrossen 2026-09-27: grype 3.0,
+// The scanner databases take ~6 GB (measured on hrossen 2026-09-27: grype 3.0,
 // trivy 1.4 + its Java DB 1.5, pulled by the first image with jars in it,
-// ADR-011 §5). Refuse to start the first download without room for them and
-// headroom after, rather than fill the root disk.
-export const DB_SPACE_BYTES = 8 * 1024 ** 3;
+// ADR-011 §5). The first download is refused when it would take the root disk
+// over the disk-threshold gate's 80% — on hrossen it took a 32 GB root to 91%,
+// and a scan that fails the health gate it reports into helps no one.
+export const DB_SPACE_BYTES = 6.5 * 1024 ** 3;
+export const DISK_CEILING = 0.8;
+
+export function dbSpaceProblem(free: number, total: number): string {
+  if (total <= 0) return "";
+  const after = (total - free + DB_SPACE_BYTES) / total;
+  if (after < DISK_CEILING) return "";
+  return `the scanner databases (~${(DB_SPACE_BYTES / 1024 ** 3).toFixed(1)} GiB) would take the root disk to ` +
+    `${Math.round(after * 100)}%, over the ${DISK_CEILING * 100}% disk gate — grow the mothership's disk first`;
+}
 
 interface Planned {
   id: string;
@@ -727,9 +737,11 @@ export function runScan(opts: ScanOpts, client: ClusterClient, io: SecurityIO): 
   // The databases first: a scan against a database that is not there fails
   // every target, which coverage then reports — nothing is silently clean.
   let dbOk = true;
-  if (!io.cachesPresent() && io.freeBytes(opts.configDir) < DB_SPACE_BYTES) {
+  const disk = io.diskSpace(opts.configDir);
+  const space = io.cachesPresent() ? "" : dbSpaceProblem(disk.free, disk.total);
+  if (space) {
     dbOk = false;
-    notes.push(`not enough free disk for the scanner databases (need ${DB_SPACE_BYTES / 1024 ** 3} GiB)`);
+    notes.push(space);
   } else {
     log("updating the scanner databases");
     notes.push(...io.dbUpdate());
@@ -788,7 +800,7 @@ export function runScan(opts: ScanOpts, client: ClusterClient, io: SecurityIO): 
       if (lp.os === "nixos") {
         const nc = nixComps.get(t.id)!;
         if (p.err || !dbOk) {
-          results.push({ ...failed(t, "nix", p.err ?? "no scanner database", nc.components.length), components: nc.components });
+          results.push({ ...failed(t, "nix", p.err ?? "no scanner database — see the scan's notes", nc.components.length), components: nc.components });
         } else {
           log(`matching ${t.name}: ${nc.components.length} Nix packages`);
           const f = join(tmp, `${safe(t.id)}.cdx.json`);
@@ -814,7 +826,7 @@ export function runScan(opts: ScanOpts, client: ClusterClient, io: SecurityIO): 
           });
         }
       } else if (lp.os === "debian") {
-        if (p.err || !dbOk) results.push(failed(t, "debian", p.err ?? "no scanner database"));
+        if (p.err || !dbOk) results.push(failed(t, "debian", p.err ?? "no scanner database — see the scan's notes"));
         else {
           log(`matching ${t.name}: Debian packages`);
           const root = join(tmp, safe(t.id));
@@ -839,7 +851,7 @@ export function runScan(opts: ScanOpts, client: ClusterClient, io: SecurityIO): 
         if (c.digests.length === 0) {
           results.push({ status: summarize(base, 0, "the image has no registry digest (built locally?) — cannot be scanned as running", [], vex, true), version: "", components: [] });
         } else if (!dbOk) {
-          results.push({ status: summarize(base, 0, "no scanner database", [], vex, true), version: "", components: [] });
+          results.push({ status: summarize(base, 0, "no scanner database — see the scan's notes", [], vex, true), version: "", components: [] });
         } else {
           log(`matching ${base.name}: ${c.digests[0]}`);
           const r = trivyTarget(base, io.trivyImage(c.digests[0]), vex);

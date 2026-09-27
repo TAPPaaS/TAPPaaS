@@ -161,9 +161,10 @@ keep one; OPNsense fetches its own). That is the only outbound traffic this adds
 update per scan, from the scanner's publisher. It is not small: after the first full
 scan the mothership held **~6 GB** of scanner cache (grype 3.0 GB; trivy 1.4 GB plus a
 1.5 GB Java database, fetched the first time an image with jars in it is scanned). They
-live on the root disk; hrossen's mothership has a 32 GB root with 9 GB free, so the scan
-refuses its first download without 8 GiB free, and reports every target SCAN FAILED
-rather than scanning with nothing.
+live on the root disk. On hrossen's mothership (32 GB root, 9 GB free) they took the disk
+to **91%**, past the 80% `disk-threshold` gate — so the scan refuses its first download
+when the databases would take the root disk over 80%, reports every target SCAN FAILED,
+and says to grow the disk. A mothership needs about 10 GB more root than it uses today.
 
 ### 6. Coverage — a scan that saw nothing is a failure
 

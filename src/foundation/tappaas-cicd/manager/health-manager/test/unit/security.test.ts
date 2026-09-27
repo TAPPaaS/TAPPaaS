@@ -11,7 +11,7 @@ import { tmpdir } from "os";
 import { join } from "path";
 import { RemoteResult } from "../../../../lib/ts/src/cluster";
 import {
-  CpeParts, DB_SPACE_BYTES, Finding, LINUX_PROBE, OPNSENSE_PROBE, PREVIOUS_FILE, STATUS_FILE, ScanStatus, SecurityIO,
+  CpeParts, DB_SPACE_BYTES, dbSpaceProblem, Finding, LINUX_PROBE, OPNSENSE_PROBE, PREVIOUS_FILE, STATUS_FILE, ScanStatus, SecurityIO,
   TargetStatus, applyCpes, checkCveStatus, groupByImage, diffScans, nixComponents, parseLinuxProbe, parseOpnsenseProbe,
   parseStorePath, parseVex, readStatus, renderReport, runScan, sbomDir, summarize, summarizeOpnsense, sweepIsNewer,
   vexSuppresses, writeScan,
@@ -74,6 +74,7 @@ class FakeIO implements SecurityIO {
   rootfs = ok(trivyJson("debian", 813, [["CVE-2026-1", "HIGH", "libc6", ""]]));
   images = new Map<string, RemoteResult>();
   free = 100 * 1024 ** 3;
+  total = 200 * 1024 ** 3;
   caches = true;
   probes: string[] = [];
   grypeInputs: string[] = [];
@@ -89,7 +90,7 @@ class FakeIO implements SecurityIO {
   trivyRootfs(): RemoteResult { return this.rootfs; }
   trivyImage(ref: string): RemoteResult { return this.images.get(ref) ?? { rc: 1, stdout: "", stderr: "FATAL image not found", ran: true }; }
   versions(): Record<string, string> { return { grype: "0.112.0", trivy: "0.72.0" }; }
-  freeBytes(): number { return this.free; }
+  diskSpace(): { free: number; total: number } { return { free: this.free, total: this.total }; }
   cachesPresent(): boolean { return this.caches; }
   hostname(): string { return "tappaas-cicd"; }
 }
@@ -242,10 +243,13 @@ console.log("runScan");
   // the rules around it
   const io2 = new FakeIO();
   io2.caches = false;
-  io2.free = DB_SPACE_BYTES - 1;
+  io2.free = 9 * 1024 ** 3; // hrossen: 32 GB root, 9 GB free
+  io2.total = 32 * 1024 ** 3;
   const r2 = runScan({ configDir: dir, defaultNode: "tappaas1", repoDir: repo() }, client, io2).status;
-  check(r2.notes.some((n) => n.includes("not enough free disk")) && r2.targets.filter((x) => x.layer !== "opnsense").every((x) => x.verdict === "failed"),
-    "no room for the scanner databases → nothing is scanned, and nothing reads clean");
+  check(r2.notes.some((n) => n.includes("over the 80% disk gate")) && r2.targets.filter((x) => x.layer !== "opnsense").every((x) => x.verdict === "failed"),
+    "databases that would take the root disk over 80% → nothing is scanned, and nothing reads clean");
+  check(dbSpaceProblem(20 * 1024 ** 3, 32 * 1024 ** 3) === "" && dbSpaceProblem(9 * DB_SPACE_BYTES, 10 * DB_SPACE_BYTES) === "",
+    "room enough → no objection");
   const io3 = new FakeIO();
   io3.local = ok(nixProbe().split("\n").filter((l) => !l.includes("glibc")).join("\n"));
   check(runScan({ configDir: dir, defaultNode: "tappaas1", repoDir: repo() }, client, io3).status.targets.find((x) => x.id === "tappaas-cicd")?.verdict === "failed",

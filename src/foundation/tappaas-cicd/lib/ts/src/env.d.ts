@@ -80,7 +80,7 @@ declare module "fs" {
   export function statSync(path: string): StatLike;
   // Free space on the filesystem holding `path` (the scan checks its scanner
   // databases fit before downloading them, ADR-011 §5).
-  export function statfsSync(path: string): { bavail: number; bsize: number };
+  export function statfsSync(path: string): { bavail: number; bsize: number; blocks: number };
   // Tests set a file's times to order it against another.
   export function utimesSync(path: string, atime: Date, mtime: Date): void;
 }

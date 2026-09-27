@@ -188,7 +188,9 @@ changes).
 `update-tappaas` run, failed or not, and scans only when that run wrote a sweep
 result (`--if-new-sweep`). The scanner databases live in `~/.cache/{grype,trivy}`
 on the root disk — about 6 GB — and the first scan refuses to download them
-without 8 GiB free. With the databases present a scan of hrossen (21 targets)
+when they would take the root disk over 80%, the `disk-threshold` gate: every
+target is then SCAN FAILED and the scan's note says to grow the mothership's
+disk. With the databases present a scan of hrossen (21 targets)
 takes about 30 s.
 
 `report security` prints the last scan: ACT first, then failures, then the rest,
