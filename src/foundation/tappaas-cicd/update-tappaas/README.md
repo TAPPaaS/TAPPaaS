@@ -204,6 +204,10 @@ site-manager validate                          # checks the schedule, prints the
 - **A notice to the site owner** when the unit fails: `update-tappaas-failure.service` mails
   `site.json` `email` through a Proxmox node's mail system, naming the step that failed
   (#651, ADR-007e v1.3).
+- **A security scan of what the run left running**: `tappaas-security-scan.service`, started
+  on success and on failure, writes `config/sbom/site.cdx.json` and `cve-status.json` and
+  mails the owner when a fixable CVE or a failed scan is new (ADR-011;
+  `health-manager report security`). Only a run that wrote a result triggers a scan.
 
 ## Building
 

@@ -742,7 +742,7 @@ New capabilities with low upgrade risk.
 | #406 | ADR-010 P7 hardening + sign-off | 2 | 2 | L | |
 | #359 | legal/processor ADR | 3 | 1 | L | |
 | #63 | Service desk tooling spike | 3 | 1 | L | |
-| FW #143 | CVE tracking / SBOM (ADR-011) | 3 | 1 | L | ADR-011 v0.3 (2026-09-27, Draft, for Erik): per-installation scan, dry run on hrossen; no longer tied to #363 |
+| FW #143 | CVE tracking / SBOM (ADR-011) | 3 | 1 | L | ADR-011 v0.4 (2026-09-27, Draft, for Erik): per-installation scan built — `health-manager scan/report security`, `tappaas-security-scan.service` after every sweep; no longer tied to #363 |
 
 ---
 

@@ -260,7 +260,12 @@ in
     # hard crash exits before that — and the hourly no-op run then clobbers this
     # unit's Result back to success. OnFailure fires on ANY non-zero exit and
     # leaves a durable breadcrumb the operator/monitoring can see.
-    unitConfig.OnFailure = "update-tappaas-failure.service";
+    unitConfig.OnFailure = [ "update-tappaas-failure.service" "tappaas-security-scan.service" ];
+    # ADR-011 §9: every sweep is followed by a security scan of what it left
+    # running — after a failed sweep too, when the site runs something unplanned.
+    # The scan skips itself unless this run wrote a sweep result (--if-new-sweep),
+    # so the hourly no-op runs cost one stat.
+    unitConfig.OnSuccess = [ "tappaas-security-scan.service" ];
     # The rebuild in ExecStartPre changes this very unit; a restart on switch
     # would kill the run that is doing the switch (ADR-017 Open).
     restartIfChanged = false;
@@ -338,6 +343,37 @@ in
       ];
       ProtectSystem = "strict";
       ReadWritePaths = [ "/home/tappaas/config" ];
+    };
+  };
+
+  # ADR-011 §9: the security scan — started by update-tappaas (OnSuccess and
+  # OnFailure above), never by a timer of its own. Inventories every target
+  # read-only and matches it against its layer's CVE source; writes
+  # config/sbom/{site.cdx.json,cve-status.json} and mails the owner only when a
+  # fixable CVE or a failed scan is NEW. A separate unit, so a scan problem never
+  # marks a sweep failed. Its scanner databases (~4.4 GB, ~/.cache/{grype,trivy})
+  # live on the root disk; the scan refuses to download them without room.
+  systemd.services.tappaas-security-scan = {
+    description = "TAPPaaS security scan — SBOM and CVE status after a sweep (ADR-011)";
+    serviceConfig = {
+      Type = "oneshot";
+      User = "tappaas";
+      ExecStart = "/home/tappaas/bin/health-manager scan security --if-new-sweep --notify";
+      Environment = [
+        ("PATH=/home/tappaas/bin:/run/wrappers/bin:/home/tappaas/.nix-profile/bin"
+          + ":/etc/profiles/per-user/tappaas/bin:/nix/var/nix/profiles/default/bin"
+          + ":/run/current-system/sw/bin")
+        # The mothership's nixpkgs is the estate pin (ADR-028 D1): the CPE
+        # vendors it declares hold for every guest built from it.
+        "TAPPAAS_NIXPKGS=${pkgs.path}"
+      ];
+      ProtectSystem = "strict";
+      ReadWritePaths = [ "/home/tappaas/config" "/home/tappaas/.cache" ];
+      PrivateTmp = true;
+      NoNewPrivileges = true;
+      # A slow registry must not hold the unit for ever; the scan's own
+      # timeouts are shorter.
+      TimeoutStartSec = "2h";
     };
   };
 
@@ -579,6 +615,9 @@ in
     # check-ha-health.sh records when each HA service entered a transitional
     # state, so it can alert on duration rather than on the state alone (#146).
     "d /var/lib/tappaas 0750 tappaas users -"
+    # The security scan's scanner databases (ADR-011): the unit's ReadWritePaths
+    # names this directory, and a missing one fails the unit's namespace setup.
+    "d /home/tappaas/.cache 0700 tappaas users -"
     # HOME for tappaas-rebuild@: root-owned, writable (nix caches there), and
     # carrying only the safe.directory grant that lets root open the operator's
     # git checkout. See the comment on environment.etc."tappaas-rebuild-gitconfig".
@@ -661,7 +700,15 @@ in
         # (ADR-012 §3.1 / #545): only the guest can read its own files, so the
         # client belongs INSIDE it.
         proxmox-backup-client
+        # The security scan's scanners (ADR-011 §4): grype matches Nix closures
+        # by CPE, trivy matches Debian hosts and container images.
+        grype
+        trivy
   ];
+
+  # `health-manager scan security` from a shell resolves CPE vendors against
+  # the same nixpkgs the unit does.
+  environment.variables.TAPPAAS_NIXPKGS = "${pkgs.path}";
 
   # Enable automatic garbage collection
   nix.gc = {

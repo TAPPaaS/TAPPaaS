@@ -76,7 +76,8 @@ Common options: `--config-dir DIR`, `--json` (machine output for list/show),
 
 When a run fails, the site owner hears about it: `update-tappaas-failure.service` mails
 `site.json` `email` through a Proxmox node's mail system, naming the step that failed
-(#651; ADR-007e v1.3 owns the target). `site show` prints the schedule as it is meant —
+(#651; ADR-007e v1.3 owns the target). Every run is also followed by a security scan of
+what it left running (`health-manager report security`, ADR-011). `site show` prints the schedule as it is meant —
 no weekday under `daily`/`none` (#447).
 
 `repository hold` stops the scheduled sweep from pulling one repository, so a test

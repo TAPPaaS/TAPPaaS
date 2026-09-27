@@ -3,11 +3,11 @@
 | | |
 |---|---|
 | **Status** | Draft |
-| **Version** | 0.3 |
+| **Version** | 0.4 |
 | **Date** | 2026-09-27 |
 | **Author** | Erik Daniel (v0.1–v0.2); Lars Rossen (v0.3 revision, for Erik's review) |
 | **Related** | **#143** (CVE tracking / SBOM — origin); **#750** (container image pinning and cadence — the image layer this ADR scans); [ADR-028](<ADR-028 - Release Cadence and Patching.md>) (D1 one estate pin — the source of every Nix identity here; D12 emergency patching — what a finding here can trigger); [ADR-027](<ADR-027 - Module Blueprint.md>) D7 (the blueprint's `<module>-sbom.json` MAY, pending this ADR); [ADR-017](<ADR-017 - Update scheduling and mothership self-update.md>) (the `pinned-pkgs.nix` provenance question — answered here, §4); [ADR-009](<ADR-009 - Composition Meta-Model.md>) (Module = atomic deployable unit) |
-| **Changelog** | **v0.3 (2026-09-27)** — rewritten on measurement: a dry run of the candidate tools against the test site (hrossen) — mothership, a guest, a container image, a Proxmox node and the firewall. Inventory is **generated per installation from what is deployed**, not committed per module (§1); the **full runtime closure**, not `--depth=1` (§3); **one tool per layer** — Nix closures, container images, Debian hosts, OPNsense (§4); CVE matching is **no longer deferred** (§5); new §6 coverage (a scan that saw nothing is a failure), §7 actionability (the metric is *fix available and not applied*), §8 triage decisions committed as VEX. v0.2's CycloneDX 1.4+ floor and its preference for Nix-native inventory over filesystem scanning stand. · v0.2 — tooling decision (§4): `sbomnix` for NixOS-templated modules, `syft` for the Debian/Ubuntu minority; CycloneDX floor corrected to 1.4+ (was 1.5+) to match the chosen tool's native output; both tools tested live, head-to-head, against the same real module derivation (`module-manager`) — `sbomnix` correctly found its dependencies, `syft`'s `nix-cataloger` found zero. · v0.1 — skeleton (Erik⟷Lars design direction agreed 2026-06-16). |
+| **Changelog** | **v0.4 (2026-09-27)** — §9 decided and built: `tappaas-security-scan.service` runs `health-manager scan security` after every sweep, failed or not; output in `config/sbom/`; `health-manager report security`; a `cve-status` gate in `validate` that only WARNs (SCAN FAILED included); the owner is mailed only when something is new; scanner databases on the root disk, measured at ~6 GB once trivy pulled its Java DB. · v0.3 (2026-09-27) — rewritten on measurement: a dry run of the candidate tools against the test site (hrossen) — mothership, a guest, a container image, a Proxmox node and the firewall. Inventory is **generated per installation from what is deployed**, not committed per module (§1); the **full runtime closure**, not `--depth=1` (§3); **one tool per layer** — Nix closures, container images, Debian hosts, OPNsense (§4); CVE matching is **no longer deferred** (§5); new §6 coverage (a scan that saw nothing is a failure), §7 actionability (the metric is *fix available and not applied*), §8 triage decisions committed as VEX. v0.2's CycloneDX 1.4+ floor and its preference for Nix-native inventory over filesystem scanning stand. · v0.2 — tooling decision (§4): `sbomnix` for NixOS-templated modules, `syft` for the Debian/Ubuntu minority; CycloneDX floor corrected to 1.4+ (was 1.5+) to match the chosen tool's native output; both tools tested live, head-to-head, against the same real module derivation (`module-manager`) — `sbomnix` correctly found its dependencies, `syft`'s `nix-cataloger` found zero. · v0.1 — skeleton (Erik⟷Lars design direction agreed 2026-06-16). |
 
 What software is actually running on a TAPPaaS installation, and which of it has a known
 vulnerability that someone should act on.
@@ -158,10 +158,12 @@ lives (vendor identity, empty scans, fix-state). Inventory and matching ship tog
 
 The scanners' vulnerability databases are fetched by the mothership (grype and trivy each
 keep one; OPNsense fetches its own). That is the only outbound traffic this adds: a DB
-update per scan, from the scanner's publisher. It is not small: after the dry run the
-mothership held **4.4 GB** of scanner cache (grype 3.0 GB, trivy 1.4 GB), which the
-scan has to budget for: hrossen's mothership has a 32 GB root with 8.8 GB free, so the
-caches would take half of it.
+update per scan, from the scanner's publisher. It is not small: after the first full
+scan the mothership held **~6 GB** of scanner cache (grype 3.0 GB; trivy 1.4 GB plus a
+1.5 GB Java database, fetched the first time an image with jars in it is scanned). They
+live on the root disk; hrossen's mothership has a 32 GB root with 9 GB free, so the scan
+refuses its first download without 8 GiB free, and reports every target SCAN FAILED
+rather than scanning with nothing.
 
 ### 6. Coverage — a scan that saw nothing is a failure
 
@@ -201,12 +203,34 @@ belongs to `templates`). The next scan applies it, so a decided finding stops be
 reported until its version changes. This is where Nix's missing fix-state is made up for,
 once per finding, by someone who checked.
 
-### 9. When it runs
+### 9. When it runs, and where the result goes
 
-Not decided in this revision. The dry run took 15 s for seven targets with warm scanner
-databases, so running with the daily sweep costs nothing measurable; the open question is
-where the result is surfaced (the sweep's result file, the health report, a notification).
-See Open questions.
+- **After every sweep.** `tappaas-security-scan.service` is started by
+  `update-tappaas.service` on success **and** on failure — a failed sweep leaves the site
+  running something unplanned, which is when a scan matters most. It is its own unit, so
+  a scan problem never marks a sweep failed. It scans only when the run wrote a sweep
+  result (`--if-new-sweep`); the hourly no-op runs cost a stat. `site-manager update`
+  starts the same unit, so a manual update is scanned too.
+- **Output**, outside the repository, in `config/sbom/`: `site.cdx.json` — one CycloneDX
+  1.4 document for the installation, each target a component (`operating-system` or
+  `container`) with its packages nested — and `cve-status.json`, the per-target coverage,
+  counts and verdict of §7. The scan before is kept as `cve-status.previous.json`.
+- **The report**: `health-manager report security` — ACT first, then SCAN FAILED, then
+  triage and watch, with what to act on per target.
+- **The gate**: `cve-status` in `health-manager validate`, **WARN only** — on an ACT, on a
+  SCAN FAILED, and on a scan older than 8 days. A CVE published upstream must never fail a
+  sweep or a test run; a failed scan is surfaced by the gate and the notice, not by
+  failing the assertion.
+- **The notice**: mailed to the site owner through the ADR-007e target
+  (`site-notify.sh`) only when a fixable Critical/High CVE or a failed scan is **new**
+  since the previous scan. The first scan announces everything it finds; after that,
+  silence means nothing changed.
+
+Measured on hrossen (2026-09-27, 21 targets: 9 NixOS guests and the mothership, 5
+images, 3 nodes, unifi-os, the vLLM container, the firewall): ~6 min for the first scan
+(database download), **~30 s** after. First result: 5 images to ACT on (authentik 154
+Critical/High fixable, open-webui 372, litellm 48, vllm 56, euro-office 2), every Debian
+host and the firewall *watch*, every closure *triage*, no coverage failure.
 
 ## Consequences
 
@@ -232,14 +256,14 @@ See Open questions.
 
 ## Open questions for review
 
-1. **Where the result is surfaced** (§9): the sweep's `last-update-result.json`, the
-   health report (ADR-007e), a notification on ACT only — or all three.
+1. ~~Where the result is surfaced~~ — decided in v0.4, §9.
 2. **Nix fix-state.** NixOS has no security tracker comparable to Debian's. Options:
    triage by VEX only (this revision); read nixpkgs' applied patch list for CVE ids
    (backports often name the CVE); or contribute to an upstream effort. Worth a
    conversation before we build more than VEX.
-3. **Debian hosts beyond the Proxmox nodes** — PBS, unifi-os, the vLLM LXC — need their
-   own copy method (the nodes' is `scp` from the mothership, which already has root there).
+3. ~~Debian hosts beyond the Proxmox nodes~~ — built in v0.4: a Debian guest is probed
+   over ssh like a NixOS one, an LXC through `pct exec`, and PBS is a package set on its
+   node. A guest the mothership cannot reach is SCAN FAILED, not skipped.
 4. **Whether VEX lives per module or in one estate file** — per module keeps ownership
    clear; one file is easier to review.
 5. **Scanner database freshness** as its own coverage condition: a database older than N
@@ -247,12 +271,15 @@ See Open questions.
 
 ## Acceptance
 
-- [ ] A scan command on the mothership produces the §4 inventory and matching for every
-      target on its installation, with the §6 coverage check and the §7 summary.
-- [ ] Guest closures are listed read-only; nothing is installed on guests.
-- [ ] Images are scanned by running digest.
-- [ ] A target that cannot be reached or yields no packages reports SCAN FAILED (tested
-      by removing `/etc/debian_version` from a node copy, as the dry run did).
-- [ ] VEX statements are applied, and a decided finding is no longer reported.
+- [x] A scan command on the mothership produces the §4 inventory and matching for every
+      target on its installation, with the §6 coverage check and the §7 summary
+      (`health-manager scan security`, v0.4).
+- [x] Guest closures are listed read-only; nothing is installed on guests.
+- [x] Images are scanned by running digest.
+- [x] A target that cannot be reached or yields no packages reports SCAN FAILED (unit
+      tests: unreachable guest, no OS detected, closure without glibc, no disk for the
+      databases).
+- [x] VEX statements are applied, and a decided finding is no longer reported (unit
+      tests; no `<module>-vex.json` is committed yet).
 - [ ] ADR-027 D7 updated: `<module>-vex.json` MAY, replacing `<module>-sbom.json`.
-- [ ] The result is surfaced where §9 decides.
+- [x] The result is surfaced where §9 decides.
