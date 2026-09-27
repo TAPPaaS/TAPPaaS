@@ -1057,6 +1057,13 @@ export function verdictLine(t: TargetStatus): string {
   return VERDICT_TEXT[t.verdict];
 }
 
+// A column of width n: long names are cut with an ellipsis and always leave a
+// space, so "authentik-server, authentik-worker (identity)" never runs into
+// the verdict beside it.
+export function fit(text: string, n: number): string {
+  return (text.length > n - 1 ? `${text.slice(0, n - 2)}…` : text).padEnd(n);
+}
+
 const ORDER: Verdict[] = ["act", "failed", "act-low", "triage", "watch"];
 
 export function renderReport(s: ScanStatus, all: boolean, now: number): string[] {
@@ -1072,7 +1079,7 @@ export function renderReport(s: ScanStatus, all: boolean, now: number): string[]
   out.push(`${pad("TARGET", 30)}${pad("LAYER", 9)}${pad("PKGS", 6)}${pad("CVES", 6)}${pad("CRIT", 5)}${pad("HIGH", 5)}${pad("FIX C/H", 8)}${pad("NEW", 5)}VERDICT`);
   for (const t of rows) {
     out.push(
-      `${pad(t.name.slice(0, 29), 30)}${pad(t.layer, 9)}${pad(t.seen, 6)}${pad(t.findings, 6)}${pad(t.critical, 5)}${pad(t.high, 5)}` +
+      `${fit(t.name, 30)}${pad(t.layer, 9)}${pad(t.seen, 6)}${pad(t.findings, 6)}${pad(t.critical, 5)}${pad(t.high, 5)}` +
         `${pad(t.critHighFixable ?? "-", 8)}${pad(t.new.length, 5)}${verdictLine(t)}`,
     );
   }
@@ -1098,7 +1105,7 @@ export function checkCveStatus(configDir: string, now: number): CheckResult {
   if (!s) return { name: "cve-status", status: "skip", detail: "no security scan yet — health-manager scan security" };
   const rows: CheckRow[] = [];
   for (const t of s.targets) {
-    if (t.verdict === "failed" || t.verdict === "act") rows.push({ status: "warn", text: `${t.name.padEnd(30)}${verdictLine(t)}` });
+    if (t.verdict === "failed" || t.verdict === "act") rows.push({ status: "warn", text: `${fit(t.name, 30)}${verdictLine(t)}` });
   }
   const days = Math.floor((now - Date.parse(s.generated)) / 86_400_000);
   const count = (v: Verdict): number => s.targets.filter((t) => t.verdict === v).length;

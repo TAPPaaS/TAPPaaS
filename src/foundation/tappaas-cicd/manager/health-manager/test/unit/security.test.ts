@@ -12,7 +12,7 @@ import { join } from "path";
 import { RemoteResult } from "../../../../lib/ts/src/cluster";
 import {
   CpeParts, DB_SPACE_BYTES, dbSpaceProblem, Finding, LINUX_PROBE, OPNSENSE_PROBE, PREVIOUS_FILE, STATUS_FILE, ScanStatus, SecurityIO,
-  TargetStatus, applyCpes, checkCveStatus, groupByImage, diffScans, nixComponents, parseLinuxProbe, parseOpnsenseProbe,
+  TargetStatus, applyCpes, checkCveStatus, fit, groupByImage, diffScans, nixComponents, parseLinuxProbe, parseOpnsenseProbe,
   loadVex, parseStorePath, parseVex, readStatus, registeredModuleDirs, renderReport, runScan, sbomDir, summarize, summarizeOpnsense, sweepIsNewer,
   vexSuppresses, writeScan,
 } from "../../src/security";
@@ -319,6 +319,9 @@ console.log("writeScan / diffScans / checkCveStatus / report");
   check(checkCveStatus(site(), now).status === "skip", "gate: no scan yet → skip");
   check(![g, checkCveStatus(clean, now + 99 * 86_400_000)].some((x) => x.status === "fail"), "gate: never FAIL");
 
+  check(fit("authentik-server, authentik-worker (identity)", 30).length === 30 && fit("authentik-server, authentik-worker (identity)", 30).endsWith("… "),
+    "a long target name is cut and still leaves a space before the verdict");
+  check(fit("coturn", 30) === "coturn".padEnd(30), "a short name is padded, not cut");
   const lines = renderReport(second, false, now);
   check(lines.some((l) => l.includes("ACT: 1 critical/high fixable")) && lines.some((l) => l.includes("SCAN FAILED — not clean: unreachable")),
     "report: verdicts spelled out");
