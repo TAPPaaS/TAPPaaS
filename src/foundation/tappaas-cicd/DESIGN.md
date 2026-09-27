@@ -26,6 +26,7 @@ src/foundation/tappaas-cicd/
 ├── scripts/tappaas-self-rebuild.sh    # ExecStartPre 3 (root): nixos-rebuild of the mothership
 ├── scripts/update-tappaas-schedule.sh # renders update-tappaas.timer from site.json (D2)
 ├── scripts/notify-update-failure.sh   # mails the site owner when a run fails (#651)
+├── scripts/site-notify.sh             # the mail itself: site.json email via a node's mailer (ADR-007e)
 ├── tappaas-cicd.nix / flake.nix       # the cicd VM's NixOS configuration
 ├── manager/                           # domain-object lifecycle (CONFIG state)
 │   ├── install.sh / update.sh / test.sh   # dispatcher: loop child components

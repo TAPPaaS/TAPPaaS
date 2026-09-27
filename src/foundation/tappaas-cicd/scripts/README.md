@@ -519,6 +519,24 @@ Output → journald → Alloy → Loki.
 
 ---
 
+### site-notify.sh — mail the site owner (ADR-007e)
+
+The site notification target: a notice goes to `site.json` `email` through a Proxmox
+node's own mail system — the cicd has no mailer. Nodes are tried in order until one
+accepts. Used by `notify-update-failure.sh` (a failed sweep, #651) and
+`health-manager scan security --notify` (ADR-011).
+
+```bash
+echo "body" | site-notify.sh --subject "what happened" [--what "failure notice"] \
+    [--breadcrumb ~/config/update-tappaas.failures] [--dry-run]
+```
+
+The subject becomes `[TAPPaaS <site domain>] <subject>`; the body gets a `Site: … — host …`
+line in front. No `email` in `site.json`: nothing is sent, exit 0. Tests:
+`test/test-notify-update-failure.sh`.
+
+---
+
 ### run-migrations.sh — config migrations (ADR-025)
 
 Applies the pending `migrations/NNNN-<slug>.sh` — one-time rewrites of the **shape** a

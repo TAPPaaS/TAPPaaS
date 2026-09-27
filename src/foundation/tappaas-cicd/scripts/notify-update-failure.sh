@@ -2,38 +2,33 @@
 # notify-update-failure.sh — tell the site owner that an update sweep failed (#651).
 #
 # Run by update-tappaas-failure.service, the OnFailure handler of
-# update-tappaas.service. The notice goes to site.json `email` through a Proxmox
-# node's own mail system (postfix/sendmail, the channel PVE already uses for its
-# own mail): the cicd has no mailer, and a notice that stays on the cicd reaches
-# no one (ADR-007e v1.3). Nodes are tried in order until one accepts the mail.
+# update-tappaas.service. It says what failed and where; site-notify.sh delivers
+# it to site.json `email` through a Proxmox node's own mail system (ADR-007e v1.3).
 #
 # Usage: notify-update-failure.sh [--dry-run]    (--dry-run prints the mail instead)
 #
 # Environment:
 #   MONITOR_SERVICE_RESULT, MONITOR_EXIT_STATUS   set by systemd for OnFailure units
 #   TAPPAAS_CONFIG_DIR   config dir (default /home/tappaas/config; tests)
-#   TAPPAAS_NOTIFY_SSH   ssh command (default ssh; tests)
-#   TAPPAAS_NOTIFY_NODES space-separated node names (default: the site's nodes; tests)
+#   TAPPAAS_NOTIFY_SSH, TAPPAAS_NOTIFY_NODES      passed on to site-notify.sh (tests)
 #
 # Exit codes: 0 notice sent (or nothing to send to), 1 no node accepted the mail.
 
 set -euo pipefail
 
 CONFIG_DIR="${TAPPAAS_CONFIG_DIR:-/home/tappaas/config}"
-SSH="${TAPPAAS_NOTIFY_SSH:-ssh}"
 DRY_RUN=0
 for a in "$@"; do
     case "${a}" in
         --dry-run) DRY_RUN=1 ;;
-        -h|--help) sed -n '2,19p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,16p' "$0"; exit 0 ;;
         *) echo "notify-update-failure: unknown option: ${a}" >&2; exit 2 ;;
     esac
 done
 
-log() { echo "notify-update-failure: $*"; }
-breadcrumb() { printf '%s %s\n' "$(date -Is)" "$*" >> "${CONFIG_DIR}/update-tappaas.failures" 2>/dev/null || true; }
+# The mailer every site notice shares; it sits next to this file.
+SITE_NOTIFY="${TAPPAAS_SITE_NOTIFY:-$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/site-notify.sh}"
 
-SITE="${CONFIG_DIR}/site.json"
 RESULT="${CONFIG_DIR}/last-update-result.json"
 # ── the stage it stopped in (ADR-017 D3) ─────────────────────────────
 # prepare / rebuild: the unit's ExecStartPre failed and no sweep ran, so the
@@ -55,47 +50,6 @@ case "${stage}" in
     *)       stage_line="" ;;
 esac
 
-to="$(jq -r '.email // empty' "${SITE}" 2>/dev/null || true)"
-site_name="$(jq -r '.name // empty' "${SITE}" 2>/dev/null || true)"
-# It goes into the Subject header: a site code, or nothing.
-[[ "${site_name}" =~ ^[A-Za-z0-9_.-]{1,64}$ ]] || site_name=""
-
-# The site's public domain, which is what tells one site from another in an
-# inbox: a site code like "rossen" and a host like "tappaas-cicd" look the same
-# from every installation. It lives on the environments, not on the site — take
-# the default environment's primary domain, else mgmt's, else the domain of the
-# address the notice goes to.
-site_domain=""
-for _envname in "$(jq -r '.defaultEnvironment // empty' "${SITE}" 2>/dev/null || true)" mgmt; do
-    [[ -n "${_envname}" ]] || continue
-    _envfile="${CONFIG_DIR}/environments/${_envname}.json"
-    [[ -f "${_envfile}" ]] || continue
-    site_domain="$(jq -r '.domains.primary // empty' "${_envfile}" 2>/dev/null || true)"
-    # `[[ … ]] && break` would end the SCRIPT under set -e on the last iteration.
-    if [[ -n "${site_domain}" ]]; then break; fi
-done
-[[ -n "${site_domain}" ]] || site_domain="${to##*@}"
-# It becomes part of a mail header: a hostname, or nothing.
-[[ "${site_domain}" =~ ^[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?$ ]] || site_domain=""
-if [[ -z "${to}" ]]; then
-    log "site.json has no email — notice not sent (set one: site-manager site modify --email <address>)"
-    breadcrumb "failure notice NOT sent: site.json has no email"
-    exit 0
-fi
-# It becomes a mail header: one plain address or nothing.
-if ! [[ "${to}" =~ ^[^@[:space:]\<\>,\;\"\(\)]+@[^@[:space:]\<\>,\;\"\(\)]+$ ]]; then
-    log "site.json email is not a single address — notice not sent"
-    breadcrumb "failure notice NOT sent: site.json email is not a single address"
-    exit 1
-fi
-
-if [[ -n "${TAPPAAS_NOTIFY_NODES:-}" ]]; then
-    read -r -a nodes <<<"${TAPPAAS_NOTIFY_NODES}"
-else
-    mapfile -t nodes < <(jq -r '.hardware.nodes[]?.name // empty' "${SITE}" 2>/dev/null | grep -E '^[A-Za-z0-9_-]+$')
-    [[ ${#nodes[@]} -gt 0 ]] || nodes=(tappaas1)
-fi
-
 # ── the message ──────────────────────────────────────────────────────
 result_line="no last-update-result.json"
 detail=""
@@ -112,12 +66,7 @@ if [[ -f "${RESULT}" ]]; then
 fi
 
 host="$(hostname 2>/dev/null || echo tappaas-cicd)"
-# The domain leads: it is the one part of this that names THIS installation.
-_label="${site_domain:-${site_name}}"
-subject="[TAPPaaS${_label:+ ${_label}}] update sweep FAILED on ${host}"
 body="$(cat <<EOF
-Site: ${site_name:-(unnamed)}${site_domain:+ (${site_domain})} — host ${host}
-
 The scheduled TAPPaaS update on ${host} failed at $(date -Is).
 
 systemd: result=${MONITOR_SERVICE_RESULT:-?} exit=${MONITOR_EXIT_STATUS:-?}
@@ -134,34 +83,8 @@ Look at:
 EOF
 )"
 
-# ── send it ──────────────────────────────────────────────────────────
-ssh_node() {
-    "${SSH}" -n -o BatchMode=yes -o ConnectTimeout=10 -o ControlMaster=no -o ControlPath=none \
-        "root@$1.mgmt.internal" "$2"
-}
-
-for node in "${nodes[@]}"; do
-    # The sender Proxmox is configured with (Datacenter → email_from), if any.
-    from="$(ssh_node "${node}" "pvesh get /cluster/options --output-format json" 2>/dev/null \
-            | jq -r '.email_from // empty' 2>/dev/null || true)"
-    from_hdr=""
-    [[ "${from}" =~ ^[^@[:space:]\<\>,\;\"\(\)]+@[^@[:space:]\<\>,\;\"\(\)]+$ ]] && from_hdr="From: TAPPaaS <${from}>"$'\n'
-    mail="$(printf 'To: %s\n%sSubject: %s\nContent-Type: text/plain; charset=UTF-8\n\n%s\n' \
-        "${to}" "${from_hdr}" "${subject}" "${body}")"
-    if [[ "${DRY_RUN}" -eq 1 ]]; then
-        printf '%s\n' "${mail}"
-        log "dry run — would send through ${node}"
-        exit 0
-    fi
-    if printf '%s\n' "${mail}" | "${SSH}" -o BatchMode=yes -o ConnectTimeout=10 -o ControlMaster=no -o ControlPath=none \
-            "root@${node}.mgmt.internal" "/usr/sbin/sendmail -t -oi"; then
-        log "notice sent to ${to} through ${node}"
-        breadcrumb "failure notice sent to ${to} through ${node}"
-        exit 0
-    fi
-    log "${node} did not take the mail — trying the next node"
-done
-
-log "no node accepted the mail — notice NOT sent"
-breadcrumb "failure notice NOT sent: no node accepted the mail"
-exit 1
+# ── send it: addressing, the node's mailer and the fallback are site-notify.sh's
+notify_args=(--what "failure notice" --breadcrumb "${CONFIG_DIR}/update-tappaas.failures"
+             --subject "update sweep FAILED on ${host}")
+[[ "${DRY_RUN}" -eq 1 ]] && notify_args+=(--dry-run)
+printf '%s\n' "${body}" | "${SITE_NOTIFY}" "${notify_args[@]}"
