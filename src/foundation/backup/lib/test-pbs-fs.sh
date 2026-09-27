@@ -24,6 +24,27 @@ PASS=0; FAIL=0
 ck()    { if [[ "$2" == "$3" ]]; then echo "  ok: $1"; PASS=$((PASS+1)); else echo "  FAIL: $1 (exp '$2' got '$3')"; FAIL=$((FAIL+1)); fi; }
 ck_rc() { if [[ "$2" == "$3" ]]; then echo "  ok: $1"; PASS=$((PASS+1)); else echo "  FAIL: $1 (exp rc $2 got $3)"; FAIL=$((FAIL+1)); fi; }
 
+# ── escrow without sudo (#742 follow-up) ──────────────────────────────
+# update-tappaas.service runs with NoNewPrivileges: sudo cannot work there, and
+# an escrow through sudo failed every scheduled sweep. With a writable escrow
+# directory the key is escrowed with no sudo at all.
+(
+    sudo() { echo "sudo called: $*" >> "${ESC_LOG}"; return 1; }
+    ssh() { case "${*: -1}" in *"bash -s") cat >/dev/null; echo created ;; *cat*) printf 'KEY-%s' "${FAKE_KEY}" ;; esac; }
+    ESC_LOG="$(mktemp)"; export ESC_LOG
+    PBS_FS_ESCROW_DIR="$(mktemp -d)/backup-fs"; mkdir -p "${PBS_FS_ESCROW_DIR}"
+    FAKE_KEY=one pbs_fs_ensure_key tappaas-cicd tappaas@tappaas-cicd.mgmt.internal "tappaas:users" "sudo " >/dev/null 2>&1
+    ck_rc "escrow: a writable escrow needs no sudo (rc)" 0 $?
+    ck "escrow: the key is written"          "KEY-one" "$(cat "${PBS_FS_ESCROW_DIR}/tappaas-cicd.key" 2>/dev/null)"
+    ck "escrow: 0600"                        "600"     "$(stat -c %a "${PBS_FS_ESCROW_DIR}/tappaas-cicd.key" 2>/dev/null || stat -f %Lp "${PBS_FS_ESCROW_DIR}/tappaas-cicd.key")"
+    ck "escrow: sudo was never called"       ""        "$(cat "${ESC_LOG}")"
+    FAKE_KEY=two pbs_fs_ensure_key tappaas-cicd tappaas@tappaas-cicd.mgmt.internal "tappaas:users" "sudo " >/dev/null 2>&1
+    ck "escrow: a changed key is re-escrowed" "KEY-two" "$(cat "${PBS_FS_ESCROW_DIR}/tappaas-cicd.key")"
+    echo "${PASS} ${FAIL}" > "${ESC_LOG}.res"
+    cp "${ESC_LOG}.res" "${CONFIG_DIR}/esc.res"
+)
+read -r PASS FAIL < "${CONFIG_DIR}/esc.res"
+
 # ── namespace + authid: one isolated tree and login per module ───────
 ck "namespace: fs/<module>"     "fs/nextcloud"     "$(pbs_fs_namespace nextcloud)"
 ck "namespace: dashed module"   "fs/tappaas-cicd"  "$(pbs_fs_namespace tappaas-cicd)"

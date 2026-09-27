@@ -263,17 +263,29 @@ REMOTE
     # Escrow it whenever the central copy is missing or differs — an unescrowed
     # key is unrecoverable, and that is true of a key we just created and of one
     # that was created before escrow existed.
-    sudo mkdir -p "${PBS_FS_ESCROW_DIR}"
+    #
+    # The escrow belongs to tappaas on the mothership (tappaas-cicd.nix tmpfiles),
+    # and update-tappaas.service may write it (ReadWritePaths). It has to: that
+    # unit runs with NoNewPrivileges, where sudo cannot work at all, so an escrow
+    # through sudo failed every scheduled sweep for every filesystem capture —
+    # the mothership and all three nodes on hrossen, 2026-09-27. sudo stays only
+    # for an escrow directory this user cannot write (a mothership built before
+    # the tmpfiles rule, run by hand).
+    local esc_sudo="sudo "
+    [[ -d "${PBS_FS_ESCROW_DIR}" && -w "${PBS_FS_ESCROW_DIR}" ]] && esc_sudo=""
+    [[ -d "${PBS_FS_ESCROW_DIR}" ]] || ${esc_sudo}mkdir -p "${PBS_FS_ESCROW_DIR}"
     local escrowed="${PBS_FS_ESCROW_DIR}/${module}.key"
     local remote_key
     remote_key="$(ssh -n -o BatchMode=yes "${target}" "${sudo_p}cat /etc/secrets/backup-fs.key" 2>/dev/null)" \
         || { warn "  could not read ${guest}'s key back to escrow it"; return 1; }
     [[ -n "${remote_key}" ]] || { warn "  ${guest}'s encryption key is empty"; return 1; }
 
-    if [[ ! -s "${escrowed}" ]] || [[ "${remote_key}" != "$(sudo cat "${escrowed}" 2>/dev/null)" ]]; then
-        printf '%s' "${remote_key}" | sudo tee "${escrowed}" >/dev/null \
+    if [[ ! -s "${escrowed}" ]] || [[ "${remote_key}" != "$(${esc_sudo}cat "${escrowed}" 2>/dev/null)" ]]; then
+        # umask: the key is never readable by anyone else, not even between the
+        # write and the chmod.
+        ( umask 077; printf '%s' "${remote_key}" | ${esc_sudo}tee "${escrowed}" >/dev/null ) \
             || { warn "  could not escrow ${module}'s encryption key"; return 1; }
-        sudo chmod 600 "${escrowed}"
+        ${esc_sudo}chmod 600 "${escrowed}"
         info "  ${GN}✓${CL} encryption key escrowed → ${escrowed}"
         warn "  Take the mandatory OUT-OF-BAND copy now (§2.5.1): backup-manager key export <dest>"
     fi

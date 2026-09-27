@@ -309,7 +309,10 @@ in
       # to /home/tappaas/bin/update-module.sh (which uses ssh).
       NoNewPrivileges = true;
       ProtectSystem = "strict";
-      ReadWritePaths = [ "/home/tappaas/config" ];
+      # config/, and the backup-key escrow: a sweep that (re)applies
+      # backup:filesystem escrows the client key centrally (#742), and under
+      # NoNewPrivileges it cannot sudo to do it (see the tmpfiles rule).
+      ReadWritePaths = [ "/home/tappaas/config" "/etc/secrets/backup-fs" ];
       PrivateTmp = true;
       ProtectKernelTunables = true;
       ProtectKernelModules = true;
@@ -618,6 +621,12 @@ in
     # The security scan's scanner databases (ADR-011): the unit's ReadWritePaths
     # names this directory, and a missing one fails the unit's namespace setup.
     "d /home/tappaas/.cache 0700 tappaas users -"
+    # The backup-key escrow (ADR-012 §2.5.1) belongs to tappaas, so the sweep
+    # can write it without sudo — which its NoNewPrivileges forbids. Z hands the
+    # keys a root-era escrow already holds to tappaas as well; their 0600 stays.
+    "d /etc/secrets 0755 root root -"
+    "d /etc/secrets/backup-fs 0700 tappaas users -"
+    "Z /etc/secrets/backup-fs - tappaas users -"
     # HOME for tappaas-rebuild@: root-owned, writable (nix caches there), and
     # carrying only the safe.directory grant that lets root open the operator's
     # git checkout. See the comment on environment.etc."tappaas-rebuild-gitconfig".
