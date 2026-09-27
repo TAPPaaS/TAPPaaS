@@ -17,6 +17,10 @@
 //                            out to update-os.sh — see the update-os case)
 //   health-manager reboot <module>                       (special action; the
 //                            same reboot + readiness wait, via reboot-guest.sh)
+//   health-manager scan security [--if-new-sweep] [--notify]
+//                            (ADR-011: inventory + CVE match of every target;
+//                             writes ~/config/sbom/, run by tappaas-security-scan)
+//   health-manager report security [--all] [--json]      (prints the last scan)
 //
 // Exit codes: ok=0, error / failed-health-gate = 1.
 
@@ -26,6 +30,10 @@ import { join } from "path";
 import { defaultConfigDir, readModuleJson } from "./config";
 import { CliClusterClient } from "./client";
 import { guestTarget, runHealthGates } from "./checks";
+import {
+  CliSecurityIO, PREVIOUS_FILE, SITE_CDX_FILE, STATUS_FILE, notify, readStatus, renderReport, runScan, sbomDir,
+  sweepIsNewer, writeScan,
+} from "./security";
 import { ClusterClient } from "./types";
 import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
 import { CL, GN, RD, YW, die, guarded, info, preflightGuard } from "../../../lib/ts/src/cli";
@@ -61,6 +69,27 @@ export const HELP: HelpSpec = {
       details: "Patches the VM's OS (NixOS rebuild / apt) through update-os.sh; may reboot it.",
     },
     {
+      usage: "scan security [--if-new-sweep] [--notify]",
+      options: [
+        ["--if-new-sweep", "Scan only when a sweep has written a result since the last scan (the unit's mode)."],
+        ["--notify", "Mail the site owner when a fixable CVE or a failed scan is new since the last scan."],
+      ],
+      details:
+        "Inventories every target — the mothership, each module's VM or container, the containers\n" +
+        "running inside them (by registry digest), the nodes and the firewall — and matches each\n" +
+        "against its layer's CVE source (ADR-011 v0.3). Read-only on every target. Writes\n" +
+        "~/config/sbom/site.cdx.json (CycloneDX) and ~/config/sbom/cve-status.json; the previous\n" +
+        "status is kept as cve-status.previous.json. Runs after every sweep (tappaas-security-scan).",
+    },
+    {
+      usage: "report security [--all] [--json]",
+      options: [
+        ["--all", "List every finding to act on, not the first ten per target."],
+        ["--json", "Print cve-status.json as it is."],
+      ],
+      details: "Prints the last scan: per target its coverage, counts and verdict — ACT, SCAN FAILED,\ntriage (Nix), watch — then what to act on.",
+    },
+    {
       usage: "reboot <module>",
       details:
         "Reboots the module's VM and waits until the module can serve — the reboot update-os takes\n" +
@@ -70,6 +99,7 @@ export const HELP: HelpSpec = {
   common: [["--config-dir DIR", "Config root (default: $CONFIG_DIR or /home/tappaas/config)."]],
   notes: [
     "validate ASSERTS the live system is healthy (health gates); exit 1 on fail.\n" +
+      "Its cve-status gate only ever WARNs: a CVE published upstream never fails a sweep.\n" +
       "update-os is the OS-patch action (special) — shells out to update-os.sh.\n" +
       "reboot takes a pending reboot (special) — shells out to reboot-guest.sh.",
     "Note: the per-VM three-way drift inspect (formerly 'show vm' / 'list vm --diff')\n" +
@@ -151,6 +181,50 @@ function cmdValidate(opts: Opts, client: ClusterClient): number {
   }
   console.error(`${RD}[Error]${CL} ${report.failed} health gate(s) failed`);
   return 1;
+}
+
+// ── scan security / report security (ADR-011 v0.3) ────────────────────
+const SITE_NOTIFY_BIN = (): string => process.env.SITE_NOTIFY_BIN ?? "site-notify.sh";
+
+function cmdScanSecurity(opts: Opts, client: ClusterClient): number {
+  const ifNew = opts.rest.includes("--if-new-sweep");
+  const doNotify = opts.rest.includes("--notify");
+  if (opts.rest.some((a) => a !== "--if-new-sweep" && a !== "--notify")) die("scan security: unexpected argument");
+  if (ifNew && !sweepIsNewer(opts.configDir)) {
+    info("no sweep since the last security scan — nothing to do");
+    return 0;
+  }
+  const repoDir = process.env.TAPPAAS_REPO ?? "/home/tappaas/TAPPaaS";
+  const { status, cdx } = runScan(
+    { configDir: opts.configDir, defaultNode: DEFAULT_NODE, repoDir, log: (m) => info(`  ${m}`) },
+    client,
+    new CliSecurityIO(),
+  );
+  const diff = writeScan(opts.configDir, status, cdx);
+  info("");
+  for (const l of renderReport(status, false, Date.now())) info(l);
+  info("");
+  info(`written: ${join(sbomDir(opts.configDir), SITE_CDX_FILE)}, ${STATUS_FILE} (previous: ${PREVIOUS_FILE})`);
+  if (doNotify) {
+    const n = notify(status, diff, SITE_NOTIFY_BIN());
+    info(n.sent ? `notice sent: ${n.message}` : n.message);
+  }
+  // The scan ran: findings are its RESULT, not its failure. Exit non-zero only
+  // when the scan itself could do nothing at all.
+  return status.targets.length > 0 && status.targets.every((t) => t.verdict === "failed") ? 1 : 0;
+}
+
+function cmdReportSecurity(opts: Opts): number {
+  const s = readStatus(join(sbomDir(opts.configDir), STATUS_FILE));
+  if (!s) die("no security scan yet — run: health-manager scan security");
+  if (opts.rest.includes("--json")) {
+    console.log(JSON.stringify(s, null, 1));
+    return 0;
+  }
+  info(`${BOLD}TAPPaaS Security Report${CL}`);
+  const tag = (l: string): string => l.replace(/ACT\b/, `${RD}ACT${CL}`).replace(/SCAN FAILED/, `${YW}SCAN FAILED${CL}`);
+  for (const l of renderReport(s, opts.rest.includes("--all"), Date.now())) info(tag(l));
+  return 0;
 }
 
 // ── reboot (#730) ─────────────────────────────────────────────────────
@@ -237,6 +311,12 @@ export function run(argv: string[], client: ClusterClient): number {
       }
       case "reboot":
         return cmdReboot(opts, client);
+      case "scan":
+        if (opts.rest[0] !== "security") die("scan: expected 'security'");
+        return cmdScanSecurity({ ...opts, rest: opts.rest.slice(1) }, client);
+      case "report":
+        if (opts.rest[0] !== "security") die("report: expected 'security'");
+        return cmdReportSecurity({ ...opts, rest: opts.rest.slice(1) });
       default:
         usage();
         die(`Unknown command: ${cmd}`);

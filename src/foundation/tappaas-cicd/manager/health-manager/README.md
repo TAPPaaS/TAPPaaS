@@ -24,6 +24,8 @@ pending the `update-os.sh` port.
 health-manager validate [--threshold PCT] [--memory-threshold PCT] [--config-dir DIR]
 health-manager update-os <name> <vmid> <node>
 health-manager reboot <module>
+health-manager scan security [--if-new-sweep] [--notify]
+health-manager report security [--all] [--json]
 ```
 
 > **MOVED (ADR-007):** the per-VM three-way drift inspect is no longer a
@@ -75,6 +77,7 @@ fails**:
 | `guest-memory` | `pvesh` + one `ps`/`qm status` per node | a module **using ≥ 90%** of its declared memory (**WARN** at 75%), or one whose allocated memory exceeds its declared limit |
 | `backup-status` | `backup-manager list --json` | a module is backup-disabled, or enabled but not in the PBS job |
 | `pending-reboot` | one SSH probe per guest | never — **WARN** when a guest is waiting for a reboot (see below) |
+| `cve-status` | `config/sbom/cve-status.json` (the last `scan security`) | never — **WARN** on a failed scan, a fixable Critical/High CVE, or a scan older than 8 days (see below) |
 
 A gate with nothing to check (e.g. no reachable guests, backup tooling absent)
 reports **SKIP**, not FAIL. `--threshold` applies cluster-wide. The disk gate is
@@ -142,6 +145,56 @@ fails** — a pending reboot is debt, not an outage, and a site that reboots in
 its own window is healthy while it waits. Take one with `health-manager reboot
 <module>`, or with the update itself: `module-manager module update <module>
 --allow-disruption`.
+
+### `scan security` / `report security` — what runs, and what needs a fix (ADR-011)
+
+`scan security` inventories everything running on the installation and matches
+it against the CVE source of its layer, read-only on every target:
+
+| Target | How it is found | Inventory | Matched by |
+|---|---|---|---|
+| the mothership | the module whose `vmname` is this host | its NixOS runtime closure (`nix-store -q --requisites`) | `grype` |
+| a module's VM | every managed module with a `vmid` | its closure (NixOS) or its dpkg status (Debian), over ssh as `tappaas` | `grype` / `trivy rootfs` |
+| a module's LXC | `kind: lxc` | the same probe, through `pct exec` on the node it runs on | `trivy rootfs` |
+| a running image | the containers `podman`/`docker ps` lists inside each target | the image by its **registry digest**, never its tag — one target per image | `trivy image` |
+| a node | `site.json` `.hardware.nodes` | its dpkg status | `trivy rootfs` |
+| the firewall | the module that provides `network:rules` | `pkg query` | `pkg audit` + `pkg upgrade -nU` |
+
+A Nix package's CPE vendor comes from the mothership's nixpkgs
+(`meta.identifiers.cpeParts`), which is the estate pin every guest is built from
+(ADR-028 D1): a guessed vendor (`glibc:glibc`) matches nothing in NVD.
+
+Each target gets a **verdict**, not a CVE count:
+
+| Verdict | Means |
+|---|---|
+| **ACT** | a Critical/High CVE with a fix published and not applied (OPNsense: a vulnerable package the channel has an update for) |
+| **SCAN FAILED — not clean** | coverage failed: unreachable, no packages seen, no OS detected (a NixOS closure without glibc, or under 50 packages) |
+| act (low/medium only) | fixable, but nothing Critical/High |
+| triage (Nix) | matched by CPE; Nix carries no fix-state, so a person decides — and records it as VEX |
+| watch | nothing fixable: waiting on upstream |
+
+**Output** goes to `config/sbom/`: `site.cdx.json` — one CycloneDX 1.4 document,
+each target a component with its packages nested — and `cve-status.json`; the
+scan before is kept as `cve-status.previous.json`, which is what makes "new"
+mean something. `--notify` mails the site owner (through `site-notify.sh`, the
+ADR-007e target) only when a fixable CVE or a failed scan is **new** since that
+scan. **Triage decisions** are committed next to the module as
+`<module>-vex.json` (CycloneDX VEX: `not_affected`, `false_positive`, `resolved`
+suppress a finding; a versioned `affects` ref stops applying when the version
+changes).
+
+**When it runs.** `tappaas-security-scan.service` starts after every
+`update-tappaas` run, failed or not, and scans only when that run wrote a sweep
+result (`--if-new-sweep`). The scanner databases live in `~/.cache/{grype,trivy}`
+on the root disk — about 6 GB — and the first scan refuses to download them
+without 8 GiB free. With the databases present a scan of hrossen (21 targets)
+takes about 30 s.
+
+`report security` prints the last scan: ACT first, then failures, then the rest,
+and the first ten findings to act on per target (`--all` for every one). The
+`cve-status` gate in `validate` only ever WARNs — a CVE published upstream must
+not be able to fail a sweep or a test run.
 
 ### What `memory-commitment` counts, and what it deliberately does not
 

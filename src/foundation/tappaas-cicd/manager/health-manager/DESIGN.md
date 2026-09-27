@@ -47,13 +47,14 @@ the running cluster and **exits non-zero if any FAIL**.
 | `guest-memory` | `pvesh` + one `ps` / `qm status` per node | a module using ≥ 90% of its declared memory (WARN ≥ 75%), or allocated above the declared limit | cluster unreachable / nothing running |
 | `backup-status` | `backup-manager list --json` | a module disabled, or enabled-but-not-in-PBS-job | backup tooling absent / unparseable |
 | `pending-reboot` | one SSH probe per guest (booted system vs profile; Debian `reboot-required`) | never — **WARN** per waiting guest (#730) | no reachable guest |
+| `cve-status` | `config/sbom/cve-status.json` | never — **WARN** on a failed scan, an ACT, or a scan older than 8 days (ADR-011) | no scan yet |
 
 `--threshold` (default 80) and `--memory-threshold` (default 100) apply
 cluster-wide. The disk gate is **read-only**: the 50%-auto-grow that
 `check-disk-threshold.sh` performs is a *mutation* and stays in the script — it
 is not part of the health assertion. The gate order is service-liveness →
 disk-threshold → memory-commitment → guest-memory → backup-status →
-pending-reboot; `validate`
+pending-reboot → cve-status; `validate`
 returns 0 only when zero gates FAIL (SKIP does not fail the assertion).
 
 `guest-memory` renders one row per module beneath its own line (`CheckResult.rows`),
@@ -168,3 +169,36 @@ changed.
 - **Full `update-os` TS port** — today the verb pass-throughs to `update-os.sh`.
 - **`install.sh` → nix build** — link the compiled `health-manager` bin (kept on
   the `.sh` link path for now).
+
+## The security scan (`security.ts`, ADR-011 v0.3)
+
+`scan security` is three steps over one I/O boundary, `SecurityIO`, so the unit
+tests run it whole against canned probe and scanner output:
+
+1. **Probe.** One POSIX script (`LINUX_PROBE`) for every Linux target, over three
+   transports — `sh -s` on the mothership, `ssh tappaas@<guest> sh -s`,
+   `ssh root@<node> pct exec <vmid> -- sh -s` for an LXC. It prints the closure
+   (NixOS) or `os-release`/`debian_version`/dpkg status (Debian), then one line
+   per running container with its registry digests, then `@@end` — output
+   without the marker was cut short and fails coverage. The firewall runs
+   `OPNSENSE_PROBE` (`pkg query`, `pkg audit`, `pkg upgrade -nU`) with its own
+   key; `-U` keeps the catalogue as OPNsense last fetched it, so nothing on the
+   firewall changes.
+2. **Inventory.** Store paths → components (`parseStorePath`: the version starts
+   at the first segment that begins with a digit; trailing output names and
+   API-level directories such as `dbus-1` are dropped). One `nix-instantiate`
+   for every Nix package name on the site maps names to
+   `meta.identifiers.cpeParts`; a name nixpkgs gives no vendor keeps
+   vendor = product and says so (`tappaas:cpe-source`).
+3. **Match and judge.** grype for Nix (CPE, no fix-state → *triage*), trivy for
+   Debian roots rebuilt in a temp dir and for images by digest, `pkg audit` for
+   OPNsense. `summarize` applies VEX, counts unique CVE ids, checks coverage and
+   picks the verdict. `diffScans` against the previous status sets `new` and
+   decides the notice.
+
+The scan writes nothing but `config/sbom/`; its exit code is non-zero only when
+every target failed (a scan with findings has succeeded). The scanner databases
+are updated once per run, before any target is matched; a database that cannot
+be fetched and is too old fails the targets that need it, through coverage,
+rather than reading clean.
+

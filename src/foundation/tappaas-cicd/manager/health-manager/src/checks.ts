@@ -12,11 +12,13 @@
 //   - backup-status    (was check-backup-status.sh; reads `backup-manager list --json`)
 //   - service-liveness (guest-agent ping / running-state — see TODO)
 //   - pending-reboot   (#730: guests whose update is waiting for a reboot)
+//   - cve-status       (ADR-011: the last security scan — WARN, never FAIL)
 
 import { spawnSync } from "child_process";
 import { join } from "path";
 import { isManaged, loadConfigModules, readModuleJson } from "./config";
 import { CheckResult, CheckRow, CheckStatus, ClusterClient, HealthReport, NodeCapacity } from "./types";
+import { checkCveStatus } from "./security";
 
 // Resolve a guest's `<vmname>.<zone0>.internal` target, as check-disk-threshold.sh
 // does (defaulting zone0 to "mgmt"), for the gates that probe a guest over SSH.
@@ -388,6 +390,7 @@ export function runHealthGates(client: ClusterClient, opts: ValidateOpts): Healt
     checkGuestMemory(client),
     checkBackupStatus(opts.configDir),
     checkPendingReboot(client, opts.configDir, opts.defaultNode),
+    checkCveStatus(opts.configDir, Date.now()),
   ];
   const failed = checks.filter((c: CheckResult): boolean => c.status === ("fail" as CheckStatus)).length;
   return { checks, failed };

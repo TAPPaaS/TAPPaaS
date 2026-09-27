@@ -73,8 +73,16 @@ declare module "fs" {
   export interface StatLike {
     isDirectory(): boolean;
     isFile(): boolean;
+    // Modification time — health-manager's security scan compares its last
+    // run against the sweep's result file (ADR-011 §9).
+    mtimeMs: number;
   }
   export function statSync(path: string): StatLike;
+  // Free space on the filesystem holding `path` (the scan checks its scanner
+  // databases fit before downloading them, ADR-011 §5).
+  export function statfsSync(path: string): { bavail: number; bsize: number };
+  // Tests set a file's times to order it against another.
+  export function utimesSync(path: string, atime: Date, mtime: Date): void;
 }
 
 // ── node:path ──────────────────────────────────────────────────────────
@@ -119,6 +127,11 @@ declare module "child_process" {
     // Working directory for the child (module-manager reconcile runs a module's
     // ./update.sh from the module directory, as the bash orchestrator did).
     cwd?: string;
+    // Written to the child's stdin (a probe script piped to `ssh … sh -s`).
+    input?: string;
+    // Milliseconds before the child is killed (a scanner that hangs on a
+    // registry must not hold the scan unit forever).
+    timeout?: number;
   }
   export function spawnSync(
     command: string,
