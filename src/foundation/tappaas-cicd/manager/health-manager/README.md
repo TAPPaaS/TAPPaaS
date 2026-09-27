@@ -182,7 +182,9 @@ ADR-007e target) only when a fixable CVE or a failed scan is **new** since that
 scan. **Triage decisions** are committed next to the module as
 `<module>-vex.json` (CycloneDX VEX: `not_affected`, `false_positive`, `resolved`
 suppress a finding; a versioned `affects` ref stops applying when the version
-changes).
+changes). They are read from the module directories of every repository in
+`site.json` `.repositories` — Community modules included — and the scan's notes
+say how many statements it applied and name any file it could not parse.
 
 **When it runs.** `tappaas-security-scan.service` starts after every
 `update-tappaas` run, failed or not, and scans only when that run wrote a sweep

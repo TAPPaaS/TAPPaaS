@@ -13,7 +13,7 @@ import { RemoteResult } from "../../../../lib/ts/src/cluster";
 import {
   CpeParts, DB_SPACE_BYTES, dbSpaceProblem, Finding, LINUX_PROBE, OPNSENSE_PROBE, PREVIOUS_FILE, STATUS_FILE, ScanStatus, SecurityIO,
   TargetStatus, applyCpes, checkCveStatus, groupByImage, diffScans, nixComponents, parseLinuxProbe, parseOpnsenseProbe,
-  parseStorePath, parseVex, readStatus, renderReport, runScan, sbomDir, summarize, summarizeOpnsense, sweepIsNewer,
+  loadVex, parseStorePath, parseVex, readStatus, registeredModuleDirs, renderReport, runScan, sbomDir, summarize, summarizeOpnsense, sweepIsNewer,
   vexSuppresses, writeScan,
 } from "../../src/security";
 import { run } from "../../src/main";
@@ -206,6 +206,34 @@ console.log("VEX");
   check(vexSuppresses(f("CVE-4", "pkg:deb/debian/x@1?arch=amd64"), vex), "no affects = every package; qualifiers ignored");
   const s = summarize({ id: "t", name: "t", layer: "nix", host: "h" }, 100, "", [f("CVE-1", "pkg:nix/glibc@2.42-84"), f("CVE-9", "pkg:nix/a@1")], vex, false);
   check(s.findings === 1 && s.suppressed === 1, "suppressed findings are counted, not listed");
+}
+
+// ── VEX from every registered repository ─────────────────────────────
+console.log("loadVex");
+{
+  const cfg = mkdtempSync(join(tmpdir(), "hm-vex-cfg-"));
+  const mkRepo = (name: string, module: string, rel: string): string => {
+    const root = mkdtempSync(join(tmpdir(), `hm-vex-${name}-`));
+    mkdirSync(join(root, rel), { recursive: true });
+    writeFileSync(join(root, "src", "module-catalog.json"), JSON.stringify({ modules: [{ name: module, moduleJson: `${rel}/${module}.json` }] }));
+    return root;
+  };
+  const vexDoc = (id: string): string => JSON.stringify({ vulnerabilities: [{ id, analysis: { state: "not_affected" } }] });
+  const tappaas = mkRepo("tappaas", "templates", "src/foundation/templates");
+  const community = mkRepo("community", "gitea", "src/someone/dev/gitea");
+  writeFileSync(join(tappaas, "src/foundation/templates/templates-vex.json"), vexDoc("CVE-A"));
+  writeFileSync(join(community, "src/someone/dev/gitea/gitea-vex.json"), vexDoc("CVE-B"));
+  writeFileSync(join(community, "src/stray-vex.json"), vexDoc("CVE-STRAY"));
+  writeFileSync(join(community, "src/someone/dev/gitea/broken-vex.json"), "{not json");
+  writeFileSync(join(cfg, "site.json"), JSON.stringify({ repositories: [
+    { name: "TAPPaaS", path: tappaas, catalog: "src/module-catalog.json" },
+    { name: "Community", path: community } ] }));
+  const v = loadVex(cfg, "/nonexistent");
+  const ids = v.statements.map((s) => s.id).sort().join(",");
+  check(ids === "CVE-A,CVE-B", `a VEX file in a Community module counts as much as one in TAPPaaS (${ids})`);
+  check(!ids.includes("STRAY"), "a VEX file outside every registered module is not read");
+  check(v.unreadable.length === 1 && v.unreadable[0].endsWith("broken-vex.json"), "an unparseable VEX file is reported, not silently skipped");
+  check(registeredModuleDirs(join(cfg, "none"), tappaas).length === 1, "no registered repositories → the tree the scan ships in");
 }
 
 // ── the whole scan, offline ──────────────────────────────────────────

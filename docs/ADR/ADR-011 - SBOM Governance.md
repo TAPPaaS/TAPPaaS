@@ -7,7 +7,7 @@
 | **Date** | 2026-09-27 |
 | **Author** | Erik Daniel (v0.1–v0.2); Lars Rossen (v0.3 revision, for Erik's review) |
 | **Related** | **#143** (CVE tracking / SBOM — origin); **#750** (container image pinning and cadence — the image layer this ADR scans); [ADR-028](<ADR-028 - Release Cadence and Patching.md>) (D1 one estate pin — the source of every Nix identity here; D12 emergency patching — what a finding here can trigger); [ADR-027](<ADR-027 - Module Blueprint.md>) D7 (the blueprint's `<module>-sbom.json` MAY, pending this ADR); [ADR-017](<ADR-017 - Update scheduling and mothership self-update.md>) (the `pinned-pkgs.nix` provenance question — answered here, §4); [ADR-009](<ADR-009 - Composition Meta-Model.md>) (Module = atomic deployable unit) |
-| **Changelog** | **v0.5 (2026-09-27) — PROPOSED.** Built and deployed on the test site (#143 closed); acceptance waits on the remaining checklist item (ADR-027 D7) and Erik's review. · **v0.4 (2026-09-27)** — §9 decided and built: `tappaas-security-scan.service` runs `health-manager scan security` after every sweep, failed or not; output in `config/sbom/`; `health-manager report security`; a `cve-status` gate in `validate` that only WARNs (SCAN FAILED included); the owner is mailed only when something is new; scanner databases on the root disk, measured at ~6 GB once trivy pulled its Java DB. · v0.3 (2026-09-27) — rewritten on measurement: a dry run of the candidate tools against the test site (hrossen) — mothership, a guest, a container image, a Proxmox node and the firewall. Inventory is **generated per installation from what is deployed**, not committed per module (§1); the **full runtime closure**, not `--depth=1` (§3); **one tool per layer** — Nix closures, container images, Debian hosts, OPNsense (§4); CVE matching is **no longer deferred** (§5); new §6 coverage (a scan that saw nothing is a failure), §7 actionability (the metric is *fix available and not applied*), §8 triage decisions committed as VEX. v0.2's CycloneDX 1.4+ floor and its preference for Nix-native inventory over filesystem scanning stand. · v0.2 — tooling decision (§4): `sbomnix` for NixOS-templated modules, `syft` for the Debian/Ubuntu minority; CycloneDX floor corrected to 1.4+ (was 1.5+) to match the chosen tool's native output; both tools tested live, head-to-head, against the same real module derivation (`module-manager`) — `sbomnix` correctly found its dependencies, `syft`'s `nix-cataloger` found zero. · v0.1 — skeleton (Erik⟷Lars design direction agreed 2026-06-16). |
+| **Changelog** | **v0.5 (2026-09-27) — PROPOSED.** Built and deployed on the test site (#143 closed); acceptance waits on Erik's review. VEX is read from every registered repository; ADR-027 D2/D7 name `<module>-vex.json` in place of `<module>-sbom.json`. · **v0.4 (2026-09-27)** — §9 decided and built: `tappaas-security-scan.service` runs `health-manager scan security` after every sweep, failed or not; output in `config/sbom/`; `health-manager report security`; a `cve-status` gate in `validate` that only WARNs (SCAN FAILED included); the owner is mailed only when something is new; scanner databases on the root disk, measured at ~6 GB once trivy pulled its Java DB. · v0.3 (2026-09-27) — rewritten on measurement: a dry run of the candidate tools against the test site (hrossen) — mothership, a guest, a container image, a Proxmox node and the firewall. Inventory is **generated per installation from what is deployed**, not committed per module (§1); the **full runtime closure**, not `--depth=1` (§3); **one tool per layer** — Nix closures, container images, Debian hosts, OPNsense (§4); CVE matching is **no longer deferred** (§5); new §6 coverage (a scan that saw nothing is a failure), §7 actionability (the metric is *fix available and not applied*), §8 triage decisions committed as VEX. v0.2's CycloneDX 1.4+ floor and its preference for Nix-native inventory over filesystem scanning stand. · v0.2 — tooling decision (§4): `sbomnix` for NixOS-templated modules, `syft` for the Debian/Ubuntu minority; CycloneDX floor corrected to 1.4+ (was 1.5+) to match the chosen tool's native output; both tools tested live, head-to-head, against the same real module derivation (`module-manager`) — `sbomnix` correctly found its dependencies, `syft`'s `nix-cataloger` found zero. · v0.1 — skeleton (Erik⟷Lars design direction agreed 2026-06-16). |
 
 What software is actually running on a TAPPaaS installation, and which of it has a known
 vulnerability that someone should act on.
@@ -197,11 +197,16 @@ workaround.
 
 ### 8. Triage is committed as VEX
 
-A finding a person has looked at gets a VEX statement — `not_affected` (with the
-justification: the vulnerable code is not in the build, not reachable, patched by a
-nixpkgs backport), `affected` (with the plan), or `fixed` — in the `<module>-vex.json` of
-the module that owns the component (the estate-wide base — glibc, openssl, systemd —
-belongs to `templates`). The next scan applies it, so a decided finding stops being
+A finding a person has looked at gets a CycloneDX VEX statement (`analysis.state`) —
+`not_affected` (with the justification: the vulnerable code is not in the build, not
+reachable, patched by a nixpkgs backport), `false_positive`, `resolved`, or `exploitable` /
+`in_triage` while it is open — in the `<module>-vex.json` of the module that owns the
+component (the estate-wide base — glibc, openssl, systemd — belongs to `templates`). The
+first three suppress the finding; the last two keep it reported. The scan reads VEX from
+the module directories of **every registered repository** (site.json `.repositories`, each
+repository's module catalogue), so a Community module's decisions count as much as a
+TAPPaaS one's; a file outside any registered module is not read, and one that does not
+parse is named in the scan's notes. The next scan applies it, so a decided finding stops being
 reported until its version changes. This is where Nix's missing fix-state is made up for,
 once per finding, by someone who checked.
 
@@ -283,5 +288,5 @@ host and the firewall *watch*, every closure *triage*, no coverage failure.
       databases).
 - [x] VEX statements are applied, and a decided finding is no longer reported (unit
       tests; no `<module>-vex.json` is committed yet).
-- [ ] ADR-027 D7 updated: `<module>-vex.json` MAY, replacing `<module>-sbom.json`.
+- [x] ADR-027 D7 updated: `<module>-vex.json` MAY, replacing `<module>-sbom.json`.
 - [x] The result is surfaced where §9 decides.

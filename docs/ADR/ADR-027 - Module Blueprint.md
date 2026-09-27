@@ -3,11 +3,11 @@
 | | |
 |---|---|
 | **Status** | **Proposed** (2026-09-20) |
-| **Version** | 0.3 |
+| **Version** | 0.4 |
 | **Date** | 2026-09-20 |
 | **Author** | Lars Rossen |
 | **Related** | **#363** (origin: the artifact set) · **#248** (what `version` and `status` claim — built 2026-09-20) · [ADR-013](<ADR-013 - Documentation Structure and Standards.md>) (**the module's documents** — README, INSTALL, DESIGN, TEST: their audiences and obligation, not restated here) · [ADR-015](<ADR-015 - Community Governance and Contribution Files.md>) (**the contribution files** — AUTHORS and the community-health set: the companion to this ADR, which owns everything a module is made of that is *not* a document) · [ADR-011](<ADR-011 - SBOM Governance.md>) (the SBOM this blueprint will name once it is accepted) · [ADR-007](<ADR-007 - TAPPaaS Taxonomy.md>) (the module/manager/controller taxonomy and the verb dispatch) · [ADR-020](<ADR-020 - Declared-Field Change Model (validate, drift, modify).md>) (the service scripts and `fields.json` — what `update`, `modify` and `reconcile` do with them) · [ADR-026](<ADR-026 - Managed Machines as Modules.md>) D6 (a module is named by its directory; an instance is not a module) · [ADR-022](<ADR-022 - Workload Ontology.md>) / [ADR-022e](<ADR-022e - Module Scope.md>) (`kind`, `scope`, `management` — and `module.tier` retired in favour of `scope`) · `src/foundation/schemas/README.md` + `module-fields.json` (the field definitions themselves) |
-| **Changelog** | v0.3 (2026-09-20) — Proposed; the answers folded into the decisions they belong to and the question list dropped; `00-Template` ships the stubs D6 describes, and they carry the warning an unimplemented script owes its operator. · v0.2 (2026-09-20) — documents and contribution files handed to ADR-013/ADR-015 and no longer listed here; the service directory gets its own decision (D3); D4 points at the schemas instead of describing fields; `stack: foundation` replaces the retired `tier`; `provisionedBy` dropped for a no-op `install.sh`; `test.sh` is a SHOULD; one severity for every module, with a sweep to clear the estate; the five open questions answered. · v0.1 (2026-09-20) — first draft |
+| **Changelog** | v0.4 (2026-09-27) — D2/D7: `<module>-sbom.json` becomes `<module>-vex.json` (MAY), as ADR-011 v0.5 decided — the inventory is generated per installation, only the triage decisions are authored. · v0.3 (2026-09-20) — Proposed; the answers folded into the decisions they belong to and the question list dropped; `00-Template` ships the stubs D6 describes, and they carry the warning an unimplemented script owes its operator. · v0.2 (2026-09-20) — documents and contribution files handed to ADR-013/ADR-015 and no longer listed here; the service directory gets its own decision (D3); D4 points at the schemas instead of describing fields; `stack: foundation` replaces the retired `tier`; `provisionedBy` dropped for a no-op `install.sh`; `test.sh` is a SHOULD; one severity for every module, with a sweep to clear the estate; the five open questions answered. · v0.1 (2026-09-20) — first draft |
 
 Every TAPPaaS module is the same shape, so tooling and people can rely on it.
 
@@ -68,7 +68,7 @@ This is what makes the rest checkable: "does this module carry X?" is `test -f`.
 | `fields.json` | **MUST** when the module declares fields of its own | the schema's: what those fields mean, composed into `module-fields.json` (#567) |
 | `services/<service>/` | **MUST** for each service the module `provides` | a consumer's — D3 |
 | `delete.sh` | **MAY** | only when deleting needs more than removing the guest and the config (the satellite's tunnel, the backup module's PBS) |
-| `<module>-sbom.json` | **MAY** | a CVE report's: what is actually inside the guest (#143). Revisited when ADR-011 is accepted — D7 |
+| `<module>-vex.json` | **MAY** | the security scan's: which of this module's CVE findings someone has decided (CycloneDX VEX, ADR-011 §8) — D7 |
 
 **MUST** means the module is incomplete without it and the check says so. **SHOULD**
 means its absence is a finding a reviewer may accept with a reason. **MAY** means it
@@ -179,9 +179,11 @@ exits 0 (D2). It is not a stub and does not warn.
 
 - **The NixOS baseline** every VM imports (#324, #390, #448, #472, FW #87) — that is
   G1.4's, and the blueprint will point at it once it exists.
-- **The SBOM's content and generation** — ADR-011, Proposed. The blueprint names the
-  file as a MAY and revisits the obligation when ADR-011 is accepted; naming it MUST
-  before there is a way to generate one would only create a finding nobody can clear.
+- **The SBOM's content and generation** — ADR-011. A module carries no SBOM: the
+  inventory is generated per installation from what is running (ADR-011 §1), because a
+  file in the module tree describes the repository, not a site. What a module MAY carry
+  is its **VEX** (`<module>-vex.json`): the triage decisions about its findings, the one
+  part a person authors. The scan reads it from any registered repository.
 - **The module's documents and contribution files** — ADR-013 and ADR-015 (D2).
 - **Where modules live** in the repository — the `src/apps` restructure is #421.
 - **How a module's payload is configured inside the guest** (Ansible or otherwise) —

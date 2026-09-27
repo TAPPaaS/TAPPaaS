@@ -661,7 +661,7 @@ interface Planned {
 export interface ScanOpts {
   configDir: string;
   defaultNode: string;
-  repoDir: string;
+  repoDir: string; // the tree this scan ships in — VEX source only when site.json registers no repository
   log?: (msg: string) => void;
 }
 
@@ -694,31 +694,70 @@ export function planTargets(configDir: string, defaultNode: string, client: Clus
   return out;
 }
 
-export function loadVex(repoDir: string): VexStatement[] {
-  const out: VexStatement[] = [];
-  const walk = (d: string, depth: number): void => {
-    if (depth > 6 || !existsSync(d)) return;
-    for (const e of readdirSync(d)) {
-      if (e.startsWith(".") || e === "node_modules" || e === "dist" || e === "result") continue;
-      const p = join(d, e);
-      let st;
-      try {
-        st = statSync(p);
-      } catch {
-        continue;
-      }
-      if (st.isDirectory()) walk(p, depth + 1);
-      else if (e.endsWith("-vex.json")) {
-        try {
-          out.push(...parseVex(readFileSync(p, "utf8"), p.slice(repoDir.length + 1)));
-        } catch {
-          // an unreadable VEX file decides nothing; the finding stays reported
-        }
-      }
+// The module directories of every REGISTERED repository: site.json
+// .repositories, and in each its module catalogue — the same walk the field
+// schema composes from (compose-fields.ts). A VEX file in a Community module is
+// as binding as one in TAPPaaS; a stray file outside any registered module is
+// not a decision anyone made about a deployed module, and is not read.
+export function registeredModuleDirs(configDir: string, fallbackRepo: string): string[] {
+  const readJson = (f: string): unknown => {
+    try {
+      return JSON.parse(readFileSync(f, "utf8"));
+    } catch {
+      return null;
     }
   };
-  walk(join(repoDir, "src"), 0);
-  return out;
+  const dirsOf = (root: string, catalogRel: string): string[] => {
+    const out: string[] = [];
+    const collect = (node: unknown): void => {
+      if (Array.isArray(node)) node.forEach(collect);
+      else if (node && typeof node === "object") {
+        const o = node as Record<string, unknown>;
+        if (typeof o.moduleJson === "string" && o.moduleJson.includes("/")) {
+          out.push(join(root, o.moduleJson.slice(0, o.moduleJson.lastIndexOf("/"))));
+        }
+        Object.values(o).forEach(collect);
+      }
+    };
+    collect(readJson(join(root, catalogRel)));
+    return out;
+  };
+  const site = readJson(join(configDir, "site.json")) as { repositories?: Array<Record<string, unknown>> } | null;
+  const dirs: string[] = [];
+  for (const r of site?.repositories ?? []) {
+    const path = typeof r.path === "string" ? r.path : "";
+    const cat = typeof r.catalog === "string" ? r.catalog : "src/module-catalog.json";
+    if (path) dirs.push(...dirsOf(path, cat));
+  }
+  // A bare checkout with no site.json repositories: the tree the scan ships in.
+  if (dirs.length === 0) dirs.push(...dirsOf(fallbackRepo, "src/module-catalog.json"));
+  return [...new Set(dirs)].sort();
+}
+
+// Every <module>-vex.json in a registered module's directory (ADR-011 §8).
+export function loadVex(configDir: string, fallbackRepo: string): { statements: VexStatement[]; files: string[]; unreadable: string[] } {
+  const statements: VexStatement[] = [];
+  const files: string[] = [];
+  const unreadable: string[] = [];
+  for (const dir of registeredModuleDirs(configDir, fallbackRepo)) {
+    let entries: string[] = [];
+    try {
+      entries = readdirSync(dir);
+    } catch {
+      continue;
+    }
+    for (const e of entries.filter((x) => x.endsWith("-vex.json")).sort()) {
+      const p = join(dir, e);
+      try {
+        statements.push(...parseVex(readFileSync(p, "utf8"), p));
+        files.push(p);
+      } catch {
+        // decides nothing — its findings stay reported — and the scan says so
+        unreadable.push(p);
+      }
+    }
+  }
+  return { statements, files, unreadable };
 }
 
 interface CdxTarget {
@@ -729,8 +768,11 @@ interface CdxTarget {
 
 export function runScan(opts: ScanOpts, client: ClusterClient, io: SecurityIO): { status: ScanStatus; cdx: Record<string, unknown> } {
   const log = opts.log ?? ((): void => undefined);
-  const vex = loadVex(opts.repoDir);
+  const v = loadVex(opts.configDir, opts.repoDir);
+  const vex = v.statements;
   const notes: string[] = [];
+  if (v.files.length > 0) notes.push(`VEX: ${vex.length} statement(s) from ${v.files.length} file(s)`);
+  for (const f of v.unreadable) notes.push(`VEX file not readable, ignored: ${f}`);
   const plan = planTargets(opts.configDir, opts.defaultNode, client, io);
   const results: CdxTarget[] = [];
 
