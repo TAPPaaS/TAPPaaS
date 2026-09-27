@@ -164,7 +164,8 @@ scan the mothership held **~6 GB** of scanner cache (grype 3.0 GB; trivy 1.4 GB 
 live on the root disk. On hrossen's mothership (32 GB root, 9 GB free) they took the disk
 to **91%**, past the 80% `disk-threshold` gate — so the scan refuses its first download
 when the databases would take the root disk over 80%, reports every target SCAN FAILED,
-and says to grow the disk. A mothership needs about 10 GB more root than it uses today.
+and says to grow the disk. The mothership's default disk is therefore 64 GB (was 32 GB);
+an update grows an installed one, since `diskSize` is `grow-only`.
 
 ### 6. Coverage — a scan that saw nothing is a failure
 

@@ -28,7 +28,7 @@
     "cluster:vm": {
       "cores": 4,
       "memory": "16384",
-      "diskSize": "32G",
+      "diskSize": "64G",
       "storage": "tanka1",
       "imageType": "clone",
       "image": "8080",

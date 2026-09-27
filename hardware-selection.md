@@ -129,7 +129,7 @@ Budget for the foundation services on top of your workloads:
 |---------|-----|---------|
 | Proxmox host | 2 GB | 32 GB |
 | OPNsense firewall | 2 GB | 16 GB |
-| TAPPaaS CICD | 4 GB | 50 GB |
+| TAPPaaS CICD | 4 GB | 64 GB |
 | NixOS template | 1 GB | 10 GB |
 | Identity | 4 GB | 20 GB |
 | Backup server | 2 GB | sized by `tankc1` |
