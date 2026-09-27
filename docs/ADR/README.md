@@ -65,7 +65,7 @@ The vocabulary every other ADR now borrows: what a module *is*, where it sits, w
 
 | ADR | Status | Decides |
 |-----|--------|---------|
-| [ADR-011 — SBOM Governance](<ADR-011 - SBOM Governance.md>) | Draft | Per-module software bill of materials (CycloneDX) for CVE tracking. |
+| [ADR-011 — SBOM Governance](<ADR-011 - SBOM Governance.md>) | Draft | What is running on an installation and which of it needs a fix: generated per installation, one scanner per layer (Nix closure, image, Debian host, OPNsense), coverage-checked, triage committed as VEX. |
 | [ADR-013 — Documentation Structure and Standards](<ADR-013 - Documentation Structure and Standards.md>) | Accepted — implemented | Where documentation lives, which artifact serves which audience, and how the site syncs from source. |
 | [ADR-015 — Community Governance and Contribution Files](<ADR-015 - Community Governance and Contribution Files.md>) | Draft | The community-health file set (CONTRIBUTING, CODE_OF_CONDUCT, SECURITY, GOVERNANCE, CODEOWNERS, templates) — names, per-repo placement, and contents, plus the per-module `AUTHORS.md`. The companion to ADR-027, which defers every contribution file here. |
 
