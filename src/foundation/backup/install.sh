@@ -209,7 +209,16 @@ then
   debug "Proxmox PBS apt repository already registered."
 else
   debug "Proxmox PBS apt repository not found, adding it ..."
+  # The LEADING BLANK LINE is required, not cosmetic (#749). deb822 separates
+  # stanzas with an empty line; without one apt reads this and the pve stanza
+  # above it as a SINGLE stanza with duplicate keys, the later URIs wins, and the
+  # node's PVE repository silently ceases to exist. tappaas3 sat on pve-manager
+  # 9.2.10 against its peers' 9.2.20 for that reason, with `apt list
+  # --upgradable` reporting nothing because there was no candidate to report.
+  # Emitted on both sides (cluster/install.sh ends its stanza with one too), so
+  # the order of installation does not matter.
   ssh root@${NODE}.$ZONE.internal "cat >> /etc/apt/sources.list.d/proxmox.sources" << EOF
+
 Types: deb
 URIs: ${IMAGE_LOCATION}
 Suites: trixie

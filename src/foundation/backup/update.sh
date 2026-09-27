@@ -158,6 +158,18 @@ if [[ "${STATE}" == "shim" ]]; then
     fi
 fi
 
+# ── #749: heal a proxmox.sources this module itself broke ─────────────
+# Installing backup on a PVE node used to append the PBS stanza with no blank
+# line before it, which deb822 needs — so apt read one stanza, the later URIs
+# won, and the node's PVE repository disappeared without a word. The install side
+# is fixed; this repairs the sites already in that state. Idempotent and quiet
+# when there is nothing to do, so it belongs here rather than in a runbook: a
+# site heals on its next sweep instead of waiting to be told.
+_pbs_repair_node="$(pbs_state_node "$(pbs_placement_state)" 2>/dev/null || true)"
+if [[ -n "${_pbs_repair_node}" ]]; then
+    pbs_repair_sources "${_pbs_repair_node}" "${ZONE}" || true
+fi
+
 # ── local PBS: the nodes can reach it — a satellite's is behind its tunnel
 # (ADR-010 §8.4.3); a no-op for a node or a LAN machine.
 pbs_host_path_ensure "$(pbs_state_node "$(pbs_placement_state)" || true)" \

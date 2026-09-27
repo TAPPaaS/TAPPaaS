@@ -383,6 +383,7 @@ Suites: trixie
 Components: pve-no-subscription
 Signed-By: /usr/share/keyrings/proxmox-archive-keyring.gpg
 Enabled: true
+
 EOF
 msg_ok "Added 'pve-no-subscription' repository"
 

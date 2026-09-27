@@ -5,6 +5,38 @@ Catalog info: [README.md](./README.md); install: [INSTALL.md](./INSTALL.md);
 operations: [README.md](./README.md); recovery: [RESTORE.md](./RESTORE.md); test coverage: [TEST.md](./TEST.md). Design
 rationale: [ADR-012](../../../docs/ADR/ADR-012-backup-enhancement.md).
 
+## The PVE repository a PBS install used to destroy (#749)
+
+`backup` installs `proxmox-backup-server` on a PVE node by appending a PBS stanza
+to `/etc/apt/sources.list.d/proxmox.sources`, which `cluster/install.sh` wrote.
+Neither side emitted the blank line deb822 requires between stanzas, so apt read
+the two as ONE stanza with duplicate keys, the later `URIs:` won, and **the
+node's PVE repository ceased to exist**.
+
+Measured on the test site (2026-09-27): the PBS node ran `pve-manager` 9.2.10
+while its two peers ran 9.2.20, and `apt-cache policy pve-manager` offered only
+`100 /var/lib/dpkg/status` — no repository at all. 32 packages were held back.
+
+It hid well, which is the part worth remembering:
+
+- `apt list --upgradable` returned **nothing** — correct, and exactly the wrong
+  signal: there was no candidate because there was no repo.
+- The node module's `updateTime` was fresh, from the same sweep as its peers.
+- Debian and security lists refreshed normally; they live in another file.
+
+So every check an operator would reach for said the node was current. The only
+visible trace was a version difference between nodes, which nothing compares.
+
+Both writers now emit the separator, so install order does not matter. Because
+every site that already installed backup onto a PVE node is in that state,
+`pbs_repair_sources` runs from the **update** path: it inserts the missing
+separator, refreshes the lists, keeps the original as `.pre-749`, and is silent
+when there is nothing to do — so a site heals on its next sweep instead of
+waiting for someone to read a runbook. It is surgical rather than a rewrite from
+known-good stanzas, so whatever else a site keeps in that file survives.
+`lib/test-pbs-sources-repair.sh` covers detection, repair, idempotence, that no
+repository is lost, and three concatenated stanzas.
+
 ## Backup strategy & disaster recovery
 
 TAPPaaS follows the **3-2-1 principle**: 3 copies of data, in 2 different formats, with 1 copy

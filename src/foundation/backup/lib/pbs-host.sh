@@ -77,6 +77,55 @@ pbs_host_path_ensure() {
 # pbs-no-subscription source, then proxmox-backup-server + -client. Idempotent. A
 # cluster node gets its packages from install.sh's PVE path instead (its keyring
 # is already there).
+# Repair a proxmox.sources whose stanzas are not blank-separated (#749).
+#
+# Installing backup on a PVE node appended the PBS stanza with no leading blank
+# line, and deb822 separates stanzas with one. apt then read the file as a SINGLE
+# stanza with duplicate keys, the later URIs won, and the node's PVE repository
+# vanished — silently, because `apt list --upgradable` has nothing to report when
+# there is no candidate. tappaas3 ran pve-manager 9.2.10 against its peers' 9.2.20.
+#
+# The install side is fixed, but every site that already installed backup onto a
+# PVE node is in this state now, so the repair runs from the UPDATE path: it is
+# idempotent, it is cheap when there is nothing to do, and a site therefore heals
+# itself on its next sweep rather than waiting for someone to read a runbook.
+#
+# Surgical on purpose: it inserts the missing separator and changes nothing else.
+# Rewriting the file from known-good stanzas would be simpler and would discard
+# whatever else a site has put there.
+#
+# Args: <host> [zone]
+pbs_repair_sources() {
+    local host="$1" zone="${2:-mgmt}" out
+    out="$(ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new \
+        "root@$(pbs_host_addr "${host}" "${zone}")" 'bash -s' <<'REMOTE' 2>&1
+set -euo pipefail
+f=/etc/apt/sources.list.d/proxmox.sources
+[ -f "$f" ] || { echo "no-file"; exit 0; }
+# A `Types:` line that follows a non-blank line is a stanza with no separator.
+if ! awk 'NR>1 && /^Types:/ && prev != "" { found=1 } { prev=$0 } END { exit !found }' "$f"; then
+    echo "already-separated"; exit 0
+fi
+cp -a "$f" "${f}.pre-749" 2>/dev/null || true
+awk 'NR>1 && /^Types:/ && prev != "" { print "" } { print; prev=$0 }' "$f" > "${f}.tmp" \
+    && mv -f "${f}.tmp" "$f"
+# The lists are what the malformed file starved; refresh them so a candidate
+# exists again before anything asks for one.
+apt-get -q update >/dev/null 2>&1 || echo "apt-update-failed"
+echo "repaired"
+REMOTE
+    )" || { warn "  could not check ${host}'s apt sources for the #749 defect"; return 0; }
+
+    case "${out}" in
+        *repaired*)
+            info "  ${GN}✓${CL} ${host}: proxmox.sources stanzas were not separated — repaired (#749), backup kept as .pre-749"
+            ;;
+        *already-separated*|*no-file*) : ;;
+        *) debug "  ${host}: #749 repair said '${out}'" ;;
+    esac
+    return 0
+}
+
 pbs_install_on_machine() {
     local host="$1" zone="${2:-mgmt}"
     ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new \
