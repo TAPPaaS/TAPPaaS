@@ -179,7 +179,7 @@ exits 0 (D2). It is not a stub and does not warn.
 
 - **The NixOS baseline** every VM imports (#324, #390, #448, #472, FW #87) — that is
   G1.4's, and the blueprint will point at it once it exists.
-- **The SBOM's content and generation** — ADR-011, still Draft. The blueprint names the
+- **The SBOM's content and generation** — ADR-011, Proposed. The blueprint names the
   file as a MAY and revisits the obligation when ADR-011 is accepted; naming it MUST
   before there is a way to generate one would only create a finding nobody can clear.
 - **The module's documents and contribution files** — ADR-013 and ADR-015 (D2).

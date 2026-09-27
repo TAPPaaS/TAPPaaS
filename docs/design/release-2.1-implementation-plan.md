@@ -742,7 +742,7 @@ New capabilities with low upgrade risk.
 | #406 | ADR-010 P7 hardening + sign-off | 2 | 2 | L | |
 | #359 | legal/processor ADR | 3 | 1 | L | |
 | #63 | Service desk tooling spike | 3 | 1 | L | |
-| FW #143 | CVE tracking / SBOM (ADR-011) | 3 | 1 | L | ADR-011 v0.4 (2026-09-27, Draft, for Erik): per-installation scan built — `health-manager scan/report security`, `tappaas-security-scan.service` after every sweep; no longer tied to #363 |
+| ✅ FW #143 | CVE tracking / SBOM (ADR-011) | 3 | 1 | L | **Closed 2026-09-27 — built.** ADR-011 v0.5 **Proposed**: per-installation scan — `health-manager scan/report security`, `tappaas-security-scan.service` after every sweep, `cve-status` gate (WARN only), notice on what is new; mothership disk 64G for the scanner databases. No longer tied to #363 |
 
 ---
 
@@ -759,7 +759,7 @@ New capabilities with low upgrade risk.
 | #83 | Reuse downloaded images | G3.5 | Contained installer change |
 | #40 | Sync-network recipe | G4.1 | Documentation half of #590 |
 
-**Optional roll-ins:** #157 (G2.2, after #387), #143 (G4.5), #158 (G4.4),
+**Optional roll-ins:** #157 (G2.2, after #387), ✅ #143 (G4.5, closed 2026-09-27), #158 (G4.4),
 #39 power saving (docs, alongside #37).
 
 **Moved out of a wave:**
@@ -895,7 +895,7 @@ open decisions from review, and the ADRs that have to be signed off first.
 | 1 · G1.6 | Secrets: an access interface first, OpenBao later (#58); #142 RFC outcome | **New: Secrets management** (#58, with FW #122 and #19); an ADR for #142 only if a REST API is chosen over SSH + sudo | as Wave 1 |
 | 2 | #645 dry-run diff on `stable`; #620 and #375 applied | ADR-014 amended: `all` sentinel (#375), `serves` as array (#576), anti-spoofing always on (#159), mDNS in zones.json (#257); ADR-021 amended: DNSSEC with split horizon (#263) and the IPv6 stance (#149) | Lockout check on the test system and each canary: mgmt and NetBird reach 8443 and 22, other zones do not |
 | 3 | none | ADR-019 Proposed → Accepted (#393 migration-failure policy; #36 / #127 boot order) | §10.1 level of each issue |
-| 4 | MAC pinning question (#444 / #582); #154 closed or kept; #430 decided before #170 | ADR-023 Proposed → Accepted (#642, #643; render check open); ADR-015 Draft → Accepted (#486); ADR-011 Draft → Accepted (FW #143); ADR-010 P7 sign-off (#406); ADR-008 amended (#236); ADR-019 amended for a second corosync link (#590) and the migrate verb (#429); ADR-007e amended for alerting and logging v2 (#126, #165), or a new ADR if Zabbix is chosen; **New: Shared storage** (#388); **New: Legal/processor** (#359) | §10.1 level of each issue |
+| 4 | MAC pinning question (#444 / #582); #154 closed or kept; #430 decided before #170 | ADR-023 Proposed → Accepted (#642, #643; render check open); ADR-015 Draft → Accepted (#486); ADR-011 Proposed → Accepted (FW #143 built and closed 2026-09-27); ADR-010 P7 sign-off (#406); ADR-008 amended (#236); ADR-019 amended for a second corosync link (#590) and the migrate verb (#429); ADR-007e amended for alerting and logging v2 (#126, #165), or a new ADR if Zabbix is chosen; **New: Shared storage** (#388); **New: Legal/processor** (#359) | §10.1 level of each issue |
 
 ADR-024 (Site Fabric) is a deferred placeholder and gates nothing here.
 
