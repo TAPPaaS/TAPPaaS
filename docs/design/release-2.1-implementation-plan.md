@@ -636,6 +636,7 @@ Low upgrade risk. Build continuously, in any order within a group.
 | ✅ #698 | logging update fails on makerfloss: the mgmt environment has no domain | — | — | — | **Closed 2026-09-21** (`c1cdf960`). Added in the 2026-09-24 issue sweep |
 | #701 | logging depends on identity though its own code makes SSO optional | — | — | — | **Open, not yet scored** — SSO is conditional on publication since `4c9c846a`. Added in the 2026-09-24 issue sweep |
 | ✅ #738 | `identity:identity` discovery check fails on a changed host key and blames the firewall | 4 | 2 | M | **Closed 2026-09-25** via `integrate/nc35` (merge `c998ca5f`, with #723/#735): the host key is cleared before the OIDC check, and an ssh failure is named as one. **Opened 2026-09-25 by @AndreasJe.** After a guest reboot or rebuild its ssh host key can change. `identity/services/identity/install-service.sh` clears a stale `known_hosts` entry before its write step (239–254) but not before the discovery check at 221, so `StrictHostKeyChecking=accept-new` refuses the changed key and line 228 dies with *OIDC discovery URI unreachable … add a firewall rule*. The firewall is fine; ssh never ran. A wrong diagnosis that sends an operator to widen the firewall. **Parallel stream** (§13) — fixed on a separate branch, landing with @AndreasJe's PRs. |
+| #752 | identity:accessControl has no test-service | 3 | 1 | L | **Opened 2026-09-28** from the #674 sweep: `test-service.sh` is an ADR-027 D6 stub that warns, so forward-auth in front of a module is never tested. Check the Authentik provider/application, the Caddy ForwardAuth flag, and that an unauthenticated request is redirected |
 
 ### G3.3 App module fixes — E4 · R2 · L-L
 
@@ -656,6 +657,7 @@ Low upgrade risk. Build continuously, in any order within a group.
 | #658 | nextcloud test 12 probes the browser URL from wherever it runs | 4 | 1 | L | Maintainer-owned (@ErikDaniel007). **Not** "treat 403 as pass" — that would mask a real access-list fault. The test should ask whether the host it runs from is inside the route's `proxyAllowedZones` and skip with a reason when it is not, the way `tappaas-cicd/test.sh` Test 9z now handles a suite that cannot run here (exit 77). Today it pushes an operator to widen a zone list to make a test pass — a security change caused by a test assumption |
 | ✅ #714 | nextcloud:fileservice fails euro-office on a verdict the run could not make | — | — | — | **Closed 2026-09-23** (`287bad27`) — TTY, readiness gate, verdict from the check's own words, JWT leeway. Added in the 2026-09-24 issue sweep |
 | ✅ #667 | `nextcloud:fileservice` declares no fields, so its connector is undefined | — | — | — | **Added in the 2026-09-25 issue sweep.** **Closed.** Sits with #714, the other fileservice defect |
+| #751 | nextcloud:fileservice has no teardown | 3 | 2 | L | **Opened 2026-09-28** from the #674 sweep: `delete-service.sh` is an ADR-027 D6 stub that warns, so a deleted euro-office, coturn or HPB leaves its connector settings in Nextcloud. Remove the env file and unset what `occ` applied; test delete → settings gone → update → restored on hrossen |
 
 ### G3.4 AI stack maturity — E3 · R3 · L-L
 

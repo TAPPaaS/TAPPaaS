@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# nextcloud:fileservice delete-service — NOT IMPLEMENTED YET (ADR-027 D6 stub)
+# nextcloud:fileservice delete-service — NOT IMPLEMENTED YET (ADR-027 D6 stub, #751)
 #
 # ── REPLACE THE WARNING BELOW WITH THE REAL TEARDOWN ─────────────────────
 # What a consumer leaves behind in Nextcloud when it is deleted:

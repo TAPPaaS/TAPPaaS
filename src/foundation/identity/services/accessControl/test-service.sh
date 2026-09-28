@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# identity:accessControl test-service — NOT IMPLEMENTED YET (ADR-027 D6 stub)
+# identity:accessControl test-service — NOT IMPLEMENTED YET (ADR-027 D6 stub, #752)
 #
 # ── REPLACE THE WARNING BELOW WITH THE REAL TEST ─────────────────────────
 # What "this consumer's access control works" means, and should check:

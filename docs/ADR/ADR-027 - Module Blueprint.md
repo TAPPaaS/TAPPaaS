@@ -244,4 +244,5 @@ exits 0 (D2). It is not a stub and does not warn.
       boundary refuses to promote a module missing a MUST (`tappaas-train`, #674).
 - [x] The sweep has landed: `install.sh` for `network` and `templates`, `test.sh` for the
       foundation modules lacking one, and the 15 service directories completed (#674).
-- [ ] What the sweep could not fix is an issue, not an exception.
+- [x] What the sweep could not fix is an issue, not an exception: #751 (the
+      `nextcloud:fileservice` teardown) and #752 (the `identity:accessControl` test).
