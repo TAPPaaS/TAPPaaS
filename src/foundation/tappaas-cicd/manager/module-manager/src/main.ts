@@ -26,14 +26,18 @@
 // Exit codes: ok=0, error / non-zero child rc = that rc (1 for config errors).
 
 import { existsSync, readFileSync } from "fs";
-import { join } from "path";
+import { dirname, join } from "path";
 import { CliModuleClient } from "./client";
 import {
   classifyModuleResolution,
   defaultConfigDir,
+  getModuleDir,
   getModuleDirResult,
   listModules,
   loadModule,
+  repoCatalogFile,
+  resolveViaCatalog,
+  siteRepositories,
 } from "./config";
 import { moduleScope } from "../../../lib/ts/src/scope";
 import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
@@ -55,6 +59,8 @@ import { cmdDrift, parseSetArg, preGateSet } from "./converge";
 import { cmdResolve } from "./resolve";
 import { realServiceFs } from "./services";
 import { validateModules } from "./validate";
+import { BlueprintTarget, SchemaFacts, checkModule, dirTarget, realBlueprintFs, repoTargets, schemaFacts } from "./blueprint";
+import { composeFields } from "../../../lib/ts/src/compose-fields";
 
 const VERSION = "0.1.0";
 
@@ -92,9 +98,17 @@ export const HELP: HelpSpec = {
       ],
     },
     {
-      usage: "validate [<module>] [--allow-fork]",
+      usage: "validate [<module>] [--allow-fork] | validate --blueprint [<module>|<dir>]... [--repo PATH]",
       name: "validate",
-      options: [["--allow-fork", "Permit forked/non-canonical module sources (relax scope/source lint)."]],
+      options: [
+        ["--allow-fork", "Permit forked/non-canonical module sources (relax scope/source lint)."],
+        ["--blueprint", "Check module SOURCE directories against the ADR-027 blueprint instead of linting deployed configs: every module of every registered repository, or the named modules/directories."],
+        ["--repo PATH", "With --blueprint: every module in that repository's catalogue (what the release boundary runs)."],
+      ],
+      details:
+        "--blueprint reports what a module is made of (ADR-027): a missing MUST is an error, a\n" +
+        "missing SHOULD a warning, the same for every module. Exit 1 on any error. It never runs\n" +
+        "at install time — an incomplete module still installs.",
     },
     {
       usage: "add <module> [--environment ENV] [--instance NAME] [--allow-fork] [--reinstall] [--<field> <value>]...",
@@ -270,6 +284,8 @@ interface Opts {
   archive: boolean;
   remove: boolean;
   decommission: boolean; // delete: a machine's delete.sh runs (ADR-010 §8.4.5)
+  blueprint: boolean; // validate: the ADR-027 blueprint check (#674)
+  repo?: string; // validate --blueprint: one repository's catalogue
   lockdown: boolean; // modify: run the module's lockdown.sh (ADR-010 §8.4.4)
   dryRun: boolean; // modify --set instance=: preview the rename (#566)
   // list --resolution: which of the three tracking paths locates each module (#460)
@@ -306,6 +322,7 @@ function parseOpts(args: string[]): Opts {
     archive: false,
     remove: false,
     decommission: false,
+    blueprint: false,
     lockdown: false,
     dryRun: false,
     resolution: false,
@@ -344,6 +361,10 @@ function parseOpts(args: string[]): Opts {
       o.apply = true;
     } else if (a === "--allow-fork") {
       o.allowFork = true;
+    } else if (a === "--blueprint") {
+      o.blueprint = true;
+    } else if (a === "--repo") {
+      o.repo = next();
     } else if (a === "--force") {
       o.force = true;
     } else if (a === "--allow-disruption") {
@@ -697,7 +718,77 @@ function readDeclaredRepositories(
   }
 }
 
+// ── validate --blueprint (ADR-027, #674) ───────────────────────────────
+// Module SOURCE directories against the blueprint. Three ways to say which:
+// --repo PATH (every module in that repository's catalogue — what the release
+// boundary runs), a
+// module name or a directory per argument, or nothing (every module of every
+// repository site.json registers).
+function cmdBlueprint(opts: Opts): number {
+  const fs = realBlueprintFs;
+  const targets: BlueprintTarget[] = [];
+  let schema: SchemaFacts | null;
+  const notes: string[] = [];
+  if (opts.repo) {
+    const root = opts.repo.replace(/\/+$/, "");
+    const r = repoTargets(root, repoCatalogFile(root, ""), fs);
+    if (r.problem) die(r.problem);
+    targets.push(...r.targets);
+    // The repository's own schemas, composed as they stand in the tree — not a
+    // site's cache, which describes whatever that site last installed.
+    const composed = composeFields(join(root, "src", "foundation"), join(root, ".no-site-config"));
+    schema = schemaFacts(composed.schema.fields as Record<string, unknown> | undefined, [join(root, "src", "foundation", "schemas")]);
+  } else {
+    schema = schemaFacts(
+      loadModuleFields(opts.configDir) as Record<string, unknown>,
+      siteRepositories(opts.configDir).map((r) => join(r.path, "src", "foundation", "schemas")),
+    );
+    if (opts.rest.length === 0) {
+      for (const repo of siteRepositories(opts.configDir)) {
+        if (!repo.path) continue;
+        const r = repoTargets(repo.path, repoCatalogFile(repo.path, repo.catalog), fs);
+        if (r.problem) notes.push(`${repo.name}: ${r.problem}`);
+        targets.push(...r.targets);
+      }
+    }
+    for (const arg of opts.rest) {
+      if (fs.isDir(arg)) {
+        const t = dirTarget(arg.replace(/\/+$/, ""), fs);
+        if (!t) die(`${arg}: no <dir>.json, and not exactly one module JSON, in that directory`);
+        targets.push(t);
+        continue;
+      }
+      const hit = resolveViaCatalog(opts.configDir, arg);
+      const dir = hit?.moduleJson ? dirname(hit.moduleJson) : getModuleDir(opts.configDir, arg);
+      if (!dir) die(`module '${arg}' is in no registered catalogue and not deployed with a moduleSource`);
+      const t = dirTarget(dir, fs);
+      if (!t) die(`${dir}: no module JSON found`);
+      targets.push({ ...t, name: arg });
+    }
+  }
+  if (!schema) notes.push("no field schema available — the two fields.json rules are skipped");
+
+  const findings = targets.flatMap((t) => checkModule(t, fs, schema));
+  const errors = findings.filter((f) => f.severity === "error").length;
+  const warnings = findings.length - errors;
+  if (opts.json) {
+    info(JSON.stringify({ modules: targets.map((t) => t.name), findings, errors, warnings, notes }, null, 2));
+    return errors > 0 ? 1 : 0;
+  }
+  for (const n of notes) warn(n);
+  for (const f of findings) {
+    if (f.severity === "error") console.error(`${RD}[Error]${CL} ${f.module}: ${f.message}`);
+    else warn(`${f.module}: ${f.message}`);
+  }
+  const summary = `${targets.length} module(s), ${errors} error(s), ${warnings} warning(s)`;
+  if (errors > 0) die(`blueprint FAILED: ${summary}`);
+  info(`${GN}blueprint ok${CL} (${summary})`);
+  return 0;
+}
+
 function cmdValidate(opts: Opts): number {
+  if (opts.blueprint) return cmdBlueprint(opts);
+  if (opts.repo) die("--repo belongs to validate --blueprint");
   const name = opts.rest[0];
   let mods;
   if (name) {

@@ -970,7 +970,9 @@ if [[ -f "$UNIT_TSCONFIG" ]]; then
         ok "TypeScript unit tests compile"
         # tsconfig rootDir is the tappaas-cicd root (shared lib/ts base), so the
         # compiled tree mirrors manager/module-manager/ under dist-test.
-        for unit in module inspect reconcile cluster manifest resolve drift report modify compose; do
+        # Every test/unit/*.test.ts, not a hand-kept list: a list is how
+        # cli.test.ts went unrun, and how a new file would (#674).
+        for unit in $(cd "${HERE}/test/unit" && ls *.test.ts | sed 's/\.test\.ts$//'); do
             if run_ts "node '${DIST_TEST}/manager/module-manager/test/unit/${unit}.test.js'" >/dev/null 2>&1; then
                 ok "TypeScript ${unit} unit tests pass"
             else

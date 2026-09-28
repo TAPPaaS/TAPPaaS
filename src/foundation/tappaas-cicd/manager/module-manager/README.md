@@ -37,6 +37,7 @@ later retire phase).
 | `module resolve <m>` | `src/resolve.ts` | **desired state**: the config *plus* the schema defaults it does not declare (`--json`) |
 | `module drift <m>` | `src/converge.ts` | that desired state **vs the live guest**, per service. `--service cluster:vm --json` prints the record a converge applies |
 | `module validate [<m>]` | scope/source lint | all modules, or one; `--allow-fork` |
+| `module validate --blueprint [<m>\|<dir>]...` | the ADR-027 blueprint check on module **source** directories | every registered repository's modules, the named ones, or `--repo PATH` (what the release boundary runs) |
 | `module add <m>` | `install-module.sh` | create + provision; `--instance NAME` names the instance (ADR-026 D6.4) |
 | `module adopt <address>` | `adopt-module.sh` | a machine that already runs becomes a module (ADR-026 D8.1); nothing on it is changed |
 | `module update <m>` | `update-module.sh` | **release update** (snapshot + test + 3-way merge) — what the sweep runs (#655) |
@@ -140,6 +141,39 @@ operator saw it on **every** update of an affected module, in a sweep log, about
 a module-authoring decision they could neither act on nor silence. The merge
 still classifies the field the same way and still keeps it at top level; it just
 no longer says so out loud (`TAPPAAS_DEBUG=1` if you want the per-merge note).
+
+### `validate --blueprint` — is the module made of what a module is made of? (ADR-027)
+
+Plain `validate` lints **deployed** configs. `--blueprint` reads a module's **source**
+directory and checks the set [ADR-027](../../../../../docs/ADR/ADR-027%20-%20Module%20Blueprint.md)
+defines — a missing MUST is an **error**, a missing SHOULD a **warning**, the same for
+every module whatever its stack or source:
+
+| Where | MUST (error) | SHOULD (warning) |
+|---|---|---|
+| module | `<module>.json`, `install.sh`, `update.sh`, `README.md` and `INSTALL.md` (ADR-013); `fields.json` when the module declares a field no schema defines; `services/<s>/` for every service in `provides` | `test.sh` |
+| `services/<s>/` | `install-service.sh`, `update-service.sh`, `delete-service.sh`, `README.md`; `fields.json` when a field names `<module>:<s>` in `usedBy` | `test-service.sh` |
+
+A `services/<s>/` for a service the module does not declare in `provides` is a warning:
+it is dead, or the declaration is missing — and a consumer's dependency on an
+undeclared service is refused at install. Test fixtures (`stack: test`) are not
+modules and are skipped; `00-Template` is checked like any module, so the template
+cannot drift from the rule. A module whose fields have their own
+`schemas/<module>-fields.json` (the satellite) is not asked for a `fields.json`.
+
+```bash
+module-manager validate --blueprint                       # every module of every registered repository
+module-manager validate --blueprint ~/TAPPaaS/src/apps/myapp
+module-manager validate --blueprint --repo ~/TAPPaaS      # one repository's catalogue — what the release boundary runs
+```
+
+It exits 1 on any error. It **never** runs at install time: the person installing a
+module is not the person who can fix it, so an incomplete module still installs. It
+runs at every **release boundary** instead (`tappaas-train`, once a fortnight, on the
+commit about to be promoted), together with the check that every service README's
+generated field section matches its `fields.json`: a missing MUST stops the boundary,
+and the result is recorded in `release-train.json`
+([RELEASE-TRAIN.md](../../RELEASE-TRAIN.md#the-module-blueprint)).
 
 ### Renaming an instance: `modify --set instance=<new>` (#566)
 
@@ -284,6 +318,7 @@ says so when it does not), and the `environment reconcile` preview passes
 module-manager module list
 module-manager module show nextcloud --json
 module-manager module validate --allow-fork
+module-manager validate --blueprint --repo ~/TAPPaaS
 module-manager module add nextcloud --environment acme
 module-manager module reconcile nextcloud                # report: fields + dependency services
 module-manager module reconcile nextcloud --no-services   # report: fields only
