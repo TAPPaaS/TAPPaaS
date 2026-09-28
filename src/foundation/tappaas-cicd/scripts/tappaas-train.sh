@@ -26,7 +26,8 @@
 #   tappaas-train fault --resolved <commit>  clear it — the commit must be on main
 #
 # One boundary is one command: move the pin, prove it here, land it on main,
-# then promote. Phases 1-2 take hours (a sweep that reboots nodes, then a deep
+# then promote. Its preflight also holds every module to the blueprint
+# (ADR-027 D5): a missing MUST refuses the boundary, and the result is recorded. Phases 1-2 take hours (a sweep that reboots nodes, then a deep
 # test), so a run that stops half way is picked up with --resume rather than
 # restarted. Nothing is promoted unless the deep test passed — a promotion is
 # never the consolation prize for a failed test.
@@ -219,6 +220,16 @@ cmd_status() {
         error "  ✗ ${ANCESTRY_WHY}"; blocks=$((blocks+1))
     fi
 
+    blueprint_check
+    if [[ "${BP_OK}" == "yes" ]]; then
+        info "  ${GN}✓${CL} $(blueprint_line)"
+    else
+        error "  ✗ $(blueprint_line)"
+        local w; for w in ${BP_WHY+"${BP_WHY[@]}"}; do error "      ${w}"; done
+        error "      see: ${BIN_DIR}/module-manager validate --blueprint --repo ${REPO_DIR}"
+        blocks=$((blocks+1))
+    fi
+
     local fault; fault="$(jq -r '.fault.what // empty' "${STATE_FILE}" 2>/dev/null)"
     if [[ -n "${fault}" ]]; then
         error "  ✗ a staging fault blocks promotion: ${fault}"
@@ -294,6 +305,72 @@ cmd_init() {
     return 0
 }
 
+# ── the module blueprint (ADR-027 D5, #674) ──────────────────────────
+# Every module in this repository is checked against what a module is made of,
+# on the code the boundary is about to promote, once a fortnight — here rather
+# than on every push. A missing MUST is BROKEN: a release does not go out with
+# a module that is not a whole module. Warnings (a missing test) are reported
+# and never block. Community is not checked: this train promotes TAPPaaS only.
+#
+# Also checked: every service README's generated field section matches its
+# fields.json (ADR-027 D3) — a stale one is BROKEN too, since regenerating is
+# one command. Sets BP_OK (yes|no|unchecked), BP_ERRORS, BP_WARNINGS,
+# BP_READMES (ok|stale|unchecked), BP_COMMIT and BP_WHY (what to fix).
+BP_OK=""; BP_ERRORS=0; BP_WARNINGS=0; BP_READMES=""; BP_COMMIT=""; BP_WHY=()
+blueprint_check() {
+    BP_OK=""; BP_ERRORS=0; BP_WARNINGS=0; BP_READMES="unchecked"; BP_WHY=()
+    BP_COMMIT="$(g rev-parse --short=12 HEAD 2>/dev/null || true)"
+    local mm="${BIN_DIR}/module-manager" out
+    if [[ ! -x "${mm}" ]]; then
+        BP_OK="unchecked"; BP_WHY+=("module-manager not found at ${mm}")
+        return 0
+    fi
+    out="$("${mm}" validate --blueprint --repo "${REPO_DIR}" --json 2>/dev/null || true)"
+    if ! jq -e '(.errors | type) == "number"' >/dev/null 2>&1 <<<"${out}"; then
+        BP_OK="unchecked"; BP_WHY+=("module-manager validate --blueprint gave no report")
+        return 0
+    fi
+    BP_ERRORS="$(jq -r '.errors' <<<"${out}")"
+    BP_WARNINGS="$(jq -r '.warnings // 0' <<<"${out}")"
+    local line
+    while IFS= read -r line; do
+        [[ -n "${line}" ]] && BP_WHY+=("${line}")
+    done < <(jq -r '[.findings[]? | select(.severity == "error") | "\(.module): \(.path)"] | .[:8][]' <<<"${out}")
+    (( BP_ERRORS <= 8 )) || BP_WHY+=("… and $(( BP_ERRORS - 8 )) more")
+    # The generator composes from THIS tree only (no site config), so another
+    # repository's READMEs cannot block a TAPPaaS release.
+    local gen="${REPO_DIR}/src/foundation/tappaas-cicd/scripts/gen-service-fields-doc.py"
+    if [[ -f "${gen}" ]]; then
+        if CONFIG_DIR=/nonexistent python3 "${gen}" --check >/dev/null 2>&1; then
+            BP_READMES="ok"
+        else
+            BP_READMES="stale"
+            BP_WHY+=("service README field sections are out of date — run: CONFIG_DIR=/nonexistent python3 ${gen}")
+        fi
+    fi
+    if (( BP_ERRORS == 0 )) && [[ "${BP_READMES}" != "stale" ]]; then BP_OK="yes"; else BP_OK="no"; fi
+    return 0
+}
+
+# One line for status and preflight alike.
+blueprint_line() {
+    case "${BP_OK}" in
+        yes)       printf 'module blueprint met at %s (%s warning(s))' "${BP_COMMIT}" "${BP_WARNINGS}" ;;
+        no)        printf 'module blueprint NOT met at %s: %s missing MUST(s)%s' "${BP_COMMIT}" "${BP_ERRORS}"                        "$([[ "${BP_READMES}" == "stale" ]] && printf ', service READMEs stale')" ;;
+        *)         printf 'module blueprint could not be checked' ;;
+    esac
+}
+
+# The boundary keeps what it found: which commit met the blueprint, per release.
+record_blueprint() {
+    local tmp="${STATE_FILE}.tmp.$$"
+    [[ -f "${STATE_FILE}" ]] || return 0
+    jq --arg c "${BP_COMMIT}" --arg ok "${BP_OK}" --argjson e "${BP_ERRORS}" --argjson w "${BP_WARNINGS}" \
+       --arg r "${BP_READMES}" --argjson at "$(now_epoch)" \
+       '.blueprint = {commit: $c, checkedAt: $at, ok: ($ok == "yes"), result: $ok, errors: $e, warnings: $w, readmes: $r}' \
+       "${STATE_FILE}" > "${tmp}" && mv -f "${tmp}" "${STATE_FILE}" || rm -f "${tmp}"
+}
+
 # ── preflight (design: phase 0) ──────────────────────────────────────
 # Every one of these is a refusal, not a warning: a release script that warns
 # and proceeds is one nobody reads the output of.
@@ -354,6 +431,13 @@ preflight() {
 
     local fault; fault="$(jq -r '.fault.what // empty' "${STATE_FILE}" 2>/dev/null)"
     [[ -z "${fault}" ]] || PF_BROKEN+=("an unresolved staging fault blocks promotion: ${fault}")
+
+    # A release does not go out with a module that is not a whole module.
+    blueprint_check
+    if [[ "${BP_OK}" != "yes" ]]; then
+        local w; PF_BROKEN+=("$(blueprint_line) — module-manager validate --blueprint --repo ${REPO_DIR}")
+        for w in ${BP_WHY+"${BP_WHY[@]}"}; do PF_BROKEN+=("    ${w}"); done
+    fi
 
     local started; started="$(soak_started)"
     if [[ -z "${started}" ]]; then
@@ -671,6 +755,9 @@ cmd_boundary() {
     echo
     info "${BOLD}Boundary preflight${CL}"
     report_preflight
+    # Kept whatever the verdict, so the record says which commit met — or did
+    # not meet — the blueprint at each boundary. A dry run records nothing.
+    [[ "${DRY_RUN}" == "1" ]] || record_blueprint
     local forced="${FORCE_BOUNDARY}"
     if (( ${#PF_BROKEN[@]} > 0 )); then
         error "Refusing: the train is not sound. --force-boundary does not lift these."

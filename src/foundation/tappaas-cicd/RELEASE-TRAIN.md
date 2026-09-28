@@ -232,8 +232,30 @@ Every one of these is a refusal, not a warning:
 - a sweep is running here or on the staging site;
 - either site's last sweep failed — a new pin must not be blamed for a failure that predates it;
 - an unresolved staging fault;
+- a module in this repository is missing a MUST of the blueprint (ADR-027), or a service
+  README's field section no longer matches its `fields.json` — see *The module blueprint* below;
 - the channels have diverged (`stable` ⊆ `staging` ⊆ `main` no longer holds);
 - a site is pointed at a channel *behind* the commit it already runs.
 
 The soak being incomplete is the one condition that resolves itself with time, so it is the one
 `--force-boundary` can override.
+
+## The module blueprint
+
+Once a fortnight, not on every push: the boundary checks every module in this repository against
+the blueprint ([ADR-027](../../../docs/ADR/ADR-027%20-%20Module%20Blueprint.md)) on the exact commit
+it is about to promote, with `module-manager validate --blueprint --repo ~/TAPPaaS`, and checks
+that every service README's generated field section matches its `fields.json`. A missing MUST or
+a stale README blocks the boundary, and `--force-boundary` does not lift it. Missing SHOULDs (a
+module without a test) are counted and never block. Community is not checked: the train promotes
+TAPPaaS only.
+
+- **`status`** runs the same check and prints it — which modules, which files — so a gap shows
+  during the fortnight rather than on boundary day. It records nothing.
+- **`boundary`** records the result in `~/config/release-train.json` under `.blueprint`: the
+  commit checked, when, whether it passed, and the error and warning counts. A dry run records
+  nothing. That file is in the mothership's config backup, so each release keeps a record of the
+  commit that met the blueprint.
+- To fix a finding before the boundary, run the check yourself — it is read-only:
+  `module-manager validate --blueprint --repo ~/TAPPaaS`, or for one module,
+  `module-manager validate --blueprint ~/TAPPaaS/src/apps/<module>`.

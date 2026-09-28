@@ -68,6 +68,7 @@ release script nobody reads the output of.
 | no sweep active here **or** on the staging site | a sweep mid-flight is reading the branch this is about to move |
 | both sites' `last-update-result.json` is `ok` | never promote on top of an estate that is already failing — the new pin would be blamed for it |
 | **no unresolved staging fault recorded** | ADR-028 D9's rule; see below |
+| every module meets the blueprint: no missing MUST, every service README's field section current (ADR-027 D5, #674) | a release does not go out with a module that is not a whole module. Checked here, on the commit about to be promoted, rather than on every push; recorded in `release-train.json` `.blueprint` |
 | `stable` ⊆ `staging` ⊆ `main` (each an ancestor of the one above) | the train is fast-forward-only; if they have diverged, something was pushed sideways into a channel and a human must look |
 | no site is pointed at a channel **behind the commit it already runs** | switching a live site to an older ref silently removes code it depends on. The migration floor does not catch this: a pure code difference changes no migration number (observed while putting makerfloss on `staging`, 2026-09-23) |
 | the soak is complete (≥ the boundary interval since the last promotion) | promoting early silently converts staging from a soak into a formality; `--force-boundary` overrides, and says so in the record |

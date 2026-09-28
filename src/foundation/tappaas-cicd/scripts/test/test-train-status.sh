@@ -58,8 +58,20 @@ EOF
         > "${TMP}/cfg/site.json"
 }
 
+# The module blueprint (ADR-027, #674) is checked by module-manager, which a
+# fixture site does not have: a stub answers with the report in FAKE_BLUEPRINT
+# (default: every module whole), so each test says what the check found.
+mkdir -p "${TMP}/bin"
+cat > "${TMP}/bin/module-manager" <<'STUB'
+#!/usr/bin/env bash
+echo "$*" >> "${FAKE_MM_LOG:-/dev/null}"
+clean='{"modules":["a"],"findings":[],"errors":0,"warnings":0}'
+printf '%s\n' "${FAKE_BLUEPRINT:-${clean}}"
+STUB
+chmod +x "${TMP}/bin/module-manager"
+
 run() {  # sets OUT/RC
-    OUT="$(TAPPAAS_REPO_DIR="${TMP}/w" TAPPAAS_CONFIG_DIR="${TMP}/cfg" \
+    OUT="$(TAPPAAS_REPO_DIR="${TMP}/w" TAPPAAS_CONFIG_DIR="${TMP}/cfg" TAPPAAS_BIN_DIR="${TMP}/bin" \
            TAPPAAS_TRAIN_NOW="${FAKE_NOW:-}" "${TRAIN}" "$@" --no-fetch 2>&1)"
     RC=$?
 }
@@ -154,6 +166,31 @@ FAKE_NOW=$(( 1790000000 + 20*86400 )) run boundary --force-boundary
 [[ "${RC}" -ne 0 && "${OUT}" == *"does not lift these"* ]] \
     && ok "a diverged channel is refused even with --force-boundary" \
     || bad "force lifted a BROKEN check: ${OUT}"
+
+echo "── the module blueprint gates a boundary (ADR-027 D5, #674) ──"
+make_train 3 2
+FAKE_NOW=1790000000 run init
+BAD='{"modules":["coturn"],"findings":[{"module":"coturn","severity":"error","path":"services/turn/README.md","message":"missing"},{"module":"coturn","severity":"warning","path":"test.sh","message":"missing"}],"errors":1,"warnings":1}'
+FAKE_BLUEPRINT="${BAD}" FAKE_NOW=$(( 1790000000 + 20*86400 )) run status
+[[ "${OUT}" == *"module blueprint NOT met"* && "${OUT}" == *"coturn: services/turn/README.md"* ]] \
+    && ok "status names the module and the missing MUST" || bad "status did not report the blueprint: ${OUT}"
+[[ "${OUT}" == *"Not promotable"* ]] && ok "…and a missing MUST makes the train not promotable" || bad "blueprint did not block status"
+[[ "$(jq -r '.blueprint // "none"' "${TMP}/cfg/release-train.json")" == "none" ]] \
+    && ok "status records nothing" || bad "status wrote the blueprint record"
+FAKE_BLUEPRINT="${BAD}" FAKE_NOW=$(( 1790000000 + 20*86400 )) run boundary --force-boundary
+[[ "${RC}" -ne 0 && "${OUT}" == *"does not lift these"* && "${OUT}" == *"blueprint NOT met"* ]] \
+    && ok "a missing MUST refuses the boundary, even with --force-boundary" || bad "the blueprint did not block: ${OUT}"
+[[ "$(jq -r '.blueprint.ok, .blueprint.errors' "${TMP}/cfg/release-train.json" | tr '\n' ' ')" == "false 1 " ]] \
+    && ok "the boundary records what it found, pass or fail" || bad "blueprint not recorded: $(jq -c .blueprint "${TMP}/cfg/release-train.json")"
+FAKE_MM_LOG="${TMP}/mm.log" FAKE_NOW=$(( 1790000000 + 20*86400 )) run status
+grep -q -- "validate --blueprint --repo ${TMP}/w --json" "${TMP}/mm.log" \
+    && ok "the check runs on this repository only — TAPPaaS, not Community" || bad "module-manager called as: $(cat "${TMP}/mm.log")"
+[[ "${OUT}" == *"module blueprint met"* ]] && ok "a clean report is shown as met" || bad "a clean report not shown as met"
+rm -f "${TMP}/bin/module-manager.off"; mv "${TMP}/bin/module-manager" "${TMP}/bin/module-manager.off"
+FAKE_NOW=$(( 1790000000 + 20*86400 )) run boundary --dry-run --force-boundary
+[[ "${RC}" -ne 0 && "${OUT}" == *"could not be checked"* ]] \
+    && ok "a blueprint that cannot be checked is not a pass" || bad "a missing module-manager passed: ${OUT}"
+mv "${TMP}/bin/module-manager.off" "${TMP}/bin/module-manager"
 
 echo "── promotion is fast-forward only, and in order ──"
 make_train 3 2
@@ -328,7 +365,7 @@ STUB
 chmod +x "${TMP}/bin/nix"
 
 run_to() {  # phase 1 for real, everything else already done
-    OUT="$(PATH="${TMP}/bin:${PATH}" TAPPAAS_REPO_DIR="${TMP}/w" TAPPAAS_CONFIG_DIR="${TMP}/cfg" \
+    OUT="$(PATH="${TMP}/bin:${PATH}" TAPPAAS_BIN_DIR="${TMP}/bin" TAPPAAS_REPO_DIR="${TMP}/w" TAPPAAS_CONFIG_DIR="${TMP}/cfg" \
            TAPPAAS_TRAIN_NOW="${FAKE_NOW:-}" "${TRAIN}" "$@" --no-fetch 2>&1)"
     RC=$?
 }
@@ -430,6 +467,7 @@ setup_prove() {
     # update-module.sh: the guest-first step.
     printf '#!/usr/bin/env bash\nexit 0\n' > "${TMP}/bin2/update-module.sh"
     chmod +x "${TMP}/bin2/update-module.sh"
+    cp "${TMP}/bin/module-manager" "${TMP}/bin2/module-manager"   # the blueprint stub (#674)
     # Every phase runs here: 1 moves the pin, 2 proves it, 3 lands it and puts
     # the site back on main. The declaration's round trip is the point.
     jq '.boundary.phasesDone = []' "${TMP}/cfg/release-train.json" > "${TMP}/x" \
