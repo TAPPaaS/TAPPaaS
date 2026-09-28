@@ -1,7 +1,8 @@
 {
   "description": "TAPPaaS template VM",
   "kind": "vm",
-  "version": "0.5",
+  "version": "0.1.0",
+  "status": "Development",
   "stack": "template",
   "vmname": "template",
   "vmid": 999,
@@ -11,7 +12,9 @@
     "cluster:ha",
     "templates:nixos"
   ],
-  "provides": [],
+  "provides": [
+    "myservice"
+  ],
   "config": {
     "cluster:vm": {
       "bridge0": "lan",

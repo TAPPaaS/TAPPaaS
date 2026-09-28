@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 #
-# TAPPaaS NixOS Template Service - Delete
+# templates:nixos delete-service
 #
-# Removes NixOS template configuration for a consuming module.
+# Nothing to remove, deliberately: everything this service does — applying and
+# updating the consumer's OS — happens inside the consumer's own VM, which
+# cluster:vm deletes along with the module. Nothing lives on the provider side.
+# (ADR-027 D3 requires the file; it says so here rather than being absent.)
 #
 # Usage: delete-service.sh <module-name>
-#
 
 set -euo pipefail
-
-echo "templates:nixos delete-service called for module: ${1:-unknown} (not yet implemented)"
+echo "templates:nixos: nothing to remove for the module — the OS lives in its own VM, deleted with it"
 exit 0

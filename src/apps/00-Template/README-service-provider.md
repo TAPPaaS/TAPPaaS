@@ -5,14 +5,17 @@ and never need this file. Read it only if your module *provides* something other
 modules declare — a `<yourmodule>:<service>` coordinate.
 
 A provider service is a directory `services/<service>/` holding the lifecycle
-scripts other modules' installs and converges call:
+scripts other modules' installs and converges call. `services/myservice/` in this
+template is one, stubbed; `module-manager validate --blueprint` checks the set
+(ADR-027 D3):
 
 | Script | Called when | Required |
 |---|---|---|
 | `install-service.sh <consumer>` | a consumer is installed, or gains this dependency | yes |
 | `update-service.sh <consumer>` | every converge (`module modify`, `reconcile --apply`) | **yes** — a service that cannot converge is a contract violation `test.sh` catches |
 | `delete-service.sh <consumer>` | a consumer is removed, or drops this dependency | yes |
-| `test-service.sh <consumer>` | `module test`, and the read-only drift report | yes |
+| `test-service.sh <consumer>` | `module test`, and the read-only drift report | should — its absence is a warning |
+| `README.md` | — | yes — what a consumer gets and must declare |
 | `fields.json` | — | only if your service **owns declared fields** (below) |
 | `report-service.sh <consumer>` | the drift computation | only if some field is applied per-field (below) |
 

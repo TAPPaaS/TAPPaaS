@@ -31,6 +31,10 @@ mv README-template.md README.md
 mv template.json myapp.json        # + template.nix -> myapp.nix, or delete it
 ```
 
+The copied scripts are stubs: each warns that it has not been implemented until you
+replace it. `services/myservice/` is a stubbed service — rename it if your module provides
+one, otherwise delete `services/` and the `provides` entry in `myapp.json`.
+
 Edit `myapp.json` — at minimum a free `vmid`, sizing (`cores`, `memory`, `diskSize`)
 and the zone (`zone0`, typically `srv`), and set `stack` to what the module is for
 (the values are listed in [module-fields.json](../../foundation/schemas/module-fields.json)).
@@ -89,6 +93,16 @@ The contract and machinery behind it:
 A finished module is a **good platform citizen**: it updates unattended, its tests pass,
 its data is backed up, it reports into health, and it carries its own `README.md` (what
 it is) and `INSTALL.md` (what automation can't do for you).
+
+Check it against the blueprint ([ADR-027](../../../docs/ADR/ADR-027%20-%20Module%20Blueprint.md))
+before you contribute — the same check the release boundary runs on the official repository
+every fortnight, where a missing required file stops the release:
+
+```bash
+module-manager validate --blueprint ~/TAPPaaS/src/apps/myapp
+```
+
+A missing required file is an error, a missing test a warning. It never stops an install.
 
 Then contribute it — via pull request to
 [TAPPaaS](https://codeberg.org/TAPPaaS/TAPPaaS), a community repository, or keep it

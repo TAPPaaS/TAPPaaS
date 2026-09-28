@@ -6,7 +6,7 @@
 
 ## Fields
 
-`nextcloud:fileservice` owns **1** declared field(s). Each table below carries the field's full definition and, where the service applies it, its ADR-020 change semantics.
+`nextcloud:fileservice` owns **2** declared field(s). Each table below carries the field's full definition and, where the service applies it, its ADR-020 change semantics.
 
 ### `connector`
 
@@ -16,6 +16,7 @@ The Nextcloud integration this consumer provides. update-service.sh re-applies '
 |---|---|
 | Type | `string` |
 | Default | *(none)* |
+| Allowed values | `onlyoffice` — Document editor (euro-office): DocumentServerUrl/StorageUrl + JWT into the onlyoffice app.<br>`talk` — TURN/STUN relay (coturn): the shared TURN secret and the coturn turnHost into Talk's stun/turn servers (/etc/s<br>`hpb` — Talk High-Performance Backend (nextcloud-hpb): the signaling secret and wss:// URL into Talk's signaling serve |
 | Format | `^(onlyoffice|talk|hpb)$` |
 | Example | `onlyoffice` |
 | Required by | *(none)* |
@@ -24,6 +25,24 @@ The Nextcloud integration this consumer provides. update-service.sh re-applies '
 | Apply mode | `reconcile` |
 
 **Why this change class.** Which connector the consumer is. update-service.sh reconciles the onlyoffice wiring on every run; changing the value changes what that reconcile does, with no guest downtime.
+
+### `nextcloudPublicUrl`
+
+Nextcloud's PUBLIC base URL (https://<proxyDomain>), stamped into the consumer's deployed config by nextcloud:fileservice so the consumer's .nix can read it from its companion JSON. The HPB's signaling server validates Talk against this exact URL (an internal name is rejected with invalid_backend).
+
+| Attribute | Value |
+|---|---|
+| Type | `string` |
+| Default | `<derived: https://<Nextcloud proxyDomain>>` |
+| Example | `https://nextcloud.example.com` |
+| Required by | *(none)* |
+| Used by | `nextcloud:fileservice` |
+| Change class | `in-place` |
+| Apply mode | `reconcile` |
+
+**About the field.** Stamped, never authored. Re-derived on every update of the consumer.
+
+**Why this change class.** A fact about the provider, refreshed on every converge.
 
 <!-- END GENERATED FIELDS -->
 

@@ -3,11 +3,11 @@
 | | |
 |---|---|
 | **Status** | **Proposed** (2026-09-20) |
-| **Version** | 0.4 |
+| **Version** | 0.5 |
 | **Date** | 2026-09-20 |
 | **Author** | Lars Rossen |
 | **Related** | **#363** (origin: the artifact set) · **#248** (what `version` and `status` claim — built 2026-09-20) · [ADR-013](<ADR-013 - Documentation Structure and Standards.md>) (**the module's documents** — README, INSTALL, DESIGN, TEST: their audiences and obligation, not restated here) · [ADR-015](<ADR-015 - Community Governance and Contribution Files.md>) (**the contribution files** — AUTHORS and the community-health set: the companion to this ADR, which owns everything a module is made of that is *not* a document) · [ADR-011](<ADR-011 - SBOM Governance.md>) (the SBOM this blueprint will name once it is accepted) · [ADR-007](<ADR-007 - TAPPaaS Taxonomy.md>) (the module/manager/controller taxonomy and the verb dispatch) · [ADR-020](<ADR-020 - Declared-Field Change Model (validate, drift, modify).md>) (the service scripts and `fields.json` — what `update`, `modify` and `reconcile` do with them) · [ADR-026](<ADR-026 - Managed Machines as Modules.md>) D6 (a module is named by its directory; an instance is not a module) · [ADR-022](<ADR-022 - Workload Ontology.md>) / [ADR-022e](<ADR-022e - Module Scope.md>) (`kind`, `scope`, `management` — and `module.tier` retired in favour of `scope`) · `src/foundation/schemas/README.md` + `module-fields.json` (the field definitions themselves) |
-| **Changelog** | v0.4 (2026-09-27) — D2/D7: `<module>-sbom.json` becomes `<module>-vex.json` (MAY), as ADR-011 v0.5 decided — the inventory is generated per installation, only the triage decisions are authored. · v0.3 (2026-09-20) — Proposed; the answers folded into the decisions they belong to and the question list dropped; `00-Template` ships the stubs D6 describes, and they carry the warning an unimplemented script owes its operator. · v0.2 (2026-09-20) — documents and contribution files handed to ADR-013/ADR-015 and no longer listed here; the service directory gets its own decision (D3); D4 points at the schemas instead of describing fields; `stack: foundation` replaces the retired `tier`; `provisionedBy` dropped for a no-op `install.sh`; `test.sh` is a SHOULD; one severity for every module, with a sweep to clear the estate; the five open questions answered. · v0.1 (2026-09-20) — first draft |
+| **Changelog** | v0.5 (2026-09-28, #674) — the check is built (`module-manager validate --blueprint`) and runs at the **release boundary**, not in CI on every push (D5, amended with the operator): `tappaas-train` refuses a boundary with a missing MUST and records the result. The D5 sweep has landed: every TAPPaaS module passes. Two service scripts are D6 stubs, with their issues; two dead service directories were removed; `templates` now declares the `windows` service its directory always carried. · v0.4 (2026-09-27) — D2/D7: `<module>-sbom.json` becomes `<module>-vex.json` (MAY), as ADR-011 v0.5 decided — the inventory is generated per installation, only the triage decisions are authored. · v0.3 (2026-09-20) — Proposed; the answers folded into the decisions they belong to and the question list dropped; `00-Template` ships the stubs D6 describes, and they carry the warning an unimplemented script owes its operator. · v0.2 (2026-09-20) — documents and contribution files handed to ADR-013/ADR-015 and no longer listed here; the service directory gets its own decision (D3); D4 points at the schemas instead of describing fields; `stack: foundation` replaces the retired `tier`; `provisionedBy` dropped for a no-op `install.sh`; `test.sh` is a SHOULD; one severity for every module, with a sweep to clear the estate; the five open questions answered. · v0.1 (2026-09-20) — first draft |
 
 Every TAPPaaS module is the same shape, so tooling and people can rely on it.
 
@@ -104,7 +104,7 @@ actually runs.
 | `delete-service.sh` | **MUST** | take it away again, leaving nothing behind |
 | `test-service.sh` | **SHOULD** | is this consumer's instance of the service actually working |
 | `fields.json` | **MUST** when the service declares fields | the per-provider manifest (ADR-020), validated by `schemas/service-fields.json` and composed into the module field set |
-| `README.md` | **MUST** | what a consumer gets and what it must declare. Its field section is generated — `scripts/gen-service-fields-doc.py`, checked in CI, so the prose cannot drift from `fields.json` |
+| `README.md` | **MUST** | what a consumer gets and what it must declare. Its field section is generated — `scripts/gen-service-fields-doc.py`, checked at the release boundary (D5), so the prose cannot drift from `fields.json` |
 
 A service may carry more: a `<service>.json` where it needs its own object
 (`network/services/dns`), or a shared helper the scripts source (`nat-common.sh`,
@@ -144,24 +144,37 @@ everyone else than by a lower bar that quietly accepts less.
 
 What protects the user is *where* the check runs, not a weaker rule: **an install is
 never blocked by a missing artifact**, because the person installing a module is not the
-person who can fix it. The check runs in `module-manager validate` and in CI on the
-official repositories, which is where a module is held to the blueprint.
+person who can fix it. The check runs in `module-manager validate --blueprint`, for an
+author at any time, and **at the release boundary** (ADR-028 D9), which is where a module is
+held to the blueprint: once a fortnight, on the exact commit about to be promoted, a missing
+MUST refuses the boundary — `--force-boundary` does not lift it — and the result is recorded in
+`release-train.json`. *(Amended v0.5: v0.4 said "in CI on the official repositories". Once a
+fortnight at the one moment code is promoted costs nothing between releases, and its record
+lives with the release rather than in a CI log nobody reads.)* The boundary checks the
+repository it promotes — TAPPaaS; another repository is held to the same rule by whoever
+promotes it.
 
 Because the standard is uniform, **the estate is swept to meet it** as part of
 implementing this ADR, rather than grandfathered. Done 2026-09-20: the `install.sh` that
 names the bootstrap for `network` and `templates` (D2), and the stub `test.sh` for
 `netbird-client` and `vaultwarden` — which now say in an operator's log that they test
-nothing, instead of being silently absent. Remaining: the 15 service directories missing
-part of their set (D3), and whatever the check reports once it is built. What cannot be
-fixed in the sweep becomes an issue, not an exception in the rule.
+nothing, instead of being silently absent. Done 2026-09-28 (#674), once the check
+existed: the service directories. Eight READMEs written; `delete-service.sh` for the
+three `templates` services, which have nothing to remove and say why; a real
+`test-service.sh` for `coturn:turn`; D6 stubs for `nextcloud:fileservice`'s delete and
+`identity:accessControl`'s test, each with an issue; `coturn/services/vm` and
+`nextcloud-hpb/services/vm` removed — declared by nothing and used by nothing — and
+`windows` added to `templates`' `provides`, without which `windows-server`'s dependency
+on it was refused at install. What cannot be fixed in the sweep becomes an issue, not
+an exception in the rule.
 
 ### D6 — `00-Template` is the blueprint, in files
 
 A new module starts as a copy of `00-Template`, which carries every MUST and SHOULD as a
 working stub: a `<module>.json` with `version: 0.1.0` and `status: Development` (what a
 new module has earned, #248), the scripts of D2, a `services/` with one stubbed service
-per D3, and the documents ADR-013 requires. The blueprint check runs on the template in
-CI, so the template cannot drift from the rule that describes it.
+per D3, and the documents ADR-013 requires. The blueprint check runs on the template at every
+release boundary (D5), so the template cannot drift from the rule that describes it.
 
 **A stub says that it is one.** Each script warns — `install.sh has not been implemented
 for this module … please contact the module's developer` — and its comment block says
@@ -196,11 +209,12 @@ exits 0 (D2). It is not a stub and does not warn.
 - The estate gets measurable, and then gets fixed: the 15 incomplete service directories
   and the two modules without `install.sh` are findings the day the check lands, and the
   D5 sweep is what clears them.
-- One severity for everyone means a community module can fail CI on the same rule as a
+- One severity for everyone means a community module fails the check on the same rule as a
   foundation one. That is the intent; it costs a contributor a stub, and it stops the
   official tree from being the only place the blueprint is true.
-- The check is one more thing to keep true: it runs in CI and in `module-manager
-  validate`, never at install time, so it cannot fail a user's install.
+- The check is one more thing to keep true: it runs at the release boundary and in
+  `module-manager validate --blueprint`, never at install time, so it cannot fail a user's
+  install.
 
 ## Alternatives considered
 
@@ -223,10 +237,11 @@ exits 0 (D2). It is not a stub and does not warn.
 
 - [ ] The executable artifact set (D2) and the service set (D3) are agreed, with the
       obligation level on each.
-- [ ] ADR-015 and this ADR reference each other, and neither restates the other's files.
-- [ ] `00-Template` carries every MUST and SHOULD as a stub, including one service (D6).
-- [ ] `module-manager validate` reports the blueprint per D5, and CI fails an official
-      module missing a MUST.
-- [ ] The sweep has landed: `install.sh` for `network` and `templates`, `test.sh` for the
-      foundation modules lacking one, and the 15 service directories completed.
+- [x] ADR-015 and this ADR reference each other, and neither restates the other's files.
+- [x] `00-Template` carries every MUST and SHOULD as a stub, including one service (D6)
+      — `services/myservice/` (#674).
+- [x] `module-manager validate` reports the blueprint per D5 (`--blueprint`), and the release
+      boundary refuses to promote a module missing a MUST (`tappaas-train`, #674).
+- [x] The sweep has landed: `install.sh` for `network` and `templates`, `test.sh` for the
+      foundation modules lacking one, and the 15 service directories completed (#674).
 - [ ] What the sweep could not fix is an issue, not an exception.

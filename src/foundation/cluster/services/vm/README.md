@@ -110,27 +110,6 @@ RAM allocation in megabytes
 
 **About the field.** Value in MB (e.g., 4096 = 4GB)
 
-**Pending is not applied (#532).** For a running guest that cannot hot-apply the
-change — no `hotplug` line means Proxmox's default, which excludes memory —
-`qm set --memory` is *accepted* and then **held until the guest restarts**.
-`qm config` reports the target from that moment, so "actual" claimed a value the
-guest was not running on, drift saw nothing to do, and the converge reported the
-change applied. Measured on hrossen (vmid 911, 2026-09-26):
-
-| | value |
-|---|---|
-| `qm set 911 --memory 4096` | accepted |
-| `qm config 911` | `memory: 4096` — the target |
-| `info balloon` | `actual=2048` — the guest |
-| `qm pending 911` | `cur memory: 2048` / `new memory: 4096` |
-
-So `report-lib.sh` now builds the live view from `qm pending`'s `cur` lines
-rather than `qm config` (verified: identical key sets, 25/25, so it is a drop-in
-that only differs where something is held), and `converge_apply_set` is followed
-by the optional `converge_pending_fields` callback — anything still held is
-counted **deferred**, not applied, and named in a `DEFERRED:` line the sweep
-collects. A service that defines no callback behaves exactly as before.
-
 ### `cputype`
 
 CPU type emulation for the VM
@@ -350,27 +329,6 @@ Name of the Proxmox/TAPPaaS node where the module should be installed. If null, 
 | Side effects | `ha-repoint` |
 
 **Why this change class.** The ADR-019 bridge. The hook routes HA-vs-non-HA internally: a module that dependsOn cluster:ha has its node drift handled by the HA rule (re-point), a plain module by qm migrate. Live-OK decides whether the migrate needs downtime, so this refuses (exit 10) rather than migrating offline without --force. module-fields.json gives node NO default, so a module that declares none has no desired placement and is left where it runs. update-service.sh instead defaulted it to the FIRST site node, which would silently migrate an undeclared guest back to node 0 after any failover or manual move — a latent hazard that only stayed invisible because the estate's undeclared guests happen to sit on node 0. Expressing no placement is not the same as asking for node 0.
-
-**When the migrate itself fails (#393).** A shared-storage check, a resource
-constraint or an HA lock can refuse the move while the guest carries on serving
-from the node it is already on. That used to be `exit 1` — a hook error, which
-makes the module update Fatal, and under ADR-020 D9 a dependency failure rolls
-the guest back to its pre-update snapshot. A healthy guest therefore lost its
-update because of *where it happened to live*.
-
-So the hook now asks the node where the guest actually is, rather than trusting
-the pre-migrate snapshot in the unit, and splits the two cases:
-
-| after the failed migrate | verdict |
-|---|---|
-| it was running and still is | `exit 11` — deferred, drift stays recorded, run continues, nothing rolled back |
-| it was not running, or the migrate left it down, or the status cannot be read | `exit 1` — a real failure, unchanged |
-
-`exit 11` is its own code rather than a reuse of `10`: nothing here is about
-authorizing downtime, so telling the operator to "rerun with `--force`" would be
-a lie — and unlike `20` it is not refused forever, it simply did not work this
-time. The placement drift is still reported, so the operator resolves it
-deliberately instead of the platform discarding an update over it.
 
 ### `storage`
 
@@ -592,3 +550,50 @@ Built from `bridge1`, `zone1`, `mac1`, `trunks1`.
 **Why this change class.** The optional second NIC. Adding it, or changing its bridge/tag, reboots; a trunk- or MAC-only change applies live. Removing it (bridge1 gone from config while the guest still has net1) is a `qm set --delete net1` and also reboots.
 
 <!-- END GENERATED FIELDS -->
+
+## When the migrate itself fails (#393)
+
+When a `node` change migrates the guest, a shared-storage check, a resource
+constraint or an HA lock can refuse the move while the guest carries on serving
+from the node it is already on. That used to be `exit 1` — a hook error, which
+makes the module update Fatal, and under ADR-020 D9 a dependency failure rolls
+the guest back to its pre-update snapshot. A healthy guest therefore lost its
+update because of *where it happened to live*.
+
+So the hook now asks the node where the guest actually is, rather than trusting
+the pre-migrate snapshot in the unit, and splits the two cases:
+
+| after the failed migrate | verdict |
+|---|---|
+| it was running and still is | `exit 11` — deferred, drift stays recorded, run continues, nothing rolled back |
+| it was not running, or the migrate left it down, or the status cannot be read | `exit 1` — a real failure, unchanged |
+
+`exit 11` is its own code rather than a reuse of `10`: nothing here is about
+authorizing downtime, so telling the operator to "rerun with `--force`" would be
+a lie — and unlike `20` it is not refused forever, it simply did not work this
+time. The placement drift is still reported, so the operator resolves it
+deliberately instead of the platform discarding an update over it.
+
+## Pending is not applied (#532)
+
+For a running guest that cannot hot-apply a `memory` (or other hardware)
+change — no `hotplug` line means Proxmox's default, which excludes memory —
+`qm set --memory` is *accepted* and then **held until the guest restarts**.
+`qm config` reports the target from that moment, so "actual" claimed a value the
+guest was not running on, drift saw nothing to do, and the converge reported the
+change applied. Measured on hrossen (vmid 911, 2026-09-26):
+
+| | value |
+|---|---|
+| `qm set 911 --memory 4096` | accepted |
+| `qm config 911` | `memory: 4096` — the target |
+| `info balloon` | `actual=2048` — the guest |
+| `qm pending 911` | `cur memory: 2048` / `new memory: 4096` |
+
+So `report-lib.sh` now builds the live view from `qm pending`'s `cur` lines
+rather than `qm config` (verified: identical key sets, 25/25, so it is a drop-in
+that only differs where something is held), and `converge_apply_set` is followed
+by the optional `converge_pending_fields` callback — anything still held is
+counted **deferred**, not applied, and named in a `DEFERRED:` line the sweep
+collects. A service that defines no callback behaves exactly as before.
+

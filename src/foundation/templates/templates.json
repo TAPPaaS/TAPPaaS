@@ -8,6 +8,7 @@
   "moduleSource": "/home/tappaas/TAPPaaS/src/foundation/templates",
   "provides": [
     "nixos",
-    "debian"
+    "debian",
+    "windows"
   ]
 }

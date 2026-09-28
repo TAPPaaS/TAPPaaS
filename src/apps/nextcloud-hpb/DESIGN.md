@@ -149,8 +149,9 @@ wire it in again. `dependsOn coturn:turn` supplies the TURN secret and
 - Talk's admin page may warn that this signaling server lacks the feature `changed-users`.
   It is optional; calls work. The warning goes away once a signaling-server release ships
   that feature.
-- `services/vm/*` hooks exist in this module but are unused: `provides` is empty, so nothing
-  depends on `nextcloud-hpb:vm`.
+- The module provides no service. The unused `services/vm/*` hooks it once carried were
+  removed with the ADR-027 blueprint sweep (#674): nothing declared or depended on
+  `nextcloud-hpb:vm`.
 
 ## Related documents
 
