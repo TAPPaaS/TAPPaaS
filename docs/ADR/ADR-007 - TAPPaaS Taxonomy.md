@@ -43,7 +43,7 @@ separate from composition (#171), which @larsrossen asked to keep small and disc
 │ 🏢 SITE  (the physical + admin perimeter — one TAPPaaS)      │
 │   ┌───────────────────────────────────────────────────────┐ │
 │   │ 👥 PEOPLE          📦 APPS          🏠 ENVIRONMENTS    │ │
-│   │ Org→Group→User     tier × source    where apps run     │ │
+│   │ Org→Group→User     scope × source   where apps run     │ │
 │   └───────────────────────────────────────────────────────┘ │
 │   🩺 HEALTH  (lens — observability overlay on all the above) │
 └─────────────────────────────────────────────────────────────┘
@@ -69,7 +69,7 @@ separate from composition (#171), which @larsrossen asked to keep small and disc
 A human? ............................ User             → 007a People
 A legal/family/customer entity? ..... Organization     → 007a People
 A collection of users (RBAC)? ....... Group            → 007a People
-Something that runs? ................ App (tier+source) → 007b Apps
+Something that runs? ................ App (scope+source) → 007b Apps
 A zone / domain / update window? .... Environment      → 007c Environments
 Hardware / ISP / IdP, site-wide? .... Site             → 007d Site
 A status / metric / alarm? .......... Health (lens)    → 007e Health
@@ -80,7 +80,7 @@ A status / metric / alarm? .......... Health (lens)    → 007e Health
 | ADR | Classification domain | Owns |
 |-----|--------|------|
 | [007a](<ADR-007a - People.md>) | 👥 People | Organization → Group → User; types; RBAC primitive |
-| [007b](<ADR-007b - Apps.md>) | 📦 Apps | the `tier` × `source` orthogonal attributes |
+| [007b](<ADR-007b - Apps.md>) | 📦 Apps | the scope × `source` orthogonal attributes (scope from `stack`, ADR-022e) |
 | [007c](<ADR-007c - Environments.md>) | 🏠 Environments | zones, domains, `ownerOrg`, multi-tenant |
 | [007d](<ADR-007d - Site.md>) | 🏢 Site | the perimeter; `site.json`; config split |
 | [007e](<ADR-007e - Health.md>) | 🩺 Health | the cross-cutting lens |
@@ -95,7 +95,7 @@ is the **[glossary](<../../GLOSSARY.md>)** SSOT; the sample JSON files live in e
 This taxonomy **classifies**; it does not define how a unit is **built**. The composition meta-model
 (`Stack ▷ Module ▷ Component ▷ Function ▷ Service`) is **[ADR-009](<ADR-009 - Composition Meta-Model.md>)**
 (tracking issue #171). The two are orthogonal: every **Module** (composition) is *classified* by
-exactly one classification domain here (+ `tier` + `source`). Apply both; never one as a substitute. *Example:*
+exactly one classification domain here (+ scope + `source`; scope from `stack`, ADR-022e). Apply both; never one as a substitute. *Example:*
 the `network` Module (ADR-009; the OPNsense firewall VM, renamed from `firewall` during implementation —
 see 007f) is classified as **Environments** (this ADR); its sub-units are **Components**, not
 classification domains.
@@ -127,7 +127,7 @@ naming, be B1-English, and feel Apple/Ubiquiti-opinionated. This ADR family is t
 | Blast radius — one bad update hits family + business + clients | Multi-tenant outage | Stagger update windows: `dev`→`myhome`→`tappaas`→`mybusiness`→`client-*` |
 | Authentik single point of failure | All Orgs lose SSO | HA Authentik, or accept + document |
 | Community-source apps shown as official | Trust/security | Source badges (🟢/🟡/🔵/⚪); install warning for `community` |
-| Foundation modules marked community | Platform breakage | Lint: `tier: foundation` ⇒ `source: official` (or override) |
+| Foundation modules marked community | Platform breakage | Lint: site-scoped (`stack: foundation`) ⇒ `source: official` (or override) |
 | "Tenant" jargon leaks to UI | User confusion | UI says "Organization"; "tenant" only in architecture docs |
 
 ## Open questions / parking lot

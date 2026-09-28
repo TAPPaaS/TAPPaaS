@@ -9,7 +9,7 @@
 | **Parent** | [ADR-007 Taxonomy (Overview)](<ADR-007 - TAPPaaS Taxonomy.md>) |
 | **Refined by** | [ADR-022c](<ADR-022c - Node and Host.md>) (amends the `node` note) · [ADR-022d](<ADR-022d - Workload Classification.md>) (`kind`) — drafts |
 | **Related** | #320; #297 (module-catalog stack/category); **schema:** `schemas/module-fields.json`; **manager:** `module-manager` (verbs add/modify/delete/list/show/validate); **composition:** [ADR-009](<ADR-009 - Composition Meta-Model.md>) + #171 |
-| **Changelog** | v1.3a (2026-09-17) — header link to the ADR-022c/022d drafts that refine this ADR; no body change. v1.3 — **as-built (2026-06-30):** module configs are **flat** `config/<name>.json` (no `modules/` folder); the foundation `firewall` module was **renamed `network`**; `environment` IS persisted on the *deployed* config (and the deployed name/VM is suffixed `<name>-<env>` for a non-default, non-mgmt environment); `tier:foundation` is enforced as **mgmt-only + single-instance + --force-to-delete**; the manager is `module-manager`. v1.2 — named `module-fields.json` as the App schema; catalog schema → Site-level; acceptance corrected. v1.1 — applied Erik⟷Lars review (CR-04 module=filename; CR-05 sourceMetadata→Site; CR-06/07 drop ownerGroup/environment; CR-03 local→issue) |
+| **Changelog** | v1.4 (2026-09-28) — `tier` retired in favour of scope, derived from `stack` (ADR-022e v1.1, #676): the attribute table, the `tier` section, the combinations grid, the lint rule and the example amended; scope is not single-instance. · v1.3a (2026-09-17) — header link to the ADR-022c/022d drafts that refine this ADR; no body change. v1.3 — **as-built (2026-06-30):** module configs are **flat** `config/<name>.json` (no `modules/` folder); the foundation `firewall` module was **renamed `network`**; `environment` IS persisted on the *deployed* config (and the deployed name/VM is suffixed `<name>-<env>` for a non-default, non-mgmt environment); `tier:foundation` is enforced as **mgmt-only + single-instance + --force-to-delete**; the manager is `module-manager`. v1.2 — named `module-fields.json` as the App schema; catalog schema → Site-level; acceptance corrected. v1.1 — applied Erik⟷Lars review (CR-04 module=filename; CR-05 sourceMetadata→Site; CR-06/07 drop ownerGroup/environment; CR-03 local→issue) |
 
 The **📦 Apps** classification domain. An App = a thing that runs (VM, container, service) with a lifecycle: install,
 update, test, backup, delete. Owned by a Group, lives in one Environment.
@@ -25,20 +25,25 @@ Apps carry **two orthogonal attributes** — never collapsed into one enum (that
 
 | Attribute | Values | Answers |
 |-----------|--------|---------|
-| **`tier`** | `foundation` · `app` | *Can it be uninstalled?* (lifecycle role) |
+| **scope** *(was `tier`)* | `site` · `environment` — derived from `stack` | *Does it belong to the Site or to one Environment?* ([ADR-022e](<ADR-022e - Module Scope.md>)) |
 | **`source`** | `official` · `community` · `private` · `local` | *Where does the catalog entry come from?* (origin & trust) |
 
 > **Open (CR-03 → issue):** the intent of `source: local` — "operational data in markdown" — is under
 > discussion; tracked as a separate issue.
 
-Every App is exactly one cell of the `tier × source` grid — naturally MECE.
+Every App is exactly one cell of the `scope × source` grid — naturally MECE.
 
-### `tier`
+### scope *(amended by ADR-022e — `tier` is retired, #676)*
 
-| Tier | Meaning | Example |
-|------|---------|---------|
-| `foundation` | ships with platform, **mgmt-only + single-instance**, `--force` to delete | `cluster`, `network` (was `firewall`), `identity`, `backup`, `templates`, `logging`, `tappaas-cicd` |
-| `app` | user-installable, freely removable | `openwebui`, `nextcloud`, `vaultwarden` |
+`tier` answered *"Can it be uninstalled?"*, which its own `--force` rule contradicted; what the code
+enforced was whether a module belongs to the Site or to one Environment. That is **scope**
+([ADR-022e](<ADR-022e - Module Scope.md>)), and it is **derived from the module's `stack`**, not
+stated a second time:
+
+| Scope | When | Meaning | Example |
+|------|------|---------|---------|
+| `site` | `stack: foundation` | belongs to the Site, serves every Environment: installed in **mgmt**, `--force` to delete; may have several named instances (ADR-022e D4) | `cluster`, `network` (was `firewall`), `identity`, `backup`, `templates`, `logging`, `tappaas-cicd` |
+| `environment` | any other stack | belongs to one Environment, freely removable | `openwebui`, `nextcloud`, `vaultwarden` |
 
 ### `source`
 
@@ -49,12 +54,12 @@ Every App is exactly one cell of the `tier × source` grid — naturally MECE.
 | `private` | private/customer repo | 🔵 Private |
 | `local` | local dev, not in any catalog | ⚪ Local |
 
-### Valid `tier × source` combinations
+### Valid `scope × source` combinations
 
 | | official | community | private | local |
 |---|---|---|---|---|
-| **foundation** | ✅ normal | 🟡 rare (fork) | ✅ custom platform | ✅ dev |
-| **app** | ✅ normal | ✅ most community apps | ✅ customer-specific | ✅ dev |
+| **site** | ✅ normal | 🟡 rare (fork) | ✅ custom platform | ✅ dev |
+| **environment** | ✅ normal | ✅ most community apps | ✅ customer-specific | ✅ dev |
 
 ## Schema (`config/<name>.json` — flat, one file per deployed module)
 
@@ -66,7 +71,7 @@ Every App is exactly one cell of the `tier × source` grid — naturally MECE.
 ```json
 {
   "displayName": "OpenWebUI",
-  "tier": "app",
+  "stack": "ai",
   "source": "official",
   "version": "0.4.1",
   "vmname": "openwebui", "vmid": 311, "node": "tappaas2",
@@ -76,12 +81,12 @@ Every App is exactly one cell of the `tier × source` grid — naturally MECE.
 }
 ```
 
-Classification fields: `tier`, `source`. Lint rule: `tier: foundation` ⇒ `source: official` (or explicit
-override). A `tier: foundation` module may only be installed into the **`mgmt`** environment, is
-**single-instance**, and needs `--force` to delete.
+Classification: scope (from `stack`) and `source`. Lint rule: site-scoped ⇒ `source: official` (or
+explicit override). A site-scoped module may only be installed into the **`mgmt`** environment and
+needs `--force` to delete; it is not single-instance (ADR-022e D4).
 
 **Schema.** Each module JSON is validated by **`schemas/module-fields.json`** (the App schema); the
-`tier`/`source`/`environment` fields are defined there. The module *catalog* (the registry of all modules)
+`stack`/`source`/`environment` fields are defined there (`tier` is kept only as retired, #676). The module *catalog* (the registry of all modules)
 has a separate schema, `schemas/module-catalog-fields.json` — a Site-level concern (see ADR-007f).
 
 Rules from review: a module's name **is** its `<name>.json` filename — no separate `module` field

@@ -125,9 +125,9 @@ where it would drift from the schema that enforces it.
 Three things about it are the blueprint's business:
 
 1. **It is the only place the module states what it is.** Its classification —
-   `kind` and `scope` (ADR-022, ADR-022e; `module.tier` is retired), `stack` (#463),
-   `source` (ADR-007b) — lives here and, except for `stack`, is never copied into the
-   catalogue.
+   `kind` (ADR-022), `stack` (#463) — which also decides scope (ADR-022e; `module.tier`
+   is retired, #676) — and `source` (ADR-007b) — lives here and, except for `stack`, is
+   never copied into the catalogue.
 2. **`version` and `status` are claims, and they are checked.** They mean what #248
    settled and `validate-module-tier-source.sh` already enforces. This ADR adopts that
    rather than restating it.

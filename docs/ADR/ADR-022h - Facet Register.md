@@ -38,7 +38,7 @@ Enumerations are also copied: `tier` and `source` values live in ADR-007b, `GLOS
 | Zone | where is it on the network? | ADR-014 | module | `zone0` | Accepted |
 | Kind | which unit does it realize? | ADR-022d, ADR-022f | module | `kind` | Draft · Proposed |
 | Operating system | which OS does the system run? | ADR-022f | machine, vm, lxc | `os.family`, `os.id` | Proposed |
-| Scope | Site or Environment? | ADR-022e | module | `scope` (was `tier`) | Proposed |
+| Scope | Site or Environment? | ADR-022e | module | derived from `stack` (was `tier`; no field, #676) | Accepted |
 | Source | where does the catalog entry come from? | ADR-007b | module | `source` | Accepted |
 | Management | does TAPPaaS tooling control it? | ADR-022g | module | `management` | Proposed |
 | Maturity | how ready is it? | ADR-022g | module, catalog entry | `status` (two enumerations today) | Proposed |
@@ -62,7 +62,7 @@ Enumerations are also copied: `tier` and `source` values live in ADR-007b, `GLOS
 ## Migration
 
 - `GLOSSARY.md`: the "Three orthogonal axes" table becomes the register.
-- `validate.ts` and `validate-module-tier-source.sh` read `tier` / `source` values from `module-fields.json`.
+- `validate.ts` and `validate-module-tier-source.sh` read `source` values from `module-fields.json`; scope is derived from `stack` (ADR-022e v1.1), no longer a `tier` enum.
 
 ## Acceptance
 

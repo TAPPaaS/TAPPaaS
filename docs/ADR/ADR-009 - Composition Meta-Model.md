@@ -27,7 +27,7 @@ Technology:   Module (the VM)  ◁hosted-on◁  physical host (tappaas1)
 Artifact:     Implementation  →realizes→  Component/Module   (swappable)
 ```
 
-Every **Module** is classified by exactly one ADR-007 classification domain (+ `tier` + `source`). One model composes,
+Every **Module** is classified by exactly one ADR-007 classification domain (+ scope + `source`; scope is derived from the Module's Stack, ADR-022e). One model composes,
 the other classifies.
 
 ## Terms (selection — full glossary: [GLOSSARY.md](<../../GLOSSARY.md>) §B)
