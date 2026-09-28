@@ -5,7 +5,6 @@
   "stack": "foundation",
   "maintainer": "@TAPPaaS",
   "status": "Production",
-  "tier": "foundation",
   "environment": "mgmt",
   "dependsOn": [],
   "provides": [

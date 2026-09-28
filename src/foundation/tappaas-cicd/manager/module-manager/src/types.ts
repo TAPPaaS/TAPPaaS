@@ -36,7 +36,8 @@ export interface ModuleConfig {
   node?: string | null;
   zone0?: string | null;
   zone1?: string | null;
-  tier?: string | null; // foundation | app  (default app when absent)
+  stack?: string | null; // the one stack (#463); `foundation` makes it site-scoped (ADR-022e)
+  tier?: string | null; // RETIRED (#676): read only to warn, and as moduleScope's fallback for one release
   source?: string | null; // official | community | private | local (default official)
   status?: ModuleStatus | null; // permitted set: MODULE_STATUS_VALUES (validated in validate.ts)
   environment?: string | null;

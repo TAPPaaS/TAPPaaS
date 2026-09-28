@@ -7,7 +7,6 @@
   "releaseDate": "2026-09-19",
   "maintainer": "@larsrossen",
   "status": "Development",
-  "tier": "foundation",
   "source": "official",
   "kind": "machine",
   "os": "debian",

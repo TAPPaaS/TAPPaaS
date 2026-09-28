@@ -1,15 +1,21 @@
 #!/usr/bin/env bash
 #
-# validate-module-tier-source.sh — the classification lint: ADR-007b tier/source,
-# and what a module's maturity claim means (#248).
+# validate-module-tier-source.sh — the classification lint: scope/source
+# (ADR-007b, ADR-022e), and what a module's maturity claim means (#248). The file
+# keeps its historical name; `tier` itself is retired (#676).
 #
-# Validates a module JSON file's `tier` and `source` classification fields:
-#   - `tier`   (mandatory) must be one of: foundation | app
+# Validates a module JSON file's classification:
+#   - scope    DERIVED from `stack` (ADR-022e v1.1): the foundation stack is
+#              site-scoped, anything else environment-scoped. A module with no
+#              `stack` is warned about (it falls back to a retired `tier` for one
+#              release, else to environment).
+#   - `tier`   retired: its presence is warned about, and a `tier` that
+#              contradicts the stack is named as ignored.
 #   - `source` (optional, default 'official') must be one of:
 #                official | community | private | local
-#   - LINT RULE: tier:foundation REQUIRES source:official — a foundation module
-#                from any non-official source is rejected unless --allow-fork is
-#                given (the documented escape hatch for a foundation fork).
+#   - LINT RULE: a site-scoped module REQUIRES source:official — one from any
+#                non-official source is rejected unless --allow-fork is given
+#                (the documented escape hatch for a foundation fork).
 #   - WARN: source:community emits a non-fatal warning (peer-reviewed, not
 #           officially supported) so install can surface it to the operator.
 #
@@ -35,7 +41,7 @@
 #   module.json          path to a module configuration JSON file
 #
 # Options:
-#   --allow-fork         permit tier:foundation with a non-official source
+#   --allow-fork         permit a site-scoped module with a non-official source
 #                        (foundation fork override — ADR-007b)
 #   --quiet              only output errors/warnings
 #   -h, --help           show this help and exit
@@ -67,6 +73,23 @@ fi
 
 command -v jq >/dev/null 2>&1 || die "jq is required but not installed."
 
+# module_scope_of (ADR-022e) lives in the side-effect-free catalog library;
+# common-install-routines.sh sources it, but the stub path above does not.
+if ! declare -F module_scope_of >/dev/null 2>&1; then
+    for _mcl in ${TAPPAAS_CATALOG_LIB:-} /home/tappaas/bin/module-catalog-lib.sh \
+                "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../../lib/module-catalog-lib.sh"; do
+        # An older copy (loaded already, or without the function) must not end
+        # the search: clear its double-source guard and try the next one.
+        [[ -r "${_mcl}" ]] || continue
+        unset _MODULE_CATALOG_LIB_LOADED
+        # shellcheck source=/dev/null
+        . "${_mcl}"
+        declare -F module_scope_of >/dev/null 2>&1 && break
+    done
+    unset _mcl
+fi
+declare -F module_scope_of >/dev/null 2>&1 || die "module-catalog-lib.sh not found (module_scope_of)"
+
 # Resolve the REAL script path (it is symlinked into /home/tappaas/bin), in case
 # a future need arises to locate a sibling schema. readlink -f follows the link.
 _SELF="$(readlink -f "${BASH_SOURCE[0]}")"
@@ -78,19 +101,18 @@ TARGET=""
 ERRORS=0
 WARNINGS=0
 
-readonly VALID_TIERS="foundation app"
 readonly VALID_SOURCES="official community private local"
 # #248: what a module may claim about itself. Deployment states are not here.
 readonly VALID_STATUSES="Development Testing Production Deprecated"
 readonly DEPLOYED_STATUSES="archived external"
 
 usage() {
-    sed -n '2,30p' "$_SELF" | sed 's/^# \{0,1\}//'
+    sed -n '2,49p' "$_SELF" | sed 's/^# \{0,1\}//'
 }
 
 log_info() { [[ "$QUIET" == "false" ]] && info "$@" || true; }
-lint_error() { error "TIER/SOURCE: $*"; ERRORS=$((ERRORS + 1)); }
-lint_warn()  { warn  "TIER/SOURCE: $*"; WARNINGS=$((WARNINGS + 1)); }
+lint_error() { error "SCOPE/SOURCE: $*"; ERRORS=$((ERRORS + 1)); }
+lint_warn()  { warn  "SCOPE/SOURCE: $*"; WARNINGS=$((WARNINGS + 1)); }
 
 parse_args() {
     while [[ $# -gt 0 ]]; do
@@ -124,21 +146,29 @@ main() {
 
     local base
     base="$(basename "$TARGET")"
-    log_info "Linting tier/source: ${TARGET}"
+    log_info "Linting scope/source: ${TARGET}"
 
-    local tier source
+    local stack tier scope source
+    stack="$(jq -r '.stack // empty' "$TARGET")"
     tier="$(jq -r '.tier // empty' "$TARGET")"
+    scope="$(module_scope_of "$TARGET")"
     # source defaults to 'official' when absent (CR-05: normally inferred).
     source="$(jq -r '.source // "official"' "$TARGET")"
 
-    # tier defaults to 'app' when absent (back-compat: untagged/legacy modules +
-    # test fixtures install as apps). An EXPLICIT out-of-range value is still an
-    # error. (New modules should set tier explicitly; this only warns.)
-    if [[ -z "$tier" ]]; then
-        lint_warn "${base}: no 'tier' field — defaulting to 'app' (back-compat; set tier: foundation|app explicitly)"
-        tier="app"
-    elif ! in_set "$tier" "$VALID_TIERS"; then
-        lint_error "${base}: invalid tier '${tier}' (must be one of: ${VALID_TIERS})"
+    # Scope follows the stack (ADR-022e v1.1). Warnings only: a module without a
+    # stack still installs, environment-scoped, and `tier` is read for one more
+    # release so a module JSON that has not dropped it still installs as before.
+    if [[ -z "$stack" ]]; then
+        lint_warn "${base}: no 'stack' — installs as ${scope}-scoped; a module states its stack (#463), and the foundation stack is what makes it site-scoped"
+    fi
+    if [[ -n "$tier" ]]; then
+        local tier_says="environment"
+        [[ "$tier" == "foundation" ]] && tier_says="site"
+        if [[ -n "$stack" && "$tier_says" != "$scope" ]]; then
+            lint_warn "${base}: 'tier: ${tier}' is ignored — scope follows the stack, and stack '${stack}' is ${scope}-scoped (ADR-022e)"
+        else
+            lint_warn "${base}: 'tier' is retired (ADR-022e, #676) — scope follows the stack; remove it"
+        fi
     fi
 
     # source enum check (the defaulted value is always valid, so this only fires
@@ -147,12 +177,12 @@ main() {
         lint_error "${base}: invalid source '${source}' (must be one of: ${VALID_SOURCES})"
     fi
 
-    # LINT RULE: tier:foundation requires source:official (unless --allow-fork).
-    if [[ "$tier" == "foundation" && "$source" != "official" ]]; then
+    # LINT RULE: a site-scoped module requires source:official (unless --allow-fork).
+    if [[ "$scope" == "site" && "$source" != "official" ]]; then
         if [[ "$ALLOW_FORK" == "true" ]]; then
-            lint_warn "${base}: tier:foundation with source:'${source}' permitted by --allow-fork (foundation fork)"
+            lint_warn "${base}: site-scoped (stack foundation) with source:'${source}' permitted by --allow-fork (foundation fork)"
         else
-            lint_error "${base}: tier:foundation requires source:official (got '${source}'). Pass --allow-fork to permit a foundation fork."
+            lint_error "${base}: site-scoped (stack foundation) requires source:official (got '${source}'). Pass --allow-fork to permit a foundation fork."
         fi
     fi
 
@@ -194,7 +224,7 @@ main() {
         error "classification lint failed: $ERRORS error(s), $WARNINGS warning(s)"
         exit 1
     fi
-    log_info "${GN:-}classification lint passed (tier=${tier}, source=${source}, status=${status:-unset}, version=${version:-unset}, ${WARNINGS} warning(s))${CL:-}"
+    log_info "${GN:-}classification lint passed (scope=${scope}, source=${source}, status=${status:-unset}, version=${version:-unset}, ${WARNINGS} warning(s))${CL:-}"
     exit 0
 }
 

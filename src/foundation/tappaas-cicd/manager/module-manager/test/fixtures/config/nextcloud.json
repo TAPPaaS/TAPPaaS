@@ -5,7 +5,7 @@
   "vmid": 340,
   "node": "tappaas1",
   "zone0": "srvWork",
-  "tier": "app",
+  "stack": "collaboration",
   "source": "official",
   "status": "Testing",
   "moduleSource": "/home/tappaas/TAPPaaS/src/apps/nextcloud",

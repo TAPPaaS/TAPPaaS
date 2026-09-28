@@ -156,29 +156,44 @@ z0="$(jq -r '.zone0 // empty' "$EXPL")"
     || bad "explicit zone0 read failed (got: ${z0})"
 
 # ===========================================================================
-# ADR-007 P5: tier/source lint + environment-aware deployment (FAST, offline).
+# ADR-007 P5: scope/source lint + environment-aware deployment (FAST, offline).
+# Scope is derived from `stack` (ADR-022e v1.1, #676); `tier` is read only as a
+# fallback when a JSON has no stack.
 # ===========================================================================
 echo ""
-echo "== module-manager P5 (tier/source + environment) FAST tests =="
+echo "== module-manager P5 (scope/source + environment) FAST tests =="
 
 LINT="${HERE}/validate-module-tier-source.sh"
 
-# --- tier/source lint ------------------------------------------------------
+# --- scope/source lint -----------------------------------------------------
 run_lint() { "$LINT" --quiet "$@" >/dev/null 2>&1; }
+lint_out() { "$LINT" --quiet "$@" 2>&1; }
 
 LWORK="${WORK}/lint"; mkdir -p "$LWORK"
-gf="${LWORK}/good.json";    printf '%s\n' '{"tier":"foundation","source":"official"}'  > "$gf"
-bf="${LWORK}/bad.json";     printf '%s\n' '{"tier":"foundation","source":"community"}' > "$bf"
-ac="${LWORK}/appcomm.json"; printf '%s\n' '{"tier":"app","source":"community"}'        > "$ac"
-ap="${LWORK}/apppriv.json"; printf '%s\n' '{"tier":"app","source":"private"}'          > "$ap"
-be="${LWORK}/badenum.json"; printf '%s\n' '{"tier":"bogus"}'                           > "$be"
+gf="${LWORK}/good.json";    printf '%s\n' '{"stack":"foundation","source":"official"}'  > "$gf"
+bf="${LWORK}/bad.json";     printf '%s\n' '{"stack":"foundation","source":"community"}' > "$bf"
+ac="${LWORK}/appcomm.json"; printf '%s\n' '{"stack":"ai","source":"community"}'         > "$ac"
+ap="${LWORK}/apppriv.json"; printf '%s\n' '{"stack":"ai","source":"private"}'           > "$ap"
+tf="${LWORK}/tierfnd.json"; printf '%s\n' '{"tier":"foundation","source":"community"}'  > "$tf"
+ct="${LWORK}/contra.json";  printf '%s\n' '{"stack":"communication","tier":"foundation","source":"community"}' > "$ct"
+be="${LWORK}/badenum.json"; printf '%s\n' '{"tier":"bogus"}'                            > "$be"
 
-run_lint "$gf"  && ok "lint: foundation+official passes" || bad "lint: foundation+official should pass"
-run_lint "$bf"  && bad "lint: foundation+community should FAIL" || ok "lint: foundation+community is rejected"
-run_lint --allow-fork "$bf" && ok "lint: foundation+community passes with --allow-fork" || bad "lint: --allow-fork should permit foundation fork"
-run_lint "$ac"  && ok "lint: app+community passes (warn-only)" || bad "lint: app+community should pass"
-run_lint "$ap"  && ok "lint: app+private passes" || bad "lint: app+private should pass"
-run_lint "$be"  && bad "lint: invalid tier enum should FAIL" || ok "lint: invalid tier enum is rejected"
+run_lint "$gf"  && ok "lint: foundation stack + official passes" || bad "lint: foundation stack + official should pass"
+run_lint "$bf"  && bad "lint: foundation stack + community should FAIL" || ok "lint: foundation stack + community is rejected (site-scoped needs official)"
+run_lint --allow-fork "$bf" && ok "lint: foundation stack + community passes with --allow-fork" || bad "lint: --allow-fork should permit foundation fork"
+run_lint "$ac"  && ok "lint: app stack + community passes (warn-only)" || bad "lint: app stack + community should pass"
+run_lint "$ap"  && ok "lint: app stack + private passes" || bad "lint: app stack + private should pass"
+run_lint "$tf"  && bad "lint: no stack, tier:foundation + community should FAIL (tier fallback, one release)" \
+                || ok "lint: no stack → the retired tier still decides, for one release"
+run_lint "$ct"  && ok "lint: a tier contradicting the stack is ignored — stack communication is environment-scoped" \
+                || bad "lint: stack communication + tier:foundation + community should pass (the stack decides)"
+# Captured, not piped: `grep -q` stops at the first match and the lint then
+# dies of SIGPIPE, which pipefail reports as a failure.
+_lo="$(lint_out "$ct")"
+grep -q "is ignored" <<< "$_lo" && ok "lint: …and says the tier is ignored" || bad "lint: a contradicting tier should be named as ignored"
+_lo="$(lint_out "$gf")"
+grep -q "retired" <<< "$_lo" && bad "lint: no tier, no retirement warning expected" || ok "lint: a module without tier is not warned about it"
+run_lint "$be"  && ok "lint: a bogus tier no longer fails — tier is retired, only warned about" || bad "lint: a bogus retired tier should only warn"
 
 # --- environment + zone + vmname resolution --------------------------------
 # Extract the P5 resolver functions from install-module.sh and run them in
@@ -300,9 +315,14 @@ die(){ echo "DIE:$*" >&2; exit 1; }
 module_exists(){ return 1; }
 tappaas_require_operator(){ :; }
 STUB
+# The real routines re-export module-catalog-lib.sh (module_scope_of, ADR-022e);
+# the stub must too, from THIS tree — ~/bin may hold an older copy.
+printf '. "%s"\n' "${HERE}/../../lib/module-catalog-lib.sh" >> "$SBIN/common-install-routines.sh"
 # Use the real lint (symlink or sibling); copy it next to the stub bin so the
 # install script's fallback finds it.
 cp "$LINT" "$SBIN/validate-module-tier-source.sh" 2>/dev/null || true
+# …and, copied away from the tree, it finds module_scope_of through this.
+export TAPPAAS_CATALOG_LIB="${HERE}/../../lib/module-catalog-lib.sh"
 chmod +x "$SBIN/validate-module-tier-source.sh" 2>/dev/null || true
 
 # A throwaway install-module.sh copy that points at the stub bin dir. We patch
@@ -317,7 +337,7 @@ chmod +x "$SINSTALL"
 # Module dir with a foundation module + a config dir with a 'foo' environment.
 MDIR="${WORK}/fmod"; mkdir -p "$MDIR"
 cat > "${MDIR}/foundmod.json" <<'JSON'
-{ "tier": "foundation", "source": "official", "vmname": "foundmod" }
+{ "stack": "foundation", "source": "official", "vmname": "foundmod" }
 JSON
 FCFG="${WORK}/fcfg"; mkdir -p "${FCFG}/environments"
 cat > "${FCFG}/environments/foo.json" <<'JSON'
@@ -326,18 +346,18 @@ JSON
 
 rej_out="$( cd "$MDIR" && CONFIG_DIR="$FCFG" bash "$SINSTALL" foundmod --environment foo 2>&1 )"; rej_rc=$?
 if [[ $rej_rc -ne 0 ]] && echo "$rej_out" | grep -qi "only be installed in the 'mgmt' environment"; then
-    ok "install: tier:foundation → non-mgmt env is rejected (offline, before provisioning)"
+    ok "install: site-scoped (stack foundation) → non-mgmt env is rejected (offline, before provisioning)"
 else
     bad "install: foundation→non-mgmt should be rejected (rc=${rej_rc}); out: ${rej_out##*$'\n'}"
 fi
 
 # A community foundation module must be rejected by the lint at install Step 0.
 cat > "${MDIR}/forkmod.json" <<'JSON'
-{ "tier": "foundation", "source": "community", "vmname": "forkmod" }
+{ "stack": "foundation", "source": "community", "vmname": "forkmod" }
 JSON
 fork_out="$( cd "$MDIR" && CONFIG_DIR="$FCFG" bash "$SINSTALL" forkmod --environment mgmt 2>&1 )"; fork_rc=$?
-if [[ $fork_rc -ne 0 ]] && echo "$fork_out" | grep -qi "tier/source lint failed"; then
-    ok "install: tier:foundation + source:community is rejected by the lint at Step 0"
+if [[ $fork_rc -ne 0 ]] && echo "$fork_out" | grep -qi "scope/source lint failed"; then
+    ok "install: stack foundation + source:community is rejected by the lint at Step 0"
 else
     bad "install: foundation+community should fail lint (rc=${fork_rc}); out: ${fork_out##*$'\n'}"
 fi
@@ -364,7 +384,7 @@ BCFG="${WORK}/bcfg"; mkdir -p "$BCFG"
 legacy_out="$( cd "$MDIR" && CONFIG_DIR="$BCFG" bash "$SINSTALL" legacymod 2>&1 )"
 # It will likely fail later (stub copy/check_json), but must NOT fail at Step 0
 # classification or the foundation guard. Assert no foundation/lint rejection.
-if echo "$legacy_out" | grep -qiE "only be installed in the 'mgmt'|tier/source lint failed"; then
+if echo "$legacy_out" | grep -qiE "only be installed in the 'mgmt'|scope/source lint failed"; then
     bad "back-compat: tier-less/app module wrongly rejected at Step 0: ${legacy_out##*$'\n'}"
 else
     ok "back-compat: app/tier-less module is NOT rejected at Step 0 (legacy path preserved)"
@@ -389,6 +409,9 @@ ensure_scripts_executable(){ :; }
 # #672: the firewall is never reached — calls are recorded in $DNS_CALLS.
 dns-manager(){ echo "$*" >> "${DNS_CALLS:-/dev/null}"; echo "released"; }
 STUB
+# The real routines re-export module-catalog-lib.sh (module_scope_of, ADR-022e);
+# the stub must too, from THIS tree — ~/bin may hold an older copy.
+printf '. "%s"\n' "${HERE}/../../lib/module-catalog-lib.sh" >> "${DWORK}/sbin/common-install-routines.sh"
 # The REAL provider resolver, not a stub of it (#718): what is under test is
 # that delete-module.sh asks it, and with which environment.
 sed -n '/^_legacy_module_alias() {/,/^}/p; /^resolve_provider_module() {/,/^}/p; /^find_service_consumers() {/,/^}/p; /^find_integrateswith_consumers() {/,/^}/p' \
@@ -397,12 +420,12 @@ DSTUB="${WORK}/del-stub.sh"
 sed -e "s#/home/tappaas/bin/common-install-routines.sh#${DWORK}/sbin/common-install-routines.sh#g" \
     -e "s#readonly CONFIG_DIR=\"/home/tappaas/config\"#CONFIG_DIR=\"${DWORK}/cfg\"#g" \
     "$DELETE" > "$DSTUB"
-printf '%s\n' '{"tier":"foundation","source":"official","vmname":"fmod"}' > "${DWORK}/cfg/fmod.json"
-printf '%s\n' '{"tier":"app","source":"official","vmname":"amod"}'        > "${DWORK}/cfg/amod.json"
+printf '%s\n' '{"stack":"foundation","source":"official","vmname":"fmod"}' > "${DWORK}/cfg/fmod.json"
+printf '%s\n' '{"stack":"ai","source":"official","vmname":"amod"}'         > "${DWORK}/cfg/amod.json"
 
 del_nf="$( bash "$DSTUB" fmod 2>&1 )"; del_nf_rc=$?
 if [[ $del_nf_rc -ne 0 ]] && echo "$del_nf" | grep -qi "without --force"; then
-    ok "delete: tier:foundation without --force is refused"
+    ok "delete: a site-scoped module (stack foundation) without --force is refused"
 else
     bad "delete: foundation without --force should be refused (rc=${del_nf_rc})"
 fi
@@ -411,7 +434,7 @@ fi
 # here since there is no cluster — exits 0 after removing the config).
 del_f="$( bash "$DSTUB" fmod --force 2>&1 )"; del_f_rc=$?
 if [[ $del_f_rc -eq 0 ]] && ! echo "$del_f" | grep -qi "without --force"; then
-    ok "delete: tier:foundation with --force proceeds (gate passed)"
+    ok "delete: a site-scoped module with --force proceeds (gate passed)"
 else
     bad "delete: foundation with --force should proceed (rc=${del_f_rc})"
 fi
@@ -560,11 +583,11 @@ grep -A4 'provider="${dep%%:\*}"' "${SRC_TREE}/foundation/network/services/rules
     || bad "guard (#718): provider looked up by bare prefix: ${bare718}"
 
 # ---------------------------------------------------------------------------
-# resolve-module.sh — catalog resolution (#459) and tier resolution (#460).
+# resolve-module.sh — catalog resolution (#459) and scope resolution (#460, #676).
 # Fixture repositories + fixture site.json; the live config is never read.
 # ---------------------------------------------------------------------------
 echo ""
-echo "== resolve-module.sh catalog/tier resolution (#459, #460) =="
+echo "== resolve-module.sh catalog/scope resolution (#459, #460, #676) =="
 
 RM="${HERE}/resolve-module.sh"
 # Exercise THIS tree's catalog library, not the installed one (#463).
@@ -629,20 +652,20 @@ got="$("$RM" curmod --config-dir "${RW}/cfg" 2>/dev/null || true)"
     && ok "resolve-module: conventional catalog still resolves" \
     || bad "resolve-module: conventional catalog regressed (got: '${got}')"
 
-# The flat shape: resolution, tier from the stack, a legacy name, and a `test`
+# The flat shape: resolution, scope from the stack, a legacy name, and a `test`
 # entry that is a fixture rather than a module to install (#463).
 got="$("$RM" flatapp --config-dir "${RW}/cfg" 2>/dev/null || true)"
 [[ "$got" == "${RW}/flat/src/apps/flatapp" ]] \
     && ok "resolve-module: a flat catalog resolves (#463)" \
     || bad "resolve-module: flat catalog not resolved (got: '${got}')"
-got="$("$RM" flatfnd --config-dir "${RW}/cfg" --field tier 2>/dev/null || true)"
-[[ "$got" == "foundation" ]] \
-    && ok "resolve-module: flat tier comes from stack: foundation" \
-    || bad "resolve-module: flat tier (got: '${got}')"
-got="$("$RM" flatapp --config-dir "${RW}/cfg" --field tier 2>/dev/null || true)"
-[[ "$got" == "app" ]] \
-    && ok "resolve-module: any other stack is an application module" \
-    || bad "resolve-module: flat app tier (got: '${got}')"
+got="$("$RM" flatfnd --config-dir "${RW}/cfg" --field scope 2>/dev/null || true)"
+[[ "$got" == "site" ]] \
+    && ok "resolve-module: stack foundation is site-scoped (ADR-022e)" \
+    || bad "resolve-module: flat scope (got: '${got}')"
+got="$("$RM" flatapp --config-dir "${RW}/cfg" --field scope 2>/dev/null || true)"
+[[ "$got" == "environment" ]] \
+    && ok "resolve-module: any other stack is environment-scoped" \
+    || bad "resolve-module: flat environment scope (got: '${got}')"
 got="$("$RM" oldfnd --config-dir "${RW}/cfg" 2>/dev/null || true)"
 [[ "$got" == "${RW}/flat/src/foundation/flatfnd" ]] \
     && ok "resolve-module: a legacyName resolves in the flat shape too" \
@@ -685,25 +708,32 @@ grep -q "Tracked" <<< "$warns" \
     && bad "resolve-module: 'managed: tracked' repo wrongly warned about (no catalog is its normal state)" \
     || ok "resolve-module: 'managed: tracked' repo does not warn"
 
-# --field tier: the deployed config outranks the catalog, which is the only
+# --field scope: the deployed config outranks the catalog, which is the only
 # source that works for a module located via .location rather than a catalog.
 echo '{"kind":"module","tier":"app","location":"/somewhere/thermostat"}' > "${RW}/cfg/thermostat.json"
-got="$("$RM" thermostat --config-dir "${RW}/cfg" --field tier 2>/dev/null || true)"
-[[ "$got" == "app" ]] \
-    && ok "resolve-module: tier resolves from the deployed config for a .location-only module (#460)" \
-    || bad "resolve-module: tier empty for a .location-only module (got: '${got}')"
+got="$("$RM" thermostat --config-dir "${RW}/cfg" --field scope 2>/dev/null || true)"
+[[ "$got" == "environment" ]] \
+    && ok "resolve-module: scope resolves from the deployed config for a .location-only module (#460)" \
+    || bad "resolve-module: scope empty for a .location-only module (got: '${got}')"
 
 echo '{"kind":"module","tier":"foundation"}' > "${RW}/cfg/curmod.json"
-got="$("$RM" curmod --config-dir "${RW}/cfg" --field tier 2>/dev/null || true)"
-[[ "$got" == "foundation" ]] \
-    && ok "resolve-module: deployed-config tier wins over the catalog" \
-    || bad "resolve-module: deployed-config tier not preferred (got: '${got}')"
+got="$("$RM" curmod --config-dir "${RW}/cfg" --field scope 2>/dev/null || true)"
+[[ "$got" == "site" ]] \
+    && ok "resolve-module: the deployed config wins over the catalog (a retired tier, for one release)" \
+    || bad "resolve-module: deployed-config scope not preferred (got: '${got}')"
+
+# the stack decides, not a tier that contradicts it (#676)
+echo '{"kind":"module","stack":"communication","tier":"foundation"}' > "${RW}/cfg/curmod.json"
+got="$("$RM" curmod --config-dir "${RW}/cfg" --field scope 2>/dev/null || true)"
+[[ "$got" == "environment" ]] \
+    && ok "resolve-module: a config's stack outranks its retired tier" \
+    || bad "resolve-module: stack communication + tier foundation should be environment (got: '${got}')"
 
 rm -f "${RW}/cfg/curmod.json"
-got="$("$RM" curmod --config-dir "${RW}/cfg" --field tier 2>/dev/null || true)"
-[[ "$got" == "foundation" ]] \
-    && ok "resolve-module: catalog tier is still the fallback" \
-    || bad "resolve-module: catalog tier fallback broken (got: '${got}')"
+got="$("$RM" curmod --config-dir "${RW}/cfg" --field scope 2>/dev/null || true)"
+[[ "$got" == "site" ]] \
+    && ok "resolve-module: the catalog is the fallback (a legacy entry with only a tier)" \
+    || bad "resolve-module: catalog scope fallback broken (got: '${got}')"
 
 # ---------------------------------------------------------------------------
 # get_module_dir exit codes (#460): 0 found, 1 no .moduleSource recorded,
@@ -1550,25 +1580,28 @@ new_diff="$(comm -13 <(fc "$PRE") <(fc "$POST_NEW"))"
     && ok "baseline: a genuinely new ✗ after the update is reported as new" \
     || bad "baseline: expected new failure 'check C failed', got '${new_diff}'"
 
-# ── resolve-module.sh --field tier: an undeclared tier resolves to the
-# documented default (#561) ──────────────────────────────────────────
+# ── resolve-module.sh --field scope: a deployed module that says nothing
+# resolves to the default (#561, ADR-022e) ─────────────────────────────
 #
-# validate-module-tier-source.sh already decided what an absent tier means:
-# it warns and defaults to 'app' ("back-compat: untagged/legacy modules ...").
-# resolve-module.sh did not share that decision — it fell through to the
-# catalog and exited 1 with an empty result, so every caller had to invent its
-# own reading of the silence. An earlier migration invented one and it was
+# Scope is derived from `stack` (ADR-022e v1.1). A deployed module with neither
+# a stack nor a (retired) tier, and no catalog entry, must resolve to the
+# default — `environment` — rather than to nothing: before #561 each caller
+# invented its own reading of the silence, and one migration's reading was
 # wrong for 22 of 47 deployed modules on a real site.
 RESOLVE="${HERE}/resolve-module.sh"
-TIERDIR="$(mktemp -d "${TMPDIR:-/tmp}/resolve-tier.XXXXXX")"
+TIERDIR="$(mktemp -d "${TMPDIR:-/tmp}/resolve-scope.XXXXXX")"
 cat > "${TIERDIR}/site.json" <<'JSON'
 { "name": "acme", "repositories": [] }
 JSON
-# a DEPLOYED module (carries vmname) that declares no tier and is in no catalog
+# a DEPLOYED module (carries vmname) that says neither, and is in no catalog
 cat > "${TIERDIR}/untiered.json" <<'JSON'
-{ "vmname": "untiered", "vmid": 999, "description": "deployed, no tier, no catalog entry" }
+{ "vmname": "untiered", "vmid": 999, "description": "deployed, no stack, no catalog entry" }
 JSON
-# a module that declares its tier explicitly — must be unaffected
+# a deployed module in the foundation stack
+cat > "${TIERDIR}/stacked.json" <<'JSON'
+{ "vmname": "stacked", "vmid": 997, "stack": "foundation" }
+JSON
+# a deployed config the merge has not yet given a stack: its retired tier decides
 cat > "${TIERDIR}/tiered.json" <<'JSON'
 { "vmname": "tiered", "vmid": 998, "tier": "foundation" }
 JSON
@@ -1578,19 +1611,24 @@ cat > "${TIERDIR}/notamodule.json" <<'JSON'
 { "description": "a schema or state file, not a module" }
 JSON
 
-out="$("$RESOLVE" untiered --config-dir "$TIERDIR" --field tier 2>/dev/null || true)"
-[[ "$out" == "app" ]]     && ok "resolve tier: a deployed module with no tier resolves to the documented default 'app'"     || bad "resolve tier: expected 'app' for an untiered deployed module, got '${out:-<empty>}'"
+out="$("$RESOLVE" untiered --config-dir "$TIERDIR" --field scope 2>/dev/null || true)"
+[[ "$out" == "environment" ]] && ok "resolve scope: a deployed module with no stack resolves to the default 'environment'" || bad "resolve scope: expected 'environment' for a stackless deployed module, got '${out:-<empty>}'"
 
-"$RESOLVE" untiered --config-dir "$TIERDIR" --field tier >/dev/null 2>&1     && ok "resolve tier: the defaulted lookup exits 0"     || bad "resolve tier: the defaulted lookup should exit 0, not signal not-found"
+"$RESOLVE" untiered --config-dir "$TIERDIR" --field scope >/dev/null 2>&1 && ok "resolve scope: the defaulted lookup exits 0" || bad "resolve scope: the defaulted lookup should exit 0, not signal not-found"
 
-out="$("$RESOLVE" tiered --config-dir "$TIERDIR" --field tier 2>/dev/null || true)"
-[[ "$out" == "foundation" ]]     && ok "resolve tier: an explicit tier is returned unchanged"     || bad "resolve tier: expected 'foundation', got '${out:-<empty>}'"
+out="$("$RESOLVE" stacked --config-dir "$TIERDIR" --field scope 2>/dev/null || true)"
+[[ "$out" == "site" ]] && ok "resolve scope: stack foundation is site-scoped" || bad "resolve scope: expected 'site' for stack foundation, got '${out:-<empty>}'"
 
-out="$("$RESOLVE" notamodule --config-dir "$TIERDIR" --field tier 2>/dev/null || true)"
-[[ -z "$out" ]]     && ok "resolve tier: a config with no vmname is still unresolved (not a module)"     || bad "resolve tier: a non-module must not default; got '${out}'"
+out="$("$RESOLVE" tiered --config-dir "$TIERDIR" --field scope 2>/dev/null || true)"
+[[ "$out" == "site" ]] && ok "resolve scope: a retired tier:foundation still reads as site, for one release" || bad "resolve scope: expected 'site' from the tier fallback, got '${out:-<empty>}'"
 
-out="$("$RESOLVE" absent --config-dir "$TIERDIR" --field tier 2>/dev/null || true)"
-[[ -z "$out" ]]     && ok "resolve tier: a module with no config file at all stays unresolved"     || bad "resolve tier: expected empty for a missing config, got '${out}'"
+out="$("$RESOLVE" notamodule --config-dir "$TIERDIR" --field scope 2>/dev/null || true)"
+[[ -z "$out" ]] && ok "resolve scope: a config with no vmname is still unresolved (not a module)" || bad "resolve scope: a non-module must not default; got '${out}'"
+
+out="$("$RESOLVE" absent --config-dir "$TIERDIR" --field scope 2>/dev/null || true)"
+[[ -z "$out" ]] && ok "resolve scope: a module with no config file at all stays unresolved" || bad "resolve scope: expected empty for a missing config, got '${out}'"
+
+"$RESOLVE" untiered --config-dir "$TIERDIR" --field tier >/dev/null 2>&1 && bad "resolve: --field tier should be refused now" || ok "resolve: --field tier is gone (#676)"
 
 rm -rf -- "$TIERDIR"
 

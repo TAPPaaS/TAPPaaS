@@ -10,7 +10,7 @@
 //   module show <module>     = one deployed module config in detail [NEW, TS]
 //   module resolve <module>  = DESIRED state: config + schema defaults [ADR-020]
 //   module drift <module>    = DESIRED vs ACTUAL, per service           [ADR-020]
-//   module validate [<m>]    = tier/source lint (all, or one)        [TS port]
+//   module validate [<m>]    = scope/source lint (all, or one)       [TS port]
 //   module reconcile <m>     = re-apply this module's config → VM/service [leaf]
 //   module test <module>     = test-module.sh
 //   module snapshot-vm <m>   = snapshot-vm.sh  (special VM op — stays)
@@ -35,6 +35,7 @@ import {
   listModules,
   loadModule,
 } from "./config";
+import { moduleScope } from "../../../lib/ts/src/scope";
 import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
 import { CL, GN, RD, YW, die, guarded, info, preflightGuard, warn } from "../../../lib/ts/src/cli";
 import {
@@ -93,7 +94,7 @@ export const HELP: HelpSpec = {
     {
       usage: "validate [<module>] [--allow-fork]",
       name: "validate",
-      options: [["--allow-fork", "Permit forked/non-canonical module sources (relax tier/source lint)."]],
+      options: [["--allow-fork", "Permit forked/non-canonical module sources (relax scope/source lint)."]],
     },
     {
       usage: "add <module> [--environment ENV] [--instance NAME] [--allow-fork] [--reinstall] [--<field> <value>]...",
@@ -226,7 +227,7 @@ export const HELP: HelpSpec = {
       "'module-manager list' and 'module-manager module list' work.",
     `Verbs map (ADR-007 verb alignment):
   add=install-module  modify=update-module  delete=delete-module
-  test=test-module    validate=tier/source lint
+  test=test-module    validate=scope/source lint
   resolve=desired state (config + schema defaults), the one resolver (ADR-020)
   drift=that desired state vs the live guest, per service (ADR-020)
   reconcile=inspect drift (default) / --apply=leaf re-apply (was health show vm)
@@ -431,12 +432,12 @@ function cmdListResolution(opts: Opts): number {
     return 0;
   }
 
-  const headers = ["NAME", "RESOLVES VIA", "TIER", "TIER SRC", "CATALOG REPO", "DIRECTORY"];
+  const headers = ["NAME", "RESOLVES VIA", "SCOPE", "SCOPE SRC", "CATALOG REPO", "DIRECTORY"];
   const body = rows.map((r) => [
     r.module,
     r.path,
-    r.tier ?? "-",
-    r.tierSource ?? "-",
+    r.scope ?? "-",
+    r.scopeSource ?? "-",
     r.catalogRepo ?? "-",
     r.dir ?? "-",
   ]);
@@ -543,7 +544,8 @@ function cmdList(opts: Opts, client: ModuleClient): number {
       vmid: r.m.vmid ?? null,
       node: r.m.node ?? null,
       zone0: r.m.zone0 ?? null,
-      tier: r.m.tier ?? null,
+      stack: r.m.stack ?? null,
+      scope: moduleScope(r.m),
       status: r.m.status ?? null,
       environment: r.m.environment ?? null,
       // Additive live fields (null when the cluster query was unavailable).

@@ -50,6 +50,25 @@ if ! declare -F info &>/dev/null; then
     fi
 fi
 
+# module_scope_of (ADR-022e) — needed below to place a site-scoped module in
+# mgmt, and most of all at bootstrap, which writes network, tappaas-cicd and
+# templates through this script before common-install-routines.sh exists. The
+# catalog library is side-effect-free, so it is loaded on its own whenever the
+# function is missing, whichever branch above ran.
+if ! declare -F module_scope_of &>/dev/null; then
+    for _mcl in /home/tappaas/bin/module-catalog-lib.sh \
+                "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../../lib/module-catalog-lib.sh"; do
+        # An older copy (loaded already, or without the function) must not end
+        # the search: clear its double-source guard and try the next one.
+        [[ -r "${_mcl}" ]] || continue
+        unset _MODULE_CATALOG_LIB_LOADED
+        # shellcheck source=/dev/null
+        . "${_mcl}"
+        declare -F module_scope_of >/dev/null 2>&1 && break
+    done
+    unset _mcl
+fi
+
 # Composed, not the raw schema: definitions live per-service since #567.
 #
 # Unconditional, and AFTER the block above. It used to sit inside that block's
@@ -420,19 +439,20 @@ main() {
         fi
     fi
 
-    # A foundation module lives in mgmt (#349). Its release names no zone0 — a
-    # released module names one only when it must live in a particular kind of
-    # zone (the satellite's edge) — so record where it goes here, the one path
+    # A site-scoped module (the foundation stack) lives in mgmt (#349). Its
+    # release names no zone0 — a released module names one only when it must
+    # live in a particular kind of zone (the satellite's edge) — so record where
+    # it goes here, the one path
     # every config is written through: the bootstrap writes network,
     # tappaas-cicd and templates with this script alone, before any environment
     # exists, and every reader of zone0 then finds it. An explicit --zone0 below
     # still overrides it; install-module.sh would resolve the same (a foundation
     # module installs into the mgmt environment, whose zone is mgmt).
-    if jq -e '(.tier == "foundation") and ((.zone0 // "") == "")' "${dest_json}" >/dev/null 2>&1; then
+    if [[ "$(module_scope_of "${dest_json}")" == "site" ]] && jq -e '(.zone0 // "") == ""' "${dest_json}" >/dev/null 2>&1; then
         tmp_file=$(mktemp)
         if jq '.zone0 = "mgmt"' "${dest_json}" > "${tmp_file}"; then
             mv "${tmp_file}" "${dest_json}"
-            debug "  zone0 = mgmt (a foundation module, #349)"
+            debug "  zone0 = mgmt (a site-scoped module, #349)"
         else
             rm -f "${tmp_file}"
             warn "  Could not record zone0 for a foundation module"

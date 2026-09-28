@@ -6,7 +6,6 @@
   "releaseDate": "2026-09-21",
   "maintainer": "@ErikDaniel007",
   "status": "Testing",
-  "tier": "app",
   "vmname": "nextcloud-hpb",
   "vmid": 342,
   "vmtag": "TAPPaaS,App",

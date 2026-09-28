@@ -4,7 +4,6 @@
   "releaseDate": "2026-07-01",
   "maintainer": "@larsrossen",
   "status": "Testing",
-  "tier": "app",
   "vmname": "sat-hello",
   "vmid": 925,
   "vmtag": "TAPPaaS,Test",

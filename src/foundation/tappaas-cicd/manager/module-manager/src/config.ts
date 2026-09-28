@@ -13,6 +13,7 @@ import { discoverModules, isModuleConfig } from "../../../lib/ts/src/module-disc
 import { ModuleConfig, ModuleStatus } from "./types";
 import { moduleSourceOf } from "../../../lib/ts/src/instance";
 import { effectiveKind } from "../../../lib/ts/src/kind";
+import { Scope, moduleScope } from "../../../lib/ts/src/scope";
 
 // Config-root resolution comes from the shared lib (TAPPAAS_CONFIG, then
 // CONFIG_DIR, then /home/tappaas/config). Re-exported for main.ts/client.ts.
@@ -79,6 +80,7 @@ function toModuleConfig(name: string, raw: Record<string, unknown>): ModuleConfi
     node: asString(raw.node) ?? null,
     zone0: asString(raw.zone0) ?? null,
     zone1: asString(raw.zone1) ?? null,
+    stack: asString(raw.stack) ?? null,
     tier: asString(raw.tier) ?? null,
     source: asString(raw.source) ?? null,
     // Kept as-loaded (round-trips any value); validate.ts warns on one outside
@@ -334,7 +336,7 @@ export function repoCatalogFile(repoPath: string, declared: string): string {
 export interface CatalogHit {
   repo: string;
   moduleJson: string;
-  tier: string;
+  scope: Scope;
 }
 
 // Port of resolve-module.sh's catalog scan: first repository in site.json order
@@ -353,7 +355,9 @@ export function resolveViaCatalog(configDir: string, module: string): CatalogHit
     // Two catalog shapes (#463): one `modules` list whose entries say what they
     // are with `stack` — `foundation` a foundation module, `template`/`test`
     // not a module to install — and, for a stable cycle, the older split into
-    // foundationModules / applicationModules with `tier` on each entry.
+    // foundationModules / applicationModules with `tier` on each entry. Either
+    // way the entry's scope follows its stack (ADR-022e): being listed under
+    // foundationModules does not make a module site-scoped.
     const flat = Array.isArray(cat.modules);
     const entries = flat
       ? (cat.modules as unknown[])
@@ -371,7 +375,7 @@ export function resolveViaCatalog(configDir: string, module: string): CatalogHit
       return {
         repo: repo.name,
         moduleJson: moduleJson ? join(repo.path.replace(/\/+$/, ""), moduleJson) : "",
-        tier: flat ? (stack === "foundation" ? "foundation" : "app") : asString(o.tier) ?? "app",
+        scope: moduleScope(o),
       };
     }
   }
@@ -393,9 +397,9 @@ export interface ModuleResolution {
   dir: string | null;
   /** Repository whose catalog carries it, independent of `path`. */
   catalogRepo: string | null;
-  tier: string | null;
-  /** Where `tier` came from — the deployed config outranks the catalog (#460). */
-  tierSource: "config" | "catalog" | null;
+  scope: Scope | null;
+  /** Where `scope` came from — the deployed config outranks the catalog (#460). */
+  scopeSource: "config" | "catalog" | null;
 }
 
 export function classifyModuleResolution(configDir: string, module: string): ModuleResolution {
@@ -418,13 +422,14 @@ export function classifyModuleResolution(configDir: string, module: string): Mod
     path = "unresolvable";
   }
 
-  const configTier = cfg?.tier ?? null;
+  // The config speaks when it says either (stack, or a tier not yet removed).
+  const configScope = cfg && (cfg.stack || cfg.tier) ? moduleScope(cfg) : null;
   return {
     module,
     path,
     dir,
     catalogRepo: hit ? hit.repo : null,
-    tier: configTier ?? hit?.tier ?? null,
-    tierSource: configTier ? "config" : hit ? "catalog" : null,
+    scope: configScope ?? hit?.scope ?? null,
+    scopeSource: configScope ? "config" : hit ? "catalog" : null,
   };
 }

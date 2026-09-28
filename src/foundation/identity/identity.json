@@ -6,7 +6,6 @@
   "releaseDate": "2026-02-17",
   "maintainer": "@larsrossen",
   "status": "Development",
-  "tier": "foundation",
   "vmname": "identity",
   "vmid": 140,
   "vmtag": "TAPPaaS,Foundation",

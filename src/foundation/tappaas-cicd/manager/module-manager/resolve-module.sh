@@ -20,12 +20,12 @@
 # `module-manager list --resolution` reports which path each module uses.
 #
 # Usage:
-#   resolve-module.sh <module> [--config-dir DIR] [--field dir|json|tier|repo]
+#   resolve-module.sh <module> [--config-dir DIR] [--field dir|json|scope|repo]
 #
 # --field (default: dir):
 #   dir   absolute source DIRECTORY of the module (dirname of its <module>.json)
 #   json  absolute path to the module's <module>.json
-#   tier  the module's tier (foundation | app)
+#   scope the module's scope (site | environment), derived from its stack (ADR-022e)
 #   repo  the repository name it was resolved from
 #
 # Exit: 0 found; 1 not found / no site.json; 2 usage error.
@@ -48,8 +48,8 @@ done
 [[ -n "$MODULE" ]] || { echo "resolve-module.sh: <module> is required" >&2; exit 2; }
 
 case "$FIELD" in
-  dir|json|tier|repo) ;;
-  *) echo "resolve-module.sh: unknown --field '${FIELD}' (dir|json|tier|repo)" >&2; exit 2 ;;
+  dir|json|scope|repo) ;;
+  *) echo "resolve-module.sh: unknown --field '${FIELD}' (dir|json|scope|repo)" >&2; exit 2 ;;
 esac
 
 command -v jq >/dev/null 2>&1 || { echo "resolve-module.sh: jq is required" >&2; exit 2; }
@@ -71,37 +71,31 @@ declare -F repo_catalog_file >/dev/null 2>&1 \
 SITE="${CONFIG_DIR%/}/site.json"
 [[ -f "$SITE" ]] || { echo "resolve-module.sh: site.json not found: ${SITE}" >&2; exit 1; }
 
-# --field tier: the module's OWN deployed config is authoritative and is the
+# --field scope: the module's OWN deployed config is authoritative and is the
 # only source that works for a module resolved via .moduleSource rather than a
-# catalog (#460). install-module.sh already reads tier from the authored JSON
-# this way; catalog lookup below stays as the fallback.
+# catalog (#460). Scope is derived from the config's `stack` (module_scope_of,
+# ADR-022e v1.1), falling back to a retired `tier` for one release (#676).
 #
-# When the config exists, carries a `vmname` (so it IS a deployed module) but
-# declares no tier, remember that: validate-module-tier-source.sh already
-# decided what an absent tier means — it warns and defaults to 'app' ("back-
-# compat: untagged/legacy modules + test fixtures install as apps"). This
-# resolver did not share that decision and fell through to `exit 1` with an
-# empty result, so each caller invented its own reading of the silence.
-# an earlier migration invented one, and it was wrong for 22 of 47 deployed
-# modules on a real site (#561). The default is applied only AFTER the catalog
-# lookup below fails, so a catalogued tier still wins.
-TIER_DEFAULTABLE=0
-if [[ "$FIELD" == "tier" ]]; then
+# A deployed module (it has a `vmname`) that says neither resolves to the
+# default, `environment`, but only AFTER the catalog lookup below fails, so a
+# catalogued stack still wins. Without that default each caller invented its own
+# reading of the silence, and one migration's reading was wrong for 22 of 47
+# deployed modules on a real site (#561). A config without a vmname (site.json,
+# zones.json, a field schema) stays unresolved, or this resolver would start
+# claiming they are modules.
+SCOPE_DEFAULTABLE=0
+if [[ "$FIELD" == "scope" ]]; then
   _mjson="${CONFIG_DIR%/}/${MODULE}.json"
-  deployed_tier="$(jq -r '.tier // empty' "$_mjson" 2>/dev/null || true)"
-  if [[ -n "$deployed_tier" ]]; then
-    printf '%s\n' "$deployed_tier"
+  if [[ -f "$_mjson" ]] && jq -e '(.stack // .tier // "") != ""' "$_mjson" >/dev/null 2>&1; then
+    module_scope_of "$_mjson"
     exit 0
   fi
-  # No tier. Only a DEPLOYED module defaults; a config without a vmname
-  # (site.json, zones.json, a field schema) must stay unresolved, or this
-  # resolver would start claiming they are modules.
   if [[ -f "$_mjson" ]] && jq -e '.vmname' "$_mjson" >/dev/null 2>&1; then
-    TIER_DEFAULTABLE=1
+    SCOPE_DEFAULTABLE=1
   fi
 fi
 
-# Resolved matches, one per line: "<repo>\t<abs-json>\t<tier>".
+# Resolved matches, one per line: "<repo>\t<abs-json>\t<scope>".
 #
 # The repository feed is \001-separated, NOT tab: `read` treats runs of IFS
 # WHITESPACE as one delimiter, so an entry with an empty .path and .catalog
@@ -127,20 +121,20 @@ while IFS=$'\001' read -r rname rpath rcatalog rmanaged; do
   fi
   entry="$(repo_catalog_entry "$catalog" "$MODULE" || true)"
   [[ -n "$entry" ]] || continue
-  mjson="${entry%%$'\t'*}"; tier="${entry##*$'\t'}"
-  matches+=("${rname}"$'\t'"${rpath%/}/${mjson}"$'\t'"${tier}")
+  mjson="${entry%%$'\t'*}"; scope="${entry##*$'\t'}"
+  matches+=("${rname}"$'\t'"${rpath%/}/${mjson}"$'\t'"${scope}")
 done < <(jq -r '.repositories[]?
                 | [(.name // ""), (.path // ""), (.catalog // ""), (.managed // "")]
                 | join("\u0001")' "$SITE" 2>/dev/null)
 
 if [[ ${#matches[@]} -eq 0 ]]; then
-  # A deployed module with no tier and no catalog entry resolves to the
-  # documented default rather than to nothing (#561). Reported on stderr so the
-  # default is visible, never silent: a caller that discards stderr still gets
-  # a usable value instead of an empty string it has to interpret.
-  if [[ "$FIELD" == "tier" && "$TIER_DEFAULTABLE" -eq 1 ]]; then
-    echo "resolve-module.sh: '${MODULE}' declares no tier and is in no catalog — using the documented default 'app' (module-fields.json)" >&2
-    printf 'app\n'
+  # A deployed module with no stack and no catalog entry resolves to the
+  # default rather than to nothing (#561). Reported on stderr so the default is
+  # visible, never silent: a caller that discards stderr still gets a usable
+  # value instead of an empty string it has to interpret.
+  if [[ "$FIELD" == "scope" && "$SCOPE_DEFAULTABLE" -eq 1 ]]; then
+    echo "resolve-module.sh: '${MODULE}' has no stack and is in no catalog — using the default scope 'environment' (ADR-022e)" >&2
+    printf 'environment\n'
     exit 0
   fi
   echo "resolve-module.sh: module '${MODULE}' not found in any repository catalog (site: ${SITE})" >&2
@@ -155,10 +149,10 @@ if [[ ${#matches[@]} -gt 1 ]]; then
 fi
 
 sel="${matches[0]}"
-r_repo="$(cut -f1 <<<"$sel")"; r_json="$(cut -f2 <<<"$sel")"; r_tier="$(cut -f3 <<<"$sel")"
+r_repo="$(cut -f1 <<<"$sel")"; r_json="$(cut -f2 <<<"$sel")"; r_scope="$(cut -f3 <<<"$sel")"
 case "$FIELD" in
   dir)  dirname "$r_json" ;;
   json) printf '%s\n' "$r_json" ;;
-  tier) printf '%s\n' "$r_tier" ;;
+  scope) printf '%s\n' "$r_scope" ;;
   repo) printf '%s\n' "$r_repo" ;;
 esac

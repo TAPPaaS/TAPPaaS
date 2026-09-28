@@ -270,8 +270,14 @@ get_default_ha_node() {
 # the ~160 scripts that already source this file keep getting them.
 for _mcl in /home/tappaas/bin/module-catalog-lib.sh \
             "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/module-catalog-lib.sh"; do
+    # Stop at the first copy that provides module_scope_of (ADR-022e, #676): an
+    # older copy — ~/bin while a test runs this tree — must not end the search,
+    # and its double-source guard must not stop the next one loading.
+    [[ -r "${_mcl}" ]] || continue
+    unset _MODULE_CATALOG_LIB_LOADED
     # shellcheck source=/dev/null
-    if [[ -r "${_mcl}" ]]; then . "${_mcl}"; break; fi
+    . "${_mcl}"
+    declare -F module_scope_of >/dev/null 2>&1 && break
 done
 unset _mcl
 

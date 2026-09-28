@@ -428,10 +428,21 @@ def _module_config(module_name: str) -> dict:
         return {}
 
 
+
+def module_scope(cfg: dict) -> str:
+    """A module's scope (ADR-022e v1.1), as module_scope_of / moduleScope decide
+    it in bash and TypeScript — the three must agree. `site` exactly when the
+    stack is `foundation`; with no stack, a retired `tier` for one release (#676).
+    """
+    stack = cfg.get("stack") or ""
+    if stack:
+        return "site" if stack == "foundation" else "environment"
+    return "site" if cfg.get("tier") == "foundation" else "environment"
+
 def foundation_machines(modules: list[str]) -> list[str]:
     """The discovered modules that are foundation machines, in sweep order.
 
-    A machine instance (kind: machine, tier: foundation) is named after the host,
+    A machine instance (kind: machine, site-scoped) is named after the host,
     not its module — tappaas1 is an instance of pvehost (ADR-026 D6) — so it never
     matches a FOUNDATION_MODULES name and used to fall through to the app phase.
     Its module says foundation; the sweep runs it right after `cluster`. Cluster
@@ -441,7 +452,7 @@ def foundation_machines(modules: list[str]) -> list[str]:
         return os.path.basename(str(_module_config(name).get("moduleSource") or "").rstrip("/")) == "pvehost"
     machines = [
         m for m in modules
-        if _module_config(m).get("kind") == "machine" and _module_config(m).get("tier") == "foundation"
+        if _module_config(m).get("kind") == "machine" and module_scope(_module_config(m)) == "site"
     ]
     return sorted(machines, key=lambda m: (not is_pvehost(m), m))
 

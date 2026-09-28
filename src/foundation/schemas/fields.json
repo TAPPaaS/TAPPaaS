@@ -37,7 +37,7 @@
     "tier": {
       "class": "in-place",
       "apply": "none",
-      "changeNote": "foundation ⇒ mgmt-only, single-instance, --force to delete, and `source` must be official (or --allow-fork). Changing it changes what the PLATFORM will permit, never the guest."
+      "changeNote": "RETIRED (ADR-022e, #676): scope follows `stack` now. Read only when a config has no stack; the next update removes it from deployed configs."
     },
     "source": {
       "class": "in-place",

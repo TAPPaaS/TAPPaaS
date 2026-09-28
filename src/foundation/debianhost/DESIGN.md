@@ -10,10 +10,9 @@ Nothing parses the instance name. The machine is reached by its **`address`** fi
 name derived from the instance, and never through Proxmox: every script talks to the machine
 over SSH only (`lib/debianhost-lib.sh`, `dh_ssh`).
 
-`tier: foundation` gives what a machine needs — installed in `mgmt`, from an official source.
-Its value text still says *single-instance*; that does not hold here and is not enforced for
-instances named with `--instance` (the guard looks for `config/debianhost.json`). ADR-022e's
-`scope: site` replaces `tier` and says it honestly.
+`stack: foundation` gives what a machine needs: it makes the module site-scoped (ADR-022e) —
+installed in `mgmt`, from an official source, `--force` to delete. Site scope is not
+single-instance (D4), which is what lets one module have several named machines.
 
 ## Root, by key, never a password (ADR-026 D8.1)
 

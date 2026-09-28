@@ -3,7 +3,6 @@
   "kind": "vm",
   "version": "1.1.0",
   "stack": "foundation",
-  "tier": "foundation",
   "status": "Production",
   "environment": "mgmt",
   "moduleSource": "/home/tappaas/TAPPaaS/src/foundation/templates",

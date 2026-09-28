@@ -1,6 +1,6 @@
 {
   "description": "Provider-only module (no vmid/vmname) — must still appear in `list`",
-  "tier": "foundation",
+  "stack": "foundation",
   "source": "official",
   "moduleSource": "/home/tappaas/TAPPaaS/src/foundation/templates",
   "provides": ["nixos", "debian"]

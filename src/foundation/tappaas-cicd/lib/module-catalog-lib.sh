@@ -17,7 +17,9 @@
 #
 # Provides:
 #   repo_catalog_file <repo-path> [declared-catalog]  -> catalog file path
-#   repo_catalog_entry <catalog-file> <module>        -> "<moduleJson>\t<tier>"
+#   repo_catalog_entry <catalog-file> <module>        -> "<moduleJson>\t<scope>"
+#   module_scope_filter                               -> the jq filter for a module's scope
+#   module_scope_of <module-json>                     -> site | environment
 
 # Guard against double-sourcing.
 if [[ -z "${_MODULE_CATALOG_LIB_LOADED:-}" ]]; then
@@ -50,8 +52,33 @@ repo_catalog_file() {
     fi
 }
 
+# A module's scope (ADR-022e v1.1): `site` — it belongs to the Site, serves
+# every Environment and installs in mgmt — or `environment`. It is DERIVED, not
+# stored: a module is site-scoped exactly when its stack is `foundation`, and
+# becomes so by moving into that stack. Nothing else says it, so nothing else
+# can disagree (#676 retired module.tier, which said the same thing twice).
+#
+# During the release that retires `tier`, a JSON with no `stack` falls back to
+# it — a deployed config the merge has not yet given a stack, or a module from a
+# repository whose module JSONs carry none. The fallback goes with the release
+# after. `zone.tier` (ADR-014) is a different field and is untouched.
+module_scope_filter() {
+    printf '%s' 'if (.stack // "") == "foundation" then "site"
+                 elif (.stack // "") != "" then "environment"
+                 elif (.tier // "") == "foundation" then "site"
+                 else "environment" end'
+}
+
+# Arguments: <module-json>. An unreadable file is environment-scoped: the
+# narrower scope, which grants nothing a site-scoped module is allowed.
+module_scope_of() {
+    local s
+    s="$(jq -r "$(module_scope_filter)" "$1" 2>/dev/null || true)"
+    [[ "${s}" == "site" ]] && printf 'site\n' || printf 'environment\n'
+}
+
 # Look a module up in one catalog file, by moduleName OR legacyName.
-# Echoes "<moduleJson>\t<tier>" and returns 0 on a hit; returns 1 with no output
+# Echoes "<moduleJson>\t<scope>" and returns 0 on a hit; returns 1 with no output
 # when the module is not in this catalog or the catalog is unreadable.
 #
 # Two catalog shapes are read (#463). The current one is a single `modules` list
@@ -61,7 +88,10 @@ repo_catalog_file() {
 # application module. The shape before it split the same entries across
 # `foundationModules` / `applicationModules` (searched) and `proxmoxTemplates` /
 # `testModules` (not), with `tier` repeated on each entry; catalogs in other
-# repositories still have it, so it is read for a stable cycle.
+# repositories still have it. Its scope comes from the entry's `stack` like any
+# other (being listed under foundationModules does not make a module site-scoped
+# — moving into the foundation stack does), and from `tier` only when the entry
+# has no stack, for the release that retires it (#676).
 #
 # Arguments: <catalog-file> <module-name>
 repo_catalog_entry() {
@@ -75,12 +105,12 @@ repo_catalog_entry() {
                           and ((.stack // "") as $s | $s != "template" and $s != "test")))
              | .[0]) as $e
             | if $e == null then empty
-              else "\($e.moduleJson)\t\(if (.modules | map(select(.moduleName == $m or .legacyName == $m)) | .[0].stack) == "foundation" then "foundation" else "app" end)" end
+              else "\($e.moduleJson)\t\($e | '"$(module_scope_filter)"')" end
         else
             (((.foundationModules // []) + (.applicationModules // []))
              | map(select(.moduleName == $m or .legacyName == $m))
              | .[0]) as $e
-            | if $e == null then empty else "\($e.moduleJson)\t\($e.tier // "app")" end
+            | if $e == null then empty else "\($e.moduleJson)\t\($e | '"$(module_scope_filter)"')" end
         end
       ' "${catalog}" 2>/dev/null || true)"
     [[ -n "${entry}" ]] || return 1

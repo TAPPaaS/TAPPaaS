@@ -3,7 +3,7 @@
   "vmname": "identity",
   "vmid": 140,
   "zone0": "mgmt",
-  "tier": "foundation",
+  "stack": "foundation",
   "source": "official",
   "status": "Development",
   "moduleSource": "/home/tappaas/TAPPaaS/src/foundation/identity",

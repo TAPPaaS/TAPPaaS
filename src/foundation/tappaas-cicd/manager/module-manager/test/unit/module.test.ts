@@ -27,6 +27,7 @@ import {
   validateOrphanFields,
   validateSourceLocation,
 } from "../../src/validate";
+import { moduleScope } from "../../../../lib/ts/src/scope";
 import { AddOptions, AdoptOptions, DeleteOptions, ModifyOptions, ModuleConfig, ValidateFinding, ValidateReport } from "../../src/types";
 import { FakeModuleClient } from "./fake-client";
 import { HELP, run } from "../../src/main";
@@ -107,12 +108,32 @@ const CONFIG =
     !report.findings.some((f) => f.module === "identity" && f.severity === "error"),
     "foundation+official passes (no error)",
   );
-  // legacyapp = no tier → warning, no error
+  // legacyapp = no stack → warning (environment-scoped), no error
   check(
     report.findings.some(
-      (f) => f.module === "legacyapp" && f.severity === "warning" && /defaulting to 'app'/.test(f.message),
+      (f) => f.module === "legacyapp" && f.severity === "warning" && /no 'stack'/.test(f.message),
     ),
-    "tier-less legacy app WARNS (defaults to app)",
+    "a stackless legacy app WARNS (environment-scoped)",
+  );
+  // policyonly still carries the retired tier → warned, never an error (#676)
+  check(
+    report.findings.some((f) => f.module === "policyonly" && f.severity === "warning" && /'tier' is retired/.test(f.message)) &&
+      !report.findings.some((f) => f.module === "policyonly" && f.severity === "error"),
+    "a retired tier is warned about, not failed",
+  );
+}
+
+// ── 3b. scope is derived from the stack (ADR-022e v1.1, #676) ──────────
+{
+  check(moduleScope({ stack: "foundation" }) === "site", "moduleScope: stack foundation → site");
+  check(moduleScope({ stack: "ai" }) === "environment", "moduleScope: any other stack → environment");
+  check(moduleScope({ stack: "communication", tier: "foundation" }) === "environment", "moduleScope: the stack outranks a contradicting tier");
+  check(moduleScope({ tier: "foundation" }) === "site", "moduleScope: no stack → the retired tier, for one release");
+  check(moduleScope({}) === "environment" && moduleScope(null) === "environment", "moduleScope: nothing said → environment");
+  const contra = validateModules([{ name: "mail", stack: "communication", tier: "foundation", source: "community" } as ModuleConfig], {});
+  check(
+    contra.errors === 0 && contra.findings.some((f) => /is ignored/.test(f.message)),
+    "validate: a community module whose tier says foundation but whose stack does not is environment-scoped — the tier is named as ignored",
   );
 }
 
@@ -573,7 +594,7 @@ function captureList(client: FakeModuleClient, extraArgs: string[] = []): string
 
   const hit = resolveViaCatalog(cfg, "catmod");
   check(
-    hit !== null && hit.repo === "Legacy" && hit.tier === "app",
+    hit !== null && hit.repo === "Legacy" && hit.scope === "environment",
     "resolveViaCatalog: a legacy-named catalog resolves (#459)",
   );
   check(resolveViaCatalog(cfg, "shelly-fleet") === null, "resolveViaCatalog: absent module → null");
@@ -584,20 +605,20 @@ function captureList(client: FakeModuleClient, extraArgs: string[] = []): string
   check(classifyModuleResolution(cfg, "stale").path === "broken-location", "classify: recorded directory gone → broken-location");
   check(classifyModuleResolution(cfg, "shelly-fleet").path === "unresolvable", "classify: neither path → unresolvable");
 
-  // Tier: the deployed config outranks the catalog, and is the ONLY source for
-  // a module located via .location (#460).
+  // Scope (ADR-022e, #676): the deployed config outranks the catalog, and is
+  // the ONLY source for a module located via .location (#460).
   check(
-    classifyModuleResolution(cfg, "thermostat").tierSource === "config",
-    "classify: tier comes from the deployed config when set",
+    classifyModuleResolution(cfg, "thermostat").scopeSource === "config",
+    "classify: scope comes from the deployed config when it says (a retired tier, for one release)",
   );
   const catmodRes = classifyModuleResolution(cfg, "catmod");
   check(
-    catmodRes.tier === "app" && catmodRes.tierSource === "catalog",
-    "classify: tier falls back to the catalog when the config declares none",
+    catmodRes.scope === "environment" && catmodRes.scopeSource === "catalog",
+    "classify: scope falls back to the catalog when the config says nothing",
   );
   check(
-    classifyModuleResolution(cfg, "shelly-fleet").tier === null,
-    "classify: an unresolvable module reports no tier rather than a wrong one",
+    classifyModuleResolution(cfg, "shelly-fleet").scope === null,
+    "classify: an unresolvable module reports no scope rather than a wrong one",
   );
 
   rmSync(tmp, { recursive: true, force: true });

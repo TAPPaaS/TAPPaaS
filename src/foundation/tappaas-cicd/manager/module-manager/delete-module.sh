@@ -102,8 +102,8 @@ Options:
                    config name (<module>-<env> for a non-default/non-mgmt env).
     --variant <name>      DEPRECATED alias for --environment.
     --yes, -y      Skip the destroy confirmation prompt (for automation)
-    --force        Delete despite dependent modules; REQUIRED for tier:foundation
-                   modules; also implies --yes AND --remove
+    --force        Delete despite dependent modules; REQUIRED for site-scoped
+                   modules (the foundation stack); also implies --yes AND --remove
     --decommission A machine only: also run its module's delete.sh, which takes the
                    Site's side of it down (a satellite: OPNsense peer, tunnel, edge
                    rules). Without it a machine is only unregistered; the machine
@@ -328,12 +328,10 @@ main() {
 
     info "  ${GN}✓${CL} Module config found: ${module_json}"
 
-    # ── Foundation-tier protection (ADR-007 P5) ──────────────────────
-    # A tier:foundation module is a critical platform component — refuse to
-    # delete it unless --force is given.
-    local _tier
-    _tier="$(jq -r '.tier // "app"' "${module_json}" 2>/dev/null)"
-    if [[ "${_tier}" == "foundation" ]]; then
+    # ── Site-scope protection (ADR-007 P5, ADR-022e D3) ──────────────
+    # A site-scoped module (the foundation stack) is a platform component every
+    # Environment relies on — refuse to delete it unless --force is given.
+    if [[ "$(module_scope_of "${module_json}")" == "site" ]]; then
         if [[ "${OPT_FORCE}" != true ]]; then
             error "Cannot delete foundation module '${module}' without --force."
             die "Foundation modules are critical platform components — re-run with --force to proceed."

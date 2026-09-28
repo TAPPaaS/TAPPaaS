@@ -34,8 +34,8 @@ converge applies it live*. `converge.ts` already calls this situation
 | `releaseDate` | in-place | none | — | Authored in source module file. Informational. |
 | `maintainer` | in-place | none | — | Authored in source module file. Informational. |
 | `status` | in-place | none | — | Authored in source module file (+ tooling). `archived` and `external` take the module **out of the update lifecycle** — `update-module.sh` skips it unless `--force`. Set automatically by `delete-module.sh --archive`. |
-| `tier` | in-place | none | — | Authored in source module file. `foundation` means mgmt-only, single-instance, and `--force` to delete; it also makes `source: official` a lint requirement. Changing it changes what the platform will let you do to the module. |
-| `source` | in-place | none | — | Authored in inferred at deploy; pinned only when the module file must. Trust marker. A `foundation` module from a non-`official` source fails the tier/source lint unless `--allow-fork`. |
+| `tier` | in-place | none | — | **Retired** (ADR-022e, #676). Scope follows `stack` now; a config still carrying `tier` loses it on its next update (the release no longer defines it), and until then it is read only when the config has no `stack`. |
+| `source` | in-place | none | — | Authored in inferred at deploy; pinned only when the module file must. Trust marker. A site-scoped module (`stack: foundation`) from a non-`official` source fails the scope/source lint unless `--allow-fork`. |
 | `rebootOk` | in-place | none | — | Authored in source module file. The [D8 disruption authorization](../tappaas-cicd/UPDATE-POLICY.md#reading-the-columns). `false` (the default) means an unattended converge **defers** every `in-place-reboot` and `migrate` change instead of applying it. This is the one unowned field that directly gates the converge. |
 | `dependsOn` | manual | none | — | Authored in source module file. The service wiring. See the hazard below. |
 | `integratesWith` | manual | none | — | Authored in source module file. Optional wiring; a missing provider is ignored rather than fatal (#501). Same delta mechanism as `dependsOn`. |

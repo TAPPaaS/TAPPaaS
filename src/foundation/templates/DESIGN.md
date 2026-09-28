@@ -22,7 +22,7 @@ Two things, deliberately kept together:
 
 | File | Role |
 |------|------|
-| `templates.json` | Module json (`tier: foundation`, `provides: ["nixos", "debian"]`). |
+| `templates.json` | Module json (`stack: foundation`, so site-scoped; `provides: ["nixos", "debian"]`). |
 | `tappaas-nixos.json` | Build config for the NixOS template: VMID 8080, pinned `version` + `imageLocation` (GitHub Release), `imageType: img`. |
 | `tappaas-nixos.nix` | Manual-install entry point: `configuration.nix` for installing the baseline by hand from the NixOS ISO (imports `hardware-configuration.nix` + `tappaas-common.nix`). |
 | `tappaas-common.nix` | The hardware-agnostic TAPPaaS NixOS baseline — shared verbatim by the prebuilt image and the manual path, and imported by every module's own `.nix` (#324). It declares no time zone: that is the site's fact, imported from the generated `/etc/nixos/tappaas-site.nix` when it exists (#472). |

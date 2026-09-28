@@ -70,12 +70,12 @@ Options:
     --environment <name>     Target environment (ADR-007 P5). Drives the VM name
                              (<module> in the default env, else <module>-<env>)
                              and zone0 (from config/environments/<env>.json →
-                             network.zone). Foundation-tier modules may ONLY be
-                             installed into 'mgmt'.
+                             network.zone). Site-scoped modules (the foundation
+                             stack, ADR-022e) may ONLY be installed into 'mgmt'.
     --variant <name>         DEPRECATED alias for --environment (compat period).
                              --environment wins if both are given.
-    --allow-fork             Permit a foundation-tier module from a non-official
-                             source (tier/source lint override).
+    --allow-fork             Permit a site-scoped module from a non-official
+                             source (scope/source lint override).
     --no-rollback            Keep a failed install in place for inspection
                              (default: remove what the run created — #584)
     --reinstall              Delete the existing deployment first, then install
@@ -85,7 +85,7 @@ Options:
 
 Environment / zone resolution (ADR-007 P5):
     * --environment given          → use it.
-    * else tier:foundation         → 'mgmt'.
+    * else scope:site (the foundation stack) → 'mgmt'.
     * else                         → the default environment (single non-mgmt
                                       env / site name); else today's behaviour.
     zone0: explicit .zone0 in the JSON wins; else the environment's network.zone
@@ -386,8 +386,8 @@ main() {
     # was being installed into — silently wrong where a shared provider also
     # existed, a hard "provider not installed" where only the environment's did.
 
-    # ── Step 0: Classify tier/source and resolve the target environment ──
-    info "${BOLD}Step 0: Classify (tier/source) and resolve environment${CL}"
+    # ── Step 0: Classify scope/source and resolve the target environment ──
+    info "${BOLD}Step 0: Classify (scope/source) and resolve environment${CL}"
 
     # Locate the module SOURCE. The current directory wins (back-compat: run from
     # the module dir), otherwise resolve it from the repository catalogs (ADR-004)
@@ -405,13 +405,15 @@ main() {
     fi
 
     # The authored module JSON in the module directory (cwd) is the source of
-    # truth for tier (and any pinned source). Read it before copying anything.
+    # truth for stack, hence scope (and any pinned source). Read it before
+    # copying anything.
     local source_json="./${module}.json"
     [[ -f "${source_json}" ]] || die "Source module config not found: ${source_json} (run install-module.sh from the module directory)"
 
-    # Tier/source lint (ADR-007b). Foundation modules MUST be source:official
-    # unless --allow-fork; community modules warn (non-fatal). The lint is the
-    # authority on the enum values, so install fails fast on a bad classification.
+    # Scope/source lint (ADR-007b, ADR-022e). Site-scoped modules MUST be
+    # source:official unless --allow-fork; community modules warn (non-fatal). The
+    # lint is the authority on the enum values, so install fails fast on a bad
+    # classification.
     local lint_cmd="/home/tappaas/bin/validate-module-tier-source.sh"
     if [[ ! -x "${lint_cmd}" ]]; then
         # Fall back to the script alongside this one (e.g. when run from the repo
@@ -421,21 +423,23 @@ main() {
     local -a lint_args=("${source_json}")
     [[ "${allow_fork}" == true ]] && lint_args+=("--allow-fork")
     if ! "${lint_cmd}" "${lint_args[@]}"; then
-        die "tier/source lint failed for ${module} — fix the classification (or pass --allow-fork for a foundation fork)"
+        die "scope/source lint failed for ${module} — fix the classification (or pass --allow-fork for a site-scoped fork)"
     fi
 
-    local tier
-    tier="$(jq -r '.tier // "app"' "${source_json}")"
-    info "  tier=${BL}${tier}${CL}"
+    # Scope is derived from the stack (ADR-022e v1.1, #676): the foundation stack
+    # is site-scoped, everything else environment-scoped.
+    local scope
+    scope="$(module_scope_of "${source_json}")"
+    info "  scope=${BL}${scope}${CL} (stack: $(jq -r '.stack // "-"' "${source_json}"))"
 
     # Environment resolution (ADR-007 P5):
-    #   explicit --environment → use it; else tier:foundation → mgmt; else the
+    #   explicit --environment → use it; else scope:site → mgmt; else the
     #   default environment (single non-mgmt env / site name); else "" (back-compat,
     #   meaning "no environment selected" — behaves like a vanilla legacy install).
     local default_env
     default_env="$(resolve_default_environment)"
     if [[ -z "${environment}" ]]; then
-        if [[ "${tier}" == "foundation" ]]; then
+        if [[ "${scope}" == "site" ]]; then
             environment="mgmt"
         elif [[ -n "${default_env}" ]]; then
             environment="${default_env}"
@@ -449,16 +453,13 @@ main() {
         info "  no environment selected — legacy/no-env install (back-compat)"
     fi
 
-    # Foundation-tier constraints: mgmt-only + single-instance (offline guard).
-    # Checked before the existence test below so a foundation module gets the more
-    # specific "foundation only in mgmt" error rather than a generic not-registered.
-    if [[ "${tier}" == "foundation" ]]; then
-        if [[ -n "${environment}" && "${environment}" != "mgmt" ]]; then
-            die "Foundation modules can only be installed in the 'mgmt' environment (got '${environment}')"
-        fi
-        if module_config_exists "${module}" && [[ "${reinstall}" != true ]]; then
-            die "Foundation module '${module}' is already installed (single-instance). Take the release forward with 'module-manager module update ${module}', or replace it with --reinstall."
-        fi
+    # A site-scoped module installs in mgmt (ADR-022e D3). Checked before the
+    # existence test below so it gets this specific error rather than a generic
+    # not-registered. It is NOT single-instance (D4, #676): a site-scoped module
+    # may have several named instances, as the satellite does. Installing the
+    # same instance twice is refused for every module by Step 1.
+    if [[ "${scope}" == "site" && -n "${environment}" && "${environment}" != "mgmt" ]]; then
+        die "Site-scoped modules (the foundation stack) can only be installed in the 'mgmt' environment (got '${environment}')"
     fi
 
     # Reject an explicitly-named environment that does not exist (fail fast, before

@@ -95,10 +95,13 @@ m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
 d = Path(tempfile.mkdtemp())
 def w(name, obj): (d / name).write_text(json.dumps(obj))
 w("nextcloud.json",   {"kind": "vm", "vmname": "nextcloud", "moduleSource": "/x/nextcloud"})
-w("dh-test1.json",    {"kind": "machine", "address": "10.0.0.90", "moduleSource": "/x/debianhost", "tier": "foundation"})
-w("tappaas2.json",    {"kind": "machine", "address": "tappaas2.mgmt.internal", "moduleSource": "/x/pvehost", "tier": "foundation"})
+w("dh-test1.json",    {"kind": "machine", "address": "10.0.0.90", "moduleSource": "/x/debianhost", "stack": "foundation"})
+w("tappaas2.json",    {"kind": "machine", "address": "tappaas2.mgmt.internal", "moduleSource": "/x/pvehost", "stack": "foundation"})
+# #676: a config the merge has not yet given a stack still reads its retired tier
 w("tappaas1.json",    {"kind": "machine", "address": "tappaas1.mgmt.internal", "moduleSource": "/x/pvehost", "tier": "foundation"})
-w("labbox.json",      {"kind": "machine", "address": "10.0.0.91", "moduleSource": "/x/debianhost"})   # no tier: an app
+w("labbox.json",      {"kind": "machine", "address": "10.0.0.91", "moduleSource": "/x/debianhost"})   # no stack: environment-scoped
+# #676: the stack decides — a tier that contradicts it is ignored
+w("mailbox.json",     {"kind": "machine", "address": "10.0.0.92", "moduleSource": "/x/debianhost", "stack": "communication", "tier": "foundation"})
 w("old.json",         {"vmname": "old"})
 w("marker.json",      {"kind": "module"})
 w("provider.json",    {"provides": ["nixos"]})
@@ -114,7 +117,7 @@ w("list.json", ["not", "an", "object"])
 (d / "broken.json").write_text("{ broken")
 m.CONFIG_DIR = d
 got = sorted(m.get_installed_apps())
-want = sorted(["nextcloud", "dh-test1", "tappaas1", "tappaas2", "labbox", "old", "marker", "provider",
+want = sorted(["nextcloud", "dh-test1", "tappaas1", "tappaas2", "labbox", "mailbox", "old", "marker", "provider",
                "satellite-s1", "satellite", "vault", "tappaas-nixos"])
 assert got == want, f"modules: {got} != {want}"
 to_update, skipped = m.partition_by_lifecycle(got)
@@ -135,7 +138,10 @@ assert fm == ["tappaas1", "tappaas2", "dh-test1"], fm
 assert m.foundation_order(["cluster", "tappaas-cicd", "backup"], fm) == \
     ["cluster", "tappaas1", "tappaas2", "dh-test1", "tappaas-cicd", "backup"]
 assert m.foundation_order(["tappaas-cicd"], fm) == fm + ["tappaas-cicd"], "no cluster: machines lead"
-assert "labbox" not in fm, "a machine without tier foundation stays an app"
+assert "labbox" not in fm, "a machine without the foundation stack is environment-scoped"
+assert "mailbox" not in fm, "a machine is site-scoped by its stack, not by a tier that says otherwise (#676)"
+assert m.module_scope({"stack": "foundation"}) == "site" and m.module_scope({"tier": "foundation"}) == "site"
+assert m.module_scope({"stack": "ai", "tier": "foundation"}) == "environment" and m.module_scope({}) == "environment"
 PYSEL
     then
         passed=$((passed + 1))

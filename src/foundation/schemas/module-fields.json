@@ -208,20 +208,18 @@
       "note": "Disruption is authorized iff '--allow-disruption' was passed (an operator, now: 'module-manager module update <m> --allow-disruption', or 'site-manager update --allow-disruption' for a run), OR rebootOk is true AND the scheduled run has automaticReboot (ADR-020 v0.10 D8). '--force' is a different lever: it proceeds past a refusal and never reboots. When a disruptive change is not authorized the converge applies everything else, prints a machine-parseable 'DEFERRED:' line and still exits 0; update-tappaas collects those into an end-of-sweep summary."
     },
     "tier": {
-      "description": "Lifecycle role of the module (ADR-007b). Answers 'Can it be uninstalled?'. Orthogonal to 'source' — never collapsed into one enum (MECE). 'foundation' modules are critical platform components: they may only be installed into the 'mgmt' environment, are single-instance, and require --force to delete. 'app' modules are tenant-facing and deploy into any environment.",
+      "description": "RETIRED (ADR-022e, #676) — replaced by scope, which is DERIVED from `stack`: the foundation stack is site-scoped, everything else environment-scoped. No module sets it any more; a deployed config that still carries it loses it on its next update (the release no longer defines it), and until then it is read only when the config has no `stack`. The name `tier` now means `zone.tier` alone (ADR-014).",
       "type": "string",
-      "requiredOnModule": true,
+      "requiredOnModule": false,
       "requiredBy": [],
       "usedBy": [
         "general"
       ],
-      "default": "app",
       "values": {
-        "foundation": "Critical platform module (mgmt-only, single-instance, --force to delete). Lint rule: source MUST be 'official' (or explicit --allow-fork override).",
-        "app": "Tenant/environment-facing module — deployable into any environment, multi-instance across environments."
+        "foundation": "Retired: read as site-scoped only when the config has no stack.",
+        "app": "Retired: read as environment-scoped only when the config has no stack."
       },
-      "example": "app",
-      "note": "Mandatory in authored module JSON (ADR-007b CR-04). The schema gives it a 'app' default so legacy module configs that predate ADR-007 still validate (back-compat); authored modules SHOULD set it explicitly."
+      "note": "Kept in the schema for one release so a config that still carries it is not reported as holding an unknown field; removed the release after (#676)."
     },
     "kind": {
       "description": "What type of workload the module is (ADR-022f D1) — equivalently, which Controller builds it. AUTHORED in the module's source JSON and adopted by deployments through the 3-way merge. Not what it runs on: that is its Host, named in `node` (ADR-022c D3).",
@@ -256,7 +254,7 @@
         "local": "⚪ Local — local dev, not in any catalog."
       },
       "example": "official",
-      "note": "Optional. Defaults to 'official'. Lint rule (validate-module-tier-source.sh): tier:foundation requires source:official unless --allow-fork is given."
+      "note": "Optional. Defaults to 'official'. Lint rule (validate-module-tier-source.sh, `module validate`): a site-scoped module (stack foundation, ADR-022e) requires source:official unless --allow-fork is given."
     },
     "moduleSource": {
       "description": "Absolute path to the module directory containing install.sh, update.sh, etc.",
@@ -429,7 +427,7 @@
       "note": "Recorded, not enforced: nothing checks it against the machine itself."
     },
     "stack": {
-      "description": "The one stack a module belongs to (#463): what a catalogue lists it under, and — once #421 lands — the directory it lives in. An enumerated field, and this schema is the list's owner: every module carries exactly one of the values below, as a field in its own module JSON. Three of them say what a module IS rather than what it is for — `foundation`, `template` and `test`; the rest group application modules by what they are for.",
+      "description": "The one stack a module belongs to (#463): what a catalogue lists it under, and — once #421 lands — the directory it lives in. An enumerated field, and this schema is the list's owner: every module carries exactly one of the values below, as a field in its own module JSON. Three of them say what a module IS rather than what it is for — `foundation`, `template` and `test`; the rest group application modules by what they are for. `foundation` also decides a module's scope (ADR-022e v1.1): a foundation-stack module is site-scoped — it belongs to the Site, serves every Environment, installs in mgmt, must come from an official source (or --allow-fork) and needs --force to delete; every other module is environment-scoped. A module becomes site-scoped by moving into the foundation stack, and in no other way.",
       "type": "string",
       "values": {
         "foundation": "Part of the platform every site runs.",

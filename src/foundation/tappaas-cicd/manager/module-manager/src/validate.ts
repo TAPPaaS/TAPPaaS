@@ -1,16 +1,18 @@
 // validate.ts — the module-manager `validate` verb engine.
 //
-// Ports the ADR-007b tier/source lint (validate-module-tier-source.sh) into
+// Ports the ADR-007b scope/source lint (validate-module-tier-source.sh) into
 // pure, in-process TS so `module validate` can lint a single module config or
 // EVERY deployed module config without shelling out. This is the real validator
 // the bash `validate-module.sh` stub never filled in (see DESIGN.md "Pending").
 //
 // Lint rules (per validate-module-tier-source.sh):
-//   - tier   : default 'app' when absent (back-compat → warning). Explicit value
-//              must be one of: foundation | app.
+//   - scope  : DERIVED from `stack` (ADR-022e v1.1) — the foundation stack is
+//              site-scoped. No stack → warning (falls back to a retired `tier`
+//              for one release, else environment). A `tier` still present is
+//              warned about, and named as ignored where it contradicts the stack.
 //   - source : default 'official' when absent. Must be one of:
 //              official | community | private | local.
-//   - RULE   : tier:foundation REQUIRES source:official, unless allowFork.
+//   - RULE   : a site-scoped module REQUIRES source:official, unless allowFork.
 //   - WARN   : source:community is valid but unsupported (🟡).
 //
 // Pure: depends only on the loaded ModuleConfig(s).
@@ -26,14 +28,14 @@ import {
 import { ServiceFs, parseDependency } from "./services";
 import { moduleSourceOf } from "../../../lib/ts/src/instance";
 import { MODULE_STATUS_VALUES, ModuleConfig, ValidateFinding, ValidateReport } from "./types";
+import { moduleScope } from "../../../lib/ts/src/scope";
 
-export const VALID_TIERS = ["foundation", "app"] as const;
 export const VALID_SOURCES = ["official", "community", "private", "local"] as const;
 
 export interface ValidateOptions {
   allowFork?: boolean;
   // Filesystem probe for the dependsOn reference-integrity check (#495 follow-up).
-  // Omit it and that check is SKIPPED — the tier/source lint stays pure and
+  // Omit it and that check is SKIPPED — the scope/source lint stays pure and
   // usable without a tree. main.ts always supplies realServiceFs(configDir).
   fs?: ServiceFs;
   // Declared repositories from site.json. Optional so a hand-built call still
@@ -59,13 +61,22 @@ export function validateModule(
   const warn = (message: string): void =>
     void out.push({ module: m.name, severity: "warning", message });
 
-  // tier — default 'app' when absent (warn), explicit out-of-range is an error.
-  let tier = m.tier ?? "";
-  if (!tier) {
-    warn(`no 'tier' field — defaulting to 'app' (back-compat; set tier: foundation|app explicitly)`);
-    tier = "app";
-  } else if (!(VALID_TIERS as readonly string[]).includes(tier)) {
-    err(`invalid tier '${tier}' (must be one of: ${VALID_TIERS.join(" ")})`);
+  // scope — derived from the stack (ADR-022e v1.1, #676). Warnings only: a
+  // module without a stack still installs, environment-scoped, and a `tier` is
+  // read for one more release.
+  const scope = moduleScope(m);
+  if (!m.stack) {
+    warn(
+      `no 'stack' — ${scope}-scoped; a module states its stack (#463), and the foundation stack is what makes it site-scoped`,
+    );
+  }
+  if (m.tier) {
+    const tierSays = m.tier === "foundation" ? "site" : "environment";
+    warn(
+      m.stack && tierSays !== scope
+        ? `'tier: ${m.tier}' is ignored — scope follows the stack, and stack '${m.stack}' is ${scope}-scoped (ADR-022e)`
+        : `'tier' is retired (ADR-022e, #676) — scope follows the stack; the next update removes it`,
+    );
   }
 
   // source — default 'official' when absent (always valid).
@@ -74,13 +85,13 @@ export function validateModule(
     err(`invalid source '${source}' (must be one of: ${VALID_SOURCES.join(" ")})`);
   }
 
-  // RULE: tier:foundation requires source:official (unless --allow-fork).
-  if (tier === "foundation" && source !== "official") {
+  // RULE: a site-scoped module requires source:official (unless --allow-fork).
+  if (scope === "site" && source !== "official") {
     if (opts.allowFork) {
-      warn(`tier:foundation with source:'${source}' permitted by --allow-fork (foundation fork)`);
+      warn(`site-scoped (stack foundation) with source:'${source}' permitted by --allow-fork (foundation fork)`);
     } else {
       err(
-        `tier:foundation requires source:official (got '${source}'). Pass --allow-fork to permit a foundation fork.`,
+        `site-scoped (stack foundation) requires source:official (got '${source}'). Pass --allow-fork to permit a foundation fork.`,
       );
     }
   }
@@ -91,7 +102,7 @@ export function validateModule(
   }
 
   // status — descriptive, so an out-of-range value is a WARNING (not an error
-  // like tier/source): erroring would fail-validate legacy fleets with variant
+  // like scope/source): erroring would fail-validate legacy fleets with variant
   // casing. Before #556 the permitted set lived only in a code comment, so no
   // check on the VALUE was possible; MODULE_STATUS_VALUES now makes it one.
   const status = m.status ?? "";

@@ -1,7 +1,7 @@
 # module-manager
 
 The **module lifecycle** manager: install, update, delete, test, reconcile, and
-snapshot TAPPaaS modules, with tier/source classification lint and
+snapshot TAPPaaS modules, with scope/source classification lint and
 environment-aware deployment. It owns the per-module JSON config in `config/` and
 drives the Proxmox cluster (over SSH) to provision and maintain the module's VM.
 
@@ -10,9 +10,12 @@ drives the Proxmox cluster (over SSH) to provision and maintain the module's VM.
 - Per-module config JSON in `config/` (`<module>.json`, or
   `<module>-<environment>.json` for non-default environments), plus `.orig`
   backups used for a 3-way merge of operator edits against release updates.
-- The `tier` (`foundation` | `app`) and `source`
-  (`official` | `community` | `private` | `local`) classification on each module
-  JSON, validated against `module-fields.json`.
+- The classification of each module: its **scope**, derived from its `stack`
+  (ADR-022e v1.1 — the `foundation` stack is **site**-scoped: installed in `mgmt`,
+  `source: official` unless `--allow-fork`, `--force` to delete; every other stack
+  is **environment**-scoped), and its `source` (`official` | `community` |
+  `private` | `local`), validated against `module-fields.json`. The old `tier`
+  field is retired (#676): read only when a config has no `stack`, for one release.
 - The `"kind":"module"` tag stamped onto every deployed config at install time —
   the authoritative marker `list`/`show` use to tell a deployed module apart
   from the co-located state files (`zones.json`, `site.json`, …). Configs from
@@ -33,7 +36,7 @@ later retire phase).
 | `module show <m>` | — | one deployed config in full (`--json`) |
 | `module resolve <m>` | `src/resolve.ts` | **desired state**: the config *plus* the schema defaults it does not declare (`--json`) |
 | `module drift <m>` | `src/converge.ts` | that desired state **vs the live guest**, per service. `--service cluster:vm --json` prints the record a converge applies |
-| `module validate [<m>]` | tier/source lint | all modules, or one; `--allow-fork` |
+| `module validate [<m>]` | scope/source lint | all modules, or one; `--allow-fork` |
 | `module add <m>` | `install-module.sh` | create + provision; `--instance NAME` names the instance (ADR-026 D6.4) |
 | `module adopt <address>` | `adopt-module.sh` | a machine that already runs becomes a module (ADR-026 D8.1); nothing on it is changed |
 | `module update <m>` | `update-module.sh` | **release update** (snapshot + test + 3-way merge) — what the sweep runs (#655) |
@@ -310,7 +313,7 @@ install-module.sh <module-name> [--environment <name>] [--instance <name>]
   parsing the name — three cluster nodes are three instances of one module. The
   name must be a DNS label and not one `config/` already uses (`site`, `zones`,
   peer configs…).
-- `--allow-fork` — permit a `tier:foundation` module from a non-`official` source.
+- `--allow-fork` — permit a site-scoped module (the `foundation` stack) from a non-`official` source.
 - `--reinstall` — delete then install: the only way to replace a deployed config
   (recovers a failed partial install too). There is no `--force`: an already
   deployed module is taken forward with `module update <m>` (#453).
@@ -366,7 +369,7 @@ delete-module.sh <module-name> [--archive|--remove] [--vmid <id>] [--decommissio
 - `--vmid <id>` — target a specific VMID.
 - `--environment <name>` (alias `--variant`).
 - `--yes` / `-y` — skip the confirmation prompt.
-- `--force` — skip dependency checks; **required** for `tier:foundation` modules.
+- `--force` — skip dependency checks; **required** for site-scoped modules (the `foundation` stack).
 - A machine (`kind: machine`) is only **unregistered**: the config goes, the machine keeps
   running untouched, `--vmid` is refused, and the module's own `delete.sh` is **not** run
   (ADR-026 D8.1).
@@ -441,12 +444,15 @@ config-block form.
 module-format.sh <to-flat|to-config> <file.json> [--in-place]
 ```
 
-### `validate-module-tier-source.sh` — tier/source lint
+### `validate-module-tier-source.sh` — scope/source lint
 
 ```
 validate-module-tier-source.sh [--allow-fork] [--quiet] <module.json>
 ```
 
-`tier:foundation` requires `source:official` (override with `--allow-fork`);
-invalid tier/source enums are rejected; `source:community` warns. Used standalone
-and at install time.
+A site-scoped module (`stack: foundation`) requires `source:official` (override
+with `--allow-fork`); an invalid `source` is rejected; `source:community` warns. A
+module without a `stack` is warned about and installs environment-scoped. A `tier`
+is retired (#676): its presence is warned about, and one that contradicts the stack
+is named as ignored. The file keeps its historical name. Used standalone and at
+install time.

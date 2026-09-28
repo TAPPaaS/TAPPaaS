@@ -46,8 +46,8 @@ success.
 Foundation modules are updated in this order via `update-module.sh`:
 
 1. **cluster** - Runs `apt update && apt upgrade` on all Proxmox nodes, distributes VM creation scripts and zone definitions
-   - **foundation machines** - then every machine instance whose module is foundation-tier (`kind: machine`,
-     `tier: foundation`): the cluster nodes (`pvehost` instances, e.g. `tappaas1`) first, then other machines
+   - **foundation machines** - then every machine instance whose module is site-scoped (`kind: machine`,
+     `stack: foundation`, ADR-022e): the cluster nodes (`pvehost` instances, e.g. `tappaas1`) first, then other machines
      (e.g. a `debianhost`, which may carry the PBS and so must precede `backup`), each group by name.
      An instance is named after its host, never its module, so it can never match a name in this list (#665).
 2. **tappaas-cicd** - Converges the mothership's own module config (the pull, the component builds and the NixOS rebuild happen in `ExecStartPre`, before the sweep)

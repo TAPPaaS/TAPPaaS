@@ -29,7 +29,7 @@ injected `ModuleClient` (production `CliModuleClient`; tests inject a fake):
 |------|-------|---------|
 | `list` / `show` | TS (config) | enumerate / detail deployed modules (`--json`) |
 | `resolve` | TS (config) | `src/resolve.ts` — the desired-state document: config + `module-fields.json` defaults + the `.orig` flags (ADR-020 D1) |
-| `validate` | TS (config) | tier/source lint (ported from `validate-module-tier-source.sh`) + the ADR-020 service field-manifest lint |
+| `validate` | TS (config) | scope/source lint (ported from `validate-module-tier-source.sh`) + the ADR-020 service field-manifest lint |
 | `add` | bash | `install-module.sh` |
 | `adopt` | bash | `adopt-module.sh` — reach, learn, choose the module by OS, then `install-module.sh` (ADR-026 D8.1) |
 | `modify` | bash | `update-module.sh` (release update) |
@@ -270,9 +270,14 @@ all reusing the `dependsOn` machinery rather than forking it:
   used for the canonical config-block ("Pattern A") form.
 - **`config/<module>.json.orig`** — the pre-image used for a 3-way merge so
   operator customizations survive a release update.
-- **Classification:** `tier` (`foundation` | `app`) and `source`
-  (`official` | `community` | `private` | `local`) on each module JSON, with the
-  rule `tier:foundation` ⇒ `source:official` (override `--allow-fork`).
+- **Classification:** scope and `source` (`official` | `community` | `private` |
+  `local`). Scope is **derived** from `stack` (ADR-022e v1.1): the `foundation`
+  stack is site-scoped, everything else environment-scoped — one rule, implemented
+  three times that must agree: `module_scope_of` (`lib/module-catalog-lib.sh`),
+  `moduleScope` (`lib/ts/src/scope.ts`) and `module_scope` (the Python sweep).
+  Site-scoped ⇒ installed in `mgmt`, `source:official` (override `--allow-fork`),
+  `--force` to delete; not single-instance (D4). The retired `tier` is read only
+  when a config has no `stack`, for one release (#676).
 - **Environment:** `--environment` resolves the VM name and the zone from the
   target environment's `network.zone` (`config/environments/<env>.json`); the
   chosen environment is persisted on the module JSON so update/delete resolve the
@@ -293,11 +298,13 @@ parsing throughout.
 `test.sh` — **fast (default), no provisioning, temp fixtures:** entry-script
 smoke (parse + on-PATH); the `resolve_default_zone` helper (explicit zone0 wins,
 then `site.json` fallback, then a single non-mgmt environment, then `mgmt`);
-the environment/zone/vmname resolution; tier/source lint cases (foundation+official
-pass, foundation+community fail, app+any pass, invalid enums fail, `--allow-fork`
-override); the foundation→non-mgmt and foundation+community rejections; the
-`--variant`→`--environment` alias; the delete-foundation `--force` gate; and
-back-compat (a tier-less app module with no site/environments). It folds in the
+the environment/zone/vmname resolution; scope/source lint cases (foundation
+stack+official pass, foundation stack+community fail, other stacks+any source
+pass, an invalid source fails, `--allow-fork` override, the `tier` fallback when
+there is no stack and a contradicting `tier` ignored); the site-scoped→non-mgmt and
+foundation+community rejections; the `--variant`→`--environment` alias; the
+delete-site-scoped `--force` gate; `resolve-module.sh --field scope`; and
+back-compat (a stackless app module with no site/environments). It folds in the
 standalone `test-validate-module-tier-source.sh` lint suite, and it now also
 compiles and runs the **TypeScript unit tests** (`test/unit/module.test.ts`,
 `test/unit/inspect.test.ts` — the inspect report, the dependency-service drift
@@ -310,7 +317,7 @@ tier has been added yet.
 ## Pending / not yet implemented
 
 - **`validate` is real (in the TS verb).** `module validate` ports the ADR-007b
-  tier/source lint into `src/validate.ts` (foundation⇒official, enum checks,
+  scope/source lint into `src/validate.ts` (site-scoped⇒official, enum checks,
   community warn, `--allow-fork`) and runs it over one or every deployed config.
   The legacy `validate-module.sh` wrapper name was retired (Phase 7.1); the
   P10 `validate.sh` delegates straight to the TS verb. dependsOn/integratesWith

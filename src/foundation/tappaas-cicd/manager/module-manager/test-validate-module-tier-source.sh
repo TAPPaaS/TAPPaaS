@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
-# test-validate-module-tier-source.sh — standalone tests for the ADR-007b
-# tier/source lint (validate-module-tier-source.sh). FAST, offline, temp
+# test-validate-module-tier-source.sh — standalone tests for the scope/source
+# lint (validate-module-tier-source.sh; ADR-007b, ADR-022e). Scope is derived
+# from `stack`; `tier` is retired and read only as a fallback (#676). FAST, offline, temp
 # fixtures only. Prints "Results: N passed, M failed"; exits 1 on any failure.
 #
 set -uo pipefail
@@ -26,51 +27,63 @@ mkfix() { printf '%s\n' "$2" > "${WORK}/$1.json"; printf '%s\n' "${WORK}/$1.json
 
 run() { "$LINT" --quiet "$@" >/dev/null 2>&1; }
 
-f_off="$(mkfix found_off  '{"tier":"foundation","source":"official"}')"
-f_com="$(mkfix found_com  '{"tier":"foundation","source":"community"}')"
-f_priv="$(mkfix found_priv '{"tier":"foundation","source":"private"}')"
-f_def="$(mkfix found_def  '{"tier":"foundation"}')"                 # source defaults official
-a_off="$(mkfix app_off    '{"tier":"app","source":"official"}')"
-a_com="$(mkfix app_com    '{"tier":"app","source":"community"}')"
-a_priv="$(mkfix app_priv  '{"tier":"app","source":"private"}')"
-a_loc="$(mkfix app_loc    '{"tier":"app","source":"local"}')"
-notier="$(mkfix notier    '{"source":"official"}')"
-badtier="$(mkfix badtier  '{"tier":"weird","source":"official"}')"
-badsrc="$(mkfix badsrc    '{"tier":"app","source":"weird"}')"
+f_off="$(mkfix found_off  '{"stack":"foundation","source":"official"}')"
+f_com="$(mkfix found_com  '{"stack":"foundation","source":"community"}')"
+f_priv="$(mkfix found_priv '{"stack":"foundation","source":"private"}')"
+f_def="$(mkfix found_def  '{"stack":"foundation"}')"                 # source defaults official
+a_off="$(mkfix app_off    '{"stack":"ai","source":"official"}')"
+a_com="$(mkfix app_com    '{"stack":"ai","source":"community"}')"
+a_priv="$(mkfix app_priv  '{"stack":"ai","source":"private"}')"
+a_loc="$(mkfix app_loc    '{"stack":"ai","source":"local"}')"
+nostack="$(mkfix nostack  '{"source":"official"}')"
+t_com="$(mkfix tier_com   '{"tier":"foundation","source":"community"}')"      # no stack: tier decides, one release
+contra="$(mkfix contra    '{"stack":"communication","tier":"foundation","source":"community"}')"
+badtier="$(mkfix badtier  '{"stack":"ai","tier":"weird","source":"official"}')"
+badsrc="$(mkfix badsrc    '{"stack":"ai","source":"weird"}')"
 
-# foundation lint rule
-run "$f_off"  && ok "foundation+official passes"            || bad "foundation+official should pass"
-run "$f_def"  && ok "foundation (source defaulted) passes"  || bad "foundation default source should pass"
-run "$f_com"  && bad "foundation+community should FAIL"      || ok "foundation+community rejected (lint rule)"
-run "$f_priv" && bad "foundation+private should FAIL"        || ok "foundation+private rejected (lint rule)"
-run --allow-fork "$f_com" && ok "foundation+community + --allow-fork passes" \
+# a site-scoped module (the foundation stack) must come from an official source
+run "$f_off"  && ok "foundation stack + official passes"            || bad "foundation+official should pass"
+run "$f_def"  && ok "foundation stack (source defaulted) passes"    || bad "foundation default source should pass"
+run "$f_com"  && bad "foundation stack + community should FAIL"      || ok "foundation stack + community rejected (lint rule)"
+run "$f_priv" && bad "foundation stack + private should FAIL"        || ok "foundation stack + private rejected (lint rule)"
+run --allow-fork "$f_com" && ok "foundation stack + community + --allow-fork passes" \
                           || bad "--allow-fork should permit a foundation fork"
 
-# app: any source valid
-run "$a_off"  && ok "app+official passes"   || bad "app+official should pass"
-run "$a_com"  && ok "app+community passes"  || bad "app+community should pass"
-run "$a_priv" && ok "app+private passes"    || bad "app+private should pass"
-run "$a_loc"  && ok "app+local passes"      || bad "app+local should pass"
+# environment-scoped: any source valid
+run "$a_off"  && ok "app stack + official passes"   || bad "app+official should pass"
+run "$a_com"  && ok "app stack + community passes"  || bad "app+community should pass"
+run "$a_priv" && ok "app stack + private passes"    || bad "app+private should pass"
+run "$a_loc"  && ok "app stack + local passes"      || bad "app+local should pass"
 
-# enum + mandatory checks
-run "$notier"  && ok "missing tier defaults to app (back-compat)" || bad "missing tier should default to app, not fail"
-run "$badtier" && bad "invalid tier enum should FAIL"   || ok "invalid tier enum rejected"
+# scope follows the stack (ADR-022e v1.1); tier is retired (#676)
+run "$nostack" && ok "no stack: installs environment-scoped (warned)" || bad "a module without a stack should warn, not fail"
+# Captured, not piped: `grep -q` stops early, the lint dies of SIGPIPE, and
+# pipefail would report that as a failure.
+_out="$("$LINT" "$nostack" 2>&1)"
+grep -q "no 'stack'" <<< "$_out" && ok "…and is warned about" || bad "a missing stack should be warned about"
+run "$t_com"   && bad "no stack + tier:foundation + community should FAIL (tier fallback)" \
+               || ok "no stack: a retired tier:foundation still makes it site-scoped, for one release"
+run "$contra"  && ok "stack communication + tier:foundation + community passes: the stack decides" \
+               || bad "a tier contradicting the stack must be ignored"
+_out="$("$LINT" "$contra" 2>&1)"
+grep -q "is ignored" <<< "$_out" && ok "…and the ignored tier is named" || bad "the contradicting tier should be named as ignored"
+run "$badtier" && ok "a bogus tier only warns — it is retired, not checked" || bad "a retired tier must not fail the lint"
 run "$badsrc"  && bad "invalid source enum should FAIL" || ok "invalid source enum rejected"
 
 # ── maturity: status + version (#248) ───────────────────────────────────────
 # What a module may claim about itself. A maturity out of range fails; a
 # deployment state in a released module fails; the version form and the two
 # contradictions warn (the author decides which side is wrong).
-warns() { "$LINT" "$@" 2>&1 | grep -c "TIER/SOURCE:.*\(version\|status\|claims stable\|earned\)" ; }
+warns() { "$LINT" "$@" 2>&1 | grep -c "SCOPE/SOURCE:.*\(version\|status\|claims stable\|earned\)" ; }
 
-m_ok="$(mkfix mat_ok     '{"tier":"app","status":"Testing","version":"0.2.0"}')"
-m_bad="$(mkfix mat_bad   '{"tier":"app","status":"Ready","version":"0.2.0"}')"
-m_arch="$(mkfix mat_arch '{"tier":"app","status":"archived","version":"0.2.0"}')"
-m_ext="$(mkfix mat_ext   '{"tier":"app","status":"external","version":"0.2.0"}')"
-m_two="$(mkfix mat_two   '{"tier":"app","status":"Testing","version":"0.2"}')"
-m_dev1="$(mkfix mat_dev1 '{"tier":"app","status":"Development","version":"1.2.0"}')"
-m_prod0="$(mkfix mat_p0  '{"tier":"app","status":"Production","version":"0.9.0"}')"
-m_none="$(mkfix mat_none '{"tier":"app"}')"
+m_ok="$(mkfix mat_ok     '{"stack":"ai","status":"Testing","version":"0.2.0"}')"
+m_bad="$(mkfix mat_bad   '{"stack":"ai","status":"Ready","version":"0.2.0"}')"
+m_arch="$(mkfix mat_arch '{"stack":"ai","status":"archived","version":"0.2.0"}')"
+m_ext="$(mkfix mat_ext   '{"stack":"ai","status":"external","version":"0.2.0"}')"
+m_two="$(mkfix mat_two   '{"stack":"ai","status":"Testing","version":"0.2"}')"
+m_dev1="$(mkfix mat_dev1 '{"stack":"ai","status":"Development","version":"1.2.0"}')"
+m_prod0="$(mkfix mat_p0  '{"stack":"ai","status":"Production","version":"0.9.0"}')"
+m_none="$(mkfix mat_none '{"stack":"ai"}')"
 
 run "$m_ok"    && ok "a maturity in range passes"                  || bad "Testing 0.2.0 should pass"
 run "$m_bad"   && bad "an unknown status should FAIL"              || ok "an unknown status is rejected"

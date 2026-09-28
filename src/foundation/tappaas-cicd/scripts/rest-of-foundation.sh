@@ -57,7 +57,7 @@ install_one() {
     return 0
   fi
   # Foundation modules live in the mgmt environment — pass it explicitly (the
-  # tier:foundation default resolves to mgmt too, but be explicit + self-documenting).
+  # a site-scoped (foundation-stack) module resolves to mgmt too, but be explicit + self-documenting).
   ( cd "$dir" && install-module.sh "$m" --environment mgmt ) || { error "  install of ${m} failed"; return 1; }
   info "  ${GN}✓${CL} ${m} installed"
 }
