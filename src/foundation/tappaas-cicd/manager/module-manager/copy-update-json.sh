@@ -47,6 +47,9 @@ if ! declare -F info &>/dev/null; then
         warn()  { echo -e "${YW}[Warning]${CL} $*"; }
         error() { echo -e "${RD}[Error]${CL} $*" >&2; }
         die()   { error "$@"; exit 1; }
+        # Called below for every field it sets: without it a run before
+        # common-install-routines.sh exists stopped at the first override.
+        debug() { [[ "${TAPPAAS_DEBUG:-0}" == "1" ]] && echo -e "[Debug] $*" >&2; return 0; }
     fi
 fi
 
@@ -117,7 +120,7 @@ Notes:
     - Field names are validated against module-fields.json schema
     - Fields can be added even if not present in source JSON
     - If fields are modified, a .orig backup is created
-    - Integer fields (per schema) are stored as JSON numbers
+    - Integer fields (per schema) are stored as JSON numbers, boolean fields as JSON booleans
     - String fields are stored as JSON strings
 EOF
 }
@@ -494,6 +497,18 @@ main() {
                         die "Field '${field}' expects an integer, got '${value}'"
                     fi
                     # Store as number
+                    if ! jq --arg f "${field}" --argjson v "${value}" '.[$f] = $v' "${dest_json}" > "${tmp_file}"; then
+                        rm -f "${tmp_file}"
+                        die "Failed to update field '${field}' with value '${value}'"
+                    fi
+                elif [[ "${field_type}" == "boolean" ]]; then
+                    # A boolean lands as a JSON boolean. Stored as the string
+                    # "false" it read as set-and-not-false to every jq test that
+                    # asks `.field == false`, and as a value to `// default` (#756).
+                    case "${value}" in true|false) ;; *)
+                        rm -f "${tmp_file}"
+                        die "Field '${field}' is a boolean — true or false, not '${value}'" ;;
+                    esac
                     if ! jq --arg f "${field}" --argjson v "${value}" '.[$f] = $v' "${dest_json}" > "${tmp_file}"; then
                         rm -f "${tmp_file}"
                         die "Failed to update field '${field}' with value '${value}'"
