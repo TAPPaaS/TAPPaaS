@@ -3,12 +3,17 @@
 # cicd-key.sh — the mothership's SSH key: see it, rotate it, recover it (#122).
 #
 # The mothership (tappaas-cicd) holds ONE key, ~/.ssh/id_ed25519, comment
-# "tappaas-cicd" (bootstrap.sh). Two kinds of machine trust it:
+# "tappaas-cicd" (bootstrap.sh). Three kinds of machine trust it:
 #   - every Proxmox node, as root, through the cluster-wide file
 #     /etc/pve/priv/authorized_keys (each node's /root/.ssh/authorized_keys is a
 #     symlink to it);
 #   - every VM that accepts tappaas@<vm> by key, through
-#     /home/tappaas/.ssh/authorized_keys, written once by cloud-init at creation.
+#     /home/tappaas/.ssh/authorized_keys, written once by cloud-init at creation;
+#   - every managed machine module (ADR-026 kind: machine — a debianhost, the
+#     satellite), as root at its `address`, through /root/.ssh/authorized_keys
+#     (#755). A `pvehost` instance is a node and is covered above. An unmanaged
+#     machine has had the key removed on purpose (the satellite vault) and is
+#     never a target.
 # The firewall is not a target: it trusts a separate key (~/.ssh/tappaas-fw).
 # An LXC is reached with `pct` through its node, so the node key covers it.
 # A Windows VM trusts the key too (templates/winserver injects it) but keeps it
@@ -25,11 +30,13 @@
 #                     refresh the console debug copy on the nodes (below).
 #                     Aborts before the switch if the new key misses a target;
 #                     the old key is archived as ~/.ssh/id_ed25519.old-<time>.
-#                     Refuses to START while any VM is in doubt — a host key that
-#                     does not match known_hosts, or no answer — because a rotation
-#                     that skipped it would leave the old key valid there.
-#                     --skip-unreachable proceeds past VMs that do not answer (a
-#                     stopped VM) and names them in the report as NOT rotated.
+#                     Refuses to START while any VM or managed machine is in
+#                     doubt — a host key that does not match known_hosts, no
+#                     answer, or (a machine) no address recorded — because a
+#                     rotation that skipped it would leave the old key valid
+#                     there, and lock the mothership out of it after the switch.
+#                     --skip-unreachable proceeds past targets that do not answer
+#                     (a stopped VM) and names them in the report as NOT rotated.
 #   recover [--dry-run]
 #                     the old key is LOST (the mothership was reinstalled): put
 #                     the current key on every VM through its QEMU guest agent,
@@ -37,6 +44,9 @@
 #                     every other tappaas-cicd key. Needs the current key on the
 #                     nodes first; SSH to the nodes is key-only (#19), so that is
 #                     one line in a node's web-GUI Shell, which this prints.
+#                     A machine has no guest agent: recover finishes one that
+#                     already takes the current key, and prints the console line
+#                     for each that does not.
 #
 # What it deliberately leaves alone: each VM's cloud-init `sshkeys`. PVE derives
 # the cloud-init instance-id from sha1(user-data + network-data), so changing
@@ -67,6 +77,7 @@ readonly CONFIG_DIR="${CONFIG_DIR:-/home/tappaas/config}"
 readonly KEY="${HOME}/.ssh/id_ed25519"
 readonly CLUSTER_FILE="/etc/pve/priv/authorized_keys"
 readonly VM_FILE="/home/tappaas/.ssh/authorized_keys"
+readonly MACHINE_FILE="/root/.ssh/authorized_keys"
 readonly SSHO=(-o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR)
 
 VERB="${1:-}"; shift || true
@@ -188,6 +199,23 @@ for f in "${CONFIG_DIR}"/*.json; do
 done
 VMS="${VMS%$'\n'}"
 
+# list_machines <config dir> <node names> — one line per machine module instance
+# (kind: machine): "<instance> <management> <root@address or ->". Skips pvehost
+# instances (cluster nodes: the cluster file covers them) and archived/external.
+list_machines() {
+    local f m mod
+    for f in "$1"/*.json; do
+        jq -e '(.kind // "") == "machine" and ((.status // "") | test("^(archived|external)$") | not)' "$f" >/dev/null 2>&1 || continue
+        m="$(basename "$f" .json)"
+        mod="$(module_of "${m}" 2>/dev/null || true)"
+        [[ "${mod}" == pvehost ]] && continue
+        grep -qxF "${m}" <<< "$2" && continue
+        printf '%s %s %s\n' "${m}" "$(jq -r '.management // "managed"' "$f")" \
+            "$(jq -r 'if (.address // "") == "" then "-" else "root@" + .address end' "$f")"
+    done
+}
+MACHINES="$(list_machines "${CONFIG_DIR}" "${NODES}")"
+
 CUR_FP="$(fp_file "${KEY}.pub")"
 CUR_PUB="$(cat "${KEY}.pub")"
 
@@ -228,6 +256,20 @@ do_status() {
             *) warn "  ? ${m}: no answer (stopped?) — cannot tell whether it trusts this key" ;;
         esac
     done <<< "${VMS}"
+    [[ -n "${MACHINES}" ]] || return 0
+    info "${BOLD}Machines${CL} (root, ${MACHINE_FILE})"
+    while read -r m mgmt tgt; do
+        [[ -n "$m" ]] || continue
+        if [[ "${mgmt}" != managed ]]; then info "  - ${m}: ${mgmt} — the mothership's key is removed by design (not a target)"; continue; fi
+        if [[ "${tgt}" == - ]]; then error "  ✗ ${m}: no address recorded — cannot reach it"; continue; fi
+        case "$(probe "${tgt}")" in
+            ok) s="$(stale_in "${tgt}" "${MACHINE_FILE}" | wc -l)"
+                [[ "$s" -eq 0 ]] && info "  ${GN}✓${CL} ${m}" || warn "  ${m}: ${s} stale mothership key(s)" ;;
+            refused) error "  ✗ ${m}: managed, but refuses this key — the sweep cannot patch it" ;;
+            hostkey) error "  ✗ ${m}: its host key does not match ~/.ssh/known_hosts — cannot tell whether it trusts this key" ;;
+            *) warn "  ? ${m}: no answer — cannot tell whether it trusts this key" ;;
+        esac
+    done <<< "${MACHINES}"
 }
 
 if [[ "${VERB}" == status ]]; then do_status; exit 0; fi
@@ -250,24 +292,36 @@ do_rotate() {
     while read -r m vmid node tgt; do
         [[ -n "$m" ]] || continue
         case "$(probe "${tgt}")" in
-            ok) targets+="${m} ${tgt}"$'\n' ;;
+            ok) targets+="${m} ${tgt} ${VM_FILE}"$'\n' ;;
             refused) ;;
             hostkey) doubt+="${m} (host key does not match known_hosts) " ;;
             *) if [[ "${SKIP_UNREACHABLE}" -eq 1 ]]; then skipped+="${m} "; else doubt+="${m} (no answer) "; fi ;;
         esac
     done <<< "${VMS}"
+    local mgmt
+    while read -r m mgmt tgt; do
+        [[ -n "$m" && "${mgmt}" == managed ]] || continue
+        if [[ "${tgt}" == - ]]; then doubt+="${m} (machine with no address recorded) "; continue; fi
+        case "$(probe "${tgt}")" in
+            ok) targets+="${m} ${tgt} ${MACHINE_FILE}"$'\n' ;;
+            refused) warn "  ${m}: managed machine, but it already refuses the current key — not rotated; fix its key by hand" ;;
+            hostkey) doubt+="${m} (host key does not match known_hosts) " ;;
+            *) if [[ "${SKIP_UNREACHABLE}" -eq 1 ]]; then skipped+="${m} "; else doubt+="${m} (no answer) "; fi ;;
+        esac
+    done <<< "${MACHINES}"
     targets="${targets%$'\n'}"
     if [[ -n "${doubt}" ]]; then
         error "  cannot tell whether these trust the current key: ${doubt}"
         error "  A rotation that skipped them could leave the old key valid there, so none is started."
         error "  Host key: confirm it (e.g. read /etc/ssh/ssh_host_ed25519_key.pub through 'qm guest exec'), then ssh-keygen -R <host>."
-        error "  No answer: start the VM, or re-run with --skip-unreachable to leave it out knowingly."
+        error "  No answer: start the VM (or bring up the machine / its tunnel), or re-run with --skip-unreachable to leave it out knowingly."
+        error "  No address: record the machine's 'address' in its config, or delete the instance if it is gone."
         exit 1
     fi
     ROTATE_SKIPPED="${skipped}"
-    info "  nodes: $(echo ${NODES}) · VMs: $(awk '{print $1}' <<< "${targets}" | tr '\n' ' ')"
+    info "  nodes: $(echo ${NODES}) · VMs and machines: $(awk '{print $1}' <<< "${targets}" | tr '\n' ' ')"
     if [[ "${DRY}" -eq 1 ]]; then
-        info "DRY RUN — would generate a new key, add it to ${CLUSTER_FILE} and to the $(grep -c . <<< "${targets}") VMs above,"
+        info "DRY RUN — would generate a new key, add it to ${CLUSTER_FILE} and to the $(grep -c . <<< "${targets}") VMs and machines above,"
         info "verify it, switch, then revoke every other tappaas-cicd key and refresh the console debug key on the nodes."
         return 0
     fi
@@ -279,9 +333,9 @@ do_rotate() {
     out="$(edit_over_ssh "root@${PRIMARY}" "${CLUSTER_FILE}" add "${NEW_PUB}" "${NEW_FP}")" \
         || { error "  nodes: ${out}"; exit 1; }
     info "  nodes: $(tr '\n' ' ' <<< "${out}")"
-    while read -r m tgt; do
+    while read -r m tgt file; do
         [[ -n "$m" ]] || continue
-        out="$(edit_over_ssh "${tgt}" "${VM_FILE}" add "${NEW_PUB}" "${NEW_FP}" 2>&1)" \
+        out="$(edit_over_ssh "${tgt}" "${file}" add "${NEW_PUB}" "${NEW_FP}" 2>&1)" \
             && info "  ${m}: $(tr '\n' ' ' <<< "${out}")" || { error "  ${m}: ${out}"; FAILED=1; }
     done <<< "${targets}"
 
@@ -289,7 +343,7 @@ do_rotate() {
     for n in ${NODES}; do
         reach "root@${n}.mgmt.internal" "${new}" || { error "  ${n}: new key refused"; FAILED=1; }
     done
-    while read -r m tgt; do
+    while read -r m tgt file; do
         [[ -n "$m" ]] || continue
         reach "${tgt}" "${new}" || { error "  ${m}: new key refused"; FAILED=1; }
     done <<< "${targets}"
@@ -298,7 +352,7 @@ do_rotate() {
         error "The new key is added where it succeeded (harmless) and kept at ${new}."
         exit 1
     fi
-    info "  ${GN}✓${CL} new key accepted by every node and VM"
+    info "  ${GN}✓${CL} new key accepted by every node, VM and machine"
 
     info "${BOLD}Step 4: switch${CL}"
     cp -p "${KEY}" "${KEY}.old-${ts}" && cp -p "${KEY}.pub" "${KEY}.pub.old-${ts}"
@@ -309,7 +363,7 @@ do_rotate() {
     revoke_everywhere "${targets}" "${targets}"
 }
 
-# revoke_everywhere <ssh-revoke list> <verify list> — lines "module tappaas@fqdn".
+# revoke_everywhere <ssh-revoke list> <verify list> — lines "<instance> <user@host> <authorized_keys>".
 # rotate passes the same list twice; recover has already revoked on each VM
 # through the agent (replace mode) and passes only a verify list.
 revoke_everywhere() {
@@ -327,9 +381,9 @@ revoke_everywhere() {
                 || { error "  ${n}: could not refresh the console debug key"; FAILED=1; }
         fi
     done
-    while read -r m tgt; do
+    while read -r m tgt file; do
         [[ -n "$m" ]] || continue
-        out="$(edit_over_ssh "${tgt}" "${VM_FILE}" revoke "${CUR_PUB}" "${CUR_FP}" 2>&1)" \
+        out="$(edit_over_ssh "${tgt}" "${file}" revoke "${CUR_PUB}" "${CUR_FP}" 2>&1)" \
             && info "  ${m}: $(tr '\n' ' ' <<< "${out}")" || { error "  ${m}: ${out}"; FAILED=1; }
     done <<< "$1"
 
@@ -337,7 +391,7 @@ revoke_everywhere() {
     for n in ${NODES}; do
         reach "root@${n}.mgmt.internal" && info "  ${GN}✓${CL} ${n}" || { error "  ✗ ${n}"; FAILED=1; }
     done
-    while read -r m tgt; do
+    while read -r m tgt file; do
         [[ -n "$m" ]] || continue
         case "$(probe "${tgt}")" in
             ok) info "  ${GN}✓${CL} ${m}" ;;
@@ -361,6 +415,7 @@ do_recover() {
     if [[ "${DRY}" -eq 1 ]]; then
         info "DRY RUN — would put the current key on each VM below through its guest agent, then revoke every other tappaas-cicd key:"
         while read -r m vmid node tgt; do [[ -n "$m" ]] && info "  ${m} (VM ${vmid} on ${node})"; done <<< "${VMS}"
+        while read -r m mgmt tgt; do [[ -n "$m" && "${mgmt}" == managed ]] && info "  ${m} (machine ${tgt} — over SSH if it takes the key, else by hand)"; done <<< "${MACHINES}"
         return 0
     fi
     info "${BOLD}Step 2: install the key on every VM through its guest agent${CL}"
@@ -380,14 +435,33 @@ do_recover() {
         fi
         out="$(edit_via_agent "${node}" "${vmid}" "${VM_FILE}" replace "${CUR_PUB}" "${CUR_FP}")"; rc=$?
         case "${rc}" in
-            0) info "  ${m}: ${out}"; targets+="${m} ${tgt}"$'\n' ;;
+            0) info "  ${m}: ${out}"; targets+="${m} ${tgt} ${VM_FILE}"$'\n' ;;
             3) info "  - ${m}: no tappaas user (not a target)" ;;
             *) error "  ${m}: ${out}"; FAILED=1 ;;
         esac
     done <<< "${VMS}"
+    # A machine has no guest agent. One that already takes the current key (the
+    # operator put it there) is finished over SSH; any other is named, with the
+    # line to run on its console.
+    local mgmt manual=""
+    while read -r m mgmt tgt; do
+        [[ -n "$m" && "${mgmt}" == managed ]] || continue
+        if [[ "${tgt}" != - ]] && reach "${tgt}"; then
+            out="$(edit_over_ssh "${tgt}" "${MACHINE_FILE}" replace "${CUR_PUB}" "${CUR_FP}" 2>&1)" \
+                && { info "  ${m}: $(tr '\n' ' ' <<< "${out}")"; targets+="${m} ${tgt} ${MACHINE_FILE}"$'\n'; } \
+                || { error "  ${m}: ${out}"; FAILED=1; }
+        else
+            manual+="${m} "
+        fi
+    done <<< "${MACHINES}"
     targets="${targets%$'\n'}"
     revoke_everywhere "" "${targets}"
     [[ -z "${skipped}" ]] || warn "Not reached (no agent): ${skipped}"
+    if [[ -n "${manual}" ]]; then
+        warn "Machines that do not take the current key yet: ${manual}"
+        warn "  On each one's console, as root:  echo '${CUR_PUB}' >> ${MACHINE_FILE}"
+        warn "  then run cicd-key.sh recover again — it finishes them and revokes the old key there."
+    fi
 }
 
 case "${VERB}" in

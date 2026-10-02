@@ -86,5 +86,33 @@ grep -q "grep -v ' tappaas-cicd" <<< "${D}" && rep=yes || rep=no
 grep -q 'readlink -f /root/.ssh/authorized_keys' <<< "${D}" && rl=yes || rl=no
 ck "distribute_cicd_key replaces, symlink-safe"  "yes yes" "${rep} ${rl}"
 
+# ── machine modules are targets (#755) ───────────────────────────────
+# A kind: machine instance has no vmid; before #755 rotate never gave it the new
+# key and then switched, locking the mothership out of the satellite and every
+# adopted debianhost. list_machines is the function as shipped.
+awk '/^list_machines\(\) \{$/ {f=1} f {print} f && /^\}$/ {exit}' "${SCRIPT}" > "${d}/lm.sh"
+[[ -s "${d}/lm.sh" ]] || { echo "  ✗ could not extract list_machines from ${SCRIPT}"; exit 1; }
+C="${d}/config"; mkdir -p "${C}"
+echo '{"kind":"machine","management":"managed","address":"10.0.0.50"}'           > "${C}/dh-test1.json"
+echo '{"kind":"machine","management":"managed","address":"203.0.113.7"}'         > "${C}/satellite.json"
+echo '{"kind":"machine","management":"unmanaged","address":"203.0.113.8"}'       > "${C}/vault.json"
+echo '{"kind":"machine","management":"managed"}'                                > "${C}/old-sat.json"
+echo '{"kind":"machine","management":"managed","address":"10.0.0.11"}'          > "${C}/tappaas1.json"
+echo '{"kind":"machine","management":"managed","address":"10.0.0.12"}'          > "${C}/node-renamed.json"
+echo '{"kind":"machine","management":"managed","address":"10.0.0.60","status":"archived"}' > "${C}/gone.json"
+echo '{"vmid":200,"vmname":"hass"}'                                              > "${C}/hass.json"
+M="$(module_of() { [[ "$1" == node-renamed ]] && echo pvehost; }; . "${d}/lm.sh"; list_machines "${C}" "tappaas1
+tappaas2")"
+line() { grep "^$1 " <<< "${M}" || echo absent; }
+ck "a managed debianhost is listed, by root@address"  "dh-test1 managed root@10.0.0.50" "$(line dh-test1)"
+ck "the satellite is listed"                         "satellite managed root@203.0.113.7" "$(line satellite)"
+ck "an unmanaged machine is listed as unmanaged"      "vault unmanaged root@203.0.113.8" "$(line vault)"
+ck "a machine with no address is listed, not dropped" "old-sat managed -" "$(line old-sat)"
+ck "a node's pvehost instance is left to the cluster file" "absent absent" "$(line tappaas1) $(line node-renamed)"
+ck "archived machines and VMs are not machines"       "absent absent" "$(line gone) $(line hass)"
+grep -q 'targets+="${m} ${tgt} ${MACHINE_FILE}"' "${SCRIPT}" && mt=yes || mt=no
+grep -q 'doubt+="${m} (machine with no address recorded) "' "${SCRIPT}" && md=yes || md=no
+ck "rotate targets managed machines, and refuses on one it cannot reach" "yes yes" "${mt} ${md}"
+
 echo "  ${pass} passed, ${fail} failed"
 [[ "${fail}" -eq 0 ]]

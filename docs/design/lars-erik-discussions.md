@@ -27,8 +27,9 @@ finish. Tick a line (✅) when it is settled, and record the outcome in the plan
    at once — coturn, euro-office, litellm, openwebui, identity, vaultwarden. Plan: G3.3.
 5. **#407 — ADR-012 sign-off on Erik's estate.** A PBS on a machine outside the cluster
    (ADR-012 §1.3) is Erik's real setup but has only been live-tested on `dh-test1`. Will he
-   validate it on his site, or let us? With it, a warning: **#755** — `cicd-key.sh rotate` locks
-   the mothership out of adopted machines and the satellite until it is fixed. Plan: G1.2.
+   validate it on his site, or let us? With it, a heads-up: **#755** — before the fix,
+   `cicd-key.sh rotate` locked the mothership out of adopted machines and the satellite. Fixed
+   2026-10-02; a site should take that release before it rotates. Plan: G1.2.
 6. **#294 — zone-aligned VMID ranges.** Adopt for new installs and variants only, or drop it.
    Existing VMs are never renumbered in place. Plan: G1.3.
 

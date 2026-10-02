@@ -493,10 +493,19 @@ the old key once, through cloud-init, when it was created. Before step 3:
    key, and removes every older mothership key, on the VMs and the nodes. A VM
    whose agent does not answer, and a Windows VM, are named for a manual fix.
    `cicd-key.sh recover --dry-run` shows the list first.
+3. **Machine modules** (an adopted `debianhost`, a managed satellite) have no
+   guest agent. recover prints the line to run on each one's console:
+   ```bash
+   echo '<contents of ~tappaas/.ssh/id_ed25519.pub on the new mothership>' >> /root/.ssh/authorized_keys
+   ```
+   Then run `cicd-key.sh recover` again: it finishes them over SSH and removes
+   the old key there. An unmanaged satellite (the vault) never trusted the
+   mothership and needs nothing.
 
 If the old key may have been **exposed** — a leaked backup, a lost disk — run
 `cicd-key.sh rotate` instead, while it still works: it adds a new key
-everywhere, proves it, switches, and only then revokes the old one.
+everywhere — nodes, VMs and managed machines — proves it, switches, and only
+then revokes the old one. See [the mothership's SSH key](../tappaas-cicd/README.md#mothership-ssh-key).
 
 ### 5.3 What the capture does *not* include
 

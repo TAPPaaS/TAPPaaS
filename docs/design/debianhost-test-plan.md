@@ -68,8 +68,8 @@ Expected afterwards:
   **breaking it on purpose**: fill the disk, stop time sync, leave a reboot pending.
 - **The nightly** — after a `site-manager update`, `dh-test1` is in `last-update-result.json`
   like any other module.
-- **The mothership key (#122)** — `cicd-key.sh status` and `rotate` cover adopted machines.
-  Today they know only nodes and VMs; this phase catches it if that is not closed first.
+- **The mothership key (#122, #755)** — `cicd-key.sh status`, `rotate` and `recover` cover
+  adopted machines. Fixed by #755 and verified 2026-10-02 (results, row 3b).
 - **Key-only SSH (#19), as its own step** — applied deliberately, then: password SSH refused,
   key login works, and the console still takes the root password.
 
@@ -120,7 +120,8 @@ Run when the last phase using a test VM has a result; record it as a row of its 
 |---|---|---|
 | 1 | 2026-09-18 | ✅ adopted as `dh-test1` (debianhost, zone `mgmt`, no `vmname`); key pre-seeded, and key arriving while `adopt` waits |
 | 2 | 2026-09-18 | ✅ live: run twice (config unchanged), name taken, address taken under another name, PVE node (`tappaas3`), unknown `--zone`, reserved name, key never arrives (nothing written). Unit-tested only (`scripts/test/test-adopt.sh`): Ubuntu, address in no zone |
-| 3 | 2026-09-18 | ✅ update deferred without consent, rebooted with `--allow-disruption` (boot id checked), waits for the clock; disk-fill test fails. **Open:** `cicd-key.sh`, key-only SSH. **The nightly:** it never selected a machine instance (its module rule was the retired `kind: module` marker or a `vmname`) — fixed 2026-09-19; confirmed 2026-09-19: the sweep journal shows `Module 'dh-test1' updated successfully` in three runs (the criterion first written here, `last-update-result.json`, could never be met — it holds counts, never module names) |
+| 3 | 2026-09-18 | ✅ update deferred without consent, rebooted with `--allow-disruption` (boot id checked), waits for the clock; disk-fill test fails. **Open:** key-only SSH (#756); `cicd-key.sh` → row 3b. **The nightly:** it never selected a machine instance (its module rule was the retired `kind: module` marker or a `vmname`) — fixed 2026-09-19; confirmed 2026-09-19: the sweep journal shows `Module 'dh-test1' updated successfully` in three runs (the criterion first written here, `last-update-result.json`, could never be met — it holds counts, never module names) |
+| 3b | 2026-10-02 | ✅ **#755, `cicd-key.sh` and machines.** Fresh `dh-test1` (VM 990, Debian 13 cloud image, tappaas2), adopted. The shipped script's `rotate --dry-run` listed 10 VMs and no machine — the lockout reproduced. Fixed script: `status` shows a *Machines* section (✓ dh-test1, nodes' `pvehost` instances left to the cluster file); a real `rotate` on hrossen added, proved, switched and revoked on 3 nodes, 10 VMs and dh-test1; the archived old key is refused by dh-test1; `test-module.sh dh-test1` green on the new key; `recover` finished dh-test1 over SSH. Machine stopped: `rotate --dry-run` refuses (`dh-test1 (no answer)`), `--skip-unreachable` leaves it out, `recover` prints the console line. Torn down the same day: unregistered, VM 990 destroyed, image removed from tappaas2, `known_hosts` cleaned; leftover check found nothing |
 | 4 | 2026-09-18 | ✅ `delete` unregisters (same boot id), `--vmid` refused |
 | 5 | — | not started (D8a) |
 | 6 | 2026-09-19 | ✅ PBS 4.2.6 installed **by hand** on `dh-test1` (datastore on a directory). Run against a copy of `config/` with an empty placement and `.node = dh-test1`, under a second instance name (`pbs6`) so the live `backup.mgmt.internal` was never touched: resolution **adopted `node` = dh-test1** and provisioned nothing on a cluster node (#602's machine case, first live run); `pbs6.mgmt.internal` became a CNAME of dh-test1, which got a DNS entry from its `address` (#612); dh-test1 is its `debianhost` instance's to patch (#603); the update created the verify job on dh-test1's PBS; PBS came back after a reboot; the `debianhost` update upgraded 12 packages with PBS running. Not shown: a PBS package upgrade (it was freshly installed) |

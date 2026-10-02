@@ -325,6 +325,13 @@ Each script exits with the failure count (0 on success). They have no network or
 
 ---
 
+### cicd-key.sh
+
+The mothership's SSH key: `status`, `rotate [--dry-run] [--skip-unreachable]`,
+`recover [--dry-run]` — nodes, VMs and managed machine modules (#122, #755). What each verb
+does and when to use it: [Mothership SSH key](../README.md#mothership-ssh-key). Unit tests:
+`test/test-cicd-key.sh`.
+
 ### create-configuration.sh
 
 Creates or updates the `configuration.json` file for the TAPPaaS system by querying the running cluster. Supports two argument styles: positional (backwards compatible) and named arguments with defaults.
