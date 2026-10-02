@@ -269,21 +269,31 @@ if [[ -f "${_cjc}" ]] && [[ -f "${CONFIG_DIR:-/home/tappaas/config}/module-field
   "backup": { "enabled": true }
 }
 JSON
-    _out="$(bash "${_cjc}" --dry-run "${_tmpdir}/m.json" 2>&1)"
-    if grep -q "is usedBy=.* but the module does not depend" <<<"${_out}"; then
-        bad "a field owned by an integratesWith provider is reported as an orphan (#501)"
+    # #683 made the merge SILENT about orphans (validate reports them, once);
+    # the classification itself is still made, and shows at debug level. So
+    # the verdict is read from the debug line, and a plain run must say nothing.
+    _orphan_re="field 'backup' is usedBy=.* and none is wired"
+    _out="$(TAPPAAS_DEBUG=1 bash "${_cjc}" --dry-run "${_tmpdir}/m.json" 2>&1)"
+    if grep -q "${_orphan_re}" <<<"${_out}"; then
+        bad "a field owned by an integratesWith provider is classified as an orphan (#501)"
     else
         ok "a field owned by an integratesWith provider is NOT an orphan"
     fi
-    # And the opposite still holds: a module wired to NEITHER still warns.
+    # And the opposite still holds: a module wired to NEITHER is an orphan.
     cat > "${_tmpdir}/n.json" <<'JSON'
 { "vmname": "n", "vmid": 901, "kind": "module", "dependsOn": ["cluster:vm"], "backup": { "enabled": true } }
 JSON
-    _out="$(bash "${_cjc}" --dry-run "${_tmpdir}/n.json" 2>&1)"
-    if grep -q "is usedBy=.* but the module does not depend" <<<"${_out}"; then
-        ok "a genuinely orphaned field is still reported"
+    _out="$(TAPPAAS_DEBUG=1 bash "${_cjc}" --dry-run "${_tmpdir}/n.json" 2>&1)"
+    if grep -q "${_orphan_re}" <<<"${_out}"; then
+        ok "a genuinely orphaned field is still classified as one"
     else
-        bad "the orphan check no longer reports a genuinely orphaned field"
+        bad "the orphan check no longer classifies a genuinely orphaned field"
+    fi
+    _out="$(bash "${_cjc}" --dry-run "${_tmpdir}/n.json" 2>&1)"
+    if grep -q -i "orphan\|none is wired\|does not depend" <<<"${_out}"; then
+        bad "the merge reports an orphan on every update again — validate's job since #683"
+    else
+        ok "…and the merge says nothing about it (#683: validate reports it, once)"
     fi
     rm -rf "${_tmpdir}"
 else
