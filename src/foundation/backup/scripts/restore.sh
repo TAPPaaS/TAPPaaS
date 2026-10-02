@@ -6,7 +6,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-# This script automates VM restoration from PBS backups
+# This script automates guest restoration from PBS backups — VMs and LXC
+# containers; the backup's volid says which (lib/restore-guest.sh)
 # Run this from tappaas-cicd as the tappaas user
 #
 # Usage: ./restore.sh [options]
@@ -91,6 +92,9 @@ elif [[ -r "$(dirname "${BASH_SOURCE[0]}")/../../tappaas-cicd/lib/ha-vm-lib.sh" 
     # shellcheck source=../../tappaas-cicd/lib/ha-vm-lib.sh disable=SC1091
     . "$(dirname "${BASH_SOURCE[0]}")/../../tappaas-cicd/lib/ha-vm-lib.sh"
 fi
+# The guest type a backup holds (#729): beside this script in a checkout.
+# shellcheck source=../lib/restore-guest.sh disable=SC1091
+. "$(dirname "${BASH_SOURCE[0]}")/../lib/restore-guest.sh"
 JSON_CONFIG="${CONFIG_DIR}/backup.json"
 JSON=$(cat "${JSON_CONFIG}")
 
@@ -247,6 +251,29 @@ else
   info "Using specified backup: ${BACKUP_ID}"
 fi
 
+# Normalize whatever form of backup identifier we were given into a volid:
+#   tappaas_backup:backup/vm/110/…  already a volid (what --list prints)
+#   backup/vm/110/…                 storage-relative path
+#   vm/110/…                        the bare snapshot triple
+case "${BACKUP_ID}" in
+  *:backup/*) VOLID="${BACKUP_ID}" ;;
+  backup/*)   VOLID="${STORAGE_NAME}:${BACKUP_ID}" ;;
+  *)          VOLID="${STORAGE_NAME}:backup/${BACKUP_ID}" ;;
+esac
+info "Using volume ID: ${VOLID}"
+
+# A VM and a container restore through different calls, and are stopped,
+# destroyed and checked with different commands. The volid says which (#729).
+GUEST_TYPE="$(restore_guest_type "${VOLID}")" \
+  || die "cannot tell from ${VOLID} whether the backup holds a VM or a container (expected …backup/vm/… or …backup/ct/…)"
+CLI="$(restore_guest_cli "${GUEST_TYPE}")"
+if [ "${GUEST_TYPE}" = "lxc" ] && [ -z "${TARGET_STORAGE}" ]; then
+  # A container restore without a storage lands on 'local', not where it came
+  # from — a different guest from the one backed up. Name it.
+  die "VMID ${VMID}'s backup is a container: give its storage with --storage (e.g. --storage tanka1)"
+fi
+info "Backup holds a ${GUEST_TYPE} guest"
+
 # From here on, VMID is the SOURCE (whose backup we read) and RESTORE_VMID is
 # the DESTINATION. They differ only for --target-vmid, whose whole point is to
 # leave the original alone — so a rehearsal can never eat the thing it is
@@ -256,9 +283,16 @@ if [ -n "${TARGET_VMID}" ]; then
   info "Restoring INTO VMID ${RESTORE_VMID} (source VM ${VMID} is left untouched)"
 fi
 
-# Check if the DESTINATION VM already exists
+# Check if the DESTINATION VMID is taken — by a VM or a container: one VMID
+# space, two commands.
 info "Checking if VMID ${RESTORE_VMID} already exists..."
-VM_EXISTS=$(ssh root@${TARGET_NODE}.${ZONE}.internal "qm status ${RESTORE_VMID} 2>&1 >/dev/null && echo 'yes' || echo 'no'")
+EXISTING_TYPE=$(ssh root@${TARGET_NODE}.${ZONE}.internal \
+  "if qm status ${RESTORE_VMID} >/dev/null 2>&1; then echo qemu; elif pct status ${RESTORE_VMID} >/dev/null 2>&1; then echo lxc; else echo none; fi")
+VM_EXISTS=no
+[ "${EXISTING_TYPE}" = "none" ] || VM_EXISTS=yes
+if [ "$VM_EXISTS" = "yes" ] && [ "${EXISTING_TYPE}" != "${GUEST_TYPE}" ]; then
+  die "VMID ${RESTORE_VMID} on ${TARGET_NODE} is a ${EXISTING_TYPE} guest but the backup holds a ${GUEST_TYPE} — refusing to replace one kind with the other"
+fi
 
 if [ "$VM_EXISTS" = "yes" ]; then
   if [ -n "${TARGET_VMID}" ]; then
@@ -279,16 +313,16 @@ if [ "$VM_EXISTS" = "yes" ]; then
   # back to a direct stop when the resource is genuinely not HA-managed.
   info "Stopping and removing existing VM ${RESTORE_VMID}..."
   if declare -F havm_stop >/dev/null 2>&1; then
-    if ! havm_stop "root@${TARGET_NODE}.${ZONE}.internal" "${RESTORE_VMID}" vm "${STOP_TIMEOUT:-180}"; then
+    if ! havm_stop "root@${TARGET_NODE}.${ZONE}.internal" "${RESTORE_VMID}" "$([ "${GUEST_TYPE}" = lxc ] && echo lxc || echo vm)" "${STOP_TIMEOUT:-180}"; then
       # The resource may have been handed to HA as 'stopped' before the failure;
       # give it back rather than leaving it parked.
       [[ "${HAVM_LAST_STOP_WAS_HA:-0}" -eq 1 ]] \
-        && havm_release_ha_stop "root@${TARGET_NODE}.${ZONE}.internal" "vm:${RESTORE_VMID}"
+        && havm_release_ha_stop "root@${TARGET_NODE}.${ZONE}.internal" "$([ "${GUEST_TYPE}" = lxc ] && echo ct || echo vm):${RESTORE_VMID}"
       die "Could not confirm VM ${RESTORE_VMID} stopped — refusing to destroy it. Nothing was changed."
     fi
   else
     warn "ha-vm-lib not available — falling back to a direct stop (unsafe for an HA-managed VM, #434)"
-    ssh root@${TARGET_NODE}.${ZONE}.internal "qm stop ${RESTORE_VMID} || true"
+    ssh root@${TARGET_NODE}.${ZONE}.internal "${CLI} stop ${RESTORE_VMID} || true"
     sleep 5
   fi
 
@@ -297,23 +331,13 @@ if [ "$VM_EXISTS" = "yes" ]; then
   # config no longer references, so a restore does not silently inherit an
   # older incarnation's leftover volumes.
   ssh root@${TARGET_NODE}.${ZONE}.internal \
-    "qm destroy ${RESTORE_VMID} --purge --destroy-unreferenced-disks 1" \
+    "${CLI} destroy ${RESTORE_VMID} --purge --destroy-unreferenced-disks 1" \
     || die "Could not destroy VM ${RESTORE_VMID}"
 fi
 
 # Perform the restore
-info "Restoring VM ${VMID} from backup into VMID ${RESTORE_VMID}..."
+info "Restoring ${GUEST_TYPE} ${VMID} from backup into VMID ${RESTORE_VMID}..."
 
-# Normalize whatever form of backup identifier we were given into a volid:
-#   tappaas_backup:backup/vm/110/…  already a volid (what --list prints)
-#   backup/vm/110/…                 storage-relative path
-#   vm/110/…                        the bare snapshot triple
-case "${BACKUP_ID}" in
-  *:backup/*) VOLID="${BACKUP_ID}" ;;
-  backup/*)   VOLID="${STORAGE_NAME}:${BACKUP_ID}" ;;
-  *)          VOLID="${STORAGE_NAME}:backup/${BACKUP_ID}" ;;
-esac
-info "Using volume ID: ${VOLID}"
 
 # A copy restored alongside its original MUST get fresh MAC addresses, or two
 # guests answer for the same address the moment either is started.
@@ -338,10 +362,10 @@ if [ -f /var/lock/qemu-server/lock-${RESTORE_VMID}.conf ]; then
   rm -f /var/lock/qemu-server/lock-${RESTORE_VMID}.conf
 fi
 
-# Unlock the VM if it's locked
-if qm status ${RESTORE_VMID} >/dev/null 2>&1; then
-  echo "Unlocking VM ${RESTORE_VMID}..."
-  qm unlock ${RESTORE_VMID} 2>/dev/null || true
+# Unlock the guest if it's locked
+if ${CLI} status ${RESTORE_VMID} >/dev/null 2>&1; then
+  echo "Unlocking ${GUEST_TYPE} ${RESTORE_VMID}..."
+  ${CLI} unlock ${RESTORE_VMID} 2>/dev/null || true
 fi
 
 # Capture restore output AND its real exit code. Piping pvesh into tee used to
@@ -353,7 +377,11 @@ fi
 RESTORE_TMP=\$(mktemp)
 RESTORE_RC=0
 
-if [ -n "${TARGET_STORAGE}" ]; then
+# A VM restores from --archive; a container is CREATED from the backup as its
+# template with --restore 1 (#729).
+if [ "${GUEST_TYPE}" = "lxc" ]; then
+  pvesh create /nodes/${TARGET_NODE}/lxc --vmid ${RESTORE_VMID} --ostemplate ${VOLID} --restore 1 --storage ${TARGET_STORAGE} --force 1 ${UNIQUE_OPT} > \$RESTORE_TMP 2>&1 || RESTORE_RC=\$?
+elif [ -n "${TARGET_STORAGE}" ]; then
   pvesh create /nodes/${TARGET_NODE}/qemu --vmid ${RESTORE_VMID} --archive ${VOLID} --storage ${TARGET_STORAGE} --force 1 ${UNIQUE_OPT} > \$RESTORE_TMP 2>&1 || RESTORE_RC=\$?
 else
   pvesh create /nodes/${TARGET_NODE}/qemu --vmid ${RESTORE_VMID} --archive ${VOLID} --force 1 ${UNIQUE_OPT} > \$RESTORE_TMP 2>&1 || RESTORE_RC=\$?
@@ -394,7 +422,7 @@ if echo "$RESTORE_OUTPUT" | grep -q "STORAGE_LOCK_ERROR"; then
   echo "  3. Choose a different target storage"
   echo ""
   echo "Note: VM ${RESTORE_VMID} was partially created but disks were not fully restored."
-  echo "You may need to run: ssh root@${TARGET_NODE}.${ZONE}.internal qm destroy ${RESTORE_VMID}"
+  echo "You may need to run: ssh root@${TARGET_NODE}.${ZONE}.internal ${CLI} destroy ${RESTORE_VMID}"
   exit 1
 elif echo "$RESTORE_OUTPUT" | grep -q "RESTORE_ERRORS_DETECTED"; then
   echo "${RD}Error: Restore completed with errors${CL}"
@@ -406,27 +434,49 @@ fi
 # Trust, then verify: ask Proxmox whether the guest is really there. A restore
 # that reports success without producing a VM is the one failure mode a backup
 # system must never have.
-if ! ssh -n root@${TARGET_NODE}.${ZONE}.internal "qm config ${RESTORE_VMID}" >/dev/null 2>&1; then
+if ! ssh -n root@${TARGET_NODE}.${ZONE}.internal "${CLI} config ${RESTORE_VMID}" >/dev/null 2>&1; then
   echo "${RD}Error: restore reported success but VMID ${RESTORE_VMID} does not exist on ${TARGET_NODE}${CL}"
   exit 1
 fi
 
+# A copy beside its original must not start by itself: the backup carries the
+# original's onboot, and the next reboot of the node would bring up a second
+# guest of the same name (seen restoring vllm-amd beside itself, #729).
+if [ -n "${TARGET_VMID}" ]; then
+  ssh -n root@${TARGET_NODE}.${ZONE}.internal "${CLI} set ${RESTORE_VMID} --onboot 0" \
+    || warn "could not set onboot 0 on ${RESTORE_VMID} — it would start at the next boot of ${TARGET_NODE}"
+fi
+
+# A container's host bind mounts (mpN: /path) are never in its backup: the
+# restored config still names them, the data is wherever it was — or gone with
+# the node it lived on. Say which, before anyone starts it.
+if [ "${GUEST_TYPE}" = "lxc" ]; then
+  BINDS="$(ssh -n root@${TARGET_NODE}.${ZONE}.internal "pct config ${RESTORE_VMID}" 2>/dev/null | restore_bind_mounts)"
+  for b in ${BINDS}; do
+    if ssh -n root@${TARGET_NODE}.${ZONE}.internal "test -e '${b}'" 2>/dev/null; then
+      warn "bind mount ${b} is not in the backup — it exists on ${TARGET_NODE}, so the container sees what is there now"
+    else
+      warn "bind mount ${b} is not in the backup and does not exist on ${TARGET_NODE} — create or repopulate it before starting ${RESTORE_VMID}"
+    fi
+  done
+fi
+
 info "\n${GN}Restore completed successfully!${CL}"
 echo
-echo "VM ${VMID} has been restored to ${TARGET_NODE} as VMID ${RESTORE_VMID}"
+echo "${GUEST_TYPE} ${VMID} has been restored to ${TARGET_NODE} as VMID ${RESTORE_VMID}"
 echo
 if [ -n "${TARGET_VMID}" ]; then
   echo "It is STOPPED and has fresh MAC addresses. Starting a restored COPY on the"
   echo "same network as its original is how you get two guests answering for one"
   echo "identity — inspect it, then start it deliberately if that is what you want:"
-  echo "  ssh root@${TARGET_NODE}.${ZONE}.internal qm start ${RESTORE_VMID}"
-  echo "  ssh root@${TARGET_NODE}.${ZONE}.internal qm destroy ${RESTORE_VMID}   # when done"
+  echo "  ssh root@${TARGET_NODE}.${ZONE}.internal ${CLI} start ${RESTORE_VMID}"
+  echo "  ssh root@${TARGET_NODE}.${ZONE}.internal ${CLI} destroy ${RESTORE_VMID}   # when done"
   exit 0
 fi
 read -p "Do you want to start the VM now? (yes/no): " START_VM
 if [ "$START_VM" = "yes" ]; then
   info "Starting VM ${VMID}..."
-  ssh root@${TARGET_NODE}.${ZONE}.internal "qm start ${RESTORE_VMID}"
+  ssh root@${TARGET_NODE}.${ZONE}.internal "${CLI} start ${RESTORE_VMID}"
   echo "${GN}VM ${VMID} started successfully${CL}"
 else
   echo "VM ${VMID} is ready but not started. Start it manually when ready."

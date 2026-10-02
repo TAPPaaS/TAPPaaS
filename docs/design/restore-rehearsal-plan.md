@@ -50,7 +50,7 @@ What follows from it:
 
 | # | What | Why |
 |---|---|---|
-| P1 | **`restore.sh` restores containers** (open, defect found writing this plan) | vllm-amd (312) is an LXC; its backup is `backup/ct/312/…`. `restore.sh` always runs `pvesh create /nodes/<n>/qemu --archive …` and probes `qm status`, so §3.3 would fail on it. Fix: take the guest type from the volid (`backup/vm/` → `qemu`, `backup/ct/` → `lxc`, `pct` for status/stop/destroy), with a unit test. |
+| P1 | ✅ **`restore.sh` restores containers** — fixed on `fix/restore-containers` 2026-10-02 (see Results) | vllm-amd (312) is an LXC; its backup is `backup/ct/312/…`. `restore.sh` always runs `pvesh create /nodes/<n>/qemu --archive …` and probes `qm status`, so §3.3 would fail on it. Fix: take the guest type from the volid (`backup/vm/` → `qemu`, `backup/ct/` → `lxc`, `pct` for status/stop/destroy), with a unit test. |
 | P2 | **PXE, decided:** `site-manager node add tappaas2 --pxe --boot-disk nvme0n1 --mac 38:05:25:33:b5:f7 --no-wan --pool tanka1=single:nvme1n1` | disks and NIC recorded above. Before the power is pulled: `efibootmgr -n 000A` on tappaas2 (one-time PXE on the next boot) |
 | P3 | Fresh backups of 310, 311, 312, 342 the same day | the restore must not lose a day of AI-stack state; `backup-manager` run on demand, then `list` shows today's |
 | P4 | Mothership `config/` capture of the same day (backup:filesystem) | §5.2 compares against it |
@@ -184,7 +184,7 @@ back from backup and pass their deep tests; the estate shows no diff.
 
 | Phase | Date | Result |
 |---|---|---|
-| P1 | | |
+| P1 | 2026-10-02 | ✅ `restore.sh` takes the guest type from the volid (`backup/ct/` → `pct`, `pvesh create …/lxc --ostemplate <volid> --restore 1`), refuses a container without `--storage` and a VM↔container swap, reports host bind mounts, and leaves a `--target-vmid` copy `onboot 0` (it inherited the original's `onboot 1` — found restoring 312). Live on hrossen: vllm-amd's backup restored as CT 931 on tappaas1 in **10 min for 28.8G**, warning that `/tanka1/vllm-models` is not in the backup and missing there; nextcloud-hpb's as VM 932, `onboot 0`; the no-storage refusal; both destroyed, no volumes left. `lib/test-restore-guest.sh` 18/18 |
 | 1 (§5.2) | | |
 | 2 (§2) | | |
 | 3 (§3) | | |

@@ -323,6 +323,12 @@ module-manager module update <module>
 module-manager module test <module> --deep
 ```
 
+A **container** (LXC) restores the same way, with two differences: `--storage`
+is required (without it a container would land on `local`), and its **host bind
+mounts** (`mpN: /some/path`) are not in any backup. The restore names each one and
+whether it exists on the target node — vllm-amd's models directory, for one, is
+gone with the node it lived on and has to be repopulated before it is useful.
+
 Guests that were **HA-managed and replicated** may already be running on a
 surviving node — the cluster failed them over, which is what HA is for. Do not
 restore those: check `ha-manager config` first. Restoring a guest that is running
