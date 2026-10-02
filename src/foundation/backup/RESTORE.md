@@ -37,6 +37,14 @@ keys encrypted with it (AES-256, PBKDF2), reads them back and compares every key
 ejects. The stick also carries `keys-from-usb.sh` and a README in plain text. Write a
 new stick whenever a key changes; the update tells you when.
 
+**Keep two sticks, in two places.** One stick is one point of failure: flash memory
+fails silently, sticks get lost, and the day you need it is the day you find out. Run
+`keys-to-usb.sh` twice (same password, or two you keep track of), keep the sticks at two
+different sites — neither of them where the servers are — and rewrite **both** whenever
+a key changes. A stick you have not read back in a year is a hope, not a backup: every
+so often, read one with `keys-from-usb.sh` on the mothership (it imports nothing new on a
+healthy site, and proves the stick and the password still work).
+
 **Getting them back** — `keys-from-usb.sh`, wherever you are:
 
 ```bash

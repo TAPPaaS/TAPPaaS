@@ -587,7 +587,8 @@ Put a USB stick into `tappaas1` and run, on the mothership:
 ```
 
 It writes every backup key to the stick, encrypted with a password you choose, checks it
-by reading it back, and ejects it. Keep the stick off-site and the password elsewhere
+by reading it back, and ejects it. Make **two** — run it once per stick — and keep them
+at two different places, both off-site, with the password elsewhere
 ([RESTORE.md §0](backup/RESTORE.md#0-before-anything-the-key)).
 
 Backups are encrypted client-side, and the keys are escrowed on the mothership —

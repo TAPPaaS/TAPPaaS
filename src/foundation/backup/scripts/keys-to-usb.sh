@@ -159,7 +159,8 @@ To restore, run keys-from-usb.sh (on this stick):
 By hand (any machine with openssl and tar):
   openssl enc -d ${USBK_CIPHER} -in tappaas-keys.tar.enc | tar -xf -
 
-Keep this stick OFF-SITE. Write a new one whenever a key changes.
+Keep this stick OFF-SITE, and a second one like it somewhere else: one stick
+is one point of failure. Rewrite both whenever a key changes.
 README
 usbk_on "sync"
 
@@ -181,4 +182,5 @@ MNT=""
 usbk_eject "${DISK}"
 usbk_say ""
 usbk_say "Done. Remove the stick from ${USBK_NODE} and keep it OFF-SITE; keep the password elsewhere."
+usbk_say "Make a SECOND stick the same way and keep it at a different place (RESTORE.md §0)."
 usbk_say "To restore: keys-from-usb.sh (on the mothership, or from the stick on a node)."
