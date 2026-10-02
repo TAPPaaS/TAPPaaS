@@ -544,7 +544,6 @@ Wave 1.
 
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
-| #58 | Secrets management (OpenBao) | 1 | 5 | H | **Proposal (G1.6 entry gate):** one secrets-access helper that every module uses instead of reading `/etc/secrets` directly. Swap in OpenBao later without touching modules |
 | ✅ #19 | Disable SSH password login on PVE nodes | 4 | 3 | M | **T3 green on hrossen 2026-09-18** (`module-manager module update cluster` from the branch: Step 5 hardened all three nodes, Test 4 passes on each, password SSH refused everywhere, PVE's node-to-node root SSH intact across all six pairs, no reboot needed). **Decided 2026-09-18: hardened, not configurable** — no `site.json` field. Every node gets `PasswordAuthentication no`, `KbdInteractiveAuthentication no`, `PermitRootLogin prohibit-password`, from `cluster/update.sh` Step 5 (`setup-ssh-hardening.sh`). Never `PermitRootLogin no`: PVE's cross-node GUI Shell and migrations run as root over key SSH, and so does the mothership. The consoles are unaffected — the web GUI (node Shell included) and the physical console use PAM, not sshd — so a development site that breaks is recovered from the console. Applied only over a connection that just authenticated by key, never by the node installer (which runs before the mothership's key exists); `sshd -t` before reload; effective values read back with `sshd -T`. `cluster/test.sh` Test 4 asserts it, skipping rather than failing in the pre-update gate so it cannot block its own fix. It no longer waits for FW #122, but it does change what a mothership **reinstall** needs: its `ssh-copy-id` can no longer fall back to a password, so the new key is planted from a node's GUI Shell until #122 automates it |
 | #128 | Security hardening (Proxmox hardening guide) | 2 | 3 | M | Decomposed 2026-09-17 against `docs/pve9-hardening-guide.md`, checked on a live node: seven gaps, each independently testable — host sshd (**absorbs #19**), `unattended-upgrades` on hosts, auditd on `/etc/pve`, microcode, Corosync ring1, client-side backup encryption, fail2ban. Already satisfied: segmentation (zones), KSM off, backup verification (#228/#230), off-site (satellite). NOT adopted: the PVE firewall (a second rule surface against `zones.json` — its own decision), Ceph, subscription repos, Secure Boot/LUKS (L3). See the issue for the table |
 | #142 | RFC: AI-agent access to cicd | 2 | 1 | M | Decision |
@@ -776,6 +775,7 @@ New capabilities with low upgrade risk.
 | # | Issue | From | When |
 |---|-------|------|------|
 | #250 | `dependsOn` ownership for community modules (option D, `dependsOn.sh`) | G1.3 | 2026-09-20 (operator) — Future Work |
+| #58 | Secrets management (OpenBao) — the proposal stands: one secrets-access helper every module uses instead of reading `/etc/secrets`, OpenBao swapped in behind it later | G1.6 | 2026-10-02 (operator) — Future Work |
 
 **Close or re-scope:**
 
@@ -902,7 +902,7 @@ open decisions from review, and the ADRs that have to be signed off first.
 | 1 · G1.2 | placement state names (#600) | ✅ ADR-012 v1.0 accepted 2026-09-18 (#600, #602, #607, #609, #612, #605 settled) | as Wave 1 |
 | 1 · G1.3 | VMID scheme: new installs only, or not at all (#294 — parked for Erik); `src/apps` restructure together with #500 (#421 — parked for Erik); zone0 direction (#349 ✅) | **New: Stacks & solutions** (#421 parked, #500 ✅; amends ADR-004 and ADR-007b — ADR-004 amended by #463 2026-09-20); **Module blueprint** (#363, #248) — ADR-027 Proposed 2026-09-20 ✅, implemented by #674 ✅ 2026-09-28 (v0.5; the check gates every release boundary); **New: Controller pattern for app modules** (#430); **New: VMID convention** only if #294 is adopted; ADR-007c amended (#349, done) | as Wave 1 |
 | 1 · G1.4 | none | **New: Module blueprint** includes the NixOS baseline every VM must import (#324, #390, #448 interface naming, #472 / FW #87 time) | Every NixOS VM on the test system rebuilt once and deep-tested |
-| 1 · G1.6 | Secrets: an access interface first, OpenBao later (#58); #142 RFC outcome | **New: Secrets management** (#58, with FW #122 and #19); an ADR for #142 only if a REST API is chosen over SSH + sudo | as Wave 1 |
+| 1 · G1.6 | #142 RFC outcome (#58 moved to Future Work 2026-10-02) | **New: Secrets management** — with #58, deferred to Future Work (FW #122 and #19 built); an ADR for #142 only if a REST API is chosen over SSH + sudo | as Wave 1 |
 | 2 | #645 dry-run diff on `stable`; #620 and #375 applied | ADR-014 amended: `all` sentinel (#375), `serves` as array (#576), anti-spoofing always on (#159), mDNS in zones.json (#257); ADR-021 amended: DNSSEC with split horizon (#263) and the IPv6 stance (#149) | Lockout check on the test system and each canary: mgmt and NetBird reach 8443 and 22, other zones do not |
 | 3 | none | ADR-019 Proposed → Accepted (#393 migration-failure policy; #36 / #127 boot order) | §10.1 level of each issue |
 | 4 | MAC pinning question (#444 / #582); #154 closed or kept; #430 decided before #170 | ADR-023 Proposed → Accepted (#642, #643; render check open); ADR-015 Draft → Accepted (#486); ADR-011 Proposed → Accepted (FW #143 built and closed 2026-09-27); ADR-010 P7 sign-off (#406); ADR-008 amended (#236); ADR-019 amended for a second corosync link (#590) and the migrate verb (#429); ADR-007e amended for alerting and logging v2 (#126, #165), or a new ADR if Zabbix is chosen; **New: Shared storage** (#388); **New: Legal/processor** (#359) | §10.1 level of each issue |
@@ -937,7 +937,7 @@ targets (an ADR-007e amendment).
 | 1 | Migration framework before Wave 1 | **Decided 2026-09-14:** yes (G0.1), and each wave documents how it is tested and rolled out (§10) |
 | 2 | `module.tier` → `stack`, or keep both | **Decided 2026-09-17/18:** neither — `module.tier` becomes `scope: site \| environment` (ADR-022e, accepted with the ADR-022 family 2026-09-18) |
 | 3 | VMID scheme (#294): new installs only, or not at all | Open → **parked 2026-09-20** until the operator has agreed it with Erik |
-| 4 | Secrets (#58): is an access interface enough for now | Open → entry gate for G1.6 |
+| 4 | Secrets (#58): is an access interface enough for now | **Deferred 2026-10-02:** #58 moved to Future Work (§8); no longer a G1.6 gate |
 | 5 | `src/apps` restructure (#421) together with #500 | #500 built 2026-09-19; the restructure itself **parked 2026-09-20** until the operator has agreed it with Erik |
 | 6 | Firewall rebuild (#439) | **Decided 2026-09-14:** only one installation runs the nano image; document the procedure, do not build or run it (G1.5) |
 | 7 | Scope of the 2.1 release | **Decided 2026-09-14:** not discussed here; the plan is organised by waves |
@@ -979,5 +979,5 @@ on `main`**, so the hook runs and the diff is reviewable against what is actuall
 That applies to this stream too — it is the difference between merging five fixes and
 merging a branch that also quietly reverts something.
 
-**Entry gate for the stream:** #488's disposition (§8). Everything else in it is
+**Entry gate for the stream:** was #488's disposition (§8) — **no longer a gate (2026-10-02):** all five issues landed (`c998ca5f`, `2d25aaf3`), and #488 itself is a hand fix on one pre-`.orig` site (operator, 2026-08-20). Everything else in it is
 independent and can land in any order.
