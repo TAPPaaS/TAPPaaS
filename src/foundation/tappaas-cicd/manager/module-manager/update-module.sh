@@ -136,15 +136,23 @@ resolve_effective_module_name() {
 # field, the 3-way merge folds in the new release — so it is part of what a
 # rollback must put back. Taken before the first write, restored beside the VM
 # snapshot (and on its own for a module that has no VM).
+#
+# They live as long as this run, which is as long as a rollback can need them:
+# cleanup_update_files removes them on every exit. The one exception is a
+# restore that FAILED — then they are the operator's only copy, the error names
+# the file, and it is kept. Under ${TMPDIR:-/tmp}, so a test confines them to
+# its own work directory. (Before this, every update left two files in /tmp:
+# 225 on the test site in two weeks.)
 CONFIG_BACKUP=""
 ORIG_BACKUP=""
+KEEP_CONFIG_BACKUP=0
 
 
 backup_module_config() {
     local module="$1"
     local src="${CONFIG_DIR}/${module}.json"
     [[ -f "${src}" ]] || return 0
-    CONFIG_BACKUP="$(mktemp "/tmp/tappaas-config-${module}.XXXXXX")" || { CONFIG_BACKUP=""; return 0; }
+    CONFIG_BACKUP="$(mktemp "${TMPDIR:-/tmp}/tappaas-config-${module}.XXXXXX")" || { CONFIG_BACKUP=""; return 0; }
     cp -p "${src}" "${CONFIG_BACKUP}" || CONFIG_BACKUP=""
     [[ -n "${CONFIG_BACKUP}" ]] && debug "  Config backed up to ${CONFIG_BACKUP}"
 
@@ -155,7 +163,7 @@ backup_module_config() {
     # release still declares, or rule 5 pins a value the operator never chose.
     ORIG_BACKUP=""
     if [[ -f "${src}.orig" ]]; then
-        ORIG_BACKUP="$(mktemp "/tmp/tappaas-orig-${module}.XXXXXX")" || return 0
+        ORIG_BACKUP="$(mktemp "${TMPDIR:-/tmp}/tappaas-orig-${module}.XXXXXX")" || return 0
         cp -p "${src}.orig" "${ORIG_BACKUP}" || ORIG_BACKUP=""
     fi
     return 0
@@ -170,15 +178,28 @@ restore_module_config() {
         # …and with it the baseline, so the next merge judges against the state
         # the config is actually in (#688).
         if [[ -n "${ORIG_BACKUP}" && -f "${ORIG_BACKUP}" ]]; then
-            cp -p "${ORIG_BACKUP}" "${dst}.orig" \
-                && info "     …and its merge baseline, so the next update re-adopts what this one discarded" \
-                || warn "     could NOT restore ${dst}.orig — the next merge will judge against a baseline this config never reached"
+            if cp -p "${ORIG_BACKUP}" "${dst}.orig"; then
+                info "     …and its merge baseline, so the next update re-adopts what this one discarded"
+            else
+                KEEP_CONFIG_BACKUP=1
+                warn "     could NOT restore ${dst}.orig — the next merge will judge against a baseline this config never reached; the pre-update baseline is kept at ${ORIG_BACKUP}"
+            fi
         elif [[ -f "${dst}.orig" ]]; then
             warn "     no pre-update baseline was captured — ${dst}.orig may be ahead of the config"
         fi
     else
-        fatal "Could not restore ${dst} from ${CONFIG_BACKUP} — do it by hand"
+        KEEP_CONFIG_BACKUP=1
+        fatal "Could not restore ${dst} from ${CONFIG_BACKUP} — do it by hand (the copy is kept)"
     fi
+}
+
+# On every exit: the run's own temporary files. The config backups go too,
+# unless a restore from them failed (KEEP_CONFIG_BACKUP) — see above.
+cleanup_update_files() {
+    rm -f "${PRE_TEST_LOG:-}"
+    [[ "${KEEP_CONFIG_BACKUP}" == 1 ]] && return 0
+    rm -f "${CONFIG_BACKUP:-}" "${ORIG_BACKUP:-}"
+    return 0
 }
 
 finalize_config() {
@@ -375,7 +396,7 @@ apply_dependson_delta() {
 # Pre-update test output, the baseline Step 6 compares against. Empty when the
 # pre-update test did not run (--no-snapshot): then every failure is new.
 PRE_TEST_LOG="$(mktemp)"
-trap 'rm -f "${PRE_TEST_LOG}"' EXIT
+trap cleanup_update_files EXIT
 
 # run_graded_test <log> <test-module.sh args...> — run it, show its output as
 # before, keep a copy in <log>; returns test-module.sh's exit code.

@@ -1477,6 +1477,7 @@ awk '/^restore_module_config\(\) \{/{f=1} f{print} f&&/^\}/{exit}' "$UPD_MOD" >>
 _cfg_out="$(bash -c '
     set -uo pipefail
     GN=""; CL=""; info(){ :; }; debug(){ :; }; warn(){ echo "WARN:$*"; }; fatal(){ echo "FATAL:$*"; }
+    export TMPDIR="'"${RB}"'"   # the copies go with the fixture, not into /tmp
     CONFIG_DIR="'"${RB}/cfg"'"
     . "'"${RB}/cfgfn.sh"'"
     printf "%s" "{\"cores\":2}" > "${CONFIG_DIR}/demo.json"
