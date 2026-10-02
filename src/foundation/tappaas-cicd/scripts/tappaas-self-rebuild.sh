@@ -260,6 +260,14 @@ if [[ -n "${NEW_RELEASE}" && -n "${CUR_RELEASE}" && "${NEW_RELEASE}" != "${CUR_R
     warn "Rebooting the mothership to take ${NEW_RELEASE}. This sweep ends here;"
     warn "  the modules were not touched — the sweep resumes automatically after the boot."
     warn "  Recorded in ${_result} as interrupted (ok:false), resume marker in ${_resume_marker}."
+    # The marker resumes the SWEEP. A release-train boundary that started it is a
+    # separate process the reboot also ends, and nothing restarts it: its record
+    # (release-train.json .boundary, cleared when it completes) says it was
+    # running, so say how to pick it up.
+    if jq -e '.boundary != null' "${CONFIG_DIR:-/home/tappaas/config}/release-train.json" >/dev/null 2>&1; then
+        warn "  A release-train boundary was running; after the boot, resume it with:"
+        warn "    tappaas-train.sh boundary --resume"
+    fi
     systemctl reboot
     # The shutdown kills this unit; the sleep is only so that a reboot which did
     # NOT happen becomes a reported failure rather than a silent continuation.

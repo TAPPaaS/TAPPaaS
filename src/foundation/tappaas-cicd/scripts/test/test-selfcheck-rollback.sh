@@ -291,6 +291,9 @@ _rm="$(sed -n '/a release move is a REBOOT/,/^# the tail of the log/p' "${REBUIL
     || bad "a refused reboot is silent about the staged generation"
 [[ "${_rm}" == *"boundary --resume"* ]] && ok "…and how to resume the boundary after the reboot" \
     || bad "no route back into the interrupted boundary"
+[[ "${_rm}" == *".boundary != null"*"release-train.json"* ]] \
+    && ok "…said only when a boundary is running (the sweep resumes itself, #744)" \
+    || bad "the boundary hint is not tied to a running boundary"
 # Staging activates nothing, so self-checking the OLD system would be a lie.
 [[ "${_rm}" == *"nothing to self-check yet"* ]] \
     && ok "staging does not pretend to verify a generation that is not running" \

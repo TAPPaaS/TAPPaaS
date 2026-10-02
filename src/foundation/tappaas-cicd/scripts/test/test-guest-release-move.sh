@@ -44,6 +44,11 @@ run() {
         info(){ echo "INFO $*"; }; warn(){ echo "WARN $*"; }; error(){ echo "ERROR $*"; }
         die(){ error "$@"; exit 1; }; debug(){ :; }
         sleep(){ :; }; update_ssh_known_hosts(){ :; }; wait_for_ssh(){ return 0; }; report_failed_units(){ :; }
+        # update-os.sh bounds the rebuild ssh (#720): `timeout -k 30 <max> ssh …`.
+        # The real timeout would exec the real ssh, so drop its three arguments
+        # and run the scripted one.
+        SSH_REBUILD_OPTS=(-o BatchMode=yes); REBUILD_MAX_SECONDS=3600
+        timeout(){ shift 3; "$@"; }
         ssh() {
             local cmd="${*: -1}"
             case "${cmd}" in

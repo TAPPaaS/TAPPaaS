@@ -79,13 +79,16 @@ echo "── no writer re-modes an existing /etc/secrets ──"
 # `install -d -m N /etc/secrets` changes an existing directory's mode, so it
 # must be guarded by `[ -d … ] ||`. A plain chmod of the directory is allowed
 # only in backup:filesystem, which documents why its capture user must be able
-# to traverse it (0755 keeps every owner's own files reachable).
+# to traverse it (0755 keeps every owner's own files reachable). Its install and
+# update share that step in backup/lib/pbs-fs.sh (#742); the service runs only on
+# the mothership and the nodes, never on a VM with its own rule (logging).
 bad="$(grep -rnE 'install -d -m [0-7]+ ("?/etc/secrets|.*dirname[^)]*SECRETS)' --include='*.sh' "${SRC_TREE}" \
         | grep -v '\[ -d ' | grep -v '/scripts/test/')"
 ck "every 'install -d -m' on /etc/secrets is guarded by [ -d ] ||" "" "${bad}"
 [[ -n "${bad}" ]] && sed 's/^/      /' <<< "${bad}"
 chm="$(grep -rnE 'chmod [0-7]+ /etc/secrets([^/]|$)' --include='*.sh' "${SRC_TREE}" \
-        | grep -v '/backup/services/filesystem/install-service.sh:' | grep -v '/scripts/test/')"
+        | grep -v -e '/backup/services/filesystem/install-service.sh:' -e '/backup/lib/pbs-fs.sh:' \
+        | grep -v '/scripts/test/')"
 ck "no script chmods /etc/secrets itself (backup:filesystem excepted)" "" "${chm}"
 
 echo "── Grafana re-asserts its own rule on every start ──"
