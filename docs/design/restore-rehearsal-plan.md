@@ -52,9 +52,11 @@ What follows from it:
 |---|---|---|
 | P1 | ✅ **`restore.sh` restores containers** — fixed on `fix/restore-containers` 2026-10-02 (see Results) | vllm-amd (312) is an LXC; its backup is `backup/ct/312/…`. `restore.sh` always runs `pvesh create /nodes/<n>/qemu --archive …` and probes `qm status`, so §3.3 would fail on it. Fix: take the guest type from the volid (`backup/vm/` → `qemu`, `backup/ct/` → `lxc`, `pct` for status/stop/destroy), with a unit test. |
 | P2 | **PXE, decided:** `site-manager node add tappaas2 --pxe --boot-disk nvme0n1 --mac 38:05:25:33:b5:f7 --no-wan --pool tanka1=single:nvme1n1` | disks and NIC recorded above. Before the power is pulled: `efibootmgr -n 000A` on tappaas2 (one-time PXE on the next boot) |
-| P3 | Fresh backups of 310, 311, 312, 342 the same day | the restore must not lose a day of AI-stack state; `backup-manager` run on demand, then `list` shows today's |
+| P3 | Fresh backups of 310, 311, 312, 342 **after the last `cicd-key.sh rotate`** (2026-10-02 10:17) and on the day | a guest restored from an older backup trusts only the revoked mothership key — nothing can log in to it (§2, 2026-10-02). There is no `backup-manager` verb for "back up now"; on tappaas2: `vzdump 310 311 312 342 --storage tappaas_backup --mode snapshot`, then `backup-manager restore list <module>` shows today's for each |
 | P4 | Mothership `config/` capture of the same day (backup:filesystem) | §5.2 compares against it |
 | P5 | `module-manager list --diff` clean, sweep green | so every finding afterwards is the rehearsal's |
+| P6 | **DNS baseline** — every module's name and address: `for m in $(module-manager list --json \| jq -r '.modules[].name'); do echo "$m $(dig +short $m.<zone>.internal @10.0.0.1)"; done` | §2 showed a restored guest can take another guest's DNS name, and Caddy proxies public sites by those names. Re-run after every restore and start in 3f and 3g, and compare |
+| P7 | `fix/restore-from` merged (✅ 2026-10-02) | before it, a restore over an existing guest stopped at `root@root@<node>`, and `--node` did not default to the module's node |
 
 ## Phase 1 — §5.2: rebuild the mothership beside the original
 
@@ -149,12 +151,31 @@ and **the backup client reconciled onto it** (ADR-012 §2.4: `backup-manager val
 
 ### 3f. §3.3 — restore the guests that are not HA
 
-For 310, 311, 342, then 312 (after P1), one at a time, as RESTORE.md §3.3 writes it:
-`backup-manager restore restore <module> --node tappaas2 --storage tanka1`, `module update`,
-`module test --deep`. Expect each restored from this morning's backup (P3) and green before the
-next starts. **Not** test-nixos: it is HA-protected and running.
+For 310, 311, 342, then 312 (after P1), one at a time, as RESTORE.md §3.3 writes it — with the
+order §2 taught (2026-10-02):
+
+1. `backup-manager restore restore <module> --node tappaas2 --storage tanka1`, **interactively**
+   (it asks whether to start the guest — answer no). Expect: the backup of P3, today's.
+2. **Start it yourself** — `qm start <vmid>` (`pct start 312`). `module update` does not start a
+   stopped guest: its pre-update tests fail on "not running" and it aborts (§2).
+3. **DNS:** the guest's own name resolves to its address, and P6's list is otherwise
+   unchanged. This is a restore of a guest's *own* backup under its own VMID — same MAC, same
+   hostname, the original is gone with the node — so no name should move; checking it is what
+   would have caught §2's incident in seconds instead of minutes. If one moves: stop the
+   restored guest, then `sudo nmcli c up tappaas-ethernet` on the guest that owns the name.
+4. **SSH:** it answers to the current mothership key (P3 is what makes this true). If not:
+   `cicd-key.sh recover`. Its host key is its own, unchanged — `known_hosts` should accept it.
+   Do not retry a refused login in a loop: sshd's per-source penalty then refuses the
+   mothership for a while ("connection reset", §2).
+5. `module update <module>`, `module test <module> --deep`; green before the next starts.
+
+**Not** test-nixos: it is HA-protected and running.
 
 vllm-amd (312) needs two more steps, both because of what a backup cannot carry (#758):
+
+Its restore needs `--storage` (a container restore refuses without one), and restore.sh warns
+that `/tanka1/vllm-models` is not in the backup and does not exist on the new tappaas2 — that
+warning is expected.
 
 1. `module-manager module update vllm-amd` re-runs `patch-host-gpu.sh` on the **new** host —
    GPU devices, render group, and the empty `/tanka1/vllm-models`. Check `/dev/kfd` and
@@ -163,16 +184,24 @@ vllm-amd (312) needs two more steps, both because of what a backup cannot carry 
    README says), the same models it served before (list them in 3b). Record size and time; then
    `module test vllm-amd --deep`.
 
+Record per guest: restore time and size (§2: 2 min 17 s for 32G; P1: 10 min for the 28.8G
+container), start-to-green time, and anything done by hand.
+
 ### 3g. §3.4 — HA guests come home; re-fold HA and replication
 
 1. `module-manager migrate test-nixos` — declaration-driven, back to tappaas2. **No restore from
    backup.** Expect: running on tappaas2, both markers intact (it is the same disk), downtime only
-   the migration's.
+   the migration's. P6's DNS list unchanged afterwards (same guest, same MAC — a migration
+   moves no names; checking it costs one command).
 2. Replication: the job was `911 -> tappaas3` from tappaas2; after recovery the guest ran *on*
    tappaas3. Record what Proxmox did with the job, then what `site-manager update` makes of it —
    expect `911 -> tappaas3` from tappaas2 again, in sync.
 3. `site-manager update`; `module-manager list --diff` **clean**; `ha-manager status` shows
    vm:911 on tappaas2 and 110/130/140 unchanged on tappaas1.
+
+**Firewall changes are the operator's.** If anything in §3 needs a change on the firewall
+itself (a dnsmasq lease, a rule), the operator makes it — Claude's session is not permitted to
+write there (2026-10-02). The fix for a moved DNS name does not need it (step 3 above).
 
 **Pass:** every §3 step ran as written, or the runbook says what it should have said; HA
 recovered the test VM without a restore and it went home by migration; the four other guests came
@@ -184,7 +213,8 @@ back from backup and pass their deep tests; the estate shows no diff.
    with it — check each).
 2. Phase 1's VM 930 and Phase 2's `openwebui-r` gone (done in their phases; checked here).
 3. The empty, stale `/etc/pve/nodes/tappaas4/` (found 2026-10-02, from an earlier node) removed.
-4. **Leftover check:** no guest in 900–999 on any node; `ha-manager config` lists only 110, 130,
+4. **Leftover check:** P6's DNS list matches the baseline (a lease of a deleted guest keeps
+   its name until it expires — note it, as §2 had to); no guest in 900–999 on any node; `ha-manager config` lists only 110, 130,
    140; `/cluster/replication` only 110, 130, 140; no `config/test-nixos*.json`,
    `config/openwebui-r*.json`; their DNS names do not resolve; no stray backups of 911/930 or the
    openwebui-r VMID left on the PBS (or note them as kept on purpose); `module-manager list --diff`
