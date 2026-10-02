@@ -66,6 +66,34 @@ if [[ "${TAPPAAS_TEST_DEEP:-0}" == "1" ]]; then
         echo "  SKIP: backup-controller not on PATH (run the module install first)"
     fi
 
+    # #760: VM and container backups are encrypted (ADR-012 §2.5) — the storage
+    # carries a key, and the escrow holds the same one. Without the key, vzdump
+    # writes plaintext; without the escrowed copy, a rebuilt cluster cannot read
+    # a single backup.
+    echo "== backup (deep): VM and container backups are encrypted =="
+    declare -F get_node_hostname >/dev/null 2>&1 \
+        || . /home/tappaas/bin/common-install-routines.sh 2>/dev/null || true
+    if command -v jq >/dev/null 2>&1 && declare -F get_node_hostname >/dev/null 2>&1; then
+        _store="$(jq -r '.pbsStorageName // "tappaas_backup"' "${CONFIG_DIR:-/home/tappaas/config}/backup.json" 2>/dev/null)"
+        _node="$(get_node_hostname 0 2>/dev/null)"
+        _key="$(ssh -n -o ConnectTimeout=10 -o BatchMode=yes "root@${_node}.mgmt.internal" \
+            "cat /etc/pve/priv/storage/${_store}.enc 2>/dev/null" 2>/dev/null)"
+        _esc="/etc/secrets/backup-fs/pve-storage-${_store}.key"
+        if [[ -z "${_key}" ]]; then
+            echo "  ✗ storage ${_store} has NO encryption key — VM and container backups are plaintext (#760)"
+            echo "      fix: module-manager module update backup"
+            rc=1
+        elif [[ "${_key}" != "$(cat "${_esc}" 2>/dev/null || sudo -n cat "${_esc}" 2>/dev/null)" ]]; then
+            echo "  ✗ storage ${_store} encrypts, but ${_esc} does not hold its key — a rebuilt cluster could not restore"
+            echo "      fix: module-manager module update backup"
+            rc=1
+        else
+            echo "  ✓ backups to ${_store} are encrypted; the key is escrowed"
+        fi
+    else
+        echo "  SKIP: cannot reach the cluster from here"
+    fi
+
     # #742: has each backup:filesystem consumer ever actually captured?
     #
     # The unit's own state cannot answer this. A capture that has NEVER succeeded

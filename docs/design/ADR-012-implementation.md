@@ -678,3 +678,32 @@ Operator chose "push into the TS layer" (2026-07-05). Extended the TypeScript `b
 - **ADR status stays Draft** — advancing to Proposed is the operator's call after the cluster live tests.
 
 **Summary — P1–P9:** P1/P2/P3 live-verified on tappaas1; P4/P5/P6/P8 implemented + offline-green; P7 (TS) built + verified on cicd; P9 docs + live test plan. What remains is purely **live validation on the incoming 3-node + tankc cluster** (off-site push/pull/subset/immutability/restore + the compromise-isolation suite) and the operator's Draft→Proposed sign-off.
+
+### 2026-10-02 — #760: VM and container backups were never encrypted
+
+§1.5/§2.5 require client-side encryption of every backup. vzdump encrypts a VM or
+container backup only when the Proxmox storage entry carries a key, and
+`backup/install.sh` registered `tappaas_backup` without one — so every VM and container
+backup was plaintext from the start. hrossen: 237 of 237 snapshots unencrypted, the
+mothership's (every site secret) among them. It went unseen because the with-key /
+without-key evidence above (P19, `backup:filesystem`) was true — for the one path that
+had its own `--keyfile`.
+
+- **Fix:** `lib/pbs-encryption.sh` `pbs_storage_key_ensure`, at install (fatal) and on
+  every update (local and external storage, fatal): a key if the storage has none
+  (`--encryption-key autogen`), escrowed as `pve-storage-<storage>.key` (so `key export`
+  carries it); on a rebuilt cluster the *escrowed* key is put back, never a new one; a
+  replaced key is escrowed with the old one kept beside it. 22 unit cases against a
+  stubbed cluster; the module's deep test fails without a key or with an escrow that
+  disagrees.
+- **Live on hrossen:** storage keyed and escrowed (byte-identical, `tappaas:users` 600);
+  `backup-controller backup coturn` → snapshot `encrypted=a7:31:d6:…` (51 s, a full
+  upload); restored beside the original **with** the key; the same snapshot through a
+  key-less storage entry on the same datastore **refused** (`--crypt-mode=none … exit
+  255`). Test VMs and the temporary storage removed.
+- **Rebuild order changes (RESTORE.md §5.2, media README):** a mothership restored from
+  its own VM backup needs the storage key on the cluster *before* `qmrestore` — from the
+  out-of-band media, since the escrow was on the mothership.
+- **Open (decision):** the snapshots taken before stay plaintext until retention (7y)
+  removes them — prune once each guest has an encrypted one, or keep?
+

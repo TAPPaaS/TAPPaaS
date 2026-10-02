@@ -12,9 +12,12 @@ labelled as such.
 
 ## 0. Before anything: the key
 
-Backups are **encrypted client-side**. The keys are escrowed on the mothership —
-which is inside the system a full rebuild recreates — so that escrow cannot be
-the only copy:
+Backups are **encrypted client-side** — VM and container backups with the Proxmox
+storage key (`/etc/pve/priv/storage/<storage>.enc`), filesystem captures with each
+host's own key. *(VM and container backups taken before the fix for #760, on
+2026-10-02, are not: the storage had no key. They stay plaintext until retention
+removes them.)* The keys are escrowed on the mothership — which is inside the
+system a full rebuild recreates — so that escrow cannot be the only copy:
 
 ```bash
 backup-manager key list                      # what is escrowed
@@ -501,6 +504,10 @@ VMID 130 destroys the machine running the command mid-flight. Drive it from a
 
 ```bash
 ssh root@tappaas1.mgmt.internal
+  # The mothership's backup is ENCRYPTED with the storage key — and the escrow that
+  # held it was on the mothership. Put it back from the out-of-band media first
+  # (once, cluster-wide; skip if `ls /etc/pve/priv/storage/` already shows the .enc):
+  pvesm set tappaas_backup --encryption-key "$(cat /media/usb-stick/tappaas-backup-keys/pve-storage-tappaas_backup.key)"
   # pick the snapshot, then restore it as VMID 130 on a surviving node
   pvesm list tappaas_backup --vmid 130
   qmrestore <volid> 130 --storage tanka1
@@ -515,7 +522,10 @@ Then, on the rebuilt mothership, in this order:
    the file capture usually is newer, and it is the site's source of truth.
 3. `site-manager update` to re-converge the estate.
 
-**Reinstalled instead of restored?** Then the mothership has a **new SSH key**,
+**Reinstalled instead of restored?** Import the keys first (`backup-manager key
+import`), then `module-manager module update backup`: with the storage key in escrow
+but none on the cluster, it puts that key back instead of generating a new one —
+a new key could not read a single existing backup. Then the mothership has a **new SSH key**,
 and nothing trusts it yet: the nodes are key-only (#19), and each VM received
 the old key once, through cloud-init, when it was created. Before step 3:
 

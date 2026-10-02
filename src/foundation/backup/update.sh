@@ -33,6 +33,8 @@ readonly MODULE_DIR
 . "${MODULE_DIR}/lib/pbs-immutable.sh"
 # shellcheck source=lib/pbs-dns.sh disable=SC1091
 . "${MODULE_DIR}/lib/pbs-dns.sh"
+# shellcheck source=lib/pbs-encryption.sh disable=SC1091
+. "${MODULE_DIR}/lib/pbs-encryption.sh"
 # shellcheck source=lib/pbs-storage.sh disable=SC1091
 . "${MODULE_DIR}/lib/pbs-storage.sh"
 # shellcheck source=lib/pbs-external.sh disable=SC1091
@@ -113,6 +115,10 @@ if [[ "${STATE}" == "external" ]]; then
     fi
     pbs_external_verify "${_ext_store}" "${ZONE}" \
         || { error "The external PBS storage ${_ext_store} is registered but not usable (see above) — backups to $(pbs_pbs_url) will fail."; exit 1; }
+    # An external PBS is the case ADR-012 encrypts FOR: its operator must hold
+    # ciphertext only (#760).
+    pbs_storage_key_ensure "${_ext_store}" "${ZONE}" \
+        || { error "Backups to the external PBS (${_ext_store}) are NOT encrypted (see above)."; exit 1; }
     exit 0
 fi
 
@@ -191,6 +197,15 @@ pbs_client_reconcile "${ZONE}" "${IMAGE_LOCATION}" \
 
 info "${BOLD}Ensuring every opted-in VM is registered in the managed backup job${CL}"
 pbs_ensure_declared
+
+# ── #760: VM and container backups are encrypted (ADR-012 §2.5) ────────
+# Registered without a key, the storage made vzdump write every VM and container
+# backup in plaintext. This gives it one on the next update — or puts back the
+# escrowed one on a rebuilt cluster — and escrows it. Fatal: an update that
+# leaves backups unencrypted must not report success.
+info "${BOLD}Ensuring VM and container backups are encrypted${CL}"
+pbs_storage_key_ensure "$(pbs_storage_name)" "${ZONE}" \
+    || { error "Backups to $(pbs_storage_name) are NOT encrypted (see above)."; exit 1; }
 
 # Retrofit the ZFS-mount ordering on already-deployed PBS servers (issue #230);
 # idempotent, so this is a no-op once the drop-ins are in place.

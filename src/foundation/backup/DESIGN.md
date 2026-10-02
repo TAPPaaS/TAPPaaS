@@ -230,6 +230,16 @@ will not have this repository); `key import` loads them onto a rebuilt mothershi
 refuses to overwrite a key that is already escrowed. Losing every copy of a key makes
 the backups it encrypted permanently unreadable.
 
+Two kinds of key (#760). **VM and container backups** are encrypted by vzdump with the
+Proxmox *storage* key — `/etc/pve/priv/storage/<storage>.enc`, one per storage,
+cluster-wide. Install and every update ensure it (`lib/pbs-encryption.sh`): give the
+storage a key if it has none, escrow it as `pve-storage-<storage>.key`, and on a rebuilt
+cluster put the escrowed key back rather than make a new one. **Filesystem captures**
+use each host's own key (`<host>.key`, `lib/pbs-fs.sh`). Until 2026-10-02 the storage
+was registered without a key, so every VM and container backup was plaintext — only
+the filesystem captures were encrypted, and they were all ADR-012's evidence covered.
+The module's deep test now fails when the storage has no key or the escrow disagrees.
+
 ## Automated schedule
 
 Configured by `install.sh`, kept current by `update.sh`; ordered so each step runs

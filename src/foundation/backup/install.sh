@@ -76,6 +76,8 @@ run_quiet() {
 . "${MODULE_DIR}/lib/pbs-dns.sh"
 # shellcheck source=lib/pbs-host.sh disable=SC1091
 . "${MODULE_DIR}/lib/pbs-host.sh"
+# shellcheck source=lib/pbs-encryption.sh disable=SC1091
+. "${MODULE_DIR}/lib/pbs-encryption.sh"
 # shellcheck source=lib/pbs-storage.sh disable=SC1091
 . "${MODULE_DIR}/lib/pbs-storage.sh"
 # shellcheck source=lib/pbs-external.sh disable=SC1091
@@ -466,6 +468,14 @@ fi
 # Clean up password file
 rm -f /tmp/pbs_password.tmp
 EOF
+
+# Step 6b: the storage encrypts (#760, ADR-012 §2.5). vzdump encrypts a VM or
+# container backup only when the storage entry carries a key; without this step
+# every one of them was plaintext. A key already in escrow (a rebuilt cluster) is
+# put back rather than replaced, so existing backups stay readable.
+info "Ensuring backups to ${DATASTORE_NAME} are encrypted..."
+pbs_storage_key_ensure "${DATASTORE_NAME}" "${ZONE}" \
+  || die "Backups to ${DATASTORE_NAME} would not be encrypted (see above) — refusing to finish an install that writes plaintext backups."
 
 # Step 7: Backup job — managed per-module, dependsOn-driven (issue #200)
 #

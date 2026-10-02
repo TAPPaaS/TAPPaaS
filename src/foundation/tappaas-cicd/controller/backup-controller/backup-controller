@@ -495,10 +495,24 @@ These keys decrypt this site's backups. Anyone holding them plus a copy of the
 backup data can read it; anyone WITHOUT them cannot restore, no matter what
 else survives.
 
-To restore onto a rebuilt mothership (ADR-012 §2.5.1):
-  1. Rebuild tappaas-cicd.
-  2. backup-controller key import <this-directory>
-  3. Restore from the off-site copy; it will decrypt.
+pve-storage-<storage>.key decrypts the VM and container backups (it is the
+Proxmox storage key, /etc/pve/priv/storage/<storage>.enc). The other keys
+decrypt the filesystem captures (config/, /etc/secrets) of each host.
+
+The mothership is lost, and you restore it from its own VM backup:
+  1. On any surviving node, put the storage key back first — the mothership's
+     backup is encrypted with it, and the escrow that held it was ON the
+     mothership:
+       pvesm set <storage> --encryption-key "$(cat pve-storage-<storage>.key)"
+  2. qmrestore <volid> 130 --storage <pool>; start it.
+  3. On it: backup-controller key import <this-directory>
+
+The mothership is reinstalled instead (or the whole cluster is):
+  1. backup-controller key import <this-directory>
+  2. module-manager module update backup — it puts the imported storage key
+     back on the cluster rather than making a new one, so every existing
+     backup stays readable.
+  3. Restore; it will decrypt.
 READMEEOF
     chmod 600 "${out}/README.txt"
     info "${GN}✓${CL} keys exported to ${out} (mode 600)"
