@@ -39,7 +39,7 @@
       "type": "string"
     },
     "version": {
-      "description": "Site config schema version.",
+      "description": "The TAPPaaS release this site was installed from, written once by create-site.sh. Not the version it runs: that is read from the checkout (git describe; site-manager site show, ADR-028 D13).",
       "type": "string",
       "default": "1.0"
     },

@@ -78,7 +78,8 @@ When a run fails, the site owner hears about it: `update-tappaas-failure.service
 `site.json` `email` through a Proxmox node's mail system, naming the step that failed
 (#651; ADR-007e v1.3 owns the target). Every run is also followed by a security scan of
 what it left running (`health-manager report security`, ADR-011). `site show` prints the schedule as it is meant —
-no weekday under `daily`/`none` (#447).
+no weekday under `daily`/`none` (#447) — and the TAPPaaS version the site runs, read from its
+checkout (`2.2`, or `2.2+14` between boundaries; ADR-028 D13), beside the one it was installed from.
 
 `repository hold` stops the scheduled sweep from pulling one repository, so a test
 site can run changes that are not pushed yet (#653). The marker is

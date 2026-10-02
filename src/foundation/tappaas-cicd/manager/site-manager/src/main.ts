@@ -32,6 +32,7 @@ import { DieError, GN, RD, YW, CL, debug, die, guarded, info, infoTagged, prefli
 import { applyPlan, computePlan } from "./reconcile";
 import { adoptNode, provisionNode } from "./provision";
 import { Site, SiteClient, SiteNode } from "./types";
+import { runningVersion } from "./version";
 import { spawnSync } from "child_process";
 import { existsSync, readFileSync } from "fs";
 
@@ -283,7 +284,12 @@ function cmdSite(o: Opts): void {
     info(`${lbl("Site")}${site.name}${site.displayName && site.displayName !== site.name ? ` (${site.displayName})` : ""}`);
     info(`${lbl("Owner")}${site.owner || "(unset)"}`);
     info(`${lbl("Email")}${site.email || "(unset)"}`);
-    info(`${lbl("Version")}${site.version || "(unset)"}`);
+    // The code's version, read live from the checkout (ADR-028 D13). site.json's
+    // `version` is the release the site was installed from, written once.
+    const tp = repos.find((r) => r.name === "TAPPaaS")?.path ?? "/home/tappaas/TAPPaaS";
+    const running = runningVersion(tp);
+    info(`${lbl("TAPPaaS")}${running ?? "(no release tag in the checkout)"}${site.channel ? `  (${site.channel} channel)` : ""}`);
+    info(`${lbl("Installed from")}${site.version || "(unset)"}`);
     info(`${lbl("Location")}${[loc.country, loc.timezone, loc.locale, loc.keyboard].filter(Boolean).join(" / ") || "(unset)"}`);
     if (loc.latitude !== undefined || loc.longitude !== undefined) {
       info(`${lbl("Position")}${[loc.latitude, loc.longitude].map((v) => (v === undefined ? "?" : String(v))).join(", ")}`);
