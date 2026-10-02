@@ -151,6 +151,14 @@ console.log("parseLinuxProbe / parseOpnsenseProbe");
   check(lp.containers.length === 1 && lp.containers[0].digests[0] === "ghcr.io/goauthentik/server@sha256:53ab", "a running container and its registry digests");
   const two = parseLinuxProbe(nixProbe([], ["podman|authentik-server|a:1|a@sha256:1", "podman|authentik-worker|a:1|a@sha256:1", "podman|redis|r:7|r@sha256:2"]));
   check(groupByImage(two.containers).map((g) => g.length).join(",") === "2,1", "two containers on one image are one image to scan");
+  // The same containers, listed in the other order and with the digests swapped:
+  // the target must come out identical, or every finding reads as new and the
+  // owner gets a security notice every morning.
+  const a = parseLinuxProbe(nixProbe([], ["podman|authentik-server|a:1|a@sha256:2,a@sha256:1", "podman|authentik-worker|a:1|a@sha256:1,a@sha256:2"]));
+  const b = parseLinuxProbe(nixProbe([], ["podman|authentik-worker|a:1|a@sha256:2,a@sha256:1", "podman|authentik-server|a:1|a@sha256:1,a@sha256:2"]));
+  const first = (p: typeof a): string => groupByImage(p.containers).map((g) => `${g.map((c) => c.name).join("+")}@${g[0].digests[0]}`).join(" ");
+  check(first(a) === first(b) && first(a) === "authentik-server+authentik-worker@a@sha256:1",
+    `an image's target is the same whatever order podman lists its containers and digests in (${first(a)} / ${first(b)})`);
   const cut = parseLinuxProbe(nixProbe().replace("@@end", ""));
   check(!cut.complete, "output without @@end is known to be cut short");
   const deb = parseLinuxProbe(debProbe);

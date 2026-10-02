@@ -231,7 +231,10 @@ export function parseLinuxProbe(out: string): LinuxProbe {
           runtime: runtime ?? "",
           name: name ?? "",
           image: image ?? "",
-          digests: (digests ?? "").split(",").map((d) => d.trim()).filter((d) => d.includes("@sha256:")),
+          // Sorted: an image can carry several (its index and its platform
+          // manifest), and the runtime does not promise their order — the first
+          // one names the image's target, so it must be the same every night.
+          digests: (digests ?? "").split(",").map((d) => d.trim()).filter((d) => d.includes("@sha256:")).sort(),
         });
       }
       section = tag;
@@ -918,13 +921,19 @@ export function runScan(opts: ScanOpts, client: ClusterClient, io: SecurityIO): 
   return { status, cdx: siteCdx(results, status, siteName(opts.configDir)) };
 }
 
+// One group per image, its containers sorted by name, the groups by their first
+// name. A group's first container names its target (image:<module>/<container>),
+// and `podman ps` lists containers in no fixed order: unsorted, authentik's
+// server and worker swapped places between nights, the target got a new id, and
+// every one of its findings read as new — a security notice each morning.
 export function groupByImage(cs: Container[]): Container[][] {
   const m = new Map<string, Container[]>();
   for (const c of cs) {
     const key = c.digests[0] ?? `local:${c.image}`;
     m.set(key, [...(m.get(key) ?? []), c]);
   }
-  return [...m.values()];
+  const byName = (a: Container, b: Container): number => a.name.localeCompare(b.name);
+  return [...m.values()].map((g) => [...g].sort(byName)).sort((a, b) => byName(a[0], b[0]));
 }
 
 function trivyTarget(base: Pick<TargetStatus, "id" | "name" | "layer" | "host" | "runsOn" | "ref">, r: RemoteResult, vex: VexStatement[]): CdxTarget {
