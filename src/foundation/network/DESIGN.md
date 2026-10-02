@@ -248,6 +248,14 @@ firewall. Manual zones get no rules and keep their reach: `mgmt` (LAN, also cove
 OPNsense's anti-lockout), the NetBird overlay and the admin VPN. Caddy is reached by its
 own rule, below.
 
+**Anti-spoofing (#159), seq 970 — the first rule of every zone.** A packet arriving on a
+zone's interface must carry a source in that zone's subnet; `Zone X block spoofed source`
+drops everything else (`from ! <subnet>`), before any pass can match a forged address.
+OPNsense's own DHCP rules come earlier, so a client's `0.0.0.0` discover still works.
+**Fragments** need no rule: pf's `scrub in all fragment reassemble` (the OPNsense default)
+reassembles every packet before filtering and drops overlapping fragments, so no fragment
+reaches a rule. Both are always on — TAPPaaS takes the decision, not a field.
+
 #### Why caddy-reach is in band 1 (#366, ADR-021 D3)
 
 Split-horizon DNS resolves every published name to the **DMZ gateway**, where `os-caddy`

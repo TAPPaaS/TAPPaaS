@@ -807,6 +807,17 @@ class ZoneManager:
     # (LAN, which OPNsense's anti-lockout also covers), the NetBird overlay and
     # the admin VPN. Band 1, before every pass.
     ADMIN_GUARD_SEQUENCE = 980         # band 1; webgui=980, ssh=981
+
+    # Anti-spoofing (#159, always on — not a field: TAPPaaS takes this decision).
+    # A packet arriving on a zone's interface must come from that zone's subnet;
+    # anything else is a forged or misrouted source, and dropped before any pass
+    # can match it. DHCP's 0.0.0.0 discover is untouched: OPNsense's own DHCP
+    # rules are evaluated before automation rules. Fragments need no rule: pf's
+    # `scrub in all fragment reassemble` (the OPNsense default) reassembles every
+    # packet before filtering and drops overlapping fragments, so a fragment never
+    # reaches a rule to be judged. Two days of hrossen's log (2026-10-02) held one
+    # off-subnet source, a container's un-NATed 172.18.0.2 — already blocked.
+    ANTISPOOF_SEQUENCE = 970           # band 1, the first zone rule
     ADMIN_GUARD_PORTS = (("8443", "webgui"), ("22", "ssh"))
 
     def _zone_rule_base(self, zone: "Zone") -> int:
@@ -1723,6 +1734,7 @@ class ZoneManager:
         results_list: list[dict],
         protocol: Protocol = Protocol.ANY,
         destination_port: str | None = None,
+        source_invert: bool = False,
     ) -> None:
         """Create a firewall rule or skip if it already exists.
 
@@ -1739,6 +1751,7 @@ class ZoneManager:
             results_list: List to append result dicts to
             protocol: L4 protocol to match (default ANY — zone access-to rules)
             destination_port: Destination port/range to match (None = any)
+            source_invert: Match every source EXCEPT source_net (anti-spoofing)
         """
         action_str = "pass" if action == RuleAction.PASS else "block"
 
@@ -1763,6 +1776,7 @@ class ZoneManager:
                 or existing.destination_net != destination_net
                 or existing.source_net != source_net
                 or (existing.destination_port or None) != destination_port
+                or existing.source_invert != source_invert
                 or seq_drift
             )
             if not drifted:
@@ -1814,6 +1828,7 @@ class ZoneManager:
                     interface=interface,
                     protocol=protocol,
                     source_net=source_net,
+                    source_invert=source_invert,
                     destination_net=destination_net,
                     destination_port=destination_port,
                     log=True,
@@ -1961,6 +1976,15 @@ class ZoneManager:
                             check_mode, zone_results,
                             protocol=proto, destination_port=port,
                         )
+                    # Step 0: only the zone's own subnet may speak on its interface (#159).
+                    self._create_or_skip_rule(
+                        manager, existing_by_desc,
+                        f"Zone {zone.name} block spoofed source",
+                        zone_interface, zone.ip_network, "any",
+                        RuleAction.BLOCK, self.ANTISPOOF_SEQUENCE,
+                        check_mode, zone_results,
+                        source_invert=True,
+                    )
                     # Step 1b: the firewall's admin ports, on any of its addresses (#384).
                     for offset, (port, label) in enumerate(self.ADMIN_GUARD_PORTS):
                         self._create_or_skip_rule(

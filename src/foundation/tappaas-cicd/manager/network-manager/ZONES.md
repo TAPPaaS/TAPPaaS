@@ -135,6 +135,19 @@ an isolated zone to a non-`mgmt` `access-to` would nullify the pinhole mechanism
 host in the source subnet would gain unconditional zone-wide reach. `iotCams` in
 particular must stay purpose-limited (GDPR Art. 25).
 
+### Hardening every zone gets, always (#159, #384, #399)
+
+No field turns these off — TAPPaaS takes the decision:
+
+- **Anti-spoofing.** A zone's interface accepts only sources from the zone's own subnet; a
+  forged or misrouted source is dropped before any rule can pass it.
+- **Fragments are reassembled** by pf before filtering (overlapping fragments dropped), so a
+  fragmented packet is judged whole.
+- **Its gateway serves it, nothing more:** DNS, NTP, DHCP and ICMP. The firewall's GUI (8443)
+  and SSH (22) are blocked from the zone on every firewall address.
+
+`Manual` zones (`mgmt`, the overlays) get no generated rules and keep their reach.
+
 ### How `mgmt` reaches every zone: `all`
 
 The `mgmt` exception is written `"access-to": ["internet", "all"]`. `all` means `internet`

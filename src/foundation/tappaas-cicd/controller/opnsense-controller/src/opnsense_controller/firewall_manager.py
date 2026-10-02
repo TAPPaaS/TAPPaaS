@@ -98,6 +98,7 @@ class FirewallRuleInfo:
     destination_port: str | None
     log: bool
     sequence: int | None = None
+    source_invert: bool = False
 
     @classmethod
     def from_api_response(cls, uuid: str, data: dict) -> "FirewallRuleInfo":
@@ -116,6 +117,7 @@ class FirewallRuleInfo:
             destination_port=data.get("destination_port"),
             log=data.get("log") == "1",
             sequence=int(data["sequence"]) if data.get("sequence") else None,
+            source_invert=data.get("source_not") == "1",
         )
 
 
@@ -259,6 +261,7 @@ class FirewallManager:
             destination_port=data.get("destination_port") or None,
             log=data.get("log") == "1",
             sequence=int(data["sequence"]) if data.get("sequence") else None,
+            source_invert=data.get("source_not") == "1",
         )
 
     def get_rule(self, uuid: str) -> dict:
@@ -353,14 +356,17 @@ class FirewallManager:
         # Optional source port
         if rule.source_port:
             params["source_port"] = rule.source_port
+        # The client module's names are source_invert/destination_invert; it
+        # refuses OPNsense's own field name (`source_not`), which only the
+        # read side sees (_parse_rule_from_get). Unused until #159.
         if rule.source_invert:
-            params["source_not"] = "1"
+            params["source_invert"] = True
 
         # Optional destination port
         if rule.destination_port:
             params["destination_port"] = rule.destination_port
         if rule.destination_invert:
-            params["destination_not"] = "1"
+            params["destination_invert"] = True
 
         # Optional gateway for policy routing
         if rule.gateway:

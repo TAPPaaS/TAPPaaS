@@ -456,6 +456,7 @@ def _to_info(rule, uuid="u") -> FirewallRuleInfo:
         destination_port=rule.destination_port,
         log=True,
         sequence=rule.sequence,
+        source_invert=rule.source_invert,
     )
 
 
@@ -538,6 +539,7 @@ class TestConfigureFirewallRulesSequencing(unittest.TestCase):
         zone_rules = [r for r in fake.created if r.sequence >= 1000]
         self.assertTrue(all(
             "-> caddy " in r.description or " block firewall " in r.description
+            or r.description.endswith(" block spoofed source")
             for r in fake.created if r.sequence < 1000))
         self.assertTrue(zone_rules)
         for rule in zone_rules:
@@ -550,7 +552,7 @@ class TestConfigureFirewallRulesSequencing(unittest.TestCase):
         # (Caddy reachability is band 1 by design and excluded here.)
         fake = self._run(_build_zones())
         for rule in fake.created:
-            if "-> caddy " in rule.description or " block firewall " in rule.description:
+            if rule.sequence < 1000:   # band 1: caddy, admin guard, anti-spoof
                 continue
             self.assertGreater(rule.sequence, 29999)
 
@@ -681,13 +683,36 @@ class TestGatewayAndAdminPorts(TestConfigureFirewallRulesSequencing):
         fake = self._run(self._with_manual())
         self.assertFalse([r for r in fake.created
                           if r.description.startswith(("Zone mgmt ", "Zone admin "))
-                          and " block firewall " in r.description])
+                          and (" block firewall " in r.description
+                               or r.description.endswith(" block spoofed source"))])
 
     def _with_manual(self):
         zones = _build_zones()
         zones["admin"] = _zone("admin", access_to=["mgmt"], zone_type="Overlay",
                                state="Manual", vlan_tag=0)
         return zones
+
+    def test_only_the_zone_subnet_may_speak_on_its_interface(self):
+        # #159: the first rule of a zone drops every source outside its subnet.
+        rules = self._zone_rules(self._run(_build_zones()), "srv")
+        r = rules["Zone srv block spoofed source"]
+        self.assertEqual(
+            (r.action, r.source_net, r.source_invert, r.destination_net, r.protocol),
+            (RuleAction.BLOCK, rules["Zone srv -> gateway dns"].source_net, True, "any", Protocol.ANY))
+        self.assertEqual(r.sequence, min(x.sequence for x in rules.values()))
+
+    def test_anti_spoofing_is_reconciled_when_the_invert_is_lost(self):
+        # A rule whose `source_not` was lost would block the zone's OWN subnet —
+        # every host in it, cut off. The reconcile must see that as drift.
+        first = self._run(_build_zones())
+        existing = [_to_info(r, uuid=f"u{i}") for i, r in enumerate(first.created)]
+        for e in existing:
+            if e.description == "Zone srv block spoofed source":
+                e.source_invert = False
+        second = self._run(_build_zones(), existing=existing)
+        self.assertIn("Zone srv block spoofed source", second.deleted)
+        self.assertTrue(next(r for r in second.created
+                             if r.description == "Zone srv block spoofed source").source_invert)
 
     def test_an_existing_all_ports_gateway_rule_is_reaped(self):
         # A site upgrading from before #399 carries `Zone srv -> gateway` on
