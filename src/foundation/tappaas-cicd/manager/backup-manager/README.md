@@ -85,6 +85,17 @@ backup-manager backup <module>... [--config-dir DIR]
         no TAPPaaS job covers (add it first). Non-zero if any backup was not
         taken — an unreachable cluster included. Calls backup-controller backup.
 
+backup-manager key list
+backup-manager key export --usb [--node N] | --file DIR
+backup-manager key import --usb [--node N] | --file DIR
+        The backup encryption keys (ADR-012 §2.5.1). --usb: a USB stick in a
+        node (default tappaas1) — export erases the stick you confirm, writes the
+        keys encrypted with a password you choose, reads them back, ejects; import
+        decrypts and imports, then offers the backup update that puts the storage
+        key back on the cluster. Runs the backup module's scripts/keys-to-usb.sh /
+        keys-from-usb.sh, interactively (ssh -t). --file: a directory, the keys
+        UNENCRYPTED (a bare directory still means --file). Keep two sticks.
+
 backup-manager reconcile [--apply] [--config-dir DIR]
         Converge resolved policies → PBS (whole-cluster; PREVIEW by default,
         --apply commits). Idempotent. Calls backup-controller add-to-job /

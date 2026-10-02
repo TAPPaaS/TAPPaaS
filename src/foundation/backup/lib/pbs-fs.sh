@@ -287,7 +287,7 @@ REMOTE
             || { warn "  could not escrow ${module}'s encryption key"; return 1; }
         ${esc_sudo}chmod 600 "${escrowed}"
         info "  ${GN}✓${CL} encryption key escrowed → ${escrowed}"
-        warn "  Take the mandatory OUT-OF-BAND copy now (§2.5.1): backup-manager key export <dest>"
+        warn "  Take the mandatory OUT-OF-BAND copy now (§2.5.1): backup-manager key export --usb"
     fi
     return 0
 }

@@ -27,31 +27,33 @@ backup-manager key list     # what is escrowed
 USB port. On the mothership:
 
 ```bash
-~/TAPPaaS/src/foundation/backup/scripts/keys-to-usb.sh        # stick in tappaas1 (--node <n> for another)
+backup-manager key export --usb        # stick in tappaas1 (--node <n> for another)
 ```
 
 It asks you to insert the stick, lists the node's USB disks (never one that is mounted
 or part of a pool, LVM or RAID), erases the one you confirm by typing its device name,
 asks for a password twice (12+ characters — keep it apart from the stick), writes the
 keys encrypted with it (AES-256, PBKDF2), reads them back and compares every key, and
-ejects. The stick also carries `keys-from-usb.sh` and a README in plain text. Write a
+ejects. The stick also carries its restore script (`keys-from-usb.sh`) and a README in
+plain text, for when the mothership is the thing that is gone. Write a
 new stick whenever a key changes; the update tells you when.
 
 **Keep two sticks, in two places.** One stick is one point of failure: flash memory
 fails silently, sticks get lost, and the day you need it is the day you find out. Run
-`keys-to-usb.sh` twice (same password, or two you keep track of), keep the sticks at two
+`key export --usb` twice (same password, or two you keep track of), keep the sticks at two
 different sites — neither of them where the servers are — and rewrite **both** whenever
 a key changes. A stick you have not read back in a year is a hope, not a backup: every
-so often, read one with `keys-from-usb.sh` on the mothership (it imports nothing new on a
+so often, read one with `key import --usb` on the mothership (it imports nothing new on a
 healthy site, and proves the stick and the password still work).
 
-**Getting them back** — `keys-from-usb.sh`, wherever you are:
+**Getting them back:**
 
 ```bash
-# on the mothership (rebuilt or reinstalled), stick in tappaas1: decrypts, key import,
-# and offers `module-manager module update backup`, which puts the storage key back
-~/TAPPaaS/src/foundation/backup/scripts/keys-from-usb.sh
-# on a node as root, when the mothership is gone — straight from the stick:
+# on the mothership (rebuilt or reinstalled), stick in tappaas1: decrypts, imports into
+# the escrow, and offers `module-manager module update backup`, which puts the storage
+# key back on the cluster
+backup-manager key import --usb        # --node <n> for another node
+# on a node as root, when the mothership is gone — the stick's own restore script:
 mount /dev/sdX1 /mnt && bash /mnt/keys-from-usb.sh      # keys → /root/tappaas-backup-keys
 ```
 
@@ -551,8 +553,8 @@ ssh root@tappaas1.mgmt.internal
 Then, on the rebuilt mothership, in this order:
 
 1. **The keys into its escrow** — before anything that must decrypt. Either copy
-   `/root/tappaas-backup-keys` from that node and `backup-manager key import` it, or
-   run `keys-from-usb.sh` on the mothership with the stick in a node. Then delete
+   `/root/tappaas-backup-keys` from that node and `backup-manager key import --file` it,
+   or run `backup-manager key import --usb` with the stick in a node. Then delete
    `/root/tappaas-backup-keys` on the node: it holds every key in the clear.
 2. Restore `config/` (§5.1) if the VM snapshot is older than the file capture —
    the file capture usually is newer, and it is the site's source of truth.

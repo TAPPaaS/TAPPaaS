@@ -217,7 +217,7 @@ main() {
         local dest="${USBK_DEST}"
         usbk_say "Insert the key stick into ${USBK_NODE}."
         usbk_restore_to "${dest}"
-        backup-manager key import "${dest}/${USBK_KEYDIR}"
+        backup-manager key import --file "${dest}/${USBK_KEYDIR}"
         printf 'Put the storage key back on the cluster now (module-manager module update backup)? [y/N] ' >&2
         local a; IFS= read -r a || a=""
         [[ "${a}" == [yY]* ]] && module-manager module update backup

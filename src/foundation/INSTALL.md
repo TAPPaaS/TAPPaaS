@@ -583,7 +583,7 @@ Manual switches always report as "needs-manual" on apply (they can't self-progra
 Put a USB stick into `tappaas1` and run, on the mothership:
 
 ```bash
-~/TAPPaaS/src/foundation/backup/scripts/keys-to-usb.sh
+backup-manager key export --usb
 ```
 
 It writes every backup key to the stick, encrypted with a password you choose, checks it

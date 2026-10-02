@@ -460,7 +460,7 @@ _key_list() {
     if [[ "${count}" -eq 0 ]]; then
         warn "  none — no client-side encrypted backups are configured yet"
     else
-        warn "  Hold an OUT-OF-BAND copy: backup-controller key export <dest>"
+        warn "  Hold an OUT-OF-BAND copy: backup-manager key export --usb"
     fi
 }
 
@@ -505,10 +505,10 @@ The mothership is lost, and you restore it from its own VM backup:
      mothership:
        pvesm set <storage> --encryption-key "$(cat pve-storage-<storage>.key)"
   2. qmrestore <volid> 130 --storage <pool>; start it.
-  3. On it: backup-controller key import <this-directory>
+  3. On it: backup-manager key import --file <this-directory>
 
 The mothership is reinstalled instead (or the whole cluster is):
-  1. backup-controller key import <this-directory>
+  1. backup-manager key import --file <this-directory>
   2. module-manager module update backup — it puts the imported storage key
      back on the cluster rather than making a new one, so every existing
      backup stays readable.
@@ -517,7 +517,7 @@ READMEEOF
     chmod 600 "${out}/README.txt"
     info "${GN}✓${CL} keys exported to ${out} (mode 600)"
     warn "  These files are NOT encrypted. For a password-protected copy on a USB stick in a"
-    warn "  node, use backup/scripts/keys-to-usb.sh instead (RESTORE.md §0)."
+    warn "  node: backup-manager key export --usb (RESTORE.md §0)."
     warn "  Store this media somewhere safe and OFF-SITE. Losing every copy of a key"
     warn "  makes the backups it encrypted permanently unreadable."
 }

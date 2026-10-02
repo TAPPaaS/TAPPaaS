@@ -224,9 +224,12 @@ escrowed key. Removing a module is exactly when its backups matter.
 Backups are encrypted client-side, so a key that does not outlive its client is the
 difference between a restore and a pile of ciphertext. Keys are escrowed centrally on
 `tappaas-cicd` — but that escrow is *inside* the system a full-site rebuild recreates,
-so it cannot be the only copy. `backup-manager key export <dest>` writes them to
-removable media (with a README, because whoever needs it will be rebuilding a site and
-will not have this repository); `key import` loads them onto a rebuilt mothership, and
+so it cannot be the only copy. `backup-manager key export --usb` writes them to a USB
+stick in a node — encrypted with a password (openssl AES-256, PBKDF2), read back and
+compared, ejected; the stick carries its own restore script and a README, because whoever
+needs it will be rebuilding a site and will not have this repository (`--file <dir>` is
+the same, unencrypted, to a directory). `key import --usb|--file` loads them onto a
+rebuilt mothership, and
 refuses to overwrite a key that is already escrowed. Losing every copy of a key makes
 the backups it encrypted permanently unreadable.
 

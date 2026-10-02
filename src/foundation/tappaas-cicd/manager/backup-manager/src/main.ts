@@ -46,6 +46,7 @@ import {
   writePeerConfig,
 } from "./peers";
 import { validate } from "./validate";
+import { KeyTarget, keyTarget, keysUsb } from "./keys";
 import { placeText } from "./offsite";
 import { placementFinishReset, placementReset, placementUseExternal, ResetDeps } from "./placement-reset";
 import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
@@ -133,10 +134,15 @@ export const HELP: HelpSpec = {
       options: [["--yes", "placement finish-reset: do not ask for confirmation."]],
     },
     {
-      usage: "key list|export <dest>|import <src>",
+      usage: "key list | export|import --usb [--node N] | export|import --file DIR",
       verb: "key",
       name: "key",
       note: "(the backup encryption keys, and the copy you keep off the machine)",
+      options: [
+        ["--usb", "key export|import: a USB stick in a node — encrypted with a password, verified, ejected."],
+        ["--node N", "key export|import --usb: the node holding the stick (default tappaas1)."],
+        ["--file DIR", "key export|import: a directory — the keys UNENCRYPTED; guard what holds them."],
+      ],
     },
     { usage: "coverage <module> [--json]", name: "coverage", note: "(every backup job covering the module's VM — TAPPaaS's own and any other, #554)" },
     { usage: "peers", name: "peers", note: "(the off-site PBS relationships this site has)" },
@@ -230,10 +236,12 @@ export const HELP: HelpSpec = {
               'peer add' writes the config then onboards it, prompting for the
               credential — never written to the config. 'peer delete' needs the
               KIND too, since one name can hold two relationships at once.
-  key         The client-side encryption keys. 'key export <dest>' writes them to
-              removable media — without a copy off this machine, a full-site restore
-              has nothing to decrypt with. 'key import <src>' loads them onto a
-              rebuilt mothership.
+  key         The client-side encryption keys. Without a copy off this machine, a
+              full-site restore has nothing to decrypt with. 'key export --usb' writes
+              them to a USB stick in a node (tappaas1, or --node), encrypted with a
+              password you choose, reads them back to check, and ejects it — make two
+              sticks, kept apart. 'key import --usb' brings them back onto a rebuilt
+              mothership. --file <dir> is the same, unencrypted, to a directory.
 
 Recovering a system is documented per scenario in the backup module's RESTORE.md.`,
   ],
@@ -936,15 +944,19 @@ export function run(argv: string[], client: Client): number {
         // cannot be the only copy of a key: without an off-system copy, an
         // encrypted off-site backup is unrecoverable (§2.5.1).
         const sub = opts.rest[0] ?? "list";
-        const arg = opts.rest[1];
-        if (sub === "list") client.keyList();
-        else if (sub === "export") {
-          if (!arg) die("key export: <dest> required (a directory on removable media)");
-          client.keyExport(arg);
-        } else if (sub === "import") {
-          if (!arg) die("key import: <src> required (the directory holding exported keys)");
-          client.keyImport(arg);
-        } else die(`key: expected 'list' | 'export <dest>' | 'import <src>', got '${sub}'`);
+        if (sub === "list") {
+          client.keyList();
+          return 0;
+        }
+        if (sub !== "export" && sub !== "import") {
+          die(`key: expected 'list' | 'export --usb|--file DIR' | 'import --usb|--file DIR', got '${sub}'`);
+        }
+        const target = keyTarget(sub as "export" | "import", opts.rest.slice(1));
+        if ("error" in target) die(target.error);
+        const t = target as KeyTarget;
+        if (t.kind === "usb") return keysUsb(sub as "export" | "import", t.node, opts.configDir);
+        if (sub === "export") client.keyExport(t.dir);
+        else client.keyImport(t.dir);
         return 0;
       }
       case "placement": {

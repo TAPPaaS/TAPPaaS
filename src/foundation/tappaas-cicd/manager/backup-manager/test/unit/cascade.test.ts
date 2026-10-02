@@ -36,6 +36,7 @@ import {
 import { addToBackupJob, modifyBackup, removeFromBackupJob } from "../../src/modify";
 import { FakeClient } from "./fake-client";
 import { HELP, run } from "../../src/main";
+import { keyTarget, keysUsb } from "../../src/keys";
 import { undocumentedOptions } from "../../../../lib/ts/src/help";
 
 // Fixtures are JSON in the SOURCE tree (test/fixtures/config), not compiled.
@@ -891,6 +892,48 @@ check(!retentionValid("7") && !retentionValid("7x") && !retentionValid(""), "inv
   t = mk();
   eq(placementUseExternal({ configDir: tmp, moduleDir: mod, url: "" }, t.deps), 1, "use-external without a URL is refused");
   eq(t.calls.length, 0, "…and runs nothing");
+}
+
+// ── key export|import --usb | --file (the scripts are an implementation detail) ──
+{
+  const t = (v: "export" | "import", a: string[]) => {
+    const r = keyTarget(v, a);
+    return "error" in r ? `ERROR ${r.error}` : r.kind === "usb" ? `usb ${r.node ?? "-"}` : `file ${r.dir}`;
+  };
+  eq(t("export", ["--usb"]), "usb -", "--usb: a stick in the default node");
+  eq(t("export", ["--usb", "--node", "tappaas2"]), "usb tappaas2", "--usb --node: a stick in another node");
+  eq(t("import", ["--file", "/tmp/k"]), "file /tmp/k", "--file <dir>");
+  eq(t("export", ["/tmp/k"]), "file /tmp/k", "a bare directory is --file (the original form keeps working)");
+  check(t("export", []).startsWith("ERROR key export: say where"), "neither: refused, naming both");
+  check(t("export", ["--usb", "--file", "/x"]).includes("not both"), "both: refused");
+  check(t("import", ["--file", "/x", "--node", "n"]).includes("--node goes with --usb"), "--node without --usb: refused");
+  check(t("export", ["--file"]).includes("a directory is required"), "--file without a directory: refused");
+
+  // --usb runs the module's own script, on this terminal; a missing script is a failure.
+  const tmp = mkdtempSync(join(tmpdir(), "bm-keys-"));
+  const mod = join(tmp, "backup");
+  mkdirSync(join(mod, "scripts"), { recursive: true });
+  writeFileSync(join(tmp, "backup.json"), JSON.stringify({ moduleSource: mod }), "utf8");
+  writeFileSync(join(mod, "scripts", "keys-to-usb.sh"), "#!/bin/sh\n", "utf8");
+  const calls: string[] = [];
+  const runner = (bin: string, args: string[]) => { calls.push(`${bin.split("/").slice(-2).join("/")} ${args.join(" ")}`.trim()); return 0; };
+  eq(keysUsb("export", "tappaas2", tmp, runner), 0, "key export --usb runs");
+  eq(calls.join(" | "), "scripts/keys-to-usb.sh --node tappaas2", "…as the module's keys-to-usb.sh, with the node");
+  const errs: string[] = [];
+  const origErr = console.error;
+  console.error = (...x: unknown[]) => void errs.push(x.join(" "));
+  try {
+    check(keysUsb("import", null, tmp, runner) !== 0, "key import --usb without keys-from-usb.sh is a failure, not a no-op");
+  } finally {
+    console.error = origErr;
+  }
+
+  // --file still goes to the controller, as before.
+  const c = new FakeClient();
+  eq(run(["key", "export", "--file", "/media/k", "--config-dir", FIX], c), 0, "key export --file runs");
+  eq(run(["key", "import", "/media/k", "--config-dir", FIX], c), 0, "key import <dir> still runs");
+  eq(c.log.filter((l) => l.startsWith("key")).join(" | "), "key export /media/k | key import /media/k",
+    "…both through the controller, to that directory");
 }
 
 // ── #759: backup <module>... — take it now, through the controller ───────

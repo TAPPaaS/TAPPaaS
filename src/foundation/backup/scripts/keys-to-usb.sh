@@ -64,7 +64,7 @@ trap cleanup EXIT
 # ── the keys ────────────────────────────────────────────────────────
 # Quietly: its own output tells a person what to do with a PLAIN export (and
 # recommends this very script). Shown only if it fails.
-_exp="$(backup-manager key export "${PLAIN}" 2>&1)" || { printf '%s\n' "${_exp}" >&2; usbk_die "key export failed"; }
+_exp="$(backup-manager key export --file "${PLAIN}" 2>&1)" || { printf '%s\n' "${_exp}" >&2; usbk_die "key export failed"; }
 NKEYS="$(find "${PLAIN}/${USBK_KEYDIR}" -name '*.key' | wc -l | tr -d ' ')"
 [[ "${NKEYS}" -gt 0 ]] || usbk_die "the escrow holds no keys — nothing to copy"
 
@@ -150,9 +150,9 @@ tappaas-keys.tar.enc holds every key that decrypts this site's backups:
 encrypted with the password chosen when this stick was written. Without the
 password the stick is useless; without the keys, so are the backups.
 
-To restore, run keys-from-usb.sh (on this stick):
-  - on the mothership:          bash keys-from-usb.sh   (stick in tappaas1)
-  - on a node, mothership lost: mount the stick, then as root:
+To restore:
+  - on the mothership:          backup-manager key import --usb   (stick in tappaas1)
+  - on a node, mothership lost: mount the stick, then as root run its script:
                                 bash /mnt/<stick>/keys-from-usb.sh
   It decrypts, imports, and puts the storage key back on the cluster.
 
@@ -182,5 +182,6 @@ MNT=""
 usbk_eject "${DISK}"
 usbk_say ""
 usbk_say "Done. Remove the stick from ${USBK_NODE} and keep it OFF-SITE; keep the password elsewhere."
-usbk_say "Make a SECOND stick the same way and keep it at a different place (RESTORE.md §0)."
-usbk_say "To restore: keys-from-usb.sh (on the mothership, or from the stick on a node)."
+usbk_say "Make a SECOND stick (backup-manager key export --usb again) and keep it at a different place."
+
+usbk_say "To restore: backup-manager key import --usb (or, mothership lost, the stick's keys-from-usb.sh on a node)."

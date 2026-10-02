@@ -90,7 +90,7 @@ pbs_storage_key_ensure() {
             _pbs_enc_escrow_write "${esc}" "${key}" \
                 || { warn "  could not escrow ${store}'s encryption key"; return 1; }
             info "  ${GN}✓${CL} ${store}'s encryption key escrowed → ${esc}"
-            warn "  Take the OUT-OF-BAND copy now (ADR-012 §2.5.1): backup-manager key export <dest>" ;;
+            warn "  Take the OUT-OF-BAND copy now (ADR-012 §2.5.1): backup-manager key export --usb" ;;
         rotate)
             # Never overwrite an escrowed key: backups made with it need it.
             _pbs_enc_escrow_write "${esc%.key}.superseded-$(date +%Y%m%d-%H%M%S).key" "${old}" \
@@ -99,7 +99,7 @@ pbs_storage_key_ensure() {
                 || { warn "  could not escrow ${store}'s new encryption key"; return 1; }
             warn "  ${store}'s encryption key is NOT the escrowed one — the cluster's key was replaced."
             warn "  Escrowed the new one; the old is kept beside it: backups made before need it."
-            warn "  Take a new OUT-OF-BAND copy: backup-manager key export <dest>" ;;
+            warn "  Take a new OUT-OF-BAND copy: backup-manager key export --usb" ;;
         restore)
             # A rebuilt cluster: the key the existing backups were made with.
             _pbs_enc_ssh "${zone}" "pvesm set ${store} --encryption-key '${old}' >/dev/null" \
@@ -116,7 +116,7 @@ pbs_storage_key_ensure() {
             info "  ${GN}✓${CL} backups to ${store} are encrypted from now on; key escrowed → ${esc}"
             warn "  Snapshots taken before stay UNENCRYPTED until retention removes them (#760)."
             warn "  The next backup of each guest is a full upload (no dedup against plaintext chunks)."
-            warn "  Take the OUT-OF-BAND copy now (ADR-012 §2.5.1): backup-manager key export <dest>" ;;
+            warn "  Take the OUT-OF-BAND copy now (ADR-012 §2.5.1): backup-manager key export --usb" ;;
     esac
     return 0
 }
