@@ -196,6 +196,14 @@ export function moduleVmid(configDir: string, module: string): string | null {
   return asString(m.vmid);
 }
 
+// The node a module's guest is declared on (`node`, top level or under
+// config."cluster:vm"), or null when it does not pin one.
+export function moduleNode(configDir: string, module: string): string | null {
+  const m = readJson(join(configDir, `${module}.json`));
+  if (!m) return null;
+  return asString(m.node) ?? asString(asObject(asObject(m.config)["cluster:vm"]).node);
+}
+
 // Read the raw site.backup block (validate needs offsite/target/offsiteResidency).
 export function siteBackup(configDir: string): Record<string, unknown> {
   return asObject(readJson(join(configDir, "site.json"))?.backup);

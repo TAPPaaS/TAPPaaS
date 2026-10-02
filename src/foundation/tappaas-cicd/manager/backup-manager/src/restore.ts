@@ -12,7 +12,7 @@
 
 import { existsSync } from "fs";
 import { join } from "path";
-import { defaultConfigDir, moduleVmid } from "./config";
+import { defaultConfigDir, moduleNode, moduleVmid } from "./config";
 import { readJsonObject } from "../../../lib/ts/src/config-io";
 import { stream } from "../../../lib/ts/src/exec";
 import { Client } from "./types";
@@ -112,13 +112,53 @@ export function restoreList(deps: RestoreDeps, module: string): number {
   return 0;
 }
 
-// `restore restore <module> [opts...]` — restore a module's VM via foundation
-// restore.sh. Resolves vmid; forwards remaining options.
+// restoreArgs — the restore.sh arguments for `restore restore <module> [opts]`.
+//
+// Plain: the module's own backup, over the module's own guest (`--vmid <its>`).
+// `--from <module|vmid>` (RESTORE.md §2, #729): ANOTHER guest's backup, into this
+// module's guest, replacing it — `--vmid <source> --target-vmid <this> --replace`.
+// The destination is always the module named on the command line. Before
+// `--from`, the only way to name a source was a second `--vmid`, and restore.sh
+// takes the LAST one as both source and destination: one missing flag away from
+// restoring over the production original instead of the new instance.
+//
+// The source may be a module that is declared here, or a bare VMID — a backup
+// from a site, or an incarnation, that this config never had.
+//
+// `--node` defaults to the node the module is declared on, as the help has
+// always said. restore.sh's own default is the site's first node: an existing
+// guest elsewhere then reads as absent — for `--from`, "does not exist".
+export function restoreArgs(
+  vmid: string, opts: string[], resolveVmid: (module: string) => string | null,
+  node: string | null = null,
+): { args: string[] } | { error: string } {
+  if (node && !opts.some((o) => o === "--node" || o === "-n")) opts = [...opts, "--node", node];
+  const i = opts.indexOf("--from");
+  if (i < 0) return { args: ["--vmid", vmid, ...opts] };
+  const from = opts[i + 1];
+  if (!from || from.startsWith("-")) return { error: "--from needs a module name or a VMID" };
+  const rest = [...opts.slice(0, i), ...opts.slice(i + 2)];
+  if (rest.some((o) => o === "--target-vmid" || o === "-t")) {
+    return { error: "--from restores INTO this module's guest; --target-vmid restores beside a guest — use one or the other" };
+  }
+  const source = /^[0-9]+$/.test(from) ? from : resolveVmid(from);
+  if (!source) return { error: `--from ${from}: no such module with a vmid here (give the backup's VMID instead)` };
+  if (source === vmid) return { error: `--from ${from} is this module's own VMID (${vmid}) — drop --from to restore its own backup` };
+  return { args: ["--vmid", source, "--target-vmid", vmid, "--replace", ...rest] };
+}
+
+// `restore restore <module> [opts...]` — restore via foundation restore.sh.
 export function restoreRun(deps: RestoreDeps, module: string, opts: string[]): number {
   const vmid = moduleVmid(deps.configDir, module);
   if (!vmid) {
     console.error(`Module '${module}' has no vmid in ${deps.configDir}`);
     return 1;
+  }
+  const planned = restoreArgs(vmid, opts, (m) => moduleVmid(deps.configDir, m),
+    moduleNode(deps.configDir, module));
+  if ("error" in planned) {
+    console.error(`restore restore ${module}: ${planned.error}`);
+    return 2;
   }
   const script = restoreScriptPath(deps.configDir);
   if (!existsSync(script)) {
@@ -129,7 +169,7 @@ export function restoreRun(deps: RestoreDeps, module: string, opts: string[]): n
     console.error(`config/backup.json .moduleSource points at the backup module.`);
     return 1;
   }
-  return spawnInherit(script, ["--vmid", vmid, ...opts]);
+  return spawnInherit(script, planned.args);
 }
 
 // `restore list-all` — list all backups (foundation restore.sh --list-all).

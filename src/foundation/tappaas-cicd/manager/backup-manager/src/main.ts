@@ -92,7 +92,7 @@ export const HELP: HelpSpec = {
     },
     { usage: "restore list <module>", name: "restore list" },
     {
-      usage: "restore restore <module> [--node N] [--storage S] [--backup-id ID] [--target-vmid ID]",
+      usage: "restore restore <module> [--from M|VMID] [--node N] [--storage S] [--backup-id ID] [--target-vmid ID]",
       name: "restore restore",
       hidden: ["-n N", "-s S", "-b ID", "-t ID"],
       options: [
@@ -100,6 +100,7 @@ export const HELP: HelpSpec = {
         ["--storage S", "Target storage pool."],
         ["--backup-id ID", "The snapshot to restore (default: the latest; see 'restore list')."],
         ["--target-vmid ID", "Restore as a new VM id instead of over the module's own."],
+        ["--from M|VMID", "Restore ANOTHER guest's backup into this module's guest, replacing its disks and keeping its network identity (RESTORE.md §2)."],
       ],
     },
     { usage: "restore list-all", name: "restore list-all" },
@@ -193,7 +194,9 @@ export const HELP: HelpSpec = {
   restore     Recover a module — 'restore list <module>' shows its snapshots,
               'restore restore <module>' restores it, 'restore list-all' shows
               everything stored. Options after the module name are passed to
-              restore.sh (--node, --storage, --backup-id, --target-vmid).
+              restore.sh (--node, --storage, --backup-id, --target-vmid);
+              --from <module|vmid> restores another guest's backup INTO this
+              module's guest (onto a system that never had it, RESTORE.md §2).
   placement   Where this site's PBS lives, and whether a datastore is realized at
               all. A 'shim' means modules install but nothing is being backed up yet.
               'placement reset' leaves an external PBS for a local one: the old PBS is

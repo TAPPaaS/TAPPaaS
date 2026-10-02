@@ -162,8 +162,9 @@ healthy right up until the node it is on fails.
 
 ## 2. Restoring a module onto a system that never had it
 
-**Unrehearsed** — the mechanism is §1's, but this sequence has not been run end
-to end.
+**Rehearsed in part** (2026-10-02, #729: openwebui's backup into a second instance on the
+test site). The restore and its safety steps were run; see the rehearsal plan for what was
+still open.
 
 A backup carries a guest's *disks and its Proxmox config*; it does not carry the
 module's TAPPaaS declaration — the VMID, node, zone, sizing, proxy domain and
@@ -178,30 +179,40 @@ So: **declare first, restore second.**
 module-manager module add nextcloud
 #    Its VMID/node/zone now exist in config/nextcloud.json and on the cluster.
 
-# 2. Restore the backup OVER that fresh guest.
-#    --vmid names the SOURCE (the VMID inside the backup); --target-vmid names
-#    where it lands (the VMID the install just chose). Without --vmid the module
-#    would resolve to its new VMID and find no backup under it.
-backup-manager restore restore nextcloud \
-    --vmid <VMID-IN-THE-BACKUP> --target-vmid <VMID-JUST-INSTALLED>
+# 2. Restore the backup INTO that fresh guest, replacing it. --from names the
+#    SOURCE: a module declared here, or the bare VMID inside the backup (a backup
+#    from a site this config never had). The destination is always the module
+#    named first — the restore cannot land on the source.
+backup-manager restore restore nextcloud --from <VMID-IN-THE-BACKUP> --storage tanka1
+```
 
-# 3. Re-apply the declaration and validate (§1.3, §1.4).
+The guest is left **stopped**, with the backup's disks under the installed guest's own
+name, `onboot` and network devices (MACs included) — so the platform's view (DNS, DHCP
+reservation, proxy, firewall rules) still holds — and with its **network links down**:
+
+```bash
+# 3. Start it offline and let cloud-init give it THIS guest's hostname.
+ssh root@<node>.mgmt.internal qm start <VMID>
+ssh root@<node>.mgmt.internal qm guest exec <VMID> -- hostname     # must be the new name
+# 4. Only then raise its links (the same netN line without link_down=1).
+ssh root@<node>.mgmt.internal qm set <VMID> --net0 '<…>'
+# 5. Re-apply the declaration (HA, replication and the backup job come back) and validate.
 module-manager module update nextcloud
 module-manager module test nextcloud --deep
 ```
 
-Two things to get right:
+**Why the links stay down until step 4.** Inside, the guest is still the old system — and
+it asks DHCP for the *old* hostname at boot, before cloud-init renames it. dnsmasq gives a
+name to whoever asked last: a restored copy of `openwebui` booted online took
+`openwebui.rossen.internal` from the running original, and with it the public site, which
+Caddy proxies by that name (#729). If it happens anyway, stop the copy, then let the
+original ask again (`sudo nmcli c up <connection>` on it) — dnsmasq moves the name back.
 
-- **The backup's VMID and the new VMID usually differ.** `--vmid` and
-  `--target-vmid` together bridge them. Restoring into the *installed* VMID keeps
-  the platform's view (config, DNS, proxy, firewall rules) intact and swaps only
-  the disks.
-- **The restored guest carries the old system's identity inside it** — hostname,
-  SSH host keys, certificates, and whatever the old site's IP was. `module
-  modify` fixes what the platform declares; anything baked inside the guest is
-  yours to reconcile. For a module whose data is separable, restoring only the
-  *data* into a freshly installed guest is often less work than reconciling a
-  transplanted machine.
+What else the restored guest carries from the old system — SSH host keys (the mothership's
+`known_hosts` will refuse it until you `ssh-keygen -R` the name), certificates, application
+URLs — is yours to reconcile. For a module whose data is separable, restoring only the
+*data* into a freshly installed guest is often less work than reconciling a transplanted
+machine.
 
 ---
 

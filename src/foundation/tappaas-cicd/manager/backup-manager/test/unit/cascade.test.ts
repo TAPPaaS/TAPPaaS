@@ -23,7 +23,7 @@ import { retentionValid, validate } from "../../src/validate";
 import { asPlace, offsiteTargets, pbsOnSatelliteWarnings, separation } from "../../src/offsite";
 import { placementFinishReset, placementReset, placementUseExternal, urlHost } from "../../src/placement-reset";
 import { applyPlan, computePlan, jobBucketIndex } from "../../src/reconcile";
-import { restoreList, restoreRun } from "../../src/restore";
+import { restoreArgs, restoreList, restoreRun } from "../../src/restore";
 import {
   buildPeerConfig,
   findPeer,
@@ -476,6 +476,40 @@ check(!retentionValid("7") && !retentionValid("7x") && !retentionValid(""), "inv
   check(rcMissing !== 0, "a missing restore.sh is a non-zero failure, never a silent success");
   if (prevEnv === undefined) delete process.env.RESTORE_SH;
   else process.env.RESTORE_SH = prevEnv;
+}
+
+// ── --from: another guest's backup INTO this module's guest (#729, RESTORE.md §2) ──
+{
+  const known: Record<string, string> = { openwebui: "311", "openwebui-r": "921" };
+  const resolve = (m: string) => known[m] ?? null;
+  const args = (o: string[]) => {
+    const r = restoreArgs("921", o, resolve);
+    return "args" in r ? r.args.join(" ") : `ERROR ${r.error}`;
+  };
+  check(args([]) === "--vmid 921", "plain restore: the module's own backup, over its own guest");
+  check(args(["--from", "openwebui"]) === "--vmid 311 --target-vmid 921 --replace",
+    "--from a module: its backup is the source, THIS module's guest the destination");
+  check(args(["--from", "4711", "--storage", "tanka1"]) === "--vmid 4711 --target-vmid 921 --replace --storage tanka1",
+    "--from a bare VMID (a backup this config never had); other options pass through");
+  check(args(["--from", "nope"]).startsWith("ERROR --from nope: no such module"),
+    "an unknown module is refused, not guessed");
+  check(args(["--from", "openwebui", "--target-vmid", "930"]).startsWith("ERROR --from restores INTO"),
+    "--from and --target-vmid are refused together");
+  check(args(["--from", "921"]).startsWith("ERROR --from 921 is this module's own VMID"),
+    "--from its own VMID is refused");
+  check(args(["--from"]).startsWith("ERROR --from needs"), "--from without a value is refused");
+  // The destination can never be the source: the trap --from replaces was a
+  // second --vmid, which restore.sh reads as source AND destination.
+  check(!args(["--from", "openwebui"]).includes("--target-vmid 311"),
+    "the source module's guest is never the destination");
+  const onNode = (o: string[]) => {
+    const r = restoreArgs("921", o, resolve, "tappaas2");
+    return "args" in r ? r.args.join(" ") : `ERROR ${r.error}`;
+  };
+  check(onNode(["--from", "openwebui"]) === "--vmid 311 --target-vmid 921 --replace --node tappaas2",
+    "--node defaults to the node the module is declared on");
+  check(onNode(["--node", "tappaas3"]) === "--vmid 921 --node tappaas3",
+    "an explicit --node wins");
 }
 
 // ── #544: discovery is shape-based, not a deny-list ───────────────────

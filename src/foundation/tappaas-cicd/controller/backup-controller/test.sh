@@ -154,6 +154,18 @@ else
     bad "key import did not restore the key"
 fi
 
+# The escrow is the sweep's to write, without sudo (c53576a0): on a mothership
+# it must come out tappaas-owned, 0700 — as tappaas-cicd.nix's tmpfiles rule
+# makes it — not root's (#729, found rebuilding a mothership beside itself).
+if id tappaas >/dev/null 2>&1; then
+    _ke_own="$(sudo stat -c '%U %a' "${_ke_dst}") $(sudo stat -c '%U %a' "${_ke_dst}/demo.key")"
+    if [[ "${_ke_own}" == "tappaas 700 tappaas 600" ]]; then
+        ok "key import leaves the escrow tappaas-owned (dir 700, key 600)"
+    else
+        bad "key import left the escrow as '${_ke_own}' — the sweep cannot write it without sudo"
+    fi
+fi
+
 # Re-importing must never silently replace an escrowed key: anywhere but a fresh
 # mothership, that could strand every backup made with the key it replaced.
 printf 'DIFFERENT\n' > "${_ke_media}/tappaas-backup-keys/demo.key"

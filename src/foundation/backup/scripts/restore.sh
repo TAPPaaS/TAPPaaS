@@ -20,6 +20,10 @@
 #                               STOPPED with fresh MACs. This is how a recovery
 #                               path is rehearsed, and how you compare a restore
 #                               against a running original before committing.
+#   --replace                   With --target-vmid: that guest EXISTS and is replaced by
+#                               the backup of --vmid, keeping its name, onboot and
+#                               network devices — RESTORE.md §2, `backup-manager
+#                               restore restore <module> --from <src>` (#729)
 #   -l, --list                  List available backups for a VMID
 #   --list-all                  List all available backups
 #   -h, --help                  Show this help message
@@ -40,6 +44,10 @@ Options:
                               A repeated --vmid overrides the earlier one, so a
                               caller that already supplied one (backup-manager
                               restore) can be pointed at a different SOURCE vmid
+  --replace                   With --target-vmid: replace that EXISTING guest with the
+                              backup of --vmid, keeping its name, onboot and network
+                              devices, so its DNS, DHCP reservation and firewall
+                              rules still hold (RESTORE.md §2). Left stopped.
   -l, --list                  List available backups for a VMID (requires -v)
   --list-all                  List all available backups
   -h, --help                  Show this help message
@@ -113,6 +121,7 @@ VMID=""
 TARGET_STORAGE=""
 BACKUP_ID=""
 TARGET_VMID=""
+REPLACE=false
 LIST_MODE=false
 LIST_ALL_MODE=false
 
@@ -138,6 +147,10 @@ while [[ $# -gt 0 ]]; do
     -t|--target-vmid)
       TARGET_VMID="$2"
       shift 2
+      ;;
+    --replace)
+      REPLACE=true
+      shift
       ;;
     -l|--list)
       LIST_MODE=true
@@ -279,9 +292,17 @@ info "Backup holds a ${GUEST_TYPE} guest"
 # leave the original alone — so a rehearsal can never eat the thing it is
 # rehearsing the recovery of.
 RESTORE_VMID="${TARGET_VMID:-${VMID}}"
+if [ "${REPLACE}" = true ] && [ -z "${TARGET_VMID}" ]; then
+  die "--replace needs --target-vmid: it names the guest the backup of ${VMID} replaces"
+fi
 if [ -n "${TARGET_VMID}" ]; then
   info "Restoring INTO VMID ${RESTORE_VMID} (source VM ${VMID} is left untouched)"
 fi
+# The guest the backup was taken of. When it is not the destination, this is a
+# copy of another guest, which may be running on the same network: fresh MACs,
+# always — not only for --target-vmid (#729: a --backup-id naming another
+# guest's snapshot used to restore that guest's MAC beside it).
+SOURCE_VMID="$(restore_volid_vmid "${VOLID}")" || SOURCE_VMID="${VMID}"
 
 # Check if the DESTINATION VMID is taken — by a VM or a container: one VMID
 # space, two commands.
@@ -294,30 +315,49 @@ if [ "$VM_EXISTS" = "yes" ] && [ "${EXISTING_TYPE}" != "${GUEST_TYPE}" ]; then
   die "VMID ${RESTORE_VMID} on ${TARGET_NODE} is a ${EXISTING_TYPE} guest but the backup holds a ${GUEST_TYPE} — refusing to replace one kind with the other"
 fi
 
+if [ "${REPLACE}" = true ] && [ "$VM_EXISTS" != "yes" ]; then
+  die "--replace: VMID ${RESTORE_VMID} does not exist on ${TARGET_NODE} — declare (install) the module first, then restore into it (RESTORE.md §2)"
+fi
+
+IDENTITY=""
 if [ "$VM_EXISTS" = "yes" ]; then
-  if [ -n "${TARGET_VMID}" ]; then
+  if [ -n "${TARGET_VMID}" ] && [ "${REPLACE}" != true ]; then
     echo "${RD}Error: target VMID ${RESTORE_VMID} is already in use${CL}"
     echo "Pick an unused VMID — --target-vmid exists to avoid destroying anything."
+    echo "To replace that guest with this backup on purpose: --replace (backup-manager: --from)."
     exit 1
   fi
-  info "VM ${RESTORE_VMID} already exists on ${TARGET_NODE}"
-  read -p "Do you want to overwrite it? (yes/no): " CONFIRM
-  if [ "$CONFIRM" != "yes" ]; then
-    echo "Restore cancelled by user"
-    exit 0
+  if [ "${REPLACE}" = true ]; then
+    # Named explicitly on the command line: that is the consent. What makes it
+    # the platform's guest is kept and put back after the restore.
+    IDENTITY="$(ssh -n root@${TARGET_NODE}.${ZONE}.internal "${CLI} config ${RESTORE_VMID}" | restore_identity_lines)" \
+      || die "could not read ${RESTORE_VMID}'s config — refusing to replace a guest whose identity cannot be kept"
+    [ -n "${IDENTITY}" ] || die "${RESTORE_VMID} has no name/network lines to keep — refusing to replace it"
+    info "Replacing ${GUEST_TYPE} ${RESTORE_VMID} with the backup of ${VMID}; keeping:"
+    printf '%s\n' "${IDENTITY}" | sed 's/^/    /'
+  else
+    info "VM ${RESTORE_VMID} already exists on ${TARGET_NODE}"
+    read -p "Do you want to overwrite it? (yes/no): " CONFIRM
+    if [ "$CONFIRM" != "yes" ]; then
+      echo "Restore cancelled by user"
+      exit 0
+    fi
   fi
   # Stopping an HA-managed VM is NOT `qm stop; sleep`. `qm stop` hands a request
   # to the CRM, which completes it on its own schedule — the exact race that
   # left this site's gateway down for 7h41m (#434), which is why ha-vm-lib
   # exists. Drive HA through ha-manager and CONFIRM the transition; only fall
   # back to a direct stop when the resource is genuinely not HA-managed.
+  # ha-vm-lib takes the node's FQDN and logs in as root itself: passing
+  # root@<node> made it ssh to root@root@<node>, so every restore over an
+  # existing guest stopped here, refusing to guess (#729, found in §2).
   info "Stopping and removing existing VM ${RESTORE_VMID}..."
   if declare -F havm_stop >/dev/null 2>&1; then
-    if ! havm_stop "root@${TARGET_NODE}.${ZONE}.internal" "${RESTORE_VMID}" "$([ "${GUEST_TYPE}" = lxc ] && echo lxc || echo vm)" "${STOP_TIMEOUT:-180}"; then
+    if ! havm_stop "${TARGET_NODE}.${ZONE}.internal" "${RESTORE_VMID}" "$([ "${GUEST_TYPE}" = lxc ] && echo lxc || echo vm)" "${STOP_TIMEOUT:-180}"; then
       # The resource may have been handed to HA as 'stopped' before the failure;
       # give it back rather than leaving it parked.
       [[ "${HAVM_LAST_STOP_WAS_HA:-0}" -eq 1 ]] \
-        && havm_release_ha_stop "root@${TARGET_NODE}.${ZONE}.internal" "$([ "${GUEST_TYPE}" = lxc ] && echo ct || echo vm):${RESTORE_VMID}"
+        && havm_release_ha_stop "${TARGET_NODE}.${ZONE}.internal" "$([ "${GUEST_TYPE}" = lxc ] && echo ct || echo vm):${RESTORE_VMID}"
       die "Could not confirm VM ${RESTORE_VMID} stopped — refusing to destroy it. Nothing was changed."
     fi
   else
@@ -342,7 +382,7 @@ info "Restoring ${GUEST_TYPE} ${VMID} from backup into VMID ${RESTORE_VMID}..."
 # A copy restored alongside its original MUST get fresh MAC addresses, or two
 # guests answer for the same address the moment either is started.
 UNIQUE_OPT=""
-[ -n "${TARGET_VMID}" ] && UNIQUE_OPT="--unique 1"
+[ "${SOURCE_VMID}" != "${RESTORE_VMID}" ] && UNIQUE_OPT="--unique 1"
 
 # Build restore options
 RESTORE_OPTS=""
@@ -439,10 +479,36 @@ if ! ssh -n root@${TARGET_NODE}.${ZONE}.internal "${CLI} config ${RESTORE_VMID}"
   exit 1
 fi
 
+# --replace: put the destination's identity back — name/hostname, onboot and its
+# network devices with their MACs. The disks are the backup's; the guest is
+# still the one the platform declared (DNS, DHCP reservation, firewall rules).
+if [ "${REPLACE}" = true ]; then
+  SET_ARGS=""
+  while IFS= read -r line; do
+    [ -n "${line}" ] || continue
+    key="${line%%: *}"; val="${line#*: }"
+    # Network devices come back with the carrier OFF. The disks are the source
+    # guest's, so until cloud-init has given it this guest's hostname at first
+    # boot, it asks DHCP for the SOURCE's name — and dnsmasq hands it over, taking
+    # it from the original. That is how a §2 rehearsal put the production
+    # openwebui's name, and its public site, on the restored copy (#729).
+    case "${key}" in net[0-9]*) val="$(printf '%s' "${val}" | sed 's/,link_down=[01]//'),link_down=1" ;; esac
+    SET_ARGS="${SET_ARGS} --${key} '${val}'"
+  done <<< "${IDENTITY}"
+  # A network device the SOURCE had and the destination did not would survive
+  # as an undeclared NIC; drop it.
+  EXTRA_NETS="$(ssh -n root@${TARGET_NODE}.${ZONE}.internal "${CLI} config ${RESTORE_VMID}" \
+    | restore_identity_lines | grep -oE '^net[0-9]+' | grep -vxF -f <(printf '%s\n' "${IDENTITY}" | grep -oE '^net[0-9]+') || true)"
+  [ -z "${EXTRA_NETS}" ] || SET_ARGS="${SET_ARGS} --delete $(echo ${EXTRA_NETS} | tr ' ' ',')"
+  ssh -n root@${TARGET_NODE}.${ZONE}.internal "${CLI} set ${RESTORE_VMID}${SET_ARGS}" \
+    || die "restored, but could not put ${RESTORE_VMID}'s identity back — set it by hand before starting it:\n${IDENTITY}"
+  info "  ${GN}✓${CL} ${RESTORE_VMID} keeps its name, onboot and network devices (links DOWN until its hostname is checked)"
+fi
+
 # A copy beside its original must not start by itself: the backup carries the
 # original's onboot, and the next reboot of the node would bring up a second
 # guest of the same name (seen restoring vllm-amd beside itself, #729).
-if [ -n "${TARGET_VMID}" ]; then
+if [ -n "${TARGET_VMID}" ] && [ "${REPLACE}" != true ]; then
   ssh -n root@${TARGET_NODE}.${ZONE}.internal "${CLI} set ${RESTORE_VMID} --onboot 0" \
     || warn "could not set onboot 0 on ${RESTORE_VMID} — it would start at the next boot of ${TARGET_NODE}"
 fi
@@ -465,6 +531,25 @@ info "\n${GN}Restore completed successfully!${CL}"
 echo
 echo "${GUEST_TYPE} ${VMID} has been restored to ${TARGET_NODE} as VMID ${RESTORE_VMID}"
 echo
+if [ "${REPLACE}" = true ]; then
+  N="root@${TARGET_NODE}.${ZONE}.internal"
+  echo "It is STOPPED. It holds ${VMID}'s disks under ${RESTORE_VMID}'s own name and network"
+  echo "identity, with its network links DOWN: inside, it is still ${VMID}'s system, and"
+  echo "online it would ask DHCP for ${VMID}'s hostname and take that guest's DNS name."
+  echo "In this order (RESTORE.md §2):"
+  echo "  1. ssh ${N} ${CLI} start ${RESTORE_VMID}"
+  if [ "${GUEST_TYPE}" = "lxc" ]; then
+    echo "  2. ssh ${N} pct exec ${RESTORE_VMID} -- hostname            # must be this guest's name"
+    echo "  3. ssh ${N} pct set ${RESTORE_VMID} --net0 '<same line, link_down=0>'"
+  else
+    echo "  2. ssh ${N} qm guest exec ${RESTORE_VMID} -- hostname      # cloud-init sets it at first boot"
+    echo "  3. ssh ${N} qm set ${RESTORE_VMID} --net0 '<same line without link_down=1>'   # each netN"
+  fi
+  echo "  4. module-manager module update <module>; module-manager module test <module> --deep"
+  echo "The replace dropped it from HA, replication and the backup job (destroy --purge);"
+  echo "step 4 puts them back. SSH host keys and certificates inside are still ${VMID}'s."
+  exit 0
+fi
 if [ -n "${TARGET_VMID}" ]; then
   echo "It is STOPPED and has fresh MAC addresses. Starting a restored COPY on the"
   echo "same network as its original is how you get two guests answering for one"

@@ -428,7 +428,15 @@ _key_import() {
     [[ -d "${src%/}/tappaas-backup-keys" ]] && src="${src%/}/tappaas-backup-keys"
 
     local found=0 f base
-    sudo mkdir -p "${KEY_ESCROW_DIR}" && sudo chmod 755 "${KEY_ESCROW_DIR}"
+    # The escrow is tappaas's, 0700 — what tappaas-cicd.nix's tmpfiles rule makes
+    # it, and what the sweep needs: update-tappaas.service writes it without sudo
+    # (NoNewPrivileges, c53576a0). Imported as root (755/root), a rebuilt
+    # mothership's first sweep could not escrow until a rebuild re-owned it
+    # (#729, §5.2 rehearsal). Off the mothership there is no tappaas user: root.
+    local owner="root:root"
+    id tappaas >/dev/null 2>&1 && owner="tappaas:users"
+    sudo mkdir -p "${KEY_ESCROW_DIR}" && sudo chmod 700 "${KEY_ESCROW_DIR}" \
+        && sudo chown "${owner}" "${KEY_ESCROW_DIR}"
     for f in "${src%/}"/*.key; do
         [[ -f "$f" ]] || continue
         base="$(basename "$f")"
@@ -440,6 +448,7 @@ _key_import() {
             continue
         fi
         sudo cp "$f" "${KEY_ESCROW_DIR}/${base}" && sudo chmod 600 "${KEY_ESCROW_DIR}/${base}" \
+            && sudo chown "${owner}" "${KEY_ESCROW_DIR}/${base}" \
             || { error "key import: could not install ${base}"; return 1; }
         info "  imported ${base%.key}"
         found=$((found + 1))
