@@ -893,6 +893,32 @@ check(!retentionValid("7") && !retentionValid("7x") && !retentionValid(""), "inv
   eq(t.calls.length, 0, "…and runs nothing");
 }
 
+// ── #759: backup <module>... — take it now, through the controller ───────
+{
+  const c = new FakeClient();
+  const errs: string[] = [];
+  const origErr = console.error;
+  console.error = (...a: unknown[]) => void errs.push(a.join(" "));
+  try {
+    eq(run(["backup", "nextcloud", "--config-dir", FIX], c), 0, "backup runs");
+    eq(c.log.filter((l) => l.startsWith("backup")).join(" | "), "backup nextcloud",
+      "…as one controller call with the module names");
+    c.log.length = 0;
+    c.backupRc = 1;
+    eq(run(["backup", "nextcloud", "--config-dir", FIX], c), 1,
+      "a failed backup is the controller's exit code, never 0");
+    c.log.length = 0;
+    c.backupRc = 0;
+    check(run(["backup", "nextcloud", "nope", "--config-dir", FIX], c) !== 0,
+      "an unknown module among several is refused");
+    eq(c.log.filter((l) => l.startsWith("backup")).length, 0,
+      "…before ANY backup runs: a typo in one name does not cost the others");
+    check(run(["backup", "--config-dir", FIX], c) !== 0, "backup without a module is refused");
+  } finally {
+    console.error = origErr;
+  }
+}
+
 // ── #554: coverage — which jobs back a module's VM up ─────────────────
 {
   const c = new FakeClient();

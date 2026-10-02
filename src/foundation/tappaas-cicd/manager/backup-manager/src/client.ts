@@ -12,7 +12,7 @@
 // resolved cascade into PBS — the controller owns the PBS write. A non-zero exit
 // (other than the graceful offline skip) throws.
 
-import { captureResult } from "../../../lib/ts/src/exec";
+import { captureResult, stream } from "../../../lib/ts/src/exec";
 import { JobCoverage, BucketMembership, Client, JobStatus, ScheduleBucket } from "./types";
 
 export class BackupControllerUnreachable extends Error {}
@@ -132,6 +132,17 @@ export class CliClient implements Client {
 
   applySchedule(spec: string): void {
     run([...this.ep(), "apply-schedule", spec]);
+  }
+
+  // Streamed, not captured: a backup takes minutes and the operator watches it.
+  // Never with --pbs: the backup jobs are this cluster's, whichever PBS the
+  // datastore verbs were pointed at.
+  backupNow(modules: string[]): number {
+    try {
+      return stream(BIN, ["backup", ...modules]);
+    } catch (e) {
+      throw new BackupControllerUnreachable(`${BIN} backup: ${(e as Error).message}`);
+    }
   }
 
   // Encryption-key escrow (ADR-012 §2.5.1). The controller owns the files;

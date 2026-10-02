@@ -89,6 +89,45 @@ else
     ok "list of missing module reports error"
 fi
 
+# ── backup <module>... (#759) ──────────────────────────────────────────
+# Unlike the query verbs, an unreachable cluster is a FAILURE: someone asked for
+# a backup, and none was taken. A quiet exit 0 would read as "backed up".
+if CONFIG_DIR="${FIX}" run_offline backup foo >/dev/null 2>&1; then
+    bad "backup with no reachable cluster exited 0 — it would read as a backup taken"
+else
+    ok "backup fails (non-zero) when the cluster is unreachable — no silent skip"
+fi
+"${BC}" backup >/dev/null 2>&1; _rc=$?
+if [[ ${_rc} -eq 2 ]]; then ok "backup without a module is a usage error (2)"; else bad "backup without a module: rc ${_rc}, expected 2"; fi
+
+# _bk_plan is pure: lift it out of the controller and feed it pvesh-shaped JSON.
+_bk_fn="$(awk '/^_bk_plan\(\) \{$/{f=1} f{print} f&&/^}$/{exit}' "${BC}")"
+if [[ -n "${_bk_fn}" ]]; then
+    eval "${_bk_fn}"
+    _M="TAPPaaS-backup-vm-managed"
+    _jobs='[
+      {"id":"aaaa1111","comment":"TAPPaaS-backup-vm-managed","vmid":"110,311,342","storage":"tappaas_backup","mode":"snapshot","compress":"zstd"},
+      {"id":"bbbb2222","comment":"TAPPaaS-backup-vm-managed-weekly","vmid":"312","storage":"tappaas_backup","mode":"stop"},
+      {"id":"cccc3333","comment":"someone else","vmid":"500","storage":"other","mode":"snapshot"}]'
+    _res='[{"vmid":311,"node":"tappaas2","type":"qemu"},{"vmid":312,"node":"tappaas2","type":"lxc"},
+           {"vmid":500,"node":"tappaas1","type":"qemu"},{"vmid":777,"node":"tappaas3","type":"qemu"}]'
+    ck_bk() { if [[ "$2" == "$3" ]]; then ok "$1"; else bad "$1 (expected '$2', got '$3')"; fi; }
+    ck_bk "a daily-job VM: its node, type and the job's storage/mode/compress" \
+          "tappaas2 qemu aaaa1111 tappaas_backup snapshot zstd" "$(_bk_plan "${_jobs}" "${_res}" 311 "${_M}" | tr '\t' ' ')"
+    ck_bk "a weekly-job container: the WEEKLY job's settings (#627: membership is per bucket)" \
+          "tappaas2 lxc bbbb2222 tappaas_backup stop " "$(_bk_plan "${_jobs}" "${_res}" 312 "${_M}" | tr '\t' ' ')"
+    _out="$(_bk_plan "${_jobs}" "${_res}" 500 "${_M}")"; _rc=$?
+    ck_bk "a guest only someone else's job covers is refused" "1 no TAPPaaS backup job covers vmid 500" "${_rc} ${_out}"
+    _out="$(_bk_plan "${_jobs}" "${_res}" 777 "${_M}")"; _rc=$?
+    ck_bk "a guest in no job at all is refused" "1" "${_rc}"
+    _out="$(_bk_plan "${_jobs}" "${_res}" 342 "${_M}")"; _rc=$?
+    ck_bk "a job member the cluster does not have is its own error" "2 the cluster has no guest with vmid 342" "${_rc} ${_out}"
+    ck_bk "1 must not match 110 or 311 (whole VMIDs, not substrings)" "1" \
+          "$(_bk_plan "${_jobs}" '[{"vmid":1,"node":"x","type":"qemu"}]' 1 "${_M}" >/dev/null; echo $?)"
+else
+    bad "could not lift _bk_plan out of ${BC}"
+fi
+
 # ADR-012 P7: backup-manager's CliClient puts `--pbs <host>` BEFORE the verb.
 # Each call shape it emits must parse (it used to fail "Unknown command: --pbs").
 for _args in "job-status --json" "list foo --json" "add-to-job 321 --bucket weekly" "apply-schedule daily" "key list"; do

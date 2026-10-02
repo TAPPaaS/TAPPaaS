@@ -10,6 +10,13 @@
 #                           list, plus every bucket job and its members (#627)
 #   list <module> [--json]  List snapshots for a module's VM (by vmid)
 #   verify <module>         Trigger + report a PBS verify for a module's VM
+#   backup <module>... [--json]
+#                           Take a backup of each module's guest NOW, through the
+#                           TAPPaaS job that covers it — its storage, mode and
+#                           compression — on the node the guest runs on, VM or
+#                           container. Refuses a module no TAPPaaS job covers.
+#                           Waits, and names the snapshot it wrote; non-zero if
+#                           any module's backup failed (#759)
 #   coverage <module> [--json]
 #                           Every cluster backup job that covers the module's VM —
 #                           TAPPaaS's own and any other — and how (#554)
@@ -89,6 +96,7 @@ job-status: --json --pbs=
 list: --json --pbs=
 coverage: --json
 verify:
+backup: --json
 namespaces: --json --pbs=
 add-to-job: --retention= --bucket=
 apply-schedule:
@@ -261,6 +269,84 @@ cmd_coverage() {
     local n; n="$(jq '[.[] | select(.enabled)] | length' <<<"$cov")"
     [[ "$n" -gt 0 ]] || warn "  no enabled job covers it"
     [[ "$n" -le 1 ]] || warn "  ${n} enabled jobs cover it — it is backed up more than once (#554)"
+}
+
+# _bk_plan <jobs-json> <resources-json> <vmid> <marker> — pure (#759).
+# How to back up <vmid> now, from `pvesh get /cluster/backup` and
+# `pvesh get /cluster/resources --type vm`, as one TSV line:
+#   <node> <qemu|lxc> <jobId> <storage> <mode> <compress>
+# rc 1 + reason on stdout when no TAPPaaS job (comment <marker>, -weekly,
+# -monthly) lists the VMID — an on-demand backup through a job the module is not
+# in would be a backup the platform does not manage; rc 2 when the cluster has
+# no such guest.
+_bk_plan() {
+    local jobs="$1" res="$2" vmid="$3" marker="$4" job where
+    job="$(jq -r --arg v "$vmid" --arg m "$marker" '
+        [ .[] | select(((.comment // "") as $c | $c == $m or $c == "\($m)-weekly" or $c == "\($m)-monthly")
+                       and (((.vmid // "") | tostring | split(",")) | index($v) != null)) ][0]
+        // empty | [.id, .storage, (.mode // "snapshot"), (.compress // "")] | @tsv' <<<"$jobs")"
+    [[ -n "$job" ]] || { echo "no TAPPaaS backup job covers vmid ${vmid}"; return 1; }
+    where="$(jq -r --argjson v "$vmid" '[ .[] | select(.vmid == $v) ][0] // empty | [.node, .type] | @tsv' <<<"$res")"
+    [[ -n "$where" ]] || { echo "the cluster has no guest with vmid ${vmid}"; return 2; }
+    printf '%s\t%s\n' "$where" "$job"
+}
+
+# backup <module>... — take each module's backup now (#759). Unlike the query
+# verbs this does NOT degrade to "skipped, exit 0" when the cluster is
+# unreachable: an operator asked for a backup, and none was taken.
+cmd_backup() {
+    parse_args "$@"
+    [[ ${#REST[@]} -gt 0 ]] || { error "backup: <module>... required"; return 2; }
+    have_pbs_libs || { error "backup: PBS libs not loaded — no backup taken"; return 1; }
+    pbs_reachable || { error "backup: the cluster is not reachable — no backup taken"; return 1; }
+    local jobs res
+    jobs="$(_pbs_ssh "pvesh get /cluster/backup --output-format json")" \
+        || { error "backup: could not read the cluster's backup jobs — no backup taken"; return 1; }
+    res="$(_pbs_ssh "pvesh get /cluster/resources --type vm --output-format json")" \
+        || { error "backup: could not list the cluster's guests — no backup taken"; return 1; }
+    local m vmid plan node type jobid store mode comp start out rc volid failed=0 results="[]"
+    for m in "${REST[@]}"; do
+        volid=""; rc=1
+        vmid="$(module_vmid "$m")" || vmid=""
+        if [[ -z "$vmid" ]]; then
+            error "${m}: no vmid in its config — nothing to back up"
+        elif ! plan="$(_bk_plan "$jobs" "$res" "$vmid" "$PBS_JOB_MARKER")"; then
+            error "${m} (vmid ${vmid}): ${plan} — wire it in first: backup-manager add ${m}"
+        else
+            IFS=$'\t' read -r node type jobid store mode comp <<<"$plan"
+            info "${BOLD:-}Backing up ${m}${CL:-} (${type} ${vmid} on ${node}) → ${store}, ${mode} mode, as job ${jobid:0:8} would"
+            start="$(date +%s)"
+            # The job's own settings, so an on-demand backup is one the job could
+            # have taken: same storage, mode and compression, nothing else.
+            out="$(ssh -n -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+                "root@${node}.mgmt.internal" \
+                "vzdump ${vmid} --storage ${store} --mode ${mode}${comp:+ --compress ${comp}} --notes-template 'on demand: backup-manager backup ${m}'" 2>&1)" \
+                && rc=0 || rc=$?
+            if [[ "$rc" -eq 0 ]]; then
+                # Trust, then verify: the snapshot this run wrote, newer than its start.
+                volid="$(_pbs_ssh "pvesh get /nodes/${node}/storage/${store}/content --vmid ${vmid} --output-format json" 2>/dev/null \
+                    | jq -r --argjson t "$((start - 5))" '[ .[] | select(.ctime >= $t) ] | sort_by(.ctime) | last | .volid // empty')"
+                if [[ -n "$volid" ]]; then
+                    info "  ${GN:-}✓${CL:-} ${volid}"
+                else
+                    rc=1
+                    error "  vzdump reported success but no new snapshot of ${vmid} is on ${store}"
+                fi
+            else
+                error "  vzdump failed (exit ${rc}):"
+                printf '%s\n' "$out" | grep -iE 'error|fail' | tail -5 | sed 's/^/    /' >&2
+            fi
+        fi
+        [[ "$rc" -eq 0 ]] || failed=$((failed + 1))
+        results="$(jq -c --arg m "$m" --arg v "${vmid}" --arg id "$volid" --argjson ok "$([[ $rc -eq 0 ]] && echo true || echo false)" \
+            '. + [{module: $m, vmid: $v, ok: $ok, volid: (if $id == "" then null else $id end)}]' <<<"$results")"
+    done
+    [[ "$JSON_OUT" -eq 1 ]] && jq -n --argjson r "$results" '{reachable: true, backups: $r}'
+    if [[ "$failed" -gt 0 ]]; then
+        error "${failed} of ${#REST[@]} backup(s) not taken"
+        return 1
+    fi
+    return 0
 }
 
 cmd_verify() {
@@ -495,6 +581,7 @@ main() {
         job-status)     cmd_job_status "$@" ;;
         list)           cmd_list "$@" ;;
         verify)         cmd_verify "$@" ;;
+        backup)         cmd_backup "$@" ;;
         coverage)       cmd_coverage "$@" ;;
         namespaces)     cmd_namespaces "$@" ;;
         add-to-job)     cmd_add_to_job "$@" ;;

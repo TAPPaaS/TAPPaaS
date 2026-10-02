@@ -78,6 +78,10 @@ backup-manager restore list nextcloud   # snapshots for this module; note the da
 module-manager show nextcloud           # what the declared config says today
 ```
 
+Before a risky change — not after it broke — take the rollback point yourself
+instead of waiting for tonight's job: `backup-manager backup nextcloud` (#759). It
+goes through the module's own job and prints the snapshot it wrote.
+
 A restore rolls the guest back to what it was **at snapshot time**, including
 anything the platform has configured inside it since. That is the point, and it
 is also the trap: the declared config in `config/` did *not* roll back, so the

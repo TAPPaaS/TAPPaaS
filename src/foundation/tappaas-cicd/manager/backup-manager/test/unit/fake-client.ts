@@ -70,6 +70,11 @@ export class FakeClient implements Client {
     if (this.failOn.has("applySchedule")) throw new Error("simulated applySchedule failure");
     this.log.push(`apply-schedule ${spec}`);
   }
+  backupRc = 0;
+  backupNow(modules: string[]): number {
+    this.log.push(`backup ${modules.join(" ")}`);
+    return this.backupRc;
+  }
   keyList(): void {
     this.log.push("key list");
   }

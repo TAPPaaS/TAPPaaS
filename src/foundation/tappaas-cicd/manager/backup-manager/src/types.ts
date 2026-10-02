@@ -157,6 +157,11 @@ export interface Client {
   addToJob(vmid: string, retention?: string, bucket?: string): void;
   // backup-controller apply-schedule <spec> — set the shared job's start time.
   applySchedule(spec: string): void;
+  // backup-controller backup <module>... — take each module's backup NOW, through
+  // the TAPPaaS job that covers it (#759). Streams the controller's output (a
+  // backup takes minutes) and returns its exit code: 0 only if every module's
+  // snapshot was written and found.
+  backupNow(modules: string[]): number;
   keyList(): void;
   keyExport(dest: string): void;
   keyImport(src: string): void;

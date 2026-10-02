@@ -77,6 +77,14 @@ backup-manager add <module> | delete <module>
         "backup:vm" in .dependsOn). modify-driven .json writes; live membership
         converges on reconcile.
 
+backup-manager backup <module>... [--config-dir DIR]
+        Take each module's backup NOW (#759): through the TAPPaaS job that
+        covers it — its storage, mode and compression — on the node the guest
+        runs on, VM or container; waits and names the snapshot (noted "on
+        demand"). Refuses a name with no vmid before anything runs, and a module
+        no TAPPaaS job covers (add it first). Non-zero if any backup was not
+        taken — an unreachable cluster included. Calls backup-controller backup.
+
 backup-manager reconcile [--apply] [--config-dir DIR]
         Converge resolved policies → PBS (whole-cluster; PREVIEW by default,
         --apply commits). Idempotent. Calls backup-controller add-to-job /
@@ -130,9 +138,9 @@ The single entry point is the `backup-manager` bin (linked onto `PATH` by
 ## Controllers it calls
 
 - [`backup-controller`](../../controller/backup-controller/) — PBS job status,
-  snapshot listing, verify, namespaces (`--json` for machine output), and the
-  `reconcile` mutations `add-to-job` / `apply-schedule` (reuses the foundation
-  PBS libs).
+  snapshot listing, verify, namespaces (`--json` for machine output), the
+  `reconcile` mutations `add-to-job` / `apply-schedule`, and `backup` (an
+  on-demand backup through the module's job) — reusing the foundation PBS libs.
 - The foundation [`backup/restore.sh`](../../../backup/restore.sh) for the actual
   VM restore.
 

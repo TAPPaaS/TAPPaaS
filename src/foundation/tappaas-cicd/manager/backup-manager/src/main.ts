@@ -84,6 +84,7 @@ export const HELP: HelpSpec = {
       ],
     },
     { usage: "add <module>", name: "add", note: "(wire into the shared PBS job)" },
+    { usage: "backup <module>...", name: "backup", note: "(take each module's backup now, through its job — #759)" },
     { usage: "delete <module>", name: "delete", note: "(un-wire from the shared PBS job)" },
     {
       usage: "reconcile [--apply]",
@@ -189,6 +190,11 @@ export const HELP: HelpSpec = {
   add         Opt a module into VM backup, and delete opts it back out. A module
   delete      that has opted into neither is not backed up — which is deliberate
               for hardware and test modules.
+  backup      Take a module's backup NOW — before a risky change, or after a key
+              rotation, when the next scheduled one is a day away. It goes through
+              the TAPPaaS job that covers the module (its storage, mode and
+              compression) on the node the guest runs on, waits, and names the
+              snapshot. A module no job covers is refused: 'add' it first.
   reconcile   Make the running PBS match the resolved policies: job membership and
               schedules. Previews by default; --apply commits.
   restore     Recover a module — 'restore list <module>' shows its snapshots,
@@ -916,6 +922,15 @@ export function run(argv: string[], client: Client): number {
       case "resolve":
         cmdResolve(opts);
         return 0;
+      case "backup": {
+        const modules = opts.rest;
+        if (modules.length === 0) die("backup: <module>... required");
+        // Every name must be a module with a guest here, before anything runs:
+        // a typo in the third of four names should not cost the first three.
+        const missing = modules.filter((m) => !moduleVmid(opts.configDir, m));
+        if (missing.length) die(`backup: no module with a vmid: ${missing.join(", ")}`);
+        return client.backupNow(modules);
+      }
       case "key": {
         // The escrow sits inside the system a full-site DR is rebuilding, so it
         // cannot be the only copy of a key: without an off-system copy, an
