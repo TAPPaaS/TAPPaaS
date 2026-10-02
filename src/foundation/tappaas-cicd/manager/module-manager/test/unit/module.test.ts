@@ -269,6 +269,19 @@ const CONFIG =
   const c5 = new FakeModuleClient();
   check(run(["module", "adopt", "10.0.0.90", "--zone"], c5) !== 0 && c5.log.length === 0,
     "adopt --zone without a value is refused");
+
+  // #756: --set field=value reaches the script, which writes it before install.
+  const c6 = new FakeModuleClient();
+  run(["module", "adopt", "10.0.0.90", "--set", "sshKeyOnly=false"], c6);
+  const a6 = c6.log[0]?.opts as AdoptOptions | undefined;
+  check(a6?.sets?.length === 1 && a6.sets[0] === "sshKeyOnly=false", "adopt forwards --set sshKeyOnly=false");
+  check((a2.sets ?? []).length === 0, "a bare adopt sets no field — the module's default stands");
+  const c7 = new FakeModuleClient();
+  check(run(["module", "adopt", "10.0.0.90", "--set", "nonsense"], c7) !== 0 && c7.log.length === 0,
+    "adopt --set that is not field=value is refused");
+  const c8 = new FakeModuleClient();
+  check(run(["module", "adopt", "10.0.0.90", "--unset", "sshKeyOnly"], c8) !== 0 && c8.log.length === 0,
+    "adopt --unset is refused — there is no config to remove a field from");
 }
 
 // ── 7. delete maps --remove/--force/--yes; mutual-exclusion guard ───────

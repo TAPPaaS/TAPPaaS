@@ -3,13 +3,13 @@
 | | |
 |---|---|
 | **Status** | **Proposed** (2026-09-18) |
-| **Version** | 0.6 |
+| **Version** | 0.7 |
 | **Date** | 2026-09-18 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen, @ErikDaniel007 |
 | **Refines** | [ADR-022c](<ADR-022c - Node and Host.md>) (Node, cluster member, Host) · [ADR-022f](<ADR-022f - Kind Values and Operating System.md>) (`kind: machine`, OS facet) · [ADR-022g](<ADR-022g - Management.md>) (`management`) · [ADR-022e](<ADR-022e - Module Scope.md>) (`scope`, D4 multiplicity) |
 | **Related** | [ADR-012](ADR-012-backup-enhancement.md) §1 (the fourth backup topology this enables) · [ADR-010](ADR-010-vps-satellite-reverse-proxy-backup.md) §8 (the satellite as a machine) · [ADR-007d](<ADR-007d - Site.md>) (`site.json hardware.nodes[]`) |
-| **Changelog** | v0.6 (2026-10-02) — D2 points at ADR-022d's interim note: until the composite-module ADR, the `cluster` module carries `kind: application` (#705). · v0.5 (2026-09-18) — `adopt` logs in as `root`; key-only SSH is a separate step, never a side effect; `delete` of a machine unregisters and never wipes; `debianhost` before #665, with a test plan. · v0.4 (2026-09-18) — D8: a machine becomes a module by `module adopt <fqdn|ip>` (key, facts, module by OS, instance named after the machine, zone from its address) or `module add --pxe` (site-manager's PXE model); `node add` becomes their composition. · v0.3 (2026-09-18) — operator answers folded in: D2a decided (membership from `site.json`), D6.5 (`node` names an instance), D6.6 (a dependency pins an instance via a field on the caller), D7 (one module type per OS; `templates:<os>` reuse deferred). · v0.2 (2026-09-18) — D4 gains stage 3 (the cluster install becomes module installs); D6 settles that an instance name is not a module name — `config/<instance>.json`, module from `.location`, a synthetic `module` field, and the defaults. · v0.1 (2026-09-18) — proposal: every machine TAPPaaS manages is a module of `kind: machine`; `debianhost` supplies the OS lifecycle; cluster nodes and the satellite follow; several instances of one module in one Environment. |
+| **Changelog** | v0.7 (2026-10-02) — D8.1 amended (operator): a managed machine is key-only over SSH by default, the settings the cluster nodes have (#19); `adopt --set sshKeyOnly=false` keeps the machine's own sshd as it is, and `modify --set` changes it later. Machines adopted before keep password SSH (migration 0013). Built in #756. · v0.6 (2026-10-02) — D2 points at ADR-022d's interim note: until the composite-module ADR, the `cluster` module carries `kind: application` (#705). · v0.5 (2026-09-18) — `adopt` logs in as `root`; key-only SSH is a separate step, never a side effect; `delete` of a machine unregisters and never wipes; `debianhost` before #665, with a test plan. · v0.4 (2026-09-18) — D8: a machine becomes a module by `module adopt <fqdn|ip>` (key, facts, module by OS, instance named after the machine, zone from its address) or `module add --pxe` (site-manager's PXE model); `node add` becomes their composition. · v0.3 (2026-09-18) — operator answers folded in: D2a decided (membership from `site.json`), D6.5 (`node` names an instance), D6.6 (a dependency pins an instance via a field on the caller), D7 (one module type per OS; `templates:<os>` reuse deferred). · v0.2 (2026-09-18) — D4 gains stage 3 (the cluster install becomes module installs); D6 settles that an instance name is not a module name — `config/<instance>.json`, module from `.location`, a synthetic `module` field, and the defaults. · v0.1 (2026-09-18) — proposal: every machine TAPPaaS manages is a module of `kind: machine`; `debianhost` supplies the OS lifecycle; cluster nodes and the satellite follow; several instances of one module in one Environment. |
 
 A machine TAPPaaS manages is a **module**, not a special case.
 
@@ -315,11 +315,31 @@ Site's cluster (a member becomes a `pvehost`, #665 — never a plain `debianhost
 most specific subnet wins. Adopting the same machine again is a no-op. The key is retried every
 20s, not faster: Debian 13's `PerSourcePenalties` otherwise locks the mothership out.
 
-What `adopt` does **not** do (operator, 2026-09-18):
+**SSH becomes key-only, unless the operator says otherwise** (operator, 2026-10-02; this
+reverses the 2026-09-18 decision that adopting changes nothing about how a machine is reached).
+A machine TAPPaaS manages refuses password and keyboard-interactive logins over SSH for every
+user, and root logs in by key only — what the cluster nodes have had since #19. The field is
+`sshKeyOnly`, true unless the config says false:
 
-- **It changes nothing about how the machine is reached.** Key-only SSH (#19) is a separate,
-  explicit step an operator takes, never a side effect of adopting: a hand-built machine may be
-  someone's only way in by password.
+- `module adopt <address> --set sshKeyOnly=false` adopts a machine and leaves its sshd as it is —
+  the answer for a hand-built machine someone reaches by password. Nothing is applied first.
+- `module modify <instance> --set sshKeyOnly=true|false` changes it later. `false` removes only
+  the drop-in TAPPaaS wrote; the machine's own `sshd_config` decides again.
+- Every update re-applies it, so a password login someone switched back on is closed again, and
+  `test.sh` asserts it from what `sshd -T` reports, not from a file being present.
+- It is applied only over a connection that has just authenticated by key, `sshd -t` checks the
+  result before sshd reloads, and the console keeps the root password.
+
+Why the default is key-only after all: a machine in the sweep is one the mothership logs in to
+as root, nightly; leaving password SSH open beside that is the weaker of two doors, and an
+operator who needs it says so once. The 2026-09-18 concern — someone's only way in — is met by
+the opt-out at the moment of adoption, before anything changes. Machines adopted before this
+were promised the opposite, and keep password SSH: migration 0013 writes `sshKeyOnly: false`
+into their configs. The satellite takes the same default; TAPPaaS builds it from keys, so no
+one's access is lost. As built: one script, `tappaas-cicd/scripts/ssh-key-only.sh`, for the
+nodes and the machine modules alike (#756).
+
+What `adopt` does **not** do (operator, 2026-09-18):
 - **Its inverse removes nothing but TAPPaaS's record.** `module delete` of a machine instance
   **unregisters** it — the config goes, the machine keeps running, untouched. For a machine,
   *delete* never means *wipe*.

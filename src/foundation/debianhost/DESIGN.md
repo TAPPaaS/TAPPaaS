@@ -20,10 +20,28 @@ single-instance (D4), which is what lets one module have several named machines.
 `KbdInteractiveAuthentication=no`. A machine that does not accept the key is unreachable to this
 module, and every script says so rather than prompting.
 
-## Registering changes nothing
+## Registering changes one thing: SSH
 
-`install.sh` only proves reachability and the OS. Key-only SSH, firewalling or any other
-hardening is a separate, explicit step (operator decision, 2026-09-18).
+`install.sh` proves reachability and the OS, then makes SSH key-only unless the config says
+`sshKeyOnly: false` (operator decision 2026-10-02, #756, reversing 2026-09-18's "registering
+changes nothing"). Firewalling or any other hardening is not done.
+
+The work is `tappaas-cicd/scripts/ssh-key-only.sh`, the script the cluster nodes use (#19),
+fed over the key login (`dh_key_only`) so nothing is copied to the machine. One sshd drop-in,
+`/etc/ssh/sshd_config.d/10-tappaas-hardening.conf`: `PermitRootLogin prohibit-password`,
+`PasswordAuthentication no`, `KbdInteractiveAuthentication no`. `sshd -t` before the reload,
+with the previous state restored on rejection; the effective values read back with `sshd -T`,
+so an earlier line in `sshd_config` that wins over the drop-in is a failure, not a pass.
+
+- `update.sh` converges it first, before `apt`: applied when wanted, the TAPPaaS drop-in
+  removed when `false` (a drop-in it did not write is left alone). A state it cannot reach
+  fails the update.
+- `test.sh` asserts it when wanted; in the pre-update gate it is reported, not failed, because
+  the update is what applies it.
+- The satellite runs these same scripts for its machine, so it gets the same behaviour.
+- A field that is absent means `true`. Machines adopted before #756 were promised the opposite,
+  so migration 0013 wrote `false` into their configs; `adopt` writes the value it chose into
+  every new config, so the config always says.
 
 ## The reboot rule (ADR-020 D8)
 

@@ -9,8 +9,9 @@ Primary audience: whoever builds and verifies ADR-026 D3 (`debianhost`) and D8 (
   #665, and #665 can then register the cluster nodes *through* `adopt`.
 - **`adopt` logs in as `root`** with the mothership's key — the same as the cluster nodes, and
   what `apt` needs anyway.
-- **Key-only SSH (#19) is a separate, explicit step**, never a side effect of `adopt`: a
-  hand-built machine may be someone's only way in by password.
+- **Key-only SSH is on by default** (#756, ADR-026 D8.1 as amended 2026-10-02): `adopt` makes
+  it so unless run with `--set sshKeyOnly=false`. *Until 2026-10-02 this read: a separate,
+  explicit step, never a side effect of `adopt`.*
 
 ## Test bed
 
@@ -68,6 +69,11 @@ Expected afterwards:
   **breaking it on purpose**: fill the disk, stop time sync, leave a reboot pending.
 - **The nightly** — after a `site-manager update`, `dh-test1` is in `last-update-result.json`
   like any other module.
+- **Key-only SSH (#756)** — on a stand-in whose root and a second user accept passwords:
+  `adopt --set sshKeyOnly=false` leaves both working; `modify --set sshKeyOnly=true` makes a
+  password login fail while the key works and `test.sh` passes the check; switching a password
+  login back on by hand is closed again by the next `update`; `--set sshKeyOnly=false` opens it
+  again. A plain `adopt` of a fresh stand-in makes it key-only at once.
 - **The mothership key (#122, #755)** — `cicd-key.sh status`, `rotate` and `recover` cover
   adopted machines. Fixed by #755 and verified 2026-10-02 (results, row 3b).
 - **Key-only SSH (#19), as its own step** — applied deliberately, then: password SSH refused,

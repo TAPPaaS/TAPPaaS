@@ -49,6 +49,11 @@
       "apply": "none",
       "changeNote": "The ADR-020 D8 disruption authorization. Nothing APPLIES it — the converge READS it to decide whether an unattended pass may reboot or offline-migrate this guest. Default false, so silence never authorizes downtime."
     },
+    "sshKeyOnly": {
+      "class": "in-place",
+      "apply": "none",
+      "changeNote": "Applied by the machine module's own update.sh, which the converge after `modify --set` runs: ssh-key-only.sh writes or removes one sshd drop-in and reloads sshd, which drops no open session — no disruption, nothing to authorize (#756). No hook: the module's update is the apply, as for every module-level field."
+    },
     "config": {
       "class": "in-place",
       "apply": "none",

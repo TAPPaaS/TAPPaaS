@@ -72,6 +72,19 @@ sat_ssh() {
         "${SAT_USER}@${ADDRESS}" "$@"
 }
 
+# sat_key_only_wanted — rc 0 unless the config says sshKeyOnly=false (#756).
+sat_key_only_wanted() { [[ "$(jq -r 'if has("sshKeyOnly") then .sshKeyOnly else true end' "${SAT_CFG}")" != "false" ]]; }
+
+# sat_key_only <user@host> <apply|remove|check> — tappaas-cicd/scripts/ssh-key-only.sh
+# on the satellite, fed over a key login (the operator's, during provisioning).
+sat_key_only() {
+    local script cmd="bash -s -- $2"
+    script="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../tappaas-cicd/scripts" && pwd)/ssh-key-only.sh"
+    [[ "${SAT_USER}" == root ]] || cmd="sudo -n ${cmd}"
+    ssh -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR \
+        -o ConnectTimeout=10 -o BatchMode=yes -o PasswordAuthentication=no "$1" "${cmd}" < "${script}"
+}
+
 # sat_operator_keys — the operator's out-of-band public keys, one per line: the
 # config's host.operatorSshKeys, else TAPPAAS_OPERATOR_KEY (a key or a file),
 # else what the forwarded agent holds (`module add` runs over `ssh -A`). Never
@@ -162,6 +175,18 @@ sat_install() {
         || die "Debian config generation failed"
     info "  [3/6] provision Debian on ${target}"
     sat_provision_debian "$(sat_assemble_debian_deploy "${cdir}")" "${target}" || die "Debian provisioning failed"
+
+    # Key-only SSH, unless the config says sshKeyOnly=false (#756): TAPPaaS built
+    # this machine from keys, so no one's password access is lost. Over the
+    # operator's key, which reaches a managed and an unmanaged satellite alike; a
+    # managed one is re-checked by every update (debianhost/update.sh).
+    if sat_key_only_wanted; then
+        local ko
+        ko="$(sat_key_only "${target}" apply 2>&1)" || { printf '%s\n' "${ko}" >&2; die "key-only SSH could not be enforced on ${target} — or add it with --sshKeyOnly false"; }
+        info "  ${GN}✓${CL} ${ko##*$'\n'}"
+    else
+        info "  sshKeyOnly is false — SSH left as the image has it"
+    fi
 
     info "  [4/6] read back the satellite's tunnel key"
     local sat_pub

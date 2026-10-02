@@ -70,6 +70,15 @@ else
 fi
 ck "a name that does not resolve → refused"         "(none)"    "$(ipof no-such-host.invalid)"
 
+# --set field=value → install-module.sh overrides (#756). A debianhost always
+# states sshKeyOnly, so the config shows what adoption chose.
+fa() { adopt_field_args "$@" 2>/dev/null | paste -sd' ' -; }
+ck "a debianhost with no --set states sshKeyOnly true"  "--sshKeyOnly true"   "$(fa debianhost)"
+ck "--set sshKeyOnly=false is passed, and not doubled"  "--sshKeyOnly false"  "$(fa debianhost sshKeyOnly=false)"
+ck "any field passes, value kept whole"                 "--description a=b c --sshKeyOnly true" "$(fa debianhost 'description=a=b c')"
+ck "a pvehost gets no sshKeyOnly of its own"            ""                    "$(fa pvehost)"
+ck "not field=value → refused"                          1                     "$(adopt_field_args debianhost nonsense >/dev/null 2>&1; echo $?)"
+
 # Sourcing defines the functions and runs nothing.
 ck "sourcing does not run the adoption"             function "$(type -t main)"
 

@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # debianhost update — keep the machine's OS patched (ADR-026 D3).
 #
-# apt update + full-upgrade, non-interactive, keeping local configuration files.
+# First, SSH is made to match `sshKeyOnly` (key-only unless false, #756), so a
+# password login someone switched back on is closed again every night. Then apt
+# update + full-upgrade, non-interactive, keeping local configuration files.
 # A reboot the upgrade asks for (/var/run/reboot-required) is taken only when it
 # is AUTHORIZED — the rule a cluster node follows (ADR-020 D8):
 #
@@ -21,6 +23,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 dh_load "$1"
 dh_reachable || die "cannot log in to root@${ADDRESS} with the mothership's key"
+dh_key_only_converge || die "${INSTANCE}: SSH does not match sshKeyOnly — see above"
 
 info "${BOLD}Updating packages on ${BL}${INSTANCE}${CL}${BOLD} (${ADDRESS})${CL}"
 if ! out="$(dh_ssh 'export DEBIAN_FRONTEND=noninteractive

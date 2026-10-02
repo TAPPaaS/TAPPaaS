@@ -12,6 +12,7 @@
     "maintainer",
     "status",
     "rebootOk",
+    "sshKeyOnly",
     "tier",
     "kind",
     "management",
@@ -206,6 +207,17 @@
       "default": false,
       "example": true,
       "note": "Disruption is authorized iff '--allow-disruption' was passed (an operator, now: 'module-manager module update <m> --allow-disruption', or 'site-manager update --allow-disruption' for a run), OR rebootOk is true AND the scheduled run has automaticReboot (ADR-020 v0.10 D8). '--force' is a different lever: it proceeds past a refusal and never reboots. When a disruptive change is not authorized the converge applies everything else, prints a machine-parseable 'DEFERRED:' line and still exits 0; update-tappaas collects those into an end-of-sweep summary."
+    },
+    "sshKeyOnly": {
+      "description": "Key-only SSH on a machine TAPPaaS manages (#756, ADR-026 D8.1): sshd refuses password and keyboard-interactive logins for every user, and root logs in by key only — the settings the cluster nodes enforce (#19). The console keeps the root password. Applied when the machine is adopted or provisioned and re-applied by every update, so a password login someone switches back on is closed again; test.sh asserts it from what sshd enforces. false returns the machine to its own sshd_config (TAPPaaS removes only the drop-in it wrote).",
+      "type": "boolean",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "default": true,
+      "example": false,
+      "note": "Read by kind: machine modules that log in to their machine: debianhost and the satellite (whose update and test run debianhost's). Opt out when adopting: module-manager module adopt <address> --set sshKeyOnly=false; later: module-manager module modify <instance> --set sshKeyOnly=false. Machines adopted before this field existed were given false by migration 0013, which is what adoption promised them then."
     },
     "tier": {
       "description": "RETIRED (ADR-022e, #676) — replaced by scope, which is DERIVED from `stack`: the foundation stack is site-scoped, everything else environment-scoped. No module sets it any more; a deployed config that still carries it loses it on its next update (the release no longer defines it), and until then it is read only when the config has no `stack`. The name `tier` now means `zone.tier` alone (ADR-014).",

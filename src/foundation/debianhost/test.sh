@@ -6,11 +6,14 @@
 #   3. no reboot is pending
 #   4. its root filesystem is below 90% full
 #   5. its clock is synchronised
-#   6. (info) how many package upgrades are waiting — not a failure: new ones are
+#   6. SSH is key-only when sshKeyOnly is true (the default; #756) — read back
+#      from what sshd enforces, not from the drop-in's presence
+#   7. (info) how many package upgrades are waiting — not a failure: new ones are
 #      published every day, and the next update takes them
 #
-# In the pre-update gate (TAPPAAS_TEST_RUNTIME_ONLY=1) a pending reboot is
-# reported, not failed: the update is what takes it, so failing would block it.
+# In the pre-update gate (TAPPAAS_TEST_RUNTIME_ONLY=1) a pending reboot and SSH
+# not yet key-only are reported, not failed: the update is what takes each, so
+# failing would block it.
 #
 # Usage: test.sh <instance>
 set -uo pipefail
@@ -53,6 +56,17 @@ else fail "root filesystem ${use}% full (limit 90%)"; fi
 
 sync="$(dh_ssh 'timedatectl show -p NTPSynchronized --value' 2>/dev/null || true)"
 [[ "${sync}" == "yes" ]] && pass "clock synchronised" || fail "clock not synchronised (NTPSynchronized=${sync:-unknown})"
+
+# Key-only SSH when the config asks for it (#756); otherwise what the machine's
+# own sshd_config allows is its owner's business, and only reported.
+if dh_key_only_wanted; then
+    if _ko="$(dh_key_only check 2>&1)"; then pass "key-only SSH"
+    elif [[ "${TAPPAAS_TEST_RUNTIME_ONLY:-0}" == "1" ]]; then
+        skip "SSH is not key-only yet — the update applies it"
+    else fail "SSH accepts passwords though sshKeyOnly is true — ${_ko//$'\n'/; } (module-manager module update ${INSTANCE} re-applies it)"; fi
+else
+    info "  sshKeyOnly is false — SSH is as the machine's own sshd_config has it"
+fi
 
 waiting="$(dh_ssh "apt list --upgradable 2>/dev/null | grep -c '/' || true" 2>/dev/null || echo '?')"
 info "  ${waiting} package upgrade(s) waiting for the next update"

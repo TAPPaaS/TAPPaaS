@@ -85,6 +85,7 @@ export class CliModuleClient implements ModuleClient {
     if (opts.instance) args.push("--instance", opts.instance);
     if (opts.zone) args.push("--zone", opts.zone);
     if (opts.wait) args.push("--wait", opts.wait);
+    for (const s of opts.sets ?? []) args.push("--set", s);
     return run(BIN.adopt, args);
   }
 

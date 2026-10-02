@@ -39,7 +39,7 @@ later retire phase).
 | `module validate [<m>]` | scope/source lint | all modules, or one; `--allow-fork` |
 | `module validate --blueprint [<m>\|<dir>]...` | the ADR-027 blueprint check on module **source** directories | every registered repository's modules, the named ones, or `--repo PATH` (what the release boundary runs) |
 | `module add <m>` | `install-module.sh` | create + provision; `--instance NAME` names the instance (ADR-026 D6.4) |
-| `module adopt <address>` | `adopt-module.sh` | a machine that already runs becomes a module (ADR-026 D8.1); nothing on it is changed |
+| `module adopt <address>` | `adopt-module.sh` | a machine that already runs becomes a module (ADR-026 D8.1); its SSH becomes key-only unless `--set sshKeyOnly=false` (#756) — nothing else on it is changed. `--set field=value` writes any field before the install |
 | `module update <m>` | `update-module.sh` | **release update** (snapshot + test + 3-way merge) — what the sweep runs (#655) |
 | `module modify <m>` | `update-module.sh` | **change the config, then converge**: `--set field=value` (ADR-020) or `--unset field` (#648). Bare, it is the deprecated spelling of `update`. `--set instance=<new>` renames the instance instead (#566); `--lockdown` runs the module's own `lockdown.sh` (a satellite → the off-site vault) |
 | `module delete <m>` | `delete-module.sh` | `--archive` (default) / `--remove`; `--decommission` (a machine) |

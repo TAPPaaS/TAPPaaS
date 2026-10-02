@@ -226,8 +226,11 @@ while read -r node; do
         _ssh_hard_fail=1
         continue
     fi
-    scp -q "${SCRIPT_DIR}/setup-ssh-hardening.sh" root@"$NODE_FQDN":/root/tappaas/
-    if _sh_out="$(ssh -n -o StrictHostKeyChecking=no root@"$NODE_FQDN" "/root/tappaas/setup-ssh-hardening.sh" 2>&1)"; then
+    # The script is fed over the key login (ssh-key-only.sh, shared with the
+    # machine modules, #756); the copy older releases left on the node goes.
+    if _sh_out="$(ssh -o StrictHostKeyChecking=no root@"$NODE_FQDN" \
+            'rm -f /root/tappaas/setup-ssh-hardening.sh; bash -s -- apply' \
+            < "${SCRIPT_DIR}/../tappaas-cicd/scripts/ssh-key-only.sh" 2>&1)"; then
         debug "$node: ${_sh_out}"
     else
         printf '%s\n' "${_sh_out}" >&2

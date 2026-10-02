@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # debianhost install — register a Debian machine TAPPaaS manages (ADR-026 D3).
 #
-# Proves two things and changes NOTHING on the machine: the mothership reaches it
-# as root by key, and it runs the OS this module manages. Adopting a machine is
-# not configuring it — hardening such as key-only SSH (#19) is a separate step an
-# operator takes deliberately (ADR-026 D8.1).
+# Proves two things — the mothership reaches it as root by key, and it runs the
+# OS this module manages — then makes SSH key-only, as on the cluster nodes (#19),
+# unless the operator adopted it with `--set sshKeyOnly=false` (ADR-026 D8.1, as
+# amended 2026-10-02, #756). Nothing else on the machine is changed.
 #
 # Usage: install.sh <instance>
 set -euo pipefail
@@ -21,4 +21,5 @@ id="$(dh_os_id)"
 version="$(dh_ssh '. /etc/os-release && printf "%s" "${VERSION_ID:-?}"' 2>/dev/null || echo '?')"
 
 info "  ${GN}✓${CL} root by key; Debian ${version}"
-info "${GN}✓${CL} ${INSTANCE} registered — nothing on it was changed"
+dh_key_only_converge || die "${INSTANCE}: not registered as key-only — fix the above, or adopt it with --set sshKeyOnly=false"
+info "${GN}✓${CL} ${INSTANCE} registered"

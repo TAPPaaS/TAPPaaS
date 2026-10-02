@@ -3,7 +3,8 @@
 # adopt-module.sh — make a module of a machine that already runs (ADR-026 D8.1).
 #
 # `module-manager module adopt <address>`. The machine is reached, learned, and
-# handed to the module for its OS; nothing on it is changed:
+# handed to the module for its OS. The one change on it is the module's: a
+# debianhost makes SSH key-only unless adopted with --set sshKeyOnly=false (#756):
 #
 #   1. Reach   — log in as root with the mothership's key (never a password).
 #                If that fails, print the one command that authorises the key and
@@ -27,7 +28,11 @@
 # Refused as well: a Proxmox VE host that is not a member of this Site's
 # cluster, and an address another instance already has.
 #
-# Usage: adopt-module.sh <address> [--instance NAME] [--zone ZONE] [--wait SECONDS]
+# --set field=value (repeatable) is written into the new config before the
+# module's install runs. A debianhost's config always states sshKeyOnly, so
+# what was chosen at adoption is visible in it (true unless --set says false).
+#
+# Usage: adopt-module.sh <address> [--instance NAME] [--zone ZONE] [--wait SECONDS] [--set field=value]...
 # Exit:  0 adopted, or already adopted · 1 refused or failed (nothing written)
 
 set -uo pipefail
@@ -35,6 +40,21 @@ set -uo pipefail
 CONFIG_DIR="${CONFIG_DIR:-/home/tappaas/config}"
 
 # ── pure functions (unit-tested: scripts/test/test-adopt.sh) ─────────────
+
+# adopt_field_args <module> [field=value...] — the install-module.sh overrides
+# for the --set fields, one `--field value` pair per line pair. A debianhost
+# states sshKeyOnly (true unless set) so the config shows what adoption chose.
+# rc 1 on an argument that is not field=value.
+adopt_field_args() {
+    local module="$1" kv key_only=""; shift
+    for kv in "$@"; do
+        [[ "${kv}" =~ ^([A-Za-z][A-Za-z0-9_.]*)=(.*)$ ]] || { echo "--set '${kv}' is not field=value" >&2; return 1; }
+        [[ "${BASH_REMATCH[1]}" == sshKeyOnly ]] && key_only="${BASH_REMATCH[2]}"
+        printf -- '--%s\n%s\n' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
+    done
+    [[ "${module}" == debianhost && -z "${key_only}" ]] && printf -- '--sshKeyOnly\ntrue\n'
+    return 0
+}
 
 _ip2int() { local IFS=.; local a b c d; read -r a b c d <<< "$1"; echo $(( (a << 24) + (b << 16) + (c << 8) + d )); }
 
@@ -109,8 +129,10 @@ main() {
     . /home/tappaas/bin/common-install-routines.sh
 
     ADDRESS=""; local instance="" zone="" wait_s=300
+    local -a sets=()
     while [[ $# -gt 0 ]]; do
         case "$1" in
+            --set)      sets+=("${2:-}"); shift 2 ;;
             --instance) instance="${2:-}"; shift 2 ;;
             --zone)     zone="${2:-}"; shift 2 ;;
             --wait)     wait_s="${2:-}"; shift 2 ;;
@@ -119,7 +141,7 @@ main() {
             *)          [[ -z "${ADDRESS}" ]] || die "adopt: one address only (got '${ADDRESS}' and '$1')"; ADDRESS="$1"; shift ;;
         esac
     done
-    [[ -n "${ADDRESS}" ]] || die "Usage: adopt-module.sh <address> [--instance NAME] [--zone ZONE] [--wait SECONDS]"
+    [[ -n "${ADDRESS}" ]] || die "Usage: adopt-module.sh <address> [--instance NAME] [--zone ZONE] [--wait SECONDS] [--set field=value]..."
     [[ "${wait_s}" =~ ^[0-9]+$ ]] || die "--wait takes seconds"
 
     local ip
@@ -194,9 +216,16 @@ main() {
     info "  ${GN}✓${CL} module ${module}, instance ${instance}, zone ${zone}"
 
     # 6. Become a module
+    local -a fields=()
+    local field_lines _l
+    field_lines="$(adopt_field_args "${module}" ${sets[@]+"${sets[@]}"})" || die "adopt: --set takes field=value"
+    if [[ -n "${field_lines}" ]]; then
+        while IFS= read -r _l; do fields+=("${_l}"); done <<< "${field_lines}"
+    fi
     install-module.sh "${module}" --instance "${instance}" --address "${ADDRESS}" --zone0 "${zone}" --os "${id}" \
+        ${fields[@]+"${fields[@]}"} \
         || die "the ${module} install of ${instance} failed (see above)"
-    info "${GN}✓${CL} ${ADDRESS} adopted as ${BL}${instance}${CL} (${module}) — nothing on it was changed"
+    info "${GN}✓${CL} ${ADDRESS} adopted as ${BL}${instance}${CL} (${module})"
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then main "$@"; fi

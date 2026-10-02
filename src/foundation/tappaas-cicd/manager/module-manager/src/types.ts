@@ -81,6 +81,9 @@ export interface AdoptOptions {
   instance?: string;
   zone?: string;
   wait?: string;
+  // field=value written into the config before the module's install.sh runs —
+  // e.g. sshKeyOnly=false, so the machine is never hardened (#756).
+  sets?: string[];
 }
 
 export interface ModifyOptions {

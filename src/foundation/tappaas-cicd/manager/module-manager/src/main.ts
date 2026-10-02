@@ -122,13 +122,14 @@ export const HELP: HelpSpec = {
       ],
     },
     {
-      usage: "adopt <address> [--instance NAME] [--zone ZONE] [--wait SECONDS]",
+      usage: "adopt <address> [--instance NAME] [--zone ZONE] [--wait SECONDS] [--set field=value]...",
       name: "adopt",
-      note: "(ADR-026 D8.1: a machine that already runs becomes a module; nothing on it is changed)",
+      note: "(ADR-026 D8.1: a machine that already runs becomes a module; its SSH becomes key-only unless --set sshKeyOnly=false — nothing else on it is changed)",
       options: [
         ["--instance NAME", "Name the instance instead of the machine's hostname — when that name is taken by another machine."],
         ["--zone ZONE", "The zone it sits in, when its address is in no active zone (a Location reached through a tunnel)."],
         ["--wait SECONDS", "How long to wait for root to accept the mothership's key (default 300); nothing is written until it does."],
+        ["--set field=value", "Write a field into the new config before its install runs. --set sshKeyOnly=false keeps password SSH as the machine has it (#756); without it, the machine refuses password logins over SSH, as the cluster nodes do."],
       ],
     },
     {
@@ -849,12 +850,17 @@ function cmdAdd(opts: Opts, client: ModuleClient): number {
 
 // `adopt` hands the machine to adopt-module.sh, which reaches it, learns its
 // OS and hostname, and installs the module for that OS (ADR-026 D8.1). Its
-// three options arrive as passthrough (parseOpts knows them for no other verb).
+// three options arrive as passthrough (parseOpts knows them for no other verb);
+// --set field=value (#756) is parsed for every verb and forwarded as it is.
 function cmdAdopt(opts: Opts, client: ModuleClient): number {
   const address = opts.rest[0];
   if (!address) die("adopt: expected <address> (an IP address or a DNS name)");
   if (opts.rest.length > 1) die(`adopt: one address only (got ${opts.rest.join(", ")})`);
-  const a: AdoptOptions = {};
+  const a: AdoptOptions = { sets: [...opts.sets] };
+  for (const s of a.sets ?? []) {
+    if (!/^[A-Za-z][A-Za-z0-9_.]*=/.test(s)) die(`adopt: --set '${s}' is not field=value`);
+  }
+  if (opts.unsets.length > 0) die("adopt: --unset has nothing to remove — the config does not exist yet");
   const p = opts.passthrough;
   for (let i = 0; i < p.length; i++) {
     const v = p[i + 1];

@@ -38,9 +38,22 @@ module-manager module adopt <ip-or-fqdn>
 ```
 
 `adopt` logs in, reads the machine's hostname and OS, names the instance after the hostname,
-takes the zone from the address, and registers it — changing nothing on the machine. If the key
-does not work yet, it prints the command from step 1 and waits for it (`--wait <seconds>`,
-default 300). Two cases it will not decide for you:
+takes the zone from the address, registers it, and makes its SSH key-only. If the key does not
+work yet, it prints the command from step 1 and waits for it (`--wait <seconds>`, default 300).
+
+**Key-only SSH is the one change it makes**, and the one decision to take before you run it.
+Afterwards nobody logs in to the machine over SSH with a password — not root, not any other
+user; keys only, as on the cluster nodes. The console keeps the root password. If someone
+reaches this machine by password today and should keep doing so, adopt it with:
+
+```bash
+module-manager module adopt <ip-or-fqdn> --set sshKeyOnly=false
+```
+
+You can change your mind either way later — `module-manager module modify <hostname> --set
+sshKeyOnly=true` (or `false`, which hands sshd back to the machine's own configuration).
+
+Two cases it will not decide for you:
 
 - **The hostname is already an instance name** (another machine is called the same): name
   this one with `--instance <name>`.
