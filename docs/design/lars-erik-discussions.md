@@ -30,7 +30,12 @@ finish. Tick a line (✅) when it is settled, and record the outcome in the plan
    validate it on his site, or let us? With it, a heads-up: **#755** — before the fix,
    `cicd-key.sh rotate` locked the mothership out of adopted machines and the satellite. Fixed
    2026-10-02; a site should take that release before it rotates. Plan: G1.2.
-6. **#294 — zone-aligned VMID ranges.** Adopt for new installs and variants only, or drop it.
+6. **#760 — VM and container backups were never encrypted.** ADR-012 requires it; the storage
+   was registered without a key, so every VM/container snapshot is plaintext (the filesystem
+   captures are encrypted). The fix encrypts new backups. Decide: prune the existing plaintext
+   snapshots once each guest has an encrypted one (retention is 7y), or keep them? And does
+   Erik's site (PBS on a machine, §1.3) hold plaintext copies too? Plan: G1.2.
+7. **#294 — zone-aligned VMID ranges.** Adopt for new installs and variants only, or drop it.
    Existing VMs are never renumbered in place. Plan: G1.3.
 
 ## Open items assigned to Erik
