@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | **Accepted** (2026-09-18) |
-| **Version** | 1.1 |
+| **Version** | 1.2 |
 | **Date** | 2026-09-09 (v1.0: 2026-09-18) |
 | **Author** | ErikDaniel007 |
 | **Deciders** | @ErikDaniel007, @LarsRossen |
@@ -11,7 +11,7 @@
 | **Refines** | [ADR-007b — Apps](<ADR-007b - Apps.md>) (what type of thing a module is) |
 | **Amends** | ~~[ADR-012](ADR-012-backup-enhancement.md) §1.1, §2.1 (`shim` becomes `realized: false`)~~ (declined, #612) · Appendix A (pointer) · [ADR-009](<ADR-009 - Composition Meta-Model.md>) :41 and [GLOSSARY.md](../../GLOSSARY.md) :34 (Module boundary = VM boundary) |
 | **Related** | [ADR-022c — Node and Host](<ADR-022c - Node and Host.md>); [ADR-007f — Realization](<ADR-007f - Realization.md>); [ADR-009](<ADR-009 - Composition Meta-Model.md>) (composition); [ADR-012](ADR-012-backup-enhancement.md) (first consumer); #611 |
-| **Changelog** | v1.1 (2026-09-22) — the table now carries what v1.0 recorded: `machine`, `application` (Accepted), `device` in the schema's wording. · v1.0 (2026-09-18) — accepted (operator) with ADR-022f's values folded in (`machine`, `application`). The `realized` amendment to ADR-012 is **declined**: `shim` stays (ADR-012 v1.0, #612). · v0.18 (2026-09-18) — `kind` marker resolved (#611): `kind` names the workload; the ADR-007 `module` marker is retired by migration 0004; `external-host` retired. · v0.17 (2026-09-17) — review #624/#637: reduced to the `kind` vocabulary in one table; `cluster`/`kubernetes` noted as grouping concepts; dispatch rationale kept; `kind` marker left open; open questions and parking lot removed, to be filed as issues; amended ADR-009, GLOSSARY and ADR-012 declared. Earlier drafts in git history. |
+| **Changelog** | v1.2 (2026-10-02) — records the interim `kind` of `cluster` (`application`) and `templates` (`vm`), the operator's decision of 2026-09-19 (#669) that until now lived only in the schema, so the data no longer contradicts this ADR (#705). · v1.1 (2026-09-22) — the table now carries what v1.0 recorded: `machine`, `application` (Accepted), `device` in the schema's wording. · v1.0 (2026-09-18) — accepted (operator) with ADR-022f's values folded in (`machine`, `application`). The `realized` amendment to ADR-012 is **declined**: `shim` stays (ADR-012 v1.0, #612). · v0.18 (2026-09-18) — `kind` marker resolved (#611): `kind` names the workload; the ADR-007 `module` marker is retired by migration 0004; `external-host` retired. · v0.17 (2026-09-17) — review #624/#637: reduced to the `kind` vocabulary in one table; `cluster`/`kubernetes` noted as grouping concepts; dispatch rationale kept; `kind` marker left open; open questions and parking lot removed, to be filed as issues; amended ADR-009, GLOSSARY and ADR-012 declared. Earlier drafts in git history. |
 
 What type of thing a module is — TAPPaaS's `kind`.
 
@@ -37,6 +37,19 @@ What type of thing a module is — TAPPaaS's `kind`.
 `machine` is the kind; **Host** is the role ([ADR-022c](<ADR-022c - Node and Host.md>) D3: the Node a module runs on). A `machine`, `vm` or `lxc` fills a Host role; an `application` runs on one.
 
 `cluster` and `kubernetes` are grouping concepts (composite modules), not `kind` values alongside the above — proposed in #637, to be decided in a separate ADR. That ADR also covers modelling hosts and clusters as modules, with a dependency hierarchy between modules.
+
+> **Interim, until that ADR (operator decision 2026-09-19, #669; recorded here by #705).** Two
+> official modules need a `kind` today, and neither fits the table exactly:
+>
+> | Module | Interim `kind` | Why this value | What it really is |
+> |---|---|---|---|
+> | `cluster` | `application` | it owns no system of its own and has no Proxmox guest, so it gets no computed `vmname` and is not reported as a missing VM | a composite: the binding of the `pvehost` machines that form the Proxmox cluster, with its own lifecycle (`pvecm`, corosync, quorum); it spans several Hosts, so its `node` is empty |
+> | `templates` | `vm` | the guests it provides are VMs (the template guests other modules clone) | a module that only provides artefacts — the `nixos`, `debian` and `windows` templates; it owns no VM of its own (`vmname` and `vmid` are empty) |
+>
+> Both stretch the definitions above, knowingly. The values are kept because `kind` is a dispatch
+> key: module discovery admits only the values in this table, so a module given a value outside
+> it would drop out of the nightly sweep. The composite-module ADR decides what both become;
+> until it is accepted, no other module takes either value on these grounds.
 
 ### 2. What `kind` does not record
 

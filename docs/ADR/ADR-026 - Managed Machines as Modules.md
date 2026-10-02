@@ -3,13 +3,13 @@
 | | |
 |---|---|
 | **Status** | **Proposed** (2026-09-18) |
-| **Version** | 0.5 |
+| **Version** | 0.6 |
 | **Date** | 2026-09-18 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen, @ErikDaniel007 |
 | **Refines** | [ADR-022c](<ADR-022c - Node and Host.md>) (Node, cluster member, Host) · [ADR-022f](<ADR-022f - Kind Values and Operating System.md>) (`kind: machine`, OS facet) · [ADR-022g](<ADR-022g - Management.md>) (`management`) · [ADR-022e](<ADR-022e - Module Scope.md>) (`scope`, D4 multiplicity) |
 | **Related** | [ADR-012](ADR-012-backup-enhancement.md) §1 (the fourth backup topology this enables) · [ADR-010](ADR-010-vps-satellite-reverse-proxy-backup.md) §8 (the satellite as a machine) · [ADR-007d](<ADR-007d - Site.md>) (`site.json hardware.nodes[]`) |
-| **Changelog** | v0.5 (2026-09-18) — `adopt` logs in as `root`; key-only SSH is a separate step, never a side effect; `delete` of a machine unregisters and never wipes; `debianhost` before #665, with a test plan. · v0.4 (2026-09-18) — D8: a machine becomes a module by `module adopt <fqdn|ip>` (key, facts, module by OS, instance named after the machine, zone from its address) or `module add --pxe` (site-manager's PXE model); `node add` becomes their composition. · v0.3 (2026-09-18) — operator answers folded in: D2a decided (membership from `site.json`), D6.5 (`node` names an instance), D6.6 (a dependency pins an instance via a field on the caller), D7 (one module type per OS; `templates:<os>` reuse deferred). · v0.2 (2026-09-18) — D4 gains stage 3 (the cluster install becomes module installs); D6 settles that an instance name is not a module name — `config/<instance>.json`, module from `.location`, a synthetic `module` field, and the defaults. · v0.1 (2026-09-18) — proposal: every machine TAPPaaS manages is a module of `kind: machine`; `debianhost` supplies the OS lifecycle; cluster nodes and the satellite follow; several instances of one module in one Environment. |
+| **Changelog** | v0.6 (2026-10-02) — D2 points at ADR-022d's interim note: until the composite-module ADR, the `cluster` module carries `kind: application` (#705). · v0.5 (2026-09-18) — `adopt` logs in as `root`; key-only SSH is a separate step, never a side effect; `delete` of a machine unregisters and never wipes; `debianhost` before #665, with a test plan. · v0.4 (2026-09-18) — D8: a machine becomes a module by `module adopt <fqdn|ip>` (key, facts, module by OS, instance named after the machine, zone from its address) or `module add --pxe` (site-manager's PXE model); `node add` becomes their composition. · v0.3 (2026-09-18) — operator answers folded in: D2a decided (membership from `site.json`), D6.5 (`node` names an instance), D6.6 (a dependency pins an instance via a field on the caller), D7 (one module type per OS; `templates:<os>` reuse deferred). · v0.2 (2026-09-18) — D4 gains stage 3 (the cluster install becomes module installs); D6 settles that an instance name is not a module name — `config/<instance>.json`, module from `.location`, a synthetic `module` field, and the defaults. · v0.1 (2026-09-18) — proposal: every machine TAPPaaS manages is a module of `kind: machine`; `debianhost` supplies the OS lifecycle; cluster nodes and the satellite follow; several instances of one module in one Environment. |
 
 A machine TAPPaaS manages is a **module**, not a special case.
 
@@ -84,7 +84,8 @@ the cost of two places to look. `site.json` stays the one source of truth: a mac
 says *what the machine is*, and membership is a property of the cluster, not of the machine.
 
 The direction of travel makes this the cheaper answer as well. A **`cluster` module** is
-already foreseen (ADR-022d leaves `cluster` as a grouping concept for its own ADR); when it
+already foreseen (ADR-022d leaves `cluster` as a grouping concept for its own ADR, and records
+the interim `kind: application` the module carries until then); when it
 exists it owns the register of which machines have been rolled into the cluster, and that
 register is `site.json`'s `hardware.nodes[]` grown up. Putting membership on the machine now
 would be a field to migrate away from later.
