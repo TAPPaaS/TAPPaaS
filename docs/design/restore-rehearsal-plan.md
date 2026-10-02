@@ -21,13 +21,37 @@ passes.
 - **§5.2 is restored beside the original only** — spare VMID, no network — and checked against
   the live mothership. No cutover, no `cicd-key.sh recover` run.
 - **Order:** §5.2, then §2 (both need no window and no presence), then §3 in the window.
+- **The replacement is PXE-installed** (operator, 2026-10-02): `site-manager node add tappaas2
+  --pxe`, which also proves the unattended path.
+
+## `tappaas2` as it is (recorded 2026-10-02)
+
+| | |
+|---|---|
+| Proxmox | pve-manager 9.2.21, kernel 7.0.14-20-pve |
+| Boot disk | `nvme0n1` — SanDisk SSD Plus 500GB (serial 25414A800205): EFI + LVM `pve` (root 96G, swap 8G, `data` thin pool 338G, empty) |
+| Data disk | `nvme1n1` — Kingston OM8TAP42048K1 2TB (serial 50026B73842AD86F): ZFS pool `tanka1`, 1.86T, 100G allocated |
+| NICs | `enp97s0` (MAC `38:05:25:33:b5:f7`) = `lan`, up — the PXE NIC (UEFI entry `Boot000A`); `enp98s0` (`…:f8`) = `wan`, **no carrier** (no WAN cable: `--no-wan`) |
+| Boot order | `proxmox` first, PXE third — the old install boots unless told otherwise |
+| Guests | VMs 310 litellm, 311 openwebui, 342 nextcloud-hpb; LXC 312 vllm-amd (AMD GPU via `/dev/kfd`, `/dev/dri/renderD128`) |
+| On `tanka1` | `subvol-312-disk-0` 28.8G (**90% of its 32G**); `vllm-models` 33.3G, bind-mounted into 312 as `/opt/vllm/models`; disks of 310/311/342; and **stale replicas of 110, 130, 140** (created 2026-08-05/09, ~117G with snapshots) although their replication targets tappaas3 today |
+
+What follows from it:
+
+- **vllm-amd's models are not in any backup.** `mp0: /tanka1/vllm-models` is a host bind mount,
+  which vzdump skips. After the loss the container comes back without its 33G of models. The
+  rehearsal records what vllm-amd does then (download on start, or fail) — and RESTORE.md says so.
+- **The stale 110/130/140 replicas** vanish with the reinstall. They are worth a check on other
+  sites (a replica left behind when a job moved), not a step here.
+- **The old install must not come back.** It is first in the boot order; if tappaas2 powers on
+  before the cluster has evicted it, it rejoins as the old node.
 
 ## Before the window — prerequisites
 
 | # | What | Why |
 |---|---|---|
 | P1 | **`restore.sh` restores containers** (open, defect found writing this plan) | vllm-amd (312) is an LXC; its backup is `backup/ct/312/…`. `restore.sh` always runs `pvesh create /nodes/<n>/qemu --archive …` and probes `qm status`, so §3.3 would fail on it. Fix: take the guest type from the volid (`backup/vm/` → `qemu`, `backup/ct/` → `lxc`, `pct` for status/stop/destroy), with a unit test. |
-| P2 | **Replacement install method** (open, operator) | §3.2 has two entries: `site-manager node add tappaas2 --pxe --boot-disk <disk>` (also proves unattended PXE), or Proxmox from USB then `node add tappaas2 --pool tanka1=single:<disk>` (adopt). Needs: does tappaas2 network-boot, which disk is the boot disk, is `tanka1` on its own disk. |
+| P2 | **PXE, decided:** `site-manager node add tappaas2 --pxe --boot-disk nvme0n1 --mac 38:05:25:33:b5:f7 --no-wan --pool tanka1=single:nvme1n1` | disks and NIC recorded above. Before the power is pulled: `efibootmgr -n 000A` on tappaas2 (one-time PXE on the next boot) |
 | P3 | Fresh backups of 310, 311, 312, 342 the same day | the restore must not lose a day of AI-stack state; `backup-manager` run on demand, then `list` shows today's |
 | P4 | Mothership `config/` capture of the same day (backup:filesystem) | §5.2 compares against it |
 | P5 | `module-manager list --diff` clean, sweep green | so every finding afterwards is the rehearsal's |
@@ -87,7 +111,9 @@ delete openwebui-r --force`, then the leftover check below.
 
 Record first: `pvesh get /cluster/resources`, `ha-manager status`, `/cluster/replication`,
 `module-manager list`, and the guest configs under `/etc/pve/nodes/tappaas2/`.
-Then **pull tappaas2's power cord.** Note the time.
+Set the one-time PXE boot (`efibootmgr -n 000A`), then **pull tappaas2's power cord.** Note the
+time. **It stays unplugged until 3e says otherwise** — powered on early, it boots its old
+install and rejoins the cluster as the node 3d just evicted.
 
 ### 3c. §3.0 — what is running, and where
 
@@ -106,7 +132,16 @@ present, `marker-2` per the replication timing; 310, 311, 312, 342 **not running
 
 ### 3e. §3.2 — the replacement, same hardware, same name
 
-Reinstall Proxmox on tappaas2 by the method chosen in P2, then `site-manager node add tappaas2 …`.
+Run the P2 command **first** — it arms the PXE offer (TTL 7200 s) and waits. **Then** plug
+tappaas2 back in and watch its console: it must PXE-boot into the Proxmox installer. If it boots
+the old install instead, power it off at once (the node is evicted; it must not run) and set
+PXE from the firmware boot menu. Two things to watch in the new install:
+
+- the **old `tanka1`** on `nvme1n1` must not be imported (a foreign hostid normally stops
+  `zfs-import-scan`); if it is, stop — its old 310/311/342 disks would make the restores below
+  meaningless. `node add`'s pool step should erase and recreate it.
+- **vllm-amd's GPU**: `/dev/kfd` and `/dev/dri/renderD128` exist on the fresh install.
+
 Expect: joined, quorum 3, `site.json` captured, `tanka1` registered, the `pvehost` instance back,
 and **the backup client reconciled onto it** (ADR-012 §2.4: `backup-manager validate` clean;
 `tappaas_backup` active on tappaas2).
