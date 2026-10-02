@@ -749,8 +749,9 @@ class ZoneManager:
     # are FIXED (independent of how many access-to entries a zone has) so adding a
     # zone to access-to fills the next pass offset without shifting — and thus
     # never colliding with — the block/internet rules (#243):
-    #   base+0          gateway pass (DNS/NTP to own gateway)
+    #   base+0          gateway pass: DNS (tcp/udp 53) to own gateway
     #   base+1 .. +N    one pass per explicitly allowed zone (N capped below)
+    #   base+86/87/88   gateway passes: NTP (udp 123), DHCP (udp 67), ICMP
     #   base+90/91/92   rfc1918 block (zone isolation catch-all)
     #   base+99         internet pass (only non-RFC1918 reaches here)
     # Slots are derived from a stable hash of the zone name; collisions across
@@ -761,7 +762,22 @@ class ZoneManager:
     ZONE_RULE_SLOT_COUNT = 100
     ZONE_RULE_GATEWAY_OFFSET = 0
     ZONE_RULE_PASS_OFFSET = 1          # first access-to pass
-    ZONE_RULE_PASS_MAX = 88            # access-to passes occupy base+1 .. base+89
+    ZONE_RULE_PASS_MAX = 85            # access-to passes occupy base+1 .. base+85
+
+    # What a zone may ask of its own gateway (#399): the services the firewall
+    # runs FOR the zone, and nothing else. It used to be one pass on every port,
+    # so every zone reached the admin GUI (8443) and SSH (22) on its gateway IP,
+    # gated only by a password. Two days of hrossen's filter log (2026-10-02)
+    # showed non-mgmt zones asking their gateway for DNS and DHCP only. Caddy is
+    # reached by its own rule (CADDY_REACH_*), on the DMZ gateway.
+    # (label, protocol, port, offset) — DNS keeps the old rule's base+0; the
+    # rest sit in the slots the access-to band gave up, ahead of the rfc1918 block.
+    ZONE_GATEWAY_SERVICES = (
+        ("dns", Protocol.TCP_UDP, "53", 0),
+        ("ntp", Protocol.UDP, "123", 86),
+        ("dhcp", Protocol.UDP, "67", 87),
+        ("icmp", Protocol.ICMP, None, 88),
+    )
     ZONE_RULE_BLOCK_OFFSET = 90        # rfc1918 blocks at base+90/91/92
     ZONE_RULE_INTERNET_OFFSET = 99     # internet pass last (lowest priority)
 
@@ -782,6 +798,16 @@ class ZoneManager:
     CADDY_REACH_SEQUENCE = 990         # band 1; https=990, http=991
     CADDY_REACH_SOURCE = "10.0.0.0/8"  # blanket internal source (rule is iface-bound)
     CADDY_REACH_PORTS = (("443", "https"), ("80", "http"))
+
+    # The firewall's own admin ports, from every zone this module writes rules
+    # for (#384). #399 closes them on a zone's own gateway; this closes every
+    # other firewall address too — a zone with `access-to: X` reaches X's whole
+    # subnet, X's gateway (this firewall) included. `(self)` is every address the
+    # firewall holds. Manual zones get no rules and so keep their reach: mgmt
+    # (LAN, which OPNsense's anti-lockout also covers), the NetBird overlay and
+    # the admin VPN. Band 1, before every pass.
+    ADMIN_GUARD_SEQUENCE = 980         # band 1; webgui=980, ssh=981
+    ADMIN_GUARD_PORTS = (("8443", "webgui"), ("22", "ssh"))
 
     def _zone_rule_base(self, zone: "Zone") -> int:
         """Deterministic band-5 base sequence for a zone's access-to rules."""
@@ -1924,14 +1950,27 @@ class ZoneManager:
                         check_mode, zone_results,
                     )
                 else:
-                    # Step 1: Allow access to own gateway (DNS, NTP)
-                    self._create_or_skip_rule(
-                        manager, existing_by_desc,
-                        f"Zone {zone.name} -> gateway",
-                        zone_interface, zone.ip_network, f"{zone.gateway_ip}/32",
-                        RuleAction.PASS, base + self.ZONE_RULE_GATEWAY_OFFSET,
-                        check_mode, zone_results,
-                    )
+                    # Step 1: the zone's own gateway, for the services the
+                    # firewall runs for it — never every port (#399).
+                    for label, proto, port, offset in self.ZONE_GATEWAY_SERVICES:
+                        self._create_or_skip_rule(
+                            manager, existing_by_desc,
+                            f"Zone {zone.name} -> gateway {label}",
+                            zone_interface, zone.ip_network, f"{zone.gateway_ip}/32",
+                            RuleAction.PASS, base + offset,
+                            check_mode, zone_results,
+                            protocol=proto, destination_port=port,
+                        )
+                    # Step 1b: the firewall's admin ports, on any of its addresses (#384).
+                    for offset, (port, label) in enumerate(self.ADMIN_GUARD_PORTS):
+                        self._create_or_skip_rule(
+                            manager, existing_by_desc,
+                            f"Zone {zone.name} block firewall {label}",
+                            zone_interface, zone.ip_network, "(self)",
+                            RuleAction.BLOCK, self.ADMIN_GUARD_SEQUENCE + offset,
+                            check_mode, zone_results,
+                            protocol=Protocol.TCP, destination_port=port,
+                        )
 
                     # Step 2: Allow access to each explicitly named zone. These
                     # occupy fixed offsets base+1 .. base+89, so the block band

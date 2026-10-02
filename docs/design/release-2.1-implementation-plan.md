@@ -563,8 +563,8 @@ dry-run to show the rule diff before `--apply`.
 
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
-| #399 | Zone → gateway rule allows every port | 4 | 4 | M | Verified: the `Zone X -> gateway` rule in `zone_manager.py` has no port; the comment says DNS/NTP |
-| #384 | Restrict webgui 8443 to mgmt + NetBird | 4 | 4 | M | Land with #399; test from mgmt and NetBird before applying |
+| ✅ #399 | Zone → gateway rule allows every port | 4 | 4 | M | **Built and applied on hrossen 2026-10-02**, with #384. The one all-ports `Zone X -> gateway` pass is four: DNS tcp/udp 53 (base+0), NTP udp 123, DHCP udp 67, ICMP (base+86..88, ahead of the rfc1918 block; the access-to band is 1..85). Chosen from hrossen's filter log: two days of non-mgmt traffic to firewall addresses was DNS and DHCP only (plus Caddy on the DMZ gateway, its own rule). The reconcile reaps the old rule on every site. Live: dry-run showed exactly 35 changes (5 zones × 6 creates + 5 reaps); after apply, from litellm (rossen) and coturn (dmz) the gateway's 8443/22 are closed, DNS, NTP, ping, Caddy and internet unchanged; seven module tests green |
+| ✅ #384 | Restrict webgui 8443 to mgmt + NetBird | 4 | 4 | M | **Built and applied on hrossen 2026-10-02**, with #399: every rule-managed zone gets BLOCK tcp 8443 and 22 to `(self)` at seq 980/981 (band 1, ahead of every pass) — the cross-zone route (an access-to edge includes the other zone's gateway, e.g. home → rossen) is closed too. Manual zones get no rules and keep their reach: mgmt (plus OPNsense's anti-lockout), NetBird, the admin VPN. Live: GUI and SSH from mgmt unchanged, including via another zone's gateway address. **Still to check by hand:** the GUI over the admin VPN and NetBird |
 | #386 | block-private rules shadow auto-pinholes | 3 | 3 | M | Opens intended paths that are silently blocked today |
 | #385 | Persist the NetBird OPT1 pass rule | 4 | 3 | M | Land with #222 |
 | #222 | NetBird → srv floating rule is fragile | 4 | 3 | M | |

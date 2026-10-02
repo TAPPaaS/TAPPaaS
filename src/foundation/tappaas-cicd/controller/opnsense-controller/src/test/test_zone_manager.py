@@ -533,9 +533,12 @@ class TestConfigureFirewallRulesSequencing(unittest.TestCase):
 
     def test_all_zone_rules_in_band_5(self):
         fake = self._run(_build_zones())
-        # Caddy reachability rules (#366) intentionally live in band 1; the
-        # access-to/block/internet rules are the band-5 ones under test here.
-        zone_rules = [r for r in fake.created if "-> caddy " not in r.description]
+        # Caddy reachability (#366) and the admin-port guard (#384) live in band
+        # 1 on purpose; the access-to/block/internet rules are band 5.
+        zone_rules = [r for r in fake.created if r.sequence >= 1000]
+        self.assertTrue(all(
+            "-> caddy " in r.description or " block firewall " in r.description
+            for r in fake.created if r.sequence < 1000))
         self.assertTrue(zone_rules)
         for rule in zone_rules:
             self.assertGreaterEqual(rule.sequence, 30000)
@@ -547,7 +550,7 @@ class TestConfigureFirewallRulesSequencing(unittest.TestCase):
         # (Caddy reachability is band 1 by design and excluded here.)
         fake = self._run(_build_zones())
         for rule in fake.created:
-            if "-> caddy " in rule.description:
+            if "-> caddy " in rule.description or " block firewall " in rule.description:
                 continue
             self.assertGreater(rule.sequence, 29999)
 
@@ -555,7 +558,7 @@ class TestConfigureFirewallRulesSequencing(unittest.TestCase):
         # srv: access-to=[internet, dmz] → gateway, pass dmz, 3 blocks, internet.
         fake = self._run(_build_zones())
         s = self._seqs_by_desc(fake)
-        gateway = s["Zone srv -> gateway"]
+        gateway = s["Zone srv -> gateway dns"]
         passes = s["Zone srv -> dmz"]
         block10 = s["Zone srv block rfc1918-10"]
         internet = s["Zone srv -> internet"]
@@ -612,15 +615,91 @@ class TestConfigureFirewallRulesSequencing(unittest.TestCase):
         # A rule carried over at the OLD vlan*10 sequence (~3100) must be
         # detected as drift and renumbered into band 5.
         fake = self._run(_build_zones())
-        gw = next(r for r in fake.created if r.description == "Zone srv -> gateway")
+        gw = next(r for r in fake.created if r.description == "Zone srv -> gateway dns")
         stale = _to_info(gw)
         stale.sequence = 3100  # legacy numbering
         second = self._run(_build_zones(), existing=[stale])
-        self.assertIn("Zone srv -> gateway", second.deleted)
+        self.assertIn("Zone srv -> gateway dns", second.deleted)
         recreated = next(
-            r for r in second.created if r.description == "Zone srv -> gateway"
+            r for r in second.created if r.description == "Zone srv -> gateway dns"
         )
         self.assertGreaterEqual(recreated.sequence, 30000)
+
+
+class TestGatewayAndAdminPorts(TestConfigureFirewallRulesSequencing):
+    """A zone asks its gateway for DNS/NTP/DHCP/ICMP only (#399), and no zone
+    this module writes rules for reaches the firewall's admin ports (#384)."""
+
+    def _zone_rules(self, fake, zone):
+        return {r.description: r for r in fake.created
+                if r.description.startswith(f"Zone {zone} ")}
+
+    def test_the_gateway_is_never_open_on_every_port(self):
+        fake = self._run(_build_zones())
+        gw = [r for r in fake.created if " -> gateway" in r.description]
+        self.assertTrue(gw)
+        for r in gw:
+            self.assertTrue(r.destination_net.endswith("/32"), r.description)
+            if r.protocol == Protocol.ICMP:
+                self.assertIsNone(r.destination_port, r.description)
+            else:
+                self.assertIn(r.destination_port, ("53", "123", "67"), r.description)
+
+    def test_the_gateway_services(self):
+        rules = self._zone_rules(self._run(_build_zones()), "srv")
+        got = {d.split(" -> gateway ")[1]: (r.protocol, r.destination_port)
+               for d, r in rules.items() if " -> gateway " in d}
+        self.assertEqual(got, {
+            "dns": (Protocol.TCP_UDP, "53"), "ntp": (Protocol.UDP, "123"),
+            "dhcp": (Protocol.UDP, "67"), "icmp": (Protocol.ICMP, None),
+        })
+
+    def test_gateway_passes_precede_the_rfc1918_block(self):
+        # The block covers 10/8, the gateway included: a pass after it is dead.
+        s = self._seqs_by_desc(self._run(_build_zones()))
+        for label in ("dns", "ntp", "dhcp", "icmp"):
+            self.assertLess(s[f"Zone srv -> gateway {label}"], s["Zone srv block rfc1918-10"])
+
+    def test_admin_ports_are_blocked_on_every_firewall_address(self):
+        rules = self._zone_rules(self._run(_build_zones()), "srv")
+        for label, port in (("webgui", "8443"), ("ssh", "22")):
+            r = rules[f"Zone srv block firewall {label}"]
+            self.assertEqual((r.action, r.protocol, r.destination_net, r.destination_port),
+                             (RuleAction.BLOCK, Protocol.TCP, "(self)", port))
+
+    def test_the_guard_precedes_every_pass_of_the_zone(self):
+        # An access-to edge into another zone includes that zone's gateway —
+        # this firewall — so the guard must be evaluated first.
+        rules = self._zone_rules(self._run(_build_zones()), "srv")
+        guard = max(r.sequence for d, r in rules.items() if " block firewall " in d)
+        passes = [r.sequence for r in rules.values()
+                  if r.action == RuleAction.PASS and "-> caddy " not in r.description]
+        self.assertLess(guard, min(passes))
+
+    def test_manual_zones_keep_their_reach(self):
+        # mgmt, the NetBird overlay and the admin VPN are Manual: no guard.
+        fake = self._run(self._with_manual())
+        self.assertFalse([r for r in fake.created
+                          if r.description.startswith(("Zone mgmt ", "Zone admin "))
+                          and " block firewall " in r.description])
+
+    def _with_manual(self):
+        zones = _build_zones()
+        zones["admin"] = _zone("admin", access_to=["mgmt"], zone_type="Overlay",
+                               state="Manual", vlan_tag=0)
+        return zones
+
+    def test_an_existing_all_ports_gateway_rule_is_reaped(self):
+        # A site upgrading from before #399 carries `Zone srv -> gateway` on
+        # every port; the reconcile must delete it, not leave it beside the new ones.
+        first = self._run(_build_zones())
+        existing = [_to_info(r, uuid=f"u{i}") for i, r in enumerate(first.created)]
+        old = _to_info(next(r for r in first.created
+                            if r.description == "Zone srv -> gateway dns"), uuid="old")
+        old.description, old.destination_port = "Zone srv -> gateway", None
+        second = self._run(_build_zones(), existing=existing + [old])
+        self.assertIn("Zone srv -> gateway", second.deleted)
+        self.assertEqual(second.created, [])
 
 
 class TestStaleZoneRuleReaping(TestConfigureFirewallRulesSequencing):

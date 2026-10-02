@@ -230,9 +230,23 @@ unlisted internal networks) is evaluated *after* per-module pinholes — otherwi
 shadow them and silently break cross-zone module connectivity. Within band 5 each
 zone gets a deterministic 100-slot range (stable hash of the zone name; cross-zone slot
 collisions are harmless since each zone's rules bind to its own interface). The
-intra-slot offsets are fixed — `base+0` gateway, `base+1..+89` one pass per `access-to`
-zone, `base+90..+92` rfc1918 block, `base+99` internet — so adding a zone to `access-to`
-never renumbers or collides with the block/internet rules.
+intra-slot offsets are fixed — `base+0` gateway DNS, `base+1..+85` one pass per
+`access-to` zone, `base+86..+88` gateway NTP, DHCP and ICMP, `base+90..+92` rfc1918 block,
+`base+99` internet — so adding a zone to `access-to` never renumbers or collides with the
+block/internet rules.
+
+#### What a zone may ask of the firewall (#399, #384)
+
+A zone reaches **its own gateway** for the services the firewall runs for it — DNS
+(tcp/udp 53), NTP (udp 123), DHCP (udp 67) and ICMP — and nothing else. The gateway rule
+used to pass every port, which put the admin GUI (8443) and SSH (22) in reach of every
+zone, guest and IoT included, behind a password only. Every zone this module writes rules
+for also gets two **blocks at seq 980/981** (band 1, ahead of every pass): tcp 8443 and 22
+to `(self)`, every address the firewall holds. That closes the other route in — an
+`access-to` edge grants another zone's whole subnet, and that zone's gateway is this
+firewall. Manual zones get no rules and keep their reach: `mgmt` (LAN, also covered by
+OPNsense's anti-lockout), the NetBird overlay and the admin VPN. Caddy is reached by its
+own rule, below.
 
 #### Why caddy-reach is in band 1 (#366, ADR-021 D3)
 
