@@ -20,10 +20,35 @@ removes them.)* The keys are escrowed on the mothership — which is inside the
 system a full rebuild recreates — so that escrow cannot be the only copy:
 
 ```bash
-backup-manager key list                      # what is escrowed
-backup-manager key export /media/usb-stick   # the mandatory out-of-band copy
-backup-manager key import /media/usb-stick   # onto a REBUILT mothership, before restoring
+backup-manager key list     # what is escrowed
 ```
+
+**The out-of-band copy is a USB stick in a node** — the mothership is a VM and has no
+USB port. On the mothership:
+
+```bash
+~/TAPPaaS/src/foundation/backup/scripts/keys-to-usb.sh        # stick in tappaas1 (--node <n> for another)
+```
+
+It asks you to insert the stick, lists the node's USB disks (never one that is mounted
+or part of a pool, LVM or RAID), erases the one you confirm by typing its device name,
+asks for a password twice (12+ characters — keep it apart from the stick), writes the
+keys encrypted with it (AES-256, PBKDF2), reads them back and compares every key, and
+ejects. The stick also carries `keys-from-usb.sh` and a README in plain text. Write a
+new stick whenever a key changes; the update tells you when.
+
+**Getting them back** — `keys-from-usb.sh`, wherever you are:
+
+```bash
+# on the mothership (rebuilt or reinstalled), stick in tappaas1: decrypts, key import,
+# and offers `module-manager module update backup`, which puts the storage key back
+~/TAPPaaS/src/foundation/backup/scripts/keys-from-usb.sh
+# on a node as root, when the mothership is gone — straight from the stick:
+mount /dev/sdX1 /mnt && bash /mnt/keys-from-usb.sh      # keys → /root/tappaas-backup-keys
+```
+
+By hand, on any machine with openssl: `openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000
+-md sha256 -in tappaas-keys.tar.enc | tar -xf -`.
 
 Losing every copy of a key makes the data it encrypted permanently unreadable.
 The compromise isolation that protects you from an attacker protects you from
@@ -505,9 +530,10 @@ VMID 130 destroys the machine running the command mid-flight. Drive it from a
 ```bash
 ssh root@tappaas1.mgmt.internal
   # The mothership's backup is ENCRYPTED with the storage key — and the escrow that
-  # held it was on the mothership. Put it back from the out-of-band media first
-  # (once, cluster-wide; skip if `ls /etc/pve/priv/storage/` already shows the .enc):
-  pvesm set tappaas_backup --encryption-key "$(cat /media/usb-stick/tappaas-backup-keys/pve-storage-tappaas_backup.key)"
+  # held it was on the mothership. Put it back from the key stick first: insert it in
+  # this node, mount it, and run the restore on it — it offers to set the storage key
+  # (once, cluster-wide; it says so when the key is already there):
+  mount /dev/sdX1 /mnt && bash /mnt/keys-from-usb.sh && umount /mnt
   # pick the snapshot, then restore it as VMID 130 on a surviving node
   pvesm list tappaas_backup --vmid 130
   qmrestore <volid> 130 --storage tanka1
@@ -516,8 +542,10 @@ ssh root@tappaas1.mgmt.internal
 
 Then, on the rebuilt mothership, in this order:
 
-1. **`backup-manager key import /media/usb-stick`** — before anything that must
-   decrypt. Without the out-of-band key, the encrypted backups are unreadable.
+1. **The keys into its escrow** — before anything that must decrypt. Either copy
+   `/root/tappaas-backup-keys` from that node and `backup-manager key import` it, or
+   run `keys-from-usb.sh` on the mothership with the stick in a node. Then delete
+   `/root/tappaas-backup-keys` on the node: it holds every key in the clear.
 2. Restore `config/` (§5.1) if the VM snapshot is older than the file capture —
    the file capture usually is newer, and it is the site's source of truth.
 3. `site-manager update` to re-converge the estate.

@@ -516,6 +516,8 @@ The mothership is reinstalled instead (or the whole cluster is):
 READMEEOF
     chmod 600 "${out}/README.txt"
     info "${GN}✓${CL} keys exported to ${out} (mode 600)"
+    warn "  These files are NOT encrypted. For a password-protected copy on a USB stick in a"
+    warn "  node, use backup/scripts/keys-to-usb.sh instead (RESTORE.md §0)."
     warn "  Store this media somewhere safe and OFF-SITE. Losing every copy of a key"
     warn "  makes the backups it encrypted permanently unreadable."
 }

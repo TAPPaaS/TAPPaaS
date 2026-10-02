@@ -580,9 +580,15 @@ Manual switches always report as "needs-manual" on apply (they can't self-progra
 
 **Do this one first: take your backup encryption key off the machine.**
 
+Put a USB stick into `tappaas1` and run, on the mothership:
+
 ```bash
-backup-manager key export /media/<your-usb-stick>
+~/TAPPaaS/src/foundation/backup/scripts/keys-to-usb.sh
 ```
+
+It writes every backup key to the stick, encrypted with a password you choose, checks it
+by reading it back, and ejects it. Keep the stick off-site and the password elsewhere
+([RESTORE.md §0](backup/RESTORE.md#0-before-anything-the-key)).
 
 Backups are encrypted client-side, and the keys are escrowed on the mothership —
 which is inside the system a full rebuild would be recreating. Without a copy
