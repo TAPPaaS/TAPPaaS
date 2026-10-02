@@ -16,18 +16,18 @@ Backups are **encrypted client-side** — VM and container backups with the Prox
 storage key (`/etc/pve/priv/storage/<storage>.enc`), filesystem captures with each
 host's own key. *(VM and container backups taken before the fix for #760, on
 2026-10-02, are not: the storage had no key. They stay plaintext until retention
-removes them.)* The keys are escrowed on the mothership — which is inside the
-system a full rebuild recreates — so that escrow cannot be the only copy:
+removes them.)* The keys are escrowed on the mothership>
 
 ```bash
 backup-manager key list     # what is escrowed
 ```
 
-**The out-of-band copy is a USB stick in a node** — the mothership is a VM and has no
-USB port. On the mothership:
+The mothership is a VM inside TAPPaaS and in a failure scenario we might not be able to access is
+ — so that escrow cannot be the only copy. We need an 
+**The out-of-band copy ** . You can create one using backup-manager:
 
 ```bash
-backup-manager key export --usb        # stick in tappaas1 (--node <n> for another)
+backup-manager key export --usb        # on a usb-stick in tappaas1 (--node <n> for another node)
 ```
 
 It asks you to insert the stick, lists the node's USB disks (never one that is mounted
