@@ -624,6 +624,7 @@ Low upgrade risk. Build continuously, in any order within a group.
 | #37 | Optimise RAM (ballooning, swap) | 3 | 3 | L | **ARC part dropped 2026-09-17** after measuring six nodes: `zfs_arc_max` is already set to ~10.7% of RAM (the PVE 8.1+ installer default, not ZFS's 50%), and three of six nodes sit AT their cap — nothing to reclaim, and the proposed direction was backwards. hrossen tappaas2 looks like an exception (69G uncommitted) but is not: it shares GPU RAM with CPU RAM and runs the LLMs. What remains is the real gain — hrossen declares 110G across 11 guests with **no ballooning on any of them**, ~70G declared and unused (`vllm-amd` 46G→2.1G, though that one is GPU-bound and needs thought, not a reflex balloon). Monitoring is partly delivered by #569's `memory-commitment` gate |
 | ✅ #423 | `Create-TAPPaaS-LXC.sh` has no `debug()` | 5 | 1 | L | Verified still missing — **Closed 2026-09-26** (`34508ed2`): the LXC creator defines the `debug()` it calls, as `Create-TAPPaaS-VM.sh` does. The same trap elsewhere is #747 |
 | ✅ #673 | Cluster nodes are a fixed list of nine, not a sequence | — | — | — | **Added in the 2026-09-25 issue sweep.** **Closed** |
+| #753 | A guest restarting during its own update fails the sweep | 3 | 2 | L | **Opened 2026-10-02.** coturn restarted inside its own update on hrossen (2026-10-01) and the post-apply `cluster:vm` SSH check raced its boot, so the module failed and the sweep with it; the next night passed. What triggers the restart is not yet established |
 
 ### G3.2 Identity & SSO wiring — E3 · R2 · L-L
 
