@@ -22,8 +22,18 @@
 #                 [--guest <module>]           the guest that meets the new pin first
 #                 [--to <nixos-XX.YY>]         a VERSION move: change the release branch itself
 #                 [--allow-no-pin-change]      prove the pin already in the tree, without moving it
+#                 [--major]                    cut the next MAJOR (3.0) instead of the next minor
 #   tappaas-train fault <what>             record a staging fault; blocks the next promotion
 #   tappaas-train fault --resolved <commit>  clear it — the commit must be on main
+#   tappaas-train patch <staging|production> <commit> --why "<what>" [--dry-run]
+#                                          an urgent fix (ADR-028 D12): fast-forward the channel
+#                                          onto <commit>, tag it MAJOR.MINOR.N, record why
+#   tappaas-train releases                 every version, its commit, when it reached each channel
+#   tappaas-train releases --render        re-render RELEASES.md from release/releases.json (after a hand edit)
+#
+# Versions (ADR-028 D13): each boundary cuts the next MAJOR.MINOR into staging
+# as an annotated tag, and the same number reaches production one boundary
+# later. The history is committed to main: release/releases.json and RELEASES.md.
 #
 # One boundary is one command: move the pin, prove it here, land it on main,
 # then promote. Its preflight also holds every module to the blueprint
@@ -95,7 +105,7 @@ read_train() {
     # reasons about a train that has already moved. It touches no working tree
     # and no branch — only refs/remotes. --no-fetch is for tests and offline.
     if [[ "${NO_FETCH}" != "1" ]]; then
-        g fetch --quiet origin main staging stable || \
+        g fetch --quiet --tags origin main staging stable || \
             warn "could not reach the forge — the positions below are this machine's last fetch"
     fi
     SITE_CHANNEL="$(jq -r '.channel // empty' "${SITE_FILE}" 2>/dev/null)"
@@ -133,7 +143,171 @@ check_ancestry() {
     fi
 }
 
-soak_started() { jq -r '.soakStartedAt // empty' "${STATE_FILE}" 2>/dev/null; }
+# Dates in the state file are written for people (ISO 8601, UTC) and read back
+# here. GNU date on the mothership; the BSD forms let the suite run on a Mac.
+iso_utc() { date -u -d "@$1" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -r "$1" +%Y-%m-%dT%H:%M:%SZ; }
+day_utc() { date -u -d "@$1" +%Y-%m-%d 2>/dev/null || date -u -r "$1" +%Y-%m-%d; }
+epoch_of() { date -u -d "$1" +%s 2>/dev/null || date -u -j -f %Y-%m-%dT%H:%M:%SZ "$1" +%s 2>/dev/null; }
+
+# The soak's start, in epoch seconds. `soakStartedAt` (epoch) is the shape
+# before D13; it is read until the next boundary rewrites the file.
+soak_started() {
+    local s; s="$(jq -r '.soakStarted // empty' "${STATE_FILE}" 2>/dev/null)"
+    if [[ -n "${s}" ]]; then epoch_of "${s}"; return 0; fi
+    jq -r '.soakStartedAt // empty' "${STATE_FILE}" 2>/dev/null
+}
+
+# ── versions (ADR-028 D13) ───────────────────────────────────────────
+# A version is an annotated tag, vMAJOR.MINOR, on the revision a boundary cuts
+# into staging. The same number reaches production one boundary later, so one
+# number names one revision for its whole life: a fault found while it soaks is
+# reported against it and fixed as MAJOR.MINOR.N before production ever sees
+# it. Every boundary is the next minor; --major is the next major; an urgent
+# fix (D12) is MAJOR.MINOR.N on the channel it reaches. Tags travel with every
+# clone, so a site reads its own version from its checkout (`git describe`).
+RELEASE_TAG_RE='^v([0-9]+)\.([0-9]+)(\.([0-9]+))?$'
+# The history, on main: the data, and the page rendered from it.
+RELEASES_FILE="release/releases.json"
+RELEASES_PAGE="RELEASES.md"
+
+release_tags() { g tag --list 'v[0-9]*' --sort=-v:refname | grep -E "${RELEASE_TAG_RE}"; }
+
+# "2.1", "2.1.1", or "2.1+14" for a commit 14 past its last release; empty when
+# nothing before it is a release.
+version_of() {
+    local ref="$1" t n
+    t="$(g describe --tags --abbrev=0 --match 'v[0-9]*' "${ref}")" || return 0
+    [[ "${t}" =~ ${RELEASE_TAG_RE} ]] || return 0
+    n="$(g rev-list --count "${t}..${ref}")"
+    if (( n == 0 )); then echo "${t#v}"; else echo "${t#v}+${n}"; fi
+}
+
+# The release tag exactly on <ref>, or nothing.
+release_tag_at() {
+    local t
+    for t in $(g tag --points-at "$1" --list 'v[0-9]*'); do
+        [[ "${t}" =~ ${RELEASE_TAG_RE} ]] && { echo "${t}"; return 0; }
+    done
+    return 0
+}
+
+# The version the next boundary cuts: the newest MAJOR.MINOR plus one minor,
+# or plus one major with --major. 1.0 in a repository with no release yet.
+next_cut() {
+    local top; top="$(release_tags | head -1)"
+    [[ "${top}" =~ ${RELEASE_TAG_RE} ]] || { echo "1.0"; return 0; }
+    if [[ "${MAJOR}" == "1" ]]; then echo "$(( BASH_REMATCH[1] + 1 )).0"
+    else echo "${BASH_REMATCH[1]}.$(( BASH_REMATCH[2] + 1 ))"; fi
+}
+
+# The next urgent fix on a revision whose version is $1 (2.1, 2.1.1, 2.1+3):
+# MAJOR.MINOR.N, one past the highest N already tagged on that MAJOR.MINOR.
+next_patch() {
+    local base="${1%%+*}" n=0 t z
+    base="$(cut -d. -f1-2 <<<"${base}")"
+    while IFS= read -r t; do
+        [[ "${t}" =~ ${RELEASE_TAG_RE} ]] || continue
+        [[ "${BASH_REMATCH[1]}.${BASH_REMATCH[2]}" == "${base}" ]] || continue
+        z="${BASH_REMATCH[4]:-0}"; (( z > n )) && n="${z}"
+    done < <(release_tags)
+    echo "${base}.$(( n + 1 ))"
+}
+
+# Tags and the release record describe the REAL channels. A rehearsal onto
+# throwaway refs moves code no site runs, so it numbers nothing.
+is_rehearsal() { [[ "${STAGING_BRANCH}" != "staging" || "${PROD_BRANCH}" != "stable" ]]; }
+
+# Put an annotated release tag on <commit> and publish it. The same tag on the
+# same commit is success (a resumed boundary); on another commit it is a
+# refusal — a version names one revision, and is never moved.
+make_release_tag() {
+    local version="$1" commit="$2" msg="$3" t="v$1" at
+    at="$(g rev-parse -q --verify "refs/tags/${t}^{commit}")"
+    if [[ -n "${at}" ]]; then
+        [[ "${at}" == "$(g rev-parse "${commit}^{commit}")" ]] \
+            || { error "${t} already names $(g rev-parse --short "${at}") — a version is never moved"; return 1; }
+    else
+        g tag -a "${t}" -m "${msg}" "${commit}" || { error "could not tag ${t}"; return 1; }
+    fi
+    g push -q origin "refs/tags/${t}" || { error "could not publish ${t}"; return 1; }
+    info "  ${GN}✓${CL} ${t} → $(g rev-parse --short "${commit}")"
+}
+
+# What a release's notes column says, in one place for the page and the CLI.
+JQ_NOTES='def notes: [ (if .kind == "patch" then "urgent fix on \(.channel): \(.why // "")" else empty end),
+                      (if .kind == "major" then "major" else empty end),
+                      (if .forced then "boundary forced" else empty end),
+                      (.note // empty) ] | join("; ");'
+
+render_releases() {
+    jq -r "${JQ_NOTES}"'
+      "# TAPPaaS releases",
+      "",
+      "Every version, the revision it names, and when it reached each channel (ADR-028 D13).",
+      "A boundary cuts the next version into **staging**; the same version reaches **production**",
+      "at the boundary after. To run one: `git checkout v<version>`.",
+      "",
+      "Generated by `tappaas-train` from [`release/releases.json`](release/releases.json) — edit that, not this page.",
+      "",
+      "| Version | Commit | Staging | Production | Notes |",
+      "|---|---|---|---|---|",
+      (.releases[] | "| \(.version) | `\(.commit)` | \(.staging // "—") | \(.production // "—") | \(notes) |")
+    ' "$1"
+}
+
+# Commit the history to main: release/releases.json, and RELEASES.md rendered
+# from it. Made AFTER the channels moved, so it records what happened rather
+# than what was meant. Idempotent — the first record of a version stands — so a
+# resumed run, even days later, cannot record twice:
+#   $1  the new release entry (JSON), or "null"
+#   $2  the version that has just reached production, or ""
+#   $3  the commit subject
+#   $4  the commit production now holds (for a version the record lacks)
+record_release() {
+    local entry="$1" promoted="$2" subject="$3" pcommit="${4:-}" f="${REPO_DIR}/${RELEASES_FILE}" tmp
+    g checkout -q main && g merge -q --ff-only origin/main \
+        || { error "main is not at origin/main — the release record was not written"; return 1; }
+    mkdir -p "$(dirname "${f}")"
+    [[ -f "${f}" ]] || printf '{"releases":[]}\n' > "${f}"
+    tmp="${f}.tmp.$$"
+    jq --argjson e "${entry}" --arg p "${promoted}" --arg pc "${pcommit}" --arg today "$(day_utc "$(now_epoch)")" '
+        (if $e == null or any((.releases // [])[]; .version == $e.version) then . else .releases = ([$e] + (.releases // [])) end)
+        | (if $p == "" or any(.releases[]; .version == $p) then . else .releases += [{version: $p, commit: $pc, staging: null, production: null}] end)
+        | (if $p == "" then . else .releases |= map(if .version == $p and .production == null then .production = $today else . end) end)
+        | .releases |= (sort_by(.version | split(".") | map(tonumber)) | reverse)
+      ' "${f}" > "${tmp}" && mv -f "${tmp}" "${f}" \
+        || { rm -f "${tmp}"; error "could not update ${RELEASES_FILE}"; return 1; }
+    render_releases "${f}" > "${REPO_DIR}/${RELEASES_PAGE}" \
+        || { error "could not render ${RELEASES_PAGE}"; return 1; }
+    g add "${RELEASES_FILE}" "${RELEASES_PAGE}"
+    if g diff --cached --quiet; then info "  the release record already says this"; return 0; fi
+    g commit -q -m "${subject}" || { error "could not commit the release record"; return 1; }
+    if ! g push -q origin main; then
+        # main moved under us: drop the local commit, so a resume starts clean.
+        g fetch --quiet origin main; g reset -q --hard origin/main
+        error "could not publish the release record (main moved?) — re-run with --resume"
+        return 1
+    fi
+    g fetch --quiet origin main
+    info "  ${GN}✓${CL} recorded on main: ${subject}"
+}
+
+# Where each channel is, by version, for the state file. $1/$2: the date the
+# staging/production channel last moved ("" keeps what the file says).
+channels_state() {
+    local s_since="$1" p_since="$2"
+    jq -n --arg mc "$(g rev-parse --short origin/main)" --arg mv "$(version_of origin/main)" \
+          --arg sb "${STAGING_BRANCH}" --arg sc "$(g rev-parse --short "origin/${STAGING_BRANCH}" 2>/dev/null)" \
+          --arg sv "$(version_of "origin/${STAGING_BRANCH}")" --arg ss "${s_since}" \
+          --arg pb "${PROD_BRANCH}" --arg pc "$(g rev-parse --short "origin/${PROD_BRANCH}" 2>/dev/null)" \
+          --arg pv "$(version_of "origin/${PROD_BRANCH}")" --arg ps "${p_since}" \
+          --slurpfile old <( [[ -f "${STATE_FILE}" ]] && cat "${STATE_FILE}" || echo '{}' ) '
+        def since($new; $ch): if $new != "" then $new else (($old[0].channels[$ch] | objects | .since) // null) end;
+        def v($x): if $x == "" then null else $x end;
+        { unstable:   {branch: "main", commit: $mc, version: v($mv)},
+          staging:    {branch: $sb, commit: $sc, version: v($sv), since: since($ss; "staging")},
+          production: {branch: $pb, commit: $pc, version: v($pv), since: since($ps; "production")} }'
+}
 
 # ── status ───────────────────────────────────────────────────────────
 CHAN_UNDECLARED=0
@@ -146,13 +320,18 @@ cmd_status() {
 
     echo
     info "${BOLD}Release train — ${SITE_NAME}${CL}"
-    printf '  %-12s %-9s %-10s %s\n' CHANNEL BRANCH COMMIT "DISTANCE"
-    printf '  %-12s %-9s %-10s %s\n' unstable   main    "${REF_MAIN}"    "—"
-    printf '  %-12s %-9s %-10s %s\n' staging    staging "${REF_STAGING}" \
+    printf '  %-12s %-9s %-10s %-10s %s\n' CHANNEL BRANCH COMMIT VERSION "DISTANCE"
+    printf '  %-12s %-9s %-10s %-10s %s\n' unstable   main    "${REF_MAIN}"    "$(version_of origin/main)" "—"
+    printf '  %-12s %-9s %-10s %-10s %s\n' staging    staging "${REF_STAGING}" "$(version_of origin/staging)" \
         "$(g rev-list --count origin/staging..origin/main) behind main"
-    printf '  %-12s %-9s %-10s %s\n' production stable  "${REF_STABLE}" \
+    printf '  %-12s %-9s %-10s %-10s %s\n' production stable  "${REF_STABLE}" "$(version_of origin/stable)" \
         "$(g rev-list --count origin/stable..origin/staging) behind staging"
     echo
+    # D12: a channel carrying an urgent fix says so until the next boundary.
+    local _x
+    while IFS= read -r _x; do
+        [[ -n "${_x}" ]] && warn "  carrying an urgent fix: ${_x}"
+    done < <(jq -r '(.expedited // [])[] | "\(.version) on \(.channel) (\(.date)): \(.why)"' "${STATE_FILE}" 2>/dev/null)
 
     if [[ -n "${SITE_CHANNEL}" ]]; then
         local want; want="$(channel_branch "${SITE_CHANNEL}")"
@@ -249,6 +428,8 @@ cmd_status() {
             info "  soak in progress: ${days_in} of ${BOUNDARY_DAYS} days"
             blocks=$((blocks+1))
         fi
+        local _soaking; _soaking="$(version_of origin/staging)"
+        info "  next boundary $(day_utc $(( started + BOUNDARY_DAYS * 86400 ))): cuts $(next_cut)${_soaking:+, ${_soaking} reaches production}"
     fi
 
     echo
@@ -288,15 +469,16 @@ cmd_init() {
 
     local started; started="$(soak_started)"
     if [[ -n "${started}" ]]; then
-        info "  soak clock already running since $(date -u -d "@${started}" +%Y-%m-%d 2>/dev/null || date -u -r "${started}" +%Y-%m-%d)"
+        info "  soak clock already running since $(day_utc "${started}")"
         return 0
     fi
     local now; now="$(now_epoch)"
     local tmp="${STATE_FILE}.tmp.$$"
-    jq -n --argjson now "${now}" --arg main "${REF_MAIN}" --arg staging "${REF_STAGING}" \
-          --arg stable "${REF_STABLE}" --arg pin "${PIN_REV}" '{
-            soakStartedAt: $now,
-            channels: { unstable: $main, staging: $staging, production: $stable },
+    jq -n --arg started "$(iso_utc "${now}")" --arg next "$(day_utc $(( now + BOUNDARY_DAYS * 86400 )))" \
+          --argjson channels "$(channels_state "" "")" --arg pin "${PIN_REV}" '{
+            soakStarted: $started,
+            nextBoundary: $next,
+            channels: $channels,
             pin: $pin,
             fault: null
           }' > "${tmp}" && mv -f "${tmp}" "${STATE_FILE}" \
@@ -356,7 +538,8 @@ blueprint_check() {
 blueprint_line() {
     case "${BP_OK}" in
         yes)       printf 'module blueprint met at %s (%s warning(s))' "${BP_COMMIT}" "${BP_WARNINGS}" ;;
-        no)        printf 'module blueprint NOT met at %s: %s missing MUST(s)%s' "${BP_COMMIT}" "${BP_ERRORS}"                        "$([[ "${BP_READMES}" == "stale" ]] && printf ', service READMEs stale')" ;;
+        no)        printf 'module blueprint NOT met at %s: %s missing MUST(s)%s' "${BP_COMMIT}" "${BP_ERRORS}" \
+                       "$([[ "${BP_READMES}" == "stale" ]] && printf ', service READMEs stale')" ;;
         *)         printf 'module blueprint could not be checked' ;;
     esac
 }
@@ -366,7 +549,7 @@ record_blueprint() {
     local tmp="${STATE_FILE}.tmp.$$"
     [[ -f "${STATE_FILE}" ]] || return 0
     jq --arg c "${BP_COMMIT}" --arg ok "${BP_OK}" --argjson e "${BP_ERRORS}" --argjson w "${BP_WARNINGS}" \
-       --arg r "${BP_READMES}" --argjson at "$(now_epoch)" \
+       --arg r "${BP_READMES}" --arg at "$(iso_utc "$(now_epoch)")" \
        '.blueprint = {commit: $c, checkedAt: $at, ok: ($ok == "yes"), result: $ok, errors: $e, warnings: $w, readmes: $r}' \
        "${STATE_FILE}" > "${tmp}" && mv -f "${tmp}" "${STATE_FILE}" || rm -f "${tmp}"
 }
@@ -750,6 +933,56 @@ do_phase_main() {
     return 0
 }
 
+# ── phases 5a/5b: number the cut, and record it ─────────────────────
+tag_message() {   # $1 = version, $2 = forced (1/0)
+    local prev; prev="$(release_tags | grep -vx "v$1" | head -1)"
+    printf 'TAPPaaS %s\n\n' "$1"
+    printf 'Cut into staging %s; reaches production at the next boundary (due %s).\n' \
+        "$(day_utc "$(now_epoch)")" "$(day_utc $(( $(now_epoch) + BOUNDARY_DAYS * 86400 )))"
+    printf 'Boundary:   %s\n' "$([[ "$2" == "1" ]] && echo "forced (--force-boundary)" || echo "on schedule")"
+    printf 'Estate pin: nixpkgs %s\n' "$(jq -r '.nodes.nixpkgs.locked.rev // "?"' "${PIN_LOCK}" 2>/dev/null | cut -c1-12)"
+    printf 'Blueprint:  %s\n' "$(blueprint_line)"
+    [[ -n "${prev}" ]] && printf 'Previous:   %s\n' "${prev}"
+    return 0
+}
+
+do_phase_tag() {   # $1 = the version this boundary cuts, $2 = forced
+    local cut="$1" tip="origin/${STAGING_BRANCH}" have
+    if is_rehearsal; then
+        info "  rehearsal: ${STAGING_BRANCH} would be cut as ${cut} — no version is tagged"
+        return 0
+    fi
+    have="$(release_tag_at "${tip}")"
+    # Staging did not move (it already held main), so there is no new
+    # revision to number.
+    if [[ -n "${have}" && "${have}" != "v${cut}" ]]; then
+        info "  staging is still ${have#v} — no new revision, no new version"
+        return 0
+    fi
+    make_release_tag "${cut}" "${tip}" "$(tag_message "${cut}" "$2")"
+}
+
+do_phase_record() {   # $1 = the version this boundary cut, $2 = forced, $3 = kind
+    local cut="$1" entry="null" promoted subject=()
+    if is_rehearsal; then info "  rehearsal: nothing is added to the release record"; return 0; fi
+    if [[ "$(release_tag_at "origin/${STAGING_BRANCH}")" == "v${cut}" ]]; then
+        entry="$(jq -n --arg v "${cut}" --arg c "$(g rev-parse --short=12 "origin/${STAGING_BRANCH}")" \
+            --arg d "$(day_utc "$(now_epoch)")" --arg k "$3" --argjson f "$([[ "$2" == "1" ]] && echo true || echo false)" \
+            --arg p "$(jq -r '.nodes.nixpkgs.locked.rev // ""' "${PIN_LOCK}" 2>/dev/null | cut -c1-12)" \
+            '{version: $v, commit: $c, staging: $d, production: null, kind: $k, forced: $f, pin: $p}')"
+        subject+=("${cut} to staging")
+    fi
+    # Production holds a release only when the revision it took was one; the
+    # first boundary promotes what staging held before versions existed.
+    promoted="$(version_of "origin/${PROD_BRANCH}")"
+    [[ "${promoted}" == *+* ]] && promoted=""
+    [[ -n "${promoted}" ]] && subject+=("${promoted} to production")
+    (( ${#subject[@]} > 0 )) || { info "  nothing new to record"; return 0; }
+    local joined="${subject[0]}"
+    (( ${#subject[@]} > 1 )) && joined+=", ${subject[1]}"
+    record_release "${entry}" "${promoted}" "chore(release): ${joined}" "$(g rev-parse --short=12 "origin/${PROD_BRANCH}")"
+}
+
 cmd_boundary() {
     preflight
     echo
@@ -780,13 +1013,28 @@ cmd_boundary() {
     fi
     info "  2  prove it here: $(pick_guest 2>/dev/null || echo "a guest") first, then the sweep, then --deep"
     info "  3  land on main (hours: the sweep reboots nodes, the deep test builds guests)"
-    info "  4  promote ${STAGING_BRANCH} → ${PROD_BRANCH}   ($(g rev-list --count "origin/${PROD_BRANCH}..origin/staging" 2>/dev/null || echo "?") commits reach production)"
-    info "  5  promote main → ${STAGING_BRANCH}"
+    # The version is decided once, here, and kept: a resumed run tags what the
+    # plan said, not whatever is "next" by the time it gets there.
+    local cut kind
+    cut="$(jq -r '.boundary.cut // empty' "${STATE_FILE}" 2>/dev/null)"
+    kind="$(jq -r '.boundary.kind // empty' "${STATE_FILE}" 2>/dev/null)"
+    [[ -n "${cut}" ]] || cut="$(next_cut)"
+    [[ -n "${kind}" ]] || kind="$([[ "${MAJOR}" == "1" ]] && echo major || echo minor)"
+    local soaked; soaked="$(version_of "origin/${STAGING_BRANCH}")"
+    info "  4  promote ${STAGING_BRANCH} → ${PROD_BRANCH}   ($(g rev-list --count "origin/${PROD_BRANCH}..origin/staging" 2>/dev/null || echo "?") commits reach production${soaked:+: ${soaked}})"
+    if is_rehearsal; then
+        info "  5  promote main → ${STAGING_BRANCH}   (a rehearsal: no version is cut or recorded)"
+    else
+        info "  5  promote main → ${STAGING_BRANCH}, tag it ${BL}v${cut}${CL}$([[ "${kind}" == major ]] && echo " (a MAJOR)"), record it on main"
+    fi
     info "  6  verify the staging site"
     if [[ "${DRY_RUN}" == "1" ]]; then
         echo; info "Dry run: nothing was changed."
         return 0
     fi
+    local tmpc="${STATE_FILE}.tmp.$$"
+    jq --arg c "${cut}" --arg k "${kind}" '.boundary = ((.boundary // {}) + {cut: $c, kind: $k})' \
+       "${STATE_FILE}" > "${tmpc}" && mv -f "${tmpc}" "${STATE_FILE}" || rm -f "${tmpc}"
 
     # Phases 1-3: move the pin, prove it HERE, land it. Each is recorded, so a
     # run that fails half way is resumed rather than restarted — re-running a
@@ -811,20 +1059,30 @@ cmd_boundary() {
         phase_done "production"
     fi
     phase_pending "staging" && { promote_ref main "${STAGING_BRANCH}" || return 1; phase_done "staging"; }
+    phase_pending "tag"     && { do_phase_tag "${cut}" "${forced}" || return 1; phase_done "tag"; }
+    phase_pending "record"  && { do_phase_record "${cut}" "${forced}" "${kind}" || return 1; phase_done "record"; }
 
     # The clock restarts from the promotion, not from when someone remembered.
-    local tmp="${STATE_FILE}.tmp.$$"
-    jq --argjson now "$(now_epoch)" --arg forced "${forced}" \
-       '.soakStartedAt = $now
-        | .channels = {unstable: "'"$(g rev-parse --short origin/main)"'",
-                       staging: "'"$(g rev-parse --short "origin/${STAGING_BRANCH}" 2>/dev/null)"'",
-                       production: "'"$(g rev-parse --short "origin/${PROD_BRANCH}" 2>/dev/null)"'"}
-        | .lastBoundary = {at: $now, forced: ($forced == "1")}
-        | .pin = "'"$(jq -r '.nodes.nixpkgs.locked.rev // empty' "${PIN_LOCK}" 2>/dev/null)"'"
+    # Written for people: dates, and each channel's version. The urgent fixes a
+    # channel carried (D12) are now part of what was promoted, so they go.
+    local now today tmp="${STATE_FILE}.tmp.$$"
+    now="$(now_epoch)"; today="$(day_utc "${now}")"
+    jq --arg started "$(iso_utc "${now}")" --arg today "${today}" \
+       --arg next "$(day_utc $(( now + BOUNDARY_DAYS * 86400 )))" \
+       --argjson channels "$(channels_state "${today}" "${today}")" --arg forced "${forced}" \
+       --arg cut "$(is_rehearsal || [[ "$(release_tag_at "origin/${STAGING_BRANCH}")" != "v${cut}" ]] || echo "${cut}")" \
+       --arg pin "$(jq -r '.nodes.nixpkgs.locked.rev // empty' "${PIN_LOCK}" 2>/dev/null)" '
+        del(.soakStartedAt)
+        | .soakStarted = $started
+        | .nextBoundary = $next
+        | .channels = $channels
+        | .lastBoundary = {date: $today, forced: ($forced == "1"), cut: (if $cut == "" then null else $cut end)}
+        | .pin = $pin
+        | del(.expedited)
         | .boundary = null' "${STATE_FILE}" > "${tmp}" && mv -f "${tmp}" "${STATE_FILE}" || rm -f "${tmp}"
 
     echo
-    info "${GN}Boundary complete.${CL} The next one is due in ${BOUNDARY_DAYS} days."
+    info "${GN}Boundary complete.${CL} The next one is due $(day_utc $(( now + BOUNDARY_DAYS * 86400 )))."
 
     # Phase 6 — the staging site is the only thing that can find what this just
     # promoted, so a boundary that skips it has moved code and learned nothing.
@@ -882,7 +1140,7 @@ cmd_fault() {
             return 1
         fi
         local tmp="${STATE_FILE}.tmp.$$"
-        jq --arg c "${commit}" --argjson now "$(now_epoch)" \
+        jq --arg c "${commit}" --arg now "$(iso_utc "$(now_epoch)")" \
            '.fault = null | .lastFaultResolved = {commit: $c, at: $now}' \
            "${STATE_FILE}" > "${tmp}" && mv -f "${tmp}" "${STATE_FILE}" \
             || { rm -f "${tmp}"; die "could not update ${STATE_FILE}"; }
@@ -894,7 +1152,7 @@ cmd_fault() {
     [[ -n "${what}" ]] || die "usage: ${SCRIPT_NAME} fault <what went wrong> | fault --resolved <commit>"
     [[ -f "${STATE_FILE}" ]] || die "no train state — run '${SCRIPT_NAME} init' first"
     local tmp="${STATE_FILE}.tmp.$$"
-    jq --arg w "${what}" --argjson now "$(now_epoch)" \
+    jq --arg w "${what}" --arg now "$(iso_utc "$(now_epoch)")" \
        '.fault = {what: $w, at: $now}' "${STATE_FILE}" > "${tmp}" \
         && mv -f "${tmp}" "${STATE_FILE}" || { rm -f "${tmp}"; die "could not update ${STATE_FILE}"; }
     warn "  Fault recorded. Promotion to production is BLOCKED until it is resolved on main."
@@ -903,12 +1161,122 @@ cmd_fault() {
     return 0
 }
 
+# ── patch (ADR-028 D12) ──────────────────────────────────────────────
+# An urgent fix reaches a channel before its boundary. The fix was authored on
+# a branch off the channel's own tip and merged into main; this moves the
+# channel onto it, numbers it MAJOR.MINOR.N and records why — the reason in
+# the state file BEFORE the move, as D12 asks, and on main after it.
+cmd_patch() {
+    read_train
+    local channel="${1:-}" commit="${2:-}" branch full
+    case "${channel}" in
+        staging)    branch="${STAGING_BRANCH}" ;;
+        production) branch="${PROD_BRANCH}" ;;
+        *) die "usage: ${SCRIPT_NAME} patch <staging|production> <commit> --why \"<what>\"" ;;
+    esac
+    [[ -n "${commit}" ]] || die "patch needs the commit that carries the fix"
+    [[ -n "${WHY}" ]] || die "patch needs --why: which D12 case (data safety, a security CVE, a service down) and what"
+    full="$(g rev-parse --verify --quiet "${commit}^{commit}")" || die "unknown commit: ${commit}"
+    [[ -z "$(g status --porcelain)" ]] || { error "the checkout has uncommitted changes"; return 1; }
+
+    # Forward only: the channel's tip must be behind the fix (D9 never rewinds).
+    if [[ "$(g rev-parse "origin/${branch}")" == "${full}" ]]; then
+        error "${branch} is already at ${commit}"; return 1
+    fi
+    if ! g merge-base --is-ancestor "origin/${branch}" "${full}"; then
+        error "${commit} does not build on ${branch}'s tip — author the fix on a branch off ${branch} (ADR-028 D12)"
+        return 1
+    fi
+    # On main, or the next boundary reintroduces the fault.
+    if ! g merge-base --is-ancestor "${full}" origin/main; then
+        error "${commit} is not on main. Merge the fix branch into main first —"
+        error "  a fix that lives only on a channel is undone by the next boundary."
+        return 1
+    fi
+    # stable ⊆ staging: production may not get ahead of staging.
+    if [[ "${channel}" == "production" ]] && ! g merge-base --is-ancestor "${full}" "origin/${STAGING_BRANCH}"; then
+        error "${commit} is not on ${STAGING_BRANCH}: production would get ahead of staging."
+        error "  Patch staging first (a branch off its tip that merges the fix, landed on main), then production."
+        return 1
+    fi
+
+    local now version count
+    now="$(now_epoch)"
+    count="$(g rev-list --count "origin/${branch}..${full}")"
+    version="$(next_patch "$(version_of "origin/${branch}")")"
+    [[ "${version}" != .* ]] || { error "${branch} has no release before it to patch"; return 1; }
+    info "${BOLD}Urgent fix → ${channel} (${branch})${CL}"
+    info "  ${branch} $(g rev-parse --short "origin/${branch}") → $(g rev-parse --short "${full}"), ${count} commit(s):"
+    g log --format='      %h %s' "origin/${branch}..${full}"
+    # D12 moves a channel by the fix and no more. Not refused — the operator
+    # decides — but a long list is the soak being skipped, so it is said.
+    (( count <= 3 )) || warn "  ${count} commits: D12 moves a channel by the fix alone — check this is not unsoaked work riding along"
+    if is_rehearsal; then info "  rehearsal: no version is tagged or recorded"
+    else info "  version ${BL}${version}${CL} — why: ${WHY}"; fi
+    if [[ "${DRY_RUN}" == "1" ]]; then echo; info "Dry run: nothing was changed."; return 0; fi
+
+    # Recorded before the move (D12), so a move that fails half way is on file.
+    local tmp="${STATE_FILE}.tmp.$$"
+    [[ -f "${STATE_FILE}" ]] || echo '{}' > "${STATE_FILE}"
+    jq --arg c "${channel}" --arg v "${version}" --arg k "$(g rev-parse --short=12 "${full}")" \
+       --arg w "${WHY}" --arg d "$(day_utc "${now}")" \
+       '.expedited = ((.expedited // []) + [{channel: $c, version: $v, commit: $k, why: $w, date: $d}])' \
+       "${STATE_FILE}" > "${tmp}" && mv -f "${tmp}" "${STATE_FILE}" || { rm -f "${tmp}"; error "could not write ${STATE_FILE}"; return 1; }
+
+    g push -q origin "${full}:refs/heads/${branch}" || { error "could not move ${branch}"; return 1; }
+    g fetch --quiet origin "${branch}"
+    info "  ${GN}✓${CL} ${branch} is at $(g rev-parse --short "origin/${branch}")"
+    is_rehearsal && return 0
+
+    make_release_tag "${version}" "${full}" "$(printf 'TAPPaaS %s — urgent fix on %s\n\n%s\n\nADR-028 D12. Moved %s, %s commit(s) on %s.\n' \
+        "${version}" "${channel}" "${WHY}" "$(day_utc "${now}")" "${count}" "$(version_of "${full}^" | cut -d+ -f1)")" || return 1
+    local entry
+    entry="$(jq -n --arg v "${version}" --arg c "$(g rev-parse --short=12 "${full}")" --arg d "$(day_utc "${now}")" \
+        --arg ch "${channel}" --arg w "${WHY}" \
+        '{version: $v, commit: $c, staging: (if $ch == "staging" then $d else null end),
+          production: (if $ch == "production" then $d else null end), kind: "patch", channel: $ch, why: $w}')"
+    record_release "${entry}" "" "chore(release): ${version}, an urgent fix on ${channel}" || return 1
+    jq --argjson ch "$(channels_state "$([[ ${channel} == staging ]] && day_utc "${now}")" "$([[ ${channel} == production ]] && day_utc "${now}")")" \
+       '.channels = $ch' "${STATE_FILE}" > "${tmp}" && mv -f "${tmp}" "${STATE_FILE}" || rm -f "${tmp}"
+    return 0
+}
+
+# ── releases ─────────────────────────────────────────────────────────
+# The history, from main — so any site with a fetch sees all of it, including
+# the versions newer than the one it runs.
+cmd_releases() {
+    if [[ "${RENDER}" == "1" ]]; then
+        [[ -f "${REPO_DIR}/${RELEASES_FILE}" ]] || die "no ${RELEASES_FILE} in ${REPO_DIR}"
+        render_releases "${REPO_DIR}/${RELEASES_FILE}" > "${REPO_DIR}/${RELEASES_PAGE}" || die "could not render"
+        info "  ${RELEASES_PAGE} rendered from ${RELEASES_FILE}"
+        return 0
+    fi
+    read_train
+    local data
+    data="$(g show "origin/main:${RELEASES_FILE}")" || data="$(cat "${REPO_DIR}/${RELEASES_FILE}" 2>/dev/null)"
+    if [[ -z "${data}" ]]; then warn "no release record yet (${RELEASES_FILE} on main)"; return 0; fi
+    echo
+    printf '  %-9s %-13s %-11s %-11s %s\n' VERSION COMMIT STAGING PRODUCTION NOTES
+    jq -r "${JQ_NOTES}"' .releases[] | [.version, .commit, (.staging // "—"), (.production // "—"), notes] | @tsv' \
+        <<<"${data}" | while IFS=$'\t' read -r v c st pr n; do
+        printf '  %-9s %-13s %-11s %-11s %s\n' "${v}" "${c}" "${st}" "${pr}" "${n}"
+    done
+    echo
+    info "  now: staging $(version_of origin/staging), production $(version_of origin/stable) — git checkout v<version> to run one"
+    return 0
+}
+
 # The range must cover the whole header block above: extend it when the header
 # grows, or --help quietly stops before its last line.
-usage() { sed -n '3,26p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '3,36p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 
 command -v jq >/dev/null 2>&1 || die "jq is required"
 NO_FETCH=0; DRY_RUN=0; RESUME=0; FORCE_BOUNDARY=0
+# Cut the next MAJOR at this boundary (ADR-028 D13) — only ever the operator's word.
+MAJOR=0
+RENDER=0
+# Why an urgent fix may skip the soak (ADR-028 D12) — required by `patch`.
+WHY=""
 # Where production lives. `stable` unless told otherwise: an alternative lets a
 # promotion be rehearsed onto a throwaway ref without touching what sites run.
 PROD_BRANCH="stable"
@@ -944,12 +1312,15 @@ for a in "$@"; do
         --resume)         RESUME=1 ;;
         --allow-no-pin-change) ALLOW_NO_PIN_CHANGE=1 ;;
         --force-boundary) FORCE_BOUNDARY=1 ;;
+        --major)          MAJOR=1 ;;
+        --render)         RENDER=1 ;;
+        --why=*)          WHY="${a#*=}" ;;
         --production-branch=*) PROD_BRANCH="${a#*=}" ;;
         --staging-branch=*)    STAGING_BRANCH="${a#*=}" ;;
         --staging-host=*)      STAGING_HOST="${a#*=}" ;;
         --guest=*)             GUEST="${a#*=}" ;;
         --to=*)                TO_BRANCH="${a#*=}" ;;
-        --production-branch|--staging-branch|--staging-host|--guest|--to) _want="${a}" ;;
+        --production-branch|--staging-branch|--staging-host|--guest|--to|--why) _want="${a}" ;;
         *)
             if [[ -n "${_want:-}" ]]; then
                 case "${_want}" in
@@ -958,6 +1329,7 @@ for a in "$@"; do
                     --staging-host)      STAGING_HOST="${a}" ;;
                     --guest)             GUEST="${a}" ;;
                     --to)                TO_BRANCH="${a}" ;;
+                    --why)               WHY="${a}" ;;
                 esac
                 _want=""
             else
@@ -973,6 +1345,8 @@ case "${1:-}" in
     init)     cmd_init ;;
     boundary) cmd_boundary ;;
     fault)    shift; cmd_fault "$@" ;;
+    patch)    shift; cmd_patch "$@" ;;
+    releases) cmd_releases ;;
     -h|--help|help|"") usage ;;
-    *) die "unknown command '${1}' (status | init | boundary | fault)" ;;
+    *) die "unknown command '${1}' (status | init | boundary | fault | patch | releases)" ;;
 esac

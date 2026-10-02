@@ -50,6 +50,8 @@ tappaas-train boundary [--dry-run]       the boundary: phases 1-6 below
 tappaas-train boundary --resume          continue from the last phase that passed
 tappaas-train fault <text>               record a staging fault; blocks the next promotion
 tappaas-train fault --resolved <commit>  clear it, naming the fix that must be on main
+tappaas-train patch <channel> <commit> --why <what>   an urgent fix (D12), numbered MAJOR.MINOR.N
+tappaas-train releases                   every version and when it reached each channel (D13)
 ```
 
 `--dry-run` stops after preflight and prints the plan: the pin move it would make, the four
@@ -143,7 +145,11 @@ and delete the pin branch — its commit is an ancestor of `main` by then, so it
 **4 — `staging` → `stable`.** Fast-forward only. This promotes the revision that has been
 soaking for a fortnight — *not* the one just built.
 
-**5 — `main` → `staging`.** Fast-forward only. The new revision starts its soak.
+**5 — `main` → `staging`.** Fast-forward only. The new revision starts its soak. It is tagged
+as the next version, `v<MAJOR>.<MINOR>` (ADR-028 D13), and the release record —
+`release/releases.json` and `RELEASES.md` — is committed to `main`: this version to staging, the
+one step 4 promoted to production. Both are phases of their own, so a resume neither tags nor
+records twice; a rehearsal does neither.
 
 Steps 4 and 5 are in this order deliberately: the old staging content reaches production before
 the new content reaches staging, so at no moment does a revision sit in production that has not

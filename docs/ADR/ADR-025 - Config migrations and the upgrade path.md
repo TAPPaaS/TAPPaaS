@@ -14,7 +14,7 @@
 ## Context
 
 TAPPaaS sites upgrade by pulling their channel and letting the next sweep reconcile
-(`release/README.md`: `main` → `rc/<ver>` → tag → fast-forward `stable`). Code arrives that
+(the release train, ADR-028: `main` → `staging` → `stable`; before 2026-10-02 `release/README.md` cut an `rc/<ver>` and fast-forwarded `stable` from it). Code arrives that
 way perfectly well. **Configuration does not.** `/home/tappaas/config/` is the site's own
 state — `site.json`, one `<module>.json` per installed module, `zones.json`, the caches — and
 a release that renames a field or changes a shape has no sanctioned way to bring it forward.

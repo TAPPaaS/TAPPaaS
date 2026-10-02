@@ -103,7 +103,7 @@ than repair:
    exists to prevent, so it names what is missing and stops. If the three have diverged, it stops
    too — the train is fast-forward only, and a human has to reconcile that.
 2. **Starts the soak clock**, recording it in `config/release-train.json` along with where each
-   channel points and the estate pin.
+   channel points, its version, and the estate pin.
 
 It is safe to re-run: with the clock already running it reports the date it started and changes
 nothing, so it never silently restarts a soak that is part-way through.
@@ -144,8 +144,10 @@ Six phases, in this order:
    boundary stops with the pending generation named. Nothing is activated either way, so
    the running system is untouched until it reboots.
 3. **Land on `main`.** Fast-forward, publish, point the site back at `main`, delete the pin branch.
-4. **`staging` → `stable`.** The revision that has soaked for a fortnight reaches production.
-5. **`main` → `staging`.** The new revision starts its soak.
+4. **`staging` → `stable`.** The revision that has soaked for a fortnight reaches production —
+   under the version it was given two weeks ago.
+5. **`main` → `staging`.** The new revision starts its soak, tagged as the next version (`v2.2`),
+   and the release record is committed to `main` (see *Versions* below).
 6. **Verify the staging site** (`--staging-host <host>`), if you named one.
 
 Steps 4 and 5 are in that order deliberately: the old staging content reaches production *before*
@@ -162,12 +164,47 @@ estate is untouched, and the boundary stops.
 | `--resume` | continue a run that stopped half way — phases are recorded, so completed ones are not repeated |
 | `--force-boundary` | proceed despite a *wait* condition (the soak is not complete). It is recorded. It cannot lift a broken one |
 | `--to <nixos-XX.YY>` | a version move: rewrite the nixpkgs release branch in phase 1 |
+| `--major` | cut the next major (2.7 → 3.0) instead of the next minor. Only ever your word |
 | `--guest <module>` | choose the guest that meets the new pin first (default: the first module that depends on `templates:nixos`) |
 | `--staging-host <host>` | run phase 6 against the staging site over ssh |
-| `--staging-branch <b>` / `--production-branch <b>` | promote onto throwaway refs instead of `staging` and `stable` — a whole boundary rehearsed without touching a real channel |
+| `--staging-branch <b>` / `--production-branch <b>` | promote onto throwaway refs instead of `staging` and `stable` — a whole boundary rehearsed without touching a real channel. A rehearsal cuts no version and writes no record |
 
 `stable` is never *created* by a promotion, only fast-forwarded. A production channel that appears
 because of a typo is exactly what this is here to prevent.
+
+## Versions
+
+Every boundary gives the revision it cuts into staging the next version, as an annotated git
+tag. The same number reaches production one boundary later, so one version names one revision
+for its whole life (ADR-028 D13).
+
+| Change | Version |
+|---|---|
+| a boundary | the next minor: 2.1 → 2.2 |
+| a boundary with `--major` | the next major: 2.7 → 3.0 |
+| an urgent fix (`patch`, below) | a third number on the channel it reaches: 2.2 → 2.2.1 |
+
+```bash
+tappaas-train.sh status      # each channel's version, and what the next boundary will cut
+tappaas-train.sh releases    # every version: its commit, when it reached staging and production
+site-manager site show       # the version this site runs, read from its checkout
+git checkout v2.1            # the exact code of a version
+```
+
+A site on `main` between boundaries shows as `2.2+14`: fourteen commits past 2.2.
+
+**Where the record lives.** Two places, for two jobs:
+
+- **In the repository**, for everyone: the tags, and
+  [`release/releases.json`](../../../release/releases.json) with
+  [`RELEASES.md`](../../../RELEASES.md) rendered from it — every version, its commit, and the day
+  it reached each channel. The boundary commits it to `main` once the channels have moved (one
+  `chore(release): …` commit), so every site has the full history after its next pull. After a
+  hand edit of the JSON, `tappaas-train.sh releases --render` redraws the page.
+- **On the mothership that drives the train**, for the run: `~/config/release-train.json` — the
+  soak clock, a boundary half way through, a recorded fault, the urgent fixes a channel carries.
+  It changes several times within one run, so it is not committed. It is written to be read:
+  dates, and each channel with its version and the day it last moved.
 
 ## One pin for the estate
 
@@ -201,21 +238,41 @@ Rare, and deliberately hard to reach for: **data safety, a high-severity securit
 service down with the fix already written** — each only when there is no workaround (ADR-028 D12).
 "It is finished" is not a reason; the soak is the test, not a queue.
 
-Author the fix on a branch off **the channel's own tip**, merge that branch into `main`, then
-fast-forward the channel onto it:
+Author the fix on a branch off **the channel's own tip**, merge that branch into `main`, then let
+the train move the channel onto it:
 
 ```bash
-git checkout -b hotfix/<what> staging      # or stable, for production
+git checkout -b hotfix/<what> origin/staging
 # ... the fix, tested ...
-git checkout main && git merge --no-ff hotfix/<what>
-git checkout staging && git merge --ff-only hotfix/<what>
+git checkout main && git merge --no-ff hotfix/<what> && git push origin main
+tappaas-train.sh patch staging <fix-commit> --why "service down: <what>" --dry-run   # look first
+tappaas-train.sh patch staging <fix-commit> --why "service down: <what>"
 ```
+
+`patch` fast-forwards the channel, tags the fix as the channel's next third number (`v2.2.1`),
+records it on `main`, and keeps the reason in the mothership's state — written *before* the move —
+so `status` shows the channel as carrying an urgent fix until the next boundary. It refuses a
+commit that is not on `main`, one that does not build on the channel's tip, and a missing `--why`.
 
 The channel then gains **exactly** the fix, and its tip is still an ancestor of `main`, so
 `stable ⊆ staging ⊆ main` holds and `init` is satisfied. Cherry-picking straight onto the channel
 breaks that ancestry and `init` refuses; fast-forwarding the channel to `main`'s tip keeps the
 ancestry but promotes everything ahead of the fix, which abandons the soak rather than shortening
-it. Record it with `tappaas-train.sh fault --resolved <commit>` if a fault was open.
+it. `patch` lists the commits it would move and warns when there are more than a few. Record it
+with `tappaas-train.sh fault --resolved <commit>` if a fault was open.
+
+**For production, staging first.** Production may never get ahead of staging, so `patch
+production` refuses a fix staging does not have. Author the fix off `stable`'s tip, bring it into
+staging with a merge on a branch off staging's tip, land both on `main`, then patch staging with
+that merge and production with the fix itself:
+
+```bash
+git checkout -b hotfix/<what> origin/stable                     # the fix: F
+git checkout -b hotfix/<what>-staging origin/staging && git merge --no-ff hotfix/<what>   # M
+git checkout main && git merge --no-ff hotfix/<what>-staging && git push origin main
+tappaas-train.sh patch staging    <M> --why "security: <CVE>"
+tappaas-train.sh patch production <F> --why "security: <CVE>"
+```
 
 **Do not patch a running site in place and stop there.** A site whose deployed scripts are ahead
 of its checkout is lying about what it runs: nothing reports the divergence, and the next
@@ -254,8 +311,8 @@ TAPPaaS only.
   during the fortnight rather than on boundary day. It records nothing.
 - **`boundary`** records the result in `~/config/release-train.json` under `.blueprint`: the
   commit checked, when, whether it passed, and the error and warning counts. A dry run records
-  nothing. That file is in the mothership's config backup, so each release keeps a record of the
-  commit that met the blueprint.
+  nothing. The version's tag message carries the same line, so the record travels with the
+  release, not only with this mothership's config backup.
 - To fix a finding before the boundary, run the check yourself — it is read-only:
   `module-manager validate --blueprint --repo ~/TAPPaaS`, or for one module,
   `module-manager validate --blueprint ~/TAPPaaS/src/apps/<module>`.

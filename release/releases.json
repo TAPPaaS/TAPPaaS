@@ -1,0 +1,39 @@
+{
+  "_README": "Every TAPPaaS version: the revision it names and when it reached each channel (ADR-028 D13). tappaas-train writes this at each boundary and urgent fix; RELEASES.md is rendered from it (tappaas-train releases --render after a hand edit). Dates are UTC days. kind: minor | major (a boundary), patch (an urgent fix, ADR-028 D12), release (made by hand, before the train).",
+  "releases": [
+    {
+      "version": "2.1",
+      "commit": "83ccb49837d1",
+      "staging": "2026-09-25",
+      "production": null,
+      "kind": "minor",
+      "forced": true,
+      "pin": "c508844df6c2",
+      "note": "the first train boundary; numbered retroactively on 2026-10-02"
+    },
+    {
+      "version": "2.0",
+      "commit": "61e91f080e01",
+      "staging": null,
+      "production": "2026-07-21",
+      "kind": "release",
+      "note": "before the train: tagged and released straight to stable. stable moved on to d796e254 (2.0+466) on 2026-09-18, before versions"
+    },
+    {
+      "version": "1.1",
+      "commit": "889c61a2c848",
+      "staging": null,
+      "production": "2026-07-12",
+      "kind": "release",
+      "note": "the last 1.x release"
+    },
+    {
+      "version": "1.0.0",
+      "commit": "682b87ce3087",
+      "staging": null,
+      "production": "2026-04-13",
+      "kind": "release",
+      "note": "the first production release"
+    }
+  ]
+}

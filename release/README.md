@@ -1,109 +1,63 @@
-# Making a TAPPaaS release
+# Releasing TAPPaaS
 
-The runbook and helper scripts for cutting a TAPPaaS release. It complements
-[BUILD.md](../BUILD.md) (how the artifacts are built) and
-[docs/codeberg-migration.md](../docs/codeberg-migration.md) (the interim image
-runbook and the branch-promotion phases). This directory is the home of the
-release process; keep new automation here.
-
-## The model
-
-TAPPaaS ships from two long-lived branches:
-
-- **`main`** — trunk / development.
-- **`stable`** — the release line. It is *also* the default `updateChannel`
-  (`src/foundation/schemas/site-fields.json`), so a running TAPPaaS pulls this
-  branch via GitOps (`git pull --ff-only`). **Promoting `stable` is the release.**
-
-Because installed systems self-update with `git pull --ff-only` on their tracked
-branch, a **detached tag can't be tracked**. So a release candidate is a
-short-lived **branch** (`rc/<maj.min>`), not a tag. The version is stamped as an
-annotated tag (`v<maj.min>`) only once the candidate passes, and `stable` is
-fast-forwarded to it.
+**A release is a release-train boundary.** Every two weeks `tappaas-train.sh boundary`, run on
+the mothership of the site where TAPPaaS is developed, promotes the revision that has soaked on
+`staging` to `stable` and cuts the next one from `main` into `staging`. The revision it cuts gets
+the next version — an annotated tag, `v<MAJOR>.<MINOR>` — and the same version reaches
+production at the boundary after. How to run a boundary, and what it refuses, is the operator
+reference: [RELEASE-TRAIN.md](../src/foundation/tappaas-cicd/RELEASE-TRAIN.md). Why it works
+this way is [ADR-028](../docs/ADR/ADR-028%20-%20Release%20Cadence%20and%20Patching.md), D9
+(the train), D12 (urgent fixes) and D13 (versions).
 
 ```mermaid
 flowchart LR
-  M[main] -->|cut| RC[rc/&lt;maj.min&gt;]
-  RC -->|install on blank system<br/>test --deep| T{pass?}
-  T -->|no| M
-  T -->|yes| TAG[tag v&lt;maj.min&gt;]
-  TAG -->|fast-forward| S[stable]
-  S -->|push origin| CB[(Codeberg)]
-  CB -->|Sync Now| GH[(GitHub mirror)]
-  TAG -.image tags.-> GHA[GitHub Actions → Releases]
+  M[main] -->|boundary: cut + tag v2.2| S[staging]
+  S -->|next boundary, after the soak| P[stable]
+  F[urgent fix] -.->|patch: v2.2.1| S
 ```
 
-### Where versions live
+## What is in this directory
 
-There is **no single product-version file** — the product version exists only as
-the `v<maj.min>` git tag. Two other version surfaces matter at release time:
+| File | What it is |
+|------|------------|
+| [`releases.json`](releases.json) | **The release history**: every version, the commit it names, and the day it reached staging and production. Written by `tappaas-train` at each boundary and urgent fix; [`RELEASES.md`](../RELEASES.md) at the repository root is rendered from it. |
+| `changelog.sh` | Release notes between two refs: the issues delivered and the changes, grouped, plus the config migrations added (ADR-025 D6). `--enrich` adds issue titles from the forge. |
+| `bump-version.sh` | Repoints `templates/tappaas-nixos.json` and `network/network.json` at newly built VM images; `--check` reports drift. |
+| `lib.sh` | Logging helpers shared by the two scripts (sourced, not run). |
 
-- **Image pointers** (updated by `bump-version.sh`):
-  `src/foundation/templates/tappaas-nixos.json` (`version` **and**
-  `imageLocation`) and `src/foundation/network/network.json` (`imageLocation`).
-  These pin the `nixos-template-v*` / `opnsense-firewall-v*` GitHub Release tags.
-- **Per-module `version` fields** in each module JSON are independent and
-  hand-maintained; they are *not* the product version and are not touched here.
+`make-release.sh`, the driver for the procedure before the train (cut `rc/<ver>`, tag it,
+fast-forward `stable` from the candidate), was retired on 2026-10-02: it skipped staging, so it
+could not keep `stable ⊆ staging`.
 
-## Scripts
+## Versions
 
-| Script | Purpose |
-|--------|---------|
-| `make-release.sh` | Guided, confirm-gated driver for the whole flow. `--dry-run` previews everything; `--yes` for non-interactive. |
-| `bump-version.sh` | Repoint `tappaas-nixos.json` / `network.json` at new image tags; `--check` reports drift. |
-| `changelog.sh` | Compile delivered issues + grouped changes between two refs as Markdown. `--enrich` adds issue titles (Forgejo API). |
-| `lib.sh` | Shared logging/confirm helpers (sourced, not run). |
+| Change | Version | Made by |
+|---|---|---|
+| a boundary | the next minor: 2.1 → 2.2 | `tappaas-train.sh boundary` |
+| a boundary that changes shape | the next major: 2.7 → 3.0 | `tappaas-train.sh boundary --major` |
+| an urgent fix | a third number: 2.2 → 2.2.1 | `tappaas-train.sh patch <channel> <commit> --why …` |
 
-All scripts run from a maintainer checkout (not the mothership) and take
-`-h/--help`. They never force-push and never push without a confirm.
+`tappaas-train.sh releases` lists them; `git checkout v<version>` gives you the code of one. Two
+other version surfaces are separate from the product version and are not touched by the train:
 
-## Procedure
+- **Image tags** (`nixos-template-v*`, `opnsense-firewall-v*`) name VM images built on GitHub
+  Actions. `bump-version.sh` moves the module configs to a new one.
+- **Each module's own `version`** in its JSON, maintained by hand with the module.
 
-Drive it with `make-release.sh` (each step is confirm-gated); the manual steps
-below are what it prompts for.
+## Release notes
 
 ```bash
-release/make-release.sh --version 2.1 --dry-run   # preview
-release/make-release.sh --version 2.1             # for real
-# add --nixos-tag 1.4 / --opnsense-tag 1.2 if images are rebuilt this release
+release/changelog.sh --from v2.1 --to v2.2 --enrich > NOTES.md
 ```
 
-1. **Pre-flight** — clean tree, on `main`, `origin` (Codeberg) + `github`
-   remotes present, `v<ver>` not already tagged, fetch tags.
-2. **Deep tests** on the current cluster (manual, on the cicd mothership):
-   `TAPPAAS_TEST_DEEP=1 ./test.sh` per foundation component and
-   `test-module.sh --deep <module>` per app. There is no cross-catalog runner —
-   sweep the modules you ship.
-3. **Cut `rc/<ver>`** from `main` and push to `origin`.
-4. **Blank-system install + upgrade test** (manual): install `rc/<ver>` on a
-   clean cluster (`install.sh` with `BRANCH=rc/<ver>`, see
-   [INSTALL.md](../INSTALL.md)) and deep-test it. Then install the previous
-   `stable` and confirm the upgrade to the candidate works.
-5. **Images** (only if rebuilt) — push the `nixos-template-v*` /
-   `opnsense-firewall-v*` tag to the **`github`** remote (that fires the build
-   Actions; `origin`/the weekly mirror will not trigger them promptly), wait for
-   the Releases, then `bump-version.sh` repoints the configs.
-6. **Tag & promote** — annotate `v<ver>` on the tested commit; fast-forward
-   `stable` to it (refuses a non-fast-forward promote).
-7. **Push** `main`, `stable`, and `v<ver>` to `origin`.
-8. **Force the mirror** — Codeberg → Settings → Repository → Mirror settings →
-   **Sync Now** (otherwise the weekly push mirror can lag up to a week).
-9. **Release notes** — `changelog.sh --from <prev v-tag> --to v<ver>` (add
-   `--enrich` for titles). Then send the announcement.
+## New VM images
 
-## Manual quick-reference
-
-If not using the driver:
+Images are built from a tag pushed to the **`github`** remote (that fires the Actions build; the
+mirror does not trigger it promptly), then the configs are repointed and the change travels the
+train like any other commit:
 
 ```bash
-git switch main && git pull --ff-only
-git branch rc/2.1 main && git push -u origin rc/2.1
-# … install rc/2.1 on a blank system, test --deep, test upgrade from stable …
-git tag -a v2.1 rc/2.1 -m "TAPPaaS 2.1"
-git merge-base --is-ancestor stable v2.1 && git branch -f stable v2.1   # ff-only
-git push origin main stable v2.1
-# images (if rebuilt): git tag nixos-template-v1.4 && git push github nixos-template-v1.4
-# then: bump-version.sh --nixos 1.4  (commit + push)
-# Codeberg UI: Mirror settings → Sync Now
-release/changelog.sh --from v2.0 --to v2.1 --enrich > NOTES.md
+git tag nixos-template-v1.5 && git push github nixos-template-v1.5
+# … wait for the GitHub Release …
+release/bump-version.sh --nixos 1.5      # then commit and push to main
 ```

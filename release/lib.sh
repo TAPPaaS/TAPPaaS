@@ -2,7 +2,7 @@
 #
 # release/lib.sh — shared helpers for the TAPPaaS release scripts.
 #
-# Sourced by changelog.sh, bump-version.sh and make-release.sh. These scripts
+# Sourced by changelog.sh and bump-version.sh. These scripts
 # run from a developer/maintainer checkout (this Mac), NOT the mothership, so
 # this lib is deliberately self-contained — it does not depend on
 # /home/tappaas/bin/common-install-routines.sh. The logging style mirrors it.

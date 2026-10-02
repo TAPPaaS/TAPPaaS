@@ -125,16 +125,23 @@ echo "── the soak clock ──"
 make_train 3 2
 FAKE_NOW=1790000000 run init
 [[ "${RC}" -eq 0 ]] && ok "init starts the clock on a sound train" || bad "init failed: ${OUT}"
-[[ "$(jq -r '.soakStartedAt' "${TMP}/cfg/release-train.json")" == "1790000000" ]] \
-    && ok "the start is recorded" || bad "soakStartedAt not written"
+[[ "$(jq -r '.soakStarted' "${TMP}/cfg/release-train.json")" == "2026-09-21T14:13:20Z" ]] \
+    && ok "the start is recorded, as a date a person can read" || bad "soakStarted not written: $(cat "${TMP}/cfg/release-train.json")"
+[[ "$(jq -r '.nextBoundary' "${TMP}/cfg/release-train.json")" == "2026-10-05" ]] \
+    && ok "…and so is when the boundary falls due" || bad "nextBoundary wrong"
 FAKE_NOW=1790000000 run status
 [[ "${OUT}" == *"0 of 14 days"* ]] && ok "a fresh soak is not due" || bad "soak progress wrong: ${OUT}"
 FAKE_NOW=$(( 1790000000 + 14*86400 )) run status
 [[ "${OUT}" == *"boundary is due"* ]] && ok "after the interval the boundary is due" || bad "soak never completes"
 # Re-running init must not restart the clock — that would hide a missed soak.
 FAKE_NOW=$(( 1790000000 + 14*86400 )) run init
-[[ "$(jq -r '.soakStartedAt' "${TMP}/cfg/release-train.json")" == "1790000000" ]] \
+[[ "$(jq -r '.soakStarted' "${TMP}/cfg/release-train.json")" == "2026-09-21T14:13:20Z" ]] \
     && ok "init is idempotent: it does not restart a running clock" || bad "init reset the soak clock"
+# A file from before D13 (epoch seconds) is still read.
+jq 'del(.soakStarted) | .soakStartedAt = 1790000000' "${TMP}/cfg/release-train.json" > "${TMP}/x" \
+    && mv "${TMP}/x" "${TMP}/cfg/release-train.json"
+FAKE_NOW=$(( 1790000000 + 14*86400 )) run status
+[[ "${OUT}" == *"boundary is due"* ]] && ok "the epoch shape before D13 is still read" || bad "old soakStartedAt ignored: ${OUT}"
 
 echo "── a recorded fault blocks promotion (ADR-028 D9) ──"
 jq '.fault = {what: "grafana lost its dashboards"}' "${TMP}/cfg/release-train.json" > "${TMP}/x" \
@@ -200,16 +207,17 @@ FAKE_NOW=1790000000 run init
 jq '.boundary.phasesDone = ["branch","prove","main"]' "${TMP}/cfg/release-train.json" > "${TMP}/x" && mv "${TMP}/x" "${TMP}/cfg/release-train.json"
 _stable_before="$(git -C "${TMP}/w" rev-parse origin/stable)"
 _staging_before="$(git -C "${TMP}/w" rev-parse origin/staging)"
+_main_before="$(git -C "${TMP}/w" rev-parse origin/main)"
 FAKE_NOW=$(( 1790000000 + 20*86400 )) run boundary --resume
 [[ "${RC}" -eq 0 ]] && ok "a due, proven boundary runs" || bad "boundary failed: ${OUT}"
 [[ "$(git -C "${TMP}/w" rev-parse origin/stable)" == "${_staging_before}" ]] \
     && ok "stable became what staging WAS — the soaked revision, not the new one" \
     || bad "stable did not take staging's old position"
-[[ "$(git -C "${TMP}/w" rev-parse origin/staging)" == "$(git -C "${TMP}/w" rev-parse origin/main)" ]] \
+[[ "$(git -C "${TMP}/w" rev-parse origin/staging)" == "${_main_before}" ]] \
     && ok "staging became main" || bad "staging did not advance to main"
 [[ "$(git -C "${TMP}/w" rev-parse origin/stable)" != "${_stable_before}" ]] \
     && ok "production moved exactly one boundary" || bad "stable did not move"
-[[ "$(jq -r '.soakStartedAt' "${TMP}/cfg/release-train.json")" == "$(( 1790000000 + 20*86400 ))" ]] \
+[[ "$(jq -r '.soakStarted' "${TMP}/cfg/release-train.json")" == "2026-10-11T14:13:20Z" ]] \
     && ok "the soak clock restarts from the promotion" || bad "clock not restarted"
 
 echo "── the fault rule (ADR-028 D9) ──"
@@ -621,6 +629,137 @@ H="$("${TRAIN}" --help 2>&1)"
 [[ "${H}" == *"fault --resolved"* ]] \
     && ok "…and the range still reaches the last usage line" \
     || bad "--help is truncated: the sed range no longer covers the header"
+
+# ── versions (ADR-028 D13) ──────────────────────────────────────────
+tags_on() { git -C "${TMP}/w" tag --points-at "$1" | tr '\n' ' '; }
+releases_on_main() { git -C "${TMP}/w" show origin/main:release/releases.json 2>/dev/null; }
+proven() { jq '.boundary.phasesDone = ["branch","prove","main"]' "${TMP}/cfg/release-train.json" > "${TMP}/x" && mv "${TMP}/x" "${TMP}/cfg/release-train.json"; }
+
+echo "── a boundary cuts the next minor into staging, as a tag ──"
+make_train 3 2
+# Production on the 2.0 line (past its tag, as on the real train), staging
+# already numbered 2.1 — the shape the retro-tag left.
+git -C "${TMP}/w" tag -a v2.0 -m "TAPPaaS 2.0" "origin/stable~1"
+git -C "${TMP}/w" tag -a v2.1 -m "TAPPaaS 2.1" origin/staging
+git -C "${TMP}/w" push -q origin v2.0 v2.1
+FAKE_NOW=1790000000 run status
+[[ "${OUT}" == *"2.0+1"* && "${OUT}" == *" 2.1 "* ]] \
+    && ok "status shows each channel's version (production is 2.0 plus one commit)" || bad "versions not shown: ${OUT}"
+FAKE_NOW=1790000000 run init; proven
+FAKE_NOW=$(( 1790000000 + 20*86400 )) run boundary --resume --dry-run
+[[ "${OUT}" == *"tag it"*"v2.2"* ]] && ok "the plan names the version it will cut" || bad "plan without a version: ${OUT}"
+_main_before="$(git -C "${TMP}/w" rev-parse origin/main)"
+FAKE_NOW=$(( 1790000000 + 20*86400 )) run boundary --resume
+[[ "${RC}" -eq 0 ]] && ok "the boundary runs" || bad "boundary failed: ${OUT}"
+[[ "$(tags_on origin/staging)" == *"v2.2"* ]] && ok "staging's new revision is tagged v2.2" || bad "no v2.2 on staging: $(tags_on origin/staging)"
+git -C "${TMP}/w" ls-remote --tags "${TMP}/origin" | grep -q 'refs/tags/v2.2$' \
+    && ok "…and the tag is published" || bad "v2.2 not pushed"
+_msg="$(git -C "${TMP}/w" tag -l --format='%(contents)' v2.2)"
+[[ "${_msg}" == *"TAPPaaS 2.2"* && "${_msg}" == *"Cut into staging 2026-10-11"* && "${_msg}" == *"Previous:   v2.1"* ]] \
+    && ok "the tag says when it was cut and what came before" || bad "tag message: ${_msg}"
+[[ "$(git -C "${TMP}/w" rev-parse origin/stable)" == "$(git -C "${TMP}/w" rev-parse 'v2.1^{commit}')" ]] \
+    && ok "production now runs 2.1" || bad "production is not 2.1"
+_r="$(releases_on_main)"
+[[ "$(jq -r '.releases[] | select(.version=="2.2") | .staging' <<<"${_r}")" == "2026-10-11" ]] \
+    && ok "release/releases.json on main records 2.2 entering staging" || bad "2.2 not recorded: ${_r}"
+[[ "$(jq -r '.releases[] | select(.version=="2.1") | .production' <<<"${_r}")" == "2026-10-11" ]] \
+    && ok "…and 2.1 reaching production" || bad "2.1 production not recorded: ${_r}"
+git -C "${TMP}/w" show origin/main:RELEASES.md | grep -q '^| 2.2 | ' \
+    && ok "RELEASES.md is rendered from it" || bad "RELEASES.md missing the row"
+[[ "$(git -C "${TMP}/w" log -1 --format=%s origin/main)" == "chore(release): 2.2 to staging, 2.1 to production" ]] \
+    && ok "one commit on main says what moved" || bad "record commit: $(git -C "${TMP}/w" log -1 --format=%s origin/main)"
+[[ "$(git -C "${TMP}/w" rev-parse origin/main~1)" == "${_main_before}" ]] \
+    && ok "…and it is the only thing added to main" || bad "main moved by more than the record"
+_st="${TMP}/cfg/release-train.json"
+[[ "$(jq -r '.channels.staging.version, .channels.production.version, .lastBoundary.cut, .nextBoundary' "${_st}" | tr '\n' ' ')" \
+   == "2.2 2.1 2.2 2026-10-25 " ]] && ok "the state file reads as versions and dates" || bad "state: $(jq -c . "${_st}")"
+FAKE_NOW=$(( 1790000000 + 21*86400 )) run status
+[[ "${OUT}" == *"cuts 2.3, 2.2 reaches production"* ]] && ok "status says what the next boundary will do" || bad "no next-boundary line: ${OUT}"
+run releases
+[[ "${OUT}" == *"2.2"*"2026-10-11"* && "${OUT}" == *"now: staging 2.2, production 2.1"* ]] \
+    && ok "releases lists the history from main" || bad "releases: ${OUT}"
+
+echo "── a resumed boundary numbers nothing twice ──"
+jq '.boundary = {phasesDone: ["branch","prove","main","production","staging"], cut: "2.2", kind: "minor"}' "${_st}" > "${TMP}/x" && mv "${TMP}/x" "${_st}"
+_main_before="$(git -C "${TMP}/w" rev-parse origin/main)"
+FAKE_NOW=$(( 1790000000 + 34*86400 )) run boundary --resume
+[[ "${RC}" -eq 0 ]] && ok "a resume after the tag runs" || bad "resume failed: ${OUT}"
+[[ "$(tags_on origin/staging)" != *"v2.3"* ]] && ok "it does not cut another version" || bad "a resume cut v2.3"
+[[ "$(git -C "${TMP}/w" rev-parse origin/main)" == "${_main_before}" ]] \
+    && ok "…nor record the release again" || bad "the record was committed twice"
+
+echo "── --major cuts the next major ──"
+proven; jq '.boundary.cut = null | .boundary.kind = null' "${_st}" > "${TMP}/x" && mv "${TMP}/x" "${_st}"
+echo more > "${TMP}/w/g"; git -C "${TMP}/w" add -A; git -C "${TMP}/w" commit -qm "c9"
+git -C "${TMP}/w" push -q origin main; git -C "${TMP}/w" fetch -q origin
+FAKE_NOW=$(( 1790000000 + 60*86400 )) run boundary --resume --major
+[[ "$(tags_on origin/staging)" == *"v3.0"* ]] && ok "staging is cut as v3.0" || bad "no v3.0: ${OUT}"
+[[ "$(releases_on_main | jq -r '.releases[] | select(.version=="3.0") | .kind')" == "major" ]] \
+    && ok "…and recorded as a major" || bad "3.0 not recorded as major"
+
+echo "── a rehearsal numbers nothing ──"
+make_train 3 2
+git -C "${TMP}/w" tag -a v2.1 -m "TAPPaaS 2.1" origin/staging; git -C "${TMP}/w" push -q origin v2.1
+FAKE_NOW=1790000000 run init; proven
+_main_before="$(git -C "${TMP}/w" rev-parse origin/main)"
+FAKE_NOW=$(( 1790000000 + 20*86400 )) run boundary --resume --staging-branch rehearse-staging --production-branch rehearse-prod
+[[ "${RC}" -eq 0 && -z "$(git -C "${TMP}/w" tag -l 'v2.2')" ]] && ok "no tag from a rehearsal" || bad "a rehearsal tagged: ${OUT}"
+[[ "$(git -C "${TMP}/w" rev-parse origin/main)" == "${_main_before}" ]] && ok "…and no record on main" || bad "a rehearsal wrote the record"
+
+echo "── patch: an urgent fix is numbered MAJOR.MINOR.N (ADR-028 D12) ──"
+make_train 3 2
+git -C "${TMP}/w" tag -a v2.0 -m "TAPPaaS 2.0" origin/stable
+git -C "${TMP}/w" tag -a v2.1 -m "TAPPaaS 2.1" origin/staging; git -C "${TMP}/w" push -q origin v2.0 v2.1
+FAKE_NOW=1790000000 run init
+# D12: the fix is authored off staging's tip, then merged into main.
+git -C "${TMP}/w" checkout -q -b fix origin/staging
+echo fixed > "${TMP}/w/fix"; git -C "${TMP}/w" add -A; git -C "${TMP}/w" commit -qm "fix: grafana can read its secrets"
+_fix="$(git -C "${TMP}/w" rev-parse HEAD)"
+git -C "${TMP}/w" checkout -q main
+run patch staging "${_fix}" --why "service down: grafana"
+[[ "${RC}" -ne 0 && "${OUT}" == *"not on main"* ]] && ok "a fix not yet on main is refused" || bad "accepted a fix off main: ${OUT}"
+git -C "${TMP}/w" merge -q --no-edit "${_fix}"; git -C "${TMP}/w" push -q origin main; git -C "${TMP}/w" fetch -q origin
+run patch staging "${_fix}"
+[[ "${RC}" -ne 0 && "${OUT}" == *"--why"* ]] && ok "a patch without a reason is refused" || bad "no --why accepted: ${OUT}"
+run patch production "${_fix}" --why "service down: grafana"
+[[ "${RC}" -ne 0 && "${OUT}" == *"ahead of staging"* ]] && ok "production may not get ahead of staging" || bad "production overtook staging: ${OUT}"
+FAKE_NOW=$(( 1790000000 + 3*86400 )) run patch staging "${_fix}" --why "service down: grafana"
+[[ "${RC}" -eq 0 ]] && ok "the staging patch runs" || bad "patch failed: ${OUT}"
+[[ "$(git -C "${TMP}/w" rev-parse origin/staging)" == "${_fix}" ]] && ok "staging moved onto the fix, and only the fix" || bad "staging not at the fix"
+[[ "$(tags_on "${_fix}")" == *"v2.1.1"* ]] && ok "the fix is v2.1.1" || bad "no v2.1.1: $(tags_on "${_fix}")"
+[[ "$(releases_on_main | jq -r '.releases[] | select(.version=="2.1.1") | "\(.kind) \(.channel) \(.staging)"')" == "patch staging 2026-09-24" ]] \
+    && ok "the record names it an urgent fix, with the date" || bad "patch not recorded: $(releases_on_main)"
+[[ "$(jq -r '.expedited[0].why' "${TMP}/cfg/release-train.json")" == "service down: grafana" ]] \
+    && ok "the site records that it carries an expedited fix (D12)" || bad "expedited not recorded"
+FAKE_NOW=$(( 1790000000 + 3*86400 )) run status
+[[ "${OUT}" == *"carrying an urgent fix: 2.1.1 on staging"* ]] && ok "status says so" || bad "status silent about the fix: ${OUT}"
+run patch staging "${_fix}" --why "again"
+[[ "${RC}" -ne 0 && "${OUT}" == *"already at"* ]] && ok "the same patch twice is refused" || bad "re-patch accepted"
+# A commit that does not build on the channel's tip would rewind or fork it.
+run patch production "$(git -C "${TMP}/w" rev-parse origin/stable~1)" --why "x"
+[[ "${RC}" -ne 0 && "${OUT}" == *"does not build on"* ]] && ok "a commit behind the channel is refused" || bad "accepted a commit behind stable: ${OUT}"
+
+echo "── patch production: the documented route, staging first ──"
+make_train 3 2
+git -C "${TMP}/w" tag -a v2.0 -m "TAPPaaS 2.0" origin/stable
+git -C "${TMP}/w" tag -a v2.1 -m "TAPPaaS 2.1" origin/staging; git -C "${TMP}/w" push -q origin v2.0 v2.1
+FAKE_NOW=1790000000 run init
+git -C "${TMP}/w" checkout -q -b hf origin/stable
+echo cve > "${TMP}/w/cve"; git -C "${TMP}/w" add -A; git -C "${TMP}/w" commit -qm "fix: the CVE"
+_F="$(git -C "${TMP}/w" rev-parse HEAD)"
+git -C "${TMP}/w" checkout -q -b hf-staging origin/staging; git -C "${TMP}/w" merge -q --no-ff --no-edit hf
+_M="$(git -C "${TMP}/w" rev-parse HEAD)"
+git -C "${TMP}/w" checkout -q main; git -C "${TMP}/w" merge -q --no-ff --no-edit hf-staging
+git -C "${TMP}/w" push -q origin main; git -C "${TMP}/w" fetch -q origin
+FAKE_NOW=$(( 1790000000 + 2*86400 )) run patch staging "${_M}" --why "security: CVE-2026-0001"
+[[ "${RC}" -eq 0 && "$(tags_on "${_M}")" == *"v2.1.1"* ]] && ok "staging takes the merge as v2.1.1" || bad "staging patch: ${OUT}"
+FAKE_NOW=$(( 1790000000 + 2*86400 )) run patch production "${_F}" --why "security: CVE-2026-0001"
+[[ "${RC}" -eq 0 && "$(tags_on "${_F}")" == *"v2.0.1"* ]] && ok "then production takes the fix alone as v2.0.1" || bad "production patch: ${OUT}"
+[[ "$(git -C "${TMP}/w" rev-list --count "v2.0..origin/stable")" == "1" ]] && ok "production moved by exactly the fix" || bad "production moved by more"
+git -C "${TMP}/w" merge-base --is-ancestor origin/stable origin/staging && git -C "${TMP}/w" merge-base --is-ancestor origin/staging origin/main \
+    && ok "stable ⊆ staging ⊆ main still holds" || bad "the patch broke the ancestry"
+[[ "$(releases_on_main | jq -r '.releases[] | select(.version=="2.0.1") | .production')" == "2026-09-23" ]] \
+    && ok "the record dates production's fix" || bad "2.0.1 not recorded: $(releases_on_main)"
 
 echo "── channels.json: a repository says which branch is which channel (D11) ──"
 CL_LIB="${HERE}/../../lib/channels-lib.sh"
