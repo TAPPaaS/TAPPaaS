@@ -556,6 +556,7 @@ Wave 1.
 | #142 | RFC: AI-agent access to cicd | 2 | 1 | M | Decision |
 | #378 | Default-on secret scanning on cicd | 4 | 1 | L | **Verified open 2026-09-26** (R=1 sweep): no gitleaks / trufflehog / secret-scan anywhere in the tree or CI |
 | ✅ #724 | The journal secret-scrub never worked (it redacted the key, not the secret) | — | — | — | **Closed 2026-09-23** (`eda1eb9d`) — secrets that reached Loki before the fix need rotating; see #715. Added in the 2026-09-24 issue sweep |
+| #762 | satellite: build the `sshPort` SSH passthrough to `tappaas-cicd` (ADR-010 §4.4.2) | 3 | 2 | M | **Opened 2026-10-02.** Designed in ADR-010, never built. A blind TCP relay, satellite `:sshPort` → infra tunnel → the mothership's `:22`, so a site with no public inbound address (makerfloss: its WAN `172.17.1.38` is behind an upstream router) has a shell on its mothership without a WireGuard client. The rules it needs are owned by the satellite module. To decide: what each relayed connection's single tunnel source address does to OpenSSH's PerSourcePenalties (a non-standard port, an allow-list on the satellite, or limiting there instead); the mothership's sshd becomes internet-reachable, key-only, as hrossen's already is. Primary access is unchanged (operator, 2026-10-02): the admin WireGuard tunnel for makerfloss, direct SSH for hrossen. Live test needs a real satellite (#671) |
 
 ---
 
