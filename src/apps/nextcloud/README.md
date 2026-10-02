@@ -14,7 +14,7 @@ Your own private cloud — files, document editing, calls and chat, with single 
 | Productivity | Nextcloud UI | Calendar, Contacts, Tasks, Forms, Polls, News (RSS reader), AI integration |
 | Mail | Nextcloud UI | Webmail client; Microsoft 365 sign-in when your admin sets it up |
 | Single sign-on | Login page | You sign in through Authentik; a local account can still sign in directly at `/login?direct=1` |
-| Backups | — | Automatic, kept for 30 days |
+| Backups | — | Automatic: the whole server, nightly, to the platform's backup server |
 
 ## What is not included
 

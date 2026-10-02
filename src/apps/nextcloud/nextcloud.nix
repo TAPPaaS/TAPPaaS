@@ -1006,7 +1006,7 @@ in
   };
 
   # Recurring pre-generation — only generates MISSING previews (efficient).
-  # Runs daily at 03:00 (after backups at 02:00 and 02:30).
+  # Runs daily at 03:00.
   systemd.services.nextcloud-preview-generate = {
     description = "Nextcloud incremental preview pre-generation";
     serviceConfig = {
@@ -1033,80 +1033,15 @@ in
   };
 
   # ============================================================================
-  # BACKUP STRATEGY
-  # ============================================================================
-
-  services.postgresqlBackup = {
-    enable      = true;
-    databases   = [ "nextcloud" ];
-    startAt     = "*-*-* 02:00:00";
-    location    = "/var/backup/nextcloud/postgresql";
-    compression = "gzip";
-  };
-
-  systemd.services.nextcloud-data-backup = {
-    description = "Nextcloud data directory daily backup";
-    serviceConfig = {
-      Type  = "oneshot";
-      User  = "root";
-      ExecStart = pkgs.writeShellScript "nextcloud-data-backup" ''
-        set -euo pipefail
-
-        BACKUP_DIR="/var/backup/nextcloud/data"
-        TIMESTAMP="$(${pkgs.coreutils}/bin/date +%Y%m%d_%H%M%S)"
-        DATA_DIR="/var/lib/nextcloud/data"
-
-        ${pkgs.coreutils}/bin/mkdir -p "$BACKUP_DIR"
-
-        if [ -d "$DATA_DIR" ]; then
-          ${pkgs.gnutar}/bin/tar --use-compress-program=${pkgs.gzip}/bin/gzip \
-            -cf "$BACKUP_DIR/nextcloud-data-$TIMESTAMP.tar.gz" \
-            -C /var/lib/nextcloud data
-          ${pkgs.coreutils}/bin/chmod 600 "$BACKUP_DIR/nextcloud-data-$TIMESTAMP.tar.gz"
-        else
-          echo "WARNING: $DATA_DIR not found, skipping." >&2
-        fi
-      '';
-    };
-  };
-
-  systemd.timers.nextcloud-data-backup = {
-    description = "Daily Nextcloud data directory backup";
-    wantedBy    = [ "timers.target" ];
-    timerConfig = {
-      OnCalendar = "*-*-* 02:30:00";
-      Persistent = true;
-    };
-  };
-
-  systemd.services.nextcloud-cleanup-backups = {
-    description = "Cleanup old Nextcloud backups";
-    serviceConfig = {
-      Type      = "oneshot";
-      User      = "root";
-      ExecStart = pkgs.writeShellScript "nextcloud-cleanup-backups" ''
-        ${pkgs.findutils}/bin/find /var/backup/nextcloud -type f -mtime +30 -delete
-      '';
-    };
-  };
-
-  systemd.timers.nextcloud-cleanup-backups = {
-    description = "Monthly cleanup of old Nextcloud backups";
-    wantedBy    = [ "timers.target" ];
-    timerConfig = {
-      OnCalendar = "monthly";
-      Persistent = true;
-    };
-  };
-
-  # ============================================================================
   # FILESYSTEM STRUCTURE
   # ============================================================================
 
+  # Backup is the platform's: PBS takes the whole VM (backup:vm, ADR-012). The
+  # in-guest pg_dump and data tar this module once ran are gone; these two rules
+  # remove what they left on every site, and are no-ops once it is gone.
   systemd.tmpfiles.rules = [
-    "d /var/backup/nextcloud             0700 root      root      -"
-    "d /var/backup/nextcloud/postgresql  0700 postgres  postgres  -"
-    "d /var/backup/nextcloud/data        0700 root      root      -"
+    "R /var/backup/nextcloud             -    -         -         -"
+    "r /var/backup                       -    -         -         -"
     "d /var/lib/nextcloud                0700 nextcloud nextcloud -"
     "d /etc/secrets                      0700 root      root      -"
   ];

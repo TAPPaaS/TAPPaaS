@@ -250,47 +250,23 @@ else
 fi
 
 # ============================================================================
-# Test 6: Backup Directories
+# Test 6: No In-Guest Backup (PBS takes the whole VM, backup:vm)
 # ============================================================================
-header "Test 6: Backup Directories"
-info "Checking backup directory structure..."
+header "Test 6: No In-Guest Backup"
+info "Backup is the platform's (ADR-012); the old in-VM copies must be gone..."
 
-subheader "/var/backup/nextcloud/postgresql"
-PG_BACKUP=$(remote "test -d /var/backup/nextcloud/postgresql && echo exists || echo missing" 2>/dev/null || echo "missing")
-if [ "$PG_BACKUP" = "exists" ]; then
-    pass "/var/backup/nextcloud/postgresql exists"
+LEFTOVER=$(remote "sudo test -e /var/backup/nextcloud && echo present || echo absent" 2>/dev/null || echo "unknown")
+if [ "$LEFTOVER" = "absent" ]; then
+    pass "/var/backup/nextcloud is gone"
 else
-    skip "/var/backup/nextcloud/postgresql not found — created on first backup timer run"
+    fail "/var/backup/nextcloud is ${LEFTOVER} — the tmpfiles R rule should have removed it"
 fi
 
-subheader "/var/backup/nextcloud/data"
-DATA_BACKUP=$(remote "test -d /var/backup/nextcloud/data && echo exists || echo missing" 2>/dev/null || echo "missing")
-if [ "$DATA_BACKUP" = "exists" ]; then
-    pass "/var/backup/nextcloud/data exists"
+OLD_TIMERS=$(remote "systemctl list-unit-files --no-legend 'nextcloud-data-backup.*' 'nextcloud-cleanup-backups.*' 'postgresqlBackup-nextcloud.*' 2>/dev/null | wc -l | tr -d ' '" || echo "?")
+if [ "$OLD_TIMERS" = "0" ]; then
+    pass "No in-guest backup units"
 else
-    skip "/var/backup/nextcloud/data not found — created on first backup timer run"
-fi
-
-# ============================================================================
-# Test 7: Backup Timers Active
-# ============================================================================
-header "Test 7: Backup Timers"
-info "Checking systemd backup timers..."
-
-subheader "Timer: nextcloud-data-backup.timer"
-DATA_TIMER=$(remote "systemctl is-active nextcloud-data-backup.timer 2>/dev/null" || echo "unknown")
-if [ "$DATA_TIMER" = "active" ]; then
-    pass "nextcloud-data-backup.timer is active"
-else
-    fail "nextcloud-data-backup.timer is ${DATA_TIMER}"
-fi
-
-subheader "Timer: postgresqlBackup-nextcloud.timer"
-PG_TIMER=$(remote "systemctl is-active postgresqlBackup-nextcloud.timer 2>/dev/null" || echo "unknown")
-if [ "$PG_TIMER" = "active" ]; then
-    pass "postgresqlBackup-nextcloud.timer is active"
-else
-    fail "postgresqlBackup-nextcloud.timer is ${PG_TIMER}"
+    fail "In-guest backup units still installed (${OLD_TIMERS})"
 fi
 
 # ============================================================================
@@ -350,36 +326,6 @@ if nc -z -w5 "${TARGET}" 9980 2>/dev/null; then
     fail "Port 9980 is open on ${TARGET} — Collabora should NOT be running here"
 else
     pass "Port 9980 is closed on ${TARGET} (correct — office handled by euro-office module)"
-fi
-
-# ============================================================================
-# Test 10: Data Backup Service (smoke test)
-# ============================================================================
-header "Test 10: Data Backup Service"
-info "Triggering nextcloud-data-backup.service (oneshot) — this may take a moment..."
-
-# Robust against clock skew / future-dated files: compare the full SET of backup
-# files before/after by filename, not the newest-by-mtime (a single file with a
-# future mtime — e.g. from a fresh VM before NTP sync — would otherwise shadow
-# every new backup under `ls -t` and cause a false negative).
-BACKUP_BEFORE=$(remote "sudo bash -c 'ls /var/backup/nextcloud/data/*.tar.gz 2>/dev/null | sort'" || echo "")
-
-if remote "sudo systemctl start nextcloud-data-backup.service" 2>/dev/null; then
-    BACKUP_AFTER=$(remote "sudo bash -c 'ls /var/backup/nextcloud/data/*.tar.gz 2>/dev/null | sort'" || echo "")
-    NEW_BACKUP=$(comm -13 <(printf '%s\n' "$BACKUP_BEFORE") <(printf '%s\n' "$BACKUP_AFTER") | grep -v '^$' | tail -1)
-    if [ -n "$NEW_BACKUP" ]; then
-        BACKUP_SIZE=$(remote "sudo du -sh '$NEW_BACKUP' 2>/dev/null | cut -f1" || echo "?")
-        pass "Data backup succeeded — ${NEW_BACKUP##*/} (${BACKUP_SIZE})"
-    elif [ -n "$BACKUP_AFTER" ]; then
-        fail "Backup service exited 0 but no new .tar.gz appeared in /var/backup/nextcloud/data/"
-    else
-        fail "Backup service exited 0 but /var/backup/nextcloud/data/ is empty"
-    fi
-else
-    JOURNAL=$(remote "sudo journalctl -u nextcloud-data-backup.service -n 5 --no-pager 2>/dev/null" || echo "(no journal)")
-    fail "nextcloud-data-backup.service failed"
-    log "  Last journal lines:"
-    while IFS= read -r line; do log "    $line"; done <<< "$JOURNAL"
 fi
 
 # ============================================================================

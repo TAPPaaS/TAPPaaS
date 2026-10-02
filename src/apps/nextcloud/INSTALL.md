@@ -63,7 +63,7 @@ default. To publish it on the internet, set `config["network:proxy"].proxyAllowe
 | Web response | HTTP 200 or 3xx redirect |
 | `installed` flag in `config.php` | `true`, maintenance mode off |
 | PostgreSQL and Redis services | active |
-| Backup timers | `nextcloud-data-backup`, `postgresqlBackup-nextcloud`, `nextcloud-cleanup-backups` active |
+| No in-guest backup | `/var/backup/nextcloud` and the old backup timers gone (PBS takes the VM) |
 | Secret file permissions | mode 0600 |
 | Firewall ports | 22 and 80 open, 9980 closed |
 | OIDC app (`user_oidc`) | enabled |

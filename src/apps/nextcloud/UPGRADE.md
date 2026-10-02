@@ -45,7 +45,7 @@ A failed `update-module.sh` auto-restores the pre-update snapshot. To roll back 
 
     test-module.sh nextcloud
 
-Expected: `installed: true`, HTTP 200/302, PostgreSQL and Redis active, backup timers active.
+Expected: `installed: true`, HTTP 200/302, PostgreSQL and Redis active, no in-guest backup left.
 
 ---
 

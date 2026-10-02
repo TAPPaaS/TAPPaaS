@@ -67,8 +67,8 @@ Consumed by `coturn`, `nextcloud-hpb` and `euro-office` (each declares
 ## Dependencies rationale
 
 - `cluster:vm`, `templates:nixos` — VM and NixOS base image.
-- `backup:vm` — adds the VM to the platform's shared Proxmox Backup Server job (separate from
-  this module's own backup timers, see Backup & restore).
+- `backup:vm` — adds the VM to the platform's shared Proxmox Backup Server job, the module's
+  only backup (see Backup & restore).
 - `network:proxy` — HTTPS reverse proxy; `proxyPort = 80`.
 - `network:rules` — firewall pass rules.
 - `identity:identity` — **required**, not optional. Authentik is the sole login backend:
@@ -119,15 +119,14 @@ Default: 4 cores / 8192 MB memory / 80G disk.
 
 ## Backup & restore
 
-Two independent mechanisms:
+The platform's PBS job, via the `backup:vm` dependency, backs up the whole VM — database, data
+and config together — with the site's schedule and retention (ADR-012). Restore is the backup
+module's: [RESTORE.md](../../foundation/backup/RESTORE.md).
 
-- **This module's own timers**: a PostgreSQL dump of the `nextcloud` database, daily at 02:00,
-  gzip, to `/var/backup/nextcloud/postgresql`; a tar of `/var/lib/nextcloud/data`, daily at
-  02:30, into `/var/backup/nextcloud/`; a monthly cleanup job deletes backups older than 30
-  days.
-- **The platform's PBS job**, via the `backup:vm` dependency: the whole VM is included in the
-  shared Proxmox Backup Server job. This is separate from, and does not replace, the timers
-  above.
+The module no longer keeps copies of its own inside the VM. Its old pg_dump and data-tar
+timers wrote to the VM's own disk, so they did not survive what PBS is there for, and the
+dump had failed every night on a directory it could not write. A tmpfiles `R` rule removes
+`/var/backup/nextcloud` from VMs that still have it.
 
 ## Deploy notes & known limitations (0.2.0)
 
