@@ -52,12 +52,19 @@ VERIFY=""
 MNT="" PART="" DISK=""
 cleanup() {
     rm -rf "${PLAIN:?}" ${VERIFY:+"${VERIFY}"}
-    if [[ -n "${MNT}" ]]; then usbk_on "umount $(printf %q "${MNT}") 2>/dev/null; rmdir $(printf %q "${MNT}") 2>/dev/null" || true; fi
+    # Unmount by asking the DISK where it is mounted — not from MNT, which a
+    # failure may never have set (or set to garbage: a real stick's sfdisk
+    # printed into what was read as the mount point).
+    if [[ -n "${DISK}" ]]; then
+        usbk_on "for m in \$(lsblk -nrpo MOUNTPOINT $(printf %q "${DISK}") | grep '^/run/tappaas-keys\.'); do umount \"\$m\" && rmdir \"\$m\"; done" || true
+    fi
 }
 trap cleanup EXIT
 
 # ── the keys ────────────────────────────────────────────────────────
-backup-manager key export "${PLAIN}" >&2 || usbk_die "key export failed"
+# Quietly: its own output tells a person what to do with a PLAIN export (and
+# recommends this very script). Shown only if it fails.
+_exp="$(backup-manager key export "${PLAIN}" 2>&1)" || { printf '%s\n' "${_exp}" >&2; usbk_die "key export failed"; }
 NKEYS="$(find "${PLAIN}/${USBK_KEYDIR}" -name '*.key' | wc -l | tr -d ' ')"
 [[ "${NKEYS}" -gt 0 ]] || usbk_die "the escrow holds no keys — nothing to copy"
 
@@ -109,18 +116,23 @@ PW="${pw1}"; unset pw1 pw2
 # ── format ──────────────────────────────────────────────────────────
 usbk_say "Formatting ${DISK} on ${USBK_NODE}..."
 q="$(printf %q "${DISK}")"
-read -r PART MNT < <(usbk_on "set -e
-    wipefs -a -q ${q}
-    printf 'label: dos\ntype=c\n' | sfdisk -q ${q}
-    udevadm settle
+# Every tool's chatter goes to stderr: only the marked last line is the answer.
+# (sfdisk on a real stick — an old hybrid-ISO one — printed "calling ioctl to
+# re-read partition table: Success" on stdout, which was read as the partition
+# and its mount point.)
+fmt="$(usbk_on "set -e
+    { wipefs -a -q ${q}
+      printf 'label: dos\ntype=c\n' | sfdisk -q ${q}
+      udevadm settle; } >&2
     p=\$(lsblk -lnpo NAME,TYPE ${q} | awk '\$2==\"part\" {print \$1; exit}')
     [ -n \"\$p\" ]
-    wipefs -a -q \"\$p\"
-    mkfs.vfat -F 32 -n ${USBK_LABEL} \"\$p\" >/dev/null
+    { wipefs -a -q \"\$p\"; mkfs.vfat -F 32 -n ${USBK_LABEL} \"\$p\" >/dev/null 2>&1; } >&2
     m=\$(mktemp -d /run/tappaas-keys.XXXXXX)
-    mount \"\$p\" \"\$m\"
-    echo \"\$p \$m\"") || usbk_die "formatting ${DISK} failed"
-[[ -n "${MNT}" ]] || usbk_die "formatting ${DISK} failed"
+    mount \"\$p\" \"\$m\" >&2
+    echo \"USBK_FORMATTED \$p \$m\"")" || usbk_die "formatting ${DISK} failed"
+read -r _ PART MNT < <(grep '^USBK_FORMATTED ' <<<"${fmt}" | tail -1)
+[[ "${PART}" == /dev/* && "${MNT}" == /run/tappaas-keys.* ]] \
+    || usbk_die "formatting ${DISK} did not report its partition and mount point (got: ${fmt})"
 
 # ── write ───────────────────────────────────────────────────────────
 qm="$(printf %q "${MNT}")"

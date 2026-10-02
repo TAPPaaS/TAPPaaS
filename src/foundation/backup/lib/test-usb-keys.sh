@@ -54,6 +54,12 @@ ck "a disk in use is never offered (mounted, swap, pool, LVM, RAID)" yes \
    "$(grep -q 'zfs_member|LVM2_member|swap|linux_raid_member' "${FROM}" && grep -q 'usbk_in_use "${d}"' "${TO}" && echo yes || echo no)"
 ck "the stick is read back and compared before it is trusted" yes \
    "$(grep -q 'differs from the escrow — do not rely on it' "${TO}" && echo yes || echo no)"
+ck "the format step's answer is a marked line, never a tool's stdout" yes \
+   "$(grep -q 'echo \\"USBK_FORMATTED' "${TO}" && grep -q "grep '^USBK_FORMATTED '" "${TO}" && grep -q '"${MNT}" == /run/tappaas-keys.\*' "${TO}" && echo yes || echo no)"
+ck "cleanup finds the stick's mounts from the disk, not from MNT" yes \
+   "$(grep -q 'lsblk -nrpo MOUNTPOINT' "${TO}" && echo yes || echo no)"
+ck "key export runs quietly (its PLAIN-copy advice is not for this script)" yes \
+   "$(grep -q '_exp="$(backup-manager key export' "${TO}" && echo yes || echo no)"
 ck "the restore script travels on the stick" yes "$(grep -q 'cat > ${qm}/keys-from-usb.sh' "${TO}" && echo yes || echo no)"
 
 echo "── round trip with openssl (the restore's own command) ──"
