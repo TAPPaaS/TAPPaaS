@@ -38,9 +38,9 @@ passes.
 
 What follows from it:
 
-- **vllm-amd's models are not in any backup.** `mp0: /tanka1/vllm-models` is a host bind mount,
-  which vzdump skips. After the loss the container comes back without its 33G of models. The
-  rehearsal records what vllm-amd does then (download on start, or fail) — and RESTORE.md says so.
+- **vllm-amd's models are not in any backup** (#758, maintainer @ErikDaniel007).
+  `mp0: /tanka1/vllm-models` is a host bind mount, which vzdump skips. The fix is the module's;
+  for this rehearsal the models are **re-downloaded by hand** (3f) and the time recorded.
 - **The stale 110/130/140 replicas** vanish with the reinstall. They are worth a check on other
   sites (a replica left behind when a job moved), not a step here.
 - **The old install must not come back.** It is first in the boot order; if tappaas2 powers on
@@ -110,7 +110,8 @@ delete openwebui-r --force`, then the leftover check below.
 ### 3b. Lose it (operator, on site)
 
 Record first: `pvesh get /cluster/resources`, `ha-manager status`, `/cluster/replication`,
-`module-manager list`, and the guest configs under `/etc/pve/nodes/tappaas2/`.
+`module-manager list`, the guest configs under `/etc/pve/nodes/tappaas2/`, and **which models
+vllm-amd serves** (`ls /tanka1/vllm-models`, its served-model list) — 3f re-downloads them.
 Set the one-time PXE boot (`efibootmgr -n 000A`), then **pull tappaas2's power cord.** Note the
 time. **It stays unplugged until 3e says otherwise** — powered on early, it boots its old
 install and rejoins the cluster as the node 3d just evicted.
@@ -152,6 +153,15 @@ For 310, 311, 342, then 312 (after P1), one at a time, as RESTORE.md §3.3 write
 `backup-manager restore restore <module> --node tappaas2 --storage tanka1`, `module update`,
 `module test --deep`. Expect each restored from this morning's backup (P3) and green before the
 next starts. **Not** test-nixos: it is HA-protected and running.
+
+vllm-amd (312) needs two more steps, both because of what a backup cannot carry (#758):
+
+1. `module-manager module update vllm-amd` re-runs `patch-host-gpu.sh` on the **new** host —
+   GPU devices, render group, and the empty `/tanka1/vllm-models`. Check `/dev/kfd` and
+   `/dev/dri/renderD128` inside the container.
+2. Re-download its models with the module's `download-model.sh` (inside the container, as its
+   README says), the same models it served before (list them in 3b). Record size and time; then
+   `module test vllm-amd --deep`.
 
 ### 3g. §3.4 — HA guests come home; re-fold HA and replication
 

@@ -677,6 +677,7 @@ Low upgrade risk. Build continuously, in any order within a group.
 | #119 | openwebui test coverage | 4 | 1 | L | |
 | #121 | litellm production-grade | 3 | 2 | L | Renamed backups: old backup files must still restore |
 | #621 | Bump litellm / openwebui | 3 | 3 | L | After #121 LLM-003 gives update.sh a health gate |
+| #758 | vllm-amd: the models bind mount is in no backup | 3 | 2 | L | **Opened 2026-10-02** while planning #729: `mp0: /tanka1/vllm-models` (33 GB on hrossen) is a host bind mount, which vzdump skips, so a restored container has no models; the host GPU prep (`patch-host-gpu.sh`) also has to rerun on a new node. Maintainer @ErikDaniel007 — options in the issue (re-download what the module declares, back the dataset up, or document it as cache). The #729 rehearsal re-downloads by hand |
 | #677 | litellm's default workers do not fit its default 4 GB | 4 | 2 | M | **Found 2026-09-20** by `site-manager test --deep`: 43 MB available on an idle VM — ~1.0 GB for litellm plus four workers at ~620 MB of a 3912 MB guest, so the deep test fails and there is no headroom for a burst. Either the default memory covers the default worker count or the workers follow the memory |
 | ✅ #690 | litellm VK provisioning has no readiness wait and discards the key | — | — | — | **Closed 2026-09-21** (`3358e3ec`). Added in the 2026-09-24 issue sweep |
 

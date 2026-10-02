@@ -47,6 +47,9 @@ finish. Tick a line (✅) when it is settled, and record the outcome in the plan
   for the first time. Land it, and when?
 - **#552 — hass: a lost long-lived access token blocks every update.** Assigned to him; still
   on his list?
+- **#758 — vllm-amd: the models are in no backup.** The models live in a host bind mount, which
+  vzdump skips; a restored container comes back without them, and the host GPU prep must rerun on
+  a new node. Which option (re-download, back up the dataset, or document as cache)?
 - **#658 — nextcloud test 12.** Agree the approach: skip with a reason when the test runs from
   outside the route's `proxyAllowedZones`, the way `tappaas-cicd` Test 9z does — not "treat 403
   as pass".
