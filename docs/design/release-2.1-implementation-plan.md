@@ -570,7 +570,7 @@ dry-run to show the rule diff before `--apply`.
 | #222 | NetBird → srv floating rule is fragile | 4 | 3 | M | |
 | #159 | Anti-spoofing + drop fragments, always on | 4 | 3 | M | Not optional (Lars, 2026-05-13) |
 | #310 | Pin the OPNsense CA instead of `--no-ssl-verify` | 3 | 3 | M | A rotated cert must fail loudly, not silently stop the sweep |
-| #375 | `mgmt.access-to: "all"` sentinel | 4 | 2 | M | Small zones.json migration |
+| ✅ #375 | `mgmt.access-to: "all"` sentinel | 4 | 2 | M | **Built 2026-10-02.** `mgmt.access-to` is `["internet", "all"]`: `all` = internet + every other standard zone (not Disabled, not Overlay/WAN), expanded where the controller reads the zones file (`zone_access.py`, used by zone_manager, rules_manager and snat_policy), so every consumer sees the explicit list it stands for; `network-manager add` no longer appends to it. Migration **0012** rewrites a site's list, reporting the zones it did not name (hrossen: work, iotLocal, iotCloud, iotCams — the drift #372/#373 described). **Live on hrossen:** zone plan, pinhole validator and the rules reconcile of all 16 modules identical with the old list and with `all`, no rule changes; 0012 `--check` on the real config. The Wave 2 entry gate is met |
 | #576 | Zone `serves` as string or array | 3 | 2 | M | Backward compatible |
 | #257 | mDNS in zones.json | 3 | 3 | M | |
 | #160 | Overlap detection in the rules manager | 3 | 1 | L | Land with #256 |

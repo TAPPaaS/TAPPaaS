@@ -40,6 +40,7 @@ from typing import Callable, Iterable, Iterator, Literal
 from oxl_opnsense_client import Client
 
 from .cli_globals import StrictArgumentParser
+from .zone_access import expand_access_all
 from .config import Config
 from .firewall_manager import (
     FirewallManager,
@@ -373,7 +374,7 @@ def _module_alias_name(peer_vmname: str) -> str:
 def load_zones(path: Path) -> dict[str, ZoneSpec]:
     """Load zones.json into a name→ZoneSpec map."""
     with open(path) as f:
-        data = json.load(f)
+        data = expand_access_all(json.load(f))   # the `all` sentinel (#375)
     result: dict[str, ZoneSpec] = {}
     for name, entry in data.items():
         # Keys beginning with '_' (e.g. _README) are documentation, not zones.

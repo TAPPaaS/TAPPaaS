@@ -3,7 +3,7 @@
     "_comment": "Documentation block, NOT a zone. Keys beginning with '_' are ignored by every consumer: zone-manager and rules-manager skip them on load, and the jq-based bash tooling selects only entries with a state/vlantag. Do not add network fields here.",
     "isolation_invariant": {
       "rule": "A zone with \"isolated\": true (iotCams, iotUntrust) is defined with \"access-to\": [] and MUST NEVER appear in any zone's \"access-to\". Inbound access is granted exclusively per-module, by listing the source zone in the target's \"pinhole-allowed-from\" and declaring the specific VM-IP-to-port rule in that module's install.sh. Enforced by `network-manager validate` (invariant I2).",
-      "mgmt_exception": "mgmt (tier 0, the control plane) is the sole exception: it lists every standard zone, including the isolated ones, in its \"access-to\" for full operational visibility. No other zone may — and no other zone may hold the \"all\" wildcard, which reaches them without naming them.",
+      "mgmt_exception": "mgmt (tier 0, the control plane) is the sole exception: its \"access-to\" is [\"internet\", \"all\"] — internet plus every other standard zone that is not Disabled (Overlay and WAN zones are not standard), the isolated ones included, for full operational visibility. The sentinel is expanded where the file is read (#375), so the list cannot drift when zones are added or deleted. No other zone may list an isolated zone, and no other zone may hold \"all\", which reaches them without naming them.",
       "rationale": "Adding an isolation zone to a non-mgmt 'access-to' nullifies the pinhole mechanism: every host in the source subnet would gain unconditional, zone-wide reach regardless of any module declaration. iotCams must stay purpose-limited (GDPR Art. 25 - privacy by design); iotUntrust must stay quarantined to prevent lateral movement on compromise.",
       "review_note": "Three working-tree additions violating this invariant (iotUntrust added to srvHome/home access-to; srvCust added to work access-to) were caught and reverted pre-commit. With the rule written here, a reviewer can distinguish an accidental violation from an intentional design change."
     },
@@ -83,14 +83,11 @@
     "bridge": "lan",
     "access-to": [
       "internet",
-      "srv",
-      "home",
-      "guest",
-      "dmz"
+      "all"
     ],
     "pinhole-allowed-from": [],
     "tier": 0,
-    "_comment": "Always-on control plane. Full access to all zones for operational control. No inbound pinholes — mgmt initiates only.",
+    "_comment": "Always-on control plane. Full access to all zones for operational control: 'all' is every other standard zone (not Disabled, not Overlay or WAN), expanded when the file is read (#375), so adding or deleting a zone never edits this list. No inbound pinholes — mgmt initiates only.",
     "description": "Control plane: hypervisors, backup, firewall, identity, cicd"
   },
   "netbird": {

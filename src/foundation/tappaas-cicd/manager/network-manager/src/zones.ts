@@ -383,14 +383,17 @@ export function changeZoneState(
 }
 
 // ── mgmt reachability invariant (#372/#373 — operational visibility) ──
-// mgmt.access-to must list every standard zone so the control plane keeps
-// operational visibility. Ports ensure_mgmt_access / remove_mgmt_access.
+// mgmt.access-to must reach every standard zone so the control plane keeps
+// operational visibility. Since #375 it says so with the `all` sentinel, which
+// the controller expands on read — then there is nothing to append or remove,
+// and the invariant cannot drift. A site still on an explicit list keeps the
+// old upkeep. Ports ensure_mgmt_access / remove_mgmt_access.
 export function ensureMgmtAccess(doc: ZonesDoc, name: string): void {
   const mgmt = doc.raw["mgmt"];
   if (!mgmt || typeof mgmt !== "object") return;
   const m = mgmt as Record<string, unknown>;
   const cur = Array.isArray(m["access-to"]) ? (m["access-to"] as string[]) : [];
-  if (cur.includes(name)) return;
+  if (cur.includes(name) || cur.includes("all")) return;
   m["access-to"] = [...cur, name];
   const zm = doc.zones.get("mgmt");
   if (zm) zm["access-to"] = m["access-to"] as string[];

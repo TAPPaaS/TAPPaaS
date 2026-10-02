@@ -25,6 +25,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .instance import module_source_of
+from .zone_access import expand_access_all
 from .cli_globals import StrictArgumentParser
 from .config import Config
 from .service_health import check_unbound_dns
@@ -836,7 +837,7 @@ class ZoneManager:
             raise FileNotFoundError(f"Zones file not found: {self.zones_file}")
 
         with open(self.zones_file) as f:
-            data = json.load(f)
+            data = expand_access_all(json.load(f))   # the `all` sentinel (#375)
 
         # Keys beginning with '_' (e.g. _README) are documentation blocks, not
         # zones — skip them so they never become inert Zone objects.

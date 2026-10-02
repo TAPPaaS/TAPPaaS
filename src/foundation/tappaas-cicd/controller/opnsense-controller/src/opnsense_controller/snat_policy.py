@@ -31,6 +31,8 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .zone_access import ACCESS_ALL, expand_access_all
+
 # Where a module's snat request lives inside its deployed JSON. Pattern A
 # (#207) nests a service's fields under its coordinate; a top-level spelling is
 # accepted as a fallback the same way the other services accept one.
@@ -88,7 +90,7 @@ class GateResult:
 def load_zones(path: Path) -> dict[str, ZoneSpec]:
     """Load zones.json into a name->ZoneSpec map."""
     with open(path) as f:
-        data = json.load(f)
+        data = expand_access_all(json.load(f))   # the `all` sentinel (#375)
     result: dict[str, ZoneSpec] = {}
     for name, entry in data.items():
         # Keys beginning with '_' (e.g. _README) are documentation, not zones.
@@ -142,10 +144,11 @@ def rule_description(module: str, from_zone: str, zone0: str) -> str:
     return f"{DESC_PREFIX}{module}:{from_zone}->{zone0}"
 
 
-# `access-to: ["all"]` is a wildcard pass to every destination. It counts as
-# reachability for R1 (operator decision, #629): a zone told it may reach
-# everything has not been told to skip this one.
-ACCESS_WILDCARD = "all"
+# `access-to: ["all"]` reaches every zone. It counts as reachability for R1
+# (operator decision, #629): a zone told it may reach everything has not been
+# told to skip this one. load_zones expands it (#375); the check below keeps a
+# ZoneSpec built by hand answering the same way.
+ACCESS_WILDCARD = ACCESS_ALL
 
 
 def reaches(source: ZoneSpec, dest_name: str) -> bool:

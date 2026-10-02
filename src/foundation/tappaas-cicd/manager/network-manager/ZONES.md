@@ -135,6 +135,17 @@ an isolated zone to a non-`mgmt` `access-to` would nullify the pinhole mechanism
 host in the source subnet would gain unconditional zone-wide reach. `iotCams` in
 particular must stay purpose-limited (GDPR Art. 25).
 
+### How `mgmt` reaches every zone: `all`
+
+The `mgmt` exception is written `"access-to": ["internet", "all"]`. `all` means `internet`
+plus every other standard zone — not `Disabled`, and not an `Overlay` or the `WAN` hand-off — and the controller expands it where it reads
+the zones file — the zone rules, the pinhole and egress checks and the SNAT reachability
+gate all see the explicit list it stands for. Adding or deleting a zone therefore never
+edits `mgmt`, so the list cannot drift (#372, #373, #375). Only `mgmt` may hold `all`
+(I2); anywhere else it would reach the isolated zones without naming them. A site still on
+an explicit list is moved by config migration `0012` at its next update; `mgmt` is a
+`Manual` zone, so the firewall rules do not change.
+
 `iotLocal` shares tier 6 with `iotCams` (both no-egress) but is **not** `isolated`: its
 serving zone reaches it zone-wide (Home Assistant → local IoT), which R2 forbids for
 `iotCams`.

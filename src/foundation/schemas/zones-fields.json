@@ -141,7 +141,7 @@
       "items": "string",
       "special_values": {
         "internet": "Allows traffic to any destination (outbound internet access)",
-        "all": "Creates a wildcard pass rule (destination: any)"
+        "all": "Every other standard zone (not Disabled, not Overlay or WAN), plus internet — expanded where the file is read, so each consumer sees the explicit list it stands for (#375). Only mgmt may use it (validate, I2): it is how mgmt keeps reaching every zone without a list that must be edited on every zone add or delete"
       },
       "note": "Zone names (e.g., 'srv', 'dmz') allow traffic to that zone's network",
       "changeClass": "in-place",

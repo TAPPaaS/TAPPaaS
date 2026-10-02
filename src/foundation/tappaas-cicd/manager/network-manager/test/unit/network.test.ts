@@ -123,6 +123,20 @@ function tmpZones(): string {
   );
 }
 
+// ── 1b. the `all` sentinel (#375): mgmt says it once, add/delete never edit it ──
+{
+  const f = tmpZones();
+  let doc = loadZones(f);
+  (doc.raw["mgmt"] as Record<string, unknown>)["access-to"] = ["internet", "all"];
+  authorZone(doc, "srvTenant", { fromZone: "srvHome", variant: "tenant1" });
+  saveZones(f, doc);
+  doc = loadZones(f);
+  const acc = () => ((doc.raw["mgmt"] as Record<string, unknown>)["access-to"] as string[]).join(",");
+  check(acc() === "internet,all", `add leaves mgmt.access-to = [internet, all] alone (got ${acc()})`);
+  removeZone(doc, "srvTenant");
+  check(acc() === "internet,all", `delete leaves mgmt.access-to = [internet, all] alone (got ${acc()})`);
+}
+
 // ── 2. duplicate / bad-name authoring is rejected ─────────────────────
 {
   const f = tmpZones();
@@ -317,9 +331,11 @@ function tmpZones(): string {
     check(refOk, "no zone references bare srv after transform (srv renamed; home/guest kept)");
 
     const mgmtAccess = (raw["mgmt"] as Record<string, unknown>)["access-to"] as string[];
+    // The template's mgmt says `all` (#375), so the srv rename has nothing to
+    // rewrite there and the new service zone is covered without being named.
     check(
-      mgmtAccess.includes("acme") && mgmtAccess.includes("home") && mgmtAccess.includes("guest"),
-      "mgmt.access-to: srv→<N> rewritten; home/guest kept",
+      JSON.stringify(mgmtAccess) === JSON.stringify(["internet", "all"]),
+      `mgmt.access-to stays [internet, all] through the srv→<N> rename (got ${JSON.stringify(mgmtAccess)})`,
     );
 
     // idempotency: re-running on the transformed doc (srv absent, acme present) is a no-op
