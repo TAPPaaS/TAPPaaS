@@ -416,7 +416,7 @@ delete-module.sh <module-name> [--archive|--remove] [--vmid <id>] [--decommissio
 ### `adopt-module.sh` — a running machine becomes a module
 
 ```
-adopt-module.sh <address> [--instance NAME] [--zone ZONE] [--wait SECONDS]
+adopt-module.sh <address> [--instance NAME] [--zone ZONE] [--wait SECONDS] [--set field=value]...
 ```
 
 `<address>` is an IP address or a DNS name. It reaches the machine as `root` with the
@@ -425,14 +425,21 @@ mothership's key; if that fails, it prints the one command that authorises the k
 `/etc/os-release`, picks the module for that OS (`debian` → `debianhost`, and a Debian machine
 running Proxmox VE → `pvehost`, #665; any other OS is refused), names the instance after the hostname, takes `zone0` from the active zone whose
 subnet holds the address, and calls `install-module.sh <module> --instance … --address …
---zone0 … --os …`. Adopting the same machine again changes nothing.
+--zone0 … --os …`, adding each `--set field=value` as a `--field value` override so it is in
+the config before the module's install runs. Adopting the same machine again changes nothing.
+
+**SSH becomes key-only** (#756, ADR-026 D8.1 as amended 2026-10-02): a `debianhost` config
+always states `sshKeyOnly` — `true` unless adopted with `--set sshKeyOnly=false` — and the
+module's `install.sh` applies it at once: password and keyboard-interactive SSH logins refused
+for every user, root by key only, the console keeping its password. `--set sshKeyOnly=false` is
+the answer for a machine someone reaches by password; `module modify <instance> --set
+sshKeyOnly=…` changes it later.
 
 Refused, with nothing written: a key that never works, an OS with no machine module, a
 Proxmox VE host that is not in this Site's cluster (`site.json` `hardware.nodes` — join it with
 `site-manager node add`), an instance name another
 machine has (`--instance`), an address another instance already has, and an address in no
-active zone (`--zone`). It never changes how the machine is reached: key-only SSH is a
-separate step.
+active zone (`--zone`), and a `--set` that is not `field=value` or names no schema field.
 
 ### `test-module.sh` — run a module's tests
 

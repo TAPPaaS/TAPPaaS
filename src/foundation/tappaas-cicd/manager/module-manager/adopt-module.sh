@@ -136,7 +136,7 @@ main() {
             --instance) instance="${2:-}"; shift 2 ;;
             --zone)     zone="${2:-}"; shift 2 ;;
             --wait)     wait_s="${2:-}"; shift 2 ;;
-            -h|--help)  sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+            -h|--help)  sed -n '2,36p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;   # the whole header
             -*)         die "adopt: unknown option '$1'" ;;
             *)          [[ -z "${ADDRESS}" ]] || die "adopt: one address only (got '${ADDRESS}' and '$1')"; ADDRESS="$1"; shift ;;
         esac
