@@ -429,7 +429,7 @@ D7 object; no combined flag is added. `site show` prints the D7 meaning: no week
 the triple is rewritten by a numbered migration, and the renderer and validator accept the
 triple only until that migration has run. Until the runner exists nothing changes shape. Rewriting
 `site.json` is a config migration, and the 2.1 plan ships re-schemas through the G0.1
-migration runner (`release-2.1-implementation-plan.md` §3 G0.1, *Migration framework*),
+migration runner (`security-and-stability-plan.md` §3 G0.1, *Migration framework*),
 which does not exist yet; its first release carries no migrations (the Wave 0 exit gate is
 "Runner released with no migrations", §10.3). The rewrite — `["daily", "Tuesday", 2]` →
 `{"frequency": "daily", "hour": 2}`, with the dropped weekday reported — becomes a numbered

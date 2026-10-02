@@ -1,4 +1,10 @@
-# Release 2.1 — Implementation Plan (draft for review)
+# Security & Stability — Implementation Plan (draft for review)
+
+> **Named for its theme, not a version** (2026-10-02). It was the *Release 2.1* plan; since
+> [ADR-028 D13](../ADR/ADR-028%20-%20Release%20Cadence%20and%20Patching.md) every release-train
+> boundary cuts the next version, so its waves land across several of them (2.1, 2.2, …), and
+> [RELEASES.md](../../RELEASES.md) says which version carried what. The forge milestone keeps
+> its old name, *Release 2.1: Security and stability release*.
 
 **Compiled:** 2026-09-14. **Status:** draft, for operator review.
 **Input:** Codeberg snapshot taken 2026-09-14 13:53 UTC — all open issues in
@@ -825,9 +831,11 @@ New capabilities with low upgrade risk.
 
 ## 10. Testing, rollout and wave gates
 
-Every wave follows the existing release flow in
-[release/README.md](../../release/README.md): `main` → `rc/<ver>` → blank
-install + upgrade test → tag `v<ver>` → fast-forward `stable`. Installed
+Every wave follows the release train
+([RELEASE-TRAIN.md](../../src/foundation/tappaas-cicd/RELEASE-TRAIN.md), ADR-028):
+`main` → `staging` (cut and tagged as the next version) → `stable` one
+boundary later. *Until 2026-10-02 this read `main` → `rc/<ver>` → tag →
+fast-forward `stable`, the procedure the train replaced.* Installed
 systems follow their channel with `git pull --ff-only`; `stable` is the
 default channel, `main` is for testing and staging. This section adds what
 is specific to the waves: how deeply each change is tested, and what must

@@ -1,6 +1,6 @@
 # Lars ↔ Erik — open discussions
 
-**Compiled:** 2026-10-02 from the [Release 2.1 implementation plan](release-2.1-implementation-plan.md).
+**Compiled:** 2026-10-02 from the [security & stability plan](security-and-stability-plan.md).
 Two lists: questions that need both of us before work can move, and items that are Erik's to
 finish. Tick a line (✅) when it is settled, and record the outcome in the plan row it points at.
 
