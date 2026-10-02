@@ -86,7 +86,8 @@ ck "--replace puts it back, dropping NICs it never had" "yes yes" \
    "$(has 'CLI\} set \$\{RESTORE_VMID\}\$\{SET_ARGS\}') $(has 'SET_ARGS --delete|--delete \$\(echo')"
 ck "ha-vm-lib gets the node's FQDN, not root@<node>" "" "$(grep -nE 'havm_[a-z_]+ "root@' "${RESTORE_SH}")"
 ck "a replaced guest's NICs come back with the link down" yes "$(has 'link_down=1')"
-ck "…and the steps say to check the hostname before raising them" yes "$(has 'hostname .*# (must be|cloud-init)')"
+ck "…and the steps set the name DHCP sends before raising them" yes "$(has 'ipv4.dhcp-hostname <name>|# must be this guest')"
+ck "…and name the key-rotation case" yes "$(has 'cicd-key.sh recover')"
 ck "a replaced guest keeps its own onboot"        yes "$(has '\[ -n "\$\{TARGET_VMID\}" \] && \[ "\$\{REPLACE\}" != true \]')"
 
 echo "── ${PASS} passed, ${FAIL} failed ──"

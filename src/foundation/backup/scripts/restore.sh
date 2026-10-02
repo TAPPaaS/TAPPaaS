@@ -542,8 +542,13 @@ if [ "${REPLACE}" = true ]; then
     echo "  2. ssh ${N} pct exec ${RESTORE_VMID} -- hostname            # must be this guest's name"
     echo "  3. ssh ${N} pct set ${RESTORE_VMID} --net0 '<same line, link_down=0>'"
   else
-    echo "  2. ssh ${N} qm guest exec ${RESTORE_VMID} -- hostname      # cloud-init sets it at first boot"
+    echo "  2. Make DHCP ask for THIS guest's name. On a NixOS guest the static hostname is the"
+    echo "     source's until step 4 rebuilds it, and NetworkManager sends the static one:"
+    echo "       ssh ${N} qm guest exec ${RESTORE_VMID} -- nmcli c modify tappaas-ethernet ipv4.dhcp-hostname <name>"
     echo "  3. ssh ${N} qm set ${RESTORE_VMID} --net0 '<same line without link_down=1>'   # each netN"
+    echo "     then check the SOURCE's DNS name still points at the source (dig <source>.<zone>.internal)"
+    echo "  3b. Backup older than the last cicd-key.sh rotate? It trusts the old mothership key only:"
+    echo "       cicd-key.sh recover    # installs the current key through the guest agent"
   fi
   echo "  4. module-manager module update <module>; module-manager module test <module> --deep"
   echo "The replace dropped it from HA, replication and the backup job (destroy --purge);"

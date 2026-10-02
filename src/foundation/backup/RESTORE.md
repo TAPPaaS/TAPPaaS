@@ -191,11 +191,19 @@ name, `onboot` and network devices (MACs included) — so the platform's view (D
 reservation, proxy, firewall rules) still holds — and with its **network links down**:
 
 ```bash
-# 3. Start it offline and let cloud-init give it THIS guest's hostname.
+# 3. Start it offline, and make DHCP ask for THIS guest's name. On a NixOS guest the
+#    static hostname is the source's until step 5 rebuilds it — `hostname` may already
+#    show the new name (cloud-init sets the transient one), but NetworkManager sends the
+#    static one. Tell it explicitly:
 ssh root@<node>.mgmt.internal qm start <VMID>
-ssh root@<node>.mgmt.internal qm guest exec <VMID> -- hostname     # must be the new name
-# 4. Only then raise its links (the same netN line without link_down=1).
+ssh root@<node>.mgmt.internal qm guest exec <VMID> -- nmcli c modify tappaas-ethernet ipv4.dhcp-hostname nextcloud
+# 4. Only then raise its links (the same netN line without link_down=1), and check the
+#    SOURCE's name still points at the source:
 ssh root@<node>.mgmt.internal qm set <VMID> --net0 '<…>'
+dig +short <source>.<zone>.internal @10.0.0.1
+# 4b. A backup older than the last `cicd-key.sh rotate` trusts the OLD mothership key
+#     only, so nothing can log in: `cicd-key.sh recover` installs the current one
+#     through the guest agent.
 # 5. Re-apply the declaration (HA, replication and the backup job come back) and validate.
 module-manager module update nextcloud
 module-manager module test nextcloud --deep
@@ -205,8 +213,10 @@ module-manager module test nextcloud --deep
 it asks DHCP for the *old* hostname at boot, before cloud-init renames it. dnsmasq gives a
 name to whoever asked last: a restored copy of `openwebui` booted online took
 `openwebui.rossen.internal` from the running original, and with it the public site, which
-Caddy proxies by that name (#729). If it happens anyway, stop the copy, then let the
-original ask again (`sudo nmcli c up <connection>` on it) — dnsmasq moves the name back.
+Caddy proxies by that name (#729) — twice in the rehearsal: once online from the start,
+once after `hostname` already read the new name (the static one had not changed). If it
+happens anyway, stop the copy, then let the original ask again (`sudo nmcli c up
+tappaas-ethernet` on it) — dnsmasq moves the name back within seconds.
 
 What else the restored guest carries from the old system — SSH host keys (the mothership's
 `known_hosts` will refuse it until you `ssh-keygen -R` the name), certificates, application
@@ -474,6 +484,11 @@ problem — every file under it is owned by `tappaas`, which is why the command
 above it needs no privilege.
 
 ### 5.2 Rebuilding a lost mothership
+
+**Rehearsed in part** (2026-10-02, #729): the snapshot restored beside the original on a
+node with no network, the key import into an empty escrow, and its `config/` and managers
+checked. Not rehearsed: restoring `config/` from the file capture on the rebuilt machine
+(it needs the network a beside-copy must not have), `site-manager update`, the cutover.
 
 **You cannot restore the mothership from itself** — `restore.sh` runs on
 `tappaas-cicd` and drives the restore over SSH, so restoring VMID 130 from
