@@ -211,9 +211,17 @@ node + its pools via `node reconcile --apply`. Every wait is time-boxed and
 the PXE trap is disarmed on every exit path. Fully unattended example:
 
 ```
-site-manager node add tappaas2 --pxe --boot-disk sda \
-    --mac aa:bb:cc:dd:ee:ff --no-wan --pool 'tanka1=single:nvme0n1'
+site-manager node add tappaas2 --pxe --boot-disk 25414A800205 \
+    --mac aa:bb:cc:dd:ee:ff --no-wan --pool 'tanka1=single:50026B73842AD86F'
 ```
+
+Up front, disks are named by **serial** (`lsblk -o NAME,SERIAL`) or
+`disk/by-id/…`: a kernel name was read on another boot than the install's, and
+NVMe names swap between boots (#729 §3), so `--pxe` refuses `sda`/`nvme0n1`.
+After the install node add puts the installed disk first in the UEFI boot
+order, and if the answer's ssh key did not survive the first boot it restores it
+with the node's generated root password (`/home/tappaas/.node-secrets/<name>.pw`,
+root-only).
 
 Afterwards run `site-manager update` to fold HA + replication.
 

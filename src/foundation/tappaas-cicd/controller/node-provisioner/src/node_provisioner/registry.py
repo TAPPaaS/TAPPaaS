@@ -36,6 +36,19 @@ from .util import provision_dir
 
 # Node-name pattern per schemas/site-fields.json hardware.nodes[].name
 NAME_RE = re.compile(r"^[A-Za-z0-9_-]+$")
+
+# A boot disk is named by its SERIAL (preferred) or, legacy, a kernel name. The
+# installer WIPES it. Kernel names are not stable across boots: a node
+# reinstalled on 2026-10-03 had its system and data disk swap nvme0n1/nvme1n1
+# between the installer and the running system (#729) — with the other order,
+# a kernel name would have aimed the installer at the 2 TB data disk.
+DISK_RE = re.compile(r"^[A-Za-z0-9._:-]+$")
+KERNEL_DISK_RE = re.compile(r"^(sd[a-z]+|vd[a-z]+|xvd[a-z]+|hd[a-z]+|nvme\d+n\d+|mmcblk\d+)$")
+
+
+def is_kernel_disk_name(disk: str) -> bool:
+    """True for sda / nvme0n1 / vdb — names the kernel hands out per boot."""
+    return bool(KERNEL_DISK_RE.match(disk or ""))
 MAC_RE = re.compile(r"^([0-9a-f]{2}:){5}[0-9a-f]{2}$")
 
 # Pool topologies per cluster/config-storage.sh --pool syntax
@@ -122,10 +135,10 @@ class Registry:
         """
         if not NAME_RE.match(name):
             raise ValueError(f"invalid node name: {name!r}")
-        if not boot_disk or "/" in boot_disk:
+        if not boot_disk or "/" in boot_disk or not DISK_RE.match(boot_disk):
             raise ValueError(
-                f"boot disk must be a bare kernel name (e.g. sda, "
-                f"nvme0n1), got {boot_disk!r}")
+                f"boot disk must be a disk's SERIAL (lsblk -o NAME,SERIAL), "
+                f"'ask', or a bare kernel name, got {boot_disk!r}")
         reg = Registration(
             name=name,
             macs=[normalize_mac(m) for m in (macs or [])],

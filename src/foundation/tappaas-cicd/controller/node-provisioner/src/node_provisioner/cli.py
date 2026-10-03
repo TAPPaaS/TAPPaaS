@@ -59,9 +59,9 @@ def cmd_register(args) -> bool:
         info("no MAC pinned — the node matches only while it is the SINGLE "
              "pending registration (add --mac to pin)")
     if not reg.pools:
-        info("no data pool declared — declare --pool "
-             "'tanka1=single:<disk>' so the storage plane can create it "
-             "post-join (the platform layer expects tanka1)")
+        info("no data pool in this registration — fine under `site-manager "
+             "node add`, which declares them at the join; registering by hand, "
+             "add --pool 'tanka1=single:<serial>' (the platform layer expects tanka1)")
     return True
 
 

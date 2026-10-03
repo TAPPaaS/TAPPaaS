@@ -80,7 +80,7 @@ export const HELP: HelpSpec = {
       options: [
         ["(default)", "Adopt a Proxmox already installed at the node's designated mgmt IP: join the cluster + capture."],
         ["--pxe", "Bare machine: PXE-install first, then join + capture. Omit --boot-disk to be asked on the NODE console; WAN port + pools are asked here."],
-        ["--boot-disk <d>", "--pxe: the disk to install Proxmox on."],
+        ["--boot-disk <serial>", "--pxe: the disk to install Proxmox on, by SERIAL (lsblk -o NAME,SERIAL) — kernel names move between boots."],
         ["--mac <m>", "--pxe: the NIC that PXE-boots."],
         ["--wan-port <if>", "the node's WAN interface."],
         ["--no-wan", "the node has no WAN port."],
@@ -89,7 +89,10 @@ export const HELP: HelpSpec = {
         ["--yes", "do not ask for confirmation."],
         ["--config-only", "Only write the site.json entry (no machine contact)."],
       ] },
-    { usage: "node delete <name>" },
+    { usage: "node delete <name>",
+      options: [
+        ["(effect)", "Drops the node from site.json and archives its pvehost module instance. The machine is not touched."],
+      ] },
     { usage: "node reboot <name> [--apply]",
       options: [
         ["(default)", "Preview the reboot's impact — which HA services drain where. Changes nothing."],
@@ -242,6 +245,20 @@ function parseOpts(args: string[]): Opts {
     }
   }
   return o;
+}
+
+// A deleted node's pvehost module instance (ADR-026 D4) goes with it: archived
+// and unregistered, never --decommission — the machine is not touched. Left
+// behind, it is a module for a node the site no longer has (#729 §3).
+function unregisterNodeModule(name: string, configDir: string): void {
+  const cfg = `${configDir.replace(/\/$/, "")}/${name}.json`;
+  if (!existsSync(cfg)) return;
+  try {
+    if (!String(JSON.parse(readFileSync(cfg, "utf8")).moduleSource ?? "").endsWith("/pvehost")) return;
+  } catch { return; }
+  const r = spawnSync("module-manager", ["delete", name, "--archive", "--yes"], { stdio: "inherit" });
+  if (r.status === 0) info(`${GN}✓${CL} its pvehost module instance is archived and unregistered`);
+  else warn(`the pvehost module instance '${name}' is still registered — module-manager delete ${name}`);
 }
 
 function siteFileOf(o: Opts): string {
@@ -658,6 +675,7 @@ function cmdNode(o: Opts, client: SiteClient): void {
     raw.hardware = hw;
     writeSite(siteFile, raw);
     info(`${GN}✓${CL} node '${name}' deleted`);
+    unregisterNodeModule(name, o.configDir);
     return;
   }
 

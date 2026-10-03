@@ -49,6 +49,37 @@ export interface ProvisionOpts {
   yes: boolean;
 }
 
+// ── disks named before the install ──────────────────────────────────────
+//
+// A kernel disk name (nvme0n1, sda) is only valid for the boot it was read on.
+// Given up front with --pxe it was read on ANOTHER boot (or another OS) than
+// the installer's and the join's — and NVMe names swap between boots (#729 §3:
+// nvme0n1/nvme1n1 traded places, so the declared data disk was the new boot
+// disk). Up front, name a disk by what does not move: its serial
+// (lsblk -o NAME,SERIAL) or, for a pool, disk/by-id/<id>. Pure.
+const KERNEL_DISK = /^(sd[a-z]+|vd[a-z]+|xvd[a-z]+|hd[a-z]+|nvme\d+n\d+|mmcblk\d+)$/;
+
+export function isKernelDiskName(d: string): boolean {
+  return KERNEL_DISK.test(d);
+}
+
+export function pxeDiskProblems(bootDisk: string | undefined, pools: string[]): string[] {
+  const out: string[] = [];
+  if (bootDisk && isKernelDiskName(bootDisk)) {
+    out.push(`--boot-disk ${bootDisk}: a kernel name moves between boots — give the disk's SERIAL ` +
+      `(lsblk -o NAME,SERIAL), or omit --boot-disk to choose it on the node console`);
+  }
+  for (const p of pools) {
+    const disks = (p.split(":")[1] ?? "").split(",").filter((d) => d !== "");
+    const bad = disks.filter(isKernelDiskName);
+    if (bad.length > 0) {
+      out.push(`--pool ${p}: ${bad.join(", ")} is a kernel name that moves between boots — use ` +
+        `disk/by-id/<id> or the disk's serial, or omit --pool to declare pools after the install`);
+    }
+  }
+  return out;
+}
+
 // ── plumbing ────────────────────────────────────────────────────────────
 
 function run(cmd: string, args: string[]): { rc: number; out: string } {
@@ -71,6 +102,66 @@ function sshTo(host: string, remote: string, timeoutSec = 10): { rc: number; out
     `root@${host}`,
     remote,
   ]);
+}
+
+// bootFromDiskFirst — the entry the node just booted from (its new disk) goes
+// first in the UEFI boot order. A machine set up for the install with network
+// boot first would otherwise PXE on every reboot (#729 §3: the first reboot after
+// the install came up in PXE). Not UEFI, or no efibootmgr: say so and go on.
+export const BOOT_FIRST_CMD =
+  "cur=$(efibootmgr | sed -n 's/^BootCurrent: //p'); ord=$(efibootmgr | sed -n 's/^BootOrder: //p'); " +
+  "[ -n \"$cur\" ] && [ -n \"$ord\" ] || exit 3; " +
+  "new=$(printf '%s\\n' \"$cur\" $(echo \"$ord\" | tr , ' ') | awk '!seen[$0]++' | paste -sd, -); " +
+  "[ \"$new\" = \"$ord\" ] && { echo \"unchanged $ord\"; exit 0; }; " +
+  "efibootmgr -o \"$new\" >/dev/null && echo \"set $new\"";
+
+function bootFromDiskFirst(host: string): void {
+  const r = sshTo(host, BOOT_FIRST_CMD, 10);
+  if (r.rc === 0) info(`  ${GN}✓${CL} boot order: the installed disk first (${r.out.trim()})`);
+  else warn(`  could not put the installed disk first in the boot order (not UEFI?) — check the firmware boot order so a reboot does not network-boot`);
+}
+
+// The root password node-provisioner generated for <name> (root-only, 0600).
+export const NODE_SECRETS_DIR = "/home/tappaas/.node-secrets";
+const CICD_PUBKEY = "/home/tappaas/.ssh/id_ed25519.pub";
+
+// restoreRootKey — log in as root with the node's generated password (ssh's
+// askpass reads it via sudo: it never reaches a command line, the environment
+// or a file of ours) and append the cicd key to root's authorized_keys.
+function restoreRootKey(name: string, host: string): boolean {
+  const pw = `${NODE_SECRETS_DIR}/${name}.pw`;
+  if (run("sudo", ["-n", "test", "-s", pw]).rc !== 0) {
+    warn(`  ${host} refuses our key and there is no stored password (${pw}) to put it back with`);
+    return false;
+  }
+  let key: string;
+  try { key = fs.readFileSync(CICD_PUBKEY, "utf8").trim(); } catch { return false; }
+  warn(`  ${host} is up but refuses our key — putting it back with the stored root password`);
+  const dir = fs.mkdtempSync("/tmp/tappaas-askpass.");
+  const askpass = `${dir}/askpass`;
+  fs.writeFileSync(askpass, `#!/bin/sh\nexec sudo -n cat ${pw}\n`);
+  fs.chmodSync(askpass, 0o700);
+  try {
+    const r = spawnSync("ssh", [
+      "-o", "ConnectTimeout=10", "-o", "StrictHostKeyChecking=accept-new",
+      "-o", "PreferredAuthentications=password,keyboard-interactive",
+      "-o", "PubkeyAuthentication=no", "-o", "NumberOfPasswordPrompts=1",
+      `root@${host}`,
+      'IFS= read -r k; mkdir -p -m 700 /root/.ssh; touch /root/.ssh/authorized_keys; ' +
+      'grep -qxF "$k" /root/.ssh/authorized_keys || printf "%s\\n" "$k" >> /root/.ssh/authorized_keys',
+    ], {
+      input: `${key}\n`, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"],
+      env: { ...process.env, SSH_ASKPASS: askpass, SSH_ASKPASS_REQUIRE: "force", DISPLAY: process.env.DISPLAY ?? ":0" },
+    });
+    if (r.status === 0) {
+      info(`  ${GN}✓${CL} key restored on ${host}`);
+      return true;
+    }
+    warn(`  password login to ${host} failed too: ${(r.stderr ?? "").trim().split("\n").pop()}`);
+    return false;
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 function sleep(seconds: number): void {
@@ -162,6 +253,8 @@ export function provisionNode(o: ProvisionOpts): void {
   const stdIp = stdIpOf(o.name);
   const provisionDir = `${defaultConfigDir()}/provision`;
   const step = stepper();
+  const diskProblems = pxeDiskProblems(o.bootDisk, o.pools);
+  if (diskProblems.length > 0) die(diskProblems.join("\n"));
 
   // register --------------------------------------------------------------
   step(`register '${o.name}' (standard mgmt IP ${stdIp})`);
@@ -207,14 +300,26 @@ export function provisionNode(o: ProvisionOpts): void {
     step(`waiting for ssh at ${installIp} (install + reboot, typically 5-10 min)`);
     run("ssh-keygen", ["-R", installIp]);
     const sshDeadline = Date.now() + 30 * 60 * 1000;
+    let refused = 0;
+    let keyTries = 0;
     for (;;) {
       const r = sshTo(installIp, "hostname", 5);
       if (r.rc === 0 && r.out.includes(o.name)) break;
+      // Up, but our key is not accepted: the answer's root-ssh-keys did not
+      // survive (#729 §3: a reset during first boot left authorized_keys at 0
+      // bytes). A few in a row — not one during sshd's start — and the root
+      // password the provisioner generated puts the key back.
+      if (r.rc !== 0 && /Permission denied/.test(r.out) && ++refused >= 3 && keyTries < 2) {
+        keyTries++;
+        refused = 0;
+        if (restoreRootKey(o.name, installIp)) continue;
+      }
       if (r.rc === 0) die(`a machine at ${installIp} answers but claims '${r.out.trim()}' — expected '${o.name}'; not touching it`);
       if (Date.now() > sshDeadline) die(`timed out waiting for ssh at ${installIp} — check the node's console`);
       sleep(15);
     }
     info(`  ${GN}✓${CL} ${o.name} is up at ${installIp}`);
+    bootFromDiskFirst(installIp);
 
     joinAndCapture(o, installIp, stdIp, step);
   } finally {
@@ -253,7 +358,7 @@ function joinAndCapture(
   }
   const pools = [...o.pools];
   if (pools.length === 0) {
-    const disks = sshTo(nodeIp, "lsblk -d -o NAME,SIZE,MODEL,TRAN | grep -v '^sr\\|^loop\\|^zd'").out.trimEnd();
+    const disks = sshTo(nodeIp, "lsblk -d -o NAME,SIZE,MODEL,SERIAL,TRAN | grep -v '^sr\\|^loop\\|^zd'").out.trimEnd();
     info(`  disks on ${o.name} (boot disk is protected automatically):\n${disks.replace(/^/gm, "    ")}`);
     info("  declare data pools as name=layout:disk[,disk...] — e.g. tanka1=single:nvme0n1 (empty line to finish)");
     for (;;) {
@@ -349,6 +454,13 @@ function joinAndCapture(
       die(`pvecm add failed on ${o.name}:\n${joined.out.trim()}`);
     }
     info(`  ${GN}✓${CL} ${o.name} joined the cluster`);
+    // HA must not place guests here until its pools are storage the cluster
+    // knows: #729 §3 — failback migrated a guest onto the rejoined node a
+    // minute after the join, before its pool existed (four aborts, then a race
+    // won). Maintenance until the storage step below; on any failure it stays.
+    const maint = sshTo(`tappaas1.${domain}`, `ha-manager crm-command node-maintenance enable ${o.name} && echo MAINT`);
+    if (maint.out.includes("MAINT")) info(`  ${o.name} held in HA maintenance until its storage is registered`);
+    else warn(`  could not put ${o.name} in HA maintenance — HA may move guests onto it before its pools are registered`);
     // Cluster ssh/cert plumbing for the NEW member (also refreshes the
     // shared known_hosts — a REUSED node name otherwise leaves stale host
     // keys that silently break inter-node root ssh; stage-2 finding).
@@ -378,6 +490,7 @@ function joinAndCapture(
   if (capturedPools.length === 0) {
     info("  no pools captured for this node — nothing to register");
   }
+  let storageOk = capturedPools.length > 0;
   for (const pool of capturedPools) {
     const r = sshTo(`tappaas1.${domain}`,
       `cur=$(sed -n "/zfspool: ${pool}\$/,/^\$/s/^\\s*nodes //p" /etc/pve/storage.cfg | head -1); ` +
@@ -385,7 +498,17 @@ function joinAndCapture(
       `*) pvesm set ${pool} --nodes "\${cur:+\${cur},}${o.name}" && echo "added" ;; esac`);
     if (/added/.test(r.out)) info(`  ${GN}✓${CL} ${o.name} added to storage '${pool}' nodes`);
     else if (/already/.test(r.out)) info(`  storage '${pool}' already lists ${o.name}`);
-    else warn(`  could not register ${o.name} on storage '${pool}': ${r.out.trim()} — fix with: pvesm set ${pool} --nodes <list>`);
+    else {
+      storageOk = false;
+      warn(`  could not register ${o.name} on storage '${pool}': ${r.out.trim()} — fix with: pvesm set ${pool} --nodes <list>`);
+    }
+  }
+  const lift = `ha-manager crm-command node-maintenance disable ${o.name}`;
+  if (storageOk && sshTo(`tappaas1.${domain}`, `${lift} && echo LIFTED`).out.includes("LIFTED")) {
+    info(`  ${GN}✓${CL} HA maintenance lifted — ${o.name} takes guests`);
+  } else {
+    warn(`  ${o.name} stays in HA maintenance (no guests placed on it) until its pools are registered — then: ` +
+         `ssh root@tappaas1.${domain} ${lift}`);
   }
 
   // backup client on the new node ------------------------------------------
@@ -407,6 +530,18 @@ function joinAndCapture(
 
   step("registering the node as a pvehost module instance (ADR-026 D4, #665)");
   registerNode(o.name);
+
+  // key-only SSH now, not at the next sweep (#19; #729 §3 — the rejoined node
+  // took root passwords over ssh for hours). Same drop-in and guard as the
+  // cluster update's Step 5: fed over the key login, so it cannot lock us out.
+  step("key-only SSH on the new node (#19)");
+  const keyOnly = `${REPO_DIR}/src/foundation/tappaas-cicd/scripts/ssh-key-only.sh`;
+  const hard = fs.existsSync(keyOnly)
+    ? spawnSync("ssh", ["-o", "BatchMode=yes", "-o", "PasswordAuthentication=no", "-o", "ConnectTimeout=10",
+        `root@${o.name}.${domain}`, "bash -s -- apply"], { input: fs.readFileSync(keyOnly, "utf8"), encoding: "utf8" })
+    : null;
+  if (hard?.status === 0) info(`  ${GN}✓${CL} ${o.name} refuses password logins over ssh (console and GUI keep the root password)`);
+  else warn(`  key-only SSH not enforced on ${o.name} yet — the next ${YW}site-manager update${CL} does it (cluster Step 5)`);
 
   info(`\n${GN}✓ node '${o.name}' is in the cluster and captured${CL}`);
   info(`  next: run ${YW}site-manager update${CL} to fold HA + replication over the new topology.`);

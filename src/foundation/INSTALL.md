@@ -341,9 +341,11 @@ The command walks the whole flow and asks only what it cannot know:
 Every question can be pre-answered for a fully unattended run:
 
 ```bash
-site-manager node add tappaas2 --pxe --boot-disk sda --mac aa:bb:cc:dd:ee:ff \
-    --no-wan --pool 'tanka1=single:nvme0n1'
-# --mac also pre-reserves the standard IP, so the node installs onto it directly
+site-manager node add tappaas2 --pxe --boot-disk 25414A800205 --mac aa:bb:cc:dd:ee:ff \
+    --no-wan --pool 'tanka1=single:50026B73842AD86F'
+# --mac also pre-reserves the standard IP, so the node installs onto it directly.
+# Disks by SERIAL (lsblk -o NAME,SERIAL): kernel names (sda, nvme0n1) swap
+# between boots, so --pxe refuses them.
 ```
 
 Afterwards, fold the new topology into HA + replication:

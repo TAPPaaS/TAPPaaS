@@ -27,7 +27,7 @@
 #                     Define a pool non-interactively. May be repeated.
 #                     topology ∈ { single, stripe, mirror, raidz, raidz2 }.
 #                     single=1 disk; stripe=2+ disks, no redundancy.
-#                     disks are kernel names (sdb) or by-id paths.
+#                     disks are kernel names (sdb), by-id paths, or serials.
 #                     e.g. --pool tanka1=mirror:sdb,sdc --pool tankb1=single:sdd
 #   --yes             Assume "yes" to wipe confirmations (DANGEROUS; for
 #                     unattended installs only). Implies non-interactive.
@@ -420,6 +420,37 @@ register_pve() {
 }
 
 # ── Non-interactive path: --pool specs ───────────────────────────────
+
+# disk_name <spec> — the disk's kernel name ON THIS BOOT. A spec is a kernel name
+# (nvme0n1), or a by-id path, absolute (/dev/disk/by-id/nvme-KINGSTON_…) or
+# relative to /dev (disk/by-id/…). Kernel names are NOT stable across boots: on a
+# node reinstalled 2026-10-03 the system disk and the data disk swapped
+# nvme0n1/nvme1n1 between the installer and the running system (#729). So a
+# caller names disks by id, and everything below — the boot-disk guard above all
+# — works on the name that id resolves to now. Passed through unresolved, a
+# by-id path never equalled a boot disk's kernel name, so the guard could not
+# fire; and '/dev/' was prefixed to an absolute path.
+disk_name() {
+  local spec="$1" path real
+  case "$spec" in
+    /*)  path="$spec" ;;
+    */*) path="/dev/$spec" ;;
+    *)   path="/dev/$spec" ;;
+  esac
+  # A bare SERIAL (what site-manager asks for up front): the one whole-disk
+  # by-id link ending in it — two different disks matching is an error.
+  if [[ ! -e "$path" && "$spec" != */* ]]; then
+    local -a m=()
+    mapfile -t m < <(for l in "${DISK_BY_ID:-/dev/disk/by-id}"/*"$spec"; do
+      [[ -e "$l" && "$l" != *-part* ]] && readlink -f "$l"; done | sort -u)
+    [[ ${#m[@]} -eq 1 ]] || return 1
+    path="${m[0]}"
+  fi
+  real="$(readlink -f "$path" 2>/dev/null)" || return 1
+  [[ -b "$real" ]] || return 1
+  basename "$real"
+}
+
 process_spec() {
   # name=topology:disk1,disk2
   local spec="$1"
@@ -427,7 +458,13 @@ process_spec() {
   local topo="${rest%%:*}" disks_csv="${rest#*:}"
   [[ "$name" == "$spec" || "$rest" == "$spec" ]] && die "Bad --pool spec '${spec}' (want name=topology:disk,disk)"
   IFS=',' read -r -a disks <<<"$disks_csv"
-  create_pool "$name" "$topo" "${disks[@]}"
+  local -a names=() d n
+  for d in "${disks[@]}"; do
+    n="$(disk_name "$d")" || die "Not a block device: ${d}"
+    [[ "$d" == "$n" ]] || info "  ${d} is /dev/${n} on this boot"
+    names+=("$n")
+  done
+  create_pool "$name" "$topo" "${names[@]}"
 }
 
 if [[ ${#POOL_SPECS[@]} -gt 0 ]]; then

@@ -98,6 +98,13 @@ class TestCrudRoundTrip(RegistryCase):
         with self.assertRaises(ValueError):
             self.registry.register("bad name!")
 
+    def test_boot_disk_serial_kernel_name_or_ask(self):
+        for ok in ("25414A800205", "50026B73842AD86F", "nvme1n1", "sda", "ask"):
+            self.assertEqual(self.registry.register("tappaas3", boot_disk=ok).boot_disk, ok)
+        for bad in ("/dev/sda", "disk/by-id/nvme-X", "a disk", "*", ""):
+            with self.assertRaises(ValueError, msg=bad):
+                self.registry.register("tappaas3", boot_disk=bad)
+
     def test_reregister_replaces(self):
         self.registry.register("tappaas3", macs=["aa:bb:cc:dd:ee:01"])
         self.registry.register("tappaas3", macs=["aa:bb:cc:dd:ee:02"])

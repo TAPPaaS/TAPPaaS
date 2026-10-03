@@ -23,8 +23,11 @@ sudo node-provisioner prepare --iso /var/tmp/proxmox-ve_9.x-auto-from-http.iso
 
 # 1. Register the new node (the allowlist entry). Pin the MAC if you know it;
 #    without a MAC the node only matches while it is the ONLY pending one.
+#    The boot disk by SERIAL (lsblk -o NAME,SERIAL) — the answer selects it
+#    with a udev ID_SERIAL filter; a kernel name (sda) still works but NVMe
+#    names swap between boots. Omit --boot-disk to be asked on the console.
 node-provisioner register tappaas3 --mac aa:bb:cc:dd:ee:ff \
-    --pool 'tanka1=single:nvme0n1'
+    --boot-disk 25414A800205 --pool 'tanka1=single:50026B73842AD86F'
 
 # 2. Open the (TTL-limited) provisioning window:
 #    starts the HTTP answer/asset server + a TFTP server (transient systemd
@@ -40,7 +43,7 @@ node-provisioner disable
 ```
 
 After the install the node's generated root password sits in
-`/home/tappaas/.node-secrets/<name>.pw` (0600) and the cicd tappaas SSH key
+`/home/tappaas/.node-secrets/<name>.pw` (root-owned, 0600: `sudo cat`) and the cicd tappaas SSH key
 is in the node's root `authorized_keys`. Joining the cluster is Phase N4
 (today: run `foundation/install.sh` on the node; the next `update-tappaas`
 captures it via `site-manager node reconcile`).

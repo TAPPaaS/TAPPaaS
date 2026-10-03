@@ -92,6 +92,18 @@ class TestRenderAnswer(unittest.TestCase):
         self.assertIn("tankb1=mirror:sdb+sdc", out)
         self.assertIn("tanka1=single:nvme0n1", out)
 
+    # ── The boot disk by serial (#729 §3: nvme0n1/nvme1n1 swapped between boots) ──
+
+    def test_boot_disk_by_serial_is_a_udev_filter(self):
+        out = self._render(boot_disk="25414A800205")
+        self.assertIn('filter.ID_SERIAL = "*25414A800205*"', out)
+        self.assertNotIn("disk-list", out, "a serial must not also pin a kernel name")
+
+    def test_boot_disk_kernel_name_keeps_disk_list(self):
+        out = self._render(boot_disk="nvme1n1")
+        self.assertIn('disk-list = ["nvme1n1"]', out)
+        self.assertNotIn("filter.ID_SERIAL", out)
+
     def test_no_pools_falls_back_to_ext4_with_todo(self):
         out = self._render(pools=[])
         self.assertIn('filesystem = "ext4"', out)

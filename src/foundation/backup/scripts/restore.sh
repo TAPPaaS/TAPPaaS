@@ -48,6 +48,9 @@ Options:
                               backup of --vmid, keeping its name, onboot and network
                               devices, so its DNS, DHCP reservation and firewall
                               rules still hold (RESTORE.md §2). Left stopped.
+  --start / --no-start        A plain restore (no --target-vmid): start the guest
+                              afterwards, or don't. Neither: asked on a terminal;
+                              with none (backup-manager over ssh), left stopped.
   -l, --list                  List available backups for a VMID (requires -v)
   --list-all                  List all available backups
   -h, --help                  Show this help message
@@ -122,6 +125,7 @@ TARGET_STORAGE=""
 BACKUP_ID=""
 TARGET_VMID=""
 REPLACE=false
+START=""   # yes | no | "" = ask, when there is someone to ask
 LIST_MODE=false
 LIST_ALL_MODE=false
 
@@ -150,6 +154,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --replace)
       REPLACE=true
+      shift
+      ;;
+    --start)
+      START=yes
+      shift
+      ;;
+    --no-start)
+      START=no
       shift
       ;;
     -l|--list)
@@ -337,6 +349,9 @@ if [ "$VM_EXISTS" = "yes" ]; then
     printf '%s\n' "${IDENTITY}" | sed 's/^/    /'
   else
     info "VM ${RESTORE_VMID} already exists on ${TARGET_NODE}"
+    # No terminal (backup-manager over ssh, a script): nobody to ask — the
+    # flag that says so is --replace (#729 §3).
+    [ -t 0 ] || die "VM ${RESTORE_VMID} exists and there is no terminal to confirm on — pass --replace to overwrite it"
     read -p "Do you want to overwrite it? (yes/no): " CONFIRM
     if [ "$CONFIRM" != "yes" ]; then
       echo "Restore cancelled by user"
@@ -563,11 +578,17 @@ if [ -n "${TARGET_VMID}" ]; then
   echo "  ssh root@${TARGET_NODE}.${ZONE}.internal ${CLI} destroy ${RESTORE_VMID}   # when done"
   exit 0
 fi
-read -p "Do you want to start the VM now? (yes/no): " START_VM
+# --start/--no-start decide; otherwise ask — and with no terminal to ask on
+# (#729 §3: the prompt read EOF), leave it stopped and say so.
+START_VM="${START}"
+if [ -z "${START_VM}" ] && [ -t 0 ]; then
+  read -p "Do you want to start the VM now? (yes/no): " START_VM
+fi
 if [ "$START_VM" = "yes" ]; then
   info "Starting VM ${VMID}..."
   ssh root@${TARGET_NODE}.${ZONE}.internal "${CLI} start ${RESTORE_VMID}"
   echo "${GN}VM ${VMID} started successfully${CL}"
 else
-  echo "VM ${VMID} is ready but not started. Start it manually when ready."
+  echo "VM ${VMID} is ready but not started. Start it when ready (or restore with --start):"
+  echo "  ssh root@${TARGET_NODE}.${ZONE}.internal ${CLI} start ${RESTORE_VMID}"
 fi

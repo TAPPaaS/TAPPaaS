@@ -270,8 +270,10 @@ machine.
 
 ## 3. A node is lost
 
-**Unrehearsed.** Recovering a node is four separate jobs, and they must happen
-in this order.
+**Rehearsed** (2026-10-03, #729: tappaas2's power pulled on the test site; the node
+PXE-reinstalled under the same name, its guests restored, the HA test VM recovered and
+home by itself — see the rehearsal plan). Recovering a node is four separate jobs, and
+they must happen in this order.
 
 ### 3.0 First: find out what is still running, and where
 
@@ -291,7 +293,7 @@ before touching anything:
 # Which modules are NOT where they are declared to be — i.e. what HA moved.
 # `node` is the declaration, `actualNode` is where the guest is really running.
 module-manager list --json \
-  | jq -r '.modules[] | select(.actualNode != null and .node != "" and .actualNode != .node)
+  | jq -r '.modules[] | select(.actualNode != null and (.node // "") != "" and .actualNode != .node)
            | "\(.name): declared \(.node), running on \(.actualNode)"'
 
 # The same question asked of the cluster itself, for when the mothership's view
@@ -343,9 +345,23 @@ site-manager node delete tappaas2
 ### 3.2 Bring the replacement back in
 
 ```bash
-site-manager node add tappaas2 --pool tanka1=single:nvme0n1     # adopt a hand-installed Proxmox
-site-manager node add tappaas2 --pxe --boot-disk nvme0n1        # or PXE-install it
+site-manager node add tappaas2 --pxe --boot-disk 25414A800205   # PXE-install it: boot disk by SERIAL
+site-manager node add tappaas2 --pool tanka1=single:50026B73842AD86F   # or adopt a hand-installed Proxmox
 ```
+
+**Name disks by serial** (`lsblk -o NAME,SERIAL`, or `disk/by-id/…`), never by
+kernel name: NVMe names swap between boots. In the #729 rehearsal the installer's
+`nvme0n1` was the running system's `nvme1n1` — a pool declared on `nvme0n1` would
+have been the new boot disk. `node add --pxe` refuses kernel names; leave out
+`--boot-disk` to pick the disk on the node's console, and `--pool` to be asked
+after the install, against the node's real disks.
+
+**The node's root password** is generated for the PXE install and kept on the
+mothership, root-only: `sudo cat /home/tappaas/.node-secrets/tappaas2.pw`. You
+need it only at the node's console — node add logs in with the cicd key, and if
+that key did not survive the first boot it puts it back with this password.
+After a firmware change the PXE entry can come first again: node add puts the
+installed disk first in the UEFI boot order, so a reboot does not reinstall.
 
 Reusing the same name is deliberate: module declarations, HA affinity rules and
 storage entries all reference nodes by name, so a replacement called `tappaas2`
@@ -377,8 +393,19 @@ end up back on the replacement. The second is the historical record of what the
 dead node was actually carrying, including anything that had been migrated onto
 it without the declaration being updated.
 
-**Skip anything §3.0 found running elsewhere.** For each remaining VMID — one at
-a time, validating each:
+**Skip anything §3.0 found running elsewhere.** Restore the rest **providers
+first**: a module whose `dependsOn` or `integratesWith` names another lost module
+comes after it. Its `module update` checks what it uses — litellm's fails while
+vllm-amd (`integratesWith: vllm-amd:inference`) is still down (#729 §3). To see
+which lost modules use which:
+
+```bash
+module-manager list --json | jq -r '.modules[] | select(.node=="tappaas2") | .name' \
+  | while read -r m; do echo "$m <- $(jq -r '[(.dependsOn // [])[], (.integratesWith // [])[]]
+      | map(split(":")[0]) | unique | join(" ")' ~/config/$m.json)"; done
+```
+
+Then for each, in that order — one at a time, validating each:
 
 ```bash
 backup-manager restore restore <module> --node tappaas2 --storage tanka1
@@ -390,7 +417,14 @@ A **container** (LXC) restores the same way, with two differences: `--storage`
 is required (without it a container would land on `local`), and its **host bind
 mounts** (`mpN: /some/path`) are not in any backup. The restore names each one and
 whether it exists on the target node — vllm-amd's models directory, for one, is
-gone with the node it lived on and has to be repopulated before it is useful.
+gone with the node it lived on and has to be repopulated before it is useful:
+create it **before** starting the container (a missing bind source stops it from
+starting), then fetch the model:
+
+```bash
+ssh root@tappaas2.mgmt.internal "zfs create tanka1/vllm-models"    # mp0: /tanka1/vllm-models
+cd ~/TAPPaaS/src/apps/vllm-amd && ./download-model.sh prod          # ~28 GB (qwen2.5-14b)
+```
 
 Guests that were **HA-managed and replicated** may already be running on a
 surviving node — the cluster failed them over, which is what HA is for. Do not

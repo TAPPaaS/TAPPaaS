@@ -23,6 +23,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .log import warn
+from .registry import is_kernel_disk_name
 
 DEFAULT_KEYBOARD = "en-us"
 DEFAULT_COUNTRY = "us"
@@ -107,8 +108,17 @@ def render_answer(
         "# TAPPaaS standard (cf. tappaas1): PVE system on a dedicated boot",
         "# disk, stock ext4/LVM layout (pve-root).",
         'filesystem = "ext4"',
-        f"disk-list = {_toml_str_list([boot_disk])}",
     ]
+    # The disk the installer WIPES. By serial whenever we have one: a udev filter
+    # on ID_SERIAL picks that physical disk whatever the kernel calls it on this
+    # boot. A kernel name (legacy) is only as good as the enumeration order.
+    if is_kernel_disk_name(boot_disk):
+        lines.append(f"disk-list = {_toml_str_list([boot_disk])}")
+    else:
+        lines += [
+            "# the boot disk by SERIAL — stable across boots (kernel names are not)",
+            f"filter.ID_SERIAL = {_toml_str('*' + boot_disk + '*')}",
+        ]
 
     if pools:
         extra = ", ".join(
