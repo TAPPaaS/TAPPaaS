@@ -177,6 +177,12 @@ Test Summary for test-nixos
 
 Test VMs are **deleted by default** after testing. Use `--skip-delete` to keep them.
 
+**A case that is already deployed when the run starts is never installed over or
+deleted** — it is tested where it is. That is also how the sweep runs a fixture
+deployed as a module (its `test.sh` is this suite): on 2026-10-03 (#729 §3) the
+suite installed over the running HA test VM, failed, and then deleted it. Only
+what the run itself installed, and an orphan guest with no config, are removed.
+
 ```bash
 # Default behavior: test.sh installs, tests, and deletes VMs
 ./test.sh

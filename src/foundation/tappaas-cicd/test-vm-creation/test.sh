@@ -114,6 +114,18 @@ fi
 declare -a INSTALL_RESULTS
 declare -a TEST_RESULTS
 
+# A case that is already DEPLOYED when the run starts is not this suite's: test
+# it where it is, never install over it, never delete it. The sweep runs a
+# deployed fixture's test.sh — this file — as its module test, and on
+# 2026-10-03 (#729 §3) that installed over the running HA test VM, failed, and
+# then deleted it with its config: "Deleting test VMs" took a guest the run had
+# not created. Only what this run installs, or an orphan with no config, goes.
+declare -A DEPLOYED_BEFORE=()
+for test_entry in "${TESTS[@]}"; do
+    IFS=':' read -r TEST_NAME _ _ <<< "$test_entry"
+    [ -f "/home/tappaas/config/${TEST_NAME}.json" ] && DEPLOYED_BEFORE["$TEST_NAME"]=1
+done
+
 # Colors
 RED='\e[31m'
 GREEN='\e[32m'
@@ -170,7 +182,9 @@ for test_entry in "${TESTS[@]}"; do
     fi
 
     # Install phase
-    if [ "$SKIP_INSTALL" = false ]; then
+    if [ -n "${DEPLOYED_BEFORE[$TEST_NAME]:-}" ]; then
+        echo -n "Already deployed — testing it in place, not touching it. "
+    elif [ "$SKIP_INSTALL" = false ]; then
         echo -n "Installing... "
         if /home/tappaas/bin/install-module.sh "$TEST_NAME" > "$INSTALL_LOG" 2>&1; then
             INSTALL_STATUS="pass"
@@ -200,7 +214,7 @@ for test_entry in "${TESTS[@]}"; do
         echo -n "Testing... "
 
         # Wait a bit for VM to be fully ready if we just installed
-        if [ "$SKIP_INSTALL" = false ]; then
+        if [ "$INSTALL_STATUS" = "pass" ]; then
             sleep 30
         fi
 
@@ -308,6 +322,11 @@ if [ "$DELETE" = true ]; then
 
     for test_entry in "${TESTS[@]}"; do
         IFS=':' read -r TEST_NAME _ _ <<< "$test_entry"
+
+        if [ -n "${DEPLOYED_BEFORE[$TEST_NAME]:-}" ]; then
+            echo "  Keeping ${TEST_NAME} (deployed before this run — not the suite's to delete)"
+            continue
+        fi
 
         # No config does NOT mean nothing to clean up — it is the case that
         # leaves orphans (#695). An install that failed after creating the guest,
