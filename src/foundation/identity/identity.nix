@@ -50,11 +50,11 @@ let
   # manifest (every other tag here is multi-arch), so an x86 guest pulled an
   # image it cannot execute (#748, 2026-10-03). Each tag below was checked.
   ak = import ./ak-step.nix {
-    # 2026.5.7 needs the worker's own listeners moved off the server's ports
-    # (akWorkerEnv below); without that it answered every request with an empty
-    # page on hrossen (#748, 2026-10-03). 2026.8.x is added once 2026.5 is proven.
+    # 2026.5 and later need the worker's own listeners moved off the server's
+    # ports (akWorkerEnv below); without that 2026.5.7 answered every request
+    # with an empty page on hrossen (#748, 2026-10-03).
     lines = [ "2025.2.3" "2025.4.4" "2025.6.4" "2025.8.6" "2025.10.4"
-              "2025.12.6" "2026.2.7" "2026.5.7" ];
+              "2025.12.6" "2026.2.7" "2026.5.7" "2026.8.3" ];
   };
 
   # Settings, as opposed to secrets: declared here, so a change reaches every
