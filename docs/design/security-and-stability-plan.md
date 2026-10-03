@@ -128,10 +128,10 @@ things that make those migrations survivable go before it (Wave 0).
 | 4 | G4.1 Alerting & cluster resilience | 5 | 0/5 | 3 | 3 | M |
 | 4 | G4.2 Proxy & ingress | 3 | 1/5 | 3 | 2 | L |
 | 4 | G4.3 Manager verb gaps | 6 | 6/14 | 3 | 2 | L |
-| 4 | G4.4 Storage & physical devices | 5 | 2/8 | 2 | 2 | M |
+| 4 | G4.4 Storage & physical devices | 5 | 2/9 | 2 | 2 | M |
 | 4 | G4.5 Governance, CI & sign-offs | 8 | 3/10 | 3 | 1 | L |
 
-**Issues** is the count when the plan was made; **Done** is ✅ rows / all rows in the group's own table now (it grows as issues are added and closed). By wave: Wave 0 25/25 · Wave 1 81/92 · Wave 2 11/29 · Wave 3 19/56 · Wave 4 12/42. Issue counts include the Future Work items rolled in.
+**Issues** is the count when the plan was made; **Done** is ✅ rows / all rows in the group's own table now (it grows as issues are added and closed). By wave: Wave 0 25/25 · Wave 1 81/92 · Wave 2 11/29 · Wave 3 19/56 · Wave 4 12/43. Issue counts include the Future Work items rolled in.
 
 ```mermaid
 quadrantChart
@@ -758,7 +758,8 @@ New capabilities with low upgrade risk.
 
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
-| #388 | `cluster:storage` (NFS first) | 1 | 2 | M | The share schema in site.json becomes a contract |
+| #388 | `cluster:storage` (NFS first) | 1 | 2 | M | The share schema in site.json becomes a contract. **Decided by [ADR-029](../ADR/ADR-029%20-%20NFS%20Service.md)** (Proposed 2026-10-03), which replaced the site.json/`environment.json` sketch: the service is `pvehost:nfs`, exports are declared on the node (`nfs.exports[]`, ZFS `sharenfs`), mounts on the consumer; built in #766 |
+| #766 | Implement ADR-029: NFS service (`pvehost:nfs`) | 2 | 2 | M | **Opened 2026-10-03.** The build of #388. Twelve work packages: node exports, validate, the per-pair rule, NixOS/Debian mounts, export backup through the node's `backup:filesystem`, registered unmanaged NAS servers, RPC-with-TLS, the storage zone for multi-zone consumers, LXC consumers, quota health; Jellyfin (#52) is the first consumer |
 | #155 | Modules for physical devices | 5 | 1 | L | Docs and examples only (Lars, 2026-05-15) |
 | #668 | A machine's zone is recorded, not enforced | 2 | 3 | M | **Opened 2026-09-19.** A `vm`'s `zone0` decides a bridge VLAN and `cluster:vm` makes it true; a `machine`'s decides which network its **physical** NIC is cabled to, and nothing checks or sets the switch port. Record the switch and port per NIC, check the port's VLAN against `zone0`/`zone1` as drift, and apply a zone change under the same consent rules as a VM's NIC change. Touches the ADR-026 machine modules, `switch-controller`/`network-manager` and the field schema; sits beside #236 |
 | #697 | Node `lan` trunks and their switch ports are set once at install, maintained by nothing | 3 | 4 | M | **Opened 2026-09-21** from the makerfloss deep sweep. `config-network.sh` writes `bridge-vids 2-4094` once; `proxmox-controller` later *narrows* it to the Active tags, and only `zone add`/`delete` ever trigger that — `enable`/`disable` just print a hint, the routine sweep runs `reconcile --only opnsense`, and no timer runs the proxmox or switch planes at all. Untagged mgmt is excluded from the desired set **by construction** (`vm-net.sh`: Active *and* `vlantag > 0`) and survives only on the kernel's default PVID 1, which nothing sets or asserts; the switch trunk has the same hole. Live proof: makerfloss's node bridges match its Active zones exactly, while `switch-configuration-*.json` hold `"switches": []` — which is why three VLAN variants created their VMs and then timed out waiting for DHCP on tag 200. The issue carries **five candidates to choose between**, not a plan to do all five: reconcile on zone state change; report plane drift in the sweep (dry-run — an unattended rewrite of a node's network config is an ADR-020 decision, not a freebie); declare the untagged/native VLAN; give `pvehost/test.sh` the trunk check that now belongs to it (#665 made a node a module, and its tests cover ssh, PVE, quorum, disk and clock but no bridge); and derive the switch port's target from `hardware.nodes`. **Decide as one sitting with #668** — same seam, and #668's "record the switch and port per NIC" is the precondition for the last of the five |
@@ -953,7 +954,7 @@ Each is a design that should be agreed before its code starts.
 | Controller pattern for app modules | #430 (Ansible first); later #170 | G1.3 | The issue is already written as an ADR proposal |
 | Secrets management | #58 interface and backend, key reissue (FW #122), #19 | G1.6 | Every module reads secrets; the interface outlives the backend |
 | VMID convention | #294 | G1.3, only if adopted | IDs are visible everywhere and cannot be changed in place |
-| Shared storage | #388 `cluster:storage`, backends, share schema in site.json | G4.4 | A new platform capability with a site.json contract |
+| Shared storage | #388 → **ADR-029 NFS Service** (Proposed 2026-10-03); built in #766 | G4.4 | A new platform capability; the contract is the node's `nfs.exports[]` and the consumer's mounts, not site.json |
 | Legal/processor | #359 | Wave 4 | Requested by the issue; cross-cutting across ADR-007 |
 
 Not proposed as ADRs: the firewall rebuild (#439, a runbook), the IPv6

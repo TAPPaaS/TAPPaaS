@@ -2,13 +2,13 @@
 
 | | |
 |---|---|
-| **Status** | **Draft** (2026-10-03) |
-| **Version** | 0.5 |
+| **Status** | **Proposed** (2026-10-03) — every open question answered by the operator; implementation tracked in #766 |
+| **Version** | 0.6 |
 | **Date** | 2026-10-03 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen |
-| **Related** | **#52** (Jellyfin — the first consumer) · [ADR-009](<ADR-009 - Composition Meta-Model.md>) (`<module>:<service>` coordinates, `config."<module>:<service>"`) · [ADR-012](ADR-012-backup-enhancement.md) (`backup:filesystem` backs up the exports — D9; F.3 narrowed to external shares) · [ADR-019](<ADR-019 - HA and Cross-Node VM Migration Policy.md>) (an HA guest mounting non-HA data) · [ADR-020](<ADR-020 - Declared-Field Change Model (validate, drift, modify).md>) (the change classes in `services/nfs/fields.json`) · [ADR-021](<ADR-021 - Split-Horizon DNS and Service Reachability.md>) (host-scoped rules, never `access-to`) · [ADR-022c](<ADR-022c - Node and Host.md>) (Host) · [ADR-026](<ADR-026 - Managed Machines as Modules.md>) (the export Host is a machine module; D6 instance names) · [ADR-027](<ADR-027 - Module Blueprint.md>) D3 (the six files of `services/nfs/`) |
-| **Changelog** | v0.5 (2026-10-03, operator review) — D2a names the two outside-the-cluster servers apart: **registered, unmanaged** (a module instance with declared shares) and **unmodelled** (an address in a literal path). Several servers are several instances (`nas1`, `nas2`). Exports move out of `config."pvehost:nfs"` into the server's own module-tier **`nfs.exports[]`**: the `config` block is the consumer's, and no server — node or NAS — carries a `dependsOn`/`integratesWith` for NFS; the consumer's `dependsOn: pvehost:nfs` is the only edge. D11 states that a consumer never creates an export: a declared-but-unbuilt one is built on the consumer's install, an undeclared one is a validate error. · v0.4 (2026-10-03, operator review) — the provider is **`pvehost`** (`pvehost:nfs`), not `cluster` or a new `storage` module (D1, Q3 closed); exports use **ZFS `sharenfs`** (new D4a, with the analysis), replacing the TAPPaaS-owned `exports.d` file; an NFS server in a guest is rejected (no ZFS sharing, costs a VM), and HA shared data points to CIFS/S3 in a next version (D8). Q9 added. File renamed from *Cluster NFS Service*. · v0.3 (2026-10-03) — **D2a**: a dedicated NFS server outside the cluster is a share source — registered as an `unmanaged` instance whose `exports[]` describe existing paths (`path`, `version`, pinned `v3Ports`), named in mounts like any export; TAPPaaS enforces the grant and the firewall rule on its side, prints what the server must carry, and detects access drift from the consumer. NFS across `wan` refused. Q4 (consumer-provisioned exports) rejected by the operator. · v0.2 (2026-10-03) — D9 rewritten: an export is backed up by its **Host's `backup:filesystem`**, one PBS group per export from a ZFS snapshot, with a mandatory `backup.enabled` on every export; restore lands beside the live dataset. ADR-012 F.3 remains only for external shares. Q8 (off-site) added. · v0.1 (2026-10-03) — first draft: one service, two declarations (export on a Host, mount on a guest); the `<host>:<name>` share reference; a four-layer access model with squash-to-owner identity; data outlives its consumers. |
+| **Related** | **#388** (origin: shared storage for modules, NFS first) · **#52** (Jellyfin — the first consumer) · [ADR-009](<ADR-009 - Composition Meta-Model.md>) (`<module>:<service>` coordinates, `config."<module>:<service>"`) · [ADR-012](ADR-012-backup-enhancement.md) (`backup:filesystem` backs up the exports — D9; F.3 narrowed to external shares) · [ADR-019](<ADR-019 - HA and Cross-Node VM Migration Policy.md>) (an HA guest mounting non-HA data) · [ADR-020](<ADR-020 - Declared-Field Change Model (validate, drift, modify).md>) (the change classes in `services/nfs/fields.json`) · [ADR-021](<ADR-021 - Split-Horizon DNS and Service Reachability.md>) (host-scoped rules, never `access-to`) · [ADR-022c](<ADR-022c - Node and Host.md>) (Host) · [ADR-026](<ADR-026 - Managed Machines as Modules.md>) (the export Host is a machine module; D6 instance names) · [ADR-027](<ADR-027 - Module Blueprint.md>) D3 (the six files of `services/nfs/`) |
+| **Changelog** | v0.6 (2026-10-03, operator answers) — Proposed. Q1: a node whose consumers span more than one zone serves NFS from a **storage zone**, not `mgmt` (D5). Q2: owner range 64000–64999 confirmed, written back. Q5: **RPC-with-TLS** is the default (D5). Q6: **LXC consumers in scope** (new D12). Q7: quota usage is a **health signal** (new D13). Q8: **no off-site** for exports (D9). Q9: a registered server is an instance of a generic **unmanaged `kind: machine`** module (D2a). Open questions replaced by the record of their answers. · v0.5 (2026-10-03, operator review) — D2a names the two outside-the-cluster servers apart: **registered, unmanaged** (a module instance with declared shares) and **unmodelled** (an address in a literal path). Several servers are several instances (`nas1`, `nas2`). Exports move out of `config."pvehost:nfs"` into the server's own module-tier **`nfs.exports[]`**: the `config` block is the consumer's, and no server — node or NAS — carries a `dependsOn`/`integratesWith` for NFS; the consumer's `dependsOn: pvehost:nfs` is the only edge. D11 states that a consumer never creates an export: a declared-but-unbuilt one is built on the consumer's install, an undeclared one is a validate error. · v0.4 (2026-10-03, operator review) — the provider is **`pvehost`** (`pvehost:nfs`), not `cluster` or a new `storage` module (D1, Q3 closed); exports use **ZFS `sharenfs`** (new D4a, with the analysis), replacing the TAPPaaS-owned `exports.d` file; an NFS server in a guest is rejected (no ZFS sharing, costs a VM), and HA shared data points to CIFS/S3 in a next version (D8). Q9 added. File renamed from *Cluster NFS Service*. · v0.3 (2026-10-03) — **D2a**: a dedicated NFS server outside the cluster is a share source — registered as an `unmanaged` instance whose `exports[]` describe existing paths (`path`, `version`, pinned `v3Ports`), named in mounts like any export; TAPPaaS enforces the grant and the firewall rule on its side, prints what the server must carry, and detects access drift from the consumer. NFS across `wan` refused. Q4 (consumer-provisioned exports) rejected by the operator. · v0.2 (2026-10-03) — D9 rewritten: an export is backed up by its **Host's `backup:filesystem`**, one PBS group per export from a ZFS snapshot, with a mandatory `backup.enabled` on every export; restore lands beside the live dataset. ADR-012 F.3 remains only for external shares. Q8 (off-site) added. · v0.1 (2026-10-03) — first draft: one service, two declarations (export on a Host, mount on a guest); the `<host>:<name>` share reference; a four-layer access model with squash-to-owner identity; data outlives its consumers. |
 
 A module that runs in a `cluster:vm` guest can mount a **named NFS share** at a directory
 inside the guest, and a machine TAPPaaS manages can **export a ZFS dataset** from one of its
@@ -56,7 +56,7 @@ TAPPaaS-managed guest" and deferred it for lack of a model. This ADR is that mod
 | **share** | Anything a guest can mount over NFS: a TAPPaaS export, a share on a registered server, or an unmodelled server's path. |
 | **share reference** | The string a mount names its share by: `<host>:<name>` or `<host>:/<path>` (D2). |
 | **mount** | A consumer's declaration that a share appears at a directory inside its guest. |
-| **consumer** | The module that declares the mount. In v1 always a `cluster:vm` guest. |
+| **consumer** | The module that declares the mount — a `cluster:vm` guest, or a `cluster:lxc` container (D12). |
 | **grant** | An export's statement that a named consumer may mount it, `ro` or `rw`. |
 
 ---
@@ -164,7 +164,9 @@ consume the NFS service, it is described *to* it (D1).
 instances of the same module — `config/nas1.json` and `config/nas2.json`, each named after
 its machine (ADR-026 D6, D8) — and a consumer names the one it wants: `nas1:video`,
 `nas2:photos`. Share names need only be unique per server, so both may have a `backup`
-share without colliding. What module type those instances belong to is Q9.
+share without colliding. Those instances belong to **one generic `unmanaged`, `kind: machine`
+module** for appliances TAPPaaS registers but does not patch (Q9, decided v0.6); a module per
+appliance family can follow if one ever needs behaviour of its own.
 
 | Field | On a registered server |
 |---|---|
@@ -191,7 +193,8 @@ and the missing client — the operator fixes the server, TAPPaaS cannot.
 **Where the server may be.** In one of the site's zones, or on a private routed network the
 firewall reaches. A server reached through `wan`/the internet is **refused** in v1 for both
 forms: NFS with `sec=sys` is cleartext and trusts the client's claimed UID, which is
-tolerable on our own VLANs and not across someone else's network (Q5 reopens this with TLS).
+tolerable on our own VLANs and not across someone else's network. RPC-with-TLS (D5) is the
+precondition for ever lifting this; lifting it is not decided here.
 
 **Lifecycle and backup.** TAPPaaS never touches data on a registered, unmanaged server or an unmodelled one:
 removing a mount unmounts and removes the rule; deleting the registered instance while
@@ -222,6 +225,7 @@ server's own business — ADR-012 F.3's `backup:dataset` remains the open questi
 | `share` | share reference (D2) | — | What is mounted there. |
 | `access` | `ro` \| `rw` | `ro` | What the consumer asks for. Must not exceed the grant (D5). Least privilege is the default. |
 | `required` | boolean | `false` | `false`: the guest boots and the app starts without the share (`nofail`, `x-systemd.automount`). `true`: a systemd ordering dependency — the app's unit waits for the mount. |
+| `tls` | boolean | `true` | RPC-with-TLS (D5). `false` only where the guest OS cannot do it, and `validate` warns. |
 | `options` | string[] | `[]` | Escape hatch for mount options from an allow-list (`rsize=`, `wsize=`, `timeo=`, `noatime`, `actimeo=`). `sec=`, `vers=`, `nolock` and anything security-relevant are TAPPaaS's, not the module's. |
 
 Mounts are always **NFSv4.2, `hard`, `_netdev`** (D8 explains `hard`).
@@ -324,9 +328,9 @@ granted client is squashed to the export's single `owner`, and the server checks
 that owner. The consumer's app user reads and writes freely; files on the Host belong to one
 identity per export; the guests need no shared UID map and no idmapd.
 
-TAPPaaS allocates `owner` from a reserved range (**proposed 64000–64999**, Q2), one uid/gid
-pair per export, recorded in the export declaration once allocated so it survives a rebuild
-of the Host.
+TAPPaaS allocates `owner` from the reserved range **64000–64999** (Q2, confirmed v0.6), one
+uid/gid pair per export, **written back into the export declaration** once allocated so it
+survives a rebuild of the Host.
 
 **What this trusts — stated plainly.** Anyone who is root on a granted consumer can read
 (and with `rw`, change) everything in that export. That is the whole trust model of
@@ -337,13 +341,30 @@ two exports, never one with two grants.
 **The export Host is a hypervisor.** A `pvehost` export means a workload VM in `srv` talks
 to a service on a cluster node in `mgmt`. Layer 2 keeps that to one port on one address from
 one address, and v4-only removes the RPC portmapper surface — but it is still a new listener
-on the hypervisor reachable from a workload zone. v1 accepts this for the Jellyfin case with
-the narrowing above; the hardening that removes it — a dedicated storage zone the nodes get
-an interface in, with `nfsd` bound only there — is **Q1**.
+on the hypervisor reachable from a workload zone. How far that is acceptable depends on
+how many zones reach it (Q1, decided v0.6):
 
-**In transit, v1 is cleartext.** The traffic stays on internal VLANs and crosses OPNsense.
-RPC-with-TLS (`xprtsec=tls`, `tlshd`) is supported by the kernels in play and is the
-intended next step (Q5); Kerberos (`sec=krb5p`) needs a KDC TAPPaaS does not have.
+| A node's consumers come from… | NFS is served on | Why |
+|---|---|---|
+| **one zone** (the Jellyfin case) | the node's `mgmt` address, behind the per-pair tcp/2049 rule | one workload zone, one port, one address per consumer — the narrowest pinhole that works, and no new network |
+| **more than one zone** | a **`storage` zone**: the node gets an interface in it, `nfsd` is bound to that address only (`/etc/nfs.conf` `[nfsd] host=`), and the per-pair rules target the node's storage `/32` | `mgmt` is reached by no workload zone at all; a second zone reaching the hypervisor's management address is where the exposure stops being narrow |
+
+The `storage` zone is a Service-type zone with no `access-to` of its own; it is created by
+`network-manager` the first time a node needs it. The switch happens when a grant adds a
+consumer from a second zone: `validate` says so, and applying it re-binds `nfsd` and
+remounts every consumer of that node, so it is a disruptive change under ADR-020's consent
+rules (`--force` / `rebootOk`), not a silent one. Dropping back to one zone does not move
+NFS back — the storage zone, once there, stays.
+
+**In transit: RPC-with-TLS by default** (Q5, decided v0.6). Managed exports require
+`xprtsec=tls` and consumers mount with it; `tlshd` (ktls-utils) runs on the node and in the
+consumer. The node's server certificate comes from the site's internal CA and consumers
+verify against it. TLS gives encryption and server authentication — it does **not** replace
+`sec=sys`, so D5's trust statement (root on a consumer is full access to its exports) stands.
+Where a consumer's OS cannot do RPC-with-TLS, the mount falls back to cleartext only with an
+explicit `"tls": false` on the mount and a validate warning; a registered, unmanaged server
+gets `tls` on its descriptor, since TAPPaaS cannot know what the appliance supports.
+Kerberos (`sec=krb5p`) needs a KDC TAPPaaS does not have and is not pursued.
 
 **Servers outside the cluster** get the subset of these layers TAPPaaS can reach from its
 own side — D2a sets out which, per layer.
@@ -434,7 +455,7 @@ A `pvehost` already has the `integratesWith` (#501), so on a cluster node this i
 | **Schedule** | The Host's slot in the ADR-012 §3.2 cascade. Exports are captured after the Host's own paths, in the same run, one group after another; an export may not ask for more than once a day, like any `backup:filesystem` path. |
 | **Exclusions** | `backup.exclude[]` — patterns relative to the export root (transcode caches, `.Trash-*`), the same semantics as a module's `backup.exclude`. |
 | **Retention** | The cascade's, applied per group — so an export can keep fewer snapshots than its Host's configuration without either affecting the other. |
-| **Off-site** | Not in v1. ADR-012 gives `fs/` no off-site grant by design, and a library sized to its own disk is the first data worth asking that again for (Q8). |
+| **Off-site** | **None** (Q8, decided v0.6). Export backups stay on the local PBS, as everything in `fs/` does under ADR-012. Data that must survive the site belongs in a module's own backup, not in an NFS export. |
 | **Same disk** | An export on the pool that holds the PBS datastore (normally `tankc1`), or on the PBS Host itself with `backup.enabled: true`, is a validate warning: that copy shares the failure it is meant to survive. |
 
 **Restore** goes through `restore.sh`, with one new target: an export group restores into a
@@ -480,6 +501,32 @@ first export, not before — a node with no export runs no NFS server.
 - The export's client list holds addresses, and addresses come from DHCP. Every reconcile
   re-resolves them, and `test-service.sh` reports a client list that no longer matches its
   consumers' leases as drift, so a lease change heals on the next sweep at the latest.
+
+### D12 — Container consumers (`cluster:lxc`)
+
+LXC consumers are in scope (Q6, decided v0.6). They declare the same `mounts[]` with the same
+share references, and the same grants authorize them — but an unprivileged container cannot
+mount NFS itself, so **the node the container runs on does the mounting**, and the container
+gets a Proxmox bind mount (`mpN`):
+
+| Container's node vs. the share | Realized as |
+|---|---|
+| the export is on the **same node** | a bind mount of the dataset straight into the container — no NFS, no network, no rule |
+| the export is on **another node**, or on a registered/unmodelled server | the node mounts the share (under `/mnt/tappaas-nfs/<host>/<name>`, with D3's options and TLS), then bind-mounts it into the container; the grant, client list and rule are the **node's**, on behalf of the container |
+| the container is HA and may run on several nodes | the node-side mount is made on every node the container may be placed on, so a migration finds the path present |
+
+Identity: files on the share belong to the export's `owner`. An unprivileged container sees
+host UIDs shifted, so the service adds an `lxc.idmap` entry that maps the container's app
+user to `owner` — the container-side equivalent of squash-to-owner. `access` is applied as
+the bind mount's `ro` flag as well as on the export.
+
+### D13 — Health: quota use
+
+An export's usage against its `quota` is an ADR-007e health signal (Q7, decided v0.6):
+warning at 80 %, critical at 95 %, read by `test-service.sh` from `zfs get used,quota` on the
+node, notified through the site's notification target. An export without a quota reports
+its pool's free space instead, because that is what it will exhaust. A registered,
+unmanaged server reports nothing — TAPPaaS cannot see its disks.
 
 ---
 
@@ -546,10 +593,10 @@ A site that keeps metadata inside the guest should grant and mount `ro`.
 
 - For a registered, unmanaged server, the server-side client list is the operator's to keep in
   step; TAPPaaS detects a gap but cannot close it.
-- A new listener on a hypervisor, reachable from a workload zone (D5, Q1).
+- A new listener on a hypervisor, reachable from one workload zone — or, beyond one zone, a `storage` zone and an interface in it on every serving node (D5).
 - `sec=sys` means root on a consumer is full access to its exports; isolation is only per
   export.
-- Cleartext NFS on internal VLANs until RPC-with-TLS (Q5).
+- RPC-with-TLS needs `tlshd` and a certificate on every node and consumer, and a CA they trust.
 - A share is a single point of failure for its consumers, and HA does not help (D8).
 - A backed-up library costs its full size in the PBS datastore at least once, and its
   first capture is a long run; `quota` is also the ceiling on what the backup can grow to.
@@ -559,8 +606,8 @@ A site that keeps metadata inside the guest should grant and mount `ro`.
 
 ### Neutral
 
-- v1 consumers are `cluster:vm` guests. `cluster:lxc` consumers would more naturally get a
-  bind mount than NFS (Q6).
+- Containers are consumers too, but realized differently — by the node, not inside the
+  container (D12).
 
 ---
 
@@ -579,26 +626,21 @@ A site that keeps metadata inside the guest should grant and mount `ro`.
 
 ---
 
-## Open questions
+## Resolved questions
 
-- **Q1 — the hypervisor exposure.** Accept the one-port pinhole into `mgmt` (v1), or add a
-  `storage` zone the nodes get an interface in with `nfsd` bound there? (A server in a guest
-  is rejected — *Alternatives*.) *Recommendation: v1 as drafted; a storage zone before a
-  second consumer.*
-- **Q2 — the owner range.** 64000–64999 is free on NixOS and Debian defaults; confirm, and
-  confirm that allocated values are written back into the Host's instance file.
-- ~~Q3 — which module provides it~~ — **decided: `pvehost`** (v0.4): see D1.
-- **Q9 — the module type of a registered, unmanaged NFS server.** D2a needs an
-  `unmanaged` `kind: machine` module that its instances (`nas1`, `nas2`, …) belong to — one
-  generic module for any appliance TAPPaaS does not patch, or one per appliance family?
-  ADR-026's question, raised here.
-- ~~Q4 — consumer shorthand~~ — **decided, rejected** (v0.3): see *Alternatives*.
-- **Q5 — encryption.** Make RPC-with-TLS the default as soon as both the Debian Host and
-  NixOS guest stacks ship `tlshd`?
-- **Q6 — LXC consumers.** Bind mount on the same node, NFS across nodes, or not in scope?
-- **Q7 — health.** Export usage against quota as an ADR-007e health signal?
-- **Q8 — off-site for exports.** ADR-012 gives `fs/` no off-site grant. Should an export be
-  able to opt into the off-site subset (ADR-012 §3.3) with its own retention?
+Every question the drafts raised is answered; each answer lives in the decision it changed.
+
+| Q | Question | Answer | Where |
+|---|---|---|---|
+| Q1 | The hypervisor exposure | One-zone consumers: pinhole into `mgmt`; consumers from several zones: a `storage` zone | D5 |
+| Q2 | The owner range | 64000–64999, written back into the declaration | D5 |
+| Q3 | Which module provides it | `pvehost` | D1 |
+| Q4 | Consumer-provisioned exports | Rejected | D11, *Alternatives* |
+| Q5 | Encryption | RPC-with-TLS by default | D5 |
+| Q6 | LXC consumers | In scope, realized by the node with bind mounts | D12 |
+| Q7 | Quota as a health signal | Yes — 80 % / 95 % | D13 |
+| Q8 | Off-site for exports | No | D9 |
+| Q9 | Module type of a registered server | One generic `unmanaged` `kind: machine` module | D2a |
 
 ---
 
@@ -619,7 +661,14 @@ A site that keeps metadata inside the guest should grant and mount `ro`.
 7. Servers outside the cluster (D2a): `path`/`version`/`v3Ports` descriptors on an
    `unmanaged` instance, `pvehost nfs show`, the consumer-side access test and its health
    finding; the literal form; the `wan` refusal.
-8. Jellyfin (#52) as the first consumer; then `debianhost` exports.
+8. RPC-with-TLS (D5): `tlshd` on node and NixOS/Debian consumers, the node certificate from
+   the site CA, `xprtsec=tls` on exports and mounts, the `"tls": false` escape and its warning.
+9. The `storage` zone (D5): `network-manager` creates it on first need, the node's interface
+   and `[nfsd] host=` binding, the switch as a consented disruptive change.
+10. Container consumers (D12): node-side mount, `mpN` bind mount, the same-node shortcut,
+    `lxc.idmap` to `owner`, mounts on every HA placement node.
+11. Health (D13): quota use at 80/95 %, pool free space for an export without a quota.
+12. Jellyfin (#52) as the first consumer; then `debianhost` exports.
 
 ## Testing
 
