@@ -23,13 +23,15 @@ N
 cat > "${R}/src/m/dig.nix" <<'N'
 { image = "docker.io/acme/dig@sha256:0123456789abcdef"; }
 N
+echo 'IMG=acme/app:1.1.0 # drifted' > "${R}/src/m/copy.sh"
 cat > "${R}/src/m/extra.sh" <<'N'
     image: other/thing:1.0
 N
 cat > "${R}/src/image-pins.json" <<'N'
 { "pins": [
   { "module": "old",  "image": "docker.io/acme/app", "kind": "tag", "file": "src/m/old.nix",
-    "match": "app = \"([^\"]+)\";" },
+    "match": "app = \"([^\"]+)\";",
+    "also": [ { "file": "src/m/copy.sh", "match": "IMG=acme/app:([^ ]+)" } ] },
   { "module": "walk", "image": "ghcr.io/acme/walk", "kind": "tag", "file": "src/m/walk.nix",
     "match": "lines = \\[[^\\]]*\"([0-9.]+)\"\\s*\\];", "tagPattern": "^[0-9]{4}\\.[0-9]+\\.[0-9]+$" },
   { "module": "dig",  "image": "acme/dig", "kind": "digest", "file": "src/m/dig.nix",
@@ -58,6 +60,8 @@ ck "a pin the file no longer holds is unreadable, not dropped"        "unreadabl
 ck "age comes from when the line last changed"                        "0"      "$(get walk ageDays)"
 ck "an image in the tree but not in the list is reported" "other/thing" \
    "$(python3 -c "import json,sys; print(','.join(u['image'] for u in json.loads(sys.argv[1])['unlisted']))" "${J}")"
+ck "a copy that holds another value is reported" "src/m/copy.sh has 1.1.0" \
+   "$(python3 -c "import json,sys; r=json.loads(sys.argv[1]); print([p for p in r['pins'] if p['module']=='old'][0]['mismatch'][0])" "${J}")"
 ck "the stale count" "1" "$(python3 -c "import json,sys; print(json.loads(sys.argv[1])['stale'])" "${J}")"
 OUT="$(python3 "${PINS}" --repo "${R}" --offline)"
 [[ "${OUT}" == *"upstream not checked"* && "${OUT}" == *"by digest"* ]] && ck "offline: age and listing, upstream not asked" y y || ck "offline report" y n

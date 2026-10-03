@@ -686,7 +686,7 @@ pins_report() {
           elif .status == "unknown" then "image \(.module): \(.image):\(.pinned), \(.ageDays // "?")d old — upstream not checked"
           elif (.newer // 0) == 0 then "image \(.module): \(.image):\(.pinned), \(.ageDays)d old — current"
           else "image \(.module): \(.image):\(.pinned), \(.ageDays)d old — \(.newer) newer, latest \(.latest)\(if .status == "stale" then " — STALE (tripwire 45d; \(.maintainer))" else "" end)"
-          end)] | @tsv' <<<"${IP_JSON}")
+          end) + (if ((.mismatch // []) | length) > 0 then " — a copy differs: \(.mismatch | join("; "))" else "" end)] | @tsv' <<<"${IP_JSON}")
     local n; n="$(jq -r '.unlisted | length' <<<"${IP_JSON}")"
     (( n == 0 )) || info "  · ${n} image(s) in the tree not yet in src/image-pins.json: $(jq -r '[.unlisted[].image] | join(", ")' <<<"${IP_JSON}")"
 }

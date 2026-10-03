@@ -117,10 +117,22 @@ def vkey(tag: str) -> tuple:
     return tuple(int(x) for x in re.findall(r"\d+", tag))
 
 
-def judge(pin: dict, value: str, age: int | None, tags: list[str] | None) -> dict:
+def copies_differ(repo: str, pin: dict, value: str) -> list[str]:
+    """Other places that must hold the same value (``also``); those that do not."""
+    bad = []
+    for c in pin.get("also", []):
+        v, _ = read_pin(repo, {"file": c["file"], "match": c["match"]})
+        if v != value:
+            bad.append(f"{c['file']} has {v or 'nothing'}")
+    return bad
+
+
+def judge(pin: dict, value: str, age: int | None, tags: list[str] | None,
+          mismatch: list[str] | None = None) -> dict:
     r = {"module": pin["module"], "image": pin["image"], "kind": pin.get("kind", "tag"),
          "pinned": value, "ageDays": age, "file": pin["file"],
-         "maintainer": pin.get("maintainer", ""), "latest": None, "newer": None, "status": "ok"}
+         "maintainer": pin.get("maintainer", ""), "latest": None, "newer": None, "status": "ok",
+         "mismatch": mismatch or []}
     if r["kind"] == "digest":
         r["status"] = "digest"
         return r
@@ -194,12 +206,13 @@ def main() -> int:
                     tags = registry_tags(pin["image"])
                 except Exception:
                     tags = None
-        results.append(judge(pin, value, age, tags))
+        results.append(judge(pin, value, age, tags, copies_differ(a.repo, pin, value)))
 
     listed = {canon(p["image"]) for p in pins}
     report = {"tripwireDays": TRIPWIRE_DAYS, "pins": results,
               "unlisted": unlisted(a.repo, listed),
-              "stale": sum(1 for r in results if r["status"] == "stale")}
+              "stale": sum(1 for r in results if r["status"] == "stale"),
+              "mismatched": sum(1 for r in results if r.get("mismatch"))}
     if a.json:
         print(json.dumps(report))
         return 0
@@ -216,6 +229,8 @@ def main() -> int:
             mark = {"ok": "✓", "behind": "→", "stale": "✗"}[r["status"]]
             tail = "current" if not r["newer"] else f"{r['newer']} newer, latest {r['latest']}"
             print(f"  {mark} {r['module']}: {r['image']}:{r['pinned']}, {age} old — {tail}")
+        for m in r.get("mismatch") or []:
+            print(f"    ✗ a copy of the pin differs: {m}")
     for u in report["unlisted"]:
         print(f"  · not yet listed: {u['image']} ({u['file']})")
     return 0

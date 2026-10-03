@@ -1,5 +1,5 @@
 {
-  "$comment": "Container image pins (#750, ADR-028 D4). Each entry says where its value lives: `file` and a regex `match` whose first group is the pinned value (the last match in the file). The module file stays the one place the pin is edited. tappaas-cicd/scripts/image-pins.py reports each pin's age and how far upstream is ahead, at every release boundary.",
+  "$comment": "Container image pins (#750, ADR-028 D4). Each entry says where its value lives: `file` and a regex `match` whose first group is the pinned value (the last match in the file); `also` names other places that must hold the same value. The module file stays the one place the pin is edited. tappaas-cicd/scripts/image-pins.py reports each pin's age and how far upstream is ahead, at every release boundary.",
   "pins": [
     {
       "module": "identity",
@@ -9,6 +9,21 @@
       "match": "lines = \\[[^\\]]*\"([0-9]+\\.[0-9]+\\.[0-9]+)\"\\s*\\];",
       "tagPattern": "^[0-9]{4}\\.[0-9]+\\.[0-9]+$",
       "maintainer": "@TAPPaaS"
+    },
+    {
+      "module": "euro-office",
+      "image": "ghcr.io/euro-office/documentserver",
+      "kind": "tag",
+      "file": "src/collaboration/euro-office/euro-office.nix",
+      "match": "image = \"ghcr\\.io/euro-office/documentserver:([^\"]+)\";",
+      "also": [
+        {
+          "file": "src/collaboration/euro-office/update.sh",
+          "match": "CONTAINER_IMAGE=\"ghcr\\.io/euro-office/documentserver:([^\"]+)\""
+        }
+      ],
+      "tagPattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "maintainer": "@ErikDaniel007"
     }
   ]
 }
