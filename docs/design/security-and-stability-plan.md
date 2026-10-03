@@ -105,32 +105,33 @@ things that make those migrations survivable go before it (Wave 0).
 
 ### Groups at a glance
 
-| Wave | Group | Issues | E | R | L |
-|------|-------|-------:|:-:|:-:|:-:|
-| 0 | ✅ G0.1 Migration & rollback framework | 5 | 2 | 2 | H |
-| 0 | ✅ G0.2 Trustworthy gates | 8 | 4 | 2 | M |
-| 0 | ✅ G0.3 Update channel & failure notice | 5 | 3 | 3 | M |
-| 1 | ✅ G1.1 Vocabulary & classification (ADR-022 family) | 8 | 2 | 4 | H |
-| 1 | G1.2 Backup placement model (ADR-012 close-out) | 13 | 3 | 4 | H |
-| 1 | G1.3 Module contract & repo layout | 8 | 2 | 5 | H |
-| 1 | G1.4 Common NixOS baseline | 9 | 2 | 4 | H |
-| 1 | G1.5 Rebuild & recovery paths | 5 | 3 | 4 | M |
-| 1 | G1.6 Secrets & privileged access | 5 | 1 | 5 | H |
-| 1 | G1.7 Parked for Erik discussion | 4 | – | – | – |
-| 2 | G2.1 Firewall exposure & rule order | 14 | 3 | 4 | M |
-| 2 | G2.2 DNS resolver robustness | 5 | 4 | 3 | M |
-| 3 | G3.1 cluster:vm lifecycle & capacity | 12 | 4 | 3 | L |
-| 3 | G3.2 Identity & SSO wiring | 4 | 3 | 2 | L |
-| 3 | G3.3 App module fixes | 11 | 4 | 2 | L |
-| 3 | G3.4 AI stack maturity | 4 | 3 | 3 | L |
-| 3 | G3.5 Installer UX | 4 | 4 | 1 | L |
-| 4 | G4.1 Alerting & cluster resilience | 5 | 3 | 3 | M |
-| 4 | G4.2 Proxy & ingress | 3 | 3 | 2 | L |
-| 4 | G4.3 Manager verb gaps | 6 | 3 | 2 | L |
-| 4 | G4.4 Storage & physical devices | 5 | 2 | 2 | M |
-| 4 | G4.5 Governance, CI & sign-offs | 8 | 3 | 1 | L |
+| Wave | Group | Issues | Done | E | R | L |
+|------|-------|-------:|-----:|:-:|:-:|:-:|
+| 0 | ✅ G0.1 Migration & rollback framework | 5 | 9/9 | 2 | 2 | H |
+| 0 | ✅ G0.2 Trustworthy gates | 8 | 9/9 | 4 | 2 | M |
+| 0 | ✅ G0.3 Update channel & failure notice | 5 | 5/5 | 3 | 3 | M |
+| 0 | ✅ G0.4 Merge trust — fast lane | 2 | 2/2 | – | – | – |
+| 1 | ✅ G1.1 Vocabulary & classification (ADR-022 family) | 8 | 14/14 | 2 | 4 | H |
+| 1 | G1.2 Backup placement model (ADR-012 close-out) | 13 | 26/27 | 3 | 4 | H |
+| 1 | G1.3 Module contract & repo layout | 8 | 8/8 | 2 | 5 | H |
+| 1 | G1.4 Common NixOS baseline | 9 | 14/18 | 2 | 4 | H |
+| 1 | G1.5 Rebuild & recovery paths | 5 | 13/14 | 3 | 4 | M |
+| 1 | G1.6 Secrets & privileged access | 5 | 3/6 | 1 | 5 | H |
+| 1 | G1.7 Parked for Erik discussion | 4 | 0/4 | – | – | – |
+| 2 | G2.1 Firewall exposure & rule order | 14 | 7/20 | 3 | 4 | M |
+| 2 | G2.2 DNS resolver robustness | 5 | 4/9 | 4 | 3 | M |
+| 3 | G3.1 cluster:vm lifecycle & capacity | 12 | 11/20 | 4 | 3 | L |
+| 3 | G3.2 Identity & SSO wiring | 4 | 2/8 | 3 | 2 | L |
+| 3 | G3.3 App module fixes | 11 | 5/17 | 4 | 2 | L |
+| 3 | G3.4 AI stack maturity | 4 | 1/7 | 3 | 3 | L |
+| 3 | G3.5 Installer UX | 4 | 0/4 | 4 | 1 | L |
+| 4 | G4.1 Alerting & cluster resilience | 5 | 0/5 | 3 | 3 | M |
+| 4 | G4.2 Proxy & ingress | 3 | 1/5 | 3 | 2 | L |
+| 4 | G4.3 Manager verb gaps | 6 | 6/14 | 3 | 2 | L |
+| 4 | G4.4 Storage & physical devices | 5 | 2/8 | 2 | 2 | M |
+| 4 | G4.5 Governance, CI & sign-offs | 8 | 3/10 | 3 | 1 | L |
 
-Issue counts include the Future Work items rolled in.
+**Issues** is the count when the plan was made; **Done** is ✅ rows / all rows in the group's own table now (it grows as issues are added and closed). By wave: Wave 0 25/25 · Wave 1 78/91 · Wave 2 11/29 · Wave 3 19/56 · Wave 4 12/42. Issue counts include the Future Work items rolled in.
 
 ```mermaid
 quadrantChart
