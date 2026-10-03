@@ -609,7 +609,7 @@ Backing up a Proxmox storage **dataset** — e.g. external NFS-served data that 
 12. **Module-schema changes (§2.7)** — **remove the `placement` field**; make `placementState` ship empty with the new value set; add `pbsUrl` (default `backup.mgmt.internal`), `backup.schedule`/`filesystemPaths`; **set `provides` to `["vm", "filesystem"]`**; deprecate `pushTarget`/`alwaysBackup`; land the KI-1 `provides`-aware normalizer fix. *(new — v0.3)*
 13. **Retire `alwaysBackup` via `integratesWith` (§2.7, depends on #501)** — once #501 adds `integratesWith`, the foundation VMs that can't `dependsOn: backup:vm` join the PBS job by declaring `integratesWith: backup`; remove the `alwaysBackup` list + code path. Backup stays opt-in (hardware/test modules declare neither). *(new — v0.3)*
 14. **Migration (§4)** — legacy `placementState` backfill; `#456` adoption preserving snapshots; datastore relocation-by-pull; `pushTarget`/`alwaysBackup` deprecation window. *(new — v0.3)*
-15. **Documentation (all changes)** — update `backup/README.md`, `RESTORE.md`, `TEST.md`; the module-authoring guide ([`apps/00-Template`](../../src/apps/00-Template/)) for the backup `dependsOn` capabilities + `backup.schedule` + placement states; the migration + key export/import runbooks; and this ADR + its [implementation tracker](../design/ADR-012-implementation.md). *(new — v0.3)*
+15. **Documentation (all changes)** — update `backup/README.md`, `RESTORE.md`, `TEST.md`; the module-authoring guide ([`apps/00-Template`](../../src/misc/00-Template/)) for the backup `dependsOn` capabilities + `backup.schedule` + placement states; the migration + key export/import runbooks; and this ADR + its [implementation tracker](../design/ADR-012-implementation.md). *(new — v0.3)*
 
 ## Testing Strategy
 

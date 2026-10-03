@@ -7,7 +7,7 @@
 #              of near-universal "plumbing" services (consumed by >=
 #              PLUMBING_MIN modules), a compact mermaid graph of the
 #              remaining application topology, and a complete per-module
-#              reference table. Apps come from src/apps/*, foundation
+#              reference table. Modules come from every src/<stack>/*, foundation
 #              modules from src/foundation/* (a module = a directory
 #              containing <dirname>.json). 00-Template is skipped.
 # Usage: src/generate-module-dependencies.sh [--check] [--output FILE]
@@ -33,7 +33,7 @@ Usage: ${SCRIPT_NAME} [OPTIONS]
 
 Description:
     Regenerates the module dependency model from the module json files under
-    src/apps/ and src/foundation/. Output has three views: (1) a table of
+    src/<stack>/ and src/foundation/. Output has three views: (1) a table of
     plumbing services consumed by >= ${PLUMBING_MIN} modules, (2) a compact
     mermaid graph of the remaining application topology (services between the
     same pair merged into one edge, providers without a module in this repo
@@ -93,7 +93,14 @@ list_modules() {
 # Emit the full markdown document on stdout.
 emit_graph() {
     local apps foundation name json dep provider service edges
-    apps="$(list_modules "${SCRIPT_DIR}/apps")"
+    # Every module outside foundation, in whichever stack directory it lives
+    # (src/<stack>/<module>, #421).
+    local stackdir
+    for stackdir in "${SCRIPT_DIR}"/*/; do
+        [[ "$(basename "${stackdir}")" == foundation ]] && continue
+        apps+="$(list_modules "${stackdir%/}")"$'\n'
+    done
+    apps="${apps%$'\n'}"
     foundation="$(list_modules "${SCRIPT_DIR}/foundation")"
 
     [[ -n "${apps}${foundation}" ]] || die "No modules found under ${SCRIPT_DIR}"

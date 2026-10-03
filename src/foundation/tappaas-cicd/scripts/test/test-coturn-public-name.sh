@@ -9,7 +9,7 @@
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-COTURN="$(readlink -f "${HERE}/../../../../apps/coturn")"
+COTURN="$(readlink -f "${HERE}/../../../../collaboration/coturn")"
 
 PASS=0; FAIL=0
 ck() { if [[ "$2" == "$3" ]]; then echo "  ok: $1"; PASS=$((PASS+1)); else echo "  FAIL: $1 (expected '$2', got '$3')"; FAIL=$((FAIL+1)); fi; }

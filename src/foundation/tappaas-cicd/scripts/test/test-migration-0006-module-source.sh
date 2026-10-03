@@ -22,7 +22,7 @@ ck() { if [[ "$2" == "$3" ]]; then echo "  ✓ $1"; pass=$((pass+1)); else echo 
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/mig0006.XXXXXX")"
 trap 'rm -rf "${TMP}"' EXIT INT TERM
 CFG="${TMP}/config"; BK="${CFG}/.migrations/backup/0006"
-SRC="${TMP}/src/apps/nextcloud"; mkdir -p "${SRC}" "${TMP}/src/foundation/templates"
+SRC="${TMP}/src/collaboration/nextcloud"; mkdir -p "${SRC}" "${TMP}/src/foundation/templates"
 
 fixtures() {
     rm -rf "${CFG}"; mkdir -p "${CFG}"

@@ -8,7 +8,7 @@
   "stack": "collaboration",
   "source": "official",
   "status": "Testing",
-  "moduleSource": "/home/tappaas/TAPPaaS/src/apps/nextcloud",
+  "moduleSource": "/home/tappaas/TAPPaaS/src/collaboration/nextcloud",
   "dependsOn": ["cluster:vm", "templates:nixos"],
   "provides": ["fileservice"]
 }

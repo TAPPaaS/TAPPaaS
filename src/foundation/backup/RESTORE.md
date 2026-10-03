@@ -429,7 +429,7 @@ starting), then fetch the model:
 
 ```bash
 ssh root@tappaas2.mgmt.internal "zfs create tanka1/vllm-models"    # mp0: /tanka1/vllm-models
-cd ~/TAPPaaS/src/apps/vllm-amd && ./download-model.sh prod          # ~28 GB (qwen2.5-14b)
+cd ~/TAPPaaS/src/ai/vllm-amd && ./download-model.sh prod          # ~28 GB (qwen2.5-14b)
 ```
 
 Guests that were **HA-managed and replicated** may already be running on a

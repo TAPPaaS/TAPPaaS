@@ -275,7 +275,7 @@
       "usedBy": [
         "general"
       ],
-      "example": "/home/tappaas/TAPPaaS/src/apps/nextcloud",
+      "example": "/home/tappaas/TAPPaaS/src/collaboration/nextcloud",
       "note": "Automatically set by copy-update-json.sh based on the directory where the module JSON resides. Named `location` before #609; migration 0006 renames it."
     },
     "location": {
@@ -286,7 +286,7 @@
       "usedBy": [
         "general"
       ],
-      "example": "/home/tappaas/TAPPaaS/src/apps/nextcloud",
+      "example": "/home/tappaas/TAPPaaS/src/collaboration/nextcloud",
       "note": "Automatically set by copy-update-json.sh based on the directory where the module JSON resides"
     },
     "dependsOn": {
@@ -439,7 +439,7 @@
       "note": "Recorded, not enforced: nothing checks it against the machine itself."
     },
     "stack": {
-      "description": "The one stack a module belongs to (#463): what a catalogue lists it under, and — once #421 lands — the directory it lives in. An enumerated field, and this schema is the list's owner: every module carries exactly one of the values below, as a field in its own module JSON. Three of them say what a module IS rather than what it is for — `foundation`, `template` and `test`; the rest group application modules by what they are for. `foundation` also decides a module's scope (ADR-022e v1.1): a foundation-stack module is site-scoped — it belongs to the Site, serves every Environment, installs in mgmt, must come from an official source (or --allow-fork) and needs --force to delete; every other module is environment-scoped. A module becomes site-scoped by moving into the foundation stack, and in no other way.",
+      "description": "The one stack a module belongs to (#463): what a catalogue lists it under, and the directory it lives in: src/<stack>/<module> for the purpose stacks and misc, src/foundation/<module> for foundation (#421). An enumerated field, and this schema is the list's owner: every module carries exactly one of the values below, as a field in its own module JSON. Three of them say what a module IS rather than what it is for — `foundation`, `template` and `test`; the rest group application modules by what they are for. `foundation` also decides a module's scope (ADR-022e v1.1): a foundation-stack module is site-scoped — it belongs to the Site, serves every Environment, installs in mgmt, must come from an official source (or --allow-fork) and needs --force to delete; every other module is environment-scoped. A module becomes site-scoped by moving into the foundation stack, and in no other way.",
       "type": "string",
       "values": {
         "foundation": "Part of the platform every site runs.",

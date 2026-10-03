@@ -326,7 +326,7 @@ Per ADR-013 (one home per doc, by audience+lifecycle; module `README` = public w
 | `src/foundation/schemas/module-fields.json` | add `rebootOk` (+ description); add the change-class/normalize vocabulary the manifests reference; touch affected per-field `description`s | schema SSOT — read by tooling and humans |
 | `src/foundation/schemas/README.md` | note `modify --set` / change classes / the `fields.json` manifest alongside the existing "admins drive verbs, not JSON" framing | reference, next to the schema |
 | `src/foundation/TESTING.md` | add coverage rows for `report-service.sh`, `--apply-drift`, `converge-lib.sh`, the deferral path | cross-component test view |
-| `src/apps/00-Template/` (`README-template.md`, `README-install-sh.md`, + a **new `fields.json` + `report-service.sh` template**) | the normative module templates must show the new service-contract shape a provider author copies | template authors (ADR-013 §4 "documentation-complete") |
+| `src/misc/00-Template/` (`README-template.md`, `README-install-sh.md`, + a **new `fields.json` + `report-service.sh` template**) | the normative module templates must show the new service-contract shape a provider author copies | template authors (ADR-013 §4 "documentation-complete") |
 | `src/foundation/DEPENDENCIES.md` | **regenerated**, not hand-edited (the `tappaas-generate-script-dependencies` skill) — new `report-service.sh`/`converge-lib.sh`/`fields.json` edges surface here | generated reference |
 | `docs/ADR/README.md` | refresh the ADR-020 index row to mention the realization (D7/D8) | index |
 

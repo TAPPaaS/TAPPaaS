@@ -95,12 +95,12 @@ console.log("repoTargets / dirTarget");
     "/repo/src/module-catalog.json": JSON.stringify({ modules: [
       { moduleName: "templates", moduleJson: "src/foundation/templates/templates.json", stack: "foundation" },
       { moduleName: "tappaas-nixos", moduleJson: "src/foundation/templates/tappaas-nixos.json", stack: "template" },
-      { moduleName: "template", moduleJson: "src/apps/00-Template/template.json", stack: "template" },
+      { moduleName: "template", moduleJson: "src/misc/00-Template/template.json", stack: "template" },
       { moduleName: "test-debian", moduleJson: "src/foundation/test-debian/test-debian.json", stack: "test" },
       { moduleName: "app", moduleJson: "src/apps/app/app.json", stack: "ai" },
     ] }),
     "/repo/src/foundation/templates/templates.json": "{}",
-    "/repo/src/apps/00-Template/template.json": "{}",
+    "/repo/src/misc/00-Template/template.json": "{}",
   };
   const r = repoTargets("/repo", "/repo/src/module-catalog.json", fakeFs(files));
   const names = r.targets.map((t) => t.name).sort().join(",");

@@ -3,14 +3,14 @@
 # test-nextcloud-major-step.sh — a Nextcloud guest moves at most one major per build.
 #
 # Nextcloud refuses to skip a major, and the module's release is 35 while existing
-# sites run 33. src/apps/nextcloud/nc-major.nix reads the installed major from the
+# sites run 33. src/collaboration/nextcloud/nc-major.nix reads the installed major from the
 # guest's config.php and builds min(target, installed + 1), so a site steps 33 -> 34
 # -> 35 over two updates and keeps its data; a fresh install goes straight to the
 # target. Evaluated here with nix-instantiate against fixture config.php files.
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-NCM="$(readlink -f "${HERE}/../../../../apps/nextcloud/nc-major.nix")"
+NCM="$(readlink -f "${HERE}/../../../../collaboration/nextcloud/nc-major.nix")"
 
 PASS=0; FAIL=0
 ck()   { if [[ "$2" == "$3" ]]; then echo "  ok: $1"; PASS=$((PASS+1)); else echo "  FAIL: $1 (expected '$2', got '$3')"; FAIL=$((FAIL+1)); fi; }

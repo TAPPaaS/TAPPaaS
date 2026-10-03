@@ -115,7 +115,7 @@ a given model size.
 
 !!! info "Where these numbers come from"
     Model and throughput figures are as tested on the reference
-    [`vllm-amd` module](https://codeberg.org/TAPPaaS/TAPPaaS/src/branch/main/src/apps/vllm-amd/README.md)
+    [`vllm-amd` module](https://codeberg.org/TAPPaaS/TAPPaaS/src/branch/main/src/ai/vllm-amd/README.md)
     (verified against its README 2026-07-10). They will move to an automated WS0 sync
     so they stay current.
 

@@ -12,7 +12,7 @@
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-FS="$(readlink -f "${HERE}/../../../../apps/nextcloud/services/fileservice")"
+FS="$(readlink -f "${HERE}/../../../../collaboration/nextcloud/services/fileservice")"
 
 PASS=0; FAIL=0
 ck()   { if [[ "$2" == "$3" ]]; then echo "  ok: $1"; PASS=$((PASS+1)); else echo "  FAIL: $1 (expected '$2', got '$3')"; FAIL=$((FAIL+1)); fi; }

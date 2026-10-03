@@ -68,67 +68,67 @@
     },
     {
       "moduleName": "hass",
-      "moduleJson": "src/apps/hass/hass.json",
+      "moduleJson": "src/home/hass/hass.json",
       "vmid": 210,
       "stack": "home"
     },
     {
       "moduleName": "litellm",
-      "moduleJson": "src/apps/litellm/litellm.json",
+      "moduleJson": "src/ai/litellm/litellm.json",
       "vmid": 310,
       "stack": "ai"
     },
     {
       "moduleName": "openwebui",
-      "moduleJson": "src/apps/openwebui/openwebui.json",
+      "moduleJson": "src/ai/openwebui/openwebui.json",
       "vmid": 311,
       "stack": "ai"
     },
     {
       "moduleName": "vllm-amd",
-      "moduleJson": "src/apps/vllm-amd/vllm-amd.json",
+      "moduleJson": "src/ai/vllm-amd/vllm-amd.json",
       "vmid": 312,
       "stack": "ai"
     },
     {
       "moduleName": "vaultwarden",
-      "moduleJson": "src/apps/vaultwarden/vaultwarden.json",
+      "moduleJson": "src/security/vaultwarden/vaultwarden.json",
       "vmid": 610,
       "stack": "security"
     },
     {
       "moduleName": "windows-server",
-      "moduleJson": "src/apps/windows-server/windows-server.json",
+      "moduleJson": "src/misc/windows-server/windows-server.json",
       "vmid": 500,
       "stack": "misc"
     },
     {
       "moduleName": "netbird-client",
-      "moduleJson": "src/apps/netbird-client/netbird-client.json",
+      "moduleJson": "src/security/netbird-client/netbird-client.json",
       "vmid": 800,
       "stack": "security"
     },
     {
       "moduleName": "nextcloud",
-      "moduleJson": "src/apps/nextcloud/nextcloud.json",
+      "moduleJson": "src/collaboration/nextcloud/nextcloud.json",
       "vmid": 340,
       "stack": "collaboration"
     },
     {
       "moduleName": "coturn",
-      "moduleJson": "src/apps/coturn/coturn.json",
+      "moduleJson": "src/collaboration/coturn/coturn.json",
       "vmid": 341,
       "stack": "collaboration"
     },
     {
       "moduleName": "nextcloud-hpb",
-      "moduleJson": "src/apps/nextcloud-hpb/nextcloud-hpb.json",
+      "moduleJson": "src/collaboration/nextcloud-hpb/nextcloud-hpb.json",
       "vmid": 342,
       "stack": "collaboration"
     },
     {
       "moduleName": "euro-office",
-      "moduleJson": "src/apps/euro-office/euro-office.json",
+      "moduleJson": "src/collaboration/euro-office/euro-office.json",
       "vmid": 343,
       "stack": "collaboration"
     },
@@ -188,13 +188,13 @@
     },
     {
       "moduleName": "template",
-      "moduleJson": "src/apps/00-Template/template.json",
+      "moduleJson": "src/misc/00-Template/template.json",
       "vmid": 999,
       "stack": "template"
     },
     {
       "moduleName": "deconz",
-      "moduleJson": "src/apps/deconz/deconz.json",
+      "moduleJson": "src/home/deconz/deconz.json",
       "vmid": 213,
       "stack": "home"
     },

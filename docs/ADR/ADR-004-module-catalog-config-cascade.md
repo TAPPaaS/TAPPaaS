@@ -159,6 +159,30 @@ Fields per entry, as originally specified:
 - Module field contract: see `src/foundation/schemas/module-fields.json`
 - Dependency graph: see `src/module-dependencies.md`
 
+#### Where a module's directory is — by stack (2026-10-03, #421)
+
+*Agreed by @LarsRossen and @ErikDaniel007.* A module lives in the directory of its stack:
+`src/<stack>/<module>/`, beside `src/foundation/`. Before #421 every module that was not
+foundation sat in one flat `src/apps/`.
+
+| Directory | Holds |
+|---|---|
+| `src/foundation/` | the `foundation` stack, as before |
+| `src/ai/`, `src/collaboration/`, `src/devops/`, `src/home/`, `src/security/` | the purpose stacks — a directory exists once the stack has a module |
+| `src/misc/` | `misc` modules, and the module skeleton `00-Template` (stack `template`) |
+
+- **One directory per purpose stack, not per `stack` value.** `template` and `test` say what a
+  module *is*: the VM templates stay with the `templates` module, test fixtures beside the suites
+  that install them.
+- **Each stack directory has a `README.md`** — what the stack delivers and its modules in install
+  order, the order generated from this catalogue. It is the stack's *solution* document: installing
+  a whole stack is #763 (`module-manager add-stack`), which reads the same catalogue.
+- **The catalogue stays the authority.** Nothing finds a module by its path: `moduleJson` says where
+  it is, so a module moves by `scripts/move-module.sh` (#500), which rewrites the entry and writes the
+  config migration that repoints every installed site (`migrations/0014-modules-moved.sh` for #421).
+- A Community repository may use the same layout; nothing requires it, since its catalogue says where
+  each module is.
+
 ---
 
 ### Layer 3 — Desired state: `/home/tappaas/config/`  *(NEW: zone-based structure)*

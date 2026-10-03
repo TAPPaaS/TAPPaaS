@@ -14,7 +14,7 @@ ck() { if [[ "$2" == "$3" ]]; then echo "  ✓ $1"; pass=$((pass+1)); else echo 
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/rename.XXXXXX")"
 trap 'rm -rf "${TMP}"' EXIT INT TERM
 
-MOD="${TMP}/src/apps/hass"; CFG="${TMP}/config"
+MOD="${TMP}/src/home/hass"; CFG="${TMP}/config"
 mkdir -p "${MOD}" "${CFG}"
 echo '{"description":"hass"}' > "${MOD}/hass.json"
 fixture() {

@@ -25,6 +25,7 @@ the Wave 0 exit gate.
 | `0012-mgmt-reaches-all-zones.sh` | `zones.json` `mgmt.access-to` becomes `["internet", "all"]` (#375): `all` is every other standard zone (not Disabled, not Overlay or WAN), expanded by the controller when it reads the file, so a zone add or delete never edits `mgmt` again. Reports the zones the old list did not name and drops names that are no zone. No firewall rule changes: `mgmt` is `Manual`. Refuses a list without `internet` (the sentinel would add egress) and anything that is not a list of names. | yes — restore `.migrations/backup/0012/zones.json` |
 | `0011-site-backup-is-an-object.sh` | `site.json` `backup: true` becomes `{}` (configured, every setting at its default) and `false` becomes `null` (#737): the schema wants the settings object or null, so `site-manager validate` failed on the boolean. `true` never named a target, so the migration reports that rather than inventing one. Refuses any other non-object value. | yes — restore `.migrations/backup/0011/site.json` |
 | `0013-adopted-machines-keep-password-ssh.sh` | A `debianhost` config that does not state `sshKeyOnly` gets `false` (#756): from #756 a machine is key-only over SSH unless its config says otherwise, and a machine adopted before that was promised that adoption changes nothing about how it is reached. The satellite and `pvehost` are not touched — they take the key-only default. Refuses a non-boolean `sshKeyOnly`. | yes — restore `.migrations/backup/0013/<file>` |
+| `0014-modules-moved.sh` | The modules grouped by stack (#421): `src/apps/<m>` → `src/<stack>/<m>` for the 13 modules that moved. Installed modules follow the moves in its table (written by `scripts/move-module.sh`, #500): a config whose `moduleSource` is a moved module's old directory points at the new one, in this site's checkout of the target repository. Refuses a target repository the site has not registered, a missing target directory, and a rename another config still depends on. | yes — restore `.migrations/backup/0014/<file>` |
 
 Its readers accept both shapes: `lib/update-schedule.sh` (the timer renderer and
 `site-manager validate` share it) and `site-manager site show` / `site modify`. That is
@@ -68,9 +69,9 @@ The runner exports `CONFIG_DIR`, `TAPPAAS_CONFIG_DIR` and `TAPPAAS_MIGRATION_BAC
 Don't write a move by hand — `0009` was the last one. From a TAPPaaS checkout:
 
 ```bash
-scripts/move-module.sh TAPPaaS:src/apps/hass TAPPaaS:src/stacks/home/hass
-scripts/move-module.sh Community:src/apps/foo TAPPaaS:src/apps/foo --checkout Community=~/src/Community
-scripts/move-module.sh TAPPaaS:src/apps/old TAPPaaS:src/apps/new --rename
+scripts/move-module.sh TAPPaaS:src/misc/foo TAPPaaS:src/home/foo
+scripts/move-module.sh Community:src/foo TAPPaaS:src/home/foo --checkout Community=~/src/Community
+scripts/move-module.sh TAPPaaS:src/home/old TAPPaaS:src/home/new --rename
 ```
 
 Name the repository on both sides, as in `site.json` `repositories[].name`. The tool moves the

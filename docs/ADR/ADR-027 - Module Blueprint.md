@@ -199,7 +199,7 @@ exits 0 (D2). It is not a stub and does not warn.
   is its **VEX** (`<module>-vex.json`): the triage decisions about its findings, the one
   part a person authors. The scan reads it from any registered repository.
 - **The module's documents and contribution files** — ADR-013 and ADR-015 (D2).
-- **Where modules live** in the repository — the `src/apps` restructure is #421.
+- **Where modules live** in the repository — `src/<stack>/<module>` since #421 (ADR-004).
 - **How a module's payload is configured inside the guest** (Ansible or otherwise) —
   #430.
 

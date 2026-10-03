@@ -37,7 +37,7 @@ Scope boundary: Authentik covers applications that speak OIDC or can sit behind
 forward-auth. Credentials for legacy and external services without SSO support belong
 in the password manager — see the combined Authentik + VaultWarden strategy in the
 [Security design](https://tappaas.org/what/security-design/) and the
-[vaultwarden app](../../apps/vaultwarden/README.md).
+[vaultwarden app](../../security/vaultwarden/README.md).
 
 ## Stack (identity.nix)
 

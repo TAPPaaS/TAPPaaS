@@ -28,7 +28,7 @@ Who is accountable for a resource.
 
 **D4. The AD trust posture is the basis of cross-Site guarantees.** ADR-012 §1.4.1 already reasons this way — off-site copies are pull-only, the source holds no credential on its buddy — without naming the model. ADR-012 should cite RFC 1136 rather than re-derive it.
 
-**D5. Never abbreviate it.** RFC 1136 uses `AD` as its own short form, but in an IT-operations estate `AD` reads as Active Directory — and `src/apps/windows-server/` deploys Windows Server 2025, for which Active Directory is the canonical first role. Because a Site is one Administrative Domain, the working word in every other document is **Site**. The full term is never abbreviated and is used only in ADR-022 and its ribs; every other document says **Site**.
+**D5. Never abbreviate it.** RFC 1136 uses `AD` as its own short form, but in an IT-operations estate `AD` reads as Active Directory — and `src/misc/windows-server/` deploys Windows Server 2025, for which Active Directory is the canonical first role. Because a Site is one Administrative Domain, the working word in every other document is **Site**. The full term is never abbreviated and is used only in ADR-022 and its ribs; every other document says **Site**.
 
 *Parked for 2.1:* how a workload or system relates to this Administrative Domain (the classification taxonomy and where Health inventories what TAPPaaS does not manage) — separate issue, to be decided jointly.
 

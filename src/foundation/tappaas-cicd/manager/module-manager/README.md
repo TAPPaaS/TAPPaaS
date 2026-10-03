@@ -163,7 +163,7 @@ cannot drift from the rule. A module whose fields have their own
 
 ```bash
 module-manager validate --blueprint                       # every module of every registered repository
-module-manager validate --blueprint ~/TAPPaaS/src/apps/myapp
+module-manager validate --blueprint ~/TAPPaaS/src/home/myapp
 module-manager validate --blueprint --repo ~/TAPPaaS      # one repository's catalogue — what the release boundary runs
 ```
 
@@ -390,7 +390,7 @@ booting (`systemctl is-system-running` past `starting`), then until the module's
 A guest that cannot be asked (OPNsense, a container) is not waited on. A timeout does
 not stop the gate; its message says the module had not become ready, so "still
 starting" and "broken" read differently. After the apply, Step 5 waits the same way
-(180 s) before the post-update test. What `ready.sh` is: [00-Template](../../../../apps/00-Template/README.md#readysh-optional).
+(180 s) before the post-update test. What `ready.sh` is: [00-Template](../../../../misc/00-Template/README.md#readysh-optional).
 
 **The gate follows the suite's own grading** (#635). `test.sh` exits 2 for a fatal
 failure and 1 for failed assertions; the gate honours both. Exit 2 aborts the update

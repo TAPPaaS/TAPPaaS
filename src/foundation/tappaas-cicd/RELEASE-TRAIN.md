@@ -289,8 +289,9 @@ Every one of these is a refusal, not a warning:
 - a sweep is running here or on the staging site;
 - either site's last sweep failed — a new pin must not be blamed for a failure that predates it;
 - an unresolved staging fault;
-- a module in this repository is missing a MUST of the blueprint (ADR-027), or a service
-  README's field section no longer matches its `fields.json` — see *The module blueprint* below;
+- a module in this repository is missing a MUST of the blueprint (ADR-027), a service
+  README's field section no longer matches its `fields.json`, or a stack README's module list no
+  longer matches the catalogue — see *The module blueprint* below;
 - the channels have diverged (`stable` ⊆ `staging` ⊆ `main` no longer holds);
 - a site is pointed at a channel *behind* the commit it already runs.
 
@@ -302,7 +303,8 @@ The soak being incomplete is the one condition that resolves itself with time, s
 Once a fortnight, not on every push: the boundary checks every module in this repository against
 the blueprint ([ADR-027](../../../docs/ADR/ADR-027%20-%20Module%20Blueprint.md)) on the exact commit
 it is about to promote, with `module-manager validate --blueprint --repo ~/TAPPaaS`, and checks
-that every service README's generated field section matches its `fields.json`. A missing MUST or
+that every service README's generated field section matches its `fields.json` and every stack
+README's module list (`src/<stack>/README.md`, #421) matches the catalogue. A missing MUST or
 a stale README blocks the boundary, and `--force-boundary` does not lift it. Missing SHOULDs (a
 module without a test) are counted and never block. Community is not checked: the train promotes
 TAPPaaS only.
@@ -315,4 +317,4 @@ TAPPaaS only.
   release, not only with this mothership's config backup.
 - To fix a finding before the boundary, run the check yourself — it is read-only:
   `module-manager validate --blueprint --repo ~/TAPPaaS`, or for one module,
-  `module-manager validate --blueprint ~/TAPPaaS/src/apps/<module>`.
+  `module-manager validate --blueprint ~/TAPPaaS/src/<stack>/<module>`.

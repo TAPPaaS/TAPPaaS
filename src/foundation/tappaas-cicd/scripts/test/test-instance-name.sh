@@ -72,7 +72,7 @@ ck "default: EFFECTIVE_MODULE is the module"      demo "${out}"
 # a legacy, unsuffixed one — still merges. The release source is the MODULE's
 # json (D6.3); before that it was derived by stripping the name at a hyphen, so
 # an unsuffixed name never resolved and every update of it failed.
-MERGE_MOD="${TMP}/src/apps/hass"; mkdir -p "${MERGE_MOD}"
+MERGE_MOD="${TMP}/src/home/hass"; mkdir -p "${MERGE_MOD}"
 echo '{"description":"hass","cores":2}' > "${MERGE_MOD}/hass.json"
 MCFG="${TMP}/mconfig"; mkdir -p "${MCFG}"
 cat > "${MCFG}/hassanova.json" <<JSON

@@ -1028,7 +1028,7 @@ The `mgmt` environment does not require a `domains` field — foundation modules
 ### What Stays the Same
 
 - `src/foundation/` and `src/apps/` directory structure
-- Module locations (`src/foundation/firewall/`, `src/apps/nextcloud/`, etc.)
+- Module locations (`src/foundation/firewall/`, `src/collaboration/nextcloud/`, etc.)
 - `bin/` entry points (symlinks to new locations)
 
 ### Target Layout (tappaas-cicd internal)

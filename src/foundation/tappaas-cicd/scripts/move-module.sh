@@ -6,8 +6,8 @@
 #   move-module.sh <Repo>:<path> <Repo>:<path> [--rename] [--new]
 #                  [--checkout <Repo>=<dir>]... [--this-repo <Repo>]
 #
-#   move-module.sh TAPPaaS:src/apps/hass TAPPaaS:src/stacks/home/hass
-#   move-module.sh Community:src/apps/foo TAPPaaS:src/apps/foo --checkout Community=~/src/Community
+#   move-module.sh TAPPaaS:src/misc/foo TAPPaaS:src/home/foo
+#   move-module.sh Community:src/foo TAPPaaS:src/home/foo --checkout Community=~/src/Community
 #
 # A repository is named as in a site's site.json `repositories[].name` (TAPPaaS,
 # Community, …); each site resolves the name to its own checkout when the

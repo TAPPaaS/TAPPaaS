@@ -92,7 +92,7 @@ Governance and Contribution Files** for the repo/org-level contribution model):
 | Role | Definition | Recorded in |
 |------|------------|-------------|
 | **Contributor** | Anyone with an accepted change (the broadest set) | **git history** — never listed in files |
-| **Author** | The copyright-bearing subset | optional per-module **`AUTHORS.md`** — additive lines of `<year> @<handle> — <role>` (template: `src/apps/00-Template/AUTHORS.md`) |
+| **Author** | The copyright-bearing subset | optional per-module **`AUTHORS.md`** — additive lines of `<year> @<handle> — <role>` (template: `src/misc/00-Template/AUTHORS.md`) |
 | **Maintainer** | The current responsible party (moves on handover) | **`maintainer` in `<module>.json`** — the one machine-readable governance field, kept there so issues can be reported/routed automatically |
 
 Authorship does **not** go into `<module>.json` — it is not needed to run the

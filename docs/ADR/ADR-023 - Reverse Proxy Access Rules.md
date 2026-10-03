@@ -356,8 +356,8 @@ n8n-hooks.example.org {
 |---|---|
 | `services/proxy/fields.json` → regenerated `README.md` | `proxyAccess`; `proxyAllowedZones` allowed in `proxyRoutes` entries; `none`; the `proxyRoutes` note stops saying routes always inherit the access list |
 | `src/foundation/network/DESIGN.md` | handle layout, invariant I1, naming and pruning |
-| `src/apps/hass/INSTALL.md` | publishing webhooks only (Example A), `local_only`, trusted proxies |
-| `src/apps/litellm/INSTALL.md` | "publish to the internet" can publish `/v1/*` without `/ui` |
+| `src/home/hass/INSTALL.md` | publishing webhooks only (Example A), `local_only`, trusted proxies |
+| `src/ai/litellm/INSTALL.md` | "publish to the internet" can publish `/v1/*` without `/ui` |
 | `docs/ADR/README.md` | index row |
 
 ## Open questions

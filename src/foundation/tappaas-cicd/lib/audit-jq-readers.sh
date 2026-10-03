@@ -7,7 +7,7 @@
 # `read_module_config` / `get_config_value`, will silently return null for fields
 # that have moved under a config block.
 #
-# This script greps the foundation + apps tree for such direct reads. Used both
+# This script greps the foundation + stack trees for such direct reads. Used both
 # during the #207 reader-funnel migration and as a CI regression net.
 #
 # Usage:
@@ -33,7 +33,7 @@ Audit the TAPPaaS tree for direct jq reads on installed module configs.
 
 Scans:
   src/foundation/**/*.sh
-  src/apps/**/*.sh
+  src/<stack>/**/*.sh   (every module outside foundation, #421)
 
 Excludes (allowlisted):
   - apply-json-merge.sh, convert-json-to-config.sh, copy-update-json.sh — the

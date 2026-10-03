@@ -24,7 +24,7 @@
 # Backups: Daily PostgreSQL dump (02:00), config tar (02:45), 30-day retention
 #
 # Changelog v1.0.0 (2026-02-17):
-# - Removed VaultWarden (moved to separate module in src/apps/vaultwarden/)
+# - Removed VaultWarden (moved to separate module in src/security/vaultwarden/)
 # - Full Authentik setup with server + worker containers
 # - PostgreSQL 16 with ensureDatabases/ensureUsers
 # - Redis for caching/sessions/task queue

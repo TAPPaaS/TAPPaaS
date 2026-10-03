@@ -18,7 +18,7 @@ A TAPPaaS module's JSON has two equivalent shapes:
   }
   ```
 
-**On disk**, installed configs in `${CONFIG_DIR}` are written in canonical Pattern A by `copy-update-json.sh` (install) and `apply-json-merge.sh` (update). The repo's source JSONs in `src/foundation/*/*.json` and `src/apps/*/*.json` are also Pattern A; the [`convert-json-to-config.sh`](#convert-json-to-configsh) tool can migrate any straggling flat module.
+**On disk**, installed configs in `${CONFIG_DIR}` are written in canonical Pattern A by `copy-update-json.sh` (install) and `apply-json-merge.sh` (update). The repo's source JSONs in `src/foundation/*/*.json` and `src/<stack>/*/*.json` are also Pattern A; the [`convert-json-to-config.sh`](#convert-json-to-configsh) tool can migrate any straggling flat module.
 
 **In scripts**, all reads go through `read_module_config <m>` (or `get_config_value <field>` when `$JSON` is auto-loaded). Both helpers normalize Pattern A → flat on the fly, so script code keeps reading top-level fields like `.cores` regardless of how the file is stored. Writes go through `jq_module_write <m> <jq-filter>` which re-renders canonical Pattern A on the way out. The [`audit-jq-readers.sh`](#audit-jq-readerssh) tool greps for any direct `jq … "${MODULE_JSON}"` reads that bypass this funnel — it must report **0** on the foundation tree.
 

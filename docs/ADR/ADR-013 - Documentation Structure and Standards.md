@@ -46,7 +46,7 @@ place (including the website) links to it or syncs from it. Git history is the a
 | **Reference docs** (`CLI-REFERENCE.md`, `ZONES.md`, schema READMEs, …) | operators/developers — *Diataxis: reference* | maintained with the code they describe | next to that code |
 | **Site page** (tappaas.org) | prospective adopters, installers, operators | curated narrative, owned by the Documentation repo | codeberg.org/TAPPaaS/Documentation |
 
-The templates in `src/apps/00-Template/` (README/INSTALL) are the normative shape for
+The templates in `src/misc/00-Template/` (README/INSTALL) are the normative shape for
 module docs — #247 updates them to match this table.
 
 ### 3. Choosing the artifact (decision tree)

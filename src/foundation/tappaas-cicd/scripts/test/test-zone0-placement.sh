@@ -44,7 +44,7 @@ done
 for f in templates/tappaas-nixos.json templates/tappaas-winserver.json; do
     ck "released ${f##*/} names no zone0" "" "$(jq -r '[.. | objects | .zone0? // empty] | first // empty' "${FOUND}/${f}")"
 done
-for pair in apps/coturn:dmz apps/vaultwarden:dmz apps/deconz:iotCloud apps/netbird-client:home foundation/satellite:edge; do
+for pair in collaboration/coturn:dmz security/vaultwarden:dmz home/deconz:iotCloud security/netbird-client:home foundation/satellite:edge; do
     p="${pair%%:*}"; z="${pair#*:}"
     ck "${p##*/} keeps the zone it must live in (${z})" "${z}" "$(jq -r '[.. | objects | .zone0? // empty] | first // empty' "${REPO}/src/${p}/${p##*/}.json")"
 done
