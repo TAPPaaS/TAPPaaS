@@ -123,6 +123,9 @@ required=(
     lib/test-node-placeholders.sh
     lib/test-storage-resolve.sh
     lib/test-vm-net.sh
+    lib/remove-node-lib.sh
+    lib/test-remove-node.sh
+    remove-node.sh
     services/vm/install-service.sh
     services/vm/update-service.sh
     services/vm/delete-service.sh
@@ -190,6 +193,19 @@ if [[ -x "${SCRIPT_DIR}/lib/test-vm-net.sh" ]]; then
     fi
 else
     fail "lib/test-vm-net.sh not found or not executable"
+fi
+
+# Removing a node (#417): what blocks it, the storage entries, the erase.
+info "${BOLD}Test 2a1: remove-node decisions (#417)${CL}"
+if [[ -x "${SCRIPT_DIR}/lib/test-remove-node.sh" ]]; then
+    if rn_out=$("${SCRIPT_DIR}/lib/test-remove-node.sh" 2>&1); then
+        pass "$(tail -1 <<< "${rn_out}")"
+    else
+        fail "remove-node unit tests failed"
+        indent <<< "${rn_out}"
+    fi
+else
+    fail "lib/test-remove-node.sh not found or not executable"
 fi
 
 # A node number is a sequence, not a list of nine (#673): tappaasN gets

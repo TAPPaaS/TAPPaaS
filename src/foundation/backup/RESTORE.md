@@ -320,27 +320,27 @@ Three outcomes, and they lead to different work:
 ### 3.1 Evict the dead node from the cluster
 
 A replacement cannot take the old name while Proxmox still believes the old node
-exists. From a **surviving** node:
+exists. Preview, then remove (#417):
 
 ```bash
-ssh root@tappaas1.mgmt.internal
-  ha-manager config                       # note what was pinned to the dead node
-  pvecm nodes                             # confirm it is down, not merely unreachable
-  pvecm delnode tappaas2
-  rm -rf /etc/pve/nodes/tappaas2          # only after delnode, and only if empty of configs you need
+site-manager node delete tappaas2 --lost            # what it held, and the plan; changes nothing
+site-manager node delete tappaas2 --lost --apply    # asks for the node name
 ```
 
-Then drop it from the site register (this only edits `site.json` — it does no
-cluster work, which is why the Proxmox step above is separate and first):
+`--lost` is for a node that is **down for good** (it is refused while the node still
+answers). The guests the cluster still places on it are lost with it: each is listed
+with its restore command, and their configs are saved on the mothership under
+`~/logs/removed-tappaas2-<time>/` — the record of which VMIDs lived there, for §3.3.
+Replication jobs to or from it are removed; HA rules naming it stay, because the
+replacement takes the same name. Then `pvecm delnode`, `/etc/pve/nodes/tappaas2`,
+its place in the storage entries and the cluster's `known_hosts`, `site.json`, and
+its `pvehost` module (archived).
 
-```bash
-site-manager node delete tappaas2
-```
-
-> **Take the guest configs off the dead node first if you can.** `/etc/pve` is
-> cluster-replicated, so a downed node's guest configs are still visible from a
-> surviving node under `/etc/pve/nodes/<name>/qemu-server/`. They are the record
-> of which VMIDs lived there.
+Taking a **running** node out for good is the same verb without `--lost`: it refuses
+while the node holds a guest, a replication job, an HA rule or the PBS (each listed
+with what moves it), and `--shutdown` powers it off first — Proxmox removes a node
+only once it is off. `--erase` also wipes it: its ZFS pools and their disks, the boot
+disk's partitions and partition table, its boot entry (it asks for `ERASE`).
 
 ### 3.2 Bring the replacement back in
 

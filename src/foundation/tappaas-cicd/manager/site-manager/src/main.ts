@@ -89,9 +89,13 @@ export const HELP: HelpSpec = {
         ["--yes", "do not ask for confirmation."],
         ["--config-only", "Only write the site.json entry (no machine contact)."],
       ] },
-    { usage: "node delete <name>",
+    { usage: "node delete <name> [--apply] [--shutdown] [--erase] [--config-only]",
       options: [
-        ["(effect)", "Drops the node from site.json and archives its pvehost module instance. The machine is not touched."],
+        ["(default)", "Preview: what still holds the node (guests, replication, HA rules, the PBS) and the plan. Changes nothing."],
+        ["--apply", "Remove it from the cluster (pvecm delnode, /etc/pve/nodes/<n>, storage entries, known_hosts), then from site.json; its pvehost module is archived. Refused while anything holds it; asks for the node name."],
+        ["--shutdown", "Power the node off first — Proxmox removes a node only once it is off. A node that is already down needs nothing."],
+        ["--erase", "Before the power-off: destroy its ZFS pools and wipe their disks, wipe the boot disk's partitions and partition table, delete its boot entry. Asks for ERASE as well. Implies --shutdown."],
+        ["--config-only", "Only drop the site.json entry and the pvehost module; the cluster is not touched."],
       ] },
     { usage: "node reboot <name> [--apply]",
       options: [
@@ -196,7 +200,7 @@ interface Opts {
 // Flags that take NO value (everything else with a value is captured generically).
 const NOARG = new Set(["--apply", "--deep", "--force", "--json",
   "--pxe", "--provision", "--config-only", "--yes", "--no-wan",
-  "--dry-run", "--no-git-pull", "--allow-disruption"]);
+  "--dry-run", "--no-git-pull", "--allow-disruption", "--shutdown", "--erase"]);
 
 function parseOpts(args: string[]): Opts {
   const o: Opts = {
@@ -669,13 +673,43 @@ function cmdNode(o: Opts, client: SiteClient): void {
     const raw = loadRaw(siteFile);
     const hw = (raw.hardware ?? {}) as Record<string, unknown>;
     const nodes = (Array.isArray(hw.nodes) ? hw.nodes : []) as SiteNode[];
-    const next = nodes.filter((n) => n.name !== name);
-    if (next.length === nodes.length) die(`node '${name}' not found`);
-    hw.nodes = next;
-    raw.hardware = hw;
-    writeSite(siteFile, raw);
-    info(`${GN}✓${CL} node '${name}' deleted`);
+    const inSite = nodes.some((n) => n.name === name);
+    const dropFromSite = (): void => {
+      if (!inSite) return;
+      hw.nodes = nodes.filter((n) => n.name !== name);
+      raw.hardware = hw;
+      writeSite(siteFile, raw);
+      info(`${GN}✓${CL} node '${name}' dropped from site.json`);
+    };
+
+    if (o.boolFlags.has("--config-only")) {
+      if (!inSite) die(`node '${name}' not found`);
+      dropFromSite();
+      unregisterNodeModule(name, o.configDir);
+      return;
+    }
+
+    // The cluster side is the cluster module's (#417), as reboot is: preview by
+    // default, --execute only with --apply, and the script asks for the node
+    // name — and for ERASE — on the operator's terminal.
+    const script = clusterScript("remove-node.sh");
+    if (!script) die("remove-node.sh not found — is the cluster module installed? (module-manager show cluster)");
+    const args = [o.apply ? "--execute" : "--dry-run"];
+    if (o.boolFlags.has("--shutdown")) args.push("--shutdown");
+    if (o.boolFlags.has("--erase")) args.push("--erase");
+    args.push(name);
+    info(`${o.apply ? "" : "[preview] "}node delete '${name}' → ${script} ${args.join(" ")}`);
+    const r = spawnSync(script, args, { stdio: "inherit" });
+    const rc = r.status ?? -1;
+    if (rc !== 0) die(`remove-node.sh exited ${rc} — site.json and the node's module are unchanged`);
+    if (!o.apply) {
+      if (inSite) info(`  then: '${name}' is dropped from site.json and its pvehost module archived`);
+      return;
+    }
+    dropFromSite();
     unregisterNodeModule(name, o.configDir);
+    // A node rebuilt under this name brings a new host key: no stale pin here.
+    for (const h of [name, `${name}.mgmt.internal`]) spawnSync("ssh-keygen", ["-R", h], { stdio: "ignore" });
     return;
   }
 
@@ -693,7 +727,7 @@ function cmdNode(o: Opts, client: SiteClient): void {
       die(`node '${name}' not found in ${siteFile} (site-manager node list)`);
     }
 
-    const script = rebootNodeScript();
+    const script = clusterScript("reboot-node.sh");
     if (!script) {
       die("reboot-node.sh not found — is the cluster module installed? (module-manager show cluster)");
     }
@@ -719,23 +753,23 @@ function cmdNode(o: Opts, client: SiteClient): void {
   die(`node ${sub}: unknown subcommand`);
 }
 
-// Locate cluster/reboot-node.sh. It is not on PATH and has no ~/bin symlink
+// Locate a cluster module script (reboot-node.sh, remove-node.sh). Not on PATH and has no ~/bin symlink
 // (unlike most TAPPaaS tooling), so resolve it from the cluster module's
 // recorded location the same way update-tappaas resolves reboot-cluster.sh.
-function rebootNodeScript(): string | null {
+function clusterScript(file: string): string | null {
   const r = spawnSync("module-manager", ["show", "cluster", "--json"], { encoding: "utf8" });
   if (r.status === 0 && r.stdout) {
     try {
       const loc = (JSON.parse(r.stdout) as Record<string, unknown>).location;
       if (typeof loc === "string" && loc) {
-        const p = `${loc}/reboot-node.sh`;
+        const p = `${loc}/${file}`;
         if (existsSync(p)) return p;
       }
     } catch {
       // fall through to the well-known path
     }
   }
-  const fallback = "/home/tappaas/TAPPaaS/src/foundation/cluster/reboot-node.sh";
+  const fallback = `/home/tappaas/TAPPaaS/src/foundation/cluster/${file}`;
   return existsSync(fallback) ? fallback : null;
 }
 
