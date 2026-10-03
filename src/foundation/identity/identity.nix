@@ -50,13 +50,11 @@ let
   # manifest (every other tag here is multi-arch), so an x86 guest pulled an
   # image it cannot execute (#748, 2026-10-03). Each tag below was checked.
   ak = import ./ak-step.nix {
-    # The walk ends at 2026.2.7 for now: on hrossen 2026.5.7 started and passed
-    # its health check but answered every request with an empty page (login,
-    # OIDC, API), and was rolled back (#748, 2026-10-03). 2026.2.7 carries the fix
-    # for every advisory that touched 2025.2. Add 2026.5.x and 2026.8.x back
-    # once that is understood.
+    # 2026.5.7 needs the worker's own listeners moved off the server's ports
+    # (akWorkerEnv below); without that it answered every request with an empty
+    # page on hrossen (#748, 2026-10-03). 2026.8.x is added once 2026.5 is proven.
     lines = [ "2025.2.3" "2025.4.4" "2025.6.4" "2025.8.6" "2025.10.4"
-              "2025.12.6" "2026.2.7" ];
+              "2025.12.6" "2026.2.7" "2026.5.7" ];
   };
 
   # Settings, as opposed to secrets: declared here, so a change reaches every
@@ -73,6 +71,19 @@ let
     # Redis is not used from 2025.10 on
     AUTHENTIK_REDIS__HOST = "localhost";
     AUTHENTIK_REDIS__PORT = "6379";
+  };
+
+  # The worker binds Authentik's listen addresses too — from 2026.5 a Rust
+  # health server whose fallback answers EVERY path with an empty 200. With
+  # --network=host both containers share the guest's ports, and when the worker
+  # wins :9000 the server only warns and every login, OIDC and API request gets
+  # an empty page (#748: 2026.5.7 on hrossen; upstream's compose gives each
+  # container its own network and never meets it). The worker's listeners go to
+  # loopback ports of their own; harmless on the versions before.
+  akWorkerEnv = akEnv // {
+    AUTHENTIK_LISTEN__HTTP = "127.0.0.1:9001";
+    AUTHENTIK_LISTEN__HTTPS = "127.0.0.1:9444";
+    AUTHENTIK_LISTEN__METRICS = "127.0.0.1:9301";
   };
 
   # From 2025.12 files are served from /data; the /media mount moves to /data/media.
@@ -384,7 +395,7 @@ EOF
       "/var/lib/authentik/templates:/templates"
       "/var/lib/authentik/certs:/certs"
     ];
-    environment = akEnv;
+    environment = akWorkerEnv;
     environmentFiles = [ "/etc/secrets/authentik.env" ];
     extraOptions = [
       "--network=host"
