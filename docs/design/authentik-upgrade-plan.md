@@ -92,6 +92,26 @@ is the exception — it lands with the 2025.12 step).
 Afterwards #750: the pin is listed where a tripwire can see it, and its age is reported at
 each release boundary, so the next lapse is visible.
 
+## Results on hrossen (2026-10-03)
+
+| Hop | Version | Time | Result |
+|---|---|---|---|
+| 1 | 2025.2.3 | 112 s | ✅ — the first try, **2025.2.4, failed**: ghcr's tag is an arm64-only manifest (every other tag is multi-arch); the x86 guest pulled it and could not execute it. Rolled back by the update's own snapshot (SSO down 16:44–17:08). The step is 2025.2.3; a pre-check now refuses a tag without amd64 |
+| 2 | 2025.4.4 | 118 s | ✅ sessions moved into the database — everyone logged in once |
+| 3 | 2025.6.4 | 115 s | ✅ |
+| 4 | 2025.8.6 | 117 s | ✅ worker on Dramatiq (315 tasks, no errors) |
+| 5 | 2025.10.4 | 104 s | ✅ Redis gone; `email_verified` kept true by the TAPPaaS mapping, put on all five providers first |
+| 6 | 2025.12.6 | 113 s | ✅ groups → `parents`, media on `/data/media` |
+| 7 | **2026.2.7** | 123 s | ✅ — **hrossen runs this**; it fixes every advisory in the table above |
+| 8 | 2026.5.7 | — | ❌ twice, rolled back each time. It migrates and answers `/-/health/ready/`, but **every request returns an empty `200`** — login flow, OIDC discovery, API — and never reaches the backend; its own internal calls do. Reproduced by hand, then rolled back (empty pages ~10 min). Not a port clash; nothing in the release notes. Under investigation |
+
+At each hop: a `pg_dump`, the update's snapshot and tests, then the recorded version, the
+running image and readiness compared, each application's OIDC discovery and the outpost
+checked, and the identity and logging tests. **The walk ends at 2026.2.7** until 2026.5 is
+understood. Lessons kept in the tooling: check a body, not a status (the empty-200 hop
+looked green), and a failed OS switch should stop `module update` at once rather than five
+minutes later in `update.sh`.
+
 ## Sources
 
 - https://docs.goauthentik.io/install-config/upgrade/
