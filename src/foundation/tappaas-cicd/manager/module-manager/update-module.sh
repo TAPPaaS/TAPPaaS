@@ -400,6 +400,17 @@ trap cleanup_update_files EXIT
 
 # run_graded_test <log> <test-module.sh args...> — run it, show its output as
 # before, keep a copy in <log>; returns test-module.sh's exit code.
+# The module's guest as <vmname>.<zone0>.internal; empty for a module without
+# one (cluster, templates — nothing to wait for).
+module_guest_host() {
+    local cfg vm zone
+    cfg="$(read_module_config "$1")" || return 0
+    vm="$(jq -r '.vmname // empty' <<<"${cfg}")"
+    zone="$(jq -r '.zone0 // empty' <<<"${cfg}")"
+    [[ -n "${vm}" && -n "${zone}" ]] && printf '%s.%s.internal\n' "${vm}" "${zone}"
+    return 0
+}
+
 run_graded_test() {
     local log="$1"; shift
     local rc=0
@@ -651,17 +662,28 @@ main() {
         # aborts; exit 1 is failed assertions, often in other modules' records,
         # and the update proceeds. Those failures become the baseline Step 6
         # compares against, so only a failure the update introduced fails it.
-        local pre_test_exit=0
+        # Settled first (#700): a guest still booting — the sweep's own node
+        # reboots and OS updates leave them so — is "not healthy YET", and
+        # failing the gate on it skipped a healthy module's update for the
+        # night. A timeout does not stop the gate; it says which it was.
+        local pre_test_exit=0 gate_host gate_note=""
+        gate_host="$(module_guest_host "${module}")"
+        if [[ -n "${gate_host}" ]]; then
+            if ! wait_for_guest_settled "${gate_host}" "${TAPPAAS_READY_WAIT:-300}" \
+               || ! wait_for_module_ready "${module}" "${gate_host}" "${TAPPAAS_READY_WAIT:-300}" hook-only; then
+                gate_note=" — the guest had NOT become ready within ${TAPPAAS_READY_WAIT:-300}s, so this may be a module still starting"
+            fi
+        fi
         run_graded_test "${PRE_TEST_LOG}" --runtime-only "${module}" || pre_test_exit=$?
 
         if [[ "${pre_test_exit}" -eq 0 ]]; then
             debug "  ${GN}✓${CL} Pre-update tests passed"
         elif [[ "${pre_test_exit}" -eq 1 ]]; then
-            warn "Pre-update tests failed (exit 1, not fatal) — updating anyway; these failures are the baseline for the post-update test"
+            warn "Pre-update tests failed (exit 1, not fatal)${gate_note} — updating anyway; these failures are the baseline for the post-update test"
         elif [[ "${OPT_FORCE}" -eq 1 ]]; then
-            warn "Pre-update tests failed fatally (exit ${pre_test_exit}) — continuing due to --force"
+            warn "Pre-update tests failed fatally (exit ${pre_test_exit})${gate_note} — continuing due to --force"
         else
-            fatal "Pre-update tests failed fatally (exit ${pre_test_exit}) — aborting update"
+            fatal "Pre-update tests failed fatally (exit ${pre_test_exit})${gate_note} — aborting update"
             error "  Use --force to override"
             exit 2
         fi
@@ -756,12 +778,12 @@ main() {
     #
     # A timeout WARNS — "tests may be flaky", not "the update failed" —
     # matching how the reboot callers treat it.
-    local ready_host ready_vm ready_zone
-    ready_vm="$(read_module_config "${module}" | jq -r '.vmname // empty')"
-    ready_zone="$(read_module_config "${module}" | jq -r '.zone0 // empty')"
-    if [[ -n "${ready_vm}" && -n "${ready_zone}" ]]; then
-        ready_host="${ready_vm}.${ready_zone}.internal"
-        wait_for_module_ready "${module}" "${ready_host}" 180 hook-only \
+    local ready_host
+    ready_host="$(module_guest_host "${module}")"
+    if [[ -n "${ready_host}" ]]; then
+        # An apply that rebooted the guest leaves it booting (#700).
+        { wait_for_guest_settled "${ready_host}" 180 \
+          && wait_for_module_ready "${module}" "${ready_host}" 180 hook-only; } \
             || warn "  '${module}' not ready after apply — post-update tests may see a starting service"
     else
         debug "  no vmname/zone0 for '${module}' — skipping the post-apply readiness gate"

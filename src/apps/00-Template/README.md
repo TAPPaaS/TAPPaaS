@@ -137,6 +137,27 @@ Update script called periodically to keep the module updated.
   Otherwise print `DEFERRED: <module> <what> …` and exit 0 — the sweep collects those lines.
   `src/foundation/debianhost/update.sh` is a worked example
 
+### ready.sh (optional)
+
+A readiness probe: "can this module serve **yet**?" — not "is it healthy", which is
+`test.sh`'s question. `module update` polls it (every 5 s, bounded) before its pre-update
+test and after its apply, and the reboot paths (`update-os`, a `cluster:vm` change) poll it
+before testing a guest they restarted. Without it a module is only waited on until its guest
+has finished booting (`systemctl is-system-running`) — enough when the service is up as soon
+as systemd is.
+
+Ship one when the service needs longer than the boot: a container that starts after the
+guest, an app that binds its port before its backend answers. Otherwise the gate tests a
+module that is still starting and calls it broken (#468, #700).
+
+- Called as `ready.sh <module> <vm-ip>`; exit 0 when ready, non-zero while starting
+- Cheap, side-effect free, quick to fail: one ssh round-trip, `--max-time` under 5 s
+- Ask what `test.sh` asks, in the same form, so the probe and the gate stay in step
+- Examples: `src/apps/litellm/ready.sh`, `src/apps/euro-office/ready.sh`,
+  `src/foundation/logging/ready.sh`
+- No stub here on purpose: a `ready.sh` that always exits 0 would replace the
+  default wait with nothing
+
 ### myModule.nix
 
 NixOS configuration file for NixOS-based modules.
@@ -259,6 +280,7 @@ module is installed or updated.
 ├── <module>.json
 ├── install.sh                    # the module's own install
 ├── update.sh                     # the module's own update
+├── ready.sh                      # optional: "can it serve yet" (see ready.sh above)
 └── services/
     └── <service-name>/
         ├── install-service.sh    # run when a dependent installs

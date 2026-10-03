@@ -19,6 +19,13 @@
 ## Deep tests (live; --deep / TAPPAAS_TEST_DEEP=1)
 - None — there is no deep tier. Because the standard checks only confirm endpoints are up and that ≥1 job label exists, the following remain unverified: remote/syslog log ingestion actually reaching Loki (only the local journal scrape is implied by check 8), retention/compaction behaviour, Grafana dashboards/datasource wiring, alerting, and end-to-end log query results.
 
+## Readiness probe (`ready.sh`)
+- Polled by `module update` before the pre-update test and after the apply (#700), and by
+  the reboot paths: exits 0 once checks 2 and 8 would pass (Loki `/ready`, ≥1 `job` label).
+  Without it a freshly booted guest failed both — Loki settles and Alloy ships its first
+  lines some seconds after systemd reports the guest up — and its update was skipped for
+  the night (2026-09-21). Keep the two in step: change a check, change the probe.
+
 ## Coverage notes
 - All eight checks are liveness/health probes of localhost endpoints over SSH; none validate log content, query results, or external syslog clients shipping to `tcp/1514`.
 - Check 8 is the only ingest assertion and it is weak: it only requires ≥1 job label value to exist (from the local systemd-journal scrape), not that a specific source or remote sender's logs arrived.

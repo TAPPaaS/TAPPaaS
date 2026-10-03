@@ -68,6 +68,7 @@ This is what makes the rest checkable: "does this module carry X?" is `test -f`.
 | `fields.json` | **MUST** when the module declares fields of its own | the schema's: what those fields mean, composed into `module-fields.json` (#567) |
 | `services/<service>/` | **MUST** for each service the module `provides` | a consumer's — D3 |
 | `delete.sh` | **MAY** | only when deleting needs more than removing the guest and the config (the satellite's tunnel, the backup module's PBS) |
+| `ready.sh` | **MAY** | the update gate's and the reboot paths': can this module serve *yet* — polled before it is tested, so a module still starting is not failed as broken (#468, #700). Without one the wait ends when the guest has booted |
 | `<module>-vex.json` | **MAY** | the security scan's: which of this module's CVE findings someone has decided (CycloneDX VEX, ADR-011 §8) — D7 |
 
 **MUST** means the module is incomplete without it and the check says so. **SHOULD**

@@ -384,6 +384,14 @@ It snapshots the VM, tests, updates, and rolls back on a fatal failure. The Step
 pre-update test runs `--runtime-only`: it gates a mutation, so it asks whether the
 module is healthy, not whether the source tree is correct (#595).
 
+**It waits for the module to be ready first** (#700): until the guest has finished
+booting (`systemctl is-system-running` past `starting`), then until the module's own
+`ready.sh` exits 0 if it ships one — up to `TAPPAAS_READY_WAIT` seconds (default 300).
+A guest that cannot be asked (OPNsense, a container) is not waited on. A timeout does
+not stop the gate; its message says the module had not become ready, so "still
+starting" and "broken" read differently. After the apply, Step 5 waits the same way
+(180 s) before the post-update test. What `ready.sh` is: [00-Template](../../../../apps/00-Template/README.md#readysh-optional).
+
 **The gate follows the suite's own grading** (#635). `test.sh` exits 2 for a fatal
 failure and 1 for failed assertions; the gate honours both. Exit 2 aborts the update
 (unless `--force`); exit 1 warns and the update proceeds, and those

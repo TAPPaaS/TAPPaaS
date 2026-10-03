@@ -174,6 +174,29 @@ else
     fail "took ${elapsed}s — looks like the port probe ran despite a ready.sh"
 fi
 
+# ── wait_for_guest_settled (#700) ─────────────────────────────────────
+# ssh and sleep are stubbed: each call answers the next line of ANSWERS.
+# The stub runs inside $(...), so its call count lives in a file.
+ANSWERS=()
+CALLS=0
+ssh() { local n; n=$(cat "${WORK}/calls"); echo $((n + 1)) > "${WORK}/calls"
+        local a="${ANSWERS[$n]:-${ANSWERS[-1]}}"; printf '%s\n' "$a"; [[ "$a" == STATE* ]]; }
+sleep() { :; }
+settled() { local rc=0; ANSWERS=("$@"); echo 0 > "${WORK}/calls"
+            wait_for_guest_settled g.mgmt.internal 20 >/dev/null 2>&1 || rc=$?
+            CALLS=$(cat "${WORK}/calls"); return "${rc}"; }
+
+settled "STATE running" && [[ ${CALLS} -eq 1 ]] && pass "a settled guest: one ask, no wait" || fail "settled guest (calls=${CALLS})"
+settled "STATE degraded" && pass "degraded counts as booted (a failed unit is the test's to report)" || fail "degraded"
+settled "ssh: connect to host g port 22: Connection refused" "STATE starting" "STATE running" && [[ ${CALLS} -eq 3 ]] \
+    && pass "not answering, then starting, then running: waits for the end of boot" || fail "boot sequence (calls=${CALLS})"
+settled "tappaas@g: Permission denied (publickey)." && [[ ${CALLS} -eq 1 ]] \
+    && pass "a guest that refuses the key (OPNsense, a container) is not waited on" || fail "permission denied (calls=${CALLS})"
+settled "STATE none" && pass "no systemd: nothing to wait for" || fail "no systemd"
+if settled "STATE starting"; then fail "a guest that never finishes booting must time out"
+else [[ ${CALLS} -eq 5 ]] && pass "never settles: times out (20s / 5s polls)" || fail "timeout polls (calls=${CALLS})"; fi
+unset -f ssh sleep
+
 echo
 echo "── summary: ${PASS} pass, ${FAIL} fail ──"
 exit "${FAIL}"
