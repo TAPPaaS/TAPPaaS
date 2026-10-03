@@ -164,6 +164,27 @@ pbs_fs_recreate_login() {
     pbs_fs_grant_ns "${module}"
 }
 
+# pbs_fs_ensure_password <module> <target> <owner-spec> <sudo-prefix> — the guest
+# holds its PBS login's password, or gets a new one. A rebuilt machine has none,
+# and PBS can only set a password when it creates a login, so the login is
+# re-created with a fresh one and the guest is given it (#729 §3: a reinstalled
+# tappaas2 had a runner, a timer and a key, and every capture failed on the
+# missing password). install-service.sh made this repair; the update never did.
+# The password goes over the pipe, never through the remote shell's text or argv.
+pbs_fs_ensure_password() {
+    local module="$1" target="$2" owner="$3" sudo_p="$4" pw
+    ssh -n -o ConnectTimeout=15 -o BatchMode=yes "${target}" "${sudo_p}test -s /etc/secrets/backup-fs.pw" \
+        >/dev/null 2>&1 && return 0
+    warn "  ${target#*@} has no backup login password — re-creating the PBS login with a new one"
+    pw="$(head -c 4096 /dev/urandom | LC_ALL=C tr -dc 'A-Za-z0-9')"; pw="${pw:0:32}"
+    [[ "${#pw}" -ge 8 ]] || { error "  could not generate a PBS password"; return 1; }
+    pbs_fs_recreate_login "${module}" "${pw}" || return 1
+    printf '%s' "${pw}" | ssh -o ConnectTimeout=15 -o BatchMode=yes -o StrictHostKeyChecking=accept-new "${target}" \
+        "${sudo_p}bash -c 'mkdir -p /etc/secrets; chmod 755 /etc/secrets; umask 077; cat > /etc/secrets/backup-fs.pw; chown ${owner} /etc/secrets/backup-fs.pw'" \
+        || { error "  could not write the backup login password on ${target#*@}"; return 1; }
+    info "  ${GN}✓${CL} backup login password in place on ${BL}${target#*@}${CL}"
+}
+
 # DatastoreBackup on this module's namespace only: create + read its own
 # snapshots, no delete, no prune, nothing outside fs/<module>.
 pbs_fs_grant_ns() {
@@ -222,31 +243,58 @@ pbs_fs_consumers() {
 
 # Make sure the guest holds a client encryption key, and that it is escrowed.
 #
-# Create-if-absent, never rotate (#742). Only install-service.sh used to do this,
-# so a guest that reached backup:filesystem by any other route — notably a
-# mothership whose capture predates the service — never got a key, and no amount
-# of updating could give it one: the capture then failed on every run, forever.
-# An existing key is left exactly alone; rotating one is a deliberate act with
-# its own verb, and silently replacing it would orphan every archive it wrote.
+# Never rotate (#742), and never replace an escrowed key (#729 §3):
+#   guest has none, escrow has one  → a REBUILT machine: the escrowed key goes
+#                                     back, so its earlier captures stay readable
+#   guest has none, escrow has none → create it, escrow it
+#   guest has one                   → left exactly alone; escrowed when missing,
+#                                     and when it differs the old escrowed key is
+#                                     kept beside it (older archives need it)
+# Only install-service.sh used to create one, so a guest that reached
+# backup:filesystem by another route never got a key (#742). Creating whenever
+# the GUEST lacked one then gave a reinstalled tappaas2 a new key and overwrote
+# the escrowed one — every earlier capture of it unreadable but for the
+# out-of-band copy (#729 §3, 2026-10-03).
 #
 # Args: <module> <target> <owner-spec> <sudo-prefix>
 pbs_fs_ensure_key() {
     local module="$1" target="$2" owner="$3" sudo_p="$4"
-    local guest="${target#*@}" created=0
+    local guest="${target#*@}" outcome=""
 
-    # `created` comes back on stdout so the caller can say which happened; the
+    # The escrow belongs to tappaas on the mothership (tappaas-cicd.nix tmpfiles),
+    # and update-tappaas.service may write it (ReadWritePaths). It has to: that
+    # unit runs with NoNewPrivileges, where sudo cannot work at all, so an escrow
+    # through sudo failed every scheduled sweep for every filesystem capture —
+    # the mothership and all three nodes on hrossen, 2026-09-27. sudo stays only
+    # for an escrow directory this user cannot write (a mothership built before
+    # the tmpfiles rule, run by hand).
+    local esc_sudo="sudo "
+    [[ -d "${PBS_FS_ESCROW_DIR}" && -w "${PBS_FS_ESCROW_DIR}" ]] && esc_sudo=""
+    [[ -d "${PBS_FS_ESCROW_DIR}" ]] || ${esc_sudo}mkdir -p "${PBS_FS_ESCROW_DIR}"
+    local escrowed="${PBS_FS_ESCROW_DIR}/${module}.key" old="" old_b64=""
+    old="$(${esc_sudo}cat "${escrowed}" 2>/dev/null)" || old=""
+    # base64 in the heredoc: the key reaches the guest on stdin, never on a
+    # command line, and no character of it can be read as shell.
+    [[ -n "${old}" ]] && old_b64="$(printf '%s' "${old}" | base64 | tr -d '\n')"
+
+    # The outcome comes back on stdout so the caller can say which happened; the
     # remote block is otherwise quiet. The directory must stay traversable by the
     # service user — the secrets are protected by their own 0600, not by the
     # parent (the 0700 form produced a "cannot read <file>" that blamed the file).
-    created="$(ssh -o ConnectTimeout=15 -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+    outcome="$(ssh -o ConnectTimeout=15 -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
         "${target}" "${sudo_p}bash -s" <<REMOTE
 set -euo pipefail
 mkdir -p /etc/secrets
 chmod 755 /etc/secrets
 umask 077
 if [[ ! -s /etc/secrets/backup-fs.key ]]; then
-    proxmox-backup-client key create /etc/secrets/backup-fs.key --kdf none >/dev/null
-    printf created
+    if [[ -n "${old_b64}" ]]; then
+        printf '%s' '${old_b64}' | base64 -d > /etc/secrets/backup-fs.key
+        printf restored
+    else
+        proxmox-backup-client key create /etc/secrets/backup-fs.key --kdf none >/dev/null
+        printf created
+    fi
 fi
 chmod 600 /etc/secrets/backup-fs.key
 chown ${owner} /etc/secrets/backup-fs.key
@@ -258,37 +306,32 @@ fi
 REMOTE
     )" || { warn "  could not ensure the encryption key on ${guest}"; return 1; }
 
-    [[ "${created}" == "created" ]] && info "  ${GN}✓${CL} created the client encryption key on ${BL}${guest}${CL}"
+    case "${outcome}" in
+        created)  info "  ${GN}✓${CL} created the client encryption key on ${BL}${guest}${CL}" ;;
+        restored) info "  ${GN}✓${CL} put the escrowed encryption key back on ${BL}${guest}${CL} — its earlier captures stay readable" ;;
+    esac
 
-    # Escrow it whenever the central copy is missing or differs — an unescrowed
-    # key is unrecoverable, and that is true of a key we just created and of one
-    # that was created before escrow existed.
-    #
-    # The escrow belongs to tappaas on the mothership (tappaas-cicd.nix tmpfiles),
-    # and update-tappaas.service may write it (ReadWritePaths). It has to: that
-    # unit runs with NoNewPrivileges, where sudo cannot work at all, so an escrow
-    # through sudo failed every scheduled sweep for every filesystem capture —
-    # the mothership and all three nodes on hrossen, 2026-09-27. sudo stays only
-    # for an escrow directory this user cannot write (a mothership built before
-    # the tmpfiles rule, run by hand).
-    local esc_sudo="sudo "
-    [[ -d "${PBS_FS_ESCROW_DIR}" && -w "${PBS_FS_ESCROW_DIR}" ]] && esc_sudo=""
-    [[ -d "${PBS_FS_ESCROW_DIR}" ]] || ${esc_sudo}mkdir -p "${PBS_FS_ESCROW_DIR}"
-    local escrowed="${PBS_FS_ESCROW_DIR}/${module}.key"
     local remote_key
     remote_key="$(ssh -n -o BatchMode=yes "${target}" "${sudo_p}cat /etc/secrets/backup-fs.key" 2>/dev/null)" \
         || { warn "  could not read ${guest}'s key back to escrow it"; return 1; }
     [[ -n "${remote_key}" ]] || { warn "  ${guest}'s encryption key is empty"; return 1; }
+    [[ "${remote_key}" == "${old}" ]] && return 0
 
-    if [[ ! -s "${escrowed}" ]] || [[ "${remote_key}" != "$(${esc_sudo}cat "${escrowed}" 2>/dev/null)" ]]; then
-        # umask: the key is never readable by anyone else, not even between the
-        # write and the chmod.
-        ( umask 077; printf '%s' "${remote_key}" | ${esc_sudo}tee "${escrowed}" >/dev/null ) \
-            || { warn "  could not escrow ${module}'s encryption key"; return 1; }
-        ${esc_sudo}chmod 600 "${escrowed}"
-        info "  ${GN}✓${CL} encryption key escrowed → ${escrowed}"
-        warn "  Take the mandatory OUT-OF-BAND copy now (§2.5.1): backup-manager key export --usb"
+    if [[ -n "${old}" ]]; then
+        # Never overwrite an escrowed key: the archives made with it need it.
+        local kept="${PBS_FS_ESCROW_DIR}/${module}.superseded-$(date +%Y%m%d-%H%M%S).key"
+        ( umask 077; printf '%s' "${old}" | ${esc_sudo}tee "${kept}" >/dev/null ) \
+            || { warn "  ${guest}'s key is not the escrowed one, and the old one could not be kept — escrow left as it is"; return 1; }
+        ${esc_sudo}chmod 600 "${kept}"
+        warn "  ${guest}'s encryption key is NOT the escrowed one — the old one is kept: ${kept}"
     fi
+    # umask: the key is never readable by anyone else, not even between the
+    # write and the chmod.
+    ( umask 077; printf '%s' "${remote_key}" | ${esc_sudo}tee "${escrowed}" >/dev/null ) \
+        || { warn "  could not escrow ${module}'s encryption key"; return 1; }
+    ${esc_sudo}chmod 600 "${escrowed}"
+    info "  ${GN}✓${CL} encryption key escrowed → ${escrowed}"
+    warn "  Take the mandatory OUT-OF-BAND copy now (§2.5.1): backup-manager key export --usb"
     return 0
 }
 

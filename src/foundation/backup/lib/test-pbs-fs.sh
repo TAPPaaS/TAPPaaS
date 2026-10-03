@@ -29,17 +29,53 @@ ck_rc() { if [[ "$2" == "$3" ]]; then echo "  ok: $1"; PASS=$((PASS+1)); else ec
 # an escrow through sudo failed every scheduled sweep. With a writable escrow
 # directory the key is escrowed with no sudo at all.
 (
+    # A guest that holds a key in GUEST_KEY_F (empty = none). `bash -s` gets the
+    # remote block on stdin: a base64 payload in it is the escrowed key going
+    # back; otherwise a new key is "created" as KEY-$FAKE_KEY.
     sudo() { echo "sudo called: $*" >> "${ESC_LOG}"; return 1; }
-    ssh() { case "${*: -1}" in *"bash -s") cat >/dev/null; echo created ;; *cat*) printf 'KEY-%s' "${FAKE_KEY}" ;; esac; }
+    ssh() {
+        case "${*: -1}" in
+            *"bash -s")
+                local blk b64; blk="$(cat)"
+                if [[ ! -s "${GUEST_KEY_F}" ]]; then
+                    b64="$(sed -n "s/^ *printf '%s' '\([A-Za-z0-9+\/=]*\)' | base64 -d.*/\1/p" <<<"${blk}")"
+                    if [[ -n "${b64}" ]]; then printf '%s' "${b64}" | base64 -d > "${GUEST_KEY_F}"; echo restored
+                    else printf 'KEY-%s' "${FAKE_KEY}" > "${GUEST_KEY_F}"; echo created; fi
+                fi ;;
+            *cat*) cat "${GUEST_KEY_F}" ;;
+        esac
+    }
     ESC_LOG="$(mktemp)"; export ESC_LOG
+    GUEST_KEY_F="$(mktemp)"; : > "${GUEST_KEY_F}"
     PBS_FS_ESCROW_DIR="$(mktemp -d)/backup-fs"; mkdir -p "${PBS_FS_ESCROW_DIR}"
-    FAKE_KEY=one pbs_fs_ensure_key tappaas-cicd tappaas@tappaas-cicd.mgmt.internal "tappaas:users" "sudo " >/dev/null 2>&1
+    E="${PBS_FS_ESCROW_DIR}/tappaas-cicd.key"
+    ensure() { pbs_fs_ensure_key tappaas-cicd tappaas@tappaas-cicd.mgmt.internal "tappaas:users" "sudo " >/dev/null 2>&1; }
+
+    FAKE_KEY=one ensure
     ck_rc "escrow: a writable escrow needs no sudo (rc)" 0 $?
-    ck "escrow: the key is written"          "KEY-one" "$(cat "${PBS_FS_ESCROW_DIR}/tappaas-cicd.key" 2>/dev/null)"
-    ck "escrow: 0600"                        "600"     "$(stat -c %a "${PBS_FS_ESCROW_DIR}/tappaas-cicd.key" 2>/dev/null || stat -f %Lp "${PBS_FS_ESCROW_DIR}/tappaas-cicd.key")"
+    ck "escrow: a new guest's new key is written"  "KEY-one" "$(cat "${E}" 2>/dev/null)"
+    ck "escrow: 0600"                        "600"     "$(stat -c %a "${E}" 2>/dev/null || stat -f %Lp "${E}")"
     ck "escrow: sudo was never called"       ""        "$(cat "${ESC_LOG}")"
-    FAKE_KEY=two pbs_fs_ensure_key tappaas-cicd tappaas@tappaas-cicd.mgmt.internal "tappaas:users" "sudo " >/dev/null 2>&1
-    ck "escrow: a changed key is re-escrowed" "KEY-two" "$(cat "${PBS_FS_ESCROW_DIR}/tappaas-cicd.key")"
+
+    # #729 §3: the machine was rebuilt — no key on it, one in escrow. The
+    # escrowed key goes back; a new one would orphan every earlier capture.
+    : > "${GUEST_KEY_F}"
+    FAKE_KEY=two ensure
+    ck "rebuilt: the escrowed key is put back on the guest" "KEY-one" "$(cat "${GUEST_KEY_F}")"
+    ck "rebuilt: the escrow is unchanged"                   "KEY-one" "$(cat "${E}")"
+    ck "rebuilt: nothing superseded"                        "0" "$(ls "${PBS_FS_ESCROW_DIR}" | grep -c superseded)"
+
+    # A key with special characters survives the trip (it is JSON in real life).
+    printf '{"kdf":null,"key":"a+b/c=$x`y"}' > "${E}"; : > "${GUEST_KEY_F}"
+    ensure
+    ck "rebuilt: a JSON key arrives byte for byte" '{"kdf":null,"key":"a+b/c=$x`y"}' "$(cat "${GUEST_KEY_F}")"
+
+    # The guest's key was changed by hand: escrow it, and keep the old one.
+    printf 'KEY-three' > "${GUEST_KEY_F}"
+    ensure
+    ck "changed: the guest's key is escrowed"  "KEY-three" "$(cat "${E}")"
+    ck "changed: the old escrowed key is kept" '{"kdf":null,"key":"a+b/c=$x`y"}' \
+       "$(cat "${PBS_FS_ESCROW_DIR}"/tappaas-cicd.superseded-*.key 2>/dev/null)"
     echo "${PASS} ${FAIL}" > "${ESC_LOG}.res"
     cp "${ESC_LOG}.res" "${CONFIG_DIR}/esc.res"
 )

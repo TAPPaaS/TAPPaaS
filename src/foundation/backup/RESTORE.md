@@ -371,6 +371,12 @@ Node-add joins the cluster, captures the node in `site.json`, registers its pool
 as cluster storage, and **reconciles the backup client onto it** (ADR-012 §2.4) —
 without that last step, VMs later placed there would silently have no backups.
 
+The node's own **file capture** (`backup:filesystem`: `/etc`, `/var/lib/pve-cluster`,
+`/root`) comes back with the first `module-manager module update <node>`: the
+escrowed encryption key is put back on the node — never a new one, so its earlier
+captures stay readable — and its PBS login gets a new password. Check with
+`module-manager module test <node>`.
+
 ### 3.3 Restore the guests that lived there
 
 **Which guests were those?** Two sources, and you want both:

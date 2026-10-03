@@ -72,6 +72,16 @@ else
         else
             bad "${RUNNER} is MISSING on ${GUEST} — the capture cannot run (re-run: update-module.sh ${MODULE})"
         fi
+        # The runner's two secrets: without either the capture fails every run
+        # (#729 §3: a rebuilt node passed this test with no password at all).
+        _sudo="$(pbs_fs_sudo "${MODULE}")"
+        for _sec in backup-fs.pw backup-fs.key; do
+            if tappaas_ssh_guest -o BatchMode=yes "${TARGET}" "${_sudo}test -s /etc/secrets/${_sec}" >/dev/null 2>&1; then
+                ok "/etc/secrets/${_sec} present on ${GUEST}"
+            else
+                bad "/etc/secrets/${_sec} is MISSING on ${GUEST} — the capture cannot run (re-run: update-module.sh ${MODULE})"
+            fi
+        done
 
         # A delivered runner with nothing to trigger it captures exactly nothing.
         # The timer is declarative (NixOS keeps /etc/systemd/system read-only), so

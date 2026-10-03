@@ -61,6 +61,8 @@ pbs_fs_ensure_target "${MODULE}" || die "could not re-assert the PBS side for ${
 # warning and falling through to the success line.
 OWNER="tappaas:users"; [[ "${KIND}" == "machine" ]] && OWNER="root:root"
 SUDO="$(pbs_fs_sudo "${MODULE}")"
+pbs_fs_ensure_password "${MODULE}" "${TARGET}" "${OWNER}" "${SUDO}" \
+    || die "could not give ${GUEST} its backup login password — the capture cannot run without it"
 pbs_fs_ensure_key "${MODULE}" "${TARGET}" "${OWNER}" "${SUDO}" \
     || die "could not converge ${MODULE}'s encryption key on ${GUEST} — the capture cannot run without it"
 
