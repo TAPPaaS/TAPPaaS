@@ -50,8 +50,13 @@ let
   # manifest (every other tag here is multi-arch), so an x86 guest pulled an
   # image it cannot execute (#748, 2026-10-03). Each tag below was checked.
   ak = import ./ak-step.nix {
+    # The walk ends at 2026.2.7 for now: on hrossen 2026.5.7 started and passed
+    # its health check but answered every request with an empty page (login,
+    # OIDC, API), and was rolled back (#748, 2026-10-03). 2026.2.7 carries the fix
+    # for every advisory that touched 2025.2. Add 2026.5.x and 2026.8.x back
+    # once that is understood.
     lines = [ "2025.2.3" "2025.4.4" "2025.6.4" "2025.8.6" "2025.10.4"
-              "2025.12.6" "2026.2.7" "2026.5.7" "2026.8.3" ];
+              "2025.12.6" "2026.2.7" ];
   };
 
   # Settings, as opposed to secrets: declared here, so a change reaches every
