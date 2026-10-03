@@ -111,9 +111,9 @@ things that make those migrations survivable go before it (Wave 0).
 | 0 | ✅ G0.2 Trustworthy gates | 8 | 4 | 2 | M |
 | 0 | ✅ G0.3 Update channel & failure notice | 5 | 3 | 3 | M |
 | 1 | ✅ G1.1 Vocabulary & classification (ADR-022 family) | 8 | 2 | 4 | H |
-| 1 | G1.2 Backup placement model (ADR-012 close-out) | 12 | 3 | 4 | H |
+| 1 | G1.2 Backup placement model (ADR-012 close-out) | 13 | 3 | 4 | H |
 | 1 | G1.3 Module contract & repo layout | 10 | 2 | 5 | H |
-| 1 | G1.4 Common NixOS baseline | 8 | 2 | 4 | H |
+| 1 | G1.4 Common NixOS baseline | 10 | 2 | 4 | H |
 | 1 | G1.5 Rebuild & recovery paths | 6 | 3 | 4 | M |
 | 1 | G1.6 Secrets & privileged access | 5 | 1 | 5 | H |
 | 2 | G2.1 Firewall exposure & rule order | 14 | 3 | 4 | M |
@@ -127,7 +127,7 @@ things that make those migrations survivable go before it (Wave 0).
 | 4 | G4.2 Proxy & ingress | 3 | 3 | 2 | L |
 | 4 | G4.3 Manager verb gaps | 6 | 3 | 2 | L |
 | 4 | G4.4 Storage & physical devices | 5 | 2 | 2 | M |
-| 4 | G4.5 Governance, CI & sign-offs | 6 | 3 | 1 | L |
+| 4 | G4.5 Governance, CI & sign-offs | 8 | 3 | 1 | L |
 
 Issue counts include the Future Work items rolled in.
 
@@ -422,6 +422,7 @@ is a migration.
 | ✅ #609 | Off-site location recorded | 4 | 2 | M | **Built 2026-09-18** (`wave1/g1.2-module-source`): the field is `physicalLocation` (operator: `location` was a module's source directory, renamed `moduleSource` with migration 0006, readers accept both for one stable cycle). Recorded by `backup-manager peer add --country/--city/--building` and `satellite-manager install --country/--city`; `site.json` `location` gains `city`/`building`; `backup-manager validate` warns about a satellite/`remote`/`pull` target not shown to be elsewhere |
 | ✅ #605 | Split ADR-012 acceptance list | 5 | 1 | L | **Done in v1.0:** a Decision list (accepted) and an Implementation list (tracked in #407) |
 | #407 | ADR-012 3-node live validation gate | 2 | 1 | L | Sign-off gate. **Live suite green 2026-09-19** on hrossen with dh-test1's PBS as the second PBS: push write-no-delete, off-site restore ±key, relocation-by-pull, `placement reset` end to end (found + fixed a substring storage check). `node add` client: moot on PVE 9 (hard dependency). Left: immutability live (production ZFS only), **operator sign-off** |
+| ✅ #749 | Installing `backup` on a PVE node silently removed its PVE apt repository | 4 | 2 | M | **Opened and closed 2026-09-27** (added to the plan 2026-10-03): `backup/install.sh` appended a deb822 stanza with no blank line before it, so apt read the PBS stanza over the PVE one — tappaas3 stopped getting Proxmox VE updates (9.2.10 vs 9.2.20) while everything reported success |
 
 ### G1.3 Module contract & repo layout — E2 · R5 · L-H
 
@@ -522,6 +523,8 @@ time or locale on a Debian guest, an adopted `debianhost`, or a Windows guest at
 | ✅ #726 | A release move leaves every Postgres guest permanently warning about collation | — | — | — | **Added in the 2026-09-25 issue sweep.** **Closed 2026-09-25.** A glibc change across the release makes `datcollversion` stale, so every guest warns forever. Reconciliation now runs in the sweep's Phase 4 and each refresh is *earned* by verifying that database's indexes first (`bt_index_check`), with a `FOUND == CHECKED` guard — an earlier cut refreshed two databases without checking anything, because `sudo -u postgres command psql` cannot exec a shell builtin and every query silently returned nothing |
 | ✅ #728 | update-os: guests switch across a nixpkgs release and fail on exit 4 | — | — | — | **Added in the 2026-09-25 issue sweep.** **Closed 2026-09-24** (`0afac5d5`). Across a release `switch` applies but cannot reload `dbus-broker`, so it exits 4 — the switch succeeded, the reload did not. A release move is now *staged* with `nixos-rebuild boot` and taken by the reboot, the way the mothership does it (#725). **This is also the likely root cause of #711**, which was reported two days earlier and whose own fix (`e5481865`) addressed only the fact that the failure left no evidence |
 | ✅ #709 | Nextcloud cannot advance past 33 | — | — | — | **Closed 2026-09-24.** The train can move the nixpkgs release (`7b3af58f`), and the pin is on 26.05 (`3e07ca7d`), which ships `nextcloud33`/`34`/`35`. Moving the module's `ncMajor` is the Nextcloud maintainers' call, not this issue. Added in the 2026-09-24 issue sweep |
+| #748 | identity: the Authentik pin has not moved since 2026-02-21, and nothing tracks it | 2 | 4 | M | **Opened 2026-09-27**, added to the plan 2026-10-03. `identity.nix` pins `authentik = "2025.2.1"` — the only literal version in the foundation; upstream is 2026.8.3, several release trains on. R4: a jump that size goes through the release notes' migration path step by step (database migrations, settings renamed) on the SSO every module depends on — test on hrossen with a restore of `identity` ready. Then #750 keeps it from happening again |
+| #750 | Container image pins have no cadence and no tripwire, unlike the nixpkgs pin | 3 | 1 | M | **Opened 2026-09-27**, added to the plan 2026-10-03. ADR-028 D2/D4 move the nixpkgs pin every boundary and fire at 45 days; a container tag moves only when someone moves it. On hrossen identity, litellm and openwebui had not moved in 7½ months — older than what nixpkgs ships. Wants: the pins listed in one place, their age reported at each boundary (`tappaas-train status`), and the same 45-day tripwire. Report-only — moving a pin stays a reviewed change |
 
 ### G1.5 Rebuild & recovery paths — E3 · R4 · L-M
 
@@ -762,6 +765,8 @@ New capabilities with low upgrade risk.
 | #359 | legal/processor ADR | 3 | 1 | L | |
 | #63 | Service desk tooling spike | 3 | 1 | L | |
 | ✅ FW #143 | CVE tracking / SBOM (ADR-011) | 3 | 1 | L | **Closed 2026-09-27 — built.** ADR-011 v0.5 **Proposed**: per-installation scan — `health-manager scan/report security`, `tappaas-security-scan.service` after every sweep, `cve-status` gate (WARN only), notice on what is new; mothership disk 64G for the scanner databases. No longer tied to #363 |
+| #746 | Emergency patching as ADR-028 D12 describes it | 3 | 1 | M | **Opened 2026-09-26**, added to the plan 2026-10-03. D12 (urgent = data safety, a high-severity CVE, or a service down with the fix written; no workaround) exists only as prose: no record that a site carries an expedited fix, and nothing performs the branch-off-the-channel-tip → `main` → fast-forward move, so done by hand it can break `stable ⊆ staging ⊆ main`. Wants a `tappaas-train` verb for the move and the carried-fix record in `status` |
+| #747 | A script that defines its own logging set must define all of it, `debug` included | 4 | 1 | L | **Opened 2026-09-26**, added to the plan 2026-10-03. Three `debug: command not found` in one day (#423, `convert-json-to-config.sh`, `tappaas-selfcheck.sh`). Wants a CI/selfcheck lint: a file that defines some of `info`/`warn`/`error`/`die` defines `debug` too |
 
 ---
 
