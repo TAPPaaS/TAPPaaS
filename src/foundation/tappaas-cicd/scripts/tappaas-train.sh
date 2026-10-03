@@ -420,6 +420,10 @@ cmd_status() {
         blocks=$((blocks+1))
     fi
 
+    # Container image pins (#750): reported, never a block.
+    pins_check
+    pins_report
+
     local fault; fault="$(jq -r '.fault.what // empty' "${STATE_FILE}" 2>/dev/null)"
     if [[ -n "${fault}" ]]; then
         error "  ✗ a staging fault blocks promotion: ${fault}"
@@ -641,6 +645,64 @@ record_secrets() {
     jq --arg c "${SS_COMMIT}" --arg ok "${SS_OK}" --argjson n "${SS_FINDINGS}" --arg r "${SS_RANGE}" \
        --arg at "$(iso_utc "$(now_epoch)")" \
        '.secrets = {commit: $c, checkedAt: $at, ok: ($ok == "yes"), result: $ok, findings: $n, range: $r}' \
+       "${STATE_FILE}" > "${tmp}" && mv -f "${tmp}" "${STATE_FILE}" || rm -f "${tmp}"
+}
+
+# ── container image pins (#750, ADR-028 D4) ──────────────────────────
+# Each pin in src/image-pins.json: its age and how far upstream is ahead, at
+# every boundary — the cadence a container pin never had. A pin older than the
+# tripwire (45 days, as D4) with a newer upstream is STALE: reported, recorded,
+# and NEVER a refusal — moving a pin is its maintainer's reviewed change, and a
+# stale pin is a release decision (D4). Sets IP_JSON (the report), IP_STALE,
+# IP_OK (yes|unchecked).
+IP_JSON=""; IP_STALE=0; IP_OK=""
+pins_check() {
+    IP_JSON=""; IP_STALE=0; IP_OK="unchecked"
+    local tool="${TAPPAAS_IMAGE_PINS:-${REPO_DIR}/src/foundation/tappaas-cicd/scripts/image-pins.py}"
+    [[ -f "${REPO_DIR}/src/image-pins.json" && -e "${tool}" ]] || return 0
+    IP_JSON="$(python3 "${tool}" --repo "${REPO_DIR}" --json 2>/dev/null || true)"
+    jq -e '.pins | type == "array"' >/dev/null 2>&1 <<<"${IP_JSON}" || { IP_JSON=""; return 0; }
+    IP_STALE="$(jq -r '.stale // 0' <<<"${IP_JSON}")"
+    IP_OK="yes"
+}
+
+# One line per pin, for status and the boundary alike.
+pins_report() {
+    if [[ "${IP_OK}" != "yes" ]]; then
+        warn "  ⧗ container image pins could not be checked (src/image-pins.json, scripts/image-pins.py)"
+        return 0
+    fi
+    local line
+    while IFS=$'\t' read -r st line; do
+        [[ -n "${line}" ]] || continue
+        case "${st}" in
+            stale) warn "  ⧗ ${line}" ;;
+            *)     info "  ${GN}✓${CL} ${line}" ;;
+        esac
+    done < <(jq -r '.pins[] |
+        [.status, (
+          if .status == "digest" then "image \(.module): \(.image) by digest, \(.ageDays // "?")d old (age only)"
+          elif .status == "unreadable" then "image \(.module): pin not found in \(.file)"
+          elif .status == "unknown" then "image \(.module): \(.image):\(.pinned), \(.ageDays // "?")d old — upstream not checked"
+          elif (.newer // 0) == 0 then "image \(.module): \(.image):\(.pinned), \(.ageDays)d old — current"
+          else "image \(.module): \(.image):\(.pinned), \(.ageDays)d old — \(.newer) newer, latest \(.latest)\(if .status == "stale" then " — STALE (tripwire 45d; \(.maintainer))" else "" end)"
+          end)] | @tsv' <<<"${IP_JSON}")
+    local n; n="$(jq -r '.unlisted | length' <<<"${IP_JSON}")"
+    (( n == 0 )) || info "  · ${n} image(s) in the tree not yet in src/image-pins.json: $(jq -r '[.unlisted[].image] | join(", ")' <<<"${IP_JSON}")"
+}
+
+pins_line() {
+    case "${IP_OK}" in
+        yes) printf '%s pin(s), %s stale' "$(jq -r '.pins | length' <<<"${IP_JSON}")" "${IP_STALE}" ;;
+        *)   printf 'not checked' ;;
+    esac
+}
+
+record_pins() {
+    local tmp="${STATE_FILE}.tmp.$$"
+    [[ -f "${STATE_FILE}" && "${IP_OK}" == "yes" ]] || return 0
+    jq --argjson r "${IP_JSON}" --arg at "$(iso_utc "$(now_epoch)")" \
+       '.imagePins = {checkedAt: $at, stale: $r.stale, pins: [$r.pins[] | {module, image, pinned, ageDays, latest, newer, status}], unlisted: [$r.unlisted[].image]}' \
        "${STATE_FILE}" > "${tmp}" && mv -f "${tmp}" "${STATE_FILE}" || rm -f "${tmp}"
 }
 
@@ -1040,6 +1102,7 @@ tag_message() {   # $1 = version, $2 = forced (1/0)
     printf 'Estate pin: nixpkgs %s\n' "$(jq -r '.nodes.nixpkgs.locked.rev // "?"' "${PIN_LOCK}" 2>/dev/null | cut -c1-12)"
     printf 'Blueprint:  %s\n' "$(blueprint_line)"
     printf 'Secrets:    %s\n' "$(secrets_line)"
+    printf 'Images:     %s\n' "$(pins_line)"
     [[ -n "${prev}" ]] && printf 'Previous:   %s\n' "${prev}"
     return 0
 }
@@ -1088,7 +1151,10 @@ cmd_boundary() {
     report_preflight
     # Kept whatever the verdict, so the record says which commit met — or did
     # not meet — the blueprint at each boundary. A dry run records nothing.
-    [[ "${DRY_RUN}" == "1" ]] || { record_blueprint; record_secrets; }
+    pins_check
+    info "${BOLD}Container image pins${CL} (ADR-028 D4 — reported, never a refusal)"
+    pins_report
+    [[ "${DRY_RUN}" == "1" ]] || { record_blueprint; record_secrets; record_pins; }
     local forced="${FORCE_BOUNDARY}"
     if (( ${#PF_BROKEN[@]} > 0 )); then
         error "Refusing: the train is not sound. --force-boundary does not lift these."

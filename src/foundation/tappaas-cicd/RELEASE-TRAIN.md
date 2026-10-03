@@ -292,6 +292,8 @@ Every one of these is a refusal, not a warning:
 - a module in this repository is missing a MUST of the blueprint (ADR-027), a service
   README's field section no longer matches its `fields.json`, or a stack README's module list no
   longer matches the catalogue — see *The module blueprint* below;
+- gitleaks finds a secret in the commits since the last release or in the tree, or the scan
+  could not run — see *Secrets* below;
 - the channels have diverged (`stable` ⊆ `staging` ⊆ `main` no longer holds);
 - a site is pointed at a channel *behind* the commit it already runs.
 
@@ -318,3 +320,32 @@ TAPPaaS only.
 - To fix a finding before the boundary, run the check yourself — it is read-only:
   `module-manager validate --blueprint --repo ~/TAPPaaS`, or for one module,
   `module-manager validate --blueprint ~/TAPPaaS/src/<stack>/<module>`.
+
+## Secrets
+
+The enforcing scan for secrets (#378) is here, not on every push: the boundary runs gitleaks on
+the commits since the last release and on the tree, values redacted, with the repository's
+`.gitleaks.toml` (the default rules plus the look-alikes it allowlists). A finding — or a scan
+that could not run — refuses the boundary, and `--force-boundary` does not lift it. `status`
+shows the result; `boundary` records it under `.secrets` and in the tag message. A false
+positive goes in `.gitleaks.toml` with its reason; a real one is rotated first, then removed.
+On the mothership a pre-commit hook (`core.hooksPath`, from `tappaas-cicd.nix`) refuses a staged
+secret before it is ever committed.
+
+## Container image pins
+
+A module that runs its application as a container pins an image tag, and nothing moved such a pin
+but a person (#748: Authentik 7½ months behind). `src/image-pins.json` lists the pins — module,
+image, the file holding the value and how to read it, tag or digest, maintainer — and every
+boundary reports each one ([ADR-028](../../../docs/ADR/ADR-028%20-%20Release%20Cadence%20and%20Patching.md) D14, #750):
+
+- its **age** (when the line holding it last changed) and, for a tag, the **newest upstream** tag
+  of the same form and how many are newer; a digest by its age only;
+- **stale** when it is older than 45 days and upstream is newer — a warning naming the module's
+  maintainer, **never a refusal**: moving a pin is the maintainer's reviewed change;
+- images in the tree that are not yet in the list, so a new pin cannot hide.
+
+`status` prints it; `boundary` records it under `.imagePins` and in the tag message
+(`Images: N pin(s), M stale`). To see it yourself: `python3 src/foundation/tappaas-cicd/scripts/image-pins.py`
+(`--offline` for ages only). To add a pin, add an entry to `src/image-pins.json`; the report then
+says whether its `match` finds the value.

@@ -1,0 +1,14 @@
+{
+  "$comment": "Container image pins (#750, ADR-028 D4). Each entry says where its value lives: `file` and a regex `match` whose first group is the pinned value (the last match in the file). The module file stays the one place the pin is edited. tappaas-cicd/scripts/image-pins.py reports each pin's age and how far upstream is ahead, at every release boundary.",
+  "pins": [
+    {
+      "module": "identity",
+      "image": "ghcr.io/goauthentik/server",
+      "kind": "tag",
+      "file": "src/foundation/identity/identity.nix",
+      "match": "lines = \\[[^\\]]*\"([0-9]+\\.[0-9]+\\.[0-9]+)\"\\s*\\];",
+      "tagPattern": "^[0-9]{4}\\.[0-9]+\\.[0-9]+$",
+      "maintainer": "@TAPPaaS"
+    }
+  ]
+}

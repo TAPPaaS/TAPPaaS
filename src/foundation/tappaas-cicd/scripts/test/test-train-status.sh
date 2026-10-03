@@ -235,6 +235,32 @@ TAPPAAS_GITLEAKS=/nonexistent/gitleaks FAKE_NOW=$(( 1790000000 + 20*86400 )) run
     && ok "a scan that cannot run is not a pass" || bad "a missing gitleaks passed: ${OUT}"
 mv "${TMP}/bin/gitleaks.off" "${TMP}/bin/gitleaks"
 
+echo "── container image pins are reported, never a refusal (#750) ──"
+make_train 3 2
+FAKE_NOW=1790000000 run init
+echo '{"pins":[]}' > "${TMP}/w/src/image-pins.json" 2>/dev/null || { mkdir -p "${TMP}/w/src"; echo '{"pins":[]}' > "${TMP}/w/src/image-pins.json"; }
+cat > "${TMP}/bin/image-pins" <<'STUB'
+#!/usr/bin/env python3
+import json
+print(json.dumps({"tripwireDays": 45, "stale": 1, "unlisted": [{"image": "acme/x", "file": "src/x.nix"}], "pins": [
+  {"module": "identity", "image": "ghcr.io/goauthentik/server", "kind": "tag", "pinned": "2026.8.3", "ageDays": 0,
+   "latest": "2026.8.3", "newer": 0, "status": "ok", "file": "f", "maintainer": "@TAPPaaS"},
+  {"module": "litellm", "image": "litellm/litellm", "kind": "tag", "pinned": "v1.85.0", "ageDays": 235,
+   "latest": "v1.102.1", "newer": 17, "status": "stale", "file": "f", "maintainer": "@ErikDaniel007"}]}))
+STUB
+chmod +x "${TMP}/bin/image-pins"
+TAPPAAS_IMAGE_PINS="${TMP}/bin/image-pins" FAKE_NOW=$(( 1790000000 + 20*86400 )) run status
+[[ "${OUT}" == *"image litellm: litellm/litellm:v1.85.0, 235d old — 17 newer, latest v1.102.1 — STALE"* ]] \
+    && ok "status names a stale pin, its age, its distance and its maintainer" || bad "stale pin not reported: ${OUT}"
+[[ "${OUT}" == *"image identity: ghcr.io/goauthentik/server:2026.8.3, 0d old — current"* ]] \
+    && ok "…and a current one as current" || bad "current pin not reported"
+[[ "${OUT}" == *"not yet in src/image-pins.json: acme/x"* ]] && ok "…and what is not yet listed" || bad "unlisted not reported"
+[[ "${OUT}" != *"Not promotable"* ]] && ok "a stale pin never makes the train unpromotable" || bad "a stale pin blocked: ${OUT}"
+TAPPAAS_IMAGE_PINS="${TMP}/bin/image-pins" FAKE_NOW=$(( 1790000000 + 20*86400 )) run boundary --force-boundary
+[[ "$(jq -r '.imagePins.stale, (.imagePins.pins | length)' "${TMP}/cfg/release-train.json" | tr '\n' ' ')" == "1 2 " ]] \
+    && ok "the boundary records the pins" || bad "pins not recorded: $(jq -c .imagePins "${TMP}/cfg/release-train.json")"
+rm -f "${TMP}/w/src/image-pins.json"
+
 echo "── promotion is fast-forward only, and in order ──"
 make_train 3 2
 FAKE_NOW=1790000000 run init
