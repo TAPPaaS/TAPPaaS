@@ -76,7 +76,9 @@ EOF
 run_check() {  # $1 = baseline file (or ""), sets RC/OUT
     local baseline="$1" args=()
     [[ -n "${baseline}" ]] && args=(--baseline "${baseline}")
-    OUT="$(PATH="${BIN}:${PATH}" TAPPAAS_USER="$(id -un)" \
+    # Check 4 (#719) is driven by its own cases below; here there is no flake.
+    OUT="$(PATH="${BIN}:${PATH}" TAPPAAS_USER="$(id -un)" SELFCHECK_FLAKE="${SELFCHECK_FLAKE_T:-/nonexistent}" \
+           SELFCHECK_BIN="${SELFCHECK_BIN_T:-${TMP}/nobin}" SELFCHECK_STORE="${SELFCHECK_STORE_T:-/nix/store}" \
            "${SELFCHECK}" "${args[@]}" 2>&1)"
     RC=$?
 }
@@ -86,6 +88,51 @@ make_stubs 0 0
 : > "${TMP}/base"
 FAILED_UNITS="" run_check "${TMP}/base"
 [[ "${RC}" -eq 0 ]] && ok "exit 0 when everything answers" || bad "exit ${RC} on a healthy plane: ${OUT}"
+
+echo "── what the generation implies is what is linked (#719) ──"
+# A fake store and ~/bin: two components, each built and linked. `nix eval`
+# is stubbed to answer the implied paths from IMPLIED_JSON.
+# On the resolved path: links are resolved with readlink -f, and on macOS /var
+# is itself a link (/private/var) — /nix/store has no such indirection.
+_TR="$(cd "${TMP}" && pwd -P)"
+ST="${_TR}/store"; HB="${_TR}/home/bin"; FL="${_TR}/flake"
+mkdir -p "${ST}/aaa-mgr-1/bin" "${ST}/bbb-ctl-1/bin" "${ST}/old-mgr-0/bin" "${HB}" "${FL}"
+: > "${FL}/flake.nix"; : > "${ST}/aaa-mgr-1/bin/mgr"; : > "${ST}/bbb-ctl-1/bin/ctl"; : > "${ST}/old-mgr-0/bin/mgr"
+cat > "${BIN}/nix" <<'EOF'
+#!/usr/bin/env bash
+[[ -n "${IMPLIED_JSON:-}" ]] || exit 1
+printf '%s\n' "${IMPLIED_JSON}"
+EOF
+chmod +x "${BIN}/nix"
+GOOD="{\"mgr\":\"${ST}/aaa-mgr-1\",\"ctl\":\"${ST}/bbb-ctl-1\"}"
+c4() {  # links as "name=target ..."; sets RC/OUT
+    find "${HB:?}" -mindepth 1 -maxdepth 1 -delete
+    local x
+    for x in "$@"; do ln -s "${x#*=}" "${HB}/${x%%=*}"; done
+    SELFCHECK_FLAKE_T="${FL}" SELFCHECK_BIN_T="${HB}" SELFCHECK_STORE_T="${ST}" run_check "${TMP}/base"
+}
+make_stubs 0 0
+IMPLIED_JSON="${GOOD}" c4 "mgr=${ST}/aaa-mgr-1/bin/mgr" "ctl=${ST}/bbb-ctl-1/bin/ctl"
+[[ "${RC}" -eq 0 && "${OUT}" == *"all 2 components are built as this generation implies"* ]] \
+    && ok "built and linked as implied: passes" || bad "matching plane failed (exit ${RC}): ${OUT}"
+IMPLIED_JSON="${GOOD}" c4 "mgr=${ST}/old-mgr-0/bin/mgr" "ctl=${ST}/bbb-ctl-1/bin/ctl"
+[[ "${RC}" -ne 0 && "${OUT}" == *"mgr: links to old-mgr-0, which this generation does not build"* ]] \
+    && ok "a link into an older build fails, naming it" || bad "stale link passed (exit ${RC}): ${OUT}"
+IMPLIED_JSON="{\"mgr\":\"${ST}/new-mgr-2\",\"ctl\":\"${ST}/bbb-ctl-1\"}" c4 "mgr=${ST}/aaa-mgr-1/bin/mgr" "ctl=${ST}/bbb-ctl-1/bin/ctl"
+[[ "${RC}" -ne 0 && "${OUT}" == *"mgr: not built — this generation implies new-mgr-2"* ]] \
+    && ok "an implied path prepare could not build fails" || bad "unbuilt component passed (exit ${RC}): ${OUT}"
+IMPLIED_JSON="${GOOD}" c4 "mgr=${ST}/aaa-mgr-1/bin/mgr"
+[[ "${RC}" -ne 0 && "${OUT}" == *"ctl: built (bbb-ctl-1) but nothing in"* ]] \
+    && ok "a built component nothing links to fails" || bad "unlinked component passed (exit ${RC}): ${OUT}"
+IMPLIED_JSON="" c4 "mgr=${ST}/aaa-mgr-1/bin/mgr" "ctl=${ST}/bbb-ctl-1/bin/ctl"
+[[ "${RC}" -ne 0 && "${OUT}" == *"cannot be evaluated"* ]] \
+    && ok "a flake that cannot evaluate its packages fails" || bad "unevaluable flake passed (exit ${RC}): ${OUT}"
+IMPLIED_JSON="${GOOD}" c4 "mgr=${ST}/aaa-mgr-1/bin/mgr" "ctl=${ST}/bbb-ctl-1/bin/ctl" "gone.sh=${TMP}/nowhere.sh"
+[[ "${RC}" -eq 0 && "${OUT}" == *"dangling link in ${HB}: gone.sh"* ]] \
+    && ok "a dangling link is reported, and does not fail the check" || bad "dangling link handling (exit ${RC}): ${OUT}"
+IMPLIED_JSON="${GOOD}" c4 "mgr=${ST}/aaa-mgr-1/bin/mgr" "ctl=${ST}/bbb-ctl-1/bin/ctl" "script.sh=${FL}/flake.nix"
+[[ "${RC}" -eq 0 ]] && ok "a link into the checkout is not compared (it follows the pull)" || bad "checkout link failed the check: ${OUT}"
+unlink "${BIN}/nix"
 
 echo "── run as root: the managers are checked through runuser (#713) ──"
 # The rebuild runs this as root. The first live run (hrossen, 2026-09-23)

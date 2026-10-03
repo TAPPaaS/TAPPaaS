@@ -117,7 +117,7 @@ bad() { error "  ✗ $1"; FAIL=$((FAIL + 1)); }
 # `nixos-rebuild switch` neither rebuilds nor relinks them — so these binaries
 # keep working across a switch to a revision that could not build them. Measured
 # on hrossen 2026-09-23: 0 managers in the system closure, 38 links in ~/bin.
-# Check 4 below reports that gap; closing it is #719 step 2.
+# Check 4 below closes that gap (#719).
 #
 # What this check does earn: a dangling or garbage-collected link, and a manager
 # that starts but cannot run.
@@ -130,6 +130,13 @@ for mgr in module-manager site-manager network-manager backup-manager \
     else
         bad "${mgr} is installed but will not run"
     fi
+done
+
+# A link to nothing is no control plane's: report it (refresh-control-plane.sh
+# removes the ones it planted; one to a deleted script outlived it, #719).
+_hb="$(getent passwd "${TAPPAAS_USER}" 2>/dev/null | cut -d: -f6)"; _hb="${SELFCHECK_BIN:-${_hb:-/home/${TAPPAAS_USER}}/bin}"
+for _l in "${_hb}"/*; do
+    [[ -L "${_l}" && ! -e "${_l}" ]] && warn "  dangling link in ${_hb}: ${_l##*/} -> $(readlink "${_l}")"
 done
 
 # ── 2. The config cascade still resolves ─────────────────────────────
@@ -156,72 +163,68 @@ else
     warn "  no baseline given — skipping the newly-failed-unit check"
 fi
 
-# ── 4. What the new generation implies vs what is linked (#719) ──────
+# ── 4. What the new generation implies IS what is linked (#719) ───────
 #
-# REPORT-ONLY, deliberately. The decision on #719 is to make the self-check
-# verify what the new generation implies rather than what happens to be linked,
-# and to relink ~tappaas/bin as part of the rebuild so a mismatch is fixed
-# rather than merely reported. Both belong together and both change what every
-# mothership rebuild does, so this step only MEASURES: it never sets FAIL and
-# never influences the rollback. What it is here to answer is the two things
-# nobody has numbers for yet — what the comparison actually says on a real
-# rebuild, and what it costs.
+# Check 1 proves the INSTALLED binaries run — which they do across a switch to a
+# revision that could not build them, since ~tappaas/bin links into immutable
+# store paths. This check makes the self-check mean what D10 says: every
+# component the checkout's flake builds (the seven managers, the two controllers,
+# node-provisioner, update-tappaas) must be BUILT at the store path this
+# generation implies, and ~tappaas/bin must link INTO it.
 #
-# Two things the first run measured on hrossen (2026-09-26), both of which step 2
-# needs and neither of which was known when #719 was written:
+# The prepare step (refresh-control-plane.sh) builds and relinks every component
+# before this rebuild; a component that failed to build there is non-fatal
+# (exit 10, "those bins are STALE") — and used to reach the sweep unnoticed.
+# Here it fails, and the rebuild rolls back (#719, operator 2026-10-03: one way
+# back, the D10 one). Four outcomes per component, only the first passes:
+#   match          built, and linked from ~/bin
+#   not built      the implied path is not in the store — prepare could not build it
+#   not linked     built, but nothing in ~/bin points into it
+#   stale link     a link points into a store path this generation does not imply
+# A flake that cannot even evaluate its packages fails the check too.
 #
-#   6 of 7 managers matched, 0 stale, 1 would need a build, in 3s (eval only).
-#   The one was health-manager, whose source had changed that morning.
-#
-#   ~tappaas/bin is NOT all store-backed, as the issue assumes. Of 108 links:
-#   25 point into /nix/store (the built managers and controllers) and 83 point
-#   straight at the CHECKOUT (the shell scripts). A store-path comparison is
-#   therefore meaningful for a quarter of ~/bin; the checkout-backed majority is
-#   current the moment a pull happens, and carries the opposite risk — those
-#   scripts never go through the pin at all.
-#
-# It EVALUATES rather than builds. `nix eval` of the flake's package outPath is
-# cheap and tells us whether the implied store path differs from the linked one.
-# It cannot tell us the revision would fail to BUILD them — only a build proves
-# that, and that is the expensive half step 2 has to price. So the third state
-# below ("not in the store") is precisely the population that would need
-# building, which is the cost estimate step 2 needs.
+# It EVALUATES, never builds: one `nix eval` of all packages (~1 s on hrossen);
+# the builds are prepare's. The 83-odd links that point straight at the checkout
+# (shell scripts) follow the pull, not the pin — nothing to compare.
 SELFCHECK_FLAKE="${SELFCHECK_FLAKE:-/home/${TAPPAAS_USER}/TAPPaaS/src/foundation/tappaas-cicd}"
-if [[ -f "${SELFCHECK_FLAKE}/flake.nix" ]] && command -v nix >/dev/null 2>&1; then
-    _t0=${SECONDS}
-    _same=0; _stale=0; _wouldbuild=0; _unknown=0
-    _home="$(getent passwd "${TAPPAAS_USER}" 2>/dev/null | cut -d: -f6)"
-    _home="${_home:-/home/${TAPPAAS_USER}}"
-    for mgr in module-manager site-manager network-manager backup-manager \
-               health-manager identity-manager environment-manager; do
-        # The link resolves to <out>/bin/<mgr>; the package out path is its parent's parent.
-        _linked=""
-        if [[ -e "${_home}/bin/${mgr}" ]]; then
-            _resolved="$(readlink -f "${_home}/bin/${mgr}" 2>/dev/null || true)"
-            [[ -n "${_resolved}" ]] && _linked="${_resolved%/bin/*}"
-        fi
-        _implied="$(nix eval --raw --no-write-lock-file \
-            "${SELFCHECK_FLAKE}#packages.x86_64-linux.${mgr}.outPath" 2>/dev/null || true)"
-        if [[ -z "${_implied}" ]]; then
-            _unknown=$((_unknown + 1))
-            debug "  ${mgr}: could not evaluate what this generation implies"
-        elif [[ "${_implied}" == "${_linked}" ]]; then
-            _same=$((_same + 1))
-        elif [[ -e "${_implied}" ]]; then
-            _stale=$((_stale + 1))
-            debug "  ${mgr}: linked ${_linked##*/} but this generation implies ${_implied##*/} (already in the store)"
-        else
-            _wouldbuild=$((_wouldbuild + 1))
-            debug "  ${mgr}: this generation implies ${_implied##*/}, which is NOT in the store — step 2 would have to build it"
-        fi
-    done
-    info "  #719 (report-only): ${_same} manager(s) match this generation, ${_stale} stale link(s), ${_wouldbuild} would need a build, ${_unknown} not evaluable — took $((SECONDS - _t0))s"
-    if (( _stale > 0 || _wouldbuild > 0 )); then
-        info "    ~${TAPPAAS_USER}/bin does not follow a rebuild; each component's install.sh plants those links."
-        info "    Not a failure here — #719 step 2 makes it one, together with relinking on rebuild."
-    fi
+_store="${SELFCHECK_STORE:-/nix/store}"   # tests use a fake one
+_home="$(getent passwd "${TAPPAAS_USER}" 2>/dev/null | cut -d: -f6)"
+_home="${SELFCHECK_BIN:-${_home:-/home/${TAPPAAS_USER}}/bin}"
+if [[ ! -f "${SELFCHECK_FLAKE}/flake.nix" ]] || ! command -v nix >/dev/null 2>&1; then
+    warn "  no flake at ${SELFCHECK_FLAKE} or no nix — what the generation implies is not checked"
 else
-    debug "  #719 report skipped: no flake at ${SELFCHECK_FLAKE} or nix not on PATH"
+    _t0=${SECONDS}
+    _implied="$(nix eval --json --no-write-lock-file "${SELFCHECK_FLAKE}#packages.x86_64-linux" \
+        --apply 'ps: builtins.mapAttrs (n: p: p.outPath) ps' 2>/dev/null || true)"
+    if ! jq -e 'type == "object" and length > 0' >/dev/null 2>&1 <<<"${_implied}"; then
+        bad "the flake's components cannot be evaluated — this revision cannot build the control plane"
+    else
+        # Every store-backed link, as "<package root> <link name>".
+        _links="$(for _l in "${_home}"/*; do
+                      [[ -L "${_l}" ]] || continue
+                      _r="$(readlink -f "${_l}" 2>/dev/null)" || continue
+                      [[ "${_r}" == "${_store}"/* ]] || continue
+                      _rel="${_r#"${_store}"/}"
+                      printf '%s %s\n' "${_store}/${_rel%%/*}" "${_l##*/}"
+                  done)"
+        _ok=0
+        while read -r _name _path; do
+            if [[ ! -e "${_path}" ]]; then
+                bad "${_name}: not built — this generation implies ${_path##*/}, and prepare could not build it"
+            elif ! grep -qF "${_path} " <<<"${_links}"; then
+                bad "${_name}: built (${_path##*/}) but nothing in ${_home} links to it"
+            else
+                _ok=$((_ok + 1))
+            fi
+        done < <(jq -r 'to_entries[] | "\(.key) \(.value)"' <<<"${_implied}")
+        while read -r _root _link; do
+            [[ -n "${_root}" ]] || continue
+            jq -e --arg r "${_root}" 'any(.[]; . == $r)' >/dev/null <<<"${_implied}" \
+                || bad "${_link}: links to ${_root##*/}, which this generation does not build — a stale link"
+        done <<<"${_links}"
+        (( _ok == $(jq 'length' <<<"${_implied}") )) \
+            && ok "all ${_ok} components are built as this generation implies, and linked ($((SECONDS - _t0))s)"
+    fi
 fi
 
 if (( FAIL > 0 )); then

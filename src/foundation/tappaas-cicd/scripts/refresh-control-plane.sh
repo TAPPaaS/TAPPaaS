@@ -171,6 +171,18 @@ for script in scripts/*.sh lib/*.sh; do
   fi
 done
 
+# Links this refresh plants that now point at nothing — a script removed from the
+# checkout, a component's store path garbage-collected — go. Only links into the
+# checkout or the nix store: a link the operator made elsewhere is theirs. (#719:
+# test-migrate-to-adr007.sh outlived its script by weeks.)
+for _l in "${BIN_DIR}"/*; do
+  [ -L "$_l" ] && [ ! -e "$_l" ] || continue
+  case "$(readlink "$_l")" in
+    "${CICD_DIR%/src/foundation/tappaas-cicd}"/*|/nix/store/*)
+      rm -f "$_l" && debug "  removed dangling link ${_l##*/}" ;;
+  esac
+done
+
 # ── 3. Build + link every compiled component ─────────────────────────
 # ADR-007 S0/P10: the scripts/*.sh glob above only covers scripts NOT yet
 # relocated. Every manager/<x>/ and controller/<x>/ component builds and links

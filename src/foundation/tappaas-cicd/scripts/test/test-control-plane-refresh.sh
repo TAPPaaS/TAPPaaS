@@ -84,6 +84,12 @@ run_refresh() {
         "${FIXTURE}/scripts/refresh-control-plane.sh" >"${TMP}/out" 2>&1
 }
 
+# Two dangling links before the refresh (#719): one the refresh planted (into the
+# cicd tree, its script since deleted) and one the operator made elsewhere.
+mkdir -p "${TMP}/bin"
+ln -s "${FIXTURE}/scripts/deleted-tool.sh" "${TMP}/bin/deleted-tool.sh"
+ln -s "${TMP}/elsewhere/mine.sh" "${TMP}/bin/mine.sh"
+
 # ── 1. A clean refresh pulls, links and builds, and exits 0 ─────────────────
 : > "${TMP}/stub.log"
 rc=0; run_refresh || rc=$?
@@ -96,6 +102,16 @@ if [[ "$(cat "${TMP}/checkout/file.txt" 2>/dev/null)" == "two" ]]; then
     pass "repository pulled to the origin tip"
 else
     fail "repository was NOT pulled (file.txt != 'two')"
+fi
+if [[ ! -L "${TMP}/bin/deleted-tool.sh" ]]; then
+    pass "a dangling link the refresh planted is removed (#719)"
+else
+    fail "the dangling link into the cicd tree survived the refresh"
+fi
+if [[ -L "${TMP}/bin/mine.sh" ]]; then
+    pass "a dangling link the operator made elsewhere is left alone"
+else
+    fail "the refresh removed a link it did not plant"
 fi
 if [[ -L "${TMP}/bin/marker-tool.sh" ]]; then
     pass "scripts/*.sh relinked into the bin dir"
