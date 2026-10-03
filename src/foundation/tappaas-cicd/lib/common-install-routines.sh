@@ -1506,6 +1506,48 @@ function wait_for_module_ready() {
   return 0
 }
 
+# Wait until a module's guest has finished BOOTING (#700).
+#
+# The sweep's own node reboots and OS updates leave guests mid-boot, and a gate
+# that asks a booting guest gets "not healthy" for what is "not healthy YET":
+# on 2026-09-21 logging's pre-update test failed, its update was skipped for the
+# night, and the same tests passed forty minutes later. systemd says when boot
+# is over: `systemctl is-system-running` reports initializing/starting until
+# then, and running or degraded after — a settled guest answers at once, so
+# this costs one ssh round-trip on every module that is not booting.
+#
+# Waits while the guest does not answer ssh or reports a boot state. Returns 0
+# as soon as it has settled — or when it cannot be ASKED: a guest that refuses
+# the tappaas key (OPNsense, a container reached through its node), changed its
+# host key, or runs no systemd. Waiting on those would cost the full timeout
+# every night and prove nothing; their own tests say what is wrong.
+# Returns 1 on timeout.
+#
+# Usage: wait_for_guest_settled <host> [timeout_seconds]
+function wait_for_guest_settled() {
+  local host="$1" max_wait="${2:-300}" waited=0 interval=5 out
+  while :; do
+    out="$(ssh -n -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+             -o LogLevel=ERROR "tappaas@${host}" \
+             'command -v systemctl >/dev/null || { echo "STATE none"; exit 0; }; echo "STATE $(systemctl is-system-running 2>/dev/null)"' 2>&1)" || true
+    case "${out}" in
+      *"STATE initializing"*|*"STATE starting"*) ;;
+      *STATE*)
+        [[ ${waited} -gt 0 ]] && debug "  ${host} finished booting (${waited}s)"
+        return 0 ;;
+      *"Permission denied"*|*"Host key verification failed"*|*"REMOTE HOST IDENTIFICATION"*)
+        debug "  ${host} cannot be asked whether it has booted — not waiting"
+        return 0 ;;
+    esac
+    if [[ ${waited} -ge ${max_wait} ]]; then
+      warn "  ${host} had not finished booting after ${max_wait}s (${out##*$'\n'})"
+      return 1
+    fi
+    sleep "${interval}"
+    waited=$((waited + interval))
+  done
+}
+
 # True when EVERY port in the space-separated list accepts a connection.
 # Port 22 is probed from here (it is the gate that lets us probe the rest);
 # every other port is probed on the VM itself against 127.0.0.1 in ONE ssh
@@ -1549,6 +1591,12 @@ function _module_ports_open() {
 # both fingerprints are printed so a key change is auditable after the fact
 # rather than silent. Set TAPPAAS_SSH_NO_REPIN=1 to refuse instead of re-pin.
 
+# The key types a server presents. ssh-keyscan's default also asks for the
+# security-key and post-quantum types, one connection each, which no sshd here
+# offers — every one closes before authenticating, and OpenSSH 10's
+# PerSourcePenalties counts those against the mothership (#729 §3).
+TAPPAAS_KEYSCAN_TYPES="${TAPPAAS_KEYSCAN_TYPES:-ed25519,ecdsa,rsa}"
+
 # tappaas_ssh_target_host <ssh-argv...> — the destination host in an ssh argv,
 # skipping options and their values, with any user@ and :port stripped.
 tappaas_ssh_target_host() {
@@ -1578,7 +1626,7 @@ tappaas_ssh_repin_host() {
     old="$(ssh-keygen -F "${host}" -f "${kh}" 2>/dev/null | grep -v '^#' \
            | ssh-keygen -lf - 2>/dev/null | awk '{print $2}' | head -1)" || true
     ssh-keygen -R "${host}" -f "${kh}" >/dev/null 2>&1 || true
-    ssh-keyscan -H -T 10 "${host}" 2>/dev/null | grep -v '^#' >> "${kh}" || true
+    ssh-keyscan -H -T 10 -t "${TAPPAAS_KEYSCAN_TYPES}" "${host}" 2>/dev/null | grep -v '^#' >> "${kh}" || true
     new="$(ssh-keygen -F "${host}" -f "${kh}" 2>/dev/null | grep -v '^#' \
            | ssh-keygen -lf - 2>/dev/null | awk '{print $2}' | head -1)" || true
     # Narration goes to STDERR: these helpers are called inside command
@@ -1608,7 +1656,7 @@ tappaas_ssh_host_key_changed() {
     pinned="$(ssh-keygen -F "${host}" -f "${kh}" 2>/dev/null | grep -v '^#' \
               | ssh-keygen -lf - 2>/dev/null | awk '{print $2}' | sort -u)" || true
     [[ -n "${pinned}" ]] || return 1
-    offered="$(ssh-keyscan -T 10 "${host}" 2>/dev/null | grep -v '^#' \
+    offered="$(ssh-keyscan -T 10 -t "${TAPPAAS_KEYSCAN_TYPES}" "${host}" 2>/dev/null | grep -v '^#' \
                | ssh-keygen -lf - 2>/dev/null | awk '{print $2}' | sort -u)" || true
     [[ -n "${offered}" ]] || return 1
     # Any overlap means the pin still matches something on offer (a host may
@@ -1638,8 +1686,15 @@ tappaas_ssh_guest() {
     # The destination is parsed before the verdict now, because the verdict may
     # need it: with the caller's stderr silenced, the host itself is the only
     # remaining evidence of what went wrong (#630).
-    (( rc == 0 )) || host="$(tappaas_ssh_target_host "$@" 2>/dev/null || true)"
-    if (( rc != 0 )) && _tappaas_is_hostkey_failure "${err}" "${host}"; then
+    #
+    # Only ssh's OWN failure (255) can be a host key. A remote command that
+    # exited non-zero — `test -f` on a missing file — is an answer, and
+    # keyscanning on it opened connections that never authenticate: under
+    # OpenSSH 10's PerSourcePenalties a few failing checks got the mothership
+    # dropped by the node, every later ssh failed, and each failure scanned
+    # again (#729 §3: a reinstalled tappaas2, refused for the whole sweep).
+    (( rc != 255 )) || host="$(tappaas_ssh_target_host "$@" 2>/dev/null || true)"
+    if (( rc == 255 )) && _tappaas_is_hostkey_failure "${err}" "${host}"; then
         if [[ -z "${host}" ]]; then
             warn "SSH host key rejected but no destination could be parsed — not re-pinning" >&2
         elif [[ "${TAPPAAS_SSH_NO_REPIN:-0}" == "1" ]]; then

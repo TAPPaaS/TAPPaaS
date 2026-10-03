@@ -195,6 +195,19 @@ tappaas_ssh_host_key_changed h && bad "nothing pinned -> not changed"  || ok "no
 
 tappaas_ssh_host_key_changed "" && bad "empty host -> not changed"     || ok "empty host -> not changed"
 
+# #729 §3: the REMOTE command failed (`test -f` on a missing file, exit 1). That
+# is an answer, not a connection problem: no keyscan — each scan is connections
+# that never authenticate, which OpenSSH 10 penalises until the node drops us.
+# Pinned, with a different key on offer: the old wrapper scanned AND re-pinned.
+printf 'h ssh-ed25519 pinned-key\n' > "$hk_home/.ssh/known_hosts"
+scanned_f="$(mktemp)"
+ssh() { return 1; }
+ssh-keyscan() { echo scan >> "$scanned_f"; printf ' h ssh-ed25519 a-brand-new-key\n'; }
+rc=0; tappaas_ssh_guest tappaas@h test -f /missing >/dev/null 2>&1 || rc=$?
+[[ "$rc" -eq 1 ]] && ok "a remote command's exit 1 is passed through" || bad "remote exit 1 (rc=$rc)"
+[[ ! -s "$scanned_f" ]] && ok "…and never triggers a keyscan" || bad "remote exit 1 keyscanned ($(wc -l < "$scanned_f") times)"
+rm -f "$scanned_f"; unset -f ssh
+
 unset -f ssh-keygen ssh-keyscan; HOME="$OLD_HOME"; rm -rf "$hk_home"
 
 echo
