@@ -1,0 +1,27 @@
+# gitleaks configuration for TAPPaaS (#378).
+#
+# Read by the release train's secret scan (tappaas-train, at every boundary) and
+# by the mothership's pre-commit hook. The default ruleset decides; this file
+# only names what is NOT a secret. Add a false positive here with the reason
+# beside it — never a real credential: a real one is rotated, then removed.
+
+title = "TAPPaaS"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "placeholders and code that only look like credentials"
+regexTarget = "match"
+regexes = [
+  # the OPNsense API examples in opnsense-controller/patches/README.md
+  '''API_KEY:API_SECRET''',
+]
+
+[[allowlists]]
+description = "code that only looks like a credential (matched on the whole line)"
+regexTarget = "line"
+regexes = [
+  # a keyword argument passed through (identity-controller authentik_cli.py)
+  '''token=token, verify_tls=''',
+]

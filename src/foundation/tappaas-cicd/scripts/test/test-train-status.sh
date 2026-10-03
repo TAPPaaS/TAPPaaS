@@ -70,6 +70,18 @@ printf '%s\n' "${FAKE_BLUEPRINT:-${clean}}"
 STUB
 chmod +x "${TMP}/bin/module-manager"
 
+# The secret scan (#378) is gitleaks; the stub writes the JSON report it would
+# write — FAKE_LEAKS (default: none found) — and logs how it was called.
+cat > "${TMP}/bin/gitleaks" <<'STUB'
+#!/usr/bin/env bash
+echo "$*" >> "${FAKE_GL_LOG:-/dev/null}"
+rp=""; while [[ $# -gt 0 ]]; do [[ "$1" == --report-path ]] && rp="$2"; shift; done
+leaks="${FAKE_LEAKS:-[]}"; [[ "$*" == *" dir "* || -z "${FAKE_LEAKS_DIR:-}" ]] || leaks="${FAKE_LEAKS_DIR}"
+printf '%s\n' "${leaks}" > "${rp}"
+[[ "${leaks}" == "[]" ]]
+STUB
+chmod +x "${TMP}/bin/gitleaks"
+
 run() {  # sets OUT/RC
     OUT="$(TAPPAAS_REPO_DIR="${TMP}/w" TAPPAAS_CONFIG_DIR="${TMP}/cfg" TAPPAAS_BIN_DIR="${TMP}/bin" \
            TAPPAAS_TRAIN_NOW="${FAKE_NOW:-}" "${TRAIN}" "$@" --no-fetch 2>&1)"
@@ -198,6 +210,30 @@ FAKE_NOW=$(( 1790000000 + 20*86400 )) run boundary --dry-run --force-boundary
 [[ "${RC}" -ne 0 && "${OUT}" == *"could not be checked"* ]] \
     && ok "a blueprint that cannot be checked is not a pass" || bad "a missing module-manager passed: ${OUT}"
 mv "${TMP}/bin/module-manager.off" "${TMP}/bin/module-manager"
+
+echo "── no secret in what is released (#378) ──"
+make_train 3 2
+FAKE_NOW=1790000000 run init
+LEAK='[{"RuleID":"github-fine-grained-pat","File":"'"${TMP}/w"'/docs/x.md","StartLine":3,"Commit":"abcdef123456","Secret":"REDACTED"}]'
+FAKE_LEAKS="${LEAK}" FAKE_NOW=$(( 1790000000 + 20*86400 )) run status
+[[ "${OUT}" == *"SECRETS found"* && "${OUT}" == *"docs/x.md:3 [github-fine-grained-pat]"* ]] \
+    && ok "status names the file, line and rule — never the value" || bad "status did not report the finding: ${OUT}"
+[[ "${OUT}" == *"Not promotable"* ]] && ok "…and a finding makes the train not promotable" || bad "a finding did not block status"
+FAKE_LEAKS="${LEAK}" FAKE_NOW=$(( 1790000000 + 20*86400 )) run boundary --force-boundary
+[[ "${RC}" -ne 0 && "${OUT}" == *"does not lift these"* && "${OUT}" == *"SECRETS found"* ]] \
+    && ok "a finding refuses the boundary, even with --force-boundary" || bad "a finding did not block: ${OUT}"
+[[ "$(jq -r '.secrets.ok, .secrets.findings, .secrets.range' "${TMP}/cfg/release-train.json" | tr '\n' ' ')" == "false 1 tree only (no release yet) " ]] \
+    && ok "the boundary records what the scan found (no release yet: the tree)" || bad "secrets not recorded: $(jq -c .secrets "${TMP}/cfg/release-train.json")"
+: > "${TMP}/gl.log"
+FAKE_GL_LOG="${TMP}/gl.log" FAKE_NOW=$(( 1790000000 + 20*86400 )) run status
+[[ "${OUT}" == *"no secret found"* ]] && ok "a clean scan is shown as such" || bad "a clean scan not shown: ${OUT}"
+grep -q -- "dir ${TMP}/w " "${TMP}/gl.log" && grep -q -- "--redact" "${TMP}/gl.log" \
+    && ok "the tree is scanned, redacted" || bad "gitleaks called as: $(cat "${TMP}/gl.log")"
+rm -f "${TMP}/bin/gitleaks.off"; mv "${TMP}/bin/gitleaks" "${TMP}/bin/gitleaks.off"
+PATH="/usr/bin:/bin" FAKE_NOW=$(( 1790000000 + 20*86400 )) run boundary --dry-run --force-boundary
+[[ "${RC}" -ne 0 && "${OUT}" == *"secret scan could not run"* ]] \
+    && ok "a scan that cannot run is not a pass" || bad "a missing gitleaks passed: ${OUT}"
+mv "${TMP}/bin/gitleaks.off" "${TMP}/bin/gitleaks"
 
 echo "── promotion is fast-forward only, and in order ──"
 make_train 3 2

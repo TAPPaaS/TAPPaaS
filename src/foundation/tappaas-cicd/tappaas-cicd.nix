@@ -713,7 +713,47 @@ in
         # by CPE, trivy matches Debian hosts and container images.
         grype
         trivy
+        # No secret is committed here, nor released (#378): the pre-commit hook
+        # below, and the release train's scan at every boundary.
+        gitleaks
   ];
+
+  # Every repository on the mothership — the managed clones, a module under
+  # development, the release record tappaas-train commits — runs this hook
+  # before a commit: gitleaks on what is staged, with the repository's own
+  # .gitleaks.toml when it has one. Local and immediate: nothing is scanned on
+  # Codeberg (operator, 2026-10-03: the scan that enforces is the release gate).
+  # core.hooksPath replaces a clone's .git/hooks, so a repository's own
+  # pre-commit hook is run after it rather than lost.
+  programs.git = {
+    enable = true;
+    config.core.hooksPath = "/etc/tappaas/git-hooks";
+  };
+  environment.etc."tappaas/git-hooks/pre-commit" = {
+    mode = "0755";
+    text = ''
+      #!/bin/sh
+      # TAPPaaS: no secret is committed on the mothership (#378).
+      top="$(git rev-parse --show-toplevel)" || exit 1
+      if command -v gitleaks >/dev/null 2>&1; then
+        cfg=""; [ -f "$top/.gitleaks.toml" ] && cfg="--config=$top/.gitleaks.toml"
+        # shellcheck disable=SC2086
+        if ! gitleaks git --pre-commit --staged --redact --no-banner $cfg "$top"; then
+          echo "pre-commit: gitleaks found a secret in what is staged — commit refused." >&2
+          echo "  A false positive goes in .gitleaks.toml; a real one is rotated, never committed." >&2
+          exit 1
+        fi
+      fi
+      # The repository's own hook, from its git directory: NOT `--git-path
+      # hooks/…`, which follows core.hooksPath back to this file — a hook that
+      # execs itself, forever (found testing it, 2026-10-03).
+      own="$(git rev-parse --git-common-dir)/hooks/pre-commit"
+      if [ -x "$own" ] && [ "$(readlink -f "$own")" != "$(readlink -f "$0")" ]; then
+        exec "$own" "$@"
+      fi
+      exit 0
+    '';
+  };
 
   # `health-manager scan security` from a shell resolves CPE vendors against
   # the same nixpkgs the unit does.

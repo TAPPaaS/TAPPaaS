@@ -37,7 +37,8 @@
 #
 # One boundary is one command: move the pin, prove it here, land it on main,
 # then promote. Its preflight also holds every module to the blueprint
-# (ADR-027 D5): a missing MUST refuses the boundary, and the result is recorded. Phases 1-2 take hours (a sweep that reboots nodes, then a deep
+# (ADR-027 D5) and scans for secrets (#378): a missing MUST or a finding refuses
+# the boundary, and both results are recorded. Phases 1-2 take hours (a sweep that reboots nodes, then a deep
 # test), so a run that stops half way is picked up with --resume rather than
 # restarted. Nothing is promoted unless the deep test passed — a promotion is
 # never the consolation prize for a failed test.
@@ -409,6 +410,16 @@ cmd_status() {
         blocks=$((blocks+1))
     fi
 
+    secrets_check
+    if [[ "${SS_OK}" == "yes" ]]; then
+        info "  ${GN}✓${CL} $(secrets_line)"
+    else
+        error "  ✗ $(secrets_line)"
+        local sw; for sw in ${SS_WHY+"${SS_WHY[@]}"}; do error "      ${sw}"; done
+        error "      a false positive goes in ${REPO_DIR}/.gitleaks.toml; a real one is rotated, then removed"
+        blocks=$((blocks+1))
+    fi
+
     local fault; fault="$(jq -r '.fault.what // empty' "${STATE_FILE}" 2>/dev/null)"
     if [[ -n "${fault}" ]]; then
         error "  ✗ a staging fault blocks promotion: ${fault}"
@@ -554,6 +565,71 @@ record_blueprint() {
        "${STATE_FILE}" > "${tmp}" && mv -f "${tmp}" "${STATE_FILE}" || rm -f "${tmp}"
 }
 
+# ── no secret in what is released (#378) ─────────────────────────────
+# gitleaks, once a fortnight on what the boundary promotes — here rather than
+# on every push (operator, 2026-10-03: no daily scans): the commits since the
+# last release and the tree as it stands. Findings are BROKEN — a release does
+# not go out with a credential in it — and so is a scan that could not run.
+# The repository's own .gitleaks.toml (the default rules + the false positives
+# it allowlists) is what decides. Values are redacted: the report names the
+# file, line and rule, never the secret. Sets SS_OK (yes|no|unchecked),
+# SS_FINDINGS, SS_COMMIT, SS_RANGE and SS_WHY.
+SS_OK=""; SS_FINDINGS=0; SS_COMMIT=""; SS_RANGE=""; SS_WHY=()
+secrets_check() {
+    SS_OK=""; SS_FINDINGS=0; SS_WHY=(); SS_RANGE=""
+    SS_COMMIT="$(g rev-parse --short=12 HEAD 2>/dev/null || true)"
+    local gl="${BIN_DIR}/gitleaks"
+    [[ -x "${gl}" ]] || gl="$(command -v gitleaks 2>/dev/null || true)"
+    if [[ -z "${gl}" ]]; then
+        SS_OK="unchecked"; SS_WHY+=("gitleaks is not installed (tappaas-cicd.nix systemPackages)")
+        return 0
+    fi
+    local prev rep_git rep_dir n_git n_dir cfg=()
+    [[ -f "${REPO_DIR}/.gitleaks.toml" ]] && cfg=(--config "${REPO_DIR}/.gitleaks.toml")
+    prev="$(release_tags | head -1)"
+    rep_git="$(mktemp)"; rep_dir="$(mktemp)"
+    if [[ -n "${prev}" ]]; then
+        SS_RANGE="${prev}..${SS_COMMIT}"
+        "${gl}" git "${REPO_DIR}" ${cfg[@]+"${cfg[@]}"} --log-opts="${prev}..HEAD" --redact --no-banner \
+            --report-format json --report-path "${rep_git}" >/dev/null 2>&1
+    else
+        SS_RANGE="tree only (no release yet)"; echo '[]' > "${rep_git}"
+    fi
+    "${gl}" dir "${REPO_DIR}" ${cfg[@]+"${cfg[@]}"} --redact --no-banner --report-format json --report-path "${rep_dir}" >/dev/null 2>&1
+    if ! n_git="$(jq -e 'length' "${rep_git}" 2>/dev/null)" || ! n_dir="$(jq -e 'length' "${rep_dir}" 2>/dev/null)"; then
+        SS_OK="unchecked"; SS_WHY+=("gitleaks gave no report")
+        rm -f "${rep_git}" "${rep_dir}"; return 0
+    fi
+    local line
+    while IFS= read -r line; do
+        [[ -n "${line}" ]] && SS_WHY+=("${line}")
+    done < <(jq -rs --arg r "${REPO_DIR}/" \
+        'add | map("\(.File | ltrimstr($r)):\(.StartLine) [\(.RuleID)]\(if .Commit != "" then " in " + .Commit[0:8] else "" end)")
+         | unique | .[:8][]' "${rep_git}" "${rep_dir}" 2>/dev/null)
+    SS_FINDINGS=$(( n_git + n_dir ))
+    (( SS_FINDINGS <= 8 )) || SS_WHY+=("… $(( SS_FINDINGS )) finding(s) in all")
+    rm -f "${rep_git}" "${rep_dir}"
+    if (( SS_FINDINGS == 0 )); then SS_OK="yes"; else SS_OK="no"; fi
+    return 0
+}
+
+secrets_line() {
+    case "${SS_OK}" in
+        yes) printf 'no secret found at %s (%s)' "${SS_COMMIT}" "${SS_RANGE}" ;;
+        no)  printf 'SECRETS found at %s: %s finding(s) (%s)' "${SS_COMMIT}" "${SS_FINDINGS}" "${SS_RANGE}" ;;
+        *)   printf 'the secret scan could not run' ;;
+    esac
+}
+
+record_secrets() {
+    local tmp="${STATE_FILE}.tmp.$$"
+    [[ -f "${STATE_FILE}" ]] || return 0
+    jq --arg c "${SS_COMMIT}" --arg ok "${SS_OK}" --argjson n "${SS_FINDINGS}" --arg r "${SS_RANGE}" \
+       --arg at "$(iso_utc "$(now_epoch)")" \
+       '.secrets = {commit: $c, checkedAt: $at, ok: ($ok == "yes"), result: $ok, findings: $n, range: $r}' \
+       "${STATE_FILE}" > "${tmp}" && mv -f "${tmp}" "${STATE_FILE}" || rm -f "${tmp}"
+}
+
 # ── preflight (design: phase 0) ──────────────────────────────────────
 # Every one of these is a refusal, not a warning: a release script that warns
 # and proceeds is one nobody reads the output of.
@@ -620,6 +696,13 @@ preflight() {
     if [[ "${BP_OK}" != "yes" ]]; then
         local w; PF_BROKEN+=("$(blueprint_line) — module-manager validate --blueprint --repo ${REPO_DIR}")
         for w in ${BP_WHY+"${BP_WHY[@]}"}; do PF_BROKEN+=("    ${w}"); done
+    fi
+
+    # Nor with a credential in it (#378).
+    secrets_check
+    if [[ "${SS_OK}" != "yes" ]]; then
+        local sw; PF_BROKEN+=("$(secrets_line) — false positive: .gitleaks.toml; real: rotate, then remove")
+        for sw in ${SS_WHY+"${SS_WHY[@]}"}; do PF_BROKEN+=("    ${sw}"); done
     fi
 
     local started; started="$(soak_started)"
@@ -942,6 +1025,7 @@ tag_message() {   # $1 = version, $2 = forced (1/0)
     printf 'Boundary:   %s\n' "$([[ "$2" == "1" ]] && echo "forced (--force-boundary)" || echo "on schedule")"
     printf 'Estate pin: nixpkgs %s\n' "$(jq -r '.nodes.nixpkgs.locked.rev // "?"' "${PIN_LOCK}" 2>/dev/null | cut -c1-12)"
     printf 'Blueprint:  %s\n' "$(blueprint_line)"
+    printf 'Secrets:    %s\n' "$(secrets_line)"
     [[ -n "${prev}" ]] && printf 'Previous:   %s\n' "${prev}"
     return 0
 }
@@ -990,7 +1074,7 @@ cmd_boundary() {
     report_preflight
     # Kept whatever the verdict, so the record says which commit met — or did
     # not meet — the blueprint at each boundary. A dry run records nothing.
-    [[ "${DRY_RUN}" == "1" ]] || record_blueprint
+    [[ "${DRY_RUN}" == "1" ]] || { record_blueprint; record_secrets; }
     local forced="${FORCE_BOUNDARY}"
     if (( ${#PF_BROKEN[@]} > 0 )); then
         error "Refusing: the train is not sound. --force-boundary does not lift these."
