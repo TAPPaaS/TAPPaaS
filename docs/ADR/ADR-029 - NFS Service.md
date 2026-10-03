@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | **Status** | **Draft** (2026-10-03) |
-| **Version** | 0.4 |
+| **Version** | 0.5 |
 | **Date** | 2026-10-03 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen |
 | **Related** | **#52** (Jellyfin — the first consumer) · [ADR-009](<ADR-009 - Composition Meta-Model.md>) (`<module>:<service>` coordinates, `config."<module>:<service>"`) · [ADR-012](ADR-012-backup-enhancement.md) (`backup:filesystem` backs up the exports — D9; F.3 narrowed to external shares) · [ADR-019](<ADR-019 - HA and Cross-Node VM Migration Policy.md>) (an HA guest mounting non-HA data) · [ADR-020](<ADR-020 - Declared-Field Change Model (validate, drift, modify).md>) (the change classes in `services/nfs/fields.json`) · [ADR-021](<ADR-021 - Split-Horizon DNS and Service Reachability.md>) (host-scoped rules, never `access-to`) · [ADR-022c](<ADR-022c - Node and Host.md>) (Host) · [ADR-026](<ADR-026 - Managed Machines as Modules.md>) (the export Host is a machine module; D6 instance names) · [ADR-027](<ADR-027 - Module Blueprint.md>) D3 (the six files of `services/nfs/`) |
-| **Changelog** | v0.4 (2026-10-03, operator review) — the provider is **`pvehost`** (`pvehost:nfs`), not `cluster` or a new `storage` module (D1, Q3 closed); exports use **ZFS `sharenfs`** (new D4a, with the analysis), replacing the TAPPaaS-owned `exports.d` file; an NFS server in a guest is rejected (no ZFS sharing, costs a VM), and HA shared data points to CIFS/S3 in a next version (D8). Q9 added. File renamed from *Cluster NFS Service*. · v0.3 (2026-10-03) — **D2a**: a dedicated NFS server outside the cluster is a share source — registered as an `unmanaged` instance whose `exports[]` describe existing paths (`path`, `version`, pinned `v3Ports`), named in mounts like any export; TAPPaaS enforces the grant and the firewall rule on its side, prints what the server must carry, and detects access drift from the consumer. NFS across `wan` refused. Q4 (consumer-provisioned exports) rejected by the operator. · v0.2 (2026-10-03) — D9 rewritten: an export is backed up by its **Host's `backup:filesystem`**, one PBS group per export from a ZFS snapshot, with a mandatory `backup.enabled` on every export; restore lands beside the live dataset. ADR-012 F.3 remains only for external shares. Q8 (off-site) added. · v0.1 (2026-10-03) — first draft: one service, two declarations (export on a Host, mount on a guest); the `<host>:<name>` share reference; a four-layer access model with squash-to-owner identity; data outlives its consumers. |
+| **Changelog** | v0.5 (2026-10-03, operator review) — D2a names the two outside-the-cluster servers apart: **registered, unmanaged** (a module instance with declared shares) and **unmodelled** (an address in a literal path). Several servers are several instances (`nas1`, `nas2`). Exports move out of `config."pvehost:nfs"` into the server's own module-tier **`nfs.exports[]`**: the `config` block is the consumer's, and no server — node or NAS — carries a `dependsOn`/`integratesWith` for NFS; the consumer's `dependsOn: pvehost:nfs` is the only edge. · v0.4 (2026-10-03, operator review) — the provider is **`pvehost`** (`pvehost:nfs`), not `cluster` or a new `storage` module (D1, Q3 closed); exports use **ZFS `sharenfs`** (new D4a, with the analysis), replacing the TAPPaaS-owned `exports.d` file; an NFS server in a guest is rejected (no ZFS sharing, costs a VM), and HA shared data points to CIFS/S3 in a next version (D8). Q9 added. File renamed from *Cluster NFS Service*. · v0.3 (2026-10-03) — **D2a**: a dedicated NFS server outside the cluster is a share source — registered as an `unmanaged` instance whose `exports[]` describe existing paths (`path`, `version`, pinned `v3Ports`), named in mounts like any export; TAPPaaS enforces the grant and the firewall rule on its side, prints what the server must carry, and detects access drift from the consumer. NFS across `wan` refused. Q4 (consumer-provisioned exports) rejected by the operator. · v0.2 (2026-10-03) — D9 rewritten: an export is backed up by its **Host's `backup:filesystem`**, one PBS group per export from a ZFS snapshot, with a mandatory `backup.enabled` on every export; restore lands beside the live dataset. ADR-012 F.3 remains only for external shares. Q8 (off-site) added. · v0.1 (2026-10-03) — first draft: one service, two declarations (export on a Host, mount on a guest); the `<host>:<name>` share reference; a four-layer access model with squash-to-owner identity; data outlives its consumers. |
 
 A module that runs in a `cluster:vm` guest can mount a **named NFS share** at a directory
 inside the guest, and a machine TAPPaaS manages can **export a ZFS dataset** from one of its
@@ -51,8 +51,9 @@ TAPPaaS-managed guest" and deferred it for lack of a model. This ADR is that mod
 |---|---|
 | **export** | A ZFS dataset on a Host, created and exported over NFS by TAPPaaS. Has a **name** unique on its Host. |
 | **export Host** | The machine module instance (ADR-026) whose pool carries the export — in v1 a cluster node (`pvehost`); a Debian machine (`debianhost`) later. |
-| **NFS server** | An NFS server outside the cluster that TAPPaaS does not configure — a NAS or dedicated file server. **Registered** when it is a module instance (`management: unmanaged`, D2a); **unmodeled** when it is only an address. |
-| **share** | Anything a guest can mount over NFS: a TAPPaaS export, a share on a registered NFS server, or an unmodeled NFS path. |
+| **registered, unmanaged NFS server** | An NFS server **outside the cluster** that the site owns — a NAS, a dedicated file server — registered as a module instance with `management: unmanaged` (D2a). TAPPaaS knows it and its shares by name, and never configures it. |
+| **unmodelled NFS server** | An NFS server **also outside the cluster**, known to TAPPaaS only as an address in a mount's literal path — no module instance, no name, no declared shares. |
+| **share** | Anything a guest can mount over NFS: a TAPPaaS export, a share on a registered server, or an unmodelled server's path. |
 | **share reference** | The string a mount names its share by: `<host>:<name>` or `<host>:/<path>` (D2). |
 | **mount** | A consumer's declaration that a share appears at a directory inside its guest. |
 | **consumer** | The module that declares the mount. In v1 always a `cluster:vm` guest. |
@@ -77,11 +78,18 @@ placement — and creating the pools stays in `config-storage.sh`.
 
 | Declared on | Field | What it says |
 |---|---|---|
-| a node's instance file (`config/tappaas2.json`) | `config."pvehost:nfs".exports[]` | "create this dataset on this pool and let these consumers mount it" |
+| a node's instance file (`config/tappaas2.json`) | `nfs.exports[]` — the node's own field | "create this dataset on this pool and let these consumers mount it" |
 | a consumer's module file (`jellyfin.json`) | `config."pvehost:nfs".mounts[]` | "mount this share at this directory in my guest" |
 
-On a node the declaration configures the instance's own service, so it needs no `dependsOn`;
-the consumer `dependsOn: pvehost:nfs`, and the share reference picks the instance (D2).
+The two fields sit in different places on purpose. **`config."<module>:<service>"` is the
+consumer's block** (ADR-009): it says what a module wants from a service it depends on, so
+the mount goes there. **A server describing its own shares consumes nothing**, so its
+exports are a module-tier object of its own — `nfs.exports[]`, the way `backup` is a
+module-tier object (ADR-012 §2.7) — defined once in the schema and read by `pvehost:nfs`.
+The same `nfs` object describes the shares of a registered, unmanaged server (D2a). No
+server carries a `dependsOn` or `integratesWith` for NFS: **the only dependency edge is the
+consumer's `dependsOn: pvehost:nfs`**, and its share reference picks the server instance
+(D2).
 A `debianhost` that should export a pool gets the same service later, as `debianhost:nfs`
 from a shared library — v1 exports from cluster nodes only.
 
@@ -102,46 +110,61 @@ way:
 | Form | Example | Server | TAPPaaS does |
 |---|---|---|---|
 | `<instance>:<name>` on a **managed** Host | `tappaas2:media` | a cluster node (`pvehost`; `debianhost` later) | everything: creates the dataset, exports it, derives all four access layers (D5), backs it up (D9). |
-| `<instance>:<name>` on a **registered NFS server** | `nas:video` | a dedicated NFS server outside the cluster, registered as an `unmanaged` module instance (D2a) | the consumer side only: validates the grant, derives the firewall rule, mounts — and **reports** what the server must be configured with, never configures it. |
-| `<fqdn-or-ip>:/<path>` | `files.partner.example:/exports/shared` | an **unmodeled** server — not a module, typically outside the Administrative Domain (ADR-022g) | the firewall rule and the mount, nothing else. |
+| `<instance>:<name>` on a **registered, unmanaged server** | `nas1:video` | outside the cluster: a NAS or file server the site owns, registered as an `unmanaged` module instance (D2a) | the consumer side only: validates the grant, derives the firewall rule, mounts — and **reports** what the server must be configured with, never configures it. |
+| `<fqdn-or-ip>:/<path>` | `files.partner.example:/exports/shared` | also outside the cluster: an **unmodelled** server — not a module, typically outside the Administrative Domain (ADR-022g) | the firewall rule and the mount, nothing else. |
 
 The rule that separates the forms is unambiguous: **no leading slash → a named share on a
 module instance; a leading slash → a literal path.** A literal path on a host that *is* a
-module instance — managed or registered — is refused at validate time: if TAPPaaS knows the
+module instance — managed, or registered and unmanaged — is refused at validate time: if TAPPaaS knows the
 server, the share is named there, and a path form would be a way around the grant.
 
 The `<instance>` is a module instance name (ADR-026 D6), not an address: an address changes,
 an instance name does not, and the instance name is what lets the validator find the
 declaration.
 
-### D2a — An NFS server outside the cluster
+### D2a — A registered, unmanaged NFS server
 
-A dedicated NFS server the site owns — a NAS, a storage box — is **registered, not
-managed**: a module instance with `kind: machine` and `management: unmanaged` (ADR-022g D3,
-ADR-026), so TAPPaaS knows its name, address and zone, gives it a DNS name and a firewall
-alias, and has somewhere to read its shares from. TAPPaaS never logs in to it, installs
-nothing on it and never writes its export table. Registering is the recommended path for
-any server the site owns; the literal form is for a server nobody here models.
+Two kinds of NFS server sit **outside the cluster**, and the difference between them is
+whether TAPPaaS models them:
 
-Its shares are declared in the same `exports[]` list as a managed Host's, but as
-**descriptors of what already exists** — a `path` instead of a `pool`:
+| | Registered, unmanaged | Unmodelled |
+|---|---|---|
+| What it is | a NAS or file server **the site owns** | a server nobody here models — another party's, or a one-off |
+| In TAPPaaS | a module instance, `kind: machine`, `management: unmanaged` (ADR-022g D3, ADR-026) | only the address in a mount's literal path (D2) |
+| Named | yes — `config/<instance>.json`, a DNS name, a firewall alias | no |
+| Shares declared | yes — `nfs.exports[]` descriptors | no |
+| Configured by TAPPaaS | **never** — no login, no packages, no export table | never |
+
+Registering is the recommended path for any server the site owns: it is what gives TAPPaaS
+something to check grants and drift against. The literal form is the fallback for a server
+that is not ours to describe.
+
+A registered server's shares are declared in the same `nfs.exports[]` object a node uses,
+but as **descriptors of what already exists** — a `path` instead of a `pool`:
 
 ```json
-// config/nas.json — a registered NFS server (management: unmanaged)
-"integratesWith": ["pvehost:nfs"],
-"config": {
-  "pvehost:nfs": {
-    "exports": [
-      {
-        "name": "video",
-        "path": "/volume1/video",
-        "version": "4.1",
-        "grants": [ { "consumer": "jellyfin", "access": "ro" } ]
-      }
-    ]
-  }
+// config/nas1.json — a registered, unmanaged NFS server
+"management": "unmanaged",
+"nfs": {
+  "exports": [
+    {
+      "name": "video",
+      "path": "/volume1/video",
+      "version": "4.1",
+      "grants": [ { "consumer": "jellyfin", "access": "ro" } ]
+    }
+  ]
 }
 ```
+
+No `dependsOn`, no `integratesWith` and no `config."pvehost:nfs"` block: the server does not
+consume the NFS service, it is described *to* it (D1).
+
+**Several servers are several instances.** A site with two NAS boxes registers two
+instances of the same module — `config/nas1.json` and `config/nas2.json`, each named after
+its machine (ADR-026 D6, D8) — and a consumer names the one it wants: `nas1:video`,
+`nas2:photos`. Share names need only be unique per server, so both may have a `backup`
+share without colliding. What module type those instances belong to is Q9.
 
 | Field | On a registered server |
 |---|---|
@@ -153,7 +176,7 @@ Its shares are declared in the same `exports[]` list as a managed Host's, but as
 
 What TAPPaaS can and cannot do for such a share, by the D5 layers:
 
-| Layer | Registered NFS server | Unmodeled (literal path) |
+| Layer | Registered, unmanaged server | Unmodelled server (literal path) |
 |---|---|---|
 | 1 Authorization | **enforced on the TAPPaaS side**: the two-key check runs against the descriptor's grants exactly as for a managed export. | none — the mount is the only declaration. |
 | 2 Network | derived: consumer → server `/32` on tcp/2049 (plus 111 and `v3Ports`, tcp and udp, for v3). No rule when consumer and server share a zone — that traffic never crosses OPNsense. | derived the same way, to the literal host. |
@@ -170,7 +193,7 @@ firewall reaches. A server reached through `wan`/the internet is **refused** in 
 forms: NFS with `sec=sys` is cleartext and trusts the client's claimed UID, which is
 tolerable on our own VLANs and not across someone else's network (Q5 reopens this with TLS).
 
-**Lifecycle and backup.** TAPPaaS never touches data on a registered or unmodeled server:
+**Lifecycle and backup.** TAPPaaS never touches data on a registered, unmanaged server or an unmodelled one:
 removing a mount unmounts and removes the rule; deleting the registered instance while
 consumers still mount its shares is refused; there is no purge. Backing up that data is the
 server's own business — ADR-012 F.3's `backup:dataset` remains the open question for it.
@@ -209,21 +232,19 @@ The export is declared on the **Host**, not on the consumer, because the data be
 Host's pool and outlives every consumer (D6).
 
 ```json
-// config/tappaas2.json — the pvehost instance for node tappaas2 (its own service: no dependsOn)
-"config": {
-  "pvehost:nfs": {
-    "exports": [
-      {
-        "name": "media",
-        "pool": "tankb1",
-        "quota": "4T",
-        "backup": { "enabled": true },
-        "grants": [
-          { "consumer": "jellyfin", "access": "rw" }
-        ]
-      }
-    ]
-  }
+// config/tappaas2.json — the pvehost instance for node tappaas2
+"nfs": {
+  "exports": [
+    {
+      "name": "media",
+      "pool": "tankb1",
+      "quota": "4T",
+      "backup": { "enabled": true },
+      "grants": [
+        { "consumer": "jellyfin", "access": "rw" }
+      ]
+    }
+  ]
 }
 ```
 
@@ -269,7 +290,7 @@ default), and the operator has run `sharenfs` exports for years. The analysis:
 | **`sharenfs=on`** | **Exports to everyone** with OpenZFS defaults. A real foot-gun — the renderer never writes `on`, and `validate`/`test-service.sh` refuse any TAPPaaS export whose live value is `on` or lacks a host list. | n/a |
 | **Inheritance** | Child datasets inherit `sharenfs`. Contained: the `tappaas-nfs` parent is explicitly `off`, and exports have no children. | n/a |
 | **`zfs send -p` / `-R`** | Carries the property: a received copy is shared on the target with the source's client list. TAPPaaS's own send/recv (export moves, future replication) always receives with `-x sharenfs`. | n/a |
-| **Non-ZFS exports** | Impossible. Irrelevant: an export *is* a ZFS dataset (D4). A registered NFS server's shares are not TAPPaaS-exported at all (D2a). | Works for any directory. |
+| **Non-ZFS exports** | Impossible. Irrelevant: an export *is* a ZFS dataset (D4). A registered, unmanaged server's shares are not TAPPaaS-exported at all (D2a). | Works for any directory. |
 
 The `sharenfs` rows that cost something — `on`, inheritance, send/recv — each have a
 one-line rule; the file's cost is the unmounted-pool hazard, which is exactly the failure a
@@ -347,13 +368,13 @@ This is ADR-026's "`delete` unregisters, never wipes", applied to data.
 |---|---|---|
 | `mounts` | `in-place`, apply `reconcile` | Adding or removing a mount is a unit change and a remount; nothing reboots. Changing one mount's `share` is unmount + mount. |
 | `mounts[].access` | `in-place` | Remount with the new mode — but only within the grant. |
-| `exports` | `in-place`, apply `reconcile` | Adds and unexports; never destroys (D6). |
-| `exports[].grants` | `in-place` | Re-renders `sharenfs` and the rules; re-sharing is live. |
-| `exports[].quota` | `in-place` | `zfs set quota`; a value below current usage is refused at apply time. |
-| `exports[].properties` | `in-place` | Applies to newly written blocks only — stated in the change note, because `recordsize` does not rewrite the existing library. |
-| `exports[].backup` | `in-place` | Rewrites the Host's capture manifest; enabling starts at the next scheduled run, disabling stops future runs and **keeps** the snapshots already stored (they age out under retention). |
-| `exports[].name`, `exports[].pool` | `immutable` | A rename breaks every share reference; a pool change is a data migration. Both are refused with the manual procedure in the README. |
-| `exports[].owner` | `immutable` once allocated | Changing it would need a recursive `chown` of the dataset. |
+| `nfs.exports` | `in-place`, apply `reconcile` | Adds and unexports; never destroys (D6). |
+| `nfs.exports[].grants` | `in-place` | Re-renders `sharenfs` and the rules; re-sharing is live. |
+| `nfs.exports[].quota` | `in-place` | `zfs set quota`; a value below current usage is refused at apply time. |
+| `nfs.exports[].properties` | `in-place` | Applies to newly written blocks only — stated in the change note, because `recordsize` does not rewrite the existing library. |
+| `nfs.exports[].backup` | `in-place` | Rewrites the Host's capture manifest; enabling starts at the next scheduled run, disabling stops future runs and **keeps** the snapshots already stored (they age out under retention). |
+| `nfs.exports[].name`, `exports[].pool` | `immutable` | A rename breaks every share reference; a pool change is a data migration. Both are refused with the manual procedure in the README. |
+| `nfs.exports[].owner` | `immutable` once allocated | Changing it would need a recursive `chown` of the dataset. |
 
 ### D8 — Availability: the share is as available as its Host, and says so
 
@@ -440,9 +461,10 @@ first export, not before — a node with no export runs no NFS server.
 
 ### D11 — Ordering and validation
 
-- A consumer declaring `mounts` must `dependsOn: pvehost:nfs`; an export Host declaring
-  `exports` too. `module-manager validate` resolves every managed share reference to an
-  export declaration and checks D5 layer 1 against it.
+- A consumer declaring `mounts` must `dependsOn: pvehost:nfs`; that is the only NFS
+  dependency in the graph (D1). `module-manager validate` resolves every named share
+  reference to an `nfs.exports[]` entry on the named instance — node or registered server —
+  and checks D5 layer 1 against it.
 - A managed share reference implies the consumer installs after its export Host — the same
   instance-pinning ADR-026 D6.6 gives a dependency.
 - The export's client list holds addresses, and addresses come from DHCP. Every reconcile
@@ -458,12 +480,12 @@ export to the node's instance file and the mount to Jellyfin:
 
 ```json
 // config/tappaas2.json
-"config": { "pvehost:nfs": { "exports": [
+"nfs": { "exports": [
   { "name": "media", "pool": "tankb1", "quota": "4T",
     "properties": { "recordsize": "1M", "compression": "lz4" },
     "backup": { "enabled": true, "exclude": [ ".Trash-*" ] },
     "grants": [ { "consumer": "jellyfin", "access": "rw" } ] }
-]}}
+]}
 ```
 
 ```json
@@ -512,7 +534,7 @@ A site that keeps metadata inside the guest should grant and mount `ro`.
 
 ### Negative / costs
 
-- For a registered NFS server, the server-side client list is the operator's to keep in
+- For a registered, unmanaged server, the server-side client list is the operator's to keep in
   step; TAPPaaS detects a gap but cannot close it.
 - A new listener on a hypervisor, reachable from a workload zone (D5, Q1).
 - `sec=sys` means root on a consumer is full access to its exports; isolation is only per
@@ -556,9 +578,10 @@ A site that keeps metadata inside the guest should grant and mount `ro`.
 - **Q2 — the owner range.** 64000–64999 is free on NixOS and Debian defaults; confirm, and
   confirm that allocated values are written back into the Host's instance file.
 - ~~Q3 — which module provides it~~ — **decided: `pvehost`** (v0.4): see D1.
-- **Q9 — the module type of a registered NFS server.** D2a needs an `unmanaged`
-  `kind: machine` module for an appliance TAPPaaS does not patch — a generic one, or one per
-  appliance family? ADR-026's question, raised here.
+- **Q9 — the module type of a registered, unmanaged NFS server.** D2a needs an
+  `unmanaged` `kind: machine` module that its instances (`nas1`, `nas2`, …) belong to — one
+  generic module for any appliance TAPPaaS does not patch, or one per appliance family?
+  ADR-026's question, raised here.
 - ~~Q4 — consumer shorthand~~ — **decided, rejected** (v0.3): see *Alternatives*.
 - **Q5 — encryption.** Make RPC-with-TLS the default as soon as both the Debian Host and
   NixOS guest stacks ship `tlshd`?
