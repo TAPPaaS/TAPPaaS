@@ -89,7 +89,9 @@ nine updates in one sitting. The code changes above land with the hop that needs
 each is backwards compatible for the hops before it (sending `parents` to a 2025.10 server
 is the exception — it lands with the 2025.12 step).
 
-Afterwards #750: the pin is listed where a tripwire can see it, and its age is reported at
+Still open after the walk: `AUTHENTIK_WEB__BASE_URL` (required from 2026.11); the
+`ak_groups` → `groups` claim expression (deprecated, still served by 2026.8);
+afterwards #750: the pin is listed where a tripwire can see it, and its age is reported at
 each release boundary, so the next lapse is visible.
 
 ## Results on hrossen (2026-10-03)
@@ -103,12 +105,14 @@ each release boundary, so the next lapse is visible.
 | 5 | 2025.10.4 | 104 s | ✅ Redis gone; `email_verified` kept true by the TAPPaaS mapping, put on all five providers first |
 | 6 | 2025.12.6 | 113 s | ✅ groups → `parents`, media on `/data/media` |
 | 7 | **2026.2.7** | 123 s | ✅ — **hrossen runs this**; it fixes every advisory in the table above |
-| 8 | 2026.5.7 | — | ❌ twice, rolled back each time. It migrates and answers `/-/health/ready/`, but **every request returns an empty `200`** — login flow, OIDC discovery, API — and never reaches the backend; its own internal calls do. Reproduced by hand, then rolled back (empty pages ~10 min). Not a port clash; nothing in the release notes. Under investigation |
+| 8 | 2026.5.7 | 111 s | ✅ after a fix — the first two tries **answered every request with an empty `200`** (login, OIDC, API) and were rolled back. Cause, found in the 2026.5.7 source: the worker is now a Rust binary whose health server binds Authentik's listen address (`:9000`) and answers every other path with an empty 200; with `--network=host` the two containers share the guest's ports, the worker won `:9000`, and the server only warned. Upstream's compose gives each container its own network and never meets it. Fix: the worker listens on `127.0.0.1:9001/9444/9301` (`akWorkerEnv`) |
+| 9 | **2026.8.3** | 141 s | ✅ — **the target; hrossen runs it.** The new Rust server owns 9000/9443/9300, the worker its loopback ports, no `failed to listen`; API and `authentik-manager test` answer; forward-auth through Caddy redirects to the login flow (2026.8 trusts forwarded headers only from 10/8 &c. — Caddy is 10.0.0.1) |
 
 At each hop: a `pg_dump`, the update's snapshot and tests, then the recorded version, the
 running image and readiness compared, each application's OIDC discovery and the outpost
-checked, and the identity and logging tests. **The walk ends at 2026.2.7** until 2026.5 is
-understood. Lessons kept in the tooling: check a body, not a status (the empty-200 hop
+checked, and the identity and logging tests. **The walk is complete: 2025.2.1 → 2026.8.3
+in nine hops, ~2 minutes each.** The identity module's test now also asks every OIDC
+application for its discovery document and fails on an empty one. Lessons kept in the tooling: check a body, not a status (the empty-200 hop
 looked green), and a failed OS switch should stop `module update` at once rather than five
 minutes later in `update.sh`.
 

@@ -72,6 +72,28 @@ section "1: Authentik reachable"
 if ${AUTHENTIK_MANAGER} test >/dev/null 2>&1; then pass "authentik-manager connects"
 else error "authentik-manager cannot reach Authentik"; exit 2; fi
 
+# A status code alone is not an answer: Authentik 2026.5.7, with its worker on
+# the server's port, returned 200 with an EMPTY body to every request — the
+# health check passed, every login and OIDC client failed (#748). Each OIDC
+# application's discovery document must say who issues its tokens.
+section "1b: Authentik serves real pages (OIDC discovery per application)"
+# Every application on an OAuth2 or proxy provider (a proxy provider is OAuth2
+# underneath and publishes the same document).
+oidc_slugs="$(api '/core/applications/?superuser_full_list=true&page_size=1000' 2>/dev/null \
+    | jq -r '.results[] | select((.provider_obj.meta_model_name // "") | test("oauth2provider|proxyprovider")) | .slug' 2>/dev/null)"
+if [[ -z "${oidc_slugs}" ]]; then
+    info "    (no OIDC applications to check)"
+else
+    for slug in ${oidc_slugs}; do
+        if curl -fsS --max-time 10 "${A_URL}/application/o/${slug}/.well-known/openid-configuration" \
+               | jq -e '.issuer | startswith("http")' >/dev/null 2>&1; then
+            pass "OIDC discovery for '${slug}' is a real document"
+        else
+            fail "OIDC discovery for '${slug}' is empty or not JSON — Authentik answers but does not serve"
+        fi
+    done
+fi
+
 # ── 2. identity-manager role groups present ────────────────────────────────────
 # The baseline role groups user/admin/root are reconciled by `identity-manager
 # sync`. The OIDC install allow-list (install-service.sh) ensures they exist via
