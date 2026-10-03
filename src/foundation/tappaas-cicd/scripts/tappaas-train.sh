@@ -578,9 +578,13 @@ SS_OK=""; SS_FINDINGS=0; SS_COMMIT=""; SS_RANGE=""; SS_WHY=()
 secrets_check() {
     SS_OK=""; SS_FINDINGS=0; SS_WHY=(); SS_RANGE=""
     SS_COMMIT="$(g rev-parse --short=12 HEAD 2>/dev/null || true)"
-    local gl="${BIN_DIR}/gitleaks"
-    [[ -x "${gl}" ]] || gl="$(command -v gitleaks 2>/dev/null || true)"
+    # TAPPAAS_GITLEAKS names the binary (tests); otherwise BIN_DIR, then PATH.
+    local gl="${TAPPAAS_GITLEAKS:-}"
     if [[ -z "${gl}" ]]; then
+        gl="${BIN_DIR}/gitleaks"
+        [[ -x "${gl}" ]] || gl="$(command -v gitleaks 2>/dev/null || true)"
+    fi
+    if [[ -z "${gl}" || ! -x "${gl}" ]]; then
         SS_OK="unchecked"; SS_WHY+=("gitleaks is not installed (tappaas-cicd.nix systemPackages)")
         return 0
     fi

@@ -230,7 +230,7 @@ FAKE_GL_LOG="${TMP}/gl.log" FAKE_NOW=$(( 1790000000 + 20*86400 )) run status
 grep -q -- "dir ${TMP}/w " "${TMP}/gl.log" && grep -q -- "--redact" "${TMP}/gl.log" \
     && ok "the tree is scanned, redacted" || bad "gitleaks called as: $(cat "${TMP}/gl.log")"
 rm -f "${TMP}/bin/gitleaks.off"; mv "${TMP}/bin/gitleaks" "${TMP}/bin/gitleaks.off"
-PATH="/usr/bin:/bin" FAKE_NOW=$(( 1790000000 + 20*86400 )) run boundary --dry-run --force-boundary
+TAPPAAS_GITLEAKS=/nonexistent/gitleaks FAKE_NOW=$(( 1790000000 + 20*86400 )) run boundary --dry-run --force-boundary
 [[ "${RC}" -ne 0 && "${OUT}" == *"secret scan could not run"* ]] \
     && ok "a scan that cannot run is not a pass" || bad "a missing gitleaks passed: ${OUT}"
 mv "${TMP}/bin/gitleaks.off" "${TMP}/bin/gitleaks"
