@@ -310,6 +310,30 @@ class TestGroupEnsure(unittest.TestCase):
         self.assertFalse(post["json"]["is_superuser"])
         self.assertEqual(post["json"]["attributes"], {"tappaas": {"role": "user"}})
 
+    def test_from_2025_12_the_parent_is_a_list(self):
+        # #748: 2025.12 replaced the single ``parent`` with ``parents``.
+        mgr, calls = _make_manager({
+            ("GET", "/admin/version/"): {"version_current": "2025.12.6"},
+            ("GET", "/core/groups/"): {"results": [{"pk": "PARENT", "name": "acme"}]},
+            ("POST", "/core/groups/"): {"pk": "CHILD", "name": "acme-users"},
+        })
+        mgr.group_ensure("acme-users", parent_name="acme")
+        post = next(c for c in calls if c["method"] == "POST" and c["path"] == "/core/groups/")
+        self.assertEqual(post["json"]["parents"], ["PARENT"])
+        self.assertNotIn("parent", post["json"])
+
+    def test_before_2025_12_the_parent_is_single(self):
+        mgr, calls = _make_manager({
+            ("GET", "/admin/version/"): {"version_current": "2025.10.4"},
+            ("GET", "/core/groups/"): {"results": []},
+            ("POST", "/core/groups/"): {"pk": "G", "name": "solo"},
+        })
+        mgr.group_ensure("solo")
+        post = next(c for c in calls if c["method"] == "POST")
+        self.assertIn("parent", post["json"])
+        self.assertIsNone(post["json"]["parent"])
+        self.assertNotIn("parents", post["json"])
+
     def test_missing_parent_raises(self):
         mgr, _ = _make_manager({("GET", "/core/groups/"): {"results": []}})
         with self.assertRaises(RuntimeError):

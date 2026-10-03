@@ -174,7 +174,7 @@ def cmd_group_ensure(mgr: AuthentikManager, args: argparse.Namespace) -> int:
         is_superuser=args.superuser,
         attributes=_parse_attrs(args.attr) or None,
     )
-    print(f"==> group '{g['name']}' pk={g['pk']} superuser={g.get('is_superuser')} parent={g.get('parent') or '-'}")
+    print(f"==> group '{g['name']}' pk={g['pk']} superuser={g.get('is_superuser')} parent={g.get('parent') or ','.join(map(str, g.get('parents') or [])) or '-'}")
     return 0
 
 

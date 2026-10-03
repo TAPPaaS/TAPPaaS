@@ -113,6 +113,7 @@ class AuthentikManager:
         self._client: httpx.Client | None = None
         # Per-instance flow-slug → pk cache (avoid sharing across managers).
         self._flow_cache: dict[str, str] = {}
+        self._version: str | None = None
 
     def connect(self) -> "AuthentikManager":
         self._client = httpx.Client(
@@ -145,6 +146,27 @@ class AuthentikManager:
         return self._client
 
     # ── primitives ──────────────────────────────────────────────────────
+
+    def server_version(self) -> str | None:
+        """The running Authentik version ("2025.2.1"), or None if it cannot be read.
+
+        The API changes shape across release lines (#748), and a site walks them
+        one per update, so the client asks rather than assumes."""
+        if self._version is None:
+            try:
+                self._version = str(self._get_json("/admin/version/").get("version_current") or "")
+            except Exception:
+                self._version = ""
+        return self._version or None
+
+    def _at_least(self, version: str) -> bool:
+        """True when the server runs ``version`` or later (YYYY.M[.P])."""
+        have = self.server_version()
+        if not have:
+            return False
+        def key(v: str) -> tuple:
+            return tuple(int(p) for p in (v.split(".") + ["0", "0"])[:3] if p.isdigit())
+        return key(have) >= key(version)
 
     def _get_json(self, path: str, **params) -> dict:
         r = self.client.get(path, params=params)
@@ -423,7 +445,13 @@ class AuthentikManager:
                 )
             parent_pk = parent["pk"]
 
-        body: dict = {"name": name, "is_superuser": is_superuser, "parent": parent_pk}
+        body: dict = {"name": name, "is_superuser": is_superuser}
+        # 2025.12 made a group's parent a list (``parents``, many-to-many); the
+        # single ``parent`` is gone. Before it, ``parent`` is the field.
+        if self._at_least("2025.12"):
+            body["parents"] = [parent_pk] if parent_pk else []
+        else:
+            body["parent"] = parent_pk
         if attributes is not None:
             body["attributes"] = attributes
 

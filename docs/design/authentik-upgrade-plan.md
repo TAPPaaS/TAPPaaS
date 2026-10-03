@@ -70,6 +70,18 @@ install only. The settings that change between versions belong in the container'
 
 ## How to carry it out
 
+**Built 2026-10-03** (prerequisite + step mechanism; the hops themselves not yet run):
+`identity/ak-step.nix` takes the version the guest runs (`/var/lib/authentik/tappaas-version`,
+or 2025.2.1 for a guest from before it) and builds the next step; a fresh install goes to the
+target. `identity.nix` builds `ak.version`, keeps Redis and the `/media` mount while the step
+needs them, declares the settings (`akEnv`) and strips them from the env file on existing
+guests; `authentik-version-record` writes the version only once the server runs that image
+and answers ready; `authentik-step-precheck` (hourly) finds duplicate group names, and the
+step into 2025.12 is then refused at evaluation, before anything changes. The controller
+sends `parents` from 2025.12 on, `parent` before. Tested: 20 step cases; a dry build on
+hrossen's guest computes **2025.2.4** as its first step. Still to do with the hops: the
+`groups` claim (2026.2) and the base URL (2026.8).
+
 The same shape as Nextcloud's walk (#709, `nc-major.nix`): the module steps **one release
 line per update**, each step a normal `module update` with its snapshot and tests — so the
 sweep can carry an estate forward and a failure stops at a known version. On hrossen it is

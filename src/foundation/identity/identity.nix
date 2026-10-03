@@ -14,7 +14,8 @@
 #
 # Architecture:
 # - PostgreSQL 16 (user/group/policy storage)
-# - Redis 7 (caching, sessions, task queue)
+# - Redis (caching, sessions, task queue) — only until Authentik 2025.10, which
+#   no longer uses it; the walk to the target version is ak-step.nix (#748)
 # - Authentik Server container (web UI + API, ports 9000/9443)
 # - Authentik Worker container (background tasks, LDAP sync, email)
 #
@@ -37,10 +38,42 @@
 let
   # Version pinning - change versions here only
   versions = {
-    authentik   = "2025.2.1";
     postgresPkg = pkgs.postgresql_16;
     redisPkg    = pkgs.redis;
   };
+
+  # Authentik moves ONE step per build along its release lines (#748): it
+  # refuses to skip a line and cannot go back. Each line's latest patch, oldest
+  # first; the last is this release's target. A new release appends a line.
+  # ak.version is what this build runs; ak-step.nix says why.
+  ak = import ./ak-step.nix {
+    lines = [ "2025.2.4" "2025.4.4" "2025.6.4" "2025.8.6" "2025.10.4"
+              "2025.12.6" "2026.2.7" "2026.5.7" "2026.8.3" ];
+  };
+
+  # Settings, as opposed to secrets: declared here, so a change reaches every
+  # guest at its next update. (They used to live in /etc/secrets/authentik.env,
+  # which is written once at first boot — a change there reached new installs only.)
+  akEnv = {
+    AUTHENTIK_POSTGRESQL__HOST = "localhost";
+    AUTHENTIK_POSTGRESQL__PORT = "5432";
+    AUTHENTIK_POSTGRESQL__USER = "authentik";
+    AUTHENTIK_POSTGRESQL__NAME = "authentik";
+    AUTHENTIK_LOG_LEVEL = "info";
+    AUTHENTIK_DISABLE_STARTUP_ANALYTICS = "true";
+  } // lib.optionalAttrs ak.redis {
+    # Redis is not used from 2025.10 on
+    AUTHENTIK_REDIS__HOST = "localhost";
+    AUTHENTIK_REDIS__PORT = "6379";
+  };
+
+  # From 2025.12 files are served from /data; the /media mount moves to /data/media.
+  akMedia = if ak.dataMount
+    then "/var/lib/authentik/media:/data/media"
+    else "/var/lib/authentik/media:/media";
+  akAfter = [ "postgresql.service" "generate-authentik-secrets.service" "authentik-env-secrets-only.service" ]
+    ++ lib.optional ak.redis "redis-authentik.service";
+  akRequires = [ "postgresql.service" ] ++ lib.optional ak.redis "redis-authentik.service";
 in
 {
   # ============================================================================
@@ -218,7 +251,7 @@ in
   # ============================================================================
 
   services.redis.servers."authentik" = {
-    enable = true;
+    enable = ak.redis;
     port = 6379;
     bind = "127.0.0.1";
     settings = {
@@ -275,14 +308,6 @@ AUTHENTIK_SECRET_KEY=$SECRET_KEY
 AUTHENTIK_BOOTSTRAP_TOKEN=$BOOTSTRAP_TOKEN
 AUTHENTIK_BOOTSTRAP_PASSWORD=$BOOTSTRAP_PASSWORD
 AUTHENTIK_BOOTSTRAP_EMAIL=admin@localhost
-AUTHENTIK_POSTGRESQL__HOST=localhost
-AUTHENTIK_POSTGRESQL__PORT=5432
-AUTHENTIK_POSTGRESQL__USER=authentik
-AUTHENTIK_POSTGRESQL__NAME=authentik
-AUTHENTIK_REDIS__HOST=localhost
-AUTHENTIK_REDIS__PORT=6379
-AUTHENTIK_LOG_LEVEL=info
-AUTHENTIK_DISABLE_STARTUP_ANALYTICS=true
 EOF
         chmod 600 /etc/secrets/authentik.env
 
@@ -299,15 +324,11 @@ EOF
 
   environment.etc."secrets/authentik-template.env" = {
     text = ''
+      # Secrets only: the settings are declared in identity.nix (akEnv).
       AUTHENTIK_SECRET_KEY=your_secret_key_here
-      AUTHENTIK_POSTGRESQL__HOST=localhost
-      AUTHENTIK_POSTGRESQL__PORT=5432
-      AUTHENTIK_POSTGRESQL__USER=authentik
-      AUTHENTIK_POSTGRESQL__NAME=authentik
-      AUTHENTIK_REDIS__HOST=localhost
-      AUTHENTIK_REDIS__PORT=6379
-      AUTHENTIK_LOG_LEVEL=info
-      AUTHENTIK_DISABLE_STARTUP_ANALYTICS=true
+      AUTHENTIK_BOOTSTRAP_TOKEN=your_api_token_here
+      AUTHENTIK_BOOTSTRAP_PASSWORD=your_akadmin_password_here
+      AUTHENTIK_BOOTSTRAP_EMAIL=admin@localhost
       # Optional SMTP configuration:
       # AUTHENTIK_EMAIL__HOST=smtp.example.com
       # AUTHENTIK_EMAIL__PORT=587
@@ -325,11 +346,12 @@ EOF
   # ============================================================================
 
   virtualisation.oci-containers.containers.authentik-server = {
-    image = "ghcr.io/goauthentik/server:${versions.authentik}";
+    image = "ghcr.io/goauthentik/server:${ak.version}";
     volumes = [
-      "/var/lib/authentik/media:/media"
+      akMedia
       "/var/lib/authentik/templates:/templates"
     ];
+    environment = akEnv;
     environmentFiles = [ "/etc/secrets/authentik.env" ];
     extraOptions = [
       "--network=host"
@@ -339,8 +361,8 @@ EOF
   };
 
   systemd.services.podman-authentik-server = {
-    after = [ "postgresql.service" "redis-authentik.service" "generate-authentik-secrets.service" ];
-    requires = [ "postgresql.service" "redis-authentik.service" ];
+    after = akAfter;
+    requires = akRequires;
   };
 
   # ============================================================================
@@ -348,12 +370,13 @@ EOF
   # ============================================================================
 
   virtualisation.oci-containers.containers.authentik-worker = {
-    image = "ghcr.io/goauthentik/server:${versions.authentik}";
+    image = "ghcr.io/goauthentik/server:${ak.version}";
     volumes = [
-      "/var/lib/authentik/media:/media"
+      akMedia
       "/var/lib/authentik/templates:/templates"
       "/var/lib/authentik/certs:/certs"
     ];
+    environment = akEnv;
     environmentFiles = [ "/etc/secrets/authentik.env" ];
     extraOptions = [
       "--network=host"
@@ -363,13 +386,86 @@ EOF
   };
 
   systemd.services.podman-authentik-worker = {
-    after = [ "postgresql.service" "redis-authentik.service" "generate-authentik-secrets.service" ];
-    requires = [ "postgresql.service" "redis-authentik.service" ];
+    after = akAfter;
+    requires = akRequires;
   };
 
   # ============================================================================
   # BACKUP STRATEGY
   # ============================================================================
+
+  # ── The upgrade walk (#748) ───────────────────────────────────────────────
+  # The env file holds secrets only. A guest installed before this change has
+  # its settings in it too — Redis among them, which would outlive 2025.10 —
+  # so they are stripped before the containers start. Idempotent, every boot.
+  systemd.services.authentik-env-secrets-only = {
+    description = "Keep only secrets in /etc/secrets/authentik.env";
+    wantedBy = [ "multi-user.target" ];
+    after = [ "generate-authentik-secrets.service" ];
+    before = [ "podman-authentik-server.service" "podman-authentik-worker.service" ];
+    unitConfig.ConditionPathExists = "/etc/secrets/authentik.env";
+    serviceConfig = { Type = "oneshot"; RemainAfterExit = true; };
+    script = ''
+      f=/etc/secrets/authentik.env
+      t="$(mktemp /etc/secrets/.authentik.env.XXXXXX)"
+      ${pkgs.gnugrep}/bin/grep -E '^AUTHENTIK_(SECRET_KEY|BOOTSTRAP_(TOKEN|PASSWORD|EMAIL))=' "$f" > "$t" || true
+      if ${pkgs.gnugrep}/bin/grep -q '^AUTHENTIK_SECRET_KEY=' "$t" && ! cmp -s "$f" "$t"; then
+        chmod 600 "$t"; mv -f "$t" "$f"; echo "authentik.env: settings removed, secrets kept"
+      else
+        rm -f "$t"
+      fi
+    '';
+  };
+
+  # What this guest runs, written only once the new version is up — the server
+  # running THIS build's image and answering ready, its migrations done. The
+  # next build reads it (ak-step.nix) to take the next step; a hop that never
+  # comes up leaves the old version recorded, so the next update retries it.
+  systemd.services.authentik-version-record = {
+    description = "Record the Authentik version this guest runs (${ak.version})";
+    wantedBy = [ "multi-user.target" ];
+    after = [ "podman-authentik-server.service" "podman-authentik-worker.service" ];
+    serviceConfig = { Type = "oneshot"; RemainAfterExit = true; TimeoutStartSec = "45min"; };
+    path = [ pkgs.podman pkgs.curl pkgs.coreutils ];
+    script = ''
+      want="ghcr.io/goauthentik/server:${ak.version}"
+      for _ in $(seq 1 520); do
+        img="$(podman inspect authentik-server --format '{{.ImageName}}' 2>/dev/null || true)"
+        if [ "$img" = "$want" ] && [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:9000/-/health/ready/)" = 200 ]; then
+          printf '%s\n' "${ak.version}" > /var/lib/authentik/tappaas-version
+          echo "authentik ${ak.version} is up — recorded"
+          exit 0
+        fi
+        sleep 5
+      done
+      echo "authentik ${ak.version} did not come up — the version stays as it was" >&2
+      exit 1
+    '';
+  };
+
+  # A step into 2025.12 fails its migration when two groups share a name; this
+  # finds that first and writes it where the next build reads it (ak-step.nix),
+  # so the step is refused before anything changes. Hourly, and at boot.
+  systemd.services.authentik-step-precheck = {
+    description = "Find what would fail the next Authentik migration";
+    after = [ "postgresql.service" ];
+    requires = [ "postgresql.service" ];
+    serviceConfig = { Type = "oneshot"; User = "postgres"; };
+    path = [ versions.postgresPkg pkgs.coreutils ];
+    script = ''
+      dup="$(psql -d authentik -tAc "select string_agg(name, ', ') from (select name from authentik_core_group group by name having count(*) > 1) d" 2>/dev/null || true)"
+      f=/var/lib/authentik/tappaas-step-blocked
+      if [ -n "$dup" ]; then
+        printf 'duplicate group names (%s) — rename them; Authentik 2025.12 makes group names unique\n' "$dup" > "$f"
+      else
+        : > "$f"   # empty = nothing blocks (postgres owns the file, not the directory)
+      fi
+    '';
+  };
+  systemd.timers.authentik-step-precheck = {
+    wantedBy = [ "timers.target" ];
+    timerConfig = { OnBootSec = "5min"; OnUnitActiveSec = "1h"; };
+  };
 
   # Layer 1: PostgreSQL dumps (daily 02:00)
   services.postgresqlBackup = {
@@ -380,8 +476,8 @@ EOF
     compression = "gzip";
   };
 
-  # Layer 2: Redis RDB snapshots (daily 02:30)
-  systemd.services.redis-backup = {
+  # Layer 2: Redis RDB snapshots (daily 02:30) — while Redis is used (< 2025.10)
+  systemd.services.redis-backup = lib.mkIf ak.redis {
     description = "Redis backup service";
     serviceConfig = {
       Type = "oneshot";
@@ -395,7 +491,7 @@ EOF
     };
   };
 
-  systemd.timers.redis-backup = {
+  systemd.timers.redis-backup = lib.mkIf ak.redis {
     description = "Daily Redis backup timer";
     wantedBy = [ "timers.target" ];
     timerConfig = {
@@ -458,6 +554,8 @@ EOF
     "d /var/backup/redis 0700 redis-authentik redis-authentik -"
     "d /var/backup/authentik-env 0700 root root -"
     "d /var/lib/authentik 0755 root root -"
+    # the precheck (User = postgres) writes its finding here
+    "f /var/lib/authentik/tappaas-step-blocked 0644 postgres postgres -"
     "d /var/lib/authentik/media 0755 1000 1000 -"
     "d /var/lib/authentik/templates 0755 1000 1000 -"
     "d /var/lib/authentik/certs 0755 1000 1000 -"

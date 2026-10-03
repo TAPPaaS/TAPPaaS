@@ -169,6 +169,19 @@ else
     fail "install-service.sh not found at ${SVC}"
 fi
 
+# ── 3b. The Authentik upgrade walk (#748, offline) ────────────────────────────
+# One step per build along the release lines; refuses to skip, go back, or step
+# into a migration the precheck found would fail.
+section "3b: Authentik moves one release line per build"
+STEP_TEST="$(cd "$(dirname "$0")" && pwd)/test-authentik-step.sh"
+if st_out="$(bash "${STEP_TEST}" 2>&1)"; then
+    pass "$(tail -1 <<<"${st_out}")"
+elif [[ $? -eq 77 ]]; then
+    info "  (nix-instantiate not available — step test skipped)"
+else
+    fail "test-authentik-step.sh failed"; printf '%s\n' "${st_out}" | grep FAIL | sed 's/^/    /'
+fi
+
 # ── 4+5. (retired) ───────────────────────────────────────────────────────────
 # The legacy roles-ensure.sh variant-scope and user.sh lifecycle tiers were
 # removed: identity-manager now owns roles/users (see manager/identity-manager).
