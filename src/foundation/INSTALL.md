@@ -127,8 +127,11 @@ over PXE is fiddly):
 
 ```bash
 ./make-install-media.sh --iso proxmox-ve_9.2-1.iso \
-    --fqdn tappaas1.mgmt.internal --disk /dev/nvme0n1
+    --fqdn tappaas1.mgmt.internal --disk 25414A800205
 # → proxmox-ve_9.2-1-tappaas-auto.iso  (answer + boot disk embedded)
+# --disk takes the disk's SERIAL (lsblk -o NAME,SERIAL, from any Linux live
+# system on the target): a kernel name like nvme0n1 can name another disk when
+# the installer boots — NVMe names are not stable across boots.
 ```
 
 **2. Stage the netboot assets** — extract the installer kernel + initrd and append

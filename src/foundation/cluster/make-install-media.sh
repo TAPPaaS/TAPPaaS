@@ -21,14 +21,16 @@
 # Usage:
 #   make-install-media.sh --iso proxmox-ve_9.x.iso \
 #       [--email <e>] [--country <cc>] [--keyboard <kb>] [--timezone <tz>] \
-#       [--password-file <f>] [--disk <dev>] [--fqdn <host.domain>] \
+#       [--password-file <f>] [--disk <serial|dev>] [--fqdn <host.domain>] \
 #       [--filesystem ext4|zfs] [--ssh-key <pubkey-file>] [--out <out.iso>]
 #
 # Anything not given is prompted for — EXCEPT the boot disk: like the PXE
 # flow, network comes from DHCP and the disk is asked ON THE TARGET'S
 # CONSOLE at install time (it lists the machine's real disks; the answer's
 # placeholder is rewritten by a prompt injected into the installer initrd).
-# Pass --disk <dev> to bake it in and keep the install fully unattended.
+# Pass --disk <serial> to bake it in and keep the install fully unattended —
+# by SERIAL (lsblk -o NAME,SERIAL): a kernel name (/dev/nvme0n1) also works but
+# is only as good as the installer's enumeration order.
 # The answer file is validated by the assistant before the ISO is built, so
 # schema drift across PVE versions fails loudly at BUILD time.
 #
@@ -190,7 +192,14 @@ ANSWER="${WORK}/answer.toml"
   if [[ "$FILESYSTEM" == "zfs" ]]; then
     echo 'zfs.raid = "raid0"'
   fi
-  echo "disk-list = [\"${DISK}\"]"
+  # A serial selects the disk whatever the installer calls it (#729 §3: NVMe
+  # names swap between boots — the name read elsewhere can be another disk).
+  # A kernel name or /dev path, and the ASKDISK placeholder, stay a disk-list.
+  if [[ "$DISK" == /* || "$DISK" == ASKDISK || "$DISK" =~ ^(sd[a-z]+|vd[a-z]+|hd[a-z]+|nvme[0-9]+n[0-9]+|mmcblk[0-9]+)$ ]]; then
+    echo "disk-list = [\"${DISK}\"]"
+  else
+    echo "filter.ID_SERIAL = \"*${DISK}*\""
+  fi
 } > "$ANSWER"
 
 info "Validating the answer file (assistant catches schema drift here)..."

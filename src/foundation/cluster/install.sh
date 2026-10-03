@@ -308,7 +308,10 @@ component_exists_in_sources() {
 
 
 
-if ! pveversion | grep -Eq "pve-manager/9\.[0-4](\.[0-9]+)*"; then
+# Any 9.x (#314): a gate on 9.0–9.4 would refuse the node installed from the
+# next point release's ISO, and the netboot picks the newest ISO of the
+# cluster's own minor — the gate is the major, which is what the code needs.
+if ! pveversion | grep -Eq "pve-manager/9\.[0-9]+(\.[0-9]+)*"; then
   msg_error "This version of Proxmox Virtual Environment is not supported"
   echo -e "Requires Proxmox Virtual Environment Version 9"
   echo -e "Exiting..."
