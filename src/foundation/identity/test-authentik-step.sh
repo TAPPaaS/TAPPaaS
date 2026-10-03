@@ -16,7 +16,7 @@ ckin() { if [[ "$3" == *"$2"* ]]; then echo "  ok: $1"; PASS=$((PASS+1)); else e
 command -v nix-instantiate >/dev/null 2>&1 || { echo "nix-instantiate not available — skipped."; exit 77; }
 T="$(mktemp -d "${TMPDIR:-/tmp}/ak-step.XXXXXX")"; trap 'rm -rf "${T}"' EXIT
 
-LINES='[ "2025.2.4" "2025.4.4" "2025.6.4" "2025.8.6" "2025.10.4" "2025.12.6" "2026.2.7" "2026.5.7" "2026.8.3" ]'
+LINES='[ "2025.2.3" "2025.4.4" "2025.6.4" "2025.8.6" "2025.10.4" "2025.12.6" "2026.2.7" "2026.5.7" "2026.8.3" ]'
 ev() {  # $1 = attribute; files in ${T}: version, env, blocked
     nix-instantiate --eval --strict 2>&1 -E "(import ${STEP} {
         lines = ${LINES};
@@ -31,12 +31,14 @@ ck "…which needs no Redis"                               "false"    "$(ev redi
 ck "…and mounts /data"                                   "true"     "$(ev dataMount)"
 
 reset; echo "AUTHENTIK_SECRET_KEY=x" > "${T}/env"
-ck "an install from before the version file runs 2025.2.1 → that line's latest patch first" "2025.2.4" "$(ev step)"
+ck "an install from before the version file runs 2025.2.1 → that line's last usable patch first" "2025.2.3" "$(ev step)"
 ck "…still with Redis"   "true"  "$(ev redis)"
 ck "…still on /media"    "false" "$(ev dataMount)"
 
-reset; printf '2025.2.4\n' > "${T}/version"
-ck "a line's latest patch → the next line" "2025.4.4" "$(ev step)"
+reset; printf '2025.2.3\n' > "${T}/version"
+ck "a line's step patch → the next line" "2025.4.4" "$(ev step)"
+printf '2025.2.4\n' > "${T}/version"
+ck "a newer patch than the line's step (2025.2.4 recorded) → the next line, not back" "2025.4.4" "$(ev step)"
 printf '2025.8.6' > "${T}/version"
 ck "2025.8 → 2025.10" "2025.10.4" "$(ev step)"
 ck "2025.10 drops Redis" "false" "$(ev redis)"

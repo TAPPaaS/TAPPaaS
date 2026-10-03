@@ -46,8 +46,11 @@ let
   # refuses to skip a line and cannot go back. Each line's latest patch, oldest
   # first; the last is this release's target. A new release appends a line.
   # ak.version is what this build runs; ak-step.nix says why.
+  # 2025.2 stops at .3, not its latest .4: ghcr's 2025.2.4 tag is an arm64-only
+  # manifest (every other tag here is multi-arch), so an x86 guest pulled an
+  # image it cannot execute (#748, 2026-10-03). Each tag below was checked.
   ak = import ./ak-step.nix {
-    lines = [ "2025.2.4" "2025.4.4" "2025.6.4" "2025.8.6" "2025.10.4"
+    lines = [ "2025.2.3" "2025.4.4" "2025.6.4" "2025.8.6" "2025.10.4"
               "2025.12.6" "2026.2.7" "2026.5.7" "2026.8.3" ];
   };
 
@@ -430,6 +433,12 @@ EOF
     script = ''
       want="ghcr.io/goauthentik/server:${ak.version}"
       for _ in $(seq 1 520); do
+        # A server that cannot start will not start by waiting: say so now, not
+        # after 45 minutes of a switch that looks hung (#748: an arm64 image).
+        if systemctl is-failed --quiet podman-authentik-server.service; then
+          echo "authentik ${ak.version}: the server failed to start — see journalctl -u podman-authentik-server" >&2
+          exit 1
+        fi
         img="$(podman inspect authentik-server --format '{{.ImageName}}' 2>/dev/null || true)"
         if [ "$img" = "$want" ] && [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:9000/-/health/ready/)" = 200 ]; then
           printf '%s\n' "${ak.version}" > /var/lib/authentik/tappaas-version
