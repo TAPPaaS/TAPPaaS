@@ -262,6 +262,12 @@ def cmd_app_bind_groups(mgr: AuthentikManager, args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_oidc_email_verified_ensure(mgr: AuthentikManager, args: argparse.Namespace) -> int:
+    n = mgr.oidc_email_verified_ensure()
+    print(f"==> OIDC providers: email_verified=true mapping in place ({n} changed)")
+    return 0
+
+
 def cmd_oidc_app_ensure(mgr: AuthentikManager, args: argparse.Namespace) -> int:
     res = mgr.oidc_app_ensure(OidcApp(
         name=args.name or args.slug,
@@ -490,6 +496,10 @@ def main(argv: list[str] | None = None) -> int:
     bg.add_argument("slug")
     bg.add_argument("--group", action="append", required=True, default=[], help="group name; repeatable")
     bg.set_defaults(handler=cmd_app_bind_groups)
+
+    ev = sub.add_parser("oidc-email-verified-ensure",
+                        help="put the TAPPaaS email mapping (email_verified=true) on every OIDC provider (#748)")
+    ev.set_defaults(handler=cmd_oidc_email_verified_ensure)
 
     oe = sub.add_parser("oidc-app-ensure",
                         help="create/update an OIDC (OAuth2/OpenID) Provider + Application")

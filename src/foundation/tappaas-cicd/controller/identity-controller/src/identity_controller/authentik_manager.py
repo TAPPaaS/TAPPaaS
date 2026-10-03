@@ -95,6 +95,15 @@ class OidcAppResult:
 
 DEFAULT_OIDC_SCOPES = ["openid", "email", "profile"]
 
+# Authentik 2025.10 changed the stock ``email`` scope's ``email_verified`` from
+# true to false (#748). TAPPaaS users' addresses are set by the operator through
+# identity-manager — nobody self-registers — so they are verified by
+# construction, and a client that matches accounts by email (openwebui's
+# OAUTH_MERGE_ACCOUNTS_BY_EMAIL) keeps working. This mapping takes the stock
+# one's place on every OIDC provider.
+EMAIL_VERIFIED_MAPPING = "tappaas: OpenID 'email' (verified)"
+EMAIL_VERIFIED_EXPRESSION = 'return {"email": request.user.email, "email_verified": True}'
+
 
 @dataclass
 class ProxyAppResult:
@@ -837,6 +846,39 @@ class AuthentikManager:
             return self._patch_json(f"/propertymappings/provider/scope/{existing['pk']}/", body)
         return self._post_json("/propertymappings/provider/scope/", body)
 
+    def email_mapping_ensure(self) -> str:
+        """The TAPPaaS ``email`` scope mapping (verified); returns its pk, "" if
+        Authentik did not return one."""
+        m = self.scope_mapping_ensure(
+            EMAIL_VERIFIED_MAPPING, "email", EMAIL_VERIFIED_EXPRESSION,
+            "TAPPaaS: operator-set addresses are verified (#748, Authentik 2025.10)")
+        return str(m.get("pk") or "")
+
+    def _email_scope_pks(self) -> set[str]:
+        """Every scope mapping that answers the ``email`` scope."""
+        rows = self._get_json("/propertymappings/provider/scope/", page_size=1000).get("results", [])
+        return {r["pk"] for r in rows if r.get("scope_name") == "email"}
+
+    def oidc_email_verified_ensure(self) -> int:
+        """Put the TAPPaaS ``email`` mapping on every OAuth2 provider in place of
+        any other ``email`` mapping. Idempotent; returns how many changed."""
+        ours = self.email_mapping_ensure()
+        if not ours:
+            raise RuntimeError(f"could not create the {EMAIL_VERIFIED_MAPPING!r} scope mapping")
+        others = self._email_scope_pks() - {ours}
+        changed = 0
+        for p in self._get_json("/providers/oauth2/", page_size=1000).get("results", []):
+            have = list(p.get("property_mappings") or [])
+            if not any(pk in others or pk == ours for pk in have):
+                continue          # a provider with no email scope gets none
+            want = [pk for pk in have if pk not in others]
+            if ours not in want:
+                want.append(ours)
+            if want != have:
+                self._patch_json(f"/providers/oauth2/{p['pk']}/", {"property_mappings": want})
+                changed += 1
+        return changed
+
     def _default_signing_key_pk(self) -> str:
         """A certificate-key pair to sign ID tokens (Nextcloud validates via JWKS)."""
         rows = self._get_json("/crypto/certificatekeypairs/", has_key=True, page_size=100).get("results", [])
@@ -854,7 +896,12 @@ class AuthentikManager:
         """
         auth_flow_pk = self._flow_pk(DEFAULT_AUTHORIZATION_FLOW_SLUG)
         invalidation_flow_pk = self._flow_pk(DEFAULT_INVALIDATION_FLOW_SLUG)
-        scope_pks = self._scope_mapping_pks(app.scopes or DEFAULT_OIDC_SCOPES)
+        scopes = list(app.scopes or DEFAULT_OIDC_SCOPES)
+        # The TAPPaaS email mapping in place of the stock one — or, if it cannot
+        # be made, the stock one: an app without an email claim is worse.
+        if "email" in scopes and self.email_mapping_ensure():
+            scopes = [EMAIL_VERIFIED_MAPPING if s == "email" else s for s in scopes]
+        scope_pks = self._scope_mapping_pks(scopes)
         signing_key = self._default_signing_key_pk()
         redirect_uris = [{"matching_mode": "strict", "url": u} for u in app.redirect_uris]
 

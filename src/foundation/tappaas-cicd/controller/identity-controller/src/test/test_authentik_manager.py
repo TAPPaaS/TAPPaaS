@@ -350,6 +350,53 @@ class TestGroupEnsure(unittest.TestCase):
         self.assertEqual(patch["json"]["attributes"], {"keep": "x", "new": "y"})
 
 
+class TestEmailVerified(unittest.TestCase):
+    """#748: Authentik 2025.10 defaults email_verified to false; TAPPaaS keeps it true."""
+    SCOPES = {"results": [
+        {"pk": "STOCK", "name": "authentik default OAuth Mapping: OpenID 'email'", "scope_name": "email"},
+        {"pk": "PROF", "name": "authentik default OAuth Mapping: OpenID 'profile'", "scope_name": "profile"},
+        {"pk": "OURS", "name": "tappaas: OpenID 'email' (verified)", "scope_name": "email"},
+    ]}
+
+    def test_swaps_the_stock_email_mapping_on_every_provider(self):
+        mgr, calls = _make_manager({
+            ("GET", "/propertymappings/provider/scope/"): self.SCOPES,
+            ("PATCH", "/propertymappings/provider/scope/OURS/"): {"pk": "OURS"},
+            ("GET", "/providers/oauth2/"): {"results": [
+                {"pk": 1, "property_mappings": ["OPENID", "STOCK", "PROF"]},   # swapped
+                {"pk": 2, "property_mappings": ["OPENID", "OURS", "PROF"]},    # already right
+                {"pk": 3, "property_mappings": ["OPENID"]},                    # no email scope: left alone
+            ]},
+        })
+        self.assertEqual(mgr.oidc_email_verified_ensure(), 1)
+        patches = [c for c in calls if c["method"] == "PATCH" and c["path"].startswith("/providers/oauth2/")]
+        self.assertEqual([c["path"] for c in patches], ["/providers/oauth2/1/"])
+        self.assertEqual(patches[0]["json"]["property_mappings"], ["OPENID", "PROF", "OURS"])
+        mapping = next(c for c in calls if c["path"] == "/propertymappings/provider/scope/OURS/")
+        self.assertIn('"email_verified": True', mapping["json"]["expression"])
+
+    def test_a_new_oidc_app_gets_the_verified_mapping(self):
+        mgr, calls = _make_manager({
+            ("GET", "/propertymappings/provider/scope/"): self.SCOPES,
+            ("PATCH", "/propertymappings/provider/scope/OURS/"): {"pk": "OURS"},
+            ("GET", "/flows/instances/"): {"results": [
+                {"pk": "F1", "slug": "default-provider-authorization-implicit-consent"},
+                {"pk": "F2", "slug": "default-provider-invalidation-flow"}]},
+            ("GET", "/crypto/certificatekeypairs/"): {"results": [{"pk": "K", "name": "authentik Self-signed Certificate"}]},
+            ("GET", "/providers/oauth2/"): {"results": []},
+            ("POST", "/providers/oauth2/"): {"pk": 9, "client_id": "c", "client_secret": "s"},
+            ("GET", "/core/applications/"): {"results": []},
+            ("POST", "/core/applications/"): {"pk": "A"},
+        })
+        try:
+            mgr.oidc_app_ensure(OidcApp(name="x", slug="x", redirect_uris=["https://x/cb"]))
+        except Exception:
+            pass   # the read-back of the client secret is not routed here; the POST is what matters
+        post = next(c for c in calls if c["method"] == "POST" and c["path"] == "/providers/oauth2/")
+        self.assertIn("OURS", post["json"]["property_mappings"])
+        self.assertNotIn("STOCK", post["json"]["property_mappings"])
+
+
 class TestUserEnsure(unittest.TestCase):
     def test_create_resolves_groups(self):
         mgr, calls = _make_manager({

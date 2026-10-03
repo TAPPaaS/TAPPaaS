@@ -200,6 +200,18 @@ else
     warn "  recovery-flow-ensure failed — password resets fall back to 'authentik-manager user-set-password <user>'"
 fi
 
+# ── OIDC: email_verified stays true (#748) ─────────────────────────────────────
+# Authentik 2025.10 made the stock email scope say email_verified=false. TAPPaaS
+# addresses are set by the operator, so they are verified; a client that matches
+# accounts by email (openwebui) depends on it. Every OIDC provider gets the
+# TAPPaaS mapping in place of the stock one — on every update, so a site that
+# walks past 2025.10 is covered from the step it lands on.
+if authentik-manager oidc-email-verified-ensure | _tag debug; then
+    debug "  ${GN}✓${CL} OIDC providers send email_verified=true"
+else
+    warn "  oidc-email-verified-ensure failed — from Authentik 2025.10 OIDC clients see email_verified=false"
+fi
+
 # ── ADR-007: role groups are owned by identity-manager ────────────────────────
 # The role groups (user/admin/root) and the team group `users` are reconciled
 # into Authentik by `identity-manager sync` (run at foundation install and on
