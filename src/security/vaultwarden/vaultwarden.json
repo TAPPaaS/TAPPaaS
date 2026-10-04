@@ -19,6 +19,17 @@
     "network:proxy"
   ],
   "provides": [],
+  "identity": {
+    "oidcRedirectPaths": [
+      "/identity/connect/oidc-signin"
+    ],
+    "scopes": [
+      "openid",
+      "email",
+      "profile"
+    ],
+    "configureService": "vaultwarden-configure-oidc.service"
+  },
   "config": {
     "cluster:vm": {
       "cores": 1,
