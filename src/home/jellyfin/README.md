@@ -33,6 +33,12 @@ for the supported paths — declared via `mediaStorage` in `jellyfin.json`
 (`allocate`, `attached`, or `share`) — and for post-install changes
 (grow/move/replace).
 
+Jellyfin is deliberately **not** HA (no `cluster:ha`): media can be re-ripped or
+re-downloaded, so it is not worth replicating. The target layout is the OS disk
+on `tanka1` and `/media` on an NFS share from a `tankb` pool (`pvehost:nfs`),
+backed up rarely and kept briefly. Until that lands, the default is `allocate`:
+a local 500G disk on `tankb1`.
+
 ## Media Folders
 
 ```

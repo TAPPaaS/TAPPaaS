@@ -5,7 +5,8 @@
 - TAPPaaS foundation installed (cluster, network, templates, tappaas-cicd,
   backup, identity)
 - NixOS template `8080` available for cloning
-- Free VMID `361` and capacity for the photo disk (default 500G on `tankb1`)
+- Free VMID `361` and capacity for the photo disk (default 500G on `tanka1`)
+  on **both** the primary node and the HA node: it is replicated (`cluster:ha`)
 - Run everything from the `tappaas-cicd` mothership as the `tappaas` user
 
 ## Configure
@@ -17,7 +18,8 @@ Edit `immich.json` before installing if the defaults don't fit:
 | `cores` / `memory` | 4 / 8192 | With `machineLearning: false`, 4096 MB is enough |
 | `diskSize` | 32G | OS disk (Postgres, ML model cache live here) |
 | `mediaStorage` | `allocate` | `allocate` \| `attached` \| `share` — see Photo Storage |
-| `mediaDiskStorage` / `mediaDiskSize` | `tankb1` / `500G` | Used in `allocate` mode |
+| `mediaDiskStorage` / `mediaDiskSize` | `tanka1` / `500G` | Used in `allocate` mode. Keep it on `tanka`: only that tier is replicated for HA |
+| `HANode` / `replicationSchedule` | next node / `*/15` | `cluster:ha` — failover node, and how much can be lost (minutes) |
 | `machineLearning` | `true` | Smart search + face recognition (`immich-machine-learning`) |
 | `proxyAllowedZones` | `home, netbird, internet` | Drop `internet` for a private-only deployment (mobile then needs Netbird) |
 

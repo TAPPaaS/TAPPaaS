@@ -18,7 +18,8 @@ ML-powered smart search and face recognition, all on your own hardware.
 | Cache | Redis (named instance `immich`), unix socket |
 | ML | `immich-machine-learning` on `localhost:3003` — smart search + face recognition; toggle via `machineLearning` in `immich.json` |
 | TLS | Terminated by Caddy on the OPNsense firewall (`network:proxy`); the VM serves plain HTTP |
-| Photos | Dedicated data disk mounted at `/var/lib/immich` (Immich's `mediaLocation`) |
+| Photos | Dedicated data disk on `tanka1`, mounted at `/var/lib/immich` (Immich's `mediaLocation`) |
+| HA | `cluster:ha` — both disks replicated to the HA node every 15 min; Proxmox HA restarts the VM there if its node fails |
 
 ## Storage Architecture
 
@@ -26,12 +27,17 @@ Same three-layer model as the jellyfin module, selected by `mediaStorage` in
 `immich.json` (see INSTALL.md → Photo Storage):
 
 - **Layer 1 — block device**: Proxmox virtual disk at slot `scsi2`
-  (`allocate`, default 500G on `tankb1`), an operator-attached USB/iSCSI disk
+  (`allocate`, default 500G on `tanka1`), an operator-attached USB/iSCSI disk
   (`attached`), or a NAS share mounted directly (`share`).
 - **Layer 2 — filesystem**: ext4, label `immich-data`, mounted by label at
   `/var/lib/immich` (`nofail` + systemd automount).
 - **Layer 3 — Immich layout**: Immich manages its own folders there —
   `upload/`, `library/`, `thumbs/`, `encoded-video/`, `profile/`, `backups/`.
+
+Photos are the one thing here that cannot be re-created, so the default puts
+them on `tanka`, next to the OS disk, where `cluster:ha` replicates both disks
+to the HA node. `attached` gives that up: a USB/iSCSI disk does not follow the VM
+to another node, so failover cannot happen.
 
 `immich-server` has `RequiresMountsFor=/var/lib/immich`: if the data disk is
 missing the service fails fast (restart loop) instead of silently writing

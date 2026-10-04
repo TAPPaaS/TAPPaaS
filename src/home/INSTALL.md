@@ -12,7 +12,7 @@ Install order: a module is listed after every module of this stack it needs or i
 |---|---|---|---|---|
 | 1 | [deconz](deconz/INSTALL.md) | — | — | `backup:vm` (foundation), `cluster:vm` (foundation), `network:proxy` (foundation), `network:rules` (foundation), `templates:nixos` (foundation) |
 | 2 | [hass](hass/INSTALL.md) | — | — | `alfen:discovery` (?), `alfen:modbus` (?), `alfen:ui` (?), `backup:vm` (foundation), `cluster:vm` (foundation), `network:proxy` (foundation), `network:rules` (foundation), `reolink:rtsp` (?), `sonos:airplay` (?), `sonos:audio` (?) |
-| 3 | [immich](immich/INSTALL.md) | — | — | `backup:vm` (foundation), `cluster:vm` (foundation), `identity:identity` (foundation), `network:proxy` (foundation), `network:rules` (foundation), `templates:nixos` (foundation) |
+| 3 | [immich](immich/INSTALL.md) | — | — | `backup:vm` (foundation), `cluster:ha` (foundation), `cluster:vm` (foundation), `identity:identity` (foundation), `network:proxy` (foundation), `network:rules` (foundation), `templates:nixos` (foundation) |
 | 4 | [jellyfin](jellyfin/INSTALL.md) | — | — | `backup:vm` (foundation), `cluster:vm` (foundation), `network:proxy` (foundation), `network:rules` (foundation), `templates:nixos` (foundation) |
 
 <!-- END GENERATED MODULES -->

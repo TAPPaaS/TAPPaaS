@@ -13,6 +13,7 @@
   "zone0": "srvHome",
   "dependsOn": [
     "cluster:vm",
+    "cluster:ha",
     "templates:nixos",
     "backup:vm",
     "network:proxy",
@@ -37,7 +38,7 @@
       "image": "8080",
       "bridge0": "lan",
       "mediaStorage": "allocate",
-      "mediaDiskStorage": "tankb1",
+      "mediaDiskStorage": "tanka1",
       "mediaDiskSize": "500G",
       "machineLearning": true
     },
