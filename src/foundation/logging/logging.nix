@@ -660,6 +660,13 @@ in
       enable = true;
       datasources.settings = {
         apiVersion = 1;
+        # Grafana finds a provisioned data source by its uid. The one every
+        # site already has was created without a fixed uid, so giving it one
+        # made Grafana refuse to start ("data source not found", hrossen
+        # 2026-10-04). Deleting it by name first — Grafana processes deletes
+        # before creates — recreates it with the uid on every start; nothing
+        # refers to it by its numeric id.
+        deleteDatasources = [{ name = "Loki"; orgId = 1; }];
         datasources = [{
           name = "Loki";
           # A fixed uid: the alert rules below name their data source by it.

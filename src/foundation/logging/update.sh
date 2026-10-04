@@ -165,8 +165,10 @@ if [[ ! -r "${_ALERT_TOKEN}" ]]; then
     warn "  ${_ALERT_TOKEN} not readable here — alerts are evaluated but cannot be delivered until the mothership's rebuild creates it"
 else
     _want="$(sha256sum < "${_ALERT_TOKEN}" | cut -d' ' -f1)"
+    # sudo reads the file itself: a `< file` redirect would be opened by the
+    # unprivileged login, fail, and make every update restart Grafana.
     # shellcheck disable=SC2029  # the path is expanded here on purpose
-    _have="$(ssh -o BatchMode=yes -o ConnectTimeout=10 "${_VM}" "sudo sha256sum < ${_VM_TOKEN} 2>/dev/null | cut -d' ' -f1" 2>/dev/null || true)"
+    _have="$(ssh -o BatchMode=yes -o ConnectTimeout=10 "${_VM}" "sudo sha256sum ${_VM_TOKEN} 2>/dev/null | cut -d' ' -f1" 2>/dev/null || true)"
     if [[ "${_have}" == "${_want}" ]]; then
         debug "  token already in place"
     # shellcheck disable=SC2029
