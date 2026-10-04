@@ -1003,6 +1003,24 @@ if [ "$IMAGETYPE" == "clone" ]; then
   fi
 fi
 
+# Thin provisioning (cluster:vm thinDisk, #773). The pools are not sparse, so a
+# zvol reserves its full size; thinDisk=true drops that reservation on every ZFS
+# disk of the guest, after the last create/resize above. The HA replica follows
+# through replication (zfs send -p). Same volume loop as lib/zfs-thin.sh — this
+# script runs on the node and carries its own copy; keep the two in step.
+if [[ "$(get_config_value 'thinDisk' 'false')" == "true" ]]; then
+  while IFS= read -r vol; do
+    case "$vol" in *cloudinit*) continue ;; esac
+    zpath="$(pvesm path "$vol" 2>/dev/null)" || continue
+    [[ "$zpath" == /dev/zvol/* ]] || continue
+    if zfs set refreservation=none "${zpath#/dev/zvol/}"; then
+      info "Thin-provisioned ${zpath#/dev/zvol/}"
+    else
+      warn "Could not thin-provision ${zpath#/dev/zvol/} — it stays thick"
+    fi
+  done < <(qm config "$VMID" | sed -n -E 's/^(scsi|virtio|sata|ide|efidisk|tpmstate)[0-9]+: ([^,]+).*/\2/p')
+fi
+
 # Windows clone VMs: OOBE setup is handled via QEMU guest agent in
 # cluster/services/vm/install-service.sh after this script returns.
 # Windows post-sysprep ignores CDROMs for answer files (only reads

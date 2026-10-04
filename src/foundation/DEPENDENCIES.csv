@@ -403,6 +403,7 @@ reboot-node-lib.sh,cluster/lib/,cloudinit-orphans.sh; ha-vm-lib.sh
 test-vm-net.sh,cluster/lib/,vm-net.sh; zones.json
 vm-net.sh,cluster/lib/,zones.json
 report-lib.sh,cluster/lib/,common-install-routines.sh; <module>.json
+zfs-thin.sh,cluster/lib/,
 #
 # === cluster/services/ha ===
 install-service.sh,cluster/services/ha/,update-service.sh
@@ -421,9 +422,10 @@ test-service.sh,cluster/services/lxc/,common-install-routines.sh; zones.json
 # === cluster/services/vm ===
 install-service.sh,cluster/services/vm/,common-install-routines.sh; Create-TAPPaaS-VM.sh; install-module.sh; dns-manager
 update-service.sh,cluster/services/vm/,common-install-routines.sh; vm-net.sh; converge-lib.sh; module-manager; dns-manager; zones.json; <module>.json
-report-service.sh,cluster/services/vm/,common-install-routines.sh; vm-net.sh; report-lib.sh; <module>.json
+report-service.sh,cluster/services/vm/,common-install-routines.sh; vm-net.sh; report-lib.sh; zfs-thin.sh; <module>.json
 update-net.sh,cluster/services/vm/,common-install-routines.sh; vm-net.sh
 update-disk.sh,cluster/services/vm/,common-install-routines.sh; resize-disk.sh
+update-thin.sh,cluster/services/vm/,common-install-routines.sh; zfs-thin.sh; report-service.sh
 update-node.sh,cluster/services/vm/,common-install-routines.sh
 delete-service.sh,cluster/services/vm/,common-install-routines.sh; delete-module.sh; dns-manager
 test-service.sh,cluster/services/vm/,common-install-routines.sh

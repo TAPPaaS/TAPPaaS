@@ -123,6 +123,8 @@ required=(
     lib/test-node-placeholders.sh
     lib/test-storage-resolve.sh
     lib/test-vm-net.sh
+    lib/zfs-thin.sh
+    lib/test-zfs-thin.sh
     lib/remove-node-lib.sh
     lib/test-remove-node.sh
     remove-node.sh
@@ -193,6 +195,19 @@ if [[ -x "${SCRIPT_DIR}/lib/test-vm-net.sh" ]]; then
     fi
 else
     fail "lib/test-vm-net.sh not found or not executable"
+fi
+
+# Thin provisioning (#773): which disks count, report, thin/thick.
+info "${BOLD}Test 2a0: zfs-thin node script (#773)${CL}"
+if [[ -x "${SCRIPT_DIR}/lib/test-zfs-thin.sh" ]]; then
+    if zt_out=$("${SCRIPT_DIR}/lib/test-zfs-thin.sh" 2>&1); then
+        pass "$(tail -1 <<< "${zt_out}")"
+    else
+        fail "zfs-thin unit tests failed"
+        indent <<< "${zt_out}"
+    fi
+else
+    fail "lib/test-zfs-thin.sh not found or not executable"
 fi
 
 # Removing a node (#417): what blocks it, the storage entries, the erase.

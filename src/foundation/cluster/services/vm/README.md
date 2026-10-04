@@ -28,7 +28,7 @@ entirely, which is why it normalizes as `optional`.
 
 ## Fields
 
-`cluster:vm` owns **26** declared field(s). Each table below carries the field's full definition and, where the service applies it, its ADR-020 change semantics.
+`cluster:vm` owns **27** declared field(s). Each table below carries the field's full definition and, where the service applies it, its ADR-020 change semantics.
 
 ### `vmname`
 
@@ -310,6 +310,28 @@ Disk size with unit suffix
 **About the field.** G=gigabytes, M=megabytes, K=kilobytes
 
 **Why this change class.** A grow goes through resize-disk.sh. The direction is only knowable against the live size, so a SHRINK is refused at apply time (hook exit 20), not by the static pre-gate. The schema default 8G is DESIRED state (ADR-020 D9): it is also what both create paths build with, so an undeclared guest is in sync from install. When the guest is later grown outside the config path — check-disk-threshold.sh, resize-disk.sh by hand, qm resize — config falls BEHIND actual, which reads as a shrink and would be refused on every converge forever. That case is now ADOPTED instead: the converge writes the observed size into config, touching nothing on the cluster. Excluding undeclared modules from the comparison, as v0.5 did, never helped here: a DECLARED module — which is all of them — got the permanent refusal anyway.
+
+### `thinDisk`
+
+Thin-provision the guest's ZFS disks (#773): every zvol gets refreservation=none, so a disk takes pool space as it fills instead of reserving its full size on day one — on the HA node too, since replication carries the property. Opt-in per module: a thin disk can overcommit its pool, and a full pool fails writes for every guest on it, so choose it for disks that fill slowly from empty (immich's photo library) and watch the pool. Not declared = not managed: the guest keeps what its storage creates (thick on the tank pools).
+
+| Attribute | Value |
+|---|---|
+| Type | `string` |
+| Default | *(none)* |
+| Allowed values | `true` — Thin — refreservation=none on every zvol (the cloud-init drive excepted)<br>`false` — Thick — refreservation=auto, the full size reserved; refused by ZFS when the pool cannot hold it |
+| Example | `true` |
+| Required by | *(none)* |
+| Used by | `cluster:vm` |
+| Change class | `in-place` |
+| Apply mode | `hook` |
+| Normalizer | `boolean` |
+| Reported as | `thinDisk` |
+| Hook | `update-thin.sh` |
+
+**About the field.** ZFS storage only. A guest with no zvol does not report the field, so declaring it there is a no-op, not drift.
+
+**Why this change class.** refreservation is accounting, not data: setting it is instant and the guest does not notice. Created thin by Create-TAPPaaS-VM.sh, converged by update-thin.sh on the guest's node; the HA replica follows on its next replication run. No default on purpose — the differ then skips every module that does not declare it, so a pool an operator made sparse by hand is never re-thickened.
 
 ### `node`
 

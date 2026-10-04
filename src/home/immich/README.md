@@ -37,7 +37,9 @@ setting. More room for photos:
 grows the filesystem.
 
 Photos are the one thing here that cannot be re-created, so the disk is on
-`tanka`, the replicated tier.
+`tanka`, the replicated tier. It is thin-provisioned (`thinDisk: true`, #773):
+an empty library takes almost nothing on either node and the disk grows into
+its 500G as photos arrive, instead of reserving 500G on each node from day one.
 
 ## Services
 

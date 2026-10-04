@@ -30,6 +30,7 @@
       "cores": 4,
       "memory": "8192",
       "diskSize": "500G",
+      "thinDisk": true,
       "storage": "tanka1",
       "imageType": "clone",
       "image": "8080",
