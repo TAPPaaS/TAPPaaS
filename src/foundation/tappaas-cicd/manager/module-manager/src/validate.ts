@@ -26,6 +26,7 @@ import {
   parseServiceFieldManifest,
 } from "../../../lib/ts/src/service-fields";
 import { ServiceFs, parseDependency } from "./services";
+import { checkExports, checkMounts, unusedGrants } from "./nfs";
 import { moduleSourceOf } from "../../../lib/ts/src/instance";
 import { MODULE_STATUS_VALUES, ModuleConfig, ValidateFinding, ValidateReport } from "./types";
 import { moduleScope } from "../../../lib/ts/src/scope";
@@ -122,6 +123,10 @@ export function validateModule(
 
   // ADR-020 service field manifests — see validateFieldManifests.
   if (opts.fs && opts.schema) validateFieldManifests(m, opts.fs, opts.schema, out);
+
+  // pvehost:nfs (ADR-029): a server's exports, and a consumer's mounts checked
+  // against them — the two-key check, before any install runs.
+  validateNfs(m, opts.fs, out);
 
   // #683 — a declared field whose consumer is not wired. Needs the schema's
   // `usedBy` ownership, so it is SKIPPED without it rather than guessing.
@@ -533,4 +538,17 @@ export function validateModules(
   const errors = findings.filter((f) => f.severity === "error").length;
   const warnings = findings.filter((f) => f.severity === "warning").length;
   return { findings, errors, warnings };
+}
+
+// ADR-029, #766. The export shape needs only the module itself; the mount check
+// and the unused-grant note read the other side, so they need fs.readConfig.
+export function validateNfs(m: ModuleConfig, fs: ServiceFs | undefined, out: ValidateFinding[]): void {
+  const raw = (m.raw ?? {}) as Record<string, unknown>;
+  const push = (f: { severity: "error" | "warning"; message: string }): void =>
+    void out.push({ module: m.name, severity: f.severity, message: f.message });
+  checkExports(m.name, raw).forEach(push);
+  if (!fs?.readConfig) return;
+  const read = (i: string): Record<string, unknown> | null => fs.readConfig!(i);
+  checkMounts(m.name, raw, read).forEach(push);
+  unusedGrants(raw, read).forEach(push);
 }

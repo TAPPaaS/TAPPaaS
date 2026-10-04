@@ -101,6 +101,13 @@ m jelly-rules '{"path":"/m","share":"tappaas1:media"}' >/dev/null; ck_rc "path: 
 m jelly-mgmt '{"path":"/m","share":"tappaas1:media"}' >/dev/null;  ck_rc "path: same zone needs no rule" 0 $?
 out="$(m jelly-srv '{"path":"/f","share":"files.example:/x"}')";   has "path: an unmodelled server needs network:rules too" "must depend on network:rules" "${out}"
 
+# ── the wan refusal (D2a) ─────────────────────────────────────────────
+out="$(m jellyfin '{"path":"/f","share":"8.8.8.8:/x"}')";   has "wan: a public literal IP refused" "public address" "${out}"
+m jellyfin '{"path":"/f","share":"192.168.1.20:/x"}' >/dev/null; ck_rc "wan: a private literal IP passes" 0 $?
+echo '{"zone0":"wan","management":"unmanaged","nfs":{"exports":[{"name":"x","path":"/x","grants":[{"consumer":"jellyfin"}]}]}}' > "${NFS_CONFIG_DIR}/outside.json"
+out="$(m jellyfin '{"path":"/f","share":"outside:x"}')";    has "wan: a server in the wan zone refused" "wan zone" "${out}"
+nfs_is_public_ipv4 100.64.1.1; ck_rc "wan: CGNAT (the overlay) is not public" 1 $?
+
 # ── owner allocation (D5, Q2) ─────────────────────────────────────────
 ck "owner: lowest free uid across the Site" "64001" "$(nfs_next_owner)"
 ck "grant lookup" "rw" "$(nfs_grant_for tappaas1 media jellyfin)"

@@ -68,6 +68,11 @@ export interface ServiceFs {
   // knowing that it exists is not enough. Injectable for the same reason the
   // other two are: validate stays offline and testable with no tree.
   readFile(path: string): string | null;
+  // A deployed instance's config, parsed — null when absent or unreadable. For
+  // checks that join two modules' declarations (pvehost:nfs: a consumer's mounts
+  // against the server's exports). Optional, so existing fakes need not grow it;
+  // without it those checks are skipped.
+  readConfig?(instance: string): Record<string, unknown> | null;
 }
 
 export function realServiceFs(configDir: string): ServiceFs {
@@ -80,6 +85,14 @@ export function realServiceFs(configDir: string): ServiceFs {
     readFile: (p) => {
       try {
         return readFileSync(p, "utf8");
+      } catch {
+        return null;
+      }
+    },
+    readConfig: (instance) => {
+      try {
+        const v: unknown = JSON.parse(readFileSync(join(configDir, `${instance}.json`), "utf8"));
+        return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
       } catch {
         return null;
       }

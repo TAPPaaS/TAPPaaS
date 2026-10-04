@@ -80,7 +80,7 @@ show/purge` verbs.
 
 **Not encrypted.** NFS runs cleartext on internal VLANs. RPC-with-TLS is
 deferred: OpenZFS 2.4.4's `sharenfs` refuses `xprtsec=tls`, and exports stay on
-`sharenfs` (ADR-029 v0.7, D5 records what was proven).
+`sharenfs` (ADR-029 v0.7, D5 records what was proven; #771).
 
 <!-- BEGIN GENERATED FIELDS -- edit the manifest, not this block -->
 

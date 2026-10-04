@@ -175,11 +175,19 @@ nfs_check_mount() {
             echo "mount ${path}: ${host} is a module instance — name its share (${host}:<name>), a path would go around the grant"
             return 1
         fi
+        if nfs_is_public_ipv4 "${host}"; then
+            echo "mount ${path}: ${host} is a public address — NFS with sec=sys is cleartext and trusts the client's UID; only a server on the site's own or a private routed network is mounted (ADR-029 D2a)"
+            return 1
+        fi
         nfs_check_path "${consumer}" "${m}" || bad=1
         return "${bad}"
     fi
     if ! nfs_is_instance "${host}"; then
         echo "mount ${path}: ${host} is not a module instance (no config/${host}.json) — for an unmodelled server write ${host}:/<path>"
+        return 1
+    fi
+    if [[ "$(jq -r '.zone0 // ""' "${NFS_CONFIG_DIR}/${host}.json")" == "wan" ]]; then
+        echo "mount ${path}: ${host} sits in the wan zone — NFS is never mounted across it (ADR-029 D2a)"
         return 1
     fi
     if ! nfs_export "${host}" "${name}" >/dev/null; then
@@ -229,4 +237,19 @@ nfs_mount_crosses_zone() {
 nfs_wires_rules() {
     jq -e '((.dependsOn // []) + (.integratesWith // [])) | any(. == "network:rules" or . == "firewall:rules")' \
         "${NFS_CONFIG_DIR}/$1.json" >/dev/null 2>&1
+}
+
+# nfs_is_public_ipv4 <host> — rc 0 for a literal IPv4 outside the private, CGNAT,
+# loopback and link-local ranges (ADR-029 D2a). A name is not judged here.
+# Mirrors isPublicIpv4 in module-manager/src/nfs.ts.
+nfs_is_public_ipv4() {
+    local a b
+    [[ "$1" =~ ^([0-9]{1,3})\.([0-9]{1,3})\.[0-9]{1,3}\.[0-9]{1,3}$ ]] || return 1
+    a="${BASH_REMATCH[1]}"; b="${BASH_REMATCH[2]}"
+    (( a == 10 || a == 127 )) && return 1
+    (( a == 172 && b >= 16 && b <= 31 )) && return 1
+    (( a == 192 && b == 168 )) && return 1
+    (( a == 100 && b >= 64 && b <= 127 )) && return 1
+    (( a == 169 && b == 254 )) && return 1
+    return 0
 }

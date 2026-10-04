@@ -374,7 +374,7 @@ What was proven, so the next attempt starts from facts (tappaas1/tappaas2, 2026-
 | the same file, dataset unmounted (`mountpoint` option) | client refused (*No such file or directory*) — the hazard D4a was decided on |
 | stacks | node: `ktls-utils` 1.0.0 in Debian 13, `tlshd` configured in `/etc/tlshd.conf` (`[authenticate.server] x509.certificate / x509.private_key`); guest: `ktls-utils` 1.3.0 in the pinned nixpkgs, **no NixOS module** — the unit would be declared in `tappaas-nfs.nix` |
 
-TLS returns when either OpenZFS accepts `xprtsec` in `sharenfs` — then it is one more option
+Tracked in **#771** (Future Work). TLS returns when either OpenZFS accepts `xprtsec` in `sharenfs` — then it is one more option
 in D4a's renderer plus `tlshd` and certificates — or the operator revisits D4a for the
 exports-file route above. Either way TAPPaaS also needs a CA it does not have today. Kerberos
 (`sec=krb5p`) needs a KDC TAPPaaS does not have and is not pursued.
@@ -649,7 +649,7 @@ Every question the drafts raised is answered; each answer lives in the decision 
 | Q2 | The owner range | 64000–64999, written back into the declaration | D5 |
 | Q3 | Which module provides it | `pvehost` | D1 |
 | Q4 | Consumer-provisioned exports | Rejected | D11, *Alternatives* |
-| Q5 | Encryption | v0.6: RPC-with-TLS by default. **v0.7: deferred** — `sharenfs` cannot carry `xprtsec`; `sharenfs` kept | D5 |
+| Q5 | Encryption | v0.6: RPC-with-TLS by default. **v0.7: deferred** (#771) — `sharenfs` cannot carry `xprtsec`; `sharenfs` kept | D5 |
 | Q6 | LXC consumers | In scope, realized by the node with bind mounts | D12 |
 | Q7 | Quota as a health signal | Yes — 80 % / 95 % | D13 |
 | Q8 | Off-site for exports | No | D9 |
