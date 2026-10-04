@@ -38,6 +38,9 @@ ck "…and the file now exists, so the wait has started" "yes" "$([[ -e ${TMP}/h
 T="$(date -r "${TMP}/hb" +%s)"
 
 ck "fresh: nothing to say" "0 0" "$(run $((T + 60))) $(mails)"
+ck "…and nothing on stderr (no state file is the healthy case)" "" \
+   "$(TAPPAAS_ALERT_HEARTBEAT="${TMP}/hb" TAPPAAS_ALERT_WATCHDOG_STATE="${TMP}/state" TAPPAAS_NOTIFY_CMD="${TMP}/notify" \
+      TAPPAAS_ALERT_BREADCRUMB="${TMP}/crumbs" TAPPAAS_NOW=$((T + 60)) bash "${W}" 2>&1 >/dev/null)"
 ck "stale: one notice" "0 1" "$(run $((T + 7300))) $(mails)"
 ck "…saying alerting is down" "ALERT: log alerting is down" "$(tail -1 "${TMP}/subjects" | cut -d' ' -f1-5)"
 ck "still stale an hour later: no second mail" "0 1" "$(run $((T + 10900))) $(mails)"
