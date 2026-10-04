@@ -46,7 +46,10 @@ fi
 last="$(date -r "${HB}" +%s)"
 age=$(( NOW - last ))
 when="$(date -d "@${last}" '+%Y-%m-%d %H:%M %Z' 2>/dev/null || date -r "${last}" '+%Y-%m-%d %H:%M %Z')"
-read -r down_since last_mail < "${STATE}" 2>/dev/null || { down_since=""; last_mail=""; }
+# No state file is the healthy case; test for it rather than let the redirect
+# complain into the journal every 15 minutes.
+down_since=""; last_mail=""
+[[ -f "${STATE}" ]] && read -r down_since last_mail < "${STATE}"
 
 notice() {  # notice <subject> — body on stdin
     "${NOTIFY}" --subject "$1" --what "alert-watchdog" --breadcrumb "${BREADCRUMB}"
