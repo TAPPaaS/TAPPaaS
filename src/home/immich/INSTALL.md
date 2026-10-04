@@ -83,7 +83,7 @@ install between "API ready" and the summary.
    in — enable background backup for the camera roll.
 4. Smart search / face recognition run automatically as photos arrive. The
    first ML job downloads models (~1–2 GB) to `/var/cache/immich` — the VM
-   needs outbound internet (srvHome has it by default).
+   needs outbound internet (the app zones have it by default).
 
 ## Authentik OIDC (SSO for all users)
 

@@ -10,7 +10,6 @@
   "vmid": 361,
   "vmtag": "TAPPaaS,App,Photos",
   "node": "tappaas1",
-  "zone0": "srvHome",
   "dependsOn": [
     "cluster:vm",
     "cluster:ha",

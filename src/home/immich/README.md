@@ -12,7 +12,7 @@ ML-powered smart search and face recognition, all on your own hardware.
 
 | | |
 |---|---|
-| VM | `immich` (VMID 361), zone `srvHome` |
+| VM | `immich` (VMID 361), in the environment's zone (`zone0` from `config/environments/<env>.json`) |
 | App | Immich (NixOS native `services.immich`), HTTP on port 2283 |
 | Database | PostgreSQL + VectorChord — auto-provisioned by the NixOS module, unix-socket peer auth (no DB password exists) |
 | Cache | Redis (named instance `immich`), unix socket |
@@ -171,7 +171,7 @@ journalctl -u immich-server -u immich-machine-learning -f
 
 Verbosity is set via `IMMICH_LOG_LEVEL` in `immich.nix` (`verbose`, `debug`,
 `log`, `warn`, `error`). Central log shipping to the `logging` foundation
-module (Loki) is **not** wired up: srvHome has no route to the mgmt zone
+module (Loki) is **not** wired up: app zones have no route to the mgmt zone
 (Tier-0 accepts no inbound pinholes by design), so Tier-1 app VMs cannot push
 to Loki today. When the platform provides an ingest path, the Promtail client
 snippet in `TAPPaaS/src/foundation/logging/DESIGN.md` is a copy-paste job.
@@ -182,7 +182,7 @@ snippet in `TAPPaaS/src/foundation/logging/DESIGN.md` is a copy-paste job.
 graph LR
     classDef default font-size:12px,font-weight:bold;
 
-    immich["immich<br/><small>zone: srvHome, VM :2283</small>"]
+    immich["immich<br/><small>zone: env zone, VM :2283</small>"]
     cluster["cluster:vm"]
     templates["templates:nixos"]
     backup["backup:vm"]
@@ -202,7 +202,7 @@ graph LR
     immich -->|dependsOn| identity
 
     homeclients -.->|"https://immich.&lt;domain&gt;"| caddy
-    homeclients -.->|"direct in-zone: http://immich.srvHome.internal:2283"| immich
+    homeclients -.->|"direct in-zone: http://immich.&lt;zone&gt;.internal:2283"| immich
     vpnpeers -.->|"same vhost, via WireGuard overlay"| caddy
     internet -.->|"proxyAllowedZones includes internet by default"| caddy
     caddy -.->|"upstream :2283"| immich

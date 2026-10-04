@@ -12,7 +12,7 @@ This module is under active development (status: Development). See
 | Field | Value |
 |---|---|
 | VM name | `jellyfin` |
-| Zone | `srvHome` (VLAN 210, 10.2.10.0/24) |
+| Zone | the environment's zone (`zone0` from `config/environments/<env>.json`) |
 | Port | 8096 |
 | VM ID | 360 |
 | App version | 10.10.7 |
@@ -22,7 +22,7 @@ This module is under active development (status: Development). See
 ```
 Layer 1 – Storage backend   allocate: Proxmox virtual disk · attached: iSCSI LUN / USB disk · share: NAS share
 Layer 2 – Filesystem        ext4 labelled jellyfin-media, mounted at /media (share: the NAS filesystem)
-Layer 3 – NFS export        /media exported to srvHome zone (allocate/attached modes only)
+Layer 3 – NFS export        /media exported to its own zone (allocate/attached modes only)
 ```
 
 The media disk is separate from the OS disk (tanka1). In the disk modes the VM
@@ -86,7 +86,7 @@ depends on which storage path serves the files — see
 
 ```mermaid
 graph LR
-    jellyfin["jellyfin (zone: srvHome, VM :8096)"]
+    jellyfin["jellyfin (zone: env zone, VM :8096)"]
     cluster["cluster:vm"]
     templates["templates:nixos"]
     backup["backup:vm"]
@@ -103,7 +103,7 @@ graph LR
     jellyfin -->|dependsOn| netproxy
 
     homeclients -.->|"https://jellyfin.&lt;domain&gt;"| caddy
-    homeclients -.->|"direct in-zone: http://jellyfin.srvHome.internal:8096"| jellyfin
+    homeclients -.->|"direct in-zone: http://jellyfin.&lt;zone&gt;.internal:8096"| jellyfin
     vpnpeers -.->|"same vhost, via WireGuard overlay"| caddy
     internet -.->|"opt-in: add 'internet' to proxyAllowedZones"| caddy
     caddy -.->|"upstream :8096"| jellyfin
