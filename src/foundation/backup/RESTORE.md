@@ -357,7 +357,7 @@ have been the new boot disk. `node add --pxe` refuses kernel names; leave out
 after the install, against the node's real disks.
 
 **The node's root password** is generated for the PXE install and kept on the
-mothership, root-only: `sudo cat /home/tappaas/.node-secrets/tappaas2.pw`. You
+mothership, the operator's and 0600: `cat ~/.node-secrets/tappaas2.pw`. You
 need it only at the node's console — node add logs in with the cicd key, and if
 that key did not survive the first boot it puts it back with this password.
 After a firmware change the PXE entry can come first again: node add puts the

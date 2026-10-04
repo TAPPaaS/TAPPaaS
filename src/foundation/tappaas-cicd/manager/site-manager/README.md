@@ -222,7 +222,7 @@ NVMe names swap between boots (#729 §3), so `--pxe` refuses `sda`/`nvme0n1`.
 After the install node add puts the installed disk first in the UEFI boot
 order, and if the answer's ssh key did not survive the first boot it restores it
 with the node's generated root password (`/home/tappaas/.node-secrets/<name>.pw`,
-root-only).
+the operator's, 0600).
 
 Afterwards run `site-manager update` to fold HA + replication.
 

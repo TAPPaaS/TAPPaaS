@@ -43,7 +43,7 @@ node-provisioner disable
 ```
 
 After the install the node's generated root password sits in
-`/home/tappaas/.node-secrets/<name>.pw` (root-owned, 0600: `sudo cat`) and the cicd tappaas SSH key
+`/home/tappaas/.node-secrets/<name>.pw` (the operator's, 0600; directory 0700) and the cicd tappaas SSH key
 is in the node's root `authorized_keys`. Joining the cluster is Phase N4
 (today: run `foundation/install.sh` on the node; the next `update-tappaas`
 captures it via `site-manager node reconcile`).

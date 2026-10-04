@@ -57,6 +57,9 @@ EOF
 target_paths() {
     printf '%s\n' "${CONFIG_DIR}"
     printf '%s\n' "${HOME_ROOT}/TAPPaaS"
+    # Node root passwords: node-provisioner's answer server runs as root and
+    # used to leave them root-owned (2026-10-04); they are the operator's, 0600.
+    printf '%s\n' "${HOME_ROOT}/.node-secrets"
     local p
     while IFS= read -r p; do
         [[ -n "$p" ]] && printf '%s\n' "$p"

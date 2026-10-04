@@ -194,6 +194,29 @@ class TestWriteNodeSecret(unittest.TestCase):
             self.assertEqual(dir_mode, 0o700)
 
 
+class TestNodeSecretOwnership(unittest.TestCase):
+    """2026-10-04: the answer server runs as root; its secrets were root-owned in
+    the operator's home. As root they now take the owner of the home they sit in."""
+
+    def test_as_root_the_secret_takes_its_homes_owner(self):
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            chowned = []
+            with mock.patch("os.geteuid", return_value=0), \
+                 mock.patch("os.chown", side_effect=lambda p, u, g: chowned.append((Path(p).name, u, g))):
+                path = write_node_secret("tappaas2", "pw", directory=home / ".node-secrets")
+            st = home.stat()
+            self.assertEqual(chowned, [(".node-secrets", st.st_uid, st.st_gid), ("tappaas2.pw", st.st_uid, st.st_gid)])
+            self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
+
+    def test_not_root_nothing_is_chowned(self):
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as tmp, mock.patch("os.chown") as ch:
+            write_node_secret("tappaas2", "pw", directory=Path(tmp) / "s")
+            ch.assert_not_called()
+
+
 class TestHandleAnswerPost(unittest.TestCase):
     SITE = {"email": "ops@acme.example",
             "location": {"country": "DK", "timezone": "Europe/Copenhagen"}}

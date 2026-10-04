@@ -121,7 +121,8 @@ function bootFromDiskFirst(host: string): void {
   else warn(`  could not put the installed disk first in the boot order (not UEFI?) — check the firmware boot order so a reboot does not network-boot`);
 }
 
-// The root password node-provisioner generated for <name> (root-only, 0600).
+// The root password node-provisioner generated for <name> (the operator's, 0600;
+// older ones root-owned — read through sudo then).
 export const NODE_SECRETS_DIR = "/home/tappaas/.node-secrets";
 const CICD_PUBKEY = "/home/tappaas/.ssh/id_ed25519.pub";
 
@@ -130,7 +131,7 @@ const CICD_PUBKEY = "/home/tappaas/.ssh/id_ed25519.pub";
 // or a file of ours) and append the cicd key to root's authorized_keys.
 function restoreRootKey(name: string, host: string): boolean {
   const pw = `${NODE_SECRETS_DIR}/${name}.pw`;
-  if (run("sudo", ["-n", "test", "-s", pw]).rc !== 0) {
+  if (run("test", ["-s", pw]).rc !== 0 && run("sudo", ["-n", "test", "-s", pw]).rc !== 0) {
     warn(`  ${host} refuses our key and there is no stored password (${pw}) to put it back with`);
     return false;
   }
@@ -139,7 +140,7 @@ function restoreRootKey(name: string, host: string): boolean {
   warn(`  ${host} is up but refuses our key — putting it back with the stored root password`);
   const dir = fs.mkdtempSync("/tmp/tappaas-askpass.");
   const askpass = `${dir}/askpass`;
-  fs.writeFileSync(askpass, `#!/bin/sh\nexec sudo -n cat ${pw}\n`);
+  fs.writeFileSync(askpass, `#!/bin/sh\ncat ${pw} 2>/dev/null || exec sudo -n cat ${pw}\n`);
   fs.chmodSync(askpass, 0o700);
   try {
     const r = spawnSync("ssh", [

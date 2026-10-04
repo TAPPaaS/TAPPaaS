@@ -129,7 +129,15 @@ def extract_serial(system_info: dict) -> str:
 
 
 def write_node_secret(name: str, password: str, directory=None) -> Path:
-    """Store the generated root password 0600 under the secrets dir."""
+    """Store the generated root password 0600 under the secrets dir (0700).
+
+    Owned by whoever owns the directory it sits in — the tappaas operator's home
+    — not by root: the answer server runs as root (`sudo node-provisioner
+    enable`), and its files were root-owned in a home where everything else,
+    the backup-key escrow included, is the operator's 0600. "Root-only" bought
+    nothing there (the operator has passwordless sudo) and made every reader
+    reach for sudo (2026-10-04).
+    """
     base = Path(directory) if directory else secrets_dir()
     base.mkdir(parents=True, exist_ok=True)
     os.chmod(base, stat.S_IRWXU)  # 0700
@@ -137,6 +145,10 @@ def write_node_secret(name: str, password: str, directory=None) -> Path:
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w") as f:
         f.write(password + "\n")
+    if os.geteuid() == 0:
+        owner = base.parent.stat()
+        for p in (base, path):
+            os.chown(p, owner.st_uid, owner.st_gid)
     return path
 
 
