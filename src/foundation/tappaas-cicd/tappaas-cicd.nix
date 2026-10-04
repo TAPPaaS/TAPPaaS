@@ -35,64 +35,23 @@ in
   imports =
     [
       /etc/nixos/hardware-configuration.nix
+      # The TAPPaaS NixOS baseline every VM shares (#324), read from this
+      # checkout — the flake's own source — rather than shipped like a guest's:
+      # ssh, cloud-init, the tappaas user, nix settings, zram/oomd, the NIC and
+      # hostname fixes, the file-backup trigger (#626). It also imports the
+      # site's own time and locale (#408, #472), /etc/nixos/tappaas-site.nix,
+      # which tappaas-self-rebuild.sh writes just before this rebuild — only
+      # when it exists, because a bootstrap builds this system before
+      # config/site.json does. This file states only what the mothership adds.
+      ../templates/tappaas-common.nix
     ]
-    # The site's own time and locale (#408, #472). The mothership is IN the site,
-    # so it reads the same generated fragment every other guest does — written by
-    # tappaas-self-rebuild.sh just before this rebuild. Optional, because a
-    # bootstrap builds this system before config/site.json exists.
-    ++ lib.optional (builtins.pathExists /etc/nixos/tappaas-site.nix)
-      /etc/nixos/tappaas-site.nix
     # When the mothership captures its own config/ (#691). Optional for the same
     # reason: it is written by backup:filesystem, which runs after a bootstrap.
     ++ lib.optional (builtins.pathExists /etc/nixos/tappaas-backup.nix)
       /etc/nixos/tappaas-backup.nix;
 
-  services.cloud-init = {
-        enable = true;
-        network.enable = false; # We handle networking ourselves with DHCP
-        # Keep this VM's SSH host identity across re-provisioning (#473).
-        # cloud-init's cc_ssh module is a PER-INSTANCE module: whenever the
-        # NoCloud seed presents an instance-id it has not seen before, it deletes
-        # /etc/ssh/ssh_host_* and generates fresh keys. That fired on 2026-08-10
-        # and every client with a cached known_hosts entry got a host-key-changed
-        # warning. NixOS already generates the host keys (sshd-keygen.service);
-        # cloud-init still injects the per-clone authorized user key.
-        #
-        # This duplicates tappaas-common.nix verbatim, because this config does
-        # not source the common baseline — remove it once #324 makes it do so.
-        settings = {
-          ssh_deletekeys = false;
-          ssh_genkeytypes = [ ];
-        };
-  };
-
-  # Use the systemd-boot EFI boot loader.
-  boot.loader.systemd-boot.enable = lib.mkDefault true;
-  boot.loader.efi.canTouchEfiVariables = lib.mkDefault true;
-
   # Network
   networking.hostName = lib.mkDefault "tappaas-cicd"; # Define your hostname.
-  networking.networkmanager.enable = true;  # Easiest to use and most distros use this by default.
-
-  # Declare who owns the NIC (#446). Enabling NetworkManager above is not enough:
-  # without a profile it left the interface "connected (externally)", carrying the
-  # address cloud-init brought up once at first boot with nothing renewing it. The
-  # kernel valid_lft (~24h) then expired silently and the mothership went dark for
-  # ~50 minutes, with no trace in any log. cloud-init writes
-  # /etc/systemd/network/10-cloud-init-eth0.network (DHCP=ipv4), but
-  # systemd-networkd is not installed here, so that file is inert — force the unit
-  # off rather than leave two half-owners of the same interface on disk.
-  #
-  # Matching by type, not name: Proxmox virtio NICs come up as eth0 or ens18
-  # depending on how the udev/cloud-init rename race lands on a given boot.
-  networking.networkmanager.ensureProfiles.profiles.tappaas-ethernet = {
-    connection = { id = "tappaas-ethernet"; type = "ethernet"; autoconnect = "true"; autoconnect-priority = "100"; };
-    ipv4 = { method = "auto"; };
-    ipv6 = { method = "auto"; addr-gen-mode = "default"; };
-  };
-
-  systemd.network.enable = lib.mkForce false;
-  systemd.network.wait-online.enable = lib.mkForce false;
 
   # DNS-independent control plane (#307). The mothership reaches the firewall and
   # the Proxmox nodes by their mgmt FQDNs to run updates AND to roll a snapshot
@@ -118,16 +77,7 @@ in
 
   # Set your time zone.
   # No time zone here: it is the site's fact, not the mothership's (#472). It
-  # arrives through /etc/nixos/tappaas-site.nix, imported above.
-
-  # Users
-  users.users.tappaas = {
-        isNormalUser = true;
-        extraGroups = [ "wheel" "networkmanager" ];
-  };
-
-  # Enable passwordless sudo for tappaas
-  security.sudo.wheelNeedsPassword = false;
+  # arrives through /etc/nixos/tappaas-site.nix, which the baseline imports.
 
   # ----------------------------------------
   # tappaas-rebuild@ — privileged helper for the mothership's own rebuild
@@ -234,18 +184,15 @@ in
     });
   '';
 
-  # Essential Services
-  services.openssh = {
-        enable = true;
-        settings = {
-                PasswordAuthentication = false;
-                # Key-only: don't offer keyboard-interactive/PAM either, so key-only
-                # doesn't hinge on the sshd PAM stack staying deny-only.
-                KbdInteractiveAuthentication = false;
-                PermitRootLogin = "no";
-        };
+  # SSH: the baseline allows root and password login for the bare template
+  # only; the mothership turns both off. Key-only: don't offer
+  # keyboard-interactive/PAM either, so key-only doesn't hinge on the sshd PAM
+  # stack staying deny-only.
+  services.openssh.settings = {
+    PasswordAuthentication = false;
+    KbdInteractiveAuthentication = false;
+    PermitRootLogin = "no";
   };
-  programs.ssh.startAgent = true;
 
   # ----------------------------------------
   # update-tappaas — the update sweep (cron was retired in issue #150)
@@ -398,7 +345,6 @@ in
     };
   };
 
-
   # ----------------------------------------
   # check-ha-health — systemd timer (issue #146)
   # ----------------------------------------
@@ -444,55 +390,11 @@ in
   # That is the case that matters: full-site DR restores config/ before there
   # is a VM to restore into.
   #
-  # The runner and its manifest are deployed by backup:filesystem's
-  # install-service.sh; this unit is only the trigger. ConditionPathExists keeps
-  # it inert until then, so a mothership whose backup is still a shim does not
-  # log a failure every day.
-  #
-  # This duplicates templates/tappaas-common.nix verbatim, because this config
-  # does not source the common baseline — remove it once #324 makes it do so.
-  # The trigger cannot live with the runner it triggers: /etc/systemd/system is
-  # a read-only store symlink on NixOS, so backup:filesystem has no way to
-  # deliver a unit imperatively and every guest must declare this one (#626).
-  systemd.services.tappaas-fs-backup = {
-    description = "TAPPaaS file-level backup of the mothership's config/ (ADR-012 §3.1)";
-    unitConfig.ConditionPathExists = "/home/tappaas/bin/tappaas-fs-backup.sh";
-    serviceConfig = {
-      Type = "oneshot";
-      # Runs as ROOT, not tappaas (#626). Its declared capture set includes
-      # /etc/secrets, and the escrow dir inside it is root-only 0600 — as it
-      # must be, it holds every module's encryption key. Run as tappaas the
-      # capture simply skipped those keys, and proxmox-backup-client exits 0
-      # after logging "access denied", so every run reported a complete backup
-      # of a path it had not fully read. A backup agent is privileged by nature.
-      ExecStart = "/home/tappaas/bin/tappaas-fs-backup.sh";
-      Environment = [
-        ("PATH=/home/tappaas/bin:/run/wrappers/bin:/home/tappaas/.nix-profile/bin"
-          + ":/etc/profiles/per-user/tappaas/bin:/nix/var/nix/profiles/default/bin"
-          + ":/run/current-system/sw/bin")
-      ];
-      # It reads /etc/secrets (its own write-no-delete login + encryption key)
-      # and the paths it captures; it writes nothing locally.
-      NoNewPrivileges = true;
-      PrivateTmp = true;
-      ProtectKernelTunables = true;
-      ProtectKernelModules = true;
-      ProtectControlGroups = true;
-    };
-  };
-
-  systemd.timers.tappaas-fs-backup = {
-    description = "Daily trigger for the mothership's config/ file backup";
-    wantedBy = [ "timers.target" ];
-    timerConfig = {
-      # Ahead of the 21:00 VM job, so a night's capture and snapshot describe
-      # the same state rather than straddling a change.
-      # A fallback: the generated tappaas-backup.nix carries the real window (#691).
-      OnCalendar = lib.mkDefault "20:30";
-      RandomizedDelaySec = "5min";
-      Persistent = true;          # catch up after downtime
-    };
-  };
+  # The trigger, tappaas-fs-backup.service/.timer, is the baseline's (#626): the
+  # same unit every guest has, inert until backup:filesystem deploys the runner
+  # (ConditionPathExists), and timed by the generated tappaas-backup.nix (#691).
+  # It runs as root because the capture set includes /etc/secrets, whose escrow
+  # of every module's encryption key is root-only.
 
   systemd.timers.check-ha-health = {
     description = "Periodic trigger for check-ha-health";
@@ -629,66 +531,17 @@ in
     "L+ /var/lib/tappaas-rebuild/.gitconfig - - - - /etc/tappaas-rebuild-gitconfig"
   ];
 
-  nix.settings.trusted-users = [ "root" "@wheel" ]; # Allow remote updates
-  nix.settings.experimental-features = [ "nix-command" "flakes" ]; # Enable flakes
-  nixpkgs.config.allowUnfree = true; # Allow unfree packages
-
-
-  # start tty0 on serial console
-  systemd.services."serial-getty@ttyS0" = {
-    enable = true;
-    wantedBy = [ "getty.target" ]; # to start at boot
-    serviceConfig.Restart = "always"; # restart when session is closed
-  };
-
   programs.nix-ld.enable = true;
   programs.nix-ld.libraries = with pkgs; [
     # Add any missing dynamic libraries for unpackaged programs
     # here, NOT in environment.systemPackages
   ];
 
-  # QEMU Guest Agent
-  services.qemuGuest.enable = true;
-
-  # Auto-grow root partition
-  boot.growPartition = lib.mkDefault true;
-
-  # ── OOM resilience (issue #323) ────────────────────────────────────────
-  # Without swap and oomd configuration, memory exhaustion causes host-wide
-  # stalls. zram provides a compressed memory buffer (no disk I/O penalty),
-  # and systemd-oomd kills runaway processes before the kernel OOM killer
-  # intervenes unpredictably.
-
-  # Compressed in-memory swap — gives oomd time to act before hard OOM
-  zramSwap = {
-    enable = true;
-    memoryPercent = 25;
-  };
-
-  # systemd-oomd: pressure-based OOM handling
-  systemd.oomd = {
-    enable = true;
-    enableRootSlice = true;
-    enableUserSlices = true;
-  };
-
-  # Limit user.slice memory to create backpressure before system exhaustion
-  systemd.slices."user-".sliceConfig = {
-    ManagedOOMMemoryPressure = "kill";
-    ManagedOOMMemoryPressureLimit = "80%";
-    MemoryHigh = "90%";
-    MemoryMax = "95%";
-  };
-
   # System packages
+  # vim, wget, curl, htop and git come from the baseline.
   environment.systemPackages = with pkgs; [
-        vim
-        wget
-        curl
-        htop
         tmux        # persistent sessions for long-running ops over SSH
         jq
-        git
         gh          # GitHub CLI
         tea         # Forgejo CLI for the Codeberg issue tracker
         dig
@@ -753,13 +606,6 @@ in
   # `health-manager scan security` from a shell resolves CPE vendors against
   # the same nixpkgs the unit does.
   environment.variables.TAPPAAS_NIXPKGS = "${pkgs.path}";
-
-  # Enable automatic garbage collection
-  nix.gc = {
-        automatic = true;
-        dates = "weekly";
-        options = "--delete-older-than 30d";
-  };
 
   # Firewall configuration
   # Open ports in the firewall.

@@ -119,5 +119,7 @@ two trees derivation by derivation. The manual and image paths import the
 baseline too, so they get the site's facts the same way.
 
 The mothership is built from the repository flake rather than by `update-os.sh`,
-so `tappaas-self-rebuild.sh` writes the same generated fragment before it
-rebuilds, and `tappaas-cicd.nix` imports it the same way.
+so nothing is shipped to it: `tappaas-cicd.nix` imports `../templates/tappaas-common.nix`
+from its own flake source, and `tappaas-self-rebuild.sh` writes the generated
+`tappaas-site.nix` before it rebuilds, which the baseline imports the same way it
+does on every guest.

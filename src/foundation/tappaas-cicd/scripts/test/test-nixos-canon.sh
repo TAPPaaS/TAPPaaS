@@ -62,7 +62,7 @@ done
 # The options below are the baseline's alone; a module that sets one is
 # carrying a copy. (Module-specific values the baseline yields to — stateVersion,
 # the SSH lockdown, a gc cadence, extra groups and packages — are not listed.)
-BASELINE_ONLY='security\.sudo\.wheelNeedsPassword|services\.cloud-init|nix\.settings\.(trusted-users|experimental-features)|services\.qemuGuest|programs\.ssh\.startAgent|nixpkgs\.config\.allowUnfree|boot\.growPartition|boot\.loader\.(systemd-boot|efi)|systemd\.network\.|networking\.networkmanager|serial-getty@ttyS0|zramSwap|systemd\.oomd|time\.timeZone|users\.users\.tappaas[[:space:]]*='
+BASELINE_ONLY='security\.sudo\.wheelNeedsPassword|services\.cloud-init|nix\.settings\.(trusted-users|experimental-features)|services\.qemuGuest|programs\.ssh\.startAgent|nixpkgs\.config\.allowUnfree|boot\.growPartition|boot\.loader\.(systemd-boot|efi)|systemd\.network\.|networking\.networkmanager|serial-getty@ttyS0|zramSwap|systemd\.oomd|time\.timeZone|users\.users\.tappaas[[:space:]]*=|systemd\.(services|timers)\.tappaas-fs-backup'
 echo "── every module NixOS config: imports the baseline, restates none of it (#324) ──"
 while IFS= read -r f; do
     name="${f#"${SRC}"/}"
@@ -72,6 +72,16 @@ while IFS= read -r f; do
        "$(live "$f" | grep -oE "${BASELINE_ONLY}" | sort -u | paste -sd, -)"
 done < <(grep -rl --include='*.nix' 'system\.stateVersion' "${SRC}" \
            | grep -v -e '/foundation/templates/' -e '/flake\.nix$' -e '/foundation/tappaas-cicd/tappaas-cicd\.nix$' | sort)
+
+# The mothership is a flake and reads the baseline from its own source, by a
+# relative path, rather than having it shipped to /etc/nixos.
+f="${SRC}/foundation/tappaas-cicd/tappaas-cicd.nix"
+ck "foundation/tappaas-cicd/tappaas-cicd.nix imports the baseline" "yes" \
+   "$( (( $(live "$f" | grep -c '\.\./templates/tappaas-common\.nix') > 0 )) && echo yes || echo no)"
+# (Its polkit rules are JavaScript inside a Nix string: a `//` comment there
+# may name a baseline option without setting it.)
+ck "foundation/tappaas-cicd/tappaas-cicd.nix restates none of it" "" \
+   "$(live "$f" | grep -v '^[[:space:]]*//' | grep -oE "${BASELINE_ONLY}" | sort -u | paste -sd, -)"
 
 # #448: the baseline turns cloud-init's network stage off, so it cannot rename
 # the NIC under NetworkManager. The template follows once modules import the
