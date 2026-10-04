@@ -67,24 +67,15 @@ The runner exports `CONFIG_DIR`, `TAPPAAS_CONFIG_DIR` and `TAPPAAS_MIGRATION_BAC
 
 ## Moving a module (#500, ADR-025 D14)
 
-Don't write a move by hand — `0009` was the last one. From a TAPPaaS checkout:
+Don't write a move by hand — `0009` was the last one. From the root of a TAPPaaS checkout:
 
 ```bash
-scripts/move-module.sh TAPPaaS:src/misc/foo TAPPaaS:src/home/foo
-scripts/move-module.sh Community:src/foo TAPPaaS:src/home/foo --checkout Community=~/src/Community
-scripts/move-module.sh TAPPaaS:src/home/old TAPPaaS:src/home/new --rename
+src/foundation/tappaas-cicd/scripts/move-module.sh TAPPaaS:src/misc/foo TAPPaaS:src/home/foo
 ```
 
-Name the repository on both sides, as in `site.json` `repositories[].name`. The tool moves the
-files, rewrites the catalogue entry, and adds the move to `NNNN-modules-moved.sh` — a new one,
-with its fixture test and a row in the table above, or the one it started earlier in this session
-while that is still uncommitted. Commit the move, the catalogue and the migration together; after
-that the migration is sealed, and the next move starts a new number (`--new` forces one).
-
-On each site the migration points every config using a moved module at the module's new place in
-that site's checkout. It stops the update when the target repository is not registered there
-(`site-manager repository add …` is the fix), when the target directory is missing, and when a
-renamed module is still named in another config's `dependsOn`/`integratesWith`.
+The tool moves the files, rewrites the catalogue entry, and adds the move to
+`NNNN-modules-moved.sh` with its fixture test and a row in the table above. How to use it, what it
+leaves to you, and what each site does with the migration: [MOVE-MODULE.md](../MOVE-MODULE.md).
 
 ## Its test ships with it
 

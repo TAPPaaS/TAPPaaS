@@ -583,8 +583,8 @@ A developer tool, run from a TAPPaaS checkout:
 `move-module.sh <Repo>:<path> <Repo>:<path> [--rename] [--new] [--checkout <Repo>=<dir>]...`.
 It moves the module's files (within one checkout, or between two), rewrites its catalogue
 entry, and writes or extends the config migration `migrations/NNNN-modules-moved.sh` that points
-every installed site at the new place (ADR-025 D14). Templates: `move-module/`. Details:
-[`../migrations/README.md`](../migrations/README.md), "Moving a module".
+every installed site at the new place (ADR-025 D14). Templates: `move-module/`. How to use it:
+[`../MOVE-MODULE.md`](../MOVE-MODULE.md).
 
 ### check-disk-threshold.sh
 
