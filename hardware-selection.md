@@ -30,7 +30,7 @@ backup nor ingress.
   (holds the GPU if you choose local AI), Node 3 = backup node (small box, big `tankc1`).
 - **Scale-out** extends SMB by adding role-dedicated nodes and separating tenants with
   **environments** — see the worked multi-tenant example in
-  [Add an Environment](INSTALL-ENVIRONMENT.md).
+  [Configure Environments](INSTALL-ENVIRONMENT.md).
 - For large bulk storage, consider ZFS raidz2 on spinning disks with an SSD cache;
   prefer ECC RAM from SMB tier upward.
 

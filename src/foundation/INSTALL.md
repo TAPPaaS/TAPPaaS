@@ -609,9 +609,9 @@ run `module-manager module update backup`; it promotes in place. Check with
 `backup-manager placement`.
 
 The rest of the foundation is complete. Everything from here is covered on the
-documentation site: **add environments**, **add a satellite**, **add stacks**
-(each module's install guide), and day-to-day **operation** — start at
-<https://tappaas.org/installation/>.
+documentation site: **configure environments**, **add a satellite**, **add workloads**
+(each stack's install guide), and day-to-day **operation** — start at the
+[install overview](../../INSTALL.md).
 
 ## Network — cutting over to the firewall
 

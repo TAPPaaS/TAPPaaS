@@ -179,7 +179,7 @@ foundation sat in one flat `src/apps/`.
   its members; on the website it is the stack's page under *Stacks*. The INSTALL.md is the stack's
   *solution* document: the notes for installing it and its modules in install order (`dependsOn`
   and `integratesWith` inside the stack); on the website it is the stack's page under *Install →
-  Add Stacks*. A planned module or stack appears in the README only, never in an INSTALL.md. Both
+  Add Workloads*. A planned module or stack appears in the README only, never in an INSTALL.md. Both
   module lists are generated from this catalogue; installing a whole stack is #763
   (`module-manager add-stack`), which reads the same catalogue.
 - **The catalogue stays the authority.** Nothing finds a module by its path: `moduleJson` says where

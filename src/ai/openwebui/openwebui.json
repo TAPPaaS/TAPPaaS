@@ -1,5 +1,5 @@
 {
-  "description": "TAPPaaS Open Webui",
+  "description": "Open WebUI chat interface — private AI chat for your users, with conversation history and RAG, through the LiteLLM gateway.",
   "kind": "vm",
   "version": "0.8.0",
   "stack": "ai",

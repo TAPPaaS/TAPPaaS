@@ -11,9 +11,9 @@ what "done" looks like before you move on.
 | 1 | [Hardware Selection](hardware-selection.md) | An honest look at your needs | Hardware sized by tier + options, on the bench |
 | 2 | [Preparation](preparation.md) | Network, domain, credentials, branch | The preparation checklist is all ticked |
 | 3 | [Install Foundation](src/foundation/INSTALL.md) | Stages 1 + 2 complete | Foundation installed on all nodes; network cut over; you can log in everywhere |
-| 4 | [Add an Environment](INSTALL-ENVIRONMENT.md) *(optional)* | A running foundation | Each tenant/purpose has its own separated environment |
+| 4 | [Configure Environments](INSTALL-ENVIRONMENT.md) *(optional)* | A running foundation | Each tenant/purpose has its own separated environment |
 | 5 | [Add a Satellite](src/foundation/satellite/INSTALL.md) *(optional)* | A VPS, if you planned one | The satellite carries its roles (ingress / backup / VPN) |
-| 6 | [Add Stacks](#stage-6-add-stacks) | A running foundation | The apps you chose are installed and reachable |
+| 6 | [Add Workloads](#stage-6-add-workloads) | A running foundation | The apps you chose are installed and reachable |
 | 7 | [Operate](https://tappaas.org/operate/) | — | Updates, backup and health checks running on schedule |
 
 ---
@@ -48,11 +48,11 @@ follow its steps top to bottom.
 **Done when:** the install prints its "🎉 your TAPPaaS foundation is installed" summary, and you can
 reach the Proxmox UI, the firewall UI and the CICD mothership.
 
-## Stage 4 — Add an Environment *(optional)*
+## Stage 4 — Configure Environments *(optional)*
 
 Run more than one world on the same platform: production next to family, tenants next to
 experiments — separated environments with network boundaries between them. See
-[Add an Environment](INSTALL-ENVIRONMENT.md).
+[Configure Environments](INSTALL-ENVIRONMENT.md).
 
 **Done when:** each environment exists with its own zones and domain.
 
@@ -64,7 +64,7 @@ VPS now via [the satellite install](src/foundation/satellite/INSTALL.md).
 
 **Done when:** the satellite carries its roles.
 
-## Stage 6 — Add Stacks
+## Stage 6 — Add Workloads
 
 Install the workloads you chose in stage 1. First-party modules install with
 `module-manager module add <module>`; community module stores register once with

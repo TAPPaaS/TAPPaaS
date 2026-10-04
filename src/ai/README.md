@@ -12,8 +12,8 @@ gateway (a placeholder directory, no module yet).
 | Module | What it is | Status |
 |---|---|---|
 | [vllm-amd](vllm-amd/README.md) | vLLM AMD ROCm inference — Ryzen AI MAX+ 395 (tappaas2) | Development |
-| [litellm](litellm/README.md) | TAPPaaS LiteLLM | Development |
-| [openwebui](openwebui/README.md) | TAPPaaS Open Webui | Development |
+| [litellm](litellm/README.md) | LiteLLM AI gateway — one OpenAI-compatible API, with per-user keys and usage tracking, in front of local (vLLM) and remote models. | Development |
+| [openwebui](openwebui/README.md) | Open WebUI chat interface — private AI chat for your users, with conversation history and RAG, through the LiteLLM gateway. | Development |
 
 Install them as [INSTALL.md](INSTALL.md) says.
 
