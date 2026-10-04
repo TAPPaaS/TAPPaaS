@@ -120,12 +120,6 @@ let
       query = ''{host="<host>"}'';
     })
     (alertRule {
-      uid = "tappaas-disk-errors"; title = "DiskErrors"; kind = "event"; window = 300;
-      expr = ''sum by (host) (count_over_time(${pve} |~ "(?i)(I/O error|checksum error|pool .*(DEGRADED|FAULTED|UNAVAIL)|SMART.*(FAILED|failure)|Currently unreadable|Offline uncorrectable)" [5m]))'';
-      summary = "Disk or ZFS errors on a Proxmox node.";
-      query = ''${pve} |~ "(?i)(I/O error|zfs|zed|smartd|DEGRADED|FAULTED)"'';
-    })
-    (alertRule {
       uid = "tappaas-backup-failed"; title = "BackupFailed"; kind = "event"; window = 300;
       expr = ''sum by (host) (count_over_time(${pve} |~ "ERROR: Backup of VM [0-9]+ failed|Backup job finished with errors|ERROR: job errors" [5m]))'';
       summary = "A VM backup failed.";
@@ -152,6 +146,22 @@ let
       query = ''${pve} |= "tappaas-rootkeys"'';
     })
   ];
+
+  # Disk trouble is a condition, not an event, and its sources speak rarely:
+  # smartd re-warns every few hours, ZED in bursts. A short window would fire,
+  # resolve and fire again — a mail each time. Looking back a day, it stays
+  # firing while any disk error was seen, mails once a day (its own route
+  # below), and resolves after a quiet day. Its own group: a day's lines are a
+  # heavier query, so every 5 minutes rather than every minute.
+  #   ZED   class=checksum|io|data|deadman, or a vdev entering a bad state —
+  #         the line is `eid=… class=checksum pool='tankc1' vdev=…`
+  #   smartd / kernel  pending or uncorrectable sectors, SMART failure, I/O error
+  diskRule = alertRule {
+    uid = "tappaas-disk-errors"; title = "DiskErrors"; kind = "state"; window = 86400;
+    expr = ''sum by (host) (count_over_time(${pve} |~ "class=(checksum|io|data|deadman) |vdev_state=(DEGRADED|FAULTED|UNAVAIL|REMOVED)|(?i)(I/O error|pool .*(DEGRADED|FAULTED|UNAVAIL)|SMART.*(FAILED|failure)|Currently unreadable|Offline uncorrectable)" [24h]))'';
+    summary = "Disk or ZFS errors on a Proxmox node in the last 24 hours (ZED pool events, smartd sector warnings, kernel I/O errors). Repeated once a day while they continue.";
+    query = ''${pve} |~ "class=|smartd|I/O error|DEGRADED|FAULTED"'';
+  };
   oidcFiles    = [ "client-id" "client-secret" "auth-url" "token-url" "api-url" ];
 in
 {
@@ -698,6 +708,12 @@ in
             folder = "TAPPaaS";
             interval = "1m";
             rules = alertRules;
+          } {
+            orgId = 1;
+            name = "tappaas-logs-daily";
+            folder = "TAPPaaS";
+            interval = "5m";
+            rules = [ diskRule ];
           }];
         };
         contactPoints.settings = {
@@ -727,6 +743,13 @@ in
             group_wait = "30s";
             group_interval = "5m";
             repeat_interval = "4h";
+            # Disk errors: once a day is enough (operator, 2026-10-04).
+            routes = [{
+              receiver = "tappaas-site-notify";
+              object_matchers = [ [ "alertname" "=" "DiskErrors" ] ];
+              group_by = [ "alertname" "host" ];
+              repeat_interval = "24h";
+            }];
           }];
         };
       };
