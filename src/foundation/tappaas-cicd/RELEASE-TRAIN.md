@@ -290,8 +290,8 @@ Every one of these is a refusal, not a warning:
 - either site's last sweep failed — a new pin must not be blamed for a failure that predates it;
 - an unresolved staging fault;
 - a module in this repository is missing a MUST of the blueprint (ADR-027), a service
-  README's field section no longer matches its `fields.json`, or a stack README's module list no
-  longer matches the catalogue — see *The module blueprint* below;
+  README's field section no longer matches its `fields.json`, or a stack README's or INSTALL.md's module
+  list no longer matches the catalogue — see *The module blueprint* below;
 - gitleaks finds a secret in the commits since the last release or in the tree, or the scan
   could not run — see *Secrets* below;
 - the channels have diverged (`stable` ⊆ `staging` ⊆ `main` no longer holds);
@@ -306,7 +306,7 @@ Once a fortnight, not on every push: the boundary checks every module in this re
 the blueprint ([ADR-027](../../../docs/ADR/ADR-027%20-%20Module%20Blueprint.md)) on the exact commit
 it is about to promote, with `module-manager validate --blueprint --repo ~/TAPPaaS`, and checks
 that every service README's generated field section matches its `fields.json` and every stack
-README's module list (`src/<stack>/README.md`, #421) matches the catalogue. A missing MUST or
+README's and INSTALL.md's module list (`src/<stack>/`, #421) matches the catalogue. A missing MUST or
 a stale README blocks the boundary, and `--force-boundary` does not lift it. Missing SHOULDs (a
 module without a test) are counted and never block. Community is not checked: the train promotes
 TAPPaaS only.

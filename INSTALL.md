@@ -72,13 +72,14 @@ Install the workloads you chose in stage 1. First-party modules install with
 
 | Stack | What you get |
 |-------|--------------|
-| [AI stack](src/ai/README.md) | Local AI: vLLM serving, LiteLLM gateway, OpenWebUI; n8n workflow automation (placeholder) |
-| [Collaboration stack](src/collaboration/README.md) | Nextcloud with EURO Office editing and Talk calls (coturn, HPB); Karakeep planned |
-| [Home stack](src/home/README.md) | Home Assistant and the deCONZ Zigbee gateway; Jellyfin, Immich planned |
-| [Security stack](src/security/README.md) | Vaultwarden password vault, NetBird client |
-| [Miscellaneous](src/misc/README.md) | Modules without a stack yet: Windows Server |
+| [AI stack](src/ai/INSTALL.md) | Local AI: vLLM serving, LiteLLM gateway, OpenWebUI |
+| [Collaboration stack](src/collaboration/INSTALL.md) | Nextcloud with EURO Office editing and Talk calls (coturn, HPB) |
+| [Home stack](src/home/INSTALL.md) | Home Assistant and the deCONZ Zigbee gateway |
+| [Security stack](src/security/INSTALL.md) | Vaultwarden password vault, NetBird client |
+| [Miscellaneous](src/misc/INSTALL.md) | Modules without a stack yet: Windows Server |
 
-Each stack README lists its modules in install order; each module's INSTALL.md says what to do by hand.
+Each stack's INSTALL.md lists its modules in install order, with the notes for that stack; each
+module's INSTALL.md says what to do by hand. What a stack is: its README.md.
 
 **Done when:** each installed app answers on its URL and is known to the
 [Module Manager](src/foundation/tappaas-cicd/manager/module-manager/README.md).

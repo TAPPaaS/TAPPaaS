@@ -5,6 +5,11 @@ Primary audience: home user; Home Assistant administrator.
 Central hub for all smart home integrations — control lights, energy, security, EV
 charging and audio from one interface, locally, without cloud dependency.
 
+It runs as a sealed appliance VM (Home Assistant OS) in the home service zone, `srvHome`.
+Access from outside is gated at the reverse-proxy layer, and the IoT devices it controls
+live in zones of their own, reached across their firewall boundaries through controlled
+pinholes — see the [Home stack](../README.md).
+
 ## What you get
 
 | Capability | Access from | How |

@@ -510,8 +510,8 @@ cmd_init() {
 # and never block. Community is not checked: this train promotes TAPPaaS only.
 #
 # Also checked: every service README's generated field section matches its
-# fields.json (ADR-027 D3), and every stack README's module list matches the
-# catalogue (#421) — a stale one is BROKEN too, since regenerating is one command. Sets BP_OK (yes|no|unchecked), BP_ERRORS, BP_WARNINGS,
+# fields.json (ADR-027 D3), and every stack README's and INSTALL.md's module
+# list matches the catalogue (#421) — a stale one is BROKEN too, since regenerating is one command. Sets BP_OK (yes|no|unchecked), BP_ERRORS, BP_WARNINGS,
 # BP_READMES (ok|stale|unchecked), BP_COMMIT and BP_WHY (what to fix).
 BP_OK=""; BP_ERRORS=0; BP_WARNINGS=0; BP_READMES=""; BP_COMMIT=""; BP_WHY=()
 blueprint_check() {
@@ -545,14 +545,14 @@ blueprint_check() {
             BP_WHY+=("service README field sections are out of date — run: CONFIG_DIR=/nonexistent python3 ${gen}")
         fi
     fi
-    # Each stack README's module list (#421) is generated from the catalogue too.
+    # Each stack README's and INSTALL.md's module list (#421) is generated from the catalogue too.
     local sgen="${REPO_DIR}/src/foundation/tappaas-cicd/scripts/gen-stack-readme.py"
     if [[ -f "${sgen}" ]]; then
         if python3 "${sgen}" --check --repo "${REPO_DIR}" >/dev/null 2>&1; then
             [[ "${BP_READMES}" == "stale" ]] || BP_READMES="ok"
         else
             BP_READMES="stale"
-            BP_WHY+=("stack README module lists are out of date — run: python3 ${sgen}")
+            BP_WHY+=("stack README/INSTALL.md module lists are out of date — run: python3 ${sgen}")
         fi
     fi
     if (( BP_ERRORS == 0 )) && [[ "${BP_READMES}" != "stale" ]]; then BP_OK="yes"; else BP_OK="no"; fi

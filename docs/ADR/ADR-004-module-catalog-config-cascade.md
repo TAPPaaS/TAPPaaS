@@ -174,9 +174,14 @@ foundation sat in one flat `src/apps/`.
 - **One directory per purpose stack, not per `stack` value.** `template` and `test` say what a
   module *is*: the VM templates stay with the `templates` module, test fixtures beside the suites
   that install them.
-- **Each stack directory has a `README.md`** — what the stack delivers and its modules in install
-  order, the order generated from this catalogue. It is the stack's *solution* document: installing
-  a whole stack is #763 (`module-manager add-stack`), which reads the same catalogue.
+- **Each stack directory has a `README.md` and an `INSTALL.md`** (2026-10-04, @LarsRossen). The
+  README says what the stack is — what it delivers, how its parts fit, what is planned — and lists
+  its members; on the website it is the stack's page under *Stacks*. The INSTALL.md is the stack's
+  *solution* document: the notes for installing it and its modules in install order (`dependsOn`
+  and `integratesWith` inside the stack); on the website it is the stack's page under *Install →
+  Add Stacks*. A planned module or stack appears in the README only, never in an INSTALL.md. Both
+  module lists are generated from this catalogue; installing a whole stack is #763
+  (`module-manager add-stack`), which reads the same catalogue.
 - **The catalogue stays the authority.** Nothing finds a module by its path: `moduleJson` says where
   it is, so a module moves by `scripts/move-module.sh` (#500), which rewrites the entry and writes the
   config migration that repoints every installed site (`migrations/0014-modules-moved.sh` for #421).
