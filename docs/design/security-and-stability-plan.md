@@ -114,7 +114,7 @@ things that make those migrations survivable go before it (Wave 0).
 | 1 | ✅ G1.1 Vocabulary & classification (ADR-022 family) | 8 | 14/14 | 2 | 4 | H |
 | 1 | G1.2 Backup placement model (ADR-012 close-out) | 13 | 26/27 | 3 | 4 | H |
 | 1 | ✅ G1.3 Module contract & repo layout | 8 | 8/8 | 2 | 5 | H |
-| 1 | G1.4 Common NixOS baseline | 9 | 17/18 | 2 | 4 | H |
+| 1 | ✅ G1.4 Common NixOS baseline | 9 | 18/18 | 2 | 4 | H |
 | 1 | ✅ G1.5 Rebuild & recovery paths | 5 | 16/16 | 3 | 4 | M |
 | 1 | G1.6 Secrets & privileged access | 5 | 3/6 | 1 | 5 | H |
 | 1 | G1.7 Parked for Erik discussion | 5 | 0/5 | – | – | – |
@@ -131,7 +131,7 @@ things that make those migrations survivable go before it (Wave 0).
 | 4 | G4.4 Storage & physical devices | 5 | 2/9 | 2 | 2 | M |
 | 4 | G4.5 Governance, CI & sign-offs | 8 | 3/10 | 3 | 1 | L |
 
-**Issues** is the count when the plan was made; **Done** is ✅ rows / all rows in the group's own table now (it grows as issues are added and closed). By wave: Wave 0 25/25 · Wave 1 84/94 · Wave 2 11/29 · Wave 3 19/56 · Wave 4 12/43. Issue counts include the Future Work items rolled in.
+**Issues** is the count when the plan was made; **Done** is ✅ rows / all rows in the group's own table now (it grows as issues are added and closed). By wave: Wave 0 25/25 · Wave 1 85/94 · Wave 2 11/29 · Wave 3 20/57 · Wave 4 12/43. Issue counts include the Future Work items rolled in.
 
 ```mermaid
 quadrantChart
@@ -462,7 +462,7 @@ Work.
 One shared baseline for every NixOS VM. Landing it rebuilds every VM once,
 so bundle all baseline changes into that one rebuild.
 
-Status: in progress — **#408, #472 and #87 built and verified on hrossen 2026-09-21**
+Status: **complete 2026-10-04** — #324 closed: every NixOS VM and the mothership import the baseline. **#408, #472 and #87 built and verified on hrossen 2026-09-21**
 (`wave1/g1.4-nixos-baseline`, merged to `main`). The site's own answers now reach every
 guest: `site.json .location` is derived from the first node and gained `keyboard`,
 `latitude`, `longitude`; a generated `/etc/nixos/tappaas-site.nix` carries time zone,
@@ -506,7 +506,7 @@ time or locale on a Debian guest, an adopted `debianhost`, or a Windows guest at
 
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
-| #324 | App VMs do not import `tappaas-common.nix` | 2 | 4 | H | **Rolled out on hrossen 2026-10-04 — 9 of 10 NixOS guests; open for step 5.** It was a de-duplication, not an import line: every module restated the baseline, and the copies drifted — before the rollout no app VM had zram (#323), the cloud-init network fix (#448), the host-key fix or the file-backup trigger (#626). The baseline now yields where a module legitimately differs (`stateVersion` 25.05, the SSH lockdown, a gc cadence, the hostname) (`0ce65c14`); all 25 module and fixture configs import it and drop their copies, and `update-os.sh` ships it before every rebuild (`b07743ef`). `scripts/nixos-baseline-eval.sh` evaluates every module with the baseline offline: before/after derivations differ only in collapsed duplicates and the fixtures' hard-coded time zone. `test-nixos-canon.sh` (silently skipping since the template moved) runs again and fails a module that restates the baseline. Sweep 19/20: coturn, deconz, euro-office, identity, litellm, logging, nextcloud, nextcloud-hpb, openwebui all carry zram, the hostname service, the backup trigger and #448, NIC `ens18`, SSH locked down; deep tests 10/10 before and after. `vaultwarden` rebuilt fine, then failed the identity drift check — it never wired SSO (**#769**, G3.2) — and rolled back. **Left:** step 5, the mothership (`tappaas-cicd.nix`) imports the baseline instead of its two marked copies; then close.
+| ✅ #324 | App VMs do not import `tappaas-common.nix` | 2 | 4 | H | **Closed 2026-10-04.** A de-duplication, not an import line: every module restated the baseline and the copies drifted (no app VM had zram #323, #448, the host-key fix or the #626 backup trigger). The baseline yields where a module differs (`0ce65c14`); all 25 module/fixture configs import it, `update-os.sh` ships it (`b07743ef`); the mothership imports it from its flake (`60c115f6`). `nixos-baseline-eval.sh` and `test-nixos-canon.sh` guard it. Derivations before/after differ only in collapsed duplicates, the fixtures' time zone and, on the mothership, #448 + the hostname service. Sweeps 2026-10-04: 19/20 (vaultwarden → #769), then 19/19; all NixOS guests and the mothership carry the baseline, deep tests 10/10 before and after |
 | ✅ #390 | 00-Template fails canon C4/C7 | 5 | 1 | H | **Closed 2026-09-24.** C4 (networkd forced off) was already fixed with #446 (`4f6e6460`); C7: the template and the baseline (`tappaas-common.nix`) now declare the firewall explicitly (enabled, SSH 22), and `test-nixos-canon.sh` keeps both patterns, since the canon lint lives outside this repo. Supersedes PR #391 |
 | ✅ #448 | NIC rename race (kernel / udev / cloud-init) | 3 | 4 | M | **Closed 2026-09-24 — resolved through #324.** `network.enable = false` only kept systemd-networkd out; cloud-init's network stage still renamed `ens18 → eth0` on every boot. The baseline (`tappaas-common.nix`) now sets `services.cloud-init.settings.network.config = "disabled"`, so NetworkManager is the one network owner and names stay `ens18`, as they already settle today. It reaches every module when #324 makes them import the baseline; NixOS only, since Debian guests rely on cloud-init's network config |
 | ✅ #472 | NixOS clock two hours off | 4 | 2 | M | **Built and verified 2026-09-21.** **Root cause:** every module nix picks its own time zone — `euro-office.nix:96` is UTC while the rest inherit `tappaas-common.nix:166`'s `mkDefault "Europe/Amsterdam"`, and the master (`tappaas1`) is `Europe/Copenhagen`. Fixed by the site fragment + #324 + #87 in one rebuild. Take it from site.json |
