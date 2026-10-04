@@ -1,0 +1,63 @@
+{
+  "$schema": "../../../schemas/service-fields.json",
+  "service": "pvehost:nfs",
+  "description": "NFS shares mounted into a consumer guest (ADR-029): a TAPPaaS export on a cluster node, a share on a registered, unmanaged server, or an unmodelled server's path.",
+  "_note": "The consumer's side only. The node's own exports are the module-tier `nfs` object (pvehost/fields.json), converged by pvehost/update.sh; this service checks a consumer's mounts against them (the two-key check), has the node build a declared export it names (D11), and writes the mounts into the guest. The `nfs` object's DEFINITION lives in the module tier (pvehost/fields.json) because registered NFS servers carry it too; its change semantics are here, with the service that converges it, as backup:filesystem does for `backup`.",
+  "fields": {
+    "nfs": {
+      "class": "in-place",
+      "apply": "reconcile",
+      "changeNote": "Converged by the node's own update (pvehost/update.sh → nfs_node_reconcile): exports are created, re-quota'd, re-granted and unshared live; nothing reboots. name, pool and an allocated owner are immutable in substance — a rename or a pool move is a data migration and is not attempted; the reconcile treats the old dataset as an orphan and keeps it."
+    },
+    "mounts": {
+      "description": "The NFS shares this guest mounts (ADR-029 D3). Each entry: {path, share, access?, required?}. share is <instance>:<name> for a share declared on a module instance, or <host>:/<path> for an unmodelled server.",
+      "type": "array",
+      "requiredBy": [],
+      "usedBy": [
+        "pvehost:nfs"
+      ],
+      "default": [],
+      "items": {
+        "type": "object",
+        "fields": {
+          "path": {
+            "description": "Absolute directory in the guest. Not /, /etc, /nix, /var, /usr, /boot or a system path.",
+            "type": "string",
+            "required": true,
+            "example": "/var/lib/jellyfin/media"
+          },
+          "share": {
+            "description": "<instance>:<name> (a share on a module instance — the grant is checked) or <host>:/<path> (an unmodelled server).",
+            "type": "string",
+            "required": true,
+            "example": "tappaas1:media"
+          },
+          "access": {
+            "description": "What the consumer asks for. Must not exceed the export's grant.",
+            "type": "string",
+            "values": {
+              "ro": "read-only (default)",
+              "rw": "read-write"
+            },
+            "default": "ro"
+          },
+          "required": {
+            "description": "false: nofail + automount — the guest boots and the app starts without the share. true: the mount is required at boot.",
+            "type": "boolean",
+            "default": false
+          }
+        }
+      },
+      "example": [
+        {
+          "path": "/var/lib/jellyfin/media",
+          "share": "tappaas1:media",
+          "access": "rw"
+        }
+      ],
+      "class": "in-place",
+      "apply": "reconcile",
+      "changeNote": "The mounts are reconciled whole: update-service.sh rewrites the guest's generated mount list (NixOS fragment, applied by the rebuild the update runs; Debian fstab block, applied at once). Adding or removing a mount remounts; nothing reboots and no share data is touched."
+    }
+  }
+}

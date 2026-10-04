@@ -1,9 +1,9 @@
 {
-  "description": "A Proxmox VE cluster node as a module: registered, visible and tested; its OS is still patched by the cluster module (ADR-026 D4 stage 1)",
+  "description": "A Proxmox VE cluster node as a module: registered, visible and tested; serves the NFS exports it declares (ADR-029); its OS is still patched by the cluster module (ADR-026 D4 stage 1)",
   "kind": "machine",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "stack": "foundation",
-  "releaseDate": "2026-09-19",
+  "releaseDate": "2026-10-04",
   "status": "Development",
   "source": "official",
   "os": "debian",
@@ -13,6 +13,9 @@
   "dependsOn": [],
   "integratesWith": [
     "backup:filesystem"
+  ],
+  "provides": [
+    "nfs"
   ],
   "backup": {
     "filesystemPaths": [

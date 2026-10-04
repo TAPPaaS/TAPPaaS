@@ -27,7 +27,13 @@
   # rebuild; a VM that has not had one yet simply keeps the NixOS defaults, which
   # is honest — nothing on the VM knows where the site is.
   imports = lib.optional (builtins.pathExists /etc/nixos/tappaas-site.nix)
-    /etc/nixos/tappaas-site.nix;
+    /etc/nixos/tappaas-site.nix
+    # The NFS shares this guest mounts (ADR-029 D10, #766): fileSystems entries
+    # written by pvehost:nfs, present only on a guest that declares mounts. It
+    # states mounts and nothing else, so it can never collide with a module's
+    # own configuration.
+    ++ lib.optional (builtins.pathExists /etc/nixos/tappaas-nfs.nix)
+      /etc/nixos/tappaas-nfs.nix;
 
   services.cloud-init = {
         enable = true;
