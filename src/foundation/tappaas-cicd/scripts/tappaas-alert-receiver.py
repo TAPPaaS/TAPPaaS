@@ -14,6 +14,10 @@ most); this only turns one webhook into one mail. Two kinds of rule, from the
   event   something happened (quorum lost, an OOM kill). It "resolves" only
           because its time window moved on, so a resolve is not mailed.
   state   something is so (a host has gone silent). Resolving is news: mailed.
+  heartbeat  Grafana's proof that the whole path works (logs arrive, rules run,
+          this webhook is reached with the token). Never mailed: its time is
+          written to the heartbeat file, and tappaas-alert-watchdog.sh — a timer
+          on this host, independent of the logging VM — mails when it stops.
 
 Every request is authenticated with a bearer token both sides read from a file
 (the receiver's, and Grafana's copy that logging/update.sh delivers). Every
@@ -36,14 +40,19 @@ DEFAULTS = {
     "token_file": "/etc/secrets/tappaas-alert-token",
     "notify": "/home/tappaas/bin/site-notify.sh",
     "breadcrumb": "/home/tappaas/config/alerts.log",
+    "heartbeat_file": "/var/lib/tappaas/alert-heartbeat",
 }
 MAX_BODY = 1 << 20  # a Grafana notification is a few KB; refuse anything absurd
+
+
+def is_heartbeat(alert):
+    return (alert.get("labels") or {}).get("kind") == "heartbeat"
 
 
 def render(payload):
     """One webhook -> (subject, body), or None when there is nothing to mail."""
     status = payload.get("status", "firing")
-    alerts = payload.get("alerts") or []
+    alerts = [a for a in (payload.get("alerts") or []) if not is_heartbeat(a)]
     if status == "resolved":
         # Only state rules are news when they clear (see the module doc).
         alerts = [a for a in alerts if (a.get("labels") or {}).get("kind") == "state"]
@@ -132,6 +141,14 @@ def make_handler(args):
             except ValueError:
                 self.reply(400, "not JSON")
                 return
+            beats = [a for a in (payload.get("alerts") or [])
+                     if is_heartbeat(a) and a.get("status", "firing") == "firing"]
+            if beats:
+                try:
+                    with open(args.heartbeat_file, "w", encoding="utf-8") as f:
+                        f.write(beats[0].get("startsAt", "") + "\n")
+                except OSError as e:
+                    print(f"heartbeat NOT recorded: {e}", flush=True)
             mail = render(payload)
             if mail is None:
                 self.reply(200, "nothing to send")
@@ -154,6 +171,7 @@ def main():
     p.add_argument("--token-file", default=DEFAULTS["token_file"])
     p.add_argument("--notify", default=DEFAULTS["notify"])
     p.add_argument("--breadcrumb", default=DEFAULTS["breadcrumb"])
+    p.add_argument("--heartbeat-file", default=DEFAULTS["heartbeat_file"])
     p.add_argument("--render", action="store_true", help="read one webhook on stdin, print the mail")
     args = p.parse_args()
 

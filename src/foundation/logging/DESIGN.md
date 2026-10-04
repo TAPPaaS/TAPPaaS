@@ -211,6 +211,46 @@ In Grafana's Explore tab, pick the **Loki** datasource:
 
 `logcli` is also installed on the VM if you prefer the CLI.
 
+## Alerting from the logs (#126)
+
+Every host's logs arriving here are only useful if something reads them. Grafana's
+alerting, provisioned from `logging.nix`, evaluates LogQL rules over them and posts
+what fires to **`tappaas-alert-receiver`** on the mothership (TCP 9095, bearer token).
+The receiver mails through `site-notify.sh`, the path a failed sweep uses (#651), so
+the subject reads `[TAPPaaS <site>] ALERT: <rule> on <host>`. Every notice is a line
+in `config/alerts.log` on the mothership.
+
+| Rule | Kind | Fires on |
+|---|---|---|
+| `QuorumLost` | event | corosync "non-primary component", pmxcfs "node lost quorum" |
+| `HaFencing` | event | watchdog expiry, a node being fenced |
+| `HostSilent` | state | a host that logged in the hour before and not in the last 15 minutes |
+| `DiskErrors` | state, daily | ZED pool events (`class=checksum\|io…`), smartd sector warnings, kernel I/O errors — last 24 h, mailed once a day |
+| `BackupFailed` | event | vzdump "Backup of VM … failed" |
+| `OomKill` | event | the kernel's "Out of memory: Killed process" (subject: *Out of Memory Kill*) |
+| `RootKeyChanged` | event | the #128 audit trail: root's `authorized_keys` written from a login session |
+| `ReplicationFailed` | state | pvesr "replication job error" in the last hour |
+| `Heartbeat` | heartbeat | logs arriving at all — never mailed, see below |
+
+- **event** — something happened. It "resolves" only because its window moved on,
+  so a resolve is not mailed. **state** — something is so; its resolve is mailed.
+- Grafana groups per rule and host and repeats a firing alert every 4 h (DiskErrors
+  every 24 h). Rules match `{source="proxmox"}` where they can: this VM's own journal
+  carries Loki's and Grafana's logged query texts, which an unanchored all-hosts rule
+  matches (OomKill did, until it was anchored).
+- **The alerting watches itself.** `Heartbeat` fires while logs arrive and rules run;
+  its webhook, hourly, proves the whole path to the mothership. The receiver records
+  it in `/var/lib/tappaas/alert-heartbeat` and mails nothing. A timer on the
+  mothership, `tappaas-alert-watchdog`, mails "log alerting is down" when the
+  heartbeat is two hours old — so a dead logging VM, Grafana, Loki or a token
+  mismatch does not leave the site silently unwatched.
+- The token: generated on the mothership (`/etc/secrets/tappaas-alert-token`),
+  copied here by `update.sh` (`/etc/secrets/grafana-alert-webhook-token`), read by the
+  contact point with `$__file{…}`. `test.sh` Check 9 asserts the rules and contact
+  point are provisioned, Check 10 that the receiver accepts the token.
+- **Coverage:** only hosts that ship logs here are watched — today the Proxmox nodes,
+  the firewall, the mothership and this VM. App VMs do not ship yet: #770.
+
 ## Retention & sizing
 
 - Default retention: **30 days** (configured in `logging.nix` as `retentionHours`).

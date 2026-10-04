@@ -336,7 +336,37 @@ in
           + ":/run/current-system/sw/bin")
       ];
       ProtectSystem = "strict";
-      ReadWritePaths = [ "/home/tappaas/config" ];
+      # config/ for the breadcrumb, /var/lib/tappaas for the heartbeat file.
+      ReadWritePaths = [ "/home/tappaas/config" "/var/lib/tappaas" ];
+    };
+  };
+
+  # The alerting watches itself (#126): Grafana's Heartbeat rule reaches the
+  # receiver hourly while logs flow and rules run; this timer — here, not on the
+  # logging VM it watches — mails when that stops for two hours, so a dead
+  # logging VM, Grafana, Loki or token cannot leave the site silently unwatched.
+  systemd.services.tappaas-alert-watchdog = {
+    description = "Mail when the log alerting has stopped reporting (#126)";
+    serviceConfig = {
+      Type = "oneshot";
+      User = "tappaas";
+      ExecStart = "/home/tappaas/bin/tappaas-alert-watchdog.sh";
+      Environment = [
+        ("PATH=/home/tappaas/bin:/run/wrappers/bin:/home/tappaas/.nix-profile/bin"
+          + ":/etc/profiles/per-user/tappaas/bin:/nix/var/nix/profiles/default/bin"
+          + ":/run/current-system/sw/bin")
+      ];
+      ProtectSystem = "strict";
+      ReadWritePaths = [ "/home/tappaas/config" "/var/lib/tappaas" ];
+    };
+  };
+
+  systemd.timers.tappaas-alert-watchdog = {
+    description = "Check the log alerting's heartbeat every 15 minutes (#126)";
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnBootSec = "30min";
+      OnUnitActiveSec = "15min";
     };
   };
 

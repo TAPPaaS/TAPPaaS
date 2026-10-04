@@ -145,6 +145,25 @@ let
       summary = "Root's authorized_keys on a Proxmox node was changed from a login session.";
       query = ''${pve} |= "tappaas-rootkeys"'';
     })
+    (alertRule {
+      uid = "tappaas-replication-failed"; title = "ReplicationFailed"; kind = "state"; window = 3600;
+      # A condition, not an event: replication runs every 15 minutes, so a job
+      # that keeps failing stays one alert (repeated every 4 h), and its resolve
+      # — an hour without the error — is mailed. The line PVE logs, seen on
+      # hrossen: "<job>: got unexpected replication job error - command ...".
+      expr = ''sum by (host) (count_over_time(${pve} |~ "replication job error|replication job .* failed" [1h]))'';
+      summary = "Storage replication (pvesr) keeps failing: the HA copy of a guest on the other node is getting stale.";
+      query = ''${pve} |~ "replication"'';
+    })
+    (alertRule {
+      uid = "tappaas-heartbeat"; title = "Heartbeat"; kind = "heartbeat"; window = 300;
+      # Fires for as long as logs arrive and rules run; its webhook proves the
+      # whole path reaches the mothership. Never mailed: the receiver records
+      # it, and tappaas-alert-watchdog there mails when it stops (#126).
+      expr = ''sum(count_over_time({host=~".+"}[5m]))'';
+      summary = "The log alerting is alive (logs arrive, rules run, the webhook gets through).";
+      query = ''{host=~".+"}'';
+    })
   ];
 
   # Disk trouble is a condition, not an event, and its sources speak rarely:
@@ -743,8 +762,17 @@ in
             group_wait = "30s";
             group_interval = "5m";
             repeat_interval = "4h";
-            # Disk errors: once a day is enough (operator, 2026-10-04).
             routes = [{
+              # The heartbeat: hourly, never grouped with anything else. The
+              # receiver records it; the watchdog mails if it stops.
+              receiver = "tappaas-site-notify";
+              object_matchers = [ [ "alertname" "=" "Heartbeat" ] ];
+              group_by = [ "alertname" ];
+              group_wait = "0s";
+              group_interval = "5m";
+              repeat_interval = "1h";
+            } {
+              # Disk errors: once a day is enough (operator, 2026-10-04).
               receiver = "tappaas-site-notify";
               object_matchers = [ [ "alertname" "=" "DiskErrors" ] ];
               group_by = [ "alertname" "host" ];

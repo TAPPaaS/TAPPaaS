@@ -191,10 +191,10 @@ check_alert_rules() {
         c=$(curl -s --max-time 10 -u "admin:${pw}" http://127.0.0.1:3000/api/v1/provisioning/contact-points \
             | jq -r "[.[] | select(.uid == \"tappaas-site-notify\" and .type == \"webhook\")] | length")
         echo "${r:-?} ${c:-?}"' 2>/dev/null) || true
-    if [[ "${out}" == "7 1" ]]; then
-        check_pass "7 alert rules and the tappaas-site-notify webhook are provisioned"
+    if [[ "${out}" == "9 1" ]]; then
+        check_pass "9 alert rules (heartbeat included) and the tappaas-site-notify webhook are provisioned"
     else
-        check_fail "alert provisioning incomplete (rules, contact points: ${out:-no answer}; want 7 1)"
+        check_fail "alert provisioning incomplete (rules, contact points: ${out:-no answer}; want 9 1)"
     fi
 }
 
