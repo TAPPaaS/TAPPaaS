@@ -35,7 +35,7 @@ chmod +x "${TMP}/notify"
 
 PORT="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1])')"
 python3 "${R}" --listen "127.0.0.1:${PORT}" --token-file "${TMP}/token" \
-    --notify "${TMP}/notify" --breadcrumb "${TMP}/crumbs" > "${TMP}/log" 2>&1 &
+    --notify "${TMP}/notify" --breadcrumb "${TMP}/crumbs" --heartbeat-file "${TMP}/heartbeat" > "${TMP}/log" 2>&1 &
 PID=$!
 for _ in $(seq 1 50); do curl -s "http://127.0.0.1:${PORT}/" >/dev/null 2>&1 && break; sleep 0.1; done
 
@@ -74,6 +74,14 @@ rm -f "${TMP}/notify-fails"
 ck "an empty token file refuses everything" "401" "$(post '' "$(wh firing event QuorumLost tappaas1)")"
 printf 'rotated\n' > "${TMP}/token"
 ck "a rotated token is read without a restart" "200" "$(post rotated "$(wh firing event OomKill openwebui)")"
+
+n="$(sent)"
+ck "a heartbeat is accepted" "200" "$(post rotated "$(wh firing heartbeat Heartbeat '')")"
+ck "…recorded" "2026-10-04T18:00:00Z" "$(cat "${TMP}/heartbeat" 2>/dev/null)"
+ck "…and never mailed" "${n}" "$(sent)"
+both='{"status":"firing","alerts":[{"status":"firing","labels":{"alertname":"Heartbeat","kind":"heartbeat"},"startsAt":"2026-10-04T19:00:00Z"},{"status":"firing","labels":{"alertname":"QuorumLost","host":"tappaas2","kind":"event"},"startsAt":"2026-10-04T19:00:00Z"}]}'
+ck "a heartbeat next to a real alert does not hide it" "200" "$(post rotated "${both}")"
+ck "…the real one is mailed" "ALERT: QuorumLost on tappaas2" "$(tail -1 "${TMP}/subjects")"
 
 ck "--render prints the mail" "Subject: ALERT: QuorumLost on tappaas1" \
    "$(wh firing event QuorumLost tappaas1 | python3 "${R}" --render | head -1)"
