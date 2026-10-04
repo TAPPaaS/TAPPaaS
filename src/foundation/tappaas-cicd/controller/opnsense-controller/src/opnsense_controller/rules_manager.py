@@ -311,7 +311,32 @@ def resolve_provider_module(
     alias = {"network": "firewall", "firewall": "network"}.get(provider, "")
     if alias and (modules_dir / f"{alias}.json").is_file():
         return alias
-    return provider
+    return provider_instance_of(modules_dir, provider) or provider
+
+
+def provider_instance_of(modules_dir: Path, module: str) -> str:
+    """The first deployed instance (by name) of a module with no config of its own name.
+
+    A module whose instances are named after something else (pvehost:
+    tappaas1..3, ADR-026 D6) is reached through any instance: its services are
+    the module's (ADR-029 D2). Never an instance named ``<module>-<env>``: an
+    environment's own copy must not answer for the shared name (#438). Mirrors
+    ``_provider_instance_of`` in common-install-routines.sh and
+    ``providerInstanceOf`` in module-manager.
+    """
+    for f in sorted(modules_dir.glob("*.json")):
+        if f.name.startswith(f"{module}-"):
+            continue
+        try:
+            raw = json.loads(f.read_text())
+        except (OSError, ValueError):
+            continue
+        if not isinstance(raw, dict):
+            continue
+        src = module_source_of(raw)
+        if src and src.rstrip("/").rsplit("/", 1)[-1] == module:
+            return f.stem
+    return ""
 
 
 def _parse_dependency(dep: str) -> tuple[str, str] | None:

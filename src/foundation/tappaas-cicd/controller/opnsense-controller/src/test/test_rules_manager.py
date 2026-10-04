@@ -1530,3 +1530,35 @@ class TestAliasAndFirewallTypeArePatternA(unittest.TestCase):
         spec = self._load({"vmname": "sonos", "dependsOn": ["network:rules"]})
         self.assertEqual(spec.alias_type, "host")
         self.assertEqual(spec.firewall_type, "opnsense")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ADR-029 D1 — a provider reached through its instances
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# pvehost has no pvehost.json: its instances are named after the nodes. The
+# coordinate must resolve to the first instance by name, as the bash and the
+# module-manager resolvers do — and never to an environment's own copy (#438).
+
+
+class TestProviderInstance(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.d = Path(self._tmp.name)
+        (self.d / "tappaas2.json").write_text(json.dumps({"moduleSource": "/r/src/foundation/pvehost"}))
+        (self.d / "tappaas1.json").write_text(json.dumps({"moduleSource": "/r/src/foundation/pvehost/"}))
+        (self.d / "0-half-written.json").write_text("broken{")
+        (self.d / "coturn-demo.json").write_text(json.dumps({"moduleSource": "/r/coturn"}))
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_first_instance_by_name(self):
+        self.assertEqual(rm.resolve_provider_module(self.d, "pvehost"), "tappaas1")
+
+    def test_an_environment_copy_never_answers_for_the_shared_name(self):
+        self.assertEqual(rm.resolve_provider_module(self.d, "coturn"), "coturn")
+        self.assertEqual(rm.resolve_provider_module(self.d, "coturn", "demo"), "coturn-demo")
+
+    def test_no_instance_echoes_the_name(self):
+        self.assertEqual(rm.resolve_provider_module(self.d, "ghost"), "ghost")

@@ -805,7 +805,32 @@ resolve_provider_module() {
         echo "${alias}"
         return
     fi
+    # A module whose instances are named after something else (pvehost:
+    # tappaas1..3, ADR-026 D6) has no config of its own name. Its services are
+    # the module's, not an instance's, so any instance reaches them; which node a
+    # consumer means is in the consumer's own config (ADR-029 D2), never in the
+    # coordinate.
+    local instance
+    instance="$(_provider_instance_of "${provider}")"
+    if [[ -n "${instance}" ]]; then
+        echo "${instance}"
+        return
+    fi
     echo "${provider}"
+}
+
+# _provider_instance_of <module> — the first deployed instance (by name) whose
+# .moduleSource (or legacy .location) is the module's directory and whose name is
+# NOT <module>-<something>; empty if none. That exclusion keeps an environment's
+# own copy (coturn-demo) from answering for the shared name — the silent
+# cross-environment resolution #438 removed. A grep, not a jq over config/: one
+# half-written file must not hide the rest. Only reached when no config carries
+# the module's own name.
+_provider_instance_of() {
+    local f
+    f="$(grep -lE "\"(moduleSource|location)\"[[:space:]]*:[[:space:]]*\"[^\"]*/$1/?\"" \
+        "${CONFIG_DIR}"/*.json 2>/dev/null | grep -v "/$1-[^/]*\.json\$" | LC_ALL=C sort | head -1)"
+    [[ -z "${f}" ]] || basename "${f}" .json
 }
 
 check_service_available() {

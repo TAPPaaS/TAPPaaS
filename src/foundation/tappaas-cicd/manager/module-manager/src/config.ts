@@ -11,7 +11,7 @@ import { basename, dirname, join } from "path";
 import { defaultConfigDir } from "../../../lib/ts/src/config-io";
 import { discoverModules, isModuleConfig } from "../../../lib/ts/src/module-discovery";
 import { ModuleConfig, ModuleStatus } from "./types";
-import { moduleSourceOf } from "../../../lib/ts/src/instance";
+import { moduleOfLocation, moduleSourceOf } from "../../../lib/ts/src/instance";
 import { effectiveKind } from "../../../lib/ts/src/kind";
 import { Scope, moduleScope } from "../../../lib/ts/src/scope";
 
@@ -270,7 +270,36 @@ export function resolveProviderModule(
   if (existsSync(join(configDir, `${provider}.json`))) return provider;
   const alias = provider === "network" ? "firewall" : provider === "firewall" ? "network" : "";
   if (alias && existsSync(join(configDir, `${alias}.json`))) return alias;
-  return provider;
+  return providerInstanceOf(configDir, provider) ?? provider;
+}
+
+// A module whose instances are named after something else (pvehost: tappaas1..3,
+// ADR-026 D6) has no config of its own name. Its services are the module's, so
+// any instance reaches them; which node a consumer means is in the consumer's
+// own config (ADR-029 D2). The first instance by name, as the bash
+// _provider_instance_of picks, never one named <module>-<env>: an environment's
+// own copy must not answer for the shared name (#438). An unreadable file is
+// skipped, never fatal.
+export function providerInstanceOf(configDir: string, module: string): string | null {
+  let files: string[];
+  try {
+    files = readdirSync(configDir)
+      .filter((f) => f.endsWith(".json") && !f.startsWith(`${module}-`))
+      .sort();
+  } catch {
+    return null;
+  }
+  for (const f of files) {
+    let raw: Record<string, unknown>;
+    try {
+      raw = JSON.parse(readFileSync(join(configDir, f), "utf8"));
+    } catch {
+      continue;
+    }
+    const src = moduleSourceOf(raw);
+    if (src && moduleOfLocation(src) === module) return f.slice(0, -".json".length);
+  }
+  return null;
 }
 
 // ── Module-resolution classification (#460) ───────────────────────────

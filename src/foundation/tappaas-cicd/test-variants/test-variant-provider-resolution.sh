@@ -151,5 +151,23 @@ else
     printf '        %s\n' "${_readers}" >&2
 fi
 
+# ── A module reached through its instances (ADR-029 D1, ADR-026 D6) ──
+# pvehost has no config/pvehost.json: its instances are named after the nodes.
+# A `pvehost:nfs` coordinate must still resolve — to an instance, the first by
+# name — so check_service_available finds the module's service directory.
+make_provider tappaas2 nfs pvehost
+jq '.moduleSource = .location | del(.location)' "${CONFIG_DIR}/tappaas2.json" > "${WORK}/t" && mv "${WORK}/t" "${CONFIG_DIR}/tappaas2.json"
+make_provider tappaas1 nfs pvehost
+printf 'broken{' > "${CONFIG_DIR}/0-half-written.json"
+assert_eq "$(resolve_provider_module pvehost)" "tappaas1" "PI-01 a module with no config of its name resolves to its first instance"
+check_service_available "pvehost:nfs" install-service.sh >/dev/null 2>&1 \
+    && pass "PI-02 check_service_available accepts pvehost:nfs through an instance" \
+    || fail "PI-02 check_service_available refused pvehost:nfs"
+assert_eq "$(resolve_provider_module ghost)" "ghost" "PI-03 a module with no instance still echoes its name (the caller reports the miss)"
+make_provider pvehost nfs pvehost
+assert_eq "$(resolve_provider_module pvehost)" "pvehost" "PI-04 a config of the module's own name still wins"
+rm -f "${CONFIG_DIR}/pvehost.json" "${CONFIG_DIR}/0-half-written.json"
+assert_eq "$(resolve_provider_module coturn "")" "coturn" "PI-05 an environment's own copy (coturn-demo) never answers for the shared name (#438)"
+
 echo "  Results: ${PASS} passed, ${FAIL} failed"
 [[ "${FAIL}" -eq 0 ]]
