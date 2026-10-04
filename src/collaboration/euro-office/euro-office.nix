@@ -168,7 +168,13 @@ EOF
     ];
 
     volumes = [
-      "/var/lib/euro-office/data:/var/www/onlyoffice/Data"  # Persistent document storage
+      # The document server's data directory. Every euro-office release keeps it
+      # at /var/www/euro-office/Data; this was mounted at the OnlyOffice path
+      # (/var/www/onlyoffice/Data), so the volume stayed empty and the server's
+      # secure_link_secret was regenerated whenever the container was recreated,
+      # breaking download links in flight (found 2026-10-04). Documents
+      # themselves live in Nextcloud, not here.
+      "/var/lib/euro-office/data:/var/www/euro-office/Data"
       # Welcome/example surface, made replaceable so the splash page can be
       # pointed at the Nextcloud that consumes this document server (see
       # euro-office-init-welcome below). Bind-mounted, so rewriting the host
@@ -310,7 +316,10 @@ EOF
   # ============================================================================
 
   systemd.tmpfiles.rules = [
-    "d /var/lib/euro-office/data  0700 root root -"  # Persistent document volume
+    # Owned as the image owns its Data directory: user and group `ds` (105:107
+    # in the image), setgid. root:root 0700 here would lock the container's
+    # `ds` out of its own directory, and `d` re-applies it on every boot.
+    "d /var/lib/euro-office/data  2775 105 107 -"
     "d /var/backup/euro-office    0700 root root -"  # Backup destination
   ];
 
