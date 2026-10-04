@@ -8,7 +8,9 @@
 # uncommitted; a module moved twice is one move; a rename needs --rename and is
 # refused while a module depends on the old name; after a commit a new migration
 # starts; a move between repositories copies, removes and re-catalogues; and the
-# generated fixture test passes.
+# generated fixture test passes. Between repositories both catalogues are
+# edited as text (escapes and indentation kept), and the entry lands in a
+# single-list catalogue's `modules` cut down to where/which VMIDs/stack.
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -28,7 +30,8 @@ echo '{"dependsOn":["bar:svc"]}' > "${R}/src/apps/dep/dep.json"
 echo '{"description":"baz"}' > "${C}/src/apps/baz/baz.json"
 cat > "${R}/src/module-catalog.json" <<'EOF'
 {
-  "applicationModules": [
+  "description": "TAPPaaS \u2014 one list — mixed escapes",
+  "modules": [
     { "moduleName": "foo", "moduleJson": "src/apps/foo/foo.json", "tier": "app" },
     {
       "moduleName": "bar",
@@ -38,7 +41,26 @@ cat > "${R}/src/module-catalog.json" <<'EOF'
   ]
 }
 EOF
-echo '{"applicationModules":[{"moduleName":"baz","moduleJson":"src/apps/baz/baz.json","tier":"app"}]}' > "${C}/src/module-catalog.json"
+cat > "${C}/src/module-catalog.json" <<'EOF'
+{
+    "description": "Community \u2014 lists by kind",
+    "applicationModules": [
+        {
+            "moduleName": "baz",
+            "repo": "community",
+            "moduleJson": "src/apps/baz/baz.json",
+            "vmid": 350,
+            "stack": "entertainment",
+            "status": "beta"
+        },
+        {
+            "moduleName": "zed",
+            "moduleJson": "src/apps/zed/zed.json"
+        }
+    ],
+    "testModules": []
+}
+EOF
 printf '#!/usr/bin/env bash\n# 0009-x.sh — x\n' > "${R}/src/foundation/tappaas-cicd/migrations/0009-x.sh"
 printf '| id | what |\n|---|---|\n| `0009-x.sh` | x | yes |\n\n## Writing one\n' > "${R}/src/foundation/tappaas-cicd/migrations/README.md"
 for r in "${R}" "${C}"; do g "${r}" init -q; g "${r}" add -A; g "${r}" commit -q -m init; done
@@ -71,7 +93,7 @@ ck "…and refused while a module depends on the old name" "1 yes yes" "${rc} $(
 echo '{}' > "${R}/src/apps/dep/dep.json"
 rc=0; "${MM}" TAPPaaS:src/apps/bar TAPPaaS:src/apps/bar2 --rename >/dev/null 2>&1 || rc=$?
 ck "with --rename and no dependant it moves"          "0 yes" "${rc} $([[ -f "${R}/src/apps/bar2/bar2.json" ]] && echo yes || echo no)"
-ck "…the catalogue names it bar2 at its new path"     "bar2 src/apps/bar2/bar2.json" "$(jq -r '.applicationModules[] | select(.moduleName == "bar2") | "\(.moduleName) \(.moduleJson)"' "${R}/src/module-catalog.json")"
+ck "…the catalogue names it bar2 at its new path"     "bar2 src/apps/bar2/bar2.json" "$(jq -r '.modules[] | select(.moduleName == "bar2") | "\(.moduleName) \(.moduleJson)"' "${R}/src/module-catalog.json")"
 
 # ── the generated fixture test passes ────────────────────────────────
 rc=0; out="$(bash "${S}/test/test-migration-0010-modules-moved.sh" 2>&1)" || rc=$?
@@ -86,12 +108,16 @@ ck "after a commit the migration is sealed"           "" "$(diff "${T}/0010.befo
 ck "…and the next move starts 0011"                   "TAPPaaS:src/stacks/home/qux|TAPPaaS:src/stacks/work/qux " "$(table "${MIG}/0011-modules-moved.sh" 2>/dev/null)"
 
 # ── between repositories ─────────────────────────────────────────────
-rc=0; "${MM}" Community:src/apps/baz TAPPaaS:src/apps/baz --checkout "Community=${C}" >/dev/null 2>&1 || rc=$?
+rc=0; "${MM}" Community:src/apps/baz TAPPaaS:src/home/baz --checkout "Community=${C}" >/dev/null 2>&1 || rc=$?
 ck "a move between repositories succeeds"             0 "${rc}"
-ck "…copied into TAPPaaS, removed from Community"     "yes no" "$([[ -f "${R}/src/apps/baz/baz.json" ]] && echo yes || echo no) $([[ -e "${C}/src/apps/baz" ]] && echo yes || echo no)"
-ck "…out of Community's catalogue"                    "0" "$(jq '.applicationModules | length' "${C}/src/module-catalog.json")"
-ck "…into TAPPaaS's, same fields"                     "app src/apps/baz/baz.json" "$(jq -r '.applicationModules[] | select(.moduleName == "baz") | "\(.tier) \(.moduleJson)"' "${R}/src/module-catalog.json")"
-ck "…and into the open migration"                     "yes" "$(grep -qF '"Community:src/apps/baz|TAPPaaS:src/apps/baz"' "${MIG}/0011-modules-moved.sh" && echo yes || echo no)"
+ck "…copied into TAPPaaS, removed from Community"     "yes no" "$([[ -f "${R}/src/home/baz/baz.json" ]] && echo yes || echo no) $([[ -e "${C}/src/apps/baz" ]] && echo yes || echo no)"
+ck "…out of Community's catalogue"                    "zed" "$(jq -r '.applicationModules[].moduleName' "${C}/src/module-catalog.json")"
+ck "…which loses only the entry's lines (text edit)"  "0 8" "$(git -C "${C}" diff --numstat src/module-catalog.json | awk '{print $1, $2}')"
+ck "…into TAPPaaS's one list, where and which VMIDs only, stack from the path" \
+    '{"moduleName":"baz","moduleJson":"src/home/baz/baz.json","vmid":350,"stack":"home"}' \
+    "$(jq -c '.modules[] | select(.moduleName == "baz")' "${R}/src/module-catalog.json")"
+ck "…which only gains lines (escapes kept)"           "1 \\u2014" "$(git -C "${R}" diff --numstat src/module-catalog.json | awk '{print $2}') $(grep -o '\\u2014' "${R}/src/module-catalog.json")"
+ck "…and into the open migration"                     "yes" "$(grep -qF '"Community:src/apps/baz|TAPPaaS:src/home/baz"' "${MIG}/0011-modules-moved.sh" && echo yes || echo no)"
 
 rc=0; "${MM}" TAPPaaS:src/apps/nope TAPPaaS:src/apps/nope2 --rename >/dev/null 2>&1 || rc=$?
 ck "a module that is not there is refused"            1 "${rc}"
