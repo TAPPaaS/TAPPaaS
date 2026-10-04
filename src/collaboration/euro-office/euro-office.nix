@@ -13,7 +13,7 @@
 # Product: Euro-Office DocumentServer (collaborative document editing)
 #
 # Architecture:
-# - Single Podman container (ghcr.io/euro-office/documentserver:v9.3.1, pinned in nix)
+# - Single Podman container (ghcr.io/euro-office/documentserver:v9.3.3, pinned in nix)
 # - Container bundles Nginx, PostgreSQL, Redis, RabbitMQ, DocService,
 #   FileConverter, AdminPanel, and an example app internally
 # - Only port 80 (Nginx) is exposed to the host; all other ports are internal
@@ -143,11 +143,16 @@ EOF
   # ============================================================================
 
   virtualisation.oci-containers.containers."euro-office" = {
-    # Pinned to the latest stable Euro-Office DocumentServer release (v9.3.1,
-    # 2026-06-09). Immutable semver tag — NOT :latest/:nightly (mutable, unfit
-    # for declarative). Runtime-verified on 2026-06-10: starts clean,
-    # /healthcheck=200, /web-apps api.js=200. Keep in sync with update.sh.
-    image = "ghcr.io/euro-office/documentserver:v9.3.1";
+    # Pinned to DocumentServer v9.3.3 (was v9.3.1), deliberately NOT the newest
+    # v9.3.4: its startup cannot generate the presentation themes — the doc
+    # renderer hits a V8 fatal error ("could not use 01_blank.pptx"), shown with
+    # a bare container and nothing of ours (hrossen, 2026-10-04). v9.3.3 starts
+    # clean and carries almost all of v9.3.4's fixes: image findings fixable
+    # 975 -> 639, High 6 -> 2 (grype); the two left are one OpenSSL CVE Ubuntu
+    # has fixed and upstream has not rebuilt for. Move on when a release past
+    # v9.3.4 generates its themes. Immutable semver tag — NOT :latest/:nightly.
+    # Keep in sync with update.sh; src/image-pins.json tracks both (#750).
+    image = "ghcr.io/euro-office/documentserver:v9.3.3";
 
     environment = {
       ALLOW_PRIVATE_IP_ADDRESS = "true";
