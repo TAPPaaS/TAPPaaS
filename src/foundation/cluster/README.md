@@ -17,6 +17,7 @@ VM, LXC and HA services every other TAPPaaS module builds on.
 | ZFS data pools (`tankXY`) | nodes | built by `config-storage.sh` at install |
 | Controlled node/cluster reboots | TAPPaaS admin | `reboot-node.sh` / `reboot-cluster.sh` |
 | Key-only SSH on every node (#19) | TAPPaaS admin | enforced by `update.sh` Step 5 (`tappaas-cicd/scripts/ssh-key-only.sh`, shared with the machine modules' `sshKeyOnly`, #756). No password SSH for any user; root by key only. The web GUI, its node Shell and the physical console still take the root password |
+| Microcode and an audit trail on every node (#128) | TAPPaaS admin | enforced by `update.sh` Step 5b (`setup-host-hardening.sh`). The CPU vendor's microcode package; auditd records changes **made from a login session** (SSH, the sweep, the console, the GUI node Shell) to `/etc/pve`, `/etc/ssh`, `/root/.ssh` and `/etc/network`, and forwards them to the logging module. In Grafana: `{source="proxmox"} \|= "tappaas-pve"` (or `tappaas-ssh`, `tappaas-network`). Changes made through the web GUI or API are PVE's own task log lines, already in Loki |
 
 A guest is **either** a VM **or** an LXC container, never both.
 

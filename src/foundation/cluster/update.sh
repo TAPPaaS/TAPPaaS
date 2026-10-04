@@ -242,6 +242,30 @@ if [[ "${_ssh_hard_fail}" -eq 0 ]]; then
     debug "Key-only SSH enforced on all Proxmox nodes."
 fi
 
+# Step 5b: CPU microcode and the audit trail on every node (issue #128).
+#   The vendor's microcode package, and auditd recording changes made from a
+#   login session to /etc/pve, /etc/ssh, /root/.ssh and /etc/network — forwarded
+#   through the journal to the logging module, so they are searched in Loki, not
+#   node by node. Fed over the key login like Step 5; a node that does not take
+#   it is reported and the update goes on: neither control is a precondition for
+#   anything else the sweep does.
+info "${BOLD}Step 5b: CPU microcode and the audit trail on Proxmox nodes${CL}"
+_host_hard_fail=0
+while read -r node; do
+    NODE_FQDN="$node.$MGMTVLAN.internal"
+    if _hh_out="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=no root@"$NODE_FQDN" \
+            'bash -s -- apply' < "${SCRIPT_DIR}/setup-host-hardening.sh" 2>&1)"; then
+        while IFS= read -r _l; do debug "$node: ${_l}"; done <<<"${_hh_out}"
+    else
+        printf '%s\n' "${_hh_out}" >&2
+        warn "$node: host hardening not in force — see above"
+        _host_hard_fail=1
+    fi
+done <<< "$NODES"
+if [[ "${_host_hard_fail}" -eq 0 ]]; then
+    debug "Microcode and the audit trail in force on all Proxmox nodes."
+fi
+
 # Step 6: Drift-heal the cluster storage `nodes` lists from site.json.
 # The lists have only one-shot writers (config-storage at pool creation,
 # site-manager node add after a join) — a node that joined by any other

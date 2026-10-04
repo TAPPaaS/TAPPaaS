@@ -641,6 +641,26 @@ for _node in $(get_all_node_hostnames 2>/dev/null); do
     fi
 done
 
+# ── Test 5: microcode and the audit trail on every node (#128) ──────
+# setup-host-hardening.sh's own check, fed over the key login: the vendor's
+# microcode package, auditd running with the TAPPaaS rules loaded, and its syslog
+# plugin on so the records reach Loki. Same pre-update-gate rule as Test 4:
+# update.sh Step 5b converges a node, so in the gate it is reported, not failed.
+
+info "${BOLD}Test 5: node microcode and audit trail${CL}"
+
+for _node in $(get_all_node_hostnames 2>/dev/null); do
+    # shellcheck disable=SC2086
+    if _hh="$(ssh ${SSH_OPTS} "root@${_node}.${MGMT}.internal" 'bash -s -- check' \
+            < "${SCRIPT_DIR}/setup-host-hardening.sh" 2>&1)"; then
+        pass "${_node}: $(paste -sd';' <<<"${_hh}" | sed 's/;/ · /g')"
+    elif [[ "${RUNTIME_ONLY}" == "1" ]]; then
+        skip "${_node}: not in force yet ($(grep -E 'NOT|not' <<<"${_hh}" | paste -sd';' -)) — update.sh Step 5b converges it"
+    else
+        fail "${_node}: $(grep -E 'NOT|not' <<<"${_hh}" | paste -sd';' -) — run: module-manager module update cluster"
+    fi
+done
+
 # ── Deep Test: create a VM, induce zone drift, verify reconcile ─────
 
 deep_cleanup() {
