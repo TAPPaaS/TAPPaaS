@@ -250,6 +250,11 @@ in `config/alerts.log` on the mothership.
   point are provisioned, Check 10 that the receiver accepts the token.
 - **Coverage:** only hosts that ship logs here are watched — today the Proxmox nodes,
   the firewall, the mothership and this VM. App VMs do not ship yet: #770.
+- **The only channel.** Proxmox's own notification mails (smartd and ZED system mail,
+  backup jobs, replication, fencing, updates) are switched off by `cluster/update.sh`
+  Step 5c, which disables PVE's built-in `default-matcher`, so one condition does not
+  arrive twice from two systems. Verified: a mail to root on a node reaches
+  `proxmox-mail-forward`, which logs "skipping disabled matcher" and sends nothing on.
 
 ## Retention & sizing
 

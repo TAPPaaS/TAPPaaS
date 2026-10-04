@@ -266,6 +266,38 @@ if [[ "${_host_hard_fail}" -eq 0 ]]; then
     debug "Microcode and the audit trail in force on all Proxmox nodes."
 fi
 
+# Step 5c: Proxmox's own notification mails off (#126).
+#   PVE mails root@pam's address through its built-in `default-matcher`: smartd
+#   and ZED warnings (as system mail), every backup job, replication failures,
+#   fencing, available updates. The logging module's alert rules now cover what
+#   matters of that — disks, backups, replication, fencing, quorum — and mail
+#   it the controlled way (site-notify.sh, grouped, repeated at most daily for
+#   disks), with a heartbeat the mothership watches. Two channels about one
+#   disk is one too many (operator, 2026-10-04). The matcher is disabled, not
+#   deleted: `pvesh set /cluster/notifications/matchers/default-matcher
+#   --disable 0` brings PVE's mails back, and a site that adds its OWN matcher
+#   keeps it. /etc/pve is cluster-wide, so one node is enough.
+info "${BOLD}Step 5c: Proxmox's own notification mails off (alerting is the logging module's)${CL}"
+_pve_notify_done=0
+while read -r node; do
+    NODE_FQDN="$node.$MGMTVLAN.internal"
+    _dm="$(ssh -n -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=no root@"$NODE_FQDN" \
+        "pvesh get /cluster/notifications/matchers --output-format json" 2>/dev/null \
+        | jq -r '.[] | select(.name == "default-matcher") | .disable // 0' 2>/dev/null)" || _dm=""
+    [[ -n "${_dm}" ]] || continue
+    if [[ "${_dm}" == "1" ]]; then
+        debug "PVE default-matcher already disabled"
+    elif ssh -n -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=no root@"$NODE_FQDN" \
+            "pvesh set /cluster/notifications/matchers/default-matcher --disable 1 --comment 'Disabled by TAPPaaS: alerts come from the logging module (#126)'" >/dev/null 2>&1; then
+        info "  ${GN}✓${CL} PVE notification mails off (default-matcher disabled, cluster-wide)"
+    else
+        warn "  could not disable PVE's default-matcher via $node — PVE keeps mailing as before"
+    fi
+    _pve_notify_done=1
+    break
+done <<< "$NODES"
+[[ "${_pve_notify_done}" -eq 1 ]] || warn "  no node answered the notifications API — PVE's mails are unchanged"
+
 # Step 6: Drift-heal the cluster storage `nodes` lists from site.json.
 # The lists have only one-shot writers (config-storage at pool creation,
 # site-manager node add after a join) — a node that joined by any other
