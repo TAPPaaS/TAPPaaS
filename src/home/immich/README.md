@@ -26,7 +26,7 @@ Same three-layer model as the jellyfin module, selected by `mediaStorage` in
 `immich.json` (see INSTALL.md → Photo Storage):
 
 - **Layer 1 — block device**: Proxmox virtual disk at slot `scsi2`
-  (`allocate`, default 500G on `tankc1`), an operator-attached USB/iSCSI disk
+  (`allocate`, default 500G on `tankb1`), an operator-attached USB/iSCSI disk
   (`attached`), or a NAS share mounted directly (`share`).
 - **Layer 2 — filesystem**: ext4, label `immich-data`, mounted by label at
   `/var/lib/immich` (`nofail` + systemd automount).
