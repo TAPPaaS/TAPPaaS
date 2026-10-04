@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 # TAPPaaS Module: immich — Installation
 #
-# Deploys the Immich NixOS config, provisions the photo data disk, and
-# bootstraps the admin account. VM creation is handled by the cluster:vm
-# dependency. Data disk provisioning (services/photostorage) runs here since
-# it provisions immich's own infrastructure, not a consumer VM.
+# Deploys the Immich NixOS config and bootstraps the admin account. VM
+# creation is handled by the cluster:vm dependency; the photos live on the VM's
+# own disk (diskSize), so there is no storage to provision here.
 #
 # Security note: the admin account is claimed immediately after the API comes
 # up — /api/auth/admin-sign-up is open to anyone until the first admin exists,
@@ -17,10 +16,6 @@ set -euo pipefail
 
 . /home/tappaas/bin/common-install-routines.sh
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-# Provision the data disk (allocate on Proxmox, format, mount /var/lib/immich)
-"${SCRIPT_DIR}/services/photostorage/install-service.sh"
 
 # Apply the NixOS config (also run on updates)
 . ./update.sh

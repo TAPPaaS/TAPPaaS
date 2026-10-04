@@ -12,7 +12,6 @@ set -euo pipefail
 
 _VMNAME="$(get_config_value 'vmname' 'immich' 2>/dev/null || echo 'immich')"
 _ZONE="$(get_config_value 'zone0' 'srvHome' 2>/dev/null || echo 'srvHome')"
-_ML="$(get_config_value 'machineLearning' 'true' 2>/dev/null || echo 'true')"
 TARGET="${_VMNAME}.${_ZONE}.internal"
 SSH_CMD="ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o BatchMode=yes tappaas@${TARGET}"
 TIMESTAMP=$(date '+%Y-%m-%d_%H%M%S')
@@ -56,15 +55,11 @@ fi
 
 # ── Test 2: Machine learning service ──────────────────────────────────────────
 header "Test 2: Machine Learning Service"
-if [[ "${_ML}" == "true" ]]; then
-    ML_STATUS=$(remote "systemctl is-active immich-machine-learning 2>/dev/null || echo inactive")
-    if [[ "${ML_STATUS}" == "active" ]]; then
-        pass "immich-machine-learning service is active"
-    else
-        fail "immich-machine-learning service is ${ML_STATUS}"
-    fi
+ML_STATUS=$(remote "systemctl is-active immich-machine-learning 2>/dev/null || echo inactive")
+if [[ "${ML_STATUS}" == "active" ]]; then
+    pass "immich-machine-learning service is active"
 else
-    skip "machine learning disabled in immich.json (machineLearning=false)"
+    fail "immich-machine-learning service is ${ML_STATUS}"
 fi
 
 # ── Test 3: PostgreSQL + vector extensions ────────────────────────────────────
@@ -109,26 +104,29 @@ fi
 
 # ── Test 6: ML endpoint (localhost only, by design) ───────────────────────────
 header "Test 6: ML Endpoint"
-if [[ "${_ML}" == "true" ]]; then
-    ML_PING=$(remote "curl -s --max-time 10 http://localhost:3003/ping 2>/dev/null || echo unreachable")
-    if [[ -n "${ML_PING}" && "${ML_PING}" != "unreachable" ]]; then
-        pass "ML service answers on localhost:3003"
-    else
-        fail "ML service on localhost:3003 not responding"
-    fi
+ML_PING=$(remote "curl -s --max-time 10 http://localhost:3003/ping 2>/dev/null || echo unreachable")
+if [[ -n "${ML_PING}" && "${ML_PING}" != "unreachable" ]]; then
+    pass "ML service answers on localhost:3003"
 else
-    skip "machine learning disabled in immich.json (machineLearning=false)"
+    fail "ML service on localhost:3003 not responding"
 fi
 
-# ── Test 7: Data disk mount + ownership ───────────────────────────────────────
-header "Test 7: Data Disk"
-MOUNT_OK=$(remote "mountpoint -q /var/lib/immich && echo yes || echo no")
-if [[ "${MOUNT_OK}" == "yes" ]]; then
-    pass "/var/lib/immich is mounted"
-    DISK_INFO=$(remote "df -h /var/lib/immich | tail -1" || true)
-    inf "  ${DISK_INFO}"
+# ── Test 7: Photo library on the VM disk ──────────────────────────────────────
+# One disk: the library is on the root filesystem, which is what the
+# platform's disk-threshold check watches and grows (df /, scsi0).
+header "Test 7: Photo Library"
+SAME_FS=$(remote "[ \"\$(stat -c %d /var/lib/immich)\" = \"\$(stat -c %d /)\" ] && echo yes || echo no")
+if [[ "${SAME_FS}" == "yes" ]]; then
+    pass "/var/lib/immich is on the root filesystem"
 else
-    fail "/var/lib/immich is not mounted — run services/photostorage/install-service.sh"
+    fail "/var/lib/immich is on a separate filesystem — the disk-threshold check cannot see or grow it"
+fi
+USE_PCT=$(remote "df --output=pcent / | tail -1 | tr -dc 0-9")
+inf "  $(remote "df -h / | tail -1" || true)"
+if [[ -n "${USE_PCT}" && "${USE_PCT}" -lt 80 ]]; then
+    pass "Root filesystem at ${USE_PCT}% (below the 80% grow threshold)"
+else
+    fail "Root filesystem at ${USE_PCT:-?}% — raise diskSize (update-module) before it fills"
 fi
 OWNER=$(remote "stat -c %U /var/lib/immich 2>/dev/null || echo unknown")
 if [[ "${OWNER}" == "immich" ]]; then

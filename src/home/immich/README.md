@@ -16,39 +16,36 @@ ML-powered smart search and face recognition, all on your own hardware.
 | App | Immich 3 (`services.immich`, module + package from nixos-unstable until NixOS 26.11), HTTP on port 2283 |
 | Database | PostgreSQL + VectorChord — auto-provisioned by the NixOS module, unix-socket peer auth (no DB password exists) |
 | Cache | Redis (named instance `immich`), unix socket |
-| ML | `immich-machine-learning` on `localhost:3003` — smart search + face recognition; toggle via `machineLearning` in `immich.json` |
+| ML | `immich-machine-learning` on `localhost:3003` — smart search + face recognition; always on, the 8 GB VM is sized for it |
 | TLS | Terminated by Caddy on the OPNsense firewall (`network:proxy`); the VM serves plain HTTP |
-| Photos | Dedicated data disk on `tanka1`, mounted at `/var/lib/immich` (Immich's `mediaLocation`) |
-| HA | `cluster:ha` — both disks replicated to the HA node every 15 min; Proxmox HA restarts the VM there if its node fails |
+| Photos | On the VM's own disk (`diskSize`, 500G on `tanka1`), in `/var/lib/immich` (Immich's `mediaLocation`) |
+| HA | `cluster:ha` — the disk is replicated to the HA node every 15 min; Proxmox HA restarts the VM there if its node fails |
 
-## Storage Architecture
+## Storage
 
-Same three-layer model as the jellyfin module, selected by `mediaStorage` in
-`immich.json` (see INSTALL.md → Photo Storage):
+One disk. The photo library lives on the VM's own disk (`diskSize` in
+`immich.json`, default 500G on `tanka1`), in Immich's `mediaLocation`,
+`/var/lib/immich`, where Immich keeps `upload/`, `library/`, `thumbs/`,
+`encoded-video/`, `profile/` and `backups/`.
 
-- **Layer 1 — block device**: Proxmox virtual disk at slot `scsi2`
-  (`allocate`, default 500G on `tanka1`), an operator-attached USB/iSCSI disk
-  (`attached`), or a NAS share mounted directly (`share`).
-- **Layer 2 — filesystem**: ext4, label `immich-data`, mounted by label at
-  `/var/lib/immich` (`nofail` + systemd automount).
-- **Layer 3 — Immich layout**: Immich manages its own folders there —
-  `upload/`, `library/`, `thumbs/`, `encoded-video/`, `profile/`, `backups/`.
+Why not a separate photo disk: one disk is what the platform already looks
+after. The disk-threshold check watches `df /` and grows `scsi0` through
+`diskSize` (grow-only); `cluster:ha` replicates it to the HA node; PBS backs it
+up. A second disk would be invisible to the first and need its own size
+setting. More room for photos:
+`module-manager module modify immich --set diskSize=<size>`; `boot.growPartition`
+grows the filesystem.
 
-Photos are the one thing here that cannot be re-created, so the default puts
-them on `tanka`, next to the OS disk, where `cluster:ha` replicates both disks
-to the HA node. `attached` gives that up: a USB/iSCSI disk does not follow the VM
-to another node, so failover cannot happen.
-
-`immich-server` has `RequiresMountsFor=/var/lib/immich`: if the data disk is
-missing the service fails fast (restart loop) instead of silently writing
-photos to the OS disk.
+Photos are the one thing here that cannot be re-created, so the disk is on
+`tanka`, the replicated tier.
 
 ## Services
 
 - `immich-server` — API + web UI on `0.0.0.0:2283` (firewall: 22, 2283 only)
 - `immich-machine-learning` — CLIP smart search, face recognition
   (`localhost:3003`; models ~1–2 GB download to `/var/cache/immich` on first
-  job). Disable with `"machineLearning": false` and drop VM memory to 4096.
+  job). Always on; its memory is capped (MemoryHigh 4G, MemoryMax 5G) so a bulk
+  import cannot starve PostgreSQL and the server.
 - `postgresql` / `redis-immich` — module-managed, no TCP listeners
 - `postgresqlBackup-immich` — daily SQL dump at 02:30 (staggered after
   Immich's built-in ~02:00 dump) to `/var/backup/immich/postgresql`,
@@ -58,10 +55,10 @@ photos to the OS disk.
 
 Three layers:
 
-1. **PBS** (`backup:vm`) snapshots both disks (OS + photo disk).
+1. **PBS** (`backup:vm`) snapshots the VM disk, photos included.
 2. **Immich built-in**: nightly `pg_dumpall` into `/var/lib/immich/backups`
-   (on the photo disk, so it rides along with PBS).
-3. **postgresqlBackup**: daily plain-SQL dump (02:30) on the OS disk —
+   (on the same disk, so it rides along with PBS).
+3. **postgresqlBackup**: daily plain-SQL dump (02:30) to `/var/backup/immich` —
    restorable without Immich itself.
 
 ## Authentication & SSO
@@ -226,7 +223,8 @@ Jellyfin media library be added as an Immich External Library over NFS.
 - **Jellyfin photo library**: add `jellyfin:storage` to `dependsOn` to
   NFS-mount jellyfin's `/media` read-only (e.g. at `/media-jellyfin`), then
   add `/media-jellyfin/Photos` as an Immich *External Library* in the admin
-  UI. Requires jellyfin in `allocate`/`attached` mode (NFS export active).
+  UI. Once jellyfin's media moves to a `pvehost:nfs` share, mount that share
+  instead (read-only).
 - **Hardware transcoding**: set `accelerationDevices` in `immich.nix` (see
   INSTALL.md → Variants).
 
@@ -234,7 +232,7 @@ Jellyfin media library be added as an Immich External Library over NFS.
 
 ```bash
 # on tappaas-cicd, from "${TAPPAAS_REPO:-/home/tappaas/TAPPaaS}"/src/home/immich
-install-module.sh immich     # VM + disk + config + admin bootstrap
+install-module.sh immich     # VM + config + admin bootstrap
 ./test.sh                    # health checks
 ```
 

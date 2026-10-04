@@ -5,8 +5,8 @@
 - TAPPaaS foundation installed (cluster, network, templates, tappaas-cicd,
   backup, identity)
 - NixOS template `8080` available for cloning
-- Free VMID `361` and capacity for the photo disk (default 500G on `tanka1`)
-  on **both** the primary node and the HA node: it is replicated (`cluster:ha`)
+- Free VMID `361` and room for the VM disk (default 500G on `tanka1`) on
+  **both** the primary node and the HA node: it is replicated (`cluster:ha`)
 - Run everything from the `tappaas-cicd` mothership as the `tappaas` user
 
 ## Configure
@@ -15,50 +15,23 @@ Edit `immich.json` before installing if the defaults don't fit:
 
 | Key | Default | Notes |
 |---|---|---|
-| `cores` / `memory` | 4 / 8192 | With `machineLearning: false`, 4096 MB is enough |
-| `diskSize` | 32G | OS disk (Postgres, ML model cache live here) |
-| `mediaStorage` | `allocate` | `allocate` \| `attached` \| `share` — see Photo Storage |
-| `mediaDiskStorage` / `mediaDiskSize` | `tanka1` / `500G` | Used in `allocate` mode. Keep it on `tanka`: only that tier is replicated for HA |
+| `cores` / `memory` | 4 / 8192 | Sized for machine learning, which is always on |
+| `diskSize` | 500G | The whole VM: OS, database, ML models **and the photos** — see Photo Storage |
+| `storage` | `tanka1` | Keep it on `tanka`: only that tier is replicated for HA |
 | `HANode` / `replicationSchedule` | next node / `*/15` | `cluster:ha` — failover node, and how much can be lost (minutes) |
-| `machineLearning` | `true` | Smart search + face recognition (`immich-machine-learning`) |
 | `proxyAllowedZones` | `home, netbird, internet` | Drop `internet` for a private-only deployment (mobile then needs Netbird) |
 
 ## Photo Storage
 
-The photo library lives on a dedicated disk mounted at `/var/lib/immich`
-(Immich's `mediaLocation`). Three paths, selected by `mediaStorage`:
+Photos live on the VM's own disk, in `/var/lib/immich` — there is no separate
+photo disk and nothing to choose. `diskSize` is the room the library has:
 
-### Path 1 — `allocate` — new virtual disk (default)
-
-The module allocates `mediaDiskSize` on `mediaDiskStorage`, attaches it at
-slot `scsi2`, formats it ext4 with label `immich-data`. Fully automatic,
-consent is the config declaration; an existing disk at `scsi2` is never
-touched.
-
-### Path 2 — `attached` — a disk you provide
-
-Attach a USB disk or iSCSI LUN at slot `scsi2` yourself, then prepare it
-interactively (relabel is non-destructive; formatting always asks):
-
-```bash
-qm set 361 --scsi2 /dev/disk/by-id/<disk-id>        # USB/local disk
-./services/photostorage/setup-media-disk.sh          # relabel/format with confirmation
-```
-
-### Path 3 — `share` — NAS share mounted directly (no scsi2)
-
-Set in `immich.json`: `mediaShareHost`, `mediaShareExport`,
-`mediaShareType` (`nfs`|`cifs`), optional `mediaShareOptions`. `update.sh`
-generates the mount into the managed `media-mount` block of `immich.nix`.
-Note: Immich runs as the `immich` user — the share must map that user's
-writes correctly (NFS: `all_squash,anonuid=<uid>`; CIFS: `uid=` mount
-option). Advanced path; prefer 1 or 2.
-
-### Changing storage after install
-
-Photos live under `/var/lib/immich`. To migrate, stop `immich-server`, copy
-the full directory tree (preserving ownership), swap the disk/label, re-run
-`./services/photostorage/install-service.sh` and `./update.sh`.
+- **More room:** `module-manager module modify immich --set diskSize=<size>`
+  (config and cluster move together). It is grow-only; NixOS grows the filesystem on
+  the next boot (`boot.growPartition`). The platform's disk-threshold check
+  watches this disk and can grow it by 50% when it passes its threshold.
+- **Where:** `storage` (`tanka1`). Keep it on `tanka` — only that tier is
+  replicated for HA, and the photos cannot be re-created.
 
 ## Install
 
@@ -68,7 +41,7 @@ install-module.sh immich
 ```
 
 This resolves the dependencies (VM 361 from template 8080, PBS backup job,
-Caddy proxy entry, firewall rules), provisions the photo disk, applies
+Caddy proxy entry, firewall rules, HA and replication), applies
 `immich.nix`, waits for the API, and bootstraps the admin account. The
 generated admin password is printed **once** — store it and change it after
 first login. The admin sign-up endpoint is open until the first admin
@@ -153,11 +126,9 @@ apps auto-update, see <https://immich.app/docs/install/upgrading>.
 
 ## Troubleshooting
 
-- **`immich-server` restart loop** — the data disk is missing/unmounted
-  (this is the intended fail-fast via `RequiresMountsFor`). Check
-  `lsblk`/`qm config 361`, then re-run
-  `./services/photostorage/install-service.sh` (non-destructive verify +
-  mount).
+- **Uploads fail, PostgreSQL errors about disk space** — the disk is full.
+  Grow it with `module-manager module modify immich --set diskSize=<size>`
+  (see Photo Storage).
 - **Smart search returns nothing** — first ML job still downloading models;
   check `journalctl -u immich-machine-learning`.
 - **Mobile login bounces** — verify all three redirect URIs are on the
@@ -174,17 +145,6 @@ apps auto-update, see <https://immich.app/docs/install/upgrading>.
   option may be set in `immich.nix`.
 
 ## Variants
-
-### Disable machine learning (small VM)
-
-```jsonc
-// immich.json
-"machineLearning": false,
-"memory": "4096"
-```
-
-then `update-module.sh immich`. Re-enable any time; models download on the
-next job run.
 
 ### Hardware transcoding (Intel iGPU)
 

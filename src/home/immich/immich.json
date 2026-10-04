@@ -19,9 +19,7 @@
     "network:rules",
     "identity:identity"
   ],
-  "provides": [
-    "photostorage"
-  ],
+  "provides": [],
   "identity": {
     "oidcRedirectPaths": ["/auth/login", "/user-settings", "/api/oauth/mobile-redirect"],
     "configureService": "immich-configure-oidc.service"
@@ -31,15 +29,11 @@
     "cluster:vm": {
       "cores": 4,
       "memory": "8192",
-      "diskSize": "32G",
+      "diskSize": "500G",
       "storage": "tanka1",
       "imageType": "clone",
       "image": "8080",
-      "bridge0": "lan",
-      "mediaStorage": "allocate",
-      "mediaDiskStorage": "tanka1",
-      "mediaDiskSize": "500G",
-      "machineLearning": true
+      "bridge0": "lan"
     },
     "network:proxy": {
       "proxyPort": 2283,
