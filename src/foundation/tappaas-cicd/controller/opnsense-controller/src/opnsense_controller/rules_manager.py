@@ -135,6 +135,10 @@ class ModuleSpec:
     integrates_with: list[str] = field(default_factory=list)
     environment: str = ""
     location: str = ""
+    # A machine instance (ADR-026) is reached at its own recorded `address`, not
+    # at <name>.<zone0>.internal — the satellite and a registered NAS have no
+    # such name. Empty for a guest.
+    address: str = ""
 
 
 @dataclass
@@ -428,14 +432,19 @@ def load_module(modules_dir: Path, name: str) -> ModuleSpec:
     # Fall back to nested form when the top-level key is absent or empty.
     _cfg = data.get("config", {})
     fr = _cfg.get("network:rules") or _cfg.get("firewall:rules", {})
+    # The NFS servers this module mounts from need a path too (ADR-029 D5 layer
+    # 2). They are derived from its pvehost:nfs mounts, never authored twice, and
+    # join the declared egress so alias provisioning, verify, prune and removal
+    # treat them like any other rule the module owns.
+    nfs_egress, nfs_aliases = nfs_derived_egress(modules_dir, data)
     return ModuleSpec(
         vmname=data.get("vmname", name),
         zone0=data.get("zone0", ""),
         bridge0=data.get("bridge0", "lan"),
         ports=data.get("ports") or fr.get("ports") or [],
         ingress=data.get("ingress") or fr.get("ingress") or [],
-        egress=data.get("egress") or fr.get("egress") or [],
-        aliases=data.get("aliases") or fr.get("aliases") or {},
+        egress=list(data.get("egress") or fr.get("egress") or []) + nfs_egress,
+        aliases={**(data.get("aliases") or fr.get("aliases") or {}), **nfs_aliases},
         # Read nested-first-then-top-level like their neighbours above (#704).
         # Both fields moved to network:rules, so the converter now nests them
         # under config."network:rules" — and a top-level-only read would have
@@ -452,7 +461,87 @@ def load_module(modules_dir: Path, name: str) -> ModuleSpec:
         # every provider path empty after migration 0006, so no auto-pinhole
         # compiled and the prune deleted the live ones (#682).
         location=module_source_of(data),
+        address=data.get("address", "") if data.get("kind") == "machine" else "",
     )
+
+
+NFS_COORDINATE = "pvehost:nfs"
+
+
+def _nfs_alias_name(host: str) -> str:
+    """A module-local host alias for an unmodelled NFS server.
+
+    OPNsense alias names take [A-Za-z0-9_] and at most 32 characters.
+    """
+    safe = "".join(c if c.isalnum() else "_" for c in host)
+    name = f"nfs_{safe}"
+    if len(name) > 32:
+        name = f"nfs_{safe[:19]}_{hashlib.sha1(host.encode()).hexdigest()[:8]}"
+    return name
+
+
+def nfs_derived_egress(modules_dir: Path, data: dict) -> tuple[list[dict], dict[str, dict]]:
+    """The egress a consumer's pvehost:nfs mounts need (ADR-029 D5 layer 2, #766).
+
+    One entry per server the module mounts from, host to host:
+      * a share on a module instance (``<instance>:<name>``) → to that instance,
+        tcp/2049; NFSv3 on a registered, unmanaged server adds rpcbind (111) and
+        its pinned v3Ports, tcp and udp (D2a);
+      * an unmodelled server (``<host>:/<path>``) → a module-local host alias,
+        tcp/2049.
+    None for a server in the consumer's own zone: that traffic never crosses the
+    firewall. A mount whose instance is missing is skipped here — the service's
+    own check refuses it with a reason.
+    """
+    deps = list(data.get("dependsOn") or []) + list(data.get("integratesWith") or [])
+    if NFS_COORDINATE not in deps:
+        return [], {}
+    mounts = ((data.get("config") or {}).get(NFS_COORDINATE) or {}).get("mounts") or []
+    zone = data.get("zone0", "")
+    seen: dict[tuple[str, str], dict] = {}
+    aliases: dict[str, dict] = {}
+    for m in mounts:
+        share = m.get("share", "") if isinstance(m, dict) else ""
+        host, _, rest = share.partition(":")
+        if not host or not rest:
+            continue
+        if rest.startswith("/"):
+            alias = _nfs_alias_name(host)
+            aliases[alias] = {
+                "type": "host",
+                "addresses": [host],
+                "description": f"pvehost:nfs server {host} (unmodelled, ADR-029 D2)",
+            }
+            to, ports, proto = f"alias:{alias}", [2049], "TCP"
+        else:
+            path = modules_dir / f"{host}.json"
+            try:
+                inst = json.loads(path.read_text())
+            except (OSError, ValueError):
+                continue
+            if inst.get("zone0", "") == zone:
+                continue
+            export = next(
+                (e for e in ((inst.get("nfs") or {}).get("exports") or [])
+                 if isinstance(e, dict) and e.get("name") == rest),
+                {},
+            )
+            to, ports, proto = host, [2049], "TCP"
+            if inst.get("management") == "unmanaged" and str(export.get("version", "4.2")) == "3":
+                v3 = export.get("v3Ports") or {}
+                ports = [111, 2049] + [v3[k] for k in ("mountd", "nlockmgr", "statd") if k in v3]
+                proto = "TCP/UDP"
+        key = (to, proto)
+        entry = seen.setdefault(key, {
+            "to": to,
+            "ports": [],
+            "protocol": proto,
+            "description": f"pvehost:nfs to {host} (ADR-029)",
+        })
+        for p in ports:
+            if p not in entry["ports"]:
+                entry["ports"].append(p)
+    return list(seen.values()), aliases
 
 
 def load_global_aliases(path: Path | None) -> dict[str, dict]:
@@ -1482,6 +1571,13 @@ class RulesManager:
         peer_module = self._load_peer_cached(peer_vmname)
         if peer_module is None:
             return None
+        if peer_module.address and peer_module.alias_type == "host":
+            # A machine is where its own record says it is (ADR-026 D8.1).
+            return AliasTarget(
+                "host",
+                [peer_module.address],
+                f"Host alias for machine '{peer_module.vmname}' (its recorded address)",
+            )
         return self._alias_target_for(
             peer_module.vmname, peer_module.zone0, peer_module.alias_type
         )

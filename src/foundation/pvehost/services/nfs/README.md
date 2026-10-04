@@ -45,13 +45,25 @@ Every mount is `hard,_netdev,noatime`; unless `required: true` it is also
 `nofail` + `x-systemd.automount`, so the guest boots and the app starts while
 the node is down.
 
+## The firewall path
+
+A consumer outside its server's zone needs one rule, and it is derived, never
+written: `network:rules` reads the consumer's mounts and compiles one
+host-to-host pass per server — consumer alias → node alias (the node's recorded
+`address`), tcp/2049; NFSv3 on a registered NAS adds rpcbind and its pinned
+`v3Ports`, tcp and udp. No rule within a zone. Such a consumer must therefore
+depend on `network:rules`; a cross-zone mount without it is refused rather than
+left to hang.
+
 ## What it refuses
 
 - a share the node does not declare — **a consumer never creates an export**;
 - a consumer the export does not grant, or `rw` against an `ro` grant;
 - a `<host>:/<path>` share on a host that is a module instance (name the share
   instead, so the grant is checked);
-- a mount over `/`, `/etc`, `/nix`, `/var`, `/usr`, `/boot` or a system path.
+- a mount over `/`, `/etc`, `/nix`, `/var`, `/usr`, `/boot` or a system path;
+- a mount through the firewall from a consumer that does not depend on
+  `network:rules`.
 
 ## What it never does
 
@@ -61,8 +73,7 @@ mounts; removing an export from the node unshares it and keeps the dataset
 
 ## Not built yet (#766)
 
-The firewall rule between consumer and node (WP4 — a consumer outside the
-node's zone needs an `egress` rule until then), backup of exports (WP6),
+Backup of exports (WP6),
 registered NAS servers beyond the share-reference check (WP7), RPC-with-TLS
 (WP8), the storage zone (WP9), LXC consumers (WP10), quota health (WP11) and
 the `pvehost nfs show/purge` verbs.

@@ -175,6 +175,7 @@ nfs_check_mount() {
             echo "mount ${path}: ${host} is a module instance — name its share (${host}:<name>), a path would go around the grant"
             return 1
         fi
+        nfs_check_path "${consumer}" "${m}" || bad=1
         return "${bad}"
     fi
     if ! nfs_is_instance "${host}"; then
@@ -194,5 +195,38 @@ nfs_check_mount() {
         echo "mount ${path}: asks rw, but ${host}:${name} grants ${consumer} only ro"
         return 1
     fi
+    nfs_check_path "${consumer}" "${m}" || bad=1
     return "${bad}"
+}
+
+# nfs_check_path <consumer> <mount-json> — a server behind the firewall needs the
+# rule network:rules derives from the mounts; without that service there is none,
+# and the mount would hang instead of failing.
+nfs_check_path() {
+    local consumer="$1" m="$2"
+    nfs_mount_crosses_zone "${consumer}" "${m}" || return 0
+    nfs_wires_rules "${consumer}" && return 0
+    echo "mount $(jq -r .path <<< "${m}"): $(jq -r .share <<< "${m}") is reached through the firewall — ${consumer} must depend on network:rules, which derives the tcp/2049 rule from its mounts (ADR-029 D5)"
+    return 1
+}
+
+# nfs_mount_crosses_zone <consumer> <mount-json> — rc 0 when the mount's server is
+# reached through the firewall (ADR-029 D5 layer 2): a module instance in another
+# zone, or an unmodelled server (whose zone TAPPaaS cannot know). The rule itself
+# is derived by rules-manager from the same mounts (nfs_derived_egress).
+nfs_mount_crosses_zone() {
+    local consumer="$1" m="$2" kind host name czone szone
+    read -r kind host name < <(nfs_parse_share_ref "$(jq -r '.share // empty' <<< "${m}")" 2>/dev/null) || return 1
+    [[ "${kind}" == "literal" ]] && return 0
+    nfs_is_instance "${host}" || return 1
+    czone="$(jq -r '.zone0 // ""' "${NFS_CONFIG_DIR}/${consumer}.json" 2>/dev/null)"
+    szone="$(jq -r '.zone0 // ""' "${NFS_CONFIG_DIR}/${host}.json" 2>/dev/null)"
+    [[ "${czone}" != "${szone}" ]]
+}
+
+# nfs_wires_rules <consumer> — rc 0 when the consumer has network:rules, the
+# service that compiles its firewall path.
+nfs_wires_rules() {
+    jq -e '((.dependsOn // []) + (.integratesWith // [])) | any(. == "network:rules" or . == "firewall:rules")' \
+        "${NFS_CONFIG_DIR}/$1.json" >/dev/null 2>&1
 }

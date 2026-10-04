@@ -73,6 +73,8 @@ cat > "${NFS_CONFIG_DIR}/tappaas2.json" <<'EOF'
 {"kind":"machine","management":"managed","nfs":{"exports":[
   {"name":"photos","pool":"tankb1","backup":{"enabled":false},"owner":{"uid":64002,"gid":64002}}]}}
 EOF
+echo '{"dependsOn":["pvehost:nfs","network:rules"]}' > "${NFS_CONFIG_DIR}/jellyfin.json"
+echo '{"dependsOn":["pvehost:nfs"]}' > "${NFS_CONFIG_DIR}/viewer.json"
 m() { nfs_check_mount "$1" "$2"; }
 m jellyfin '{"path":"/var/lib/jellyfin/media","share":"tappaas1:media","access":"rw"}' >/dev/null; ck_rc "mount: granted rw passes" 0 $?
 m viewer '{"path":"/srv/media","share":"tappaas1:media"}' >/dev/null;                    ck_rc "mount: granted ro, default ro passes" 0 $?
@@ -86,6 +88,18 @@ m jellyfin '{"path":"/srv/v","share":"nas1:video"}' >/dev/null;                 
 m jellyfin '{"path":"/srv/f","share":"files.partner.example:/exports/shared"}' >/dev/null; ck_rc "mount: unmodelled server passes" 0 $?
 out="$(m jellyfin '{"path":"/etc","share":"tappaas1:media","access":"rw"}')";             has "mount: /etc refused" "not a directory a share may cover" "${out}"
 out="$(m jellyfin '{"path":"relative","share":"tappaas1:media","access":"rw"}')";         has "mount: relative path refused" "must be absolute" "${out}"
+
+# ── the firewall path (D5 layer 2) ────────────────────────────────────
+echo '{"zone0":"srvHome","dependsOn":["pvehost:nfs"]}' > "${NFS_CONFIG_DIR}/jelly-srv.json"
+echo '{"zone0":"srvHome","dependsOn":["pvehost:nfs","network:rules"]}' > "${NFS_CONFIG_DIR}/jelly-rules.json"
+echo '{"zone0":"mgmt","dependsOn":["pvehost:nfs"]}' > "${NFS_CONFIG_DIR}/jelly-mgmt.json"
+jq '.zone0 = "mgmt" | .nfs.exports[0].grants += [{"consumer":"jelly-srv","access":"ro"},{"consumer":"jelly-rules","access":"ro"},{"consumer":"jelly-mgmt","access":"ro"}]' \
+   "${NFS_CONFIG_DIR}/tappaas1.json" > "${NFS_CONFIG_DIR}/t" && mv "${NFS_CONFIG_DIR}/t" "${NFS_CONFIG_DIR}/tappaas1.json"
+out="$(m jelly-srv '{"path":"/m","share":"tappaas1:media"}')"; ck_rc "path: cross-zone without network:rules refused" 1 $?
+has "path: says which service derives the rule" "must depend on network:rules" "${out}"
+m jelly-rules '{"path":"/m","share":"tappaas1:media"}' >/dev/null; ck_rc "path: cross-zone with network:rules passes" 0 $?
+m jelly-mgmt '{"path":"/m","share":"tappaas1:media"}' >/dev/null;  ck_rc "path: same zone needs no rule" 0 $?
+out="$(m jelly-srv '{"path":"/f","share":"files.example:/x"}')";   has "path: an unmodelled server needs network:rules too" "must depend on network:rules" "${out}"
 
 # ── owner allocation (D5, Q2) ─────────────────────────────────────────
 ck "owner: lowest free uid across the Site" "64001" "$(nfs_next_owner)"
