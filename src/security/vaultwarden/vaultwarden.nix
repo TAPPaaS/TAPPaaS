@@ -249,6 +249,15 @@ EOF
 
   # The built-in services.vaultwarden.backupDir enables the upstream backup
   # service which copies the SQLite database to /var/backup/vaultwarden daily.
+  #
+  # It also runs at boot, and on a fresh VM that is before vaultwarden has
+  # written anything: its `cp /var/lib/vaultwarden/!(db.*)` matches nothing and
+  # fails, so the first activation fails and the install rolls back (hrossen,
+  # 2026-10-04). Nothing to back up yet is not a failure: wait for the database.
+  # No ordering added: upstream already starts vaultwarden after this backup,
+  # and `after = vaultwarden` closed a cycle systemd broke by dropping the job.
+  systemd.services.backup-vaultwarden.unitConfig.ConditionPathExists =
+    "/var/lib/vaultwarden/db.sqlite3";
 
   # Daily backup archive of vault data + environment (03:00)
   systemd.services.vaultwarden-backup-archive = {
