@@ -661,6 +661,30 @@ for _node in $(get_all_node_hostnames 2>/dev/null); do
     fi
 done
 
+# ── Test 6: Proxmox's own notification mails are off (#126) ─────────
+# Alerts come from the logging module; PVE's built-in default-matcher is
+# disabled by update.sh Step 5c. Cluster-wide, so one node is asked. Same gate
+# rule as Tests 4 and 5.
+
+info "${BOLD}Test 6: PVE notification mails off${CL}"
+_dm=""
+for _node in $(get_all_node_hostnames 2>/dev/null); do
+    # shellcheck disable=SC2086
+    _dm="$(ssh ${SSH_OPTS} "root@${_node}.${MGMT}.internal" \
+        "pvesh get /cluster/notifications/matchers --output-format json" 2>/dev/null \
+        | jq -r '.[] | select(.name == "default-matcher") | .disable // 0' 2>/dev/null)" || _dm=""
+    [[ -n "${_dm}" ]] && break
+done
+if [[ "${_dm}" == "1" ]]; then
+    pass "PVE's default-matcher is disabled — alerts come from the logging module"
+elif [[ -z "${_dm}" ]]; then
+    fail "could not read PVE's notification matchers from any node"
+elif [[ "${RUNTIME_ONLY}" == "1" ]]; then
+    skip "PVE still mails through its default-matcher — update.sh Step 5c turns it off"
+else
+    fail "PVE still mails through its default-matcher — run: module-manager module update cluster"
+fi
+
 # ── Deep Test: create a VM, induce zone drift, verify reconcile ─────
 
 deep_cleanup() {
