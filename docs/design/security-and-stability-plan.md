@@ -722,7 +722,7 @@ New capabilities with low upgrade risk.
 
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
-| #126 | No alerts for quorum loss / node dropout | 3 | 1 | L | Reuse the #651 channel; Zabbix option discussed |
+| #126 | Alerting from Loki through the #651 channel (was: no alerts for quorum loss / node dropout) | 3 | 3 | M | **Pulled forward and widened 2026-10-04** (operator, after #128): every host already logs to Loki and nothing reads it — the 2026-09-06 cluster reset itself 13 times in 70 minutes unnoticed. Grafana alerting provisioned from `logging.nix` (LogQL rules: quorum/node dropout, HA fencing, a host gone silent, disk/ZFS, backup failure, OOM kill, a new root key from the #128 audit trail), delivered by webhook to a receiver on the mothership that hands it to `site-notify.sh` (#651). Zabbix stays an option for metrics. Known limit: in-cluster alerting reports a total outage after recovery; real time needs an outside heartbeat (satellite, #671) |
 | #125 | Mail relay via M365 Graph API | 3 | 2 | L | |
 | #165 | logging v2: Loki auth, Grafana OIDC | 2 | 3 | M | Turning on Loki auth breaks existing Alloy pushes unless clients change in the same sweep |
 | #590 | Second corosync link | 2 | 3 | M | |
