@@ -75,6 +75,10 @@ site_locale_ntp() {
 # internet (#716). The NixOS pool, because it is the one every NixOS guest already
 # lists as its fallback, and two of them so the fallback is not a single host.
 SITE_NTP_PUBLIC=("0.nixos.pool.ntp.org" "1.nixos.pool.ntp.org")
+# The longest timesyncd waits between rounds for a guest whose only source is
+# its gateway (#716): the default 2048 s back-off kept such a guest unsynced for
+# up to 34 min after the gateway recovered.
+SITE_NTP_GATEWAY_ONLY_MAX_POLL=256
 
 _sl_zone_has_internet() {
     local zone="$1" zones="${_SL_CONFIG_DIR}/zones.json"
@@ -129,6 +133,19 @@ EOF
   services.timesyncd.enable = lib.mkDefault true;
   services.timesyncd.servers = [ ${list}];
 EOF
+        # A zone WITHOUT internet has its gateway alone. timesyncd doubles its
+        # wait after every round no server answers — 32, 64, 128 … 2048 s
+        # (measured on hrossen, #716) — so a guest whose gateway was busy at boot
+        # sat unsynchronised up to 34 min after it came back. Capping the
+        # back-off bounds that to minutes; polling the LAN gateway every 256 s is
+        # free. Zones with internet try nine addresses per round and keep the
+        # default, so the public pool's load does not grow.
+        if ! _sl_zone_has_internet "${zone}"; then
+            cat <<EOF
+  # Gateway only (no internet in this zone): cap timesyncd's back-off (#716).
+  services.timesyncd.extraConfig = "PollIntervalMaxSec=${SITE_NTP_GATEWAY_ONLY_MAX_POLL}";
+EOF
+        fi
     fi
     printf '}\n'
 }
@@ -194,8 +211,11 @@ apply_site_locale_debian() {
     # as it is and the site's choice is one removable file. NTP= holds the whole
     # ordered list (#716): the gateway, then public servers where reachable.
     if [[ -n "${ntp}" ]]; then
-        if ! ssh -o BatchMode=yes "${user}@${ip}" "grep -qs '^NTP=${ntp}\$' /etc/systemd/timesyncd.conf.d/tappaas.conf" 2>/dev/null; then
-            if ssh -o BatchMode=yes "${user}@${ip}" "sudo install -d -m 0755 /etc/systemd/timesyncd.conf.d && printf '# TAPPaaS (#87, #716): the zone gateway first, public servers after it.\n[Time]\nNTP=${ntp}\n' | sudo tee /etc/systemd/timesyncd.conf.d/tappaas.conf >/dev/null && sudo systemctl restart systemd-timesyncd" 2>/dev/null; then
+        # Gateway only (no internet): cap the back-off, as for NixOS (#716).
+        local maxpoll=""
+        _sl_zone_has_internet "${zone}" || maxpoll="PollIntervalMaxSec=${SITE_NTP_GATEWAY_ONLY_MAX_POLL}"
+        if ! ssh -o BatchMode=yes "${user}@${ip}" "grep -qs '^NTP=${ntp}\$' /etc/systemd/timesyncd.conf.d/tappaas.conf && { [ -z '${maxpoll}' ] && ! grep -qs '^PollIntervalMaxSec=' /etc/systemd/timesyncd.conf.d/tappaas.conf || grep -qsx '${maxpoll}' /etc/systemd/timesyncd.conf.d/tappaas.conf; }" 2>/dev/null; then
+            if ssh -o BatchMode=yes "${user}@${ip}" "sudo install -d -m 0755 /etc/systemd/timesyncd.conf.d && printf '# TAPPaaS (#87, #716): the zone gateway first, public servers after it.\n[Time]\nNTP=${ntp}\n${maxpoll:+${maxpoll}\\n}' | sudo tee /etc/systemd/timesyncd.conf.d/tappaas.conf >/dev/null && sudo systemctl restart systemd-timesyncd" 2>/dev/null; then
                 info "  time source → ${ntp}"; changed=1
             else
                 warn "  could not point ${ip} at the time source ${ntp}"

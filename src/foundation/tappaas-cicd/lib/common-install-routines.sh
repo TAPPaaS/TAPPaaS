@@ -1523,17 +1523,32 @@ function wait_for_module_ready() {
 # every night and prove nothing; their own tests say what is wrong.
 # Returns 1 on timeout.
 #
+# Once booted, the CLOCK too (#716): time-sensitive work after a reboot — OIDC
+# tokens (iat/exp), signed downloads, TOTP — fails in ways that point anywhere
+# but the clock (#714: every signed download refused for 17 min). So a booted
+# guest whose clock is not yet synchronised is waited on as well, for at most
+# TAPPAAS_NTP_WAIT seconds (default 120): then a WARNING, never a failure — an
+# unsynchronised clock is worth seeing in the log, not worth refusing an update.
+#
 # Usage: wait_for_guest_settled <host> [timeout_seconds]
 function wait_for_guest_settled() {
-  local host="$1" max_wait="${2:-300}" waited=0 interval=5 out
+  local host="$1" max_wait="${2:-300}" waited=0 interval=5 out ntp_waited=0
+  local ntp_wait="${TAPPAAS_NTP_WAIT:-120}"
   while :; do
     out="$(ssh -n -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
              -o LogLevel=ERROR "tappaas@${host}" \
-             'command -v systemctl >/dev/null || { echo "STATE none"; exit 0; }; echo "STATE $(systemctl is-system-running 2>/dev/null)"' 2>&1)" || true
+             'command -v systemctl >/dev/null || { echo "STATE none"; exit 0; }; echo "STATE $(systemctl is-system-running 2>/dev/null) NTP $(timedatectl show -p NTPSynchronized --value 2>/dev/null || echo unknown)"' 2>&1)" || true
     case "${out}" in
       *"STATE initializing"*|*"STATE starting"*) ;;
+      *"NTP no"*)
+        # Booted, clock not yet synchronised.
+        if [[ ${ntp_waited} -ge ${ntp_wait} || ${waited} -ge ${max_wait} ]]; then
+          warn "  ${host}: booted, but its clock is NOT synchronised after ${ntp_wait}s — time-sensitive checks may fail (#716)"
+          return 0
+        fi
+        ntp_waited=$((ntp_waited + interval)) ;;
       *STATE*)
-        [[ ${waited} -gt 0 ]] && debug "  ${host} finished booting (${waited}s)"
+        [[ ${waited} -gt 0 ]] && debug "  ${host} finished booting and its clock is synchronised (${waited}s)"
         return 0 ;;
       *"Permission denied"*|*"Host key verification failed"*|*"REMOTE HOST IDENTIFICATION"*)
         debug "  ${host} cannot be asked whether it has booted — not waiting"

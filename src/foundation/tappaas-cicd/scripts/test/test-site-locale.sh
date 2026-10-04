@@ -67,6 +67,12 @@ has "$out" 'services.timesyncd.servers = [ "10.2.0.1" "0.nixos.pool.ntp.org" "1.
     "a zone with internet access: the gateway first, then two public servers"
 out="$(load 'render_site_nix iotLocal')"
 has "$out" 'services.timesyncd.servers = [ "10.3.0.1" ];' "a zone without internet access: the gateway alone"
+# #716: its only source is the gateway, so timesyncd's back-off is capped — it
+# doubled to 2048 s on hrossen and kept a guest unsynced 34 min after the
+# gateway came back. A zone with internet keeps the default (pool load).
+has "$out" 'services.timesyncd.extraConfig = "PollIntervalMaxSec=256";' "a gateway-only zone caps timesyncd's back-off"
+out="$(load 'render_site_nix rossen')"
+hasnt "$out" 'PollIntervalMaxSec' "a zone with internet keeps timesyncd's default back-off"
 is "the ordered list, for the Debian drop-in" "$(load 'site_locale_ntp_servers rossen')" "10.2.0.1 0.nixos.pool.ntp.org 1.nixos.pool.ntp.org"
 is "…and a zone the site does not know gets nothing" "$(load 'site_locale_ntp_servers nosuch')" ""
 grep -q 'NTP=${ntp}' "${LIB}" && grep -q 'site_locale_ntp_servers "${zone}"' <(sed -n '/^apply_site_locale_debian()/,/^}/p' "${LIB}") \

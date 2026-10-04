@@ -186,7 +186,17 @@ settled() { local rc=0; ANSWERS=("$@"); echo 0 > "${WORK}/calls"
             wait_for_guest_settled g.mgmt.internal 20 >/dev/null 2>&1 || rc=$?
             CALLS=$(cat "${WORK}/calls"); return "${rc}"; }
 
-settled "STATE running" && [[ ${CALLS} -eq 1 ]] && pass "a settled guest: one ask, no wait" || fail "settled guest (calls=${CALLS})"
+settled "STATE running NTP yes" && [[ ${CALLS} -eq 1 ]] && pass "a settled guest with a synchronised clock: one ask, no wait" || fail "settled guest (calls=${CALLS})"
+settled "STATE running" && [[ ${CALLS} -eq 1 ]] && pass "a guest that does not report its clock is not waited on" || fail "no NTP field (calls=${CALLS})"
+# #716: booted, clock not synchronised yet — wait for it, a bounded time
+settled "STATE running NTP no" "STATE running NTP no" "STATE running NTP yes" && [[ ${CALLS} -eq 3 ]] \
+    && pass "booted but unsynchronised: waits until the clock is synchronised" || fail "clock wait (calls=${CALLS})"
+OUTW="$(ANSWERS=("STATE running NTP no"); echo 0 > "${WORK}/calls"; TAPPAAS_NTP_WAIT=10 wait_for_guest_settled g.mgmt.internal 300 2>&1)"; RCW=$?
+[[ ${RCW} -eq 0 && "${OUTW}" == *"clock is NOT synchronised"* ]] \
+    && pass "a clock that never synchronises: a warning, not a failure" || fail "unsynced clock (rc=${RCW}): ${OUTW}"
+OUTB="$(ANSWERS=("STATE running NTP no"); echo 0 > "${WORK}/calls"; TAPPAAS_NTP_WAIT=600 wait_for_guest_settled g.mgmt.internal 20 2>&1)"; RCB=$?
+[[ ${RCB} -eq 0 && "${OUTB}" != *"not finished booting"* ]] \
+    && pass "…and a booted guest is never reported as not booted, whichever bound comes first" || fail "bounds (rc=${RCB}): ${OUTB}"
 settled "STATE degraded" && pass "degraded counts as booted (a failed unit is the test's to report)" || fail "degraded"
 settled "ssh: connect to host g port 22: Connection refused" "STATE starting" "STATE running" && [[ ${CALLS} -eq 3 ]] \
     && pass "not answering, then starting, then running: waits for the end of boot" || fail "boot sequence (calls=${CALLS})"
