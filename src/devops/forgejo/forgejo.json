@@ -1,0 +1,56 @@
+{
+  "description": "Forgejo — self-hosted Git service and DevOps platform (Gitea fork)",
+  "kind": "vm",
+  "version": "0.1.0",
+  "stack": "devops",
+  "appVersion": "15.0.2",
+  "releaseDate": "2026-06-01",
+  "maintainer": "@ErikDaniel007",
+  "status": "Testing",
+  "vmname": "forgejo",
+  "vmid": 350,
+  "vmtag": "TAPPaaS,Community,Testing",
+  "node": "tappaas2",
+  "cores": 2,
+  "memory": "2048",
+  "diskSize": "20G",
+  "storage": "tanka1",
+  "imageType": "clone",
+  "image": "8080",
+  "bridge0": "lan",
+  "firewallType": "opnsense",
+  "proxyPort": 3000,
+  "proxyAllowedZones": [
+    "work",
+    "mgmt"
+  ],
+  "ports": [
+    {
+      "port": 3000,
+      "protocol": "TCP",
+      "description": "Web UI and REST API"
+    },
+    {
+      "port": 22,
+      "protocol": "TCP",
+      "description": "SSH git access"
+    }
+  ],
+  "ingress": [
+    {
+      "from": "dmz",
+      "ports": [
+        3000
+      ],
+      "protocol": "TCP",
+      "description": "Caddy reverse proxy forwards HTTPS traffic to Forgejo web UI"
+    }
+  ],
+  "dependsOn": [
+    "cluster:vm",
+    "backup:vm",
+    "network:proxy",
+    "network:rules"
+  ],
+  "provides": []
+}

@@ -202,6 +202,24 @@
       "moduleName": "satellite",
       "moduleJson": "src/foundation/satellite/satellite.json",
       "stack": "foundation"
+    },
+    {
+      "moduleName": "immich",
+      "moduleJson": "src/home/immich/immich.json",
+      "vmid": 361,
+      "stack": "home"
+    },
+    {
+      "moduleName": "jellyfin",
+      "moduleJson": "src/home/jellyfin/jellyfin.json",
+      "vmid": 360,
+      "stack": "home"
+    },
+    {
+      "moduleName": "forgejo",
+      "moduleJson": "src/devops/forgejo/forgejo.json",
+      "vmid": 350,
+      "stack": "devops"
     }
   ]
 }
