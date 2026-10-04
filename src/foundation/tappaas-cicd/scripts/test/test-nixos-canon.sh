@@ -19,7 +19,7 @@ set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRC="$(cd "${HERE}/../../../.." && pwd)"
 FILES=(
-    "${SRC}/apps/00-Template/template.nix"
+    "${SRC}/misc/00-Template/template.nix"
     "${SRC}/foundation/templates/tappaas-common.nix"
 )
 
@@ -56,6 +56,16 @@ done
 echo "── foundation/templates/tappaas-common.nix: cloud-init ──"
 ck "cloud-init's network stage is disabled (#448)" "yes" \
    "$(live "${SRC}/foundation/templates/tappaas-common.nix" | grep -qE 'network\.config[[:space:]]*=[[:space:]]*"disabled"' && echo yes || echo no)"
+
+# #324: a module importing the baseline states these itself, with another
+# value — the baseline's must yield, or every such module fails to evaluate.
+echo "── foundation/templates/tappaas-common.nix: values a module overrides (#324) ──"
+for opt in 'system\.stateVersion' 'PasswordAuthentication' 'PermitRootLogin'; do
+    ck "${opt//\\/} yields to the module (mkDefault)" "yes" \
+       "$(live "${SRC}/foundation/templates/tappaas-common.nix" | grep -qE "${opt}[[:space:]]*=[[:space:]]*lib\.mkDefault " && echo yes || echo no)"
+done
+ck "networking.hostName yields even to a module's mkDefault" "yes" \
+   "$(live "${SRC}/foundation/templates/tappaas-common.nix" | grep -qE 'networking\.hostName[[:space:]]*=[[:space:]]*lib\.mkOptionDefault ' && echo yes || echo no)"
 
 echo
 echo "── ${PASS} passed, ${FAIL} failed ──"

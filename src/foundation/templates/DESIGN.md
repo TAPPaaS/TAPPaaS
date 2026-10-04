@@ -99,12 +99,20 @@ modules each hard-coded a time zone and six disagreed with the site.
 
 **The baseline itself is not shipped to guests yet.** Every module `.nix` still
 carries its own copy of what is here — ssh, cloud-init, the `tappaas` user, the
-nix settings, `system.stateVersion` — so importing `tappaas-common.nix` makes
-NixOS refuse the build with conflicting definitions at equal priority. Proven on
-the test site 2026-09-20: `system.stateVersion` is `25.11` here and `25.05` in
-every module. De-duplicating those copies so the baseline can be imported is
-**#324**; `tappaas-common.nix` imports `tappaas-site.nix` itself, so the manual
-and image paths already get the site's facts.
+nix settings, `system.stateVersion` — and the copies drifted: no app VM has the
+zram swap, the cloud-init network fix (#448), the host-key fix or the file-backup
+trigger (#626). Making every module import this file instead is **#324**.
+
+What a module legitimately states differently, the baseline declares at a lower
+priority so the module's value wins: `system.stateVersion` (the template's
+`25.11`; every existing VM's state is `25.05` and must stay so), root and
+password SSH (on for the bare template only), the garbage-collection cadence
+(`lib.mkDefault`), and the hostname (`lib.mkOptionDefault`, below a module's own
+`mkDefault`). `scripts/nixos-baseline-eval.sh` on the mothership evaluates every
+module with the baseline imported, against the nixpkgs `update-os.sh` builds
+with, so a conflict is found there rather than as a rolled-back rebuild.
+`tappaas-common.nix` imports `tappaas-site.nix` itself, so the manual and image
+paths already get the site's facts.
 
 The mothership is built from the repository flake rather than by `update-os.sh`,
 so `tappaas-self-rebuild.sh` writes the same generated fragment before it

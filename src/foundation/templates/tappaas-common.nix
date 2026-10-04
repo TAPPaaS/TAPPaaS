@@ -89,7 +89,10 @@
   # in DNS under <vmname> within ~40s of first boot, with NO dependency on the
   # cicd pipeline or on the consumer's nixos-rebuild overlay applying. Consumer
   # overlays still set networking.hostName = "<vmname>" for the final state.
-  networking.hostName = lib.mkDefault ""; # was "tappaas-nixos" — see Option 2 investigation
+  # Option-default priority, below mkDefault: a module importing this baseline
+  # may state its own name as `lib.mkDefault "<vmname>"`, and two mkDefaults
+  # that disagree are a conflict (#324).
+  networking.hostName = lib.mkOptionDefault ""; # was "tappaas-nixos" — see Option 2 investigation
   networking.networkmanager.enable = true;  # Easiest to use and most distros use this by default.
 
   # Option 2 (issue #302/#309): make the DHCP lease carry the correct per-clone
@@ -196,11 +199,13 @@
   # Essential Services
   # we allow root ssh access for the template. all derived NixOS installation will have this disabled
   # Reason: need access before tappaas-cicd is configured with public ssh keys
+  # mkDefault (#324): every module importing this baseline turns both off with
+  # its own plain setting, which wins; only the bare template keeps them on.
   services.openssh = {
         enable = true;
         settings = {
-                PasswordAuthentication = true;
-                PermitRootLogin = "yes";
+                PasswordAuthentication = lib.mkDefault true;
+                PermitRootLogin = lib.mkDefault "yes";
         };
   };
   programs.ssh.startAgent = true;
@@ -322,10 +327,12 @@
   ];
 
   # Enable automatic garbage collection
+  # Cadence and retention are mkDefault (#324): a module with a small disk or a
+  # fast-moving closure tunes them (openwebui: daily, 7d) and its value wins.
   nix.gc = {
         automatic = true;
-        dates = "weekly";
-        options = "--delete-older-than 30d";
+        dates = lib.mkDefault "weekly";
+        options = lib.mkDefault "--delete-older-than 30d";
   };
 
   # Firewall: explicit, as every TAPPaaS module declares it (canon C7, #390).
@@ -354,6 +361,10 @@
   # and migrated your data accordingly.
   #
   # For more information, see `man configuration.nix` or https://nixos.org/manual/nixos/stable/options#opt-system.stateVersion .
-  system.stateVersion = "25.11";
+  #
+  # mkDefault (#324): this is the template's own value. A VM's state was created
+  # when it was, so a module importing this baseline keeps stating its own
+  # (every existing module VM is 25.05) and that value wins. Never unify it.
+  system.stateVersion = lib.mkDefault "25.11";
 
 }
