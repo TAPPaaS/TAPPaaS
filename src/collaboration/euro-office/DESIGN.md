@@ -37,7 +37,7 @@ Persistent storage:
 
 | Host path | Container path | Purpose |
 |-----------|-----------------|---------|
-| `/var/lib/euro-office/data` | `/var/www/onlyoffice/Data` | Document-server data (see Backup & restore — empty in practice) |
+| `/var/lib/euro-office/data` | `/var/www/euro-office/Data` | Document-server data: its `secure_link_secret` (and custom fonts, if added). Owned `105:107` (the image's `ds`), mode 2775. Documents live in Nextcloud, not here. Until 2026-10-04 this was mounted at the OnlyOffice path and stayed empty |
 | `/etc/euro-office/ds-example.conf` | `/etc/nginx/includes/ds-example.conf` (ro) | Welcome-page bind mount |
 
 The built-in `/example/` test app is disabled (`EXAMPLE_ENABLED=false`).
@@ -129,15 +129,16 @@ Restore:
       sudo tar xzf /var/backup/euro-office/<archive>.tar.gz -C /var/lib/euro-office && \
       sudo systemctl start podman-euro-office"
 
-**Known limitation**: in practice `/var/lib/euro-office/data` is empty — documents are
-stored in Nextcloud, not on this VM, so this nightly job currently backs up little to
-nothing. `backup:vm` covers the whole VM via the shared Proxmox Backup Server job; it
+**Known limitation**: `/var/lib/euro-office/data` holds only the server's
+`secure_link_secret` (and custom fonts, if any) — documents are stored in Nextcloud, not
+on this VM, so this nightly job backs up very little. (Until 2026-10-04 the volume was
+mounted at the wrong container path and was empty altogether.) `backup:vm` covers the whole VM via the shared Proxmox Backup Server job; it
 does not replace this document-tar mechanism, and vice versa.
 
-## Deploy notes and known limitations (0.2.0)
+## Deploy notes and known limitations (0.2.2)
 
 - Module status: `Testing`.
-- `/var/lib/euro-office/data` is empty in practice — see Backup & restore.
+- `/var/lib/euro-office/data` holds little — see Backup & restore.
 - The document server needs roughly 20-40 seconds after a (re)start before it answers
   its healthcheck; this is expected, not a fault.
 
