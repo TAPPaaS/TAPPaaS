@@ -69,7 +69,9 @@ let
   #          that is not mailed
   #   state  something is so; its resolve is news, and is mailed
   # `query` is the log query to paste into Explore; the mail carries it.
-  alertRule = { uid, title, kind, expr, window, summary, query }: {
+  # `headline`, when given, is how the mail's subject names the rule
+  # ("ALERT: Out of Memory Kill on tappaas3" rather than "ALERT: OomKill on …").
+  alertRule = { uid, title, kind, expr, window, summary, query, headline ? null }: {
     inherit uid title;
     condition = "C";
     data = [
@@ -90,7 +92,7 @@ let
     execErrState = "Error";
     for = "0s";
     labels = { inherit kind; };
-    annotations = { inherit summary query; };
+    annotations = { inherit summary query; } // lib.optionalAttrs (headline != null) { inherit headline; };
   };
   # Proxmox nodes arrive by syslog (source=proxmox); every VM by its journal.
   pve = ''{source="proxmox"}'';
@@ -131,6 +133,7 @@ let
     })
     (alertRule {
       uid = "tappaas-oom-kill"; title = "OomKill"; kind = "event"; window = 300;
+      headline = "Out of Memory Kill";
       # Anchored: Loki and Grafana log every rule's query text on this VM, and
       # this VM's journal is searched too — unanchored, the rule matched its own
       # query and fired on `logging` forever (hrossen, 2026-10-04). The kernel's

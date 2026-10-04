@@ -75,8 +75,10 @@ ck "an empty token file refuses everything" "401" "$(post '' "$(wh firing event 
 printf 'rotated\n' > "${TMP}/token"
 ck "a rotated token is read without a restart" "200" "$(post rotated "$(wh firing event OomKill openwebui)")"
 
-ck "--render prints the mail" "Subject: ALERT: OomKill on openwebui" \
-   "$(wh firing event OomKill openwebui | python3 "${R}" --render | head -1)"
+ck "--render prints the mail" "Subject: ALERT: QuorumLost on tappaas1" \
+   "$(wh firing event QuorumLost tappaas1 | python3 "${R}" --render | head -1)"
+ck "a rule's headline names it in the subject, after ALERT:" "Subject: ALERT: Out of Memory Kill on openwebui" \
+   "$(wh firing event OomKill openwebui | sed 's/"query":/"headline":"Out of Memory Kill","query":/' | python3 "${R}" --render | head -1)"
 
 echo
 echo "── ${PASS} passed, ${FAIL} failed ──"

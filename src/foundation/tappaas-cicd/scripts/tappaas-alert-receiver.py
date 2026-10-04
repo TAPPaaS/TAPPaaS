@@ -55,9 +55,15 @@ def render(payload):
     common = payload.get("commonLabels") or {}
     name = common.get("alertname") or (alerts[0].get("labels") or {}).get("alertname", "alert")
     hosts = sorted({(a.get("labels") or {}).get("host", "") for a in alerts} - {""})
-    word = "RESOLVED" if status == "resolved" else "ALERT"
     where = f" on {', '.join(hosts)}" if hosts else ""
-    subject = f"{word}: {name}{where}"
+    # A rule may name itself for the inbox (its `headline` annotation, e.g.
+    # "Out of Memory Kill"); otherwise its rule name stands. site-notify.sh
+    # puts "[TAPPaaS <site>] " in front: "[TAPPaaS hrossen.dk] ALERT: Out of
+    # Memory Kill on tappaas3".
+    headline = ((payload.get("commonAnnotations") or {}).get("headline")
+                or (alerts[0].get("annotations") or {}).get("headline"))
+    word = "RESOLVED" if status == "resolved" else "ALERT"
+    subject = f"{word}: {headline or name}{where}"
 
     lines = []
     for a in alerts:
