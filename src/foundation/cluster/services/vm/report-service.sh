@@ -72,6 +72,8 @@ readonly SCRIPT_DIR
 . "${SCRIPT_DIR}/../../lib/vm-net.sh"
 # shellcheck source=../../lib/report-lib.sh disable=SC1091
 . "${SCRIPT_DIR}/../../lib/report-lib.sh"
+# shellcheck source=../../lib/zfs-thin.sh disable=SC1091
+. "${SCRIPT_DIR}/../../lib/zfs-thin.sh"
 
 report_guard_stdout
 report_begin qemu "$@"
@@ -116,6 +118,14 @@ if [[ "${REPORT_STATUS}" == "running" ]]; then
     esac
 fi
 
+# `thinDisk` (#773) is whether every zvol of the guest has refreservation=none.
+# Like `os`, the key is OMITTED when it cannot be observed — the guest has no
+# zvol (non-ZFS storage), or the node did not answer — so the manager records
+# `not-reported` instead of drifting a module against a guess.
+thin_disk="$(zfs_thin_remote "${REPORT_NODE}" "${REPORT_VMID}" report 2>/dev/null)" || thin_disk=""
+has_thin=false
+[[ "${thin_disk}" == "true" || "${thin_disk}" == "false" ]] && has_thin=true
+
 # The jq program is deliberately single-quoted: $vmid and friends are JQ
 # variables bound by the --arg pairs below, not shell expansions.
 # shellcheck disable=SC2016
@@ -130,7 +140,8 @@ report_emit \
       "net1.bridge": $net1b, "net1.tag": $net1t, "net1.trunks": $net1k,
       "net1.mac": $net1m, "net1.queues": $net1q,
       cloudInit: $cloudInit}
-     + (if $hasOs then {os: $os} else {} end)' \
+     + (if $hasOs then {os: $os} else {} end)
+     + (if $hasThin then {thinDisk: $thinDisk} else {} end)' \
     --arg vmid     "${REPORT_VMID}" \
     --arg node     "${REPORT_NODE}" \
     --arg status   "${REPORT_STATUS}" \
@@ -157,4 +168,6 @@ report_emit \
     --arg net1q    "$(vmnet_parse "${net1}" queues)" \
     --arg cloudInit "${cloud_init}" \
     --arg os        "${vm_os}" \
-    --argjson hasOs "${has_os}"
+    --argjson hasOs "${has_os}" \
+    --arg thinDisk  "${thin_disk}" \
+    --argjson hasThin "${has_thin}"

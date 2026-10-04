@@ -11,38 +11,50 @@
 # update-os.sh during install and subsequent nixos-rebuild switch calls.
 #
 # Architecture:
-# - NixOS native services.immich (server + optional machine-learning)
+# - services.immich (server + machine-learning), Immich 3 from
+#   nixos-unstable -- see unstableSrc below
 # - PostgreSQL + VectorChord: fully managed by the immich module
 #   (unix-socket peer auth -- no DB password, no secrets plumbing)
 # - Redis (named instance "immich"): managed by the immich module, unix socket
-# - Machine learning (smart search, face recognition) on localhost:3003;
-#   toggled via "machineLearning" in immich.json (marker block below)
+# - Machine learning (smart search, face recognition) on localhost:3003,
+#   always on -- it is much of why one runs Immich; the VM is sized for it (8G)
 # - Caddy on the OPNsense firewall terminates TLS; VM serves plain HTTP :2283
 # - OIDC (Authentik) wired automatically: identity:identity + immich-configure-oidc
 #
-# Storage architecture (three layers; Layer 1 is selected by the
-# "mediaStorage" mode in immich.json -- see INSTALL.md -> Media Storage):
-#   Layer 1 -- Block device:  Proxmox virtual disk (allocate) or an attached
-#                             USB/iSCSI disk (attached), presented as
-#                             /dev/disk/by-label/immich-data; or a NAS
-#                             share mounted directly (share).
-#   Layer 2 -- Filesystem:   ext4, created by install-service.sh (allocate)
-#                             or setup-media-disk.sh (attached).
-#   Layer 3 -- Immich mediaLocation = /var/lib/immich (the mount point).
-#              Immich manages its own layout there: upload/, library/,
-#              thumbs/, encoded-video/, profile/, backups/ (nightly built-in
-#              pg_dumpall dumps land in backups/ -> covered by the data disk
-#              and PBS snapshots).
+# Storage: ONE disk. Photos live on the VM's own disk (cluster:vm diskSize,
+# on tanka1), in Immich's mediaLocation /var/lib/immich: upload/, library/,
+# thumbs/, encoded-video/, profile/, backups/. One disk is what the platform
+# can watch and grow -- the disk-threshold check and its auto-grow look at
+# `df /` and scsi0 only -- and what cluster:ha replicates. More room = raise
+# diskSize (grow-only); boot.growPartition grows the filesystem.
 #
-# Backups: PBS snapshots both disks (backup:vm dependency); additionally a
+# Backups: PBS snapshots the disk (backup:vm dependency); additionally a
 # daily PostgreSQL dump at 02:30 with 30-day retention (belt and braces).
 # ============================================================================
 
 { config, lib, pkgs, modulesPath, ... }:
 
+let
+  # Immich 3 comes from nixos-unstable: the pinned release only has Immich 2,
+  # which is end of life and marked insecure there (CVE-2026-59258,
+  # CVE-2026-82272). Only the immich module and package are taken from it;
+  # the rest of the system, PostgreSQL included, stays on the pinned release
+  # (both ship VectorChord 1.1.1). Drop this once the pinned release carries
+  # Immich 3 (NixOS 26.11). Bump: new rev + `nix-prefetch-url --unpack <url>`.
+  unstableSrc = builtins.fetchTarball {
+    url    = "https://github.com/NixOS/nixpkgs/archive/a7868a727837f3c09cee2ce0ca671c76b1589fed.tar.gz";
+    sha256 = "0z1daxh826r5d877fa77576ihfq4lzhzwys0ggnppw8bld42s0ia";
+  };
+  unstable = import unstableSrc {
+    inherit (pkgs.stdenv.hostPlatform) system;
+    config.allowUnfree = true;
+  };
+in
 {
+  disabledModules = [ "services/web-apps/immich.nix" ];
   imports = [
     /etc/nixos/hardware-configuration.nix
+    "${unstableSrc}/nixos/modules/services/web-apps/immich.nix"
   ];
 
   # -- Boot ------------------------------------------------------------------
@@ -146,27 +158,23 @@
   # -- Immich photo/video server ----------------------------------------------
   services.immich = {
     enable = true;
+    package = unstable.immich;   # Immich 3 -- see unstableSrc above
     host = "0.0.0.0";        # module default "localhost" is unreachable by Caddy
     port = 2283;
-    mediaLocation = "/var/lib/immich";  # = data-disk mount point (see below)
+    mediaLocation = "/var/lib/immich";  # on the root filesystem (one disk)
 
     # DB + Redis fully managed by the NixOS module: postgres over a unix
     # socket with peer auth (no password / secretsFile needed), database,
     # user and extensions auto-created; redis instance "immich" on a socket.
+    # VectorChord is always on in the pinned nixpkgs: enableVectorChord and
+    # enableVectors (pgvecto.rs) are gone, and setting either fails the build.
     database = {
       enable = true;
       createDB = true;
-      enableVectorChord = true;
-      # With stateVersion 25.05 enableVectors defaults to TRUE (pgvecto.rs),
-      # which asserts PostgreSQL < 17 and fails the build on nixos-25.11's
-      # PostgreSQL 17. Fresh install -> VectorChord only.
-      enableVectors = false;
     };
     redis.enable = true;
 
-    # BEGIN ml-config (managed by update.sh from "machineLearning" in immich.json)
     machine-learning.enable = true;
-    # END ml-config
 
     # null keeps the entire system config editable in the admin UI (OIDC,
     # storage template, quotas, ...). A declared settings attrset would make
@@ -202,8 +210,13 @@
     wantedBy    = [ "multi-user.target" ];
     after       = [ "immich-server.service" ];
 
-    # Activated only once identity:identity has written the secrets file.
-    unitConfig.ConditionPathExists = "/etc/secrets/immich.env";
+    # Activated only once identity:identity has written the secrets file AND
+    # install.sh has minted the API key. Without the second condition the
+    # first nixos-rebuild switch (before the admin exists) failed with exit 4.
+    unitConfig.ConditionPathExists = [
+      "/etc/secrets/immich.env"
+      "/etc/secrets/immich-admin-api-key"
+    ];
 
     serviceConfig = {
       Type            = "oneshot";
@@ -322,36 +335,17 @@
   # Throttle ML memory during bulk imports (first phone sync = thousands of
   # jobs) so it cannot starve postgres and immich-server. MemoryHigh throttles
   # before oomd would have to kill.
-  systemd.services.immich-machine-learning = lib.mkIf config.services.immich.machine-learning.enable {
+  systemd.services.immich-machine-learning = {
     serviceConfig = {
       MemoryHigh = "4G";
       MemoryMax  = "5G";
     };
   };
 
-  # -- Data disk mount ---------------------------------------------------------
-  # Identified by label so the mount survives disk reordering between reboots.
-  # nofail: VM boots normally even before the disk is attached (install order).
-  # The block between the media-mount markers is managed by update.sh: with
-  # mediaStorage=share in immich.json it is replaced by the declared
-  # NFS/CIFS mount at deploy time (edits inside the markers are overwritten
-  # in that mode).
-  # BEGIN media-mount (managed by update.sh)
-  fileSystems."/var/lib/immich" = {
-    device  = "/dev/disk/by-label/immich-data";
-    fsType  = "ext4";
-    options = [ "nofail" "noatime" "x-systemd.automount" "x-systemd.device-timeout=10" ];
-  };
-  # END media-mount
-
-  # Fail fast instead of silently writing photos to the OS disk if the data
-  # disk is absent (diagnostic signature: immich-server restart loop).
-  systemd.services.immich-server.unitConfig.RequiresMountsFor = [ "/var/lib/immich" ];
-
   # -- Backup strategy ---------------------------------------------------------
-  # PBS (backup:vm) snapshots both disks. Immich also writes its own nightly
+  # PBS (backup:vm) snapshots the disk. Immich also writes its own nightly
   # pg_dumpall into /var/lib/immich/backups. This dump is belt and braces:
-  # a plain-SQL copy on the OS disk, restorable without Immich itself.
+  # a plain-SQL copy, restorable without Immich itself.
   # 02:30, not 02:00: Immich's own built-in nightly dump defaults to ~02:00 —
   # staggering avoids two simultaneous dumps of the same database.
   services.postgresqlBackup = {
@@ -383,9 +377,11 @@
   };
 
   # -- Filesystem structure ----------------------------------------------------
+  # The parent must be traversable: postgresqlBackup runs as postgres and
+  # creates its own 0700 postgres location below it. A 0700 root parent made
+  # every dump fail (found in the hrossen live test).
   systemd.tmpfiles.rules = [
-    "d /var/backup/immich             0700 root     root     -"
-    "d /var/backup/immich/postgresql  0700 postgres postgres -"
+    "d /var/backup/immich             0755 root     root     -"
   ];
 
   system.stateVersion = "25.05";

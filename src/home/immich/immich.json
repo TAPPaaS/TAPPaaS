@@ -10,7 +10,6 @@
   "vmid": 361,
   "vmtag": "TAPPaaS,App,Photos",
   "node": "tappaas1",
-  "zone0": "srvHome",
   "dependsOn": [
     "cluster:vm",
     "cluster:ha",
@@ -20,27 +19,22 @@
     "network:rules",
     "identity:identity"
   ],
-  "provides": [
-    "photostorage"
-  ],
+  "provides": [],
   "identity": {
     "oidcRedirectPaths": ["/auth/login", "/user-settings", "/api/oauth/mobile-redirect"],
     "configureService": "immich-configure-oidc.service"
   },
-  "appVersion": "2.7.5",
+  "appVersion": "3.2.4",
   "config": {
     "cluster:vm": {
       "cores": 4,
       "memory": "8192",
-      "diskSize": "32G",
+      "diskSize": "500G",
+      "thinDisk": true,
       "storage": "tanka1",
       "imageType": "clone",
       "image": "8080",
-      "bridge0": "lan",
-      "mediaStorage": "allocate",
-      "mediaDiskStorage": "tanka1",
-      "mediaDiskSize": "500G",
-      "machineLearning": true
+      "bridge0": "lan"
     },
     "network:proxy": {
       "proxyPort": 2283,

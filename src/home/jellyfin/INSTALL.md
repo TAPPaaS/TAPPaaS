@@ -36,7 +36,7 @@ For `share` mode, add:
 
 ```json
 "mediaStorage": "share",
-"mediaShareHost": "synology.srvHome.internal",
+"mediaShareHost": "synology.<zone>.internal",
 "mediaShareExport": "/volume1/media",
 "mediaShareType": "nfs"                ← nfs (default) or cifs
 ```
@@ -86,7 +86,7 @@ works:
    and a second writer at the block layer corrupts it. No path supports
    block-level sharing, by design.
 2. **All other modules share at the file layer, over NFS.** In Paths 1 and 2
-   Jellyfin *is* the storage server: `/media` is NFS-exported to the srvHome
+   Jellyfin *is* the storage server: `/media` is NFS-exported to its own
    zone, and a consumer module declares `dependsOn: ["jellyfin:storage"]` to get
    it mounted at `/media-jellyfin`. In Path 3 the NAS is the storage server and
    every module (Jellyfin included) is just a client.
@@ -244,7 +244,7 @@ CIFS/SMB shares authenticate with a username/password, which must not go into
 the mount options:
 
 ```bash
-ssh tappaas@jellyfin.srvHome.internal
+ssh tappaas@jellyfin.<zone>.internal
 sudo sh -c 'printf "username=media\npassword=YOURPASSWORD\n" > /etc/nixos/smb-secrets && chmod 600 /etc/nixos/smb-secrets'
 ```
 
@@ -365,12 +365,12 @@ To update the Jellyfin package version, change `appVersion` in `jellyfin.json` a
 
 **Jellyfin web UI not reachable**
 ```bash
-ssh tappaas@jellyfin.srvHome.internal 'sudo journalctl -u jellyfin -n 50'
+ssh tappaas@jellyfin.<zone>.internal 'sudo journalctl -u jellyfin -n 50'
 ```
 
 **/media not mounted**
 ```bash
-ssh tappaas@jellyfin.srvHome.internal 'sudo mount /media'
+ssh tappaas@jellyfin.<zone>.internal 'sudo mount /media'
 # If that fails, re-run the mediaserver service (non-destructive verify + mount):
 ./services/mediaserver/install-service.sh
 ```
@@ -381,7 +381,7 @@ ssh tappaas@jellyfin.srvHome.internal 'sudo mount /media'
 sudo exportfs -v      # Should list /media
 sudo systemctl status nfs-server
 # On the consumer VM:
-showmount -e jellyfin.srvHome.internal
+showmount -e jellyfin.<zone>.internal
 ```
 
 ## Variants

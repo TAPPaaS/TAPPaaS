@@ -10,7 +10,6 @@
   "vmid": 360,
   "vmtag": "TAPPaaS,App,Media",
   "node": "tappaas1",
-  "zone0": "srvHome",
   "dependsOn": [
     "cluster:vm",
     "templates:nixos",

@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 # TAPPaaS Module: immich — Installation
 #
-# Deploys the Immich NixOS config, provisions the photo data disk, and
-# bootstraps the admin account. VM creation is handled by the cluster:vm
-# dependency. Data disk provisioning (services/photostorage) runs here since
-# it provisions immich's own infrastructure, not a consumer VM.
+# Deploys the Immich NixOS config and bootstraps the admin account. VM
+# creation is handled by the cluster:vm dependency; the photos live on the VM's
+# own disk (diskSize), so there is no storage to provision here.
 #
 # Security note: the admin account is claimed immediately after the API comes
 # up — /api/auth/admin-sign-up is open to anyone until the first admin exists,
@@ -17,10 +16,6 @@ set -euo pipefail
 
 . /home/tappaas/bin/common-install-routines.sh
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-# Provision the data disk (allocate on Proxmox, format, mount /var/lib/immich)
-"${SCRIPT_DIR}/services/photostorage/install-service.sh"
 
 # Apply the NixOS config (also run on updates)
 . ./update.sh
@@ -55,8 +50,10 @@ done
 # ── Bootstrap admin account ───────────────────────────────────────────────────
 # /api/auth/admin-sign-up succeeds (HTTP 201) only while no admin exists;
 # afterwards it returns 400 — used as the "already initialized" signal.
-_DOMAIN=$(jq -r '.tappaas.domain // empty' /home/tappaas/config/configuration.json 2>/dev/null || true)
-ADMIN_EMAIL="admin@${_DOMAIN:-tappaas.internal}"
+_ENV="$(get_config_value 'environment' '')"
+_BASE_DOMAIN="$(get_variant_config "${_ENV}" 2>/dev/null | jq -r '.domain // empty' 2>/dev/null || true)"
+_PUBLIC_DOMAIN="$(module_public_domain "${VMNAME}" "${_ENV}" "${JSON}")"
+ADMIN_EMAIL="admin@${_BASE_DOMAIN:-tappaas.internal}"
 
 info "${BOLD}Bootstrapping Immich admin account...${CL}"
 ADMIN_PASS=$(python3 -c "import secrets, string; print(''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(20)))")
@@ -145,8 +142,8 @@ fi
 # ── Summary ───────────────────────────────────────────────────────────────────
 echo ""
 info "${GN}✓${CL} Immich installation completed."
-if [[ -n "${_DOMAIN}" ]]; then
-    info "  Web UI : https://${VMNAME}.${_DOMAIN}"
+if [[ -n "${_PUBLIC_DOMAIN}" ]]; then
+    info "  Web UI : https://${_PUBLIC_DOMAIN}"
 else
     info "  Web UI : http://${IMMICH_HOST}:2283"
 fi

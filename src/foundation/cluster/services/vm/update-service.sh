@@ -15,7 +15,7 @@
 #   actual  = ./report-service.sh             [extract only]
 #   drift   = module-manager module drift     [the one differ]
 #   apply   = converge_apply (converge-lib.sh) → the batched `qm set`
-#             + update-net.sh / update-disk.sh / update-node.sh
+#             + update-net.sh / update-disk.sh / update-thin.sh / update-node.sh
 #
 # What lives HERE is what is genuinely cluster:vm's and is NOT field drift: the
 # provider callbacks (how to run a batched `qm set`; how to reboot, wait for an
@@ -26,6 +26,7 @@
 #   net0/net1 (bridge, zone→tag, trunks; MAC + queues preserved) -> update-net.sh
 #   cores, memory, cputype, vmtag, vmname                        -> one qm set
 #   diskSize (grow only)                                         -> update-disk.sh
+#   thinDisk (only when the module declares it, #773)            -> update-thin.sh
 #   node (only if the module does NOT dependOn cluster:ha)       -> update-node.sh
 #
 # Reported but not auto-applied (the manifest's classes say so):
