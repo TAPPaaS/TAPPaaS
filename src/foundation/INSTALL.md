@@ -12,8 +12,7 @@ boot preconfigured, and the bootstrap scripts chain together — so most steps a
 > [Appendix: install options](#appendix-install-options).
 
 **Before you start:** hardware sizing, network plan, domain/DNS, credentials and
-branch selection are covered in the preparation guide on the documentation site:
-<https://tappaas.org/installation/preparation/>. This document assumes preparation
+branch selection are covered in the [preparation guide](../../preparation.md). This document assumes preparation
 is done and concentrates on the install itself.
 
 ---

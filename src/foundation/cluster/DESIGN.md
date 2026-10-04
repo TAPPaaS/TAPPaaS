@@ -4,7 +4,7 @@ Implementation and reference detail for the cluster module. For the catalog entr
 [README.md](./README.md); for installation see [INSTALL.md](./INSTALL.md); for test
 coverage see [TEST.md](./TEST.md).
 
-Canonical online instructions: <https://tappaas.org/installation/foundation/cluster/>
+Install instructions: [INSTALL.md](INSTALL.md).
 
 ## Capabilities
 

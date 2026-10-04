@@ -1,6 +1,6 @@
 # TAPPaaS source
 
-Source tree for TAPPaaS. To install, follow the [Installation guide](https://tappaas.org/installation/).
+Source tree for TAPPaaS. To install, follow the [install overview](../INSTALL.md).
 
 ## Layout
 
