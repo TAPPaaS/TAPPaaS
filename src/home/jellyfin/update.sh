@@ -87,7 +87,7 @@ ssh ${SSH_OPTS} "tappaas@${JELLYFIN_HOST}" \
   || { warn "  Could not install jellyfin.nix to /etc/nixos/"; exit 1; }
 
 ssh ${SSH_OPTS} "tappaas@${JELLYFIN_HOST}" \
-    "sudo nixos-rebuild switch -I nixos-config=/etc/nixos/jellyfin.nix 2>&1 | tail -5" \
+    "set -o pipefail; sudo nixos-rebuild switch -I nixos-config=/etc/nixos/jellyfin.nix 2>&1 | tail -5" \
   && info "  ${GN}✓${CL} nixos-rebuild switch completed" \
   || { warn "  nixos-rebuild reported errors -- check journalctl on ${JELLYFIN_HOST}"; exit 1; }
 

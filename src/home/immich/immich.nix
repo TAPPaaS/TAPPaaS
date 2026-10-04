@@ -219,8 +219,13 @@ in
     wantedBy    = [ "multi-user.target" ];
     after       = [ "immich-server.service" ];
 
-    # Activated only once identity:identity has written the secrets file.
-    unitConfig.ConditionPathExists = "/etc/secrets/immich.env";
+    # Activated only once identity:identity has written the secrets file AND
+    # install.sh has minted the API key. Without the second condition the
+    # first nixos-rebuild switch (before the admin exists) failed with exit 4.
+    unitConfig.ConditionPathExists = [
+      "/etc/secrets/immich.env"
+      "/etc/secrets/immich-admin-api-key"
+    ];
 
     serviceConfig = {
       Type            = "oneshot";
@@ -400,9 +405,11 @@ in
   };
 
   # -- Filesystem structure ----------------------------------------------------
+  # The parent must be traversable: postgresqlBackup runs as postgres and
+  # creates its own 0700 postgres location below it. A 0700 root parent made
+  # every dump fail (found in the hrossen live test).
   systemd.tmpfiles.rules = [
-    "d /var/backup/immich             0700 root     root     -"
-    "d /var/backup/immich/postgresql  0700 postgres postgres -"
+    "d /var/backup/immich             0755 root     root     -"
   ];
 
   system.stateVersion = "25.05";

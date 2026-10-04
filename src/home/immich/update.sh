@@ -112,7 +112,7 @@ ssh ${SSH_OPTS} "tappaas@${IMMICH_HOST}" \
   || { warn "  Could not install immich.nix to /etc/nixos/"; exit 1; }
 
 ssh ${SSH_OPTS} "tappaas@${IMMICH_HOST}" \
-    "sudo nixos-rebuild switch -I nixos-config=/etc/nixos/immich.nix 2>&1 | tail -5" \
+    "set -o pipefail; sudo nixos-rebuild switch -I nixos-config=/etc/nixos/immich.nix 2>&1 | tail -5" \
   && info "  ${GN}✓${CL} nixos-rebuild switch completed" \
   || { warn "  nixos-rebuild reported errors -- check journalctl on ${IMMICH_HOST}"; exit 1; }
 
@@ -131,11 +131,7 @@ ssh ${SSH_OPTS} "tappaas@${IMMICH_HOST}" \
 # install-service.sh Step 5b, "co-managed keys" -- the same mechanism
 # euro-office/nextcloud connectors already rely on), so this is safe to run on
 # every update alongside it.
-PROXY_DOMAIN="$(get_config_value 'proxyDomain' '')"
-if [[ -z "${PROXY_DOMAIN}" ]]; then
-    _DOMAIN=$(jq -r '.tappaas.domain // empty' /home/tappaas/config/configuration.json 2>/dev/null || true)
-    [[ -n "${_DOMAIN}" ]] && PROXY_DOMAIN="${VMNAME}.${_DOMAIN}"
-fi
+PROXY_DOMAIN="$(module_public_domain "${VMNAME}" "$(get_config_value 'environment' '')" "${JSON}")"
 if [[ -n "${PROXY_DOMAIN}" ]]; then
     if ssh ${SSH_OPTS} "tappaas@${IMMICH_HOST}" \
         "sudo sh -c 'umask 077; t=\$(mktemp /etc/secrets/.immich.XXXXXX) || exit 1; \

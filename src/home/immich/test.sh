@@ -139,11 +139,13 @@ fi
 
 # ── Test 8: Backup plumbing ───────────────────────────────────────────────────
 header "Test 8: Backups"
-BACKUP_DIR=$(remote "test -d /var/backup/immich/postgresql && echo yes || echo no")
+# Writable BY postgres, the user the dump runs as -- a 0700 root parent once
+# left the directory present but every nightly dump failing.
+BACKUP_DIR=$(remote "sudo -u postgres test -w /var/backup/immich/postgresql && echo yes || echo no")
 if [[ "${BACKUP_DIR}" == "yes" ]]; then
-    pass "Backup directory /var/backup/immich/postgresql exists"
+    pass "Backup directory /var/backup/immich/postgresql is writable by postgres"
 else
-    fail "Backup directory /var/backup/immich/postgresql missing"
+    fail "Backup directory /var/backup/immich/postgresql missing or not writable by postgres"
 fi
 TIMER=$(remote "systemctl list-timers --all 2>/dev/null | grep -c postgresqlBackup" || echo 0)
 if [[ "${TIMER}" -ge 1 ]]; then

@@ -151,12 +151,12 @@ else
 fi
 
 # ── Summary ───────────────────────────────────────────────────────────────────
-_DOMAIN=$(jq -r '.tappaas.domain // empty' /home/tappaas/config/configuration.json 2>/dev/null || true)
+_PUBLIC_DOMAIN="$(module_public_domain "${VMNAME}" "$(get_config_value 'environment' '')" "${JSON}")"
 
 echo ""
 info "${GN}✓${CL} Jellyfin installation completed."
-if [[ -n "${_DOMAIN}" ]]; then
-    info "  Web UI : https://${VMNAME}.${_DOMAIN}"
+if [[ -n "${_PUBLIC_DOMAIN}" ]]; then
+    info "  Web UI : https://${_PUBLIC_DOMAIN}"
 else
     info "  Web UI : http://${JELLYFIN_HOST}:8096"
 fi
