@@ -131,7 +131,11 @@ let
     })
     (alertRule {
       uid = "tappaas-oom-kill"; title = "OomKill"; kind = "event"; window = 300;
-      expr = ''sum by (host) (count_over_time({host=~".+"} |= "Out of memory: Killed process" [5m]))'';
+      # Anchored: Loki and Grafana log every rule's query text on this VM, and
+      # this VM's journal is searched too — unanchored, the rule matched its own
+      # query and fired on `logging` forever (hrossen, 2026-10-04). The kernel's
+      # line starts with the phrase; a logged query only contains it.
+      expr = ''sum by (host) (count_over_time({host=~".+"} |~ "^\\s*Out of memory: Killed process" [5m]))'';
       summary = "The kernel killed a process for lack of memory.";
       query = ''{host="<host>"} |= "Out of memory"'';
     })
