@@ -150,3 +150,31 @@ EOF
         fi
     done
 fi
+
+# ── The alert webhook's token (#126) ─────────────────────────────────
+# Grafana's alert rules post to the mothership's tappaas-alert-receiver, which
+# mails through site-notify.sh. The receiver checks a bearer token; its own copy
+# is /etc/secrets/tappaas-alert-token here (tappaas-cicd.nix generates it), and
+# Grafana reads its copy from the logging VM. Copied only when it differs, and
+# Grafana restarted only then: the contact point reads the file at start.
+info "${BOLD}Deliver the alert webhook token to Grafana${CL}"
+_ALERT_TOKEN=/etc/secrets/tappaas-alert-token
+_VM_TOKEN=/etc/secrets/grafana-alert-webhook-token
+_VM="tappaas@${VMNAME}.${ZONE0NAME}.internal"
+if [[ ! -r "${_ALERT_TOKEN}" ]]; then
+    warn "  ${_ALERT_TOKEN} not readable here — alerts are evaluated but cannot be delivered until the mothership's rebuild creates it"
+else
+    _want="$(sha256sum < "${_ALERT_TOKEN}" | cut -d' ' -f1)"
+    # shellcheck disable=SC2029  # the path is expanded here on purpose
+    _have="$(ssh -o BatchMode=yes -o ConnectTimeout=10 "${_VM}" "sudo sha256sum < ${_VM_TOKEN} 2>/dev/null | cut -d' ' -f1" 2>/dev/null || true)"
+    if [[ "${_have}" == "${_want}" ]]; then
+        debug "  token already in place"
+    # shellcheck disable=SC2029
+    elif ssh -o BatchMode=yes -o ConnectTimeout=10 "${_VM}" \
+            "sudo install -m 0600 -o grafana -g grafana /dev/stdin ${_VM_TOKEN} && sudo systemctl restart grafana" \
+            < "${_ALERT_TOKEN}"; then
+        info "  ${GN}✓${CL} token delivered; Grafana restarted to read it"
+    else
+        warn "  could not deliver the token to ${VMNAME} — alerts cannot reach the mothership until it is"
+    fi
+fi

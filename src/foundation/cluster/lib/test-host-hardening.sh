@@ -19,7 +19,8 @@ ck() { if [[ "$2" == "$3" ]]; then echo "  ok: $1"; PASS=$((PASS+1)); else echo 
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/hosthard.XXXXXX")"; trap 'rm -rf "${TMP}"' EXIT INT TERM
 
 node() {   # node <vendor> — a fresh fake node; prints its root
-    local r="${TMP}/$1.$RANDOM"; mkdir -p "${r}/etc/pve" "${r}/etc/ssh" "${r}/etc/network" "${r}/etc/audit/plugins.d"
+    local r="${TMP}/$1.$RANDOM"; mkdir -p "${r}/etc/pve/priv" "${r}/etc/ssh" "${r}/etc/network" "${r}/etc/audit/plugins.d"
+    : > "${r}/etc/pve/priv/authorized_keys"
     : > "${r}/etc/network/interfaces"
     printf 'active = no\ndirection = out\npath = /sbin/audisp-syslog\ntype = always\nargs = LOG_INFO\nformat = string\n' > "${r}/etc/audit/plugins.d/syslog.conf"
     printf 'processor\t: 0\nvendor_id\t: %s\n' "$1" > "${r}.cpuinfo"
@@ -38,6 +39,8 @@ ck "rules cover /etc/pve, login sessions only" "2" "$(grep -c -- '-F dir=/etc/pv
 ck "both architectures" "b32,b64" "$(grep -oE 'arch=b[0-9]+' <<<"${rules}" | sort -u | cut -d= -f2 | paste -sd, -)"
 ck "a path the node lacks is left out (/root/.ssh, interfaces.d)" "0" "$(grep -cE '/root/.ssh|interfaces.d' <<<"${rules}")"
 ck "the interfaces file is watched" "2" "$(grep -c 'path=/etc/network/interfaces ' <<<"${rules}")"
+ck "root's authorized_keys has its own key, ahead of the /etc/pve rules" "tappaas-rootkeys" \
+   "$(grep -m1 -oE 'k tappaas-[a-z]+' <<<"${rules}" | cut -d' ' -f2)"
 ck "the syslog plugin is switched on in place" "active = yes" "$(grep '^active' "${r}/etc/audit/plugins.d/syslog.conf")"
 ck "the rest of the plugin file is kept" "path = /sbin/audisp-syslog" "$(grep '^path' "${r}/etc/audit/plugins.d/syslog.conf")"
 ck "check passes after apply" "0" "$(run "${r}" check >/dev/null; echo $?)"

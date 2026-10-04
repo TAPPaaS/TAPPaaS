@@ -291,6 +291,55 @@ in
     };
   };
 
+  # ----------------------------------------
+  # Alerts from the logs (#126)
+  # ----------------------------------------
+  # The logging module's Grafana evaluates LogQL rules over every host's logs
+  # (quorum lost, HA fencing, a host gone silent, disk, backup, OOM, a new root
+  # key) and posts what fires to this receiver, which mails it through
+  # site-notify.sh — the same path as a failed sweep (#651). Stateless: Grafana
+  # groups and repeats. The token authenticates Grafana; logging/update.sh
+  # copies it to the logging VM. TCP 9095 is open below; the logging VM and the
+  # mothership share mgmt, so no firewall rule is involved, and the token is
+  # what decides.
+  systemd.services.tappaas-alert-token = {
+    description = "Generate the token Grafana's alert webhook presents (#126)";
+    wantedBy = [ "multi-user.target" ];
+    before = [ "tappaas-alert-receiver.service" ];
+    unitConfig.ConditionPathExists = "!/etc/secrets/tappaas-alert-token";
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      ExecStart = pkgs.writeShellScript "tappaas-alert-token" ''
+        ${pkgs.coreutils}/bin/mkdir -p /etc/secrets
+        ${pkgs.openssl}/bin/openssl rand -hex 32 \
+          | ${pkgs.coreutils}/bin/install -m 0600 -o tappaas -g users /dev/stdin /etc/secrets/tappaas-alert-token
+      '';
+    };
+  };
+
+  systemd.services.tappaas-alert-receiver = {
+    description = "Receive Grafana alert webhooks and mail them to the site owner (#126)";
+    wantedBy = [ "multi-user.target" ];
+    after = [ "network-online.target" "tappaas-alert-token.service" ];
+    wants = [ "network-online.target" ];
+    requires = [ "tappaas-alert-token.service" ];
+    serviceConfig = {
+      User = "tappaas";
+      ExecStart = "${pkgs.python3}/bin/python3 ${./scripts/tappaas-alert-receiver.py}";
+      Restart = "on-failure";
+      RestartSec = 5;
+      # site-notify.sh needs ssh and jq, as the failure notice does (above).
+      Environment = [
+        ("PATH=/home/tappaas/bin:/run/wrappers/bin:/home/tappaas/.nix-profile/bin"
+          + ":/etc/profiles/per-user/tappaas/bin:/nix/var/nix/profiles/default/bin"
+          + ":/run/current-system/sw/bin")
+      ];
+      ProtectSystem = "strict";
+      ReadWritePaths = [ "/home/tappaas/config" ];
+    };
+  };
+
   # ADR-011 §9: the security scan — started by update-tappaas (OnSuccess and
   # OnFailure above), never by a timer of its own. Inventories every target
   # read-only and matches it against its layer's CVE source; writes
@@ -618,7 +667,10 @@ in
   # the HTTP answer/asset server. The VM sits on the mgmt plane only, and the
   # services are OFF by default (TTL-limited transient units) — the ports are
   # open, the listeners are the interlock.
-  networking.firewall.allowedTCPPorts = [ 8090 ];
+  networking.firewall.allowedTCPPorts = [
+    8090  # node-provisioner (above)
+    9095  # tappaas-alert-receiver: Grafana's alert webhook (#126)
+  ];
   networking.firewall.allowedUDPPorts = [ 69 ];
 
   # This option defines the first version of NixOS you have installed on this particular machine,

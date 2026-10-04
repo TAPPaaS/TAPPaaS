@@ -178,6 +178,45 @@ check_loki_query() {
     fi
 }
 
+check_alert_rules() {
+    info "Check 9: Grafana has the TAPPaaS alert rules and the webhook contact point (#126)"
+    local out
+    # Asked on the VM itself, with the admin password read there: it never
+    # crosses the wire or lands in a log.
+    # shellcheck disable=SC2086,SC2016
+    out=$(ssh ${SSH_OPTS} "tappaas@${VM_HOST}" '
+        pw=$(sudo cat /etc/secrets/grafana-admin-password 2>/dev/null)
+        r=$(curl -s --max-time 10 -u "admin:${pw}" http://127.0.0.1:3000/api/v1/provisioning/alert-rules \
+            | jq -r "[.[] | select(.uid | startswith(\"tappaas-\"))] | length")
+        c=$(curl -s --max-time 10 -u "admin:${pw}" http://127.0.0.1:3000/api/v1/provisioning/contact-points \
+            | jq -r "[.[] | select(.uid == \"tappaas-site-notify\" and .type == \"webhook\")] | length")
+        echo "${r:-?} ${c:-?}"' 2>/dev/null) || true
+    if [[ "${out}" == "7 1" ]]; then
+        check_pass "7 alert rules and the tappaas-site-notify webhook are provisioned"
+    else
+        check_fail "alert provisioning incomplete (rules, contact points: ${out:-no answer}; want 7 1)"
+    fi
+}
+
+check_alert_delivery() {
+    info "Check 10: Grafana's token opens the mothership's alert receiver (#126)"
+    local code
+    # An empty alert list with Grafana's own token: 200 proves the path, the
+    # receiver and the token at once, and sends no mail ("nothing to send").
+    # shellcheck disable=SC2086,SC2016
+    code=$(ssh ${SSH_OPTS} "tappaas@${VM_HOST}" '
+        tok=$(sudo cat /etc/secrets/grafana-alert-webhook-token 2>/dev/null)
+        curl -s -o /dev/null -w "%{http_code}" --max-time 10 -X POST \
+            -H "Authorization: Bearer ${tok}" -H "Content-Type: application/json" \
+            --data "{\"status\":\"firing\",\"alerts\":[]}" \
+            http://tappaas-cicd.mgmt.internal:9095/alert' 2>/dev/null) || true
+    case "${code}" in
+        200) check_pass "the receiver accepts Grafana's token" ;;
+        401) check_fail "the receiver refuses Grafana's token — re-run this module's update to deliver it" ;;
+        *)   check_fail "the alert receiver is not reachable from ${VMNAME} (HTTP ${code:-none})" ;;
+    esac
+}
+
 # ── Main ──────────────────────────────────────────────────────────────
 
 main() {
@@ -206,6 +245,8 @@ main() {
     check_alloy_metrics
     check_syslog_port
     check_loki_query
+    check_alert_rules
+    check_alert_delivery
 
     echo ""
     info "Results: ${PASS_COUNT} passed, ${FAIL_COUNT} failed"

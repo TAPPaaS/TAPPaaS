@@ -54,13 +54,18 @@ DRY="${HOST_HARDENING_DRY:-0}"
 RULES="${R}/etc/audit/rules.d/50-tappaas.rules"
 SYSLOG_PLUGIN="${R}/etc/audit/plugins.d/syslog.conf"
 CPUINFO="${HOST_HARDENING_CPUINFO:-/proc/cpuinfo}"
-KEYS="tappaas-pve tappaas-ssh tappaas-network"
+KEYS="tappaas-rootkeys tappaas-pve tappaas-ssh tappaas-network"
 
 case "${MODE}" in apply|check) ;; *) echo "usage: $0 apply|check" >&2; exit 2 ;; esac
 [[ -n "${R}" || "$(id -u)" -eq 0 ]] || { echo "host-hardening: must run as root" >&2; exit 2; }
 
 # One rule per path and architecture: a 32-bit syscall would otherwise slip past
-# a 64-bit-only rule. Paths that do not exist on this node are left out, because
+# a 64-bit-only rule. The first rule that matches names the record, so root's
+# authorized_keys comes first with a key of its own (tappaas-rootkeys): the
+# logging module alerts on it (#126), and a SYSCALL line carries the key but
+# not the file name. On PVE /root/.ssh/authorized_keys is a symlink to the
+# cluster-wide /etc/pve/priv/authorized_keys; both are named.
+# Paths that do not exist on this node are left out, because
 # auditctl refuses a rule on a missing path and that would fail the whole file.
 want_rules() {
     local p kind key a
@@ -76,6 +81,8 @@ EOF
             echo "-a always,exit -F arch=${a} -F ${kind}=${p} -F perm=wa -F auid!=unset -k ${key}"
         done
     done <<'EOF'
+path /etc/pve/priv/authorized_keys tappaas-rootkeys
+path /root/.ssh/authorized_keys tappaas-rootkeys
 dir /etc/pve tappaas-pve
 dir /etc/ssh tappaas-ssh
 dir /root/.ssh tappaas-ssh

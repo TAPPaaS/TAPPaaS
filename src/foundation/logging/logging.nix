@@ -58,6 +58,93 @@ let
   # they are only known once identity:identity has registered the application —
   # long after this file is built.
   oidcSecret   = name: "$__file{/etc/secrets/logging-oidc-${name}}";
+
+  # ── Alert rules over the logs (#126) ─────────────────────────────────────
+  # Every host already logs here and nothing read it: on 2026-09-06 a cluster
+  # reset itself 13 times in 70 minutes and no one was told. Each rule is a
+  # LogQL count per host; anything above zero fires, and Grafana posts it to
+  # the mothership's tappaas-alert-receiver, which mails it through
+  # site-notify.sh (#651). `kind` tells the receiver what a resolve means:
+  #   event  something happened; it "resolves" only as its window moves on, so
+  #          that is not mailed
+  #   state  something is so; its resolve is news, and is mailed
+  # `query` is the log query to paste into Explore; the mail carries it.
+  alertRule = { uid, title, kind, expr, window, summary, query }: {
+    inherit uid title;
+    condition = "C";
+    data = [
+      { refId = "A"; datasourceUid = "loki";
+        relativeTimeRange = { from = window; to = 0; };
+        model = { refId = "A"; expr = expr; queryType = "instant"; editorMode = "code"; }; }
+      { refId = "B"; datasourceUid = "__expr__";
+        model = { refId = "B"; type = "reduce"; expression = "A"; reducer = "last";
+                  datasource = { type = "__expr__"; uid = "__expr__"; }; }; }
+      { refId = "C"; datasourceUid = "__expr__";
+        model = { refId = "C"; type = "threshold"; expression = "B";
+                  conditions = [{ evaluator = { type = "gt"; params = [ 0 ]; }; }];
+                  datasource = { type = "__expr__"; uid = "__expr__"; }; }; }
+    ];
+    # Nothing matched is the healthy case, not missing data. A Loki that
+    # cannot answer is an alert of its own (DatasourceError).
+    noDataState = "OK";
+    execErrState = "Error";
+    for = "0s";
+    labels = { inherit kind; };
+    annotations = { inherit summary query; };
+  };
+  # Proxmox nodes arrive by syslog (source=proxmox); every VM by its journal.
+  pve = ''{source="proxmox"}'';
+  alertRules = [
+    (alertRule {
+      uid = "tappaas-quorum-lost"; title = "QuorumLost"; kind = "event"; window = 300;
+      expr = ''sum by (host) (count_over_time(${pve} |~ "non-primary component|node lost quorum" [5m]))'';
+      summary = "A Proxmox node lost cluster quorum. HA guests on it stop; repeated, the cluster resets itself.";
+      query = ''${pve} |~ "QUORUM|quorum|corosync"'';
+    })
+    (alertRule {
+      uid = "tappaas-ha-fencing"; title = "HaFencing"; kind = "event"; window = 300;
+      expr = ''sum by (host) (count_over_time(${pve} |~ "client watchdog expired|watchdog did not stop|=> 'fence'" [5m]))'';
+      summary = "HA fencing: a node's watchdog expired or a node is being fenced (it resets).";
+      query = ''${pve} |~ "watchdog|fence"'';
+    })
+    (alertRule {
+      uid = "tappaas-host-silent"; title = "HostSilent"; kind = "state"; window = 4500;
+      # Hosts that logged in the hour before and not in the last 15 minutes: no
+      # list to keep, so a new VM is covered at once; a deleted one alerts once
+      # and clears after the hour. It is the rule the others depend on — a host
+      # that cannot log cannot raise anything else.
+      expr = ''count by (host) (count_over_time({host=~".+"}[1h] offset 15m)) unless count by (host) (count_over_time({host=~".+"}[15m]))'';
+      summary = "A host stopped logging 15 minutes ago: it is down, or its log forwarder is (rsyslog on a node, alloy on a VM).";
+      query = ''{host="<host>"}'';
+    })
+    (alertRule {
+      uid = "tappaas-disk-errors"; title = "DiskErrors"; kind = "event"; window = 300;
+      expr = ''sum by (host) (count_over_time(${pve} |~ "(?i)(I/O error|checksum error|pool .*(DEGRADED|FAULTED|UNAVAIL)|SMART.*(FAILED|failure)|Currently unreadable|Offline uncorrectable)" [5m]))'';
+      summary = "Disk or ZFS errors on a Proxmox node.";
+      query = ''${pve} |~ "(?i)(I/O error|zfs|zed|smartd|DEGRADED|FAULTED)"'';
+    })
+    (alertRule {
+      uid = "tappaas-backup-failed"; title = "BackupFailed"; kind = "event"; window = 300;
+      expr = ''sum by (host) (count_over_time(${pve} |~ "ERROR: Backup of VM [0-9]+ failed|Backup job finished with errors|ERROR: job errors" [5m]))'';
+      summary = "A VM backup failed.";
+      query = ''${pve} |~ "vzdump|Backup"'';
+    })
+    (alertRule {
+      uid = "tappaas-oom-kill"; title = "OomKill"; kind = "event"; window = 300;
+      expr = ''sum by (host) (count_over_time({host=~".+"} |= "Out of memory: Killed process" [5m]))'';
+      summary = "The kernel killed a process for lack of memory.";
+      query = ''{host="<host>"} |= "Out of memory"'';
+    })
+    (alertRule {
+      uid = "tappaas-root-key-changed"; title = "RootKeyChanged"; kind = "event"; window = 300;
+      # The #128 audit trail: a write to root's authorized_keys from a login
+      # session (SSH, the sweep, a console). The sweep's own key rotation shows
+      # up here too — expected, and worth a line in the inbox.
+      expr = ''sum by (host) (count_over_time(${pve} |= "type=SYSCALL" |= "tappaas-rootkeys" [5m]))'';
+      summary = "Root's authorized_keys on a Proxmox node was changed from a login session.";
+      query = ''${pve} |= "tappaas-rootkeys"'';
+    })
+  ];
   oidcFiles    = [ "client-id" "client-secret" "auth-url" "token-url" "api-url" ];
 in
 {
@@ -177,6 +264,15 @@ in
           echo "Grafana secret key generated at /etc/secrets/grafana-secret-key."
           echo "  It encrypts Grafana's database secrets and CANNOT be rotated;"
           echo "  it is covered by this module's backup:vm snapshot."
+        fi
+
+        # ── the alert webhook's token (#126) ──
+        # The real one is the mothership's, copied here by update.sh. Until it
+        # arrives, a placeholder lets Grafana start (its contact point reads the
+        # file); the receiver refuses it, which the receiver's journal shows.
+        if [ ! -e /etc/secrets/grafana-alert-webhook-token ]; then
+          ${pkgs.coreutils}/bin/install -m 0600 -o grafana -g grafana \
+            /dev/stdin /etc/secrets/grafana-alert-webhook-token <<< "unconfigured"
         fi
 
         # ── the admin password ──
@@ -566,12 +662,59 @@ in
         apiVersion = 1;
         datasources = [{
           name = "Loki";
+          # A fixed uid: the alert rules below name their data source by it.
+          uid = "loki";
           type = "loki";
           access = "proxy";
           url = "http://127.0.0.1:${toString lokiPort}";
           isDefault = true;
           editable = false;
         }];
+      };
+
+      # #126: the rules above, one contact point (the mothership's receiver),
+      # and a policy that sends everything there, grouped per rule and host,
+      # repeated at most every 4 hours while it lasts.
+      alerting = {
+        rules.settings = {
+          apiVersion = 1;
+          groups = [{
+            orgId = 1;
+            name = "tappaas-logs";
+            folder = "TAPPaaS";
+            interval = "1m";
+            rules = alertRules;
+          }];
+        };
+        contactPoints.settings = {
+          apiVersion = 1;
+          contactPoints = [{
+            orgId = 1;
+            name = "tappaas-site-notify";
+            receivers = [{
+              uid = "tappaas-site-notify";
+              type = "webhook";
+              disableResolveMessage = false;
+              settings = {
+                url = "http://tappaas-cicd.mgmt.internal:9095/alert";
+                httpMethod = "POST";
+                authorization_scheme = "Bearer";
+                authorization_credentials = "$__file{/etc/secrets/grafana-alert-webhook-token}";
+              };
+            }];
+          }];
+        };
+        policies.settings = {
+          apiVersion = 1;
+          policies = [{
+            orgId = 1;
+            receiver = "tappaas-site-notify";
+            group_by = [ "alertname" "host" ];
+            group_wait = "30s";
+            group_interval = "5m";
+            repeat_interval = "4h";
+          }];
+        };
       };
     };
   };
