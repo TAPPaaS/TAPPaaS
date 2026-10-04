@@ -54,35 +54,23 @@ in
   disabledModules = [ "services/web-apps/immich.nix" ];
   imports = [
     /etc/nixos/hardware-configuration.nix
+    # The TAPPaaS NixOS baseline every VM shares (#324), shipped by update-os.sh
+    # before every rebuild; it imports the site's time and locale.
+    /etc/nixos/tappaas-common.nix
+    # When this guest captures its declared paths, if it captures at all (#691).
+    # Always present: update-os.sh ships an empty one, and backup:filesystem
+    # overwrites it with the real trigger.
+    /etc/nixos/tappaas-backup.nix
     "${unstableSrc}/nixos/modules/services/web-apps/immich.nix"
   ];
 
-  # -- Boot ------------------------------------------------------------------
-  boot.loader.systemd-boot.enable = lib.mkDefault true;
-  boot.loader.efi.canTouchEfiVariables = lib.mkDefault true;
-  boot.growPartition = lib.mkDefault true;
-
-  # -- Cloud-init ------------------------------------------------------------
-  services.cloud-init = {
-    enable = true;
-    network.enable = false;
-  };
+  # Everything a TAPPaaS VM has in common -- boot, cloud-init, NetworkManager,
+  # the tappaas user and sudo, ssh, qemu-guest, serial console, zram/oomd, nix
+  # settings and gc, the site's time zone -- comes from the baseline (#324).
+  # This file states only what immich adds or changes.
 
   # -- Networking ------------------------------------------------------------
   networking.hostName = lib.mkDefault "immich";
-  networking.networkmanager.enable = true;
-  networking.networkmanager.ensureProfiles.profiles.tappaas-ethernet = {
-    connection = {
-      id = "tappaas-ethernet";
-      type = "ethernet";
-      autoconnect = "true";
-      autoconnect-priority = "100";
-    };
-    ipv4 = { method = "auto"; };
-    ipv6 = { method = "auto"; addr-gen-mode = "default"; };
-  };
-  systemd.network.enable = lib.mkForce false;
-  systemd.network.wait-online.enable = lib.mkForce false;
 
   # Single source of truth for open ports (services.immich.openFirewall is
   # deliberately left off so editing this list is sufficient).
@@ -91,67 +79,15 @@ in
     allowedTCPPorts = [ 22 2283 ];
   };
 
-  # -- Time zone -------------------------------------------------------------
-  time.timeZone = lib.mkDefault "Europe/Amsterdam";
-
-  # -- Users & sudo ----------------------------------------------------------
-  users.users.tappaas = {
-    isNormalUser = true;
-    extraGroups = [ "wheel" "networkmanager" ];
-  };
-  security.sudo.wheelNeedsPassword = false;
-
-  # -- SSH -------------------------------------------------------------------
-  services.openssh = {
-    enable = true;
-    settings = {
-      PasswordAuthentication = false;
-      PermitRootLogin = "no";
-    };
-  };
-  programs.ssh.startAgent = true;
-
-  # -- Essential services ----------------------------------------------------
-  services.qemuGuest.enable = true;
-
-  systemd.services."serial-getty@ttyS0" = {
-    enable = true;
-    wantedBy = [ "getty.target" ];
-    serviceConfig.Restart = "always";
-  };
-
-  # -- OOM resilience --------------------------------------------------------
-  zramSwap = {
-    enable = true;
-    memoryPercent = 25;
-  };
-  systemd.oomd = {
-    enable = true;
-    enableRootSlice = true;
-    enableUserSlices = true;
-  };
-  systemd.slices."user-".sliceConfig = {
-    ManagedOOMMemoryPressure = "kill";
-    ManagedOOMMemoryPressureLimit = "80%";
-    MemoryHigh = "90%";
-    MemoryMax = "95%";
-  };
-
-  # -- Nix settings ----------------------------------------------------------
-  nix.settings.trusted-users = [ "root" "@wheel" ];
-  nix.settings.experimental-features = [ "nix-command" "flakes" ];
-  nixpkgs.config.allowUnfree = true;
-  nix.gc = {
-    automatic = true;
-    dates = "weekly";
-    options = "--delete-older-than 30d";
-  };
+  # -- SSH: keys only (the baseline's defaults allow passwords) ----------------
+  services.openssh.settings = { PasswordAuthentication = false; PermitRootLogin = "no"; };
 
   # -- Packages --------------------------------------------------------------
-  # postgresql: psql CLI for debugging; the immich package brings the
-  # immich-admin CLI (lockout recovery: immich-admin enable-password-login).
+  # vim, wget, curl, htop and git come from the baseline. postgresql: psql CLI
+  # for debugging; the immich package brings the immich-admin CLI (lockout
+  # recovery: immich-admin enable-password-login).
   environment.systemPackages = with pkgs; [
-    vim wget curl htop git jq openssl postgresql
+    jq openssl postgresql
     config.services.immich.package
   ];
 

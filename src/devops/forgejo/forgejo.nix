@@ -18,72 +18,34 @@ let
   };
 in
 {
-  imports = [ /etc/nixos/hardware-configuration.nix ];
+  imports = [
+    /etc/nixos/hardware-configuration.nix
+    # The TAPPaaS NixOS baseline every VM shares (#324), shipped by update-os.sh
+    # before every rebuild; it imports the site's time and locale.
+    /etc/nixos/tappaas-common.nix
+    # When this guest captures its declared paths, if it captures at all (#691).
+    # Always present: update-os.sh ships an empty one, and backup:filesystem
+    # overwrites it with the real trigger.
+    /etc/nixos/tappaas-backup.nix
+  ];
 
-  # === Boot ===
-  boot.loader.systemd-boot.enable    = lib.mkDefault true;
-  boot.loader.efi.canTouchEfiVariables = lib.mkDefault true;
-  boot.growPartition                 = lib.mkDefault true;
+  # Everything a TAPPaaS VM has in common -- boot, cloud-init, NetworkManager,
+  # the tappaas user and sudo, ssh, qemu-guest, serial console, zram/oomd, nix
+  # settings and gc, the site's time zone -- comes from the baseline (#324).
+  # This file states only what forgejo adds or changes.
 
   system.stateVersion = "25.05";
 
   # === Networking ===
-  networking = {
-    hostName              = lib.mkDefault "forgejo";
-    networkmanager.enable = true;
-    # Match ethernet by type — interface name varies across clone generations
-    networkmanager.ensureProfiles.profiles.tappaas-ethernet = {
-      connection = {
-        id                   = "tappaas-ethernet";
-        type                 = "ethernet";
-        autoconnect          = "true";
-        autoconnect-priority = "100";
-      };
-      ipv4.method = "auto";
-      ipv6 = { method = "auto"; addr-gen-mode = "default"; };
-    };
-  };
+  networking.hostName = lib.mkDefault "forgejo";
 
   networking.firewall = {
     enable          = true;
     allowedTCPPorts = [ 22 3000 ];
   };
 
-  # Disable systemd-networkd (NetworkManager owns networking)
-  systemd.network.enable            = lib.mkForce false;
-  systemd.network.wait-online.enable = lib.mkForce false;
-
-  # === Proxmox integration ===
-  systemd.services."serial-getty@ttyS0" = {
-    enable      = true;
-    wantedBy    = [ "getty.target" ];
-    serviceConfig.Restart = "always";
-  };
-  services.qemuGuest.enable = true;
-  services.cloud-init = {
-    enable         = true;
-    network.enable = false;
-  };
-
-  time.timeZone = lib.mkDefault "Europe/Amsterdam";
-
-  # === Users ===
-  users.users.tappaas = {
-    isNormalUser  = true;
-    extraGroups   = [ "wheel" "networkmanager" ];
-    shell         = pkgs.bash;
-  };
-
-  security.sudo.wheelNeedsPassword = false;
-
-  services.openssh = {
-    enable   = true;
-    settings = {
-      PasswordAuthentication = false;
-      PermitRootLogin        = "no";
-    };
-  };
-  programs.ssh.startAgent = true;
+  # === SSH: keys only (the baseline's defaults allow passwords) ===
+  services.openssh.settings = { PasswordAuthentication = false; PermitRootLogin = "no"; };
 
   # === Forgejo service ===
   services.forgejo = {
@@ -196,18 +158,6 @@ in
   };
 
   # === System packages ===
-  environment.systemPackages = with pkgs; [
-    vim wget curl htop git rsync sqlite
-  ];
-
-  # === Nix ===
-  nix.settings.trusted-users        = [ "root" "@wheel" ];
-  nix.settings.experimental-features = [ "nix-command" "flakes" ];
-  nixpkgs.config.allowUnfree        = true;
-
-  nix.gc = {
-    automatic = true;
-    dates     = "weekly";
-    options   = "--delete-older-than 30d";
-  };
+  # vim, wget, curl, htop and git come from the baseline.
+  environment.systemPackages = with pkgs; [ rsync sqlite ];
 }
