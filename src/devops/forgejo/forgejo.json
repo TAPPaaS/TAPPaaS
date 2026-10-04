@@ -48,6 +48,7 @@
   ],
   "dependsOn": [
     "cluster:vm",
+    "templates:nixos",
     "backup:vm",
     "network:proxy",
     "network:rules"
