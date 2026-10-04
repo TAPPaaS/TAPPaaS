@@ -26,7 +26,7 @@
     "oidcRedirectPaths": ["/auth/login", "/user-settings", "/api/oauth/mobile-redirect"],
     "configureService": "immich-configure-oidc.service"
   },
-  "appVersion": "2.7.5",
+  "appVersion": "3.2.4",
   "config": {
     "cluster:vm": {
       "cores": 4,

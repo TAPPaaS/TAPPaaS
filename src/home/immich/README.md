@@ -13,7 +13,7 @@ ML-powered smart search and face recognition, all on your own hardware.
 | | |
 |---|---|
 | VM | `immich` (VMID 361), in the environment's zone (`zone0` from `config/environments/<env>.json`) |
-| App | Immich (NixOS native `services.immich`), HTTP on port 2283 |
+| App | Immich 3 (`services.immich`, module + package from nixos-unstable until NixOS 26.11), HTTP on port 2283 |
 | Database | PostgreSQL + VectorChord — auto-provisioned by the NixOS module, unix-socket peer auth (no DB password exists) |
 | Cache | Redis (named instance `immich`), unix socket |
 | ML | `immich-machine-learning` on `localhost:3003` — smart search + face recognition; toggle via `machineLearning` in `immich.json` |

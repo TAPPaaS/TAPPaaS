@@ -11,7 +11,8 @@
 # update-os.sh during install and subsequent nixos-rebuild switch calls.
 #
 # Architecture:
-# - NixOS native services.immich (server + optional machine-learning)
+# - services.immich (server + optional machine-learning), Immich 3 from
+#   nixos-unstable -- see unstableSrc below
 # - PostgreSQL + VectorChord: fully managed by the immich module
 #   (unix-socket peer auth -- no DB password, no secrets plumbing)
 # - Redis (named instance "immich"): managed by the immich module, unix socket
@@ -40,9 +41,27 @@
 
 { config, lib, pkgs, modulesPath, ... }:
 
+let
+  # Immich 3 comes from nixos-unstable: the pinned release only has Immich 2,
+  # which is end of life and marked insecure there (CVE-2026-59258,
+  # CVE-2026-82272). Only the immich module and package are taken from it;
+  # the rest of the system, PostgreSQL included, stays on the pinned release
+  # (both ship VectorChord 1.1.1). Drop this once the pinned release carries
+  # Immich 3 (NixOS 26.11). Bump: new rev + `nix-prefetch-url --unpack <url>`.
+  unstableSrc = builtins.fetchTarball {
+    url    = "https://github.com/NixOS/nixpkgs/archive/a7868a727837f3c09cee2ce0ca671c76b1589fed.tar.gz";
+    sha256 = "0z1daxh826r5d877fa77576ihfq4lzhzwys0ggnppw8bld42s0ia";
+  };
+  unstable = import unstableSrc {
+    inherit (pkgs.stdenv.hostPlatform) system;
+    config.allowUnfree = true;
+  };
+in
 {
+  disabledModules = [ "services/web-apps/immich.nix" ];
   imports = [
     /etc/nixos/hardware-configuration.nix
+    "${unstableSrc}/nixos/modules/services/web-apps/immich.nix"
   ];
 
   # -- Boot ------------------------------------------------------------------
@@ -146,6 +165,7 @@
   # -- Immich photo/video server ----------------------------------------------
   services.immich = {
     enable = true;
+    package = unstable.immich;   # Immich 3 -- see unstableSrc above
     host = "0.0.0.0";        # module default "localhost" is unreachable by Caddy
     port = 2283;
     mediaLocation = "/var/lib/immich";  # = data-disk mount point (see below)
