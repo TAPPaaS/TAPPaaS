@@ -198,11 +198,33 @@ Two properties follow, and both matter:
 - **Idempotent**, so `pre-update.sh` still calls it (a standalone
   `module modify tappaas-cicd` must be correct on its own) and the second run is a no-op.
 - **Exit code 10 means STALE**: the pull and relink succeeded, but a component failed to
-  *build*, so its bin is the previous one. Not fatal — the fleet update proceeds on working
-  binaries, and Test 11 is what surfaces a broken build — but never silent either. It
-  reaches the sweep summary and `last-update-result.json` as `control_plane`, and makes
-  `ok` false. A stale control plane is the root cause that otherwise presents as N
-  unrelated-looking module failures.
+  *build*, so its bin is the previous one. Not fatal *here* — but since #719 the self-check
+  after the rebuild requires every flake component built at the path the new generation
+  implies and linked from `~/bin`, so a stale one fails it, the generation rolls back and the
+  sweep does not run (ADR-028 D10). It reaches the sweep summary and
+  `last-update-result.json` as `control_plane`. A stale control plane is the root cause that
+  otherwise presents as N unrelated-looking module failures.
+
+## The sweep runs in the operator's context (#767)
+
+`update-tappaas.service` gives each step the context of the tappaas console, because that is
+where every change is tested: tappaas steps run in a **login shell** (`bash -l -c`), root steps
+**through `sudo -n`**, and the unit has **no sandbox** (ADR-017 D3, amended). Three sweeps
+failed on the difference before (#713 PATH, #742 `sudo` under `NoNewPrivileges`, #719 root's
+HOME) — each worked by hand.
+
+A systemd service still is not a terminal: no TTY, no SSH agent, a timer start. So the rule for
+**any change to code the sweep runs**: verify it with `scripts/tappaas-unit-run.sh`, which runs
+a command exactly as the unit runs its steps (read from the live unit) — not only from the
+console, and never only through `sudo` by hand:
+
+```bash
+tappaas-unit-run.sh -- update-tappaas --dry-run           # a tappaas step
+tappaas-unit-run.sh --root -- tappaas-selfcheck.sh        # a root step (sudo -n, as the unit)
+```
+
+The deep suite does the same for the self-check and the sweep's plan (*Deep Test: the sweep's
+own context*).
 
 ## Config migrations run in that same step, before the rebuild
 

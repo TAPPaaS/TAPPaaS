@@ -132,7 +132,9 @@ in
   # ----------------------------------------
   # tappaas-rebuild@ — privileged helper for the mothership's own rebuild
   # ----------------------------------------
-  # update-tappaas.service runs as tappaas under NoNewPrivileges=true. The
+  # (History — since #767 update-tappaas.service has no NoNewPrivileges and runs
+  # its root steps through `sudo -n`; this helper remains for the module update.)
+  # update-tappaas.service ran as tappaas under NoNewPrivileges=true. The
   # kernel's no_new_privs latch is inherited by every descendant and cannot be
   # cleared, so setuid binaries stop conferring privilege and the `sudo
   # nixos-rebuild` in this module's update.sh aborts before doing anything:
@@ -272,51 +274,44 @@ in
     serviceConfig = {
       Type = "oneshot";
       User = "tappaas";
-      # #533: before the sweep, repair any root-owned config/repo files back to
-      # the tappaas operator. The `+` prefix runs this one step as root (needed
-      # to chown, and to reach outside ReadWritePaths/ProtectSystem); the `-`
-      # keeps a missing or failing repair from blocking the update. This is the
-      # automated arm of the ownership guard — the managers refuse to run as
-      # root, and this heals the drift that made anyone reach for sudo in the
-      # first place. See scripts/tappaas-repair-ownership.sh.
+      # #767 (ADR-017 D3, amended 2026-10-04): each step runs in the OPERATOR'S
+      # CONSOLE CONTEXT, because that is the context every change is tested in.
+      # Three times code that worked from the tappaas console failed only here —
+      # root's runuser child got root's PATH (#713); sudo cannot run under
+      # NoNewPrivileges (#742); the `+` root step had HOME=/home/tappaas and
+      # libgit2 refused the checkout that `sudo` had made trusted by hand (#719) —
+      # each found by a failed sweep, not a test. So:
+      #   * tappaas steps run in a LOGIN SHELL: the operator's PATH and profile,
+      #     not a list kept in step with them by hand;
+      #   * root steps run through `sudo -n`, as the operator would run them
+      #     (root's HOME, SUDO_UID set; tappaas has passwordless sudo, line ~130);
+      #   * no sandbox. NoNewPrivileges only ever protected this VM's own root:
+      #     the tappaas user whose code the sweep runs already holds the root SSH
+      #     key to every node, the backup-key escrow, ~/bin and the checkouts.
+      # What alignment cannot remove (no TTY, a timer start, no SSH agent) is
+      # tested in this context with tappaas-unit-run (scripts/).
       #
-      # ADR-017 D3: the mothership updates itself here, before the sweep, so the
-      # sweep runs on current tooling and a failed pull or rebuild stops the
-      # unit before any module is touched (OnFailure then mails the owner,
-      # #651). prepare (tappaas, sandboxed): pull + relink + builds; rebuild
-      # (`+`, root, outside the sandbox): nixos-rebuild switch — the one step
-      # needing privilege, so no sudo and no polkit.
+      # The steps (ADR-017 D3): repair ownership (#533; `-`: a failed repair
+      # must not block the sweep); prepare (pull + relink + builds); rebuild
+      # (nixos-rebuild switch — fatal on failure); then the sweep.
       ExecStartPre = [
-        "+-/home/tappaas/bin/tappaas-repair-ownership.sh"
-        "/home/tappaas/bin/tappaas-self-prepare.sh"
-        "+/home/tappaas/bin/tappaas-self-rebuild.sh"
+        "-/run/wrappers/bin/sudo -n /home/tappaas/bin/tappaas-repair-ownership.sh"
+        "/run/current-system/sw/bin/bash -l -c tappaas-self-prepare.sh"
+        "/run/wrappers/bin/sudo -n /home/tappaas/bin/tappaas-self-rebuild.sh"
       ];
-      ExecStart = "/home/tappaas/bin/update-tappaas";
+      ExecStart = "/run/current-system/sw/bin/bash -l -c update-tappaas";
       # Per-run state (the claimed request, the prepared/rebuilt markers);
-      # removed when the unit stops, so nothing leaks into the next run.
+      # removed when the unit stops, so nothing leaks into the next run. The root
+      # steps find it at /run/update-tappaas (sudo resets RUNTIME_DIRECTORY).
       RuntimeDirectory = "update-tappaas";
-      # Mirror the operator's login PATH. Without this the service runs with
-      # NixOS's minimal default service PATH (no bash), so update-module.sh's
-      # `#!/usr/bin/env bash` shebang fails with "env: 'bash': No such file or
-      # directory" and every module update dies instantly. update-module.sh
-      # also needs ssh, jq, git, nixos-rebuild, nix and curl — all on this PATH.
+      # The login shell sets PATH from the operator's profile; this is only the
+      # floor for anything that runs before it (and for the self-check, which
+      # reads this unit's PATH, #713).
       Environment = [
         ("PATH=/home/tappaas/bin:/run/wrappers/bin:/home/tappaas/.nix-profile/bin"
           + ":/etc/profiles/per-user/tappaas/bin:/nix/var/nix/profiles/default/bin"
           + ":/run/current-system/sw/bin")
       ];
-      # Hardening — update-tappaas only needs to read configs and shell out
-      # to /home/tappaas/bin/update-module.sh (which uses ssh).
-      NoNewPrivileges = true;
-      ProtectSystem = "strict";
-      # config/, and the backup-key escrow: a sweep that (re)applies
-      # backup:filesystem escrows the client key centrally (#742), and under
-      # NoNewPrivileges it cannot sudo to do it (see the tmpfiles rule).
-      ReadWritePaths = [ "/home/tappaas/config" "/etc/secrets/backup-fs" ];
-      PrivateTmp = true;
-      ProtectKernelTunables = true;
-      ProtectKernelModules = true;
-      ProtectControlGroups = true;
     };
   };
 

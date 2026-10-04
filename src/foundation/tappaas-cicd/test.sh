@@ -929,6 +929,37 @@ else
     skip "tracked exec-mode guard (use --deep to run)"
 fi
 
+# ── Deep Test: the sweep's own context (#767) ───────────────────────
+# Three sweeps failed on code that worked from the tappaas console (#713, #742,
+# #719). The unit now gives each step the console's context, and what a systemd
+# service still differs in (no TTY, no agent, a timer start) is tested HERE, in
+# that context, through tappaas-unit-run.sh — read-only: the self-check as the
+# rebuild runs it (root, through sudo), and the sweep's own plan (--dry-run).
+info "${BOLD}Deep Test: the sweep's own context (#767)${CL}"
+_ur="${SCRIPT_DIR}/scripts/tappaas-unit-run.sh"
+if [[ "${DEEP}" != "1" ]]; then
+    skip "the sweep's context (use --deep to run)"
+elif ! command -v systemd-run >/dev/null 2>&1 || ! systemctl cat update-tappaas.service >/dev/null 2>&1; then
+    skip "the sweep's context (no update-tappaas.service here — not a mothership)"
+else
+    if "${_ur}" -- bash -c '[ -t 0 ] && echo TTY || echo NOTTY' 2>/dev/null | grep -qx NOTTY; then
+        pass "tappaas-unit-run runs as a service: no terminal"
+    else
+        fail "tappaas-unit-run did not reproduce the unit's context (a terminal, or it did not run)"
+    fi
+    if _o="$("${_ur}" --root -- tappaas-selfcheck.sh 2>&1)"; then
+        pass "the self-check passes as the rebuild runs it (root, through sudo, as a service)"
+    else
+        fail "the self-check FAILS as the rebuild runs it — the next sweep would roll back:"
+        grep -E '✗|Error' <<<"${_o}" | head -5 | sed 's/^/      /'
+    fi
+    if "${_ur}" -- update-tappaas --dry-run >/dev/null 2>&1; then
+        pass "the sweep plans in its own context (update-tappaas --dry-run)"
+    else
+        fail "update-tappaas --dry-run fails in the unit's context"
+    fi
+fi
+
 # ── Summary ─────────────────────────────────────────────────────────
 
 info "  Results: ${GN}${PASS} passed${CL}, ${RD}${FAIL} failed${CL}, ${YW}${SKIP} skipped${CL}"
