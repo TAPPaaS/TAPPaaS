@@ -17,6 +17,8 @@ from modules, **named, not numbered** — install order is derived from each mod
 | [identity/](identity/README.md) | Authentik: SSO, users, groups, organisations; secrets |
 | [logging/](logging/README.md) | Loki / Grafana / Promtail: central logs |
 | [satellite/](satellite/README.md) | Optional off-premises VPS: public ingress, off-site backup, admin VPN (ADR-010) |
+| [pvehost/](pvehost/README.md) | A Proxmox VE cluster node as a module: one instance per node, patched and tested like any module (ADR-026) |
+| [debianhost/](debianhost/README.md) | A Debian machine outside the cluster that TAPPaaS keeps patched under the same rules (ADR-026) |
 
 ## Architecture view
 
