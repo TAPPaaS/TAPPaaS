@@ -87,21 +87,25 @@ green exit; implementing it is the tracked open item.
 ## The site's facts on a running VM (#472, #87)
 
 A module VM does not build from this directory. Before every `nixos-rebuild
-switch` on the guest, `update-os.sh` ships one generated file to `/etc/nixos`:
+switch` on the guest, `update-os.sh` ships two files to `/etc/nixos`:
 
 | File | Where it comes from | What it carries |
 |---|---|---|
+| `tappaas-common.nix` | this directory, from the checkout | the baseline every VM shares (#324) |
 | `tappaas-site.nix` | generated from `config/site.json` by `lib/site-locale.sh` | the site's time zone, locale, console keymap and time source |
 
-Each module's own `.nix` imports it, so the site's answers (recorded per #408)
+Each module's own `.nix` imports the baseline, which imports the site's file, so the site's answers (recorded per #408)
 reach every guest without any module restating them. Before this, thirteen
 modules each hard-coded a time zone and six disagreed with the site.
 
-**The baseline itself is not shipped to guests yet.** Every module `.nix` still
-carries its own copy of what is here — ssh, cloud-init, the `tappaas` user, the
-nix settings, `system.stateVersion` — and the copies drifted: no app VM has the
-zram swap, the cloud-init network fix (#448), the host-key fix or the file-backup
-trigger (#626). Making every module import this file instead is **#324**.
+**Every module imports the baseline (#324).** `update-os.sh` ships this file to
+`/etc/nixos/tappaas-common.nix` before every rebuild, from the checkout — so a
+VM follows the baseline its release carries, not the one baked into its image —
+and each module `.nix` imports it and states only what the module adds. Before
+#324 every module carried its own copy, and the copies drifted: no app VM had
+the zram swap, the cloud-init network fix (#448), the host-key fix or the
+file-backup trigger (#626). `scripts/test/test-nixos-canon.sh` fails a module
+that restates a baseline option.
 
 What a module legitimately states differently, the baseline declares at a lower
 priority so the module's value wins: `system.stateVersion` (the template's
@@ -109,10 +113,10 @@ priority so the module's value wins: `system.stateVersion` (the template's
 password SSH (on for the bare template only), the garbage-collection cadence
 (`lib.mkDefault`), and the hostname (`lib.mkOptionDefault`, below a module's own
 `mkDefault`). `scripts/nixos-baseline-eval.sh` on the mothership evaluates every
-module with the baseline imported, against the nixpkgs `update-os.sh` builds
-with, so a conflict is found there rather than as a rolled-back rebuild.
-`tappaas-common.nix` imports `tappaas-site.nix` itself, so the manual and image
-paths already get the site's facts.
+module with the baseline, against the nixpkgs `update-os.sh` builds with, so a
+conflict is found there rather than as a rolled-back rebuild; `--drv` compares
+two trees derivation by derivation. The manual and image paths import the
+baseline too, so they get the site's facts the same way.
 
 The mothership is built from the repository flake rather than by `update-os.sh`,
 so `tappaas-self-rebuild.sh` writes the same generated fragment before it

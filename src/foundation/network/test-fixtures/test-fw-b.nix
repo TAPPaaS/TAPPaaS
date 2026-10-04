@@ -8,46 +8,19 @@
 {
   imports = [
     /etc/nixos/hardware-configuration.nix
+    # The TAPPaaS NixOS baseline every VM shares (#324).
+    /etc/nixos/tappaas-common.nix
     ./test-fw-webserver.nix
   ];
 
-  services.cloud-init = {
-    enable = true;
-    network.enable = false;
-  };
-
-  boot.loader.systemd-boot.enable = lib.mkDefault true;
-  boot.loader.efi.canTouchEfiVariables = lib.mkDefault true;
-
   networking.hostName = "test-fw-b";
-  networking.networkmanager.enable = true;
 
-  time.timeZone = lib.mkDefault "Europe/Amsterdam";
+  # The baseline allows root and password login for the bare template only;
+  # every module turns both off.
+  services.openssh.settings = { PasswordAuthentication = false; PermitRootLogin = "no"; };
 
-  users.users.tappaas = {
-    isNormalUser = true;
-    extraGroups = [ "wheel" "networkmanager" ];
-  };
-
-  security.sudo.wheelNeedsPassword = false;
-
-  services.openssh = {
-    enable = true;
-    settings = {
-      PasswordAuthentication = false;
-      PermitRootLogin = "no";
-    };
-  };
-  programs.ssh.startAgent = true;
-
-  nix.settings.trusted-users = [ "root" "@wheel" ];
-  nix.settings.experimental-features = [ "nix-command" "flakes" ];
-  nixpkgs.config.allowUnfree = true;
-
-  services.qemuGuest.enable = true;
-  boot.growPartition = lib.mkDefault true;
-
-  environment.systemPackages = with pkgs; [ curl jq ];
+  # vim, wget, curl, htop and git come from the baseline.
+  environment.systemPackages = with pkgs; [ jq ];
 
   tappaas.test = {
     webserverPort = 9090;

@@ -16,10 +16,12 @@
 # The guest's /etc/nixos files are stood in for: the module's own siblings and
 # JSON, the baseline from this checkout, and empty site / backup fragments.
 #
-# Usage: nixos-baseline-eval.sh [--as-is] [--nixpkgs <path|url>] [<module.nix>...]
+# Usage: nixos-baseline-eval.sh [--as-is] [--drv] [--nixpkgs <path|url>] [<module.nix>...]
 #   (no files)  every module .nix under src/ that sets system.stateVersion,
 #               except the templates themselves and the mothership (a flake)
 #   --as-is     evaluate the module alone, without adding the baseline (the "before")
+#   --drv       print each system's derivation: removing a copy that equals the
+#               baseline should leave it unchanged (compare two runs; nix-diff)
 #   --nixpkgs   nixpkgs to evaluate against (default: the template's pinned rev)
 # Exit: 0 all evaluate; 1 at least one fails; 2 usage or no nix.
 set -uo pipefail
@@ -27,11 +29,12 @@ set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRC="$(cd "${HERE}/../../.." && pwd)"
 BASELINE="${SRC}/foundation/templates/tappaas-common.nix"
-AS_IS=0; NIXPKGS=""
+AS_IS=0; DRV=0; NIXPKGS=""
 FILES=()
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --as-is)   AS_IS=1; shift ;;
+        --drv)     DRV=1; shift ;;
         --nixpkgs) NIXPKGS="${2:?--nixpkgs needs a value}"; shift 2 ;;
         -h|--help) awk 'NR > 1 { if ($0 !~ /^#/) exit; sub(/^# ?/, ""); print }' "${BASH_SOURCE[0]}"; exit 0 ;;
         -*)        echo "nixos-baseline-eval: unknown option $1" >&2; exit 2 ;;
@@ -54,7 +57,10 @@ fi
 # A module imports the baseline when a live (uncommented) line names it.
 imports_baseline() { sed -E 's/#.*$//' "$1" | grep -q 'tappaas-common\.nix'; }
 
-WORK="$(mktemp -d)"; trap 'rm -rf "${WORK}"' EXIT
+# A fixed place, not mktemp: the stand-in /etc/nixos path ends up in the
+# derivations, and two runs (before and after a change) must be comparable.
+WORK="${TMPDIR:-/tmp}/tappaas-nixos-baseline-eval"
+rm -rf "${WORK}"; mkdir -p "${WORK}"; trap 'rm -rf "${WORK}"' EXIT
 PASS=0; FAIL=0
 for f in "${FILES[@]}"; do
     f="$(cd "$(dirname "$f")" && pwd -P)/$(basename "$f")"
@@ -75,9 +81,16 @@ for f in "${FILES[@]}"; do
     (( AS_IS )) || imports_baseline "$f" || extra="./etc/tappaas-common.nix"
     printf '{ imports = [ ./%s.nix %s ]; }\n' "${name}" "${extra}" > "${d}/wrapper.nix"
 
-    if out="$(nix-instantiate --eval --quiet -I "nixpkgs=${NIXPKGS}" -I "nixos-config=${d}/wrapper.nix" \
-                '<nixpkgs/nixos>' -A config.system.build.toplevel.drvPath 2>&1)"; then
-        echo "  ok: ${rel}"; PASS=$((PASS+1))
+    # --drv instantiates (writes the .drv files, builds nothing) so two runs can
+    # be compared derivation by derivation; otherwise the path is only computed.
+    if (( DRV )); then
+        mode=(--quiet -A config.system.build.toplevel)
+    else
+        mode=(--eval --quiet -A config.system.build.toplevel.drvPath)
+    fi
+    if out="$(nix-instantiate "${mode[@]}" -I "nixpkgs=${NIXPKGS}" -I "nixos-config=${d}/wrapper.nix" \
+                '<nixpkgs/nixos>' 2>&1)"; then
+        echo "  ok: ${rel}$( (( DRV )) && printf ' %s' "$(tail -1 <<<"${out}")")"; PASS=$((PASS+1))
     else
         echo "  FAIL: ${rel}"; FAIL=$((FAIL+1))
         # The verdict, not the trace: the error line and the definitions it names.

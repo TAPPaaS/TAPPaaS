@@ -563,11 +563,23 @@ update_nixos() {
         "test -f /etc/nixos/tappaas-backup.nix || printf '{ }\n' | sudo tee /etc/nixos/tappaas-backup.nix >/dev/null" \
         || warn "could not place the capture-timer placeholder on ${vm_ip}"
 
-    # The site's own time and locale, written where the module's .nix imports it
-    # from (#472). Before the rebuild, so this run applies it rather than the next.
-    # The baseline itself (tappaas-common.nix) is NOT shipped yet: every module
-    # still inlines its own copy, so importing it conflicts option by option —
-    # that de-duplication is #324.
+    # The baseline every module imports (#324), from this checkout — the same
+    # file the template image is built from, so a VM stays on the baseline its
+    # release ships rather than the one baked into its image. Always overwritten:
+    # it is the platform's file, not the guest's. A module that imports it and
+    # did not get it would fail the rebuild on a missing path, so say so here.
+    local _baseline="${TAPPAAS_BASELINE_NIX:-/home/tappaas/TAPPaaS/src/foundation/templates/tappaas-common.nix}"
+    if [[ -f "${_baseline}" ]]; then
+        info "Copying the NixOS baseline to ${vm_ip}:/etc/nixos/tappaas-common.nix"
+        scp -q -o StrictHostKeyChecking=accept-new -o BatchMode=yes "${_baseline}" "tappaas@${vm_ip}:/tmp/tappaas-common.nix" \
+            && ssh -o BatchMode=yes "tappaas@${vm_ip}" "sudo install -m 0644 /tmp/tappaas-common.nix /etc/nixos/tappaas-common.nix && rm -f /tmp/tappaas-common.nix" \
+            || die "failed to install the NixOS baseline on ${vm_ip}"
+    elif sed -E 's/#.*$//' "${nix_config}" | grep -q 'tappaas-common\.nix'; then
+        die "${nix_config} imports the NixOS baseline, but ${_baseline} does not exist"
+    fi
+
+    # The site's own time and locale, written where the baseline imports it from
+    # (#472). Before the rebuild, so this run applies it rather than the next.
     if declare -F apply_site_locale_nixos >/dev/null 2>&1; then
         local _zone
         _zone="$(jq -r '(.zone0 // (.config? // {} | to_entries[]?.value.zone0?)) // ""' "${CONFIG_DIR}/${vmname}.json" 2>/dev/null | head -1)"

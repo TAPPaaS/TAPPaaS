@@ -58,36 +58,16 @@ in
   
   imports = [ 
     /etc/nixos/hardware-configuration.nix
-    # The site's own time, locale and time source (#472, #87), generated from
-    # config/site.json and shipped to /etc/nixos by update-os.sh on every update.
-    # A VM that has never had one simply keeps the NixOS defaults.
-    #
-    # NOT tappaas-common.nix: this module still carries its own copy of the
-    # baseline (ssh, cloud-init, users, nix settings), so importing the baseline
-    # would conflict on every one of them. De-duplicating that is #324.
-    /etc/nixos/tappaas-site.nix
+    # The TAPPaaS NixOS baseline every VM shares (#324): ssh, cloud-init, the
+    # tappaas user, nix settings, zram/oomd, the NIC and hostname fixes, and the
+    # site's own time and locale (it imports tappaas-site.nix). update-os.sh ships
+    # it before every rebuild; this file states only what the module adds.
+    /etc/nixos/tappaas-common.nix
     # When this guest captures its declared paths, if it captures at all (#691).
     # Always present: update-os.sh ships an empty one, and backup:filesystem
     # overwrites it with the real trigger.
     /etc/nixos/tappaas-backup.nix
   ];
-
-  # ============================================================================
-  # BOOT CONFIGURATION
-  # ============================================================================
-  
-  boot.loader.systemd-boot.enable = lib.mkDefault true;
-  boot.loader.efi.canTouchEfiVariables = lib.mkDefault true;
-  boot.growPartition = lib.mkDefault true;  # Auto-expand root partition on resize
-
-  # ============================================================================
-  # CLOUD-INIT
-  # ============================================================================
-  
-  services.cloud-init = {
-    enable = true;
-    network.enable = false;  # We handle networking ourselves with NetworkManager
-  };
 
   # ============================================================================
   # NETWORKING
@@ -98,24 +78,7 @@ in
           then builtins.fromJSON (builtins.readFile ./litellm.json)
           else {};
   in lib.mkDefault (cfg.vmname or "litellm");
-  networking.networkmanager.enable = true;
-  # Match ethernet by type, not interface name (ens18/eth0/enp0s18 varies)
-  networking.networkmanager.ensureProfiles.profiles.tappaas-ethernet = {
-    connection = { id = "tappaas-ethernet"; type = "ethernet"; autoconnect = "true"; autoconnect-priority = "100"; };
-    ipv4 = { method = "auto"; };
-    ipv6 = { method = "auto"; addr-gen-mode = "default"; };
-  };
   
-  # Prevent systemd-networkd conflicts with NetworkManager
-  systemd.network.enable = lib.mkForce false;
-  systemd.network.wait-online.enable = lib.mkForce false;
-
-  # Serial console for VM debugging (bypass KVM console)
-  systemd.services."serial-getty@ttyS0" = {
-    enable = true;
-    wantedBy = [ "getty.target" ];
-    serviceConfig.Restart = "always";
-  };
 
   networking.firewall = {
     enable = true;
@@ -131,49 +94,20 @@ in
   # ============================================================================
   
   # No time zone here: it is the site's fact, not the module's (#472). It
-  # arrives through /etc/nixos/tappaas-site.nix, imported above.
-
-  # ============================================================================
-  # USERS & SECURITY
-  # ============================================================================
-  
-  users.users.tappaas = {
-    isNormalUser = true;
-    extraGroups = [ "wheel" "networkmanager" ];
-  };
-  
-  security.sudo.wheelNeedsPassword = false;
+  # arrives through /etc/nixos/tappaas-site.nix, which the baseline imports.
 
   # ============================================================================
   # SYSTEM PACKAGES
   # ============================================================================
   
-  environment.systemPackages = with pkgs; [
-    vim
-    wget
-    curl
-    htop
-    git
-    lsof
-    jq
-    openssl
-    postgresql  # psql CLI for debugging
-  ];
+  # vim, wget, curl, htop and git come from the baseline.
+  environment.systemPackages = with pkgs; [ lsof jq openssl postgresql ];
 
   # ============================================================================
   # NIX SETTINGS
   # ============================================================================
   
-  nix.settings.trusted-users = [ "root" "@wheel" ];  # Allow remote deployments
-  nix.settings.experimental-features = [ "nix-command" "flakes" ];
-  nixpkgs.config.allowUnfree = true;
 
-  # Automatic garbage collection - 30 day retention (dev-friendly)
-  nix.gc = {
-    automatic = true;
-    dates = "weekly";
-    options = "--delete-older-than 30d";
-  };
   
   nix.optimise = {
     automatic = true;
@@ -184,17 +118,11 @@ in
   # ESSENTIAL SERVICES
   # ============================================================================
   
-  services.qemuGuest.enable = true;  # Proxmox/QEMU integration
   
-  services.openssh = {
-    enable = true;
-    settings = {
-      PasswordAuthentication = false;
-      PermitRootLogin = "no";
-    };
-  };
+  # The baseline allows root and password login for the bare template only;
+  # every module turns both off.
+  services.openssh.settings = { PasswordAuthentication = false; PermitRootLogin = "no"; };
   
-  programs.ssh.startAgent = true;
 
   # ============================================================================
   # DATABASE - PostgreSQL 17
@@ -507,7 +435,6 @@ EOF
       '';
     };
   };
-
 
   # ============================================================================
   # vLLM MODEL REGISTRATION (#503)

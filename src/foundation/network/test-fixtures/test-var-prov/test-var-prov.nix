@@ -8,26 +8,16 @@ let
   marker = "tappaas-var-prov-ok";
 in
 {
-  imports = [ /etc/nixos/hardware-configuration.nix ];
-
-  services.cloud-init = { enable = true; network.enable = false; };
-  boot.loader.systemd-boot.enable = lib.mkDefault true;
-  boot.loader.efi.canTouchEfiVariables = lib.mkDefault true;
+  imports = [ /etc/nixos/hardware-configuration.nix
+    # The TAPPaaS NixOS baseline every VM shares (#324).
+    /etc/nixos/tappaas-common.nix
+  ];
 
   networking.hostName = "test-var-prov";
-  networking.networkmanager.enable = true;
-  time.timeZone = lib.mkDefault "Europe/Amsterdam";
 
-  users.users.tappaas = { isNormalUser = true; extraGroups = [ "wheel" "networkmanager" ]; };
-  security.sudo.wheelNeedsPassword = false;
-  services.openssh = { enable = true; settings = { PasswordAuthentication = false; PermitRootLogin = "no"; }; };
-  programs.ssh.startAgent = true;
-
-  nix.settings.trusted-users = [ "root" "@wheel" ];
-  nix.settings.experimental-features = [ "nix-command" "flakes" ];
-  nixpkgs.config.allowUnfree = true;
-  services.qemuGuest.enable = true;
-  boot.growPartition = lib.mkDefault true;
+  # The baseline allows root and password login for the bare template only;
+  # every module turns both off.
+  services.openssh.settings = { PasswordAuthentication = false; PermitRootLogin = "no"; };
 
   networking.firewall.allowedTCPPorts = [ webserverPort ];
   environment.etc."tappaas-test-www/index.html".text = "${marker}\n";

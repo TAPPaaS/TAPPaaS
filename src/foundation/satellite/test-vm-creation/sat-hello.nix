@@ -14,88 +14,17 @@
   imports =
     [
       /etc/nixos/hardware-configuration.nix
+      # The TAPPaaS NixOS baseline every VM shares (#324).
+      /etc/nixos/tappaas-common.nix
     ];
-
-  services.cloud-init = {
-    enable = true;
-    network.enable = false; # We handle networking ourselves with DHCP
-  };
-
-  # Use the systemd-boot EFI boot loader.
-  boot.loader.systemd-boot.enable = lib.mkDefault true;
-  boot.loader.efi.canTouchEfiVariables = lib.mkDefault true;
 
   # Network
   networking.hostName = lib.mkDefault "sat-hello";
-  networking.networkmanager.enable = true;
-
-  # Ensure consistent interface naming across cloned VMs (see template.nix).
-  networking.networkmanager.ensureProfiles.profiles = {
-    tappaas-ethernet = {
-      connection = {
-        id = "tappaas-ethernet";
-        type = "ethernet";
-        autoconnect = "true";
-        autoconnect-priority = "100";
-      };
-      ipv4 = {
-        method = "auto";
-      };
-      ipv6 = {
-        method = "auto";
-        addr-gen-mode = "default";
-      };
-    };
-  };
-
-  time.timeZone = lib.mkDefault "Europe/Amsterdam";
-
-  # Users
-  users.users.tappaas = {
-    isNormalUser = true;
-    extraGroups = [ "wheel" "networkmanager" ];
-  };
-  security.sudo.wheelNeedsPassword = false;
 
   # Essential Services
-  services.openssh = {
-    enable = true;
-    settings = {
-      PasswordAuthentication = false;
-      PermitRootLogin = "no";
-    };
-  };
-  programs.ssh.startAgent = true;
-
-  nix.settings.trusted-users = [ "root" "@wheel" ];
-  nix.settings.experimental-features = [ "nix-command" "flakes" ];
-  nixpkgs.config.allowUnfree = true;
-
-  systemd.services."serial-getty@ttyS0" = {
-    enable = true;
-    wantedBy = [ "getty.target" ];
-    serviceConfig.Restart = "always";
-  };
-
-  services.qemuGuest.enable = true;
-  boot.growPartition = lib.mkDefault true;
-
-  # ── OOM resilience (issue #323) — keep the baseline so nixos-rebuild has swap ──
-  zramSwap = {
-    enable = true;
-    memoryPercent = 25;
-  };
-  systemd.oomd = {
-    enable = true;
-    enableRootSlice = true;
-    enableUserSlices = true;
-  };
-  systemd.slices."user-".sliceConfig = {
-    ManagedOOMMemoryPressure = "kill";
-    ManagedOOMMemoryPressureLimit = "80%";
-    MemoryHigh = "90%";
-    MemoryMax = "95%";
-  };
+  # The baseline allows root and password login for the bare template only;
+  # every module turns both off.
+  services.openssh.settings = { PasswordAuthentication = false; PermitRootLogin = "no"; };
 
   # ── The actual test payload: a trivial web server on :80 ────────────────
   services.nginx = {
@@ -111,14 +40,6 @@
     };
   };
   networking.firewall.allowedTCPPorts = [ 80 ];
-
-  environment.systemPackages = with pkgs; [ vim curl htop ];
-
-  nix.gc = {
-    automatic = true;
-    dates = "weekly";
-    options = "--delete-older-than 30d";
-  };
 
   system.stateVersion = "25.05";
 }

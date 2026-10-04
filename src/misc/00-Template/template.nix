@@ -1,10 +1,16 @@
 # ----------------------------------------
 # Author: Erik, Lars (Tappaas)
-# Purpose: 
-#     Declarative common baseline NIXOS VM Template for all tappaas pve-nixos-vm 
+# Purpose:
+#     Starting point for a TAPPaaS module's NixOS configuration. Copy it to
+#     <module>.nix and add what the module runs.
 #
-#     Edit this configuration file to define what should be installed on
-#     your system. Help is available in the configuration.nix(5) man page, on
+#     Everything every TAPPaaS VM has — ssh, cloud-init, the tappaas user,
+#     nix settings, NetworkManager, zram/oomd, the site's time and locale — is
+#     the baseline, templates/tappaas-common.nix, imported below. Do not restate
+#     it here: a copy drifts, and a copy with another value fails the build
+#     (#324). scripts/nixos-baseline-eval.sh checks a module against it.
+#
+#     Help is available in the configuration.nix(5) man page, on
 #     https://search.nixos.org/options and in the NixOS manual (`nixos-help`).
 #
 # ----------------------------------------
@@ -12,155 +18,27 @@
 { config, lib, pkgs, modulesPath, system, ... }:
 
 {
-  imports =
-    [ 
-      /etc/nixos/hardware-configuration.nix
-    # The site's own time, locale and time source (#472, #87), generated from
-    # config/site.json and shipped to /etc/nixos by update-os.sh on every update.
-    # A VM that has never had one simply keeps the NixOS defaults.
-    #
-    # NOT tappaas-common.nix: this module still carries its own copy of the
-    # baseline (ssh, cloud-init, users, nix settings), so importing the baseline
-    # would conflict on every one of them. De-duplicating that is #324.
-    /etc/nixos/tappaas-site.nix
+  imports = [
+    /etc/nixos/hardware-configuration.nix
+    # The TAPPaaS NixOS baseline every VM shares (#324): ssh, cloud-init, the
+    # tappaas user, nix settings, zram/oomd, the NIC and hostname fixes, and the
+    # site's own time and locale (it imports tappaas-site.nix). update-os.sh ships
+    # it before every rebuild; this file states only what the module adds.
+    /etc/nixos/tappaas-common.nix
     # When this guest captures its declared paths, if it captures at all (#691).
     # Always present: update-os.sh ships an empty one, and backup:filesystem
     # overwrites it with the real trigger.
     /etc/nixos/tappaas-backup.nix
-    ];
-
-  services.cloud-init = {
-        enable = true;
-        network.enable = false; # We handle networking ourselves with DHCP
-  };
-
-  # Use the systemd-boot EFI boot loader.
-  boot.loader.systemd-boot.enable = lib.mkDefault true;
-  boot.loader.efi.canTouchEfiVariables = lib.mkDefault true;
-
-  # Network
-  networking.hostName = lib.mkDefault "tappaas-nixos"; # Define your hostname.
-  networking.networkmanager.enable = true;  # Easiest to use and most distros use this by default.
-
-  # Ensure consistent interface naming across cloned VMs.
-  # Proxmox virtio NICs may appear as ens18, eth0, or enp0s18 depending on
-  # kernel/udev version. Using ensureProfiles with match-by-type guarantees
-  # DHCP works regardless of the actual interface name.
-  networking.networkmanager.ensureProfiles.profiles = {
-    tappaas-ethernet = {
-      connection = {
-        id = "tappaas-ethernet";
-        type = "ethernet";
-        autoconnect = "true";
-        autoconnect-priority = "100";
-      };
-      ipv4 = {
-        method = "auto";
-      };
-      ipv6 = {
-        method = "auto";
-        addr-gen-mode = "default";
-      };
-    };
-  };
-
-  # cloud-init writes /etc/systemd/network/10-cloud-init-eth0.network (DHCP=ipv4)
-  # into every clone, but systemd-networkd is not installed on these images — the
-  # file is inert and NetworkManager above is the real owner. Force the unit off
-  # so a module never ships two half-owners of the same interface: when neither
-  # side actually takes DHCP ownership the address simply expires with its lease
-  # and the VM goes dark with nothing logged (#446). Keep this in any module you
-  # copy from this template.
-  systemd.network.enable = lib.mkForce false;
-  systemd.network.wait-online.enable = lib.mkForce false;
-
-  # Set your time zone.
-  # No time zone here: it is the site's fact, not the module's (#472). It
-  # arrives through /etc/nixos/tappaas-site.nix, imported above.
-
-  # Users
-  users.users.tappaas = {
-        isNormalUser = true;
-        extraGroups = [ "wheel" "networkmanager" ];
-  };
-
-  # Enable passwordless sudo for tappaas
-  security.sudo.wheelNeedsPassword = false;
-
-  # Essential Services
-  services.openssh = {
-        enable = true;
-        settings = {
-                PasswordAuthentication = false;
-                PermitRootLogin = "no";
-        };
-  };
-  programs.ssh.startAgent = true;
-
-  nix.settings.trusted-users = [ "root" "@wheel" ]; # Allow remote updates
-  nix.settings.experimental-features = [ "nix-command" "flakes" ]; # Enable flakes
-  nixpkgs.config.allowUnfree = true; # Allow unfree packages
-
-
-  # start tty0 on serial console
-  systemd.services."serial-getty@ttyS0" = {
-    enable = true;
-    wantedBy = [ "getty.target" ]; # to start at boot
-    serviceConfig.Restart = "always"; # restart when session is closed
-  };
-
-
-  # QEMU Guest Agent
-  services.qemuGuest.enable = true;
-
-  # Auto-grow root partition
-  boot.growPartition = lib.mkDefault true;
-
-  # ── OOM resilience (issue #323) ────────────────────────────────────────
-  # Without swap and oomd configuration, memory exhaustion causes host-wide
-  # stalls. zram provides a compressed memory buffer (no disk I/O penalty),
-  # and systemd-oomd kills runaway processes before the kernel OOM killer
-  # intervenes unpredictably.
-
-  # Compressed in-memory swap — gives oomd time to act before hard OOM
-  zramSwap = {
-    enable = true;
-    memoryPercent = 25;
-  };
-
-  # systemd-oomd: pressure-based OOM handling
-  systemd.oomd = {
-    enable = true;
-    enableRootSlice = true;
-    enableUserSlices = true;
-  };
-
-  # Limit user.slice memory to create backpressure before system exhaustion
-  systemd.slices."user-".sliceConfig = {
-    ManagedOOMMemoryPressure = "kill";
-    ManagedOOMMemoryPressureLimit = "80%";
-    MemoryHigh = "90%";
-    MemoryMax = "95%";
-  };
-
-  # System packages
-  environment.systemPackages = with pkgs; [
-        vim
-        wget
-        curl
-        htop
-        git
   ];
 
-  # Enable automatic garbage collection
-  nix.gc = {
-        automatic = true;
-        dates = "weekly";
-        options = "--delete-older-than 30d";
-  };
+  networking.hostName = lib.mkDefault "tappaas-nixos"; # Define your hostname.
 
-# TODO: the following service definitions are templates only, they need to be adopted/customized for tappaas use
+  # No time zone here: it is the site's fact, not the module's (#472). It
+  # arrives through /etc/nixos/tappaas-site.nix, which the baseline imports.
 
+  # The baseline allows root and password login for the bare template only;
+  # every module turns both off.
+  services.openssh.settings = { PasswordAuthentication = false; PermitRootLogin = "no"; };
 
   # Firewall: explicit, as every TAPPaaS module declares it (canon C7, #390).
   # SSH is the one port every guest needs; a module adds its own service ports
@@ -170,6 +48,9 @@
     enable = true;
     allowedTCPPorts = [ 22 ];
   };
+
+  # Packages beyond the baseline's (vim, wget, curl, htop, git), if any:
+  # environment.systemPackages = with pkgs; [ jq ];
 
   # This option defines the first version of NixOS you have installed on this particular machine,
   # and is used to maintain compatibility with application data (e.g. databases) created on older NixOS versions.
