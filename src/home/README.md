@@ -1,6 +1,7 @@
 # Home stack
 
-Home automation: Home Assistant, and the Zigbee gateway it talks to. On the website:
+Home automation: Home Assistant, and the Zigbee gateway it talks to — and the household's
+media: Jellyfin for movies, series and music, Immich for the photo and video library. On the website:
 [Home Stack](https://tappaas.org/stacks/home/).
 
 Device gateways are part of this stack — but **IoT devices are still separated at the
@@ -9,15 +10,14 @@ own zones (local-only, cloud-dependent, cameras, untrusted) with firewall bounda
 Home Assistant reaches them across those boundaries through controlled pinholes — see
 [Network Zones](../foundation/tappaas-cicd/manager/network-manager/ZONES.md).
 
-**Planned:** Jellyfin — media server for your movies, series and music; Immich — photo and
-video library, indexed and searchable at home (no modules yet).
-
 <!-- BEGIN GENERATED MODULES -- edit the module JSONs and src/module-catalog.json, not this block -->
 
 | Module | What it is | Status |
 |---|---|---|
 | [deconz](deconz/README.md) | Zigbee gateway — deCONZ engine (ConBee II, native zigbee for HA) + diyHue front-end (hue-bridge for free@home/SysAP). See README.md / INSTALL.md. | Development |
 | [hass](hass/README.md) | Home Assistant OS (HAOS) - home automation platform | Testing |
+| [immich](immich/README.md) | Immich self-hosted photo and video backup with ML-powered search, face recognition and mobile auto-upload. | Development |
+| [jellyfin](jellyfin/README.md) | Jellyfin open-source media server for personal movie, TV and music libraries. | Development |
 
 Install them as [INSTALL.md](INSTALL.md) says.
 

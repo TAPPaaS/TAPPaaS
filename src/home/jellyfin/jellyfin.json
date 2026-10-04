@@ -1,0 +1,48 @@
+{
+  "description": "Jellyfin open-source media server for personal movie, TV and music libraries.",
+  "kind": "vm",
+  "version": "0.1.0",
+  "stack": "home",
+  "releaseDate": "2026-06-27",
+  "maintainer": "@AndreasJe",
+  "status": "Development",
+  "vmname": "jellyfin",
+  "vmid": 360,
+  "vmtag": "TAPPaaS,App,Media",
+  "node": "tappaas1",
+  "zone0": "srvHome",
+  "dependsOn": [
+    "cluster:vm",
+    "templates:nixos",
+    "backup:vm",
+    "network:proxy",
+    "network:rules"
+  ],
+  "provides": [
+    "mediaserver",
+    "storage"
+  ],
+  "appVersion": "10.10.7",
+  "config": {
+    "cluster:vm": {
+      "cores": 4,
+      "memory": "2048",
+      "diskSize": "32G",
+      "storage": "tanka1",
+      "imageType": "clone",
+      "image": "8080",
+      "bridge0": "lan",
+      "mediaStorage": "allocate",
+      "mediaDiskStorage": "tankc1",
+      "mediaDiskSize": "500G"
+    },
+    "network:proxy": {
+      "proxyPort": 8096,
+      "proxyAllowedZones": [
+        "home",
+        "netbird",
+        "internet"
+      ]
+    }
+  }
+}

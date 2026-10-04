@@ -153,14 +153,23 @@ if [[ -n "${entry}" ]]; then
             || die "catalogue: the edit did not leave one entry for ${new_json} — check ${cat_f}"
         info "catalogue: ${list} entry now ${new_json}"
     else
-        tmp="$(mktemp)"
-        jq --arg l "${list}" --arg j "${FREL}/${ONAME}.json" '.[$l] |= map(select(.moduleJson != $j))' \
-            "${FDIR}/${CATALOG_REL}" > "${tmp}" && mv "${tmp}" "${FDIR}/${CATALOG_REL}"
+        # Between repositories the two catalogues need not share a shape: a
+        # single-list catalogue (#463: `modules`) records only where a module
+        # is and which VMIDs it holds, so the entry is cut down to that, with
+        # `stack` taken from the directory it lands in (src/<stack>/<module>).
+        # Both edits are text edits, checked by parsing (catalog-entry.py).
+        "${HERE}/move-module/catalog-entry.py" remove "${FDIR}/${CATALOG_REL}" "${FREL}/${ONAME}.json" >/dev/null \
+            || die "catalogue: ${FREPO}'s entry for ${FREL}/${ONAME}.json is left as it was — the files are moved; fix the catalogues by hand"
         info "catalogue: removed from ${FREPO}"
         if [[ -n "${TDIR}" && -f "${TDIR}/${CATALOG_REL}" ]]; then
-            tmp="$(mktemp)"
-            jq --arg l "${list}" --argjson m "${moved}" '.[$l] = ((.[$l] // []) + [$m])' \
-                "${TDIR}/${CATALOG_REL}" > "${tmp}" && mv "${tmp}" "${TDIR}/${CATALOG_REL}"
+            if jq -e '.modules | type == "array"' "${TDIR}/${CATALOG_REL}" >/dev/null 2>&1; then
+                list="modules"
+                stack="$(sed -n 's#^src/foundation/[^/]*$#foundation#p; s#^src/\([^/]*\)/[^/]*$#\1#p' <<< "${TREL}")"
+                moved="$(jq -c --arg s "${stack}" '{moduleName, legacyName, moduleJson, vmid}
+                    | with_entries(select(.value != null)) + (if $s != "" then {stack: $s} else {} end)' <<< "${moved}")"
+            fi
+            "${HERE}/move-module/catalog-entry.py" add "${TDIR}/${CATALOG_REL}" "${list}" "${moved}" \
+                || die "catalogue: add the entry to ${TREPO}'s ${list} by hand: ${moved}"
             info "catalogue: added to ${TREPO} (${list})"
         else
             warn "add the entry to ${TREPO}'s catalogue by hand: ${moved}"
