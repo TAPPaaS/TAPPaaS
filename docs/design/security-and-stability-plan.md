@@ -115,7 +115,7 @@ things that make those migrations survivable go before it (Wave 0).
 | 1 | G1.2 Backup placement model (ADR-012 close-out) | 13 | 26/27 | 3 | 4 | H |
 | 1 | ✅ G1.3 Module contract & repo layout | 8 | 8/8 | 2 | 5 | H |
 | 1 | G1.4 Common NixOS baseline | 9 | 16/18 | 2 | 4 | H |
-| 1 | ✅ G1.5 Rebuild & recovery paths | 5 | 15/15 | 3 | 4 | M |
+| 1 | ✅ G1.5 Rebuild & recovery paths | 5 | 16/16 | 3 | 4 | M |
 | 1 | G1.6 Secrets & privileged access | 5 | 3/6 | 1 | 5 | H |
 | 1 | G1.7 Parked for Erik discussion | 5 | 0/5 | – | – | – |
 | 2 | G2.1 Firewall exposure & rule order | 14 | 7/20 | 3 | 4 | M |
@@ -131,7 +131,7 @@ things that make those migrations survivable go before it (Wave 0).
 | 4 | G4.4 Storage & physical devices | 5 | 2/9 | 2 | 2 | M |
 | 4 | G4.5 Governance, CI & sign-offs | 8 | 3/10 | 3 | 1 | L |
 
-**Issues** is the count when the plan was made; **Done** is ✅ rows / all rows in the group's own table now (it grows as issues are added and closed). By wave: Wave 0 25/25 · Wave 1 82/93 · Wave 2 11/29 · Wave 3 19/56 · Wave 4 12/43. Issue counts include the Future Work items rolled in.
+**Issues** is the count when the plan was made; **Done** is ✅ rows / all rows in the group's own table now (it grows as issues are added and closed). By wave: Wave 0 25/25 · Wave 1 83/94 · Wave 2 11/29 · Wave 3 19/56 · Wave 4 12/43. Issue counts include the Future Work items rolled in.
 
 ```mermaid
 quadrantChart
@@ -548,6 +548,7 @@ Wave 1.
 | ✅ #720 | update-os.sh hangs indefinitely when the rebuild's ssh session dies | — | — | — | **Open, not yet scored** — rebuild path, beside #713/#725. Added in the 2026-09-24 issue sweep — **Closed 2026-09-26** (`1aefd916`): keepalives plus a ceiling on the rebuild ssh, so a switch that restarts sshd fails instead of hanging 93 minutes; an activated guest reads "done, connection lost" |
 | ✅ #700 | The pre-update gate tests guests that are still booting | 4 | 1 | L | Added in the 2026-09-24 issue sweep. **Done 2026-10-03:** before Step 2's gate (and after the apply) `module update` waits until the guest has finished booting — `systemctl is-system-running` past `starting`, one ssh round-trip on a settled guest; a guest that cannot be asked (OPNsense, a container) is not waited on — then until the module's `ready.sh` exits 0, up to `TAPPAAS_READY_WAIT` (300 s). A timeout does not stop the gate, it says the module had not become ready. `logging` gained a `ready.sh` (Loki `/ready` + ≥1 stream: the 2026-09-21 case); `ready.sh` is documented as a MAY artifact (ADR-027 D2, 00-Template README) |
 | ✅ #767 | The sweep's systemd unit is not the operator's console — align it (ADR-017 D3) | 4 | 3 | M | **Opened 2026-10-04** after the third sweep that failed on code that worked from the console (#713 PATH, #742 sudo under NoNewPrivileges, #719 root's HOME — the last rolled back a healthy generation and aborted the night's sweep). Decided (operator): **align the unit** — tappaas steps in a login shell, root steps through `sudo -n`, no sandbox; ADR-017 D3 amendment drafted. **Built 2026-10-04:** the unit; `scripts/tappaas-unit-run.sh` (a command run exactly as the unit runs its steps, read from the live unit) for what alignment cannot remove; a deep test of the self-check and the sweep's plan in that context; the rule in DESIGN.md. On hrossen the harness already reproduced the old unit's flaw (sudo refused under NoNewPrivileges). **Closed 2026-10-04:** sweep 1 (started under the old unit, with the #719 fix) installed the aligned unit, 18/18; the deep context tests then passed against it — the root self-check through `sudo -n`, which the old unit refused, included; sweep 2 ran entirely through the aligned unit, 18/18, and its ownership repair handed `~/.node-secrets` (root-owned by node-provisioner's answer server) back to the operator. ADR-017 D3 amendment still a draft for review |
+| ✅ #768 | `module update`: a failed dependency (the OS rebuild) should stop the update, not run update.sh first | 4 | 2 | L | **Opened and closed 2026-10-04**, from the Authentik walk (#748 hop 1: the guest's OS switch failed, `identity/update.sh` then waited 5 min for an API that would never answer, SSO down throughout, before the rollback). `reconcile --apply --fail-fast` stops at the first dependency that fails and skips Step 3; `update-module.sh` passes it only when it took a snapshot (a rollback follows). A plain `reconcile` and `--no-snapshot` keep #495 (Step 3 always runs — never leave a guest less converged). Unit-tested |
 
 ### G1.6 Secrets & privileged access — E1 · R5 · L-H
 

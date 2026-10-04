@@ -750,6 +750,11 @@ main() {
     # disrupted in the scheduled window, and nothing else is.
     reconcile_args=("${module}" --apply)
     [[ "${OPT_ALLOW_DISRUPTION}" -eq 1 ]] && reconcile_args+=(--allow-disruption)
+    # #768: with a snapshot, a failed dependency (the guest's OS rebuild above
+    # all) stops the apply at once and the rollback below runs — not after the
+    # module's own update.sh has waited minutes on a guest that is about to be
+    # reverted. Without one there is no way back, and #495 holds: Step 3 runs.
+    [[ "${snapshot_created}" == "true" ]] && reconcile_args+=(--fail-fast)
 
     if ! module-manager reconcile "${reconcile_args[@]}"; then
         fatal_with_rollback "${module}" "${snapshot_created}" \

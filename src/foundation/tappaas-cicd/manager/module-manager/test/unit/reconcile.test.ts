@@ -133,6 +133,27 @@ process.env.TAPPAAS_CONFIG = CONFIG;
   );
 }
 
+// ── 2b. #768: --fail-fast stops at the failed dependency, Step 3 skipped ──
+// For `module update`, which took a snapshot and rolls back: running the
+// module's update.sh against a guest whose OS switch just failed only delayed
+// the rollback (five minutes on hrossen, SSO down throughout).
+{
+  resetLog();
+  makeProvider("badprov2", [{ svc: "boom", exit: 1 }]);
+  makeProvider("later", [{ svc: "ok" }]);
+  makeModule("app-ff", ["badprov2:boom", "later:ok"]);
+  const rc = reconcileModule("app-ff", { ...OPTS, failFast: true });
+  const c = calls();
+  check(rc === 1, "--fail-fast: a failed dependency exits 1");
+  check(!c.some((l) => l.startsWith("app-ff:update.sh|")), "--fail-fast: Step 3 does NOT run");
+  check(!c.some((l) => l.startsWith(`later:ok:${SERVICE_SCRIPT}|`)), "--fail-fast: nothing after the failure runs");
+  resetLog();
+  makeProvider("goodprov", [{ svc: "fine" }]);
+  makeModule("app-ff2", ["goodprov:fine"]);
+  check(reconcileModule("app-ff2", { ...OPTS, failFast: true }) === 0, "--fail-fast changes nothing when every dependency re-applies");
+  check(calls().some((l) => l.startsWith("app-ff2:update.sh|")), "…and Step 3 runs as usual");
+}
+
 // ── 3. every dependency is attempted; one failure does not stop the rest ─
 {
   resetLog();

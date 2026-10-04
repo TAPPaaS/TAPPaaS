@@ -201,11 +201,12 @@ export const HELP: HelpSpec = {
       ],
     },
     {
-      usage: "reconcile <module> [--apply] [--allow-disruption] [--environment ENV] [--no-snapshot] [--no-services]",
+      usage: "reconcile <module> [--apply] [--allow-disruption] [--fail-fast] [--environment ENV] [--no-snapshot] [--no-services]",
       name: "reconcile",
       options: [
         ["--apply", "Converge the module's config → VM/service. Default is a read-only three-way (released/desired/running) drift INSPECT."],
         ["--allow-disruption", "--apply: authorize a disruptive change (reboot / offline migrate). Without it such a change is deferred, not applied."],
+        ["--fail-fast", "--apply: stop at the first dependency that fails to re-apply and skip the module's own update.sh — for a caller that rolls back (module update, #768)."],
         ["--environment ENV", "Target environment to reconcile."],
         ["--no-snapshot", "Skip any pre-change VM snapshot (--apply; leaf re-apply is idempotent)."],
         ["--no-services", "INSPECT only: skip the dependency-service drift check (declared firewall/NAT/discovery state), which is ON by default."],
@@ -274,6 +275,7 @@ interface Opts {
   allowFork: boolean;
   force: boolean;
   allowDisruption: boolean;
+  failFast: boolean;
   reinstall: boolean;
   noSnapshot: boolean;
   debug: boolean;
@@ -315,6 +317,7 @@ function parseOpts(args: string[]): Opts {
     force: false,
     reinstall: false,
     allowDisruption: false,
+    failFast: false,
     noSnapshot: false,
     debug: false,
     silent: false,
@@ -370,6 +373,8 @@ function parseOpts(args: string[]): Opts {
       o.force = true;
     } else if (a === "--allow-disruption") {
       o.allowDisruption = true;
+    } else if (a === "--fail-fast") {
+      o.failFast = true;
     } else if (a === "--reinstall") {
       o.reinstall = true;
     } else if (a === "--no-snapshot") {
@@ -1096,6 +1101,7 @@ function cmdReconcile(opts: Opts, client: ModuleClient): number {
     debug: opts.debug,
     silent: opts.silent,
     allowDisruption: opts.allowDisruption,
+    failFast: opts.failFast,
   };
   return client.reconcile(module, r);
 }

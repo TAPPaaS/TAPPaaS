@@ -124,6 +124,10 @@ export interface ReconcileOptions {
   // `--force` is a different lever and is never this one: it means proceed past
   // a refusal (a failed pre-update test, an archived module), never downtime.
   allowDisruption?: boolean;
+  // STOP AT THE FIRST FAILED DEPENDENCY (#768): skip Step 3 and fail at once.
+  // Only for a caller that rolls back — `module update`, which took a snapshot.
+  // Without it Step 3 always runs after a Step 2 failure (#495).
+  failFast?: boolean;
 }
 
 // Options for the READ-ONLY inspect (`reconcile` without --apply, and each

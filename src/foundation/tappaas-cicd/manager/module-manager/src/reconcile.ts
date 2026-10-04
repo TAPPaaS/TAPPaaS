@@ -317,6 +317,15 @@ function doReconcile(moduleArg: string, opts: ReconcileOptions): void {
       error(`  ✗ ${dep} re-apply failed: ${svcScript} exited ${svcRc}`);
       error(`    re-run with TAPPAAS_DEBUG=1 for its per-step narration`);
       depFailures.push(dep);
+      // #768: a caller that rolls back (`module update`, with its snapshot) gains
+      // nothing from Step 3 after a failure — on hrossen it waited five minutes
+      // for an API the failed OS switch had taken down, SSO down all along, and
+      // could act on Caddy/Authentik for a guest about to be reverted. Without
+      // --fail-fast, #495 stands: Step 3 runs.
+      if (opts.failFast) {
+        fail(`${dep} failed to re-apply — stopping before the module's own re-apply ` +
+             `(--fail-fast: the caller rolls '${module}' back)`);
+      }
     }
   };
 
