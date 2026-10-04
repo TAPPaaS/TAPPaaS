@@ -169,10 +169,9 @@ apps auto-update, see <https://immich.app/docs/install/upgrading>.
   `oauth.mobileRedirectUri`/`IMMICH_PUBLIC_URL` — if `IMMICH_PUBLIC_URL`
   never got set, the mobile override stays off even though web login
   works fine.
-- **Build fails with a pgvecto.rs/PostgreSQL 17 assertion** — do not remove
-  `database.enableVectors = false` from `immich.nix`; with stateVersion
-  25.05 the option defaults to the legacy extension, which is incompatible
-  with PostgreSQL 17.
+- **Build fails with "`database.enableVectors`/`enableVectorChord` no longer
+  has any effect"** — the pinned nixpkgs always uses VectorChord, so neither
+  option may be set in `immich.nix`.
 
 ## Variants
 

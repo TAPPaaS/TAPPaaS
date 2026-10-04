@@ -153,14 +153,11 @@
     # DB + Redis fully managed by the NixOS module: postgres over a unix
     # socket with peer auth (no password / secretsFile needed), database,
     # user and extensions auto-created; redis instance "immich" on a socket.
+    # VectorChord is always on in the pinned nixpkgs: enableVectorChord and
+    # enableVectors (pgvecto.rs) are gone, and setting either fails the build.
     database = {
       enable = true;
       createDB = true;
-      enableVectorChord = true;
-      # With stateVersion 25.05 enableVectors defaults to TRUE (pgvecto.rs),
-      # which asserts PostgreSQL < 17 and fails the build on nixos-25.11's
-      # PostgreSQL 17. Fresh install -> VectorChord only.
-      enableVectors = false;
     };
     redis.enable = true;
 
