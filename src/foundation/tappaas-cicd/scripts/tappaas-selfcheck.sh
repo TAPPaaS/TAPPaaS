@@ -194,10 +194,20 @@ if [[ ! -f "${SELFCHECK_FLAKE}/flake.nix" ]] || ! command -v nix >/dev/null 2>&1
     warn "  no flake at ${SELFCHECK_FLAKE} or no nix — what the generation implies is not checked"
 else
     _t0=${SECONDS}
-    _implied="$(nix eval --json --no-write-lock-file "${SELFCHECK_FLAKE}#packages.x86_64-linux" \
-        --apply 'ps: builtins.mapAttrs (n: p: p.outPath) ps' 2>/dev/null || true)"
+    # As root, exactly as tappaas-self-rebuild.sh runs nix: HOME holds root's
+    # safe.directory grant for the tappaas-owned checkout (nix's libgit2 reads it
+    # from $HOME/.gitconfig only). Without it, in the unit — not from a sudo
+    # shell, where git trusts SUDO_UID — libgit2 refuses the repository ("not
+    # owned by current user"), and the first sweep after #719 rolled back a
+    # healthy generation for it (2026-10-04).
+    _nixenv=()
+    [[ "${EUID:-$(id -u)}" -eq 0 && -d /var/lib/tappaas-rebuild ]] && _nixenv=(env HOME=/var/lib/tappaas-rebuild)
+    _err="$(mktemp)"
+    _implied="$("${_nixenv[@]}" nix --extra-experimental-features 'nix-command flakes' \
+        eval --json --no-write-lock-file "${SELFCHECK_FLAKE}#packages.x86_64-linux" \
+        --apply 'ps: builtins.mapAttrs (n: p: p.outPath) ps' 2>"${_err}" || true)"
     if ! jq -e 'type == "object" and length > 0' >/dev/null 2>&1 <<<"${_implied}"; then
-        bad "the flake's components cannot be evaluated — this revision cannot build the control plane"
+        bad "the flake's components cannot be evaluated: $(grep -E '^error|error:' "${_err}" | tail -1 | sed 's/^ *//' | cut -c1-200)"
     else
         # Every store-backed link, as "<package root> <link name>".
         _links="$(for _l in "${_home}"/*; do
@@ -225,6 +235,7 @@ else
         (( _ok == $(jq 'length' <<<"${_implied}") )) \
             && ok "all ${_ok} components are built as this generation implies, and linked ($((SECONDS - _t0))s)"
     fi
+    rm -f "${_err}"
 fi
 
 if (( FAIL > 0 )); then

@@ -100,7 +100,7 @@ mkdir -p "${ST}/aaa-mgr-1/bin" "${ST}/bbb-ctl-1/bin" "${ST}/old-mgr-0/bin" "${HB
 : > "${FL}/flake.nix"; : > "${ST}/aaa-mgr-1/bin/mgr"; : > "${ST}/bbb-ctl-1/bin/ctl"; : > "${ST}/old-mgr-0/bin/mgr"
 cat > "${BIN}/nix" <<'EOF'
 #!/usr/bin/env bash
-[[ -n "${IMPLIED_JSON:-}" ]] || exit 1
+[[ -n "${IMPLIED_JSON:-}" ]] || { echo "error: opening Git repository: not owned by current user" >&2; exit 1; }
 printf '%s\n' "${IMPLIED_JSON}"
 EOF
 chmod +x "${BIN}/nix"
@@ -125,8 +125,13 @@ IMPLIED_JSON="${GOOD}" c4 "mgr=${ST}/aaa-mgr-1/bin/mgr"
 [[ "${RC}" -ne 0 && "${OUT}" == *"ctl: built (bbb-ctl-1) but nothing in"* ]] \
     && ok "a built component nothing links to fails" || bad "unlinked component passed (exit ${RC}): ${OUT}"
 IMPLIED_JSON="" c4 "mgr=${ST}/aaa-mgr-1/bin/mgr" "ctl=${ST}/bbb-ctl-1/bin/ctl"
-[[ "${RC}" -ne 0 && "${OUT}" == *"cannot be evaluated"* ]] \
-    && ok "a flake that cannot evaluate its packages fails" || bad "unevaluable flake passed (exit ${RC}): ${OUT}"
+[[ "${RC}" -ne 0 && "${OUT}" == *"cannot be evaluated: error: opening Git repository: not owned by current user"* ]] \
+    && ok "a flake that cannot evaluate its packages fails, and says nix's own reason" || bad "unevaluable flake (exit ${RC}): ${OUT}"
+# 2026-10-04: as root in the unit, libgit2 refused the tappaas-owned checkout
+# without the rebuild's HOME; a healthy generation was rolled back for it.
+grep -q 'env HOME=/var/lib/tappaas-rebuild' "${SELFCHECK}" \
+    && ok "as root, nix runs with the rebuild's HOME (root's safe.directory grant)" \
+    || bad "check 4 runs nix as root without the rebuild's HOME"
 IMPLIED_JSON="${GOOD}" c4 "mgr=${ST}/aaa-mgr-1/bin/mgr" "ctl=${ST}/bbb-ctl-1/bin/ctl" "gone.sh=${TMP}/nowhere.sh"
 [[ "${RC}" -eq 0 && "${OUT}" == *"dangling link in ${HB}: gone.sh"* ]] \
     && ok "a dangling link is reported, and does not fail the check" || bad "dangling link handling (exit ${RC}): ${OUT}"
