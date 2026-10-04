@@ -17,8 +17,8 @@ SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=15 -o BatchMode=yes"
 YW='\033[33m' RD='\033[01;31m' GN='\033[32m' CL='\033[m' BOLD='\033[1m'
 PASSED=0 FAILED=0
 
-pass() { echo -e "${GN}[PASS]${CL} $1"; ((PASSED++)); }
-fail() { echo -e "${RD}[FAIL]${CL} $1"; ((FAILED++)); }
+pass() { echo -e "${GN}[PASS]${CL} $1"; PASSED=$((PASSED + 1)); }
+fail() { echo -e "${RD}[FAIL]${CL} $1"; FAILED=$((FAILED + 1)); }
 
 echo ""
 echo -e "${BOLD}jellyfin: mediaserver service test${CL}"

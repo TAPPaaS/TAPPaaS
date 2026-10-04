@@ -23,9 +23,9 @@ PASSED=0 FAILED=0 SKIPPED=0
 mkdir -p "$LOG_DIR"
 
 log()    { echo -e "$1" | tee -a "$LOG_FILE"; }
-pass()   { log "${GN}[PASS]${CL} $1"; ((PASSED++)); }
-fail()   { log "${RD}[FAIL]${CL} $1"; ((FAILED++)); }
-skip()   { log "${YW}[SKIP]${CL} $1"; ((SKIPPED++)); }
+pass()   { log "${GN}[PASS]${CL} $1"; PASSED=$((PASSED + 1)); }
+fail()   { log "${RD}[FAIL]${CL} $1"; FAILED=$((FAILED + 1)); }
+skip()   { log "${YW}[SKIP]${CL} $1"; SKIPPED=$((SKIPPED + 1)); }
 inf()    { log "${BL}[INFO]${CL} $1"; }
 header() { log ""; log "${BOLD}═══════════════════════════════════════════════════════════════${CL}"; log "${BOLD}  $1${CL}"; log "${BOLD}═══════════════════════════════════════════════════════════════${CL}"; }
 remote() { $SSH_CMD "$1" 2>/dev/null; }
