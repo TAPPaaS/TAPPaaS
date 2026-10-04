@@ -33,7 +33,7 @@
       "image": "8080",
       "bridge0": "lan",
       "mediaStorage": "allocate",
-      "mediaDiskStorage": "tankc1",
+      "mediaDiskStorage": "tankb1",
       "mediaDiskSize": "500G"
     },
     "network:proxy": {
