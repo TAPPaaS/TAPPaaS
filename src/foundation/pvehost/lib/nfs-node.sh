@@ -256,8 +256,25 @@ nfs_node_purge() {
     [[ -n "${ds}" ]] || { info "  ${INSTANCE}: no dataset for share ${name} — nothing to purge"; return 0; }
     [[ "$(pn_ssh "zfs get -H -o value sharenfs '${ds}'")" == "off" ]] \
         || { error "  ${ds} is still shared — converge first"; return 1; }
-    pn_ssh "exportfs -ra 2>/dev/null; for i in 1 2 3 4 5 6; do zfs destroy -r '${ds}' 2>/dev/null && exit 0; sleep 5; done; exit 1" \
-        || { error "  could not destroy ${ds} (busy?)"; return 1; }
+    # nfsd keeps a dataset it holds NFSv4 state for busy until the state drains (the
+    # lease, 90 s by default): retry for two minutes before calling it busy.
+    pn_ssh "exportfs -ra 2>/dev/null; for i in \$(seq 24); do zfs destroy -r '${ds}' 2>/dev/null && exit 0; sleep 5; done; exit 1" \
+        || { error "  could not destroy ${ds}: still busy after 2 minutes — a client may still hold it; retry later"; return 1; }
     pn_ssh "rmdir '${NFS_MOUNT_ROOT}/${name}' 2>/dev/null; true"
     info "  ${GN}✓${CL} ${ds} destroyed — share ${name}'s data is gone"
+    nfs_node_drop_parent "${ds%/*}"
+}
+
+# nfs_node_drop_parent <pool>/tappaas-nfs — once the last share on a pool is purged,
+# its parent dataset goes too (it holds nothing of its own; the next share recreates
+# it), and so does the mount root when no pool uses it any more.
+nfs_node_drop_parent() {
+    local parent="$1"
+    [[ "${parent##*/}" == "${NFS_PARENT}" ]] || return 0
+    pn_ssh "[ -z \"\$(zfs list -H -o name -r -d 1 '${parent}' 2>/dev/null | tail -n +2)\" ] \
+            && mp=\"\$(zfs get -H -o value mountpoint '${parent}' 2>/dev/null)\" \
+            && zfs destroy '${parent}' && { rmdir \"\${mp}\" 2>/dev/null; echo dropped; }; \
+            rmdir '${NFS_MOUNT_ROOT}' 2>/dev/null; true" | grep -q dropped \
+        && info "  ${parent}: removed with its last share"
+    return 0
 }

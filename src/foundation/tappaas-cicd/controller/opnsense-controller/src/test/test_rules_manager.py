@@ -208,6 +208,18 @@ class TestLoaders(unittest.TestCase):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+_FW_SSH = patch.object(rm, "_firewall_ssh", return_value=MagicMock(returncode=0, stderr=""))
+
+
+def setUpModule():
+    # No test reaches the firewall: deleting an alias also drops its table over ssh.
+    _FW_SSH.start()
+
+
+def tearDownModule():
+    _FW_SSH.stop()
+
+
 def _make_manager(zones=None, modules_dir=None, global_aliases=None, firewall_type="opnsense"):
     """Build a RulesManager without connecting."""
     config = Config(firewall="example.invalid", ssl_verify=False)
@@ -1710,3 +1722,90 @@ class TestDropDerivedAliases(unittest.TestCase):
         self.assertEqual(self.mgr._drop_derived_aliases(
             "jf", ["tappaas-module:jf:egress:alias:llm_providers:443", "tappaas-module:jf:ingress:dmz:80"]), 0)
         self.mgr._delete_alias.assert_not_called()
+
+
+class TestNfsAliasTableWait(unittest.TestCase):
+    """An apply waits for a share alias's pf table (ADR-029 D11): the reconfigure
+    only queues the resolution, and a mount right after the apply raced it."""
+
+    def setUp(self):
+        self.mgr = _make_manager(modules_dir=Path(tempfile.gettempdir()))
+        self.mgr._fw = MagicMock()
+        self.mgr.NFS_TABLE_POLL = 0.0
+        self.mgr.reconfigure_aliases = MagicMock()
+        self.mgr._referenced_alias_names = lambda module, rules: ["nfs_share_media", "tm_jellyfin"]
+        self.module = MagicMock(vmname="jellyfin")
+
+    def test_it_returns_once_the_table_has_members(self):
+        answers = iter([[], [], ["10.0.0.10"]])
+        self.mgr._alias_table_addresses = lambda n: next(answers)
+        self.assertEqual(self.mgr._wait_for_nfs_tables(self.module, []), [])
+
+    def test_only_nfs_aliases_are_waited_for(self):
+        seen = []
+        self.mgr._alias_table_addresses = lambda n: seen.append(n) or ["10.0.0.10"]
+        self.mgr._wait_for_nfs_tables(self.module, [])
+        self.assertEqual(seen, ["nfs_share_media"])
+
+    def test_an_unreadable_table_is_not_waited_for(self):
+        self.mgr._alias_table_addresses = lambda n: None
+        self.assertEqual(self.mgr._wait_for_nfs_tables(self.module, []), [])
+
+    def test_at_the_deadline_it_warns_and_names_the_table(self):
+        self.mgr.NFS_TABLE_WAIT = 0.0
+        self.mgr._alias_table_addresses = lambda n: []
+        with contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(self.mgr._wait_for_nfs_tables(self.module, []), ["nfs_share_media"])
+
+    def test_halfway_it_reconfigures_once_more(self):
+        self.mgr.NFS_TABLE_WAIT = 0.05
+        self.mgr.NFS_TABLE_POLL = 0.01
+        self.mgr._alias_table_addresses = lambda n: []
+        with contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
+            self.mgr._wait_for_nfs_tables(self.module, [])
+        self.mgr.reconfigure_aliases.assert_called_once()
+
+    def test_check_mode_does_not_wait(self):
+        self.mgr.check_mode = True
+        self.mgr._alias_table_addresses = MagicMock()
+        self.assertEqual(self.mgr._wait_for_nfs_tables(self.module, []), [])
+        self.mgr._alias_table_addresses.assert_not_called()
+
+
+class TestDropAliasTable(unittest.TestCase):
+    """OPNsense keeps a deleted alias's pf table and /var/db/aliastables file; a
+    same-named alias created later started from the stale addresses."""
+
+    def setUp(self):
+        self.mgr = _make_manager(modules_dir=Path(tempfile.gettempdir()))
+        self.mgr._fw = MagicMock()
+        rm._firewall_ssh.reset_mock()
+
+    def test_a_deleted_alias_takes_its_table_and_file(self):
+        self.assertTrue(self.mgr._delete_alias("nfs_share_media"))
+        host, script = rm._firewall_ssh.call_args[0]
+        self.assertEqual(host, "example.invalid")
+        self.assertIn("pfctl -t nfs_share_media -T kill", script)
+        self.assertIn("rm -f /var/db/aliastables/nfs_share_media.*", script)
+
+    def test_a_failed_delete_leaves_the_table(self):
+        self.mgr._fw.client.run_module.side_effect = RuntimeError("api down")
+        with contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
+            self.assertFalse(self.mgr._delete_alias("nfs_share_media"))
+        rm._firewall_ssh.assert_not_called()
+
+    def test_an_ssh_failure_does_not_fail_the_delete(self):
+        rm._firewall_ssh.side_effect = OSError("no ssh")
+        try:
+            self.assertTrue(self.mgr._delete_alias("nfs_share_media"))
+        finally:
+            rm._firewall_ssh.side_effect = None
+
+    def test_a_name_that_is_not_an_alias_name_is_never_put_in_a_command(self):
+        self.mgr._drop_alias_table("x; rm -rf /")
+        rm._firewall_ssh.assert_not_called()
+
+    def test_check_mode_touches_nothing(self):
+        self.mgr.check_mode = True
+        self.mgr._delete_alias("nfs_share_media")
+        rm._firewall_ssh.assert_not_called()

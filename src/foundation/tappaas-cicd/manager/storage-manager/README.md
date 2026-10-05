@@ -31,7 +31,7 @@ Every changing verb takes `--check`: show the result, change nothing.
 | `share add` | the server builds the share; alias created; owner uid allocated (64000–64999) | a name in use, a server that cannot serve, a missing `--backup` |
 | `share modify` | the server re-quotas / re-sets properties | `server`, `pool`, `owner`, rename — data migrations |
 | `share delete` | unshared, alias dropped | while any consumer mounts it |
-| `share purge` | the hook destroys the dataset | while the share is still declared, without `--yes` |
+| `share purge` | the hook destroys the dataset (retrying for 2 minutes while nfsd lets go); the last share on a pool takes `<pool>/tappaas-nfs` with it | while the share is still declared, without `--yes` |
 | `grant` | re-shared to the consumer; the consumer's `storage:nfs` update runs (mount or migration, with its consent) | an undeclared share |
 | `revoke` | unshared from the consumer | while the consumer mounts it |
 | `converge` | without arguments, the whole Site (what `storage` `update.sh` runs) | — |

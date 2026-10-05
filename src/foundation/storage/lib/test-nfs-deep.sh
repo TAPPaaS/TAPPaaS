@@ -90,31 +90,69 @@ for v in $(seq 990 999); do grep -qx "${v}" <<< "${used}" || { VMID="${v}"; brea
 [[ -n "${VMID}" ]] || { error "no free VMID in 990-999"; exit 1; }
 info "${BOLD}storage:nfs deep suite${CL}: share ${SHARE} on ${NODE}:${POOL}, consumer ${FIX} (vmid ${VMID}) on ${CNODE} in ${ZONE}${NODE2:+, move target ${NODE2}}"
 
-declare -A HAD_NFSD=() TOUCHED=()
+declare -A HAD_NFSD=() HAD_PARENT=() TOUCHED=()
 HAD_SHARES=0; [[ -f "${CFG}/shares.json" ]] && { cp -p "${CFG}/shares.json" "${WORK}/shares.json.orig"; HAD_SHARES=1; }
 for n in "${NODE}" ${NODE2}; do
     cp -p "${CFG}/${n}.json" "${WORK}/${n}.json.orig"; TOUCHED["${n}"]=1
     node_ssh "${n}" "dpkg-query -W -f='\${Status}' nfs-kernel-server 2>/dev/null | grep -q 'install ok installed'" && HAD_NFSD["${n}"]=1
+    node_ssh "${n}" "zfs list -H -o name '$(pool_on "${n}")/${NFS_PARENT}'" >/dev/null 2>&1 && HAD_PARENT["${n}"]=1
 done
 
 # ── 12 teardown, on any exit ──────────────────────────────────────────
+# The product removes what it made — the consumer's delete, then 'share delete'
+# and 'share purge' — and the leftover check judges what it left. Only after that
+# is anything still there removed by force, so a failed run leaves the site clean
+# without hiding what the product missed.
 teardown() {
     step "12 teardown"
-    [[ -f "${CFG}/${FIX}.json" ]] && /home/tappaas/bin/delete-module.sh "${FIX}" --force >/dev/null 2>&1
+    local n p left=0
+    [[ -f "${CFG}/${FIX}.json" ]] && /home/tappaas/bin/delete-module.sh "${FIX}" --force > "${WORK}/td-consumer.log" 2>&1
     dns-manager --no-ssl-verify delete "${FIX}" "${ZONE}.internal" >/dev/null 2>&1
+    if jq -e --arg s "${SHARE}" '.nfs.shares[$s]' "${CFG}/shares.json" >/dev/null 2>&1; then
+        storage-manager nfs share delete "${SHARE}" > "${WORK}/td-delete.log" 2>&1 \
+            || fail "teardown: storage-manager nfs share delete ${SHARE} (see ${WORK}/td-delete.log)"
+    fi
+    for n in "${!TOUCHED[@]}"; do
+        node_ssh "${n}" "zfs list -H -o name -r 2>/dev/null | grep -q '/${NFS_PARENT}/${SHARE}\$'" || continue
+        storage-manager nfs share purge "${SHARE}" --server "${n}" --yes > "${WORK}/td-purge-${n}.log" 2>&1 \
+            || fail "teardown: storage-manager nfs share purge ${SHARE} --server ${n} (see ${WORK}/td-purge-${n}.log)"
+    done
+
+    step "leftover check"
+    [[ -f "${CFG}/${FIX}.json" ]] && { fail "leftover: config/${FIX}.json"; left=1; }
+    jq -e --arg s "${SHARE}" '.nfs.shares[$s]' "${CFG}/shares.json" >/dev/null 2>&1 && { fail "leftover: share ${SHARE} still declared"; left=1; }
+    for n in "${NODES[@]}"; do
+        node_ssh "${n}" "qm status ${VMID}" >/dev/null 2>&1 && { fail "leftover: VM ${VMID} on ${n}"; left=1; }
+    done
+    for n in "${!TOUCHED[@]}"; do
+        p="$(pool_on "${n}")"
+        node_ssh "${n}" "zfs list -H -o name -r 2>/dev/null | grep -q '/${NFS_PARENT}/${SHARE}\$'" && { fail "leftover: a ${SHARE} dataset on ${n}"; left=1; }
+        [[ -z "${HAD_PARENT[${n}]:-}" ]] && node_ssh "${n}" "zfs list -H -o name '${p}/${NFS_PARENT}'" >/dev/null 2>&1 \
+            && { fail "leftover: ${p}/${NFS_PARENT} on ${n} (the suite's share created it)"; left=1; }
+        node_ssh "${n}" "test -e /tappaas-nfs/${SHARE}" && { fail "leftover: /tappaas-nfs/${SHARE} on ${n}"; left=1; }
+    done
+    dns-manager --no-ssl-verify alias list 2>/dev/null | grep -q "$(nfs_share_alias "${SHARE}")" && { fail "leftover: the share alias"; left=1; }
+    rules-manager --no-ssl-verify list-rules 2>/dev/null | grep -q "tappaas-module:${FIX}:" && { fail "leftover: firewall rules of ${FIX}"; left=1; }
+    [[ "$(fw "ls /var/db/aliastables" 2>/dev/null | grep -cE "^(nfs_share_${SHARE}|tm_${FIX//-/_})\.")" -eq 0 ]] \
+        || { fail "leftover: OPNsense alias table files of ${FIX} / ${SHARE}"; left=1; }
+    for n in "${NODES[@]}"; do
+        node_ssh "${n}" "dpkg-query -W -f='\${Status}' nfs-common 2>/dev/null | grep -q 'install ok installed' && ! test -d /etc/nfs.conf.d" \
+            && { fail "leftover: /etc/nfs.conf.d (nfs-common's) missing on ${n}"; left=1; }
+    done
+
+    # Restore: the config files as they were, and by force whatever is still there.
     if [[ "${HAD_SHARES}" -eq 1 ]]; then cp -p "${WORK}/shares.json.orig" "${CFG}/shares.json"; else rm -f "${CFG}/shares.json"; fi
-    local n p
     for n in "${!TOUCHED[@]}"; do
         cp -p "${WORK}/${n}.json.orig" "${CFG}/${n}.json"
         p="$(pool_on "${n}")"
-        # Unshare, and let nfsd let go, before the destroy: a dataset nfsd still
-        # holds is "busy" and survives. On a node whose NFS server the suite
-        # installed, stop it first; on one that had its own, retry while its
-        # NFSv4 state for the share drains.
-        local stop=":"; [[ -z "${HAD_NFSD[${n}]:-}" ]] && stop="systemctl stop nfs-server 2>/dev/null"
-        node_ssh "${n}" "ds='$(dataset_on "${n}" "${p}")'; zfs set sharenfs=off \"\${ds}\" 2>/dev/null; exportfs -ra 2>/dev/null; ${stop};
-            for i in 1 2 3 4 5 6; do zfs list \"\${ds}\" >/dev/null 2>&1 || break; zfs destroy -r \"\${ds}\" 2>/dev/null && break; sleep 5; done;
-            zfs list -H -o name -r '${p}/${NFS_PARENT}' 2>/dev/null | grep -q /${NFS_PARENT}/ || zfs destroy '${p}/${NFS_PARENT}' 2>/dev/null;
+        # nfsd holds a dataset it still has NFSv4 state for: on a node whose NFS
+        # server the suite installed, stop it first; else retry while the state drains.
+        local stop=":" dropparent=":"
+        [[ -z "${HAD_NFSD[${n}]:-}" ]] && stop="systemctl stop nfs-server 2>/dev/null"
+        [[ -z "${HAD_PARENT[${n}]:-}" ]] && dropparent="zfs destroy '${p}/${NFS_PARENT}' 2>/dev/null"
+        node_ssh "${n}" "ds='$(dataset_on "${n}" "${p}")'; zfs list \"\${ds}\" >/dev/null 2>&1 && { zfs set sharenfs=off \"\${ds}\"; exportfs -ra; ${stop};
+            for i in 1 2 3 4 5 6; do zfs destroy -r \"\${ds}\" 2>/dev/null && break; sleep 5; done; } 2>/dev/null;
+            zfs list -H -o name -r '${p}/${NFS_PARENT}' 2>/dev/null | grep -q /${NFS_PARENT}/ || ${dropparent};
             rmdir '/tappaas-nfs/${SHARE}' /tappaas-nfs 2>/dev/null; true"
         if [[ -z "${HAD_NFSD[${n}]:-}" && -z "$(nfs_exports "${n}")" ]]; then
             # /etc/nfs.conf.d belongs to nfs-common, which every node has: only
@@ -126,34 +164,17 @@ teardown() {
     done
     dns-manager --no-ssl-verify alias delete "$(nfs_share_alias "${SHARE}")" >/dev/null 2>&1
     rules-manager --no-ssl-verify remove-alias "nfs_share_${SHARE}" >/dev/null 2>&1
-    ssh -o BatchMode=yes -i /home/tappaas/.ssh/tappaas-fw root@firewall.mgmt.internal "sh -s" >/dev/null 2>&1 <<EOF
+    ssh -o BatchMode=yes -i /home/tappaas/.ssh/tappaas-fw root@firewall.mgmt.internal "sh -s" >/dev/null 2>&1 <<FWEOF
 for t in tm_${FIX//-/_} nfs_share_${SHARE}; do pfctl -t \$t -T kill; rm -f /var/db/aliastables/\$t.*; done
-EOF
-    step "leftover check"
-    local left=0
-    [[ -f "${CFG}/${FIX}.json" ]] && { fail "leftover: config/${FIX}.json"; left=1; }
-    if [[ "${HAD_SHARES}" -eq 1 ]]; then cmp -s "${WORK}/shares.json.orig" "${CFG}/shares.json" || { fail "leftover: config/shares.json differs from before"; left=1; }
-    else [[ ! -f "${CFG}/shares.json" ]] || { fail "leftover: config/shares.json (the suite created it)"; left=1; }; fi
-    for n in "${NODES[@]}"; do
-        node_ssh "${n}" "qm status ${VMID}" >/dev/null 2>&1 && { fail "leftover: VM ${VMID} on ${n}"; left=1; }
-    done
+FWEOF
+    if [[ "${HAD_SHARES}" -eq 1 ]]; then cmp -s "${WORK}/shares.json.orig" "${CFG}/shares.json" || { fail "restore: config/shares.json differs from before"; left=1; }; fi
     for n in "${!TOUCHED[@]}"; do
-        cmp -s "${WORK}/${n}.json.orig" "${CFG}/${n}.json" || { fail "leftover: config/${n}.json differs from before"; left=1; }
-        node_ssh "${n}" "zfs list -H -o name -r 2>/dev/null | grep -q '/${NFS_PARENT}/${SHARE}\$'" && { fail "leftover: a ${SHARE} dataset on ${n}"; left=1; }
+        cmp -s "${WORK}/${n}.json.orig" "${CFG}/${n}.json" || { fail "restore: config/${n}.json differs from before"; left=1; }
         if [[ -z "${HAD_NFSD[${n}]:-}" && -z "$(nfs_exports "${n}")" ]]; then
             node_ssh "${n}" "dpkg-query -W -f='\${Status}' nfs-kernel-server 2>/dev/null | grep -q 'install ok installed'" \
-                && { fail "leftover: nfs-kernel-server on ${n} (the suite installed it)"; left=1; }
+                && { fail "restore: nfs-kernel-server still on ${n} (the suite installed it)"; left=1; }
         fi
     done
-    dns-manager --no-ssl-verify alias list 2>/dev/null | grep -q "$(nfs_share_alias "${SHARE}")" && { fail "leftover: the share alias"; left=1; }
-    rules-manager --no-ssl-verify list-rules 2>/dev/null | grep -q "tappaas-module:${FIX}:" && { fail "leftover: firewall rules of ${FIX}"; left=1; }
-    for n in "${NODES[@]}"; do
-        node_ssh "${n}" "dpkg-query -W -f='\${Status}' nfs-common 2>/dev/null | grep -q 'install ok installed' && ! test -d /etc/nfs.conf.d" \
-            && { fail "leftover: /etc/nfs.conf.d (nfs-common's) missing on ${n}"; left=1; }
-        node_ssh "${n}" "test -e /tappaas-nfs/${SHARE}" && { fail "leftover: /tappaas-nfs/${SHARE} on ${n}"; left=1; }
-    done
-    [[ "$(fw "ls /var/db/aliastables" 2>/dev/null | grep -cE "^(nfs_share_${SHARE}|tm_${FIX//-/_})\.")" -eq 0 ]] \
-        || { fail "leftover: OPNsense alias cache files"; left=1; }
     [[ "${left}" -eq 0 ]] && pass "nothing left behind"
     if [[ "${FAIL}" -eq 0 ]]; then rm -rf "${WORK}"; else
         rm -rf "${WORK}/fixture"; info "  logs kept in ${WORK} (a check failed)"; fi

@@ -85,7 +85,9 @@ A consumer outside its share's server's zone needs one rule, and it is derived,
 never written: `network:rules` reads the consumer's mounts and compiles one
 host-to-host pass per share — consumer alias → a host alias holding the share
 alias, tcp/2049; NFSv3 on a registered NAS adds rpcbind and its pinned
-`v3Ports`. No rule within a zone, none for a pending mount. Such a consumer must
+`v3Ports`. No rule within a zone, none for a pending mount. The apply that compiles the rule
+waits (up to 90 s) until OPNsense has resolved the share alias into its table, so a
+mount right after it — an install, a grant — does not race the resolution. Such a consumer must
 depend on `network:rules`; a cross-zone mount without it is refused.
 
 ## What it refuses

@@ -33,6 +33,7 @@ import hashlib
 import json
 import os
 import sys
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Iterable, Iterator, Literal
@@ -53,6 +54,7 @@ from .firewall_manager import (
 )
 from .instance import module_source_of
 from .log import debug, error, info, warn
+from .service_health import _firewall_ssh
 from .vlan_manager import VlanManager
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -963,7 +965,44 @@ class RulesManager:
 
         self._drop_derived_aliases(module.vmname, pruned, keep=set(module.aliases))
         self._write_sequence_map(module, rules)
+        self._wait_for_nfs_tables(module, rules)
         return result
+
+    # How long an apply waits for a share alias's pf table (ADR-029 D11). The alias
+    # reconfigure only queues the resolution; a consumer that mounts right after
+    # its rules were compiled — an install, a grant — otherwise races it and times out.
+    NFS_TABLE_WAIT = 90.0
+    NFS_TABLE_POLL = 3.0
+
+    def _wait_for_nfs_tables(self, module: ModuleSpec, rules: list[ModuleFirewallRule]) -> list[str]:
+        """Wait until each NFS alias a rule of the module matches on has members.
+
+        Returns the aliases still empty at the deadline (warned, not fatal: the
+        mount then reports its own timeout). Halfway through it reconfigures the
+        aliases once more, for a share alias whose DNS record was created moments
+        before the first resolution ran. A table that cannot be read is not waited for.
+        """
+        if self.check_mode or self._fw is None:
+            return []
+        pending = [n for n in self._referenced_alias_names(module, rules) if n.startswith("nfs_")]
+        start = time.monotonic()
+        nudged = False
+        while pending:
+            pending = [n for n in pending if self._alias_table_addresses(n) == []]
+            if not pending:
+                break
+            waited = time.monotonic() - start
+            if waited >= self.NFS_TABLE_WAIT:
+                warn(f"{module.vmname}: alias table(s) {', '.join(pending)} still empty after "
+                     f"{int(waited)} s — an NFS mount through them will time out until they resolve")
+                return pending
+            if not nudged and waited >= self.NFS_TABLE_WAIT / 2:
+                self.reconfigure_aliases()
+                nudged = True
+            time.sleep(self.NFS_TABLE_POLL)
+        if time.monotonic() - start >= self.NFS_TABLE_POLL:
+            info(f"{module.vmname}: NFS alias tables resolved after {int(time.monotonic() - start)} s")
+        return []
 
     def _drop_derived_aliases(self, vmname: str, descriptions: list[str], keep: set[str] | None = None) -> int:
         """Delete the derived NFS aliases the given (deleted) rules pointed at.
@@ -1810,10 +1849,29 @@ class RulesManager:
                 "alias",
                 params={"name": name, "state": "absent", "reload": False},
             )
-            return True
         except Exception as exc:
             warn(f"Failed to remove alias '{name}': {exc}")
             return False
+        self._drop_alias_table(name)
+        return True
+
+    def _drop_alias_table(self, name: str) -> None:
+        """Remove a deleted alias's pf table and its /var/db/aliastables file.
+
+        OPNsense keeps both when an alias is deleted, and an alias recreated under
+        the same name — a share declared again, or moved — starts from the stale
+        addresses in that file until its next resolution. Best effort: the alias
+        itself is already gone, so a failure here is only debug.
+        """
+        if not all(c.isalnum() or c == "_" for c in name):
+            return
+        try:
+            r = _firewall_ssh(self.config.firewall,
+                              f"pfctl -t {name} -T kill 2>/dev/null; rm -f /var/db/aliastables/{name}.*\n")
+            if r.returncode != 0:
+                debug(f"could not drop the table of alias '{name}': {(r.stderr or '').strip()}")
+        except Exception as exc:  # ssh missing, timeout — the alias is deleted regardless
+            debug(f"could not drop the table of alias '{name}': {exc}")
 
     def _alias_is_orphan(self, alias_name: str, exclude_module: str) -> bool:
         """Return True if no rule outside `exclude_module` references `alias_name`.
