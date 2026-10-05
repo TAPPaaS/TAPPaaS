@@ -64,36 +64,44 @@ else
     fail "Jellyfin /health returned HTTP ${HTTP_CODE}"
 fi
 
-# ── Test 3: Media share (pvehost:nfs) ─────────────────────────────────────────
-# /media is the node's "media" export, not a disk in this VM. `ls` triggers the
-# automount; findmnt then says whether NFS is what is mounted there.
+# ── Tests 3-5: Media share (pvehost:nfs) ──────────────────────────────────────
+# /media is the share "media" (subdir jellyfin), not a disk in this VM. While no
+# server declares that share the mount is PENDING (ADR-029 v0.8): /media is a
+# local directory, nothing is mounted, and that is a valid state — the share
+# checks are skipped, not failed. A mount in the guest's fstab means the share is
+# available, and then it must be mounted and writable.
 header "Test 3: Media Share"
-MEDIA_SRC=$(remote "ls /media >/dev/null 2>&1; findmnt -n -t nfs,nfs4 -o SOURCE /media 2>/dev/null || true")
-if [[ -n "${MEDIA_SRC}" ]]; then
-    pass "/media is the NFS share ${MEDIA_SRC}"
-    inf "  $(remote "df -h /media | tail -1" || true)"
+if [[ "$(remote "findmnt -n --fstab /media >/dev/null && echo yes || echo no")" != "yes" ]]; then
+    skip "media share not mounted: pending (no server declares 'media') or migration awaiting consent — pvehost:nfs test-service says which"
+    skip "library folders: created once the share is mounted"
+    skip "share writability: nothing mounted"
 else
-    fail "/media is not an NFS mount — is the node serving its 'media' export? (update-module.sh <node>, then update-module.sh jellyfin)"
-fi
+    # `ls` triggers the automount; findmnt then says whether NFS is mounted there.
+    MEDIA_SRC=$(remote "ls /media >/dev/null 2>&1; findmnt -n -t nfs,nfs4 -o SOURCE /media 2>/dev/null || true")
+    if [[ -n "${MEDIA_SRC}" ]]; then
+        pass "/media is the NFS share ${MEDIA_SRC}"
+        inf "  $(remote "df -h /media | tail -1" || true)"
+    else
+        fail "/media is declared as the media share but not mounted — is its server up? (update-module.sh <node>, then update-module.sh jellyfin)"
+    fi
 
-# ── Test 4: Library folders ───────────────────────────────────────────────────
-header "Test 4: Library Folders"
-FOLDERS_OK=$(remote "test -d /media/Movies && test -d /media/TV && test -d /media/Music && echo yes || echo no")
-if [[ "${FOLDERS_OK}" == "yes" ]]; then
-    pass "Library folders exist (Movies, TV, Music)"
-else
-    fail "One or more library folders missing — update.sh creates them once /media is mounted"
-fi
+    header "Test 4: Library Folders"
+    FOLDERS_OK=$(remote "test -d /media/Movies && test -d /media/TV && test -d /media/Music && echo yes || echo no")
+    if [[ "${FOLDERS_OK}" == "yes" ]]; then
+        pass "Library folders exist (Movies, TV, Music)"
+    else
+        fail "One or more library folders missing — update.sh creates them once /media is mounted"
+    fi
 
-# ── Test 5: Jellyfin can write to the share ───────────────────────────────────
-# Every request is squashed to the export's owner (ADR-029 D7), so the jellyfin
-# user writes there although the files belong to another uid.
-header "Test 5: Share Writable by Jellyfin"
-WRITE_OK=$(remote "f=/media/.tappaas-write-test.\$\$; sudo -u jellyfin touch \"\$f\" 2>/dev/null && sudo -u jellyfin rm -f \"\$f\" && echo yes || echo no")
-if [[ "${WRITE_OK}" == "yes" ]]; then
-    pass "jellyfin can write to /media"
-else
-    fail "jellyfin cannot write to /media — the export must grant jellyfin rw"
+    # Every request is squashed to the export's owner (ADR-029 D7), so the
+    # jellyfin user writes there although the files belong to another uid.
+    header "Test 5: Share Writable by Jellyfin"
+    WRITE_OK=$(remote "f=/media/.tappaas-write-test.\$\$; sudo -u jellyfin touch \"\$f\" 2>/dev/null && sudo -u jellyfin rm -f \"\$f\" && echo yes || echo no")
+    if [[ "${WRITE_OK}" == "yes" ]]; then
+        pass "jellyfin can write to /media"
+    else
+        fail "jellyfin cannot write to /media — the share must grant jellyfin rw"
+    fi
 fi
 
 # ── Test 6: Disk usage ────────────────────────────────────────────────────────

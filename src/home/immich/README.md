@@ -222,10 +222,10 @@ Jellyfin media library be added as an Immich External Library over NFS.
 
 ## Future enhancements
 
-- **Jellyfin photo library**: grant `immich` `ro` on the node's `media`
-  export, add `pvehost:nfs` to `dependsOn` and a mount
-  (`{"path": "/media-library", "share": "<node>:media", "access": "ro"}`), then
-  add `/media-library/Photos` as an Immich *External Library* in the admin UI.
+- **Jellyfin photo library**: grant `immich` `ro` on the share `media`, add
+  `pvehost:nfs` to `dependsOn` and a mount
+  (`{"path": "/media-photos", "share": "media", "subdir": "jellyfin/Photos", "access": "ro"}`),
+  then add `/media-photos` as an Immich *External Library* in the admin UI.
 - **Hardware transcoding**: set `accelerationDevices` in `immich.nix` (see
   INSTALL.md → Variants).
 

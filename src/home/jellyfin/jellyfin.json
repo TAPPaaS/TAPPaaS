@@ -34,8 +34,10 @@
       "mounts": [
         {
           "path": "/media",
-          "share": "tappaas2:media",
-          "access": "rw"
+          "share": "media",
+          "subdir": "jellyfin",
+          "access": "rw",
+          "stopUnits": ["jellyfin.service"]
         }
       ]
     },

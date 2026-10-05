@@ -47,15 +47,20 @@ ssh ${SSH_OPTS} "tappaas@${JELLYFIN_HOST}" \
 # ── Library folders on the media share ───────────────────────────────────────
 # Created here, not by tmpfiles: every write to the share is squashed to the
 # export's owner, so a tmpfiles chown to jellyfin would fail. `ls` triggers the
-# automount; only an NFS mount gets folders — never the bare local /media.
+# automount. Only on the NFS mount: while the mount is PENDING (no server
+# declares the share "media" yet, ADR-029 v0.8) /media is a local directory, and
+# leaving it empty lets the share mount there later without a migration — a
+# directory with content needs one, and that needs consent.
 if ssh ${SSH_OPTS} "tappaas@${JELLYFIN_HOST}" \
     "ls /media >/dev/null 2>&1; findmnt -n -t nfs,nfs4 /media >/dev/null"; then
     ssh ${SSH_OPTS} "tappaas@${JELLYFIN_HOST}" \
         "sudo -u jellyfin mkdir -p /media/Movies /media/TV /media/Music /media/Photos /media/Audiobooks" \
       && info "  ${GN}✓${CL} library folders present on the media share" \
-      || warn "  could not create the library folders on /media -- check the export's grant (rw)"
+      || warn "  could not create the library folders on /media -- check the share's grant (rw)"
+elif ssh ${SSH_OPTS} "tappaas@${JELLYFIN_HOST}" "findmnt -n --fstab /media >/dev/null"; then
+    warn "  /media should be the media share but is not mounted -- is its server up? (update-module.sh <node>)"
 else
-    warn "  /media is not mounted -- is the node serving its 'media' export? (update-module.sh <node>)"
+    info "  /media: the media share is pending (no server declares 'media') -- a local directory until it does"
 fi
 
 echo ""

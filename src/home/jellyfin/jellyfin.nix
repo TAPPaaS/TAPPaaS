@@ -10,12 +10,15 @@
 # Self-contained NixOS configuration -- used directly as nixos-config by
 # update-os.sh during install and subsequent nixos-rebuild switch calls.
 #
-# Storage: the media library is NOT in this VM. /media is an NFS share from
-# a cluster node's tankb pool (pvehost:nfs, ADR-029): the node declares the
-# export ("media", with its quota and backup policy), jellyfin.json declares
-# the mount, and the service writes it into /etc/nixos/tappaas-nfs.nix, which
-# the baseline imports. The VM stays small (OS + Jellyfin's own data on
-# tanka1); the library has its own lifecycle and survives the VM.
+# Storage: the media library is NOT in this VM. /media is the subdir jellyfin
+# of the share "media" (pvehost:nfs, ADR-029 v0.8), mounted by name as
+# nfs-media.mgmt.internal:/tappaas-nfs/media/jellyfin — the site's server
+# declares the share, jellyfin.json the mount, and the service writes it into
+# /etc/nixos/tappaas-nfs.nix, which the baseline imports. Until a server
+# declares "media" the mount is pending and /media is a local directory; when
+# the share arrives the service migrates its content in (with consent). The VM
+# stays small (OS + Jellyfin's own data on tanka1); the library has its own
+# lifecycle and survives the VM.
 #
 # Library folders under /media (created by update.sh once the share is
 # mounted — every write is squashed to the export's owner, so tmpfiles could
