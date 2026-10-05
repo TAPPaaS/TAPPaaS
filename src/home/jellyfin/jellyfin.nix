@@ -10,27 +10,17 @@
 # Self-contained NixOS configuration -- used directly as nixos-config by
 # update-os.sh during install and subsequent nixos-rebuild switch calls.
 #
-# Storage architecture (three layers; Layer 1 is selected by the
-# "mediaStorage" mode in jellyfin.json — see INSTALL.md → Media Storage):
-#   Layer 1 -- Block device:  Proxmox virtual disk (allocate) or an attached
-#                             USB/iSCSI disk (attached), presented as
-#                             /dev/disk/by-label/jellyfin-media; or a NAS
-#                             share mounted directly (share).
-#   Layer 2 -- Filesystem:   ext4, created by install-service.sh (allocate)
-#                             or setup-media-disk.sh (attached).
-#   Layer 3 -- NFS export:   /media exported to srvHome zone so file-service
-#                             modules can mount it via jellyfin:storage
-#                             (allocate/attached modes only).
+# Storage: the media library is NOT in this VM. /media is an NFS share from
+# a cluster node's tankb pool (pvehost:nfs, ADR-029): the node declares the
+# export ("media", with its quota and backup policy), jellyfin.json declares
+# the mount, and the service writes it into /etc/nixos/tappaas-nfs.nix, which
+# the baseline imports. The VM stays small (OS + Jellyfin's own data on
+# tanka1); the library has its own lifecycle and survives the VM.
 #
-# Media folder layout under /media:
-#   Movies/           Jellyfin library type Movies
-#   TV/               Jellyfin library type Shows
-#   Music/            Jellyfin library type Music
-#   Photos/           Jellyfin library type Photos
-#   Audiobooks/       Jellyfin library type Books/Audiobooks
-#   downloads/
-#     complete/       file-service modules write here (writable via NFS)
-#     incomplete/     in-progress downloads (not exported)
+# Library folders under /media (created by update.sh once the share is
+# mounted — every write is squashed to the export's owner, so tmpfiles could
+# not chown them to jellyfin anyway):
+#   Movies/  TV/  Music/  Photos/  Audiobooks/
 # ============================================================================
 
 { config, lib, pkgs, modulesPath, ... }:
@@ -57,8 +47,7 @@
 
   networking.firewall = {
     enable = true;
-    allowedTCPPorts = [ 22 2049 8096 8920 ];
-    allowedUDPPorts = [ 2049 ];
+    allowedTCPPorts = [ 22 8096 8920 ];
   };
 
   # -- SSH: keys only (the baseline's defaults allow passwords) ----------------
@@ -66,7 +55,8 @@
 
   # -- Packages --------------------------------------------------------------
   # vim, wget, curl, htop and git come from the baseline.
-  environment.systemPackages = with pkgs; [ jq nfs-utils ];
+  # NFS client support comes with the mount (tappaas-nfs.nix).
+  environment.systemPackages = with pkgs; [ jq ];
 
   # -- Jellyfin media server -------------------------------------------------
   services.jellyfin = {
@@ -74,42 +64,6 @@
     openFirewall = true;
     dataDir   = "/var/lib/jellyfin";
     cacheDir  = "/var/cache/jellyfin";
-  };
-
-  # -- Media disk mount ------------------------------------------------------
-  # Identified by label so the mount survives disk reordering between reboots.
-  # nofail: VM boots normally even before the disk is attached (install order).
-  # The block between the media-mount markers is managed by update.sh: with
-  # mediaStorage=share in jellyfin.json it is replaced by the declared
-  # NFS/CIFS mount at deploy time (edits inside the markers are overwritten
-  # in that mode).
-  # BEGIN media-mount (managed by update.sh)
-  fileSystems."/media" = {
-    device  = "/dev/disk/by-label/jellyfin-media";
-    fsType  = "ext4";
-    options = [ "nofail" "noatime" "x-systemd.automount" "x-systemd.device-timeout=10" ];
-  };
-  # END media-mount
-
-  # -- Content folder layout -------------------------------------------------
-  systemd.tmpfiles.rules = [
-    "d /media/Movies               0755 jellyfin jellyfin -"
-    "d /media/TV                   0755 jellyfin jellyfin -"
-    "d /media/Music                0755 jellyfin jellyfin -"
-    "d /media/Photos               0755 jellyfin jellyfin -"
-    "d /media/Audiobooks           0755 jellyfin jellyfin -"
-    "d /media/downloads            0775 jellyfin jellyfin -"
-    "d /media/downloads/complete   0775 jellyfin jellyfin -"
-    "d /media/downloads/incomplete 0770 jellyfin jellyfin -"
-  ];
-
-  # -- NFS export (provides storage to dependent modules) --------------------
-  # anonuid/anongid=993: NFS clients write as the Jellyfin user/group.
-  services.nfs.server = {
-    enable  = true;
-    exports = ''
-      /media  10.2.10.0/24(rw,sync,no_subtree_check,all_squash,anonuid=993,anongid=993)
-    '';
   };
 
   # -- VAAPI hardware transcoding --------------------------------------------

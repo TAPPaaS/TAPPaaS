@@ -1,21 +1,15 @@
 #!/usr/bin/env bash
 # TAPPaaS Module: jellyfin — Installation
 #
-# Deploys the Jellyfin NixOS config, provisions the media disk, and bootstraps
-# three pre-made user accounts (admin, stream, local). VM creation is handled
-# by the cluster:vm dependency. Media disk provisioning (services/mediaserver)
-# runs here since it provisions jellyfin's own infrastructure, not a consumer VM.
+# Deploys the Jellyfin NixOS config and bootstraps three pre-made user accounts
+# (admin, stream, local). VM creation is handled by the cluster:vm dependency;
+# the media library is an NFS share mounted by the pvehost:nfs dependency.
 #
 # Usage: ./install.sh [vmname]
 
 set -euo pipefail
 
 . /home/tappaas/bin/common-install-routines.sh
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-# Provision the media disk (allocate on Proxmox, format, mount /media)
-"${SCRIPT_DIR}/services/mediaserver/install-service.sh"
 
 # Apply the NixOS config (also run on updates)
 . ./update.sh
