@@ -540,15 +540,20 @@ export function validateModules(
   return { findings, errors, warnings };
 }
 
-// ADR-029, #766. The export shape needs only the module itself; the mount check
-// and the unused-grant note read the other side, so they need fs.readConfig.
+// ADR-029 (v0.8). The export shape needs only the module itself; the Site-unique
+// name check, the mount check and the unused-grant note read the other instances,
+// so they need fs.readConfig and fs.listInstances.
 export function validateNfs(m: ModuleConfig, fs: ServiceFs | undefined, out: ValidateFinding[]): void {
   const raw = (m.raw ?? {}) as Record<string, unknown>;
   const push = (f: { severity: "error" | "warning"; message: string }): void =>
     void out.push({ module: m.name, severity: f.severity, message: f.message });
-  checkExports(m.name, raw).forEach(push);
-  if (!fs?.readConfig) return;
+  if (!fs?.readConfig || !fs.listInstances) {
+    checkExports(m.name, raw).forEach(push);
+    return;
+  }
   const read = (i: string): Record<string, unknown> | null => fs.readConfig!(i);
-  checkMounts(m.name, raw, read).forEach(push);
+  const list = (): string[] => fs.listInstances!();
+  checkExports(m.name, raw, list, read).forEach(push);
+  checkMounts(m.name, raw, list, read).forEach(push);
   unusedGrants(raw, read).forEach(push);
 }

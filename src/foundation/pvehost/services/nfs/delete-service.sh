@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
 #
-# pvehost:nfs — delete-service (ADR-029 D6, #766). Takes the consumer's mounts
-# away and leaves every share's DATA alone: the export belongs to its node, not
-# to the consumer. Its grants stay too — they are the node's declaration, and
-# with the consumer gone they simply resolve to nobody on the next reconcile.
+# pvehost:nfs — delete-service (ADR-029 D6, D16). Takes the consumer's mounts away
+# and leaves every share's DATA alone: the export belongs to its server, not to the
+# consumer. Its grants stay too — they are the server's declaration.
+#
+# First, every server that grants it reconverges WITHOUT it (D16): its address
+# leaves the client lists now, not at the server's next update. Before v0.8 a
+# deleted consumer's address stayed shared until then, and a VM that later leased
+# that address could have mounted the share.
 #
 # Usage: delete-service.sh <consumer>
 #
@@ -16,6 +20,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONSUMER="${1:-}"
 [[ -n "${CONSUMER}" ]] || { echo "Usage: $0 <consumer>"; exit 1; }
 nfs_is_instance "${CONSUMER}" || { info "pvehost:nfs: no config/${CONSUMER}.json — nothing to remove"; exit 0; }
+
+nfs_service_reconverge "${CONSUMER}" exclude \
+    || warn "  ${CONSUMER}: a server it was granted on did not reconverge (above) — check its client list"
 
 target="$(nfs_consumer_target "${CONSUMER}")" || { info "pvehost:nfs: ${CONSUMER} has no guest — nothing to remove"; exit 0; }
 case "$(nfs_consumer_os "${CONSUMER}")" in

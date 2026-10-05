@@ -1,14 +1,15 @@
-// nfs.ts — the pvehost:nfs declarations, checked across modules (ADR-029, #766).
+// nfs.ts — the pvehost:nfs declarations, checked across modules (ADR-029 v0.8).
 //
 // Two declarations meet in one check: a server's own `nfs.exports[]` (a cluster
 // node builds them, a registered, unmanaged server describes them) and a
-// consumer's `config."pvehost:nfs".mounts[]`. The service scripts refuse a bad
-// pair at install time (pvehost/lib/nfs-lib.sh); this is the same set of rules
-// reported by `module-manager validate`, so it is caught before anything runs.
-// Keep the two in step: test-nfs-lib.sh and test/unit/nfs.test.ts pin the same
-// cases.
+// consumer's `config."pvehost:nfs".mounts[]`. A mount names a SHARE, never a
+// server: share names are unique across the Site, and the share is found by
+// looking through every deployed instance. The service scripts apply the same
+// rules at install time (pvehost/lib/nfs-lib.sh); this reports them from
+// `module-manager validate`, before anything runs. Keep the two in step:
+// test-nfs-lib.sh and test/unit/nfs.test.ts pin the same cases.
 //
-// Pure: configs arrive through `readConfig`, so the unit tests need no tree.
+// Pure: configs arrive through a lister and a reader, so the tests need no tree.
 
 export interface NfsFinding {
   severity: "error" | "warning";
@@ -16,9 +17,12 @@ export interface NfsFinding {
 }
 
 export type ConfigReader = (instance: string) => Record<string, unknown> | null;
+export type InstanceLister = () => string[];
 
 export const NFS_COORDINATE = "pvehost:nfs";
+export const NFS_ALIAS_DOMAIN = "mgmt.internal";
 const NAME_RE = /^[a-z][a-z0-9-]*$/;
+const SUBDIR_RE = /^[A-Za-z0-9._/-]+$/;
 const OWNER_MIN = 64000;
 const OWNER_MAX = 64999;
 const PROPERTIES = new Set(["recordsize", "compression", "atime"]);
@@ -31,29 +35,29 @@ const obj = (v: unknown): Obj => (v && typeof v === "object" && !Array.isArray(v
 const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 const str = (v: unknown): string => (typeof v === "string" ? v : "");
 
-export interface ShareRef {
-  kind: "named" | "literal";
-  host: string;
-  rest: string; // export name (named) or absolute path (literal)
-}
+export type ShareRef =
+  | { kind: "named"; share: string }
+  | { kind: "literal"; host: string; path: string };
 
-// ADR-029 D2: no leading slash after the colon → a named share on a module
-// instance; a leading slash → an unmodelled server's literal path.
+// ADR-029 D2 (v0.8): a reference containing ':' is an unmodelled server's literal
+// <ip-or-host>:/<path>; anything else is a Site-unique share name.
 export function parseShareRef(ref: string): ShareRef | string {
   const i = ref.indexOf(":");
-  if (i < 0) return `share '${ref}' is not <host>:<name> or <host>:/<path>`;
-  const host = ref.slice(0, i);
-  const rest = ref.slice(i + 1);
-  if (!host || !rest) return `share '${ref}' has an empty host or name`;
-  if (rest.startsWith("/")) return { kind: "literal", host, rest };
-  if (!NAME_RE.test(rest)) return `share name '${rest}' must match ${NAME_RE.source}`;
-  return { kind: "named", host, rest };
+  if (i >= 0) {
+    const host = ref.slice(0, i);
+    const path = ref.slice(i + 1);
+    if (!host || !path.startsWith("/"))
+      return `share '${ref}' is not <ip-or-host>:/<path> — a share is named, or a literal with an absolute path`;
+    return { kind: "literal", host, path };
+  }
+  if (!NAME_RE.test(ref)) return `share name '${ref}' must match ${NAME_RE.source}`;
+  return { kind: "named", share: ref };
 }
 
+export const shareAlias = (share: string): string => `nfs-${share}.${NFS_ALIAS_DOMAIN}`;
+
 // ADR-029 D2a: an NFS server is reached on our own VLANs or a private routed
-// network, never across someone else's — sec=sys is cleartext and trusts the
-// client's claimed UID. Only a literal IP can be judged offline; a name is
-// resolved, and judged, by the service at install time.
+// network, never across someone else's. Only a literal IP can be judged offline.
 export function isPublicIpv4(host: string): boolean {
   const m = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
   if (!m) return false;
@@ -67,20 +71,32 @@ export function isPublicIpv4(host: string): boolean {
 }
 
 const deps = (c: Obj): string[] => [...arr(c.dependsOn), ...arr(c.integratesWith)].map(str);
+const exportsOf = (c: Obj): Obj[] => arr(obj(c.nfs).exports).map(obj);
 
-// ADR-029 D4 / D2a — one server's nfs.exports[].
-export function checkExports(name: string, cfg: Obj): NfsFinding[] {
+// Every instance declaring an export of that name, sorted. One is the server;
+// none is a pending share; more is an error (names are Site-unique, D2).
+export function shareServers(share: string, list: InstanceLister, read: ConfigReader): string[] {
+  return list()
+    .filter((i) => exportsOf(read(i) ?? {}).some((e) => e.name === share))
+    .sort();
+}
+
+// ADR-029 D4 / D2a — one server's nfs.exports[], and (v0.8) that each name is
+// declared by no other instance.
+export function checkExports(name: string, cfg: Obj, list?: InstanceLister, read?: ConfigReader): NfsFinding[] {
   const out: NfsFinding[] = [];
   const err = (message: string): void => void out.push({ severity: "error", message });
-  const exports = arr(obj(cfg.nfs).exports);
   const managed = str(cfg.management || "managed") === "managed";
   const seen = new Set<string>();
-  for (const raw of exports) {
-    const e = obj(raw);
+  for (const e of exportsOf(cfg)) {
     const n = str(e.name) || "<unnamed>";
     if (!NAME_RE.test(str(e.name))) err(`nfs export ${n}: name must match ${NAME_RE.source}`);
     if (seen.has(n)) err(`nfs export ${n}: declared twice on ${name}`);
     seen.add(n);
+    if (list && read) {
+      const others = shareServers(n, list, read).filter((i) => i !== name);
+      if (others.length) err(`nfs export ${n}: also declared by ${others.join(", ")} — share names are unique across the Site (ADR-029 D2)`);
+    }
     const consumers = new Set<string>();
     for (const g of arr(e.grants).map(obj)) {
       const c = str(g.consumer);
@@ -116,9 +132,10 @@ export function checkExports(name: string, cfg: Obj): NfsFinding[] {
   return out;
 }
 
-// ADR-029 D3 / D11 / D5 layer 2 — one consumer's mounts against the servers they
-// name: shape, the two-key check, and the firewall path.
-export function checkMounts(name: string, cfg: Obj, read: ConfigReader): NfsFinding[] {
+// ADR-029 D3 / D11 / D15 / D5 layer 2 (v0.8) — one consumer's mounts: shape, and
+// where the share exists, the two-key check and the firewall path. A share no
+// server declares is a pending mount — reported as a warning, never refused.
+export function checkMounts(name: string, cfg: Obj, list: InstanceLister, read: ConfigReader): NfsFinding[] {
   const out: NfsFinding[] = [];
   const err = (message: string): void => void out.push({ severity: "error", message });
   const mounts = arr(obj(obj(cfg.config)[NFS_COORDINATE]).mounts).map(obj);
@@ -140,16 +157,20 @@ export function checkMounts(name: string, cfg: Obj, read: ConfigReader): NfsFind
     paths.add(path);
     const access = m.access ?? "ro";
     if (access !== "ro" && access !== "rw") err(`${at}: access ${String(access)} (ro|rw)`);
+    const subdir = str(m.subdir);
+    if (subdir && (subdir.startsWith("/") || !SUBDIR_RE.test(subdir) || subdir.split("/").some((s) => s === ".." || s === ".")))
+      err(`${at}: subdir '${subdir}' must be a relative path inside the share — no leading /, no . or .. (ADR-029 D15)`);
+    if ("stopUnits" in m && !(Array.isArray(m.stopUnits) && m.stopUnits.every((u) => typeof u === "string")))
+      err(`${at}: stopUnits must be a list of unit names`);
     const ref = parseShareRef(str(m.share));
     if (typeof ref === "string") {
       err(`${at}: ${ref}`);
       continue;
     }
-    const server = read(ref.host);
     let crosses: boolean;
     if (ref.kind === "literal") {
-      if (server) {
-        err(`${at}: ${ref.host} is a module instance — name its share (${ref.host}:<name>), a path would go around the grant`);
+      if (read(ref.host)) {
+        err(`${at}: ${ref.host} is a module instance — name its share, a literal path would go around the grant (ADR-029 D2)`);
         continue;
       }
       if (isPublicIpv4(ref.host)) {
@@ -158,32 +179,34 @@ export function checkMounts(name: string, cfg: Obj, read: ConfigReader): NfsFind
       }
       crosses = true; // an unmodelled server's zone cannot be known
     } else {
-      if (!server) {
-        err(`${at}: ${ref.host} is not a module instance (no config/${ref.host}.json) — for an unmodelled server write ${ref.host}:/<path>`);
+      const servers = shareServers(ref.share, list, read);
+      if (servers.length === 0) {
+        out.push({ severity: "warning", message: `${at}: share ${ref.share} is not declared on any server — pending, the directory stays local until it is (ADR-029 D11)` });
         continue;
       }
+      if (servers.length > 1) {
+        err(`${at}: share ${ref.share} is declared by ${servers.join(", ")} — share names are unique across the Site`);
+        continue;
+      }
+      const server = read(servers[0]) ?? {};
       if (str(server.zone0) === "wan") {
-        err(`${at}: ${ref.host} sits in the wan zone — NFS is never mounted across it (ADR-029 D2a)`);
+        err(`${at}: share ${ref.share} is on ${servers[0]}, in the wan zone — NFS is never mounted across it (ADR-029 D2a)`);
         continue;
       }
-      const exp = arr(obj(server.nfs).exports).map(obj).find((e) => e.name === ref.rest);
-      if (!exp) {
-        err(`${at}: ${ref.host} declares no export '${ref.rest}' — add it to config/${ref.host}.json nfs.exports[] (a consumer never creates an export, ADR-029 D11)`);
-        continue;
-      }
+      const exp = exportsOf(server).find((e) => e.name === ref.share) ?? {};
       const grant = arr(exp.grants).map(obj).find((g) => g.consumer === name);
       if (!grant) {
-        err(`${at}: ${ref.host}:${ref.rest} grants ${name} nothing — add {"consumer": "${name}", "access": "${String(access)}"} to its grants`);
+        err(`${at}: share ${ref.share} (on ${servers[0]}) grants ${name} nothing — add {"consumer": "${name}", "access": "${String(access)}"} to its grants in config/${servers[0]}.json, or remove the mount (ADR-029 D11)`);
         continue;
       }
       if (access === "rw" && (grant.access ?? "ro") === "ro") {
-        err(`${at}: asks rw, but ${ref.host}:${ref.rest} grants ${name} only ro`);
+        err(`${at}: asks rw, but share ${ref.share} grants ${name} only ro`);
         continue;
       }
       crosses = str(server.zone0) !== zone;
     }
     if (crosses && !rules)
-      err(`${at}: ${str(m.share)} is reached through the firewall — ${name} must depend on network:rules, which derives the tcp/2049 rule from its mounts (ADR-029 D5)`);
+      err(`${at}: share ${str(m.share)} is reached through the firewall — ${name} must depend on network:rules, which derives the tcp/2049 rule from its mounts (ADR-029 D5)`);
   }
   return out;
 }
@@ -192,7 +215,7 @@ export function checkMounts(name: string, cfg: Obj, read: ConfigReader): NfsFind
 // may be a typo — but not an error: the consumer may simply come later.
 export function unusedGrants(cfg: Obj, read: ConfigReader): NfsFinding[] {
   const out: NfsFinding[] = [];
-  for (const e of arr(obj(cfg.nfs).exports).map(obj))
+  for (const e of exportsOf(cfg))
     for (const g of arr(e.grants).map(obj)) {
       const c = str(g.consumer);
       if (c && !read(c))

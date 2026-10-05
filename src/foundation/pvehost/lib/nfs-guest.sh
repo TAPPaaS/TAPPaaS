@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# nfs-guest.sh — the consumer side of pvehost:nfs (ADR-029 D3, D10, D11): resolve a
-# consumer's mounts to NFS sources and write them into its guest. Sourced by the
-# service scripts after common-install-routines.sh and nfs-lib.sh.
+# nfs-guest.sh — the consumer side of pvehost:nfs (ADR-029 D3, D10, D11, D14, D15):
+# resolve a consumer's mounts to NFS sources, render them for its guest, and the
+# migration that moves a pending mount's local content into its share. Sourced by
+# the service scripts after common-install-routines.sh and nfs-lib.sh.
 #
 # Never calls pn_load: in a service script $1 is the CONSUMER, and
 # common-install-routines.sh has loaded the consumer's config into $JSON, which
-# pn_load's get_config_value would read. A node is read straight from its file.
+# pn_load's get_config_value would read. A server is read straight from its file.
 
 NFS_GUEST_FRAGMENT="/etc/nixos/tappaas-nfs.nix"
 NFS_FSTAB_BEGIN="# BEGIN pvehost:nfs (ADR-029) — generated, do not edit"
@@ -15,27 +16,31 @@ NFS_FSTAB_END="# END pvehost:nfs"
 nfs_instance_address() { jq -r '.address // empty' "${NFS_CONFIG_DIR}/$1.json" 2>/dev/null; }
 
 # nfs_resolve_mount <mount-json> — one tab-separated line:
-#   <path> <source host:path> <version> <access> <required> <named-instance|->
-# The source of a managed export is its dataset's mountpoint on the node; of a
-# registered server, the descriptor's path; of an unmodelled one, the literal.
+#   <path> <source> <version> <access> <required> <status>
+# status: available (a named share some server carries), literal, or pending — and
+# a pending mount has no source. A named share is reached through its alias (D2b):
+# <alias>:<path inside the server>[/<subdir>]; a literal is used as written.
 nfs_resolve_mount() {
-    local m="$1" path share access required kind host name addr e src version
+    local m="$1" path share access required subdir kind name lpath server e src version
     path="$(jq -r .path <<< "${m}")"; share="$(jq -r .share <<< "${m}")"
     access="$(jq -r '.access // "ro"' <<< "${m}")"; required="$(jq -r '.required // false' <<< "${m}")"
-    read -r kind host name < <(nfs_parse_share_ref "${share}") || return 1
+    subdir="$(jq -r '.subdir // empty' <<< "${m}")"
+    read -r kind name lpath < <(nfs_parse_share_ref "${share}") || return 1
     if [[ "${kind}" == "literal" ]]; then
-        printf '%s\t%s\t%s\t%s\t%s\t-\n' "${path}" "${host}:${name}" "4.2" "${access}" "${required}"
+        src="${name}:${lpath%/}${subdir:+/${subdir}}"
+        printf '%s\t%s\t%s\t%s\t%s\tliteral\n' "${path}" "${src}" "4.2" "${access}" "${required}"
         return 0
     fi
-    addr="$(nfs_instance_address "${host}")"
-    [[ -n "${addr}" ]] || { echo "${host} has no address in config/${host}.json" >&2; return 1; }
-    e="$(nfs_export "${host}" "${name}")" || return 1
-    if nfs_instance_managed "${host}"; then
-        src="/$(nfs_dataset "$(jq -r .pool <<< "${e}")" "${name}")"; version="4.2"
-    else
-        src="$(jq -r .path <<< "${e}")"; version="$(jq -r '.version // "4.2"' <<< "${e}")"
+    if ! server="$(nfs_find_share "${name}" 2>/dev/null)"; then
+        printf '%s\t-\t-\t%s\t%s\tpending\n' "${path}" "${access}" "${required}"
+        return 0
     fi
-    printf '%s\t%s\t%s\t%s\t%s\t%s\n' "${path}" "${addr}:${src}" "${version}" "${access}" "${required}" "${host}"
+    e="$(nfs_export "${server}" "${name}")" || return 1
+    src="$(nfs_share_alias "${name}"):$(nfs_export_path "${server}" "${e}")"
+    src="${src%/}${subdir:+/${subdir}}"
+    version="4.2"
+    nfs_instance_managed "${server}" || version="$(jq -r '.version // "4.2"' <<< "${e}")"
+    printf '%s\t%s\t%s\t%s\t%s\tavailable\n' "${path}" "${src}" "${version}" "${access}" "${required}"
 }
 
 # nfs_mount_options <version> <access> <required> — the options every mount gets
@@ -43,21 +48,28 @@ nfs_resolve_mount() {
 # boots and the app starts without the share.
 nfs_mount_options() {
     local v="$1" access="$2" required="$3" o
-    if [[ "${v}" == "3" ]]; then o="vers=3"; else o="vers=${v}"; fi
-    o+=",${access},hard,_netdev,noatime"
+    o="vers=${v},${access},hard,_netdev,noatime"
     [[ "${required}" == "true" ]] || o+=",nofail,x-systemd.automount,x-systemd.mount-timeout=30"
     printf '%s\n' "${o}"
 }
 
-# nfs_render_nixos <resolved-lines> — the fragment's text (ADR-029 D10). States
-# fileSystems and nothing a module could also declare, so it never collides.
+# nfs_runtime_options <version> <access> — the options for mounting by hand during
+# a migration: the kernel's subset, without fstab's systemd hints.
+nfs_runtime_options() { printf 'vers=%s,%s,hard,noatime\n' "$1" "$2"; }
+
+# nfs_render_nixos <resolved-lines> — the fragment's text (D10). Always NFS support
+# and rsync, even when every mount is pending: a later migration (D14) needs both
+# in the guest before the share exists. Then a fileSystems entry per mount that is
+# not pending. States nothing a module could also declare, so it never collides.
 nfs_render_nixos() {
-    local lines="$1" path src v access req inst opts o first
+    local lines="$1" path src v access req status opts first x
+    local -a o
     printf '# tappaas-nfs.nix — GENERATED by pvehost:nfs (ADR-029). Do not edit here.\n'
     printf '# Imported by tappaas-common.nix; rewritten whenever this guest'"'"'s mounts change.\n'
-    printf '{ ... }:\n{\n  boot.supportedFilesystems = [ "nfs" ];\n'
-    while IFS=$'\t' read -r path src v access req inst; do
-        [[ -n "${path}" ]] || continue
+    printf '{ pkgs, ... }:\n{\n  boot.supportedFilesystems = [ "nfs" ];\n'
+    printf '  environment.systemPackages = [ pkgs.rsync pkgs.psmisc ];\n'
+    while IFS=$'\t' read -r path src v access req status; do
+        [[ -n "${path}" && "${status}" != "pending" ]] || continue
         opts=""; first=1
         IFS=, read -ra o <<< "$(nfs_mount_options "${v}" "${access}" "${req}")"
         for x in "${o[@]}"; do opts+="$([[ ${first} -eq 1 ]] || printf ' ')\"${x}\""; first=0; done
@@ -69,10 +81,10 @@ nfs_render_nixos() {
 
 # nfs_render_fstab <resolved-lines> — the marked /etc/fstab block for a Debian guest.
 nfs_render_fstab() {
-    local lines="$1" path src v access req inst
+    local lines="$1" path src v access req status
     printf '%s\n' "${NFS_FSTAB_BEGIN}"
-    while IFS=$'\t' read -r path src v access req inst; do
-        [[ -n "${path}" ]] || continue
+    while IFS=$'\t' read -r path src v access req status; do
+        [[ -n "${path}" && "${status}" != "pending" ]] || continue
         printf '%s %s nfs %s 0 0\n' "${src}" "${path}" "$(nfs_mount_options "${v}" "${access}" "${req}")"
     done <<< "${lines}"
     printf '%s\n' "${NFS_FSTAB_END}"
@@ -91,4 +103,93 @@ nfs_consumer_os() {
     local os
     os="$(jq -r '.config["cluster:vm"].os // .os // "nixos"' "${NFS_CONFIG_DIR}/$1.json" 2>/dev/null)"
     case "${os}" in nixos|debian) printf '%s\n' "${os}" ;; *) printf 'other\n' ;; esac
+}
+
+# nfs_consent <consumer> — rc 0 when a migration may stop the consumer's app (D14):
+# the consumer says rebootOk, or the run was given --allow-disruption, which
+# reconcile passes on as TAPPAAS_ALLOW_DISRUPTION=1 (ADR-020).
+nfs_consent() {
+    [[ "${TAPPAAS_ALLOW_DISRUPTION:-}" == "1" ]] && return 0
+    [[ "$(jq -r '.rebootOk // false' "${NFS_CONFIG_DIR}/$1.json" 2>/dev/null)" == "true" ]]
+}
+
+# nfs_guest_probe <path> <source> — a script for the guest that prints one line of
+# key=value facts about a mount point: mounted (the NFS source mounted there, or
+# empty), local (yes when the directory holds anything while not mounted),
+# prenfs (yes when <path>.pre-nfs exists), nfs (yes when the guest can mount NFS).
+nfs_guest_probe_script() {
+    cat <<EOF
+P='$1'
+m="\$(findmnt -n -t nfs,nfs4 -o SOURCE --mountpoint "\$P" 2>/dev/null | tail -1)"
+l=no; [ -z "\$m" ] && [ -d "\$P" ] && [ -n "\$(ls -A "\$P" 2>/dev/null)" ] && l=yes
+p=no; [ -e "\$P.pre-nfs" ] && p=yes
+n=no; command -v mount.nfs >/dev/null 2>&1 && command -v rsync >/dev/null 2>&1 && n=yes
+echo "mounted=\$m local=\$l prenfs=\$p nfs=\$n"
+EOF
+}
+
+# nfs_migrate_script <path> <source> <runtime-options> <stopUnits> <stopCommand>
+# <startCommand> — the migration, run in the guest as root (D14). Exit codes:
+#   0 migrated · 3 the share already holds data (no merge) · 4 the open-files guard
+#   stopped it (holders printed) · other: a failure, after which the guest is back
+#   on its local data.
+nfs_migrate_script() {
+    local path="$1" src="$2" opts="$3" units="$4" stopcmd="$5" startcmd="$6"
+    cat <<EOF
+set -uo pipefail
+P='${path}'; SRC='${src}'; OPTS='${opts}'; UNITS='${units}'
+TMP="/run/tappaas-nfs-migrate\$(echo "\$P" | tr / _)"
+stopped=0; swapped=0
+start_app() {
+    [ -n "\$UNITS" ] && systemctl start \$UNITS
+    $( [[ -n "${startcmd}" ]] && printf '%s\n' "${startcmd}" || printf ':\n' )
+}
+cleanup() {
+    rc=\$?
+    if [ "\$rc" -ne 0 ]; then
+        if [ "\$swapped" -eq 1 ]; then
+            umount "\$P" 2>/dev/null; rmdir "\$P" 2>/dev/null; mv "\$P.pre-nfs" "\$P"
+            echo "rolled back: \$P is the local directory again" >&2
+        fi
+        [ "\$stopped" -eq 1 ] && start_app
+    fi
+    mountpoint -q "\$TMP" && umount "\$TMP"; rmdir "\$TMP" 2>/dev/null
+    exit \$rc
+}
+trap cleanup EXIT
+mkdir -p "\$TMP" && mount -t nfs -o "\$OPTS" "\$SRC" "\$TMP" || { echo "cannot mount \$SRC" >&2; exit 5; }
+MARK="\$TMP/.tappaas-nfs-migrating"
+if [ -e "\$MARK" ]; then
+    echo "resuming an earlier, interrupted migration into \$SRC"
+elif [ -n "\$(ls -A "\$TMP")" ]; then
+    echo "the share already holds data: \$(du -sh "\$TMP" | cut -f1) in \$SRC, \$(du -sh "\$P" | cut -f1) in \$P — not merged" >&2
+    exit 3
+fi
+# The marker says: what is here was copied by a migration of \$P, so a retry after
+# an abort resumes instead of finding a share that "already holds data".
+touch "\$MARK" || { echo "cannot write to \$SRC" >&2; exit 5; }
+echo "pass 1: copying \$(du -sh "\$P" | cut -f1) while the app runs"
+rsync -rlptH --no-owner --no-group --exclude=/.tappaas-nfs-migrating "\$P/" "\$TMP/" || { echo "pass 1 failed" >&2; exit 6; }
+stopped=1
+$( [[ -n "${stopcmd}" ]] && printf '%s || { echo "stopCommand failed" >&2; exit 7; }\n' "${stopcmd}" || printf ':\n' )
+[ -n "\$UNITS" ] && { systemctl stop \$UNITS || { echo "could not stop \$UNITS" >&2; exit 7; }; }
+holders="\$(for f in /proc/[0-9]*/fd/* /proc/[0-9]*/cwd; do
+    t="\$(readlink "\$f" 2>/dev/null)" || continue
+    case "\$t" in "\$P"|"\$P"/*) echo "\${f#/proc/}" | cut -d/ -f1 ;; esac
+done | sort -u)"
+if [ -n "\$holders" ]; then
+    echo "open-files guard: still in use by:" >&2
+    for pid in \$holders; do echo "  \$pid \$(tr '\0' ' ' < /proc/\$pid/cmdline 2>/dev/null | cut -c1-100)" >&2; done
+    exit 4
+fi
+echo "pass 2: the difference, with the app stopped"
+rsync -rlptH --no-owner --no-group --delete --exclude=/.tappaas-nfs-migrating "\$P/" "\$TMP/" || { echo "pass 2 failed" >&2; exit 6; }
+rm -f "\$MARK"
+umount "\$TMP"
+mv "\$P" "\$P.pre-nfs" && mkdir "\$P" && swapped=1 || { echo "could not move \$P aside" >&2; exit 8; }
+mount -t nfs -o "\$OPTS" "\$SRC" "\$P" || { echo "could not mount \$SRC on \$P" >&2; exit 9; }
+stopped=0
+start_app
+echo "migrated: \$P is \$SRC; the local copy is \$P.pre-nfs until the next healthy update"
+EOF
 }

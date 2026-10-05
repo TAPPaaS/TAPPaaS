@@ -1,0 +1,35 @@
+{
+  "description": "Test fixture: pvehost:nfs consumer for pvehost/test.sh --deep (ADR-029). Disposable NixOS clone; safe to delete. The deep suite sets vmid, node and zone0 on its own copy.",
+  "kind": "vm",
+  "version": "0.1.0",
+  "stack": "foundation",
+  "status": "Development",
+  "vmname": "test-nfsconsumer",
+  "vmid": 927,
+  "vmtag": "TAPPaaS,Test",
+  "node": "tappaas2",
+  "zone0": "mgmt",
+  "dependsOn": [
+    "cluster:vm",
+    "network:rules",
+    "pvehost:nfs"
+  ],
+  "config": {
+    "cluster:vm": {
+      "cores": 2,
+      "memory": 2048,
+      "diskSize": "24G",
+      "storage": "tanka1",
+      "imageType": "clone",
+      "image": "8080",
+      "bridge0": "lan"
+    },
+    "pvehost:nfs": {
+      "mounts": [
+        { "path": "/srv/deep/a", "share": "nfsdeeptest", "subdir": "a", "access": "rw",
+          "stopUnits": ["nfs-deep-writer.service"] },
+        { "path": "/srv/deep/b", "share": "nfsdeeptest", "subdir": "b", "access": "rw" }
+      ]
+    }
+  }
+}

@@ -58,9 +58,18 @@ nfs_node_ensure_dataset() {
     pool="$(jq -r .pool <<< "${e}")"; name="$(jq -r .name <<< "${e}")"
     ds="$(nfs_dataset "${pool}" "${name}")"
     quota="$(jq -r '.quota // "none"' <<< "${e}")"
+    local want_mnt="${NFS_MOUNT_ROOT}/${name}"
     if ! pn_ssh "zfs list -H -o name '${ds}' >/dev/null 2>&1"; then
-        pn_ssh "zfs create -o sharenfs=off '${ds}'" || { error "  could not create ${ds} on ${INSTANCE}"; return 1; }
-        info "  ${GN}✓${CL} created ${BL}${ds}${CL}"
+        pn_ssh "zfs create -o sharenfs=off -o mountpoint='${want_mnt}' '${ds}'" \
+            || { error "  could not create ${ds} on ${INSTANCE}"; return 1; }
+        info "  ${GN}✓${CL} created ${BL}${ds}${CL} at ${want_mnt}"
+    fi
+    # The same path on every node, whatever the pool (D2b): a share that moves
+    # keeps the path its consumers mount. A dataset built before v0.8 is moved here
+    # (a remount — an active client sees it as a brief stall).
+    if [[ "$(pn_ssh "zfs get -H -o value mountpoint '${ds}'")" != "${want_mnt}" ]]; then
+        pn_ssh "zfs set mountpoint='${want_mnt}' '${ds}'" || { error "  could not move ${ds} to ${want_mnt}"; return 1; }
+        info "  ${GN}✓${CL} ${ds}: mounted at ${want_mnt}"
     fi
     # Quota: a value below what is already used is refused, never applied (D7).
     local cur used
@@ -99,6 +108,7 @@ nfs_node_ensure_dataset() {
 nfs_node_set_share() {
     local ds="$1" want="$2" cur mnt live
     cur="$(pn_ssh "zfs get -H -o value sharenfs '${ds}'")"
+    NFS_PREVIOUS_SHARE="${cur}"
     if [[ "${cur}" != "${want}" ]]; then
         pn_ssh "zfs set sharenfs='${want}' '${ds}'" || { error "  could not set sharenfs on ${ds}"; return 1; }
         info "  ${GN}✓${CL} ${ds}: sharenfs ${want}"
@@ -151,7 +161,8 @@ nfs_write_owner() {
 # could not be brought to its declared state.
 nfs_node_reconcile() {
     local e name pool uid gid rw ro c a grant ds p fails=0 problems
-    local -A declared=()
+    local -A declared=() alias_of=()
+    local -a notify=()
     local -a exports=()
     local -a pools=()
     mapfile -t exports < <(nfs_exports "${INSTANCE}")
@@ -165,6 +176,10 @@ nfs_node_reconcile() {
         name="$(jq -r .name <<< "${e}")"; pool="$(jq -r '.pool // empty' <<< "${e}")"
         if problems="$(nfs_check_export "${e}" managed)"; then :; else
             while IFS= read -r p; do error "  ${p}"; done <<< "${problems}"
+            fails=$((fails + 1)); continue
+        fi
+        if [[ -n "$(nfs_share_servers "${name}" | grep -vx "${INSTANCE}")" ]]; then
+            error "  export ${name}: also declared by $(nfs_share_servers "${name}" | grep -vx "${INSTANCE}" | tr '\n' ' ')— share names are unique across the Site; not built (ADR-029 D2)"
             fails=$((fails + 1)); continue
         fi
         if ! nfs_node_pool_exists "${pool}"; then
@@ -182,18 +197,26 @@ nfs_node_reconcile() {
         fi
         nfs_node_ensure_parent "${pool}" && nfs_node_ensure_dataset "${e}" "${uid}" "${gid}" \
             || { fails=$((fails + 1)); continue; }
-        # The client list: each granted consumer's current address (D5 layer 3). A
-        # grant whose consumer is not installed, or has no lease, shares to nobody
-        # yet — it is reported, and the next reconcile picks it up.
+        nfs_node_ensure_alias "${name}" alias_of || fails=$((fails + 1))
+        # The client list (D5 layer 3, D16): see nfs_node_clients.
         rw=""; ro=""
-        while IFS=$'\t' read -r c grant; do
+        local -a added=()
+        while read -r c grant a; do
             [[ -n "${c}" ]] || continue
-            a="$(nfs_consumer_address "${c}")"
-            if [[ -z "${a}" ]]; then info "  export ${name}: ${c} is granted but not resolvable yet — not shared to it"; continue; fi
+            if [[ "${a}" == "-" ]]; then info "  export ${name}: ${c} mounts it but is not resolvable yet — not shared to it"; continue; fi
             if [[ "${grant}" == "rw" ]]; then rw+=" ${a}"; else ro+=" ${a}"; fi
-        done < <(jq -r '.grants // [] | .[] | "\(.consumer)\t\(.access // "ro")"' <<< "${e}")
-        nfs_node_set_share "${ds}" "$(nfs_render_sharenfs "${uid}" "${gid}" "${rw}" "${ro}")" \
-            || fails=$((fails + 1))
+            added+=("${c}=${a}")
+        done < <(nfs_node_clients "${e}")
+        NFS_PREVIOUS_SHARE=""
+        if nfs_node_set_share "${ds}" "$(nfs_render_sharenfs "${uid}" "${gid}" "${rw}" "${ro}")"; then
+            # A consumer whose address just joined the list may have a pending mount
+            # to migrate (D11, D14): run its update now rather than at the next sweep.
+            for c in "${added[@]}"; do
+                [[ "${NFS_PREVIOUS_SHARE}" == *"@${c#*=}/32"* ]] || notify+=("${c%%=*}")
+            done
+        else
+            fails=$((fails + 1))
+        fi
     done
     # What is no longer declared is unshared and KEPT (D6): only an explicit purge
     # destroys data. Every pool the node has is checked, not just the declared ones,
@@ -206,8 +229,99 @@ nfs_node_reconcile() {
             if [[ "$(pn_ssh "zfs get -H -o value sharenfs '${orphan}'")" != "off" ]]; then
                 pn_ssh "zfs set sharenfs=off '${orphan}'" && info "  ${orphan}: no longer declared — unshared, data kept"
             fi
+            nfs_node_drop_alias "${orphan##*/}"
             warn "  ${orphan}: an orphan export (declared nowhere) — its data is kept; 'pvehost nfs purge' destroys it"
         done < <(nfs_node_shared_datasets "${p}")
     done < <(pn_ssh "zpool list -H -o name")
+    nfs_node_notify_consumers "${notify[@]}"
     (( fails == 0 ))
+}
+
+# nfs_node_clients <export-json> — "<consumer> <access> <address>" per consumer that
+# belongs in the export's client list (D5 layer 3, D16): granted, deployed, mounting
+# this share, and not being deleted (NFS_EXCLUDE_CONSUMERS). Never a grant alone. An
+# address that does not resolve yet prints as "-".
+nfs_node_clients() {
+    local e="$1" name c grant a
+    name="$(jq -r .name <<< "${e}")"
+    while IFS=$'\t' read -r c grant; do
+        [[ -n "${c}" ]] || continue
+        [[ " ${NFS_EXCLUDE_CONSUMERS:-} " == *" ${c} "* ]] && continue
+        nfs_is_instance "${c}" || continue
+        nfs_mounts_share "${c}" "${name}" || continue
+        a="$(nfs_consumer_address "${c}")"
+        printf '%s %s %s\n' "${c}" "${grant}" "${a:--}"
+    done < <(jq -r '.grants // [] | .[] | "\(.consumer)\t\(.access // "ro")"' <<< "${e}")
+}
+
+# nfs_node_expected_share <export-json> — the sharenfs value the export should carry
+# now; the reconcile sets it, and the node's test compares the live value with it.
+nfs_node_expected_share() {
+    local e="$1" uid gid rw="" ro="" c grant a
+    uid="$(jq -r '.owner.uid // empty' <<< "${e}")"; gid="$(jq -r '.owner.gid // empty' <<< "${e}")"
+    while read -r c grant a; do
+        [[ -n "${c}" && "${a}" != "-" ]] || continue
+        if [[ "${grant}" == "rw" ]]; then rw+=" ${a}"; else ro+=" ${a}"; fi
+    done < <(nfs_node_clients "${e}")
+    nfs_render_sharenfs "${uid}" "${gid}" "${rw}" "${ro}"
+}
+
+# nfs_alias_target — the Host this node's share aliases follow: its address, split
+# into the host label and the domain dns-manager wants. rc 1 for an address that is
+# not an FQDN (a CNAME cannot follow an IP).
+nfs_alias_target() {
+    [[ "${ADDRESS}" == *.* && ! "${ADDRESS}" =~ ^[0-9.]+$ ]] || return 1
+    printf '%s %s\n' "${ADDRESS%%.*}" "${ADDRESS#*.}"
+}
+
+# nfs_alias_list — "alias target" pairs from dns-manager, cached for one reconcile.
+nfs_alias_list() {
+    if [[ -z "${NFS_ALIAS_CACHE+set}" ]]; then
+        NFS_ALIAS_CACHE="$(dns-manager --no-ssl-verify alias list 2>/dev/null \
+            | awk '$2 == "->" {print $1, $3}')"
+    fi
+    printf '%s\n' "${NFS_ALIAS_CACHE}"
+}
+
+# nfs_node_ensure_alias <share> — the share alias nfs-<share>.mgmt.internal is a
+# CNAME of this node (D2b). Re-pointed when it follows another Host (the share
+# moved here); created when absent.
+nfs_node_ensure_alias() {
+    local share="$1" alias host domain cur
+    alias="$(nfs_share_alias "${share}")"
+    read -r host domain < <(nfs_alias_target) \
+        || { error "  export ${share}: ${INSTANCE}'s address '${ADDRESS}' is not an FQDN — the share alias cannot follow it"; return 1; }
+    cur="$(nfs_alias_list | awk -v a="${alias}" '$1 == a {print $2}')"
+    [[ "${cur}" == "${host}.${domain}" ]] && return 0
+    [[ -n "${cur}" ]] && dns-manager --no-ssl-verify alias delete "${alias}" >/dev/null 2>&1
+    dns-manager --no-ssl-verify alias add "${alias}" "${host}" "${domain}" >/dev/null \
+        || { error "  export ${share}: could not create the share alias ${alias}"; return 1; }
+    unset NFS_ALIAS_CACHE
+    info "  ${GN}✓${CL} ${alias} → ${host}.${domain}${cur:+ (was ${cur})}"
+}
+
+# nfs_node_drop_alias <share> — remove the share alias, but only while it still
+# follows this node: once the share has moved, the alias is the new Host's.
+nfs_node_drop_alias() {
+    local alias host domain cur
+    alias="$(nfs_share_alias "$1")"
+    read -r host domain < <(nfs_alias_target) || return 0
+    cur="$(nfs_alias_list | awk -v a="${alias}" '$1 == a {print $2}')"
+    [[ "${cur}" == "${host}.${domain}" ]] || return 0
+    dns-manager --no-ssl-verify alias delete "${alias}" >/dev/null 2>&1 \
+        && { unset NFS_ALIAS_CACHE; info "  ${alias}: removed with its export"; }
+}
+
+# nfs_node_notify_consumers <consumer...> — run the service's update for consumers
+# a share just became available to (D11). Not from inside a consumer's own service
+# run (NFS_NO_REVERSE), which would recurse. The consent a migration needs travels
+# in TAPPAAS_ALLOW_DISRUPTION, as reconcile passes it.
+nfs_node_notify_consumers() {
+    [[ "$#" -gt 0 && -z "${NFS_NO_REVERSE:-}" ]] || return 0
+    local c svc
+    svc="$(cd "$(dirname "${BASH_SOURCE[0]}")/../services/nfs" && pwd)/update-service.sh"
+    for c in $(printf '%s\n' "$@" | sort -u); do
+        info "  ${c}: a share became available to it — running its pvehost:nfs update"
+        NFS_NO_REVERSE=1 "${svc}" "${c}" || warn "  ${c}: its pvehost:nfs update failed (above); the next sweep retries"
+    done
 }

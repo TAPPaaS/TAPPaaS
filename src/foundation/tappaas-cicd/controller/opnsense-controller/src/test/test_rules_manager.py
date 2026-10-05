@@ -1565,12 +1565,12 @@ class TestProviderInstance(unittest.TestCase):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# ADR-029 D5 layer 2 — the path to an NFS server is derived from the mounts
+# ADR-029 v0.8 D5 layer 2 — the path to a share is derived from the mounts
 # ─────────────────────────────────────────────────────────────────────────────
 #
-# A consumer's pvehost:nfs mounts become host-to-host egress rules, joined to its
-# declared egress so aliases, verify, prune and removal treat them like any rule
-# the module owns. Same zone → no rule; never authored twice (#766).
+# A consumer's pvehost:nfs mounts become host-to-host egress rules to the share
+# alias nfs-<share>.mgmt.internal, so a share that moves keeps its rule. None for
+# a pending mount, an ungranted share, or the consumer's own zone (#766, #772).
 
 
 class TestNfsDerivedEgress(unittest.TestCase):
@@ -1583,9 +1583,10 @@ class TestNfsDerivedEgress(unittest.TestCase):
                                      "backup": {"enabled": True},
                                      "grants": [{"consumer": "jellyfin", "access": "rw"}]}]}}
         nas = {"kind": "machine", "management": "unmanaged", "zone0": "home",
-               "address": "10.3.10.50",
+               "address": "nas1.home.internal",
                "nfs": {"exports": [{"name": "old", "path": "/v", "version": "3",
-                                    "v3Ports": {"mountd": 892, "nlockmgr": 32803, "statd": 662}}]}}
+                                    "v3Ports": {"mountd": 892, "nlockmgr": 32803, "statd": 662},
+                                    "grants": [{"consumer": "jellyfin"}]}]}}
         (self.dir / "tappaas1.json").write_text(json.dumps(node))
         (self.dir / "nas1.json").write_text(json.dumps(nas))
         self.mgr = _make_manager(modules_dir=self.dir)
@@ -1593,54 +1594,65 @@ class TestNfsDerivedEgress(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def _consumer(self, mounts, zone="srvWork", deps=("cluster:vm", "pvehost:nfs"), egress=None):
-        data = {"vmname": "jellyfin", "zone0": zone, "dependsOn": list(deps),
+    def _consumer(self, mounts, zone="srvWork", deps=("cluster:vm", "pvehost:nfs"), egress=None, name="jellyfin"):
+        data = {"vmname": name, "zone0": zone, "dependsOn": list(deps),
                 "config": {"pvehost:nfs": {"mounts": mounts}}}
         if egress is not None:
             data["egress"] = egress
-        (self.dir / "jellyfin.json").write_text(json.dumps(data))
-        return load_module(self.dir, "jellyfin")
+        (self.dir / f"{name}.json").write_text(json.dumps(data))
+        return load_module(self.dir, name)
 
-    def test_a_node_share_is_one_tcp_2049_rule_to_the_node(self):
-        mod = self._consumer([{"path": "/m", "share": "tappaas1:media", "access": "rw"}])
+    def test_a_share_is_one_tcp_2049_rule_to_its_alias(self):
+        mod = self._consumer([{"path": "/m", "share": "media", "access": "rw"}])
         rules, errors = self.mgr._compile(mod)
         self.assertEqual(errors, [])
-        nfs = [r for r in rules if r.peer == "tappaas1"]
-        self.assertEqual([(r.port, r.protocol, r.direction) for r in nfs], [(2049, "TCP", "egress")])
-        self.assertEqual(nfs[0].destination_net, "tm_tappaas1")
-        self.assertEqual(nfs[0].source_net, "tm_jellyfin")
+        nfs = [r for r in rules if r.direction == "egress"]
+        self.assertEqual([(r.port, r.protocol) for r in nfs], [(2049, "TCP")])
+        self.assertEqual(nfs[0].destination_net, "nfs_share_media")
+        self.assertEqual(mod.aliases["nfs_share_media"]["addresses"], ["nfs-media.mgmt.internal"])
 
-    def test_a_machine_alias_is_its_recorded_address(self):
-        mod = self._consumer([{"path": "/m", "share": "tappaas1:media"}])
-        aliases = self.mgr._module_aliases_to_provision(mod)
-        self.assertEqual(aliases["tm_tappaas1"].content, ["tappaas1.mgmt.internal"])
+    def test_the_rule_does_not_name_the_server(self):
+        mod = self._consumer([{"path": "/m", "share": "media"}])
+        self.assertNotIn("tappaas1", json.dumps(mod.egress) + json.dumps(mod.aliases))
 
-    def test_two_mounts_from_one_server_are_one_rule(self):
-        mod = self._consumer([{"path": "/a", "share": "tappaas1:media"},
-                              {"path": "/b", "share": "tappaas1:media"}])
+    def test_two_mounts_of_one_share_are_one_rule(self):
+        mod = self._consumer([{"path": "/a", "share": "media", "subdir": "x"},
+                              {"path": "/b", "share": "media", "subdir": "y"}])
         rules, _ = self.mgr._compile(mod)
-        self.assertEqual(len([r for r in rules if r.peer == "tappaas1"]), 1)
+        self.assertEqual(len([r for r in rules if r.direction == "egress"]), 1)
+
+    def test_a_pending_mount_has_no_rule(self):
+        mod = self._consumer([{"path": "/m", "share": "nope"}])
+        self.assertEqual(mod.egress, [])
+
+    def test_an_ungranted_share_has_no_rule(self):
+        mod = self._consumer([{"path": "/m", "share": "media"}], name="stranger")
+        self.assertEqual(mod.egress, [])
+
+    def test_a_share_declared_twice_has_no_rule(self):
+        (self.dir / "tappaas2.json").write_text((self.dir / "tappaas1.json").read_text())
+        mod = self._consumer([{"path": "/m", "share": "media"}])
+        self.assertEqual(mod.egress, [])
 
     def test_same_zone_needs_no_rule(self):
-        mod = self._consumer([{"path": "/m", "share": "tappaas1:media"}], zone="mgmt")
+        mod = self._consumer([{"path": "/m", "share": "media"}], zone="mgmt")
         self.assertEqual(mod.egress, [])
 
     def test_without_the_dependency_nothing_is_derived(self):
-        mod = self._consumer([{"path": "/m", "share": "tappaas1:media"}], deps=("cluster:vm",))
+        mod = self._consumer([{"path": "/m", "share": "media"}], deps=("cluster:vm",))
         self.assertEqual(mod.egress, [])
 
     def test_declared_egress_is_kept(self):
-        mod = self._consumer([{"path": "/m", "share": "tappaas1:media"}],
+        mod = self._consumer([{"path": "/m", "share": "media"}],
                              egress=[{"to": "internet", "ports": [443], "description": "updates"}])
-        self.assertEqual([e["to"] for e in mod.egress], ["internet", "tappaas1"])
+        self.assertEqual([e["to"] for e in mod.egress], ["internet", "alias:nfs_share_media"])
 
     def test_nfsv3_on_a_registered_server_opens_its_pinned_ports(self):
-        mod = self._consumer([{"path": "/o", "share": "nas1:old"}])
-        entry = next(e for e in mod.egress if e["to"] == "nas1")
+        mod = self._consumer([{"path": "/o", "share": "old"}])
+        entry = mod.egress[0]
         self.assertEqual(entry["protocol"], "TCP/UDP")
         self.assertEqual(entry["ports"], [111, 2049, 892, 32803, 662])
-        aliases = self.mgr._module_aliases_to_provision(mod)
-        self.assertEqual(aliases["tm_nas1"].content, ["10.3.10.50"])
+        self.assertEqual(mod.aliases["nfs_share_old"]["addresses"], ["nfs-old.mgmt.internal"])
 
     def test_an_unmodelled_server_gets_a_module_local_alias(self):
         mod = self._consumer([{"path": "/f", "share": "files.partner.example:/exports/shared"}])
@@ -1650,12 +1662,45 @@ class TestNfsDerivedEgress(unittest.TestCase):
         self.assertEqual(r.destination_net, "nfs_files_partner_example")
         self.assertEqual(mod.aliases["nfs_files_partner_example"]["addresses"], ["files.partner.example"])
 
-    def test_a_long_host_name_still_makes_a_valid_alias(self):
+    def test_a_long_name_still_makes_a_valid_alias(self):
         mod = self._consumer([{"path": "/f", "share": "a-very-long-server-name.storage.partner.example:/x"}])
         name = next(iter(mod.aliases))
         self.assertLessEqual(len(name), 32)
         self.assertRegex(name, r"^[A-Za-z0-9_]+$")
 
-    def test_a_missing_instance_is_left_to_the_service_check(self):
-        mod = self._consumer([{"path": "/m", "share": "ghost:media"}])
+    def test_the_withdrawn_instance_form_derives_nothing(self):
+        mod = self._consumer([{"path": "/m", "share": "tappaas1:media"}])
         self.assertEqual(mod.egress, [])
+
+
+class TestDropDerivedAliases(unittest.TestCase):
+    """A share's alias leaves with the last rule that used it (ADR-029 v0.8).
+
+    Once a share is undeclared, the consumer's config no longer derives its alias,
+    so removal and prune find it through the deleted rule's description instead.
+    """
+
+    def setUp(self):
+        self.mgr = _make_manager(modules_dir=Path(tempfile.gettempdir()))
+        self.mgr._delete_alias = MagicMock(return_value=True)
+        self.orphan = True
+        self.mgr._alias_is_orphan = lambda name, exclude_module: self.orphan
+
+    def test_the_alias_of_a_deleted_nfs_rule_goes(self):
+        n = self.mgr._drop_derived_aliases("jf", ["tappaas-module:jf:egress:alias:nfs_share_media:2049 | pvehost:nfs"])
+        self.assertEqual(n, 1)
+        self.mgr._delete_alias.assert_called_once_with("nfs_share_media")
+
+    def test_an_alias_another_module_still_uses_stays(self):
+        self.orphan = False
+        self.assertEqual(self.mgr._drop_derived_aliases("jf", ["tappaas-module:jf:egress:alias:nfs_share_media:2049"]), 0)
+        self.mgr._delete_alias.assert_not_called()
+
+    def test_an_alias_the_config_still_derives_stays(self):
+        self.assertEqual(self.mgr._drop_derived_aliases(
+            "jf", ["tappaas-module:jf:egress:alias:nfs_share_media:2049"], keep={"nfs_share_media"}), 0)
+
+    def test_other_aliases_are_not_this_rules_business(self):
+        self.assertEqual(self.mgr._drop_derived_aliases(
+            "jf", ["tappaas-module:jf:egress:alias:llm_providers:443", "tappaas-module:jf:ingress:dmz:80"]), 0)
+        self.mgr._delete_alias.assert_not_called()

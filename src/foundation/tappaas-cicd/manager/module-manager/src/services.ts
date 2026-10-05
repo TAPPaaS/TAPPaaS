@@ -24,7 +24,7 @@
 // filesystem lookups arrive through an injectable ServiceFs) so the planning and
 // rendering logic is unit-testable offline (test/unit/inspect.test.ts).
 
-import { existsSync, readFileSync } from "fs";
+import { existsSync, readFileSync, readdirSync } from "fs";
 import { join } from "path";
 import { captureResult } from "../../../lib/ts/src/exec";
 import { getModuleDir, resolveProviderModule } from "./config";
@@ -73,6 +73,9 @@ export interface ServiceFs {
   // against the server's exports). Optional, so existing fakes need not grow it;
   // without it those checks are skipped.
   readConfig?(instance: string): Record<string, unknown> | null;
+  // Every deployed instance's name. With readConfig, it lets a check find which
+  // instance declares something — pvehost:nfs finds a share by name (ADR-029 v0.8).
+  listInstances?(): string[];
 }
 
 export function realServiceFs(configDir: string): ServiceFs {
@@ -87,6 +90,16 @@ export function realServiceFs(configDir: string): ServiceFs {
         return readFileSync(p, "utf8");
       } catch {
         return null;
+      }
+    },
+    listInstances: () => {
+      try {
+        return readdirSync(configDir)
+          .filter((f) => f.endsWith(".json"))
+          .map((f) => f.slice(0, -".json".length))
+          .sort();
+      } catch {
+        return [];
       }
     },
     readConfig: (instance) => {

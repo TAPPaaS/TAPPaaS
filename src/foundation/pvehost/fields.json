@@ -5,7 +5,7 @@
   "_note": "MODULE TIER (ADR-029 D1). A server describing its own NFS shares consumes nothing, so its exports are a module-tier object of its own rather than a config.\"pvehost:nfs\" block (that block is the consumer's: its mounts). A cluster node builds what it declares here; a registered, unmanaged server (ADR-029 D2a) declares descriptors of what already exists.",
   "fields": {
     "nfs": {
-      "description": "The NFS shares this machine serves (ADR-029 D4, D2a). On a cluster node each exports[] entry becomes the dataset <pool>/tappaas-nfs/<name>, shared through ZFS sharenfs to the consumers it grants; on a registered, unmanaged server each entry describes a share that already exists, by path.",
+      "description": "The NFS shares this machine serves (ADR-029 D4, D2a). Share names are unique across the Site (v0.8). On a cluster node each exports[] entry becomes the dataset <pool>/tappaas-nfs/<name>, mounted at /tappaas-nfs/<name>, reached as nfs-<name>.mgmt.internal and shared through ZFS sharenfs to the consumers that are granted and mount it; on a registered, unmanaged server each entry describes a share that already exists, by path.",
       "type": "object",
       "requiredBy": [],
       "usedBy": [

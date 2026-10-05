@@ -436,7 +436,7 @@ def load_module(modules_dir: Path, name: str) -> ModuleSpec:
     # 2). They are derived from its pvehost:nfs mounts, never authored twice, and
     # join the declared egress so alias provisioning, verify, prune and removal
     # treat them like any other rule the module owns.
-    nfs_egress, nfs_aliases = nfs_derived_egress(modules_dir, data)
+    nfs_egress, nfs_aliases = nfs_derived_egress(modules_dir, data, name)
     return ModuleSpec(
         vmname=data.get("vmname", name),
         zone0=data.get("zone0", ""),
@@ -466,13 +466,11 @@ def load_module(modules_dir: Path, name: str) -> ModuleSpec:
 
 
 NFS_COORDINATE = "pvehost:nfs"
+NFS_ALIAS_DOMAIN = "mgmt.internal"
 
 
 def _nfs_alias_name(host: str) -> str:
-    """A module-local host alias for an unmodelled NFS server.
-
-    OPNsense alias names take [A-Za-z0-9_] and at most 32 characters.
-    """
+    """A module-local host alias name: [A-Za-z0-9_], at most 32 characters (OPNsense)."""
     safe = "".join(c if c.isalnum() else "_" for c in host)
     name = f"nfs_{safe}"
     if len(name) > 32:
@@ -480,63 +478,91 @@ def _nfs_alias_name(host: str) -> str:
     return name
 
 
-def nfs_derived_egress(modules_dir: Path, data: dict) -> tuple[list[dict], dict[str, dict]]:
-    """The egress a consumer's pvehost:nfs mounts need (ADR-029 D5 layer 2, #766).
+def _nfs_share_server(modules_dir: Path, share: str) -> tuple[dict, dict] | None:
+    """The one deployed instance declaring an export named ``share``, and that export.
 
-    One entry per server the module mounts from, host to host:
-      * a share on a module instance (``<instance>:<name>``) → to that instance,
-        tcp/2049; NFSv3 on a registered, unmanaged server adds rpcbind (111) and
-        its pinned v3Ports, tcp and udp (D2a);
-      * an unmodelled server (``<host>:/<path>``) → a module-local host alias,
-        tcp/2049.
-    None for a server in the consumer's own zone: that traffic never crosses the
-    firewall. A mount whose instance is missing is skipped here — the service's
-    own check refuses it with a reason.
+    None when no instance declares it (a pending mount, ADR-029 D11) or more than
+    one does (an error the service and validate report; no rule is guessed).
+    """
+    found: list[tuple[dict, dict]] = []
+    for f in sorted(modules_dir.glob("*.json")):
+        try:
+            raw = json.loads(f.read_text())
+        except (OSError, ValueError):
+            continue
+        if not isinstance(raw, dict):
+            continue
+        for e in ((raw.get("nfs") or {}).get("exports") or []):
+            if isinstance(e, dict) and e.get("name") == share:
+                found.append((raw, e))
+    return found[0] if len(found) == 1 else None
+
+
+def nfs_derived_egress(modules_dir: Path, data: dict, instance: str = "") -> tuple[list[dict], dict[str, dict]]:
+    """The egress a consumer's pvehost:nfs mounts need (ADR-029 v0.8 D5 layer 2).
+
+    One entry per share the module mounts, host to host:
+      * a named share → a module-local host alias holding the share alias
+        ``nfs-<share>.mgmt.internal`` (D2b), tcp/2049 — so a share that moves to
+        another server keeps its rule; NFSv3 on a registered, unmanaged server
+        adds rpcbind (111) and its pinned v3Ports, tcp and udp (D2a);
+      * an unmodelled server (``<host>:/<path>``) → a module-local host alias of
+        that host, tcp/2049.
+    None for a pending mount (no server declares the share), a share that does not
+    grant the consumer (refused elsewhere), or a server in the consumer's own zone
+    (that traffic never crosses the firewall).
     """
     deps = list(data.get("dependsOn") or []) + list(data.get("integratesWith") or [])
     if NFS_COORDINATE not in deps:
         return [], {}
     mounts = ((data.get("config") or {}).get(NFS_COORDINATE) or {}).get("mounts") or []
     zone = data.get("zone0", "")
+    consumer = instance or data.get("vmname", "")
     seen: dict[tuple[str, str], dict] = {}
     aliases: dict[str, dict] = {}
     for m in mounts:
         share = m.get("share", "") if isinstance(m, dict) else ""
-        host, _, rest = share.partition(":")
-        if not host or not rest:
+        if not share:
             continue
-        if rest.startswith("/"):
+        if ":" in share:
+            host, _, path = share.partition(":")
+            if not host or not path.startswith("/"):
+                continue
             alias = _nfs_alias_name(host)
             aliases[alias] = {
                 "type": "host",
                 "addresses": [host],
                 "description": f"pvehost:nfs server {host} (unmodelled, ADR-029 D2)",
             }
-            to, ports, proto = f"alias:{alias}", [2049], "TCP"
+            label, ports, proto = host, [2049], "TCP"
         else:
-            path = modules_dir / f"{host}.json"
-            try:
-                inst = json.loads(path.read_text())
-            except (OSError, ValueError):
+            found = _nfs_share_server(modules_dir, share)
+            if found is None:
                 continue
-            if inst.get("zone0", "") == zone:
+            server, export = found
+            if server.get("zone0", "") == zone:
                 continue
-            export = next(
-                (e for e in ((inst.get("nfs") or {}).get("exports") or [])
-                 if isinstance(e, dict) and e.get("name") == rest),
-                {},
-            )
-            to, ports, proto = host, [2049], "TCP"
-            if inst.get("management") == "unmanaged" and str(export.get("version", "4.2")) == "3":
+            granted = {g.get("consumer") for g in (export.get("grants") or []) if isinstance(g, dict)}
+            if consumer and consumer not in granted:
+                continue
+            fqdn = f"nfs-{share}.{NFS_ALIAS_DOMAIN}"
+            alias = _nfs_alias_name(f"share_{share}")
+            aliases[alias] = {
+                "type": "host",
+                "addresses": [fqdn],
+                "description": f"pvehost:nfs share {share} — follows its server (ADR-029 D2b)",
+            }
+            label, ports, proto = f"share {share}", [2049], "TCP"
+            if server.get("management") == "unmanaged" and str(export.get("version", "4.2")) == "3":
                 v3 = export.get("v3Ports") or {}
                 ports = [111, 2049] + [v3[k] for k in ("mountd", "nlockmgr", "statd") if k in v3]
                 proto = "TCP/UDP"
-        key = (to, proto)
+        key = (alias, proto)
         entry = seen.setdefault(key, {
-            "to": to,
+            "to": f"alias:{alias}",
             "ports": [],
             "protocol": proto,
-            "description": f"pvehost:nfs to {host} (ADR-029)",
+            "description": f"pvehost:nfs to {label} (ADR-029)",
         })
         for p in ports:
             if p not in entry["ports"]:
@@ -655,11 +681,13 @@ class RulesManager:
             f"{p}:{module.vmname}:" for p in MODULE_RULE_PREFIXES
         )
         revision = self.fw.create_savepoint()
+        deleted_descs: list[str] = []
         try:
             for rule in existing:
                 if rule.description.startswith(owned_prefixes):
                     self.fw.delete_rule_by_uuid(rule.uuid, apply=False)
                     result.deleted += 1
+                    deleted_descs.append(rule.description)
             if result.deleted:
                 self.fw.apply_changes()
         except Exception:
@@ -670,6 +698,9 @@ class RulesManager:
         for alias_name in module.aliases.keys():
             if self._delete_alias(alias_name):
                 result.aliases_removed += 1
+        # …and a derived NFS alias the current config no longer names (ADR-029).
+        result.aliases_removed += self._drop_derived_aliases(
+            module.vmname, deleted_descs, keep=set(module.aliases))
 
         # Remove the FQDN alias for this module if no other module's rules still
         # reference it (refcount via description-prefix scan).
@@ -907,6 +938,7 @@ class RulesManager:
                 if ((res or {}).get("result") or {}).get("changed"):
                     result.applied += 1
 
+            pruned: list[str] = []
             if prune:
                 for live_rule in existing:
                     # Compare on canonical identity — the live description carries
@@ -914,6 +946,7 @@ class RulesManager:
                     if _canonical_part(live_rule.description) not in desired_descs:
                         self.fw.delete_rule_by_uuid(live_rule.uuid, apply=False)
                         result.deleted += 1
+                        pruned.append(live_rule.description)
 
             # A filter reload per module per update, for rules that did not
             # change, is churn on the firewall; reload only when something did.
@@ -927,8 +960,30 @@ class RulesManager:
             self._revert(revision)
             raise
 
+        self._drop_derived_aliases(module.vmname, pruned, keep=set(module.aliases))
         self._write_sequence_map(module, rules)
         return result
+
+    def _drop_derived_aliases(self, vmname: str, descriptions: list[str], keep: set[str] | None = None) -> int:
+        """Delete the derived NFS aliases the given (deleted) rules pointed at.
+
+        A share's alias (``nfs_*``, ADR-029) is derived from the consumer's mounts
+        at load time. Once the share is undeclared the derivation no longer names
+        it, so a removal or prune that only deletes ``module.aliases`` would leave
+        it behind. The deleted rule's own description still says which alias it
+        used; that alias goes too, unless another module's rule still uses it.
+        """
+        removed = 0
+        for desc in descriptions:
+            parts = _canonical_part(desc).split(":")
+            # tappaas-module:<vm>:egress:alias:<name>:<port>
+            if len(parts) >= 6 and parts[3] == "alias" and parts[4].startswith("nfs_"):
+                name = parts[4]
+                if (keep and name in keep) or not self._alias_is_orphan(name, exclude_module=vmname):
+                    continue
+                if self._delete_alias(name):
+                    removed += 1
+        return removed
 
     # ── Compilation ──────────────────────────────────────────────────────
 
