@@ -39,14 +39,14 @@ pool through `pvehost:nfs`
   baseline). The mount is `nofail` + automount: Jellyfin starts even while the
   server is down.
 
-**No share yet?** Jellyfin installs anyway: the mount is *pending* and `/media`
-is a local directory on the VM's disk. When the operator later declares the
-share, the service **migrates** what `/media` holds into it — copied while
-Jellyfin runs, `jellyfin.service` stopped for the final pass, the old directory
-kept as `/media.pre-nfs` until the next healthy update — and mounts it. The
-migration stops Jellyfin, so it needs consent: `rebootOk` on the module, or an
-update run with `--allow-disruption`; without it the update reports *migration
-pending*.
+**No share yet?** Jellyfin installs and works anyway, but the media then lives
+in `/media` **on the VM's own 32G disk** (on `tanka1`) — a stopgap, not a home
+for a library. Declare the `media` share for real use. When it arrives, the next
+update **moves** what `/media` holds into it — copied while Jellyfin runs,
+`jellyfin.service` stopped for the final pass, the old directory kept as
+`/media.pre-nfs` until the next healthy update — and mounts it. The module ships
+with `rebootOk: true`, so that happens without anyone present; Jellyfin is down
+for the final copy only.
 
 Why: media is large and can be re-ripped or re-downloaded. It does not belong on
 the replicated `tanka` tier or in the VM's backup, and it should outlive the VM
@@ -59,8 +59,8 @@ reserved uid.
 
 ## Media Folders
 
-`update.sh` creates the library folders once the share is mounted (not while it
-is pending — an empty `/media` lets the share mount later without a migration):
+`update.sh` creates the library folders — on the share, or on the VM's disk while
+the share is pending:
 
 ```
 /media/
@@ -71,9 +71,8 @@ is pending — an empty `/media` lets the share mount later without a migration)
   Audiobooks/       Jellyfin library: Books/Audiobooks
 ```
 
-Another module that needs the library — Immich reading `Photos/` as an External
-Library, a download client writing new media — gets its own grant on the share
-`media` and mounts it itself (e.g. `subdir: "jellyfin/Photos"`, `ro`). It never
+Another module that needs the library — a download client writing new media,
+say — gets its own grant on the share `media` and mounts it itself. It never
 goes through Jellyfin. `subdir` is organisation, not isolation: every consumer
 granted `media` can reach all of it (ADR-029 D15).
 

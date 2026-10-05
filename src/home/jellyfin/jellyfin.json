@@ -10,6 +10,7 @@
   "vmid": 360,
   "vmtag": "TAPPaaS,App,Media",
   "node": "tappaas1",
+  "rebootOk": true,
   "dependsOn": [
     "cluster:vm",
     "templates:nixos",

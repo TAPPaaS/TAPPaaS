@@ -20,9 +20,10 @@ it by name — `jellyfin.json` is the same on every site and never names a node:
 ]}}
 ```
 
-**Installing without a share** works: the mount is *pending*, `/media` is a
-local directory on the VM's disk, and `validate` notes that the share `media`
-is not declared.
+**Installing without a share** works, but the media then lives in `/media` **on
+the VM's own 32G disk** — enough to try Jellyfin, not for a library. The mount
+is *pending*, the library folders are created locally, and `validate` notes
+that the share `media` is not declared.
 
 **Declaring the share** — on the node that has the `tankb` pool, in its config
 (`config/<node>.json`, e.g. `config/tappaas1.json`):
@@ -46,19 +47,19 @@ Media is re-creatable: keep its backup infrequent and short-lived — per-share
 schedule and retention are not built yet (#772, WP6), so today the choice is on
 or off.
 
-**When the share arrives after Jellyfin** and `/media` already holds media, the
-update migrates it: copies `/media` into `media/jellyfin` while Jellyfin runs,
-stops `jellyfin.service`, copies the difference, keeps the old directory as
-`/media.pre-nfs`, mounts the share and starts Jellyfin. That stops Jellyfin, so
-it runs only with consent — `rebootOk: true` on the module, or
+**When the share arrives after Jellyfin**, the update the node triggers moves
+what `/media` holds into it: copies `/media` into `media/jellyfin` while
+Jellyfin runs, stops `jellyfin.service`, copies the difference, keeps the old
+directory as `/media.pre-nfs` (removed by the next healthy update), mounts the
+share and starts Jellyfin. Jellyfin ships with `rebootOk: true`, which is the
+consent a migration needs, so this happens unattended. A site that sets
+`rebootOk: false` gets *migration pending* instead, and runs it when convenient:
 
 ```bash
 update-module.sh jellyfin --allow-disruption
 ```
 
-— otherwise the update reports *migration pending* and changes nothing. A share
-that already holds data is never merged into. An empty `/media` needs no
-migration: the share is simply mounted.
+A share that already holds data is never merged into.
 
 Moving the share to another node or pool later changes only the alias —
 Jellyfin's config, mount and firewall rule stay as they are. `rw` because
@@ -72,7 +73,7 @@ a site that keeps metadata inside the guest can grant and mount `ro`.
 | `cores` / `memory` | 4 / 2048 | |
 | `diskSize` / `storage` | 32G / `tanka1` | The VM only: OS and Jellyfin's own data. The media is on the share — or on this disk while the share is pending |
 | `pvehost:nfs` `mounts` | `/media` ← share `media`, subdir `jellyfin`, `rw` | See Media share |
-| `rebootOk` | not set | Set `true` to let an update migrate `/media` into a newly available share without `--allow-disruption` |
+| `rebootOk` | `true` | Lets an unattended update restart Jellyfin — to move `/media` into a newly declared share, or for a change that needs a reboot. `false`: such changes wait for `--allow-disruption` |
 | `proxyAllowedZones` | `home, netbird, internet` | Drop `internet` for a private-only deployment |
 
 ## Install
@@ -93,7 +94,8 @@ Duration: ~5–10 minutes (NixOS clone + rebuild).
 3. Check the mount against the share's grant and write it into the guest — or
    record it as pending when no server declares `media` (`pvehost:nfs`)
 4. Apply `jellyfin.nix` via `update.sh` — the rebuild mounts `/media` — and
-   create the library folders on the share
+   create the library folders (on the share, or on the VM's disk while it is
+   pending)
 5. Bootstrap the admin, `stream` and `local` accounts and print the web UI URL
 
 ## First-Time Setup

@@ -64,17 +64,14 @@ else
     fail "Jellyfin /health returned HTTP ${HTTP_CODE}"
 fi
 
-# ── Tests 3-5: Media share (pvehost:nfs) ──────────────────────────────────────
-# /media is the share "media" (subdir jellyfin), not a disk in this VM. While no
-# server declares that share the mount is PENDING (ADR-029 v0.8): /media is a
-# local directory, nothing is mounted, and that is a valid state — the share
-# checks are skipped, not failed. A mount in the guest's fstab means the share is
-# available, and then it must be mounted and writable.
+# ── Test 3: Media share (pvehost:nfs) ─────────────────────────────────────────
+# /media is the share "media" (subdir jellyfin) once a server declares it. Until
+# then the mount is PENDING (ADR-029 v0.8): /media is a directory on this VM's
+# disk — a valid state, so this check is skipped, not failed. A mount in the
+# guest's fstab means the share is available, and then it must be mounted.
 header "Test 3: Media Share"
 if [[ "$(remote "findmnt -n --fstab /media >/dev/null && echo yes || echo no")" != "yes" ]]; then
-    skip "media share not mounted: pending (no server declares 'media') or migration awaiting consent — pvehost:nfs test-service says which"
-    skip "library folders: created once the share is mounted"
-    skip "share writability: nothing mounted"
+    skip "media share not mounted: pending (no server declares 'media') or migration awaiting consent — /media is on this VM's disk (pvehost:nfs test-service says which)"
 else
     # `ls` triggers the automount; findmnt then says whether NFS is mounted there.
     MEDIA_SRC=$(remote "ls /media >/dev/null 2>&1; findmnt -n -t nfs,nfs4 -o SOURCE /media 2>/dev/null || true")
@@ -84,24 +81,26 @@ else
     else
         fail "/media is declared as the media share but not mounted — is its server up? (update-module.sh <node>, then update-module.sh jellyfin)"
     fi
+fi
 
-    header "Test 4: Library Folders"
-    FOLDERS_OK=$(remote "test -d /media/Movies && test -d /media/TV && test -d /media/Music && echo yes || echo no")
-    if [[ "${FOLDERS_OK}" == "yes" ]]; then
-        pass "Library folders exist (Movies, TV, Music)"
-    else
-        fail "One or more library folders missing — update.sh creates them once /media is mounted"
-    fi
+# ── Test 4: Library folders (share or local) ──────────────────────────────────
+header "Test 4: Library Folders"
+FOLDERS_OK=$(remote "test -d /media/Movies && test -d /media/TV && test -d /media/Music && echo yes || echo no")
+if [[ "${FOLDERS_OK}" == "yes" ]]; then
+    pass "Library folders exist (Movies, TV, Music)"
+else
+    fail "One or more library folders missing — update.sh creates them"
+fi
 
-    # Every request is squashed to the export's owner (ADR-029 D7), so the
-    # jellyfin user writes there although the files belong to another uid.
-    header "Test 5: Share Writable by Jellyfin"
-    WRITE_OK=$(remote "f=/media/.tappaas-write-test.\$\$; sudo -u jellyfin touch \"\$f\" 2>/dev/null && sudo -u jellyfin rm -f \"\$f\" && echo yes || echo no")
-    if [[ "${WRITE_OK}" == "yes" ]]; then
-        pass "jellyfin can write to /media"
-    else
-        fail "jellyfin cannot write to /media — the share must grant jellyfin rw"
-    fi
+# ── Test 5: Jellyfin can write to /media ──────────────────────────────────────
+# On the share every request is squashed to its owner (ADR-029 D7), so the
+# jellyfin user writes there although the files belong to another uid.
+header "Test 5: /media Writable by Jellyfin"
+WRITE_OK=$(remote "f=/media/.tappaas-write-test.\$\$; sudo -u jellyfin touch \"\$f\" 2>/dev/null && sudo -u jellyfin rm -f \"\$f\" && echo yes || echo no")
+if [[ "${WRITE_OK}" == "yes" ]]; then
+    pass "jellyfin can write to /media"
+else
+    fail "jellyfin cannot write to /media — on the share it must be granted rw"
 fi
 
 # ── Test 6: Disk usage ────────────────────────────────────────────────────────
