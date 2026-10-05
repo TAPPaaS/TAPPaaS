@@ -33,6 +33,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . /home/tappaas/bin/common-install-routines.sh
 . "${HERE}/pvehost-lib.sh"
 . "${HERE}/nfs-lib.sh"
+. "${HERE}/nfs-guest.sh"
 
 NODE="${1:?usage: test-nfs-deep.sh <node-instance>}"
 SHARE="nfsdeeptest"
@@ -48,7 +49,7 @@ step() { info "${BOLD}── $1${CL}"; }
 
 node_ssh()  { ssh -n -o BatchMode=yes -o ConnectTimeout=15 -o LogLevel=ERROR "root@$(nfs_instance_address_of "$1")" "${@:2}"; }
 nfs_instance_address_of() { jq -r '.address // empty' "${CFG}/$1.json"; }
-guest()     { tappaas_ssh_guest -o BatchMode=yes "tappaas@${FIX}.${ZONE}.internal" "$@"; }
+guest()     { tappaas_ssh_guest -o BatchMode=yes -o ConnectTimeout=15 "tappaas@${FIX}.${ZONE}.internal" "$@"; }
 set_export() {   # set_export <node> <json-or-null>: replace the test share's declaration
     local f="${CFG}/$1.json" tmp
     tmp="$(mktemp "${f}.XXXX")"
@@ -147,7 +148,14 @@ cp "${HERE}/../${FIX}/"* "${WORK}/fixture/${FIX}/"
 jq --argjson v "${VMID}" --arg n "${CNODE}" --arg z "${ZONE}" '.vmid = $v | .node = $n | .zone0 = $z' \
     "${HERE}/../${FIX}/${FIX}.json" > "${WORK}/fixture/${FIX}/${FIX}.json"
 ( cd "${WORK}/fixture/${FIX}" && /home/tappaas/bin/install-module.sh "${FIX}" ) > "${WORK}/install.log" 2>&1
-ok "the consumer installs with its share undeclared" "[ -f '${CFG}/${FIX}.json' ]"
+if [[ ! -f "${CFG}/${FIX}.json" ]]; then
+    # Nothing after this can run without the consumer; stop here and tear down
+    # rather than let every later step time out against a VM that is gone.
+    fail "the consumer installs with its share undeclared — the rest is skipped:"
+    grep -E "Error|✗" "${WORK}/install.log" | head -5 | sed 's/^/      /' >&2
+    exit 1
+fi
+pass "the consumer installs with its share undeclared"
 grep -q "pending" "${WORK}/install.log" && pass "the install reports the mount pending" || fail "the install reports the mount pending"
 ( cd "${WORK}/fixture/${FIX}" && /home/tappaas/bin/update-os.sh "${FIX}" "${VMID}" "${CNODE}" ) > "${WORK}/rebuild1.log" 2>&1 \
     || fail "rebuild after install (see ${WORK}/rebuild1.log)"

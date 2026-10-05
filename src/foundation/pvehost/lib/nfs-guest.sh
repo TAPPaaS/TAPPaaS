@@ -113,6 +113,20 @@ nfs_consent() {
     [[ "$(jq -r '.rebootOk // false' "${NFS_CONFIG_DIR}/$1.json" 2>/dev/null)" == "true" ]]
 }
 
+# nfs_guest_ready <target> [seconds] — wait until the guest takes our ssh AND runs
+# sudo without a password. A guest seconds old (the install's Step 5, right after
+# cluster:vm) can answer ssh while cloud-init has not yet given the tappaas user
+# its sudo rule — the same wait update-os.sh makes before it touches a guest
+# (wait_for_provisioning, #309). rc 1 after the timeout (default 300 s).
+nfs_guest_ready() {
+    local target="$1" limit="${2:-300}" waited=0
+    while ! tappaas_ssh_guest -n -o BatchMode=yes -o ConnectTimeout=10 "${target}" "sudo -n true" >/dev/null 2>&1; do
+        (( waited >= limit )) && return 1
+        (( waited == 0 )) && info "  waiting for ${target#*@} to accept ssh and passwordless sudo (cloud-init)..."
+        sleep 5; waited=$((waited + 5))
+    done
+}
+
 # nfs_guest_probe <path> <source> — a script for the guest that prints one line of
 # key=value facts about a mount point: mounted (the NFS source mounted there, or
 # empty), local (yes when the directory holds anything while not mounted),

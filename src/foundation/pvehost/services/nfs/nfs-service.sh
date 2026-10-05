@@ -90,9 +90,14 @@ nfs_service_ensure_subdir() {
     return 0
 }
 
-# nfs_guest_facts <target> <path> — key=value facts about a mount point in the guest.
+# nfs_guest_facts <target> <path> — key=value facts about a mount point in the guest,
+# or "unreachable=yes" when the guest does not answer. Never fails the caller: the
+# service scripts run under set -e, and a probe that failed used to end an install
+# without a word.
 nfs_guest_facts() {
-    nfs_guest_probe_script "$2" | tappaas_ssh_guest -o BatchMode=yes "$1" "sudo bash -s" 2>/dev/null | tail -1
+    local out
+    out="$(nfs_guest_probe_script "$2" | tappaas_ssh_guest -o BatchMode=yes -o ConnectTimeout=15 "$1" "sudo bash -s" 2>/dev/null | tail -1)" || true
+    [[ "${out}" == mounted=* ]] && printf '%s\n' "${out}" || printf 'unreachable=yes\n'
 }
 
 # nfs_fact <facts> <key>
@@ -115,6 +120,8 @@ nfs_service_converge() {
     target="$(nfs_consumer_target "${consumer}")" \
         || { warn "  ${consumer} has no vmname — no guest to write mounts into"; return 0; }
     os="$(nfs_consumer_os "${consumer}")"
+    nfs_guest_ready "${target}" \
+        || { error "  ${target#*@} does not accept ssh with passwordless sudo after 5 minutes — its mounts were not written"; return 1; }
 
     while IFS= read -r m <&3; do
         [[ -n "${m}" ]] || continue
