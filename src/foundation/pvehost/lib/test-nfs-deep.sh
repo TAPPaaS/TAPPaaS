@@ -48,6 +48,8 @@ ok()   { if eval "$2" >/dev/null 2>&1; then pass "$1"; else fail "$1"; fi; }
 step() { info "${BOLD}── $1${CL}"; }
 
 node_ssh()  { ssh -n -o BatchMode=yes -o ConnectTimeout=15 -o LogLevel=ERROR "root@$(nfs_instance_address_of "$1")" "${@:2}"; }
+# node_ssh_in — the same, reading stdin: the receiving end of a zfs send pipe.
+node_ssh_in() { ssh -o BatchMode=yes -o ConnectTimeout=15 -o LogLevel=ERROR "root@$(nfs_instance_address_of "$1")" "${@:2}"; }
 nfs_instance_address_of() { jq -r '.address // empty' "${CFG}/$1.json"; }
 guest()     { tappaas_ssh_guest -o BatchMode=yes -o ConnectTimeout=15 "tappaas@${FIX}.${ZONE}.internal" "$@"; }
 set_export() {   # set_export <node> <json-or-null>: replace the test share's declaration
@@ -252,7 +254,7 @@ if [[ -n "${NODE2}" ]]; then
     guest "sudo systemctl stop nfs-deep-writer; sudo umount -l /srv/deep/a /srv/deep/b; true"
     e="$(jq -c --arg n "${SHARE}" '.nfs.exports[] | select(.name == $n) | .pool = "'"${POOL2}"'"' "${CFG}/${NODE}.json")"
     node_ssh "${NODE}" "zfs snapshot ${DS}@move && zfs send ${DS}@move" \
-        | node_ssh "${NODE2}" "zfs list ${POOL2}/${NFS_PARENT} >/dev/null 2>&1 || zfs create -o sharenfs=off ${POOL2}/${NFS_PARENT};
+        | node_ssh_in "${NODE2}" "zfs list ${POOL2}/${NFS_PARENT} >/dev/null 2>&1 || zfs create -o sharenfs=off ${POOL2}/${NFS_PARENT};
             zfs recv -x sharenfs -o mountpoint=/tappaas-nfs/${SHARE} $(dataset_on "${NODE2}" "${POOL2}") && zfs destroy $(dataset_on "${NODE2}" "${POOL2}")@move" \
         || fail "zfs send/recv to ${NODE2}"
     set_export "${NODE}" null
