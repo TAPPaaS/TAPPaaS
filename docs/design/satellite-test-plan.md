@@ -1,7 +1,8 @@
 # `satellite` as a module — test plan (#671)
 
 Primary audience: whoever verifies ADR-010 §8.4 (the satellite as a module, #670) end to end.
-Test site: **hrossen**. Only phase 7 touches makerfloss, and only with the operator.
+Test site: **hrossen**, which runs `main`. Nothing here runs on makerfloss: converting its
+existing satellite is #775.
 
 ## What is being tested
 
@@ -105,11 +106,11 @@ its home PBS again. The satellite's PBS datastore stays for phase 5.
 
 Then the operator deletes the VPS, its volume and the `sat-test` DNS record (D6).
 
-## Phase 7 — makerfloss conversion (§8.4.7, with the operator)
+## makerfloss's `satellite1` — not in this plan
 
-makerfloss runs `satellite1` from the `satellite-manager` era. With the operator: the manual
-steps of §8.4.7, then phases 1 and 2's checks against `satellite1`. Not before makerfloss runs a
-release that contains #670 — it is on staging (v2.1) until the 2.2 boundary.
+Converting makerfloss's existing satellite (ADR-010 §8.4.7) is **#775**, split out on
+2026-10-05: it can only happen once makerfloss runs a release containing #670 (2.2), and it must
+not hold this test open. #775 reuses phases 1 and 2's checks against `satellite1`.
 
 ## Seen during preparation (2026-10-05)
 
@@ -121,8 +122,7 @@ not part of #671; it belongs in its own issue.
 
 ## Done when
 
-Phases 1–6 green on hrossen with their teardowns run, phase 7 done with the operator, and the
-results recorded below.
+Phases 1–6 green on hrossen with their teardowns run, and the results recorded below.
 
 ## Results
 
@@ -134,4 +134,3 @@ results recorded below.
 | 4 | | |
 | 5 | | |
 | 6 | | |
-| 7 | | |
