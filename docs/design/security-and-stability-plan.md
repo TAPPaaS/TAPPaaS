@@ -125,13 +125,13 @@ things that make those migrations survivable go before it (Wave 0).
 | 3 | G3.3 App module fixes | 11 | 5/17 | 4 | 2 | L |
 | 3 | G3.4 AI stack maturity | 4 | 1/7 | 3 | 3 | L |
 | 3 | G3.5 Installer UX | 4 | 0/4 | 4 | 1 | L |
-| 4 | G4.1 Alerting & cluster resilience | 5 | 1/6 | 3 | 3 | M |
+| 4 | G4.1 Alerting & cluster resilience | 5 | 1/7 | 3 | 3 | M |
 | 4 | G4.2 Proxy & ingress | 3 | 1/5 | 3 | 2 | L |
 | 4 | G4.3 Manager verb gaps | 6 | 6/14 | 3 | 2 | L |
 | 4 | G4.4 Storage & physical devices | 5 | 3/10 | 2 | 2 | M |
 | 4 | G4.5 Governance, CI & sign-offs | 8 | 3/10 | 3 | 1 | L |
 
-**Issues** is the count when the plan was made; **Done** is ✅ rows / all rows in the group's own table now (it grows as issues are added and closed). By wave: Wave 0 25/25 · Wave 1 86/94 · Wave 2 11/29 · Wave 3 20/57 · Wave 4 13/45. Issue counts include the Future Work items rolled in.
+**Issues** is the count when the plan was made; **Done** is ✅ rows / all rows in the group's own table now (it grows as issues are added and closed). By wave: Wave 0 25/25 · Wave 1 86/94 · Wave 2 11/29 · Wave 3 20/57 · Wave 4 13/46. Issue counts include the Future Work items rolled in.
 
 ```mermaid
 quadrantChart
@@ -726,6 +726,7 @@ New capabilities with low upgrade risk.
 | #125 | Mail relay via M365 Graph API | 3 | 2 | L | |
 | #165 | logging v2: Loki auth, Grafana OIDC | 2 | 3 | M | Turning on Loki auth breaks existing Alloy pushes unless clients change in the same sweep |
 | #770 | App VMs do not ship their logs to Loki | 3 | 3 | M | **Opened 2026-10-04** from the #126 live test: Loki holds only the three nodes, the firewall, the mothership and logging — no app or foundation VM (only `tappaas-cicd.nix` has an Alloy client). So #126's `OomKill`/`HostSilent` cannot see app VMs. Proposed: an Alloy client in the NixOS baseline (every VM imports it since #324), Debian guests through `update-os.sh`. **Operator decision:** the network path from VM zones to the logging VM on mgmt (a firewall opening), and its order with #165 — Loki has no auth, so opening `:3100` also opens reading every host's logs; a push-only path (syslog `:1515`) avoids that |
+| #774 | No local Nix cache: every VM fetches nixpkgs and binaries from upstream on its own | 2 | 3 | M | **Opened 2026-10-05.** `update-os.sh` points each guest at the GitHub archive of the pinned nixpkgs rev, and each guest re-downloads it after the default 1 h `tarball-ttl`; every guest substitutes from cache.nixos.org separately. A sweep therefore depends on GitHub and cache.nixos.org being reachable and not rate-limiting — #467's 429 hang, generalised — and a site with its WAN down cannot rebuild even a config-only change. Proposed: tappaas-cicd serves a signed binary cache (Harmonia or nix-serve-ng) plus a pull-through for upstream, the pinned tarball fetched once by hash, `substituters` in `tappaas-common.nix` with cache.nixos.org kept as fallback, a selfcheck probe and a GC policy. **Operator decision:** pull-through by caching proxy, or by cicd copying each closure to the guest before the switch. Lands in one sweep that changes every guest's `nix.conf` (R=3) |
 | #590 | Second corosync link | 2 | 3 | M | |
 | FW #40 | Dedicated sync network recipe | 4 | 1 | L | Roll in with #590 |
 
