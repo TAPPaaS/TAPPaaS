@@ -5,7 +5,7 @@
   "stack": "home",
   "releaseDate": "2026-06-27",
   "maintainer": "@AndreasJe",
-  "status": "Development",
+  "status": "Testing",
   "vmname": "jellyfin",
   "vmid": 360,
   "vmtag": "TAPPaaS,App,Media",

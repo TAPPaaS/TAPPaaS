@@ -2,7 +2,7 @@
 
 Open-source media server for personal movie, TV, music, and photo libraries.
 
-This module is under active development (status: Development). See
+Status: Testing — installed and live-tested on the reference site with its media on an NFS share (ADR-029). See
 [INSTALL.md](INSTALL.md) for installation and for the media share a site's
 server declares — before or after Jellyfin is installed.
 
