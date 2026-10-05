@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 # TAPPaaS Module: jellyfin -- Update
 #
-# Pushes the current jellyfin.nix to the running VM and applies it, then makes
-# sure the library folders exist on the media share. Sourced by install.sh so
-# the same config apply runs on first install too.
+# Makes sure the library folders exist under /media. Sourced by install.sh, so
+# a first install gets them too.
 #
-# /media is an NFS share (storage:nfs): storage:nfs's install/update service
-# writes /etc/nixos/tappaas-nfs.nix before this runs, and the rebuild below is
-# what applies it.
+# The NixOS configuration is NOT built here. templates:nixos (update-os.sh)
+# builds and applies jellyfin.nix on every install and update -- against the
+# release's pinned nixpkgs, built on the mothership (#774). It is listed after
+# storage:nfs in jellyfin.json, so the share mount storage:nfs writes into
+# /etc/nixos/tappaas-nfs.nix is part of that build. A rebuild here would build
+# again against the VM's own channel and could undo a release move.
 #
 # Usage: ./update.sh [vmname]
 
@@ -21,28 +23,9 @@ NODE="$(get_config_value 'node' "$(get_node_hostname 0)")"
 ZONE0NAME="$(get_config_value 'zone0' 'srvHome')"
 JELLYFIN_HOST="${VMNAME}.${ZONE0NAME}.internal"
 SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=30 -o BatchMode=yes"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo ""
-info "${BOLD}Deploying jellyfin.nix to ${JELLYFIN_HOST}${CL}"
-
-# SCP to /tmp first (tappaas user cannot write /etc/nixos directly),
-# then sudo install into place -- mirrors what update-os.sh does.
-scp -o StrictHostKeyChecking=no -o ConnectTimeout=15 \
-    "${SCRIPT_DIR}/jellyfin.nix" \
-    "tappaas@${JELLYFIN_HOST}:/tmp/jellyfin.nix" \
-  && info "  ${GN}✓${CL} jellyfin.nix staged to /tmp" \
-  || { warn "  Could not push jellyfin.nix -- is ${JELLYFIN_HOST} reachable?"; exit 1; }
-
-ssh ${SSH_OPTS} "tappaas@${JELLYFIN_HOST}" \
-    "sudo install -m 0644 /tmp/jellyfin.nix /etc/nixos/jellyfin.nix && rm -f /tmp/jellyfin.nix" \
-  && info "  ${GN}✓${CL} jellyfin.nix installed to /etc/nixos/" \
-  || { warn "  Could not install jellyfin.nix to /etc/nixos/"; exit 1; }
-
-ssh ${SSH_OPTS} "tappaas@${JELLYFIN_HOST}" \
-    "set -o pipefail; sudo nixos-rebuild switch -I nixos-config=/etc/nixos/jellyfin.nix 2>&1 | tail -5" \
-  && info "  ${GN}✓${CL} nixos-rebuild switch completed" \
-  || { warn "  nixos-rebuild reported errors -- check journalctl on ${JELLYFIN_HOST}"; exit 1; }
+info "${BOLD}jellyfin: library folders on ${JELLYFIN_HOST}${CL}"
 
 # ── Library folders under /media ──────────────────────────────────────────────
 # /media is the share "media" (subdir jellyfin) when a server declares it, and a

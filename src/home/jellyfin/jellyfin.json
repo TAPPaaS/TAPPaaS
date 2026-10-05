@@ -13,11 +13,11 @@
   "rebootOk": true,
   "dependsOn": [
     "cluster:vm",
-    "templates:nixos",
     "backup:vm",
     "network:proxy",
     "network:rules",
-    "storage:nfs"
+    "storage:nfs",
+    "templates:nixos"
   ],
   "provides": [],
   "appVersion": "10.10.7",
