@@ -40,6 +40,7 @@
       network-manager     = component ./manager/network-manager;
       identity-manager      = component ./manager/identity-manager;
       site-manager        = component ./manager/site-manager;
+      storage-manager     = component ./manager/storage-manager;
       identity-controller = component ./controller/identity-controller;
       node-provisioner    = component ./controller/node-provisioner;
       opnsense-controller = component ./controller/opnsense-controller;
