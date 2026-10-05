@@ -44,18 +44,25 @@ ssh ${SSH_OPTS} "tappaas@${JELLYFIN_HOST}" \
   && info "  ${GN}✓${CL} nixos-rebuild switch completed" \
   || { warn "  nixos-rebuild reported errors -- check journalctl on ${JELLYFIN_HOST}"; exit 1; }
 
-# ── Library folders on the media share ───────────────────────────────────────
-# Created here, not by tmpfiles: every write to the share is squashed to the
-# export's owner, so a tmpfiles chown to jellyfin would fail. `ls` triggers the
-# automount; only an NFS mount gets folders — never the bare local /media.
-if ssh ${SSH_OPTS} "tappaas@${JELLYFIN_HOST}" \
-    "ls /media >/dev/null 2>&1; findmnt -n -t nfs,nfs4 /media >/dev/null"; then
-    ssh ${SSH_OPTS} "tappaas@${JELLYFIN_HOST}" \
-        "sudo -u jellyfin mkdir -p /media/Movies /media/TV /media/Music /media/Photos /media/Audiobooks" \
-      && info "  ${GN}✓${CL} library folders present on the media share" \
-      || warn "  could not create the library folders on /media -- check the export's grant (rw)"
+# ── Library folders under /media ──────────────────────────────────────────────
+# /media is the share "media" (subdir jellyfin) when a server declares it, and a
+# directory on this VM's own disk while the mount is pending (ADR-029 v0.8) —
+# the folders are created either way, so Jellyfin is usable from day one. When
+# the share arrives later, the update migrates what is here into it (rebootOk).
+# Created here, not by tmpfiles: on the share every write is squashed to its
+# owner, so a tmpfiles chown to jellyfin would fail. `ls` triggers the automount.
+if ssh ${SSH_OPTS} "tappaas@${JELLYFIN_HOST}" "findmnt -n --fstab /media >/dev/null" \
+   && ! ssh ${SSH_OPTS} "tappaas@${JELLYFIN_HOST}" "ls /media >/dev/null 2>&1; findmnt -n -t nfs,nfs4 /media >/dev/null"; then
+    # Declared as the share but not mounted: never write the folders under it.
+    warn "  /media should be the media share but is not mounted -- is its server up? (update-module.sh <node>)"
 else
-    warn "  /media is not mounted -- is the node serving its 'media' export? (update-module.sh <node>)"
+    where="the media share"
+    ssh ${SSH_OPTS} "tappaas@${JELLYFIN_HOST}" "findmnt -n -t nfs,nfs4 /media >/dev/null" \
+        || where="this VM's disk (media share pending -- declare 'media' for a real library)"
+    ssh ${SSH_OPTS} "tappaas@${JELLYFIN_HOST}" \
+        "sudo install -d -o jellyfin -g jellyfin /media 2>/dev/null || true; sudo -u jellyfin mkdir -p /media/Movies /media/TV /media/Music /media/Photos /media/Audiobooks" \
+      && info "  ${GN}✓${CL} library folders present on ${where}" \
+      || warn "  could not create the library folders on /media -- check the share's grant (rw)"
 fi
 
 echo ""

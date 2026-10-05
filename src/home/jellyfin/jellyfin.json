@@ -10,6 +10,7 @@
   "vmid": 360,
   "vmtag": "TAPPaaS,App,Media",
   "node": "tappaas1",
+  "rebootOk": true,
   "dependsOn": [
     "cluster:vm",
     "templates:nixos",
@@ -34,8 +35,10 @@
       "mounts": [
         {
           "path": "/media",
-          "share": "tappaas2:media",
-          "access": "rw"
+          "share": "media",
+          "subdir": "jellyfin",
+          "access": "rw",
+          "stopUnits": ["jellyfin.service"]
         }
       ]
     },
