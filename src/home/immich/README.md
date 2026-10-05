@@ -192,7 +192,6 @@ graph LR
     vpnpeers["netbird VPN peers<br/><small>remote devices</small>"]
     internet["internet<br/><small>public</small>"]
     authentik["Authentik<br/><small>identity module</small>"]
-    jellyfinlib["media share (pvehost:nfs)<br/><small>optional</small>"]
 
     immich -->|dependsOn| cluster
     immich -->|dependsOn| templates
@@ -207,7 +206,6 @@ graph LR
     caddy -.->|"upstream :2283"| immich
 
     immich -.->|"OIDC login + discovery"| authentik
-    jellyfinlib -.->|"optional: read-only NFS mount as an External Library"| immich
 ```
 
 Solid arrows are declared `dependsOn` edges (install-order dependencies).
@@ -217,15 +215,14 @@ vhost on the Caddy reverse proxy, and `proxyAllowedZones` (`home`, `netbird`,
 including the public internet, so mobile auto-upload works away from home
 without a VPN. Home-zone clients can also bypass the proxy and hit the VM
 directly in-zone. `immich:identity` traffic is the OIDC login/discovery
-flow against Authentik, described above. The optional Jellyfin link lets a
-Jellyfin media library be added as an Immich External Library over NFS.
+flow against Authentik, described above.
+
+Immich deliberately uses **no NFS share**: its photo library is high-value data
+on its own 500G VM disk, replicated for HA — not on the re-creatable media tier
+that `pvehost:nfs` serves (see Storage).
 
 ## Future enhancements
 
-- **Jellyfin photo library**: grant `immich` `ro` on the share `media`, add
-  `pvehost:nfs` to `dependsOn` and a mount
-  (`{"path": "/media-photos", "share": "media", "subdir": "jellyfin/Photos", "access": "ro"}`),
-  then add `/media-photos` as an Immich *External Library* in the admin UI.
 - **Hardware transcoding**: set `accelerationDevices` in `immich.nix` (see
   INSTALL.md → Variants).
 
