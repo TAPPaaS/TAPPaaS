@@ -52,6 +52,7 @@ node_ssh()  { ssh -n -o BatchMode=yes -o ConnectTimeout=15 -o LogLevel=ERROR "ro
 node_ssh_in() { ssh -o BatchMode=yes -o ConnectTimeout=15 -o LogLevel=ERROR "root@$(nfs_instance_address_of "$1")" "${@:2}"; }
 nfs_instance_address_of() { jq -r '.address // empty' "${CFG}/$1.json"; }
 guest()     { tappaas_ssh_guest -o BatchMode=yes -o ConnectTimeout=15 "tappaas@${FIX}.${ZONE}.internal" "$@"; }
+fw()        { ssh -n -o BatchMode=yes -o ConnectTimeout=15 -o LogLevel=ERROR -i /home/tappaas/.ssh/tappaas-fw root@firewall.mgmt.internal "$@"; }
 set_export() {   # set_export <node> <json-or-null>: replace the test share's declaration
     local f="${CFG}/$1.json" tmp
     tmp="$(mktemp "${f}.XXXX")"
@@ -113,7 +114,7 @@ teardown() {
     dns-manager --no-ssl-verify alias delete "$(nfs_share_alias "${SHARE}")" >/dev/null 2>&1
     rules-manager --no-ssl-verify remove-alias "nfs_share_${SHARE}" >/dev/null 2>&1
     ssh -o BatchMode=yes -i /home/tappaas/.ssh/tappaas-fw root@firewall.mgmt.internal "sh -s" >/dev/null 2>&1 <<EOF
-for t in tm_${FIX//-/_} nfs_share_${SHARE}; do pfctl -t \$t -T kill; done
+for t in tm_${FIX//-/_} nfs_share_${SHARE}; do pfctl -t \$t -T kill; rm -f /var/db/aliastables/\$t.*; done
 EOF
     step "leftover check"
     local left=0
@@ -136,6 +137,8 @@ EOF
             && { fail "leftover: /etc/nfs.conf.d (nfs-common's) missing on ${n}"; left=1; }
         node_ssh "${n}" "test -e /tappaas-nfs/${SHARE}" && { fail "leftover: /tappaas-nfs/${SHARE} on ${n}"; left=1; }
     done
+    [[ "$(fw "ls /var/db/aliastables" 2>/dev/null | grep -cE "^(nfs_share_${SHARE}|tm_${FIX//-/_})\.")" -eq 0 ]] \
+        || { fail "leftover: OPNsense alias cache files"; left=1; }
     [[ "${left}" -eq 0 ]] && pass "nothing left behind"
     rm -rf "${WORK}"
     info "  Results: ${GN}${PASS} passed${CL}, ${RD}${FAIL} failed${CL}"
@@ -262,9 +265,33 @@ if [[ -n "${NODE2}" ]]; then
     bash "${HERE}/../update.sh" "${NODE}" > "${WORK}/node10a.log" 2>&1 || fail "the old node's update (see ${WORK}/node10a.log)"
     NFS_NO_REVERSE=1 bash "${HERE}/../update.sh" "${NODE2}" > "${WORK}/node10b.log" 2>&1 || fail "the new node's update (see ${WORK}/node10b.log)"
     ok "the alias now follows ${NODE2}" "dns-manager --no-ssl-verify alias list | grep -q '$(nfs_share_alias "${SHARE}") *-> *$(nfs_instance_address_of "${NODE2}")'"
-    ssh -o BatchMode=yes -i /home/tappaas/.ssh/tappaas-fw root@firewall.mgmt.internal "configctl filter refresh_aliases" >/dev/null 2>&1
-    guest "sudo resolvectl flush-caches 2>/dev/null; sudo systemctl start nfs-deep-writer; timeout 60 ls /srv/deep/a >/dev/null"
-    ok "the consumer mounts the moved share, its data intact" "guest 'findmnt -n --mountpoint /srv/deep/a && test -f /srv/deep/a/seed-20'"
+    # OPNsense caches a host alias's resolution for its TTL (300 s) and re-resolves
+    # only after that, on its refresh: a consumer behind the firewall reaches a
+    # moved share within about five minutes (ADR-029 D2b). Wait for it.
+    N2IP="$(getent ahostsv4 "$(nfs_instance_address_of "${NODE2}")" | awk 'NR==1{print $1}')"
+    t0=$SECONDS
+    until fw "pfctl -t nfs_share_${SHARE} -T show" 2>/dev/null | grep -qw "${N2IP}"; do
+        (( SECONDS - t0 > 600 )) && break
+        fw "configctl filter refresh_aliases" >/dev/null 2>&1; sleep 15
+    done
+    if fw "pfctl -t nfs_share_${SHARE} -T show" 2>/dev/null | grep -qw "${N2IP}"; then
+        pass "the firewall follows the alias to ${NODE2} after $(( SECONDS - t0 )) s"
+    else
+        fail "the firewall follows the alias to ${NODE2} within 10 minutes"
+    fi
+    guest "sudo systemctl reset-failed 'srv-deep-*' 2>/dev/null; sudo systemctl start nfs-deep-writer; timeout 60 ls /srv/deep/a >/dev/null"
+    if guest 'findmnt -n --mountpoint /srv/deep/a && test -f /srv/deep/a/seed-20' >/dev/null 2>&1; then
+        pass "the consumer mounts the moved share, its data intact"
+    else
+        fail "the consumer mounts the moved share, its data intact — diagnostics:"
+        {
+            echo "guest resolves: $(guest "getent hosts $(nfs_share_alias "${SHARE}")" 2>&1)"
+            echo "guest mount units:"; guest "systemctl list-units --all --no-legend 'srv-deep-a*'; journalctl -n 15 --no-pager -u srv-deep-a.mount -u srv-deep-a.automount" 2>&1 | sed 's/^/    /'
+            echo "guest manual mount:"; guest "sudo timeout 40 mount -t nfs -o vers=4.2 $(nfs_share_alias "${SHARE}"):/tappaas-nfs/${SHARE}/a /mnt 2>&1; sudo umount /mnt 2>/dev/null" 2>&1 | sed 's/^/    /'
+            echo "${NODE2} exports:"; node_ssh "${NODE2}" "exportfs -s; zfs get -H -o value mountpoint,sharenfs $(dataset_on "${NODE2}" "${POOL2}"); systemctl is-active nfs-server" 2>&1 | sed 's/^/    /'
+            echo "firewall alias table:"; ssh -o BatchMode=yes -i /home/tappaas/.ssh/tappaas-fw root@firewall.mgmt.internal "pfctl -t nfs_share_${SHARE} -T show" 2>&1 | sed 's/^/    /'
+        } >&2
+    fi
     ok "and reaches it on ${NODE2}" "node_ssh '${NODE2}' \"ss -tn state established '( sport = :2049 )' | grep -q '${CIP}:'\""
     [[ "$(md5sum "${CFG}/${FIX}.json" | cut -d' ' -f1)" == "${before}" ]] && pass "the consumer's config did not change" || fail "the consumer's config did not change"
     DS="$(dataset_on "${NODE2}" "${POOL2}")"; HOLDER="${NODE2}"

@@ -253,8 +253,13 @@ mounts released, or followed by their restart.
 
 **The cost:** a mount now depends on the site resolver. With the resolver down a mount that
 is not yet active fails to resolve, exactly as every `.internal` name does; an active mount
-is unaffected. The firewall's host alias re-resolves on OPNsense's alias refresh, so a moved
-share is reachable after that interval, not instantly.
+is unaffected. The firewall's host alias holding the share alias is re-resolved by OPNsense
+only when its cached resolution expires — the host alias TTL, **300 s** — and neither
+`configctl filter refresh_aliases` nor a filter reload re-resolves it sooner (measured on the
+reference site, 2026-10-05). So after a move, consumers behind the firewall reach the share
+within about five minutes, not at once; a consumer in the server's own zone, which needs no
+rule, at once. Forcing it sooner would mean deleting OPNsense's alias cache as root on the
+firewall, which a rare, operator-driven move does not justify.
 
 ### D3 — The mount declaration
 
@@ -767,7 +772,7 @@ which is that module's change, not this ADR's.
   first capture is a long run; `quota` is also the ceiling on what the backup can grow to.
 - Throughput is capped by OPNsense routing, even on the same node.
 - A mount depends on the site resolver for the share alias, and the firewall's view of a
-  moved share lags by OPNsense's alias refresh (D2b).
+  moved share lags by up to the 300 s host-alias TTL (D2b).
 - A migration stops the app for its second pass, and needs consent to run (D14); share
   names are a Site-wide namespace the operator must keep unique.
 - Two more declarations for `module-manager validate` to cross-check, and a DHCP-dependent
@@ -905,8 +910,8 @@ Every question the drafts raised is answered; each answer lives in the decision 
      proving it cannot mount would cost another clone, or a probe from another module's
      guest; the server-side list is asserted instead.)
   9. **Move** — send the dataset to another node and move the declaration there: the alias
-     follows it, and after the firewall's alias refresh the consumer mounts it with its
-     config unchanged. A consumer's *active* mount must be remounted after a move — the old
+     follows it; the suite waits for the firewall's alias table to follow (up to 10 minutes —
+     the 300 s TTL plus a refresh), then the consumer mounts it with its config unchanged. A consumer's *active* mount must be remounted after a move — the old
      server no longer exports it, and a `hard` mount stalls until it is; the suite unmounts
      before the move, as an operator would.
   10. **Delete** — delete the fixture: its address is gone from the export's client list
