@@ -77,7 +77,7 @@ module-manager test jellyfin                                        # once Jelly
 |---|---|
 | Grow the library | `storage-manager nfs share modify media --set quota=6T` |
 | Let another module use the share | `storage-manager nfs grant media <module> ro`; that module mounts `share: "media"` itself |
-| Stop serving it | remove Jellyfin's mount, then `storage-manager nfs share delete media`: unshared, the dataset and its data are **kept**; `storage-manager nfs share purge media --server tappaas1` destroys it |
+| Stop serving it | remove Jellyfin's mount, then `storage-manager nfs share delete media`: unshared, the dataset and its data are **kept**; `storage-manager nfs share purge media --server tappaas1 --yes` destroys it |
 
 `server`, `pool` and the allocated owner cannot change in place — moving the
 share to another node or pool is a data migration (a `share move` verb comes
@@ -97,11 +97,16 @@ update-module.sh jellyfin --allow-disruption
 
 A share that already holds data is never merged into.
 
-`network:rules` is listed before `storage:nfs` in `jellyfin.json` on purpose: an
-update applies dependencies in that order, so the firewall path to the share
-exists before the migration tries to mount it. In the other order the migration
-timed out, the update stopped before the rule was made, and rolled back — on
-every run.
+The order of `dependsOn` in `jellyfin.json` is deliberate — install and update
+apply dependencies in that order:
+
+- `network:rules` before `storage:nfs`, so the firewall path to the share exists
+  before a migration tries to mount it (in the other order the migration timed
+  out and every update rolled back);
+- `storage:nfs` before `templates:nixos`, so the mount the service writes into
+  the guest (`/etc/nixos/tappaas-nfs.nix`) is applied by the OS build that
+  follows — the platform's pinned build (`update-os.sh`). Jellyfin's `update.sh`
+  does not rebuild NixOS itself.
 
 If the share later lives on another node, only its alias changes — Jellyfin's
 config, mount and firewall rule stay as they are.
@@ -165,7 +170,10 @@ cd "${TAPPAAS_REPO:-/home/tappaas/TAPPaaS}"/src/home/jellyfin
 ./update.sh jellyfin
 ```
 
-This pushes the current `jellyfin.nix` and runs `nixos-rebuild switch` on the VM.
+The NixOS configuration is built and applied by `templates:nixos`
+(`update-os.sh`, the release's pinned nixpkgs, built on the mothership) — after
+`storage:nfs` has written the share's mount; `update.sh` only makes sure the
+library folders exist.
 
 ## Deleting Jellyfin
 
