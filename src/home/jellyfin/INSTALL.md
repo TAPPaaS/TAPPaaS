@@ -107,6 +107,12 @@ update-module.sh jellyfin --allow-disruption
 
 A share that already holds data is never merged into.
 
+`network:rules` is listed before `pvehost:nfs` in `jellyfin.json` on purpose: an
+update applies dependencies in that order, so the firewall path to the share
+exists before the migration tries to mount it. In the other order the migration
+timed out, the update stopped before the rule was made, and rolled back — on
+every run.
+
 If the share later lives on another node, only its alias changes — Jellyfin's
 config, mount and firewall rule stay as they are.
 

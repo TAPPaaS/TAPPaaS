@@ -15,9 +15,9 @@
     "cluster:vm",
     "templates:nixos",
     "backup:vm",
-    "pvehost:nfs",
     "network:proxy",
-    "network:rules"
+    "network:rules",
+    "pvehost:nfs"
   ],
   "provides": [],
   "appVersion": "10.10.7",
