@@ -17,8 +17,8 @@ set -euo pipefail
 . /home/tappaas/bin/common-install-routines.sh
 
 
-# Apply the NixOS config (also run on updates)
-. ./update.sh
+# The NixOS config (immich.nix) is already applied: templates:nixos runs before
+# this script, on install and on every update.
 
 VMNAME="$(get_config_value 'vmname' "${1:-immich}")"
 ZONE0NAME="$(get_config_value 'zone0' 'srvHome')"

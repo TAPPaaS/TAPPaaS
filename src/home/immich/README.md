@@ -88,7 +88,7 @@ graph TD
     authentikapi["Authentik REST API"]
     secretsenv["/etc/secrets/immich.env<br/><small>OIDC_CLIENT_ID / SECRET / DISCOVERY_URI</small>"]
 
-    updatesh["immich/update.sh"]
+    companion["/etc/nixos/immich.json<br/><small>proxyDomain — deployed by update-os.sh</small>"]
     installsh["immich/install.sh"]
     apikeyfile["/etc/secrets/immich-admin-api-key"]
 
@@ -97,11 +97,11 @@ graph TD
 
     installsvc -->|"oidc-app-ensure + app-bind-groups"| authentikcli --> authentikapi
     installsvc -->|writes| secretsenv
-    updatesh -->|"co-manages IMMICH_PUBLIC_URL"| secretsenv
     installsh -->|"mints a scoped API key at admin bootstrap"| apikeyfile
 
     secretsenv --> configuresvc
     apikeyfile --> configuresvc
+    companion -->|"public URL, at build time"| configuresvc
     configuresvc -->|"GET, merge, PUT the .oauth section"| immichapi
 ```
 
@@ -146,12 +146,14 @@ block:
    trailing slash included, since Immich's OIDC client validates it per
    the OIDC discovery specification.
 
-   The mobile redirect override needs to know this module's own public
-   URL, which `/etc/secrets/immich.env` doesn't otherwise carry (it only
-   holds the `OIDC_*` keys the generic mechanism manages) — `update.sh`
-   co-manages one additional key, `IMMICH_PUBLIC_URL`, into the same file,
-   the same "co-managed keys" pattern the euro-office/nextcloud connectors
-   already use, where each script only ever touches its own key(s).
+   The mobile redirect override needs this module's own public URL,
+   which `/etc/secrets/immich.env` does not carry (it only holds the
+   `OIDC_*` keys). `immich.nix` reads it from `/etc/nixos/immich.json` —
+   the module's config, which `update-os.sh` deploys beside it with the
+   name the proxy publishes it under (`proxyDomain`, #715), the same idiom
+   vaultwarden and logging use. The URL is built into the service, so a
+   changed domain changes the unit and the next rebuild re-runs it; a
+   module that is not published gets web OAuth only.
 
 Access can be narrowed beyond "every TAPPaaS login" with
 `authentik-manager app-bind-groups immich --group <narrower-group>` (see

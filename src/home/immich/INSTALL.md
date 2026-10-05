@@ -118,11 +118,13 @@ respectively.
 ## Updating Immich
 
 ```bash
-update-module.sh immich      # or ./update.sh from the module directory
+update-module.sh immich
 ```
 
-Immich versions come from the platform's pinned nixpkgs (template rev,
-applied by the engine). Keep server and mobile app in step — Immich mobile
+The NixOS configuration is applied by `templates:nixos` (`update-os.sh`) —
+the module's own `update.sh` deliberately does nothing. The system follows
+the release's pinned nixpkgs; Immich itself is pinned in `immich.nix` (the
+nixos-unstable revision, until NixOS 26.11). Keep server and mobile app in step — Immich mobile
 apps require a matching/newer server; update the module before the phone
 apps auto-update, see <https://immich.app/docs/install/upgrading>.
 
@@ -139,9 +141,9 @@ apps auto-update, see <https://immich.app/docs/install/upgrading>.
   three come from `immich.json`'s `identity.oidcRedirectPaths`, so a typo
   there means re-run `update-module.sh immich` after fixing it. Also check
   `journalctl -u immich-configure-oidc` on the VM for
-  `oauth.mobileRedirectUri`/`IMMICH_PUBLIC_URL` — if `IMMICH_PUBLIC_URL`
-  never got set, the mobile override stays off even though web login
-  works fine.
+  `oauth.mobileRedirectUri` — "not published" means `/etc/nixos/immich.json`
+  has no `proxyDomain` (the module has no public route), so only web OAuth
+  is configured.
 - **Build fails with "`database.enableVectors`/`enableVectorChord` no longer
   has any effect"** — the pinned nixpkgs always uses VectorChord, so neither
   option may be set in `immich.nix`.

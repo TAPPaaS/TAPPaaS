@@ -45,6 +45,19 @@ let
     url    = "https://github.com/NixOS/nixpkgs/archive/a7868a727837f3c09cee2ce0ca671c76b1589fed.tar.gz";
     sha256 = "0z1daxh826r5d877fa77576ihfq4lzhzwys0ggnppw8bld42s0ia";
   };
+  # The site's own public name (#715), not ours to guess: update-os.sh deploys
+  # the module's config beside this file as /etc/nixos/immich.json, with the
+  # name the proxy publishes it under and whether that name has a public record
+  # -- the vaultwarden/logging idiom. The mobile app's OAuth redirect needs that
+  # https URL; unpublished, there is none and only web OAuth is configured.
+  moduleCfg   = if builtins.pathExists ./immich.json
+                then builtins.fromJSON (builtins.readFile ./immich.json)
+                else {};
+  proxyCfg    = (moduleCfg.config or {})."network:proxy" or {};
+  proxyDomain = proxyCfg.proxyDomain or (moduleCfg.proxyDomain or "");
+  published   = proxyDomain != "" && (moduleCfg.proxyPublished or true);
+  publicUrl   = if published then "https://${proxyDomain}" else "";
+
   unstable = import unstableSrc {
     inherit (pkgs.stdenv.hostPlatform) system;
     config.allowUnfree = true;
@@ -203,18 +216,18 @@ in
         # /api/oauth/mobile-redirect, that forwards to the custom scheme
         # internally; that route is what gets registered with Authentik (via
         # identity.oidcRedirectPaths, a plain https path) and is what
-        # oauth.mobileRedirectUri must point at here. IMMICH_PUBLIC_URL (this
-        # module's own public URL) is co-managed into /etc/secrets/immich.env
-        # by update.sh, since identity:identity's env file only carries the
-        # OIDC_* keys otherwise -- it may not have run yet on a very first
-        # boot, so degrade to web-only OAuth rather than fail the whole call.
+        # oauth.mobileRedirectUri must point at here. The public URL comes from
+        # immich.json at build time (publicUrl above), so it is part of this
+        # unit: a changed domain changes the unit, and the rebuild re-runs it.
+        # Unpublished: web OAuth only.
+        PUBLIC_URL="${publicUrl}"
         MOBILE_OVERRIDE="false"
         MOBILE_URI=""
-        if [ -n "''${IMMICH_PUBLIC_URL:-}" ]; then
+        if [ -n "$PUBLIC_URL" ]; then
           MOBILE_OVERRIDE="true"
-          MOBILE_URI="''${IMMICH_PUBLIC_URL}/api/oauth/mobile-redirect"
+          MOBILE_URI="$PUBLIC_URL/api/oauth/mobile-redirect"
         else
-          echo "immich-configure-oidc: IMMICH_PUBLIC_URL not set yet -- configuring web OAuth only (mobile override applies once update.sh has written it, next run)" >&2
+          echo "immich-configure-oidc: immich is not published -- configuring web OAuth only (no https URL for the mobile redirect)" >&2
         fi
 
         # PUT replaces the whole document -- merge into the current config so

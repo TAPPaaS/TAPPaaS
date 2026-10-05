@@ -2,9 +2,8 @@
 #
 # forgejo — update
 #
-# Copies forgejo.nix to the VM as /etc/nixos/forgejo.nix — where
-# templates:nixos (update-os.sh) deploys it, beside the TAPPaaS baseline it
-# imports (#324) — then runs nixos-rebuild switch with it.
+# Checks that Forgejo answers after templates:nixos has applied forgejo.nix
+# (see below: the OS build is not done here).
 # Safe to re-run — NixOS rebuilds are idempotent.
 #
 # Usage: update.sh <vmname>
@@ -13,7 +12,6 @@ set -euo pipefail
 
 . /home/tappaas/bin/common-install-routines.sh "${1:-forgejo}"
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 VMNAME="$(get_config_value 'vmname' "${1:-forgejo}")"
 VMID="$(get_config_value 'vmid')"
@@ -29,34 +27,13 @@ info "  Node: ${NODE}"
 info "  Zone: ${ZONE0NAME}"
 info "  Host: ${VM_HOST}"
 
-# ── 1. Wait for VM to be reachable ────────────────────────────────────────────
-info "Waiting for SSH on ${VM_HOST}…"
-WAIT=0
-until ssh ${SSH_OPTS} "tappaas@${VM_HOST}" true 2>/dev/null; do
-    WAIT=$((WAIT + 5))
-    if [[ ${WAIT} -ge 120 ]]; then
-        error "Timeout: VM ${VM_HOST} not reachable after 120s"
-        exit 1
-    fi
-    sleep 5
-done
-info "  SSH reachable — OK"
+# The NixOS configuration (forgejo.nix) is NOT applied here: the templates:nixos
+# dependency (update-os.sh) builds and applies it on every install and update,
+# against the release's pinned nixpkgs, release moves staged for the next boot
+# (#728), built on the mothership (#774). A rebuild here would build again
+# against the VM's own channel and could undo a release move.
 
-# ── 2. Deploy NixOS configuration ─────────────────────────────────────────────
-info "Copying forgejo.nix to ${VM_HOST}…"
-scp ${SSH_OPTS} "${SCRIPT_DIR}/forgejo.nix" \
-    "tappaas@${VM_HOST}:/tmp/forgejo.nix"
-
-info "Installing configuration…"
-# shellcheck disable=SC2029
-ssh ${SSH_OPTS} "tappaas@${VM_HOST}" "
-    set -euo pipefail
-    sudo install -m 0644 /tmp/forgejo.nix /etc/nixos/forgejo.nix && rm -f /tmp/forgejo.nix
-    sudo nixos-rebuild switch -I nixos-config=/etc/nixos/forgejo.nix 2>&1
-"
-info "  NixOS rebuild — OK"
-
-# ── 3. Verify Forgejo is responding ───────────────────────────────────────────
+# ── Verify Forgejo is responding ───────────────────────────────────────────
 info "Verifying Forgejo service on port 3000…"
 RETRY=0
 until ssh ${SSH_OPTS} "tappaas@${VM_HOST}" \
