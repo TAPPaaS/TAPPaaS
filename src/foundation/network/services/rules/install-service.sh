@@ -62,6 +62,11 @@ fi
 INGRESS_COUNT=$(read_module_config "${MODULE}" | jq -r '(.ingress // []) | length')
 EGRESS_COUNT=$(read_module_config "${MODULE}" | jq -r '(.egress // []) | length')
 ALIAS_COUNT=$(read_module_config "${MODULE}" | jq -r '(.aliases // {}) | length')
+# NFS mounts (ADR-029 D5 layer 2, #766): the compiler derives one host-to-host
+# tcp/2049 pass per server a module mounts from. A consumer that declares no
+# ingress/egress of its own — jellyfin — was gated out here, so its install
+# never got the rule and its mount timed out until the next update reconciled.
+MOUNT_COUNT=$(read_module_config "${MODULE}" | jq -r '(.config["pvehost:nfs"].mounts // .mounts // []) | length')
 
 # Auto-pinholes (#173): even if the module has no manual ingress/egress/
 # aliases, rules-manager may still need to run when a declared coordinate points
@@ -92,8 +97,8 @@ while read -r dep; do
     fi
 done < <(read_module_config "${MODULE}" | jq -r '((.dependsOn // []) + (.integratesWith // []))[]')
 
-if (( INGRESS_COUNT == 0 && EGRESS_COUNT == 0 && ALIAS_COUNT == 0 && HAS_AUTO_PINHOLE == 0 )); then
-    debug "  No ports/ingress/egress/aliases declared and no declared pinholes — nothing to apply."
+if (( INGRESS_COUNT == 0 && EGRESS_COUNT == 0 && ALIAS_COUNT == 0 && MOUNT_COUNT == 0 && HAS_AUTO_PINHOLE == 0 )); then
+    debug "  No ports/ingress/egress/aliases/NFS mounts declared and no declared pinholes — nothing to apply."
     debug "${GN}network:rules install-service completed for ${MODULE} (no-op)${CL}"
     exit 0
 fi
@@ -106,7 +111,7 @@ fi
 
 # ── Apply ────────────────────────────────────────────────────────────
 
-debug "  ingress=${INGRESS_COUNT} egress=${EGRESS_COUNT} aliases=${ALIAS_COUNT} firewallType=${FIREWALL_TYPE}"
+debug "  ingress=${INGRESS_COUNT} egress=${EGRESS_COUNT} aliases=${ALIAS_COUNT} mounts=${MOUNT_COUNT} firewallType=${FIREWALL_TYPE}"
 
 rules-manager add-rules "${MODULE}" \
     --firewall-type "${FIREWALL_TYPE}" \
