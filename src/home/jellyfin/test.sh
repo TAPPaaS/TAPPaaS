@@ -70,17 +70,16 @@ fi
 # disk — a valid state, so this check is skipped, not failed. A mount in the
 # guest's fstab means the share is available, and then it must be mounted.
 header "Test 3: Media Share"
-if [[ "$(remote "findmnt -n --fstab /media >/dev/null && echo yes || echo no")" != "yes" ]]; then
-    skip "media share not mounted: pending (no server declares 'media') or migration awaiting consent — /media is on this VM's disk (storage:nfs test-service says which)"
+# What is mounted decides first: a migration mounts the share at once, before
+# the next build writes it into the guest's fstab. `ls` triggers an automount.
+MEDIA_SRC=$(remote "ls /media >/dev/null 2>&1; findmnt -n -t nfs,nfs4 -o SOURCE /media 2>/dev/null | tail -1 || true")
+if [[ -n "${MEDIA_SRC}" ]]; then
+    pass "/media is the NFS share ${MEDIA_SRC}"
+    inf "  $(remote "df -h /media | tail -1" || true)"
+elif [[ "$(remote "findmnt -n --fstab /media >/dev/null && echo yes || echo no")" == "yes" ]]; then
+    fail "/media is declared as the media share but not mounted — is its server up? (storage-manager nfs show, then update-module.sh jellyfin)"
 else
-    # `ls` triggers the automount; findmnt then says whether NFS is mounted there.
-    MEDIA_SRC=$(remote "ls /media >/dev/null 2>&1; findmnt -n -t nfs,nfs4 -o SOURCE /media 2>/dev/null || true")
-    if [[ -n "${MEDIA_SRC}" ]]; then
-        pass "/media is the NFS share ${MEDIA_SRC}"
-        inf "  $(remote "df -h /media | tail -1" || true)"
-    else
-        fail "/media is declared as the media share but not mounted — is its server up? (update-module.sh <node>, then update-module.sh jellyfin)"
-    fi
+    skip "media share not mounted: pending (no share 'media' declared) or migration awaiting consent — /media is on this VM's disk (storage:nfs test-service says which)"
 fi
 
 # ── Test 4: Library folders (share or local) ──────────────────────────────────
