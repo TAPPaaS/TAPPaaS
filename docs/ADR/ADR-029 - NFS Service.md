@@ -1,18 +1,19 @@
-# ADR-029 — NFS Service (`pvehost:nfs`)
+# ADR-029 — NFS Service (`storage:nfs`)
 
 | | |
 |---|---|
-| **Status** | **Proposed** (v0.8, 2026-10-05) — redesigned after the first consumer (#52): shares are named site-wide and reached through a DNS alias, a missing share leaves a mount pending, and a share created later is migrated into. v0.1–v0.7 built in #766; v0.8 and the remaining work packages in #772 |
-| **Version** | 0.8 |
-| **Date** | 2026-10-03 (v0.8: 2026-10-05) |
+| **Status** | **Proposed** (v0.9, 2026-10-06) — the share declarations move out of the node configs into a Site file, `config/storage.json`, owned by a new **`storage-manager`** with per-share verbs; consumers depend on **`storage:nfs`**, provided by a thin `storage` module; a server module only builds what is declared for it. v0.1–v0.8 built in #766/#772 (v0.8 deep-tested); v0.9 not built — nothing uses NFS yet |
+| **Version** | 0.9 |
+| **Date** | 2026-10-03 (v0.8: 2026-10-05; v0.9: 2026-10-06) |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen |
 | **Related** | **#388** (origin: shared storage for modules, NFS first) · **#52** (Jellyfin — the first consumer) · [ADR-009](<ADR-009 - Composition Meta-Model.md>) (`<module>:<service>` coordinates, `config."<module>:<service>"`) · [ADR-012](ADR-012-backup-enhancement.md) (`backup:filesystem` backs up the exports — D9; F.3 narrowed to external shares) · [ADR-019](<ADR-019 - HA and Cross-Node VM Migration Policy.md>) (an HA guest mounting non-HA data) · [ADR-020](<ADR-020 - Declared-Field Change Model (validate, drift, modify).md>) (the change classes in `services/nfs/fields.json`) · [ADR-021](<ADR-021 - Split-Horizon DNS and Service Reachability.md>) (host-scoped rules, never `access-to`) · [ADR-022c](<ADR-022c - Node and Host.md>) (Host) · [ADR-026](<ADR-026 - Managed Machines as Modules.md>) (the export Host is a machine module; D6 instance names) · [ADR-027](<ADR-027 - Module Blueprint.md>) D3 (the six files of `services/nfs/`) |
-| **Changelog** | v0.8 (2026-10-05, operator redesign after consuming the service for Jellyfin, #52) — **a mount names a share, never a host.** Share names are unique across the Site (D2); each share gets a DNS alias `nfs-<share>.mgmt.internal` to whatever server carries it, a node exports every share at the same path `/tappaas-nfs/<share>`, and the firewall rule targets the alias — so a consumer's config, mount and rule survive a share moving (new D2b). The `<instance>:<name>` form is withdrawn; a registered NAS is reached through the alias like a node; only `<ip-or-host>:/<path>` for an unmodelled server is used as written. **A share no server declares leaves the mount pending** — the module installs and the directory stays local; a share that exists but does not grant the consumer stays an error (D11). **A share that appears later is migrated into** on update, with consent: two-pass copy, the mount's `stopUnits`/`stopCommand`/`startCommand`, an open-files guard, the local copy kept as `<path>.pre-nfs` and removed by the next healthy update (new D14). **`subdir`** lets several consumers use one share (new D15). **Fixed: a deleted consumer's address stayed in the export's client list** until the node's next update; the delete now reconverges the node without it, and the client list is built from consumers that are deployed and mount the share, not from grants alone (new D16). · v0.7 (2026-10-04, operator decision, #766 WP8) — **TLS deferred; `sharenfs` kept.** Probed live on PVE 9.2 / OpenZFS 2.4.4: `sharenfs` refuses `xprtsec=tls` as an invalid option, so Q5 (TLS by default) and D4a (`sharenfs`) cannot both hold. An `/etc/exports.d` file with `xprtsec=tls,mountpoint` was proven to work (plain mounts refused, TLS mount OK, an unmounted dataset refused) and is recorded as the way out, but the operator kept `sharenfs`: NFS stays cleartext on internal VLANs until OpenZFS accepts `xprtsec` (D5, Q5). The mount's `tls` field is withdrawn. · v0.6 (2026-10-03, operator answers) — Proposed. Q1: a node whose consumers span more than one zone serves NFS from a **storage zone**, not `mgmt` (D5). Q2: owner range 64000–64999 confirmed, written back. Q5: **RPC-with-TLS** is the default (D5). Q6: **LXC consumers in scope** (new D12). Q7: quota usage is a **health signal** (new D13). Q8: **no off-site** for exports (D9). Q9: a registered server is an instance of a generic **unmanaged `kind: machine`** module (D2a). Open questions replaced by the record of their answers. · v0.5 (2026-10-03, operator review) — D2a names the two outside-the-cluster servers apart: **registered, unmanaged** (a module instance with declared shares) and **unmodelled** (an address in a literal path). Several servers are several instances (`nas1`, `nas2`). Exports move out of `config."pvehost:nfs"` into the server's own module-tier **`nfs.exports[]`**: the `config` block is the consumer's, and no server — node or NAS — carries a `dependsOn`/`integratesWith` for NFS; the consumer's `dependsOn: pvehost:nfs` is the only edge. D11 states that a consumer never creates an export: a declared-but-unbuilt one is built on the consumer's install, an undeclared one is a validate error. · v0.4 (2026-10-03, operator review) — the provider is **`pvehost`** (`pvehost:nfs`), not `cluster` or a new `storage` module (D1, Q3 closed); exports use **ZFS `sharenfs`** (new D4a, with the analysis), replacing the TAPPaaS-owned `exports.d` file; an NFS server in a guest is rejected (no ZFS sharing, costs a VM), and HA shared data points to CIFS/S3 in a next version (D8). Q9 added. File renamed from *Cluster NFS Service*. · v0.3 (2026-10-03) — **D2a**: a dedicated NFS server outside the cluster is a share source — registered as an `unmanaged` instance whose `exports[]` describe existing paths (`path`, `version`, pinned `v3Ports`), named in mounts like any export; TAPPaaS enforces the grant and the firewall rule on its side, prints what the server must carry, and detects access drift from the consumer. NFS across `wan` refused. Q4 (consumer-provisioned exports) rejected by the operator. · v0.2 (2026-10-03) — D9 rewritten: an export is backed up by its **Host's `backup:filesystem`**, one PBS group per export from a ZFS snapshot, with a mandatory `backup.enabled` on every export; restore lands beside the live dataset. ADR-012 F.3 remains only for external shares. Q8 (off-site) added. · v0.1 (2026-10-03) — first draft: one service, two declarations (export on a Host, mount on a guest); the `<host>:<name>` share reference; a four-layer access model with squash-to-owner identity; data outlives its consumers. |
+| **Changelog** | v0.9 (2026-10-06, operator decision after installing Jellyfin on v0.8, #52) — **shares are Site state, not node state.** v0.8 made a share's name Site-unique and its server a DNS answer, which left the node's config the wrong home for the declaration: a move meant cutting an entry from one node file into another, uniqueness was a scan of every config, `modify --set nfs=…` replaced the whole object (and was refused, bug 1 below), and site state rode the release's 3-way merge of a module file. Decided: one Site file, **`config/storage.json`**, a map of shares keyed by name, owned by a new **`storage-manager`** (`network-manager`/`zones.json` is the precedent) with verbs that change one share — `nfs share add|modify|delete|purge`, `nfs grant|revoke`, `nfs show` — each validating, writing and converging (new D17, D18). The manager is the start of a storage control plane that can grow beyond NFS and beyond PVE hosts: a server module only implements a **server hook** that builds what `storage.json` declares for its instance (new D19). Consumers depend on **`storage:nfs`**, provided by a thin `storage` module, the way `network` provides services `network-manager` owns the state of (D1 rewritten) — **to confirm, Q17**. The node configs' `nfs` field and the `pvehost:nfs` coordinate are withdrawn, with a config migration (D20). Three defects found by installing Jellyfin, fixed in the v0.9 build: a node-triggered migration ran no `network:rules`, so the mount it needed had no rule (D11); an automount of the share read as local data, so every update after a migration refused and rolled back (D14); `module-manager modify` refused a field owned by a service the module itself provides (a general fix, recorded under *Implementation plan*). · v0.8 (2026-10-05, operator redesign after consuming the service for Jellyfin, #52) — **a mount names a share, never a host.** Share names are unique across the Site (D2); each share gets a DNS alias `nfs-<share>.mgmt.internal` to whatever server carries it, a node exports every share at the same path `/tappaas-nfs/<share>`, and the firewall rule targets the alias — so a consumer's config, mount and rule survive a share moving (new D2b). The `<instance>:<name>` form is withdrawn; a registered NAS is reached through the alias like a node; only `<ip-or-host>:/<path>` for an unmodelled server is used as written. **A share no server declares leaves the mount pending** — the module installs and the directory stays local; a share that exists but does not grant the consumer stays an error (D11). **A share that appears later is migrated into** on update, with consent: two-pass copy, the mount's `stopUnits`/`stopCommand`/`startCommand`, an open-files guard, the local copy kept as `<path>.pre-nfs` and removed by the next healthy update (new D14). **`subdir`** lets several consumers use one share (new D15). **Fixed: a deleted consumer's address stayed in the export's client list** until the node's next update; the delete now reconverges the node without it, and the client list is built from consumers that are deployed and mount the share, not from grants alone (new D16). · v0.7 (2026-10-04, operator decision, #766 WP8) — **TLS deferred; `sharenfs` kept.** Probed live on PVE 9.2 / OpenZFS 2.4.4: `sharenfs` refuses `xprtsec=tls` as an invalid option, so Q5 (TLS by default) and D4a (`sharenfs`) cannot both hold. An `/etc/exports.d` file with `xprtsec=tls,mountpoint` was proven to work (plain mounts refused, TLS mount OK, an unmounted dataset refused) and is recorded as the way out, but the operator kept `sharenfs`: NFS stays cleartext on internal VLANs until OpenZFS accepts `xprtsec` (D5, Q5). The mount's `tls` field is withdrawn. · v0.6 (2026-10-03, operator answers) — Proposed. Q1: a node whose consumers span more than one zone serves NFS from a **storage zone**, not `mgmt` (D5). Q2: owner range 64000–64999 confirmed, written back. Q5: **RPC-with-TLS** is the default (D5). Q6: **LXC consumers in scope** (new D12). Q7: quota usage is a **health signal** (new D13). Q8: **no off-site** for exports (D9). Q9: a registered server is an instance of a generic **unmanaged `kind: machine`** module (D2a). Open questions replaced by the record of their answers. · v0.5 (2026-10-03, operator review) — D2a names the two outside-the-cluster servers apart: **registered, unmanaged** (a module instance with declared shares) and **unmodelled** (an address in a literal path). Several servers are several instances (`nas1`, `nas2`). Exports move out of `config."pvehost:nfs"` into the server's own module-tier **`nfs.exports[]`**: the `config` block is the consumer's, and no server — node or NAS — carries a `dependsOn`/`integratesWith` for NFS; the consumer's `dependsOn: pvehost:nfs` is the only edge. D11 states that a consumer never creates an export: a declared-but-unbuilt one is built on the consumer's install, an undeclared one is a validate error. · v0.4 (2026-10-03, operator review) — the provider is **`pvehost`** (`pvehost:nfs`), not `cluster` or a new `storage` module (D1, Q3 closed); exports use **ZFS `sharenfs`** (new D4a, with the analysis), replacing the TAPPaaS-owned `exports.d` file; an NFS server in a guest is rejected (no ZFS sharing, costs a VM), and HA shared data points to CIFS/S3 in a next version (D8). Q9 added. File renamed from *Cluster NFS Service*. · v0.3 (2026-10-03) — **D2a**: a dedicated NFS server outside the cluster is a share source — registered as an `unmanaged` instance whose `exports[]` describe existing paths (`path`, `version`, pinned `v3Ports`), named in mounts like any export; TAPPaaS enforces the grant and the firewall rule on its side, prints what the server must carry, and detects access drift from the consumer. NFS across `wan` refused. Q4 (consumer-provisioned exports) rejected by the operator. · v0.2 (2026-10-03) — D9 rewritten: an export is backed up by its **Host's `backup:filesystem`**, one PBS group per export from a ZFS snapshot, with a mandatory `backup.enabled` on every export; restore lands beside the live dataset. ADR-012 F.3 remains only for external shares. Q8 (off-site) added. · v0.1 (2026-10-03) — first draft: one service, two declarations (export on a Host, mount on a guest); the `<host>:<name>` share reference; a four-layer access model with squash-to-owner identity; data outlives its consumers. |
 
 A module that runs in a `cluster:vm` guest can mount a **named NFS share** at a directory
 inside the guest, and a machine TAPPaaS manages can **export a ZFS dataset** from one of its
-pools as that share — declared, reconciled and access-controlled like every other service.
+pools as that share — declared once in the Site's `storage.json` through `storage-manager`,
+reconciled and access-controlled like every other service.
 The consumer names the share, never the machine that carries it; a share that does not exist
 yet leaves the directory local, and one that appears later is moved into.
 
@@ -66,8 +67,10 @@ v0.8 answers all three, and fixes a defect the Jellyfin work found (D16).
 
 | Term | Means |
 |---|---|
-| **export** | A ZFS dataset on a Host, created and exported over NFS by TAPPaaS. Its **name** is unique across the Site (v0.8). |
-| **export Host** | The machine module instance (ADR-026) whose pool carries the export — in v1 a cluster node (`pvehost`); a Debian machine (`debianhost`) later. |
+| **share declaration** | One entry of `config/storage.json` `nfs.shares`, keyed by the share's Site-unique name: which server carries it and how (D4). Changed only through `storage-manager` (D17). |
+| **export** | A ZFS dataset on a Host, created and exported over NFS by TAPPaaS because a share declaration names that Host as its server. |
+| **export Host** / **server** | The machine module instance (ADR-026) a share declaration names in `server` — a managed Host whose module implements the NFS server hook (D19: `pvehost` in v1, others later), or a registered, unmanaged server. |
+| **server hook** | The script a server's module ships to build, test and purge the shares declared for one of its instances (D19). |
 | **registered, unmanaged NFS server** | An NFS server **outside the cluster** that the site owns — a NAS, a dedicated file server — registered as a module instance with `management: unmanaged` (D2a). TAPPaaS knows it and its shares by name, and never configures it. |
 | **unmodelled NFS server** | An NFS server **also outside the cluster**, known to TAPPaaS only as an address in a mount's literal path — no module instance, no name, no declared shares. |
 | **share** | Anything a guest can mount over NFS: a TAPPaaS export, a share on a registered server, or an unmodelled server's path. |
@@ -77,47 +80,55 @@ v0.8 answers all three, and fixes a defect the Jellyfin work found (D16).
 | **migration** | Moving a pending mount's local content into its share once the share exists, then mounting it (D14). |
 | **mount** | A consumer's declaration that a share appears at a directory inside its guest. |
 | **consumer** | The module that declares the mount — a `cluster:vm` guest, or a `cluster:lxc` container (D12). |
-| **grant** | An export's statement that a named consumer may mount it, `ro` or `rw`. |
+| **grant** | A share declaration's statement that a named consumer may mount it, `ro` or `rw`. |
 
 ---
 
 ## Decision
 
-### D1 — One service, two declarations
+### D1 — Three parts: a manager for the state, a module for the consumers, hooks on the servers
 
-The **`pvehost`** module — the cluster node as a module (ADR-026 D4) — **provides `nfs`**
-(added to `pvehost.json` `provides`), implemented in `src/foundation/pvehost/services/nfs/`
-with the ADR-027 D3 file set. The provider is the node, not the `cluster` module and not a
-new `storage` module, because the thing being served is the node's own: its pools, its
-datasets, its NFS server. The node is already a module instance (ADR-026 D6), and it already backs itself up through
-`backup:filesystem` (D9). `cluster` keeps what is genuinely cluster-wide — VM, LXC, HA
-placement — and creating the pools stays in `config-storage.sh`.
+**v0.9 (operator decision):** the share declarations are Site state, owned by a manager —
+not fields of the node that happens to carry a share. TAPPaaS already has this pattern:
+`network-manager` owns `zones.json` and changes it through verbs, and the `network` module
+provides the services consumers depend on (`network:rules`, `network:proxy`). Storage gets
+the same shape:
 
-`pvehost:nfs` is consumed in two places, by two kinds of module, with two different fields:
-
-| Declared on | Field | What it says |
+| Part | Where | Owns |
 |---|---|---|
-| a node's instance file (`config/tappaas2.json`) | `nfs.exports[]` — the node's own field | "create this dataset on this pool and let these consumers mount it" |
-| a consumer's module file (`jellyfin.json`) | `config."pvehost:nfs".mounts[]` | "mount this share at this directory in my guest" |
+| **`storage-manager`** | `tappaas-cicd/manager/storage-manager/` | `config/storage.json` — every share's declaration, keyed by its Site-unique name (D18); the verbs that change one share at a time (D17); converging servers and notifying consumers |
+| **`storage` module** | `src/foundation/storage/` | the consumer-facing service **`storage:nfs`** (the ADR-027 D3 file set): checks a consumer's mounts against `storage.json`, mounts or migrates, writes the guest's mount list (D10, D14) |
+| **server hooks** | in each server's module — `pvehost/storage/nfs-server.sh` in v1 | building on one instance what `storage.json` declares for it: dataset, mountpoint, owner, `sharenfs` (D4, D4a, D19) |
 
-The two fields sit in different places on purpose. **`config."<module>:<service>"` is the
-consumer's block** (ADR-009): it says what a module wants from a service it depends on, so
-the mount goes there. **A server describing its own shares consumes nothing**, so its
-exports are a module-tier object of its own — `nfs.exports[]`, the way `backup` is a
-module-tier object (ADR-012 §2.7) — defined once in the schema and read by `pvehost:nfs`.
-The same `nfs` object describes the shares of a registered, unmanaged server (D2a). No
-server carries a `dependsOn` or `integratesWith` for NFS: **the only dependency edge is the
-consumer's `dependsOn: pvehost:nfs`**, and the share's name finds the server (D2, D2b).
-A `debianhost` that should export a pool gets the same service later, as `debianhost:nfs`
-from a shared library — v1 exports from cluster nodes only.
+| Declared in | What it says |
+|---|---|
+| `config/storage.json` `nfs.shares.<name>` — through `storage-manager` | "this share lives on this server, built this way, and these consumers may mount it" |
+| a consumer's module file (`jellyfin.json`), `config."storage:nfs".mounts[]` | "mount this share at this directory in my guest" |
 
-Both are one service because **access is a join between them** (D5): neither side alone can
-decide the export's client list, the firewall rule or the conflict between a `ro` grant and
-an `rw` request. One service owns both halves and reconciles the pair; two services would
-each own half a rule.
+**Why a manager.** A share's server is one of its attributes since v0.8 (the alias makes it
+invisible to consumers), so the declaration belongs where the Site's share namespace is —
+one file, a map keyed by name, which makes uniqueness structural instead of a scan, a move a
+change of one field, and every change a verb that touches one share (D17). It is also not
+NFS-specific in shape: `storage.json` is the place further storage kinds join (D18), and
+`storage-manager` the control plane that drives whichever servers implement them — PVE hosts
+now, `debianhost` and others later (D19).
 
-The service runs on the mothership like every other provider, reaching the export Host and
-the guest over the same SSH paths `backup:filesystem` already uses.
+**Why a module as well.** A consumer's dependency names a module's service (ADR-009); a
+manager is not one. The `storage` module is thin — `kind: application`, `scope: site`,
+`stack: foundation`, installed once with the foundation, nothing to install on a machine of its
+own — and exists to provide `storage:nfs` (and later services) where consumers can depend on
+it. ADR-029 v0.4 rejected "a `storage` module" as a module with no machine of its own *serving
+the shares*; v0.9's module serves nothing — the servers do, through their hooks — and only
+gives the consumer side its coordinate, exactly as `network` does. **Q17: confirm the
+coordinate `storage:nfs`** (the alternative, keeping `pvehost:nfs` for the consumer side, names
+a server type in every consumer although a share may live on any server).
+
+**The only dependency edge is the consumer's `dependsOn: storage:nfs`.** No server depends on
+anything for NFS: `storage-manager` reads which servers to drive from `storage.json`, and a
+server's own update calls its hook for the shares declared for it.
+
+Both halves meet in one service because **access is a join** (D5): the share declaration's
+grants and the consumer's mount decide the client list and the firewall rule together.
 
 ### D2 — The share reference: a share name, or `<ip-or-host>:/<path>`
 
@@ -150,33 +161,23 @@ whether TAPPaaS models them:
 | What it is | a NAS or file server **the site owns** | a server nobody here models — another party's, or a one-off |
 | In TAPPaaS | a module instance, `kind: machine`, `management: unmanaged` (ADR-022g D3, ADR-026) | only the address in a mount's literal path (D2) |
 | Named | yes — `config/<instance>.json`, a DNS name, a firewall alias; each share a share alias (D2b) | no |
-| Shares declared | yes — `nfs.exports[]` descriptors | no |
+| Shares declared | yes — share declarations in `storage.json` naming it as `server` | no |
 | Configured by TAPPaaS | **never** — no login, no packages, no export table | never |
 
 Registering is the recommended path for any server the site owns: it is what gives TAPPaaS
 something to check grants and drift against. The literal form is the fallback for a server
 that is not ours to describe.
 
-A registered server's shares are declared in the same `nfs.exports[]` object a node uses,
-but as **descriptors of what already exists** — a `path` instead of a `pool`:
+A registered server's shares are declared in `storage.json` like a node's, but as
+**descriptors of what already exists** — a `path` instead of a `pool` (D4):
 
-```json
-// config/nas1.json — a registered, unmanaged NFS server
-"management": "unmanaged",
-"nfs": {
-  "exports": [
-    {
-      "name": "video",
-      "path": "/volume1/video",
-      "version": "4.1",
-      "grants": [ { "consumer": "jellyfin", "access": "ro" } ]
-    }
-  ]
-}
+```bash
+storage-manager nfs share add video --server nas1 --path /volume1/video --version 4.1
+storage-manager nfs grant video jellyfin ro
 ```
 
-No `dependsOn`, no `integratesWith` and no `config."pvehost:nfs"` block: the server does not
-consume the NFS service, it is described *to* it (D1).
+The NAS's own instance file carries nothing about NFS: the server does not consume the NFS
+service, it is described *to* it (D1).
 
 **Several servers are several instances.** A site with two NAS boxes registers two
 instances of the same module — `config/nas1.json` and `config/nas2.json`, each named after
@@ -189,7 +190,7 @@ appliance family can follow if one ever needs behaviour of its own.
 
 | Field | On a registered server |
 |---|---|
-| `name`, `grants` | as on a managed Host (D4). |
+| `server`, `grants` | as for a managed Host (D4). |
 | `path` | **required** — the path the server exports. Forbidden on a managed Host. |
 | `version` | `4.2` (default), `4.1`, `4.0` or `3`. Many NAS still default to older protocol versions; the mount follows what the server offers. |
 | `v3Ports` | **required with `version: "3"`** — `{mountd, nlockmgr, statd}`. NFSv3 needs `rpcbind` (111) and the auxiliary daemons, whose ports are dynamic unless pinned; the firewall rule (layer 2) can only be host-scoped if they are pinned, so a v3 share with dynamic ports is refused. |
@@ -201,7 +202,7 @@ What TAPPaaS can and cannot do for such a share, by the D5 layers:
 |---|---|---|
 | 1 Authorization | **enforced on the TAPPaaS side**: the two-key check runs against the descriptor's grants exactly as for a managed export. | none — the mount is the only declaration. |
 | 2 Network | derived: consumer → the share alias on tcp/2049 (plus 111 and `v3Ports`, tcp and udp, for v3). No rule when consumer and server share a zone — that traffic never crosses OPNsense. | derived the same way, to the literal host. |
-| 3 Client list | **reported, not applied**: `pvehost nfs show <instance>` prints, per share, the consumer addresses and `ro`/`rw` the server's export table must carry, and the recommended options (`root_squash`, `all_squash` to one owner — D5). | the operator's. |
+| 3 Client list | **reported, not applied**: `storage-manager nfs show --server <instance>` prints, per share, the consumer addresses and `ro`/`rw` the server's export table must carry, and the recommended options (`root_squash`, `all_squash` to one owner — D5). | the operator's. |
 | 4 File identity | recommended (squash-to-owner), not enforceable. If the server maps UIDs instead, files are created with each consumer's own app UID, which differs between guests — `show` warns. | the operator's. |
 
 **Drift is detected, not healed.** `test-service.sh` runs from each consumer: the share
@@ -224,8 +225,9 @@ server's own business — ADR-012 F.3's `backup:dataset` remains the open questi
 
 Every share has a DNS name, **`nfs-<share>.mgmt.internal`**, a CNAME of the server that
 carries it — `tappaas1.mgmt.internal` for a node, the registered server's own name for a
-NAS. It is created by whatever converges the server (`pvehost update` for a node; the
-registered-server module's update for a NAS, WP7) with `dns-manager alias add`, the same
+NAS. It is created by `storage-manager` when it converges the share — for a node and for a
+registered NAS alike, since the alias is about the share, not the server's kind — with
+`dns-manager alias add`, the same
 mechanism the backup Host alias uses (ADR-012 §2.7, #612), and deleted when the share is.
 
 The domain is fixed — `mgmt.internal`, whatever zone the server sits in — so the name a
@@ -264,9 +266,9 @@ firewall, which a rare, operator-driven move does not justify.
 ### D3 — The mount declaration
 
 ```json
-"dependsOn": ["cluster:vm", "pvehost:nfs", "network:rules", "..."],
+"dependsOn": ["cluster:vm", "network:rules", "storage:nfs", "..."],
 "config": {
-  "pvehost:nfs": {
+  "storage:nfs": {
     "mounts": [
       {
         "path": "/media",
@@ -295,53 +297,60 @@ Mounts are always **NFSv4.2 (or the registered server's version), `hard`, `_netd
 explains `hard`). The stop/start fields matter only to a migration (D14); a mount whose
 share existed from the start never uses them.
 
-### D4 — The export declaration
+### D4 — The share declaration (`config/storage.json`)
 
-The export is declared on the **Host**, not on the consumer, because the data belongs to the
-Host's pool and outlives every consumer (D6).
+A share is declared once, in the Site's `storage.json`, not on the server and not on the
+consumer: the data outlives every consumer (D6), and the server is only where it currently
+lives (D2b). The file is written by `storage-manager` (D17); this is what it holds:
 
 ```json
-// config/tappaas2.json — the pvehost instance for node tappaas2
-"nfs": {
-  "exports": [
-    {
-      "name": "media",
-      "pool": "tankb1",
-      "quota": "4T",
-      "backup": { "enabled": true },
-      "grants": [
-        { "consumer": "jellyfin", "access": "rw" }
-      ]
+{
+  "nfs": {
+    "shares": {
+      "media": {
+        "server": "tappaas1",
+        "pool": "tankb1",
+        "quota": "4T",
+        "properties": { "recordsize": "1M", "compression": "lz4" },
+        "backup": { "enabled": true, "exclude": [".Trash-*"] },
+        "owner": { "uid": 64000, "gid": 64000 },
+        "grants": { "jellyfin": "rw", "immich": "ro" }
+      },
+      "video": {
+        "server": "nas1",
+        "path": "/volume1/video",
+        "version": "4.1",
+        "grants": { "jellyfin": "ro" }
+      }
     }
-  ]
+  }
 }
 ```
 
 | Field | Type | Default | Meaning |
 |---|---|---|---|
-| `name` | `^[a-z][a-z0-9-]*$` | — | **Unique across the Site** (v0.8) — the share reference itself, and the share alias `nfs-<name>`. |
-| `pool` | ZFS pool name | — | Must exist on this Host. Any pool is accepted; `tanka*` gets a validate warning (D8). |
-| `quota` | size | none | ZFS `quota` on the dataset. Strongly recommended on a pool that also holds VM disks — a full pool stops every guest on it, not just the consumer. |
-| `grants` | `[{consumer, access}]` | `[]` | Who may mount, and how much. `consumer` is a module instance name. An export with no grants exists and is mountable by nobody. |
-| `owner` | `{uid, gid}` | allocated (D5) | The identity every client is squashed to. Allocated by TAPPaaS unless pinned. |
-| `properties` | object | `{}` | ZFS properties from an allow-list: `recordsize`, `compression`, `atime`. (`1M` recordsize and `lz4` suit a media library; the defaults suit general files.) |
-| `backup` | `{enabled, exclude[]}` | **none — `enabled` is required** | Whether the Host's `backup:filesystem` captures this export (D9). `exclude` takes patterns relative to the export root. |
+| *(key)* | `^[a-z][a-z0-9-]*$` | — | The share's name — **unique across the Site by construction** (a map key), the share reference, and the alias `nfs-<name>`. |
+| `server` | module instance | — | The managed Host or registered server that carries the share. Its module must implement the NFS server hook (D19) unless it is unmanaged. |
+| `pool` | ZFS pool name | — | Managed Host only: must exist on the server. `tanka*` gets a warning (D8). |
+| `quota` | size | none | ZFS `quota` on the dataset. Strongly recommended on a pool that also holds VM disks. |
+| `properties` | object | `{}` | ZFS properties from an allow-list: `recordsize`, `compression`, `atime`. |
+| `backup` | `{enabled, exclude[]}` | **none — `enabled` is required** for a managed share | Whether the server's `backup:filesystem` captures it (D9). |
+| `owner` | `{uid, gid}` | allocated (D5) | The identity every client is squashed to; allocated by `storage-manager` from 64000–64999 and recorded here. |
+| `grants` | `{consumer: "ro"\|"rw"}` | `{}` | Who may mount, and how much — a map, so one grant is added or revoked without touching the rest. |
+| `path`, `version`, `v3Ports` | | | Registered server only (D2a). |
 
-What the service builds on the Host:
+What the server hook builds for a managed share (D19):
 
 - the dataset **`<pool>/tappaas-nfs/<name>`**, its ZFS `mountpoint` set to
-  **`/tappaas-nfs/<name>`** — the same path on every node, whatever the pool (v0.8, D2b). The
-  `tappaas-nfs/` parent keeps exports out of the namespace Proxmox uses for VM disks
-  (`<pool>/vm-<id>-disk-<n>`), so neither `pvesm` nor the storage-drift test ever mistakes
-  one for the other; its own mountpoint stays the pool's default, and no two exports collide
-  because their names are Site-unique;
-- the share alias `nfs-<name>.mgmt.internal` → this node (D2b);
+  **`/tappaas-nfs/<name>`** — the same path on every node, whatever the pool (D2b); the
+  `tappaas-nfs/` parent keeps exports out of the namespace Proxmox uses for VM disks;
 - its root owned by `owner`, mode `0770`;
-- the export itself as the dataset's **`sharenfs` property** (D4a), rendered from the grants;
-  the parent `<pool>/tappaas-nfs` is set `sharenfs=off` explicitly, so nothing is exported by
-  inheritance;
-- the NFS server configured **v4-only** (`/etc/nfs.conf`: `vers3=n`; `rpcbind`, `mountd`
-  and `statd` not exposed), so the only port is **tcp/2049**.
+- the export itself as the dataset's **`sharenfs` property** (D4a), rendered from the grants
+  and the consumers that mount the share (D16); the parent `<pool>/tappaas-nfs` set
+  `sharenfs=off` explicitly;
+- the NFS server configured **v4-only**, so the only port is **tcp/2049**.
+
+`storage-manager` itself creates the share alias `nfs-<name>.mgmt.internal` → the server (D2b).
 
 ### D4a — The export is the dataset's `sharenfs` property
 
@@ -458,15 +467,15 @@ Lifecycles follow ownership, and no TAPPaaS verb destroys share data as a side e
 | Event | Effect |
 |---|---|
 | mount removed from a consumer, or consumer `delete`d | unmount, remove the guest's mount unit, **reconverge the server without the consumer** so its address leaves the client list at once (D16), remove the firewall rule. **Data untouched.** |
-| grant removed while the consumer still mounts | refused at validate — remove the mount first, or both in one change. |
-| export removed from the Host's declaration, with mounts | refused at validate, naming the mounting consumers. |
-| export removed, no mounts | unexported and **kept**; the dataset is reported as an orphan by `test-service.sh` until purged. |
+| grant revoked while the consumer still mounts | `storage-manager nfs revoke` refuses — remove the mount first. |
+| share deleted while consumers mount it | `storage-manager nfs share delete` refuses, naming the mounting consumers. |
+| share deleted, no mounts | unexported, alias removed, data **kept**; the dataset is reported as an orphan (`storage-manager nfs show`, the server hook's test) until purged. |
 | share deleted after a consumer migrated into it | **never a silent fallback** to the local directory: the mount stays declared and `validate` errors that its share is gone (D14). |
-| purge | an explicit verb — `pvehost nfs purge <share>` — which demands confirmation and is never run by `update`, `delete` or the sweep. |
+| purge | an explicit verb — `storage-manager nfs share purge <share>` (D17) — which demands confirmation and is never run by `update`, `delete` or the sweep. |
 
 This is ADR-026's "`delete` unregisters, never wipes", applied to data.
 
-### D7 — Change semantics (`services/nfs/fields.json`)
+### D7 — Change semantics
 
 | Field | Class | Why |
 |---|---|---|
@@ -474,13 +483,18 @@ This is ADR-026's "`delete` unregisters, never wipes", applied to data.
 | `mounts[].access` | `in-place` | Remount with the new mode — but only within the grant. |
 | `mounts[].share`, `mounts[].subdir` | `in-place` | Unmount and mount the new source. **Data is not moved** between shares or subdirs: only a pending mount is migrated into (D14). |
 | `mounts[].stopUnits`, `stopCommand`, `startCommand` | `none` | Read only by a migration. |
-| `nfs.exports` | `in-place`, apply `reconcile` | Adds and unexports; never destroys (D6). |
-| `nfs.exports[].grants` | `in-place` | Re-renders `sharenfs` and the rules; re-sharing is live. |
-| `nfs.exports[].quota` | `in-place` | `zfs set quota`; a value below current usage is refused at apply time. |
-| `nfs.exports[].properties` | `in-place` | Applies to newly written blocks only — stated in the change note, because `recordsize` does not rewrite the existing library. |
-| `nfs.exports[].backup` | `in-place` | Rewrites the Host's capture manifest; enabling starts at the next scheduled run, disabling stops future runs and **keeps** the snapshots already stored (they age out under retention). |
-| `nfs.exports[].name`, `exports[].pool` | `immutable` | A rename breaks every consumer's share reference; a pool change is a data migration. Both are refused with the manual procedure in the README — after which the share alias moves and consumers notice nothing (D2b). |
-| `nfs.exports[].owner` | `immutable` once allocated | Changing it would need a recursive `chown` of the dataset. |
+
+A share declaration changes only through `storage-manager` (D17); the same classes govern
+what its `share modify --set` accepts:
+
+| `storage.json` share field | Class | Why |
+|---|---|---|
+| `grants` (via `grant`/`revoke`) | `in-place` | Re-renders `sharenfs` and the rules; re-sharing is live. Revoking a grant a consumer still mounts is refused (D6). |
+| `quota` | `in-place` | `zfs set quota`; a value below current usage is refused at apply time. |
+| `properties` | `in-place` | Applies to newly written blocks only. |
+| `backup` | `in-place` | Rewrites the server's capture manifest; disabling keeps the snapshots already stored. |
+| *name*, `pool`, `server` | `migrate` — refused by `modify` | A rename breaks every consumer's share reference; a pool or server change is a data migration, done by the operator with the procedure in the README (send the dataset, then change `server`/`pool`), after which the alias follows and consumers notice nothing (D2b). A `share move` verb is a candidate for later (Q18). |
+| `owner` | `immutable` once allocated | Changing it would need a recursive `chown` of the dataset. |
 
 ### D8 — Availability: the share is as available as its Host, and says so
 
@@ -567,14 +581,14 @@ first export, not before — a node with no export runs no NFS server.
 
 ### D11 — Ordering, validation, and the pending mount
 
-A consumer declaring `mounts` must `dependsOn: pvehost:nfs`; that is the only NFS dependency
+A consumer declaring `mounts` must `dependsOn: storage:nfs`; that is the only NFS dependency
 in the graph (D1). What a mount's share reference finds decides what happens — **v0.8: a
 share that does not exist is not a refusal**:
 
 | The share reference finds… | Result |
 |---|---|
 | **no** server declaring the share | **pending**: the module installs, `path` stays a directory on the guest's own disk, no mount, no firewall rule, no client-list entry. `validate` reports it as information, naming the share. A consumer never creates a share (Q4): the data must not follow the consumer's lifecycle (D6). |
-| the share, declared but not yet built | the consumer's install or update has the server build it — dataset, owner, alias, `sharenfs` — through the server's own idempotent reconcile, then mounts (or migrates, D14). |
+| the share, declared but not yet built | the consumer's install or update has `storage-manager` converge it — the server hook builds dataset, owner, `sharenfs`; the manager the alias — then mounts (or migrates, D14). |
 | the share, **not granting** this consumer | **error** (operator decision, v0.8): a share that exists and leaves this consumer out is a configuration mistake, not a gap to wait out. The message prints the grant to add. So the install-anywhere promise holds while the share does not exist, not while it exists without the grant. |
 | the share, granted, `rw` asked against `ro` | **error**. |
 | the share, granted | mounted — or, if the mount was pending and `path` holds data, migrated into (D14). |
@@ -582,9 +596,16 @@ share that does not exist is not a refusal**:
 | an **unmodelled** server's path | mounted; nothing to check until the mount is tried. |
 
 The pending → available transition reaches the consumer two ways: its own update on every
-sweep, and the server's update, which — after building a share or adding a grant — runs the
-service's update for each consumer whose mount it just made available, so a migration need
-not wait for the next sweep. The export's client list holds addresses resolved at each
+sweep, and `storage-manager`, which — after `share add` or `grant` — runs the service's update
+for each consumer whose mount it just made available, so a migration need not wait for the
+next sweep.
+
+**The consumer's NFS update owns its firewall path (v0.9).** Found installing Jellyfin on
+v0.8: a node-triggered update ran only `pvehost:nfs`, never the consumer's `network:rules`, so
+a consumer installed before its share had no rule and the mount its migration needed timed
+out. From v0.9 the `storage:nfs` update recompiles the consumer's rules (`rules-manager
+reconcile <consumer>`) before it mounts or migrates whenever a mount crosses the firewall —
+whoever triggered the update. The export's client list holds addresses resolved at each
 reconcile; `test-service.sh` reports one that no longer matches a consumer's lease as drift.
 
 ### D12 — Container consumers (`cluster:lxc`)
@@ -621,7 +642,7 @@ mounts it** — never simply mounting over it, which would hide the data under a
 
 | Step | What happens |
 |---|---|
-| 0. Decide | `path` empty or absent → nothing to move: mount and stop. The share (at `subdir`, D15) already holds data **and** `path` does too → **refused**, never merged; reported with both sizes, for the operator to resolve — unless what is there is this mount's own interrupted migration (a marker file it leaves while copying), which is **resumed**. Otherwise continue. |
+| 0. Decide | `path` already **is** the share — mounted from the expected source, *or an automount (autofs) of it* — → nothing to move. `path` empty or absent → nothing to move: mount and stop. The share (at `subdir`, D15) already holds data **and** `path` does too → **refused**, never merged; reported with both sizes, for the operator to resolve — unless what is there is this mount's own interrupted migration (a marker file it leaves while copying), which is **resumed**. Otherwise continue. |
 | 1. Consent | A migration stops the app, so it runs only with consent: the consumer's `rebootOk: true`, or an update run with `--allow-disruption` (ADR-020's disruption gate, decided v0.8). Without it the update reports **migration pending** and changes nothing. |
 | 2. First pass | Mount the share at a temporary path in the guest, leave the marker, and `rsync -rlptH --no-owner --no-group` the directory into it **while the app runs** — the bulk, which may take hours for a media library. No ownership or ACLs are copied: every write is squashed to the export's `owner` anyway (D5), and trying would fail on each file. |
 | 3. Stop | `stopCommand`, then `stopUnits` (D3). |
@@ -629,6 +650,15 @@ mounts it** — never simply mounting over it, which would hide the data under a
 | 5. Second pass | The same rsync with `--delete`, for the difference since the first pass — short, because the app was stopped. Then the marker goes. |
 | 6. Swap | Rename `path` to **`<path>.pre-nfs`**, recreate `path` empty, mount the share there at once, and write the mount into the guest (D10) so the next rebuild keeps it. |
 | 7. Start | `stopUnits` start, then `startCommand`. Then the service's own test: mounted, writable for `rw`. |
+
+**An automount is the share, not local data (v0.9).** Found installing Jellyfin on v0.8: once
+the guest's rebuild turned `path` into an automount point, the probe saw no NFS mount, then
+listed the directory — which triggered the automount and listed the *share* — and called it
+local data. The share "already held data", the update refused a merge and rolled back, and
+`<path>.pre-nfs` was never removed: every update after a migration failed. The probe now
+recognises an autofs mount at `path` whose unit mounts the expected source as the share, and
+only then triggers it to check health. The deep suite had missed it because it always touched
+the directory before updating; it now updates without touching it first.
 
 **Until a migration succeeds the mount stays out of the guest's mount list** (D10): a
 directory that holds local data is never handed to a rebuild that would mount the share
@@ -681,12 +711,81 @@ with an NFS rule of its own to the same node, could have mounted the share.
 - The client list (D5 layer 3) is built from consumers that are **granted, deployed and
   mount the share** — not from grants alone. A grant for a consumer that is gone, or that
   does not mount the share, contributes no address.
-- `delete-service.sh` **reconverges every server the consumer mounted from, without the
-  consumer**, before it returns — the consumer's config still exists at that moment, so the
-  server's reconcile is told to leave it out.
+- `delete-service.sh` has `storage-manager` **reconverge every share that grants the
+  consumer, without the consumer**, before it returns — the consumer's config still exists at
+  that moment, so the server hook is told to leave it out.
 - A mount removed by an update does the same for the server it named.
 - `test-service.sh` on the server side reports an address in a client list that belongs to
   no deployed, mounting consumer as drift — the check that would have caught this.
+
+### D17 — `storage-manager`: one share at a time
+
+Shares are changed by verbs that act on **one share by name**; nobody hand-edits
+`storage.json` or replaces the whole object to change one entry:
+
+| Verb | Does |
+|---|---|
+| `storage-manager nfs share add <name> --server <instance> (--pool <p> [--quota <q>] --backup true\|false [--prop k=v…] \| --path <p> [--version v] [--v3-ports m,n,s])` | declares a share; refuses a name already declared, a server that cannot serve (D19), a pool the server lacks |
+| `storage-manager nfs share modify <name> --set <field>=<value>…` | changes fields within their D7 class; refuses `migrate`/`immutable` ones with the procedure |
+| `storage-manager nfs grant <share> <consumer> ro\|rw` · `revoke <share> <consumer>` | adds or removes one grant; `revoke` is refused while the consumer still mounts the share (D6) |
+| `storage-manager nfs share delete <name>` | removes the declaration: unshared, alias removed, **data kept** and reported as an orphan; refused while a consumer mounts it (D6) |
+| `storage-manager nfs share purge <name>` | destroys an orphan's dataset, after confirmation; never run by `update`, `delete` or the sweep (D6) |
+| `storage-manager nfs show [<name>] [--server <instance>]` | the declarations, what each server holds live, who mounts what; for a registered server, the client lines its export table must carry (D2a) |
+| `storage-manager nfs converge [<name>\|--server <instance>]` | re-applies the declarations — what a server's own update also does for its shares |
+
+Every changing verb runs the same sequence: **lock** `storage.json` (one writer at a time),
+**validate** the whole resulting file with the same rules `module-manager validate` uses
+(Site-unique names, `backup.enabled` stated, a server that can serve, the pool present), **write**
+it atomically, **converge** the affected share — the server hook, then the alias — and
+**notify** the consumers whose mounts it changed (their `storage:nfs` update, with the consent
+rules of D14). A verb that fails validation changes nothing. `--check` shows the plan without
+applying it.
+
+`storage-manager` is a manager in the ADR-007f sense: a CLI in `tappaas-cicd/manager/`, run on
+the mothership as the `tappaas` operator, with its own `test.sh` (fast tier: the verbs against a
+fixture `storage.json`; deep: the end-to-end suite, D-testing).
+
+### D18 — `config/storage.json`
+
+One Site file, schema `schemas/storage-fields.json`, a section per storage kind — `nfs` now
+(`shares`, D4); further kinds (an SMB or S3 service, the ADR-029 D8 direction for HA shared
+data) join as sibling sections managed by the same manager. It is Site state like
+`zones.json`: never part of a module's release merge, written only by `storage-manager`,
+backed up with the rest of `config/` (ADR-012 D20), and migrated by ADR-025 migrations when its
+shape changes. An absent file is an empty one: a Site with no shares has nothing to declare.
+
+### D19 — Server hooks: who can serve
+
+A managed Host can serve a share when its module ships an **NFS server hook**,
+`<module>/storage/nfs-server.sh`, with three verbs, each for one instance:
+
+| Verb | Does |
+|---|---|
+| `converge <instance> [--exclude <consumer>…]` | builds and shares, on that machine, every share `storage.json` declares for it (D4, D4a, D16), and unshares (keeping the data) what is no longer declared for it |
+| `test <instance>` | the live state against the declarations: dataset, mountpoint, client list (D16 drift) |
+| `purge <instance> <share>` | destroys one orphan's dataset (called only by `share purge`) |
+
+`pvehost` ships it in v1 (the v0.8 node code, moved behind the hook). A `debianhost` that
+should serve a pool ships the same hook — from a shared library — and nothing else changes:
+`storage-manager` finds the hook through the server instance's module (`moduleSource`, ADR-026
+D6). A registered, unmanaged server needs no hook — TAPPaaS builds nothing there (D2a) — and a
+managed instance whose module has none cannot be named as a share's `server`.
+
+A server's own update calls its hook's `converge` for itself, so the sweep keeps every server
+converged without a verb having run. The hook never decides *what* to serve — `storage.json`
+does — only *how* on its kind of machine; that is what lets the storage control plane grow to
+servers that are not PVE hosts.
+
+### D20 — Migration from v0.8 (ADR-025)
+
+Nothing uses NFS yet, but `config/` shapes are only ever changed with a migration:
+`migrations/NNNN-storage-json.sh` moves every instance's `nfs.exports[]` into
+`storage.json` `nfs.shares` (grants turned into a map; `server` set to the instance), removes
+the `nfs` field from the instance configs, and rewrites each consumer's `pvehost:nfs` —
+`dependsOn` entry and `config` block — to `storage:nfs`. `--check` reports what it would move;
+two servers declaring one share name is a refusal, as it already is at validate. The
+`pvehost` module stops providing `nfs`; its field definition and service directory go, its
+node code moves behind the server hook (D19).
 
 ---
 
@@ -695,9 +794,9 @@ with an NFS rule of its own to the same node, could have mounted the share.
 `jellyfin.json` ships the same mount to every site:
 
 ```json
-"dependsOn": ["cluster:vm", "templates:nixos", "backup:vm", "pvehost:nfs", "network:proxy", "network:rules"],
+"dependsOn": ["cluster:vm", "templates:nixos", "backup:vm", "network:proxy", "network:rules", "storage:nfs"],
 "config": {
-  "pvehost:nfs": { "mounts": [
+  "storage:nfs": { "mounts": [
     { "path": "/media", "share": "media", "subdir": "jellyfin", "access": "rw",
       "stopUnits": ["jellyfin.service"] }
   ]}
@@ -707,36 +806,30 @@ with an NFS rule of its own to the same node, could have mounted the share.
 **On a site with no media share** the mount is pending: Jellyfin installs, `/media` is a
 directory on its own disk, and `validate` notes that the share `media` is not declared.
 
-**Later the operator creates the share** on the node that has `tankb1`:
+**Later the operator creates the share** on the node that has `tankb1`, and grants it:
 
-```json
-// config/tappaas1.json
-"nfs": { "exports": [
-  { "name": "media", "pool": "tankb1", "quota": "4T",
-    "properties": { "recordsize": "1M", "compression": "lz4" },
-    "backup": { "enabled": true, "exclude": [ ".Trash-*" ] },
-    "grants": [ { "consumer": "jellyfin", "access": "rw" } ] }
-]}
+```bash
+storage-manager nfs share add media --server tappaas1 --pool tankb1 --quota 4T \
+    --prop recordsize=1M --prop compression=lz4 --backup true
+storage-manager nfs grant media jellyfin rw
 ```
 
-`pvehost update tappaas1` creates `tankb1/tappaas-nfs/media` mounted at `/tappaas-nfs/media`
-(quota 4T, owner 64000:64000), the alias `nfs-media.mgmt.internal` → `tappaas1.mgmt.internal`,
-and shares it to Jellyfin's address; then it runs the service's update for Jellyfin. With
-consent (`rebootOk`, or `--allow-disruption`) that update migrates: copies `/media` into
-`/tappaas-nfs/media/jellyfin` while Jellyfin runs, stops `jellyfin.service`, copies the
-difference, renames `/media` to `/media.pre-nfs`, mounts
-`nfs-media.mgmt.internal:/tappaas-nfs/media/jellyfin` on `/media`, and starts Jellyfin. The
-next healthy update removes `/media.pre-nfs`. `network:rules` holds one rule: Jellyfin →
-`nfs-media.mgmt.internal`, tcp/2049. Without consent the update reports *migration pending*.
+`share add` validates, writes `storage.json`, and converges: tappaas1's hook creates
+`tankb1/tappaas-nfs/media` at `/tappaas-nfs/media` (owner 64000:64000, allocated and recorded),
+and the manager creates the alias `nfs-media.mgmt.internal` → `tappaas1.mgmt.internal`. `grant`
+adds Jellyfin to the client list and runs Jellyfin's `storage:nfs` update, which first
+recompiles its firewall rule (Jellyfin → `nfs-media.mgmt.internal`, tcp/2049), then — with
+consent (`rebootOk`, or `--allow-disruption`) — migrates `/media` into
+`/tappaas-nfs/media/jellyfin`; without consent it reports *migration pending*. The next
+healthy update removes `/media.pre-nfs`.
 
 If the operator later moves the share to another node, Jellyfin's config, mount and rule are
-unchanged; the alias follows the share. Because `tappaas1` `integratesWith`
-`backup:filesystem`, the library is captured nightly into `fs/tappaas1` as the group
-`tappaas1-nfs-media` (D9).
+unchanged: the dataset is sent, `share modify`'s refusal names the procedure, `storage.json`'s
+`server` changes, and the alias follows. Because tappaas1 `integratesWith` `backup:filesystem`,
+the library is captured nightly as `tappaas1-nfs-media` (D9).
 
-The Community Jellyfin module today carries its own media-storage modes (`mediaStorage:
-allocate|share`) and runs its own NFS export of `/media`; adopting this mount replaces those,
-which is that module's change, not this ADR's.
+The Community Jellyfin module carries its own media-storage modes (`mediaStorage:
+allocate|share`); adopting this mount replaces those, which is that module's change.
 
 ---
 
@@ -795,7 +888,9 @@ which is that module's change, not this ADR's.
 | **Highly available shared storage** | Out of scope for NFS. If HA for shared data becomes a requirement, a next version of TAPPaaS goes to **CIFS or S3** on replicated storage (D8). |
 | **SMB** | Better for desktop clients, worse for Linux services; a separate service if ever needed. |
 | **A TAPPaaS-owned `/etc/exports.d/tappaas.exports`** | v0.1–v0.3's choice. Exports the empty mountpoint when a pool fails to import, and is a second record that can disagree with the dataset. **Replaced by `sharenfs`** (D4a, v0.4). |
-| **`cluster:nfs`, or a new `storage` module** | v0.1–v0.3 placed the service on `cluster`. **Decided `pvehost`** (operator, v0.4): the pools, datasets and NFS server are the node's, the node is the instance a share reference names, and a `storage` module would be a module with no machine of its own (D1). |
+| **`cluster:nfs`, or a new `storage` module** | v0.1–v0.3 placed the service on `cluster`; v0.4 decided `pvehost`, rejecting a `storage` module as one with no machine of its own. **v0.9 revisits it** (operator): the state moves to `storage-manager`, the servers keep the building (D19), and a thin `storage` module only gives consumers their coordinate — the `network` / `network-manager` split (D1). |
+| **Share declarations in the node's own config** (`nfs.exports[]` on the pvehost instance, v0.5–v0.8) | Fit while the node was the share's owner. Once v0.8 made a share Site-unique and its server a DNS answer, it left: a move as an edit of two node files, uniqueness as a scan, `modify --set nfs=…` as a whole-object replacement (and refused), Site state in a module's release merge. **Superseded** (operator, v0.9) by `storage.json` and `storage-manager` (D1, D17). |
+| **Mark `nfs` as a provider-owned field** so a node may `modify` it | Classifies the field correctly and fixes the refusal, but keeps the declaration on the wrong object. The general fix it implies — a module may change fields owned by services it provides — is made anyway (*Implementation plan*). |
 | **A host-qualified share reference** (`tappaas1:media`, v0.1–v0.7) | Put a node's name into a module's file: the same module could not ship to two sites, and a moved share broke every consumer. **Withdrawn** (operator, v0.8) for a Site-unique name reached through a share alias (D2, D2b). |
 | **Resolve the share from config instead of DNS** (the service rewrites the guest's mount with the current server on each update) | Works for the mount, but the firewall rule and the guest both still name the server, so a moved share needs every consumer updated before it is reachable. The alias makes the move a single DNS change (operator choice, v0.8). |
 | **Consumer-provisioned exports** (the mount names `pool` + `size`, TAPPaaS creates the export) | Nicer to write, wrong ownership: the data would follow the consumer's lifecycle, which is the problem D6 exists to prevent. **Rejected** (operator, v0.3) — also as a later shorthand: the export is always declared on its Host. |
@@ -822,6 +917,13 @@ Every question the drafts raised is answered; each answer lives in the decision 
 | Q12 | Consent for a migration (v0.8) | Required: `rebootOk` or `--allow-disruption`; otherwise *migration pending* | D14 |
 | Q13 | The `<path>.pre-nfs` copy (v0.8) | Deleted by the next healthy update; backups cover a fatal error | D14 |
 | Q14 | Where the stop/start declaration lives (v0.8) | On each mount: `stopUnits`, plus `stopCommand`/`startCommand` for what is not a unit, behind an open-files guard | D3, D14 |
+| Q15 | Where share declarations live (v0.9) | A Site file, `config/storage.json`, not the node configs | D1, D4, D18 |
+| Q16 | Who changes them (v0.9) | A new `storage-manager`, one share per verb, growing beyond NFS and beyond PVE hosts | D17, D19 |
+
+**Open (v0.9):**
+
+- **Q17 — the consumer coordinate.** `storage:nfs`, provided by a thin `storage` module (recommended: a share may live on any server, so the coordinate should not name a server type), or keep `pvehost:nfs` for the consumer side?
+- **Q18 — a `share move` verb.** Sending the dataset and changing `server` is an operator procedure in v0.9; a verb that does both, with consent, could follow.
 
 ---
 
@@ -867,6 +969,25 @@ Every question the drafts raised is answered; each answer lives in the decision 
     the server without the consumer; the server-side drift check (D16).
 19. `rules_manager`: the derived rule targets the share alias.
 
+**v0.9** (not built; nothing uses NFS yet):
+
+20. `storage-manager` (TS, `tappaas-cicd/manager/storage-manager/`): `storage.json` schema and
+    loader, the lock, the verbs of D17 with `--check`, validation shared with `module-manager
+    validate`, converge (hook + alias) and consumer notification; its fast tier.
+21. The `storage` module: `storage:nfs` — the consumer side of v0.8 moved from `pvehost`, reading
+    `storage.json` instead of scanning instances; it recompiles the consumer's `network:rules`
+    before mounting or migrating across the firewall (D11); the automount-aware probe (D14).
+22. `pvehost/storage/nfs-server.sh`: the v0.8 node code behind `converge|test|purge`; the node's
+    update calls `converge`; `pvehost` stops providing `nfs`.
+23. `rules_manager` and `module-manager validate` read shares from `storage.json`.
+24. The ADR-025 migration (D20) with its before→after fixture test.
+25. The deep suite on the verbs, with the scenarios v0.8 missed: a share added after the
+    consumer, migrated by the notification alone (the D11 rule); an update after migration that
+    does not touch the directory first (D14).
+26. **General, not NFS:** `module-manager modify` accepts a field owned by a service the module
+    itself provides — `converge.ts` builds the field's owners from `dependsOn` + `integratesWith`
+    only, where `validateOrphanFields` already counts `provides` (found as bug 1 on v0.8).
+
 ## Testing
 
 - **Fast tier** (`pvehost/lib/test-nfs-lib.sh`, `module-manager/test/unit/nfs.test.ts` — the
@@ -879,10 +1000,11 @@ Every question the drafts raised is answered; each answer lives in the decision 
   not mount; the derived rule targeting the alias, none for a pending mount; NixOS and
   Debian rendering; `backup.enabled` missing → error.
 
-- **Deep tier** — `pvehost/test.sh <node> --deep` runs `lib/test-nfs-deep.sh` against a real
-  node of the running site. It brings its own fixture module (`pvehost/test-nfsconsumer/`, a
+- **Deep tier** — `storage-manager`'s `test.sh --deep` (v0.9; `pvehost/test.sh <node> --deep` in
+  v0.8) runs the end-to-end suite against a real node of the running site, declaring and
+  granting its share through the verbs. It brings its own fixture module (`pvehost/test-nfsconsumer/`, a
   disposable NixOS clone in the default environment's service zone, depending on
-  `pvehost:nfs` and `network:rules`, carrying a small writer unit for `stopUnits`), a share
+  `storage:nfs` and `network:rules`, carrying a small writer unit for `stopUnits`), a share
   named `deeptest-<random>` with a 1G quota on the node's `tankb1` (else its first data
   pool), and edits to the node's config that it backs up and restores. Every step is an
   assertion; the scenario runs in this order:
@@ -891,7 +1013,7 @@ Every question the drafts raised is answered; each answer lives in the decision 
      succeeds, `path` is a local directory, no fragment entry, no rule, `validate` reports
      the pending share.
   2. **Not granted** — declare the share without a grant: `validate` and the service refuse.
-  3. **Migration pending** — add the grant, run the node's update: the dataset, the
+  3. **Migration pending** — add the grant (v0.9: `storage-manager nfs grant`): the dataset, the
      `/tappaas-nfs/<share>` mountpoint and the alias exist; the consumer's update (run by
      the node, no consent) reports *migration pending* and changes nothing.
   4. **Guard** — seed files in `path`, hold one open from a process outside `stopUnits`, run
@@ -918,6 +1040,10 @@ Every question the drafts raised is answered; each answer lives in the decision 
       **at once** (D16), its rule is gone, the share's data is kept and reported as unmounted.
   11. **Gone after migration** — a consumer whose migrated share is removed: `validate`
       errors, no fallback to a local directory.
+  v0.9 adds: **a share that arrives after the consumer** is migrated by the notification
+  `grant` sends, with no other step run — so the consumer's own rule compilation (D11) is what
+  makes the mount reachable; and **an update after migration that does not touch the
+  directory first**, which must leave the automounted share alone (D14).
   12. **Teardown, always** (a trap, also on failure): the fixture deleted, the node's config
       restored byte-for-byte, the test datasets destroyed after the NFS server releases them,
       the alias and the share's firewall alias deleted, `nfs-kernel-server` removed only if
