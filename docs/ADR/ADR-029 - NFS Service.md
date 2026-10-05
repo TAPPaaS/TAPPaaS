@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | **Proposed** (v0.9, 2026-10-05) — the share declarations move out of the node configs into a Site file, `config/shares.json`, owned by a new **`storage-manager`** with per-share verbs; consumers depend on **`storage:nfs`**, provided by a thin `storage` module; a server module only builds what is declared for it. v0.1–v0.8 built in #766/#772 (v0.8 deep-tested); v0.9 not built — nothing uses NFS yet |
+| **Status** | **Proposed** (v0.9, 2026-10-05) — the share declarations move out of the node configs into a Site file, `config/shares.json`, owned by a new **`storage-manager`** with per-share verbs; consumers depend on **`storage:nfs`**, provided by a thin `storage` module; a server module only builds what is declared for it. v0.1–v0.8 built in #766/#772; v0.9 built in #772 and deep-tested on the reference site (2026-10-05, 41/41) |
 | **Version** | 0.9 |
 | **Date** | 2026-10-03 (v0.8: 2026-10-05; v0.9: 2026-10-05) |
 | **Author** | Lars Rossen |

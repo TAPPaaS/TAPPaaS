@@ -155,7 +155,8 @@ EOF
     [[ "$(fw "ls /var/db/aliastables" 2>/dev/null | grep -cE "^(nfs_share_${SHARE}|tm_${FIX//-/_})\.")" -eq 0 ]] \
         || { fail "leftover: OPNsense alias cache files"; left=1; }
     [[ "${left}" -eq 0 ]] && pass "nothing left behind"
-    rm -rf "${WORK}"
+    if [[ "${FAIL}" -eq 0 ]]; then rm -rf "${WORK}"; else
+        rm -rf "${WORK}/fixture"; info "  logs kept in ${WORK} (a check failed)"; fi
     info "  Results: ${GN}${PASS} passed${CL}, ${RD}${FAIL} failed${CL}"
     [[ "${FAIL}" -eq 0 ]]
 }
@@ -212,7 +213,8 @@ ok "the directory is still local" "guest '! findmnt -n --mountpoint /srv/deep/a 
 step "4 guard — a holder outside stopUnits stops the migration"
 guest "sudo bash -c 'nohup sleep 900 < /srv/deep/a/seed-1 >/dev/null 2>&1 &'"
 TAPPAAS_ALLOW_DISRUPTION=1 NFS_NO_REVERSE=1 "${SVC}/update-service.sh" "${FIX}" > "${WORK}/svc4.log" 2>&1
-grep -q "open-files guard" "${WORK}/svc4.log" && pass "the guard aborts and names the holder" || fail "the guard aborts and names the holder"
+grep -q "open-files guard" "${WORK}/svc4.log" && pass "the guard aborts and names the holder" \
+    || { fail "the guard aborts and names the holder"; tail -n 15 "${WORK}/svc4.log" | sed 's/^/      /'; }
 ok "nothing changed: local data, writer running" "guest '! findmnt -n --mountpoint /srv/deep/a && test -f /srv/deep/a/seed-20 && systemctl is-active -q nfs-deep-writer'"
 guest "sudo pkill -f 'sleep 900'"
 
