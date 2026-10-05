@@ -246,7 +246,10 @@ declaration — changes the CNAME and nothing a consumer holds. A registered NAS
 descriptor path (`/volume1/video`); that path is written into the guest's mount on each
 update, so a share moved between NAS boxes still needs no change in a consumer's config.
 Moving a share is still a data migration the operator performs (D7: `pool` is immutable in
-place); the alias is what makes it invisible to consumers once done.
+place); the alias is what keeps every consumer's config, mount entry and firewall rule
+unchanged. A consumer's *active* mount still has to be remounted once the old server stops
+exporting — a `hard` mount stalls until then — so a move is done with the consumers'
+mounts released, or followed by their restart.
 
 **The cost:** a mount now depends on the site resolver. With the resolver down a mount that
 is not yet active fails to resolve, exactly as every `.internal` name does; an active mount
@@ -613,14 +616,19 @@ mounts it** — never simply mounting over it, which would hide the data under a
 
 | Step | What happens |
 |---|---|
-| 0. Decide | `path` empty or absent → nothing to move: mount and stop. The share (at `subdir`, D15) already holds data **and** `path` does too → **refused**, never merged; reported with both sizes, for the operator to resolve. Otherwise continue. |
+| 0. Decide | `path` empty or absent → nothing to move: mount and stop. The share (at `subdir`, D15) already holds data **and** `path` does too → **refused**, never merged; reported with both sizes, for the operator to resolve — unless what is there is this mount's own interrupted migration (a marker file it leaves while copying), which is **resumed**. Otherwise continue. |
 | 1. Consent | A migration stops the app, so it runs only with consent: the consumer's `rebootOk: true`, or an update run with `--allow-disruption` (ADR-020's disruption gate, decided v0.8). Without it the update reports **migration pending** and changes nothing. |
-| 2. First pass | Mount the share at a temporary path in the guest; `rsync -aHAX` the directory into it **while the app runs** — the bulk, which may take hours for a media library. |
+| 2. First pass | Mount the share at a temporary path in the guest, leave the marker, and `rsync -rlptH --no-owner --no-group` the directory into it **while the app runs** — the bulk, which may take hours for a media library. No ownership or ACLs are copied: every write is squashed to the export's `owner` anyway (D5), and trying would fail on each file. |
 | 3. Stop | `stopCommand`, then `stopUnits` (D3). |
 | 4. Guard | Nothing may still have a file open under `path` (`fuser -m`). If something does — a unit nobody declared, a process outside systemd, a cron job — **abort**: start everything again, report what held the path, change nothing. A missing declaration costs a refused migration, never a lost write. |
-| 5. Second pass | `rsync -aHAX --delete` the difference since the first pass — short, because the app was stopped. |
+| 5. Second pass | The same rsync with `--delete`, for the difference since the first pass — short, because the app was stopped. Then the marker goes. |
 | 6. Swap | Rename `path` to **`<path>.pre-nfs`**, recreate `path` empty, mount the share there at once, and write the mount into the guest (D10) so the next rebuild keeps it. |
 | 7. Start | `stopUnits` start, then `startCommand`. Then the service's own test: mounted, writable for `rw`. |
+
+**Until a migration succeeds the mount stays out of the guest's mount list** (D10): a
+directory that holds local data is never handed to a rebuild that would mount the share
+over it and hide that data — whether the migration waits for consent, waits for the guest
+to gain NFS support, or failed.
 
 **A failure before step 6** restarts the app on its untouched local data. **A failure after
 it** moves `<path>.pre-nfs` back and restarts the app on it. Either way the update reports
@@ -632,9 +640,11 @@ consumer's own backup (`backup:vm`) covers a fatal error after the deletion. The
 that deletes it says so.
 
 **No way back.** Once a consumer has migrated into a share, a share that later disappears is
-an error (`validate`, and the mount's own test), never a silent return to the local
-directory: by then the local directory is gone, and starting the app on an empty one would
-look like data loss.
+an error (the service's update and the mount's own test), never a silent return to the
+local directory: by then the local directory is gone, and starting the app on an empty one
+would look like data loss. The guest keeps its mount entry until the operator either
+declares the share again or removes the mount — dropping it would unmount on the next
+rebuild and start the app on an empty directory.
 
 Files arrive on the share owned by the export's `owner` (D5): the copy runs as root in the
 guest, and every write is squashed.
@@ -890,19 +900,25 @@ Every question the drafts raised is answered; each answer lives in the decision 
   7. **subdir** — a second mount on the same share with another `subdir`: created, owned by
      `owner`, separate from the first.
   8. **Firewall** — the consumer is in a service zone: exactly one rule, consumer →
-     the alias, tcp/2049; a second VM in the same zone without a rule cannot mount.
-  9. **Move** — repoint the alias at another node carrying a copy of the share (the test
-     sends the dataset): after the alias refresh the consumer's mount works with no change
-     to its config, fragment or rule.
+     the alias, tcp/2049; the export's client list holds exactly the consumer's address,
+     and the node's own test passes (alias, mountpoint, no client-list drift). (A second VM
+     proving it cannot mount would cost another clone, or a probe from another module's
+     guest; the server-side list is asserted instead.)
+  9. **Move** — send the dataset to another node and move the declaration there: the alias
+     follows it, and after the firewall's alias refresh the consumer mounts it with its
+     config unchanged. A consumer's *active* mount must be remounted after a move — the old
+     server no longer exports it, and a `hard` mount stalls until it is; the suite unmounts
+     before the move, as an operator would.
   10. **Delete** — delete the fixture: its address is gone from the export's client list
       **at once** (D16), its rule is gone, the share's data is kept and reported as unmounted.
   11. **Gone after migration** — a consumer whose migrated share is removed: `validate`
       errors, no fallback to a local directory.
   12. **Teardown, always** (a trap, also on failure): the fixture deleted, the node's config
       restored byte-for-byte, the test datasets destroyed after the NFS server releases them,
-      the alias deleted, `nfs-kernel-server` removed only if the test installed it, stale pf
-      tables dropped, the fixture's DNS records deleted. Then a **leftover check** that fails
-      the run if any of it remains.
+      the alias and the share's firewall alias deleted, `nfs-kernel-server` removed only if
+      the test installed it (never `nfs-common`'s `/etc/nfs.conf.d`), stale pf tables
+      dropped, the fixture's DNS records deleted. Then a **leftover check** that fails the
+      run if any of it remains.
 
   Cost: one VM clone and three guest rebuilds — about 20 minutes — so it runs in `--deep`
   only, never in the sweep.
