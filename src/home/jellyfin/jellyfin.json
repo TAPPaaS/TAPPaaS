@@ -14,13 +14,11 @@
     "cluster:vm",
     "templates:nixos",
     "backup:vm",
+    "pvehost:nfs",
     "network:proxy",
     "network:rules"
   ],
-  "provides": [
-    "mediaserver",
-    "storage"
-  ],
+  "provides": [],
   "appVersion": "10.10.7",
   "config": {
     "cluster:vm": {
@@ -30,10 +28,16 @@
       "storage": "tanka1",
       "imageType": "clone",
       "image": "8080",
-      "bridge0": "lan",
-      "mediaStorage": "allocate",
-      "mediaDiskStorage": "tankb1",
-      "mediaDiskSize": "500G"
+      "bridge0": "lan"
+    },
+    "pvehost:nfs": {
+      "mounts": [
+        {
+          "path": "/media",
+          "share": "tappaas2:media",
+          "access": "rw"
+        }
+      ]
     },
     "network:proxy": {
       "proxyPort": 8096,

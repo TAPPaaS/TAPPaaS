@@ -192,7 +192,7 @@ graph LR
     vpnpeers["netbird VPN peers<br/><small>remote devices</small>"]
     internet["internet<br/><small>public</small>"]
     authentik["Authentik<br/><small>identity module</small>"]
-    jellyfinlib["jellyfin:storage<br/><small>optional</small>"]
+    jellyfinlib["media share (pvehost:nfs)<br/><small>optional</small>"]
 
     immich -->|dependsOn| cluster
     immich -->|dependsOn| templates
@@ -207,7 +207,7 @@ graph LR
     caddy -.->|"upstream :2283"| immich
 
     immich -.->|"OIDC login + discovery"| authentik
-    jellyfinlib -.->|"optional: NFS mount as an External Library"| immich
+    jellyfinlib -.->|"optional: read-only NFS mount as an External Library"| immich
 ```
 
 Solid arrows are declared `dependsOn` edges (install-order dependencies).
@@ -222,11 +222,10 @@ Jellyfin media library be added as an Immich External Library over NFS.
 
 ## Future enhancements
 
-- **Jellyfin photo library**: add `jellyfin:storage` to `dependsOn` to
-  NFS-mount jellyfin's `/media` read-only (e.g. at `/media-jellyfin`), then
-  add `/media-jellyfin/Photos` as an Immich *External Library* in the admin
-  UI. Once jellyfin's media moves to a `pvehost:nfs` share, mount that share
-  instead (read-only).
+- **Jellyfin photo library**: grant `immich` `ro` on the node's `media`
+  export, add `pvehost:nfs` to `dependsOn` and a mount
+  (`{"path": "/media-library", "share": "<node>:media", "access": "ro"}`), then
+  add `/media-library/Photos` as an Immich *External Library* in the admin UI.
 - **Hardware transcoding**: set `accelerationDevices` in `immich.nix` (see
   INSTALL.md → Variants).
 

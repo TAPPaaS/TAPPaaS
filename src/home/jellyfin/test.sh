@@ -64,35 +64,36 @@ else
     fail "Jellyfin /health returned HTTP ${HTTP_CODE}"
 fi
 
-# ── Test 3: Media disk mount ──────────────────────────────────────────────────
-header "Test 3: Media Disk Mount"
-MOUNT_OK=$(remote "mountpoint -q /media && echo yes || echo no")
-if [[ "${MOUNT_OK}" == "yes" ]]; then
-    pass "/media is mounted"
-    DISK_INFO=$(remote "df -h /media | tail -1" || true)
-    inf "  ${DISK_INFO}"
+# ── Test 3: Media share (pvehost:nfs) ─────────────────────────────────────────
+# /media is the node's "media" export, not a disk in this VM. `ls` triggers the
+# automount; findmnt then says whether NFS is what is mounted there.
+header "Test 3: Media Share"
+MEDIA_SRC=$(remote "ls /media >/dev/null 2>&1; findmnt -n -t nfs,nfs4 -o SOURCE /media 2>/dev/null || true")
+if [[ -n "${MEDIA_SRC}" ]]; then
+    pass "/media is the NFS share ${MEDIA_SRC}"
+    inf "  $(remote "df -h /media | tail -1" || true)"
 else
-    fail "/media is not mounted — run services/mediaserver/install-service.sh"
+    fail "/media is not an NFS mount — is the node serving its 'media' export? (update-module.sh <node>, then update-module.sh jellyfin)"
 fi
 
-# ── Test 4: Content folders ───────────────────────────────────────────────────
-header "Test 4: Content Folders"
+# ── Test 4: Library folders ───────────────────────────────────────────────────
+header "Test 4: Library Folders"
 FOLDERS_OK=$(remote "test -d /media/Movies && test -d /media/TV && test -d /media/Music && echo yes || echo no")
 if [[ "${FOLDERS_OK}" == "yes" ]]; then
-    pass "Content folders exist (Movies, TV, Music)"
+    pass "Library folders exist (Movies, TV, Music)"
 else
-    fail "One or more content folders missing — check systemd.tmpfiles and /media mount"
+    fail "One or more library folders missing — update.sh creates them once /media is mounted"
 fi
 
-# ── Test 5: NFS export ────────────────────────────────────────────────────────
-header "Test 5: NFS Export"
-NFS_STATUS=$(remote "systemctl is-active nfs-server 2>/dev/null || echo inactive")
-if [[ "${NFS_STATUS}" == "active" ]]; then
-    pass "nfs-server is active"
-    NFS_EXPORTS=$(remote "sudo exportfs -v 2>/dev/null | grep '/media' | head -2" || true)
-    inf "  ${NFS_EXPORTS}"
+# ── Test 5: Jellyfin can write to the share ───────────────────────────────────
+# Every request is squashed to the export's owner (ADR-029 D7), so the jellyfin
+# user writes there although the files belong to another uid.
+header "Test 5: Share Writable by Jellyfin"
+WRITE_OK=$(remote "f=/media/.tappaas-write-test.\$\$; sudo -u jellyfin touch \"\$f\" 2>/dev/null && sudo -u jellyfin rm -f \"\$f\" && echo yes || echo no")
+if [[ "${WRITE_OK}" == "yes" ]]; then
+    pass "jellyfin can write to /media"
 else
-    fail "nfs-server is ${NFS_STATUS}"
+    fail "jellyfin cannot write to /media — the export must grant jellyfin rw"
 fi
 
 # ── Test 6: Disk usage ────────────────────────────────────────────────────────
