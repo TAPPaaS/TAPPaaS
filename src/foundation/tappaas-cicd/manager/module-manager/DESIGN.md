@@ -289,9 +289,12 @@ It does not drive a control-plane controller; it operates Proxmox directly over
 SSH (`root@<node>.mgmt.internal`): `pvesh get /cluster/resources` to discover
 VMs, `qm config` / `qm status`, `qm snapshot` / `delsnapshot` / `rollback` for
 snapshots, and `qm guest cmd ... ping` for guest-agent health. NixOS modules are
-rebuilt locally **on the VM** (not via `--target-host`) so the hardware config
-matches, after waiting for cloud-init + passwordless sudo to be ready. Heavy `jq`
-parsing throughout.
+built **on the mothership** and the closure is copied to the VM, which only
+activates it (#774); the build runs in a mount namespace with a copy of the VM's
+own `/etc/nixos` over `/etc/nixos`, so the hardware config is the VM's (never
+`--target-host`, which read the mothership's). A VM that cannot be built there is
+rebuilt on itself, as before. All of it waits for cloud-init + passwordless sudo
+to be ready. Heavy `jq` parsing throughout.
 
 ## Testing
 

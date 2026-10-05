@@ -469,6 +469,107 @@ release_move_of() {
     printf '%s %s' "${cur}" "${new}"
 }
 
+# ── Guest systems are built on the mothership (#774) ─────────────────────────
+# A guest that evaluates and builds its own system needs ~0.9 GB of headroom for
+# the evaluation alone (measured on hrossen: 650–940 MB whatever the VM's size),
+# up to 5 GB of disk for a release move, its own cores for what the cache lacks,
+# and GitHub plus cache.nixos.org on every rebuild. Here the mothership does all
+# of that and the guest only receives the closure and activates it.
+#
+# Why the mount namespace: modules import the guest's own files by absolute path
+# (/etc/nixos/hardware-configuration.nix, tappaas-common.nix, tappaas-backup.nix,
+# and through the baseline tappaas-site.nix and tappaas-nfs.nix). The old
+# --target-host path evaluated them on the mothership and read the MOTHERSHIP's
+# hardware config, which broke every guest it switched. A copy of the guest's
+# /etc/nixos bind-mounted over /etc/nixos, in a namespace of its own, makes every
+# such path resolve to the guest's file without changing a module. Proven on
+# hrossen: built this way, vaultwarden's system is the same store path the guest
+# had built for itself.
+GUEST_BUILD_STAGE="${GUEST_BUILD_STAGE:-/var/lib/tappaas-guest-build}"
+# Each guest's current and previous system stay rooted here, so a rollback still
+# finds the previous one in the mothership's store; the rest goes with its GC.
+GUEST_BUILD_GCROOTS="${GUEST_BUILD_GCROOTS:-/nix/var/nix/gcroots/tappaas-guests}"
+
+# The pinned nixpkgs as a store path, fetched once by the lock's narHash — never
+# re-downloaded once present, whatever tarball-ttl says. Empty when the lock does
+# not pin a GitHub revision.
+pinned_nixpkgs_source() {
+    local lock="$1" expr
+    expr="$(jq -r '.nodes.nixpkgs.locked | select(.type == "github" and .narHash != null)
+        | "builtins.fetchTree { type = \"github\"; owner = \"\(.owner)\"; repo = \"\(.repo)\"; rev = \"\(.rev)\"; narHash = \"\(.narHash)\"; }"' \
+        "${lock}" 2>/dev/null)" || return 1
+    [[ -n "${expr}" ]] || return 1
+    nix eval --impure --raw --expr "(${expr}).outPath" 2>/dev/null
+}
+
+# guest_build_on_cicd <vmname> <vm_ip> <config basename> <nixpkgs store path>
+# Stages the guest's /etc/nixos, builds its system against it and copies the
+# closure to the guest. Prints the system's store path. The build is rooted as
+# <vmname>.new until the switch succeeds (guest_build_promote).
+guest_build_on_cicd() {
+    local vmname="$1" vm_ip="$2" cfg="$3" src="$4"
+    local stage="${GUEST_BUILD_STAGE}/${vmname}" link="${GUEST_BUILD_GCROOTS}/${vmname}.new" out
+
+    sudo -n rm -rf "${stage}" && sudo -n install -d -m 0700 "${stage}" \
+        && sudo -n install -d -m 0755 "${GUEST_BUILD_GCROOTS}" || return 1
+    ssh -n -o BatchMode=yes "tappaas@${vm_ip}" "sudo -n tar -C /etc/nixos -cf - ." \
+        | sudo -n tar -C "${stage}" -xf - || return 1
+
+    run_quiet_rc "building ${vmname}'s system on the mothership" \
+        sudo -n unshare --mount --propagation private -- /bin/sh -c '
+            PATH=/run/current-system/sw/bin:$PATH
+            mount --bind "$1" /etc/nixos || exit 1
+            exec nix-build "<nixpkgs/nixos>" -A system -I "nixpkgs=$2" \
+                -I "nixos-config=/etc/nixos/$3" -o "$4"' sh "${stage}" "${src}" "${cfg}" "${link}" \
+        >&2 || return 1
+    out="$(readlink -f "${link}")"
+    [[ "${out}" == /nix/store/*-nixos-system-* ]] || return 1
+
+    # No --substitute-on-destination: the guest is to fetch nothing itself.
+    # --no-check-sigs: what the mothership built carries no signature, and without
+    # it the guest refuses it. Only a trusted user may skip the check — tappaas is,
+    # through the baseline's trusted-users = @wheel.
+    run_quiet_rc "copying ${vmname}'s system to ${vm_ip}" \
+        env NIX_SSHOPTS="-o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=6" \
+        nix copy --no-check-sigs --to "ssh-ng://tappaas@${vm_ip}" "${out}" >&2 || return 1
+    printf '%s' "${out}"
+}
+
+# After a successful switch: <vmname>.new becomes .current, the old .current
+# becomes .previous. A failed switch drops .new.
+guest_build_promote() {
+    local vmname="$1" ok="$2"
+    local r="${GUEST_BUILD_GCROOTS}/${vmname}"
+    if [[ "${ok}" == 1 ]]; then
+        if [[ -L "${r}.current" && "$(readlink "${r}.current")" != "$(readlink "${r}.new")" ]]; then
+            sudo -n mv -fT "${r}.current" "${r}.previous" || true
+        fi
+        sudo -n mv -fT "${r}.new" "${r}.current" || true
+    else
+        sudo -n rm -f "${r}.new" || true
+    fi
+}
+
+# The command that activates a system already in the guest's store — what
+# nixos-rebuild does after its build: point the system profile at it, then run
+# switch-to-configuration under systemd-run, so the activation survives the ssh
+# session it restarts. Exit codes are switch-to-configuration's (bits 2 and 4).
+guest_activate_cmd() {
+    local system="$1" action="$2"
+    printf '%s' "sudo nix-env -p /nix/var/nix/profiles/system --set ${system} && sudo systemd-run -E LOCALE_ARCHIVE -E NIXOS_INSTALL_BOOTLOADER --collect --no-ask-password --pipe --quiet --service-type=exec --unit=tappaas-switch-to-configuration --wait ${system}/bin/switch-to-configuration ${action}"
+}
+
+# release_move_of for a system built here: the release it carries is read from
+# the mothership's store, the running one from the guest.
+release_move_to() {
+    local ip="$1" system="$2" cur new
+    cur="$(ssh -o BatchMode=yes "tappaas@${ip}" \
+        "grep -oE '[0-9]+\\.[0-9]+' /run/current-system/nixos-version | head -n 1" 2>/dev/null)" || return 1
+    new="$(grep -oE '[0-9]+\.[0-9]+' "${system}/nixos-version" 2>/dev/null | head -n 1)" || return 1
+    [[ -n "${cur}" && -n "${new}" && "${cur}" != "${new}" ]] || return 1
+    printf '%s %s' "${cur}" "${new}"
+}
+
 update_nixos() {
     local vmname="$1"
     local vmid="$2"
@@ -491,18 +592,12 @@ update_nixos() {
     _source_vmname="$(basename "${nix_config}" .nix)"
 
     info "Using NixOS config: ${nix_config}"
-    info "Running nixos-rebuild ON the target VM (not --target-host)..."
-    # Build LOCALLY on the target VM so the module's
-    # `imports = [ /etc/nixos/hardware-configuration.nix ]` resolves to the
-    # VM's OWN hw-config (right disk UUIDs / boot device), not the cicd's.
-    # The previous --target-host path built locally on cicd → wrong hw-config
-    # → activation broke sshd/qemu-agent on the target every time. See the
-    # automated-install-state memory note ("Latent issue NOT yet fixed").
-    #
-    # Mechanics: scp the .nix into /etc/nixos/<vmname>.nix on the VM, then
-    # ssh in and run `nixos-rebuild switch` locally. nixos-rebuild on the VM
-    # uses its own nixpkgs channel + can pull from cache.nixos.org via the
-    # firewall — no closure-copying over the slow ssh path.
+    # The guest's /etc/nixos stays the source of truth: everything below is
+    # written there first. The system is then built on the mothership against a
+    # copy of that directory (guest_build_on_cicd, #774), or on the guest itself
+    # when that is impossible. Never --target-host: it read the mothership's own
+    # /etc/nixos/hardware-configuration.nix and broke sshd/qemu-agent on every
+    # guest it switched.
     local nix_basename remote_nix_path
     nix_basename="$(basename "${nix_config}")"
     remote_nix_path="/etc/nixos/${nix_basename}"
@@ -642,13 +737,40 @@ update_nixos() {
     # nothing left to reload — but on another site all three attempts failed and
     # the guest rolled back. A boot has nothing to reload: `nixos-rebuild boot`
     # makes the new release the next generation, and the reboot below takes it.
-    info "Building the target system on ${vm_ip}..."
-    if _move="$(release_move_of "${vm_ip}" "${nixpkgs_arg}" "${remote_nix_path}")"; then
+    #
+    # The system is built on the mothership (#774) unless that is impossible —
+    # then on the guest, as before, with a warning that names why. Opt out for one
+    # run with TAPPAAS_GUEST_BUILD=guest. The mothership itself is never built
+    # this way: tappaas-self-rebuild.sh builds it.
+    local _built="" _src="" _stage_cmd
+    if [[ "${TAPPAAS_GUEST_BUILD:-cicd}" != "guest" && "${vmname}" != "$(hostname)" ]]; then
+        if ! _src="$(pinned_nixpkgs_source "${flake_lock}")" || [[ -z "${_src}" ]]; then
+            warn "Building ${vmname} on the guest: the pinned nixpkgs could not be resolved from ${flake_lock} (#774)"
+        elif _built="$(guest_build_on_cicd "${vmname}" "${vm_ip}" "${nix_basename}" "${_src}")"; then
+            info "  ${GN}✓${CL} built on the mothership and copied: ${_built##*/}"
+            _rebuild_cmd="$(guest_activate_cmd "${_built}" switch)"
+        else
+            _built=""
+            guest_build_promote "${vmname}" 0
+            warn "Building ${vmname} on the guest: building it on the mothership failed (#774)"
+        fi
+    fi
+
+    if [[ -n "${_built}" ]]; then
+        _move="$(release_move_to "${vm_ip}" "${_built}")" || _move=""
+        _stage_cmd="$(guest_activate_cmd "${_built}" boot)"
+    else
+        info "Building the target system on ${vm_ip}..."
+        _move="$(release_move_of "${vm_ip}" "${nixpkgs_arg}" "${remote_nix_path}")" || _move=""
+        _stage_cmd="sudo nixos-rebuild boot ${nixpkgs_arg} -I nixos-config=${remote_nix_path}"
+    fi
+    if [[ -n "${_move}" ]]; then
         info "Release move on ${vmname}: ${_move% *} -> ${_move#* } — staging it for the next boot (#728)"
-        ( run_quiet "nixos-rebuild boot on ${vm_ip}" \
+        ( run_quiet "staging the release move on ${vm_ip}" \
             timeout -k 30 "${REBUILD_MAX_SECONDS}" \
-            ssh "${SSH_REBUILD_OPTS[@]}" "tappaas@${vm_ip}" "sudo nixos-rebuild boot ${nixpkgs_arg} -I nixos-config=${remote_nix_path}" ) \
-            || die "staging the release move on ${vmname} failed — it is still on ${_move% *}"
+            ssh "${SSH_REBUILD_OPTS[@]}" "tappaas@${vm_ip}" "${_stage_cmd}" ) \
+            || { [[ -n "${_built}" ]] && guest_build_promote "${vmname}" 0
+                 die "staging the release move on ${vmname} failed — it is still on ${_move% *}"; }
         rebuilt=1; staged=1
     fi
 
@@ -700,6 +822,7 @@ update_nixos() {
             error "nixos-rebuild on ${vm_ip} failed with exit ${rc} — $(nixos_rebuild_exit_meaning "${rc}")."
             error "Not retrying: this is the configuration's verdict, not a connection fault."
             report_failed_units "${vm_ip}"
+            [[ -n "${_built}" ]] && guest_build_promote "${vmname}" 0
             die "nixos-rebuild failed (exit ${rc}) on ${vmname}; fix the configuration and re-run"
         fi
         [[ "$attempt" -lt 3 ]] || break
@@ -709,6 +832,7 @@ update_nixos() {
         # Give sshd up to 90 s to come back before attempting the next rebuild.
         wait_for_ssh "${vm_ip}" 90 || warn "ssh still unreachable after 90 s — trying nixos-rebuild anyway"
     done
+    [[ -n "${_built}" ]] && guest_build_promote "${vmname}" "${rebuilt}"
     [[ "$rebuilt" == "1" ]] || die "nixos-rebuild failed after 3 attempts (ssh connection lost each time)"
 
     # nixos-rebuild switch already activated the new generation; the reboot

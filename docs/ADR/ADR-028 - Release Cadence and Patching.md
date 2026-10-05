@@ -170,6 +170,11 @@ separate and larger download from `cache.nixos.org`.) Nothing shares a mirror: e
 GitHub on its own. At a fortnightly cadence that is affordable; it is worth knowing before anyone
 proposes daily.
 
+> **Since #774 (2026-10-05)** guests are built on the mothership: it resolves the pin once by
+> the lock's `narHash` (no network once present) and copies each guest's finished closure to it,
+> so a bump is one download for the site, and a guest neither fetches nixpkgs nor reaches
+> `cache.nixos.org`. The figures above are the guest-side build, which remains the fallback.
+
 ### What reaches an existing VM, and what does not
 
 The template image and the estate pin live in the same directory, which invites the assumption
