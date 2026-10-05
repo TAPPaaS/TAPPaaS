@@ -244,6 +244,9 @@ cd ../cluster || { _error "Cluster directory not found!"; exit 1; }
 /home/tappaas/bin/copy-update-json.sh cluster
 cd ../templates || { _error "Templates directory not found!"; exit 1; }
 /home/tappaas/bin/copy-update-json.sh templates
+# ADR-029 v0.9 D1: storage is virtual like cluster — registered so storage:nfs resolves.
+cd ../storage || { _error "Storage directory not found!"; exit 1; }
+/home/tappaas/bin/copy-update-json.sh storage
 # ADR-007 P8: the firewall module is renamed to "network" (deploys config/network.json).
 # The OPNsense HOST is still reached as FIREWALL_FQDN (firewall.mgmt.internal) — the
 # host rename is the deferred supervised migration, so that lifeline is unchanged here.

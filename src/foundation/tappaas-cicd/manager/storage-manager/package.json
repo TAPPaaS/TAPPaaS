@@ -1,0 +1,13 @@
+{
+  "name": "storage-manager",
+  "version": "0.1.0",
+  "description": "TAPPaaS storage control plane — NFS shares in config/shares.json (ADR-029) — TypeScript",
+  "license": "MIT",
+  "private": true,
+  "bin": {
+    "storage-manager": "dist/main.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  }
+}

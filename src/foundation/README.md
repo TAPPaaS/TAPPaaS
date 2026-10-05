@@ -11,6 +11,7 @@ from modules, **named, not numbered** — install order is derived from each mod
 |--------|------|
 | [cluster/](cluster/README.md) | Proxmox nodes, storage pools, HA — the ground everything stands on |
 | [network/](network/README.md) | OPNsense firewall: zones, DNS, DHCP, reverse proxy, rules |
+| [storage/](storage/README.md) | NFS shares for consumer modules: declared with `storage-manager`, served by the cluster nodes, mounted by `storage:nfs` (ADR-029) |
 | [templates/](templates/README.md) | The prebuilt VM templates (NixOS, Windows) modules deploy from |
 | [tappaas-cicd/](tappaas-cicd/README.md) | The mothership: managers and controllers that run the platform |
 | [backup/](backup/README.md) | Proxmox Backup Server: scheduled, verified, off-site capable |

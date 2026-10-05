@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# pvehost:nfs — test-service (ADR-029 v0.8). Is each of this consumer's shares
+# storage:nfs — test-service (ADR-029 v0.9). Is each of this consumer's shares
 # actually there, from the consumer's own side?
 #
 #   1. the mount still passes its checks (D11); a pending mount passes as pending,
@@ -28,7 +28,7 @@ PASS=0; FAIL=0
 pass() { info "  ${GN}✓${CL} $1"; PASS=$((PASS + 1)); }
 fail() { error "  ✗ $1"; FAIL=$((FAIL + 1)); }
 
-target="$(nfs_consumer_target "${CONSUMER}")" || { info "pvehost:nfs: ${CONSUMER} has no guest — nothing to test"; exit 0; }
+target="$(nfs_consumer_target "${CONSUMER}")" || { info "storage:nfs: ${CONSUMER} has no guest — nothing to test"; exit 0; }
 while IFS= read -r m <&3; do
     [[ -n "${m}" ]] || continue
     path="$(jq -r .path <<< "${m}")"

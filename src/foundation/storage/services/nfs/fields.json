@@ -1,20 +1,15 @@
 {
   "$schema": "../../../schemas/service-fields.json",
-  "service": "pvehost:nfs",
-  "description": "NFS shares mounted into a consumer guest (ADR-029): a TAPPaaS export on a cluster node, a share on a registered, unmanaged server, or an unmodelled server's path.",
-  "_note": "The consumer's side only. The node's own exports are the module-tier `nfs` object (pvehost/fields.json), converged by pvehost/update.sh; this service checks a consumer's mounts against them (the two-key check), has the node build a declared export it names (D11), and writes the mounts into the guest. The `nfs` object's DEFINITION lives in the module tier (pvehost/fields.json) because registered NFS servers carry it too; its change semantics are here, with the service that converges it, as backup:filesystem does for `backup`.",
+  "service": "storage:nfs",
+  "description": "NFS shares mounted into a consumer guest (ADR-029 v0.9): a share declared in config/shares.json (reached through its alias nfs-<share>.mgmt.internal), or an unmodelled server's path.",
+  "_note": "The consumer's side. Share declarations are Site state in config/shares.json, changed only through storage-manager (ADR-029 v0.9 D17, D18) — not module fields. This service checks a consumer's mounts against them, has the share's server converge (its hook) and the alias follow, recompiles the consumer's network:rules when a mount crosses the firewall, and mounts or migrates.",
   "fields": {
-    "nfs": {
-      "class": "in-place",
-      "apply": "reconcile",
-      "changeNote": "Converged by the node's own update (pvehost/update.sh → nfs_node_reconcile): exports are created, re-quota'd, re-granted and unshared live; nothing reboots. name, pool and an allocated owner are immutable in substance — a rename or a pool move is a data migration and is not attempted; the reconcile treats the old dataset as an orphan and keeps it."
-    },
     "mounts": {
-      "description": "The NFS shares this guest mounts (ADR-029 v0.8 D3). Each entry: {path, share, subdir?, access?, required?, stopUnits?, stopCommand?, startCommand?}. share is a Site-unique share NAME — never the machine that carries it; it is reached through its DNS alias nfs-<share>.mgmt.internal — or <ip-or-host>:/<path> for an unmodelled server. A share no server declares leaves the mount pending: the directory stays local, and is migrated into once the share appears (with consent).",
+      "description": "The NFS shares this guest mounts (ADR-029 v0.9 D3). Each entry: {path, share, subdir?, access?, required?, stopUnits?, stopCommand?, startCommand?}. share is a Site-unique share NAME — never the machine that carries it; it is reached through its DNS alias nfs-<share>.mgmt.internal — or <ip-or-host>:/<path> for an unmodelled server. A share not declared in config/shares.json leaves the mount pending: the directory stays local, and is migrated into once the share appears (with consent).",
       "type": "array",
       "requiredBy": [],
       "usedBy": [
-        "pvehost:nfs"
+        "storage:nfs"
       ],
       "default": [],
       "items": {

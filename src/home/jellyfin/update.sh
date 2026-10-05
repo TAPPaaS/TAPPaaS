@@ -5,7 +5,7 @@
 # sure the library folders exist on the media share. Sourced by install.sh so
 # the same config apply runs on first install too.
 #
-# /media is an NFS share (pvehost:nfs): pvehost:nfs's install/update service
+# /media is an NFS share (storage:nfs): storage:nfs's install/update service
 # writes /etc/nixos/tappaas-nfs.nix before this runs, and the rebuild below is
 # what applies it.
 #

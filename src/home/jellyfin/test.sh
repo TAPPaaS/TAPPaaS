@@ -64,14 +64,14 @@ else
     fail "Jellyfin /health returned HTTP ${HTTP_CODE}"
 fi
 
-# ── Test 3: Media share (pvehost:nfs) ─────────────────────────────────────────
+# ── Test 3: Media share (storage:nfs) ─────────────────────────────────────────
 # /media is the share "media" (subdir jellyfin) once a server declares it. Until
 # then the mount is PENDING (ADR-029 v0.8): /media is a directory on this VM's
 # disk — a valid state, so this check is skipped, not failed. A mount in the
 # guest's fstab means the share is available, and then it must be mounted.
 header "Test 3: Media Share"
 if [[ "$(remote "findmnt -n --fstab /media >/dev/null && echo yes || echo no")" != "yes" ]]; then
-    skip "media share not mounted: pending (no server declares 'media') or migration awaiting consent — /media is on this VM's disk (pvehost:nfs test-service says which)"
+    skip "media share not mounted: pending (no server declares 'media') or migration awaiting consent — /media is on this VM's disk (storage:nfs test-service says which)"
 else
     # `ls` triggers the automount; findmnt then says whether NFS is mounted there.
     MEDIA_SRC=$(remote "ls /media >/dev/null 2>&1; findmnt -n -t nfs,nfs4 -o SOURCE /media 2>/dev/null || true")

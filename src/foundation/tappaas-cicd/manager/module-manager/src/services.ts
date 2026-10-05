@@ -69,12 +69,12 @@ export interface ServiceFs {
   // other two are: validate stays offline and testable with no tree.
   readFile(path: string): string | null;
   // A deployed instance's config, parsed — null when absent or unreadable. For
-  // checks that join two modules' declarations (pvehost:nfs: a consumer's mounts
-  // against the server's exports). Optional, so existing fakes need not grow it;
+  // checks that join two modules' declarations (storage:nfs: a consumer's mounts
+  // against config/shares.json). Optional, so existing fakes need not grow it;
   // without it those checks are skipped.
   readConfig?(instance: string): Record<string, unknown> | null;
   // Every deployed instance's name. With readConfig, it lets a check find which
-  // instance declares something — pvehost:nfs finds a share by name (ADR-029 v0.8).
+  // instance declares something.
   listInstances?(): string[];
 }
 

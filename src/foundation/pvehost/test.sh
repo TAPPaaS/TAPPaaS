@@ -7,25 +7,18 @@
 #   4. its root filesystem is below 90% full
 #   5. its clock is synchronised (corosync depends on it)
 #   6. (info) a pending reboot — the cluster module's reboot pass takes it
-#   7. each NFS export it declares (ADR-029): built at /tappaas-nfs/<share>, its
-#      share alias following this node, and its live client list exactly the one
-#      the declarations call for — an address no deployed, mounting consumer
-#      accounts for is drift (D16)
+#   7. the NFS shares config/shares.json declares for it (ADR-029 v0.9): built at
+#      /tappaas-nfs/<share>, and its live client list exactly the one the
+#      declarations call for — an address no deployed, mounting consumer accounts
+#      for is drift (D16). Asked of the node's own hook (storage/nfs-server.sh test).
 #
-# --deep also runs the pvehost:nfs end-to-end suite (lib/test-nfs-deep.sh) against
-# this node: a disposable consumer, a throwaway share, and a teardown that leaves
-# nothing behind. About 20 minutes; never in the sweep.
+# The end-to-end NFS suite is storage-manager's (`storage-manager test --deep`).
 #
 # Usage: test.sh <instance> [--deep]
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . /home/tappaas/bin/common-install-routines.sh
 . "${HERE}/lib/pvehost-lib.sh"
-. "${HERE}/lib/nfs-lib.sh"
-. "${HERE}/lib/nfs-node.sh"
-DEEP=0
-for a in "$@"; do [[ "${a}" == "--deep" ]] && DEEP=1; done
-[[ "${TAPPAAS_TEST_DEEP:-}" == "1" ]] && DEEP=1
 
 PASS=0; FAIL=0
 pass() { info "  ${GN}✓${CL} $1"; PASS=$((PASS + 1)); }
@@ -62,26 +55,9 @@ if pn_ssh 'test -f /var/run/reboot-required'; then
     info "  a reboot is pending — the cluster module's reboot pass takes it"
 fi
 
-while IFS= read -r e; do
-    [[ -n "${e}" ]] || continue
-    name="$(jq -r .name <<< "${e}")"; pool="$(jq -r '.pool // empty' <<< "${e}")"
-    ds="$(nfs_dataset "${pool}" "${name}")"
-    mnt="$(pn_ssh "zfs get -H -o value mountpoint '${ds}' 2>/dev/null" 2>/dev/null)"
-    if [[ "${mnt}" == "${NFS_MOUNT_ROOT}/${name}" ]]; then pass "export ${name}: ${ds} at ${mnt}"
-    else fail "export ${name}: ${ds} is ${mnt:+at ${mnt}}${mnt:-not built} — the next update converges it"; continue; fi
-    alias="$(nfs_share_alias "${name}")"
-    target="$(nfs_alias_list | awk -v a="${alias}" '$1 == a {print $2}')"
-    [[ "${target}" == "${ADDRESS}" ]] && pass "export ${name}: ${alias} → ${ADDRESS}" \
-        || fail "export ${name}: ${alias} follows '${target:-nothing}', not ${ADDRESS}"
-    want="$(nfs_node_expected_share "${e}")"
-    live="$(pn_ssh "zfs get -H -o value sharenfs '${ds}'")"
-    [[ "${live}" == "${want}" ]] && pass "export ${name}: client list as declared" \
-        || fail "export ${name}: client list drift (D16) — live '${live}', declared '${want}'"
-done < <(nfs_exports "${INSTANCE}")
-
-if [[ "${DEEP}" -eq 1 ]]; then
-    if "${HERE}/lib/test-nfs-deep.sh" "${INSTANCE}"; then pass "pvehost:nfs deep suite"
-    else fail "pvehost:nfs deep suite (above)"; fi
+if [[ "$(jq -r --arg i "${INSTANCE}" '[.nfs.shares // {} | to_entries[] | select(.value.server == $i)] | length' "${CONFIG_DIR}/shares.json" 2>/dev/null || echo 0)" != "0" ]]; then
+    if "${HERE}/storage/nfs-server.sh" test "${INSTANCE}"; then pass "NFS shares as declared"
+    else fail "NFS shares drift from their declarations (above)"; fi
 fi
 
 info "  Results: ${GN}${PASS} passed${CL}, ${RD}${FAIL} failed${CL}"

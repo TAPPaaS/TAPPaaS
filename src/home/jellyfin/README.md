@@ -16,23 +16,23 @@ server declares — before or after Jellyfin is installed.
 | VM ID | 360 |
 | App version | 10.10.7 |
 | VM disk | 32G on `tanka1` — OS and Jellyfin's own data (`/var/lib/jellyfin`, metadata, cache) |
-| Media | `/media` — subdir `jellyfin` of the NFS share `media` (`pvehost:nfs`); a local directory while the share is pending |
+| Media | `/media` — subdir `jellyfin` of the NFS share `media` (`storage:nfs`); a local directory while the share is pending |
 
 ## Storage
 
 The media library is **not** in the VM. `/media` is the subdirectory `jellyfin`
 of the NFS share named **`media`**, served by a cluster node from its `tankb`
-pool through `pvehost:nfs`
-([ADR-029](../../../docs/ADR/ADR-029%20-%20NFS%20Service.md) v0.8):
+pool through `storage:nfs`
+([ADR-029](../../../docs/ADR/ADR-029%20-%20NFS%20Service.md) v0.9):
 
 - **Jellyfin names the share, not a machine.** `jellyfin.json` mounts
   `share: "media"`, `subdir: "jellyfin"` at `/media`, `rw` — the same file on
   every site. The guest mounts `nfs-media.mgmt.internal:/tappaas-nfs/media/jellyfin`;
   the alias follows the share, so moving it to another node or pool changes
   nothing here.
-- **The site's server declares the share** in its own config
-  (`config/<node>.json`): name `media`, pool, quota, backup policy, and a grant
-  to `jellyfin`. A consumer never creates a share.
+- **The operator declares the share** with `storage-manager` (kept in
+  `config/shares.json`): name `media`, server node, pool, quota, backup policy,
+  and a grant to `jellyfin`. A consumer never creates a share.
 - **The service joins them:** it shares the dataset to Jellyfin's address only,
   opens the one firewall path (Jellyfin → the share, tcp/2049) and writes the
   mount into the guest (`/etc/nixos/tappaas-nfs.nix`, imported by the
@@ -84,7 +84,7 @@ graph LR
     cluster["cluster:vm"]
     templates["templates:nixos"]
     backup["backup:vm"]
-    nfs["pvehost:nfs"]
+    nfs["storage:nfs"]
     netproxy["network:proxy / network:rules"]
     node["share media — nfs-media.mgmt.internal (tankb pool on a node)"]
     caddy["Caddy reverse proxy (on the OPNsense firewall, :443)"]

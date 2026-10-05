@@ -3,7 +3,7 @@
 #
 # Deploys the Jellyfin NixOS config and bootstraps three pre-made user accounts
 # (admin, stream, local). VM creation is handled by the cluster:vm dependency;
-# the media library is an NFS share mounted by the pvehost:nfs dependency.
+# the media library is an NFS share mounted by the storage:nfs dependency.
 #
 # Usage: ./install.sh [vmname]
 

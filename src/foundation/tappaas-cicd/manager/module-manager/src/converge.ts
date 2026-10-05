@@ -41,6 +41,7 @@ import { getModuleDir, resolveProviderModule } from "./config";
 import { parseDependency } from "./services";
 import { resolveModuleFromConfig } from "./resolve";
 import { runServiceReporter } from "./report";
+import { moduleOfLocation, moduleSourceOf } from "../../../lib/ts/src/instance";
 
 // Everything that can stop a drift computation, kept apart because the caller
 // says something different about each. In particular "this provider has no
@@ -254,7 +255,7 @@ export function preGateSet(
     };
   }
   const environment = desired.fields.environment?.value ?? "";
-  const declared = new Set([...desired.dependsOn, ...desired.integratesWith]);
+  const declared = new Set([...desired.dependsOn, ...desired.integratesWith, ...ownServices(configDir, module)]);
 
   // Manifests are loaded once per coordinate, not once per field.
   const manifests = new Map<string, ServiceFieldManifest | null>();
@@ -492,4 +493,23 @@ export function cmdDrift(module: string, opts: DriftOptions): number {
   }
   if (opts.json) emitJson({ module, services: records });
   return worst;
+}
+
+// The coordinates a module provides itself, "<module>:<service>" for each entry of its
+// deployed `provides`. A field one of them owns is the module's own to change: the
+// provider of a service declares it about itself and depends on nothing for it. The
+// field-owner check used to read dependsOn + integratesWith only, and refused such a
+// field on every instance (found on pvehost's NFS exports, ADR-029 v0.8 bug 1).
+// validateOrphanFields already counts `provides` the same way.
+export function ownServices(configDir: string, instance: string): string[] {
+  let raw: Record<string, unknown>;
+  try {
+    raw = JSON.parse(readFileSync(join(configDir, `${instance}.json`), "utf8"));
+  } catch {
+    return [];
+  }
+  const provides = Array.isArray(raw.provides) ? raw.provides.filter((p): p is string => typeof p === "string") : [];
+  const src = moduleSourceOf(raw);
+  const module = src ? moduleOfLocation(src) : instance;
+  return provides.map((svc) => `${module}:${svc}`);
 }

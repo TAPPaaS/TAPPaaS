@@ -29,7 +29,7 @@
   imports = lib.optional (builtins.pathExists /etc/nixos/tappaas-site.nix)
     /etc/nixos/tappaas-site.nix
     # The NFS shares this guest mounts (ADR-029 D10, #766): fileSystems entries
-    # written by pvehost:nfs, present only on a guest that declares mounts. It
+    # written by storage:nfs, present only on a guest that declares mounts. It
     # states mounts and nothing else, so it can never collide with a module's
     # own configuration.
     ++ lib.optional (builtins.pathExists /etc/nixos/tappaas-nfs.nix)

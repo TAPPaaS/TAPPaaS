@@ -1,21 +1,19 @@
 #!/usr/bin/env bash
-# nfs-service.sh — what install-, update-, delete- and test-service.sh share
-# (ADR-029). Sourced by them after common-install-routines.sh. Not a dispatch
-# target itself.
+# nfs-service.sh — what install-, update-, delete- and test-service.sh of storage:nfs
+# share (ADR-029 v0.9). Sourced by them after common-install-routines.sh. Not a
+# dispatch target itself.
 #
-# CONSUMER is the consuming module ($1 of the service script). Its config is in
-# config/<CONSUMER>.json; a server is always read from its own file, never through
-# pn_load (see nfs-guest.sh).
+# CONSUMER is the consuming module ($1 of the service script). Shares are read from
+# config/shares.json; servers are driven through nfs-converge.sh (their hooks), never
+# reached from here directly.
 
 NFS_SERVICE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=../../lib/pvehost-lib.sh disable=SC1091
-. "${NFS_SERVICE_DIR}/../../lib/pvehost-lib.sh"
 # shellcheck source=../../lib/nfs-lib.sh disable=SC1091
 . "${NFS_SERVICE_DIR}/../../lib/nfs-lib.sh"
-# shellcheck source=../../lib/nfs-node.sh disable=SC1091
-. "${NFS_SERVICE_DIR}/../../lib/nfs-node.sh"
 # shellcheck source=../../lib/nfs-guest.sh disable=SC1091
 . "${NFS_SERVICE_DIR}/../../lib/nfs-guest.sh"
+# shellcheck source=../../lib/nfs-converge.sh disable=SC1091
+. "${NFS_SERVICE_DIR}/../../lib/nfs-converge.sh"
 
 # nfs_service_check <consumer> — every mount passes its shape check and, where its
 # share exists, the two-key check (D3, D11). Prints the problems; rc 1 when there
@@ -34,60 +32,65 @@ nfs_service_check() {
     return "${rc}"
 }
 
-# nfs_servers_granting <consumer> — every managed server with an export that grants
-# the consumer. These are the servers whose client lists may hold its address, so
-# they are the ones to reconverge when its mounts change or it is deleted (D16).
-nfs_servers_granting() {
-    local f inst
-    for f in "${NFS_CONFIG_DIR}"/*.json; do
-        [[ -f "${f}" ]] || continue
-        grep -q '"nfs"' "${f}" 2>/dev/null || continue
-        jq -e --arg c "$1" 'any(.nfs.exports // [] | .[]; any(.grants // [] | .[]; .consumer == $c))' "${f}" >/dev/null 2>&1 || continue
-        inst="$(basename "${f}" .json)"
-        nfs_instance_managed "${inst}" && printf '%s\n' "${inst}"
-    done
-}
+# nfs_shares_granting <consumer> — the shares that grant the consumer, one name per
+# line. Their client lists are the ones that may hold its address (D16).
+nfs_shares_granting() { nfs_shares | jq -r --arg c "$1" 'select(.grants[$c] != null) | .name'; }
 
-# nfs_service_reconverge <consumer> [exclude] — have each server that grants the
-# consumer converge: build a declared share it now mounts (D11), and rebuild the
-# client list so it holds the consumer exactly when it mounts the share (D16). With
-# "exclude", the consumer is left out whatever its config says — the delete case,
-# where the config still exists. Each server once, in a subshell so INSTANCE and
-# ADDRESS never leak; never notifying consumers back (NFS_NO_REVERSE).
+# nfs_service_reconverge <consumer> [exclude] — every share that grants the consumer
+# converges: its server builds it, the client list holds the consumer exactly when it
+# mounts the share (D16), the alias follows. With "exclude" the consumer is left out
+# whatever its config says — the delete case, where the config still exists. Each
+# server once; never notifying consumers back (NFS_NO_REVERSE).
 nfs_service_reconverge() {
-    local consumer="$1" exclude="${2:-}" host rc=0
-    while IFS= read -r host <&3; do
-        [[ -n "${host}" ]] || continue
-        ( INSTANCE="${host}"; ADDRESS="$(nfs_instance_address "${host}")"
-          export NFS_NO_REVERSE=1
-          [[ -n "${exclude}" ]] && export NFS_EXCLUDE_CONSUMERS="${NFS_EXCLUDE_CONSUMERS:-} ${consumer}"
-          [[ -n "${ADDRESS}" ]] || { error "  ${host}: no address in config/${host}.json"; exit 1; }
-          pn_reachable || { error "  ${host}: root@${ADDRESS} does not accept the mothership's key"; exit 1; }
-          nfs_node_reconcile ) || rc=1
-    done 3< <(nfs_servers_granting "${consumer}" | sort -u)
+    local consumer="$1" exclude="${2:-}" name server rc=0
+    local -A done=()
+    local -a ex=()
+    [[ -n "${exclude}" ]] && ex=("${consumer}")
+    while IFS= read -r name <&3; do
+        [[ -n "${name}" ]] || continue
+        server="$(nfs_find_share "${name}")" || continue
+        if [[ -z "${done[${server}]:-}" ]]; then
+            done["${server}"]=1
+            NFS_NO_REVERSE=1 nfs_converge_server "${server}" "${ex[@]}" || rc=1
+        fi
+        nfs_ensure_alias "${name}" "${server}" || rc=1
+    done 3< <(nfs_shares_granting "${consumer}")
     return "${rc}"
 }
 
 # nfs_service_ensure_subdir <mount-json> — the mount's subdir exists in its share,
-# owned by the export's owner (D15). Created on the node for a managed share; a
-# registered server's or a literal share's subdir must already exist (TAPPaaS does
-# not write to a server it does not manage) and is checked by the mount itself.
+# owned by the share's owner (D15), made by the server's hook. A registered server's
+# or a literal share's subdir must already exist — TAPPaaS does not write to a server
+# it does not manage — and the mount itself shows whether it does.
 nfs_service_ensure_subdir() {
-    local m="$1" subdir name server e uid gid dir
+    local m="$1" subdir kind name server out
     subdir="$(jq -r '.subdir // empty' <<< "${m}")"
     [[ -n "${subdir}" ]] || return 0
     read -r kind name _ < <(nfs_parse_share_ref "$(jq -r .share <<< "${m}")") || return 1
     [[ "${kind}" == "named" ]] || return 0
-    server="$(nfs_find_share "${name}" 2>/dev/null)" || return 0
-    nfs_instance_managed "${server}" || return 0
-    e="$(nfs_export "${server}" "${name}")" || return 1
-    uid="$(jq -r '.owner.uid // empty' <<< "${e}")"; gid="$(jq -r '.owner.gid // empty' <<< "${e}")"
-    [[ -n "${uid}" ]] || { error "  share ${name} has no owner yet — its server has not built it"; return 1; }
-    dir="${NFS_MOUNT_ROOT}/${name}/${subdir}"
-    ( INSTANCE="${server}"; ADDRESS="$(nfs_instance_address "${server}")"
-      pn_ssh "[ -d '${dir}' ] || { install -d -o '${uid}' -g '${gid}' -m 0770 '${dir}' && echo created; }" ) \
-        | grep -q created && info "  ${GN}✓${CL} ${name}/${subdir}: created, owned by ${uid}:${gid}"
+    server="$(nfs_find_share "${name}")" || return 0
+    [[ "$(nfs_server_kind "${server}")" == "hook" ]] || return 0
+    out="$("$(nfs_server_hook "${server}")" subdir "${server}" "${name}" "${subdir}")" \
+        || { error "  ${name}/${subdir}: could not be created on ${server}"; return 1; }
+    [[ "${out}" == *created* ]] && info "  ${GN}✓${CL} ${name}/${subdir}: created, owned by the share's owner"
     return 0
+}
+
+# nfs_service_rules <consumer> — the consumer's NFS update owns its firewall path
+# (D11, v0.9): when a mount it can make now crosses the firewall, recompile its
+# network:rules first. A share that arrived after the consumer (and the update a
+# grant triggers) otherwise had no rule, and the mount timed out.
+nfs_service_rules() {
+    local consumer="$1" m need=0
+    while IFS= read -r m <&3; do
+        [[ -n "${m}" ]] || continue
+        [[ "$(nfs_mount_status "${m}")" == "pending" ]] && continue
+        nfs_mount_crosses_zone "${consumer}" "${m}" && { need=1; break; }
+    done 3< <(nfs_mounts "${consumer}")
+    [[ "${need}" -eq 1 ]] || return 0
+    rules-manager --no-ssl-verify reconcile "${consumer}" >/dev/null \
+        || { error "  ${consumer}: its firewall rules did not compile — the share is not reachable through the firewall"; return 1; }
+    debug "  ${consumer}: firewall rules recompiled for its NFS mounts"
 }
 
 # nfs_guest_facts <target> <path> — key=value facts about a mount point in the guest,
@@ -114,9 +117,10 @@ nfs_fact() { sed -n "s/.*\b$2=\([^ ]*\).*/\1/p" <<< "$1"; }
 #   4. the guest's generated mount list is rewritten (D10)
 nfs_service_converge() {
     local consumer="$1" target os m path src v access req status facts lines="" rc=0
-    nfs_service_check "${consumer}" || { error "pvehost:nfs: ${consumer}'s mounts are refused (above) — nothing was changed"; return 1; }
-    [[ "$(nfs_consumer_os "${consumer}")" != "other" ]] || { error "pvehost:nfs mounts only NixOS and Debian guests (ADR-029 D10)"; return 1; }
-    nfs_service_reconverge "${consumer}" || { error "pvehost:nfs: a server's exports did not converge (above)"; return 1; }
+    nfs_service_check "${consumer}" || { error "storage:nfs: ${consumer}'s mounts are refused (above) — nothing was changed"; return 1; }
+    [[ "$(nfs_consumer_os "${consumer}")" != "other" ]] || { error "storage:nfs mounts only NixOS and Debian guests (ADR-029 D10)"; return 1; }
+    nfs_service_reconverge "${consumer}" || { error "storage:nfs: a share's server did not converge (above)"; return 1; }
+    nfs_service_rules "${consumer}" || return 1
     target="$(nfs_consumer_target "${consumer}")" \
         || { warn "  ${consumer} has no vmname — no guest to write mounts into"; return 0; }
     os="$(nfs_consumer_os "${consumer}")"
@@ -128,7 +132,10 @@ nfs_service_converge() {
         IFS=$'\t' read -r path src v access req status < <(nfs_resolve_mount "${m}")
         facts="$(nfs_guest_facts "${target}" "${path}")"
         if [[ "${status}" == "pending" ]]; then
+            # Still mounted — or an automount still declared — from a share that is
+            # no longer declared: the D14 "no way back" case.
             local gone; gone="$(nfs_fact "${facts}" mounted)"
+            [[ -n "${gone}" || "$(nfs_fact "${facts}" autofs)" != "yes" ]] || gone="$(nfs_fact "${facts}" fstab)"
             if [[ -n "${gone}" ]]; then
                 error "  ${path}: share $(jq -r .share <<< "${m}") is gone, but ${path} is still mounted from it — never a silent fallback to a local directory (ADR-029 D14). Declare the share again, or remove the mount."
                 rc=1
@@ -146,6 +153,13 @@ nfs_service_converge() {
         if [[ "${mounted}" == "${src}" ]]; then
             lines+="${line}${status}"$'\n'
             nfs_service_drop_prenfs "${target}" "${path}" "${access}" "$(nfs_fact "${facts}" prenfs)" || rc=1
+            continue
+        fi
+        if [[ "$(nfs_fact "${facts}" autofs)" == "yes" && "$(nfs_fact "${facts}" fstab)" == "${src}" ]]; then
+            # The share is the guest's mount here, but would not mount just now (its
+            # server is down, or the network): nothing to migrate, nothing to change.
+            warn "  ${path}: the share is this guest's mount, but it did not mount just now — is its server up?"
+            lines+="${line}${status}"$'\n'
             continue
         fi
         if [[ "$(nfs_fact "${facts}" local)" == "yes" ]]; then
@@ -264,7 +278,7 @@ EOF
             info "  ${GN}✓${CL} ${consumer}: /etc/fstab block updated and applied" ;;
         *)
             rm -f "${tmp}"
-            error "  ${consumer}: pvehost:nfs mounts only NixOS and Debian guests (ADR-029 D10)"; return 1 ;;
+            error "  ${consumer}: storage:nfs mounts only NixOS and Debian guests (ADR-029 D10)"; return 1 ;;
     esac
     rm -f "${tmp}"
 }

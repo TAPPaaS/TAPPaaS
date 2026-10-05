@@ -57,6 +57,11 @@
       "stack": "foundation"
     },
     {
+      "moduleName": "storage",
+      "moduleJson": "src/foundation/storage/storage.json",
+      "stack": "foundation"
+    },
+    {
       "moduleName": "debianhost",
       "moduleJson": "src/foundation/debianhost/debianhost.json",
       "stack": "foundation"

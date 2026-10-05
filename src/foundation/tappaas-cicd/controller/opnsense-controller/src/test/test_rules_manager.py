@@ -1568,7 +1568,7 @@ class TestProviderInstance(unittest.TestCase):
 # ADR-029 v0.8 D5 layer 2 — the path to a share is derived from the mounts
 # ─────────────────────────────────────────────────────────────────────────────
 #
-# A consumer's pvehost:nfs mounts become host-to-host egress rules to the share
+# A consumer's storage:nfs mounts become host-to-host egress rules to the share
 # alias nfs-<share>.mgmt.internal, so a share that moves keeps its rule. None for
 # a pending mount, an ungranted share, or the consumer's own zone (#766, #772).
 
@@ -1578,25 +1578,27 @@ class TestNfsDerivedEgress(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.dir = Path(self.tmp.name)
         node = {"kind": "machine", "management": "managed", "zone0": "mgmt",
-                "address": "tappaas1.mgmt.internal",
-                "nfs": {"exports": [{"name": "media", "pool": "tankb1",
-                                     "backup": {"enabled": True},
-                                     "grants": [{"consumer": "jellyfin", "access": "rw"}]}]}}
+                "address": "tappaas1.mgmt.internal"}
         nas = {"kind": "machine", "management": "unmanaged", "zone0": "home",
-               "address": "nas1.home.internal",
-               "nfs": {"exports": [{"name": "old", "path": "/v", "version": "3",
-                                    "v3Ports": {"mountd": 892, "nlockmgr": 32803, "statd": 662},
-                                    "grants": [{"consumer": "jellyfin"}]}]}}
+               "address": "nas1.home.internal"}
+        shares = {"nfs": {"shares": {
+            "media": {"server": "tappaas1", "pool": "tankb1", "backup": {"enabled": True},
+                      "grants": {"jellyfin": "rw"}},
+            "old": {"server": "nas1", "path": "/v", "version": "3",
+                    "v3Ports": {"mountd": 892, "nlockmgr": 32803, "statd": 662},
+                    "grants": {"jellyfin": "ro"}},
+        }}}
         (self.dir / "tappaas1.json").write_text(json.dumps(node))
         (self.dir / "nas1.json").write_text(json.dumps(nas))
+        (self.dir / "shares.json").write_text(json.dumps(shares))
         self.mgr = _make_manager(modules_dir=self.dir)
 
     def tearDown(self):
         self.tmp.cleanup()
 
-    def _consumer(self, mounts, zone="srvWork", deps=("cluster:vm", "pvehost:nfs"), egress=None, name="jellyfin"):
+    def _consumer(self, mounts, zone="srvWork", deps=("cluster:vm", "storage:nfs"), egress=None, name="jellyfin"):
         data = {"vmname": name, "zone0": zone, "dependsOn": list(deps),
-                "config": {"pvehost:nfs": {"mounts": mounts}}}
+                "config": {"storage:nfs": {"mounts": mounts}}}
         if egress is not None:
             data["egress"] = egress
         (self.dir / f"{name}.json").write_text(json.dumps(data))
@@ -1625,13 +1627,13 @@ class TestNfsDerivedEgress(unittest.TestCase):
         mod = self._consumer([{"path": "/m", "share": "nope"}])
         self.assertEqual(mod.egress, [])
 
-    def test_an_ungranted_share_has_no_rule(self):
-        mod = self._consumer([{"path": "/m", "share": "media"}], name="stranger")
+    def test_without_shares_json_every_mount_is_pending(self):
+        (self.dir / "shares.json").unlink()
+        mod = self._consumer([{"path": "/m", "share": "media"}])
         self.assertEqual(mod.egress, [])
 
-    def test_a_share_declared_twice_has_no_rule(self):
-        (self.dir / "tappaas2.json").write_text((self.dir / "tappaas1.json").read_text())
-        mod = self._consumer([{"path": "/m", "share": "media"}])
+    def test_an_ungranted_share_has_no_rule(self):
+        mod = self._consumer([{"path": "/m", "share": "media"}], name="stranger")
         self.assertEqual(mod.egress, [])
 
     def test_same_zone_needs_no_rule(self):
@@ -1640,6 +1642,10 @@ class TestNfsDerivedEgress(unittest.TestCase):
 
     def test_without_the_dependency_nothing_is_derived(self):
         mod = self._consumer([{"path": "/m", "share": "media"}], deps=("cluster:vm",))
+        self.assertEqual(mod.egress, [])
+
+    def test_the_old_coordinate_derives_nothing(self):
+        mod = self._consumer([{"path": "/m", "share": "media"}], deps=("cluster:vm", "pvehost:nfs"))
         self.assertEqual(mod.egress, [])
 
     def test_declared_egress_is_kept(self):
@@ -1687,7 +1693,7 @@ class TestDropDerivedAliases(unittest.TestCase):
         self.mgr._alias_is_orphan = lambda name, exclude_module: self.orphan
 
     def test_the_alias_of_a_deleted_nfs_rule_goes(self):
-        n = self.mgr._drop_derived_aliases("jf", ["tappaas-module:jf:egress:alias:nfs_share_media:2049 | pvehost:nfs"])
+        n = self.mgr._drop_derived_aliases("jf", ["tappaas-module:jf:egress:alias:nfs_share_media:2049 | storage:nfs"])
         self.assertEqual(n, 1)
         self.mgr._delete_alias.assert_called_once_with("nfs_share_media")
 

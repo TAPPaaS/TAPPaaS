@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# pvehost:nfs — delete-service (ADR-029 D6, D16). Takes the consumer's mounts away
+# storage:nfs — delete-service (ADR-029 D6, D16). Takes the consumer's mounts away
 # and leaves every share's DATA alone: the export belongs to its server, not to the
 # consumer. Its grants stay too — they are the server's declaration.
 #
@@ -19,12 +19,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 CONSUMER="${1:-}"
 [[ -n "${CONSUMER}" ]] || { echo "Usage: $0 <consumer>"; exit 1; }
-nfs_is_instance "${CONSUMER}" || { info "pvehost:nfs: no config/${CONSUMER}.json — nothing to remove"; exit 0; }
+nfs_is_instance "${CONSUMER}" || { info "storage:nfs: no config/${CONSUMER}.json — nothing to remove"; exit 0; }
 
 nfs_service_reconverge "${CONSUMER}" exclude \
     || warn "  ${CONSUMER}: a server it was granted on did not reconverge (above) — check its client list"
 
-target="$(nfs_consumer_target "${CONSUMER}")" || { info "pvehost:nfs: ${CONSUMER} has no guest — nothing to remove"; exit 0; }
+target="$(nfs_consumer_target "${CONSUMER}")" || { info "storage:nfs: ${CONSUMER} has no guest — nothing to remove"; exit 0; }
 case "$(nfs_consumer_os "${CONSUMER}")" in
     nixos)
         tappaas_ssh_guest -o BatchMode=yes "${target}" "sudo rm -f ${NFS_GUEST_FRAGMENT}" 2>/dev/null \

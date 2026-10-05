@@ -66,7 +66,7 @@ ALIAS_COUNT=$(read_module_config "${MODULE}" | jq -r '(.aliases // {}) | length'
 # tcp/2049 pass per server a module mounts from. A consumer that declares no
 # ingress/egress of its own — jellyfin — was gated out here, so its install
 # never got the rule and its mount timed out until the next update reconciled.
-MOUNT_COUNT=$(read_module_config "${MODULE}" | jq -r '(.config["pvehost:nfs"].mounts // .mounts // []) | length')
+MOUNT_COUNT=$(read_module_config "${MODULE}" | jq -r '(.config["storage:nfs"].mounts // .mounts // []) | length')
 
 # Auto-pinholes (#173): even if the module has no manual ingress/egress/
 # aliases, rules-manager may still need to run when a declared coordinate points

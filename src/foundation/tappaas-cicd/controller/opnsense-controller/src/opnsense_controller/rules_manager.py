@@ -433,7 +433,7 @@ def load_module(modules_dir: Path, name: str) -> ModuleSpec:
     _cfg = data.get("config", {})
     fr = _cfg.get("network:rules") or _cfg.get("firewall:rules", {})
     # The NFS servers this module mounts from need a path too (ADR-029 D5 layer
-    # 2). They are derived from its pvehost:nfs mounts, never authored twice, and
+    # 2). They are derived from its storage:nfs mounts, never authored twice, and
     # join the declared egress so alias provisioning, verify, prune and removal
     # treat them like any other rule the module owns.
     nfs_egress, nfs_aliases = nfs_derived_egress(modules_dir, data, name)
@@ -465,7 +465,7 @@ def load_module(modules_dir: Path, name: str) -> ModuleSpec:
     )
 
 
-NFS_COORDINATE = "pvehost:nfs"
+NFS_COORDINATE = "storage:nfs"
 NFS_ALIAS_DOMAIN = "mgmt.internal"
 
 
@@ -479,27 +479,28 @@ def _nfs_alias_name(host: str) -> str:
 
 
 def _nfs_share_server(modules_dir: Path, share: str) -> tuple[dict, dict] | None:
-    """The one deployed instance declaring an export named ``share``, and that export.
+    """The server instance carrying ``share``, and the share's declaration.
 
-    None when no instance declares it (a pending mount, ADR-029 D11) or more than
-    one does (an error the service and validate report; no rule is guessed).
+    Shares are declared once, in ``config/shares.json`` ``nfs.shares`` (ADR-029 v0.9
+    D4, D18). None when the share is not declared (a pending mount, D11) or its
+    server has no config.
     """
-    found: list[tuple[dict, dict]] = []
-    for f in sorted(modules_dir.glob("*.json")):
-        try:
-            raw = json.loads(f.read_text())
-        except (OSError, ValueError):
-            continue
-        if not isinstance(raw, dict):
-            continue
-        for e in ((raw.get("nfs") or {}).get("exports") or []):
-            if isinstance(e, dict) and e.get("name") == share:
-                found.append((raw, e))
-    return found[0] if len(found) == 1 else None
+    try:
+        doc = json.loads((modules_dir / "shares.json").read_text())
+    except (OSError, ValueError):
+        return None
+    decl = ((doc.get("nfs") or {}).get("shares") or {}).get(share) if isinstance(doc, dict) else None
+    if not isinstance(decl, dict) or not decl.get("server"):
+        return None
+    try:
+        server = json.loads((modules_dir / f"{decl['server']}.json").read_text())
+    except (OSError, ValueError):
+        return None
+    return (server, decl) if isinstance(server, dict) else None
 
 
 def nfs_derived_egress(modules_dir: Path, data: dict, instance: str = "") -> tuple[list[dict], dict[str, dict]]:
-    """The egress a consumer's pvehost:nfs mounts need (ADR-029 v0.8 D5 layer 2).
+    """The egress a consumer's storage:nfs mounts need (ADR-029 v0.9 D5 layer 2).
 
     One entry per share the module mounts, host to host:
       * a named share → a module-local host alias holding the share alias
@@ -532,7 +533,7 @@ def nfs_derived_egress(modules_dir: Path, data: dict, instance: str = "") -> tup
             aliases[alias] = {
                 "type": "host",
                 "addresses": [host],
-                "description": f"pvehost:nfs server {host} (unmodelled, ADR-029 D2)",
+                "description": f"storage:nfs server {host} (unmodelled, ADR-029 D2)",
             }
             label, ports, proto = host, [2049], "TCP"
         else:
@@ -542,15 +543,15 @@ def nfs_derived_egress(modules_dir: Path, data: dict, instance: str = "") -> tup
             server, export = found
             if server.get("zone0", "") == zone:
                 continue
-            granted = {g.get("consumer") for g in (export.get("grants") or []) if isinstance(g, dict)}
-            if consumer and consumer not in granted:
+            grants = export.get("grants") or {}
+            if consumer and not (isinstance(grants, dict) and consumer in grants):
                 continue
             fqdn = f"nfs-{share}.{NFS_ALIAS_DOMAIN}"
             alias = _nfs_alias_name(f"share_{share}")
             aliases[alias] = {
                 "type": "host",
                 "addresses": [fqdn],
-                "description": f"pvehost:nfs share {share} — follows its server (ADR-029 D2b)",
+                "description": f"storage:nfs share {share} — follows its server (ADR-029 D2b)",
             }
             label, ports, proto = f"share {share}", [2049], "TCP"
             if server.get("management") == "unmanaged" and str(export.get("version", "4.2")) == "3":
@@ -562,7 +563,7 @@ def nfs_derived_egress(modules_dir: Path, data: dict, instance: str = "") -> tup
             "to": f"alias:{alias}",
             "ports": [],
             "protocol": proto,
-            "description": f"pvehost:nfs to {label} (ADR-029)",
+            "description": f"storage:nfs to {label} (ADR-029)",
         })
         for p in ports:
             if p not in entry["ports"]:

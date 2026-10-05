@@ -26,7 +26,7 @@ import {
   parseServiceFieldManifest,
 } from "../../../lib/ts/src/service-fields";
 import { ServiceFs, parseDependency } from "./services";
-import { checkExports, checkMounts, unusedGrants } from "./nfs";
+import { checkMounts } from "./nfs";
 import { moduleSourceOf } from "../../../lib/ts/src/instance";
 import { MODULE_STATUS_VALUES, ModuleConfig, ValidateFinding, ValidateReport } from "./types";
 import { moduleScope } from "../../../lib/ts/src/scope";
@@ -124,8 +124,8 @@ export function validateModule(
   // ADR-020 service field manifests — see validateFieldManifests.
   if (opts.fs && opts.schema) validateFieldManifests(m, opts.fs, opts.schema, out);
 
-  // pvehost:nfs (ADR-029): a server's exports, and a consumer's mounts checked
-  // against them — the two-key check, before any install runs.
+  // storage:nfs (ADR-029 v0.9): a consumer's mounts checked against the shares
+  // in config/shares.json and their grants — before any install runs.
   validateNfs(m, opts.fs, out);
 
   // #683 — a declared field whose consumer is not wired. Needs the schema's
@@ -540,20 +540,12 @@ export function validateModules(
   return { findings, errors, warnings };
 }
 
-// ADR-029 (v0.8). The export shape needs only the module itself; the Site-unique
-// name check, the mount check and the unused-grant note read the other instances,
-// so they need fs.readConfig and fs.listInstances.
+// ADR-029 (v0.9): a consumer's mounts against config/shares.json — read through
+// fs.readConfig (config/shares.json is read like any config). Without the reader the
+// check is skipped, not failed.
 export function validateNfs(m: ModuleConfig, fs: ServiceFs | undefined, out: ValidateFinding[]): void {
+  if (!fs?.readConfig) return;
   const raw = (m.raw ?? {}) as Record<string, unknown>;
-  const push = (f: { severity: "error" | "warning"; message: string }): void =>
-    void out.push({ module: m.name, severity: f.severity, message: f.message });
-  if (!fs?.readConfig || !fs.listInstances) {
-    checkExports(m.name, raw).forEach(push);
-    return;
-  }
   const read = (i: string): Record<string, unknown> | null => fs.readConfig!(i);
-  const list = (): string[] => fs.listInstances!();
-  checkExports(m.name, raw, list, read).forEach(push);
-  checkMounts(m.name, raw, list, read).forEach(push);
-  unusedGrants(raw, read).forEach(push);
+  for (const f of checkMounts(m.name, raw, read)) out.push({ module: m.name, severity: f.severity, message: f.message });
 }

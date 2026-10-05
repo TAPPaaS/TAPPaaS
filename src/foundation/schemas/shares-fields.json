@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "shares-fields.json",
+  "title": "TAPPaaS Shares",
+  "description": "config/shares.json — the Site's storage shares (ADR-029 v0.9 D4, D18). Site state, written only by storage-manager; never part of a module's release merge. A section per protocol: nfs now. An absent file is an empty one.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "nfs": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "shares": {
+          "description": "NFS shares keyed by their Site-unique name; each is reached as nfs-<name>.mgmt.internal (D2b).",
+          "type": "object",
+          "propertyNames": { "pattern": "^[a-z][a-z0-9-]*$" },
+          "additionalProperties": { "$ref": "#/$defs/share" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "share": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["server"],
+      "properties": {
+        "server": {
+          "description": "The module instance that carries the share: a managed Host whose module ships the NFS server hook (D19), or a registered, unmanaged server (D2a). Immutable in place — a move is a data migration.",
+          "type": "string"
+        },
+        "pool": {
+          "description": "Managed Host: the ZFS pool the dataset <pool>/tappaas-nfs/<name> is built in. Immutable in place.",
+          "type": "string"
+        },
+        "quota": { "description": "Managed Host: ZFS quota (e.g. 4T).", "type": "string" },
+        "properties": {
+          "description": "Managed Host: ZFS properties TAPPaaS sets.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "recordsize": { "type": "string" },
+            "compression": { "type": "string" },
+            "atime": { "type": "string" }
+          }
+        },
+        "backup": {
+          "description": "Managed Host: whether the share is backed up (D9) — required, never a default.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "exclude": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "owner": {
+          "description": "Managed Host: the uid/gid every client is squashed to, allocated by 'share add' from 64000-64999 (D5). Immutable.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["uid", "gid"],
+          "properties": {
+            "uid": { "type": "integer", "minimum": 64000, "maximum": 64999 },
+            "gid": { "type": "integer", "minimum": 64000, "maximum": 64999 }
+          }
+        },
+        "grants": {
+          "description": "Consumer instance → access. Changed by 'nfs grant' / 'nfs revoke'.",
+          "type": "object",
+          "additionalProperties": { "enum": ["ro", "rw"] }
+        },
+        "path": { "description": "Registered, unmanaged server: the exported path.", "type": "string" },
+        "version": { "description": "Registered server: NFS version.", "enum": ["4.2", "4.1", "4.0", "3"] },
+        "v3Ports": {
+          "description": "Registered server on NFSv3: its pinned ports, for the derived firewall rule.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mountd", "nlockmgr", "statd"],
+          "properties": {
+            "mountd": { "type": "integer" },
+            "nlockmgr": { "type": "integer" },
+            "statd": { "type": "integer" }
+          }
+        }
+      }
+    }
+  }
+}

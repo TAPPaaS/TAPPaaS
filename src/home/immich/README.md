@@ -221,7 +221,7 @@ flow against Authentik, described above.
 
 Immich deliberately uses **no NFS share**: its photo library is high-value data
 on its own 500G VM disk, replicated for HA — not on the re-creatable media tier
-that `pvehost:nfs` serves (see Storage).
+that `storage:nfs` serves (see Storage).
 
 ## Future enhancements
 

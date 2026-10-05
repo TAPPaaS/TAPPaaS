@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
-# nfs-lib.sh — the parts of pvehost:nfs (ADR-029) that need no node and no guest:
-# reading a share reference, finding the server that carries a share, checking
-# export and mount declarations, rendering an export's `sharenfs`, and allocating
-# an export's owner. Pure functions over config/ JSON, so the fast tier can test
-# them (test-nfs-lib.sh). The same rules, reported by `module-manager validate`,
-# live in module-manager/src/nfs.ts; keep the two in step.
+# nfs-lib.sh — the parts of storage:nfs (ADR-029 v0.9) that need no server and no
+# guest: reading a share reference, looking a share up in config/shares.json,
+# checking share declarations and mounts, and rendering an export's `sharenfs`.
+# Pure functions over config/ JSON, so the fast tier can test them
+# (test-nfs-lib.sh). The same rules, reported by storage-manager and
+# `module-manager validate`, live in lib/ts/src/nfs-shares.ts; keep them in step.
+#
+# Used by the storage module's service (storage:nfs) and by every server's NFS
+# hook (pvehost/storage/nfs-server.sh), which find it through config/storage.json.
 #
 # Sourced after common-install-routines.sh (or on its own by the tests).
 
@@ -22,6 +25,9 @@ NFS_PARENT="tappaas-nfs"
 NFS_MOUNT_ROOT="/tappaas-nfs"
 NFS_ALIAS_DOMAIN="mgmt.internal"
 NFS_NAME_RE='^[a-z][a-z0-9-]*$'
+# The consumer coordinate (ADR-029 v0.9 D1) and the Site file shares live in (D18).
+NFS_COORDINATE="storage:nfs"
+nfs_shares_file() { printf '%s/shares.json\n' "${NFS_CONFIG_DIR}"; }
 
 # nfs_parse_share_ref <ref> — ADR-029 D2 (v0.8). Prints one line:
 #   named <share>              a share name, Site-unique
@@ -53,55 +59,33 @@ nfs_instance_managed() {
     [[ "$(jq -r '.management // "managed"' "${NFS_CONFIG_DIR}/$1.json" 2>/dev/null)" == "managed" ]]
 }
 
-# nfs_exports <instance> — the instance's nfs.exports[] as compact JSON, one per line.
-nfs_exports() { jq -c '.nfs.exports // [] | .[]' "${NFS_CONFIG_DIR}/$1.json" 2>/dev/null; }
+# nfs_shares — every declared share as compact JSON, its name included as .name,
+# one per line. An absent shares.json is an empty one (D18).
+nfs_shares() {
+    local f; f="$(nfs_shares_file)"
+    [[ -f "${f}" ]] || return 0
+    jq -c '.nfs.shares // {} | to_entries[] | .value + {name: .key}' "${f}" 2>/dev/null
+}
 
-# nfs_export <instance> <name> — one export's declaration; rc 1 when absent.
+# nfs_exports <instance> — the shares declared for that server, compact JSON, one per
+# line — what its hook builds (D19).
+nfs_exports() { nfs_shares | jq -c --arg i "$1" 'select(.server == $i)'; }
+
+# nfs_export <instance> <name> — one share's declaration if that server carries it;
+# rc 1 otherwise.
 nfs_export() {
-    jq -ce --arg n "$2" '.nfs.exports // [] | map(select(.name == $n)) | .[0] // empty' \
-        "${NFS_CONFIG_DIR}/$1.json" 2>/dev/null | grep . || return 1
+    nfs_shares | jq -ce --arg i "$1" --arg n "$2" 'select(.server == $i and .name == $n)' | grep . || return 1
 }
 
-# nfs_share_servers <share> — every instance that declares an export of that name,
-# one per line, sorted. More than one is a configuration error (names are
-# Site-unique, D2); none means the share is not declared (a pending mount, D11).
-# Each file is read on its own, so one unreadable config hides nothing else.
-nfs_share_servers() {
-    local f
-    for f in "${NFS_CONFIG_DIR}"/*.json; do
-        [[ -f "${f}" ]] || continue
-        grep -q '"nfs"' "${f}" 2>/dev/null || continue
-        jq -e --arg n "$1" 'any(.nfs.exports // [] | .[]; .name == $n)' "${f}" >/dev/null 2>&1 \
-            && basename "${f}" .json
-    done | LC_ALL=C sort
-}
+# nfs_share <name> — one share's declaration, wherever it lives; rc 1 when undeclared.
+nfs_share() { nfs_shares | jq -ce --arg n "$1" 'select(.name == $n)' | grep . || return 1; }
 
-# nfs_find_share <share> — the one instance carrying it. rc 1: no server declares
-# it; rc 2: more than one does (each named on stderr).
+# nfs_find_share <share> — the server carrying it; rc 1 when no share of that name is
+# declared (a pending mount, D11). Names are unique by construction: shares.json is a
+# map keyed by name.
 nfs_find_share() {
-    local servers n
-    servers="$(nfs_share_servers "$1")"
-    n="$(grep -c . <<< "${servers}" || true)"
-    case "${n}" in
-        0) return 1 ;;
-        1) printf '%s\n' "${servers}" ;;
-        *) echo "share '$1' is declared by more than one server: $(tr '\n' ' ' <<< "${servers}")— share names are unique across the Site" >&2; return 2 ;;
-    esac
-}
-
-# nfs_check_unique <instance> — this instance's export names that another instance
-# also declares, as problems; rc 1 when there is any.
-nfs_check_unique() {
-    local name others bad=0
-    while IFS= read -r name; do
-        [[ -n "${name}" ]] || continue
-        others="$(nfs_share_servers "${name}" | grep -vx "$1" || true)"
-        if [[ -n "${others}" ]]; then
-            echo "export ${name}: also declared by $(tr '\n' ' ' <<< "${others}")— share names are unique across the Site (ADR-029 D2)"
-            bad=1
-        fi
-    done < <(jq -r '.nfs.exports // [] | .[].name // empty' "${NFS_CONFIG_DIR}/$1.json" 2>/dev/null)
-    return "${bad}"
+    local s; s="$(nfs_share "$1")" || return 1
+    jq -r '.server // empty' <<< "${s}" | grep . || return 1
 }
 
 # nfs_dataset <pool> <name> — the dataset an export lives in.
@@ -117,42 +101,40 @@ nfs_export_path() {
     fi
 }
 
-# nfs_check_export <export-json> <managed|unmanaged> — ADR-029 D4 / D2a. Prints one
-# problem per line; rc 1 when there is any. The shape checks only: whether the
-# pool exists is a question for the node.
+# nfs_check_export <share-json> <managed|unmanaged> — ADR-029 D4 / D2a: one share
+# declaration's shape (its .name included). Prints one problem per line; rc 1 when
+# there is any. Whether the pool exists is a question for the server.
 nfs_check_export() {
     local e="$1" mode="$2"
     jq -r --arg mode "${mode}" --arg re "${NFS_NAME_RE}" --argjson min "${NFS_OWNER_MIN}" --argjson max "${NFS_OWNER_MAX}" '
       (.name // "<unnamed>") as $nm |
       [
         (if (.name | type) != "string" or (.name | test($re) | not)
-           then "export \($nm): name must match \($re)" else empty end),
-        (.grants // [] | .[] |
-           if (.consumer | type) != "string" or .consumer == "" then "export \($nm): a grant has no consumer"
-           elif (.access // "ro") as $a | ($a != "ro" and $a != "rw") then "export \($nm): grant for \(.consumer) has access \(.access) (ro|rw)"
-           else empty end),
-        (if ((.grants // []) | map(.consumer) | (length != (unique | length)))
-           then "export \($nm): a consumer is granted twice" else empty end),
+           then "share \($nm): name must match \($re)" else empty end),
+        (if (.server | type) != "string" or .server == "" then "share \($nm): server is required" else empty end),
+        (if has("grants") and (.grants | type) != "object" then "share \($nm): grants must be a map of consumer to ro|rw"
+         else (.grants // {} | to_entries[] | select(.value != "ro" and .value != "rw")
+               | "share \($nm): grant for \(.key) is \(.value) (ro|rw)") end),
         (if $mode == "managed" then
-           (if (.pool | type) != "string" or .pool == "" then "export \($nm): pool is required on a managed Host" else empty end),
-           (if has("path") then "export \($nm): path is for a registered, unmanaged server — a managed Host builds the dataset from pool" else empty end),
+           (if (.pool | type) != "string" or .pool == "" then "share \($nm): pool is required on a managed Host" else empty end),
+           (if has("path") then "share \($nm): path is for a registered, unmanaged server — a managed Host builds the dataset from pool" else empty end),
            (if (.backup.enabled | type) != "boolean"
-              then "export \($nm): backup.enabled must be stated, true or false (ADR-029 D9 — there is no default)" else empty end),
+              then "share \($nm): backup.enabled must be stated, true or false (ADR-029 D9 — there is no default)" else empty end),
            (if has("owner") and ((.owner.uid | type) != "number" or (.owner.gid | type) != "number"
                                  or .owner.uid < $min or .owner.uid > $max or .owner.gid < $min or .owner.gid > $max)
-              then "export \($nm): owner must be {uid, gid} in \($min)-\($max)" else empty end),
+              then "share \($nm): owner must be {uid, gid} in \($min)-\($max)" else empty end),
            (.properties // {} | keys[] | select(IN("recordsize", "compression", "atime") | not)
-              | "export \($nm): property \(.) is not one TAPPaaS sets (recordsize, compression, atime)")
+              | "share \($nm): property \(.) is not one TAPPaaS sets (recordsize, compression, atime)")
          else
            (if (.path | type) != "string" or (.path | startswith("/") | not)
-              then "export \($nm): path (absolute) is required on a registered, unmanaged server" else empty end),
+              then "share \($nm): path (absolute) is required on a registered, unmanaged server" else empty end),
            (["pool", "quota", "owner", "properties", "backup"][] as $k | select(has($k))
-              | "export \($nm): \($k) is not allowed on a registered, unmanaged server — TAPPaaS does not provision it"),
+              | "share \($nm): \($k) is not allowed on a registered, unmanaged server — TAPPaaS does not provision it"),
            (if ((.version // "4.2") | IN("4.2", "4.1", "4.0", "3") | not)
-              then "export \($nm): version \(.version) (4.2|4.1|4.0|3)" else empty end),
+              then "share \($nm): version \(.version) (4.2|4.1|4.0|3)" else empty end),
            (if (.version // "4.2") == "3" and ((.v3Ports.mountd | type) != "number"
                  or (.v3Ports.nlockmgr | type) != "number" or (.v3Ports.statd | type) != "number")
-              then "export \($nm): NFSv3 needs v3Ports {mountd, nlockmgr, statd} pinned — dynamic ports cannot be firewalled per host" else empty end)
+              then "share \($nm): NFSv3 needs v3Ports {mountd, nlockmgr, statd} pinned — dynamic ports cannot be firewalled per host" else empty end)
          end)
       ] | .[]' <<< "${e}" | grep . && return 1
     return 0
@@ -179,43 +161,20 @@ nfs_render_sharenfs() {
     printf '%s\n' "${opts[*]}"
 }
 
-# nfs_allocated_owners — every owner uid already written into any instance's
-# exports, one per line.
-nfs_allocated_owners() {
-    local f
-    for f in "${NFS_CONFIG_DIR}"/*.json; do
-        [[ -f "${f}" ]] || continue
-        jq -r '.nfs.exports // [] | .[] | .owner.uid // empty' "${f}" 2>/dev/null
-    done
-}
-
-# nfs_next_owner — the lowest free uid in the range, across the whole Site, so two
-# nodes never hand out the same owner (a consumer may mount from both). rc 1 when
-# the range is exhausted.
-nfs_next_owner() {
-    local used u
-    used="$(nfs_allocated_owners | sort -n | uniq)"
-    for (( u = NFS_OWNER_MIN; u <= NFS_OWNER_MAX; u++ )); do
-        grep -qx "${u}" <<< "${used}" || { printf '%s\n' "${u}"; return 0; }
-    done
-    return 1
-}
-
-# nfs_grant_for <instance> <export> <consumer> — the access a consumer is granted
-# on one export ("ro"/"rw"), empty when it has none.
+# nfs_grant_for <share> <consumer> — the access a consumer is granted on a share
+# ("ro"/"rw"), empty when it has none.
 nfs_grant_for() {
-    jq -r --arg n "$2" --arg c "$3" \
-        '.nfs.exports // [] | .[] | select(.name == $n) | .grants // [] | .[] | select(.consumer == $c) | (.access // "ro")' \
-        "${NFS_CONFIG_DIR}/$1.json" 2>/dev/null | head -1
+    local s; s="$(nfs_share "$1")" || return 0
+    jq -r --arg c "$2" '.grants[$c] // empty' <<< "${s}"
 }
 
-# nfs_mounts <consumer> — the consumer's config."pvehost:nfs".mounts[], compact, one per line.
-nfs_mounts() { jq -c '.config["pvehost:nfs"].mounts // [] | .[]' "${NFS_CONFIG_DIR}/$1.json" 2>/dev/null; }
+# nfs_mounts <consumer> — the consumer's config."storage:nfs".mounts[], compact, one per line.
+nfs_mounts() { jq -c --arg k "${NFS_COORDINATE}" '.config[$k].mounts // [] | .[]' "${NFS_CONFIG_DIR}/$1.json" 2>/dev/null; }
 
 # nfs_mounts_share <consumer> <share> — rc 0 when one of the consumer's mounts names
 # the share. Only such a consumer earns a client-list entry (D16).
 nfs_mounts_share() {
-    jq -e --arg s "$2" 'any(.config["pvehost:nfs"].mounts // [] | .[]; .share == $s)' \
+    jq -e --arg s "$2" --arg k "${NFS_COORDINATE}" 'any(.config[$k].mounts // [] | .[]; .share == $s)' \
         "${NFS_CONFIG_DIR}/$1.json" >/dev/null 2>&1
 }
 
@@ -269,18 +228,14 @@ nfs_check_mount() {
         nfs_check_path "${consumer}" "${m}" || bad=1
         return "${bad}"
     fi
-    server="$(nfs_find_share "${name}" 2>&1)"
-    case $? in
-        1) return "${bad}" ;;                                   # pending: not a problem (D11)
-        2) echo "mount ${path}: ${server}"; return 1 ;;
-    esac
+    server="$(nfs_find_share "${name}")" || return "${bad}"    # pending: not a problem (D11)
     if [[ "$(jq -r '.zone0 // ""' "${NFS_CONFIG_DIR}/${server}.json")" == "wan" ]]; then
         echo "mount ${path}: share ${name} is on ${server}, in the wan zone — NFS is never mounted across it (ADR-029 D2a)"
         return 1
     fi
-    grant="$(nfs_grant_for "${server}" "${name}" "${consumer}")"
+    grant="$(nfs_grant_for "${name}" "${consumer}")"
     if [[ -z "${grant}" ]]; then
-        echo "mount ${path}: share ${name} (on ${server}) grants ${consumer} nothing — add {\"consumer\": \"${consumer}\", \"access\": \"${access}\"} to its grants in config/${server}.json, or remove the mount (ADR-029 D11)"
+        echo "mount ${path}: share ${name} grants ${consumer} nothing — run: storage-manager nfs grant ${name} ${consumer} ${access}  (or remove the mount, ADR-029 D11)"
         return 1
     fi
     if [[ "${access}" == "rw" && "${grant}" == "ro" ]]; then

@@ -1,0 +1,15 @@
+{
+  "description": "Storage for consumer modules (ADR-029): NFS shares declared in config/shares.json through storage-manager, served by the cluster nodes, mounted into consumer guests by storage:nfs. A virtual module, like cluster — nothing of its own to install.",
+  "kind": "application",
+  "version": "0.1.0",
+  "stack": "foundation",
+  "releaseDate": "2026-10-05",
+  "maintainer": "@TAPPaaS",
+  "status": "Development",
+  "source": "official",
+  "dependsOn": [],
+  "provides": [
+    "nfs"
+  ],
+  "_virtual": "Like cluster: registered (config/storage.json) so the dispatcher can resolve storage:nfs, but it installs nothing on any machine. The shares themselves are Site state in config/shares.json, owned by storage-manager (tappaas-cicd/manager/storage-manager); the cluster nodes serve them through their NFS server hook (pvehost/storage/nfs-server.sh). ADR-029 v0.9 D1."
+}

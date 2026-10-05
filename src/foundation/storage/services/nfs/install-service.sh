@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
-# pvehost:nfs — install-service (ADR-029 v0.8). Gives a consumer the NFS shares its
-# config."pvehost:nfs".mounts[] names — by share name, wherever they live:
+# storage:nfs — install-service (ADR-029 v0.9). Gives a consumer the NFS shares its
+# config."storage:nfs".mounts[] names — by share name, wherever they live:
 #
 #   1. every mount passes its shape check; where its share exists, the two-key
 #      check (D3, D11). A share no server declares leaves the mount PENDING: the
@@ -24,8 +24,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 CONSUMER="${1:-}"
 [[ -n "${CONSUMER}" ]] || { echo "Usage: $0 <consumer>"; exit 1; }
-nfs_is_instance "${CONSUMER}" || die "pvehost:nfs: no config/${CONSUMER}.json"
+nfs_is_instance "${CONSUMER}" || die "storage:nfs: no config/${CONSUMER}.json"
 
 count="$(nfs_mounts "${CONSUMER}" | grep -c . || true)"
-info "${BOLD}pvehost:nfs: ${count} mount(s) for ${BL}${CONSUMER}${CL}"
+info "${BOLD}storage:nfs: ${count} mount(s) for ${BL}${CONSUMER}${CL}"
 nfs_service_converge "${CONSUMER}"

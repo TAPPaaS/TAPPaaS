@@ -17,7 +17,7 @@
     "backup:vm",
     "network:proxy",
     "network:rules",
-    "pvehost:nfs"
+    "storage:nfs"
   ],
   "provides": [],
   "appVersion": "10.10.7",
@@ -31,7 +31,7 @@
       "image": "8080",
       "bridge0": "lan"
     },
-    "pvehost:nfs": {
+    "storage:nfs": {
       "mounts": [
         {
           "path": "/media",
