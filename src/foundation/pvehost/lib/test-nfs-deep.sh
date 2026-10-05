@@ -98,9 +98,12 @@ teardown() {
         cp -p "${WORK}/${n}.json.orig" "${CFG}/${n}.json"
         p="$(pool_on "${n}")"
         # Unshare, and let nfsd let go, before the destroy: a dataset nfsd still
-        # holds is "busy" and survives.
-        node_ssh "${n}" "zfs set sharenfs=off '$(dataset_on "${n}" "${p}")' 2>/dev/null; exportfs -ra 2>/dev/null; sleep 2;
-            zfs destroy -r '$(dataset_on "${n}" "${p}")' 2>/dev/null;
+        # holds is "busy" and survives. On a node whose NFS server the suite
+        # installed, stop it first; on one that had its own, retry while its
+        # NFSv4 state for the share drains.
+        local stop=":"; [[ -z "${HAD_NFSD[${n}]:-}" ]] && stop="systemctl stop nfs-server 2>/dev/null"
+        node_ssh "${n}" "ds='$(dataset_on "${n}" "${p}")'; zfs set sharenfs=off \"\${ds}\" 2>/dev/null; exportfs -ra 2>/dev/null; ${stop};
+            for i in 1 2 3 4 5 6; do zfs list \"\${ds}\" >/dev/null 2>&1 || break; zfs destroy -r \"\${ds}\" 2>/dev/null && break; sleep 5; done;
             zfs list -H -o name -r '${p}/${NFS_PARENT}' 2>/dev/null | grep -q /${NFS_PARENT}/ || zfs destroy '${p}/${NFS_PARENT}' 2>/dev/null;
             rmdir '/tappaas-nfs/${SHARE}' /tappaas-nfs 2>/dev/null; true"
         if [[ -z "${HAD_NFSD[${n}]:-}" && -z "$(nfs_exports "${n}")" ]]; then
