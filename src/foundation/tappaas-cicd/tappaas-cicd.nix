@@ -110,6 +110,12 @@ in
   # still rebuilds through it) and goes with the legacy path in update-tappaas.
   systemd.services."tappaas-rebuild@" = {
     description = "TAPPaaS mothership NixOS rebuild for %i (privileged helper)";
+    # This unit runs the switch that may change this unit. Without this, the
+    # switch stops the running helper (SIGTERM, the rebuild reported failed)
+    # and then starts it again, which collides with the switch's own transient
+    # unit — hrossen 2026-10-06, when #770 added the ExecStartPre below. The
+    # system was switched each time; only the report and the unit state lied.
+    restartIfChanged = false;
     serviceConfig = {
       Type = "oneshot";
       # Runs as root: no User=, and deliberately none of update-tappaas's
