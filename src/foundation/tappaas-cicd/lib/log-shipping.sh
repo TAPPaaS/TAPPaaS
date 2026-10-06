@@ -222,6 +222,30 @@ EOF
         expression = "Authorization:[[:space:]]+(?:Basic|Bearer)[[:space:]]+(\\S+)"
         replace    = "***REDACTED***"
       }
+
+      // 5. Container lines carry their own level (#785). Podman's journald
+      //    driver writes all of stderr at priority err, so authentik's info
+      //    JSON arrived as severity=error. Where a line names its level
+      //    ("level": "info", level=warn, | INFO |, [ERROR], ERROR: ...), that
+      //    is its severity, in the journal's words. A line without one keeps
+      //    the journal's priority: no match leaves the template empty, and an
+      //    empty template drops the key, so stage.labels leaves severity alone.
+      stage.match {
+        selector = "{container=~\".+\"}"
+
+        stage.regex {
+          expression = "(?i)(?:^|\"level\"\\s*:\\s*\"|\\blevel=|\\|\\s*|\\[)(?P<lvl>debug|info|notice|warn|warning|error|err|critical|crit|fatal|panic)\\b"
+        }
+
+        stage.template {
+          source   = "lvl"
+          template = "{{ $l := ToLower .Value }}{{ if eq $l \"warn\" }}warning{{ else if eq $l \"err\" }}error{{ else if or (eq $l \"critical\") (eq $l \"fatal\") }}crit{{ else if eq $l \"panic\" }}emerg{{ else }}{{ $l }}{{ end }}"
+        }
+
+        stage.labels {
+          values = { severity = "lvl" }
+        }
+      }
     }
 
     discovery.relabel "journal" {
@@ -235,6 +259,13 @@ EOF
       rule {
         source_labels = ["__journal_priority_keyword"]
         target_label  = "severity"
+      }
+
+      // The podman container a line came from (journald driver), whatever
+      // the unit is called; the level stage above keys on it.
+      rule {
+        source_labels = ["__journal_container_name"]
+        target_label  = "container"
       }
     }
 
