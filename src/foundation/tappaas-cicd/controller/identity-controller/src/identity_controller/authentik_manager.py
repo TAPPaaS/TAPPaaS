@@ -74,6 +74,11 @@ class OidcApp:
     # custom scope. Unknown names are skipped with a warning.
     scopes: list[str] | None = None
     description: str = ""
+    # Where Authentik's application list (My applications) opens the app. Empty:
+    # left as it is, and Authentik falls back to the first redirect URI's origin
+    # -- the app's front page, i.e. its own login screen. Set to the app's
+    # SSO entry point, the user who clicks it in Authentik goes straight in.
+    launch_url: str = ""
 
 
 @dataclass
@@ -950,6 +955,8 @@ class AuthentikManager:
             "provider": provider_pk,
             "meta_description": app.description,
         }
+        if app.launch_url:
+            app_body["meta_launch_url"] = app.launch_url
         if existing_app:
             application_pk = existing_app["pk"]
             self._patch_json(f"/core/applications/{existing_app['slug']}/", app_body)

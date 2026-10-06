@@ -596,6 +596,22 @@ class TestOidcAppEnsure(unittest.TestCase):
         patch = next(c for c in calls if c["method"] == "PATCH" and c["path"] == "/providers/oauth2/7/")
         self.assertEqual(patch["json"]["grant_types"], ["authorization_code", "refresh_token"])
 
+    def test_launch_url_is_set_on_the_application(self):
+        mgr, calls = _make_manager(self._update_routes([]))
+        mgr.oidc_app_ensure(OidcApp(name="immich", slug="immich",
+                                    redirect_uris=["https://immich.test/auth/login"],
+                                    launch_url="https://immich.test/auth/login?autoLaunch=1"))
+        app = next(c for c in calls if c["method"] == "PATCH" and c["path"] == "/core/applications/immich/")
+        self.assertEqual(app["json"]["meta_launch_url"], "https://immich.test/auth/login?autoLaunch=1")
+
+    def test_no_launch_url_leaves_the_application_alone(self):
+        # An operator's own launch URL survives a module that declares none.
+        mgr, calls = _make_manager(self._update_routes([]))
+        mgr.oidc_app_ensure(OidcApp(name="immich", slug="immich",
+                                    redirect_uris=["https://immich.test/auth/login"]))
+        app = next(c for c in calls if c["method"] == "PATCH" and c["path"] == "/core/applications/immich/")
+        self.assertNotIn("meta_launch_url", app["json"])
+
     def test_update_never_narrows_existing_grants(self):
         wide = ["authorization_code", "hybrid", "implicit", "client_credentials", "password"]
         mgr, calls = _make_manager(self._update_routes(wide))

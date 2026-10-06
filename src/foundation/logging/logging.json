@@ -18,6 +18,7 @@
   ],
   "provides": [],
   "identity": {
+    "launchPath": "/login/generic_oauth",
     "providesAdminRole": true,
     "oidcRedirectPaths": [
       "/login/generic_oauth"

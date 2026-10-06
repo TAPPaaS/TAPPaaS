@@ -30,6 +30,11 @@ forwarders — OPNsense via `syslog-manager`, Proxmox nodes via rsyslog — all 
 
 ## Post-install
 
+On a published site Grafana's login page goes straight to Authentik
+(`auto_login`), and Authentik's application list opens it at
+`/login/generic_oauth`. The local `admin` account below signs in at
+`https://logging.<domain>/login?disableAutoLogin`.
+
 Retrieve the auto-generated Grafana admin password, change it in the UI, then delete the
 one-shot file:
 

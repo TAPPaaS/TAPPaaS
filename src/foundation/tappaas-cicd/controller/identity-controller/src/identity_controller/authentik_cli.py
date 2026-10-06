@@ -275,6 +275,7 @@ def cmd_oidc_app_ensure(mgr: AuthentikManager, args: argparse.Namespace) -> int:
         redirect_uris=args.redirect_uri,
         scopes=args.scope or None,
         description=args.description,
+        launch_url=args.launch_url,
     ))
     print(f"==> oidc app '{res.slug}': provider_pk={res.provider_pk} application_pk={res.application_pk}")
     if args.show_secret:
@@ -510,6 +511,8 @@ def main(argv: list[str] | None = None) -> int:
     oe.add_argument("--scope", action="append", default=[],
                     help="OIDC scope-mapping name (default: openid email profile); repeatable")
     oe.add_argument("--description", default="")
+    oe.add_argument("--launch-url", default="",
+                    help="where Authentik's app list opens the app (its SSO entry point); default: unchanged")
     oe.add_argument("--show-secret", action="store_true", help="print the client_secret (sensitive)")
     oe.set_defaults(handler=cmd_oidc_app_ensure)
 

@@ -230,6 +230,10 @@ in
           echo "immich-configure-oidc: immich is not published -- configuring web OAuth only (no https URL for the mobile redirect)" >&2
         fi
 
+        # autoLaunch: the login page goes straight to Authentik, as Nextcloud's
+        # does -- a user signed in there never sees Immich's own form. The local
+        # admin (the account of last resort) still signs in at
+        # /auth/login?autoLaunch=0.
         # PUT replaces the whole document -- merge into the current config so
         # storage template/backup/job settings the admin already tuned survive.
         MERGED="$(printf '%s' "$CURRENT" | jq \
@@ -245,6 +249,7 @@ in
            | .oauth.scope              = "openid email profile"
            | .oauth.buttonText         = "Login with Authentik"
            | .oauth.autoRegister       = true
+           | .oauth.autoLaunch         = true
            | if $mobileOverride then
                (.oauth.mobileOverrideEnabled = true | .oauth.mobileRedirectUri = $mobileUri)
              else . end')"
