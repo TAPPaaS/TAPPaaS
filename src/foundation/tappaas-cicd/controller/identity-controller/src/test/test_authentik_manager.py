@@ -567,6 +567,42 @@ class TestOidcAppEnsure(unittest.TestCase):
         self.assertEqual(prov["json"]["redirect_uris"],
                          [{"matching_mode": "strict", "url": "https://nc.test/apps/user_oidc/code"}])
         self.assertEqual(prov["json"]["property_mappings"], ["S-OPENID", "S-EMAIL", "S-PROFILE"])
+        # Authentik 2026.8 defaults a provider's grant list to EMPTY: without
+        # these the login fails at the authorize step (invalid_request).
+        self.assertEqual(prov["json"]["grant_types"], ["authorization_code", "refresh_token"])
+
+    def _update_routes(self, grants):
+        return {
+            ("GET", "/flows/instances/"): {"results": [{"pk": "FLOW"}]},
+            ("GET", "/propertymappings/provider/scope/"): {"results": [
+                {"pk": "S-OPENID", "scope_name": "openid"},
+                {"pk": "S-EMAIL", "scope_name": "email"},
+                {"pk": "S-PROFILE", "scope_name": "profile"},
+            ]},
+            ("GET", "/crypto/certificatekeypairs/"): {"results": [
+                {"pk": "CERT", "name": "authentik Self-signed Certificate"}]},
+            ("GET", "/providers/oauth2/"): {"results": [
+                {"pk": 7, "name": "immich", "grant_types": grants}]},
+            ("PATCH", "/providers/oauth2/7/"): {"pk": 7, "client_id": "CID", "client_secret": "CSEC"},
+            ("GET", "/core/applications/"): {"results": [{"pk": "APP", "slug": "immich", "provider": 7}]},
+            ("PATCH", "/core/applications/immich/"): {"pk": "APP"},
+        }
+
+    def test_update_adds_login_grants_to_an_empty_provider(self):
+        # The provider immich and vaultwarden got on hrossen (2026-10-06).
+        mgr, calls = _make_manager(self._update_routes([]))
+        mgr.oidc_app_ensure(OidcApp(name="immich", slug="immich",
+                                    redirect_uris=["https://immich.test/auth/login"]))
+        patch = next(c for c in calls if c["method"] == "PATCH" and c["path"] == "/providers/oauth2/7/")
+        self.assertEqual(patch["json"]["grant_types"], ["authorization_code", "refresh_token"])
+
+    def test_update_never_narrows_existing_grants(self):
+        wide = ["authorization_code", "hybrid", "implicit", "client_credentials", "password"]
+        mgr, calls = _make_manager(self._update_routes(wide))
+        mgr.oidc_app_ensure(OidcApp(name="immich", slug="immich",
+                                    redirect_uris=["https://immich.test/auth/login"]))
+        patch = next(c for c in calls if c["method"] == "PATCH" and c["path"] == "/providers/oauth2/7/")
+        self.assertEqual(patch["json"]["grant_types"], wide + ["refresh_token"])
 
 
 class TestCheckSelfConfig(unittest.TestCase):

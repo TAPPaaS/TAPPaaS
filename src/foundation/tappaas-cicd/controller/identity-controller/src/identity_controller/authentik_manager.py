@@ -94,6 +94,12 @@ class OidcAppResult:
 
 
 DEFAULT_OIDC_SCOPES = ["openid", "email", "profile"]
+# The grants an OIDC login needs. Since Authentik 2026.8 a provider carries its
+# own allowed grant list, and the model's default is EMPTY: a provider created
+# through the API without it cannot run any flow, and the login fails at the
+# authorize step with "invalid_request" ("Invalid grant_type for provider"). An
+# existing provider keeps whatever it already allows; these two are added to it.
+OIDC_LOGIN_GRANT_TYPES = ["authorization_code", "refresh_token"]
 
 # Authentik 2025.10 changed the stock ``email`` scope's ``email_verified`` from
 # true to false (#748). TAPPaaS users' addresses are set by the operator through
@@ -920,9 +926,15 @@ class AuthentikManager:
         existing_provider = self._find_by_name(provider_rows, app.name)
         if existing_provider:
             provider_pk = existing_provider["pk"]
-            provider = self._patch_json(f"/providers/oauth2/{provider_pk}/", provider_body)
+            # Add the login grants, never narrow: a provider an upgrade gave every
+            # grant (or an operator widened) keeps the rest.
+            grants = list(existing_provider.get("grant_types") or [])
+            grants += [g for g in OIDC_LOGIN_GRANT_TYPES if g not in grants]
+            provider = self._patch_json(f"/providers/oauth2/{provider_pk}/",
+                                        {**provider_body, "grant_types": grants})
         else:
-            provider = self._post_json("/providers/oauth2/", provider_body)
+            provider = self._post_json("/providers/oauth2/",
+                                       {**provider_body, "grant_types": list(OIDC_LOGIN_GRANT_TYPES)})
             provider_pk = provider["pk"]
 
         # Find or create the Application (slug is the immutable key; reuse an app
