@@ -1,9 +1,9 @@
 {
   "description": "Forgejo — self-hosted Git service and DevOps platform (Gitea fork)",
   "kind": "vm",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "stack": "devops",
-  "appVersion": "15.0.2",
+  "appVersion": "16.0.5",
   "releaseDate": "2026-06-01",
   "maintainer": "@ErikDaniel007",
   "status": "Testing",
@@ -51,10 +51,25 @@
     "templates:nixos",
     "backup:vm",
     "network:proxy",
-    "network:rules"
+    "network:rules",
+    "identity:identity"
   ],
   "integratesWith": [
     "logging:logs"
   ],
+  "identity": {
+    "providesAdminRole": true,
+    "adminGroupClaim": "admin",
+    "launchPath": "/user/oauth2/authentik",
+    "oidcRedirectPaths": [
+      "/user/oauth2/authentik/callback"
+    ],
+    "scopes": [
+      "openid",
+      "email",
+      "profile"
+    ],
+    "configureService": "forgejo-configure-oidc.service"
+  },
   "provides": []
 }

@@ -30,8 +30,14 @@ install-module.sh forgejo
 
 ## Post-install
 
-1. **Create the admin account** — navigate to `https://forgejo.<domain>` and create the first admin
-   user. Registration is disabled after first admin is created (`DISABLE_REGISTRATION = true`).
+1. **Store the break-glass admin password** — `install.sh` creates the local admin
+   `tappaas-admin` and prints its password **once**. It signs in on the local form at
+   `https://forgejo.<domain>/user/login`; everyone else signs in with Authentik.
+
+   **Make yourself a Forgejo admin**: add your Authentik user to the `forgejo-admins`
+   group (`authentik-manager user-add-to-groups <user> forgejo-admins`), then sign in with
+   Authentik. Lost the break-glass password: `sudo forgejo-admin admin user change-password
+   --username tappaas-admin --password <new>` on the VM.
 
 2. **Configure SMTP** (optional) — SSH into the VM and edit `/var/lib/forgejo/custom/conf/app.ini`:
    ```ini
@@ -123,5 +129,12 @@ The system OpenSSH listens on port 22. Verify it is running:
 ssh tappaas@forgejo.srvWork.internal "systemctl status sshd"
 ```
 If users are outside the `work` VLAN, add an NAT port-forward rule (see §Customisation).
+
+**"No Sign in with Authentik button" / SSO login fails**
+`journalctl -u forgejo-configure-oidc` on the VM says what it did. No button: there is no
+OIDC client (`/etc/secrets/forgejo.env`) — the name is not published (no public DNS
+record, #778), or identity:identity has not run; re-run `update-module.sh forgejo`. A
+callback error: `ROOT_URL` in `/var/lib/forgejo/custom/conf/app.ini` must be
+`https://forgejo.<domain>/` — it comes from `/etc/nixos/forgejo.json` at the rebuild.
 
 For operational issues after a successful install, see [ADMIN.md](./ADMIN.md) if present.

@@ -17,7 +17,6 @@ own infrastructure with no external dependencies.
 ## What is not included
 
 - Email notifications (requires SMTP configuration after install — see INSTALL.md §Post-install)
-- OAuth2 / SSO integration (configure via Forgejo admin UI after install)
 - External SSH NAT (port forwarding from internet to port 22 — architectural decision required)
 - CI/CD runner (Forgejo Actions — install separately as a companion module)
 
@@ -25,7 +24,7 @@ own infrastructure with no external dependencies.
 
 - Proxmox node: `tappaas1` with `tanka1` storage pool
 - Zone: `srvWork` (VLAN 220)
-- Dependencies: `cluster:vm`, `backup:vm`, `network:proxy`, `network:rules`
+- Dependencies: `cluster:vm`, `templates:nixos`, `backup:vm`, `network:proxy`, `network:rules`, `identity:identity`
 
 ## Services offered (`provides`)
 
@@ -51,5 +50,22 @@ own infrastructure with no external dependencies.
 | `backup:vm` | PBS backup of the VM (daily snapshot) |
 | `network:proxy` | Caddy reverse proxy — HTTPS endpoint on `work`/`mgmt` |
 | `network:rules` | Firewall pinholes (dmz → srvWork TCP 3000) |
+| `identity:identity` | Single sign-on with the site's Authentik (#282) — see below |
+
+Optional (`integratesWith`): `logging:logs` — the journal to the site's Loki.
+
+## Authentication & SSO
+
+Accounts come from the site's Authentik. `identity:identity` registers Forgejo, and
+`forgejo-configure-oidc` keeps one Forgejo login source, `authentik`, in step with that
+client. A first SSO login creates the Forgejo account (named after the Authentik username);
+local sign-up is off. Members of Authentik's `forgejo-admins` group are Forgejo site admins
+(the groups claim carries `admin` for them, nothing for anyone else). Authentik's application
+list opens Forgejo at its SSO entry point (`/user/oauth2/authentik`).
+
+`tappaas-admin` is the local break-glass admin, created by `install.sh` with a password it
+prints once; it signs in on the local form at `/user/login`. While `forgejo.<domain>` has no
+public DNS record there is no route and no SSO (#778): the source is removed and only local
+accounts work.
 
 For installation steps see [INSTALL.md](./INSTALL.md).

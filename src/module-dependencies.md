@@ -4,7 +4,7 @@ Computed from every module's `<module>.json` (`dependsOn: "provider:service"`).
 Three views: the platform plumbing every module uses, the application topology
 worth drawing, and the complete per-module reference.
 
-_Generated: 2026-10-06 by generate-module-dependencies.sh from 26 modules / 104 dependencies — do not edit by hand._
+_Generated: 2026-10-06 by generate-module-dependencies.sh from 26 modules / 105 dependencies — do not edit by hand._
 
 ## 1. Platform plumbing
 
@@ -19,7 +19,7 @@ reference below says otherwise.
 | `network:proxy` | 16 |
 | `templates:nixos` | 13 |
 | `network:rules` | 12 |
-| `identity:identity` | 6 |
+| `identity:identity` | 7 |
 | `cluster:ha` | 6 |
 
 ## 2. Application topology
@@ -61,7 +61,7 @@ Every dependency of every module, verbatim from the json contracts.
 | **debianhost** | — |
 | **deconz** | `cluster:vm` `templates:nixos` `backup:vm` `network:proxy` `network:rules`  |
 | **euro-office** | `cluster:vm` `templates:nixos` `backup:vm` `network:proxy` `network:rules` `nextcloud:fileservice`  |
-| **forgejo** | `cluster:vm` `templates:nixos` `backup:vm` `network:proxy` `network:rules`  |
+| **forgejo** | `cluster:vm` `templates:nixos` `backup:vm` `network:proxy` `network:rules` `identity:identity`  |
 | **hass** | `cluster:vm` `backup:vm` `network:proxy` `network:rules` `alfen:ui` `alfen:discovery` `alfen:modbus` `sonos:audio` `sonos:airplay` `reolink:rtsp`  |
 | **identity** | `cluster:vm` `cluster:ha` `templates:nixos` `backup:vm` `network:proxy`  |
 | **immich** | `cluster:vm` `cluster:ha` `templates:nixos` `backup:vm` `network:proxy` `network:rules` `identity:identity`  |

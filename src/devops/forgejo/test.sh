@@ -124,6 +124,43 @@ else
     fail "Backup timer NOT active: ${TIMER_STATE}"
 fi
 
+# ── Test 11: SSO — the Authentik login source (#282) ──────────────────────────
+# With an OIDC client on the VM, Forgejo must hold the "authentik" source and the
+# login page must offer it; without one (unpublished), there must be no source.
+echo ""
+echo "[ SSO ]"
+HAS_CLIENT=$(ssh ${SSH_OPTS} "tappaas@${VM_HOST}" \
+    "sudo grep -q '^OIDC_CLIENT_ID=.' /etc/secrets/forgejo.env 2>/dev/null && echo yes || echo no")
+SOURCE=$(ssh ${SSH_OPTS} "tappaas@${VM_HOST}" \
+    "sudo forgejo-admin admin auth list 2>/dev/null | awk 'NR>1 && \$2==\"authentik\" {print \$4; exit}'" 2>/dev/null)
+if [[ "${HAS_CLIENT}" == "yes" ]]; then
+    if [[ "${SOURCE}" == "true" ]]; then
+        pass "Authentik login source configured and enabled"
+    else
+        fail "OIDC client present but no enabled 'authentik' source — journalctl -u forgejo-configure-oidc"
+    fi
+    LOGIN=$(ssh ${SSH_OPTS} "tappaas@${VM_HOST}" \
+        "curl -s http://localhost:3000/user/login | grep -c '/user/oauth2/authentik'" 2>/dev/null || echo 0)
+    if [[ "${LOGIN}" =~ ^[0-9]+$ && "${LOGIN}" -gt 0 ]]; then
+        pass "Login page offers sign-in with Authentik"
+    else
+        fail "Login page has no Authentik button"
+    fi
+    ROOT=$(ssh ${SSH_OPTS} "tappaas@${VM_HOST}" \
+        "sudo grep -m1 '^ROOT_URL' /var/lib/forgejo/custom/conf/app.ini | sed 's/.*= *//'" 2>/dev/null)
+    if [[ "${ROOT}" == https://* ]]; then
+        pass "ROOT_URL is the public URL (${ROOT})"
+    else
+        fail "ROOT_URL is '${ROOT}' — the OAuth callback needs the public https URL"
+    fi
+else
+    if [[ -z "${SOURCE}" ]]; then
+        pass "No OIDC client (not published) and no login source — SSO off"
+    else
+        fail "No OIDC client, but an 'authentik' login source remains"
+    fi
+fi
+
 # ── Summary ───────────────────────────────────────────────────────────────────
 echo ""
 echo "─────────────────────────────────────────────────────────────"
