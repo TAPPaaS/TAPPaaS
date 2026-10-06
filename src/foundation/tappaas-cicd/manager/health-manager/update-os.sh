@@ -502,9 +502,23 @@ pinned_nixpkgs_source() {
     nix eval --impure --raw --expr "(${expr}).outPath" 2>/dev/null
 }
 
+# Whether any binary cache the mothership's Nix is configured with answers. Not
+# a formality: before building a derivation Nix asks the cache for its output,
+# and with the cache unreachable that lookup is fatal (fallback = false) — so a
+# WAN outage stopped even a config-only update whose inputs were all in the store
+# (#774, proven with egress blocked on hrossen). Probed once, 5 s per cache.
+binary_cache_reachable() {
+    local url
+    for url in $(nix config show substituters 2>/dev/null); do
+        curl -fsS -o /dev/null --max-time 5 "${url%/}/nix-cache-info" 2>/dev/null && return 0
+    done
+    return 1
+}
+
 # guest_build_on_cicd <vmname> <vm_ip> <config basename> <nixpkgs store path>
 # Stages the guest's /etc/nixos, builds its system against it and copies the
-# closure to the guest. Prints the system's store path. The build is rooted as
+# closure to the guest. Prints the system's store path — and nothing else on
+# stdout: every message goes to stderr. The build is rooted as
 # <vmname>.new until the switch succeeds (guest_build_promote).
 guest_build_on_cicd() {
     local vmname="$1" vm_ip="$2" cfg="$3" src="$4"
@@ -515,12 +529,23 @@ guest_build_on_cicd() {
     ssh -n -o BatchMode=yes "tappaas@${vm_ip}" "sudo -n tar -C /etc/nixos -cf - ." \
         | sudo -n tar -C "${stage}" -xf - || return 1
 
+    # Unreachable cache: build from what the mothership's store holds, without
+    # asking it. Reachable: fallback=true still builds whatever a cache that fails
+    # part-way could not deliver.
+    local substitute=true
+    if ! binary_cache_reachable; then
+        substitute=false
+        # To stderr: this function's stdout is the store path it returns.
+        warn "No binary cache answers — building ${vmname} from the mothership's store alone (#774)" >&2
+    fi
     run_quiet_rc "building ${vmname}'s system on the mothership" \
         sudo -n unshare --mount --propagation private -- /bin/sh -c '
             PATH=/run/current-system/sw/bin:$PATH
             mount --bind "$1" /etc/nixos || exit 1
             exec nix-build "<nixpkgs/nixos>" -A system -I "nixpkgs=$2" \
-                -I "nixos-config=/etc/nixos/$3" -o "$4"' sh "${stage}" "${src}" "${cfg}" "${link}" \
+                -I "nixos-config=/etc/nixos/$3" -o "$4" \
+                --option substitute "$5" --option fallback true' \
+            sh "${stage}" "${src}" "${cfg}" "${link}" "${substitute}" \
         >&2 || return 1
     out="$(readlink -f "${link}")"
     [[ "${out}" == /nix/store/*-nixos-system-* ]] || return 1
