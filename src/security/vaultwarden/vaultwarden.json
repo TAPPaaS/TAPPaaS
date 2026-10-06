@@ -20,6 +20,7 @@
   ],
   "provides": [],
   "identity": {
+    "launchPath": "/#/sso",
     "oidcRedirectPaths": [
       "/identity/connect/oidc-signin"
     ],
@@ -41,6 +42,7 @@
       "bridge0": "lan"
     },
     "network:proxy": {
+      "proxyPort": 8222,
       "proxyAllowedZones": [
         "internet"
       ]

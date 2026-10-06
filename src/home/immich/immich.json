@@ -21,6 +21,7 @@
   ],
   "provides": [],
   "identity": {
+    "launchPath": "/auth/login?autoLaunch=1",
     "oidcRedirectPaths": ["/auth/login", "/user-settings", "/api/oauth/mobile-redirect"],
     "configureService": "immich-configure-oidc.service"
   },

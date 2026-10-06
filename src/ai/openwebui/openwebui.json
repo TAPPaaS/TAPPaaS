@@ -39,6 +39,7 @@
     }
   },
   "identity": {
+    "launchPath": "/oauth/oidc/login",
     "oidcRedirectPaths": [
       "/oauth/oidc/callback"
     ],

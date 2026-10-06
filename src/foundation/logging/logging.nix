@@ -683,6 +683,9 @@ in
         scopes        = "openid email profile";
         use_pkce      = true;
         allow_sign_up = true;
+        # The login page goes straight to Authentik, as Nextcloud's does; the
+        # local admin still signs in at /login?disableAutoLogin.
+        auto_login    = true;
         # logging-admins (created because logging.json sets
         # identity.providesAdminRole) becomes GrafanaAdmin; everyone else who
         # can sign in at all gets Viewer. Day-2 access is granted through

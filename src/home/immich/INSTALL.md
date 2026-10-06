@@ -88,6 +88,11 @@ session logged in while testing; this step is **not** automated, since
 enabling it before OAuth is confirmed working risks locking out the
 operator entirely.
 
+**Signing in.** The login page sends you straight to Authentik
+(`oauth.autoLaunch`), and Authentik's application list opens Immich at its SSO
+entry point (`identity.launchPath`) — signed in to Authentik, you go straight
+in. The local admin signs in at `https://immich.<domain>/auth/login?autoLaunch=0`.
+
 **Lockout recovery** (password login disabled and OAuth broken): the
 `immich-admin` CLI ships on the VM:
 
