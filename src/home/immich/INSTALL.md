@@ -112,7 +112,7 @@ respectively.
 ## Verification
 
 ```bash
-./test.sh          # on tappaas-cicd — 10 checks incl. DB extensions, mounts, API, OIDC
+./test.sh          # on tappaas-cicd — 16 checks: services, DB extensions, API, ML, library on the VM disk, backups, OIDC
 ```
 
 ## Updating Immich
