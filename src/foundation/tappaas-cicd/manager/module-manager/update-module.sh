@@ -606,10 +606,9 @@ main() {
         # agent; freezing the controller's own root FS mid-update can hang the thaw
         # and strand the VM for hours (same class as the #275 self-reboot guard).
         # Proceed WITHOUT a snapshot — so snapshot_created stays false and no later
-        # rollback will try to stop/restore this VM from inside.
-        warn "  Skipping pre-update snapshot: ${self_vm} is THIS controller VM."
-        warn "    Snapshotting it from inside fsfreezes its own root FS and can strand it."
-        warn "    Continuing WITHOUT a rollback safety net (take a node-side snapshot under supervision if needed)."
+        # rollback will try to stop/restore this VM from inside. Info, not a
+        # warning: every sweep takes this path, so there is nothing to act on.
+        info "  No pre-update snapshot: ${self_vm} is this controller VM (a self-snapshot fsfreezes its own root FS)"
     elif [[ "${has_vm}" == true ]]; then
         # A guest a backup is holding cannot be snapshotted (#686). Wait for the
         # lock rather than failing on it: the two schedules simply met.
