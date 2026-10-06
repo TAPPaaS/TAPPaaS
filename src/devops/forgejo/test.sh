@@ -124,6 +124,17 @@ else
     fail "Backup timer NOT active: ${TIMER_STATE}"
 fi
 
+# ── Test 10b: the last backup run did not fail ───────────────────────────────
+# The timer being active says nothing about the job: it ran as a user the VM
+# did not have and failed every night (217/USER) while Test 10 passed.
+BACKUP_RESULT=$(ssh ${SSH_OPTS} "tappaas@${VM_HOST}" \
+    "systemctl show forgejo-backup.service -p Result --value 2>/dev/null" 2>/dev/null)
+if [[ "${BACKUP_RESULT}" == "success" ]]; then
+    pass "Last backup run: success (or none yet)"
+else
+    fail "Last backup run failed (${BACKUP_RESULT:-unknown}) — journalctl -u forgejo-backup"
+fi
+
 # ── Test 11: SSO — the Authentik login source (#282) ──────────────────────────
 # With an OIDC client on the VM, Forgejo must hold the "authentik" source and the
 # login page must offer it; without one (unpublished), there must be no source.

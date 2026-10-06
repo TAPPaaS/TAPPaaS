@@ -208,9 +208,12 @@ in
   };
 
   # === Data directories ===
+  # Owned by the user Forgejo runs as. These said git:git, a user this VM never
+  # had: tmpfiles skipped both lines and every nightly backup failed with
+  # 217/USER (found on hrossen 2026-10-06, #282's live test).
   systemd.tmpfiles.rules = [
-    "d /var/lib/forgejo/repositories 0750 git git -"
-    "d /var/backup/forgejo            0700 git git -"
+    "d /var/lib/forgejo/repositories 0750 ${fcfg.user} ${fcfg.group} -"
+    "d /var/backup/forgejo            0700 ${fcfg.user} ${fcfg.group} -"
   ];
 
   # === Backup: daily dump of repositories + SQLite ===
@@ -219,7 +222,7 @@ in
     after       = [ "forgejo.service" ];
     serviceConfig = {
       Type    = "oneshot";
-      User    = "git";
+      User    = fcfg.user;
       ExecStart = pkgs.writeShellScript "forgejo-backup" ''
         set -euo pipefail
         DEST=/var/backup/forgejo/forgejo-$(date +%F)
