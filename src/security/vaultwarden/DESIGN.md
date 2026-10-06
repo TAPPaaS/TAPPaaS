@@ -19,8 +19,11 @@ Implementation detail moved out of README/INSTALL (Diataxis: explanation).
 The oneshot `generate-vaultwarden-secrets` service runs before `vaultwarden.service` on first
 boot only (`ConditionPathExists=!/var/lib/vaultwarden/vaultwarden.env`). It generates a random
 64-hex `ADMIN_TOKEN` and writes `/var/lib/vaultwarden/vaultwarden.env` (mode 0600, owned by
-`vaultwarden`) with empty `SMTP_*` values for the admin to fill in. Installs before #769 also
-wrote a placeholder `DOMAIN` there; the SSO file below is loaded after it and overrides it.
+`vaultwarden`) with the `SMTP_*` lines commented out for the admin to fill in. Installs before
+#769 also wrote a placeholder `DOMAIN` there; the SSO file below is loaded after it and overrides
+it. Older installs also wrote an empty `SMTP_HOST=`, which Vaultwarden reads as a host (mail on,
+every send fails); `vaultwarden-smtp-unset-empty.service` comments that block out before each
+start while `SMTP_HOST` is empty.
 
 ## Site URL and SSO (#769)
 

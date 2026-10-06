@@ -211,8 +211,8 @@ in
   };
 
   systemd.services.vaultwarden = {
-    wants = [ "vaultwarden-configure-oidc.service" ];
-    after = [ "vaultwarden-configure-oidc.service" ];
+    wants = [ "vaultwarden-configure-oidc.service" "vaultwarden-smtp-unset-empty.service" ];
+    after = [ "vaultwarden-configure-oidc.service" "vaultwarden-smtp-unset-empty.service" ];
   };
 
   # ============================================================================
@@ -242,15 +242,17 @@ in
 # the site's, written by vaultwarden-configure-oidc (#769).
 ADMIN_TOKEN=$ADMIN_TOKEN
 
-# SMTP configuration - update for your mail server
+# SMTP configuration - uncomment and fill in for your mail server.
+# Leave SMTP_HOST commented while there is none: an empty value still turns
+# mail on, and every mail-sending action then fails.
 # See: https://github.com/dani-garcia/vaultwarden/wiki/SMTP-configuration
-SMTP_HOST=
-SMTP_PORT=587
-SMTP_SECURITY=starttls
-SMTP_FROM=vaultwarden@example.com
-SMTP_FROM_NAME=TAPPaaS VaultWarden
-SMTP_USERNAME=
-SMTP_PASSWORD=
+# SMTP_HOST=smtp.example.com
+# SMTP_PORT=587
+# SMTP_SECURITY=starttls
+# SMTP_FROM=vaultwarden@example.com
+# SMTP_FROM_NAME=TAPPaaS VaultWarden
+# SMTP_USERNAME=
+# SMTP_PASSWORD=
 EOF
         ${pkgs.coreutils}/bin/chmod 600 /var/lib/vaultwarden/vaultwarden.env
         ${pkgs.coreutils}/bin/chown vaultwarden:vaultwarden /var/lib/vaultwarden/vaultwarden.env
@@ -262,6 +264,29 @@ EOF
         echo "================================================"
       '';
     };
+  };
+
+  # Installs before this fix wrote `SMTP_HOST=` (empty). Vaultwarden reads an
+  # empty value as a host, so mail is on: account creation and new-device mail
+  # fail with "failed to lookup address information" (hrossen, 2026-10-06).
+  # Comment the SMTP block out while SMTP_HOST is empty; a real host is kept.
+  systemd.services.vaultwarden-smtp-unset-empty = {
+    description = "Disable VaultWarden mail while SMTP_HOST is empty";
+    wantedBy = [ "multi-user.target" ];
+    after = [ "generate-vaultwarden-secrets.service" ];
+    before = [ "vaultwarden.service" ];
+    unitConfig.ConditionPathExists = "/var/lib/vaultwarden/vaultwarden.env";
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+    };
+    script = ''
+      ENV=/var/lib/vaultwarden/vaultwarden.env
+      if ${pkgs.gnugrep}/bin/grep -qE '^SMTP_HOST=[[:space:]]*$' "$ENV"; then
+        ${pkgs.gnused}/bin/sed -i 's/^SMTP_/# SMTP_/' "$ENV"
+        echo "vaultwarden-smtp-unset-empty: SMTP_HOST was empty — SMTP block commented out"
+      fi
+    '';
   };
 
   # ============================================================================

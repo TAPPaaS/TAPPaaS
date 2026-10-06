@@ -79,9 +79,11 @@ SSO is off: see `journalctl -u vaultwarden-configure-oidc` for why (no public na
 registered client, or the discovery document was unreadable).
 
 **No verification / invitation emails**
-SMTP is not configured. Fill in the `SMTP_*` values in the environment file (see the
-[upstream SMTP guide](https://github.com/dani-garcia/vaultwarden/wiki/SMTP-configuration)) and
-restart the service.
+SMTP is not configured. Uncomment and fill in the `SMTP_*` lines in the environment file (see
+the [upstream SMTP guide](https://github.com/dani-garcia/vaultwarden/wiki/SMTP-configuration)) and
+restart the service. Keep `SMTP_HOST` commented while there is no mail server: an empty
+`SMTP_HOST=` still turns mail on, and account creation then fails with "SMTP error: Connection
+error: failed to lookup address information".
 
 **Service not starting**
 Check the journal on the VM: `sudo journalctl -u vaultwarden -n 50`.
