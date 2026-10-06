@@ -351,7 +351,9 @@ EOF
       f=/etc/secrets/authentik.env
       t="$(mktemp /etc/secrets/.authentik.env.XXXXXX)"
       ${pkgs.gnugrep}/bin/grep -E '^AUTHENTIK_(SECRET_KEY|BOOTSTRAP_(TOKEN|PASSWORD|EMAIL))=' "$f" > "$t" || true
-      if ${pkgs.gnugrep}/bin/grep -q '^AUTHENTIK_SECRET_KEY=' "$t" && ! cmp -s "$f" "$t"; then
+      # Rewrite only when something was stripped: a file that is already
+      # secrets-only stays untouched (same inode, mtime, no log line).
+      if ${pkgs.gnugrep}/bin/grep -q '^AUTHENTIK_SECRET_KEY=' "$t" && ! ${pkgs.diffutils}/bin/cmp -s "$f" "$t"; then
         chmod 600 "$t"; mv -f "$t" "$f"; echo "authentik.env: settings removed, secrets kept"
       else
         rm -f "$t"
