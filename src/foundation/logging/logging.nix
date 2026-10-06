@@ -367,7 +367,9 @@ in
         # The firewall does NOT open 9096; this stays inside the VM.
         grpc_listen_address = "0.0.0.0";
         grpc_listen_port = 9096;
-        log_level = "info";
+        # warn, not info: at info Loki logs every query and table lookup
+        # into its own journal, which it then ingests — ~190k lines a day.
+        log_level = "warn";
       };
 
       common = {
