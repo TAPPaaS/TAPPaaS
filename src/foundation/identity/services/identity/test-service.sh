@@ -54,6 +54,11 @@ if [[ -z "${_TS_DOMAIN}" ]]; then
     info "    ${GN}✓${CL} not published (no domain for environment '$(jq -r '.environment // "default"' <<<"${_TS_JSON}")') — no SSO to verify"
     exit 0
 fi
+# The same verdict install-service reaches for a name with no public record (#778).
+if oidc_domain_unpublished "${_TS_DOMAIN}"; then
+    info "    ${GN}✓${CL} not published (${_TS_DOMAIN} has no public DNS record) — no SSO to verify"
+    exit 0
+fi
 
 if ! ${AUTHENTIK_MANAGER} test >/dev/null 2>&1; then
     error "  authentik-manager cannot reach Authentik"

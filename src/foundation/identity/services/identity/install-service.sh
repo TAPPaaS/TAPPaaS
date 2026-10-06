@@ -101,6 +101,24 @@ if [[ -z "${PROXY_DOMAIN}" ]]; then
     exit 0
 fi
 
+# A public NAME is not a published one (#778): on a per-service site a name with
+# no public A record has no route through the proxy and no certificate, so no
+# OIDC redirect to it can ever complete. Registering it anyway put a dead tile in
+# Authentik's application list (logging on hrossen, 2026-10-06). Same verdict as
+# with_public_domain and network:proxy — the ONE resolver (ADR-021): exit 3 is
+# "not published". The module keeps its own login; a registration left from
+# before is removed. Creating the public record and re-running update gives it SSO.
+if oidc_domain_unpublished "${PROXY_DOMAIN}"; then
+    warn "${PROXY_DOMAIN} is not published (no public DNS record) — no SSO for '${MODULE}'; it keeps its own login"
+    if [[ "${DRY_RUN}" -eq 1 ]]; then
+        debug "  ${YW}[dry-run]${CL} ${AUTHENTIK_MANAGER} app-delete ${MODULE}"
+    else
+        ${AUTHENTIK_MANAGER} app-delete "${MODULE}" >/dev/null \
+            || warn "  could not remove a previous Authentik registration for '${MODULE}'"
+    fi
+    exit 0
+fi
+
 # identity.* contract (with Nextcloud-friendly defaults).
 PROVIDES_ADMIN="$(echo "${JSON}" | jq -r '.identity.providesAdminRole // false')"
 ADMIN_CLAIM="$(echo "${JSON}" | jq -r '.identity.adminGroupClaim // empty')"

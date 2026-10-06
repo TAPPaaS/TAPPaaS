@@ -38,6 +38,19 @@ oidc_public_domain() {
     module_public_domain "$1" "$2" "$3"
 }
 
+# oidc_domain_unpublished <domain> — succeeds when the name is authoritatively
+# NOT published (#778): no public A record on a per-service site, so no proxy
+# route, no certificate, and no OIDC redirect to it can complete. The verdict is
+# the one resolver's (ADR-021, `network-manager split-horizon-target` exit 3),
+# shared with network:proxy and with_public_domain. Unknown (no network-manager,
+# a lookup error) is NOT unpublished: the module keeps its SSO as before.
+oidc_domain_unpublished() {
+    local rc=0
+    command -v network-manager >/dev/null 2>&1 || return 1
+    network-manager split-horizon-target "$1" >/dev/null 2>&1 || rc=$?
+    [[ ${rc} -eq 3 ]]
+}
+
 oidc_consumer_paths() {
     local module="$1" environment="$2" json="$3" cs
     OIDC_MODULE_BASE="${module}"
