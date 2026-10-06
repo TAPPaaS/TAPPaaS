@@ -1,7 +1,7 @@
 {
   "description": "VaultWarden password manager (Bitwarden-compatible) in DMZ",
   "kind": "vm",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "stack": "security",
   "releaseDate": "2026-02-17",
   "maintainer": "@larsrossen",
@@ -15,7 +15,11 @@
     "cluster:ha",
     "templates:nixos",
     "backup:vm",
-    "network:proxy"
+    "network:proxy",
+    "network:rules"
+  ],
+  "integratesWith": [
+    "logging:logs"
   ],
   "provides": [],
   "config": {

@@ -46,5 +46,8 @@ Source: the [Security design](https://tappaas.org/what/security-design/). Depth:
 | `templates:nixos` | NixOS base image |
 | `backup:vm` | VM registered with Proxmox Backup Server |
 | `network:proxy` | HTTPS reverse proxy, allowed from the `internet` zone |
+| `network:rules` | Firewall rules — carries the `logging:logs` pinhole out of the DMZ |
+
+Optional (`integratesWith`): `logging:logs` — the journal to the site's Loki.
 
 For installation steps see [INSTALL.md](./INSTALL.md).

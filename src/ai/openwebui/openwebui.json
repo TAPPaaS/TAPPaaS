@@ -1,7 +1,7 @@
 {
   "description": "Open WebUI chat interface — private AI chat for your users, with conversation history and RAG, through the LiteLLM gateway.",
   "kind": "vm",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "stack": "ai",
   "releaseDate": "2026-07-02",
   "maintainer": "@ErikDaniel007",
@@ -18,6 +18,9 @@
     "litellm:models",
     "network:rules",
     "identity:identity"
+  ],
+  "integratesWith": [
+    "logging:logs"
   ],
   "provides": [],
   "appVersion": "0.10.2",

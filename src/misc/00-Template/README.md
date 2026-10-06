@@ -230,6 +230,7 @@ dependent, and which `<module>.json` fields the dependent passes to it.
 | [`network:nat`](../../foundation/network/services/nat/README.md) | Adds destination-NAT (port-forward) rules on OPNsense. |
 | [`network:discovery`](../../foundation/network/services/discovery/README.md) | Relays mDNS / broadcast discovery across zone boundaries. |
 | [`identity:identity`](../../foundation/identity/services/identity/README.md) | Wires the module into single sign-on — OIDC client, redirect URIs, group access. |
+| [`logging:logs`](../../foundation/logging/services/logs/README.md) | Ships the guest's journal to the site's Loki (NixOS guests). Declare it in `integratesWith`; outside mgmt also `dependsOn` `network:rules` for the pinhole. |
 | [`templates:windows`](../../foundation/templates/services/windows/README.md) | Windows VM lifecycle (OOBE and beyond) for Windows-based modules. |
 
 A few further coordinates have no standalone page yet — `templates:nixos` and

@@ -12,6 +12,9 @@
     "cluster:ha",
     "templates:nixos"
   ],
+  "integratesWith": [
+    "logging:logs"
+  ],
   "provides": [
     "myservice"
   ],

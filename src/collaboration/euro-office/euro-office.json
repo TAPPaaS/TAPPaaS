@@ -1,7 +1,7 @@
 {
   "description": "Euro-Office DocumentServer — collaborative document editing for Nextcloud.",
   "kind": "vm",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "stack": "collaboration",
   "releaseDate": "2026-06-12",
   "maintainer": "@ErikDaniel007",
@@ -17,6 +17,9 @@
     "network:proxy",
     "network:rules",
     "nextcloud:fileservice"
+  ],
+  "integratesWith": [
+    "logging:logs"
   ],
   "provides": [],
   "appVersion": "9.3.3",

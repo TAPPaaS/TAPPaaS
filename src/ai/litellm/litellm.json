@@ -1,7 +1,7 @@
 {
   "description": "LiteLLM AI gateway — one OpenAI-compatible API, with per-user keys and usage tracking, in front of local (vLLM) and remote models.",
   "kind": "vm",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "stack": "ai",
   "releaseDate": "2026-09-07",
   "maintainer": "@ErikDaniel007",
@@ -19,7 +19,8 @@
     "identity:identity"
   ],
   "integratesWith": [
-    "vllm-amd:inference"
+    "vllm-amd:inference",
+    "logging:logs"
   ],
   "provides": [
     "models"

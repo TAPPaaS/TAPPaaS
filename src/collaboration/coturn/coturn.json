@@ -1,7 +1,7 @@
 {
   "description": "coturn TURN/STUN server for Nextcloud Talk WebRTC audio/video calls.",
   "kind": "vm",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "stack": "collaboration",
   "releaseDate": "2026-09-21",
   "maintainer": "@ErikDaniel007",
@@ -18,6 +18,9 @@
     "network:rules",
     "nextcloud:fileservice",
     "templates:nixos"
+  ],
+  "integratesWith": [
+    "logging:logs"
   ],
   "provides": [
     "turn"

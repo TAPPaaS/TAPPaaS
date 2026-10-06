@@ -4,7 +4,7 @@ Computed from every module's `<module>.json` (`dependsOn: "provider:service"`).
 Three views: the platform plumbing every module uses, the application topology
 worth drawing, and the complete per-module reference.
 
-_Generated: 2026-10-06 by generate-module-dependencies.sh from 26 modules / 103 dependencies — do not edit by hand._
+_Generated: 2026-10-06 by generate-module-dependencies.sh from 26 modules / 104 dependencies — do not edit by hand._
 
 ## 1. Platform plumbing
 
@@ -18,7 +18,7 @@ reference below says otherwise.
 | `backup:vm` | 17 |
 | `network:proxy` | 16 |
 | `templates:nixos` | 13 |
-| `network:rules` | 11 |
+| `network:rules` | 12 |
 | `identity:identity` | 6 |
 | `cluster:ha` | 6 |
 
@@ -78,6 +78,6 @@ Every dependency of every module, verbatim from the json contracts.
 | **storage** | — |
 | **tappaas-cicd** | `cluster:vm` `cluster:ha`  |
 | **templates** | — |
-| **vaultwarden** | `cluster:vm` `cluster:ha` `templates:nixos` `backup:vm` `network:proxy`  |
+| **vaultwarden** | `cluster:vm` `cluster:ha` `templates:nixos` `backup:vm` `network:proxy` `network:rules`  |
 | **vllm-amd** | `cluster:lxc` `backup:vm`  |
 | **windows-server** | `cluster:vm` `templates:windows` `backup:vm` `network:proxy`  |
