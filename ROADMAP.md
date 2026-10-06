@@ -31,8 +31,8 @@ Markers:
 - **✅** in front of a row means done: the issue is closed on the forge, or the question in the
   row is answered. A ✅ row still in a wave is done on `main` and ships with the **next release**.
 - A group heading says where its rows are: `released in 2.1: 8 · done for 2.2: 1 · open: 3`. A
-  group with nothing left keeps its place in the wave with **✅ … released in 2.1** and a link to
-  the release that carried it.
+  group, or a whole wave, that a release carried completely is no longer listed above the
+  releases — it lives only in the section of the release that carried it.
 - A row with no tick is still to do. Planning the next step is reading down a wave and stopping at
   the first unticked line.
 - A group opens with **what it is for and what it still intends to do**, in at most three lines.
@@ -46,7 +46,8 @@ Markers:
 
 **When a release is cut** (a release-train boundary, [ADR-028](docs/ADR/ADR-028%20-%20Release%20Cadence%20and%20Patching.md)
 D13): every ✅ row whose fix is in the new tag moves out of its wave into that release's section,
-under the same wave and group heading, and the group's marker is updated. Which tag carries a fix:
+under the same wave and group heading, and the group's marker is updated. A group or wave left
+with nothing open or pending is removed from above the releases, *At a glance* included. Which tag carries a fix:
 `git merge-base --is-ancestor <commit> v<version>`.
 
 ### The scores
@@ -117,9 +118,6 @@ Per group: its scores, and where its rows are. *2.1* = shipped in 2.1; *2.2* = d
 | 1 | G1.6 Secrets & privileged access | H | H | 3 | 1 | 2 |
 | 1 | G1.7 Parked for Erik discussion | – | – | – | – | 5 |
 | 0 | ✅ G0.1 Migration & rollback framework | H | L | 8 | 1 | – |
-| 0 | ✅ G0.2 Trustworthy gates | L | L | all | – | – |
-| 0 | ✅ G0.3 Update channel & failure notice | M | M | all | – | – |
-| 0 | ✅ G0.4 Merge trust | – | – | all | – | – |
 
 ---
 
@@ -525,18 +523,6 @@ Changes to `config/` that every site can take safely: versioned migrations with 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
 | ✅ #736 | update merge pins a field that a release moves to a new place | M | M | **Closed 2026-09-26** (`2d25aaf3`): merge rule 5 tells "the operator changed it" from "`.orig` never recorded it" and names each refused value with its remedy. The rule itself: #488 |
-
-### ✅ G0.2 Trustworthy gates — Ease L · Risk L · released in 2.1
-
-Tests that tell the truth, so every later migration can be verified. Every item shipped in 2.1 — see [Release 2.1, G0.2](#rel21-g02).
-
-### ✅ G0.3 Update channel & failure notice — Ease M · Risk M · released in 2.1
-
-A scheduled update on a channel, with a mail when a sweep fails — the path every later fix takes to a site. Every item shipped in 2.1 — see [Release 2.1, G0.3](#rel21-g03).
-
-### ✅ G0.4 Merge trust · released in 2.1
-
-A 3-way merge that can no longer skip a module silently, so Wave 1's re-schemas reach every deployed config. Every item shipped in 2.1 — see [Release 2.1, G0.4](#rel21-g04).
 
 ## Release 2.1 — staging 2026-09-25 · production at the next boundary
 
