@@ -184,6 +184,25 @@ public_cert_state() {
 # grades a dead endpoint by public_cert_state, where it is about public TLS.
 VHOST_EXPECTED=1
 [[ -z "${TAPPAAS_DOMAIN}" ]] && VHOST_EXPECTED=0
+#   not published (#778)            → per-service, no wildcard covers the name,
+#                                     and the one resolver says it has no public
+#                                     record (split-horizon-target exit 3): the
+#                                     updater WITHDRAWS the route. Here a vhost
+#                                     must be ABSENT — one still present is drift.
+UNPUBLISHED=0
+if [[ "${VHOST_EXPECTED}" -eq 1 && -n "${PROXY_DOMAIN}" ]] && command -v network-manager >/dev/null 2>&1; then
+    _T_DNS_MODE="$(jq -r '.dnsMode // "per-service"' <<<"$(get_variant_config "${_ENV:-}" 2>/dev/null || echo '{}')")"
+    case "$(get_config_value 'proxyTls' '')" in
+        dns01)  _T_DNS_MODE="wildcard" ;;
+        http01) _T_DNS_MODE="per-service" ;;
+    esac
+    if [[ "${_T_DNS_MODE}" == "per-service" ]] \
+       && ! unbound_wildcard_covers "${PROXY_DOMAIN%%.*}" "${PROXY_DOMAIN#*.}" >/dev/null 2>&1; then
+        _t_rc=0
+        network-manager split-horizon-target "${PROXY_DOMAIN}" >/dev/null 2>&1 || _t_rc=$?
+        [[ ${_t_rc} -eq 3 ]] && { UNPUBLISHED=1; VHOST_EXPECTED=0; }
+    fi
+fi
 
 # `caddy-manager list` renders one line per entry:
 #   Domains:   "  <fqdn padded 40> [enabled]  (<description>)  uuid=…"
@@ -236,7 +255,15 @@ if [[ "${VHOST_EXPECTED}" -eq 0 ]]; then
     # reconcile and there is no vhost to find. Check nothing rather than pass
     # falsely — an empty needle makes `grep -q ""` match every line, which used to
     # report a meaningless "Domain '' exists in Caddy".
-    warn "    No domain for this environment — updater skips the reconcile, no vhost expected"
+    if [[ "${UNPUBLISHED}" -eq 1 ]]; then
+        if grep -qE "^[[:space:]]+${PROXY_DOMAIN_RE}[[:space:]]+\[" <<<"${caddy_list}"; then
+            fail "${PROXY_DOMAIN} is not published (no public DNS record) but Caddy still serves it — run update to withdraw it"
+        else
+            pass "${PROXY_DOMAIN} is not published (no public DNS record) — no route, as expected"
+        fi
+    else
+        warn "    No domain for this environment — updater skips the reconcile, no vhost expected"
+    fi
 elif grep -qE "^[[:space:]]+${PROXY_DOMAIN_RE}[[:space:]]+\[" <<<"${caddy_list}"; then
     pass "Domain '${PROXY_DOMAIN}' exists in Caddy"
 else
@@ -269,7 +296,11 @@ EXPECT_UPSTREAM="${EXPECT_SCHEME}://${UPSTREAM}:${PROXY_PORT}"
 
 info "  Check 2: Caddy handler entry"
 if [[ "${VHOST_EXPECTED}" -eq 0 ]]; then
-    warn "    No domain for this environment — updater skips the reconcile, no handler expected"
+    if [[ "${UNPUBLISHED}" -eq 1 ]]; then
+        info "    not published — no handler expected"
+    else
+        warn "    No domain for this environment — updater skips the reconcile, no handler expected"
+    fi
 else
     # The handler for THIS upstream, whatever scheme and port it happens to carry.
     # `|| true` is load-bearing: under `set -e` + `pipefail` a grep that matches
@@ -314,7 +345,11 @@ routes_tsv="$(read_module_config "${MODULE}" | jq -rc '.proxyRoutes // [] | .[] 
 if [[ -z "${routes_tsv}" ]]; then
     info "    none declared"
 elif [[ "${VHOST_EXPECTED}" -eq 0 ]]; then
-    warn "    No domain for this environment — updater skips the reconcile, no routes expected"
+    if [[ "${UNPUBLISHED}" -eq 1 ]]; then
+        info "    not published — no routes expected"
+    else
+        warn "    No domain for this environment — updater skips the reconcile, no routes expected"
+    fi
 else
     while IFS=$'\t' read -r rname rport; do
         [[ -z "${rname}" ]] && continue
@@ -342,6 +377,9 @@ if [[ -z "${PROXY_DOMAIN}" ]]; then
     # environment's domain. Reading .environment made "mgmt" explicit, and this
     # hard fail then blocked every mgmt module that depends on network:proxy.
     warn "    No domain configured for this environment — skipping HTTPS check"
+elif [[ "${UNPUBLISHED}" -eq 1 ]]; then
+    # Not published (#778): no route, so no endpoint and no certificate to grade.
+    info "    not published — no HTTPS endpoint (reach it at ${UPSTREAM}:${PROXY_PORT})"
 elif [[ -z "${FIREWALL_IP}" && -z "${TAPPAAS_TEST_HTTPS_CODE:-}" ]]; then
     # Without the firewall's internal IP we cannot reach Caddy without hitting
     # the un-hairpinned WAN IP, so skip rather than report a false failure.
@@ -392,6 +430,8 @@ if [[ "${DEEP}" -eq 1 ]]; then
     info "  Check 4: TLS certificate"
     if [[ -z "${PROXY_DOMAIN}" ]]; then
         fail "Cannot check TLS — no proxy domain"
+    elif [[ "${UNPUBLISHED}" -eq 1 ]]; then
+        info "    not published — no certificate to check"
     elif [[ -z "${FIREWALL_IP}" ]]; then
         warn "    Cannot determine ${FIREWALL_FQDN} internal IP — skipping TLS check"
     else

@@ -2,7 +2,7 @@
 #
 # TAPPaaS network:proxy — shared access-list helper (issue #206)
 #
-# Sourced by install-service.sh and update-service.sh. Resolves a module's
+# Sourced by install-service.sh, update-service.sh and delete-service.sh. Resolves a module's
 # `proxyAllowedZones` to an os-caddy access list that restricts which client
 # networks may reach the proxied service, and (de)provisions it via
 # caddy-manager. The caller attaches the result to its handler with
@@ -324,4 +324,41 @@ proxy_add_routes() {
     run_caddy prune-domains --description-prefix "${description}#" \
         "${keep_fqdns[@]+"${keep_fqdns[@]}"}" \
         --no-ssl-verify || warn "Could not prune undeclared routes for ${MODULE} (non-fatal)"
+}
+
+# proxy_unpublish <module> <proxy-domain> <environment-domain> <module-json>
+#
+# Removes everything network:proxy publishes for a module: its handler, access
+# list, domain, extra proxyRoutes, and their per-service split-horizon records
+# (never the shared '*' wildcard). The one removal path — delete-service uses it
+# to delete a module, install/update to withdraw one that is not published
+# (#778): a per-service name with no public A record gets no certificate, so a
+# Caddy route for it only makes Caddy fail ACME on every reload (and spend Let's
+# Encrypt's failed-validation allowance) while serving no one. Every step is
+# idempotent; a step that fails warns and the rest still run. The caller runs
+# `caddy-manager reconfigure` afterwards.
+proxy_unpublish() {
+    local module="$1" domain="$2" env_domain="$3" json="$4"
+    local desc="TAPPaaS: ${module}"
+    caddy-manager delete-handler --description "${desc}" --no-ssl-verify \
+        || warn "Could not delete handler for ${module}"
+    # The handler first, so nothing references the access list any more.
+    caddy-manager delete-accesslist "tappaas-${module}" --no-ssl-verify >/dev/null 2>&1 || true
+    if [[ -n "${domain}" ]]; then
+        caddy-manager delete-domain "${domain}" --no-ssl-verify \
+            || warn "Could not delete domain ${domain}"
+        unbound_prune_host_override "${domain%%.*}" "${domain#*.}"
+    else
+        warn "Cannot determine proxy domain for ${module} — manual cleanup may be needed"
+    fi
+    caddy-manager prune-domains --description-prefix "${desc}#" --no-ssl-verify \
+        || warn "Could not delete additional routes for ${module}"
+    if [[ -n "${json}" && -n "${env_domain}" ]]; then
+        local _rname _rport
+        while IFS=$'\t' read -r _rname _rport; do
+            [[ -z "${_rname}" ]] && continue
+            unbound_prune_host_override "${_rname}" "${env_domain}"
+        done < <(echo "${json}" | jq -rc '.proxyRoutes // [] | .[] | [.name, (.port|tostring)] | @tsv')
+    fi
+    return 0
 }

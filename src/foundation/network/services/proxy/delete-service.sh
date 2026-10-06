@@ -19,6 +19,9 @@ set -euo pipefail
 
 # shellcheck source=common-install-routines.sh disable=SC1091
 . /home/tappaas/bin/common-install-routines.sh
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=access-list.sh disable=SC1091
+. "${SCRIPT_DIR}/access-list.sh"
 
 # ── Arguments ────────────────────────────────────────────────────────
 
@@ -107,50 +110,11 @@ fi
 
 DESCRIPTION="TAPPaaS: ${MODULE}"
 
-# ── Delete handler ──────────────────────────────────────────────────
-
-debug "  Deleting Caddy handler..."
-caddy-manager delete-handler \
-    --description "${DESCRIPTION}" \
-    --no-ssl-verify || warn "Could not delete handler for ${MODULE}"
-
-# ── Delete access list (issue #206) ─────────────────────────────────
-# Remove the handler first so nothing references the access list, then drop it.
-debug "  Deleting Caddy access list (if any)..."
-caddy-manager delete-accesslist "tappaas-${MODULE}" \
-    --no-ssl-verify >/dev/null 2>&1 || true
-
-# ── Delete domain ───────────────────────────────────────────────────
-
-if [[ -n "${PROXY_DOMAIN}" ]]; then
-    debug "  Deleting Caddy domain: ${BL}${PROXY_DOMAIN}${CL}"
-    caddy-manager delete-domain "${PROXY_DOMAIN}" \
-        --no-ssl-verify || warn "Could not delete domain ${PROXY_DOMAIN}"
-
-    # Per-service split-horizon DNS cleanup (ADR-005 §6, #269). #505: this used
-    # to be gated on the *current* dnsMode, so an override created under
-    # per-service mode was stranded once the environment later flipped to
-    # wildcard. Removal is unconditional now — we delete only the specific
-    # <host>.<zone> record, never the shared '*' wildcard (owned by acme-setup),
-    # and deleting a non-existent host is a harmless no-op.
-    unbound_prune_host_override "${PROXY_DOMAIN%%.*}" "${PROXY_DOMAIN#*.}"
-else
-    warn "Cannot determine proxy domain — manual cleanup may be needed"
-fi
-
-# ── Delete additional routes (proxyRoutes, #597) ────────────────────
-# Remove every extra route this module published (matched by description prefix,
-# so no route list is needed), then drop each route's per-service split-horizon
-# Unbound override (harmless no-op when none exists / wildcard mode).
-debug "  Deleting additional Caddy routes for ${MODULE}..."
-caddy-manager prune-domains --description-prefix "${DESCRIPTION}#" \
-    --no-ssl-verify || warn "Could not delete additional routes for ${MODULE}"
-if [[ -f "${MODULE_JSON}" && -n "${TAPPAAS_DOMAIN}" ]]; then
-    while IFS=$'\t' read -r _rname _rport; do
-        [[ -z "${_rname}" ]] && continue
-        unbound_prune_host_override "${_rname}" "${TAPPAAS_DOMAIN}"
-    done < <(echo "${JSON}" | jq -rc '.proxyRoutes // [] | .[] | [.name, (.port|tostring)] | @tsv')
-fi
+# ── Remove everything the module published (handler, access list, domain,
+#    extra proxyRoutes, split-horizon records) — the one removal path, shared
+#    with install/update withdrawing an unpublished module (#778) ───────────
+debug "  Removing ${MODULE}'s reverse-proxy routes${PROXY_DOMAIN:+ (${BL}${PROXY_DOMAIN}${CL})}..."
+proxy_unpublish "${MODULE}" "${PROXY_DOMAIN}" "${TAPPAAS_DOMAIN}" "$([[ -f "${MODULE_JSON}" ]] && echo "${JSON}")"
 
 # ── Reconfigure Caddy ───────────────────────────────────────────────
 

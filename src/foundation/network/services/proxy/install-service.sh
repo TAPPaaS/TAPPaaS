@@ -200,6 +200,7 @@ case "${PROXY_TLS}" in
     http01) DNS_MODE="per-service" ;;
 esac
 
+UNPUBLISHED=0
 CADDY_DOMAIN_ARGS=()
 if [[ "${DNS_MODE}" == "per-service" ]]; then
     debug "  TLS: per-service HTTP-01 (dnsMode=per-service) — Caddy issues a cert for ${PROXY_DOMAIN}"
@@ -242,6 +243,7 @@ if [[ "${DNS_MODE}" == "per-service" ]]; then
             # caller gets a TLS error instead of the NXDOMAIN that would tell
             # them the truth (#593). Never touches the shared '*' wildcard.
             unbound_prune_host_override "${DNS_HOST}" "${DNS_ZONE}"
+            UNPUBLISHED=1
         else
             warn "  Could not derive a split-horizon target for ${PROXY_DOMAIN} — register DNS manually"
         fi
@@ -269,6 +271,22 @@ else
         debug "  TLS: wildcard but no tlsCertRefid for environment '${ENVIRONMENT:-default}' yet."
         debug "       Run: acme-setup.sh --variant '${ENVIRONMENT}' (flag name unchanged; internal LAN access still works meanwhile)."
     fi
+fi
+
+# ── Not published: no route at all (#778) ──────────────────────────
+# Per-service and authoritatively no public A record for the name: Caddy could
+# never get it a certificate (ACME cannot reach a name that does not resolve),
+# and no client resolves it either. A route would only make Caddy retry ACME on
+# every reload — spending Let's Encrypt's 5-failures-per-name-per-hour allowance
+# — while serving no one. Withdraw whatever was published before and stop; the
+# module stays reachable at its internal name. Creating its public record and
+# re-running update publishes it.
+if [[ "${UNPUBLISHED}" -eq 1 ]]; then
+    info "  ${PROXY_DOMAIN} has no public DNS record — not published: no reverse-proxy route (reach '${MODULE}' at ${UPSTREAM}:${PROXY_PORT})"
+    proxy_unpublish "${MODULE}" "${PROXY_DOMAIN}" "${TAPPAAS_DOMAIN}" "${JSON}"
+    run_caddy reconfigure --no-ssl-verify || warn "Caddy reconfigure returned non-zero"
+    debug "${GN}network:proxy install-service completed for ${MODULE} (not published)${CL}"
+    exit 0
 fi
 
 # ── Create domain ───────────────────────────────────────────────────
