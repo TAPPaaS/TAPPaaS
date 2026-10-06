@@ -31,47 +31,12 @@ REBUILD_LOG=/var/lib/tappaas-rebuild/nixos-rebuild.log
 VMNAME="$(jq -r '.vmname // .config.vmname // "tappaas-cicd"' /home/tappaas/config/tappaas-cicd.json 2>/dev/null || echo tappaas-cicd)"
 [[ "${VMNAME}" =~ ^[A-Za-z0-9-]+$ ]] || { error "tappaas-self-rebuild: bad vmname '${VMNAME}'"; exit 1; }
 
-# The site's own time and locale, written before the build that reads it
-# (#408, #472): tappaas-cicd.nix imports /etc/nixos/tappaas-site.nix when it
-# exists. Sourced from the CHECKOUT, not ~tappaas/bin — root already builds this
-# system from that tree, so it is no new trust, while ~tappaas/bin is a path root
-# must not read code from.
-_sl="${CICD_DIR}/lib/site-locale.sh"
-if [[ -f "${_sl}" ]]; then
-    # shellcheck source=../lib/site-locale.sh
-    if . "${_sl}" 2>/dev/null && declare -F render_site_nix >/dev/null 2>&1; then
-        _mgmt_zone="$(jq -r '(.zone0 // "mgmt")' /home/tappaas/config/tappaas-cicd.json 2>/dev/null || echo mgmt)"
-        if render_site_nix "${_mgmt_zone}" > /etc/nixos/tappaas-site.nix.new 2>/dev/null; then
-            mv -f /etc/nixos/tappaas-site.nix.new /etc/nixos/tappaas-site.nix
-            debug "wrote /etc/nixos/tappaas-site.nix from site.json"
-        else
-            rm -f /etc/nixos/tappaas-site.nix.new
-            warn "could not render the site's time/locale — the mothership keeps what it has"
-        fi
-    fi
-fi
-
-# The mothership's journal client (#770), the fragment every NixOS VM gets
-# (lib/log-shipping.sh), rendered here because this host is not built by
-# update-os.sh. Removed when logging is not deployed.
-_lsh="${CICD_DIR}/lib/log-shipping.sh"
-if [[ -f "${_lsh}" ]]; then
-    # shellcheck source=../lib/log-shipping.sh
-    if . "${_lsh}" 2>/dev/null && declare -F render_logging_nix >/dev/null 2>&1; then
-        if CONFIG_DIR=/home/tappaas/config log_shipping_wanted tappaas-cicd; then
-            if render_logging_nix "${VMNAME}" mgmt \
-                    "$(CONFIG_DIR=/home/tappaas/config log_shipping_drop_regex tappaas-cicd)" \
-                    > /etc/nixos/tappaas-logging.nix.new 2>/dev/null; then
-                mv -f /etc/nixos/tappaas-logging.nix.new /etc/nixos/tappaas-logging.nix
-            else
-                rm -f /etc/nixos/tappaas-logging.nix.new
-                warn "could not render the journal client — the mothership keeps what it has"
-            fi
-        else
-            rm -f /etc/nixos/tappaas-logging.nix
-        fi
-    fi
-fi
+# The fragments the mothership's build imports — the site's time and locale and
+# its journal client — written before the build that reads them. The same script
+# runs ahead of the tappaas-rebuild@ helper, so neither rebuild path builds
+# without them.
+"${_here}/tappaas-render-fragments.sh" \
+    || warn "could not write the mothership's fragments — it keeps the ones it has"
 
 # ── what this rebuild pins, and whether that moves the system BACK (#680) ──
 #

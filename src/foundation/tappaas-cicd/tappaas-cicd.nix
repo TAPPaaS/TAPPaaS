@@ -119,6 +119,10 @@ in
       # --impure is required only because tappaas-cicd.nix imports the
       # machine-specific /etc/nixos/hardware-configuration.nix; nixpkgs itself
       # stays pinned by flake.lock.
+      # The generated fragments this build imports (site time/locale, journal
+      # client — #770), written first as update-tappaas's path does. "-": a
+      # failure keeps the fragments already there rather than block the rebuild.
+      ExecStartPre = "-/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/scripts/tappaas-render-fragments.sh";
       ExecStart = "/run/current-system/sw/bin/nixos-rebuild switch --flake .#%i --impure";
       # nixos-rebuild shells out to nix, git and systemd tooling.
       Environment = [
