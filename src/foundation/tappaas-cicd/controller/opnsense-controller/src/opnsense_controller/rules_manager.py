@@ -617,6 +617,9 @@ class RulesManager:
         self.firewall_type = firewall_type.upper() if firewall_type else "OPNSENSE"
         self._fw: FirewallManager | None = None
         self._client: Client | None = None
+        # Aliases deleted in this operation, whose pf tables are dropped once the
+        # alias set is reconfigured (see _finish_alias_deletes).
+        self._deleted_aliases: list[str] = []
         # Cache: peer-module spec lookup for alias targets (avoids re-reading JSON)
         self._peer_module_cache: dict[str, ModuleSpec | None] = {}
         # Cache: VLAN-tag → OPNsense interface identifier (lazy-loaded at first use)
@@ -719,6 +722,7 @@ class RulesManager:
                 if self._delete_alias(peer_alias):
                     result.aliases_removed += 1
 
+        self._finish_alias_deletes()
         return result
 
     def list_rules(
@@ -861,7 +865,9 @@ class RulesManager:
 
     def remove_alias(self, name: str) -> bool:
         """Delete an OPNsense alias by name."""
-        return self._delete_alias(name)
+        ok = self._delete_alias(name)
+        self._finish_alias_deletes()
+        return ok
 
     # ── Apply pipeline ───────────────────────────────────────────────────
 
@@ -964,6 +970,7 @@ class RulesManager:
             raise
 
         self._drop_derived_aliases(module.vmname, pruned, keep=set(module.aliases))
+        self._finish_alias_deletes()
         self._write_sequence_map(module, rules)
         self._wait_for_nfs_tables(module, rules)
         return result
@@ -975,7 +982,11 @@ class RulesManager:
     NFS_TABLE_POLL = 3.0
 
     def _wait_for_nfs_tables(self, module: ModuleSpec, rules: list[ModuleFirewallRule]) -> list[str]:
-        """Wait until each NFS alias a rule of the module matches on has members.
+        """Wait until both ends of each NFS rule of the module have table members.
+
+        Both, because the consumer's own alias (``tm_<consumer>``, the source) is
+        usually created by the same apply as the share alias and resolves just as
+        late — a full share table behind an empty source table still drops the mount.
 
         Returns the aliases still empty at the deadline (warned, not fatal: the
         mount then reports its own timeout). Halfway through it reconfigures the
@@ -984,7 +995,11 @@ class RulesManager:
         """
         if self.check_mode or self._fw is None:
             return []
-        pending = [n for n in self._referenced_alias_names(module, rules) if n.startswith("nfs_")]
+        known = set(self._referenced_alias_names(module, rules))
+        pending: list[str] = []
+        for r in rules:
+            if r.destination_net.startswith("nfs_"):
+                pending += [n for n in (r.source_net, r.destination_net) if n in known and n not in pending]
         start = time.monotonic()
         nudged = False
         while pending:
@@ -1852,24 +1867,48 @@ class RulesManager:
         except Exception as exc:
             warn(f"Failed to remove alias '{name}': {exc}")
             return False
-        self._drop_alias_table(name)
+        self._deleted_aliases.append(name)
         return True
+
+    def _finish_alias_deletes(self) -> None:
+        """Reconfigure the alias set once, then drop the deleted aliases' tables.
+
+        A delete stored with reload=False leaves the alias in OPNsense's generated
+        /usr/local/etc/filter_tables.conf, and the periodic table update keeps
+        resolving it from there — re-creating the pf table and its file minutes
+        after they were removed. Regenerating that list first is what makes the
+        drop stick.
+        """
+        names, self._deleted_aliases = self._deleted_aliases, []
+        if not names or self.check_mode:
+            return
+        try:
+            self.reconfigure_aliases()
+        except Exception as exc:  # the aliases are deleted; their tables can wait
+            debug(f"alias reconfigure after deleting {', '.join(names)} failed: {exc}")
+        for name in names:
+            self._drop_alias_table(name)
 
     def _drop_alias_table(self, name: str) -> None:
         """Remove a deleted alias's pf table and its /var/db/aliastables file.
 
         OPNsense keeps both when an alias is deleted, and an alias recreated under
         the same name — a share declared again, or moved — starts from the stale
-        addresses in that file until its next resolution. Best effort: the alias
-        itself is already gone, so a failure here is only debug.
+        addresses in that file until its next resolution. Waits (up to 30 s) for the
+        regenerated filter_tables.conf to stop listing the alias, since a table
+        dropped while it is listed is re-created. Best effort: the alias itself is
+        already gone, so a failure here is only debug.
         """
         if not all(c.isalnum() or c == "_" for c in name):
             return
         try:
             r = _firewall_ssh(self.config.firewall,
-                              f"pfctl -t {name} -T kill 2>/dev/null; rm -f /var/db/aliastables/{name}.*\n")
+                              f"for i in $(seq 15); do grep -q '<name>{name}</name>' /usr/local/etc/filter_tables.conf || break; sleep 2; done; "
+                              f"grep -q '<name>{name}</name>' /usr/local/etc/filter_tables.conf && {{ echo 'still listed in filter_tables.conf' >&2; exit 1; }}; "
+                              f"pfctl -t {name} -T kill 2>/dev/null; rm -f /var/db/aliastables/{name}.*\n",
+                              timeout=60.0)
             if r.returncode != 0:
-                debug(f"could not drop the table of alias '{name}': {(r.stderr or '').strip()}")
+                warn(f"could not drop the pf table of deleted alias '{name}': {(r.stderr or '').strip()}")
         except Exception as exc:  # ssh missing, timeout — the alias is deleted regardless
             debug(f"could not drop the table of alias '{name}': {exc}")
 

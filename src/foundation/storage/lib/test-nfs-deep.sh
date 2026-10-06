@@ -5,9 +5,10 @@
 #
 # Brings its own consumer (the fixture module ../test-nfsconsumer: a disposable
 # NixOS clone in a service zone, with a writer unit holding a file open), declares a
-# throwaway share `nfsdeeptest` (1G quota) through storage-manager, and backs up and
-# restores config/shares.json. Every step asserts; the teardown runs on any exit —
-# also when a step fails — and a leftover check fails the run if anything remains.
+# throwaway share `nfsdeeptest` (1G quota) through storage-manager, and takes only
+# that share back out of config/shares.json — the site's other shares are left as
+# they are. Every step asserts; the teardown runs on any exit — also when a step
+# fails — and a leftover check fails the run if anything remains.
 #
 #   1 pending      the share is undeclared: the install succeeds, the directory is
 #                  local, the fragment has no entry, validate warns, no rule
@@ -91,7 +92,7 @@ for v in $(seq 990 999); do grep -qx "${v}" <<< "${used}" || { VMID="${v}"; brea
 info "${BOLD}storage:nfs deep suite${CL}: share ${SHARE} on ${NODE}:${POOL}, consumer ${FIX} (vmid ${VMID}) on ${CNODE} in ${ZONE}${NODE2:+, move target ${NODE2}}"
 
 declare -A HAD_NFSD=() HAD_PARENT=() TOUCHED=()
-HAD_SHARES=0; [[ -f "${CFG}/shares.json" ]] && { cp -p "${CFG}/shares.json" "${WORK}/shares.json.orig"; HAD_SHARES=1; }
+HAD_SHARES=0; [[ -f "${CFG}/shares.json" ]] && HAD_SHARES=1
 for n in "${NODE}" ${NODE2}; do
     cp -p "${CFG}/${n}.json" "${WORK}/${n}.json.orig"; TOUCHED["${n}"]=1
     node_ssh "${n}" "dpkg-query -W -f='\${Status}' nfs-kernel-server 2>/dev/null | grep -q 'install ok installed'" && HAD_NFSD["${n}"]=1
@@ -141,7 +142,10 @@ teardown() {
     done
 
     # Restore: the config files as they were, and by force whatever is still there.
-    if [[ "${HAD_SHARES}" -eq 1 ]]; then cp -p "${WORK}/shares.json.orig" "${CFG}/shares.json"; else rm -f "${CFG}/shares.json"; fi
+    # Only the suite's own share comes out by force: the rest of shares.json is the
+    # site's, and another session may have changed it while the suite ran.
+    jq -e --arg s "${SHARE}" '.nfs.shares[$s]' "${CFG}/shares.json" >/dev/null 2>&1 && shares_edit "del(.nfs.shares[\"${SHARE}\"])"
+    [[ "${HAD_SHARES}" -eq 0 && -f "${CFG}/shares.json" && "$(jq '.nfs.shares // {} | length' "${CFG}/shares.json")" -eq 0 ]] && rm -f "${CFG}/shares.json"
     for n in "${!TOUCHED[@]}"; do
         cp -p "${WORK}/${n}.json.orig" "${CFG}/${n}.json"
         p="$(pool_on "${n}")"
@@ -167,7 +171,6 @@ teardown() {
     ssh -o BatchMode=yes -i /home/tappaas/.ssh/tappaas-fw root@firewall.mgmt.internal "sh -s" >/dev/null 2>&1 <<FWEOF
 for t in tm_${FIX//-/_} nfs_share_${SHARE}; do pfctl -t \$t -T kill; rm -f /var/db/aliastables/\$t.*; done
 FWEOF
-    if [[ "${HAD_SHARES}" -eq 1 ]]; then cmp -s "${WORK}/shares.json.orig" "${CFG}/shares.json" || { fail "restore: config/shares.json differs from before"; left=1; }; fi
     for n in "${!TOUCHED[@]}"; do
         cmp -s "${WORK}/${n}.json.orig" "${CFG}/${n}.json" || { fail "restore: config/${n}.json differs from before"; left=1; }
         if [[ -z "${HAD_NFSD[${n}]:-}" && -z "$(nfs_exports "${n}")" ]]; then
