@@ -120,7 +120,7 @@ things that make those migrations survivable go before it (Wave 0).
 | 1 | G1.7 Parked for Erik discussion | 5 | 0/5 | – | – | – |
 | 2 | G2.1 Firewall exposure & rule order | 14 | 7/20 | 3 | 4 | M |
 | 2 | G2.2 DNS resolver robustness | 5 | 4/9 | 4 | 3 | M |
-| 3 | G3.1 cluster:vm lifecycle & capacity | 12 | 11/20 | 4 | 3 | L |
+| 3 | G3.1 cluster:vm lifecycle & capacity | 12 | 12/20 | 4 | 3 | L |
 | 3 | G3.2 Identity & SSO wiring | 4 | 3/9 | 3 | 2 | L |
 | 3 | G3.3 App module fixes | 11 | 5/17 | 4 | 2 | L |
 | 3 | G3.4 AI stack maturity | 4 | 1/7 | 3 | 3 | L |
@@ -131,7 +131,7 @@ things that make those migrations survivable go before it (Wave 0).
 | 4 | G4.4 Storage & physical devices | 5 | 3/10 | 2 | 2 | M |
 | 4 | G4.5 Governance, CI & sign-offs | 8 | 3/10 | 3 | 1 | L |
 
-**Issues** is the count when the plan was made; **Done** is ✅ rows / all rows in the group's own table now (it grows as issues are added and closed). By wave: Wave 0 25/25 · Wave 1 86/95 · Wave 2 11/29 · Wave 3 20/57 · Wave 4 14/47. Issue counts include the Future Work items rolled in.
+**Issues** is the count when the plan was made; **Done** is ✅ rows / all rows in the group's own table now (it grows as issues are added and closed). By wave: Wave 0 25/25 · Wave 1 86/95 · Wave 2 11/29 · Wave 3 21/57 · Wave 4 14/47. Issue counts include the Future Work items rolled in.
 
 ```mermaid
 quadrantChart
@@ -651,7 +651,7 @@ Low upgrade risk. Build continuously, in any order within a group.
 | #403 | Install on the root disk; smarter placement | 3 | 2 | L | |
 | ✅ #569 | Node capacity / overcommit verb | 4 | 1 | L | **Done 2026-09-17** (71799221): `health-manager validate` gained a `memory-commitment` gate beside `disk-threshold` — per node, committed vs physical, `--memory-threshold PCT`. Committed (not used), stopped guests excluded, idle nodes reported at 0% so a placement gap shows |
 | #663 | Memory defaults are not based on measurement | 4 | 2 | M | The demand side of #37. Shipped defaults were never checked against use: 60G declared across hrossen's QEMU guests, 31.9G resident, ~20G used. Over-declaring costs **commitment** (what #569's gate reports and what decides placement), not RAM — except where a guest's allocator touches everything, as OPNsense/FreeBSD does. Applied on hrossen: `tappaas-cicd` 12G, `unifi-os` 5G. `network` 8G→4G is **parked until the operator has physical access** — the firewall is the route back into the site |
-| #37 | Optimise RAM (ballooning, swap) | 3 | 3 | L | **ARC part dropped 2026-09-17** after measuring six nodes: `zfs_arc_max` is already set to ~10.7% of RAM (the PVE 8.1+ installer default, not ZFS's 50%), and three of six nodes sit AT their cap — nothing to reclaim, and the proposed direction was backwards. hrossen tappaas2 looks like an exception (69G uncommitted) but is not: it shares GPU RAM with CPU RAM and runs the LLMs. What remains is the real gain — hrossen declares 110G across 11 guests with **no ballooning on any of them**, ~70G declared and unused (`vllm-amd` 46G→2.1G, though that one is GPU-bound and needs thought, not a reflex balloon). Monitoring is partly delivered by #569's `memory-commitment` gate |
+| ✅ #37 | Optimise RAM (ballooning, swap) | 3 | 3 | L | **ARC part dropped 2026-09-17** after measuring six nodes: `zfs_arc_max` is already set to ~10.7% of RAM (the PVE 8.1+ installer default, not ZFS's 50%), and three of six nodes sit AT their cap — nothing to reclaim, and the proposed direction was backwards. hrossen tappaas2 looks like an exception (69G uncommitted) but is not: it shares GPU RAM with CPU RAM and runs the LLMs. What remains is the real gain — hrossen declares 110G across 11 guests with **no ballooning on any of them**, ~70G declared and unused (`vllm-amd` 46G→2.1G, though that one is GPU-bound and needs thought, not a reflex balloon). Monitoring is partly delivered by #569's `memory-commitment` gate **Closed 2026-10-06, folded into #663** (operator): measuring and monitoring are #663's node sampler in Loki; ballooning is not pursued — over-declaring costs commitment, not RAM, and right-sizing from measurement removes it directly; swap (8 GB LVM) and the ARC cap are the Proxmox installer's, not TAPPaaS's |
 | ✅ #423 | `Create-TAPPaaS-LXC.sh` has no `debug()` | 5 | 1 | L | Verified still missing — **Closed 2026-09-26** (`34508ed2`): the LXC creator defines the `debug()` it calls, as `Create-TAPPaaS-VM.sh` does. The same trap elsewhere is #747 |
 | ✅ #673 | Cluster nodes are a fixed list of nine, not a sequence | — | — | — | **Added in the 2026-09-25 issue sweep.** **Closed** |
 | #761 | A composite-module ADR: `cluster`, `kubernetes`, and modules that only provide artefacts | 2 | 3 | M | **Opened 2026-10-02 from #705**. ADR-022d and ADR-026 both defer `cluster` (and `kubernetes`) to an ADR that does not exist, and `templates` — a module that provides clone sources and owns no VM — fits no `kind`. Until it lands they carry interim values (ADR-022d v1.2). Decides: a `kind` value (or a separate field) for a composite with its own lifecycle (`pvecm`, corosync, quorum) and its members; whether a provides-only module carries a `kind`; then discovery's accepted list (`module-discovery.ts`, `update_tappaas`), `install-module.sh`'s guestless branch, `module inspect`, the schema and GLOSSARY follow. With @ErikDaniel007 (ADR-022d's author) |
