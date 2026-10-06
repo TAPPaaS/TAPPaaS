@@ -262,6 +262,51 @@ EOF
     check "an unreadable drift record fails" "${rc}" "1"
 }
 
+# ── 10. a held change config no longer wants is withdrawn ────────────
+# memory set back to the value the guest runs: no drift, so nothing re-sets it,
+# and the hypervisor would apply the old target at the next restart. A held key
+# that is not a declared field (localtime, #699) is left alone.
+{
+    insync_rec() {
+        cat > "${W}/drift.json" <<EOF
+{ "module": "demo", "service": "cluster:vm",
+  "actual": { "vmid": "300", "node": "tappaas1", "status": "running" },
+  "units": ${1:-[]}, "unreconciled": [], "skipped": [],
+  "inSync": [ {"field":"memory","class":"in-place","liveKey":"memory","desired":"16384","actual":"16384"},
+              {"field":"bridge0","class":"in-place-reboot","liveKey":"net0.bridge","desired":"lan","actual":"lan","composite":"net0"} ] }
+EOF
+    }
+    # shellcheck disable=SC2329  # called by name from converge-lib.sh
+    converge_pending_fields() { printf '%s\n' "${HELD// /$'\n'}"; }
+    # shellcheck disable=SC2329
+    converge_revert_pending() { echo "REVERT $*" >> "${CMDLOG}"; return "${REVERT_RC:-0}"; }
+
+    reset; HELD="localtime memory"; insync_rec
+    run; rc=$?
+    check "withdrawing a stale held change converges cleanly" "${rc}" "0"
+    check "…withdraws the in-sync field only, not localtime" "$(grep '^REVERT' "${CMDLOG}")" "REVERT memory"
+
+    reset; HELD="localtime"; insync_rec
+    run >/dev/null
+    lacks "nothing held for an in-sync field: nothing withdrawn" "$(cat "${CMDLOG}")" "REVERT"
+
+    reset; HELD="memory"; insync_rec
+    run 1 >/dev/null
+    lacks "--check withdraws nothing" "$(cat "${CMDLOG}")" "REVERT"
+    contains "…but says it would" "${LOG}" "would withdraw"
+
+    reset; HELD="memory"; REVERT_RC=1; insync_rec
+    run; rc=$?
+    check "a failed withdraw fails the converge" "${rc}" "1"
+    REVERT_RC=0
+
+    reset; HELD="memory"; insync_rec "[$(unit_set cores --cores 8 4)]"
+    run >/dev/null
+    contains "a withdraw does not stop the rest of the record applying" "$(cat "${CMDLOG}")" "SET --cores 8"
+
+    unset -f converge_pending_fields converge_revert_pending
+}
+
 echo ""
 echo "Results: ${pass} passed, ${fail} failed"
 [[ ${fail} -eq 0 ]]

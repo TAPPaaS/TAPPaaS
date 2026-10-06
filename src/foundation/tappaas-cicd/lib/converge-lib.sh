@@ -35,7 +35,10 @@
 #                                               (#532). Undefined = nothing is
 #                                               ever held, which is how every
 #                                               service behaved before.
-#   converge_side_effect_<name>                 perform one side effect
+#   converge_revert_pending "<key>" ...         OPTIONAL. Withdraw the held
+#                                               changes to these keys: config
+#                                               is back at the running value.
+#   converge_side_effect_<name>                perform one side effect
 #                                               (reboot / wait-ip / dns /
 #                                               ha-repoint). Return non-zero to
 #                                               fail the converge.
@@ -160,6 +163,40 @@ converge_apply() {
         fi
     done < <(jq -r --arg fs "${CONVERGE_FS}" \
         '.adopt[]? | [.field, .class, .desired, .actual] | join($fs)' "${drift_file}")
+
+    # ── stale held changes ───────────────────────────────────────────
+    # "actual" is what the guest RUNS (#532), so an in-sync field the hypervisor
+    # is still holding a change for is holding a value config no longer wants —
+    # config was set back to the running value after an earlier converge queued
+    # another. Nothing would ever re-set it, and the next restart would apply it.
+    # Withdraw it. Composite parts (net0.bridge) are not hypervisor keys.
+    if declare -F converge_pending_fields >/dev/null; then
+        local _held
+        _held="$(converge_pending_fields 2>/dev/null || true)"
+        if [[ -n "${_held}" ]]; then
+            local -a _stale=()
+            local _k
+            while read -r _k; do
+                [[ -n "${_k}" ]] && _stale+=("${_k}")
+            done < <(jq -r --arg held "${_held}" '
+                ($held | split("\n")) as $h
+                | .inSync[]? | select(.composite == null) | .liveKey
+                | select(. as $k | $h | index($k))' "${drift_file}")
+            if [[ ${#_stale[@]} -gt 0 ]]; then
+                local _s_list; _s_list="$(IFS=,; echo "${_stale[*]}" | sed 's/,/, /g')"
+                if [[ "${check}" == "1" ]]; then
+                    converge_report "  held change to ${_s_list} no longer wanted (config matches the running guest) — would withdraw it"
+                elif ! declare -F converge_revert_pending >/dev/null; then
+                    warn "  held change to ${_s_list} no longer wanted, but this service defines no converge_revert_pending"
+                elif converge_revert_pending "${_stale[@]}"; then
+                    info "  ${GN}✓${CL} withdrew the held change to ${_s_list}: config matches what ${module} runs"
+                else
+                    error "  could not withdraw the held change to ${_s_list} — the next restart would apply it"
+                    rc=1
+                fi
+            fi
+        fi
+    fi
 
     if [[ "$(jq -r '.units | length' "${drift_file}")" -eq 0 ]]; then
         # In --check mode the verdict IS the output — reporting is the whole

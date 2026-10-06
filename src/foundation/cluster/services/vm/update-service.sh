@@ -181,6 +181,15 @@ converge_pending_fields() {
         "qm pending ${VMID}" 2>/dev/null | sed -n 's/^new \([^:]*\):.*/\1/p'
 }
 
+# Withdraw held changes that config no longer wants: memory set back to the
+# value the guest runs left the earlier target queued for its next restart.
+# shellcheck disable=SC2029
+converge_revert_pending() {
+    local keys; keys="$(IFS=,; echo "$*")"
+    ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" \
+        "qm set ${VMID} --revert $(printf '%q' "${keys}")" >/dev/null
+}
+
 # shellcheck disable=SC2029
 converge_side_effect_reboot() {
     if [[ "${VMSTATUS}" != "running" ]]; then
