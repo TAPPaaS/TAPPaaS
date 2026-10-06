@@ -1,6 +1,6 @@
 # Lars ↔ Erik — open discussions
 
-**Compiled:** 2026-10-02 from the [security & stability plan](security-and-stability-plan.md).
+**Compiled:** 2026-10-02 from the security & stability plan, now [ROADMAP.md](../../ROADMAP.md).
 Two lists: questions that need both of us before work can move, and items that are Erik's to
 finish. Tick a line (✅) when it is settled, and record the outcome in the plan row it points at.
 
