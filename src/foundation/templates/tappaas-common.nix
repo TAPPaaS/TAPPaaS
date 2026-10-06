@@ -33,7 +33,12 @@
     # states mounts and nothing else, so it can never collide with a module's
     # own configuration.
     ++ lib.optional (builtins.pathExists /etc/nixos/tappaas-nfs.nix)
-      /etc/nixos/tappaas-nfs.nix;
+      /etc/nixos/tappaas-nfs.nix
+    # The journal client (#770): an Alloy pipeline to logging's push-only
+    # receiver, written by update-os.sh while the module declares logging:logs
+    # and logging is deployed. Absent, the VM ships nothing and runs no Alloy.
+    ++ lib.optional (builtins.pathExists /etc/nixos/tappaas-logging.nix)
+      /etc/nixos/tappaas-logging.nix;
 
   services.cloud-init = {
         enable = true;

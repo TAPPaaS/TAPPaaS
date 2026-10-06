@@ -180,10 +180,15 @@ When the consumer's install runs, `rules-manager` walks **both** `dependsOn` and
 declared port — **only** when:
 
 1. The two modules are in different zones (intra-zone traffic flows freely).
-2. The consumer's zone is **not already** in the provider zone's `access-to`
-   (zone-level rule covers it).
+2. The provider's zone is **not already** in the consumer zone's `access-to`
+   (`access-to` lists where a zone may go, so that zone-level rule covers it; `"all"`
+   covers every zone). Until #770 this read the provider zone's list — the reverse
+   direction — which skipped every consumer of a mgmt service as "covered".
 3. The consumer's zone **is** in the provider zone's `pinhole-allowed-from`
-   (policy gate).
+   (policy gate) — or the provider is a **foundation** module whose `pinhole.json`
+   says `"fromZones": "any"`. That exception exists for platform sinks every module
+   feeds (today only `logging:logs`, a push-only port into mgmt, #770); it is ignored
+   for community modules, so a module cannot widen the zone policy by shipping a file.
 
 If condition 3 fails, the auto-pinhole is **skipped with a warning** — the operator
 chose this trade-off on the original ticket: a missing zone policy should not block an

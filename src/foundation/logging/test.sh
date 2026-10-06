@@ -163,6 +163,24 @@ check_syslog_port() {
     fi
 }
 
+check_push_receiver() {
+    info "Check 7b: Push-only receiver accepts a line on tcp/3101 (#770)"
+    # From here (mgmt) — the path every VM's journal client takes. One line,
+    # job="tappaas-test", so it is easy to tell apart from real logs.
+    local now code
+    now="$(date +%s%N)"
+    code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 \
+        -H 'Content-Type: application/json' -X POST \
+        "http://${VM_HOST}:3101/loki/api/v1/push" \
+        --data "{\"streams\":[{\"stream\":{\"job\":\"tappaas-test\",\"host\":\"$(hostname)\"},\"values\":[[\"${now}\",\"logging test.sh push check\"]]}]}" \
+        2>/dev/null) || true
+    if [[ "${code}" == "204" || "${code}" == "200" ]]; then
+        check_pass "Push receiver accepted a line (HTTP ${code})"
+    else
+        check_fail "Push receiver on ${VM_HOST}:3101 did not accept a line (status: ${code:-timeout})"
+    fi
+}
+
 check_loki_query() {
     info "Check 8: Loki has received at least one log line from the local journal"
     local count
@@ -244,6 +262,7 @@ main() {
     check_grafana_health
     check_alloy_metrics
     check_syslog_port
+    check_push_receiver
     check_loki_query
     check_alert_rules
     check_alert_delivery

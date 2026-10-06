@@ -30,6 +30,8 @@ readonly MGMT="mgmt"
 # mothership that has not deployed it yet updates as before, without the facts.
 # shellcheck source=site-locale.sh
 [[ -f /home/tappaas/bin/site-locale.sh ]] && . /home/tappaas/bin/site-locale.sh
+# shellcheck source=log-shipping.sh
+[[ -f /home/tappaas/bin/log-shipping.sh ]] && . /home/tappaas/bin/log-shipping.sh
 
 # When invoked as a module-update sub-step (templates:nixos / templates:debian
 # update-service.sh set TAPPAAS_OS_AS_DEBUG=1), route this script's [Info]
@@ -706,6 +708,16 @@ update_nixos() {
         info "Writing /etc/nixos/tappaas-site.nix (site time + locale)"
         apply_site_locale_nixos "${vm_ip}" "${_zone}" \
             || warn "could not write the site fragment on ${vm_ip} — the VM keeps its current time and locale"
+    fi
+
+    # The journal client (#770): written while the module declares logging:logs
+    # and logging is deployed, removed otherwise — the baseline imports it.
+    if declare -F apply_log_shipping_nixos >/dev/null 2>&1; then
+        if log_shipping_wanted "${vmname}"; then
+            info "Writing /etc/nixos/tappaas-logging.nix (journal → Loki)"
+        fi
+        apply_log_shipping_nixos "${vm_ip}" "${vmname}" \
+            || warn "could not write the log-shipping fragment on ${vm_ip} — its journal stays on the VM"
     fi
 
     # The prebuilt NixOS template ships without /etc/nixos/hardware-configuration.nix

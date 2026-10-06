@@ -42,9 +42,9 @@ one-shot file:
     # log in to https://logging.<your-domain>/, change the password, then:
     ssh tappaas@logging.mgmt.internal -- sudo rm /root/grafana-admin-password.initial
 
-Optional: add an Alloy client to any other VM you want shipped to Loki — the NixOS
-snippet is in [DESIGN.md](./DESIGN.md#setting-up-an-alloy-client-on-another-vm)
-(`tappaas-cicd` ships with it pre-installed).
+Modules that declare `integratesWith: ["logging:logs"]` start shipping their journal
+at their next update (`update-module.sh <module>`) — see
+[services/logs](services/logs/README.md).
 
 ## Verification
 
@@ -77,10 +77,11 @@ the firewall.
 `systemctl status rsyslog` on the node; re-run `update-module.sh logging`. To retire a
 node's forwarder: remove that file and restart rsyslog.
 
-**A client VM outside the mgmt zone ships nothing**
-There is no automated firewall pinhole yet — a sender in `srv`/`dmz`/etc. cannot reach
-`logging:3100` until an OPNsense rule permits it. Add the pinhole manually (see the
-network module's `rules-manager`), or keep senders in mgmt for now.
+**A module's journal is not in Loki**
+`test-module.sh <module>` runs the `logging:logs` check. The module must declare
+`logging:logs` and have had an update since logging was installed (that writes
+`/etc/nixos/tappaas-logging.nix`); outside mgmt it also needs `network:rules`, whose
+pinhole opens tcp/3101 from it to logging (`rules-manager reconcile <module>` shows it).
 
 **Disk filling up**
 Default retention is 30 days (`retentionHours` in `logging.nix`); rule of thumb

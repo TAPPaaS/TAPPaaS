@@ -1,7 +1,7 @@
 {
   "description": "Centralized log aggregation with Grafana Loki, Alloy and Grafana UI",
   "kind": "vm",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "stack": "foundation",
   "releaseDate": "2026-05-14",
   "maintainer": "@larsrossen",
@@ -16,7 +16,9 @@
     "network:proxy",
     "identity:identity"
   ],
-  "provides": [],
+  "provides": [
+    "logs"
+  ],
   "identity": {
     "launchPath": "/login/generic_oauth",
     "providesAdminRole": true,

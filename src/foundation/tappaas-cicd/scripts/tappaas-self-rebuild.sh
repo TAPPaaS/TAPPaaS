@@ -51,6 +51,28 @@ if [[ -f "${_sl}" ]]; then
     fi
 fi
 
+# The mothership's journal client (#770), the fragment every NixOS VM gets
+# (lib/log-shipping.sh), rendered here because this host is not built by
+# update-os.sh. Removed when logging is not deployed.
+_lsh="${CICD_DIR}/lib/log-shipping.sh"
+if [[ -f "${_lsh}" ]]; then
+    # shellcheck source=../lib/log-shipping.sh
+    if . "${_lsh}" 2>/dev/null && declare -F render_logging_nix >/dev/null 2>&1; then
+        if CONFIG_DIR=/home/tappaas/config log_shipping_wanted tappaas-cicd; then
+            if render_logging_nix "${VMNAME}" mgmt \
+                    "$(CONFIG_DIR=/home/tappaas/config log_shipping_drop_regex tappaas-cicd)" \
+                    > /etc/nixos/tappaas-logging.nix.new 2>/dev/null; then
+                mv -f /etc/nixos/tappaas-logging.nix.new /etc/nixos/tappaas-logging.nix
+            else
+                rm -f /etc/nixos/tappaas-logging.nix.new
+                warn "could not render the journal client — the mothership keeps what it has"
+            fi
+        else
+            rm -f /etc/nixos/tappaas-logging.nix
+        fi
+    fi
+fi
+
 # ── what this rebuild pins, and whether that moves the system BACK (#680) ──
 #
 # Since ADR-017 D3 this script builds from the checkout's flake, so

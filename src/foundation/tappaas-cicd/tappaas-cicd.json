@@ -1,7 +1,7 @@
 {
   "description": "The TAPPaaS mothership VM",
   "kind": "vm",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "stack": "foundation",
   "status": "Production",
   "environment": "mgmt",
@@ -14,7 +14,8 @@
   ],
   "integratesWith": [
     "backup:vm",
-    "backup:filesystem"
+    "backup:filesystem",
+    "logging:logs"
   ],
   "backup": {
     "filesystemPaths": [
@@ -35,6 +36,12 @@
     },
     "cluster:ha": {
       "replicationSchedule": "*/15"
+    },
+    "logging:logs": {
+      "dropUnits": [
+        "opnsense-controller.*",
+        "setup-caddy.*"
+      ]
     }
   }
 }

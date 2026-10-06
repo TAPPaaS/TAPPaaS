@@ -18,7 +18,8 @@
 # - Alloy (local journal scrape + 2 syslog receivers: 1514 OPNsense, 1515 Proxmox)
 #
 # Ingest paths:
-# - Other TAPPaaS VMs run Alloy clients that push to this VM:3100
+# - Other TAPPaaS VMs run Alloy clients that push to this VM:3101 (push-only,
+#   loki.source.api; logging:logs, #770) — 3100 (Loki, query too) is mgmt-only
 # - OPNsense forwards RFC 5424 syslog over TCP to this VM:1514 (source=opnsense)
 # - Proxmox nodes' rsyslog forwards to this VM:1515 (source=proxmox)
 #
@@ -30,6 +31,7 @@
 
 let
   lokiPort          = 3100;
+  pushPort          = 3101;    # push-only receiver every VM ships to (#770)
   grafanaPort       = 3000;
   syslogOpnsensePort = 1514;   # OPNsense → Alloy (source=opnsense)
   syslogProxmoxPort  = 1515;   # Proxmox nodes → Alloy (source=proxmox)
@@ -212,7 +214,8 @@ in
     allowedTCPPorts = [
       22             # SSH
       grafanaPort    # Grafana web UI (3000) — fronted by Caddy
-      lokiPort       # Loki HTTP push/query (3100) — from mgmt zone Alloy clients
+      lokiPort       # Loki HTTP push/query (3100) — mgmt only (Grafana, tests)
+      pushPort       # Push-only receiver (3101) — every VM's Alloy client (#770)
       syslogOpnsensePort     # Syslog ingest (1514) — from OPNsense
       syslogProxmoxPort      # Syslog ingest (1515) — from Proxmox nodes
     ];
@@ -607,6 +610,18 @@ in
       }
       forward_to    = [loki.write.default.receiver]
       relabel_rules = discovery.relabel.syslog_proxmox.rules
+    }
+
+    // Push-only receiver for every TAPPaaS VM's journal (#770). Loki's own
+    // port also answers queries without authentication, so it stays mgmt-only;
+    // this one accepts /loki/api/v1/push and nothing else. App zones reach it
+    // through the logging:logs pinhole (per consumer VM, this port only).
+    loki.source.api "push" {
+      http {
+        listen_address = "0.0.0.0"
+        listen_port    = ${toString pushPort}
+      }
+      forward_to = [loki.write.default.receiver]
     }
 
     loki.write "default" {

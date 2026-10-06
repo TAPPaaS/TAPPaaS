@@ -1,0 +1,7 @@
+{
+  "_comment": "logging:logs (#770). A consumer in another zone gets a pinhole from its own VM to logging's push-only receiver. fromZones: any lifts mgmt's empty pinhole-allowed-from for this foundation service alone: the path is per consumer VM and to this port only; Loki's query port 3100 stays mgmt-only.",
+  "fromZones": "any",
+  "ports": [
+    { "port": 3101, "protocol": "TCP", "description": "Loki push-only receiver (Alloy loki.source.api)" }
+  ]
+}

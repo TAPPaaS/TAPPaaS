@@ -10,8 +10,8 @@ VM that collects logs from every TAPPaaS VM, the Proxmox nodes and the OPNsense 
 | Capability | Access from | How |
 |------------|-------------|-----|
 | Grafana UI (dashboards, LogQL Explore) | mgmt zone (via Caddy) | `https://logging.<tappaas.domain>` |
-| Loki log store (30-day retention) | mgmt zone | HTTP push/query on `logging.mgmt.internal:3100` |
-| Journal shipping from TAPPaaS VMs | each VM | Alloy client pushing to `:3100` |
+| Loki log store (30-day retention) | mgmt zone | HTTP query on `logging.mgmt.internal:3100` |
+| Journal shipping from TAPPaaS VMs | any zone, per VM | `logging:logs` — the baseline's Alloy client pushing to the push-only receiver `:3101` |
 | OPNsense firewall logs | firewall | syslog RFC 5424 → `tcp/1514` (`source=opnsense`) |
 | Proxmox node logs | nodes | rsyslog forwarder → `tcp/1515` (`source=proxmox`) |
 | CLI queries on the VM | mgmt admins (SSH) | `logcli` installed on the VM |
@@ -21,9 +21,8 @@ VM that collects logs from every TAPPaaS VM, the Proxmox nodes and the OPNsense 
 - Metrics, Prometheus or Alertmanager — logs only (metrics-side alerting is v2 backlog).
 - Loki authentication — the mgmt zone is the trust boundary (v2 backlog).
 - Syslog over TLS — plain TCP inside mgmt today (v2 backlog).
-- A consumable `logging:*` service for other modules — `provides` is empty in v1;
-  consumer VMs add their own Alloy block (see [DESIGN.md](./DESIGN.md)). Firewall
-  pinholes for non-mgmt-zone senders are also not yet automated.
+- Journal shipping from Debian, HAOS, LXC and Windows guests — `logging:logs` covers
+  NixOS guests (see [services/logs](services/logs/README.md)).
 
 ## Requirements
 

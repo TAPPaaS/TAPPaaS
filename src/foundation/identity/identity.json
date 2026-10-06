@@ -1,7 +1,7 @@
 {
   "description": "Authentik SSO identity provider for TAPPaaS",
   "kind": "vm",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "stack": "foundation",
   "releaseDate": "2026-02-17",
   "maintainer": "@larsrossen",
@@ -15,6 +15,9 @@
     "templates:nixos",
     "backup:vm",
     "network:proxy"
+  ],
+  "integratesWith": [
+    "logging:logs"
   ],
   "provides": [
     "accessControl",
@@ -34,6 +37,13 @@
       "proxyPort": 9000,
       "proxyAllowedZones": [
         "internet"
+      ]
+    },
+    "logging:logs": {
+      "dropUnits": [
+        "generate-authentik-secrets.*",
+        "authentik-env-secrets-only.*",
+        "authentik-env-backup.*"
       ]
     }
   }

@@ -489,106 +489,12 @@ in
   # explicitly so a stale crontab entry can never resurrect a dual scheduler.
   services.cron.enable = false;
 
-  # ----------------------------------------
-  # Alloy client → ship the mothership's journal to logging
-  # ----------------------------------------
-  # Lets you query update-tappaas / update-module.sh output in Grafana via the
-  # Loki datasource. Safe-if-target-missing: Alloy buffers locally and retries.
-  #
-  # Grafana Alloy replaced Promtail here because 26.05 removed both the promtail
-  # NixOS module AND the package — promtail reached end of life (#721). Alloy
-  # embeds promtail's own pipeline, so every stage below means exactly what it
-  # meant before; the translation was made by `alloy convert --source-format=promtail`
-  # from the config this host was actually running, not rewritten by hand.
-  #
-  # SECURITY: this VM runs opnsense-controller and setup-caddy.sh, which handle
-  # OPNsense API credentials. The stages below DROP journal entries from
-  # credential-handling units and SCRUB common secret patterns from everything
-  # else BEFORE the line leaves this host.
-  services.alloy = {
-    enable = true;
-    extraFlags = [
-      # Alloy's own HTTP server: metrics and the component UI. Localhost only —
-      # this must not be reachable across mgmt. (Alloy already defaults to
-      # 127.0.0.1, unlike promtail; stated here so it cannot drift.)
-      "--server.http.listen-addr=127.0.0.1:9080"
-      # Do not report the enabled component set to Grafana. A TAPPaaS site
-      # tells no one what it runs.
-      "--disable-reporting"
-    ];
-  };
-
-  # Written to /etc rather than the store so `alloy` can reload it in place;
-  # the module watches every alloy/*.alloy file and reloads on switch.
-  environment.etc."alloy/config.alloy".text = ''
-    loki.process "journal" {
-      forward_to = [loki.write.default.receiver]
-
-      // 1. Drop journal entries from units that handle credentials.
-      stage.match {
-        selector = "{unit=~\"opnsense-controller.*|setup-caddy.*|generate-.*-secrets.*\"}"
-        action   = "drop"
-      }
-
-      // 2. Belt-and-braces: scrub common secret assignments anywhere else.
-      //
-      // Only the CAPTURE GROUPS are replaced, and `replace` is used literally —
-      // there is no $1 expansion (#724). So each expression captures the SECRET
-      // and leaves the key outside the group: the key stays readable and only
-      // the value is destroyed.
-      //
-      // These deliberately over-match: "password: permission denied" loses the
-      // word "permission", because demanding the value hug the separator would
-      // miss the very common `token: abc123`. Redacting a word that was not a
-      // secret costs readability; missing one that was costs the secret.
-      stage.replace {
-        expression = "(?i)\\b(?:token|secret|password|passwd|api[_-]?key)\\s*[:=]\\s*(\\S+)"
-        replace    = "***REDACTED***"
-      }
-
-      // 3. Scrub HTTP basic-auth in curl-like lines: -u "user:pass"
-      stage.replace {
-        expression = "-u[[:space:]]+[\"']?([^\"' ]+:[^\"' ]+)[\"']?"
-        replace    = "***REDACTED***"
-      }
-
-      // 4. Scrub Authorization headers
-      stage.replace {
-        expression = "Authorization:[[:space:]]+(?:Basic|Bearer)[[:space:]]+(\\S+)"
-        replace    = "***REDACTED***"
-      }
-    }
-
-    discovery.relabel "journal" {
-      targets = []
-
-      rule {
-        source_labels = ["__journal__systemd_unit"]
-        target_label  = "unit"
-      }
-
-      rule {
-        source_labels = ["__journal_priority_keyword"]
-        target_label  = "severity"
-      }
-    }
-
-    loki.source.journal "journal" {
-      max_age       = "12h0m0s"
-      relabel_rules = discovery.relabel.journal.rules
-      forward_to    = [loki.process.journal.receiver]
-      labels        = {
-        host = "tappaas-cicd",
-        job  = "systemd-journal",
-      }
-    }
-
-    loki.write "default" {
-      endpoint {
-        url = "http://logging.mgmt.internal:3100/loki/api/v1/push"
-      }
-    }
-  '';
+  # The mothership's journal goes to logging through the baseline's journal
+  # client (#770): tappaas-self-rebuild.sh writes /etc/nixos/tappaas-logging.nix
+  # from lib/log-shipping.sh — the same pipeline as every NixOS VM. Units that
+  # handle OPNsense credentials are dropped there (tappaas-cicd.json
+  # config."logging:logs".dropUnits) and secret patterns scrubbed before a line
+  # leaves this host.
 
   systemd.tmpfiles.rules = [
     # check-ha-health.sh records when each HA service entered a transitional

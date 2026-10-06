@@ -1,0 +1,23 @@
+{
+  "$schema": "../../../schemas/service-fields.json",
+  "service": "logging:logs",
+  "description": "The consumer's systemd journal shipped to the site's Loki by the NixOS baseline's journal client (#770), through logging's push-only receiver on tcp/3101.",
+  "fields": {
+    "dropUnits": {
+      "description": "Units whose journal lines never leave the VM, on top of the platform's generate-.*-secrets.* — the units that read or write the module's own secrets. Unit-name patterns (regex): letters, digits, _ . * @ - only.",
+      "type": "array",
+      "requiredBy": [],
+      "usedBy": [
+        "logging:logs"
+      ],
+      "default": [],
+      "items": {
+        "type": "string",
+        "example": "generate-authentik-secrets.*"
+      },
+      "class": "in-place",
+      "apply": "reconcile",
+      "changeNote": "The journal client is rewritten whole by update-os.sh on every OS update (/etc/nixos/tappaas-logging.nix) and applied by that rebuild; alloy reloads its config in place. No downtime for the module."
+    }
+  }
+}

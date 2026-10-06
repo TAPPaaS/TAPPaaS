@@ -10,8 +10,8 @@ For the catalog entry see [README.md](./README.md); for installation see
 - **Grafana** — web UI, port 3000, fronted by Caddy at `logging.<tappaas.domain>`.
 - **Grafana Alloy** (on this VM) — tails the local journal **and** receives syslog from
   OPNsense on tcp/1514 and from the Proxmox nodes on tcp/1515.
-- **Alloy clients** (on every other VM) — push their journal to
-  `http://logging.mgmt.internal:3100`.
+- **Alloy clients** (on every NixOS VM that declares `logging:logs`) — push their journal
+  to the push-only receiver `http://logging.mgmt.internal:3101` (#770).
 
 Alloy replaced Promtail in 2026-09 (#721): NixOS 26.05 removed both the promtail module
 and the package, promtail having reached end of life. Alloy embeds promtail's own
@@ -51,7 +51,8 @@ The whole stack is declared in [`logging.nix`](logging.nix).
 |---|---|---|---|
 | 22 | TCP | SSH | mgmt admins |
 | 3000 | TCP | Grafana UI | Caddy on the firewall |
-| 3100 | TCP | Loki HTTP push/query | Alloy clients on other VMs |
+| 3100 | TCP | Loki HTTP push/query | this VM; mgmt (Grafana, tests) — never opened to other zones |
+| 3101 | TCP | Push-only receiver (Alloy `loki.source.api`) → Loki | every VM's journal client (`logging:logs` pinhole) |
 | 1514 | TCP | Syslog ingest (RFC 5424) → `source=opnsense` | OPNsense firewall |
 | 1515 | TCP | Syslog ingest (RFC 5424) → `source=proxmox` | Proxmox nodes (rsyslog) |
 | 9080 | TCP | Alloy metrics and component UI (localhost only) | local |
@@ -167,61 +168,33 @@ ssh root@<node>.mgmt.internal "systemctl disable --now tappaas-guest-memory && r
 > TLS on tcp/6514 is in the v2 backlog (needs a TLS cert on `logging.mgmt.internal` and
 > a `tls_config` block on Alloy's `loki.source.syslog` listener).
 
-## Setting up an Alloy client on another VM
+## Journal shipping from other VMs — `logging:logs` (#770)
 
-Add to that VM's NixOS config. Alloy's NixOS module is deliberately thin — it enables the
-service and points it at a config directory — so the pipeline itself is written in Alloy's
-own configuration language and placed in `/etc` (not the store), which lets Alloy reload it
-in place on a `nixos-rebuild switch`:
+A module declares `integratesWith: ["logging:logs"]`. While logging is deployed,
+`update-os.sh` writes `/etc/nixos/tappaas-logging.nix` on its VM (the mothership's
+`tappaas-self-rebuild.sh` writes its own), and the NixOS baseline imports it. The
+fragment comes from one renderer, `tappaas-cicd/lib/log-shipping.sh`, so every VM runs
+the same pipeline:
 
-```nix
-services.alloy = {
-  enable = true;
-  # Localhost only: Alloy's HTTP server carries metrics and the component UI.
-  extraFlags = [
-    "--server.http.listen-addr=127.0.0.1:9080"
-    "--disable-reporting"
-  ];
-};
+1. **Drop** units that handle secrets — `generate-.*-secrets.*` everywhere, plus the
+   module's `config."logging:logs".dropUnits` (identity: the Authentik secret units;
+   tappaas-cicd: `opnsense-controller`, `setup-caddy`).
+2. **Scrub** secret assignments, `curl -u user:pass` and `Authorization:` headers (only
+   the captured value is replaced, #724).
+3. **Label** `host` (the vmname), `zone`, `unit`, `severity`, `job="systemd-journal"`.
+4. **Push** to `logging.mgmt.internal:3101`, the push-only receiver.
 
-environment.etc."alloy/config.alloy".text = ''
-  discovery.relabel "journal" {
-    targets = []
+Why a second port: Loki's 3100 answers queries without authentication, so opening it to
+an app zone would let one compromised VM there read every log on the site. 3101 is Alloy's
+`loki.source.api` on this VM, forwarding to the local Loki: it accepts pushes only.
 
-    rule {
-      source_labels = ["__journal__systemd_unit"]
-      target_label  = "unit"
-    }
-  }
+Why the firewall lets an app zone in: mgmt's `pinhole-allowed-from` is empty, so no zone
+may pinhole into it. `services/logs/pinhole.json` says `"fromZones": "any"` — honoured for
+foundation providers only — and the pinhole is still per consumer VM (its own alias to
+`tm_logging`) and to 3101 alone. A consumer outside mgmt needs `network:rules` to carry it.
 
-  loki.source.journal "journal" {
-    max_age       = "12h0m0s"
-    relabel_rules = discovery.relabel.journal.rules
-    forward_to    = [loki.write.default.receiver]
-    labels        = {
-      host = "<this-vm-hostname>",
-      job  = "systemd-journal",
-    }
-  }
-
-  loki.write "default" {
-    endpoint {
-      url = "http://logging.mgmt.internal:3100/loki/api/v1/push"
-    }
-  }
-'';
-```
-
-The service reads the journal through the module's `SupplementaryGroups = [ "systemd-journal" ]`
-and keeps its read positions under its systemd `StateDirectory` (`/var/lib/alloy`) — there is
-no positions file to declare, as there was with promtail.
-
-**Shipping credentials-handling units?** Add a `loki.process` between the source and the
-write, with `stage.match { action = "drop" }` for those units and `stage.replace` stages for
-secret patterns — see the blocks in `logging.nix` and `tappaas-cicd.nix`. Check any config
-before deploying it: `alloy validate /etc/alloy/config.alloy`.
-
-The `tappaas-cicd` mothership ships with this block pre-installed.
+No file, no Alloy: a module that does not declare `logging:logs`, or a site without
+logging, ships nothing. NixOS guests only for now.
 
 ## Useful Loki queries
 
@@ -278,8 +251,8 @@ in `config/alerts.log` on the mothership.
   copied here by `update.sh` (`/etc/secrets/grafana-alert-webhook-token`), read by the
   contact point with `$__file{…}`. `test.sh` Check 9 asserts the rules and contact
   point are provisioned, Check 10 that the receiver accepts the token.
-- **Coverage:** only hosts that ship logs here are watched — today the Proxmox nodes,
-  the firewall, the mothership and this VM. App VMs do not ship yet: #770.
+- **Coverage:** only hosts that ship logs here are watched — the Proxmox nodes, the
+  firewall, the mothership, this VM, and every NixOS VM declaring `logging:logs` (#770).
 - **The only channel.** Proxmox's own notification mails (smartd and ZED system mail,
   backup jobs, replication, fencing, updates) are switched off by `cluster/update.sh`
   Step 5c, which disables PVE's built-in `default-matcher`, so one condition does not
@@ -305,9 +278,12 @@ expected and acceptable.
 
 The mgmt zone is the trust boundary for the logging stack:
 
-- Loki accepts unauthenticated pushes on tcp/3100 from anything routable in the mgmt
-  zone. A compromised mgmt-zone VM could write spoofed-label logs or query/delete
+- Loki accepts unauthenticated pushes and queries on tcp/3100 from anything routable in
+  the mgmt zone. A compromised mgmt-zone VM could write spoofed-label logs or query/delete
   arbitrary log history.
+- tcp/3101 accepts unauthenticated pushes and nothing else, from mgmt and from each VM
+  holding a `logging:logs` pinhole. Such a VM can write lines under any label (a `host`
+  it is not), but cannot read or delete anything.
 - Alloy accepts unauthenticated RFC 5424 syslog on tcp/1514 from anywhere routable
   in mgmt.
 - Grafana web UI is on tcp/3000; the only intended access path is through Caddy in the
@@ -359,17 +335,5 @@ Mitigations in place:
   `update.sh` and runs on every install/update.
 - **No Prometheus / Alertmanager yet**: the same VM can host them when metrics-side
   alerting is added.
-- **`provides` is empty in v1**: the module does not yet expose a consumable logging
-  service. v2 adds `provides: ["logging"]` alongside the service-hook scripts so other
-  modules can `dependsOn: ["logging:logging"]` and receive an Alloy client
-  automatically.
-- **Service-hook scripts not yet written**: `services/logging/install-service.sh`,
-  `update-service.sh`, `test-service.sh`, and `delete-service.sh` need to be authored so
-  consumers declaring `dependsOn: ["logging:logging"]` get the Alloy client installed
-  and verified automatically (same drop/scrub pipeline, per-consumer `host=` label).
-- **Service hooks must open firewall pinholes**: a consumer in a non-mgmt zone (e.g.
-  `srv`, `dmz`) cannot reach `logging:3100` until an OPNsense rule permits it. The
-  `install-service.sh` hook should call into `opnsense-controller` to add a
-  per-source-zone pinhole to `logging` on tcp/3100, and the corresponding
-  `delete-service.sh` should tear it down. Without this, declaring the dependency from
-  anywhere outside mgmt produces silently-dropped logs.
+- **A consumable logging service**: ✅ done — `logging:logs` (#770), see "Journal
+  shipping from other VMs" above. Still open: Debian, HAOS, LXC and Windows guests.
