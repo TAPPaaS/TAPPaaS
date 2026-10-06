@@ -110,7 +110,7 @@ in
       # a first SSO login creates the account. While the name is unpublished
       # there is no SSO, and registration is closed altogether. The NixOS module
       # sets INSTALL_LOCK and generates SECRET_KEY / INTERNAL_TOKEN itself (no
-      # web installer); install.sh creates the local break-glass admin.
+      # web installer). No local admin is created: INSTALL.md §Local admin.
       service = {
         DEFAULT_ORG_VISIBILITY           = lib.mkDefault "private";
         DISABLE_REGISTRATION             = !published;

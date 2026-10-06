@@ -30,14 +30,11 @@ install-module.sh forgejo
 
 ## Post-install
 
-1. **Store the break-glass admin password** — `install.sh` creates the local admin
-   `tappaas-admin` and prints its password **once**. It signs in on the local form at
-   `https://forgejo.<domain>/user/login`; everyone else signs in with Authentik.
-
-   **Make yourself a Forgejo admin**: add your Authentik user to the `forgejo-admins`
-   group (`authentik-manager user-add-to-groups <user> forgejo-admins`), then sign in with
-   Authentik. Lost the break-glass password: `sudo forgejo-admin admin user change-password
-   --username tappaas-admin --password <new>` on the VM.
+1. **Make yourself a Forgejo admin** — add your Authentik user to the `forgejo-admins`
+   group (`authentik-manager user-add-to-groups <user> forgejo-admins` on tappaas-cicd),
+   then sign in with Authentik (the Forgejo tile, or *Sign in with authentik* on the login
+   page). The first login creates your Forgejo account. No local admin exists — see
+   [Local admin](#local-admin) for when you need one.
 
 2. **Configure SMTP** (optional) — SSH into the VM and edit `/var/lib/forgejo/custom/conf/app.ini`:
    ```ini
@@ -56,6 +53,40 @@ install-module.sh forgejo
    git clone git@forgejo.srvWork.internal:org/repo.git
    ```
    External SSH access requires an NAT port-forward rule — see §Customisation.
+
+## Local admin
+
+Forgejo has no standing local account: everyone signs in with Authentik. You need a local
+admin only when that cannot work — Authentik is down, `forgejo.<domain>` is not published
+(no SSO, #778), or nobody is in `forgejo-admins` yet. Create one over SSH from tappaas-cicd;
+`forgejo-admin` on the VM is the Forgejo CLI run as the service's own user:
+
+```bash
+FJ="tappaas@forgejo.$(jq -r .zone0 ~/config/forgejo.json).internal"
+ssh "$FJ" sudo forgejo-admin admin user create --admin \
+    --username tappaas-admin --email tappaas-admin@forgejo.internal --random-password
+```
+
+The command prints the generated password; sign in on the local form at
+`https://forgejo.<domain>/user/login` (Forgejo asks for a new password at the first login).
+Other things the same CLI does from tappaas-cicd:
+
+```bash
+ssh "$FJ" sudo forgejo-admin admin user list                       # who exists, who is admin
+ssh "$FJ" sudo forgejo-admin admin user change-password \
+    --username tappaas-admin --password '<new>'                     # reset a local password
+ssh "$FJ" sudo forgejo-admin admin user delete --username tappaas-admin   # done with it
+```
+
+Remove the local admin when the reason for it is gone: it signs in with a password only, without
+Authentik's MFA and rate limiting. Forgejo refuses to delete its **last** admin, so delete it
+once an Authentik admin (a `forgejo-admins` member) has signed in; until then lock it instead —
+reset its password to one nobody keeps:
+
+```bash
+ssh "$FJ" sudo forgejo-admin admin user change-password \
+    --username tappaas-admin --password "$(head -c 32 /dev/urandom | base64)"
+```
 
 ## Verification
 

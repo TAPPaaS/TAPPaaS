@@ -63,9 +63,10 @@ local sign-up is off. Members of Authentik's `forgejo-admins` group are Forgejo 
 (the groups claim carries `admin` for them, nothing for anyone else). Authentik's application
 list opens Forgejo at its SSO entry point (`/user/oauth2/authentik`).
 
-`tappaas-admin` is the local break-glass admin, created by `install.sh` with a password it
-prints once; it signs in on the local form at `/user/login`. While `forgejo.<domain>` has no
-public DNS record there is no route and no SSO (#778): the source is removed and only local
-accounts work.
+There is no standing local admin. When one is needed — Authentik down, the name unpublished,
+no `forgejo-admins` member yet — the operator creates it over SSH from tappaas-cicd
+([INSTALL.md → Local admin](INSTALL.md#local-admin)) and deletes it afterwards. While
+`forgejo.<domain>` has no public DNS record there is no route and no SSO (#778): the source is
+removed and only local accounts work.
 
 For installation steps see [INSTALL.md](./INSTALL.md).
