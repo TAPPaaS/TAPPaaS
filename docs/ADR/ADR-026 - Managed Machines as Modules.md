@@ -389,7 +389,7 @@ numbered migration with a before→after fixture. Order, because each step depen
 
 1. `debianhost` module built and tested against a real Debian machine (D3), brought in by
    `module-manager module adopt` (D8.1) — the first user of the verb. Test plan:
-   [debianhost-test-plan.md](../design/debianhost-test-plan.md), on stand-in VMs outside
+   [debianhost-test-plan.md](../plans/debianhost-test-plan.md), on stand-in VMs outside
    TAPPaaS (VMID 990+) on the test site. This comes **before** #665 (operator, 2026-09-18):
    `adopt` needs nothing from it, and #665 can then register the nodes *through* `adopt`.
 2. ADR-012's fourth topology verified on it (PBS on a non-cluster machine).

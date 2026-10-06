@@ -18,4 +18,4 @@ boolean override, `adopt --set` — are `tappaas-cicd/scripts/test/test-ssh-key-
 `test-adopt.sh`; migration 0013 has `test-migration-0013-key-only.sh`.
 
 The live test plan — stand-in VMs outside TAPPaaS, `adopt`, the lifecycle, removal, PXE — is
-[docs/design/debianhost-test-plan.md](../../../docs/design/debianhost-test-plan.md).
+[docs/plans/debianhost-test-plan.md](../../../docs/plans/debianhost-test-plan.md).

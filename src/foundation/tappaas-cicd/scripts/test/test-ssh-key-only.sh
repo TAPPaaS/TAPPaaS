@@ -12,7 +12,7 @@
 #      string "false"), and a non-boolean is refused.
 #
 # The live half — a real Debian machine adopted, hardened, opened again — is in
-# docs/design/debianhost-test-plan.md, phase 3.
+# docs/plans/debianhost-test-plan.md, phase 3.
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

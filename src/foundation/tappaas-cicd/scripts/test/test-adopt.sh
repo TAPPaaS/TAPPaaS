@@ -4,7 +4,7 @@
 # Zone from the address (most specific active subnet wins; switched-off zones
 # and non-zone entries are skipped; no match is a refusal), and module from the
 # OS (one module per OS, no near match). Reaching and learning a machine is the
-# live test: docs/design/debianhost-test-plan.md phases 1-2.
+# live test: docs/plans/debianhost-test-plan.md phases 1-2.
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
