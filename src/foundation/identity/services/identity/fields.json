@@ -46,6 +46,12 @@
           "description": "systemd unit on the module VM to restart after writing the env so the app registers the provider (e.g. nextcloud-configure-oidc.service). Empty defaults to <base>-configure-oidc.service (best-effort restart; warns if absent). Set to \"none\" for modules that register the provider themselves via the app's API (e.g. Portainer on Debian) — no unit is restarted.",
           "type": "string",
           "default": ""
+        },
+        "launchPath": {
+          "description": "Absolute path on the module's public domain where Authentik's application list (My applications) opens the app: its SSO entry point, so a user already signed in to Authentik goes straight in instead of landing on the app's own login screen (e.g. Immich /auth/login?autoLaunch=1, Grafana /login/generic_oauth). Unset: Authentik's default, the app's front page.",
+          "type": "string",
+          "required": false,
+          "example": "/auth/login?autoLaunch=1"
         }
       },
       "class": "in-place",

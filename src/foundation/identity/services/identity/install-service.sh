@@ -106,6 +106,12 @@ PROVIDES_ADMIN="$(echo "${JSON}" | jq -r '.identity.providesAdminRole // false')
 ADMIN_CLAIM="$(echo "${JSON}" | jq -r '.identity.adminGroupClaim // empty')"
 mapfile -t REDIRECT_PATHS < <(echo "${JSON}" | jq -r '(.identity.oidcRedirectPaths // ["/apps/user_oidc/code"])[]')
 mapfile -t OIDC_SCOPES   < <(echo "${JSON}" | jq -r '(.identity.scopes // [])[]')
+# identity.launchPath: where Authentik's application list opens the app -- its
+# SSO entry point, so a user signed in to Authentik goes straight in instead of
+# landing on the app's own login screen. Unset: Authentik's default (front page).
+LAUNCH_PATH="$(echo "${JSON}" | jq -r '.identity.launchPath // empty')"
+[[ -z "${LAUNCH_PATH}" || "${LAUNCH_PATH}" == /* ]] \
+    || die "identity.launchPath must be an absolute path on the module's domain (got '${LAUNCH_PATH}')"
 
 # The base module name (strip the -<environment> suffix) — used for the VM
 # secrets path and the module-admin group, so an environment install shares the
@@ -183,6 +189,7 @@ declare -a oidc_args=("oidc-app-ensure" "${SLUG}" "--name" "${MODULE}" \
     "--description" "TAPPaaS OIDC for ${MODULE} (ADR-006)" "--show-secret")
 for p in "${REDIRECT_PATHS[@]}"; do oidc_args+=("--redirect-uri" "https://${PROXY_DOMAIN}${p}"); done
 for s in "${OIDC_SCOPES[@]}"; do oidc_args+=("--scope" "${s}"); done
+[[ -n "${LAUNCH_PATH}" ]] && oidc_args+=("--launch-url" "https://${PROXY_DOMAIN}${LAUNCH_PATH}")
 
 if [[ "${DRY_RUN}" -eq 1 ]]; then
     debug "  ${YW}[dry-run]${CL} oidc: ${AUTHENTIK_MANAGER} ${oidc_args[*]}"
