@@ -45,7 +45,6 @@ Source: the [Security design](https://tappaas.org/what/security-design/). Depth:
 | `cluster:ha` | High-availability placement |
 | `templates:nixos` | NixOS base image |
 | `backup:vm` | VM registered with Proxmox Backup Server |
-| `identity:identity` | Secrets and identity management |
 | `network:proxy` | HTTPS reverse proxy, allowed from the `internet` zone |
 
 For installation steps see [INSTALL.md](./INSTALL.md).

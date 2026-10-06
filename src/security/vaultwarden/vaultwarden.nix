@@ -15,8 +15,8 @@
 # Architecture:
 # - Native NixOS services.vaultwarden (lightweight, no container)
 # - SQLite backend (default, sufficient for SMB/home use)
-# - Environment file for secrets (ADMIN_TOKEN, SMTP); DOMAIN and SSO come from
-#   vaultwarden-configure-oidc (#769)
+# - Environment file for secrets (ADMIN_TOKEN, SMTP); DOMAIN comes from
+#   vaultwarden-site-url. No SSO: the vault keeps its own accounts
 #
 # Network: DMZ zone (VLAN 610, 10.6.0.0/24)
 # Firewall: ports 22 (SSH) + 8222 (VaultWarden HTTP)
@@ -35,8 +35,8 @@ let
   # The site's own values (#769), not ours to guess: update-os.sh deploys the
   # module's config beside this file as /etc/nixos/vaultwarden.json, with the
   # name the proxy publishes it under and whether that name has a public record
-  # (#715) — the logging.nix idiom. Unpublished, there is no https URL and no
-  # SSO redirect can exist, so DOMAIN is the honest internal address.
+  # (#715) — the logging.nix idiom. Unpublished, there is no https URL, so
+  # DOMAIN is the honest internal address.
   moduleCfg   = if builtins.pathExists ./vaultwarden.json
                 then builtins.fromJSON (builtins.readFile ./vaultwarden.json)
                 else {};
@@ -46,7 +46,7 @@ let
   port        = 8222;
   domain      = if published then "https://${proxyDomain}"
                 else "http://${moduleCfg.vmname or "vaultwarden"}.${moduleCfg.zone0 or "dmz"}.internal:${toString port}";
-  ssoEnv      = "/etc/secrets/vaultwarden-sso.env";
+  siteEnv     = "/etc/secrets/vaultwarden-site.env";
 in
 {
   # ============================================================================
@@ -125,9 +125,9 @@ in
     backupDir = "/var/backup/vaultwarden";
 
     # ADMIN_TOKEN and SMTP: generated on first boot (generate-vaultwarden-secrets
-    # below). DOMAIN and SSO: vaultwarden-configure-oidc (#769). Later files win,
-    # so its DOMAIN replaces the placeholder older installs wrote into the first.
-    environmentFile = [ "/var/lib/vaultwarden/vaultwarden.env" ssoEnv ];
+    # below). DOMAIN: vaultwarden-site-url. Later files win, so its DOMAIN
+    # replaces the placeholder older installs wrote into the first.
+    environmentFile = [ "/var/lib/vaultwarden/vaultwarden.env" siteEnv ];
 
     config = {
       SIGNUPS_ALLOWED = false;
@@ -137,82 +137,61 @@ in
       ROCKET_PORT = port;
       ROCKET_LOG = "critical";
 
-      # DOMAIN, SSO_*, ADMIN_TOKEN and SMTP_* are set via environmentFile
+      # DOMAIN, ADMIN_TOKEN and SMTP_* are set via environmentFile
     };
   };
 
   # ============================================================================
-  # SITE URL + SSO (#769)
+  # SITE URL — no SSO
   # ============================================================================
   #
-  # identity:identity registers an OIDC application for this module and writes
-  # its client to /etc/secrets/vaultwarden.env (OIDC_CLIENT_ID / _SECRET /
-  # _DISCOVERY_URI). This unit is the module's half of that contract — the
-  # identity.configureService it restarts after writing — and turns it into
-  # Vaultwarden's own settings: DOMAIN, and SSO_* (Vaultwarden >= 1.35).
+  # Vaultwarden is deliberately NOT behind the site's single sign-on: the
+  # password vault must not open with — or stop opening without — the identity
+  # provider, so it keeps its own accounts and master passwords. #769 had wired
+  # identity:identity's OIDC client into SSO_*; that is withdrawn (0.6.0).
   #
-  # SSO is on only when everything it needs is real: a published https name (the
-  # redirect is DOMAIN + /identity/connect/oidc-signin), the client, and a
-  # readable discovery document (its issuer is SSO_AUTHORITY). Otherwise it is
-  # written off, and the unit still succeeds — a vault without SSO is a working
-  # vault. SSO_ONLY stays off: the master password still decrypts the vault, and
-  # an account reached by SSO is still matched by e-mail. The file is always
-  # written, because Vaultwarden's EnvironmentFile list does not tolerate a
-  # missing one.
-  systemd.services.vaultwarden-configure-oidc = {
-    description = "Write Vaultwarden's site URL and SSO settings from the identity provider";
+  # This unit writes the one site value Vaultwarden needs, DOMAIN (https on the
+  # published name, else the internal address), and pins SSO_ENABLED=false so
+  # nothing an older install wrote can turn it back on. The file is loaded after
+  # vaultwarden.env, whose placeholder DOMAIN older installs still carry, and is
+  # always written: Vaultwarden's EnvironmentFile list does not tolerate a missing
+  # one. The OIDC client identity:identity left in /etc/secrets/vaultwarden.env
+  # is removed — its Authentik application is gone with the dependency.
+  systemd.services.vaultwarden-site-url = {
+    description = "Write Vaultwarden's site URL";
     wantedBy = [ "multi-user.target" ];
     before = [ "vaultwarden.service" ];
-    after = [ "local-fs.target" "network-online.target" ];
-    wants = [ "network-online.target" ];
+    after = [ "local-fs.target" ];
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;
     };
     script = ''
       set -uo pipefail
-      PATH="${pkgs.coreutils}/bin:${pkgs.gnugrep}/bin:${pkgs.curl}/bin:${pkgs.jq}/bin:${pkgs.systemd}/bin:$PATH"
-      OUT=${ssoEnv}
-      OIDC=/etc/secrets/vaultwarden.env
+      PATH="${pkgs.coreutils}/bin:${pkgs.systemd}/bin:$PATH"
+      OUT=${siteEnv}
       mkdir -p /etc/secrets
-      readvar() { [ -f "$1" ] && grep -m1 "^$2=" "$1" 2>/dev/null | cut -d= -f2- || true; }
+      rm -f /etc/secrets/vaultwarden.env /etc/secrets/vaultwarden-sso.env
 
-      NEW="DOMAIN=${domain}"$'\n'
-      CID="$(readvar "$OIDC" OIDC_CLIENT_ID)"
-      CSE="$(readvar "$OIDC" OIDC_CLIENT_SECRET)"
-      DIS="$(readvar "$OIDC" OIDC_DISCOVERY_URI)"
-      SSO=off
-      if ${lib.boolToString published} && [ -n "$CID" ] && [ -n "$CSE" ] && [ -n "$DIS" ]; then
-        ISS="$(curl -fsS --max-time 20 "$DIS" 2>/dev/null | jq -r '.issuer // empty' 2>/dev/null || true)"
-        if [ -n "$ISS" ]; then
-          NEW="$NEW""SSO_ENABLED=true"$'\n'"SSO_ONLY=false"$'\n'"SSO_AUTHORITY=$ISS"$'\n'
-          NEW="$NEW""SSO_CLIENT_ID=$CID"$'\n'"SSO_CLIENT_SECRET=$CSE"$'\n'"SSO_SCOPES=email profile"$'\n'
-          SSO=on
-        else
-          echo "vaultwarden-configure-oidc: discovery document unreadable at $DIS — SSO left off" >&2
-        fi
-      fi
-      [ "$SSO" = on ] || NEW="$NEW""SSO_ENABLED=false"$'\n'
-
+      NEW="DOMAIN=${domain}"$'\n'"SSO_ENABLED=false"$'\n'
       OLD="$(cat "$OUT" 2>/dev/null || true)"
       if [ ! -f "$OUT" ] || [ "$OLD"$'\n' != "$NEW" ]; then
-        T="$(mktemp /etc/secrets/.vaultwarden-sso.XXXXXX)"
+        T="$(mktemp /etc/secrets/.vaultwarden-site.XXXXXX)"
         printf '%s' "$NEW" > "$T"
         chmod 600 "$T"
         mv -f "$T" "$OUT"
-        echo "vaultwarden-configure-oidc: DOMAIN=${domain}, SSO $SSO — updated"
-        # --no-block: vaultwarden is ordered after this unit, so waiting on its
-        # restart from in here would wait on ourselves.
+        echo "vaultwarden-site-url: DOMAIN=${domain} — updated"
+        # --no-block: vaultwarden is ordered after this unit.
         systemctl try-restart --no-block vaultwarden.service || true
       else
-        echo "vaultwarden-configure-oidc: DOMAIN=${domain}, SSO $SSO — no change"
+        echo "vaultwarden-site-url: DOMAIN=${domain} — no change"
       fi
     '';
   };
 
   systemd.services.vaultwarden = {
-    wants = [ "vaultwarden-configure-oidc.service" "vaultwarden-smtp-unset-empty.service" ];
-    after = [ "vaultwarden-configure-oidc.service" "vaultwarden-smtp-unset-empty.service" ];
+    wants = [ "vaultwarden-site-url.service" "vaultwarden-smtp-unset-empty.service" ];
+    after = [ "vaultwarden-site-url.service" "vaultwarden-smtp-unset-empty.service" ];
   };
 
   # ============================================================================
@@ -239,7 +218,7 @@ in
         cat > /var/lib/vaultwarden/vaultwarden.env <<EOF
 # VaultWarden secrets - auto-generated on first boot
 # Edit the SMTP settings for your deployment. DOMAIN is not set here: it is
-# the site's, written by vaultwarden-configure-oidc (#769).
+# the site's, written by vaultwarden-site-url.
 ADMIN_TOKEN=$ADMIN_TOKEN
 
 # SMTP configuration - uncomment and fill in for your mail server.

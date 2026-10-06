@@ -4,7 +4,7 @@ Computed from every module's `<module>.json` (`dependsOn: "provider:service"`).
 Three views: the platform plumbing every module uses, the application topology
 worth drawing, and the complete per-module reference.
 
-_Generated: 2026-10-03 by generate-module-dependencies.sh from 22 modules / 86 dependencies — do not edit by hand._
+_Generated: 2026-10-06 by generate-module-dependencies.sh from 26 modules / 103 dependencies — do not edit by hand._
 
 ## 1. Platform plumbing
 
@@ -12,15 +12,15 @@ These foundation services are consumed near-universally; drawing them would
 bury the interesting structure. A module uses them unless its entry in the
 reference below says otherwise.
 
-| Service | Consumers (of 22 modules) |
+| Service | Consumers (of 26 modules) |
 |---------|----------|
-| `cluster:vm` | 15 |
-| `backup:vm` | 14 |
-| `network:proxy` | 13 |
-| `templates:nixos` | 10 |
-| `network:rules` | 8 |
+| `cluster:vm` | 18 |
+| `backup:vm` | 17 |
+| `network:proxy` | 16 |
+| `templates:nixos` | 13 |
+| `network:rules` | 11 |
 | `identity:identity` | 6 |
-| `cluster:ha` | 5 |
+| `cluster:ha` | 6 |
 
 ## 2. Application topology
 
@@ -36,6 +36,7 @@ graph TD
     hass -->|"audio, airplay"| sonos
     hass -->|"rtsp"| reolink
     hass -->|"ui, discovery, modbus"| alfen
+    jellyfin -->|"nfs"| storage
     netbird-client -->|"debian"| templates
     nextcloud-hpb -->|"fileservice"| nextcloud
     nextcloud-hpb -->|"turn"| coturn
@@ -60,8 +61,11 @@ Every dependency of every module, verbatim from the json contracts.
 | **debianhost** | — |
 | **deconz** | `cluster:vm` `templates:nixos` `backup:vm` `network:proxy` `network:rules`  |
 | **euro-office** | `cluster:vm` `templates:nixos` `backup:vm` `network:proxy` `network:rules` `nextcloud:fileservice`  |
+| **forgejo** | `cluster:vm` `templates:nixos` `backup:vm` `network:proxy` `network:rules`  |
 | **hass** | `cluster:vm` `backup:vm` `network:proxy` `network:rules` `alfen:ui` `alfen:discovery` `alfen:modbus` `sonos:audio` `sonos:airplay` `reolink:rtsp`  |
 | **identity** | `cluster:vm` `cluster:ha` `templates:nixos` `backup:vm` `network:proxy`  |
+| **immich** | `cluster:vm` `cluster:ha` `templates:nixos` `backup:vm` `network:proxy` `network:rules` `identity:identity`  |
+| **jellyfin** | `cluster:vm` `backup:vm` `network:proxy` `network:rules` `storage:nfs` `templates:nixos`  |
 | **litellm** | `cluster:vm` `templates:nixos` `backup:vm` `network:proxy` `network:rules` `identity:identity`  |
 | **logging** | `cluster:vm` `templates:nixos` `backup:vm` `network:proxy` `identity:identity`  |
 | **netbird-client** | `cluster:vm` `cluster:ha` `templates:debian` `backup:vm` `identity:identity` `network:proxy`  |
@@ -71,8 +75,9 @@ Every dependency of every module, verbatim from the json contracts.
 | **openwebui** | `cluster:vm` `templates:nixos` `backup:vm` `network:proxy` `litellm:models` `network:rules` `identity:identity`  |
 | **pvehost** | — |
 | **satellite** | — |
+| **storage** | — |
 | **tappaas-cicd** | `cluster:vm` `cluster:ha`  |
 | **templates** | — |
-| **vaultwarden** | `cluster:vm` `cluster:ha` `templates:nixos` `backup:vm` `identity:identity` `network:proxy`  |
+| **vaultwarden** | `cluster:vm` `cluster:ha` `templates:nixos` `backup:vm` `network:proxy`  |
 | **vllm-amd** | `cluster:lxc` `backup:vm`  |
 | **windows-server** | `cluster:vm` `templates:windows` `backup:vm` `network:proxy`  |

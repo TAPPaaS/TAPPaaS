@@ -30,29 +30,29 @@ On first boot the VM auto-generates an `ADMIN_TOKEN` into
 2. Edit `/var/lib/vaultwarden/vaultwarden.env` on the VM:
    - `SMTP_*` — mail server settings for account verification and notifications.
 
-   `DOMAIN` is not yours to edit: `vaultwarden-configure-oidc` writes it from the site's
+   `DOMAIN` is not yours to edit: `vaultwarden-site-url` writes it from the site's
    published name (`https://vaultwarden.<domain>`), or the internal address while that name
-   has no public record (#769).
+   has no public record.
 
    Then restart the service: `sudo systemctl restart vaultwarden`.
 
 3. Log in to `https://vaultwarden.<domain>/admin` with the `ADMIN_TOKEN` and create/invite
    users (public signups are disabled).
 
-## Single sign-on
+## No single sign-on
 
-`identity:identity` registers Vaultwarden with the site's Authentik, and
-`vaultwarden-configure-oidc` turns that into Vaultwarden's `SSO_*` settings (#769). The web
-vault then offers *Use single sign-on*. SSO is on only when the name is published, the client
-is registered and Authentik's discovery document is readable; otherwise it is off and
-password login works as before. It never replaces the master password, which still decrypts
-the vault, and with public signups disabled a new SSO user still needs an invitation.
+Vaultwarden is deliberately not behind the site's Authentik: the password vault must neither
+open with the identity provider nor stop opening without it. Users sign in with their e-mail
+and master password; there is no Authentik tile for it. `SSO_ENABLED=false` is pinned, and an
+install that had SSO (#769, before 0.6.0) loses it on the next update — Authentik's
+application and the OIDC client on the VM are removed. An account that was reached by SSO keeps
+its master password and signs in with it.
 
 ## Verification
 
     test-module.sh vaultwarden
 
-Note: this module does not yet ship an automated `test.sh`; verify manually:
+`test.sh` checks the service, `/alive`, the site URL, and that SSO is off. By hand:
 
 | Check | Expected |
 |-------|----------|
@@ -69,14 +69,9 @@ It persists in `/var/lib/vaultwarden/vaultwarden.env` on the VM:
 `sudo cat /var/lib/vaultwarden/vaultwarden.env`.
 
 **Links or vault URLs point at `example.com` or the internal address**
-`DOMAIN` comes from `/etc/secrets/vaultwarden-sso.env`, written by
-`vaultwarden-configure-oidc` (#769). An internal address means the public name has no DNS
-record yet; once it has, the next update writes the https URL. Check with
-`journalctl -u vaultwarden-configure-oidc`.
-
-**No "Use single sign-on" button**
-SSO is off: see `journalctl -u vaultwarden-configure-oidc` for why (no public name, no
-registered client, or the discovery document was unreadable).
+`DOMAIN` comes from `/etc/secrets/vaultwarden-site.env`, written by `vaultwarden-site-url`.
+An internal address means the public name has no DNS record yet; once it has, the next update
+writes the https URL. Check with `journalctl -u vaultwarden-site-url`.
 
 **No verification / invitation emails**
 SMTP is not configured. Uncomment and fill in the `SMTP_*` lines in the environment file (see
