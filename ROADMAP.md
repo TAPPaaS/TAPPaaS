@@ -35,6 +35,9 @@ Markers:
   the release that carried it.
 - A row with no tick is still to do. Planning the next step is reading down a wave and stopping at
   the first unticked line.
+- A group opens with **what it is for and what it still intends to do**, in at most three lines.
+  How it got there — status logs, measurements, decisions on the way — is on the issues and in
+  git; the full group text as it was is [ROADMAP.md at `a23ca653`](https://codeberg.org/TAPPaaS/TAPPaaS/src/commit/a23ca653d20996314f473beee1e9b07db8b3304c/ROADMAP.md).
 - An issue's note is **at most two lines** (200 characters): its status, the date, the commit and the
   one fact that matters. The detail — investigation, decision, how it was proven — belongs on the
   issue. Notes were cut to this on 2026-10-06; the full text as it was is
@@ -240,6 +243,8 @@ New capabilities with low upgrade risk.
 
 ### G4.1 Alerting & cluster resilience — E3 · R3 · L-M · done for 2.2: 3 · open: 5
 
+Be told when something breaks, and survive more of it. Built: alerts from Loki by mail, every VM's logs in Loki. Next: a notice when a whole site goes dark (#776), Loki authentication (#165), a mail relay (#125), a second corosync link (#590).
+
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
 | ✅ #126 | Alerting from Loki through the #651 channel (was: no alerts for quorum loss / node dropout) | 3 | 3 | M | **Closed 2026-10-04.** Grafana alerting from Loki: 9 rules, mailed via `site-notify.sh`, heartbeat watchdog; all fired live on hrossen. Follow-up: app VMs ship no logs (#770) |
@@ -253,6 +258,8 @@ New capabilities with low upgrade risk.
 
 ### G4.2 Proxy & ingress — E3 · R2 · L-L · released in 2.1: 1 · open: 4
 
+Publish less of each app: limit a route to some paths (#642), some zones (#643) or a provider's source addresses (#656), as ADR-023 describes. Decide whether an internal proxy is needed at all (#154).
+
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
 | #642 | Limit a route to paths | 3 | 2 | L | ADR-023, approved by Erik 2026-09-14 |
@@ -261,6 +268,8 @@ New capabilities with low upgrade risk.
 | #154 | `firewall:internal-proxy` | — | — | — | Close? Lars questioned the need (2026-05-31) |
 
 ### G4.3 Manager verb gaps — E3 · R2 · L-L · released in 2.1: 4 · done for 2.2: 2 · open: 8
+
+The verbs operators otherwise do by hand: install a whole stack (#763), suspend a module (#428), migrate by changing `.node` (#429), `test` verbs (#499), private repositories (#634), module-level `--set` rules (#654). #444/#582 wait on a discussion.
 
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
@@ -277,6 +286,8 @@ New capabilities with low upgrade risk.
 
 ### G4.4 Storage & physical devices — E2 · R2 · L-M · released in 2.1: 2 · done for 2.2: 2 · open: 6
 
+Shared storage and the physical network as managed parts of a site: the rest of the NFS service (#772), a machine's zone enforced at its switch port (#668, #697), controller modules that register their devices (#731), device modules (#155).
+
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
 | ✅ #388 | `cluster:storage` (NFS first) | 1 | 2 | M | **Closed 2026-10-06:** met by `storage:nfs` (ADR-029, built in #766, live with Jellyfin's share on hrossen). Remaining work: #772; NFS over TLS: #771 |
@@ -289,6 +300,8 @@ New capabilities with low upgrade risk.
 | FW #158 | Multi-NIC module firewall rules | 3 | 1 | L | Optional roll-in |
 
 ### G4.5 Governance, CI & sign-offs — E3 · R1 · L-L · released in 2.1: 2 · done for 2.2: 1 · open: 7
+
+The project's own machinery: CI runners (#415), community-health files (#486), the remaining sign-offs and ADRs (#406, #359), a tool for urgent patches (#746), a logging-function lint (#747), a service-desk spike (#63).
 
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
@@ -303,12 +316,13 @@ New capabilities with low upgrade risk.
 
 ---
 
-
 ## Wave 3 — stability & correctness
 
 Low upgrade risk. Build continuously, in any order within a group.
 
 ### G3.1 cluster:vm lifecycle & capacity — E4 · R3 · L-L · released in 2.1: 7 · done for 2.2: 5 · open: 8
+
+Guests sized, placed, started and stopped right: memory defaults from measurement (#663), hardware drift (#531), shutdown and boot order (#36, #127), storage growth and placement (#100, #403), a composite-module ADR (#761), and a sweep that survives a guest restarting itself (#753).
 
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
@@ -328,6 +342,8 @@ Low upgrade risk. Build continuously, in any order within a group.
 
 ### G3.2 Identity & SSO wiring — E3 · R2 · L-L · released in 2.1: 1 · done for 2.2: 2 · open: 6
 
+Every app wired to the identity provider the same way: OIDC for hass, Nextcloud and forgejo (#345, #401, #282), a site-specific login page (#479), logging's SSO dependency (#701), and a test for forward-auth (#752).
+
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
 | #345 | hass: appliance-aware OIDC staging | 3 | 2 | L | |
@@ -340,6 +356,8 @@ Low upgrade risk. Build continuously, in any order within a group.
 | ✅ #769 | vaultwarden: SSO is registered but never wired into the app | 3 | 2 | L | **Closed 2026-10-04** (SSO wired, `e184ea9d`). **Reversed 2026-10-06, vaultwarden 0.6.0:** no SSO for the password vault, by decision — see vaultwarden DESIGN.md |
 
 ### G3.3 App module fixes — E4 · R2 · L-L · released in 2.1: 5 · done for 2.2: 1 · open: 12
+
+The known rough edges of the app modules, fixed and tested so they stay fixed: Nextcloud Talk end to end (#715), Home Assistant (#552, #568, #571 — maintainer-owned), Nextcloud and euro-office (#332, #658, #751), litellm consumers (#553), windows-server (#411), forgejo (#283, #284), in-guest backups (#754).
 
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
@@ -359,6 +377,8 @@ Low upgrade risk. Build continuously, in any order within a group.
 
 ### G3.4 AI stack maturity — E3 · R3 · L-L · released in 2.1: 1 · open: 6
 
+A production-grade AI stack: LiteLLM and Open WebUI tested (#119, #120), hardened (#121) and kept current (#621), LiteLLM sized for its workers (#677), and vLLM's models recoverable after a restore (#758).
+
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
 | #120 | litellm test.sh conventions | 4 | 1 | L | 2 of 6 items done |
@@ -370,6 +390,8 @@ Low upgrade risk. Build continuously, in any order within a group.
 
 ### G3.5 Installer UX — E4 · R1 · L-L · open: 4
 
+A first install that is easier to get through: resumable (#377), showing its progress (#266), asking only what the hardware needs (#405), reusing what it already downloaded (#83).
+
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
 | #377 | Installer cannot restart; mgmt-net routing | 3 | 1 | L | |
@@ -379,15 +401,13 @@ Low upgrade risk. Build continuously, in any order within a group.
 
 ---
 
-
 ## Wave 2 — network behaviour hardening
 
-These change live firewall and DNS behaviour on every installation. They are
-not schema migrations, but anything users rely on today (reaching the GUI
-from `home`, say) gets harder to take away later. Every item needs the #645
-dry-run to show the rule diff before `--apply`.
+Changes to live firewall and DNS behaviour on every installation. Restrictive defaults get harder to introduce the longer users rely on permissive ones, so they come early; every change shows its dry-run diff (#645) before `--apply`.
 
 ### G2.1 Firewall exposure & rule order — E3 · R4 · L-M · released in 2.1: 3 · done for 2.2: 4 · open: 13
+
+Tighter firewall defaults that keep what modules need. Built: the gateway, GUI/SSH and anti-spoofing rules. Next: pinholes shadowed by private-range blocks (#386), lasting NetBird rules (#385, #222), a pinned OPNsense CA (#310), and the rules manager's zones, aliases and overlaps.
 
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
@@ -411,6 +431,8 @@ dry-run to show the rule diff before `--apply`.
 
 ### G2.2 DNS resolver robustness — E4 · R3 · L-M · released in 2.1: 4 · open: 5
 
+A resolver that holds up: a working Unbound restart (#387), a written IPv6 stance (#149), DNSSEC with split horizon (#263), public DNS that follows a dynamic WAN address (#383), and optional blocklists (#157).
+
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
 | #387 | Unbound rc.d restart fails (Python mismatch) | 4 | 2 | M | |
@@ -421,23 +443,13 @@ dry-run to show the rule diff before `--apply`.
 
 ---
 
-
 ## Wave 1 — the breaking-change window
 
-Everything here renames, re-schemas or rebuilds. Land it in one or two
-coordinated releases, each with migrations (G0.1), release notes listing the
-migrations, and an **upgrade test from a `v2.0` install** on the test system,
-not only a fresh install.
+Everything that renames, re-schemas or rebuilds, landed while few installations depend on today's shapes — each change with its migration and an upgrade test from the current `stable`, not only a fresh install.
 
 ### ✅ G1.1 Vocabulary & classification (ADR-022 family) — E2 · R4 · L-H · released in 2.1: 11 · done for 2.2: 3
 
-Settle the words before they spread further into schemas, CLI names and
-`config/` paths.
-
-Status: **Completed 2026-10-03** — every issue below is closed. **ADR-022 family accepted 2026-09-18** (022 and 022a–h, v1.0). #611 and #628
-landed on `main`. ADR-007a/006 (People → Identity) are Erik's edits; the operator
-assumes they will follow and **implementation does not wait for them** (2026-09-18).
-The `tier` → `scope` change (ADR-022e) — **#676** — landed 2026-09-28: scope is derived from `stack` (ADR-022e v1.1), no migration. #674, the blueprint check, landed the same day (below). Follow-up, not part of G1.1: one release later, removing the `tier` fallback and its schema entry.
+Settle the words before they spread into schemas, CLI names and `config/` paths: the ADR-022 vocabulary — `kind`, scope derived from stack, People → Identity — everywhere. Left for a later release: removing the `tier` fallback.
 
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
@@ -447,22 +459,7 @@ The `tier` → `scope` change (ADR-022e) — **#676** — landed 2026-09-28: sco
 
 ### G1.2 Backup placement model + managed machines (ADR-012, ADR-026) — E3 · R4 · L-H · released in 2.1: 20 · done for 2.2: 6 · open: 2
 
-**ADR-026 — managed machines as modules** joins this group (2026-09-18): every machine
-TAPPaaS manages becomes a module of `kind: machine`, which is what makes ADR-012's
-fourth topology — a local PBS on a machine that is not a cluster member — something
-the model can express and patch. The two are one piece of work because a backup
-`application` needs a Host the model knows.
-
-Status: **landed on `main` 2026-09-19** (1f57509b, fast-forward of `wave1/g1.2-module-source`):
-ADR-026 D6, #602, `debianhost` + `module adopt`, #665 stage 1 (`pvehost`), `location` →
-`moduleSource` (migration 0006), #609, #607, #612, #600 (migration 0007), #603, #601, #457,
-#554, #456; §1.3 verified (test plan phase 6). Rolled out on makerfloss the same day (both
-migrations applied, nodes registered, `backup.mgmt.internal` a CNAME, 9/9 modules updated).
-Left: #407 sign-off; stage 2 of ADR-026 D4 (node patching behind `pvehost`); the
-`debianhost` follow-ups #755 (cicd-key coverage, a lockout hazard) and #756 (key-only SSH);
-phase 5 of the debianhost test plan (PXE) is #757, in Future Work. The satellite as a module (#670, ADR-010 §8.4, ADR-026 D4 stage 5)
-landed and was closed 2026-09-20; its deep test (#671, after the operator's travel) is the
-remaining validation.
+Backups where the operator chooses — a node, a managed machine, an external PBS or the satellite — encrypted, with every machine TAPPaaS manages a module (ADR-012, ADR-026). Left: the satellite's live test on a real VPS (#671) and converting makerfloss's satellite (#775).
 
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
@@ -475,17 +472,7 @@ remaining validation.
 
 #### ADR-012 close-out (original scope)
 
-**Gate met 2026-09-18: ADR-012 v1.0 accepted** (operator, with the four design decisions below). The `docs(ADR-012)` issues are settled in the ADR; each row now says what is left to *build*.
-
-**Order (operator, 2026-09-18): machines-as-modules first** — every step of it is done
-(ADR-026 D6.3/D6.4, `debianhost` + `module adopt`, #665 stage 1, #612, #600 with migration
-0007, #603, #601, #607, #609, #602; #457, #554 and #456 as they fit). What the ordering
-was for — `node` becoming a pointer to a machine instance, and the PBS's DNS alias with
-it — is in place, so the rows below stand on their own.
-
-Most of the remaining 2.0 milestone. The placement *state* values are
-persisted in `config/backup.json` on every install, so the vocabulary change
-is a migration.
+ADR-012 v1.0's design decisions, built.
 
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
@@ -494,23 +481,7 @@ is a migration.
 
 ### ✅ G1.3 Module contract & repo layout — E2 · R5 · L-H · released in 2.1: 6 · done for 2.2: 2
 
-What community modules copy and what deployed configs point at.
-
-Status: landed 2026-09-20 — `wave1/g1.3-module-contract` merged to `main` after a green
-sweep on hrossen (16/16 modules; 124 bash + 394 TypeScript assertions). Built: #500
-(ahead of the entry gate, operator 2026-09-19; ADR-025 D14), #349 (operator go,
-2026-09-19; ADR-007c v1.5), #566 (ADR-026 D6.4a), #248, #463 (ADR-004 amended). #363 is
-**Proposed** as ADR-027 (no Erik sign-off needed); **#674** built what remained of it on
-2026-09-28 — the blueprint check (`module-manager validate --blueprint`, enforced at every
-release boundary) and the sweep of the 15 incomplete service directories. Every TAPPaaS
-module now meets the blueprint; ADR-027 is v0.5. Still open in this group: #421 and #294
-(parked for Erik) and #430. Two defects found while assessing the merge and fixed on the branch: the
-instance rename could not be previewed (`--dry-run` never reached `rename-instance.sh`),
-and #463 had removed the catalogue `source` that `kind.ts` used, which would have made
-every module with no authored `kind` a `vm` — a repository now states its source once.
-**Parked until the operator has agreed them with Erik:** #421 (`src/apps` into stacks),
-#294 (VMID scheme) and #430 (controller pattern). #250 left the wave 2026-09-20 — Future
-Work.
+One module contract — what community modules copy and deployed configs point at: version and status rules, one catalogue, the blueprint check at every release, modules grouped by stack, and a tool to move them ([MOVE-MODULE.md](src/foundation/tappaas-cicd/MOVE-MODULE.md)).
 
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
@@ -519,50 +490,7 @@ Work.
 
 ### ✅ G1.4 Common NixOS baseline — E2 · R4 · L-H · released in 2.1: 14 · done for 2.2: 5
 
-One shared baseline for every NixOS VM. Landing it rebuilds every VM once,
-so bundle all baseline changes into that one rebuild.
-
-Status: **complete 2026-10-04** — #324 closed: every NixOS VM and the mothership import the baseline. **#408, #472 and #87 built and verified on hrossen 2026-09-21**
-(`wave1/g1.4-nixos-baseline`, merged to `main`). The site's own answers now reach every
-guest: `site.json .location` is derived from the first node and gained `keyboard`,
-`latitude`, `longitude`; a generated `/etc/nixos/tappaas-site.nix` carries time zone,
-locale, keymap and time source to each NixOS VM, with a converge path for Debian guests and
-adopted hosts keyed on `management`; thirteen hard-coded time zones are gone from the module
-`.nix` files. Evidence after the 2026-09-21 08:35 sweep (15/16, the one failure being #687):
-every guest on `Europe/Copenhagen`, syncing against its own zone's gateway — `10.0.0.1` for
-mgmt, `10.2.0.1` for rossen — the mothership included, where nothing had a time source
-before. #87 needed only the consuming half: OPNsense has been serving NTP (stratum 2) all
-along and no guest asked it. **#324 was pulled in and split back out** (see its row). **#680 came here from the open decisions on
-2026-09-21** — its code half is built and verified on hrossen; what remains of it is a release
-decision, not code (who refreshes the baseline `flake.lock`, and how often).
-**Remaining:** #348 parked (needs a site with hass), #678 in Future Work. #777 (the one nixpkgs revision outside the pin) closed 2026-10-06 without a change — see its row.
-
-**Approach (operator, 2026-09-20).** Locale and time are **one site fact, applied per OS
-family** — not a NixOS-only concern. Measured that day on the test site: `tappaas1` is
-`Europe/Copenhagen` + keyboard `dk` (the operator's install answers), `tappaas2` and
-`tappaas3` are `Europe/Amsterdam` + `us` (PXE-provisioned from a site.json the mothership's
-own clock produced), `site.json` says `NL` / `Europe/Amsterdam`, `tappaas-common.nix` hard-codes
-Amsterdam and `euro-office.nix` hard-codes UTC — which is #472's "two hours out". Nothing sets
-time or locale on a Debian guest, an adopted `debianhost`, or a Windows guest at all.
-
-1. `site.json .location` is the single source: it gains `keyboard`, `latitude` and `longitude`,
-   and `tappaas1` — where the operator answered once — is what it is derived from (#408).
-2. **NixOS:** a generated `/etc/nixos/tappaas-site.nix` (time zone, locale, keymap, NTP server),
-   imported by each module's own `.nix` and by `tappaas-common.nix`. **#324 was bundled into
-   this rebuild and then split back out 2026-09-20**: the canary (`euro-office`) proved modules
-   are *copies* of the baseline, not consumers — importing `tappaas-common.nix` fails on
-   `system.stateVersion` (`25.11` vs every module's `25.05`) and on ~14 more options that 11–13
-   modules each restate. De-duplicating those is #324's real content and needs its own rebuild
-   cycle; the fragment collides with nothing and lands now.
-3. **Debian/Ubuntu:** the same facts converged in the Debian branch of `update-os.sh`, so a
-   guest and an adopted host are corrected by every sweep instead of only being tested for a
-   ticking clock. For an **adopted machine the `management` field decides** (ADR-022g):
-   converge where TAPPaaS manages the host, report drift where it does not.
-4. **Proxmox nodes:** `node-provisioner/answer.py` takes the keyboard from `.location` too, and
-   `pvehost`'s `update.sh` converges an existing node — which is what fixes tappaas2 and
-   tappaas3 without reinstalling them.
-5. **Windows** is split out as **#678** (Future Work): one module, its own time-zone vocabulary
-   (`W. Europe Standard Time`, not IANA) and a Windows test, so it must not hold up the rest.
+One NixOS baseline every VM imports, carrying the site's time zone, locale, keyboard and time source — the same facts applied to Debian guests and nodes — and pins with a cadence. Left: hass locale (#348, G1.7) and Windows guests (#678, Future Work).
 
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
@@ -574,9 +502,7 @@ time or locale on a Debian guest, an adopted `debianhost`, or a Windows guest at
 
 ### ✅ G1.5 Rebuild & recovery paths — E3 · R4 · L-M · released in 2.1: 7 · done for 2.2: 9
 
-A proven way back before Wave 1 changes anything: `config/` is backed up and
-restorable, and the cicd keys can be reissued. Build this group first within
-Wave 1.
+A proven way back before anything breaking: `config/` backed up and restorable, mothership keys that can be reissued, restores of a module, a node and the mothership rehearsed, and a control plane that checks itself and rolls back.
 
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
@@ -592,18 +518,17 @@ Wave 1.
 
 ### G1.6 Secrets & privileged access — E1 · R5 · L-H · released in 2.1: 3 · done for 2.2: 1 · open: 2
 
+Least privilege on the platform. Built: nodes hardened to the Proxmox guide, key-only SSH, encrypted backups. Next: how an AI agent may reach the mothership (#142), and SSH to the mothership through the satellite (#762). Secrets management (#58) waits in Future Work.
+
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
 | ✅ #128 | Security hardening (Proxmox hardening guide) | 2 | 3 | M | **Closed 2026-10-04** (`383f8d5e`): of seven guide gaps, sshd (#19), backup encryption (#760), microcode and auditd → Loki done; unattended-upgrades and fail2ban not adopted; Corosync → #590 |
 | #142 | RFC: AI-agent access to cicd | 2 | 1 | M | Decision |
 | #762 | satellite: build the `sshPort` SSH passthrough to `tappaas-cicd` (ADR-010 §4.4.2) | 3 | 2 | M | Designed in ADR-010, never built: a TCP relay satellite `:sshPort` → tunnel → mothership `:22` for sites with no public inbound address. Decide how to limit it; live test needs #671 |
 
-### G1.7 Parked for Erik discussion — added 2026-10-03 · open: 5
+### G1.7 Parked for Erik discussion · open: 5
 
-Design questions that wait on a conversation between the operator and @ErikDaniel007 —
-not on work. Nothing here is started until that conversation has happened; each row says
-what it is waiting to settle. (#421, the `src/apps` restructure, is being handled in a
-separate session and stays in G1.3.)
+Waiting on a conversation between Lars and @ErikDaniel007, not on work: the firewall rebuild runbook (#439), the controller pattern (#430), VMID ranges (#294), hass locale (#348) and Erik's image pins (#765).
 
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
@@ -615,94 +540,29 @@ separate session and stays in G1.3.)
 
 ---
 
-
 ## Wave 0 — make upgrades safe
 
-Do this first. Apart from #620 (authoring `tier` in zones.json) and #471
-(replacing the update unit), nothing here changes an installation's
-configuration; it changes how updates behave when they go wrong, which every
-later wave depends on.
+Make updates safe before anything breaking travels through them: versioned migrations, honest gates, a scheduled update channel with failure notices, and a merge that cannot skip a module.
 
 ### ✅ G0.1 Migration & rollback framework — E2 · R2 · L-H · released in 2.1: 8 · done for 2.2: 1
+
+Changes to `config/` that every site can take safely: versioned migrations with backup, dry-run and a ledger (the contract is ADR-025), rollback in install and update, and one meaning for `--force`.
 
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
 | ✅ #736 | update merge pins a field that a release moves to a new place | 3 | 3 | M | **Closed 2026-09-26** (`2d25aaf3`): merge rule 5 tells "the operator changed it" from "`.orig` never recorded it" and names each refused value with its remedy. The rule itself: #488 |
 
-#### Migration framework (decided 2026-09-14)
-
-- **Where:** `src/foundation/tappaas-cicd/migrations/NNNN-<slug>.sh`, run in
-  numeric order by `scripts/run-migrations.sh` from `tappaas-self-prepare.sh`
-  — after the control-plane refresh, before the `nixos-rebuild` and before any
-  module update. (ADR-025 D2 settled the slot: `pre-update.sh` runs inside the
-  sweep, after the modules `tappaas-cicd` depends on, so "before any module"
-  cannot be true there.)
-- **Contract per migration:** idempotent; `--check` reports what it would
-  change and writes nothing; apply first copies every file it touches to
-  `config/.migrations/backup/NNNN/`; exit non-zero on any doubt.
-- **State:** `config/.migrations/applied` records id, date and commit. It
-  lives in `config/`, so it is covered by the #545 backup.
-- **Failure:** stops the sweep before module updates, is recorded in
-  `last-update-result.json` and notified through #651.
-- **Visibility:** `update-tappaas --dry-run` lists pending migrations;
-  `release/changelog.sh` lists the migrations added between two tags, so
-  release notes name them.
-
-Status: landed 2026-09-16 — 121cf82a (ADRs), 64cc90c3 (#655 + the `--force`
-rework), c69b3860 + 96ea83d3 (ADR-025), 21a81d84 (#453), d234e3bd (#584),
-51b63e5d (#648), 060f61a0 (#572), e46e4e45 (#652), plus 99297d14, 1387038b and
-f44828af (see below). Every issue in the table is implemented.
-
-**T3 on hrossen: green.** A real sweep through `update-tappaas.service`, 13/13
-modules, no `--force`, no node reboot needed. The migration runner ran between
-the control-plane refresh and the rebuild, reported `no pending migrations`, and
-wrote nothing — no ledger, no snapshot (ADR-025 D11). The sweep invoked the new
-`module update` verb for all 13 modules and the bare-`modify` deprecation
-warning never fired, which is what proves #655 reached the path that matters.
-The #572 auto-stash restore was verified live on the shared checkout where the
-entries had accumulated.
-
-**Two failure injections**, run deliberately with the operator's approval, put
-the ADR-025 worked-example table on the record rather than on trust:
-
-- a migration that exits non-zero stopped the run at the migrate stage — no
-  rebuild, no sweep, module `updateTime`s unchanged, nothing recorded in the
-  ledger, the whole-`config/` snapshot taken first and complete, and the #651
-  notice naming the stage;
-- a migration that succeeds is recorded and is **not** re-applied on the next
-  run, which is what makes "fix forward after a failed rebuild" safe.
-
-**Three defects the live path found**, all fixed on the branch: a ledger that
-could not be read was treated as "nothing applied" and would have replayed every
-migration a site ever received; a `config/` snapshot with holes in it passed as a
-safety net; and `date -Is` (GNU-only) wrote a ledger line the reader would refuse
-the next night — caught only because the reader was tightened first (1387038b).
-A refused field change also told the operator the config "may be partially
-updated" when nothing had been written (f44828af). The always-red source-tree
-suites now skip with a reason instead of failing on every run (99297d14).
-- **Rule for reviews:** a change that renames or re-schemas anything under
-  `config/` ships with its migration and a fixture test (config before →
-  after) in the tappaas-cicd fast tier.
-- **No down-migrations by default.** Rollback for one site is restoring
-  `config/.migrations/backup/NNNN/`; a migration that cannot be reversed
-  that way says so in its header.
-- **Bootstrap:** the release that introduces the runner carries no new
-  migrations; the existing blocks in `pre-update.sh` move into it later as
-  `0001…`, since they are already idempotent.
-
 ### ✅ G0.2 Trustworthy gates — E4 · R2 · L-M · released in 2.1
 
-Every item shipped in 2.1 — see [Release 2.1, G0.2](#rel21-g02).
+Tests that tell the truth, so every later migration can be verified. Every item shipped in 2.1 — see [Release 2.1, G0.2](#rel21-g02).
 
 ### ✅ G0.3 Update channel & failure notice — E3 · R3 · L-M · released in 2.1
 
-Every item shipped in 2.1 — see [Release 2.1, G0.3](#rel21-g03).
+A scheduled update on a channel, with a mail when a sweep fails — the path every later fix takes to a site. Every item shipped in 2.1 — see [Release 2.1, G0.3](#rel21-g03).
 
-### ✅ G0.4 Merge trust — fast lane, added 2026-09-16 · released in 2.1
+### ✅ G0.4 Merge trust · released in 2.1
 
-Every item shipped in 2.1 — see [Release 2.1, G0.4](#rel21-g04).
-
----
+A 3-way merge that can no longer skip a module silently, so Wave 1's re-schemas reach every deployed config. Every item shipped in 2.1 — see [Release 2.1, G0.4](#rel21-g04).
 
 ## Release 2.1 — staging 2026-09-25 · production at the next boundary
 
@@ -744,13 +604,7 @@ The rows below are what it carried, by the wave and group they came from.
 
 #### G0.2 Trustworthy gates — E4 · R2 · L-M
 
-Status: landed 2026-09-15 on `main` — ADR-020 v0.8 ddae6b99;
-#636 ed16f691, #555 7f7901fb, #645 0c408b1f + df7b8915, #560 d32ea443 +
-422986f2, #620 254bdcba, #635 8b86662a, #633 f73f705a + 082964af; T3 on
-hrossen green (tappaas-cicd's #595 guard fixed in 747b2310).
-
-Tests that pass when they should fail, or fail when they should pass, make
-every later migration unverifiable.
+Tests that tell the truth, so every later migration can be verified.
 
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
@@ -768,15 +622,7 @@ every later migration unverifiable.
 
 #### G0.3 Update channel & failure notice — E3 · R3 · L-M
 
-Status: landed 2026-09-15 on `main` — ADR-007e v1.3
-aab46270, ADR-020 v0.9 5c77a7ca, ADR-017 v0.2 2fb781fb (FW #357 settled, D7
-deferred to G0.1's runner); #653 aac924f0; #651 0b99af35; fleet `--force`
-bb3f07b6; #471 da38bc36 d6bac3d7 88b96379 4507936a + fixes e7dc61d2 d95e6891
-675a9779 1e1a4810; #447 ddbb1a66. T3 on hrossen green: bootstrap through the
-interim path, then a full sweep through the new unit (13/13, timer rendered).
-
-The update mechanism is how every later fix reaches an installation. It has
-to be solid before Wave 1 starts sending migrations through it.
+A scheduled update on a channel, with a mail when a sweep fails — the path every later fix takes to a site.
 
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
@@ -788,14 +634,9 @@ to be solid before Wave 1 starts sending migrations through it.
 
 <a id="rel21-g04"></a>
 
-#### G0.4 Merge trust — fast lane, added 2026-09-16
+#### G0.4 Merge trust
 
-Not a planned group: one issue, fast-laned ahead of Wave 1 on the operator's
-decision (2026-09-16), because every Wave 1 item is a config re-schema that
-reaches a deployed config **through** the 3-way merge. A module the merge skips
-will silently not receive Wave 1's changes either, while the migration ledger
-reports the site as migrated — the result of the whole wave would be
-unfalsifiable on exactly the installs that need it most.
+A 3-way merge that can no longer skip a module silently, so Wave 1's re-schemas reach every deployed config.
 
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
@@ -830,8 +671,6 @@ deployed `podman-lab1` resolves to `podman` because `lab1` is a DECLARED
 environment, while `vllm-amd` stays whole because `amd` is not — the declared
 environment set is what makes that decidable, since module names contain
 hyphens too.
-
-
 
 ### Wave 1 — the breaking-change window
 
@@ -941,7 +780,6 @@ hyphens too.
 | ✅ #378 | Default-on secret scanning on cicd | 4 | 1 | L | **Closed 2026-10-03:** gitleaks gates every release boundary (not every push); a pre-commit hook on the mothership. History holds old tokens — **rotate them**; rewriting history is the operator's call |
 | ✅ #724 | The journal secret-scrub never worked (it redacted the key, not the secret) | — | — | — | **Closed 2026-09-23** (`eda1eb9d`) — secrets that reached Loki before the fix need rotating; see #715. Added in the 2026-09-24 issue sweep |
 
-
 ### Wave 2 — network behaviour hardening
 
 <a id="rel21-g21"></a>
@@ -964,7 +802,6 @@ hyphens too.
 | ✅ #657 | Standard 4 invents an FQDN when a config lookup fails | 5 | 1 | L | **Done 2026-09-17:** the DNS sample carries each module's own zone instead of guessing `srvHome`, so the test stops asserting names the estate never declared |
 | ✅ #702 | dns-manager add matches an entry by description, not by name | — | — | — | **Closed 2026-09-22** (`148b920b`). Added in the 2026-09-24 issue sweep |
 | ✅ #703 | acme-setup: wildcard DNS is skipped when only the apex is unpublished | — | — | — | **Closed 2026-09-22** (`dd0a0763`). Added in the 2026-09-24 issue sweep |
-
 
 ### Wave 3 — stability & correctness
 
@@ -1009,7 +846,6 @@ hyphens too.
 | # | Issue | E | R | L | Note |
 |---|-------|:-:|:-:|:-:|------|
 | ✅ #690 | litellm VK provisioning has no readiness wait and discards the key | — | — | — | **Closed 2026-09-21** (`3358e3ec`). Added in the 2026-09-24 issue sweep |
-
 
 ### Wave 4 — additive capabilities
 
