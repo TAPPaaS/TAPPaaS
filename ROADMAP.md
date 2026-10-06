@@ -116,7 +116,7 @@ Per group: its scores, and where its rows are. *2.1* = shipped in 2.1; *2.2* = d
 | 4 | G4.4 Storage & physical devices | 2 | 2 | M | 2 | 2 | 6 |
 | 4 | G4.5 Governance, CI & sign-offs | 3 | 1 | L | 2 | 1 | 7 |
 | 3 | G3.1 cluster:vm lifecycle & capacity | 4 | 3 | L | 7 | 5 | 8 |
-| 3 | G3.2 Identity & SSO wiring | 3 | 2 | L | 1 | 2 | 6 |
+| 3 | G3.2 Identity & SSO wiring | 3 | 2 | L | 1 | 3 | 5 |
 | 3 | G3.3 App module fixes | 4 | 2 | L | 5 | 2 | 10 |
 | 3 | G3.4 AI stack maturity | 3 | 3 | L | 1 | – | 6 |
 | 3 | G3.5 Installer UX | 4 | 1 | L | – | – | 4 |
@@ -340,7 +340,7 @@ Guests sized, placed, started and stopped right: memory defaults from measuremen
 | #761 | A composite-module ADR: `cluster`, `kubernetes`, and modules that only provide artefacts | 2 | 3 | M | ADR-022d and ADR-026 defer `cluster`/`kubernetes` to an ADR that does not exist, and `templates` fits no `kind`; interim values in ADR-022d v1.2. With @ErikDaniel007 |
 | #753 | A guest restarting during its own update fails the sweep | 3 | 2 | L | coturn restarted inside its own update on hrossen (2026-10-01); the post-apply SSH check raced its boot and failed the sweep. The restart's trigger is not yet known |
 
-### G3.2 Identity & SSO wiring — E3 · R2 · L-L · released in 2.1: 1 · done for 2.2: 2 · open: 6
+### G3.2 Identity & SSO wiring — E3 · R2 · L-L · released in 2.1: 1 · done for 2.2: 3 · open: 5
 
 Every app wired to the identity provider the same way: OIDC for hass, Nextcloud and forgejo (#345, #401, #282), a site-specific login page (#479), logging's SSO dependency (#701), and a test for forward-auth (#752).
 
@@ -348,7 +348,7 @@ Every app wired to the identity provider the same way: OIDC for hass, Nextcloud 
 |---|-------|:-:|:-:|:-:|------|
 | #345 | hass: appliance-aware OIDC staging | 3 | 2 | L | |
 | #401 | Nextcloud: OIDC redirect, trusted domains | 3 | 2 | L | |
-| #282 | forgejo SSO (Community repo) | 3 | 1 | L | |
+| ✅ #282 | forgejo SSO (Community repo) | 3 | 1 | L | **Done 2026-10-06** (`b3c19be6`, `115328ca`), live on hrossen: `identity:identity` + `forgejo-configure-oidc` keep one `authentik` login source (groups claim `admin` for `forgejo-admins` → site admin); `ROOT_URL` from the published name; local sign-up off, first SSO login creates the account; `tappaas-admin` is the local break-glass admin. The live test also found every nightly backup failing (user `git` never existed) — fixed |
 | #479 | Site-specific login page | 4 | 1 | L | |
 | #701 | logging depends on identity though its own code makes SSO optional | — | — | — | **Open, not yet scored** — SSO is conditional on publication since `4c9c846a`. Added in the 2026-09-24 issue sweep |
 | ✅ #738 | `identity:identity` discovery check fails on a changed host key and blames the firewall | 4 | 2 | M | **Closed 2026-09-25** via `integrate/nc35` (`c998ca5f`): the stale host key is cleared before the OIDC check, and an ssh failure is named as one. Reported by @AndreasJe |
