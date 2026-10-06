@@ -98,7 +98,7 @@ Per group: its scores, and where its rows are. *2.1* = shipped in 2.1; *2.2* = d
 
 | Wave | Group | Ease | Risk | 2.1 | 2.2 | open |
 |------|-------|:-:|:-:|---:|---:|---:|
-| 4 | G4.1 Alerting & cluster resilience | M | M | – | 3 | 7 |
+| 4 | G4.1 Alerting & cluster resilience | M | M | – | 4 | 7 |
 | 4 | G4.2 Proxy & ingress | M | L | 1 | – | 4 |
 | 4 | G4.3 Manager verb gaps | M | L | 4 | 2 | 8 |
 | 4 | G4.4 Storage & physical devices | H | L | 2 | 2 | 6 |
@@ -198,6 +198,7 @@ items that belong to a group — FW #40, #83, #157, #158, #162 — are rows in t
 | #678 | windows-server: time zone, keyboard and locale from the site | From G1.4: its own time-zone vocabulary and a Windows test |
 | #757 | `debianhost` over PXE (ADR-026 D8a) | `adopt` covers every known site |
 | #771 | NFS over TLS for `pvehost:nfs` | ADR-029 v0.7: OpenZFS `sharenfs` cannot carry `xprtsec` |
+| #787 | logging: TLS for syslog ingest and Loki's ports | From #165 §3 (2026-10-06). Waits for a TAPPaaS CA; traffic stays inside mgmt / the site network meanwhile |
 | ✅ #11 | NextCloud | **Closed 2026-10-06:** a TAPPaaS module, `src/collaboration/nextcloud` |
 | ✅ #12 | HomeAssistant | **Closed 2026-10-06:** a TAPPaaS module, `src/home/hass` |
 | ✅ #52 | Jellyfin | **Closed 2026-10-06:** in TAPPaaS at status Testing, media on a `storage:nfs` share, installed on hrossen |
@@ -210,15 +211,16 @@ items that belong to a group — FW #40, #83, #157, #158, #162 — are rows in t
 
 New capabilities with low upgrade risk.
 
-### G4.1 Alerting & cluster resilience — Ease M · Risk M · done for 2.2: 3 · open: 7
+### G4.1 Alerting & cluster resilience — Ease M · Risk M · done for 2.2: 4 · open: 7
 
-Be told when something breaks, and survive more of it. Built: alerts from Loki by mail, every VM's logs in Loki. Next: a notice when a whole site goes dark (#776), true timestamps and severities in Loki (#784, #785), Loki authentication (#165), a mail relay (#125), a second corosync link (#590).
+Be told when something breaks, and survive more of it. Built: alerts from Loki by mail, every VM's logs in Loki, a credential per pushing VM. Next: a notice when a whole site goes dark (#776), true timestamps and severities in Loki (#784, #785), a warning when a pin move brings a Loki major (#788), a mail relay (#125), a second corosync link (#590).
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
 | ✅ #126 | Alerting from Loki through the #651 channel (was: no alerts for quorum loss / node dropout) | M | M | **Closed 2026-10-04.** Grafana alerting from Loki: 9 rules, mailed via `site-notify.sh`, heartbeat watchdog; all fired live on hrossen. Follow-up: app VMs ship no logs (#770) |
 | #125 | Mail relay via M365 Graph API | M | L | |
-| #165 | logging v2: Loki auth, Grafana OIDC | H | M | Turning on Loki auth breaks existing pushes unless clients change in the same sweep; since #770 every client comes from `lib/log-shipping.sh`, so the credential goes in one renderer |
+| ✅ #165 | logging v2: Loki auth, Grafana OIDC | H | M | **Closed 2026-10-06** (`f69d536e`, `48cc4683`), live on hrossen: nginx fronts Loki — 3101 push only with a credential per VM (username = vmname; `host` is set from it, so a VM writes as itself only), 3100 Loki's API behind an admin credential held by the mothership; Loki and Alloy on localhost. Grafana OIDC (#513), the OPNsense syslog target and the consumer hooks (#770) were done before. TLS moved to #787, version pins re-scoped as #788 |
+| #788 | Release train: flag a Loki/Grafana major version change at a pin move | M | L | **Opened 2026-10-06** from #165 §5: versions only move with the pin; a major bump (Loki storage schema) should be reported at the move |
 | ✅ #770 | App VMs do not ship their logs to Loki | M | M | **Done 2026-10-06**, live on hrossen: every NixOS VM integrating `logging:logs` ships its journal from one renderer (`lib/log-shipping.sh`) to a push-only `:3101`; Loki's `:3100` stays mgmt-only |
 | #776 | Report a site that has gone dark (outside heartbeat) | M | L | **Opened 2026-10-06** after makerfloss was dark 2½ days unreported. Proposed: the satellite mails when the home WireGuard handshake is >15 min stale. **Decide:** its mail path (#125?) |
 | #784 | Loki stores receive time — backfill and reboot entries collapse | M | L | **Opened 2026-10-06** from a Loki sweep on hrossen: live lines are ~1 s off, but a boot's or a backfill's entries all land on Alloy's start time. Find where the journal time is lost |
