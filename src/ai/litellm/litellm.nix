@@ -317,6 +317,11 @@ EOF
     extraOptions = [ 
       "--network=host"           # Access localhost PostgreSQL/Redis
       "--log-driver=journald"    # Logs to systemd journal
+      # catatonit as PID 1 (#786). LiteLLM's python is PID 1 otherwise, and PID 1
+      # ignores SIGTERM until uvicorn installs its handler — so a container
+      # stopped while still starting (prisma migrations; an update restarts it
+      # three times in a row) sat out podman's 10 s and was SIGKILLed.
+      "--init"
     ];
     cmd = [ 
       "--config" "/app/config.yaml" 
@@ -339,6 +344,9 @@ EOF
     after = [ "postgresql.service" "redis-litellm.service" "litellm-integrations.service" ];
     wants = [ "redis-litellm.service" ];
     requires = [ "postgresql.service" "litellm-integrations.service" ];
+    # Stopped while still starting, LiteLLM dies of the SIGTERM itself (143):
+    # an ordinary stop, not a failure (#786).
+    serviceConfig.SuccessExitStatus = [ 143 ];
     serviceConfig.ExecStartPre = [
       "${pkgs.writeShellScript "litellm-wait-for-redis" ''
         for _ in $(seq 1 30); do

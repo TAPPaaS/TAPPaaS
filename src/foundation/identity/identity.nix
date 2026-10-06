@@ -327,6 +327,10 @@ EOF
     extraOptions = [
       "--network=host"
       "--log-driver=journald"
+      # The worker drains its dramatiq queue on SIGTERM: 16-32 s measured on
+      # hrossen, past podman's 10 s default, so every stop ended in SIGKILL
+      # (exit 137, unit failed — #786). Below the unit's 2 min TimeoutStopSec.
+      "--stop-timeout=90"
     ];
     cmd = [ "worker" ];
   };
