@@ -17,7 +17,7 @@ Home Assistant reaches them across those boundaries through controlled pinholes 
 | [deconz](deconz/README.md) | Zigbee gateway — deCONZ engine (ConBee II, native zigbee for HA) + diyHue front-end (hue-bridge for free@home/SysAP). See README.md / INSTALL.md. | Development |
 | [hass](hass/README.md) | Home Assistant OS (HAOS) - home automation platform | Testing |
 | [immich](immich/README.md) | Immich self-hosted photo and video backup with ML-powered search, face recognition and mobile auto-upload. | Development |
-| [jellyfin](jellyfin/README.md) | Jellyfin open-source media server for personal movie, TV and music libraries. | Development |
+| [jellyfin](jellyfin/README.md) | Jellyfin open-source media server for personal movie, TV and music libraries. | Testing |
 
 Install them as [INSTALL.md](INSTALL.md) says.
 
