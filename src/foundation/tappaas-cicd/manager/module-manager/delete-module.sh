@@ -235,6 +235,22 @@ machine_hosted_modules() {
     printf '%s' "${out[*]:-}"
 }
 
+# drop_guest_build <vmname> — the GC roots and staged /etc/nixos that
+# update-os.sh keeps for a guest it builds on the mothership (#774). Best
+# effort: a leftover root only delays the mothership's GC.
+drop_guest_build() {
+    local vmname="$1"
+    local roots="${GUEST_BUILD_GCROOTS:-/nix/var/nix/gcroots/tappaas-guests}"
+    local stage="${GUEST_BUILD_STAGE:-/var/lib/tappaas-guest-build}"
+    compgen -G "${roots}/${vmname}.*" >/dev/null || [[ -d "${stage}/${vmname}" ]] || return 0
+    if sudo -n rm -f "${roots}/${vmname}.current" "${roots}/${vmname}.previous" "${roots}/${vmname}.new" \
+        && sudo -n rm -rf "${stage:?}/${vmname}"; then
+        info "  ${GN}✓${CL} Dropped ${vmname}'s system build on the mothership (GC roots, staged /etc/nixos)"
+    else
+        warn "  could not drop ${roots}/${vmname}.* — remove it by hand"
+    fi
+}
+
 # release_machine_dns <machine> <zone> — best effort; a failure is a stale
 # record, never a failed delete.
 release_machine_dns() {
@@ -581,6 +597,13 @@ main() {
     # no DHCP reservation and carries no alias — anything else survives.
     if [[ "${is_machine}" -eq 1 ]]; then
         release_machine_dns "${module}" "$(echo "${_cfg}" | jq -r '.zone0 // "mgmt"')"
+    fi
+
+    # ── Step 5c: The guest's build on the mothership (#774) ──────────
+    # update-os.sh roots each NixOS guest's current and previous system here and
+    # keeps a copy of its /etc/nixos; with the VM gone they only hold store space.
+    if [[ "${is_machine}" -eq 0 ]]; then
+        drop_guest_build "${vmname}"
     fi
 
     # ── Step 6: Archive (keep config) or Remove (delete config) ──────

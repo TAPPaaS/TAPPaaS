@@ -74,6 +74,20 @@ move() { RUNNING="$1" bash -c 'source "$1"; ssh() { echo "${RUNNING}"; }; releas
 ck "a guest on 25.11 receiving 26.05 is a release move" "25.11 26.05" "$(move 25.11)"
 ck "the same release is not a move" "" "$(move 26.05)"
 
+# ── delete-module drops the guest's build (drop_guest_build) ────────────────
+DEL="${HERE}/../../manager/module-manager/delete-module.sh"
+awk '$0 == "drop_guest_build() {" {p=1} p {print} p && /^}$/ {exit}' "${DEL}" > "${TMP}/drop.sh"
+ck "drop_guest_build extracts from delete-module.sh" "1" "$(grep -c '^drop_guest_build() {$' "${TMP}/drop.sh")"
+R2="${TMP}/roots2"; ST2="${TMP}/stage2"; mkdir -p "${R2}" "${ST2}/vw" "${ST2}/vwx"
+ln -s /nix/store/g1 "${R2}/vw.current"; ln -s /nix/store/g0 "${R2}/vw.previous"; ln -s /nix/store/x1 "${R2}/vwx.current"
+drop() { GUEST_BUILD_GCROOTS="${R2}" GUEST_BUILD_STAGE="${ST2}" bash -c '
+    source "$1"; info() { :; }; warn() { echo WARN; }; GN=; CL=
+    sudo() { [[ "$1" == -n ]] && shift; "$@"; }; drop_guest_build "$2"' _ "${TMP}/drop.sh" "$1"; }
+drop vw
+ck "the deleted guest's roots and staging are gone" "-" "$(ls "${R2}"/vw.* "${ST2}/vw" 2>/dev/null | head -1 || true)-"
+ck "another guest whose name starts the same keeps its own" "vwx.current,vwx" "$(ls "${R2}" | paste -sd, -),$(ls "${ST2}")"
+ck "a guest that was never built here is a no-op" "" "$(drop nothere)"
+
 echo
 echo "── ${PASS} passed, ${FAIL} failed ──"
 [[ "${FAIL}" -eq 0 ]]
