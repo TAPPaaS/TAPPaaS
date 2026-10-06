@@ -229,8 +229,11 @@ export class CliSiteClient implements SiteClient {
   }
 
   followUnit(invocationId: string): "finished" | "detached" {
+    // Only what the run prints. Every sudo/runuser in the unit also logs to
+    // syslog under its cgroup (pam_unix session lines, sudo's COMMAND= audit) —
+    // hundreds per sweep; they stay in the journal but out of the operator's view.
     const filter = invocationId ? [`_SYSTEMD_INVOCATION_ID=${invocationId}`] : ["-u", UNIT];
-    const j = spawn(JOURNALCTL(), ["-f", "-o", "cat", ...filter], { stdio: "inherit" });
+    const j = spawn(JOURNALCTL(), ["-f", "-o", "cat", ...filter, "_TRANSPORT=stdout"], { stdio: "inherit" });
     try {
       for (;;) {
         const st = this.unitState();

@@ -70,11 +70,27 @@ try {
     check(spawned() === "reconcile --apply", `network cascade spawns 'reconcile --apply' (got: ${spawned()})`);
     process.env.SITE_NETWORK_BIN = stub(3);
     check(c.cascade("network", true) === 3, "cascade returns the child's rc");
+
+    // ── followUnit ────────────────────────────────────────────────────
+    // Only the run's own stdout/stderr: each sudo/runuser in the unit also
+    // writes pam_unix and sudo-audit syslog lines into its journal.
+    const inactive = join(root, "systemctl-inactive");
+    writeFileSync(inactive, "#!/usr/bin/env bash\necho inactive\n");
+    chmodSync(inactive, 0o755);
+    process.env.SITE_SYSTEMCTL_BIN = inactive;
+    process.env.SITE_JOURNALCTL_BIN = stub(0);
+    c.followUnit("abc123");
+    check(
+      spawned() === "-f -o cat _SYSTEMD_INVOCATION_ID=abc123 _TRANSPORT=stdout",
+      `followUnit follows the invocation's stdout only (got: ${spawned()})`,
+    );
   } finally {
     if (prevEnv === undefined) delete process.env.SITE_ENVIRONMENT_BIN;
     else process.env.SITE_ENVIRONMENT_BIN = prevEnv;
     if (prevNet === undefined) delete process.env.SITE_NETWORK_BIN;
     else process.env.SITE_NETWORK_BIN = prevNet;
+    delete process.env.SITE_SYSTEMCTL_BIN;
+    delete process.env.SITE_JOURNALCTL_BIN;
   }
 } finally {
   rmSync(root, { recursive: true, force: true });
