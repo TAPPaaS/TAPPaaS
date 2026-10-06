@@ -117,7 +117,7 @@ Per group: its scores, and where its rows are. *2.1* = shipped in 2.1; *2.2* = d
 | 4 | G4.5 Governance, CI & sign-offs | 3 | 1 | L | 2 | 1 | 7 |
 | 3 | G3.1 cluster:vm lifecycle & capacity | 4 | 3 | L | 7 | 5 | 8 |
 | 3 | G3.2 Identity & SSO wiring | 3 | 2 | L | 1 | 2 | 6 |
-| 3 | G3.3 App module fixes | 4 | 2 | L | 5 | 1 | 12 |
+| 3 | G3.3 App module fixes | 4 | 2 | L | 5 | 2 | 10 |
 | 3 | G3.4 AI stack maturity | 3 | 3 | L | 1 | – | 6 |
 | 3 | G3.5 Installer UX | 4 | 1 | L | – | – | 4 |
 | 2 | G2.1 Firewall exposure & rule order | 3 | 4 | M | 3 | 4 | 13 |
@@ -177,7 +177,7 @@ met gates are recorded in the releases that carried their waves.
 
 - **Merge pairs** the issues themselves say belong together: #36 + #127, #385 + #222,
   #160 + #256, #642 + #643, #444 + #582, #119 / #120 / #121.
-- **Close or park:** #284 (a module implementation choice, Lars 2026-06-03), #154, #223 →
+- **Close or park:** #154, #223 → (#284 went to Future Work 2026-10-06)
   *Parking lot*. The forge's *Release 2.0: Build out Stacks* milestone still has 4 open issues —
   move them per this plan and close it.
 - **Parked, half of #656:** a proxy access list kept current from a provider's published feed (an
@@ -230,7 +230,7 @@ firewall rules (G4.4), #39 power saving (docs).
 **Done, ships in 2.2:** #52 Jellyfin — closed 2026-10-06, in TAPPaaS at status Testing, media on a
 `storage:nfs` share, installed on hrossen.
 
-**Keep in Future Work:** #26 IPv6 (write the stance under #149), #129 Project Nomad, #89 binary repository, #91 Backstage, #156 pfSense alias import, #170 LiteLLM
+**Keep in Future Work:** #26 IPv6 (write the stance under #149), #284 forgejo SQLite → PostgreSQL (moved out of G3.3 2026-10-06, operator — SQLite stays the default until load says otherwise), #129 Project Nomad, #89 binary repository, #91 Backstage, #156 pfSense alias import, #170 LiteLLM
 declarative state (decide with #430), #183 service catalog, #678 Windows guests' time zone (from
 G1.4), #757 `debianhost` over PXE (ADR-026 D8a — `adopt` covers every known site), #771 NFS over
 TLS (ADR-029 v0.7 — OpenZFS `sharenfs` cannot carry `xprtsec`).
@@ -355,7 +355,7 @@ Every app wired to the identity provider the same way: OIDC for hass, Nextcloud 
 | #752 | identity:accessControl has no test-service | 3 | 1 | L | `test-service.sh` is an ADR-027 stub, so forward-auth is never tested. Check the Authentik provider, Caddy's ForwardAuth, and that an anonymous request is redirected |
 | ✅ #769 | vaultwarden: SSO is registered but never wired into the app | 3 | 2 | L | **Closed 2026-10-04** (SSO wired, `e184ea9d`). **Reversed 2026-10-06, vaultwarden 0.6.0:** no SSO for the password vault, by decision — see vaultwarden DESIGN.md |
 
-### G3.3 App module fixes — E4 · R2 · L-L · released in 2.1: 5 · done for 2.2: 1 · open: 12
+### G3.3 App module fixes — E4 · R2 · L-L · released in 2.1: 5 · done for 2.2: 2 · open: 10
 
 The known rough edges of the app modules, fixed and tested so they stay fixed: Nextcloud Talk end to end (#715), Home Assistant (#552, #568, #571 — maintainer-owned), Nextcloud and euro-office (#332, #658, #751), litellm consumers (#553), windows-server (#411), forgejo (#283, #284), in-guest backups (#754).
 
@@ -369,8 +369,7 @@ The known rough edges of the app modules, fixed and tested so they stay fixed: N
 | #411 | windows-server: `deploy-instances.sh` missing | 4 | 1 | L | **Verified open 2026-09-26** (R=1 sweep): the script does not exist; writing it is the work |
 | #332 | euro-office / Nextcloud install findings | 3 | 2 | L | |
 | ✅ #51 | Immich | — | — | — | **Closed 2026-10-06.** In `src/home/immich`: Immich 3 from pinned nixos-unstable, 500G thin disk under `cluster:ha`, OIDC; live-tested on hrossen, status Testing. Failover untried |
-| #283 | forgejo central logging (moved to `src/devops`, 2026-10-04) | 4 | 1 | L | |
-| #284 | forgejo SQLite → PostgreSQL | — | — | — | Close: a module implementation choice (Lars, 2026-06-03) |
+| ✅ #283 | forgejo central logging (moved to `src/devops`, 2026-10-04) | 4 | 1 | L | **Closed 2026-10-06** by #770: `forgejo.json` declares `integratesWith: logging:logs`; the baseline journal client ships it. Forgejo was not installed on hrossen when #770 rolled out — its next install is its own test |
 | #658 | nextcloud test 12 probes the browser URL from wherever it runs | 4 | 1 | L | Maintainer-owned (@ErikDaniel007). Not "403 = pass": skip with a reason when the test host is outside the route's `proxyAllowedZones` (exit 77), as Test 9z does |
 | #751 | nextcloud:fileservice has no teardown | 3 | 2 | L | `delete-service.sh` is an ADR-027 stub, so a deleted consumer leaves its connector settings in Nextcloud. Remove the env file and unset what `occ` applied; test on hrossen |
 | #754 | In-guest backup timers in six modules: drop for PBS or say why they stay | 4 | 2 | L | After Nextcloud dropped its failing in-guest dump (`ed663fe8`): six modules still dump inside the guest. Per module: drop it (PBS takes the VM) or keep it with the reason in DESIGN.md |
