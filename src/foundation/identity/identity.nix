@@ -494,6 +494,83 @@ EOF
   };
 
   # ============================================================================
+  # LOG SHIPPING - journal -> Loki on the logging VM (#770)
+  # ============================================================================
+
+  # Authentik's events -- logins, failed logins, OAuth rejections ("Invalid
+  # grant_type for provider"), token and admin changes -- are the site's audit
+  # trail; in this VM's journal alone they cannot be alerted on and are lost with
+  # the VM. Shipped with the Alloy journal client tappaas-cicd runs (same
+  # pipeline, same scrubbing). identity sits in mgmt with Loki, so no firewall
+  # path is needed. Authentik logs JSON lines: query with `| json` in Grafana.
+  # Safe-if-target-missing: Alloy buffers locally and retries.
+  services.alloy = {
+    enable = true;
+    extraFlags = [
+      # Alloy's own HTTP server, localhost only -- not reachable across mgmt.
+      "--server.http.listen-addr=127.0.0.1:9080"
+      # A TAPPaaS site tells no one what it runs.
+      "--disable-reporting"
+    ];
+  };
+
+  # In /etc, not the store, so alloy reloads it in place on switch.
+  environment.etc."alloy/config.alloy".text = ''
+    loki.process "journal" {
+      forward_to = [loki.write.default.receiver]
+
+      // 1. Drop the units that read or write Authentik's secrets.
+      stage.match {
+        selector = "{unit=~\"generate-authentik-secrets.*|authentik-env-secrets-only.*|authentik-env-backup.*\"}"
+        action   = "drop"
+      }
+
+      // 2. Scrub secret assignments anywhere else -- only the captured value
+      //    is replaced, the key stays readable (#724).
+      stage.replace {
+        expression = "(?i)\\b(?:token|secret|password|passwd|api[_-]?key)\\s*[:=]\\s*(\\S+)"
+        replace    = "***REDACTED***"
+      }
+
+      // 3. Scrub Authorization headers.
+      stage.replace {
+        expression = "Authorization:[[:space:]]+(?:Basic|Bearer)[[:space:]]+(\\S+)"
+        replace    = "***REDACTED***"
+      }
+    }
+
+    discovery.relabel "journal" {
+      targets = []
+
+      rule {
+        source_labels = ["__journal__systemd_unit"]
+        target_label  = "unit"
+      }
+
+      rule {
+        source_labels = ["__journal_priority_keyword"]
+        target_label  = "severity"
+      }
+    }
+
+    loki.source.journal "journal" {
+      max_age       = "12h0m0s"
+      relabel_rules = discovery.relabel.journal.rules
+      forward_to    = [loki.process.journal.receiver]
+      labels        = {
+        host = "identity",
+        job  = "systemd-journal",
+      }
+    }
+
+    loki.write "default" {
+      endpoint {
+        url = "http://logging.mgmt.internal:3100/loki/api/v1/push"
+      }
+    }
+  '';
+
+  # ============================================================================
   # FILESYSTEM STRUCTURE
   # ============================================================================
 
