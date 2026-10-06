@@ -189,5 +189,18 @@ nfs_consent ok; ck_rc "consent: rebootOk" 0 $?
 nfs_consent no; ck_rc "consent: none without rebootOk or --allow-disruption" 1 $?
 TAPPAAS_ALLOW_DISRUPTION=1 nfs_consent no; ck_rc "consent: --allow-disruption" 0 $?
 
+# ── the sweep drops share aliases of undeclared shares (D2b) ──────────
+DNS_LOG="${NFS_CONFIG_DIR}/dns.log"; : > "${DNS_LOG}"
+dns-manager() { echo "$*" >> "${DNS_LOG}"; }
+NFS_ALIAS_CACHE=$'nfs-media.mgmt.internal tappaas1.mgmt.internal\nnfs-old.mgmt.internal tappaas2.mgmt.internal\nnfs.mgmt.internal x\nwiki.mgmt.internal tappaas1.mgmt.internal'
+nfs_drop_orphan_aliases; ck_rc "orphan aliases: the sweep succeeds" 0 $?
+has "orphan aliases: an undeclared share's alias goes" "alias delete nfs-old.mgmt.internal" "$(cat "${DNS_LOG}")"
+ck "orphan aliases: declared shares and other names stay" "1" "$(grep -c "alias delete" "${DNS_LOG}")"
+cp "${NFS_CONFIG_DIR}/shares.json" "${NFS_CONFIG_DIR}/shares.json.keep"; echo '{broken' > "${NFS_CONFIG_DIR}/shares.json"; : > "${DNS_LOG}"
+NFS_ALIAS_CACHE=$'nfs-media.mgmt.internal tappaas1.mgmt.internal'
+nfs_drop_orphan_aliases; ck_rc "orphan aliases: an unreadable shares.json refuses" 1 $?
+ck "orphan aliases: …and removes nothing" "0" "$(grep -c "alias delete" "${DNS_LOG}")"
+mv "${NFS_CONFIG_DIR}/shares.json.keep" "${NFS_CONFIG_DIR}/shares.json"; unset -f dns-manager
+
 echo "  Results: ${PASS} passed, ${FAIL} failed"
 [[ "${FAIL}" -eq 0 ]]

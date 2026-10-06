@@ -118,6 +118,10 @@ teardown() {
         storage-manager nfs share purge "${SHARE}" --server "${n}" --yes > "${WORK}/td-purge-${n}.log" 2>&1 \
             || fail "teardown: storage-manager nfs share purge ${SHARE} --server ${n} (see ${WORK}/td-purge-${n}.log)"
     done
+    # Step 11 removed the declaration by hand, so no verb dropped the share alias:
+    # the sweep must (nfs_drop_orphan_aliases).
+    storage-manager nfs converge > "${WORK}/td-sweep.log" 2>&1 \
+        || fail "teardown: the storage sweep (see ${WORK}/td-sweep.log)"
 
     step "leftover check"
     [[ -f "${CFG}/${FIX}.json" ]] && { fail "leftover: config/${FIX}.json"; left=1; }

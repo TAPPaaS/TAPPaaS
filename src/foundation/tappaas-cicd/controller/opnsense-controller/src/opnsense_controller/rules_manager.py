@@ -30,8 +30,10 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import ipaddress
 import json
 import os
+import socket
 import sys
 import time
 from dataclasses import dataclass, field
@@ -982,16 +984,19 @@ class RulesManager:
     NFS_TABLE_POLL = 3.0
 
     def _wait_for_nfs_tables(self, module: ModuleSpec, rules: list[ModuleFirewallRule]) -> list[str]:
-        """Wait until both ends of each NFS rule of the module have table members.
+        """Wait until both ends of each NFS rule hold the addresses their names have now.
 
-        Both, because the consumer's own alias (``tm_<consumer>``, the source) is
-        usually created by the same apply as the share alias and resolves just as
-        late — a full share table behind an empty source table still drops the mount.
+        Both ends, because the consumer's own alias (``tm_<consumer>``, the source) is
+        created by the same apply as the share alias. The right addresses, not just
+        some: OPNsense resolves a host alias once and keeps the answer for its TTL
+        (300 s) — a consumer whose name still pointed at an earlier lease, or a share
+        whose alias just moved to another node, has a full table that drops the
+        mount. Such a table is re-resolved at once (``_reresolve_alias_tables``);
+        an empty one gets one more alias reconfigure halfway through.
 
-        Returns the aliases still empty at the deadline (warned, not fatal: the
-        mount then reports its own timeout). Halfway through it reconfigures the
-        aliases once more, for a share alias whose DNS record was created moments
-        before the first resolution ran. A table that cannot be read is not waited for.
+        Returns the aliases still wrong or empty at the deadline (warned, not fatal:
+        the mount then reports its own timeout). A table that cannot be read is not
+        waited for; one whose names do not resolve here only has to be non-empty.
         """
         if self.check_mode or self._fw is None:
             return []
@@ -1000,24 +1005,89 @@ class RulesManager:
         for r in rules:
             if r.destination_net.startswith("nfs_"):
                 pending += [n for n in (r.source_net, r.destination_net) if n in known and n not in pending]
+        expected = {n: self._expected_alias_addresses(module, n) for n in pending}
         start = time.monotonic()
-        nudged = False
+        nudged = reresolved = False
         while pending:
-            pending = [n for n in pending if self._alias_table_addresses(n) == []]
+            empty: list[str] = []
+            stale: list[str] = []
+            for n in pending:
+                have = self._alias_table_addresses(n)
+                if have is None:
+                    continue
+                if not have:
+                    empty.append(n)
+                elif expected[n] is not None and set(have) != expected[n]:
+                    stale.append(n)
+            pending = empty + stale
             if not pending:
                 break
             waited = time.monotonic() - start
             if waited >= self.NFS_TABLE_WAIT:
-                warn(f"{module.vmname}: alias table(s) {', '.join(pending)} still empty after "
+                warn(f"{module.vmname}: alias table(s) {', '.join(pending)} still empty or out of date after "
                      f"{int(waited)} s — an NFS mount through them will time out until they resolve")
                 return pending
-            if not nudged and waited >= self.NFS_TABLE_WAIT / 2:
+            if stale and not reresolved:
+                self._reresolve_alias_tables(stale)
+                reresolved = True
+            elif not nudged and waited >= self.NFS_TABLE_WAIT / 2:
                 self.reconfigure_aliases()
                 nudged = True
             time.sleep(self.NFS_TABLE_POLL)
         if time.monotonic() - start >= self.NFS_TABLE_POLL:
             info(f"{module.vmname}: NFS alias tables resolved after {int(time.monotonic() - start)} s")
         return []
+
+    def _expected_alias_addresses(self, module: ModuleSpec, name: str) -> set[str] | None:
+        """The addresses a host alias of the module should hold now: its literal IPs,
+        and its names as this machine's resolver (the same DNS as the firewall's)
+        answers them. None when that cannot be told — not a host alias of this
+        module, a network or range entry, or a name that does not resolve."""
+        content: list[str] | None = None
+        if name in module.aliases:
+            d = module.aliases[name]
+            if d.get("type", "host") == "host":
+                content = list(d.get("addresses", []))
+        else:
+            t = self._module_aliases_to_provision(module).get(name)
+            if t is not None and t.alias_type == "host":
+                content = list(t.content)
+        if not content:
+            return None
+        out: set[str] = set()
+        for c in content:
+            try:
+                out.add(str(ipaddress.IPv4Address(c)))
+                continue
+            except ValueError:
+                pass
+            if "/" in c or all(ch.isdigit() or ch in ".-" for ch in c):  # a CIDR or a range
+                return None
+            try:
+                out.update(socket.gethostbyname_ex(c)[2])
+            except OSError:
+                return None
+        return out or None
+
+    def _reresolve_alias_tables(self, names: list[str]) -> None:
+        """Make OPNsense resolve these host aliases again now, not at their TTL.
+
+        Measured on OPNsense: refresh_aliases keeps a cached answer, and so does a
+        flushed table — it is reloaded from /var/db/aliastables/<name>.txt. Only
+        removing that file before the refresh re-resolves the name. Best effort.
+        """
+        safe = [n for n in names if all(c.isalnum() or c == "_" for c in n)]
+        if not safe:
+            return
+        script = "".join(f"pfctl -t {n} -T flush 2>/dev/null; rm -f /var/db/aliastables/{n}.*; " for n in safe)
+        try:
+            r = _firewall_ssh(self.config.firewall, script + "configctl filter refresh_aliases >/dev/null\n", timeout=60.0)
+            if r.returncode == 0:
+                info(f"re-resolving alias table(s) {', '.join(safe)}: they held an earlier address")
+            else:
+                debug(f"could not re-resolve {', '.join(safe)}: {(r.stderr or '').strip()}")
+        except Exception as exc:  # ssh missing, timeout — the TTL still corrects it later
+            debug(f"could not re-resolve {', '.join(safe)}: {exc}")
 
     def _drop_derived_aliases(self, vmname: str, descriptions: list[str], keep: set[str] | None = None) -> int:
         """Delete the derived NFS aliases the given (deleted) rules pointed at.

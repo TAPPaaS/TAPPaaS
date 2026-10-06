@@ -101,6 +101,27 @@ nfs_drop_alias() {
         && { unset NFS_ALIAS_CACHE; info "  ${alias}: removed with its share"; }
 }
 
+# nfs_drop_orphan_aliases — remove every share alias (nfs-<share>.<domain>, D2b: the
+# storage module's own names) whose share is no longer declared. A declaration that
+# went without 'share delete' — a hand edit of shares.json — otherwise left it.
+nfs_drop_orphan_aliases() {
+    local alias share rc=0 f
+    f="$(nfs_shares_file)"
+    # Never judge orphans from a file that cannot be read: every alias would look like one.
+    [[ ! -e "${f}" ]] || jq -e 'type == "object"' "${f}" >/dev/null 2>&1 \
+        || { warn "  ${f} is not readable JSON — share aliases left as they are"; return 1; }
+    while read -r alias _; do
+        [[ "${alias}" == nfs-*."${NFS_ALIAS_DOMAIN}" ]] || continue
+        share="${alias#nfs-}"; share="${share%%.*}"
+        nfs_find_share "${share}" >/dev/null 2>&1 && continue
+        dns-manager --no-ssl-verify alias delete "${alias}" >/dev/null 2>&1 \
+            && info "  ${alias}: removed — share ${share} is no longer declared" \
+            || { warn "  ${alias}: could not remove it (share ${share} is no longer declared)"; rc=1; }
+    done < <(nfs_alias_list)
+    unset NFS_ALIAS_CACHE
+    return "${rc}"
+}
+
 # nfs_share_consumers <share> — the consumers granted the share that are deployed and
 # mount it, one per line.
 nfs_share_consumers() {
@@ -162,6 +183,7 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
                 [[ -n "${s}" ]] || continue
                 nfs_ensure_alias "$(jq -r .name <<< "${s}")" "$(jq -r .server <<< "${s}")" || rc=1
             done < <(nfs_shares)
+            nfs_drop_orphan_aliases || rc=1
             exit "${rc}" ;;
         drop)
             [[ "${#pos[@]}" -eq 2 ]] || die "drop <name> <server>"

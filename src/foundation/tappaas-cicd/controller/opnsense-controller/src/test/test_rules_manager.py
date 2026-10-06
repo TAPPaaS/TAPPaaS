@@ -1739,6 +1739,9 @@ class TestNfsAliasTableWait(unittest.TestCase):
             MagicMock(source_net="tm_jellyfin", destination_net="nfs_share_media"),
             MagicMock(source_net="tm_other", destination_net="tm_jellyfin"),
         ]
+        self.expected = {}
+        self.mgr._expected_alias_addresses = lambda module, n: self.expected.get(n)
+        self.mgr._reresolve_alias_tables = MagicMock()
 
     def test_it_returns_once_the_tables_have_members(self):
         answers = {"nfs_share_media": iter([[], ["10.0.0.10"]]), "tm_jellyfin": iter([[], [], ["10.2.0.5"]])}
@@ -1768,6 +1771,28 @@ class TestNfsAliasTableWait(unittest.TestCase):
         with contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
             self.mgr._wait_for_nfs_tables(self.module, self.rules)
         self.mgr.reconfigure_aliases.assert_called_once()
+
+    def test_a_table_holding_an_earlier_address_is_re_resolved_at_once(self):
+        # The consumer's alias held its previous lease's address: full, but wrong.
+        self.expected = {"tm_jellyfin": {"10.2.0.139"}, "nfs_share_media": {"10.0.0.10"}}
+        answers = {"nfs_share_media": iter([["10.0.0.10"]] * 5),
+                   "tm_jellyfin": iter([["10.2.0.93"], ["10.2.0.93"], ["10.2.0.139"]])}
+        self.mgr._alias_table_addresses = lambda n: next(answers[n])
+        self.assertEqual(self.mgr._wait_for_nfs_tables(self.module, self.rules), [])
+        self.mgr._reresolve_alias_tables.assert_called_once_with(["tm_jellyfin"])
+        self.mgr.reconfigure_aliases.assert_not_called()
+
+    def test_a_table_that_stays_wrong_is_named_at_the_deadline(self):
+        self.mgr.NFS_TABLE_WAIT = 0.0
+        self.expected = {"nfs_share_media": {"10.0.0.12"}}
+        self.mgr._alias_table_addresses = lambda n: ["10.0.0.10"]
+        with contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(self.mgr._wait_for_nfs_tables(self.module, self.rules), ["nfs_share_media"])
+
+    def test_without_an_expected_address_any_member_will_do(self):
+        self.mgr._alias_table_addresses = lambda n: ["10.9.9.9"]
+        self.assertEqual(self.mgr._wait_for_nfs_tables(self.module, self.rules), [])
+        self.mgr._reresolve_alias_tables.assert_not_called()
 
     def test_a_module_without_nfs_rules_does_not_wait(self):
         self.mgr._alias_table_addresses = MagicMock()
@@ -1841,3 +1866,60 @@ class TestDropAliasTable(unittest.TestCase):
         self.mgr.check_mode = True
         self.mgr.remove_alias("nfs_share_media")
         self.assertEqual(self.order, [])
+
+
+class TestExpectedAliasAddresses(unittest.TestCase):
+    """What a host alias should hold now: its IPs, and its names as resolved here."""
+
+    def setUp(self):
+        self.mgr = _make_manager(modules_dir=Path(tempfile.gettempdir()))
+        self.module = MagicMock(aliases={
+            "nfs_share_media": {"type": "host", "addresses": ["nfs-media.mgmt.internal"]},
+            "nfs_lit": {"type": "host", "addresses": ["10.3.10.50"]},
+            "nets": {"type": "network", "addresses": ["10.0.0.0/24"]},
+        })
+        self.mgr._module_aliases_to_provision = lambda module: {
+            "tm_jf": MagicMock(alias_type="host", content=["jf.rossen.internal"]),
+            "tm_iot": MagicMock(alias_type="network", content=["10.4.0.0/24"]),
+        }
+
+    def _resolve(self, name):
+        table = {"nfs-media.mgmt.internal": ["10.0.0.10"], "jf.rossen.internal": ["10.2.0.139"]}
+        if name not in table:
+            raise OSError("no such name")
+        return (name, [], table[name])
+
+    def test_names_resolve_and_literals_stay(self):
+        with patch.object(rm.socket, "gethostbyname_ex", side_effect=self._resolve):
+            self.assertEqual(self.mgr._expected_alias_addresses(self.module, "nfs_share_media"), {"10.0.0.10"})
+            self.assertEqual(self.mgr._expected_alias_addresses(self.module, "tm_jf"), {"10.2.0.139"})
+            self.assertEqual(self.mgr._expected_alias_addresses(self.module, "nfs_lit"), {"10.3.10.50"})
+
+    def test_unknown_when_it_cannot_be_told(self):
+        with patch.object(rm.socket, "gethostbyname_ex", side_effect=self._resolve):
+            self.assertIsNone(self.mgr._expected_alias_addresses(self.module, "nets"))
+            self.assertIsNone(self.mgr._expected_alias_addresses(self.module, "tm_iot"))
+            self.assertIsNone(self.mgr._expected_alias_addresses(self.module, "not_an_alias"))
+            self.module.aliases["nfs_share_gone"] = {"type": "host", "addresses": ["nfs-gone.mgmt.internal"]}
+            self.assertIsNone(self.mgr._expected_alias_addresses(self.module, "nfs_share_gone"))
+
+
+class TestReresolveAliasTables(unittest.TestCase):
+    """OPNsense re-resolves a host alias only once its table file is gone (measured)."""
+
+    def setUp(self):
+        self.mgr = _make_manager(modules_dir=Path(tempfile.gettempdir()))
+        rm._firewall_ssh.reset_mock()
+        rm._firewall_ssh.side_effect = None
+
+    def test_it_removes_the_files_then_refreshes(self):
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            self.mgr._reresolve_alias_tables(["tm_jf", "nfs_share_media"])
+        script = rm._firewall_ssh.call_args[0][1]
+        self.assertIn("rm -f /var/db/aliastables/tm_jf.*", script)
+        self.assertIn("rm -f /var/db/aliastables/nfs_share_media.*", script)
+        self.assertLess(script.index("aliastables/nfs_share_media"), script.index("refresh_aliases"))
+
+    def test_a_name_that_is_not_an_alias_name_is_never_put_in_a_command(self):
+        self.mgr._reresolve_alias_tables(["x; reboot"])
+        rm._firewall_ssh.assert_not_called()
