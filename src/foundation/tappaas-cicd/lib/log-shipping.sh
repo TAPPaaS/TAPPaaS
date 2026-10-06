@@ -47,7 +47,9 @@ log_shipping_wanted() {
 log_shipping_drop_regex() {
     local module="$1" cfg extra re="${LOG_SHIPPING_BASE_DROP}" u
     cfg="$(_ls_config_dir)"
-    extra="$(jq -r '(.config["logging:logs"].dropUnits // [])[]' "${cfg}/${module}.json" 2>/dev/null)"
+    # The installed config carries service fields flat (copy-update-json);
+    # the module's source JSON nests them under config."logging:logs".
+    extra="$(jq -r '(.dropUnits // .config["logging:logs"].dropUnits // [])[]' "${cfg}/${module}.json" 2>/dev/null)"
     while IFS= read -r u; do
         [[ -n "${u}" ]] || continue
         if [[ "${u}" =~ ^[A-Za-z0-9_.*@-]+$ ]]; then
