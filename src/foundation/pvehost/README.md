@@ -13,6 +13,7 @@ instance — `config/tappaas1.json`, `config/tappaas2.json`, … — named after
 | The nodes in TAPPaaS's inventory | one instance per node, `kind: machine`, `os: debian` |
 | Health checks | reachable by key, Proxmox VE, in this Site's cluster and quorate, disk below 90%, clock synchronised |
 | Serving NFS shares | the node is a server for the storage module (ADR-029 v0.9 D19): `storage/nfs-server.sh` builds, re-quotas, shares and unshares the shares `config/shares.json` places on it — declared with `storage-manager`, never in the node's own config; `module update <node>` re-converges them and `module test <node>` checks them |
+| Configuration backup | through `backup:filesystem`, like a guest (#662): `/etc` whole (a fixed list of subdirectories goes stale when Proxmox moves something), `/var/lib/pve-cluster` (`/etc/pve` is only a FUSE view of pmxcfs — copying it back is not a restore), and `/root` minus the netboot ISOs that `make-install-media.sh` rebuilds. Declared with `integratesWith`, not `dependsOn` (#501): a node registers long before a backup server exists |
 | Registration without effort | the cluster module's update registers every node that is not an instance yet; `site-manager node add` registers a node it joins |
 
 ## What is not included (stage 1)
