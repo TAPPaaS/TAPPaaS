@@ -97,14 +97,14 @@ Per group: its scores, and where its rows are. *2.1* = shipped in 2.1; *2.2* = d
 
 | Wave | Group | Ease | Risk | 2.1 | 2.2 | open |
 |------|-------|:-:|:-:|---:|---:|---:|
-| 4 | G4.1 Alerting & cluster resilience | M | M | – | 3 | 5 |
+| 4 | G4.1 Alerting & cluster resilience | M | M | – | 3 | 7 |
 | 4 | G4.2 Proxy & ingress | M | L | 1 | – | 4 |
 | 4 | G4.3 Manager verb gaps | M | L | 4 | 2 | 8 |
 | 4 | G4.4 Storage & physical devices | H | L | 2 | 2 | 6 |
 | 4 | G4.5 Governance, CI & sign-offs | M | L | 2 | 1 | 7 |
 | 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 7 | 5 | 8 |
-| 3 | G3.2 Identity & SSO wiring | M | L | 1 | 3 | 5 |
-| 3 | G3.3 App module fixes | L | L | 5 | 2 | 10 |
+| 3 | G3.2 Identity & SSO wiring | M | L | 1 | 4 | 5 |
+| 3 | G3.3 App module fixes | L | L | 5 | 2 | 11 |
 | 3 | G3.4 AI stack maturity | M | M | 1 | – | 6 |
 | 3 | G3.5 Installer UX | L | L | – | – | 4 |
 | 2 | G2.1 Firewall exposure & rule order | M | H | 3 | 4 | 13 |
@@ -228,9 +228,9 @@ TLS (ADR-029 v0.7 — OpenZFS `sharenfs` cannot carry `xprtsec`).
 
 New capabilities with low upgrade risk.
 
-### G4.1 Alerting & cluster resilience — Ease M · Risk M · done for 2.2: 3 · open: 5
+### G4.1 Alerting & cluster resilience — Ease M · Risk M · done for 2.2: 3 · open: 7
 
-Be told when something breaks, and survive more of it. Built: alerts from Loki by mail, every VM's logs in Loki. Next: a notice when a whole site goes dark (#776), Loki authentication (#165), a mail relay (#125), a second corosync link (#590).
+Be told when something breaks, and survive more of it. Built: alerts from Loki by mail, every VM's logs in Loki. Next: a notice when a whole site goes dark (#776), true timestamps and severities in Loki (#784, #785), Loki authentication (#165), a mail relay (#125), a second corosync link (#590).
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
@@ -239,6 +239,8 @@ Be told when something breaks, and survive more of it. Built: alerts from Loki b
 | #165 | logging v2: Loki auth, Grafana OIDC | H | M | Turning on Loki auth breaks existing pushes unless clients change in the same sweep; since #770 every client comes from `lib/log-shipping.sh`, so the credential goes in one renderer |
 | ✅ #770 | App VMs do not ship their logs to Loki | M | M | **Done 2026-10-06**, live on hrossen: every NixOS VM integrating `logging:logs` ships its journal from one renderer (`lib/log-shipping.sh`) to a push-only `:3101`; Loki's `:3100` stays mgmt-only |
 | #776 | Report a site that has gone dark (outside heartbeat) | M | L | **Opened 2026-10-06** after makerfloss was dark 2½ days unreported. Proposed: the satellite mails when the home WireGuard handshake is >15 min stale. **Decide:** its mail path (#125?) |
+| #784 | Loki stores receive time — backfill and reboot entries collapse | M | L | **Opened 2026-10-06** from a Loki sweep on hrossen: live lines are ~1 s off, but a boot's or a backfill's entries all land on Alloy's start time. Find where the journal time is lost |
+| #785 | Container stderr is labelled severity=error regardless of level | L | L | **Opened 2026-10-06:** podman writes stderr at PRIORITY=3, so authentik's info JSON is 12.4k "errors" a day on identity. Derive severity from the line for podman units |
 | ✅ #774 | Build guest systems on tappaas-cicd — guests neither evaluate, compile nor download | H | M | **Closed 2026-10-06.** NixOS guests are built on the mothership in a mount namespace and copied over (`a0a4b66e`); offline and release-move proven on hrossen. Guest sizing continues in #663 |
 | #590 | Second corosync link | H | M | |
 | FW #40 | Dedicated sync network recipe | L | L | Roll in with #590 |
@@ -327,7 +329,7 @@ Guests sized, placed, started and stopped right: memory defaults from measuremen
 | #761 | A composite-module ADR: `cluster`, `kubernetes`, and modules that only provide artefacts | H | M | ADR-022d and ADR-026 defer `cluster`/`kubernetes` to an ADR that does not exist, and `templates` fits no `kind`; interim values in ADR-022d v1.2. With @ErikDaniel007 |
 | #753 | A guest restarting during its own update fails the sweep | M | L | coturn restarted inside its own update on hrossen (2026-10-01); the post-apply SSH check raced its boot and failed the sweep. The restart's trigger is not yet known |
 
-### G3.2 Identity & SSO wiring — Ease M · Risk L · released in 2.1: 1 · done for 2.2: 3 · open: 5
+### G3.2 Identity & SSO wiring — Ease M · Risk L · released in 2.1: 1 · done for 2.2: 4 · open: 5
 
 Every app wired to the identity provider the same way: OIDC for hass, Nextcloud and forgejo (#345, #401, #282), a site-specific login page (#479), logging's SSO dependency (#701), and a test for forward-auth (#752).
 
@@ -341,10 +343,11 @@ Every app wired to the identity provider the same way: OIDC for hass, Nextcloud 
 | ✅ #738 | `identity:identity` discovery check fails on a changed host key and blames the firewall | L | L | **Closed 2026-09-25** via `integrate/nc35` (`c998ca5f`): the stale host key is cleared before the OIDC check, and an ssh failure is named as one. Reported by @AndreasJe |
 | #752 | identity:accessControl has no test-service | M | L | `test-service.sh` is an ADR-027 stub, so forward-auth is never tested. Check the Authentik provider, Caddy's ForwardAuth, and that an anonymous request is redirected |
 | ✅ #769 | vaultwarden: SSO is registered but never wired into the app | M | L | **Closed 2026-10-04** (SSO wired, `e184ea9d`). **Reversed 2026-10-06, vaultwarden 0.6.0:** no SSO for the password vault, by decision — see vaultwarden DESIGN.md |
+| ✅ #779 | identity: `authentik-env-secrets-only` calls `cmp` without diffutils | L | M | **Closed 2026-10-06** (`3f34f63e`): `! cmp` was always true, so the clean `authentik.env` was replaced and logged every boot. Live-tested on hrossen |
 
-### G3.3 App module fixes — Ease L · Risk L · released in 2.1: 5 · done for 2.2: 2 · open: 10
+### G3.3 App module fixes — Ease L · Risk L · released in 2.1: 5 · done for 2.2: 2 · open: 11
 
-The known rough edges of the app modules, fixed and tested so they stay fixed: Nextcloud Talk end to end (#715), Home Assistant (#552, #568, #571 — maintainer-owned), Nextcloud and euro-office (#332, #658, #751), litellm consumers (#553), windows-server (#411), forgejo (#283, #284), in-guest backups (#754).
+The known rough edges of the app modules, fixed and tested so they stay fixed: Nextcloud Talk end to end (#715), Home Assistant (#552, #568, #571 — maintainer-owned), Nextcloud and euro-office (#332, #658, #751), litellm consumers (#553), windows-server (#411), forgejo (#283, #284), in-guest backups (#754), container stop timeouts (#786).
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
@@ -360,6 +363,7 @@ The known rough edges of the app modules, fixed and tested so they stay fixed: N
 | #658 | nextcloud test 12 probes the browser URL from wherever it runs | L | L | Maintainer-owned (@ErikDaniel007). Not "403 = pass": skip with a reason when the test host is outside the route's `proxyAllowedZones` (exit 77), as Test 9z does |
 | #751 | nextcloud:fileservice has no teardown | M | L | `delete-service.sh` is an ADR-027 stub, so a deleted consumer leaves its connector settings in Nextcloud. Remove the env file and unset what `occ` applied; test on hrossen |
 | #754 | In-guest backup timers in six modules: drop for PBS or say why they stay | L | L | After Nextcloud dropped its failing in-guest dump (`ed663fe8`): six modules still dump inside the guest. Per module: drop it (PBS takes the VM) or keep it with the reason in DESIGN.md |
+| #786 | identity, litellm: containers get SIGKILL on every stop (10 s timeout) | L | M | **Opened 2026-10-06:** authentik-worker and litellm outlast podman's 10 s stop, exit 137 and leave the unit failed on every update. Longer `--stop-timeout`; check the other podman modules |
 
 ### G3.4 AI stack maturity — Ease M · Risk M · released in 2.1: 1 · open: 6
 
