@@ -54,7 +54,14 @@ LOG_SHIPPING_BASE_DROP="generate-.*-secrets.*"
 _ls_config_dir() { echo "${CONFIG_DIR:-/home/tappaas/config}"; }
 
 # 32 characters from [A-Za-z0-9]: 190 bits, nothing a shell or nginx quotes.
-_ls_new_secret() { tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 32; }
+# A finite read, cut in bash: `tr < /dev/urandom | head` ends tr with SIGPIPE,
+# which the callers' pipefail turned into a failure (#165 live test).
+_ls_new_secret() {
+    local s
+    s="$(head -c 96 /dev/urandom | base64 -w0 | tr -dc 'A-Za-z0-9')"
+    [[ ${#s} -ge 32 ]] || return 1
+    printf '%s' "${s:0:32}"
+}
 
 # Create <file> with a new secret unless it has one. Run as root (the
 # mothership's own fragment), it still leaves the file to tappaas, who owns the
