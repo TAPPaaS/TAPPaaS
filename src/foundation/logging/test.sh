@@ -92,7 +92,7 @@ check_loki_ready() {
     local body
     # shellcheck disable=SC2086
     body=$(ssh ${SSH_OPTS} "tappaas@${VM_HOST}" \
-        "curl -s --max-time 10 http://127.0.0.1:3100/ready" 2>/dev/null) || true
+        "curl -s --max-time 10 http://127.0.0.1:3102/ready" 2>/dev/null) || true
     if [[ "${body}" == *"ready"* ]]; then
         check_pass "Loki reports ready"
     else
@@ -105,7 +105,7 @@ check_loki_metrics() {
     local http_code
     # shellcheck disable=SC2086
     http_code=$(ssh ${SSH_OPTS} "tappaas@${VM_HOST}" \
-        "curl -s -o /dev/null -w '%{http_code}' --max-time 10 http://127.0.0.1:3100/metrics" 2>/dev/null) || true
+        "curl -s -o /dev/null -w '%{http_code}' --max-time 10 http://127.0.0.1:3102/metrics" 2>/dev/null) || true
     if [[ "${http_code}" == "200" ]]; then
         check_pass "Loki metrics responding"
     else
@@ -164,21 +164,42 @@ check_syslog_port() {
 }
 
 check_push_receiver() {
-    info "Check 7b: Push-only receiver accepts a line on tcp/3101 (#770)"
-    # From here (mgmt) — the path every VM's journal client takes. One line,
-    # job="tappaas-test", so it is easy to tell apart from real logs.
-    local now code
-    now="$(date +%s%N)"
-    code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 \
-        -H 'Content-Type: application/json' -X POST \
-        "http://${VM_HOST}:3101/loki/api/v1/push" \
-        --data "{\"streams\":[{\"stream\":{\"job\":\"tappaas-test\",\"host\":\"$(hostname)\"},\"values\":[[\"${now}\",\"logging test.sh push check\"]]}]}" \
-        2>/dev/null) || true
-    if [[ "${code}" == "204" || "${code}" == "200" ]]; then
-        check_pass "Push receiver accepted a line (HTTP ${code})"
-    else
-        check_fail "Push receiver on ${VM_HOST}:3101 did not accept a line (status: ${code:-timeout})"
+    info "Check 7b: Push and query need a credential; a VM writes only as itself (#770, #165)"
+    # From here (mgmt), with the mothership's own push credential — the path
+    # every VM's journal client takes. Lines carry job="tappaas-test".
+    # shellcheck source=../tappaas-cicd/lib/log-shipping.sh
+    . "${LOG_SHIPPING_LIB:-/home/tappaas/bin/log-shipping.sh}"
+    local now mark pw code body n
+    now="$(date +%s%N)"; mark="push-check-${now}"
+    pw="$(cat "${LOG_SHIPPING_CRED_DIR}/tappaas-cicd" 2>/dev/null)"
+    # The line claims to be another host; Loki must store it as tappaas-cicd.
+    body="{\"streams\":[{\"stream\":{\"job\":\"tappaas-test\",\"host\":\"spoofed\"},\"values\":[[\"${now}\",\"${mark}\"]]}]}"
+    push() { curl -s -o /dev/null -w '%{http_code}' --max-time 10 -H 'Content-Type: application/json' \
+                -X POST "http://${VM_HOST}:3101/loki/api/v1/push" --data "${body}" "$@" 2>/dev/null || true; }
+
+    code="$(push)"
+    if [[ "${code}" == "401" ]]; then check_pass "Push without a credential refused (401)"
+    else check_fail "Push without a credential got ${code:-no answer}, not 401"; fi
+
+    code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "http://${VM_HOST}:3100/loki/api/v1/labels" 2>/dev/null || true)"
+    if [[ "${code}" == "401" ]]; then check_pass "Query without a credential refused (401)"
+    else check_fail "Query without a credential got ${code:-no answer}, not 401"; fi
+
+    if [[ -z "${pw}" ]]; then
+        check_fail "No push credential for tappaas-cicd in ${LOG_SHIPPING_CRED_DIR} — re-run update-module.sh logging"
+        return
     fi
+    code="$(push -u "tappaas-cicd:${pw}")"
+    if [[ "${code}" == "204" || "${code}" == "200" ]]; then check_pass "Authenticated push accepted (HTTP ${code})"
+    else check_fail "Authenticated push got ${code:-no answer}"; return; fi
+
+    sleep 2
+    n="$(log_shipping_curl_admin -s --max-time 10 -G "http://${VM_HOST}:3100/loki/api/v1/query_range" \
+            --data-urlencode "query={job=\"tappaas-test\",host=\"tappaas-cicd\"} |= \"${mark}\"" \
+            --data-urlencode "start=$(( now - 60000000000 ))" 2>/dev/null \
+         | jq -r '[.data.result[].values[]] | length' 2>/dev/null || echo "")"
+    if [[ "${n}" == "1" ]]; then check_pass "The line is stored as host=tappaas-cicd, not the host it claimed"
+    else check_fail "The test line was not found as host=tappaas-cicd (found: ${n:-query failed})"; fi
 }
 
 check_loki_query() {
@@ -188,7 +209,7 @@ check_loki_query() {
     # there should be at least one stream with job="systemd-journal".
     # shellcheck disable=SC2086
     count=$(ssh ${SSH_OPTS} "tappaas@${VM_HOST}" \
-        "curl -s --max-time 10 --get 'http://127.0.0.1:3100/loki/api/v1/label/job/values' | jq -r '.data | length'" 2>/dev/null) || true
+        "curl -s --max-time 10 --get 'http://127.0.0.1:3102/loki/api/v1/label/job/values' | jq -r '.data | length'" 2>/dev/null) || true
     if [[ "${count}" =~ ^[0-9]+$ ]] && (( count >= 1 )); then
         check_pass "Loki has ${count} job label value(s)"
     else

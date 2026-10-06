@@ -8,9 +8,9 @@
 # when it exists — so no module carries its own copy of the pipeline, and a VM
 # that should not ship has no file and runs no Alloy.
 #
-# It pushes to logging's push-only receiver, logging.mgmt.internal:3101 (Alloy
-# loki.source.api): Loki's own 3100 also answers queries without authentication
-# and stays mgmt-only. A VM outside mgmt reaches 3101 through the logging:logs
+# It pushes to logging's push-only port, logging.mgmt.internal:3101 (nginx in
+# front of Alloy's loki.source.api); 3100 is Loki's whole API and stays
+# mgmt-only. A VM outside mgmt reaches 3101 through the logging:logs
 # pinhole (fromZones: any — per consumer VM, that port only).
 #
 # Before the line leaves the VM: units that handle secrets are dropped (the
@@ -19,19 +19,115 @@
 # everywhere else. The stages are the ones tappaas-cicd and identity shipped
 # with (#724): only the captured value is replaced, the key stays readable.
 #
+# Authentication (#165 §1). Every VM pushes with a credential of its own
+# (username = its vmname), kept on the mothership in ~tappaas/.loki-push/<host>
+# and written to the VM as /etc/secrets/tappaas-logging-push. nginx on the
+# logging VM checks it on :3101 and passes the username on as the tenant;
+# Alloy there overwrites the line's `host` with it, so a VM can only ever write
+# as itself. :3100 (query and admin) takes one admin credential,
+# ~tappaas/.loki-admin-password (user "tappaas").
+#
 # Sourceable only. Functions:
 #   log_shipping_wanted <module>                  0 when the module should ship
 #   render_logging_nix <host> <zone> [dropRegex]  the NixOS fragment, on stdout
 #   log_shipping_drop_regex <module>              the unit regex to drop
-#   apply_log_shipping_nixos <ip> <module>        install (or remove) the fragment;
-#                                                 the caller rebuilds
+#   apply_log_shipping_nixos <ip> <module>        install (or remove) the fragment
+#                                                 and the VM's push secret; the
+#                                                 caller rebuilds
+#   log_shipping_password <host>                  the host's push secret (created
+#                                                 on first use)
+#   log_shipping_admin_password                   the :3100 admin secret
+#   log_shipping_sync_logging                     write both htpasswd files on the
+#                                                 logging VM, reload nginx
+#   log_shipping_curl_admin <curl args...>        curl against :3100 as admin
 
 LOG_SHIPPING_PUSH_URL="${LOG_SHIPPING_PUSH_URL:-http://logging.mgmt.internal:3101/loki/api/v1/push}"
 LOG_SHIPPING_FRAGMENT="/etc/nixos/tappaas-logging.nix"
+LOG_SHIPPING_VM_SECRET="/etc/secrets/tappaas-logging-push"
+LOG_SHIPPING_CRED_DIR="${LOG_SHIPPING_CRED_DIR:-/home/tappaas/.loki-push}"
+LOG_SHIPPING_ADMIN_FILE="${LOG_SHIPPING_ADMIN_FILE:-/home/tappaas/.loki-admin-password}"
+LOG_SHIPPING_ADMIN_USER="tappaas"
+LOG_SHIPPING_QUERY_URL="${LOG_SHIPPING_QUERY_URL:-http://logging.mgmt.internal:3100}"
 # Units every TAPPaaS VM may have that write secrets: never shipped.
 LOG_SHIPPING_BASE_DROP="generate-.*-secrets.*"
 
 _ls_config_dir() { echo "${CONFIG_DIR:-/home/tappaas/config}"; }
+
+# 32 characters from [A-Za-z0-9]: 190 bits, nothing a shell or nginx quotes.
+_ls_new_secret() { tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 32; }
+
+# Create <file> with a new secret unless it has one. Run as root (the
+# mothership's own fragment), it still leaves the file to tappaas, who owns the
+# store. Sets LOG_SHIPPING_NEW=1 when it created one.
+_ls_ensure_secret() {
+    local f="$1"
+    [[ -s "${f}" ]] && return 0
+    (umask 077; mkdir -p "$(dirname "${f}")" && _ls_new_secret > "${f}") || return 1
+    if [[ ${EUID} -eq 0 ]]; then chown tappaas:users "$(dirname "${f}")" "${f}" 2>/dev/null || true; fi
+    LOG_SHIPPING_NEW=1
+}
+
+log_shipping_password() {
+    local host="$1"
+    [[ "${host}" =~ ^[A-Za-z0-9-]+$ ]] || { echo "log_shipping_password: bad host '${host}'" >&2; return 1; }
+    _ls_ensure_secret "${LOG_SHIPPING_CRED_DIR}/${host}" && cat "${LOG_SHIPPING_CRED_DIR}/${host}"
+}
+
+log_shipping_admin_password() {
+    _ls_ensure_secret "${LOG_SHIPPING_ADMIN_FILE}" && cat "${LOG_SHIPPING_ADMIN_FILE}"
+}
+
+# nginx's {SHA} scheme: base64 of the raw SHA-1. Unsalted is enough for a
+# 190-bit random secret, and it needs nothing beyond coreutils.
+_ls_sha() { printf '%s' "$1" | sha1sum | cut -d' ' -f1 | tr 'a-f' 'A-F' | basenc --base16 -d | base64; }
+
+_ls_htpasswd_push() {
+    local f
+    for f in "${LOG_SHIPPING_CRED_DIR}"/*; do
+        [[ -s "${f}" ]] || continue
+        printf '%s:{SHA}%s\n' "$(basename "${f}")" "$(_ls_sha "$(cat "${f}")")"
+    done
+}
+
+_ls_logging_vm() {
+    local cfg; cfg="$(_ls_config_dir)/logging.json"
+    printf 'tappaas@%s.%s.internal' "$(jq -r '.vmname // "logging"' "${cfg}" 2>/dev/null || echo logging)" \
+        "$(jq -r '.zone0 // "mgmt"' "${cfg}" 2>/dev/null || echo mgmt)"
+}
+
+# Put one htpasswd file on the logging VM, only when it differs. Echoes
+# "changed" when it wrote one.
+_ls_put_htpasswd() {
+    local vm="$1" path="$2" content="$3" want have
+    want="$(printf '%s' "${content}" | sha256sum | cut -d' ' -f1)"
+    have="$(ssh -o BatchMode=yes -o ConnectTimeout=10 "${vm}" "sudo sha256sum ${path} 2>/dev/null | cut -d' ' -f1" 2>/dev/null || true)"
+    [[ "${have}" == "${want}" ]] && return 0
+    printf '%s' "${content}" | ssh -o BatchMode=yes -o ConnectTimeout=10 "${vm}" \
+        "sudo install -m 0640 -o root -g nginx /dev/stdin ${path}" || return 1
+    echo changed
+}
+
+# Both password files on the logging VM: one line per pushing host (:3101), and
+# the admin (:3100). nginx reloads only when one changed.
+log_shipping_sync_logging() {
+    local vm admin changed=""
+    [[ -f "$(_ls_config_dir)/logging.json" ]] || return 0
+    vm="$(_ls_logging_vm)"
+    admin="$(log_shipping_admin_password)" || return 1
+    changed+="$(_ls_put_htpasswd "${vm}" /etc/loki-auth/push.htpasswd "$(_ls_htpasswd_push)")" || return 1
+    changed+="$(_ls_put_htpasswd "${vm}" /etc/loki-auth/admin.htpasswd \
+        "$(printf '%s:{SHA}%s\n' "${LOG_SHIPPING_ADMIN_USER}" "$(_ls_sha "${admin}")")")" || return 1
+    if [[ -n "${changed}" ]]; then
+        ssh -o BatchMode=yes -o ConnectTimeout=10 "${vm}" "sudo systemctl reload-or-restart nginx" || return 1
+    fi
+}
+
+# curl against Loki's query/admin port with the admin credential.
+log_shipping_curl_admin() {
+    local pw
+    pw="$(log_shipping_admin_password)" || return 1
+    curl -u "${LOG_SHIPPING_ADMIN_USER}:${pw}" "$@"
+}
 
 # The module declares logging:logs, and logging is deployed on this site.
 log_shipping_wanted() {
@@ -74,6 +170,10 @@ render_logging_nix() {
 # retries.
 { ... }:
 {
+  # The push secret (#165 §1), handed to Alloy by systemd: readable by the
+  # service whatever user it runs as, and never in the store.
+  systemd.services.alloy.serviceConfig.LoadCredential = [ "loki-push:${LOG_SHIPPING_VM_SECRET}" ];
+
   services.alloy = {
     enable = true;
     extraFlags = [
@@ -147,6 +247,10 @@ EOF
     loki.write "default" {
       endpoint {
         url = "${LOG_SHIPPING_PUSH_URL}"
+        basic_auth {
+          username      = "${host}"
+          password_file = sys.env("CREDENTIALS_DIRECTORY") + "/loki-push"
+        }
       }
     }
   '';
@@ -157,14 +261,25 @@ EOF
 # Install the fragment on a NixOS guest when the module ships, remove it when it
 # does not. The caller's nixos-rebuild applies either.
 apply_log_shipping_nixos() {
-    local ip="$1" module="$2" cfg host zone tmp
+    local ip="$1" module="$2" cfg host zone tmp pw
     cfg="$(_ls_config_dir)"
     if ! log_shipping_wanted "${module}"; then
-        ssh -o BatchMode=yes "tappaas@${ip}" "sudo rm -f ${LOG_SHIPPING_FRAGMENT}"
+        ssh -o BatchMode=yes "tappaas@${ip}" "sudo rm -f ${LOG_SHIPPING_FRAGMENT} ${LOG_SHIPPING_VM_SECRET}"
         return
     fi
     host="$(jq -r '.vmname // empty' "${cfg}/${module}.json" 2>/dev/null)"
     zone="$(jq -r '(.zone0 // (.config? // {} | to_entries[]?.value.zone0?)) // ""' "${cfg}/${module}.json" 2>/dev/null | head -1)"
+    # The VM's push secret first: the fragment names it, and Alloy will not
+    # start without it. A new one is added to the logging VM's password file at
+    # once, so the VM's first push is accepted.
+    LOG_SHIPPING_NEW=0
+    pw="$(log_shipping_password "${host:-${module}}")" || return 1
+    printf '%s' "${pw}" | ssh -o BatchMode=yes "tappaas@${ip}" \
+        "sudo install -d -m 0755 /etc/secrets && sudo install -m 0600 -o root -g root /dev/stdin ${LOG_SHIPPING_VM_SECRET}" \
+        || return 1
+    if [[ "${LOG_SHIPPING_NEW}" -eq 1 ]]; then
+        log_shipping_sync_logging || echo "log-shipping: could not add ${host:-${module}} to the logging VM's password file — its pushes are refused until logging's next update" >&2
+    fi
     tmp="$(mktemp)" || return 1
     if ! render_logging_nix "${host:-${module}}" "${zone}" "$(log_shipping_drop_regex "${module}")" > "${tmp}"; then
         rm -f "${tmp}"; return 1

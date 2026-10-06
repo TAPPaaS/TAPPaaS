@@ -56,7 +56,7 @@ standard run is itself live; see [TEST.md](./TEST.md)).
 | Check | Expected |
 |-------|----------|
 | SSH to `tappaas@logging.mgmt.internal` | Succeeds |
-| `curl http://127.0.0.1:3100/ready` on the VM | Contains `ready` (Loki up) |
+| `curl http://127.0.0.1:3102/ready` on the VM | Contains `ready` (Loki up; 3100 is nginx and wants the admin credential) |
 | `http://127.0.0.1:3000/api/health` on the VM | JSON shows `"database": "ok"` (Grafana) |
 | `ss -lnt` on the VM | `tcp/1514` in LISTEN (syslog ingest) |
 | Grafana Explore: `{job="systemd-journal"}` | Log lines from the local journal |

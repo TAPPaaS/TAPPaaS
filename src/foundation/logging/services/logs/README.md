@@ -10,9 +10,12 @@ alert rules (#770).
   baseline imports it. It is an Alloy pipeline (`lib/log-shipping.sh`) that drops units
   handling secrets, scrubs secret-looking values, labels each line `host` (the vmname),
   `zone`, `unit`, `severity`, and pushes to `logging.mgmt.internal:3101`.
+- **A push credential of its own** (#165 §1): username = its vmname, kept on the mothership
+  (`~tappaas/.loki-push/<host>`), written to the VM as `/etc/secrets/tappaas-logging-push`,
+  and added to logging's nginx password file by this service. Logging sets each line's
+  `host` from it, so the consumer writes as itself only.
 - **Network access**: `pinhole.json` opens TCP 3101 from the consumer's VM to logging —
-  logging's push-only receiver. Loki's own port 3100 answers queries without
-  authentication and stays mgmt-only. logging sits in mgmt, which no zone may otherwise
+  push only. Loki's API on 3100 stays mgmt-only and wants the admin credential. logging sits in mgmt, which no zone may otherwise
   pinhole into: `"fromZones": "any"` is the exception, honoured for foundation providers
   only, and still per consumer VM and to this port alone.
 - **Delete** reconciles the consumer's rules (the pinhole goes); its next OS update

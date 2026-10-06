@@ -37,3 +37,21 @@ logs_reconcile_consumer_rules() {
     fi
     "${_RULES_UPDATE}" "${CONSUMER}" || warn "  could not reconcile ${CONSUMER}'s firewall rules — run: update-module.sh ${CONSUMER}"
 }
+
+# The consumer's push credential (#165 §1): made if it has none, and the
+# logging VM's password file brought up to date, so the consumer's first push is
+# accepted whichever runs first — this, or its OS update writing the client.
+logs_sync_credentials() {
+    # shellcheck source=../../../tappaas-cicd/lib/log-shipping.sh
+    . "${LOG_SHIPPING_LIB:-/home/tappaas/bin/log-shipping.sh}"
+    local host
+    host="$(read_module_config "${CONSUMER}" 2>/dev/null | jq -r '.vmname // empty')"
+    if [[ "${DRY_RUN}" -eq 1 ]]; then
+        debug "  [dry-run] push credential for ${host:-${CONSUMER}}, sync to logging"
+        return 0
+    fi
+    log_shipping_password "${host:-${CONSUMER}}" >/dev/null \
+        || { warn "  could not make the push credential for ${host:-${CONSUMER}}"; return 0; }
+    log_shipping_sync_logging \
+        || warn "  could not update logging's password file — ${host:-${CONSUMER}}'s pushes are refused until it is"
+}

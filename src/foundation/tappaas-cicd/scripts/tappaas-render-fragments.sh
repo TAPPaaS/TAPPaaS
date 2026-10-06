@@ -54,6 +54,13 @@ if [[ -f "${_lsh}" ]]; then
     # shellcheck source=../lib/log-shipping.sh
     if . "${_lsh}" 2>/dev/null && declare -F render_logging_nix >/dev/null 2>&1; then
         if CONFIG_DIR=/home/tappaas/config log_shipping_wanted tappaas-cicd; then
+            # Its push secret (#165 §1), from the store every VM's comes from;
+            # the logging VM learns a new one at logging:logs' next sync.
+            if ! { _pw="$(log_shipping_password "${VMNAME}")" \
+                   && install -d -m 0755 /etc/secrets \
+                   && printf '%s' "${_pw}" | install -m 0600 -o root -g root /dev/stdin "${LOG_SHIPPING_VM_SECRET}"; }; then
+                warn "could not write the mothership's log push secret — its journal is refused until it is"
+            fi
             if render_logging_nix "${VMNAME}" mgmt \
                     "$(CONFIG_DIR=/home/tappaas/config log_shipping_drop_regex tappaas-cicd)" \
                     > /etc/nixos/tappaas-logging.nix.new 2>/dev/null; then
@@ -63,7 +70,7 @@ if [[ -f "${_lsh}" ]]; then
                 warn "could not render the journal client — the mothership keeps what it has"
             fi
         else
-            rm -f /etc/nixos/tappaas-logging.nix
+            rm -f /etc/nixos/tappaas-logging.nix "${LOG_SHIPPING_VM_SECRET}"
         fi
     fi
 fi

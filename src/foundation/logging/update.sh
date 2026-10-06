@@ -209,3 +209,18 @@ else
         warn "  could not deliver the token to ${VMNAME} — alerts cannot reach the mothership until it is"
     fi
 fi
+
+# ── Who may push and read (#165 §1) ──────────────────────────────────
+# nginx on the VM checks every push against a credential per VM and every
+# query against the admin credential; both password files are kept here on the
+# mothership and written to the VM when they differ. The mothership's own
+# credential is made here, as tappaas, before its own rebuild reads it.
+info "${BOLD}Sync the push and admin credentials to nginx${CL}"
+# shellcheck source=../tappaas-cicd/lib/log-shipping.sh
+. /home/tappaas/bin/log-shipping.sh
+log_shipping_password tappaas-cicd >/dev/null || warn "  could not make the mothership's push credential"
+if log_shipping_sync_logging; then
+    info "  ${GN}✓${CL} credentials in place ($(ls "${LOG_SHIPPING_CRED_DIR}" 2>/dev/null | wc -l) pushing hosts)"
+else
+    warn "  could not write the credentials to ${VMNAME} — pushes and queries are refused until they are"
+fi

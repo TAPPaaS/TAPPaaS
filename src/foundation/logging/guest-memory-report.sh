@@ -21,13 +21,16 @@
 # see. A guest with pressure (PSI > 0, stalls or an OOM kill) keeps at least what it
 # has: its peak was capped by its size, so the peak understates its need.
 set -euo pipefail
+# Loki's API takes the admin credential (#165 §1): log_shipping_curl_admin.
+# shellcheck source=../tappaas-cicd/lib/log-shipping.sh
+. "${LOG_SHIPPING_LIB:-/home/tappaas/bin/log-shipping.sh}"
 
 WINDOW="${1:-7d}"
 LOKI_URL="${LOKI_URL:-http://logging.mgmt.internal:3100}"
 SEL='{source="proxmox", unit="tappaas-guest-memory"} | logfmt | measured="1" | __error__=""'
 
 q() {   # q <logql> — instant query → {"vm": value, …}
-    curl -fsS --max-time 120 -G "${LOKI_URL}/loki/api/v1/query" --data-urlencode "query=$1" \
+    log_shipping_curl_admin -fsS --max-time 120 -G "${LOKI_URL}/loki/api/v1/query" --data-urlencode "query=$1" \
         | jq -c '[.data.result[] | {key: .metric.vm, value: (.value[1] | tonumber)}] | from_entries'
 }
 

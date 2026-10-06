@@ -51,8 +51,10 @@ The whole stack is declared in [`logging.nix`](logging.nix).
 |---|---|---|---|
 | 22 | TCP | SSH | mgmt admins |
 | 3000 | TCP | Grafana UI | Caddy on the firewall |
-| 3100 | TCP | Loki HTTP push/query | this VM; mgmt (Grafana, tests) — never opened to other zones |
-| 3101 | TCP | Push-only receiver (Alloy `loki.source.api`) → Loki | every VM's journal client (`logging:logs` pinhole) |
+| 3100 | TCP | nginx → Loki's API, admin credential (#165) | the mothership's tools — mgmt only, never opened to other zones |
+| 3101 | TCP | nginx → Alloy `loki.source.api` → Loki: push only, a credential per VM | every VM's journal client (`logging:logs` pinhole) |
+| 3102 | TCP | Loki itself (localhost only) | Grafana, this VM's Alloy |
+| 3103 | TCP | Alloy's push receiver (localhost only) | nginx |
 | 1514 | TCP | Syslog ingest (RFC 5424) → `source=opnsense` | OPNsense firewall |
 | 1515 | TCP | Syslog ingest (RFC 5424) → `source=proxmox` | Proxmox nodes (rsyslog) |
 | 9080 | TCP | Alloy metrics and component UI (localhost only) | local |
@@ -184,9 +186,17 @@ the same pipeline:
 3. **Label** `host` (the vmname), `zone`, `unit`, `severity`, `job="systemd-journal"`.
 4. **Push** to `logging.mgmt.internal:3101`, the push-only receiver.
 
-Why a second port: Loki's 3100 answers queries without authentication, so opening it to
-an app zone would let one compromised VM there read every log on the site. 3101 is Alloy's
-`loki.source.api` on this VM, forwarding to the local Loki: it accepts pushes only.
+Why a second port: 3100 is Loki's whole API — queries, deletes — and must never be open to
+an app zone. 3101 accepts pushes only.
+
+Who may push (#165 §1): each VM has a credential of its own, username = its vmname. The
+mothership keeps them (`~tappaas/.loki-push/<host>`) and writes the VM's copy to
+`/etc/secrets/tappaas-logging-push`, which systemd hands to Alloy (`LoadCredential`). nginx
+on this VM checks it against `/etc/loki-auth/push.htpasswd` (synced by `logging:logs` and
+`update.sh`) and passes the username on as the tenant; Alloy here makes that the line's
+`host`, whatever the line said. So a VM writes as itself and nobody else. 3100 takes one
+admin credential (`~tappaas/.loki-admin-password`, user `tappaas`;
+`log_shipping_curl_admin` in `lib/log-shipping.sh`).
 
 Why the firewall lets an app zone in: mgmt's `pinhole-allowed-from` is empty, so no zone
 may pinhole into it. `services/logs/pinhole.json` says `"fromZones": "any"` — honoured for
@@ -274,16 +284,17 @@ Covered by the standard `backup:vm` dependency (PBS snapshot). Loki state under
 `/var/lib/loki` is captured as part of the VM image. Log gaps during a restore are
 expected and acceptable.
 
-## Trust model (v1)
+## Trust model
 
-The mgmt zone is the trust boundary for the logging stack:
-
-- Loki accepts unauthenticated pushes and queries on tcp/3100 from anything routable in
-  the mgmt zone. A compromised mgmt-zone VM could write spoofed-label logs or query/delete
-  arbitrary log history.
-- tcp/3101 accepts unauthenticated pushes and nothing else, from mgmt and from each VM
-  holding a `logging:logs` pinhole. Such a VM can write lines under any label (a `host`
-  it is not), but cannot read or delete anything.
+- Loki and Alloy's receiver listen on localhost only; nginx is the way in (#165 §1).
+- tcp/3100 (query, delete, everything) needs the admin credential, which only the
+  mothership holds. Without it a mgmt-zone VM gets 401.
+- tcp/3101 needs the pushing VM's own credential and accepts pushes only. A VM can write
+  lines under its own `host` and no other — the label is set from the credential — and
+  cannot read or delete anything. A stolen credential lets its holder write as that VM.
+- Credentials are HTTP basic auth over plain HTTP inside the site network: someone who
+  can read traffic on the path can lift them. TLS would close that; it needs the TAPPaaS
+  CA (the syslog-over-TLS issue).
 - Alloy accepts unauthenticated RFC 5424 syslog on tcp/1514 from anywhere routable
   in mgmt.
 - Grafana web UI is on tcp/3000; the only intended access path is through Caddy in the
@@ -310,9 +321,8 @@ Mitigations in place:
 
 ## Known limitations / v2 backlog
 
-- **Loki authentication**: turn on `auth_enabled = true` with per-tenant `X-Scope-OrgID`
-  and either basic-auth or mTLS on tcp/3100. Alloy clients on each VM ship a tenant
-  ID so spoofed-host labels are rejected.
+- **Loki authentication**: ✅ done (#165 §1) — nginx with a credential per pushing VM on
+  3101 and an admin credential on 3100; `host` is set from the credential. Not TLS yet.
 - **Grafana auth**: ✅ OIDC against `identity:identity` is wired (from AndreasJe's work
   on pr-513, adapted). `logging.json` declares the contract — `providesAdminRole`, the
   `/login/generic_oauth` redirect path, `secretsEnv` and `configureService`; Authentik

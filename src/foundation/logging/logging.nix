@@ -30,8 +30,10 @@
 { config, lib, pkgs, modulesPath, system, ... }:
 
 let
-  lokiPort          = 3100;
-  pushPort          = 3101;    # push-only receiver every VM ships to (#770)
+  lokiPort          = 3100;    # nginx: Loki's API behind the admin credential (#165 §1)
+  pushPort          = 3101;    # nginx: push only, a credential per VM (#770, #165 §1)
+  lokiInternal      = 3102;    # Loki itself, localhost only
+  pushInternal      = 3103;    # Alloy's push receiver, localhost only
   grafanaPort       = 3000;
   syslogOpnsensePort = 1514;   # OPNsense → Alloy (source=opnsense)
   syslogProxmoxPort  = 1515;   # Proxmox nodes → Alloy (source=proxmox)
@@ -214,8 +216,8 @@ in
     allowedTCPPorts = [
       22             # SSH
       grafanaPort    # Grafana web UI (3000) — fronted by Caddy
-      lokiPort       # Loki HTTP push/query (3100) — mgmt only (Grafana, tests)
-      pushPort       # Push-only receiver (3101) — every VM's Alloy client (#770)
+      lokiPort       # Loki API (3100) via nginx, admin credential — mgmt only
+      pushPort       # Push only (3101) via nginx, a credential per VM (#770)
       syslogOpnsensePort     # Syslog ingest (1514) — from OPNsense
       syslogProxmoxPort      # Syslog ingest (1515) — from Proxmox nodes
     ];
@@ -358,8 +360,10 @@ in
       auth_enabled = false;
 
       server = {
-        http_listen_address = "0.0.0.0";
-        http_listen_port = lokiPort;
+        # Localhost only (#165 §1): everything from outside goes through nginx,
+        # which asks for a credential (lokiPort, pushPort below).
+        http_listen_address = "127.0.0.1";
+        http_listen_port = lokiInternal;
         # gRPC must listen on 0.0.0.0: Loki's internal querier/scheduler
         # components dial each other via the ring's instance address (the
         # VM's primary interface IP), even in single-binary mode. Binding
@@ -614,24 +618,82 @@ in
       relabel_rules = discovery.relabel.syslog_proxmox.rules
     }
 
-    // Push-only receiver for every TAPPaaS VM's journal (#770). Loki's own
-    // port also answers queries without authentication, so it stays mgmt-only;
-    // this one accepts /loki/api/v1/push and nothing else. App zones reach it
-    // through the logging:logs pinhole (per consumer VM, this port only).
+    // Push receiver for every TAPPaaS VM's journal (#770), behind nginx on
+    // :${toString pushPort}: nginx checks the VM's own credential and passes its
+    // username on as the tenant (X-Scope-OrgID). App zones reach :${toString pushPort}
+    // through the logging:logs pinhole (per consumer VM, that port only).
     loki.source.api "push" {
       http {
-        listen_address = "0.0.0.0"
-        listen_port    = ${toString pushPort}
+        listen_address = "127.0.0.1"
+        listen_port    = ${toString pushInternal}
       }
+      forward_to = [loki.relabel.pushed_by.receiver]
+    }
+
+    // A VM writes as itself and nobody else (#165 §1): `host` is the
+    // authenticated username, whatever the line claimed. The tenant label goes
+    // after use — Loki here is single-tenant.
+    loki.relabel "pushed_by" {
       forward_to = [loki.write.default.receiver]
+      rule {
+        source_labels = ["__tenant_id__"]
+        target_label  = "host"
+      }
+      rule {
+        action = "labeldrop"
+        regex  = "__tenant_id__"
+      }
     }
 
     loki.write "default" {
       endpoint {
-        url = "http://127.0.0.1:${toString lokiPort}/loki/api/v1/push"
+        url = "http://127.0.0.1:${toString lokiInternal}/loki/api/v1/push"
       }
     }
   '';
+
+  # ============================================================================
+  # NGINX — who may push, who may read (#165 §1)
+  # ============================================================================
+  #
+  # Loki and Alloy's receiver listen on localhost only; this is the way in.
+  #   :${toString pushPort}  push only. One credential per VM (username = its vmname),
+  #          kept on the mothership and synced here as push.htpasswd by
+  #          logging:logs. The username becomes the tenant, and Alloy makes it
+  #          the line's `host` — a VM cannot write as another.
+  #   :${toString lokiPort}  Loki's whole API (query, admin) for the mothership's
+  #          tools, behind the admin credential (admin.htpasswd).
+  # Grafana and this VM's own Alloy talk to Loki on localhost directly.
+  # The password files start empty (tmpfiles below): nginx then refuses everyone
+  # until the mothership writes them, rather than failing to start.
+  services.nginx = {
+    enable = true;
+    virtualHosts."loki-push" = {
+      listen = [ { addr = "0.0.0.0"; port = pushPort; } ];
+      locations."= /loki/api/v1/push" = {
+        proxyPass = "http://127.0.0.1:${toString pushInternal}";
+        extraConfig = ''
+          auth_basic "TAPPaaS log push";
+          auth_basic_user_file /etc/loki-auth/push.htpasswd;
+          proxy_set_header X-Scope-OrgID $remote_user;
+          client_max_body_size 16m;
+        '';
+      };
+      locations."/".return = "404";
+    };
+    virtualHosts."loki-api" = {
+      listen = [ { addr = "0.0.0.0"; port = lokiPort; } ];
+      locations."/" = {
+        proxyPass = "http://127.0.0.1:${toString lokiInternal}";
+        extraConfig = ''
+          auth_basic "TAPPaaS log store";
+          auth_basic_user_file /etc/loki-auth/admin.htpasswd;
+          client_max_body_size 16m;
+          proxy_read_timeout 300s;
+        '';
+      };
+    };
+  };
 
   # ============================================================================
   # GRAFANA — web UI
@@ -729,7 +791,7 @@ in
           uid = "loki";
           type = "loki";
           access = "proxy";
-          url = "http://127.0.0.1:${toString lokiPort}";
+          url = "http://127.0.0.1:${toString lokiInternal}";
           isDefault = true;
           editable = false;
         }];
@@ -958,6 +1020,11 @@ in
     "d /var/lib/loki/rules             0700 loki     loki     -"
     "d /var/lib/loki/compactor         0700 loki     loki     -"
     "d /etc/secrets                    0750 root     grafana  -"
+    # nginx's password files (#165 §1), written by the mothership. Created
+    # empty so nginx starts — and refuses everyone — before the first sync.
+    "d /etc/loki-auth                  0750 root     nginx    -"
+    "f /etc/loki-auth/push.htpasswd    0640 root     nginx    -"
+    "f /etc/loki-auth/admin.htpasswd   0640 root     nginx    -"
   ];
 
   # ============================================================================

@@ -33,7 +33,11 @@ fi
 # Both in ONE ssh round-trip; --max-time well under the 5 s poll interval.
 ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR -o BatchMode=yes \
     "tappaas@${VM_IP}" '
-        case "$(curl -s --max-time 4 http://127.0.0.1:3100/ready)" in *ready*) ;; *) exit 1 ;; esac
-        n=$(curl -s --max-time 4 --get http://127.0.0.1:3100/loki/api/v1/label/job/values | jq -r ".data | length") || exit 1
+        # Loki on localhost: 3102 since #165 (3100 is nginx, with a credential);
+        # 3100 still answers on a generation from before it.
+        L=http://127.0.0.1:3102
+        curl -s --max-time 2 "$L/ready" >/dev/null 2>&1 || L=http://127.0.0.1:3100
+        case "$(curl -s --max-time 4 "$L/ready")" in *ready*) ;; *) exit 1 ;; esac
+        n=$(curl -s --max-time 4 --get "$L/loki/api/v1/label/job/values" | jq -r ".data | length") || exit 1
         [ "${n:-0}" -ge 1 ]
     ' >/dev/null 2>&1
