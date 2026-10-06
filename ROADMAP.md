@@ -164,8 +164,7 @@ met gates are recorded in the releases that carried their waves.
 
 - **Merge pairs** the issues themselves say belong together: #36 + #127, #385 + #222,
   #160 + #256, #642 + #643, #444 + #582, #119 / #120 / #121.
-- **Close or park:** #154, #223 → (#284 went to Future Work 2026-10-06)
-  *Parking lot*. The forge's *Release 2.0: Build out Stacks* milestone still has 4 open issues —
+- **Close or park:** #154, #223 → *Parking lot* (#284 went to Future Work 2026-10-06). The forge's *Release 2.0: Build out Stacks* milestone still has 4 open issues —
   move them per this plan and close it.
 - **Parked, half of #656:** a proxy access list kept current from a provider's published feed (an
   Azure service tag, say) is a subsystem, not a field — an outbound fetch on a schedule, a trust
@@ -179,48 +178,33 @@ met gates are recorded in the releases that carried their waves.
 
 ## Future Work — not yet in a wave
 
-**Roll in** — small, and cheaper done with the group they sit in:
-
-| # | Issue | Group | Why now |
-|---|-------|-------|---------|
-| #162 | Firewall sequence-map artifact | G2.1 | Falls out of #160 / #645 |
-| #83 | Reuse downloaded images | G3.5 | An installer change — but a cache location and staleness policy to decide (re-scored to Ease H) |
-| #40 | Sync-network recipe | G4.1 | Documentation half of #590 |
-
-**Optional roll-ins:** #157 default DNS blocklists (G2.2, after #387), #158 multi-NIC module
-firewall rules (G4.4), #39 power saving (docs).
-
-**Moved out of a wave:**
-
-| # | Issue | From | When |
-|---|-------|------|------|
-| #250 | `dependsOn` ownership for community modules (option D, `dependsOn.sh`) | G1.3 | 2026-09-20 (operator) |
-| #58 | Secrets management (OpenBao) — the proposal stands: one secrets-access helper every module uses instead of reading `/etc/secrets`, OpenBao swapped in behind it later | G1.6 | 2026-10-02 (operator) |
-
-**Close or re-scope:**
-
-| # | Issue | Proposal |
-|---|-------|----------|
-| #11 | NextCloud | Close: `src/collaboration/nextcloud` exists |
-| #12 | HomeAssistant | Close: `src/home/hass` exists |
-| #71 | Backup of user data inside the VM | Re-scope: the `backup:filesystem` service exists; document it for app data |
-| #93 | App-level backups to PBS as pxar | Same as #71 |
-| #98 | Create the DevOps stack | Close, or keep as the stack epic: `src/devops` exists since 2026-10-04 with forgejo, moved from Community and live-tested |
-
-**Parking lot** (on the forge, outside the waves):
+Known work that no wave holds yet. A ✅ row is done and ships with the next release. (Small
+items that belong to a group — FW #40, #83, #157, #158, #162 — are rows in that group.)
 
 | # | Issue | Note |
 |---|-------|------|
-| #488 | apply-json-merge pins fields the operator never changed | The general case of #736 — see *Decisions* above |
-| #464 | migrate-firewall-to-network: dry-run reports a step it cannot predict | A dry run that overstates what it will do — the kind of thing that teaches an operator to distrust dry runs |
-
-**Done, ships in 2.2:** #52 Jellyfin — closed 2026-10-06, in TAPPaaS at status Testing, media on a
-`storage:nfs` share, installed on hrossen.
-
-**Keep in Future Work:** #26 IPv6 (write the stance under #149), #284 forgejo SQLite → PostgreSQL (moved out of G3.3 2026-10-06, operator — SQLite stays the default until load says otherwise), #129 Project Nomad, #89 binary repository, #91 Backstage, #156 pfSense alias import, #170 LiteLLM
-declarative state (decide with #430), #183 service catalog, #678 Windows guests' time zone (from
-G1.4), #757 `debianhost` over PXE (ADR-026 D8a — `adopt` covers every known site), #771 NFS over
-TLS (ADR-029 v0.7 — OpenZFS `sharenfs` cannot carry `xprtsec`).
+| #26 | IPv6 implemented | Write the stance first, under #149 (G2.2) |
+| #39 | Power saving | Documentation |
+| #58 | Secrets management | One secrets-access helper every module uses instead of reading `/etc/secrets`, OpenBao behind it later. Out of G1.6 since 2026-10-02 (operator) |
+| #71 | TAPPaaS way to back up, export and restore user data inside a VM | Open: `backup:filesystem` does not solve it |
+| #89 | Manage binaries for TAPPaaS | |
+| #91 | Backstage as a component of tappaas-cicd | |
+| #129 | Project Nomad in the Home stack | |
+| #156 | pfSense `aliases.xml` import script | |
+| #170 | LiteLLM declarative control plane | Decide with #430 (G1.7) |
+| #183 | TAPPaaS service catalog | |
+| #250 | `dependsOn` ownership for community modules | Option D, `dependsOn.sh`. Out of G1.3 since 2026-09-20 (operator) |
+| #284 | forgejo: SQLite → PostgreSQL | Out of G3.3 2026-10-06 (operator): SQLite stays the default until load says otherwise |
+| #464 | migrate-firewall-to-network: dry-run reports a step it cannot predict | A dry run that overstates what it will do teaches an operator to distrust dry runs. Parking lot on the forge |
+| #488 | apply-json-merge pins fields the operator never changed | The general case of #736 — see *Decisions*. Parking lot on the forge |
+| #678 | windows-server: time zone, keyboard and locale from the site | From G1.4: its own time-zone vocabulary and a Windows test |
+| #757 | `debianhost` over PXE (ADR-026 D8a) | `adopt` covers every known site |
+| #771 | NFS over TLS for `pvehost:nfs` | ADR-029 v0.7: OpenZFS `sharenfs` cannot carry `xprtsec` |
+| ✅ #11 | NextCloud | **Closed 2026-10-06:** a TAPPaaS module, `src/collaboration/nextcloud` |
+| ✅ #12 | HomeAssistant | **Closed 2026-10-06:** a TAPPaaS module, `src/home/hass` |
+| ✅ #52 | Jellyfin | **Closed 2026-10-06:** in TAPPaaS at status Testing, media on a `storage:nfs` share, installed on hrossen |
+| ✅ #93 | App-level backups to PBS as pxar archives | **Closed 2026-10-06:** what `backup:filesystem` does (`proxmox-backup-client`) |
+| ✅ #98 | Create the DevOps stack | **Closed 2026-10-06:** `src/devops`, with forgejo moved from Community and live-tested |
 
 ---
 
