@@ -358,12 +358,11 @@ def _parse_dependency(dep: str) -> tuple[str, str] | None:
     return provider, service
 
 
-def load_pinhole_ports(provider_location: str, service: str) -> list[dict] | None:
+def load_pinhole(provider_location: str, service: str) -> dict | None:
     """Load <provider.location>/services/<service>/pinhole.json (issue #173).
 
-    Returns the list of port specs (``{port, protocol, description}``), or
-    ``None`` when the file is absent (which is the normal case for services
-    that don't expose network ports, e.g. ``cluster:vm``).
+    Returns the parsed file, or ``None`` when it is absent (the normal case for
+    services that expose no network ports, e.g. ``cluster:vm``).
     """
     if not provider_location:
         return None
@@ -371,11 +370,35 @@ def load_pinhole_ports(provider_location: str, service: str) -> list[dict] | Non
     if not path.is_file():
         return None
     with open(path) as f:
-        data = json.load(f)
+        return json.load(f)
+
+
+def load_pinhole_ports(provider_location: str, service: str) -> list[dict] | None:
+    """The port specs (``{port, protocol, description}``) of a pinhole.json, or
+    ``None`` when there is none."""
+    data = load_pinhole(provider_location, service)
+    if data is None:
+        return None
     ports = data.get("ports", []) or []
     if not isinstance(ports, list):
         return None
     return ports
+
+
+def pinhole_from_any_zone(provider_location: str, service: str) -> bool:
+    """True when a FOUNDATION provider's pinhole.json says ``"fromZones": "any"``
+    (#770): the one exception to the provider zone's ``pinhole-allowed-from``.
+
+    It exists for platform sinks every module feeds — logging:logs, a push-only
+    port into mgmt, which no zone may otherwise pinhole into. The path is still
+    per consumer VM and only to the ports the file names. Honoured for foundation
+    providers alone: a community module cannot widen the zone policy by shipping
+    a file.
+    """
+    data = load_pinhole(provider_location, service)
+    if not data or data.get("fromZones") != "any":
+        return False
+    return "foundation" in Path(provider_location).parts
 
 
 def _module_alias_name(peer_vmname: str) -> str:
@@ -1620,13 +1643,21 @@ class RulesManager:
                             f"{provider.vmname} is in zone '{provider.zone0}', "
                             "which is not in zones.json")
                 continue
-            if module.zone0 in provider_zone.access_to:
+            # The consumer opens the connection, so it is the CONSUMER's zone edge
+            # that may already carry it: access-to lists where a zone may go
+            # (#770). This read the provider's list, the reverse direction — so
+            # every consumer of a mgmt service ("access-to": ["all"]) was
+            # skipped as covered while its traffic was in fact refused.
+            consumer_zone = self.zones.get(module.zone0)
+            if consumer_zone and (provider.zone0 in consumer_zone.access_to
+                                  or "all" in consumer_zone.access_to):
                 if on_skip:
                     on_skip(dep, origin,
-                            f"'{module.zone0}' is already in {provider.zone0}.access-to — "
+                            f"'{provider.zone0}' is already in {module.zone0}.access-to — "
                             "the zone edge covers it")
                 continue
-            if module.zone0 not in provider_zone.pinhole_allowed_from:
+            if (module.zone0 not in provider_zone.pinhole_allowed_from
+                    and not pinhole_from_any_zone(provider.location, service)):
                 if on_policy_block is not None:
                     on_policy_block(dep, origin, provider, provider_zone)
                 if on_skip:

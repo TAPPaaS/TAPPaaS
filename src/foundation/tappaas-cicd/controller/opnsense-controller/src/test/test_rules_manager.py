@@ -789,9 +789,11 @@ class _PinholeFixtures:
         zone0: str,
         pinhole_ports: list[dict] | None,
         service: str = "api",
+        pinhole_extra: dict | None = None,
+        location: Path | None = None,
     ):
         """Create <vmname>.json + (optionally) services/<service>/pinhole.json."""
-        location = dir_ / f"{vmname}-src"
+        location = location or dir_ / f"{vmname}-src"
         location.mkdir(parents=True, exist_ok=True)
         (dir_ / f"{vmname}.json").write_text(json.dumps({
             "vmname": vmname,
@@ -804,7 +806,8 @@ class _PinholeFixtures:
         if pinhole_ports is not None:
             svc_dir = location / "services" / service
             svc_dir.mkdir(parents=True, exist_ok=True)
-            (svc_dir / "pinhole.json").write_text(json.dumps({"ports": pinhole_ports}))
+            (svc_dir / "pinhole.json").write_text(
+                json.dumps({"ports": pinhole_ports, **(pinhole_extra or {})}))
         return location
 
     def _write_consumer(
@@ -923,9 +926,9 @@ class TestAutoPinholes(_PinholeFixtures, unittest.TestCase):
         self.assertFalse(any(r.description.startswith("tappaas-svcdep:") for r in rules))
 
     def test_access_to_covers_traffic_so_no_pinhole_needed(self):
-        # Make dmz appear in srvWork.access-to → zone-level rule already
-        # permits the traffic; the per-module pinhole is redundant.
-        zones = self._make_zones(**{"srvWork": {"access_to": ["internet", "dmz"]}})
+        # Make srvWork appear in dmz.access-to → the consumer's zone edge
+        # already permits the traffic; the per-module pinhole is redundant.
+        zones = self._make_zones(**{"dmz": {"access_to": ["internet", "srvWork"]}})
         self._write_provider(
             self.dir, vmname="api", zone0="srvWork",
             pinhole_ports=[{"port": 4000}], service="rest",
@@ -957,6 +960,63 @@ class TestAutoPinholes(_PinholeFixtures, unittest.TestCase):
         rules, errors = mgr._compile(load_module(self.dir, "ui"))
         # No errors — it's a warning, not an error
         self.assertEqual(errors, [])
+        self.assertFalse(any(r.description.startswith("tappaas-svcdep:") for r in rules))
+
+    def test_provider_access_to_does_not_cover_the_consumer(self):
+        # #770: access-to is where a zone may GO. srvWork reaching dmz says
+        # nothing about dmz reaching srvWork, so the pinhole is still needed.
+        zones = self._make_zones(**{"srvWork": {"access_to": ["internet", "dmz"]}})
+        self._write_provider(
+            self.dir, vmname="api", zone0="srvWork",
+            pinhole_ports=[{"port": 4000}], service="rest",
+        )
+        self._write_consumer(self.dir, vmname="ui", zone0="dmz", depends_on=["api:rest"])
+        mgr = _make_manager(zones=zones, modules_dir=self.dir)
+        rules, _ = mgr._compile(load_module(self.dir, "ui"))
+        self.assertIn("tappaas-svcdep:ui:rest:api:4000", {r.description for r in rules})
+
+    def test_consumer_access_to_all_covers_it(self):
+        # A mgmt consumer ("access-to": ["all"]) reaches every zone already.
+        zones = self._make_zones(**{"mgmt": {"access_to": ["internet", "all"]}})
+        self._write_provider(
+            self.dir, vmname="api", zone0="srvWork",
+            pinhole_ports=[{"port": 4000}], service="rest",
+        )
+        self._write_consumer(self.dir, vmname="ui", zone0="mgmt", depends_on=["api:rest"])
+        mgr = _make_manager(zones=zones, modules_dir=self.dir)
+        rules, _ = mgr._compile(load_module(self.dir, "ui"))
+        self.assertFalse(any(r.description.startswith("tappaas-svcdep:") for r in rules))
+
+    def _write_logging(self, foundation: bool):
+        """A mgmt sink whose pinhole.json says fromZones: any (#770)."""
+        base = self.dir / ("src/foundation" if foundation else "src/community")
+        self._write_provider(
+            self.dir, vmname="logging", zone0="mgmt",
+            pinhole_ports=[{"port": 3101, "protocol": "TCP"}], service="logs",
+            pinhole_extra={"fromZones": "any"}, location=base / "logging",
+        )
+
+    def test_foundation_from_zones_any_lifts_the_policy_gate(self):
+        # mgmt.pinhole-allowed-from is [] — only fromZones lets dmz in, and only
+        # to the declared port, from the consumer's own alias.
+        zones = self._make_zones(**{"mgmt": {"access_to": ["internet", "all"]}})
+        self._write_logging(foundation=True)
+        self._write_consumer(self.dir, vmname="ui", zone0="dmz",
+                             integrates_with=["logging:logs"])
+        mgr = _make_manager(zones=zones, modules_dir=self.dir)
+        rules, errors = mgr._compile(load_module(self.dir, "ui"))
+        self.assertEqual(errors, [])
+        rule = next(r for r in rules if r.description == "tappaas-svcdep:ui:logs:logging:3101")
+        self.assertEqual(rule.source_net, "tm_ui")
+        self.assertEqual(rule.destination_net, "tm_logging")
+
+    def test_from_zones_any_outside_foundation_is_refused(self):
+        zones = self._make_zones(**{"mgmt": {"access_to": ["internet", "all"]}})
+        self._write_logging(foundation=False)
+        self._write_consumer(self.dir, vmname="ui", zone0="dmz",
+                             integrates_with=["logging:logs"])
+        mgr = _make_manager(zones=zones, modules_dir=self.dir)
+        rules, _ = mgr._compile(load_module(self.dir, "ui"))
         self.assertFalse(any(r.description.startswith("tappaas-svcdep:") for r in rules))
 
     def test_service_without_pinhole_json_is_a_noop(self):
@@ -1424,7 +1484,7 @@ class TestExpectedPinholes(_PinholeFixtures, unittest.TestCase):
         )
         self._write_consumer(self.dir, vmname="ui", zone0="dmz",
                              depends_on=["api:rest"])
-        exp = self._expect(srvWork={"access_to": ["dmz"]})
+        exp = self._expect(dmz={"access_to": ["srvWork"]})
         self.assertEqual(exp.rules, [])
         self.assertIn("access-to", exp.skipped[0][1])
 

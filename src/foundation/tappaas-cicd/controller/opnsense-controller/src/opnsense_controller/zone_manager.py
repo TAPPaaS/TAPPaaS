@@ -503,6 +503,19 @@ def _load_pinhole_ports(provider_location: str, service: str) -> list[dict] | No
     return ports if isinstance(ports, list) else None
 
 
+def _pinhole_from_any_zone(provider_location: str, service: str) -> bool:
+    """Mirror of rules_manager.pinhole_from_any_zone (#770): a foundation
+    provider's ``"fromZones": "any"`` lifts the pinhole-allowed-from gate."""
+    if not provider_location:
+        return False
+    path = Path(provider_location) / "services" / service / "pinhole.json"
+    try:
+        data = json.loads(path.read_text()) if path.is_file() else {}
+    except Exception:
+        return False
+    return data.get("fromZones") == "any" and "foundation" in Path(provider_location).parts
+
+
 def validate_pinhole_allowed_from(
     zones: dict[str, "Zone"],
     modules_dir: Path,
@@ -650,10 +663,9 @@ def validate_pinhole_allowed_from(
         # a services/<service>/pinhole.json, the rules_manager will (or won't)
         # emit a synthesised pinhole — same policy gate. Report violations
         # here so the operator catches them before install time.
-        deps = data.get("dependsOn", []) or []
-        if not isinstance(deps, list):
-            continue
-        for dep in deps:
+        deps = [(d, "dependsOn") for d in (data.get("dependsOn", []) or [])] + \
+               [(d, "integratesWith") for d in (data.get("integratesWith", []) or [])]
+        for dep, origin in deps:
             if not isinstance(dep, str) or ":" not in dep:
                 continue
             provider_name, _, service = dep.partition(":")
@@ -682,17 +694,22 @@ def validate_pinhole_allowed_from(
             provider_zone = zones.get(provider_zone_name)
             if provider_zone is None:
                 continue
-            if dest_zone_name in provider_zone.access_to:
+            # The consumer's own edge: access-to lists where a zone may go (#770).
+            consumer_zone = zones.get(dest_zone_name)
+            if consumer_zone is not None and (provider_zone_name in consumer_zone.access_to
+                                              or "all" in consumer_zone.access_to):
                 continue  # zone-level access-to already permits
             if dest_zone_name in provider_zone.pinhole_allowed_from:
                 continue  # policy permits the auto-pinhole
+            if _pinhole_from_any_zone(provider_location, service):
+                continue  # a foundation sink every zone may reach (#770)
 
             warnings.append(ValidationMessage(
                 severity="warning",
                 module=vmname,
                 file_path=str(mod_file),
                 line=_find_field_line(raw, f'"{dep}"'),
-                text=(f"dependsOn '{dep}' would create an auto-pinhole from "
+                text=(f"{origin} '{dep}' would create an auto-pinhole from "
                       f"'{dest_zone_name}' into '{provider_zone_name}', but "
                       f"'{provider_zone_name}'.pinhole-allowed-from = "
                       f"{provider_zone.pinhole_allowed_from} — policy denies. "
