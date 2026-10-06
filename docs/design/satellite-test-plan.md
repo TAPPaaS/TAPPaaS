@@ -118,7 +118,7 @@ makerfloss lost all three nodes on 2026-10-03 at 11:45–11:53 (no clean shutdow
 loss, most likely) and stayed down for two and a half days. Nothing reported it: the alerting of
 #126, the sweep and its failure mail all run inside the cluster that was down. Only a heartbeat
 watched from **outside** the site catches that — the satellite is the natural place. That is
-not part of #671; it belongs in its own issue.
+#776, not part of #671 — but this test's satellite is where it will first be exercised.
 
 ## Done when
 
