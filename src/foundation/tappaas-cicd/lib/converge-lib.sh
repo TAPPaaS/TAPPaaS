@@ -268,8 +268,8 @@ converge_apply() {
             if [[ -n "${_pending}" ]]; then
                 local _p_n; _p_n="$(printf '%s\n' "${_pending}" | grep -c . || true)"
                 local _p_list; _p_list="$(printf '%s\n' "${_pending}" | paste -sd, - | sed 's/,/, /g')"
-                warn "DEFERRED: ${module} — Proxmox is holding ${_p_list} until the guest restarts"
-                warn "  It accepted the change but cannot hot-apply it; the guest keeps running on its previous value."
+                warn "DEFERRED: ${module} — new ${_p_list} saved in the VM config; the running VM keeps its old values"
+                warn "  Proxmox applies them when it restarts the VM (qm reboot, or stop + start); a reboot inside the guest is not enough."
                 CONVERGE_DEFERRED=$(( CONVERGE_DEFERRED + _p_n ))
                 (( _set_n -= _p_n )) || true
                 (( _set_n < 0 )) && _set_n=0
