@@ -1,0 +1,126 @@
+#!/usr/bin/perl
+#
+# tappaas-guest-memory — what each guest on this Proxmox node actually needs,
+# once a minute, as one logfmt line per guest on stdout (#663).
+#
+# Installed on every node by logging/update.sh and run by
+# tappaas-guest-memory.service, whose output the node's rsyslog already ships to
+# Loki: {source="proxmox", unit="tappaas-guest-memory"}. logging/guest-memory-report.sh
+# turns a window of it into the numbers module memory defaults are chosen from.
+#
+# What is measured, and why not Proxmox's own figure: Proxmox reports a VM's
+# memory from the balloon's free_mem, which counts page cache as used (a 1 GB
+# guest needing 0.3 GB reads 0.67 GB), or from the host's view when the guest
+# reports nothing. The balloon also carries the guest's MemAvailable
+# (stat-available-memory); total - available is the guest's own working set,
+# the number `free` shows. Read through Proxmox's monitor API, so this never
+# logs into a guest. A guest without balloon stats (FreeBSD, Windows, no
+# driver) is reported measured=0 rather than given a number that misleads.
+#
+# A container's memory is its cgroup: used = memory.current - file (page cache).
+#
+# Fields: kind vmid vm measured total available used cache maxmem resident
+#         oom_kills direct_reclaims alloc_stalls swap_in swap_out psi_some_avg60
+# Counters (oom_kills … swap_out) count from the guest's boot.
+
+use strict;
+use warnings;
+
+use PVE::Cluster;
+use PVE::QemuServer;
+use PVE::QemuServer::Monitor qw(mon_cmd);
+use PVE::LXC;
+
+$| = 1;
+my $INTERVAL = $ENV{TAPPAAS_GUEST_MEMORY_INTERVAL} || 60;
+
+sub slurp {
+    my ($path) = @_;
+    open(my $fh, '<', $path) or return undef;
+    local $/;
+    my $s = <$fh>;
+    close($fh);
+    return $s;
+}
+
+sub psi_some_avg60 {
+    my $s = slurp("$_[0]/memory.pressure") // return undef;
+    return $s =~ /^some .*avg60=([0-9.]+)/m ? $1 : undef;
+}
+
+sub logfmt {
+    my (%f) = @_;
+    my @order = qw(kind vmid vm measured total available used cache maxmem resident
+                   oom_kills direct_reclaims alloc_stalls swap_in swap_out psi_some_avg60);
+    return join(' ', map { "$_=$f{$_}" } grep { defined $f{$_} } @order);
+}
+
+sub sample_qemu {
+    my $vms = eval { PVE::QemuServer::vmstatus() } // {};
+    for my $vmid (sort { $a <=> $b } keys %$vms) {
+        my $d = $vms->{$vmid};
+        next unless ($d->{status} // '') eq 'running';
+        my $scope = "/sys/fs/cgroup/qemu.slice/$vmid.scope";
+        my %f = (
+            kind => 'qemu', vmid => $vmid, vm => ($d->{name} // "vm$vmid"),
+            maxmem => $d->{maxmem}, measured => 0,
+            resident => do { my $c = slurp("$scope/memory.current"); defined $c ? $c + 0 : undef },
+            psi_some_avg60 => psi_some_avg60($scope),
+        );
+        my $gs = eval {
+            mon_cmd($vmid, 'qom-get', path => '/machine/peripheral/balloon0', property => 'guest-stats');
+        };
+        my $st = ($gs && $gs->{stats}) || {};
+        my $fresh = $gs && $gs->{'last-update'} && (time() - $gs->{'last-update'}) <= 3 * $INTERVAL;
+        if ($fresh && ($st->{'stat-available-memory'} // -1) >= 0 && ($st->{'stat-total-memory'} // 0) > 0) {
+            $f{measured}  = 1;
+            $f{total}     = $st->{'stat-total-memory'};
+            $f{available} = $st->{'stat-available-memory'};
+            $f{used}      = $f{total} - $f{available};
+            $f{cache}     = $st->{'stat-disk-caches'};
+            $f{oom_kills}       = $st->{'stat-oom-kills'};
+            $f{direct_reclaims} = $st->{'stat-direct-reclaims'};
+            $f{alloc_stalls}    = $st->{'stat-alloc-stalls'};
+            $f{swap_in}         = $st->{'stat-swap-in'};
+            $f{swap_out}        = $st->{'stat-swap-out'};
+        }
+        print logfmt(%f), "\n";
+    }
+}
+
+sub sample_lxc {
+    my $cts = eval { PVE::LXC::vmstatus() } // {};
+    for my $vmid (sort { $a <=> $b } keys %$cts) {
+        my $d = $cts->{$vmid};
+        next unless ($d->{status} // '') eq 'running';
+        my $cg = "/sys/fs/cgroup/lxc/$vmid";
+        my %f = (kind => 'lxc', vmid => $vmid, vm => ($d->{name} // "ct$vmid"),
+                 maxmem => $d->{maxmem}, measured => 0, psi_some_avg60 => psi_some_avg60($cg));
+        my $cur = slurp("$cg/memory.current");
+        my $stat = slurp("$cg/memory.stat") // '';
+        my ($file) = $stat =~ /^file (\d+)$/m;
+        my ($oom) = (slurp("$cg/memory.events") // '') =~ /^oom_kill (\d+)$/m;
+        if (defined $cur && defined $file) {
+            $f{measured} = 1;
+            $f{total}    = $d->{maxmem};
+            $f{resident} = $cur + 0;
+            $f{cache}    = $file + 0;
+            $f{used}     = $cur - $file;
+            $f{available} = $f{total} - $f{used} if $f{total};
+            $f{oom_kills} = $oom;
+        }
+        print logfmt(%f), "\n";
+    }
+}
+
+# --once: one sample and exit (tests, and a quick look by hand).
+my $once = grep { $_ eq '--once' } @ARGV;
+while (1) {
+    # Without it vmstatus() sees no guests; each pass also picks up guests
+    # that started, stopped or migrated here since the last one.
+    eval { PVE::Cluster::cfs_update(); 1 } or print STDERR "cfs_update failed: $@";
+    eval { sample_qemu(); 1 } or print STDERR "qemu sample failed: $@";
+    eval { sample_lxc(); 1 }  or print STDERR "lxc sample failed: $@";
+    last if $once;
+    sleep($INTERVAL - (time() % $INTERVAL));
+}

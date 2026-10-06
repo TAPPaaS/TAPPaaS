@@ -131,6 +131,36 @@ To remove the rsyslog forwarder from a node (e.g. when retiring it):
 ssh root@<node>.mgmt.internal "rm /etc/rsyslog.d/99-tappaas-loki.conf && systemctl restart rsyslog"
 ```
 
+### Guest memory samples from the nodes (#663)
+
+Module memory defaults are to be chosen from measurement, and Proxmox's own figure
+cannot be used for that: it counts the guest's page cache as used (from the balloon's
+`free_mem`), or shows the host's view when the guest reports nothing. So each node
+also runs `tappaas-guest-memory.service` (`node/tappaas-guest-memory`, a Perl loop on
+Proxmox's own modules), installed by the same `update.sh` step and restarted only
+when its files change. Once a minute it writes one logfmt line per running guest to
+its journal, which the rsyslog forwarder above already ships:
+`{source="proxmox", unit="tappaas-guest-memory"}`.
+
+- **VMs:** `used` = total − the guest's MemAvailable, read from the balloon's
+  `guest-stats` through Proxmox's monitor API. Nothing logs into a guest. A guest
+  without balloon stats (the FreeBSD firewall, Windows) reads `measured=0`.
+- **Containers:** `used` = the cgroup's `memory.current` − `file`.
+- **Pressure:** PSI `some avg60` of the guest's host cgroup, and the guest's own
+  OOM kills, direct reclaims and allocation stalls (counters since its boot).
+
+About 20 lines a minute for a 20-guest site; within the 30-day retention.
+
+`guest-memory-report.sh [window]` (default `7d`) turns a window into per-guest
+peak, p99 and average, the pressure seen, and a suggested size by the rule written
+in its header. In Grafana: `{unit="tappaas-guest-memory"} | logfmt | unwrap used`.
+
+To remove the sampler from a node:
+
+```
+ssh root@<node>.mgmt.internal "systemctl disable --now tappaas-guest-memory && rm /etc/systemd/system/tappaas-guest-memory.service /usr/local/sbin/tappaas-guest-memory && systemctl daemon-reload"
+```
+
 > **Security note:** OPNsense and Proxmox syslog streams include filter logs, VPN auth
 > events, sshd auth attempts, and other sensitive data. Today both use plain TCP, which
 > is acceptable inside the `mgmt` zone with no rogue switches. Moving to RFC 5425 over

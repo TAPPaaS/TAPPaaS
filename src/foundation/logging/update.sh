@@ -78,6 +78,33 @@ else
     fi
 fi
 
+# install_guest_memory_sampler <node fqdn> <node name> — each guest's memory
+# working set, once a minute, through the node's rsyslog into Loki (#663;
+# node/tappaas-guest-memory). The service restarts only when a file changed, so
+# a routine update leaves no gap in the series.
+install_guest_memory_sampler() {
+    local fqdn="$1" name="$2" dir="${SCRIPT_DIR}/node" rc=0
+    # shellcheck disable=SC2086
+    tar -C "${dir}" -cf - tappaas-guest-memory tappaas-guest-memory.service \
+        | ssh ${SSH_OPTS} "root@${fqdn}" '
+            set -e; t=$(mktemp -d); trap "rm -rf $t" EXIT; tar -C "$t" -xf -
+            perl -c "$t/tappaas-guest-memory" >/dev/null 2>&1 || exit 3
+            changed=0
+            cmp -s "$t/tappaas-guest-memory" /usr/local/sbin/tappaas-guest-memory || {
+                install -m 0755 "$t/tappaas-guest-memory" /usr/local/sbin/tappaas-guest-memory; changed=1; }
+            cmp -s "$t/tappaas-guest-memory.service" /etc/systemd/system/tappaas-guest-memory.service || {
+                install -m 0644 "$t/tappaas-guest-memory.service" /etc/systemd/system/; changed=1
+                systemctl daemon-reload; }
+            systemctl enable --now tappaas-guest-memory.service >/dev/null 2>&1
+            [ "$changed" = 0 ] || systemctl restart tappaas-guest-memory.service
+            systemctl is-active --quiet tappaas-guest-memory.service' 2>/dev/null || rc=$?
+    case "${rc}" in
+        0) debug "    ${GN}✓${CL} ${name}: guest memory sampler running" ;;
+        3) warn "    ${name}: the guest memory sampler does not compile on this node's Perl — not installed" ;;
+        *) warn "    ${name}: could not install or start the guest memory sampler (rc ${rc})" ;;
+    esac
+}
+
 # ── Configure Proxmox nodes to forward rsyslog to this VM ────────────
 # Each cluster node ships its journal-forwarded syslog (via rsyslog) to the
 # Alloy syslog receiver on tcp/1515 (source=proxmox).
@@ -148,6 +175,8 @@ EOF
         else
             warn "    ${NODE_HOSTNAME}: config pushed but rsyslog (enable|restart) failed"
         fi
+
+        install_guest_memory_sampler "${NODE_FQDN}" "${NODE_HOSTNAME}"
     done
 fi
 
@@ -169,9 +198,9 @@ else
     # unprivileged login, fail, and make every update restart Grafana.
     # shellcheck disable=SC2029  # the path is expanded here on purpose
     _have="$(ssh -o BatchMode=yes -o ConnectTimeout=10 "${_VM}" "sudo sha256sum ${_VM_TOKEN} 2>/dev/null | cut -d' ' -f1" 2>/dev/null || true)"
+    # shellcheck disable=SC2029  # the elif's path is expanded here on purpose too
     if [[ "${_have}" == "${_want}" ]]; then
         debug "  token already in place"
-    # shellcheck disable=SC2029
     elif ssh -o BatchMode=yes -o ConnectTimeout=10 "${_VM}" \
             "sudo install -m 0600 -o grafana -g grafana /dev/stdin ${_VM_TOKEN} && sudo systemctl restart grafana" \
             < "${_ALERT_TOKEN}"; then

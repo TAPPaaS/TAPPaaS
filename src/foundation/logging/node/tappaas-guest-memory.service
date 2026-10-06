@@ -1,0 +1,18 @@
+# TAPPaaS-managed — installed by logging/update.sh; do not edit by hand.
+# Each guest's memory working set, once a minute, to syslog and so to Loki (#663).
+# A long-running loop rather than a timer: a timer would put two systemd
+# start/stop lines per minute per node into Loki as well.
+[Unit]
+Description=TAPPaaS guest memory sampler (to Loki via rsyslog)
+After=pve-cluster.service
+Wants=pve-cluster.service
+
+[Service]
+ExecStart=/usr/local/sbin/tappaas-guest-memory
+SyslogIdentifier=tappaas-guest-memory
+Restart=always
+RestartSec=30
+Nice=10
+
+[Install]
+WantedBy=multi-user.target
