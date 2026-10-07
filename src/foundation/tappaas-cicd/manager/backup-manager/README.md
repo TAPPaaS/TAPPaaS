@@ -77,6 +77,16 @@ backup-manager add <module> | delete <module>
         "backup:vm" in .dependsOn). modify-driven .json writes; live membership
         converges on reconcile.
 
+backup-manager purge <module|vmid> [--yes]
+        Erase a removed guest's restore points (#789): delete the backup group
+        vm/<vmid> in this site's datastore (root namespace; buddy copies under
+        pull/<peer> are never touched) and start garbage collection, which is
+        what frees the space. Shows the plan first, then asks you to type the
+        VMID (or --yes). Refused for a deployed module (archived ones may be
+        purged), a VMID a backup job still lists, or when the cluster cannot be
+        asked. After `module-manager delete --remove` the config is gone: pass
+        the VMID. See RESTORE.md §11.
+
 backup-manager backup <module>... [--config-dir DIR]
         Take each module's backup NOW (#759): through the TAPPaaS job that
         covers it — its storage, mode and compression — on the node the guest

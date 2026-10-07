@@ -637,6 +637,18 @@ main() {
         info "  Removed ${config_orig}"
     fi
 
+    # The guest's restore points stay in the datastore: --remove takes it out of
+    # the backup job, it does not erase what was backed up (#789). Say so, with
+    # the one command that does, rather than leave the data behind silently.
+    if [[ -n "${target_vmid}" ]] && command -v backup-controller >/dev/null 2>&1; then
+        local _rp
+        _rp="$(backup-controller purge "${target_vmid}" --json 2>/dev/null | jq -r '.snapshots // empty' 2>/dev/null)"
+        if [[ "${_rp}" =~ ^[0-9]+$ && "${_rp}" -gt 0 ]]; then
+            warn "  ${_rp} restore point(s) of vm/${target_vmid} remain in the backup datastore."
+            warn "  To erase them: backup-manager purge ${target_vmid}"
+        fi
+    fi
+
     # ── Done ─────────────────────────────────────────────────────────
     echo ""
     info "${GN}${BOLD}╔══════════════════════════════════════════════╗${CL}"

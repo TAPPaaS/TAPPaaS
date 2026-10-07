@@ -860,3 +860,24 @@ mothership that had never been in the backup job at all. The second rehearsal
 (hrossen, 2026-09-18) found a fourth: `/etc/secrets` could not be restored by
 following this page, because the command for it was not here and the obvious
 adaptation of the `config/` one fails partway on file ownership (§5.1).
+
+---
+
+## 11. Decommissioning: erasing a guest's restore points
+
+`module-manager delete <module> --remove` deletes the VM and the module config and takes
+the VMID out of the backup job — but the restore points already taken stay in the
+datastore (prune keeps the last ones of every group, so they never age out). When the data
+must be erased, not just stopped (a data-protection request, the end of a contract, a VMID
+that will be reused):
+
+```bash
+module-manager delete <module> --remove     # it ends by naming the VMID and how many restore points remain
+backup-manager purge <vmid>                 # shows them, asks you to type the VMID, deletes vm/<vmid>, starts GC
+```
+
+`purge` refuses a VMID that a deployed module still owns or a backup job still lists, so
+it cannot erase a live module's history. An archived module (`delete --archive`) may be
+purged — it can no longer be restored afterwards. The space comes back when garbage
+collection finishes (`proxmox-backup-manager garbage-collection status <store>` on the
+PBS host). Copies a buddy site pulled are that site's to erase.

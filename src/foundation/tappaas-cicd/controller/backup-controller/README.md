@@ -21,6 +21,12 @@ backup-controller add-to-job <vmid> [--retention SPEC]
                                         echoed; per-job prune wiring is a follow-up.
 backup-controller apply-schedule <spec> Set the shared managed job's start time
                                         (PBS mutation; e.g. "21:00").
+backup-controller purge <vmid> [--yes] [--json]
+                                        Erase vm/<vmid>'s restore points (#789):
+                                        plan by default; with --yes delete the
+                                        backup group + start GC. Refuses a
+                                        deployed module's VMID, one a job lists,
+                                        or when the cluster cannot be asked.
 backup-controller --selftest            Pure-function self-test (no cluster).
 ```
 

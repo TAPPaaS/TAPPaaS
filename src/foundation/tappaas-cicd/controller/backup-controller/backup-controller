@@ -18,6 +18,9 @@
 #                           Waits, and names the snapshot it wrote; non-zero if
 #                           any module's backup failed (#759)
 #   coverage <module> [--json]
+#   purge <vmid> [--yes] [--json]          erase vm/<vmid>'s restore points + start GC
+#                                         (dry run without --yes; refuses a deployed
+#                                         module's VMID or one still in a job, #789)
 #                           Every cluster backup job that covers the module's VM —
 #                           TAPPaaS's own and any other — and how (#554)
 #   namespaces [--json]     List the datastore's namespaces
@@ -95,6 +98,7 @@ readonly CLI_SPEC='
 job-status: --json --pbs=
 list: --json --pbs=
 coverage: --json
+purge: --json --yes --pbs=
 verify:
 backup: --json
 namespaces: --json --pbs=
@@ -144,6 +148,7 @@ parse_args() {
             # ADR-012 P7: target a non-local PBS (e.g. a satellite) for datastore
             # ops. Passed by the TS backup-manager's endpoint-agnostic CliClient.
             --pbs)  PBS_ENDPOINT="${2:-}"; shift 2 ;;
+            --yes)  YES=1; shift ;;
             *)      REST+=("$1"); shift ;;
         esac
     done
@@ -247,6 +252,86 @@ cmd_list() {
         info "Snapshots for ${module} (vmid ${vmid}) on ${store}:"
         [[ -n "$snaps" ]] && printf '%s\n' "$snaps"
     fi
+}
+
+# `purge <vmid> [--yes]` (#789): erase a guest's restore points — the backup
+# group vm/<vmid> in this site's datastore (root namespace: our own backups;
+# pull/<peer> copies of other sites are never touched) — then start garbage
+# collection, which is what frees the space. Without --yes it only reports the
+# plan. Refuses, even with --yes, when a deployed module still owns the VMID
+# (archived ones excepted: erasing an archived module's backups is the point) or
+# an enabled backup job lists it, and when the cluster cannot be asked — a purge
+# never runs on a guess. backup-manager's `purge` wraps this with confirmation.
+_purge_owner() {   # the deployed, non-archived module whose config has <vmid>
+    local vmid="$1" f
+    for f in "${CONFIG_DIR}"/*.json; do
+        [[ -f "$f" ]] || continue
+        jq -e --arg v "$vmid" '((.vmid // .config.vmid // "") | tostring) == $v
+                               and ((.status // "") != "archived")' "$f" >/dev/null 2>&1 \
+            && { basename "$f" .json; return 0; }
+    done
+    return 1
+}
+
+cmd_purge() {
+    YES=0
+    parse_args "$@"
+    local vmid="${REST[0]:-}" owner cov jobs node store snaps n bytes
+    [[ "$vmid" =~ ^[0-9]+$ ]] || { error "purge: <vmid> required (a number)"; return 2; }
+    have_pbs_libs || { error "purge: PBS libs not loaded — nothing purged"; return 1; }
+    pbs_reachable || { error "purge: the cluster is not reachable — nothing purged"; return 1; }
+
+    local refuse=()
+    if owner="$(_purge_owner "$vmid")"; then
+        refuse+=("vmid ${vmid} belongs to the deployed module '${owner}' — delete the module first")
+    fi
+    cov="$(pbs_job_coverage_json "$vmid")" \
+        || { error "purge: could not read the cluster's backup jobs — nothing purged"; return 1; }
+    jobs="$(jq -r '[.[] | select(.enabled and .how == "explicit") | .jobId] | join(", ")' <<<"$cov")"
+    [[ -z "$jobs" ]] || refuse+=("vmid ${vmid} is still listed in backup job(s) ${jobs} — remove it there first")
+
+    node="$(pbs_node)" || return 1
+    store="$(pbs_storage_name)"
+    snaps="$(_pbs_node_run proxmox-backup-debug api get "/admin/datastore/${store}/snapshots" \
+                 --backup-type vm --backup-id "$vmid" --output-format json 2>/dev/null)" \
+        || { error "purge: could not list vm/${vmid} on ${store} — nothing purged"; return 1; }
+    n="$(jq 'length' <<<"$snaps")"
+    bytes="$(jq '[.[].size // 0] | add // 0' <<<"$snaps")"
+
+    # One JSON object, written last: _purge_json <purged true|false>.
+    _purge_json() {
+        jq -n --arg vmid "$vmid" --arg store "$store" --argjson n "$n" --argjson bytes "$bytes" \
+              --argjson purged "$1" --arg refuse "$(printf '%s\n' "${refuse[@]}")" \
+            '{reachable: true, vmid: $vmid, store: $store, snapshots: $n, bytes: $bytes,
+              refused: ($refuse | split("\n") | map(select(length > 0))), purged: $purged}'
+    }
+    if [[ "$JSON_OUT" -ne 1 ]]; then
+        info "vm/${vmid} on ${store} (node ${node}): ${n} restore point(s), $(numfmt --to=iec "$bytes" 2>/dev/null || echo "${bytes} bytes") referenced"
+        jq -r '.[] | "  \(.["backup-time"] | strftime("%Y-%m-%d %H:%M"))  \(.size // 0)"' <<<"$snaps" 2>/dev/null | head -50
+    fi
+    if [[ ${#refuse[@]} -gt 0 ]]; then
+        local r; for r in "${refuse[@]}"; do error "purge refused: ${r}"; done
+        [[ "$JSON_OUT" -eq 1 ]] && _purge_json false
+        return 1
+    fi
+    if [[ "$n" -eq 0 || "$YES" -ne 1 ]]; then
+        if [[ "$JSON_OUT" -eq 1 ]]; then _purge_json false
+        elif [[ "$n" -eq 0 ]]; then info "  nothing to purge"
+        else info "  dry run — run with --yes to delete the group and start garbage collection"; fi
+        return 0
+    fi
+
+    _pbs_node_run proxmox-backup-debug api delete "/admin/datastore/${store}/groups" \
+        --backup-type vm --backup-id "$vmid" >/dev/null \
+        || { error "purge: deleting vm/${vmid} failed — check the datastore by hand"; return 1; }
+    [[ "$JSON_OUT" -eq 1 ]] || info "  ${GN:-}✓${CL:-} deleted vm/${vmid} (${n} restore point(s)) from ${store}"
+    if _pbs_node_run proxmox-backup-manager garbage-collection start "$store" >/dev/null 2>&1; then
+        [[ "$JSON_OUT" -eq 1 ]] || info "  garbage collection started on ${store} — the space is free when it finishes (proxmox-backup-manager garbage-collection status ${store})"
+    else
+        warn "  garbage collection did not start — the space is freed at the next scheduled run"
+    fi
+    [[ "$JSON_OUT" -eq 1 ]] && _purge_json true
+    return 0
 }
 
 # `coverage <module>` (#554): which jobs back this VM up — ours and anyone
@@ -599,6 +684,7 @@ main() {
         verify)         cmd_verify "$@" ;;
         backup)         cmd_backup "$@" ;;
         coverage)       cmd_coverage "$@" ;;
+        purge)          cmd_purge "$@" ;;
         namespaces)     cmd_namespaces "$@" ;;
         add-to-job)     cmd_add_to_job "$@" ;;
         apply-schedule) cmd_apply_schedule "$@" ;;

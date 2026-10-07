@@ -13,7 +13,7 @@
 // (other than the graceful offline skip) throws.
 
 import { captureResult, stream } from "../../../lib/ts/src/exec";
-import { JobCoverage, BucketMembership, Client, JobStatus, ScheduleBucket } from "./types";
+import { JobCoverage, BucketMembership, Client, JobStatus, PurgeResult, ScheduleBucket } from "./types";
 
 export class BackupControllerUnreachable extends Error {}
 
@@ -121,6 +121,30 @@ export class CliClient implements Client {
     // { reachable, module, vmid, snapshots: [backup-time, ...] }.
     const o = runJson([...this.ep(), "list", module]);
     return asStringArray(o.snapshots);
+  }
+
+  purge(vmid: string, yes: boolean): PurgeResult {
+    // Read the JSON even on exit 1: a refusal is an answer, with its reasons.
+    const args = [...this.ep(), "purge", vmid, "--json", ...(yes ? ["--yes"] : [])];
+    const r = captureResult(BIN, args);
+    if (!r.ran) throw new BackupControllerUnreachable(`${BIN} purge: ${r.stderr}`);
+    let o: Record<string, unknown> = {};
+    try {
+      o = JSON.parse(r.stdout.trim() || "{}") as Record<string, unknown>;
+    } catch {
+      o = {};
+    }
+    if (typeof o.vmid !== "string") {
+      throw new Error(`${BIN} purge ${vmid} failed (exit ${r.rc}): ${r.stderr.trim()}`);
+    }
+    return {
+      vmid: o.vmid,
+      store: typeof o.store === "string" ? o.store : "",
+      snapshots: typeof o.snapshots === "number" ? o.snapshots : 0,
+      bytes: typeof o.bytes === "number" ? o.bytes : 0,
+      refused: asStringArray(o.refused),
+      purged: o.purged === true,
+    };
   }
 
   addToJob(vmid: string, retention?: string, bucket?: string): void {

@@ -88,6 +88,12 @@ export const HELP: HelpSpec = {
     { usage: "backup <module>...", name: "backup", note: "(take each module's backup now, through its job — #759)" },
     { usage: "delete <module>", name: "delete", note: "(un-wire from the shared PBS job)" },
     {
+      usage: "purge <module|vmid> [--yes]",
+      name: "purge",
+      note: "(erase a removed guest's restore points + start GC — #789)",
+      options: [["--yes", "purge: do not ask; without it you type the VMID to confirm."]],
+    },
+    {
       usage: "reconcile [--apply]",
       name: "reconcile",
       options: [["--apply", "reconcile: commit changes (default = preview)."]],
@@ -888,6 +894,47 @@ function cmdAdd(opts: Opts): void {
   }
 }
 
+// purge <module|vmid> [--yes] (#789): erase a guest's restore points — for a
+// module that is gone (module-manager delete --remove leaves them in the
+// datastore) or archived, when its data must be erased, not just stopped. The
+// controller owns every check that matters (no deployed module owns the VMID, no
+// job lists it, the cluster answered) and refuses with --yes too; here the
+// operator sees the plan and types the VMID, or passes --yes.
+function cmdPurge(opts: Opts, client: Client): number {
+  const arg = opts.rest[0];
+  if (!arg) die("purge: <module|vmid> required");
+  let vmid = arg;
+  if (!/^[0-9]+$/.test(arg)) {
+    const v = moduleVmid(opts.configDir, arg);
+    if (!v) die(`purge: no config for module '${arg}' — pass its VMID instead (the config goes with delete --remove)`);
+    vmid = v!;
+    if (!moduleArchived(opts.configDir, arg)) {
+      die(`purge: '${arg}' is deployed — delete it first (module-manager delete ${arg} --remove), then purge ${vmid}`);
+    }
+  }
+  const plan = client.purge(vmid, false);
+  const size = plan.bytes >= 1 << 30 ? `${(plan.bytes / (1 << 30)).toFixed(1)} GiB` : `${Math.round(plan.bytes / (1 << 20))} MiB`;
+  info(`vm/${vmid} on ${plan.store}: ${plan.snapshots} restore point(s), ${size} referenced`);
+  if (plan.refused.length > 0) {
+    for (const r of plan.refused) warn(`  refused: ${r}`);
+    die(`purge ${vmid}: refused — nothing deleted`);
+  }
+  if (plan.snapshots === 0) {
+    info("  nothing to purge");
+    return 0;
+  }
+  if (!opts.yes) {
+    const r = spawnSync("bash", ["-c", 'printf "%s" "$1" > /dev/tty; IFS= read -r v < /dev/tty; printf "%s" "$v"', "--",
+      `  This permanently deletes ${plan.snapshots} restore point(s) of vm/${vmid}. Type ${vmid} to confirm: `], { encoding: "utf8" });
+    if (r.status !== 0) die("purge: cannot ask for confirmation (non-interactive session?) — pass --yes");
+    if ((r.stdout ?? "").trim() !== vmid) die("purge: not confirmed — nothing deleted");
+  }
+  const res = client.purge(vmid, true);
+  if (!res.purged) die(`purge ${vmid}: not purged${res.refused.length ? ` (${res.refused.join("; ")})` : ""}`);
+  info(`${GN}purge: deleted vm/${vmid} (${res.snapshots} restore point(s)); garbage collection started — the space is free when it finishes${CL}`);
+  return 0;
+}
+
 function cmdDelete(opts: Opts): void {
   const module = opts.rest[0];
   if (!module) die("delete: <module> required");
@@ -1007,6 +1054,8 @@ export function run(argv: string[], client: Client): number {
       case "delete":
         cmdDelete(opts);
         return 0;
+      case "purge":
+        return cmdPurge(opts, client);
       default:
         usage();
         die(`Unknown command: ${cmd}`);

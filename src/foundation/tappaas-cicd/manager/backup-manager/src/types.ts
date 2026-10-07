@@ -143,6 +143,15 @@ export interface JobCoverage {
   managed: boolean; // one of TAPPaaS's marked bucket jobs
 }
 
+export interface PurgeResult {
+  vmid: string;
+  store: string;
+  snapshots: number;
+  bytes: number;
+  refused: string[];
+  purged: boolean;
+}
+
 export interface Client {
   // backup-controller job-status --json — the shared PBS backup job state.
   jobStatus(): JobStatus;
@@ -162,6 +171,10 @@ export interface Client {
   // backup takes minutes) and returns its exit code: 0 only if every module's
   // snapshot was written and found.
   backupNow(modules: string[]): number;
+  // backup-controller purge <vmid> --json [--yes] (#789) — erase vm/<vmid>'s
+  // restore points and start GC; without yes, only the plan. Refusals come back
+  // in `refused` (the controller exits 1 then), never as a throw.
+  purge(vmid: string, yes: boolean): PurgeResult;
   keyList(): void;
   keyExport(dest: string): void;
   keyImport(src: string): void;

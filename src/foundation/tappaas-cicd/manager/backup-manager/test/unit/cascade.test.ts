@@ -962,6 +962,53 @@ check(!retentionValid("7") && !retentionValid("7x") && !retentionValid(""), "inv
   }
 }
 
+// ── #789: purge — erase a removed guest's restore points ──────────────
+{
+  const c = new FakeClient();
+  c.purgePlans.set("350", { vmid: "350", store: "tappaas_backup", snapshots: 3, bytes: 3 * 2 ** 30, refused: [] });
+  c.purgePlans.set("201", { vmid: "201", store: "tappaas_backup", snapshots: 22, bytes: 9 * 2 ** 30,
+    refused: ["vmid 201 belongs to the deployed module 'nextcloud' — delete the module first"] });
+  let lines: string[] = [];
+  // Run the CLI with its output captured; the assertions print normally.
+  const cli = (argv: string[]): number => {
+    lines = [];
+    const orig = console.log, origErr = console.error;
+    console.log = (...a: unknown[]) => void lines.push(a.join(" "));
+    console.error = (...a: unknown[]) => void lines.push(a.join(" "));
+    try {
+      return run([...argv, "--config-dir", FIX], c);
+    } finally {
+      console.log = orig;
+      console.error = origErr;
+    }
+  };
+  const yesCalls = () => c.log.filter((l) => l.endsWith("--yes")).length;
+
+  eq(cli(["purge", "350", "--yes"]), 0, "purge <vmid> --yes runs");
+  eq(c.log.filter((l) => l.startsWith("purge")).join(" | "), "purge 350 | purge 350 --yes", "…plan first, then the purge");
+  check(lines.some((l) => l.includes("3 restore point(s)") && l.includes("3.0 GiB")), "purge shows what goes");
+
+  c.log.length = 0;
+  check(cli(["purge", "350"]) !== 0, "purge without --yes in a non-interactive session is refused");
+  eq(yesCalls(), 0, "…and nothing is deleted");
+
+  c.log.length = 0;
+  check(cli(["purge", "nextcloud", "--yes"]) !== 0, "purge of a deployed module is refused");
+  eq(c.log.length, 0, "…before asking the controller anything");
+
+  c.log.length = 0;
+  check(cli(["purge", "201", "--yes"]) !== 0, "purge of a VMID the controller refuses fails");
+  eq(yesCalls(), 0, "…and nothing is deleted");
+  check(lines.some((l) => l.includes("deployed module 'nextcloud'")), "…naming why");
+
+  c.log.length = 0;
+  eq(cli(["purge", "999", "--yes"]), 0, "purge of a VMID with no restore points is a no-op");
+  eq(yesCalls(), 0, "…that deletes nothing");
+
+  check(cli(["purge", "gone-module"]) !== 0, "purge of an unknown module name asks for the VMID");
+  check(cli(["purge"]) !== 0, "purge without an argument is refused");
+}
+
 // ── #554: coverage — which jobs back a module's VM up ─────────────────
 {
   const c = new FakeClient();
