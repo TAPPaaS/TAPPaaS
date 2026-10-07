@@ -39,13 +39,39 @@ rns="$(jq -r '.remoteNamespace // ""' "${CFG}")"
 sched="$(jq -r '.pullSchedule // "04:00"' "${CFG}")"
 rv="$(jq -r 'if .removeVanished then "true" else "false" end' "${CFG}")"
 readauth="$(jq -r '.readAuthId // ""' "${CFG}")"
+rport="$(jq -r '.remotePort // empty' "${CFG}")"
+# 0 = the remote namespace only (#796). Absent in older configs: PBS's default.
+depth="$(jq -r '.maxDepth // empty' "${CFG}")"
 retention="$(jq -c '.retention // {}' "${CFG}")"
 # Optional subset selector (ADR-012 §3.6, #389): a PBS group-filter that pulls
 # only part of the source. Accepts a JSON array (joined with commas) or a string.
 gfilter="$(jq -r 'if (.groupFilter // "" | type) == "array" then (.groupFilter | join(",")) else (.groupFilter // "") end' "${CFG}")"
 
+# A buddy tunnel (#796): we DIAL the WireGuard instance the pulled site serves,
+# and reach its PBS at <net>.1 — which is also the default remoteHost.
+trole="$(jq -r '.tunnel.role // empty' "${CFG}")"
+if [[ "${trole}" == "dial" ]]; then
+    # shellcheck source=../../lib/pbs-tunnel.sh disable=SC1091
+    . "${SCRIPT_DIR}/../../lib/pbs-tunnel.sh"
+    tnet="$(jq -r '.tunnel.net // empty' "${CFG}")"
+    [[ -n "${rhost}" ]] || { rhost="$(bt_hosts "${tnet}")" && rhost="${rhost% *}"; } \
+        || die "tunnel.net ${tnet} is not a valid /30"
+fi
+
 [[ -n "${ns}" && -n "${rhost}" && -n "${rstore}" ]] \
     || die "config ${CFG} must set namespace, remoteHost and remoteStore"
+
+if [[ "${trole}" == "dial" ]]; then
+    tep="$(jq -r '.tunnel.endpoint // empty' "${CFG}")"
+    tkey="$(jq -r '.tunnel.peerKey // empty' "${CFG}")"
+    tmtu="$(jq -r '.tunnel.mtu // empty' "${CFG}")"
+    info "${BOLD}Dialing buddy tunnel $(bt_pull_name "${NAME}") → ${tep} (${tnet})${CL}"
+    ourkey="$(bt_dial_up "${NAME}" "${tnet}" "${tep}" "${tkey}" "${tmtu}")" \
+        || die "could not bring up the buddy tunnel (backup-manager peer check pull ${NAME})"
+    info "  ${GN}✓${CL} tunnel up — their PBS is ${rhost}:8007 through it"
+    info "  Our public key, for their side (backup-manager peer add remote <us> --peer-key …):"
+    info "    ${BL}${ourkey}${CL}"
+fi
 
 debug "${BOLD}Onboarding TAPPaaS buddy '${NAME}' → ${store}/${ns} (pull from ${rhost})${CL}"
 
@@ -56,8 +82,8 @@ read -rp "  Buddy PBS TLS fingerprint (sha256, blank to skip): " FP
 [[ -n "${AUTHID}" && -n "${PASSWORD}" ]] || die "auth-id and password are required"
 
 pbs_ns_ensure "${ns}"
-pbs_remote_ensure "${NAME}" "${rhost}" "${AUTHID}" "${PASSWORD}" "${FP}"
-pbs_syncjob_ensure "sync-${NAME}" "${store}" "${ns}" "${NAME}" "${rstore}" "${rns}" "${sched}" "${rv}" "${gfilter}"
+pbs_remote_ensure "${NAME}" "${rhost}" "${AUTHID}" "${PASSWORD}" "${FP}" "${rport}"
+pbs_syncjob_ensure "sync-${NAME}" "${store}" "${ns}" "${NAME}" "${rstore}" "${rns}" "${sched}" "${rv}" "${gfilter}" "${depth}"
 [[ -n "${gfilter}" ]] && debug "  ${GN}✓${CL} sync-${NAME} restricted to subset: ${gfilter}"
 
 # Namespace-scoped, admin-owned prune-job (the buddy cannot prune our copy).

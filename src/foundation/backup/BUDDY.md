@@ -8,9 +8,9 @@ PBS reads your backups into a namespace of its own; your PBS never pushes anywhe
 rule that makes a compromised site unable to destroy the copy its buddy holds (ADR-012 §1.4.1): a
 pull holds only a read-only login on the side it pulls from.
 
-**Status:** the PBS side (`backup-manager peer …`) is built; the tunnel is set up by hand on each
-firewall, and serving a tunnel through a satellite needs a satellite change that is not built yet
-— see [What is still to build](#what-is-still-to-build).
+**Status:** on a TAPPaaS system `backup-manager peer …` sets up both the PBS side and the tunnel
+(#796). Serving a tunnel through a satellite needs a satellite change that is not built yet — see
+[What is still to build](#what-is-still-to-build).
 
 ## One pull, one tunnel
 
@@ -71,9 +71,17 @@ Each tunnel has a `/30` of its own from **`10.255.2.0/24`** — clear of the TAP
 | serving end, the pulled system | `10.255.2.1` | `10.255.2.5` |
 | dialling end, the pulling system | `10.255.2.2` | `10.255.2.6` |
 
-The `/30` lives on **both** systems, so it must be free on both: the serving side proposes it, and
-the two agree. A system with several pulls uses the next free `/30` for each. The examples below
-use the first pull's addresses.
+The `/30` lives on **both** systems, so it must be free on both: the serving side picks it, and the
+dialling side takes it from them. A system with several pulls uses the next free `/30` for each.
+The examples below use the first pull's addresses.
+
+`10.255.2.0/24` is the default, and can be changed:
+
+- **For the whole site** — set `ip` of the `buddy` zone in `config/zones.json` (edit the file;
+  `network-manager modify` keeps a zone's range fixed). New tunnels are carved from there.
+- **For one tunnel** — `--tunnel-net <a.b.c.d/30>` on `peer add`. Use it when the `/30` the serving
+  side picked is already taken at the dialling side: `peer add pull` refuses it and names a `/30`
+  that is free there, for the serving side to re-run with.
 
 ### The serving end (the pulled system)
 
@@ -120,71 +128,67 @@ Send the password over a channel you trust; public keys and fingerprints may go 
 
 ## Setup 1: a TAPPaaS system a buddy can pull
 
-You serve the tunnel and grant read access. On your OPNsense (`https://firewall.mgmt.internal:8443`):
+You serve the tunnel and grant read access — one command:
 
-1. **VPN → WireGuard → Instances → +**: name `buddy-<buddy>-in`, generate a key pair, listen port
-   e.g. `51830` (unused), tunnel address `10.255.2.1/30`, MTU `1340` if you serve through a
-   satellite. Leave *Disable routes* off — the peer's single `/32` route is how replies find it.
-   Save; the **public key** goes to your buddy.
-2. **Peers → +** (once you have their key): name `buddy-<buddy>-puller`, their public key, allowed
-   IPs `10.255.2.2/32`, no endpoint, instance `buddy-<buddy>-in`. Enable WireGuard, apply.
-3. **Reachable from the internet** — either
-   - **own WAN:** Firewall → Rules → WAN: pass UDP `51830` to *This Firewall*, description
-     `buddy-<buddy> wireguard`; or
-   - **behind a satellite:** the satellite must relay UDP `51830` to `10.255.0.1:51830` — not built
-     yet (#795).
-4. **Only the PBS port** — Firewall → NAT → Port Forward, interface `WireGuard (Group)`: source
-   `10.255.2.2/32`, destination `10.255.2.1` port `8007`/tcp → your PBS's mgmt address
-   (`dig backup.mgmt.internal`) port `8007`, filter rule *Pass*; description `buddy-<buddy> pbs`.
-   Under Firewall → Rules → WireGuard, check nothing else passes `10.255.2.2`.
-5. **Read-only access to your backups:**
+```bash
+backup-manager peer add remote <buddy> --auth-id <buddy>@pbs --country <CC> --city <City> \
+    --tunnel serve [--mtu 1340]
+```
 
-   ```bash
-   backup-manager peer add remote <buddy> --auth-id <buddy>@pbs --country <CC> --city <City>
-   ```
+- It creates `<buddy>@pbs` (prompting for the password) and grants it `DatastoreReader` **without
+  propagation** — so the buddy never sees your `fs/` captures (your `config/` and secrets) nor what
+  *you* hold for others.
+- It takes the next free `/30` (e.g. `10.255.2.0/30`) and listen port (from `51830`), and on your
+  OPNsense creates the WireGuard instance `buddy-<buddy>-serve` (`.1/30`), a WAN rule for the UDP
+  port (`buddy-<buddy> serve wg`), and a port forward that lets only `.2` reach your PBS on
+  `.1:8007` (`buddy-<buddy> serve pbs`).
+- It prints what to send: the host (`10.255.2.1`), datastore, login, fingerprint, and the ready-made
+  `--tunnel dial --tunnel-net … --peer-key … --endpoint <your public IP>:<port>` for their side.
+  Fill in your public IP — your WAN address, or your satellite's.
 
-   It creates `<buddy>@pbs` (prompting for the password) and grants it `DatastoreReader` **without
-   propagation** — so the buddy never sees your `fs/` captures (your `config/` and secrets) nor
-   what *you* hold for others — and prints what to send. **Send the tunnel address
-   `10.255.2.1`, not the host it prints** (`backup.mgmt.internal` — an internal name, #796).
+When the buddy sends **their** public key, admit it — the same command with `--peer-key` and
+`--force` (the `/30` and port are kept, the login is left as it is):
 
-Keep the `buddy-<buddy>` descriptions: TAPPaaS's nightly firewall reconcile deletes only rules
-carrying its own `tappaas-…` prefix, so these survive it, and they are how you find them to remove.
+```bash
+backup-manager peer add remote <buddy> --auth-id <buddy>@pbs --country <CC> --city <City> \
+    --peer-key <their key> --force
+backup-manager peer check remote <buddy>      # the instance, its key, the handshake
+```
+
+Behind a satellite, the satellite must also relay the UDP port to `10.255.0.1:<port>` — not built
+yet (#795); pass `--mtu 1340`.
+
+The firewall objects are named `buddy-<buddy> …`: TAPPaaS's nightly firewall reconcile deletes only
+rules carrying its own `tappaas-…` prefix, so they survive it, and `peer delete` removes them.
 
 ## Setup 2: a TAPPaaS system that pulls a buddy
 
-You dial the buddy's tunnel and pull. On your OPNsense:
+You dial the buddy's tunnel and pull. With what they sent:
 
-1. **VPN → WireGuard → Instances → +**: name `buddy-<buddy>-out`, generate a key pair, no listen
-   port, tunnel address `10.255.2.2/30`, MTU `1340` if *they* serve through a satellite. Leave
-   *Disable routes* off — the peer's `/32` is the only route into the tunnel. The **public key**
-   goes to your buddy.
-2. **Peers → +**: name `buddy-<buddy>-server`, their public key, endpoint their public IP (or
-   satellite IP) and port, allowed IPs `10.255.2.1/32`, keepalive `25`, instance
-   `buddy-<buddy>-out`. Apply.
-3. **Firewall → NAT → Outbound** (hybrid mode): interface `WireGuard (Group)`, source your PBS's
-   address, destination `10.255.2.1/32` port `8007`/tcp, translation address `10.255.2.2`;
-   description `buddy-<buddy> pull`.
-4. **Firewall → Rules → LAN** (the mgmt zone): pass tcp from your PBS's address to `10.255.2.1`
-   port `8007`; description `buddy-<buddy> pull`.
-5. **Check the tunnel** — VPN → WireGuard → Status shows a handshake, and:
+```bash
+backup-manager peer add pull <buddy> --store <their datastore> --country <CC> --city <City> \
+    --tunnel dial --tunnel-net 10.255.2.0/30 --endpoint <their public IP>:<port> \
+    --peer-key <their key> [--mtu 1340]
+```
 
-   ```bash
-   ssh root@backup.mgmt.internal 'curl -sk -o /dev/null -w "%{http_code}\n" https://10.255.2.1:8007'   # 200
-   ```
+- On your OPNsense it creates the WireGuard instance `buddy-<buddy>-pull` (`.2/30`) with one peer —
+  their key and endpoint, `AllowedIPs = .1/32`, keepalive 25 — an outbound NAT that sends your
+  PBS's connection to `.1` as `.2` (`buddy-<buddy> pull nat`), and a mgmt rule that lets only your
+  PBS use the tunnel, only to `.1:8007` (`buddy-<buddy> pull`).
+- It prints **your** public key: send it to the buddy, for their `--peer-key`.
+- It prompts for the auth-id, password and fingerprint the buddy sent (they are never written to
+  config), creates the `pull/<buddy>` namespace, a nightly sync job (04:00) of their root namespace
+  only (`--max-depth 0`) and its retention, and records it all in `config/pull-<buddy>.json` —
+  the remote host is the tunnel's `.1`.
 
-6. **The pull:**
+The pull works once the buddy has admitted your key. Then:
 
-   ```bash
-   backup-manager peer add pull <buddy> --host 10.255.2.1 --store <their datastore> --country <CC> --city <City>
-   ssh root@backup.mgmt.internal proxmox-backup-manager sync-job run sync-<buddy>
-   backup-manager peers        # the relationship, and where the copy lives
-   backup-manager validate     # warns if the buddy is not shown to be somewhere else
-   ```
-
-   `peer add pull` prompts for the auth-id, password and fingerprint the buddy sent (they are
-   never written to config), creates the `pull/<buddy>` namespace, a nightly sync job (04:00)
-   and its retention, and records the buddy in `config/pull-<buddy>.json`.
+```bash
+backup-manager peer check pull <buddy>   # handshake, and their PBS answering on .1:8007
+ssh root@backup.mgmt.internal proxmox-backup-manager sync-job run sync-<buddy>
+backup-manager peers                     # the relationship, its tunnel, where the copy lives
+backup-manager validate                  # tunnel /30s, and whether the buddy is shown to be elsewhere
+```
 
 ## Setup 3: a non-TAPPaaS PBS that pulls a TAPPaaS system
 
@@ -205,7 +209,7 @@ PostUp     = wg set %i private-key /etc/wireguard/buddy-out.key
 # MTU = 1340   # if the TAPPaaS system serves through its satellite
 
 [Peer]
-PublicKey           = <the TAPPaaS system's buddy-…-in public key>
+PublicKey           = <the TAPPaaS system's buddy-…-serve public key>
 Endpoint            = <its public IP or satellite IP>:<port>
 AllowedIPs          = 10.255.2.1/32
 PersistentKeepalive = 25
@@ -255,7 +259,7 @@ PostUp     = wg set %i private-key /etc/wireguard/buddy-in.key
 # MTU = 1340   # if the TAPPaaS system dials through a satellite
 
 [Peer]
-PublicKey  = <the TAPPaaS system's buddy-…-out public key>
+PublicKey  = <the TAPPaaS system's buddy-…-pull public key>
 AllowedIPs = 10.255.2.2/32
 ```
 
@@ -276,8 +280,10 @@ proxmox-backup-manager acl update /datastore/<your-store> DatastoreReader \
 proxmox-backup-manager cert info | grep Fingerprint
 ```
 
-Send: auth-id `tappaas-buddy@pbs`, the password, the fingerprint and your datastore name — the
-TAPPaaS operator passes the store with `peer add pull … --store <your-store>`.
+Send: auth-id `tappaas-buddy@pbs`, the password, the fingerprint, your datastore name, your public
+key and `<public IP>:51830` — the TAPPaaS operator passes them to `peer add pull … --store
+<your-store> --tunnel dial --tunnel-net 10.255.2.0/30 --endpoint … --peer-key …`, and sends back
+the key it prints for your `[Peer]`.
 
 ## Prove it
 
@@ -292,29 +298,18 @@ TAPPaaS operator passes the store with `peer add pull … --store <your-store>`.
 ## End a pull
 
 Each side ends its own half. The pulled side: `backup-manager peer delete remote <buddy>`
-withdraws the read access (`--purge` also deletes the login), and its `buddy-<buddy>` WireGuard
-instance, WAN or relay rule and port forward go. The pulling side: `backup-manager peer delete pull
-<buddy>` stops the pull and keeps the copy (`--purge` deletes it), and its WireGuard instance,
-outbound NAT and mgmt rule go. On a non-TAPPaaS PBS: `systemctl disable --now wg-quick@buddy-…`,
+withdraws the read access (`--purge` also deletes the login) and removes its `buddy-<buddy>-serve`
+WireGuard instance, WAN rule and port forward. The pulling side: `backup-manager peer delete pull
+<buddy>` stops the pull and keeps the copy (`--purge` deletes it), and removes its WireGuard
+instance, outbound NAT and mgmt rule. On a non-TAPPaaS PBS: `systemctl disable --now wg-quick@buddy-…`,
 and the user, remote and jobs removed with `proxmox-backup-manager`.
 
 ## What is still to build
 
-The design above is complete; these parts of it are done by hand today, or not possible yet:
-
 - **Serving through a satellite.** The satellite relays only the admin VPN's UDP 51821 today, and
   its firewall is regenerated by every update, so a hand-added relay does not survive. Wanted: a
   satellite role that relays a declared UDP port to the home firewall — **#795**.
-- **The firewall objects.** Every WireGuard instance, rule and NAT entry in Setups 1 and 2 is made
-  by hand in OPNsense. Wanted: `backup-manager peer add … --tunnel`, creating and removing them with
-  the peer through the network controller, in an Overlay zone of their own (`buddy`), and a check
-  in `backup-manager validate` that the tunnel is up — **#796**.
-- **`peer add remote` prints `backup.mgmt.internal`** as the host to send — an internal name the
-  buddy cannot resolve; it should print the tunnel address (#796).
-- **`peer add pull` has no `--port`, `--remote-namespace` or `--max-depth`**, so a TAPPaaS pull
-  syncs every namespace it can list. Against a TAPPaaS buddy's non-propagating grant that is the
-  root only, but `--max-depth 0` should be explicit, as the satellite's own pull already is (#796).
-- **No buddy restore has been rehearsed** ([RESTORE.md §8](RESTORE.md#8-recovering-from-an-off-site-buddy)
-  is marked *Unrehearsed*).
+- **No buddy tunnel or restore has been rehearsed between two live sites**
+  ([RESTORE.md §8](RESTORE.md#8-recovering-from-an-off-site-buddy) is marked *Unrehearsed*).
 - **Several buddies, one site:** ADR-024 (Site Fabric) is where relationships between sites are
   meant to be described; it is a placeholder.

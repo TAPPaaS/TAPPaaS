@@ -38,6 +38,7 @@ import { FakeClient } from "./fake-client";
 import { HELP, run } from "../../src/main";
 import { keyTarget, keysUsb } from "../../src/keys";
 import { undocumentedOptions } from "../../../../lib/ts/src/help";
+import { allocateNet, allocatePort, buddyPool, nextServe, slash30Error, tunnelErrors, tunnelHosts } from "../../src/tunnel";
 
 // Fixtures are JSON in the SOURCE tree (test/fixtures/config), not compiled.
 // The compiled test runs from dist-test/manager/backup-manager/test/unit/
@@ -1075,6 +1076,92 @@ check(!retentionValid("7") && !retentionValid("7x") && !retentionValid(""), "inv
     check(r.rc === 1 && r.err.includes("unknown option") && r.log.length === 0, `${argv.join(" ")}: refused, nothing run`);
   }
   check(undocumentedOptions(HELP).length === 0, `every usage option is described (${undocumentedOptions(HELP).join(", ")})`);
+}
+
+// ── #796: buddy tunnels — one /30 per pull, served by the pulled site ──
+{
+  eq(slash30Error("10.255.2.4/30"), null, "a /30 on its boundary is a tunnel net");
+  check((slash30Error("10.255.2.5/30") ?? "").includes("10.255.2.4/30"), "…off the boundary names the right one");
+  check((slash30Error("10.255.2.0/24") ?? "").includes("/30"), "…a wider net is refused");
+  eq(JSON.stringify(tunnelHosts("10.255.2.8/30")), '{"serve":"10.255.2.9","dial":"10.255.2.10"}', ".1 serves, .2 dials");
+  eq(allocateNet("10.255.2.0/24", []), "10.255.2.0/30", "first /30 of the pool");
+  eq(allocateNet("10.255.2.0/24", ["10.255.2.0/30", "10.255.2.8/30"]), "10.255.2.4/30", "…skips the ones in use");
+  eq(allocateNet("10.255.2.0/29", ["10.255.2.0/30", "10.255.2.4/30"]), null, "…null when the pool is full");
+  eq(allocatePort([51830, 51831]), 51832, "next free listen port from 51830");
+
+  const d = mkdtempSync(join(tmpdir(), "bm-tunnel-"));
+  eq(buddyPool(d), "10.255.2.0/24", "no zones.json: the default pool");
+  writeFileSync(join(d, "zones.json"), JSON.stringify({
+    mgmt: { ip: "10.0.0.0/24" }, buddy: { ip: "172.31.9.0/24" }, _profiles: {},
+  }));
+  eq(buddyPool(d), "172.31.9.0/24", "the pool follows zones.json buddy.ip (the site-wide override)");
+
+  const out: string[] = [];
+  const call = (argv: string[]): number => {
+    const log = console.log;
+    const error = console.error;
+    console.log = (m: string) => void out.push(String(m));
+    console.error = (m: string) => void out.push(String(m));
+    try {
+      return run([...argv, "--config-dir", d, "--config-only"], new FakeClient());
+    } finally {
+      console.log = log;
+      console.error = error;
+    }
+  };
+  const cfg = (f: string) => JSON.parse(readFileSync(join(d, f), "utf8"));
+
+  eq(call(["peer", "add", "remote", "anna", "--auth-id", "anna@pbs", "--country", "DE", "--tunnel", "serve"]), 0, "remote --tunnel serve");
+  eq(JSON.stringify(cfg("remote-anna.json").tunnel), '{"role":"serve","net":"172.31.9.0/30","listenPort":51830}',
+    "…gets the first /30 of the pool and port 51830");
+  eq(call(["peer", "add", "remote", "bo", "--auth-id", "bo@pbs", "--country", "DE", "--tunnel", "serve", "--mtu", "1340"]), 0, "a second serve");
+  eq(JSON.stringify(cfg("remote-bo.json").tunnel), '{"role":"serve","net":"172.31.9.4/30","mtu":1340,"listenPort":51831}',
+    "…gets the next /30 and port");
+  const key = "x".repeat(42) + "A=";
+  eq(call(["peer", "add", "remote", "anna", "--auth-id", "anna@pbs", "--country", "DE", "--peer-key", key, "--force"]), 0,
+    "re-run with the puller's key (--force)");
+  eq(JSON.stringify(cfg("remote-anna.json").tunnel), `{"role":"serve","net":"172.31.9.0/30","peerKey":"${key}","listenPort":51830}`,
+    "…keeps its /30 and port, adds the key");
+  eq(call(["peer", "add", "remote", "cy", "--auth-id", "cy@pbs", "--country", "DE", "--tunnel", "serve", "--tunnel-net", "10.99.0.8/30"]), 0,
+    "--tunnel-net pins one tunnel outside the pool");
+  eq(cfg("remote-cy.json").tunnel.net, "10.99.0.8/30", "…and is kept");
+
+  check(call(["peer", "add", "pull", "anna", "--country", "DE", "--tunnel", "dial", "--tunnel-net", "172.31.9.0/30",
+    "--endpoint", "203.0.113.7:51830", "--peer-key", key]) !== 0, "a dial /30 that one of ours already holds is refused");
+  check(out.some((l) => l.includes("--tunnel-net 172.31.9.8/30")), "…telling the serving side which /30 is free here");
+  eq(call(["peer", "add", "pull", "anna", "--country", "DE", "--tunnel", "dial", "--tunnel-net", "10.255.2.0/30",
+    "--endpoint", "203.0.113.7:51830", "--peer-key", key]), 0, "pull --tunnel dial");
+  const pa = cfg("pull-anna.json");
+  eq(pa.remoteHost, "10.255.2.1", "…pulls from the serving side's .1");
+  eq(pa.tunnel.endpoint, "203.0.113.7:51830", "…dialing their endpoint");
+
+  check(call(["peer", "add", "pull", "z", "--tunnel", "dial", "--tunnel-net", "10.255.3.0/30"]) !== 0, "dial without endpoint/key is refused");
+  check(call(["peer", "add", "pull", "z", "--tunnel", "serve", "--host", "h"]) !== 0, "a pull cannot serve");
+  check(call(["peer", "add", "remote", "z", "--auth-id", "z@pbs", "--tunnel", "dial"]) !== 0, "a remote cannot dial");
+  check(call(["peer", "add", "receive", "z", "--tunnel", "serve"]) !== 0, "a receive has no tunnel");
+  check(call(["peer", "add", "pull", "z", "--host", "h", "--tunnel-net", "10.255.3.0/30"]) !== 0, "tunnel flags need --tunnel");
+  check(call(["peer", "add", "remote", "z", "--auth-id", "z@pbs", "--tunnel", "serve", "--tunnel-net", "10.0.0.4/30"]) !== 0,
+    "a /30 inside a zone (mgmt) is refused");
+  check(call(["peer", "add", "remote", "z", "--auth-id", "z@pbs", "--tunnel", "serve", "--peer-key", "nope"]) !== 0, "a malformed key is refused");
+  eq(nextServe(d).net, "172.31.9.8/30", "nextServe skips every tunnel in use");
+
+  eq(tunnelErrors(d).length, 0, `the configs written are valid (${tunnelErrors(d).join("; ")})`);
+  const bo = cfg("remote-bo.json");
+  bo.tunnel.net = "172.31.9.0/30";
+  writeFileSync(join(d, "remote-bo.json"), JSON.stringify(bo));
+  check(validate(d).errors.some((e) => e.includes("used by both")), "validate: two tunnels on one /30 is an error");
+  bo.tunnel.net = "172.31.9.5/30";
+  writeFileSync(join(d, "remote-bo.json"), JSON.stringify(bo));
+  check(validate(d).errors.some((e) => e.includes("boundary")), "validate: a misaligned /30 is an error");
+  check(listPeers(d).some((p) => p.tunnel === "serve 172.31.9.0/30 :51830"), "peers shows the tunnel");
+
+  eq(`${pa.remotePort}/${pa.maxDepth}`, "8007/0", "a pull says its port and syncs the remote namespace only (max-depth 0)");
+  eq(call(["peer", "add", "pull", "deep", "--host", "h", "--country", "DE", "--port", "8443", "--remote-namespace", "site/a", "--max-depth", "2"]), 0,
+    "pull --port --remote-namespace --max-depth");
+  const deep = cfg("pull-deep.json");
+  eq(`${deep.remotePort} ${deep.remoteNamespace} ${deep.maxDepth}`, "8443 site/a 2", "…recorded");
+  check(call(["peer", "add", "pull", "z", "--host", "h", "--max-depth", "9"]) !== 0, "max-depth beyond PBS's 7 is refused");
+  check(call(["peer", "add", "remote", "z", "--auth-id", "z@pbs", "--port", "8443"]) !== 0, "--port on a remote is refused");
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

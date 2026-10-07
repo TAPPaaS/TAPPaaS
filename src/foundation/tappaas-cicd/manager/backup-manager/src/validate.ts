@@ -12,6 +12,8 @@
 //   6. every off-site target records a physicalLocation away from the Site's
 //      (#609, ADR-012 §1.5) — WARNINGS: a peer that predates the field, or one
 //      in the same city, is not a broken configuration.
+//   7. every buddy tunnel (#796) is a /30 on its boundary, with the fields its
+//      role needs, sharing no /30 or listen port and inside no zone.
 
 import {
   environmentRaw,
@@ -22,6 +24,7 @@ import {
   siteBackup,
 } from "./config";
 import { offsiteWarnings, pbsOnSatelliteWarnings } from "./offsite";
+import { tunnelErrors } from "./tunnel";
 
 export interface ValidateResult {
   oks: string[];
@@ -114,6 +117,9 @@ export function validate(configDir: string): ValidateResult {
   } else if (target) {
     ok(`site backup target '${target}' set`);
   }
+
+  // ── 7. buddy tunnels (#796): a valid /30 each, none shared, none inside a zone
+  for (const e of tunnelErrors(configDir)) err(e);
 
   // ── 6. off-site copies are recorded, not asserted (#609) ─────────
   const warnings = [...offsiteWarnings(configDir), ...pbsOnSatelliteWarnings(configDir)];

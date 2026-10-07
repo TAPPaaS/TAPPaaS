@@ -722,7 +722,9 @@ site was lost — and the surviving copy is the one a **buddy pulled** from you
   ([BUDDY.md](BUDDY.md)).
 - **A way to reach their PBS.** The tunnel you pulled them through
   ([BUDDY.md](BUDDY.md), *Setup 2*) — re-create
-  your end of it on the rebuilt firewall; their end is unchanged.
+  your end of it on the rebuilt firewall with the same `peer add pull … --tunnel dial`
+  values. It prints a new public key: their operator admits it with
+  `peer add remote … --peer-key <it> --force`.
 
 That asymmetry is deliberate: it is why a compromise of your site could not have
 deleted their copy, and it is why recovery needs their cooperation.

@@ -41,11 +41,26 @@ import {
   findPeer,
   findPeers,
   normalizeKind,
+  peerConfigPath,
   peerScript,
+  readPeerConfig,
   removePeerConfig,
   writePeerConfig,
 } from "./peers";
 import { validate } from "./validate";
+import {
+  Tunnel,
+  asTunnel,
+  buddyPool,
+  isTunnelRole,
+  nextServe,
+  overlaps,
+  slash30Error,
+  tunnelHosts,
+  tunnelsInUse,
+  zoneNets,
+} from "./tunnel";
+import { basename, join } from "path";
 import { KeyTarget, keyTarget, keysUsb } from "./keys";
 import { placeText } from "./offsite";
 import { placementFinishReset, placementReset, placementUseExternal, ResetDeps } from "./placement-reset";
@@ -154,12 +169,17 @@ export const HELP: HelpSpec = {
     { usage: "peers", name: "peers", note: "(the off-site PBS relationships this site has)" },
     {
       usage: "peer add pull|remote|receive <name> [--host H] [--store S] [--namespace NS] "
+        + "[--port P] [--remote-namespace NS] [--max-depth N] "
         + "[--schedule SPEC] [--group-filter F] [--auth-id ID] [--propagate] "
-        + "[--country CC] [--city C] [--building B] [--force]",
+        + "[--country CC] [--city C] [--building B] "
+        + "[--tunnel serve|dial] [--tunnel-net CIDR] [--listen-port P] [--endpoint H:P] [--peer-key K] [--mtu N] [--force]",
       name: "peer add",
       options: [
         ["--host H", "peer add pull: the PBS we pull from."],
         ["--store S", "peer add pull: its datastore name (default tappaas_backup)."],
+        ["--port P", "peer add pull: its PBS API port (default 8007)."],
+        ["--remote-namespace NS", "peer add pull: the namespace to pull FROM (default its root)."],
+        ["--max-depth N", "peer add pull: how many namespace levels below it to sync (default 0: that namespace only)."],
         ["--namespace NS", "peer add: pull/receive — where the data lands here. remote — what they may read (default: the root namespace, our VM backups)."],
         ["--schedule SPEC", "peer add pull: when to pull (default 04:00)."],
         ["--group-filter F", "peer add pull: replicate only part of the source."],
@@ -168,10 +188,17 @@ export const HELP: HelpSpec = {
         ["--country CC", "peer add: the country the peer's PBS is in (ISO code) — the evidence its copy is off-site (#609)."],
         ["--city C", "peer add: its city — needed to tell it apart from a Site in the same country."],
         ["--building B", "peer add: its building or data centre — needed when it shares the Site's city."],
+        ["--tunnel serve|dial", "peer add: carry this pull over its own WireGuard tunnel (#796, BUDDY.md). The pulled site serves (remote), the puller dials (pull)."],
+        ["--tunnel-net CIDR", "peer add: the tunnel's /30. serve: default the next free /30 of zones.json buddy.ip (10.255.2.0/24). dial: the serving side's."],
+        ["--listen-port P", "peer add remote --tunnel serve: UDP port to listen on (default the next free from 51830)."],
+        ["--endpoint H:P", "peer add pull --tunnel dial: the serving side's public address (or its satellite's) and port."],
+        ["--peer-key K", "peer add: the other side's WireGuard public key. serve may add it later: re-run with --force."],
+        ["--mtu N", "peer add: tunnel MTU (e.g. 1340 through a satellite relay; default OPNsense's)."],
         ["--config-only", "peer add: write the config, skip onboarding (no PBS contact)."],
-        ["--force", "peer add: overwrite an existing peer config."],
+        ["--force", "peer add: overwrite an existing peer config (keeps its tunnel /30 and port unless given)."],
       ],
     },
+    { usage: "peer check pull|remote <name>", name: "peer check", note: "(the buddy tunnel's live state: instance, key, handshake, PBS reach)" },
     {
       usage: "peer delete pull|remote|receive <name> [--purge] [--config-only]",
       name: "peer delete",
@@ -279,6 +306,15 @@ interface Opts {
   peer?: string;
   datastore?: string;
   fingerprint?: string;
+  tunnel?: string;
+  tunnelNet?: string;
+  listenPort?: string;
+  endpoint?: string;
+  peerKey?: string;
+  mtu?: string;
+  port?: string;
+  remoteNamespace?: string;
+  maxDepth?: string;
   yes: boolean;
   noUpdate: boolean;
   propagate: boolean;
@@ -292,6 +328,8 @@ interface Opts {
 const PEER_VALUE_FLAGS = new Set([
   "--host", "--store", "--namespace", "--schedule", "--group-filter", "--auth-id",
   "--country", "--city", "--building", "--peer", "--datastore", "--fingerprint",
+  "--tunnel", "--tunnel-net", "--listen-port", "--endpoint", "--peer-key", "--mtu",
+  "--port", "--remote-namespace", "--max-depth",
 ]);
 
 function parseOpts(args: string[]): Opts {
@@ -386,6 +424,15 @@ function parseOpts(args: string[]): Opts {
     peer: peerFlags["--peer"],
     datastore: peerFlags["--datastore"],
     fingerprint: peerFlags["--fingerprint"],
+    tunnel: peerFlags["--tunnel"],
+    tunnelNet: peerFlags["--tunnel-net"],
+    listenPort: peerFlags["--listen-port"],
+    endpoint: peerFlags["--endpoint"],
+    peerKey: peerFlags["--peer-key"],
+    mtu: peerFlags["--mtu"],
+    port: peerFlags["--port"],
+    remoteNamespace: peerFlags["--remote-namespace"],
+    maxDepth: peerFlags["--max-depth"],
     yes, noUpdate,
     propagate, configOnly, purge, force,
     rest,
@@ -615,7 +662,8 @@ function cmdPeer(opts: Opts): number {
   const sub = opts.rest[0];
   if (sub === "add") return cmdPeerAdd(opts);
   if (sub === "delete" || sub === "remove") return cmdPeerDelete(opts);
-  die("peer: expected 'add <kind> <name>' or 'delete <name>'");
+  if (sub === "check") return cmdPeerCheck(opts);
+  die("peer: expected 'add <kind> <name>', 'delete <kind> <name>' or 'check <kind> <name>'");
   return 1;
 }
 
@@ -632,8 +680,9 @@ function cmdPeerAdd(opts: Opts): number {
   const k = kind as PeerKind;
   // Say what cannot work now, rather than at onboarding when a credential has
   // already been typed.
-  if (k === "pull" && !opts.host) {
-    die("peer add pull: --host is required (the PBS we pull from)");
+  const tunnel = peerTunnel(opts, k, name);
+  if (k === "pull" && !opts.host && !tunnel) {
+    die("peer add pull: --host is required (the PBS we pull from), or --tunnel dial");
   }
   if (k === "remote" && !opts.authId) {
     die("peer add remote: --auth-id is required (the login they will pull with, " +
@@ -649,7 +698,14 @@ function cmdPeerAdd(opts: Opts): number {
     groupFilter: opts.groupFilter,
     authId: opts.authId,
     propagate: opts.propagate,
+    remoteNamespace: opts.remoteNamespace,
+    port: intFlag("--port", opts.port, 1, 65535),
+    maxDepth: intFlag("--max-depth", opts.maxDepth, 0, 7),
+    ...(tunnel ? { tunnel } : {}),
   };
+  if (k !== "pull" && (opts.port || opts.remoteNamespace || opts.maxDepth)) {
+    die(`peer add ${k}: --port, --remote-namespace and --max-depth describe a pull`);
+  }
   if (opts.country) {
     if (!/^[A-Za-z]{2}$/.test(opts.country)) die(`peer add: --country takes an ISO 3166-1 alpha-2 code (e.g. DE), not '${opts.country}'`);
     spec.physicalLocation = { country: opts.country.toUpperCase() };
@@ -677,12 +733,114 @@ function cmdPeerAdd(opts: Opts): number {
     return 1;
   }
   info(`Onboarding — you will be prompted for the credential (it is never stored in the config).`);
-  const rc = stream(script, [name]);
+  const rc = stream(script, [name], scriptEnv(opts));
   if (rc !== 0) {
     warn(`Onboarding failed (rc ${rc}). The config remains at ${file};`);
     warn(`fix the cause and re-run, or 'backup-manager peer delete ${name}' to drop it.`);
   }
   return rc;
+}
+
+function intFlag(flag: string, v: string | undefined, lo: number, hi: number): number | undefined {
+  if (v === undefined) return undefined;
+  const n = Number(v);
+  if (!Number.isInteger(n) || n < lo || n > hi) die(`peer add: ${flag} takes ${lo}–${hi}, not '${v}'`);
+  return n;
+}
+
+// The onboarding scripts read the peer config from $CONFIG_DIR; hand them the
+// one this run was given (--config-dir), not the process default.
+function scriptEnv(opts: Opts): { env: Record<string, string> } {
+  return { env: { CONFIG_DIR: opts.configDir, TAPPAAS_CONFIG: opts.configDir } };
+}
+
+const WG_KEY = /^[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=$/;
+
+// The tunnel a `peer add` asks for (#796), or undefined for none. Dies on
+// anything onboarding could not make work, before a credential is typed.
+// With --force an existing tunnel's /30 and port are kept unless given again —
+// the other site already holds them.
+function peerTunnel(opts: Opts, k: PeerKind, name: string): Tunnel | undefined {
+  const prev = opts.force ? asTunnel(readPeerConfig(opts.configDir, k, name)?.tunnel) : null;
+  const role = opts.tunnel ?? prev?.role;
+  const given = opts.tunnelNet || opts.listenPort || opts.endpoint || opts.peerKey || opts.mtu;
+  if (!role) {
+    if (given) die("peer add: --tunnel-net, --listen-port, --endpoint, --peer-key and --mtu need --tunnel serve|dial");
+    return undefined;
+  }
+  if (!isTunnelRole(role)) die(`peer add: --tunnel takes serve or dial, not '${role}'`);
+  if (k === "receive") die("peer add receive: a receive peer pushes to us and has no tunnel (BUDDY.md)");
+  const want = k === "pull" ? "dial" : "serve";
+  if (role !== want) {
+    die(`peer add ${k}: the ${k} side ${want}s its tunnel — the site whose data is pulled serves it (BUDDY.md). Use --tunnel ${want}`);
+  }
+  const file = basename(peerConfigPath(opts.configDir, k, name));
+  const t: Tunnel = { role, net: opts.tunnelNet ?? prev?.net ?? "" };
+  const peerKey = opts.peerKey ?? prev?.peerKey;
+  if (peerKey) {
+    if (!WG_KEY.test(peerKey)) die(`peer add: --peer-key '${peerKey}' is not a WireGuard public key (44 base64 characters)`);
+    t.peerKey = peerKey;
+  }
+  const mtu = opts.mtu !== undefined ? Number(opts.mtu) : prev?.mtu;
+  if (mtu !== undefined) {
+    if (!Number.isInteger(mtu) || mtu < 1280 || mtu > 1500) die(`peer add: --mtu takes 1280–1500, not '${opts.mtu}'`);
+    t.mtu = mtu;
+  }
+  if (role === "serve") {
+    const next = nextServe(opts.configDir, file);
+    if (!t.net) {
+      if (!next.net) die(`peer add: no free /30 left in the buddy pool ${buddyPool(opts.configDir)} — widen zones.json buddy.ip or pass --tunnel-net`);
+      t.net = next.net as string;
+    }
+    const port = opts.listenPort !== undefined ? Number(opts.listenPort) : prev?.listenPort ?? next.port;
+    if (!Number.isInteger(port) || port < 1 || port > 65535) die(`peer add: --listen-port takes 1–65535, not '${opts.listenPort}'`);
+    t.listenPort = port;
+  } else {
+    const ep = opts.endpoint ?? prev?.endpoint;
+    if (!t.net || !ep || !t.peerKey) {
+      die("peer add pull --tunnel dial: --tunnel-net, --endpoint and --peer-key are required — " +
+          "the serving side's 'peer add remote … --tunnel serve' prints all three");
+    }
+    if (!/^[^\s:]+:\d{1,5}$/.test(ep as string)) die(`peer add: --endpoint takes host:port, not '${ep}'`);
+    t.endpoint = ep;
+  }
+  const bad = slash30Error(t.net);
+  if (bad) die(`peer add: ${bad}`);
+  for (const u of tunnelsInUse(opts.configDir)) {
+    if (u.file !== file && overlaps(u.tunnel.net, t.net)) {
+      const free = nextServe(opts.configDir, file).net;
+      die(`peer add: tunnel ${t.net} is already used by ${u.file}.` +
+          (role === "dial"
+            ? ` Ask the serving side to re-run its 'peer add remote' with --tunnel-net ${free ?? "<a free /30>"} --force.`
+            : ` Pick another with --tunnel-net (free: ${free ?? "none"}).`));
+    }
+    if (role === "serve" && u.file !== file && u.tunnel.listenPort === t.listenPort) {
+      die(`peer add: listen port ${t.listenPort} is already used by ${u.file} — pass another --listen-port`);
+    }
+  }
+  for (const z of zoneNets(opts.configDir)) {
+    if (overlaps(z.ip, t.net)) die(`peer add: tunnel ${t.net} overlaps zone '${z.zone}' (${z.ip}) — pick another /30`);
+  }
+  const h = tunnelHosts(t.net);
+  info(`  tunnel ${role} ${t.net}: ${h.serve} serves PBS :8007, ${h.dial} dials` +
+       (t.listenPort ? ` · udp/${t.listenPort}` : "") + (t.endpoint ? ` · endpoint ${t.endpoint}` : ""));
+  return t;
+}
+
+// `peer check <kind> <name>` (#796): the live state of a peer's buddy tunnel —
+// the OPNsense instance, its key, the handshake, and (dialing side) whether the
+// far PBS answers through it. Read-only.
+function cmdPeerCheck(opts: Opts): number {
+  const kind = normalizeKind(opts.rest[1] ?? "");
+  const name = opts.rest[2];
+  if (!kind || kind === "receive" || !name) die("peer check: expected pull|remote <name>");
+  const cfg = readPeerConfig(opts.configDir, kind as PeerKind, name as string);
+  if (!cfg) die(`peer check: no ${kind} peer named '${name}'`);
+  const t = asTunnel(cfg?.tunnel);
+  if (!t) die(`peer check: ${kind} peer '${name}' has no tunnel — it reaches ${String(cfg?.remoteHost || "its PBS")} directly`);
+  const script = join(moduleScriptDir(opts.configDir), "scripts", "tunnel-check.sh");
+  if (!existsSync(script)) die(`peer check: ${script} not found`);
+  return stream(script, [(t as Tunnel).role, name as string, (t as Tunnel).net], scriptEnv(opts));
 }
 
 function cmdPeerDelete(opts: Opts): number {
@@ -727,7 +885,7 @@ function cmdPeerDelete(opts: Opts): number {
   if (opts.configOnly) {
     info("  --config-only: the PBS side is left exactly as it is.");
   } else if (existsSync(script)) {
-    rc = stream(script, opts.purge ? [name, "--purge"] : [name]);
+    rc = stream(script, opts.purge ? [name, "--purge"] : [name], scriptEnv(opts));
     if (rc !== 0) {
       warn(`Offboarding reported rc ${rc}; the config is left in place so you can retry.`);
       return rc;
@@ -783,11 +941,12 @@ function cmdPeers(opts: Opts): void {
     return;
   }
   const pad = (s: string, n: number): string => (s.length >= n ? s : s + " ".repeat(n - s.length));
-  info(pad("NAME", 20) + " " + pad("ROLE", 9) + " " + pad("HOST", 28) + " " + pad("NAMESPACE", 20) + " LOCATION");
+  info(pad("NAME", 20) + " " + pad("ROLE", 9) + " " + pad("HOST", 28) + " " + pad("NAMESPACE", 20) + " " +
+    pad("TUNNEL", 26) + " LOCATION");
   for (const p of peers) {
     info(
       pad(p.name, 20) + " " + pad(p.role, 9) + " " + pad(p.remoteHost ?? "-", 28) + " " +
-        pad(p.namespace ?? "-", 20) + " " + placeText(p.physicalLocation),
+        pad(p.namespace ?? "-", 20) + " " + pad(p.tunnel ?? "-", 26) + " " + placeText(p.physicalLocation),
     );
   }
 }

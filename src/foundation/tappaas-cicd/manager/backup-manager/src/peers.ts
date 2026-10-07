@@ -37,6 +37,7 @@
 
 import { existsSync, readFileSync, readdirSync, renameSync, unlinkSync, writeFileSync } from "fs";
 import { join } from "path";
+import { Tunnel, tunnelHosts } from "./tunnel";
 
 export type PeerKind = "pull" | "remote" | "receive";
 
@@ -74,6 +75,8 @@ export interface PeerSpec {
   namespace?: string; // pull/receive: where the data lands on our datastore
   //                     remote: what they may read ("" = the root namespace)
   remoteNamespace?: string; // pull: which namespace to pull FROM
+  port?: number; // pull: their PBS API port (default 8007)
+  maxDepth?: number; // pull: how far below remoteNamespace to descend (default 0)
   schedule?: string; // pull: when to pull
   groupFilter?: string; // pull: replicate only part of the source
   authId?: string; // remote: the login they pull with
@@ -81,6 +84,8 @@ export interface PeerSpec {
   // Where the peer physically is (#609) — the evidence its copy is off-site.
   physicalLocation?: { country: string; city?: string; building?: string };
   retention?: Record<string, number>;
+  // #796: the WireGuard tunnel under this pull — pull dials it, remote serves it.
+  tunnel?: Tunnel;
 }
 
 // Build the config document for a peer. Deliberately mirrors the shipped
@@ -94,13 +99,19 @@ export function buildPeerConfig(
 ): Record<string, unknown> {
   const ns = spec.namespace ?? defaultNamespace(kind, spec.name, siteName);
   const place = spec.physicalLocation ? { physicalLocation: spec.physicalLocation } : {};
+  const tun = spec.tunnel ? { tunnel: spec.tunnel } : {};
   if (kind === "pull") {
     return {
       name: spec.name,
       type: "tappaas",
-      remoteHost: spec.host ?? "",
+      // Through a tunnel their PBS is at <net>.1 — nothing else of theirs is reachable.
+      remoteHost: spec.host ?? (spec.tunnel ? tunnelHosts(spec.tunnel.net).serve : ""),
+      remotePort: spec.port ?? 8007,
       remoteStore: spec.store ?? "tappaas_backup",
       remoteNamespace: spec.remoteNamespace ?? "",
+      // Explicit, as the satellite's own pull is: a TAPPaaS buddy grants its root
+      // without propagation, and a sync must not wander below it (#796).
+      maxDepth: spec.maxDepth ?? 0,
       namespace: ns,
       pullSchedule: spec.schedule ?? "04:00",
       removeVanished: false, // never let a compromised source erase our copy
@@ -109,6 +120,7 @@ export function buildPeerConfig(
       groupFilter: spec.groupFilter ?? "",
       retention: spec.retention ?? { keepLast: 4, keepDaily: 14, keepWeekly: 8, keepMonthly: 12 },
       ...place,
+      ...tun,
     };
   }
   if (kind === "receive") {
@@ -134,6 +146,7 @@ export function buildPeerConfig(
     // other peer's data.
     propagate: spec.propagate ?? false,
     ...place,
+    ...tun,
   };
 }
 

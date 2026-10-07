@@ -41,6 +41,7 @@
         "netbird",
         "edge",
         "admin",
+        "buddy",
         "srv",
         "home",
         "guest",
@@ -130,6 +131,19 @@
     "pinhole-allowed-from": [],
     "_comment": "ADR-010 admin-vpn landing zone (Q3 RESOLVED, validated live 2026-07-01). The operator's admin WireGuard session TERMINATES on OPNsense (a dedicated 'tappaas-admin' WG server on port 51821, tunneladdress 10.255.1.1/24); the satellite only blind-relays the UDP (or the admin device connects direct to the cluster WAN — the OPNsense side is identical). access-to: ['mgmt'] is realised NOT by zone-manager (which skips Overlay/vlantag=0 zones) but by a single explicit least-privilege firewall pass rule on the 'wireguard' interface: 10.255.1.0/24 -> 10.0.0.0/24, created idempotently by 'network-manager wgvpn setup' (network-manager/wgvpn/). NetBird (the 'netbird' overlay) remains independent for many-peer mesh; admin-vpn covers the single-operator case with plain WireGuard and no control plane. Peers are managed with 'network-manager wgvpn add-peer'. Full runbook: tappaas-cicd/manager/network-manager/ADMIN-VPN.md.",
     "description": "ADR-010 admin-vpn landing (mgmt tunnel; see ADMIN-VPN.md)"
+  },
+  "buddy": {
+    "type": "Overlay",
+    "state": "Manual",
+    "typeId": "7",
+    "subId": "3",
+    "vlantag": 0,
+    "ip": "10.255.2.0/24",
+    "bridge": "wireguard",
+    "access-to": [],
+    "pinhole-allowed-from": [],
+    "_comment": "#796 backup-buddy tunnels. The pool that 'backup-manager peer add remote <n> --tunnel serve' carves one /30 per pulled-from relationship out of (.1 = the serving side, .2 = the puller). Each tunnel carries only PBS tcp/8007 to one address: AllowedIPs are /32s, so the two sites' networks are never merged. Change 'ip' here (by hand; network-manager modify keeps it immutable) to move the pool if it collides with something at a buddy site; one tunnel can also be pinned with --tunnel-net. Both ends of a tunnel must agree on its /30, so the dialing side always takes it from the serving side. See backup/BUDDY.md.",
+    "description": "#796 backup-buddy tunnels (one /30 per pull; see backup/BUDDY.md)"
   },
   "wan": {
     "type": "WAN",

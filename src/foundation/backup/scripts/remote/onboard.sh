@@ -84,9 +84,33 @@ info "  ${GN}✓${CL} ${authid} may READ ${acl_path}$([[ "${propagate}" == "fals
 # What they need on their side to configure the pull.
 fp="$(_pbs_node_run proxmox-backup-manager cert info 2>/dev/null | sed -n 's/^Fingerprint (sha256): //p' | head -1)"
 info ""
+# A buddy tunnel (#796): the pulled side SERVES it, so the puller reaches our
+# PBS at <net>.1 and nothing else of ours.
+trole="$(jq -r '.tunnel.role // empty' "${CFG}")"
+phost="$(pbs_pbs_url 2>/dev/null || echo backup.mgmt.internal)"
+if [[ "${trole}" == "serve" ]]; then
+    # shellcheck source=../../lib/pbs-tunnel.sh disable=SC1091
+    . "${SCRIPT_DIR}/../../lib/pbs-tunnel.sh"
+    tnet="$(jq -r '.tunnel.net // empty' "${CFG}")"
+    tport="$(jq -r '.tunnel.listenPort // empty' "${CFG}")"
+    tkey="$(jq -r '.tunnel.peerKey // empty' "${CFG}")"
+    tmtu="$(jq -r '.tunnel.mtu // empty' "${CFG}")"
+    hosts="$(bt_hosts "${tnet}")" || die "tunnel.net ${tnet} is not a valid /30"
+    info "${BOLD}Serving buddy tunnel $(bt_serve_name "${NAME}") on udp/${tport} (${tnet})${CL}"
+    ourkey="$(bt_serve_up "${NAME}" "${tnet}" "${tport}" "${tmtu}" "${tkey}")" \
+        || die "could not bring up the buddy tunnel (backup-manager peer check remote ${NAME})"
+    phost="${hosts% *}"
+    info "  ${GN}✓${CL} tunnel instance up — only ${hosts#* } may reach ${phost}:8007 through it"
+    [[ -n "${tkey}" ]] || warn "  No --peer-key yet: nobody can connect until you re-run with their key (--force)."
+fi
+
 info "${BOLD}Give the remote operator these, so they can add us as a pull source:${CL}"
-info "  host:        $(pbs_pbs_url 2>/dev/null || echo backup.mgmt.internal)"
+info "  host:        ${phost}"
 info "  datastore:   ${store}"
 info "  namespace:   ${ns:-<root>}"
 info "  auth id:     ${authid}"
 info "  fingerprint: ${fp:-<run: proxmox-backup-manager cert info>}"
+if [[ "${trole}" == "serve" ]]; then
+    info "  tunnel:      --tunnel dial --tunnel-net ${tnet} --peer-key ${ourkey}"
+    info "               --endpoint <our public IP or satellite>:${tport}${tmtu:+  (MTU ${tmtu})}"
+fi

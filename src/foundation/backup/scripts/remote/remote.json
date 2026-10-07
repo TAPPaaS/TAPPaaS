@@ -8,5 +8,6 @@
     "physicalLocation": { "country": "DE", "city": "Berlin" },
     "_physicalLocation_note": "Where THEIR PBS — the off-site copy of our data — physically is (#609); `backup-manager validate` compares it with site.json's location. EXAMPLE values.",
     "_namespace_note": "What they may read. Empty = the ROOT namespace, i.e. our VM backups. propagate:false keeps the grant off child namespaces — fs/ holds our config and secrets capture, and receive/ holds other peers' data.",
-    "_fingerprint_note": "They will need our PBS TLS fingerprint and hostname to configure their pull. Onboarding prints both."
+    "_fingerprint_note": "They will need our PBS TLS fingerprint and hostname to configure their pull. Onboarding prints both.",
+    "_tunnel_note": "#796 (BUDDY.md): present when their pull runs over its own WireGuard tunnel, which we SERVE (the pulled side serves). Our PBS is then reachable to them at the tunnel's .1 on tcp/8007 and nowhere else. Written by peer add remote --tunnel serve; e.g. {\"role\": \"serve\", \"net\": \"10.255.2.0/30\", \"listenPort\": 51830, \"peerKey\": \"…\"}"
 }

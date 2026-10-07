@@ -27,6 +27,7 @@ import { defaultConfigDir, readJsonObject as readJson } from "../../../lib/ts/sr
 import { declaresBackup, discoverModules } from "../../../lib/ts/src/module-discovery";
 import { BackupPolicy, Peer, PeerRole, Placement, PlacementKind, ScheduleBucket } from "./types";
 import { asPlace } from "./offsite";
+import { asTunnel } from "./tunnel";
 
 // The cascade reads the TARGET config root directly (it holds <module>.json,
 // site.json, environments/) — the lib's ONE config-root rule (TAPPAAS_CONFIG >
@@ -282,6 +283,11 @@ export function readPlacement(configDir: string): Placement {
 //   receive-<n>  they push theirs into ours
 // Prompt-not-store means these files carry host/namespace only, never a
 // credential.
+function tunnelText(v: unknown): string | null {
+  const t = asTunnel(v);
+  return t ? `${t.role} ${t.net}${t.listenPort ? ` :${t.listenPort}` : ""}` : null;
+}
+
 export function listPeers(configDir: string): Peer[] {
   if (!existsSync(configDir)) return [];
   const prefixes: Array<[string, PeerRole]> = [
@@ -302,6 +308,7 @@ export function listPeers(configDir: string): Peer[] {
         remoteHost: asString(j.remoteHost),
         namespace: asString(j.namespace),
         physicalLocation: asPlace(j.physicalLocation),
+        tunnel: tunnelText(j.tunnel),
       });
       break;
     }

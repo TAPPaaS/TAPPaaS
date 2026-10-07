@@ -36,6 +36,13 @@ acl_path="$(_pbs_ns_acl_path "${store}" "${ns}")"
 pbs_acl_delete "${acl_path}" DatastoreReader "${authid}"
 info "  ${GN}✓${CL} revoked ${authid}'s read access to ${acl_path}"
 
+if [[ "$(jq -r '.tunnel.role // empty' "${CFG}")" == "serve" ]]; then
+    # shellcheck source=../../lib/pbs-tunnel.sh disable=SC1091
+    . "${SCRIPT_DIR}/../../lib/pbs-tunnel.sh"
+    bt_serve_down "${NAME}"
+    info "  ${GN}✓${CL} removed buddy tunnel $(bt_serve_name "${NAME}") and its rules"
+fi
+
 if [[ "${PURGE}" == "--purge" ]]; then
     if [[ "${authid}" == *"@pbs" ]] && _pbs_user_exists "${authid}"; then
         _pbs_node_run proxmox-backup-manager user remove "${authid}" \

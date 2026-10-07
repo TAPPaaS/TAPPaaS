@@ -1065,7 +1065,7 @@ function tmpZones(): string {
     // core on a FRESH install: exactly the core set, renamed.
     const core = initProfile(template, {}, "acme", "core");
     check(
-      zonesOf(core.raw).join(",") === ["mgmt", "wan", "netbird", "edge", "admin", "acme", "home", "guest", "dmz"].sort().join(","),
+      zonesOf(core.raw).join(",") === ["mgmt", "wan", "netbird", "edge", "admin", "buddy", "acme", "home", "guest", "dmz"].sort().join(","),
       `init core emits exactly the core set (got ${zonesOf(core.raw).join(",")})`,
     );
     check(!zonesOf(core.raw).some((z) => z.startsWith("iot")), "init core ships NO IoT zones (opt-in)");

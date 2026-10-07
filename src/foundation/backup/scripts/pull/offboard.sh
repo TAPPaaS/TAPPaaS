@@ -28,13 +28,19 @@ PURGE="${2:-}"
 store="$(pbs_storage_name)"
 CFG="${CONFIG_DIR}/pull-${NAME}.json"
 ns="$(jq -r '.namespace // empty' "${CFG}" 2>/dev/null || true)"
-[[ -n "${ns}" ]] || ns="remote/${NAME}"
+[[ -n "${ns}" ]] || ns="pull/${NAME}"
+trole="$(jq -r '.tunnel.role // empty' "${CFG}" 2>/dev/null || true)"
 readauth="$(jq -r '.readAuthId // ""' "${CFG}" 2>/dev/null || true)"
 
 debug "${BOLD}Offboarding TAPPaaS buddy '${NAME}'${CL}"
 pbs_syncjob_delete "sync-${NAME}"   && debug "  removed sync-job sync-${NAME}"
 pbs_prunejob_delete "prune-remote-${NAME}" && debug "  removed prune-job prune-remote-${NAME}"
 pbs_remote_delete "${NAME}"         && debug "  removed remote ${NAME}"
+if [[ "${trole}" == "dial" ]]; then
+    # shellcheck source=../../lib/pbs-tunnel.sh disable=SC1091
+    . "${SCRIPT_DIR}/../../lib/pbs-tunnel.sh"
+    bt_dial_down "${NAME}" && debug "  removed buddy tunnel $(bt_pull_name "${NAME}")"
+fi
 [[ -n "${readauth}" ]] && pbs_acl_delete "$(_pbs_ns_acl_path "${store}" "${ns}")" DatastoreReader "${readauth}"
 
 if [[ "${PURGE}" == "--purge" ]]; then

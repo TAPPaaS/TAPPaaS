@@ -168,13 +168,16 @@ _pbs_syncjob_exists() {
 # fields (schedule, remove-vanished, group-filter) are touched to avoid identity
 # churn. An optional group-filter selects a SUBSET of the source (ADR-012 §3.6,
 # #389 "back up only a subset") — e.g. "type:vm" or "group:vm/101,group:vm/102".
-# Args: id store ns remote remote-store remote-ns schedule remove-vanished [group-filter]
+# An optional max-depth bounds how far below remote-ns the sync descends (0 = that
+# namespace only; empty = PBS's default, all of them) (#796).
+# Args: id store ns remote remote-store remote-ns schedule remove-vanished [group-filter] [max-depth]
 pbs_syncjob_ensure() {
-    local id="$1" store="$2" ns="$3" remote="$4" rstore="$5" rns="$6" sched="$7" rv="$8" gfilter="${9:-}"
+    local id="$1" store="$2" ns="$3" remote="$4" rstore="$5" rns="$6" sched="$7" rv="$8" gfilter="${9:-}" depth="${10:-}"
     if _pbs_syncjob_exists "$id"; then
         local -a a=(proxmox-backup-manager sync-job update "$id" --remove-vanished "$rv")
         [[ -n "$sched" ]] && a+=(--schedule "$sched")
         [[ -n "$gfilter" ]] && a+=(--group-filter "$gfilter")
+        [[ -n "$depth" ]] && a+=(--max-depth "$depth")
         _pbs_node_run "${a[@]}"
     else
         local -a a=(proxmox-backup-manager sync-job create "$id"
@@ -183,6 +186,7 @@ pbs_syncjob_ensure() {
         [[ -n "$rns" ]] && a+=(--remote-ns "$rns")
         [[ -n "$sched" ]] && a+=(--schedule "$sched")
         [[ -n "$gfilter" ]] && a+=(--group-filter "$gfilter")
+        [[ -n "$depth" ]] && a+=(--max-depth "$depth")
         _pbs_node_run "${a[@]}"
     fi
 }

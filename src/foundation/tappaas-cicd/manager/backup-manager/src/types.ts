@@ -109,6 +109,8 @@ export interface Peer {
   namespace: string | null;
   // Where it physically is (#609): site.json's location shape, or null.
   physicalLocation: { country?: string; city?: string; building?: string } | null;
+  // #796: "<serve|dial> <net/30>[ :port]" when the pull runs over a buddy tunnel.
+  tunnel: string | null;
 }
 
 // ── Client — the backup-controller boundary ───────────────────────────
