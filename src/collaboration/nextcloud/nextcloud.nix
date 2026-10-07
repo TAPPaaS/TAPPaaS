@@ -525,7 +525,7 @@ in
   #          return {
   #            "nextcloud_user_id": request.user.username,
   #            "quota":             "5 GB",
-  #            "groups":            [g.name for g in request.user.ak_groups.all()],
+  #            "groups":            [g.name for g in request.user.groups.all()],
   #          }
   #
   #   2. Applications → Providers → Create OAuth2/OpenID Connect Provider:

@@ -185,7 +185,7 @@ if [[ "${PROVIDES_ADMIN}" == "true" ]]; then
         [[ "${ADMIN_CLAIM}" =~ ^[A-Za-z0-9_-]+$ && "${ADMIN_GROUP}" =~ ^[A-Za-z0-9_-]+$ ]] \
             || die "identity.adminGroupClaim and the admin group must be plain names (got '${ADMIN_CLAIM}', '${ADMIN_GROUP}')"
         CLAIM_MAPPING="TAPPaaS OAuth Mapping: ${MODULE_BASE} groups"
-        CLAIM_EXPR="groups = [g.name for g in request.user.ak_groups.all()]
+        CLAIM_EXPR="groups = [g.name for g in request.user.groups.all()]
 return {\"groups\": [\"${ADMIN_CLAIM}\"] if \"${ADMIN_GROUP}\" in groups else []}"
         debug "  ${ADMIN_GROUP} members get '${ADMIN_CLAIM}' in the groups claim (${CLAIM_MAPPING})"
         [[ "${DRY_RUN}" -eq 0 ]] && ${AUTHENTIK_MANAGER} scope-mapping-ensure "${CLAIM_MAPPING}" \

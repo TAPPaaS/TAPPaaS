@@ -89,8 +89,8 @@ nine updates in one sitting. The code changes above land with the hop that needs
 each is backwards compatible for the hops before it (sending `parents` to a 2025.10 server
 is the exception — it lands with the 2025.12 step).
 
-Still open after the walk: `AUTHENTIK_WEB__BASE_URL` (required from 2026.11); the
-`ak_groups` → `groups` claim expression (deprecated, still served by 2026.8);
+Still open after the walk: `AUTHENTIK_WEB__BASE_URL` (required from 2026.11). The
+`ak_groups` → `groups` claim expression is done (#794, 2026-10-07);
 afterwards #750: the pin is listed where a tripwire can see it, and its age is reported at
 each release boundary, so the next lapse is visible.
 
