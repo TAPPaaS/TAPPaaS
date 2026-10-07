@@ -199,7 +199,18 @@ apply_site_locale_debian() {
     if [[ -n "${locale}" ]]; then
         cur="$(ssh -o BatchMode=yes "${user}@${ip}" '. /etc/default/locale 2>/dev/null && printf "%s" "${LANG:-}"' 2>/dev/null || true)"
         if [[ -n "${cur}" && "${cur}" != "${locale}" ]]; then
-            if ssh -o BatchMode=yes "${user}@${ip}" "sudo localectl set-locale 'LANG=${locale}'" 2>/dev/null; then
+            # Generate it first (a minimal Debian has only C), then set it with
+            # update-locale: `localectl set-locale` goes through systemd-localed,
+            # which refused it ("Access denied") on every unifi-os update since
+            # 2026-10-01 — and a LANG naming an ungenerated locale is no locale.
+            local entry="${locale} ${locale##*.}"
+            if ssh -o BatchMode=yes "${user}@${ip}" "sudo sh -s" 2>/dev/null <<EOF
+entry='${entry}'
+grep -qx "\$entry" /etc/locale.gen || sed -i "s|^# *\$entry\$|\$entry|" /etc/locale.gen
+grep -qx "\$entry" /etc/locale.gen || echo "\$entry" >> /etc/locale.gen
+/usr/sbin/locale-gen >/dev/null && /usr/sbin/update-locale 'LANG=${locale}'
+EOF
+            then
                 info "  locale ${cur} → ${locale}"; changed=1
             else
                 warn "  could not set the locale on ${ip} (it stays ${cur})"
