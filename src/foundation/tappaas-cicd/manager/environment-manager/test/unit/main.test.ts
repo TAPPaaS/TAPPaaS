@@ -117,5 +117,61 @@ throwsDie(() => parseOpts(["-x"]), "unknown short flag -x is rejected");
   check(undocumentedOptions(HELP).length === 0, `every usage option is described (${undocumentedOptions(HELP).join(", ")})`);
 }
 
+// ── #790: delete removes what TAPPaaS created for the environment ──────
+{
+  const { mkdtempSync, mkdirSync, writeFileSync, existsSync } = require("fs") as typeof import("fs");
+  const { join } = require("path") as typeof import("path");
+  const { tmpdir } = require("os") as typeof import("os");
+  const setup = (envs: Record<string, string>) => {
+    const d = mkdtempSync(join(tmpdir(), "envdel-"));
+    mkdirSync(join(d, "environments"));
+    for (const [n, dom] of Object.entries(envs)) {
+      writeFileSync(join(d, "environments", `${n}.json`), JSON.stringify({
+        name: n, displayName: n, ownerOrg: "o", network: { zone: "srv" },
+        domains: { primary: dom, dnsMode: "wildcard" } }));
+    }
+    return d;
+  };
+  const quiet = <T>(f: () => T): T => {
+    const l = console.log, e = console.error;
+    console.log = () => {}; console.error = () => {};
+    try { return f(); } finally { console.log = l; console.error = e; }
+  };
+  const seeded = () => {
+    const dt = new FakeDnsTlsClient();
+    dt.seedWildcard("t1.example", "10.6.0.1");
+    dt.seedIssuedCert("t1.example", "REF-T1");
+    dt.seedRecordedRefid("tenant1", "REF-T1");
+    return dt;
+  };
+
+  // --check: plans, changes nothing
+  let d = setup({ tenant1: "t1.example" });
+  let dt = seeded();
+  quiet(() => run(["delete", "tenant1", "--check", "--config-dir", d], new FakeNetworkClient(), new FakeModuleClient(), dt));
+  check(existsSync(join(d, "environments", "tenant1.json")), "delete --check keeps the environment file");
+  check(dt.log.length === 0 && dt.refids.has("tenant1") && dt.issuedRefids.has("t1.example"),
+    "delete --check removes no override, refid or certificate");
+
+  // delete: the env's override, refid and certificate go
+  dt = seeded();
+  const rc = quiet(() => run(["delete", "tenant1", "--config-dir", d], new FakeNetworkClient(), new FakeModuleClient(), dt));
+  check(rc === 0 && !existsSync(join(d, "environments", "tenant1.json")), "delete removes the environment file");
+  check(dt.log.includes("removeWildcard t1.example 1"), "delete removes the *.<domain> Unbound override");
+  check(dt.deletedCerts.includes("t1.example"), "delete deletes the ACME certificate (and its Trust cert)");
+  check(!dt.refids.has("tenant1"), "delete drops the cert-refids.json entry");
+
+  // a domain another environment still uses: its DNS and certificate stay
+  d = setup({ tenant1: "shared.example", tenant2: "shared.example" });
+  dt = new FakeDnsTlsClient();
+  dt.seedWildcard("shared.example", "10.6.0.1");
+  dt.seedIssuedCert("shared.example", "REF-S");
+  dt.seedRecordedRefid("tenant1", "REF-S");
+  quiet(() => run(["delete", "tenant1", "--config-dir", d], new FakeNetworkClient(), new FakeModuleClient(), dt));
+  check(dt.issuedRefids.has("shared.example") && !dt.log.some((l) => l.startsWith("removeWildcard")),
+    "a domain still used by another environment keeps its override and certificate");
+  check(!dt.refids.has("tenant1"), "…but the deleted environment's own refid entry goes");
+}
+
 console.log(`\n${passed} passed, ${failed} failed.`);
 if (failed > 0) process.exit(1);

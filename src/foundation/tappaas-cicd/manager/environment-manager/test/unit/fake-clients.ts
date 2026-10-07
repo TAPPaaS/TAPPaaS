@@ -136,6 +136,35 @@ export class FakeDnsTlsClient implements DnsTlsClient {
       collidingHosts: [...(this.collisions.get(domain) ?? [])],
     };
   }
+  // #790 teardown. `deletedCerts` records each acme-manager delete.
+  deletedCerts: string[] = [];
+  removeWildcard(domain: string, dryRun: boolean): number {
+    const n = this.wildcardRowCounts.get(domain) ?? (this.wildcardTargets.has(domain) ? 1 : 0);
+    if (!dryRun && n > 0) {
+      this.wildcardTargets.delete(domain);
+      this.wildcardRowCounts.delete(domain);
+      this.log.push(`removeWildcard ${domain} ${n}`);
+    }
+    return n;
+  }
+  forgetCertRefid(envName: string, dryRun: boolean): boolean {
+    if (!this.refids.has(envName)) return false;
+    if (!dryRun) {
+      this.refids.delete(envName);
+      this.log.push(`forgetCertRefid ${envName}`);
+    }
+    return true;
+  }
+  deleteWildcardCert(domain: string, dryRun: boolean): string[] {
+    if (!this.issuedRefids.has(domain)) return [`no certificate '*.${domain}' configured — nothing to delete`];
+    if (!dryRun) {
+      this.issuedRefids.delete(domain);
+      this.deletedCerts.push(domain);
+      this.log.push(`deleteWildcardCert ${domain}`);
+    }
+    return [`${dryRun ? "would delete" : "deleted"} certificate request '*.${domain}'`];
+  }
+
   registerWildcard(domain: string, gatewayIp: string, zone: string, envName: string): void {
     const c = this.collisions.get(domain) ?? [];
     this.log.push(`register-wildcard ${domain} -> ${gatewayIp} (${zone}, ${envName}) prune=[${c.join(",")}]`);

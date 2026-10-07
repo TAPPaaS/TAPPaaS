@@ -411,6 +411,57 @@ class TestCertNotAfter(unittest.TestCase):
         self.assertEqual(mgr.client.calls, [])
 
 
+class TestCertificateDelete(unittest.TestCase):
+    """#790: the request and its Trust certificate go; nothing shared does."""
+
+    ROUTES = {
+        ("Certificates", "search"): {"rows": [
+            {"uuid": "c-other", "name": "*.other.example"},
+            {"uuid": "c-1", "name": "*.tenant1.example"},
+        ]},
+        ("Certificates", "get"): {"certificate": {"name": "*.tenant1.example", "certRefId": "REF1"}},
+        ("cert", "search"): {"rows": [{"uuid": "t-1", "refid": "REF1"}, {"uuid": "t-2", "refid": "REF2"}]},
+        ("Certificates", "del"): {"result": "deleted"},
+        ("cert", "del"): {"result": "deleted"},
+    }
+
+    def _deletes(self, mgr):
+        return [(c["controller"], c["url_params"]) for c in mgr.client.calls if c["command"] == "del"]
+
+    def test_deletes_request_then_trust_cert(self):
+        mgr = _make_manager(dict(self.ROUTES))
+        res = mgr.certificate_delete("*.tenant1.example")
+        self.assertEqual(res, {"certificate": "c-1", "trust": "t-1", "refid": "REF1"})
+        self.assertEqual(self._deletes(mgr), [("Certificates", ["c-1"]), ("cert", ["t-1"])])
+
+    def test_touches_nothing_shared(self):
+        mgr = _make_manager(dict(self.ROUTES))
+        mgr.certificate_delete("*.tenant1.example")
+        touched = {c["controller"] for c in mgr.client.calls if c["action"] == "post"}
+        self.assertNotIn("Accounts", touched)
+        self.assertNotIn("Validations", touched)
+        self.assertNotIn("Actions", touched)
+
+    def test_dry_run_deletes_nothing(self):
+        mgr = _make_manager(dict(self.ROUTES))
+        res = mgr.certificate_delete("*.tenant1.example", dry_run=True)
+        self.assertEqual(res["certificate"], "c-1")
+        self.assertEqual(self._deletes(mgr), [])
+
+    def test_unknown_name_is_a_noop(self):
+        mgr = _make_manager(dict(self.ROUTES))
+        res = mgr.certificate_delete("*.nobody.example")
+        self.assertEqual(res, {"certificate": None, "trust": None, "refid": ""})
+        self.assertEqual(self._deletes(mgr), [])
+
+    def test_trust_cert_in_use_is_an_error(self):
+        routes = dict(self.ROUTES)
+        routes[("cert", "del")] = {"result": "failed", "message": "in use"}
+        mgr = _make_manager(routes)
+        with self.assertRaises(RuntimeError):
+            mgr.certificate_delete("*.tenant1.example")
+
+
 class TestPluginEnabled(unittest.TestCase):
     """settings/get wraps the payload in the model root ("acmeclient")."""
 

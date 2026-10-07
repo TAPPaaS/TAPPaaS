@@ -175,6 +175,16 @@ export interface DnsTlsClient {
   // registers the wildcard DNS and writes cert-refids.json itself. Throws on
   // failure.
   issueWildcardCert(envName: string): string;
+
+  // ── Teardown (#790): what add/reconcile/acme-setup created for an env ──
+  // Delete every `*` override for <domain>; returns how many there were. With
+  // dryRun, only counts.
+  removeWildcard(domain: string, dryRun: boolean): number;
+  // Drop <envName> from cert-refids.json; true when it was there.
+  forgetCertRefid(envName: string, dryRun: boolean): boolean;
+  // Delete the `*.<domain>` ACME certificate and its Trust certificate
+  // (`acme-manager delete`); returns acme-manager's report lines.
+  deleteWildcardCert(domain: string, dryRun: boolean): string[];
 }
 
 // ── ModuleClient — the module-manager boundary (--deep cascade) ───────

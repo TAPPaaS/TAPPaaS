@@ -152,7 +152,11 @@ acme-manager setup --domain <d> --email <e> [--provider cloudflare]
         [--provider-field KEY=VALUE ...] [--staging] [--no-include-apex]
         [--dns-sleep <s>] [--timeout <s>] [--key-length key_2048] [...]
 acme-manager status --domain <d>
+acme-manager delete --domain <d> [--dry-run]
 ```
+`delete` removes the `*.<domain>` certificate request and its issued certificate in
+the Trust store (#790) — never the shared account, validation, action or renewal
+cron. `environment-manager delete` calls it.
 `setup` idempotently provisions the LE account + DNS-01 validation +
 caddy-reload action and issues a `*.<domain>` certificate.
 

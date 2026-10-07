@@ -234,6 +234,24 @@ def cmd_setup(mgr: AcmeManager, args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_delete(mgr: AcmeManager, args: argparse.Namespace) -> int:
+    """Delete the wildcard certificate of a domain (#790)."""
+    wildcard_cn = f"*.{args.domain}"
+    res = mgr.certificate_delete(wildcard_cn, dry_run=args.dry_run)
+    verb = "would delete" if args.dry_run else "deleted"
+    if not res["certificate"]:
+        print(f"no certificate '{wildcard_cn}' configured — nothing to delete")
+        return 0
+    print(f"{verb} certificate request '{wildcard_cn}' ({res['certificate']})")
+    if res["trust"]:
+        print(f"{verb} Trust certificate {res['refid']} ({res['trust']})")
+    elif res["refid"]:
+        print(f"Trust certificate {res['refid']} not found — nothing more to delete")
+    if not args.dry_run:
+        mgr.service_reconfigure()
+    return 0
+
+
 def cmd_status(mgr: AcmeManager, args: argparse.Namespace) -> int:
     """Print the current state of the wildcard cert."""
     wildcard_cn = f"*.{args.domain}"
@@ -320,6 +338,15 @@ def main(argv: list[str] | None = None) -> int:
     p_setup.add_argument("--timeout", type=int, default=180,
                          help="Seconds to wait for issuance (default 180)")
     p_setup.set_defaults(handler=cmd_setup)
+
+    p_delete = sub.add_parser(
+        "delete", parents=[gp],
+        help="Delete the wildcard certificate for a domain and its Trust certificate "
+             "(#790). The shared account, validation and action stay.")
+    p_delete.add_argument("--domain", required=True)
+    p_delete.add_argument("--dry-run", action="store_true",
+                          help="Show what would be deleted, change nothing")
+    p_delete.set_defaults(handler=cmd_delete)
 
     p_status = sub.add_parser("status", parents=[gp],
                               help="Show the current state of the wildcard certificate")

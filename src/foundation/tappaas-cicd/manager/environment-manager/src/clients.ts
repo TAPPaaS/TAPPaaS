@@ -321,6 +321,42 @@ export class CliDnsTlsClient implements DnsTlsClient {
     return home !== "" && existsSync(join(home, ".acme-dns-credentials.txt"));
   }
 
+  removeWildcard(domain: string, dryRun: boolean): number {
+    const r = captureResult(UNBOUND_MANAGER_BIN(), ["--no-ssl-verify", "list"]);
+    if (!r.ran) throw new NetworkUnreachable(`${UNBOUND_MANAGER_BIN()} list: ${r.stderr}`);
+    let rows = 0;
+    for (const line of r.stdout.split("\n").slice(1)) {
+      const cols = line.trim().split(/\s+/);
+      if (cols.length >= 2 && cols[0] === "*" && cols[1] === domain) rows++;
+    }
+    if (dryRun) return rows;
+    for (let i = 0; i < rows; i++) {
+      const d = captureResult(UNBOUND_MANAGER_BIN(), ["--no-ssl-verify", "delete", "*", domain]);
+      if (!d.ran) throw new NetworkUnreachable(`${UNBOUND_MANAGER_BIN()} delete: ${d.stderr}`);
+      if (d.rc !== 0) throw new Error(`unbound-manager delete '*' ${domain}: ${d.stderr || d.stdout}`);
+    }
+    return rows;
+  }
+
+  forgetCertRefid(envName: string, dryRun: boolean): boolean {
+    const map = this.readCertRefids();
+    if (!(envName in map)) return false;
+    if (!dryRun) {
+      delete map[envName];
+      writeFileSync(this.certRefidsPath(), JSON.stringify(map, null, 2) + "\n");
+    }
+    return true;
+  }
+
+  deleteWildcardCert(domain: string, dryRun: boolean): string[] {
+    const args = ["--no-ssl-verify", "delete", "--domain", domain];
+    if (dryRun) args.push("--dry-run");
+    const r = captureResult(ACME_MANAGER_BIN(), args);
+    if (!r.ran) throw new NetworkUnreachable(`${ACME_MANAGER_BIN()} delete: ${r.stderr}`);
+    if (r.rc !== 0) throw new Error(`acme-manager delete --domain ${domain}: ${(r.stderr || r.stdout).trim()}`);
+    return r.stdout.split("\n").map((l) => l.trim()).filter((l) => l !== "");
+  }
+
   issueWildcardCert(envName: string): string {
     // Delegate issuance to acme-setup.sh (the sole credential-bearing step); it
     // runs non-interactively when ~/.acme-dns-credentials.txt is present, and

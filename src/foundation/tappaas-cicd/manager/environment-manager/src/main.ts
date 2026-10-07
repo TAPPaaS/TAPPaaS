@@ -39,7 +39,7 @@ import { runValidate } from "./validate";
 import { DnsTlsClient, Environment, ModuleClient, NetworkClient } from "./types";
 import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
 import { RD, GN, CL, die, guarded, info, warn } from "../../../lib/ts/src/cli";
-import { existsSync, readFileSync, unlinkSync } from "fs";
+import { existsSync, readFileSync, readdirSync, unlinkSync } from "fs";
 import { join } from "path";
 
 // The two always-required bootstrap environments are protected from delete:
@@ -107,9 +107,12 @@ export const HELP: HelpSpec = {
       ],
     },
     {
-      usage: "delete <env> [--force]",
+      usage: "delete <env> [--force] [--check]",
       name: "delete",
-      options: [["--force", "add: overwrite existing; delete: override guard rails."]],
+      options: [
+        ["--force", "add: overwrite existing; delete: override guard rails."],
+        ["--check", "delete: show what would be removed, change nothing."],
+      ],
     },
     {
       usage: "reconcile <env> [--deep] [--apply] [--skip-network]",
@@ -159,6 +162,7 @@ interface Opts {
   apply: boolean;
   skipNetwork: boolean;
   force: boolean;
+  check: boolean;
   json: boolean;
   rest: string[];
 }
@@ -171,6 +175,7 @@ export function parseOpts(args: string[]): Opts {
     apply: false,
     skipNetwork: false,
     force: false,
+    check: false,
     createZone: false,
     json: false,
     rest: [],
@@ -234,6 +239,9 @@ export function parseOpts(args: string[]): Opts {
         break;
       case "--force":
         o.force = true;
+        break;
+      case "--check":
+        o.check = true;
         break;
       case "--json":
         o.json = true;
@@ -475,7 +483,7 @@ function cmdModify(opts: Opts): void {
 // default <N> environment = site.json '.defaultEnvironment'), and refuse when deployed modules
 // still consume the env — UNLESS --force. The `add` minimal-set bootstrap is the
 // single owner of the bootstrap files, so they are never casually removed.
-function cmdDelete(opts: Opts, mod: ModuleClient): void {
+function cmdDelete(opts: Opts, mod: ModuleClient, dt: DnsTlsClient): void {
   const name = opts.rest[0];
   if (!name) die("delete: expected <env>");
   const path = join(environmentsDir(opts.configDir), `${name}.json`);
@@ -504,8 +512,67 @@ function cmdDelete(opts: Opts, mod: ModuleClient): void {
     }
   }
 
-  unlinkSync(path);
-  info(`${GN}Deleted ${path}${CL}`);
+  // #790: what add / reconcile / acme-setup created for this environment goes
+  // with it — its wildcard override, its cert-refids entry, its ACME certificate
+  // and Trust certificate — and nothing another environment still uses.
+  let domain: string | undefined;
+  try {
+    const env = JSON.parse(readFileSync(path, "utf8")) as Environment;
+    domain = env.domains?.primary;
+  } catch {
+    warn(`could not read ${path} — its domain's DNS override and certificate are left for you`);
+  }
+  const sharedWith = domain
+    ? readdirSync(environmentsDir(opts.configDir))
+        .filter((f) => f.endsWith(".json") && f !== `${name}.json`)
+        .filter((f) => {
+          try {
+            const o = JSON.parse(readFileSync(join(environmentsDir(opts.configDir), f), "utf8")) as Environment;
+            return o.domains?.primary === domain || (o.domains?.aliases ?? []).includes(domain!);
+          } catch {
+            return false;
+          }
+        })
+        .map((f) => f.replace(/\.json$/, ""))
+    : [];
+  const ownsDomain = domain !== undefined && sharedWith.length === 0;
+  const dry = opts.check;
+  const say = (m: string) => info(dry ? `  [check] would ${m}` : `  ${m}`);
+  const leftover: string[] = [];
+
+  if (dry) info(`delete '${name}' [check] — nothing is changed`);
+  if (!dry) unlinkSync(path);
+  say(`remove ${path}`);
+
+  if (domain && !ownsDomain) {
+    info(`  ${domain} is also used by ${sharedWith.join(", ")} — its DNS override and certificate stay`);
+  }
+  if (ownsDomain) {
+    try {
+      const n = dt.removeWildcard(domain!, dry);
+      if (n > 0) say(`remove ${n} Unbound override(s) *.${domain}`);
+    } catch (e) {
+      leftover.push(`Unbound override *.${domain} (unbound-manager delete '*' ${domain}): ${(e as Error).message}`);
+    }
+    try {
+      for (const l of dt.deleteWildcardCert(domain!, dry)) {
+        if (!l.startsWith("no certificate")) info(`  ${l}`);
+      }
+    } catch (e) {
+      leftover.push(`ACME certificate *.${domain} (acme-manager delete --domain ${domain}): ${(e as Error).message}`);
+    }
+  }
+  try {
+    if (dt.forgetCertRefid(name, dry)) say(`drop '${name}' from cert-refids.json`);
+  } catch (e) {
+    leftover.push(`cert-refids.json['${name}']: ${(e as Error).message}`);
+  }
+
+  for (const l of leftover) warn(`  NOT removed — ${l}`);
+  if (domain && ownsDomain) {
+    info(`  Yours to remove at your DNS provider: the public records for ${domain} and *.${domain} (#383).`);
+  }
+  if (!dry) info(`${GN}Deleted environment '${name}'${CL}`);
 }
 
 // ── reconcile ─────────────────────────────────────────────────────────
@@ -632,7 +699,7 @@ export function run(argv: string[], net: NetworkClient, mod: ModuleClient, dt: D
         cmdModify(opts);
         return 0;
       case "delete":
-        cmdDelete(opts, mod);
+        cmdDelete(opts, mod, dt);
         return 0;
       case "reconcile":
         return cmdReconcile(opts, net, mod, dt);

@@ -424,6 +424,39 @@ class AcmeManager:
             raise RuntimeError(f"certificate add failed: {res}")
         return uuid
 
+    def certificate_delete(self, name: str, dry_run: bool = False) -> dict:
+        """Delete a certificate request by name, and its issued certificate in
+        the Trust store (#790). Never the shared account, validation, action or
+        renewal cron — other environments use them.
+
+        Returns ``{"certificate": <uuid or None>, "trust": <uuid or None>,
+        "refid": <refid or "">}`` — what was (or, with dry_run, would be)
+        deleted. Deleting the request first stops its renewal; the Trust
+        certificate goes next, found by the refid the request recorded.
+        """
+        existing = self._find_by_name(
+            self._api_get("Certificates", "search").get("rows", []), name)
+        if not existing:
+            return {"certificate": None, "trust": None, "refid": ""}
+        uuid = existing["uuid"]
+        refid = self.certificate_get(uuid).cert_refid
+        trust = self._trust_row(refid)
+        trust_uuid = trust.get("uuid") if trust else None
+        if not dry_run:
+            res = self._api_post("Certificates", "del", url_params=[uuid])
+            if res.get("result") not in ("deleted", None):
+                raise RuntimeError(f"certificate delete failed: {res}")
+            if trust_uuid:
+                tres = self.client.run_module("raw", params={
+                    "module": "trust", "controller": "cert", "command": "del",
+                    "action": "post", "params": [trust_uuid],
+                }).get("result", {}).get("response", {})
+                if tres.get("result") not in ("deleted", None):
+                    raise RuntimeError(
+                        f"certificate request deleted, but the Trust certificate "
+                        f"{refid} was not (still in use?): {tres}")
+        return {"certificate": uuid, "trust": trust_uuid, "refid": refid}
+
     def certificate_sign(self, uuid: str) -> None:
         """Trigger issuance/renewal for the certificate (background)."""
         self._api_post("Certificates", "sign", url_params=[uuid])
@@ -560,8 +593,13 @@ class AcmeManager:
         same refid. Returns 0 when the refid is empty/unknown or the field is
         absent; callers treat 0 as "unknown", not "expired".
         """
+        row = self._trust_row(refid)
+        return int(row.get("valid_to") or 0) if row else 0
+
+    def _trust_row(self, refid: str) -> dict | None:
+        """The Trust-store row for <refid>, or None."""
         if not refid:
-            return 0
+            return None
         resp = self.client.run_module("raw", params={
             "module": "trust",
             "controller": "cert",
@@ -572,8 +610,8 @@ class AcmeManager:
         }).get("result", {}).get("response", {})
         for row in resp.get("rows", []):
             if row.get("refid") == refid:
-                return int(row.get("valid_to") or 0)
-        return 0
+                return row
+        return None
 
     # ── Service control ─────────────────────────────────────────────────
 

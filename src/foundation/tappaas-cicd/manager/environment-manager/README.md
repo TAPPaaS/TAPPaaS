@@ -33,7 +33,7 @@ environment-manager add [<env>] [--name N] [--domain D] [--owner ORG]
                         [--zone Z] [--display D] [--dns-mode M] [--force] [--config-dir DIR]
 environment-manager modify <env> [--domain D] [--owner ORG] [--zone Z]
                         [--display D] [--dns-mode M] [--config-dir DIR]
-environment-manager delete <env> [--force] [--config-dir DIR]
+environment-manager delete <env> [--force] [--check] [--config-dir DIR]
 environment-manager reconcile <env> [--deep] [--apply] [--config-dir DIR]
                                    [--skip-network]
 ```
@@ -131,6 +131,16 @@ with bare defaults.
 
 The `add` minimal-set bootstrap is the single owner of the two bootstrap files;
 `--force` overrides the guard rails for the rare deliberate removal.
+
+### What `delete` removes (#790)
+
+Besides the environment file, what `add`, `reconcile` and `acme-setup.sh` created for
+it: the Unbound `*.<domain>` override(s), its `cert-refids.json` entry, and its ACME
+certificate with the Trust certificate (`acme-manager delete`). Nothing shared: a domain
+another environment still uses keeps its override and certificate, and the ACME account,
+validation and action stay. `--check` prints the plan and changes nothing. The output
+ends with what only you can remove: the public DNS records at your DNS provider (#383).
+A step that fails is reported as NOT removed, with the command to finish it by hand.
 
 ### The `validate` gate
 
