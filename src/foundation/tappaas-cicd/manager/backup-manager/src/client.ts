@@ -128,9 +128,11 @@ export class CliClient implements Client {
     const args = [...this.ep(), "purge", vmid, "--json", ...(yes ? ["--yes"] : [])];
     const r = captureResult(BIN, args);
     if (!r.ran) throw new BackupControllerUnreachable(`${BIN} purge: ${r.stderr}`);
+    // The object is the last line of stdout (jq -c); anything before it is noise.
     let o: Record<string, unknown> = {};
+    const last = r.stdout.trim().split("\n").filter((l) => l.trim().startsWith("{")).pop() ?? "{}";
     try {
-      o = JSON.parse(r.stdout.trim() || "{}") as Record<string, unknown>;
+      o = JSON.parse(last) as Record<string, unknown>;
     } catch {
       o = {};
     }

@@ -582,7 +582,7 @@ const RESET_DEPS: ResetDeps = {
     return rc === -1 ? 1 : rc; // killed by a signal
   },
   confirm: (q) => {
-    const r = spawnSync("bash", ["-c", 'printf "%s" "$1" > /dev/tty; IFS= read -r v < /dev/tty; printf "%s" "$v"', "--", q], {
+    const r = spawnSync("bash", ["-c", 'printf "%s" "$1" > /dev/tty; IFS= read -r v < /dev/tty || exit 1; printf "%s" "$v"', "--", q], {
       encoding: "utf8",
     });
     if (r.status !== 0) die("cannot ask for confirmation (non-interactive session?) — pass --yes");
@@ -924,7 +924,7 @@ function cmdPurge(opts: Opts, client: Client): number {
     return 0;
   }
   if (!opts.yes) {
-    const r = spawnSync("bash", ["-c", 'printf "%s" "$1" > /dev/tty; IFS= read -r v < /dev/tty; printf "%s" "$v"', "--",
+    const r = spawnSync("bash", ["-c", 'printf "%s" "$1" > /dev/tty; IFS= read -r v < /dev/tty || exit 1; printf "%s" "$v"', "--",
       `  This permanently deletes ${plan.snapshots} restore point(s) of vm/${vmid}. Type ${vmid} to confirm: `], { encoding: "utf8" });
     if (r.status !== 0) die("purge: cannot ask for confirmation (non-interactive session?) — pass --yes");
     if ((r.stdout ?? "").trim() !== vmid) die("purge: not confirmed — nothing deleted");
