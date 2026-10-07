@@ -24,13 +24,15 @@ From the top:
 1. **Planning items still open** — decisions, gates and ADRs the waves wait on.
 2. **Future Work** — known, not yet in a wave.
 3. **The waves, latest first** — Wave 4 down to Wave 0, each group with its open issues.
-4. **The releases, newest first** — what shipped, grouped by the wave and group it came from.
+4. **Next release** — what the next release will deliver, kept current as work lands.
+5. **The releases, newest first** — what shipped, grouped by the wave and group it came from.
 
 Markers:
 
 - **✅** in front of a row means done: the issue is closed on the forge, or the question in the
   row is answered. A ✅ row still in a wave is done on `main` and ships with the **next release**.
-- A group heading says where its rows are: `released in 2.1: 8 · done for 2.2: 1 · open: 3`. A
+- A group heading says where its rows are: `released: 8 · done for 2.2: 1 · open: 3` — *released*
+  counts every release; the release sections say which one carried what. A
   group, or a whole wave, that a release carried completely is no longer listed above the
   releases — it lives only in the section of the release that carried it.
 - A row with no tick is still to do. Planning the next step is reading down a wave and stopping at
@@ -44,11 +46,12 @@ Markers:
   [ROADMAP.md at `a6f7074f`](https://codeberg.org/TAPPaaS/TAPPaaS/src/commit/a6f7074f778fb2877b1c22026301327a8ae9ff3a/ROADMAP.md) and the closed
   [plan](docs/plans/security-and-stability-plan.md).
 
-**When a release is cut** (a release-train boundary, [ADR-028](docs/ADR/ADR-028%20-%20Release%20Cadence%20and%20Patching.md)
-D13): every ✅ row whose fix is in the new tag moves out of its wave into that release's section,
-under the same wave and group heading, and the group's marker is updated. A group or wave left
-with nothing open or pending is removed from above the releases, *At a glance* included. Which tag carries a fix:
-`git merge-base --is-ancestor <commit> v<version>`.
+**When a release is cut**, the release-train boundary does it — `release/roadmap-cut.py`, run just
+before `main` is promoted to staging, so the new version's tag already holds its own roadmap.
+Every ✅ row in a wave or in Future Work moves into a new `## Release <version>` section, under the
+same wave and group heading; the group counts are updated; a group or wave with nothing left leaves
+the waves, *At a glance* included; and **`## Next release` becomes the release's summary** — keep it
+current as work lands, since nobody edits ROADMAP.md during a boundary. ([ADR-028](docs/ADR/ADR-028%20-%20Release%20Cadence%20and%20Patching.md) D13)
 
 ### The scores
 
@@ -94,9 +97,9 @@ release is fixed forward.
 
 ## At a glance
 
-Per group: its scores, and where its rows are. *2.1* = shipped in 2.1; *2.2* = done on `main`, ships at the next boundary; *open* = still to do.
+Per group: its scores, and where its rows are. *released* = shipped in a release (the release sections say which); *done for 2.2* = done on `main`, ships at the next boundary; *open* = still to do.
 
-| Wave | Group | Ease | Risk | 2.1 | 2.2 | open |
+| Wave | Group | Ease | Risk | released | done for 2.2 | open |
 |------|-------|:-:|:-:|---:|---:|---:|
 | 4 | G4.1 Alerting & cluster resilience | M | M | – | 6 | 5 |
 | 4 | G4.2 Proxy & ingress | M | L | 1 | – | 4 |
@@ -118,8 +121,6 @@ Per group: its scores, and where its rows are. *2.1* = shipped in 2.1; *2.2* = d
 | 1 | G1.6 Secrets & privileged access | H | H | 3 | 1 | 2 |
 | 1 | G1.7 Parked for Erik discussion | – | – | – | – | 5 |
 | 0 | ✅ G0.1 Migration & rollback framework | H | L | 8 | 1 | – |
-
----
 
 ## Planning items still open
 
@@ -229,7 +230,7 @@ Be told when something breaks, and survive more of it. Built: alerts from Loki b
 | #590 | Second corosync link | H | M | |
 | FW #40 | Dedicated sync network recipe | L | L | Roll in with #590 |
 
-### G4.2 Proxy & ingress — Ease M · Risk L · released in 2.1: 1 · open: 4
+### G4.2 Proxy & ingress — Ease M · Risk L · released: 1 · open: 4
 
 Publish less of each app: limit a route to some paths (#642), some zones (#643) or a provider's source addresses (#656), as ADR-023 describes. Decide whether an internal proxy is needed at all (#154).
 
@@ -240,7 +241,7 @@ Publish less of each app: limit a route to some paths (#642), some zones (#643) 
 | #656 | Limit a route to a provider's source ranges | M | L | Split, folded into ADR-023: a route names explicit CIDRs (`remote_ip`) — an exposure reduction beside #642/#643. The provider-feed half is parked (*Housekeeping*) |
 | #154 | `firewall:internal-proxy` | — | — | Close? Lars questioned the need (2026-05-31) |
 
-### G4.3 Manager verb gaps — Ease M · Risk L · released in 2.1: 4 · done for 2.2: 5 · open: 8
+### G4.3 Manager verb gaps — Ease M · Risk L · released: 4 · done for 2.2: 5 · open: 8
 
 The verbs operators otherwise do by hand: install a whole stack (#763), suspend a module (#428), migrate by changing `.node` (#429), `test` verbs (#499), private repositories (#634), module-level `--set` rules (#654). #444/#582 wait on a discussion.
 
@@ -260,7 +261,7 @@ The verbs operators otherwise do by hand: install a whole stack (#763), suspend 
 | ✅ #790 | `environment-manager delete` leaves the env's DNS override, cert and refid | M | L | **Done 2026-10-07**: delete also removes the `*.<domain>` Unbound override(s), the `cert-refids.json` entry and the ACME certificate with its Trust certificate (new `acme-manager delete`); never a domain another env uses, nor the shared ACME account/validation/action. `--check` plans; the output names the public DNS records only the operator can remove |
 | ✅ #791 | `network-manager delete` leaves the zone in other zones' lists | H | L | **Done 2026-10-07**: delete strips the zone from every other zone's `access-to`/`pinhole-allowed-from` before its reconcile, so one run converges and `validate` stays green; `--check` names the zones. `retire` and `delete` share the helper |
 
-### G4.4 Storage & physical devices — Ease H · Risk L · released in 2.1: 2 · done for 2.2: 3 · open: 6
+### G4.4 Storage & physical devices — Ease H · Risk L · released: 2 · done for 2.2: 3 · open: 6
 
 Shared storage and the physical network as managed parts of a site: the rest of the NFS service (#772), a machine's zone enforced at its switch port (#668, #697), controller modules that register their devices (#731), device modules (#155).
 
@@ -276,7 +277,7 @@ Shared storage and the physical network as managed parts of a site: the rest of 
 | ✅ #792 | `unifi.sh`: whole API payloads as jq arguments fail on large sites | H | M | **Done 2026-10-07**: interrogate (switch, controller, AP) and the port-override builder pass payloads by file (`--slurpfile`), never argv — Linux caps one argument at 128 KiB. Reproduced offline with a 165 KiB device list (old: "Argument list too long"; new: same answer as small) |
 | FW #158 | Multi-NIC module firewall rules | M | L | Optional roll-in |
 
-### G4.5 Governance, CI & sign-offs — Ease M · Risk L · released in 2.1: 2 · done for 2.2: 1 · open: 7
+### G4.5 Governance, CI & sign-offs — Ease M · Risk L · released: 2 · done for 2.2: 1 · open: 7
 
 The project's own machinery: CI runners (#415), community-health files (#486), the remaining sign-offs and ADRs (#406, #359), a tool for urgent patches (#746), a logging-function lint (#747), a service-desk spike (#63).
 
@@ -297,7 +298,7 @@ The project's own machinery: CI runners (#415), community-health files (#486), t
 
 Low upgrade risk. Build continuously, in any order within a group.
 
-### G3.1 cluster:vm lifecycle & capacity — Ease L · Risk M · released in 2.1: 7 · done for 2.2: 6 · open: 8
+### G3.1 cluster:vm lifecycle & capacity — Ease L · Risk M · released: 7 · done for 2.2: 6 · open: 8
 
 Guests sized, placed, started and stopped right: memory defaults from measurement (#663), hardware drift (#531), shutdown and boot order (#36, #127), storage growth and placement (#100, #403), a composite-module ADR (#761), and a sweep that survives a guest restarting itself (#753).
 
@@ -318,7 +319,7 @@ Guests sized, placed, started and stopped right: memory defaults from measuremen
 | #753 | A guest restarting during its own update fails the sweep | M | L | coturn restarted inside its own update on hrossen (2026-10-01); the post-apply SSH check raced its boot and failed the sweep. The restart's trigger is not yet known |
 | ✅ #793 | A live migration leaves a FreeBSD guest's agent dead (firewall) | L | L | **Closed 2026-10-07** (`4543af5f`): the network update adds `-r` to the firewall's qemu-ga via `/usr/local/etc/rc.conf.d`; agent answered after live migrations both ways on hrossen |
 
-### G3.2 Identity & SSO wiring — Ease M · Risk L · released in 2.1: 1 · done for 2.2: 5 · open: 5
+### G3.2 Identity & SSO wiring — Ease M · Risk L · released: 1 · done for 2.2: 5 · open: 5
 
 Every app wired to the identity provider the same way: OIDC for hass, Nextcloud and forgejo (#345, #401, #282), a site-specific login page (#479), logging's SSO dependency (#701), and a test for forward-auth (#752).
 
@@ -335,7 +336,7 @@ Every app wired to the identity provider the same way: OIDC for hass, Nextcloud 
 | ✅ #769 | vaultwarden: SSO is registered but never wired into the app | M | L | **Closed 2026-10-04** (SSO wired, `e184ea9d`). **Reversed 2026-10-06, vaultwarden 0.6.0:** no SSO for the password vault, by decision — see vaultwarden DESIGN.md |
 | ✅ #779 | identity: `authentik-env-secrets-only` calls `cmp` without diffutils | L | M | **Closed 2026-10-06** (`3f34f63e`): `! cmp` was always true, so the clean `authentik.env` was replaced and logged every boot. Live-tested on hrossen |
 
-### G3.3 App module fixes — Ease L · Risk L · released in 2.1: 5 · done for 2.2: 3 · open: 10
+### G3.3 App module fixes — Ease L · Risk L · released: 5 · done for 2.2: 3 · open: 10
 
 The known rough edges of the app modules, fixed and tested so they stay fixed: Nextcloud Talk end to end (#715), Home Assistant (#552, #568, #571 — maintainer-owned), Nextcloud and euro-office (#332, #658, #751), litellm consumers (#553), windows-server (#411), forgejo (#283, #284), in-guest backups (#754), container stop timeouts (#786).
 
@@ -355,7 +356,7 @@ The known rough edges of the app modules, fixed and tested so they stay fixed: N
 | #754 | In-guest backup timers in six modules: drop for PBS or say why they stay | L | L | After Nextcloud dropped its failing in-guest dump (`ed663fe8`): six modules still dump inside the guest. Per module: drop it (PBS takes the VM) or keep it with the reason in DESIGN.md |
 | ✅ #786 | identity, litellm: containers get SIGKILL on every stop (10 s timeout) | L | M | **Closed 2026-10-06** (`b7af4b14`): worker `--stop-timeout=90` (drains 16-32 s); litellm `--init`, as PID 1 it ignored SIGTERM while starting. Live-tested on hrossen |
 
-### G3.4 AI stack maturity — Ease M · Risk M · released in 2.1: 1 · open: 6
+### G3.4 AI stack maturity — Ease M · Risk M · released: 1 · open: 6
 
 A production-grade AI stack: LiteLLM and Open WebUI tested (#119, #120), hardened (#121) and kept current (#621), LiteLLM sized for its workers (#677), and vLLM's models recoverable after a restore (#758).
 
@@ -385,7 +386,7 @@ A first install that is easier to get through: resumable (#377), showing its pro
 
 Changes to live firewall and DNS behaviour on every installation. Restrictive defaults get harder to introduce the longer users rely on permissive ones, so they come early; every change shows its dry-run diff (#645) before `--apply`.
 
-### G2.1 Firewall exposure & rule order — Ease M · Risk H · released in 2.1: 3 · done for 2.2: 4 · open: 13
+### G2.1 Firewall exposure & rule order — Ease M · Risk H · released: 3 · done for 2.2: 4 · open: 13
 
 Tighter firewall defaults that keep what modules need. Built: the gateway, GUI/SSH and anti-spoofing rules. Next: pinholes shadowed by private-range blocks (#386), lasting NetBird rules (#385, #222), a pinned OPNsense CA (#310), and the rules manager's zones, aliases and overlaps.
 
@@ -409,7 +410,7 @@ Tighter firewall defaults that keep what modules need. Built: the gateway, GUI/S
 | #223 | OPNsense 26.1 InterfaceAssignController | — | — | Park (agreed 2026-05-27); move to *Parking lot* |
 | #706 | A wireless device zone cannot be checked against its type | — | — | **Open, not yet scored** — zone model. Added in the 2026-09-24 issue sweep |
 
-### G2.2 DNS resolver robustness — Ease L · Risk M · released in 2.1: 4 · open: 5
+### G2.2 DNS resolver robustness — Ease L · Risk M · released: 4 · open: 5
 
 A resolver that holds up: a working Unbound restart (#387), a written IPv6 stance (#149), DNSSEC with split horizon (#263), public DNS that follows a dynamic WAN address (#383), and optional blocklists (#157).
 
@@ -427,7 +428,7 @@ A resolver that holds up: a working Unbound restart (#387), a written IPv6 stanc
 
 Everything that renames, re-schemas or rebuilds, landed while few installations depend on today's shapes — each change with its migration and an upgrade test from the current `stable`, not only a fresh install.
 
-### ✅ G1.1 Vocabulary & classification (ADR-022 family) — Ease H · Risk H · released in 2.1: 11 · done for 2.2: 3
+### ✅ G1.1 Vocabulary & classification (ADR-022 family) — Ease H · Risk H · released: 11 · done for 2.2: 3
 
 Settle the words before they spread into schemas, CLI names and `config/` paths: the ADR-022 vocabulary — `kind`, scope derived from stack, People → Identity — everywhere. Left for a later release: removing the `tier` fallback.
 
@@ -437,7 +438,7 @@ Settle the words before they spread into schemas, CLI names and `config/` paths:
 | ✅ #705 | cluster and templates carry a kind ADR-022d denies them | L | L | **Closed 2026-10-02:** the interim kinds (`cluster` = application, `templates` = vm) are recorded in ADR-022d v1.2; what they really are is the composite-module ADR, #761 |
 | ✅ #741 | `update-tappaas` sweeps a Proxmox VM template as if it were a module | — | — | **Closed 2026-09-25** (`912b50b9`): a config whose `stack` is `template` no longer enters the update queue (it failed every sweep for 13 days on the reporter's site) |
 
-### G1.2 Backup placement model + managed machines (ADR-012, ADR-026) — Ease M · Risk H · released in 2.1: 20 · done for 2.2: 6 · open: 2
+### G1.2 Backup placement model + managed machines (ADR-012, ADR-026) — Ease M · Risk H · released: 20 · done for 2.2: 6 · open: 2
 
 Backups where the operator chooses — a node, a managed machine, an external PBS or the satellite — encrypted, with every machine TAPPaaS manages a module (ADR-012, ADR-026). Left: the satellite's live test on a real VPS (#671) and converting makerfloss's satellite (#775).
 
@@ -459,7 +460,7 @@ ADR-012 v1.0's design decisions, built.
 | ✅ #407 | ADR-012 3-node live validation gate | H | L | **Closed 2026-10-03:** push write-no-delete, ±key restore and relocation green 2026-09-19; node-add client proven in the #729 rejoin; ADR-012 v1.0 accepted; immutability deferred (F.1) |
 | ✅ #749 | Installing `backup` on a PVE node silently removed its PVE apt repository | L | L | **Opened and closed 2026-09-27:** `backup/install.sh` wrote its apt stanza over the PVE one, so tappaas3 silently stopped getting Proxmox updates |
 
-### ✅ G1.3 Module contract & repo layout — Ease H · Risk H · released in 2.1: 6 · done for 2.2: 2
+### ✅ G1.3 Module contract & repo layout — Ease H · Risk H · released: 6 · done for 2.2: 2
 
 One module contract — what community modules copy and deployed configs point at: version and status rules, one catalogue, the blueprint check at every release, modules grouped by stack, and a tool to move them ([MOVE-MODULE.md](src/foundation/tappaas-cicd/MOVE-MODULE.md)).
 
@@ -468,7 +469,7 @@ One module contract — what community modules copy and deployed configs point a
 | ✅ #421 | Restructure `src/apps` into stacks | H | H | **Done 2026-10-03**, live on hrossen: modules live in `src/<stack>/<module>`, `src/apps` gone; 13 moves by `move-module.sh`, migration 0014; stack READMEs generated. Agreed with @ErikDaniel007 |
 | ✅ #674 | Implement the ADR-027 blueprint check | M | L | **Landed 2026-09-28:** `module-manager validate --blueprint`, run at every release boundary (not every push); every TAPPaaS module passes. Community: 78 errors, reported to its maintainers |
 
-### ✅ G1.4 Common NixOS baseline — Ease H · Risk H · released in 2.1: 14 · done for 2.2: 5
+### ✅ G1.4 Common NixOS baseline — Ease H · Risk H · released: 14 · done for 2.2: 5
 
 One NixOS baseline every VM imports, carrying the site's time zone, locale, keyboard and time source — the same facts applied to Debian guests and nodes — and pins with a cadence. Left: hass locale (#348, G1.7) and Windows guests (#678, Future Work).
 
@@ -480,7 +481,7 @@ One NixOS baseline every VM imports, carrying the site's time zone, locale, keyb
 | ✅ #750 | Container image pins have no cadence and no tripwire, unlike the nixpkgs pin | M | L | **Closed 2026-10-03:** `src/image-pins.json` lists container pins; `tappaas-train` reports age and newer upstream at each boundary, a warning past 45 days (ADR-028 D14 draft). Rest: #765 |
 | ✅ #777 | Release train: lock nixos-unstable beside the pin, so Immich 3 follows release moves | M | M | **Closed 2026-10-06, not built (decision):** Immich keeps its own nixos-unstable revision in `immich.nix` until NixOS 26.11 is pinned; until then an Immich update is a deliberate edit |
 
-### ✅ G1.5 Rebuild & recovery paths — Ease M · Risk H · released in 2.1: 7 · done for 2.2: 9
+### ✅ G1.5 Rebuild & recovery paths — Ease M · Risk H · released: 7 · done for 2.2: 9
 
 A proven way back before anything breaking: `config/` backed up and restorable, mothership keys that can be reissued, restores of a module, a node and the mothership rehearsed, and a control plane that checks itself and rolls back.
 
@@ -496,7 +497,7 @@ A proven way back before anything breaking: `config/` backed up and restorable, 
 | ✅ #767 | The sweep's systemd unit is not the operator's console — align it (ADR-017 D3) | L | M | **Closed 2026-10-04:** the sweep unit runs steps as the console does (login shell, `sudo -n`, no sandbox); `tappaas-unit-run.sh` tests in that context. Two sweeps 18/18. ADR-017 D3 draft |
 | ✅ #768 | `module update`: a failed dependency (the OS rebuild) should stop the update, not run update.sh first | L | L | **Opened and closed 2026-10-04:** with a snapshot taken, `reconcile --apply --fail-fast` stops at the first failed dependency and skips Step 3. Found in the Authentik walk |
 
-### G1.6 Secrets & privileged access — Ease H · Risk H · released in 2.1: 3 · done for 2.2: 1 · open: 2
+### G1.6 Secrets & privileged access — Ease H · Risk H · released: 3 · done for 2.2: 1 · open: 2
 
 Least privilege on the platform. Built: nodes hardened to the Proxmox guide, key-only SSH, encrypted backups. Next: how an AI agent may reach the mothership (#142), and SSH to the mothership through the satellite (#762). Secrets management (#58) waits in Future Work.
 
@@ -524,13 +525,23 @@ Waiting on a conversation between Lars and @ErikDaniel007, not on work: the fire
 
 Make updates safe before anything breaking travels through them: versioned migrations, honest gates, a scheduled update channel with failure notices, and a merge that cannot skip a module.
 
-### ✅ G0.1 Migration & rollback framework — Ease H · Risk L · released in 2.1: 8 · done for 2.2: 1
+### ✅ G0.1 Migration & rollback framework — Ease H · Risk L · released: 8 · done for 2.2: 1
 
 Changes to `config/` that every site can take safely: versioned migrations with backup, dry-run and a ledger (the contract is ADR-025), rollback in install and update, and one meaning for `--force`.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
 | ✅ #736 | update merge pins a field that a release moves to a new place | M | M | **Closed 2026-09-26** (`2d25aaf3`): merge rule 5 tells "the operator changed it" from "`.orig` never recorded it" and names each refused value with its remedy. The rule itself: #488 |
+
+## Next release
+
+What the next release delivers, kept current as work lands — one short paragraph, written for
+someone deciding whether to upgrade. The release-train boundary turns it into that release's
+summary (`release/roadmap-cut.py`) and leaves this block empty again.
+
+<!-- next-release summary -->
+
+<!-- /next-release summary -->
 
 ## Release 2.1 — staging 2026-09-25 · production at the next boundary
 
