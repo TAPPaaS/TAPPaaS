@@ -18,7 +18,7 @@
 #
 # Architecture:
 # - PostgreSQL 17 (model configs + usage tracking)
-# - Redis 7 (response caching + AOF persistence)
+# - Redis (response caching + AOF persistence; version follows the nixpkgs pin)
 # - LiteLLM container (unified API gateway)
 #
 # Network: Self-managed DHCP, firewall ports 22 (SSH) + 4000 (LiteLLM API)
@@ -35,6 +35,9 @@
 # - Upgraded PostgreSQL 15 → 17 (fresh DB, no migration needed)
 # - Added Redis AOF persistence (appendonly + appendfsync everysec)
 #
+# Changelog v1.103.3 (2026-10-07):
+# - Upgraded LiteLLM 1.85.0 → 1.103.3 (PostgreSQL stays 17; see UPGRADE.md)
+#
 # Changelog module v0.7.1:
 # - Redis self-heals a small corrupt AOF tail instead of refusing to start
 # - Redis gets a restart policy (previously none)
@@ -46,7 +49,11 @@
 let
   # Version pinning - change versions here only
   versions = {
-    litellm     = "v1.85.0";
+    # v1.103.3, deliberately not the newest (#765). 1.104 refuses to start on an
+    # unset or default master key and was days old when this moved; 1.103.3 is
+    # the first release that stops the boot on a failed migration instead of
+    # serving on a stale schema. Move on when 1.104 has been in the field.
+    litellm     = "v1.103.3";
     postgresPkg = pkgs.postgresql_17;
     redisPkg    = pkgs.redis;
   };

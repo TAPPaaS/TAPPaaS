@@ -1,5 +1,54 @@
 # LiteLLM — Upgrade Guide
 
+## Upgrading to v1.103.3 (module v0.7.3)
+
+### What changes
+
+- LiteLLM moves from 1.85.0 to 1.103.3. PostgreSQL stays on 17 and Redis follows
+  the nixpkgs pin; neither is part of this step.
+- The database schema is migrated when the container starts (`prisma migrate
+  deploy`). The migrations only go forward: an older image does not run on the
+  migrated schema, so the way back is a restore, not a tag.
+- From 1.103.3 a failed migration stops the container instead of letting it
+  serve on a stale schema. A failed upgrade is therefore visible at once.
+- `test.sh` now fails when a table that held rows is empty.
+
+### Why not the newest
+
+1.104 refuses to start when the master key is unset or still the default, and
+was days old when this pin moved. 1.103.3 is a backport line and carries the
+migration fix.
+
+### Before
+
+Take a backup that does not live on the guest:
+
+```bash
+backup-manager backup litellm
+```
+
+### Update
+
+```bash
+module-manager update litellm --allow-disruption
+```
+
+The update takes a snapshot first and rolls back to it when a test fails
+fatally.
+
+### After
+
+- `module-manager test litellm --deep` passes, the row check included.
+- Virtual keys, teams and their model limits, models and credentials are all
+  still listed.
+- One request through a local model and one through a cloud model succeed.
+
+### Way back
+
+Restore the pre-update snapshot (`module-manager snapshot-vm litellm --restore
+<n>`) or the backup (`backup-manager restore restore litellm`). Do not point an
+older image at the migrated database.
+
 ## v0.7.0 — credential management tooling (module version, no app upgrade)
 
 Not a LiteLLM app version change (still 1.85.0) — module tooling only.

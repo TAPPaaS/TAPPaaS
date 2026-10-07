@@ -197,6 +197,33 @@ else
     fail "LiteLLM database has no tables or is inaccessible"
 fi
 
+# Tables alone prove nothing about the data: a database that came up empty (a
+# failed migration, a PostgreSQL major bump that started a fresh data directory)
+# has every table and no rows, and the check above passes. The guest remembers
+# the most rows it has seen per table; a table that had rows and now has none
+# fails. A fresh install has nothing remembered and passes.
+subheader "LiteLLM Data Still Present"
+ROWS=$(remote 'sudo mkdir -p /var/lib/tappaas-litellm-rows
+for t in LiteLLM_VerificationToken LiteLLM_TeamTable LiteLLM_UserTable; do
+    now=$(sudo -u postgres psql -At litellm -c "SELECT count(*) FROM \"$t\";" 2>/dev/null)
+    seen=$(sudo cat /var/lib/tappaas-litellm-rows/$t 2>/dev/null)
+    echo "$t ${now:-unreadable} ${seen:-0}"
+    [ "${now:-0}" -gt "${seen:-0}" ] 2>/dev/null && echo "$now" | sudo tee /var/lib/tappaas-litellm-rows/$t >/dev/null
+done' || true)
+if [ -z "$ROWS" ]; then
+    fail "Could not count LiteLLM rows"
+else
+    while read -r t now seen; do
+        if [ "$now" = "unreadable" ]; then
+            fail "$t could not be read"
+        elif [ "$now" -eq 0 ] 2>/dev/null && [ "$seen" -gt 0 ] 2>/dev/null; then
+            fail "$t is empty, it held $seen rows before — the data is gone"
+        else
+            pass "$t: $now rows (most seen: $seen)"
+        fi
+    done <<< "$ROWS"
+fi
+
 # ============================================================================
 # Test 4: Redis Connectivity
 # ============================================================================
