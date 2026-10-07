@@ -114,7 +114,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | 2 | G2.1 Firewall exposure & rule order | M | H | 3 | 4 | 13 |
 | 2 | G2.2 DNS resolver robustness | L | M | 4 | – | 5 |
 | 1 | ✅ G1.1 Vocabulary & classification (ADR-022 family) | H | H | 11 | 3 | – |
-| 1 | G1.2 Backup placement model + managed machines (ADR-012, ADR-026) | M | H | 20 | 7 | 2 |
+| 1 | G1.2 Backup placement model + managed machines (ADR-012, ADR-026) | M | H | 20 | 7 | 4 |
 | 1 | ✅ G1.3 Module contract & repo layout | H | H | 6 | 2 | – |
 | 1 | ✅ G1.4 Common NixOS baseline | H | H | 14 | 5 | – |
 | 1 | ✅ G1.5 Rebuild & recovery paths | M | H | 7 | 10 | – |
@@ -442,9 +442,9 @@ Settle the words before they spread into schemas, CLI names and `config/` paths:
 | ✅ #705 | cluster and templates carry a kind ADR-022d denies them | L | L | **Closed 2026-10-02:** the interim kinds (`cluster` = application, `templates` = vm) are recorded in ADR-022d v1.2; what they really are is the composite-module ADR, #761 |
 | ✅ #741 | `update-tappaas` sweeps a Proxmox VM template as if it were a module | — | — | **Closed 2026-09-25** (`912b50b9`): a config whose `stack` is `template` no longer enters the update queue (it failed every sweep for 13 days on the reporter's site) |
 
-### G1.2 Backup placement model + managed machines (ADR-012, ADR-026) — Ease M · Risk H · released: 20 · done for 2.2: 7 · open: 2
+### G1.2 Backup placement model + managed machines (ADR-012, ADR-026) — Ease M · Risk H · released: 20 · done for 2.2: 7 · open: 4
 
-Backups where the operator chooses — a node, a managed machine, an external PBS or the satellite — encrypted, with every machine TAPPaaS manages a module (ADR-012, ADR-026). Left: the satellite's live test on a real VPS (#671) and converting makerfloss's satellite (#775).
+Backups where the operator chooses — a node, a managed machine, an external PBS or the satellite — encrypted, with every machine TAPPaaS manages a module (ADR-012, ADR-026). Left: the satellite's live test on a real VPS (#671), converting makerfloss's satellite (#775), and backup buddies over WireGuard (#795, #796).
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
@@ -452,6 +452,8 @@ Backups where the operator chooses — a node, a managed machine, an external PB
 | ✅ #760 | VM and container backups are not encrypted, against ADR-012 | M | H | **Closed 2026-10-03:** every VM and container backup is encrypted (`--encryption-key`, escrowed); restore with and without the key proven on hrossen. Old plaintext snapshots: the operator's |
 | #671 | Deep test: satellite as a module on a real VPS | H | L | **Test plan written 2026-10-05** (`docs/plans/satellite-test-plan.md`): six phases on hrossen, each with a teardown. Waits for the operator's VPS and a `sat-test` DNS record |
 | #775 | Convert makerfloss's `satellite1` into a module instance | H | L | Split from #671: ADR-010 §8.4.7 with the operator, then #671's phase 1–2 checks. Not before makerfloss runs 2.2; keep a second way in — `satellite1` carries its admin VPN |
+| #795 | satellite: relay a buddy's WireGuard tunnel to the home firewall | M | M | **Opened 2026-10-07** from BUDDY.md: a `buddy-relay` role relaying declared UDP ports (the admin VPN's P5 pattern), so a site reached only through its satellite can serve a buddy |
+| #796 | backup: a buddy's WireGuard tunnel set up with the peer (`peer add … --tunnel`) | H | M | **Opened 2026-10-07** from BUDDY.md: the two PBS-only tunnels, today built by hand in OPNsense, created and removed with the peer; plus `peer add pull` flags |
 | ✅ #737 | `site.json` `backup: true` fails validation and has no migration | L | L | **Closed 2026-09-25** via `integrate/nc35` (`c998ca5f`): migration 0011 turns an old `backup: true` into `{}` (`false` → `null`), so older sites validate. Reported by @AndreasJe |
 | ✅ #742 | `backup:filesystem` update never creates a missing encryption key, so a capture can fail forever | L | M | **Closed 2026-09-26** (`85d3ccf3`): an absent `backup:filesystem` key is created and escrowed on update — makerfloss's mothership `config/` had never been backed up. Escrow fix `c53576a0` |
 | ✅ #745 | A dangling symlink in a declared path refuses the whole capture | M | M | **Closed 2026-09-26** (`backup:filesystem`). Added to the roadmap 2026-10-07 |
