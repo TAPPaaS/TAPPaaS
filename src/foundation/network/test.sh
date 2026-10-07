@@ -507,6 +507,9 @@ run_autopinhole_check() {
     local access_to="$4"
     local pinhole_ports="$5"
     local out="$6"
+    # The consumer zone's own access-to (#770: that is the edge that may
+    # already carry the consumer's traffic). Default: internet only.
+    local consumer_access_to="${7:-[\"internet\"]}"
 
     local tmp
     tmp=$(mktemp -d)
@@ -537,7 +540,7 @@ EOF
     else
         cat > "${tmp}/zones.json" <<EOF
 {"${consumer_zone}":{"vlantag":810,"ip":"10.80.10.0/24","bridge":"lan",
-   "access-to":["internet"],"pinhole-allowed-from":[]},
+   "access-to":${consumer_access_to},"pinhole-allowed-from":[]},
  "${provider_zone}":{"vlantag":820,"ip":"10.80.20.0/24","bridge":"lan",
    "access-to":${access_to},"pinhole-allowed-from":${pinhole_allowed}}}
 EOF
@@ -628,16 +631,31 @@ else
     cleanup_autopinhole_tmp
 
     # ── Bonus: zone-level access-to already covers it → no auto-pinhole.
-    # Even though pinhole-allowed-from permits, the zone-level rule already
-    # allows the traffic, so the per-module pinhole is redundant.
+    # The CONSUMER's zone may go to the provider's (access-to lists where a
+    # zone may go, #770), so the zone edge carries the traffic and the
+    # per-module pinhole is redundant.
     run_autopinhole_check \
-        "src1" "dst1" '["src1"]' '["internet","src1"]' \
+        "src1" "dst1" '["src1"]' '["internet"]' \
         '[{"port":9091,"protocol":"TCP","description":"X"}]' \
-        "${APH_OUT}"
+        "${APH_OUT}" '["internet","dst1"]'
     if grep -qE 'AUTO-PINHOLES' "${APH_OUT}"; then
         fail "access-to-covers-it case should NOT emit any auto-pinhole"
     else
         pass "access-to-covers-it case correctly emits no auto-pinhole"
+    fi
+    cleanup_autopinhole_tmp
+
+    # ── The reverse direction does NOT cover it (#770). The provider's zone
+    # reaching the consumer's says nothing about the consumer's traffic; the
+    # check read that list until #770 and skipped pinholes that were needed.
+    run_autopinhole_check \
+        "src1" "dst1" '["src1"]' '["internet","src1"]' \
+        '[{"port":9091,"protocol":"TCP","description":"X"}]' \
+        "${APH_OUT}"
+    if grep -qE 'ui +→ +api +:9091/TCP' "${APH_OUT}"; then
+        pass "provider's access-to does not stand in for the consumer's — pinhole emitted"
+    else
+        fail "provider-side access-to skipped a needed auto-pinhole (the pre-#770 direction)"
     fi
     cleanup_autopinhole_tmp
 
