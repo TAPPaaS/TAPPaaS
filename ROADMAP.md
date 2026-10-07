@@ -74,7 +74,7 @@ changes that rename, re-schema or rebuild; the things that make them survivable 
 | M | the sweep changes live state automatically (firewall rules, DNS, VM config, restarts); reversible, but a mistake is an outage |
 | H | persisted config, schema, paths or CLI names change and must be migrated on every install — or it needs a rebuild, reinstall or renumbering, or can lock the operator out |
 
-### Test level by upgrade risk
+### Test effort needed based on Risk
 
 How deeply a change is tested before it merges to `main`, by its Risk. Each level includes everything
 above it. From `main` a change follows the release train ([RELEASE-TRAIN.md](src/foundation/tappaas-cicd/RELEASE-TRAIN.md)):
