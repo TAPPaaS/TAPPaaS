@@ -116,7 +116,7 @@ cmd_inspect() {
     echo ""
 
     info "${BOLD}VIRTUAL KEYS${CL} (consumer-facing auth into litellm)"
-    _remote_curl "curl -sf 'http://localhost:4000/key/list?return_full_object=true' -H 'Authorization: Bearer ${master}'" \
+    _remote_curl "curl -sf 'http://localhost:4000/key/list?return_full_object=true&size=100' -H 'Authorization: Bearer ${master}'" \
         | jq -r '.keys[]? | "  \(.key_alias // "unnamed")\tblocked=\(.blocked // false)\tspend=\(.spend // 0)"' \
         | column -t -s $'\t'
     echo ""

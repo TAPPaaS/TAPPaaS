@@ -121,11 +121,13 @@ _api() {
     [[ -n "${master}" ]] || { API_FAIL_KIND="masterkey"; return 1; }
     body_b64="$(printf '%s' "${body}" | base64 -w0)"
 
+    # ssh joins its arguments into one remote command line, so the path is quoted
+    # for that shell: a query string with `&` in it cut the command in two.
     # `|| true` on the ssh: a non-zero here can mean either an ssh failure or a
     # curl that ran fine and wrote a status we still want to read. The empty
     # output check below tells those apart, so the status is never thrown away.
     out="$(ssh ${SSH_OPTS} "tappaas@${LITELLM_HOST}" bash -s -- \
-             "${master}" "${method}" "${rpath}" "${body_b64}" 2>/dev/null <<'EOSH' || true
+             "${master}" "${method}" "$(printf '%q' "${rpath}")" "${body_b64}" 2>/dev/null <<'EOSH' || true
 MASTER="$1"; METHOD="$2"; RPATH="$3"; BODY_B64="$4"
 if [ -n "${BODY_B64}" ]; then
     curl -s -X "${METHOD}" "http://localhost:4000${RPATH}" \
@@ -275,7 +277,8 @@ cmd_delete() {
     # Refuse before asking. Prompting [y/N] about a delete that will be refused
     # teaches the operator that the prompt is noise.
     local keys_raw info_raw blockers
-    _api GET '/key/list?return_full_object=true' || _api_fail "key/list"
+    # ponytail: one page of 100, the API's maximum — page through when a site holds more keys.
+    _api GET '/key/list?return_full_object=true&size=100' || _api_fail "key/list"
     keys_raw="${API_BODY}"
     _api GET "/team/info?team_id=${team_id}" || _api_fail "team/info"
     info_raw="${API_BODY}"
@@ -319,7 +322,8 @@ cmd_delete() {
 
 cmd_key_list() {
     local raw n
-    _api GET '/key/list?return_full_object=true' || _api_fail "key/list"
+    # ponytail: one page of 100, the API's maximum — page through when a site holds more keys.
+    _api GET '/key/list?return_full_object=true&size=100' || _api_fail "key/list"
     raw="${API_BODY}"
     n="$(printf '%s' "${raw}" | jq --arg a "${ALIAS}" \
         '[ .keys[]? | select($a == "" or .key_alias == $a) ] | length')"
@@ -341,7 +345,7 @@ cmd_key_list() {
 cmd_key_info() {
     [[ -n "${ALIAS}" ]] || die "--alias is required"
     local raw entry
-    _api GET '/key/list?return_full_object=true' || _api_fail "key/list"
+    _api GET "/key/list?return_full_object=true&size=100&key_alias=$(jq -rn --arg a "${ALIAS}" '$a|@uri')" || _api_fail "key/list"
     raw="${API_BODY}"
     entry="$(printf '%s' "${raw}" | jq -c --arg a "${ALIAS}" \
         'first(.keys[]? | select(.key_alias == $a)) // empty')"
@@ -368,7 +372,7 @@ cmd_key_delete() {
     [[ -n "${ALIAS}" ]] || die "--alias is required"
 
     local raw entry token created team
-    _api GET '/key/list?return_full_object=true' || _api_fail "key/list"
+    _api GET "/key/list?return_full_object=true&size=100&key_alias=$(jq -rn --arg a "${ALIAS}" '$a|@uri')" || _api_fail "key/list"
     raw="${API_BODY}"
     entry="$(printf '%s' "${raw}" | jq -c --arg a "${ALIAS}" \
         'first(.keys[]? | select(.key_alias == $a)) // empty')"
