@@ -61,28 +61,37 @@ function debug() { [[ "${TAPPAAS_DEBUG:-0}" -eq 1 ]] || return 0; echo -e "${BL}
 # under error_handler's generic output (no VM/disk exists yet at call sites).
 function die() { trap - ERR; error "$*"; exit 1; }
 
+# The VM's Proxmox summary note (#764): the TAPPaaS turtle, the module's
+# description, and three links — docs (tappaas.org; module pages under Stacks),
+# code (the module's own directory when it comes from the TAPPaaS repo, else the
+# repo) and issues. The old logo URL was dead (404) and "Discussions" pointed at
+# GitHub, which the project has left.
 function create_vm_descriptions_html() {
-  local TEXT="$1"
+  local TEXT="$1" SOURCE="${2:-}" REPO="https://codeberg.org/TAPPaaS/TAPPaaS" CODE
+  CODE="${REPO}"
+  if [[ "${SOURCE}" == */TAPPaaS/src/* ]]; then
+    CODE="${REPO}/src/branch/main/src/${SOURCE##*/TAPPaaS/src/}"
+  fi
   DESCRIPTION_HTML=$(
     cat <<EOF
 <div align='center'>
   <a href='https://tappaas.org' target='_blank' rel='noopener noreferrer'>
-    <img src='https://www.tappaas.org/taapaas.png' alt='Logo' style='width:81px;height:112px;'/>
+    <img src='https://tappaas.org/tappaas-icon.png' alt='TAPPaaS' style='width:120px;height:84px;'/>
   </a>
 
   <h2 style='font-size: 24px; margin: 20px 0;'>$TEXT</h2>
 
   <span style='margin: 0 10px;'>
-    <i class="fa fa-code-fork fa-fw" style="color: #f5f5f5;"></i>
-    <a href='https://codeberg.org/TAPPaaS/TAPPaaS' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>Codeberg</a>
+    <i class="fa fa-book fa-fw" style="color: #f5f5f5;"></i>
+    <a href='https://tappaas.org' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>docs</a>
   </span>
   <span style='margin: 0 10px;'>
-    <i class="fa fa-comments fa-fw" style="color: #f5f5f5;"></i>
-    <a href='https://github.com/TAPPaaS/TAPPaaS/discussions' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>Discussions</a>
+    <i class="fa fa-code-fork fa-fw" style="color: #f5f5f5;"></i>
+    <a href='${CODE}' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>code</a>
   </span>
   <span style='margin: 0 10px;'>
     <i class="fa fa-exclamation-circle fa-fw" style="color: #f5f5f5;"></i>
-    <a href='https://codeberg.org/TAPPaaS/TAPPaaS/issues' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>Issues</a>
+    <a href='${REPO}/issues' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>Issues</a>
   </span>
   <br>
   <br>
@@ -497,7 +506,9 @@ DISK0_REF=${STORAGE}:${DISK0}
 DISK1="vm-${VMID}-disk-1"
 DISK1_REF=${STORAGE}:${DISK1}
 
-create_vm_descriptions_html "$DESCRIPTION"
+# moduleSource is optional (older configs, Community modules): read it directly,
+# not through get_config_value, which treats a missing key as fatal.
+create_vm_descriptions_html "$DESCRIPTION" "$(echo "$JSON" | jq -r '.moduleSource // .location // empty' 2>/dev/null)"
 
 # Pre-flight (issue #308): abort before any ZFS work — and before a potentially
 # large image download — if a stuck D-state 'zfs recv' is poisoning the target
