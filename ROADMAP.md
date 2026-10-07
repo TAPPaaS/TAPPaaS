@@ -98,7 +98,7 @@ Per group: its scores, and where its rows are. *2.1* = shipped in 2.1; *2.2* = d
 
 | Wave | Group | Ease | Risk | 2.1 | 2.2 | open |
 |------|-------|:-:|:-:|---:|---:|---:|
-| 4 | G4.1 Alerting & cluster resilience | M | M | – | 5 | 6 |
+| 4 | G4.1 Alerting & cluster resilience | M | M | – | 6 | 5 |
 | 4 | G4.2 Proxy & ingress | M | L | 1 | – | 4 |
 | 4 | G4.3 Manager verb gaps | M | L | 4 | 2 | 8 |
 | 4 | G4.4 Storage & physical devices | H | L | 2 | 2 | 6 |
@@ -211,9 +211,9 @@ items that belong to a group — FW #40, #83, #157, #158, #162 — are rows in t
 
 New capabilities with low upgrade risk.
 
-### G4.1 Alerting & cluster resilience — Ease M · Risk M · done for 2.2: 5 · open: 6
+### G4.1 Alerting & cluster resilience — Ease M · Risk M · done for 2.2: 6 · open: 5
 
-Be told when something breaks, and survive more of it. Built: alerts from Loki by mail, every VM's logs in Loki, a credential per pushing VM, container severities from the line. Next: a notice when a whole site goes dark (#776), true timestamps in Loki (#784), a warning when a pin move brings a Loki major (#788), a mail relay (#125), a second corosync link (#590).
+Be told when something breaks, and survive more of it. Built: alerts from Loki by mail, every VM's logs in Loki, a credential per pushing VM, container severities from the line, each line's own timestamp. Next: a notice when a whole site goes dark (#776), a warning when a pin move brings a Loki major (#788), a mail relay (#125), a second corosync link (#590).
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
@@ -223,7 +223,7 @@ Be told when something breaks, and survive more of it. Built: alerts from Loki b
 | #788 | Release train: flag a Loki/Grafana major version change at a pin move | M | L | **Opened 2026-10-06** from #165 §5: versions only move with the pin; a major bump (Loki storage schema) should be reported at the move |
 | ✅ #770 | App VMs do not ship their logs to Loki | M | M | **Done 2026-10-06**, live on hrossen: every NixOS VM integrating `logging:logs` ships its journal from one renderer (`lib/log-shipping.sh`) to a push-only `:3101`; Loki's `:3100` stays mgmt-only |
 | #776 | Report a site that has gone dark (outside heartbeat) | M | L | **Opened 2026-10-06** after makerfloss was dark 2½ days unreported. Proposed: the satellite mails when the home WireGuard handshake is >15 min stale. **Decide:** its mail path (#125?) |
-| #784 | Loki stores receive time — backfill and reboot entries collapse | M | L | **Opened 2026-10-06** from a Loki sweep on hrossen: live lines are ~1 s off, but a boot's or a backfill's entries all land on Alloy's start time. Find where the journal time is lost |
+| ✅ #784 | Loki stores receive time — backfill and reboot entries collapse | M | L | **Closed 2026-10-07** (`cc997ea3`): logging's push receiver restamped lines on arrival (and doubled re-sent ones); `use_incoming_timestamp = true`. Proven on hrossen |
 | ✅ #785 | Container stderr is labelled severity=error regardless of level | L | L | **Closed 2026-10-06** (`lib/log-shipping.sh`): a container line naming its level (JSON, `level=`, `\| INFO \|`, `[ERROR]`) sets severity; new `container` label. Live on hrossen |
 | ✅ #774 | Build guest systems on tappaas-cicd — guests neither evaluate, compile nor download | H | M | **Closed 2026-10-06.** NixOS guests are built on the mothership in a mount namespace and copied over (`a0a4b66e`); offline and release-move proven on hrossen. Guest sizing continues in #663 |
 | #590 | Second corosync link | H | M | |
