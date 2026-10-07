@@ -177,6 +177,20 @@ render_logging_nix() {
 # retries.
 { ... }:
 {
+  # A line every 5 minutes, so a healthy VM is never silent (#770). HostSilent
+  # alerts on a host with no line for 15 minutes; near-idle VMs (coturn,
+  # jellyfin, …) log only on the hour, and raised it — and its resolve — every
+  # hour (hrossen, 2026-10-07). With this, a silent host is down or not shipping.
+  systemd.services.tappaas-log-heartbeat = {
+    description = "TAPPaaS log heartbeat";
+    serviceConfig.Type = "oneshot";
+    script = "echo 'tappaas-log-heartbeat: alive'";
+  };
+  systemd.timers.tappaas-log-heartbeat = {
+    wantedBy = [ "timers.target" ];
+    timerConfig = { OnBootSec = "1min"; OnUnitActiveSec = "5min"; AccuracySec = "30s"; };
+  };
+
   # The push secret (#165 §1), handed to Alloy by systemd: readable by the
   # service whatever user it runs as, and never in the store.
   systemd.services.alloy.serviceConfig.LoadCredential = [ "loki-push:${LOG_SHIPPING_VM_SECRET}" ];

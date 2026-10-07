@@ -203,6 +203,11 @@ may pinhole into it. `services/logs/pinhole.json` says `"fromZones": "any"` — 
 foundation providers only — and the pinhole is still per consumer VM (its own alias to
 `tm_logging`) and to 3101 alone. A consumer outside mgmt needs `network:rules` to carry it.
 
+The fragment also runs `tappaas-log-heartbeat.timer`: one line every 5 minutes, so a
+healthy VM is never silent and HostSilent (no line for 15 minutes) means the VM is down or
+not shipping. Without it, near-idle VMs that log only on the hour raised HostSilent and its
+resolve every hour.
+
 No file, no Alloy: a module that does not declare `logging:logs`, or a site without
 logging, ships nothing. NixOS guests only for now.
 
