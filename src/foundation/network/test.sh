@@ -1607,7 +1607,19 @@ else
     if [[ -n "${proxy_domain}" && "${proxy_domain}" != "test-fw-a." ]]; then
         # caddy-manager has the global-flag-before-subcommand argparse bug;
         # place --no-ssl-verify AFTER the subcommand.
-        if caddy-manager list --no-ssl-verify 2>/dev/null | grep -q "test-fw-a\|${proxy_domain}"; then
+        # A name with no public DNS record gets no route (#778): ACME could never
+        # issue for it. Then the right state is NO entry; with a record, one.
+        _tfa_unpub=0
+        if command -v network-manager >/dev/null 2>&1; then
+            network-manager split-horizon-target "${proxy_domain}" >/dev/null 2>&1 || [[ $? -ne 3 ]] || _tfa_unpub=1
+        fi
+        if [[ "${_tfa_unpub}" -eq 1 ]]; then
+            if caddy-manager list --no-ssl-verify 2>/dev/null | grep -q "${proxy_domain}"; then
+                fail "Caddy has an entry for ${proxy_domain}, which has no public DNS record (#778: it should not)"
+            else
+                pass "no Caddy entry for ${proxy_domain} — not published (no public DNS record), as #778 intends"
+            fi
+        elif caddy-manager list --no-ssl-verify 2>/dev/null | grep -q "test-fw-a\|${proxy_domain}"; then
             pass "Caddy domain entry for test-fw-a present"
         else
             fail "Caddy domain entry for test-fw-a missing"
