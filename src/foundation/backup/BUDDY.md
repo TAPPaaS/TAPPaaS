@@ -177,9 +177,9 @@ backup-manager peer add pull <buddy> --store <their datastore> --country <CC> --
   PBS use the tunnel, only to `.1:8007` (`buddy-<buddy> pull`).
 - It prints **your** public key: send it to the buddy, for their `--peer-key`.
 - It prompts for the auth-id, password and fingerprint the buddy sent (they are never written to
-  config), creates the `pull/<buddy>` namespace, a nightly sync job (04:00) of their root namespace
-  only (`--max-depth 0`) and its retention, and records it all in `config/pull-<buddy>.json` —
-  the remote host is the tunnel's `.1`.
+  config), creates the `pull/<buddy>` namespace, a nightly sync job (04:00) and its retention
+  (`--max-depth 0` makes "their root namespace only" explicit), and records it all in
+  `config/pull-<buddy>.json` — the remote host is the tunnel's `.1`.
 
 The pull works once the buddy has admitted your key. Then:
 

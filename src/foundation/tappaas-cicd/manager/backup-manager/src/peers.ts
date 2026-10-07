@@ -76,7 +76,7 @@ export interface PeerSpec {
   //                     remote: what they may read ("" = the root namespace)
   remoteNamespace?: string; // pull: which namespace to pull FROM
   port?: number; // pull: their PBS API port (default 8007)
-  maxDepth?: number; // pull: how far below remoteNamespace to descend (default 0)
+  maxDepth?: number; // pull: how far below remoteNamespace to descend (default: all)
   schedule?: string; // pull: when to pull
   groupFilter?: string; // pull: replicate only part of the source
   authId?: string; // remote: the login they pull with
@@ -109,9 +109,9 @@ export function buildPeerConfig(
       remotePort: spec.port ?? 8007,
       remoteStore: spec.store ?? "tappaas_backup",
       remoteNamespace: spec.remoteNamespace ?? "",
-      // Explicit, as the satellite's own pull is: a TAPPaaS buddy grants its root
-      // without propagation, and a sync must not wander below it (#796).
-      maxDepth: spec.maxDepth ?? 0,
+      // Only when asked: placement reset's pull of a former external PBS needs
+      // the fs/ namespaces below its root, so there is no default depth (#796).
+      ...(spec.maxDepth !== undefined ? { maxDepth: spec.maxDepth } : {}),
       namespace: ns,
       pullSchedule: spec.schedule ?? "04:00",
       removeVanished: false, // never let a compromised source erase our copy

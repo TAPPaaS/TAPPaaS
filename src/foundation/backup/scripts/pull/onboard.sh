@@ -40,7 +40,7 @@ sched="$(jq -r '.pullSchedule // "04:00"' "${CFG}")"
 rv="$(jq -r 'if .removeVanished then "true" else "false" end' "${CFG}")"
 readauth="$(jq -r '.readAuthId // ""' "${CFG}")"
 rport="$(jq -r '.remotePort // empty' "${CFG}")"
-# 0 = the remote namespace only (#796). Absent in older configs: PBS's default.
+# 0 = the remote namespace only (#796). Absent: PBS's default, every level.
 depth="$(jq -r '.maxDepth // empty' "${CFG}")"
 retention="$(jq -c '.retention // {}' "${CFG}")"
 # Optional subset selector (ADR-012 §3.6, #389): a PBS group-filter that pulls

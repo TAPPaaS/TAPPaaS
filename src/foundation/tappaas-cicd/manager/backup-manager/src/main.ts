@@ -179,7 +179,7 @@ export const HELP: HelpSpec = {
         ["--store S", "peer add pull: its datastore name (default tappaas_backup)."],
         ["--port P", "peer add pull: its PBS API port (default 8007)."],
         ["--remote-namespace NS", "peer add pull: the namespace to pull FROM (default its root)."],
-        ["--max-depth N", "peer add pull: how many namespace levels below it to sync (default 0: that namespace only)."],
+        ["--max-depth N", "peer add pull: how many namespace levels below it to sync (0 = that namespace only; default all)."],
         ["--namespace NS", "peer add: pull/receive — where the data lands here. remote — what they may read (default: the root namespace, our VM backups)."],
         ["--schedule SPEC", "peer add pull: when to pull (default 04:00)."],
         ["--group-filter F", "peer add pull: replicate only part of the source."],

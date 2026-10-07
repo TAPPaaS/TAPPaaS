@@ -1155,7 +1155,7 @@ check(!retentionValid("7") && !retentionValid("7x") && !retentionValid(""), "inv
   check(validate(d).errors.some((e) => e.includes("boundary")), "validate: a misaligned /30 is an error");
   check(listPeers(d).some((p) => p.tunnel === "serve 172.31.9.0/30 :51830"), "peers shows the tunnel");
 
-  eq(`${pa.remotePort}/${pa.maxDepth}`, "8007/0", "a pull says its port and syncs the remote namespace only (max-depth 0)");
+  eq(`${pa.remotePort}/${pa.maxDepth}`, "8007/undefined", "a pull says its port, and no depth unless asked (placement reset needs fs/)");
   eq(call(["peer", "add", "pull", "deep", "--host", "h", "--country", "DE", "--port", "8443", "--remote-namespace", "site/a", "--max-depth", "2"]), 0,
     "pull --port --remote-namespace --max-depth");
   const deep = cfg("pull-deep.json");

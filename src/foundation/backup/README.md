@@ -154,7 +154,7 @@ backup-manager peer check pull|remote <name>   # instance, handshake, their PBS 
 the OPNsense instance, rules and NAT that let only the two PBSs talk over it, on
 tcp/8007 only. The live work is `lib/pbs-tunnel.sh`; `scripts/tunnel-check.sh` is
 `peer check`. A pull also takes `--port`, `--remote-namespace` and `--max-depth`
-(default 0: the remote namespace only).
+(0 = the remote namespace only; default every level).
 
 `peer delete` takes the kind because one name can hold two relationships at
 once — a buddy is usually both a `pull` and a `remote`.
