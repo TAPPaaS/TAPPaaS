@@ -103,7 +103,7 @@ Per group: its scores, and where its rows are. *2.1* = shipped in 2.1; *2.2* = d
 | 4 | G4.3 Manager verb gaps | M | L | 4 | 5 | 8 |
 | 4 | G4.4 Storage & physical devices | H | L | 2 | 3 | 6 |
 | 4 | G4.5 Governance, CI & sign-offs | M | L | 2 | 1 | 7 |
-| 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 7 | 5 | 9 |
+| 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 7 | 6 | 8 |
 | 3 | G3.2 Identity & SSO wiring | M | L | 1 | 5 | 5 |
 | 3 | G3.3 App module fixes | L | L | 5 | 3 | 10 |
 | 3 | G3.4 AI stack maturity | M | M | 1 | – | 6 |
@@ -297,9 +297,9 @@ The project's own machinery: CI runners (#415), community-health files (#486), t
 
 Low upgrade risk. Build continuously, in any order within a group.
 
-### G3.1 cluster:vm lifecycle & capacity — Ease L · Risk M · released in 2.1: 7 · done for 2.2: 5 · open: 9
+### G3.1 cluster:vm lifecycle & capacity — Ease L · Risk M · released in 2.1: 7 · done for 2.2: 6 · open: 8
 
-Guests sized, placed, started and stopped right: memory defaults from measurement (#663), hardware drift (#531), shutdown and boot order (#36, #127), storage growth and placement (#100, #403), a composite-module ADR (#761), a sweep that survives a guest restarting itself (#753), and a guest agent that survives a live migration (#793).
+Guests sized, placed, started and stopped right: memory defaults from measurement (#663), hardware drift (#531), shutdown and boot order (#36, #127), storage growth and placement (#100, #403), a composite-module ADR (#761), and a sweep that survives a guest restarting itself (#753).
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
@@ -316,7 +316,7 @@ Guests sized, placed, started and stopped right: memory defaults from measuremen
 | ✅ #423 | `Create-TAPPaaS-LXC.sh` has no `debug()` | L | L | Verified still missing — **Closed 2026-09-26** (`34508ed2`): the LXC creator defines the `debug()` it calls, as `Create-TAPPaaS-VM.sh` does. The same trap elsewhere is #747 |
 | #761 | A composite-module ADR: `cluster`, `kubernetes`, and modules that only provide artefacts | H | M | ADR-022d and ADR-026 defer `cluster`/`kubernetes` to an ADR that does not exist, and `templates` fits no `kind`; interim values in ADR-022d v1.2. With @ErikDaniel007 |
 | #753 | A guest restarting during its own update fails the sweep | M | L | coturn restarted inside its own update on hrossen (2026-10-01); the post-apply SSH check raced its boot and failed the sweep. The restart's trigger is not yet known |
-| #793 | A live migration leaves a FreeBSD guest's agent dead (firewall) | L | L | **Opened 2026-10-07:** hrossen's firewall agent was dead from the 2026-10-01 migration until restarted by hand; backups lost fsfreeze. Ping (and restart) the agent after `qm migrate` |
+| ✅ #793 | A live migration leaves a FreeBSD guest's agent dead (firewall) | L | L | **Closed 2026-10-07** (`4543af5f`): the network update adds `-r` to the firewall's qemu-ga via `/usr/local/etc/rc.conf.d`; agent answered after live migrations both ways on hrossen |
 
 ### G3.2 Identity & SSO wiring — Ease M · Risk L · released in 2.1: 1 · done for 2.2: 5 · open: 5
 
