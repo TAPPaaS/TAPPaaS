@@ -514,9 +514,8 @@ EOF
   # FILESYSTEM STRUCTURE
   # ============================================================================
 
+  # /var/backup/postgresql comes from services.postgresqlBackup itself.
   systemd.tmpfiles.rules = [
-    "d /var/backup/postgresql 0700 postgres postgres -"
-    "d /var/backup/redis 0700 redis-authentik redis-authentik -"
     "d /var/backup/authentik-env 0700 root root -"
     "d /var/lib/authentik 0755 root root -"
     # the precheck (User = postgres) writes its finding here
@@ -524,7 +523,10 @@ EOF
     "d /var/lib/authentik/media 0755 1000 1000 -"
     "d /var/lib/authentik/templates 0755 1000 1000 -"
     "d /var/lib/authentik/certs 0755 1000 1000 -"
-  ];
+  ]
+  # Only while Redis is used (< 2025.10): its user goes with it, and a rule
+  # naming a missing user fails every tmpfiles run.
+  ++ lib.optional ak.redis "d /var/backup/redis 0700 redis-authentik redis-authentik -";
 
   # ============================================================================
   # SYSTEM STATE VERSION - DO NOT CHANGE after initial install
