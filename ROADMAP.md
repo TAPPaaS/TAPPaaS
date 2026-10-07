@@ -104,7 +104,7 @@ Per group: its scores, and where its rows are. *2.1* = shipped in 2.1; *2.2* = d
 | 4 | G4.4 Storage & physical devices | H | L | 2 | 3 | 6 |
 | 4 | G4.5 Governance, CI & sign-offs | M | L | 2 | 1 | 7 |
 | 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 7 | 5 | 9 |
-| 3 | G3.2 Identity & SSO wiring | M | L | 1 | 4 | 6 |
+| 3 | G3.2 Identity & SSO wiring | M | L | 1 | 5 | 5 |
 | 3 | G3.3 App module fixes | L | L | 5 | 3 | 10 |
 | 3 | G3.4 AI stack maturity | M | M | 1 | – | 6 |
 | 3 | G3.5 Installer UX | L | L | – | – | 4 |
@@ -318,9 +318,9 @@ Guests sized, placed, started and stopped right: memory defaults from measuremen
 | #753 | A guest restarting during its own update fails the sweep | M | L | coturn restarted inside its own update on hrossen (2026-10-01); the post-apply SSH check raced its boot and failed the sweep. The restart's trigger is not yet known |
 | #793 | A live migration leaves a FreeBSD guest's agent dead (firewall) | L | L | **Opened 2026-10-07:** hrossen's firewall agent was dead from the 2026-10-01 migration until restarted by hand; backups lost fsfreeze. Ping (and restart) the agent after `qm migrate` |
 
-### G3.2 Identity & SSO wiring — Ease M · Risk L · released in 2.1: 1 · done for 2.2: 4 · open: 6
+### G3.2 Identity & SSO wiring — Ease M · Risk L · released in 2.1: 1 · done for 2.2: 5 · open: 5
 
-Every app wired to the identity provider the same way: OIDC for hass, Nextcloud and forgejo (#345, #401, #282), a site-specific login page (#479), logging's SSO dependency (#701), a test for forward-auth (#752), and the groups claim off the deprecated `ak_groups` (#794).
+Every app wired to the identity provider the same way: OIDC for hass, Nextcloud and forgejo (#345, #401, #282), a site-specific login page (#479), logging's SSO dependency (#701), and a test for forward-auth (#752).
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
@@ -331,7 +331,7 @@ Every app wired to the identity provider the same way: OIDC for hass, Nextcloud 
 | #701 | logging depends on identity though its own code makes SSO optional | — | — | **Open, not yet scored** — SSO is conditional on publication since `4c9c846a`. Added in the 2026-09-24 issue sweep |
 | ✅ #738 | `identity:identity` discovery check fails on a changed host key and blames the firewall | L | L | **Closed 2026-09-25** via `integrate/nc35` (`c998ca5f`): the stale host key is cleared before the OIDC check, and an ssh failure is named as one. Reported by @AndreasJe |
 | #752 | identity:accessControl has no test-service | M | L | `test-service.sh` is an ADR-027 stub, so forward-auth is never tested. Check the Authentik provider, Caddy's ForwardAuth, and that an anonymous request is redirected |
-| #794 | The groups claim mapping uses `User.ak_groups`, deprecated since 2026.2 | L | L | **Opened 2026-10-07:** warns on every forgejo/nextcloud login; a release that drops it empties every app's `groups` claim. `install-service.sh:188` → `user.groups` |
+| ✅ #794 | The groups claim mapping uses `User.ak_groups`, deprecated since 2026.2 | L | L | **Closed 2026-10-07** (`b7b5d242`): the mapping reads `user.groups` (same groups for all users); forgejo and nextcloud re-applied on hrossen, no deprecation |
 | ✅ #769 | vaultwarden: SSO is registered but never wired into the app | M | L | **Closed 2026-10-04** (SSO wired, `e184ea9d`). **Reversed 2026-10-06, vaultwarden 0.6.0:** no SSO for the password vault, by decision — see vaultwarden DESIGN.md |
 | ✅ #779 | identity: `authentik-env-secrets-only` calls `cmp` without diffutils | L | M | **Closed 2026-10-06** (`3f34f63e`): `! cmp` was always true, so the clean `authentik.env` was replaced and logged every boot. Live-tested on hrossen |
 
