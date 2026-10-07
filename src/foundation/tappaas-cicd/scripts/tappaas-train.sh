@@ -252,8 +252,33 @@ render_releases() {
       "",
       "| Version | Commit | Staging | Production | Notes |",
       "|---|---|---|---|---|",
-      (.releases[] | "| \(.version) | `\(.commit)` | \(.staging // "—") | \(.production // "—") | \(notes) |")
+      (.releases[] | "| \(.version) | \(if (.commit // "") == "" then "`v\(.version)`" else "`\(.commit)`" end) | \(.staging // "—") | \(.production // "—") | \(notes) |")
     ' "$1"
+}
+
+# Cut ROADMAP.md for the version a boundary cuts (release/roadmap-cut.py, run from
+# the checkout being released, so the script always matches the file it edits): the
+# ✅ rows leave the waves for a `## Release <version>` section, `## Next release`
+# becomes its summary, the promoted release gets its production date. A repository
+# without a ROADMAP.md is left alone.
+#   $1  the version cut   $2  the version that reached production, or ""
+roadmap_cut() {
+    local v="$1" p="$2" script="${REPO_DIR}/release/roadmap-cut.py"
+    [[ -f "${REPO_DIR}/ROADMAP.md" ]] || { info "  no ROADMAP.md in this repository — nothing to cut"; return 0; }
+    if [[ ! -f "${script}" ]]; then
+        warn "  ROADMAP.md is not cut: this checkout has no release/roadmap-cut.py"
+        return 0
+    fi
+    local out rc
+    out="$(python3 "${script}" --file "${REPO_DIR}/ROADMAP.md" --version "${v}" \
+        --date "$(day_utc "$(now_epoch)")" ${p:+--promoted "${p}"} 2>&1)"; rc=$?
+    [[ -n "${out}" ]] && sed 's/^/  /' <<< "${out}"
+    if (( rc != 0 )); then
+        error "ROADMAP.md could not be cut for ${v} — nothing was committed"
+        g checkout -q -- ROADMAP.md 2>/dev/null
+        return 1
+    fi
+    g add ROADMAP.md
 }
 
 # Commit the history to main: release/releases.json, and RELEASES.md rendered
@@ -264,8 +289,10 @@ render_releases() {
 #   $2  the version that has just reached production, or ""
 #   $3  the commit subject
 #   $4  the commit production now holds (for a version the record lacks)
+#   $5  the version a boundary cuts: ROADMAP.md is cut for it in the same commit
+#       (release/roadmap-cut.py); "" for an urgent fix, which cuts no roadmap
 record_release() {
-    local entry="$1" promoted="$2" subject="$3" pcommit="${4:-}" f="${REPO_DIR}/${RELEASES_FILE}" tmp
+    local entry="$1" promoted="$2" subject="$3" pcommit="${4:-}" cutv="${5:-}" f="${REPO_DIR}/${RELEASES_FILE}" tmp
     g checkout -q main && g merge -q --ff-only origin/main \
         || { error "main is not at origin/main — the release record was not written"; return 1; }
     mkdir -p "$(dirname "${f}")"
@@ -275,12 +302,16 @@ record_release() {
         (if $e == null or any((.releases // [])[]; .version == $e.version) then . else .releases = ([$e] + (.releases // [])) end)
         | (if $p == "" or any(.releases[]; .version == $p) then . else .releases += [{version: $p, commit: $pc, staging: null, production: null}] end)
         | (if $p == "" then . else .releases |= map(if .version == $p and .production == null then .production = $today else . end) end)
+        | (if $p == "" or $pc == "" then . else .releases |= map(if .version == $p and (.commit // "") == "" then .commit = $pc else . end) end)
         | .releases |= (sort_by(.version | split(".") | map(tonumber)) | reverse)
       ' "${f}" > "${tmp}" && mv -f "${tmp}" "${f}" \
         || { rm -f "${tmp}"; error "could not update ${RELEASES_FILE}"; return 1; }
     render_releases "${f}" > "${REPO_DIR}/${RELEASES_PAGE}" \
         || { error "could not render ${RELEASES_PAGE}"; return 1; }
     g add "${RELEASES_FILE}" "${RELEASES_PAGE}"
+    if [[ -n "${cutv}" ]]; then
+        roadmap_cut "${cutv}" "${promoted}" || { g checkout -q -- "${RELEASES_FILE}" "${RELEASES_PAGE}" 2>/dev/null; g reset -q; return 1; }
+    fi
     if g diff --cached --quiet; then info "  the release record already says this"; return 0; fi
     g commit -q -m "${subject}" || { error "could not commit the release record"; return 1; }
     if ! g push -q origin main; then
@@ -1123,11 +1154,23 @@ do_phase_tag() {   # $1 = the version this boundary cuts, $2 = forced
     make_release_tag "${cut}" "${tip}" "$(tag_message "${cut}" "$2")"
 }
 
-do_phase_record() {   # $1 = the version this boundary cut, $2 = forced, $3 = kind
-    local cut="$1" entry="null" promoted subject=()
+# Runs BEFORE main is promoted to staging (operator, 2026-10-07): the record and
+# the ROADMAP.md cut are committed to main first, so the revision cut into staging —
+# and its tag — already says what it is. The new version's commit is the record
+# commit itself, which cannot name its own hash: it is left empty (RELEASES.md shows
+# the tag) and filled in when the version reaches production. A resumed run that
+# finds staging already tagged records the tagged commit, as before.
+do_phase_record() {   # $1 = the version this boundary cuts, $2 = forced, $3 = kind
+    local cut="$1" entry="null" promoted subject=() commit=""
     if is_rehearsal; then info "  rehearsal: nothing is added to the release record"; return 0; fi
     if [[ "$(release_tag_at "origin/${STAGING_BRANCH}")" == "v${cut}" ]]; then
-        entry="$(jq -n --arg v "${cut}" --arg c "$(g rev-parse --short=12 "origin/${STAGING_BRANCH}")" \
+        commit="$(g rev-parse --short=12 "origin/${STAGING_BRANCH}")"
+    elif g rev-parse --verify --quiet "origin/${STAGING_BRANCH}" >/dev/null \
+         && g merge-base --is-ancestor origin/main "origin/${STAGING_BRANCH}"; then
+        cut=""          # staging already holds main: nothing new is cut
+    fi
+    if [[ -n "${cut}" ]]; then
+        entry="$(jq -n --arg v "${cut}" --arg c "${commit}" \
             --arg d "$(day_utc "$(now_epoch)")" --arg k "$3" --argjson f "$([[ "$2" == "1" ]] && echo true || echo false)" \
             --arg p "$(jq -r '.nodes.nixpkgs.locked.rev // ""' "${PIN_LOCK}" 2>/dev/null | cut -c1-12)" \
             '{version: $v, commit: $c, staging: $d, production: null, kind: $k, forced: $f, pin: $p}')"
@@ -1141,7 +1184,7 @@ do_phase_record() {   # $1 = the version this boundary cut, $2 = forced, $3 = ki
     (( ${#subject[@]} > 0 )) || { info "  nothing new to record"; return 0; }
     local joined="${subject[0]}"
     (( ${#subject[@]} > 1 )) && joined+=", ${subject[1]}"
-    record_release "${entry}" "${promoted}" "chore(release): ${joined}" "$(g rev-parse --short=12 "origin/${PROD_BRANCH}")"
+    record_release "${entry}" "${promoted}" "chore(release): ${joined}" "$(g rev-parse --short=12 "origin/${PROD_BRANCH}")" "${cut}"
 }
 
 cmd_boundary() {
@@ -1189,7 +1232,11 @@ cmd_boundary() {
     if is_rehearsal; then
         info "  5  promote main → ${STAGING_BRANCH}   (a rehearsal: no version is cut or recorded)"
     else
-        info "  5  promote main → ${STAGING_BRANCH}, tag it ${BL}v${cut}${CL}$([[ "${kind}" == major ]] && echo " (a MAJOR)"), record it on main"
+        info "  5  record the release and cut ROADMAP.md on main, then promote main → ${STAGING_BRANCH} and tag it ${BL}v${cut}${CL}$([[ "${kind}" == major ]] && echo " (a MAJOR)")"
+        if [[ "${DRY_RUN}" == "1" && -f "${REPO_DIR}/ROADMAP.md" && -f "${REPO_DIR}/release/roadmap-cut.py" ]]; then
+            python3 "${REPO_DIR}/release/roadmap-cut.py" --check --file "${REPO_DIR}/ROADMAP.md" --version "${cut}" \
+                --date "$(day_utc "$(now_epoch)")" ${soaked:+--promoted "${soaked}"} 2>&1 | sed 's/^roadmap-cut: /       ROADMAP.md: /'
+        fi
     fi
     info "  6  verify the staging site"
     if [[ "${DRY_RUN}" == "1" ]]; then
@@ -1222,9 +1269,11 @@ cmd_boundary() {
         fi
         phase_done "production"
     fi
+    # The record and the ROADMAP.md cut go onto main FIRST, so what reaches staging
+    # — and its tag — already carries them; nobody edits either mid-boundary.
+    phase_pending "record"  && { do_phase_record "${cut}" "${forced}" "${kind}" || return 1; phase_done "record"; }
     phase_pending "staging" && { promote_ref main "${STAGING_BRANCH}" || return 1; phase_done "staging"; }
     phase_pending "tag"     && { do_phase_tag "${cut}" "${forced}" || return 1; phase_done "tag"; }
-    phase_pending "record"  && { do_phase_record "${cut}" "${forced}" "${kind}" || return 1; phase_done "record"; }
 
     # The clock restarts from the promotion, not from when someone remembered.
     # Written for people: dates, and each channel's version. The urgent fixes a

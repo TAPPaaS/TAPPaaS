@@ -702,8 +702,12 @@ one file:
 
 - **History** — which revision got which version, and the day it reached each channel — is
   permanent, and every site needs it. It is committed to `main` as `release/releases.json`, with
-  `RELEASES.md` rendered from it, in one `chore(release): …` commit after the channels have moved,
-  so it records what happened rather than what was planned. The tags carry the commits.
+  `RELEASES.md` rendered from it, in one `chore(release): …` commit. *Amended 2026-10-07
+  (operator):* the commit is made **before** `main` is promoted to staging, together with the
+  `ROADMAP.md` cut (`release/roadmap-cut.py`), so the cut version's tag holds its own record and
+  roadmap; it no longer records only after the fact. The new version's commit is the record commit
+  itself and cannot name its own hash, so it is filled in when the version reaches production; the
+  tags carry the commits.
 - **Run state** — the soak clock, a boundary half way through, a recorded fault, the fixes a
   channel carries — changes several times within one run and is meaningful only to the machine
   running it. It stays in `~/config/release-train.json` on that mothership, and is written for a

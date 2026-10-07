@@ -146,8 +146,9 @@ Six phases, in this order:
 3. **Land on `main`.** Fast-forward, publish, point the site back at `main`, delete the pin branch.
 4. **`staging` → `stable`.** The revision that has soaked for a fortnight reaches production —
    under the version it was given two weeks ago.
-5. **`main` → `staging`.** The new revision starts its soak, tagged as the next version (`v2.2`),
-   and the release record is committed to `main` (see *Versions* below).
+5. **Record, then `main` → `staging`.** The release record and the `ROADMAP.md` cut are committed
+   to `main` first (see *Versions* below), so the revision that starts its soak — tagged as the
+   next version (`v2.2`) — already says what it is. Nobody edits either during a boundary.
 6. **Verify the staging site** (`--staging-host <host>`), if you named one.
 
 Steps 4 and 5 are in that order deliberately: the old staging content reaches production *before*
@@ -198,9 +199,17 @@ A site on `main` between boundaries shows as `2.2+14`: fourteen commits past 2.2
 - **In the repository**, for everyone: the tags, and
   [`release/releases.json`](../../../release/releases.json) with
   [`RELEASES.md`](../../../RELEASES.md) rendered from it — every version, its commit, and the day
-  it reached each channel. The boundary commits it to `main` once the channels have moved (one
-  `chore(release): …` commit), so every site has the full history after its next pull. After a
-  hand edit of the JSON, `tappaas-train.sh releases --render` redraws the page.
+  it reached each channel. The boundary commits it to `main` just before `main` is promoted to
+  staging (one `chore(release): …` commit), so the new tag holds its own record and every site
+  has the full history after its next pull. The new version's commit cannot name its own hash:
+  `RELEASES.md` shows its tag until the version reaches production, when the hash is filled in.
+  After a hand edit of the JSON, `tappaas-train.sh releases --render` redraws the page.
+- **[`ROADMAP.md`](../../../ROADMAP.md)**, in the same commit:
+  [`release/roadmap-cut.py`](../../../release/roadmap-cut.py) moves every ✅ row out of the waves
+  into a `## Release <version>` section, turns `## Next release` into its summary, and gives the
+  release that reached production its date. `--dry-run` shows what it would move; a rehearsal
+  cuts nothing. Keep `## Next release` current as work lands — that text is the release's
+  summary.
 - **On the mothership that drives the train**, for the run: `~/config/release-train.json` — the
   soak clock, a boundary half way through, a recorded fault, the urgent fixes a channel carries.
   It changes several times within one run, so it is not committed. It is written to be read:

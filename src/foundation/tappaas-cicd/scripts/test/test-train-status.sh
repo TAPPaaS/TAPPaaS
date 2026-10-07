@@ -275,8 +275,12 @@ FAKE_NOW=$(( 1790000000 + 20*86400 )) run boundary --resume
 [[ "$(git -C "${TMP}/w" rev-parse origin/stable)" == "${_staging_before}" ]] \
     && ok "stable became what staging WAS — the soaked revision, not the new one" \
     || bad "stable did not take staging's old position"
-[[ "$(git -C "${TMP}/w" rev-parse origin/staging)" == "${_main_before}" ]] \
-    && ok "staging became main" || bad "staging did not advance to main"
+# Staging becomes main as it is after the release record (and ROADMAP.md cut) was
+# committed to it: main itself, or main plus that one record commit.
+_main_now="$(git -C "${TMP}/w" rev-parse origin/main)"
+[[ "$(git -C "${TMP}/w" rev-parse origin/staging)" == "${_main_now}" ]] \
+    && { [[ "${_main_now}" == "${_main_before}" ]] || [[ "$(git -C "${TMP}/w" rev-parse "${_main_now}~1")" == "${_main_before}" ]]; } \
+    && ok "staging became main (with the release record on top)" || bad "staging did not advance to main"
 [[ "$(git -C "${TMP}/w" rev-parse origin/stable)" != "${_stable_before}" ]] \
     && ok "production moved exactly one boundary" || bad "stable did not move"
 [[ "$(jq -r '.soakStarted' "${TMP}/cfg/release-train.json")" == "2026-10-11T14:13:20Z" ]] \
@@ -704,12 +708,54 @@ make_train 3 2
 git -C "${TMP}/w" tag -a v2.0 -m "TAPPaaS 2.0" "origin/stable~1"
 git -C "${TMP}/w" tag -a v2.1 -m "TAPPaaS 2.1" origin/staging
 git -C "${TMP}/w" push -q origin v2.0 v2.1
+# A ROADMAP.md and the real release/roadmap-cut.py on main, so the boundary cuts the roadmap
+# the way it will in the repository: one ✅ row to move, one open row to stay.
+mkdir -p "${TMP}/w/release"
+cp "${HERE}/../../../../../release/roadmap-cut.py" "${TMP}/w/release/roadmap-cut.py"
+cat > "${TMP}/w/ROADMAP.md" <<'EOF'
+# TAPPaaS Roadmap
+
+## At a glance
+
+old table
+
+## Wave 1 — the test wave
+
+What it is for.
+
+### G1.1 A group — Ease L · Risk L · done for 2.2: 1 · open: 1
+
+Intent.
+
+| # | Issue | Ease | Risk | Note |
+|---|-------|:-:|:-:|------|
+| ✅ #1 | the done thing | L | L | done |
+| #2 | the open thing | L | L | open |
+
+## Next release
+
+<!-- next-release summary -->
+The test release: the done thing.
+<!-- /next-release summary -->
+
+## Release 2.1 — staging 2026-09-25 · production at the next boundary
+
+Tag `v2.1`.
+
+## Release 2.0 — production 2026-07-21
+
+Before.
+EOF
+git -C "${TMP}/w" add -A; git -C "${TMP}/w" commit -qm "docs: a roadmap"
+git -C "${TMP}/w" push -q origin main; git -C "${TMP}/w" fetch -q origin
 FAKE_NOW=1790000000 run status
 [[ "${OUT}" == *"2.0+1"* && "${OUT}" == *" 2.1 "* ]] \
     && ok "status shows each channel's version (production is 2.0 plus one commit)" || bad "versions not shown: ${OUT}"
 FAKE_NOW=1790000000 run init; proven
 FAKE_NOW=$(( 1790000000 + 20*86400 )) run boundary --resume --dry-run
 [[ "${OUT}" == *"tag it"*"v2.2"* ]] && ok "the plan names the version it will cut" || bad "plan without a version: ${OUT}"
+[[ "${OUT}" == *"ROADMAP.md: 2.2: 1 row move"* ]] && ok "the dry run says what the ROADMAP.md cut would move" || bad "no roadmap cut in the plan: ${OUT}"
+[[ "$(git -C "${TMP}/w" show origin/main:ROADMAP.md)" != *"## Release 2.2"* ]] && ok "…and changes nothing" || bad "a dry run cut the roadmap"
 _main_before="$(git -C "${TMP}/w" rev-parse origin/main)"
 FAKE_NOW=$(( 1790000000 + 20*86400 )) run boundary --resume
 [[ "${RC}" -eq 0 ]] && ok "the boundary runs" || bad "boundary failed: ${OUT}"
@@ -732,6 +778,21 @@ git -C "${TMP}/w" show origin/main:RELEASES.md | grep -q '^| 2.2 | ' \
     && ok "one commit on main says what moved" || bad "record commit: $(git -C "${TMP}/w" log -1 --format=%s origin/main)"
 [[ "$(git -C "${TMP}/w" rev-parse origin/main~1)" == "${_main_before}" ]] \
     && ok "…and it is the only thing added to main" || bad "main moved by more than the record"
+# Recorded BEFORE main reached staging: the v2.2 tag holds its own record and roadmap.
+_rm="$(git -C "${TMP}/w" show v2.2:ROADMAP.md)"
+[[ "$(git -C "${TMP}/w" show v2.2:release/releases.json | jq -r '.releases[] | select(.version=="2.2") | .staging')" == "2026-10-11" ]] \
+    && ok "the v2.2 tag already holds its own release record" || bad "v2.2 lacks its record"
+[[ "${_rm}" == *"## Release 2.2 — staging 2026-10-11 · production at the next boundary"* ]] \
+    && ok "…and its ROADMAP.md has a Release 2.2 section" || bad "no 2.2 section in v2.2: ${_rm}"
+[[ "${_rm}" == *"The test release: the done thing."* ]] && ok "…summarised from Next release" || bad "the Next release text was not used"
+[[ "$(sed -n '/^## Wave 1/,/^## Next release/p' <<< "${_rm}")" != *"the done thing"* && "${_rm}" == *"| #2 | the open thing"* ]] \
+    && ok "the done row left the wave, the open one stayed" || bad "rows not moved: ${_rm}"
+[[ "${_rm}" == *"### G1.1 A group — Ease L · Risk L · released: 1 · open: 1"* ]] \
+    && ok "the group heading counts it as released" || bad "heading not recounted"
+[[ "${_rm}" == *"## Release 2.1 — staging 2026-09-25 · production 2026-10-11"* ]] \
+    && ok "2.1's section records it reached production" || bad "2.1 production date not written"
+git -C "${TMP}/w" show origin/main:RELEASES.md | grep -q '^| 2.2 | `v2.2` |' \
+    && ok "RELEASES.md names the tag while the commit cannot name itself" || bad "RELEASES.md 2.2 row: $(git -C "${TMP}/w" show origin/main:RELEASES.md | grep '^| 2.2')"
 _st="${TMP}/cfg/release-train.json"
 [[ "$(jq -r '.channels.staging.version, .channels.production.version, .lastBoundary.cut, .nextBoundary' "${_st}" | tr '\n' ' ')" \
    == "2.2 2.1 2.2 2026-10-25 " ]] && ok "the state file reads as versions and dates" || bad "state: $(jq -c . "${_st}")"
@@ -758,6 +819,8 @@ FAKE_NOW=$(( 1790000000 + 60*86400 )) run boundary --resume --major
 [[ "$(tags_on origin/staging)" == *"v3.0"* ]] && ok "staging is cut as v3.0" || bad "no v3.0: ${OUT}"
 [[ "$(releases_on_main | jq -r '.releases[] | select(.version=="3.0") | .kind')" == "major" ]] \
     && ok "…and recorded as a major" || bad "3.0 not recorded as major"
+[[ "$(releases_on_main | jq -r '.releases[] | select(.version=="2.2") | .commit')" == "$(git -C "${TMP}/w" rev-parse --short=12 'v2.2^{commit}')" ]] \
+    && ok "2.2's commit is filled in when it reaches production" || bad "2.2 commit: $(releases_on_main | jq -c '.releases[] | select(.version=="2.2")')"
 
 echo "── a rehearsal numbers nothing ──"
 make_train 3 2

@@ -21,6 +21,7 @@ flowchart LR
 | File | What it is |
 |------|------------|
 | [`releases.json`](releases.json) | **The release history**: every version, the commit it names, and the day it reached staging and production. Written by `tappaas-train` at each boundary and urgent fix; [`RELEASES.md`](../RELEASES.md) at the repository root is rendered from it. |
+| [`roadmap-cut.py`](roadmap-cut.py) | **The ROADMAP.md cut**, run by the boundary just before `main` reaches staging: every ✅ row leaves the waves for a `## Release <version>` section, `## Next release` becomes its summary, the promoted release gets its production date. `--check` shows what it would do; `--normalize` rewrites counts without cutting. Tested by `scripts/test/test-roadmap-cut.sh`. |
 | `changelog.sh` | Release notes between two refs: the issues delivered and the changes, grouped, plus the config migrations added (ADR-025 D6). `--enrich` adds issue titles from the forge. |
 | `bump-version.sh` | Repoints `templates/tappaas-nixos.json` and `network/network.json` at newly built VM images; `--check` reports drift. |
 | `lib.sh` | Logging helpers shared by the two scripts (sourced, not run). |
