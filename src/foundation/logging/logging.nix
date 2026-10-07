@@ -627,6 +627,10 @@ in
         listen_address = "127.0.0.1"
         listen_port    = ${toString pushInternal}
       }
+      // Keep the time each VM's journal gave the line (#784). The default
+      // restamps it on arrival, so a backfill or a reboot's lines all landed
+      // on Alloy's start, and a line re-sent after a restart was stored twice.
+      use_incoming_timestamp = true
       forward_to = [loki.relabel.pushed_by.receiver]
     }
 
