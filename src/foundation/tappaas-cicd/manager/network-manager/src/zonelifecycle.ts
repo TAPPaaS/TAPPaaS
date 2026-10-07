@@ -28,6 +28,8 @@ import {
   removeZone,
   saveZones,
   setZoneState,
+  stripZoneRefs,
+  zoneReferrers,
 } from "./zones";
 
 // After network-manager writes the live zones.json, push it to every Proxmox
@@ -58,6 +60,9 @@ export interface LifecycleResult {
   vlantag?: number;
   report: ReconcileReport; // the all-plane reconcile outcome (empty if dryRun)
   dryRun: boolean;
+  // delete only: the zones whose access-to / pinhole-allowed-from named the
+  // deleted zone (#791) — stripped, or on a dry run, that would be.
+  strippedFrom?: string[];
 }
 
 export interface AddOpts extends AddZoneOpts {
@@ -117,10 +122,17 @@ export function deleteZone(
   const vt = typeof existing.vlantag === "number" ? existing.vlantag : undefined;
 
   if (opts.dryRun) {
-    return { zone: name, vlantag: vt, report: emptyReport(false), dryRun: true };
+    return {
+      zone: name, vlantag: vt, report: emptyReport(false), dryRun: true,
+      strippedFrom: zoneReferrers(doc, name),
+    };
   }
 
-  // 1. mgmt invariant + disable so the reconcile tears down the OPNsense iface.
+  // 1. Drop the zone from every other zone's access-to / pinhole-allowed-from
+  //    (#791), BEFORE the reconcile, so the same run removes the referring
+  //    zones' rules and `validate` stays green. Then disable it so the
+  //    reconcile tears down the OPNsense interface.
+  const strippedFrom = stripZoneRefs(doc, name);
   setZoneState(doc, name, "Disabled");
   // (removeMgmtAccess happens with removeZone below; disable first so the
   // reconcile of the still-present-but-Disabled zone drops its resources.)
@@ -138,7 +150,7 @@ export function deleteZone(
   refreshEffectiveQuietly(zonesFile);
   maybeDistribute(zonesFile, opts.noDistribute ?? false);
 
-  return { zone: name, vlantag: vt, report, dryRun: false };
+  return { zone: name, vlantag: vt, report, dryRun: false, strippedFrom };
 }
 
 function emptyReport(apply: boolean): ReconcileReport {

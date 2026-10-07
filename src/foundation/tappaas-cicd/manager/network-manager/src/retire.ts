@@ -26,7 +26,7 @@
 // the reconcile merely converges the (now smaller) desired state.
 
 import { ZonesDoc } from "./types";
-import { getZone, listZoneNames, removeZone, saveZones } from "./zones";
+import { getZone, removeZone, saveZones, stripZoneRefs, zoneReferrers } from "./zones";
 import { occupiedZones } from "./zonescheck";
 
 // Zones the D7 template no longer ships. Explicit, ordered, and deliberately
@@ -70,32 +70,6 @@ function isLiveState(state: unknown): boolean {
   return state === "Active" || state === "Mandatory" || state === "Manual";
 }
 
-// Strip every reference to `zone` from every other zone's access-to /
-// pinhole-allowed-from. Returns the zone names that actually changed.
-function stripRefs(doc: ZonesDoc, zone: string): string[] {
-  const touched: string[] = [];
-  for (const name of listZoneNames(doc)) {
-    if (name === zone) continue;
-    const raw = doc.raw[name];
-    if (raw === null || typeof raw !== "object" || Array.isArray(raw)) continue;
-    const r = raw as Record<string, unknown>;
-    let hit = false;
-    for (const field of ["access-to", "pinhole-allowed-from"]) {
-      if (!Array.isArray(r[field])) continue;
-      const cur = r[field] as unknown[];
-      const next = cur.filter((x) => x !== zone);
-      if (next.length !== cur.length) {
-        r[field] = next;
-        const z = doc.zones.get(name);
-        if (z) (z as Record<string, unknown>)[field] = next;
-        hit = true;
-      }
-    }
-    if (hit) touched.push(name);
-  }
-  return touched;
-}
-
 // Plan (and, when apply=true, perform) the retirement. Pure with respect to the
 // filesystem: the caller persists.
 export function retireZones(doc: ZonesDoc, configDir: string, apply: boolean): RetireResult {
@@ -137,7 +111,7 @@ export function retireZones(doc: ZonesDoc, configDir: string, apply: boolean): R
 
     // Eligible. Compute (and on apply, perform) the removal + reference strip.
     if (apply) {
-      const touched = stripRefs(doc, name);
+      const touched = stripZoneRefs(doc, name);
       removeZone(doc, name);
       items.push({
         zone: name,
@@ -146,15 +120,7 @@ export function retireZones(doc: ZonesDoc, configDir: string, apply: boolean): R
         strippedFrom: touched,
       });
     } else {
-      const touched = listZoneNames(doc).filter((other) => {
-        if (other === name) return false;
-        const z2 = getZone(doc, other);
-        return (
-          (Array.isArray(z2?.["access-to"]) && (z2!["access-to"] as string[]).includes(name)) ||
-          (Array.isArray(z2?.["pinhole-allowed-from"]) &&
-            (z2!["pinhole-allowed-from"] as string[]).includes(name))
-        );
-      });
+      const touched = zoneReferrers(doc, name);
       items.push({
         zone: name,
         verdict: "retired",

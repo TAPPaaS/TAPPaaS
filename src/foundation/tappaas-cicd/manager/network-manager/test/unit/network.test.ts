@@ -38,6 +38,7 @@ import {
   removeZone,
   saveZones,
   zoneExists,
+  zoneReferrers,
 } from "../../src/zones";
 import { reconcileAll } from "../../src/reconcile";
 import { addZone, deleteZone } from "../../src/zonelifecycle";
@@ -59,6 +60,7 @@ import {
   shouldAutoDistribute,
 } from "../../src/distribute";
 import { FakePlaneClient } from "./fake-plane-client";
+import { Plane, PlaneResult } from "../../src/types";
 
 let passed = 0;
 let failed = 0;
@@ -215,6 +217,50 @@ function tmpZones(): string {
 
   doc = loadZones(f);
   check(!zoneExists(doc, "srvTenant"), "zone delete removes the key after reconcile");
+}
+
+// ── 5b. zone delete drops the zone from other zones' lists first (#791) ─
+{
+  const f = tmpZones();
+  let doc = loadZones(f);
+  authorZone(doc, "srvTenant", { fromZone: "srvHome" });
+  // two other zones name it: one in access-to, one in pinhole-allowed-from
+  const others = listZoneNames(doc).filter((z) => z !== "srvTenant" && z !== "mgmt").slice(0, 2);
+  const a = doc.raw[others[0]] as Record<string, unknown>;
+  const b = doc.raw[others[1]] as Record<string, unknown>;
+  a["access-to"] = [...((a["access-to"] as string[]) ?? []), "srvTenant"];
+  b["pinhole-allowed-from"] = [...((b["pinhole-allowed-from"] as string[]) ?? []), "srvTenant"];
+  saveZones(f, doc);
+  // every zone that names it (authorZone may already have added some)
+  const referrers = zoneReferrers(loadZones(f), "srvTenant").sort();
+  check(others.every((o) => referrers.includes(o)), "the seeded references are in place");
+
+  // --check names them and changes nothing
+  const before = readFileSync(f, "utf8");
+  const dry = deleteZone(new FakePlaneClient(), f, "srvTenant", { dryRun: true });
+  check(JSON.stringify([...(dry.strippedFrom ?? [])].sort()) === JSON.stringify(referrers),
+    `zone delete --check names the zones whose lists would change (${referrers.join(",")})`);
+  check(readFileSync(f, "utf8") === before, "zone delete --check still mutates nothing");
+
+  // the reconcile already sees the references gone (one run converges)
+  class Peek extends FakePlaneClient {
+    refsAtReconcile = -1;
+    reconcile(plane: Plane, apply: boolean, zonesFile: string): PlaneResult {
+      if (this.refsAtReconcile < 0) this.refsAtReconcile = zoneReferrers(loadZones(zonesFile), "srvTenant").length;
+      return super.reconcile(plane, apply, zonesFile);
+    }
+  }
+  const c = new Peek();
+  const res = deleteZone(c, f, "srvTenant", { noDistribute: true });
+  check(c.refsAtReconcile === 0, "references are stripped BEFORE the reconcile runs");
+  check(JSON.stringify([...(res.strippedFrom ?? [])].sort()) === JSON.stringify(referrers),
+    "zone delete reports every zone it stripped");
+  doc = loadZones(f);
+  check(zoneReferrers(doc, "srvTenant").length === 0, "no zone names the deleted zone afterwards");
+  check(!((doc.raw[others[0]] as Record<string, unknown>)["access-to"] as string[]).includes("srvTenant"),
+    "access-to of the referring zone no longer lists it");
+  check(!((doc.raw[others[1]] as Record<string, unknown>)["pinhole-allowed-from"] as string[]).includes("srvTenant"),
+    "pinhole-allowed-from of the referring zone no longer lists it");
 }
 
 // ── 6. per-plane rc aggregation ───────────────────────────────────────

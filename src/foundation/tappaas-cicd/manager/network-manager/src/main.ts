@@ -674,11 +674,18 @@ function cmdZoneDelete(opts: Opts, client: PlaneClient = new CliPlaneClient()): 
     dryRun: opts.check,
     noDistribute: opts.noDistribute,
   });
+  const refs = res.strippedFrom ?? [];
   if (res.dryRun) {
+    if (refs.length > 0) {
+      info(`  [dry-run] would drop '${name}' from access-to / pinhole-allowed-from of: ${refs.join(", ")}`);
+    }
     info(`  [dry-run] would disable + reconcile all planes, then delete '${name}' (vlan ${res.vlantag})`);
     return;
   }
   printReport(res.report);
+  if (refs.length > 0) {
+    info(`  dropped '${name}' from access-to / pinhole-allowed-from of: ${refs.join(", ")}`);
+  }
   info(`  ${GN}✓${CL} zone '${name}' deleted`);
   if (res.report.failed.length > 0) {
     throw new DieError(`planes not in sync: ${res.report.failed.join(", ")}`);

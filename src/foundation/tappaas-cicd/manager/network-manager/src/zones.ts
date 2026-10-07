@@ -311,6 +311,39 @@ export function authorZone(doc: ZonesDoc, name: string, opts: AddZoneOpts): Zone
 
 // Remove a zone from the doc (in memory). Ports cmd_delete's key removal +
 // mgmt.access-to invariant cleanup. Returns the deleted zone's vlantag (if any).
+// The other zones whose access-to or pinhole-allowed-from names `zone`.
+export function zoneReferrers(doc: ZonesDoc, zone: string): string[] {
+  return listZoneNames(doc).filter((other) => {
+    if (other === zone) return false;
+    const r = doc.raw[other];
+    if (r === null || typeof r !== "object" || Array.isArray(r)) return false;
+    const o = r as Record<string, unknown>;
+    return ["access-to", "pinhole-allowed-from"].some(
+      (f) => Array.isArray(o[f]) && (o[f] as unknown[]).includes(zone),
+    );
+  });
+}
+
+// Strip every reference to `zone` from every other zone's access-to /
+// pinhole-allowed-from (in memory). Returns the zones that changed. Shared by
+// `retire` and `delete` (#791): a zone that goes must not stay named elsewhere,
+// or `validate` fails and the referring zone's rule outlives it.
+export function stripZoneRefs(doc: ZonesDoc, zone: string): string[] {
+  const touched: string[] = [];
+  for (const name of zoneReferrers(doc, zone)) {
+    const r = doc.raw[name] as Record<string, unknown>;
+    const z = doc.zones.get(name) as Record<string, unknown> | undefined;
+    for (const field of ["access-to", "pinhole-allowed-from"]) {
+      if (!Array.isArray(r[field])) continue;
+      const next = (r[field] as unknown[]).filter((x) => x !== zone);
+      r[field] = next;
+      if (z) z[field] = next;
+    }
+    touched.push(name);
+  }
+  return touched;
+}
+
 export function removeZone(doc: ZonesDoc, name: string): number | undefined {
   const z = getZone(doc, name);
   if (!z) throw new Error(`Zone '${name}' not found`);
