@@ -102,22 +102,22 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | Wave | Group | Ease | Risk | released | done for 2.2 | open |
 |------|-------|:-:|:-:|---:|---:|---:|
 | 4 | G4.1 Alerting & cluster resilience | M | M | – | 6 | 5 |
-| 4 | G4.2 Proxy & ingress | M | L | 1 | – | 4 |
+| 4 | G4.2 Proxy & ingress | M | L | 1 | 1 | 4 |
 | 4 | G4.3 Manager verb gaps | M | L | 4 | 5 | 8 |
 | 4 | G4.4 Storage & physical devices | H | L | 2 | 3 | 6 |
 | 4 | G4.5 Governance, CI & sign-offs | M | L | 2 | 1 | 7 |
-| 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 7 | 6 | 8 |
+| 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 7 | 7 | 9 |
 | 3 | G3.2 Identity & SSO wiring | M | L | 1 | 5 | 5 |
-| 3 | G3.3 App module fixes | L | L | 5 | 3 | 10 |
+| 3 | G3.3 App module fixes | L | L | 5 | 4 | 10 |
 | 3 | G3.4 AI stack maturity | M | M | 1 | – | 6 |
 | 3 | G3.5 Installer UX | L | L | – | – | 4 |
 | 2 | G2.1 Firewall exposure & rule order | M | H | 3 | 4 | 13 |
 | 2 | G2.2 DNS resolver robustness | L | M | 4 | – | 5 |
 | 1 | ✅ G1.1 Vocabulary & classification (ADR-022 family) | H | H | 11 | 3 | – |
-| 1 | G1.2 Backup placement model + managed machines (ADR-012, ADR-026) | M | H | 20 | 6 | 2 |
+| 1 | G1.2 Backup placement model + managed machines (ADR-012, ADR-026) | M | H | 20 | 7 | 2 |
 | 1 | ✅ G1.3 Module contract & repo layout | H | H | 6 | 2 | – |
 | 1 | ✅ G1.4 Common NixOS baseline | H | H | 14 | 5 | – |
-| 1 | ✅ G1.5 Rebuild & recovery paths | M | H | 7 | 9 | – |
+| 1 | ✅ G1.5 Rebuild & recovery paths | M | H | 7 | 10 | – |
 | 1 | G1.6 Secrets & privileged access | H | H | 3 | 1 | 2 |
 | 1 | G1.7 Parked for Erik discussion | – | – | – | – | 5 |
 | 0 | ✅ G0.1 Migration & rollback framework | H | L | 8 | 1 | – |
@@ -230,7 +230,7 @@ Be told when something breaks, and survive more of it. Built: alerts from Loki b
 | #590 | Second corosync link | H | M | |
 | FW #40 | Dedicated sync network recipe | L | L | Roll in with #590 |
 
-### G4.2 Proxy & ingress — Ease M · Risk L · released: 1 · open: 4
+### G4.2 Proxy & ingress — Ease M · Risk L · released: 1 · done for 2.2: 1 · open: 4
 
 Publish less of each app: limit a route to some paths (#642), some zones (#643) or a provider's source addresses (#656), as ADR-023 describes. Decide whether an internal proxy is needed at all (#154).
 
@@ -240,6 +240,7 @@ Publish less of each app: limit a route to some paths (#642), some zones (#643) 
 | #643 | Per-route allowed zones | M | L | Same ADR |
 | #656 | Limit a route to a provider's source ranges | M | L | Split, folded into ADR-023: a route names explicit CIDRs (`remote_ip`) — an exposure reduction beside #642/#643. The provider-feed half is parked (*Housekeeping*) |
 | #154 | `firewall:internal-proxy` | — | — | Close? Lars questioned the need (2026-05-31) |
+| ✅ #778 | `network:proxy` publishes names with no public DNS record: failing ACME, dead SSO tiles | M | L | **Closed 2026-10-06.** On a per-service site a name without a public A record gets no Caddy route (Caddy retried ACME on every reload) and no Authentik app (a dead tile); an existing one is withdrawn on update. Live on hrossen: logging, network and unifi-os unpublished, ~46k failed ACME lines stopped |
 
 ### G4.3 Manager verb gaps — Ease M · Risk L · released: 4 · done for 2.2: 5 · open: 8
 
@@ -298,7 +299,7 @@ The project's own machinery: CI runners (#415), community-health files (#486), t
 
 Low upgrade risk. Build continuously, in any order within a group.
 
-### G3.1 cluster:vm lifecycle & capacity — Ease L · Risk M · released: 7 · done for 2.2: 6 · open: 8
+### G3.1 cluster:vm lifecycle & capacity — Ease L · Risk M · released: 7 · done for 2.2: 7 · open: 9
 
 Guests sized, placed, started and stopped right: memory defaults from measurement (#663), hardware drift (#531), shutdown and boot order (#36, #127), storage growth and placement (#100, #403), a composite-module ADR (#761), and a sweep that survives a guest restarting itself (#753).
 
@@ -318,6 +319,8 @@ Guests sized, placed, started and stopped right: memory defaults from measuremen
 | #761 | A composite-module ADR: `cluster`, `kubernetes`, and modules that only provide artefacts | H | M | ADR-022d and ADR-026 defer `cluster`/`kubernetes` to an ADR that does not exist, and `templates` fits no `kind`; interim values in ADR-022d v1.2. With @ErikDaniel007 |
 | #753 | A guest restarting during its own update fails the sweep | M | L | coturn restarted inside its own update on hrossen (2026-10-01); the post-apply SSH check raced its boot and failed the sweep. The restart's trigger is not yet known |
 | ✅ #793 | A live migration leaves a FreeBSD guest's agent dead (firewall) | L | L | **Closed 2026-10-07** (`4543af5f`): the network update adds `-r` to the firewall's qemu-ga via `/usr/local/etc/rc.conf.d`; agent answered after live migrations both ways on hrossen |
+| ✅ #773 | `cluster:vm` thinDisk — opt-in thin provisioning per module | M | M | **Closed 2026-10-04.** `thinDisk: true` keeps a module's disk thin on its storage and on the HA replica (immich first: 500G that takes what the library uses). Watch the pool — a thin disk can overcommit it |
+| #764 | The Proxmox VM summary note links "Discussions": make the links docs, code, issues | H | L | **Opened 2026-10-03.** The note `cluster:vm` writes on each VM: drop or replace the logo link with the turtle, and change the links under the module name to *docs*, *code*, *Issues* |
 
 ### G3.2 Identity & SSO wiring — Ease M · Risk L · released: 1 · done for 2.2: 5 · open: 5
 
@@ -336,7 +339,7 @@ Every app wired to the identity provider the same way: OIDC for hass, Nextcloud 
 | ✅ #769 | vaultwarden: SSO is registered but never wired into the app | M | L | **Closed 2026-10-04** (SSO wired, `e184ea9d`). **Reversed 2026-10-06, vaultwarden 0.6.0:** no SSO for the password vault, by decision — see vaultwarden DESIGN.md |
 | ✅ #779 | identity: `authentik-env-secrets-only` calls `cmp` without diffutils | L | M | **Closed 2026-10-06** (`3f34f63e`): `! cmp` was always true, so the clean `authentik.env` was replaced and logged every boot. Live-tested on hrossen |
 
-### G3.3 App module fixes — Ease L · Risk L · released: 5 · done for 2.2: 3 · open: 10
+### G3.3 App module fixes — Ease L · Risk L · released: 5 · done for 2.2: 4 · open: 10
 
 The known rough edges of the app modules, fixed and tested so they stay fixed: Nextcloud Talk end to end (#715), Home Assistant (#552, #568, #571 — maintainer-owned), Nextcloud and euro-office (#332, #658, #751), litellm consumers (#553), windows-server (#411), forgejo (#283, #284), in-guest backups (#754), container stop timeouts (#786).
 
@@ -355,6 +358,7 @@ The known rough edges of the app modules, fixed and tested so they stay fixed: N
 | #751 | nextcloud:fileservice has no teardown | M | L | `delete-service.sh` is an ADR-027 stub, so a deleted consumer leaves its connector settings in Nextcloud. Remove the env file and unset what `occ` applied; test on hrossen |
 | #754 | In-guest backup timers in six modules: drop for PBS or say why they stay | L | L | After Nextcloud dropped its failing in-guest dump (`ed663fe8`): six modules still dump inside the guest. Per module: drop it (PBS takes the VM) or keep it with the reason in DESIGN.md |
 | ✅ #786 | identity, litellm: containers get SIGKILL on every stop (10 s timeout) | L | M | **Closed 2026-10-06** (`b7af4b14`): worker `--stop-timeout=90` (drains 16-32 s); litellm `--init`, as PID 1 it ignored SIGTERM while starting. Live-tested on hrossen |
+| ✅ #743 | nextcloud:fileservice test contradicts euro-office UPGRADE.md | L | L | **Closed 2026-09-26** (@ErikDaniel007). Added to the roadmap 2026-10-07 |
 
 ### G3.4 AI stack maturity — Ease M · Risk M · released: 1 · open: 6
 
@@ -438,7 +442,7 @@ Settle the words before they spread into schemas, CLI names and `config/` paths:
 | ✅ #705 | cluster and templates carry a kind ADR-022d denies them | L | L | **Closed 2026-10-02:** the interim kinds (`cluster` = application, `templates` = vm) are recorded in ADR-022d v1.2; what they really are is the composite-module ADR, #761 |
 | ✅ #741 | `update-tappaas` sweeps a Proxmox VM template as if it were a module | — | — | **Closed 2026-09-25** (`912b50b9`): a config whose `stack` is `template` no longer enters the update queue (it failed every sweep for 13 days on the reporter's site) |
 
-### G1.2 Backup placement model + managed machines (ADR-012, ADR-026) — Ease M · Risk H · released: 20 · done for 2.2: 6 · open: 2
+### G1.2 Backup placement model + managed machines (ADR-012, ADR-026) — Ease M · Risk H · released: 20 · done for 2.2: 7 · open: 2
 
 Backups where the operator chooses — a node, a managed machine, an external PBS or the satellite — encrypted, with every machine TAPPaaS manages a module (ADR-012, ADR-026). Left: the satellite's live test on a real VPS (#671) and converting makerfloss's satellite (#775).
 
@@ -450,6 +454,7 @@ Backups where the operator chooses — a node, a managed machine, an external PB
 | #775 | Convert makerfloss's `satellite1` into a module instance | H | L | Split from #671: ADR-010 §8.4.7 with the operator, then #671's phase 1–2 checks. Not before makerfloss runs 2.2; keep a second way in — `satellite1` carries its admin VPN |
 | ✅ #737 | `site.json` `backup: true` fails validation and has no migration | L | L | **Closed 2026-09-25** via `integrate/nc35` (`c998ca5f`): migration 0011 turns an old `backup: true` into `{}` (`false` → `null`), so older sites validate. Reported by @AndreasJe |
 | ✅ #742 | `backup:filesystem` update never creates a missing encryption key, so a capture can fail forever | L | M | **Closed 2026-09-26** (`85d3ccf3`): an absent `backup:filesystem` key is created and escrowed on update — makerfloss's mothership `config/` had never been backed up. Escrow fix `c53576a0` |
+| ✅ #745 | A dangling symlink in a declared path refuses the whole capture | M | M | **Closed 2026-09-26** (`backup:filesystem`). Added to the roadmap 2026-10-07 |
 
 #### ADR-012 close-out (original scope)
 
@@ -481,7 +486,7 @@ One NixOS baseline every VM imports, carrying the site's time zone, locale, keyb
 | ✅ #750 | Container image pins have no cadence and no tripwire, unlike the nixpkgs pin | M | L | **Closed 2026-10-03:** `src/image-pins.json` lists container pins; `tappaas-train` reports age and newer upstream at each boundary, a warning past 45 days (ADR-028 D14 draft). Rest: #765 |
 | ✅ #777 | Release train: lock nixos-unstable beside the pin, so Immich 3 follows release moves | M | M | **Closed 2026-10-06, not built (decision):** Immich keeps its own nixos-unstable revision in `immich.nix` until NixOS 26.11 is pinned; until then an Immich update is a deliberate edit |
 
-### ✅ G1.5 Rebuild & recovery paths — Ease M · Risk H · released: 7 · done for 2.2: 9
+### ✅ G1.5 Rebuild & recovery paths — Ease M · Risk H · released: 7 · done for 2.2: 10
 
 A proven way back before anything breaking: `config/` backed up and restorable, mothership keys that can be reissued, restores of a module, a node and the mothership rehearsed, and a control plane that checks itself and rolls back.
 
@@ -496,6 +501,7 @@ A proven way back before anything breaking: `config/` backed up and restorable, 
 | ✅ #700 | The pre-update gate tests guests that are still booting | L | L | **Done 2026-10-03:** `module update` waits until the guest has booted and its `ready.sh` passes (up to 300 s) before the gate; a timeout is reported, not fatal. `ready.sh` is an ADR-027 MAY |
 | ✅ #767 | The sweep's systemd unit is not the operator's console — align it (ADR-017 D3) | L | M | **Closed 2026-10-04:** the sweep unit runs steps as the console does (login shell, `sudo -n`, no sandbox); `tappaas-unit-run.sh` tests in that context. Two sweeps 18/18. ADR-017 D3 draft |
 | ✅ #768 | `module update`: a failed dependency (the OS rebuild) should stop the update, not run update.sh first | L | L | **Opened and closed 2026-10-04:** with a snapshot taken, `reconcile --apply --fail-fast` stops at the first failed dependency and skips Step 3. Found in the Authentik walk |
+| ✅ #744 | A mothership release move ends the sweep with no record, no re-arm and no notice | M | H | **Closed 2026-09-26.** Added to the roadmap 2026-10-07 |
 
 ### G1.6 Secrets & privileged access — Ease H · Risk H · released: 3 · done for 2.2: 1 · open: 2
 
