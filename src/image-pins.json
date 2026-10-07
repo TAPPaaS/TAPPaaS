@@ -24,6 +24,15 @@
       ],
       "tagPattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$",
       "maintainer": "@ErikDaniel007"
+    },
+    {
+      "module": "litellm",
+      "image": "docker.io/litellm/litellm",
+      "kind": "tag",
+      "file": "src/ai/litellm/litellm.nix",
+      "match": "litellm\\s+= \"(v[^\"]+)\";",
+      "tagPattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "maintainer": "@ErikDaniel007"
     }
   ]
 }
