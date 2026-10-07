@@ -141,7 +141,20 @@ backup-manager peer add remote  <name> --auth-id <them>@pbs --country CC [--city
 backup-manager peer add receive <name>
 backup-manager peer delete pull|remote|receive <name> [--purge]
 backup-manager peers                      # what exists today
+
+# over a buddy tunnel (#796, BUDDY.md) — the pulled side serves, the puller dials:
+backup-manager peer add remote <name> --auth-id <them>@pbs --country CC --tunnel serve [--peer-key K --force]
+backup-manager peer add pull   <name> --country CC --tunnel dial --tunnel-net <their /30> \
+    --endpoint <their-ip>:<port> --peer-key <their key>
+backup-manager peer check pull|remote <name>   # instance, handshake, their PBS on .1:8007
 ```
+
+`--tunnel` gives the pull its own WireGuard `/30` (from the `buddy` zone, default
+`10.255.2.0/24`; `--tunnel-net` overrides one) and creates, and on `peer delete` removes,
+the OPNsense instance, rules and NAT that let only the two PBSs talk over it, on
+tcp/8007 only. The live work is `lib/pbs-tunnel.sh`; `scripts/tunnel-check.sh` is
+`peer check`. A pull also takes `--port`, `--remote-namespace` and `--max-depth`
+(default 0: the remote namespace only).
 
 `peer delete` takes the kind because one name can hold two relationships at
 once — a buddy is usually both a `pull` and a `remote`.
