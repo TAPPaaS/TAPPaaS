@@ -100,7 +100,7 @@ if [[ "${HTTP_CODE}" == "201" ]]; then
         ssh-keygen -R "${IMMICH_HOST}" >/dev/null 2>&1 || true
         if printf '%s' "${API_KEY}" | ssh -o BatchMode=yes -o ConnectTimeout=15 \
             -o StrictHostKeyChecking=accept-new "tappaas@${IMMICH_HOST}" \
-            "sudo install -d -m 700 /etc/secrets && \
+            "{ [ -d /etc/secrets ] || sudo install -d -m 700 /etc/secrets; } && \
              sudo sh -c 'umask 077; cat > /etc/secrets/immich-admin-api-key' && \
              sudo chmod 600 /etc/secrets/immich-admin-api-key"; then
             info "  ${GN}✓${CL} API key written to /etc/secrets/immich-admin-api-key on ${IMMICH_HOST}"

@@ -57,7 +57,7 @@ if [[ -f "${_lsh}" ]]; then
             # Its push secret (#165 §1), from the store every VM's comes from;
             # the logging VM learns a new one at logging:logs' next sync.
             if ! { _pw="$(log_shipping_password "${VMNAME}")" \
-                   && install -d -m 0755 /etc/secrets \
+                   && { [ -d /etc/secrets ] || install -d -m 0755 /etc/secrets; } \
                    && printf '%s' "${_pw}" | install -m 0600 -o root -g root /dev/stdin "${LOG_SHIPPING_VM_SECRET}"; }; then
                 warn "could not write the mothership's log push secret — its journal is refused until it is"
             fi

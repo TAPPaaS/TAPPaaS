@@ -25,7 +25,7 @@ Install order: a module is listed after every module of this stack it needs or i
 | # | Module | Needs, in this stack | Integrates with, if installed | Needs, installed first |
 |---|---|---|---|---|
 | 1 | [vllm-amd](vllm-amd/INSTALL.md) | — | — | `backup:vm` (foundation), `cluster:lxc` (foundation) |
-| 2 | [litellm](litellm/INSTALL.md) | — | `vllm-amd:inference` | `backup:vm` (foundation), `cluster:vm` (foundation), `identity:identity` (foundation), `network:proxy` (foundation), `network:rules` (foundation), `templates:nixos` (foundation) |
-| 3 | [openwebui](openwebui/INSTALL.md) | `litellm:models` | — | `backup:vm` (foundation), `cluster:vm` (foundation), `identity:identity` (foundation), `network:proxy` (foundation), `network:rules` (foundation), `templates:nixos` (foundation) |
+| 2 | [litellm](litellm/INSTALL.md) | — | `logging:logs` (foundation), `vllm-amd:inference` | `backup:vm` (foundation), `cluster:vm` (foundation), `identity:identity` (foundation), `network:proxy` (foundation), `network:rules` (foundation), `templates:nixos` (foundation) |
+| 3 | [openwebui](openwebui/INSTALL.md) | `litellm:models` | `logging:logs` (foundation) | `backup:vm` (foundation), `cluster:vm` (foundation), `identity:identity` (foundation), `network:proxy` (foundation), `network:rules` (foundation), `templates:nixos` (foundation) |
 
 <!-- END GENERATED MODULES -->

@@ -67,6 +67,11 @@ run() {
             esac
         }
         source "${T}/run_quiet.sh"; source "${T}/release_move_of.sh"
+        # The guest-side path (the guest builds, stages, boots): what this test is
+        # about. Since #774 the block builds on the mothership by default and
+        # needs flake_lock and the guest_build_* helpers, which this harness does
+        # not stub — TAPPAAS_GUEST_BUILD=guest is the switch #774 provides.
+        TAPPAAS_GUEST_BUILD=guest flake_lock=""
         OPT_DEBUG=0 vm_ip=10.2.0.9 vmname=guest nixpkgs_arg="-I nixpkgs=x" remote_nix_path=/etc/nixos/guest.nix
         f() { '"$(cat "${TMP}/block.sh")"'
             echo "STAGED=${staged}"

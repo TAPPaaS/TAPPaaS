@@ -31,11 +31,28 @@ alert rules (#770).
 it starts shipping at its first update after logging arrives. A consumer outside mgmt also
 needs `network:rules` in `dependsOn` to carry the pinhole.
 
-## Fields
-
-| Field | Type | Meaning |
-|---|---|---|
-| `config."logging:logs".dropUnits` | list of unit patterns | Units whose lines never leave the VM, on top of `generate-.*-secrets.*` — e.g. the units that read or write the module's own secrets |
-
 NixOS guests only. Debian (netbird-client), HAOS, LXC and Windows guests are not covered
 yet.
+
+<!-- BEGIN GENERATED FIELDS -- edit the manifest, not this block -->
+
+## Fields
+
+`logging:logs` owns **1** declared field(s). Each table below carries the field's full definition and, where the service applies it, its ADR-020 change semantics.
+
+### `dropUnits`
+
+Units whose journal lines never leave the VM, on top of the platform's generate-.*-secrets.* — the units that read or write the module's own secrets. Unit-name patterns (regex): letters, digits, _ . * @ - only.
+
+| Attribute | Value |
+|---|---|
+| Type | `array` |
+| Default | *(none)* |
+| Required by | *(none)* |
+| Used by | `logging:logs` |
+| Change class | `in-place` |
+| Apply mode | `reconcile` |
+
+**Why this change class.** The journal client is rewritten whole by update-os.sh on every OS update (/etc/nixos/tappaas-logging.nix) and applied by that rebuild; alloy reloads its config in place. No downtime for the module.
+
+<!-- END GENERATED FIELDS -->

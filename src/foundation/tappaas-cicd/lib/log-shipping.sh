@@ -327,7 +327,7 @@ apply_log_shipping_nixos() {
     LOG_SHIPPING_NEW=0
     pw="$(log_shipping_password "${host:-${module}}")" || return 1
     printf '%s' "${pw}" | ssh -o BatchMode=yes "tappaas@${ip}" \
-        "sudo install -d -m 0755 /etc/secrets && sudo install -m 0600 -o root -g root /dev/stdin ${LOG_SHIPPING_VM_SECRET}" \
+        "{ [ -d /etc/secrets ] || sudo install -d -m 0755 /etc/secrets; } && sudo install -m 0600 -o root -g root /dev/stdin ${LOG_SHIPPING_VM_SECRET}" \
         || return 1
     if [[ "${LOG_SHIPPING_NEW}" -eq 1 ]]; then
         log_shipping_sync_logging || echo "log-shipping: could not add ${host:-${module}} to the logging VM's password file — its pushes are refused until logging's next update" >&2

@@ -29,7 +29,14 @@ set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FOUNDATION="$(cd "${HERE}/../../.." && pwd)"
 GEN="${FOUNDATION}/backup/lib/pbs-fs.sh"
-IMPORTERS=("${FOUNDATION}/tappaas-cicd/tappaas-cicd.nix" "${FOUNDATION}/templates/tappaas-common.nix")
+# Since #324 the mothership imports the baseline and has no copy of the unit of
+# its own, so the baseline is the one place the unit is declared.
+IMPORTERS=("${FOUNDATION}/templates/tappaas-common.nix")
+if grep -qE '\.\./templates/tappaas-common\.nix' "${FOUNDATION}/tappaas-cicd/tappaas-cicd.nix"; then
+    ck "tappaas-cicd.nix gets the unit by importing the baseline (#324)" "yes" "yes"
+else
+    ck "tappaas-cicd.nix gets the unit by importing the baseline (#324)" "yes" "no"
+fi
 
 PASS=0; FAIL=0
 ck() { if [[ "$2" == "$3" ]]; then echo "  ok: $1"; PASS=$((PASS+1)); else echo "  FAIL: $1 (expected '$2', got '$3')"; FAIL=$((FAIL+1)); fi; }
