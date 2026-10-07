@@ -65,8 +65,14 @@ LITELLM_KEYSTORE="/etc/secrets/litellm-svc-${CONSUMING_VMNAME}.key"
 REVOKE_RESULT=$(ssh "${SSH_OPTS[@]}" "tappaas@${LITELLM_HOST}" 'bash -s' <<EOSH
 MASTER="${MASTER}"
 ALIAS="${VK_ALIAS}"
+# /key/list returns one page of 10 unless asked otherwise, so an alias on a
+# later page read as absent and a second key was minted for it. Ask for the
+# alias; the exact match below stays, because the filter matched loosely
+# before LiteLLM 1.90.
 KEYSTORE="${LITELLM_KEYSTORE}"
-LIST=\$(curl -sf "http://localhost:4000/key/list?return_full_object=true" \
+LIST=\$(curl -sf -G "http://localhost:4000/key/list" \
+    --data-urlencode "return_full_object=true" --data-urlencode "size=100" \
+    --data-urlencode "key_alias=\${ALIAS}" \
     -H "Authorization: Bearer \${MASTER}" 2>/dev/null || echo '{}')
 TOKEN=\$(echo "\${LIST}" | jq -r --arg a "\${ALIAS}" \
     '.keys[]? | select(.key_alias == \$a) | .token' 2>/dev/null | head -1)

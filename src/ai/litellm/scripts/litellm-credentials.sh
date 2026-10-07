@@ -116,7 +116,7 @@ cmd_inspect() {
     echo ""
 
     info "${BOLD}VIRTUAL KEYS${CL} (consumer-facing auth into litellm)"
-    _remote_curl "curl -sf 'http://localhost:4000/key/list?return_full_object=true' -H 'Authorization: Bearer ${master}'" \
+    _remote_curl "curl -sf 'http://localhost:4000/key/list?return_full_object=true&size=100' -H 'Authorization: Bearer ${master}'" \
         | jq -r '.keys[]? | "  \(.key_alias // "unnamed")\tblocked=\(.blocked // false)\tspend=\(.spend // 0)"' \
         | column -t -s $'\t'
     echo ""
@@ -210,7 +210,9 @@ curl -sf -X PATCH "http://localhost:4000/credentials/${NAME_ENC}" \
 EOSH
     )" || die "rotate failed: could not reach ${LITELLM_HOST}"
 
-    echo "${result}" | jq -e '.credential_name' >/dev/null 2>&1 \
+    # LiteLLM answers a successful PATCH with {"success":true,...}, not with the
+    # credential: testing for .credential_name reported every rotation as failed.
+    echo "${result}" | jq -e '.success == true or .credential_name != null' >/dev/null 2>&1 \
         || die "rotate failed: unexpected response: ${result}"
     info "${GN}✓${CL} Credential '${NAME}' rotated. ${usage_count} model(s) automatically use the new value — no restart needed."
 }

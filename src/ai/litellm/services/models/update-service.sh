@@ -84,8 +84,14 @@ KEYSTORE="${LITELLM_KEYSTORE}"
 # list for a provider that never answered, and "no keys" is what drove the
 # needless re-provision (#690).
 BODY=\$(mktemp)
+# /key/list returns one page of 10 unless asked otherwise, so an alias on a
+# later page read as absent and a second key was minted for it. Ask for the
+# alias; the exact match below stays, because the filter matched loosely
+# before LiteLLM 1.90.
 CODE=\$(curl -s -o "\${BODY}" -w '%{http_code}' --max-time 15 \
-    "http://localhost:4000/key/list?return_full_object=true" \
+    -G "http://localhost:4000/key/list" \
+    --data-urlencode "return_full_object=true" --data-urlencode "size=100" \
+    --data-urlencode "key_alias=\${ALIAS}" \
     -H "Authorization: Bearer \${MASTER}")
 if [[ "\${CODE}" != 2* ]]; then
     rm -f "\${BODY}"; echo "unavailable:\${CODE}"; exit 0
