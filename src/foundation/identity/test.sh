@@ -21,6 +21,9 @@
 set -uo pipefail
 
 . /home/tappaas/bin/common-install-routines.sh
+# oidc_domain_unpublished — the published/unpublished verdict the services use (#778).
+# shellcheck source=lib/oidc-consumer.sh disable=SC1091
+. "$(cd "$(dirname "$0")" && pwd)/lib/oidc-consumer.sh"
 
 AUTHENTIK_MANAGER="${AUTHENTIK_MANAGER:-authentik-manager}"
 
@@ -275,7 +278,22 @@ proxy_fetch() {        # $1 = fqdn, $2 = attempts (default 12 -> ~60s)
         # ── 6. forward-auth (identity:accessControl) GATES the webserver ──
         section "6 (deep): forward-auth — Authentik gates the webserver"
         FA_FQDN="test-idfa.${DOMAIN}"
-        if ( cd "${FIXTURES}/test-idfa" && "${INSTALL_MODULE}" test-idfa --proxyDomain "${FA_FQDN}" ) >/tmp/idfa-install.log 2>&1; then
+        if oidc_domain_unpublished "${FA_FQDN}"; then
+            # #778: a name with no public record gets no route, so forward-auth
+            # has nothing to gate. The install must succeed and leave no proxy
+            # app; the gate itself is exercised where the name is published
+            # (dnsMode=wildcard, or a public record).
+            if ( cd "${FIXTURES}/test-idfa" && "${INSTALL_MODULE}" test-idfa --proxyDomain "${FA_FQDN}" ) >/tmp/idfa-install.log 2>&1; then
+                pass "test-idfa installed — ${FA_FQDN} not published, forward-auth skipped (#778)"
+                [[ "$(api '/core/applications/?superuser_full_list=true&page_size=1000' | jq -r '[.results[]|select(.slug=="test-idfa")]|length')" -eq 0 ]] \
+                    && pass "no Authentik proxy app for the unpublished name" || fail "a proxy app exists for unpublished test-idfa"
+                skip "forward-auth gate — ${FA_FQDN} has no public record (dnsMode=per-service). Use dnsMode=wildcard, or publish the record, to exercise it."
+            else
+                fail "test-idfa install failed for an unpublished name (see /tmp/idfa-install.log)"
+            fi
+            "${DELETE_MODULE}" test-idfa --force >/dev/null 2>&1 \
+                && pass "test-idfa torn down" || fail "test-idfa teardown failed"
+        elif ( cd "${FIXTURES}/test-idfa" && "${INSTALL_MODULE}" test-idfa --proxyDomain "${FA_FQDN}" ) >/tmp/idfa-install.log 2>&1; then
             pass "test-idfa installed (forward-auth)"
             if ! proxy_tls_usable "${FA_FQDN}"; then
                 skip "forward-auth gating — Caddy cannot serve TLS for ${FA_FQDN} (dnsMode=$(jq -r '.domains.dnsMode // "?"' "${CONFIG_DIR}/environments/$(jq -r '.defaultEnvironment // .name' "${CONFIG_DIR}/site.json").json" 2>/dev/null): no public A record ⇒ no ACME cert). Use dnsMode=wildcard, or publish the record, to exercise this."
@@ -300,7 +318,20 @@ proxy_fetch() {        # $1 = fqdn, $2 = attempts (default 12 -> ~60s)
         # ── 7. OIDC (identity:identity) — passthrough + provider + env delivery ──
         section "7 (deep): OIDC — passthrough + provider/binding + env on VM"
         OIDC_FQDN="test-idoidc.${DOMAIN}"
-        if ( cd "${FIXTURES}/test-idoidc" && "${INSTALL_MODULE}" test-idoidc --proxyDomain "${OIDC_FQDN}" ) >/tmp/idoidc-install.log 2>&1; then
+        if oidc_domain_unpublished "${OIDC_FQDN}"; then
+            # #778: no public record → no OIDC client (it could never complete a
+            # redirect) and no tile. Install must succeed and register nothing.
+            if ( cd "${FIXTURES}/test-idoidc" && "${INSTALL_MODULE}" test-idoidc --proxyDomain "${OIDC_FQDN}" ) >/tmp/idoidc-install.log 2>&1; then
+                pass "test-idoidc installed — ${OIDC_FQDN} not published, no SSO registered (#778)"
+                [[ -z "$(api '/core/applications/?superuser_full_list=true&page_size=1000' | jq -r '.results[]|select(.slug=="test-idoidc")|.pk')" ]] \
+                    && pass "no Authentik OIDC application for the unpublished name" || fail "an OIDC app exists for unpublished test-idoidc"
+                skip "OIDC provider, binding and env delivery — ${OIDC_FQDN} has no public record (dnsMode=per-service). Use dnsMode=wildcard, or publish the record, to exercise them."
+            else
+                fail "test-idoidc install failed for an unpublished name (see /tmp/idoidc-install.log)"
+            fi
+            "${DELETE_MODULE}" test-idoidc --force >/dev/null 2>&1 \
+                && pass "test-idoidc torn down" || fail "test-idoidc teardown failed"
+        elif ( cd "${FIXTURES}/test-idoidc" && "${INSTALL_MODULE}" test-idoidc --proxyDomain "${OIDC_FQDN}" ) >/tmp/idoidc-install.log 2>&1; then
             pass "test-idoidc installed (OIDC)"
             if ! proxy_tls_usable "${OIDC_FQDN}"; then
                 skip "OIDC passthrough — Caddy cannot serve TLS for ${OIDC_FQDN} (no public A record under dnsMode=per-service ⇒ no ACME cert). Use dnsMode=wildcard, or publish the record, to exercise this."

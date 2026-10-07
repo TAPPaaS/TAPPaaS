@@ -77,6 +77,21 @@ if [[ -z "${PROXY_DOMAIN}" ]]; then
     warn "  To protect a published instance, set proxyDomain on the module, or give the environment a domains.primary."
     exit 0
 fi
+
+# A name with no public DNS record is not published either (#778):
+# network:proxy gives it no Caddy route, so there is no handler to put
+# ForwardAuth on and nothing exposed to protect — the same verdict, from the same
+# resolver, as identity:identity. Skip, and withdraw a proxy app left from when
+# it was published, instead of dying on the missing handler (found by the
+# identity deep test on hrossen, 2026-10-07).
+if oidc_domain_unpublished "${PROXY_DOMAIN}"; then
+    warn "${PROXY_DOMAIN} is not published (no public DNS record) — no route, so no forward-auth for '${MODULE}'"
+    warn "  It is reachable only at ${VMNAME}.${ZONE0}.internal. Create the public record and re-run update to protect it."
+    if command -v authentik-manager >/dev/null 2>&1 && [[ -f "${HOME}/.authentik-credentials.txt" ]]; then
+        authentik-manager app-delete "${MODULE}" >/dev/null 2>&1 || true
+    fi
+    exit 0
+fi
 [[ -n "${PROXY_PORT}" ]] \
     || die "module ${MODULE} is published at ${PROXY_DOMAIN} but sets no proxyPort — forward-auth has no upstream to protect"
 
