@@ -100,8 +100,8 @@ Per group: its scores, and where its rows are. *2.1* = shipped in 2.1; *2.2* = d
 |------|-------|:-:|:-:|---:|---:|---:|
 | 4 | G4.1 Alerting & cluster resilience | M | M | – | 6 | 5 |
 | 4 | G4.2 Proxy & ingress | M | L | 1 | – | 4 |
-| 4 | G4.3 Manager verb gaps | M | L | 4 | 2 | 8 |
-| 4 | G4.4 Storage & physical devices | H | L | 2 | 2 | 6 |
+| 4 | G4.3 Manager verb gaps | M | L | 4 | 5 | 8 |
+| 4 | G4.4 Storage & physical devices | H | L | 2 | 3 | 6 |
 | 4 | G4.5 Governance, CI & sign-offs | M | L | 2 | 1 | 7 |
 | 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 7 | 5 | 9 |
 | 3 | G3.2 Identity & SSO wiring | M | L | 1 | 4 | 6 |
@@ -240,7 +240,7 @@ Publish less of each app: limit a route to some paths (#642), some zones (#643) 
 | #656 | Limit a route to a provider's source ranges | M | L | Split, folded into ADR-023: a route names explicit CIDRs (`remote_ip`) — an exposure reduction beside #642/#643. The provider-feed half is parked (*Housekeeping*) |
 | #154 | `firewall:internal-proxy` | — | — | Close? Lars questioned the need (2026-05-31) |
 
-### G4.3 Manager verb gaps — Ease M · Risk L · released in 2.1: 4 · done for 2.2: 2 · open: 8
+### G4.3 Manager verb gaps — Ease M · Risk L · released in 2.1: 4 · done for 2.2: 5 · open: 8
 
 The verbs operators otherwise do by hand: install a whole stack (#763), suspend a module (#428), migrate by changing `.node` (#429), `test` verbs (#499), private repositories (#634), module-level `--set` rules (#654). #444/#582 wait on a discussion.
 
@@ -256,8 +256,11 @@ The verbs operators otherwise do by hand: install a whole stack (#763), suspend 
 | #634 | Private repositories in `repository add` | L | L | Adopt-mode: won't fix; document the deploy-key method |
 | #654 | `module-manager`: the `--set` pre-gate ignores the module-level field declarations (ADR-020 D10) | M | L | ADR-020 D10 lets a module declare its own field rules; the `--set` pre-gate ignores them, so such a declaration is inert. Belongs with the ADR-020 verb work (#453, #655) |
 | ✅ #739 | After reinstalling a provider, `dependsOn` consumers stay unwired | M | M | **Closed 2026-09-25** via `integrate/nc35` (`c998ca5f`): a (re)installed provider re-wires its `dependsOn` consumers, not only `integratesWith` ones. Reported by @AndreasJe |
+| ✅ #789 | `backup-manager`: no verb to delete a module's restore points | M | L | **Done 2026-10-07**: `backup-manager purge <module\|vmid>` (and `backup-controller purge <vmid>`) shows the restore points, asks you to type the VMID (or `--yes`), deletes the group `vm/<vmid>` (root namespace only) and starts GC. Refuses a deployed module's VMID, one a job lists, or when the cluster cannot be asked. `delete --remove` now says how many restore points remain; RESTORE.md §11 |
+| ✅ #790 | `environment-manager delete` leaves the env's DNS override, cert and refid | M | L | **Done 2026-10-07**: delete also removes the `*.<domain>` Unbound override(s), the `cert-refids.json` entry and the ACME certificate with its Trust certificate (new `acme-manager delete`); never a domain another env uses, nor the shared ACME account/validation/action. `--check` plans; the output names the public DNS records only the operator can remove |
+| ✅ #791 | `network-manager delete` leaves the zone in other zones' lists | H | L | **Done 2026-10-07**: delete strips the zone from every other zone's `access-to`/`pinhole-allowed-from` before its reconcile, so one run converges and `validate` stays green; `--check` names the zones. `retire` and `delete` share the helper |
 
-### G4.4 Storage & physical devices — Ease H · Risk L · released in 2.1: 2 · done for 2.2: 2 · open: 6
+### G4.4 Storage & physical devices — Ease H · Risk L · released in 2.1: 2 · done for 2.2: 3 · open: 6
 
 Shared storage and the physical network as managed parts of a site: the rest of the NFS service (#772), a machine's zone enforced at its switch port (#668, #697), controller modules that register their devices (#731), device modules (#155).
 
@@ -270,6 +273,7 @@ Shared storage and the physical network as managed parts of a site: the rest of 
 | #668 | A machine's zone is recorded, not enforced | H | M | A machine's `zone0` says which network its physical NIC is cabled to, and nothing checks the switch port. Record switch and port per NIC, report VLAN drift. Decide with #697 |
 | #697 | Node `lan` trunks and their switch ports are set once at install, maintained by nothing | M | H | Node trunks and switch ports are set at install and maintained by nothing; untagged mgmt survives on PVID 1 by accident. Five candidate fixes on the issue — **decide with #668** |
 | #731 | Controller-architecture modules never register themselves, and inventory drift has no routine check | M | L | A controller plugin (`unifi-os`) installs without registering in `switch-controller`/`ap-controller`; inventory drift is never checked. Reported by @ErikDaniel007 |
+| ✅ #792 | `unifi.sh`: whole API payloads as jq arguments fail on large sites | H | M | **Done 2026-10-07**: interrogate (switch, controller, AP) and the port-override builder pass payloads by file (`--slurpfile`), never argv — Linux caps one argument at 128 KiB. Reproduced offline with a 165 KiB device list (old: "Argument list too long"; new: same answer as small) |
 | FW #158 | Multi-NIC module firewall rules | M | L | Optional roll-in |
 
 ### G4.5 Governance, CI & sign-offs — Ease M · Risk L · released in 2.1: 2 · done for 2.2: 1 · open: 7
