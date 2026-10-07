@@ -546,7 +546,15 @@ someone deciding whether to upgrade. The release-train boundary turns it into th
 summary (`release/roadmap-cut.py`) and leaves this block empty again.
 
 <!-- next-release summary -->
-
+**Safer by default, and you hear when something breaks.** Every VM and container backup is now
+encrypted; the firewall admits its GUI and SSH only from management, gives other zones nothing but
+DNS, NTP and DHCP, and drops spoofed traffic; nodes are hardened to the Proxmox guide; Authentik is
+current again (2026.8), and a CVE scan runs after every update. Alerts reach you by mail — quorum
+loss, failing disks, out-of-memory kills, failed backups — with every VM's logs in Loki. Guests are
+built on the mothership, so updates work without internet, and restores of a node and of the
+mothership have been rehearsed. New: NFS shares from the nodes, Immich and Jellyfin (Testing), and
+forgejo with single sign-on in a DevOps stack. *Upgrading:* each guest's first backup afterwards is a
+full upload, and Authentik steps through its versions over several updates.
 <!-- /next-release summary -->
 
 ## Release 2.1 — staging 2026-09-25 · production at the next boundary
