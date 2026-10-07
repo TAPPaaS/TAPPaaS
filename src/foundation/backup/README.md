@@ -125,6 +125,9 @@ consuming module's behalf. The peer machinery lives in
 
 `pull` and `remote` are the same movement from opposite ends: to keep a copy of
 our data with a buddy, we add **remote** and they add **pull**.
+**Setting up a buddy end to end** — both sites, the two WireGuard tunnels that carry only PBS
+traffic, a site reached through its satellite, and a buddy that is not TAPPaaS — is
+[BUDDY.md](BUDDY.md).
 
 There is deliberately **no verb for sending our backups to another PBS**. A site
 with no local datastore configures that as *placement* — `placementState:

@@ -68,8 +68,10 @@ None for a normal local install. Optional follow-ups:
 - **Export the encryption key** — mandatory, and easy to postpone until it is too
   late: `backup-manager key export /media/<stick>`. The escrow lives on the
   mothership, so it cannot be the only copy (ADR-012 §2.5.1).
-- **Off-site / multi-source setup** (buddy pull, external clients): see
-  [RESTORE.md](./RESTORE.md).
+- **Off-site copy with a backup buddy** — another site that keeps a copy of yours while you
+  keep one of theirs, each pulling over a WireGuard tunnel that carries only PBS traffic: see
+  [BUDDY.md](./BUDDY.md). Receiving pushes from a system without a PBS: the README's
+  [Off-site peers](./README.md#off-site-peers-are-relationships-not-capabilities).
 - Consider setting up a backup-of-backup to a remote PBS.
 
 ## Verification

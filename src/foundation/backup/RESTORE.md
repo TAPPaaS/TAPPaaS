@@ -717,8 +717,12 @@ site was lost — and the surviving copy is the one a **buddy pulled** from you
   §0. Without it, stop — there is nothing further to try.
 - **Read access to their datastore.** Off-site copies are pulled, so you hold no
   credential on them by design. Ask the buddy's operator to grant a read-only
-  auth-id (`DatastoreReader`) on the namespace holding your copy, usually
-  `remote/<your-site>`.
+  auth-id (`DatastoreReader`) on the namespace holding your copy — `pull/<your-site>`
+  on theirs, where a buddy keeps what it pulled from you
+  ([BUDDY.md](BUDDY.md)).
+- **A way to reach their PBS.** The tunnel you pulled them through
+  ([BUDDY.md](BUDDY.md), step 3 *Dial your buddy's tunnel*) — re-create
+  your end of it on the rebuilt firewall; their end is unchanged.
 
 That asymmetry is deliberate: it is why a compromise of your site could not have
 deleted their copy, and it is why recovery needs their cooperation.
@@ -731,7 +735,9 @@ then pull the buddy in as a source and sync in the reverse direction:
 
 ```bash
 # On the rebuilt system: register the buddy as a pull source.
-backup-manager peer add pull buddy        # prompts for the read-only auth-id they issued
+backup-manager peer add pull buddy --host <their tunnel address>   # prompts for the auth-id they issued
+# Their copy of you is in THEIR pull/<your-site>; peer add pull cannot name a remote namespace yet:
+ssh root@<pbs-node> proxmox-backup-manager sync-job update sync-buddy --remote-ns pull/<your-site>
 backup-manager peers                                    # confirm it and its namespace
 
 # Sync their copy of your data into the local datastore, then verify it.
@@ -765,7 +771,7 @@ Symmetrically, if you are the one holding a peer's copy, they need read-only
 access to pull it back. That is a **remote** peer, and it is a one-liner:
 
 ```bash
-backup-manager peer add remote their-site --auth-id theirsite@pbs
+backup-manager peer add remote their-site --auth-id theirsite@pbs --namespace pull/their-site
 #   … recovery happens …
 backup-manager peer delete remote their-site --purge   # revoke, and drop the login
 ```
