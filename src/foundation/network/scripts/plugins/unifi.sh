@@ -119,6 +119,10 @@ plugin_controller_module() { echo "unifi-os"; }
 # Emit the device's live state in switch-controller's actual-switch shape:
 #   {vendor,model,managementIp,ports:{ "<idx>": {mode,nativeVlan,taggedVlans,...} }}
 # Match the UniFi device by management IP first, then by name.
+#
+# API payloads reach jq through --slurpfile and a process substitution, never as
+# arguments: Linux caps one argument at 128 KiB, and a site's device list passed
+# that, so every interrogate failed with "Argument list too long" (#792).
 plugin_interrogate() {
     local name="$1" mgmt_ip="${2:-}"
     _unifi_login || { echo "{}"; return 1; }
@@ -129,9 +133,10 @@ plugin_interrogate() {
     echo "${nets}" | jq -e . >/dev/null 2>&1 || nets='{"data":[]}'
 
     jq -n --arg name "${name}" --arg ip "${mgmt_ip}" \
-          --argjson devs "${devs}" --argjson nets "${nets}" '
+          --slurpfile devs <(printf '%s' "${devs}") --slurpfile nets <(printf '%s' "${nets}") '
+        $devs[0] as $devs | $nets[0] as $nets
         # vlan map: networkconf _id -> vlan id (0 when untagged/Default)
-        (reduce (($nets.data // [])[]) as $n ({}; .[$n._id] = ($n.vlan // 0))) as $id2vlan
+        | (reduce (($nets.data // [])[]) as $n ({}; .[$n._id] = ($n.vlan // 0))) as $id2vlan
         # all defined tagged VLAN ids (for forward=all/customize trunks)
         | ([ ($nets.data // [])[] | (.vlan // 0) | select(. > 0) ] | sort | unique) as $allvlans
         | ( ($devs.data // []) | map(select(((.ip==$ip) and ($ip!="")) or (.name==$name))) | .[0] ) as $d
@@ -182,8 +187,9 @@ plugin_controller_interrogate() {
     nets=$(_unifi_get /rest/networkconf)
     echo "${nets}" | jq -e . >/dev/null 2>&1 || nets='{"data":[]}'
 
-    jq -n --argjson devs "${devs}" --argjson nets "${nets}" '
-        (reduce (($nets.data // [])[]) as $n ({}; .[$n._id] = ($n.vlan // 0))) as $id2vlan
+    jq -n --slurpfile devs <(printf '%s' "${devs}") --slurpfile nets <(printf '%s' "${nets}") '
+        $devs[0] as $devs | $nets[0] as $nets
+        | (reduce (($nets.data // [])[]) as $n ({}; .[$n._id] = ($n.vlan // 0))) as $id2vlan
         | ([ ($nets.data // [])[] | (.vlan // 0) | select(. > 0) ] | sort | unique) as $allvlans
         # switch MAC -> name, to resolve an AP uplink to its switch.
         | ([ ($devs.data // [])[] | select(.type=="usw") | {key:.mac, value:.name} ] | from_entries) as $swmac
@@ -277,9 +283,10 @@ plugin_apply() {
 
     # Build the merged port_overrides array.
     local overrides
-    overrides=$(jq -n --argjson nets "${nets}" --argjson desired "${desired}" \
-                       --argjson cur "$(echo "${devs}" | jq -c --arg id "${devid}" '.data[]|select(._id==$id)|.port_overrides // []')" '
-        (reduce ($nets.data[] | select(.vlan != null and .vlan > 0)) as $n ({}; .[($n.vlan|tostring)] = $n._id)) as $vid
+    overrides=$(jq -n --slurpfile nets <(printf '%s' "${nets}") --argjson desired "${desired}" \
+                       --slurpfile cur <(echo "${devs}" | jq -c --arg id "${devid}" '.data[]|select(._id==$id)|.port_overrides // []') '
+        $nets[0] as $nets | ($cur[0] // []) as $cur
+        | (reduce ($nets.data[] | select(.vlan != null and .vlan > 0)) as $n ({}; .[($n.vlan|tostring)] = $n._id)) as $vid
         | ([ $nets.data[] | select(.vlan == null) ][0]._id // $nets.data[0]._id) as $def
         | ([ $nets.data[] | select(.vlan != null and .vlan > 0) | ._id ]) as $allvlannets
         | (reduce ($cur[]?) as $o ({}; .[($o.port_idx|tostring)] = $o)) as $curmap
@@ -384,8 +391,10 @@ plugin_ap_interrogate() {
     wlans=$(_unifi_get /rest/wlanconf);   echo "${wlans}" | jq -e . >/dev/null 2>&1 || wlans='{"data":[]}'
 
     jq -n --arg name "${name}" --arg ip "${mgmt_ip}" \
-          --argjson devs "${devs}" --argjson nets "${nets}" --argjson wlans "${wlans}" '
-        (reduce (($nets.data // [])[]) as $n ({}; .[$n._id] = ($n.vlan // 0))) as $id2vlan
+          --slurpfile devs <(printf '%s' "${devs}") --slurpfile nets <(printf '%s' "${nets}") \
+          --slurpfile wlans <(printf '%s' "${wlans}") '
+        $devs[0] as $devs | $nets[0] as $nets | $wlans[0] as $wlans
+        | (reduce (($nets.data // [])[]) as $n ({}; .[$n._id] = ($n.vlan // 0))) as $id2vlan
         | ( ($devs.data // []) | map(select((.type=="uap") and (((.ip==$ip) and ($ip!="")) or (.name==$name)))) | .[0] ) as $d
         | if $d == null then {} else
             {

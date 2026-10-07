@@ -30,6 +30,22 @@ done
 ck "plugin_arch is controller"      "controller" "$(plugin_arch)"
 ck "plugin_controller_module"       "unifi-os"   "$(plugin_controller_module)"
 
+# #792: the current fixture again, with the device list padded past Linux's
+# 128 KiB per-argument limit — the payload once reached jq as an argument and
+# every interrogate failed with "Argument list too long". Same answer expected.
+pad_devices() {
+    eval "$(declare -f _unifi_get | sed '1s/_unifi_get/_unifi_get_small/')"
+    _unifi_get() {
+        if [[ "$1" == /stat/device ]]; then
+            _unifi_get_small "$1" | jq -c '.data += [range(1500) | {_id:"pad\(.)", type:"ugw",
+                name:"padding-device-\(.)-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                ip:"192.0.2.\(. % 250)"}]'
+        else
+            _unifi_get_small "$1"
+        fi
+    }
+}
+
 # Stub the API for an offline interrogate test.
 _unifi_login() { _UNIFI_URL="https://stub"; _UNIFI_JAR="/dev/null"; _UNIFI_CSRF=""; return 0; }
 _unifi_get() {
@@ -57,6 +73,9 @@ ck "port1 nativeVlan 200"          "200"    "$(jq -r '.ports["1"].nativeVlan' <<
 ck "port2 trunk"                   "trunk"  "$(jq -r '.ports["2"].mode' <<<"$OUT")"
 ck "port2 tagged = all minus excluded(210) = [200]" "200" "$(jq -rc '.ports["2"].taggedVlans|join(",")' <<<"$OUT")"
 ck "port3 trunk(all) tagged = 200,210" "200,210" "$(jq -rc '.ports["3"].taggedVlans|join(",")' <<<"$OUT")"
+pad_devices
+[[ $(_unifi_get /stat/device | wc -c) -gt 131072 ]] && ck "large site: device list over 128 KiB" yes yes || ck "large site: device list over 128 KiB" yes no
+ck "large site: switch interrogate unchanged (#792)" "${OUT}" "$(plugin_interrogate sw1 1.2.3.4 2>&1)"
 
 # ── Controller interrogate: enumerate usw switches (skip uap) ───────
 _unifi_get() {
@@ -88,6 +107,8 @@ ck "controller lists the uap"          "Nano"    "$(jq -r '.aps|keys[0]' <<<"$CO
 ck "ap uplinkSwitch detected"          "USW Pro" "$(jq -r '.aps["Nano"].uplinkSwitch' <<<"$COUT")"
 ck "ap uplinkPort detected"            "5"       "$(jq -r '.aps["Nano"].uplinkPort' <<<"$COUT")"
 ck "ap model"                          "U7"      "$(jq -r '.aps["Nano"].model' <<<"$COUT")"
+pad_devices
+ck "large site: controller interrogate unchanged (#792)" "${COUT}" "$(plugin_controller_interrogate ctrl1 https://x 2>&1)"
 
 # ── AP (WiFi) interrogate + security mapping (offline) ──────────────
 # Re-stub the API for a uap device + two WLANs (one disabled WPA2 on VLAN 400,
@@ -124,6 +145,8 @@ ck "ssid guest enabled true"        "true"   "$(jq -r '.ssids["guest"].enabled' 
 
 # AP interrogate returns {} when the device is not found (no pollution of actual).
 ck "ap interrogate unknown -> {}"   "{}"     "$(plugin_ap_interrogate nope 9.9.9.9 | jq -c .)"
+pad_devices
+ck "large site: ap interrogate unchanged (#792)" "${APOUT}" "$(plugin_ap_interrogate nano-hd 10.0.0.184 2>&1)"
 
 # _unifi_security_fields mapping
 ck "secfields open"                 "open"   "$(_unifi_security_fields open "" | jq -r .security)"
@@ -216,6 +239,39 @@ out="$(CURL_GET=401 plugin_controller_interrogate ctrl1 x 2>/dev/null)"; rc=$?
 ck "no device list: controller interrogate rc 1" "1" "${rc}"
 unset -f curl warn
 rm -rf "${ETMP}"
+
+# ── Apply: the port_overrides PUT, offline (#792) ────────────────────
+# _unifi_send records the body instead of calling the controller. The overrides
+# are built with the device list as jq input — run it small and padded past
+# 128 KiB, and the PUT must be the same.
+. "${SCRIPT_DIR}/plugins/unifi.sh"
+ATMP="$(mktemp -d)"
+cat > "${ATMP}/switch-configuration-desired.json" <<'JSON'
+{"switches":{"sw1":{"managementIp":"1.2.3.4","ports":{
+  "1":{"mode":"access","nativeVlan":200,"type":"server"},
+  "2":{"mode":"trunk","nativeVlan":0,"taggedVlans":[200],"type":"uplink"},
+  "3":{"mode":"trunk","nativeVlan":0,"taggedVlans":[200,210]}}}}}
+JSON
+_unifi_login() { _UNIFI_URL="https://stub"; _UNIFI_JAR="/dev/null"; _UNIFI_CSRF=""; return 0; }
+_unifi_get() {
+    case "$1" in
+        /rest/networkconf) echo '{"data":[{"_id":"def","name":"Default","vlan":null},{"_id":"n200","vlan":200},{"_id":"n210","vlan":210}]}' ;;
+        /stat/device) echo '{"data":[{"_id":"d1","name":"sw1","ip":"1.2.3.4","port_overrides":[{"port_idx":9,"forward":"all"}]}]}' ;;
+    esac
+}
+_unifi_send() { printf '%s' "$3" > "${ATMP}/put.json"; echo '{"meta":{"rc":"ok"}}'; }
+CONFIG_DIR="${ATMP}" plugin_apply sw1 2>/dev/null; rc=$?
+SMALL="$(jq -c . "${ATMP}/put.json" 2>/dev/null)"
+ck "apply rc 0"                              "0"       "${rc}"
+ck "apply: port 1 access native n200"        "native:n200" "$(jq -r '.port_overrides[]|select(.port_idx==1)|"\(.forward):\(.native_networkconf_id)"' <<<"${SMALL}")"
+ck "apply: port 2 trunk excludes n210 only"  "customize:n210" "$(jq -r '.port_overrides[]|select(.port_idx==2)|"\(.forward):\(.excluded_networkconf_ids|join(","))"' <<<"${SMALL}")"
+ck "apply: unannotated port 3 left alone"    "0"       "$(jq '[.port_overrides[]|select(.port_idx==3)]|length' <<<"${SMALL}")"
+ck "apply: existing override kept (port 9)"  "all"     "$(jq -r '.port_overrides[]|select(.port_idx==9)|.forward' <<<"${SMALL}")"
+pad_devices
+rm -f "${ATMP}/put.json"
+CONFIG_DIR="${ATMP}" plugin_apply sw1 2>/dev/null
+ck "large site: apply PUT unchanged (#792)"  "${SMALL}" "$(jq -c . "${ATMP}/put.json" 2>/dev/null)"
+rm -rf "${ATMP}"
 
 echo ""
 echo "test-unifi-plugin: ${PASS} passed, ${FAIL} failed"
