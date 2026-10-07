@@ -170,6 +170,33 @@ if [[ $DNS_CHECK_COUNT -lt $DNS_CHECK_RETRIES ]]; then
     debug "${GN}✓${CL} Unbound DNS is responding"
 fi
 
+# ── QEMU guest agent: survive a live migration (#793) ───────────────
+#
+# A live migration resets the agent's virtio channel. FreeBSD's qemu-ga does not
+# reopen it unless started with -r (--retry-path), so after a node update or an
+# HA move Proxmox lost the agent — no fsfreeze for backups, no clean shutdown —
+# until someone restarted it. The os-qemu-guest-agent plugin regenerates
+# /etc/rc.conf.d/qemu_guest_agent with no way to add a flag; rc.subr reads
+# /usr/local/etc/rc.conf.d/<service> after it, so -r is appended there, keeping
+# whatever the plugin set (debug log, blocked RPCs). The agent restarts only
+# when the file changed.
+_qga_state="$(ssh root@"$FIREWALL_FQDN" 'sh -s' 2>&1 <<'EOF'
+f=/usr/local/etc/rc.conf.d/qemu_guest_agent
+want='# TAPPaaS (#793): reopen the virtio channel after a live migration resets it.
+qemu_guest_agent_flags="${qemu_guest_agent_flags} -r"'
+pkg info -e os-qemu-guest-agent || { echo absent; exit 0; }
+[ "$(cat "$f" 2>/dev/null)" = "$want" ] && { echo unchanged; exit 0; }
+mkdir -p /usr/local/etc/rc.conf.d && printf '%s\n' "$want" > "$f" \
+    && service qemu-guest-agent restart >/dev/null 2>&1 && echo changed
+EOF
+)" || true
+case "${_qga_state}" in
+    unchanged) debug "${GN}✓${CL} QEMU guest agent reopens its channel after a migration (-r)" ;;
+    changed)   info "  QEMU guest agent: -r added, so it survives a live migration (#793)" ;;
+    absent)    warn "QEMU guest agent plugin is not installed on the firewall — Proxmox cannot reach it" ;;
+    *)         warn "Could not set the QEMU guest agent's -r flag on the firewall: ${_qga_state:-no answer}" ;;
+esac
+
 # ── Output levels ───────────────────────────────────────────────────
 #
 # relog_steps — a filter for a sub-command's stream. Warnings and errors pass
