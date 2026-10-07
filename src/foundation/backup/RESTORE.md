@@ -721,7 +721,7 @@ site was lost — and the surviving copy is the one a **buddy pulled** from you
   on theirs, where a buddy keeps what it pulled from you
   ([BUDDY.md](BUDDY.md)).
 - **A way to reach their PBS.** The tunnel you pulled them through
-  ([BUDDY.md](BUDDY.md), step 3 *Dial your buddy's tunnel*) — re-create
+  ([BUDDY.md](BUDDY.md), *Setup 2*) — re-create
   your end of it on the rebuilt firewall; their end is unchanged.
 
 That asymmetry is deliberate: it is why a compromise of your site could not have
