@@ -66,6 +66,9 @@ function die() { trap - ERR; error "$*"; exit 1; }
 # code (the module's own directory when it comes from the TAPPaaS repo, else the
 # repo) and issues. The old logo URL was dead (404) and "Discussions" pointed at
 # GitHub, which the project has left.
+# Size with width/height attributes: Proxmox's note sanitiser keeps those and
+# drops every `style` attribute, so a styled size renders the 612x426 image
+# full-size.
 function create_vm_descriptions_html() {
   local TEXT="$1" SOURCE="${2:-}" REPO="https://codeberg.org/TAPPaaS/TAPPaaS" CODE
   CODE="${REPO}"
@@ -76,7 +79,7 @@ function create_vm_descriptions_html() {
     cat <<EOF
 <div align='center'>
   <a href='https://tappaas.org' target='_blank' rel='noopener noreferrer'>
-    <img src='https://tappaas.org/tappaas-icon.png' alt='TAPPaaS' style='width:120px;height:84px;'/>
+    <img src='https://tappaas.org/tappaas-icon.png' alt='TAPPaaS' width='60' height='42'/>
   </a>
 
   <h2 style='font-size: 24px; margin: 20px 0;'>$TEXT</h2>
