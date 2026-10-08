@@ -374,14 +374,28 @@ EOF
     wantedBy = [ "multi-user.target" ];
     after = [ "podman-authentik-server.service" "podman-authentik-worker.service" ];
     serviceConfig = { Type = "oneshot"; RemainAfterExit = true; TimeoutStartSec = "45min"; };
-    path = [ pkgs.podman pkgs.curl pkgs.coreutils ];
+    path = [ pkgs.podman pkgs.curl pkgs.coreutils pkgs.gnugrep pkgs.systemd ];
     script = ''
       want="ghcr.io/goauthentik/server:${ak.version}"
+      since="$(date '+%Y-%m-%d %H:%M:%S')"
+      restarts0="$(systemctl show -p NRestarts --value podman-authentik-server.service 2>/dev/null || echo 0)"
       for _ in $(seq 1 520); do
         # A server that cannot start will not start by waiting: say so now, not
         # after 45 minutes of a switch that looks hung (#748: an arm64 image).
         if systemctl is-failed --quiet podman-authentik-server.service; then
           echo "authentik ${ak.version}: the server failed to start — see journalctl -u podman-authentik-server" >&2
+          exit 1
+        fi
+        # The unit restarts a dying container, so it never reads as failed: a
+        # refused version restarted it for 45 minutes with SSO down (#797). Its
+        # own refusal, or a server that keeps restarting, ends the wait now.
+        if journalctl -u podman-authentik-server --since "$since" -o cat 2>/dev/null \
+             | grep -q -m1 'version skips are not allowed'; then
+          echo "authentik ${ak.version}: Authentik refuses this version (a release line skipped) — see journalctl -u podman-authentik-server" >&2
+          exit 1
+        fi
+        if [ "$(( $(systemctl show -p NRestarts --value podman-authentik-server.service 2>/dev/null || echo 0) - restarts0 ))" -ge 3 ]; then
+          echo "authentik ${ak.version}: the server restarted 3 times while starting — see journalctl -u podman-authentik-server" >&2
           exit 1
         fi
         img="$(podman inspect authentik-server --format '{{.ImageName}}' 2>/dev/null || true)"

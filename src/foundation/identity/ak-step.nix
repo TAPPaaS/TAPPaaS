@@ -8,28 +8,27 @@
 #   on an older patch of a line   → that line's latest patch
 #   on a line's latest patch      → the next line
 #   on the target                 → stays
-#   fresh install (no database)   → straight to the target
+#   fresh install (no Authentik)  → straight to the target
 #
-# What the guest runs is read at build time — nixos-rebuild evaluates as root, on
-# the guest — from the version file a successful start writes (identity.nix,
-# authentik-version-record). A guest from before that file existed has the env
-# file its first boot generated: it runs the one version ever pinned until then.
+# What the guest runs comes from the build facts update-os.sh collects on the
+# guest before every build (build-facts.sh) and stages as
+# /etc/nixos/tappaas-build-facts.env. The build runs on the mothership (#774),
+# where the guest's own files do not exist: reading them here made every guest
+# look like a fresh install and jump straight to the target, which Authentik
+# refuses — SSO down until the update rolled back (#797). So "fresh" must be
+# SAID (AUTHENTIK_INSTALLED=none); no facts, or a database whose version is
+# not known, stops the build before it switches, and the old version keeps running.
 #
-# A blocker file, written by the guest's own pre-check, stops a step that would
-# fail its migration (2025.12 refuses duplicate group names) BEFORE anything
-# changes: the evaluation throws, the rebuild never switches, the old version
-# keeps running, and the update says why.
+# The pre-check's blocker (AUTHENTIK_STEP_BLOCKED) stops a step that would fail
+# its migration (2025.12 refuses duplicate group names) the same way.
 #
-# Paths are STRINGS, never path literals: a literal would copy the file into the
-# world-readable nix store (the env file holds secrets).
+# The path is a STRING, never a path literal: a literal would copy the file into
+# the nix store.
 #
 # builtins only, so test-authentik-step.sh can evaluate it without nixpkgs.
 {
   lines,
-  versionFile ? "/var/lib/authentik/tappaas-version",
-  legacyMarker ? "/etc/secrets/authentik.env",
-  legacyVersion ? "2025.2.1",
-  blockerFile ? "/var/lib/authentik/tappaas-step-blocked",
+  factsFile ? "/etc/nixos/tappaas-build-facts.env",
 }:
 let
   # The file's first line, without surrounding whitespace; "" when there is none.
@@ -43,11 +42,20 @@ let
   n = builtins.length lines;
   target = builtins.elemAt lines (n - 1);
 
-  recorded = if builtins.pathExists versionFile then trim (builtins.readFile versionFile) else "";
+  # /etc/nixos/tappaas-build-facts.env as an attrset: one KEY=value per line.
+  facts =
+    if !(builtins.pathExists factsFile) then
+      throw "authentik: no build facts (${factsFile}) — update this guest through module-manager, which collects what it runs before it builds (#797)"
+    else builtins.listToAttrs (map (m: { name = builtins.elemAt m 0; value = builtins.elemAt m 1; })
+      (builtins.filter (m: m != null)
+        (map (l: builtins.match "([A-Z_]+)=(.*)" l)
+          (builtins.filter builtins.isString (builtins.split "\n" (builtins.readFile factsFile))))));
+  said = facts.AUTHENTIK_INSTALLED or (throw "authentik: the build facts (${factsFile}) do not say what the guest runs (#797)");
   installed =
-    if recorded != "" then recorded
-    else if builtins.pathExists legacyMarker then legacyVersion
-    else null;
+    if said == "none" then null
+    else if said == "unknown" then
+      throw "authentik: the guest has a database but no record of the Authentik version it runs — cannot choose a step. Write it to /var/lib/authentik/tappaas-version on the guest (what `podman inspect authentik-server` runs), then update again (#797)"
+    else trim said;
 
   # index of the installed version's line in `lines`, or null
   idxs = builtins.filter (i: lineOf (builtins.elemAt lines i) == lineOf installed)
@@ -64,7 +72,7 @@ let
     else if idx + 1 < n then builtins.elemAt lines (idx + 1)
     else target;
 
-  blocked = if builtins.pathExists blockerFile then trim (builtins.readFile blockerFile) else "";
+  blocked = trim (facts.AUTHENTIK_STEP_BLOCKED or "");
 in
 if installed != null && older target installed then
   throw "authentik: the guest runs ${installed}, newer than this release's ${target} — Authentik cannot go back a version"

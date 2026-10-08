@@ -18,7 +18,7 @@
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-NC="$(cd "${HERE}/../../../.." && pwd)/apps/nextcloud"
+NC="$(cd "${HERE}/../../../.." && pwd)/collaboration/nextcloud"
 
 PASS=0; FAIL=0
 ck()   { if [[ "$2" == "$3" ]]; then echo "  ok: $1"; PASS=$((PASS+1)); else echo "  FAIL: $1 (expected '$2', got '$3')"; FAIL=$((FAIL+1)); fi; }
@@ -33,6 +33,9 @@ command -v nix-instantiate >/dev/null 2>&1 || {
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/nc-units.XXXXXX")"
 trap 'rm -rf "${TMP}"' EXIT INT TERM
 cp -r "${NC}" "${TMP}/nc"
+# nc-major.nix reads the guest's build facts (#797); this is a fresh install.
+printf 'NEXTCLOUD_INSTALLED_MAJOR=none\n' > "${TMP}/facts.env"
+sed -i.orig "s#/etc/nixos/tappaas-build-facts.env#${TMP}/facts.env#" "${TMP}/nc/nc-major.nix" && rm -f "${TMP}/nc/nc-major.nix.orig"
 
 cat > "${TMP}/ev.nix" <<'EOF'
 let pkgs = import <nixpkgs> {};

@@ -2,73 +2,59 @@
 #
 # test-nextcloud-major-step.sh — a Nextcloud guest moves at most one major per build.
 #
-# Nextcloud refuses to skip a major, and the module's release is 35 while existing
-# sites run 33. src/collaboration/nextcloud/nc-major.nix reads the installed major from the
-# guest's config.php and builds min(target, installed + 1), so a site steps 33 -> 34
-# -> 35 over two updates and keeps its data; a fresh install goes straight to the
-# target. Evaluated here with nix-instantiate against fixture config.php files.
+# build-facts.sh reads the major from the guest's config.php (none for a fresh
+# install, unknown for an instance whose major cannot be read), and nc-major.nix
+# takes min(target, installed + 1) from those facts. Here the real collector runs
+# against a fixture root and its facts are evaluated with nix-instantiate — the
+# pair the mothership build uses (#797).
 set -uo pipefail
-
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-NCM="$(readlink -f "${HERE}/../../../../collaboration/nextcloud/nc-major.nix")"
-
+NC="$(cd "${HERE}/../../../../collaboration/nextcloud" 2>/dev/null && pwd)"
+STEP="${NC}/nc-major.nix"
+FACTS="${NC}/build-facts.sh"
 PASS=0; FAIL=0
 ck()   { if [[ "$2" == "$3" ]]; then echo "  ok: $1"; PASS=$((PASS+1)); else echo "  FAIL: $1 (expected '$2', got '$3')"; FAIL=$((FAIL+1)); fi; }
 ckin() { if [[ "$3" == *"$2"* ]]; then echo "  ok: $1"; PASS=$((PASS+1)); else echo "  FAIL: $1 (missing '$2' in: $3)"; FAIL=$((FAIL+1)); fi; }
-
-[[ -f "${NCM}" ]] || { echo "nc-major.nix not found — cannot run here."; exit 77; }
+[[ -f "${STEP}" && -f "${FACTS}" ]] || { echo "nc-major.nix / build-facts.sh not found — cannot run here."; exit 77; }
 command -v nix-instantiate >/dev/null 2>&1 || { echo "nix-instantiate not available — skipped."; exit 77; }
+T="$(mktemp -d "${TMPDIR:-/tmp}/nc-major.XXXXXX")"; trap 'rm -rf "${T}"' EXIT
+G="${T}/guest"; CFG="${G}/var/lib/nextcloud/config/config.php"
 
-TMP="$(mktemp -d "${TMPDIR:-/tmp}/nc-major.XXXXXX")"
-trap 'rm -rf "${TMP}"' EXIT INT TERM
-
-# A config.php as Nextcloud writes it, with neighbours that must not be mistaken
-# for the version.
-cfg() {
-    cat > "${TMP}/config.php" <<EOF
-<?php
-\$CONFIG = array (
-  'instanceid' => 'oc1234',
-  'versionstring' => 'ignored',
-  'version' => '$1',
-  'installed' => true,
-  'maintenance_window_start' => 1,
-);
-EOF
+AVAIL='m: builtins.elem m [ 33 34 35 ]'   # which nextcloud<N> this nixpkgs carries
+eval_step() {  # $1 = attribute, $2 = target major
+    nix-instantiate --eval --strict 2>&1 -E "(import ${STEP} {
+        targetMajor = ${2:-35}; available = ${3:-${AVAIL}}; factsFile = \"${T}/facts.env\";
+    }).$1" | tr -d '"'
 }
+ev() { FACTS_ROOT="${G}" bash "${FACTS}" > "${T}/facts.env"; eval_step "$@"; }
+reset() { rm -rf "${G}"; mkdir -p "${G}/var/lib/nextcloud/config"; }
+config() { printf "<?php\n\$CONFIG = array (\n  'instanceid' => 'x',\n  'version' => '%s',\n  'passwordsalt' => 'secret',\n);\n" "$1" > "${CFG}"; }
 
-# step <available majors, e.g. "33 34 35"> [config.php path] — "major/onTarget", or the error.
-step() {
-    local avail="$1" path="${2:-${TMP}/config.php}"
-    nix-instantiate --eval --strict --json -E "
-      let r = import ${NCM} {
-        targetMajor = 35;
-        available = m: builtins.elem m [ ${avail} ];
-        configPhp = \"${path}\";
-      }; in \"\${toString r.major}/\${if r.onTarget then \"target\" else \"step\"}\"" 2>&1 | tr -d '"'
-}
+reset
+ck "fresh install (no config.php, no data): straight to the target" "35" "$(ev major)"
+ck "…the collector says so: none" "NEXTCLOUD_INSTALLED_MAJOR=none" "$(cat "${T}/facts.env")"
 
-echo "── an existing site steps one major per build ──"
-cfg 33.0.9.1;  ck "33 -> 34 (a step, not the target)" "34/step"   "$(step '33 34 35')"
-cfg 34.0.4.1;  ck "34 -> 35 (the target)"             "35/target" "$(step '33 34 35')"
-cfg 35.0.0.12; ck "35 stays 35"                       "35/target" "$(step '33 34 35')"
-cfg 32.0.11.2; ck "32 -> 33, never straight to 35"    "33/step"   "$(step '32 33 34 35')"
+reset; config 33.0.4.1
+ck "33 → 34, not straight to 35" "34" "$(ev major)"
+ck "…the collector reads the major only" "NEXTCLOUD_INSTALLED_MAJOR=33" "$(cat "${T}/facts.env")"
+ck "…and no secret leaves the guest" "0" "$(grep -c secret "${T}/facts.env")"
+reset; config 34.0.1.2
+ck "34 → 35" "35" "$(ev major)"
+ck "…on the target" "true" "$(ev onTarget)"
+reset; config 35.0.0.10
+ck "on the target: stays" "35" "$(ev major)"
+reset; config 36.0.0.1
+ckin "newer than the target: refused" "cannot go back a major" "$(ev major)"
+reset; config 32.0.0.1
+ckin "a major this nixpkgs does not carry next: refused" "needs nextcloud33" "$(ev major 35 'm: builtins.elem m [ 34 35 ]')"
 
-echo "── a fresh install goes straight to the target ──"
-ck "no config.php: 35" "35/target" "$(step '33 34 35' "${TMP}/nope.php")"
-printf '<?php\n$CONFIG = array (\n);\n' > "${TMP}/config.php"
-ck "config.php without a version (setup not run yet): 35" "35/target" "$(step '33 34 35')"
+# #797: what the mothership build saw — nothing — must never read as a fresh install.
+reset; printf "<?php\n\$CONFIG = array ( 'instanceid' => 'x' );\n" > "${CFG}"
+ckin "a config.php without a version: refused" "cannot be read from config.php" "$(ev major)"
+reset; rm -rf "${G}/var/lib/nextcloud/config"; mkdir -p "${G}/var/lib/nextcloud/data/admin"
+ckin "data but no config.php: refused, not a fresh install" "cannot be read from config.php" "$(ev major)"
+rm -f "${T}/facts.env"
+ckin "no build facts at all: refused" "no build facts" "$(eval_step major)"
 
-echo "── what cannot be done says so, before anything is built ──"
-cfg 31.0.9.1
-ckin "a step nixpkgs lacks: refused, naming the way out" "reinstall (install-module.sh nextcloud --reinstall)" "$(step '33 34 35')"
-cfg 36.0.0.1
-ckin "a newer installed major: refused (no downgrade)" "cannot go back a major" "$(step '33 34 35')"
-
-echo "── the store copy of config.php never happens ──"
-ck "nc-major.nix reads config.php through a string, not a path literal" "0" \
-   "$(grep -cE '^[^#]*[^"/]/var/lib/nextcloud' "${NCM}")"
-
-echo
-echo "── ${PASS} passed, ${FAIL} failed ──"
+echo "── nextcloud major step: ${PASS} passed, ${FAIL} failed ──"
 [[ "${FAIL}" -eq 0 ]]

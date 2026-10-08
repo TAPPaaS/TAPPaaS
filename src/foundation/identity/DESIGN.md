@@ -43,15 +43,39 @@ opening without it (vaultwarden DESIGN.md).
 
 ## Stack (identity.nix)
 
-- Authentik server + worker as podman containers (version pinned in `identity.nix`,
-  currently `2025.2.1`); web UI + API on ports 9000 (HTTP) / 9443 (HTTPS).
-- PostgreSQL 16 and Redis run natively on the VM.
+- Authentik server + worker as podman containers; the release's target version is the
+  last of the release lines in `identity.nix` (`2026.8.3`); web UI + API on ports 9000
+  (HTTP) / 9443 (HTTPS).
+- PostgreSQL 16 runs natively on the VM (Redis only below Authentik 2025.10).
 - VM firewall open: 22 (SSH), 9000, 9443.
 - **Secrets are auto-generated on first boot** by the `generate-authentik-secrets`
   systemd service (guarded by `ConditionPathExists=!/etc/secrets/authentik.env`): the
   Authentik secret key, the `akadmin` bootstrap password and the
   `AUTHENTIK_BOOTSTRAP_TOKEN` all land in `/etc/secrets/authentik.env` (mode 600).
   Nothing is prompted for and nothing is stored in the repo.
+
+## Upgrading Authentik: one release line per update (#748, #797)
+
+Authentik refuses to skip a release line, moves to each line's latest patch before the
+next, and cannot go back. `ak-step.nix` therefore builds **one step per update** along
+the release lines in `identity.nix`: an older patch goes to its line's latest, a line's
+latest to the next line. A guest on 2025.2.x reaches 2026.8.3 in **eight updates** — eight
+nights on a site with a daily update schedule, or eight runs of
+`module-manager update identity` to do it now.
+
+What the guest runs comes from **build facts** collected on the guest before every build
+(`build-facts.sh`, written to `/etc/nixos/tappaas-build-facts.env`): the version
+`authentik-version-record` wrote after the last successful start, `none` for a fresh
+install, `unknown` for a database without that record. The build runs on the mothership
+(#774), where the guest's files do not exist; reading them there made every guest look
+fresh and jump straight to the target (#797). Missing or `unknown` facts stop the build
+before it switches — the old version keeps serving and the update says why. The guest's
+pre-check (`authentik-step-precheck`) can block a step the same way (2025.12 refuses
+duplicate group names).
+
+A step Authentik refuses anyway ends `authentik-version-record`'s wait at once — on its
+"version skips are not allowed", or three server restarts — so the update fails and rolls
+back in about a minute instead of waiting 45.
 
 ## Credential bootstrap (issue #312)
 

@@ -678,6 +678,23 @@ update_nixos() {
         rm -f "${_flat_tmp}"
     fi
 
+    # Build facts (#797): what the guest runs, for a module whose build steps along
+    # it (identity: Authentik's release lines, nextcloud: its majors). The build
+    # runs on the mothership (#774), where the guest's own files do not exist, so
+    # the module's build-facts.sh runs ON the guest and its KEY=value lines — never
+    # a secret — land in /etc/nixos/tappaas-build-facts.env: staged with the rest
+    # of /etc/nixos on the mothership, read in place by a build on the guest. No
+    # facts must not look like a fresh install, so a collector that fails stops here.
+    if [[ -f ./build-facts.sh ]]; then
+        local _facts
+        _facts="$(ssh -o BatchMode=yes "tappaas@${vm_ip}" 'sudo -n bash -s' < ./build-facts.sh)" \
+            || die "collecting the build facts on ${vmname} failed — its build would not know what the guest runs (#797)"
+        printf '%s\n' "${_facts}" | ssh -o BatchMode=yes "tappaas@${vm_ip}" \
+            "sudo -n tee /etc/nixos/tappaas-build-facts.env >/dev/null" \
+            || die "failed to write the build facts on ${vm_ip}"
+        info "Build facts on ${vmname}: $(paste -sd' ' <<<"${_facts}")"
+    fi
+
     # An empty capture-timer fragment so the module's fixed import resolves on a
     # guest that captures nothing (#691). Never overwrites a real one:
     # backup:filesystem writes that, and it must survive this step.

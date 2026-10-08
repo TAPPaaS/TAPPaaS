@@ -73,6 +73,10 @@ for f in "${FILES[@]}"; do
     cp "${BASELINE}" "${d}/etc/tappaas-common.nix"
     printf '{ }\n' > "${d}/etc/tappaas-site.nix"
     printf '{ }\n' > "${d}/etc/tappaas-backup.nix"
+    # A module that steps along what the guest runs reads its build facts (#797):
+    # the stand-in guest is a fresh one, so its own collector on an empty root.
+    [[ -f "$(dirname "$f")/build-facts.sh" ]] \
+        && FACTS_ROOT="${d}/guest" bash "$(dirname "$f")/build-facts.sh" > "${d}/etc/tappaas-build-facts.env"
     printf '{ ... }: { fileSystems."/" = { device = "/dev/disk/by-label/nixos"; fsType = "ext4"; }; }\n' \
         > "${d}/etc/hardware-configuration.nix"
     # The guest's /etc/nixos is this directory's etc/.

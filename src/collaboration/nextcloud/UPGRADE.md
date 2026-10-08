@@ -17,8 +17,11 @@ Nextcloud's own database/app migration (`occ upgrade`) runs automatically on act
 ## Nextcloud major-version upgrades
 
 - Majors must be sequential — Nextcloud refuses to skip one (33 → 34 → 35, never 33 → 35).
-- **The module steps for you, one major per update.** `nc-major.nix` reads the installed major
-  from the guest's `config.php` and builds `min(targetMajor, installed + 1)`. A site on 33 goes
+- **The module steps for you, one major per update.** `nc-major.nix` builds
+  `min(targetMajor, installed + 1)` from the installed major that `build-facts.sh` reads from
+  the guest's `config.php` before every build (only the major leaves the guest; the build runs
+  on the mothership, #774/#797). A config.php without a version, or data without a config.php,
+  stops the update before it switches — it is never taken for a fresh install. A site on 33 goes
   to 34 at its next update and to 35 at the one after, keeping its data; the scheduled sweep
   does both, a night apart. To take both steps now, run `update-module.sh nextcloud` twice.
 - An intermediate step uses nixpkgs' own app set for that major; the release's app-store pins
