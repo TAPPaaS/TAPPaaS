@@ -213,28 +213,37 @@ The TAPPaaS system does Setup 1. On your PBS host (Debian), the tunnel ends on t
 The tunnel could instead run on your site's firewall, if it supports WireGuard; that is out of
 scope here.
 
+With what the TAPPaaS operator sent:
+
+```bash
+SITE="rossen"                    # the TAPPaaS system's site name (a label on your side)
+THEM="10.255.2.1"                # their end of the tunnel /30 they sent (.1) — their PBS
+US="10.255.2.2"                  # your end of it (.2)
+ENDPOINT="203.0.113.7:51830"     # their public IP (or satellite IP) and UDP port
+THEIRKEY="…"                     # their WireGuard public key (buddy-…-serve)
+MTU="1420"                       # 1340 if they serve through their satellite
+```
+
+The tunnel:
+
 ```bash
 apt install wireguard-tools
-wg genkey | tee /etc/wireguard/buddy-out.key | wg pubkey     # send this public key
-chmod 600 /etc/wireguard/buddy-out.key
-```
+(umask "077"; wg genkey > /etc/wireguard/buddy-out.key)
+wg pubkey < /etc/wireguard/buddy-out.key                      # send this public key
 
-`/etc/wireguard/buddy-out.conf`:
-
-```ini
+cat > /etc/wireguard/buddy-out.conf <<EOF
 [Interface]
-Address    = 10.255.2.2/30
+Address    = $US/30
 PostUp     = wg set %i private-key /etc/wireguard/buddy-out.key
-# MTU = 1340   # if the TAPPaaS system serves through its satellite
+MTU        = $MTU
 
 [Peer]
-PublicKey           = <the TAPPaaS system's buddy-…-serve public key>
-Endpoint            = <its public IP or satellite IP>:<port>
-AllowedIPs          = 10.255.2.1/32
+PublicKey           = $THEIRKEY
+Endpoint            = $ENDPOINT
+AllowedIPs          = $THEM/32
 PersistentKeepalive = 25
-```
+EOF
 
-```bash
 systemctl enable --now wg-quick@buddy-out
 nft add rule inet filter input iifname "buddy-out" drop     # nothing may come in on it (adapt to your firewall)
 ```
@@ -242,15 +251,21 @@ nft add rule inet filter input iifname "buddy-out" drop     # nothing may come i
 Then the pull, into a namespace of your own, never deleting what the TAPPaaS system removes:
 
 ```bash
-proxmox-backup-manager remote create tappaas-<site> --host 10.255.2.1 --port 8007 \
-    --auth-id <name>@pbs --password '<from the TAPPaaS operator>' --fingerprint '<from them>'
-proxmox-backup-manager namespace create <your-store> --ns pull/<site>     # PBS ≥ 2.2
-proxmox-backup-manager sync-job create tappaas-<site> --store <your-store> --ns pull/<site> \
-    --remote tappaas-<site> --remote-store tappaas_backup --max-depth 0 \
+STORE="backup"                   # your datastore
+AUTHID="you@pbs"                 # the login they created for you
+PASSWORD='…'                     # its password
+FP='…'                           # their TLS fingerprint
+DAILY="14"; WEEKLY="8"; MONTHLY="12"   # how many copies of theirs you keep
+
+proxmox-backup-manager remote create "tappaas-$SITE" --host "$THEM" --port "8007" \
+    --auth-id "$AUTHID" --password "$PASSWORD" --fingerprint "$FP"
+proxmox-backup-manager namespace create "$STORE" --ns "pull/$SITE"     # PBS ≥ 2.2
+proxmox-backup-manager sync-job create "tappaas-$SITE" --store "$STORE" --ns "pull/$SITE" \
+    --remote "tappaas-$SITE" --remote-store "tappaas_backup" --max-depth "0" \
     --remove-vanished false --schedule daily
-proxmox-backup-manager prune-job create tappaas-<site> --store <your-store> --ns pull/<site> \
-    --schedule daily --keep-daily 14 --keep-weekly 8 --keep-monthly 12
-proxmox-backup-manager sync-job run tappaas-<site>
+proxmox-backup-manager prune-job create "tappaas-$SITE" --store "$STORE" --ns "pull/$SITE" \
+    --schedule daily --keep-daily "$DAILY" --keep-weekly "$WEEKLY" --keep-monthly "$MONTHLY"
+proxmox-backup-manager sync-job run "tappaas-$SITE"
 ```
 
 `--max-depth 0` matters: the TAPPaaS system grants read on its datastore's root namespace
@@ -265,46 +280,55 @@ The tunnel could instead run on your site's firewall, if it supports WireGuard; 
 scope here.
 
 ```bash
-apt install wireguard-tools
-wg genkey | tee /etc/wireguard/buddy-in.key | wg pubkey      # send this public key
-chmod 600 /etc/wireguard/buddy-in.key
+US="10.255.2.1"                  # your end of the tunnel (.1 of a /30 free at both sites)
+THEM="10.255.2.2"                # the TAPPaaS system's end (.2)
+PORT="51830"                     # the UDP port you listen on
+THEIRKEY="…"                     # the TAPPaaS system's public key (buddy-…-pull), once it sent it
+MTU="1420"                       # 1340 if the TAPPaaS system dials through a satellite
+STORE="backup"                   # your datastore
+LOGIN="tappaas-buddy@pbs"        # the read-only login you create for them
+PASSWORD='…'                     # a strong password for it
 ```
 
-`/etc/wireguard/buddy-in.conf`:
-
-```ini
-[Interface]
-Address    = 10.255.2.1/30
-ListenPort = 51830
-PostUp     = wg set %i private-key /etc/wireguard/buddy-in.key
-# MTU = 1340   # if the TAPPaaS system dials through a satellite
-
-[Peer]
-PublicKey  = <the TAPPaaS system's buddy-…-pull public key>
-AllowedIPs = 10.255.2.2/32
-```
+The tunnel:
 
 ```bash
+apt install wireguard-tools
+(umask "077"; wg genkey > /etc/wireguard/buddy-in.key)
+wg pubkey < /etc/wireguard/buddy-in.key                       # send this public key
+
+cat > /etc/wireguard/buddy-in.conf <<EOF
+[Interface]
+Address    = $US/30
+ListenPort = $PORT
+PostUp     = wg set %i private-key /etc/wireguard/buddy-in.key
+MTU        = $MTU
+
+[Peer]
+PublicKey  = $THEIRKEY
+AllowedIPs = $THEM/32
+EOF
+
 systemctl enable --now wg-quick@buddy-in
 # only the PBS port, only from the puller (adapt to your own input chain):
-nft add rule inet filter input iifname "buddy-in" ip saddr 10.255.2.2 tcp dport 8007 accept
+nft add rule inet filter input iifname "buddy-in" ip saddr "$THEM" tcp dport "8007" accept
 nft add rule inet filter input iifname "buddy-in" drop
 ```
 
-Forward UDP `51830` from your router to the PBS host if it is behind NAT. Then the read-only
+Forward the UDP port from your router to the PBS host if it is behind NAT. Then the read-only
 login, granted **without propagation** on what the TAPPaaS system may copy:
 
 ```bash
-proxmox-backup-manager user create tappaas-buddy@pbs --password '<a strong password>'
-proxmox-backup-manager acl update /datastore/<your-store> DatastoreReader \
-    --auth-id tappaas-buddy@pbs --propagate false
+proxmox-backup-manager user create "$LOGIN" --password "$PASSWORD"
+proxmox-backup-manager acl update "/datastore/$STORE" DatastoreReader \
+    --auth-id "$LOGIN" --propagate false
 proxmox-backup-manager cert info | grep Fingerprint
 ```
 
-Send: auth-id `tappaas-buddy@pbs`, the password, the fingerprint, your datastore name, your public
-key and `<public IP>:51830` — the TAPPaaS operator passes them to `peer add pull … --store
-<your-store> --tunnel dial --tunnel-net 10.255.2.0/30 --endpoint … --peer-key …`, and sends back
-the key it prints for your `[Peer]`.
+Send: the login, the password, the fingerprint, your datastore name, your public key, the `/30`
+and `<public IP>:<port>` — the TAPPaaS operator passes them to Setup 2's `peer add pull`, and sends
+back the key it prints. Put that key in `THEIRKEY` and re-write the `.conf` (then
+`systemctl restart wg-quick@buddy-in`).
 
 ## Prove it
 
