@@ -103,6 +103,10 @@ ck "an image module: both references, and its CVEs marked image" "lit:1.85.0 lit
 SHOW="$(python3 "${PP}" --show logging --details "${D}" 2>&1)"; RC=$?
 ck "--show prints one module: NEW, FIXED and SAME, each CVE on its line" "yes" \
    "$([[ ${RC} -eq 0 && "${SHOW}" == *"NEW"*"CVE-2"*"FIXED"*"CVE-OLD"*"SAME"*"CVE-1"* && "${SHOW}" == *"grafana"*"13.0.9 -> 14.0.1"* ]] && echo yes || echo no)"
+jq '.modules.logging.packages += [{"pkg":"perl-CGI","base":"4.59","now":null},{"pkg":"newlib","base":null,"now":"1.0"}]' "${D}" > "${T}/d2.json"
+SHOW="$(python3 "${PP}" --show logging --details "${T}/d2.json" 2>&1)"
+ck "packages only removed or only added are one line each" "yes" \
+   "$([[ "${SHOW}" == *"no longer shipped (1): perl-CGI"* && "${SHOW}" == *"newly shipped (1): newlib"* && "${SHOW}" != *"perl-CGI    "* ]] && echo yes || echo no)"
 SHOW="$(python3 "${PP}" --show nosuch --details "${D}" 2>&1)"; RC=$?
 ck "an unknown module: rc 1, and the modules there are named" "1 yes" "${RC} $([[ "${SHOW}" == *"logging"* ]] && echo yes || echo no)"
 

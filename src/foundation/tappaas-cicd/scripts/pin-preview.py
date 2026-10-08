@@ -335,10 +335,19 @@ def show(module, path):
     if i.get("base") or i.get("now"):
         same = i.get("base") == i.get("now")
         print(f"  image: {i.get('now') or '—'}" + ("   (unchanged)" if same else f"   ({b}: {i.get('base') or '—'})"))
-    if m.get("packages"):
-        print(f"  packages that change ({len(m['packages'])}):")
-        for p in m["packages"]:
-            print(f"    {p['pkg']:<32} {p['base'] or '—':>14} -> {p['now'] or '—'}")
+    moved = [p for p in m.get("packages", []) if p["base"] and p["now"]]
+    gone = [p["pkg"] for p in m.get("packages", []) if p["base"] and not p["now"]]
+    added = [p["pkg"] for p in m.get("packages", []) if p["now"] and not p["base"]]
+    def names(xs):
+        return ", ".join(xs[:8]) + (f" +{len(xs) - 8}" if len(xs) > 8 else "")
+    if moved:
+        print(f"  packages whose version changes ({len(moved)}):")
+        for p in moved:
+            print(f"    {p['pkg']:<32} {p['base']:>14} -> {p['now']}")
+    if gone:
+        print(f"  no longer shipped ({len(gone)}): {names(gone)}")
+    if added:
+        print(f"  newly shipped ({len(added)}): {names(added)}")
     print(f"  critical/high: now {len(c['new']) + len(c['same'])}, {b} {len(c['fixed']) + len(c['same'])}")
     for title, rows in (("NEW — in now, not in " + b, c["new"]), ("FIXED — in " + b + ", gone now", c["fixed"]), ("SAME — in both", c["same"])):
         print(f"\n  {title} ({len(rows)}):")
