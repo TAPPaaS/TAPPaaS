@@ -521,8 +521,12 @@ FAKE_GATE='[]' run_to preview
 [[ "${RC}" -eq 0 && "${OUT}" == *"nothing to acknowledge"* ]] && ok "a pin bringing nothing notable: no ack needed" || bad "empty preview: ${OUT}"
 [[ -s "${TMP}/cfg/train-preview.json" ]] && ok "…and the preview is written to config" || bad "no train-preview.json"
 FAKE_GATE='["major grafana 13->14"]' run_to preview
-[[ "${OUT}" == *"stops before its deep test unless this is accepted"* && "${OUT}" == *"major grafana 13->14"* ]] \
-    && ok "a major is named, with what happens if it is not accepted" || bad "major not reported: ${OUT}"
+[[ "${OUT}" == *"stops before its deep test until 1 item(s) are accepted"* && "${OUT}" != *"    major grafana 13->14"* ]] \
+    && ok "what needs an ack is one line, not a list" || bad "ack line: ${OUT}"
+[[ "${OUT}" == *"preview --module <name>"* ]] && ok "…pointing at the per-module view" || bad "no --module hint: ${OUT}"
+printf '{"baseLabel":"v2.1","from":"a","to":"b","modules":{"logging":{"module":"logging","approximate":false,"note":"","image":{},"packages":[],"cves":{"new":[{"id":"CVE-2","pkg":"grafana","version":"14.0.1","severity":"High","from":"nixos"}],"fixed":[],"same":[]}}}}' > "${TMP}/cfg/train-preview-details.json"
+run_to preview --module logging
+[[ "${RC}" -eq 0 && "${OUT}" == *"NEW"*"CVE-2"*"grafana"* ]] && ok "preview --module shows one module from the details" || bad "--module: ${OUT}"
 FAKE_GATE='["major grafana 13->14"]' FAKE_NOW=$(( 1790000000 + 20*86400 )) run_to boundary --resume --to nixos-26.05
 [[ "${RC}" -ne 0 && "${OUT}" == *"stopped before the deep test"* && "${OUT}" == *"major grafana 13->14"* ]] \
     && ok "the boundary stops on an unaccepted major, before the deep test" || bad "boundary went on: ${OUT}"

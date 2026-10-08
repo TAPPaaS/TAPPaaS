@@ -66,7 +66,7 @@ run() {  # $@ = extra overrides (e.g. a different nix scanner)
     OUT="$(python3 "${PP}" --inventory "${T}/site.cdx.json" --status "${T}/cve-status.json" \
         --base-label v2.1 --base-closures "${T}/base" --base-images "${T}/base-images.json" --base-nix-scanner "${NIXSCAN:-${T}/nix} --components {file}" \
         --now-closures "${T}/now" --now-images "${T}/now-images.json" --now-nix-scanner "${NIXSCAN:-${T}/nix} --components {file}" \
-        --image-scanner "${T}/img --refs {file}" --from aaaaaaaaaaaa --to bbbbbbbbbbbb --out "${T}/p.json" --ignore "${T}/ignore.json" 2>&1)"; RC=$?
+        --image-scanner "${T}/img --refs {file}" --from aaaaaaaaaaaa --to bbbbbbbbbbbb --out "${T}/p.json" --ignore "${T}/ignore.json" --details "${T}/d.json" 2>&1)"; RC=$?
 }
 row() { jq -r --arg m "$1" '.modules[] | select(.module == $m) | "\(.now) \(.base) \(.fixed) \(.new) \(.same)"' "${T}/p.json"; }
 
@@ -91,6 +91,21 @@ ck "the gate: majors and what is new against the release" \
 ck "the table: NOW first, then the release's columns" "yes" "$([[ "${OUT}" == *"MODULE"*"NOW"*"│"*"V2.1"*"FIXED"*"NEW"*"SAME"* ]] && echo yes || echo no)"
 ck "…with the approximate row said" "yes" "$([[ "${OUT}" == *"deconz"*"≈ approximate"* ]] && echo yes || echo no)"
 ck "…and a grand TOTAL with the platform" "yes" "$(grep -qE '^ +TOTAL +252 ' <<<"${OUT}" && echo yes || echo no)"
+# ── the details file: per module, each CVE with what it is (#788) ──
+D="${T}/d.json"
+ck "details: logging's NEW lists the CVE, package, version and where it comes from" "CVE-2 grafana 14.0.1 High nixos" \
+   "$(jq -r '.modules.logging.cves.new[] | "\(.id) \(.pkg) \(.version) \(.severity) \(.from)"' "${D}")"
+ck "…FIXED what the release had" "CVE-OLD grafana 13.0.9" "$(jq -r '.modules.logging.cves.fixed[] | "\(.id) \(.pkg) \(.version)"' "${D}")"
+ck "…SAME what stays" "CVE-1 openssl" "$(jq -r '.modules.logging.cves.same[] | "\(.id) \(.pkg)"' "${D}")"
+ck "…and the packages that change" "true" "$(jq '[.modules.logging.packages[] | select(.pkg=="grafana" and .base=="13.0.9" and .now=="14.0.1")] | length == 1' "${D}")"
+ck "an image module: both references, and its CVEs marked image" "lit:1.85.0 lit:1.103.3 image" \
+   "$(jq -r '.modules.litellm | "\(.image.base) \(.image.now) \(.cves.fixed[0].from)"' "${D}")"
+SHOW="$(python3 "${PP}" --show logging --details "${D}" 2>&1)"; RC=$?
+ck "--show prints one module: NEW, FIXED and SAME, each CVE on its line" "yes" \
+   "$([[ ${RC} -eq 0 && "${SHOW}" == *"NEW"*"CVE-2"*"FIXED"*"CVE-OLD"*"SAME"*"CVE-1"* && "${SHOW}" == *"grafana"*"13.0.9 -> 14.0.1"* ]] && echo yes || echo no)"
+SHOW="$(python3 "${PP}" --show nosuch --details "${D}" 2>&1)"; RC=$?
+ck "an unknown module: rc 1, and the modules there are named" "1 yes" "${RC} $([[ "${SHOW}" == *"logging"* ]] && echo yes || echo no)"
+
 d1="$(jq -r .digest "${T}/p.json")"; run
 ck "the same findings, the same digest" "${d1}" "$(jq -r .digest "${T}/p.json")"
 

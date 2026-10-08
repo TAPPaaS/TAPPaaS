@@ -238,6 +238,7 @@ release changes and not what was published meanwhile. Nothing is built and nothi
 tappaas-train.sh preview                        # last release vs now, next patch pin
 tappaas-train.sh preview --to nixos-26.11       # … with a release move
 tappaas-train.sh preview --since v2.0           # against an older release
+tappaas-train.sh preview --module openwebui     # one module, CVE by CVE (from the last preview)
 tappaas-train.sh ack --note "read the Nextcloud 35 notes; CVE-… has no fix upstream yet"
 ```
 
@@ -246,6 +247,8 @@ tappaas-train.sh ack --note "read the Nextcloud 35 notes; CVE-… has no fix ups
 | `preview` | The last release (the newest `v*` tag) against "if released now". Prints the table, writes `config/train-preview.json`. |
 | `preview --to <nixos-XX.YY>` | "Now" moves to that release branch: a version move. |
 | `preview --since <vX.Y>` | Compare with that release instead of the newest. |
+| `preview --details-file <f>` | Write the per-module details there instead of `config/train-preview-details.json`. |
+| `preview --module <name>` | Show one module from the last preview's details, without recomputing: the image (both sides), the packages that change, and its critical/high CVEs in three lists — **NEW** (in now, not in the release), **FIXED** (in the release, gone now) and **SAME** — each with package, version, severity and whether it comes from the NixOS system or the image. |
 | `ack` | Accept what the last `preview` gates: majors, critical/high CVEs new against the release, a failed match. |
 | `ack --note "<why>"` | The same, with the reason recorded beside it. |
 
@@ -274,6 +277,9 @@ tappaas-train.sh ack --note "read the Nextcloud 35 notes; CVE-… has no fix ups
 - **Not compared**: the nodes, Debian guests and the firewall patch continuously and are not part
   of a release; the mothership is a flake of its own. Their row has only "now", from the last
   `health-manager scan security`, and they are in the TOTAL.
+- **The details** (`config/train-preview-details.json`) hold, per module, every critical/high CVE
+  of both sides with its package and version, the image references and the changed package
+  versions: the input for working out what to fix (`preview --module`, or `jq`).
 - A past release is evaluated **as it was built** (`--as-is`: before #324 its modules carried
   their own baseline), against its own pin.
 

@@ -28,12 +28,16 @@
 #   tappaas-train patch <staging|production> <commit> --why "<what>" [--dry-run]
 #                                          an urgent fix (ADR-028 D12): fast-forward the channel
 #                                          onto <commit>, tag it MAJOR.MINOR.N, record why
-#   tappaas-train preview [--to <nixos-XX.YY>] [--since <vX.Y>]
+#   tappaas-train preview [--to <nixos-XX.YY>] [--since <vX.Y>] [--details-file <f>]
 #                                          the last release (default: the newest tag) against
 #                                          "if released now" (#788): per module, critical/high now
 #                                          and fixed/new/unchanged since; majors. NixOS modules
 #                                          evaluated, images scanned by reference — nothing built,
-#                                          nothing moved; writes config/train-preview.json
+#                                          nothing moved; writes config/train-preview.json and the
+#                                          per-module details (config/train-preview-details.json)
+#   tappaas-train preview --module <name> [--details-file <f>]
+#                                          one module from the last preview, CVE by CVE: what is
+#                                          NEW, FIXED and SAME, the image and packages that change
 #   tappaas-train ack [--note "<why>"]     accept what the last preview reported; the next
 #                                          boundary goes ahead if it finds nothing beyond it
 #   tappaas-train releases                 every version, its commit, when it reached each channel
@@ -1511,9 +1515,11 @@ cmd_patch() {
 # needs an operator's word; `ack` gives it ahead of time, and the boundary
 # checks the pin it takes against that word before its deep test.
 PREVIEW_FILE="${CONFIG_DIR}/train-preview.json"
+# Per module: each side's CVEs, images and changed packages (`preview --module`).
+DETAILS_FILE="${CONFIG_DIR}/train-preview-details.json"
 TRAIN_SCRIPTS="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 
-# pin_findings <dir holding the candidate flake.lock> <from rev> <out json>
+# pin_findings <dir holding the candidate flake.lock> <from rev> <out json> [<details json>]
 # The last release against "if released now" (#788): the release's tree, its
 # nixpkgs pin and its image pins on one side; this tree, the candidate pin and
 # its image pins on the other — every NixOS module evaluated (nothing built),
@@ -1524,7 +1530,7 @@ TRAIN_SCRIPTS="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 pin_findings() {
     local dir="$1" from="$2" out="$3" sbom="${CONFIG_DIR}/sbom" work tag base_src now_src side tree src ok rel drv
     if [[ -n "${TAPPAAS_PIN_FINDINGS:-}" ]]; then
-        bash -c "${TAPPAAS_PIN_FINDINGS}" _ "${dir}" "${from}" "${out}"; return
+        bash -c "${TAPPAAS_PIN_FINDINGS}" _ "${dir}" "${from}" "${out}" "${4:-}"; return
     fi
     [[ -s "${sbom}/site.cdx.json" && -s "${sbom}/cve-status.json" ]] \
         || { echo "no security scan to compare with — run: health-manager scan security" >&2; return 1; }
@@ -1572,7 +1578,7 @@ pin_findings() {
         --now-nix-scanner "${hm} scan nix-list --components {file} --nixpkgs ${now_src} --no-db-update" \
         --image-scanner "${hm} scan images --refs {file} --no-db-update" \
         --from "${from}" --to "$(jq -r '.nodes.nixpkgs.locked.rev // empty' "${dir}/flake.lock")" --out "${out}" \
-        --ignore "${REPO_DIR}/release/pin-watch-ignore.json"
+        --ignore "${REPO_DIR}/release/pin-watch-ignore.json" ${4:+--details "$4"}
     local rc=$?
     rm -rf "${work}"
     return "${rc}"
@@ -1585,6 +1591,11 @@ unacked() {   # $1 = a preview/findings json
 }
 
 cmd_preview() {
+    # One module from the last preview's details — nothing is recomputed.
+    if [[ -n "${MODULE_SHOW}" ]]; then
+        python3 "${TRAIN_SCRIPTS}/pin-preview.py" --show "${MODULE_SHOW}" --details "${DETAILS_PATH:-${DETAILS_FILE}}"
+        return
+    fi
     read_train
     local t from; t="$(mktemp -d)"
     cp "${REPO_DIR}/src/foundation/templates/flake.nix" "${REPO_DIR}/src/foundation/templates/flake.lock" "${t}/" \
@@ -1598,24 +1609,23 @@ cmd_preview() {
         ( cd "${t}" && nix flake update --extra-experimental-features "nix-command flakes" ) >/dev/null 2>&1 \
             || { rm -rf "${t}"; die "could not resolve the next pin${TO_BRANCH:+ on ${TO_BRANCH}}"; }
     fi
-    if ! pin_findings "${t}" "${from}" "${PREVIEW_FILE}.tmp"; then
+    if ! pin_findings "${t}" "${from}" "${PREVIEW_FILE}.tmp" "${DETAILS_PATH:-${DETAILS_FILE}}"; then
         rm -rf "${t}" "${PREVIEW_FILE}.tmp"; error "no preview"; return 1
     fi
     rm -rf "${t}"
     jq --arg at "$(iso_utc "$(now_epoch)")" --arg ref "${TO_BRANCH}" '. + {at: $at, toBranch: $ref}' \
         "${PREVIEW_FILE}.tmp" > "${PREVIEW_FILE}" && rm -f "${PREVIEW_FILE}.tmp"
-    local open; open="$(unacked "${PREVIEW_FILE}")"
+    local open n; open="$(unacked "${PREVIEW_FILE}")"; n="$(grep -c . <<<"${open}")"
     echo
     if [[ "$(jq '.gate | length' "${PREVIEW_FILE}")" == "0" ]]; then
         info "  ${GN}✓${CL} nothing to acknowledge — the next boundary needs no ack for this pin"
     elif [[ -z "${open}" ]]; then
         info "  ${GN}✓${CL} all of it is acknowledged already ($(jq -r '.ack.at // "?"' "${STATE_FILE}"))"
     else
-        warn "  the next boundary stops before its deep test unless this is accepted:"
-        while IFS= read -r l; do warn "    ${l}"; done <<<"${open}"
-        info "  read the upstream notes, then: ${SCRIPT_NAME} ack --note \"<why>\""
+        info "  the next boundary stops before its deep test until ${n} item(s) are accepted: ${SCRIPT_NAME} ack --note \"<why>\""
     fi
-    info "  written: ${PREVIEW_FILE}"
+    info "  one module, CVE by CVE: ${SCRIPT_NAME} preview --module <name>"
+    info "  written: ${PREVIEW_FILE}, ${DETAILS_PATH:-${DETAILS_FILE}}"
 }
 
 cmd_ack() {
@@ -1706,7 +1716,7 @@ cmd_releases() {
 
 # The range must cover the whole header block above: extend it when the header
 # grows, or --help quietly stops before its last line.
-usage() { sed -n '3,50p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '3,53p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 
 command -v jq >/dev/null 2>&1 || die "jq is required"
 NO_FETCH=0; DRY_RUN=0; RESUME=0; FORCE_BOUNDARY=0
@@ -1742,6 +1752,8 @@ TO_BRANCH=""
 NOTE=""
 # The release a preview compares with (default: the newest v* tag).
 SINCE_TAG=""
+# `preview --module <m>`: show one module from the details; `--details-file`: where they go.
+MODULE_SHOW=""; DETAILS_PATH=""
 # Run a boundary whose value is the PROOF rather than the move: the pin is
 # already where it should be (landed by hand, or a frozen branch) and this run
 # exists to put it through the guest, the sweep and the deep test.
@@ -1759,12 +1771,14 @@ for a in "$@"; do
         --why=*)          WHY="${a#*=}" ;;
         --note=*)         NOTE="${a#*=}" ;;
         --since=*)        SINCE_TAG="${a#*=}" ;;
+        --module=*)       MODULE_SHOW="${a#*=}" ;;
+        --details-file=*) DETAILS_PATH="${a#*=}" ;;
         --production-branch=*) PROD_BRANCH="${a#*=}" ;;
         --staging-branch=*)    STAGING_BRANCH="${a#*=}" ;;
         --staging-host=*)      STAGING_HOST="${a#*=}" ;;
         --guest=*)             GUEST="${a#*=}" ;;
         --to=*)                TO_BRANCH="${a#*=}" ;;
-        --production-branch|--staging-branch|--staging-host|--guest|--to|--why|--note|--since) _want="${a}" ;;
+        --production-branch|--staging-branch|--staging-host|--guest|--to|--why|--note|--since|--module|--details-file) _want="${a}" ;;
         *)
             if [[ -n "${_want:-}" ]]; then
                 case "${_want}" in
@@ -1776,6 +1790,8 @@ for a in "$@"; do
                     --why)               WHY="${a}" ;;
                     --note)              NOTE="${a}" ;;
                     --since)             SINCE_TAG="${a}" ;;
+                    --module)            MODULE_SHOW="${a}" ;;
+                    --details-file)      DETAILS_PATH="${a}" ;;
                 esac
                 _want=""
             else
