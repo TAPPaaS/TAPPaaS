@@ -123,6 +123,8 @@ required=(
     lib/test-node-placeholders.sh
     lib/test-storage-resolve.sh
     lib/test-config-storage-free.sh
+    lib/test-guest-hook.sh
+    setup-guest-hook.sh
     lib/test-vm-net.sh
     lib/zfs-thin.sh
     lib/test-zfs-thin.sh
@@ -222,6 +224,19 @@ if [[ -x "${SCRIPT_DIR}/lib/test-config-storage-free.sh" ]]; then
     fi
 else
     fail "lib/test-config-storage-free.sh not found or not executable"
+fi
+
+# Guests wait for the firewall (#127): the node script and the hookscript.
+info "${BOLD}Test 2a0c: guest start hook (#127)${CL}"
+if [[ -x "${SCRIPT_DIR}/lib/test-guest-hook.sh" ]]; then
+    if gh_out=$("${SCRIPT_DIR}/lib/test-guest-hook.sh" 2>&1); then
+        pass "$(tail -1 <<< "${gh_out}")"
+    else
+        fail "guest start hook unit tests failed"
+        indent <<< "${gh_out}"
+    fi
+else
+    fail "lib/test-guest-hook.sh not found or not executable"
 fi
 
 # Removing a node (#417): what blocks it, the storage entries, the erase.
@@ -687,6 +702,24 @@ for _node in $(get_all_node_hostnames 2>/dev/null); do
         skip "${_node}: not in force yet ($(grep -E 'NOT|not' <<<"${_hh}" | paste -sd';' -)) — update.sh Step 5b converges it"
     else
         fail "${_node}: $(grep -E 'NOT|not' <<<"${_hh}" | paste -sd';' -) — run: module-manager module update cluster"
+    fi
+done
+
+# ── Test 5d: every guest waits for the firewall (#127) ──────────────
+# setup-guest-hook.sh's own check per node: the hook installed, and on every
+# guest but the firewall. Same gate rule as Test 5: update.sh Step 5d converges.
+
+info "${BOLD}Test 5d: guests wait for the firewall before they start${CL}"
+
+for _node in $(get_all_node_hostnames 2>/dev/null); do
+    # shellcheck disable=SC2086
+    if _gh="$(ssh ${SSH_OPTS} "root@${_node}.${MGMT}.internal" 'bash -s -- check' \
+            < "${SCRIPT_DIR}/setup-guest-hook.sh" 2>&1)"; then
+        pass "${_node}: $(paste -sd';' <<<"${_gh}" | sed 's/;/ · /g')"
+    elif [[ "${RUNTIME_ONLY}" == "1" ]]; then
+        skip "${_node}: not in force yet ($(paste -sd';' <<<"${_gh}")) — update.sh Step 5d converges it"
+    else
+        fail "${_node}: $(paste -sd';' <<<"${_gh}") — run: module-manager module update cluster"
     fi
 done
 

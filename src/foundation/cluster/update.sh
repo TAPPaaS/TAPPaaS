@@ -266,6 +266,29 @@ if [[ "${_host_hard_fail}" -eq 0 ]]; then
     debug "Microcode and the audit trail in force on all Proxmox nodes."
 fi
 
+# Step 5d: guests wait for the firewall before they start (#127).
+#   Guests take their address by DHCP from the firewall VM; after a cold start of
+#   the site each node starts its guests at once, while the HA firewall waits for
+#   quorum. A pre-start hookscript on every guest but the firewall waits until it
+#   answers DNS, at most 180s. The firewall is network's VM; a site without one
+#   gets '-' and a hook that waits for nothing. Report-and-continue, as Step 5b.
+info "${BOLD}Step 5d: guests wait for the firewall before they start${CL}"
+_fw_vmid="$(jq -r '.vmid // empty' /home/tappaas/config/network.json 2>/dev/null)"
+_fw_vmid="${_fw_vmid:--}"
+_guest_hook_fail=0
+while read -r node; do
+    NODE_FQDN="$node.$MGMTVLAN.internal"
+    if _gh_out="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=no root@"$NODE_FQDN" \
+            "bash -s -- apply ${_fw_vmid}" < "${SCRIPT_DIR}/setup-guest-hook.sh" 2>&1)"; then
+        while IFS= read -r _l; do debug "$node: ${_l}"; done <<<"${_gh_out}"
+    else
+        printf '%s\n' "${_gh_out}" >&2
+        warn "$node: guest start hook not in force — see above"
+        _guest_hook_fail=1
+    fi
+done <<< "$NODES"
+[[ "${_guest_hook_fail}" -eq 0 ]] && debug "Every guest waits for the firewall (VM ${_fw_vmid}) before it starts."
+
 # Step 5c: Proxmox's own notification mails off (#126).
 #   PVE mails root@pam's address through its built-in `default-matcher`: smartd
 #   and ZED warnings (as system mail), every backup job, replication failures,

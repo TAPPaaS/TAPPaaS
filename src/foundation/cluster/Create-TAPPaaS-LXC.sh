@@ -314,6 +314,14 @@ pct create "${VMID}" "local:vztmpl/${IMAGE}" \
   --onboot 1 \
   >/dev/null
 CREATED=1
+# Wait for the firewall before every start (#127): the hook and its settings are
+# installed by cluster's update (setup-guest-hook.sh); the firewall itself and a
+# site without them get nothing.
+if [[ -x /var/lib/vz/snippets/tappaas-guest-hook.sh ]] \
+   && ! grep -qx "FW_VMID=${VMID}" /etc/tappaas/firewall-wait.env 2>/dev/null; then
+  pct set "${VMID}" --hookscript local:snippets/tappaas-guest-hook.sh >/dev/null \
+    || warn "could not attach the firewall-wait hook to ${VMID}"
+fi
 info "  Created container ${VMID} on bridge ${BRIDGE0} (zone ${ZONE0}, tag ${VLANTAG0})"
 
 CONF="/etc/pve/lxc/${VMID}.conf"

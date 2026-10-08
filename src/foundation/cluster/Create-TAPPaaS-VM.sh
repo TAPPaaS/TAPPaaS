@@ -837,6 +837,14 @@ info "${BOLD}Configuring the $VMNAME VM settings..."
 qm set $VMID --description "$DESCRIPTION_HTML" >/dev/null \
     2> >(grep -v 'Wide character in print' >&2 || true)
 qm set $VMID --tags $VMTAG >/dev/null
+# Wait for the firewall before every start (#127): the hook and its settings are
+# installed by cluster's update (setup-guest-hook.sh); the firewall itself and a
+# site without them get nothing.
+if [[ -x /var/lib/vz/snippets/tappaas-guest-hook.sh ]] \
+   && ! grep -qx "FW_VMID=${VMID}" /etc/tappaas/firewall-wait.env 2>/dev/null; then
+  qm set "${VMID}" --hookscript local:snippets/tappaas-guest-hook.sh >/dev/null \
+    || warn "could not attach the firewall-wait hook to ${VMID}"
+fi
 qm set $VMID --agent enabled=1 >/dev/null
 qm set $VMID --cores $CORE_COUNT --memory $RAM_SIZE >/dev/null
 NET0_OPTS="virtio,bridge=${BRIDGE0},macaddr=${MAC0}"
