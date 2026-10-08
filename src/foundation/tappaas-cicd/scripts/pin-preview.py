@@ -271,8 +271,10 @@ def main():
         nf = by_id(side_findings("now", m)) if in_now else {}
         vx = by_id(side_findings("now", m, suppressed=True)) if in_now else {}
         bk, nk = set(bf), set(nf)
+        # Gone from now because a VEX statement decided it is not fixed — it is in VEX.
+        gone = bk - nk - set(vx)
         row = {"module": m, "now": len(nk) if in_now else None, "base": len(bk) if in_base else None,
-               "fixed": len(bk - nk), "new": len(nk - bk), "same": len(nk & bk), "vex": len(vx), "approximate": approx.get(m, False),
+               "fixed": len(gone), "new": len(nk - bk), "same": len(nk & bk), "vex": len(vx), "approximate": approx.get(m, False),
                "note": "new since " + a.base_label if not in_base else ("removed" if not in_now else ""),
                "image": now_img.get(m) or base_img.get(m)}
         rows.append(row)
@@ -283,7 +285,7 @@ def main():
             "packages": [{"pkg": p, "base": max(bp[p], key=vkey) if p in bp else None, "now": max(np_[p], key=vkey) if p in np_ else None}
                          for p in sorted(set(bp) | set(np_))
                          if (max(bp[p], key=vkey) if p in bp else None) != (max(np_[p], key=vkey) if p in np_ else None)],
-            "cves": {"new": ordered(nf, nk - bk), "fixed": ordered(bf, bk - nk), "same": ordered(nf, nk & bk),
+            "cves": {"new": ordered(nf, nk - bk), "fixed": ordered(bf, gone), "same": ordered(nf, nk & bk),
                      "vex": ordered(vx, set(vx))},
         }
         for k in nk - bk:

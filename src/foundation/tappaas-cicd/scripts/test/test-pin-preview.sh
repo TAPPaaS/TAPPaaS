@@ -52,7 +52,9 @@ comps = json.load(open(sys.argv[sys.argv.index("--components") + 1]))
 vexed = set(os.environ.get("VEXED", "").split())
 fs = [{"id": i, "severity": s, "pkg": c["name"], "installed": c["version"], "fixed": ""}
       for c in comps for i, s in db.get(f"{c['name']}@{c['version']}", [])]
-json.dump({"findings": [f for f in fs if f["id"] not in vexed], "suppressed": [f for f in fs if f["id"] in vexed], "error": ""}, sys.stdout)
+# A token is a CVE id (any version) or id@version (a versioned statement).
+dec = lambda f: f["id"] in vexed or f"{f['id']}@{f['installed']}" in vexed
+json.dump({"findings": [f for f in fs if not dec(f)], "suppressed": [f for f in fs if dec(f)], "error": ""}, sys.stdout)
 EOF
 cat > "${T}/img" <<'EOF'
 #!/usr/bin/env python3
@@ -142,6 +144,9 @@ ck "a VEX-decided CVE leaves NOW: logging 1 | v2.1 1" "1 1" "$(jq -r '.modules[]
 ck "…and is counted in the VEX column, on its own" "1" "$(jq '.modules[] | select(.module=="logging") | .vex' "${T}/p.json")"
 ck "…listed under VEX in the details" "CVE-1" "$(jq -r '.modules.logging.cves.vex[].id' "${T}/d.json")"
 ck "…not gated: a decided CVE needs no ack" "false" "$(jq '.gate | index("cve CVE-1") != null' "${T}/p.json")"
+VEXED="CVE-1@3.5.2" run
+ck "a statement on the new version only: the release had it, now it is decided — VEX, not FIXED" "1 1 CVE-OLD" \
+   "$(jq -r '.modules[] | select(.module=="logging") | "\(.fixed) \(.vex)"' "${T}/p.json") $(jq -r '[.modules.logging.cves.fixed[].id] | join(",")' "${T}/d.json")"
 run
 
 printf '#!/usr/bin/env bash\necho "{\\"findings\\":[],\\"error\\":\\"grype failed: no db\\"}"; exit 1\n' > "${T}/bad"; chmod +x "${T}/bad"
