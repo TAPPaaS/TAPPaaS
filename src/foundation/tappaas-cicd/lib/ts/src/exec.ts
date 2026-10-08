@@ -11,8 +11,14 @@ import { defaultConfigDir } from "./config-io";
 // every manager used).
 const MAX_BUFFER = 64 * 1024 * 1024;
 
+// Only a NON-default root is exported: the standard path is what every child
+// resolves on its own. Exporting it anyway shadowed a test's fixture — a test
+// that sets CONFIG_DIR inherits TAPPAAS_CONFIG, which TS children prefer, so
+// under `site-manager test --deep` the storage-manager suite edited the live
+// shares.json and quota (hrossen, 2026-10-08).
 export function configEnv(): Record<string, string | undefined> {
   const cd = defaultConfigDir();
+  if (cd === "/home/tappaas/config") return { ...process.env };
   return { ...process.env, CONFIG_DIR: cd, TAPPAAS_CONFIG: cd };
 }
 

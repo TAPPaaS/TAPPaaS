@@ -70,7 +70,7 @@ write_module() {
 # the rc is half of what this suite asserts.
 run_svc() {  # $1 = identity|accessControl
     local svc="$1"
-    CONFIG_DIR="${TMP}" timeout 45 "${IDENTITY_SVC}/${svc}/install-service.sh" logging \
+    CONFIG_DIR="${TMP}" TAPPAAS_CONFIG="${TMP}" timeout 45 "${IDENTITY_SVC}/${svc}/install-service.sh" logging \
         > "${TMP}/svc-out.txt" 2>&1
     RC=$?
     OUT="$(cat "${TMP}/svc-out.txt")"
@@ -96,7 +96,7 @@ echo "── the verifier must agree with the installer ──"
 # The half that actually rolled makerfloss's logging back a second time: the
 # installer skipped, then test-service.sh reported the absent OIDC application
 # as drift, so `reconcile --apply` declared the module unconverged.
-CONFIG_DIR="${TMP}" timeout 45 "${IDENTITY_SVC}/identity/test-service.sh" logging \
+CONFIG_DIR="${TMP}" TAPPAAS_CONFIG="${TMP}" timeout 45 "${IDENTITY_SVC}/identity/test-service.sh" logging \
     > "${TMP}/test-out.txt" 2>&1
 RC=$?; OUT="$(cat "${TMP}/test-out.txt")"
 [[ "${RC}" -eq 0 ]] && ok "test-service reports no drift for an unpublished module" \

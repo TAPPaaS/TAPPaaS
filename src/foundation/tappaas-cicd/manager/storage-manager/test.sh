@@ -49,7 +49,9 @@ cat > "${FIX}/cfg/jellyfin.json" <<'JSON'
 {"vmname":"jellyfin","zone0":"srvHome","dependsOn":["cluster:vm","network:rules","storage:nfs"],
  "config":{"storage:nfs":{"mounts":[{"path":"/media","share":"media","access":"rw"}]}}}
 JSON
-SM() { CONFIG_DIR="${FIX}/cfg" run_ts "node '${DIST}/manager/storage-manager/src/main.js' $*"; }
+# Both spellings: TS reads TAPPAAS_CONFIG first, and an inherited one would
+# point this suite at the live config.
+SM() { CONFIG_DIR="${FIX}/cfg" TAPPAAS_CONFIG="${FIX}/cfg" run_ts "node '${DIST}/manager/storage-manager/src/main.js' $*"; }
 last() { tail -1 "${FIX}/converge.log" 2>/dev/null; }
 
 SM nfs share add media --server tappaas1 --pool tankb1 --quota 4T --backup true --check >/dev/null 2>&1
