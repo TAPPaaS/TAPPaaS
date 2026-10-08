@@ -105,9 +105,9 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | 4 | G4.2 Proxy & ingress | M | L | 1 | 1 | 4 |
 | 4 | G4.3 Manager verb gaps | M | L | 4 | 5 | 8 |
 | 4 | G4.4 Storage & physical devices | H | L | 2 | 3 | 6 |
-| 4 | G4.5 Governance, CI & sign-offs | M | L | 2 | 2 | 6 |
+| 4 | G4.5 Governance, CI & sign-offs | M | L | 2 | 3 | 5 |
 | 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 7 | 10 | 6 |
-| 3 | G3.2 Identity & SSO wiring | M | L | 1 | 5 | 5 |
+| 3 | G3.2 Identity & SSO wiring | M | L | 1 | 6 | 5 |
 | 3 | G3.3 App module fixes | L | L | 5 | 4 | 10 |
 | 3 | G3.4 AI stack maturity | M | M | 1 | – | 6 |
 | 3 | G3.5 Installer UX | L | L | – | 1 | 3 |
@@ -128,6 +128,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 
 | # | Question | Waits on |
 |---|----------|----------|
+| #801 | Default update schedule: daily on every channel — on `stable`/`staging` 13 of 14 runs change nothing, but urgent fixes and OS patches arrive within a day; what to do with sites on the old weekly default | Operator (proposed 2026-10-08, from #797) |
 | #294 | VMID scheme: zone-aligned ranges for new installs only, or not at all — never renumber in place | Lars and @ErikDaniel007 (G1.7) |
 | #430 | Controller/manager pattern for app modules (Ansible first?) — decide before #170 | Lars and @ErikDaniel007 (G1.7) |
 | #142 | AI-agent access to the mothership: SSH + sudo, or a REST API (which would need an ADR) | RFC outcome (G1.6) |
@@ -278,7 +279,7 @@ Shared storage and the physical network as managed parts of a site: the rest of 
 | ✅ #792 | `unifi.sh`: whole API payloads as jq arguments fail on large sites | H | M | **Done 2026-10-07**: interrogate (switch, controller, AP) and the port-override builder pass payloads by file (`--slurpfile`), never argv — Linux caps one argument at 128 KiB. Reproduced offline with a 165 KiB device list (old: "Argument list too long"; new: same answer as small) |
 | FW #158 | Multi-NIC module firewall rules | M | L | Optional roll-in |
 
-### G4.5 Governance, CI & sign-offs — Ease M · Risk L · released: 2 · done for 2.2: 2 · open: 6
+### G4.5 Governance, CI & sign-offs — Ease M · Risk L · released: 2 · done for 2.2: 3 · open: 5
 
 The project's own machinery: CI runners (#415), community-health files (#486), the remaining sign-offs and ADRs (#406, #359), a tool for urgent patches (#746), a logging-function lint (#747), a service-desk spike (#63).
 
@@ -290,7 +291,7 @@ The project's own machinery: CI runners (#415), community-health files (#486), t
 | #359 | legal/processor ADR | M | L | |
 | #63 | Service desk tooling spike | M | L | |
 | ✅ FW #143 | CVE tracking / SBOM (ADR-011) | M | L | **Closed 2026-09-27 — built.** ADR-011 v0.5 Proposed: `health-manager scan/report security` after every sweep, a WARN-only `cve-status` gate, notice on what is new |
-| #746 | Emergency patching as ADR-028 D12 describes it | M | L | ADR-028 D12 urgent fixes exist only as prose. Wants a `tappaas-train` verb for the channel-tip → `main` → fast-forward move, and the carried fix shown in `status` |
+| ✅ #746 | Emergency patching as ADR-028 D12 describes it | M | L | **Closed 2026-10-08** (`3f732eb9`): `tappaas-train patch` (built under D13) now requires `--why` to name its D12 case; the next boundary records the urgent fixes it supersedes; `status` and the self-check report code running ahead of the checkout (`lib/deployed-drift.sh`). Production moves stay the operator's, by hand (D12). Live on hrossen |
 | ✅ #747 | A script that defines its own logging set must define all of it, `debug` included | L | L | **Closed 2026-10-08** (`fb557bbc`): the 24 scripts with a private `info`/`warn`/`error`/`die` set and no `debug` define it; `scripts/test/test-log-set-lint.sh` (Test 9z) checks definitions, so the 25th cannot land |
 
 ---
@@ -322,7 +323,7 @@ Guests sized, placed, started and stopped right: memory defaults from measuremen
 | ✅ #773 | `cluster:vm` thinDisk — opt-in thin provisioning per module | M | M | **Closed 2026-10-04.** `thinDisk: true` keeps a module's disk thin on its storage and on the HA replica (immich first: 500G that takes what the library uses). Watch the pool — a thin disk can overcommit it |
 | ✅ #764 | The Proxmox VM summary note links "Discussions": make the links docs, code, issues | H | L | **Done 2026-10-07.** The note `cluster:vm` writes on a new VM: the turtle (the old logo URL was dead), then *docs* (tappaas.org), *code* (the module's own directory in the repo) and *Issues*. Existing VMs keep their note |
 
-### G3.2 Identity & SSO wiring — Ease M · Risk L · released: 1 · done for 2.2: 5 · open: 5
+### G3.2 Identity & SSO wiring — Ease M · Risk L · released: 1 · done for 2.2: 6 · open: 5
 
 Every app wired to the identity provider the same way: OIDC for hass, Nextcloud and forgejo (#345, #401, #282), a site-specific login page (#479), logging's SSO dependency (#701), and a test for forward-auth (#752).
 
@@ -334,6 +335,7 @@ Every app wired to the identity provider the same way: OIDC for hass, Nextcloud 
 | #479 | Site-specific login page | L | L | |
 | #701 | logging depends on identity though its own code makes SSO optional | — | — | **Open, not yet scored** — SSO is conditional on publication since `4c9c846a`. Added in the 2026-09-24 issue sweep |
 | ✅ #738 | `identity:identity` discovery check fails on a changed host key and blames the firewall | L | L | **Closed 2026-09-25** via `integrate/nc35` (`c998ca5f`): the stale host key is cleared before the OIDC check, and an ssh failure is named as one. Reported by @AndreasJe |
+| ✅ #797 | identity: an update skips Authentik release lines when the guest is built on the mothership | M | M | **Closed 2026-10-08** (`fc8383f8`, `68c4af51`): the step logic read guest files the mothership build cannot see, so every guest looked fresh and jumped to the target (Nextcloud majors too). `build-facts.sh` now reports the version — from the record, else the server container — staged as `/etc/nixos/tappaas-build-facts.env`; missing or unknown facts stop the build before it switches; no step below the running container; a refused version ends the wait in a minute, not 45. Reported by @ErikDaniel007; live on hrossen |
 | #752 | identity:accessControl has no test-service | M | L | `test-service.sh` is an ADR-027 stub, so forward-auth is never tested. Check the Authentik provider, Caddy's ForwardAuth, and that an anonymous request is redirected |
 | ✅ #794 | The groups claim mapping uses `User.ak_groups`, deprecated since 2026.2 | L | L | **Closed 2026-10-07** (`b7b5d242`): the mapping reads `user.groups` (same groups for all users); forgejo and nextcloud re-applied on hrossen, no deprecation |
 | ✅ #769 | vaultwarden: SSO is registered but never wired into the app | M | L | **Closed 2026-10-04** (SSO wired, `e184ea9d`). **Reversed 2026-10-06, vaultwarden 0.6.0:** no SSO for the password vault, by decision — see vaultwarden DESIGN.md |
