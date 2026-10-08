@@ -8,9 +8,11 @@ PBS reads your backups into a namespace of its own; your PBS never pushes anywhe
 rule that makes a compromised site unable to destroy the copy its buddy holds (ADR-012 §1.4.1): a
 pull holds only a read-only login on the side it pulls from.
 
-**Status:** on a TAPPaaS system `backup-manager peer …` sets up both the PBS side and the tunnel
-(#796). Serving a tunnel through a satellite needs a satellite change that is not built yet — see
-[What is still to build](#what-is-still-to-build).
+**How each end is set up.** On a TAPPaaS system, every setup below is a `backup-manager peer add`
+command: it sets up both the PBS side and the tunnel. For a PBS that is not part of TAPPaaS, the
+instructions are for a Debian-based PBS host, with WireGuard running on the host itself. Running
+the tunnel on that site's firewall instead, if it supports WireGuard, works as well, but is out of
+scope here.
 
 ## One pull, one tunnel
 
@@ -131,8 +133,12 @@ Send the password over a channel you trust; public keys and fingerprints may go 
 You serve the tunnel and grant read access — one command:
 
 ```bash
-backup-manager peer add remote <buddy> --auth-id <buddy>@pbs --country <CC> --city <City> \
-    --tunnel serve [--mtu 1340]
+BUDDY="anna"      # a short name for your buddy: letters, digits, - and _
+CC="DE"           # the country your buddy's PBS is in (ISO code)
+CITY="Berlin"     # the city it is in
+MTU="1420"        # 1340 if you serve through a satellite
+backup-manager peer add remote "$BUDDY" --auth-id "$BUDDY@pbs" --country "$CC" --city "$CITY" \
+    --tunnel serve --mtu "$MTU"
 ```
 
 - It creates `<buddy>@pbs` (prompting for the password) and grants it `DatastoreReader` **without
@@ -150,13 +156,14 @@ When the buddy sends **their** public key, admit it — the same command with `-
 `--force` (the `/30` and port are kept, the login is left as it is):
 
 ```bash
-backup-manager peer add remote <buddy> --auth-id <buddy>@pbs --country <CC> --city <City> \
-    --peer-key <their key> --force
-backup-manager peer check remote <buddy>      # the instance, its key, the handshake
+KEY="…"           # your buddy's public key, as their peer add pull printed it
+backup-manager peer add remote "$BUDDY" --auth-id "$BUDDY@pbs" --country "$CC" --city "$CITY" \
+    --peer-key "$KEY" --force
+backup-manager peer check remote "$BUDDY"      # the instance, its key, the handshake
 ```
 
 Behind a satellite, the satellite must also relay the UDP port to `10.255.0.1:<port>` — not built
-yet (#795); pass `--mtu 1340`.
+yet (#795).
 
 The firewall objects are named `buddy-<buddy> …`: TAPPaaS's nightly firewall reconcile deletes only
 rules carrying its own `tappaas-…` prefix, so they survive it, and `peer delete` removes them.
@@ -166,9 +173,16 @@ rules carrying its own `tappaas-…` prefix, so they survive it, and `peer delet
 You dial the buddy's tunnel and pull. With what they sent:
 
 ```bash
-backup-manager peer add pull <buddy> --store <their datastore> --country <CC> --city <City> \
-    --tunnel dial --tunnel-net 10.255.2.0/30 --endpoint <their public IP>:<port> \
-    --peer-key <their key> [--mtu 1340]
+BUDDY="anna"                   # a short name for your buddy: letters, digits, - and _
+STORE="tappaas_backup"         # their datastore name
+NET="10.255.2.0/30"            # the tunnel /30 they sent
+ENDPOINT="203.0.113.7:51830"   # their public IP (or satellite IP) and UDP port
+KEY="…"                        # their public key
+MTU="1420"                     # 1340 if they serve through a satellite
+CC="DE"                        # the country their PBS is in (ISO code)
+CITY="Berlin"                  # the city it is in
+backup-manager peer add pull "$BUDDY" --store "$STORE" --country "$CC" --city "$CITY" \
+    --tunnel dial --tunnel-net "$NET" --endpoint "$ENDPOINT" --peer-key "$KEY" --mtu "$MTU"
 ```
 
 - On your OPNsense it creates the WireGuard instance `buddy-<buddy>-pull` (`.2/30`) with one peer —
@@ -184,15 +198,17 @@ backup-manager peer add pull <buddy> --store <their datastore> --country <CC> --
 The pull works once the buddy has admitted your key. Then:
 
 ```bash
-backup-manager peer check pull <buddy>   # handshake, and their PBS answering on .1:8007
-ssh root@backup.mgmt.internal proxmox-backup-manager sync-job run sync-<buddy>
-backup-manager peers                     # the relationship, its tunnel, where the copy lives
-backup-manager validate                  # tunnel /30s, and whether the buddy is shown to be elsewhere
+backup-manager peer check pull "$BUDDY"   # handshake, and their PBS answering on .1:8007
+ssh root@backup.mgmt.internal proxmox-backup-manager sync-job run "sync-$BUDDY"
+backup-manager peers                      # the relationship, its tunnel, where the copy lives
+backup-manager validate                   # tunnel /30s, and whether the buddy is shown to be elsewhere
 ```
 
 ## Setup 3: a non-TAPPaaS PBS that pulls a TAPPaaS system
 
-The TAPPaaS system does Setup 1. On your PBS host (Debian), the tunnel ends on the host itself:
+The TAPPaaS system does Setup 1. On your PBS host (Debian), the tunnel ends on the host itself.
+The tunnel could instead run on your site's firewall, if it supports WireGuard; that is out of
+scope here.
 
 ```bash
 apt install wireguard-tools
@@ -241,7 +257,9 @@ of the sync.
 ## Setup 4: a non-TAPPaaS PBS a TAPPaaS system can pull
 
 The TAPPaaS system does Setup 2. On your PBS host (Debian), the tunnel ends on the host itself, so
-no port forward is needed — PBS answers on the tunnel address:
+no port forward is needed — PBS answers on the tunnel address.
+The tunnel could instead run on your site's firewall, if it supports WireGuard; that is out of
+scope here.
 
 ```bash
 apt install wireguard-tools
