@@ -248,6 +248,7 @@ in `config/alerts.log` on the mothership.
 | `OomKill` | event | the kernel's "Out of memory: Killed process" (subject: *Out of Memory Kill*) |
 | `RootKeyChanged` | event | a key added to or removed from root's `authorized_keys` on the nodes — the nodes' `tappaas-rootkeys-check` (5-minute timer) compares key fingerprints and names each one; one alert for the cluster-wide file. Rewrites with the same keys (Proxmox's `pvecm updatecerts`) do not alert; the audit trail still records every write |
 | `HaStuck` | state | the mothership's `check-ha-health` (5-minute timer) logging `tappaas-ha-stuck:`: a node in HA maintenance past 30 minutes, or an HA service in a transitional state past 10; `ha_stuck` names it |
+| `FirewallCertChanged` | event | the mothership's `check-firewall-cert` (hourly) logging that the firewall's API certificate changed — a rebuild, a renewal, or something answering as the firewall — or expires within 30 days (once a day). Controllers skip verifying that certificate (#310) |
 | `ReplicationFailed` | state | a storage replication job failed in two runs within the hour (one failed run while a node reboots does not mail). The mail names the job (`replication_job`, `<vmid>-<n>`); it clears after an hour without the error |
 | `Heartbeat` | heartbeat | logs arriving at all — never mailed, see below |
 

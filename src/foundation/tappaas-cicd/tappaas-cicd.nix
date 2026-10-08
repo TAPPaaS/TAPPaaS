@@ -485,6 +485,38 @@ in
   # It runs as root because the capture set includes /etc/secrets, whose escrow
   # of every module's encryption key is root-only.
 
+  # check-firewall-cert — the firewall API's certificate changed? (#310)
+  # Every controller call skips certificate verification (self-signed, for
+  # another name), so a rotation — or something answering as the firewall —
+  # is otherwise invisible. Logs a line on a change; logging mails it
+  # (FirewallCertChanged). The record is config/firewall-cert.json.
+  systemd.services.check-firewall-cert = {
+    description = "TAPPaaS: has the firewall API certificate changed";
+    serviceConfig = {
+      Type = "oneshot";
+      User = "tappaas";
+      ExecStart = "/home/tappaas/bin/check-firewall-cert.sh";
+      Environment = [
+        ("PATH=/home/tappaas/bin:/run/wrappers/bin:/home/tappaas/.nix-profile/bin"
+          + ":/etc/profiles/per-user/tappaas/bin:/nix/var/nix/profiles/default/bin"
+          + ":/run/current-system/sw/bin")
+      ];
+      NoNewPrivileges = true;
+      ProtectSystem = "strict";
+      ReadWritePaths = [ "/home/tappaas/config" ];
+      PrivateTmp = true;
+    };
+  };
+  systemd.timers.check-firewall-cert = {
+    description = "Hourly trigger for check-firewall-cert";
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnBootSec = "15min";
+      OnUnitActiveSec = "1h";
+      RandomizedDelaySec = "60s";
+    };
+  };
+
   systemd.timers.check-ha-health = {
     description = "Periodic trigger for check-ha-health";
     wantedBy = [ "timers.target" ];

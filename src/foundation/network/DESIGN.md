@@ -67,6 +67,20 @@ fixed raw layout could not be grown and caused disk-full update failures.
 > supervised migration). `update.sh` resolves `config/network.json` first and falls back
 > to the legacy `config/firewall.json`.
 
+## The API certificate: unverified, watched (#310)
+
+The mothership reaches the firewall's API (443/8443) with `--no-ssl-verify`: the firewall's
+certificate is OPNsense's self-signed one, issued for `network.internal`, while every caller
+connects to `firewall.mgmt.internal`. What that leaves open is narrow — the API key travels to
+whoever answers as the firewall, and answering as it needs a foothold on the management LAN
+(8443 is closed to every other zone, #384) — and blocking on a pinned certificate would stop
+the nightly sweep at every firewall rebuild or certificate renewal. So the certificate is
+**watched, not pinned**: `check-firewall-cert` on the mothership (hourly) records its fingerprint
+in `config/firewall-cert.json` and logs a line when it changes, or once a day in its last 30
+days; logging mails both as **FirewallCertChanged**. A change after a rebuild or a renewal is
+expected; any other change means something else answers as the firewall. Proper verification
+comes with a TAPPaaS internal CA issuing the firewall a certificate for its real name (#787).
+
 ## Per-module firewall rules
 
 The `network:rules` capability lets each module declare its inbound and outbound network

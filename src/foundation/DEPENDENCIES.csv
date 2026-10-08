@@ -142,6 +142,7 @@ src/config.ts,tappaas-cicd/manager/health-manager/,site.json
 src/types.ts,tappaas-cicd/manager/health-manager/,
 check-disk-threshold.sh,tappaas-cicd/manager/health-manager/,
 check-ha-health.sh,tappaas-cicd/manager/health-manager/,common-install-routines.sh; ha-vm-lib.sh; cloudinit-orphans.sh; site.json
+check-firewall-cert.sh,tappaas-cicd/manager/health-manager/,firewall-cert.json
 update-os.sh,tappaas-cicd/manager/health-manager/,common-install-routines.sh
 install.sh,tappaas-cicd/manager/health-manager/,health-manager; update-os.sh; validate.sh
 test.sh,tappaas-cicd/manager/health-manager/,validate.sh

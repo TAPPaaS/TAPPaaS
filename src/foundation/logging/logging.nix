@@ -181,6 +181,17 @@ let
       query = ''{host="tappaas-cicd", unit="check-ha-health.service"} |= "tappaas-ha-stuck"'';
     })
     (alertRule {
+      uid = "tappaas-firewall-cert"; title = "FirewallCertChanged"; kind = "event"; window = 300;
+      # The firewall's API certificate changed, or expires within 30 days (#310):
+      # the mothership's check-firewall-cert (hourly) logs the line once per
+      # change, the expiry once a day. Controllers skip verifying it, so this is
+      # how a rebuild, a renewal — or something answering as the firewall — shows.
+      # Scoped to the unit: the rule's own query text is logged too.
+      expr = ''sum by (host) (count_over_time({host="tappaas-cicd", unit="check-firewall-cert.service"} |~ "tappaas-firewall-cert-(changed|expiring):" [5m]))'';
+      summary = "The firewall's API certificate changed (expected after a firewall rebuild or a certificate renewal — otherwise something answers as the firewall), or expires within 30 days. The line names the old and new fingerprints.";
+      query = ''{host="tappaas-cicd", unit="check-firewall-cert.service"} |= "tappaas-firewall-cert"'';
+    })
+    (alertRule {
       uid = "tappaas-heartbeat"; title = "Heartbeat"; kind = "heartbeat"; window = 300;
       # Fires for as long as logs arrive and rules run; its webhook proves the
       # whole path reaches the mothership. Never mailed: the receiver records
