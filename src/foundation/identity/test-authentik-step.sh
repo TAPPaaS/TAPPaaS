@@ -22,12 +22,12 @@ T="$(mktemp -d "${TMPDIR:-/tmp}/ak-step.XXXXXX")"; trap 'rm -rf "${T}"' EXIT
 LINES='[ "2025.2.3" "2025.4.4" "2025.6.4" "2025.8.6" "2025.10.4" "2025.12.6" "2026.2.7" "2026.5.7" "2026.8.3" ]'
 G="${T}/guest"   # the guest's filesystem, as the collector sees it
 ev() {  # $1 = attribute; the guest's files under ${G}
-    FACTS_ROOT="${G}" bash "${FACTS}" > "${T}/facts.env"
+    FACTS_ROOT="${G}" FACTS_IMAGE="${IMG:-}" bash "${FACTS}" > "${T}/facts.env"
     nix-instantiate --eval --strict 2>&1 -E "(import ${STEP} {
         lines = ${LINES}; factsFile = \"${T}/facts.env\";
     }).$1" | tr -d '"'
 }
-reset() { rm -rf "${G}"; mkdir -p "${G}/var/lib/authentik" "${G}/etc/secrets"; }
+reset() { rm -rf "${G}"; mkdir -p "${G}/var/lib/authentik" "${G}/etc/secrets"; IMG=""; }
 # The old fixture names, now files on the fixture guest.
 
 reset
@@ -36,8 +36,8 @@ ck "…the collector says so: none" "AUTHENTIK_INSTALLED=none" "$(head -1 "${T}/
 ck "…which needs no Redis"                               "false"    "$(ev redis)"
 ck "…and mounts /data"                                   "true"     "$(ev dataMount)"
 
-reset; echo "AUTHENTIK_SECRET_KEY=x" > "${G}/etc/secrets/authentik.env"
-ck "an install from before the version file runs 2025.2.1 → that line's last usable patch first" "2025.2.3" "$(ev step)"
+reset; echo "AUTHENTIK_SECRET_KEY=x" > "${G}/etc/secrets/authentik.env"; IMG="ghcr.io/goauthentik/server:2025.2.1"
+ck "an install from before the version file (its container on 2025.2.1) → that line's last usable patch first" "2025.2.3" "$(ev step)"
 ck "…still with Redis"   "true"  "$(ev redis)"
 ck "…still on /media"    "false" "$(ev dataMount)"
 
@@ -82,6 +82,19 @@ printf 'SOMETHING_ELSE=1\n' > "${T}/facts.env"
 ckin "facts that do not name the version: refused" "do not say what the guest runs" "$(nix-instantiate --eval --strict 2>&1 -E "(import ${STEP} { lines = ${LINES}; factsFile = \"${T}/facts.env\"; }).step")"
 reset; printf '2025.10.4\n' > "${G}/var/lib/authentik/tappaas-version"; printf 'a = b; c\n' > "${G}/var/lib/authentik/tappaas-step-blocked"
 ckin "a blocker with '=' in it survives the facts file" "a = b; c" "$(ev step)"
+
+# hrossen 2026-10-08: the record missing on a 2026.8.3 guest was read as 2025.2.1
+# (from the env file every guest has) and stepped it DOWN to 2025.2.3.
+reset; echo "AUTHENTIK_SECRET_KEY=x" > "${G}/etc/secrets/authentik.env"; IMG="ghcr.io/goauthentik/server:2026.8.3"
+mkdir -p "${G}/var/lib/postgresql/16"
+ck "no record, its container on the target: stays — never a downgrade" "2026.8.3" "$(ev step)"
+ck "…the collector reports the container" "AUTHENTIK_RUNNING=2026.8.3" "$(sed -n 2p "${T}/facts.env")"
+reset; mkdir -p "${G}/var/lib/postgresql/16"; echo "AUTHENTIK_SECRET_KEY=x" > "${G}/etc/secrets/authentik.env"
+ckin "the env file alone says nothing: a database, no record, no container is refused" "no record of the Authentik version" "$(ev step)"
+reset; printf '2025.2.1\n' > "${G}/var/lib/authentik/tappaas-version"; IMG="ghcr.io/goauthentik/server:2026.8.3"
+ckin "a record below what the container runs: refused, not a downgrade" "cannot go back a version" "$(ev step)"
+reset; printf '2026.5.7\n' > "${G}/var/lib/authentik/tappaas-version"; IMG="ghcr.io/goauthentik/server:2026.5.7"
+ck "record and container agree: the next step" "2026.8.3" "$(ev step)"
 
 echo "── authentik step: ${PASS} passed, ${FAIL} failed ──"
 [[ "${FAIL}" -eq 0 ]]

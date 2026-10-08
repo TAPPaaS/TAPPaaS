@@ -73,8 +73,13 @@ let
     else target;
 
   blocked = trim (facts.AUTHENTIK_STEP_BLOCKED or "");
+  # What the guest's server container runs: never step below it (a lost or
+  # wrong record must not become a downgrade, which Authentik cannot undo).
+  running = let r = trim (facts.AUTHENTIK_RUNNING or "none"); in if r == "none" || r == "" then null else r;
 in
-if installed != null && older target installed then
+if running != null && older step running then
+  throw "authentik: the guest's server runs ${running}, newer than the step ${step} this build would install — Authentik cannot go back a version; check /var/lib/authentik/tappaas-version on the guest (#797)"
+else if installed != null && older target installed then
   throw "authentik: the guest runs ${installed}, newer than this release's ${target} — Authentik cannot go back a version"
 else if installed != null && step != installed && blocked != "" && !(older step "2025.12.0") then
   throw "authentik: the step ${installed} -> ${step} would fail its migration — ${blocked}"

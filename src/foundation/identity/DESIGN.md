@@ -65,8 +65,11 @@ nights on a site with a daily update schedule, or eight runs of
 
 What the guest runs comes from **build facts** collected on the guest before every build
 (`build-facts.sh`, written to `/etc/nixos/tappaas-build-facts.env`): the version
-`authentik-version-record` wrote after the last successful start, `none` for a fresh
-install, `unknown` for a database without that record. The build runs on the mothership
+`authentik-version-record` wrote after the last successful start — without it, the version
+of the guest's server container — `none` for a fresh install, `unknown` for a database with
+neither. The container's version is also a floor: no step goes below what the guest runs,
+because Authentik cannot go back. (The env file every guest has is no evidence of a version:
+reading it as "2025.2.1" once stepped a 2026.8.3 guest down to 2025.2.3, hrossen 2026-10-08.) The build runs on the mothership
 (#774), where the guest's files do not exist; reading them there made every guest look
 fresh and jump straight to the target (#797). Missing or `unknown` facts stop the build
 before it switches — the old version keeps serving and the update says why. The guest's
