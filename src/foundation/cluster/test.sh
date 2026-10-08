@@ -28,6 +28,8 @@
 #
 
 set -uo pipefail
+# No `| grep -q` here: grep -q exits at its first match, the writer then dies of
+# SIGPIPE and pipefail fails the check — a timing flake (deep run, 2026-10-08).
 
 # Accept --deep as well as TAPPAAS_TEST_DEEP=1. Every gate below reads the
 # variable, so exporting it here is all a flag needs to do — and exporting (not
@@ -782,7 +784,7 @@ if [[ "${DEEP}" -eq 1 && -n "${DEFAULT_ZONE}" ]]; then
     if [[ "${deep_ok}" -eq 1 ]]; then
         info "  Waiting for VM to settle..."
         sleep 30
-        if "${UPSVC}" --check "${TVM}" 2>&1 | grep -q "in sync"; then
+        if "${UPSVC}" --check "${TVM}" 2>&1 | grep "in sync" >/dev/null; then
             pass "post-install: reconciler reports in sync"
         else
             fail "post-install: expected 'in sync'"
@@ -802,7 +804,7 @@ if [[ "${DEEP}" -eq 1 && -n "${DEFAULT_ZONE}" ]]; then
 
     # 4. --check must now detect the net0 drift.
     if [[ "${deep_ok}" -eq 1 ]]; then
-        if "${UPSVC}" --check "${TVM}" 2>&1 | grep -q "net0:"; then
+        if "${UPSVC}" --check "${TVM}" 2>&1 | grep "net0:" >/dev/null; then
             pass "reconciler detects net0 drift"
         else
             fail "reconciler did not detect net0 drift"
@@ -953,7 +955,7 @@ if [[ "${DEEP}" -eq 1 && -n "${DEFAULT_ZONE}" && "${NODE_COUNT}" -ge 2 ]]; then
     if [[ "${hdeep_ok}" -eq 1 ]]; then
         info "  Waiting for HA + replication to register..."
         sleep 20
-        if "${HUPSVC}" --check "${THVM}" 2>&1 | grep -q "in sync"; then
+        if "${HUPSVC}" --check "${THVM}" 2>&1 | grep "in sync" >/dev/null; then
             pass "post-install: HA reconciler reports in sync"
         else
             fail "post-install: expected 'in sync'"
@@ -972,7 +974,7 @@ if [[ "${DEEP}" -eq 1 && -n "${DEFAULT_ZONE}" && "${NODE_COUNT}" -ge 2 ]]; then
 
     # 4. --check detects schedule drift; apply; verify the live job changed.
     if [[ "${hdeep_ok}" -eq 1 ]]; then
-        if "${HUPSVC}" --check "${THVM}" 2>&1 | grep -q "replication schedule"; then
+        if "${HUPSVC}" --check "${THVM}" 2>&1 | grep "replication schedule" >/dev/null; then
             pass "reconciler detects replication-schedule drift"
         else
             fail "reconciler did not detect replication-schedule drift"
@@ -1010,7 +1012,7 @@ if [[ "${DEEP}" -eq 1 && -n "${DEFAULT_ZONE}" && "${NODE_COUNT}" -ge 2 ]]; then
 
     # 6. --check detects rule-nodes drift; apply; verify normalized back.
     if [[ "${hdeep_ok}" -eq 1 ]]; then
-        if "${HUPSVC}" --check "${THVM}" 2>&1 | grep -q "ha-rule nodes"; then
+        if "${HUPSVC}" --check "${THVM}" 2>&1 | grep "ha-rule nodes" >/dev/null; then
             pass "reconciler detects HA-rule node drift"
         else
             fail "reconciler did not detect HA-rule node drift"
@@ -1095,7 +1097,7 @@ if [[ "${DEEP}" -eq 1 && -n "${DEFAULT_ZONE}" ]]; then
 
     # 3. post-install reconciler reports in sync.
     if [[ "${ldeep_ok}" -eq 1 ]]; then
-        if "${LUPSVC}" --check "${TLVM}" 2>&1 | grep -q "in sync"; then
+        if "${LUPSVC}" --check "${TLVM}" 2>&1 | grep "in sync" >/dev/null; then
             pass "post-install: LXC reconciler reports in sync"
         else
             fail "post-install: expected 'in sync'"
@@ -1133,7 +1135,7 @@ if [[ "${DEEP}" -eq 1 && -n "${DEFAULT_ZONE}" ]]; then
         fi
     fi
     if [[ "${ldeep_ok}" -eq 1 ]]; then
-        if "${LUPSVC}" --check "${TLVM}" 2>&1 | grep -q "cores:"; then
+        if "${LUPSVC}" --check "${TLVM}" 2>&1 | grep "cores:" >/dev/null; then
             pass "reconciler detects cores drift"
         else
             fail "reconciler did not detect cores drift"
@@ -1349,7 +1351,7 @@ if [[ "${DEEP}" == "1" ]]; then
 
             # 1. Dry-run must report it and exit 2, without deleting anything.
             _co_rc=0; _co_out=$("${SWEEP}" "${_co_target}" 2>&1) || _co_rc=$?
-            if [[ "${_co_rc}" -eq 2 ]] && printf '%s' "${_co_out}" | grep -q "ORPHAN.*${_co_vol}"; then
+            if [[ "${_co_rc}" -eq 2 ]] && printf '%s' "${_co_out}" | grep "ORPHAN.*${_co_vol}" >/dev/null; then
                 pass "dry-run detected staged orphan (exit 2, not freed)"
             else
                 fail "dry-run did not report the staged orphan (rc ${_co_rc})"
@@ -1357,7 +1359,7 @@ if [[ "${DEEP}" == "1" ]]; then
             fi
             # shellcheck disable=SC2086
             if ssh ${SSH_OPTS} "root@${_co_target}.${MGMT}.internal" \
-                   "pvesm list tanka1" 2>/dev/null | grep -q "vm-${_co_vmid}-cloudinit"; then
+                   "pvesm list tanka1" 2>/dev/null | grep "vm-${_co_vmid}-cloudinit" >/dev/null; then
                 pass "dry-run left the volume in place"
             else
                 fail "dry-run deleted the volume — must be report-only"
@@ -1371,7 +1373,7 @@ if [[ "${DEEP}" == "1" ]]; then
             fi
             # shellcheck disable=SC2086
             if ssh ${SSH_OPTS} "root@${_co_target}.${MGMT}.internal" \
-                   "pvesm list tanka1" 2>/dev/null | grep -q "vm-${_co_vmid}-cloudinit"; then
+                   "pvesm list tanka1" 2>/dev/null | grep "vm-${_co_vmid}-cloudinit" >/dev/null; then
                 fail "orphan still present after --execute"
             else
                 pass "volume gone from ${_co_target} after --execute"
@@ -1396,14 +1398,14 @@ if [[ "${DEEP}" == "1" ]]; then
     # shellcheck disable=SC2086,SC2029
     if ssh ${SSH_OPTS} "root@${_uo_node}.${MGMT}.internal" \
            "test ! -e /etc/pve/nodes/*/qemu-server/${_uo_vmid}.conf && pvesm alloc tanka1 ${_uo_vmid} vm-${_uo_vmid}-cloudinit 4M" >/dev/null 2>&1; then
-        if "${SWEEP}" --execute "${_uo_node}" 2>&1 | grep -q "UNOWNED.*vm-${_uo_vmid}-cloudinit"; then
+        if "${SWEEP}" --execute "${_uo_node}" 2>&1 | grep "UNOWNED.*vm-${_uo_vmid}-cloudinit" >/dev/null; then
             pass "unowned volume reported, not freed"
         else
             fail "unowned volume was not reported as UNOWNED"
         fi
         # shellcheck disable=SC2086
         if ssh ${SSH_OPTS} "root@${_uo_node}.${MGMT}.internal" \
-               "pvesm list tanka1" 2>/dev/null | grep -q "vm-${_uo_vmid}-cloudinit"; then
+               "pvesm list tanka1" 2>/dev/null | grep "vm-${_uo_vmid}-cloudinit" >/dev/null; then
             pass "unowned volume survived --execute (report-only guard holds)"
         else
             fail "unowned volume was deleted — the guard failed"
