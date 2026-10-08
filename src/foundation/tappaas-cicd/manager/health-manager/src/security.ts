@@ -958,7 +958,11 @@ export function scanComponentList(list: { name: string; version: string }[], io:
     const g = io.grype(f);
     if (!g.ran || g.rc !== 0) return { findings: [], suppressed: [], error: `grype failed: ${lastLine(g.stderr) || `exit ${g.rc}`}` };
     try {
-      return { ...splitVex(dedupe(grypeFindings(g.stdout)), vex), error: "" };
+      // Not deduped: a list holds many targets' packages, and one CVE in two
+      // versions of a package (openssl 3.6.4 and 4.0.2) is a finding for each —
+      // deduping by CVE + package kept one and lost the other target's (#788).
+      // The scan counts from raw findings too; dedupe is for its ACT display.
+      return { ...splitVex(grypeFindings(g.stdout), vex), error: "" };
     } catch {
       return { findings: [], suppressed: [], error: "grype output not parseable" };
     }
@@ -980,7 +984,7 @@ export function scanImageRefs(refs: string[], io: SecurityIO, vex: VexStatement[
       continue;
     }
     try {
-      out[ref] = { ...splitVex(dedupe(trivyParse(r.stdout).findings), vex), error: "" };
+      out[ref] = { ...splitVex(trivyParse(r.stdout).findings, vex), error: "" };
     } catch {
       out[ref] = { findings: [], suppressed: [], error: "trivy output not parseable" };
     }

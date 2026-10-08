@@ -165,6 +165,8 @@ def main():
         ap.add_argument(a, required=True)
     ap.add_argument("--ignore", help="release/pin-watch-ignore.json: packages whose major is not gated, with the reason")
     ap.add_argument("--details", help="write the per-module details here")
+    ap.add_argument("--check-scan", action="store_true",
+                    help="'now' is the pin in the tree: compare each module with the nightly scan's count")
     a = ap.parse_args()
     try:
         inv = inventory(json.load(open(a.inventory)))
@@ -302,6 +304,26 @@ def main():
             platform.append({"target": t.get("name"), "layer": "nix, not compared",
                              "now": (t.get("critical") or 0) + (t.get("high") or 0), "coverage": t.get("coverage")})
 
+    # With no pin move, a module that runs here must count what the nightly scan
+    # counted for it (its NixOS system and its images, by CVE id) — the two use
+    # one matcher and one VEX; a difference is a bug in one of them (#788).
+    scan_check = None
+    if a.check_scan:
+        scanned = {}
+        for t in status.get("targets", []):
+            if t.get("layer") not in ("nix", "image"):
+                continue
+            n = t.get("name", "")
+            mod = n[n.rfind("(") + 1:-1] if t["layer"] == "image" and n.endswith(")") else n.split(" ")[0]
+            scanned.setdefault(mod, set()).update(k.split(" ")[0] for k in t.get("critHighKeys", []))
+        scan_check = []
+        for r in rows:
+            if r["module"] in scanned and r["now"] is not None:
+                nowids = {c["id"] for c in details[r["module"]]["cves"]["new"] + details[r["module"]]["cves"]["same"]}
+                s = scanned[r["module"]]
+                scan_check.append({"module": r["module"], "preview": len(nowids), "scan": len(s),
+                                   "previewOnly": sorted(nowids - s), "scanOnly": sorted(s - nowids)})
+
     gate = sorted([f"major {m['pkg']} {x}->{y}" for (p, x, y), m in majors.items()]
                   + [f"cve {k}" for k in introduced]
                   + (["cve-match-failed"] if errors else []))
@@ -313,6 +335,7 @@ def main():
         "notGated": [{"pkg": p, "why": w} for p, w in sorted(quiet.items())],
         "introduced": [{"key": k, "modules": sorted(set(v))} for k, v in sorted(introduced.items())],
         "errors": errors, "gate": gate, "digest": hashlib.sha256("\n".join(gate).encode()).hexdigest()[:16],
+        "scanCheck": scan_check,
     }
     json.dump(out, open(a.out, "w"), indent=1)
     if a.details:
@@ -406,6 +429,12 @@ def render(o):
         print(f"  not counted as major ({len(o['notGated'])}): {tl([q['pkg'] for q in o['notGated']])} — date/sequence versions or pin-watch-ignore.json")
     for e in o["errors"]:
         print(f"  CVE match FAILED — {e}")
+    if o.get("scanCheck") is not None:
+        bad = [c for c in o["scanCheck"] if c["previewOnly"] or c["scanOnly"]]
+        print(f"  against the nightly scan: {len(o['scanCheck']) - len(bad)} of {len(o['scanCheck'])} module(s) that run here agree"
+              + ("" if not bad else " — differ: " + "; ".join(
+                  f"{c['module']} {c['preview']} vs {c['scan']} (preview only {','.join(c['previewOnly'][:3]) or '—'}, scan only {','.join(c['scanOnly'][:3]) or '—'})"
+                  for c in bad)))
     print(f"  VEX: our recorded triage (<module>-vex.json), the same statements the nightly scan applies — not in NOW")
     print(f"  to acknowledge: {len(o['gate'])} item(s) ({len(o['introduced'])} new critical/high, {len(o['majors'])} majors)"
           if o["gate"] else "  nothing to acknowledge")

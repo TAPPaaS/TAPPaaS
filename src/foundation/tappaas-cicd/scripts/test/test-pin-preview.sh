@@ -116,6 +116,23 @@ ck "packages only removed or only added are one line each" "yes" \
 SHOW="$(python3 "${PP}" --show nosuch --details "${D}" 2>&1)"; RC=$?
 ck "an unknown module: rc 1, and the modules there are named" "1 yes" "${RC} $([[ "${SHOW}" == *"logging"* ]] && echo yes || echo no)"
 
+# --check-scan: modules that run here, against the nightly scan's CVE ids.
+jq '.targets[0].critHighKeys = ["CVE-1 openssl","CVE-2 grafana"]' "${T}/cve-status.json" > "${T}/cs.json" && cp "${T}/cve-status.json" "${T}/cs.bak" && mv "${T}/cs.json" "${T}/cve-status.json"
+OUT="$(python3 "${PP}" --inventory "${T}/site.cdx.json" --status "${T}/cve-status.json" \
+    --base-label v2.1 --base-closures "${T}/base" --base-images "${T}/base-images.json" --base-nix-scanner "${T}/nix --components {file}" \
+    --now-closures "${T}/now" --now-images "${T}/now-images.json" --now-nix-scanner "${T}/nix --components {file}" \
+    --image-scanner "${T}/img --refs {file}" --from a --to b --out "${T}/p.json" --ignore "${T}/ignore.json" --check-scan 2>&1)"
+ck "--check-scan: a module that counts what the nightly scan counted agrees" "logging 2 2 0 0" \
+   "$(jq -r '.scanCheck[] | "\(.module) \(.preview) \(.scan) \(.previewOnly|length) \(.scanOnly|length)"' "${T}/p.json")"
+ck "…and says so" "yes" "$([[ "${OUT}" == *"1 of 1 module(s) that run here agree"* ]] && echo yes || echo no)"
+jq '.targets[0].critHighKeys = ["CVE-1 openssl","CVE-9 libfoo"]' "${T}/cs.bak" > "${T}/cve-status.json"
+OUT="$(python3 "${PP}" --inventory "${T}/site.cdx.json" --status "${T}/cve-status.json" \
+    --base-label v2.1 --base-closures "${T}/base" --base-images "${T}/base-images.json" --base-nix-scanner "${T}/nix --components {file}" \
+    --now-closures "${T}/now" --now-images "${T}/now-images.json" --now-nix-scanner "${T}/nix --components {file}" \
+    --image-scanner "${T}/img --refs {file}" --from a --to b --out "${T}/p.json" --ignore "${T}/ignore.json" --check-scan 2>&1)"
+ck "…and a difference is named, CVE by CVE" "yes" "$([[ "${OUT}" == *"differ: logging 2 vs 2 (preview only CVE-2, scan only CVE-9)"* ]] && echo yes || echo no)"
+mv "${T}/cs.bak" "${T}/cve-status.json"
+
 d1="$(jq -r .digest "${T}/p.json")"; run
 ck "the same findings, the same digest" "${d1}" "$(jq -r .digest "${T}/p.json")"
 

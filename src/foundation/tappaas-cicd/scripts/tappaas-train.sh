@@ -1579,7 +1579,8 @@ pin_findings() {
         --now-nix-scanner "${hm} scan nix-list --components {file} --nixpkgs ${now_src} --no-db-update" \
         --image-scanner "${hm} scan images --refs {file} --no-db-update" \
         --from "${from}" --to "$(jq -r '.nodes.nixpkgs.locked.rev // empty' "${dir}/flake.lock")" --out "${out}" \
-        --ignore "${REPO_DIR}/release/pin-watch-ignore.json" ${4:+--details "$4"}
+        --ignore "${REPO_DIR}/release/pin-watch-ignore.json" ${4:+--details "$4"} \
+        $([[ "${NO_PIN_MOVE}" == "1" ]] && echo --check-scan)
     local rc=$?
     rm -rf "${work}"
     return "${rc}"
