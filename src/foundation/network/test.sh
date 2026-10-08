@@ -1526,22 +1526,44 @@ else
     # a freshly-activated zone (cloud-init / SSH-readiness race). A second
     # attempt — after delete-module.sh has cleaned partial state — reliably
     # succeeds.
+    # The test zones' VLANs are added to the firewall VM's trunk (above), not to
+    # the nodes' physical lan trunks: those carry the least-privilege set, and
+    # widening them is operator-gated (proxmox-controller bridge-vids --apply).
+    # So a test VM gets DHCP only on the node the firewall VM runs on. Put every
+    # test VM there, wherever the firewall is now — it moves (live migration,
+    # HA). Found on hrossen 2026-10-08: the firewall had moved to tappaas3, the
+    # fixtures said tappaas1, and test-fw-c never got an address.
+    FW_VMID="$(jq -r '.vmid // empty' "${FIREWALL_JSON}" 2>/dev/null)"
+    FW_NODE=""
+    if [[ -n "${FW_VMID}" ]]; then
+        FW_NODE="$(ssh -o BatchMode=yes -o ConnectTimeout=10 "root@$(get_node_hostname 0).mgmt.internal" \
+            "pvesh get /cluster/resources --type vm --output-format json" 2>/dev/null \
+            | jq -r --argjson v "${FW_VMID}" '.[] | select(.vmid == $v) | .node' 2>/dev/null)"
+    fi
+    if [[ -n "${FW_NODE}" ]]; then
+        info "Test VMs go to ${FW_NODE}, where the firewall VM (${FW_VMID}) runs"
+    else
+        warn "Could not find the firewall VM's node — test VMs use their fixture's node (DHCP fails if that is another node)"
+    fi
+
     install_with_retry() {
         local mod="$1"
         local mod_dir="$2"
+        local node_args=()
+        [[ -n "${FW_NODE}" ]] && node_args=(--node "${FW_NODE}")
         # Source layout: most fixtures live flat in FIXTURES_DIR, but
         # test-fw-c lives in its own subdir (test-fw-c/) because it ships a
         # services/web/{install,update,delete}-service.sh + pinhole.json.
         # install-module.sh resolves <mod>.json relative to cwd.
         pushd "${mod_dir}" >/dev/null
-        if /home/tappaas/bin/install-module.sh "${mod}" 2>&1 | tee -a "${LOG_FILE}" | tail -10; then
+        if /home/tappaas/bin/install-module.sh "${mod}" "${node_args[@]}" 2>&1 | tee -a "${LOG_FILE}" | tail -10; then
             pass "install-module.sh ${mod}"
             popd >/dev/null
             return 0
         fi
         warn "  First install of ${mod} failed (likely cloud-init race) — retrying once after cleanup..."
         /home/tappaas/bin/delete-module.sh "${mod}" --force >/dev/null 2>&1 || true
-        if /home/tappaas/bin/install-module.sh "${mod}" 2>&1 | tee -a "${LOG_FILE}" | tail -10; then
+        if /home/tappaas/bin/install-module.sh "${mod}" "${node_args[@]}" 2>&1 | tee -a "${LOG_FILE}" | tail -10; then
             pass "install-module.sh ${mod} (succeeded on retry)"
             popd >/dev/null
             return 0
