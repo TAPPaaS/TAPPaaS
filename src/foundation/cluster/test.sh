@@ -122,6 +122,7 @@ required=(
     lib/test-node-mgmt-ip.sh
     lib/test-node-placeholders.sh
     lib/test-storage-resolve.sh
+    lib/test-config-storage-free.sh
     lib/test-vm-net.sh
     lib/zfs-thin.sh
     lib/test-zfs-thin.sh
@@ -208,6 +209,19 @@ if [[ -x "${SCRIPT_DIR}/lib/test-zfs-thin.sh" ]]; then
     fi
 else
     fail "lib/test-zfs-thin.sh not found or not executable"
+fi
+
+# The installer's pool loop (#405): a pool with no free disk left is not offered.
+info "${BOLD}Test 2a0b: config-storage free disks (#405)${CL}"
+if [[ -x "${SCRIPT_DIR}/lib/test-config-storage-free.sh" ]]; then
+    if cs_out=$("${SCRIPT_DIR}/lib/test-config-storage-free.sh" 2>&1); then
+        pass "$(tail -1 <<< "${cs_out}")"
+    else
+        fail "config-storage free-disk unit tests failed"
+        indent <<< "${cs_out}"
+    fi
+else
+    fail "lib/test-config-storage-free.sh not found or not executable"
 fi
 
 # Removing a node (#417): what blocks it, the storage entries, the erase.

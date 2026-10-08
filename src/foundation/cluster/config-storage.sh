@@ -520,6 +520,17 @@ interactive_topology() {
   fi
 }
 
+# Disks still free for a new pool: candidates no IMPORTED pool claims. A disk in
+# a live pool is listed (so the operator sees it) but is no choice; one carrying
+# an old, unimported label is — reusing it is the point of [in zpool]/[has data].
+free_disk_count() {
+  local n=0 i
+  for i in "${!CAND_NAME[@]}"; do
+    [[ -z "$(disk_zpool "${CAND_NAME[$i]}")" ]] && n=$((n + 1))
+  done
+  echo "$n"
+}
+
 # Pool descriptions for the interactive dialogs (issue #271)
 pool_description() {
   case "$1" in
@@ -533,6 +544,11 @@ pool_description() {
 for POOL in tanka1 tankb1 tankc1; do
   if pool_exists "$POOL"; then
     info "Pool '${POOL}' already exists — skipping (use a fresh disk set to rebuild)."
+    continue
+  fi
+  # Asking for a pool there is no disk left for only makes the operator say no (#405).
+  if [[ "$(free_disk_count)" -eq 0 ]]; then
+    info "No free disk left for '${POOL}' — skipping."
     continue
   fi
   POOL_DESC="$(pool_description "$POOL")"
