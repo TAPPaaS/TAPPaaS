@@ -45,6 +45,16 @@ DEFAULTS = {
 MAX_BODY = 1 << 20  # a Grafana notification is a few KB; refuse anything absurd
 
 
+# Labels every alert carries; the rest are the series' own (a replication job,
+# a unit…) and are what tells one alert from the next, so the mail names them.
+_PLAIN_LABELS = {"alertname", "host", "kind", "grafana_folder"}
+
+
+def extra_labels(labels):
+    return {k: v for k, v in sorted(labels.items())
+            if k not in _PLAIN_LABELS and not k.startswith("__") and v}
+
+
 def is_heartbeat(alert):
     return (alert.get("labels") or {}).get("kind") == "heartbeat"
 
@@ -72,7 +82,10 @@ def render(payload):
     headline = ((payload.get("commonAnnotations") or {}).get("headline")
                 or (alerts[0].get("annotations") or {}).get("headline"))
     word = "RESOLVED" if status == "resolved" else "ALERT"
-    subject = f"{word}: {headline or name}{where}"
+    # One alert: its own labels in the subject too ("… on tappaas1 (job 110-0)").
+    extra = extra_labels(alerts[0].get("labels") or {}) if len(alerts) == 1 else {}
+    what = f" ({', '.join(f'{k} {v}' for k, v in extra.items())})" if extra else ""
+    subject = f"{word}: {headline or name}{where}{what}"
 
     lines = []
     for a in alerts:
@@ -80,6 +93,8 @@ def render(payload):
         ann = a.get("annotations") or {}
         lines.append(f"== {labels.get('alertname', name)}"
                      + (f" — {labels['host']}" if labels.get("host") else ""))
+        for k, v in extra_labels(labels).items():
+            lines.append(f"{k}: {v}")
         if ann.get("summary"):
             lines.append(ann["summary"])
         if ann.get("description"):

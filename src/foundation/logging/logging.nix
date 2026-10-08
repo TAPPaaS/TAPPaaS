@@ -160,9 +160,14 @@ let
       # that keeps failing stays one alert (repeated every 4 h), and its resolve
       # — an hour without the error — is mailed. The line PVE logs, seen on
       # hrossen: "<job>: got unexpected replication job error - command ...".
-      expr = ''sum by (host) (count_over_time(${pve} |~ "replication job error|replication job .* failed" [1h]))'';
-      summary = "Storage replication (pvesr) keeps failing: the HA copy of a guest on the other node is getting stale.";
-      query = ''${pve} |~ "replication"'';
+      # The job id (<vmid>-<n>) is lifted into a label, so the mail says WHICH
+      # job — it named only the node before. Two failures within the hour (two
+      # 15-minute runs in a row): one failed run while a node reboots in the
+      # nightly sweep is not a stale replica (hrossen 2026-10-08 02:30: job
+      # 110-0 against a rebooting tappaas3, fine on the next run).
+      expr = ''sum by (host, replication_job) (count_over_time(${pve} |~ "replication job error|replication job .* failed" | regexp "(?P<replication_job>[0-9]+-[0-9]+)" [1h])) > 1'';
+      summary = "A storage replication job (pvesr) failed in two runs within the hour: the HA copy of its guest (the job's first number is the VMID) on the other node is getting stale.";
+      query = ''${pve} |~ "replication job"'';
     })
     (alertRule {
       uid = "tappaas-heartbeat"; title = "Heartbeat"; kind = "heartbeat"; window = 300;

@@ -85,6 +85,10 @@ ck "…the real one is mailed" "ALERT: QuorumLost on tappaas2" "$(tail -1 "${TMP
 
 ck "--render prints the mail" "Subject: ALERT: QuorumLost on tappaas1" \
    "$(wh firing event QuorumLost tappaas1 | python3 "${R}" --render | head -1)"
+rep='{"status":"firing","alerts":[{"status":"firing","labels":{"alertname":"ReplicationFailed","host":"tappaas1","replication_job":"110-0","kind":"state","grafana_folder":"TAPPaaS","__alert_rule_uid__":"x"},"annotations":{"summary":"s"},"startsAt":"2026-10-08T00:31:00Z"}]}'
+ck "a series label names WHICH one in the subject (replication job)" "Subject: ALERT: ReplicationFailed on tappaas1 (replication_job 110-0)" \
+   "$(python3 "${R}" --render <<<"${rep}" | head -1)"
+ck "…and in the body; grafana's own labels stay out" "replication_job: 110-0" "$(python3 "${R}" --render <<<"${rep}" | grep -E '^(replication_job|grafana_folder|__alert)' | paste -sd' ' -)"
 ck "a rule's headline names it in the subject, after ALERT:" "Subject: ALERT: Out of Memory Kill on openwebui" \
    "$(wh firing event OomKill openwebui | sed 's/"query":/"headline":"Out of Memory Kill","query":/' | python3 "${R}" --render | head -1)"
 
