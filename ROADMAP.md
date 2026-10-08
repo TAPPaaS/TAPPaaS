@@ -101,7 +101,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 
 | Wave | Group | Ease | Risk | released | done for 2.2 | open |
 |------|-------|:-:|:-:|---:|---:|---:|
-| 4 | G4.1 Alerting & cluster resilience | M | M | – | 6 | 5 |
+| 4 | G4.1 Alerting & cluster resilience | M | M | – | 7 | 4 |
 | 4 | G4.2 Proxy & ingress | M | L | 1 | 1 | 4 |
 | 4 | G4.3 Manager verb gaps | M | L | 4 | 5 | 8 |
 | 4 | G4.4 Storage & physical devices | H | L | 2 | 3 | 6 |
@@ -214,7 +214,7 @@ items that belong to a group — FW #40, #83, #157, #158, #162 — are rows in t
 
 New capabilities with low upgrade risk.
 
-### G4.1 Alerting & cluster resilience — Ease M · Risk M · done for 2.2: 6 · open: 5
+### G4.1 Alerting & cluster resilience — Ease M · Risk M · done for 2.2: 7 · open: 4
 
 Be told when something breaks, and survive more of it. Built: alerts from Loki by mail, every VM's logs in Loki, a credential per pushing VM, container severities from the line, each line's own timestamp. Next: a notice when a whole site goes dark (#776), a warning when a pin move brings a Loki major (#788), a mail relay (#125), a second corosync link (#590).
 
@@ -223,7 +223,7 @@ Be told when something breaks, and survive more of it. Built: alerts from Loki b
 | ✅ #126 | Alerting from Loki through the #651 channel (was: no alerts for quorum loss / node dropout) | M | M | **Closed 2026-10-04.** Grafana alerting from Loki: 9 rules, mailed via `site-notify.sh`, heartbeat watchdog; all fired live on hrossen. Follow-up: app VMs ship no logs (#770) |
 | #125 | Mail relay via M365 Graph API | M | L | |
 | ✅ #165 | logging v2: Loki auth, Grafana OIDC | H | M | **Closed 2026-10-06** (`f69d536e`, `48cc4683`), live on hrossen: nginx fronts Loki — 3101 push only with a credential per VM (username = vmname; `host` is set from it, so a VM writes as itself only), 3100 Loki's API behind an admin credential held by the mothership; Loki and Alloy on localhost. Grafana OIDC (#513), the OPNsense syslog target and the consumer hooks (#770) were done before. TLS moved to #787, version pins re-scoped as #788 |
-| #788 | Release train: flag a Loki/Grafana major version change at a pin move | M | L | **Opened 2026-10-06** from #165 §5: versions only move with the pin; a major bump (Loki storage schema) should be reported at the move |
+| ✅ #788 | Release train: flag a major version change at a pin move | M | L | **Done 2026-10-08** (`2e180979`), broadened from Loki/Grafana to every package that runs: `tappaas-train preview [--to <release>]` evaluates the guests against the next pin in about a minute (nothing built) and reports major version changes and critical/high CVEs introduced, kept and fixed; `ack` accepts them; a boundary checks the pin it takes right after moving it — before the deep test — and stops on anything not accepted. Accepted items are recorded on the release |
 | ✅ #770 | App VMs do not ship their logs to Loki | M | M | **Done 2026-10-06**, live on hrossen: every NixOS VM integrating `logging:logs` ships its journal from one renderer (`lib/log-shipping.sh`) to a push-only `:3101`; Loki's `:3100` stays mgmt-only |
 | #776 | Report a site that has gone dark (outside heartbeat) | M | L | **Opened 2026-10-06** after makerfloss was dark 2½ days unreported. Proposed: the satellite mails when the home WireGuard handshake is >15 min stale. **Decide:** its mail path (#125?) |
 | ✅ #784 | Loki stores receive time — backfill and reboot entries collapse | M | L | **Closed 2026-10-07** (`cc997ea3`): logging's push receiver restamped lines on arrival (and doubled re-sent ones); `use_incoming_timestamp = true`. Proven on hrossen |
