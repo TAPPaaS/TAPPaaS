@@ -233,16 +233,27 @@ def main():
         if e:
             errors.append(f"image {ref}: {e}")
 
+    def decided(f, m):
+        """A statement decides for its own module only; templates' (\"\") for every one —
+        the nightly scan's rule (health-manager vexFor)."""
+        by = f.get("vexModules")
+        return by is None or "" in by or m in by
+
     def side_findings(side, m, suppressed=False):
-        """A module's findings on one side: its NixOS packages' and its image's."""
+        """A module's findings on one side: its NixOS packages' and its image's. A finding
+        another module's VEX decided is still this module's finding."""
         out = []
-        src = nix_sup if suppressed else nix
+        def take(open_, sup, src):
+            if suppressed:
+                return [dict(f, **{"from": src}) for f in sup if decided(f, m)]
+            return [dict(f, **{"from": src}) for f in open_] + [dict(f, **{"from": src}) for f in sup if not decided(f, m)]
         for p, vs in pkgs[side].get(m, {}).items():
             for v in vs:
-                out += [dict(f, **{"from": "nixos"}) for f in src[side].get((p, v), [])]
+                out += take(nix[side].get((p, v), []), nix_sup[side].get((p, v), []), "nixos")
         ref = (base_img if side == "base" else now_img).get(m)
         if ref:
-            out += [dict(f, **{"from": "image"}) for f in (img.get(ref) or {}).get("suppressed" if suppressed else "findings", [])]
+            r = img.get(ref) or {}
+            out += take(r.get("findings", []), r.get("suppressed", []), "image")
         return out
 
     def by_id(findings):

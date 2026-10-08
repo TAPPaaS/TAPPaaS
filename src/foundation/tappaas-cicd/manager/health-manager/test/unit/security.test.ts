@@ -14,7 +14,7 @@ import {
   CpeParts, DB_SPACE_BYTES, dbSpaceProblem, Finding, LINUX_PROBE, OPNSENSE_PROBE, PREVIOUS_FILE, STATUS_FILE, ScanStatus, SecurityIO,
   TargetStatus, applyCpes, checkCveStatus, fit, groupByImage, diffScans, nixComponents, parseLinuxProbe, parseOpnsenseProbe,
   loadVex, parseStorePath, parseVex, scanComponentList, scanImageRefs, readStatus, registeredModuleDirs, renderReport, runScan, sbomDir, summarize, summarizeOpnsense, sweepIsNewer,
-  vexSuppresses, writeScan,
+  vexFor, vexSuppresses, writeScan,
 } from "../../src/security";
 import { run } from "../../src/main";
 import { FakeClusterClient } from "./fake-client";
@@ -242,6 +242,12 @@ console.log("loadVex");
   check(!ids.includes("STRAY"), "a VEX file outside every registered module is not read");
   check(v.unreadable.length === 1 && v.unreadable[0].endsWith("broken-vex.json"), "an unparseable VEX file is reported, not silently skipped");
   check(registeredModuleDirs(join(cfg, "none"), tappaas).length === 1, "no registered repositories → the tree the scan ships in");
+  const by = Object.fromEntries(v.statements.map((s) => [s.id, s.module]));
+  check(by["CVE-A"] === "" && by["CVE-B"] === "gitea", "templates-vex.json is everyone's; <module>-vex.json is that module's");
+  const at = (t: string): string => vexFor(v.statements, t).map((s) => s.id).sort().join(",");
+  check(at("gitea") === "CVE-A,CVE-B" && at("image:gitea/server") === "CVE-A,CVE-B", "a module's target and its images get the base and its own");
+  check(at("forgejo") === "CVE-A", "…another module only the base: a decision about gitea's use of a package is not forgejo's");
+  check(vexFor([{ id: "C", state: "not_affected", refs: [], source: "s", module: "cluster" }], "node:tappaas1").length === 1, "a Proxmox node is the cluster module's");
 }
 
 // ── the whole scan, offline ──────────────────────────────────────────
@@ -394,6 +400,10 @@ console.log("writeScan / diffScans / checkCveStatus / report");
   io3.images.set("ex/app:1", ok(trivyJson("debian", 100, [["CVE-2026-9", "CRITICAL", "libc6", "2.36-9+deb12u5"]])));
   const v3 = parseVex(JSON.stringify({ vulnerabilities: [{ id: "CVE-2026-9", analysis: { state: "false_positive" } }] }), "t");
   check(scanImageRefs(["ex/app:1"], io3, v3)["ex/app:1"].suppressed.length === 1, "…and in an image, the same rule");
+  const v4 = [...parseVex(JSON.stringify({ vulnerabilities: [{ id: "CVE-2026-5450", analysis: { state: "not_affected" } }] }), "a", "nextcloud"),
+    ...parseVex(JSON.stringify({ vulnerabilities: [{ id: "CVE-2026-5450", analysis: { state: "false_positive" } }] }), "b", "immich")];
+  const r4 = scanComponentList([{ name: "glibc", version: "2.42-84" }], new FakeIO(), v4);
+  check(r4.suppressed[0]?.vexModules?.join(",") === "immich,nextcloud", "a list mixes modules: a suppressed finding names whose statements decided it");
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

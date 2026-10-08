@@ -271,7 +271,8 @@ as in the nightly `health-manager scan security`), "if released now" first:
 ```
 
 - **VEX**: the same triage statements the nightly scan applies (`<module>-vex.json` next to each
-  module; the shared NixOS baseline's in `templates-vex.json`) apply here too, to both sides. A
+  module, deciding for that module only; the shared NixOS baseline's in `templates-vex.json`, for
+  every module) apply here too, to both sides. A
   CVE a statement decided is not in NOW: the `VEX` column counts it apart, `preview --module`
   lists it, and it needs no ack.
 - **Every module counts the same**, whatever it is built from: a NixOS guest's packages and a

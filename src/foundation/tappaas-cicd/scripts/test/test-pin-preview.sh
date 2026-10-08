@@ -52,9 +52,17 @@ comps = json.load(open(sys.argv[sys.argv.index("--components") + 1]))
 vexed = set(os.environ.get("VEXED", "").split())
 fs = [{"id": i, "severity": s, "pkg": c["name"], "installed": c["version"], "fixed": ""}
       for c in comps for i, s in db.get(f"{c['name']}@{c['version']}", [])]
-# A token is a CVE id (any version) or id@version (a versioned statement).
-dec = lambda f: f["id"] in vexed or f"{f['id']}@{f['installed']}" in vexed
-json.dump({"findings": [f for f in fs if not dec(f)], "suppressed": [f for f in fs if dec(f)], "error": ""}, sys.stdout)
+# A token is a CVE id (any version) or id@version (a versioned statement), and
+# id:module a statement in that module's VEX file (vexModules), not templates'.
+def by(f):
+    out = []
+    for t in vexed:
+        i, _, mod = t.partition(":")
+        if i == f["id"] or i == f"{f['id']}@{f['installed']}":
+            out.append(mod)
+    return out
+json.dump({"findings": [f for f in fs if not by(f)],
+           "suppressed": [dict(f, vexModules=sorted(set(by(f)))) for f in fs if by(f)], "error": ""}, sys.stdout)
 EOF
 cat > "${T}/img" <<'EOF'
 #!/usr/bin/env python3
@@ -144,6 +152,9 @@ ck "a VEX-decided CVE leaves NOW: logging 1 | v2.1 1" "1 1" "$(jq -r '.modules[]
 ck "…and is counted in the VEX column, on its own" "1" "$(jq '.modules[] | select(.module=="logging") | .vex' "${T}/p.json")"
 ck "…listed under VEX in the details" "CVE-1" "$(jq -r '.modules.logging.cves.vex[].id' "${T}/d.json")"
 ck "…not gated: a decided CVE needs no ack" "false" "$(jq '.gate | index("cve CVE-1") != null' "${T}/p.json")"
+VEXED="CVE-1:deconz" run
+ck "a statement in deconz's VEX decides for deconz, not for logging" "0 1 1" \
+   "$(jq -r '[(.modules[] | select(.module=="deconz") | .now, .vex), (.modules[] | select(.module=="logging") | .same)] | join(" ")' "${T}/p.json")"
 VEXED="CVE-1@3.5.2" run
 ck "a statement on the new version only: the release had it, now it is decided — VEX, not FIXED" "1 1 CVE-OLD" \
    "$(jq -r '.modules[] | select(.module=="logging") | "\(.fixed) \(.vex)"' "${T}/p.json") $(jq -r '[.modules.logging.cves.fixed[].id] | join(",")' "${T}/d.json")"

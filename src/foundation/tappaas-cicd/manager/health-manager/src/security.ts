@@ -58,6 +58,7 @@ export interface Finding {
   installed: string;
   fixed: string; // "" when no fix is published
   purl: string;
+  vexModules?: string[]; // a list scan's suppressed finding: whose statements decided it ("" = templates, every module)
 }
 
 export interface TargetStatus {
@@ -372,16 +373,17 @@ export interface VexStatement {
   state: string;
   refs: string[]; // purls; empty = every package
   source: string;
+  module: string; // whose targets it decides: "" = every target (templates, the estate-wide base)
 }
 
 const VEX_SUPPRESS = new Set(["not_affected", "false_positive", "resolved", "resolved_with_pedigree"]);
 
-export function parseVex(json: string, source: string): VexStatement[] {
+export function parseVex(json: string, source: string, module = ""): VexStatement[] {
   const doc = JSON.parse(json) as { vulnerabilities?: { id?: string; analysis?: { state?: string }; affects?: { ref?: string }[] }[] };
   const out: VexStatement[] = [];
   for (const v of doc.vulnerabilities ?? []) {
     if (!v.id || !v.analysis?.state) continue;
-    out.push({ id: v.id, state: v.analysis.state, refs: (v.affects ?? []).map((a) => a.ref ?? "").filter(Boolean), source });
+    out.push({ id: v.id, state: v.analysis.state, refs: (v.affects ?? []).map((a) => a.ref ?? "").filter(Boolean), source, module });
   }
   return out;
 }
@@ -396,8 +398,13 @@ function splitPurl(p: string): { base: string; version: string } {
 // A statement with a versioned ref stops applying when the version changes —
 // the decision was about THAT build, and the next one is looked at again.
 export function vexSuppresses(f: Finding, vex: VexStatement[]): boolean {
+  return vexDeciders(f, vex).length > 0;
+}
+
+// The statements that decide a finding.
+function vexDeciders(f: Finding, vex: VexStatement[]): VexStatement[] {
   const fp = splitPurl(f.purl);
-  return vex.some((s) => {
+  return vex.filter((s) => {
     if (s.id !== f.id || !VEX_SUPPRESS.has(s.state)) return false;
     if (s.refs.length === 0) return true;
     return s.refs.some((r) => {
@@ -737,6 +744,15 @@ export function registeredModuleDirs(configDir: string, fallbackRepo: string): s
   return [...new Set(dirs)].sort();
 }
 
+// A module's decisions are about how THAT module uses a package — libtiff not
+// reachable in one module can be in another — so <module>-vex.json decides for
+// that module's targets only; templates-vex.json, the estate-wide base (§8), for
+// every target. A Proxmox node is the cluster module's.
+export function vexFor(vex: VexStatement[], target: string): VexStatement[] {
+  const module = target.startsWith("node:") ? "cluster" : target.replace(/^image:/, "").split("/")[0];
+  return vex.filter((s) => s.module === "" || s.module === module);
+}
+
 // Every <module>-vex.json in a registered module's directory (ADR-011 §8).
 export function loadVex(configDir: string, fallbackRepo: string): { statements: VexStatement[]; files: string[]; unreadable: string[] } {
   const statements: VexStatement[] = [];
@@ -752,7 +768,8 @@ export function loadVex(configDir: string, fallbackRepo: string): { statements: 
     for (const e of entries.filter((x) => x.endsWith("-vex.json")).sort()) {
       const p = join(dir, e);
       try {
-        statements.push(...parseVex(readFileSync(p, "utf8"), p));
+        const module = e.slice(0, -"-vex.json".length);
+        statements.push(...parseVex(readFileSync(p, "utf8"), p, module === "templates" ? "" : module));
         files.push(p);
       } catch {
         // decides nothing — its findings stay reported — and the scan says so
@@ -822,14 +839,15 @@ export function runScan(opts: ScanOpts, client: ClusterClient, io: SecurityIO): 
 
     // 3. scan each target with its layer's scanner
     const failed = (t: Planned, layer: Layer, why: string, seen = 0): CdxTarget => ({
-      status: summarize({ id: t.id, name: t.name, layer, host: t.host }, seen, why, [], vex, layer !== "nix"),
+      status: summarize({ id: t.id, name: t.name, layer, host: t.host }, seen, why, [], vexFor(vex, t.id), layer !== "nix"),
       version: "",
       components: [],
     });
     for (const p of probed) {
       const t = p.t;
+      const tv = vexFor(vex, t.id);
       if (t.layer === "opnsense") {
-        const s = summarizeOpnsense({ id: t.id, name: t.name, layer: "opnsense", host: t.host }, p.opn ?? null, vex);
+        const s = summarizeOpnsense({ id: t.id, name: t.name, layer: "opnsense", host: t.host }, p.opn ?? null, tv);
         results.push({
           status: s,
           version: p.opn?.version ?? "",
@@ -864,7 +882,7 @@ export function runScan(opts: ScanOpts, client: ClusterClient, io: SecurityIO): 
             }
           }
           results.push({
-            status: summarize({ id: t.id, name: t.name, layer: "nix", host: t.host }, nc.components.length, cov, findings, vex, false,
+            status: summarize({ id: t.id, name: t.name, layer: "nix", host: t.host }, nc.components.length, cov, findings, tv, false,
               `${nc.dropped} unversioned store paths not inventoried`),
             version: "",
             components: nc.components,
@@ -880,7 +898,7 @@ export function runScan(opts: ScanOpts, client: ClusterClient, io: SecurityIO): 
           writeFileSync(join(root, "etc", "os-release"), lp.osRelease + "\n");
           if (lp.debianVersion) writeFileSync(join(root, "etc", "debian_version"), lp.debianVersion + "\n");
           writeFileSync(join(root, "var", "lib", "dpkg", "status"), lp.dpkg + "\n");
-          results.push(trivyTarget({ id: t.id, name: t.name, layer: "debian", host: t.host }, io.trivyRootfs(root), vex));
+          results.push(trivyTarget({ id: t.id, name: t.name, layer: "debian", host: t.host }, io.trivyRootfs(root), tv));
         }
       } else {
         results.push(failed(t, "unknown", p.err ?? "not NixOS or Debian — no scanner for this system"));
@@ -894,12 +912,12 @@ export function runScan(opts: ScanOpts, client: ClusterClient, io: SecurityIO): 
         const id = `image:${t.id}/${c.name}`;
         const base = { id, name: `${names.join(", ")} (${t.id})`, layer: "image" as Layer, host: t.host, runsOn: names.map((n) => `${t.id}/${n}`), ref: c.digests[0] ?? c.image };
         if (c.digests.length === 0) {
-          results.push({ status: summarize(base, 0, "the image has no registry digest (built locally?) — cannot be scanned as running", [], vex, true), version: "", components: [] });
+          results.push({ status: summarize(base, 0, "the image has no registry digest (built locally?) — cannot be scanned as running", [], tv, true), version: "", components: [] });
         } else if (!dbOk) {
-          results.push({ status: summarize(base, 0, "no scanner database — see the scan's notes", [], vex, true), version: "", components: [] });
+          results.push({ status: summarize(base, 0, "no scanner database — see the scan's notes", [], tv, true), version: "", components: [] });
         } else {
           log(`matching ${base.name}: ${c.digests[0]}`);
-          const r = trivyTarget(base, io.trivyImage(c.digests[0]), vex);
+          const r = trivyTarget(base, io.trivyImage(c.digests[0]), tv);
           r.version = c.image;
           results.push(r);
         }
@@ -935,8 +953,17 @@ export function runScan(opts: ScanOpts, client: ClusterClient, io: SecurityIO): 
 // VEX applies as in a scan (vexSuppresses): what a statement decides comes back
 // as `suppressed`, not dropped, so the preview counts it per module (#788).
 export interface ListScan { findings: Finding[]; suppressed: Finding[]; error: string }
+// The list mixes modules, so a suppressed finding names whose statements decided it
+// (vexModules) and the caller applies vexFor's rule per module.
 function splitVex(fs: Finding[], vex: VexStatement[]): { findings: Finding[]; suppressed: Finding[] } {
-  return { findings: fs.filter((f) => !vexSuppresses(f, vex)), suppressed: fs.filter((f) => vexSuppresses(f, vex)) };
+  const findings: Finding[] = [];
+  const suppressed: Finding[] = [];
+  for (const f of fs) {
+    const by = vexDeciders(f, vex);
+    if (by.length === 0) findings.push(f);
+    else suppressed.push({ ...f, vexModules: [...new Set(by.map((s) => s.module))].sort() });
+  }
+  return { findings, suppressed };
 }
 
 export function scanComponentList(list: { name: string; version: string }[], io: SecurityIO, vex: VexStatement[] = []): ListScan {

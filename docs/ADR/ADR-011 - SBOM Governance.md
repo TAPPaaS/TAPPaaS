@@ -202,7 +202,10 @@ A finding a person has looked at gets a CycloneDX VEX statement (`analysis.state
 reachable, patched by a nixpkgs backport), `false_positive`, `resolved`, or `exploitable` /
 `in_triage` while it is open — in the `<module>-vex.json` of the module that owns the
 component (the estate-wide base — glibc, openssl, systemd — belongs to `templates`). The
-first three suppress the finding; the last two keep it reported. The scan reads VEX from
+first three suppress the finding; the last two keep it reported. A module's statements
+decide for that module's targets only (its VM and its images; a Proxmox node is
+`cluster`'s), since whether a flaw is reachable depends on how the module uses the
+package; `templates-vex.json` decides for every target. The scan reads VEX from
 the module directories of **every registered repository** (site.json `.repositories`, each
 repository's module catalogue), so a Community module's decisions count as much as a
 TAPPaaS one's; a file outside any registered module is not read, and one that does not
