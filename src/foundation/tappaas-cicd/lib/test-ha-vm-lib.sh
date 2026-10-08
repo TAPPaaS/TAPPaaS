@@ -283,6 +283,12 @@ check "file hook: parsed without touching the cluster" \
     "$(havm_ha_services "$N" | tr '\n' ';')" "vm:210 tappaas2 migrate;vm:220 tappaas1 started;"
 check "file hook: unsettled works off the canned listing" \
     "$(havm_ha_unsettled "$N")" "vm:210=migrate"
+printf '%s\n' "quorum OK" "lrm tappaas1 (maintenance mode, watchdog standby, x)" \
+    "lrm tappaas2 (idle, watchdog standby, x)" "lrm tappaas3 (active, watchdog active, x)" > "${W}/maint"
+check "maintenance nodes: only the LRM in maintenance mode" \
+    "$(TAPPAAS_HA_STATUS_FILE="${W}/maint" havm_ha_maintenance_nodes "$N")" "tappaas1"
+check "maintenance nodes: none when no LRM is in maintenance" \
+    "$(havm_ha_maintenance_nodes "$N")" ""
 check "file hook: rc 1 when the file is unreadable" \
     "$(TAPPAAS_HA_STATUS_FILE="${W}/nope" havm_ha_services "$N" >/dev/null 2>&1; echo $?)" "1"
 

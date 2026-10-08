@@ -82,6 +82,15 @@ HAVM_STEADY_STATES="started stopped disabled ignored freeze"
 # Args: <node_fqdn>
 havm_ha_services() {
     local node_fqdn="$1" status
+    status=$(havm_ha_status "${node_fqdn}") || return 1
+    printf '%s\n' "${status}" \
+        | awk '$1 == "service" { gsub(/[(),]/, ""); print $2, $3, $4 }'
+}
+
+# The raw `ha-manager status` text; rc 1 when the query failed.
+# Args: <node_fqdn>
+havm_ha_status() {
+    local node_fqdn="$1" status
     if [[ -n "${TAPPAAS_HA_STATUS_FILE:-}" ]]; then
         status=$(cat "${TAPPAAS_HA_STATUS_FILE}") || return 1
     else
@@ -90,8 +99,16 @@ havm_ha_services() {
     # A working node always prints at least `quorum OK`, so empty output is a
     # failed query wearing a zero exit status — not a cluster with no services.
     [[ -n "${status}" ]] || return 1
-    printf '%s\n' "${status}" \
-        | awk '$1 == "service" { gsub(/[(),]/, ""); print $2, $3, $4 }'
+    printf '%s\n' "${status}"
+}
+
+# Nodes whose LRM is in maintenance mode, one per line, from
+# `lrm tappaas1 (maintenance mode, watchdog standby, ...)`.
+# Args: <node_fqdn>
+havm_ha_maintenance_nodes() {
+    local node_fqdn="$1" status
+    status=$(havm_ha_status "${node_fqdn}") || return 1
+    printf '%s\n' "${status}" | awk '$1 == "lrm" && $3 == "(maintenance" { print $2 }'
 }
 
 # HA services on one node, optionally only those in <state>.

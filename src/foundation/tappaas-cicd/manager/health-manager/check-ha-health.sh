@@ -12,21 +12,27 @@
 # transitional state distinguishes a healthy migration from a wedged one.
 #
 # This check records when each service first entered a transitional state and
-# alerts once it has stayed there past a threshold. With --repair it also runs
+# alerts once it has stayed there past a threshold. It does the same for a node
+# held in HA maintenance mode: its HA guests stay on the other nodes, every
+# service reads `started`, and nothing else notices (hrossen, 2026-10-08: a
+# rolling reboot died with the mothership and left tappaas1 there for hours).
+# Both log a `tappaas-ha-stuck:` line, which logging's HaStuck rule mails. With --repair it also runs
 # the cluster's cloud-init orphan sweep, which is the known cause of the
 # failback loop (https://bugzilla.proxmox.com/show_bug.cgi?id=7608).
 #
 # Usage:
-#   check-ha-health.sh [--repair] [--threshold SECONDS] [--quiet]
+#   check-ha-health.sh [--repair] [--threshold SECONDS] [--maintenance-threshold SECONDS] [--quiet]
 #
 #   --repair            Run cloudinit-orphans.sh --execute when a service is wedged
 #   --threshold SECONDS How long a transitional state may persist (default 600)
+#   --maintenance-threshold SECONDS
+#                       How long a node may stay in HA maintenance (default 1800)
 #   --quiet             Only emit output when something is wrong (for timers)
 #
 # Exit codes:
 #   0  all HA services in a steady state (or transitioning within threshold)
 #   1  could not determine HA status (no reachable node, no HA configured)
-#   2  at least one service wedged beyond the threshold
+#   2  a service wedged, or a node in maintenance, beyond its threshold
 #
 # Designed to be run from a systemd timer on tappaas-cicd every ~5 minutes.
 #
@@ -61,18 +67,21 @@ readonly STATE_FILE="${TAPPAAS_HA_STATE:-/var/lib/tappaas/ha-health.state}"
 # healthy for a short while.
 
 THRESHOLD=600
+MAINT_THRESHOLD=1800
 REPAIR=0
 QUIET=0
 
 usage() {
     cat <<'EOF'
-Usage: check-ha-health.sh [--repair] [--threshold SECONDS] [--quiet]
+Usage: check-ha-health.sh [--repair] [--threshold SECONDS] [--maintenance-threshold SECONDS] [--quiet]
 
   --repair             Run the cloud-init orphan sweep when a service is wedged
   --threshold SECONDS  Transitional-state grace period (default 600)
+  --maintenance-threshold SECONDS
+                       How long a node may stay in HA maintenance (default 1800)
   --quiet              Only produce output when something is wrong
 
-Exit: 0 healthy, 1 undetermined, 2 wedged service found.
+Exit: 0 healthy, 1 undetermined, 2 wedged service or stuck maintenance found.
 EOF
 }
 
@@ -80,6 +89,7 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --repair)    REPAIR=1; shift ;;
         --threshold) THRESHOLD="${2:-}"; shift 2 ;;
+        --maintenance-threshold) MAINT_THRESHOLD="${2:-}"; shift 2 ;;
         --quiet)     QUIET=1; shift ;;
         --help|-h)   usage; exit 0 ;;
         *)           usage; die "Unknown option: $1" ;;
@@ -87,6 +97,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 [[ "${THRESHOLD}" =~ ^[0-9]+$ ]] || die "Threshold must be numeric: ${THRESHOLD}"
+[[ "${MAINT_THRESHOLD}" =~ ^[0-9]+$ ]] || die "Maintenance threshold must be numeric: ${MAINT_THRESHOLD}"
 
 say() { [[ "${QUIET}" -eq 1 ]] || info "$@"; }
 
@@ -100,13 +111,16 @@ say() { [[ "${QUIET}" -eq 1 ]] || info "$@"; }
 # happens to print quorum/master/lrm lines alongside the services.
 # TAPPAAS_HA_STATUS_FILE (the offline test hook) is honoured inside the library.
 ha_services=""
+maint_nodes=""
 got_status=0
 if [[ -n "${TAPPAAS_HA_STATUS_FILE:-}" ]]; then
     ha_services=$(havm_ha_services "") && got_status=1
+    maint_nodes=$(havm_ha_maintenance_nodes "") || true
 else
     for node in $(get_all_node_hostnames); do
         if ha_services=$(havm_ha_services "${node}.mgmt.internal"); then
             got_status=1
+            maint_nodes=$(havm_ha_maintenance_nodes "${node}.mgmt.internal") || true
             break
         fi
     done
@@ -166,23 +180,42 @@ while read -r sid node state; do
     elapsed=$(( now - first_seen ))
     if [[ "${elapsed}" -ge "${THRESHOLD}" ]]; then
         wedged=1
-        error "HA service ${sid} stuck in '${state}' on ${node} for ${elapsed}s (threshold ${THRESHOLD}s)"
+        error "tappaas-ha-stuck: service=${sid} in '${state}' on ${node} for ${elapsed}s (threshold ${THRESHOLD}s)"
     else
         say "  ${YW}…${CL} ${sid} in '${state}' on ${node} for ${elapsed}s (within threshold)"
     fi
 done < <(printf '%s\n' "${ha_services}")
 
-# Rewrite the state file with only the currently-transitional services, so a
-# service that settles forgets its history and gets a fresh grace period.
+# Nodes in maintenance share the history file, keyed `node:<name>`. A rolling
+# reboot holds each node there for minutes; past the threshold, the run that
+# set it is gone and HA keeps the node's guests elsewhere until someone clears it.
+maint_stuck=0
+while read -r mnode; do
+    [[ -n "${mnode}" ]] || continue
+    first_seen=$(awk -F'\t' -v s="node:${mnode}" '$1 == s && $2 == "maintenance" {print $3; exit}' "${STATE_PATH}")
+    [[ -n "${first_seen}" ]] || { first_seen="${now}"; say "  ${YW}…${CL} ${mnode} entered HA maintenance"; }
+    new_state+="node:${mnode}"$'\t'"maintenance"$'\t'"${first_seen}"$'\n'
+    elapsed=$(( now - first_seen ))
+    if [[ "${elapsed}" -ge "${MAINT_THRESHOLD}" ]]; then
+        maint_stuck=1
+        error "tappaas-ha-stuck: node=${mnode} in HA maintenance for ${elapsed}s (threshold ${MAINT_THRESHOLD}s); its HA guests stay off it. Clear with: ha-manager crm-command node-maintenance disable ${mnode}"
+    else
+        say "  ${YW}…${CL} ${mnode} in HA maintenance for ${elapsed}s (within threshold)"
+    fi
+done < <(printf '%s\n' "${maint_nodes}")
+
+# Rewrite the state file with only what is still transitional, so a service
+# or node that settles forgets its history and gets a fresh grace period.
 printf '%s' "${new_state}" > "${STATE_PATH}"
 
 ###############################################################################
 # Report / repair
 ###############################################################################
 if [[ "${wedged}" -eq 0 ]]; then
-    if [[ "${transitioning}" -eq 0 ]]; then
+    if [[ "${transitioning}" -eq 0 && -z "${maint_nodes}" ]]; then
         say "${GN}✓${CL} All HA services in a steady state"
     fi
+    [[ "${maint_stuck}" -eq 0 ]] || exit 2
     exit 0
 fi
 

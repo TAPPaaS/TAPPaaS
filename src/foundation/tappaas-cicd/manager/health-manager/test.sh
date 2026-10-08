@@ -78,6 +78,27 @@ service vm:130 (tappaas1, freeze)
 EOF
     _chh 0 "'freeze' treated as steady → exit 0" --threshold 0
 
+    # A node held in HA maintenance: quiet within the grace period, stuck past it.
+    cat >"${_status}" <<'EOF'
+lrm tappaas1 (maintenance mode, watchdog standby, Thu Oct  8 09:12:57 2026)
+lrm tappaas3 (active, watchdog active, Thu Oct  8 09:12:57 2026)
+service vm:110 (tappaas3, started)
+EOF
+    : > "${_state}"
+    _chh 0 "new maintenance within threshold → exit 0" --maintenance-threshold 1800
+    if grep -q '^node:tappaas1' "${_state}"; then ok "maintenance recorded in history"
+    else bad "history did not record node:tappaas1"; fi
+    awk -F'\t' 'BEGIN{OFS="\t"} {print $1, $2, $3 - 4000}' "${_state}" >"${_state}.bak" \
+        && mv "${_state}.bak" "${_state}"
+    _out=$(TAPPAAS_HA_STATUS_FILE="${_status}" TAPPAAS_HA_STATE="${_state}" "$CHH" --quiet 2>&1); _rc=$?
+    if [[ "${_rc}" -eq 2 && "${_out}" == *"tappaas-ha-stuck: node=tappaas1 "* ]]; then
+        ok "maintenance past threshold → exit 2 with the tappaas-ha-stuck line"
+    else bad "stuck maintenance not reported (rc ${_rc}): ${_out}"; fi
+    sed -i.bak 's/maintenance mode/active/' "${_status}"
+    _chh 0 "maintenance cleared → exit 0"
+    if [[ -s "${_state}" ]]; then bad "maintenance history not cleared"
+    else ok "maintenance history cleared"; fi
+
     rm -rf -- "${_tmp}"
 else
     bad "check-ha-health.sh not executable"

@@ -247,6 +247,7 @@ in `config/alerts.log` on the mothership.
 | `BackupFailed` | event | vzdump "Backup of VM … failed" |
 | `OomKill` | event | the kernel's "Out of memory: Killed process" (subject: *Out of Memory Kill*) |
 | `RootKeyChanged` | event | a key added to or removed from root's `authorized_keys` on the nodes — the nodes' `tappaas-rootkeys-check` (5-minute timer) compares key fingerprints and names each one; one alert for the cluster-wide file. Rewrites with the same keys (Proxmox's `pvecm updatecerts`) do not alert; the audit trail still records every write |
+| `HaStuck` | state | the mothership's `check-ha-health` (5-minute timer) logging `tappaas-ha-stuck:`: a node in HA maintenance past 30 minutes, or an HA service in a transitional state past 10; `ha_stuck` names it |
 | `ReplicationFailed` | state | a storage replication job failed in two runs within the hour (one failed run while a node reboots does not mail). The mail names the job (`replication_job`, `<vmid>-<n>`); it clears after an hour without the error |
 | `Heartbeat` | heartbeat | logs arriving at all — never mailed, see below |
 

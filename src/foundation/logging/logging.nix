@@ -170,6 +170,17 @@ let
       query = ''${pve} |~ "replication job"'';
     })
     (alertRule {
+      uid = "tappaas-ha-stuck"; title = "HaStuck"; kind = "state"; window = 600;
+      # The mothership's check-ha-health (every 5 minutes) logs this line while
+      # an HA service stays in a transitional state past 10 minutes, or a node
+      # stays in HA maintenance past 30 — a rolling reboot that died with the
+      # mothership left tappaas1 there, its guests elsewhere, unnoticed (hrossen,
+      # 2026-10-08). Scoped to the unit: the rule's own query text is logged too.
+      expr = ''sum by (host, ha_stuck) (count_over_time({host="tappaas-cicd", unit="check-ha-health.service"} |= "tappaas-ha-stuck:" | regexp "tappaas-ha-stuck: (?P<ha_stuck>(node|service)=[^ ]+)" [10m]))'';
+      summary = "HA is not where it should be: a node is held in maintenance mode (its HA guests stay elsewhere) or an HA service is stuck migrating. The line says which and how to clear it.";
+      query = ''{host="tappaas-cicd", unit="check-ha-health.service"} |= "tappaas-ha-stuck"'';
+    })
+    (alertRule {
       uid = "tappaas-heartbeat"; title = "Heartbeat"; kind = "heartbeat"; window = 300;
       # Fires for as long as logs arrive and rules run; its webhook proves the
       # whole path reaches the mothership. Never mailed: the receiver records
