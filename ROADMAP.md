@@ -105,12 +105,12 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | 4 | G4.2 Proxy & ingress | M | L | 1 | 1 | 4 |
 | 4 | G4.3 Manager verb gaps | M | L | 4 | 5 | 8 |
 | 4 | G4.4 Storage & physical devices | H | L | 2 | 3 | 6 |
-| 4 | G4.5 Governance, CI & sign-offs | M | L | 2 | 1 | 7 |
-| 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 7 | 8 | 8 |
+| 4 | G4.5 Governance, CI & sign-offs | M | L | 2 | 2 | 6 |
+| 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 7 | 10 | 6 |
 | 3 | G3.2 Identity & SSO wiring | M | L | 1 | 5 | 5 |
 | 3 | G3.3 App module fixes | L | L | 5 | 4 | 10 |
 | 3 | G3.4 AI stack maturity | M | M | 1 | – | 6 |
-| 3 | G3.5 Installer UX | L | L | – | – | 4 |
+| 3 | G3.5 Installer UX | L | L | – | 1 | 3 |
 | 2 | G2.1 Firewall exposure & rule order | M | H | 3 | 4 | 13 |
 | 2 | G2.2 DNS resolver robustness | L | M | 4 | – | 5 |
 | 1 | ✅ G1.1 Vocabulary & classification (ADR-022 family) | H | H | 11 | 3 | – |
@@ -278,7 +278,7 @@ Shared storage and the physical network as managed parts of a site: the rest of 
 | ✅ #792 | `unifi.sh`: whole API payloads as jq arguments fail on large sites | H | M | **Done 2026-10-07**: interrogate (switch, controller, AP) and the port-override builder pass payloads by file (`--slurpfile`), never argv — Linux caps one argument at 128 KiB. Reproduced offline with a 165 KiB device list (old: "Argument list too long"; new: same answer as small) |
 | FW #158 | Multi-NIC module firewall rules | M | L | Optional roll-in |
 
-### G4.5 Governance, CI & sign-offs — Ease M · Risk L · released: 2 · done for 2.2: 1 · open: 7
+### G4.5 Governance, CI & sign-offs — Ease M · Risk L · released: 2 · done for 2.2: 2 · open: 6
 
 The project's own machinery: CI runners (#415), community-health files (#486), the remaining sign-offs and ADRs (#406, #359), a tool for urgent patches (#746), a logging-function lint (#747), a service-desk spike (#63).
 
@@ -291,7 +291,7 @@ The project's own machinery: CI runners (#415), community-health files (#486), t
 | #63 | Service desk tooling spike | M | L | |
 | ✅ FW #143 | CVE tracking / SBOM (ADR-011) | M | L | **Closed 2026-09-27 — built.** ADR-011 v0.5 Proposed: `health-manager scan/report security` after every sweep, a WARN-only `cve-status` gate, notice on what is new |
 | #746 | Emergency patching as ADR-028 D12 describes it | M | L | ADR-028 D12 urgent fixes exist only as prose. Wants a `tappaas-train` verb for the channel-tip → `main` → fast-forward move, and the carried fix shown in `status` |
-| #747 | A script that defines its own logging set must define all of it, `debug` included | L | L | Three `debug: command not found` in one day. Wants a lint: a script defining some of `info`/`warn`/`error`/`die` defines `debug` too |
+| ✅ #747 | A script that defines its own logging set must define all of it, `debug` included | L | L | **Closed 2026-10-08** (`fb557bbc`): the 24 scripts with a private `info`/`warn`/`error`/`die` set and no `debug` define it; `scripts/test/test-log-set-lint.sh` (Test 9z) checks definitions, so the 25th cannot land |
 
 ---
 
@@ -299,7 +299,7 @@ The project's own machinery: CI runners (#415), community-health files (#486), t
 
 Low upgrade risk. Build continuously, in any order within a group.
 
-### G3.1 cluster:vm lifecycle & capacity — Ease L · Risk M · released: 7 · done for 2.2: 8 · open: 8
+### G3.1 cluster:vm lifecycle & capacity — Ease L · Risk M · released: 7 · done for 2.2: 10 · open: 6
 
 Guests sized, placed, started and stopped right: memory defaults from measurement (#663), hardware drift (#531), shutdown and boot order (#36, #127), storage growth and placement (#100, #403), a composite-module ADR (#761), and a sweep that survives a guest restarting itself (#753).
 
@@ -309,8 +309,8 @@ Guests sized, placed, started and stopped right: memory defaults from measuremen
 | ✅ #393 | A failed migration must not block later steps | L | L | **Fixed 2026-09-26:** a failed `qm migrate` of a guest still running returns exit 11 — deferred, drift recorded, no rollback — instead of failing a healthy guest's update |
 | #531 | Detect hardware-spec drift | L | M | Once detected, pending changes get applied (reboots): gate on `rebootOk` |
 | ✅ #532 | Pending vs applied hardware changes | M | L | **Fixed 2026-09-26:** a held change (memory without hotplug) is read from `qm pending` and reported as deferred, not applied. Verified against ground truth on hrossen |
-| #36 | VM shutdown timeout | L | L | Land with #127 |
-| #127 | Boot order: firewall (and secrets) first | L | L | |
+| ✅ #36 | VM shutdown timeout | L | L | **Closed 2026-10-08 — already met:** `pve-guests` stops each guest with its `down=` or 180 s, then a hard stop (`force-stop` defaults on); every TAPPaaS stop path passes a timeout. hrossen reboots: guests stopped in 4–33 s |
+| ✅ #127 | Boot order: firewall (and secrets) first | L | L | **Closed 2026-10-08** (`fb461a1d`): a pre-start hookscript on every guest but the firewall waits until it answers DNS (180 s at most), so a cold start no longer boots guests without DHCP — `startup: order=` cannot do it (HA ignores it). `cluster` update Step 5d, Test 5d |
 | #100 | Automatic storage extension | M | L | |
 | #403 | Install on the root disk; smarter placement | M | L | |
 | #663 | Memory defaults are not based on measurement | L | L | Shipped memory defaults were never measured (hrossen: 60G declared, ~20G used). Over-declaring costs commitment. `network` 8G→4G parked until the operator has physical access |
@@ -373,7 +373,7 @@ A production-grade AI stack: LiteLLM and Open WebUI tested (#119, #120), hardene
 | #758 | vllm-amd: the models bind mount is in no backup | M | L | The 33 GB `/tanka1/vllm-models` bind mount is in no backup, so a restored container has no models. Maintainer @ErikDaniel007: re-download, back it up, or call it cache |
 | #677 | litellm's default workers do not fit its default 4 GB | L | L | Found 2026-09-20 by `--deep`: litellm plus four workers leave 43 MB free in the default 4 GB. Either the default memory covers the workers, or the workers follow the memory |
 
-### G3.5 Installer UX — Ease L · Risk L · open: 4
+### G3.5 Installer UX — Ease L · Risk L · done for 2.2: 1 · open: 3
 
 A first install that is easier to get through: resumable (#377), showing its progress (#266), asking only what the hardware needs (#405), reusing what it already downloaded (#83).
 
@@ -381,7 +381,7 @@ A first install that is easier to get through: resumable (#377), showing its pro
 |---|-------|:-:|:-:|------|
 | #377 | Installer cannot restart; mgmt-net routing | M | L | |
 | #266 | Progress indicator during the PVE update | L | L | **Verified open 2026-09-26** (low-risk sweep): `cluster/install.sh` has no progress, dots or spinner |
-| #405 | Do not ask for tanks without free disks | L | L | |
+| ✅ #405 | Do not ask for tanks without free disks | L | L | **Closed 2026-10-08** (`e46f0429`): the installer skips a pool when no disk is free — a disk in an imported pool is no choice, an old unimported label still is |
 | FW #83 | Reuse already-downloaded images | H | L | **Re-scored Ease L → H (2026-09-26):** the img download lives in a temp dir deleted on exit. Reuse needs a cache location and a staleness policy (moving tags) — a decision first |
 
 ---
