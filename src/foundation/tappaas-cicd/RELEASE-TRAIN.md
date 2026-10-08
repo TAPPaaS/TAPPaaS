@@ -226,6 +226,50 @@ its guests is a split nobody would notice until something broke.
 Debian guests are not part of this: they patch themselves between releases (`apt-get upgrade` on
 the daily sweep, `unattended-upgrades` where a guest is locked down).
 
+## Before the pin moves: preview and ack (#788)
+
+A boundary proves a new pin by running it — a guest first, then the sweep, then the deep test —
+which takes hours. What a pin move *brings* is known much sooner: evaluating every guest against
+the next pin (nothing is built) shows which packages change major version and which critical or
+high CVEs the move introduces, keeps, or fixes. That takes minutes.
+
+```bash
+tappaas-train.sh preview                        # the next patch pin of the current release
+tappaas-train.sh preview --to nixos-26.11       # a release move
+tappaas-train.sh ack --note "read the Grafana 14 notes; CVE-… has no fix upstream yet"
+```
+
+| Option | Meaning |
+|--------|---------|
+| `preview` | Resolve the pin the next boundary would take, evaluate the guests the last security scan found against it, and compare. Prints the summary, writes `config/train-preview.json`. Changes nothing. |
+| `preview --to <nixos-XX.YY>` | The same for a version move to another release branch. |
+| `ack` | Accept everything the last `preview` reported: its major version changes and the critical/high CVEs it introduces (or a CVE match that failed). |
+| `ack --note "<why>"` | The same, with the reason recorded beside it. |
+
+**What is reported.** Only packages that *run today* are compared — the last `health-manager scan
+security` says which, per guest — so build tools in a closure do not count. *Major* is the first
+version number changing (`13.0.9 → 14.0.1`). On the CVE side, the next pin's packages are matched
+the way a scan matches them (`health-manager scan nix-list`): critical/high CVEs it **introduces**
+need an ack; those it **keeps** and those it **fixes** are reported. A failed match is never a
+clean result — it needs an ack like a finding.
+
+**What a boundary does with it.** Right after phase 1 moves the pin — before the deep test — the
+boundary computes the same findings for the pin it actually took:
+
+- nothing found: it goes on, **no ack needed** — the common case;
+- everything found is covered by the last `ack`: it goes on (the channel may have moved a few
+  commits since the preview; what matters is that it brings nothing new);
+- anything not covered: it **stops** before the deep test, names the new items, and leaves the
+  checkout clean. Run `preview`, read the upstream notes, `ack`, run the boundary again.
+
+The accepted items are recorded on the release (`accepted` in `release/releases.json`, shown by
+`tappaas-train releases`), and the boundary uses the ack up. `boundary --dry-run` says what the
+gate would do with the last preview. When the gate cannot judge — no security scan to compare
+with, or the pin cannot be evaluated — it says so and lets the deep test decide.
+
+Not covered: the mothership (a flake of its own on the same pin; compared through its guests'
+packages), container images (they have their own pins, below) and Debian (patched daily).
+
 ## When staging finds a fault
 
 **Patch forward. Nothing moves backwards.** A blocked train is a normal state, not an incident —

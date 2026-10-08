@@ -21,17 +21,21 @@
 //                            (ADR-011: inventory + CVE match of every target;
 //                             writes ~/config/sbom/, run by tappaas-security-scan)
 //   health-manager report security [--all] [--json]      (prints the last scan)
+//   health-manager scan nix-list --components <file> [--nixpkgs <path>] [--no-db-update]
+//                            (#788: match a name/version list as if it ran — the
+//                             release train's pin preview; JSON on stdout)
 //
 // Exit codes: ok=0, error / failed-health-gate = 1.
 
 import { spawnSync } from "child_process";
+import { readFileSync } from "fs";
 import { hostname } from "os";
 import { join } from "path";
 import { defaultConfigDir, readModuleJson } from "./config";
 import { CliClusterClient } from "./client";
 import { guestTarget, runHealthGates } from "./checks";
 import {
-  CliSecurityIO, PREVIOUS_FILE, SITE_CDX_FILE, STATUS_FILE, notify, readStatus, renderReport, runScan, sbomDir,
+  CliSecurityIO, scanComponentList, PREVIOUS_FILE, SITE_CDX_FILE, STATUS_FILE, notify, readStatus, renderReport, runScan, sbomDir,
   sweepIsNewer, writeScan,
 } from "./security";
 import { ClusterClient } from "./types";
@@ -80,6 +84,19 @@ export const HELP: HelpSpec = {
         "against its layer's CVE source (ADR-011 v0.3). Read-only on every target. Writes\n" +
         "~/config/sbom/site.cdx.json (CycloneDX) and ~/config/sbom/cve-status.json; the previous\n" +
         "status is kept as cve-status.previous.json. Runs after every sweep (tappaas-security-scan).",
+    },
+    {
+      usage: "scan nix-list --components <file> [--nixpkgs <path>] [--no-db-update]",
+      options: [
+        ["--components <file>", "JSON array of {name, version} — the packages to match (required)."],
+        ["--nixpkgs <path>", "The nixpkgs whose CPE vendors to use: the pin being previewed (default: the installed one)."],
+        ["--no-db-update", "Match against the grype database as it is, without refreshing it first."],
+      ],
+      details:
+        "Matches a package list against the CVE database as if it ran (#788): the release train's\n" +
+        "`tappaas-train preview` uses it for the packages the NEXT nixpkgs pin would bring, which\n" +
+        "nothing runs yet. Same CPE rule and matcher as `scan security`; writes nothing. Prints\n" +
+        "{\"findings\": [{id, severity, pkg, installed, fixed, purl}], \"error\": \"\"} on stdout.",
     },
     {
       usage: "report security [--all] [--json]",
@@ -181,6 +198,33 @@ function cmdValidate(opts: Opts, client: ClusterClient): number {
   }
   console.error(`${RD}[Error]${CL} ${report.failed} health gate(s) failed`);
   return 1;
+}
+
+// ── scan nix-list (#788) ──────────────────────────────────────────────
+function cmdScanNixList(opts: Opts): number {
+  let file = "";
+  let nixpkgs = "";
+  let dbUpdate = true;
+  for (let i = 0; i < opts.rest.length; i++) {
+    const a = opts.rest[i];
+    if (a === "--components") file = opts.rest[++i] ?? "";
+    else if (a === "--nixpkgs") nixpkgs = opts.rest[++i] ?? "";
+    else if (a === "--no-db-update") dbUpdate = false;
+    else die(`scan nix-list: unexpected argument ${a}`);
+  }
+  if (!file) die("scan nix-list: --components <file> is required");
+  let list: { name: string; version: string }[];
+  try {
+    list = JSON.parse(readFileSync(file, "utf8"));
+  } catch {
+    die(`scan nix-list: ${file} is not a JSON array of {name, version}`);
+  }
+  if (nixpkgs) process.env.TAPPAAS_NIXPKGS = nixpkgs;
+  const io = new CliSecurityIO();
+  if (dbUpdate) for (const n of io.dbUpdate()) process.stderr.write(`[Warning] ${n}\n`);
+  const r = scanComponentList(list!, io);
+  process.stdout.write(JSON.stringify(r) + "\n");
+  return r.error ? 1 : 0;
 }
 
 // ── scan security / report security (ADR-011 v0.3) ────────────────────
@@ -312,7 +356,8 @@ export function run(argv: string[], client: ClusterClient): number {
       case "reboot":
         return cmdReboot(opts, client);
       case "scan":
-        if (opts.rest[0] !== "security") die("scan: expected 'security'");
+        if (opts.rest[0] === "nix-list") return cmdScanNixList({ ...opts, rest: opts.rest.slice(1) });
+        if (opts.rest[0] !== "security") die("scan: expected 'security' or 'nix-list'");
         return cmdScanSecurity({ ...opts, rest: opts.rest.slice(1) }, client);
       case "report":
         if (opts.rest[0] !== "security") die("report: expected 'security'");

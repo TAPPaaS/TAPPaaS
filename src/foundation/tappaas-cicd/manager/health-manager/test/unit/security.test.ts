@@ -13,7 +13,7 @@ import { RemoteResult } from "../../../../lib/ts/src/cluster";
 import {
   CpeParts, DB_SPACE_BYTES, dbSpaceProblem, Finding, LINUX_PROBE, OPNSENSE_PROBE, PREVIOUS_FILE, STATUS_FILE, ScanStatus, SecurityIO,
   TargetStatus, applyCpes, checkCveStatus, fit, groupByImage, diffScans, nixComponents, parseLinuxProbe, parseOpnsenseProbe,
-  loadVex, parseStorePath, parseVex, readStatus, registeredModuleDirs, renderReport, runScan, sbomDir, summarize, summarizeOpnsense, sweepIsNewer,
+  loadVex, parseStorePath, parseVex, scanComponentList, readStatus, registeredModuleDirs, renderReport, runScan, sbomDir, summarize, summarizeOpnsense, sweepIsNewer,
   vexSuppresses, writeScan,
 } from "../../src/security";
 import { run } from "../../src/main";
@@ -351,6 +351,19 @@ console.log("writeScan / diffScans / checkCveStatus / report");
   check(run(["report", "security", "--config-dir", dir], client) === 0, "report security → exit 0");
   check(run(["scan", "security", "--if-new-sweep", "--config-dir", site()], client) === 0, "scan --if-new-sweep with no new sweep → exit 0, nothing run");
   check(run(["scan", "security", "--bogus", "--config-dir", site()], client) !== 0, "an option the verb does not take is refused");
+}
+
+// ── scan nix-list: a package list matched as if it ran (#788) ──
+{
+  const io = new FakeIO();
+  const r = scanComponentList([{ name: "glibc", version: "2.42-84" }, { name: "glibc", version: "2.42-84" }, { name: "zlib", version: "" }], io);
+  check(r.error === "" && r.findings.length === 1 && r.findings[0].id === "CVE-2026-5450", "a listed package is matched like a scanned one");
+  const sbom = JSON.parse(io.grypeInputs[0]);
+  check(sbom.components.length === 1, "duplicates and versionless entries are not sent to the matcher");
+  check(String(sbom.components[0].cpe).startsWith("cpe:2.3:a:gnu:glibc:2.42-84"), "…with the CPE vendor from nixpkgs");
+  io.grypeOut = { rc: 1, stdout: "", stderr: "db missing", ran: true };
+  check(scanComponentList([{ name: "glibc", version: "2.42-84" }], io).error.startsWith("grype failed"), "a failed matcher is an error, not zero findings");
+  check(scanComponentList([], new FakeIO()).error !== "", "an empty list is an error, not a clean result");
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

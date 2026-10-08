@@ -926,6 +926,40 @@ export function runScan(opts: ScanOpts, client: ClusterClient, io: SecurityIO): 
 // and `podman ps` lists containers in no fixed order: unsorted, authentik's
 // server and worker swapped places between nights, the target got a new id, and
 // every one of its findings read as new — a security notice each morning.
+// ── a package list, matched as if it ran (#788) ──────────────────────
+// The release train's preview asks what the NEXT nixpkgs pin would bring. Its
+// packages come from evaluating the guests against that pin — nothing runs it
+// yet, so there is no store path to probe, only names and versions. Same CPE
+// rule and matcher as a scan; the CPE vendor comes from the pin being previewed
+// (the caller points TAPPAAS_NIXPKGS at it), not from the one installed.
+export function scanComponentList(list: { name: string; version: string }[], io: SecurityIO): { findings: Finding[]; error: string } {
+  const seen = new Set<string>();
+  const comps: Component[] = [];
+  for (const c of list) {
+    if (!c || !c.name || !c.version) continue;
+    const k = `${c.name}@${c.version}`;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    comps.push({ type: "library", name: c.name, version: c.version, purl: `pkg:nix/${c.name}@${c.version}` });
+  }
+  if (comps.length === 0) return { findings: [], error: "no packages to match" };
+  applyCpes(comps, io.nixCpeParts([...new Set(comps.map((c) => c.name))]));
+  const dir = mkdtempSync(join(tmpdir(), "tappaas-preview-"));
+  try {
+    const f = join(dir, "list.cdx.json");
+    writeFileSync(f, JSON.stringify(cdxDoc(comps)));
+    const g = io.grype(f);
+    if (!g.ran || g.rc !== 0) return { findings: [], error: `grype failed: ${lastLine(g.stderr) || `exit ${g.rc}`}` };
+    try {
+      return { findings: dedupe(grypeFindings(g.stdout)), error: "" };
+    } catch {
+      return { findings: [], error: "grype output not parseable" };
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 export function groupByImage(cs: Container[]): Container[][] {
   const m = new Map<string, Container[]>();
   for (const c of cs) {

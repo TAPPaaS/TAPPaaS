@@ -28,12 +28,24 @@
 #   tappaas-train patch <staging|production> <commit> --why "<what>" [--dry-run]
 #                                          an urgent fix (ADR-028 D12): fast-forward the channel
 #                                          onto <commit>, tag it MAJOR.MINOR.N, record why
+#   tappaas-train preview [--to <nixos-XX.YY>]
+#                                          what the NEXT pin move would bring to what runs here
+#                                          (#788): major version changes and critical/high CVEs —
+#                                          introduced, remaining, fixed. Evaluates, builds nothing,
+#                                          moves nothing; writes config/train-preview.json
+#   tappaas-train ack [--note "<why>"]     accept what the last preview reported; the next
+#                                          boundary goes ahead if it finds nothing beyond it
 #   tappaas-train releases                 every version, its commit, when it reached each channel
 #   tappaas-train releases --render        re-render RELEASES.md from release/releases.json (after a hand edit)
 #
 # Versions (ADR-028 D13): each boundary cuts the next MAJOR.MINOR into staging
 # as an annotated tag, and the same number reaches production one boundary
 # later. The history is committed to main: release/releases.json and RELEASES.md.
+#
+# Pin preview (#788): a pin move's MAJOR version changes and the critical/high CVEs
+# it introduces are found by evaluating, in minutes. `preview` shows them, `ack`
+# accepts them, and a boundary checks the pin it moves to right away — before its
+# deep test — and stops on anything not accepted. Nothing found: no ack needed.
 #
 # One boundary is one command: move the pin, prove it here, land it on main,
 # then promote. Its preflight also holds every module to the blueprint
@@ -242,6 +254,7 @@ make_release_tag() {
 JQ_NOTES='def notes: [ (if .kind == "patch" then "urgent fix on \(.channel): \(.why // "")" else empty end),
                       (if .kind == "major" then "major" else empty end),
                       (if (.supersedes // []) != [] then "supersedes \(.supersedes | join(", "))" else empty end),
+                      (if (.accepted // []) != [] then "accepted: \(.accepted | join("; "))" else empty end),
                       (if .forced then "boundary forced" else empty end),
                       (.note // empty) ] | join("; ");'
 
@@ -918,7 +931,10 @@ do_phase_branch() {
     local br; br="pin/$(date -u +%Y-w%V)"
     info "${BOLD}Phase 1: ${br} — refresh the estate pin${CL}"
     local before; before="$(jq -r '.nodes.nixpkgs.locked.rev // empty' "${PIN_LOCK}")"
-    [[ "${DRY_RUN}" == "1" ]] && { info "  (dry run) would branch ${br} and update ${PIN_LOCK##*/}"; return 0; }
+    if [[ "${DRY_RUN}" == "1" ]]; then
+        info "  (dry run) would branch ${br} and update ${PIN_LOCK##*/}"
+        return 0
+    fi
 
     g rev-parse --verify --quiet "${br}" >/dev/null && g branch -D "${br}" >/dev/null 2>&1
     g checkout -q -b "${br}" origin/main || { error "could not branch ${br}"; return 1; }
@@ -994,6 +1010,7 @@ do_phase_branch() {
         return 0
     fi
     info "  pin ${before:0:12} → ${after:0:12}"
+    pin_gate "${REPO_DIR}/src/foundation/templates" "${before}" || { abandon_phase_branch "${br}"; return 1; }
     # One pathspec that matches nothing makes `git add` stage NOTHING, and the
     # commit below then fails with the pin already rewritten on disk — so each
     # path is offered on its own.
@@ -1191,8 +1208,10 @@ do_phase_record() {   # $1 = the version this boundary cuts, $2 = forced, $3 = k
             --arg d "$(day_utc "$(now_epoch)")" --arg k "$3" --argjson f "$([[ "$2" == "1" ]] && echo true || echo false)" \
             --arg p "$(jq -r '.nodes.nixpkgs.locked.rev // ""' "${PIN_LOCK}" 2>/dev/null | cut -c1-12)" \
             --argjson s "${sup:-[]}" \
+            --argjson acc "$(jq -c '.boundary.accepted // []' "${STATE_FILE}" 2>/dev/null || echo '[]')" \
             '{version: $v, commit: $c, staging: $d, production: null, kind: $k, forced: $f, pin: $p}
-             + (if ($s | length) > 0 then {supersedes: $s} else {} end)')"
+             + (if ($s | length) > 0 then {supersedes: $s} else {} end)
+             + (if ($acc | length) > 0 then {accepted: $acc} else {} end)')"
         subject+=("${cut} to staging")
     fi
     # Production holds a release only when the revision it took was one; the
@@ -1237,6 +1256,7 @@ cmd_boundary() {
     else
         info "  1  branch pin/$(date -u +%Y-w%V), refresh the estate pin"
     fi
+    preview_plan
     info "  2  prove it here: $(pick_guest 2>/dev/null || echo "a guest") first, then the sweep, then --deep"
     info "  3  land on main (hours: the sweep reboots nodes, the deep test builds guests)"
     # The version is decided once, here, and kept: a resumed run tags what the
@@ -1311,6 +1331,7 @@ cmd_boundary() {
         | .lastBoundary = {date: $today, forced: ($forced == "1"), cut: (if $cut == "" then null else $cut end)}
         | .pin = $pin
         | del(.expedited)
+        | del(.ack)
         | .boundary = null' "${STATE_FILE}" > "${tmp}" && mv -f "${tmp}" "${STATE_FILE}" || rm -f "${tmp}"
 
     echo
@@ -1482,6 +1503,159 @@ cmd_patch() {
     return 0
 }
 
+# ── preview / ack (#788) ─────────────────────────────────────────────
+# What a pin move brings is found in minutes by EVALUATING the guests against
+# the next pin — not after the hours a boundary spends proving it and rolling
+# it back. A major version change, or a critical/high CVE the move introduces,
+# needs an operator's word; `ack` gives it ahead of time, and the boundary
+# checks the pin it takes against that word before its deep test.
+PREVIEW_FILE="${CONFIG_DIR}/train-preview.json"
+TRAIN_SCRIPTS="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+
+# pin_findings <dir holding the candidate flake.lock> <from rev> <out json>
+# rc 1, with the reason on stderr, when it cannot judge: no security scan to
+# compare with, or the pin cannot be fetched or evaluated.
+# TAPPAAS_PIN_FINDINGS (tests): a command run as `cmd <dir> <from> <out>`.
+pin_findings() {
+    local dir="$1" from="$2" out="$3" sbom="${CONFIG_DIR}/sbom" to src work name f rel drv ok
+    if [[ -n "${TAPPAAS_PIN_FINDINGS:-}" ]]; then
+        bash -c "${TAPPAAS_PIN_FINDINGS}" _ "${dir}" "${from}" "${out}"; return
+    fi
+    [[ -s "${sbom}/site.cdx.json" && -s "${sbom}/cve-status.json" ]] \
+        || { echo "no security scan to compare with — run: health-manager scan security" >&2; return 1; }
+    to="$(jq -r '.nodes.nixpkgs.locked.rev // empty' "${dir}/flake.lock")"
+    src="$(nix eval --impure --raw --expr \
+        "(builtins.fetchTree (builtins.fromJSON (builtins.readFile ${dir}/flake.lock)).nodes.nixpkgs.locked).outPath" 2>/dev/null)" \
+        || { echo "the pin ${to:0:12} could not be fetched" >&2; return 1; }
+    work="$(mktemp -d)"; mkdir -p "${work}/closures"
+    # The Nix targets of the last scan, each by the .nix file it is built from.
+    # The mothership is a flake of its own and follows the same pin (D1); its
+    # packages are not compared here.
+    local files=()
+    while IFS= read -r name; do
+        f="$(grep -rl --include="${name}.nix" 'system\.stateVersion' "${REPO_DIR}/src" 2>/dev/null \
+             | grep -v -e '/foundation/templates/' -e '/tappaas-cicd/tappaas-cicd\.nix$' | head -1)"
+        [[ -n "${f}" ]] && files+=("${f}")
+    done < <(jq -r '.components[] | select([.properties[]? | select(.name == "tappaas:layer" and .value == "nix")] | length > 0) | .name' \
+             "${sbom}/site.cdx.json")
+    (( ${#files[@]} > 0 )) || { rm -rf "${work}"; echo "the last scan lists no NixOS guest to compare" >&2; return 1; }
+    info "  evaluating ${#files[@]} guest(s) against ${to:0:12} — nothing is built"
+    # nixos-baseline-eval --drv writes the derivations (builds nothing) and prints
+    # "  ok: <rel> <drv>" per module.
+    while read -r ok rel drv; do
+        [[ "${ok}" == "ok:" && "${drv}" == *.drv ]] || continue
+        nix-store -q --requisites "${drv}" > "${work}/closures/$(basename "${rel}" .nix).txt" 2>/dev/null || true
+    done < <(bash "${TRAIN_SCRIPTS}/nixos-baseline-eval.sh" --drv --nixpkgs "${src}" "${files[@]}" 2>&1)
+    python3 "${TRAIN_SCRIPTS}/pin-preview.py" \
+        --inventory "${sbom}/site.cdx.json" --status "${sbom}/cve-status.json" --closures "${work}/closures" \
+        --scanner "${HEALTH_MANAGER:-health-manager} scan nix-list --components {file} --nixpkgs ${src}" \
+        --from "${from}" --to "${to}" --out "${out}"
+    local rc=$?
+    rm -rf "${work}"
+    return "${rc}"
+}
+
+# The gate items a preview found that no ack covers, one per line.
+unacked() {   # $1 = a preview/findings json
+    local ack; ack="$(jq -c '.ack.gate // []' "${STATE_FILE}" 2>/dev/null || echo '[]')"
+    jq -r --argjson a "${ack:-[]}" '(.gate // []) - $a | .[]' "$1" 2>/dev/null
+}
+
+cmd_preview() {
+    read_train
+    local t from; t="$(mktemp -d)"
+    cp "${REPO_DIR}/src/foundation/templates/flake.nix" "${REPO_DIR}/src/foundation/templates/flake.lock" "${t}/" \
+        || die "no templates flake in ${REPO_DIR}"
+    if [[ -n "${TO_BRANCH}" ]]; then
+        sed -i.bak "s|github:NixOS/nixpkgs/[^\"]*\"|github:NixOS/nixpkgs/${TO_BRANCH}\"|" "${t}/flake.nix" && rm -f "${t}/flake.nix.bak"
+    fi
+    from="$(jq -r '.nodes.nixpkgs.locked.rev // empty' "${PIN_LOCK}")"
+    info "${BOLD}Pin preview${CL} — what the next pin move would bring (#788). Nothing is built or moved."
+    if [[ -z "${TAPPAAS_PIN_FINDINGS:-}" ]]; then
+        ( cd "${t}" && nix flake update --extra-experimental-features "nix-command flakes" ) >/dev/null 2>&1 \
+            || { rm -rf "${t}"; die "could not resolve the next pin${TO_BRANCH:+ on ${TO_BRANCH}}"; }
+    fi
+    if ! pin_findings "${t}" "${from}" "${PREVIEW_FILE}.tmp"; then
+        rm -rf "${t}" "${PREVIEW_FILE}.tmp"; error "no preview"; return 1
+    fi
+    rm -rf "${t}"
+    jq --arg at "$(iso_utc "$(now_epoch)")" --arg ref "${TO_BRANCH}" '. + {at: $at, toBranch: $ref}' \
+        "${PREVIEW_FILE}.tmp" > "${PREVIEW_FILE}" && rm -f "${PREVIEW_FILE}.tmp"
+    local open; open="$(unacked "${PREVIEW_FILE}")"
+    echo
+    if [[ "$(jq '.gate | length' "${PREVIEW_FILE}")" == "0" ]]; then
+        info "  ${GN}✓${CL} nothing to acknowledge — the next boundary needs no ack for this pin"
+    elif [[ -z "${open}" ]]; then
+        info "  ${GN}✓${CL} all of it is acknowledged already ($(jq -r '.ack.at // "?"' "${STATE_FILE}"))"
+    else
+        warn "  the next boundary stops before its deep test unless this is accepted:"
+        while IFS= read -r l; do warn "    ${l}"; done <<<"${open}"
+        info "  read the upstream notes, then: ${SCRIPT_NAME} ack --note \"<why>\""
+    fi
+    info "  written: ${PREVIEW_FILE}"
+}
+
+cmd_ack() {
+    [[ -s "${PREVIEW_FILE}" ]] || die "nothing to acknowledge — run: ${SCRIPT_NAME} preview"
+    local n; n="$(jq '.gate | length' "${PREVIEW_FILE}")"
+    [[ "${n}" != "0" ]] || { info "the last preview found nothing to acknowledge"; return 0; }
+    [[ -f "${STATE_FILE}" ]] || echo '{}' > "${STATE_FILE}"
+    local tmp="${STATE_FILE}.tmp.$$"
+    jq --slurpfile p "${PREVIEW_FILE}" --arg at "$(iso_utc "$(now_epoch)")" --arg note "${NOTE}" \
+        '.ack = {gate: $p[0].gate, digest: $p[0].digest, to: $p[0].to, at: $at, note: $note}' \
+        "${STATE_FILE}" > "${tmp}" && mv -f "${tmp}" "${STATE_FILE}" || { rm -f "${tmp}"; die "could not write ${STATE_FILE}"; }
+    info "${GN}✓${CL} acknowledged ${n} item(s) of the preview to ${BL}$(jq -r '.to[0:12]' "${PREVIEW_FILE}")${CL}:"
+    jq -r '.gate[]' "${PREVIEW_FILE}" | sed 's/^/    /'
+    info "  the next boundary goes ahead if the pin it takes brings nothing beyond these"
+}
+
+# The boundary plan's line for the pin gate (#788): what the last preview
+# said, against the ack — the gate this run would meet after moving the pin.
+preview_plan() {
+    if [[ ! -s "${PREVIEW_FILE}" ]]; then
+        info "       pin gate: no preview yet — ${SCRIPT_NAME} preview shows what the pin move would bring"
+        return 0
+    fi
+    local open n; open="$(unacked "${PREVIEW_FILE}")"; n="$(jq '.gate | length' "${PREVIEW_FILE}")"
+    if [[ "${n}" == "0" ]]; then
+        info "       pin gate: the last preview ($(jq -r '.at // "?"' "${PREVIEW_FILE}")) found nothing to acknowledge"
+    elif [[ -z "${open}" ]]; then
+        info "       pin gate: the last preview's ${n} item(s) are all acknowledged — the gate would pass"
+    else
+        warn "       pin gate: the gate would STOP on $(wc -l <<<"${open}" | tr -d ' ') unacknowledged item(s) — ${SCRIPT_NAME} ack"
+    fi
+}
+
+# The boundary's gate, before its deep test: the pin it just moved to, against
+# the ack. rc 1 = stop. A gate that cannot judge says why and lets the deep test
+# decide — it adds knowledge, it does not replace the proof.
+pin_gate() {   # $1 = templates dir with the moved lock, $2 = from rev
+    local f="${CONFIG_DIR}/train-preview-boundary.json" open
+    info "  pin preview (#788): what this pin brings, before the deep test"
+    if ! pin_findings "$1" "$2" "${f}"; then
+        warn "  pin preview unavailable — the deep test still proves the pin"
+        return 0
+    fi
+    if [[ "$(jq '.gate | length' "${f}")" == "0" ]]; then
+        info "  ${GN}✓${CL} no major version change, no new critical/high CVE"
+        return 0
+    fi
+    open="$(unacked "${f}")"
+    if [[ -n "${open}" ]]; then
+        error "  this pin brings what nobody has accepted:"
+        while IFS= read -r l; do error "    ${l}"; done <<<"${open}"
+        error "  stopped before the deep test. Read the upstream notes, then:"
+        error "    ${SCRIPT_NAME} preview${TO_BRANCH:+ --to ${TO_BRANCH}}   (see it all)"
+        error "    ${SCRIPT_NAME} ack --note \"<why>\"   and run the boundary again"
+        return 1
+    fi
+    local tmp="${STATE_FILE}.tmp.$$"
+    jq --slurpfile p "${f}" '.boundary = ((.boundary // {}) + {accepted: $p[0].gate})' \
+        "${STATE_FILE}" > "${tmp}" && mv -f "${tmp}" "${STATE_FILE}" || rm -f "${tmp}"
+    info "  ${GN}✓${CL} $(jq '.gate | length' "${f}") item(s), all acknowledged ($(jq -r '.ack.at // "?"' "${STATE_FILE}"))"
+    return 0
+}
+
 # ── releases ─────────────────────────────────────────────────────────
 # The history, from main — so any site with a fetch sees all of it, including
 # the versions newer than the one it runs.
@@ -1509,7 +1683,7 @@ cmd_releases() {
 
 # The range must cover the whole header block above: extend it when the header
 # grows, or --help quietly stops before its last line.
-usage() { sed -n '3,36p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '3,49p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 
 command -v jq >/dev/null 2>&1 || die "jq is required"
 NO_FETCH=0; DRY_RUN=0; RESUME=0; FORCE_BOUNDARY=0
@@ -1541,6 +1715,8 @@ GUEST=""
 # that the script never picks a branch on its own, so this is only ever an
 # operator's word.
 TO_BRANCH=""
+# Why an acknowledgement was given (`ack --note`), recorded with it.
+NOTE=""
 # Run a boundary whose value is the PROOF rather than the move: the pin is
 # already where it should be (landed by hand, or a frozen branch) and this run
 # exists to put it through the guest, the sweep and the deep test.
@@ -1556,12 +1732,13 @@ for a in "$@"; do
         --major)          MAJOR=1 ;;
         --render)         RENDER=1 ;;
         --why=*)          WHY="${a#*=}" ;;
+        --note=*)         NOTE="${a#*=}" ;;
         --production-branch=*) PROD_BRANCH="${a#*=}" ;;
         --staging-branch=*)    STAGING_BRANCH="${a#*=}" ;;
         --staging-host=*)      STAGING_HOST="${a#*=}" ;;
         --guest=*)             GUEST="${a#*=}" ;;
         --to=*)                TO_BRANCH="${a#*=}" ;;
-        --production-branch|--staging-branch|--staging-host|--guest|--to|--why) _want="${a}" ;;
+        --production-branch|--staging-branch|--staging-host|--guest|--to|--why|--note) _want="${a}" ;;
         *)
             if [[ -n "${_want:-}" ]]; then
                 case "${_want}" in
@@ -1571,6 +1748,7 @@ for a in "$@"; do
                     --guest)             GUEST="${a}" ;;
                     --to)                TO_BRANCH="${a}" ;;
                     --why)               WHY="${a}" ;;
+                    --note)              NOTE="${a}" ;;
                 esac
                 _want=""
             else
@@ -1588,6 +1766,8 @@ case "${1:-}" in
     fault)    shift; cmd_fault "$@" ;;
     patch)    shift; cmd_patch "$@" ;;
     releases) cmd_releases ;;
+    preview)  cmd_preview ;;
+    ack)      cmd_ack ;;
     -h|--help|help|"") usage ;;
-    *) die "unknown command '${1}' (status | init | boundary | fault | patch | releases)" ;;
+    *) die "unknown command '${1}' (status | init | boundary | fault | patch | preview | ack | releases)" ;;
 esac

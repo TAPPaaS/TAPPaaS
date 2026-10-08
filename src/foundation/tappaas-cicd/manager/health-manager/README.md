@@ -26,7 +26,13 @@ health-manager update-os <name> <vmid> <node>
 health-manager reboot <module>
 health-manager scan security [--if-new-sweep] [--notify]
 health-manager report security [--all] [--json]
+health-manager scan nix-list --components <file> [--nixpkgs <path>] [--no-db-update]
 ```
+
+`scan nix-list` matches a JSON list of `{name, version}` against the CVE database as if those
+packages ran — same CPE rule and matcher as `scan security`, writing nothing. The release train's
+`tappaas-train preview` uses it for the packages the next nixpkgs pin would bring (#788);
+`--nixpkgs` points the CPE vendors at that pin. Prints `{"findings": [...], "error": ""}`.
 
 > **MOVED (ADR-007):** the per-VM three-way drift inspect is no longer a
 > health-manager verb. It is now `module-manager reconcile <m>` (the read-only

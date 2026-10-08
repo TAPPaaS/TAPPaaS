@@ -513,6 +513,42 @@ FAKE_NOW=$(( 1790000000 + 20*86400 )) run_to boundary --resume --to nixos-25.11 
     || bad "no-op --to was not recognised: ${OUT}"
 [[ "${RC}" -ne 0 ]] && ok "…and the frozen pin still refuses" || bad "a frozen no-op was accepted"
 
+echo "── pin preview and ack: what a pin move brings is accepted before the deep test (#788) ──"
+# The findings are stubbed: FAKE_GATE is the list of items the next pin brings.
+export TAPPAAS_PIN_FINDINGS='printf "{\"gate\":%s,\"digest\":\"d\",\"to\":\"abc\",\"majors\":[],\"cves\":{}}\n" "${FAKE_GATE:-[]}" > "$3"'
+setup_to
+FAKE_GATE='[]' run_to preview
+[[ "${RC}" -eq 0 && "${OUT}" == *"nothing to acknowledge"* ]] && ok "a pin bringing nothing notable: no ack needed" || bad "empty preview: ${OUT}"
+[[ -s "${TMP}/cfg/train-preview.json" ]] && ok "…and the preview is written to config" || bad "no train-preview.json"
+FAKE_GATE='["major grafana 13->14"]' run_to preview
+[[ "${OUT}" == *"stops before its deep test unless this is accepted"* && "${OUT}" == *"major grafana 13->14"* ]] \
+    && ok "a major is named, with what happens if it is not accepted" || bad "major not reported: ${OUT}"
+FAKE_GATE='["major grafana 13->14"]' FAKE_NOW=$(( 1790000000 + 20*86400 )) run_to boundary --resume --to nixos-26.05
+[[ "${RC}" -ne 0 && "${OUT}" == *"stopped before the deep test"* && "${OUT}" == *"major grafana 13->14"* ]] \
+    && ok "the boundary stops on an unaccepted major, before the deep test" || bad "boundary went on: ${OUT}"
+[[ -z "$(git -C "${TMP}/w" status --porcelain)" && "$(git -C "${TMP}/w" rev-parse --abbrev-ref HEAD)" == "main" ]] \
+    && ok "…leaving the checkout clean, on main" || bad "the gate left the checkout dirty"
+FAKE_GATE='["major grafana 13->14"]' run_to boundary --dry-run --force-boundary
+[[ "${OUT}" == *"the gate would STOP on 1 unacknowledged item"* ]] && ok "a dry run says the gate would stop" || bad "dry run silent: ${OUT}"
+NOTE_OUT="$(PATH="${TMP}/bin:${PATH}" TAPPAAS_REPO_DIR="${TMP}/w" TAPPAAS_CONFIG_DIR="${TMP}/cfg" TAPPAAS_TRAIN_NOW=$(( 1790000000 + 20*86400 )) "${TRAIN}" ack --note "read the Grafana 14 notes" --no-fetch 2>&1)"
+[[ "${NOTE_OUT}" == *"acknowledged 1 item"* && "$(jq -r '.ack.note' "${TMP}/cfg/release-train.json")" == "read the Grafana 14 notes" ]] \
+    && ok "ack records what was accepted, and why" || bad "ack: ${NOTE_OUT}"
+FAKE_GATE='["major grafana 13->14"]' run_to boundary --dry-run --force-boundary
+[[ "${OUT}" == *"all acknowledged — the gate would pass"* ]] && ok "…and a dry run then says the gate would pass" || bad "dry run after ack: ${OUT}"
+FAKE_GATE='["cve CVE-2026-9 openssl","major grafana 13->14"]' FAKE_NOW=$(( 1790000000 + 20*86400 )) run_to boundary --resume --to nixos-26.05
+[[ "${RC}" -ne 0 && "${OUT}" == *"cve CVE-2026-9 openssl"* && "${OUT}" != *"    major grafana"* ]] \
+    && ok "something new beyond the ack stops it again, naming only the new item" || bad "a new item passed: ${OUT}"
+FAKE_GATE='["major grafana 13->14"]' FAKE_NOW=$(( 1790000000 + 20*86400 )) run_to boundary --resume --to nixos-26.05
+[[ "${RC}" -eq 0 && "${OUT}" == *"all acknowledged"* ]] && ok "what was accepted goes ahead" || bad "acked boundary failed: ${OUT}"
+_rel="$(git -C "${TMP}/w" show origin/main:release/releases.json 2>/dev/null)"
+[[ "$(jq -c '[.releases[] | .accepted // empty] | add' <<<"${_rel}")" == '["major grafana 13->14"]' ]] \
+    && ok "…the release record names what was accepted" || bad "accepted not recorded: ${_rel}"
+[[ "$(jq -r '.ack // "gone"' "${TMP}/cfg/release-train.json")" == "gone" ]] && ok "…and the ack is used up by the boundary" || bad "ack survived the boundary"
+FAKE_GATE='[]' run_to preview
+FAKE_GATE='[]' run_to ack
+[[ "${RC}" -eq 0 && "${OUT}" == *"nothing to acknowledge"* ]] && ok "ack with nothing to accept says so" || bad "ack on empty: ${OUT}"
+unset TAPPAAS_PIN_FINDINGS
+
 echo "── a flake with no nixpkgs ref is refused, never rewritten blind ──"
 setup_to
 printf '{\n  inputs.nixpkgs.url = "git+https://example.invalid/np";\n}\n' \
