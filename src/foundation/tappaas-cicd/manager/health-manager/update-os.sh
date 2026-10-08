@@ -223,6 +223,30 @@ wait_for_ssh() {
     return 0
 }
 
+# wait_for_guest_settled <ip> [max seconds] — until systemd on the guest has no
+# job queued, seen empty twice in a row (#753). sshd answering once is not a
+# settled guest: right after a switch it can still be the OLD sshd, which the
+# activation restarts a moment later, and right after a boot units are still
+# starting. The verify step that follows reconnects by name, and on hrossen
+# 2026-10-01 it hit that gap — coturn's update failed and rolled back for an
+# SSH check that would have passed seconds later. Bounded; a guest that never
+# settles is reported, not failed: the verify step judges it.
+wait_for_guest_settled() {
+    local ip="$1" max="${2:-90}" waited=0 empty=0 jobs
+    while (( waited < max )); do
+        jobs="$(ssh -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=accept-new "tappaas@${ip}" \
+            "systemctl list-jobs --no-legend --no-pager 2>/dev/null | wc -l" 2>/dev/null)" || jobs=""
+        if [[ "${jobs}" == "0" ]]; then
+            (( ++empty >= 2 )) && { debug "guest ${ip} settled after ${waited}s"; return 0; }
+        else
+            empty=0
+        fi
+        sleep 3; waited=$(( waited + 3 ))
+    done
+    warn "guest ${ip} still had systemd jobs queued after ${max}s — verifying anyway"
+    return 1
+}
+
 # Reboot a guest and wait until its module can SERVE, not merely until sshd
 # answers (#468). The one reboot path: the post-rebuild reboot below and
 # `health-manager reboot` (reboot-guest.sh) both take it (#730).
@@ -244,6 +268,7 @@ reboot_guest() {
     # Wait for sshd to come back (replaces fixed sleep 60 — issue #376).
     update_ssh_known_hosts "${vm_ip}"
     wait_for_ssh "${vm_ip}" 120 || warn "sshd unreachable after 120 s — subsequent service updaters may fail"
+    wait_for_guest_settled "${vm_ip}" 90 || true
     # sshd answering is NOT the module being able to serve (#468): it comes
     # up seconds after boot while the module's own service may need far
     # longer, and the post-update tests run straight after this returns.
@@ -944,6 +969,7 @@ update_nixos() {
         # Wait for SSH to stabilise before returning so subsequent service updaters can reach the VM.
         update_ssh_known_hosts "${vm_ip}"
         wait_for_ssh "${vm_ip}" 90 || warn "sshd unreachable after 90 s — subsequent service updaters may fail"
+        wait_for_guest_settled "${vm_ip}" 90 || true
     fi
 }
 

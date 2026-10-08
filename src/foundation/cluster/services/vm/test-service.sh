@@ -151,11 +151,27 @@ if [[ "${SSH_ACCESS}" == "false" ]]; then
 fi
 
 info "  Check 3: SSH connectivity"
-# shellcheck disable=SC2086
-if ssh ${SSH_OPTS} "${SSH_USER}@${VM_HOST}" "exit 0" &>/dev/null; then
-    pass "SSH connection successful"
+# Retried for a bounded time (#753): this runs right after a module's re-apply,
+# when an activation can still be restarting sshd or a reboot still be booting —
+# one attempt made a guest that answered seconds later read as DRIFT and rolled
+# back its whole update (coturn, hrossen 2026-10-01). A failure names ssh's own
+# error, so the next one says whether it was refused, timed out or denied.
+ssh_settle_check() {   # sets SSH_ERR; rc 0 when SSH works within SSH_SETTLE_MAX seconds
+    local waited=0 max="${SSH_SETTLE_MAX:-60}"
+    while :; do
+        # shellcheck disable=SC2086
+        if SSH_ERR="$(ssh ${SSH_OPTS} "${SSH_USER}@${VM_HOST}" "exit 0" 2>&1 >/dev/null)"; then
+            SSH_WAITED="${waited}"; return 0
+        fi
+        (( waited >= max )) && return 1
+        sleep 5; waited=$(( waited + 5 ))
+    done
+}
+SSH_ERR=""; SSH_WAITED=0
+if ssh_settle_check; then
+    if (( SSH_WAITED > 0 )); then pass "SSH connection successful (after ${SSH_WAITED}s)"; else pass "SSH connection successful"; fi
 else
-    fail "SSH connection failed to ${SSH_USER}@${VM_HOST}"
+    fail "SSH connection failed to ${SSH_USER}@${VM_HOST} for ${SSH_SETTLE_MAX:-60}s: ${SSH_ERR:-no error text}"
     info "  Results: ${GN}${PASS} passed${CL}, ${RD}${FAIL} failed${CL}"
     exit 2
 fi
