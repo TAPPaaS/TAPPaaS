@@ -270,6 +270,19 @@ ancestry but promotes everything ahead of the fix, which abandons the soak rathe
 it. `patch` lists the commits it would move and warns when there are more than a few. Record it
 with `tappaas-train.sh fault --resolved <commit>` if a fault was open.
 
+`--why` must begin with the D12 case it invokes — `data safety:`, `security:` or `service
+down:` — then what; anything else is refused, so the bar can be audited from
+`release/releases.json` afterwards. The next boundary promotes the fix with everything else,
+says which urgent fixes it supersedes, and records them on its release (`supersedes`).
+
+**Who moves a channel.** An urgent fix to production is moved by the operator, by hand: the
+train never moves `stable` on its own (ADR-028 D12).
+
+**Never patch a running site in place and stop there.** `tappaas-train status` and the
+control plane's self-check report what runs ahead of the checkout: uncommitted changes in it,
+commits that are not on the site's channel, and a plain file in `~/bin` that differs from its
+source or has none.
+
 **For production, staging first.** Production may never get ahead of staging, so `patch
 production` refuses a fix staging does not have. Author the fix off `stable`'s tip, bring it into
 staging with a merge on a branch off staging's tip, land both on `main`, then patch staging with

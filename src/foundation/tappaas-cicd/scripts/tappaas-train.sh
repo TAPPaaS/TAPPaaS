@@ -65,6 +65,9 @@ BIN_DIR="${TAPPAAS_BIN_DIR:-/home/tappaas/bin}"
 _chan_lib="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)/../lib/channels-lib.sh"
 # shellcheck source=../lib/channels-lib.sh
 [[ -r "${_chan_lib}" ]] && . "${_chan_lib}"
+# What runs here against what the checkout declares (ADR-028 D12, #746).
+# shellcheck source=../lib/deployed-drift.sh
+[[ -r "${_chan_lib%/*}/deployed-drift.sh" ]] && . "${_chan_lib%/*}/deployed-drift.sh"
 SITE_FILE="${CONFIG_DIR}/site.json"
 STATE_FILE="${CONFIG_DIR}/release-train.json"
 # The boundary interval (ADR-028 D2). Policy, so it is named once.
@@ -238,6 +241,7 @@ make_release_tag() {
 # What a release's notes column says, in one place for the page and the CLI.
 JQ_NOTES='def notes: [ (if .kind == "patch" then "urgent fix on \(.channel): \(.why // "")" else empty end),
                       (if .kind == "major" then "major" else empty end),
+                      (if (.supersedes // []) != [] then "supersedes \(.supersedes | join(", "))" else empty end),
                       (if .forced then "boundary forced" else empty end),
                       (.note // empty) ] | join("; ");'
 
@@ -375,6 +379,13 @@ cmd_status() {
         fi
     else
         warn "  this site declares no channel — site-manager site modify --channel <c>"
+    fi
+    # D12: a site patched in place runs code its channel does not declare, and
+    # the next refresh reverts it silently. Say so while it is true.
+    if declare -f deployed_drift >/dev/null 2>&1; then
+        local _d
+        while IFS= read -r _d; do [[ -n "${_d}" ]] && warn "  ${_d}"; done \
+            < <(deployed_drift "${REPO_DIR}" "${BIN_DIR}" "${SITE_BRANCH}")
     fi
 
     # Every registered repository, not just this one (ADR-028 D11). A site on
@@ -1170,11 +1181,18 @@ do_phase_record() {   # $1 = the version this boundary cuts, $2 = forced, $3 = k
          && g merge-base --is-ancestor origin/main "origin/${STAGING_BRANCH}"; then
         cut=""          # staging already holds main: nothing new is cut
     fi
+    # The urgent fixes the channels carried (D12) are part of what is promoted
+    # now: the boundary says so, and its record names them.
+    local sup
+    sup="$(jq -c '[(.expedited // [])[].version]' "${STATE_FILE}" 2>/dev/null || echo '[]')"
+    [[ "${sup}" == "[]" || -z "${sup}" ]] || info "  this boundary supersedes the urgent fixes $(jq -r 'join(", ")' <<<"${sup}")"
     if [[ -n "${cut}" ]]; then
         entry="$(jq -n --arg v "${cut}" --arg c "${commit}" \
             --arg d "$(day_utc "$(now_epoch)")" --arg k "$3" --argjson f "$([[ "$2" == "1" ]] && echo true || echo false)" \
             --arg p "$(jq -r '.nodes.nixpkgs.locked.rev // ""' "${PIN_LOCK}" 2>/dev/null | cut -c1-12)" \
-            '{version: $v, commit: $c, staging: $d, production: null, kind: $k, forced: $f, pin: $p}')"
+            --argjson s "${sup:-[]}" \
+            '{version: $v, commit: $c, staging: $d, production: null, kind: $k, forced: $f, pin: $p}
+             + (if ($s | length) > 0 then {supersedes: $s} else {} end)')"
         subject+=("${cut} to staging")
     fi
     # Production holds a release only when the revision it took was one; the
@@ -1347,7 +1365,7 @@ cmd_fault() {
         # very next boundary, which promotes main INTO staging.
         g rev-parse --verify --quiet "${commit}^{commit}" >/dev/null \
             || die "unknown commit: ${commit}"
-        if ! g merge-base --is-ancestor "${commit}" origin/main; then
+        if ! on_main "${commit}"; then
             error "${commit} is not on main."
             error "  A fix that lives only on staging is reintroduced by the next boundary,"
             error "  which promotes main into staging. Land it on main first."
@@ -1375,6 +1393,14 @@ cmd_fault() {
     return 0
 }
 
+# The fix is on main: D9's "resolved" and D12's "may move" are the same fact —
+# a fix only on a channel is undone by the next boundary, which promotes main.
+on_main() { g merge-base --is-ancestor "$1" origin/main; }
+
+# A D12 reason names its case first, so the bar can be audited from the record.
+D12_CLAUSES="data safety:|security:|service down:"
+d12_clause_ok() { [[ "$1" =~ ^(data\ safety|security|service\ down):\ *[^\ ] ]]; }
+
 # ── patch (ADR-028 D12) ──────────────────────────────────────────────
 # An urgent fix reaches a channel before its boundary. The fix was authored on
 # a branch off the channel's own tip and merged into main; this moves the
@@ -1390,6 +1416,7 @@ cmd_patch() {
     esac
     [[ -n "${commit}" ]] || die "patch needs the commit that carries the fix"
     [[ -n "${WHY}" ]] || die "patch needs --why: which D12 case (data safety, a security CVE, a service down) and what"
+    d12_clause_ok "${WHY}" || die "--why must start with the D12 case it invokes — ${D12_CLAUSES//|/ or } — then what: \"service down: grafana crash-loops on /etc/secrets\". Not urgent otherwise (ADR-028 D12)."
     full="$(g rev-parse --verify --quiet "${commit}^{commit}")" || die "unknown commit: ${commit}"
     [[ -z "$(g status --porcelain)" ]] || { error "the checkout has uncommitted changes"; return 1; }
 
@@ -1402,7 +1429,7 @@ cmd_patch() {
         return 1
     fi
     # On main, or the next boundary reintroduces the fault.
-    if ! g merge-base --is-ancestor "${full}" origin/main; then
+    if ! on_main "${full}"; then
         error "${commit} is not on main. Merge the fix branch into main first —"
         error "  a fix that lives only on a channel is undone by the next boundary."
         return 1

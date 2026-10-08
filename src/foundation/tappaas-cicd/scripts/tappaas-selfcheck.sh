@@ -139,6 +139,16 @@ for _l in "${_hb}"/*; do
     [[ -L "${_l}" && ! -e "${_l}" ]] && warn "  dangling link in ${_hb}: ${_l##*/} -> $(readlink "${_l}")"
 done
 
+# Code patched in place runs ahead of what the checkout declares, and the next
+# refresh reverts it silently (ADR-028 D12, #746). A warning, never a failure.
+_dd="${SELFCHECK_REPO:-/home/${TAPPAAS_USER}/TAPPaaS}/src/foundation/tappaas-cicd/lib/deployed-drift.sh"
+if [[ -r "${_dd}" ]]; then
+    # shellcheck source=../lib/deployed-drift.sh disable=SC1090
+    . "${_dd}"
+    while IFS= read -r _d; do [[ -n "${_d}" ]] && warn "  ${_d}"; done \
+        < <(deployed_drift "${SELFCHECK_REPO:-/home/${TAPPAAS_USER}/TAPPaaS}" "${_hb}")
+fi
+
 # ── 2. The config cascade still resolves ─────────────────────────────
 # Reading a manager's --help proves the binary starts; this proves it can still
 # do its job against this site's data.

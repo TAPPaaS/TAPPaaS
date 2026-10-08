@@ -846,6 +846,8 @@ run patch staging "${_fix}" --why "service down: grafana"
 git -C "${TMP}/w" merge -q --no-edit "${_fix}"; git -C "${TMP}/w" push -q origin main; git -C "${TMP}/w" fetch -q origin
 run patch staging "${_fix}"
 [[ "${RC}" -ne 0 && "${OUT}" == *"--why"* ]] && ok "a patch without a reason is refused" || bad "no --why accepted: ${OUT}"
+run patch staging "${_fix}" --why "it is finished"
+[[ "${RC}" -ne 0 && "${OUT}" == *"must start with the D12 case"* ]] && ok "a reason that names no D12 case is refused (#746)" || bad "a reason without a clause accepted: ${OUT}"
 run patch production "${_fix}" --why "service down: grafana"
 [[ "${RC}" -ne 0 && "${OUT}" == *"ahead of staging"* ]] && ok "production may not get ahead of staging" || bad "production overtook staging: ${OUT}"
 FAKE_NOW=$(( 1790000000 + 3*86400 )) run patch staging "${_fix}" --why "service down: grafana"
@@ -858,11 +860,23 @@ FAKE_NOW=$(( 1790000000 + 3*86400 )) run patch staging "${_fix}" --why "service 
     && ok "the site records that it carries an expedited fix (D12)" || bad "expedited not recorded"
 FAKE_NOW=$(( 1790000000 + 3*86400 )) run status
 [[ "${OUT}" == *"carrying an urgent fix: 2.1.1 on staging"* ]] && ok "status says so" || bad "status silent about the fix: ${OUT}"
-run patch staging "${_fix}" --why "again"
+run patch staging "${_fix}" --why "service down: again"
 [[ "${RC}" -ne 0 && "${OUT}" == *"already at"* ]] && ok "the same patch twice is refused" || bad "re-patch accepted"
 # A commit that does not build on the channel's tip would rewind or fork it.
-run patch production "$(git -C "${TMP}/w" rev-parse origin/stable~1)" --why "x"
+run patch production "$(git -C "${TMP}/w" rev-parse origin/stable~1)" --why "security: x"
 [[ "${RC}" -ne 0 && "${OUT}" == *"does not build on"* ]] && ok "a commit behind the channel is refused" || bad "accepted a commit behind stable: ${OUT}"
+# D12: the site patched in place — a dirty checkout — is said by status (#746).
+echo "patched in place" >> "${TMP}/w/fix"
+FAKE_NOW=$(( 1790000000 + 3*86400 )) run status
+[[ "${OUT}" == *"uncommitted changes in 1 file(s)"* ]] && ok "status reports a checkout patched in place" || bad "status silent about a dirty checkout: ${OUT}"
+git -C "${TMP}/w" checkout -q -- fix
+# The next boundary promotes the fix with everything else and says it supersedes it.
+proven
+FAKE_NOW=$(( 1790000000 + 20*86400 )) run boundary --resume
+[[ "${OUT}" == *"supersedes the urgent fixes 2.1.1"* ]] && ok "the boundary says which urgent fixes it supersedes" || bad "boundary silent about 2.1.1: ${OUT}"
+[[ "$(releases_on_main | jq -c '[.releases[] | select(.supersedes) | .supersedes[]]')" == '["2.1.1"]' ]] \
+    && ok "…and its record names them" || bad "no supersedes in the record: $(releases_on_main)"
+[[ "$(jq -c '.expedited // []' "${TMP}/cfg/release-train.json")" == "[]" ]] && ok "…and the site no longer carries them" || bad "expedited survived the boundary"
 
 echo "── patch production: the documented route, staging first ──"
 make_train 3 2
@@ -885,6 +899,26 @@ git -C "${TMP}/w" merge-base --is-ancestor origin/stable origin/staging && git -
     && ok "stable ⊆ staging ⊆ main still holds" || bad "the patch broke the ancestry"
 [[ "$(releases_on_main | jq -r '.releases[] | select(.version=="2.0.1") | .production')" == "2026-09-23" ]] \
     && ok "the record dates production's fix" || bad "2.0.1 not recorded: $(releases_on_main)"
+
+echo "── deployed drift: what runs against what the checkout declares (ADR-028 D12, #746) ──"
+DD_LIB="${HERE}/../../lib/deployed-drift.sh"
+if [[ ! -r "${DD_LIB}" ]]; then
+    bad "deployed-drift.sh not found beside the suite"
+else
+    . "${DD_LIB}"
+    D="${TMP}/dd"; mkdir -p "${D}/r/src/m" "${D}/bin"
+    git -C "${D}/r" init -q; git -C "${D}/r" config user.email t@t; git -C "${D}/r" config user.name t
+    echo 'echo v1' > "${D}/r/src/m/tool.sh"; git -C "${D}/r" add -A; git -C "${D}/r" commit -qm one
+    cp "${D}/r/src/m/tool.sh" "${D}/bin/tool.sh"; ln -s "${D}/r/src/m/tool.sh" "${D}/bin/linked.sh"
+    [[ -z "$(deployed_drift "${D}/r" "${D}/bin")" ]] && ok "a copy equal to its source and a link: nothing to say" || bad "clean state reported: $(deployed_drift "${D}/r" "${D}/bin")"
+    echo 'echo hotfix' > "${D}/bin/tool.sh"
+    [[ "$(deployed_drift "${D}/r" "${D}/bin")" == *"tool.sh differs from"* ]] && ok "a copy patched in ~/bin is reported" || bad "edited copy not reported"
+    cp "${D}/r/src/m/tool.sh" "${D}/bin/tool.sh"; echo 'echo x' > "${D}/bin/orphan.sh"
+    [[ "$(deployed_drift "${D}/r" "${D}/bin")" == *"orphan.sh is a plain file with no source"* ]] && ok "a plain file with no source is reported" || bad "orphan not reported"
+    rm -f "${D}/bin/orphan.sh"; echo 'echo v2' > "${D}/r/src/m/tool.sh"
+    [[ "$(deployed_drift "${D}/r" "${D}/bin")" == *"uncommitted changes in 1 file(s)"* ]] && ok "a checkout edited in place is reported" || bad "dirty checkout not reported"
+    [[ "$(deployed_drift "${D}/r" "${D}/nobin"; echo "rc=$?")" == *"rc=0"* ]] && ok "it reports, never fails" || bad "deployed_drift failed"
+fi
 
 echo "── channels.json: a repository says which branch is which channel (D11) ──"
 CL_LIB="${HERE}/../../lib/channels-lib.sh"

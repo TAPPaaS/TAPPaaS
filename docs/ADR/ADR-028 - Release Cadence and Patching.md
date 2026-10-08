@@ -641,6 +641,19 @@ the two obvious alternatives:
 The cherry-pick loses the invariant the train checks; the fast-forward keeps it but delivers one
 fix by promoting everything ahead of it, which is the soak abandoned rather than shortened.
 
+#### Built (#746, 2026-10-08)
+
+`tappaas-train patch <staging|production> <commit> --why "<case>: <what>"` performs the move
+(D13 numbers it). `--why` must start with the case — `data safety:`, `security:` or `service
+down:` — and is recorded before the move. `fault --resolved` and `patch` share one test for
+"on `main`". The next boundary names the urgent fixes it supersedes, on screen and in its release
+record. `tappaas-train status` and the control plane's self-check report a site running ahead
+of its checkout (see below).
+
+**Who moves `stable`: the operator, by hand.** The train never moves production on its own. An
+unattended production move needs a recorded authorization model, which is its own decision once
+there is a production fleet; until then an urgent production fix waits for a person.
+
 #### What must not be done, and why
 
 **Do not patch a running site in place and leave it there.** Deploying a corrected script to a
