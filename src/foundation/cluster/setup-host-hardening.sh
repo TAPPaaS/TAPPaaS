@@ -30,6 +30,11 @@
 #               cluster, not node by node, and not only on the node that could
 #               have been tampered with. /var/log/audit/audit.log stays as the
 #               local copy.
+#               The /etc/pve rules are NOT in rules.d: audit-rules.service loads
+#               those at boot, before pmxcfs mounts /etc/pve, and one rule on a
+#               missing path fails the whole load — auditd then does not start
+#               (tappaas1 after a reboot, 2026-10-08). tappaas-audit-pve.service
+#               loads them from ${PVE_RULES} once pve-cluster is up.
 #
 #   rootkeys    a 5-minute check of WHICH KEYS root's authorized_keys holds
 #               (tappaas-rootkeys-check.timer). It logs
@@ -63,6 +68,7 @@ MODE="${1:-apply}"
 R="${HOST_HARDENING_ROOT:-}"
 DRY="${HOST_HARDENING_DRY:-0}"
 RULES="${R}/etc/audit/rules.d/50-tappaas.rules"
+PVE_RULES="${R}/etc/audit/tappaas-pve.rules"
 CHECKER="${R}/usr/local/sbin/tappaas-rootkeys-check"
 UNIT_DIR="${R}/etc/systemd/system"
 SYSLOG_PLUGIN="${R}/etc/audit/plugins.d/syslog.conf"
@@ -80,8 +86,10 @@ case "${MODE}" in apply|check) ;; *) echo "usage: $0 apply|check" >&2; exit 2 ;;
 # cluster-wide /etc/pve/priv/authorized_keys; both are named.
 # Paths that do not exist on this node are left out, because
 # auditctl refuses a rule on a missing path and that would fail the whole file.
+# want_rules boot|pve: `pve` is everything that lives in pmxcfs (the symlinked
+# /root/.ssh/authorized_keys too), loaded after pve-cluster; `boot` the rest.
 want_rules() {
-    local p kind key a
+    local set="$1" p kind key a
     cat <<'EOF'
 ## Managed by TAPPaaS (cluster/setup-host-hardening.sh, #128) — do not edit.
 ## Changes made from a login session to the cluster's configuration, to who can
@@ -89,6 +97,10 @@ want_rules() {
 ## not recorded; web UI / API changes are in PVE's own task log.
 EOF
     while read -r kind p key; do
+        case "${p}" in
+            /etc/pve*|/root/.ssh/authorized_keys) [[ "${set}" == pve ]] || continue ;;
+            *) [[ "${set}" == boot ]] || continue ;;
+        esac
         [[ -e "${R}${p}" ]] || continue
         for a in b64 b32; do
             echo "-a always,exit -F arch=${a} -F ${kind}=${p} -F perm=wa -F auid!=unset -k ${key}"
@@ -150,6 +162,12 @@ want_service() {
     printf '%s\n' '[Unit]' 'Description=TAPPaaS: log changes to the set of root SSH keys (#128)' \
         '[Service]' 'Type=oneshot' 'ExecStart=/usr/local/sbin/tappaas-rootkeys-check'
 }
+want_pve_unit() {
+    printf '%s\n' '[Unit]' 'Description=TAPPaaS: audit rules for /etc/pve, once pmxcfs is up (#128)' \
+        'After=pve-cluster.service auditd.service audit-rules.service' 'Requires=pve-cluster.service' 'Wants=auditd.service' \
+        '[Service]' 'Type=oneshot' 'RemainAfterExit=yes' 'ExecStart=/usr/sbin/auditctl -R /etc/audit/tappaas-pve.rules' \
+        '' '[Install]' 'WantedBy=multi-user.target'
+}
 want_timer() {
     printf '%s\n' '[Unit]' 'Description=TAPPaaS: check the set of root SSH keys every 5 minutes (#128)' \
         '[Timer]' 'OnBootSec=2min' 'OnUnitActiveSec=5min' 'AccuracySec=30s' '' '[Install]' 'WantedBy=timers.target'
@@ -192,6 +210,8 @@ check() {
         echo "audit: auditd not running"; ok=1
     elif ! rules_loaded; then
         echo "audit: TAPPaaS rules not loaded"; ok=1
+    elif [[ ! -f "${UNIT_DIR}/tappaas-audit-pve.service" ]] || grep -q /etc/pve "${RULES}" 2>/dev/null; then
+        echo "audit: /etc/pve rules are loaded at boot, before pmxcfs — auditd fails to start on the next reboot"; ok=1
     elif ! plugin_active; then
         echo "audit: rules loaded, but the syslog plugin is off — records stay on the node"; ok=1
     else
@@ -227,8 +247,16 @@ if ! installed auditd || ! installed audispd-plugins; then
     echo "audit: installed auditd"
 fi
 
+# The /etc/pve set and the unit that loads it go first: the boot file below
+# drops those rules, and a reload of it (-D) clears every loaded rule.
+pv="$(write_if_changed "${PVE_RULES}" "$(want_rules pve)" 0640)"
+pv+="$(write_if_changed "${UNIT_DIR}/tappaas-audit-pve.service" "$(want_pve_unit)")"
+if [[ "${DRY}" != 1 && -n "${pv}" ]]; then
+    systemctl daemon-reload; systemctl enable --quiet tappaas-audit-pve.service || fail=1
+fi
+
 mkdir -p "$(dirname "${RULES}")"
-new="$(want_rules)"
+new="$(want_rules boot)"
 if [[ "$(cat "${RULES}" 2>/dev/null)" != "${new}" ]]; then
     printf '%s\n' "${new}" > "${RULES}.tappaas-new"
     if [[ "${DRY}" != 1 ]]; then
@@ -245,6 +273,7 @@ if [[ "$(cat "${RULES}" 2>/dev/null)" != "${new}" ]]; then
         mv -f "${RULES}.tappaas-new" "${RULES}"
     fi
     echo "audit: rules written and loaded"
+    pv+=boot
 fi
 
 if ! plugin_active; then
@@ -268,6 +297,14 @@ if ! plugin_active; then
     echo "audit: syslog plugin on — records go to the journal and on to Loki"
 fi
 [[ "${DRY}" == 1 ]] || systemctl enable --quiet --now auditd 2>/dev/null || true
+# (Re)load the /etc/pve set when it or the boot set changed, or when something
+# — an auditd package upgrade's augenrules — dropped it since. After auditd is
+# up: starting it runs audit-rules, whose -D clears every loaded rule.
+if [[ "${DRY}" != 1 ]] && { [[ -n "${pv}" ]] || ! rules_loaded; }; then
+    systemctl restart tappaas-audit-pve.service >/dev/null 2>&1 \
+        || { echo "audit: could not load ${PVE_RULES}" >&2; fail=1; }
+fi
+[[ -n "${pv}" ]] && echo "audit: /etc/pve rules load after pve-cluster (tappaas-audit-pve.service)"
 
 # The key-set check (rootkeys above).
 rk="$(write_if_changed "${CHECKER}" "$(want_checker)" 0755)"

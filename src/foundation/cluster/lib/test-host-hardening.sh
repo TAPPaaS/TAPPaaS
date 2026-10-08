@@ -34,24 +34,36 @@ out="$(run "${r}" apply)"; rc=$?
 ck "apply succeeds" "0" "${rc}"
 ck "AMD gets amd64-microcode" "yes" "$(grep -q 'installed amd64-microcode' <<<"${out}" && echo yes || echo no)"
 ck "auditd is installed" "yes" "$([[ -e ${r}/var/lib/dpkg/fake-installed/auditd ]] && echo yes || echo no)"
-rules="$(cat "${r}/etc/audit/rules.d/50-tappaas.rules")"
+boot="$(cat "${r}/etc/audit/rules.d/50-tappaas.rules")"
+ck "boot rules (rules.d) name nothing in /etc/pve — pmxcfs is not up then" "0" "$(grep -c /etc/pve <<<"${boot}")"
+pverules="$(cat "${r}/etc/audit/tappaas-pve.rules")"
+ck "the /etc/pve rules load after pve-cluster" "After=pve-cluster.service auditd.service audit-rules.service" \
+   "$(grep -o '^After=.*' "${r}/etc/systemd/system/tappaas-audit-pve.service")"
+rules="${boot}"$'\n'"${pverules}"
 ck "rules cover /etc/pve, login sessions only" "2" "$(grep -c -- '-F dir=/etc/pve -F perm=wa -F auid!=unset -k tappaas-pve' <<<"${rules}")"
 ck "both architectures" "b32,b64" "$(grep -oE 'arch=b[0-9]+' <<<"${rules}" | sort -u | cut -d= -f2 | paste -sd, -)"
 ck "a path the node lacks is left out (/root/.ssh, interfaces.d)" "0" "$(grep -cE '/root/.ssh|interfaces.d' <<<"${rules}")"
 ck "the interfaces file is watched" "2" "$(grep -c 'path=/etc/network/interfaces ' <<<"${rules}")"
 ck "root's authorized_keys has its own key, ahead of the /etc/pve rules" "tappaas-rootkeys" \
-   "$(grep -m1 -oE 'k tappaas-[a-z]+' <<<"${rules}" | cut -d' ' -f2)"
+   "$(grep -m1 -oE 'k tappaas-[a-z]+' <<<"${pverules}" | cut -d' ' -f2)"
 ck "the syslog plugin is switched on in place" "active = yes" "$(grep '^active' "${r}/etc/audit/plugins.d/syslog.conf")"
 ck "the rest of the plugin file is kept" "path = /sbin/audisp-syslog" "$(grep '^path' "${r}/etc/audit/plugins.d/syslog.conf")"
 ck "the key-set check is installed, executable" "yes" "$([[ -x ${r}/usr/local/sbin/tappaas-rootkeys-check ]] && echo yes || echo no)"
 ck "…with its 5-minute timer" "OnUnitActiveSec=5min" "$(grep -o 'OnUnitActiveSec=5min' "${r}/etc/systemd/system/tappaas-rootkeys-check.timer")"
 ck "check passes after apply" "0" "$(run "${r}" check >/dev/null; echo $?)"
 again="$(run "${r}" apply)"
-ck "a second apply changes nothing" "" "$(grep -E ': installed|written|plugin on|check installed' <<<"${again}")"
+ck "a second apply changes nothing" "" "$(grep -E ': installed|written|plugin on|check installed|load after' <<<"${again}")"
+
+# A node set up before the split: /etc/pve rules in rules.d. check flags it, apply moves them.
+r2="$(node AuthenticAMD)"; run "${r2}" apply >/dev/null
+cat "${r2}/etc/audit/tappaas-pve.rules" >> "${r2}/etc/audit/rules.d/50-tappaas.rules"
+ck "check flags /etc/pve rules left in rules.d" "1" "$(run "${r2}" check >/dev/null; echo $?)"
+run "${r2}" apply >/dev/null
+ck "apply moves them out again" "0" "$(grep -c /etc/pve "${r2}/etc/audit/rules.d/50-tappaas.rules")"
 
 mkdir -p "${r}/root/.ssh"
 out="$(run "${r}" apply)"
-ck "a path that appears is added on the next apply" "yes" "$(grep -q 'rules written' <<<"${out}" && grep -q '/root/.ssh' "${r}/etc/audit/rules.d/50-tappaas.rules" && echo yes || echo no)"
+ck "a path that appears is added on the next apply" "yes" "$(grep -q 'rules written' <<<"${out}" && grep -q 'dir=/root/.ssh' "${r}/etc/audit/rules.d/50-tappaas.rules" && echo yes || echo no)"
 
 r="$(node GenuineIntel)"; rm -f "${r}/etc/audit/plugins.d/syslog.conf"
 out="$(run "${r}" apply)"
