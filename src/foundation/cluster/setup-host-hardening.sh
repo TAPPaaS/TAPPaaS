@@ -31,6 +31,17 @@
 #               have been tampered with. /var/log/audit/audit.log stays as the
 #               local copy.
 #
+#   rootkeys    a 5-minute check of WHICH KEYS root's authorized_keys holds
+#               (tappaas-rootkeys-check.timer). It logs
+#               `tappaas-rootkeys-changed: …` only when the set of key
+#               fingerprints changes — a key added or removed — naming each one;
+#               the logging module alerts on that line. The audit rule above
+#               records every WRITE, and Proxmox rewrites the file on its own:
+#               `pvecm updatecerts` runs from the pve packages' postinst, so every
+#               night that patched them alerted on all three nodes (hrossen,
+#               2026-10-08) though no key had changed. Rewrites, reordering and
+#               comment edits no longer alert; the audit trail stays.
+#
 # Not here, on purpose (see #128): unattended-upgrades (the nightly sweep patches
 # the nodes behind its snapshot and test gates), fail2ban (the web UI is reached
 # from mgmt and the admin tunnel only; SSH is key-only), a second Corosync link
@@ -52,6 +63,8 @@ MODE="${1:-apply}"
 R="${HOST_HARDENING_ROOT:-}"
 DRY="${HOST_HARDENING_DRY:-0}"
 RULES="${R}/etc/audit/rules.d/50-tappaas.rules"
+CHECKER="${R}/usr/local/sbin/tappaas-rootkeys-check"
+UNIT_DIR="${R}/etc/systemd/system"
 SYSLOG_PLUGIN="${R}/etc/audit/plugins.d/syslog.conf"
 CPUINFO="${HOST_HARDENING_CPUINFO:-/proc/cpuinfo}"
 KEYS="tappaas-rootkeys tappaas-pve tappaas-ssh tappaas-network"
@@ -91,6 +104,62 @@ dir /etc/network/interfaces.d tappaas-network
 EOF
 }
 
+# The key-set check, installed as ${CHECKER}. Env overrides are for the tests.
+want_checker() {
+    cat <<'EOF'
+#!/usr/bin/env bash
+# tappaas-rootkeys-check — managed by TAPPaaS (cluster/setup-host-hardening.sh). Do not edit.
+#
+# Logs `tappaas-rootkeys-changed: …` when the SET of keys in root's
+# authorized_keys changes (fingerprints, not bytes): a rewrite with the same
+# keys — Proxmox's `pvecm updatecerts` — says nothing. The first run records a
+# baseline. Runs from tappaas-rootkeys-check.timer every 5 minutes.
+set -uo pipefail
+FILES="${ROOTKEYS_FILES:-/etc/pve/priv/authorized_keys /root/.ssh/authorized_keys}"
+STATE="${ROOTKEYS_STATE:-/var/lib/tappaas/rootkeys}"
+LOG="${ROOTKEYS_LOGGER:-logger -t tappaas-rootkeys -p auth.warning}"
+mkdir -p "${STATE}"
+seen=""
+for f in ${FILES}; do
+    [[ -e "${f}" ]] || continue
+    real="$(readlink -f "${f}")"
+    [[ " ${seen} " == *" ${real} "* ]] && continue    # /root/.ssh/… -> /etc/pve/priv/…
+    seen+=" ${real}"
+    # One line per key: "<fingerprint> (<type>) <comment>", sorted by fingerprint.
+    now="$(ssh-keygen -l -E sha256 -f "${real}" 2>/dev/null \
+           | awk '{fp=$2; t=$NF; $1=""; $2=""; $NF=""; c=$0; gsub(/^ +| +$/,"",c); print fp" "t" "c}' | sort -u -k1,1)"
+    st="${STATE}/$(printf '%s' "${real}" | tr '/' '_').fp"
+    if [[ ! -f "${st}" ]]; then
+        printf '%s\n' "${now}" > "${st}"
+        ${LOG} "tappaas-rootkeys: baseline for ${real}: $(grep -c . <<<"${now}") key(s)"
+        continue
+    fi
+    old="$(cat "${st}")"
+    added="$(comm -13 <(cut -d' ' -f1 <<<"${old}" | sort -u) <(cut -d' ' -f1 <<<"${now}" | sort -u))"
+    removed="$(comm -23 <(cut -d' ' -f1 <<<"${old}" | sort -u) <(cut -d' ' -f1 <<<"${now}" | sort -u))"
+    [[ -z "${added}${removed}" ]] && continue
+    msg="tappaas-rootkeys-changed: ${real}"
+    for k in ${added};   do msg+=" | + $(grep -m1 "^${k} " <<<"${now}")"; done
+    for k in ${removed}; do msg+=" | - $(grep -m1 "^${k} " <<<"${old}")"; done
+    ${LOG} "${msg}"
+    printf '%s\n' "${now}" > "${st}"
+done
+EOF
+}
+want_service() {
+    printf '%s\n' '[Unit]' 'Description=TAPPaaS: log changes to the set of root SSH keys (#128)' \
+        '[Service]' 'Type=oneshot' 'ExecStart=/usr/local/sbin/tappaas-rootkeys-check'
+}
+want_timer() {
+    printf '%s\n' '[Unit]' 'Description=TAPPaaS: check the set of root SSH keys every 5 minutes (#128)' \
+        '[Timer]' 'OnBootSec=2min' 'OnUnitActiveSec=5min' 'AccuracySec=30s' '' '[Install]' 'WantedBy=timers.target'
+}
+# write_if_changed <file> <content> [mode] — echoes "changed" when it wrote.
+write_if_changed() {
+    [[ "$(cat "$1" 2>/dev/null)" == "$2" ]] && return 0
+    mkdir -p "$(dirname "$1")"; printf '%s\n' "$2" > "$1"; chmod "${3:-0644}" "$1"; echo changed
+}
+
 microcode_pkg() {
     case "$(awk -F': ' '/^vendor_id/{print $2; exit}' "${CPUINFO}" 2>/dev/null)" in
         AuthenticAMD) echo amd64-microcode ;;
@@ -127,6 +196,13 @@ check() {
         echo "audit: rules loaded, but the syslog plugin is off — records stay on the node"; ok=1
     else
         echo "audit: rules loaded (${KEYS// /, }), forwarded via syslog"
+    fi
+    if [[ ! -x "${CHECKER}" ]]; then
+        echo "rootkeys: tappaas-rootkeys-check not installed"; ok=1
+    elif [[ "${DRY}" != 1 ]] && ! systemctl is-active --quiet tappaas-rootkeys-check.timer; then
+        echo "rootkeys: tappaas-rootkeys-check.timer not active"; ok=1
+    else
+        echo "rootkeys: key-set check every 5 minutes (alerts on an added or removed key only)"
     fi
     return "${ok}"
 }
@@ -192,6 +268,18 @@ if ! plugin_active; then
     echo "audit: syslog plugin on — records go to the journal and on to Loki"
 fi
 [[ "${DRY}" == 1 ]] || systemctl enable --quiet --now auditd 2>/dev/null || true
+
+# The key-set check (rootkeys above).
+rk="$(write_if_changed "${CHECKER}" "$(want_checker)" 0755)"
+rk+="$(write_if_changed "${UNIT_DIR}/tappaas-rootkeys-check.service" "$(want_service)")"
+rk+="$(write_if_changed "${UNIT_DIR}/tappaas-rootkeys-check.timer" "$(want_timer)")"
+if [[ "${DRY}" != 1 ]]; then
+    [[ -n "${rk}" ]] && systemctl daemon-reload
+    systemctl enable --quiet --now tappaas-rootkeys-check.timer || fail=1
+    # First run now: it records the baseline, so the next real change is caught.
+    [[ -n "${rk}" ]] && systemctl start tappaas-rootkeys-check.service >/dev/null 2>&1 || true
+fi
+[[ -n "${rk}" ]] && echo "rootkeys: key-set check installed (timer every 5 minutes)"
 
 out="$(check)"; rc=$?
 printf '%s\n' "${out}"

@@ -43,9 +43,11 @@ ck "root's authorized_keys has its own key, ahead of the /etc/pve rules" "tappaa
    "$(grep -m1 -oE 'k tappaas-[a-z]+' <<<"${rules}" | cut -d' ' -f2)"
 ck "the syslog plugin is switched on in place" "active = yes" "$(grep '^active' "${r}/etc/audit/plugins.d/syslog.conf")"
 ck "the rest of the plugin file is kept" "path = /sbin/audisp-syslog" "$(grep '^path' "${r}/etc/audit/plugins.d/syslog.conf")"
+ck "the key-set check is installed, executable" "yes" "$([[ -x ${r}/usr/local/sbin/tappaas-rootkeys-check ]] && echo yes || echo no)"
+ck "…with its 5-minute timer" "OnUnitActiveSec=5min" "$(grep -o 'OnUnitActiveSec=5min' "${r}/etc/systemd/system/tappaas-rootkeys-check.timer")"
 ck "check passes after apply" "0" "$(run "${r}" check >/dev/null; echo $?)"
 again="$(run "${r}" apply)"
-ck "a second apply changes nothing" "" "$(grep -E ': installed|written|plugin on' <<<"${again}")"
+ck "a second apply changes nothing" "" "$(grep -E ': installed|written|plugin on|check installed' <<<"${again}")"
 
 mkdir -p "${r}/root/.ssh"
 out="$(run "${r}" apply)"
@@ -57,6 +59,28 @@ ck "Intel gets intel-microcode" "yes" "$(grep -q 'installed intel-microcode' <<<
 ck "a missing plugin file is written, active" "active = yes" "$(grep '^active' "${r}/etc/audit/plugins.d/syslog.conf")"
 
 ck "an unknown mode is a usage error" "2" "$(run "${r}" frobnicate >/dev/null; echo $?)"
+
+# ── the key-set check itself (#128): a line only when a key is added or removed ──
+if command -v ssh-keygen >/dev/null 2>&1; then
+    K="${TMP}/keys"; mkdir -p "${K}"
+    for n in a b c; do ssh-keygen -q -t ed25519 -N '' -C "user-$n@host" -f "${K}/$n" >/dev/null; done
+    AK="${TMP}/authorized_keys"; LOGF="${TMP}/rk.log"; ST="${TMP}/rkstate"
+    chk() { ROOTKEYS_FILES="${AK}" ROOTKEYS_STATE="${ST}" ROOTKEYS_LOGGER="echo" bash "${r}/usr/local/sbin/tappaas-rootkeys-check" > "${LOGF}" 2>&1; }
+    cat "${K}/a.pub" "${K}/b.pub" > "${AK}"; chk
+    ck "first run records a baseline, no change line" "baseline" "$(grep -o 'baseline' "${LOGF}"; grep -c 'rootkeys-changed' "${LOGF}" | grep -v '^0$')"
+    cat "${K}/b.pub" "${K}/a.pub" > "${AK}"; chk
+    ck "the same keys rewritten in another order: nothing logged" "" "$(cat "${LOGF}")"
+    sed 's/user-a@host/renamed@elsewhere/' "${K}/a.pub" > "${AK}"; cat "${K}/b.pub" >> "${AK}"; chk
+    ck "a comment edit, same keys: nothing logged" "" "$(cat "${LOGF}")"
+    cat "${K}/a.pub" "${K}/b.pub" "${K}/c.pub" > "${AK}"; chk
+    ck "a key added: one line naming it" "1" "$(grep -c 'tappaas-rootkeys-changed:.*| + SHA256:.*user-c@host' "${LOGF}")"
+    cat "${K}/a.pub" "${K}/c.pub" > "${AK}"; chk
+    ck "a key removed: named with a minus" "1" "$(grep -c 'tappaas-rootkeys-changed:.*| - SHA256:.*user-b@host' "${LOGF}")"
+    chk
+    ck "no change since: nothing logged" "" "$(cat "${LOGF}")"
+else
+    echo "  (ssh-keygen not found — key-set check behaviour not tested here)"
+fi
 
 echo
 echo "── ${PASS} passed, ${FAIL} failed ──"

@@ -246,7 +246,7 @@ in `config/alerts.log` on the mothership.
 | `DiskErrors` | state, daily | ZED pool events (`class=checksum\|io…`), smartd sector warnings, kernel I/O errors — last 24 h, mailed once a day |
 | `BackupFailed` | event | vzdump "Backup of VM … failed" |
 | `OomKill` | event | the kernel's "Out of memory: Killed process" (subject: *Out of Memory Kill*) |
-| `RootKeyChanged` | event | the #128 audit trail: root's `authorized_keys` written from a login session |
+| `RootKeyChanged` | event | a key added to or removed from root's `authorized_keys` on the nodes — the nodes' `tappaas-rootkeys-check` (5-minute timer) compares key fingerprints and names each one; one alert for the cluster-wide file. Rewrites with the same keys (Proxmox's `pvecm updatecerts`) do not alert; the audit trail still records every write |
 | `ReplicationFailed` | state | pvesr "replication job error" in the last hour |
 | `Heartbeat` | heartbeat | logs arriving at all — never mailed, see below |
 

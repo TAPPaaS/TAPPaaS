@@ -142,11 +142,16 @@ let
     })
     (alertRule {
       uid = "tappaas-root-key-changed"; title = "RootKeyChanged"; kind = "event"; window = 300;
-      # The #128 audit trail: a write to root's authorized_keys from a login
-      # session (SSH, the sweep, a console). The sweep's own key rotation shows
-      # up here too — expected, and worth a line in the inbox.
-      expr = ''sum by (host) (count_over_time(${pve} |= "type=SYSCALL" |= "tappaas-rootkeys" [5m]))'';
-      summary = "Root's authorized_keys on a Proxmox node was changed from a login session.";
+      # A key ADDED to or REMOVED from root's authorized_keys (#128): the nodes'
+      # tappaas-rootkeys-check compares the set of key fingerprints every 5
+      # minutes and logs this line only when it changes, naming each key. It
+      # alerted on every audited write before, and Proxmox rewrites the file
+      # itself (`pvecm updatecerts` in the pve packages' postinst) — three mails
+      # on most nights with no key changed (hrossen, 2026-10-08). The file is
+      # cluster-wide, so every node sees one change: summed, it is one alert.
+      # The sweep's own key rotation is a real change and still shows up.
+      expr = ''sum(count_over_time(${pve} |= "tappaas-rootkeys-changed:" [5m]))'';
+      summary = "A key was added to or removed from root's authorized_keys on the Proxmox nodes (the line names it).";
       query = ''${pve} |= "tappaas-rootkeys"'';
     })
     (alertRule {
