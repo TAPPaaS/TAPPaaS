@@ -1,5 +1,5 @@
 {
-  "$comment": "Container image pins (#750, ADR-028 D4). Each entry says where its value lives: `file` and a regex `match` whose first group is the pinned value (the last match in the file); `also` names other places that must hold the same value. The module file stays the one place the pin is edited. tappaas-cicd/scripts/image-pins.py reports each pin's age and how far upstream is ahead, at every release boundary.",
+  "$comment": "Container image pins (#750, ADR-028 D4). Each entry says where its value lives: `file` and a regex `match` whose first group is the pinned value (the last match in the file); `also` names other places that must hold the same value. The module file stays the one place the pin is edited. tappaas-cicd/scripts/image-pins.py reports each pin's age and how far upstream is ahead, at every release boundary. `earlierMatch` (optional) lists the forms the value had in earlier releases, tried in order when `match` finds nothing \u2014 release-images.py reads a past release's images with it (#788).",
   "pins": [
     {
       "module": "identity",
@@ -8,7 +8,10 @@
       "file": "src/foundation/identity/identity.nix",
       "match": "lines = \\[[^\\]]*\"([0-9]+\\.[0-9]+\\.[0-9]+)\"\\s*\\];",
       "tagPattern": "^[0-9]{4}\\.[0-9]+\\.[0-9]+$",
-      "maintainer": "@TAPPaaS"
+      "maintainer": "@TAPPaaS",
+      "earlierMatch": [
+        "authentik\\s*=\\s*\"([0-9]+\\.[0-9]+\\.[0-9]+)\";"
+      ]
     },
     {
       "module": "euro-office",
@@ -32,6 +35,31 @@
       "file": "src/ai/litellm/litellm.nix",
       "match": "litellm\\s+= \"(v[^\"]+)\";",
       "tagPattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "maintainer": "@ErikDaniel007"
+    },
+    {
+      "module": "openwebui",
+      "image": "docker.io/openwebui/open-webui",
+      "kind": "tag",
+      "file": "src/ai/openwebui/openwebui.nix",
+      "match": "openwebui\\s+= \"([^\"]+)\";",
+      "tagPattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "maintainer": "@ErikDaniel007"
+    },
+    {
+      "module": "vllm-amd",
+      "image": "docker.io/kyuz0/vllm-therock-gfx1151",
+      "kind": "digest",
+      "file": "src/ai/vllm-amd/update.sh",
+      "match": "PINNED_IMAGE=\"kyuz0/vllm-therock-gfx1151@(sha256:[0-9a-f]+)\"",
+      "maintainer": "@ErikDaniel007"
+    },
+    {
+      "module": "deconz",
+      "image": "docker.io/diyhue/core",
+      "kind": "digest",
+      "file": "src/home/deconz/deconz.nix",
+      "match": "diyhue = \"(sha256:[0-9a-f]+)\";",
       "maintainer": "@ErikDaniel007"
     }
   ]

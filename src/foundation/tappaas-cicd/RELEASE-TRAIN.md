@@ -226,53 +226,74 @@ its guests is a split nobody would notice until something broke.
 Debian guests are not part of this: they patch themselves between releases (`apt-get upgrade` on
 the daily sweep, `unattended-upgrades` where a guest is locked down).
 
-## Before the pin moves: preview and ack (#788)
+## Before a boundary: the release CVE preview and ack (#788)
 
-A boundary proves a new pin by running it — a guest first, then the sweep, then the deep test —
-which takes hours. What a pin move *brings* is known much sooner: evaluating every guest against
-the next pin (nothing is built) shows which packages change major version and which critical or
-high CVEs the move introduces, keeps, or fixes. That takes minutes.
+A boundary proves a release by running it — a guest first, then the sweep, then the deep test —
+which takes hours. What the release *changes* is known in minutes: `preview` compares the **last
+release** with **"if released now"** — this tree, the pin the next boundary takes and its image
+pins — module by module, with today's CVE database on both sides, so the difference is what the
+release changes and not what was published meanwhile. Nothing is built and nothing moves.
 
 ```bash
-tappaas-train.sh preview                        # the next patch pin of the current release
-tappaas-train.sh preview --to nixos-26.11       # a release move
-tappaas-train.sh ack --note "read the Grafana 14 notes; CVE-… has no fix upstream yet"
+tappaas-train.sh preview                        # last release vs now, next patch pin
+tappaas-train.sh preview --to nixos-26.11       # … with a release move
+tappaas-train.sh preview --since v2.0           # against an older release
+tappaas-train.sh ack --note "read the Nextcloud 35 notes; CVE-… has no fix upstream yet"
 ```
 
 | Option | Meaning |
 |--------|---------|
-| `preview` | Resolve the pin the next boundary would take, evaluate the guests the last security scan found against it, and compare. Prints the summary, writes `config/train-preview.json`. Changes nothing. |
-| `preview --to <nixos-XX.YY>` | The same for a version move to another release branch. |
-| `ack` | Accept everything the last `preview` reported: its major version changes and the critical/high CVEs it introduces (or a CVE match that failed). |
+| `preview` | The last release (the newest `v*` tag) against "if released now". Prints the table, writes `config/train-preview.json`. |
+| `preview --to <nixos-XX.YY>` | "Now" moves to that release branch: a version move. |
+| `preview --since <vX.Y>` | Compare with that release instead of the newest. |
+| `ack` | Accept what the last `preview` gates: majors, critical/high CVEs new against the release, a failed match. |
 | `ack --note "<why>"` | The same, with the reason recorded beside it. |
 
-**What is reported.** Only packages that *run today* are compared — the last `health-manager scan
-security` says which, per guest — so build tools in a closure do not count. *Major* is the first
-version number changing (`13.0.9 → 14.0.1`) — except where that number is a date or a sequence
-(100 or more: `20260107`, less `692`, systemd `260`), which counts up with every release; and
-except the packages `release/pin-watch-ignore.json` lists, each with the reason its major is no
-break for TAPPaaS. Both are reported as "not counted as major", never hidden. A major whose
-version goes *down* is labelled a downgrade. On the CVE side, the next pin's packages are matched
-the way a scan matches them (`health-manager scan nix-list`): critical/high CVEs it **introduces**
-need an ack; those it **keeps** and those it **fixes** are reported. A failed match is never a
-clean result — it needs an ack like a finding.
+**The table** — critical/high counts per module, "if released now" first:
+
+```
+  MODULE             NOW │   V2.1  FIXED   NEW  SAME  NOTE
+  openwebui         1051 │   1055      4     0  1051
+  identity           129 │    336    226    19   110
+  jellyfin            96 │      —      0    96     0  new since v2.1
+  deconz             301 │    305      4     0   301  ≈ approximate (runs nowhere here)
+  …
+  MODULES           2205 │   2397    440   248  1957
+  — not compared: the platform (patched continuously) and the mothership (now = last scan) —
+  tappaas1 (node)    182 │
+  …
+  TOTAL             3127 │
+```
+
+- **Every module counts the same**, whatever it is built from: a NixOS guest's packages and a
+  container image's (from `src/image-pins.json`, read at the release's tag and in this tree) are
+  matched alike. Every module TAPPaaS ships counts — every NixOS system in the tree except the
+  template, the mothership, `00-Template` and test fixtures, and every pinned image.
+- **≈ approximate**: a module the build system does not run is evaluated without knowing which
+  of its packages run; it is counted from its closure, by the package names that run elsewhere.
+- **Not compared**: the nodes, Debian guests and the firewall patch continuously and are not part
+  of a release; the mothership is a flake of its own. Their row has only "now", from the last
+  `health-manager scan security`, and they are in the TOTAL.
+- A past release is evaluated **as it was built** (`--as-is`: before #324 its modules carried
+  their own baseline), against its own pin.
+
+**Majors.** A package whose first version number changes since the release — except where that
+number is a date or a sequence (100 or more: `20260107`, less `692`, systemd `260`), and the
+packages `release/pin-watch-ignore.json` lists with their reason. Those are reported as "not
+counted as major", never hidden; a major that goes *down* is labelled a downgrade.
 
 **What a boundary does with it.** Right after phase 1 moves the pin — before the deep test — the
-boundary computes the same findings for the pin it actually took:
+boundary computes the same comparison for the pin it actually took:
 
-- nothing found: it goes on, **no ack needed** — the common case;
-- everything found is covered by the last `ack`: it goes on (the channel may have moved a few
-  commits since the preview; what matters is that it brings nothing new);
+- nothing to acknowledge: it goes on, **no ack needed**;
+- everything gated is covered by the last `ack`: it goes on;
 - anything not covered: it **stops** before the deep test, names the new items, and leaves the
   checkout clean. Run `preview`, read the upstream notes, `ack`, run the boundary again.
 
 The accepted items are recorded on the release (`accepted` in `release/releases.json`, shown by
-`tappaas-train releases`), and the boundary uses the ack up. `boundary --dry-run` says what the
-gate would do with the last preview. When the gate cannot judge — no security scan to compare
-with, or the pin cannot be evaluated — it says so and lets the deep test decide.
-
-Not covered: the mothership (a flake of its own on the same pin; compared through its guests'
-packages), container images (they have their own pins, below) and Debian (patched daily).
+`tappaas-train releases`); the boundary uses the ack up. `boundary --dry-run` says what the gate
+would do with the last preview. When the comparison cannot be made — no release tag, no security
+scan, a pin that cannot be fetched — it says so and lets the deep test decide.
 
 ## When staging finds a fault
 

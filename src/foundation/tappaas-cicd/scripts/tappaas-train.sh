@@ -28,11 +28,12 @@
 #   tappaas-train patch <staging|production> <commit> --why "<what>" [--dry-run]
 #                                          an urgent fix (ADR-028 D12): fast-forward the channel
 #                                          onto <commit>, tag it MAJOR.MINOR.N, record why
-#   tappaas-train preview [--to <nixos-XX.YY>]
-#                                          what the NEXT pin move would bring to what runs here
-#                                          (#788): major version changes and critical/high CVEs —
-#                                          introduced, remaining, fixed. Evaluates, builds nothing,
-#                                          moves nothing; writes config/train-preview.json
+#   tappaas-train preview [--to <nixos-XX.YY>] [--since <vX.Y>]
+#                                          the last release (default: the newest tag) against
+#                                          "if released now" (#788): per module, critical/high now
+#                                          and fixed/new/unchanged since; majors. NixOS modules
+#                                          evaluated, images scanned by reference — nothing built,
+#                                          nothing moved; writes config/train-preview.json
 #   tappaas-train ack [--note "<why>"]     accept what the last preview reported; the next
 #                                          boundary goes ahead if it finds nothing beyond it
 #   tappaas-train releases                 every version, its commit, when it reached each channel
@@ -42,10 +43,10 @@
 # as an annotated tag, and the same number reaches production one boundary
 # later. The history is committed to main: release/releases.json and RELEASES.md.
 #
-# Pin preview (#788): a pin move's MAJOR version changes and the critical/high CVEs
-# it introduces are found by evaluating, in minutes. `preview` shows them, `ack`
-# accepts them, and a boundary checks the pin it moves to right away — before its
-# deep test — and stops on anything not accepted. Nothing found: no ack needed.
+# Release CVE preview (#788): the last release against "if released now", per module,
+# found by evaluating in minutes. `preview` shows it, `ack` accepts its majors and new
+# critical/high CVEs, and a boundary checks the pin it moves to right away — before
+# its deep test — and stops on anything not accepted. Nothing to accept: no ack needed.
 #
 # One boundary is one command: move the pin, prove it here, land it on main,
 # then promote. Its preflight also holds every module to the blueprint
@@ -1513,43 +1514,65 @@ PREVIEW_FILE="${CONFIG_DIR}/train-preview.json"
 TRAIN_SCRIPTS="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 
 # pin_findings <dir holding the candidate flake.lock> <from rev> <out json>
-# rc 1, with the reason on stderr, when it cannot judge: no security scan to
-# compare with, or the pin cannot be fetched or evaluated.
+# The last release against "if released now" (#788): the release's tree, its
+# nixpkgs pin and its image pins on one side; this tree, the candidate pin and
+# its image pins on the other — every NixOS module evaluated (nothing built),
+# every pinned image scanned by reference, all with today's CVE database.
+# rc 1, with the reason on stderr, when it cannot judge: no release tag, no
+# security scan to compare with, or a pin that cannot be fetched.
 # TAPPAAS_PIN_FINDINGS (tests): a command run as `cmd <dir> <from> <out>`.
 pin_findings() {
-    local dir="$1" from="$2" out="$3" sbom="${CONFIG_DIR}/sbom" to src work name f rel drv ok
+    local dir="$1" from="$2" out="$3" sbom="${CONFIG_DIR}/sbom" work tag base_src now_src side tree src ok rel drv
     if [[ -n "${TAPPAAS_PIN_FINDINGS:-}" ]]; then
         bash -c "${TAPPAAS_PIN_FINDINGS}" _ "${dir}" "${from}" "${out}"; return
     fi
     [[ -s "${sbom}/site.cdx.json" && -s "${sbom}/cve-status.json" ]] \
         || { echo "no security scan to compare with — run: health-manager scan security" >&2; return 1; }
-    to="$(jq -r '.nodes.nixpkgs.locked.rev // empty' "${dir}/flake.lock")"
-    src="$(nix eval --impure --raw --expr \
-        "(builtins.fetchTree (builtins.fromJSON (builtins.readFile ${dir}/flake.lock)).nodes.nixpkgs.locked).outPath" 2>/dev/null)" \
-        || { echo "the pin ${to:0:12} could not be fetched" >&2; return 1; }
-    work="$(mktemp -d)"; mkdir -p "${work}/closures"
-    # The Nix targets of the last scan, each by the .nix file it is built from.
-    # The mothership is a flake of its own and follows the same pin (D1); its
-    # packages are not compared here.
-    local files=()
-    while IFS= read -r name; do
-        f="$(grep -rl --include="${name}.nix" 'system\.stateVersion' "${REPO_DIR}/src" 2>/dev/null \
-             | grep -v -e '/foundation/templates/' -e '/tappaas-cicd/tappaas-cicd\.nix$' | head -1)"
-        [[ -n "${f}" ]] && files+=("${f}")
-    done < <(jq -r '.components[] | select([.properties[]? | select(.name == "tappaas:layer" and .value == "nix")] | length > 0) | .name' \
-             "${sbom}/site.cdx.json")
-    (( ${#files[@]} > 0 )) || { rm -rf "${work}"; echo "the last scan lists no NixOS guest to compare" >&2; return 1; }
-    info "  evaluating ${#files[@]} guest(s) against ${to:0:12} — nothing is built"
-    # nixos-baseline-eval --drv writes the derivations (builds nothing) and prints
-    # "  ok: <rel> <drv>" per module.
-    while read -r ok rel drv; do
-        [[ "${ok}" == "ok:" && "${drv}" == *.drv ]] || continue
-        nix-store -q --requisites "${drv}" > "${work}/closures/$(basename "${rel}" .nix).txt" 2>/dev/null || true
-    done < <(bash "${TRAIN_SCRIPTS}/nixos-baseline-eval.sh" --drv --nixpkgs "${src}" "${files[@]}" 2>&1)
+    tag="${SINCE_TAG:-$(g tag -l 'v[0-9]*' --sort=-v:refname | head -1)}"
+    [[ -n "${tag}" ]] && g rev-parse --verify --quiet "${tag}^{commit}" >/dev/null \
+        || { echo "no release to compare with${SINCE_TAG:+ (${SINCE_TAG} unknown)}" >&2; return 1; }
+    work="$(mktemp -d)"; mkdir -p "${work}/release" "${work}/base" "${work}/now"
+    g archive "${tag}" src | tar -x -C "${work}/release" \
+        || { rm -rf "${work}"; echo "could not unpack ${tag}" >&2; return 1; }
+    fetch_pin() { nix eval --impure --raw --expr \
+        "(builtins.fetchTree (builtins.fromJSON (builtins.readFile $1)).nodes.nixpkgs.locked).outPath" 2>/dev/null; }
+    base_src="$(fetch_pin "${work}/release/src/foundation/templates/flake.lock")" \
+        || { rm -rf "${work}"; echo "the pin of ${tag} could not be fetched" >&2; return 1; }
+    now_src="$(fetch_pin "${dir}/flake.lock")" \
+        || { rm -rf "${work}"; echo "the candidate pin could not be fetched" >&2; return 1; }
+    local mode files=()
+    for side in base now; do
+        # A past release is evaluated as it was built: before #324 its modules
+        # carried their own copy of the baseline, so adding today's would clash.
+        if [[ "${side}" == base ]]; then tree="${work}/release/src"; src="${base_src}"; mode="--as-is"
+        else tree="${REPO_DIR}/src"; src="${now_src}"; mode=""; fi
+        # The modules TAPPaaS ships: every NixOS system in the tree but the
+        # template, the mothership (a flake of its own), the module template (00-Template) and
+        # test fixtures (a path segment test-*, or test-fixtures/).
+        mapfile -t files < <(grep -rl --include='*.nix' 'system\.stateVersion' "${tree}" 2>/dev/null \
+            | grep -v -e '/foundation/templates/' -e '/flake\.nix$' -e '/tappaas-cicd/tappaas-cicd\.nix$' \
+                      -e '/misc/' -e '/00-Template/' -e '/test-' -e '/test-fixtures/' | sort)
+        info "  evaluating ${#files[@]} NixOS module(s) of $([[ ${side} == base ]] && echo "${tag}" || echo "this tree") — nothing is built"
+        (( ${#files[@]} > 0 )) || continue
+        while read -r ok rel drv; do
+            [[ "${ok}" == "ok:" && "${drv}" == *.drv ]] || continue
+            nix-store -q --requisites "${drv}" > "${work}/${side}/$(basename "${rel}" .nix).txt" 2>/dev/null || true
+        done < <(bash "${TRAIN_SCRIPTS}/nixos-baseline-eval.sh" --src "${tree}" ${mode} --drv --nixpkgs "${src}" "${files[@]}" 2>&1)
+    done
+    python3 "${TRAIN_SCRIPTS}/release-images.py" --repo "${REPO_DIR}" --ref "${tag}" > "${work}/base-images.json" \
+        && python3 "${TRAIN_SCRIPTS}/release-images.py" --repo "${REPO_DIR}" > "${work}/now-images.json" \
+        || { rm -rf "${work}"; echo "the image pins could not be read" >&2; return 1; }
+    info "  scanning the images of both sides by reference (the first run fetches them)"
+    local hm="${HEALTH_MANAGER:-health-manager}"
     python3 "${TRAIN_SCRIPTS}/pin-preview.py" \
-        --inventory "${sbom}/site.cdx.json" --status "${sbom}/cve-status.json" --closures "${work}/closures" \
-        --scanner "${HEALTH_MANAGER:-health-manager} scan nix-list --components {file} --nixpkgs ${src}" \
-        --from "${from}" --to "${to}" --out "${out}" --ignore "${REPO_DIR}/release/pin-watch-ignore.json"
+        --inventory "${sbom}/site.cdx.json" --status "${sbom}/cve-status.json" \
+        --base-label "${tag}" --base-closures "${work}/base" --base-images "${work}/base-images.json" \
+        --base-nix-scanner "${hm} scan nix-list --components {file} --nixpkgs ${base_src}" \
+        --now-closures "${work}/now" --now-images "${work}/now-images.json" \
+        --now-nix-scanner "${hm} scan nix-list --components {file} --nixpkgs ${now_src} --no-db-update" \
+        --image-scanner "${hm} scan images --refs {file} --no-db-update" \
+        --from "${from}" --to "$(jq -r '.nodes.nixpkgs.locked.rev // empty' "${dir}/flake.lock")" --out "${out}" \
+        --ignore "${REPO_DIR}/release/pin-watch-ignore.json"
     local rc=$?
     rm -rf "${work}"
     return "${rc}"
@@ -1683,7 +1706,7 @@ cmd_releases() {
 
 # The range must cover the whole header block above: extend it when the header
 # grows, or --help quietly stops before its last line.
-usage() { sed -n '3,49p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '3,50p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 
 command -v jq >/dev/null 2>&1 || die "jq is required"
 NO_FETCH=0; DRY_RUN=0; RESUME=0; FORCE_BOUNDARY=0
@@ -1717,6 +1740,8 @@ GUEST=""
 TO_BRANCH=""
 # Why an acknowledgement was given (`ack --note`), recorded with it.
 NOTE=""
+# The release a preview compares with (default: the newest v* tag).
+SINCE_TAG=""
 # Run a boundary whose value is the PROOF rather than the move: the pin is
 # already where it should be (landed by hand, or a frozen branch) and this run
 # exists to put it through the guest, the sweep and the deep test.
@@ -1733,12 +1758,13 @@ for a in "$@"; do
         --render)         RENDER=1 ;;
         --why=*)          WHY="${a#*=}" ;;
         --note=*)         NOTE="${a#*=}" ;;
+        --since=*)        SINCE_TAG="${a#*=}" ;;
         --production-branch=*) PROD_BRANCH="${a#*=}" ;;
         --staging-branch=*)    STAGING_BRANCH="${a#*=}" ;;
         --staging-host=*)      STAGING_HOST="${a#*=}" ;;
         --guest=*)             GUEST="${a#*=}" ;;
         --to=*)                TO_BRANCH="${a#*=}" ;;
-        --production-branch|--staging-branch|--staging-host|--guest|--to|--why|--note) _want="${a}" ;;
+        --production-branch|--staging-branch|--staging-host|--guest|--to|--why|--note|--since) _want="${a}" ;;
         *)
             if [[ -n "${_want:-}" ]]; then
                 case "${_want}" in
@@ -1749,6 +1775,7 @@ for a in "$@"; do
                     --to)                TO_BRANCH="${a}" ;;
                     --why)               WHY="${a}" ;;
                     --note)              NOTE="${a}" ;;
+                    --since)             SINCE_TAG="${a}" ;;
                 esac
                 _want=""
             else

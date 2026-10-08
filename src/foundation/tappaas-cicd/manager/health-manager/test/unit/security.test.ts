@@ -13,7 +13,7 @@ import { RemoteResult } from "../../../../lib/ts/src/cluster";
 import {
   CpeParts, DB_SPACE_BYTES, dbSpaceProblem, Finding, LINUX_PROBE, OPNSENSE_PROBE, PREVIOUS_FILE, STATUS_FILE, ScanStatus, SecurityIO,
   TargetStatus, applyCpes, checkCveStatus, fit, groupByImage, diffScans, nixComponents, parseLinuxProbe, parseOpnsenseProbe,
-  loadVex, parseStorePath, parseVex, scanComponentList, readStatus, registeredModuleDirs, renderReport, runScan, sbomDir, summarize, summarizeOpnsense, sweepIsNewer,
+  loadVex, parseStorePath, parseVex, scanComponentList, scanImageRefs, readStatus, registeredModuleDirs, renderReport, runScan, sbomDir, summarize, summarizeOpnsense, sweepIsNewer,
   vexSuppresses, writeScan,
 } from "../../src/security";
 import { run } from "../../src/main";
@@ -364,6 +364,16 @@ console.log("writeScan / diffScans / checkCveStatus / report");
   io.grypeOut = { rc: 1, stdout: "", stderr: "db missing", ran: true };
   check(scanComponentList([{ name: "glibc", version: "2.42-84" }], io).error.startsWith("grype failed"), "a failed matcher is an error, not zero findings");
   check(scanComponentList([], new FakeIO()).error !== "", "an empty list is an error, not a clean result");
+}
+
+// ── scan images: by registry reference, nothing running (#788) ──
+{
+  const io = new FakeIO();
+  io.images.set("ex/app:1", ok(trivyJson("debian", 100, [["CVE-2026-9", "CRITICAL", "libc6", "2.36-9+deb12u5"]])));
+  const r = scanImageRefs(["ex/app:1", "ex/app:1", "ex/gone:2"], io);
+  check(Object.keys(r).length === 2, "each reference is scanned once");
+  check(r["ex/app:1"].findings.length === 1 && r["ex/app:1"].error === "", "an image's findings come back by reference");
+  check(r["ex/gone:2"].error.startsWith("trivy failed"), "an image trivy cannot fetch is an error, not zero findings");
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

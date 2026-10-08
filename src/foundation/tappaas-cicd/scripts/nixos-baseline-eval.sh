@@ -23,6 +23,8 @@
 #   --drv       print each system's derivation: removing a copy that equals the
 #               baseline should leave it unchanged (compare two runs; nix-diff)
 #   --nixpkgs   nixpkgs to evaluate against (default: the template's pinned rev)
+#   --src DIR   the tree to evaluate (a src/ directory) instead of this checkout's —
+#               another release's, unpacked (the release CVE preview, #788)
 # Exit: 0 all evaluate; 1 at least one fails; 2 usage or no nix.
 set -uo pipefail
 
@@ -36,6 +38,7 @@ while [[ $# -gt 0 ]]; do
         --as-is)   AS_IS=1; shift ;;
         --drv)     DRV=1; shift ;;
         --nixpkgs) NIXPKGS="${2:?--nixpkgs needs a value}"; shift 2 ;;
+        --src)     SRC="$(cd "${2:?--src needs a directory}" && pwd)"; BASELINE="${SRC}/foundation/templates/tappaas-common.nix"; shift 2 ;;
         -h|--help) awk 'NR > 1 { if ($0 !~ /^#/) exit; sub(/^# ?/, ""); print }' "${BASH_SOURCE[0]}"; exit 0 ;;
         -*)        echo "nixos-baseline-eval: unknown option $1" >&2; exit 2 ;;
         *)         FILES+=("$1"); shift ;;

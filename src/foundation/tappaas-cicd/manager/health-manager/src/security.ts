@@ -960,6 +960,27 @@ export function scanComponentList(list: { name: string; version: string }[], io:
   }
 }
 
+// ── images by reference, matched without running them (#788) ─────────
+// The release preview compares the images a past release shipped with the ones
+// the next would: neither has to run here. trivy fetches each by its registry
+// reference (layers cached between runs); same parser as a running container.
+export function scanImageRefs(refs: string[], io: SecurityIO): Record<string, { findings: Finding[]; error: string }> {
+  const out: Record<string, { findings: Finding[]; error: string }> = {};
+  for (const ref of [...new Set(refs.filter((r) => !!r))]) {
+    const r = io.trivyImage(ref);
+    if (!r.ran || r.rc !== 0) {
+      out[ref] = { findings: [], error: `trivy failed: ${lastLine(r.stderr) || `exit ${r.rc}`}` };
+      continue;
+    }
+    try {
+      out[ref] = { findings: dedupe(trivyParse(r.stdout).findings), error: "" };
+    } catch {
+      out[ref] = { findings: [], error: "trivy output not parseable" };
+    }
+  }
+  return out;
+}
+
 export function groupByImage(cs: Container[]): Container[][] {
   const m = new Map<string, Container[]>();
   for (const c of cs) {
