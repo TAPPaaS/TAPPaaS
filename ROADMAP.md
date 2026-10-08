@@ -106,7 +106,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | 4 | G4.3 Manager verb gaps | M | L | 4 | 5 | 8 |
 | 4 | G4.4 Storage & physical devices | H | L | 2 | 3 | 6 |
 | 4 | G4.5 Governance, CI & sign-offs | M | L | 2 | 3 | 5 |
-| 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 7 | 10 | 6 |
+| 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 7 | 11 | 5 |
 | 3 | G3.2 Identity & SSO wiring | M | L | 1 | 6 | 5 |
 | 3 | G3.3 App module fixes | L | L | 5 | 4 | 10 |
 | 3 | G3.4 AI stack maturity | M | M | 1 | – | 6 |
@@ -300,7 +300,7 @@ The project's own machinery: CI runners (#415), community-health files (#486), t
 
 Low upgrade risk. Build continuously, in any order within a group.
 
-### G3.1 cluster:vm lifecycle & capacity — Ease L · Risk M · released: 7 · done for 2.2: 10 · open: 6
+### G3.1 cluster:vm lifecycle & capacity — Ease L · Risk M · released: 7 · done for 2.2: 11 · open: 5
 
 Guests sized, placed, started and stopped right: memory defaults from measurement (#663), hardware drift (#531), shutdown and boot order (#36, #127), storage growth and placement (#100, #403), a composite-module ADR (#761), and a sweep that survives a guest restarting itself (#753).
 
@@ -318,7 +318,7 @@ Guests sized, placed, started and stopped right: memory defaults from measuremen
 | ✅ #37 | Optimise RAM (ballooning, swap) | M | M | **Closed 2026-10-06, folded into #663** (operator): measuring is #663's sampler; no ballooning — right-sizing removes over-commitment; the ARC cap and swap are the Proxmox installer's |
 | ✅ #423 | `Create-TAPPaaS-LXC.sh` has no `debug()` | L | L | Verified still missing — **Closed 2026-09-26** (`34508ed2`): the LXC creator defines the `debug()` it calls, as `Create-TAPPaaS-VM.sh` does. The same trap elsewhere is #747 |
 | #761 | A composite-module ADR: `cluster`, `kubernetes`, and modules that only provide artefacts | H | M | ADR-022d and ADR-026 defer `cluster`/`kubernetes` to an ADR that does not exist, and `templates` fits no `kind`; interim values in ADR-022d v1.2. With @ErikDaniel007 |
-| #753 | A guest restarting during its own update fails the sweep | M | L | coturn restarted inside its own update on hrossen (2026-10-01); the post-apply SSH check raced its boot and failed the sweep. The restart's trigger is not yet known |
+| ✅ #753 | A guest restarting during its own update fails the sweep | M | L | **Closed 2026-10-08** (`2fe116df`): the "restart" was the rollback, which also erased the guest's journal; what failed was one SSH attempt seconds after the OS update. update-os now waits until systemd on the guest has no queued job after a switch or a reboot, and `cluster:vm`'s SSH check retries for 60 s and names ssh's own error before it reports drift |
 | ✅ #793 | A live migration leaves a FreeBSD guest's agent dead (firewall) | L | L | **Closed 2026-10-07** (`4543af5f`): the network update adds `-r` to the firewall's qemu-ga via `/usr/local/etc/rc.conf.d`; agent answered after live migrations both ways on hrossen |
 | ✅ #773 | `cluster:vm` thinDisk — opt-in thin provisioning per module | M | M | **Closed 2026-10-04.** `thinDisk: true` keeps a module's disk thin on its storage and on the HA replica (immich first: 500G that takes what the library uses). Watch the pool — a thin disk can overcommit it |
 | ✅ #764 | The Proxmox VM summary note links "Discussions": make the links docs, code, issues | H | L | **Done 2026-10-07.** The note `cluster:vm` writes on a new VM: the turtle (the old logo URL was dead), then *docs* (tappaas.org), *code* (the module's own directory in the repo) and *Issues*. Existing VMs keep their note |
