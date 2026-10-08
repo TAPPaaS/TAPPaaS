@@ -248,7 +248,11 @@ tappaas-train.sh ack --note "read the Grafana 14 notes; CVE-… has no fix upstr
 
 **What is reported.** Only packages that *run today* are compared — the last `health-manager scan
 security` says which, per guest — so build tools in a closure do not count. *Major* is the first
-version number changing (`13.0.9 → 14.0.1`). On the CVE side, the next pin's packages are matched
+version number changing (`13.0.9 → 14.0.1`) — except where that number is a date or a sequence
+(100 or more: `20260107`, less `692`, systemd `260`), which counts up with every release; and
+except the packages `release/pin-watch-ignore.json` lists, each with the reason its major is no
+break for TAPPaaS. Both are reported as "not counted as major", never hidden. A major whose
+version goes *down* is labelled a downgrade. On the CVE side, the next pin's packages are matched
 the way a scan matches them (`health-manager scan nix-list`): critical/high CVEs it **introduces**
 need an ack; those it **keeps** and those it **fixes** are reported. A failed match is never a
 clean result — it needs an ack like a finding.

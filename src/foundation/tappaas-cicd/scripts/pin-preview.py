@@ -26,9 +26,10 @@ Exit: 0 written (findings or not), 2 bad input.
 import argparse, hashlib, json, os, re, shlex, subprocess, sys, tempfile
 
 OUTPUTS = {"bin", "lib", "dev", "out", "man", "doc", "info", "debug", "static", "data", "dist", "py"}
-# A closure of derivations holds the sources too (glibc-2.42.tar.xz.drv): never a
-# version that runs.
-SOURCE = re.compile(r"\.(tar(\.[a-z0-9]+)?|tgz|tbz2?|txz|zip|xz|gz|bz2|zst|lz|7z|patch|diff|deb|rpm|whl|gem|jar|crate|nupkg)$")
+# A closure of derivations holds sources (glibc-2.42.tar.xz.drv) and generated
+# files (polkit-1.pam, php-extra-init-8.4.25.ini) too: never a version that runs.
+SOURCE = re.compile(r"\.(tar(\.[a-z0-9]+)?|tgz|tbz2?|txz|zip|xz|gz|bz2|zst|lz|7z|patch|diff|deb|rpm|whl|gem|jar|crate|nupkg"
+                    r"|pam|ini|conf|cfg|service|socket|timer|json|yaml|yml|toml|nix|sh|py|txt|rules|xml)$")
 
 
 def parse_name(path):
@@ -62,6 +63,16 @@ def major(v):
     return m.group(1) if m else v
 
 
+def semantic_major(old, new):
+    """Does old -> new change the MAJOR as an API break means it? Not when the first
+    number is a date or a sequence (20260107, 2025_09_19, less 692, systemd 260):
+    those count up with every release, so each step is an update, not a break."""
+    a, b = major(old), major(new)
+    if a.isdigit() and b.isdigit() and (int(a) >= 100 or int(b) >= 100):
+        return False
+    return a != b
+
+
 def inventory(cdx):
     """target name -> {pname: set(versions)} for every Nix target of the last scan."""
     out = {}
@@ -86,7 +97,14 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     for a in ("--inventory", "--status", "--closures", "--scanner", "--from", "--to", "--out"):
         ap.add_argument(a, required=True)
+    ap.add_argument("--ignore", help="release/pin-watch-ignore.json: packages whose major is not gated, each with its reason")
     args = ap.parse_args()
+    ignore = {}
+    if args.ignore and os.path.exists(args.ignore):
+        try:
+            ignore = json.load(open(args.ignore)).get("packages", {})
+        except ValueError:
+            print(f"pin-preview: {args.ignore} is not JSON — nothing is ignored", file=sys.stderr)
     try:
         inv = inventory(json.load(open(args.inventory)))
         base = baseline(json.load(open(args.status)))
@@ -94,7 +112,7 @@ def main():
         print(f"pin-preview: cannot read the last security scan: {e}", file=sys.stderr)
         return 2
 
-    targets, majors, new_comps, skipped = {}, {}, {}, []
+    targets, majors, new_comps, skipped, quiet = {}, {}, {}, [], {}
     for name in sorted(inv):
         f = os.path.join(args.closures, f"{name}.txt")
         if not os.path.exists(f):
@@ -116,9 +134,15 @@ def main():
                 same = [v for v in news if major(v) == major(old)]
                 new = max(same or news, key=vkey)
                 comps.append((pname, new))
-                changes.append({"pkg": pname, "from": old, "to": new, "major": not same})
-                if not same:
-                    majors.setdefault((pname, major(old), major(new)), {"pkg": pname, "from": old, "to": new, "targets": []})["targets"].append(name)
+                is_major = not same and semantic_major(old, new) and pname not in ignore
+                down = vkey(new) < vkey(old)
+                changes.append({"pkg": pname, "from": old, "to": new, "major": is_major, "downgrade": down})
+                if is_major:
+                    majors.setdefault((pname, major(old), major(new)),
+                                      {"pkg": pname, "from": old, "to": new, "downgrade": down, "targets": []})["targets"].append(name)
+                elif not same:
+                    # A first number that moved but is not gated: say why, once.
+                    quiet[pname] = ignore.get(pname) or "date or sequence version"
         targets[name] = {"changes": changes, "packages": len(comps)}
         new_comps[name] = comps
 
@@ -164,6 +188,7 @@ def main():
                  "remaining": sorted(remaining.values(), key=lambda x: x["key"]),
                  "fixed": fixed},
         "targets": targets, "notCompared": skipped, "scanError": scan_error,
+        "notGated": [{"pkg": p, "why": w} for p, w in sorted(quiet.items())],
         "gate": gate, "digest": hashlib.sha256("\n".join(gate).encode()).hexdigest()[:16],
     }
     json.dump(out, open(args.out, "w"), indent=1)
@@ -176,9 +201,12 @@ def main():
     if out["majors"]:
         print(f"  MAJOR version changes ({len(out['majors'])}):")
         for m in out["majors"]:
-            print(f"    {m['pkg']:<28} {m['from']} -> {m['to']}   [{tl(sorted(set(m['targets'])))}]")
+            print(f"    {m['pkg']:<28} {m['from']} -> {m['to']}{'  (a DOWNGRADE)' if m.get('downgrade') else ''}"
+                  f"   [{tl(sorted(set(m['targets'])))}]")
     else:
         print("  no major version changes")
+    if quiet:
+        print(f"  not counted as major ({len(quiet)}): {tl(sorted(quiet))} — date/sequence versions or pin-watch-ignore.json")
     if scan_error:
         print(f"  CVE match FAILED: {scan_error} — the CVE side is unknown")
     else:

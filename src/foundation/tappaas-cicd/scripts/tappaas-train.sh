@@ -1549,7 +1549,7 @@ pin_findings() {
     python3 "${TRAIN_SCRIPTS}/pin-preview.py" \
         --inventory "${sbom}/site.cdx.json" --status "${sbom}/cve-status.json" --closures "${work}/closures" \
         --scanner "${HEALTH_MANAGER:-health-manager} scan nix-list --components {file} --nixpkgs ${src}" \
-        --from "${from}" --to "${to}" --out "${out}"
+        --from "${from}" --to "${to}" --out "${out}" --ignore "${REPO_DIR}/release/pin-watch-ignore.json"
     local rc=$?
     rm -rf "${work}"
     return "${rc}"

@@ -1,0 +1,8 @@
+{
+  "_README": "Packages whose MAJOR version change a pin preview reports but does not gate (tappaas-train preview, #788). Each entry says why its major is not a break for TAPPaaS. Date and sequence versions (first number 100 or more) are never gated and need no entry here.",
+  "packages": {
+    "xgcc": "GCC's runtime libraries (libgcc_s, libstdc++), present in every closure: they move with every GCC release and keep their ABI",
+    "gfortran": "the Fortran runtime that numeric libraries link; moves with GCC like xgcc",
+    "linux-headers-static": "kernel headers used to build, not a running kernel; the kernel itself (linux) is still compared"
+  }
+}
