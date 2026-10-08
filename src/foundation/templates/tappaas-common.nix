@@ -105,6 +105,11 @@
   # that disagree are a conflict (#324).
   networking.hostName = lib.mkOptionDefault ""; # was "tappaas-nixos" — see Option 2 investigation
   networking.networkmanager.enable = true;  # Easiest to use and most distros use this by default.
+  # No Wi-Fi on a VM: NetworkManager's module switches on networking.wireless for
+  # its Wi-Fi backend, which ran a root wpa_supplicant on every guest with no
+  # wireless device to drive — attack surface for nothing (CVE review, #788).
+  # Wired networking is NetworkManager's own and unaffected.
+  networking.wireless.enable = lib.mkForce false;
 
   # Option 2 (issue #302/#309): make the DHCP lease carry the correct per-clone
   # name autonomously, independent of the cicd install pipeline AND of whether
