@@ -147,6 +147,23 @@ bt_dial_down() {  # <name>
     _bt_fw_apply
 }
 
+# ── what the dialling side runs ──────────────────────────────────────────────
+# The `peer add pull` the buddy runs to dial our tunnel, filled in from what we
+# know — our site name and location (site.json) included, since --country/--city
+# record where OUR PBS is and only we know it. The public endpoint is left for the
+# operator: behind a satellite it is the satellite's address, which we cannot see.
+bt_dial_command() {  # <site.json> <store> <net/30> <our-pubkey> <listen-port> [mtu]
+    local sj="$1" store="$2" net="$3" key="$4" port="$5" mtu="${6:-}" site loc
+    site="$(jq -r '.name // empty' "${sj}" 2>/dev/null)"
+    loc="$(jq -r '.location // {} | [
+        (if .country then "--country \(.country|@sh)" else "--country <CC>" end),
+        (if .city then "--city \(.city|@sh)" else empty end),
+        (if .building then "--building \(.building|@sh)" else empty end)] | join(" ")' "${sj}" 2>/dev/null)"
+    printf 'backup-manager peer add pull %s --store %s %s \\\n' "${site:-<our-site>}" "${store}" "${loc:---country <CC>}"
+    printf '    --tunnel dial --tunnel-net %s --endpoint <our public IP or satellite IP>:%s \\\n' "${net}" "${port}"
+    printf '    --peer-key %s%s\n' "${key}" "${mtu:+ --mtu ${mtu}}"
+}
+
 # ── status ───────────────────────────────────────────────────────────────────
 # "<instance> pubkey=<ours> peer=<status hs=age|none>", rc 1 when no instance.
 bt_status() {  # <serve|dial> <name>

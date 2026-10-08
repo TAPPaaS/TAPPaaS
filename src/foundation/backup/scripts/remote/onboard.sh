@@ -111,6 +111,10 @@ info "  namespace:   ${ns:-<root>}"
 info "  auth id:     ${authid}"
 info "  fingerprint: ${fp:-<run: proxmox-backup-manager cert info>}"
 if [[ "${trole}" == "serve" ]]; then
-    info "  tunnel:      --tunnel dial --tunnel-net ${tnet} --peer-key ${ourkey}"
-    info "               --endpoint <our public IP or satellite>:${tport}${tmtu:+  (MTU ${tmtu})}"
+    sj="${CONFIG_DIR:-/home/tappaas/config}/site.json"
+    info ""
+    info "${BOLD}On a TAPPaaS system they run this (fill in the endpoint):${CL}"
+    while IFS= read -r l; do info "  ${l}"; done < <(bt_dial_command "${sj}" "${store}" "${tnet}" "${ourkey}" "${tport}" "${tmtu}")
+    [[ "$(jq -r '.location.country // empty' "${sj}" 2>/dev/null)" != "" ]] \
+        || warn "  site.json records no location — set it (site-manager site modify --locationCountry …) so they need not type it"
 fi

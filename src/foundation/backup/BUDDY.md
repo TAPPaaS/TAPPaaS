@@ -148,9 +148,11 @@ backup-manager peer add remote "$BUDDY" --auth-id "$BUDDY@pbs" --country "$CC" -
   OPNsense creates the WireGuard instance `buddy-<buddy>-serve` (`.1/30`), a WAN rule for the UDP
   port (`buddy-<buddy> serve wg`), and a port forward that lets only `.2` reach your PBS on
   `.1:8007` (`buddy-<buddy> serve pbs`).
-- It prints what to send: the host (`10.255.2.1`), datastore, login, fingerprint, and the ready-made
-  `--tunnel dial --tunnel-net … --peer-key … --endpoint <your public IP>:<port>` for their side.
-  Fill in your public IP — your WAN address, or your satellite's.
+- It prints what to send: the host (`10.255.2.1`), datastore, login and fingerprint, and the whole
+  `backup-manager peer add pull …` command for a TAPPaaS buddy to run — your site name, datastore,
+  location (from your `site.json`), the `/30`, your public key, port and MTU filled in. Fill in your
+  public IP in it — your WAN address, or your satellite's. (No location in `site.json`? Set it
+  with `site-manager site modify --locationCountry … --locationCity …`.)
 
 When the buddy sends **their** public key, admit it — the same command with `--peer-key` and
 `--force` (the `/30` and port are kept, the login is left as it is):
@@ -170,7 +172,8 @@ rules carrying its own `tappaas-…` prefix, so they survive it, and `peer delet
 
 ## Setup 2: a TAPPaaS system that pulls a buddy
 
-You dial the buddy's tunnel and pull. With what they sent:
+You dial the buddy's tunnel and pull. Their `peer add remote` printed the whole command for you
+with everything filled in, their location included — run that. By hand, with what they sent:
 
 ```bash
 BUDDY="anna"                   # a short name for your buddy: letters, digits, - and _

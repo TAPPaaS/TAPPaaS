@@ -126,6 +126,18 @@ has "…its NAT removed"            "snat-manager delete-rule --firewall fw.test
 bt_dial_down bo; ck "down is idempotent" 0 $?
 bt_status dial bo >/dev/null; ck "status of an absent tunnel fails" 1 $?
 
+# ── the dial command printed for the buddy ───────────────────────────
+echo '{"name":"hrossen","location":{"country":"DK","city":"Kgs. Lyngby"}}' > "${T}/site.json"
+cmd="$(bt_dial_command "${T}/site.json" tappaas_backup 10.255.2.0/30 PUBK 51830 1340)"
+has "names us as their peer, with our store"   "peer add pull hrossen --store tappaas_backup" <(echo "${cmd}")
+has "…our location from site.json, quoted"     "--country 'DK' --city 'Kgs. Lyngby'" <(echo "${cmd}")
+has "…the /30, endpoint port to fill in"       "--tunnel-net 10.255.2.0/30 --endpoint <our public IP or satellite IP>:51830" <(echo "${cmd}")
+has "…our key and the MTU"                     "--peer-key PUBK --mtu 1340" <(echo "${cmd}")
+echo '{"name":"bare"}' > "${T}/site.json"
+cmd="$(bt_dial_command "${T}/site.json" s 10.255.2.4/30 K 51831)"
+has "no location: a placeholder, not a guess"  "--store s --country <CC> \\" <(echo "${cmd}")
+ck  "no MTU: none passed"                      "0" "$(grep -c -- '--mtu' <<<"${cmd}")"
+
 echo ""
 echo "pbs-tunnel: ${PASS} passed, ${FAIL} failed"
 [[ "${FAIL}" -eq 0 ]]
