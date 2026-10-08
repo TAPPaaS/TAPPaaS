@@ -152,8 +152,10 @@ def run_scanner(cmd, payload):
         return None, f"output not parseable (exit {r.returncode}): {(r.stderr or '').strip()[-200:]}"
 
 
-def keys(findings):
-    return {f"{f['id']} {f['pkg']}" for f in findings if f.get("severity") in CH}
+def ids(findings):
+    """Critical/high findings as CVE ids: the unit health-manager's scan counts in —
+    one CVE that hits two packages (libssl3 and openssl) is one."""
+    return {f["id"] for f in findings if f.get("severity") in CH}
 
 
 def main():
@@ -205,17 +207,20 @@ def main():
                 quiet[pname] = ignore.get(pname) or "date or sequence version"
 
     # One match per side for the Nix packages, one for every image.
-    errors, nix = [], {}
+    errors, nix, nix_sup = [], {}, {}
     for side, cmd in (("base", a.base_nix_scanner), ("now", a.now_nix_scanner)):
         uniq = sorted({(p, v) for mp in pkgs[side].values() for p, vs in mp.items() for v in vs})
         res, err = run_scanner(cmd, [{"name": p, "version": v} for p, v in uniq])
         err = err or (res or {}).get("error", "")
         if err:
             errors.append(f"{a.base_label if side == 'base' else 'now'} packages: {err}")
-        by = {}
+        by, sup = {}, {}
         for f in (res or {}).get("findings", []):
             by.setdefault((f.get("pkg"), f.get("installed")), []).append(f)
+        for f in (res or {}).get("suppressed", []):
+            sup.setdefault((f.get("pkg"), f.get("installed")), []).append(f)
         nix[side] = by
+        nix_sup[side] = sup
     refs = sorted(set(base_img.values()) | set(now_img.values()))
     img, err = run_scanner(a.image_scanner, refs) if refs else ({}, "")
     if err:
@@ -226,48 +231,49 @@ def main():
         if e:
             errors.append(f"image {ref}: {e}")
 
-    def module_keys(side, m):
-        k = set()
+    def side_findings(side, m, suppressed=False):
+        """A module's findings on one side: its NixOS packages' and its image's."""
+        out = []
+        src = nix_sup if suppressed else nix
         for p, vs in pkgs[side].get(m, {}).items():
             for v in vs:
-                k |= keys(nix[side].get((p, v), []))
+                out += [dict(f, **{"from": "nixos"}) for f in src[side].get((p, v), [])]
         ref = (base_img if side == "base" else now_img).get(m)
         if ref:
-            k |= keys((img.get(ref) or {}).get("findings", []))
-        return k
+            out += [dict(f, **{"from": "image"}) for f in (img.get(ref) or {}).get("suppressed" if suppressed else "findings", [])]
+        return out
 
-    def module_findings(side, m):
-        """key -> what a critical/high finding is: id, package, version, severity, nixos|image."""
+    def by_id(findings):
+        """CVE id -> the CVE, with every package it hits (version, fixed in, nixos|image)."""
         out = {}
-        for p, vs in pkgs[side].get(m, {}).items():
-            for v in vs:
-                for f in nix[side].get((p, v), []):
-                    if f.get("severity") in CH:
-                        out.setdefault(f"{f['id']} {f['pkg']}", {"id": f["id"], "pkg": f["pkg"], "version": f.get("installed", v),
-                                                                 "severity": f["severity"], "from": "nixos"})
-        ref = (base_img if side == "base" else now_img).get(m)
-        for f in (img.get(ref) or {}).get("findings", []) if ref else []:
-            if f.get("severity") in CH:
-                out.setdefault(f"{f['id']} {f['pkg']}", {"id": f["id"], "pkg": f["pkg"], "version": f.get("installed", ""),
-                                                         "severity": f["severity"], "from": "image"})
+        for f in findings:
+            if f.get("severity") not in CH:
+                continue
+            e = out.setdefault(f["id"], {"id": f["id"], "severity": f["severity"], "packages": []})
+            if f["severity"] == "Critical":
+                e["severity"] = "Critical"
+            pk = {"pkg": f.get("pkg"), "version": f.get("installed", ""), "fixed": f.get("fixed", ""), "from": f["from"]}
+            if pk not in e["packages"]:
+                e["packages"].append(pk)
         return out
 
     def ordered(d, ks):
-        return sorted((d[k] for k in ks), key=lambda f: (f["severity"] != "Critical", f["pkg"], f["id"]))
+        return sorted((d[k] for k in ks), key=lambda f: (f["severity"] != "Critical", f["packages"][0]["pkg"] or "", f["id"]))
 
     details = {}
-    rows, introduced, total = [], {}, {"now": 0, "base": 0, "fixed": 0, "new": 0, "same": 0}
+    rows, introduced, total = [], {}, {"now": 0, "base": 0, "fixed": 0, "new": 0, "same": 0, "vex": 0}
     for m in modules:
         in_base = m in pkgs["base"] or m in base_img
         in_now = m in pkgs["now"] or m in now_img
-        bk, nk = (module_keys("base", m) if in_base else set()), (module_keys("now", m) if in_now else set())
+        bf = by_id(side_findings("base", m)) if in_base else {}
+        nf = by_id(side_findings("now", m)) if in_now else {}
+        vx = by_id(side_findings("now", m, suppressed=True)) if in_now else {}
+        bk, nk = set(bf), set(nf)
         row = {"module": m, "now": len(nk) if in_now else None, "base": len(bk) if in_base else None,
-               "fixed": len(bk - nk), "new": len(nk - bk), "same": len(nk & bk), "approximate": approx.get(m, False),
+               "fixed": len(bk - nk), "new": len(nk - bk), "same": len(nk & bk), "vex": len(vx), "approximate": approx.get(m, False),
                "note": "new since " + a.base_label if not in_base else ("removed" if not in_now else ""),
                "image": now_img.get(m) or base_img.get(m)}
         rows.append(row)
-        bf = module_findings("base", m) if in_base else {}
-        nf = module_findings("now", m) if in_now else {}
         bp, np_ = pkgs["base"].get(m, {}), pkgs["now"].get(m, {})
         details[m] = {
             "module": m, "approximate": approx.get(m, False), "note": row["note"],
@@ -275,11 +281,12 @@ def main():
             "packages": [{"pkg": p, "base": max(bp[p], key=vkey) if p in bp else None, "now": max(np_[p], key=vkey) if p in np_ else None}
                          for p in sorted(set(bp) | set(np_))
                          if (max(bp[p], key=vkey) if p in bp else None) != (max(np_[p], key=vkey) if p in np_ else None)],
-            "cves": {"new": ordered(nf, nk - bk), "fixed": ordered(bf, bk - nk), "same": ordered(nf, nk & bk)},
+            "cves": {"new": ordered(nf, nk - bk), "fixed": ordered(bf, bk - nk), "same": ordered(nf, nk & bk),
+                     "vex": ordered(vx, set(vx))},
         }
         for k in nk - bk:
             introduced.setdefault(k, []).append(m)
-        for f in ("fixed", "new", "same"):
+        for f in ("fixed", "new", "same", "vex"):
             total[f] += row[f]
         total["now"] += len(nk)
         total["base"] += len(bk)
@@ -328,6 +335,11 @@ def show(module, path):
         return 1
     b = d.get("baseLabel", "the release")
     c = m["cves"]
+    # A details file from before #788's alignment holds one flat package per entry.
+    for lst in c.values():
+        for f in lst:
+            if "packages" not in f:
+                f["packages"] = [{"pkg": f.get("pkg"), "version": f.get("version", ""), "fixed": "", "from": f.get("from", "")}]
     print(f"{module} — if released now (pin {d.get('to', '')[:12]}) against {b} (pin {d.get('from', '')[:12]})"
           + ("   ≈ approximate: runs nowhere on the build system" if m.get("approximate") else "")
           + (f"   [{m['note']}]" if m.get("note") else ""))
@@ -348,11 +360,17 @@ def show(module, path):
         print(f"  no longer shipped ({len(gone)}): {names(gone)}")
     if added:
         print(f"  newly shipped ({len(added)}): {names(added)}")
-    print(f"  critical/high: now {len(c['new']) + len(c['same'])}, {b} {len(c['fixed']) + len(c['same'])}")
-    for title, rows in (("NEW — in now, not in " + b, c["new"]), ("FIXED — in " + b + ", gone now", c["fixed"]), ("SAME — in both", c["same"])):
+    print(f"  critical/high CVEs: now {len(c['new']) + len(c['same'])}, {b} {len(c['fixed']) + len(c['same'])}"
+          f"   (+{len(c.get('vex', []))} decided by VEX)")
+    lists = (("NEW — in now, not in " + b, c["new"]), ("FIXED — in " + b + ", gone now", c["fixed"]),
+             ("SAME — in both", c["same"]), ("VEX — decided by a recorded statement, not counted", c.get("vex", [])))
+    for title, rows in lists:
         print(f"\n  {title} ({len(rows)}):")
         for f in rows:
-            print(f"    {f['severity']:<8} {f['id']:<20} {f['pkg']:<28} {f['version']:<24} {f['from']}")
+            for i, p in enumerate(f["packages"]):
+                head = f"{f['severity']:<8} {f['id']:<20}" if i == 0 else " " * 29
+                fix = f"  fixed in {p['fixed']}" if p.get("fixed") else ""
+                print(f"    {head} {p['pkg'] or '':<28} {p['version'] or '':<24} {p['from']}{fix}")
     return 0
 
 
@@ -363,15 +381,15 @@ def render(o):
     def n(v):
         return "—" if v is None else str(v)
     b = o["baseLabel"]
-    print(f"Release CVE preview — critical/high, today's CVE database on both sides")
+    print(f"Release CVE preview — critical/high CVEs, today's CVE database on both sides, after VEX")
     print(f"  if released now: this tree, pin {o['to'][:12]}, its image pins   ·   {b}: its tree, pin {o['from'][:12]}, its image pins")
     print()
-    print(f"  {'MODULE':<16} {'NOW':>5} │ {b.upper():>6} {'FIXED':>6} {'NEW':>5} {'SAME':>5}  NOTE")
+    print(f"  {'MODULE':<16} {'NOW':>5} │ {b.upper():>6} {'FIXED':>6} {'NEW':>5} {'SAME':>5} │ {'VEX':>4}  NOTE")
     for r in sorted(o["modules"], key=lambda r: (-(r["now"] or 0), r["module"])):
         note = ("≈ approximate (runs nowhere here)" if r["approximate"] else "") + (("; " if r["approximate"] and r["note"] else "") + r["note"])
-        print(f"  {r['module']:<16} {n(r['now']):>5} │ {n(r['base']):>6} {r['fixed']:>6} {r['new']:>5} {r['same']:>5}  {note}")
+        print(f"  {r['module']:<16} {n(r['now']):>5} │ {n(r['base']):>6} {r['fixed']:>6} {r['new']:>5} {r['same']:>5} │ {r.get('vex', 0):>4}  {note}")
     t = o["total"]
-    print(f"  {'MODULES':<16} {t['now']:>5} │ {t['base']:>6} {t['fixed']:>6} {t['new']:>5} {t['same']:>5}")
+    print(f"  {'MODULES':<16} {t['now']:>5} │ {t['base']:>6} {t['fixed']:>6} {t['new']:>5} {t['same']:>5} │ {t.get('vex', 0):>4}")
     if o["platform"]:
         print(f"  — not compared: the platform (patched continuously) and the mothership (now = last scan) —")
         for p in sorted(o["platform"], key=lambda p: -p["now"]):
@@ -388,6 +406,7 @@ def render(o):
         print(f"  not counted as major ({len(o['notGated'])}): {tl([q['pkg'] for q in o['notGated']])} — date/sequence versions or pin-watch-ignore.json")
     for e in o["errors"]:
         print(f"  CVE match FAILED — {e}")
+    print(f"  VEX: our recorded triage (<module>-vex.json), the same statements the nightly scan applies — not in NOW")
     print(f"  to acknowledge: {len(o['gate'])} item(s) ({len(o['introduced'])} new critical/high, {len(o['majors'])} majors)"
           if o["gate"] else "  nothing to acknowledge")
 

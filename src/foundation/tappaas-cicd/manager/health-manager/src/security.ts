@@ -932,7 +932,14 @@ export function runScan(opts: ScanOpts, client: ClusterClient, io: SecurityIO): 
 // yet, so there is no store path to probe, only names and versions. Same CPE
 // rule and matcher as a scan; the CPE vendor comes from the pin being previewed
 // (the caller points TAPPAAS_NIXPKGS at it), not from the one installed.
-export function scanComponentList(list: { name: string; version: string }[], io: SecurityIO): { findings: Finding[]; error: string } {
+// VEX applies as in a scan (vexSuppresses): what a statement decides comes back
+// as `suppressed`, not dropped, so the preview counts it per module (#788).
+export interface ListScan { findings: Finding[]; suppressed: Finding[]; error: string }
+function splitVex(fs: Finding[], vex: VexStatement[]): { findings: Finding[]; suppressed: Finding[] } {
+  return { findings: fs.filter((f) => !vexSuppresses(f, vex)), suppressed: fs.filter((f) => vexSuppresses(f, vex)) };
+}
+
+export function scanComponentList(list: { name: string; version: string }[], io: SecurityIO, vex: VexStatement[] = []): ListScan {
   const seen = new Set<string>();
   const comps: Component[] = [];
   for (const c of list) {
@@ -942,18 +949,18 @@ export function scanComponentList(list: { name: string; version: string }[], io:
     seen.add(k);
     comps.push({ type: "library", name: c.name, version: c.version, purl: `pkg:nix/${c.name}@${c.version}` });
   }
-  if (comps.length === 0) return { findings: [], error: "no packages to match" };
+  if (comps.length === 0) return { findings: [], suppressed: [], error: "no packages to match" };
   applyCpes(comps, io.nixCpeParts([...new Set(comps.map((c) => c.name))]));
   const dir = mkdtempSync(join(tmpdir(), "tappaas-preview-"));
   try {
     const f = join(dir, "list.cdx.json");
     writeFileSync(f, JSON.stringify(cdxDoc(comps)));
     const g = io.grype(f);
-    if (!g.ran || g.rc !== 0) return { findings: [], error: `grype failed: ${lastLine(g.stderr) || `exit ${g.rc}`}` };
+    if (!g.ran || g.rc !== 0) return { findings: [], suppressed: [], error: `grype failed: ${lastLine(g.stderr) || `exit ${g.rc}`}` };
     try {
-      return { findings: dedupe(grypeFindings(g.stdout)), error: "" };
+      return { ...splitVex(dedupe(grypeFindings(g.stdout)), vex), error: "" };
     } catch {
-      return { findings: [], error: "grype output not parseable" };
+      return { findings: [], suppressed: [], error: "grype output not parseable" };
     }
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -964,18 +971,18 @@ export function scanComponentList(list: { name: string; version: string }[], io:
 // The release preview compares the images a past release shipped with the ones
 // the next would: neither has to run here. trivy fetches each by its registry
 // reference (layers cached between runs); same parser as a running container.
-export function scanImageRefs(refs: string[], io: SecurityIO): Record<string, { findings: Finding[]; error: string }> {
-  const out: Record<string, { findings: Finding[]; error: string }> = {};
+export function scanImageRefs(refs: string[], io: SecurityIO, vex: VexStatement[] = []): Record<string, ListScan> {
+  const out: Record<string, ListScan> = {};
   for (const ref of [...new Set(refs.filter((r) => !!r))]) {
     const r = io.trivyImage(ref);
     if (!r.ran || r.rc !== 0) {
-      out[ref] = { findings: [], error: `trivy failed: ${lastLine(r.stderr) || `exit ${r.rc}`}` };
+      out[ref] = { findings: [], suppressed: [], error: `trivy failed: ${lastLine(r.stderr) || `exit ${r.rc}`}` };
       continue;
     }
     try {
-      out[ref] = { findings: dedupe(trivyParse(r.stdout).findings), error: "" };
+      out[ref] = { ...splitVex(dedupe(trivyParse(r.stdout).findings), vex), error: "" };
     } catch {
-      out[ref] = { findings: [], error: "trivy output not parseable" };
+      out[ref] = { findings: [], suppressed: [], error: "trivy output not parseable" };
     }
   }
   return out;

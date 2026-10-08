@@ -21,8 +21,8 @@
 //                            (ADR-011: inventory + CVE match of every target;
 //                             writes ~/config/sbom/, run by tappaas-security-scan)
 //   health-manager report security [--all] [--json]      (prints the last scan)
-//   health-manager scan nix-list --components <file> [--nixpkgs <path>] [--no-db-update]
-//   health-manager scan images --refs <file> [--no-db-update]
+//   health-manager scan nix-list --components <file> [--nixpkgs <path>] [--no-db-update] [--no-vex]
+//   health-manager scan images --refs <file> [--no-db-update] [--no-vex]
 //                            (#788: container images by registry reference; JSON on stdout)
 //                            (#788: match a name/version list as if it ran — the
 //                             release train's pin preview; JSON on stdout)
@@ -37,7 +37,7 @@ import { defaultConfigDir, readModuleJson } from "./config";
 import { CliClusterClient } from "./client";
 import { guestTarget, runHealthGates } from "./checks";
 import {
-  CliSecurityIO, scanComponentList, scanImageRefs, PREVIOUS_FILE, SITE_CDX_FILE, STATUS_FILE, notify, readStatus, renderReport, runScan, sbomDir,
+  CliSecurityIO, loadVex, scanComponentList, scanImageRefs, PREVIOUS_FILE, SITE_CDX_FILE, STATUS_FILE, notify, readStatus, renderReport, runScan, sbomDir,
   sweepIsNewer, writeScan,
 } from "./security";
 import { ClusterClient } from "./types";
@@ -88,28 +88,32 @@ export const HELP: HelpSpec = {
         "status is kept as cve-status.previous.json. Runs after every sweep (tappaas-security-scan).",
     },
     {
-      usage: "scan nix-list --components <file> [--nixpkgs <path>] [--no-db-update]",
+      usage: "scan nix-list --components <file> [--nixpkgs <path>] [--no-db-update] [--no-vex]",
       options: [
         ["--components <file>", "JSON array of {name, version} — the packages to match (required)."],
         ["--nixpkgs <path>", "The nixpkgs whose CPE vendors to use: the pin being previewed (default: the installed one)."],
         ["--no-db-update", "Match against the grype database as it is, without refreshing it first."],
+        ["--no-vex", "Apply no VEX statement (by default the ones `scan security` applies: <module>-vex.json)."],
       ],
       details:
         "Matches a package list against the CVE database as if it ran (#788): the release train's\n" +
         "`tappaas-train preview` uses it for the packages the NEXT nixpkgs pin would bring, which\n" +
-        "nothing runs yet. Same CPE rule and matcher as `scan security`; writes nothing. Prints\n" +
-        "{\"findings\": [{id, severity, pkg, installed, fixed, purl}], \"error\": \"\"} on stdout.",
+        "nothing runs yet. Same CPE rule, matcher and VEX as `scan security`; writes nothing.\n" +
+        "Prints {\"findings\": [{id, severity, pkg, installed, fixed, purl}], \"suppressed\": [...], \"error\": \"\"}:\n" +
+        "`suppressed` holds what a VEX statement decided.",
     },
     {
-      usage: "scan images --refs <file> [--no-db-update]",
+      usage: "scan images --refs <file> [--no-db-update] [--no-vex]",
       options: [
         ["--refs <file>", "JSON array of image references (`<image>:<tag>` or `<image>@sha256:…`) (required)."],
         ["--no-db-update", "Match against the trivy database as it is, without refreshing it first."],
+        ["--no-vex", "Apply no VEX statement (by default the ones `scan security` applies)."],
       ],
       details:
         "Scans container images by registry reference, none of which has to run here (#788): the\n" +
         "release preview compares a past release's images with the next one's. trivy fetches each\n" +
-        "image (layers are cached). Writes nothing. Prints {\"<ref>\": {\"findings\": [...], \"error\": \"\"}}.",
+        "image (layers are cached). Same VEX as `scan security`. Writes nothing. Prints\n" +
+        "{\"<ref>\": {\"findings\": [...], \"suppressed\": [...], \"error\": \"\"}}.",
     },
     {
       usage: "report security [--all] [--json]",
@@ -213,16 +217,27 @@ function cmdValidate(opts: Opts, client: ClusterClient): number {
   return 1;
 }
 
+// The VEX the nightly scan applies (loadVex: <module>-vex.json in every registered
+// module directory), so a triage decision counts the same in both (#788).
+function verbVex(opts: Opts, off: boolean): ReturnType<typeof loadVex>["statements"] {
+  if (off) return [];
+  const v = loadVex(opts.configDir, process.env.TAPPAAS_REPO ?? "/home/tappaas/TAPPaaS");
+  for (const u of v.unreadable) process.stderr.write(`[Warning] VEX file not parseable, decides nothing: ${u}\n`);
+  return v.statements;
+}
+
 // ── scan nix-list (#788) ──────────────────────────────────────────────
 function cmdScanNixList(opts: Opts): number {
   let file = "";
   let nixpkgs = "";
   let dbUpdate = true;
+  let noVex = false;
   for (let i = 0; i < opts.rest.length; i++) {
     const a = opts.rest[i];
     if (a === "--components") file = opts.rest[++i] ?? "";
     else if (a === "--nixpkgs") nixpkgs = opts.rest[++i] ?? "";
     else if (a === "--no-db-update") dbUpdate = false;
+    else if (a === "--no-vex") noVex = true;
     else die(`scan nix-list: unexpected argument ${a}`);
   }
   if (!file) die("scan nix-list: --components <file> is required");
@@ -235,7 +250,7 @@ function cmdScanNixList(opts: Opts): number {
   if (nixpkgs) process.env.TAPPAAS_NIXPKGS = nixpkgs;
   const io = new CliSecurityIO();
   if (dbUpdate) for (const n of io.dbUpdate()) process.stderr.write(`[Warning] ${n}\n`);
-  const r = scanComponentList(list!, io);
+  const r = scanComponentList(list!, io, verbVex(opts, noVex));
   process.stdout.write(JSON.stringify(r) + "\n");
   return r.error ? 1 : 0;
 }
@@ -244,10 +259,12 @@ function cmdScanNixList(opts: Opts): number {
 function cmdScanImages(opts: Opts): number {
   let file = "";
   let dbUpdate = true;
+  let noVex = false;
   for (let i = 0; i < opts.rest.length; i++) {
     const a = opts.rest[i];
     if (a === "--refs") file = opts.rest[++i] ?? "";
     else if (a === "--no-db-update") dbUpdate = false;
+    else if (a === "--no-vex") noVex = true;
     else die(`scan images: unexpected argument ${a}`);
   }
   if (!file) die("scan images: --refs <file> is required");
@@ -259,7 +276,7 @@ function cmdScanImages(opts: Opts): number {
   }
   const io = new CliSecurityIO();
   if (dbUpdate) for (const n of io.dbUpdate()) process.stderr.write(`[Warning] ${n}\n`);
-  process.stdout.write(JSON.stringify(scanImageRefs(refs!, io)) + "\n");
+  process.stdout.write(JSON.stringify(scanImageRefs(refs!, io, verbVex(opts, noVex))) + "\n");
   return 0;
 }
 

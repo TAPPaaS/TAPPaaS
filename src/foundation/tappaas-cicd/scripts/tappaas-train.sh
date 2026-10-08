@@ -35,6 +35,7 @@
 #                                          evaluated, images scanned by reference — nothing built,
 #                                          nothing moved; writes config/train-preview.json and the
 #                                          per-module details (config/train-preview-details.json)
+#                 [--no-pin-move]          "now" keeps the pin in the tree: what it ships today
 #   tappaas-train preview --module <name> [--details-file <f>]
 #                                          one module from the last preview, CVE by CVE: what is
 #                                          NEW, FIXED and SAME, the image and packages that change
@@ -1605,7 +1606,7 @@ cmd_preview() {
     fi
     from="$(jq -r '.nodes.nixpkgs.locked.rev // empty' "${PIN_LOCK}")"
     info "${BOLD}Pin preview${CL} — what the next pin move would bring (#788). Nothing is built or moved."
-    if [[ -z "${TAPPAAS_PIN_FINDINGS:-}" ]]; then
+    if [[ -z "${TAPPAAS_PIN_FINDINGS:-}" && "${NO_PIN_MOVE}" != "1" ]]; then
         ( cd "${t}" && nix flake update --extra-experimental-features "nix-command flakes" ) >/dev/null 2>&1 \
             || { rm -rf "${t}"; die "could not resolve the next pin${TO_BRANCH:+ on ${TO_BRANCH}}"; }
     fi
@@ -1716,7 +1717,7 @@ cmd_releases() {
 
 # The range must cover the whole header block above: extend it when the header
 # grows, or --help quietly stops before its last line.
-usage() { sed -n '3,53p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '3,54p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 
 command -v jq >/dev/null 2>&1 || die "jq is required"
 NO_FETCH=0; DRY_RUN=0; RESUME=0; FORCE_BOUNDARY=0
@@ -1754,6 +1755,8 @@ NOTE=""
 SINCE_TAG=""
 # `preview --module <m>`: show one module from the details; `--details-file`: where they go.
 MODULE_SHOW=""; DETAILS_PATH=""
+# `preview --no-pin-move`: "now" is the pin already in the tree, not the next one.
+NO_PIN_MOVE=0
 # Run a boundary whose value is the PROOF rather than the move: the pin is
 # already where it should be (landed by hand, or a frozen branch) and this run
 # exists to put it through the guest, the sweep and the deep test.
@@ -1772,6 +1775,7 @@ for a in "$@"; do
         --note=*)         NOTE="${a#*=}" ;;
         --since=*)        SINCE_TAG="${a#*=}" ;;
         --module=*)       MODULE_SHOW="${a#*=}" ;;
+        --no-pin-move)    NO_PIN_MOVE=1 ;;
         --details-file=*) DETAILS_PATH="${a#*=}" ;;
         --production-branch=*) PROD_BRANCH="${a#*=}" ;;
         --staging-branch=*)    STAGING_BRANCH="${a#*=}" ;;

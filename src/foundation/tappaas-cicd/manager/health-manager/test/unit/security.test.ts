@@ -376,5 +376,21 @@ console.log("writeScan / diffScans / checkCveStatus / report");
   check(r["ex/gone:2"].error.startsWith("trivy failed"), "an image trivy cannot fetch is an error, not zero findings");
 }
 
+// ── VEX in the preview's verbs: the scan's rule, suppressed kept apart (#788) ──
+{
+  const io = new FakeIO();
+  const vex = parseVex(JSON.stringify({ vulnerabilities: [{ id: "CVE-2026-5450", analysis: { state: "not_affected" }, affects: [{ ref: "pkg:nix/glibc@2.42-84" }] }] }), "t");
+  const r = scanComponentList([{ name: "glibc", version: "2.42-84" }], io, vex);
+  check(r.findings.length === 0 && r.suppressed.length === 1 && r.suppressed[0].id === "CVE-2026-5450", "a VEX statement suppresses a listed package's finding, and it is returned as suppressed");
+  const io2 = new FakeIO();
+  io2.grypeOut = ok(grypeJson([["CVE-2026-5450", "Critical", "glibc", "2.42-100"]]));
+  const r2 = scanComponentList([{ name: "glibc", version: "2.42-100" }], io2, vex);
+  check(r2.findings.length === 1 && r2.suppressed.length === 0, "…a versioned statement stops applying at another version");
+  const io3 = new FakeIO();
+  io3.images.set("ex/app:1", ok(trivyJson("debian", 100, [["CVE-2026-9", "CRITICAL", "libc6", "2.36-9+deb12u5"]])));
+  const v3 = parseVex(JSON.stringify({ vulnerabilities: [{ id: "CVE-2026-9", analysis: { state: "false_positive" } }] }), "t");
+  check(scanImageRefs(["ex/app:1"], io3, v3)["ex/app:1"].suppressed.length === 1, "…and in an image, the same rule");
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

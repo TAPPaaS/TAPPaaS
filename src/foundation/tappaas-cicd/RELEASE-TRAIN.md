@@ -247,12 +247,14 @@ tappaas-train.sh ack --note "read the Nextcloud 35 notes; CVE-… has no fix ups
 | `preview` | The last release (the newest `v*` tag) against "if released now". Prints the table, writes `config/train-preview.json`. |
 | `preview --to <nixos-XX.YY>` | "Now" moves to that release branch: a version move. |
 | `preview --since <vX.Y>` | Compare with that release instead of the newest. |
+| `preview --no-pin-move` | "Now" keeps the pin already in the tree: what this tree ships today. For an installed module its NOW then matches the nightly scan's count — the check that the two agree. |
 | `preview --details-file <f>` | Write the per-module details there instead of `config/train-preview-details.json`. |
 | `preview --module <name>` | Show one module from the last preview's details, without recomputing: the image (both sides), the packages that change, and its critical/high CVEs in three lists — **NEW** (in now, not in the release), **FIXED** (in the release, gone now) and **SAME** — each with package, version, severity and whether it comes from the NixOS system or the image. |
 | `ack` | Accept what the last `preview` gates: majors, critical/high CVEs new against the release, a failed match. |
 | `ack --note "<why>"` | The same, with the reason recorded beside it. |
 
-**The table** — critical/high counts per module, "if released now" first:
+**The table** — critical/high **CVEs** per module (a CVE that hits two packages counts once,
+as in the nightly `health-manager scan security`), "if released now" first:
 
 ```
   MODULE             NOW │   V2.1  FIXED   NEW  SAME  NOTE
@@ -268,6 +270,10 @@ tappaas-train.sh ack --note "read the Nextcloud 35 notes; CVE-… has no fix ups
   TOTAL             3127 │
 ```
 
+- **VEX**: the same triage statements the nightly scan applies (`<module>-vex.json` next to each
+  module; the shared NixOS baseline's in `templates-vex.json`) apply here too, to both sides. A
+  CVE a statement decided is not in NOW: the `VEX` column counts it apart, `preview --module`
+  lists it, and it needs no ack.
 - **Every module counts the same**, whatever it is built from: a NixOS guest's packages and a
   container image's (from `src/image-pins.json`, read at the release's tag and in this tree) are
   matched alike. Every module TAPPaaS ships counts — every NixOS system in the tree except the

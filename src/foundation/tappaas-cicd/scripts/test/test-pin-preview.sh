@@ -47,17 +47,20 @@ cat > "${T}/nix" <<'EOF'
 import json, sys
 db = {"grafana@13.0.9": [("CVE-OLD", "High")], "openssl@3.5.1": [("CVE-1", "Critical")],
       "openssl@3.5.2": [("CVE-1", "Critical"), ("CVE-LOW", "Low")], "grafana@14.0.1": [("CVE-2", "High")]}
+import os
 comps = json.load(open(sys.argv[sys.argv.index("--components") + 1]))
-json.dump({"findings": [{"id": i, "severity": s, "pkg": c["name"], "installed": c["version"]}
-                        for c in comps for i, s in db.get(f"{c['name']}@{c['version']}", [])], "error": ""}, sys.stdout)
+vexed = set(os.environ.get("VEXED", "").split())
+fs = [{"id": i, "severity": s, "pkg": c["name"], "installed": c["version"], "fixed": ""}
+      for c in comps for i, s in db.get(f"{c['name']}@{c['version']}", [])]
+json.dump({"findings": [f for f in fs if f["id"] not in vexed], "suppressed": [f for f in fs if f["id"] in vexed], "error": ""}, sys.stdout)
 EOF
 cat > "${T}/img" <<'EOF'
 #!/usr/bin/env python3
 import json, sys
-db = {"ow:0.10.2": [("CVE-W1", "Critical", "perl")], "lit:1.85.0": [("CVE-L1", "High", "PyJWT"), ("CVE-L2", "High", "tar")],
+db = {"ow:0.10.2": [("CVE-W1", "Critical", "perl"), ("CVE-W2", "High", "libssl3"), ("CVE-W2", "High", "openssl")], "lit:1.85.0": [("CVE-L1", "High", "PyJWT"), ("CVE-L2", "High", "tar")],
       "lit:1.103.3": [("CVE-L2", "High", "tar")]}
 refs = json.load(open(sys.argv[sys.argv.index("--refs") + 1]))
-json.dump({r: {"findings": [{"id": i, "severity": s, "pkg": p, "installed": "x"} for i, s, p in db.get(r, [])], "error": ""}
+json.dump({r: {"findings": [{"id": i, "severity": s, "pkg": p, "installed": "x", "fixed": "y" if p == "openssl" else ""} for i, s, p in db.get(r, [])], "suppressed": [], "error": ""}
            for r in refs}, sys.stdout)
 EOF
 chmod +x "${T}/nix" "${T}/img"
@@ -74,11 +77,12 @@ run
 ck "runs" "0" "${RC}"
 ck "logging: now 2 | v2.1 2, fixed 1, new 1, same 1" "2 2 1 1 1" "$(row logging)"
 ck "an image module counts like a NixOS one: litellm 1 | 2, fixed 1" "1 2 1 0 1" "$(row litellm)"
-ck "an unchanged image: openwebui 1 | 1, same 1" "1 1 0 0 1" "$(row openwebui)"
+ck "an unchanged image: openwebui 2 | 2, same 2" "2 2 0 0 2" "$(row openwebui)"
+ck "one CVE in two packages counts once, as in the nightly scan (CVE-W2: libssl3 + openssl)" "2" "$(jq '.modules[] | select(.module=="openwebui") | .now' "${T}/p.json")"
 ck "a module new since the release: deconz, no release column" "1 null 0 1 0" "$(row deconz)"
 ck "…counted though it runs nowhere, marked approximate" "true" "$(jq '.modules[] | select(.module=="deconz") | .approximate' "${T}/p.json")"
 ck "…from runtime package names only — no build tool" "1" "$(jq '.modules[] | select(.module=="deconz") | .now' "${T}/p.json")"
-ck "the modules total: now 5 | v2.1 5" "5 5" "$(jq -r '"\(.total.now) \(.total.base)"' "${T}/p.json")"
+ck "the modules total: now 6 | v2.1 6" "6 6" "$(jq -r '"\(.total.now) \(.total.base)"' "${T}/p.json")"
 ck "the platform has only a now: node 182, firewall 0" "182 0" "$(jq -r '[.platform[] | select(.layer != "nix, not compared") | .now] | sort | reverse | join(" ")' "${T}/p.json")"
 ck "the mothership is not dropped: now only, not compared" "65" "$(jq '.platform[] | select(.layer == "nix, not compared") | .now' "${T}/p.json")"
 ck "a real major since the release: grafana 13 -> 14" "true" "$(jq '[.majors[].pkg] | index("grafana") != null' "${T}/p.json")"
@@ -87,19 +91,21 @@ ck "an ignored package is not gated" "false" "$(jq '[.majors[].pkg] | index("xgc
 ck "a downgrade is labelled" "true" "$(jq '.majors[] | select(.pkg=="protobuf") | .downgrade' "${T}/p.json")"
 ck "low severity is never counted" "false" "$(jq '[.introduced[].key] | any(contains("CVE-LOW"))' "${T}/p.json")"
 ck "the gate: majors and what is new against the release" \
-   '["cve CVE-1 openssl","cve CVE-2 grafana","major grafana 13->14","major protobuf 34->33"]' "$(jq -c '.gate' "${T}/p.json")"
+   '["cve CVE-1","cve CVE-2","major grafana 13->14","major protobuf 34->33"]' "$(jq -c '.gate' "${T}/p.json")"
 ck "the table: NOW first, then the release's columns" "yes" "$([[ "${OUT}" == *"MODULE"*"NOW"*"│"*"V2.1"*"FIXED"*"NEW"*"SAME"* ]] && echo yes || echo no)"
 ck "…with the approximate row said" "yes" "$([[ "${OUT}" == *"deconz"*"≈ approximate"* ]] && echo yes || echo no)"
-ck "…and a grand TOTAL with the platform" "yes" "$(grep -qE '^ +TOTAL +252 ' <<<"${OUT}" && echo yes || echo no)"
+ck "…and a grand TOTAL with the platform" "yes" "$(grep -qE '^ +TOTAL +253 ' <<<"${OUT}" && echo yes || echo no)"
 # ── the details file: per module, each CVE with what it is (#788) ──
 D="${T}/d.json"
 ck "details: logging's NEW lists the CVE, package, version and where it comes from" "CVE-2 grafana 14.0.1 High nixos" \
-   "$(jq -r '.modules.logging.cves.new[] | "\(.id) \(.pkg) \(.version) \(.severity) \(.from)"' "${D}")"
-ck "…FIXED what the release had" "CVE-OLD grafana 13.0.9" "$(jq -r '.modules.logging.cves.fixed[] | "\(.id) \(.pkg) \(.version)"' "${D}")"
-ck "…SAME what stays" "CVE-1 openssl" "$(jq -r '.modules.logging.cves.same[] | "\(.id) \(.pkg)"' "${D}")"
+   "$(jq -r '.modules.logging.cves.new[] | "\(.id) \(.packages[0].pkg) \(.packages[0].version) \(.severity) \(.packages[0].from)"' "${D}")"
+ck "…FIXED what the release had" "CVE-OLD grafana 13.0.9" "$(jq -r '.modules.logging.cves.fixed[] | "\(.id) \(.packages[0].pkg) \(.packages[0].version)"' "${D}")"
+ck "…SAME what stays" "CVE-1 openssl" "$(jq -r '.modules.logging.cves.same[] | "\(.id) \(.packages[0].pkg)"' "${D}")"
+ck "one CVE, every package it hits, with the version that fixes it" "CVE-W2 libssl3,openssl y" \
+   "$(jq -r '.modules.openwebui.cves.same[] | select(.id=="CVE-W2") | "\(.id) \([.packages[].pkg] | join(",")) \([.packages[].fixed | select(. != "")] | join(","))"' "${D}")"
 ck "…and the packages that change" "true" "$(jq '[.modules.logging.packages[] | select(.pkg=="grafana" and .base=="13.0.9" and .now=="14.0.1")] | length == 1' "${D}")"
 ck "an image module: both references, and its CVEs marked image" "lit:1.85.0 lit:1.103.3 image" \
-   "$(jq -r '.modules.litellm | "\(.image.base) \(.image.now) \(.cves.fixed[0].from)"' "${D}")"
+   "$(jq -r '.modules.litellm | "\(.image.base) \(.image.now) \(.cves.fixed[0].packages[0].from)"' "${D}")"
 SHOW="$(python3 "${PP}" --show logging --details "${D}" 2>&1)"; RC=$?
 ck "--show prints one module: NEW, FIXED and SAME, each CVE on its line" "yes" \
    "$([[ ${RC} -eq 0 && "${SHOW}" == *"NEW"*"CVE-2"*"FIXED"*"CVE-OLD"*"SAME"*"CVE-1"* && "${SHOW}" == *"grafana"*"13.0.9 -> 14.0.1"* ]] && echo yes || echo no)"
@@ -112,6 +118,14 @@ ck "an unknown module: rc 1, and the modules there are named" "1 yes" "${RC} $([
 
 d1="$(jq -r .digest "${T}/p.json")"; run
 ck "the same findings, the same digest" "${d1}" "$(jq -r .digest "${T}/p.json")"
+
+# VEX: what a recorded statement decided is not in NOW, and is counted apart.
+VEXED="CVE-1" run
+ck "a VEX-decided CVE leaves NOW: logging 1 | v2.1 1" "1 1" "$(jq -r '.modules[] | select(.module=="logging") | "\(.now) \(.base)"' "${T}/p.json")"
+ck "…and is counted in the VEX column, on its own" "1" "$(jq '.modules[] | select(.module=="logging") | .vex' "${T}/p.json")"
+ck "…listed under VEX in the details" "CVE-1" "$(jq -r '.modules.logging.cves.vex[].id' "${T}/d.json")"
+ck "…not gated: a decided CVE needs no ack" "false" "$(jq '.gate | index("cve CVE-1") != null' "${T}/p.json")"
+run
 
 printf '#!/usr/bin/env bash\necho "{\\"findings\\":[],\\"error\\":\\"grype failed: no db\\"}"; exit 1\n' > "${T}/bad"; chmod +x "${T}/bad"
 NIXSCAN="${T}/bad" run

@@ -26,11 +26,14 @@ health-manager update-os <name> <vmid> <node>
 health-manager reboot <module>
 health-manager scan security [--if-new-sweep] [--notify]
 health-manager report security [--all] [--json]
-health-manager scan nix-list --components <file> [--nixpkgs <path>] [--no-db-update]
+health-manager scan nix-list --components <file> [--nixpkgs <path>] [--no-db-update] [--no-vex]
+health-manager scan images --refs <file> [--no-db-update] [--no-vex]
 ```
 
 `scan nix-list` matches a JSON list of `{name, version}` against the CVE database as if those
-packages ran — same CPE rule and matcher as `scan security`, writing nothing. The release train's
+packages ran — same CPE rule, matcher and VEX statements as `scan security`, writing nothing;
+what a statement decides comes back as `suppressed` (`--no-vex` applies none). `scan images`
+does the same for container images by registry reference. The release train's
 `tappaas-train preview` uses it for the packages the next nixpkgs pin would bring (#788);
 `--nixpkgs` points the CPE vendors at that pin. Prints `{"findings": [...], "error": ""}`.
 
