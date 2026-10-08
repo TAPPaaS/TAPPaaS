@@ -219,7 +219,10 @@ check_loki_query() {
 
 check_alert_rules() {
     info "Check 9: Grafana has the TAPPaaS alert rules and the webhook contact point (#126)"
-    local out
+    local out want
+    # As many as logging.nix defines (each one is an `alertRule {` call), so a
+    # new rule does not fail this check until the count here is edited too.
+    want="$(grep -c 'alertRule {' "$(dirname "${BASH_SOURCE[0]}")/logging.nix") 1"
     # Asked on the VM itself, with the admin password read there: it never
     # crosses the wire or lands in a log.
     # shellcheck disable=SC2086,SC2016
@@ -230,10 +233,10 @@ check_alert_rules() {
         c=$(curl -s --max-time 10 -u "admin:${pw}" http://127.0.0.1:3000/api/v1/provisioning/contact-points \
             | jq -r "[.[] | select(.uid == \"tappaas-site-notify\" and .type == \"webhook\")] | length")
         echo "${r:-?} ${c:-?}"' 2>/dev/null) || true
-    if [[ "${out}" == "9 1" ]]; then
-        check_pass "9 alert rules (heartbeat included) and the tappaas-site-notify webhook are provisioned"
+    if [[ "${out}" == "${want}" ]]; then
+        check_pass "${want% *} alert rules (heartbeat included) and the tappaas-site-notify webhook are provisioned"
     else
-        check_fail "alert provisioning incomplete (rules, contact points: ${out:-no answer}; want 9 1)"
+        check_fail "alert provisioning incomplete (rules, contact points: ${out:-no answer}; want ${want})"
     fi
 }
 
