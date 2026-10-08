@@ -1218,7 +1218,9 @@ export function run(argv: string[], client: ModuleClient): number {
 
 // Entry point (only when run directly, not when imported by tests).
 if (require.main === module) {
-  process.exit(run(process.argv.slice(2), new CliModuleClient()));
+  // exitCode, not exit(): exit() ends the process before a large write to a pipe
+  // has drained, cutting --json output at 65536 bytes (found with health-manager, #788).
+  process.exitCode = run(process.argv.slice(2), new CliModuleClient());
 }
 
 // Re-export for tests.

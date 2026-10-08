@@ -409,5 +409,8 @@ export function run(argv: string[], client: ClusterClient): number {
 // Entry point (only when run directly, not when imported by tests).
 if (require.main === module) {
   const client = new CliClusterClient();
-  process.exit(run(process.argv.slice(2), client));
+  // exitCode, not exit(): exit() ends the process before a large write to a PIPE
+  // has drained, so `scan images` reached the release preview cut at 65536 bytes
+  // (hrossen, 2026-10-08). Nothing else keeps the loop alive: it exits right after.
+  process.exitCode = run(process.argv.slice(2), client);
 }

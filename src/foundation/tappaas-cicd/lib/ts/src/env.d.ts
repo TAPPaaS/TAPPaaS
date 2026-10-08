@@ -22,6 +22,8 @@ declare const process: {
   execPath: string;
   env: Record<string, string | undefined>;
   exit(code?: number): never;
+  // Set instead of exit() where output may be large: exit() cuts a pipe at 64 KiB.
+  exitCode?: number;
   pid: number;
   stdout: { write(s: string): void };
   stderr: { write(s: string): void };

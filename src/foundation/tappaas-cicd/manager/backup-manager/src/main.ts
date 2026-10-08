@@ -1230,5 +1230,7 @@ if (require.main === module) {
   const ei = argv.indexOf("--pbs");
   const endpoint = ei >= 0 ? argv[ei + 1] : undefined;
   const client = new CliClient(endpoint);
-  process.exit(run(argv, client));
+  // exitCode, not exit(): exit() ends the process before a large write to a pipe
+  // has drained, cutting --json output at 65536 bytes (found with health-manager, #788).
+  process.exitCode = run(argv, client);
 }
