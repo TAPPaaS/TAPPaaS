@@ -201,7 +201,7 @@ items that belong to a group — FW #40, #83, #157, #158, #162 — are rows in t
 | #757 | `debianhost` over PXE (ADR-026 D8a) | `adopt` covers every known site |
 | #771 | NFS over TLS for `pvehost:nfs` | ADR-029 v0.7: OpenZFS `sharenfs` cannot carry `xprtsec` |
 | #787 | logging: TLS for syslog ingest and Loki's ports | From #165 §3 (2026-10-06). Waits for a TAPPaaS CA; traffic stays inside mgmt / the site network meanwhile |
-| #310 | Firewall API certificate verified, not skipped (`--no-ssl-verify`) | **Follows #787:** the same TAPPaaS CA issues the firewall a certificate for `firewall.mgmt.internal`, and the controllers verify it. Rescoped 2026-10-08 out of G2.1: blocking on a pinned self-signed certificate would stop the sweep at every rebuild or renewal for a narrow risk (a foothold on mgmt). Meanwhile a change is detected — `check-firewall-cert`, hourly, mails FirewallCertChanged (`aec2467f`) |
+| #310 | Firewall API certificate verified, not skipped (`--no-ssl-verify`) | **Follows #787:** the same TAPPaaS CA issues the firewall a certificate for `firewall.mgmt.internal`, and the controllers verify it. Rescoped 2026-10-08 out of G2.1: blocking on a pinned self-signed certificate would stop the sweep at every rebuild or renewal for a narrow risk (a foothold on mgmt). Meanwhile a change is detected — `check-firewall-cert`, hourly, mails FirewallCertChanged (`ddf94cdb`) |
 | ✅ #11 | NextCloud | **Closed 2026-10-06:** a TAPPaaS module, `src/collaboration/nextcloud` |
 | ✅ #12 | HomeAssistant | **Closed 2026-10-06:** a TAPPaaS module, `src/home/hass` |
 | ✅ #52 | Jellyfin | **Closed 2026-10-06:** in TAPPaaS at status Testing, media on a `storage:nfs` share, installed on hrossen |
