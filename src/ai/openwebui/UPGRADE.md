@@ -1,5 +1,36 @@
 # OpenWebUI — Upgrade Guide
 
+## Upgrading to v0.11.4 (module v0.8.2)
+
+### What is new
+
+- OpenWebUI updated from 0.10.2 to 0.11.4. 0.11 redesigns the user interface;
+  tell the users before the update.
+- The database schema is migrated when the container first starts. The
+  migration only goes forward: the way back is the pre-update snapshot or a
+  backup, not the old image on the new schema.
+- Do not stop at 0.11.0, 0.11.1 or 0.11.2. They can skip migrations without an
+  error (upstream #29280); 0.11.3 fixed that.
+- No PostgreSQL or Redis change.
+
+### Before the update
+
+```bash
+backup-manager backup <instance>
+```
+
+### Verify after upgrade
+
+```bash
+module-manager test <instance> --deep
+```
+
+`test.sh` now fails when the `user`, `chat` or `file` table held rows before and
+is empty now. Also read the container log once to its end: a migration that
+failed shows there, not on the health endpoint.
+
+---
+
 ## Upgrading to v0.10.2
 
 ### What is new

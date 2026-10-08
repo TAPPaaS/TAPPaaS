@@ -180,6 +180,36 @@ check_redis() {
     fi
 }
 
+# The checks above pass on an empty database: an update that lost the data
+# would leave a healthy, empty OpenWebUI. The guest remembers the most rows it
+# has seen per table; a table that had rows and now has none fails. A fresh
+# install has nothing remembered and passes.
+check_data() {
+    info "Check 6: data still present"
+    local rows t now seen
+    # shellcheck disable=SC2086
+    rows=$(ssh ${SSH_OPTS} "tappaas@${VM_HOST}" 'sudo mkdir -p /var/lib/tappaas-openwebui-rows
+for t in user chat file; do
+    now=$(sudo -u postgres psql -At openwebui -c "SELECT count(*) FROM \"$t\";" 2>/dev/null)
+    seen=$(sudo cat /var/lib/tappaas-openwebui-rows/$t 2>/dev/null)
+    echo "$t ${now:-unreadable} ${seen:-0}"
+    [ "${now:-0}" -gt "${seen:-0}" ] 2>/dev/null && echo "$now" | sudo tee /var/lib/tappaas-openwebui-rows/$t >/dev/null
+done' 2>/dev/null) || true
+    if [[ -z "${rows}" ]]; then
+        check_fail "Could not count OpenWebUI rows"
+        return
+    fi
+    while read -r t now seen; do
+        if [[ "${now}" == "unreadable" ]]; then
+            check_fail "Table ${t} could not be read"
+        elif [[ "${now}" -eq 0 && "${seen}" -gt 0 ]]; then
+            check_fail "Table ${t} is empty, it held ${seen} rows before — the data is gone"
+        else
+            check_pass "Table ${t}: ${now} rows (most seen: ${seen})"
+        fi
+    done <<< "${rows}"
+}
+
 # ── Main ──────────────────────────────────────────────────────────────
 
 main() {
@@ -200,6 +230,7 @@ main() {
     check_http
     check_postgresql
     check_redis
+    check_data
 
     echo ""
     info "Results: ${PASS_COUNT} passed, ${FAIL_COUNT} failed"
