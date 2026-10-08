@@ -64,6 +64,38 @@ else
 fi
 
 
+# ── Drain must wait out `migrate`, not just `started` (2026-10-08) ───
+(
+    LOG="${WORK}/m.log"; : > "${LOG}"; N="${WORK}/m.n"; echo 0 > "${N}"
+    sleep() { :; }
+    rn_ha_active_count() { echo 2; }
+    rn_latest_kernel()   { echo ""; }
+    rn_node_fqdn()       { echo "$1"; }
+    rn_wait_for_node()   { return 1; }           # stop right after the reboot
+    # Three polls in `migrate`, then the service is on the other node.
+    havm_ha_services_on_node() {
+        local n; n=$(( $(cat "${N}") + 1 )); echo "${n}" > "${N}"
+        # Honour the optional state filter the way the real helper does.
+        if (( n <= 3 )) && [[ -z "${3:-}" || "${3}" == migrate ]]; then echo "vm:130 testnode migrate"; fi
+    }
+    rn_node_ssh() {
+        shift; printf '%s\n' "$*" >> "${LOG}"
+        [[ "$*" == reboot ]] && echo "polls=$(cat "${N}")" >> "${LOG}"
+        return 0
+    }
+    reboot_one_node "testnode" >/dev/null 2>&1
+    grep -qx 'polls=4' "${LOG}"
+) && pass "drain waits while a service is in migrate, reboots after it left" \
+  || fail "drain rebooted with a service still migrating"
+
+(
+    sleep() { :; }
+    rn_node_fqdn() { echo "$1"; }
+    havm_ha_services_on_node() { printf '%s\n' "vm:1 testnode stopped" "vm:2 testnode disabled" "vm:3 testnode ignored"; }
+    [[ -z "$(rn_ha_left_on_node testnode)" ]]
+) && pass "stopped/disabled/ignored services do not block the drain" \
+  || fail "a service with nothing running blocked the drain"
+
 # ── Post-reboot maintenance-disable scenarios ────────────────────────
 #
 # A node that reboots and never leaves maintenance mode sits out of HA

@@ -225,6 +225,16 @@ rn_wait_ha_settled() {
     done
 }
 
+# HA services still on <node> that a reboot would kill: every state except the
+# ones with nothing running. `migrate` and `relocate` count — the guest is still
+# here until the CRM moves the service's node field (2026-10-08: draining on
+# `started` alone rebooted tappaas1 mid-migration and killed five live guests).
+rn_ha_left_on_node() {
+    local node="$1"
+    havm_ha_services_on_node "$(rn_node_fqdn "$node")" "$node" 2>/dev/null \
+        | awk '$1 != "" && $3 !~ /^(stopped|disabled|ignored|error)$/'
+}
+
 # Perform a controlled reboot of a single node. Returns 0 on success; non-zero
 # on any failure (caller decides whether to abort the run). Assumes the caller
 # has already confirmed/authorised the action.
@@ -255,13 +265,13 @@ reboot_one_node() {
     rn_node_ssh "$node" "ha-manager crm-command node-maintenance enable ${node}" \
         || { error "Failed to enable HA maintenance mode on ${node}"; return 1; }
 
-    # Drain: wait until no HA service is still 'started' on this node. The old
-    # `grep "${node}.*started"` matched the node name anywhere on the line;
-    # havm_ha_services_on_node compares the node and state fields exactly.
-    while [[ -n "$(havm_ha_services_on_node "$(rn_node_fqdn "$node")" "$node" started 2>/dev/null || true)" ]]; do
+    # Drain: wait until no live HA service is left on this node, migrating ones
+    # included (rn_ha_left_on_node). A 16 GiB guest took 86s alongside four
+    # others, so the budget is RN_DRAIN_MAX (600s), not the old 120s.
+    while [[ -n "$(rn_ha_left_on_node "$node" || true)" ]]; do
         sleep 5; (( local_wait+=5 ))
-        if [[ $local_wait -ge 120 ]]; then
-            error "HA migration timeout on ${node} after 120s"
+        if [[ $local_wait -ge ${RN_DRAIN_MAX:-600} ]]; then
+            error "HA migration timeout on ${node} after ${local_wait}s: $(rn_ha_left_on_node "$node" | awk '{printf "%s=%s ", $1, $3}')"
             # #507: the reboot has NOT happened yet, so the VMs are still on this
             # node — restore the pre-attempt HA state rather than stranding it in
             # maintenance. Leaving it on here is how a CPU-heterogeneous cluster
