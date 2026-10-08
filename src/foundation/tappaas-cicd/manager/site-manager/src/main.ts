@@ -312,6 +312,10 @@ function cmdSite(o: Opts): void {
     info(`${lbl("TAPPaaS")}${running ?? "(no release tag in the checkout)"}${site.channel ? `  (${site.channel} channel)` : ""}`);
     info(`${lbl("Installed from")}${site.version || "(unset)"}`);
     info(`${lbl("Location")}${[loc.country, loc.timezone, loc.locale, loc.keyboard].filter(Boolean).join(" / ") || "(unset)"}`);
+    // #609: where the site physically is — what an off-site copy is compared with.
+    if (loc.city || loc.building) {
+      info(`${lbl("Place")}${[loc.building, loc.city, loc.country].filter(Boolean).join(", ")}`);
+    }
     if (loc.latitude !== undefined || loc.longitude !== undefined) {
       info(`${lbl("Position")}${[loc.latitude, loc.longitude].map((v) => (v === undefined ? "?" : String(v))).join(", ")}`);
     }
