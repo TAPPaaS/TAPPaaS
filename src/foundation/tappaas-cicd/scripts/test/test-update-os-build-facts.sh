@@ -36,7 +36,7 @@ run() {
         die(){ echo died >> "${T}/out"; exit 1; }
         ssh(){
             case "$*" in
-                *"bash -s"*) [[ "${RC}" -eq 0 ]] || return "${RC}"; FACTS_ROOT="${T}/guest" bash -s ;;
+                *"bash -s"*) [[ "${RC}" -eq 0 ]] || return "${RC}"; FACTS_ROOT="${T}/guest" FACTS_IMAGE="" bash -s ;;
                 *"tee /etc/nixos/tappaas-build-facts.env"*) cat > "${T}/written" ;;
             esac
         }
@@ -52,7 +52,7 @@ cp "${COLLECTOR}" "${TMP}/ident/build-facts.sh"
 printf '2025.4.4\n' > "${TMP}/guest/var/lib/authentik/tappaas-version"
 
 ck "a module without build-facts.sh: nothing collected" "" "$(run "${TMP}/plain" 0)"
-ck "identity: the guest's facts are written to /etc/nixos" "AUTHENTIK_INSTALLED=2025.4.4 AUTHENTIK_STEP_BLOCKED=" "$(run "${TMP}/ident" 0)"
+ck "identity: the guest's facts are written to /etc/nixos" "AUTHENTIK_INSTALLED=2025.4.4 AUTHENTIK_RUNNING=none AUTHENTIK_STEP_BLOCKED=" "$(run "${TMP}/ident" 0)"
 ck "a collector that cannot run stops the update" "died" "$(run "${TMP}/ident" 255)"
 ck "…and writes no facts" "no" "$([[ -f ${TMP}/written ]] && echo yes || echo no)"
 ck "the facts are written before the build, with the rest of /etc/nixos" "yes" \
