@@ -43,6 +43,7 @@ info()  { echo -e "${GN}[firewall]${CL} $*"; }
 warn()  { echo -e "${YW}[firewall][warn]${CL} $*"; }
 error() { echo -e "${RD}[firewall][error]${CL} $*" >&2; }
 die()   { error "$*"; exit 1; }
+debug() { [[ "${TAPPAAS_DEBUG:-0}" == 1 ]] || return 0; echo "[Debug] $*" >&2; }
 
 # ── Cleanup ──────────────────────────────────────────────────────────
 WORKDIR=""

@@ -46,6 +46,7 @@ info()  { echo -e "${GN}[platform]${CL} $*"; }
 warn()  { echo -e "${YW}[platform][warn]${CL} $*"; }
 error() { echo -e "${RD}[platform][error]${CL} $*" >&2; }
 die()   { error "$*"; exit 1; }
+debug() { [[ "${TAPPAAS_DEBUG:-0}" == 1 ]] || return 0; echo "[Debug] $*" >&2; }
 
 usage() { sed -n '2,/^set -euo/p' "$0" | sed 's/^# \{0,1\}//; /^set -euo/d'; }
 

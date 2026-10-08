@@ -22,6 +22,7 @@ _ts() { date '+%Y-%m-%dT%H:%M:%S%z'; }
 info() { printf '[%s] [info]  %s\n' "$(_ts)" "$*"; }
 warn() { printf '[%s] [warn]  %s\n' "$(_ts)" "$*" >&2; }
 die()  { printf '[%s] [error] %s\n' "$(_ts)" "$*" >&2; exit 1; }
+debug() { [[ "${TAPPAAS_DEBUG:-0}" == 1 ]] || return 0; echo "[Debug] $*" >&2; }
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "${HERE}"

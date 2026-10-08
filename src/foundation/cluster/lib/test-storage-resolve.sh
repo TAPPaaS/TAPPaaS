@@ -43,6 +43,7 @@ run_raw() {
         warn() { echo "WARN: $*"; }
         error() { echo "ERROR: $*" >&2; }
         die() { error "$*"; exit 1; }
+        debug() { [[ "${TAPPAAS_DEBUG:-0}" == 1 ]] || return 0; echo "[Debug] $*" >&2; }
         get_config_value() {
             local key="$1" default="${2:-}"
             local v

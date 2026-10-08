@@ -58,6 +58,7 @@ cat > "${FAKECOMMON}" <<'EOF'
 info()  { echo "[Info] $*"; }
 warn()  { echo "[Warning] $*" >&2; }
 error() { echo "[Error] $*" >&2; }
+debug() { [[ "${TAPPAAS_DEBUG:-0}" == 1 ]] || return 0; echo "[Debug] $*" >&2; }
 get_node_hostname() { echo "nonexistent-node-xyz"; }
 EOF
 

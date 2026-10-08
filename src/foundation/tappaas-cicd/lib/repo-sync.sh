@@ -21,6 +21,7 @@ REPO_SYNC_STASH_TAG="tappaas repo-sync auto-stash"
 command -v info  >/dev/null 2>&1 || info()  { echo "$*"; }
 command -v warn  >/dev/null 2>&1 || warn()  { echo "WARN: $*" >&2; }
 command -v error >/dev/null 2>&1 || error() { echo "ERROR: $*" >&2; }
+declare -F debug >/dev/null 2>&1 || debug() { [[ "${TAPPAAS_DEBUG:-0}" == 1 ]] || return 0; echo "[Debug] $*" >&2; }
 
 # Build the canonical https clone URL from a site.json `url` (which is stored
 # bare, e.g. "codeberg.org/TAPPaaS/TAPPaaS"). An explicit scheme is preserved.

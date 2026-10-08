@@ -27,6 +27,7 @@
 declare -F info  >/dev/null || info()  { echo "$*"; }
 declare -F warn  >/dev/null || warn()  { echo "WARN: $*" >&2; }
 declare -F error >/dev/null || error() { echo "ERROR: $*" >&2; }
+declare -F debug >/dev/null 2>&1 || debug() { [[ "${TAPPAAS_DEBUG:-0}" == 1 ]] || return 0; echo "[Debug] $*" >&2; }
 
 # Seconds between polls. Kept small enough to not add latency of its own, large
 # enough that a 180s wait is ~60 ssh round trips, not 180. Tests override it.

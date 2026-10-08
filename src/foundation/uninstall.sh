@@ -46,6 +46,7 @@ info()  { echo -e "${GN}[uninstall]${CL} $*"; }
 warn()  { echo -e "${YW}[uninstall][warn]${CL} $*"; }
 error() { echo -e "${RD}[uninstall][error]${CL} $*" >&2; }
 die()   { error "$*"; exit 1; }
+debug() { [[ "${TAPPAAS_DEBUG:-0}" == 1 ]] || return 0; echo "[Debug] $*" >&2; }
 
 # ── Arguments ────────────────────────────────────────────────────────
 DRY_RUN=1 FORCE=0 KEEP_POOLS=0 KEEP_NETWORK=0 KEEP_USER=0

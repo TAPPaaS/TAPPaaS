@@ -75,6 +75,7 @@ info()  { echo -e "${GN}[Info]${CL} $*"; }
 warn()  { echo -e "${YW}[Warning]${CL} $*"; }
 error() { echo -e "${RD}[Error]${CL} $*" >&2; }
 die()   { error "$*"; exit 2; }
+debug() { [[ "${TAPPAAS_DEBUG:-0}" == 1 ]] || return 0; echo "[Debug] $*" >&2; }
 
 # The channel → branch map. One place, because every command needs it and a
 # second copy is how they come to disagree.

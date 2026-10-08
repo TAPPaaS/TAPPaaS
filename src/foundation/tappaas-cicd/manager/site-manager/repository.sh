@@ -57,6 +57,7 @@ info()  { echo -e "${DGN}$*${CL}"; }
 warn()  { echo -e "${YW}[WARN]${CL} $*"; }
 error() { echo -e "${RD}[ERROR]${CL} $*" >&2; }
 die()   { error "$@"; exit 1; }
+debug() { [[ "${TAPPAAS_DEBUG:-0}" == 1 ]] || return 0; echo "[Debug] $*" >&2; }
 
 # Shared repo-checkout reconciler (re-point origin + checkout branch) — also used
 # by the routine update path (refresh-control-plane.sh) so `modify` and `update-tappaas`

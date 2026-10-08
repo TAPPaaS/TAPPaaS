@@ -37,6 +37,7 @@ info()  { printf '[%s] [info]  %s\n'  "$(_ts)" "$*"; }
 warn()  { printf '[%s] [warn]  %s\n'  "$(_ts)" "$*" >&2; }
 error() { printf '[%s] [error] %s\n'  "$(_ts)" "$*" >&2; }
 die()   { error "$*"; exit 1; }
+debug() { [[ "${TAPPAAS_DEBUG:-0}" == 1 ]] || return 0; echo "[Debug] $*" >&2; }
 
 # ── cleanup trap ─────────────────────────────────────────────────────────────
 _tmp="$(mktemp -d)"

@@ -20,6 +20,7 @@ info()  { echo -e "${GN}[INFO]${CL}  $*"; }
 warn()  { echo -e "${YW}[WARN]${CL}  $*" >&2; }
 error() { echo -e "${RD}[ERROR]${CL} $*" >&2; }
 die()   { error "$*"; exit 1; }
+debug() { [[ "${TAPPAAS_DEBUG:-0}" == 1 ]] || return 0; echo "[Debug] $*" >&2; }
 
 # -- Defaults (override via environment) -------------------------------------
 TEMPLATE_VMID="${TEMPLATE_VMID:-8081}"

@@ -20,7 +20,7 @@
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-info(){ :; }; warn(){ :; }; error(){ :; }   # silence the lib's progress in tests
+info(){ :; }; warn(){ :; }; error(){ :; }; debug(){ :; }   # silence the lib's progress in tests
 # shellcheck source=ha-vm-lib.sh
 . "${HERE}/ha-vm-lib.sh"
 

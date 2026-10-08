@@ -46,6 +46,7 @@ RD=$'\033[01;31m'; GN=$'\033[32m'; YL=$'\033[33m'; BD=$'\033[1m'; CL=$'\033[m'
 info()  { echo -e "${GN}[Info]${CL} $*"; }
 warn()  { echo -e "${YL}[Warning]${CL} $*"; }
 error() { echo -e "${RD}[Error]${CL} $*" >&2; }
+debug() { [[ "${TAPPAAS_DEBUG:-0}" == 1 ]] || return 0; echo "[Debug] $*" >&2; }
 
 APPLY=0
 GUESTS=()

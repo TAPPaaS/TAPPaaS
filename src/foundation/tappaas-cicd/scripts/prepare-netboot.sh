@@ -29,6 +29,7 @@ GN="\033[1;92m"; YW="\033[33m"; RD="\033[01;31m"; CL="\033[m"
 info() { echo -e "${GN}[Info]${CL} $*"; }
 warn() { echo -e "${YW}[Warning]${CL} $*"; }
 die()  { echo -e "${RD}[Error]${CL} $*" >&2; exit 1; }
+debug() { [[ "${TAPPAAS_DEBUG:-0}" == 1 ]] || return 0; echo "[Debug] $*" >&2; }
 
 FORCE=0
 NODE="tappaas1.mgmt.internal"

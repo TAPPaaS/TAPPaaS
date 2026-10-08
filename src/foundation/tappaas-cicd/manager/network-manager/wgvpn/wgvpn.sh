@@ -25,6 +25,7 @@ YW=$'\033[01;33m'; RD=$'\033[01;31m'; CL=$'\033[0m'
 info()  { echo "${*}" >&2; }
 warn()  { echo "${YW}[Warning]${CL} ${*}" >&2; }
 die()   { echo "${RD}[Error]${CL} ${*}" >&2; exit 1; }
+debug() { [[ "${TAPPAAS_DEBUG:-0}" == 1 ]] || return 0; echo "[Debug] $*" >&2; }
 
 # What each sub-verb accepts (lib/cli-gate.sh; '=' marks an option with a value).
 readonly CLI_SPEC='

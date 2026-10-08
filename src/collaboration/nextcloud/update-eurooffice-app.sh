@@ -26,6 +26,7 @@ info()  { echo -e "${BL}[INFO]${CL}  $*"; }
 pass()  { echo -e "${GN}[OK]${CL}    $*"; }
 warn()  { echo -e "${YW}[WARN]${CL}  $*"; }
 error() { echo -e "${RD}[ERROR]${CL} $*" >&2; exit 1; }
+debug() { [[ "${TAPPAAS_DEBUG:-0}" == 1 ]] || return 0; echo "[Debug] $*" >&2; }
 
 echo -e ""
 echo -e "${BOLD}═══════════════════════════════════════════════════════════════${CL}"

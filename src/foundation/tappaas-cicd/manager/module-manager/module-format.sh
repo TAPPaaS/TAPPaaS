@@ -37,6 +37,7 @@ readonly HEADER_PINNED='["vmname","vmid","vmtag","node","zone0","zone1","mac0","
     warn()  { echo "[Warning] $*" >&2; }
     error() { echo "[Error] $*" >&2; }
     die()   { error "$@"; exit 1; }
+    debug() { [[ "${TAPPAAS_DEBUG:-0}" == 1 ]] || return 0; echo "[Debug] $*" >&2; }
 }
 
 # Composed, not the raw schema: definitions live per-service since #567.

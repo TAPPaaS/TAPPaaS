@@ -45,6 +45,7 @@ RELEASE="${TAPPAAS_RELEASE:-2.1}"
 die()  { echo "${SCRIPT_NAME}: $*" >&2; exit 1; }
 info() { echo "$*"; }
 warn() { echo "${SCRIPT_NAME}: warning: $*" >&2; }
+debug() { [[ "${TAPPAAS_DEBUG:-0}" == 1 ]] || return 0; echo "[Debug] $*" >&2; }
 
 usage() { sed -n '3,9p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 
