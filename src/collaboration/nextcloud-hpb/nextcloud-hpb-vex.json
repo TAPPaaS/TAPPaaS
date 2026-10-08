@@ -1,0 +1,482 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "version": 1,
+  "metadata": {
+    "component": {
+      "type": "application",
+      "name": "nextcloud-hpb",
+      "description": "TAPPaaS module nextcloud-hpb: triage of its own critical/high CVEs (#788). nextcloud-spreed-signaling 2.1.1 (in-process NATS, :8080 behind Caddy, internal zones by default) and Janus 1.4.1 (videoroom plugin and loopback websockets transport only, RTP on UDP 20000-20999, reachable from dmz for coturn) run on the VM; no recording server runs here. Live check: ffmpeg-8.1.2-lib is referenced only by janus-gateway's janus-pp-rec and mjr2pcap binaries, the running janus process does not map any libav*, libssh, libtiff or gstreamer library, and no unit or timer calls those tools. libssh and libtiff reach the closure only through that ffmpeg; gstreamer core (no plugin packages at all) only through libnice's gstreamer element, which janus does not load."
+    }
+  },
+  "vulnerabilities": [
+    {
+      "id": "CVE-2026-64830",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "ffmpeg 8.1.2 is linked only by janus-pp-rec and mjr2pcap (offline recording post-processors); the running janus does not map it, recordplay is disabled and no unit or timer runs those tools.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg@8.1.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-64831",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "ffmpeg 8.1.2 is linked only by janus-pp-rec and mjr2pcap (offline recording post-processors); the running janus does not map it, recordplay is disabled and no unit or timer runs those tools.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg@8.1.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-64832",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "ffmpeg 8.1.2 is linked only by janus-pp-rec and mjr2pcap (offline recording post-processors); the running janus does not map it, recordplay is disabled and no unit or timer runs those tools.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg@8.1.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-64833",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "ffmpeg 8.1.2 is linked only by janus-pp-rec and mjr2pcap (offline recording post-processors); the running janus does not map it, recordplay is disabled and no unit or timer runs those tools.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg@8.1.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-64834",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "ffmpeg 8.1.2 is linked only by janus-pp-rec and mjr2pcap (offline recording post-processors); the running janus does not map it, recordplay is disabled and no unit or timer runs those tools.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg@8.1.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-64835",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "ffmpeg 8.1.2 is linked only by janus-pp-rec and mjr2pcap (offline recording post-processors); the running janus does not map it, recordplay is disabled and no unit or timer runs those tools.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg@8.1.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-65703",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "ffmpeg 8.1.2 is linked only by janus-pp-rec and mjr2pcap (offline recording post-processors); the running janus does not map it, recordplay is disabled and no unit or timer runs those tools.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg@8.1.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-65704",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "ffmpeg 8.1.2 is linked only by janus-pp-rec and mjr2pcap (offline recording post-processors); the running janus does not map it, recordplay is disabled and no unit or timer runs those tools.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg@8.1.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-65705",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "ffmpeg 8.1.2 is linked only by janus-pp-rec and mjr2pcap (offline recording post-processors); the running janus does not map it, recordplay is disabled and no unit or timer runs those tools.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg@8.1.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-65706",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "ffmpeg 8.1.2 is linked only by janus-pp-rec and mjr2pcap (offline recording post-processors); the running janus does not map it, recordplay is disabled and no unit or timer runs those tools.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg@8.1.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-66036",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "ffmpeg 8.1.2 is linked only by janus-pp-rec and mjr2pcap (offline recording post-processors); the running janus does not map it, recordplay is disabled and no unit or timer runs those tools.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg@8.1.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-66039",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "ffmpeg 8.1.2 is linked only by janus-pp-rec and mjr2pcap (offline recording post-processors); the running janus does not map it, recordplay is disabled and no unit or timer runs those tools.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg@8.1.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-66040",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "ffmpeg 8.1.2 is linked only by janus-pp-rec and mjr2pcap (offline recording post-processors); the running janus does not map it, recordplay is disabled and no unit or timer runs those tools.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg@8.1.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-66041",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "ffmpeg 8.1.2 is linked only by janus-pp-rec and mjr2pcap (offline recording post-processors); the running janus does not map it, recordplay is disabled and no unit or timer runs those tools.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg@8.1.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-70628",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "ffmpeg 8.1.2 is linked only by janus-pp-rec and mjr2pcap (offline recording post-processors); the running janus does not map it, recordplay is disabled and no unit or timer runs those tools.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg@8.1.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-70632",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "ffmpeg 8.1.2 is linked only by janus-pp-rec and mjr2pcap (offline recording post-processors); the running janus does not map it, recordplay is disabled and no unit or timer runs those tools.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg@8.1.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-18295",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "MRF parser is a GStreamer plugin; the VM has only gstreamer core (coreelements/coretracers), pulled in by libnice's unused gst element, and Janus does not load it.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/gstreamer@1.26.11"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-18296",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "MRF parser is a GStreamer plugin; the VM has only gstreamer core (coreelements/coretracers), pulled in by libnice's unused gst element, and Janus does not load it.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/gstreamer@1.26.11"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-18297",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "oggdemux is a GStreamer plugin; the VM has only gstreamer core (coreelements/coretracers), pulled in by libnice's unused gst element, and Janus does not load it.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/gstreamer@1.26.11"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-18298",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "pngdec is a GStreamer plugin; the VM has only gstreamer core (coreelements/coretracers), pulled in by libnice's unused gst element, and Janus does not load it.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/gstreamer@1.26.11"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-18299",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "rtpsbcdepay is a GStreamer plugin; the VM has only gstreamer core (coreelements/coretracers), pulled in by libnice's unused gst element, and Janus does not load it.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/gstreamer@1.26.11"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-1940",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "wavparse is a GStreamer plugin; the VM has only gstreamer core (coreelements/coretracers), pulled in by libnice's unused gst element, and Janus does not load it.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/gstreamer@1.26.11"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-2920",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "asfdemux is a GStreamer plugin; the VM has only gstreamer core (coreelements/coretracers), pulled in by libnice's unused gst element, and Janus does not load it.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/gstreamer@1.26.11"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-2921",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "riff palette (gst-riff) is a GStreamer plugin; the VM has only gstreamer core (coreelements/coretracers), pulled in by libnice's unused gst element, and Janus does not load it.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/gstreamer@1.26.11"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-2922",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "rmdemux (RealMedia) is a GStreamer plugin; the VM has only gstreamer core (coreelements/coretracers), pulled in by libnice's unused gst element, and Janus does not load it.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/gstreamer@1.26.11"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-2923",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "DVB subtitle overlay is a GStreamer plugin; the VM has only gstreamer core (coreelements/coretracers), pulled in by libnice's unused gst element, and Janus does not load it.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/gstreamer@1.26.11"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-3081",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "H.266 codecparser is a GStreamer plugin; the VM has only gstreamer core (coreelements/coretracers), pulled in by libnice's unused gst element, and Janus does not load it.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/gstreamer@1.26.11"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-3082",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "jpegparse is a GStreamer plugin; the VM has only gstreamer core (coreelements/coretracers), pulled in by libnice's unused gst element, and Janus does not load it.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/gstreamer@1.26.11"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-3083",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "rtpqdm2depay is a GStreamer plugin; the VM has only gstreamer core (coreelements/coretracers), pulled in by libnice's unused gst element, and Janus does not load it.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/gstreamer@1.26.11"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-3084",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "H.266 codecparser is a GStreamer plugin; the VM has only gstreamer core (coreelements/coretracers), pulled in by libnice's unused gst element, and Janus does not load it.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/gstreamer@1.26.11"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-3085",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "rtpqdm2depay is a GStreamer plugin; the VM has only gstreamer core (coreelements/coretracers), pulled in by libnice's unused gst element, and Janus does not load it.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/gstreamer@1.26.11"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-3086",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "H.266 codecparser is a GStreamer plugin; the VM has only gstreamer core (coreelements/coretracers), pulled in by libnice's unused gst element, and Janus does not load it.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/gstreamer@1.26.11"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-59850",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libssh is in the closure only via ffmpeg-8.1.2-lib, which only the unused janus-pp-rec/mjr2pcap tools link; no process on the VM loads it.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/libssh@0.12.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-59851",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Server-side GSSAPI key-exchange check; no libssh server runs (sshd is OpenSSH) and libssh is only a dep of the unused ffmpeg libs.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/libssh@0.12.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2023-52356",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libtiff is only linked by openjpeg/libwebp tools under ffmpeg-8.1.2-lib; neither janus nor the signaling server maps it.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/libtiff@4.7.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-4775",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libtiff is only linked by openjpeg/libwebp tools under ffmpeg-8.1.2-lib; neither janus nor the signaling server maps it.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/libtiff@4.7.2"
+        }
+      ]
+    }
+  ]
+}

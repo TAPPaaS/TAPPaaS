@@ -1,0 +1,538 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "version": 1,
+  "metadata": {
+    "component": {
+      "type": "application",
+      "name": "identity",
+      "description": "TAPPaaS module identity: triage of its own critical/high CVEs (#788). Authentik 2026.8.3 runs as two podman containers (server, worker) from ghcr.io/goauthentik/server with --network=host on the identity VM (mgmt zone), next to NixOS PostgreSQL; Redis is no longer used. Port 9000 is published to the internet through the firewall's Caddy (proxyAllowedZones: internet), so login, OIDC, SAML and API endpoints are internet-reachable; the worker's listeners are on loopback. Verified live on hrossen: both containers run 2026.8.3 as uid 1000 with no capabilities, processes are only dumb-init, gunicorn/Python and the Go 'authentik server'; the venv has PyJWT 2.13.0, anyio 4.14.1, urllib3 2.7.0, msgpack 1.2.1, setuptools 83.0.0, lxml 6.1.1 + xmlsec linked to the system libxml2 2.9.14. msgpack 1.1.2 and setuptools 70.3.0 in the scan are pip's vendored copies, not the app's. Authentik's lib/xml rejects DOCTYPEs with expat before lxml parses untrusted XML, and every jwt.decode pins a single server-chosen algorithm or passes key objects. TAPPaaS configures OIDC/proxy providers only, no SAML providers or OAuth/federation sources."
+    }
+  },
+  "vulnerabilities": [
+    {
+      "id": "CVE-2026-102266",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Empty-k oct key in a trusted JWKS; Authentik builds PyJWK keys only from the JWKS of an admin-configured OIDC source or JWT federation source, TAPPaaS configures none, and an IdP would have to publish a symmetric key with empty k.",
+        "justification": "requires_configuration"
+      },
+      "affects": [
+        {
+          "ref": "pkg:pypi/pyjwt@2.13.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-102272",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "HMAC/asymmetric key confusion via a BOM-prefixed public JWK passed as an HMAC secret; every Authentik jwt.decode call pins one server-chosen algorithm or passes a parsed key object, never public-key text where HS* is allowed.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:pypi/pyjwt@2.13.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-102273",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "HMAC/asymmetric key confusion via container JWK forms; every Authentik jwt.decode call pins one server-chosen algorithm or passes a parsed key object, never public-key text where HS* is allowed.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:pypi/pyjwt@2.13.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-63349",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "anyio.run_process/open_process extra_groups mishandling; neither Authentik nor its dependencies call anyio's process API with group arguments (only watchfiles' dev reloader references run_process).",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:pypi/anyio@4.14.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-75804",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "OpenSSL QUIC flow control; nothing in the container speaks QUIC (Python's ssl module has no QUIC, the Go server uses crypto/tls, xmlsec uses libcrypto only).",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libssl-dev@3.5.7-1~deb13u2"
+        },
+        {
+          "ref": "pkg:deb/debian/libssl3t64@3.5.7-1~deb13u2"
+        },
+        {
+          "ref": "pkg:deb/debian/openssl@3.5.7-1~deb13u2"
+        },
+        {
+          "ref": "pkg:deb/debian/openssl-provider-legacy@3.5.7-1~deb13u2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-86139",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "Integer overflow in xmlURIEscapeStr; lxml/xmlsec in Authentik link the image's libxml2 2.9.14 and SAML endpoints take unauthenticated XML from the internet via the proxy, but triggering the overflow needs input far beyond request size limits. Risk here: low. Action: No Debian fix yet; Wait for an upstream Authentik image (2026.8.x patch or next line) built on a fixed package; append that tag to the lines list in identity.nix."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libxml2@2.12.7%2Bdfsg%2Breally2.9.14-2.1%2Bdeb13u3"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-102268",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "is_pem_format misses some PEM forms in mixed HMAC/asymmetric setups; Authentik never passes PEM text to jwt.decode with HS* allowed (HS256 only with secrets, asymmetric only with key objects).",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:pypi/pyjwt@2.13.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-63374",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "TLS hostname check bypass for internationalized hostnames on anyio TLS clients; the only anyio TLS client path is async httpx in the enterprise Microsoft Entra provider, which TAPPaaS does not configure and which talks to ASCII Microsoft hosts; other outbound HTTP uses requests/urllib3.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:pypi/anyio@4.14.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-6653",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Use-after-free in DTD internal subset parsing; Authentik parses untrusted XML only via lib/xml.lxml_from_string, which rejects any DOCTYPE with expat before libxml2 sees it, or via defusedxml (expat).",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libxml2@2.12.7%2Bdfsg%2Breally2.9.14-2.1%2Bdeb13u3"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-102267",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyJWKClient redirect handling; Authentik 2026.8.3 never uses PyJWKClient (no reference outside tests), it fetches JWKS itself with requests.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:pypi/pyjwt@2.13.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-102271",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "DER public key used as HMAC secret in mixed-algorithm setups; Authentik never passes DER key bytes to jwt.decode with HS* allowed (header-chosen alg paths get cryptography key objects, which HMAC rejects).",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:pypi/pyjwt@2.13.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-76642",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Applies to SUID mount with /etc/fstab entries carrying the user option; the container's /etc/fstab is the unconfigured Debian stub with no entries, and Authentik runs as uid 1000 with no capabilities and never calls mount.",
+        "justification": "requires_configuration"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/bsdutils@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libblkid1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/liblastlog2-2@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libmount1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libsmartcols1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libuuid1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/login@4.16.0-2%2Breally2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/mount@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/util-linux@2.41.5-0%2Bdeb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-78408",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "nsenter --join-cgroup run as root; nsenter is never invoked in the container, which runs only dumb-init, gunicorn/Python and the Go server as uid 1000.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/bsdutils@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libblkid1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/liblastlog2-2@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libmount1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libsmartcols1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libuuid1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/login@4.16.0-2%2Breally2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/mount@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/util-linux@2.41.5-0%2Bdeb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-78409",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Applies to SUID mount with /etc/fstab entries carrying the user option; the container's /etc/fstab is the unconfigured Debian stub with no entries, and Authentik runs as uid 1000 with no capabilities and never calls mount.",
+        "justification": "requires_configuration"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/bsdutils@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libblkid1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/liblastlog2-2@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libmount1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libsmartcols1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libuuid1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/login@4.16.0-2%2Breally2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/mount@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/util-linux@2.41.5-0%2Bdeb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-78410",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Applies to SUID mount with /etc/fstab entries carrying the user option; the container's /etc/fstab is the unconfigured Debian stub with no entries, and Authentik runs as uid 1000 with no capabilities and never calls mount.",
+        "justification": "requires_configuration"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/bsdutils@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libblkid1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/liblastlog2-2@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libmount1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libsmartcols1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libuuid1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/login@4.16.0-2%2Breally2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/mount@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/util-linux@2.41.5-0%2Bdeb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-54369",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libacl pathname functions follow symlinks when a privileged process handles attacker-writable paths; the container runs a single unprivileged user and no privileged process calls acl_*_file (only coreutils link it).",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libacl1@2.3.2-2%2Bb1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2025-69720",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "ncurses terminfo string analysis (tic/infocmp); nothing in the container processes attacker-supplied terminfo, and the app processes do not link ncurses.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libncursesw6@6.5%2B20250216-2"
+        },
+        {
+          "ref": "pkg:deb/debian/libtinfo6@6.5%2B20250216-2"
+        },
+        {
+          "ref": "pkg:deb/debian/ncurses-base@6.5%2B20250216-2"
+        },
+        {
+          "ref": "pkg:deb/debian/ncurses-bin@6.5%2B20250216-2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-103111",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "pcre2 JIT with attacker-controlled patterns; libpcre2 is linked only by coreutils/findutils/dpkg tools, Authentik's Python uses re and the Go server uses regexp.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libpcre2-8-0@10.46-1~deb13u2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-84782",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "DTLS retransmission; nothing in the container speaks DTLS (Python's ssl module is TLS over TCP, the Go server uses crypto/tls, xmlsec uses libcrypto only).",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libssl-dev@3.5.7-1~deb13u2"
+        },
+        {
+          "ref": "pkg:deb/debian/libssl3t64@3.5.7-1~deb13u2"
+        },
+        {
+          "ref": "pkg:deb/debian/openssl@3.5.7-1~deb13u2"
+        },
+        {
+          "ref": "pkg:deb/debian/openssl-provider-legacy@3.5.7-1~deb13u2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-16742",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Flaw is in systemd-homed, which is not in libsystemd0/libudev1 and not in the image; only the client libraries are present.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libsystemd0@257.13-1~deb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libudev1@257.13-1~deb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-74860",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Double free in libxml2's Python bindings SAX callback; the bindings (python3-libxml2) are not installed, Authentik uses lxml.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libxml2@2.12.7%2Bdfsg%2Breally2.9.14-2.1%2Bdeb13u3"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-86138",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "Integer overflow in xmlDictAddQString; libxml2 parses SAML XML from the internet via lxml, but the overflow needs oversized names well beyond request size limits. Risk here: low. Action: No Debian fix yet; Wait for an upstream Authentik image (2026.8.x patch or next line) built on a fixed package; append that tag to the lines list in identity.nix."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libxml2@2.12.7%2Bdfsg%2Breally2.9.14-2.1%2Bdeb13u3"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-86140",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Stack overflow in xmlSnprintfElements, used by DTD validation errors; DOCTYPEs are rejected before parsing and Authentik never enables DTD validation.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libxml2@2.12.7%2Bdfsg%2Breally2.9.14-2.1%2Bdeb13u3"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-86142",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "Heap overflow in XPointer evaluation; xmlsec resolves #xpointer(...) Reference URIs when Authentik verifies a signed AuthnRequest, reachable unauthenticated but only for a SAML provider with a verification certificate (TAPPaaS configures none) and only with an oversized expression. Risk here: low. Action: No Debian fix yet; Wait for an upstream Authentik image (2026.8.x patch or next line) built on a fixed package; append that tag to the lines list in identity.nix."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libxml2@2.12.7%2Bdfsg%2Breally2.9.14-2.1%2Bdeb13u3"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-86143",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "Negative length reaches output write callbacks in xmlIO; Authentik serializes SAML/XML through lxml, but the overflow needs output sizes far beyond what requests produce. Risk here: low. Action: No Debian fix yet; Wait for an upstream Authentik image (2026.8.x patch or next line) built on a fixed package; append that tag to the lines list in identity.nix."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libxml2@2.12.7%2Bdfsg%2Breally2.9.14-2.1%2Bdeb13u3"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-86144",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "XInclude does not propagate parse flags; Authentik never runs XInclude processing (no xinclude call in the code base) and xmlsec signature verification does not use it.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libxml2@2.12.7%2Bdfsg%2Breally2.9.14-2.1%2Bdeb13u3"
+        }
+      ]
+    },
+    {
+      "id": "GHSA-6v7p-g79w-8964",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "This msgpack 1.1.2 is pip's vendored copy under /usr/local/lib/python3.14/site-packages/pip/_vendor, used only by pip's cache, and pip never runs in the container; Authentik's own venv has msgpack 1.2.1 (fixed).",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:pypi/msgpack@1.1.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-9538",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Archive::Tar is not part of perl-base and is not installed in the image (perl -MArchive::Tar fails).",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/perl-base@5.40.1-6%2Bdeb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2025-47273",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "setuptools 70.3.0 is only pip's vendored pkg_resources (pip/_vendor/vendor.txt); the vulnerable PackageIndex download code is not shipped there, and Authentik's venv has setuptools 83.0.0.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:pypi/setuptools@70.3.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-97687",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "urllib3 proxy vs. target TLS settings mixing; only applies when traffic goes through a ProxyManager, and the Authentik containers have no HTTP(S)_PROXY set and Authentik configures no proxy.",
+        "justification": "requires_configuration"
+      },
+      "affects": [
+        {
+          "ref": "pkg:pypi/urllib3@2.7.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-97689",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "Unbounded memory in chunked response parsing; Authentik fetches over requests/urllib3 from admin-configured URLs (OIDC source JWKS/userinfo, webhooks) and its update check, so a hostile or compromised remote server could exhaust worker memory. Risk here: low. Action: Wait for an upstream Authentik image with urllib3 >= 2.8.0; append that tag to the lines list in identity.nix."
+      },
+      "affects": [
+        {
+          "ref": "pkg:pypi/urllib3@2.7.0"
+        }
+      ]
+    }
+  ]
+}

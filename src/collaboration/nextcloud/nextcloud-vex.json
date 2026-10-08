@@ -1,0 +1,161 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "version": 1,
+  "metadata": {
+    "component": {
+      "type": "application",
+      "name": "nextcloud",
+      "description": "TAPPaaS module nextcloud: triage of its own critical/high CVEs (#788). Nextcloud 35 on NixOS (php-fpm behind a local nginx on :80, plain HTTP), published to the internet through the firewall's Caddy as cloud.hrossen.dk; also whiteboard on :3002 and PostgreSQL on localhost. Verified live on hrossen: redis-nextcloud listens only on /run/redis-nextcloud/redis.sock (port 0), no containers run, and imagemagick/libraw/libtiff are in the closure only via php-imagick, libxslt only via nginx (no xslt directive in nginx.conf). enabledPreviewProviders is the NixOS default list (PNG, JPEG, GIF, BMP, XBitmap, Krita, WebP, MarkDown, TXT, OpenDocument), none of which uses Imagick; Imagick is used only for generated letter avatars and admin theming images. All listed libraw/libtiff CVEs are fixed in the shipped upstream versions (LibRaw 0.22.1, libtiff 4.7.2), and the ImageMagick ones are 2014/2017 bugs long fixed."
+    }
+  },
+  "vulnerabilities": [
+    {
+      "id": "CVE-2014-9826",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "SUN coder error handling fixed in ImageMagick 6.8.9 (2014); 7.1.2-32 contains the fix, the match comes from a version-less CVE record.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/imagemagick@7.1.2-31"
+        },
+        {
+          "ref": "pkg:nix/imagemagick@7.1.2-32"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-20884",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "deflate_dng_load_raw integer overflow (TALOS-2026-2364) is fixed in upstream LibRaw 0.22.1 (commit aa4458e, Debian marks 0.22.1-1 fixed); the shipped libraw is 0.22.1.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/libraw@0.22.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-24450",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "uncompressed_fp_dng_load_raw overflow (TALOS-2026-2363) is fixed in upstream LibRaw 0.22.1 (commit c911c9b); the shipped libraw is 0.22.1.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/libraw@0.22.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2022-0543",
+      "analysis": {
+        "state": "false_positive",
+        "detail": "Debian/Ubuntu packaging bug (Lua loaded as a dynamic library, exposing package/loadlib); nixpkgs builds redis with its bundled Lua and this Nextcloud instance listens only on a unix socket."
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/redis"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2022-3734",
+      "analysis": {
+        "state": "false_positive",
+        "detail": "Concerns an unofficial Windows port (dbghelp.dll search path); upstream Redis on Linux is not affected."
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/redis"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2017-5506",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Double free in profile.c fixed in 6.9.7-4 / 7.0.4-4; 7.1.2-32 contains the fix.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/imagemagick@7.1.2-31"
+        },
+        {
+          "ref": "pkg:nix/imagemagick@7.1.2-32"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-20911",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "HuffTable::initval overflow (TALOS-2026-2330) is fixed in upstream LibRaw 0.22.1 (commit 5357bb5); the shipped libraw is 0.22.1.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/libraw@0.22.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-21413",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "lossless_jpeg_load_raw overflow (TALOS-2026-2331) is fixed in upstream LibRaw 0.22.1 (commit 75ed2c1); the shipped libraw is 0.22.1.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/libraw@0.22.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2023-52356",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "TIFFReadRGBATileExt heap overflow fixed by commit 5155851 (MR 546), first released in libtiff 4.7.0; the shipped libtiff is 4.7.2.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/libtiff@4.7.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-4775",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "putcontig8bitYCbCr44tile overflow fixed by commit 782a11d6, which is in the v4.7.2 tag (Debian marks 4.7.2-1 fixed); the shipped libtiff is 4.7.2.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/libtiff@4.7.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2025-7425",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libxslt is only linked into nginx's built-in xslt filter, and the nextcloud nginx.conf has no xslt_stylesheet directive, so no XSLT is ever run; the libxml2 it links (2.15.4) also carries the upstream mitigation (>= 2.14.5).",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/libxslt@1.1.45"
+        }
+      ]
+    }
+  ]
+}

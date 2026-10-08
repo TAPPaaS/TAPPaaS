@@ -1,0 +1,521 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "version": 1,
+  "metadata": {
+    "component": {
+      "type": "application",
+      "name": "jellyfin",
+      "description": "TAPPaaS module jellyfin: triage of its own critical/high CVEs (#788). Jellyfin 10.11.11 runs on its NixOS VM (port 8096), published through the firewall's Caddy to home, netbird and internet zones; the library is an NFS share mounted at /media. Live check: the server launches nixpkgs jellyfin-ffmpeg 7.1.4-3 (--ffmpeg flag), not the ffmpeg 8.1.2 the scan reports; 8.1.2 is in the closure only via opencv (frei0r) and chromaprint, and the only 8.1.2 library ffmpeg loads is libavutil.so.60 through chromaprint. Library files are attacker-relevant input to jellyfin-ffmpeg, so decoder/demuxer CVEs in the 7.1 range are kept affected against that fork. Hardware acceleration is none and the VM has only a QEMU VGA (no render node, no NVIDIA). GStreamer, libtiff, libxslt and cups come in via gtk4/zenity (SDL), opencv and pipewire chains that neither the jellyfin process nor ffmpeg maps; gst-plugins-good/-ugly are absent. Filter names floodfill/swaprect/hqdn3d/quirc/frei0r and the spdif format do not occur in Jellyfin's encoding assemblies."
+    }
+  },
+  "vulnerabilities": [
+    {
+      "id": "CVE-2026-31852",
+      "analysis": {
+        "state": "false_positive",
+        "detail": "GitHub Actions workflow in the jellyfin-ios repository; not part of the Jellyfin server package."
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/jellyfin"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2018-6553",
+      "analysis": {
+        "state": "false_positive",
+        "detail": "Ubuntu's CUPS AppArmor profile; NixOS ships no such profile and only cups-lib is present (via gtk), no cupsd."
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/cups"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-64830",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "VobSub .idx/.sub heap overflow; Jellyfin picks up external .idx/.sub next to videos and hands them to its ffmpeg (jellyfin-ffmpeg 7.1.4-3, inside the 2.1+ range). Risk here: medium: needs a crafted file in the library (NFS share writers, media fetched from untrusted sources); Jellyfin is internet-reachable but the parse runs in a transient ffmpeg as the hardened jellyfin user.. Action: Jellyfin runs nixpkgs jellyfin-ffmpeg 7.1.4-3 (not this ffmpeg 8.1.2, whose libavcodec/libavformat nothing on the VM loads), which the scan does not list; a fix needs a jellyfin-ffmpeg release carrying the upstream patch, so check the nixpkgs jellyfin-ffmpeg bump, not only ffmpeg 8.1.3."
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg@8.1.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-64831",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Vulkan HEVC hardware decoder, 8.0+ only; Jellyfin's ffmpeg is the 7.1-based jellyfin-ffmpeg, hardware acceleration is off and the VM has no GPU (only QEMU VGA), and the 8.1.2 libavcodec is never loaded.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg@8.1.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-64832",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "NVDEC double free needs an NVIDIA GPU with NVDEC hwaccel; the VM has no NVIDIA device and Jellyfin's HardwareAccelerationType is none.",
+        "justification": "requires_environment"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg@8.1.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-64833",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "S/PDIF muxer; Jellyfin never selects the spdif output format (absent from its encoding code), and the 8.1.2 libavformat is never loaded.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg@8.1.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-64834",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "RTP/ASF depacketizer loop; reachable only through a network stream URL (library .strm or a Live TV source), not local media files. Risk here: low: infinite-loop DoS of one ffmpeg process; needs a .strm in the library pointing at an attacker RTSP/RTP source, no Live TV tuner is configured.. Action: Jellyfin runs nixpkgs jellyfin-ffmpeg 7.1.4-3 (not this ffmpeg 8.1.2, whose libavcodec/libavformat nothing on the VM loads), which the scan does not list; a fix needs a jellyfin-ffmpeg release carrying the upstream patch, so check the nixpkgs jellyfin-ffmpeg bump, not only ffmpeg 8.1.3."
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg@8.1.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-64835",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "ADX decoder out-of-bounds read/write; ffprobe/ffmpeg probe every library file, so a crafted .adx (or ADX stream in a container) reaches it in jellyfin-ffmpeg 7.1.4-3. Risk here: medium: needs a crafted file in the library (NFS share writers, media fetched from untrusted sources); Jellyfin is internet-reachable but the parse runs in a transient ffmpeg as the hardened jellyfin user.. Action: Jellyfin runs nixpkgs jellyfin-ffmpeg 7.1.4-3 (not this ffmpeg 8.1.2, whose libavcodec/libavformat nothing on the VM loads), which the scan does not list; a fix needs a jellyfin-ffmpeg release carrying the upstream patch, so check the nixpkgs jellyfin-ffmpeg bump, not only ffmpeg 8.1.3."
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg@8.1.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-65703",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "TDSC decoder heap write via crafted AVI; any AVI in the library is decoded for thumbnails, trickplay or transcode by jellyfin-ffmpeg 7.1.4-3. Risk here: medium: needs a crafted file in the library (NFS share writers, media fetched from untrusted sources); Jellyfin is internet-reachable but the parse runs in a transient ffmpeg as the hardened jellyfin user.. Action: Jellyfin runs nixpkgs jellyfin-ffmpeg 7.1.4-3 (not this ffmpeg 8.1.2, whose libavcodec/libavformat nothing on the VM loads), which the scan does not list; a fix needs a jellyfin-ffmpeg release carrying the upstream patch, so check the nixpkgs jellyfin-ffmpeg bump, not only ffmpeg 8.1.3."
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg@8.1.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-65704",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "TY demuxer/Shorten heap write; Jellyfin itself runs ffmpeg with -f concat -safe 0 (DVD/BD folders) and also probes .ty files directly. Risk here: medium: needs a crafted file in the library (NFS share writers, media fetched from untrusted sources); Jellyfin is internet-reachable but the parse runs in a transient ffmpeg as the hardened jellyfin user.. Action: Jellyfin runs nixpkgs jellyfin-ffmpeg 7.1.4-3 (not this ffmpeg 8.1.2, whose libavcodec/libavformat nothing on the VM loads), which the scan does not list; a fix needs a jellyfin-ffmpeg release carrying the upstream patch, so check the nixpkgs jellyfin-ffmpeg bump, not only ffmpeg 8.1.3."
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg@8.1.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-65705",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vf_floodfill filter; Jellyfin never builds a filtergraph containing it (filter name absent from its encoding code) and users cannot inject filters.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg@8.1.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-65706",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vf_swaprect filter; Jellyfin never builds a filtergraph containing it (filter name absent from its encoding code) and users cannot inject filters.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg@8.1.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-66036",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vf_hqdn3d with -reinit_filter 0; Jellyfin never uses the hqdn3d filter (absent from its encoding code) and users cannot inject filters.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg@8.1.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-66039",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "MACE6 decoder heap corruption via crafted CAF; a .caf in the music library is probed and decoded by jellyfin-ffmpeg 7.1.4-3. Risk here: medium: needs a crafted file in the library (NFS share writers, media fetched from untrusted sources); Jellyfin is internet-reachable but the parse runs in a transient ffmpeg as the hardened jellyfin user.. Action: Jellyfin runs nixpkgs jellyfin-ffmpeg 7.1.4-3 (not this ffmpeg 8.1.2, whose libavcodec/libavformat nothing on the VM loads), which the scan does not list; a fix needs a jellyfin-ffmpeg release carrying the upstream patch, so check the nixpkgs jellyfin-ffmpeg bump, not only ffmpeg 8.1.3."
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg@8.1.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-66040",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "PNG/APNG encoder heap write from a crafted eXIf chunk; Jellyfin extracts embedded cover art with ffmpeg and may write it as PNG. Risk here: low: the eXIf-writing PNG encoder path looks like 8.x code the 7.1-based jellyfin-ffmpeg may lack (unverified); reachable only when Jellyfin re-encodes an embedded PNG cover.. Action: Jellyfin runs nixpkgs jellyfin-ffmpeg 7.1.4-3 (not this ffmpeg 8.1.2, whose libavcodec/libavformat nothing on the VM loads), which the scan does not list; a fix needs a jellyfin-ffmpeg release carrying the upstream patch, so check the nixpkgs jellyfin-ffmpeg bump, not only ffmpeg 8.1.3. Confirm whether 7.1.4-3 contains the eXIf writer; if not, this can become not_affected/code_not_present."
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg@8.1.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-66041",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vf_quirc (QR) filter; Jellyfin never builds a filtergraph containing it (absent from its encoding code) and users cannot inject filters.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg@8.1.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-70628",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "DVB subtitle parser heap overflow; DVB subs are common in TS recordings and are parsed by jellyfin-ffmpeg 7.1.4-3 during probe, extraction and burn-in. Risk here: medium: needs a crafted file in the library (NFS share writers, media fetched from untrusted sources); Jellyfin is internet-reachable but the parse runs in a transient ffmpeg as the hardened jellyfin user.. Action: Jellyfin runs nixpkgs jellyfin-ffmpeg 7.1.4-3 (not this ffmpeg 8.1.2, whose libavcodec/libavformat nothing on the VM loads), which the scan does not list; a fix needs a jellyfin-ffmpeg release carrying the upstream patch, so check the nixpkgs jellyfin-ffmpeg bump, not only ffmpeg 8.1.3."
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg@8.1.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-70632",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "CineForm HD decoder heap write; a crafted CFHD .mov/.avi in the library is decoded by jellyfin-ffmpeg 7.1.4-3. Risk here: medium: needs a crafted file in the library (NFS share writers, media fetched from untrusted sources); Jellyfin is internet-reachable but the parse runs in a transient ffmpeg as the hardened jellyfin user.. Action: Jellyfin runs nixpkgs jellyfin-ffmpeg 7.1.4-3 (not this ffmpeg 8.1.2, whose libavcodec/libavformat nothing on the VM loads), which the scan does not list; a fix needs a jellyfin-ffmpeg release carrying the upstream patch, so check the nixpkgs jellyfin-ffmpeg bump, not only ffmpeg 8.1.3."
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg@8.1.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-18295",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "MRF parser; GStreamer is only a transitive dep of opencv (frei0r), gtk4 (zenity via SDL) and pipewire, none of which Jellyfin or its ffmpeg load; neither process maps libgst*.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/gstreamer@1.26.11"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-18296",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "MRF parser; GStreamer is only a transitive dep of opencv (frei0r), gtk4 (zenity via SDL) and pipewire, none of which Jellyfin or its ffmpeg load; neither process maps libgst*.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/gstreamer@1.26.11"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-18297",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "oggdemux; GStreamer is only a transitive dep of opencv (frei0r), gtk4 (zenity via SDL) and pipewire, none of which Jellyfin or its ffmpeg load; neither process maps libgst*.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/gstreamer@1.26.11"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-18298",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "pngdec lives in gst-plugins-good, which is not on the VM (only gstreamer core, -base and -bad are, as deps of opencv/gtk4/pipewire); nothing runs a GStreamer pipeline.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/gstreamer@1.26.11"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-18299",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "rtpsbcdepay lives in gst-plugins-good, which is not on the VM (only gstreamer core, -base and -bad are, as deps of opencv/gtk4/pipewire); nothing runs a GStreamer pipeline.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/gstreamer@1.26.11"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-1940",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "wavparse lives in gst-plugins-good, which is not on the VM (only gstreamer core, -base and -bad are, as deps of opencv/gtk4/pipewire); nothing runs a GStreamer pipeline.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/gstreamer@1.26.11"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-2920",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "asfdemux lives in gst-plugins-ugly, which is not on the VM (only gstreamer core, -base and -bad are, as deps of opencv/gtk4/pipewire); nothing runs a GStreamer pipeline.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/gstreamer@1.26.11"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-2921",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "riff palette (gst-riff); GStreamer is only a transitive dep of opencv (frei0r), gtk4 (zenity via SDL) and pipewire, none of which Jellyfin or its ffmpeg load; neither process maps libgst*.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/gstreamer@1.26.11"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-2922",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "rmdemux (RealMedia) lives in gst-plugins-ugly, which is not on the VM (only gstreamer core, -base and -bad are, as deps of opencv/gtk4/pipewire); nothing runs a GStreamer pipeline.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/gstreamer@1.26.11"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-2923",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "DVB subtitle overlay; GStreamer is only a transitive dep of opencv (frei0r), gtk4 (zenity via SDL) and pipewire, none of which Jellyfin or its ffmpeg load; neither process maps libgst*.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/gstreamer@1.26.11"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-3081",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "H.266 codecparser; GStreamer is only a transitive dep of opencv (frei0r), gtk4 (zenity via SDL) and pipewire, none of which Jellyfin or its ffmpeg load; neither process maps libgst*.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/gstreamer@1.26.11"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-3082",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "jpegparse; GStreamer is only a transitive dep of opencv (frei0r), gtk4 (zenity via SDL) and pipewire, none of which Jellyfin or its ffmpeg load; neither process maps libgst*.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/gstreamer@1.26.11"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-3083",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "rtpqdm2depay lives in gst-plugins-good, which is not on the VM (only gstreamer core, -base and -bad are, as deps of opencv/gtk4/pipewire); nothing runs a GStreamer pipeline.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/gstreamer@1.26.11"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-3084",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "H.266 codecparser; GStreamer is only a transitive dep of opencv (frei0r), gtk4 (zenity via SDL) and pipewire, none of which Jellyfin or its ffmpeg load; neither process maps libgst*.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/gstreamer@1.26.11"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-3085",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "rtpqdm2depay lives in gst-plugins-good, which is not on the VM (only gstreamer core, -base and -bad are, as deps of opencv/gtk4/pipewire); nothing runs a GStreamer pipeline.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/gstreamer@1.26.11"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-3086",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "H.266 codecparser; GStreamer is only a transitive dep of opencv (frei0r), gtk4 (zenity via SDL) and pipewire, none of which Jellyfin or its ffmpeg load; neither process maps libgst*.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/gstreamer@1.26.11"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-59850",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "Use-after-free on channel data after close; libssh is loaded by jellyfin-ffmpeg as its SFTP client and is reachable only via an sftp:// stream URL. Risk here: low: needs a library .strm with an sftp:// URL to an attacker SSH server; outcome is a crash or UAF in one ffmpeg process.. Action: Fixed in a newer libssh; next nixpkgs pin that carries it."
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/libssh@0.12.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-59851",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Server-side GSSAPI key-exchange check; libssh is used only as libavformat's SFTP client, and the VM's sshd is OpenSSH.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/libssh@0.12.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2023-52356",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "TIFFReadRGBATile crash; libtiff is only linked by openjpeg/libwebp command-line tools, gdk-pixbuf/gtk4 and opencv, none of which Jellyfin or its ffmpeg load (ffmpeg decodes TIFF natively).",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/libtiff@4.7.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-4775",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "putcontig8bitYCbCr44tile overflow; libtiff is only linked by openjpeg/libwebp tools, gdk-pixbuf/gtk4 and opencv, none of which Jellyfin or its ffmpeg load.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/libtiff@4.7.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2025-7425",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libxslt is only in the closure via gst-plugins-bad -> lrdf -> raptor2 (gtk4/zenity chain); nothing running on the VM loads it.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/libxslt@1.1.45"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2011-2411",
+      "analysis": {
+        "state": "false_positive",
+        "detail": "Samba on HP NonStop servers (H06/J06); not this Linux samba build, which is present only as libsmbclient for ffmpeg."
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/samba"
+        }
+      ]
+    }
+  ]
+}

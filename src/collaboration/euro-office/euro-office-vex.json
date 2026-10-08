@@ -1,0 +1,30 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "version": 1,
+  "metadata": {
+    "component": {
+      "type": "application",
+      "name": "euro-office",
+      "description": "TAPPaaS module euro-office: triage of its own critical/high CVEs (#788). Euro-Office DocumentServer v9.3.3 runs as one podman container (Ubuntu 24.04 based) on the euro-office VM, publishing only container nginx on :80; the firewall's Caddy terminates TLS and proxies the editor endpoint to Nextcloud users. Inside, supervisord runs nginx, the pkg-built Node services (docservice, converter, adminpanel), PostgreSQL 16, Redis on 127.0.0.1 and RabbitMQ, all internal to the container. Verified live on hrossen: only :80 and :22 listen on the VM; the Node binaries do not link the system libssl, nginx/postgres/redis link libssl3t64 3.0.13-0ubuntu3.12 but only for TCP TLS, and nginx serves plain HTTP."
+    }
+  },
+  "vulnerabilities": [
+    {
+      "id": "CVE-2026-84782",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "DTLS retransmission; nothing in the container speaks DTLS: nginx (plain HTTP on :80, TLS ends at Caddy), postgres and redis use libssl for TLS over TCP only and locally, RabbitMQ's DTLS would be Erlang's own, and the Node services carry their own statically linked OpenSSL.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/ubuntu/libssl3t64@3.0.13-0ubuntu3.12"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/openssl@3.0.13-0ubuntu3.12"
+        }
+      ]
+    }
+  ]
+}

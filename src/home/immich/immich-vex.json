@@ -1,0 +1,232 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "version": 1,
+  "metadata": {
+    "component": {
+      "type": "application",
+      "name": "immich",
+      "description": "TAPPaaS module immich: triage of its own critical/high CVEs (#788). Immich 3.2.4 (from nixos-unstable) on NixOS: immich-server on :2283 plain HTTP, published through the firewall's Caddy to home, netbird and internet zones, ML service on 127.0.0.1:3003, PostgreSQL local, redis on a unix socket only. VM firewall opens only 22 and 2283 (a microservices worker also binds 0.0.0.0:33293 but the firewall blocks it). Verified live on hrossen: the immich Node processes load libraw 0.22.1, libtiff 4.7.2 and ImageMagick via vips (sharp) for thumbnails, so any user upload reaches them; libssh comes only via ffmpeg's sftp support; openssl 3.5.8 is loaded by Node and the Python ML worker as TLS clients only. All listed libraw/libtiff CVEs are fixed in the shipped upstream versions, the ImageMagick ones are 2014/2017 bugs long fixed, and no OpenSSL QUIC/DTLS/TLS-server path exists on the VM."
+    }
+  },
+  "vulnerabilities": [
+    {
+      "id": "CVE-2014-9826",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "SUN coder error handling fixed in ImageMagick 6.8.9 (2014); 7.1.2-31 contains the fix, the match comes from a version-less CVE record.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/imagemagick@7.1.2-31"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-20884",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "deflate_dng_load_raw integer overflow (TALOS-2026-2364) is fixed in upstream LibRaw 0.22.1 (commit aa4458e, Debian marks 0.22.1-1 fixed); the shipped libraw is 0.22.1.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/libraw@0.22.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-24450",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "uncompressed_fp_dng_load_raw overflow (TALOS-2026-2363) is fixed in upstream LibRaw 0.22.1 (commit c911c9b); the shipped libraw is 0.22.1.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/libraw@0.22.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2022-0543",
+      "analysis": {
+        "state": "false_positive",
+        "detail": "Debian/Ubuntu packaging bug (Lua loaded as a dynamic library, exposing package/loadlib); nixpkgs builds redis with its bundled Lua and this Immich instance listens only on a unix socket."
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/redis"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2022-3734",
+      "analysis": {
+        "state": "false_positive",
+        "detail": "Concerns an unofficial Windows port (dbghelp.dll search path); upstream Redis on Linux is not affected."
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/redis"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2017-5506",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Double free in profile.c fixed in 6.9.7-4 / 7.0.4-4; 7.1.2-31 contains the fix.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/imagemagick@7.1.2-31"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-20911",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "HuffTable::initval overflow (TALOS-2026-2330) is fixed in upstream LibRaw 0.22.1 (commit 5357bb5); the shipped libraw is 0.22.1.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/libraw@0.22.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-21413",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "lossless_jpeg_load_raw overflow (TALOS-2026-2331) is fixed in upstream LibRaw 0.22.1 (commit 75ed2c1); the shipped libraw is 0.22.1.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/libraw@0.22.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-59850",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libssh is linked only into ffmpeg (jellyfin-ffmpeg, opencv's ffmpeg) for the sftp:// protocol; Immich hands ffmpeg local file paths only and never connects to an SSH server, so the channel callback path never runs.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/libssh@0.12.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-59851",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Server-side GSSAPI key exchange flaw; libssh is used only as an ffmpeg sftp client here, and the VM's SSH server is OpenSSH.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/libssh@0.12.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2023-52356",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "TIFFReadRGBATileExt heap overflow fixed by commit 5155851 (MR 546), first released in libtiff 4.7.0; the shipped libtiff is 4.7.2.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/libtiff@4.7.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-4775",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "putcontig8bitYCbCr44tile overflow fixed by commit 782a11d6, which is in the v4.7.2 tag (Debian marks 4.7.2-1 fixed); the shipped libtiff is 4.7.2.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/libtiff@4.7.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-54873",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "QUIC stack packet-buffer retention; nothing on the immich VM uses OpenSSL's QUIC stack (immich-server and the ML service speak plain HTTP, outbound HTTPS from Node is TCP TLS).",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/openssl@3.5.8"
+        },
+        {
+          "ref": "pkg:nix/openssl@3.6.4"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-72897",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Needs a TLS server that swaps SSL_CTX mid-handshake with differing provider sigalgs; no process on the immich VM serves TLS with this OpenSSL (TLS ends at the firewall's Caddy, :2283 is plain HTTP).",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/openssl@3.5.8"
+        },
+        {
+          "ref": "pkg:nix/openssl@3.6.4"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-84782",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "DTLS retransmission bug; nothing on the immich VM speaks DTLS.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/openssl@3.5.8"
+        },
+        {
+          "ref": "pkg:nix/openssl@3.6.4"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-84784",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "QUIC NEW_CONNECTION_ID flood; nothing on the immich VM uses OpenSSL's QUIC stack.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/openssl@3.5.8"
+        },
+        {
+          "ref": "pkg:nix/openssl@3.6.4"
+        }
+      ]
+    }
+  ]
+}
