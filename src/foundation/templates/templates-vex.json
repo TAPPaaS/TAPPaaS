@@ -276,6 +276,9 @@
       "affects": [
         {
           "ref": "pkg:nix/perl@5.42.3"
+        },
+        {
+          "ref": "pkg:nix/perl@5.42.0"
         }
       ]
     },
@@ -289,6 +292,9 @@
       "affects": [
         {
           "ref": "pkg:nix/perl@5.42.3"
+        },
+        {
+          "ref": "pkg:nix/perl@5.42.0"
         }
       ]
     },
@@ -302,6 +308,9 @@
       "affects": [
         {
           "ref": "pkg:nix/perl@5.42.3"
+        },
+        {
+          "ref": "pkg:nix/perl@5.42.0"
         }
       ]
     },
