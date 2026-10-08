@@ -111,7 +111,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | 3 | G3.3 App module fixes | L | L | 5 | 4 | 10 |
 | 3 | G3.4 AI stack maturity | M | M | 1 | – | 6 |
 | 3 | G3.5 Installer UX | L | L | – | 1 | 3 |
-| 2 | G2.1 Firewall exposure & rule order | M | H | 3 | 4 | 13 |
+| 2 | G2.1 Firewall exposure & rule order | M | H | 3 | 4 | 12 |
 | 2 | G2.2 DNS resolver robustness | L | M | 4 | – | 5 |
 | 1 | ✅ G1.1 Vocabulary & classification (ADR-022 family) | H | H | 11 | 3 | – |
 | 1 | G1.2 Backup placement model + managed machines (ADR-012, ADR-026) | M | H | 20 | 7 | 4 |
@@ -201,6 +201,7 @@ items that belong to a group — FW #40, #83, #157, #158, #162 — are rows in t
 | #757 | `debianhost` over PXE (ADR-026 D8a) | `adopt` covers every known site |
 | #771 | NFS over TLS for `pvehost:nfs` | ADR-029 v0.7: OpenZFS `sharenfs` cannot carry `xprtsec` |
 | #787 | logging: TLS for syslog ingest and Loki's ports | From #165 §3 (2026-10-06). Waits for a TAPPaaS CA; traffic stays inside mgmt / the site network meanwhile |
+| #310 | Firewall API certificate verified, not skipped (`--no-ssl-verify`) | **Follows #787:** the same TAPPaaS CA issues the firewall a certificate for `firewall.mgmt.internal`, and the controllers verify it. Rescoped 2026-10-08 out of G2.1: blocking on a pinned self-signed certificate would stop the sweep at every rebuild or renewal for a narrow risk (a foothold on mgmt). Meanwhile a change is detected — `check-firewall-cert`, hourly, mails FirewallCertChanged (`aec2467f`) |
 | ✅ #11 | NextCloud | **Closed 2026-10-06:** a TAPPaaS module, `src/collaboration/nextcloud` |
 | ✅ #12 | HomeAssistant | **Closed 2026-10-06:** a TAPPaaS module, `src/home/hass` |
 | ✅ #52 | Jellyfin | **Closed 2026-10-06:** in TAPPaaS at status Testing, media on a `storage:nfs` share, installed on hrossen |
@@ -392,9 +393,9 @@ A first install that is easier to get through: resumable (#377), showing its pro
 
 Changes to live firewall and DNS behaviour on every installation. Restrictive defaults get harder to introduce the longer users rely on permissive ones, so they come early; every change shows its dry-run diff (#645) before `--apply`.
 
-### G2.1 Firewall exposure & rule order — Ease M · Risk H · released: 3 · done for 2.2: 4 · open: 13
+### G2.1 Firewall exposure & rule order — Ease M · Risk H · released: 3 · done for 2.2: 4 · open: 12
 
-Tighter firewall defaults that keep what modules need. Built: the gateway, GUI/SSH and anti-spoofing rules. Next: pinholes shadowed by private-range blocks (#386), lasting NetBird rules (#385, #222), a pinned OPNsense CA (#310), and the rules manager's zones, aliases and overlaps.
+Tighter firewall defaults that keep what modules need. Built: the gateway, GUI/SSH and anti-spoofing rules. Next: pinholes shadowed by private-range blocks (#386), lasting NetBird rules (#385, #222), and the rules manager's zones, aliases and overlaps.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
@@ -404,7 +405,6 @@ Tighter firewall defaults that keep what modules need. Built: the gateway, GUI/S
 | #385 | Persist the NetBird OPT1 pass rule | L | M | Land with #222 |
 | #222 | NetBird → srv floating rule is fragile | L | M | |
 | ✅ #159 | Anti-spoofing + drop fragments, always on | L | M | **Closed 2026-10-02:** a spoofed-source block heads every rule-managed zone (pf already reassembles fragments). Fixed on the way: inverted rules were never created (`source_invert`) |
-| #310 | Pin the OPNsense CA instead of `--no-ssl-verify` | M | M | A rotated cert must fail loudly, not silently stop the sweep |
 | ✅ #375 | `mgmt.access-to: "all"` sentinel | L | L | **Closed 2026-10-02:** `mgmt.access-to` is `["internet", "all"]`, expanded where the zones file is read; migration 0012. Identical rules on hrossen before and after; Wave 2 entry gate met |
 | #576 | Zone `serves` as string or array | M | L | Backward compatible |
 | #257 | mDNS in zones.json | M | M | |
