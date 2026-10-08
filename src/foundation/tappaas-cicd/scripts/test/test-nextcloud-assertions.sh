@@ -12,8 +12,8 @@
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SRC="$(cd "${HERE}/../../../.." && pwd)/apps/nextcloud/test.sh"
-HPB="$(cd "${HERE}/../../../.." && pwd)/apps/nextcloud-hpb/test.sh"
+SRC="$(cd "${HERE}/../../../.." && pwd)/collaboration/nextcloud/test.sh"
+HPB="$(cd "${HERE}/../../../.." && pwd)/collaboration/nextcloud-hpb/test.sh"
 
 PASS=0; FAIL=0
 ck()   { if [[ "$2" == "$3" ]]; then echo "  ok: $1"; PASS=$((PASS+1)); else echo "  FAIL: $1 (expected '$2', got '$3')"; FAIL=$((FAIL+1)); fi; }
