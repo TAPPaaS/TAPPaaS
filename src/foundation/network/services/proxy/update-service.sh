@@ -302,6 +302,12 @@ run_caddy add-handler "${PROXY_DOMAIN}" \
     --no-ssl-verify || die "Failed to reconcile Caddy handler"
 CHANGES_MADE=true
 
+# Retire the route of a previous domain (#474), as install-service does: since
+# #495 a domain change reaches only this script (#809). No-op when unchanged.
+debug "  Pruning stale reverse-proxy routes for ${MODULE}..."
+proxy_prune_domains --description "${DESCRIPTION}" --keep "${PROXY_DOMAIN}" \
+    --no-ssl-verify || warn "Could not prune stale Caddy routes for ${MODULE} (non-fatal)"
+
 # ── Additional routes (proxyRoutes, #597) ──────────────────────────
 # Reconcile the module's extra hostnames the same way as the primary route, and
 # sweep any route no longer declared. See proxy_add_routes in access-list.sh.

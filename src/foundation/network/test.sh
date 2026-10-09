@@ -786,18 +786,29 @@ section "Standard 11: network:proxy drift reports both directions (issue #580)"
 PROXY_TS="${SCRIPT_DIR}/services/proxy/test-service.sh"
 
 # Pick a deployed module that declares network:proxy. Any will do — the fixture
-# is derived from whatever that module resolves to.
+# is derived from whatever that module resolves to — but prefer one with a domain
+# for its environment: the first match had none on hrossen (deconz-test), so
+# every case below was skipped.
+_p580_strip() { sed 's/\x1b\[[0-9;]*m//g'; }
 _p580_mod=""
+_p580_probe="$(mktemp)"
+printf 'No Caddy reverse proxy entries configured\n' > "${_p580_probe}"
 for f in "${CONFIG_DIR}"/*.json; do
     [[ -f "${f}" ]] || continue
     if jq -e '[(.dependsOn // []), (.integratesWith // [])] | flatten
               | index("network:proxy")' "${f}" >/dev/null 2>&1; then
-        _p580_mod="$(basename "${f}" .json)"
-        break
+        _p580_cand="$(basename "${f}" .json)"
+        [[ -n "${_p580_mod}" ]] || _p580_mod="${_p580_cand}"
+        [[ -f "${PROXY_TS}" ]] || break
+        _p580_txt="$(TAPPAAS_TEST_CADDY_LIST="${_p580_probe}" \
+            bash "${PROXY_TS}" "${_p580_cand}" 2>&1 | _p580_strip || true)"
+        if [[ "${_p580_txt}" != *"no vhost expected"* ]]; then
+            _p580_mod="${_p580_cand}"
+            break
+        fi
     fi
 done
-
-_p580_strip() { sed 's/\x1b\[[0-9;]*m//g'; }
+rm -f "${_p580_probe}"
 
 if [[ ! -f "${PROXY_TS}" ]]; then
     fail "network:proxy test-service.sh not found at ${PROXY_TS}"
@@ -907,6 +918,27 @@ EOF
             pass "wrong upstream scheme reported as drift, not as clean"
         else
             fail "handler proxying as ${_p580_otherscheme}:// was not reported"
+        fi
+
+        # ── E. a route left from an earlier domain (#809) ────────────
+        # Same description, another name: must be reported. A proxyRoutes entry
+        # ("<description>#<name>") must not be.
+        cat > "${_p580_dir}/stale.list" <<EOF
+Domains (3):
+  ${_p580_dom}                    [enabled]  (TAPPaaS: ${_p580_mod})  uuid=fixture-d
+  old-${_p580_dom}                [enabled]  (TAPPaaS: ${_p580_mod})  uuid=fixture-o
+  extra-${_p580_dom}              [enabled]  (TAPPaaS: ${_p580_mod}#extra)  uuid=fixture-r
+
+Handlers (1):
+  -> ${_p580_up}     [enabled]  (TAPPaaS: ${_p580_mod})  uuid=fixture-h
+EOF
+        _p580_txt="$(TAPPAAS_TEST_CADDY_LIST="${_p580_dir}/stale.list" \
+            bash "${PROXY_TS}" "${_p580_mod}" 2>&1 | _p580_strip || true)"
+        if grep -q "still serves old-${_p580_dom} for" <<<"${_p580_txt}" \
+           && ! grep -q "still serves.*extra-" <<<"${_p580_txt}"; then
+            pass "route from an earlier domain reported; proxyRoutes entry left alone"
+        else
+            fail "route from an earlier domain not reported, or a proxyRoutes entry was"
         fi
     fi
 

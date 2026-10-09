@@ -270,6 +270,20 @@ else
     fail "Domain '${PROXY_DOMAIN}' not found in Caddy — module declares network:proxy but has no vhost ('module-manager reconcile ${MODULE} --apply' creates it)"
 fi
 
+# A domain with this module's exact description but another name is a route
+# left from an earlier domain: still public, served blank (#809). proxyRoutes
+# carry "<description>#<name>", so the closing paren keeps them out.
+if [[ "${VHOST_EXPECTED}" -eq 1 || "${UNPUBLISHED}" -eq 1 ]]; then
+    _own_re="$(re_quote "(TAPPaaS: ${MODULE})")"
+    _stale="$(grep -E "^[[:space:]]+[^-[:space:]][^[:space:]]*[[:space:]]+\[[^]]*\][[:space:]]+${_own_re}" <<<"${caddy_list}" \
+        | awk -v keep="${PROXY_DOMAIN}" '$1 != keep {print $1}' | paste -sd' ' -)" || _stale=""
+    if [[ -n "${_stale}" ]]; then
+        fail "Caddy still serves ${_stale} for ${MODULE} — a route from an earlier domain (update retires it)"
+    else
+        pass "No route left from an earlier domain"
+    fi
+fi
+
 # ── Test 2: Handler exists in Caddy ─────────────────────────────────
 
 # The handler is checked with its port AND its upstream scheme. Matching the

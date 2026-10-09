@@ -45,6 +45,58 @@ run_caddy() {
     return 0
 }
 
+# proxy_prune_domains <caddy-manager prune-domains args...> — prune stale routes
+# AND the per-service Unbound override of every name pruned. The one prune path
+# for install, update and unpublish: update had none, so an old domain stayed in
+# Caddy after a proxyDomain change, and the override kept the name resolving (#809).
+#
+# Only an override carrying the same description is removed: the old name may
+# since have been taken by something else (coturn's "turn" is one), and its
+# record must survive this module letting the name go.
+proxy_prune_domains() {
+    local _out _rc _fqdn _desc="" _prefix=0 _i
+    local -a _args=("$@")
+    for ((_i = 0; _i < ${#_args[@]}; _i++)); do
+        case "${_args[_i]}" in
+            --description) _desc="${_args[_i + 1]:-}" ;;
+            --description-prefix) _desc="${_args[_i + 1]:-}"; _prefix=1 ;;
+        esac
+    done
+    _out="$(caddy-manager prune-domains "$@" 2>&1)" && _rc=0 || _rc=$?
+    if [[ ${_rc} -ne 0 ]]; then
+        [[ -n "${_out}" ]] && printf '%s\n' "${_out}" >&2
+        return "${_rc}"
+    fi
+    while IFS= read -r _fqdn; do
+        [[ -n "${_fqdn}" ]] || continue
+        info "  Retired stale reverse-proxy route ${_fqdn}" >&2
+        proxy_unbound_prune_owned "${_fqdn%%.*}" "${_fqdn#*.}" "${_desc}" "${_prefix}" >&2
+    done < <(sed -n 's/^Deleted stale domain: //p' <<<"${_out}")
+    return 0
+}
+
+# proxy_unbound_prune_owned <host> <zone> <description> <prefix:0|1>
+# Delete the Unbound override <host>.<zone> if its description is <description>
+# (or starts with it, when prefix=1). `unbound-manager list` columns:
+# HOST DOMAIN TYPE VALUE DESCRIPTION — the description may contain spaces.
+proxy_unbound_prune_owned() {
+    local host="$1" zone="$2" desc="$3" prefix="$4"
+    [[ -z "${host}" || "${host}" == "*" || -z "${desc}" ]] && return 0
+    if unbound-manager --no-ssl-verify list 2>/dev/null | awk -v h="${host}" -v z="${zone}" \
+        -v d="${desc}" -v p="${prefix}" '
+            $1 == h && $2 == z {
+                s = $0
+                for (i = 0; i < 4; i++) sub(/^[[:space:]]*[^[:space:]]+[[:space:]]+/, "", s)
+                sub(/[[:space:]]+$/, "", s)
+                if (s == d || (p == 1 && index(s, d) == 1)) f = 1
+            }
+            END { exit !f }'; then
+        debug "  Pruning per-service Unbound override ${host}.${zone}..."
+        unbound-manager --no-ssl-verify delete "${host}" "${zone}" >/dev/null 2>&1 \
+            || warn "  Could not prune Unbound override ${host}.${zone}"
+    fi
+}
+
 # proxy_resolve_access_list <module> <module_json> <zones_file> <description>
 # Echoes the access-list name to attach (empty string when public). Returns
 # non-zero on a hard error (caller should die).
@@ -321,7 +373,7 @@ proxy_add_routes() {
     # Sweep any route this module previously published but no longer declares.
     # Empty keep list (no proxyRoutes) removes every "<description>#*" route.
     debug "  Pruning undeclared routes for ${MODULE} (prefix '${description}#')..."
-    run_caddy prune-domains --description-prefix "${description}#" \
+    proxy_prune_domains --description-prefix "${description}#" \
         "${keep_fqdns[@]+"${keep_fqdns[@]}"}" \
         --no-ssl-verify || warn "Could not prune undeclared routes for ${MODULE} (non-fatal)"
 }
@@ -348,10 +400,13 @@ proxy_unpublish() {
         caddy-manager delete-domain "${domain}" --no-ssl-verify \
             || warn "Could not delete domain ${domain}"
         unbound_prune_host_override "${domain%%.*}" "${domain#*.}"
+        # A route from an earlier domain shares the description, not the name.
+        proxy_prune_domains --description "${desc}" --keep "${domain}" --no-ssl-verify \
+            || warn "Could not delete earlier-domain routes for ${module}"
     else
         warn "Cannot determine proxy domain for ${module} — manual cleanup may be needed"
     fi
-    caddy-manager prune-domains --description-prefix "${desc}#" --no-ssl-verify \
+    proxy_prune_domains --description-prefix "${desc}#" --no-ssl-verify \
         || warn "Could not delete additional routes for ${module}"
     if [[ -n "${json}" && -n "${env_domain}" ]]; then
         local _rname _rport

@@ -352,7 +352,7 @@ run_caddy add-handler "${PROXY_DOMAIN}" \
 # module's description whose FQDN is not the current one. Idempotent no-op when
 # the domain is unchanged.
 debug "  Pruning stale reverse-proxy routes for ${MODULE}..."
-run_caddy prune-domains --description "${DESCRIPTION}" --keep "${PROXY_DOMAIN}" \
+proxy_prune_domains --description "${DESCRIPTION}" --keep "${PROXY_DOMAIN}" \
     --no-ssl-verify || warn "Could not prune stale Caddy routes for ${MODULE} (non-fatal)"
 
 # ── Additional routes (proxyRoutes, #597) ──────────────────────────
