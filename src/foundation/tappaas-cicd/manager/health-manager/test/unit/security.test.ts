@@ -511,6 +511,10 @@ console.log("writeScan / diffScans / checkCveStatus / report");
   const r5 = scanComponentList([{ name: "glibc", version: "2.42-84" }], new FakeIO(), v5);
   check(r5.findings.length === 1 && r5.findings[0].triage?.[0]?.module === "identity" && r5.findings[0].triage?.[0]?.risk === "low",
     "…it decides nothing — the finding stays counted, carrying who analysed it and the risk");
+  const v6 = [...v5, ...parseVex(JSON.stringify({ vulnerabilities: [{ id: "CVE-2026-5450", analysis: { state: "not_affected" } }] }), "d", "vllm-amd")];
+  const r6 = scanComponentList([{ name: "glibc", version: "2.42-84" }], new FakeIO(), v6);
+  check(r6.suppressed[0]?.vexModules?.join(",") === "vllm-amd" && r6.suppressed[0]?.triage?.[0]?.module === "identity",
+    "another module's 'not affected' keeps this module's analysis on the finding (identity's urllib3 read OPEN)");
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

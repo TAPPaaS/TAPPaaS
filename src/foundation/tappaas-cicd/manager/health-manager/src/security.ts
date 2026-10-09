@@ -1226,12 +1226,13 @@ function splitVex(fs: Finding[], vex: VexStatement[]): { findings: Finding[]; su
   const suppressed: Finding[] = [];
   for (const f of fs) {
     const by = vexDeciders(f, vex);
-    if (by.length > 0) {
-      suppressed.push({ ...f, vexModules: [...new Set(by.map((s) => s.module))].sort() });
-      continue;
-    }
+    // Analyses travel with the finding either way: one module's "not affected"
+    // (vllm-amd: pip's bundled urllib3) leaves the finding another module's, and
+    // that module's own "exploitable" (identity) must still read as RISK there.
     const tri = vexTriage(f, vex);
-    findings.push(tri.length > 0 ? { ...f, triage: tri.map((s) => ({ module: s.module, state: s.state, risk: s.risk ?? "" })) } : f);
+    const t = tri.length > 0 ? { triage: tri.map((s) => ({ module: s.module, state: s.state, risk: s.risk ?? "" })) } : {};
+    if (by.length > 0) suppressed.push({ ...f, ...t, vexModules: [...new Set(by.map((s) => s.module))].sort() });
+    else findings.push({ ...f, ...t });
   }
   return { findings, suppressed };
 }
