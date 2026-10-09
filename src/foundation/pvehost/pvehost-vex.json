@@ -1,0 +1,2674 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "version": 1,
+  "metadata": {
+    "component": {
+      "type": "application",
+      "name": "pvehost",
+      "description": "TAPPaaS module pvehost: triage of its own critical/high CVEs (#788)."
+    }
+  },
+  "vulnerabilities": [
+    {
+      "id": "CVE-2019-16224",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "liblmdb0 is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/liblmdb0@0.9.31-1%2Bb2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2019-16225",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "liblmdb0 is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/liblmdb0@0.9.31-1%2Bb2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2019-16226",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "liblmdb0 is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/liblmdb0@0.9.31-1%2Bb2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2019-16227",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "liblmdb0 is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/liblmdb0@0.9.31-1%2Bb2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2019-16228",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "liblmdb0 is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/liblmdb0@0.9.31-1%2Bb2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2023-39810",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Only used to build the initramfs; is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/busybox@1.37.0-6%2Bb9"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2025-30156",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/ceph-common@19.2.6-pve4"
+        },
+        {
+          "ref": "pkg:deb/debian/ceph-fuse@19.2.6-pve4"
+        },
+        {
+          "ref": "pkg:deb/debian/libcephfs2@19.2.6-pve4"
+        },
+        {
+          "ref": "pkg:deb/debian/librados2@19.2.6-pve4"
+        },
+        {
+          "ref": "pkg:deb/debian/libradosstriper1@19.2.6-pve4"
+        },
+        {
+          "ref": "pkg:deb/debian/librbd1@19.2.6-pve4"
+        },
+        {
+          "ref": "pkg:deb/debian/librgw2@19.2.6-pve4"
+        },
+        {
+          "ref": "pkg:deb/debian/python3-ceph-argparse@19.2.6-pve4"
+        },
+        {
+          "ref": "pkg:deb/debian/python3-ceph-common@19.2.6-pve4"
+        },
+        {
+          "ref": "pkg:deb/debian/python3-cephfs@19.2.6-pve4"
+        },
+        {
+          "ref": "pkg:deb/debian/python3-rados@19.2.6-pve4"
+        },
+        {
+          "ref": "pkg:deb/debian/python3-rbd@19.2.6-pve4"
+        },
+        {
+          "ref": "pkg:deb/debian/python3-rgw@19.2.6-pve4"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2025-48431",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libthrift-0.19.0t64@0.19.0-4%2Bb1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2025-61662",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "grub-common grub-efi-amd64 grub-efi-amd64-bin grub-efi-amd64-unsigned grub-pc-bin grub2-common proxmox-grub is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/grub-common@2.12-9%2Bpmx2"
+        },
+        {
+          "ref": "pkg:deb/debian/grub-efi-amd64-bin@2.12-9%2Bpmx2"
+        },
+        {
+          "ref": "pkg:deb/debian/grub-efi-amd64-unsigned@2.12-9%2Bpmx2"
+        },
+        {
+          "ref": "pkg:deb/debian/grub-efi-amd64@2.12-9%2Bpmx2"
+        },
+        {
+          "ref": "pkg:deb/debian/grub-pc-bin@2.12-9%2Bpmx2"
+        },
+        {
+          "ref": "pkg:deb/debian/grub2-common@2.12-9%2Bpmx2"
+        },
+        {
+          "ref": "pkg:deb/debian/proxmox-grub@2.12-9%2Bpmx2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2025-66471",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Python: no Python service runs on a node (Proxmox is Perl); this is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/python3-urllib3@2.3.0-3%2Bdeb13u2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2025-69720",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libncurses6 libncursesw6 libtinfo6 ncurses-base ncurses-bin ncurses-term is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libncurses6@6.5%2B20250216-2"
+        },
+        {
+          "ref": "pkg:deb/debian/libncursesw6@6.5%2B20250216-2"
+        },
+        {
+          "ref": "pkg:deb/debian/libtinfo6@6.5%2B20250216-2"
+        },
+        {
+          "ref": "pkg:deb/debian/ncurses-base@6.5%2B20250216-2"
+        },
+        {
+          "ref": "pkg:deb/debian/ncurses-bin@6.5%2B20250216-2"
+        },
+        {
+          "ref": "pkg:deb/debian/ncurses-term@6.5%2B20250216-2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-0799",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libpcap0.8t64 is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libpcap0.8t64@1.10.5-2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-12064",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "The curl command is not run by any service; kvm loads libcurl-gnutls only for QEMU's curl block driver, and no disk is http:.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/curl@8.14.1-2%2Bdeb13u5"
+        },
+        {
+          "ref": "pkg:deb/debian/libcurl3t64-gnutls@8.14.1-2%2Bdeb13u5"
+        },
+        {
+          "ref": "pkg:deb/debian/libcurl4t64@8.14.1-2%2Bdeb13u5"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-12505",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "cifs-utils is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/cifs-utils@7.4-1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-15308",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Python: no Python service runs on a node (Proxmox is Perl); this is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libpython3.13-minimal@3.13.5-2%2Bdeb13u5"
+        },
+        {
+          "ref": "pkg:deb/debian/libpython3.13-stdlib@3.13.5-2%2Bdeb13u5"
+        },
+        {
+          "ref": "pkg:deb/debian/python3.13-minimal@3.13.5-2%2Bdeb13u5"
+        },
+        {
+          "ref": "pkg:deb/debian/python3.13@3.13.5-2%2Bdeb13u5"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-15816",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Only used to build the initramfs; is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/dracut-install@106-6"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-16313",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libsgutils2-1.48 sg3-utils is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libsgutils2-1.48@1.48-3~deb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/sg3-utils@1.48-3~deb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-16445",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Only used to build the initramfs; is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/dracut-install@106-6"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-16742",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "systemd-homed signature verification; systemd-homed is not used on a node.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libnss-systemd@257.13-1~deb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libpam-systemd@257.13-1~deb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libsystemd-shared@257.13-1~deb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libsystemd0@257.13-1~deb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libudev1@257.13-1~deb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/systemd-boot-efi@257.13-1~deb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/systemd-boot-tools@257.13-1~deb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/systemd-sysv@257.13-1~deb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/systemd@257.13-1~deb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/udev@257.13-1~deb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-19445",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Python: no Python service runs on a node (Proxmox is Perl); this is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libpython3.13-minimal@3.13.5-2%2Bdeb13u5"
+        },
+        {
+          "ref": "pkg:deb/debian/libpython3.13-stdlib@3.13.5-2%2Bdeb13u5"
+        },
+        {
+          "ref": "pkg:deb/debian/python3.13-minimal@3.13.5-2%2Bdeb13u5"
+        },
+        {
+          "ref": "pkg:deb/debian/python3.13@3.13.5-2%2Bdeb13u5"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-19553",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Python: no Python service runs on a node (Proxmox is Perl); this is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libpython3.13-minimal@3.13.5-2%2Bdeb13u5"
+        },
+        {
+          "ref": "pkg:deb/debian/libpython3.13-stdlib@3.13.5-2%2Bdeb13u5"
+        },
+        {
+          "ref": "pkg:deb/debian/python3.13-minimal@3.13.5-2%2Bdeb13u5"
+        },
+        {
+          "ref": "pkg:deb/debian/python3.13@3.13.5-2%2Bdeb13u5"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-23949",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Python: no Python service runs on a node (Proxmox is Perl); this is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/python3-pkg-resources@78.1.1-0.1"
+        },
+        {
+          "ref": "pkg:deb/debian/python3-setuptools@78.1.1-0.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-24882",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "dirmngr gnupg gnupg-l10n gpg gpg-agent gpgconf gpgsm is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/dirmngr@2.4.7-21%2Bdeb13u1%2Bb5"
+        },
+        {
+          "ref": "pkg:deb/debian/gnupg-l10n@2.4.7-21%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/gnupg@2.4.7-21%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/gpg-agent@2.4.7-21%2Bdeb13u1%2Bb5"
+        },
+        {
+          "ref": "pkg:deb/debian/gpg@2.4.7-21%2Bdeb13u1%2Bb5"
+        },
+        {
+          "ref": "pkg:deb/debian/gpgconf@2.4.7-21%2Bdeb13u1%2Bb5"
+        },
+        {
+          "ref": "pkg:deb/debian/gpgsm@2.4.7-21%2Bdeb13u1%2Bb5"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-26157",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Only used to build the initramfs; is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/busybox@1.37.0-6%2Bb9"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-26158",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Only used to build the initramfs; is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/busybox@1.37.0-6%2Bb9"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-26269",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "vim on a node runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/vim-common@9.1.1230-2"
+        },
+        {
+          "ref": "pkg:deb/debian/vim-tiny@9.1.1230-2"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-28417",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "vim on a node runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/vim-common@9.1.1230-2"
+        },
+        {
+          "ref": "pkg:deb/debian/vim-tiny@9.1.1230-2"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-28421",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "vim on a node runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/vim-common@9.1.1230-2"
+        },
+        {
+          "ref": "pkg:deb/debian/vim-tiny@9.1.1230-2"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-29004",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Only used to build the initramfs; is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/busybox@1.37.0-6%2Bb9"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-33412",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "vim on a node runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/vim-common@9.1.1230-2"
+        },
+        {
+          "ref": "pkg:deb/debian/vim-tiny@9.1.1230-2"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-33630",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libcares2 is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libcares2@1.34.5-1%2Bdeb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-34982",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "vim on a node runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/vim-common@9.1.1230-2"
+        },
+        {
+          "ref": "pkg:deb/debian/vim-tiny@9.1.1230-2"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-35177",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "vim on a node runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/vim-common@9.1.1230-2"
+        },
+        {
+          "ref": "pkg:deb/debian/vim-tiny@9.1.1230-2"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-37460",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Python: no Python service runs on a node (Proxmox is Perl); this is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/frr-pythontools@10.6.1-1%2Bpve3"
+        },
+        {
+          "ref": "pkg:deb/debian/frr@10.6.1-1%2Bpve3"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-37555",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Needs a crafted audio file read; QEMU reads none on a node.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libsndfile1@1.2.2-2%2Bdeb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-38754",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Only used to build the initramfs; is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/busybox@1.37.0-6%2Bb9"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-39881",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "vim on a node runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/vim-common@9.1.1230-2"
+        },
+        {
+          "ref": "pkg:deb/debian/vim-tiny@9.1.1230-2"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-39944",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/ceph-common@19.2.6-pve4"
+        },
+        {
+          "ref": "pkg:deb/debian/ceph-fuse@19.2.6-pve4"
+        },
+        {
+          "ref": "pkg:deb/debian/libcephfs2@19.2.6-pve4"
+        },
+        {
+          "ref": "pkg:deb/debian/librados2@19.2.6-pve4"
+        },
+        {
+          "ref": "pkg:deb/debian/libradosstriper1@19.2.6-pve4"
+        },
+        {
+          "ref": "pkg:deb/debian/librbd1@19.2.6-pve4"
+        },
+        {
+          "ref": "pkg:deb/debian/librgw2@19.2.6-pve4"
+        },
+        {
+          "ref": "pkg:deb/debian/python3-ceph-argparse@19.2.6-pve4"
+        },
+        {
+          "ref": "pkg:deb/debian/python3-ceph-common@19.2.6-pve4"
+        },
+        {
+          "ref": "pkg:deb/debian/python3-cephfs@19.2.6-pve4"
+        },
+        {
+          "ref": "pkg:deb/debian/python3-rados@19.2.6-pve4"
+        },
+        {
+          "ref": "pkg:deb/debian/python3-rbd@19.2.6-pve4"
+        },
+        {
+          "ref": "pkg:deb/debian/python3-rgw@19.2.6-pve4"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-41602",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libthrift-0.19.0t64@0.19.0-4%2Bb1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-41606",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libthrift-0.19.0t64@0.19.0-4%2Bb1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-41607",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libthrift-0.19.0t64@0.19.0-4%2Bb1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-41608",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libthrift-0.19.0t64@0.19.0-4%2Bb1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-43871",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libthrift-0.19.0t64@0.19.0-4%2Bb1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-43961",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "vim on a node runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/vim-common@9.1.1230-2"
+        },
+        {
+          "ref": "pkg:deb/debian/vim-tiny@9.1.1230-2"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-44673",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libyang3 is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libyang3@3.12.2-1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-44943",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libopeniscsiusr open-iscsi is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libopeniscsiusr@2.1.11-1%2Bdeb13u2"
+        },
+        {
+          "ref": "pkg:deb/debian/open-iscsi@2.1.11-1%2Bdeb13u2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-44944",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libopeniscsiusr open-iscsi is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libopeniscsiusr@2.1.11-1%2Bdeb13u2"
+        },
+        {
+          "ref": "pkg:deb/debian/open-iscsi@2.1.11-1%2Bdeb13u2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-45112",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libthrift-0.19.0t64@0.19.0-4%2Bb1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-46483",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "vim on a node runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/vim-common@9.1.1230-2"
+        },
+        {
+          "ref": "pkg:deb/debian/vim-tiny@9.1.1230-2"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-47162",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "vim on a node runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/vim-common@9.1.1230-2"
+        },
+        {
+          "ref": "pkg:deb/debian/vim-tiny@9.1.1230-2"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-48144",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libthrift-0.19.0t64@0.19.0-4%2Bb1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-48145",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libthrift-0.19.0t64@0.19.0-4%2Bb1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-48586",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libthrift-0.19.0t64@0.19.0-4%2Bb1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-50152",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/ceph-common@19.2.6-pve4"
+        },
+        {
+          "ref": "pkg:deb/debian/ceph-fuse@19.2.6-pve4"
+        },
+        {
+          "ref": "pkg:deb/debian/libcephfs2@19.2.6-pve4"
+        },
+        {
+          "ref": "pkg:deb/debian/librados2@19.2.6-pve4"
+        },
+        {
+          "ref": "pkg:deb/debian/libradosstriper1@19.2.6-pve4"
+        },
+        {
+          "ref": "pkg:deb/debian/librbd1@19.2.6-pve4"
+        },
+        {
+          "ref": "pkg:deb/debian/librgw2@19.2.6-pve4"
+        },
+        {
+          "ref": "pkg:deb/debian/python3-ceph-argparse@19.2.6-pve4"
+        },
+        {
+          "ref": "pkg:deb/debian/python3-ceph-common@19.2.6-pve4"
+        },
+        {
+          "ref": "pkg:deb/debian/python3-cephfs@19.2.6-pve4"
+        },
+        {
+          "ref": "pkg:deb/debian/python3-rados@19.2.6-pve4"
+        },
+        {
+          "ref": "pkg:deb/debian/python3-rbd@19.2.6-pve4"
+        },
+        {
+          "ref": "pkg:deb/debian/python3-rgw@19.2.6-pve4"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-52858",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "vim on a node runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/vim-common@9.1.1230-2"
+        },
+        {
+          "ref": "pkg:deb/debian/vim-tiny@9.1.1230-2"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-52860",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "vim on a node runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/vim-common@9.1.1230-2"
+        },
+        {
+          "ref": "pkg:deb/debian/vim-tiny@9.1.1230-2"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-54330",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/ceph-common@19.2.6-pve4"
+        },
+        {
+          "ref": "pkg:deb/debian/ceph-fuse@19.2.6-pve4"
+        },
+        {
+          "ref": "pkg:deb/debian/libcephfs2@19.2.6-pve4"
+        },
+        {
+          "ref": "pkg:deb/debian/librados2@19.2.6-pve4"
+        },
+        {
+          "ref": "pkg:deb/debian/libradosstriper1@19.2.6-pve4"
+        },
+        {
+          "ref": "pkg:deb/debian/librbd1@19.2.6-pve4"
+        },
+        {
+          "ref": "pkg:deb/debian/librgw2@19.2.6-pve4"
+        },
+        {
+          "ref": "pkg:deb/debian/python3-ceph-argparse@19.2.6-pve4"
+        },
+        {
+          "ref": "pkg:deb/debian/python3-ceph-common@19.2.6-pve4"
+        },
+        {
+          "ref": "pkg:deb/debian/python3-cephfs@19.2.6-pve4"
+        },
+        {
+          "ref": "pkg:deb/debian/python3-rados@19.2.6-pve4"
+        },
+        {
+          "ref": "pkg:deb/debian/python3-rbd@19.2.6-pve4"
+        },
+        {
+          "ref": "pkg:deb/debian/python3-rgw@19.2.6-pve4"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-54369",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Symlink traversal through libacl into privilege; needs an unprivileged local user, and a node has none.",
+        "justification": "requires_environment"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libacl1@2.3.2-2%2Bb1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-55693",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "vim on a node runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/vim-common@9.1.1230-2"
+        },
+        {
+          "ref": "pkg:deb/debian/vim-tiny@9.1.1230-2"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-55895",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "vim on a node runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/vim-common@9.1.1230-2"
+        },
+        {
+          "ref": "pkg:deb/debian/vim-tiny@9.1.1230-2"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-55969",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libthrift-0.19.0t64@0.19.0-4%2Bb1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-55971",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libthrift-0.19.0t64@0.19.0-4%2Bb1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-55995",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libisns0t64 is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libisns0t64@0.101-1%2Bb1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-57455",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "vim on a node runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/vim-common@9.1.1230-2"
+        },
+        {
+          "ref": "pkg:deb/debian/vim-tiny@9.1.1230-2"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-57456",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "vim on a node runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/vim-common@9.1.1230-2"
+        },
+        {
+          "ref": "pkg:deb/debian/vim-tiny@9.1.1230-2"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-58023",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libthrift-0.19.0t64@0.19.0-4%2Bb1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-58471",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "wget is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/wget@1.25.0-2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-58472",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "wget is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/wget@1.25.0-2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-58662",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libthrift-0.19.0t64@0.19.0-4%2Bb1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-59856",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "vim on a node runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/vim-common@9.1.1230-2"
+        },
+        {
+          "ref": "pkg:deb/debian/vim-tiny@9.1.1230-2"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-59858",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "vim on a node runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/vim-common@9.1.1230-2"
+        },
+        {
+          "ref": "pkg:deb/debian/vim-tiny@9.1.1230-2"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-59999",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "sshd: DisableForwarding not overriding PermitTunnel; neither is set on the nodes (tunnelling is off by default).",
+        "justification": "requires_configuration"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/openssh-client@10.0p1-7%2Bdeb13u4"
+        },
+        {
+          "ref": "pkg:deb/debian/openssh-server@10.0p1-7%2Bdeb13u4"
+        },
+        {
+          "ref": "pkg:deb/debian/openssh-sftp-server@10.0p1-7%2Bdeb13u4"
+        },
+        {
+          "ref": "pkg:deb/debian/ssh@10.0p1-7%2Bdeb13u4"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-60000",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "sshd: MaxAuthTries with GSSAPI authentication; GSSAPIAuthentication is off on the nodes.",
+        "justification": "requires_configuration"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/openssh-client@10.0p1-7%2Bdeb13u4"
+        },
+        {
+          "ref": "pkg:deb/debian/openssh-server@10.0p1-7%2Bdeb13u4"
+        },
+        {
+          "ref": "pkg:deb/debian/openssh-sftp-server@10.0p1-7%2Bdeb13u4"
+        },
+        {
+          "ref": "pkg:deb/debian/ssh@10.0p1-7%2Bdeb13u4"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-60002",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "ssh client use-after-free when a server changes its host key on rekey; Proxmox's ssh client connects only to the cluster's own nodes."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/openssh-client@10.0p1-7%2Bdeb13u4"
+        },
+        {
+          "ref": "pkg:deb/debian/openssh-server@10.0p1-7%2Bdeb13u4"
+        },
+        {
+          "ref": "pkg:deb/debian/openssh-sftp-server@10.0p1-7%2Bdeb13u4"
+        },
+        {
+          "ref": "pkg:deb/debian/ssh@10.0p1-7%2Bdeb13u4"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-61373",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libthrift-0.19.0t64@0.19.0-4%2Bb1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-66046",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "libexpat is loaded by dbus, kvm and the Proxmox daemons; untrusted XML arrives only when an admin imports an OVA/OVF."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libexpat1@2.8.3-1~deb13u1"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-66054",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libthrift-0.19.0t64@0.19.0-4%2Bb1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-66081",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libthrift-0.19.0t64@0.19.0-4%2Bb1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-6653",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "libxml2 is loaded by kvm and the Proxmox daemons; their API is JSON, and untrusted XML arrives only when an admin imports an OVA/OVF."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libxml2@2.12.7%2Bdfsg%2Breally2.9.14-2.1%2Bdeb13u3"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-66837",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libthrift-0.19.0t64@0.19.0-4%2Bb1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-66858",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libthrift-0.19.0t64@0.19.0-4%2Bb1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-6893",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Only used to build the initramfs; is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/dracut-install@106-6"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-69184",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libcares2 is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libcares2@1.34.5-1%2Bdeb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-69186",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libcares2 is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libcares2@1.34.5-1%2Bdeb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-69249",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Python: no Python service runs on a node (Proxmox is Perl); this is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/python3-cryptography@43.0.0-3%2Bdeb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-7210",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Python: no Python service runs on a node (Proxmox is Perl); this is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libpython3.13-minimal@3.13.5-2%2Bdeb13u5"
+        },
+        {
+          "ref": "pkg:deb/debian/libpython3.13-stdlib@3.13.5-2%2Bdeb13u5"
+        },
+        {
+          "ref": "pkg:deb/debian/python3.13-minimal@3.13.5-2%2Bdeb13u5"
+        },
+        {
+          "ref": "pkg:deb/debian/python3.13@3.13.5-2%2Bdeb13u5"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-73072",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "vim on a node runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/vim-common@9.1.1230-2"
+        },
+        {
+          "ref": "pkg:deb/debian/vim-tiny@9.1.1230-2"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-73073",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "vim on a node runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/vim-common@9.1.1230-2"
+        },
+        {
+          "ref": "pkg:deb/debian/vim-tiny@9.1.1230-2"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-73076",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "vim on a node runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/vim-common@9.1.1230-2"
+        },
+        {
+          "ref": "pkg:deb/debian/vim-tiny@9.1.1230-2"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-73077",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "vim on a node runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/vim-common@9.1.1230-2"
+        },
+        {
+          "ref": "pkg:deb/debian/vim-tiny@9.1.1230-2"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-73078",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "vim on a node runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/vim-common@9.1.1230-2"
+        },
+        {
+          "ref": "pkg:deb/debian/vim-tiny@9.1.1230-2"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-74860",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "libxml2 is loaded by kvm and the Proxmox daemons; their API is JSON, and untrusted XML arrives only when an admin imports an OVA/OVF."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libxml2@2.12.7%2Bdfsg%2Breally2.9.14-2.1%2Bdeb13u3"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-76642",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "util-linux mount helpers/nsenter: needs an unprivileged local user (fstab user entries, cgroup joins); a node has none.",
+        "justification": "requires_environment"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/bsdextrautils@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/bsdutils@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/eject@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/fdisk@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libblkid1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libfdisk1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/liblastlog2-2@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libmount1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libsmartcols1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libuuid1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/login@4.16.0-2%2Breally2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/mount@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/util-linux-extra@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/util-linux@2.41.5-0%2Bdeb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-76956",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "libexpat is loaded by dbus, kvm and the Proxmox daemons; untrusted XML arrives only when an admin imports an OVA/OVF."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libexpat1@2.8.3-1~deb13u1"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-76957",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "libexpat is loaded by dbus, kvm and the Proxmox daemons; untrusted XML arrives only when an admin imports an OVA/OVF."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libexpat1@2.8.3-1~deb13u1"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-78408",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "util-linux mount helpers/nsenter: needs an unprivileged local user (fstab user entries, cgroup joins); a node has none.",
+        "justification": "requires_environment"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/bsdextrautils@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/bsdutils@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/eject@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/fdisk@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libblkid1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libfdisk1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/liblastlog2-2@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libmount1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libsmartcols1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libuuid1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/login@4.16.0-2%2Breally2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/mount@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/util-linux-extra@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/util-linux@2.41.5-0%2Bdeb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-78409",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "util-linux mount helpers/nsenter: needs an unprivileged local user (fstab user entries, cgroup joins); a node has none.",
+        "justification": "requires_environment"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/bsdextrautils@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/bsdutils@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/eject@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/fdisk@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libblkid1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libfdisk1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/liblastlog2-2@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libmount1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libsmartcols1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libuuid1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/login@4.16.0-2%2Breally2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/mount@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/util-linux-extra@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/util-linux@2.41.5-0%2Bdeb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-78410",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "util-linux mount helpers/nsenter: needs an unprivileged local user (fstab user entries, cgroup joins); a node has none.",
+        "justification": "requires_environment"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/bsdextrautils@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/bsdutils@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/eject@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/fdisk@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libblkid1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libfdisk1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/liblastlog2-2@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libmount1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libsmartcols1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libuuid1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/login@4.16.0-2%2Breally2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/mount@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/util-linux-extra@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/util-linux@2.41.5-0%2Bdeb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-81665",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "Heap overflow in totem message reassembly; Proxmox's corosync drops packets not carrying the cluster's authkey, so it needs a cluster member."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/corosync@3.1.10-pve3"
+        },
+        {
+          "ref": "pkg:deb/debian/libcfg7@3.1.10-pve3"
+        },
+        {
+          "ref": "pkg:deb/debian/libcmap4@3.1.10-pve3"
+        },
+        {
+          "ref": "pkg:deb/debian/libcorosync-common4@3.1.10-pve3"
+        },
+        {
+          "ref": "pkg:deb/debian/libcpg4@3.1.10-pve3"
+        },
+        {
+          "ref": "pkg:deb/debian/libquorum5@3.1.10-pve3"
+        },
+        {
+          "ref": "pkg:deb/debian/libvotequorum8@3.1.10-pve3"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-81928",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "Archive::Tar denial of service from a crafted tar header (Debian: fix deferred); only an admin-supplied tar reaches it."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libnet-dns-perl@1.56-0%2Bdeb13u1"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-82049",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Python: no Python service runs on a node (Proxmox is Perl); this is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libpython3.13-minimal@3.13.5-2%2Bdeb13u5"
+        },
+        {
+          "ref": "pkg:deb/debian/libpython3.13-stdlib@3.13.5-2%2Bdeb13u5"
+        },
+        {
+          "ref": "pkg:deb/debian/python3.13-minimal@3.13.5-2%2Bdeb13u5"
+        },
+        {
+          "ref": "pkg:deb/debian/python3.13@3.13.5-2%2Bdeb13u5"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-82458",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libthrift-0.19.0t64@0.19.0-4%2Bb1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-82459",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libthrift-0.19.0t64@0.19.0-4%2Bb1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-8286",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "The curl command is not run by any service; kvm loads libcurl-gnutls only for QEMU's curl block driver, and no disk is http:.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/curl@8.14.1-2%2Bdeb13u5"
+        },
+        {
+          "ref": "pkg:deb/debian/libcurl3t64-gnutls@8.14.1-2%2Bdeb13u5"
+        },
+        {
+          "ref": "pkg:deb/debian/libcurl4t64@8.14.1-2%2Bdeb13u5"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-83663",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libthrift-0.19.0t64@0.19.0-4%2Bb1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-8458",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "The curl command is not run by any service; kvm loads libcurl-gnutls only for QEMU's curl block driver, and no disk is http:.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/curl@8.14.1-2%2Bdeb13u5"
+        },
+        {
+          "ref": "pkg:deb/debian/libcurl3t64-gnutls@8.14.1-2%2Bdeb13u5"
+        },
+        {
+          "ref": "pkg:deb/debian/libcurl4t64@8.14.1-2%2Bdeb13u5"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-85086",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libthrift-0.19.0t64@0.19.0-4%2Bb1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-85088",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libthrift-0.19.0t64@0.19.0-4%2Bb1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-85494",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libthrift-0.19.0t64@0.19.0-4%2Bb1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-86138",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "libxml2 is loaded by kvm and the Proxmox daemons; their API is JSON, and untrusted XML arrives only when an admin imports an OVA/OVF."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libxml2@2.12.7%2Bdfsg%2Breally2.9.14-2.1%2Bdeb13u3"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-86139",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "libxml2 is loaded by kvm and the Proxmox daemons; their API is JSON, and untrusted XML arrives only when an admin imports an OVA/OVF."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libxml2@2.12.7%2Bdfsg%2Breally2.9.14-2.1%2Bdeb13u3"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-86140",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "libxml2 is loaded by kvm and the Proxmox daemons; their API is JSON, and untrusted XML arrives only when an admin imports an OVA/OVF."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libxml2@2.12.7%2Bdfsg%2Breally2.9.14-2.1%2Bdeb13u3"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-86142",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "libxml2 is loaded by kvm and the Proxmox daemons; their API is JSON, and untrusted XML arrives only when an admin imports an OVA/OVF."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libxml2@2.12.7%2Bdfsg%2Breally2.9.14-2.1%2Bdeb13u3"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-86143",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "libxml2 is loaded by kvm and the Proxmox daemons; their API is JSON, and untrusted XML arrives only when an admin imports an OVA/OVF."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libxml2@2.12.7%2Bdfsg%2Breally2.9.14-2.1%2Bdeb13u3"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-86144",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "libxml2 is loaded by kvm and the Proxmox daemons; their API is JSON, and untrusted XML arrives only when an admin imports an OVA/OVF."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libxml2@2.12.7%2Bdfsg%2Breally2.9.14-2.1%2Bdeb13u3"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-88806",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Needs a malicious X server; kvm loads libX11 for display backends Proxmox does not use (consoles are VNC/SPICE).",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libx11-6@1.8.12-1"
+        },
+        {
+          "ref": "pkg:deb/debian/libx11-data@1.8.12-1"
+        },
+        {
+          "ref": "pkg:deb/debian/libx11-xcb1@1.8.12-1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-88807",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Needs a malicious X server; kvm loads libX11 for display backends Proxmox does not use (consoles are VNC/SPICE).",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libxrender1@0.9.12-1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-88830",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Only used to build the initramfs; is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/busybox@1.37.0-6%2Bb9"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-88832",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Only used to build the initramfs; is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/busybox@1.37.0-6%2Bb9"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-8927",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "The curl command is not run by any service; kvm loads libcurl-gnutls only for QEMU's curl block driver, and no disk is http:.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/curl@8.14.1-2%2Bdeb13u5"
+        },
+        {
+          "ref": "pkg:deb/debian/libcurl3t64-gnutls@8.14.1-2%2Bdeb13u5"
+        },
+        {
+          "ref": "pkg:deb/debian/libcurl4t64@8.14.1-2%2Bdeb13u5"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-93925",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libthrift-0.19.0t64@0.19.0-4%2Bb1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-93926",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libthrift-0.19.0t64@0.19.0-4%2Bb1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-93990",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "libexpat is loaded by dbus, kvm and the Proxmox daemons; untrusted XML arrives only when an admin imports an OVA/OVF."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libexpat1@2.8.3-1~deb13u1"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-94637",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libthrift-0.19.0t64@0.19.0-4%2Bb1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-94640",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "Unauthenticated denial of service of rpcbind (port 111, listening on every node; tappaas1 serves NFS) \u2014 a crash, not code execution, reachable only from inside the site's network."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/rpcbind@1.2.7-1"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-94650",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libthrift-0.19.0t64@0.19.0-4%2Bb1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-9499",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libqt5core5t64 libqt5dbus5t64 libqt5network5t64 is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libqt5core5t64@5.15.15%2Bdfsg-6%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libqt5dbus5t64@5.15.15%2Bdfsg-6%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libqt5network5t64@5.15.15%2Bdfsg-6%2Bdeb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-9538",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "Archive::Tar denial of service from a crafted tar header (Debian: fix deferred); only an admin-supplied tar reaches it."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libperl5.40@5.40.1-6%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/perl-base@5.40.1-6%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/perl-modules-5.40@5.40.1-6%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/perl@5.40.1-6%2Bdeb13u1"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-96512",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "sudo NOTBEFORE/NOTAFTER rules; the nodes' sudoers uses none.",
+        "justification": "requires_configuration"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/sudo@1.9.16p2-3%2Bdeb13u2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-97687",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Python: no Python service runs on a node (Proxmox is Perl); this is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/python3-urllib3@2.3.0-3%2Bdeb13u2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-97689",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Python: no Python service runs on a node (Proxmox is Perl); this is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/python3-urllib3@2.3.0-3%2Bdeb13u2"
+        }
+      ]
+    }
+  ]
+}
