@@ -102,13 +102,13 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | Wave | Group | Ease | Risk | released | done for 2.2 | open |
 |------|-------|:-:|:-:|---:|---:|---:|
 | 4 | G4.1 Alerting & cluster resilience | M | M | – | 7 | 4 |
-| 4 | G4.2 Proxy & ingress | M | L | 1 | 1 | 4 |
+| 4 | G4.2 Proxy & ingress | M | L | 1 | 2 | 4 |
 | 4 | G4.3 Manager verb gaps | M | L | 4 | 5 | 8 |
 | 4 | G4.4 Storage & physical devices | H | L | 2 | 3 | 6 |
 | 4 | G4.5 Governance, CI & sign-offs | M | L | 2 | 3 | 5 |
 | 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 7 | 11 | 5 |
 | 3 | G3.2 Identity & SSO wiring | M | L | 1 | 9 | 4 |
-| 3 | G3.3 App module fixes | L | L | 5 | 4 | 10 |
+| 3 | G3.3 App module fixes | L | L | 5 | 5 | 10 |
 | 3 | G3.4 AI stack maturity | M | M | 1 | – | 6 |
 | 3 | G3.5 Installer UX | L | L | – | 1 | 3 |
 | 2 | G2.1 Firewall exposure & rule order | M | H | 3 | 4 | 12 |
@@ -232,7 +232,7 @@ Be told when something breaks, and survive more of it. Built: alerts from Loki b
 | #590 | Second corosync link | H | M | |
 | FW #40 | Dedicated sync network recipe | L | L | Roll in with #590 |
 
-### G4.2 Proxy & ingress — Ease M · Risk L · released: 1 · done for 2.2: 1 · open: 4
+### G4.2 Proxy & ingress — Ease M · Risk L · released: 1 · done for 2.2: 2 · open: 4
 
 Publish less of each app: limit a route to some paths (#642), some zones (#643) or a provider's source addresses (#656), as ADR-023 describes. Decide whether an internal proxy is needed at all (#154).
 
@@ -243,6 +243,7 @@ Publish less of each app: limit a route to some paths (#642), some zones (#643) 
 | #656 | Limit a route to a provider's source ranges | M | L | Split, folded into ADR-023: a route names explicit CIDRs (`remote_ip`) — an exposure reduction beside #642/#643. The provider-feed half is parked (*Housekeeping*) |
 | #154 | `firewall:internal-proxy` | — | — | Close? Lars questioned the need (2026-05-31) |
 | ✅ #778 | `network:proxy` publishes names with no public DNS record: failing ACME, dead SSO tiles | M | L | **Closed 2026-10-06.** On a per-service site a name without a public A record gets no Caddy route (Caddy retried ACME on every reload) and no Authentik app (a dead tile); an existing one is withdrawn on update. Live on hrossen: logging, network and unifi-os unpublished, ~46k failed ACME lines stopped |
+| ✅ #809 | `network:proxy` update keeps the old domain after a `proxyDomain` change | M | L | **Closed 2026-10-09** (`525ac696`), live on hrossen: since #495 a change reaches only `update-service.sh`, which had no prune, so the old name stayed in Caddy and served a blank page. One `proxy_prune_domains` for install, update, proxyRoutes and unpublish; it also removes the old name's Unbound override, only when that override carries the module's description. The proxy test fails on a leftover domain. Reported by @ErikDaniel007 |
 
 ### G4.3 Manager verb gaps — Ease M · Risk L · released: 4 · done for 2.2: 5 · open: 8
 
@@ -344,7 +345,7 @@ Every app wired to the identity provider the same way: OIDC for hass, Nextcloud 
 | ✅ #769 | vaultwarden: SSO is registered but never wired into the app | M | L | **Closed 2026-10-04** (SSO wired, `e184ea9d`). **Reversed 2026-10-06, vaultwarden 0.6.0:** no SSO for the password vault, by decision — see vaultwarden DESIGN.md |
 | ✅ #779 | identity: `authentik-env-secrets-only` calls `cmp` without diffutils | L | M | **Closed 2026-10-06** (`3f34f63e`): `! cmp` was always true, so the clean `authentik.env` was replaced and logged every boot. Live-tested on hrossen |
 
-### G3.3 App module fixes — Ease L · Risk L · released: 5 · done for 2.2: 4 · open: 10
+### G3.3 App module fixes — Ease L · Risk L · released: 5 · done for 2.2: 5 · open: 10
 
 The known rough edges of the app modules, fixed and tested so they stay fixed: Nextcloud Talk end to end (#715), Home Assistant (#552, #568, #571 — maintainer-owned), Nextcloud and euro-office (#332, #658, #751), litellm consumers (#553), windows-server (#411), forgejo (#283, #284), in-guest backups (#754), container stop timeouts (#786).
 
@@ -359,6 +360,7 @@ The known rough edges of the app modules, fixed and tested so they stay fixed: N
 | #332 | euro-office / Nextcloud install findings | M | L | |
 | ✅ #51 | Immich | — | — | **Closed 2026-10-06.** In `src/home/immich`: Immich 3 from pinned nixos-unstable, 500G thin disk under `cluster:ha`, OIDC; live-tested on hrossen, status Testing. Failover untried |
 | #807 | Immich: bump `unstableSrc` once `jellyfin-ffmpeg` fixes six upload-reachable CVEs | M | L | **Opened 2026-10-09** from the #788 triage (`cc6790a2`): immich-server's jellyfin-ffmpeg 8.1.2-5 has six heap-corruption flaws any logged-in uploader reaches (RISK medium in `immich-vex.json`); nixos-unstable has no fixed jellyfin-ffmpeg yet, and plain ffmpeg 9.0.1 lacks the `tonemapx` filter immich needs |
+| ✅ #808 | euro-office: test.sh fails a healthy DocumentServer, 50 s too short | L | L | **Closed 2026-10-09** (`6e553818`), live on hrossen: the post-rollback test ran straight after the snapshot restore, with no readiness gate; it now waits for the guest and `ready.sh` like the post-update test. Tests 4 and 4b poll up to 180 s (Test 4 probed `/` once and failed a 1 s old container). A forced rollback passed its test. Reported by @ErikDaniel007 |
 | ✅ #283 | forgejo central logging (moved to `src/devops`, 2026-10-04) | L | L | **Closed 2026-10-06** by #770: `forgejo.json` declares `integratesWith: logging:logs`; the baseline journal client ships it. Forgejo was not installed on hrossen when #770 rolled out — its next install is its own test |
 | #658 | nextcloud test 12 probes the browser URL from wherever it runs | L | L | Maintainer-owned (@ErikDaniel007). Not "403 = pass": skip with a reason when the test host is outside the route's `proxyAllowedZones` (exit 77), as Test 9z does |
 | #751 | nextcloud:fileservice has no teardown | M | L | `delete-service.sh` is an ADR-027 stub, so a deleted consumer leaves its connector settings in Nextcloud. Remove the env file and unset what `occ` applied; test on hrossen |
