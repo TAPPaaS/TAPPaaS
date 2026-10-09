@@ -259,24 +259,24 @@ tappaas-train.sh ack --note "everything else: reviewed in the preview"
 as in the nightly `health-manager scan security`), "if released now" first:
 
 ```
-  MODULE                OPEN  RISK  ACK   NOW │   V2.1  FIXED   NEW │  VEX  NOTE
-  NixOS baseline          26     0    0    26 │     31      5     0 │   29  the package versions every NixOS module ships
-  openwebui              142     0    0   142 │    231     89     0 │    0
-  immich                  20     0    0    20 │      —      0    20 │   16  new since v2.1
-  jellyfin                 1     8    0     9 │      —      0     9 │   47  risk medium; new since v2.1
-  identity                 0     5    0     5 │    204    179     1 │   26  risk low
-  coturn                   0     0    0     0 │      0      0     0 │    0
+  MODULE                OPEN  RISK  ACK   NOW │   V2.1  FIXED  DECIDED   NEW │  VEX  NOTE
+  NixOS baseline          26     0    0    26 │     31      5        0     0 │   29  the package versions every NixOS module ships
+  openwebui              142     0    0   142 │    231     89        0     0 │    0
+  immich                   0     9    0     9 │      —      0        0     9 │   33  risk medium; new since v2.1
+  identity                 0     5    0     5 │    204    179       21     1 │   26  risk low
+  coturn                   0     0    0     0 │      0      0        0     0 │    0
   …
-  MODULES                221    18    0   239 │    634    406    33 │  277
   — the platform: patched by its own channel, not by a release — now, from the last scan —
-  pvehost ×3             131     0    —   131 │                     │    4  tappaas1 130 · tappaas3 130 · tappaas2 130
-  Debian LXC              89     0    —    89 │                     │    0  used by vllm-amd
-  network (firewall)      29     0    —    29 │                     │    0
-  backup (on tappaas3)                      — │                     │       installed as packages; Proxmox's have no CVE feed…
-  TOTAL                                   580 │
+  pvehost ×3             131     0    —   131 │                              │    4  tappaas1 130 · tappaas3 130 · tappaas2 130
+  Debian LXC              89     0    —    89 │                              │    0  used by vllm-amd
+  network (firewall)      29     0    —    29 │                              │    0
+  backup (on tappaas3)                      — │                              │       installed as packages; Proxmox's have no CVE feed…
 ```
 
-- **SAME** (in both) is not a column — it is NOW minus NEW; `preview --module` still lists it.
+- **The row adds up: NOW = V2.1 − FIXED − DECIDED + NEW.** FIXED: in the release, gone from what
+  ships now. DECIDED: in the release, still shipped, but settled since by a VEX statement — not
+  fixed, so not FIXED, and not in NOW (identity: 204 − 179 − 21 + 1 = 5). SAME (in both, still
+  counted) is not a column — it is NOW minus NEW; `preview --module` lists it.
 - **OPEN · RISK · ACK = NOW.** OPEN: nobody has analysed it. RISK: analysed and still counted —
   an `exploitable` statement in `<module>-vex.json` (or `templates-vex.json`), whose
   `ratings[]` entry with source `TAPPaaS` gives the risk in this deployment (the NOTE shows the

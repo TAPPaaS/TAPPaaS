@@ -259,6 +259,17 @@ python3 "${PP}" --inventory "${T}/site4.cdx.json" --status "${T}/cs4.json" \
     --image-scanner "${T}/img --refs {file}" --from a --to b --out "${T}/p4.json" --ignore "${T}/ignore.json" >/dev/null 2>&1
 ck "a running instance (deconz-test) makes its module (deconz) run: not approximate" "false" \
    "$(jq -r '.modules[] | select(.module=="deconz") | .approximate' "${T}/p4.json")"
+# The row adds up: NOW = V2.1 − FIXED − DECIDED + NEW. A CVE the release had that a
+# VEX statement now settles at the new version is DECIDED, not FIXED and not in NOW.
+VEXED="CVE-1@3.5.2" run
+ck "a CVE the release had, still shipped but decided now, is DECIDED (logging: 2 − 1 − 1 + 1 = 1)" "2 1 1 1 1" \
+   "$(jq -r '.modules[] | select(.module=="logging") | "\(.base) \(.fixed) \(.decided) \(.new) \(.now)"' "${T}/p.json")"
+ck "…and every row adds up" "true" "$(jq '[.modules[] | select(.base != null and .now != null) | .base - .fixed - .decided + .new == .now] | all' "${T}/p.json")"
+# A running instance of a compared module is in that module's row, not a second one.
+jq '.targets += [{"name":"deconz-test","module":"deconz","layer":"nix","critical":1,"high":1}]' "${T}/cve-status.json" > "${T}/cs5.json" && cp "${T}/cve-status.json" "${T}/cs5.bak" && mv "${T}/cs5.json" "${T}/cve-status.json"
+run
+ck "deconz-test (deconz in the test environment) is no separate 'not compared' row" "0" "$(jq '[.platform[] | select(.target == "deconz-test")] | length' "${T}/p.json")"
+mv "${T}/cs5.bak" "${T}/cve-status.json"
 echo
 echo "── ${PASS} passed, ${FAIL} failed ──"
 [[ "${FAIL}" -eq 0 ]]

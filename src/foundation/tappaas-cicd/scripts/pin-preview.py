@@ -346,7 +346,7 @@ def main():
         tri = [t for t in cve.get("triage", []) if t.get("module") in ("", key)]
         return ("risk", worst([t.get("risk") or "unrated" for t in tri])) if tri else ("open", "")
 
-    COLS = ("now", "open", "risk", "ack", "base", "fixed", "new", "same", "vex")
+    COLS = ("now", "open", "risk", "ack", "base", "fixed", "decided", "new", "same", "vex")
     details = {}
     rows, introduced, total = [], {}, dict.fromkeys(COLS, 0)
     gate_modules = {}
@@ -354,6 +354,7 @@ def main():
     def make_row(key, bf, nf, vx, in_base, in_now, note, approx_):
         bk, nk = set(bf), set(nf)
         gone = bk - nk - set(vx)  # gone because a VEX statement decided it: not fixed, VEX
+        decided = (bk - nk) & set(vx)  # in the release, still shipped, now settled by triage
         st = {k: status_of(nf[k], key) for k in nk}
         for k, (s_, r_) in st.items():
             nf[k]["status"] = s_
@@ -364,7 +365,7 @@ def main():
                "risk": sum(1 for s_, _ in st.values() if s_ == "risk"),
                "riskLevel": worst([r_ for s_, r_ in st.values() if s_ == "risk"]),
                "ack": sum(1 for s_, _ in st.values() if s_ == "ack"),
-               "fixed": len(gone), "new": len(nk - bk), "same": len(nk & bk), "vex": len(vx),
+               "fixed": len(gone), "decided": len(decided), "new": len(nk - bk), "same": len(nk & bk), "vex": len(vx),
                "approximate": approx_, "note": note}
         for k in nk - bk:
             introduced.setdefault(f"{key} {k}", []).append(key)
@@ -473,7 +474,8 @@ def main():
     # A Nix target that is no evaluated module (the mothership is a flake of its
     # own): counted as it runs, not compared — said so, never dropped.
     for t in status.get("targets", []):
-        if t.get("layer") == "nix" and t.get("name") not in modules and t.get("name", "").split(" ")[0] not in modules:
+        if (t.get("layer") == "nix" and t.get("name") not in modules and t.get("name", "").split(" ")[0] not in modules
+                and t.get("module") not in modules):  # deconz-test is deconz's instance: in deconz's row
             platform.append({"target": t.get("name"), "layer": "nix, not compared",
                              "now": (t.get("critical") or 0) + (t.get("high") or 0), "coverage": t.get("coverage")})
 
@@ -593,10 +595,10 @@ def render(o):
     print(f"Release CVE preview — critical/high CVEs, today's CVE database on both sides")
     print(f"  if released now: this tree, pin {o['to'][:12]}, its image pins   ·   {b}: its tree, pin {o['from'][:12]}, its image pins")
     print()
-    head = f"  {'MODULE':<{W}} {'OPEN':>5} {'RISK':>5} {'ACK':>4} {'NOW':>5} │ {b.upper():>6} {'FIXED':>6} {'NEW':>5} │ {'VEX':>4}  NOTE"
+    head = f"  {'MODULE':<{W}} {'OPEN':>5} {'RISK':>5} {'ACK':>4} {'NOW':>5} │ {b.upper():>6} {'FIXED':>6} {'DECIDED':>8} {'NEW':>5} │ {'VEX':>4}  NOTE"
     def line(label, r, note=""):
         return (f"  {label:<{W}} {r.get('open', 0):>5} {r.get('risk', 0):>5} {r.get('ack', 0):>4} {n(r['now']):>5} │ "
-                f"{n(r['base']):>6} {r['fixed']:>6} {r['new']:>5} │ {r.get('vex', 0):>4}  {note}")
+                f"{n(r['base']):>6} {r['fixed']:>6} {r.get('decided', 0):>8} {r['new']:>5} │ {r.get('vex', 0):>4}  {note}")
     def note_of(r):
         parts = []
         if r.get("risk"):
@@ -619,13 +621,14 @@ def render(o):
         for p in sorted(o["platform"], key=lambda p: (-(p["now"] if p["now"] is not None else -1), p["target"])):
             note = "; ".join(x for x in ((f"risk {p['riskLevel']}" if p.get("risk") else ""), p.get("note", "")) if x)
             if p["now"] is None:
-                print(f"  {p['target']:<{W}} {'':>5} {'':>5} {'':>4} {'—':>5} │ {'':>6} {'':>6} {'':>5} │ {'':>4}  {note}")
+                print(f"  {p['target']:<{W}} {'':>5} {'':>5} {'':>4} {'—':>5} │ {'':>6} {'':>6} {'':>8} {'':>5} │ {'':>4}  {note}")
             else:
                 print(f"  {p['target']:<{W}} {p.get('open', p['now']):>5} {p.get('risk', 0):>5} {'—':>4} {p['now']:>5} │ "
-                      f"{'':>6} {'':>6} {'':>5} │ {p.get('vex', 0):>4}  {note}")
+                      f"{'':>6} {'':>6} {'':>8} {'':>5} │ {p.get('vex', 0):>4}  {note}")
         print(f"  {'TOTAL':<{W}} {'':>5} {'':>5} {'':>4} {t['now'] + o['platformTotal']:>5} │")
     print("  OPEN nobody has analysed · RISK analysed, still counted (<module>-vex.json `exploitable`, with its risk here)")
     print("  ACK accepted for this release (`ack`; the platform is not released: —) · VEX decided not affected — not in NOW")
+    print(f"  NOW = {b.upper()} − FIXED − DECIDED + NEW · FIXED gone from what ships · DECIDED still shipped, now settled by VEX")
     print()
     if o["majors"]:
         print(f"  MAJOR version changes since {b} ({len(o['majors'])}):")
