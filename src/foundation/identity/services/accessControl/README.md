@@ -27,6 +27,12 @@ List it **after** `network:proxy` — it layers onto the route that service crea
 Who may log in to the app is decided by Authentik's groups and policies, managed with
 `identity-manager`: members of `users` by default.
 
+A module that also declares `identity:identity` keeps both (the ADR-006 §4 exception,
+#806): its OIDC app holds the slug `<module>` and is the tile, and the gate becomes
+`<module>-gate`, hidden from Authentik's app list. A proxy app left under `<module>`
+from before is removed on the next update. List `identity:identity` after
+`identity:accessControl`.
+
 Forward-auth gates the public name only. Native clients that log in to the app's own
 API (TV and mobile apps) cannot pass it; they need a route that does not go through
 the proxy, such as the module's `<vmname>.<zone>.internal` address.

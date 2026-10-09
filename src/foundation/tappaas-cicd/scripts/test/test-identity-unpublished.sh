@@ -120,5 +120,17 @@ run_svc accessControl
                     || bad "accessControl accepted a published module with no proxyPort"
 ckin "and says which fact is missing" "no proxyPort" "${OUT}"
 
+echo "── the forward-auth gate's slug next to an OIDC app (#806) ──"
+# install, test and delete name the gate through this one predicate; if delete
+# got <module> while the module also has OIDC, it would remove the OIDC app.
+# shellcheck source=../../../identity/lib/oidc-consumer.sh disable=SC1091
+. "${IDENTITY_SVC}/../lib/oidc-consumer.sh"
+[[ "$(accesscontrol_gate_slug jellyfin '{"dependsOn":["network:proxy","identity:accessControl"]}')" == jellyfin ]] \
+    && ok "forward-auth alone keeps the module's own slug" || bad "forward-auth alone did not get slug 'jellyfin'"
+[[ "$(accesscontrol_gate_slug jellyfin '{"dependsOn":["identity:accessControl","identity:identity"]}')" == jellyfin-gate ]] \
+    && ok "next to identity:identity the gate is <module>-gate" || bad "next to identity:identity the gate is not 'jellyfin-gate'"
+[[ "$(accesscontrol_gate_slug jellyfin '{}')" == jellyfin ]] \
+    && ok "a config without dependsOn keeps the module's slug" || bad "a config without dependsOn changed the slug"
+
 echo "── summary: ${PASS} pass, ${FAIL} fail ──"
 [[ "${FAIL}" -eq 0 ]]

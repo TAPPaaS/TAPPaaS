@@ -118,6 +118,24 @@ the code flow, not the headers). Pick one mode per app. (See the Nextcloud examp
 A module **chooses its mode by what it depends on**: `identity:accessControl` → forward-auth,
 `identity:identity` → OIDC.
 
+**Exception — an app whose API must not be public (#806).** The rule assumes the OIDC
+app's own login is its only door. Jellyfin breaks that assumption. Its API, which
+TV/mobile apps log in to by password, would face the internet with only Jellyfin's
+own login, and its OIDC support is a third-party plugin. It therefore declares
+**both**:
+- forward-auth gates every request, so nothing reaches Jellyfin before an Authentik
+  login;
+- OIDC (the SSO-Auth plugin) turns Jellyfin's own login into one click with the same
+  session.
+
+The two Authentik applications must not share a slug. When a module declares both,
+the OIDC app keeps `<module>` and is the tile in the app list. The gate becomes
+`<module>-gate`, hidden from the list (`launch_url blank://blank`). One predicate,
+`accesscontrol_gate_slug` in `identity/lib/oidc-consumer.sh`, decides this for install,
+test and delete. The double login stays but costs one click. Use this exception only
+for an app whose own login cannot be the front door; an ordinary OIDC app still
+picks one mode.
+
 **Mode A — Forward-auth (the gate).** Authentik is literally the front door; the app has no
 separate login and trusts the injected headers:
 

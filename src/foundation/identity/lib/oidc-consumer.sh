@@ -38,6 +38,20 @@ oidc_public_domain() {
     module_public_domain "$1" "$2" "$3"
 }
 
+# accesscontrol_gate_slug <module> <normalized module json> — the Authentik slug
+# of the module's forward-auth gate (identity:accessControl). It is <module>,
+# unless the module ALSO declares identity:identity: then its OIDC app holds
+# <module> and shows the tile, and the gate is <module>-gate, hidden from the
+# app list (#806 — Jellyfin's API needs the gate, its login needs OIDC; the
+# ADR-006 §4 exception). install, test and delete must agree, so it is here.
+accesscontrol_gate_slug() {
+    if jq -e '(.dependsOn // []) | index("identity:identity")' <<<"$2" >/dev/null 2>&1; then
+        printf '%s-gate\n' "$1"
+    else
+        printf '%s\n' "$1"
+    fi
+}
+
 # oidc_domain_unpublished <domain> — succeeds when the name is authoritatively
 # NOT published (#778): no public A record on a per-service site, so no proxy
 # route, no certificate, and no OIDC redirect to it can complete. The verdict is

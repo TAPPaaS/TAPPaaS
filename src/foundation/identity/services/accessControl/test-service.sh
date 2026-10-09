@@ -45,6 +45,7 @@ if oidc_domain_unpublished "${DOMAIN}"; then
     info "    ${GN}✓${CL} not published (${DOMAIN} has no public DNS record) — no forward-auth to verify"
     exit 0
 fi
+GATE_SLUG="$(accesscontrol_gate_slug "${MODULE}" "${_TS_JSON}")"
 
 if ! ${AUTHENTIK_MANAGER} test >/dev/null 2>&1; then
     error "  authentik-manager cannot reach Authentik"
@@ -61,20 +62,20 @@ fail=0
 # 1. Application + provider on the embedded outpost (superuser_full_list — a
 #    bound app is hidden from the list otherwise).
 APPS="$(api "/core/applications/?superuser_full_list=true&page_size=1000" || echo '{}')"
-APP_PK="$(jq -r --arg s "${MODULE}" '.results[]? | select(.slug==$s) | .pk' <<<"${APPS}")"
-PROV_PK="$(jq -r --arg s "${MODULE}" '.results[]? | select(.slug==$s) | .provider // empty' <<<"${APPS}")"
+APP_PK="$(jq -r --arg s "${GATE_SLUG}" '.results[]? | select(.slug==$s) | .pk' <<<"${APPS}")"
+PROV_PK="$(jq -r --arg s "${GATE_SLUG}" '.results[]? | select(.slug==$s) | .provider // empty' <<<"${APPS}")"
 if [[ -n "${APP_PK}" && -n "${PROV_PK}" ]]; then
-    info "    ${GN}✓${CL} proxy application '${MODULE}' present"
+    info "    ${GN}✓${CL} proxy application '${GATE_SLUG}' present"
     attached="$( (api "/outposts/instances/?managed__iexact=goauthentik.io/outposts/embedded" || echo '{}') \
         | jq -r --argjson p "${PROV_PK}" '[.results[]? | select(.providers | index($p))] | length')"
     if [[ "${attached:-0}" -ge 1 ]]; then
         info "    ${GN}✓${CL} provider attached to the embedded outpost"
     else
-        error "    ✗ provider of '${MODULE}' is not on the embedded outpost — the gate cannot answer"
+        error "    ✗ provider of '${GATE_SLUG}' is not on the embedded outpost — the gate cannot answer"
         fail=1
     fi
 else
-    error "    ✗ no proxy application with slug '${MODULE}'"
+    error "    ✗ no proxy application with slug '${GATE_SLUG}'"
     fail=1
 fi
 
@@ -85,7 +86,7 @@ if [[ -n "${APP_PK}" ]]; then
     if [[ "${n:-0}" -ge 1 ]]; then
         info "    ${GN}✓${CL} access binding present (${n} group binding(s))"
     else
-        error "    ✗ application '${MODULE}' has NO access binding — every Authentik user passes"
+        error "    ✗ application '${GATE_SLUG}' has NO access binding — every Authentik user passes"
         fail=1
     fi
 fi

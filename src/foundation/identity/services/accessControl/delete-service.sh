@@ -32,5 +32,14 @@ if [[ ! -f "${HOME}/.authentik-credentials.txt" ]]; then
 fi
 
 debug "identity:accessControl: tearing down Authentik wiring for ${MODULE}"
-authentik-manager app-delete "${MODULE}" || warn "  app-delete for ${MODULE} returned non-zero (may already be gone)"
-debug "  ${GN}✓${CL} Authentik app/provider for ${MODULE} removed"
+# The gate's slug, from the same predicate as install (#806): <module>-gate when
+# the module's OIDC app holds <module> — deleting <module> here would remove
+# that app instead. --only-proxy keeps it safe either way.
+_DS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=../../lib/oidc-consumer.sh disable=SC1091
+. "${_DS_DIR}/../../lib/oidc-consumer.sh"
+GATE_SLUG="$(accesscontrol_gate_slug "${MODULE}" \
+    "$(normalize_module_config < "${CONFIG_DIR}/${MODULE}.json" 2>/dev/null || echo '{}')")"
+authentik-manager app-delete "${GATE_SLUG}" --only-proxy \
+    || warn "  app-delete for ${GATE_SLUG} returned non-zero (may already be gone)"
+debug "  ${GN}✓${CL} Authentik app/provider ${GATE_SLUG} removed"
