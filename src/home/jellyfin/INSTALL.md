@@ -3,7 +3,8 @@
 ## Prerequisites
 
 1. TAPPaaS foundation deployed: `cluster:vm`, `templates:nixos`, `backup:vm`,
-   `storage:nfs`, `network:proxy`, `network:rules`
+   `storage:nfs`, `network:proxy`, `network:rules`, and the `identity` module
+   (Authentik), whose `identity:accessControl` gates the published name
 2. For the media share (now or later): a cluster node with a `tankb` pool to
    serve it from
 
@@ -100,6 +101,9 @@ A share that already holds data is never merged into.
 The order of `dependsOn` in `jellyfin.json` is deliberate — install and update
 apply dependencies in that order:
 
+- `identity:accessControl` right after `network:proxy`: it turns on forward-auth
+  for the route that `network:proxy` has just created. An update that recreates
+  the route therefore gets the gate back in the same run;
 - `network:rules` before `storage:nfs`, so the firewall path to the share exists
   before a migration tries to mount it (in the other order the migration timed
   out and every update rolled back);
@@ -119,7 +123,7 @@ config, mount and firewall rule stay as they are.
 | `diskSize` / `storage` | 32G / `tanka1` | The VM only: OS and Jellyfin's own data. The media is on the share — or on this disk while the share is pending |
 | `storage:nfs` `mounts` | `/media` ← share `media`, subdir `jellyfin`, `rw` | See Media share |
 | `rebootOk` | `true` | Lets an unattended update restart Jellyfin — to move `/media` into a newly declared share, or for a change that needs a reboot. `false`: such changes wait for `--allow-disruption` |
-| `proxyAllowedZones` | `home, netbird, internet` | Drop `internet` for a private-only deployment |
+| `proxyAllowedZones` | `home, netbird, internet` | Which zones Caddy accepts at all; Authentik forward-auth gates every one of them. Drop `internet` for a private-only deployment |
 
 ## Install
 
@@ -145,7 +149,10 @@ Duration: ~5–10 minutes (NixOS clone + rebuild).
 
 ## First-Time Setup
 
-1. Open `https://jellyfin.<your-domain>` and log in with the printed admin account
+1. Open `https://jellyfin.<your-domain>`. Log in to Authentik first (any member
+   of the `users` group gets through), then to Jellyfin with the printed admin
+   account. Browser only: TV and mobile apps cannot pass forward-auth — see
+   [README.md](README.md#access-browser-only-behind-authentik)
 2. Add libraries under **Dashboard → Libraries**:
 
    | Path | Library type |
@@ -214,4 +221,5 @@ Then enable in Jellyfin Dashboard → Playback → Hardware Acceleration → Int
 ### Private-only deployment
 
 Remove `"internet"` from `proxyAllowedZones` in `jellyfin.json` and run
-`update-module.sh jellyfin`. LAN clients and `netbird` VPN peers keep access.
+`update-module.sh jellyfin`. LAN clients and `netbird` VPN peers keep access,
+still through Authentik.

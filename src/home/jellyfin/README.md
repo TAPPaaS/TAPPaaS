@@ -86,8 +86,10 @@ graph LR
     backup["backup:vm"]
     nfs["storage:nfs"]
     netproxy["network:proxy / network:rules"]
+    idac["identity:accessControl"]
     node["share media — nfs-media.mgmt.internal (tankb pool on a node)"]
     caddy["Caddy reverse proxy (on the OPNsense firewall, :443)"]
+    authentik["Authentik (identity) — forward-auth"]
     homeclients["home-zone clients (LAN)"]
     vpnpeers["netbird VPN peers (remote devices)"]
     internet["internet (public)"]
@@ -97,21 +99,37 @@ graph LR
     jellyfin -->|dependsOn| backup
     jellyfin -->|dependsOn| nfs
     jellyfin -->|dependsOn| netproxy
+    jellyfin -->|dependsOn| idac
 
     jellyfin -.->|"NFSv4 tcp/2049 — /media = media/jellyfin"| node
     homeclients -.->|"https://jellyfin.&lt;domain&gt;"| caddy
-    homeclients -.->|"direct in-zone: http://jellyfin.&lt;zone&gt;.internal:8096"| jellyfin
     vpnpeers -.->|"same vhost, via WireGuard overlay"| caddy
     internet -.->|"proxyAllowedZones includes internet"| caddy
-    caddy -.->|"upstream :8096"| jellyfin
+    caddy -.->|"forward-auth: logged in?"| authentik
+    caddy -.->|"upstream :8096, after Authentik"| jellyfin
 ```
 
 Solid arrows are declared `dependsOn` edges (install-order dependencies). Dashed
 arrows are traffic: `network:proxy` creates the `jellyfin.<domain>` vhost on the
 Caddy reverse proxy, and `proxyAllowedZones` (`home`, `netbird`, `internet`)
-controls which source zones that vhost accepts. Home-zone clients can also reach
-the VM directly in-zone. The NFS path to the share is the one rule
-`network:rules` derives from the mount (none while it is pending).
+controls which source zones that vhost accepts. `identity:accessControl` puts
+Authentik forward-auth on that vhost, so the zone list only filters; the gate is
+Authentik. The NFS path to the share is the one rule `network:rules` derives
+from the mount (none while it is pending).
+
+## Access: browser only, behind Authentik
+
+Every request to `https://jellyfin.<domain>` goes through Authentik first, from
+home, from netbird and from the internet alike (home clients resolve the same
+name to Caddy, ADR-021). Only members of the Authentik group `users` get through
+(#805). After that, Jellyfin asks for its own login: Jellyfin does not read
+Authentik's headers, so a browser user logs in twice.
+
+**Native TV and mobile apps do not work.** They log in to Jellyfin's API with a
+username and password, and cannot pass forward-auth. There is no direct route
+either: Jellyfin sits in a Service zone that accepts connections from the
+proxy (`dmz`) only. Apps come back with an ADR-023 path bypass
+(`proxyAccess` / `identityGate: false`), which is not built yet.
 
 ## Quick Start
 

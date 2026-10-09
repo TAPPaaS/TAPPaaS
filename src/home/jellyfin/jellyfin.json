@@ -1,7 +1,7 @@
 {
   "description": "Jellyfin open-source media server for personal movie, TV and music libraries.",
   "kind": "vm",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "stack": "home",
   "releaseDate": "2026-06-27",
   "maintainer": "@AndreasJe",
@@ -15,6 +15,7 @@
     "cluster:vm",
     "backup:vm",
     "network:proxy",
+    "identity:accessControl",
     "network:rules",
     "storage:nfs",
     "templates:nixos"
