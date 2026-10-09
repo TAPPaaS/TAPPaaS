@@ -202,6 +202,12 @@ def add_handler(
     # rather than skipping — important for applying #206 restriction changes.
     existing = manager.get_handler_by_description(description) if description else None
     if existing:
+        # Forward-auth belongs to identity:accessControl, not to this caller:
+        # a reconcile that does not ask for it keeps what the handle has. Writing
+        # "0" here opened every gated module to the internet from network:proxy's
+        # reconfigure until accessControl re-ran in the same update (#806).
+        # Turning it off is the gate owner's call (or the route's removal).
+        handler.forward_auth = forward_auth or existing.forward_auth
         if check_mode:
             print(f"Would update handler: {domain_name} -> {target_desc} "
                   f"(access_list={access_list or 'none'}) (dry-run)")

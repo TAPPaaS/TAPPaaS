@@ -140,6 +140,10 @@ class CaddyHandlerInfo:
     upstream_tls: bool = False
     upstream_http_version: str = ""
     access_list_uuid: str = ""
+    # Authentik forward-auth on this handle (identity:accessControl, #45).
+    # Read so a reconcile can keep it: network:proxy rebuilt the handle without
+    # it and left the module ungated until accessControl ran again (#806).
+    forward_auth: bool = False
 
     @classmethod
     def from_api_response(cls, data: dict) -> "CaddyHandlerInfo":
@@ -166,6 +170,7 @@ class CaddyHandlerInfo:
             upstream_tls=str(data.get("HttpTls", "")) == "1",
             upstream_http_version=_option_str(data.get("HttpVersion", "")),
             access_list_uuid=_option_str(data.get("accesslist", "")),
+            forward_auth=str(data.get("ForwardAuth", "")) == "1",
         )
 
 

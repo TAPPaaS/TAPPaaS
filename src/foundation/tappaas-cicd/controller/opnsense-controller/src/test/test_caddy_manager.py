@@ -411,6 +411,51 @@ class TestHandlerInfoAppliedSettings(unittest.TestCase):
         )
 
 
+class TestReconcileKeepsForwardAuth(unittest.TestCase):
+    """A handle reconcile must not switch Authentik forward-auth off (#806).
+
+    network:proxy re-applies the handle on every update without --forward-auth;
+    writing ForwardAuth=0 left the module ungated from that reconfigure until
+    identity:accessControl turned it back on later in the same update.
+    """
+
+    def _reconcile(self, existing_fa: bool, flag: bool):
+        from opnsense_controller import caddy_cli  # noqa: PLC0415
+        from opnsense_controller.caddy_manager import CaddyHandlerInfo  # noqa: PLC0415
+        mgr = MagicMock()
+        mgr.get_domain_by_name.return_value = MagicMock(uuid="d1")
+        mgr.get_handler_by_description.return_value = CaddyHandlerInfo(
+            uuid="h1", domain_uuid="d1", upstream_domain="jellyfin.srv.internal",
+            upstream_port="8096", description="TAPPaaS: jellyfin", enabled=True,
+            forward_auth=existing_fa)
+        mgr.update_handler.return_value = {"result": "saved"}
+        self.assertTrue(caddy_cli.add_handler(
+            mgr, "jellyfin.example.org", upstream="jellyfin.srv.internal", port="8096",
+            description="TAPPaaS: jellyfin", forward_auth=flag, preserve_host=True))
+        return mgr.update_handler.call_args[0][1]
+
+    def test_reconcile_keeps_an_existing_gate(self):
+        self.assertTrue(self._reconcile(existing_fa=True, flag=False).forward_auth)
+
+    def test_reconcile_of_an_ungated_handle_stays_ungated(self):
+        self.assertFalse(self._reconcile(existing_fa=False, flag=False).forward_auth)
+
+    def test_flag_turns_the_gate_on(self):
+        self.assertTrue(self._reconcile(existing_fa=False, flag=True).forward_auth)
+
+    def test_preserve_host_reaches_the_handle(self):
+        self.assertEqual(self._reconcile(existing_fa=True, flag=False).host_header,
+                         "jellyfin.example.org")
+
+    def test_forward_auth_is_read_from_the_search_row(self):
+        from opnsense_controller.caddy_manager import CaddyHandlerInfo  # noqa: PLC0415
+        row = {"uuid": "u", "reverse": "d", "ToDomain": "x", "ToPort": "1",
+               "description": "TAPPaaS: x", "enabled": "1", "ForwardAuth": "1"}
+        self.assertTrue(CaddyHandlerInfo.from_api_response(row).forward_auth)
+        row["ForwardAuth"] = "0"
+        self.assertFalse(CaddyHandlerInfo.from_api_response(row).forward_auth)
+
+
 class TestListAllRendersScheme(unittest.TestCase):
     """`list` is the state source every verifier greps, so it must show the scheme."""
 
