@@ -14,7 +14,7 @@ import {
   CpeParts, DB_SPACE_BYTES, dbSpaceProblem, Finding, LINUX_PROBE, OPNSENSE_PROBE, PREVIOUS_FILE, STATUS_FILE, ScanStatus, SecurityIO,
   TargetStatus, applyCpes, checkCveStatus, fit, groupByImage, diffScans, nixComponents, parseLinuxProbe, parseOpnsenseProbe,
   loadVex, parseStorePath, parseVex, scanComponentList, scanImageRefs, readStatus, registeredModuleDirs, renderReport, runScan, sbomDir, summarize, summarizeOpnsense, sweepIsNewer,
-  vexFor, vexSuppresses, writeScan, isBuildOnly, pickSeverities, aptModules, moduleOf, patchVex, grypeFindings,
+  vexFor, vexSuppresses, writeScan, isBuildOnly, pickSeverities, aptModules, moduleOf, patchVex, grypeFindings, instanceModules,
 } from "../../src/security";
 import { run } from "../../src/main";
 import { FakeClusterClient } from "./fake-client";
@@ -314,6 +314,13 @@ console.log("loadVex");
   check(at("gitea") === "CVE-A,CVE-B" && at("image:gitea/server") === "CVE-A,CVE-B", "a module's target and its images get the base and its own");
   check(at("forgejo") === "CVE-A", "…another module only the base: a decision about gitea's use of a package is not forgejo's");
   check(vexFor([{ id: "C", state: "not_affected", refs: [], source: "s", module: "pvehost" }], "node:tappaas1").length === 1, "a Proxmox node is the pvehost module's");
+  const idir = mkdtempSync(join(tmpdir(), "hm-inst-"));
+  writeFileSync(join(idir, "gitea-test.json"), JSON.stringify({ moduleSource: "/x/src/someone/dev/gitea", vmname: "gitea-test" }));
+  writeFileSync(join(idir, "site.json"), JSON.stringify({ name: "s" }));
+  const inst = instanceModules(idir);
+  check(inst["gitea-test"] === "gitea" && !("site" in inst), "an instance's module is its config's moduleSource, not its name");
+  check(at("forgejo") === "CVE-A" && vexFor(v.statements, "image:gitea-test/server", inst).map((s) => s.id).sort().join(",") === "CVE-A,CVE-B",
+    "…so gitea in the test environment (gitea-test) and its images get gitea's VEX");
 }
 
 // ── the whole scan, offline ──────────────────────────────────────────

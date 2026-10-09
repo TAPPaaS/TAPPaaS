@@ -247,6 +247,18 @@ python3 "${PP}" --inventory "${T}/site.cdx.json" --status "${T}/cve-status.json"
     --image-scanner "${T}/img --refs {file}" --from a --to b --out "${T}/p3.json" --ignore "${T}/ignore.json" >/dev/null 2>&1
 ck "a module built on both sides is exact: no ≈, its runtime packages counted" "false 2" \
    "$(jq -r '.modules[] | select(.module=="deconz") | "\(.approximate) \(.now)"' "${T}/p3.json")"
+# An instance runs its module: deconz-test (deconz in the test environment) runs, so
+# deconz is no longer approximate and counts what the instance runs.
+cat > "${T}/site4.cdx.json" <<'EOF'
+{"components":[{"name":"deconz-test","properties":[{"name":"tappaas:layer","value":"nix"}],"components":[{"name":"openssl","version":"3.5.2"}]}]}
+EOF
+echo '{"targets":[{"name":"deconz-test","module":"deconz","layer":"nix","critical":1,"high":0}]}' > "${T}/cs4.json"
+python3 "${PP}" --inventory "${T}/site4.cdx.json" --status "${T}/cs4.json" \
+    --base-label v2.1 --base-closures "${T}/base" --base-images "${T}/noimg.json" --base-nix-scanner "${T}/nix --components {file}" \
+    --now-closures "${T}/now" --now-images "${T}/noimg.json" --now-nix-scanner "${T}/nix --components {file}" \
+    --image-scanner "${T}/img --refs {file}" --from a --to b --out "${T}/p4.json" --ignore "${T}/ignore.json" >/dev/null 2>&1
+ck "a running instance (deconz-test) makes its module (deconz) run: not approximate" "false" \
+   "$(jq -r '.modules[] | select(.module=="deconz") | .approximate' "${T}/p4.json")"
 echo
 echo "── ${PASS} passed, ${FAIL} failed ──"
 [[ "${FAIL}" -eq 0 ]]

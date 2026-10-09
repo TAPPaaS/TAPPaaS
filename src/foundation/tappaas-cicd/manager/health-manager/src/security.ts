@@ -31,6 +31,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSy
 import { hostname, tmpdir } from "os";
 import { join } from "path";
 import { RemoteResult, mgmtDomain, operatorHome, sshIdentity } from "../../../lib/ts/src/cluster";
+import { moduleOfLocation, moduleSourceOf } from "../../../lib/ts/src/instance";
 import { isManaged, loadConfigModules, readModuleJson, siteNodeHostnames } from "./config";
 import { guestTarget } from "./checks";
 import { CheckResult, CheckRow, CheckStatus, ClusterClient } from "./types";
@@ -860,6 +861,22 @@ export function planTargets(configDir: string, defaultNode: string, client: Clus
   return out;
 }
 
+// instance → module, from each deployed config's moduleSource (ADR-026 D6.3).
+export function instanceModules(configDir: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  let files: string[] = [];
+  try {
+    files = readdirSync(configDir).filter((f) => f.endsWith(".json"));
+  } catch {
+    return out;
+  }
+  for (const f of files) {
+    const src = moduleSourceOf(readModuleJson(join(configDir, f)));
+    if (src) out[f.slice(0, -".json".length)] = moduleOfLocation(src);
+  }
+  return out;
+}
+
 // node → the modules installed on it as packages (module json imageType "apt").
 // They have no vmid, so loadConfigModules does not list them.
 export function aptModules(configDir: string, defaultNode: string): Record<string, string[]> {
@@ -923,11 +940,16 @@ export function registeredModuleDirs(configDir: string, fallbackRepo: string): s
 // reachable in one module can be in another — so <module>-vex.json decides for
 // that module's targets only; templates-vex.json, the estate-wide base (§8), for
 // every target. A Proxmox node is the pvehost module's.
-export function moduleOf(target: string): string {
-  return target.startsWith("node:") ? "pvehost" : target.replace(/^image:/, "").split("/")[0];
+// A target names an INSTANCE (deconz-test: deconz in the `test` environment); its
+// module is its config's moduleSource (ADR-026 D6.3) — never the instance name,
+// or an instance outside the default environment loses its module's VEX.
+export function moduleOf(target: string, instances: Record<string, string> = {}): string {
+  if (target.startsWith("node:")) return "pvehost";
+  const instance = target.replace(/^image:/, "").split("/")[0];
+  return instances[instance] ?? instance;
 }
-export function vexFor(vex: VexStatement[], target: string): VexStatement[] {
-  const module = moduleOf(target);
+export function vexFor(vex: VexStatement[], target: string, instances: Record<string, string> = {}): VexStatement[] {
+  const module = moduleOf(target, instances);
   return vex.filter((s) => s.module === "" || s.module === module);
 }
 
@@ -966,6 +988,7 @@ interface CdxTarget {
 
 export function runScan(opts: ScanOpts, client: ClusterClient, io: SecurityIO): { status: ScanStatus; cdx: Record<string, unknown> } {
   const log = opts.log ?? ((): void => undefined);
+  const inst = instanceModules(opts.configDir);
   const v = loadVex(opts.configDir, opts.repoDir);
   const vex = v.statements;
   const notes: string[] = [];
@@ -1023,13 +1046,13 @@ export function runScan(opts: ScanOpts, client: ClusterClient, io: SecurityIO): 
 
     // 3. scan each target with its layer's scanner
     const failed = (t: Planned, layer: Layer, why: string, seen = 0): CdxTarget => ({
-      status: summarize({ id: t.id, name: t.name, layer, host: t.host }, seen, why, [], vexFor(vex, t.id), layer !== "nix"),
+      status: summarize({ id: t.id, name: t.name, layer, host: t.host }, seen, why, [], vexFor(vex, t.id, inst), layer !== "nix"),
       version: "",
       components: [],
     });
     for (const p of probed) {
       const t = p.t;
-      const tv = vexFor(vex, t.id);
+      const tv = vexFor(vex, t.id, inst);
       if (t.layer === "opnsense") {
         const ids = [...new Set((p.opn?.audit ?? []).flatMap((a) => a.cves))];
         const sev = ids.length > 0 && dbOk ? io.cveSeverities(ids) : ids.length > 0 ? null : {};
@@ -1117,7 +1140,7 @@ export function runScan(opts: ScanOpts, client: ClusterClient, io: SecurityIO): 
   // as packages: backup's Proxmox Backup Server is apt on its node, no VM.
   const apt = aptModules(opts.configDir, opts.defaultNode);
   for (const r of results) {
-    r.status.module = moduleOf(r.status.id);
+    r.status.module = moduleOf(r.status.id, inst);
     if (!r.status.id.startsWith("node:")) continue;
     const on = apt[r.status.id.slice(5)];
     if (on) r.status.apt = on;

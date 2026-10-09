@@ -195,6 +195,13 @@ def main():
             ignore = json.load(open(a.ignore)).get("packages", {})
         except ValueError:
             print(f"pin-preview: {a.ignore} is not JSON — nothing is ignored", file=sys.stderr)
+    # An instance runs its module (ADR-026 D6.3): deconz-test is deconz in the `test`
+    # environment, and what it runs is what deconz runs — the scan names the module.
+    for t in status.get("targets", []):
+        name, mod = t.get("name", "").split(" ")[0], t.get("module")
+        if t.get("layer") == "nix" and mod and mod != name and name in inv:
+            for p, vs in inv[name].items():
+                inv.setdefault(mod, {}).setdefault(p, set()).update(vs)
     union = {p for pk in inv.values() for p in pk}
     clo = {"base": closures(a.base_closures), "now": closures(a.now_closures)}
     exact = {"base": built(a.base_closures), "now": built(a.now_closures)}

@@ -187,7 +187,8 @@ The firewall's `pkg audit` (VuXML) carries no severity; each CVE id's severity
 is looked up in grype's database, NVD first. On a Debian host, findings only in
 build-only packages (kernel headers, compilers, `-dev`) are counted apart
 (`buildOnly`) and named under the report. Each target names its `module` (a node
-is `pvehost`'s), and a node lists what is installed on it as packages (`apt`:
+is `pvehost`'s; an instance in another environment, such as `deconz-test`, is its
+config's `moduleSource` module, so the module's VEX applies to it), and a node lists what is installed on it as packages (`apt`:
 backup); Proxmox's own packages are matched by no feed, and the node's note says so.
 
 **Output** goes to `config/sbom/`: `site.cdx.json` — one CycloneDX 1.4 document,
