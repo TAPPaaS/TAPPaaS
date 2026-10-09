@@ -1,0 +1,51 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "version": 1,
+  "metadata": {
+    "component": {
+      "type": "application",
+      "name": "litellm",
+      "description": "TAPPaaS module litellm: triage of its own critical/high CVEs (#788)."
+    }
+  },
+  "vulnerabilities": [
+    {
+      "id": "CVE-2022-0543",
+      "analysis": {
+        "state": "false_positive",
+        "detail": "Debian/Ubuntu packaging bug (Lua loaded as a dynamic library, exposing package/loadlib); nixpkgs builds redis with its bundled Lua, and litellm's redis listens on 127.0.0.1 only."
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/redis"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2022-3734",
+      "analysis": {
+        "state": "false_positive",
+        "detail": "Concerns an unofficial Windows port (dbghelp.dll search path); upstream Redis on Linux is not affected."
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/redis"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-104851",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Jinja rendering in fsspec's ReferenceFileSystem (Kerchunk reference JSON); fsspec is in the image only for huggingface_hub and polars, nothing in litellm opens a reference:// filesystem, and no request can supply one.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:pypi/fsspec@2026.4.0"
+        }
+      ]
+    }
+  ]
+}
