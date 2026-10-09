@@ -85,6 +85,9 @@ export interface TargetStatus {
   verdict: Verdict;
   act: Finding[]; // what ACT refers to
   critHighKeys: string[]; // "<id> <pkg>" of every Critical/High finding — the diff base
+  critHighRisk?: string[]; // ids of those an `exploitable` statement analysed (RISK), still counted
+  riskLevel?: string; // the worst risk-here among them
+  critHighVex?: string[]; // Critical/High ids a VEX statement decided — not counted
   new: string[]; // critHighKeys not present in the previous scan
 }
 
@@ -537,6 +540,18 @@ export function summarize(
     critHighKeys: [...new Set(ch.map((f) => `${f.id} ${f.pkg}`))].sort(),
     new: [],
   };
+  // What the release preview's platform rows show: RISK (analysed, still counted)
+  // and VEX (decided), for Critical/High — the scan's own split of NOW.
+  const isCH = (f: Finding): boolean => f.severity === "Critical" || f.severity === "High";
+  const tri = ch.flatMap((f) => vexTriage(f, vex).map((v) => ({ id: f.id, risk: v.risk ?? "" })));
+  if (tri.length > 0) {
+    status.critHighRisk = [...new Set(tri.map((x) => x.id))].sort();
+    const rank = ["critical", "high", "medium", "low"];
+    const lv = tri.map((x) => x.risk).filter((r) => rank.includes(r)).sort((a, b) => rank.indexOf(a) - rank.indexOf(b));
+    status.riskLevel = lv[0] ?? "unrated";
+  }
+  const chVex = new Set(all.filter((f) => f.id && isCH(f) && vexSuppresses(f, vex)).map((f) => f.id));
+  if (chVex.size > 0) status.critHighVex = [...chVex].sort();
   if (coverageFail) status.verdict = "failed";
   else if (!hasFixState) status.verdict = "triage";
   else if (chFix.length > 0) {

@@ -406,12 +406,16 @@ def main():
             continue
         name = t.get("name", "")
         mod = t.get("module") or ("cluster" if name.endswith("(node)") else name.split(" ")[0])
-        g = groups.setdefault(mod, {"targets": [], "ids": set(), "keyed": True})
+        g = groups.setdefault(mod, {"targets": [], "ids": set(), "risk": set(), "vex": set(), "levels": [], "keyed": True})
         g["targets"].append(t)
         if "critHighKeys" in t:
             g["ids"] |= {k.split(" ")[0] for k in t["critHighKeys"]}
         else:
             g["keyed"] = False
+        g["risk"] |= set(t.get("critHighRisk") or [])
+        g["vex"] |= set(t.get("critHighVex") or [])
+        if t.get("riskLevel"):
+            g["levels"].append(t["riskLevel"])
     platform = []
     for mod, g in sorted(groups.items()):
         ts = g["targets"]
@@ -419,8 +423,12 @@ def main():
         label = f"{mod} ×{len(ts)}" if len(ts) > 1 else ts[0].get("name", mod)
         if mod in modules:  # a module whose host is also scanned as a system (vllm-amd's LXC)
             label = f"{mod} host"
+        nowp = len(g["ids"]) if g["keyed"] else max(c for _, c in each)
+        riskp = len(g["risk"] & g["ids"])
         platform.append({"target": label, "module": mod, "layer": ts[0].get("layer"),
-                         "now": len(g["ids"]) if g["keyed"] else max(c for _, c in each),
+                         "now": nowp, "open": nowp - riskp, "risk": riskp, "vex": len(g["vex"]),
+                         "riskLevel": min(g["levels"], key=lambda x: ("critical", "high", "medium", "low", "unrated").index(x)
+                                          if x in ("critical", "high", "medium", "low", "unrated") else 9) if g["levels"] else "",
                          "instances": [n for n, _ in each] if len(ts) > 1 else [],
                          "note": " · ".join(f"{n} {c}" for n, c in each) if len(ts) > 1 else "",
                          "coverage": "fail" if any(t.get("coverage") == "fail" for t in ts) else "ok"})
@@ -428,9 +436,9 @@ def main():
         # its own row, so it is not lost inside the node's — no feed covers it.
         for t in ts:
             for am in t.get("apt", []):
-                platform.append({"target": f"{am} (apt on {t.get('name', '').split(' ')[0]})", "module": am, "layer": "apt",
+                platform.append({"target": f"{am} (on {t.get('name', '').split(' ')[0]})", "module": am, "layer": "apt",
                                  "now": None, "instances": [], "coverage": "ok",
-                                 "note": "Proxmox packages: no CVE feed; its Debian base counts under " + mod})
+                                 "note": "installed as packages; Proxmox's have no CVE feed, its Debian base counts under " + mod})
     # A Nix target that is no evaluated module (the mothership is a flake of its
     # own): counted as it runs, not compared — said so, never dropped.
     for t in status.get("targets", []):
@@ -554,10 +562,10 @@ def render(o):
     print(f"Release CVE preview — critical/high CVEs, today's CVE database on both sides")
     print(f"  if released now: this tree, pin {o['to'][:12]}, its image pins   ·   {b}: its tree, pin {o['from'][:12]}, its image pins")
     print()
-    head = f"  {'MODULE':<{W}} {'OPEN':>5} {'RISK':>5} {'ACK':>4} {'NOW':>5} │ {b.upper():>6} {'FIXED':>6} {'NEW':>5} {'SAME':>5} │ {'VEX':>4}  NOTE"
+    head = f"  {'MODULE':<{W}} {'OPEN':>5} {'RISK':>5} {'ACK':>4} {'NOW':>5} │ {b.upper():>6} {'FIXED':>6} {'NEW':>5} │ {'VEX':>4}  NOTE"
     def line(label, r, note=""):
         return (f"  {label:<{W}} {r.get('open', 0):>5} {r.get('risk', 0):>5} {r.get('ack', 0):>4} {n(r['now']):>5} │ "
-                f"{n(r['base']):>6} {r['fixed']:>6} {r['new']:>5} {r['same']:>5} │ {r.get('vex', 0):>4}  {note}")
+                f"{n(r['base']):>6} {r['fixed']:>6} {r['new']:>5} │ {r.get('vex', 0):>4}  {note}")
     def note_of(r):
         parts = []
         if r.get("risk"):
@@ -578,10 +586,15 @@ def render(o):
     if o["platform"]:
         print(f"  — the platform: patched by its own channel, not by a release — now, from the last scan —")
         for p in sorted(o["platform"], key=lambda p: (-(p["now"] if p["now"] is not None else -1), p["target"])):
-            print(f"  {p['target']:<{W}} {'':>5} {'':>5} {'':>4} {n(p['now']):>5} │" + (f"   {p['note']}" if p.get("note") else ""))
+            note = "; ".join(x for x in ((f"risk {p['riskLevel']}" if p.get("risk") else ""), p.get("note", "")) if x)
+            if p["now"] is None:
+                print(f"  {p['target']:<{W}} {'':>5} {'':>5} {'':>4} {'—':>5} │ {'':>6} {'':>6} {'':>5} │ {'':>4}  {note}")
+            else:
+                print(f"  {p['target']:<{W}} {p.get('open', p['now']):>5} {p.get('risk', 0):>5} {'—':>4} {p['now']:>5} │ "
+                      f"{'':>6} {'':>6} {'':>5} │ {p.get('vex', 0):>4}  {note}")
         print(f"  {'TOTAL':<{W}} {'':>5} {'':>5} {'':>4} {t['now'] + o['platformTotal']:>5} │")
     print("  OPEN nobody has analysed · RISK analysed, still counted (<module>-vex.json `exploitable`, with its risk here)")
-    print("  ACK accepted for this release (`ack`) · VEX decided not affected — not in NOW")
+    print("  ACK accepted for this release (`ack`; the platform is not released: —) · VEX decided not affected — not in NOW")
     print()
     if o["majors"]:
         print(f"  MAJOR version changes since {b} ({len(o['majors'])}):")

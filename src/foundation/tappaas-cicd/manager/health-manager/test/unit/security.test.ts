@@ -193,6 +193,12 @@ console.log("summarize: coverage and verdicts");
   check(summarize(base, 9, "", [f("A", "Critical", "")], [], true).verdict === "watch", "Critical without a fix → watch (upstream)");
   const nix = summarize({ ...base, layer: "nix" }, 400, "", [f("A", "Critical", "")], [], false);
   check(nix.verdict === "triage" && nix.fixable === null, "Nix → triage, fix-state unknown (null, not 0)");
+  const vx = parseVex(JSON.stringify({ vulnerabilities: [
+    { id: "R", analysis: { state: "exploitable" }, ratings: [{ source: { name: "TAPPaaS" }, severity: "low" }] },
+    { id: "V", analysis: { state: "not_affected" } }] }), "c", "cluster");
+  const sp = summarize(base, 9, "", [f("R", "High", ""), f("V", "Critical", ""), f("O", "High", "")], vx, true);
+  check(sp.high === 2 && sp.critHighRisk?.join(",") === "R" && sp.riskLevel === "low" && sp.critHighVex?.join(",") === "V",
+    "a platform target says which critical/high are analysed (RISK, worst risk) and how many VEX decided");
   const dup = summarize(base, 9, "", [f("A", "High", "2", "x"), f("A", "High", "2", "y")], [], true);
   check(dup.findings === 1 && dup.high === 1 && dup.critHighKeys.length === 2, "counts are unique CVE ids; keys keep the package");
 }

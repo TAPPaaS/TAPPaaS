@@ -259,22 +259,23 @@ tappaas-train.sh ack --note "everything else: reviewed in the preview"
 as in the nightly `health-manager scan security`), "if released now" first:
 
 ```
-  MODULE                OPEN  RISK  ACK   NOW │   V2.1  FIXED   NEW  SAME │  VEX  NOTE
-  baseline (all NixOS)    26     0    0    26 │     31      5     0    26 │   29  the package versions every NixOS module ships
-  openwebui              332     0    0   332 │    704    372     0   332 │    0
-  immich                  20     0    0    20 │      —      0    20     0 │   16  new since v2.1
-  jellyfin                 1     8    0     9 │      —      0     9     0 │   47  risk medium; new since v2.1
-  identity                 0     5    0     5 │    204    179     1     4 │   26  risk low
-  coturn                   0     0    0     0 │      0      0     0     0 │    0
+  MODULE                OPEN  RISK  ACK   NOW │   V2.1  FIXED   NEW │  VEX  NOTE
+  baseline (all NixOS)    26     0    0    26 │     31      5     0 │   29  the package versions every NixOS module ships
+  openwebui              142     0    0   142 │    231     89     0 │    0
+  immich                  20     0    0    20 │      —      0    20 │   16  new since v2.1
+  jellyfin                 1     8    0     9 │      —      0     9 │   47  risk medium; new since v2.1
+  identity                 0     5    0     5 │    204    179     1 │   26  risk low
+  coturn                   0     0    0     0 │      0      0     0 │    0
   …
-  MODULES                591    18    0   609 │   1107    689   213   396 │  277
+  MODULES                221    18    0   239 │    634    406    33 │  277
   — the platform: patched by its own channel, not by a release — now, from the last scan —
-  cluster ×3                              131 │   tappaas1 130 · tappaas3 130 · tappaas2 130
-  network (firewall)                       29 │
-  backup (apt on tappaas3)                   — │   Proxmox packages: no CVE feed; its Debian base counts under cluster
-  TOTAL                                  1082 │
+  cluster ×3             131     0    —   131 │                     │    4  tappaas1 130 · tappaas3 130 · tappaas2 130
+  network (firewall)      29     0    —    29 │                     │    0
+  backup (on tappaas3)                      — │                     │       installed as packages; Proxmox's have no CVE feed…
+  TOTAL                                   580 │
 ```
 
+- **SAME** (in both) is not a column — it is NOW minus NEW; `preview --module` still lists it.
 - **OPEN · RISK · ACK = NOW.** OPEN: nobody has analysed it. RISK: analysed and still counted —
   an `exploitable` statement in `<module>-vex.json` (or `templates-vex.json`), whose
   `ratings[]` entry with source `TAPPaaS` gives the risk in this deployment (the NOTE shows the
@@ -303,7 +304,8 @@ as in the nightly `health-manager scan security`), "if released now" first:
   last `health-manager scan security`, and they are in the TOTAL. One row per module, however many
   instances run it: the nodes are one `cluster ×3` row counting each CVE once, every node's own
   count beside it. A module installed on a node as packages (backup) has its own row, marked as
-  covered by no feed.
+  covered by no feed. OPEN, RISK and VEX come from the scan (an `exploitable` statement in, say,
+  `cluster-vex.json` is RISK); ACK is "—": the platform is not released, so nothing to accept.
 - **The details** (`config/train-preview-details.json`) hold, per module, every critical/high CVE
   of both sides with its package and version, the image references and the changed package
   versions: the input for working out what to fix (`preview --module`, or `jq`).
