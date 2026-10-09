@@ -118,6 +118,17 @@ authentik-manager proxy-app-ensure "${MODULE}" \
     --description "TAPPaaS forward-auth for ${MODULE} (#45)" \
     --attach-outpost || die "authentik-manager proxy-app-ensure failed for ${MODULE}"
 
+# ── Step 1b: access gate (MANDATORY — an unbound app is allow-all) ───────────
+# Authentik lets every user through an application with no policy binding
+# (ADR-006 §5), so without this any account on the identity provider passes the
+# forward-auth gate. Bind the org membership group `users`, as identity:identity
+# does for OIDC apps (#805). group-ensure is the same idempotent safety net.
+authentik-manager group-ensure users >/dev/null 2>&1 \
+    || warn "group-ensure users failed; assuming identity-manager already created it"
+_bind_out="$(authentik-manager app-bind-groups "${MODULE}" --group users)" \
+    || die "app-bind-groups failed for ${MODULE} — the app would be open to every Authentik user"
+debug "  ${_bind_out}"
+
 # ── Step 2: Flip ForwardAuth on the existing Caddy handler ──────────────────
 
 # Flip ForwardAuth on the existing handler directly via the OPNsense API.

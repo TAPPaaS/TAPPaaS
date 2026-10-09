@@ -283,7 +283,7 @@ them on one app (double login, no benefit):
 | Mode | `dependsOn` | How it works | In-app account |
 |------|-------------|--------------|----------------|
 | **OIDC** (e.g. Nextcloud) | `identity:identity` | the app is an OIDC client of Authentik; groups arrive in the `groups` claim | created just-in-time on first login |
-| **Forward-auth** (e.g. Open WebUI) | `identity:accessControl` | Caddy asks the Authentik outpost, then injects `X-Authentik-*` headers | none — the URL is simply gated |
+| **Forward-auth** (e.g. Jellyfin) | `identity:accessControl` | Caddy asks the Authentik outpost, then injects `X-Authentik-*` headers | none — the URL is simply gated |
 
 The user's groups travel in both modes; **the app decides what each group means**.
 Authentik only carries them.

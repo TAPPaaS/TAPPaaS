@@ -10,7 +10,7 @@ single sign-on across all modules.
 | Capability | Access from | How |
 |------------|-------------|-----|
 | Authentik SSO web UI (login + admin) | internet (via reverse proxy) | `https://identity.<domain>` |
-| Forward-auth gating for header-based apps (e.g. Open WebUI) | consumer modules | module declares `dependsOn: ["identity:accessControl"]` — wired automatically at its install |
+| Forward-auth gating for apps without native SSO (e.g. Jellyfin) | consumer modules | module declares `dependsOn: ["identity:accessControl"]` — wired automatically at its install |
 | OIDC provider for native-OIDC apps (e.g. Nextcloud) | consumer modules | module declares `dependsOn: ["identity:identity"]` — OAuth2/OpenID provider, app, group bindings and VM secrets wired automatically |
 | Role-based access (people reconciled by `identity-manager`) | admin (tappaas-cicd) | `identity-manager reconcile --apply`; also manageable in the Authentik admin UI |
 | Authentik API access for tooling | tappaas-cicd | `authentik-manager` with auto-bootstrapped `~/.authentik-credentials.txt` |

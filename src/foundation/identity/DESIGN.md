@@ -113,7 +113,9 @@ after a cicd rebuild).
 
 - **`identity:accessControl`** (forward-auth, header-based apps): creates/updates an
   Authentik Proxy Provider + Application for the consumer, attaches it to the embedded
-  outpost, and flips the consumer's existing Caddy handler to `ForwardAuth=1`. Requires
+  outpost, binds the `users` group to it (mandatory — without a binding every Authentik
+  user passes the gate, #805), and flips the consumer's existing Caddy handler to
+  `ForwardAuth=1`. Requires
   the consumer's `network:proxy` service to have run first.
 - **`identity:identity`** (native OIDC apps): ensures the optional `<module>-admins`
   group (when `identity.providesAdminRole`), creates/updates an OAuth2/OpenID Provider +
