@@ -469,6 +469,10 @@ console.log("writeScan / diffScans / checkCveStatus / report");
   io3.images.set("ex/app:1", ok(trivyJson("debian", 100, [["CVE-2026-9", "CRITICAL", "libc6", "2.36-9+deb12u5"]])));
   const v3 = parseVex(JSON.stringify({ vulnerabilities: [{ id: "CVE-2026-9", analysis: { state: "false_positive" } }] }), "t");
   check(scanImageRefs(["ex/app:1"], io3, v3)["ex/app:1"].suppressed.length === 1, "…and in an image, the same rule");
+  const io6 = new FakeIO();
+  io6.images.set("ex/app:2", ok(trivyJson("debian", 100, [["CVE-2013-7445", "HIGH", "linux-libc-dev", "6.1.1"], ["CVE-2026-9", "HIGH", "libc6", "2.36"]])));
+  check(scanImageRefs(["ex/app:2"], io6)["ex/app:2"].findings.map((f) => f.id).join(",") === "CVE-2026-9",
+    "an image's build-only packages are not counted in a list scan either — as in the nightly scan");
   const v4 = [...parseVex(JSON.stringify({ vulnerabilities: [{ id: "CVE-2026-5450", analysis: { state: "not_affected" } }] }), "a", "nextcloud"),
     ...parseVex(JSON.stringify({ vulnerabilities: [{ id: "CVE-2026-5450", analysis: { state: "false_positive" } }] }), "b", "immich")];
   const r4 = scanComponentList([{ name: "glibc", version: "2.42-84" }], new FakeIO(), v4);

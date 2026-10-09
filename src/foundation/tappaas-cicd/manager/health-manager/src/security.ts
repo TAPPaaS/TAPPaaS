@@ -1203,7 +1203,8 @@ export function scanImageRefs(refs: string[], io: SecurityIO, vex: VexStatement[
       continue;
     }
     try {
-      out[ref] = { ...splitVex(trivyParse(r.stdout).findings, vex), error: "" };
+      // As the scan counts an image (trivyTarget): build-only packages apart.
+      out[ref] = { ...splitVex(trivyParse(r.stdout).findings.filter((f) => !isBuildOnly(f.pkg)), vex), error: "" };
     } catch {
       out[ref] = { findings: [], suppressed: [], error: "trivy output not parseable" };
     }
