@@ -281,6 +281,14 @@ TLS_ARGS=()
 if [[ "$(get_config_value 'proxyUpstreamTls' 'false')" == "true" ]]; then
     TLS_ARGS=(--upstream-tls)
 fi
+# The same upstream flags install-service passes. The handler is rebuilt from
+# them on every reconcile, so a flag left out here was never applied to an
+# installed module and was dropped from one installed with it: proxyPreserveHost
+# was logged as "true" while Caddy kept sending its own Host (#806).
+HTTP1_ARGS=()
+[[ "$(get_config_value 'proxyUpstreamHttp1' 'false')" == "true" ]] && HTTP1_ARGS=(--upstream-http1)
+PRESERVE_HOST_ARGS=()
+[[ "$(get_config_value 'proxyPreserveHost' 'false')" == "true" ]] && PRESERVE_HOST_ARGS=(--preserve-host)
 
 debug "  Reconciling handler (upstream ${UPSTREAM}:${PROXY_PORT}, access=${ACL_NAME:-public})..."
 run_caddy add-handler "${PROXY_DOMAIN}" \
@@ -289,6 +297,8 @@ run_caddy add-handler "${PROXY_DOMAIN}" \
     --description "${DESCRIPTION}" \
     "${ACL_ARGS[@]+"${ACL_ARGS[@]}"}" \
     "${TLS_ARGS[@]+"${TLS_ARGS[@]}"}" \
+    "${HTTP1_ARGS[@]+"${HTTP1_ARGS[@]}"}" \
+    "${PRESERVE_HOST_ARGS[@]+"${PRESERVE_HOST_ARGS[@]}"}" \
     --no-ssl-verify || die "Failed to reconcile Caddy handler"
 CHANGES_MADE=true
 
