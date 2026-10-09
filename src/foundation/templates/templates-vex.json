@@ -404,6 +404,371 @@
           "ref": "pkg:nix/p11-kit@0.26.2"
         }
       ]
+    },
+    {
+      "id": "CVE-2019-1010022",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "Disputed upstream: a stack-guard bypass that needs an overflow already exploited; the record names no affected versions. Kept counted, as glibc is."
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/glibc@2.42-100"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2019-1010023",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "Disputed upstream: ldd run on a malicious ELF, which glibc treats as a non-security bug; the record names no affected versions. Kept counted, as glibc is."
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/glibc@2.42-100"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-52858",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "Python omni-completion executing buffer code (python3complete.vim). vim on a guest runs only when an admin edits over SSH; no service hands it untrusted input. Reachable only if that admin opens attacker-supplied content."
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/vim@9.2.0541"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-52860",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "Python omni-completion exec() of reconstructed definitions. vim on a guest runs only when an admin edits over SSH; no service hands it untrusted input. Reachable only if that admin opens attacker-supplied content."
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/vim@9.2.0541"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-57456",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "Python omni-completion exec() of reconstructed definitions. vim on a guest runs only when an admin edits over SSH; no service hands it untrusted input. Reachable only if that admin opens attacker-supplied content."
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/vim@9.2.0541"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-52859",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "terminal snapshot copy (update_snapshot) in a :terminal window. vim on a guest runs only when an admin edits over SSH; no service hands it untrusted input. Reachable only if that admin opens attacker-supplied content."
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/vim@9.2.0541"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-55693",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "a crafted spell file (tree_count_words). vim on a guest runs only when an admin edits over SSH; no service hands it untrusted input. Reachable only if that admin opens attacker-supplied content."
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/vim@9.2.0541"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-57455",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "a crafted spell file (spell_soundfold_sofo). vim on a guest runs only when an admin edits over SSH; no service hands it untrusted input. Reachable only if that admin opens attacker-supplied content."
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/vim@9.2.0541"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-73072",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "a crafted spell file (set_sofo). vim on a guest runs only when an admin edits over SSH; no service hands it untrusted input. Reachable only if that admin opens attacker-supplied content."
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/vim@9.2.0541"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-55895",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "netrw deleting a crafted file name. vim on a guest runs only when an admin edits over SSH; no service hands it untrusted input. Reachable only if that admin opens attacker-supplied content."
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/vim@9.2.0541"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-73078",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "netrw bookmark/history menus from crafted directory names. vim on a guest runs only when an admin edits over SSH; no service hands it untrusted input. Reachable only if that admin opens attacker-supplied content."
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/vim@9.2.0541"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-59856",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "PHP omni-completion on a crafted class name. vim on a guest runs only when an admin edits over SSH; no service hands it untrusted input. Reachable only if that admin opens attacker-supplied content."
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/vim@9.2.0541"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-59858",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "C omni-completion on a crafted tags entry. vim on a guest runs only when an admin edits over SSH; no service hands it untrusted input. Reachable only if that admin opens attacker-supplied content."
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/vim@9.2.0541"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-73073",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "C omni-completion on a crafted tags file. vim on a guest runs only when an admin edits over SSH; no service hands it untrusted input. Reachable only if that admin opens attacker-supplied content."
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/vim@9.2.0541"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-73076",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "a crafted vimball (.VimballRecord). vim on a guest runs only when an admin edits over SSH; no service hands it untrusted input. Reachable only if that admin opens attacker-supplied content."
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/vim@9.2.0541"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-73077",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "K (keywordprg) on a crafted selection in sh/zsh/ps1. vim on a guest runs only when an admin edits over SSH; no service hands it untrusted input. Reachable only if that admin opens attacker-supplied content."
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/vim@9.2.0541"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-57453",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "zip.vim falls back to PowerShell only when unzip is missing and PowerShell is installed; no guest has PowerShell.",
+        "justification": "requires_environment"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/vim@9.2.0541"
+        }
+      ]
     }
   ]
 }
