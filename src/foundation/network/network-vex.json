@@ -1,0 +1,436 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "version": 1,
+  "metadata": {
+    "component": {
+      "type": "application",
+      "name": "network",
+      "description": "TAPPaaS module network: triage of its own critical/high CVEs (#788)."
+    }
+  },
+  "vulnerabilities": [
+    {
+      "id": "CVE-2026-81634",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "Heap overflow in RRSet canonicalisation from a 255-byte query name and a large TCP response. unbound on the firewall is a full recursive resolver for every zone (forwards only internal and 10.in-addr.arpa to dnsmasq), so any internal client looking up an attacker's domain makes unbound read the attacker's own DNS server's responses. Fixed in unbound 1.26.1; OPNsense 26.1.11_10 ships 1.25.1 and its channel offers nothing newer yet."
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/opnsense/unbound@1.25.1_1"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "high",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-82717",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "Progressive heap corruption, possible code execution. unbound on the firewall is a full recursive resolver for every zone (forwards only internal and 10.in-addr.arpa to dnsmasq), so any internal client looking up an attacker's domain makes unbound read the attacker's own DNS server's responses. Fixed in unbound 1.26.1; OPNsense 26.1.11_10 ships 1.25.1 and its channel offers nothing newer yet."
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/opnsense/unbound@1.25.1_1"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "high",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-50252",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "Outgoing query source-port entropy weakened where upstream load balancing depends on it: cache poisoning of the site's recursive resolver. unbound on the firewall is a full recursive resolver for every zone (forwards only internal and 10.in-addr.arpa to dnsmasq), so any internal client looking up an attacker's domain makes unbound read the attacker's own DNS server's responses."
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/opnsense/unbound@1.25.1_1"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "medium",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-80225",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "Unbounded consecutive reads on a TCP/DoT connection: denial of service of the resolver, by a client inside the site (port 53 on the internal zones)."
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/opnsense/unbound@1.25.1_1"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-32665",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Downstream DNS-over-QUIC is not configured on the firewall's unbound (no quic-port).",
+        "justification": "requires_configuration"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/opnsense/unbound@1.25.1_1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-40691",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "DNSCrypt is not configured on the firewall's unbound.",
+        "justification": "requires_configuration"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/opnsense/unbound@1.25.1_1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-55973",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "dns-error-reporting is not configured on the firewall's unbound (default no).",
+        "justification": "requires_configuration"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/opnsense/unbound@1.25.1_1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-44690",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "aggressive NSEC processing; the firewall's unbound does no DNSSEC validation (module-config: python iterator, no validator).",
+        "justification": "requires_configuration"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/opnsense/unbound@1.25.1_1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-81642",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "the DNSSEC validator's DNSKEY digesting; the firewall's unbound does no DNSSEC validation (module-config: python iterator, no validator).",
+        "justification": "requires_configuration"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/opnsense/unbound@1.25.1_1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-85501",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "DNSSEC algorithmic complexity (ReTrap); the firewall's unbound does no DNSSEC validation (module-config: python iterator, no validator).",
+        "justification": "requires_configuration"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/opnsense/unbound@1.25.1_1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-54873",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "OpenSSL's QUIC stack; nothing on the firewall uses QUIC.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/opnsense/openssl@3.0.21,1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-63075",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "OpenSSL's QUIC stack; nothing on the firewall uses QUIC.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/opnsense/openssl@3.0.21,1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-84784",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "OpenSSL's QUIC stack; nothing on the firewall uses QUIC.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/opnsense/openssl@3.0.21,1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-54874",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "DTLS; nothing on the firewall speaks DTLS (OpenVPN, which could, is not running).",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/opnsense/openssl@3.0.21,1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-84782",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "DTLS; nothing on the firewall speaks DTLS (OpenVPN, which could, is not running).",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/opnsense/openssl@3.0.21,1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-63072",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "CMS decryption; nothing on the firewall decrypts CMS messages.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/opnsense/openssl@3.0.21,1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-63073",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "OpenSSL's CMP client; nothing on the firewall uses CMP.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/opnsense/openssl@3.0.21,1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-63076",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "OpenSSL's CMP client; nothing on the firewall uses CMP.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/opnsense/openssl@3.0.21,1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-14457",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "RFC 7250 raw public keys with no certificate; no TLS service on the firewall is configured that way.",
+        "justification": "requires_configuration"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/opnsense/openssl@3.0.21,1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-72897",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "A TLS server swapping SSL_CTX mid-handshake between contexts with different providers; lighttpd on the firewall is not configured that way.",
+        "justification": "requires_configuration"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/opnsense/openssl@3.0.21,1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-84783",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Needs several threads first using one X.509 certificate concurrently; lighttpd is single-threaded, and unbound serves no TLS here.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/opnsense/openssl@3.0.21,1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-75803",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "ChaCha20-Poly1305/AES-OCB tag not checked for an empty ciphertext through EVP_Cipher(); not ruled out for the TLS record layer of the web UI (8443), impact a forged empty record."
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/opnsense/openssl@3.0.21,1"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-78130",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "strongSwan: IPsec is not configured and charon is not running on the firewall.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/opnsense/strongswan@6.0.7"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-78132",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "strongSwan: IPsec is not configured and charon is not running on the firewall.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/opnsense/strongswan@6.0.7"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-78133",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "strongSwan: IPsec is not configured and charon is not running on the firewall.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/opnsense/strongswan@6.0.7"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-78134",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "strongSwan: IPsec is not configured and charon is not running on the firewall.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/opnsense/strongswan@6.0.7"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-78135",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "strongSwan: IPsec is not configured and charon is not running on the firewall.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/opnsense/strongswan@6.0.7"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-84732",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "OpenVPN is not running on the firewall.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/opnsense/openvpn@2.7.5"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-93990",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "The firewall parses no untrusted XML; config.xml is its own.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/opnsense/expat@2.8.2"
+        }
+      ]
+    }
+  ]
+}
