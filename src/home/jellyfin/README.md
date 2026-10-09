@@ -14,7 +14,7 @@ server declares — before or after Jellyfin is installed.
 | Zone | the environment's zone (`zone0` from `config/environments/<env>.json`) |
 | Port | 8096 |
 | VM ID | 360 |
-| App version | 10.10.7 |
+| App version | 10.11.11 |
 | VM disk | 32G on `tanka1` — OS and Jellyfin's own data (`/var/lib/jellyfin`, metadata, cache) |
 | Media | `/media` — subdir `jellyfin` of the NFS share `media` (`storage:nfs`); a local directory while the share is pending |
 
@@ -87,6 +87,7 @@ graph LR
     nfs["storage:nfs"]
     netproxy["network:proxy / network:rules"]
     idac["identity:accessControl"]
+    idoidc["identity:identity (OIDC, SSO-Auth plugin)"]
     node["share media — nfs-media.mgmt.internal (tankb pool on a node)"]
     caddy["Caddy reverse proxy (on the OPNsense firewall, :443)"]
     authentik["Authentik (identity) — forward-auth"]
@@ -100,6 +101,7 @@ graph LR
     jellyfin -->|dependsOn| nfs
     jellyfin -->|dependsOn| netproxy
     jellyfin -->|dependsOn| idac
+    jellyfin -->|dependsOn| idoidc
 
     jellyfin -.->|"NFSv4 tcp/2049 — /media = media/jellyfin"| node
     homeclients -.->|"https://jellyfin.&lt;domain&gt;"| caddy
@@ -122,8 +124,26 @@ from the mount (none while it is pending).
 Every request to `https://jellyfin.<domain>` goes through Authentik first, from
 home, from netbird and from the internet alike (home clients resolve the same
 name to Caddy, ADR-021). Only members of the Authentik group `users` get through
-(#805). After that, Jellyfin asks for its own login: Jellyfin does not read
-Authentik's headers, so a browser user logs in twice.
+(#805).
+
+Jellyfin's login page then offers **Sign in with Authentik** (the SSO-Auth plugin,
+#806). With the Authentik session already open it is one click. The Jellyfin tile
+in Authentik's app list goes straight through
+(`/sso/OID/start/authentik`).
+
+- **Accounts:** the first Authentik sign-in creates the Jellyfin account, named
+  after the Authentik username, with access to every library.
+- **Admins:** members of the Authentik group `jellyfin-admins` become Jellyfin
+  administrators, and that is re-checked at every sign-in.
+- **Local accounts:** `admin`, `stream` and `local` (from the install) keep working
+  with their passwords on the same page. `admin` is the break-glass account.
+- **Name collisions:** the plugin links an Authentik user to an EXISTING Jellyfin
+  account of the same name. Don't give an Authentik user the name `admin`,
+  `stream` or `local`, or it gets that local account.
+- **Plugin version:** 9p4/jellyfin-plugin-sso 4.0.0.4, pinned in `jellyfin.nix`.
+  Upstream is archived, and this is its last release (for Jellyfin 10.11). It's a
+  store path of its own (`jellyfin-plugin-sso-4.0.0.4`), so the security scan
+  lists it.
 
 **Native TV and mobile apps do not work.** They log in to Jellyfin's API with a
 username and password, and cannot pass forward-auth. There is no direct route

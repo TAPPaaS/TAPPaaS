@@ -4,7 +4,8 @@
 
 1. TAPPaaS foundation deployed: `cluster:vm`, `templates:nixos`, `backup:vm`,
    `storage:nfs`, `network:proxy`, `network:rules`, and the `identity` module
-   (Authentik), whose `identity:accessControl` gates the published name
+   (Authentik): `identity:accessControl` gates the published name and
+   `identity:identity` gives Jellyfin's login a Sign in with Authentik button
 2. For the media share (now or later): a cluster node with a `tankb` pool to
    serve it from
 
@@ -104,6 +105,10 @@ apply dependencies in that order:
 - `identity:accessControl` right after `network:proxy`: it turns on forward-auth
   for the route that `network:proxy` has just created. An update that recreates
   the route therefore gets the gate back in the same run;
+- `identity:identity` last: it registers Jellyfin's OIDC app (after
+  accessControl has moved the gate to `jellyfin-gate`), writes the client
+  config to `/etc/secrets/jellyfin.env` and restarts `jellyfin-configure-oidc`,
+  which `templates:nixos` has built by then;
 - `network:rules` before `storage:nfs`, so the firewall path to the share exists
   before a migration tries to mount it (in the other order the migration timed
   out and every update rolled back);
@@ -149,9 +154,11 @@ Duration: ~5–10 minutes (NixOS clone + rebuild).
 
 ## First-Time Setup
 
-1. Open `https://jellyfin.<your-domain>`. Log in to Authentik first (any member
-   of the `users` group gets through), then to Jellyfin with the printed admin
-   account. Browser only: TV and mobile apps cannot pass forward-auth — see
+1. Open `https://jellyfin.<your-domain>`, or the Jellyfin tile in Authentik. Log in
+   to Authentik (any member of the `users` group gets through), then click
+   **Sign in with Authentik**. For administration, be in `jellyfin-admins`, or use
+   the printed `admin` account on the same page. Browser only: TV and mobile apps
+   cannot pass forward-auth — see
    [README.md](README.md#access-browser-only-behind-authentik)
 2. Add libraries under **Dashboard → Libraries**:
 

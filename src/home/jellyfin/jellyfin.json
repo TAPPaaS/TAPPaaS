@@ -1,7 +1,7 @@
 {
   "description": "Jellyfin open-source media server for personal movie, TV and music libraries.",
   "kind": "vm",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "stack": "home",
   "releaseDate": "2026-06-27",
   "maintainer": "@AndreasJe",
@@ -18,13 +18,28 @@
     "identity:accessControl",
     "network:rules",
     "storage:nfs",
-    "templates:nixos"
+    "templates:nixos",
+    "identity:identity"
   ],
   "integratesWith": [
     "logging:logs"
   ],
   "provides": [],
-  "appVersion": "10.10.7",
+  "appVersion": "10.11.11",
+  "identity": {
+    "providesAdminRole": true,
+    "adminGroupClaim": "admin",
+    "launchPath": "/sso/OID/start/authentik",
+    "oidcRedirectPaths": [
+      "/sso/OID/redirect/authentik"
+    ],
+    "scopes": [
+      "openid",
+      "email",
+      "profile"
+    ],
+    "configureService": "jellyfin-configure-oidc.service"
+  },
   "config": {
     "cluster:vm": {
       "cores": 4,
@@ -48,6 +63,7 @@
     },
     "network:proxy": {
       "proxyPort": 8096,
+      "proxyPreserveHost": "true",
       "proxyAllowedZones": [
         "home",
         "netbird",

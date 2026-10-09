@@ -102,8 +102,37 @@ else
     fail "jellyfin cannot write to /media — on the share it must be granted rw"
 fi
 
-# ── Test 6: Disk usage ────────────────────────────────────────────────────────
-header "Test 6: Resource Usage"
+# ── Test 6: Sign in with Authentik (SSO-Auth plugin, #806) ────────────────────
+# identity:identity writes /etc/secrets/jellyfin.env only when Jellyfin is
+# published; without it there is no provider to configure, so skip.
+header "Test 6: Sign in with Authentik"
+if [[ "$(remote "test -f /etc/secrets/jellyfin.env && echo yes || echo no")" != "yes" ]]; then
+    skip "no OIDC config on the VM (/etc/secrets/jellyfin.env) — Jellyfin is not published, or identity:identity has not run"
+else
+    PLUGIN_STATUS=$(remote "sudo sh -c 'jq -r .status /var/lib/jellyfin/plugins/SSO-Auth_*/meta.json' 2>/dev/null | head -1")
+    if [[ "${PLUGIN_STATUS}" == "Active" ]]; then
+        pass "SSO-Auth plugin is loaded (status Active)"
+    else
+        fail "SSO-Auth plugin is not active (status '${PLUGIN_STATUS:-missing}') — see journalctl -u jellyfin"
+    fi
+    CONF_STATE=$(remote "systemctl is-active jellyfin-configure-oidc 2>/dev/null || true")
+    if [[ "${CONF_STATE}" == "active" ]]; then
+        pass "jellyfin-configure-oidc has written the provider"
+    else
+        fail "jellyfin-configure-oidc is ${CONF_STATE:-unknown} — see journalctl -u jellyfin-configure-oidc"
+    fi
+    # The plugin answers the start of the login with a redirect to Authentik's
+    # authorize endpoint only when the provider is configured and enabled.
+    START=$(remote "curl -s -o /dev/null -w '%{http_code} %{redirect_url}' --max-time 10 http://localhost:8096/sso/OID/start/authentik")
+    if [[ "${START}" == 302*"/application/o/authorize"* ]]; then
+        pass "/sso/OID/start/authentik redirects to Authentik"
+    else
+        fail "/sso/OID/start/authentik did not redirect to Authentik (${START:-no answer})"
+    fi
+fi
+
+# ── Test 7: Disk usage ────────────────────────────────────────────────────────
+header "Test 7: Resource Usage"
 MEM=$(remote "free -h | grep Mem" || true)
 DISK=$(remote "df -h / | tail -1" || true)
 inf "Memory : ${MEM}"
