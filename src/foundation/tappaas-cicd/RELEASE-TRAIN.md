@@ -239,7 +239,8 @@ tappaas-train.sh preview                        # last release vs now, next patc
 tappaas-train.sh preview --to nixos-26.11       # … with a release move
 tappaas-train.sh preview --since v2.0           # against an older release
 tappaas-train.sh preview --module openwebui     # one module, CVE by CVE (from the last preview)
-tappaas-train.sh ack --note "read the Nextcloud 35 notes; CVE-… has no fix upstream yet"
+tappaas-train.sh ack --module nextcloud --note "read the Nextcloud 35 notes"
+tappaas-train.sh ack --note "everything else: reviewed in the preview"
 ```
 
 | Option | Meaning |
@@ -252,24 +253,40 @@ tappaas-train.sh ack --note "read the Nextcloud 35 notes; CVE-… has no fix ups
 | `preview --module <name>` | Show one module from the last preview's details, without recomputing: the image (both sides), the packages that change, and its critical/high CVEs in three lists — **NEW** (in now, not in the release), **FIXED** (in the release, gone now) and **SAME** — each with package, version, severity and whether it comes from the NixOS system or the image. |
 | `ack` | Accept what the last `preview` gates: majors, critical/high CVEs new against the release, a failed match. |
 | `ack --note "<why>"` | The same, with the reason recorded beside it. |
+| `ack --module <name> --note "<why>"` | Accept one module's items only: its new CVEs and the majors it ships (`baseline` for the shared row). Acks add up, each with its note; the preview's ACK column shows them. |
 
 **The table** — critical/high **CVEs** per module (a CVE that hits two packages counts once,
 as in the nightly `health-manager scan security`), "if released now" first:
 
 ```
-  MODULE             NOW │   V2.1  FIXED   NEW  SAME  NOTE
-  openwebui         1051 │   1055      4     0  1051
-  identity           129 │    336    226    19   110
-  jellyfin            96 │      —      0    96     0  new since v2.1
-  deconz             301 │    305      4     0   301  ≈ approximate (runs nowhere here)
+  MODULE                OPEN  RISK  ACK   NOW │   V2.1  FIXED   NEW  SAME │  VEX  NOTE
+  baseline (all NixOS)    26     0    0    26 │     31      5     0    26 │   29  the package versions every NixOS module ships
+  openwebui              332     0    0   332 │    704    372     0   332 │    0
+  immich                  20     0    0    20 │      —      0    20     0 │   16  new since v2.1
+  jellyfin                 1     8    0     9 │      —      0     9     0 │   47  risk medium; new since v2.1
+  identity                 0     5    0     5 │    204    179     1     4 │   26  risk low
+  coturn                   0     0    0     0 │      0      0     0     0 │    0
   …
-  MODULES           2205 │   2397    440   248  1957
-  — not compared: the platform (patched continuously) and the mothership (now = last scan) —
-  tappaas1 (node)    182 │
-  …
-  TOTAL             3127 │
+  MODULES                591    18    0   609 │   1107    689   213   396 │  277
+  — the platform: patched by its own channel, not by a release — now, from the last scan —
+  cluster ×3                              131 │   tappaas1 130 · tappaas3 130 · tappaas2 130
+  network (firewall)                       29 │
+  backup (apt on tappaas3)                   — │   Proxmox packages: no CVE feed; its Debian base counts under cluster
+  TOTAL                                  1082 │
 ```
 
+- **OPEN · RISK · ACK = NOW.** OPEN: nobody has analysed it. RISK: analysed and still counted —
+  an `exploitable` statement in `<module>-vex.json` (or `templates-vex.json`), whose
+  `ratings[]` entry with source `TAPPaaS` gives the risk in this deployment (the NOTE shows the
+  worst). ACK: accepted for this release with `ack`. VEX (decided not affected) is not in NOW.
+- **The baseline** is one row: the package versions of `templates/tappaas-common.nix` (evaluated
+  as an empty module) that every NixOS module ships — glibc, vim. A module's row is what it
+  adds; a module on another version of a baseline package carries that version's CVEs itself.
+  The MODULES total counts the baseline once.
+- **The mothership** is a module like the others: its system is evaluated in place on both
+  sides (it reads this machine's `/etc/nixos`).
+- **The gate** names its module: `cve <module> <CVE>` (`cve baseline <CVE>` for the shared row)
+  and `major <pkg> a->b`; the last line says what is left to acknowledge, by module.
 - **VEX**: the same triage statements the nightly scan applies (`<module>-vex.json` next to each
   module, deciding for that module only; the shared NixOS baseline's in `templates-vex.json`, for
   every module) apply here too, to both sides. A
@@ -281,8 +298,8 @@ as in the nightly `health-manager scan security`), "if released now" first:
   template, the mothership, `00-Template` and test fixtures, and every pinned image.
 - **≈ approximate**: a module the build system does not run is evaluated without knowing which
   of its packages run; it is counted from its closure, by the package names that run elsewhere.
-- **Not compared**: the nodes, Debian guests and the firewall patch by their own channel and are
-  not part of a release; the mothership is a flake of its own. Their row has only "now", from the
+- **The platform**: the nodes, Debian guests and the firewall patch by their own channel and are
+  not part of a release. Their row has only "now", from the
   last `health-manager scan security`, and they are in the TOTAL. One row per module, however many
   instances run it: the nodes are one `cluster ×3` row counting each CVE once, every node's own
   count beside it. A module installed on a node as packages (backup) has its own row, marked as

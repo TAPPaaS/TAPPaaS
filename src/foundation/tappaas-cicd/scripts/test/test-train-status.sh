@@ -515,7 +515,7 @@ FAKE_NOW=$(( 1790000000 + 20*86400 )) run_to boundary --resume --to nixos-25.11 
 
 echo "── pin preview and ack: what a pin move brings is accepted before the deep test (#788) ──"
 # The findings are stubbed: FAKE_GATE is the list of items the next pin brings.
-export TAPPAAS_PIN_FINDINGS='printf "{\"gate\":%s,\"digest\":\"d\",\"to\":\"abc\",\"majors\":[],\"cves\":{}}\n" "${FAKE_GATE:-[]}" > "$3"'
+export TAPPAAS_PIN_FINDINGS='printf "{\"gate\":%s,\"gateModules\":%s,\"digest\":\"d\",\"to\":\"abc\",\"majors\":[],\"cves\":{}}\n" "${FAKE_GATE:-[]}" "${FAKE_GM:-{\}}" > "$3"'
 setup_to
 FAKE_GATE='[]' run_to preview
 [[ "${RC}" -eq 0 && "${OUT}" == *"nothing to acknowledge"* ]] && ok "a pin bringing nothing notable: no ack needed" || bad "empty preview: ${OUT}"
@@ -551,6 +551,18 @@ _rel="$(git -C "${TMP}/w" show origin/main:release/releases.json 2>/dev/null)"
 FAKE_GATE='[]' run_to preview
 FAKE_GATE='[]' run_to ack
 [[ "${RC}" -eq 0 && "${OUT}" == *"nothing to acknowledge"* ]] && ok "ack with nothing to accept says so" || bad "ack on empty: ${OUT}"
+# One module at a time: acks add up, each with its note.
+FAKE_GATE='["cve identity CVE-7","cve vllm-amd CVE-8","major grafana 13->14"]' \
+FAKE_GM='{"cve identity CVE-7":["identity"],"cve vllm-amd CVE-8":["vllm-amd"],"major grafana 13->14":["logging"]}' run_to preview
+NOTE_OUT="$(PATH="${TMP}/bin:${PATH}" TAPPAAS_REPO_DIR="${TMP}/w" TAPPAAS_CONFIG_DIR="${TMP}/cfg" "${TRAIN}" ack --module identity --note "libxml2: no fix yet, low here" --no-fetch 2>&1)"
+[[ "${NOTE_OUT}" == *"acknowledged 1 item(s) of identity"* && "${NOTE_OUT}" == *"still to acknowledge: 2 item(s)"* ]] \
+    && ok "ack --module accepts one module's items and says what is left" || bad "ack --module: ${NOTE_OUT}"
+PATH="${TMP}/bin:${PATH}" TAPPAAS_REPO_DIR="${TMP}/w" TAPPAAS_CONFIG_DIR="${TMP}/cfg" "${TRAIN}" ack --module logging --note "Grafana 14 notes read" --no-fetch >/dev/null 2>&1
+[[ "$(jq -c '.ack.gate' "${TMP}/cfg/release-train.json")" == '["cve identity CVE-7","major grafana 13->14"]' \
+   && "$(jq -r '[.ack.notes[] | "\(.module): \(.note)"] | join("; ")' "${TMP}/cfg/release-train.json")" == *"identity: libxml2: no fix yet, low here; logging: Grafana 14 notes read"* ]] \
+    && ok "…acks add up, each module's note kept" || bad "acks: $(jq -c .ack "${TMP}/cfg/release-train.json")"
+NOTE_OUT="$(PATH="${TMP}/bin:${PATH}" TAPPAAS_REPO_DIR="${TMP}/w" TAPPAAS_CONFIG_DIR="${TMP}/cfg" "${TRAIN}" ack --module coturn --note x --no-fetch 2>&1)"
+[[ "${NOTE_OUT}" == *"nothing to acknowledge for coturn"* ]] && ok "…a module with nothing to accept says so" || bad "ack coturn: ${NOTE_OUT}"
 unset TAPPAAS_PIN_FINDINGS
 
 echo "── a flake with no nixpkgs ref is refused, never rewritten blind ──"

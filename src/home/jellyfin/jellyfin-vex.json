@@ -44,6 +44,16 @@
         {
           "ref": "pkg:nix/jellyfin-ffmpeg@7.1.4-3"
         }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "medium",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
       ]
     },
     {
@@ -82,6 +92,16 @@
         {
           "ref": "pkg:nix/jellyfin-ffmpeg@7.1.4-3"
         }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
       ]
     },
     {
@@ -93,6 +113,16 @@
       "affects": [
         {
           "ref": "pkg:nix/jellyfin-ffmpeg@7.1.4-3"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "medium",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
         }
       ]
     },
@@ -106,6 +136,16 @@
         {
           "ref": "pkg:nix/jellyfin-ffmpeg@7.1.4-3"
         }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "medium",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
       ]
     },
     {
@@ -117,6 +157,16 @@
       "affects": [
         {
           "ref": "pkg:nix/jellyfin-ffmpeg@7.1.4-3"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "medium",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
         }
       ]
     },
@@ -169,6 +219,16 @@
         {
           "ref": "pkg:nix/jellyfin-ffmpeg@7.1.4-3"
         }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "medium",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
       ]
     },
     {
@@ -207,6 +267,16 @@
         {
           "ref": "pkg:nix/jellyfin-ffmpeg@7.1.4-3"
         }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "medium",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
       ]
     },
     {
@@ -218,6 +288,16 @@
       "affects": [
         {
           "ref": "pkg:nix/jellyfin-ffmpeg@7.1.4-3"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "medium",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
         }
       ]
     },
@@ -794,6 +874,16 @@
       "affects": [
         {
           "ref": "pkg:nix/libssh@0.12.2"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
         }
       ]
     },

@@ -198,7 +198,10 @@ ADR-007e target) only when a fixable CVE or a failed scan is **new** since that
 scan. **Triage decisions** are committed next to the module as
 `<module>-vex.json` (CycloneDX VEX: `not_affected`, `false_positive`, `resolved`
 suppress a finding; a versioned `affects` ref stops applying when the version
-changes). A module's file decides for that module's targets (its VM and images)
+changes; `exploitable` keeps it counted and, in `scan nix-list`/`scan images`, marks
+it `triage` with the risk from the statement's `ratings[]` entry whose source is
+`TAPPaaS` — the risk in this deployment, which the release preview's RISK column
+shows). A module's file decides for that module's targets (its VM and images)
 only — whether a package's flaw is reachable depends on how the module uses it;
 `templates-vex.json`, the shared base, decides for every target, and a Proxmox
 node's findings are `cluster`'s. They are read from the module directories of every repository in

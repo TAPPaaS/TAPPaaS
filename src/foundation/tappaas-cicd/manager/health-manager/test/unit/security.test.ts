@@ -445,6 +445,12 @@ console.log("writeScan / diffScans / checkCveStatus / report");
     ...parseVex(JSON.stringify({ vulnerabilities: [{ id: "CVE-2026-5450", analysis: { state: "false_positive" } }] }), "b", "immich")];
   const r4 = scanComponentList([{ name: "glibc", version: "2.42-84" }], new FakeIO(), v4);
   check(r4.suppressed[0]?.vexModules?.join(",") === "immich,nextcloud", "a list mixes modules: a suppressed finding names whose statements decided it");
+  const v5 = parseVex(JSON.stringify({ vulnerabilities: [{ id: "CVE-2026-5450", analysis: { state: "exploitable" },
+    ratings: [{ source: { name: "NVD" }, severity: "critical" }, { source: { name: "TAPPaaS" }, severity: "Low" }] }] }), "c", "identity");
+  check(v5[0].risk === "low", "an exploitable statement's risk here is the TAPPaaS rating, not the CVE's own");
+  const r5 = scanComponentList([{ name: "glibc", version: "2.42-84" }], new FakeIO(), v5);
+  check(r5.findings.length === 1 && r5.findings[0].triage?.[0]?.module === "identity" && r5.findings[0].triage?.[0]?.risk === "low",
+    "…it decides nothing — the finding stays counted, carrying who analysed it and the risk");
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

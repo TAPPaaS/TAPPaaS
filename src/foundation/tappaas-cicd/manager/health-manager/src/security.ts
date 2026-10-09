@@ -59,6 +59,7 @@ export interface Finding {
   fixed: string; // "" when no fix is published
   purl: string;
   vexModules?: string[]; // a list scan's suppressed finding: whose statements decided it ("" = templates, every module)
+  triage?: { module: string; state: string; risk: string }[]; // a list scan's kept finding: analysed, still counted (exploitable)
 }
 
 export interface TargetStatus {
@@ -405,16 +406,25 @@ export interface VexStatement {
   refs: string[]; // purls; empty = every package
   source: string;
   module: string; // whose targets it decides: "" = every target (templates, the estate-wide base)
+  risk?: string; // exploitable/in_triage: the risk HERE, from ratings[] (source TAPPaaS) — low|medium|high|critical
 }
 
 const VEX_SUPPRESS = new Set(["not_affected", "false_positive", "resolved", "resolved_with_pedigree"]);
 
+// An analysed finding that stays counted (exploitable) carries the risk it has in
+// THIS deployment as a CycloneDX rating whose source is TAPPaaS — not the CVE's
+// own severity: a critical libxml2 flaw reachable only by an admin is low here.
 export function parseVex(json: string, source: string, module = ""): VexStatement[] {
-  const doc = JSON.parse(json) as { vulnerabilities?: { id?: string; analysis?: { state?: string }; affects?: { ref?: string }[] }[] };
+  type Doc = { vulnerabilities?: { id?: string; analysis?: { state?: string }; affects?: { ref?: string }[];
+    ratings?: { source?: { name?: string }; severity?: string }[] }[] };
+  const doc = JSON.parse(json) as Doc;
   const out: VexStatement[] = [];
   for (const v of doc.vulnerabilities ?? []) {
     if (!v.id || !v.analysis?.state) continue;
-    out.push({ id: v.id, state: v.analysis.state, refs: (v.affects ?? []).map((a) => a.ref ?? "").filter(Boolean), source, module });
+    const s: VexStatement = { id: v.id, state: v.analysis.state, refs: (v.affects ?? []).map((a) => a.ref ?? "").filter(Boolean), source, module };
+    const r = (v.ratings ?? []).find((x) => x.source?.name === "TAPPaaS" && x.severity);
+    if (r?.severity) s.risk = r.severity.toLowerCase();
+    out.push(s);
   }
   return out;
 }
@@ -434,9 +444,18 @@ export function vexSuppresses(f: Finding, vex: VexStatement[]): boolean {
 
 // The statements that decide a finding.
 function vexDeciders(f: Finding, vex: VexStatement[]): VexStatement[] {
+  return vexMatching(f, vex).filter((s) => VEX_SUPPRESS.has(s.state));
+}
+
+// The analysed-but-counted ones: exploitable or in_triage, with the risk here.
+function vexTriage(f: Finding, vex: VexStatement[]): VexStatement[] {
+  return vexMatching(f, vex).filter((s) => !VEX_SUPPRESS.has(s.state));
+}
+
+function vexMatching(f: Finding, vex: VexStatement[]): VexStatement[] {
   const fp = splitPurl(f.purl);
   return vex.filter((s) => {
-    if (s.id !== f.id || !VEX_SUPPRESS.has(s.state)) return false;
+    if (s.id !== f.id) return false;
     if (s.refs.length === 0) return true;
     return s.refs.some((r) => {
       const rp = splitPurl(r);
@@ -1070,8 +1089,12 @@ function splitVex(fs: Finding[], vex: VexStatement[]): { findings: Finding[]; su
   const suppressed: Finding[] = [];
   for (const f of fs) {
     const by = vexDeciders(f, vex);
-    if (by.length === 0) findings.push(f);
-    else suppressed.push({ ...f, vexModules: [...new Set(by.map((s) => s.module))].sort() });
+    if (by.length > 0) {
+      suppressed.push({ ...f, vexModules: [...new Set(by.map((s) => s.module))].sort() });
+      continue;
+    }
+    const tri = vexTriage(f, vex);
+    findings.push(tri.length > 0 ? { ...f, triage: tri.map((s) => ({ module: s.module, state: s.state, risk: s.risk ?? "" })) } : f);
   }
   return { findings, suppressed };
 }

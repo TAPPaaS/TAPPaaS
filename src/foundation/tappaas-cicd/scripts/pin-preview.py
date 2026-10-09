@@ -99,7 +99,7 @@ def inventory(cdx):
         for c in t.get("components", []) or []:
             if c.get("name") and c.get("version"):
                 pk.setdefault(c["name"], set()).add(c["version"])
-        out[t["name"]] = pk
+        out[t["name"].split(" ")[0]] = pk
     return out
 
 
@@ -165,6 +165,7 @@ def main():
         ap.add_argument(a, required=True)
     ap.add_argument("--ignore", help="release/pin-watch-ignore.json: packages whose major is not gated, with the reason")
     ap.add_argument("--details", help="write the per-module details here")
+    ap.add_argument("--acked", help="release-train.json: the gate items `ack` accepted (.ack.gate) — the ACK column")
     ap.add_argument("--check-scan", action="store_true",
                     help="'now' is the pin in the tree: compare each module with the nightly scan's count")
     a = ap.parse_args()
@@ -184,6 +185,9 @@ def main():
             print(f"pin-preview: {a.ignore} is not JSON — nothing is ignored", file=sys.stderr)
     union = {p for pk in inv.values() for p in pk}
     clo = {"base": closures(a.base_closures), "now": closures(a.now_closures)}
+    # _baseline: an empty module with the shared NixOS baseline — not a module, the row
+    # every module's own CVEs are counted apart from.
+    blclo = {s: clo[s].pop("_baseline", None) for s in ("base", "now")}
     modules = sorted(set(clo["base"]) | set(clo["now"]) | set(base_img) | set(now_img))
 
     # What each side ships, per module.
@@ -239,22 +243,25 @@ def main():
         by = f.get("vexModules")
         return by is None or "" in by or m in by
 
-    def side_findings(side, m, suppressed=False):
-        """A module's findings on one side: its NixOS packages' and its image's. A finding
-        another module's VEX decided is still this module's finding."""
+    def findings_for(side, pairs, ref, m, suppressed=False):
+        """Findings of these NixOS (pkg, version) pairs and this image on one side. A
+        finding another module's VEX decided is still m's finding."""
         out = []
         def take(open_, sup, src):
             if suppressed:
                 return [dict(f, **{"from": src}) for f in sup if decided(f, m)]
             return [dict(f, **{"from": src}) for f in open_] + [dict(f, **{"from": src}) for f in sup if not decided(f, m)]
-        for p, vs in pkgs[side].get(m, {}).items():
-            for v in vs:
-                out += take(nix[side].get((p, v), []), nix_sup[side].get((p, v), []), "nixos")
-        ref = (base_img if side == "base" else now_img).get(m)
+        for p, v in pairs:
+            out += take(nix[side].get((p, v), []), nix_sup[side].get((p, v), []), "nixos")
         if ref:
             r = img.get(ref) or {}
             out += take(r.get("findings", []), r.get("suppressed", []), "image")
         return out
+
+    def side_findings(side, m, suppressed=False):
+        """A module's findings on one side: its NixOS packages' and its image's."""
+        pairs = [(p, v) for p, vs in pkgs[side].get(m, {}).items() for v in vs]
+        return findings_for(side, pairs, (base_img if side == "base" else now_img).get(m), m, suppressed)
 
     def by_id(findings):
         """CVE id -> the CVE, with every package it hits (version, fixed in, nixos|image)."""
@@ -268,27 +275,114 @@ def main():
             pk = {"pkg": f.get("pkg"), "version": f.get("installed", ""), "fixed": f.get("fixed", ""), "from": f["from"]}
             if pk not in e["packages"]:
                 e["packages"].append(pk)
+            for t in f.get("triage") or []:
+                if t not in e.setdefault("triage", []):
+                    e["triage"].append(t)
         return out
 
     def ordered(d, ks):
         return sorted((d[k] for k in ks), key=lambda f: (f["severity"] != "Critical", f["packages"][0]["pkg"] or "", f["id"]))
 
+    acked = set()
+    if a.acked and os.path.exists(a.acked):
+        try:
+            acked = set(((json.load(open(a.acked)) or {}).get("ack") or {}).get("gate") or [])
+        except ValueError:
+            print(f"pin-preview: {a.acked} is not JSON — nothing counts as acknowledged", file=sys.stderr)
+
+    # The shared baseline: the package versions of templates/tappaas-common.nix, as
+    # the modules ship them (glibc, vim, openssl…). Its CVEs are one row, not repeated
+    # in each module's; a module's row is what it adds. A module on another version
+    # of a baseline package (immich's glibc) carries that version's CVEs itself.
+    def baseline_pairs(side):
+        sets = [{(p, v) for p, vs in pkgs[side][m].items() for v in vs} for m in pkgs[side] if not approx.get(m)]
+        if blclo[side] is not None and sets:
+            # What the baseline module holds, as the modules ship it — of the names EVERY
+            # module ships (a .drv closure has build tools too: python, gcc), at the
+            # baseline's version.
+            shipped = set().union(*sets)
+            everywhere = set.intersection(*[{p for p, _ in x} for x in sets])
+            return {(p, v) for p, vs in blclo[side].items() for v in vs if p in everywhere} & shipped
+        return set.intersection(*sets) if len(sets) > 1 else set()  # no baseline evaluated: what all share
+    bl = {"base": baseline_pairs("base"), "now": baseline_pairs("now")}
+
+    def in_baseline(cve, side):
+        return all(p["from"] == "nixos" and (p["pkg"], p["version"]) in bl[side] for p in cve["packages"])
+
+    RANK = ("critical", "high", "medium", "low")
+
+    def worst(levels):
+        ls = [x for x in levels if x in RANK]
+        return min(ls, key=RANK.index) if ls else ("unrated" if levels else "")
+
+    def status_of(cve, key):
+        """ack: accepted for this release · risk: analysed (a VEX `exploitable` statement
+        of this module or the baseline), still counted · open: nobody has looked."""
+        if f"cve {key} {cve['id']}" in acked:
+            return "ack", ""
+        tri = [t for t in cve.get("triage", []) if t.get("module") in ("", key)]
+        return ("risk", worst([t.get("risk") or "unrated" for t in tri])) if tri else ("open", "")
+
+    COLS = ("now", "open", "risk", "ack", "base", "fixed", "new", "same", "vex")
     details = {}
-    rows, introduced, total = [], {}, {"now": 0, "base": 0, "fixed": 0, "new": 0, "same": 0, "vex": 0}
+    rows, introduced, total = [], {}, dict.fromkeys(COLS, 0)
+    gate_modules = {}
+
+    def make_row(key, bf, nf, vx, in_base, in_now, note, approx_):
+        bk, nk = set(bf), set(nf)
+        gone = bk - nk - set(vx)  # gone because a VEX statement decided it: not fixed, VEX
+        st = {k: status_of(nf[k], key) for k in nk}
+        for k, (s_, r_) in st.items():
+            nf[k]["status"] = s_
+            if r_:
+                nf[k]["risk"] = r_
+        row = {"module": key, "now": len(nk) if in_now else None, "base": len(bk) if in_base else None,
+               "open": sum(1 for s_, _ in st.values() if s_ == "open"),
+               "risk": sum(1 for s_, _ in st.values() if s_ == "risk"),
+               "riskLevel": worst([r_ for s_, r_ in st.values() if s_ == "risk"]),
+               "ack": sum(1 for s_, _ in st.values() if s_ == "ack"),
+               "fixed": len(gone), "new": len(nk - bk), "same": len(nk & bk), "vex": len(vx),
+               "approximate": approx_, "note": note}
+        for k in nk - bk:
+            introduced.setdefault(f"{key} {k}", []).append(key)
+            gate_modules[f"cve {key} {k}"] = [key]
+        for f in COLS:
+            total[f] += row[f] or 0
+        return row, gone
+
+    # The baseline, decided by templates-vex.json only (a module's own statement on a
+    # baseline package moves that CVE to the module's VEX, not the estate's).
+    b_all = by_id(findings_for("base", sorted(bl["base"]), None, ""))
+    n_all = by_id(findings_for("now", sorted(bl["now"]), None, ""))
+    v_all = by_id(findings_for("now", sorted(bl["now"]), None, "", suppressed=True))
+    if bl["now"] or bl["base"]:
+        brow, bgone = make_row("baseline", b_all, n_all, v_all, bool(bl["base"]), bool(bl["now"]), "every NixOS module ships it", False)
+        brow["baseline"] = True
+        rows.append(brow)
+        bk, nk = set(b_all), set(n_all)
+        details["baseline"] = {"module": "baseline", "approximate": False, "note": "the package versions every NixOS module ships",
+                               "image": {}, "packages": [],
+                               "cves": {"new": ordered(n_all, nk - bk), "fixed": ordered(b_all, bgone), "same": ordered(n_all, nk & bk),
+                                        "vex": ordered(v_all, set(v_all))}}
+
     for m in modules:
         in_base = m in pkgs["base"] or m in base_img
         in_now = m in pkgs["now"] or m in now_img
         bf = by_id(side_findings("base", m)) if in_base else {}
         nf = by_id(side_findings("now", m)) if in_now else {}
         vx = by_id(side_findings("now", m, suppressed=True)) if in_now else {}
-        bk, nk = set(bf), set(nf)
-        # Gone from now because a VEX statement decided it is not fixed — it is in VEX.
-        gone = bk - nk - set(vx)
-        row = {"module": m, "now": len(nk) if in_now else None, "base": len(bk) if in_base else None,
-               "fixed": len(gone), "new": len(nk - bk), "same": len(nk & bk), "vex": len(vx), "approximate": approx.get(m, False),
-               "note": "new since " + a.base_label if not in_base else ("removed" if not in_now else ""),
-               "image": now_img.get(m) or base_img.get(m)}
+        # What the module adds: its CVEs that are not all in baseline packages.
+        own = lambda d, side: {k: v for k, v in d.items() if not in_baseline(v, side)}
+        bfo, nfo, vxo = own(bf, "base"), own(nf, "now"), own(vx, "now")
+        note = "new since " + a.base_label if not in_base else ("removed" if not in_now else "")
+        row, gone = make_row(m, bfo, nfo, vxo, in_base, in_now, note, approx.get(m, False))
+        row["image"] = now_img.get(m) or base_img.get(m)
         rows.append(row)
+        bk, nk = set(bf), set(nf)
+        for k in nk:  # the details keep the module's whole picture, the baseline marked
+            if k in nfo:
+                continue
+            nf[k]["status"] = "baseline"
         bp, np_ = pkgs["base"].get(m, {}), pkgs["now"].get(m, {})
         details[m] = {
             "module": m, "approximate": approx.get(m, False), "note": row["note"],
@@ -296,15 +390,9 @@ def main():
             "packages": [{"pkg": p, "base": max(bp[p], key=vkey) if p in bp else None, "now": max(np_[p], key=vkey) if p in np_ else None}
                          for p in sorted(set(bp) | set(np_))
                          if (max(bp[p], key=vkey) if p in bp else None) != (max(np_[p], key=vkey) if p in np_ else None)],
-            "cves": {"new": ordered(nf, nk - bk), "fixed": ordered(bf, gone), "same": ordered(nf, nk & bk),
+            "cves": {"new": ordered(nf, nk - bk), "fixed": ordered(bf, bk - nk - set(vx)), "same": ordered(nf, nk & bk),
                      "vex": ordered(vx, set(vx))},
         }
-        for k in nk - bk:
-            introduced.setdefault(k, []).append(m)
-        for f in ("fixed", "new", "same", "vex"):
-            total[f] += row[f]
-        total["now"] += len(nk)
-        total["base"] += len(bk)
 
     # The platform: not released, patched by its own channel — "now" from the last
     # scan, one row per MODULE however many instances run it: three nodes are one
@@ -367,6 +455,10 @@ def main():
                 scan_check.append({"module": r["module"], "preview": len(nowids), "scan": len(s),
                                    "previewOnly": sorted(nowids - s), "scanOnly": sorted(s - nowids)})
 
+    for (p, x, y), mj in majors.items():
+        gate_modules[f"major {mj['pkg']} {x}->{y}"] = sorted(set(mj["modules"]))
+    if errors:
+        gate_modules["cve-match-failed"] = ["(a failed match)"]
     gate = sorted([f"major {m['pkg']} {x}->{y}" for (p, x, y), m in majors.items()]
                   + [f"cve {k}" for k in introduced]
                   + (["cve-match-failed"] if errors else []))
@@ -378,6 +470,7 @@ def main():
         "notGated": [{"pkg": p, "why": w} for p, w in sorted(quiet.items())],
         "introduced": [{"key": k, "modules": sorted(set(v))} for k, v in sorted(introduced.items())],
         "errors": errors, "gate": gate, "digest": hashlib.sha256("\n".join(gate).encode()).hexdigest()[:16],
+        "gateModules": gate_modules, "acked": sorted(acked & set(gate)),
         "scanCheck": scan_check,
     }
     json.dump(out, open(a.out, "w"), indent=1)
@@ -433,10 +526,14 @@ def show(module, path):
     for title, rows in lists:
         print(f"\n  {title} ({len(rows)}):")
         for f in rows:
+            st = f.get("status", "")
+            tag = {"open": "OPEN", "ack": "ACK", "baseline": "baseline"}.get(st, f"RISK {f.get('risk', '')}".strip() if st == "risk" else "")
             for i, p in enumerate(f["packages"]):
-                head = f"{f['severity']:<8} {f['id']:<20}" if i == 0 else " " * 29
+                head = f"{f['severity']:<8} {f['id']:<20} {tag:<10}" if i == 0 else " " * 40
                 fix = f"  fixed in {p['fixed']}" if p.get("fixed") else ""
                 print(f"    {head} {p['pkg'] or '':<28} {p['version'] or '':<24} {p['from']}{fix}")
+    print("\n  OPEN nobody has analysed · RISK analysed, still counted, with its risk here · ACK accepted for this release"
+          " · baseline: in the package versions every NixOS module ships (its own row)")
     return 0
 
 
@@ -447,20 +544,38 @@ def render(o):
     def n(v):
         return "—" if v is None else str(v)
     b = o["baseLabel"]
-    print(f"Release CVE preview — critical/high CVEs, today's CVE database on both sides, after VEX")
+    W = 20
+    print(f"Release CVE preview — critical/high CVEs, today's CVE database on both sides")
     print(f"  if released now: this tree, pin {o['to'][:12]}, its image pins   ·   {b}: its tree, pin {o['from'][:12]}, its image pins")
     print()
-    print(f"  {'MODULE':<16} {'NOW':>5} │ {b.upper():>6} {'FIXED':>6} {'NEW':>5} {'SAME':>5} │ {'VEX':>4}  NOTE")
-    for r in sorted(o["modules"], key=lambda r: (-(r["now"] or 0), r["module"])):
-        note = ("≈ approximate (runs nowhere here)" if r["approximate"] else "") + (("; " if r["approximate"] and r["note"] else "") + r["note"])
-        print(f"  {r['module']:<16} {n(r['now']):>5} │ {n(r['base']):>6} {r['fixed']:>6} {r['new']:>5} {r['same']:>5} │ {r.get('vex', 0):>4}  {note}")
+    head = f"  {'MODULE':<{W}} {'OPEN':>5} {'RISK':>5} {'ACK':>4} {'NOW':>5} │ {b.upper():>6} {'FIXED':>6} {'NEW':>5} {'SAME':>5} │ {'VEX':>4}  NOTE"
+    def line(label, r, note=""):
+        return (f"  {label:<{W}} {r.get('open', 0):>5} {r.get('risk', 0):>5} {r.get('ack', 0):>4} {n(r['now']):>5} │ "
+                f"{n(r['base']):>6} {r['fixed']:>6} {r['new']:>5} {r['same']:>5} │ {r.get('vex', 0):>4}  {note}")
+    def note_of(r):
+        parts = []
+        if r.get("risk"):
+            parts.append(f"risk {r.get('riskLevel') or '?'}")
+        if r.get("approximate"):
+            parts.append("≈ approximate (runs nowhere here)")
+        if r.get("note") and not r.get("baseline"):
+            parts.append(r["note"])
+        return "; ".join(parts)
+    print(head)
+    rows = o["modules"]
+    for r in [r for r in rows if r.get("baseline")]:
+        print(line("baseline (all NixOS)", r, "; ".join(x for x in (note_of(r), "the package versions every NixOS module ships") if x)))
+    for r in sorted([r for r in rows if not r.get("baseline")], key=lambda r: (-(r["now"] or 0), r["module"])):
+        print(line(r["module"], r, note_of(r)))
     t = o["total"]
-    print(f"  {'MODULES':<16} {t['now']:>5} │ {t['base']:>6} {t['fixed']:>6} {t['new']:>5} {t['same']:>5} │ {t.get('vex', 0):>4}")
+    print(line("MODULES", t))
     if o["platform"]:
-        print(f"  — not compared: the platform (patched by its own channel) and the mothership (now = last scan) —")
+        print(f"  — the platform: patched by its own channel, not by a release — now, from the last scan —")
         for p in sorted(o["platform"], key=lambda p: (-(p["now"] if p["now"] is not None else -1), p["target"])):
-            print(f"  {p['target']:<16} {n(p['now']):>5} │" + (f"   {p['note']}" if p.get("note") else ""))
-        print(f"  {'TOTAL':<16} {t['now'] + o['platformTotal']:>5} │")
+            print(f"  {p['target']:<{W}} {'':>5} {'':>5} {'':>4} {n(p['now']):>5} │" + (f"   {p['note']}" if p.get("note") else ""))
+        print(f"  {'TOTAL':<{W}} {'':>5} {'':>5} {'':>4} {t['now'] + o['platformTotal']:>5} │")
+    print("  OPEN nobody has analysed · RISK analysed, still counted (<module>-vex.json `exploitable`, with its risk here)")
+    print("  ACK accepted for this release (`ack`) · VEX decided not affected — not in NOW")
     print()
     if o["majors"]:
         print(f"  MAJOR version changes since {b} ({len(o['majors'])}):")
@@ -478,9 +593,19 @@ def render(o):
               + ("" if not bad else " — differ: " + "; ".join(
                   f"{c['module']} {c['preview']} vs {c['scan']} (preview only {','.join(c['previewOnly'][:3]) or '—'}, scan only {','.join(c['scanOnly'][:3]) or '—'})"
                   for c in bad)))
-    print(f"  VEX: our recorded triage (<module>-vex.json), the same statements the nightly scan applies — not in NOW")
-    print(f"  to acknowledge: {len(o['gate'])} item(s) ({len(o['introduced'])} new critical/high, {len(o['majors'])} majors)"
-          if o["gate"] else "  nothing to acknowledge")
+    acked = set(o.get("acked", []))
+    left = [g for g in o["gate"] if g not in acked]
+    if not o["gate"]:
+        print("  nothing to acknowledge")
+        return
+    per = {}
+    for g in left:
+        for m in o.get("gateModules", {}).get(g, ["—"]):
+            per[m] = per.get(m, 0) + 1
+    print(f"  to acknowledge: {len(left)} of {len(o['gate'])} item(s) — new critical/high and majors since {b}"
+          + (f", {len(acked)} acknowledged" if acked else ""))
+    if per:
+        print("    by module: " + ", ".join(f"{m} {c}" for m, c in sorted(per.items(), key=lambda x: (-x[1], x[0]))))
 
 
 if __name__ == "__main__":

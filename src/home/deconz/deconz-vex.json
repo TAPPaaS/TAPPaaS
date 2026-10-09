@@ -1118,6 +1118,16 @@
         {
           "ref": "pkg:deb/debian/libnghttp2-14@1.64.0-1.1"
         }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
       ]
     },
     {
@@ -1203,6 +1213,16 @@
         },
         {
           "ref": "pkg:deb/debian/python3.13-minimal@3.13.5-2"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
         }
       ]
     },
@@ -1679,6 +1699,16 @@
         {
           "ref": "pkg:deb/debian/openssl-provider-legacy@3.5.5-1~deb13u1"
         }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
       ]
     },
     {
@@ -1833,6 +1863,16 @@
         {
           "ref": "pkg:pypi/urllib3@2.6.3"
         }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
       ]
     },
     {
@@ -1857,6 +1897,16 @@
       "affects": [
         {
           "ref": "pkg:pypi/urllib3@2.6.3"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
         }
       ]
     }

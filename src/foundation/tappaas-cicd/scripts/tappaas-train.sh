@@ -39,8 +39,8 @@
 #   tappaas-train preview --module <name> [--details-file <f>]
 #                                          one module from the last preview, CVE by CVE: what is
 #                                          NEW, FIXED and SAME, the image and packages that change
-#   tappaas-train ack [--note "<why>"]     accept what the last preview reported; the next
-#                                          boundary goes ahead if it finds nothing beyond it
+#   tappaas-train ack [--module <m>] --note "<why>"   accept what the last preview reported (one
+#                                          module's with --module; acks add up); the boundary goes on
 #   tappaas-train releases                 every version, its commit, when it reached each channel
 #   tappaas-train releases --render        re-render RELEASES.md from release/releases.json (after a hand edit)
 #
@@ -1565,6 +1565,28 @@ pin_findings() {
             [[ "${ok}" == "ok:" && "${drv}" == *.drv ]] || continue
             nix-store -q --requisites "${drv}" > "${work}/${side}/$(basename "${rel}" .nix).txt" 2>/dev/null || true
         done < <(bash "${TRAIN_SCRIPTS}/nixos-baseline-eval.sh" --src "${tree}" ${mode} --drv --nixpkgs "${src}" "${files[@]}" 2>&1)
+        # The shared baseline: an empty module with templates/tappaas-common.nix added —
+        # what every guest starts from. Its packages are the preview's baseline row.
+        mkdir -p "${work}/${side}-bl"
+        printf '{ ... }: { system.stateVersion = "25.11"; networking.hostName = "baseline"; }\n' > "${work}/${side}-bl/_baseline.nix"
+        while read -r ok rel drv; do
+            [[ "${ok}" == "ok:" && "${drv}" == *.drv ]] || continue
+            nix-store -q --requisites "${drv}" > "${work}/${side}/_baseline.txt" 2>/dev/null || true
+        done < <(bash "${TRAIN_SCRIPTS}/nixos-baseline-eval.sh" --src "${tree}" --drv --nixpkgs "${src}" "${work}/${side}-bl/_baseline.nix" 2>&1)
+        # The mothership is pinned NixOS too, a flake of its own: evaluated in place —
+        # its relative imports (../templates, ./controller) resolve in that tree, and
+        # /etc/nixos is this machine's own, which is the mothership being previewed.
+        local mf="${tree}/foundation/tappaas-cicd/tappaas-cicd.nix"
+        if [[ -f "${mf}" ]]; then
+            printf '{ imports = [ %s ]; }\n' "${mf}" > "${work}/${side}-cicd.nix"
+            drv="$(nix-instantiate --quiet -A config.system.build.toplevel -I "nixpkgs=${src}" \
+                -I "nixos-config=${work}/${side}-cicd.nix" '<nixpkgs/nixos>' 2>/dev/null | tail -1)"
+            if [[ "${drv}" == *.drv ]]; then
+                nix-store -q --requisites "${drv}" > "${work}/${side}/tappaas-cicd.txt" 2>/dev/null || true
+            else
+                info "  the mothership's system did not evaluate ($([[ ${side} == base ]] && echo "${tag}" || echo "this tree")) — it is counted as it runs"
+            fi
+        fi
     done
     python3 "${TRAIN_SCRIPTS}/release-images.py" --repo "${REPO_DIR}" --ref "${tag}" > "${work}/base-images.json" \
         && python3 "${TRAIN_SCRIPTS}/release-images.py" --repo "${REPO_DIR}" > "${work}/now-images.json" \
@@ -1579,7 +1601,7 @@ pin_findings() {
         --now-nix-scanner "${hm} scan nix-list --components {file} --nixpkgs ${now_src} --no-db-update" \
         --image-scanner "${hm} scan images --refs {file} --no-db-update" \
         --from "${from}" --to "$(jq -r '.nodes.nixpkgs.locked.rev // empty' "${dir}/flake.lock")" --out "${out}" \
-        --ignore "${REPO_DIR}/release/pin-watch-ignore.json" ${4:+--details "$4"} \
+        --ignore "${REPO_DIR}/release/pin-watch-ignore.json" ${4:+--details "$4"} --acked "${STATE_FILE}" \
         $([[ "${NO_PIN_MOVE}" == "1" ]] && echo --check-scan)
     local rc=$?
     rm -rf "${work}"
@@ -1624,24 +1646,38 @@ cmd_preview() {
     elif [[ -z "${open}" ]]; then
         info "  ${GN}✓${CL} all of it is acknowledged already ($(jq -r '.ack.at // "?"' "${STATE_FILE}"))"
     else
-        info "  the next boundary stops before its deep test until ${n} item(s) are accepted: ${SCRIPT_NAME} ack --note \"<why>\""
+        info "  the next boundary stops before its deep test until ${n} item(s) are accepted: ${SCRIPT_NAME} ack [--module <name>] --note \"<why>\""
     fi
     info "  one module, CVE by CVE: ${SCRIPT_NAME} preview --module <name>"
     info "  written: ${PREVIEW_FILE}, ${DETAILS_PATH:-${DETAILS_FILE}}"
 }
 
+# ack [--module <m>] --note "<why>": accept the preview's gate items — all of them,
+# or one module's (its new CVEs, and the majors it ships). Acks add up: one module
+# accepted today, another tomorrow; each note is kept with what it accepted.
 cmd_ack() {
     [[ -s "${PREVIEW_FILE}" ]] || die "nothing to acknowledge — run: ${SCRIPT_NAME} preview"
-    local n; n="$(jq '.gate | length' "${PREVIEW_FILE}")"
-    [[ "${n}" != "0" ]] || { info "the last preview found nothing to acknowledge"; return 0; }
+    local n sel
+    sel="$(jq -c --arg m "${MODULE_SHOW}" '[.gate[] as $g | select($m == "" or ((.gateModules // {})[$g] // [] | index($m)) != null) | $g]' "${PREVIEW_FILE}")"
+    n="$(jq 'length' <<<"${sel}")"
+    if [[ "${n}" == "0" ]]; then
+        [[ -n "${MODULE_SHOW}" ]] && { info "the last preview has nothing to acknowledge for ${MODULE_SHOW}"; return 0; }
+        info "the last preview found nothing to acknowledge"; return 0
+    fi
     [[ -f "${STATE_FILE}" ]] || echo '{}' > "${STATE_FILE}"
     local tmp="${STATE_FILE}.tmp.$$"
-    jq --slurpfile p "${PREVIEW_FILE}" --arg at "$(iso_utc "$(now_epoch)")" --arg note "${NOTE}" \
-        '.ack = {gate: $p[0].gate, digest: $p[0].digest, to: $p[0].to, at: $at, note: $note}' \
+    jq --slurpfile p "${PREVIEW_FILE}" --argjson sel "${sel}" --arg at "$(iso_utc "$(now_epoch)")" --arg note "${NOTE}" --arg m "${MODULE_SHOW}" \
+        '.ack = ((.ack // {}) | .gate = (((.gate // []) + $sel) | unique) | .digest = $p[0].digest | .to = $p[0].to
+                 | .at = $at | .note = $note | .notes = ((.notes // []) + [{module: (if $m == "" then "all" else $m end), note: $note, at: $at, items: ($sel | length)}]))' \
         "${STATE_FILE}" > "${tmp}" && mv -f "${tmp}" "${STATE_FILE}" || { rm -f "${tmp}"; die "could not write ${STATE_FILE}"; }
-    info "${GN}✓${CL} acknowledged ${n} item(s) of the preview to ${BL}$(jq -r '.to[0:12]' "${PREVIEW_FILE}")${CL}:"
-    jq -r '.gate[]' "${PREVIEW_FILE}" | sed 's/^/    /'
-    info "  the next boundary goes ahead if the pin it takes brings nothing beyond these"
+    info "${GN}✓${CL} acknowledged ${n} item(s)${MODULE_SHOW:+ of ${MODULE_SHOW}} of the preview to ${BL}$(jq -r '.to[0:12]' "${PREVIEW_FILE}")${CL}:"
+    jq -r '.[]' <<<"${sel}" | sed 's/^/    /'
+    local left; left="$(unacked "${PREVIEW_FILE}")"
+    if [[ -n "${left}" ]]; then
+        info "  still to acknowledge: $(grep -c . <<<"${left}") item(s) — ${SCRIPT_NAME} preview shows them by module"
+    else
+        info "  the next boundary goes ahead if the pin it takes brings nothing beyond these"
+    fi
 }
 
 # The boundary plan's line for the pin gate (#788): what the last preview

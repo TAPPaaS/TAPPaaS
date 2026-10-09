@@ -62,6 +62,12 @@ def by(f):
         if i == f["id"] or i == f"{f['id']}@{f['installed']}":
             out.append(mod)
     return out
+# TRIAGED: id:module:risk — an `exploitable` statement: kept, carrying who analysed it.
+for t in os.environ.get("TRIAGED", "").split():
+    i, mod, risk = t.split(":")
+    for f in fs:
+        if f["id"] == i:
+            f.setdefault("triage", []).append({"module": mod, "state": "exploitable", "risk": risk})
 json.dump({"findings": [f for f in fs if not by(f)],
            "suppressed": [dict(f, vexModules=sorted(set(by(f)))) for f in fs if by(f)], "error": ""}, sys.stdout)
 EOF
@@ -106,7 +112,7 @@ ck "an ignored package is not gated" "false" "$(jq '[.majors[].pkg] | index("xgc
 ck "a downgrade is labelled" "true" "$(jq '.majors[] | select(.pkg=="protobuf") | .downgrade' "${T}/p.json")"
 ck "low severity is never counted" "false" "$(jq '[.introduced[].key] | any(contains("CVE-LOW"))' "${T}/p.json")"
 ck "the gate: majors and what is new against the release" \
-   '["cve CVE-1","cve CVE-2","major grafana 13->14","major protobuf 34->33"]' "$(jq -c '.gate' "${T}/p.json")"
+   '["cve deconz CVE-1","cve logging CVE-2","major grafana 13->14","major protobuf 34->33"]' "$(jq -c '.gate' "${T}/p.json")"
 ck "the table: NOW first, then the release's columns" "yes" "$([[ "${OUT}" == *"MODULE"*"NOW"*"│"*"V2.1"*"FIXED"*"NEW"*"SAME"* ]] && echo yes || echo no)"
 ck "…with the approximate row said" "yes" "$([[ "${OUT}" == *"deconz"*"≈ approximate"* ]] && echo yes || echo no)"
 ck "…and a grand TOTAL with the platform" "yes" "$(grep -qE '^ +TOTAL +74 ' <<<"${OUT}" && echo yes || echo no)"
@@ -169,6 +175,60 @@ printf '#!/usr/bin/env bash\necho "{\\"findings\\":[],\\"error\\":\\"grype faile
 NIXSCAN="${T}/bad" run
 ck "a failed match is no clean result: gated" "true" "$(jq '.gate | index("cve-match-failed") != null' "${T}/p.json")"
 ck "…and said" "yes" "$([[ "${OUT}" == *"CVE match FAILED"* ]] && echo yes || echo no)"
+
+# ── the baseline row, OPEN / RISK / ACK, ack per module ──
+# Two NixOS modules that both run: what they share is the baseline (openssl here).
+cat > "${T}/site2.cdx.json" <<'EOF'
+{"components":[
+ {"name":"logging","properties":[{"name":"tappaas:layer","value":"nix"}],"components":[{"name":"grafana","version":"13.0.9"},{"name":"openssl","version":"3.5.1"}]},
+ {"name":"coturn","properties":[{"name":"tappaas:layer","value":"nix"}],"components":[{"name":"openssl","version":"3.5.1"}]},
+ {"name":"tappaas-cicd (mothership)","properties":[{"name":"tappaas:layer","value":"nix"}],"components":[{"name":"openssl","version":"3.5.1"}]}
+]}
+EOF
+mkdir -p "${T}/b2" "${T}/n2"
+drvs "${T}/b2/logging.txt" grafana-13.0.9 openssl-3.5.1; drvs "${T}/b2/coturn.txt" openssl-3.5.1; drvs "${T}/b2/tappaas-cicd.txt" openssl-3.5.1
+drvs "${T}/n2/logging.txt" grafana-14.0.1 openssl-3.5.2; drvs "${T}/n2/coturn.txt" openssl-3.5.2; drvs "${T}/n2/tappaas-cicd.txt" openssl-3.5.2
+echo '{}' > "${T}/noimg.json"
+run2() {
+    OUT="$(python3 "${PP}" --inventory "${T}/site2.cdx.json" --status "${T}/cve-status.json" \
+        --base-label v2.1 --base-closures "${T}/b2" --base-images "${T}/noimg.json" --base-nix-scanner "${T}/nix --components {file}" \
+        --now-closures "${T}/n2" --now-images "${T}/noimg.json" --now-nix-scanner "${T}/nix --components {file}" \
+        --image-scanner "${T}/img --refs {file}" --from a --to b --out "${T}/p2.json" --details "${T}/d2.json" \
+        --ignore "${T}/ignore.json" "$@" 2>&1)"
+}
+r2() { jq -r --arg m "$1" '.modules[] | select(.module==$m) | "\(.open) \(.risk) \(.ack) \(.now) | \(.base) \(.fixed) \(.new) \(.same)"' "${T}/p2.json"; }
+run2
+ck "the shared baseline is one row: openssl's CVE-1, same in both" "1 0 0 1 | 1 0 0 1" "$(r2 baseline)"
+ck "…and not in each module's: logging adds grafana's CVE-2, fixed CVE-OLD" "1 0 0 1 | 1 1 1 0" "$(r2 logging)"
+ck "…coturn adds nothing" "0 0 0 0 | 0 0 0 0" "$(r2 coturn)"
+ck "the mothership is a module, compared like the others" "0 0 0 0 | 0 0 0 0" "$(r2 tappaas-cicd)"
+ck "the total counts the baseline once" "2" "$(jq '.total.now' "${T}/p2.json")"
+ck "the details keep a module's whole picture, the baseline marked" "CVE-1 baseline" \
+   "$(jq -r '.modules.logging.cves.same[] | "\(.id) \(.status)"' "${T}/d2.json")"
+ck "the table: OPEN RISK ACK NOW, the baseline first" "yes" \
+   "$([[ "${OUT}" == *"OPEN"*"RISK"*"ACK"*"NOW"*"baseline (all NixOS)"*"logging"* ]] && echo yes || echo no)"
+TRIAGED="CVE-2:logging:low" run2
+ck "an exploitable statement moves a CVE from OPEN to RISK, with its risk here" "0 1 0 1 low" \
+   "$(jq -r '.modules[] | select(.module=="logging") | "\(.open) \(.risk) \(.ack) \(.now) \(.riskLevel)"' "${T}/p2.json")"
+TRIAGED="CVE-2:coturn:low" run2
+ck "…another module's analysis is not this one's" "1 0" "$(jq -r '.modules[] | select(.module=="logging") | "\(.open) \(.risk)"' "${T}/p2.json")"
+ck "a new CVE is gated per module" '["cve logging CVE-2","major grafana 13->14"]' "$(jq -c '.gate' "${T}/p2.json")"
+echo '{"ack":{"gate":["cve logging CVE-2"]}}' > "${T}/state.json"
+TRIAGED="CVE-2:logging:low" run2 --acked "${T}/state.json"
+ck "an acknowledged CVE is in ACK, not RISK" "0 0 1 1" "$(jq -r '.modules[] | select(.module=="logging") | "\(.open) \(.risk) \(.ack) \(.now)"' "${T}/p2.json")"
+ck "…what is left to acknowledge is said per module" "yes" \
+   "$([[ "${OUT}" == *"to acknowledge: 1 of 2 item(s)"*"1 acknowledged"*"by module: logging 1"* ]] && echo yes || echo no)"
+SHOW="$(python3 "${PP}" --show logging --details "${T}/d2.json" 2>&1)"
+ck "--show tags each CVE: ACK, baseline" "yes" "$([[ "${SHOW}" == *"CVE-2"*"ACK"* && "${SHOW}" == *"CVE-1"*"baseline"* ]] && echo yes || echo no)"
+
+# The baseline from its own evaluation: a module on another version of a baseline
+# package carries that version's CVEs itself — it does not empty the baseline.
+drvs "${T}/n2/_baseline.txt" openssl-3.5.2; drvs "${T}/b2/_baseline.txt" openssl-3.5.1
+drvs "${T}/n2/coturn.txt" openssl-3.5.1
+run2
+ck "with _baseline evaluated, it is no module" "false" "$(jq '[.modules[].module] | index("_baseline") != null' "${T}/p2.json")"
+ck "…coturn on the release's openssl keeps CVE-1 as its own; the baseline still has it" "1 1" \
+   "$(jq -r '[(.modules[] | select(.module=="coturn") | .now), (.modules[] | select(.module=="baseline") | .now)] | join(" ")' "${T}/p2.json")"
 
 echo
 echo "── ${PASS} passed, ${FAIL} failed ──"
