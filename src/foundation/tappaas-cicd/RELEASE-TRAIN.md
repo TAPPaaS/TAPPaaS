@@ -342,7 +342,9 @@ scan, a pin that cannot be fetched — it says so and lets the deep test decide.
 Before anyone looks, two kinds of finding are settled by the data itself:
 
 - **Fixed by a nixpkgs patch.** A package whose `patches` name a CVE (libssh2's
-  `CVE-2026-55199.patch`) has that fix applied. The scan and the preview count it as resolved
+  `CVE-2026-55199.patch`), or a patch file whose commit messages name a CVE (glibc's
+  `2.42-master.patch`, its release branch: "memalign: reinstate alignment overflow check
+  (CVE-2026-0861)"), has that fix applied. The scan and the preview count it as resolved
   — in the VEX column — for the version nixpkgs builds; another version is looked at as it is.
 - **A record with no version range** (grype: `none (unknown)`) names the product but no
   affected versions — ImageMagick's 2014 bugs "match" 7.1.2. Flagged `?range` in

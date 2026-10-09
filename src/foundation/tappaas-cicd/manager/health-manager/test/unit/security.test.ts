@@ -14,7 +14,7 @@ import {
   CpeParts, DB_SPACE_BYTES, dbSpaceProblem, Finding, LINUX_PROBE, OPNSENSE_PROBE, PREVIOUS_FILE, STATUS_FILE, ScanStatus, SecurityIO,
   TargetStatus, applyCpes, checkCveStatus, fit, groupByImage, diffScans, nixComponents, parseLinuxProbe, parseOpnsenseProbe,
   loadVex, parseStorePath, parseVex, scanComponentList, scanImageRefs, readStatus, registeredModuleDirs, renderReport, runScan, sbomDir, summarize, summarizeOpnsense, sweepIsNewer,
-  vexFor, vexSuppresses, writeScan, isBuildOnly, pickSeverities, aptModules, moduleOf, patchVex, grypeFindings, instanceModules,
+  vexFor, vexSuppresses, writeScan, isBuildOnly, pickSeverities, aptModules, moduleOf, patchVex, grypeFindings, instanceModules, cvesInPatchMessages,
 } from "../../src/security";
 import { run } from "../../src/main";
 import { FakeClusterClient } from "./fake-client";
@@ -85,8 +85,8 @@ class FakeIO implements SecurityIO {
   probeNode(n: string): RemoteResult { this.probes.push(`node:${n}`); return this.nodes.get(n) ?? down; }
   probeFirewall(s: string): RemoteResult { this.probes.push(`fw:${s === OPNSENSE_PROBE}`); return this.firewall; }
   severities: Record<string, string> | null = {};
-  patches: Record<string, { version: string; patches: string[] } | null> | null = {};
-  nixPatches(): Record<string, { version: string; patches: string[] } | null> | null { return this.patches; }
+  patches: Record<string, { version: string; patches: string[]; messageCves?: string[] } | null> | null = {};
+  nixPatches(): Record<string, { version: string; patches: string[]; messageCves?: string[] } | null> | null { return this.patches; }
   cveSeverities(): Record<string, string> | null { return this.severities; }
   nixCpeParts(): Record<string, CpeParts | null> | null { return this.cpe; }
   dbUpdate(): string[] { return []; }
@@ -248,6 +248,13 @@ console.log("nixpkgs patches");
   io.patches = { libssh2: { version: "1.11.1", patches: ["CVE-2026-55199.patch"] } };
   const r = scanComponentList([{ name: "libssh2", version: "1.11.1" }], io);
   check(r.findings.length === 0 && r.suppressed[0]?.vexModules?.join(",") === "", "a list scan applies them too, as the estate's (templates') decision");
+  const branch = ["commit 1a2b3c4d5e6f", "Author: x", "Date:   Thu Jan 15", "", "    memalign: reinstate alignment overflow check (CVE-2026-0861)",
+    "", "diff --git a/malloc/malloc.c b/malloc/malloc.c", "+  /* see CVE-2019-9999 for context */", " old line CVE-2018-1",
+    "commit 9f8e7d6c5b4a", "", "    posix: Reset wordexp_t fields with WRDE_REUSE (CVE-2025-15281 / BZ 33814)", "diff --git a/x b/x"].join("\n");
+  check(cvesInPatchMessages(branch).join(",") === "CVE-2025-15281,CVE-2026-0861",
+    "a release-branch patch's commit messages name the CVEs it fixes; ids in the diff do not count");
+  const pv2 = patchVex({ glibc: { version: "2.42-100", patches: ["2.42-master.patch"], messageCves: ["CVE-2026-0861"] } });
+  check(pv2.length === 1 && pv2[0].refs[0] === "pkg:nix/glibc@2.42-100", "…resolved for the version nixpkgs builds");
 }
 
 console.log("build-only packages, modules");

@@ -485,11 +485,28 @@ function vexMatching(f: Finding, vex: VexStatement[]): VexStatement[] {
 // of the package is looked at as it is. Measured on hrossen 2026-10-09: libssh2's
 // nine findings and one of perl's were patched all along.
 export const PATCH_SOURCE = "nixpkgs patches";
-export function patchVex(p: Record<string, { version: string; patches: string[] } | null> | null): VexStatement[] {
+
+// The CVE ids a patch file's COMMIT MESSAGES name — `git log -p` / format-patch
+// output, as nixpkgs keeps a release branch (glibc's 2.42-master.patch:
+// "memalign: reinstate alignment overflow check (CVE-2026-0861)"). Only the
+// message, between a commit header and its first diff: a CVE id in the code or a
+// test the diff touches is not a fix this patch makes.
+export function cvesInPatchMessages(text: string): string[] {
+  const out = new Set<string>();
+  let inMsg = false;
+  for (const line of text.split("\n")) {
+    if (/^(commit [0-9a-f]{7,}|From [0-9a-f]{40} )/.test(line)) inMsg = true;
+    else if (/^(diff --git |---$|Index: )/.test(line)) inMsg = false;
+    else if (inMsg) for (const c of line.match(/CVE-\d{4}-\d{4,}/gi) ?? []) out.add(c.toUpperCase());
+  }
+  return [...out].sort();
+}
+export function patchVex(p: Record<string, { version: string; patches: string[]; messageCves?: string[] } | null> | null): VexStatement[] {
   const out: VexStatement[] = [];
   for (const [name, v] of Object.entries(p ?? {})) {
     if (!v || !v.version) continue;
-    const ids = new Set(v.patches.flatMap((x) => (x.match(/CVE-\d{4}-\d{4,}/gi) ?? []).map((c) => c.toUpperCase())));
+    const ids = new Set([...v.patches.flatMap((x) => (x.match(/CVE-\d{4}-\d{4,}/gi) ?? []).map((c) => c.toUpperCase())),
+      ...(v.messageCves ?? [])]);
     for (const id of ids) out.push({ id, state: "resolved", refs: [`pkg:nix/${name}@${v.version}`], source: PATCH_SOURCE, module: "" });
   }
   return out;
@@ -641,7 +658,7 @@ export interface SecurityIO {
   // pname → nixpkgs meta.identifiers.cpeParts (null: eval failed as a whole)
   nixCpeParts(names: string[]): Record<string, CpeParts | null> | null;
   // pname → the version nixpkgs builds and the names of its patches (null: eval failed)
-  nixPatches(names: string[]): Record<string, { version: string; patches: string[] } | null> | null;
+  nixPatches(names: string[]): Record<string, { version: string; patches: string[]; messageCves?: string[] } | null> | null;
   dbUpdate(): string[]; // notes; empty when both databases are current
   grype(sbomFile: string): RemoteResult;
   trivyRootfs(dir: string): RemoteResult;
@@ -721,7 +738,7 @@ export class CliSecurityIO implements SecurityIO {
     }
     return out;
   }
-  nixPatches(names: string[]): Record<string, { version: string; patches: string[] } | null> | null {
+  nixPatches(names: string[]): Record<string, { version: string; patches: string[]; messageCves?: string[] } | null> | null {
     const dir = mkdtempSync(join(tmpdir(), "tappaas-patches-"));
     try {
       const f = join(dir, "names.json");
@@ -730,13 +747,37 @@ export class CliSecurityIO implements SecurityIO {
       const expr =
         `let pkgs = ${np} {}; names = builtins.fromJSON (builtins.readFile ${f}); ` +
         "pname = x: if builtins.isAttrs x then (x.name or \"\") else baseNameOf (toString x); " +
+        "ppath = x: if builtins.isAttrs x then \"\" else toString x; " +
         "look = n: let r = builtins.tryEval (let p = pkgs.${n} or null; in " +
-        "if p == null || !(builtins.isAttrs p) then null else { version = p.version or \"\"; patches = map pname (p.patches or []); }); in " +
+        "if p == null || !(builtins.isAttrs p) then null else { " +
+        // the version as the store path names it — glibc is 2.42-100 there, .version says 2.42
+        "version = let v = (builtins.parseDrvName (p.name or \"\")).version; in if v != \"\" then v else (p.version or \"\"); " +
+        "patches = map pname (p.patches or []); " +
+        "paths = builtins.filter (x: x != \"\") (map ppath (p.patches or [])); }); in " +
         "if r.success then (builtins.deepSeq r.value r.value) else null; " +
         "in builtins.listToAttrs (map (n: { name = n; value = look n; }) names)";
       const r = exec("nix-instantiate", ["--eval", "--strict", "--json", "-E", expr], undefined, 10 * MIN);
       if (r.rc !== 0) return null;
-      return JSON.parse(r.stdout) as Record<string, { version: string; patches: string[] } | null>;
+      const raw = JSON.parse(r.stdout) as Record<string, { version: string; patches: string[]; paths?: string[] } | null>;
+      const out: Record<string, { version: string; patches: string[]; messageCves?: string[] } | null> = {};
+      for (const [n, v] of Object.entries(raw)) {
+        if (!v) {
+          out[n] = null;
+          continue;
+        }
+        // A patch nixpkgs keeps as a file (glibc's 2.42-master.patch: its release
+        // branch's commits) names in its commit messages the CVEs it fixes.
+        const cves = new Set<string>();
+        for (const p of v.paths ?? []) {
+          try {
+            for (const c of cvesInPatchMessages(readFileSync(p, "utf8"))) cves.add(c);
+          } catch {
+            // unreadable: its name still counts
+          }
+        }
+        out[n] = { version: v.version, patches: v.patches, ...(cves.size > 0 ? { messageCves: [...cves].sort() } : {}) };
+      }
+      return out;
     } catch {
       return null;
     } finally {

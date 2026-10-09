@@ -214,8 +214,9 @@ decide for that module's targets only (its VM and its images; a Proxmox node is
 `pvehost`'s), since whether a flaw is reachable depends on how the module uses the
 package; `templates-vex.json` decides for every target. An `exploitable` statement carries
 the risk in this deployment as a `ratings[]` entry with source `TAPPaaS`. Two kinds are
-settled without a person: a CVE named in the nixpkgs package's `patches` is `resolved` for
-the version nixpkgs builds, and a match on a CVE record with no version range is flagged
+settled without a person: a CVE named in the nixpkgs package's `patches` — a patch's name, or
+the commit messages of a release-branch patch such as glibc's — is `resolved` for the version
+nixpkgs builds, and a match on a CVE record with no version range is flagged
 for a quick false-positive check. `cve-triage.sh` lists a module's open CVEs and writes the
 decisions. The scan reads VEX from
 the module directories of **every registered repository** (site.json `.repositories`, each
