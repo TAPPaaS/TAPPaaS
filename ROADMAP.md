@@ -378,6 +378,8 @@ A production-grade AI stack: LiteLLM and Open WebUI tested (#119, #120), hardene
 | #119 | openwebui test coverage | L | L | |
 | #121 | litellm production-grade | M | L | Renamed backups: old backup files must still restore |
 | #621 | Bump litellm / openwebui | M | M | After #121 LLM-003 gives update.sh a health gate |
+| #810 | openwebui: container runs as root on the host network, with server-side STT on | M | L | **Opened 2026-10-09** from the #788 triage (`8c3d5257`): any approved user's "audio" upload reaches Debian ffmpeg (6 CVEs RISK high in `openwebui-vex.json`) as root in a host-network container; run it non-root, consider turning off server STT |
+| #811 | CVE scan: native libraries bundled in Python wheels are not seen | M | M | **Opened 2026-10-09** from the #788 triage: PyAV's FFmpeg 7.1 (loaded in openwebui's app process), soundfile's libsndfile, Python's own expat — none appear in the scan or the preview |
 | #758 | vllm-amd: the models bind mount is in no backup | M | L | The 33 GB `/tanka1/vllm-models` bind mount is in no backup, so a restored container has no models. Maintainer @ErikDaniel007: re-download, back it up, or call it cache |
 | #677 | litellm's default workers do not fit its default 4 GB | L | L | Found 2026-09-20 by `--deep`: litellm plus four workers leave 43 MB free in the default 4 GB. Either the default memory covers the workers, or the workers follow the memory |
 
