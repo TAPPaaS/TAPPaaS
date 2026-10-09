@@ -1,0 +1,196 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "version": 1,
+  "metadata": {
+    "component": {
+      "type": "application",
+      "name": "vllm-amd",
+      "description": "TAPPaaS module vllm-amd: triage of its own critical/high CVEs (#788)."
+    }
+  },
+  "vulnerabilities": [
+    {
+      "id": "CVE-2026-89407",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Inside Ray's ray/jars/ray_dist.jar (its Java worker API); the image has no Java runtime, so no jar is ever executed \u2014 vLLM uses Ray, if at all, from Python.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:maven/com.fasterxml.jackson.core/jackson-core@2.18.8"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-89425",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Inside Ray's ray/jars/ray_dist.jar (its Java worker API); the image has no Java runtime, so no jar is ever executed \u2014 vLLM uses Ray, if at all, from Python.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:maven/com.fasterxml.jackson.core/jackson-core@2.18.8"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-68497",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Inside Ray's ray/jars/ray_dist.jar (its Java worker API); the image has no Java runtime, so no jar is ever executed \u2014 vLLM uses Ray, if at all, from Python.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.18.8"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-91776",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Inside Ray's ray/jars/ray_dist.jar (its Java worker API); the image has no Java runtime, so no jar is ever executed \u2014 vLLM uses Ray, if at all, from Python.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.18.8"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-91777",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Inside Ray's ray/jars/ray_dist.jar (its Java worker API); the image has no Java runtime, so no jar is ever executed \u2014 vLLM uses Ray, if at all, from Python.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.18.8"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-54399",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Inside Ray's ray/jars/ray_dist.jar (its Java worker API); the image has no Java runtime, so no jar is ever executed \u2014 vLLM uses Ray, if at all, from Python.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:maven/org.apache.httpcomponents.core5/httpcore5@5.0.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2025-47273",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "pip 26.2.1's own bundled copy (pip/_vendor/vendor.txt), loaded only when pip runs; vLLM serving never runs pip, and the copy vLLM imports is fixed (setuptools 79.0.1).",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:pypi/setuptools@70.3.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-97687",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "pip 26.2.1's own bundled copy (pip/_vendor/vendor.txt), loaded only when pip runs; vLLM serving never runs pip, and the copy vLLM imports is fixed (urllib3 2.8.0).",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:pypi/urllib3@2.7.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-97689",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "pip 26.2.1's own bundled copy (pip/_vendor/vendor.txt), loaded only when pip runs; vLLM serving never runs pip, and the copy vLLM imports is fixed (urllib3 2.8.0).",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:pypi/urllib3@2.7.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-23949",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "A copy bundled inside setuptools 79 (setuptools/_vendor), used to unpack archives when installing packages; vLLM serving installs nothing.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:pypi/jaraco.context@5.3.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-24049",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "A copy bundled inside setuptools 79 (setuptools/_vendor), used to unpack wheels when installing packages; vLLM serving installs nothing.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:pypi/wheel@0.45.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-84782",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "DTLS handshake retransmission in the image's Ubuntu openssl; vLLM serves plain HTTP on :8000 and nothing in the container speaks DTLS (Ubuntu's 3.0.13-0ubuntu3.16 fixes it).",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/ubuntu/libssl3t64@3.0.13-0ubuntu3.15"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-84782",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "DTLS handshake retransmission in the image's Ubuntu openssl; vLLM serves plain HTTP on :8000 and nothing in the container speaks DTLS (Ubuntu's 3.0.13-0ubuntu3.16 fixes it).",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/ubuntu/openssl@3.0.13-0ubuntu3.15"
+        }
+      ]
+    },
+    {
+      "id": "GHSA-6v7p-g79w-8964",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "pip 26.2.1's own bundled copy (pip/_vendor/vendor.txt), loaded only when pip runs; vLLM serving never runs pip, and the copy vLLM imports is fixed (msgpack 1.2.2).",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:pypi/msgpack@1.1.2"
+        }
+      ]
+    }
+  ]
+}
