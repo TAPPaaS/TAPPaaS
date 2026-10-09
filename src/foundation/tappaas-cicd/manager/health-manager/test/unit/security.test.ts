@@ -141,6 +141,15 @@ console.log("applyCpes");
   const d = nixComponents([`/nix/store/${H(1)}-glibc-2.42-84`]).components;
   applyCpes(d, null);
   check(d[0].properties?.[0].value === "naive", "a failed nixpkgs evaluation degrades to naive, it does not drop the component");
+  // The ffmpeg Jellyfin runs: nixpkgs declares only product jellyfin-ffmpeg, which NVD never lists.
+  const j = nixComponents([`/nix/store/${H(3)}-jellyfin-ffmpeg-7.1.4-3-bin`, `/nix/store/${H(4)}-ffmpeg-8.1.2-lib`,
+    `/nix/store/${H(5)}-ffmpeg-headless-8.1.2-lib`]).components;
+  check(j[0].name === "jellyfin-ffmpeg" && j[0].version === "7.1.4-3", "jellyfin-ffmpeg-7.1.4-3-bin → jellyfin-ffmpeg 7.1.4-3");
+  applyCpes(j, { "jellyfin-ffmpeg": { vendor: null, product: "jellyfin-ffmpeg" }, ffmpeg: { vendor: null, product: "ffmpeg" } });
+  check(j[0].cpe === "cpe:2.3:a:ffmpeg:ffmpeg:7.1.4:*:*:*:*:*:*:*", "a fork is matched as upstream ffmpeg at the release it carries");
+  check(j[0].purl === "pkg:nix/jellyfin-ffmpeg@7.1.4-3" && j[0].properties?.[0].value === "fork", "the fork keeps its own purl for findings and VEX");
+  check(j[1].cpe === "cpe:2.3:a:ffmpeg:ffmpeg:8.1.2:*:*:*:*:*:*:*", "plain ffmpeg is unchanged");
+  check(j[2].cpe === "cpe:2.3:a:ffmpeg:ffmpeg:8.1.2:*:*:*:*:*:*:*", "a build variant (ffmpeg-headless) is ffmpeg at its own version");
 }
 
 // ── probes ───────────────────────────────────────────────────────────

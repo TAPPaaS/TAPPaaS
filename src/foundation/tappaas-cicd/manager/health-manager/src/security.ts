@@ -158,9 +158,26 @@ export interface CpeParts {
 // The CPE vendor decides whether NVD matches at all (sbomnix's glibc:glibc
 // finds nothing; NVD says gnu:glibc). nixpkgs declares it for the packages that
 // matter; where it does not, vendor = product, and the component says which.
+// A fork or build variant packaged under its own name is matched as upstream
+// at the release it carries: jellyfin-ffmpeg 7.1.4-3 is ffmpeg 7.1.4 plus
+// Jellyfin's patch set, ffmpeg-headless a smaller build of the same source, and
+// NVD lists their CVEs only under ffmpeg:ffmpeg. grype compares the CPE's
+// version, so the component keeps its own name, version and purl (VEX refs).
+const NIX_FORKS: Record<string, { vendor: string; product: string; version?: (v: string) => string }> = {
+  "jellyfin-ffmpeg": { vendor: "ffmpeg", product: "ffmpeg", version: (v) => v.replace(/-\d+$/, "") },
+  "ffmpeg-headless": { vendor: "ffmpeg", product: "ffmpeg" },
+  "ffmpeg-full": { vendor: "ffmpeg", product: "ffmpeg" },
+};
+
 export function applyCpes(comps: Component[], parts: Record<string, CpeParts | null> | null): number {
   let fromMeta = 0;
   for (const c of comps) {
+    const fork = NIX_FORKS[c.name];
+    if (fork) {
+      c.cpe = `cpe:2.3:a:${fork.vendor}:${fork.product}:${fork.version?.(c.version) ?? c.version}:*:*:*:*:*:*:*`;
+      c.properties = [{ name: "tappaas:cpe-source", value: "fork" }];
+      continue;
+    }
     const p = parts?.[c.name] ?? null;
     const vendor = p?.vendor ?? null;
     const product = p?.product ?? c.name;
