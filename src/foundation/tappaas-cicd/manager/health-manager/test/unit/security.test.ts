@@ -14,7 +14,7 @@ import {
   CpeParts, DB_SPACE_BYTES, dbSpaceProblem, Finding, LINUX_PROBE, OPNSENSE_PROBE, PREVIOUS_FILE, STATUS_FILE, ScanStatus, SecurityIO,
   TargetStatus, applyCpes, checkCveStatus, fit, groupByImage, diffScans, nixComponents, parseLinuxProbe, parseOpnsenseProbe,
   loadVex, parseStorePath, parseVex, scanComponentList, scanImageRefs, readStatus, registeredModuleDirs, renderReport, runScan, sbomDir, summarize, summarizeOpnsense, sweepIsNewer,
-  vexFor, vexSuppresses, writeScan, isBuildOnly, pickSeverities, aptModules, moduleOf, patchVex, grypeFindings, instanceModules, cvesInPatchMessages,
+  vexFor, vexSuppresses, writeScan, isBuildOnly, pickSeverities, aptModules, moduleOf, patchVex, grypeFindings, instanceModules, cvesInPatchMessages, trivyParse,
 } from "../../src/security";
 import { run } from "../../src/main";
 import { FakeClusterClient } from "./fake-client";
@@ -222,6 +222,14 @@ console.log("summarizeOpnsense");
     { id: "CVE-1", provider: "ubuntu", severity: "medium" }, { id: "CVE-1", provider: "nvd", severity: "high" }, { id: "CVE-1", provider: "alpine", severity: "critical" },
     { id: "cve-2", provider: "debian", severity: "negligible" }, { id: "CVE-2", provider: "rhel", severity: "low" }, { id: "CVE-3", provider: "x", severity: "unknown" }]);
   check(picked["CVE-1"] === "High" && picked["CVE-2"] === "Low" && !("CVE-3" in picked), "NVD's severity first, else the highest; ids case-folded; unknown is no severity");
+}
+
+console.log("trivy package purls");
+{
+  const doc = JSON.stringify({ Metadata: { OS: { Family: "debian", Name: "13.7" } }, Results: [{ Packages: [
+    { Name: "rpcbind", Version: "1.2.7", Release: "1", Identifier: { PURL: "pkg:deb/debian/rpcbind@1.2.7-1?arch=amd64&distro=debian-13.7" } }] }] });
+  check(trivyParse(doc).components[0].purl === "pkg:deb/debian/rpcbind@1.2.7-1?arch=amd64&distro=debian-13.7",
+    "a package's purl comes from Identifier (trivy >= 0.50) — the inventory had none for Debian hosts and images");
 }
 
 console.log("unversioned CVE records");

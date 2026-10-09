@@ -358,7 +358,8 @@ function unversionedMatch(m: GrypeMatch): boolean {
 interface TrivyDoc {
   Metadata?: { OS?: { Family?: string; Name?: string } };
   Results?: {
-    Packages?: { Name?: string; Version?: string; Release?: string; PkgIdentifier?: { PURL?: string } }[];
+    // A package's purl is `Identifier` (trivy >= 0.50); a vulnerability's, `PkgIdentifier`.
+    Packages?: { Name?: string; Version?: string; Release?: string; Identifier?: { PURL?: string }; PkgIdentifier?: { PURL?: string } }[];
     Vulnerabilities?: {
       VulnerabilityID?: string;
       Severity?: string;
@@ -377,7 +378,7 @@ export function trivyParse(json: string): { family: string; osName: string; comp
   for (const res of doc.Results ?? []) {
     for (const p of res.Packages ?? []) {
       const version = p.Release ? `${p.Version ?? ""}-${p.Release}` : (p.Version ?? "");
-      components.push({ type: "library", name: p.Name ?? "", version, purl: p.PkgIdentifier?.PURL ?? "" });
+      components.push({ type: "library", name: p.Name ?? "", version, purl: p.Identifier?.PURL ?? p.PkgIdentifier?.PURL ?? "" });
     }
     for (const v of res.Vulnerabilities ?? []) {
       findings.push({
