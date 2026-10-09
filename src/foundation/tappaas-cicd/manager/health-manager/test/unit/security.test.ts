@@ -14,7 +14,7 @@ import {
   CpeParts, DB_SPACE_BYTES, dbSpaceProblem, Finding, LINUX_PROBE, OPNSENSE_PROBE, PREVIOUS_FILE, STATUS_FILE, ScanStatus, SecurityIO,
   TargetStatus, applyCpes, checkCveStatus, fit, groupByImage, diffScans, nixComponents, parseLinuxProbe, parseOpnsenseProbe,
   loadVex, parseStorePath, parseVex, scanComponentList, scanImageRefs, readStatus, registeredModuleDirs, renderReport, runScan, sbomDir, summarize, summarizeOpnsense, sweepIsNewer,
-  vexFor, vexSuppresses, writeScan, isBuildOnly, pickSeverities, aptModules, moduleOf,
+  vexFor, vexSuppresses, writeScan, isBuildOnly, pickSeverities, aptModules, moduleOf, patchVex, grypeFindings,
 } from "../../src/security";
 import { run } from "../../src/main";
 import { FakeClusterClient } from "./fake-client";
@@ -85,6 +85,8 @@ class FakeIO implements SecurityIO {
   probeNode(n: string): RemoteResult { this.probes.push(`node:${n}`); return this.nodes.get(n) ?? down; }
   probeFirewall(s: string): RemoteResult { this.probes.push(`fw:${s === OPNSENSE_PROBE}`); return this.firewall; }
   severities: Record<string, string> | null = {};
+  patches: Record<string, { version: string; patches: string[] } | null> | null = {};
+  nixPatches(): Record<string, { version: string; patches: string[] } | null> | null { return this.patches; }
   cveSeverities(): Record<string, string> | null { return this.severities; }
   nixCpeParts(): Record<string, CpeParts | null> | null { return this.cpe; }
   dbUpdate(): string[] { return []; }
@@ -214,6 +216,32 @@ console.log("summarizeOpnsense");
     { id: "CVE-1", provider: "ubuntu", severity: "medium" }, { id: "CVE-1", provider: "nvd", severity: "high" }, { id: "CVE-1", provider: "alpine", severity: "critical" },
     { id: "cve-2", provider: "debian", severity: "negligible" }, { id: "CVE-2", provider: "rhel", severity: "low" }, { id: "CVE-3", provider: "x", severity: "unknown" }]);
   check(picked["CVE-1"] === "High" && picked["CVE-2"] === "Low" && !("CVE-3" in picked), "NVD's severity first, else the highest; ids case-folded; unknown is no severity");
+}
+
+console.log("unversioned CVE records");
+{
+  const j = JSON.stringify({ matches: [
+    { vulnerability: { id: "CVE-2014-9826", severity: "High" }, artifact: { name: "imagemagick", version: "7.1.2-31", purl: "pkg:nix/imagemagick@7.1.2-31" },
+      matchDetails: [{ found: { versionConstraint: "none (unknown)" } }] },
+    { vulnerability: { id: "CVE-2026-7598", severity: "High" }, artifact: { name: "libssh2", version: "1.11.1", purl: "pkg:nix/libssh2@1.11.1" },
+      matchDetails: [{ found: { versionConstraint: "<= 1.11.1 (unknown)" } }] }] });
+  const fs = grypeFindings(j);
+  check(fs[0].unversioned === true && fs[1].unversioned === undefined, "a match on a record with no version range is flagged; a ranged one is not");
+}
+
+console.log("nixpkgs patches");
+{
+  const pv = patchVex({ libssh2: { version: "1.11.1", patches: ["CVE-2026-55199.patch", "cve-2026-7598.patch", "fix-build.patch"] },
+    glibc: { version: "2.42", patches: ["2.42-master.patch"] }, gone: null });
+  check(pv.map((s) => s.id).sort().join(",") === "CVE-2026-55199,CVE-2026-7598" && pv.every((s) => s.state === "resolved" && s.module === ""),
+    "a patch naming a CVE is that fix applied: resolved, for every module");
+  const f = (purl: string): Finding => ({ id: "CVE-2026-55199", severity: "High", pkg: "libssh2", installed: "", fixed: "", purl });
+  check(vexSuppresses(f("pkg:nix/libssh2@1.11.1"), pv) && !vexSuppresses(f("pkg:nix/libssh2@1.11.0"), pv), "…for the version nixpkgs builds, not another");
+  const io = new FakeIO();
+  io.grypeOut = ok(grypeJson([["CVE-2026-55199", "High", "libssh2", "1.11.1"]]));
+  io.patches = { libssh2: { version: "1.11.1", patches: ["CVE-2026-55199.patch"] } };
+  const r = scanComponentList([{ name: "libssh2", version: "1.11.1" }], io);
+  check(r.findings.length === 0 && r.suppressed[0]?.vexModules?.join(",") === "", "a list scan applies them too, as the estate's (templates') decision");
 }
 
 console.log("build-only packages, modules");

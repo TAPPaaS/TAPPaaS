@@ -60,6 +60,7 @@ export interface Finding {
   purl: string;
   vexModules?: string[]; // a list scan's suppressed finding: whose statements decided it ("" = templates, every module)
   triage?: { module: string; state: string; risk: string }[]; // a list scan's kept finding: analysed, still counted (exploitable)
+  unversioned?: boolean; // matched on a CVE record with no version range: every version "matches" — check first
 }
 
 export interface TargetStatus {
@@ -326,6 +327,7 @@ export function pkgNameOf(nameVer: string): string {
 interface GrypeMatch {
   vulnerability?: { id?: string; severity?: string; fix?: { versions?: string[]; state?: string } };
   artifact?: { name?: string; version?: string; purl?: string };
+  matchDetails?: { found?: { versionConstraint?: string } }[];
 }
 
 export function grypeFindings(json: string): Finding[] {
@@ -338,7 +340,15 @@ export function grypeFindings(json: string): Finding[] {
     // grype's nix matches are by CPE and carry no fix-state: never "fixable".
     fixed: "",
     purl: m.artifact?.purl ?? "",
+    // "none (unknown)": the CVE record names the product but no affected versions
+    // (ImageMagick's 2014 SUN coder bug matches 7.1.2) — a likely false positive.
+    ...(unversionedMatch(m) ? { unversioned: true } : {}),
   }));
+}
+
+function unversionedMatch(m: GrypeMatch): boolean {
+  const cs = (m.matchDetails ?? []).map((d) => d.found?.versionConstraint ?? "");
+  return cs.length > 0 && cs.every((c) => /^none\b/.test(c.trim()));
 }
 
 interface TrivyDoc {
@@ -462,6 +472,23 @@ function vexMatching(f: Finding, vex: VexStatement[]): VexStatement[] {
       return rp.base === fp.base && (rp.version === "" || rp.version === fp.version);
     });
   });
+}
+
+// ── nixpkgs patches: a fix nixpkgs backported ──────────────────────────
+// A package's `patches` naming a CVE (libssh2's CVE-2026-55199.patch) is that fix,
+// applied: the finding is resolved for the version nixpkgs builds — no person needs
+// to triage it. Version-exact, like a versioned VEX ref: a module on another version
+// of the package is looked at as it is. Measured on hrossen 2026-10-09: libssh2's
+// nine findings and one of perl's were patched all along.
+export const PATCH_SOURCE = "nixpkgs patches";
+export function patchVex(p: Record<string, { version: string; patches: string[] } | null> | null): VexStatement[] {
+  const out: VexStatement[] = [];
+  for (const [name, v] of Object.entries(p ?? {})) {
+    if (!v || !v.version) continue;
+    const ids = new Set(v.patches.flatMap((x) => (x.match(/CVE-\d{4}-\d{4,}/gi) ?? []).map((c) => c.toUpperCase())));
+    for (const id of ids) out.push({ id, state: "resolved", refs: [`pkg:nix/${name}@${v.version}`], source: PATCH_SOURCE, module: "" });
+  }
+  return out;
 }
 
 // ── coverage + verdict (ADR-011 §6, §7) ────────────────────────────────
@@ -597,6 +624,8 @@ export interface SecurityIO {
   cveSeverities(ids: string[]): Record<string, string> | null;
   // pname → nixpkgs meta.identifiers.cpeParts (null: eval failed as a whole)
   nixCpeParts(names: string[]): Record<string, CpeParts | null> | null;
+  // pname → the version nixpkgs builds and the names of its patches (null: eval failed)
+  nixPatches(names: string[]): Record<string, { version: string; patches: string[] } | null> | null;
   dbUpdate(): string[]; // notes; empty when both databases are current
   grype(sbomFile: string): RemoteResult;
   trivyRootfs(dir: string): RemoteResult;
@@ -675,6 +704,28 @@ export class CliSecurityIO implements SecurityIO {
       }
     }
     return out;
+  }
+  nixPatches(names: string[]): Record<string, { version: string; patches: string[] } | null> | null {
+    const dir = mkdtempSync(join(tmpdir(), "tappaas-patches-"));
+    try {
+      const f = join(dir, "names.json");
+      writeFileSync(f, JSON.stringify(names));
+      const np = process.env.TAPPAAS_NIXPKGS ? `import ${process.env.TAPPAAS_NIXPKGS}` : "import <nixpkgs>";
+      const expr =
+        `let pkgs = ${np} {}; names = builtins.fromJSON (builtins.readFile ${f}); ` +
+        "pname = x: if builtins.isAttrs x then (x.name or \"\") else baseNameOf (toString x); " +
+        "look = n: let r = builtins.tryEval (let p = pkgs.${n} or null; in " +
+        "if p == null || !(builtins.isAttrs p) then null else { version = p.version or \"\"; patches = map pname (p.patches or []); }); in " +
+        "if r.success then (builtins.deepSeq r.value r.value) else null; " +
+        "in builtins.listToAttrs (map (n: { name = n; value = look n; }) names)";
+      const r = exec("nix-instantiate", ["--eval", "--strict", "--json", "-E", expr], undefined, 10 * MIN);
+      if (r.rc !== 0) return null;
+      return JSON.parse(r.stdout) as Record<string, { version: string; patches: string[] } | null>;
+    } catch {
+      return null;
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   }
   dbUpdate(): string[] {
     const notes: string[] = [];
@@ -948,6 +999,12 @@ export function runScan(opts: ScanOpts, client: ClusterClient, io: SecurityIO): 
     const parts = names.length > 0 ? io.nixCpeParts(names) : {};
     if (parts === null) notes.push("nixpkgs CPE metadata unavailable — every Nix vendor guessed from the package name");
     for (const c of nixComps.values()) applyCpes(c.components, parts);
+    // …and the CVE fixes nixpkgs backported into them: resolved, for every target.
+    const patched = names.length > 0 ? patchVex(io.nixPatches(names)) : [];
+    if (patched.length > 0) {
+      vex.push(...patched);
+      notes.push(`nixpkgs patches: ${patched.length} CVE fix(es) in ${new Set(patched.map((s) => s.refs[0])).size} package(s) count as resolved`);
+    }
 
     // 3. scan each target with its layer's scanner
     const failed = (t: Planned, layer: Layer, why: string, seen = 0): CdxTarget => ({
@@ -1110,7 +1167,9 @@ export function scanComponentList(list: { name: string; version: string }[], io:
     comps.push({ type: "library", name: c.name, version: c.version, purl: `pkg:nix/${c.name}@${c.version}` });
   }
   if (comps.length === 0) return { findings: [], suppressed: [], error: "no packages to match" };
-  applyCpes(comps, io.nixCpeParts([...new Set(comps.map((c) => c.name))]));
+  const names = [...new Set(comps.map((c) => c.name))];
+  applyCpes(comps, io.nixCpeParts(names));
+  vex = [...vex, ...patchVex(io.nixPatches(names))];
   const dir = mkdtempSync(join(tmpdir(), "tappaas-preview-"));
   try {
     const f = join(dir, "list.cdx.json");

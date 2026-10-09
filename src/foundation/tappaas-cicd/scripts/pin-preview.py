@@ -272,7 +272,10 @@ def main():
             e = out.setdefault(f["id"], {"id": f["id"], "severity": f["severity"], "packages": []})
             if f["severity"] == "Critical":
                 e["severity"] = "Critical"
-            pk = {"pkg": f.get("pkg"), "version": f.get("installed", ""), "fixed": f.get("fixed", ""), "from": f["from"]}
+            pk = {"pkg": f.get("pkg"), "version": f.get("installed", ""), "fixed": f.get("fixed", ""), "from": f["from"],
+                  "purl": f.get("purl", "")}
+            if f.get("unversioned"):
+                pk["unversioned"] = True
             if pk not in e["packages"]:
                 e["packages"].append(pk)
             for t in f.get("triage") or []:
@@ -528,12 +531,15 @@ def show(module, path):
         for f in rows:
             st = f.get("status", "")
             tag = {"open": "OPEN", "ack": "ACK", "baseline": "baseline"}.get(st, f"RISK {f.get('risk', '')}".strip() if st == "risk" else "")
+            if all(p.get("unversioned") for p in f["packages"]):
+                tag = (tag + " ?range").strip()
             for i, p in enumerate(f["packages"]):
                 head = f"{f['severity']:<8} {f['id']:<20} {tag:<10}" if i == 0 else " " * 40
                 fix = f"  fixed in {p['fixed']}" if p.get("fixed") else ""
                 print(f"    {head} {p['pkg'] or '':<28} {p['version'] or '':<24} {p['from']}{fix}")
     print("\n  OPEN nobody has analysed · RISK analysed, still counted, with its risk here · ACK accepted for this release"
-          " · baseline: in the package versions every NixOS module ships (its own row)")
+          " · baseline: in the package versions every NixOS module ships (its own row)"
+          " · ?range: the CVE record names no affected versions — check it first, likely a false positive")
     return 0
 
 

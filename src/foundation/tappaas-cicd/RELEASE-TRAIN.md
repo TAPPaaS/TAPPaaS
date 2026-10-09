@@ -328,6 +328,33 @@ The accepted items are recorded on the release (`accepted` in `release/releases.
 would do with the last preview. When the comparison cannot be made — no release tag, no security
 scan, a pin that cannot be fetched — it says so and lets the deep test decide.
 
+### Working through OPEN: `cve-triage.sh`
+
+Before anyone looks, two kinds of finding are settled by the data itself:
+
+- **Fixed by a nixpkgs patch.** A package whose `patches` name a CVE (libssh2's
+  `CVE-2026-55199.patch`) has that fix applied. The scan and the preview count it as resolved
+  — in the VEX column — for the version nixpkgs builds; another version is looked at as it is.
+- **A record with no version range** (grype: `none (unknown)`) names the product but no
+  affected versions — ImageMagick's 2014 bugs "match" 7.1.2. Flagged `?range` in
+  `preview --module` and listed first by `cve-triage.sh open`: usually a false positive, quick
+  to confirm.
+
+The rest is a person's (or an agent's) call, recorded as VEX:
+
+```bash
+cve-triage.sh open immich --json /tmp/immich.json   # OPEN CVEs, descriptions, ?range first
+cve-triage.sh add immich CVE-2026-1234 --pkg ffmpeg-headless --state exploitable --risk medium \
+    --detail "MOV demuxer; reachable by any uploaded video. Fixed in 8.1.3: the next pin."
+cve-triage.sh add immich CVE-2014-9826 --pkg imagemagick --state false_positive \
+    --detail "SUN coder bug fixed in 6.8.9 (2014); the record has no version range."
+```
+
+`add` pins `not_affected` to the versions the release ships and the module runs today, so a
+version change asks again; `false_positive` covers the package; `exploitable` keeps the CVE
+counted, as RISK, with the risk here. `baseline` writes to `templates-vex.json`. Commit the
+file; the next scan and preview apply it.
+
 ## When staging finds a fault
 
 **Patch forward. Nothing moves backwards.** A blocked train is a normal state, not an incident —

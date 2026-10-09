@@ -212,7 +212,12 @@ component (the estate-wide base — glibc, openssl, systemd — belongs to `temp
 first three suppress the finding; the last two keep it reported. A module's statements
 decide for that module's targets only (its VM and its images; a Proxmox node is
 `cluster`'s), since whether a flaw is reachable depends on how the module uses the
-package; `templates-vex.json` decides for every target. The scan reads VEX from
+package; `templates-vex.json` decides for every target. An `exploitable` statement carries
+the risk in this deployment as a `ratings[]` entry with source `TAPPaaS`. Two kinds are
+settled without a person: a CVE named in the nixpkgs package's `patches` is `resolved` for
+the version nixpkgs builds, and a match on a CVE record with no version range is flagged
+for a quick false-positive check. `cve-triage.sh` lists a module's open CVEs and writes the
+decisions. The scan reads VEX from
 the module directories of **every registered repository** (site.json `.repositories`, each
 repository's module catalogue), so a Community module's decisions count as much as a
 TAPPaaS one's; a file outside any registered module is not read, and one that does not
