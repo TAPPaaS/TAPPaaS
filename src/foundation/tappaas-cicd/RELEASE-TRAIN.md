@@ -260,7 +260,7 @@ as in the nightly `health-manager scan security`), "if released now" first:
 
 ```
   MODULE                OPEN  RISK  ACK   NOW │   V2.1  FIXED   NEW │  VEX  NOTE
-  baseline (all NixOS)    26     0    0    26 │     31      5     0 │   29  the package versions every NixOS module ships
+  NixOS baseline          26     0    0    26 │     31      5     0 │   29  the package versions every NixOS module ships
   openwebui              142     0    0   142 │    231     89     0 │    0
   immich                  20     0    0    20 │      —      0    20 │   16  new since v2.1
   jellyfin                 1     8    0     9 │      —      0     9 │   47  risk medium; new since v2.1
@@ -269,7 +269,8 @@ as in the nightly `health-manager scan security`), "if released now" first:
   …
   MODULES                221    18    0   239 │    634    406    33 │  277
   — the platform: patched by its own channel, not by a release — now, from the last scan —
-  cluster ×3             131     0    —   131 │                     │    4  tappaas1 130 · tappaas3 130 · tappaas2 130
+  pvehost ×3             131     0    —   131 │                     │    4  tappaas1 130 · tappaas3 130 · tappaas2 130
+  Debian LXC              89     0    —    89 │                     │    0  used by vllm-amd
   network (firewall)      29     0    —    29 │                     │    0
   backup (on tappaas3)                      — │                     │       installed as packages; Proxmox's have no CVE feed…
   TOTAL                                   580 │
@@ -280,7 +281,7 @@ as in the nightly `health-manager scan security`), "if released now" first:
   an `exploitable` statement in `<module>-vex.json` (or `templates-vex.json`), whose
   `ratings[]` entry with source `TAPPaaS` gives the risk in this deployment (the NOTE shows the
   worst). ACK: accepted for this release with `ack`. VEX (decided not affected) is not in NOW.
-- **The baseline** is one row: the package versions of `templates/tappaas-common.nix` (evaluated
+- **The NixOS baseline** is one row (`baseline` to `ack --module` and `cve-triage.sh`): the package versions of `templates/tappaas-common.nix` (evaluated
   as an empty module) that every NixOS module ships — glibc, vim. A module's row is what it
   adds; a module on another version of a baseline package carries that version's CVEs itself.
   The MODULES total counts the baseline once.
@@ -302,10 +303,12 @@ as in the nightly `health-manager scan security`), "if released now" first:
 - **The platform**: the nodes, Debian guests and the firewall patch by their own channel and are
   not part of a release. Their row has only "now", from the
   last `health-manager scan security`, and they are in the TOTAL. One row per module, however many
-  instances run it: the nodes are one `cluster ×3` row counting each CVE once, every node's own
-  count beside it. A module installed on a node as packages (backup) has its own row, marked as
-  covered by no feed. OPEN, RISK and VEX come from the scan (an `exploitable` statement in, say,
-  `cluster-vex.json` is RISK); ACK is "—": the platform is not released, so nothing to accept.
+  instances run it: the site's nodes (whichever are deployed) are one `pvehost ×N` row counting
+  each CVE once, every node's own count beside it. The Debian LXC a module runs its image in
+  (vllm-amd) is a "Debian LXC" row saying which module uses it; the module's own row is its
+  image. A module installed on a node as packages (backup) has its own row, marked as covered by
+  no feed. OPEN, RISK and VEX come from the scan (an `exploitable` statement in, say,
+  `pvehost-vex.json` is RISK); ACK is "—": the platform is not released, so nothing to accept.
 - **The details** (`config/train-preview-details.json`) hold, per module, every critical/high CVE
   of both sides with its package and version, the image references and the changed package
   versions: the input for working out what to fix (`preview --module`, or `jq`).

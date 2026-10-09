@@ -27,8 +27,9 @@ cat > "${T}/cve-status.json" <<'EOF'
 {"targets":[
  {"name":"logging","layer":"nix","critical":1,"high":1},
  {"name":"tappaas-cicd (mothership)","layer":"nix","critical":8,"high":57},
- {"name":"tappaas1 (node)","module":"cluster","layer":"debian","critical":1,"high":2,"critHighKeys":["CVE-N1 libc6","CVE-N2 libc6","CVE-N3 sudo"],"critHighRisk":["CVE-N3"],"riskLevel":"low","critHighVex":["CVE-V1"]},
- {"name":"tappaas2 (node)","module":"cluster","layer":"debian","critical":1,"high":1,"critHighKeys":["CVE-N1 libc6","CVE-N2 libc6"],"apt":["backup"]},
+ {"name":"tappaas1 (node)","module":"pvehost","layer":"debian","critical":1,"high":2,"critHighKeys":["CVE-N1 libc6","CVE-N2 libc6","CVE-N3 sudo"],"critHighRisk":["CVE-N3"],"riskLevel":"low","critHighVex":["CVE-V1"]},
+ {"name":"tappaas2 (node)","module":"pvehost","layer":"debian","critical":1,"high":1,"critHighKeys":["CVE-N1 libc6","CVE-N2 libc6"],"apt":["backup"]},
+ {"name":"vllm-amd","module":"vllm-amd","layer":"debian","host":"tappaas3:ct312","critical":2,"high":3,"critHighKeys":["CVE-L1 libc6"]},
  {"name":"network (firewall)","layer":"opnsense","critical":0,"high":0}
 ]}
 EOF
@@ -101,10 +102,12 @@ ck "…counted though it runs nowhere, marked approximate" "true" "$(jq '.module
 ck "…from runtime package names only — no build tool" "1" "$(jq '.modules[] | select(.module=="deconz") | .now' "${T}/p.json")"
 ck "the modules total: now 6 | v2.1 6" "6 6" "$(jq -r '"\(.total.now) \(.total.base)"' "${T}/p.json")"
 ck "the platform has only a now: firewall 0" "0" "$(jq -r '.platform[] | select(.module == "network") | .now' "${T}/p.json")"
-ck "two nodes are ONE cluster row, its CVEs counted once by id (3, not 3+2)" "cluster ×2 3 tappaas1 3 · tappaas2 2" \
-   "$(jq -r '.platform[] | select(.module == "cluster") | "\(.target) \(.now) \(.note)"' "${T}/p.json")"
+ck "the site's nodes are ONE pvehost row, its CVEs counted once by id (3, not 3+2)" "pvehost ×2 3 tappaas1 3 · tappaas2 2" \
+   "$(jq -r '.platform[] | select(.module == "pvehost") | "\(.target) \(.now) \(.note)"' "${T}/p.json")"
+ck "a Debian LXC running a module's image is \"Debian LXC\", used by that module" "Debian LXC 1 used by vllm-amd" \
+   "$(jq -r '.platform[] | select(.target == "Debian LXC") | "\(.target) \(.now) \(.note)"' "${T}/p.json")"
 ck "a platform row splits NOW as the scan saw it: OPEN, RISK (with its risk), VEX" "2 1 low 1" \
-   "$(jq -r '.platform[] | select(.module == "cluster") | "\(.open) \(.risk) \(.riskLevel) \(.vex)"' "${T}/p.json")"
+   "$(jq -r '.platform[] | select(.module == "pvehost") | "\(.open) \(.risk) \(.riskLevel) \(.vex)"' "${T}/p.json")"
 ck "a module installed on a node as packages has its own row, said uncovered" "backup (on tappaas2) null" \
    "$(jq -r '.platform[] | select(.module == "backup") | "\(.target) \(.now)"' "${T}/p.json")"
 ck "the mothership is not dropped: now only, not compared" "65" "$(jq '.platform[] | select(.layer == "nix, not compared") | .now' "${T}/p.json")"
@@ -118,7 +121,7 @@ ck "the gate: majors and what is new against the release" \
 ck "the table: NOW first, then the release's columns — no SAME (it is NOW minus NEW)" "yes" \
    "$([[ "${OUT}" == *"MODULE"*"NOW"*"│"*"V2.1"*"FIXED"*"NEW"*"│"*"VEX"* && "$(grep -m1 'MODULE' <<<"${OUT}")" != *SAME* ]] && echo yes || echo no)"
 ck "…with the approximate row said" "yes" "$([[ "${OUT}" == *"deconz"*"≈ approximate"* ]] && echo yes || echo no)"
-ck "…and a grand TOTAL with the platform" "yes" "$(grep -qE '^ +TOTAL +74 ' <<<"${OUT}" && echo yes || echo no)"
+ck "…and a grand TOTAL with the platform" "yes" "$(grep -qE '^ +TOTAL +75 ' <<<"${OUT}" && echo yes || echo no)"
 # ── the details file: per module, each CVE with what it is (#788) ──
 D="${T}/d.json"
 ck "details: logging's NEW lists the CVE, package, version and where it comes from" "CVE-2 grafana 14.0.1 High nixos" \
@@ -209,7 +212,7 @@ ck "the total counts the baseline once" "2" "$(jq '.total.now' "${T}/p2.json")"
 ck "the details keep a module's whole picture, the baseline marked" "CVE-1 baseline" \
    "$(jq -r '.modules.logging.cves.same[] | "\(.id) \(.status)"' "${T}/d2.json")"
 ck "the table: OPEN RISK ACK NOW, the baseline first" "yes" \
-   "$([[ "${OUT}" == *"OPEN"*"RISK"*"ACK"*"NOW"*"baseline (all NixOS)"*"logging"* ]] && echo yes || echo no)"
+   "$([[ "${OUT}" == *"OPEN"*"RISK"*"ACK"*"NOW"*"NixOS baseline"*"logging"* ]] && echo yes || echo no)"
 TRIAGED="CVE-2:logging:low" run2
 ck "an exploitable statement moves a CVE from OPEN to RISK, with its risk here" "0 1 0 1 low" \
    "$(jq -r '.modules[] | select(.module=="logging") | "\(.open) \(.risk) \(.ack) \(.now) \(.riskLevel)"' "${T}/p2.json")"

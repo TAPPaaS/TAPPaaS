@@ -66,7 +66,7 @@ export interface Finding {
 export interface TargetStatus {
   id: string; // stable key across scans: "node:tappaas1", "identity", "image:identity/authentik-server"
   name: string;
-  module?: string; // the module it is an instance of: a node is cluster's, an image its module's
+  module?: string; // the module it is an instance of: a node is pvehost's, an image its module's
   apt?: string[]; // modules installed on this host as packages (imageType apt), e.g. backup
   layer: Layer;
   host: string;
@@ -922,9 +922,9 @@ export function registeredModuleDirs(configDir: string, fallbackRepo: string): s
 // A module's decisions are about how THAT module uses a package — libtiff not
 // reachable in one module can be in another — so <module>-vex.json decides for
 // that module's targets only; templates-vex.json, the estate-wide base (§8), for
-// every target. A Proxmox node is the cluster module's.
+// every target. A Proxmox node is the pvehost module's.
 export function moduleOf(target: string): string {
-  return target.startsWith("node:") ? "cluster" : target.replace(/^image:/, "").split("/")[0];
+  return target.startsWith("node:") ? "pvehost" : target.replace(/^image:/, "").split("/")[0];
 }
 export function vexFor(vex: VexStatement[], target: string): VexStatement[] {
   const module = moduleOf(target);

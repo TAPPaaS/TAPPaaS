@@ -398,15 +398,22 @@ def main():
         }
 
     # The platform: not released, patched by its own channel — "now" from the last
-    # scan, one row per MODULE however many instances run it: three nodes are one
-    # cluster, its CVEs counted once (by id), each node's own count beside it.
+    # scan, one row per system however many instances run it: the site's nodes are
+    # one pvehost row, its CVEs counted once (by id), each node's own count beside
+    # it; a Debian LXC that runs a module's image (vllm-amd) is "Debian LXC", used by
+    # that module — the module's own row is its image.
     groups = {}
     for t in status.get("targets", []):
         if t.get("layer") not in ("debian", "opnsense"):
             continue
         name = t.get("name", "")
-        mod = t.get("module") or ("cluster" if name.endswith("(node)") else name.split(" ")[0])
-        g = groups.setdefault(mod, {"targets": [], "ids": set(), "risk": set(), "vex": set(), "levels": [], "keyed": True})
+        mod = t.get("module") or ("pvehost" if name.endswith("(node)") else name.split(" ")[0])
+        if mod == "cluster":  # a scan from before the rename
+            mod = "pvehost"
+        key = "Debian LXC" if t.get("layer") == "debian" and ":ct" in t.get("host", "") else mod
+        g = groups.setdefault(key, {"targets": [], "ids": set(), "risk": set(), "vex": set(), "levels": [], "keyed": True, "users": []})
+        if key != mod:
+            g["users"].append(mod)
         g["targets"].append(t)
         if "critHighKeys" in t:
             g["ids"] |= {k.split(" ")[0] for k in t["critHighKeys"]}
@@ -420,9 +427,13 @@ def main():
     for mod, g in sorted(groups.items()):
         ts = g["targets"]
         each = [(t.get("name", "").split(" ")[0], (t.get("critical") or 0) + (t.get("high") or 0)) for t in ts]
-        label = f"{mod} ×{len(ts)}" if len(ts) > 1 else ts[0].get("name", mod)
-        if mod in modules:  # a module whose host is also scanned as a system (vllm-amd's LXC)
-            label = f"{mod} host"
+        if g["users"]:
+            label = mod + (f" ×{len(ts)}" if len(ts) > 1 else "")
+        else:
+            label = f"{mod} ×{len(ts)}" if len(ts) > 1 else ts[0].get("name", mod)
+        notes = ["used by " + ", ".join(sorted(set(g["users"])))] if g["users"] else []
+        if len(ts) > 1:
+            notes.append(" · ".join(f"{n} {c}" for n, c in each))
         nowp = len(g["ids"]) if g["keyed"] else max(c for _, c in each)
         riskp = len(g["risk"] & g["ids"])
         platform.append({"target": label, "module": mod, "layer": ts[0].get("layer"),
@@ -430,7 +441,7 @@ def main():
                          "riskLevel": min(g["levels"], key=lambda x: ("critical", "high", "medium", "low", "unrated").index(x)
                                           if x in ("critical", "high", "medium", "low", "unrated") else 9) if g["levels"] else "",
                          "instances": [n for n, _ in each] if len(ts) > 1 else [],
-                         "note": " · ".join(f"{n} {c}" for n, c in each) if len(ts) > 1 else "",
+                         "note": "; ".join(notes),
                          "coverage": "fail" if any(t.get("coverage") == "fail" for t in ts) else "ok"})
         # A module installed on a node as packages (backup's Proxmox Backup Server):
         # its own row, so it is not lost inside the node's — no feed covers it.
@@ -578,7 +589,7 @@ def render(o):
     print(head)
     rows = o["modules"]
     for r in [r for r in rows if r.get("baseline")]:
-        print(line("baseline (all NixOS)", r, "; ".join(x for x in (note_of(r), "the package versions every NixOS module ships") if x)))
+        print(line("NixOS baseline", r, "; ".join(x for x in (note_of(r), "the package versions every NixOS module ships") if x)))
     for r in sorted([r for r in rows if not r.get("baseline")], key=lambda r: (-(r["now"] or 0), r["module"])):
         print(line(r["module"], r, note_of(r)))
     t = o["total"]

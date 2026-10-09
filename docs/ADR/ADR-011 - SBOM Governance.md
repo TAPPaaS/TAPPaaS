@@ -125,7 +125,7 @@ Kernel headers, compilers and `-dev` packages (a DKMS driver needs them) are **b
 their findings are counted apart and named, not as running code — the kernel's CVEs match
 `linux-libc-dev` by source package. No feed covers Proxmox's own packages (its kernel, QEMU,
 PVE, the backup server): a node's scan says so rather than implying they are clean. Every
-target names the **module** it is an instance of (a node is `cluster`'s), so a module run
+target names the **module** it is an instance of (a node is `pvehost`'s), so a module run
 three times is reported once.
 
 **Nix closures — one method for mothership and guests.** The guest runs one read-only
@@ -211,7 +211,7 @@ reachable, patched by a nixpkgs backport), `false_positive`, `resolved`, or `exp
 component (the estate-wide base — glibc, openssl, systemd — belongs to `templates`). The
 first three suppress the finding; the last two keep it reported. A module's statements
 decide for that module's targets only (its VM and its images; a Proxmox node is
-`cluster`'s), since whether a flaw is reachable depends on how the module uses the
+`pvehost`'s), since whether a flaw is reachable depends on how the module uses the
 package; `templates-vex.json` decides for every target. An `exploitable` statement carries
 the risk in this deployment as a `ratings[]` entry with source `TAPPaaS`. Two kinds are
 settled without a person: a CVE named in the nixpkgs package's `patches` is `resolved` for

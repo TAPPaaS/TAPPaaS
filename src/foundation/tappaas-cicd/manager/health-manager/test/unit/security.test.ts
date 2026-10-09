@@ -195,7 +195,7 @@ console.log("summarize: coverage and verdicts");
   check(nix.verdict === "triage" && nix.fixable === null, "Nix → triage, fix-state unknown (null, not 0)");
   const vx = parseVex(JSON.stringify({ vulnerabilities: [
     { id: "R", analysis: { state: "exploitable" }, ratings: [{ source: { name: "TAPPaaS" }, severity: "low" }] },
-    { id: "V", analysis: { state: "not_affected" } }] }), "c", "cluster");
+    { id: "V", analysis: { state: "not_affected" } }] }), "c", "pvehost");
   const sp = summarize(base, 9, "", [f("R", "High", ""), f("V", "Critical", ""), f("O", "High", "")], vx, true);
   check(sp.high === 2 && sp.critHighRisk?.join(",") === "R" && sp.riskLevel === "low" && sp.critHighVex?.join(",") === "V",
     "a platform target says which critical/high are analysed (RISK, worst risk) and how many VEX decided");
@@ -255,7 +255,7 @@ console.log("build-only packages, modules");
   check(["linux-libc-dev", "proxmox-headers-7.0.14-23-pve", "gcc-14", "cpp-14-x86-64-linux-gnu", "libssl-dev", "binutils-common"].every(isBuildOnly),
     "kernel headers, compilers and -dev packages are build-only");
   check(!["libssl3t64", "linux-image-amd64", "proxmox-kernel-7.0", "gcc-14-base", "libgcc-s1", "sudo"].some(isBuildOnly), "…what runs is not (gcc-14-base is a runtime package)");
-  check(moduleOf("node:tappaas2") === "cluster" && moduleOf("image:identity/authentik-server") === "identity" && moduleOf("coturn") === "coturn",
+  check(moduleOf("node:tappaas2") === "pvehost" && moduleOf("image:identity/authentik-server") === "identity" && moduleOf("coturn") === "coturn",
     "a node is an instance of cluster; an image of its module");
   const dir = mkdtempSync(join(tmpdir(), "hm-apt-"));
   writeFileSync(join(dir, "backup.json"), JSON.stringify({ imageType: "apt", node: "tappaas3" }));
@@ -313,7 +313,7 @@ console.log("loadVex");
   const at = (t: string): string => vexFor(v.statements, t).map((s) => s.id).sort().join(",");
   check(at("gitea") === "CVE-A,CVE-B" && at("image:gitea/server") === "CVE-A,CVE-B", "a module's target and its images get the base and its own");
   check(at("forgejo") === "CVE-A", "…another module only the base: a decision about gitea's use of a package is not forgejo's");
-  check(vexFor([{ id: "C", state: "not_affected", refs: [], source: "s", module: "cluster" }], "node:tappaas1").length === 1, "a Proxmox node is the cluster module's");
+  check(vexFor([{ id: "C", state: "not_affected", refs: [], source: "s", module: "pvehost" }], "node:tappaas1").length === 1, "a Proxmox node is the pvehost module's");
 }
 
 // ── the whole scan, offline ──────────────────────────────────────────
@@ -346,8 +346,8 @@ console.log("runScan");
   const n1 = t("node:tappaas1");
   check(n1?.high === 1 && n1.buildOnly === 1 && n1.note.includes("1 CVE(s) only in build-only packages"),
     "a CVE only in kernel headers is not counted, but said; one also in a running package still counts");
-  check(n1?.module === "cluster" && n1.apt?.join(",") === "backup" && n1.note.includes("Proxmox packages (kernel, QEMU, backup) not matched"),
-    "a node is cluster's, carries the apt-installed backup, and says what no feed covers");
+  check(n1?.module === "pvehost" && n1.apt?.join(",") === "backup" && n1.note.includes("Proxmox packages (kernel, QEMU, backup) not matched"),
+    "a node is pvehost's, carries the apt-installed backup, and says what no feed covers");
   check(t("image:identity/authentik-server")?.module === "identity" && t("network")?.critical === 1, "an image is its module's; the firewall's severity is looked up");
   const c = t("coturn");
   check(c?.verdict === "failed" && c.note.startsWith("unreachable"), "an unreachable guest is SCAN FAILED with the reason");

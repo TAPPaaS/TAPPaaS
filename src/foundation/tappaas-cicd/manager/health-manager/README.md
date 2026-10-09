@@ -187,7 +187,7 @@ The firewall's `pkg audit` (VuXML) carries no severity; each CVE id's severity
 is looked up in grype's database, NVD first. On a Debian host, findings only in
 build-only packages (kernel headers, compilers, `-dev`) are counted apart
 (`buildOnly`) and named under the report. Each target names its `module` (a node
-is `cluster`'s), and a node lists what is installed on it as packages (`apt`:
+is `pvehost`'s), and a node lists what is installed on it as packages (`apt`:
 backup); Proxmox's own packages are matched by no feed, and the node's note says so.
 
 **Output** goes to `config/sbom/`: `site.cdx.json` — one CycloneDX 1.4 document,
@@ -204,7 +204,7 @@ it `triage` with the risk from the statement's `ratings[]` entry whose source is
 shows). A module's file decides for that module's targets (its VM and images)
 only — whether a package's flaw is reachable depends on how the module uses it;
 `templates-vex.json`, the shared base, decides for every target, and a Proxmox
-node's findings are `cluster`'s. They are read from the module directories of every repository in
+node's findings are `pvehost`'s. They are read from the module directories of every repository in
 `site.json` `.repositories` — Community modules included — and the scan's notes
 say how many statements it applied and name any file it could not parse.
 
