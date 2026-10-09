@@ -59,6 +59,10 @@ class ProxyApp:
     slug: str                   # URL slug (must match across runs for idempotency)
     external_host: str          # public URL of the protected service, e.g. https://openwebui.test.tapaas.org
     description: str = ""
+    # Where Authentik's application list opens the app. Empty: external_host.
+    # "blank://blank" hides the app from the list -- for a gate whose module
+    # shows its own tile through an OIDC app (#806).
+    launch_url: str = ""
 
 
 @dataclass
@@ -302,7 +306,7 @@ class AuthentikManager:
             "slug": app.slug,
             "provider": provider_pk,
             "meta_description": app.description,
-            "meta_launch_url": app.external_host,
+            "meta_launch_url": app.launch_url or app.external_host,
         }
         if existing_app:
             application_pk = existing_app["pk"]
@@ -338,6 +342,19 @@ class AuthentikManager:
                 # (the OIDC case — caught by identity/test.sh --deep §7 teardown).
                 for endpoint in ("/providers/proxy", "/providers/oauth2"):
                     self._delete(f"{endpoint}/{provider_pk}/")
+
+    def app_provider_pk(self, slug: str) -> int | None:
+        """The provider pk of the Application with this slug; None when absent."""
+        app = self._find_by_field(self._applications(), "slug", slug)
+        return app.get("provider") if app else None
+
+    def app_is_proxy(self, slug: str) -> bool:
+        """True when the Application with this slug is backed by a Proxy Provider."""
+        provider_pk = self.app_provider_pk(slug)
+        if not provider_pk:
+            return False
+        rows = self._get_json("/providers/proxy/", page_size=1000).get("results", [])
+        return self._find_by_field(rows, "pk", provider_pk) is not None
 
     # ── Embedded Outpost ────────────────────────────────────────────────
 

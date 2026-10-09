@@ -509,6 +509,81 @@ class TestAppDelete(unittest.TestCase):
         self.assertFalse(any(c["method"] == "DELETE" for c in calls))
 
 
+class TestProxyAppLaunchUrl(unittest.TestCase):
+    ROUTES = {
+        ("GET", "/flows/instances/"): {"results": [{"pk": "FLOW1"}]},
+        ("GET", "/providers/proxy/"): {"results": []},
+        ("POST", "/providers/proxy/"): {"pk": 42},
+        ("GET", "/core/applications/"): {"results": []},
+        ("POST", "/core/applications/"): {"pk": "APP"},
+    }
+
+    def _launch(self, **kw):
+        mgr, calls = _make_manager(self.ROUTES)
+        mgr.proxy_app_ensure(ProxyApp(name="jellyfin-gate", slug="jellyfin-gate",
+                                      external_host="https://jf.example.org", **kw))
+        return next(c for c in calls if c["method"] == "POST" and c["path"] == "/core/applications/")["json"]
+
+    def test_default_launches_the_external_host(self):
+        self.assertEqual(self._launch()["meta_launch_url"], "https://jf.example.org")
+
+    def test_a_gate_can_be_hidden_from_the_app_list(self):
+        # #806: the module's OIDC app shows the tile; its forward-auth gate must not.
+        self.assertEqual(self._launch(launch_url="blank://blank")["meta_launch_url"], "blank://blank")
+
+
+class TestAppIsProxy(unittest.TestCase):
+    APPS = {"results": [{"pk": "A1", "slug": "jellyfin", "provider": 7},
+                        {"pk": "A2", "slug": "immich", "provider": 9}]}
+
+    def test_proxy_backed_app(self):
+        mgr, _ = _make_manager({("GET", "/core/applications/"): self.APPS,
+                                ("GET", "/providers/proxy/"): {"results": [{"pk": 7, "name": "jellyfin"}]}})
+        self.assertTrue(mgr.app_is_proxy("jellyfin"))
+
+    def test_oidc_backed_and_missing_apps_are_not(self):
+        mgr, _ = _make_manager({("GET", "/core/applications/"): self.APPS,
+                                ("GET", "/providers/proxy/"): {"results": [{"pk": 7, "name": "jellyfin"}]}})
+        self.assertFalse(mgr.app_is_proxy("immich"))
+        self.assertFalse(mgr.app_is_proxy("ghost"))
+
+
+class TestCliAppDelete(unittest.TestCase):
+    """app-delete detaches only ITS provider, and --only-proxy spares an OIDC app (#806)."""
+
+    APPS = {"results": [{"pk": "A1", "slug": "jellyfin", "provider": 7},
+                        {"pk": "A2", "slug": "test-idfa", "provider": 8}]}
+    OUTPOST = {"results": [{"pk": "OP", "name": EMBEDDED_OUTPOST_NAME, "providers": [7, 8]}]}
+
+    def _run(self, argv, proxy_rows):
+        import contextlib
+        import io
+        from unittest.mock import patch
+        from identity_controller import authentik_cli as cli
+        mgr, calls = _make_manager({("GET", "/core/applications/"): self.APPS,
+                                    ("GET", "/providers/proxy/"): {"results": proxy_rows},
+                                    ("GET", "/outposts/instances/"): self.OUTPOST})
+        ctx = MagicMock()
+        ctx.__enter__.return_value = mgr   # the real __enter__ opens a live client
+        with patch.object(cli, "_make_manager", return_value=ctx), contextlib.redirect_stdout(io.StringIO()):
+            cli.main(argv)
+        return calls
+
+    def test_detaches_only_the_deleted_apps_provider(self):
+        calls = self._run(["app-delete", "test-idfa"], [{"pk": 7}, {"pk": 8}])
+        patch_ = next(c for c in calls if c["method"] == "PATCH" and c["path"] == "/outposts/instances/OP/")
+        self.assertEqual(patch_["json"]["providers"], [7])
+        self.assertIn("/core/applications/test-idfa/", [c["path"] for c in calls if c["method"] == "DELETE"])
+
+    def test_only_proxy_keeps_an_oidc_app(self):
+        calls = self._run(["app-delete", "jellyfin", "--only-proxy"], [{"pk": 8}])
+        self.assertFalse(any(c["method"] in ("DELETE", "PATCH") for c in calls))
+
+    def test_only_proxy_deletes_a_proxy_app(self):
+        calls = self._run(["app-delete", "jellyfin", "--only-proxy"], [{"pk": 7}])
+        self.assertIn("/core/applications/jellyfin/", [c["path"] for c in calls if c["method"] == "DELETE"])
+
+
 class TestScopeMappings(unittest.TestCase):
     ROWS = {"results": [
         {"pk": "S-GENERIC", "name": "TAPPaaS OAuth Mapping: groups", "scope_name": "groups"},

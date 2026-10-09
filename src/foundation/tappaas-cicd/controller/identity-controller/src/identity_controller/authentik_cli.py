@@ -19,7 +19,7 @@ Subcommands:
   test                                     — confirm token + reachability
   proxy-app-ensure <slug> --name … --external-host …
                                             — idempotent Proxy app for forward-auth
-  app-delete <slug>                         — remove an app + its provider
+  app-delete <slug> [--only-proxy]          — remove an app + its provider
   outpost-attach <slug>                     — attach the app's provider to the embedded outpost
   outpost-set-authentik-host <url>          — set the public URL the outpost redirects to
   recovery-flow-ensure                      — create/reconcile the password-recovery flow
@@ -113,6 +113,7 @@ def cmd_proxy_app_ensure(mgr: AuthentikManager, args: argparse.Namespace) -> int
         slug=args.slug,
         external_host=args.external_host,
         description=args.description,
+        launch_url=args.launch_url,
     ))
     print(f"==> proxy app '{res.slug}': provider_pk={res.provider_pk} application_pk={res.application_pk}")
     if args.attach_outpost:
@@ -122,11 +123,17 @@ def cmd_proxy_app_ensure(mgr: AuthentikManager, args: argparse.Namespace) -> int
 
 
 def cmd_app_delete(mgr: AuthentikManager, args: argparse.Namespace) -> int:
+    # --only-proxy: a forward-auth gate moving to <module>-gate removes the old
+    # <module> app only if it is the old proxy app, never the OIDC app (#806).
+    if args.only_proxy and not mgr.app_is_proxy(args.slug):
+        print(f"==> '{args.slug}' is not a proxy app — kept")
+        return 0
     # Detach from the outpost first so we leave the outpost provider list clean.
-    apps = mgr._get_json("/core/applications/", slug=args.slug).get("results", [])  # noqa: SLF001
-    for a in apps:
-        if a.get("provider"):
-            mgr.outpost_detach_provider(a["provider"])
+    # Looked up client-side: Authentik ignores ?slug=, and filtering on it
+    # detached EVERY app's provider from the outpost (#806).
+    provider_pk = mgr.app_provider_pk(args.slug)
+    if provider_pk:
+        mgr.outpost_detach_provider(provider_pk)
     mgr.app_delete(args.slug)
     print(f"==> deleted app/provider '{args.slug}' (idempotent)")
     return 0
@@ -407,12 +414,16 @@ def main(argv: list[str] | None = None) -> int:
     pa.add_argument("--external-host", required=True,
                     help="public URL of the protected service (e.g. https://app.example.org)")
     pa.add_argument("--description", default="")
+    pa.add_argument("--launch-url", default="",
+                    help="where Authentik's app list opens it (default: --external-host; blank://blank hides it)")
     pa.add_argument("--attach-outpost", action="store_true",
                     help="also attach the new provider to the embedded outpost")
     pa.set_defaults(handler=cmd_proxy_app_ensure)
 
     ad = sub.add_parser("app-delete", help="remove an application + its provider")
     ad.add_argument("slug")
+    ad.add_argument("--only-proxy", action="store_true",
+                    help="delete only if the app is backed by a Proxy Provider (forward-auth)")
     ad.set_defaults(handler=cmd_app_delete)
 
     oa = sub.add_parser("outpost-attach",
