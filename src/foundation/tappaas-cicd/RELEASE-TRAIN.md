@@ -281,9 +281,12 @@ as in the nightly `health-manager scan security`), "if released now" first:
   template, the mothership, `00-Template` and test fixtures, and every pinned image.
 - **≈ approximate**: a module the build system does not run is evaluated without knowing which
   of its packages run; it is counted from its closure, by the package names that run elsewhere.
-- **Not compared**: the nodes, Debian guests and the firewall patch continuously and are not part
-  of a release; the mothership is a flake of its own. Their row has only "now", from the last
-  `health-manager scan security`, and they are in the TOTAL.
+- **Not compared**: the nodes, Debian guests and the firewall patch by their own channel and are
+  not part of a release; the mothership is a flake of its own. Their row has only "now", from the
+  last `health-manager scan security`, and they are in the TOTAL. One row per module, however many
+  instances run it: the nodes are one `cluster ×3` row counting each CVE once, every node's own
+  count beside it. A module installed on a node as packages (backup) has its own row, marked as
+  covered by no feed.
 - **The details** (`config/train-preview-details.json`) hold, per module, every critical/high CVE
   of both sides with its package and version, the image references and the changed package
   versions: the input for working out what to fix (`preview --module`, or `jq`).

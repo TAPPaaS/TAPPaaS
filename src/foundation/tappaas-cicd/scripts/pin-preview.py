@@ -306,10 +306,40 @@ def main():
         total["now"] += len(nk)
         total["base"] += len(bk)
 
-    # The platform: not released, patched continuously — "now" from the last scan.
-    platform = [{"target": t.get("name"), "layer": t.get("layer"), "now": (t.get("critical") or 0) + (t.get("high") or 0),
-                 "coverage": t.get("coverage")}
-                for t in status.get("targets", []) if t.get("layer") in ("debian", "opnsense")]
+    # The platform: not released, patched by its own channel — "now" from the last
+    # scan, one row per MODULE however many instances run it: three nodes are one
+    # cluster, its CVEs counted once (by id), each node's own count beside it.
+    groups = {}
+    for t in status.get("targets", []):
+        if t.get("layer") not in ("debian", "opnsense"):
+            continue
+        name = t.get("name", "")
+        mod = t.get("module") or ("cluster" if name.endswith("(node)") else name.split(" ")[0])
+        g = groups.setdefault(mod, {"targets": [], "ids": set(), "keyed": True})
+        g["targets"].append(t)
+        if "critHighKeys" in t:
+            g["ids"] |= {k.split(" ")[0] for k in t["critHighKeys"]}
+        else:
+            g["keyed"] = False
+    platform = []
+    for mod, g in sorted(groups.items()):
+        ts = g["targets"]
+        each = [(t.get("name", "").split(" ")[0], (t.get("critical") or 0) + (t.get("high") or 0)) for t in ts]
+        label = f"{mod} ×{len(ts)}" if len(ts) > 1 else ts[0].get("name", mod)
+        if mod in modules:  # a module whose host is also scanned as a system (vllm-amd's LXC)
+            label = f"{mod} host"
+        platform.append({"target": label, "module": mod, "layer": ts[0].get("layer"),
+                         "now": len(g["ids"]) if g["keyed"] else max(c for _, c in each),
+                         "instances": [n for n, _ in each] if len(ts) > 1 else [],
+                         "note": " · ".join(f"{n} {c}" for n, c in each) if len(ts) > 1 else "",
+                         "coverage": "fail" if any(t.get("coverage") == "fail" for t in ts) else "ok"})
+        # A module installed on a node as packages (backup's Proxmox Backup Server):
+        # its own row, so it is not lost inside the node's — no feed covers it.
+        for t in ts:
+            for am in t.get("apt", []):
+                platform.append({"target": f"{am} (apt on {t.get('name', '').split(' ')[0]})", "module": am, "layer": "apt",
+                                 "now": None, "instances": [], "coverage": "ok",
+                                 "note": "Proxmox packages: no CVE feed; its Debian base counts under " + mod})
     # A Nix target that is no evaluated module (the mothership is a flake of its
     # own): counted as it runs, not compared — said so, never dropped.
     for t in status.get("targets", []):
@@ -343,7 +373,7 @@ def main():
     out = {
         "baseLabel": a.base_label, "from": a.__dict__["from"], "to": a.to,
         "modules": rows, "platform": platform, "total": total,
-        "platformTotal": sum(p["now"] for p in platform),
+        "platformTotal": sum(p["now"] or 0 for p in platform),
         "majors": sorted(majors.values(), key=lambda m: m["pkg"]),
         "notGated": [{"pkg": p, "why": w} for p, w in sorted(quiet.items())],
         "introduced": [{"key": k, "modules": sorted(set(v))} for k, v in sorted(introduced.items())],
@@ -427,9 +457,9 @@ def render(o):
     t = o["total"]
     print(f"  {'MODULES':<16} {t['now']:>5} │ {t['base']:>6} {t['fixed']:>6} {t['new']:>5} {t['same']:>5} │ {t.get('vex', 0):>4}")
     if o["platform"]:
-        print(f"  — not compared: the platform (patched continuously) and the mothership (now = last scan) —")
-        for p in sorted(o["platform"], key=lambda p: -p["now"]):
-            print(f"  {p['target']:<16} {p['now']:>5} │")
+        print(f"  — not compared: the platform (patched by its own channel) and the mothership (now = last scan) —")
+        for p in sorted(o["platform"], key=lambda p: (-(p["now"] if p["now"] is not None else -1), p["target"])):
+            print(f"  {p['target']:<16} {n(p['now']):>5} │" + (f"   {p['note']}" if p.get("note") else ""))
         print(f"  {'TOTAL':<16} {t['now'] + o['platformTotal']:>5} │")
     print()
     if o["majors"]:

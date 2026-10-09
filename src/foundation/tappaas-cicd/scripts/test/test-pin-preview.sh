@@ -27,7 +27,8 @@ cat > "${T}/cve-status.json" <<'EOF'
 {"targets":[
  {"name":"logging","layer":"nix","critical":1,"high":1},
  {"name":"tappaas-cicd (mothership)","layer":"nix","critical":8,"high":57},
- {"name":"tappaas1 (node)","layer":"debian","critical":10,"high":172},
+ {"name":"tappaas1 (node)","module":"cluster","layer":"debian","critical":1,"high":2,"critHighKeys":["CVE-N1 libc6","CVE-N2 libc6","CVE-N3 sudo"]},
+ {"name":"tappaas2 (node)","module":"cluster","layer":"debian","critical":1,"high":1,"critHighKeys":["CVE-N1 libc6","CVE-N2 libc6"],"apt":["backup"]},
  {"name":"network (firewall)","layer":"opnsense","critical":0,"high":0}
 ]}
 EOF
@@ -93,7 +94,11 @@ ck "a module new since the release: deconz, no release column" "1 null 0 1 0" "$
 ck "…counted though it runs nowhere, marked approximate" "true" "$(jq '.modules[] | select(.module=="deconz") | .approximate' "${T}/p.json")"
 ck "…from runtime package names only — no build tool" "1" "$(jq '.modules[] | select(.module=="deconz") | .now' "${T}/p.json")"
 ck "the modules total: now 6 | v2.1 6" "6 6" "$(jq -r '"\(.total.now) \(.total.base)"' "${T}/p.json")"
-ck "the platform has only a now: node 182, firewall 0" "182 0" "$(jq -r '[.platform[] | select(.layer != "nix, not compared") | .now] | sort | reverse | join(" ")' "${T}/p.json")"
+ck "the platform has only a now: firewall 0" "0" "$(jq -r '.platform[] | select(.module == "network") | .now' "${T}/p.json")"
+ck "two nodes are ONE cluster row, its CVEs counted once by id (3, not 3+2)" "cluster ×2 3 tappaas1 3 · tappaas2 2" \
+   "$(jq -r '.platform[] | select(.module == "cluster") | "\(.target) \(.now) \(.note)"' "${T}/p.json")"
+ck "a module installed on a node as packages has its own row, said uncovered" "backup (apt on tappaas2) null" \
+   "$(jq -r '.platform[] | select(.module == "backup") | "\(.target) \(.now)"' "${T}/p.json")"
 ck "the mothership is not dropped: now only, not compared" "65" "$(jq '.platform[] | select(.layer == "nix, not compared") | .now' "${T}/p.json")"
 ck "a real major since the release: grafana 13 -> 14" "true" "$(jq '[.majors[].pkg] | index("grafana") != null' "${T}/p.json")"
 ck "date and sequence versions are not majors" "false" "$(jq '[.majors[].pkg] | (index("abseil-cpp") != null or index("less") != null)' "${T}/p.json")"
@@ -104,7 +109,7 @@ ck "the gate: majors and what is new against the release" \
    '["cve CVE-1","cve CVE-2","major grafana 13->14","major protobuf 34->33"]' "$(jq -c '.gate' "${T}/p.json")"
 ck "the table: NOW first, then the release's columns" "yes" "$([[ "${OUT}" == *"MODULE"*"NOW"*"│"*"V2.1"*"FIXED"*"NEW"*"SAME"* ]] && echo yes || echo no)"
 ck "…with the approximate row said" "yes" "$([[ "${OUT}" == *"deconz"*"≈ approximate"* ]] && echo yes || echo no)"
-ck "…and a grand TOTAL with the platform" "yes" "$(grep -qE '^ +TOTAL +253 ' <<<"${OUT}" && echo yes || echo no)"
+ck "…and a grand TOTAL with the platform" "yes" "$(grep -qE '^ +TOTAL +74 ' <<<"${OUT}" && echo yes || echo no)"
 # ── the details file: per module, each CVE with what it is (#788) ──
 D="${T}/d.json"
 ck "details: logging's NEW lists the CVE, package, version and where it comes from" "CVE-2 grafana 14.0.1 High nixos" \

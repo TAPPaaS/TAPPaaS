@@ -183,6 +183,13 @@ Each target gets a **verdict**, not a CVE count:
 | triage (Nix) | matched by CPE; Nix carries no fix-state, so a person decides — and records it as VEX |
 | watch | nothing fixable: waiting on upstream |
 
+The firewall's `pkg audit` (VuXML) carries no severity; each CVE id's severity
+is looked up in grype's database, NVD first. On a Debian host, findings only in
+build-only packages (kernel headers, compilers, `-dev`) are counted apart
+(`buildOnly`) and named under the report. Each target names its `module` (a node
+is `cluster`'s), and a node lists what is installed on it as packages (`apt`:
+backup); Proxmox's own packages are matched by no feed, and the node's note says so.
+
 **Output** goes to `config/sbom/`: `site.cdx.json` — one CycloneDX 1.4 document,
 each target a component with its packages nested — and `cve-status.json`; the
 scan before is kept as `cve-status.previous.json`, which is what makes "new"

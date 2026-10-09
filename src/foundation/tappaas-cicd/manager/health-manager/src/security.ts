@@ -64,6 +64,8 @@ export interface Finding {
 export interface TargetStatus {
   id: string; // stable key across scans: "node:tappaas1", "identity", "image:identity/authentik-server"
   name: string;
+  module?: string; // the module it is an instance of: a node is cluster's, an image its module's
+  apt?: string[]; // modules installed on this host as packages (imageType apt), e.g. backup
   layer: Layer;
   host: string;
   runsOn?: string[]; // images: the module/container that runs it
@@ -77,6 +79,7 @@ export interface TargetStatus {
   fixable: number | null; // null: the layer has no fix-state (nix)
   critHighFixable: number | null;
   suppressed: number; // findings a committed VEX statement decided
+  buildOnly?: number; // CVE ids found only in build-only packages (headers, compilers) — not counted
   verdict: Verdict;
   act: Finding[]; // what ACT refers to
   critHighKeys: string[]; // "<id> <pkg>" of every Critical/High finding — the diff base
@@ -384,6 +387,17 @@ function normSeverity(s: string): string {
   return "Unknown";
 }
 
+// ── build-only packages ────────────────────────────────────────────────
+// Kernel headers, compilers and -dev packages are on a host to BUILD something
+// (a DKMS driver: r8127 on hrossen's tappaas1/2), never run by a service. The
+// kernel's CVEs match linux-libc-dev and the headers by source package — 55 of
+// tappaas1's critical/high were those. Counted apart, not as running code; the
+// library a -dev package belongs to is its own package and still counts.
+const BUILD_ONLY = /^(linux-libc-dev|(linux|proxmox|pve)-headers(-.*)?|(cpp|gcc|g\+\+)(-\d+)?(-x86-64-linux-gnu)?|binutils(-.*)?|build-essential|dpkg-dev|libc6-dev|.+-dev)$/;
+export function isBuildOnly(pkg: string): boolean {
+  return BUILD_ONLY.test(pkg);
+}
+
 // ── VEX: triage decisions committed next to the module (ADR-011 §8) ─────
 export interface VexStatement {
   id: string;
@@ -488,10 +502,15 @@ export function summarize(
 
 // OPNsense: VuXML carries no severity; a vulnerable package the channel has an
 // update for is the thing to act on.
+// VuXML carries no severity: every firewall finding was "Unknown", so the firewall
+// counted 0 critical/high while it had 42 (hrossen, 2026-10-09: unbound, openssl,
+// strongswan). A CVE id's severity comes from the scanner's own database (NVD
+// first); a VuXML entry without a CVE id stays Unknown.
 export function summarizeOpnsense(
   base: Pick<TargetStatus, "id" | "name" | "layer" | "host">,
   p: OpnsenseProbe | null,
   vex: VexStatement[],
+  severity: Record<string, string> | null = null,
 ): TargetStatus {
   if (!p || !p.complete || p.pkgs.length === 0 || !p.auditRan) {
     const why = !p ? "the firewall could not be reached" : p.pkgs.length === 0 ? "pkg listed no packages" : "pkg audit did not run";
@@ -503,11 +522,12 @@ export function summarizeOpnsense(
     const fixed = p.upgrades.has(name) ? "channel update" : "";
     const installed = a.pkg.slice(name.length + 1);
     for (const id of a.cves.length ? a.cves : [`VuXML:${a.pkg}`]) {
-      findings.push({ id, severity: "Unknown", pkg: name, installed, fixed, purl: `pkg:generic/opnsense/${name}@${installed}` });
+      findings.push({ id, severity: severity?.[id] ?? "Unknown", pkg: name, installed, fixed, purl: `pkg:generic/opnsense/${name}@${installed}` });
     }
   }
   const age = p.vulnXmlAgeDays;
-  const note = `${p.version || "OPNsense"}; VuXML ${age === null ? "age unknown" : `${age} day(s) old`}`;
+  const note = `${p.version || "OPNsense"}; VuXML ${age === null ? "age unknown" : `${age} day(s) old`}` +
+    (severity === null ? "; severity unknown (CVE database lookup failed)" : "; severity from the CVE database (NVD first)");
   const s = summarize(base, p.pkgs.length, "", findings, vex, true, note);
   const fixable = findings.filter((f) => f.fixed !== "" && !vexSuppresses(f, vex));
   if (fixable.length > 0) {
@@ -554,6 +574,8 @@ export interface SecurityIO {
   probeLxc(node: string, vmid: number, script: string): RemoteResult;
   probeNode(node: string, script: string): RemoteResult;
   probeFirewall(script: string): RemoteResult;
+  // CVE id → Critical|High|Medium|Low from the local CVE database (null: lookup failed)
+  cveSeverities(ids: string[]): Record<string, string> | null;
   // pname → nixpkgs meta.identifiers.cpeParts (null: eval failed as a whole)
   nixCpeParts(names: string[]): Record<string, CpeParts | null> | null;
   dbUpdate(): string[]; // notes; empty when both databases are current
@@ -621,6 +643,20 @@ export class CliSecurityIO implements SecurityIO {
       rmSync(dir, { recursive: true, force: true });
     }
   }
+  cveSeverities(ids: string[]): Record<string, string> | null {
+    const out: Record<string, string> = {};
+    for (let i = 0; i < ids.length; i += 200) {
+      const r = exec("grype", ["db", "search", "vuln", ...ids.slice(i, i + 200), "-o", "json", "-q"], undefined, 5 * MIN,
+        { ...process.env, GRYPE_DB_AUTO_UPDATE: "false" });
+      if (r.rc !== 0) return null;
+      try {
+        Object.assign(out, pickSeverities(JSON.parse(r.stdout) as { id?: string; provider?: string; severity?: string }[]));
+      } catch {
+        return null;
+      }
+    }
+    return out;
+  }
   dbUpdate(): string[] {
     const notes: string[] = [];
     const g = exec("grype", ["db", "update"], undefined, 20 * MIN);
@@ -653,6 +689,24 @@ export class CliSecurityIO implements SecurityIO {
   hostname(): string {
     return hostname();
   }
+}
+
+// One severity per CVE id: NVD's when it has one, else the highest any provider
+// gives — distro feeds rate a CVE for their own build, NVD for the software.
+export function pickSeverities(rows: { id?: string; provider?: string; severity?: string }[]): Record<string, string> {
+  const rank = ["critical", "high", "medium", "low"];
+  const nvd: Record<string, string> = {};
+  const best: Record<string, string> = {};
+  for (const r of rows) {
+    const id = (r.id ?? "").toUpperCase();
+    const s = (r.severity ?? "").toLowerCase();
+    if (!id || !rank.includes(s)) continue;
+    if (r.provider === "nvd") nvd[id] = s;
+    if (!best[id] || rank.indexOf(s) < rank.indexOf(best[id])) best[id] = s;
+  }
+  const out: Record<string, string> = {};
+  for (const id of Object.keys(best)) out[id] = normSeverity(nvd[id] ?? best[id]);
+  return out;
 }
 
 function lastLine(s: string): string {
@@ -721,6 +775,25 @@ export function planTargets(configDir: string, defaultNode: string, client: Clus
   return out;
 }
 
+// node → the modules installed on it as packages (module json imageType "apt").
+// They have no vmid, so loadConfigModules does not list them.
+export function aptModules(configDir: string, defaultNode: string): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  let files: string[] = [];
+  try {
+    files = readdirSync(configDir).filter((f) => f.endsWith(".json")).sort();
+  } catch {
+    return out;
+  }
+  for (const f of files) {
+    const raw = readModuleJson(join(configDir, f));
+    if (!raw || raw.imageType !== "apt") continue;
+    const node = typeof raw.node === "string" && raw.node ? raw.node : defaultNode;
+    (out[node] ??= []).push(f.slice(0, -".json".length));
+  }
+  return out;
+}
+
 // The module directories of every REGISTERED repository: site.json
 // .repositories, and in each its module catalogue — the same walk the field
 // schema composes from (compose-fields.ts). A VEX file in a Community module is
@@ -765,8 +838,11 @@ export function registeredModuleDirs(configDir: string, fallbackRepo: string): s
 // reachable in one module can be in another — so <module>-vex.json decides for
 // that module's targets only; templates-vex.json, the estate-wide base (§8), for
 // every target. A Proxmox node is the cluster module's.
+export function moduleOf(target: string): string {
+  return target.startsWith("node:") ? "cluster" : target.replace(/^image:/, "").split("/")[0];
+}
 export function vexFor(vex: VexStatement[], target: string): VexStatement[] {
-  const module = target.startsWith("node:") ? "cluster" : target.replace(/^image:/, "").split("/")[0];
+  const module = moduleOf(target);
   return vex.filter((s) => s.module === "" || s.module === module);
 }
 
@@ -864,7 +940,9 @@ export function runScan(opts: ScanOpts, client: ClusterClient, io: SecurityIO): 
       const t = p.t;
       const tv = vexFor(vex, t.id);
       if (t.layer === "opnsense") {
-        const s = summarizeOpnsense({ id: t.id, name: t.name, layer: "opnsense", host: t.host }, p.opn ?? null, tv);
+        const ids = [...new Set((p.opn?.audit ?? []).flatMap((a) => a.cves))];
+        const sev = ids.length > 0 && dbOk ? io.cveSeverities(ids) : ids.length > 0 ? null : {};
+        const s = summarizeOpnsense({ id: t.id, name: t.name, layer: "opnsense", host: t.host }, p.opn ?? null, tv, sev);
         results.push({
           status: s,
           version: p.opn?.version ?? "",
@@ -942,6 +1020,21 @@ export function runScan(opts: ScanOpts, client: ClusterClient, io: SecurityIO): 
     }
   } finally {
     rmSync(tmp, { recursive: true, force: true });
+  }
+
+  // Which module each target is an instance of, and what is installed on a node
+  // as packages: backup's Proxmox Backup Server is apt on its node, no VM.
+  const apt = aptModules(opts.configDir, opts.defaultNode);
+  for (const r of results) {
+    r.status.module = moduleOf(r.status.id);
+    if (!r.status.id.startsWith("node:")) continue;
+    const on = apt[r.status.id.slice(5)];
+    if (on) r.status.apt = on;
+    // Proxmox's own packages — its kernel, QEMU, PVE, and the backup server —
+    // are in no feed trivy reads: matched by nothing, so say so.
+    if (r.status.coverage === "ok") {
+      r.status.note = [r.status.note, `Proxmox packages (kernel, QEMU${on ? `, ${on.join(", ")}` : ""}) not matched: no CVE feed`].filter(Boolean).join("; ");
+    }
   }
 
   const sweep = readSweep(opts.configDir);
@@ -1052,8 +1145,14 @@ function trivyTarget(base: Pick<TargetStatus, "id" | "name" | "layer" | "host" |
   }
   try {
     const t = trivyParse(r.stdout);
+    const running = t.findings.filter((f) => !isBuildOnly(f.pkg));
+    const runIds = new Set(running.map((f) => f.id));
+    const buildOnly = new Set(t.findings.filter((f) => isBuildOnly(f.pkg) && !runIds.has(f.id)).map((f) => f.id)).size;
+    const notes = [t.osName ? `${t.family} ${t.osName}` : "", buildOnly > 0 ? `${buildOnly} CVE(s) only in build-only packages (headers, compilers), not counted` : ""];
+    const status = summarize(base, t.components.length, osCoverage(t.family, t.components.length), running, vex, true, notes.filter(Boolean).join("; "));
+    if (buildOnly > 0) status.buildOnly = buildOnly;
     return {
-      status: summarize(base, t.components.length, osCoverage(t.family, t.components.length), t.findings, vex, true, t.osName ? `${t.family} ${t.osName}` : ""),
+      status,
       version: t.osName,
       components: t.components,
     };
@@ -1211,6 +1310,10 @@ export function renderReport(s: ScanStatus, all: boolean, now: number): string[]
   }
   const vexed = rows.reduce((a, t) => a + t.suppressed, 0);
   if (vexed > 0) out.push("", `${vexed} finding(s) decided by committed VEX statements and not listed.`);
+  const built = rows.filter((t) => (t.buildOnly ?? 0) > 0);
+  if (built.length > 0) {
+    out.push(`Not counted, only in build-only packages (kernel headers, compilers): ${built.map((t) => `${t.name} ${t.buildOnly}`).join(", ")}.`);
+  }
   return out;
 }
 

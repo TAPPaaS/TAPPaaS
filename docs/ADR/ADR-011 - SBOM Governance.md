@@ -119,7 +119,14 @@ installed package, which is what the tools do by default.
 | NixOS closure (mothership **and** guests) | the target's runtime path list → `paths2cdx` → CPE vendor from the estate's nixpkgs (`meta.identifiers.cpeParts`) | `grype` (NVD by CPE) | **none** — triage (§8) |
 | Container image | the image **as running**, by digest — never by tag | `trivy image` | yes (distro + language ecosystems) |
 | Debian host | a copy of `/etc/os-release`, `/etc/debian_version`, `/var/lib/dpkg/status` | `trivy rootfs` | yes (Debian security tracker) |
-| OPNsense | on the firewall | `pkg audit` (VuXML) + firmware channel status | via the channel |
+| OPNsense | on the firewall | `pkg audit` (VuXML) + firmware channel status; VuXML has no severity, so each CVE id's comes from grype's database (NVD first) | via the channel |
+
+Kernel headers, compilers and `-dev` packages (a DKMS driver needs them) are **build-only**:
+their findings are counted apart and named, not as running code — the kernel's CVEs match
+`linux-libc-dev` by source package. No feed covers Proxmox's own packages (its kernel, QEMU,
+PVE, the backup server): a node's scan says so rather than implying they are clean. Every
+target names the **module** it is an instance of (a node is `cluster`'s), so a module run
+three times is reported once.
 
 **Nix closures — one method for mothership and guests.** The guest runs one read-only
 command it already has (`nix-store -q --requisites /run/current-system`); the list comes

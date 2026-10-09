@@ -14,7 +14,7 @@ import {
   CpeParts, DB_SPACE_BYTES, dbSpaceProblem, Finding, LINUX_PROBE, OPNSENSE_PROBE, PREVIOUS_FILE, STATUS_FILE, ScanStatus, SecurityIO,
   TargetStatus, applyCpes, checkCveStatus, fit, groupByImage, diffScans, nixComponents, parseLinuxProbe, parseOpnsenseProbe,
   loadVex, parseStorePath, parseVex, scanComponentList, scanImageRefs, readStatus, registeredModuleDirs, renderReport, runScan, sbomDir, summarize, summarizeOpnsense, sweepIsNewer,
-  vexFor, vexSuppresses, writeScan,
+  vexFor, vexSuppresses, writeScan, isBuildOnly, pickSeverities, aptModules, moduleOf,
 } from "../../src/security";
 import { run } from "../../src/main";
 import { FakeClusterClient } from "./fake-client";
@@ -84,6 +84,8 @@ class FakeIO implements SecurityIO {
   probeLxc(n: string, v: number): RemoteResult { this.probes.push(`lxc:${n}/${v}`); return this.lxc.get(`${n}/${v}`) ?? down; }
   probeNode(n: string): RemoteResult { this.probes.push(`node:${n}`); return this.nodes.get(n) ?? down; }
   probeFirewall(s: string): RemoteResult { this.probes.push(`fw:${s === OPNSENSE_PROBE}`); return this.firewall; }
+  severities: Record<string, string> | null = {};
+  cveSeverities(): Record<string, string> | null { return this.severities; }
   nixCpeParts(): Record<string, CpeParts | null> | null { return this.cpe; }
   dbUpdate(): string[] { return []; }
   grype(f: string): RemoteResult { this.grypeInputs.push(readFileSync(f, "utf8")); return this.grypeOut; }
@@ -204,6 +206,27 @@ console.log("summarizeOpnsense");
   check(summarizeOpnsense(base, null, []).verdict === "failed", "an unreachable firewall is a failed scan");
   const noAudit = parseOpnsenseProbe(fwProbe(false).replace(/@@audit[\s\S]*@@upgrades/, "@@audit\n@@upgrades"), now);
   check(summarizeOpnsense(base, noAudit, []).verdict === "failed", "pkg audit that printed nothing did not run → failed");
+  check(noUpd.critical === 0 && noUpd.high === 0 && noUpd.note.includes("severity unknown"), "no severity looked up: Unknown, and the note says so");
+  const sev = summarizeOpnsense(base, parseOpnsenseProbe(fwProbe(false), now), [], { "CVE-2026-77860": "Critical", "CVE-2026-85501": "High" });
+  check(sev.critical === 1 && sev.high === 1 && sev.critHighKeys.join(",") === "CVE-2026-77860 unbound,CVE-2026-85501 unbound",
+    "VuXML has no severity: the CVE database's counts the firewall's critical/high (it showed 0 of 42)");
+  const picked = pickSeverities([
+    { id: "CVE-1", provider: "ubuntu", severity: "medium" }, { id: "CVE-1", provider: "nvd", severity: "high" }, { id: "CVE-1", provider: "alpine", severity: "critical" },
+    { id: "cve-2", provider: "debian", severity: "negligible" }, { id: "CVE-2", provider: "rhel", severity: "low" }, { id: "CVE-3", provider: "x", severity: "unknown" }]);
+  check(picked["CVE-1"] === "High" && picked["CVE-2"] === "Low" && !("CVE-3" in picked), "NVD's severity first, else the highest; ids case-folded; unknown is no severity");
+}
+
+console.log("build-only packages, modules");
+{
+  check(["linux-libc-dev", "proxmox-headers-7.0.14-23-pve", "gcc-14", "cpp-14-x86-64-linux-gnu", "libssl-dev", "binutils-common"].every(isBuildOnly),
+    "kernel headers, compilers and -dev packages are build-only");
+  check(!["libssl3t64", "linux-image-amd64", "proxmox-kernel-7.0", "gcc-14-base", "libgcc-s1", "sudo"].some(isBuildOnly), "…what runs is not (gcc-14-base is a runtime package)");
+  check(moduleOf("node:tappaas2") === "cluster" && moduleOf("image:identity/authentik-server") === "identity" && moduleOf("coturn") === "coturn",
+    "a node is an instance of cluster; an image of its module");
+  const dir = mkdtempSync(join(tmpdir(), "hm-apt-"));
+  writeFileSync(join(dir, "backup.json"), JSON.stringify({ imageType: "apt", node: "tappaas3" }));
+  writeFileSync(join(dir, "coturn.json"), JSON.stringify({ vmid: 341, node: "tappaas1" }));
+  check(JSON.stringify(aptModules(dir, "tappaas1")) === '{"tappaas3":["backup"]}', "a module installed as packages (imageType apt) is found on its node, with no vmid");
 }
 
 // ── VEX ──────────────────────────────────────────────────────────────
@@ -269,6 +292,9 @@ console.log("runScan");
   io.images.set("ghcr.io/goauthentik/server@sha256:dc07", ok(trivyJson("debian", 425, [["CVE-2025-1", "CRITICAL", "libxml2", "2.9.14"], ["CVE-2025-2", "LOW", "tar", ""]])));
   io.lxc.set("tappaas3/312", ok(debProbe));
   io.nodes.set("tappaas1", ok(debProbe));
+  io.rootfs = ok(trivyJson("debian", 813, [["CVE-2026-1", "HIGH", "libc6", ""], ["CVE-2026-1", "HIGH", "linux-libc-dev", ""], ["CVE-2026-7", "HIGH", "linux-libc-dev", ""]]));
+  io.severities = { "CVE-2026-77860": "Critical" };
+  writeFileSync(join(dir, "backup.json"), JSON.stringify({ imageType: "apt", node: "tappaas1" }));
   const client = new FakeClusterClient();
   client.actualNodes.set("tappaas2/312", "tappaas3"); // HA moved the container
   const { status, cdx } = runScan({ configDir: dir, defaultNode: "tappaas1", repoDir: repo() }, client, io);
@@ -283,6 +309,12 @@ console.log("runScan");
   check(img?.verdict === "act" && img.critHighFixable === 1 && img.ref === "ghcr.io/goauthentik/server@sha256:dc07", "the running image, by digest: act");
   check(img?.runsOn?.length === 2 && !t("image:identity/authentik-worker"), "server and worker: one image target naming both");
   check(t("vllm-amd")?.layer === "debian" && t("node:tappaas1")?.verdict === "watch", "Debian container and node scanned by trivy");
+  const n1 = t("node:tappaas1");
+  check(n1?.high === 1 && n1.buildOnly === 1 && n1.note.includes("1 CVE(s) only in build-only packages"),
+    "a CVE only in kernel headers is not counted, but said; one also in a running package still counts");
+  check(n1?.module === "cluster" && n1.apt?.join(",") === "backup" && n1.note.includes("Proxmox packages (kernel, QEMU, backup) not matched"),
+    "a node is cluster's, carries the apt-installed backup, and says what no feed covers");
+  check(t("image:identity/authentik-server")?.module === "identity" && t("network")?.critical === 1, "an image is its module's; the firewall's severity is looked up");
   const c = t("coturn");
   check(c?.verdict === "failed" && c.note.startsWith("unreachable"), "an unreachable guest is SCAN FAILED with the reason");
   const comps = (cdx.components as Array<Record<string, unknown>>);
