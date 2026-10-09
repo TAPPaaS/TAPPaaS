@@ -166,6 +166,47 @@ else
 fi
 
 # ============================================================================
+# Readiness polling (Tests 4 and 4b)
+# ============================================================================
+# Poll rather than probe once. The DocumentServer runs in a container, and
+# these tests are reached by the very operations that restart it (update,
+# reconcile, and the post-rollback run) — so a single request cannot tell
+# "not ready yet" from "not working", and a healthy module gets failed and
+# rolled back for being mid-startup. Same shape as the retry in
+# foundation/identity/services/identity/install-service.sh.
+#
+# Bounded on purpose: an unbounded wait would hide a real outage, which is
+# the opposite failure. On success the elapsed time is reported, so a slow
+# start stays visible instead of being smoothed away. 50s failed healthy
+# starts on a slower instance (#808); 170s matches the 180s readiness gate.
+ENDPOINT_RETRIES="${EURO_OFFICE_HEALTH_RETRIES:-18}"  # 18 × 10s ≈ 180s
+ENDPOINT_WAIT="${EURO_OFFICE_HEALTH_WAIT:-10}"
+
+# probe_until_ready <url> [accepted-codes-regex] — echo the last HTTP code and
+# the seconds waited. Test 4 is reached right after a start too: a single probe
+# of / failed a fresh container with HTTP 000 (#808).
+probe_until_ready() {
+    local url="$1" ok="${2:-^200$}" code="000" i
+    for ((i = 1; i <= ENDPOINT_RETRIES; i++)); do
+        # `$(cmd || echo 000)` would CONCATENATE curl's own "000" with the
+        # fallback ("000000"), so the fallback is assigned outside it.
+        code=$(remote "curl -s -o /dev/null -w '%{http_code}' --max-time 15 ${url}") || code="000"
+        [[ -n "${code}" ]] || code="000"
+        if [[ "${code}" =~ ${ok} ]]; then
+            printf '%s %s\n' "${code}" "$(( (i - 1) * ENDPOINT_WAIT ))"
+            return 0
+        fi
+        # `[[ cond ]] && cmd` as the last statement in the body returns 1 on the
+        # final iteration, which under `set -e` kills the subshell this function
+        # runs in — the caller's `read` then gets nothing. Use an if-block.
+        if [[ $i -lt ${ENDPOINT_RETRIES} ]]; then
+            sleep "${ENDPOINT_WAIT}"
+        fi
+    done
+    printf '%s %s\n' "${code}" "$(( (ENDPOINT_RETRIES - 1) * ENDPOINT_WAIT ))"
+}
+
+# ============================================================================
 # Test 4: HTTP Health (DocumentServer root)
 # ============================================================================
 header "Test 4: HTTP Health"
@@ -174,17 +215,15 @@ info "Testing DocumentServer HTTP response on http://localhost/..."
 if [ "$CONTAINER_OK" = false ]; then
     skip "HTTP health check skipped — container is not running"
 else
-    # `$(cmd || echo 000)` CONCATENATES curl's own "000" (it writes the code even on failure) with the fallback, giving "000000" — which then compares unequal to "000" and defeats every downstream check. Assign the fallback OUTSIDE the substitution.
-    HTTP_CODE=$(remote "curl -s -o /dev/null -w '%{http_code}' --max-time 15 http://localhost/") || HTTP_CODE="000"
-    [[ -n "${HTTP_CODE}" ]] || HTTP_CODE="000"
-    info "HTTP status code: ${HTTP_CODE}"
+    read -r HTTP_CODE HTTP_WAITED < <(probe_until_ready "http://localhost/" '^(200|301|302)$')
+    info "HTTP status code: ${HTTP_CODE} (after ${HTTP_WAITED}s)"
 
     if [ "$HTTP_CODE" = "200" ]; then
         pass "HTTP health check passed (HTTP 200)"
     elif [ "$HTTP_CODE" = "301" ] || [ "$HTTP_CODE" = "302" ]; then
         pass "HTTP health check passed (HTTP ${HTTP_CODE} redirect)"
     else
-        fail "HTTP health check failed (HTTP ${HTTP_CODE})"
+        fail "HTTP health check failed (HTTP ${HTTP_CODE}) after ${HTTP_WAITED}s of retries"
     fi
 fi
 
@@ -202,38 +241,6 @@ info "Testing the endpoints the Nextcloud connector relies on..."
 if [ "$CONTAINER_OK" = false ]; then
     skip "Connector endpoint check skipped — container is not running"
 else
-    # Poll rather than probe once. The DocumentServer runs in a container, and
-    # this test is reached by the very operations that restart it (update,
-    # reconcile, and the post-rollback run) — so a single request cannot tell
-    # "not ready yet" from "not working", and a healthy module gets failed and
-    # rolled back for being mid-startup. Same shape as the retry in
-    # foundation/identity/services/identity/install-service.sh.
-    #
-    # Bounded on purpose: an unbounded wait would hide a real outage, which is
-    # the opposite failure. On success the elapsed time is reported, so a slow
-    # start stays visible instead of being smoothed away.
-    ENDPOINT_RETRIES="${EURO_OFFICE_HEALTH_RETRIES:-6}"   # 6 × 10s ≈ 60s
-    ENDPOINT_WAIT="${EURO_OFFICE_HEALTH_WAIT:-10}"
-
-    probe_until_ready() { # probe_until_ready <url> — echo the last HTTP code
-        local url="$1" code="000" i
-        for ((i = 1; i <= ENDPOINT_RETRIES; i++)); do
-            code=$(remote "curl -s -o /dev/null -w '%{http_code}' --max-time 15 ${url}") || code="000"
-            [[ -n "${code}" ]] || code="000"
-            if [[ "${code}" == "200" ]]; then
-                printf '%s %s\n' "${code}" "$(( (i - 1) * ENDPOINT_WAIT ))"
-                return 0
-            fi
-            # `[[ cond ]] && cmd` as the last statement in the body returns 1 on the
-            # final iteration, which under `set -e` kills the subshell this function
-            # runs in — the caller's `read` then gets nothing. Use an if-block.
-            if [[ $i -lt ${ENDPOINT_RETRIES} ]]; then
-                sleep "${ENDPOINT_WAIT}"
-            fi
-        done
-        printf '%s %s\n' "${code}" "$(( (ENDPOINT_RETRIES - 1) * ENDPOINT_WAIT ))"
-    }
-
     read -r HC_CODE HC_WAITED < <(probe_until_ready "http://localhost/healthcheck")
     read -r API_CODE API_WAITED < <(probe_until_ready "http://localhost/web-apps/apps/api/documents/api.js")
     info "/healthcheck: ${HC_CODE} (after ${HC_WAITED}s)   /web-apps api.js: ${API_CODE} (after ${API_WAITED}s)"

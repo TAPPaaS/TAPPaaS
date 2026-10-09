@@ -237,6 +237,16 @@ attempt_rollback() {
         warn "Attempting rollback to pre-update snapshot..."
         if /home/tappaas/bin/snapshot-vm.sh "${module}" --restore 1; then
             info "  ${GN}✓${CL} Rollback completed — VM restored to pre-update state"
+            # The restore returns once the guest agent answers, which is boot,
+            # not service: the module's own services are still starting. Gate
+            # the test as Step 6 does, or a healthy rollback fails it (#808).
+            local rb_host
+            rb_host="$(module_guest_host "${module}")"
+            if [[ -n "${rb_host}" ]]; then
+                { wait_for_guest_settled "${rb_host}" 180 \
+                  && wait_for_module_ready "${module}" "${rb_host}" 180 hook-only; } \
+                    || warn "  '${module}' not ready after rollback — post-rollback tests may see a starting service"
+            fi
             info "  Running post-rollback verification..."
             local rollback_test_exit=0
             /home/tappaas/bin/test-module.sh "${module}" || rollback_test_exit=$?
