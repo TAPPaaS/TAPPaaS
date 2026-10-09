@@ -1547,7 +1547,9 @@ pin_findings() {
         || { rm -rf "${work}"; echo "the pin of ${tag} could not be fetched" >&2; return 1; }
     now_src="$(fetch_pin "${dir}/flake.lock")" \
         || { rm -rf "${work}"; echo "the candidate pin could not be fetched" >&2; return 1; }
-    local mode files=()
+    local mode files=() running
+    # The modules whose NixOS system runs here (the last scan's Nix targets).
+    running="$(jq -r '.components[] | select(any(.properties[]?; .name == "tappaas:layer" and .value == "nix")) | .name | split(" ")[0]' "${sbom}/site.cdx.json" 2>/dev/null)"
     for side in base now; do
         # A past release is evaluated as it was built: before #324 its modules
         # carried their own copy of the baseline, so adding today's would clash.
@@ -1563,7 +1565,21 @@ pin_findings() {
         (( ${#files[@]} > 0 )) || continue
         while read -r ok rel drv; do
             [[ "${ok}" == "ok:" && "${drv}" == *.drv ]] || continue
-            nix-store -q --requisites "${drv}" > "${work}/${side}/$(basename "${rel}" .nix).txt" 2>/dev/null || true
+            local mname; mname="$(basename "${rel}" .nix)"
+            # A module that runs nowhere here has no inventory to say which of its
+            # .drv closure runs — that closure holds build inputs too (deconz:
+            # qemu's full build → pipewire → ffmpeg, where a guest runs only
+            # qemu's guest-agent output). Build its system — mostly fetched; config
+            # files built — and read the runtime closure. Unrooted: GC reclaims it.
+            # Failing or slow, it stays approximate, and says so.
+            if ! grep -qx "${mname}" <<<"${running}"; then
+                local outp
+                if outp="$(timeout "${PREVIEW_BUILD_TIMEOUT:-900}" nix-store --realise "${drv}" 2>/dev/null | tail -1)" && [[ -n "${outp}" ]]; then
+                    nix-store -q --requisites "${outp}" > "${work}/${side}/${mname}.txt" 2>/dev/null && : > "${work}/${side}/${mname}.built" && continue
+                fi
+                info "  ${mname} runs nowhere here and its system did not build — counted approximately (≈)"
+            fi
+            nix-store -q --requisites "${drv}" > "${work}/${side}/${mname}.txt" 2>/dev/null || true
         done < <(bash "${TRAIN_SCRIPTS}/nixos-baseline-eval.sh" --src "${tree}" ${mode} --drv --nixpkgs "${src}" "${files[@]}" 2>&1)
         # The shared baseline: an empty module with templates/tappaas-common.nix added —
         # what every guest starts from. Its packages are the preview's baseline row.

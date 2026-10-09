@@ -298,8 +298,12 @@ as in the nightly `health-manager scan security`), "if released now" first:
   container image's (from `src/image-pins.json`, read at the release's tag and in this tree) are
   matched alike. Every module TAPPaaS ships counts — every NixOS system in the tree except the
   template, the mothership, `00-Template` and test fixtures, and every pinned image.
-- **≈ approximate**: a module the build system does not run is evaluated without knowing which
-  of its packages run; it is counted from its closure, by the package names that run elsewhere.
+- **≈ approximate**: a module that runs nowhere here has no inventory to say which of its
+  packages run. The train then builds its system (mostly fetched; its config files built) and
+  counts its runtime closure — exact, no mark. Only when that build fails or takes longer than
+  15 minutes (`PREVIEW_BUILD_TIMEOUT`) is it counted from its `.drv` closure by the package names
+  that run elsewhere, marked ≈ — which can include build inputs (deconz's showed ffmpeg through
+  qemu's full build, where a guest runs only qemu's guest-agent output).
 - **The platform**: the nodes, Debian guests and the firewall patch by their own channel and are
   not part of a release. Their row has only "now", from the
   last `health-manager scan security`, and they are in the TOTAL. One row per module, however many

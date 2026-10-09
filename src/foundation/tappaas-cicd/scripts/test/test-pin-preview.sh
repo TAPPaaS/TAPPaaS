@@ -236,6 +236,17 @@ ck "with _baseline evaluated, it is no module" "false" "$(jq '[.modules[].module
 ck "…coturn on the release's openssl keeps CVE-1 as its own; the baseline still has it" "1 1" \
    "$(jq -r '[(.modules[] | select(.module=="coturn") | .now), (.modules[] | select(.module=="baseline") | .now)] | join(" ")' "${T}/p2.json")"
 
+# A module that runs nowhere, whose system the train could BUILD on both sides: its
+# closure files are runtime closures (<module>.built) — exact, no "runs elsewhere" filter.
+mkdir -p "${T}/n3" "${T}/b3"
+drvs "${T}/n3/deconz.txt" openssl-3.5.2 grafana-14.0.1; : > "${T}/n3/deconz.built"
+drvs "${T}/b3/deconz.txt" openssl-3.5.1; : > "${T}/b3/deconz.built"
+python3 "${PP}" --inventory "${T}/site.cdx.json" --status "${T}/cve-status.json" \
+    --base-label v2.1 --base-closures "${T}/b3" --base-images "${T}/noimg.json" --base-nix-scanner "${T}/nix --components {file}" \
+    --now-closures "${T}/n3" --now-images "${T}/noimg.json" --now-nix-scanner "${T}/nix --components {file}" \
+    --image-scanner "${T}/img --refs {file}" --from a --to b --out "${T}/p3.json" --ignore "${T}/ignore.json" >/dev/null 2>&1
+ck "a module built on both sides is exact: no ≈, its runtime packages counted" "false 2" \
+   "$(jq -r '.modules[] | select(.module=="deconz") | "\(.approximate) \(.now)"' "${T}/p3.json")"
 echo
 echo "── ${PASS} passed, ${FAIL} failed ──"
 [[ "${FAIL}" -eq 0 ]]

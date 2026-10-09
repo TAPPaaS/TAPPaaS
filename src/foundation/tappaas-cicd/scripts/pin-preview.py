@@ -14,7 +14,8 @@ packages and a container image's are matched with today's CVE database on both
 sides, so the difference is what the release changes, not what was published
 meanwhile. Per module: critical/high now, and against the release: in it, fixed,
 new, unchanged. A module the build system does not run is evaluated from its
-closure without knowing which packages run — counted, marked approximate (≈).
+closure without knowing which packages run — counted, marked approximate (≈) —
+unless the train could build its system: then its runtime closure is exact.
 The nodes and the firewall patch continuously and are not part of a release:
 their row has only "now", from the last security scan.
 
@@ -128,8 +129,19 @@ def pick(running, versions):
     return max(same or versions, key=vkey)
 
 
-def side_packages(module, clo, inv, union):
-    """{pname: version} a side ships for a module; approximate when it runs nowhere."""
+def built(d):
+    """Modules whose closure file is the RUNTIME closure of their built system
+    (<module>.built beside <module>.txt): what would run, exactly."""
+    if not d or not os.path.isdir(d):
+        return set()
+    return {f[:-6] for f in os.listdir(d) if f.endswith(".built")}
+
+
+def side_packages(module, clo, inv, union, exact=False):
+    """{pname: version} a side ships for a module; approximate when it runs nowhere
+    and its system could not be built (its .drv closure holds build inputs too)."""
+    if exact:
+        return {p: set(vs) for p, vs in clo.items()}, False
     if module in inv:
         out = {}
         for pname, runs in inv[module].items():
@@ -185,6 +197,7 @@ def main():
             print(f"pin-preview: {a.ignore} is not JSON — nothing is ignored", file=sys.stderr)
     union = {p for pk in inv.values() for p in pk}
     clo = {"base": closures(a.base_closures), "now": closures(a.now_closures)}
+    exact = {"base": built(a.base_closures), "now": built(a.now_closures)}
     # _baseline: an empty module with the shared NixOS baseline — not a module, the row
     # every module's own CVEs are counted apart from.
     blclo = {s: clo[s].pop("_baseline", None) for s in ("base", "now")}
@@ -195,7 +208,7 @@ def main():
     for m in modules:
         for side in ("base", "now"):
             if m in clo[side]:
-                pkgs[side][m], ap_ = side_packages(m, clo[side][m], inv, union)
+                pkgs[side][m], ap_ = side_packages(m, clo[side][m], inv, union, m in exact[side] and m not in inv)
                 approx[m] = approx.get(m, False) or ap_
 
     # Majors: the release's version against the one it would ship now.
