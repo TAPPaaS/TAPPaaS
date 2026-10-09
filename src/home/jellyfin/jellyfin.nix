@@ -61,7 +61,11 @@ let
     suffix = ".well-known/openid-configuration"
     endpoint = discovery[: -len(suffix)] if discovery.endswith(suffix) else discovery
 
-    # OidConfig fields, in the plugin's declaration order (XmlSerializer).
+    # OidConfig fields, in the plugin's declaration order, by their XML names.
+    # The class is [XmlRoot("PluginConfiguration")], so each provider's value
+    # is a nested <PluginConfiguration>, and FolderRoleMapping serializes as
+    # FolderRoleMappings. Anything else and Jellyfin silently replaces the file
+    # with an empty default on load (#806, found live on hrossen).
     # Lists are string[]; None leaves the field out (null). Access is decided by
     # Authentik (the app's group binding), so Roles stays empty; "admin" in the
     # groups claim (members of jellyfin-admins) makes a Jellyfin administrator.
@@ -81,7 +85,7 @@ let
         ("EnableLiveTvManagement", "false"),
         ("LiveTvRoles", []),
         ("LiveTvManagementRoles", []),
-        ("FolderRoleMapping", []),
+        ("FolderRoleMappings", []),
         ("RoleClaim", "groups"),
         ("OidScopes", ["email", "groups"]),
         # Caddy terminates TLS; the plugin builds its redirect URI from the
@@ -122,12 +126,12 @@ let
     cfg = None
     for it in oids.findall("item"):
         if (it.findtext("key/string") or "") == PROVIDER:
-            cfg = child(child(it, "value"), "OidConfig")
+            cfg = child(child(it, "value"), "PluginConfiguration")
             break
     if cfg is None:
         item = ET.SubElement(oids, "item")
         ET.SubElement(ET.SubElement(item, "key"), "string").text = PROVIDER
-        cfg = ET.SubElement(ET.SubElement(item, "value"), "OidConfig")
+        cfg = ET.SubElement(ET.SubElement(item, "value"), "PluginConfiguration")
     for name, value in FIELDS:
         el = cfg.find(name)
         if isinstance(value, list):
