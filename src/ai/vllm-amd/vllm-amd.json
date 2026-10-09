@@ -1,7 +1,7 @@
 {
   "description": "vLLM AMD ROCm inference — Ryzen AI MAX+ 395 (tappaas2)",
   "kind": "lxc",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "stack": "ai",
   "releaseDate": "2026-07-02",
   "maintainer": "@ErikDaniel007",
@@ -21,7 +21,7 @@
     "cluster:lxc": {
       "cores": 24,
       "memory": "47104",
-      "diskSize": "32G",
+      "diskSize": "80G",
       "storage": "tanka1",
       "imageType": "clone",
       "image": "debian-12-standard_12.12-1_amd64.tar.zst",
