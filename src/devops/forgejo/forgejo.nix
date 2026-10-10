@@ -191,30 +191,31 @@ in
         exit 0
       fi
 
-      # Forgejo checks the discovery URL when the source is added or updated, so it
-      # must answer first. On a sweep the firewall's DNS and proxy entries are
-      # re-applied minutes earlier, and a lookup in that window fails: the boundary
-      # of 2026-10-10 lost forgejo to "lookup identity.hrossen.dk: no such host".
-      up=0
-      for _ in $(seq 1 36); do
-        if curl -sf --max-time 5 "$OIDC_DISCOVERY_URI" >/dev/null; then up=1; break; fi
-        sleep 5
-      done
-      [ "$up" -eq 1 ] || echo "forgejo-configure-oidc: $OIDC_DISCOVERY_URI did not answer in 3 minutes — trying anyway" >&2
-
       ARGS=(--name authentik --provider openidConnect
             --key "$OIDC_CLIENT_ID" --secret "$OIDC_CLIENT_SECRET"
             --auto-discover-url "$OIDC_DISCOVERY_URI"
             --scopes openid --scopes email --scopes profile --scopes groups
             --group-claim-name groups --admin-group admin
             --skip-local-2fa)
-      if [ -z "$ID" ]; then
-        forgejo-admin admin auth add-oauth "''${ARGS[@]}"
-        echo "forgejo-configure-oidc: authentik login source added"
-      else
-        forgejo-admin admin auth update-oauth --id "$ID" "''${ARGS[@]}"
-        echo "forgejo-configure-oidc: authentik login source $ID updated"
-      fi
+      # Forgejo resolves and fetches the discovery URL itself when the source is
+      # added or updated — with Go's own resolver, reading /etc/resolv.conf. A
+      # NixOS switch restarts this unit while the network units restart too, and
+      # in that window the lookup fails ("lookup identity.hrossen.dk: no such
+      # host"; curl, through the system resolver, still answered). Twice that
+      # failed forgejo's OS update and stopped the 2026-10-10 boundary: retry.
+      for attempt in $(seq 1 12); do
+        if [ -z "$ID" ]; then
+          if forgejo-admin admin auth add-oauth "''${ARGS[@]}"; then
+            echo "forgejo-configure-oidc: authentik login source added"; exit 0
+          fi
+        elif forgejo-admin admin auth update-oauth --id "$ID" "''${ARGS[@]}"; then
+          echo "forgejo-configure-oidc: authentik login source $ID updated"; exit 0
+        fi
+        echo "forgejo-configure-oidc: attempt $attempt failed — retrying in 10 s" >&2
+        sleep 10
+      done
+      echo "forgejo-configure-oidc: Forgejo could not reach $OIDC_DISCOVERY_URI in 2 minutes" >&2
+      exit 1
     '';
   };
 
