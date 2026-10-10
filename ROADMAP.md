@@ -108,8 +108,8 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | 4 | G4.5 Governance, CI & sign-offs | M | L | 2 | 3 | 5 |
 | 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 7 | 11 | 5 |
 | 3 | G3.2 Identity & SSO wiring | M | L | 1 | 9 | 4 |
-| 3 | G3.3 App module fixes | L | L | 5 | 5 | 10 |
-| 3 | G3.4 AI stack maturity | M | M | 1 | – | 6 |
+| 3 | G3.3 App module fixes | L | L | 5 | 5 | 11 |
+| 3 | G3.4 AI stack maturity | M | M | 1 | – | 9 |
 | 3 | G3.5 Installer UX | L | L | – | 1 | 3 |
 | 2 | G2.1 Firewall exposure & rule order | M | H | 3 | 4 | 12 |
 | 2 | G2.2 DNS resolver robustness | L | M | 4 | – | 5 |
@@ -345,7 +345,7 @@ Every app wired to the identity provider the same way: OIDC for hass, Nextcloud 
 | ✅ #769 | vaultwarden: SSO is registered but never wired into the app | M | L | **Closed 2026-10-04** (SSO wired, `e184ea9d`). **Reversed 2026-10-06, vaultwarden 0.6.0:** no SSO for the password vault, by decision — see vaultwarden DESIGN.md |
 | ✅ #779 | identity: `authentik-env-secrets-only` calls `cmp` without diffutils | L | M | **Closed 2026-10-06** (`3f34f63e`): `! cmp` was always true, so the clean `authentik.env` was replaced and logged every boot. Live-tested on hrossen |
 
-### G3.3 App module fixes — Ease L · Risk L · released: 5 · done for 2.2: 5 · open: 10
+### G3.3 App module fixes — Ease L · Risk L · released: 5 · done for 2.2: 5 · open: 11
 
 The known rough edges of the app modules, fixed and tested so they stay fixed: Nextcloud Talk end to end (#715), Home Assistant (#552, #568, #571 — maintainer-owned), Nextcloud and euro-office (#332, #658, #751), litellm consumers (#553), windows-server (#411), forgejo (#283, #284), in-guest backups (#754), container stop timeouts (#786).
 
@@ -368,7 +368,7 @@ The known rough edges of the app modules, fixed and tested so they stay fixed: N
 | ✅ #786 | identity, litellm: containers get SIGKILL on every stop (10 s timeout) | L | M | **Closed 2026-10-06** (`b7af4b14`): worker `--stop-timeout=90` (drains 16-32 s); litellm `--init`, as PID 1 it ignored SIGTERM while starting. Live-tested on hrossen |
 | ✅ #743 | nextcloud:fileservice test contradicts euro-office UPGRADE.md | L | L | **Closed 2026-09-26** (@ErikDaniel007). Added to the roadmap 2026-10-07 |
 
-### G3.4 AI stack maturity — Ease M · Risk M · released: 1 · open: 6
+### G3.4 AI stack maturity — Ease M · Risk M · released: 1 · open: 9
 
 A production-grade AI stack: LiteLLM and Open WebUI tested (#119, #120), hardened (#121) and kept current (#621), LiteLLM sized for its workers (#677), and vLLM's models recoverable after a restore (#758).
 
