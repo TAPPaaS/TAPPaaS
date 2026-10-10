@@ -1909,6 +1909,45 @@
           "justification": "risk in this deployment, from the triage"
         }
       ]
+    },
+    {
+      "id": "CVE-2026-77214",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "A heap over-read when the calling program passes XML_ParseBuffer a length beyond its buffer \u2014 a caller bug, not crafted XML; the programs that load expat here pass correct lengths.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libexpat1@2.7.1-2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-88647",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "GnuTLS TLS-client hostname-verification bypass (CN fallback); nothing in the diyHue image makes TLS connections through gnutls (curl and Python use OpenSSL; the gnutls CoAP client is for unconfigured Tradfri support).",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libgnutls30t64@3.8.9-3%2Bdeb13u2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-88648",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "GnuTLS TLS-client cross-domain CA restriction bypass; nothing in the diyHue image makes TLS connections through gnutls (curl and Python use OpenSSL; the gnutls CoAP client is for unconfigured Tradfri support).",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libgnutls30t64@3.8.9-3%2Bdeb13u2"
+        }
+      ]
     }
   ]
 }

@@ -1948,6 +1948,45 @@
           "ref": "pkg:deb/debian/python3-urllib3@1.26.12-1%2Bdeb12u4"
         }
       ]
+    },
+    {
+      "id": "CVE-2026-77214",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "A heap over-read when the calling program passes XML_ParseBuffer a length beyond its buffer \u2014 a caller bug, not crafted XML; the programs that load expat here pass correct lengths.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libexpat1@2.5.0-1%2Bdeb12u4"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-88647",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "GnuTLS TLS-client hostname-verification bypass (CN fallback); the only gnutls TLS client on the host is apt's HTTPS downloads, and apt verifies the GPG signatures on everything it installs \u2014 an impersonated mirror cannot inject a package.",
+        "justification": "protected_by_mitigating_control"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libgnutls30@3.7.9-2%2Bdeb12u7"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-88648",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "GnuTLS TLS-client cross-domain CA restriction bypass; the only gnutls TLS client on the host is apt's HTTPS downloads, and apt verifies the GPG signatures on everything it installs \u2014 an impersonated mirror cannot inject a package.",
+        "justification": "protected_by_mitigating_control"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libgnutls30@3.7.9-2%2Bdeb12u7"
+        }
+      ]
     }
   ]
 }

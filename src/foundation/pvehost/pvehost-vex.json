@@ -2669,6 +2669,304 @@
           "ref": "pkg:deb/debian/python3-urllib3@2.3.0-3%2Bdeb13u2"
         }
       ]
+    },
+    {
+      "id": "CVE-2026-77214",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "A heap over-read when the calling program passes XML_ParseBuffer a length beyond its buffer \u2014 a caller bug, not crafted XML; the programs that load expat here pass correct lengths.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libexpat1@2.8.3-1~deb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-88647",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "GnuTLS TLS-client hostname-verification bypass (CN fallback); the only gnutls TLS client on the host is apt's HTTPS downloads, and apt verifies the GPG signatures on everything it installs \u2014 an impersonated mirror cannot inject a package.",
+        "justification": "protected_by_mitigating_control"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/gnutls-bin@3.8.9-3%2Bdeb13u4"
+        },
+        {
+          "ref": "pkg:deb/debian/libgnutls-dane0t64@3.8.9-3%2Bdeb13u4"
+        },
+        {
+          "ref": "pkg:deb/debian/libgnutls30t64@3.8.9-3%2Bdeb13u4"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-88648",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "GnuTLS TLS-client cross-domain CA restriction bypass; the only gnutls TLS client on the host is apt's HTTPS downloads, and apt verifies the GPG signatures on everything it installs \u2014 an impersonated mirror cannot inject a package.",
+        "justification": "protected_by_mitigating_control"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/gnutls-bin@3.8.9-3%2Bdeb13u4"
+        },
+        {
+          "ref": "pkg:deb/debian/libgnutls-dane0t64@3.8.9-3%2Bdeb13u4"
+        },
+        {
+          "ref": "pkg:deb/debian/libgnutls30t64@3.8.9-3%2Bdeb13u4"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-61374",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Apache Thrift language bindings (Java/Python/Perl, fixed in 0.25.0); Debian's libthrift-0.19.0t64 is the C++ library, used only by Ceph's librgw2 \u2014 no Ceph cluster on the site, and nothing loads either.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libthrift-0.19.0t64@0.19.0-4%2Bb1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-63772",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Apache Thrift language bindings (Java/Python/Perl, fixed in 0.25.0); Debian's libthrift-0.19.0t64 is the C++ library, used only by Ceph's librgw2 \u2014 no Ceph cluster on the site, and nothing loads either.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libthrift-0.19.0t64@0.19.0-4%2Bb1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-66055",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Apache Thrift language bindings (Java/Python/Perl, fixed in 0.25.0); Debian's libthrift-0.19.0t64 is the C++ library, used only by Ceph's librgw2 \u2014 no Ceph cluster on the site, and nothing loads either.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libthrift-0.19.0t64@0.19.0-4%2Bb1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-66859",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Apache Thrift language bindings (Java/Python/Perl, fixed in 0.25.0); Debian's libthrift-0.19.0t64 is the C++ library, used only by Ceph's librgw2 \u2014 no Ceph cluster on the site, and nothing loads either.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libthrift-0.19.0t64@0.19.0-4%2Bb1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-83632",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Apache Thrift language bindings (Java/Python/Perl, fixed in 0.25.0); Debian's libthrift-0.19.0t64 is the C++ library, used only by Ceph's librgw2 \u2014 no Ceph cluster on the site, and nothing loads either.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libthrift-0.19.0t64@0.19.0-4%2Bb1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-85476",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Apache Thrift language bindings (Java/Python/Perl, fixed in 0.25.0); Debian's libthrift-0.19.0t64 is the C++ library, used only by Ceph's librgw2 \u2014 no Ceph cluster on the site, and nothing loads either.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libthrift-0.19.0t64@0.19.0-4%2Bb1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-91135",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Apache Thrift language bindings (Java/Python/Perl, fixed in 0.25.0); Debian's libthrift-0.19.0t64 is the C++ library, used only by Ceph's librgw2 \u2014 no Ceph cluster on the site, and nothing loads either.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libthrift-0.19.0t64@0.19.0-4%2Bb1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-91137",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Apache Thrift language bindings (Java/Python/Perl, fixed in 0.25.0); Debian's libthrift-0.19.0t64 is the C++ library, used only by Ceph's librgw2 \u2014 no Ceph cluster on the site, and nothing loads either.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libthrift-0.19.0t64@0.19.0-4%2Bb1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-94634",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Apache Thrift language bindings (Java/Python/Perl, fixed in 0.25.0); Debian's libthrift-0.19.0t64 is the C++ library, used only by Ceph's librgw2 \u2014 no Ceph cluster on the site, and nothing loads either.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libthrift-0.19.0t64@0.19.0-4%2Bb1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-94636",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Apache Thrift language bindings (Java/Python/Perl, fixed in 0.25.0); Debian's libthrift-0.19.0t64 is the C++ library, used only by Ceph's librgw2 \u2014 no Ceph cluster on the site, and nothing loads either.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libthrift-0.19.0t64@0.19.0-4%2Bb1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-94639",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Apache Thrift language bindings (Java/Python/Perl, fixed in 0.25.0); Debian's libthrift-0.19.0t64 is the C++ library, used only by Ceph's librgw2 \u2014 no Ceph cluster on the site, and nothing loads either.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libthrift-0.19.0t64@0.19.0-4%2Bb1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-94642",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Apache Thrift language bindings (Java/Python/Perl, fixed in 0.25.0); Debian's libthrift-0.19.0t64 is the C++ library, used only by Ceph's librgw2 \u2014 no Ceph cluster on the site, and nothing loads either.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libthrift-0.19.0t64@0.19.0-4%2Bb1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-94644",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Apache Thrift language bindings (Java/Python/Perl, fixed in 0.25.0); Debian's libthrift-0.19.0t64 is the C++ library, used only by Ceph's librgw2 \u2014 no Ceph cluster on the site, and nothing loads either.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libthrift-0.19.0t64@0.19.0-4%2Bb1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-94651",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Apache Thrift language bindings (Java/Python/Perl, fixed in 0.25.0); Debian's libthrift-0.19.0t64 is the C++ library, used only by Ceph's librgw2 \u2014 no Ceph cluster on the site, and nothing loads either.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libthrift-0.19.0t64@0.19.0-4%2Bb1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-94653",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Apache Thrift language bindings (Java/Python/Perl, fixed in 0.25.0); Debian's libthrift-0.19.0t64 is the C++ library, used only by Ceph's librgw2 \u2014 no Ceph cluster on the site, and nothing loads either.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libthrift-0.19.0t64@0.19.0-4%2Bb1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-94654",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Apache Thrift language bindings (Java/Python/Perl, fixed in 0.25.0); Debian's libthrift-0.19.0t64 is the C++ library, used only by Ceph's librgw2 \u2014 no Ceph cluster on the site, and nothing loads either.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libthrift-0.19.0t64@0.19.0-4%2Bb1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-96286",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Apache Thrift language bindings (Java/Python/Perl, fixed in 0.25.0); Debian's libthrift-0.19.0t64 is the C++ library, used only by Ceph's librgw2 \u2014 no Ceph cluster on the site, and nothing loads either.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libthrift-0.19.0t64@0.19.0-4%2Bb1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-96287",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Apache Thrift language bindings (Java/Python/Perl, fixed in 0.25.0); Debian's libthrift-0.19.0t64 is the C++ library, used only by Ceph's librgw2 \u2014 no Ceph cluster on the site, and nothing loads either.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libthrift-0.19.0t64@0.19.0-4%2Bb1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-96289",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Apache Thrift language bindings (Java/Python/Perl, fixed in 0.25.0); Debian's libthrift-0.19.0t64 is the C++ library, used only by Ceph's librgw2 \u2014 no Ceph cluster on the site, and nothing loads either.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libthrift-0.19.0t64@0.19.0-4%2Bb1"
+        }
+      ]
     }
   ]
 }
