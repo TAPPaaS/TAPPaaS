@@ -191,6 +191,17 @@ in
         exit 0
       fi
 
+      # Forgejo checks the discovery URL when the source is added or updated, so it
+      # must answer first. On a sweep the firewall's DNS and proxy entries are
+      # re-applied minutes earlier, and a lookup in that window fails: the boundary
+      # of 2026-10-10 lost forgejo to "lookup identity.hrossen.dk: no such host".
+      up=0
+      for _ in $(seq 1 36); do
+        if curl -sf --max-time 5 "$OIDC_DISCOVERY_URI" >/dev/null; then up=1; break; fi
+        sleep 5
+      done
+      [ "$up" -eq 1 ] || echo "forgejo-configure-oidc: $OIDC_DISCOVERY_URI did not answer in 3 minutes — trying anyway" >&2
+
       ARGS=(--name authentik --provider openidConnect
             --key "$OIDC_CLIENT_ID" --secret "$OIDC_CLIENT_SECRET"
             --auto-discover-url "$OIDC_DISCOVERY_URI"
