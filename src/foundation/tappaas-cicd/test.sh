@@ -297,7 +297,9 @@ else
     fail "nix min-free is '${_minfree:-unset}' — the store can fill the disk between GCs (#813)"
 fi
 _gccal="$(systemctl cat nix-gc.timer 2>/dev/null | sed -n 's/^OnCalendar=//p' | head -1)"
-if [[ "${_gccal}" == "daily" ]] && systemctl cat nix-gc.service 2>/dev/null | grep -q -- '--delete-older-than 7d'; then
+# NixOS puts the options in the unit's start script, not in the unit itself.
+_gcexec="$(systemctl show -P ExecStart nix-gc.service 2>/dev/null | sed -n 's/.*path=\([^ ;]*\).*/\1/p')"
+if [[ "${_gccal}" == "daily" ]] && grep -qs -- '--delete-older-than 7d' "${_gcexec:-/nonexistent}"; then
     pass "nix-gc runs daily, keeping 7 days of generations"
 else
     fail "nix-gc runs '${_gccal:-?}' (want daily, --delete-older-than 7d; #813)"
