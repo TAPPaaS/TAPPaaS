@@ -451,6 +451,11 @@ Every one of these is a refusal, not a warning:
 - a sweep is running here or on the staging site;
 - either site's last sweep failed — a new pin must not be blamed for a failure that predates it;
 - an unresolved staging fault;
+- a release image a module downloads (`imageType: img` with an `http` `imageLocation` — the
+  NixOS template, the OPNsense firewall) is not published. A `nixos-template-v*` or
+  `opnsense-firewall-v*` tag builds it only when pushed to the GitHub repo; 2.2 named
+  `nixos-template-v1.4`, whose tag never got there, and makerfloss's templates update failed
+  with a 404;
 - a module in this repository is missing a MUST of the blueprint (ADR-027), a service
   README's field section no longer matches its `fields.json`, or a stack README's or INSTALL.md's module
   list no longer matches the catalogue — see *The module blueprint* below;

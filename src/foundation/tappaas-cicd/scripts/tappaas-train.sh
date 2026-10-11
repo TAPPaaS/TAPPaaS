@@ -482,6 +482,15 @@ cmd_status() {
         blocks=$((blocks+1))
     fi
 
+    images_check
+    if (( ${#IMG_MISSING[@]} == 0 )); then
+        info "  ${GN}✓${CL} release images: ${IMG_COUNT} named, all published"
+    else
+        local im; for im in "${IMG_MISSING[@]}"; do error "  ✗ release image not published: ${im}"; done
+        error "      publish it first (a nixos-template-v* / opnsense-firewall-v* tag on the GitHub repo builds it)"
+        blocks=$((blocks+1))
+    fi
+
     # Container image pins (#750): reported, never a block.
     pins_check
     pins_report
@@ -710,6 +719,31 @@ record_secrets() {
        "${STATE_FILE}" > "${tmp}" && mv -f "${tmp}" "${STATE_FILE}" || rm -f "${tmp}"
 }
 
+# Release images (template, firewall) a module downloads from imageLocation must
+# be published before the tree that names them is promoted: 2.2 named
+# nixos-template-v1.4, whose tag never reached the GitHub repo that builds it, so
+# makerfloss's first night on 2.2 failed the templates update with a 404.
+# The URL is joined as Create-TAPPaaS-VM.sh joins it (one slash between).
+# IMG_MISSING: "<module> <url>" per unreachable image. TAPPAAS_TRAIN_FETCH (tests)
+# replaces the probe: `cmd <url>`, rc 0 = published.
+images_check() {
+    IMG_MISSING=(); IMG_COUNT=0
+    local f url
+    while IFS= read -r f; do
+        url="$(jq -r '(.config["cluster:vm"] // .) | select((.imageType // "") == "img")
+                     | select((.imageLocation // "") | startswith("http"))
+                     | (.imageLocation | sub("/+$"; "")) + "/" + (.image | sub("^/+"; ""))' "${REPO_DIR}/${f}" 2>/dev/null)"
+        [[ -n "${url}" ]] || continue
+        IMG_COUNT=$((IMG_COUNT+1))
+        if [[ -n "${TAPPAAS_TRAIN_FETCH:-}" ]]; then
+            ${TAPPAAS_TRAIN_FETCH} "${url}" >/dev/null 2>&1 && continue
+        else
+            curl -sfL --max-time 20 -r 0-0 -o /dev/null "${url}" && continue
+        fi
+        IMG_MISSING+=("$(basename "${f}" .json) ${url}")
+    done < <(g ls-files -- 'src/*.json' | grep -v -e '/test' -e 'fields.json$' -e 'schemas/')
+}
+
 # ── container image pins (#750, ADR-028 D4) ──────────────────────────
 # Each pin in src/image-pins.json: its age and how far upstream is ahead, at
 # every boundary — the cadence a container pin never had. A pin older than the
@@ -828,6 +862,12 @@ preflight() {
 
     local fault; fault="$(jq -r '.fault.what // empty' "${STATE_FILE}" 2>/dev/null)"
     [[ -z "${fault}" ]] || PF_BROKEN+=("an unresolved staging fault blocks promotion: ${fault}")
+
+    # Nor with an image a module downloads that nobody can download.
+    images_check
+    local im; for im in ${IMG_MISSING+"${IMG_MISSING[@]}"}; do
+        PF_BROKEN+=("release image not published: ${im} — publish it before promoting")
+    done
 
     # A release does not go out with a module that is not a whole module.
     blueprint_check
@@ -1409,6 +1449,9 @@ cmd_fault() {
 
     local what="$*"
     [[ -n "${what}" ]] || die "usage: ${SCRIPT_NAME} fault <what went wrong> | fault --resolved <commit>"
+    # An option is not a fault: `fault --help` recorded "--help" and blocked
+    # promotion (2026-10-11).
+    [[ "${what}" != -* ]] || die "usage: ${SCRIPT_NAME} fault <what went wrong> | fault --resolved <commit> ('${1}' is not a description)"
     [[ -f "${STATE_FILE}" ]] || die "no train state — run '${SCRIPT_NAME} init' first"
     local tmp="${STATE_FILE}.tmp.$$"
     jq --arg w "${what}" --arg now "$(iso_utc "$(now_epoch)")" \

@@ -163,6 +163,22 @@ FAKE_NOW=$(( 1790000000 + 14*86400 )) run status
     && ok "an unresolved staging fault blocks, and is quoted" || bad "fault not reported: ${OUT}"
 [[ "${OUT}" == *"Not promotable"* ]] && ok "…and the verdict says so" || bad "verdict ignored the fault"
 
+echo "── a release image a module downloads must be published (the 2.2 template) ──"
+mkdir -p "${TMP}/w/src/foundation/templates"
+printf '{"config":{"cluster:vm":{"imageType":"img","image":"t.qcow2.zst","imageLocation":"https://example.invalid/nixos-template-v9.9/"}}}\n' \
+    > "${TMP}/w/src/foundation/templates/tappaas-nixos.json"
+git -C "${TMP}/w" add -A && git -C "${TMP}/w" commit -qm "template image" && git -C "${TMP}/w" push -q origin main
+OUT="$(PATH="${TMP}/bin:${PATH}" TAPPAAS_REPO_DIR="${TMP}/w" TAPPAAS_CONFIG_DIR="${TMP}/cfg" TAPPAAS_TRAIN_NOW=$(( 1790000000 + 14*86400 )) \
+    TAPPAAS_TRAIN_FETCH=false "${TRAIN}" status --no-fetch 2>&1)"
+[[ "${OUT}" == *"release image not published: tappaas-nixos https://example.invalid/nixos-template-v9.9/t.qcow2.zst"* ]] \
+    && ok "an unpublished release image is named, with its URL" || bad "missing image not reported: ${OUT}"
+OUT="$(PATH="${TMP}/bin:${PATH}" TAPPAAS_REPO_DIR="${TMP}/w" TAPPAAS_CONFIG_DIR="${TMP}/cfg" TAPPAAS_TRAIN_NOW=$(( 1790000000 + 14*86400 )) \
+    TAPPAAS_TRAIN_FETCH=true "${TRAIN}" status --no-fetch 2>&1)"
+[[ "${OUT}" == *"release images: 1 named, all published"* ]] && ok "…and a published one passes" || bad "published image: ${OUT}"
+git -C "${TMP}/w" rm -q "src/foundation/templates/tappaas-nixos.json" && git -C "${TMP}/w" commit -qm "drop" && git -C "${TMP}/w" push -q origin main
+OUT="$(PATH="${TMP}/bin:${PATH}" TAPPAAS_REPO_DIR="${TMP}/w" TAPPAAS_CONFIG_DIR="${TMP}/cfg" "${TRAIN}" fault --help 2>&1)"; RC=$?
+[[ "${RC}" -ne 0 && "${OUT}" == *"is not a description"* ]] && ok "fault --help records no fault" || bad "fault --help: ${OUT}"
+
 echo "── a boundary refuses what it cannot promote ──"
 make_train 3 2
 FAKE_NOW=1790000000 run init
