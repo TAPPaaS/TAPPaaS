@@ -17,6 +17,7 @@
 #   add <url> [--branch <branch>]      Add a new module repository
 #   remove <name> [--force]            Remove a module repository
 #   modify <name> [--url <url>] [--branch <branch>] [--force]  Modify a repository
+#   sync <name> [--dry-run]            Bring one repository to its branch tip (#814)
 #   list                               List all tracked repositories
 #   validate-catalog [<name>] [--strict]  Check a repository's module catalog (#463)
 #
@@ -65,6 +66,9 @@ debug() { [[ "${TAPPAAS_DEBUG:-0}" == 1 ]] || return 0; echo "[Debug] $*" >&2; }
 _REPO_SYNC_LIB="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)/../../lib/repo-sync.sh"
 # shellcheck source=/dev/null
 [ -r "${_REPO_SYNC_LIB}" ] && . "${_REPO_SYNC_LIB}"
+# The pull hold (#653) — `sync` honours it as the sweep does.
+# shellcheck source=/dev/null
+[ -r "${_REPO_SYNC_LIB%/*}/repo-hold.sh" ] && . "${_REPO_SYNC_LIB%/*}/repo-hold.sh"
 
 # repo_catalog_file() comes from lib/module-catalog-lib.sh so that this script
 # and resolve-module.sh cannot disagree about where a repository's catalog is —
@@ -115,6 +119,17 @@ Commands:
         refused when the branch carries commits that exist only there
         (use --force to snapshot them to a repo-sync/pre-reset-*
         branch and reset anyway).
+
+    sync <name> [--dry-run]
+        Bring one repository to the tip of its declared branch without the
+        sweep (#814). Honours a pull hold, auto-stashes local changes and
+        never discards commits that exist only in the checkout. REFUSES,
+        and proposes site-manager update, when the new tip carries a
+        config migration this site has not applied or changes the
+        mothership's NixOS configuration. Names every installed module
+        whose source moved (it deploys none of them). A change to the
+        running control plane is followed by refresh-control-plane.sh
+        without a pull. --dry-run reports and moves nothing.
 
     list
         List all tracked repositories with name, URL, branch,
@@ -1037,6 +1052,234 @@ cmd_list() {
     echo ""
 }
 
+# ── sync ─────────────────────────────────────────────────────────────
+
+# Bring ONE declared repository to the tip of its branch, outside the sweep
+# (#814). The sweep pulls every repository, runs the migrations, rebuilds the
+# mothership and then updates every module; a pull by hand skips all of that and
+# the guards with it. This is the narrow path between the two:
+#
+#   - the same guards as the sweep: a pull hold, the auto-stash, and no commits
+#     that exist only in the checkout;
+#   - it REFUSES, and proposes `site-manager update`, when the new tip carries a
+#     migration this site has not applied (ADR-025: config shape moves with the
+#     code) or a change to the mothership's own NixOS configuration;
+#   - it names every installed module whose source the sync moves, because from
+#     here the checkout is ahead of what those modules run. It deploys nothing;
+#   - a change to the running control plane (tappaas-cicd in this checkout) is
+#     followed by refresh-control-plane.sh without a pull, so ~/bin and the
+#     compiled managers do not disagree.
+#
+# Decided on the fetched tip before the tree moves: a refusal changes nothing
+# but origin/<branch>.
+
+readonly SYNC_CICD_REL="src/foundation/tappaas-cicd"
+readonly SYNC_MIG_REL="${SYNC_CICD_REL}/migrations"
+
+# The ids in the migration ledger, one per line. Every line counts, whatever its
+# reason, exactly as run-migrations.sh reads it.
+sync_ledger_ids() {
+    local ledger="${CONFIG_DIR}/.migrations/applied"
+    [[ -f "${ledger}" ]] || return 0
+    grep -Eo '^[0-9]{4}' "${ledger}" 2>/dev/null | sort -u || true
+}
+
+# The migration files the tree at <rev> ships that the ledger does not hold.
+sync_pending_migrations() {
+    local path="$1" rev="$2" applied f id
+    applied="$(sync_ledger_ids)"
+    while IFS= read -r f; do
+        [[ -n "${f}" ]] || continue
+        id="${f##*/}"; id="${id:0:4}"
+        [[ "${id}" =~ ^[0-9]{4}$ ]] || continue
+        grep -qx "${id}" <<<"${applied}" || printf '%s\n' "${f##*/}"
+    done < <(git -C "${path}" ls-tree --name-only "${rev}" -- "${SYNC_MIG_REL}/" 2>/dev/null)
+}
+
+# Paths in the change that the mothership's own system closure is built from
+# (flake.nix: nixosConfigurations.tappaas-cicd imports tappaas-cicd.nix, which
+# pulls in the two controllers, the alert receiver and templates' common module).
+# Those need tappaas-self-rebuild.sh, which only the sweep runs.
+sync_system_paths() {
+    grep -E "^(${SYNC_CICD_REL}/(flake\.nix|flake\.lock|tappaas-cicd\.nix|controller/(opnsense|identity)-controller/|scripts/tappaas-alert-receiver\.py)|src/foundation/templates/tappaas-common\.nix)" || true
+}
+
+# Is <path> the checkout the running control plane is linked from? Only then
+# does a change under tappaas-cicd/ change what ~/bin runs.
+sync_is_control_plane() {
+    local path="$1" cicd
+    cicd="${TAPPAAS_CICD_DIR:-$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../.." && pwd)}"
+    [[ "$(readlink -f "${cicd}")" == "$(readlink -f "${path}")/${SYNC_CICD_REL}" ]]
+}
+
+cmd_sync() {
+    local name="" dry_run=0 a
+    for a in "$@"; do
+        case "${a}" in
+            --dry-run) dry_run=1 ;;
+            -*) die "sync: unknown option ${a}" ;;
+            *) [[ -z "${name}" ]] || die "sync: one repository at a time (got '${name}' and '${a}') — the whole site is: site-manager update"
+               name="${a}" ;;
+        esac
+    done
+    [[ -n "${name}" ]] || die "usage: ${SCRIPT_NAME} sync <name> [--dry-run]   (every repository: site-manager update)"
+    validate_config
+
+    local entry path url branch
+    entry="$(get_repo_by_name "${name}")"
+    [[ "${entry}" != "null" ]] || die "sync: no repository named '${name}' in ${SITE_FILE}"
+    path="$(jq -r '.path // empty' <<<"${entry}")"
+    url="$(jq -r '.url // empty' <<<"${entry}")"
+    branch="$(jq -r '.branch // "stable"' <<<"${entry}")"
+    [[ -n "${path}" ]] || path="${CLONE_DIR}/${name}"
+    [[ -d "${path}/.git" ]] || die "sync: ${name}'s checkout is missing: ${path} (clone it: site-manager repository reconcile --apply)"
+
+    # ── the hold (#653) ──
+    local hold
+    hold="$(repo_hold_state "${name}" "${CONFIG_DIR}")"
+    case "${hold}" in
+        active*)
+            error "sync: ${name}'s pull is HELD — ${hold#active }"
+            die "  release it first if the hold is over: site-manager repository release ${name}" ;;
+        expired*)
+            warn "${name}: the pull hold expired ${hold#expired } — it is removed when the sync runs"
+            [[ "${dry_run}" == 1 ]] || repo_hold_clear "${name}" "${CONFIG_DIR}" ;;
+    esac
+
+    # ── a forge change is not a sync ──
+    local cur_url
+    cur_url="$(git -C "${path}" remote get-url origin 2>/dev/null || true)"
+    if [[ "$(repo_sync_canon "$(repo_sync_clone_url "${url}")")" != "$(repo_sync_canon "${cur_url}")" ]]; then
+        error "sync: ${path}'s origin is ${cur_url:-<none>}, but site.json declares ${url}"
+        die "  that is an origin change, which resets the checkout: site-manager repository modify ${name} --url ${url}"
+    fi
+
+    info "${BOLD}Sync ${name}${CL} (${branch}) ${path}"
+    git -C "${path}" fetch --quiet --prune origin \
+        || die "sync: fetch from ${cur_url} failed"
+    local tip
+    tip="$(git -C "${path}" rev-parse --verify --quiet "refs/remotes/origin/${branch}^{commit}")" \
+        || die "sync: origin has no branch '${branch}'"
+
+    # ── commits that exist only here: ff-only would refuse; say why first ──
+    local local_ref="refs/heads/${branch}" ahead=0
+    git -C "${path}" show-ref --verify --quiet "${local_ref}" || local_ref="HEAD"
+    ahead="$(git -C "${path}" rev-list --count "${tip}..${local_ref}" 2>/dev/null || echo 0)"
+    if (( ahead > 0 )); then
+        error "sync: ${ahead} commit(s) on ${branch} in ${path} are not on origin:"
+        git -C "${path}" log --oneline --no-decorate -n 5 "${tip}..${local_ref}" 2>/dev/null \
+            | while IFS= read -r c; do error "    ${c}"; done || true
+        die "  push them (or move them to a branch) — a sync never discards work"
+    fi
+
+    local head on_branch behind
+    head="$(git -C "${path}" rev-parse HEAD)"
+    on_branch="$(git -C "${path}" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+    behind="$(git -C "${path}" rev-list --count "HEAD..${tip}")"
+    if [[ "${head}" == "${tip}" && "${on_branch}" == "${branch}" ]]; then
+        info "  ${GN}✓${CL} already at origin/${branch} (${tip:0:8}) — nothing to do"
+        return 0
+    fi
+    [[ "${on_branch}" == "${branch}" ]] \
+        || warn "  ${path} is on '${on_branch}', site.json declares '${branch}' — the sync switches it"
+
+    info "  ${behind} commit(s) from ${head:0:8} to ${tip:0:8}:"
+    git -C "${path}" log --oneline --no-decorate -n 15 "HEAD..${tip}" | sed 's/^/    /'
+    (( behind <= 15 )) || info "    ... and $(( behind - 15 )) more"
+
+    local changed
+    changed="$(git -C "${path}" diff --name-only "HEAD" "${tip}")"
+
+    # ── the gates: what only the full update may bring in ──
+    local refuse=0 pending system
+    pending="$(sync_pending_migrations "${path}" "${tip}")"
+    if [[ -n "${pending}" ]]; then
+        refuse=1
+        error "  the new tip carries config migration(s) this site has not applied (ADR-025):"
+        printf '%s\n' "${pending}" | while IFS= read -r m; do error "    ${m}"; done
+        error "    migrations run before the rebuild and the sweep; code past them reads a config shape it does not know"
+    fi
+    if sync_is_control_plane "${path}"; then
+        system="$(printf '%s\n' "${changed}" | sync_system_paths)"
+        if [[ -n "${system}" ]]; then
+            refuse=1
+            error "  the change touches the mothership's own NixOS configuration (needs tappaas-self-rebuild):"
+            printf '%s\n' "${system}" | head -5 | while IFS= read -r p; do error "    ${p}"; done
+        fi
+    fi
+
+    # ── what the sync moves under installed modules ──
+    local mods mod src rel n shared=0 nmods=0
+    mods="$(get_modules_in_repo "${path}")"
+    if sync_is_control_plane "${path}"; then
+        shared="$(printf '%s\n' "${changed}" | grep -c "^${SYNC_CICD_REL}/lib/" || true)"
+    fi
+    for mod in ${mods}; do
+        src="$(jq -r '.moduleSource // .location // empty' "${CONFIG_DIR}/${mod}.json" 2>/dev/null)"
+        [[ "${src}" == "${path}/"* ]] || continue
+        rel="${src#"${path}/"}"; rel="${rel%/}"
+        [[ -n "${rel}" ]] || continue
+        n="$(printf '%s\n' "${changed}" | grep -c "^${rel}/" || true)"
+        (( n > 0 )) || continue
+        if (( nmods == 0 )); then
+            warn "  installed modules whose source this sync changes — they still run the old tree:"
+        fi
+        nmods=$((nmods + 1))
+        warn "    ${mod}: ${n} file(s) in ${rel}/   → module-manager update ${mod}"
+    done
+    (( nmods > 0 )) || info "  no installed module's own directory changes"
+    if (( shared > 0 )); then
+        warn "  ${shared} file(s) under ${SYNC_CICD_REL}/lib/ change — every module's update sources them"
+    fi
+
+    if (( refuse )); then
+        error "sync: REFUSED — nothing moved. This change needs the full update:"
+        error "    site-manager update --dry-run    # what it would do"
+        error "    site-manager update"
+        return 1
+    fi
+    if [[ "${dry_run}" == 1 ]]; then
+        info "  (dry run — nothing moved; run without --dry-run to sync)"
+        return 0
+    fi
+
+    # ── move: the sweep's own reconciler, without allow_discard ──
+    # Its own lines (and the stash pointers it prints) are the operator's; raw
+    # git output goes to debug, as in refresh-control-plane.sh.
+    local rc=0 out line
+    out="$(reconcile_repo_checkout "${path}" "${url}" "${branch}" 2>&1)" || rc=$?
+    while IFS= read -r line; do
+        case "${line}" in
+            *repo-sync:*|*'[WARN]'*|*'[ERROR]'*|*'site-manager repository'*) printf '%s\n' "${line}" ;;
+            *) debug "  ${line}" ;;
+        esac
+    done <<<"${out}"
+    case "${rc}" in
+        0) ;;
+        2) die "sync: refused — commits exist only in ${path} (listed above)" ;;
+        *) die "sync: ${name} did not sync (rc ${rc}) — see above" ;;
+    esac
+    info "  ${GN}✓${CL} ${name} at origin/${branch} (${tip:0:8})"
+
+    # ── the running control plane follows its checkout ──
+    if sync_is_control_plane "${path}" && grep -q "^${SYNC_CICD_REL}/" <<<"${changed}"; then
+        local refresh="${TAPPAAS_REFRESH_CMD:-${path}/${SYNC_CICD_REL}/scripts/refresh-control-plane.sh}"
+        info "  the control plane changed — relinking ~/bin and rebuilding the managers (no pull)"
+        rc=0
+        TAPPAAS_NO_GIT_PULL=1 "${refresh}" || rc=$?
+        case "${rc}" in
+            0)  info "  ${GN}✓${CL} control plane refreshed" ;;
+            10) warn "  some component builds failed — those bins are still the previous build (see above)" ;;
+            *)  error "  refresh-control-plane.sh exited ${rc} — run it again, or: site-manager update"
+                return 1 ;;
+        esac
+    fi
+    if (( nmods > 0 )); then
+        info "  deploy the modules listed above with module-manager update <module>, or wait for the sweep"
+    fi
+    return 0
+}
+
 # ── stash ────────────────────────────────────────────────────────────
 
 # When a managed checkout is dirty the sync stashes it so the pull can move
@@ -1225,6 +1468,7 @@ main() {
         list)   cmd_list ;;
         validate-catalog) cmd_validate_catalog "$@" ;;
         stash)  cmd_stash "$@" ;;
+        sync)   cmd_sync "$@" ;;
         -h|--help) usage; exit 0 ;;
         *)
             error "Unknown command: ${command}"

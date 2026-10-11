@@ -187,5 +187,40 @@ const live = (name: string): { name: string; status: string } => ({ name, status
   check(undocumentedOptions(HELP).length === 0, `every usage option is described (${undocumentedOptions(HELP).join(", ")})`);
 }
 
+// ── repository sync (#814): one repository, delegated; reconcile says "behind" ──
+function captured(argv: string[], c: FakeSiteClient): { rc: number; out: string; log: string[] } {
+  const [log, error] = [console.log, console.error];
+  let out = "";
+  console.log = (...a: unknown[]): void => { out += a.map(String).join(" ") + "\n"; };
+  console.error = (...a: unknown[]): void => { out += a.map(String).join(" ") + "\n"; };
+  try {
+    return { rc: run(argv, c), out, log: c.log };
+  } finally {
+    console.log = log;
+    console.error = error;
+  }
+}
+{
+  const c = new FakeSiteClient();
+  check(run(["repository", "sync", "extra", "--dry-run", "--config-dir", cfg], c) === 0
+    && c.log.includes("repository.sh sync extra --dry-run"), "repository sync <name> --dry-run delegates to repository.sh");
+  for (const argv of [["repository", "sync"], ["repository", "sync", "a", "b"]]) {
+    const r = captured([...argv, "--config-dir", cfg], new FakeSiteClient());
+    check(r.rc !== 0 && !r.log.some((l) => l.startsWith("repository.sh sync")), `${argv.join(" ")}: refused — one name, never the whole site`);
+  }
+  const f = new FakeSiteClient(); f.delegateRc = 1;
+  check(run(["repository", "sync", "extra", "--config-dir", cfg], f) !== 0, "a refused sync is a non-zero exit");
+}
+{
+  const c = new FakeSiteClient();
+  c.seedClone("/repo/tappaas", "main");
+  c.seedClone("/repo/extra", "stable");
+  c.probes.set("/repo/tappaas", { head: "aaaa", tip: "bbbb", behind: 2 });
+  const r = captured(["repository", "reconcile", "--config-dir", cfg], c);
+  check(r.out.includes("2 commit(s) behind origin") && r.out.includes("repository sync TAPPaaS"),
+    "reconcile reports a checkout behind origin and the sync that closes it");
+  check(!r.out.includes("Converged"), "a checkout behind origin is not reported as Converged");
+}
+
 console.log(`fleet.test: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

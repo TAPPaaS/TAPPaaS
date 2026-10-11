@@ -108,7 +108,7 @@ export const HELP: HelpSpec = {
     { usage: "repository add <url> [--branch <b>] [--managed full|tracked] [--catalog <p>]",
       options: [
         ["--branch <b>", "Branch to check out (default stable)."],
-        ["--managed full|tracked", "full: update-tappaas updates it; tracked: only listed."],
+        ["--managed full|tracked", "full: carries modules, its catalog is validated; tracked: registered without catalog requirements. The sweep pulls both."],
         ["--catalog <p>", "Path of the module catalog inside the repository."],
       ] },
     { usage: "repository modify <name> [--url <u>] [--branch <b>]",
@@ -124,7 +124,11 @@ export const HELP: HelpSpec = {
       note: "(#681: the local changes a sync set aside — listed with their age, inspectable, restorable, discardable)",
       options: [["--force", "Confirm a discard. Dropping a stash entry cannot be undone, so `discard` refuses without it."]] },
     { usage: "repository reconcile [--apply]",
+      note: "(presence and branch; how far behind origin is reported, and `sync` closes it)",
       options: [["--apply", "Commit (default is preview)."]] },
+    { usage: "repository sync <name> [--dry-run]",
+      note: "(#814: one repository to its branch tip, without the sweep; deploys no module)",
+      options: [["--dry-run", "Report the commits, any pending migration and the installed modules it would move; change nothing."]] },
     { usage: "repository hold <name> --reason <text> [--until <30m|12h|7d|ISO date>]",
       note: "(#653: the scheduled sweep skips this repository's pull until the hold expires)",
       options: [["--reason <text>", "Why the pull is held (shown in every sweep log)."],
@@ -791,7 +795,7 @@ function collectPools(o: Opts, name: string): string[] {
 // ── `repository` CRUD + reconcile ──────────────────────────────────────
 function cmdRepository(o: Opts, client: SiteClient): void {
   const sub = o.rest[0];
-  if (!sub) die("repository: expected 'list' | 'add' | 'modify' | 'delete' | 'reconcile' | 'hold' | 'release' | 'stash'");
+  if (!sub) die("repository: expected 'list' | 'add' | 'modify' | 'delete' | 'reconcile' | 'sync' | 'hold' | 'release' | 'stash'");
   const siteFile = siteFileOf(o);
 
   if (sub === "list") {
@@ -830,6 +834,19 @@ function cmdRepository(o: Opts, client: SiteClient): void {
     const rest = o.rest.slice(1);
     if (o.force) rest.push("--force");
     process.exit(client.repositoryStash(rest));
+  }
+
+  if (sub === "sync") {
+    // #814: one repository to its branch tip, with the sweep's guards and
+    // without the sweep. repository.sh owns it — the repo-sync, hold and
+    // migration-ledger code it needs is bash. One name only: the whole site is
+    // `site-manager update`, which also runs the migrations.
+    const rest = o.rest.slice(1);
+    if (rest.length !== 1) die("repository sync: expected exactly one <name> (every repository: site-manager update)");
+    if (o.boolFlags.has("--dry-run")) rest.push("--dry-run");
+    const rc = client.repositorySync(rest);
+    if (rc !== 0) throw new DieError(`repository sync ${rest[0]}: not synced (repository.sh exited ${rc})`);
+    return;
   }
 
   if (sub === "validate-catalog") {
@@ -925,11 +942,20 @@ function cmdRepository(o: Opts, client: SiteClient): void {
         `${o.apply ? "" : " (preview)"}:`,
     );
     for (const w of plan.warnings) warn(w);
+    // #814: present and on its branch is not up to date. Say how far behind
+    // origin each checkout is (ls-remote; nothing is fetched or moved).
+    let behindAny = 0;
     for (const repo of site.repositories) {
       const br = repo.branch ?? "stable";
       const act = plan.actions.find((a) => a.target.startsWith(`repository ${repo.name} `));
       if (!act) {
-        info(`  ${GN}✓${CL} ${repo.name} @ ${br} — present, on the declared branch`);
+        const p = client.repoProbe(repo.path ?? `/home/tappaas/${repo.name}`, br);
+        if (p.head && p.tip && p.head !== p.tip) {
+          behindAny++;
+          info(`  ${YW}↓${CL} ${repoStatusLine(repo.name, br, p.head, p.tip, p.behind, null)} — site-manager repository sync ${repo.name}`);
+        } else {
+          info(`  ${GN}✓${CL} ${repo.name} @ ${br} — present, on the declared branch${p.head && p.tip ? ", current" : ""}`);
+        }
       } else if (act.kind === "clone-repo") {
         info(`  ${YW}+${CL} ${repo.name} @ ${br} — ${o.apply ? "cloning" : "not cloned; would clone"} ${repo.url}`);
       } else {
@@ -939,7 +965,9 @@ function cmdRepository(o: Opts, client: SiteClient): void {
       }
     }
     info("");
-    if (plan.actions.length === 0) {
+    if (plan.actions.length === 0 && behindAny > 0) {
+      info(`${YW}Every repository is present and on its declared branch; ${behindAny} is behind origin (sync it, or wait for the sweep).${CL}`);
+    } else if (plan.actions.length === 0) {
       info(`${GN}Converged — every repository is present and on its declared branch. Nothing to do.${CL}`);
     } else if (o.apply) {
       const res = applyPlan(client, plan);

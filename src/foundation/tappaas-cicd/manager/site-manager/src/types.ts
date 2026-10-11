@@ -227,6 +227,8 @@ export interface SiteClient {
   repositoryValidateCatalog(args: string[]): number;
   //   repository stash  → repository.sh stash [list|show|restore|discard] … (#681)
   repositoryStash(args: string[]): number;
+  //   repository sync   → repository.sh sync <name> [--dry-run] (#814)
+  repositorySync(args: string[]): number;
 
   // ── (4) fleet verbs delegating to update-tappaas / module-manager (#588) ──
   // `site-manager update` drives update-tappaas.service (ADR-017 D4); the

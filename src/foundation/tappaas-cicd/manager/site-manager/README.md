@@ -38,6 +38,7 @@ repository         repository list [--json]
                    repository add <url> [--branch <b>] [--managed full|tracked] [--catalog <p>]
                    repository delete <name> [--force]
                    repository reconcile [--apply]
+                   repository sync <name> [--dry-run]                (#814)
                    repository hold <name> --reason <text> [--until <30m|12h|7d|date>]
                    repository release <name>
                    repository validate-catalog [<name>] [--strict]   (#463)
@@ -87,6 +88,18 @@ site can run changes that are not pushed yet (#653). The marker is
 `config/.repo-hold/<repo>.json`; every hold expires (default 24h), and an
 expired hold is removed by the next sweep, which then pulls again.
 `repository list` and `update` show active holds.
+
+`repository sync <name>` brings one repository to the tip of its declared branch
+without the sweep (#814). It keeps the sweep's guards (the hold, the auto-stash,
+no commits that exist only in the checkout) and decides on the fetched tip before
+anything moves. It **refuses**, and proposes `site-manager update`, when the tip
+carries a config migration the ledger does not hold or changes the mothership's
+own NixOS configuration: both need steps only the sweep runs. It names every
+installed module whose source directory changes, and deploys none of them; a
+change under `tappaas-cicd/lib/` is said to reach every module. When the
+repository is the one the control plane is linked from, `refresh-control-plane.sh`
+runs afterwards without a pull. `repository reconcile` now says how far behind
+origin each checkout is, rather than calling a stale checkout "Converged".
 
 `repository stash` is where the local changes a sync had to set aside go to be
 found (#681). A dirty managed checkout is stashed so the pull can move and the

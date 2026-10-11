@@ -188,6 +188,11 @@ export class CliSiteClient implements SiteClient {
     return runStreaming(REPOSITORY_SH(), ["stash", ...args]);
   }
 
+  repositorySync(args: string[]): number {
+    // #814: repository.sh sync <name> [--dry-run].
+    return runStreaming(REPOSITORY_SH(), ["sync", ...args]);
+  }
+
   repositoryValidateCatalog(args: string[]): number {
     return runStreaming(REPOSITORY_SH(), ["validate-catalog", ...args]);
   }
