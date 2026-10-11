@@ -288,6 +288,21 @@ else
     pass "no legacy update-tappaas cron entry"
 fi
 
+# Store garbage (#813): nix collects when free space drops under min-free, and
+# nix-gc runs daily keeping a week — the 63G store filled between weekly GCs.
+_minfree="$(sed -n 's/^min-free *= *//p' /etc/nix/nix.conf 2>/dev/null | head -1)"
+if [[ "${_minfree:-0}" =~ ^[0-9]+$ ]] && (( ${_minfree:-0} > 0 )); then
+    pass "nix min-free is $(( _minfree / 1024 / 1024 / 1024 )) GiB (GC on low space)"
+else
+    fail "nix min-free is '${_minfree:-unset}' — the store can fill the disk between GCs (#813)"
+fi
+_gccal="$(systemctl cat nix-gc.timer 2>/dev/null | sed -n 's/^OnCalendar=//p' | head -1)"
+if [[ "${_gccal}" == "daily" ]] && systemctl cat nix-gc.service 2>/dev/null | grep -q -- '--delete-older-than 7d'; then
+    pass "nix-gc runs daily, keeping 7 days of generations"
+else
+    fail "nix-gc runs '${_gccal:-?}' (want daily, --delete-older-than 7d; #813)"
+fi
+
 # ── Source-tree checks (Tests 7-10b) ────────────────────────────────────────
 # Everything from here to Test 11 is an OFFLINE check of the repository: unit
 # suites over temp fixtures, stubbed libraries, the scripts/test tabletop sweep,

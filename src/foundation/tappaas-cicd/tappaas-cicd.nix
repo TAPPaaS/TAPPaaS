@@ -50,6 +50,15 @@ in
     ++ lib.optional (builtins.pathExists /etc/nixos/tappaas-backup.nix)
       /etc/nixos/tappaas-backup.nix;
 
+  # Store garbage (#813): the mothership builds every guest's system and each
+  # preview fetches pins; one busy day filled its 63G between weekly GCs (99%,
+  # 2026-10-10, the boundary's deep test). Collect when space runs low, and
+  # daily, keeping a week of generations (baseline: weekly, 30d — mkDefault).
+  nix.settings.min-free = 5 * 1024 * 1024 * 1024;
+  nix.settings.max-free = 15 * 1024 * 1024 * 1024;
+  nix.gc.dates = "daily";
+  nix.gc.options = "--delete-older-than 7d";
+
   # Network
   networking.hostName = lib.mkDefault "tappaas-cicd"; # Define your hostname.
 
