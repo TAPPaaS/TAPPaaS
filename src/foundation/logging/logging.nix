@@ -1061,7 +1061,17 @@ in
     "d /etc/loki-auth                  0750 root     nginx    -"
     "f /etc/loki-auth/push.htpasswd    0640 root     nginx    -"
     "f /etc/loki-auth/admin.htpasswd   0640 root     nginx    -"
+    # nginx's own log directory, before anything starts — see logrotate-checkconf.
+    "d /var/log/nginx                  0750 nginx    nginx    -"
   ];
+
+  # logrotate-checkconf runs in every switch and checks nginx's rotation rule as
+  # the nginx user. On the first switch that brings nginx (2.1 → 2.2) it ran while
+  # nginx was still creating /var/log/nginx, got "stat of /var/log/nginx/*.log
+  # failed: Permission denied", and failed the switch — logging's update rolled
+  # back on makerfloss (2026-10-11). The directory now exists first (tmpfiles
+  # above), and the check waits for nginx.
+  systemd.services.logrotate-checkconf.after = [ "nginx.service" ];
 
   # ============================================================================
   # SYSTEM STATE VERSION - DO NOT CHANGE after initial install
