@@ -25,6 +25,10 @@ when:
         - BUILD.md
         - docs/ADR/README.md
         - src/**/*.md
+        # ROADMAP.md is left out on purpose: its rows change too often to rebuild
+        # on each. A release cut is the one big change, and it always touches
+        # RELEASES.md (tappaas-train.sh boundary), so the roadmap page refreshes then.
+        - RELEASES.md
         # a change to this trigger proves itself on push
         - .woodpecker/docs-trigger.yml
 
