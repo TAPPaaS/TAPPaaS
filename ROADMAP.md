@@ -109,7 +109,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 18 | – | 5 |
 | 3 | G3.2 Identity & SSO wiring | M | L | 10 | – | 4 |
 | 3 | G3.3 App module fixes | L | L | 10 | – | 11 |
-| 3 | G3.4 AI stack maturity | M | M | 1 | – | 9 |
+| 3 | G3.4 AI stack maturity | M | M | 1 | – | 10 |
 | 3 | G3.5 Installer UX | L | L | 1 | – | 3 |
 | 2 | G2.1 Firewall exposure & rule order | M | H | 7 | – | 12 |
 | 2 | G2.2 DNS resolver robustness | L | M | 4 | – | 5 |
@@ -313,7 +313,7 @@ The known rough edges of the app modules, fixed and tested so they stay fixed: N
 | #751 | nextcloud:fileservice has no teardown | M | L | `delete-service.sh` is an ADR-027 stub, so a deleted consumer leaves its connector settings in Nextcloud. Remove the env file and unset what `occ` applied; test on hrossen |
 | #754 | In-guest backup timers in six modules: drop for PBS or say why they stay | L | L | After Nextcloud dropped its failing in-guest dump (`ed663fe8`): six modules still dump inside the guest. Per module: drop it (PBS takes the VM) or keep it with the reason in DESIGN.md |
 
-### G3.4 AI stack maturity — Ease M · Risk M · released: 1 · open: 9
+### G3.4 AI stack maturity — Ease M · Risk M · released: 1 · open: 10
 
 A production-grade AI stack: LiteLLM and Open WebUI tested (#119, #120), hardened (#121) and kept current (#621), LiteLLM sized for its workers (#677), and vLLM's models recoverable after a restore (#758).
 
@@ -326,6 +326,7 @@ A production-grade AI stack: LiteLLM and Open WebUI tested (#119, #120), hardene
 | #810 | openwebui: container runs as root on the host network, with server-side STT on | M | L | **Opened 2026-10-09** from the #788 triage (`8c3d5257`): any approved user's "audio" upload reaches Debian ffmpeg (6 CVEs RISK high in `openwebui-vex.json`) as root in a host-network container; run it non-root, consider turning off server STT |
 | #811 | CVE scan: native libraries bundled in Python wheels are not seen | M | M | **Opened 2026-10-09** from the #788 triage: PyAV's FFmpeg 7.1 (loaded in openwebui's app process), soundfile's libsndfile, Python's own expat — none appear in the scan or the preview |
 | #812 | vllm-amd: privileged LXC, unauthenticated vLLM API, sshd password auth | M | L | **Opened 2026-10-09** from the #788 triage of its Debian LXC: root in ct312 is root on tappaas2 (Docker inside, GPU devices); vLLM :8000 on all interfaces with no `--api-key`, bypassing LiteLLM; `PasswordAuthentication yes` |
+| #813 | tappaas-cicd: Nix store fills the mothership disk between weekly GCs | L | L | **Opened 2026-10-11:** the 2026-10-10 boundary's deep test found the mothership at 99% (12,372 dead paths, 9.5 GiB); GC is weekly only — `min-free`/`max-free`, a daily schedule, previews cleaning up |
 | #758 | vllm-amd: the models bind mount is in no backup | M | L | The 33 GB `/tanka1/vllm-models` bind mount is in no backup, so a restored container has no models. Maintainer @ErikDaniel007: re-download, back it up, or call it cache |
 | #677 | litellm's default workers do not fit its default 4 GB | L | L | Found 2026-09-20 by `--deep`: litellm plus four workers leave 43 MB free in the default 4 GB. Either the default memory covers the workers, or the workers follow the memory |
 
