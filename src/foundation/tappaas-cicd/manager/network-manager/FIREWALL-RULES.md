@@ -6,9 +6,8 @@ each kind of rule is for. [ZONES.md](ZONES.md) describes the zones themselves �
 the trust model it is meant to express, and the zone lifecycle. This page is the other half:
 what the firewall actually does with them.
 
-It describes the system **as built** (reviewed 2026-10-12 against the code, #816). Where the
-code does less than the model promises, the gap is named in [Known gaps](#known-gaps) rather
-than left out.
+It describes the system as it is built. Where the rules do less than the zone model
+describes, the difference is listed under [Current limitations](#current-limitations).
 
 ## In one paragraph
 
@@ -214,11 +213,11 @@ For each `Active`/`Mandatory` zone with a non-empty `access-to`, on the zone's o
 
 **What a zone may ask of the firewall.** Its gateway serves it DNS, NTP, DHCP and ICMP, and
 nothing else: the admin GUI and SSH are blocked from every zone on every firewall address,
-because an `access-to` edge grants a whole subnet and every zone's gateway *is* the firewall
-(#384, #399). Fragments need no rule — OPNsense reassembles them before filtering.
+because an `access-to` edge grants a whole subnet and every zone's gateway *is* the
+firewall. Fragments need no rule — OPNsense reassembles them before filtering.
 
-**Caddy-reach** (ADR-021 D3). Split-horizon DNS answers every published name with the DMZ
-gateway, where Caddy listens, and no zone may hold `access-to: dmz` (invariant I5, #618). So a
+**Caddy-reach.** Split-horizon DNS answers every published name with the DMZ gateway, where
+Caddy listens, and no zone may hold `access-to: dmz` (invariant I5). So a
 zone reaches Caddy by its own rule at 990/991 — ahead of its private-network block — on two
 ports, to one address. It is reachability only: Caddy's `proxyAllowedZones` and the identity
 gate decide who gets in. Candidates are a zone with `internet` (or `all`) in `access-to`, an
@@ -252,10 +251,10 @@ Rule names carry their identity: `tappaas-module:<vm>:ingress:<peer>:<port>`,
 
 ## Address family
 
-TAPPaaS rules are **IPv4 only** today. Whether a site supports IPv6 at all is `site.json`
-`ipv6` (#149, default `false`): when it is false, the firewall drops all inbound and forwarded
-IPv6 ahead of every TAPPaaS rule, and DNS resolves over IPv4 only. No zone has an IPv6 address.
-Making every zone rule cover IPv6 too is #815; giving zones IPv6 is #26, behind its own ADR.
+TAPPaaS rules are **IPv4 only**, and no zone has an IPv6 address. Whether the site supports
+IPv6 at all is `site.json` `ipv6` (default `false`). When it is false, the firewall drops all
+inbound and forwarded IPv6 ahead of every TAPPaaS rule, and DNS resolves over IPv4 only.
+After changing it, `module-manager update network` applies it.
 
 ## Rules written by other modules
 
@@ -268,8 +267,8 @@ These modules write their own rules when they are installed or reconfigured, by 
 | Backup buddy | `buddy-<n> serve wg` (WAN), `buddy-<n> pull` (mgmt) |
 | Caddy setup | `TAPPaaS: Allow HTTP/HTTPS to Caddy` (WAN) |
 
-No component writes the NetBird rules; on a site that runs NetBird they are set by hand
-(#385, #222 — pending a decision on NetBird's role).
+No component writes NetBird rules: on a site that runs NetBird, they are set by hand in the
+OPNsense GUI.
 
 ## Checking it
 
@@ -286,25 +285,25 @@ rules-manager list-rules --orphans       # TAPPaaS rules nothing declares any mo
 ssh root@firewall.mgmt.internal 'pfctl -sr'   # the rules pf actually evaluates, in order
 ```
 
-## Known gaps
+## Current limitations
 
-Found by the 2026-10-12 review (#816; the full evidence is in
-[docs/design/zone-rules-review.md](../../../../../docs/design/zone-rules-review.md)). Each is
-tracked to be fixed or decided:
+Where the rules do less than the zone model describes:
 
-- **Stale protective rules.** Removing or renaming a zone leaves its anti-spoofing and admin-guard
-  rules behind (D1). On an interface reused by a new zone, the old anti-spoofing rule would
-  block all its traffic.
-- **Changed rule properties are not repaired.** A rule is compared by name, source, destination
-  and port only: a rule disabled in the GUI, or with a different protocol or address family,
-  stays as it is (D2). This blocks #815.
-- **The trust model is checked, not enforced.** Module egress is not checked against an
-  `isolated` target or its `pinhole-allowed-from`; ingress from another module, an alias or the
-  internet is not policy-checked; port forwards have no zone gate (D4–D6).
-- **A zone with an empty `access-to`** (no egress, e.g. `iotLocal`) gets no rules at all — no
-  anti-spoofing, no gateway DNS or NTP (D15). An `isolated` zone with internet egress gets the
-  full set.
-- **The private-network block is RFC 1918 only.** 100.64.0.0/10 (carrier-grade NAT, NetBird)
-  and 169.254.0.0/16 are reachable from every zone with internet (D14).
-- **Caddy-reach's source is `10.0.0.0/8`**, not the zone's subnet. Anti-spoofing narrows it on a
-  VLAN; on the WireGuard interface group, which has no anti-spoofing, it admits every tunnel (T8).
+- **Removing or renaming a zone leaves its protective rules.** Its anti-spoofing and admin-guard
+  rules stay on the interface. If OPNsense gives that interface to a new zone, the old
+  anti-spoofing rule blocks the new zone's traffic until it is deleted.
+- **A changed rule property is not repaired.** Rules are compared by name, source, destination
+  and port. A rule disabled in the GUI, or with a different protocol or address family, is
+  left as it is.
+- **The trust model is checked, not enforced, for module rules.** Module egress is not checked
+  against an `isolated` target or the target's `pinhole-allowed-from`; ingress from another
+  module, an alias or the internet is not checked against the zones; port forwards are not
+  limited by zone.
+- **A zone with an empty `access-to` gets no rules.** A zone without egress, such as
+  `iotLocal`, has no anti-spoofing rule and no rules for gateway DNS or NTP. An `isolated` zone
+  with internet egress gets the full set.
+- **The private-network block covers RFC 1918 only.** 100.64.0.0/10 (carrier-grade NAT) and
+  169.254.0.0/16 are reachable from every zone with internet access.
+- **The caddy-reach source is `10.0.0.0/8`**, not the zone's subnet. On a VLAN, anti-spoofing
+  narrows it to the zone; on the WireGuard interface group, which has no anti-spoofing, it
+  admits every tunnel.

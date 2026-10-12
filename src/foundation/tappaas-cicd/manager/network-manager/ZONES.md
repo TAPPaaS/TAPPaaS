@@ -71,7 +71,7 @@ Two mechanisms control reachability between zones:
 
 How each becomes a firewall rule is in [FIREWALL-RULES.md](FIREWALL-RULES.md).
 
-### The lattice (ADR-014)
+### The lattice
 
 `tier` is a **strict trust rank**, there so the access model can be checked by machine
 rather than by eye. It is checked, not enforced: the rules come from `access-to` and
@@ -93,8 +93,8 @@ warn when those break the lattice.
 
 - **No zone reaches the DMZ zone-wide.** A DMZ host is internet-exposed and assumed
   breached, so it sits below an internal backend, and `access-to: dmz` is refused (I5): the
-  DMZ gateway is the firewall itself, so the edge would hand its GUI and SSH to the whole
-  source zone (#618). Published names are reached through Caddy, and a DMZ workload by
+  DMZ gateway is the firewall itself, so the edge would give the whole source zone the
+  firewall's GUI and SSH. Published names are reached through Caddy, and a DMZ workload by
   pinhole.
 - **Service sits above trusted clients.** A client reaching its service uses an upward
   pinhole to specific ports, never the backend's whole subnet.
@@ -109,13 +109,14 @@ warn when those break the lattice.
 Isolation is independent of rank: `iotCams` (tier 6, no egress) and `iotUntrust` (tier 3,
 internet egress) are both quarantined. They are reached only by pinhole. `iotLocal` shares
 tier 6 with `iotCams` but is not isolated: its serving zone reaches it zone-wide (Home
-Assistant → local IoT), which R2 forbids for `iotCams` (GDPR Art. 25).
+Assistant → local IoT), which R2 forbids for `iotCams`: camera footage stays reachable only
+by the modules that need it.
 
 ### `mgmt` reaches every zone: `all`
 
 `mgmt` says `"access-to": ["internet", "all"]`. `all` stands for `internet` plus every zone
 that is not `Disabled`, an `Overlay` or the `WAN` hand-off, so adding or deleting a zone
-never edits `mgmt` (#375). Only `mgmt` may hold `all` (I2).
+never edits `mgmt`. Only `mgmt` may hold `all` (I2).
 
 ### `serves` — linking a client or IoT zone to an environment
 
@@ -165,11 +166,11 @@ Each is a warning, and an error under `--strict`:
 
 | ID | Rule | Notes |
 |---|---|---|
-| **I1** | R1 — `tier(A) ≤ tier(B)` for every `access-to` edge | `mgmt` exempt; `Overlay`/`WAN` skipped; names every edge it could not check for a missing `tier` (#620) |
+| **I1** | R1 — `tier(A) ≤ tier(B)` for every `access-to` edge | `mgmt` exempt; `Overlay`/`WAN` skipped; names every edge it could not check for a missing `tier` |
 | **I2** | R2 — an `isolated` zone is in nobody's `access-to`; only `mgmt` holds `all` | `mgmt` exempt |
 | **I3** | A tier-6 zone does not list `internet` | `Overlay`/`WAN` skipped |
 | **I4** | `(type, tier, isolated)` matches an archetype | catches a zone configured against its intent |
-| **I5** | No zone but `mgmt` has `dmz` in `access-to` | ADR-021 D3b |
+| **I5** | No zone but `mgmt` has `dmz` in `access-to` | the DMZ is reached through Caddy or by pinhole |
 
 `pinhole-allowed-from` is deliberately not tier-gated: upward is what pinholes are for.
 
