@@ -111,6 +111,41 @@
           "description": "Public IP address, or \"auto\" to discover at runtime.",
           "type": "string",
           "default": "auto"
+        },
+        "wan": {
+          "description": "How the firewall's WAN gets its addresses (ADR-030 D2). Converged by the network update; a WAN edited by hand in OPNsense is drift and is put back. Absent: IPv4 by DHCP and, when ipv6 is true, IPv6 dynamic.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "ipv4": {
+              "description": "dhcp (default) or static.",
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["mode"],
+              "properties": {
+                "mode": { "type": "string", "enum": ["dhcp", "static"], "default": "dhcp" },
+                "address": { "description": "static: the WAN address in CIDR form, e.g. 198.51.100.10/24.", "type": "string" },
+                "gateway": { "description": "static: the ISP's gateway address.", "type": "string" }
+              },
+              "if": { "properties": { "mode": { "const": "static" } } },
+              "then": { "required": ["address", "gateway"] }
+            },
+            "ipv6": {
+              "description": "dynamic (default when ipv6 is true): DHCPv6 and a delegated prefix of prefixLength. static: a fixed WAN address and the prefix the ISP routes to it. none: no IPv6 on the WAN. The site prefix must be /56 or larger (ADR-030 D3).",
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["mode"],
+              "properties": {
+                "mode": { "type": "string", "enum": ["dynamic", "static", "none"], "default": "dynamic" },
+                "prefixLength": { "description": "dynamic: the delegated prefix size to ask for, 48-56.", "type": "integer", "minimum": 48, "maximum": 56, "default": 56 },
+                "address": { "description": "static: the WAN address in CIDR form, e.g. 2001:db8:0:1::2/64.", "type": "string" },
+                "gateway": { "description": "static: the ISP's gateway, e.g. 2001:db8:0:1::1.", "type": "string" },
+                "prefix": { "description": "static: the prefix routed to the WAN address, /56 or larger, e.g. 2001:db8:6648::/48.", "type": "string" }
+              },
+              "if": { "properties": { "mode": { "const": "static" } } },
+              "then": { "required": ["address", "gateway", "prefix"] }
+            }
+          }
         }
       }
     },

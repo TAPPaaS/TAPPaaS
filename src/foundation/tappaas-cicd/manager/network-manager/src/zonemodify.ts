@@ -35,6 +35,8 @@ export interface ZoneFieldSchema {
   type?: string;
   changeClass?: string;
   changeNote?: string;
+  // ADR-030 D4: the field may be removed with `modify --unset`.
+  unset?: boolean;
 }
 export type ZonesFieldsSchema = Record<string, ZoneFieldSchema>;
 
@@ -170,6 +172,20 @@ export function preGateZoneSet(
 
   if (rejections.length > 0) return { ok: false, rejections };
   return { ok: true, plan };
+}
+
+// `--unset <field>`: only a field whose schema says it may be removed. Removing
+// is a change of its own — ipv6Subnet cannot be SET in place (it renumbers every
+// device), but removing it is how a zone opts out of IPv6 (ADR-030 D4).
+export function preGateZoneUnset(fields: string[], schema: ZonesFieldsSchema): SetRejection[] {
+  return fields
+    .filter((f) => !schema[f]?.unset)
+    .map((f) => ({
+      field: f,
+      reason: schema[f]
+        ? "cannot be removed with --unset (zones-fields.json does not allow it)"
+        : "not a field zones-fields.json declares — check the spelling",
+    }));
 }
 
 // Apply the plan to the in-memory document. The caller saves.

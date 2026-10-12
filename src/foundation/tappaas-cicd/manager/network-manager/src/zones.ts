@@ -138,6 +138,31 @@ export function listZoneNames(doc: ZonesDoc): string[] {
   return Array.from(doc.zones.keys()).sort();
 }
 
+// ── IPv6 subnet numbers (ADR-030 D4) ─────────────────────────────────
+// The control plane, the overlays and the WAN hand-off never carry IPv6.
+export const NO_IPV6_TYPES = new Set(["Management", "Overlay", "WAN"]);
+export const IPV6_SUBNET_MAX = 255;
+
+function ipv6SubnetInUse(doc: ZonesDoc, n: number): boolean {
+  for (const z of doc.zones.values()) if (z.ipv6Subnet === n) return true;
+  return false;
+}
+
+// A zone's IPv6 subnet number: its VLAN tag read as hex where that fits (VLAN
+// 310 → 0x31, so the zone's network ends in …31::/64), else the lowest free one.
+export function allocateIpv6Subnet(doc: ZonesDoc, vlantag: number): number {
+  const typeId = Math.floor(vlantag / 100);
+  const sub = vlantag % 100;
+  if (sub % 10 === 0 && typeId < 16) {
+    const readable = typeId * 16 + sub / 10;
+    if (!ipv6SubnetInUse(doc, readable)) return readable;
+  }
+  for (let n = 1; n <= IPV6_SUBNET_MAX; n++) {
+    if (!ipv6SubnetInUse(doc, n)) return n;
+  }
+  throw new Error(`No free IPv6 subnet number (all ${IPV6_SUBNET_MAX} in use)`);
+}
+
 // ── allocation helpers (port of zone-controller.sh) ──────────────────
 function vlanInUse(doc: ZonesDoc, tag: number): boolean {
   for (const z of doc.zones.values()) {
@@ -286,6 +311,9 @@ export function authorZone(doc: ZonesDoc, name: string, opts: AddZoneOpts): Zone
   // being given a guessed rank.
   if (tier !== undefined) zone.tier = tier;
   if (isolated) zone.isolated = true;
+  // ADR-030 D4: every zone gets an IPv6 subnet number unless its type never
+  // carries IPv6; `modify --unset ipv6Subnet` opts it out.
+  if (!NO_IPV6_TYPES.has(type)) zone.ipv6Subnet = allocateIpv6Subnet(doc, vt);
   if (opts.serves) zone.serves = opts.serves;
   if (parent) zone.parent = parent;
   if (variant) zone.variant = variant;

@@ -35,7 +35,7 @@ import { existsSync, readdirSync, readFileSync } from "fs";
 import { join } from "path";
 import { CL, GN, RD, YW } from "../../../lib/ts/src/cli";
 import { Zone, ZonesDoc } from "./types";
-import { loadZones } from "./zones";
+import { NO_IPV6_TYPES, loadZones } from "./zones";
 import { renderEffective, resolveServes } from "./serves";
 import {
   CONTROL_PLANE_ZONE,
@@ -209,6 +209,27 @@ function checkUniqueness(doc: ZonesDoc, rep: Reporter): void {
     if (zs.length > 1) {
       const [typeId, subId] = key.split("/");
       rep.err(`uniqueness: subId ${subId} reused in type band ${typeId} by ${zs.sort().join(", ")}`);
+      collisions++;
+    }
+  }
+  // ADR-030 D4: one IPv6 subnet number per zone, 0-255, never on a zone type
+  // that does not carry IPv6.
+  const byV6 = new Map<number, string[]>();
+  for (const [name, z] of doc.zones) {
+    if (z.ipv6Subnet === undefined) continue;
+    if (!Number.isInteger(z.ipv6Subnet) || z.ipv6Subnet < 0 || z.ipv6Subnet > 255) {
+      rep.err(`ipv6Subnet: zone '${name}' has ${JSON.stringify(z.ipv6Subnet)} — must be an integer 0-255`);
+      collisions++;
+      continue;
+    }
+    if (z.type && NO_IPV6_TYPES.has(z.type)) {
+      rep.warn(`ipv6Subnet: zone '${name}' is ${z.type}, which carries no IPv6 — the number is ignored`);
+    }
+    byV6.set(z.ipv6Subnet, [...(byV6.get(z.ipv6Subnet) ?? []), name]);
+  }
+  for (const [n, zs] of byV6) {
+    if (zs.length > 1) {
+      rep.err(`uniqueness: ipv6Subnet ${n} shared by ${zs.sort().join(", ")}`);
       collisions++;
     }
   }

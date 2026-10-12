@@ -67,6 +67,7 @@ import {
   applyZoneSet,
   parseSetArg,
   preGateZoneSet,
+  preGateZoneUnset,
 } from "./zonemodify";
 import { cmdSnat } from "./snat";
 import { stream } from "../../../lib/ts/src/exec";
@@ -132,7 +133,7 @@ export const HELP: HelpSpec = {
       ],
     },
     {
-      usage: "modify <name> --set field=value [--set field=value]...",
+      usage: "modify <name> [--set field=value]... [--unset field]...",
       name: "modify",
       options: [
         [
@@ -142,6 +143,11 @@ export const HELP: HelpSpec = {
             "                cannot change in place — vlantag, ip, type, bridge — is refused\n" +
             "                before anything is written, and one that has its own verb points\n" +
             "                at it. A list takes 'a,b' or JSON.",
+        ],
+        [
+          "--unset field",
+          "Remove a field the schema lets you remove. Today: ipv6Subnet, which\n" +
+            "                keeps the zone IPv4-only (ADR-030). Repeatable.",
         ],
       ],
       note:
@@ -362,6 +368,7 @@ interface Opts {
   bootfileName?: string;
   // modify --set field=value, repeatable (ADR-020 D6 / #538)
   sets: string[];
+  unsets: string[];
 }
 
 function isPlane(s: string): s is Plane {
@@ -385,6 +392,7 @@ function parseOpts(args: string[]): Opts {
     unbind: false,
     effective: false,
     sets: [],
+    unsets: [],
   };
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -450,6 +458,9 @@ function parseOpts(args: string[]): Opts {
         break;
       case "--set":
         o.sets.push(next());
+        break;
+      case "--unset":
+        o.unsets.push(next());
         break;
       case "--unbind":
         o.unbind = true;
@@ -731,9 +742,9 @@ function cmdZoneState(verb: string, opts: Opts): void {
 // firewall changes.
 function cmdModifyZone(opts: Opts): void {
   const name = opts.rest[0];
-  if (!name) die("modify: expected <zone> --set field=value");
-  if (opts.sets.length === 0) {
-    die("modify: expected at least one --set field=value (see 'network-manager modify --help')");
+  if (!name) die("modify: expected <zone> --set field=value | --unset field");
+  if (opts.sets.length === 0 && opts.unsets.length === 0) {
+    die("modify: expected at least one --set field=value or --unset field (see 'network-manager modify --help')");
   }
 
   const doc = loadZones(opts.zonesFile);
@@ -747,12 +758,19 @@ function cmdModifyZone(opts: Opts): void {
     requests.push(parsed);
   }
 
-  const gate = preGateZoneSet(name, requests, loadZoneFieldSchema());
-  if (!gate.ok) {
-    for (const r of gate.rejections) {
+  const schema = loadZoneFieldSchema();
+  const gate = requests.length > 0
+    ? preGateZoneSet(name, requests, schema)
+    : { ok: true as const, plan: [] as ParsedSet[] };
+  const unsetRejections = preGateZoneUnset(opts.unsets, schema);
+  if (!gate.ok || unsetRejections.length > 0) {
+    for (const r of gate.ok ? [] : gate.rejections) {
       console.error(`${RD}[Error]${CL} --set ${r.field}: ${r.reason}`);
     }
-    die("nothing was written — a modify either applies every --set or none of them");
+    for (const r of unsetRejections) {
+      console.error(`${RD}[Error]${CL} --unset ${r.field}: ${r.reason}`);
+    }
+    die("nothing was written — a modify either applies every --set and --unset or none of them");
   }
 
   const rawZone = doc.raw[name] as Record<string, unknown>;
@@ -764,7 +782,9 @@ function cmdModifyZone(opts: Opts): void {
   const changed = gate.plan.filter(
     (p: ParsedSet) => before.get(p.field) !== JSON.stringify(p.parsed),
   );
-  if (changed.length === 0) {
+  const removed = opts.unsets.filter((f) => f in rawZone);
+  for (const f of removed) delete rawZone[f];
+  if (changed.length === 0 && removed.length === 0) {
     info(`${name}: already as requested — no change`);
     return;
   }
@@ -773,6 +793,7 @@ function cmdModifyZone(opts: Opts): void {
   for (const p of changed) {
     info(`${name}: ${p.field} ${before.get(p.field)} → ${GN}${JSON.stringify(p.parsed)}${CL} [${p.changeClass}]`);
   }
+  for (const f of removed) info(`${name}: ${f} removed`);
   info("");
   info("  To apply on the planes, run:");
   info(`    network-manager reconcile --apply`);

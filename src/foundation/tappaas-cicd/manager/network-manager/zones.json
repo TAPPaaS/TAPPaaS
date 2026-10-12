@@ -165,6 +165,7 @@
     "subId": "0",
     "vlantag": 200,
     "ip": "10.2.0.0/24",
+    "ipv6Subnet": 32,
     "bridge": "lan",
     "access-to": [
       "internet"
@@ -184,6 +185,7 @@
     "vlantag": 310,
     "SSID": "<HOME_SSID>",
     "ip": "10.3.10.0/24",
+    "ipv6Subnet": 49,
     "bridge": "lan",
     "access-to": [
       "internet"
@@ -202,6 +204,7 @@
     "vlantag": 410,
     "SSID": "<IOT_LOCAL_SSID>",
     "ip": "10.4.10.0/24",
+    "ipv6Subnet": 65,
     "bridge": "lan",
     "access-to": [],
     "pinhole-allowed-from": [],
@@ -218,6 +221,7 @@
     "vlantag": 420,
     "SSID": "<IOT_CLOUD_SSID>",
     "ip": "10.4.20.0/24",
+    "ipv6Subnet": 66,
     "bridge": "lan",
     "access-to": [
       "internet"
@@ -237,6 +241,7 @@
     "subId": "30",
     "vlantag": 430,
     "ip": "10.4.30.0/24",
+    "ipv6Subnet": 67,
     "bridge": "lan",
     "access-to": [],
     "pinhole-allowed-from": [],
@@ -254,6 +259,7 @@
     "vlantag": 440,
     "SSID": "<IOT_UNTRUST_SSID>",
     "ip": "10.4.40.0/24",
+    "ipv6Subnet": 68,
     "bridge": "lan",
     "access-to": [
       "internet"
@@ -272,6 +278,7 @@
     "vlantag": 510,
     "SSID": "<GUEST_SSID>",
     "ip": "10.5.10.0/24",
+    "ipv6Subnet": 81,
     "bridge": "lan",
     "access-to": [
       "internet"
@@ -288,6 +295,7 @@
     "subId": "10",
     "vlantag": 610,
     "ip": "10.6.0.0/24",
+    "ipv6Subnet": 97,
     "bridge": "lan",
     "access-to": [
       "internet"

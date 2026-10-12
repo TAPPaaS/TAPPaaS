@@ -119,6 +119,19 @@
       "changeClass": "immutable",
       "changeNote": "The zone's subnet. Every guest in it is addressed from here, so a change re-addresses all of them; that is a migration, not a field edit."
     },
+    "ipv6Subnet": {
+      "description": "The zone's IPv6 network: its /64 within the site's first /56 (ADR-030). Absent: the zone has no IPv6.",
+      "type": "integer",
+      "required": false,
+      "minimum": 0,
+      "maximum": 255,
+      "computed": "the VLAN tag read as hex where it fits (VLAN 310 \u2192 0x31 = 49), else the lowest free number; never on Management, Overlay or WAN zones",
+      "example": 49,
+      "changeClass": "immutable",
+      "changeNote": "The zone's IPv6 network. Every device in the zone takes an address from it, so a new number renumbers all of them; that is delete-and-re-add, as for ip.",
+      "unset": true,
+      "unsetNote": "Removing it keeps the zone IPv4-only: network-manager modify <zone> --unset ipv6Subnet."
+    },
     "bridge": {
       "description": "Network interface the zone is associated with. For a VLAN zone this is the physical trunk it rides. For a non-VLAN zone (vlantag 0 — Overlay/Manual) it is the OPNsense interface token its traffic arrives on, e.g. 'wireguard' for a WireGuard overlay; ADR-021 D3a needs it to place that overlay's caddy-reach rule",
       "type": "string",

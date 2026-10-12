@@ -30,6 +30,7 @@ import {
 } from "../../src/zonesinit";
 import { mergeZones, runZonesMerge } from "../../src/zonesmerge";
 import {
+  allocateIpv6Subnet,
   authorZone,
   changeZoneState,
   getZone,
@@ -51,6 +52,7 @@ import {
   coerce,
   parseSetArg,
   preGateZoneSet,
+  preGateZoneUnset,
 } from "../../src/zonemodify";
 import { RETIRED_ZONES, retireZones } from "../../src/retire";
 import {
@@ -2187,6 +2189,33 @@ function tmpZones(): string {
     if (v === undefined) delete process.env[k];
     else process.env[k] = v;
   }
+}
+
+// ── ipv6Subnet (ADR-030 D4): allocated by default, unique, removable ──
+{
+  const f = tmpZones();
+  const doc = loadZones(f);
+  check(allocateIpv6Subnet(doc, 310) === 0x31, "VLAN 310 reads as subnet 0x31");
+  check(allocateIpv6Subnet(doc, 465) === 1, "a VLAN off the ten-step grid gets the lowest free number");
+  const z = authorZone(doc, "work", { type: "Client", typeId: "3", vlan: 320 });
+  check(z.ipv6Subnet === 0x32, `a new zone gets its subnet number (got ${z.ipv6Subnet})`);
+  // The readable number is taken: the next zone gets the lowest free one.
+  doc.zones.set("work", z);
+  doc.raw["work"] = { ...z };
+  const z2 = authorZone(doc, "work2", { type: "Client", typeId: "3", vlan: 330 });
+  check(z2.ipv6Subnet === 0x33, `the next zone gets its own (got ${z2.ipv6Subnet})`);
+  const w = authorZone(loadZones(f), "wan2", { type: "WAN", typeId: "1", vlan: 160 });
+  check(w.ipv6Subnet === undefined, "a WAN zone never gets one");
+}
+{
+  const schema = { ipv6Subnet: { type: "integer", changeClass: "immutable", unset: true },
+                   vlantag: { type: "integer", changeClass: "immutable" } };
+  check(preGateZoneUnset(["ipv6Subnet"], schema).length === 0, "--unset ipv6Subnet is allowed");
+  const r = preGateZoneUnset(["vlantag", "nosuch"], schema);
+  check(r.length === 2 && r[0].reason.includes("cannot be removed"),
+    "--unset of a field the schema does not allow is refused");
+  const set = preGateZoneSet("home", [{ field: "ipv6Subnet", value: "7" }], schema);
+  check(!set.ok, "--set ipv6Subnet is refused: it is immutable");
 }
 
 // ── render: zones.effective.json without touching any plane (review D13) ──

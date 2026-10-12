@@ -41,6 +41,9 @@ export interface Zone {
   // and the explicit dhcp-option 66/67 when both are present.
   "tftp-server-name"?: string;
   "bootfile-name"?: string;
+  // ADR-030 D4: the zone's /64 within the site's first /56 (0-255). Absent = no
+  // IPv6 for this zone. Given by default; an operator removes it to opt out.
+  ipv6Subnet?: number;
   // Preserve any unknown fields so a load→edit→save round-trips losslessly.
   [k: string]: unknown;
 }
