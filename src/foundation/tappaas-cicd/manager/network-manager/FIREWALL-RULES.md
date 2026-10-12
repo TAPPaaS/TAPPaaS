@@ -20,41 +20,149 @@ other private network, and the internet). Zone rules come from `zones.json`; mod
 from each module's `network:rules` and its service dependencies. Everything not passed is
 dropped by OPNsense's default deny.
 
-## Who writes the rules
+## What the rules are made from
 
-| Writer | Writes | From | Owns rules named |
+Everything the firewall enforces comes from five places in the configuration. Nothing is
+written into the firewall by hand.
+
+**1. A zone** — `config/zones.json` ([ZONES.md](ZONES.md) has every field). The fields the
+firewall reads:
+
+```jsonc
+"home": {
+    "state": "Active",                 // only Active and Mandatory zones get rules
+    "ip": "10.3.10.0/24",              // the zone's subnet: source of its rules
+    "access-to": ["internet"],         // zones it may reach, whole subnet, every port
+    "pinhole-allowed-from": [],        // zones whose modules may open a pinhole into it
+    "snat-allowed-from": [],           // zones whose traffic may be masqueraded into it
+    "serves": "warmelo"                // adds the environment's service zone (derived)
+}
+```
+
+`tier` and `isolated` are in the same object, but they feed the checks, not the rules.
+
+**2. A module's own traffic** — in `config/<module>.json`, for a module whose `dependsOn`
+lists `network:rules`. The ports it offers, who may reach them, and what it may reach beyond
+its zone's `access-to`:
+
+```jsonc
+"zone0": "warmelo",                    // the zone the module runs in
+"ports":   [{ "port": 3478, "protocol": "UDP" }],
+"ingress": [{ "from": "home", "ports": [3478], "protocol": "UDP",
+              "description": "Talk clients relay through coturn" }],
+"egress":  [{ "to": "internet", "ports": [443], "protocol": "TCP",
+              "description": "why this is needed" }]
+```
+
+`from` / `to` is a zone, another module, `internet`, or `alias:<name>` (an alias the module
+declares under `aliases`, or one from the site-wide `network/aliases.json`). Schema and a
+worked example: [network/DESIGN.md](../../../network/DESIGN.md#per-module-firewall-rules).
+
+**3. A service pinhole** — a provider module ships `services/<service>/pinhole.json`
+listing the ports of a service it offers; a consumer opens it by naming the service in its
+`dependsOn` or `integratesWith` (`litellm:models`). No rule is declared by either side: the
+pinhole follows from the dependency, if the zones allow it.
+
+```jsonc
+{ "ports": [{ "port": 4000, "protocol": "TCP", "description": "model web service" }] }
+```
+
+**4. A port forward or source NAT** — in the module's `config`, for a module that depends on
+`network:nat` or `network:snat`:
+
+```jsonc
+"config": {
+    "network:nat":  { "natRules": [{ "externalPort": 2022, "internalPort": 22,
+                                     "protocol": "TCP", "description": "Git over SSH" }] },
+    "network:snat": { "snatFrom": ["home"], "snatReason": "the device only answers its own subnet" }
+}
+```
+
+**5. The site** — `config/site.json` `ipv6` (default `false`): whether the firewall allows
+IPv6 at all ([Address family](#address-family)).
+
+## How the rules get written
+
+An administrator changes the configuration through two managers; they write the rules.
+The commands that actually talk to OPNsense — `zone-manager`, `rules-manager`,
+`nat-manager`, `snat-manager` — are internal tools of the OPNsense controller: the managers
+call them, and an administrator does not run them to change anything.
+
+| You change | You run | Underneath | Rules written |
 |---|---|---|---|
-| `zone-manager` (via `network-manager reconcile`) | each zone's baseline and protective rules, caddy-reach | `config/zones.effective.json` | `Zone <zone> …` |
-| `rules-manager` | per-module ingress/egress, auto-pinholes from service dependencies, NFS egress | `config/<module>.json`, `services/*/pinhole.json`, `config/shares.json` | `tappaas-module:<vm>:…`, `tappaas-svcdep:<consumer>:…`; aliases `tm_*`, `nfs_*` |
-| `nat-manager` / `snat-manager` | port forwards (rdr-pass on WAN), outbound NAT | module and zone declarations | — |
-| Other components, directly | the admin VPN, satellite, backup-buddy and Caddy WAN rules | their own scripts | see [Rules written outside the managers](#rules-written-outside-the-managers) |
+| a zone (add, delete, `access-to`, `pinhole-allowed-from`, `serves`) | `network-manager add` / `delete` / `bind`, or edit `zones.json` and run `network-manager reconcile --apply` | `network-manager` → `zone-manager` | the zone's baseline: `Zone <zone> …` |
+| a module's traffic, pinholes, NAT | `module-manager add` / `update` / `modify` / `delete <module>` | the module's network services — `network:rules` → `rules-manager`, `network:nat` → `nat-manager`, `network:snat` → `snat-manager` | `tappaas-module:<vm>:…`, `tappaas-svcdep:<consumer>:…`, port forwards, outbound NAT |
+| nothing — the nightly update | `update-tappaas` (scheduled) | the network module's update runs `network-manager reconcile --only opnsense --apply`; every module's update reconciles its rules | everything above, brought back to the configuration |
 
-Each writer finds and replaces **only its own rules**, by their description. A rule an operator
-adds in the OPNsense GUI with any other description is never touched.
+`network-manager reconcile --only opnsense` without `--apply` shows what would change and
+changes nothing. A module's **install adds** its rules; its **update reconciles** them (adds
+what is missing, removes what the module no longer declares); its **delete removes** them.
+Each writer touches only rules carrying its own names, so a rule an operator adds in the
+OPNsense GUI under any other description is left alone.
 
-## From `zones.json` to the rule set
+A few modules write their own rules as part of their install — the admin VPN, the satellite,
+the backup buddy and Caddy ([below](#rules-written-by-other-modules)).
 
-1. **Authored** — `config/zones.json`: each zone's subnet, `access-to` (the zones it may reach,
-   subnet to subnet), `pinhole-allowed-from` (the zones whose modules may open a pinhole into
-   it), `serves`, `tier`, `isolated`.
-2. **Effective** — `network-manager reconcile` renders `config/zones.effective.json`: the
-   authored file plus the edges `serves` derives. A Client or Guest zone that serves an
-   environment gets that environment's service zone in its `access-to`; an IoT zone gets it in
-   its `pinhole-allowed-from`. The edge is added only to the zone that declares `serves`
-   ([ZONES.md](ZONES.md#serves--linking-a-client-or-iot-zone-to-an-environment)).
-3. **`all` expanded** — where a zone (only `mgmt`) says `all`, the controller reads it as
-   `internet` plus every zone that is not `Disabled`, an `Overlay` or the `WAN` hand-off.
-4. **Zone rules** — `zone-manager` writes the baseline of every `Active` or `Mandatory` zone
-   with a non-empty `access-to`, removes the rules of disabled and deleted zones, and applies
-   once.
-5. **Module rules** — `rules-manager` compiles each module's declared ingress and egress and
-   its service dependencies into rules and host aliases, checks them against the zones, and
-   applies them. A module's install adds its rules; its update **reconciles** them (adds what
-   is missing, removes what it no longer declares); its delete removes them.
+## From the configuration to the rule set
 
-`tier` and `isolated` do **not** feed the rules. They are checked by `network-manager validate`
-(the invariants in [ZONES.md](ZONES.md#security-invariants-network-manager-validate)) and warn;
-what the firewall enforces is `access-to` and `pinhole-allowed-from`.
+```mermaid
+flowchart TD
+    subgraph CFG["Configuration you edit"]
+        direction LR
+        Z["zones.json<br/>ip · access-to<br/>pinhole-allowed-from<br/>snat-allowed-from · serves"]
+        E["environments/ENV.json<br/>network.zone"]
+        S["site.json<br/>ipv6"]
+        M["MODULE.json<br/>zone0 · ports · ingress · egress<br/>aliases · dependsOn<br/>network:nat · network:snat"]
+        P["provider<br/>services/SERVICE/pinhole.json"]
+        A["network/aliases.json"]
+    end
+
+    subgraph RUN["What you run"]
+        direction LR
+        NM["network-manager reconcile<br/>(also add · delete · bind,<br/>and the nightly network update)"]
+        MM["module-manager<br/>add · update · modify · delete<br/>(and the nightly module updates)"]
+    end
+
+    subgraph CTL["Internal tools (OPNsense controller)"]
+        direction LR
+        ZM["zone-manager<br/>each zone's baseline"]
+        RM["rules-manager<br/>ingress · egress · auto-pinholes"]
+        NAT["nat-manager · snat-manager<br/>port forwards · outbound NAT"]
+        V6["ipv6-manager<br/>Allow IPv6"]
+    end
+
+    FW[("OPNsense rule set<br/>first match wins, by sequence")]
+
+    Z --> NM
+    E --> NM
+    S --> NM
+    M --> MM
+    P --> MM
+    A --> MM
+    NM -- "zones.effective.json<br/>serves derived · all expanded" --> ZM
+    NM -- "nightly network update" --> V6
+    NM -. "effective zones" .-> RM
+    MM -- "network:rules" --> RM
+    MM -- "network:nat · network:snat" --> NAT
+    ZM --> FW
+    RM --> FW
+    NAT --> FW
+    V6 --> FW
+```
+
+1. **Effective zones.** `network-manager reconcile` adds the edges `serves` derives — a Client
+   or Guest zone that serves an environment reaches that environment's service zone; an IoT
+   zone accepts pinholes from it — and writes `config/zones.effective.json`. Only the zone that
+   declares `serves` changes ([ZONES.md](ZONES.md#serves--linking-a-client-or-iot-zone-to-an-environment)).
+2. **`all`.** Where `mgmt` says `all`, it is read as `internet` plus every zone that is not
+   `Disabled`, an `Overlay` or the `WAN` hand-off.
+3. **Zone rules.** `zone-manager` writes the baseline of every `Active` or `Mandatory` zone with
+   a non-empty `access-to`, removes the rules of disabled and deleted zones, and applies once.
+4. **Module rules.** `rules-manager` turns each module's ingress, egress and service
+   dependencies into rules and host aliases, checks them against the effective zones, and
+   applies them. Port forwards and source NAT are written by their own tools, and source NAT
+   only into a zone whose `snat-allowed-from` names the source.
+5. **IPv6.** The nightly network update runs `ipv6-manager`, which sets the firewall's *Allow IPv6* from `site.json`.
 
 ## Evaluation order
 
@@ -113,8 +221,8 @@ SNAT, not a rule.
 
 ## Module rules
 
-A module declares its traffic in its own JSON (`network:rules`; full schema and a worked
-example in [network/DESIGN.md](../../../network/DESIGN.md#per-module-firewall-rules)):
+How `rules-manager` turns a module's declarations ([input 2 and 3](#what-the-rules-are-made-from))
+into rules:
 
 - **Ingress** — who may reach this module, on which ports. From a zone: the rule is on that
   zone's interface and admits the **whole source zone**. From another module: only that
@@ -139,9 +247,9 @@ TAPPaaS rules are **IPv4 only** today. Whether a site supports IPv6 at all is `s
 IPv6 ahead of every TAPPaaS rule, and DNS resolves over IPv4 only. No zone has an IPv6 address.
 Making every zone rule cover IPv6 too is #815; giving zones IPv6 is #26, behind its own ADR.
 
-## Rules written outside the managers
+## Rules written by other modules
 
-These components write their own rules, by description, without a sequence number:
+These modules write their own rules when they are installed or reconfigured, by description, without a sequence number — not through `network-manager` or `network:rules`:
 
 | Component | Rules |
 |---|---|
@@ -155,7 +263,11 @@ No component writes the NetBird rules; on a site that runs NetBird they are set 
 
 ## Checking it
 
+The managers' own views, and the OPNsense controller's read-only listings — safe to run at
+any time, they change nothing:
+
 ```bash
+network-manager reconcile --only opnsense   # what a zone reconcile would change (no --apply)
 network-manager validate --effective     # the zone model: references, tiers, invariants
 zone-manager --summary                   # zones, their interfaces, pinhole policy warnings
 rules-manager verify-rules <module>      # a module's declared rules vs what OPNsense holds
