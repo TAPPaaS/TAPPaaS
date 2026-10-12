@@ -281,6 +281,17 @@ def add_access_list_cmd(
               file=sys.stderr)
         return False
 
+    # A zone named by its IPv4 network is let in over IPv6 too (ADR-030 D9): a
+    # client in it reaches Caddy by the name's AAAA, from its IPv6 address.
+    try:
+        from .dual_stack import read_interfaces, with_v6
+        expanded = with_v6(client_ips, read_interfaces(manager.client))
+    except Exception as exc:  # noqa: BLE001
+        print(f"WARNING: IPv6 networks of the zones not added: {exc} "
+              f"(ipv6-manager apply adds them on the next network update)", file=sys.stderr)
+        expanded = client_ips
+    client_ips = expanded
+
     al = CaddyAccessList(
         name=name, client_ips=client_ips, invert=invert, matcher=matcher,
         response_code=response_code, description=description,

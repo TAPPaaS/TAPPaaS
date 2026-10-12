@@ -227,7 +227,9 @@ export class CliDnsTlsClient implements DnsTlsClient {
         const cols = line.trim().split(/\s+/);
         if (cols.length < 4) continue;
         const [host, dom, type, value] = cols;
-        if (dom !== domain || !type.startsWith("A")) continue;
+        // A only: the AAAA beside it is its IPv6 counterpart (ADR-030 D9), not
+        // a second wildcard row or a colliding host.
+        if (dom !== domain || type !== "A") continue;
         if (host === "*") {
           // Keep counting after the first: the COUNT is the signal (#594), and
           // reading only the last value is what made two identical rows look

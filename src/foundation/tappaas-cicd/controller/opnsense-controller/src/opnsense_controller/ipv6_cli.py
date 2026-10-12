@@ -39,6 +39,7 @@ from typing import Callable
 from .cli_globals import StrictArgumentParser, make_global_parent, parse_with_globals
 from .config import Config
 from .dhcp_manager import DhcpManager  # reused only as a connected-Client provider
+from .dual_stack import derived_v6, read_interfaces
 from .ipv6_plan import STATIC_GATEWAY_NAME, ZONE_V6_KEYS, Action, desired_state, plan
 from .service_health import _firewall_ssh, check_unbound_dns, filter_reload, unbound_restart
 from .vlan_manager import VlanManager
@@ -354,17 +355,68 @@ def converge_site(mgr, config: Config, host: str, config_dir: Path, check_mode: 
               f"({desired.wan.mode if desired.wan else 'off'}); {len(desired.zones)} zone(s) with IPv6")
     if not actions:
         print("ipv6: the WAN and the zones match the declaration")
-        return True
-    for a in actions:
-        print(f"ipv6: {'would ' if check_mode else ''}{a.describe()}")
-    if check_mode:
-        return True
-    execute(mgr, host, actions)
-    if not check_unbound_dns(host=host, label="POST-IPV6", retries=10, delay=3.0):
-        print("ERROR: Unbound stopped answering after the IPv6 changes — recover on the firewall by IP: "
-              "pluginctl -c unbound_start", file=sys.stderr)
-        return False
-    print(f"ipv6: {len(actions)} change(s) applied")
+    else:
+        for a in actions:
+            print(f"ipv6: {'would ' if check_mode else ''}{a.describe()}")
+        if not check_mode:
+            execute(mgr, host, actions)
+            if not check_unbound_dns(host=host, label="POST-IPV6", retries=10, delay=3.0):
+                print("ERROR: Unbound stopped answering after the IPv6 changes — recover on the "
+                      "firewall by IP: pluginctl -c unbound_start", file=sys.stderr)
+                return False
+            print(f"ipv6: {len(actions)} change(s) applied")
+    return converge_published(mgr, config, host, check_mode)
+
+
+def converge_published(mgr, config: Config, host: str, check_mode: bool) -> bool:
+    """Published names and access lists follow the interfaces' IPv6 (ADR-030 D9).
+
+    The split-horizon AAAA next to every A that points at the firewall, and the
+    IPv6 networks next to the IPv4 ones in TAPPaaS's Caddy access lists — both
+    from what the interfaces hold now, so a changed prefix, or IPv6 switched off,
+    is followed here on the next network update.
+    """
+    from .caddy_cli import reconfigure_cmd
+    from .caddy_manager import CaddyManager
+    from .unbound_cli import _search_overrides, apply_aaaa, describe_aaaa
+    from .dual_stack import aaaa_plan
+
+    ifaces = read_interfaces(mgr.client)
+    names = aaaa_plan(_search_overrides(mgr), ifaces)
+    for line in describe_aaaa(names):
+        print(f"ipv6: {'would ' if check_mode else ''}{line}")
+    if names and not check_mode:
+        apply_aaaa(mgr, names)
+        if not check_unbound_dns(host=host, label="POST-AAAA", retries=10, delay=3.0):
+            print("ERROR: Unbound stopped answering after the AAAA records — recover on the "
+                  "firewall by IP: pluginctl -c unbound_start", file=sys.stderr)
+            return False
+
+    changed = 0
+    try:
+        with CaddyManager(config) as cm:
+            lists = [al for al in cm.list_access_lists() if al.name.startswith("tappaas-")]
+            for al in lists:
+                want = derived_v6(al.client_ips, ifaces)
+                if want == al.client_ips:
+                    continue
+                print(f"ipv6: {'would ' if check_mode else ''}access list {al.name}: "
+                      + ", ".join(want))
+                changed += 1
+                if not check_mode:
+                    upd = al.to_access_list()
+                    upd.client_ips = want
+                    r = cm.update_access_list(al.uuid, upd)
+                    if r.get("result") not in ("saved", "ok"):
+                        raise RuntimeError(f"access list {al.name}: {r}")
+            if changed and not check_mode and not reconfigure_cmd(cm):
+                return False
+    except RuntimeError:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        print(f"ipv6: Caddy access lists not checked: {exc}")
+    if not names and not changed:
+        print("ipv6: published names and access lists match the interfaces")
     return True
 
 

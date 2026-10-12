@@ -22,6 +22,7 @@ import sys
 from .cli_globals import StrictArgumentParser, make_global_parent, parse_with_globals
 from .config import Config
 from .dhcp_manager import DhcpManager  # reused only as a connected-Client provider
+from .dual_stack import AaaaPlan, aaaa_plan, read_interfaces
 from .service_health import check_unbound_dns, unbound_checkconf, unbound_restart
 
 
@@ -127,7 +128,8 @@ def _covering_wildcard(rows: list, hostname: str, domain: str):
     """The deepest `*` override whose redirect zone contains <hostname>.<domain>."""
     name = f"{hostname}.{domain}"
     hits = [r for r in rows
-            if r.get("hostname") == "*" and _is_below(name, r.get("domain", ""))]
+            if r.get("hostname") == "*" and str(r.get("rr", "A")) == "A"
+            and _is_below(name, r.get("domain", ""))]
     return max(hits, key=lambda r: len(_norm(r.get("domain", ""))), default=None)
 
 
@@ -144,7 +146,7 @@ def _find_a_overrides(mgr, hostname: str, domain: str) -> list:
         r for r in rows
         if r.get("hostname") == hostname
         and r.get("domain") == domain
-        and str(r.get("rr", "")).startswith("A")
+        and str(r.get("rr", "")) == "A"     # not AAAA: that is the IPv6 counterpart
     ]
 
 
@@ -173,6 +175,59 @@ def _delete_all_a_overrides(mgr, args, hostname: str, domain: str) -> int:
             break
         removed += 1
     return removed
+
+
+def _unbound_api(mgr, controller: str, command: str, action: str, data=None, params=None) -> dict:
+    p = {"module": "unbound", "controller": controller, "command": command, "action": action}
+    if data is not None:
+        p["data"] = data
+    if params:
+        p["params"] = params
+    return (mgr.client.run_module("raw", params=p).get("result") or {}).get("response") or {}
+
+
+def apply_aaaa(mgr, plan: AaaaPlan) -> None:
+    """Carry out an AAAA plan (dual_stack.aaaa_plan), then reload Unbound once."""
+    for r in plan.delete:
+        res = _unbound_api(mgr, "settings", "delHostOverride", "post", params=[r.get("uuid")])
+        if res.get("result") != "deleted":
+            raise RuntimeError(f"AAAA {r.get('hostname')}.{r.get('domain')}: delete returned {res}")
+    for a in plan.add:
+        res = _unbound_api(mgr, "settings", "addHostOverride", "post", {"host": {
+            "enabled": "1", "hostname": a["hostname"], "domain": a["domain"],
+            "rr": "AAAA", "server": a["server"], "description": a["description"]}})
+        if res.get("result") != "saved":
+            raise RuntimeError(f"AAAA {a['hostname']}.{a['domain']}: add returned {res}")
+    if plan:
+        _unbound_api(mgr, "service", "reconfigure", "post")
+
+
+def describe_aaaa(plan: AaaaPlan) -> list[str]:
+    def n(r):
+        return f"{r.get('hostname')}.{r.get('domain')}"
+    return ([f"AAAA {n(a)} -> {a['server']}" for a in plan.add]
+            + [f"remove AAAA {n(r)} ({r.get('server')})" for r in plan.delete])
+
+
+def _follow_with_aaaa(args, hostname: str, domain: str) -> bool:
+    """Give <hostname>.<domain> the AAAA its A record calls for (ADR-030 D9): an A
+    that points at a firewall interface gets that interface's IPv6 address, or
+    none when the site has no IPv6. Best effort — the A record is what matters."""
+    try:
+        with _client(args) as mgr:
+            plan = aaaa_plan(_search_overrides(mgr), read_interfaces(mgr.client),
+                             only=(hostname, domain))
+            for line in describe_aaaa(plan):
+                print(f"{'Would ' if args.check_mode else ''}{line}")
+            if plan and not args.check_mode:
+                apply_aaaa(mgr, plan)
+    except Exception as exc:  # noqa: BLE001
+        print(f"WARNING: IPv6 counterpart of {hostname}.{domain} not written: {exc} "
+              f"(ipv6-manager apply writes it on the next network update)", file=sys.stderr)
+        return True
+    if plan and not args.check_mode:
+        return _verify_resolver_after_write(args.firewall, f"AAAA for {hostname}.{domain}")
+    return True
 
 
 def _check_redirect_zone(rows: list, args):
@@ -247,7 +302,7 @@ def add_override(args) -> bool:
         if len(existing) == 1 and existing[0].get("server") == args.ip:
             print(f"Already up to date: {args.hostname}.{args.domain} -> "
                   f"{args.ip} (Unbound host override)")
-            return True
+            return _follow_with_aaaa(args, args.hostname, args.domain)
         if existing:
             n = _delete_all_a_overrides(mgr, args, args.hostname, args.domain)
             if n:
@@ -277,7 +332,7 @@ def add_override(args) -> bool:
         if was_up and not args.check_mode:
             _rollback_add(args)
         return False
-    return True
+    return _follow_with_aaaa(args, args.hostname, args.domain)
 
 
 def delete_override(args) -> bool:
@@ -295,6 +350,13 @@ def delete_override(args) -> bool:
                 "match_fields": ["hostname", "domain", "record_type"],
             },
         )
+        # The name's AAAA (ours, ADR-030 D9) goes with it: with no A left the
+        # plan for this name is "remove ours".
+        if not result.get("error"):
+            plan = aaaa_plan(_search_overrides(mgr) if not args.check_mode else [], [],
+                             only=(args.hostname, args.domain))
+            if plan and not args.check_mode:
+                apply_aaaa(mgr, plan)
     if result.get("error"):
         print(f"ERROR: {result['error']}", file=sys.stderr)
         return False
