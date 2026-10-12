@@ -1877,8 +1877,17 @@ else
     _tfw_c_alias="tm_$(echo "test-fw-c" | tr '-' '_')"
     if _alias_refresh "${_tfw_c_alias}"; then
         pass "FQDN alias table ${_tfw_c_alias} populated on the firewall"
+        # The pinhole's SOURCE is the consumer's alias: an empty one matches
+        # nothing either, and the SYN falls through to the zone's private-network
+        # block — which looks like the block "shadowing" the pinhole, but is not.
+        _tfw_a_alias="tm_$(echo "test-fw-a" | tr '-' '_')"
+        if _alias_refresh "${_tfw_a_alias}"; then
+            pass "FQDN alias table ${_tfw_a_alias} populated on the firewall (the pinhole's source)"
+        else
+            fail "FQDN alias table ${_tfw_a_alias} is EMPTY — the auto-pinhole source matches nothing"
+        fi
     else
-        fail "FQDN alias table ${_tfw_c_alias} is EMPTY — the auto-pinhole destination matches nothing (this is #386)"
+        fail "FQDN alias table ${_tfw_c_alias} is EMPTY — the auto-pinhole destination matches nothing"
         # LIVE EVIDENCE, captured while the VMs still exist. Everything about
         # this failure has had to be reconstructed after teardown until now:
         # whether the alias was created, what it points at, and whether the
@@ -1930,12 +1939,10 @@ EVIDENCE
     if (( autopinhole_curl_ok == 1 )); then
         pass "test-fw-a → test-fw-c:9091 (auto-pinhole permits cross-zone traffic; attempt ${attempt})"
     else
-        # Distinguish "auto-pinhole wrong" from the known
-        # "zone-manager block-private shadows the pinhole" infrastructure bug
-        # (see GitHub #386).
-        # If pflog shows a `block` rule (numbered low, on the consumer zone's vlan) eating
-        # the SYN, that's the upstream issue, not an auto-pinhole bug — we
-        # downgrade the result to a skip with a pointer.
+        # The auto-pinhole is sequenced ahead of the consumer zone's private-network
+        # block, so a block caught on the consumer's VLAN means the pinhole matched
+        # nothing — most often an empty source or destination alias. That is a
+        # failure, never a skip: the evidence below says which.
         pflog_verdict=$(ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
             root@"${FIREWALL_FQDN}" \
             "timeout 3 tcpdump -i pflog0 -nvec 2 'tcp port 9091' 2>/dev/null &
@@ -1944,34 +1951,19 @@ EVIDENCE
                  tappaas@${TFW_A_FQDN} \
                  'curl --max-time 2 http://${TFW_C_FQDN}:9091/ >/dev/null 2>&1'
              wait" 2>/dev/null || true)
-
-        # The interface name is vlan0.<consumer VLAN>. DERIVE it — a literal here
-        # silently stops matching the moment the fixture's VLAN changes, which
-        # turns this known-infrastructure-bug SKIP into a spurious FAIL. (The
-        # #306 guard above only greps zone NAMES, so a hardcoded VLAN slips past
-        # it; this is the same lesson.)
-        _tfw_a_vlan="$(jq -r --arg z "${TFW_A_ZONE}" '.[$z].vlantag // empty' \
-            "${CONFIG_DIR}/zones.json" 2>/dev/null)"
-        if [[ -n "${_tfw_a_vlan}" ]] \
-           && echo "${pflog_verdict}" | grep -qE "block.*in on vlan0\.${_tfw_a_vlan}"; then
-            skip "test-fw-a → test-fw-c:9091 — auto-pinhole rule IS created (see Deep 6b) but zone-manager's block-private rule shadows it (see GitHub #386)"
-            info "  -- pflog evidence (a 'block' rule on vlan0.${_tfw_a_vlan} caught the SYN) --"
-            echo "${pflog_verdict}" | grep -E 'block|tcp.*9091' | sed 's/^/      /' | head -4
-        else
-            fail "test-fw-a → test-fw-c:9091 (expected auto-pinhole to allow, gave up after 6×15s)"
-            info "  -- pflog evidence --"
-            echo "${pflog_verdict}" | sed 's/^/      /' | head -6
-            info "  -- pfctl alias contents on firewall --"
-            # `|| true` is LOAD-BEARING: this is a diagnostic, and under
-            # `set -euo pipefail` a failing ssh here aborted the whole suite
-            # through the EXIT trap — which then reported success (exit 0) with
-            # no summary, hiding every failure already counted.
-            { ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
-                root@"${FIREWALL_FQDN}" \
-                "pfctl -t tm_test_fw_c -T show 2>&1; \
-                 pfctl -t tm_test_fw_a -T show 2>&1" 2>/dev/null \
-                | sed 's/^/      /' | head -20; } || true
-        fi
+        fail "test-fw-a → test-fw-c:9091 (expected auto-pinhole to allow, gave up after 6×15s)"
+        info "  -- pflog evidence --"
+        echo "${pflog_verdict}" | sed 's/^/      /' | head -6
+        info "  -- pfctl alias contents on firewall --"
+        # `|| true` is LOAD-BEARING: this is a diagnostic, and under
+        # `set -euo pipefail` a failing ssh here aborted the whole suite
+        # through the EXIT trap — which then reported success (exit 0) with
+        # no summary, hiding every failure already counted.
+        { ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+            root@"${FIREWALL_FQDN}" \
+            "pfctl -t tm_test_fw_c -T show 2>&1; \
+             pfctl -t tm_test_fw_a -T show 2>&1" 2>/dev/null \
+            | sed 's/^/      /' | head -20; } || true
     fi
 
     # Negative check: a port that is NOT in pinhole.json should be blocked.
