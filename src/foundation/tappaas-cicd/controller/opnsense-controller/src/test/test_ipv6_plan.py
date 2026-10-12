@@ -65,7 +65,8 @@ class TestDesired(unittest.TestCase):
         d = desired_state({"ipv6": True}, ZONES, IFACES, DELEGATED)
         self.assertEqual(set(d.zones), {"opt1", "opt8"})      # not mgmt, not unset, not Inactive
         self.assertEqual(dict(d.zones["opt8"].config),
-                         {"ipaddrv6": "track6", "track6-interface": "wan", "track6-prefix-id": "49"})
+                         {"ipaddrv6": "track6", "track6-interface": "wan", "track6-prefix-id": "49",
+                          "dhcpd6track6allowoverride": "1"})
 
     def test_static_puts_the_firewall_on_1_of_each_zone(self):
         d = desired_state(STATIC_SITE, ZONES, IFACES, None)
@@ -98,8 +99,10 @@ class TestPlan(unittest.TestCase):
     def test_a_converged_firewall_needs_nothing(self):
         d = desired_state({"ipv6": True}, ZONES, IFACES, DELEGATED)
         cur = self._cur(
-            opt1={"if": "vlan0.200", "ipaddrv6": "track6", "track6-interface": "wan", "track6-prefix-id": "32"},
-            opt8={"if": "vlan0.310", "ipaddrv6": "track6", "track6-interface": "wan", "track6-prefix-id": "49"})
+            opt1={"if": "vlan0.200", "ipaddrv6": "track6", "track6-interface": "wan", "track6-prefix-id": "32",
+                  "dhcpd6track6allowoverride": "1"},
+            opt8={"if": "vlan0.310", "ipaddrv6": "track6", "track6-interface": "wan", "track6-prefix-id": "49",
+                  "dhcpd6track6allowoverride": "1"})
         ranges = [_v6("opt1"), _v6("opt8"),
                   {"uuid": "v4", "interface": "opt8", "start_addr": "10.3.10.50"}]
         self.assertEqual(plan(d, cur, ZONE_IFACES, [], ranges), [])
@@ -132,6 +135,14 @@ class TestPlan(unittest.TestCase):
         kinds = {(a.kind, a.target) for a in plan(d, cur, ZONE_IFACES, [])}
         self.assertIn(("zone-clear", "opt8"), kinds)
         self.assertNotIn(("wan", "wan"), kinds)
+
+    def test_a_tracked_zone_without_the_override_is_corrected(self):
+        # Without the flag OPNsense runs its own radvd on the zone next to dnsmasq.
+        d = desired_state({"ipv6": True}, ZONES, IFACES, DELEGATED)
+        cur = self._cur(opt8={"if": "vlan0.310", "ipaddrv6": "track6", "track6-interface": "wan",
+                              "track6-prefix-id": "49"})
+        acts = plan(d, cur, ZONE_IFACES, [], [_v6("opt8")])
+        self.assertIn(("zone-set", "opt8"), {(a.kind, a.target) for a in acts})
 
     def test_a_range_without_ra_names_is_corrected(self):
         d = desired_state({"ipv6": True}, ZONES, IFACES, DELEGATED)

@@ -18,8 +18,9 @@ The rules it applies:
   `::1` of its /64 (static) (D5).
 * Every such zone gets a dnsmasq IPv6 range in `ra-names` mode: dnsmasq sends the
   router advertisements (SLAAC) and gives every host with a DHCPv4 lease an AAAA
-  record. No zone interface has a radvd entry — two daemons must not advertise
-  on one interface (D6, v0.3).
+  record. radvd stays off zone interfaces — no radvd entry, and a tracked
+  zone carries the override flag that stops OPNsense's automatic radvd: two
+  daemons must not advertise on one interface (D6, v0.3).
 """
 
 from __future__ import annotations
@@ -128,14 +129,17 @@ def desired_state(site: dict, zones: dict, interfaces: dict[str, str],
             net = zone_network(prefix, subnet)
             cfg = (("ipaddrv6", str(net[1])), ("subnetv6", "64"))
         else:
+            # The override flag keeps OPNsense's automatic radvd off the
+            # interface: dnsmasq advertises there instead.
             cfg = (("ipaddrv6", "track6"), ("track6-interface", "wan"),
-                   ("track6-prefix-id", str(subnet)))
+                   ("track6-prefix-id", str(subnet)), ("dhcpd6track6allowoverride", "1"))
         out.zones[iface] = ZoneV6(zone=name, config=cfg)
     return out
 
 
 # The config.xml keys a zone's IPv6 consists of — what "clear" removes.
-ZONE_V6_KEYS = ("ipaddrv6", "subnetv6", "track6-interface", "track6-prefix-id")
+ZONE_V6_KEYS = ("ipaddrv6", "subnetv6", "track6-interface", "track6-prefix-id",
+                "dhcpd6track6allowoverride")
 
 
 @dataclass(frozen=True)
