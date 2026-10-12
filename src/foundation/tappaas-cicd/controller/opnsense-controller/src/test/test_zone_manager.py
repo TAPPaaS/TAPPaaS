@@ -27,6 +27,7 @@ from opnsense_controller.zone_manager import (
     ZoneManager,
     select_orphan_ranges,
     select_orphan_zone_rules,
+    ZONE_RULE_RE,
     firewall_rule_plan,
     pending_change_count,
     _check_egress,
@@ -961,6 +962,27 @@ class TestSelectOrphanZoneRules(unittest.TestCase):
         self.assertEqual(orphans, {"srv-home": [
             "Zone srv-home -> internet", "Zone srv-home block rfc1918-10"]})
 
+    def test_protective_rules_of_absent_zones_are_reaped(self):
+        # Anti-spoofing and the admin guard outlive a removed zone otherwise; on
+        # an interface reused by a new zone, the old anti-spoofing rule blocks it.
+        orphans, refusal = select_orphan_zone_rules(
+            ["Zone home -> internet", "Zone old block spoofed source",
+             "Zone old block firewall webgui", "Zone old block firewall ssh"],
+            {"home"},
+        )
+        self.assertEqual(refusal, "")
+        self.assertEqual(sorted(orphans["old"]), [
+            "Zone old block firewall ssh", "Zone old block firewall webgui",
+            "Zone old block spoofed source"])
+
+    def test_similar_hand_made_blocks_are_not_ours(self):
+        orphans, _ = select_orphan_zone_rules(
+            ["Zone old block spoofed source extra", "Zone old block firewall gui",
+             "Zone home -> internet"],
+            {"home"},
+        )
+        self.assertEqual(orphans, {})
+
     def test_other_shapes_are_not_ours(self):
         orphans, _ = select_orphan_zone_rules(
             ["Zone gone allow printer", "tappaas-admin admin->mgmt",
@@ -990,6 +1012,27 @@ class TestOrphanZoneRuleReaping(TestConfigureFirewallRulesSequencing):
             orphan.interface = "opt2"  # an optN since reassigned (wg0 on-site)
             existing.append(orphan)
         return existing
+
+    def test_every_emitted_rule_shape_is_reapable(self):
+        # Whatever configure_firewall_rules writes, the orphan reaper must know
+        # it, or the rule survives its zone (the anti-spoofing case above).
+        first = self._run(_build_zones())
+        unknown = [r.description for r in first.created
+                   if not ZONE_RULE_RE.match(r.description)]
+        self.assertTrue(first.created)
+        self.assertEqual(unknown, [])
+
+    def test_protective_rules_of_renamed_zone_are_reaped(self):
+        existing = self._existing_with(
+            "Zone rossen-private block spoofed source",
+            "Zone rossen-private block firewall webgui",
+            "Zone rossen-private block firewall ssh",
+        )
+        fake = self._run(_build_zones(), existing=existing)
+        for d in ("Zone rossen-private block spoofed source",
+                  "Zone rossen-private block firewall webgui",
+                  "Zone rossen-private block firewall ssh"):
+            self.assertIn(d, fake.deleted)
 
     def test_rules_of_renamed_zone_are_reaped(self):
         existing = self._existing_with(

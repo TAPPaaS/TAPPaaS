@@ -321,7 +321,12 @@ def select_orphan_ranges(
 
 # The rule shapes configure_firewall_rules writes. Only these are ours to reap
 # when their zone is gone; a hand-made "Zone ..." rule of any other shape is not.
-ZONE_RULE_RE = re.compile(r"^Zone (\S+) (?:-> \S|block rfc1918-)")
+# The passes ("-> <target>"), the private-range blocks, anti-spoofing and the
+# admin guard (labels from ZoneManager.ADMIN_GUARD_PORTS). A test checks that
+# every rule the reconcile emits matches, so a new shape cannot be left out.
+ZONE_RULE_RE = re.compile(
+    r"^Zone (\S+) (?:-> \S|block rfc1918-|block spoofed source$|block firewall (?:webgui|ssh)$)"
+)
 
 
 def select_orphan_zone_rules(
