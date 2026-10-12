@@ -2,13 +2,13 @@
 
 | | |
 |---|---|
-| **Status** | **Proposed** (v0.1, 2026-10-12) |
-| **Version** | 0.1 |
+| **Status** | **Proposed** (v0.2, 2026-10-12) |
+| **Version** | 0.2 |
 | **Date** | 2026-10-12 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen |
 | **Related** | **#26** (IPv6, opt-in per site) · **#149** (`site.json` `ipv6`, the site's switch — built) · **#815** (firewall rules cover IPv6 — built) · **#383** (public DNS that follows the WAN) · **#223** (OPNsense interface assignment API) · [ADR-014](<ADR-014 - Zone and Environment Lifecycle.md>) (zones, `changeClass`) · [ADR-021](<ADR-021 - Split-Horizon DNS and Service Reachability.md>) (split-horizon DNS, Caddy) · [ADR-025](<ADR-025 - Config migrations and the upgrade path.md>) (migrations) |
-| **Changelog** | v0.1 — first draft, from the operator discussion of 2026-10-12. |
+| **Changelog** | v0.2 (2026-10-12) — the OPNsense spike on hrossen settles D7's open point: interface IPv6 is `config.xml` through OPNsense's PHP config library, router advertisements are the Radvd API; the WAN's delegation size must be written, a tracked zone's firewall address is EUI-64, a tracked interface advertises *managed* unless told otherwise, and removing IPv6 leaves the address behind. v0.1 — first draft, from the operator discussion of 2026-10-12. |
 
 A site turns IPv6 on with one switch. Its WAN then gets IPv6 the way the site declares —
 **dynamic** (DHCPv6 with a delegated prefix) by default, **static** where the ISP offers it —
@@ -115,7 +115,7 @@ prefix from the firewall and applies the same check.
 | Mode | The zone's `/64` | The firewall's address on it |
 |---|---|---|
 | `static` | the site prefix's first `/56`, with `ipv6Subnet` as its last 8 bits | `::1` in that `/64` |
-| `dynamic` | OPNsense *Track interface* on the WAN, **prefix ID = `ipv6Subnet`** | chosen by OPNsense (EUI-64 or `::1`) |
+| `dynamic` | OPNsense *Track interface* on the WAN, **prefix ID = `ipv6Subnet`** | EUI-64, from the interface's MAC (the spike: `…8210:98:34ff:fe69:901a`) |
 
 Worked example, static `2a13:e747:6648::/48`: `home`, `ipv6Subnet` 16 (`0x10`) →
 `2a13:e747:6648:10::/64`, firewall `2a13:e747:6648:10::1`. With a delegated
@@ -133,6 +133,18 @@ name through Caddy and for internet egress. A DHCPv6 server, for devices that ca
 is not part of v1.
 
 ### D7 — One converging step, in the network update
+
+How each part is written, as the spike on hrossen (2026-10-12) found it on OPNsense 26.1:
+
+| Part | Written through | Notes |
+|---|---|---|
+| WAN IPv6 mode, address, gateway | `config.xml` (`interfaces/wan`: `ipaddrv6`, `subnetv6`, `gatewayv6`) via OPNsense's PHP config library, then `configctl interface reconfigure wan` | no MVC API; a WAN reconfigure renews IPv4 too, so it runs only on a change |
+| Delegated prefix size | `config.xml` `interfaces/wan/dhcp6-ia-pd-len` (`/56` = 8, `/48` = 16; `0` means `/64`) | **must match** `prefixLength`: at the template's `0`, OPNsense ignores every prefix ID and a tracked zone gets the whole `/56` |
+| A zone's IPv6 | `config.xml` (`ipaddrv6` = `track6`, `track6-interface`, `track6-prefix-id`; or a static `ipaddrv6`/`subnetv6`), then `configctl interface reconfigure <optN>` | reloads that zone only. Verified: prefix ID 16 on a `/56` gives `…:8210::/64` |
+| Router advertisements | the Radvd API, `radvd/settings/addEntry` (payload key `entries`), mode `unmanaged`, then `radvd/service/reconfigure` | **an explicit entry is required**: a tracked interface with none advertises *managed* (DHCPv6) by default |
+| Turning a zone's IPv6 off | remove the `config.xml` keys and the Radvd entry, reconfigure, **then delete the address from the interface** and refresh the aliases | the reconfigure leaves the tracked address on the interface until its lifetime ends |
+
+What the step does:
 
 `ipv6-manager` (#149) grows from *Allow IPv6* to the whole of this ADR. The network module's
 update runs it, so it applies on every sweep and on `module-manager update network`:
@@ -184,15 +196,12 @@ change to the WAN or to a zone's IPv6 reloads that interface only.
   `site.json` gains `network.wan`.
 
 **Open**
-- **OPNsense's API for interface IPv6 settings** (WAN mode, *Track interface*, static IPv6 on a
-  VLAN interface, router advertisements). If it is thin (cf. #223), D7 edits `config.xml` over
-  ssh and reloads the interface, as other foundation scripts do. **Spike this first.**
 - How a site's IPv4 range can be smaller than `10.0.0.0/8` (a `site.json` base the zones'
   `ip` is computed from) — the same shape as this ADR, decided separately.
 
 ## Rollout
 
-1. Spike the OPNsense API (D7, open point), on hrossen, on an unused zone.
+1. ~~Spike the OPNsense API~~ — done 2026-10-12, findings in D7.
 2. Schema: `site.json` `network.wan`, `zones.json` `ipv6Subnet`; the migration that stamps it.
 3. `ipv6-manager`: WAN, prefix check, per-zone configuration and advertisements.
 4. hrossen: Netnørden switches the line to static; `site.json` gets the static `wan.ipv6`; one
