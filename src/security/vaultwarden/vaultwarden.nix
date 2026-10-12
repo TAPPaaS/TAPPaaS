@@ -132,8 +132,9 @@ in
     config = {
       SIGNUPS_ALLOWED = false;
 
-      # Listen on all interfaces — accessed via Caddy reverse proxy in DMZ
-      ROCKET_ADDRESS = "0.0.0.0";
+      # Listen on every address, both families — Caddy reaches it over IPv6
+      # where the zone has it (ADR-030 D9)
+      ROCKET_ADDRESS = "::";
       ROCKET_PORT = port;
       ROCKET_LOG = "critical";
 

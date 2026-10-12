@@ -178,6 +178,27 @@ let
 
     print("changed" if changed else "unchanged")
   '';
+
+  # Jellyfin listens on IPv6 only with EnableIPv6 in its network.xml (default
+  # off), and Caddy reaches it over IPv6 where the zone has it (ADR-030 D9). Sets
+  # that one element and keeps the rest; a missing file is created with it alone,
+  # which Jellyfin reads as its defaults plus this.
+  ipv6Enable = pkgs.writeText "jellyfin-ipv6.py" ''
+    import os, sys
+    import xml.etree.ElementTree as ET
+    path = sys.argv[1]
+    if os.path.exists(path):
+        tree = ET.parse(path)
+    else:
+        tree = ET.ElementTree(ET.Element("NetworkConfiguration"))
+    el = tree.getroot().find("EnableIPv6")
+    if el is None:
+        el = ET.SubElement(tree.getroot(), "EnableIPv6")
+    if el.text != "true":
+        el.text = "true"
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        tree.write(path, encoding="utf-8", xml_declaration=True)
+  '';
 in
 {
   imports = [
@@ -239,6 +260,7 @@ in
       chmod -R u+w "$target"
       echo "${ssoPlugin}" > "$target/.tappaas-src"
     fi
+    ${pkgs.python3}/bin/python3 ${ipv6Enable} ${config.services.jellyfin.configDir}/network.xml
   '';
 
   # identity:identity writes OIDC_CLIENT_ID / _SECRET / _DISCOVERY_URI into

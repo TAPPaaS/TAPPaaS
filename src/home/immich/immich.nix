@@ -57,6 +57,9 @@ let
   proxyDomain = proxyCfg.proxyDomain or (moduleCfg.proxyDomain or "");
   published   = proxyDomain != "" && (moduleCfg.proxyPublished or true);
   publicUrl   = if published then "https://${proxyDomain}" else "";
+  # The firewall's IPv6 address in this zone: Caddy's source when it reaches
+  # Immich over IPv6 (ADR-030 D9). Absent on a site without IPv6.
+  proxySourceV6 = moduleCfg.proxySourceV6 or "";
 
   unstable = import unstableSrc {
     inherit (pkgs.stdenv.hostPlatform) system;
@@ -108,7 +111,7 @@ in
   services.immich = {
     enable = true;
     package = unstable.immich;   # Immich 3 -- see unstableSrc above
-    host = "0.0.0.0";        # module default "localhost" is unreachable by Caddy
+    host = "::";             # every address, both families; "localhost" is unreachable by Caddy
     port = 2283;
     mediaLocation = "/var/lib/immich";  # on the root filesystem (one disk)
 
@@ -134,8 +137,10 @@ in
     environment = {
       IMMICH_LOG_LEVEL = "log";
       # Caddy runs on the OPNsense firewall which holds the gateway IP of
-      # every TAPPaaS zone (10.x.y.1) -- same rationale as nextcloud.
-      IMMICH_TRUSTED_PROXIES = "10.0.0.0/8";
+      # every TAPPaaS zone (10.x.y.1) -- same rationale as nextcloud; over IPv6
+      # it comes from the firewall's address in this zone (ADR-030 D9).
+      IMMICH_TRUSTED_PROXIES = lib.concatStringsSep ","
+        ([ "10.0.0.0/8" ] ++ lib.optional (proxySourceV6 != "") proxySourceV6);
     };
 
     # No GPU passthrough by default; set [ "/dev/dri/renderD128" ] for VAAPI

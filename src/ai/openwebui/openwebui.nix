@@ -188,6 +188,7 @@ in
         --log-driver=journald \
         --env-file=/etc/secrets/openwebui.env \
         --env-file=/etc/secrets/openwebui-integrations.env \
+        --env HOST=:: \
         -v /var/lib/openwebui/data:/app/backend/data \
         -v /var/lib/openwebui/models:/app/backend/data/models \
         docker.io/openwebui/open-webui:${versions.openwebui}

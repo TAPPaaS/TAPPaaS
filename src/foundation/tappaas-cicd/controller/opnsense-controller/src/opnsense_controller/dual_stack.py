@@ -98,6 +98,19 @@ def v6_for(ip: str, ifaces: list[IfaceAddr]) -> str | None:
     return None
 
 
+def v6_on_network(cidr: str, ifaces: list[IfaceAddr]) -> str | None:
+    """The firewall's global IPv6 address on the interface whose IPv4 network is
+    `cidr` — in a zone, the address Caddy and the gateway use over IPv6."""
+    try:
+        net = ipaddress.IPv4Network(cidr, strict=False)
+    except ValueError:
+        return None
+    for i in ifaces:
+        if i.v4 is not None and i.v4.network == net and i.v6:
+            return str(i.v6[0].ip)
+    return None
+
+
 @dataclass
 class AaaaPlan:
     add: list[dict] = field(default_factory=list)      # {hostname, domain, server, description}

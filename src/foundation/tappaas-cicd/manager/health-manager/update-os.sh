@@ -695,6 +695,9 @@ update_nixos() {
         # The public name the proxy publishes this module under, derived or not
         # (#715): what nextcloud.nix and logging.nix need and could not see.
         declare -F with_public_domain >/dev/null 2>&1 && with_public_domain "${vmname}" "${_flat_tmp}"
+        # Where Caddy reaches it from over IPv6, for a module that trusts its proxy
+        # by address (ADR-030 D9).
+        declare -F with_proxy_source_v6 >/dev/null 2>&1 && with_proxy_source_v6 "${vmname}" "${_flat_tmp}"
         info "Copying JSON config to ${vm_ip}:${_companion_remote}"
         scp -q -o StrictHostKeyChecking=accept-new -o BatchMode=yes "${_flat_tmp}" "tappaas@${vm_ip}:/tmp/${_source_vmname}.json" \
             || { rm -f "${_flat_tmp}"; die "failed to scp JSON config to ${vm_ip}"; }

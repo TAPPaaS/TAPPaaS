@@ -333,7 +333,7 @@ EOF
     cmd = [ 
       "--config" "/app/config.yaml" 
       "--port" "4000" 
-      "--host" "0.0.0.0" 
+      "--host" "::"      # every address, both families (ADR-030 D9)
       "--num_workers" "4"  
     ];
   };

@@ -630,6 +630,31 @@ with_public_domain() {
     return 0
 }
 
+# with_proxy_source_v6 <vmname> <file> — add `proxySourceV6` to a module's
+# companion JSON: the firewall's IPv6 address in the module's zone, which is
+# where Caddy's requests come from when it reaches the module over IPv6
+# (ADR-030 D9). A module that trusts its reverse proxy by address (Nextcloud's
+# trusted_proxies, Immich's IMMICH_TRUSTED_PROXIES) trusts this one beside the
+# IPv4 rule. Read from the firewall at every deploy, so a changed prefix is
+# picked up by the next update. Absent when the zone has no IPv6 (or the
+# firewall cannot be asked): the module then trusts IPv4 only, as before.
+with_proxy_source_v6() {
+    local vmname="$1" file="$2" zone="" addr="" rc=0 tmp=""
+    [[ -f "${file}" ]] || return 0
+    jq -e '((.dependsOn // []) | index("network:proxy")) != null' "${file}" >/dev/null 2>&1 || return 0
+    zone="$(jq -r '.zone0 // empty' "${file}" 2>/dev/null)" || zone=""
+    [[ -n "${zone}" ]] && command -v ipv6-manager >/dev/null 2>&1 || return 0
+    addr="$(ipv6-manager --no-ssl-verify gateway "${zone}" 2>/dev/null)" || rc=$?
+    tmp="$(mktemp)" || return 0
+    if [[ ${rc} -eq 0 && -n "${addr}" ]]; then
+        jq --arg a "${addr}" '.proxySourceV6 = $a' "${file}" > "${tmp}" 2>/dev/null
+    else
+        [[ ${rc} -eq 3 ]] || debug "  proxySourceV6 for ${vmname}: the firewall gave no answer (rc ${rc})"
+        jq 'del(.proxySourceV6)' "${file}" > "${tmp}" 2>/dev/null
+    fi && mv "${tmp}" "${file}" || rm -f "${tmp}"
+    return 0
+}
+
 # Resolve the PUBLIC A record for a name, deliberately bypassing the local
 # resolver.
 #

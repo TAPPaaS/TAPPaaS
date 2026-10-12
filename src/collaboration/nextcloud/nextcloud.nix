@@ -108,6 +108,9 @@ let
   ncProxyCfg    = (moduleCfg.config or {})."network:proxy" or {};
   ncProxyDomain = ncProxyCfg.proxyDomain or (moduleCfg.proxyDomain or "");
   ncInternalFqdn = if ncZone0 != "" then "${ncVmName}.${ncZone0}.internal" else "";
+  # The firewall's IPv6 address in this zone: Caddy's source when it reaches
+  # Nextcloud over IPv6 (ADR-030 D9). Absent on a site without IPv6.
+  ncProxySourceV6 = moduleCfg.proxySourceV6 or "";
 
   # hostName is deliberately NOT listed: the NixOS nextcloud module prepends
   # services.nextcloud.hostName to whatever settings.trusted_domains declares,
@@ -458,11 +461,14 @@ in
       # trusted_proxies: Caddy runs on the OPNsense firewall which holds the
       # gateway IP of every TAPPaaS zone (10.x.y.1). Including 10.0.0.0/8
       # covers all zones generically — safe in a private TAPPaaS deployment.
+      # Over IPv6 Caddy comes from the firewall's address in this zone, which
+      # follows the site prefix, so that one address is trusted (ADR-030 D9).
       # With a trusted proxy, Nextcloud reads the Host header directly, so
       # overwritehost is not needed. overwrite.cli.url is: occ and cron have no
       # Host header, and without it Talk signs its HPB backend calls as
       # https://localhost, which the HPB rejects ("Authentication check failed").
-      trusted_proxies   = [ "127.0.0.1" "::1" "10.0.0.0/8" ];
+      trusted_proxies   = [ "127.0.0.1" "::1" "10.0.0.0/8" ]
+                          ++ lib.optional (ncProxySourceV6 != "") ncProxySourceV6;
       overwriteprotocol = "https";
     } // lib.optionalAttrs (ncProxyDomain != "") {
       "overwrite.cli.url" = "https://${ncProxyDomain}";

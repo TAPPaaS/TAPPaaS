@@ -39,7 +39,7 @@ from typing import Callable
 from .cli_globals import StrictArgumentParser, make_global_parent, parse_with_globals
 from .config import Config
 from .dhcp_manager import DhcpManager  # reused only as a connected-Client provider
-from .dual_stack import derived_v6, read_interfaces
+from .dual_stack import derived_v6, read_interfaces, v6_on_network
 from .ipv6_plan import STATIC_GATEWAY_NAME, ZONE_V6_KEYS, Action, desired_state, plan
 from .service_health import _firewall_ssh, check_unbound_dns, filter_reload, unbound_restart
 from .vlan_manager import VlanManager
@@ -443,6 +443,11 @@ Examples:
     )
     sub = parser.add_subparsers(dest="command", help="Command")
     sub.add_parser("status", parents=[gp], help="Show whether the firewall allows IPv6")
+    p_gw = sub.add_parser("gateway", parents=[gp],
+                          help="The firewall's IPv6 address in a zone (exit 3: the zone has none)")
+    p_gw.add_argument("zone", help="zone name from zones.json")
+    p_gw.add_argument("--config-dir", default=os.environ.get("CONFIG_DIR", "/home/tappaas/config"),
+                      help="where zones.json is (default: /home/tappaas/config)")
     p_apply = sub.add_parser("apply", parents=[gp], help="Set 'Allow IPv6' to the site's value")
     p_apply.add_argument("--allow", type=_parse_bool, default=None,
                          help="override site.json ipv6 for the switch (default: read site.json)")
@@ -462,6 +467,18 @@ Examples:
         with _client(args) as mgr:
             if args.command == "status":
                 print(f"ipv6: firewall allows IPv6: {_yn(read_allowed(mgr))}")
+                ok = True
+            elif args.command == "gateway":
+                # Where Caddy's requests come from when it reaches a service in
+                # this zone over IPv6: what a service trusts beside the IPv4 one.
+                _, zones = load_site_and_zones(Path(args.config_dir))
+                z = zones.get(args.zone)
+                if not isinstance(z, dict) or not z.get("ip"):
+                    raise RuntimeError(f"zone '{args.zone}' has no 'ip' in zones.json")
+                addr = v6_on_network(z["ip"], read_interfaces(mgr.client))
+                if not addr:
+                    sys.exit(3)
+                print(addr)
                 ok = True
             else:
                 ok = converge_site(mgr, mgr.config, _probe_ip(args.firewall), Path(args.config_dir),

@@ -14,6 +14,7 @@ from opnsense_controller.dual_stack import (
     derived_v6,
     parse_overview,
     v6_for,
+    v6_on_network,
     with_v6,
 )
 
@@ -47,6 +48,13 @@ class TestInterfaces(unittest.TestCase):
         self.assertEqual(v6_for("10.6.0.1", IFACES), DMZ_V6)
         self.assertIsNone(v6_for("10.0.0.1", IFACES))      # mgmt: no IPv6
         self.assertIsNone(v6_for("10.6.0.7", IFACES))      # not the firewall
+
+
+class TestZoneGateway(unittest.TestCase):
+    def test_the_firewalls_address_in_a_zone(self):
+        self.assertEqual(v6_on_network("10.2.0.0/24", IFACES), "2a13:e747:a210:8220:98:34ff:fe69:901a")
+        self.assertIsNone(v6_on_network("10.0.0.0/24", IFACES))     # no IPv6 in mgmt
+        self.assertIsNone(v6_on_network("10.9.0.0/24", IFACES))     # no such interface
 
 
 class TestAccessLists(unittest.TestCase):
