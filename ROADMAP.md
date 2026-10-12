@@ -429,6 +429,8 @@ summary (`release/roadmap-cut.py`) and leaves this block empty again.
 
 <!-- next-release summary -->
 
+A site now says whether it supports IPv6: `site.json` `ipv6`, default `false` (#149). **The first sweep after upgrading turns IPv6 off on the firewall** — inbound IPv6 dropped, DNS resolved over IPv4 only — unless the site sets `site-manager site modify --ipv6 true` first. No zone has IPv6 yet, so nothing inside the site changes.
+
 <!-- /next-release summary -->
 
 ## Release 2.2 — staging 2026-10-10 · production at the next boundary
