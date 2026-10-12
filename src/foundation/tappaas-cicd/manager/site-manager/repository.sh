@@ -1096,12 +1096,14 @@ sync_pending_migrations() {
     done < <(git -C "${path}" ls-tree --name-only "${rev}" -- "${SYNC_MIG_REL}/" 2>/dev/null)
 }
 
-# Paths in the change that the mothership's own system closure is built from
+# Paths in the change that the mothership's running system is built from
 # (flake.nix: nixosConfigurations.tappaas-cicd imports tappaas-cicd.nix, which
-# pulls in the two controllers, the alert receiver and templates' common module).
-# Those need tappaas-self-rebuild.sh, which only the sweep runs.
+# runs the alert receiver as a service and imports templates' common module).
+# Those need tappaas-self-rebuild.sh, which only the sweep runs. The two
+# controllers are in the closure too, but only as a PATH fallback behind
+# ~/bin, which the refresh after a sync rebuilds — so they do not count here.
 sync_system_paths() {
-    grep -E "^(${SYNC_CICD_REL}/(flake\.nix|flake\.lock|tappaas-cicd\.nix|controller/(opnsense|identity)-controller/|scripts/tappaas-alert-receiver\.py)|src/foundation/templates/tappaas-common\.nix)" || true
+    grep -E "^(${SYNC_CICD_REL}/(flake\.nix|flake\.lock|tappaas-cicd\.nix|scripts/tappaas-alert-receiver\.py)|src/foundation/templates/tappaas-common\.nix)" || true
 }
 
 # Is <path> the checkout the running control plane is linked from? Only then

@@ -120,6 +120,10 @@ upstream "${C}/lib/shared.sh" 'x=2' 'shared lib change'
 out="$(sync TAPPaaS)"; ck "a control-plane change syncs" 0 "$?"
 has "a shared lib change is said to reach every module" "every module's update sources them" "${out}"
 ck "…and the refresh ran without a pull" "NO_GIT_PULL=1" "$(cat "${d}/refresh.called" 2>/dev/null)"
+rm -f "${d}/refresh.called"
+upstream "${C}/controller/opnsense-controller/src/x.py" 'x = 2' 'controller change'
+out="$(sync TAPPaaS)"; ck "a controller change syncs (the system copy is only a PATH fallback)" 0 "$?"
+ck "…and the refresh rebuilds it" "NO_GIT_PULL=1" "$(cat "${d}/refresh.called" 2>/dev/null)"
 upstream "${C}/tappaas-cicd.nix" '{ x = 1; }' 'system config change'
 before="$(head_of)"
 out="$(sync TAPPaaS)"; ck "a change to the mothership's NixOS config refuses the sync" 1 "$?"
