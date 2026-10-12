@@ -76,6 +76,8 @@ debug "  Desired rules: ${BL}${RULE_COUNT}${CL}"
 
 TARGET=""
 if [[ "${RULE_COUNT}" -gt 0 ]]; then
+    # Before anything is removed: a refused module keeps its current forwards.
+    nat_zone_check "${MODULE}"
     if ! TARGET=$(nat_resolve_target "${MODULE}"); then
         die "Cannot resolve internal target for ${MODULE} — set an 'ip' field or ensure DNS for <vmname>.<zone0>.internal exists."
     fi

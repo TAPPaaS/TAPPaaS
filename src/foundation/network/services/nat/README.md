@@ -22,7 +22,7 @@ Add `network:nat` to `dependsOn` and declare the mappings under the
 ```jsonc
 {
   "vmname": "forgejo",
-  "zone0": "srvWork",
+  "zone0": "dmz",
   "dependsOn": [
     "cluster:vm",
     "network:rules",
@@ -43,6 +43,12 @@ Add `network:nat` to `dependsOn` and declare the mappings under the
 
 With the above, connecting to `mydomain.org:2022` over SSH is forwarded to the
 forgejo VM's port 22.
+
+**A port forward reaches only a zone that accepts the internet** — one whose
+`pinhole-allowed-from` lists `internet`, which the `dmz` does. A module in any other
+zone has its forwards refused at install and update, and the message names the zone
+change that would allow them. The one exception is the control plane
+(`tappaas-cicd`), whose SSH an operator may expose as the way in.
 
 ### `natRules` fields
 

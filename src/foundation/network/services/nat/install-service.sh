@@ -68,6 +68,10 @@ if [[ "${RULE_COUNT}" -eq 0 ]]; then
     exit 0
 fi
 
+# ── The zone must accept traffic from the internet ──────────────────
+
+nat_zone_check "${MODULE}"
+
 # ── Resolve the internal target (shared by all rules) ───────────────
 
 if ! TARGET=$(nat_resolve_target "${MODULE}"); then

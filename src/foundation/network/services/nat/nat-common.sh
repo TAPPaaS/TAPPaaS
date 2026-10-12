@@ -33,6 +33,33 @@ nat_rule_count() {
     echo "${JSON}" | jq '(.natRules // []) | length'
 }
 
+# The module that is the control plane itself: an operator may expose its SSH
+# to the internet as the way in, whatever zone it runs in.
+readonly NAT_CONTROL_PLANE_MODULE="tappaas-cicd"
+
+# nat_zone_check <module>
+# A port forward brings the internet into the module's zone, so the zone must
+# accept that: its pinhole-allowed-from lists `internet` (the dmz does). The
+# control plane is the one exception. Dies with what to change; prints nothing
+# when the forward is allowed. Read from the effective zones when present.
+nat_zone_check() {
+    local module="$1" zone zones_file
+    [[ "${module}" == "${NAT_CONTROL_PLANE_MODULE}" ]] && return 0
+    zone="$(echo "${JSON}" | jq -r '.zone0 // empty')"
+    [[ -n "${zone}" ]] || die "${module} has natRules but no zone0 — cannot tell which zone the forward reaches"
+    zones_file="${CONFIG_DIR}/zones.effective.json"
+    [[ -f "${zones_file}" ]] || zones_file="${CONFIG_DIR}/zones.json"
+    if jq -e --arg z "${zone}" '.[$z]["pinhole-allowed-from"] // [] | index("internet")'             "${zones_file}" >/dev/null 2>&1; then
+        return 0
+    fi
+    error "Port forwards for ${module} refused: it runs in zone '${zone}', which does not accept"
+    error "  traffic from the internet (its pinhole-allowed-from does not list 'internet')."
+    error "  Port forwards reach the dmz only. Install ${module} in the dmz, remove its natRules,"
+    error "  or — if '${zone}' is meant to be internet-facing — add 'internet' to it:"
+    error "  network-manager modify ${zone} --set 'pinhole-allowed-from=[..., \"internet\"]'"
+    die "network:nat: ${module}'s port forwards are not allowed into zone '${zone}'"
+}
+
 # Resolve the internal target IP for the module:
 #   1. explicit `ip` field (static reservation), else
 #   2. DNS resolution of <vmname>.<zone0>.internal

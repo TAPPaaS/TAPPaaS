@@ -77,6 +77,10 @@ pinhole follows from the dependency, if the zones allow it.
 }
 ```
 
+A port forward is accepted only for a module in a zone that lists `internet` in
+`pinhole-allowed-from` (the `dmz`); the control plane (`tappaas-cicd`) is the one exception,
+so an operator may expose its SSH as the way in.
+
 **5. The site** — `config/site.json` `ipv6` (default `false`): whether the firewall allows
 IPv6 at all ([Address family](#address-family)).
 
@@ -298,9 +302,8 @@ ssh root@firewall.mgmt.internal 'pfctl -sr'   # the rules pf actually evaluates,
 
 Where the rules do less than the zone model describes:
 
-- **Aliases and port forwards are not checked against the zones.** A rule to or from an
-  `alias:` is written as declared, and a port forward is not limited to the zones that accept
-  internet ingress.
+- **Aliases are not checked against the zones.** A rule to or from an `alias:` is written as
+  declared.
 - **The private-network block covers RFC 1918 only.** 100.64.0.0/10 (carrier-grade NAT) and
   169.254.0.0/16 are reachable from every zone with internet access.
 - **The caddy-reach source is `10.0.0.0/8`**, not the zone's subnet. On a VLAN, anti-spoofing
