@@ -699,7 +699,7 @@ class TestGatewayAndAdminPorts(TestConfigureFirewallRulesSequencing):
         rules = self._zone_rules(fake, "home")
         self.assertEqual(sorted(rules), [
             "Zone home -> gateway dhcp", "Zone home -> gateway dns",
-            "Zone home -> gateway ntp",
+            "Zone home -> gateway icmp", "Zone home -> gateway ntp",
             "Zone home block firewall ssh", "Zone home block firewall webgui",
             "Zone home block spoofed source"])
         # The gateway passes reach the gateway's /32 on their own ports only.
@@ -713,10 +713,11 @@ class TestGatewayAndAdminPorts(TestConfigureFirewallRulesSequencing):
         second = self._run(_build_zones(home={"access_to": []}), existing=existing)
         gone = {d for d in second.deleted if d.startswith("Zone home ")}
         self.assertIn("Zone home -> internet", gone)
-        self.assertIn("Zone home -> gateway icmp", gone)
+        self.assertIn("Zone home block rfc1918-10", gone)
         for kept in ("Zone home block spoofed source", "Zone home block firewall webgui",
                      "Zone home block firewall ssh", "Zone home -> gateway dns",
-                     "Zone home -> gateway ntp", "Zone home -> gateway dhcp"):
+                     "Zone home -> gateway ntp", "Zone home -> gateway dhcp",
+                     "Zone home -> gateway icmp"):
             self.assertNotIn(kept, gone)
 
     def test_the_gateway_is_never_open_on_every_port(self):

@@ -110,7 +110,7 @@ Shadowing: only the band-1 blocks sit ahead of module passes (anti-spoofing; the
 | D12 | A second copy of the pinhole predicate in ZM resolves providers by bare name and reads top-level `ingress` only (#632 drift class) | Low/Med | ZM:574, 676; RM:1556-1565 | none |
 | D13 | A stale `zones.effective.json` makes rules-manager fall back to `zones.json` and lose the `serves` edges; a `reconcile` then prunes the auto-pinholes they allowed | Med (transient) | RM:2223-2241 | none |
 | D14 | The private-range block is RFC 1918 only: 100.64/10 (NetBird), 169.254/16 and the firewall's other ports are reachable from every `internet` zone | Med (live check) | ZM:752-756 | none |
-| D15 | ✅ **Fixed on `g2.1-firewall`: such zones get anti-spoofing, the admin guard and gateway DNS/NTP/DHCP (operator decision 2026-10-12; no ICMP).** No-egress zones get no gateway DNS/NTP, no anti-spoofing, no guard | design gap | ZM:1903-1906, 2101-2103 | T-ZM:858 caddy only |
+| D15 | ✅ **Fixed on `g2.1-firewall`: such zones get anti-spoofing, the admin guard and gateway DNS/NTP/DHCP/ICMP (operator decision 2026-10-12).** No-egress zones get no gateway DNS/NTP, no anti-spoofing, no guard | design gap | ZM:1903-1906, 2101-2103 | T-ZM:858 caddy only |
 | D16 | DES claims that do not match: slot collisions "detected at compile time" (nothing does); band 1 "DHCP, NTP, ICMP" (they are band 5); band 2 deny defaults (nothing emits); `tappaas_module_<vm>` (prefix is `tm_`) | Low | DES:103, 232-244 | — |
 | D17 | Dead `all` handling | Low | ZM:1046-1050, 1975-1983, 2283; RM:1653 | — |
 | D18 | Gateway lookup is one API call per zone without retry (not the batched resolver) | Low | ZM:1944, 2303 vs 999-1044 | — |

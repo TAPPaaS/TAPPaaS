@@ -201,7 +201,7 @@ drop it.
 
 For each `Active`/`Mandatory` zone, on the zone's own interface (`base` = the zone's slot in
 band 7). A zone with an empty `access-to` gets the three protective rules — anti-spoofing and
-the admin guard — and its gateway's DNS, NTP and DHCP, and nothing else.
+the admin guard — and its gateway's DNS, NTP, DHCP and ICMP, and nothing else.
 
 | Sequence | Rule | Action |
 |---|---|---|
