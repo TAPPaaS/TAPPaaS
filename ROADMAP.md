@@ -111,7 +111,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | 3 | G3.3 App module fixes | L | L | 10 | – | 11 |
 | 3 | G3.4 AI stack maturity | M | M | 1 | – | 10 |
 | 3 | G3.5 Installer UX | L | L | 1 | – | 3 |
-| 2 | G2.1 Firewall exposure & rule order | M | H | 7 | – | 12 |
+| 2 | G2.1 Firewall exposure & rule order | M | H | 7 | – | 14 |
 | 2 | G2.2 DNS resolver robustness | L | M | 4 | – | 5 |
 | 1 | G1.2 Backup placement model + managed machines (ADR-012, ADR-026) | M | H | 27 | – | 4 |
 | 1 | G1.6 Secrets & privileged access | H | H | 4 | – | 2 |
@@ -140,7 +140,7 @@ met gates are recorded in the releases that carried their waves.
 | Wave · group | Still open |
 |--------------|------------|
 | 1 · G1.6 | #142 RFC outcome; a *Secrets management* ADR only once #58 comes back from Future Work |
-| 2 | Entry: ADR-014 amended for the `all` sentinel (#375, built), `serves` as an array (#576), anti-spoofing always on (#159, built) and mDNS in zones.json (#257); ADR-021 amended for DNSSEC with split horizon (#263) and the IPv6 stance (#149). Exit: a lockout check on each site — mgmt and NetBird reach 8443 and 22, other zones do not; done on hrossen 2026-10-02 (NetBird untested there) |
+| 2 | Entry: ADR-014 amended for the `all` sentinel (#375, built), `serves` as an array (#576), anti-spoofing always on (#159, built) and mDNS in zones.json (#257); ADR-021 amended for DNSSEC with split horizon (#263); `site.json` `ipv6` (#149) — the IPv6 stance is its own ADR (#26). Exit: a lockout check on each site — mgmt and NetBird reach 8443 and 22, other zones do not; done on hrossen 2026-10-02 (NetBird untested there) |
 | 3 | ADR-019 Proposed → Accepted (#36 / #127 boot order) |
 | 4 | ADR-023 Proposed → Accepted (#642, #643; render check open); ADR-015 Draft → Accepted (#486); ADR-011 Proposed → Accepted (#143 built); ADR-010 P7 sign-off (#406); ADR-008 amended (#236); ADR-019 amended for a second corosync link (#590) and the migrate verb (#429); ADR-007e amended for logging v2 (#165), or a new ADR if Zabbix is chosen; ADR-029 Proposed → Accepted (#772); the MAC pinning question (#444 / #582); #154 closed or kept; #430 decided before #170 |
 
@@ -154,6 +154,7 @@ met gates are recorded in the releases that carried their waves.
 | Secrets management | #58 (in Future Work since 2026-10-02): one secrets-access helper every module uses instead of reading `/etc/secrets`, OpenBao behind it later | G1.6, when #58 returns |
 | VMID convention | #294 — only if it is adopted | G1.7 |
 | Legal/processor | #359 | Wave 4 |
+| IPv6 | #26: opt-in per site after install — a delegated prefix per zone, which zones get it, east-west stays IPv4, a prefix change, turning it off | #26 parts 4–6; parity (#815) goes ahead in G2.1 |
 
 ### Housekeeping
 
@@ -178,7 +179,7 @@ items that belong to a group — FW #40, #83, #157, #158, #162 — are rows in t
 
 | # | Issue | Note |
 |---|-------|------|
-| #26 | IPv6 implemented | Write the stance first, under #149 (G2.2) |
+| #26 | IPv6, opt-in per site after install | **Replanned 2026-10-12:** an IPv6 ADR first (*ADRs still to write*); `site.json` `ipv6`, default `false` (#149); firewall parity (#815, G2.1); then probe/enable/disable, DNS and Caddy. Ease H, ~3–4 weeks |
 | #39 | Power saving | Documentation |
 | #58 | Secrets management | One secrets-access helper every module uses instead of reading `/etc/secrets`, OpenBao behind it later. Out of G1.6 since 2026-10-02 (operator) |
 | #71 | TAPPaaS way to back up, export and restore user data inside a VM | Open: `backup:filesystem` does not solve it |
@@ -346,13 +347,15 @@ A first install that is easier to get through: resumable (#377), showing its pro
 
 Changes to live firewall and DNS behaviour on every installation. Restrictive defaults get harder to introduce the longer users rely on permissive ones, so they come early; every change shows its dry-run diff (#645) before `--apply`.
 
-### G2.1 Firewall exposure & rule order — Ease M · Risk H · released: 7 · open: 12
+### G2.1 Firewall exposure & rule order — Ease M · Risk H · released: 7 · open: 14
 
-Tighter firewall defaults that keep what modules need. Built: the gateway, GUI/SSH and anti-spoofing rules. Next: pinholes shadowed by private-range blocks (#386), lasting NetBird rules (#385, #222), and the rules manager's zones, aliases and overlaps.
+Tighter firewall defaults that keep what modules need. Built: the gateway, GUI/SSH and anti-spoofing rules. Sprint from 2026-10-12: first a review of the tier model and rule creation, published (#816); then pinholes shadowed by private-range blocks (#386), lasting NetBird rules (#385, #222), every zone policy for IPv6 too (#815), and the rules manager's zones, aliases and overlaps.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
+| #816 | Review the zone tiers and rule-set creation; publish how it works | M | L | **Opened 2026-10-12, first in the sprint:** every rule class, its order in pf and the tier model as built, against ADR-014/021; a design page for tappaas.org; each defect its own issue |
 | #386 | block-private rules shadow auto-pinholes | M | M | Opens intended paths that are silently blocked today |
+| #815 | IPv6 parity: zone policy covers IPv6 before any zone gets an address | M | M | **Opened 2026-10-12**, part 1 of #26: rules `inet46`, block-private plus ULA and link-local. No effect where IPv6 is absent; ships with the dry-run diff and the lockout check |
 | #385 | Persist the NetBird OPT1 pass rule | L | M | Land with #222 |
 | #222 | NetBird → srv floating rule is fragile | L | M | |
 | #576 | Zone `serves` as string or array | M | L | Backward compatible |
@@ -372,7 +375,7 @@ A resolver that holds up: a working Unbound restart (#387), a written IPv6 stanc
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
 | #387 | Unbound rc.d restart fails (Python mismatch) | L | L | |
-| #149 | IPv6 root lookups fail → `do-ip6: no` | L | L | Also write down the IPv6 stance (FW #26) |
+| #149 | IPv6 root lookups fail → `do-ip6: no` | L | L | **Decided 2026-10-12:** a `site.json` `ipv6` field, default `false`, says whether the site supports IPv6; Unbound's `do-ip6` follows it. The stance is the IPv6 ADR (#26) |
 | #263 | DNSSEC on Unbound | L | M | Internal split-horizon zones need `domain-insecure` |
 | #383 | Keep wildcard public DNS current on dynamic WAN | M | L | |
 | FW #157 | Default DNS blocklists (DNSBL / maltrail) | M | M | Stretch; only after #387 |
