@@ -2,13 +2,13 @@
 
 | | |
 |---|---|
-| **Status** | **Proposed** (v0.2, 2026-10-12) |
-| **Version** | 0.2 |
+| **Status** | **Proposed** (v0.3, 2026-10-12) |
+| **Version** | 0.3 |
 | **Date** | 2026-10-12 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen |
 | **Related** | **#26** (IPv6, opt-in per site) · **#149** (`site.json` `ipv6`, the site's switch — built) · **#815** (firewall rules cover IPv6 — built) · **#383** (public DNS that follows the WAN) · **#223** (OPNsense interface assignment API) · [ADR-014](<ADR-014 - Zone and Environment Lifecycle.md>) (zones, `changeClass`) · [ADR-021](<ADR-021 - Split-Horizon DNS and Service Reachability.md>) (split-horizon DNS, Caddy) · [ADR-025](<ADR-025 - Config migrations and the upgrade path.md>) (migrations) |
-| **Changelog** | v0.2 (2026-10-12) — the OPNsense spike on hrossen settles D7's open point: interface IPv6 is `config.xml` through OPNsense's PHP config library, router advertisements are the Radvd API; the WAN's delegation size must be written, a tracked zone's firewall address is EUI-64, a tracked interface advertises *managed* unless told otherwise, and removing IPv6 leaves the address behind. v0.1 — first draft, from the operator discussion of 2026-10-12. |
+| **Changelog** | v0.3 (2026-10-12, operator request after the first rollout on hrossen) — **internal names resolve to IPv6 too**: router advertisements move from radvd to dnsmasq in `ra-names` mode, which gives every VM with a DHCPv4 lease an AAAA record from its EUI-64 address; the NixOS baseline switches to EUI-64 without temporary addresses. VM to VM and Caddy to a service then work over IPv6 by name; the internal split-horizon answer for a published name gains the DMZ's IPv6 address. Proven by a spike on hrossen's test zone. v0.2 (2026-10-12) — the OPNsense spike on hrossen settles D7's open point: interface IPv6 is `config.xml` through OPNsense's PHP config library, router advertisements are the Radvd API; the WAN's delegation size must be written, a tracked zone's firewall address is EUI-64, a tracked interface advertises *managed* unless told otherwise, and removing IPv6 leaves the address behind. v0.1 — first draft, from the operator discussion of 2026-10-12. |
 
 A site turns IPv6 on with one switch. Its WAN then gets IPv6 the way the site declares —
 **dynamic** (DHCPv6 with a delegated prefix) by default, **static** where the ISP offers it —
@@ -126,13 +126,38 @@ Worked example, static `2a13:e747:6648::/48`: `home`, `ipv6Subnet` 16 (`0x10`) �
 The same number means the same position in both modes, so a site that moves from dynamic to
 static keeps each zone's place in its prefix.
 
-### D6 — Devices configure themselves (SLAAC)
+### D6 — Devices configure themselves, and internal names get AAAA records
 
-Every zone with IPv6 sends router advertisements (*unmanaged*: SLAAC, no DHCPv6 server),
-with the firewall's address on the zone as the DNS server (RDNSS). Internal names stay A
-records only: split-horizon DNS (ADR-021) is unchanged, and IPv6 inside the site is used by
-name through Caddy and for internet egress. A DHCPv6 server, for devices that cannot do SLAAC,
-is not part of v1.
+**dnsmasq** — which already serves DHCPv4 and the internal names (`<vm>.<zone>.internal`,
+reached through Unbound's `internal` forward) — sends the router advertisements, one IPv6 range
+per zone in **`ra-names`** mode, built from the zone interface's prefix (`constructor`), so it
+follows a changing prefix:
+
+```
+dhcp-range=tag:vlan0.299,::,constructor:vlan0.299,ra-names,64,86400
+```
+
+Devices take addresses by SLAAC. For every host with a DHCPv4 lease, dnsmasq computes the
+EUI-64 address its MAC gives in the zone's `/64`, pings it, and on an answer adds an **AAAA
+record under the same name**. So a VM's name resolves to both families with no registration
+step, and its address is stable: Proxmox fixes the MAC, and a static prefix fixes the rest.
+
+- **The NixOS baseline uses EUI-64 and no temporary addresses** (NetworkManager
+  `ipv6.addr-gen-mode = eui64`, `ipv6.ip6-privacy = 0`) — the address dnsmasq computes is the
+  address the VM has. Client devices (phones, laptops) keep their privacy addresses and get no
+  AAAA, which is right: names matter for servers.
+- **No DHCPv6 server.** Stateful DHCPv6 would name hosts too, but Android does not do it and it
+  would be a second way to hand out addresses.
+- radvd is not used for zones: two daemons advertising on one interface conflict.
+
+What follows from names with both families:
+
+- **VM to VM** over IPv6, by name: zone rules are dual-stack (#815), and a module's host alias
+  (`tm_<vm>`) resolves A *and* AAAA — OPNsense's alias resolver asks for both — so every pinhole
+  covers IPv6 within the alias's refresh (300 s).
+- **Caddy to a service** over IPv6: Caddy reaches upstreams by name and tries IPv6 first,
+  falling back to IPv4 at once (Go's dialer). A service that listens on IPv4 only (`0.0.0.0`)
+  keeps working over IPv4; one that listens on `[::]` is reached over IPv6.
 
 ### D7 — One converging step, in the network update
 
@@ -143,8 +168,8 @@ How each part is written, as the spike on hrossen (2026-10-12) found it on OPNse
 | WAN IPv6 mode, address, gateway | `config.xml` (`interfaces/wan`: `ipaddrv6`, `subnetv6`, `gatewayv6`) via OPNsense's PHP config library, then `configctl interface reconfigure wan` | no MVC API; a WAN reconfigure renews IPv4 too, so it runs only on a change |
 | Delegated prefix size | `config.xml` `interfaces/wan/dhcp6-ia-pd-len` (`/56` = 8, `/48` = 16; `0` means `/64`) | **must match** `prefixLength`: at the template's `0`, OPNsense ignores every prefix ID and a tracked zone gets the whole `/56` |
 | A zone's IPv6 | `config.xml` (`ipaddrv6` = `track6`, `track6-interface`, `track6-prefix-id`; or a static `ipaddrv6`/`subnetv6`), then `configctl interface reconfigure <optN>` | reloads that zone only. Verified: prefix ID 16 on a `/56` gives `…:8210::/64` |
-| Router advertisements | the Radvd API, `radvd/settings/addEntry` (payload key `entries`), mode `unmanaged`, then `radvd/service/reconfigure` | **an explicit entry is required**: a tracked interface with none advertises *managed* (DHCPv6) by default |
-| Turning a zone's IPv6 off | remove the `config.xml` keys and the Radvd entry, reconfigure, **then delete the address from the interface** and refresh the aliases | the reconfigure leaves the tracked address on the interface until its lifetime ends |
+| Router advertisements and AAAA names | the dnsmasq API, `dnsmasq/settings/addRange` (payload key `range`: `interface`, `start_addr` `::`, `constructor` = the interface, `ra_mode` `ra-names`), then `dnsmasq/service/reconfigure` | spike 2026-10-12: the AAAA appeared within seconds of the host's DHCPv4 request. A tracked interface without an explicit RA source gets radvd's *managed* default — so no radvd entry, and the dnsmasq range present |
+| Turning a zone's IPv6 off | remove the `config.xml` keys and the dnsmasq IPv6 range, reconfigure, **then delete the address from the interface** and refresh the aliases | the reconfigure leaves the tracked address on the interface until its lifetime ends; removing the range removes the zone's AAAA records |
 
 What the step does:
 
@@ -176,6 +201,9 @@ change to the WAN or to a zone's IPv6 reloads that interface only.
   (`fe80::/10`), so the IPv4 rule's form would block traffic IPv6 needs. v1 writes it as a block
   of sources outside the zone's network *table* (`__optN_network`, which holds no link-local),
   after a pass for link-local sources to the firewall.
+- **Published names, inside the site.** Split-horizon DNS (ADR-021) answers a published name
+  with the DMZ gateway's IPv4 address; it also answers AAAA with the DMZ interface's IPv6
+  address, kept current when the prefix changes. The caddy-reach rule already covers IPv6.
 - **Public names.** A published name gets an AAAA record: the DMZ's IPv6 address. Static: set
   once. Dynamic: kept current by the same path that follows a changing WAN IPv4 address (#383).
 - **Inbound from the internet.** IPv6 has no port forwarding. The Caddy entry on the WAN gets an
