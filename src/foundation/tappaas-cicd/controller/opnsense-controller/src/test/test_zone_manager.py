@@ -752,7 +752,9 @@ class TestGatewayAndAdminPorts(TestConfigureFirewallRulesSequencing):
                 continue
             self.assertEqual(r.source_net, "opt_srv", d)
         self.assertEqual(rules["Zone srv -> internet"].ip_protocol, IpProtocol.BOTH)
-        self.assertEqual(rules["Zone srv block spoofed source"].ip_protocol, IpProtocol.BOTH)
+        # Anti-spoofing stays IPv4: a negated IPv6 interface network would also
+        # block link-local (OPNsense adds fe80::/10 to it).
+        self.assertEqual(rules["Zone srv block spoofed source"].ip_protocol, IpProtocol.IPV4)
         self.assertEqual(rules["Zone srv -> dmz"].destination_net, "opt_dmz")
         self.assertEqual(rules["Zone srv -> dmz"].ip_protocol, IpProtocol.BOTH)
         self.assertEqual(rules["Zone srv block rfc1918-10"].ip_protocol, IpProtocol.IPV4)

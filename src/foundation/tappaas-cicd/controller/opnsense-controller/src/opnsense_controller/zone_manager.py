@@ -1858,7 +1858,11 @@ class ZoneManager:
             zone_interface, zone_interface, "any",
             RuleAction.BLOCK, self.ANTISPOOF_SEQUENCE,
             check_mode, zone_results,
-            source_invert=True, ip_protocol=IpProtocol.BOTH,
+            # IPv4 only. For IPv6, OPNsense adds link-local (fe80::/10) to an
+            # interface's network, and negated that reads "not the zone's
+            # network, or link-local" — a block of the link-local traffic IPv6
+            # needs. IPv6 anti-spoofing waits for zones that carry IPv6 (#26).
+            source_invert=True, ip_protocol=IpProtocol.IPV4,
         )
         for offset, (port, label) in enumerate(self.ADMIN_GUARD_PORTS):
             self._create_or_skip_rule(
