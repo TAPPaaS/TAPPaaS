@@ -109,6 +109,20 @@ def unbound_checkconf(host: str) -> tuple[bool, str]:
     return r.returncode == 0, out
 
 
+def filter_reload(host: str) -> bool:
+    """Re-render and load the firewall's pf rules (`configctl filter reload`).
+
+    Needed after a global setting the filter reads at render time, such as
+    "Allow IPv6" (#149): the settings reconfigure does not reload pf. Over ssh
+    by IP, best-effort like unbound_restart: never raises, returns success.
+    """
+    try:
+        r = _firewall_ssh(host, "configctl filter reload\n", timeout=120.0)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return r.returncode == 0
+
+
 def unbound_restart(host: str) -> bool:
     """Regenerate the Unbound config and (re)start the daemon on the firewall.
 

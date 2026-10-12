@@ -67,6 +67,9 @@ export interface Site {
   // repository tracks is where the code sits; this is the promise about risk.
   channel?: "unstable" | "staging" | "production";
   automaticReboot?: boolean;
+  // #149: whether the site supports IPv6 — OPNsense's global "Allow IPv6".
+  // Absent reads as false.
+  ipv6?: boolean;
   snapshotRetention?: number;
   repositories: Repository[];
   // NOTE: environments are NOT a site field — they are enumerated from the
@@ -86,6 +89,7 @@ export type SiteModifiableField =
   | "owner"
   | "email"
   | "automaticReboot"
+  | "ipv6"
   | "snapshotRetention"
   | "backupTarget"
   | "backupOffsite"

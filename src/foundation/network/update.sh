@@ -197,6 +197,21 @@ case "${_qga_state}" in
     *)         warn "Could not set the QEMU guest agent's -r flag on the firewall: ${_qga_state:-no answer}" ;;
 esac
 
+# ── IPv6 stance (#149) ──────────────────────────────────────────────
+#
+# site.json `ipv6` (absent = false) is whether the site supports IPv6; on the
+# firewall it is OPNsense's global "Allow IPv6". Off: inbound and forwarded IPv6
+# dropped, Unbound resolves over IPv4 only (do-ip6: no — the #149 fix). Filter
+# and Unbound reload only on a change; ipv6-manager checks the resolver after.
+_ipv6="$(jq -r 'if .ipv6 == true then "true" else "false" end' "${CONFIG_DIR}/site.json" 2>/dev/null || echo false)"
+_ipv6_out="$(/home/tappaas/bin/ipv6-manager --no-ssl-verify apply --allow "${_ipv6}" 2>&1)" && _ipv6_rc=0 || _ipv6_rc=$?
+case "${_ipv6_rc}:${_ipv6_out}" in
+    0:*changing*) while IFS= read -r _l; do info "  ${_l}"; done <<< "${_ipv6_out}" ;;
+    0:*)          debug "  ${_ipv6_out}" ;;
+    *)            printf '%s\n' "${_ipv6_out}" >&2
+                  warn "ipv6-manager could not bring 'Allow IPv6' to ipv6=${_ipv6} (continuing)" ;;
+esac
+
 # ── Output levels ───────────────────────────────────────────────────
 #
 # relog_steps — a filter for a sub-command's stream. Warnings and errors pass

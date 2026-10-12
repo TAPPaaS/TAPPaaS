@@ -218,6 +218,12 @@
       "type": "boolean",
       "default": true
     },
+    "ipv6": {
+      "description": "Whether this site supports IPv6 (#149). It is OPNsense's global 'Allow IPv6' setting, applied by the network module's update: when false the firewall drops all inbound and forwarded IPv6 and Unbound resolves over IPv4 only (do-ip6: no). When true the firewall allows IPv6; no zone is given an IPv6 address by this field alone (that is #26).",
+      "type": "boolean",
+      "default": false,
+      "note": "Set it true only when the upstream provides IPv6. Changing it reloads the firewall's filter and Unbound once; IPv4 traffic is not interrupted."
+    },
     "snapshotRetention": {
       "description": "Number of snapshots to retain. Site-wide until P3 (then moves to Environment).",
       "type": "integer",

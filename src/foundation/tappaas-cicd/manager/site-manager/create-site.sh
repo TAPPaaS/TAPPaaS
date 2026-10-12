@@ -31,6 +31,7 @@
 #   backup            <- null
 #   updateSchedule    <- [--schedule, --weekday, --hour]
 #   automaticReboot   <- preserved from existing site.json, else true
+#   ipv6              <- preserved from existing site.json, else false (#149)
 #   snapshotRetention <- preserved from existing site.json, else 5
 #   repositories[]    <- built from --upstream-git/--branch (default TAPPaaS repo),
 #                        preserving any existing operator-set repositories
@@ -539,8 +540,10 @@ build_and_write_site() {
     # a stray literal '}' (bash parses ${X:-{} + }) and breaks the jq input.
     local existing="${EXISTING_SITE:-}"
     [[ -n "$existing" ]] || existing='{}'
-    local automaticReboot snapshotRetention owner displayName backup network location organizations defaultEnvironment
+    local automaticReboot ipv6 snapshotRetention owner displayName backup network location organizations defaultEnvironment
     automaticReboot="$(jq -r 'if .automaticReboot != null then (.automaticReboot|tostring) else "true" end' <<<"$existing")"
+    # #149: whether the site supports IPv6 — an operator's statement, kept; absent is false.
+    ipv6="$(jq -r 'if .ipv6 == true then "true" else "false" end' <<<"$existing")"
     snapshotRetention="$(jq -r 'if .snapshotRetention != null then (.snapshotRetention|tostring) else "5" end' <<<"$existing")"
     # defaultEnvironment / owner / organizations all key on the ORG (the default
     # organization/environment/zone), decoupled from the site code (#426). An
@@ -597,6 +600,7 @@ build_and_write_site() {
         --argjson backup "$backup" \
         --argjson updateSchedule "$schedule_json" \
         --argjson automaticReboot "$automaticReboot" \
+        --argjson ipv6 "$ipv6" \
         --argjson snapshotRetention "$snapshotRetention" \
         --argjson repositories "$repos_json" \
         --argjson organizations "$organizations" \
@@ -613,6 +617,7 @@ build_and_write_site() {
             backup: $backup,
             updateSchedule: $updateSchedule,
             automaticReboot: $automaticReboot,
+            ipv6: $ipv6,
             snapshotRetention: $snapshotRetention,
             repositories: $repositories,
             organizations: $organizations

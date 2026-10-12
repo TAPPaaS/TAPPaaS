@@ -77,5 +77,15 @@ const opts = HELP.verbs.flatMap((v) => (v.options ?? []).map(([f]) => f)).join("
 check(opts.includes("--updateFrequency") && opts.includes("--updateWeekday") && opts.includes("--updateHour"),
   "help documents the three schedule flags");
 
+// ── ipv6 (#149): a boolean the network update applies; absent reads as false ──
+{
+  const ipv6 = (): unknown => JSON.parse(readFileSync(siteFile, "utf8")).ipv6;
+  writeFileSync(siteFile, JSON.stringify({ name: "s" }));
+  check(run(["site", "modify", "--ipv6", "true", "--config-dir", dir], c) === 0 && ipv6() === true,
+    "site modify --ipv6 true writes a boolean true");
+  run(["site", "modify", "--ipv6", "false", "--config-dir", dir], c);
+  check(ipv6() === false, "…and --ipv6 false writes false");
+}
+
 console.log(`schedule: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

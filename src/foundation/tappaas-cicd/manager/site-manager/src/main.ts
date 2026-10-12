@@ -54,6 +54,7 @@ export const HELP: HelpSpec = {
         ["--owner <org>", "owning organization"],
         ["--email <addr>", "admin email"],
         ["--automaticReboot true|false", "allow update reboots"],
+        ["--ipv6 true|false", "the site supports IPv6 (#149): OPNsense's 'Allow IPv6', applied by the next network update (default false)"],
         ["--snapshotRetention <n>", "VM snapshots kept per module"],
         ["--backupTarget <s>", "backup.target"],
         ["--backupOffsite <s>", "backup.offsite"],
@@ -323,7 +324,7 @@ function cmdSite(o: Opts): void {
     if (loc.latitude !== undefined || loc.longitude !== undefined) {
       info(`${lbl("Position")}${[loc.latitude, loc.longitude].map((v) => (v === undefined ? "?" : String(v))).join(", ")}`);
     }
-    info(`${lbl("Network")}publicIp=${net.publicIp ?? "(unset)"}  isp=${net.isp ?? "(none)"}`);
+    info(`${lbl("Network")}publicIp=${net.publicIp ?? "(unset)"}  isp=${net.isp ?? "(none)"}  ipv6=${site.ipv6 ? "yes" : "no"}`);
     info(`${lbl("Update")}${schedStr}  (auto-reboot: ${site.automaticReboot ? "yes" : "no"}, keep ${site.snapshotRetention ?? "?"})`);
     info(`${lbl("Nodes")}${nodes.length ? nodes.map((n) => `${n.name} [${n.storagePools.join(", ")}]`).join("  ") : "(none)"}`);
     info(`${lbl("Repositories")}${repos.length ? repos.map((r) => `${r.name}${r.branch ? "@" + r.branch : ""}`).join("  ") : "(none)"}`);
@@ -471,6 +472,7 @@ function cmdSite(o: Opts): void {
     setStr("--owner", ["owner"]);
     setStr("--email", ["email"]);
     setBool("--automaticReboot", ["automaticReboot"]);
+    setBool("--ipv6", ["ipv6"]);
     setInt("--snapshotRetention", ["snapshotRetention"]);
     setStr("--backupTarget", ["backup", "target"]);
     setStr("--backupOffsite", ["backup", "offsite"]);
