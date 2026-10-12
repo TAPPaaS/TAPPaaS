@@ -827,6 +827,9 @@ class ZoneManager:
         ("dhcp", Protocol.UDP, "67", 87),
         ("icmp", Protocol.ICMP, None, 88),
     )
+    # What a zone with an empty access-to still asks of its gateway: an address,
+    # names and time. No ICMP — it reaches nothing, the gateway included.
+    NO_EGRESS_GATEWAY_SERVICES = ("dns", "ntp", "dhcp")
     ZONE_RULE_BLOCK_OFFSET = 90        # rfc1918 blocks at base+90/91/92
     ZONE_RULE_INTERNET_OFFSET = 99     # internet pass last (lowest priority)
 
@@ -1769,6 +1772,34 @@ class ZoneManager:
 
         return results
 
+    def _gateway_rules(
+        self,
+        manager: FirewallManager,
+        existing_by_desc: dict[str, FirewallRuleInfo],
+        zone: "Zone",
+        zone_interface: str,
+        check_mode: bool,
+        zone_results: list[dict],
+        only: tuple[str, ...] | None = None,
+    ) -> None:
+        """Passes to the zone's own gateway for the services the firewall runs.
+
+        Every port of the gateway is never opened; ``only`` narrows the services
+        (a zone with no access-to gets DNS, NTP and DHCP).
+        """
+        base = self._zone_rule_base(zone)
+        for label, proto, port, offset in self.ZONE_GATEWAY_SERVICES:
+            if only is not None and label not in only:
+                continue
+            self._create_or_skip_rule(
+                manager, existing_by_desc,
+                f"Zone {zone.name} -> gateway {label}",
+                zone_interface, zone.ip_network, f"{zone.gateway_ip}/32",
+                RuleAction.PASS, base + offset,
+                check_mode, zone_results,
+                protocol=proto, destination_port=port,
+            )
+
     def _protective_rules(
         self,
         manager: FirewallManager,
@@ -2050,15 +2081,8 @@ class ZoneManager:
                 else:
                     # Step 1: the zone's own gateway, for the services the
                     # firewall runs for it — never every port (#399).
-                    for label, proto, port, offset in self.ZONE_GATEWAY_SERVICES:
-                        self._create_or_skip_rule(
-                            manager, existing_by_desc,
-                            f"Zone {zone.name} -> gateway {label}",
-                            zone_interface, zone.ip_network, f"{zone.gateway_ip}/32",
-                            RuleAction.PASS, base + offset,
-                            check_mode, zone_results,
-                            protocol=proto, destination_port=port,
-                        )
+                    self._gateway_rules(manager, existing_by_desc, zone, zone_interface,
+                                        check_mode, zone_results)
                     # Steps 0 and 1b: anti-spoofing and the admin guard.
                     self._protective_rules(manager, existing_by_desc, zone,
                                            zone_interface, check_mode, zone_results)
@@ -2118,8 +2142,8 @@ class ZoneManager:
                     "rules": zone_results,
                 }
 
-            # A zone with no access-to grants nothing, but it is still protected:
-            # anti-spoofing and the admin guard, and no pass of any kind.
+            # A zone with no access-to reaches nothing beyond its own gateway's
+            # DNS, NTP and DHCP, and is protected like every other zone.
             for zone in isolated_zones:
                 zone_interface = self.get_zone_interface(zone)
                 if not zone_interface:
@@ -2134,6 +2158,9 @@ class ZoneManager:
                 zone_results = []
                 self._protective_rules(manager, existing_by_desc, zone,
                                        zone_interface, check_mode, zone_results)
+                self._gateway_rules(manager, existing_by_desc, zone, zone_interface,
+                                    check_mode, zone_results,
+                                    only=self.NO_EGRESS_GATEWAY_SERVICES)
                 results[zone.name] = {"status": "isolated", "interface": zone_interface,
                                       "access_to": [], "rules": zone_results}
 

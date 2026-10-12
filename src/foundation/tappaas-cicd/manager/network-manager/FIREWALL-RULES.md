@@ -200,8 +200,8 @@ drop it.
 ## Zone rules
 
 For each `Active`/`Mandatory` zone, on the zone's own interface (`base` = the zone's slot in
-band 7). A zone with an empty `access-to` gets only the three protective rules — anti-spoofing
-and the admin guard — and no pass: it reaches neither its gateway's services nor anything else.
+band 7). A zone with an empty `access-to` gets the three protective rules — anti-spoofing and
+the admin guard — and its gateway's DNS, NTP and DHCP, and nothing else.
 
 | Sequence | Rule | Action |
 |---|---|---|

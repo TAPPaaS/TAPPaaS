@@ -694,21 +694,29 @@ class TestGatewayAndAdminPorts(TestConfigureFirewallRulesSequencing):
         return {r.description: r for r in fake.created
                 if r.description.startswith(f"Zone {zone} ")}
 
-    def test_a_zone_without_access_to_gets_protective_rules_only(self):
+    def test_a_zone_without_access_to_gets_its_gateway_and_protection_only(self):
         fake = self._run(_build_zones(home={"access_to": []}))
-        self.assertEqual(sorted(self._zone_rules(fake, "home")), [
+        rules = self._zone_rules(fake, "home")
+        self.assertEqual(sorted(rules), [
+            "Zone home -> gateway dhcp", "Zone home -> gateway dns",
+            "Zone home -> gateway ntp",
             "Zone home block firewall ssh", "Zone home block firewall webgui",
             "Zone home block spoofed source"])
+        # The gateway passes reach the gateway's /32 on their own ports only.
+        dns = rules["Zone home -> gateway dns"]
+        self.assertTrue(dns.destination_net.endswith("/32"))
+        self.assertEqual(dns.destination_port, "53")
 
-    def test_losing_access_to_keeps_only_the_protective_rules(self):
+    def test_losing_access_to_keeps_only_gateway_and_protection(self):
         first = self._run(_build_zones())
         existing = [_to_info(r, uuid=f"u{i}") for i, r in enumerate(first.created)]
         second = self._run(_build_zones(home={"access_to": []}), existing=existing)
         gone = {d for d in second.deleted if d.startswith("Zone home ")}
         self.assertIn("Zone home -> internet", gone)
-        self.assertIn("Zone home -> gateway dns", gone)
+        self.assertIn("Zone home -> gateway icmp", gone)
         for kept in ("Zone home block spoofed source", "Zone home block firewall webgui",
-                     "Zone home block firewall ssh"):
+                     "Zone home block firewall ssh", "Zone home -> gateway dns",
+                     "Zone home -> gateway ntp", "Zone home -> gateway dhcp"):
             self.assertNotIn(kept, gone)
 
     def test_the_gateway_is_never_open_on_every_port(self):
