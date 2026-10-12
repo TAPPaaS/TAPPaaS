@@ -34,6 +34,7 @@ import ipaddress
 import json
 import os
 import socket
+import subprocess
 import sys
 import time
 from dataclasses import dataclass, field
@@ -271,6 +272,14 @@ def _normalize_protocol(value: str | None) -> str:
     if upper in {"ICMPV6", "IPV6-ICMP", "ICMP6"}:
         return Protocol.ICMPV6.value
     return upper
+
+
+def _net_names(net: str | None) -> set[str]:
+    """The names a rule's source or destination holds: a comma list, possibly negated.
+
+    Matched whole, so alias `tm_foo` is not "referenced" by a rule using `tm_foobar`.
+    """
+    return {part.strip().lstrip("!") for part in (net or "").split(",") if part.strip()}
 
 
 def _rule_family(protocol: str, *nets: str) -> IpProtocol:
@@ -2131,7 +2140,7 @@ class RulesManager:
                 seen.add(key)
                 if r.description.startswith(exclude_prefixes):
                     continue
-                if alias_name in (r.source_net or "") or alias_name in (r.destination_net or ""):
+                if alias_name in _net_names(r.source_net) | _net_names(r.destination_net):
                     return False
         return True
 
@@ -2302,6 +2311,22 @@ def _canonical_part(description: str) -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+def _render_effective(authored: Path) -> bool:
+    """Ask network-manager to re-render the effective zones next to `authored`.
+
+    Offline (it touches no plane). False when network-manager is not there or
+    the render fails, e.g. on a `serves` link that does not resolve.
+    """
+    try:
+        r = subprocess.run(
+            ["network-manager", "render", "--zones", str(authored)],
+            capture_output=True, text=True, timeout=60,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return r.returncode == 0
+
+
 def _find_zones_file(explicit: str | None) -> Path:
     if explicit:
         return Path(explicit)
@@ -2325,6 +2350,13 @@ def _find_zones_file(explicit: str | None) -> Path:
     ):
         if eff.is_file() and authored.is_file():
             if eff.stat().st_mtime >= authored.stat().st_mtime:
+                return eff
+            # Stale: re-render it rather than lose the `serves`-derived edges —
+            # without them a reconcile prunes the pinholes they allow. Only if
+            # that fails is the authored file used (review D13).
+            if _render_effective(authored) and eff.stat().st_mtime >= authored.stat().st_mtime:
+                print(f"[Info] {eff} was older than {authored} — re-rendered it.",
+                      file=sys.stderr)
                 return eff
             # STDERR, not warn(): warn() prints to STDOUT, and this function is
             # reached in `--output json` mode too — a warning line prepended to

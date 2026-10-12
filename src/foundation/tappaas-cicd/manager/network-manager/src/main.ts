@@ -190,6 +190,12 @@ export const HELP: HelpSpec = {
         "snatFrom moves it to 'hybrid' when it is not already enforcing.",
     },
     {
+      usage: "render [--zones <file>]",
+      name: "render",
+      note: "write zones.effective.json from zones.json (the serves-derived edges); offline, touches no plane",
+      options: [["--zones <file>", "the authored zones.json (default: the site's config/zones.json)"]],
+    },
+    {
       usage: "reconcile [--apply] [--only <plane>]",
       name: "reconcile",
       options: [
@@ -869,6 +875,20 @@ function cmdBind(opts: Opts): void {
 }
 
 // ── reconcile command ──────────────────────────────────────────────────
+// `render` — zones.effective.json from zones.json, and nothing else. Lets a
+// reader that finds the effective document older than the authored one (e.g.
+// rules-manager after a hand edit) bring it up to date without converging any
+// plane. An unresolvable `serves` link fails it, as it fails reconcile.
+function cmdRender(opts: Opts): void {
+  loadZones(opts.zonesFile);
+  const eff = refreshEffective(opts.zonesFile);
+  if (eff.errors.length > 0) {
+    for (const e of eff.errors) warn(e);
+    die(`unresolved 'serves' link(s): ${eff.errors.length} — fix the binding(s) and re-run`);
+  }
+  info(`rendered ${effectiveFileFor(opts.zonesFile)} (${eff.edges.length} serves link(s))`);
+}
+
 function cmdReconcile(opts: Opts, client: PlaneClient = new CliPlaneClient()): void {
   // Validate zones.json is readable before touching any plane.
   loadZones(opts.zonesFile);
@@ -1243,6 +1263,9 @@ export function run(argv: string[], client?: PlaneClient): number {
         return 0;
       case "reconcile":
         cmdReconcile(opts, client ?? new CliPlaneClient());
+        return 0;
+      case "render":
+        cmdRender(opts);
         return 0;
       case "init": // primary verb; zones-init kept as fall-through alias
       case "zones-init":

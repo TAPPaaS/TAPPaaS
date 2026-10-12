@@ -18,7 +18,7 @@ import { gatewayIpOf, resolveSplitHorizonTarget } from "../../src/splithorizon";
 import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "fs";
 import { HELP, run } from "../../src/main";
 import { undocumentedOptions } from "../../../../lib/ts/src/help";
-import { join } from "path";
+import { dirname, join } from "path";
 import { tmpdir } from "os";
 import { PLANE_ORDER } from "../../src/types";
 import {
@@ -2187,6 +2187,18 @@ function tmpZones(): string {
     if (v === undefined) delete process.env[k];
     else process.env[k] = v;
   }
+}
+
+// ── render: zones.effective.json without touching any plane (review D13) ──
+{
+  const f = tmpZones();
+  const eff = join(dirname(f), "zones.effective.json");
+  check(!existsSync(eff), "no effective document before render");
+  const rc = run(["render", "--zones", f]);
+  check(rc === 0 && existsSync(eff), "render writes zones.effective.json next to zones.json");
+  check(JSON.stringify(Object.keys(JSON.parse(readFileSync(eff, "utf8"))).sort())
+        === JSON.stringify(Object.keys(JSON.parse(readFileSync(f, "utf8"))).sort()),
+    "the effective document carries the same zones");
 }
 
 console.log("");

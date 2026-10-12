@@ -12,6 +12,7 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -399,6 +400,65 @@ class TestValidation(unittest.TestCase):
 # ─────────────────────────────────────────────────────────────────────────────
 # Compilation
 # ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestStaleEffectiveZones(unittest.TestCase):
+    """A stale zones.effective.json is re-rendered, not silently dropped (review D13)."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.cwd = os.getcwd()
+        os.chdir(self.tmp.name)
+        Path("zones.effective.json").write_text("{}")
+        Path("zones.json").write_text("{}")
+        # The authored file is newer: the effective one is stale.
+        os.utime("zones.effective.json", (1, 1))
+
+    def tearDown(self):
+        os.chdir(self.cwd)
+        self.tmp.cleanup()
+
+    def _render_ok(self, authored):
+        Path("zones.effective.json").write_text("{}")   # fresh mtime
+        return True
+
+    def test_a_stale_render_is_refreshed_and_used(self):
+        with patch.object(rm, "_render_effective", side_effect=self._render_ok) as render, \
+             patch.object(rm.Path, "is_file", lambda p: str(p).startswith("zones")):
+            found = rm._find_zones_file(None)
+        render.assert_called_once()
+        self.assertEqual(found.name, "zones.effective.json")
+
+    def test_when_the_render_fails_the_authored_file_is_used(self):
+        with patch.object(rm, "_render_effective", return_value=False), \
+             patch.object(rm.Path, "is_file", lambda p: str(p).startswith("zones")):
+            found = rm._find_zones_file(None)
+        self.assertEqual(found.name, "zones.json")
+
+
+class TestAliasOrphan(unittest.TestCase):
+    """An alias is in use only when a rule names it whole (review D11)."""
+
+    def _mgr_with_rules(self, *rules):
+        mgr = _make_manager()
+        mgr._fw = MagicMock()
+        mgr._fw.list_rules.side_effect = lambda search_pattern="": [
+            r for r in rules if r.description.startswith(search_pattern)]
+        return mgr
+
+    def _rule(self, desc, src="any", dst="any"):
+        return MagicMock(uuid=desc, description=desc, source_net=src, destination_net=dst)
+
+    def test_a_longer_alias_name_does_not_keep_a_shorter_one(self):
+        mgr = self._mgr_with_rules(
+            self._rule("tappaas-module:other:egress:foobar:443", dst="tm_foobar"))
+        self.assertTrue(mgr._alias_is_orphan("tm_foo", exclude_module="foo"))
+
+    def test_a_rule_naming_the_alias_keeps_it(self):
+        mgr = self._mgr_with_rules(
+            self._rule("tappaas-module:other:egress:foo:443", dst="tm_foo"),
+            self._rule("tappaas-svcdep:x:logs:foo:3101", src="tm_x,tm_foo"))
+        self.assertFalse(mgr._alias_is_orphan("tm_foo", exclude_module="foo"))
 
 
 class TestAddressFamily(unittest.TestCase):
