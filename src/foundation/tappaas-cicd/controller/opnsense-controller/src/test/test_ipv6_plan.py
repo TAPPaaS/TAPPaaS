@@ -36,6 +36,12 @@ STATIC_SITE = {"ipv6": True, "network": {"wan": {"ipv6": {
     "gateway": "2a13:e740:2e4:56c0::1", "prefix": "2a13:e747:6648::/48"}}}}
 
 
+def _v6(iface):
+    """A dnsmasq IPv6 range as ipv6-manager writes it."""
+    return {"uuid": f"r-{iface}", "interface": iface, "start_addr": "::",
+            "constructor": iface, "ra_mode": "ra-names"}
+
+
 class TestAddressing(unittest.TestCase):
     def test_zone_network_in_a_56(self):
         self.assertEqual(str(zone_network(DELEGATED, 0x31)), "2a13:e747:a210:8231::/64")
@@ -94,9 +100,9 @@ class TestPlan(unittest.TestCase):
         cur = self._cur(
             opt1={"if": "vlan0.200", "ipaddrv6": "track6", "track6-interface": "wan", "track6-prefix-id": "32"},
             opt8={"if": "vlan0.310", "ipaddrv6": "track6", "track6-interface": "wan", "track6-prefix-id": "49"})
-        ra = [{"uuid": "a", "interface": "opt1", "mode": "unmanaged", "enabled": "1"},
-              {"uuid": "b", "interface": "opt8", "mode": "unmanaged", "enabled": "1"}]
-        self.assertEqual(plan(d, cur, ZONE_IFACES, ra), [])
+        ranges = [_v6("opt1"), _v6("opt8"),
+                  {"uuid": "v4", "interface": "opt8", "start_addr": "10.3.10.50"}]
+        self.assertEqual(plan(d, cur, ZONE_IFACES, [], ranges), [])
 
     def test_from_nothing_to_dynamic(self):
         d = desired_state({"ipv6": True}, ZONES, IFACES, DELEGATED)
@@ -105,7 +111,7 @@ class TestPlan(unittest.TestCase):
         self.assertIn(("wan", "wan"), kinds)                  # pd-len 0 -> 8
         self.assertIn(("zone-set", "opt1"), kinds)
         self.assertIn(("zone-set", "opt8"), kinds)
-        self.assertIn(("ra-add", "opt8"), kinds)
+        self.assertIn(("names-add", "opt8"), kinds)
         self.assertNotIn(("zone-set", "opt5"), kinds)         # iotCams: ipv6Subnet unset
         wan = next(a for a in plan(d, cur, ZONE_IFACES, []) if a.kind == "wan")
         self.assertEqual(wan.detail["set"], {"dhcp6-ia-pd-len": "8"})
@@ -114,11 +120,10 @@ class TestPlan(unittest.TestCase):
         d = desired_state({"ipv6": True}, ZONES, IFACES, DELEGATED)
         cur = self._cur(opt5={"if": "vlan0.430", "ipaddrv6": "track6", "track6-interface": "wan",
                               "track6-prefix-id": "67"})
-        acts = plan(d, cur, ZONE_IFACES, [{"uuid": "c", "interface": "opt5", "mode": "unmanaged",
-                                           "enabled": "1"}])
+        acts = plan(d, cur, ZONE_IFACES, [], [_v6("opt5")])
         kinds = {(a.kind, a.target) for a in acts}
         self.assertIn(("zone-clear", "opt5"), kinds)
-        self.assertIn(("ra-del", "opt5"), kinds)
+        self.assertIn(("names-del", "opt5"), kinds)
 
     def test_ipv6_off_clears_zones_but_leaves_the_wan(self):
         d = desired_state({"ipv6": False}, ZONES, IFACES, DELEGATED)
@@ -128,11 +133,28 @@ class TestPlan(unittest.TestCase):
         self.assertIn(("zone-clear", "opt8"), kinds)
         self.assertNotIn(("wan", "wan"), kinds)
 
-    def test_a_managed_advertisement_is_made_unmanaged(self):
+    def test_a_range_without_ra_names_is_corrected(self):
+        d = desired_state({"ipv6": True}, ZONES, IFACES, DELEGATED)
+        wrong = {**_v6("opt8"), "ra_mode": "slaac"}
+        acts = plan(d, self._cur(), ZONE_IFACES, [], [wrong])
+        self.assertIn(("names-set", "opt8"), {(a.kind, a.target) for a in acts})
+
+    def test_radvd_entries_on_zone_interfaces_are_removed(self):
+        # dnsmasq advertises; a radvd entry on the same interface would conflict.
         d = desired_state({"ipv6": True}, ZONES, IFACES, DELEGATED)
         acts = plan(d, self._cur(), ZONE_IFACES,
-                    [{"uuid": "x", "interface": "opt8", "mode": "managed", "enabled": "1"}])
-        self.assertIn(("ra-set", "opt8"), {(a.kind, a.target) for a in acts})
+                    [{"uuid": "x", "interface": "opt8", "mode": "unmanaged", "enabled": "1"},
+                     {"uuid": "y", "interface": "lan", "mode": "unmanaged", "enabled": "1"}],
+                    [_v6("opt8")])
+        kinds = {(a.kind, a.target) for a in acts}
+        self.assertIn(("radvd-del", "opt8"), kinds)
+        self.assertNotIn(("radvd-del", "lan"), kinds)     # not a zone interface
+
+    def test_an_ipv4_range_is_never_touched(self):
+        d = desired_state({"ipv6": False}, ZONES, IFACES, DELEGATED)
+        acts = plan(d, self._cur(), ZONE_IFACES, [],
+                    [{"uuid": "v4", "interface": "opt8", "start_addr": "10.3.10.50"}])
+        self.assertEqual([a for a in acts if a.kind.startswith("names-")], [])
 
     def test_static_wan_sets_address_and_gateway(self):
         d = desired_state(STATIC_SITE, ZONES, IFACES, None)

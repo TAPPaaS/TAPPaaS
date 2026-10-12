@@ -205,6 +205,15 @@ def _radvd(mgr, controller: str, command: str, action: str, data=None, params=No
     return (mgr.client.run_module("raw", params=p).get("result") or {}).get("response") or {}
 
 
+def _dnsmasq(mgr, controller: str, command: str, action: str, data=None, params=None) -> dict:
+    p = {"module": "dnsmasq", "controller": controller, "command": command, "action": action}
+    if data is not None:
+        p["data"] = data
+    if params:
+        p["params"] = params
+    return (mgr.client.run_module("raw", params=p).get("result") or {}).get("response") or {}
+
+
 def _routing(mgr, command: str, action: str, data=None, params=None) -> dict:
     p = {"module": "routing", "controller": "settings", "command": command, "action": action}
     if data is not None:
@@ -276,19 +285,30 @@ def execute(mgr, host: str, actions: list[Action]) -> None:
     if script:
         _fw(host, script + "configctl filter refresh_aliases >/dev/null\n", timeout=300.0)
 
-    ra = [a for a in actions if a.kind.startswith("ra-")]
-    for a in ra:
-        entry = {"entries": {"enabled": "1", "interface": a.target, "mode": "unmanaged"}}
-        if a.kind == "ra-add":
-            r = _radvd(mgr, "settings", "addEntry", "post", entry)
-        elif a.kind == "ra-set":
-            r = _radvd(mgr, "settings", "setEntry", "post", entry, [a.detail["uuid"]])
-        else:
-            r = _radvd(mgr, "settings", "delEntry", "post", params=[a.detail["uuid"]])
-        if r.get("result") not in ("saved", "deleted"):
-            raise RuntimeError(f"router advertisements on {a.target}: {a.kind} returned {r}")
-    if ra:
+    # radvd first: a zone must not have two daemons advertising on it.
+    radvd = [a for a in actions if a.kind == "radvd-del"]
+    for a in radvd:
+        r = _radvd(mgr, "settings", "delEntry", "post", params=[a.detail["uuid"]])
+        if r.get("result") != "deleted":
+            raise RuntimeError(f"radvd entry on {a.target}: delete returned {r}")
+    if radvd:
         _radvd(mgr, "service", "reconfigure", "post")
+
+    # dnsmasq: one IPv6 range per zone, `ra-names` — advertisements and AAAA names.
+    names = [a for a in actions if a.kind.startswith("names-")]
+    for a in names:
+        rng = {"range": {"interface": a.target, "start_addr": "::", "constructor": a.target,
+                         "ra_mode": "ra-names", "domain_type": "range"}}
+        if a.kind == "names-add":
+            r = _dnsmasq(mgr, "settings", "addRange", "post", rng)
+        elif a.kind == "names-set":
+            r = _dnsmasq(mgr, "settings", "setRange", "post", rng, [a.detail["uuid"]])
+        else:
+            r = _dnsmasq(mgr, "settings", "delRange", "post", params=[a.detail["uuid"]])
+        if r.get("result") not in ("saved", "deleted"):
+            raise RuntimeError(f"dnsmasq IPv6 range on {a.target}: {a.kind} returned {r}")
+    if names:
+        _dnsmasq(mgr, "service", "reconfigure", "post")
 
 
 def _ensure_static_gateway(mgr, address: str) -> None:
@@ -325,7 +345,8 @@ def converge_site(mgr, config: Config, host: str, config_dir: Path, check_mode: 
     for p in desired.problems:
         print(f"ipv6: {p}")
     entries = _radvd(mgr, "settings", "searchEntry", "get").get("rows", []) or []
-    actions = plan(desired, current, set(ifaces.values()), entries)
+    ranges = _dnsmasq(mgr, "settings", "searchRange", "get").get("rows", []) or []
+    actions = plan(desired, current, set(ifaces.values()), entries, ranges)
     if desired.site_prefix:
         print(f"ipv6: site prefix {desired.site_prefix} "
               f"({desired.wan.mode if desired.wan else 'off'}); {len(desired.zones)} zone(s) with IPv6")

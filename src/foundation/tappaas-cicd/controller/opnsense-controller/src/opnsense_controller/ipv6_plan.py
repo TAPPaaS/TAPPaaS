@@ -16,7 +16,10 @@ The rules it applies:
 * A zone gets IPv6 when it is Active or Mandatory, its type can carry it, and it
   has an `ipv6Subnet` (D4): *track the WAN* with that prefix ID (dynamic), or
   `::1` of its /64 (static) (D5).
-* Every such zone advertises, unmanaged (SLAAC); no other zone interface does (D6).
+* Every such zone gets a dnsmasq IPv6 range in `ra-names` mode: dnsmasq sends the
+  router advertisements (SLAAC) and gives every host with a DHCPv4 lease an AAAA
+  record. No zone interface has a radvd entry — two daemons must not advertise
+  on one interface (D6, v0.3).
 """
 
 from __future__ import annotations
@@ -137,7 +140,7 @@ ZONE_V6_KEYS = ("ipaddrv6", "subnetv6", "track6-interface", "track6-prefix-id")
 
 @dataclass(frozen=True)
 class Action:
-    kind: str          # wan | zone-set | zone-clear | ra-add | ra-set | ra-del
+    kind: str          # wan | zone-set | zone-clear | names-add | names-set | names-del | radvd-del
     target: str        # interface, or "wan"
     detail: dict
 
@@ -146,9 +149,10 @@ class Action:
             "wan": "WAN IPv6",
             "zone-set": "zone IPv6",
             "zone-clear": "remove zone IPv6",
-            "ra-add": "start router advertisements",
-            "ra-set": "make router advertisements unmanaged",
-            "ra-del": "stop router advertisements",
+            "names-add": "start advertisements and AAAA names",
+            "names-set": "correct advertisements and AAAA names",
+            "names-del": "stop advertisements and AAAA names",
+            "radvd-del": "remove the radvd entry",
         }[self.kind] + f" on {self.target}: {self.detail.get('summary', '')}".rstrip(": ")
 
 
@@ -165,13 +169,15 @@ def wan_config(wan: WanV6) -> dict[str, str | None]:
 
 
 def plan(desired: Desired, current_ifaces: dict[str, dict], zone_interfaces: set[str],
-         ra_entries: list[dict]) -> list[Action]:
+         ra_entries: list[dict], dhcp_ranges: list[dict] | None = None) -> list[Action]:
     """The changes from what the firewall holds to what is desired.
 
     `current_ifaces` is `config.xml` `interfaces/<id>` per interface (wan
     included); `zone_interfaces` the interfaces of the site's zones — the only
-    ones this touches; `ra_entries` the Radvd entries (interface, mode, enabled).
+    ones this touches; `ra_entries` the radvd entries; `dhcp_ranges` the dnsmasq
+    ranges (interface, start_addr, constructor, ra_mode).
     """
+    dhcp_ranges = dhcp_ranges or []
     actions: list[Action] = []
 
     if desired.wan is not None:
@@ -200,15 +206,23 @@ def plan(desired: Desired, current_ifaces: dict[str, dict], zone_interfaces: set
             actions.append(Action("zone-clear", iface, {
                 "device": cur.get("if", ""), "summary": "no ipv6Subnet, or IPv6 off"}))
 
-    by_iface = {e.get("interface"): e for e in ra_entries}
+    # dnsmasq IPv6 ranges (start "::") on zone interfaces — the zone's
+    # advertisements and AAAA names. An IPv4 range is never touched.
+    ranges = {r.get("interface"): r for r in dhcp_ranges
+              if r.get("start_addr") == "::" and r.get("interface") in zone_interfaces}
     for iface in sorted(zone_interfaces):
-        entry = by_iface.get(iface)
+        rng = ranges.get(iface)
         wanted = iface in desired.zones
-        if wanted and entry is None:
-            actions.append(Action("ra-add", iface, {"summary": "unmanaged (SLAAC)"}))
-        elif wanted and (entry.get("mode") != "unmanaged" or str(entry.get("enabled")) != "1"):
-            actions.append(Action("ra-set", iface, {"uuid": entry.get("uuid"),
-                                                    "summary": "unmanaged (SLAAC)"}))
-        elif not wanted and entry is not None:
-            actions.append(Action("ra-del", iface, {"uuid": entry.get("uuid")}))
+        if wanted and rng is None:
+            actions.append(Action("names-add", iface, {"summary": "ra-names (SLAAC, AAAA by name)"}))
+        elif wanted and (rng.get("constructor") != iface or rng.get("ra_mode") != "ra-names"):
+            actions.append(Action("names-set", iface, {"uuid": rng.get("uuid"),
+                                                       "summary": "ra-names (SLAAC, AAAA by name)"}))
+        elif not wanted and rng is not None:
+            actions.append(Action("names-del", iface, {"uuid": rng.get("uuid")}))
+
+    # radvd is not used for zones: any entry on a zone interface goes.
+    for e in ra_entries:
+        if e.get("interface") in zone_interfaces:
+            actions.append(Action("radvd-del", e.get("interface"), {"uuid": e.get("uuid")}))
     return actions

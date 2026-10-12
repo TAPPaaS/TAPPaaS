@@ -166,6 +166,33 @@
     '';
   };
 
+  # ADR-030 D6: a guest running before the profile switched to EUI-64 keeps its
+  # old IPv6 addresses until its connection is reactivated. Reactivate once —
+  # only when it has a global IPv6 address and none of them is the EUI-64 one
+  # its MAC gives (on a site without IPv6 there is nothing to do).
+  systemd.services.tappaas-ipv6-eui64 = {
+    description = "Reactivate the ethernet profile once so IPv6 uses the EUI-64 address (TAPPaaS ADR-030)";
+    after = [ "NetworkManager.service" "NetworkManager-ensure-profiles.service" ];
+    wants = [ "NetworkManager-ensure-profiles.service" ];
+    wantedBy = [ "multi-user.target" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+    };
+    path = [ pkgs.networkmanager pkgs.iproute2 pkgs.gnugrep pkgs.coreutils pkgs.gawk ];
+    script = ''
+      dev=$(nmcli -t -f DEVICE,TYPE device status | grep ':ethernet$' | cut -d: -f1 | head -1)
+      [ -n "$dev" ] || exit 0
+      ip -6 addr show dev "$dev" scope global | grep -q inet6 || exit 0
+      mac=$(cat "/sys/class/net/$dev/address")
+      # The EUI-64 interface id's last three groups: <b3>ff:fe<b4>:<b5><b6>.
+      suffix=$(echo "$mac" | awk -F: '{ printf "%x:fe%s:%x", strtonum("0x" $3) * 256 + 255, $4, strtonum("0x" $5 $6) }')
+      if ip -6 addr show dev "$dev" scope global | grep -q ":$suffix/"; then exit 0; fi
+      echo "TAPPaaS: $dev has no EUI-64 IPv6 address (…:$suffix) — reactivating tappaas-ethernet"
+      nmcli connection up tappaas-ethernet || true
+    '';
+  };
+
   # Ensure consistent interface naming across cloned VMs.
   # Proxmox virtio NICs may appear as ens18, eth0, or enp0s18 depending on
   # kernel/udev version. Using ensureProfiles with match-by-type guarantees
@@ -181,9 +208,14 @@
       ipv4 = {
         method = "auto";
       };
+      # IPv6 by SLAAC with the EUI-64 address (from the NIC's MAC, which Proxmox
+      # fixes) and no temporary addresses: the address the firewall's dnsmasq
+      # computes for this guest's DHCPv4 lease is then the one it has, so its
+      # name gets an AAAA record (ADR-030 D6). Changes only on a site with IPv6.
       ipv6 = {
         method = "auto";
-        addr-gen-mode = "default";
+        addr-gen-mode = "eui64";
+        ip6-privacy = "0";
       };
     };
   };
