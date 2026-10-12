@@ -102,8 +102,10 @@ prefix from the firewall and applies the same check.
 
 - `ipv6Subnet` is a number, 0–255: the zone's `/64` within the site's first `/56`.
 - **Every zone gets one by default.** The template carries them, `network-manager add`
-  allocates the next free number (as it allocates VLAN tags), and a config migration stamps
-  the zones of existing sites once. Numbers are unique per site.
+  allocates one (as it allocates VLAN tags), and config migration 0016 stamps the zones of
+  existing sites once, in VLAN order. The number is the VLAN tag read as hex where that fits
+  (VLAN 310 → `0x31`, so `home`'s network ends in `…31::/64`), else the lowest free number.
+  Numbers are unique per site.
 - **A zone without `ipv6Subnet` gets no IPv6.** An operator keeps a zone IPv4-only by removing
   the field (`network-manager modify <zone> --unset ipv6Subnet`).
 - It is `immutable` (ADR-014 `changeClass`), like `ip`: a new number renumbers every device in

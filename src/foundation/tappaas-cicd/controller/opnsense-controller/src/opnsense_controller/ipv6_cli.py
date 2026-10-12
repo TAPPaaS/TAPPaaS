@@ -14,7 +14,12 @@ Allowing IPv6 gives no zone an IPv6 address; that is #26, behind its own ADR.
 
 Commands:
   ipv6-manager status
-  ipv6-manager apply --allow true|false [--check-mode]
+  ipv6-manager apply [--allow true|false] [--config-dir DIR] [--check-mode]
+
+`apply` converges the whole of ADR-030 from config/site.json and the zones: the
+switch, the WAN's IPv6, the site prefix, each zone's IPv6 and its router
+advertisements (see ipv6_plan for the rules). `--allow` overrides site.json
+`ipv6` for the switch (tests, and a one-off).
 
 `apply` changes nothing when the firewall already agrees. A change applies the
 global interface settings, reloads the filter, restarts Unbound so `do-ip6`
@@ -23,14 +28,20 @@ follows, and checks that the resolver still answers. Measured on hrossen
 """
 
 import argparse
+import base64
 import ipaddress
+import json
+import os
 import sys
+from pathlib import Path
 from typing import Callable
 
 from .cli_globals import StrictArgumentParser, make_global_parent, parse_with_globals
 from .config import Config
 from .dhcp_manager import DhcpManager  # reused only as a connected-Client provider
-from .service_health import check_unbound_dns, filter_reload, unbound_restart
+from .ipv6_plan import STATIC_GATEWAY_NAME, ZONE_V6_KEYS, Action, desired_state, plan
+from .service_health import _firewall_ssh, check_unbound_dns, filter_reload, unbound_restart
+from .vlan_manager import VlanManager
 
 
 def _client(args):
@@ -136,6 +147,204 @@ def _parse_bool(v: str) -> bool:
     raise argparse.ArgumentTypeError(f"expected true or false, got '{v}'")
 
 
+# ── ADR-030: the WAN, the prefix and the zones ─────────────────────────
+
+_IFACE_KEYS = ("if", "ipaddrv6", "subnetv6", "gatewayv6", "track6-interface",
+               "track6-prefix-id", "dhcp6-ia-pd-len")
+
+_READ_PHP = r"""<?php
+require_once("config.inc");
+$c = config_read_array("interfaces");
+$keys = %s;
+$out = [];
+foreach ($c as $k => $v) {
+    $o = [];
+    foreach ($keys as $f) { if (isset($v[$f]) && !is_array($v[$f])) { $o[$f] = (string)$v[$f]; } }
+    $out[$k] = $o;
+}
+$wanif = $c["wan"]["if"] ?? "";
+$p = @file_get_contents("/tmp/{$wanif}_prefixv6");
+echo json_encode(["interfaces" => $out, "prefix" => trim((string)$p)]);
+""" % ("[" + ", ".join(f'"{k}"' for k in _IFACE_KEYS) + "]")
+
+_WRITE_PHP = r"""<?php
+require_once("config.inc");
+require_once("util.inc");
+$ch = json_decode(base64_decode("%s"), true);
+foreach ($ch as $if => $keys) {
+    $c = &config_read_array("interfaces", $if);
+    foreach ($keys as $k => $v) { if ($v === null) { unset($c[$k]); } else { $c[$k] = (string)$v; } }
+    unset($c);
+}
+write_config("TAPPaaS ipv6-manager (ADR-030)");
+echo "written\n";
+"""
+
+
+def _fw(host: str, script: str, timeout: float = 120.0) -> str:
+    """Run a shell script on the firewall; its stdout, or RuntimeError."""
+    r = _firewall_ssh(host, script, timeout=timeout)
+    if r.returncode != 0:
+        raise RuntimeError(f"firewall script failed (rc {r.returncode}): {(r.stderr or r.stdout).strip()[:300]}")
+    return r.stdout
+
+
+def read_firewall(host: str) -> tuple[dict, str]:
+    """`config.xml` interfaces (the IPv6 keys) and the WAN's delegated prefix."""
+    out = _fw(host, "php <<'PHP'\n" + _READ_PHP + "\nPHP\n")
+    data = json.loads(out.strip().splitlines()[-1])
+    return data.get("interfaces") or {}, data.get("prefix") or ""
+
+
+def _radvd(mgr, controller: str, command: str, action: str, data=None, params=None) -> dict:
+    p = {"module": "radvd", "controller": controller, "command": command, "action": action}
+    if data is not None:
+        p["data"] = data
+    if params:
+        p["params"] = params
+    return (mgr.client.run_module("raw", params=p).get("result") or {}).get("response") or {}
+
+
+def _routing(mgr, command: str, action: str, data=None, params=None) -> dict:
+    p = {"module": "routing", "controller": "settings", "command": command, "action": action}
+    if data is not None:
+        p["data"] = data
+    if params:
+        p["params"] = params
+    return (mgr.client.run_module("raw", params=p).get("result") or {}).get("response") or {}
+
+
+def zone_interfaces(config: Config, zones: dict) -> dict[str, str]:
+    """Zone name -> its VLAN interface (opt<n>), from the firewall's assignments."""
+    with VlanManager(config) as vm:
+        by_tag = {str(v["vlan_tag"]): v["identifier"] for v in vm.get_assigned_vlans()}
+    out = {}
+    for name, z in zones.items():
+        if name.startswith("_") or not isinstance(z, dict):
+            continue
+        tag = z.get("vlantag")
+        if isinstance(tag, int) and tag > 0 and str(tag) in by_tag:
+            out[name] = by_tag[str(tag)]
+    return out
+
+
+def load_site_and_zones(config_dir: Path) -> tuple[dict, dict]:
+    site = json.loads((config_dir / "site.json").read_text())
+    authored, effective = config_dir / "zones.json", config_dir / "zones.effective.json"
+    zf = effective if effective.is_file() and (
+        not authored.is_file() or effective.stat().st_mtime >= authored.stat().st_mtime) else authored
+    return site, json.loads(zf.read_text())
+
+
+def execute(mgr, host: str, actions: list[Action]) -> None:
+    """Carry out a plan: one config.xml write, the gateway, the reloads, the
+    advertisements, and the leftovers a cleared zone keeps on its interface."""
+    config_changes: dict[str, dict] = {}
+    reload_ifaces: list[str] = []
+    cleared_devices: list[str] = []
+    wan_reload = False
+    for a in actions:
+        if a.kind == "wan":
+            config_changes["wan"] = dict(a.detail["set"])
+            # The delegation size alone needs no WAN reload: OPNsense reads it
+            # when a zone tracks the WAN, and a reload would renew IPv4 too.
+            wan_reload = any(k != "dhcp6-ia-pd-len" for k in a.detail["set"])
+            if a.detail.get("mode") == "static":
+                _ensure_static_gateway(mgr, a.detail["gateway"])
+        elif a.kind == "zone-set":
+            config_changes[a.target] = {k: a.detail["set"].get(k) for k in ZONE_V6_KEYS}
+            reload_ifaces.append(a.target)
+        elif a.kind == "zone-clear":
+            config_changes[a.target] = {k: None for k in ZONE_V6_KEYS}
+            reload_ifaces.append(a.target)
+            if a.detail.get("device"):
+                cleared_devices.append(a.detail["device"])
+
+    if config_changes:
+        payload = base64.b64encode(json.dumps(config_changes).encode()).decode()
+        _fw(host, "php <<'PHP'\n" + (_WRITE_PHP % payload) + "\nPHP\n")
+    script = ""
+    if wan_reload:
+        script += "configctl interface reconfigure wan >/dev/null\n"
+    for iface in reload_ifaces:
+        script += f"configctl interface reconfigure {iface} >/dev/null\n"
+    for dev in cleared_devices:
+        # Reconfiguring leaves a tracked address on the interface until its
+        # lifetime ends (ADR-030 D7): remove it now.
+        script += (f"for a in $(ifconfig {dev} | awk '/inet6/ && !/fe80/ {{print $2}}'); do "
+                   f"ifconfig {dev} inet6 \"$a\" delete; done\n")
+    if script:
+        _fw(host, script + "configctl filter refresh_aliases >/dev/null\n", timeout=300.0)
+
+    ra = [a for a in actions if a.kind.startswith("ra-")]
+    for a in ra:
+        entry = {"entries": {"enabled": "1", "interface": a.target, "mode": "unmanaged"}}
+        if a.kind == "ra-add":
+            r = _radvd(mgr, "settings", "addEntry", "post", entry)
+        elif a.kind == "ra-set":
+            r = _radvd(mgr, "settings", "setEntry", "post", entry, [a.detail["uuid"]])
+        else:
+            r = _radvd(mgr, "settings", "delEntry", "post", params=[a.detail["uuid"]])
+        if r.get("result") not in ("saved", "deleted"):
+            raise RuntimeError(f"router advertisements on {a.target}: {a.kind} returned {r}")
+    if ra:
+        _radvd(mgr, "service", "reconfigure", "post")
+
+
+def _ensure_static_gateway(mgr, address: str) -> None:
+    """The WAN's static IPv6 gateway, as OPNsense wants it: a named gateway."""
+    rows = _routing(mgr, "searchGateway", "get").get("rows", []) or []
+    item = {"gateway_item": {"name": STATIC_GATEWAY_NAME, "interface": "wan", "ipprotocol": "inet6",
+                             "gateway": address, "descr": "TAPPaaS: WAN IPv6 gateway (site.json)",
+                             "defaultgw": "1"}}
+    mine = next((r for r in rows if r.get("name") == STATIC_GATEWAY_NAME), None)
+    r = (_routing(mgr, "setGateway", "post", item, [mine["uuid"]]) if mine
+         else _routing(mgr, "addGateway", "post", item))
+    if r.get("result") != "saved":
+        raise RuntimeError(f"WAN IPv6 gateway: {r}")
+    _routing(mgr, "reconfigure", "post")
+
+
+def converge_site(mgr, config: Config, host: str, config_dir: Path, check_mode: bool,
+                  allow_override: bool | None = None) -> bool:
+    """ADR-030 end to end. True on success."""
+    site, zones = load_site_and_zones(config_dir)
+    if allow_override is not None:
+        site = {**site, "ipv6": allow_override}
+    allowed = bool(site.get("ipv6"))
+    ok = converge(mgr, allowed, check_mode,
+                  restart=lambda: unbound_restart(host),
+                  resolver_ok=lambda: check_unbound_dns(host=host, label="POST-IPV6", retries=10, delay=3.0),
+                  reload_filter=lambda: filter_reload(host))
+    if not ok:
+        return False
+
+    ifaces = zone_interfaces(config, zones)
+    current, prefix = read_firewall(host)
+    desired = desired_state(site, zones, ifaces, prefix or None)
+    for p in desired.problems:
+        print(f"ipv6: {p}")
+    entries = _radvd(mgr, "settings", "searchEntry", "get").get("rows", []) or []
+    actions = plan(desired, current, set(ifaces.values()), entries)
+    if desired.site_prefix:
+        print(f"ipv6: site prefix {desired.site_prefix} "
+              f"({desired.wan.mode if desired.wan else 'off'}); {len(desired.zones)} zone(s) with IPv6")
+    if not actions:
+        print("ipv6: the WAN and the zones match the declaration")
+        return True
+    for a in actions:
+        print(f"ipv6: {'would ' if check_mode else ''}{a.describe()}")
+    if check_mode:
+        return True
+    execute(mgr, host, actions)
+    if not check_unbound_dns(host=host, label="POST-IPV6", retries=10, delay=3.0):
+        print("ERROR: Unbound stopped answering after the IPv6 changes — recover on the firewall by IP: "
+              "pluginctl -c unbound_start", file=sys.stderr)
+        return False
+    print(f"ipv6: {len(actions)} change(s) applied")
+    return True
+
+
 def main():
     # Global options work on either side of the subcommand (#379); see cli_globals.py.
     gp = make_global_parent()
@@ -160,8 +369,10 @@ Examples:
     sub = parser.add_subparsers(dest="command", help="Command")
     sub.add_parser("status", parents=[gp], help="Show whether the firewall allows IPv6")
     p_apply = sub.add_parser("apply", parents=[gp], help="Set 'Allow IPv6' to the site's value")
-    p_apply.add_argument("--allow", type=_parse_bool, required=True,
-                         help="true when the site supports IPv6 (site.json ipv6)")
+    p_apply.add_argument("--allow", type=_parse_bool, default=None,
+                         help="override site.json ipv6 for the switch (default: read site.json)")
+    p_apply.add_argument("--config-dir", default=os.environ.get("CONFIG_DIR", "/home/tappaas/config"),
+                         help="where site.json and zones.json are (default: /home/tappaas/config)")
 
     args = parse_with_globals(parser, {
         "firewall": "firewall.mgmt.internal", "port": None,
@@ -178,13 +389,8 @@ Examples:
                 print(f"ipv6: firewall allows IPv6: {_yn(read_allowed(mgr))}")
                 ok = True
             else:
-                ip = _probe_ip(args.firewall)
-                ok = converge(
-                    mgr, args.allow, args.check_mode,
-                    restart=lambda: unbound_restart(ip),
-                    resolver_ok=lambda: check_unbound_dns(host=ip, label="POST-IPV6", retries=10, delay=3.0),
-                    reload_filter=lambda: filter_reload(ip),
-                )
+                ok = converge_site(mgr, mgr.config, _probe_ip(args.firewall), Path(args.config_dir),
+                                   args.check_mode, allow_override=args.allow)
     except Exception as exc:  # noqa: BLE001
         print(f"ERROR: {exc}", file=sys.stderr)
         if args.debug:
