@@ -240,13 +240,17 @@ Compile-time, before any OPNsense API call:
 
 1. **Schema** — fields/types match `module-fields.json`.
 2. **Zone existence** — every zone-named peer exists in `zones.json`.
-3. **Policy** — every `ingress.from` is in destination zone's `pinhole-allowed-from`.
+3. **Policy** — a rule crossing zones needs the target zone in the source zone's
+   `access-to`, or the source zone in the target zone's `pinhole-allowed-from` (a module
+   peer counts as its zone; a zone `ingress.from` must be in `pinhole-allowed-from`).
+   Ingress from `internet` needs `internet` in the module zone's `pinhole-allowed-from`,
+   except for the firewall's own module.
 4. **Port consistency** — every `ingress.ports` value is in `module.ports[]`.
 5. **Module existence** — every module-named peer has a corresponding `<peer>.json`
    on disk.
 
-Egress to a zone not in the source zone's `access-to` is permitted but logged as a
-warning (exceptions are intentional).
+A violation is an error: the module's rules are not written, and the message names the
+`network-manager modify` command that would allow the path.
 
 ### `firewallType: "NONE"` fallback
 

@@ -239,9 +239,15 @@ into rules:
 - **Ingress** — who may reach this module, on which ports. From a zone: the rule is on that
   zone's interface and admits the **whole source zone**. From another module: only that
   module's addresses (its `tm_<module>` alias). From `alias:X` or `internet`: on the LAN or WAN.
-  The source zone must be in the destination zone's `pinhole-allowed-from`.
 - **Egress** — what this module may reach beyond its zone's `access-to`: a zone, a module, an
-  alias, or `internet`. A target outside `access-to` is allowed and warned about.
+  alias, or `internet`.
+- **The zones decide.** A rule that crosses zones is written only if the zones allow it: the
+  source zone has the target zone in `access-to`, or the target zone lists the source zone in
+  `pinhole-allowed-from`. A module peer counts as the zone it runs in, and traffic within one
+  zone is always allowed. Ingress from the internet is accepted only by a zone that lists
+  `internet` in `pinhole-allowed-from` (the `dmz`); the firewall's own entry to Caddy is the
+  exception. A rule the zones do not allow stops the module's install or update, and the
+  message gives the `network-manager modify` command that would allow it.
 - **Auto-pinholes** — when a module depends on another module's service (`dependsOn`,
   `integratesWith`), `rules-manager` opens the provider's ports from the consumer's address to
   the provider's, on the consumer's interface — if the provider's zone allows the consumer's
@@ -292,10 +298,9 @@ ssh root@firewall.mgmt.internal 'pfctl -sr'   # the rules pf actually evaluates,
 
 Where the rules do less than the zone model describes:
 
-- **The trust model is checked, not enforced, for module rules.** Module egress is not checked
-  against an `isolated` target or the target's `pinhole-allowed-from`; ingress from another
-  module, an alias or the internet is not checked against the zones; port forwards are not
-  limited by zone.
+- **Aliases and port forwards are not checked against the zones.** A rule to or from an
+  `alias:` is written as declared, and a port forward is not limited to the zones that accept
+  internet ingress.
 - **The private-network block covers RFC 1918 only.** 100.64.0.0/10 (carrier-grade NAT) and
   169.254.0.0/16 are reachable from every zone with internet access.
 - **The caddy-reach source is `10.0.0.0/8`**, not the zone's subnet. On a VLAN, anti-spoofing

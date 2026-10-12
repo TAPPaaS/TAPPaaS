@@ -273,6 +273,86 @@ class TestValidation(unittest.TestCase):
         errors = mgr._validate(mod)
         self.assertTrue(any("violates policy" in e.message for e in errors), errors)
 
+    # ── cross-zone policy for module egress and ingress ──────────────────
+
+    def _with_peer(self, mgr, name, zone0):
+        mgr._peer_module_cache[name] = self._module(vmname=name, zone0=zone0)
+
+    def _policy_errors(self, mgr, mod):
+        return [e.message for e in mgr._validate(mod) if "violates policy" in e.message]
+
+    def test_egress_into_a_zone_that_does_not_accept_it_is_refused(self):
+        mgr = _make_manager()
+        mod = self._module(zone0="home", ports=[],
+                           egress=[{"to": "dmz", "ports": [443], "description": "x"}])
+        errs = self._policy_errors(mgr, mod)
+        self.assertEqual(len(errs), 1, errs)
+        self.assertIn("network-manager modify dmz --set 'pinhole-allowed-from=[\"internet\", \"home\"]'", errs[0])
+
+    def test_egress_allowed_by_pinhole_allowed_from_access_to_or_same_zone(self):
+        mgr = _make_manager()
+        for zone0, to in (("home", "srvWork"),      # srvWork lists home
+                          ("srvWork", "srvWork"),   # same zone
+                          ("srvWork", "internet")):
+            with self.subTest(f"{zone0}->{to}"):
+                mod = self._module(zone0=zone0, ports=[],
+                                   egress=[{"to": to, "ports": [443], "description": "x"}])
+                self.assertEqual(self._policy_errors(mgr, mod), [])
+        zones = {n: ZoneSpec(name=n, ip_network=z["ip"], bridge="lan", vlan_tag=z["vlantag"],
+                             access_to=z["access-to"], pinhole_allowed_from=z["pinhole-allowed-from"])
+                 for n, z in ZONES_FIXTURE.items()}
+        zones["srvWork"].access_to = ["internet", "home"]
+        mgr = _make_manager(zones=zones)
+        mod = self._module(egress=[{"to": "home", "ports": [80], "description": "x"}])
+        self.assertEqual(self._policy_errors(mgr, mod), [])
+
+    def test_egress_to_a_module_is_judged_by_its_zone(self):
+        mgr = _make_manager()
+        self._with_peer(mgr, "speaker", "home")
+        self._with_peer(mgr, "neighbour", "srvWork")
+        refused = self._module(egress=[{"to": "speaker", "ports": [1400], "description": "x"}])
+        allowed = self._module(egress=[{"to": "neighbour", "ports": [1400], "description": "x"}])
+        self.assertEqual(len(self._policy_errors(mgr, refused)), 1)
+        self.assertEqual(self._policy_errors(mgr, allowed), [])
+
+    def test_an_isolated_target_is_named_as_such(self):
+        zones = {n: ZoneSpec(name=n, ip_network=z["ip"], bridge="lan", vlan_tag=z["vlantag"],
+                             access_to=z["access-to"], pinhole_allowed_from=z["pinhole-allowed-from"])
+                 for n, z in ZONES_FIXTURE.items()}
+        zones["cams"] = ZoneSpec(name="cams", ip_network="10.4.30.0/24", bridge="lan",
+                                 vlan_tag=430, access_to=[], pinhole_allowed_from=[],
+                                 isolated=True)
+        mgr = _make_manager(zones=zones)
+        mod = self._module(egress=[{"to": "cams", "ports": [554], "description": "x"}])
+        errs = self._policy_errors(mgr, mod)
+        self.assertTrue(errs and "isolated zone cams" in errs[0], errs)
+
+    def test_ingress_from_a_module_is_judged_by_its_zone(self):
+        mgr = _make_manager()
+        self._with_peer(mgr, "proxy", "dmz")       # srvWork lists dmz
+        self._with_peer(mgr, "nvr", "mgmt")        # srvWork does not list mgmt
+        ok = self._module(ingress=[{"from": "proxy", "ports": [4000], "description": "x"}])
+        bad = self._module(ingress=[{"from": "nvr", "ports": [4000], "description": "x"}])
+        self.assertEqual(self._policy_errors(mgr, ok), [])
+        self.assertEqual(len(self._policy_errors(mgr, bad)), 1)
+
+    def test_ingress_from_the_internet_needs_the_zone_to_accept_it(self):
+        mgr = _make_manager()
+        inside = self._module(ingress=[{"from": "internet", "ports": [4000], "description": "x"}])
+        in_dmz = self._module(zone0="dmz",
+                              ingress=[{"from": "internet", "ports": [4000], "description": "x"}])
+        errs = self._policy_errors(mgr, inside)
+        self.assertEqual(len(errs), 1)
+        self.assertIn("does not accept ingress from the internet", errs[0])
+        self.assertEqual(self._policy_errors(mgr, in_dmz), [])
+
+    def test_the_firewalls_own_module_is_exempt_from_the_internet_check(self):
+        mgr = _make_manager()
+        fw = self._module(vmname="network", zone0="mgmt",
+                          ports=[{"port": 80, "protocol": "TCP"}, {"port": 443, "protocol": "TCP"}],
+                          ingress=[{"from": "internet", "ports": [80, 443], "description": "Caddy"}])
+        self.assertEqual(self._policy_errors(mgr, fw), [])
+
     def test_port_consistency_required(self):
         mgr = _make_manager()
         # Ingress declares port 5000 not in module.ports[]

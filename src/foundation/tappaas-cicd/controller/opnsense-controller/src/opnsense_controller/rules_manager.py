@@ -105,6 +105,13 @@ class ZoneSpec:
     vlan_tag: int
     access_to: list[str]
     pinhole_allowed_from: list[str]
+    isolated: bool = False
+
+
+# The firewall's own module. Its ingress from the internet is the WAN entry to
+# Caddy, which terminates on the firewall itself, not in the zone the module is
+# recorded in — so the zone's pinhole-allowed-from does not govern it.
+FIREWALL_MODULES = frozenset({"network", "firewall"})
 
 
 @dataclass
@@ -443,6 +450,7 @@ def load_zones(path: Path) -> dict[str, ZoneSpec]:
             vlan_tag=int(entry.get("vlantag", 0) or 0),
             access_to=entry.get("access-to", []) or [],
             pinhole_allowed_from=entry.get("pinhole-allowed-from", []) or [],
+            isolated=bool(entry.get("isolated", False)),
         )
     return result
 
@@ -1385,6 +1393,23 @@ class RulesManager:
                 continue
             peer = entry["from"]
             self._validate_peer(peer, module, path + ".from", errors)
+            if dest_zone and peer == "internet" and module.vmname not in FIREWALL_MODULES:
+                if "internet" not in dest_zone.pinhole_allowed_from:
+                    errors.append(ValidationError(
+                        module.vmname, f"{path}.from",
+                        f"'internet' violates policy — {module.zone0} does not accept "
+                        f"ingress from the internet. Only a zone that lists 'internet' "
+                        f"in pinhole-allowed-from (the dmz) does: "
+                        f"{self._fix_hint(module.zone0, 'internet')}",
+                    ))
+            peer_zone = self._peer_module_zone(peer)
+            if dest_zone and peer_zone:
+                refusal = self._cross_zone_refusal(peer_zone, module.zone0)
+                if refusal:
+                    errors.append(ValidationError(
+                        module.vmname, f"{path}.from",
+                        f"'{peer}' (zone {peer_zone}) violates policy — {refusal}",
+                    ))
             # Policy: ingress.from must be in dest_zone.pinhole-allowed-from
             if dest_zone and peer in self.zones:
                 if peer not in dest_zone.pinhole_allowed_from:
@@ -1424,15 +1449,51 @@ class RulesManager:
                 continue
             peer = entry["to"]
             self._validate_peer(peer, module, path + ".to", errors)
-            # Warning (not error): egress to a zone not in access-to
-            if source_zone and peer in self.zones:
-                if peer not in source_zone.access_to:
-                    warn(
-                        f"{module.vmname}: egress to '{peer}' not in "
-                        f"{module.zone0}.access-to (intentional exception?)"
-                    )
+            # Policy: reaching another zone needs that zone in our access-to, or
+            # our zone in its pinhole-allowed-from. A module peer is judged by
+            # the zone it runs in.
+            target_zone = peer if peer in self.zones else self._peer_module_zone(peer)
+            if source_zone and target_zone:
+                refusal = self._cross_zone_refusal(module.zone0, target_zone)
+                if refusal:
+                    errors.append(ValidationError(
+                        module.vmname, f"{path}.to",
+                        f"'{peer}' (zone {target_zone}) violates policy — {refusal}",
+                    ))
 
         return errors
+
+    def _peer_module_zone(self, peer: str) -> str | None:
+        """The zone a module peer runs in; None for a zone, alias, internet or unknown."""
+        if peer == "internet" or peer.startswith("alias:") or peer in self.zones:
+            return None
+        peer_module = self._load_peer_cached(peer)
+        return peer_module.zone0 if peer_module and peer_module.zone0 else None
+
+    def _cross_zone_refusal(self, src: str, dst: str) -> str | None:
+        """Why traffic from zone `src` into zone `dst` is not allowed; None if it is.
+
+        Allowed within one zone, when `dst` is in src's access-to, or when dst's
+        pinhole-allowed-from names `src`. An unknown zone is reported elsewhere.
+        """
+        if src == dst:
+            return None
+        s, t = self.zones.get(src), self.zones.get(dst)
+        if s is None or t is None:
+            return None
+        if dst in s.access_to or src in t.pinhole_allowed_from:
+            return None
+        kind = "isolated zone " if t.isolated else "zone "
+        return (f"{kind}{dst} does not accept it from {src} ({src}.access-to has no "
+                f"{dst}, {dst}.pinhole-allowed-from has no {src}). If {dst} should accept "
+                f"pinholes from {src}: {self._fix_hint(dst, src)}")
+
+    def _fix_hint(self, zone: str, add: str) -> str:
+        """The command that adds `add` to zone's pinhole-allowed-from."""
+        current = self.zones[zone].pinhole_allowed_from if zone in self.zones else []
+        wanted = json.dumps(list(current) + [add])
+        return (f"network-manager modify {zone} --set 'pinhole-allowed-from={wanted}' "
+                f"&& network-manager reconcile --apply")
 
     def _validate_peer(
         self,
