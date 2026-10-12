@@ -17,6 +17,8 @@ switch, and the WiFi. There is **no separate `zone-controller`** — the desired
 authority lives inside network-manager.
 
 Modules connect to zones via their `module.json` (`zone0`, ingress/egress).
+How zones and modules become firewall rules — who writes them, in which order they
+are evaluated, and the known gaps — is [FIREWALL-RULES.md](FIREWALL-RULES.md).
 The `zones.json` template ships under this directory; the live, per-installation
 copy lives at `${TAPPAAS_CONFIG:-/home/tappaas/config}/zones.json`.
 
@@ -62,7 +64,7 @@ the client DNS domain `<zone>.internal`, so renaming one re-domains every device
 | IoT | 4 | IoT devices (often less secure). |
 | Guest | 5 | Untrusted / guest access. |
 | DMZ | 6 | Demilitarized zone for controlled-exposure services. |
-| Overlay | 7 | Non-VLAN overlay (e.g. NetBird/WireGuard); no interface/DHCP/rules, always `Manual`, `vlantag=0`. Carries its own source CIDR so consumers can resolve it. |
+| Overlay | 7 | Non-VLAN overlay (e.g. NetBird/WireGuard); no interface or DHCP, always `Manual`, `vlantag=0`. Carries its own source CIDR so consumers can resolve it. Its rules come from its own component (and caddy-reach, when it has an `access-to`). |
 
 ### Zone `state`
 
@@ -81,12 +83,14 @@ Two independent mechanisms control reachability between zones:
 | Mechanism | Scope | Direction | Set by |
 |---|---|---|---|
 | `access-to` | Entire source subnet → entire target subnet | **Downward only** | Zone designer, in `zones.json` (baseline) |
-| `pinhole-allowed-from` + module `install.sh` | Specific source VM IP → specific port | **The only way trust flows up** | Module author (runtime) |
+| `pinhole-allowed-from` + the module's `network:rules` | A module's ports, from another module's address — or from a whole zone, when the module names the zone | **The only way trust flows up** | Module author (runtime) |
 
 ### The lattice (ADR-014)
 
 `tier` is a **strict trust rank**, not a label. It exists so the access model can be
-machine-checked rather than reviewed by eye:
+machine-checked rather than reviewed by eye. It is **checked, not enforced**: the
+firewall rules are built from `access-to` and `pinhole-allowed-from` alone, and the tier
+invariants below warn when those break the lattice.
 
 > **R1 (monotonic `access-to`)** — for every edge `A access-to B`, `tier(A) ≤ tier(B)`.
 > Never upward. `internet` counts as tier 5.
@@ -135,18 +139,13 @@ an isolated zone to a non-`mgmt` `access-to` would nullify the pinhole mechanism
 host in the source subnet would gain unconditional zone-wide reach. `iotCams` in
 particular must stay purpose-limited (GDPR Art. 25).
 
-### Hardening every zone gets, always (#159, #384, #399)
+### Hardening every zone gets (#159, #384, #399)
 
-No field turns these off — TAPPaaS takes the decision:
-
-- **Anti-spoofing.** A zone's interface accepts only sources from the zone's own subnet; a
-  forged or misrouted source is dropped before any rule can pass it.
-- **Fragments are reassembled** by pf before filtering (overlapping fragments dropped), so a
-  fragmented packet is judged whole.
-- **Its gateway serves it, nothing more:** DNS, NTP, DHCP and ICMP. The firewall's GUI (8443)
-  and SSH (22) are blocked from the zone on every firewall address.
-
-`Manual` zones (`mgmt`, the overlays) get no generated rules and keep their reach.
+No field turns these off: every rule-managed zone drops forged sources (anti-spoofing),
+reaches its own gateway only for DNS, NTP, DHCP and ICMP, and cannot reach the firewall's
+GUI (8443) or SSH (22). `Manual` zones (`mgmt`, the overlays) get no generated rules. The
+rules, and the zones that currently miss them, are in
+[FIREWALL-RULES.md](FIREWALL-RULES.md#zone-rules).
 
 ### How `mgmt` reaches every zone: `all`
 
@@ -156,8 +155,9 @@ the zones file — the zone rules, the pinhole and egress checks and the SNAT re
 gate all see the explicit list it stands for. Adding or deleting a zone therefore never
 edits `mgmt`, so the list cannot drift (#372, #373, #375). Only `mgmt` may hold `all`
 (I2); anywhere else it would reach the isolated zones without naming them. A site still on
-an explicit list is moved by config migration `0012` at its next update; `mgmt` is a
-`Manual` zone, so the firewall rules do not change.
+an explicit list is moved by config migration `0012` at its next update. `mgmt` is a
+`Manual` zone, so `all` writes no firewall rule: mgmt's reach comes from the firewall's own
+LAN rules.
 
 `iotLocal` shares tier 6 with `iotCams` (both no-egress) but is **not** `isolated`: its
 serving zone reaches it zone-wide (Home Assistant → local IoT), which R2 forbids for
@@ -182,37 +182,17 @@ not a copy-paste of a template block.
 | `iot-local` | IoT | 6 | no | *(none)* | `iotLocal` |
 | `iot-cams` | IoT | 6 | **yes** | *(none)* | `iotCams` |
 
-### Reaching the reverse proxy — the caddy-reach rule (ADR-021 D3)
-
-Split-horizon DNS resolves every published name to the **DMZ gateway**, where
-`os-caddy` listens. No zone needs `access-to: dmz` to use it, and none should have it
-(**I5** above). Instead `zone-manager` emits, per candidate zone, a band-1 pass:
-
-```
-<zone subnet>  →  <dmz gateway>/32  :  tcp 80, 443
-```
-
-ordered ahead of that zone's RFC1918 block, so the packet reaches Caddy and nothing
-else in the DMZ. It is **L3 reachability only** — Caddy's `proxyAllowedZones` ACL and
-the Authentik identity gate remain the authorization, which is the whole point of
-ADR-021 D2: the address encodes no entitlement.
-
-A zone is a candidate when it:
-
-| | |
-|---|---|
-| has `internet` (or `all`) in `access-to` | it can already reach that Caddy the long way round, via the WAN hairpin, so this opens no new destination |
-| is an **Overlay** with a non-empty `access-to` (**D3a**) | overlay peers are not a routed segment and carry no `internet`, but they resolve the same answer. `admin` is the live case; a dormant overlay (empty `access-to`) stays out. Its `bridge` names the interface its peers arrive on, e.g. `wireguard` |
-| is the **`dmz` zone itself** (**D3b**) | it used to be skipped as "reaches the gateway locally", but that was the unrestricted `Zone dmz -> gateway` rule which #399 narrows to DNS/NTP/DHCP/ICMP — after which a DMZ workload would lose tcp/443 to Caddy |
-
-A fully-isolated zone (empty `access-to`, no `internet`) gets no rule and cannot reach
-a published name at all. That is the correct outcome for a deliberately isolated
-segment: it is cut off from published services by the same mechanism that cuts it off
-from the internet.
-
 The catalog is authoritative in
 [`schemas/zones-fields.json`](../../../schemas/zones-fields.json) (`archetypes.catalog`),
 which is also what invariant I4 checks against.
+
+### Reaching the reverse proxy
+
+Published names resolve to the DMZ gateway, where Caddy listens, and no zone has
+`access-to: dmz` (I5). Each zone that can reach the internet — and an overlay with an
+`access-to`, and `dmz` itself — reaches Caddy through a rule of its own, on TCP 80 and 443
+only (ADR-021 D3). A zone with no egress cannot reach a published name. The rule is in
+[FIREWALL-RULES.md](FIREWALL-RULES.md#zone-rules).
 
 ### `serves` — linking a client or IoT zone to an environment
 
@@ -260,7 +240,8 @@ The checks below promote what used to be a human PR checklist into code. Each is
 | **I4** | Archetype conformance: `(type, tier, isolated)` matches a catalog entry | catches a zone configured against its declared intent |
 
 `pinhole-allowed-from` is deliberately **not** tier-gated — upward is what pinholes are
-*for*. It is validated per-module against the target zone's list, as today.
+*for*. A module's ingress from a zone is checked against the target zone's list when its
+rules are compiled.
 
 ## network-manager commands (the zones lifecycle)
 
@@ -404,7 +385,7 @@ closes the recurring duplicate-VLAN corruption the old `apply-zones-merge.sh` ha
         "ip": "10.0.0.0/24",
         "bridge": "lan",
         "tier": 0,
-        "access-to": ["internet", "warmelo", "home", "iotCams", "dmz"],
+        "access-to": ["internet", "all"],
         "pinhole-allowed-from": [],
         "description": "Control plane: hypervisors, backup, firewall, identity, cicd"
     },
@@ -417,7 +398,7 @@ closes the recurring duplicate-VLAN corruption the old `apply-zones-merge.sh` ha
         "ip": "10.2.0.0/24",
         "bridge": "lan",
         "tier": 1,
-        "access-to": ["internet", "iotCloud", "iotLocal", "dmz"],
+        "access-to": ["internet", "iotCloud", "iotLocal"],
         "pinhole-allowed-from": ["dmz"],
         "description": "Service zone for the warmelo environment"
     },
@@ -498,18 +479,9 @@ access-control values. It also carries the machine-readable **`tier_model`**,
 **`archetypes.catalog`**, **`invariants`** (I1–I4) and **`tier_exempt_types`** blocks
 that this document describes in prose — those are the authoritative copies.
 
-## Per-Module Firewall Rules
+## Firewall rules
 
-Zone-level rules govern coarse access between zones. **Per-module** rules
-(`network:rules` capability) declare each module's ingress/egress contract in
-its own JSON and are validated against the zone-level policy:
-
-- Every `ingress.from` zone must be in the destination zone's `pinhole-allowed-from`.
-- Egress to a zone not in the source zone's `access-to` is permitted but warned.
-
-A peer that is **another module's name** is resolved via an OPNsense host alias
-populated with the peer's FQDN (`<vmname>.<zone0>.internal`), kept fresh by
-OPNsense Unbound against dnsmasq — DHCP IP changes do not require rule rewrites.
-
-See [`network/README.md`](../../../network/README.md) for the full schema,
-sequence bands, and CLI reference.
+Zone-level `access-to` and per-module `network:rules` (a module's ingress, egress and its
+service dependencies) are turned into the firewall's rule set as described in
+[FIREWALL-RULES.md](FIREWALL-RULES.md). The module rule schema and a worked example are in
+[`network/DESIGN.md`](../../../network/DESIGN.md#per-module-firewall-rules).

@@ -869,7 +869,7 @@ The Rules Manager compiles per-module firewall rules from `module.json` into OPN
 
 Module-named peers in `from`/`to` are resolved by creating an OPNsense host alias `tappaas_module_<peer>` populated with the peer's FQDN (`<peer>.<zone0>.internal`). Any hyphens in the peer's vmname are normalised to underscores because OPNsense alias names disallow hyphens. OPNsense Unbound resolves the FQDN against dnsmasq, so DHCP IP changes flow through transparently without rule rewrites.
 
-For the full schema and design — including sequence bands, validation layers, and the worked examples — see [`src/foundation/firewall/README.md`](../../firewall/README.md).
+For the rule order, the sequence bands and what each rule is for, see [FIREWALL-RULES.md](../../manager/network-manager/FIREWALL-RULES.md); for the module rule schema, validation and worked examples, [`network/DESIGN.md`](../../../network/DESIGN.md#per-module-firewall-rules).
 
 #### CLI Usage
 
