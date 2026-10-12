@@ -332,7 +332,6 @@ main() {
                 ;;
             --no-rollback)
                 INSTALL_NO_ROLLBACK=true
-                shift
                 ;;
             --reinstall)
                 reinstall=true
