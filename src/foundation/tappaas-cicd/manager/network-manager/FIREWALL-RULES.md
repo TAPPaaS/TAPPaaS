@@ -270,13 +270,19 @@ into rules:
 - **Aliases** — a module peer is an OPNsense host alias holding the peer's DNS name
   (`<vm>.<zone>.internal`), so a changed DHCP address needs no rule change.
 
+Module rules cover IPv4 and IPv6 like zone rules: a zone peer is that zone's interface
+network, and a module peer its host alias, which resolves both kinds of address. A rule is
+IPv4-only when it names a literal IPv4 address or ICMP, and IPv6-only for ICMPv6 (declared as
+`ICMPv6`).
+
 Rule names carry their identity: `tappaas-module:<vm>:ingress:<peer>:<port>`,
 `tappaas-svcdep:<consumer>:<service>:<provider>:<port>`, each followed by a human description.
 
 ## Address family
 
-Zone rules cover IPv4 and IPv6 (see [Zone rules](#zone-rules)); no zone has an IPv6 address
-yet. Whether the site supports IPv6 at all is `site.json` `ipv6` (default `false`). When it is
+Zone and module rules cover IPv4 and IPv6 (see [Zone rules](#zone-rules) and
+[Module rules](#module-rules)); no zone has an IPv6 address yet. Rules written by other
+modules (below) are IPv4 only. Whether the site supports IPv6 at all is `site.json` `ipv6` (default `false`). When it is
 false, the firewall drops all inbound and forwarded IPv6 ahead of every TAPPaaS rule, and DNS
 resolves over IPv4 only. After changing it, `module-manager update network` applies it.
 
@@ -319,6 +325,7 @@ Where the rules do less than the zone model describes:
   169.254.0.0/16 are reachable from every zone with internet access.
 - **An overlay's caddy-reach source is `10.0.0.0/8`**, not its peers' range: the WireGuard
   interface group has no network of its own to name, and no anti-spoofing narrows it.
-- **Module rules and anti-spoofing are IPv4 only.** Rules written by `rules-manager` match
-  IPv4; a zone's anti-spoofing rule does too, because a negated IPv6 interface network in
-  OPNsense also covers link-local addresses.
+- **Anti-spoofing is IPv4 only**, because a negated IPv6 interface network in OPNsense also
+  covers link-local addresses, which IPv6 needs.
+- **A module with `aliasType: network`** is reached through an alias of its zone's IPv4
+  subnet, so its rules cover IPv4 only.
