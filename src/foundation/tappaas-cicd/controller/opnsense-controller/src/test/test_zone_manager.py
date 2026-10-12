@@ -476,6 +476,14 @@ class _FakeFirewall:
         self.rule_ifaces = rule_ifaces      # None: the pre-check is unavailable
         self.fail_create = fail_create
         self.fail_apply = fail_apply
+        # The raw client: zone-manager writes the zone-networks alias through it.
+        self.alias_calls = []
+        self.client = MagicMock()
+        self.client.run_module.side_effect = self._run_module
+
+    def _run_module(self, module, check_mode=False, params=None):
+        self.alias_calls.append((module, check_mode, dict(params or {})))
+        return {"result": {"changed": True}}
 
     def __enter__(self):
         return self
@@ -521,6 +529,8 @@ class TestConfigureFirewallRulesSequencing(unittest.TestCase):
         zm.zones = list(zones.values())
         # Each zone on its own interface (real resolution needs OPNsense).
         zm.get_zone_interface = lambda zone: f"opt_{zone.name}"
+        zm._resolve_zone_interfaces = lambda zones, **kw: (
+            {z.name: f"opt_{z.name}" for z in zones}, [])
         return zm
 
     def _run(self, zones, existing=None, check_mode=False, **fake_kw) -> _FakeFirewall:
@@ -668,7 +678,7 @@ class TestRuleDrift(TestConfigureFirewallRulesSequencing):
                 again = next(r for r in second.created
                              if r.description == "Zone srv -> caddy https")
                 self.assertEqual(again.protocol, Protocol.TCP)
-                self.assertEqual(again.ip_protocol, IpProtocol.IPV4)
+                self.assertEqual(again.ip_protocol, IpProtocol.BOTH)
                 self.assertTrue(again.enabled and again.log and again.quick)
 
     def test_rule_drift_names_what_differs(self):
@@ -699,12 +709,13 @@ class TestGatewayAndAdminPorts(TestConfigureFirewallRulesSequencing):
         rules = self._zone_rules(fake, "home")
         self.assertEqual(sorted(rules), [
             "Zone home -> gateway dhcp", "Zone home -> gateway dns",
-            "Zone home -> gateway icmp", "Zone home -> gateway ntp",
+            "Zone home -> gateway icmp", "Zone home -> gateway icmpv6",
+            "Zone home -> gateway ntp",
             "Zone home block firewall ssh", "Zone home block firewall webgui",
             "Zone home block spoofed source"])
         # The gateway passes reach the gateway's /32 on their own ports only.
         dns = rules["Zone home -> gateway dns"]
-        self.assertTrue(dns.destination_net.endswith("/32"))
+        self.assertEqual(dns.destination_net, "opt_homeip")
         self.assertEqual(dns.destination_port, "53")
 
     def test_losing_access_to_keeps_only_gateway_and_protection(self):
@@ -725,11 +736,61 @@ class TestGatewayAndAdminPorts(TestConfigureFirewallRulesSequencing):
         gw = [r for r in fake.created if " -> gateway" in r.description]
         self.assertTrue(gw)
         for r in gw:
-            self.assertTrue(r.destination_net.endswith("/32"), r.description)
-            if r.protocol == Protocol.ICMP:
+            # The zone interface's own address: one address per family, never a range.
+            self.assertEqual(r.destination_net, r.interface + "ip", r.description)
+            if r.protocol in (Protocol.ICMP, Protocol.ICMPV6):
                 self.assertIsNone(r.destination_port, r.description)
             else:
                 self.assertIn(r.destination_port, ("53", "123", "67"), r.description)
+
+    # ── IPv6 parity (#815): rules name interfaces, and cover both families ──
+
+    def test_zone_rules_name_the_zone_interface_not_its_ipv4_subnet(self):
+        rules = self._zone_rules(self._run(_build_zones()), "srv")
+        for d, r in rules.items():
+            if " -> caddy " in d:
+                continue
+            self.assertEqual(r.source_net, "opt_srv", d)
+        self.assertEqual(rules["Zone srv -> internet"].ip_protocol, IpProtocol.BOTH)
+        self.assertEqual(rules["Zone srv block spoofed source"].ip_protocol, IpProtocol.BOTH)
+        self.assertEqual(rules["Zone srv -> dmz"].destination_net, "opt_dmz")
+        self.assertEqual(rules["Zone srv -> dmz"].ip_protocol, IpProtocol.BOTH)
+        self.assertEqual(rules["Zone srv block rfc1918-10"].ip_protocol, IpProtocol.IPV4)
+
+    def test_ipv6_blocks_stand_in_for_rfc1918(self):
+        s = self._seqs_by_desc(self._run(_build_zones()))
+        rules = self._zone_rules(self._run(_build_zones()), "srv")
+        for label, dest in (("zone-networks", "tappaas_zone_networks"), ("ula", "fc00::/7")):
+            r = rules[f"Zone srv block {label}"]
+            self.assertEqual(r.destination_net, dest)
+            self.assertEqual(r.ip_protocol, IpProtocol.IPV6)
+            self.assertEqual(r.action, RuleAction.BLOCK)
+            self.assertLess(s["Zone srv -> dmz"], s[f"Zone srv block {label}"])
+            self.assertLess(s[f"Zone srv block {label}"], s["Zone srv -> internet"])
+
+    def test_the_zone_networks_alias_lists_every_zone_interface(self):
+        fake = self._run(_build_zones())
+        alias = [p for m, _, p in fake.alias_calls if m == "alias"]
+        self.assertEqual(len(alias), 1)
+        self.assertEqual(alias[0]["name"], "tappaas_zone_networks")
+        self.assertEqual(alias[0]["type"], "networkgroup")
+        self.assertIn("__opt_srv_network", alias[0]["content"])
+        self.assertIn("__opt_home_network", alias[0]["content"])
+
+    def test_a_dry_run_does_not_write_the_alias(self):
+        fake = self._run(_build_zones(), check_mode=True)
+        self.assertTrue(all(check for m, check, _ in fake.alias_calls if m == "alias"))
+
+    def test_a_target_without_an_interface_keeps_its_ipv4_subnet(self):
+        zm = self._manager(_build_zones())
+        zm._resolve_zone_interfaces = lambda zones, **kw: (
+            {z.name: f"opt_{z.name}" for z in zones if z.name != "dmz"}, [])
+        fake = _FakeFirewall(None)
+        with patch("opnsense_controller.zone_manager.FirewallManager", return_value=fake):
+            zm.configure_firewall_rules(check_mode=False)
+        r = next(r for r in fake.created if r.description == "Zone srv -> dmz")
+        self.assertEqual(r.ip_protocol, IpProtocol.IPV4)
+        self.assertTrue(r.destination_net[0].isdigit(), r.destination_net)
 
     def test_the_gateway_services(self):
         rules = self._zone_rules(self._run(_build_zones()), "srv")
@@ -738,6 +799,7 @@ class TestGatewayAndAdminPorts(TestConfigureFirewallRulesSequencing):
         self.assertEqual(got, {
             "dns": (Protocol.TCP_UDP, "53"), "ntp": (Protocol.UDP, "123"),
             "dhcp": (Protocol.UDP, "67"), "icmp": (Protocol.ICMP, None),
+            "icmpv6": (Protocol.ICMPV6, None),
         })
 
     def test_gateway_passes_precede_the_rfc1918_block(self):
@@ -882,7 +944,7 @@ class TestCaddyReachability(TestConfigureFirewallRulesSequencing):
         rules = {r.description: r for r in self._caddy_rules(fake)}
         self.assertIn("Zone dmz -> caddy https", rules)
         r = rules["Zone dmz -> caddy https"]
-        self.assertEqual(r.destination_net, "10.2.10.1/32")
+        self.assertEqual(r.destination_net, "opt_dmzip")   # the DMZ interface's address
         self.assertEqual(r.destination_port, "443")
         self.assertEqual(r.protocol, Protocol.TCP)
 
@@ -916,8 +978,10 @@ class TestCaddyReachability(TestConfigureFirewallRulesSequencing):
     def test_targets_dmz_gateway_on_tcp_80_and_443(self):
         fake = self._run(_build_zones())
         for r in self._caddy_rules(fake):
-            self.assertEqual(r.destination_net, "10.2.10.1/32")  # dmz gateway
-            self.assertEqual(r.source_net, "10.0.0.0/8")
+            zone = r.description.split()[1]
+            self.assertEqual(r.destination_net, "opt_dmzip")      # the DMZ interface address
+            self.assertEqual(r.source_net, f"opt_{zone}")         # the zone's own network
+            self.assertEqual(r.ip_protocol, IpProtocol.BOTH)
             self.assertEqual(r.action, RuleAction.PASS)
             self.assertEqual(r.protocol, Protocol.TCP)
             self.assertIn(r.destination_port, ("80", "443"))

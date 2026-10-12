@@ -325,7 +325,8 @@ def select_orphan_ranges(
 # admin guard (labels from ZoneManager.ADMIN_GUARD_PORTS). A test checks that
 # every rule the reconcile emits matches, so a new shape cannot be left out.
 ZONE_RULE_RE = re.compile(
-    r"^Zone (\S+) (?:-> \S|block rfc1918-|block spoofed source$|block firewall (?:webgui|ssh)$)"
+    r"^Zone (\S+) (?:-> \S|block rfc1918-|block (?:zone-networks|ula)$"
+    r"|block spoofed source$|block firewall (?:webgui|ssh)$)"
 )
 
 
@@ -821,11 +822,24 @@ class ZoneManager:
     # reached by its own rule (CADDY_REACH_*), on the DMZ gateway.
     # (label, protocol, port, offset) — DNS keeps the old rule's base+0; the
     # rest sit in the slots the access-to band gave up, ahead of the rfc1918 block.
+    # (label, protocol, port, offset, address family). The gateway is the zone
+    # interface's own address, so a rule covers whichever families it carries;
+    # ICMP is IPv4's, ICMPv6 IPv6's (#815).
     ZONE_GATEWAY_SERVICES = (
-        ("dns", Protocol.TCP_UDP, "53", 0),
-        ("ntp", Protocol.UDP, "123", 86),
-        ("dhcp", Protocol.UDP, "67", 87),
-        ("icmp", Protocol.ICMP, None, 88),
+        ("dns", Protocol.TCP_UDP, "53", 0, IpProtocol.BOTH),
+        ("ntp", Protocol.UDP, "123", 86, IpProtocol.BOTH),
+        ("dhcp", Protocol.UDP, "67", 87, IpProtocol.BOTH),
+        ("icmp", Protocol.ICMP, None, 88, IpProtocol.IPV4),
+        ("icmpv6", Protocol.ICMPV6, None, 89, IpProtocol.IPV6),
+    )
+    # IPv6 has no RFC 1918: a zone's IPv6 network is public. Two blocks stand in
+    # for the IPv4 private-range blocks, at base+93/94: every zone's network (an
+    # alias of OPNsense's per-interface network tables, so it follows the
+    # addresses the zones carry) and unique-local addresses (#815).
+    ZONE_NETWORKS_ALIAS = "tappaas_zone_networks"
+    IPV6_BLOCKS = (
+        ("zone-networks", ZONE_NETWORKS_ALIAS, 93),
+        ("ula", "fc00::/7", 94),
     )
     ZONE_RULE_BLOCK_OFFSET = 90        # rfc1918 blocks at base+90/91/92
     ZONE_RULE_INTERNET_OFFSET = 99     # internet pass last (lowest priority)
@@ -1769,6 +1783,35 @@ class ZoneManager:
 
         return results
 
+    def _converge_zone_networks_alias(
+        self, manager: FirewallManager, zone_ifaces: dict[str, str], check_mode: bool
+    ) -> None:
+        """Keep the alias of every zone's network (OPNsense's per-interface tables).
+
+        The IPv6 zone-networks block points at it, so a zone cannot reach another
+        over its public IPv6 network. It follows the interfaces, not addresses.
+        """
+        content = sorted({f"__{iface}_network" for iface in zone_ifaces.values()})
+        if not content:
+            return
+        try:
+            result = manager.client.run_module(
+                "alias", check_mode=check_mode,
+                params={
+                    "name": self.ZONE_NETWORKS_ALIAS,
+                    "type": "networkgroup",
+                    "content": content,
+                    "description": "TAPPaaS: every zone's network (zone-manager)",
+                    "reload": True,
+                },
+            )
+        except Exception as e:  # noqa: BLE001 - the block rules then fail visibly
+            self._fail(f"Zone networks alias {self.ZONE_NETWORKS_ALIAS}: {e}")
+            return
+        if (result.get("result") or {}).get("changed"):
+            info(f"  {'would update' if check_mode else 'updated'} alias "
+                 f"{self.ZONE_NETWORKS_ALIAS}: {len(content)} zone network(s)")
+
     def _gateway_rules(
         self,
         manager: FirewallManager,
@@ -1779,16 +1822,19 @@ class ZoneManager:
         zone_results: list[dict],
     ) -> None:
         """Passes to the zone's own gateway for the services the firewall runs
-        for it — DNS, NTP, DHCP and ICMP — never every port of the gateway."""
+        for it — DNS, NTP, DHCP, ICMP and ICMPv6 — never every port of the gateway.
+
+        Source and destination name the interface (its network, its address), so
+        a rule covers IPv4 and IPv6 alike (#815)."""
         base = self._zone_rule_base(zone)
-        for label, proto, port, offset in self.ZONE_GATEWAY_SERVICES:
+        for label, proto, port, offset, family in self.ZONE_GATEWAY_SERVICES:
             self._create_or_skip_rule(
                 manager, existing_by_desc,
                 f"Zone {zone.name} -> gateway {label}",
-                zone_interface, zone.ip_network, f"{zone.gateway_ip}/32",
+                zone_interface, zone_interface, f"{zone_interface}ip",
                 RuleAction.PASS, base + offset,
                 check_mode, zone_results,
-                protocol=proto, destination_port=port,
+                protocol=proto, destination_port=port, ip_protocol=family,
             )
 
     def _protective_rules(
@@ -1809,19 +1855,20 @@ class ZoneManager:
         self._create_or_skip_rule(
             manager, existing_by_desc,
             f"Zone {zone.name} block spoofed source",
-            zone_interface, zone.ip_network, "any",
+            zone_interface, zone_interface, "any",
             RuleAction.BLOCK, self.ANTISPOOF_SEQUENCE,
             check_mode, zone_results,
-            source_invert=True,
+            source_invert=True, ip_protocol=IpProtocol.BOTH,
         )
         for offset, (port, label) in enumerate(self.ADMIN_GUARD_PORTS):
             self._create_or_skip_rule(
                 manager, existing_by_desc,
                 f"Zone {zone.name} block firewall {label}",
-                zone_interface, zone.ip_network, "(self)",
+                zone_interface, zone_interface, "(self)",
                 RuleAction.BLOCK, self.ADMIN_GUARD_SEQUENCE + offset,
                 check_mode, zone_results,
                 protocol=Protocol.TCP, destination_port=port,
+                ip_protocol=IpProtocol.BOTH,
             )
 
     def _create_or_skip_rule(
@@ -2004,6 +2051,14 @@ class ZoneManager:
             existing_rules = manager.list_rules()
             existing_by_desc = {r.description: r for r in existing_rules}
 
+            # Every zone's interface, read once: rules name a zone by its
+            # interface (its network, its address) so they cover IPv4 and IPv6.
+            zone_ifaces, _ = self._resolve_zone_interfaces(
+                [z for z in self.get_enabled_zones() + manual_zones
+                 if z.zone_type not in ("Overlay", "WAN")]
+            )
+            self._converge_zone_networks_alias(manager, zone_ifaces, check_mode)
+
             # Delete firewall rules for disabled zones
             for zone in disabled_zones:
                 zone_prefix = f"Zone {zone.name} "
@@ -2090,18 +2145,26 @@ class ZoneManager:
                     for offset, target in enumerate(
                         specific_targets[: self.ZONE_RULE_PASS_MAX]
                     ):
+                        # The target's network by its interface, so the pass
+                        # covers both families; a target with no interface on
+                        # the firewall keeps its IPv4 subnet (#815).
                         target_zone = self.get_zone_by_name(target)
-                        if target_zone:
-                            dest = target_zone.ip_network
+                        family = IpProtocol.BOTH
+                        if target_zone and target in zone_ifaces:
+                            dest = zone_ifaces[target]
+                        elif target_zone:
+                            dest, family = target_zone.ip_network, IpProtocol.IPV4
                         else:
                             warn(f"target zone '{target}' not found in zones.json, using name as alias")
                             dest = target
                         self._create_or_skip_rule(
                             manager, existing_by_desc,
                             f"Zone {zone.name} -> {target}",
-                            zone_interface, zone.ip_network, dest,
+                            zone_interface,
+                            zone.ip_network if family == IpProtocol.IPV4 else zone_interface,
+                            dest,
                             RuleAction.PASS, base + self.ZONE_RULE_PASS_OFFSET + offset,
-                            check_mode, zone_results,
+                            check_mode, zone_results, ip_protocol=family,
                         )
 
                     if has_internet:
@@ -2112,19 +2175,30 @@ class ZoneManager:
                             self._create_or_skip_rule(
                                 manager, existing_by_desc,
                                 f"Zone {zone.name} block {label}",
-                                zone_interface, zone.ip_network, network,
+                                zone_interface, zone_interface, network,
                                 RuleAction.BLOCK,
                                 base + self.ZONE_RULE_BLOCK_OFFSET + offset,
                                 check_mode, zone_results,
                             )
+                        # Step 3b: the same for IPv6 — every zone's network, and
+                        # unique-local addresses (#815).
+                        for label, dest, offset in self.IPV6_BLOCKS:
+                            self._create_or_skip_rule(
+                                manager, existing_by_desc,
+                                f"Zone {zone.name} block {label}",
+                                zone_interface, zone_interface, dest,
+                                RuleAction.BLOCK, base + offset,
+                                check_mode, zone_results,
+                                ip_protocol=IpProtocol.IPV6,
+                            )
 
-                        # Step 4: Allow internet (pass to any — only non-RFC1918 reaches here)
+                        # Step 4: Allow internet (pass to any — only non-private reaches here)
                         self._create_or_skip_rule(
                             manager, existing_by_desc,
                             f"Zone {zone.name} -> internet",
-                            zone_interface, zone.ip_network, "any",
+                            zone_interface, zone_interface, "any",
                             RuleAction.PASS, base + self.ZONE_RULE_INTERNET_OFFSET,
-                            check_mode, zone_results,
+                            check_mode, zone_results, ip_protocol=IpProtocol.BOTH,
                         )
 
                 results[zone.name] = {
@@ -2385,6 +2459,10 @@ class ZoneManager:
             except Exception as e:  # noqa: BLE001 - optional pre-check
                 debug(f"  Caddy reachability: interface list unavailable: {e}")
 
+        # Caddy listens on the DMZ interface: its address covers both families.
+        # An overlay keeps the IPv4 rule (its tunnels carry no IPv6).
+        dmz_interface = self.get_zone_interface(dmz)
+
         for zone in candidate_zones:
             zone_interface = self.get_zone_interface(zone)
             if not zone_interface:
@@ -2415,14 +2493,20 @@ class ZoneManager:
             zone_results = results.setdefault(
                 zone.name, {"status": "processed", "rules": []}
             ).setdefault("rules", [])
+            if zone.zone_type == "Overlay" or not dmz_interface:
+                source, dest, family = self.CADDY_REACH_SOURCE, caddy_dest, IpProtocol.IPV4
+            else:
+                # The zone's own network, not every internal address: on a VLAN
+                # anti-spoofing narrowed it anyway; this says so in the rule.
+                source, dest, family = zone_interface, f"{dmz_interface}ip", IpProtocol.BOTH
             for offset, (port, label) in enumerate(self.CADDY_REACH_PORTS):
                 self._create_or_skip_rule(
                     manager, existing_by_desc,
                     f"Zone {zone.name} -> caddy {label}",
-                    zone_interface, self.CADDY_REACH_SOURCE, caddy_dest,
+                    zone_interface, source, dest,
                     RuleAction.PASS, self.CADDY_REACH_SEQUENCE + offset,
                     check_mode, zone_results,
-                    protocol=Protocol.TCP, destination_port=port,
+                    protocol=Protocol.TCP, destination_port=port, ip_protocol=family,
                 )
 
     def update_dnsmasq_interfaces(self, check_mode: bool = True) -> dict:
