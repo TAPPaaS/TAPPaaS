@@ -164,8 +164,10 @@ What follows from names with both families:
   deploy adds it to the module's companion JSON as `proxySourceV6`. A module that trusts its
   proxy by address (Nextcloud `trusted_proxies`, Immich `IMMICH_TRUSTED_PROXIES`) trusts that
   one `/128` beside its IPv4 rule. After a prefix change it is picked up by the next update;
-  until then the service sees the proxy as the client. A service in a container on a Podman
-  bridge network (Euro-Office) stays IPv4: its port mapping forwards IPv4 only.
+  until then the service sees the proxy as the client. Two stay IPv4, and Caddy reaches
+  them over IPv4: a container on a Podman bridge network (Euro-Office), whose port mapping
+  forwards IPv4 only, and a single-worker uvicorn (Open WebUI), which on `::` binds IPv6 *only*
+  (asyncio sets `IPV6_V6ONLY`) and would refuse IPv4.
 
 ### D7 — One converging step, in the network update
 
