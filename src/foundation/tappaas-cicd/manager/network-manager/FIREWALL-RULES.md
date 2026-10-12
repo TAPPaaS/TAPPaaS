@@ -83,16 +83,26 @@ IPv6 at all ([Address family](#address-family)).
 
 ## How the rules get written
 
-An administrator changes the configuration through two managers; they write the rules.
-The commands that actually talk to OPNsense — `zone-manager`, `rules-manager`,
-`nat-manager`, `snat-manager` — are internal tools of the OPNsense controller: the managers
-call them, and an administrator does not run them to change anything.
+An administrator works with two managers:
 
-| You change | You run | Underneath | Rules written |
-|---|---|---|---|
-| a zone (add, delete, `access-to`, `pinhole-allowed-from`, `serves`) | `network-manager add` / `delete` / `bind`, or edit `zones.json` and run `network-manager reconcile --apply` | `network-manager` → `zone-manager` | the zone's baseline: `Zone <zone> …` |
-| a module's traffic, pinholes, NAT | `module-manager add` / `update` / `modify` / `delete <module>` | the module's network services — `network:rules` → `rules-manager`, `network:nat` → `nat-manager`, `network:snat` → `snat-manager` | `tappaas-module:<vm>:…`, `tappaas-svcdep:<consumer>:…`, port forwards, outbound NAT |
-| nothing — the nightly update | `update-tappaas` (scheduled) | the network module's update runs `network-manager reconcile --only opnsense --apply`; every module's update reconciles its rules | everything above, brought back to the configuration |
+- **`network-manager`** — the zones: `add`, `delete`, `bind`, `reconcile`.
+- **`module-manager`** — the modules: `add`, `update`, `modify`, `delete`.
+
+Neither writes to OPNsense itself. Both change the rules **through the OPNsense controller**,
+which has one procedure for each kind of rule:
+
+| OPNsense controller procedure | Called by | Writes |
+|---|---|---|
+| `zone-manager` | `network-manager reconcile` (which `add`, `delete` and `bind` run too) | each zone's baseline: `Zone <zone> …` |
+| `rules-manager` | `module-manager`, through the module's `network:rules` service | module ingress and egress, auto-pinholes: `tappaas-module:<vm>:…`, `tappaas-svcdep:<consumer>:…` |
+| `nat-manager` | `module-manager`, through the module's `network:nat` service | port forwards |
+| `snat-manager` | `module-manager`, through the module's `network:snat` service | outbound NAT |
+| `ipv6-manager` | `module-manager`, when it updates the `network` module | the firewall's *Allow IPv6* |
+
+The [diagram below](#from-the-configuration-to-the-rule-set) shows the whole path, from the
+configuration through the two managers and the controller to the rule set. The procedures are
+the controller's internals: an administrator changes the configuration and runs a manager,
+never a procedure directly (a few have read-only listings, under [Checking it](#checking-it)).
 
 `network-manager reconcile --only opnsense` without `--apply` shows what would change and
 changes nothing. A module's **install adds** its rules; its **update reconciles** them (adds
@@ -119,11 +129,11 @@ flowchart TD
 
     subgraph RUN["What you run"]
         direction LR
-        NM["network-manager reconcile<br/>(also add · delete · bind,<br/>and the nightly network update)"]
-        MM["module-manager<br/>add · update · modify · delete<br/>(and the nightly module updates)"]
+        NM["network-manager<br/>add · delete · bind · reconcile"]
+        MM["module-manager<br/>add · update · modify · delete"]
     end
 
-    subgraph CTL["Internal tools (OPNsense controller)"]
+    subgraph CTL["OPNsense controller"]
         direction LR
         ZM["zone-manager<br/>each zone's baseline"]
         RM["rules-manager<br/>ingress · egress · auto-pinholes"]
@@ -135,15 +145,15 @@ flowchart TD
 
     Z --> NM
     E --> NM
-    S --> NM
+    S --> MM
     M --> MM
     P --> MM
     A --> MM
     NM -- "zones.effective.json<br/>serves derived · all expanded" --> ZM
-    NM -- "nightly network update" --> V6
     NM -. "effective zones" .-> RM
     MM -- "network:rules" --> RM
     MM -- "network:nat · network:snat" --> NAT
+    MM -- "network module" --> V6
     ZM --> FW
     RM --> FW
     NAT --> FW
@@ -162,7 +172,7 @@ flowchart TD
    dependencies into rules and host aliases, checks them against the effective zones, and
    applies them. Port forwards and source NAT are written by their own tools, and source NAT
    only into a zone whose `snat-allowed-from` names the source.
-5. **IPv6.** The nightly network update runs `ipv6-manager`, which sets the firewall's *Allow IPv6* from `site.json`.
+5. **IPv6.** Updating the `network` module runs `ipv6-manager`, which sets the firewall's *Allow IPv6* from `site.json`.
 
 ## Evaluation order
 
