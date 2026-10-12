@@ -119,7 +119,8 @@ check_grafana_http() {
     # shellcheck disable=SC2086
     http_code=$(ssh ${SSH_OPTS} "tappaas@${VM_HOST}" \
         "curl -s -o /dev/null -w '%{http_code}' --max-time 10 http://127.0.0.1:3000/login" 2>/dev/null) || true
-    if [[ "${http_code}" =~ ^(200|302)$ ]]; then
+    # With SSO, Grafana's auto-login answers /login with a 307 to its OIDC login.
+    if [[ "${http_code}" =~ ^(200|302|307)$ ]]; then
         check_pass "Grafana login responding (status ${http_code})"
     else
         check_fail "Grafana login not responding (status: ${http_code:-timeout})"
