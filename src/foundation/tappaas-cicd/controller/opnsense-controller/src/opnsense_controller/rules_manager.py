@@ -1607,9 +1607,7 @@ class RulesManager:
         result: dict[str, AliasTarget] = {}
         # Self alias — destination for ingress, source for egress (and for
         # auto-pinhole rules, which use the self alias as the source).
-        self_target = self._alias_target_for(
-            module.vmname, module.zone0, module.alias_type
-        )
+        self_target = self._module_alias_target(module)
         if self_target:
             result[_module_alias_name(module.vmname)] = self_target
         # Peer aliases (module-name peers in ingress.from and egress.to)
@@ -1891,16 +1889,19 @@ class RulesManager:
         peer_module = self._load_peer_cached(peer_vmname)
         if peer_module is None:
             return None
-        if peer_module.address and peer_module.alias_type == "host":
-            # A machine is where its own record says it is (ADR-026 D8.1).
+        return self._module_alias_target(peer_module)
+
+    def _module_alias_target(self, module: ModuleSpec) -> AliasTarget | None:
+        """tm_<vmname> for a module — the same whether it is the module itself or
+        a peer. A machine with a recorded address is where that record says it
+        is (ADR-026 D8.1); anything else follows its alias type."""
+        if module.address and module.alias_type == "host":
             return AliasTarget(
                 "host",
-                [peer_module.address],
-                f"Host alias for machine '{peer_module.vmname}' (its recorded address)",
+                [module.address],
+                f"Host alias for machine '{module.vmname}' (its recorded address)",
             )
-        return self._alias_target_for(
-            peer_module.vmname, peer_module.zone0, peer_module.alias_type
-        )
+        return self._alias_target_for(module.vmname, module.zone0, module.alias_type)
 
     def _load_peer_cached(self, peer_vmname: str) -> ModuleSpec | None:
         """Load (and cache) a peer module spec; None if its JSON is missing."""

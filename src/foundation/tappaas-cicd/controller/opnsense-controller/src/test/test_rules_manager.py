@@ -436,6 +436,31 @@ class TestStaleEffectiveZones(unittest.TestCase):
         self.assertEqual(found.name, "zones.json")
 
 
+class TestMachineSelfAlias(unittest.TestCase):
+    """A machine's own alias holds its recorded address, as its peer alias does (D10)."""
+
+    def _machine(self, **kw):
+        base = dict(vmname="nas", zone0="srvWork", bridge0="lan", ports=[], ingress=[],
+                    egress=[], aliases={}, firewall_type="opnsense", address="10.2.10.50")
+        base.update(kw)
+        return ModuleSpec(**base)
+
+    def test_self_alias_uses_the_recorded_address(self):
+        t = _make_manager()._module_aliases_to_provision(self._machine())["tm_nas"]
+        self.assertEqual((t.alias_type, list(t.content)), ("host", ["10.2.10.50"]))
+
+    def test_self_and_peer_alias_agree(self):
+        mgr = _make_manager()
+        nas = self._machine()
+        mgr._peer_module_cache["nas"] = nas
+        self.assertEqual(mgr._module_aliases_to_provision(nas)["tm_nas"].content,
+                         mgr._peer_alias_target("nas").content)
+
+    def test_without_an_address_the_fqdn_is_used(self):
+        t = _make_manager()._module_aliases_to_provision(self._machine(address=None))["tm_nas"]
+        self.assertEqual(list(t.content), ["nas.srvWork.internal"])
+
+
 class TestAliasOrphan(unittest.TestCase):
     """An alias is in use only when a rule names it whole (review D11)."""
 

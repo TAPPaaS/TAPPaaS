@@ -103,16 +103,16 @@ Shadowing: only the band-1 blocks sit ahead of module passes (anti-spoofing; the
 | D5 | ✅ **Fixed for module peers and `internet` (firewall exempt); `alias:` still unchecked.** Module-peer, `alias:` and `internet` ingress skip the compile-time policy check; ZM's static validator does warn for module peers — the two disagree | Med | RM:1389; ZM ~602-648 | validator only (T-ZM:245) |
 | D6 | ✅ **Fixed on `g2.1-firewall`: forwards only into a zone listing `internet` (the dmz); the control plane exempt (operator decision 2026-10-12).** NAT port-forwards (rdr-pass) have no zone gate: any module in any zone can expose itself; dmz's `pinhole-allowed-from: ["internet"]` is decorative | Med | `nat_manager.py` | none |
 | D7 | `alias:X` ingress is bound to `lan`, not floating; failed VLAN lookups fall back to lan/bridge silently (ZM fails instead) | Low/Med | RM:1811-1813, 1819-1822, 1848-1853 | none |
-| D8 | ICMPv6 cannot be declared: `IPV6-ICMP` ≠ enum `IPv6-ICMP`, falls back to **TCP** silently, as does any unknown protocol | Low now (IPv6) | RM:256-264, 1887 | passthrough only |
+| D8 | ✅ **Fixed on `g2.1-firewall` with #815.** ICMPv6 cannot be declared: `IPV6-ICMP` ≠ enum `IPv6-ICMP`, falls back to **TCP** silently, as does any unknown protocol | Low now (IPv6) | RM:256-264, 1887 | passthrough only |
 | D9 | Changing a rule's free-text description duplicates it on install (upsert key includes it; `add-rules` does not prune) | Low | RM:1888; FM:345 | — |
-| D10 | Self alias ignores a machine's `address` (always the FQDN); peers honour it — empty table for `kind: machine` (#542 class) | Low/Med | RM:1501-1505, 1786-1792 | none |
-| D11 | `_alias_is_orphan` matches substrings: `tm_foo` matches `tm_foobar` | Low | RM:2034 | none |
+| D10 | ✅ **Fixed on `g2.1-firewall`: one alias builder for self and peer.** Self alias ignores a machine's `address` (always the FQDN); peers honour it — empty table for `kind: machine` (#542 class) | Low/Med | RM:1501-1505, 1786-1792 | none |
+| D11 | ✅ **Fixed on `g2.1-firewall`: whole-name match.** `_alias_is_orphan` matches substrings: `tm_foo` matches `tm_foobar` | Low | RM:2034 | none |
 | D12 | A second copy of the pinhole predicate in ZM resolves providers by bare name and reads top-level `ingress` only (#632 drift class) | Low/Med | ZM:574, 676; RM:1556-1565 | none |
-| D13 | A stale `zones.effective.json` makes rules-manager fall back to `zones.json` and lose the `serves` edges; a `reconcile` then prunes the auto-pinholes they allowed | Med (transient) | RM:2223-2241 | none |
+| D13 | ✅ **Fixed on `g2.1-firewall`: rules-manager runs `network-manager render` first.** A stale `zones.effective.json` makes rules-manager fall back to `zones.json` and lose the `serves` edges; a `reconcile` then prunes the auto-pinholes they allowed | Med (transient) | RM:2223-2241 | none |
 | D14 | The private-range block is RFC 1918 only: 100.64/10 (NetBird), 169.254/16 and the firewall's other ports are reachable from every `internet` zone | Med (live check) | ZM:752-756 | none |
 | D15 | ✅ **Fixed on `g2.1-firewall`: such zones get anti-spoofing, the admin guard and gateway DNS/NTP/DHCP/ICMP (operator decision 2026-10-12).** No-egress zones get no gateway DNS/NTP, no anti-spoofing, no guard | design gap | ZM:1903-1906, 2101-2103 | T-ZM:858 caddy only |
-| D16 | DES claims that do not match: slot collisions "detected at compile time" (nothing does); band 1 "DHCP, NTP, ICMP" (they are band 5); band 2 deny defaults (nothing emits); `tappaas_module_<vm>` (prefix is `tm_`) | Low | DES:103, 232-244 | — |
-| D17 | Dead `all` handling | Low | ZM:1046-1050, 1975-1983, 2283; RM:1653 | — |
+| D16 | ✅ **Fixed: the band section moved to FIREWALL-RULES.md, `tm_` corrected.** DES claims that do not match: slot collisions "detected at compile time" (nothing does); band 1 "DHCP, NTP, ICMP" (they are band 5); band 2 deny defaults (nothing emits); `tappaas_module_<vm>` (prefix is `tm_`) | Low | DES:103, 232-244 | — |
+| D17 | **Kept:** the branch is dead in production (`all` is expanded on read) but the unit tests drive it with unexpanded zones; removing it buys nothing. Dead `all` handling | Low | ZM:1046-1050, 1975-1983, 2283; RM:1653 | — |
 | D18 | Gateway lookup is one API call per zone without retry (not the batched resolver) | Low | ZM:1944, 2303 vs 999-1044 | — |
 
 **The G2.1 issues against today's code**
