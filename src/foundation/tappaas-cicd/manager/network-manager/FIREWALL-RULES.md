@@ -107,7 +107,9 @@ never a procedure directly (a few have read-only listings, under [Checking it](#
 changes nothing. A module's **install adds** its rules; its **update reconciles** them (adds
 what is missing, removes what the module no longer declares); its **delete removes** them.
 Each writer touches only rules carrying its own names, so a rule an operator adds in the
-OPNsense GUI under any other description is left alone.
+OPNsense GUI under any other description is left alone. A TAPPaaS rule changed on the firewall
+— disabled, or with another protocol, port, address family or order — is put back as declared
+at the next reconcile, and the rules of a zone that is removed or renamed are removed with it.
 
 A few modules write their own rules as part of their install — the admin VPN, the satellite,
 the backup buddy and Caddy ([below](#rules-written-by-other-modules)).
@@ -289,12 +291,6 @@ ssh root@firewall.mgmt.internal 'pfctl -sr'   # the rules pf actually evaluates,
 
 Where the rules do less than the zone model describes:
 
-- **Removing or renaming a zone leaves its protective rules.** Its anti-spoofing and admin-guard
-  rules stay on the interface. If OPNsense gives that interface to a new zone, the old
-  anti-spoofing rule blocks the new zone's traffic until it is deleted.
-- **A changed rule property is not repaired.** Rules are compared by name, source, destination
-  and port. A rule disabled in the GUI, or with a different protocol or address family, is
-  left as it is.
 - **The trust model is checked, not enforced, for module rules.** Module egress is not checked
   against an `isolated` target or the target's `pinhole-allowed-from`; ingress from another
   module, an alias or the internet is not checked against the zones; port forwards are not
