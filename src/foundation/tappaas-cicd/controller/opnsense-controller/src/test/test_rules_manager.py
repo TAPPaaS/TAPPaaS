@@ -20,6 +20,7 @@ from unittest.mock import MagicMock, patch
 from opnsense_controller import rules_manager as rm
 from opnsense_controller.config import Config
 from opnsense_controller.firewall_manager import FirewallRuleInfo
+from opnsense_controller.firewall_manager import IpProtocol, Protocol
 from opnsense_controller.rules_manager import (
     BAND_EGRESS_BASE,
     BAND_INGRESS_BASE,
@@ -32,6 +33,7 @@ from opnsense_controller.rules_manager import (
     _canonical_part,
     _module_alias_name,
     _normalize_protocol,
+    _rule_family,
     load_global_aliases,
     load_module,
     load_zones,
@@ -397,6 +399,38 @@ class TestValidation(unittest.TestCase):
 # ─────────────────────────────────────────────────────────────────────────────
 # Compilation
 # ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestAddressFamily(unittest.TestCase):
+    """Module rules cover IPv4 and IPv6 unless an address or protocol pins one (#815)."""
+
+    def test_interfaces_aliases_and_any_cover_both(self):
+        self.assertEqual(_rule_family("TCP", "opt3", "tm_forgejo"), IpProtocol.BOTH)
+        self.assertEqual(_rule_family("UDP", "any", "nfs_share_media"), IpProtocol.BOTH)
+
+    def test_a_literal_address_pins_its_family(self):
+        self.assertEqual(_rule_family("TCP", "10.2.10.0/24", "tm_x"), IpProtocol.IPV4)
+        self.assertEqual(_rule_family("TCP", "tm_x", "2001:db8::/64"), IpProtocol.IPV6)
+
+    def test_icmp_is_ipv4_and_icmpv6_ipv6(self):
+        self.assertEqual(_rule_family("ICMP", "opt3", "any"), IpProtocol.IPV4)
+        self.assertEqual(_rule_family("IPv6-ICMP", "opt3", "any"), IpProtocol.IPV6)
+
+    def test_icmpv6_can_be_declared(self):
+        # It used to normalise to "IPV6-ICMP", match no protocol and become TCP.
+        for spelling in ("ICMPv6", "ipv6-icmp", "icmp6"):
+            self.assertEqual(_normalize_protocol(spelling), Protocol.ICMPV6.value)
+
+    def test_a_zone_peer_is_its_interface_network(self):
+        mgr = _make_manager()
+        mgr._vlan_iface_cache = {310: "opt8"}
+        self.assertEqual(mgr._zone_net(mgr.zones["home"]), "opt8")
+        self.assertEqual(mgr._zone_net(mgr.zones["mgmt"]), "lan")      # untagged mgmt
+
+    def test_an_unresolved_zone_keeps_its_ipv4_subnet(self):
+        mgr = _make_manager()
+        mgr._vlan_iface_cache = {}
+        self.assertEqual(mgr._zone_net(mgr.zones["home"]), "10.3.10.0/24")
 
 
 class TestCompile(unittest.TestCase):

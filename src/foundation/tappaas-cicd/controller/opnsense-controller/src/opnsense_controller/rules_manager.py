@@ -268,7 +268,30 @@ def _normalize_protocol(value: str | None) -> str:
         return upper
     if upper in {"TCP/UDP", "TCP-UDP", "BOTH"}:
         return Protocol.TCP_UDP.value
+    if upper in {"ICMPV6", "IPV6-ICMP", "ICMP6"}:
+        return Protocol.ICMPV6.value
     return upper
+
+
+def _rule_family(protocol: str, *nets: str) -> IpProtocol:
+    """The address family a module rule can match.
+
+    Interface networks, aliases and `any` hold either family, so the rule
+    covers both — unless a literal address pins it, or the protocol does (ICMP
+    is IPv4's, ICMPv6 IPv6's). OPNsense refuses a both-family rule with a
+    literal address of one family.
+    """
+    if protocol == Protocol.ICMP.value:
+        return IpProtocol.IPV4
+    if protocol == Protocol.ICMPV6.value:
+        return IpProtocol.IPV6
+    for net in nets:
+        try:
+            version = ipaddress.ip_network(str(net).lstrip("!"), strict=False).version
+        except ValueError:
+            continue
+        return IpProtocol.IPV4 if version == 4 else IpProtocol.IPV6
+    return IpProtocol.BOTH
 
 
 def _port_to_str(value: int | str) -> str:
@@ -1539,9 +1562,25 @@ class RulesManager:
         if peer.startswith("alias:"):
             return peer[len("alias:") :]
         if peer in self.zones:
-            return self.zones[peer].ip_network or "any"
+            return self._zone_net(self.zones[peer])
         # Module-named peer: ensure FQDN alias exists, reference by alias name.
         return _module_alias_name(peer)
+
+    def _zone_net(self, zone: ZoneSpec) -> str:
+        """A zone's network as a rule names it: its interface, so the rule covers
+        whichever addresses the zone carries (IPv4 and IPv6).
+
+        A VLAN zone is its assigned interface; the untagged management zone is
+        `lan`. When neither resolves, the literal IPv4 subnet — and the rule
+        then matches IPv4 only.
+        """
+        if zone.vlan_tag > 0:
+            iface = self._vlan_interface_for_tag(zone.vlan_tag)
+            if iface:
+                return iface
+        elif zone.bridge.lower() == "lan":
+            return "lan"
+        return zone.ip_network or "any"
 
     def _resolve_self(self, module: ModuleSpec) -> str:
         """Resolve self (the module itself) for rules destined to/from this module."""
@@ -1953,7 +1992,7 @@ class RulesManager:
             action=RuleAction.PASS,
             interface=r.interface,
             direction=RuleDirection.IN,
-            ip_protocol=IpProtocol.IPV4,
+            ip_protocol=_rule_family(protocol.value, r.source_net, r.destination_net),
             protocol=protocol,
             source_net=r.source_net,
             destination_net=r.destination_net,
