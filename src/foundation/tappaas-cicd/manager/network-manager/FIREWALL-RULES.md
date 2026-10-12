@@ -205,18 +205,29 @@ drop it.
 
 For each `Active`/`Mandatory` zone, on the zone's own interface (`base` = the zone's slot in
 band 7). A zone with an empty `access-to` gets the three protective rules — anti-spoofing and
-the admin guard — and its gateway's DNS, NTP, DHCP and ICMP, and nothing else.
+the admin guard — and its gateway's services, and nothing else.
 
-| Sequence | Rule | Action |
-|---|---|---|
-| 970 | `Zone Z block spoofed source` | block, source not in the zone's subnet |
-| 980 / 981 | `Zone Z block firewall webgui` / `ssh` | block TCP 8443 / 22 to the firewall itself |
-| 990 / 991 | `Zone Z -> caddy https` / `http` | pass TCP 443 / 80 to the DMZ gateway |
-| base+0 | `Zone Z -> gateway dns` | pass TCP/UDP 53 to the zone's own gateway |
-| base+1 … +85 | `Zone Z -> <zone>` | pass any, to each zone in `access-to` (whole subnet, every port) |
-| base+86 / 87 / 88 | `Zone Z -> gateway ntp` / `dhcp` / `icmp` | pass UDP 123 / UDP 67 / ICMP to the gateway |
-| base+90 … 92 | `Zone Z block rfc1918-10` / `172` / `192` | block every other private network (only when `internet` is in `access-to`) |
-| base+99 | `Zone Z -> internet` | pass any (only when `internet` is in `access-to`) |
+Zone rules name a zone by its **interface**: its network as the source, its interface address as
+the gateway, a target zone by that zone's interface network. A rule therefore covers whichever
+addresses the zone carries, IPv4 and IPv6 alike. The family column says which.
+
+| Sequence | Rule | Family | Action |
+|---|---|---|---|
+| 970 | `Zone Z block spoofed source` | IPv4 | block, source not in the zone's network |
+| 980 / 981 | `Zone Z block firewall webgui` / `ssh` | both | block TCP 8443 / 22 to the firewall itself |
+| 990 / 991 | `Zone Z -> caddy https` / `http` | both | pass TCP 443 / 80 from the zone's network to the DMZ interface address |
+| base+0 | `Zone Z -> gateway dns` | both | pass TCP/UDP 53 to the zone's interface address |
+| base+1 … +85 | `Zone Z -> <zone>` | both | pass any, to each zone in `access-to` (its whole network, every port) |
+| base+86 / 87 | `Zone Z -> gateway ntp` / `dhcp` | both | pass UDP 123 / UDP 67 to the zone's interface address |
+| base+88 / 89 | `Zone Z -> gateway icmp` / `icmpv6` | IPv4 / IPv6 | pass ICMP / ICMPv6 to the zone's interface address |
+| base+90 … 92 | `Zone Z block rfc1918-10` / `172` / `192` | IPv4 | block every other private network (only when `internet` is in `access-to`) |
+| base+93 | `Zone Z block zone-networks` | IPv6 | block every zone's network: the alias `tappaas_zone_networks` (same condition) |
+| base+94 | `Zone Z block ula` | IPv6 | block unique-local addresses, `fc00::/7` (same condition) |
+| base+99 | `Zone Z -> internet` | both | pass any (only when `internet` is in `access-to`) |
+
+`tappaas_zone_networks` groups OPNsense's network table of every zone's interface, so it holds
+each zone's current IPv4 and IPv6 networks. IPv6 has no private ranges inside a site — a zone's
+IPv6 network is public — so this alias is what keeps zones apart over IPv6.
 
 **What a zone may ask of the firewall.** Its gateway serves it DNS, NTP, DHCP and ICMP, and
 nothing else: the admin GUI and SSH are blocked from every zone on every firewall address,
@@ -264,10 +275,10 @@ Rule names carry their identity: `tappaas-module:<vm>:ingress:<peer>:<port>`,
 
 ## Address family
 
-TAPPaaS rules are **IPv4 only**, and no zone has an IPv6 address. Whether the site supports
-IPv6 at all is `site.json` `ipv6` (default `false`). When it is false, the firewall drops all
-inbound and forwarded IPv6 ahead of every TAPPaaS rule, and DNS resolves over IPv4 only.
-After changing it, `module-manager update network` applies it.
+Zone rules cover IPv4 and IPv6 (see [Zone rules](#zone-rules)); no zone has an IPv6 address
+yet. Whether the site supports IPv6 at all is `site.json` `ipv6` (default `false`). When it is
+false, the firewall drops all inbound and forwarded IPv6 ahead of every TAPPaaS rule, and DNS
+resolves over IPv4 only. After changing it, `module-manager update network` applies it.
 
 ## Rules written by other modules
 
@@ -306,6 +317,8 @@ Where the rules do less than the zone model describes:
   declared.
 - **The private-network block covers RFC 1918 only.** 100.64.0.0/10 (carrier-grade NAT) and
   169.254.0.0/16 are reachable from every zone with internet access.
-- **The caddy-reach source is `10.0.0.0/8`**, not the zone's subnet. On a VLAN, anti-spoofing
-  narrows it to the zone; on the WireGuard interface group, which has no anti-spoofing, it
-  admits every tunnel.
+- **An overlay's caddy-reach source is `10.0.0.0/8`**, not its peers' range: the WireGuard
+  interface group has no network of its own to name, and no anti-spoofing narrows it.
+- **Module rules and anti-spoofing are IPv4 only.** Rules written by `rules-manager` match
+  IPv4; a zone's anti-spoofing rule does too, because a negated IPv6 interface network in
+  OPNsense also covers link-local addresses.
