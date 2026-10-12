@@ -17,6 +17,7 @@
 #   - non-force re-run REFUSES (exit != 0) and leaves site.json unchanged
 #   - --force re-run is idempotent (succeeds, still valid)
 #   - --name is required (no --name -> error)
+#   - --force keeps an operator-set channel (ADR-028 D9) and ipv6 (#149)
 #
 # Prints "Results: N passed, M failed, K skipped"; exits 1 on any failure.
 #
@@ -147,6 +148,19 @@ else
     ok "invalid --organization is rejected (slug validation)"
 fi
 
+# --- Case 6: --force keeps the operator's channel (ADR-028 D9) and ipv6 (#149) ---
+# Dropping channel would silently move an unstable/staging site to production.
+[[ "$(jqv "$SITE" 'has("channel")')" == "false" ]] && ok "fresh site.json has no .channel (= production)" || bad "fresh site.json wrote .channel"
+jq '.channel = "unstable" | .ipv6 = true' "$SITE" > "$SITE.tmp" && mv "$SITE.tmp" "$SITE"
+if "$CREATE" --name testsite --config-dir "$C1" --force >/dev/null 2>&1; then
+    ok "--force re-run with channel/ipv6 set exits 0"
+else
+    bad "--force re-run with channel/ipv6 set failed"
+fi
+[[ "$(jqv "$SITE" '.channel')" == "unstable" ]] && ok ".channel preserved across --force" || bad ".channel dropped by --force (got '$(jqv "$SITE" '.channel')')"
+[[ "$(jqv "$SITE" '.ipv6')" == "true" ]]       && ok ".ipv6 preserved across --force"    || bad ".ipv6 dropped by --force (got '$(jqv "$SITE" '.ipv6')')"
+run_validate "$SITE" && ok "site.json with channel validates" || bad "site.json with channel failed schema validation"
+
 echo ""
-echo "Results: ${PASS} passed, ${FAIL} failed, ${SKIP} skipped"
+echo "Results:${PASS} passed, ${FAIL} failed, ${SKIP} skipped"
 [[ "$FAIL" -eq 0 ]]
