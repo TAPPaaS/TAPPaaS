@@ -149,8 +149,9 @@ def _parse_bool(v: str) -> bool:
 
 # ── ADR-030: the WAN, the prefix and the zones ─────────────────────────
 
-_IFACE_KEYS = ("if", "ipaddrv6", "subnetv6", "gatewayv6", "track6-interface",
-               "track6-prefix-id", "dhcp6-ia-pd-len")
+# Read back every key the plan compares — the zone keys included, or a written
+# key reads as missing and every run rewrites it.
+_IFACE_KEYS = ("if", "gatewayv6", "dhcp6-ia-pd-len", *ZONE_V6_KEYS)
 
 _READ_PHP = r"""<?php
 require_once("config.inc");
@@ -291,7 +292,8 @@ def execute(mgr, host: str, actions: list[Action]) -> None:
         r = _radvd(mgr, "settings", "delEntry", "post", params=[a.detail["uuid"]])
         if r.get("result") != "deleted":
             raise RuntimeError(f"radvd entry on {a.target}: delete returned {r}")
-    if radvd:
+    # A zone change moves OPNsense's automatic radvd too (the override flag).
+    if radvd or reload_ifaces:
         _radvd(mgr, "service", "reconfigure", "post")
 
     # dnsmasq: one IPv6 range per zone, `ra-names` — advertisements and AAAA names.
