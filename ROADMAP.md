@@ -112,7 +112,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | 3 | G3.4 AI stack maturity | M | M | 1 | – | 10 |
 | 3 | G3.5 Installer UX | L | L | 1 | – | 3 |
 | 2 | G2.1 Firewall exposure & rule order | M | H | 7 | – | 14 |
-| 2 | G2.2 DNS resolver robustness | L | M | 4 | – | 5 |
+| 2 | G2.2 DNS resolver robustness | L | M | 4 | 1 | 4 |
 | 1 | G1.2 Backup placement model + managed machines (ADR-012, ADR-026) | M | H | 27 | – | 4 |
 | 1 | G1.6 Secrets & privileged access | H | H | 4 | – | 2 |
 | 1 | G1.7 Parked for Erik discussion | – | – | – | – | 5 |
@@ -131,6 +131,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | #488 | `apply-json-merge`: should a field that `.orig` never recorded be adopted from the release, or kept? #736 made each refused value visible; the rule itself is open | Operator |
 | #444 / #582 | What reading back a static DHCP reservation means (MAC pinning) — one question, not two | Lars and @ErikDaniel007 |
 | #154 | Is `firewall:internal-proxy` needed at all? | Operator (questioned 2026-05-31) |
+| #385 / #222 | NetBird: keep its server-side integration (zone, OPT1 and floating rules), or make it a pure client-side tool and reserve management access to the WireGuard admin VPN | Operator (considering, 2026-10-12) |
 
 ### Gates
 
@@ -140,7 +141,7 @@ met gates are recorded in the releases that carried their waves.
 | Wave · group | Still open |
 |--------------|------------|
 | 1 · G1.6 | #142 RFC outcome; a *Secrets management* ADR only once #58 comes back from Future Work |
-| 2 | Entry: ADR-014 amended for the `all` sentinel (#375, built), `serves` as an array (#576), anti-spoofing always on (#159, built) and mDNS in zones.json (#257); ADR-021 amended for DNSSEC with split horizon (#263); `site.json` `ipv6` (#149) — the IPv6 stance is its own ADR (#26). Exit: a lockout check on each site — mgmt and NetBird reach 8443 and 22, other zones do not; done on hrossen 2026-10-02 (NetBird untested there) |
+| 2 | Entry: ADR-014 amended for the `all` sentinel (#375, built), `serves` as an array (#576), anti-spoofing always on (#159, built) and mDNS in zones.json (#257); ADR-021 amended for DNSSEC with split horizon (#263); `site.json` `ipv6` (#149) — the IPv6 stance is its own ADR (#26). Exit: a lockout check on each site — mgmt and the admin VPN reach 8443 and 22, other zones do not; done on hrossen 2026-10-02. NetBird only if the NetBird decision keeps it server-side |
 | 3 | ADR-019 Proposed → Accepted (#36 / #127 boot order) |
 | 4 | ADR-023 Proposed → Accepted (#642, #643; render check open); ADR-015 Draft → Accepted (#486); ADR-011 Proposed → Accepted (#143 built); ADR-010 P7 sign-off (#406); ADR-008 amended (#236); ADR-019 amended for a second corosync link (#590) and the migrate verb (#429); ADR-007e amended for logging v2 (#165), or a new ADR if Zabbix is chosen; ADR-029 Proposed → Accepted (#772); the MAC pinning question (#444 / #582); #154 closed or kept; #430 decided before #170 |
 
@@ -349,15 +350,13 @@ Changes to live firewall and DNS behaviour on every installation. Restrictive de
 
 ### G2.1 Firewall exposure & rule order — Ease M · Risk H · released: 7 · open: 14
 
-Tighter firewall defaults that keep what modules need. Built: the gateway, GUI/SSH and anti-spoofing rules. Sprint from 2026-10-12: first a review of the tier model and rule creation, published (#816); then pinholes shadowed by private-range blocks (#386), lasting NetBird rules (#385, #222), every zone policy for IPv6 too (#815), and the rules manager's zones, aliases and overlaps.
+Tighter firewall defaults that keep what modules need. Built: the gateway, GUI/SSH and anti-spoofing rules. Sprint from 2026-10-12: first a review of the tier model and rule creation, published (#816); then pinholes shadowed by private-range blocks (#386), every zone policy for IPv6 too (#815), and the rules manager's zones, aliases and overlaps. NetBird rules (#385, #222) are low priority until the NetBird decision.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
 | #816 | Review the zone tiers and rule-set creation; publish how it works | M | L | **Opened 2026-10-12, first in the sprint:** every rule class, its order in pf and the tier model as built, against ADR-014/021; a design page for tappaas.org; each defect its own issue |
 | #386 | block-private rules shadow auto-pinholes | M | M | Opens intended paths that are silently blocked today |
 | #815 | IPv6 parity: zone policy covers IPv6 before any zone gets an address | M | M | **Opened 2026-10-12**, part 1 of #26: rules `inet46`, block-private plus ULA and link-local. No effect where IPv6 is absent; ships with the dry-run diff and the lockout check |
-| #385 | Persist the NetBird OPT1 pass rule | L | M | Land with #222 |
-| #222 | NetBird → srv floating rule is fragile | L | M | |
 | #576 | Zone `serves` as string or array | M | L | Backward compatible |
 | #257 | mDNS in zones.json | M | M | |
 | #160 | Overlap detection in the rules manager | M | L | Land with #256 |
@@ -367,15 +366,17 @@ Tighter firewall defaults that keep what modules need. Built: the gateway, GUI/S
 | #683 | Declared `ports` without `network:rules` are inert | L | L | Modules declaring `ports` but no `network:rules` (makerfloss) get no validation or rules, silently. Decide what such `ports` mean — a `validate` finding or documentation — with 0010's rule |
 | #223 | OPNsense 26.1 InterfaceAssignController | — | — | Park (agreed 2026-05-27); move to *Parking lot* |
 | #706 | A wireless device zone cannot be checked against its type | — | — | **Open, not yet scored** — zone model. Added in the 2026-09-24 issue sweep |
+| #385 | Persist the NetBird OPT1 pass rule | L | M | **Low priority this sprint (2026-10-12)**, pending the NetBird decision (*Decisions*). Land with #222 |
+| #222 | NetBird → srv floating rule is fragile | L | M | **Low priority this sprint (2026-10-12)**, pending the NetBird decision. The #816 review found no code that creates NetBird rules |
 
-### G2.2 DNS resolver robustness — Ease L · Risk M · released: 4 · open: 5
+### G2.2 DNS resolver robustness — Ease L · Risk M · released: 4 · done for 2.3: 1 · open: 4
 
 A resolver that holds up: a working Unbound restart (#387), a written IPv6 stance (#149), DNSSEC with split horizon (#263), public DNS that follows a dynamic WAN address (#383), and optional blocklists (#157).
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
 | #387 | Unbound rc.d restart fails (Python mismatch) | L | L | |
-| #149 | IPv6 root lookups fail → `do-ip6: no` | L | L | **Decided 2026-10-12:** a `site.json` `ipv6` field, default `false`, says whether the site supports IPv6; Unbound's `do-ip6` follows it. The stance is the IPv6 ADR (#26) |
+| ✅ #149 | IPv6 root lookups fail → `do-ip6: no` | L | L | **Done 2026-10-12** (`b03a4840`, awaits push): `ipv6-manager`, round trip live on hrossen with no IPv4 gap. **Every site turns IPv6 off at its next sweep unless `ipv6: true`.** Decided: a `site.json` `ipv6` field, default `false`, says whether the site supports IPv6; Unbound's `do-ip6` follows it. The stance is the IPv6 ADR (#26) |
 | #263 | DNSSEC on Unbound | L | M | Internal split-horizon zones need `domain-insecure` |
 | #383 | Keep wildcard public DNS current on dynamic WAN | M | L | |
 | FW #157 | Default DNS blocklists (DNSBL / maltrail) | M | M | Stretch; only after #387 |
