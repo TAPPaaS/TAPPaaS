@@ -16,6 +16,7 @@ from unittest.mock import MagicMock, patch
 
 from opnsense_controller.firewall_manager import (
     FirewallRuleInfo,
+    IpProtocol,
     Protocol,
     RuleAction,
 )
@@ -27,6 +28,7 @@ from opnsense_controller.zone_manager import (
     ZoneManager,
     select_orphan_ranges,
     select_orphan_zone_rules,
+    rule_drift,
     ZONE_RULE_RE,
     firewall_rule_plan,
     pending_change_count,
@@ -441,7 +443,7 @@ class TestGetZoneInterfaceVlanTagType(unittest.TestCase):
 
 
 def _to_info(rule, uuid="u") -> FirewallRuleInfo:
-    """Convert a created FirewallRule into the FirewallRuleInfo a later run sees."""
+    """Convert a created FirewallRule (or a FirewallRuleInfo) into what a later run sees."""
     iface = rule.interface if isinstance(rule.interface, str) else rule.interface[0]
     return FirewallRuleInfo(
         uuid=uuid,
@@ -450,7 +452,7 @@ def _to_info(rule, uuid="u") -> FirewallRuleInfo:
         action="pass" if rule.action == RuleAction.PASS else "block",
         interface=iface,
         direction="in",
-        protocol="any",
+        protocol=getattr(rule.protocol, "value", rule.protocol),
         source_net=rule.source_net,
         source_port=None,
         destination_net=rule.destination_net,
@@ -458,6 +460,8 @@ def _to_info(rule, uuid="u") -> FirewallRuleInfo:
         log=True,
         sequence=rule.sequence,
         source_invert=rule.source_invert,
+        ip_protocol=getattr(rule.ip_protocol, "value", rule.ip_protocol),
+        quick=rule.quick,
     )
 
 
@@ -627,6 +631,59 @@ class TestConfigureFirewallRulesSequencing(unittest.TestCase):
             r for r in second.created if r.description == "Zone srv -> gateway dns"
         )
         self.assertGreaterEqual(recreated.sequence, 30000)
+
+
+class TestRuleDrift(TestConfigureFirewallRulesSequencing):
+    """A zone rule changed on the firewall is put back as declared: not only what
+    it matches, but whether it is enabled, its protocol and address family."""
+
+    def _second_run_with(self, desc, **changes):
+        first = self._run(_build_zones())
+        existing = [_to_info(r, uuid=f"u{i}") for i, r in enumerate(first.created)]
+        target = next(r for r in existing if r.description == desc)
+        for k, v in changes.items():
+            setattr(target, k, v)
+        return self._run(_build_zones(), existing=existing)
+
+    def test_a_rule_as_declared_is_left_alone(self):
+        first = self._run(_build_zones())
+        existing = [_to_info(r, uuid=f"u{i}") for i, r in enumerate(first.created)]
+        second = self._run(_build_zones(), existing=existing)
+        self.assertEqual(second.deleted, [])
+        self.assertEqual(second.created, [])
+
+    def test_each_changed_property_is_repaired(self):
+        cases = {
+            "enabled": {"enabled": False},
+            "protocol": {"protocol": "UDP"},
+            "address family": {"ip_protocol": "inet6"},
+            "direction": {"direction": "out"},
+            "log": {"log": False},
+            "quick": {"quick": False},
+        }
+        for name, change in cases.items():
+            with self.subTest(name):
+                second = self._second_run_with("Zone srv -> caddy https", **change)
+                self.assertEqual(second.deleted, ["Zone srv -> caddy https"])
+                again = next(r for r in second.created
+                             if r.description == "Zone srv -> caddy https")
+                self.assertEqual(again.protocol, Protocol.TCP)
+                self.assertEqual(again.ip_protocol, IpProtocol.IPV4)
+                self.assertTrue(again.enabled and again.log and again.quick)
+
+    def test_rule_drift_names_what_differs(self):
+        first = self._run(_build_zones())
+        rule = next(r for r in first.created if r.description == "Zone srv -> caddy https")
+        info = _to_info(rule)
+        info.enabled = False
+        info.ip_protocol = "inet46"
+        self.assertEqual(
+            rule_drift(info, interface=info.interface, action="pass",
+                       source_net=rule.source_net, destination_net=rule.destination_net,
+                       destination_port=rule.destination_port,
+                       source_invert=rule.source_invert, sequence=rule.sequence,
+                       protocol=rule.protocol, ip_protocol=IpProtocol.IPV4),
+            ["address family", "enabled"])
 
 
 class TestGatewayAndAdminPorts(TestConfigureFirewallRulesSequencing):

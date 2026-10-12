@@ -101,7 +101,7 @@ def postflight_checks(skip_egress: bool = False) -> bool:
 
 
 from .dhcp_manager import DhcpManager, DhcpRange
-from .firewall_manager import FirewallManager, FirewallRule, FirewallRuleInfo, Protocol, RuleAction
+from .firewall_manager import FirewallManager, FirewallRule, FirewallRuleInfo, IpProtocol, Protocol, RuleAction
 from .log import debug, error, info, warn
 from .vlan_manager import Vlan, VlanManager
 
@@ -362,6 +362,33 @@ def select_orphan_zone_rules(
             "probably not this site's. Check --zones-file; no rules were removed."
         )
     return orphans, ""
+
+
+def rule_drift(existing: FirewallRuleInfo, *, interface: str, action: str,
+               source_net: str, destination_net: str, destination_port: str | None,
+               source_invert: bool, sequence: int, protocol: Protocol,
+               ip_protocol: IpProtocol) -> list[str]:
+    """The properties of an existing zone rule that differ from the declared rule.
+
+    Zone rules are written enabled, inbound, logged and first-match; anything else
+    on the firewall is drift, as is a different protocol or address family. An
+    empty list means the rule is as declared.
+    """
+    checks = [
+        ("interface", existing.interface != interface),
+        ("action", (existing.action or "").lower() != action),
+        ("source", existing.source_net != source_net or existing.source_invert != source_invert),
+        ("destination", existing.destination_net != destination_net),
+        ("port", (existing.destination_port or None) != destination_port),
+        ("sequence", existing.sequence is None or int(existing.sequence) != sequence),
+        ("protocol", (existing.protocol or "any").lower() != protocol.value.lower()),
+        ("address family", (existing.ip_protocol or "inet").lower() != ip_protocol.value),
+        ("enabled", not existing.enabled),
+        ("direction", (existing.direction or "in").lower() != "in"),
+        ("log", not existing.log),
+        ("quick", not existing.quick),
+    ]
+    return [name for name, differs in checks if differs]
 
 
 _RULE_PLAN_VERB = {"would_create": "create", "would_update": "update",
@@ -1757,6 +1784,7 @@ class ZoneManager:
         protocol: Protocol = Protocol.ANY,
         destination_port: str | None = None,
         source_invert: bool = False,
+        ip_protocol: IpProtocol = IpProtocol.IPV4,
     ) -> None:
         """Create a firewall rule or skip if it already exists.
 
@@ -1774,6 +1802,7 @@ class ZoneManager:
             protocol: L4 protocol to match (default ANY — zone access-to rules)
             destination_port: Destination port/range to match (None = any)
             source_invert: Match every source EXCEPT source_net (anti-spoofing)
+            ip_protocol: Address family the rule matches (default IPv4)
         """
         action_str = "pass" if action == RuleAction.PASS else "block"
 
@@ -1791,17 +1820,16 @@ class ZoneManager:
             # sequence (e.g. carried over from the old vlan*10 numbering, or
             # from before an access-to zone was added) must be renumbered or it
             # collides with / mis-orders against the other zone rules (#243).
-            seq_drift = existing.sequence is None or int(existing.sequence) != sequence
-            drifted = (
-                existing.interface != interface
-                or (existing.action or "").lower() != action_str
-                or existing.destination_net != destination_net
-                or existing.source_net != source_net
-                or (existing.destination_port or None) != destination_port
-                or existing.source_invert != source_invert
-                or seq_drift
+            # Every property the rule is written with is compared, not only what
+            # it matches: a rule disabled or edited in the GUI, or written with
+            # another protocol or address family, is put back as declared.
+            drift = rule_drift(
+                existing, interface=interface, action=action_str,
+                source_net=source_net, destination_net=destination_net,
+                destination_port=destination_port, source_invert=source_invert,
+                sequence=sequence, protocol=protocol, ip_protocol=ip_protocol,
             )
-            if not drifted:
+            if not drift:
                 debug(f"    {action_str}: {description} (exists, in sync, skipping)")
                 results_list.append({
                     "description": description,
@@ -1811,9 +1839,7 @@ class ZoneManager:
                 })
                 return
 
-            debug(f"    {action_str}: {description} (drift: iface "
-                  f"{existing.interface!r}->{interface!r}, seq "
-                  f"{existing.sequence!r}->{sequence!r}; reconciling)")
+            debug(f"    {action_str}: {description} (drift: {', '.join(drift)}; reconciling)")
             if check_mode:
                 results_list.append({
                     "description": description,
@@ -1822,6 +1848,7 @@ class ZoneManager:
                     "destination": destination_net,
                     "from_interface": existing.interface,
                     "to_interface": interface,
+                    "drift": drift,
                 })
                 return
             # Delete the stale rule, then fall through to recreate it cleanly
@@ -1848,6 +1875,7 @@ class ZoneManager:
                     description=description,
                     action=action,
                     interface=interface,
+                    ip_protocol=ip_protocol,
                     protocol=protocol,
                     source_net=source_net,
                     source_invert=source_invert,
