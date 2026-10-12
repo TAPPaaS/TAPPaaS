@@ -1769,6 +1769,39 @@ class ZoneManager:
 
         return results
 
+    def _protective_rules(
+        self,
+        manager: FirewallManager,
+        existing_by_desc: dict[str, FirewallRuleInfo],
+        zone: "Zone",
+        zone_interface: str,
+        check_mode: bool,
+        zone_results: list[dict],
+    ) -> None:
+        """Anti-spoofing and the admin guard: what every rule-managed zone gets.
+
+        Only the zone's own subnet may send on its interface, and no address of
+        the firewall is reachable on its admin ports. Neither grants anything,
+        so a zone with an empty access-to gets them too.
+        """
+        self._create_or_skip_rule(
+            manager, existing_by_desc,
+            f"Zone {zone.name} block spoofed source",
+            zone_interface, zone.ip_network, "any",
+            RuleAction.BLOCK, self.ANTISPOOF_SEQUENCE,
+            check_mode, zone_results,
+            source_invert=True,
+        )
+        for offset, (port, label) in enumerate(self.ADMIN_GUARD_PORTS):
+            self._create_or_skip_rule(
+                manager, existing_by_desc,
+                f"Zone {zone.name} block firewall {label}",
+                zone_interface, zone.ip_network, "(self)",
+                RuleAction.BLOCK, self.ADMIN_GUARD_SEQUENCE + offset,
+                check_mode, zone_results,
+                protocol=Protocol.TCP, destination_port=port,
+            )
+
     def _create_or_skip_rule(
         self,
         manager: FirewallManager,
@@ -2026,25 +2059,9 @@ class ZoneManager:
                             check_mode, zone_results,
                             protocol=proto, destination_port=port,
                         )
-                    # Step 0: only the zone's own subnet may speak on its interface (#159).
-                    self._create_or_skip_rule(
-                        manager, existing_by_desc,
-                        f"Zone {zone.name} block spoofed source",
-                        zone_interface, zone.ip_network, "any",
-                        RuleAction.BLOCK, self.ANTISPOOF_SEQUENCE,
-                        check_mode, zone_results,
-                        source_invert=True,
-                    )
-                    # Step 1b: the firewall's admin ports, on any of its addresses (#384).
-                    for offset, (port, label) in enumerate(self.ADMIN_GUARD_PORTS):
-                        self._create_or_skip_rule(
-                            manager, existing_by_desc,
-                            f"Zone {zone.name} block firewall {label}",
-                            zone_interface, zone.ip_network, "(self)",
-                            RuleAction.BLOCK, self.ADMIN_GUARD_SEQUENCE + offset,
-                            check_mode, zone_results,
-                            protocol=Protocol.TCP, destination_port=port,
-                        )
+                    # Steps 0 and 1b: anti-spoofing and the admin guard.
+                    self._protective_rules(manager, existing_by_desc, zone,
+                                           zone_interface, check_mode, zone_results)
 
                     # Step 2: Allow access to each explicitly named zone. These
                     # occupy fixed offsets base+1 .. base+89, so the block band
@@ -2101,6 +2118,25 @@ class ZoneManager:
                     "rules": zone_results,
                 }
 
+            # A zone with no access-to grants nothing, but it is still protected:
+            # anti-spoofing and the admin guard, and no pass of any kind.
+            for zone in isolated_zones:
+                zone_interface = self.get_zone_interface(zone)
+                if not zone_interface:
+                    if check_mode:
+                        warn(f"{zone.name}: Cannot find interface (skipping)")
+                    else:
+                        self._fail(f"{zone.name}: Cannot find interface — its "
+                                   f"protective rules were not reconciled")
+                    results[zone.name] = {"status": "error",
+                                          "error": "Interface not found", "rules": []}
+                    continue
+                zone_results = []
+                self._protective_rules(manager, existing_by_desc, zone,
+                                       zone_interface, check_mode, zone_results)
+                results[zone.name] = {"status": "isolated", "interface": zone_interface,
+                                      "access_to": [], "rules": zone_results}
+
             # Blanket reverse-proxy reachability (#366): every zone may reach the
             # DMZ gateway (Caddy) on tcp/80+443 regardless of access-to, so
             # split-horizon DNS to the DMZ gateway works for client zones that have
@@ -2132,8 +2168,8 @@ class ZoneManager:
 
             # Report on isolated zones (enabled but empty access-to)
             for zone in isolated_zones:
-                debug(f"  {zone.name}: No rules (fully isolated, default block)")
-                results[zone.name] = {"status": "isolated", "access_to": []}
+                debug(f"  {zone.name}: protective rules only (no access-to, default block)")
+                results.setdefault(zone.name, {"status": "isolated", "access_to": []})
 
             # Report on manual zones
             for zone in manual_zones:

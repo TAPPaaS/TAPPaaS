@@ -167,8 +167,8 @@ flowchart TD
    declares `serves` changes ([ZONES.md](ZONES.md#serves--linking-a-client-or-iot-zone-to-an-environment)).
 2. **`all`.** Where `mgmt` says `all`, it is read as `internet` plus every zone that is not
    `Disabled`, an `Overlay` or the `WAN` hand-off.
-3. **Zone rules.** `zone-manager` writes the baseline of every `Active` or `Mandatory` zone with
-   a non-empty `access-to`, removes the rules of disabled and deleted zones, and applies once.
+3. **Zone rules.** `zone-manager` writes the rules of every `Active` or `Mandatory` zone,
+   removes the rules of disabled and deleted zones, and applies once.
 4. **Module rules.** `rules-manager` turns each module's ingress, egress and service
    dependencies into rules and host aliases, checks them against the effective zones, and
    applies them. Port forwards and source NAT are written by their own tools, and source NAT
@@ -199,8 +199,9 @@ drop it.
 
 ## Zone rules
 
-For each `Active`/`Mandatory` zone with a non-empty `access-to`, on the zone's own interface
-(`base` = the zone's slot in band 7):
+For each `Active`/`Mandatory` zone, on the zone's own interface (`base` = the zone's slot in
+band 7). A zone with an empty `access-to` gets only the three protective rules — anti-spoofing
+and the admin guard — and no pass: it reaches neither its gateway's services nor anything else.
 
 | Sequence | Rule | Action |
 |---|---|---|
@@ -295,9 +296,6 @@ Where the rules do less than the zone model describes:
   against an `isolated` target or the target's `pinhole-allowed-from`; ingress from another
   module, an alias or the internet is not checked against the zones; port forwards are not
   limited by zone.
-- **A zone with an empty `access-to` gets no rules.** A zone without egress, such as
-  `iotLocal`, has no anti-spoofing rule and no rules for gateway DNS or NTP. An `isolated` zone
-  with internet egress gets the full set.
 - **The private-network block covers RFC 1918 only.** 100.64.0.0/10 (carrier-grade NAT) and
   169.254.0.0/16 are reachable from every zone with internet access.
 - **The caddy-reach source is `10.0.0.0/8`**, not the zone's subnet. On a VLAN, anti-spoofing
