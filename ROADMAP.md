@@ -155,7 +155,7 @@ met gates are recorded in the releases that carried their waves.
 | Secrets management | #58 (in Future Work since 2026-10-02): one secrets-access helper every module uses instead of reading `/etc/secrets`, OpenBao behind it later | G1.6, when #58 returns |
 | VMID convention | #294 — only if it is adopted | G1.7 |
 | Legal/processor | #359 | Wave 4 |
-| IPv6 | #26: opt-in per site after install — a delegated prefix per zone, which zones get it, east-west stays IPv4, a prefix change, turning it off | #26 parts 4–6; parity (#815) goes ahead in G2.1 |
+| IPv6 | #26 — **drafted 2026-10-12 as [ADR-030](docs/ADR/ADR-030%20-%20IPv6.md) (Proposed)** on `g2.1-firewall`: WAN in `site.json` (dynamic default, static), a `/56`-or-larger prefix, an `ipv6Subnet` per zone by default. Next: the OPNsense interface-API spike | #26 parts 4–6; parity (#815) built in G2.1 |
 
 ### Housekeeping
 
