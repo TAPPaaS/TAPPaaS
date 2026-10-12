@@ -158,6 +158,14 @@ What follows from names with both families:
 - **Caddy to a service** over IPv6: Caddy reaches upstreams by name and tries IPv6 first,
   falling back to IPv4 at once (Go's dialer). A service that listens on IPv4 only (`0.0.0.0`)
   keeps working over IPv4; one that listens on `[::]` is reached over IPv6.
+- **Services listen on both families**, and **trust Caddy by its IPv6 address too.** Over
+  IPv6, Caddy's requests come from the firewall's address in the service's zone, which
+  follows the prefix. `ipv6-manager gateway <zone>` reads it from the interface, and the
+  deploy adds it to the module's companion JSON as `proxySourceV6`. A module that trusts its
+  proxy by address (Nextcloud `trusted_proxies`, Immich `IMMICH_TRUSTED_PROXIES`) trusts that
+  one `/128` beside its IPv4 rule. After a prefix change it is picked up by the next update;
+  until then the service sees the proxy as the client. A service in a container on a Podman
+  bridge network (Euro-Office) stays IPv4: its port mapping forwards IPv4 only.
 
 ### D7 — One converging step, in the network update
 
