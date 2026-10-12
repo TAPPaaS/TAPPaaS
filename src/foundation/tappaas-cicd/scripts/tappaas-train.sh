@@ -1468,8 +1468,12 @@ cmd_fault() {
 on_main() { g merge-base --is-ancestor "$1" origin/main; }
 
 # A D12 reason names its case first, so the bar can be audited from the record.
+# Production's three; staging also takes a disruption the boundary would carry on.
 D12_CLAUSES="data safety:|security:|service down:"
-d12_clause_ok() { [[ "$1" =~ ^(data\ safety|security|service\ down):\ *[^\ ] ]]; }
+d12_clause_ok() { # <why> <channel>
+    [[ "$1" =~ ^(data\ safety|security|service\ down):\ *[^\ ] ]] && return 0
+    [[ "$2" == "staging" && "$1" =~ ^disruption:\ *[^\ ] ]]
+}
 
 # ── patch (ADR-028 D12) ──────────────────────────────────────────────
 # An urgent fix reaches a channel before its boundary. The fix was authored on
@@ -1486,7 +1490,7 @@ cmd_patch() {
     esac
     [[ -n "${commit}" ]] || die "patch needs the commit that carries the fix"
     [[ -n "${WHY}" ]] || die "patch needs --why: which D12 case (data safety, a security CVE, a service down) and what"
-    d12_clause_ok "${WHY}" || die "--why must start with the D12 case it invokes — ${D12_CLAUSES//|/ or } — then what: \"service down: grafana crash-loops on /etc/secrets\". Not urgent otherwise (ADR-028 D12)."
+    d12_clause_ok "${WHY}" "${channel}" || die "--why must start with the D12 case it invokes — ${D12_CLAUSES//|/ or }$([[ ${channel} == staging ]] && echo ' or disruption:') — then what: \"service down: grafana crash-loops on /etc/secrets\". Not urgent otherwise (ADR-028 D12)."
     full="$(g rev-parse --verify --quiet "${commit}^{commit}")" || die "unknown commit: ${commit}"
     [[ -z "$(g status --porcelain)" ]] || { error "the checkout has uncommitted changes"; return 1; }
 
@@ -1820,7 +1824,7 @@ NO_FETCH=0; DRY_RUN=0; RESUME=0; FORCE_BOUNDARY=0
 # Cut the next MAJOR at this boundary (ADR-028 D13) — only ever the operator's word.
 MAJOR=0
 RENDER=0
-# Why an urgent fix may skip the soak (ADR-028 D12) — required by `patch`.
+# Why an urgent fix may skip the soak (ADR-028 D12; D15 moves it) — required by `patch`.
 WHY=""
 # Where production lives. `stable` unless told otherwise: an alternative lets a
 # promotion be rehearsed onto a throwaway ref without touching what sites run.

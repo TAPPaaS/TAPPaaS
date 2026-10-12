@@ -385,6 +385,8 @@ ancestor of `main`, which is what makes "back-ported" a fact rather than an inte
 
 Rare, and deliberately hard to reach for: **data safety, a high-severity security CVE, or a
 service down with the fix already written** — each only when there is no workaround (ADR-028 D12).
+Staging also takes a **disruption** (`--why "disruption: …"`): a fault that disrupts or regresses
+the platform's operation and that the next boundary would carry into production.
 "It is finished" is not a reason; the soak is the test, not a queue.
 
 Author the fix on a branch off **the channel's own tip**, merge that branch into `main`, then let
