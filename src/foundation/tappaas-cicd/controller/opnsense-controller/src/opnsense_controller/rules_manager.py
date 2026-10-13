@@ -1082,8 +1082,30 @@ class RulesManager:
         # 2. Apply rules atomically with a savepoint
         revision = self.fw.create_savepoint()
         try:
-            existing = self._list_owned_rules(module.vmname) if prune else []
+            live = self._list_owned_rules(module.vmname)
+            existing = live if prune else []
             desired_descs = {r.description for r in rules}
+
+            # A rule is matched on its full description, which carries the
+            # human text after its canonical identity: a changed text would be
+            # a new rule next to the old one, and both share the identity, so
+            # no prune ever removed it (#820). Before writing, drop every live
+            # rule with a desired identity but not the description being
+            # written, and every second copy — the write then updates the one
+            # left, or creates it. Same savepoint, one apply.
+            by_identity: dict[str, list[FirewallRuleInfo]] = {}
+            for lr in live:
+                by_identity.setdefault(_canonical_part(lr.description), []).append(lr)
+            for r in rules:
+                want = self._to_firewall_rule(r).description
+                kept = False
+                for lr in by_identity.get(r.description, []):
+                    if lr.description == want and not kept:
+                        kept = True
+                        continue
+                    debug(f"{module.vmname}: replacing '{lr.description}' with '{want}'")
+                    self.fw.delete_rule_by_uuid(lr.uuid, apply=False)
+                    result.deleted += 1
 
             for r in rules:
                 res = self.fw.create_rule(self._to_firewall_rule(r), apply=False)

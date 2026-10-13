@@ -835,6 +835,58 @@ class TestVerifyAndPruneSuffix(unittest.TestCase):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+class TestDescriptionChange(unittest.TestCase):
+    """#820: a changed description updates the rule; it never leaves a second one."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self.tmp.name)
+        (self.dir / "litellm.json").write_text(json.dumps(LITELLM_FIXTURE))
+        (self.dir / "vllm.json").write_text(json.dumps(VLLM_FIXTURE))
+        self.mgr = _make_manager(modules_dir=self.dir)
+        self.mgr._write_sequence_map = lambda *a, **k: None
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def _apply(self, live, prune):
+        self.mgr._list_owned_rules = lambda name: live
+        fw = MagicMock()
+        fw.create_savepoint.return_value = "rev"
+        deleted = []
+        fw.delete_rule_by_uuid.side_effect = lambda uuid, apply=False: deleted.append(uuid)
+        fw.create_rule.return_value = {"result": {"changed": True}}
+        self.mgr._fw = fw
+        self.mgr._apply("litellm", prune=prune)
+        return deleted, fw
+
+    def _with_text(self, info, text, uuid):
+        canon = _canonical_part(info.description)
+        return FirewallRuleInfo(**{**info.__dict__, "uuid": uuid,
+                                   "description": f"{canon} | {text}"})
+
+    def test_a_new_text_replaces_the_old_rule_on_add_and_reconcile(self):
+        desired, _ = self.mgr._compile(load_module(self.dir, "litellm"))
+        live = _live_from_compiled(self.mgr, desired)
+        old = self._with_text(live[0], "old wording", "OLD")
+        for prune in (False, True):
+            deleted, fw = self._apply(live[1:] + [old], prune)
+            self.assertEqual(deleted, ["OLD"])
+            self.assertEqual(fw.create_rule.call_count, len(desired))
+
+    def test_a_second_copy_is_removed(self):
+        desired, _ = self.mgr._compile(load_module(self.dir, "litellm"))
+        live = _live_from_compiled(self.mgr, desired)
+        copy = FirewallRuleInfo(**{**live[0].__dict__, "uuid": "COPY"})
+        deleted, _ = self._apply(live + [copy], prune=False)
+        self.assertEqual(deleted, ["COPY"])
+
+    def test_an_unchanged_rule_is_left_alone(self):
+        desired, _ = self.mgr._compile(load_module(self.dir, "litellm"))
+        deleted, _ = self._apply(_live_from_compiled(self.mgr, desired), prune=True)
+        self.assertEqual(deleted, [])
+
+
 def _raw_reconfigure_calls(fw) -> list:
     """The firewall/alias/reconfigure raw calls recorded on a MagicMock client."""
     calls = []

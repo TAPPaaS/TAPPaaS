@@ -303,6 +303,7 @@ IPv4-only when it names a literal IPv4 address or ICMP, and IPv6-only for ICMPv6
 
 Rule names carry their identity: `tappaas-module:<vm>:ingress:<peer>:<port>`,
 `tappaas-svcdep:<consumer>:<service>:<provider>:<port>`, each followed by a human description.
+A rule is one per identity: changing only its description rewrites the rule in place.
 
 ## Address family
 
