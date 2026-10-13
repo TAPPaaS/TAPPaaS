@@ -166,8 +166,15 @@ it against the CVE source of its layer, read-only on every target:
 | a module's VM | every managed module with a `vmid` | its closure (NixOS) or its dpkg status (Debian), over ssh as `tappaas` | `grype` / `trivy rootfs` |
 | a module's LXC | `kind: lxc` | the same probe, through `pct exec` on the node it runs on | `trivy rootfs` |
 | a running image | the containers `podman`/`docker ps` lists inside each target | the image by its **registry digest**, never its tag — one target per image | `trivy image` |
+| …its bundled native libraries | the same containers | what the container's own Python reports: FFmpeg in PyAV, libsndfile in soundfile, Pillow's codecs, OpenSSL in cryptography, OpenBLAS in numpy, Python's expat | `grype` by CPE, on the image's target |
 | a node | `site.json` `.hardware.nodes` | its dpkg status | `trivy rootfs` |
 | the firewall | the module that provides `network:rules` | `pkg query` | `pkg audit` + `pkg upgrade -nU` |
+
+trivy sees an image's OS and Python packages but not the shared libraries a wheel
+ships inside it, loaded in the application's own process. The scan asks each
+container's Python for those versions (a script on stdin; nothing is installed),
+matches them by CPE and counts them on the image. They carry no fix-state: the fix
+is a new image. Wheel libraries it cannot attribute are counted in the image's note.
 
 A Nix package's CPE vendor comes from the mothership's nixpkgs
 (`meta.identifiers.cpeParts`), which is the estate pin every guest is built from

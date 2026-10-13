@@ -4670,6 +4670,617 @@
           "ref": "pkg:deb/debian/libgnutls30@3.7.9-2%2Bdeb12u7"
         }
       ]
+    },
+    {
+      "id": "CVE-2023-6601",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 (av.libs), found by the bundled-library scan (#811). PyAV is imported only by routers/audio.py, for server-side transcription (faster-whisper); since #810 the server transcribes nothing: audio.stt.supported_content_types names a type no upload carries, which closes both callers (the transcription endpoint and chat-file processing), and openwebui-apply-stt keeps it so. No user data reaches these decoders.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2023-6602",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 (av.libs), found by the bundled-library scan (#811). PyAV is imported only by routers/audio.py, for server-side transcription (faster-whisper); since #810 the server transcribes nothing: audio.stt.supported_content_types names a type no upload carries, which closes both callers (the transcription endpoint and chat-file processing), and openwebui-apply-stt keeps it so. No user data reaches these decoders.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2023-6604",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 (av.libs), found by the bundled-library scan (#811). PyAV is imported only by routers/audio.py, for server-side transcription (faster-whisper); since #810 the server transcribes nothing: audio.stt.supported_content_types names a type no upload carries, which closes both callers (the transcription endpoint and chat-file processing), and openwebui-apply-stt keeps it so. No user data reaches these decoders.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2023-6605",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 (av.libs), found by the bundled-library scan (#811). PyAV is imported only by routers/audio.py, for server-side transcription (faster-whisper); since #810 the server transcribes nothing: audio.stt.supported_content_types names a type no upload carries, which closes both callers (the transcription endpoint and chat-file processing), and openwebui-apply-stt keeps it so. No user data reaches these decoders.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2024-55069",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 (av.libs), found by the bundled-library scan (#811). PyAV is imported only by routers/audio.py, for server-side transcription (faster-whisper); since #810 the server transcribes nothing: audio.stt.supported_content_types names a type no upload carries, which closes both callers (the transcription endpoint and chat-file processing), and openwebui-apply-stt keeps it so. No user data reaches these decoders.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2025-0518",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 (av.libs), found by the bundled-library scan (#811). PyAV is imported only by routers/audio.py, for server-side transcription (faster-whisper); since #810 the server transcribes nothing: audio.stt.supported_content_types names a type no upload carries, which closes both callers (the transcription endpoint and chat-file processing), and openwebui-apply-stt keeps it so. No user data reaches these decoders.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2025-10256",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 (av.libs), found by the bundled-library scan (#811). PyAV is imported only by routers/audio.py, for server-side transcription (faster-whisper); since #810 the server transcribes nothing: audio.stt.supported_content_types names a type no upload carries, which closes both callers (the transcription endpoint and chat-file processing), and openwebui-apply-stt keeps it so. No user data reaches these decoders.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2025-12343",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 (av.libs), found by the bundled-library scan (#811). PyAV is imported only by routers/audio.py, for server-side transcription (faster-whisper); since #810 the server transcribes nothing: audio.stt.supported_content_types names a type no upload carries, which closes both callers (the transcription endpoint and chat-file processing), and openwebui-apply-stt keeps it so. No user data reaches these decoders.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2025-1373",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 (av.libs), found by the bundled-library scan (#811). PyAV is imported only by routers/audio.py, for server-side transcription (faster-whisper); since #810 the server transcribes nothing: audio.stt.supported_content_types names a type no upload carries, which closes both callers (the transcription endpoint and chat-file processing), and openwebui-apply-stt keeps it so. No user data reaches these decoders.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2025-1594",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 (av.libs), found by the bundled-library scan (#811). PyAV is imported only by routers/audio.py, for server-side transcription (faster-whisper); since #810 the server transcribes nothing: audio.stt.supported_content_types names a type no upload carries, which closes both callers (the transcription endpoint and chat-file processing), and openwebui-apply-stt keeps it so. No user data reaches these decoders.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2025-22919",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 (av.libs), found by the bundled-library scan (#811). PyAV is imported only by routers/audio.py, for server-side transcription (faster-whisper); since #810 the server transcribes nothing: audio.stt.supported_content_types names a type no upload carries, which closes both callers (the transcription endpoint and chat-file processing), and openwebui-apply-stt keeps it so. No user data reaches these decoders.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2025-22921",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 (av.libs), found by the bundled-library scan (#811). PyAV is imported only by routers/audio.py, for server-side transcription (faster-whisper); since #810 the server transcribes nothing: audio.stt.supported_content_types names a type no upload carries, which closes both callers (the transcription endpoint and chat-file processing), and openwebui-apply-stt keeps it so. No user data reaches these decoders.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2025-25468",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 (av.libs), found by the bundled-library scan (#811). PyAV is imported only by routers/audio.py, for server-side transcription (faster-whisper); since #810 the server transcribes nothing: audio.stt.supported_content_types names a type no upload carries, which closes both callers (the transcription endpoint and chat-file processing), and openwebui-apply-stt keeps it so. No user data reaches these decoders.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2025-25469",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 (av.libs), found by the bundled-library scan (#811). PyAV is imported only by routers/audio.py, for server-side transcription (faster-whisper); since #810 the server transcribes nothing: audio.stt.supported_content_types names a type no upload carries, which closes both callers (the transcription endpoint and chat-file processing), and openwebui-apply-stt keeps it so. No user data reaches these decoders.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2025-59730",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 (av.libs), found by the bundled-library scan (#811). PyAV is imported only by routers/audio.py, for server-side transcription (faster-whisper); since #810 the server transcribes nothing: audio.stt.supported_content_types names a type no upload carries, which closes both callers (the transcription endpoint and chat-file processing), and openwebui-apply-stt keeps it so. No user data reaches these decoders.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2025-9951",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 (av.libs), found by the bundled-library scan (#811). PyAV is imported only by routers/audio.py, for server-side transcription (faster-whisper); since #810 the server transcribes nothing: audio.stt.supported_content_types names a type no upload carries, which closes both callers (the transcription endpoint and chat-file processing), and openwebui-apply-stt keeps it so. No user data reaches these decoders.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-30997",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 (av.libs), found by the bundled-library scan (#811). PyAV is imported only by routers/audio.py, for server-side transcription (faster-whisper); since #810 the server transcribes nothing: audio.stt.supported_content_types names a type no upload carries, which closes both callers (the transcription endpoint and chat-file processing), and openwebui-apply-stt keeps it so. No user data reaches these decoders.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-30998",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 (av.libs), found by the bundled-library scan (#811). PyAV is imported only by routers/audio.py, for server-side transcription (faster-whisper); since #810 the server transcribes nothing: audio.stt.supported_content_types names a type no upload carries, which closes both callers (the transcription endpoint and chat-file processing), and openwebui-apply-stt keeps it so. No user data reaches these decoders.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-30999",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 (av.libs), found by the bundled-library scan (#811). PyAV is imported only by routers/audio.py, for server-side transcription (faster-whisper); since #810 the server transcribes nothing: audio.stt.supported_content_types names a type no upload carries, which closes both callers (the transcription endpoint and chat-file processing), and openwebui-apply-stt keeps it so. No user data reaches these decoders.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-40962",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 (av.libs), found by the bundled-library scan (#811). PyAV is imported only by routers/audio.py, for server-side transcription (faster-whisper); since #810 the server transcribes nothing: audio.stt.supported_content_types names a type no upload carries, which closes both callers (the transcription endpoint and chat-file processing), and openwebui-apply-stt keeps it so. No user data reaches these decoders.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-64830",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 (av.libs), found by the bundled-library scan (#811). PyAV is imported only by routers/audio.py, for server-side transcription (faster-whisper); since #810 the server transcribes nothing: audio.stt.supported_content_types names a type no upload carries, which closes both callers (the transcription endpoint and chat-file processing), and openwebui-apply-stt keeps it so. No user data reaches these decoders.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-64832",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 (av.libs), found by the bundled-library scan (#811). PyAV is imported only by routers/audio.py, for server-side transcription (faster-whisper); since #810 the server transcribes nothing: audio.stt.supported_content_types names a type no upload carries, which closes both callers (the transcription endpoint and chat-file processing), and openwebui-apply-stt keeps it so. No user data reaches these decoders.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-64833",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 (av.libs), found by the bundled-library scan (#811). PyAV is imported only by routers/audio.py, for server-side transcription (faster-whisper); since #810 the server transcribes nothing: audio.stt.supported_content_types names a type no upload carries, which closes both callers (the transcription endpoint and chat-file processing), and openwebui-apply-stt keeps it so. No user data reaches these decoders.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-64834",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 (av.libs), found by the bundled-library scan (#811). PyAV is imported only by routers/audio.py, for server-side transcription (faster-whisper); since #810 the server transcribes nothing: audio.stt.supported_content_types names a type no upload carries, which closes both callers (the transcription endpoint and chat-file processing), and openwebui-apply-stt keeps it so. No user data reaches these decoders.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-64835",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 (av.libs), found by the bundled-library scan (#811). PyAV is imported only by routers/audio.py, for server-side transcription (faster-whisper); since #810 the server transcribes nothing: audio.stt.supported_content_types names a type no upload carries, which closes both callers (the transcription endpoint and chat-file processing), and openwebui-apply-stt keeps it so. No user data reaches these decoders.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-65703",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 (av.libs), found by the bundled-library scan (#811). PyAV is imported only by routers/audio.py, for server-side transcription (faster-whisper); since #810 the server transcribes nothing: audio.stt.supported_content_types names a type no upload carries, which closes both callers (the transcription endpoint and chat-file processing), and openwebui-apply-stt keeps it so. No user data reaches these decoders.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-65704",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 (av.libs), found by the bundled-library scan (#811). PyAV is imported only by routers/audio.py, for server-side transcription (faster-whisper); since #810 the server transcribes nothing: audio.stt.supported_content_types names a type no upload carries, which closes both callers (the transcription endpoint and chat-file processing), and openwebui-apply-stt keeps it so. No user data reaches these decoders.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-65705",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 (av.libs), found by the bundled-library scan (#811). PyAV is imported only by routers/audio.py, for server-side transcription (faster-whisper); since #810 the server transcribes nothing: audio.stt.supported_content_types names a type no upload carries, which closes both callers (the transcription endpoint and chat-file processing), and openwebui-apply-stt keeps it so. No user data reaches these decoders.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-65706",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 (av.libs), found by the bundled-library scan (#811). PyAV is imported only by routers/audio.py, for server-side transcription (faster-whisper); since #810 the server transcribes nothing: audio.stt.supported_content_types names a type no upload carries, which closes both callers (the transcription endpoint and chat-file processing), and openwebui-apply-stt keeps it so. No user data reaches these decoders.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-66036",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 (av.libs), found by the bundled-library scan (#811). PyAV is imported only by routers/audio.py, for server-side transcription (faster-whisper); since #810 the server transcribes nothing: audio.stt.supported_content_types names a type no upload carries, which closes both callers (the transcription endpoint and chat-file processing), and openwebui-apply-stt keeps it so. No user data reaches these decoders.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-66037",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 (av.libs), found by the bundled-library scan (#811). PyAV is imported only by routers/audio.py, for server-side transcription (faster-whisper); since #810 the server transcribes nothing: audio.stt.supported_content_types names a type no upload carries, which closes both callers (the transcription endpoint and chat-file processing), and openwebui-apply-stt keeps it so. No user data reaches these decoders.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-66038",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 (av.libs), found by the bundled-library scan (#811). PyAV is imported only by routers/audio.py, for server-side transcription (faster-whisper); since #810 the server transcribes nothing: audio.stt.supported_content_types names a type no upload carries, which closes both callers (the transcription endpoint and chat-file processing), and openwebui-apply-stt keeps it so. No user data reaches these decoders.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-66039",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 (av.libs), found by the bundled-library scan (#811). PyAV is imported only by routers/audio.py, for server-side transcription (faster-whisper); since #810 the server transcribes nothing: audio.stt.supported_content_types names a type no upload carries, which closes both callers (the transcription endpoint and chat-file processing), and openwebui-apply-stt keeps it so. No user data reaches these decoders.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-66040",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 (av.libs), found by the bundled-library scan (#811). PyAV is imported only by routers/audio.py, for server-side transcription (faster-whisper); since #810 the server transcribes nothing: audio.stt.supported_content_types names a type no upload carries, which closes both callers (the transcription endpoint and chat-file processing), and openwebui-apply-stt keeps it so. No user data reaches these decoders.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-66041",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 (av.libs), found by the bundled-library scan (#811). PyAV is imported only by routers/audio.py, for server-side transcription (faster-whisper); since #810 the server transcribes nothing: audio.stt.supported_content_types names a type no upload carries, which closes both callers (the transcription endpoint and chat-file processing), and openwebui-apply-stt keeps it so. No user data reaches these decoders.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-70628",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 (av.libs), found by the bundled-library scan (#811). PyAV is imported only by routers/audio.py, for server-side transcription (faster-whisper); since #810 the server transcribes nothing: audio.stt.supported_content_types names a type no upload carries, which closes both callers (the transcription endpoint and chat-file processing), and openwebui-apply-stt keeps it so. No user data reaches these decoders.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-70629",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 (av.libs), found by the bundled-library scan (#811). PyAV is imported only by routers/audio.py, for server-side transcription (faster-whisper); since #810 the server transcribes nothing: audio.stt.supported_content_types names a type no upload carries, which closes both callers (the transcription endpoint and chat-file processing), and openwebui-apply-stt keeps it so. No user data reaches these decoders.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-70630",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 (av.libs), found by the bundled-library scan (#811). PyAV is imported only by routers/audio.py, for server-side transcription (faster-whisper); since #810 the server transcribes nothing: audio.stt.supported_content_types names a type no upload carries, which closes both callers (the transcription endpoint and chat-file processing), and openwebui-apply-stt keeps it so. No user data reaches these decoders.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-70631",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 (av.libs), found by the bundled-library scan (#811). PyAV is imported only by routers/audio.py, for server-side transcription (faster-whisper); since #810 the server transcribes nothing: audio.stt.supported_content_types names a type no upload carries, which closes both callers (the transcription endpoint and chat-file processing), and openwebui-apply-stt keeps it so. No user data reaches these decoders.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-70632",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 (av.libs), found by the bundled-library scan (#811). PyAV is imported only by routers/audio.py, for server-side transcription (faster-whisper); since #810 the server transcribes nothing: audio.stt.supported_content_types names a type no upload carries, which closes both callers (the transcription endpoint and chat-file processing), and openwebui-apply-stt keeps it so. No user data reaches these decoders.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-8461",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 (av.libs), found by the bundled-library scan (#811). PyAV is imported only by routers/audio.py, for server-side transcription (faster-whisper); since #810 the server transcribes nothing: audio.stt.supported_content_types names a type no upload carries, which closes both callers (the transcription endpoint and chat-file processing), and openwebui-apply-stt keeps it so. No user data reaches these decoders.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2022-33065",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "soundfile's bundled libsndfile 1.2.2, found by the bundled-library scan (#811). soundfile is used only on the server-side transcription path in routers/audio.py, which #810 closed: audio.stt.supported_content_types names a type no upload carries, so no upload reaches it; openwebui-apply-stt keeps it so.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/libsndfile@1.2.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2024-50612",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "soundfile's bundled libsndfile 1.2.2, found by the bundled-library scan (#811). soundfile is used only on the server-side transcription path in routers/audio.py, which #810 closed: audio.stt.supported_content_types names a type no upload carries, so no upload reaches it; openwebui-apply-stt keeps it so.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/libsndfile@1.2.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2024-50613",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "soundfile's bundled libsndfile 1.2.2, found by the bundled-library scan (#811). soundfile is used only on the server-side transcription path in routers/audio.py, which #810 closed: audio.stt.supported_content_types names a type no upload carries, so no upload reaches it; openwebui-apply-stt keeps it so.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/libsndfile@1.2.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2025-52194",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "soundfile's bundled libsndfile 1.2.2, found by the bundled-library scan (#811). soundfile is used only on the server-side transcription path in routers/audio.py, which #810 closed: audio.stt.supported_content_types names a type no upload carries, so no upload reaches it; openwebui-apply-stt keeps it so.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/libsndfile@1.2.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2025-56226",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "soundfile's bundled libsndfile 1.2.2, found by the bundled-library scan (#811). soundfile is used only on the server-side transcription path in routers/audio.py, which #810 closed: audio.stt.supported_content_types names a type no upload carries, so no upload reaches it; openwebui-apply-stt keeps it so.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/libsndfile@1.2.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-37555",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "soundfile's bundled libsndfile 1.2.2, found by the bundled-library scan (#811). soundfile is used only on the server-side transcription path in routers/audio.py, which #810 closed: audio.stt.supported_content_types names a type no upload carries, so no upload reaches it; openwebui-apply-stt keeps it so.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/libsndfile@1.2.2"
+        }
+      ]
     }
   ]
 }

@@ -200,6 +200,75 @@ export function applyCpes(comps: Component[], parts: Record<string, CpeParts | n
 // ── the probe every Linux target runs (read-only, commands it already has) ─
 // One script, three transports: ssh to a guest, `pct exec` for a container,
 // `sh -s` on the mothership itself. @@end proves the output is complete.
+// ── native libraries Python packages bundle (#811) ─────────────────────
+// trivy reads an image's OS packages and its Python packages, but not the
+// shared libraries a wheel ships inside it: PyAV's FFmpeg, soundfile's
+// libsndfile, Pillow's codecs, cryptography's OpenSSL, numpy's OpenBLAS — and
+// Python's own expat. They are loaded in the application process, so their CVEs
+// are the application's. This asks the container's own Python for the versions
+// those packages report (exact, unlike a soname), fed to it on stdin: nothing is
+// installed. One JSON line; a container without Python prints nothing.
+export const BUNDLED_PY = "import json, os, sys, glob\nout = []\ndef add(product, version, via):\n    if version:\n        out.append({\"product\": product, \"version\": str(version).strip(), \"via\": via})\ndef tryit(f):\n    try:\n        f()\n    except Exception:\n        pass\ndef _expat():\n    import pyexpat\n    add(\"expat\", pyexpat.EXPAT_VERSION.replace(\"expat_\", \"\"), \"python\")\ndef _av():\n    import av\n    add(\"ffmpeg\", getattr(av, \"ffmpeg_version_info\", \"\"), \"av\")\ndef _sf():\n    import soundfile\n    add(\"libsndfile\", soundfile.__libsndfile_version__, \"soundfile\")\ndef _pil():\n    from PIL import features\n    # libjpeg_turbo, not jpg: \"jpg\" is the libjpeg API level (6.2/8.0).\n    for feat, prod in ((\"libjpeg_turbo\", \"libjpeg-turbo\"), (\"zlib\", \"zlib\"), (\"libtiff\", \"libtiff\"),\n                       (\"webp\", \"libwebp\"), (\"freetype2\", \"freetype\"), (\"littlecms2\", \"lcms2\")):\n        try:\n            v = features.version(feat)\n            # zlib-ng reports a zlib-compatible number: not zlib's own release.\n            if v and not (prod == \"zlib\" and \"ng\" in str(v)):\n                add(prod, v, \"Pillow\")\n        except Exception:\n            pass\ndef _crypto():\n    from cryptography.hazmat.backends.openssl.backend import backend\n    v = backend.openssl_version_text().split()\n    if v and v[0] == \"OpenSSL\":\n        add(\"openssl\", v[1], \"cryptography\")\ndef _numpy():\n    import numpy\n    cfg = getattr(numpy.__config__, \"CONFIG\", {})\n    b = cfg.get(\"Build Dependencies\", {}).get(\"blas\", {})\n    if \"openblas\" in str(b.get(\"name\", \"\")).lower():\n        add(\"openblas\", b.get(\"version\", \"\"), \"numpy\")\nfor f in (_expat, _av, _sf, _pil, _crypto, _numpy):\n    tryit(f)\n# Native libraries wheels vendor (<pkg>.libs / <pkg>/.libs), whatever reads them:\n# counted, so a scan can say how much it could not attribute.\nlibs = set()\nfor p in sys.path:\n    if p and os.path.isdir(p):\n        for d in glob.glob(os.path.join(p, \"*.libs\")) + glob.glob(os.path.join(p, \"*\", \".libs\")):\n            for f in os.listdir(d):\n                if \".so\" in f:\n                    libs.add(f)\nprint(json.dumps({\"bundled\": out, \"vendoredLibs\": sorted(libs)}))\n";
+
+export interface Bundled {
+  product: string;
+  version: string;
+  via: string; // the Python package that carries it ("python" for the interpreter's own)
+}
+
+// product → CPE vendor:product, as NVD records them
+export const BUNDLED_CPE: Record<string, string> = {
+  ffmpeg: "ffmpeg:ffmpeg",
+  libsndfile: "libsndfile_project:libsndfile",
+  expat: "libexpat_project:libexpat",
+  "libjpeg-turbo": "libjpeg-turbo:libjpeg-turbo",
+  zlib: "zlib:zlib",
+  libtiff: "libtiff:libtiff",
+  libwebp: "webmproject:libwebp",
+  freetype: "freetype:freetype",
+  lcms2: "littlecms:little_cms_color_engine",
+  openssl: "openssl:openssl",
+  openblas: "openblas_project:openblas",
+};
+
+// The components to match, one per product+version: by CPE, as grype matches
+// the Nix layer. The name says where it lives, so a finding reads "ffmpeg (in av)".
+export function bundledComponents(list: Bundled[]): Component[] {
+  const seen = new Set<string>();
+  const out: Component[] = [];
+  for (const b of list) {
+    const vp = BUNDLED_CPE[b.product];
+    if (!vp || !b.version || !/^\d/.test(b.version)) continue;
+    const k = `${b.product}@${b.version}`;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push({
+      type: "library",
+      name: `${b.product} (in ${b.via})`,
+      version: b.version,
+      purl: `pkg:generic/${b.product}@${b.version}`,
+      cpe: `cpe:2.3:a:${vp}:${b.version}:*:*:*:*:*:*:*`,
+      properties: [{ name: "tappaas:bundled-in", value: b.via }],
+    });
+  }
+  return out;
+}
+
+// base64 of an ASCII script, so the probe can pass it through `sh` unquoted
+// (this build has no Node typings, hence no Buffer).
+export function base64Ascii(text: string): string {
+  const A = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  let out = "";
+  for (let i = 0; i < text.length; i += 3) {
+    const n = (text.charCodeAt(i) << 16) | ((text.charCodeAt(i + 1) || 0) << 8) | (text.charCodeAt(i + 2) || 0);
+    out += A[(n >> 18) & 63] + A[(n >> 12) & 63]
+      + (i + 1 < text.length ? A[(n >> 6) & 63] : "=") + (i + 2 < text.length ? A[n & 63] : "=");
+  }
+  return out;
+}
+
+const BUNDLED_B64 = base64Ascii(BUNDLED_PY);
+
 export const LINUX_PROBE = [
   'S=""; [ "$(id -u)" = 0 ] || S="sudo -n"',
   "if [ -e /run/current-system ]; then echo '@@nixos'; nix-store -q --requisites /run/current-system",
@@ -209,6 +278,8 @@ export const LINUX_PROBE = [
   "  $S $rt ps --format '{{.Names}}|{{.Image}}' 2>/dev/null | while IFS='|' read -r n i; do",
   "    d=$($S $rt image inspect --format '{{join .RepoDigests \",\"}}' \"$i\" 2>/dev/null)",
   '    echo "@@container $rt|$n|$i|$d"',
+  // stdin of exec is the decoded script, not the loop's `ps` pipe
+  `    echo '@@bundled'; echo ${BUNDLED_B64} | base64 -d | timeout 60 $S $rt exec -i "$n" sh -c 'if command -v python3 >/dev/null 2>&1; then exec python3 -; elif command -v python >/dev/null 2>&1; then exec python -; fi' 2>/dev/null; echo`,
   "  done",
   "done",
   "echo '@@end'",
@@ -230,6 +301,8 @@ export interface Container {
   name: string;
   image: string;
   digests: string[];
+  bundled?: Bundled[];
+  vendoredLibs?: number; // native libraries found in wheels' .libs directories
 }
 
 export interface LinuxProbe {
@@ -269,6 +342,17 @@ export function parseLinuxProbe(out: string): LinuxProbe {
     }
     if (section === "nixos") {
       if (line.startsWith("/nix/store/")) r.paths.push(line.trim());
+    } else if (section === "bundled") {
+      const c = r.containers[r.containers.length - 1];
+      if (c && line.trim().startsWith("{")) {
+        try {
+          const d = JSON.parse(line) as { bundled?: Bundled[]; vendoredLibs?: string[] };
+          c.bundled = (d.bundled ?? []).filter((b) => b && b.product && b.version);
+          c.vendoredLibs = (d.vendoredLibs ?? []).length;
+        } catch {
+          /* a garbled line: the image is still scanned by trivy */
+        }
+      }
     } else if (section in buf) buf[section].push(line);
   }
   r.osRelease = buf["os-release"].join("\n");
@@ -1168,7 +1252,7 @@ export function runScan(opts: ScanOpts, client: ClusterClient, io: SecurityIO): 
           results.push({ status: summarize(base, 0, "no scanner database — see the scan's notes", [], tv, true), version: "", components: [] });
         } else {
           log(`matching ${base.name}: ${c.digests[0]}`);
-          const r = trivyTarget(base, io.trivyImage(c.digests[0]), tv);
+          const r = trivyTarget(base, io.trivyImage(c.digests[0]), tv, matchBundled(c, io, tmp));
           r.version = c.image;
           results.push(r);
         }
@@ -1203,6 +1287,33 @@ export function runScan(opts: ScanOpts, client: ClusterClient, io: SecurityIO): 
     targets: results.map((r) => r.status),
   };
   return { status, cdx: siteCdx(results, status, siteName(opts.configDir)) };
+}
+
+// The bundled libraries of one container, matched by CPE (#811). null when it
+// reported none. A grype failure is said in the note, not hidden: the image's
+// own scan still stands.
+export function matchBundled(c: Container, io: SecurityIO, tmp: string): BundledMatch | null {
+  const comps = bundledComponents(c.bundled ?? []);
+  const unattributed = c.vendoredLibs ?? 0;
+  if (comps.length === 0) {
+    return unattributed > 0
+      ? { components: [], findings: [], note: `${unattributed} native librar${unattributed === 1 ? "y" : "ies"} bundled in Python wheels not identified` }
+      : null;
+  }
+  const f = join(tmp, `bundled-${safe(c.name)}-${comps.length}.cdx.json`);
+  writeFileSync(f, JSON.stringify(cdxDoc(comps)));
+  const g = io.grype(f);
+  const list = comps.map((x) => `${x.name.replace(/ \(in .*\)$/, "")} ${x.version}`).join(", ");
+  if (!g.ran || g.rc !== 0) {
+    return { components: comps, findings: [], note: `bundled libraries not matched (grype: ${lastLine(g.stderr) || `exit ${g.rc}`}): ${list}` };
+  }
+  let findings: Finding[] = [];
+  try {
+    findings = grypeFindings(g.stdout);
+  } catch {
+    return { components: comps, findings: [], note: `bundled libraries not matched (grype output not parseable): ${list}` };
+  }
+  return { components: comps, findings, note: `bundled in Python packages: ${list}` };
 }
 
 // One group per image, its containers sorted by name, the groups by their first
@@ -1303,16 +1414,24 @@ export function groupByImage(cs: Container[]): Container[][] {
   return [...m.values()].map((g) => [...g].sort(byName)).sort((a, b) => byName(a[0], b[0]));
 }
 
-function trivyTarget(base: Pick<TargetStatus, "id" | "name" | "layer" | "host" | "runsOn" | "ref">, r: RemoteResult, vex: VexStatement[]): CdxTarget {
+// What an image's bundled libraries added (#811): matched separately (grype, by
+// CPE) and merged into the image's own result.
+export interface BundledMatch { components: Component[]; findings: Finding[]; note: string }
+
+function trivyTarget(base: Pick<TargetStatus, "id" | "name" | "layer" | "host" | "runsOn" | "ref">, r: RemoteResult, vex: VexStatement[], bundled: BundledMatch | null = null): CdxTarget {
   if (!r.ran || r.rc !== 0) {
     return { status: summarize(base, 0, `trivy failed: ${lastLine(r.stderr) || `exit ${r.rc}`}`, [], vex, true), version: "", components: [] };
   }
   try {
     const t = trivyParse(r.stdout);
+    if (bundled) {
+      t.components.push(...bundled.components);
+      t.findings.push(...bundled.findings);
+    }
     const running = t.findings.filter((f) => !isBuildOnly(f.pkg));
     const runIds = new Set(running.map((f) => f.id));
     const buildOnly = new Set(t.findings.filter((f) => isBuildOnly(f.pkg) && !runIds.has(f.id)).map((f) => f.id)).size;
-    const notes = [t.osName ? `${t.family} ${t.osName}` : "", buildOnly > 0 ? `${buildOnly} CVE(s) only in build-only packages (headers, compilers), not counted` : ""];
+    const notes = [t.osName ? `${t.family} ${t.osName}` : "", buildOnly > 0 ? `${buildOnly} CVE(s) only in build-only packages (headers, compilers), not counted` : "", bundled?.note ?? ""];
     const status = summarize(base, t.components.length, osCoverage(t.family, t.components.length), running, vex, true, notes.filter(Boolean).join("; "));
     if (buildOnly > 0) status.buildOnly = buildOnly;
     return {

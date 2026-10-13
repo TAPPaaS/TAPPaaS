@@ -15,6 +15,7 @@ import {
   TargetStatus, applyCpes, checkCveStatus, fit, groupByImage, diffScans, nixComponents, parseLinuxProbe, parseOpnsenseProbe,
   loadVex, parseStorePath, parseVex, scanComponentList, scanImageRefs, readStatus, registeredModuleDirs, renderReport, runScan, sbomDir, summarize, summarizeOpnsense, sweepIsNewer,
   vexFor, vexSuppresses, writeScan, isBuildOnly, pickSeverities, aptModules, moduleOf, patchVex, grypeFindings, instanceModules, cvesInPatchMessages, trivyParse,
+  bundledComponents, matchBundled, BUNDLED_PY, base64Ascii,
 } from "../../src/security";
 import { run } from "../../src/main";
 import { FakeClusterClient } from "./fake-client";
@@ -515,6 +516,68 @@ console.log("writeScan / diffScans / checkCveStatus / report");
   const r6 = scanComponentList([{ name: "glibc", version: "2.42-84" }], new FakeIO(), v6);
   check(r6.suppressed[0]?.vexModules?.join(",") === "vllm-amd" && r6.suppressed[0]?.triage?.[0]?.module === "identity",
     "another module's 'not affected' keeps this module's analysis on the finding (identity's urllib3 read OPEN)");
+}
+
+// ── #811: native libraries bundled in Python wheels ──────────────────
+{
+  const probe = [
+    "@@os-release", "ID=debian", "@@end",
+    "@@container podman|openwebui|docker.io/openwebui/open-webui:0.11.4|docker.io/openwebui/open-webui@sha256:aa",
+    "@@bundled",
+    JSON.stringify({ bundled: [
+      { product: "ffmpeg", version: "7.1", via: "av" },
+      { product: "libsndfile", version: "1.2.2", via: "soundfile" },
+      { product: "expat", version: "2.8.3", via: "python" },
+      { product: "unknownlib", version: "1.0", via: "x" },
+    ], vendoredLibs: ["libavcodec-1.so.61", "libsndfile-2.so.1"] }),
+    "@@container podman|redis|redis:7|redis@sha256:bb",
+    "@@bundled",
+    "",
+  ].join("\n");
+  const lp = parseLinuxProbe(probe);
+  const ow = lp.containers.find((c) => c.name === "openwebui");
+  check(ow?.bundled?.length === 4 && ow?.vendoredLibs === 2, "a container's bundled libraries are read from its @@bundled line");
+  check(lp.containers.find((c) => c.name === "redis")?.bundled === undefined, "a container without Python reports nothing, and is not an error");
+  const comps = bundledComponents(ow?.bundled ?? []);
+  check(comps.length === 3, "only products with a known CPE become components");
+  const ff = comps.find((c) => c.name === "ffmpeg (in av)");
+  check(ff?.cpe === "cpe:2.3:a:ffmpeg:ffmpeg:7.1:*:*:*:*:*:*:*" && ff?.purl === "pkg:generic/ffmpeg@7.1",
+    "PyAV's FFmpeg is matched as FFmpeg by CPE, named for the package that carries it");
+  check(comps.some((c) => c.cpe?.startsWith("cpe:2.3:a:libexpat_project:libexpat:2.8.3:")), "Python's own expat is matched as libexpat");
+  check(bundledComponents([{ product: "zlib", version: "1.3.1.zlib-ng", via: "Pillow" }, { product: "zlib", version: "", via: "x" }]).length === 1
+    && bundledComponents([{ product: "zlib", version: "ng", via: "x" }]).length === 0, "a version that is not a number is not matched");
+
+  const io = new FakeIO();
+  io.grypeOut = ok(grypeJson([["CVE-2026-37555", "High", "libsndfile (in soundfile)", "1.2.2"]]));
+  const tmp = mkdtempSync(join(tmpdir(), "hm-bundled-"));
+  const m = matchBundled(ow!, io, tmp);
+  check(m?.findings.length === 1 && m.findings[0].pkg === "libsndfile (in soundfile)" && m.findings[0].fixed === "",
+    "a bundled library's CVE is a finding, with no fix-state (the fix is a new image)");
+  check(JSON.parse(io.grypeInputs[io.grypeInputs.length - 1]).components.length === 3, "grype is given the bundled components");
+  check(m?.note.includes("ffmpeg 7.1") === true, `the note names what was found (${m?.note})`);
+  const io2 = new FakeIO();
+  io2.grypeOut = { rc: 1, stdout: "", stderr: "db missing", ran: true };
+  check(matchBundled(ow!, io2, tmp)?.note.startsWith("bundled libraries not matched (grype: db missing)") === true,
+    "a grype failure is said, not hidden");
+  check(matchBundled({ runtime: "podman", name: "x", image: "x", digests: [], vendoredLibs: 3 }, io, tmp)?.note
+    === "3 native libraries bundled in Python wheels not identified", "libraries it cannot attribute are counted");
+  check(matchBundled({ runtime: "podman", name: "x", image: "x", digests: [] }, io, tmp) === null, "nothing bundled, nothing added");
+  check(BUNDLED_PY.includes("pyexpat.EXPAT_VERSION") && LINUX_PROBE.includes("@@bundled"), "the probe carries the Python inventory");
+  check(base64Ascii("Man") === "TWFu" && base64Ascii("Ma") === "TWE=" && base64Ascii("M") === "TQ==", "base64 matches the standard alphabet and padding");
+  check(/^[\x00-\x7f]*$/.test(BUNDLED_PY), "the script is ASCII, which base64Ascii requires");
+
+  // In a scan: the bundled CVE lands on the image target, counted.
+  const io3 = new FakeIO();
+  const dir = site();
+  io3.local = ok(nixProbe());
+  io3.guests.set("openwebui.mgmt.internal", ok(probe));
+  io3.images.set("docker.io/openwebui/open-webui@sha256:aa", ok(trivyJson("debian", 300, [])));
+  io3.grypeOut = ok(grypeJson([["CVE-2026-37555", "High", "libsndfile (in soundfile)", "1.2.2"]]));
+  writeFileSync(join(dir, "openwebui.json"), JSON.stringify({ vmname: "openwebui", vmid: 311, node: "tappaas1", zone0: "mgmt" }));
+  const st = runScan({ configDir: dir, defaultNode: "tappaas1", repoDir: repo() }, new FakeClusterClient(), io3).status;
+  const img = st.targets.find((x) => x.id === "image:openwebui/openwebui");
+  check(img !== undefined && img.high === 1 && (img.note ?? "").includes("bundled in Python packages"),
+    `the image target counts its bundled library's CVE (${JSON.stringify(img && { high: img.high, note: img.note })})`);
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);
