@@ -2329,6 +2329,14 @@ class RulesManager:
         if self.check_mode:
             info(f"[check] +alias {name} ({alias_type}) → {addresses}")
             return
+        current = self._alias_current(name)
+        if current is not None and current[1] != alias_type:
+            # #660: the client module refuses a type change ("delete the current
+            # one first"), and a delete is refused while a rule references the
+            # alias. OPNsense itself changes the type in place, rules and all.
+            self._retype_alias(current[0], name, alias_type, addresses, description)
+            info(f"alias {name}: type {current[1]} → {alias_type}, changed in place")
+            return
         params = {
             "name": name,
             "type": alias_type,
@@ -2338,6 +2346,43 @@ class RulesManager:
             "reload": False,
         }
         self.fw.client.run_module("alias", params=params)
+
+    def _alias_raw(self, command: str, action: str = "get", data: dict | None = None):
+        params: dict = {"module": "firewall", "controller": "alias",
+                        "command": command, "action": action}
+        if data is not None:
+            params["data"] = data
+        result = self.fw.client.run_module("raw", params=params)
+        if not isinstance(result, dict):
+            return None
+        response = (result.get("result") or {}).get("response")
+        return response if isinstance(response, dict) else None
+
+    def _alias_current(self, name: str) -> tuple[str, str] | None:
+        """(uuid, type) of the stored alias `name`, or None (absent or unreadable)."""
+        try:
+            found = self._alias_raw(f"getAliasUUID/{name}")
+            uuid = (found or {}).get("uuid")
+            if not isinstance(uuid, str) or not uuid:
+                return None
+            item = (self._alias_raw(f"getItem/{uuid}") or {}).get("alias") or {}
+            types = item.get("type") if isinstance(item, dict) else None
+            if not isinstance(types, dict):
+                return None
+            sel = [k for k, v in types.items() if isinstance(v, dict) and str(v.get("selected")) == "1"]
+            return (uuid, sel[0]) if sel else None
+        except Exception as exc:  # noqa: BLE001 — fall back to the plain upsert
+            debug(f"could not read alias '{name}': {exc}")
+            return None
+
+    def _retype_alias(self, uuid: str, name: str, alias_type: str,
+                      addresses: list[str], description: str) -> None:
+        saved = self._alias_raw(f"setItem/{uuid}", "post", {"alias": {
+            "enabled": "1", "name": name, "type": alias_type,
+            "content": "\n".join(addresses), "description": description}})
+        if not saved or saved.get("result") != "saved":
+            raise RuntimeError(f"alias {name}: changing its type to {alias_type} was "
+                               f"refused: {saved}")
 
     def reconfigure_aliases(self) -> None:
         """Resolve stored alias definitions into their pf tables.

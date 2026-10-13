@@ -111,7 +111,7 @@ OPNsense alias type for the module's firewall alias (tappaas_module_<vmname>). '
 
 **About the field.** When 'network', the alias content is derived from the zone0 subnet — no separate field is needed. The module's zone0 must define an 'ip' (subnet) in zones.json. Owned by network:rules (#704): rules_manager.py builds and validates the alias, and network:proxy never reads this field at all — the old attribution made every device module that declares network:rules and not network:proxy warn as an orphan on each conversion.
 
-**Why this change class.** How the module is addressed in the generated firewall alias (host vs network).
+**Why this change class.** How the module is addressed in the generated firewall alias (host vs network). A change is made to the existing alias in place at the next reconcile, so the rules that use it keep working throughout.
 
 ### `firewallType`
 
