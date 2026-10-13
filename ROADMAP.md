@@ -354,9 +354,17 @@ Tighter firewall defaults that keep what modules need. Built: the gateway, GUI/S
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
-| #816 | Review the zone tiers and rule-set creation; publish how it works | M | L | **Review done 2026-10-12** (`docs/design/zone-rules-review.md`, 18 findings, 11 fixed on `main`); published as FIREWALL-RULES.md and a slimmer ZONES.md, plus IPV6.md (tappaas.org Operate menu, once the Documentation push lands). **Left:** an issue each for the open findings D3, D5 (`alias:` peers), D7, D9, D12, D14, D18; ADR-014/021 amended to the model as built |
+| ✅ #816 | Review the zone tiers and rule-set creation; publish how it works | M | L | **Closed 2026-10-13:** review (`docs/design/zone-rules-review.md`, 18 findings, 11 fixed on `main`); published on tappaas.org as *Firewall Rules*, a slimmer *Network Zones* and *IPv6*; open findings are #817–#823, the ADR amendments #824 |
 | ✅ #386 | block-private rules shadow auto-pinholes | M | M | **Closed 2026-10-12:** pinholes sit in a band before the zone baseline; pf order verified on hrossen |
 | ✅ #815 | IPv6 parity: zone policy covers IPv6 before any zone gets an address | M | M | **Done 2026-10-12, on `main` 2026-10-13:** zone and module rules `inet46`, a zone-networks table and ULA blocks for IPv6, ICMPv6 declarable; forced sweep 24/24, isolation over IPv6 verified. Anti-spoofing stays IPv4 (in #26's remainder) |
+| #817 | Egress `to: internet` also passes every private and zone network | M | M | From #816 (D3). Latent: no module declares it today |
+| #818 | `alias:` peers skip the zone-policy check | M | M | From #816 (D5, the part left open). List affected modules first |
+| #819 | `alias:` ingress bound to `lan`; a failed interface lookup falls back silently | M | L | From #816 (D7) |
+| #820 | A description change duplicates a module rule | L | L | From #816 (D9) |
+| #821 | The pinhole check exists twice and the copies can disagree | L | L | From #816 (D12), the #632 drift class |
+| #822 | Block-private misses 100.64/10, 169.254/16 and the firewall's other addresses | M | M | From #816 (D14). Live check on hrossen first; NetBird decision affects 100.64/10 |
+| #823 | Gateway lookup is one unretried API call per zone | L | L | From #816 (D18) |
+| #824 | Amend ADR-014 and ADR-021 to the zone and rule model as built | L | L | From #816; documentation only |
 | #576 | Zone `serves` as string or array | M | L | Backward compatible |
 | #257 | mDNS in zones.json | M | M | |
 | #160 | Overlap detection in the rules manager | M | L | Land with #256 |
