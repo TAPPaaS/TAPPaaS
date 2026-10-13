@@ -33,6 +33,7 @@ import ipaddress
 import json
 import os
 import sys
+import time
 from pathlib import Path
 from typing import Callable
 
@@ -152,6 +153,19 @@ def _parse_bool(v: str) -> bool:
 
 # Read back every key the plan compares — the zone keys included, or a written
 # key reads as missing and every run rewrites it.
+# How long a zone's zero-lifetime advertisements run before its IPv6 goes:
+# dnsmasq sends them on reload, guests drop the route within seconds (ADR-030 D8).
+DRAIN_SECONDS = 10
+
+
+def _v6_range(iface: str, router_lifetime: str = "") -> dict:
+    """A zone's dnsmasq IPv6 range as ipv6-manager writes it; router lifetime 0
+    withdraws the zone's IPv6 default route from its guests."""
+    return {"range": {"interface": iface, "start_addr": "::", "constructor": iface,
+                      "ra_mode": "ra-names", "domain_type": "range",
+                      "ra_router_lifetime": router_lifetime}}
+
+
 _IFACE_KEYS = ("if", "gatewayv6", "dhcp6-ia-pd-len", *ZONE_V6_KEYS)
 
 _READ_PHP = r"""<?php
@@ -247,13 +261,26 @@ def load_site_and_zones(config_dir: Path) -> tuple[dict, dict]:
     return site, json.loads(zf.read_text())
 
 
-def execute(mgr, host: str, actions: list[Action]) -> None:
+def execute(mgr, host: str, actions: list[Action], drain_seconds: float = DRAIN_SECONDS) -> None:
     """Carry out a plan: one config.xml write, the gateway, the reloads, the
     advertisements, and the leftovers a cleared zone keeps on its interface."""
     config_changes: dict[str, dict] = {}
     reload_ifaces: list[str] = []
     cleared_devices: list[str] = []
     wan_reload = False
+    # A zone whose advertisements stop first tells its guests to drop the IPv6
+    # default route (router lifetime 0) — while the firewall still allows IPv6,
+    # or the advertisement never leaves it. Without this they keep the route
+    # until it expires and every IPv6 attempt hangs before falling back (D8).
+    drains = [a for a in actions if a.kind == "names-del"]
+    for a in drains:
+        r = _dnsmasq(mgr, "settings", "setRange", "post", _v6_range(a.target, "0"), [a.detail["uuid"]])
+        if r.get("result") != "saved":
+            raise RuntimeError(f"dnsmasq IPv6 range on {a.target}: drain returned {r}")
+    if drains:
+        _dnsmasq(mgr, "service", "reconfigure", "post")
+        time.sleep(drain_seconds)
+
     for a in actions:
         if a.kind == "wan":
             config_changes["wan"] = dict(a.detail["set"])
@@ -300,8 +327,7 @@ def execute(mgr, host: str, actions: list[Action]) -> None:
     # dnsmasq: one IPv6 range per zone, `ra-names` — advertisements and AAAA names.
     names = [a for a in actions if a.kind.startswith("names-")]
     for a in names:
-        rng = {"range": {"interface": a.target, "start_addr": "::", "constructor": a.target,
-                         "ra_mode": "ra-names", "domain_type": "range"}}
+        rng = _v6_range(a.target)
         if a.kind == "names-add":
             r = _dnsmasq(mgr, "settings", "addRange", "post", rng)
         elif a.kind == "names-set":
@@ -335,11 +361,17 @@ def converge_site(mgr, config: Config, host: str, config_dir: Path, check_mode: 
     if allow_override is not None:
         site = {**site, "ipv6": allow_override}
     allowed = bool(site.get("ipv6"))
-    ok = converge(mgr, allowed, check_mode,
-                  restart=lambda: unbound_restart(host),
-                  resolver_ok=lambda: check_unbound_dns(host=host, label="POST-IPV6", retries=10, delay=3.0),
-                  reload_filter=lambda: filter_reload(host))
-    if not ok:
+
+    def switch() -> bool:
+        return converge(mgr, allowed, check_mode,
+                        restart=lambda: unbound_restart(host),
+                        resolver_ok=lambda: check_unbound_dns(host=host, label="POST-IPV6", retries=10, delay=3.0),
+                        reload_filter=lambda: filter_reload(host))
+
+    # Switching off, the zones go first: their withdrawal is an advertisement,
+    # which the firewall no longer sends once it disallows IPv6 (D8).
+    turning_off = not allowed and read_allowed(mgr)
+    if not turning_off and not switch():
         return False
 
     ifaces = zone_interfaces(config, zones)
@@ -365,6 +397,8 @@ def converge_site(mgr, config: Config, host: str, config_dir: Path, check_mode: 
                       "firewall by IP: pluginctl -c unbound_start", file=sys.stderr)
                 return False
             print(f"ipv6: {len(actions)} change(s) applied")
+    if turning_off and not switch():
+        return False
     return converge_published(mgr, config, host, check_mode)
 
 

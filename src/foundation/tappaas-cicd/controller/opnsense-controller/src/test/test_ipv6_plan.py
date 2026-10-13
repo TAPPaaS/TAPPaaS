@@ -150,6 +150,11 @@ class TestPlan(unittest.TestCase):
         acts = plan(d, self._cur(), ZONE_IFACES, [], [wrong])
         self.assertIn(("names-set", "opt8"), {(a.kind, a.target) for a in acts})
 
+    def test_a_range_left_draining_is_restored(self):
+        d = desired_state({"ipv6": True}, ZONES, IFACES, DELEGATED)
+        acts = plan(d, self._cur(), ZONE_IFACES, [], [{**_v6("opt8"), "ra_router_lifetime": "0"}])
+        self.assertIn(("names-set", "opt8"), {(a.kind, a.target) for a in acts})
+
     def test_radvd_entries_on_zone_interfaces_are_removed(self):
         # dnsmasq advertises; a radvd entry on the same interface would conflict.
         d = desired_state({"ipv6": True}, ZONES, IFACES, DELEGATED)

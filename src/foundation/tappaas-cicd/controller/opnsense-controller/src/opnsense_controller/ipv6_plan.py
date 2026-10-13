@@ -155,7 +155,7 @@ class Action:
             "zone-clear": "remove zone IPv6",
             "names-add": "start advertisements and AAAA names",
             "names-set": "correct advertisements and AAAA names",
-            "names-del": "stop advertisements and AAAA names",
+            "names-del": "withdraw the IPv6 route (router lifetime 0), then stop advertisements and AAAA names",
             "radvd-del": "remove the radvd entry",
         }[self.kind] + f" on {self.target}: {self.detail.get('summary', '')}".rstrip(": ")
 
@@ -219,7 +219,8 @@ def plan(desired: Desired, current_ifaces: dict[str, dict], zone_interfaces: set
         wanted = iface in desired.zones
         if wanted and rng is None:
             actions.append(Action("names-add", iface, {"summary": "ra-names (SLAAC, AAAA by name)"}))
-        elif wanted and (rng.get("constructor") != iface or rng.get("ra_mode") != "ra-names"):
+        elif wanted and (rng.get("constructor") != iface or rng.get("ra_mode") != "ra-names"
+                         or str(rng.get("ra_router_lifetime") or "") != ""):   # a drain left behind
             actions.append(Action("names-set", iface, {"uuid": rng.get("uuid"),
                                                        "summary": "ra-names (SLAAC, AAAA by name)"}))
         elif not wanted and rng is not None:
