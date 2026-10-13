@@ -118,7 +118,7 @@ by the modules that need it.
 that is not `Disabled`, an `Overlay` or the `WAN` hand-off, so adding or deleting a zone
 never edits `mgmt`. Only `mgmt` may hold `all` (I2).
 
-### `serves` — linking a client or IoT zone to an environment
+### Linking a client or IoT zone to an environment: `serves`
 
 A client zone reaches its services, and an IoT zone is reached by them. Naming the service
 zone literally breaks when `network-manager init` renames `srv` → `<defaultEnvironment>`,

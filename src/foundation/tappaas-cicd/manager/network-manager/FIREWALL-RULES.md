@@ -168,7 +168,7 @@ flowchart TD
 1. **Effective zones.** `network-manager reconcile` adds the edges `serves` derives — a Client
    or Guest zone that serves an environment reaches that environment's service zone; an IoT
    zone accepts pinholes from it — and writes `config/zones.effective.json`. Only the zone that
-   declares `serves` changes ([ZONES.md](ZONES.md#serves--linking-a-client-or-iot-zone-to-an-environment)).
+   declares `serves` changes ([ZONES.md](ZONES.md#linking-a-client-or-iot-zone-to-an-environment-serves)).
 2. **`all`.** Where `mgmt` says `all`, it is read as `internet` plus every zone that is not
    `Disabled`, an `Overlay` or the `WAN` hand-off.
 3. **Zone rules.** `zone-manager` writes the rules of every `Active` or `Mandatory` zone,
