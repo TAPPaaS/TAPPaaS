@@ -179,8 +179,8 @@ class TestMatchingScenarios(unittest.TestCase):
         self.assertEqual(errors, [])
         self.assertEqual(warnings, [])
 
-    def test_ingress_internet_and_alias_are_out_of_scope(self):
-        """'internet' and 'alias:...' are not pinhole-allowed-from concerns."""
+    def test_internet_into_the_dmz_and_a_public_alias_pass(self):
+        """The dmz accepts the internet; an alias of public addresses is the internet (#818)."""
         _write_module(self.dir, "web", {
             "zone0": "dmz",
             "ports": [{"port": 443}, {"port": 80}],
@@ -188,6 +188,8 @@ class TestMatchingScenarios(unittest.TestCase):
                 {"from": "internet", "ports": [443], "description": "public web"},
                 {"from": "alias:admin_ips", "ports": [80], "description": "admin"},
             ],
+            "aliases": {"admin_ips": {"type": "host", "description": "d",
+                                      "addresses": ["9.9.9.9"]}},
         })
         warnings, errors = validate_pinhole_allowed_from(self.zones, self.dir)
         self.assertEqual(errors, [])
@@ -208,6 +210,35 @@ class TestMatchingScenarios(unittest.TestCase):
         warnings, errors = validate_pinhole_allowed_from(self.zones, self.dir)
         self.assertEqual(errors, [])
         self.assertEqual(warnings, [])
+
+
+class TestOnePredicate(unittest.TestCase):
+    """#821: the validator asks rules-manager, so the two cannot disagree."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self.tmp.name)
+        self.zones = _build_zones()
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_rules_nested_under_network_rules_are_checked(self):
+        # The old copy read only top-level ingress; deployed modules nest it.
+        _write_module(self.dir, "nested", {"zone0": "srv", "config": {"network:rules": {
+            "ports": [{"port": 80}],
+            "ingress": [{"from": "home", "ports": [80], "description": "x"}]}}})
+        warnings, errors = validate_pinhole_allowed_from(self.zones, self.dir)
+        self.assertEqual(errors, [])
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("'home' violates policy", warnings[0].text)
+
+    def test_a_zone_whose_access_to_reaches_the_module_is_accepted_by_both(self):
+        self.zones["home"].access_to = ["internet", "srv"]
+        _write_module(self.dir, "app", {"zone0": "srv", "ports": [{"port": 80}],
+            "ingress": [{"from": "home", "ports": [80], "description": "x"}]})
+        warnings, errors = validate_pinhole_allowed_from(self.zones, self.dir)
+        self.assertEqual((warnings, errors), ([], []))
 
 
 class TestMismatchingScenarios(unittest.TestCase):
@@ -242,7 +273,7 @@ class TestMismatchingScenarios(unittest.TestCase):
         self.assertGreater(msg.line, 0)
         # Message names the offending zone, the destination, and quotes the policy
         self.assertIn("'home'", msg.text)
-        self.assertIn("'srv'", msg.text)
+        self.assertIn("srv.pinhole-allowed-from", msg.text)
         self.assertIn("pinhole-allowed-from", msg.text)
 
     def test_peer_module_ingress_violates_policy(self):
@@ -357,7 +388,7 @@ class TestSchemaErrors(unittest.TestCase):
             ],
         })
         warnings, errors = validate_pinhole_allowed_from(self.zones, self.dir)
-        self.assertTrue(any("missing required 'from'" in e.text for e in errors))
+        self.assertTrue(any("missing 'from'" in e.text for e in errors))
 
     def test_ingress_from_unknown_zone_or_module_is_a_schema_error(self):
         _write_module(self.dir, "unknown-peer", {

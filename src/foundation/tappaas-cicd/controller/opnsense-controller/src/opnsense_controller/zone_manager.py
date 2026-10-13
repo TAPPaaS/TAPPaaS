@@ -517,237 +517,98 @@ def _find_ingress_line(text: str, idx: int, field_value: str | None = None) -> i
     return entry_open_line or 1
 
 
-def _load_pinhole_ports(provider_location: str, service: str) -> list[dict] | None:
-    """Mirror of rules_manager.load_pinhole_ports (kept local to avoid a circular import).
-
-    Returns the ports list, or None when the provider has no pinhole.json for
-    that service (which is the normal case for most services).
-    """
-    if not provider_location:
-        return None
-    path = Path(provider_location) / "services" / service / "pinhole.json"
-    if not path.is_file():
-        return None
-    try:
-        data = json.loads(path.read_text())
-    except Exception:
-        return None
-    ports = data.get("ports", []) or []
-    return ports if isinstance(ports, list) else None
-
-
-def _pinhole_from_any_zone(provider_location: str, service: str) -> bool:
-    """Mirror of rules_manager.pinhole_from_any_zone (#770): a foundation
-    provider's ``"fromZones": "any"`` lifts the pinhole-allowed-from gate."""
-    if not provider_location:
-        return False
-    path = Path(provider_location) / "services" / service / "pinhole.json"
-    try:
-        data = json.loads(path.read_text()) if path.is_file() else {}
-    except Exception:
-        return False
-    return data.get("fromZones") == "any" and "foundation" in Path(provider_location).parts
-
-
 def validate_pinhole_allowed_from(
     zones: dict[str, "Zone"],
     modules_dir: Path,
 ) -> tuple[list[ValidationMessage], list[ValidationMessage]]:
-    """Cross-check every module's ingress entries against zone policy.
+    """Cross-check every module's rules against zone policy, without OPNsense.
 
-    Returns ``(warnings, errors)``.
-
-    Warnings cover policy mismatches (an ingress entry — or a dependsOn-driven
-    auto-pinhole, see issue #173 — would open a pinhole into a destination
-    zone whose pinhole-allowed-from does NOT list the source zone). Errors
-    cover schema problems that prevent meaningful evaluation (malformed JSON,
-    `ingress` not an array, ingress entry without a `from` field, `from`
-    references a non-existent peer or zone, …).
+    Returns ``(warnings, errors)``. The policy is rules-manager's own — the
+    check its compile applies to ingress, egress, `alias:` peers and
+    auto-pinholes — so this report and an install can never disagree (#821;
+    a second copy of the predicate here once drifted, #632). A policy refusal
+    is a warning here (the operator's view of the deployed set); anything that
+    stops a module's rules from being evaluated is an error.
 
     By contract: errors → CLI exit code 2; warnings alone → exit 0.
     """
+    from .rules_manager import RulesManager, ZoneSpec, load_global_aliases, load_module
+
     warnings: list[ValidationMessage] = []
     errors: list[ValidationMessage] = []
+    specs = {name: ZoneSpec(name=name, ip_network=z.ip_network, bridge=z.bridge,
+                            vlan_tag=z.vlan_tag, access_to=list(z.access_to),
+                            pinhole_allowed_from=list(z.pinhole_allowed_from),
+                            isolated=bool(getattr(z, "isolated", False)))
+             for name, z in zones.items()}
+    aliases_file = modules_dir / "firewall" / "aliases.json"
+    mgr = RulesManager(Config(firewall="validate.invalid", ssl_verify=False), specs,
+                       modules_dir=modules_dir,
+                       global_aliases=load_global_aliases(aliases_file) if aliases_file.is_file() else {},
+                       sequence_map_file=None, firewall_type="NONE")
 
     for mod_file in discover_module_files(modules_dir):
+        def msg(severity: str, module: str, line: int, text: str) -> ValidationMessage:
+            return ValidationMessage(severity=severity, module=module,
+                                     file_path=str(mod_file), line=line or 1, text=text)
         try:
             raw = mod_file.read_text()
             data = json.loads(raw)
         except json.JSONDecodeError as e:
-            errors.append(ValidationMessage(
-                severity="error",
-                module=mod_file.stem,
-                file_path=str(mod_file),
-                line=getattr(e, "lineno", 1) or 1,
-                text=f"invalid JSON: {e.msg}",
-            ))
+            errors.append(msg("error", mod_file.stem, getattr(e, "lineno", 1), f"invalid JSON: {e.msg}"))
             continue
         except OSError as e:
-            errors.append(ValidationMessage(
-                severity="error",
-                module=mod_file.stem,
-                file_path=str(mod_file),
-                line=1,
-                text=f"cannot read: {e}",
-            ))
+            errors.append(msg("error", mod_file.stem, 1, f"cannot read: {e}"))
             continue
         if not isinstance(data, dict):
-            errors.append(ValidationMessage(
-                severity="error",
-                module=mod_file.stem,
-                file_path=str(mod_file),
-                line=1,
-                text="top-level JSON value is not an object",
-            ))
+            errors.append(msg("error", mod_file.stem, 1, "top-level JSON value is not an object"))
+            continue
+        vmname = data.get("vmname", mod_file.stem)
+        # The shape rules-manager's loader assumes: lists of objects.
+        rules_cfg = ((data.get("config") or {}).get("network:rules") or {}) \
+            if isinstance(data.get("config"), dict) else {}
+        shape_ok = True
+        for key in ("ingress", "egress"):
+            entries = data.get(key, rules_cfg.get(key)) or []
+            if not isinstance(entries, list):
+                errors.append(msg("error", vmname, _find_field_line(raw, f'"{key}"'),
+                                  f"'{key}' is not an array"))
+                shape_ok = False
+            elif any(not isinstance(x, dict) for x in entries):
+                errors.append(msg("error", vmname, _find_field_line(raw, f'"{key}"'),
+                                  f"an entry of '{key}' is not an object"))
+                shape_ok = False
+        if not shape_ok:
+            continue
+        try:
+            module = load_module(modules_dir, mod_file.stem)
+        except Exception as e:  # noqa: BLE001 - a module that will not load is the finding
+            errors.append(msg("error", vmname, 1, f"cannot be evaluated: {e}"))
             continue
 
-        vmname = data.get("vmname", mod_file.stem)
-        dest_zone_name = data.get("zone0", "")
+        for e in mgr._validate(module):
+            m = re.match(r"(ingress|egress)\[(\d+)\]", e.path or "")
+            value = None
+            if m:
+                entries = module.ingress if m.group(1) == "ingress" else module.egress
+                idx = int(m.group(2))
+                if idx < len(entries) and isinstance(entries[idx], dict):
+                    value = entries[idx].get("from" if m.group(1) == "ingress" else "to")
+            line = (_find_ingress_line(raw, int(m.group(2)), value) if m and m.group(1) == "ingress"
+                    else _find_field_line(raw, f'"{value}"') if value else 1)
+            severity = "warning" if "violates policy" in e.message or "holds internet" in e.message \
+                else "error"
+            (warnings if severity == "warning" else errors).append(
+                msg(severity, vmname, line, f"{e.path}: {e.message}"))
 
-        # Manual ingress entries -------------------------------------------------
-        ingress_entries = data.get("ingress", []) or []
-        if not isinstance(ingress_entries, list):
-            errors.append(ValidationMessage(
-                severity="error",
-                module=vmname,
-                file_path=str(mod_file),
-                line=_find_field_line(raw, '"ingress"'),
-                text="'ingress' is not an array",
-            ))
-            ingress_entries = []
-
-        for idx, entry in enumerate(ingress_entries):
-            if not isinstance(entry, dict):
-                errors.append(ValidationMessage(
-                    severity="error",
-                    module=vmname,
-                    file_path=str(mod_file),
-                    line=_find_ingress_line(raw, idx),
-                    text=f"ingress[{idx}] is not an object",
-                ))
-                continue
-            from_value = entry.get("from")
-            if not isinstance(from_value, str) or not from_value:
-                errors.append(ValidationMessage(
-                    severity="error",
-                    module=vmname,
-                    file_path=str(mod_file),
-                    line=_find_ingress_line(raw, idx),
-                    text=f"ingress[{idx}] missing required 'from' field",
-                ))
-                continue
-
-            # 'internet' and alias references are out of scope for the pinhole
-            # policy gate.
-            if from_value == "internet" or from_value.startswith("alias:"):
-                continue
-
-            # Resolve from_value to a source zone. It is either a zone name
-            # directly, or a peer module's vmname (in which case we look up
-            # that peer's zone0).
-            if from_value in zones:
-                src_zone_name = from_value
-            else:
-                peer_file = modules_dir / f"{from_value}.json"
-                if not peer_file.is_file():
-                    errors.append(ValidationMessage(
-                        severity="error",
-                        module=vmname,
-                        file_path=str(mod_file),
-                        line=_find_ingress_line(raw, idx, from_value),
-                        text=(f"ingress[{idx}].from = '{from_value}' is not a "
-                              f"known zone, 'internet', alias:..., or peer "
-                              f"module on disk"),
-                    ))
-                    continue
-                try:
-                    peer_data = json.loads(peer_file.read_text())
-                except Exception:
-                    continue
-                src_zone_name = peer_data.get("zone0", "") if isinstance(peer_data, dict) else ""
-
-            if not src_zone_name or not dest_zone_name:
-                continue
-            if src_zone_name == dest_zone_name:
-                continue  # intra-zone traffic doesn't need a pinhole
-            dest_zone = zones.get(dest_zone_name)
-            if dest_zone is None:
-                continue  # surfaced by other checks; not our job
-            if src_zone_name in dest_zone.pinhole_allowed_from:
-                continue  # policy permits — happy path
-
-            warnings.append(ValidationMessage(
-                severity="warning",
-                module=vmname,
-                file_path=str(mod_file),
-                line=_find_ingress_line(raw, idx, from_value),
-                text=(f"ingress[{idx}].from = '{from_value}' "
-                      f"(source zone '{src_zone_name}') would pinhole into "
-                      f"'{dest_zone_name}', but "
-                      f"'{dest_zone_name}'.pinhole-allowed-from = "
-                      f"{dest_zone.pinhole_allowed_from} — policy denies. "
-                      f"Add '{src_zone_name}' to "
-                      f"{dest_zone_name}.pinhole-allowed-from in zones.json, "
-                      f"or remove this entry."),
-            ))
-
-        # Auto-pinholes from dependsOn (issue #173) ----------------------------
-        # If a module depends on `<provider>:<service>` and the provider ships
-        # a services/<service>/pinhole.json, the rules_manager will (or won't)
-        # emit a synthesised pinhole — same policy gate. Report violations
-        # here so the operator catches them before install time.
-        deps = [(d, "dependsOn") for d in (data.get("dependsOn", []) or [])] + \
-               [(d, "integratesWith") for d in (data.get("integratesWith", []) or [])]
-        for dep, origin in deps:
-            if not isinstance(dep, str) or ":" not in dep:
-                continue
-            provider_name, _, service = dep.partition(":")
-            provider_name = provider_name.strip()
-            service = service.strip()
-            if not provider_name or not service:
-                continue
-            peer_file = modules_dir / f"{provider_name}.json"
-            if not peer_file.is_file():
-                continue  # provider not installed yet; install-time will catch
-            try:
-                peer_data = json.loads(peer_file.read_text())
-            except Exception:
-                continue
-            if not isinstance(peer_data, dict):
-                continue
-            provider_location = module_source_of(peer_data)   # or pre-#609 location (#682)
-            ports = _load_pinhole_ports(provider_location, service)
-            if not ports:
-                continue
-            provider_zone_name = peer_data.get("zone0", "")
-            if not provider_zone_name or not dest_zone_name:
-                continue
-            if provider_zone_name == dest_zone_name:
-                continue  # intra-zone — no pinhole
-            provider_zone = zones.get(provider_zone_name)
-            if provider_zone is None:
-                continue
-            # The consumer's own edge: access-to lists where a zone may go (#770).
-            consumer_zone = zones.get(dest_zone_name)
-            if consumer_zone is not None and (provider_zone_name in consumer_zone.access_to
-                                              or "all" in consumer_zone.access_to):
-                continue  # zone-level access-to already permits
-            if dest_zone_name in provider_zone.pinhole_allowed_from:
-                continue  # policy permits the auto-pinhole
-            if _pinhole_from_any_zone(provider_location, service):
-                continue  # a foundation sink every zone may reach (#770)
-
-            warnings.append(ValidationMessage(
-                severity="warning",
-                module=vmname,
-                file_path=str(mod_file),
-                line=_find_field_line(raw, f'"{dep}"'),
-                text=(f"{origin} '{dep}' would create an auto-pinhole from "
-                      f"'{dest_zone_name}' into '{provider_zone_name}', but "
-                      f"'{provider_zone_name}'.pinhole-allowed-from = "
-                      f"{provider_zone.pinhole_allowed_from} — policy denies. "
-                      f"Auto-pinhole will be silently skipped at install time."),
-            ))
+        def refused(dep, origin, provider, provider_zone):
+            warnings.append(msg(
+                "warning", vmname, _find_field_line(raw, f'"{dep}"'),
+                f"{origin} '{dep}' would need a pinhole from zone '{module.zone0}' into "
+                f"'{provider.zone0}', but '{module.zone0}' is not in "
+                f"{provider.zone0}.pinhole-allowed-from = {provider_zone.pinhole_allowed_from}"))
+        for _ in mgr._auto_pinhole_candidates(module, on_policy_block=refused):
+            pass
 
     return warnings, errors
 

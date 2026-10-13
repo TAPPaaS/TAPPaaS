@@ -1575,20 +1575,14 @@ class RulesManager:
                         module.vmname, f"{path}.from",
                         f"'{peer}' (zone {peer_zone}) violates policy — {refusal}",
                     ))
-            # Policy: ingress.from must be in dest_zone.pinhole-allowed-from
+            # Policy: a zone peer is allowed like any other — its access-to
+            # reaches this zone, or this zone lists it in pinhole-allowed-from
+            # (#821: this path alone used to demand pinhole-allowed-from).
             if dest_zone and peer in self.zones:
-                if peer not in dest_zone.pinhole_allowed_from:
-                    errors.append(
-                        ValidationError(
-                            module.vmname,
-                            f"{path}.from",
-                            f"'{peer}' violates policy — "
-                            f"{module.zone0}.pinhole-allowed-from = "
-                            f"{dest_zone.pinhole_allowed_from}. "
-                            f"Add '{peer}' to {module.zone0}.pinhole-allowed-from "
-                            f"in zones.json, or remove this entry.",
-                        )
-                    )
+                refusal = self._cross_zone_refusal(peer, module.zone0)
+                if refusal:
+                    errors.append(ValidationError(
+                        module.vmname, f"{path}.from", f"'{peer}' violates policy — {refusal}"))
             # Port consistency: every ingress.ports must be in module.ports[]
             if declared_ports:
                 for port in entry.get("ports", []):
