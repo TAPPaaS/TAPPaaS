@@ -38,6 +38,7 @@ import subprocess
 import sys
 import time
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Iterable, Iterator, Literal
 
@@ -689,6 +690,10 @@ class RulesManager:
         self._peer_module_cache: dict[str, ModuleSpec | None] = {}
         # Cache: VLAN-tag → OPNsense interface identifier (lazy-loaded at first use)
         self._vlan_iface_cache: dict[int, str] | None = None
+        # Rules the last compile left out because a zone edge already passes
+        # them (#256): {"rule", "from", "to"} each, recorded in the sequence map
+        # so a zone change can bring them back (recheck_covered).
+        self._covered: list[dict] = []
 
     @property
     def is_none_mode(self) -> bool:
@@ -788,6 +793,7 @@ class RulesManager:
                     result.aliases_removed += 1
 
         self._finish_alias_deletes()
+        self._forget_in_sequence_map(module.vmname)
         return result
 
     def list_rules(
@@ -891,6 +897,45 @@ class RulesManager:
                 if net in universe:
                     referenced.add(net)
         return sorted(referenced)
+
+    def detect_overlaps(self, module_name: str | None = None):
+        """Overlap analysis of the TAPPaaS rules on the firewall (#160).
+
+        Read-only. Names in the rules are resolved to what the firewall holds
+        now: an interface's networks (`optN`) and addresses (`optNip`), and each
+        alias's live table. With `module_name`, only findings that involve one of
+        that module's rules are kept. Returns a `rule_overlap.Report`.
+        """
+        from .dual_stack import read_interfaces
+        from . import rule_overlap
+
+        ifaces = {i.identifier: i for i in read_interfaces(self.fw.client)}
+        cache: dict[str, list[str] | None] = {}
+
+        def resolve(name: str) -> list[str] | None:
+            if name in cache:
+                return cache[name]
+            base, is_ip = (name[:-2], True) if name.endswith("ip") and name[:-2] in ifaces else (name, False)
+            nets: list[str] | None
+            if base in ifaces:
+                i = ifaces[base]
+                addrs = ([i.v4] if i.v4 is not None else []) + list(i.v6)
+                nets = [str(a.ip) if is_ip else str(a.network) for a in addrs]
+            else:
+                table = self._alias_table_addresses(name)
+                nets = None if table is None else [a for a in table if a]
+            cache[name] = nets
+            return nets
+
+        def managed(desc: str) -> bool:
+            return desc.startswith(("tappaas-", "Zone "))
+
+        rep = rule_overlap.report(self.fw.list_rules(), resolve, managed)
+        if module_name:
+            own = (f"tappaas-module:{module_name}:", f"tappaas-svcdep:{module_name}:")
+            rep.findings = [f for f in rep.findings
+                            if f.rule.description.startswith(own) or f.by.description.startswith(own)]
+        return rep
 
     def _alias_table_addresses(self, alias_name: str) -> list[str] | None:
         """Return the live pf-table entries for ``alias_name``.
@@ -1182,11 +1227,15 @@ class RulesManager:
 
         rules: list[ModuleFirewallRule] = []
         slot = stable_hash_index(module.vmname)
+        self._covered = []
 
         for idx, entry in enumerate(module.ingress):
             peer = entry["from"]
             protocol = _normalize_protocol(entry.get("protocol"))
             desc_human = entry["description"]
+            if self._skip_covered(module, "ingress", peer, entry["ports"], protocol,
+                                  self._peer_zone(peer), module.zone0):
+                continue
             interface = self._ingress_interface(peer)
             src_net = self._resolve_peer_net(peer, module=module)
             dst_net = self._resolve_self(module)
@@ -1224,6 +1273,9 @@ class RulesManager:
             peer = entry["to"]
             protocol = _normalize_protocol(entry.get("protocol"))
             desc_human = entry["description"]
+            if self._skip_covered(module, "egress", peer, entry["ports"], protocol,
+                                  module.zone0, self._peer_zone(peer)):
+                continue
             interface = self._egress_interface(module)
             src_net = self._resolve_self(module)
             dst_net = self._resolve_peer_net(peer, module=module)
@@ -1318,8 +1370,18 @@ class RulesManager:
                 f"to enable it."
             )
 
+        def _covered(provider, service, port_specs):
+            for spec in port_specs:
+                if spec.get("port") is None:
+                    continue
+                self._note_covered(
+                    module,
+                    _canonical_description_svcdep(module.vmname, service, provider.vmname,
+                                                  spec["port"], _normalize_protocol(spec.get("protocol"))),
+                    module.zone0, provider.zone0)
+
         for dep, _origin, provider, service, port_specs in self._auto_pinhole_candidates(
-            module, on_policy_block=_policy_blocked
+            module, on_policy_block=_policy_blocked, on_covered=_covered
         ):
             dst_alias = _module_alias_name(provider.vmname)
 
@@ -1501,6 +1563,67 @@ class RulesManager:
             return None
         peer_module = self._load_peer_cached(peer)
         return peer_module.zone0 if peer_module and peer_module.zone0 else None
+
+    def _peer_zone(self, peer: str) -> str | None:
+        """The zone a zone or module peer stands for; None for internet, alias: or unknown."""
+        if peer in self.zones:
+            return peer
+        return self._peer_module_zone(peer)
+
+    def _zone_edge_covers(self, src: str | None, dst: str | None) -> bool:
+        """True when zone `src`'s access-to already passes all traffic into `dst` (#256).
+
+        zone-manager writes that pass on src's interface, from src's whole network
+        to dst's (or to any, for `all`), every protocol and port — broader than any
+        module rule between the two zones, at the same place in the evaluation
+        order relative to the protective blocks. Within one zone nothing crosses
+        the firewall, so that is not a cover.
+        """
+        if not src or not dst or src == dst:
+            return False
+        s, t = self.zones.get(src), self.zones.get(dst)
+        if s is None or t is None:
+            return False
+        return dst in s.access_to or "all" in s.access_to
+
+    def _note_covered(self, module: ModuleSpec, description: str, src: str, dst: str) -> None:
+        info(f"{module.vmname}: {description} not written — {src}.access-to already "
+             f"passes all traffic into {dst}")
+        self._covered.append({"rule": description, "from": src, "to": dst})
+
+    def _skip_covered(self, module: ModuleSpec, direction: str, peer: str,
+                      ports: list, protocol: str, src: str | None, dst: str | None) -> bool:
+        """Leave a module rule out when a zone edge already passes it (#256)."""
+        if not self._zone_edge_covers(src, dst):
+            return False
+        for port in ports:
+            self._note_covered(module, _canonical_description(module.vmname, direction, peer,
+                                                              port, protocol), src, dst)
+        return True
+
+    def recheck_covered(self) -> list[str]:
+        """Reconcile every module a zone change has uncovered (#256).
+
+        The sequence map records, per module, the rules left out because a zone
+        edge passed them. When that edge is gone — an access-to narrowed — the
+        module is reconciled now, so its rules are written in the same update
+        rather than at the module's next one. Returns the modules reconciled.
+        """
+        doc = self._read_sequence_map()
+        uncovered = []
+        for name, entry in sorted((doc.get("modules") or {}).items()):
+            gone = [c for c in entry.get("covered") or []
+                    if not self._zone_edge_covers(c.get("from"), c.get("to"))]
+            if not gone:
+                continue
+            if not (self.modules_dir / f"{name}.json").is_file():
+                continue
+            info(f"{name}: {gone[0]['from']}.access-to no longer passes into "
+                 f"{gone[0]['to']} — writing its rules ({len(gone)} left out before)")
+            uncovered.append(name)
+            if not self.check_mode:
+                self.reconcile(name)
+        return uncovered
 
     def _cross_zone_refusal(self, src: str, dst: str) -> str | None:
         """Why traffic from zone `src` into zone `dst` is not allowed; None if it is.
@@ -1688,6 +1811,7 @@ class RulesManager:
         module: ModuleSpec,
         on_policy_block: "Callable[[str, str, ModuleSpec, ZoneSpec], None] | None" = None,
         on_skip: "Callable[[str, str, str], None] | None" = None,
+        on_covered: "Callable[[ModuleSpec, str, list[dict]], None] | None" = None,
     ) -> Iterator[tuple[str, str, ModuleSpec, str, list[dict]]]:
         """Yield (dep, origin, provider, service, port_specs) for each coordinate
         that clears every auto-pinhole precondition.
@@ -1755,9 +1879,9 @@ class RulesManager:
             # (#770). This read the provider's list, the reverse direction — so
             # every consumer of a mgmt service ("access-to": ["all"]) was
             # skipped as covered while its traffic was in fact refused.
-            consumer_zone = self.zones.get(module.zone0)
-            if consumer_zone and (provider.zone0 in consumer_zone.access_to
-                                  or "all" in consumer_zone.access_to):
+            if self._zone_edge_covers(module.zone0, provider.zone0):
+                if on_covered is not None:
+                    on_covered(provider, service, port_specs)
                 if on_skip:
                     on_skip(dep, origin,
                             f"'{provider.zone0}' is already in {module.zone0}.access-to — "
@@ -2247,46 +2371,97 @@ class RulesManager:
 
     # ── Sequence map artifact ────────────────────────────────────────────
 
+    def _read_sequence_map(self) -> dict:
+        """The sequence map (#162), or an empty one when there is none yet."""
+        if not self.sequence_map_file or not self.sequence_map_file.exists():
+            return {}
+        try:
+            with open(self.sequence_map_file) as f:
+                return json.load(f)
+        except (OSError, ValueError) as exc:
+            warn(f"Could not read the sequence map {self.sequence_map_file}: {exc}")
+            return {}
+
+    def _save_sequence_map(self, modules: dict) -> None:
+        # Entries for modules no longer deployed are dropped: a stale entry
+        # would report a collision with a module that is gone.
+        modules = {n: m for n, m in modules.items()
+                   if (self.modules_dir / f"{n}.json").is_file()}
+        doc = {
+            "version": 1,
+            "generated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "note": "Written by rules-manager after every add-rules, reconcile and remove-rules; "
+                    "regenerated from the module configs, not read back as configuration — "
+                    "except `covered`, which a zone change re-checks (recheck-covered).",
+            "bands": {
+                "ingress": {"start": BAND_INGRESS_BASE,
+                            "end": BAND_INGRESS_BASE + SLOT_COUNT * SLOT_SIZE - 1,
+                            "slot_size": SLOT_SIZE},
+                "egress": {"start": BAND_EGRESS_BASE,
+                           "end": BAND_EGRESS_BASE + SLOT_COUNT * SLOT_SIZE - 1,
+                           "slot_size": SLOT_SIZE},
+            },
+            "modules": dict(sorted(modules.items())),
+        }
+        self.sequence_map_file.parent.mkdir(parents=True, exist_ok=True)
+        tmp = self.sequence_map_file.with_suffix(".json.tmp")
+        with open(tmp, "w") as f:
+            json.dump(doc, f, indent=2)
+        tmp.replace(self.sequence_map_file)
+
     def _write_sequence_map(
         self, module: ModuleSpec, rules: list[ModuleFirewallRule]
     ) -> None:
         if not self.sequence_map_file:
             return
         try:
-            self.sequence_map_file.parent.mkdir(parents=True, exist_ok=True)
-            existing: dict = {}
-            if self.sequence_map_file.exists():
-                with open(self.sequence_map_file) as f:
-                    existing = json.load(f)
+            modules = dict(self._read_sequence_map().get("modules") or {})
             slot = stable_hash_index(module.vmname)
-            ing_seqs = [r.sequence for r in rules if r.direction == "ingress"]
-            egr_seqs = [r.sequence for r in rules if r.direction == "egress"]
-            modules = existing.get("modules", {})
+            # Two modules in one slot share sequence numbers. Their rules are all
+            # passes, so nothing is lost — but the map can no longer tell them
+            # apart by sequence, and an operator should know.
+            sharing = sorted(n for n, m in modules.items()
+                             if n != module.vmname and m.get("slot") == slot
+                             and (self.modules_dir / f"{n}.json").is_file())
+            if sharing:
+                warn(f"{module.vmname}: rule slot {slot} is shared with {', '.join(sharing)} — "
+                     "their rules use the same sequence numbers (all passes: no rule is lost)")
             modules[module.vmname] = {
                 "slot": slot,
                 "ingress_range": [BAND_INGRESS_BASE + slot * SLOT_SIZE,
-                                   BAND_INGRESS_BASE + slot * SLOT_SIZE + SLOT_SIZE - 1],
+                                  BAND_INGRESS_BASE + slot * SLOT_SIZE + SLOT_SIZE - 1],
                 "egress_range": [BAND_EGRESS_BASE + slot * SLOT_SIZE,
-                                  BAND_EGRESS_BASE + slot * SLOT_SIZE + SLOT_SIZE - 1],
-                "ingress_used": ing_seqs,
-                "egress_used": egr_seqs,
+                                 BAND_EGRESS_BASE + slot * SLOT_SIZE + SLOT_SIZE - 1],
+                "ingress_used": [r.sequence for r in rules if r.direction == "ingress"],
+                "egress_used": [r.sequence for r in rules if r.direction == "egress"],
+                "covered": list(self._covered),
             }
-            doc = {
-                "version": 1,
-                "bands": {
-                    "ingress": {"start": BAND_INGRESS_BASE,
-                                 "end": BAND_INGRESS_BASE + SLOT_COUNT * SLOT_SIZE - 1,
-                                 "slot_size": SLOT_SIZE},
-                    "egress": {"start": BAND_EGRESS_BASE,
-                                "end": BAND_EGRESS_BASE + SLOT_COUNT * SLOT_SIZE - 1,
-                                "slot_size": SLOT_SIZE},
-                },
-                "modules": modules,
-            }
-            with open(self.sequence_map_file, "w") as f:
-                json.dump(doc, f, indent=2)
+            self._save_sequence_map(modules)
         except Exception as exc:
             warn(f"Could not update sequence-map artifact: {exc}")
+
+    def _forget_in_sequence_map(self, vmname: str) -> None:
+        if not self.sequence_map_file:
+            return
+        try:
+            modules = dict(self._read_sequence_map().get("modules") or {})
+            if modules.pop(vmname, None) is not None or modules:
+                self._save_sequence_map(modules)
+        except Exception as exc:
+            warn(f"Could not update sequence-map artifact: {exc}")
+
+    def list_slots(self) -> dict:
+        """The sequence map as list-slots shows it: slots, use, sharing, covered rules."""
+        doc = self._read_sequence_map()
+        modules = doc.get("modules") or {}
+        by_slot: dict[int, list[str]] = {}
+        for n, m in modules.items():
+            by_slot.setdefault(m.get("slot"), []).append(n)
+        return {
+            "generated": doc.get("generated"),
+            "modules": modules,
+            "shared": {s: sorted(ns) for s, ns in by_slot.items() if len(ns) > 1},
+        }
 
 
 def _extract_module(description: str) -> str:
@@ -2470,6 +2645,13 @@ def main() -> int:
     p_ver.add_argument("module", help="Module name")
     p_ver.add_argument("--deep", action="store_true",
                         help="Run connectivity probes in addition to rule presence")
+    p_ver.add_argument("--detect-overlap", action="store_true",
+                        help="Also report rules of this module that are shadowed, redundant or in "
+                             "conflict with another rule (warnings only)")
+    p_ov = subparsers.add_parser("overlaps", parents=[global_parser],
+                                 help="Rules on the firewall that are shadowed, redundant or in conflict "
+                                      "(read-only, warnings only)")
+    p_ov.add_argument("--module", help="Only findings that involve this module's rules")
 
     p_ep = subparsers.add_parser("expected-pinholes", parents=[global_parser],
                                    help="Which auto-pinhole rules a consumer should carry, and why any are not")
@@ -2482,6 +2664,13 @@ def main() -> int:
     p_ls.add_argument("--module", help="Filter by module name")
     p_ls.add_argument("--orphans", action="store_true",
                        help="Only rules whose module no longer exists on disk")
+
+    subparsers.add_parser("list-slots", parents=[global_parser],
+                          help="Each module's rule slot and sequences, shared slots, and the rules "
+                               "left out because a zone edge covers them (the sequence map)")
+    subparsers.add_parser("recheck-covered", parents=[global_parser],
+                          help="Reconcile every module whose left-out rules a zone change has "
+                               "uncovered (the network update runs this)")
 
     p_ca = subparsers.add_parser("create-alias", parents=[global_parser],
                                    help="Create or update an OPNsense alias")
@@ -2525,6 +2714,19 @@ def main() -> int:
         if args.debug:
             raise
         return 1
+
+
+def _print_overlaps(rep) -> list[dict]:
+    """Print an overlap report (#160) as warnings; return it as JSON-ready dicts."""
+    for f in rep.findings:
+        (warn if f.kind != "redundant" else info)(f"  {f.kind} on {f.interface}: {f.text()}")
+    for d in rep.unresolved:
+        debug(f"  not analysed (a name could not be resolved): {d}")
+    info(f"overlaps: {rep.analysed} rule(s) analysed, {len(rep.findings)} finding(s)"
+         + (f", {len(rep.unresolved)} not analysable" if rep.unresolved else ""))
+    return [{"kind": f.kind, "interface": f.interface, "rule": f.rule.description,
+             "sequence": f.rule.sequence, "by": f.by.description, "by_sequence": f.by.sequence,
+             "text": f.text()} for f in rep.findings]
 
 
 def _dispatch(args: argparse.Namespace, manager: RulesManager) -> int:
@@ -2583,11 +2785,19 @@ def _dispatch(args: argparse.Namespace, manager: RulesManager) -> int:
             warn(f"  extra:   {d}")
         for d in result.empty_tables:
             error(f"  empty table: {d} — rule matches on it but pf table has no members")
+        overlaps = []
+        if args.detect_overlap:
+            overlaps = _print_overlaps(manager.detect_overlaps(args.module))
         _output({"module": result.module, "desired": result.desired,
                   "present": result.present, "missing": result.missing,
                   "extra": result.extra, "empty_tables": result.empty_tables,
-                  "ok": result.ok}, args)
+                  "overlaps": overlaps, "ok": result.ok}, args)
         return 0 if result.ok else 1
+
+    if cmd == "overlaps":
+        found = _print_overlaps(manager.detect_overlaps(args.module))
+        _output({"findings": found}, args)
+        return 0
 
     if cmd == "expected-pinholes":
         # Read-only: this asks the compile-side predicate and makes no firewall
@@ -2611,6 +2821,31 @@ def _dispatch(args: argparse.Namespace, manager: RulesManager) -> int:
                   "rules": [{"description": r.description, "sequence": r.sequence,
                               "interface": r.interface, "uuid": r.uuid}
                              for r in rules]}, args)
+        return 0
+
+    if cmd == "list-slots":
+        slots = manager.list_slots()
+        if not slots["modules"]:
+            info("no sequence map yet — it is written by the first add-rules or reconcile")
+        for name, m in sorted(slots["modules"].items(), key=lambda kv: kv[1].get("slot", 0)):
+            used = len(m.get("ingress_used") or []) + len(m.get("egress_used") or [])
+            covered = m.get("covered") or []
+            info(f"  slot {m.get('slot'):>2}  {name:<20} ingress {m['ingress_range'][0]}-"
+                 f"{m['ingress_range'][1]}  egress {m['egress_range'][0]}-{m['egress_range'][1]}  "
+                 f"{used} rule(s)" + (f", {len(covered)} covered by a zone edge" if covered else ""))
+            for c in covered:
+                info(f"           covered: {c['rule']}  ({c['from']} -> {c['to']} by access-to)")
+        for slot, names in sorted(slots["shared"].items()):
+            warn(f"  slot {slot} is shared by {', '.join(names)}")
+        _output(slots, args)
+        return 0
+
+    if cmd == "recheck-covered":
+        done = manager.recheck_covered()
+        (info if done else debug)(
+            f"recheck-covered: {len(done)} module(s) "
+            f"{'would be ' if args.check_mode else ''}reconciled" + (f": {', '.join(done)}" if done else ""))
+        _output({"reconciled": done, "check_mode": bool(args.check_mode)}, args)
         return 0
 
     if cmd == "create-alias":

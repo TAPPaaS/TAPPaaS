@@ -99,6 +99,7 @@ class FirewallRuleInfo:
     log: bool
     sequence: int | None = None
     source_invert: bool = False
+    destination_invert: bool = False
     # Address family (inet / inet6 / inet46) and first-match. Defaults are what
     # OPNsense stores when a rule does not say; read so drift checks can see them.
     ip_protocol: str = "inet"
@@ -122,6 +123,7 @@ class FirewallRuleInfo:
             log=data.get("log") == "1",
             sequence=int(data["sequence"]) if data.get("sequence") else None,
             source_invert=data.get("source_not") == "1",
+            destination_invert=data.get("destination_not") == "1",
             ip_protocol=data.get("ipprotocol") or "inet",
             quick=data.get("quick", "1") == "1",
         )
@@ -268,6 +270,7 @@ class FirewallManager:
             log=data.get("log") == "1",
             sequence=int(data["sequence"]) if data.get("sequence") else None,
             source_invert=data.get("source_not") == "1",
+            destination_invert=data.get("destination_not") == "1",
             ip_protocol=get_selected_value(data.get("ipprotocol", {})) or "inet",
             quick=data.get("quick", "1") == "1",
         )
