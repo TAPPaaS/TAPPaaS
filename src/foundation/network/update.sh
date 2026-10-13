@@ -213,6 +213,21 @@ case "${_ipv6_rc}:${_ipv6_out}" in
                   warn "ipv6-manager could not bring the site's IPv6 to site.json (continuing)" ;;
 esac
 
+# ── DNSSEC (#263) ────────────────────────────────────────────────────
+#
+# unbound-manager brings Unbound's DNSSEC validation to site.json `dnssec`
+# (absent = true). The site's own names are unaffected: OPNsense marks the
+# internal domain and the private reverse zones insecure, and split-horizon
+# answers are local data. A change reloads Unbound and is checked.
+_dnssec="$(jq -r 'if .dnssec == false then "false" else "true" end' "${CONFIG_DIR}/site.json" 2>/dev/null || echo true)"
+_sec_out="$(/home/tappaas/bin/unbound-manager --no-ssl-verify dnssec --set "${_dnssec}" 2>&1)" && _sec_rc=0 || _sec_rc=$?
+case "${_sec_rc}:${_sec_out}" in
+    0:*changing*) while IFS= read -r _l; do info "  ${_l}"; done <<< "${_sec_out}" ;;
+    0:*)          while IFS= read -r _l; do debug "  ${_l}"; done <<< "${_sec_out}" ;;
+    *)            printf '%s\n' "${_sec_out}" >&2
+                  warn "unbound-manager could not bring DNSSEC to site.json (continuing)" ;;
+esac
+
 # ── Output levels ───────────────────────────────────────────────────
 #
 # relog_steps — a filter for a sub-command's stream. Warnings and errors pass

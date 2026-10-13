@@ -412,6 +412,53 @@ def checkconf(args) -> bool:
     return valid
 
 
+def read_dnssec(mgr) -> bool:
+    """Does Unbound validate DNSSEC now (Services > Unbound DNS > General)?"""
+    g = ((_unbound_api(mgr, "settings", "get", "get").get("unbound") or {}).get("general") or {})
+    v = g.get("dnssec")
+    if v not in ("0", "1"):
+        raise RuntimeError(f"unbound general.dnssec is {v!r}, neither 0 nor 1 — not guessing")
+    return v == "1"
+
+
+def dnssec(args) -> bool:
+    """Bring Unbound's DNSSEC validation to `site.json` `dnssec` (#263).
+
+    Split horizon needs nothing extra: OPNsense marks its private domains
+    (`internal`, the private reverse zones) `domain-insecure` itself, and host
+    overrides are local data, which the validator does not judge. A change
+    reloads Unbound once; the resolver must answer afterwards.
+    """
+    with _client(args) as mgr:
+        current = read_dnssec(mgr)
+        if current == args.set:
+            print(f"dnssec: validation {'on' if current else 'off'} — matches site.json")
+            return True
+        what = f"validation {'on' if current else 'off'} -> {'on' if args.set else 'off'}"
+        if args.check_mode:
+            print(f"dnssec: would change {what}")
+            return True
+        print(f"dnssec: changing {what}")
+        r = _unbound_api(mgr, "settings", "set", "post",
+                         {"unbound": {"general": {"dnssec": "1" if args.set else "0"}}})
+        if r.get("result") != "saved":
+            print(f"ERROR: dnssec: set returned {r}", file=sys.stderr)
+            return False
+        _unbound_api(mgr, "service", "reconfigure", "post")
+        if read_dnssec(mgr) != args.set:
+            print("ERROR: dnssec: the firewall still reports the old value", file=sys.stderr)
+            return False
+    return _verify_resolver_after_write(args.firewall, f"DNSSEC {what}")
+
+
+def _parse_bool(v: str) -> bool:
+    if str(v).lower() in ("true", "1", "yes", "on"):
+        return True
+    if str(v).lower() in ("false", "0", "no", "off"):
+        return False
+    raise argparse.ArgumentTypeError(f"expected true or false, got {v!r}")
+
+
 def main():
     # Global options work on either side of the subcommand (#379); see cli_globals.py.
     gp = make_global_parent()
@@ -432,6 +479,7 @@ Examples:
   unbound-manager add nextcloud tappaas.org 10.6.0.1
   unbound-manager delete nextcloud tappaas.org
   unbound-manager list
+  unbound-manager dnssec --set "$(jq -r '.dnssec // true' ~/config/site.json)"
 """,
     )
 
@@ -452,6 +500,10 @@ Examples:
     sub.add_parser("checkconf", parents=[gp],
                    help="Validate the firewall's live Unbound config (unbound-checkconf)")
 
+    p_sec = sub.add_parser("dnssec", parents=[gp],
+                           help="Turn DNSSEC validation on or off (site.json dnssec, default true)")
+    p_sec.add_argument("--set", type=_parse_bool, required=True, help="true or false")
+
     args = parse_with_globals(parser, {
         "firewall": "firewall.mgmt.internal", "port": None,
         "credential_file": None, "no_ssl_verify": False,
@@ -470,6 +522,8 @@ Examples:
             ok = list_overrides(args)
         elif args.command == "checkconf":
             ok = checkconf(args)
+        elif args.command == "dnssec":
+            ok = dnssec(args)
         else:
             parser.print_help()
             ok = False

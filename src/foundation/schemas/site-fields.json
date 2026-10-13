@@ -259,6 +259,12 @@
       "default": false,
       "note": "Set it true only when the upstream provides IPv6. Changing it reloads the firewall's filter and Unbound once; IPv4 traffic is not interrupted."
     },
+    "dnssec": {
+      "description": "Whether the firewall's resolver (Unbound) validates DNSSEC, applied by the network module's update. True: answers for signed domains are validated and a forged or broken answer is refused (SERVFAIL). The site's own names are not affected: the internal domain and private reverse zones are marked insecure, and the split-horizon answers for published names are local data.",
+      "type": "boolean",
+      "default": true,
+      "note": "Turn it off only if an upstream path breaks DNSSEC (a middlebox that strips signatures). Changing it reloads Unbound once."
+    },
     "snapshotRetention": {
       "description": "Number of snapshots to retain. Site-wide until P3 (then moves to Environment).",
       "type": "integer",

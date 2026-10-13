@@ -351,6 +351,15 @@ teardown removes exactly what setup created.
 See [`docs/test-network-setup.md`](docs/test-network-setup.md) for the full
 setup/teardown runbook, options, verification, and troubleshooting.
 
+## DNSSEC
+
+Unbound validates DNSSEC (`site.json` `dnssec`, default `true`; the network update applies
+it with `unbound-manager dnssec`). An answer for a signed domain is validated, and a forged
+or broken one is refused with SERVFAIL. The site's own names are not affected: OPNsense marks
+the internal domain (`internal`) and the private reverse zones `domain-insecure`, and the
+split-horizon answers for published names are local data, which the validator does not judge.
+Turn it off only where an upstream path strips signatures.
+
 ## Troubleshooting: Unbound / DNSBL
 
 **Restart Unbound only through OPNsense:** `configctl unbound restart` (what TAPPaaS
