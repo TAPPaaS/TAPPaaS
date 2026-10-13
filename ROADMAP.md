@@ -155,7 +155,7 @@ met gates are recorded in the releases that carried their waves.
 | Secrets management | #58 (in Future Work since 2026-10-02): one secrets-access helper every module uses instead of reading `/etc/secrets`, OpenBao behind it later | G1.6, when #58 returns |
 | VMID convention | #294 — only if it is adopted | G1.7 |
 | Legal/processor | #359 | Wave 4 |
-| IPv6 | #26 — [ADR-030](docs/ADR/ADR-030%20-%20IPv6.md) **Proposed v0.4, built and on `main` 2026-10-13**: WAN in `site.json` (dynamic default, static), a `/56`-or-larger prefix, `ipv6Subnet` per zone, AAAA names, dual-stack Caddy and access lists, IPv4 fallback and switch-off. To accept once the inbound part (public AAAA, Caddy on the WAN) is built | #26 remaining parts (Housekeeping) |
+| IPv6 | #26 — [ADR-030](docs/ADR/ADR-030%20-%20IPv6.md) **Accepted v1.0 2026-10-13**: built and on `main`; inbound verified from a phone over IPv6 via the public AAAA. Remaining outside it: public DNS that follows a dynamic WAN (#383) | #26 closable |
 
 ### Housekeeping
 
@@ -242,7 +242,7 @@ The verbs operators otherwise do by hand: install a whole stack (#763), suspend 
 | #634 | Private repositories in `repository add` | L | L | Adopt-mode: won't fix; document the deploy-key method |
 | #654 | `module-manager`: the `--set` pre-gate ignores the module-level field declarations (ADR-020 D10) | M | L | ADR-020 D10 lets a module declare its own field rules; the `--set` pre-gate ignores them, so such a declaration is inert. Belongs with the ADR-020 verb work (#453, #655) |
 
-### G4.4 Storage & physical devices — Ease H · Risk L · released: 5 · open: 6
+### G4.4 Storage & physical devices — Ease H · Risk L · released: 5 · open: 7
 
 Shared storage and the physical network as managed parts of a site: the rest of the NFS service (#772), a machine's zone enforced at its switch port (#668, #697), controller modules that register their devices (#731), device modules (#155).
 
@@ -252,6 +252,7 @@ Shared storage and the physical network as managed parts of a site: the rest of 
 | #155 | Modules for physical devices | L | L | Docs and examples only (Lars, 2026-05-15) |
 | #668 | A machine's zone is recorded, not enforced | H | M | A machine's `zone0` says which network its physical NIC is cabled to, and nothing checks the switch port. Record switch and port per NIC, report VLAN drift. Decide with #697 |
 | #697 | Node `lan` trunks and their switch ports are set once at install, maintained by nothing | M | H | Node trunks and switch ports are set at install and maintained by nothing; untagged mgmt survives on PVID 1 by accident. Five candidate fixes on the issue — **decide with #668** |
+| #706 | A wireless device zone cannot be checked against its SSID | M | L | **Scored 2026-10-13:** an attachment field (`port`/`ssid`) for `kind: device` and the #668 check extended to SSIDs. Additive check; after #668 (the wired half, open). Moved from G2.1 2026-10-13: it needs #668's attachment record first |
 | #731 | Controller-architecture modules never register themselves, and inventory drift has no routine check | M | L | A controller plugin (`unifi-os`) installs without registering in `switch-controller`/`ap-controller`; inventory drift is never checked. Reported by @ErikDaniel007 |
 | FW #158 | Multi-NIC module firewall rules | M | L | Optional roll-in |
 
@@ -349,9 +350,9 @@ A first install that is easier to get through: resumable (#377), showing its pro
 
 Changes to live firewall and DNS behaviour on every installation. Restrictive defaults get harder to introduce the longer users rely on permissive ones, so they come early; every change shows its dry-run diff (#645) before `--apply`.
 
-### G2.1 Firewall exposure & rule order — Ease M · Risk H · released: 7 · open: 14
+### G2.1 Firewall exposure & rule order — Ease M · Risk H · released: 7 · done for 2.3: 18 · open: 2
 
-Tighter firewall defaults that keep what modules need. Built: the gateway, GUI/SSH and anti-spoofing rules. Sprint from 2026-10-12: the review of the tier model and rule creation is done and published (#816), with most of its findings fixed; pinholes no longer shadowed (#386); every zone policy covers IPv6 (#815), and IPv6 itself is built (#26). The rules manager's overlap report, covered pinholes and sequence map are built (#160, #256, #162, on the branch). The review findings are done: #817, #818, #822 closed; #819–#821, #823 and the ADR amendments (#824) closed — on `main` 2026-10-13 after a clean `--deep` (144/0). Inbound IPv6 to Caddy, IPv6 anti-spoofing, DNSSEC (#263), #576, #257, #660 and #683 followed, on `main` 2026-10-13 after a clean `--deep` (144/0). Open: the NetBird rules below and #706. NetBird rules (#385, #222) are low priority until the NetBird decision.
+Tighter firewall defaults that keep what modules need. Built: the gateway, GUI/SSH and anti-spoofing rules. Sprint from 2026-10-12: the review of the tier model and rule creation is done and published (#816), with most of its findings fixed; pinholes no longer shadowed (#386); every zone policy covers IPv6 (#815), and IPv6 itself is built (#26). The rules manager's overlap report, covered pinholes and sequence map are built (#160, #256, #162, on the branch). The review findings are done: #817, #818, #822 closed; #819–#821, #823 and the ADR amendments (#824) closed — on `main` 2026-10-13 after a clean `--deep` (144/0). Inbound IPv6 to Caddy, IPv6 anti-spoofing, DNSSEC (#263), #576, #257, #660 and #683 followed, on `main` 2026-10-13 after a clean `--deep` (144/0). Lockout check re-run on hrossen 2026-10-13 against the current rules, IPv4 and IPv6: only mgmt reaches the firewall's GUI and SSH, on any address; the WAN passes 80/443 and nothing else (the admin VPN not re-probed). Open: the NetBird rules below, pending the NetBird decision; #706 moved to G4.4 behind #668. NetBird rules (#385, #222) are low priority until the NetBird decision.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
@@ -373,11 +374,10 @@ Tighter firewall defaults that keep what modules need. Built: the gateway, GUI/S
 | ✅ #162 | Persistent sequence-map artifact | L | L | **Closed 2026-10-13** (`g2.1-firewall`): the map gains `generated`, `covered` and stale-entry clean-up; slot sharing warned; `rules-manager list-slots` |
 | ✅ #660 | A declared `aliasType` change cannot be applied | M | M | **Closed 2026-10-13** (on `main` 2026-10-13 after a clean `--deep` (144/0)): the type is changed in place through OPNsense's own API, rules referencing it and all; verified live |
 | ✅ #683 | Declared `ports` without `network:rules` are inert | L | L | **Closed 2026-10-13** (on `main` 2026-10-13 after a clean `--deep` (144/0)): operator decision — such `ports` are documentation (`unwired: documentation`); validate and the merge stay silent |
-| #706 | A wireless device zone cannot be checked against its SSID | M | L | **Scored 2026-10-13:** an attachment field (`port`/`ssid`) for `kind: device` and the #668 check extended to SSIDs. Additive check; after #668 (the wired half, open) |
 | #385 | Persist the NetBird OPT1 pass rule | L | M | **Low priority this sprint (2026-10-12)**, pending the NetBird decision (*Decisions*). Land with #222 |
 | #222 | NetBird → srv floating rule is fragile | L | M | **Low priority this sprint (2026-10-12)**, pending the NetBird decision. The #816 review found no code that creates NetBird rules |
 
-### G2.2 DNS resolver robustness — Ease L · Risk M · released: 4 · done for 2.3: 1 · open: 4
+### G2.2 DNS resolver robustness — Ease L · Risk M · released: 4 · done for 2.3: 3 · open: 2
 
 A resolver that holds up: a working Unbound restart (#387), a written IPv6 stance (#149), DNSSEC with split horizon (#263), public DNS that follows a dynamic WAN address (#383), and optional blocklists (#157).
 
@@ -437,7 +437,9 @@ summary (`release/roadmap-cut.py`) and leaves this block empty again.
 
 <!-- next-release summary -->
 
-**IPv6, opt-in per site.** A site turns it on with `site.json` `ipv6: true` (default `false`): each zone gets a `/64` from the WAN's prefix, every VM's name resolves to its IPv6 address too, the firewall rules cover both families, and names published through Caddy answer over IPv6 inside the site; everything still works over IPv4, and switching it off withdraws IPv6 cleanly. **The first sweep after upgrading turns IPv6 off on the firewall** — inbound IPv6 dropped, DNS over IPv4 only — unless the site sets `site-manager site modify --ipv6 true` first. Existing zones are given an IPv6 number (migration 0016); it does nothing while `ipv6` is `false`. See *IPv6* and *Firewall Rules* on tappaas.org.
+**IPv6, opt-in per site.** A site turns it on with `site.json` `ipv6: true` (default `false`): each zone gets a `/64` from the WAN's prefix, every VM's name resolves to its IPv6 address too, the firewall rules cover both families, names published through Caddy answer over IPv6 inside the site, and Caddy is reachable from the internet over IPv6 — publish the address `ipv6-manager` reports as the AAAA; everything still works over IPv4, and switching it off withdraws IPv6 cleanly. **The first sweep after upgrading turns IPv6 off on the firewall** — inbound IPv6 dropped, DNS over IPv4 only — unless the site sets `site-manager site modify --ipv6 true` first. Existing zones are given an IPv6 number (migration 0016); it does nothing while `ipv6` is `false`. See *IPv6* and *Firewall Rules* on tappaas.org.
+
+**Firewall and DNS.** Unbound validates DNSSEC: **the first sweep turns it on** (`site.json` `dnssec`, default `true`; set it `false` to opt out); internal and published names are unaffected. A zone can share mDNS discovery with other zones (`"mdns": true`; discovery only, reach is still the zone rules). A client zone can serve several environments (`serves` as a list, `network-manager bind --add`). A module's `aliasType` can now be changed and is applied in place; `ports` on a module without `network:rules` is documentation and no longer warns. `rules-manager overlaps` reports shadowed, redundant and conflicting rules, and a pinhole a zone's `access-to` already covers is no longer written. Every zone with internet access now also blocks CGNAT, link-local and the firewall's own addresses, and a module's egress `to: internet` excludes the site.
 
 <!-- /next-release summary -->
 
