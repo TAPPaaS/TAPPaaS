@@ -161,15 +161,13 @@ met gates are recorded in the releases that carried their waves.
 
 - **Merge pairs** the issues themselves say belong together: #385 + #222,
   #160 + #256, #642 + #643, #444 + #582, #119 / #120 / #121.
-- **Close or park:** #154, #223 → *Parking lot* (#284 went to Future Work 2026-10-06). The forge's *Release 2.0: Build out Stacks* milestone still has 4 open issues —
+- **Close or park:** #154 → *Parking lot* (#223 parked 2026-10-13) (#284 went to Future Work 2026-10-06). The forge's *Release 2.0: Build out Stacks* milestone still has 4 open issues —
   move them per this plan and close it.
 - **Parked, half of #656:** a proxy access list kept current from a provider's published feed (an
   Azure service tag, say) is a subsystem, not a field — an outbound fetch on a schedule, a trust
   decision about a third party deciding who reaches a site, and a defined behaviour when the feed
   is unreachable or changes shape. It needs its own decision in ADR-023. The static CIDR half is in
   G4.2.
-- **Tracked on the forge as open, built here:** FW #357, FW #122 and FW #143 are done in this
-  plan's rows (2.1, 2.1, 2.2); close them on the forge.
 
 ---
 
@@ -190,6 +188,7 @@ items that belong to a group — FW #40, #83, #157, #158, #162 — are rows in t
 | #156 | pfSense `aliases.xml` import script | |
 | #170 | LiteLLM declarative control plane | Decide with #430 (G1.7) |
 | #183 | TAPPaaS service catalog | |
+| #223 | OPNsense 26.1 InterfaceAssignController may break on a future upgrade | Parked 2026-10-13 (agreed 2026-05-27): works on 26.1 as deployed; revisit when an upgrade breaks it. Parking lot on the forge |
 | #250 | `dependsOn` ownership for community modules | Option D, `dependsOn.sh`. Out of G1.3 since 2026-09-20 (operator) |
 | #284 | forgejo: SQLite → PostgreSQL | Out of G3.3 2026-10-06 (operator): SQLite stays the default until load says otherwise |
 | #464 | migrate-firewall-to-network: dry-run reports a step it cannot predict | A dry run that overstates what it will do teaches an operator to distrust dry runs. Parking lot on the forge |
@@ -276,7 +275,7 @@ Low upgrade risk. Build continuously, in any order within a group.
 
 ### G3.1 cluster:vm lifecycle & capacity — Ease L · Risk M · released: 18 · open: 5
 
-Guests sized, placed, started and stopped right: memory defaults from measurement (#663), moving a running guest to another node (#825), hardware drift (#531), shutdown and boot order (#36, #127), storage growth and placement (#100, #403), a composite-module ADR (#761), and a sweep that survives a guest restarting itself (#753).
+Guests sized, placed, started and stopped right: memory defaults from measurement (#663), moving a running guest to another node (#825), a readiness wait that skips UDP ports (#826), hardware drift (#531), shutdown and boot order (#36, #127), storage growth and placement (#100, #403), a composite-module ADR (#761), and a sweep that survives a guest restarting itself (#753).
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
@@ -284,8 +283,8 @@ Guests sized, placed, started and stopped right: memory defaults from measuremen
 | #100 | Automatic storage extension | M | L | |
 | #403 | Install on the root disk; smarter placement | M | L | |
 | ✅ #663 | Memory defaults are not based on measurement | L | L | **Closed 2026-10-13** (operator): 7-day measurement on hrossen. vaultwarden was too small — 1→1.5 GiB (`bac670ce`); euro-office and deconz-test moved tappaas1→tappaas2, tappaas1 commitment 63→51.5 GiB of 61. The other proposed reductions (nextcloud-hpb, jellyfin, forgejo, litellm default) not applied; `network` 8G→4G still parked |
-| ✅ #825 | update-module: changing a running guest's node does not migrate it | M | M | **Closed 2026-10-13** (`fix(cluster): move a running guest when its node changes`): snapshot and OS update act where the guest runs; `live-ok` refuses local disks with snapshots; `--allow-disruption` does stop → offline migrate → start. Found moving guests for #663 |
-| ✅ #826 | Readiness wait probes UDP ports over TCP — 180 s lost per update | L | L | **Closed 2026-10-13** (`fix(module-ready): do not probe UDP or ICMP ports over TCP`): only TCP, TCP/UDP and unset protocols are probed; deconz-test's wait went 180 s → 0 s. Found during the #825 test |
+| ✅ #825 | update-module: changing a running guest's node does not migrate it | M | M | **Closed 2026-10-13** (`fix(cluster): move a running guest when its node changes`): snapshot and OS update act where the guest runs; `live-ok` refuses local disks with snapshots; `--allow-disruption` does stop → offline migrate → start. Proven on hrossen (`g2.1-firewall`): deconz-test deferred, then moved tappaas2→tappaas3 and back by `update-module`. Found moving guests for #663 |
+| ✅ #826 | Readiness wait probes UDP ports over TCP — 180 s lost per update | L | L | **Closed 2026-10-13** (`fix(module-ready): do not probe UDP or ICMP ports over TCP`): only TCP, TCP/UDP and unset protocols are probed; deconz-test's wait went 180 s → 0 s; a full `update-module deconz-test` on hrossen now takes 79 s. Found during the #825 test |
 | #761 | A composite-module ADR: `cluster`, `kubernetes`, and modules that only provide artefacts | H | M | ADR-022d and ADR-026 defer `cluster`/`kubernetes` to an ADR that does not exist, and `templates` fits no `kind`; interim values in ADR-022d v1.2. With @ErikDaniel007 |
 
 ### G3.2 Identity & SSO wiring — Ease M · Risk L · released: 10 · open: 4
@@ -352,21 +351,21 @@ Changes to live firewall and DNS behaviour on every installation. Restrictive de
 
 ### G2.1 Firewall exposure & rule order — Ease M · Risk H · released: 7 · open: 14
 
-Tighter firewall defaults that keep what modules need. Built: the gateway, GUI/SSH and anti-spoofing rules. Sprint from 2026-10-12: the review of the tier model and rule creation is done and published (#816), with most of its findings fixed; pinholes no longer shadowed (#386); every zone policy covers IPv6 (#815), and IPv6 itself is built (#26). The rules manager's overlap report, covered pinholes and sequence map are built (#160, #256, #162, on the branch). Next: the open review findings (#817–#823). NetBird rules (#385, #222) are low priority until the NetBird decision.
+Tighter firewall defaults that keep what modules need. Built: the gateway, GUI/SSH and anti-spoofing rules. Sprint from 2026-10-12: the review of the tier model and rule creation is done and published (#816), with most of its findings fixed; pinholes no longer shadowed (#386); every zone policy covers IPv6 (#815), and IPv6 itself is built (#26). The rules manager's overlap report, covered pinholes and sequence map are built (#160, #256, #162, on the branch). The review findings are done: #817, #818, #822 closed; #819–#821, #823 and the ADR amendments (#824) built on the branch, awaiting push. Next: a `--deep` run and the batch into `main`. NetBird rules (#385, #222) are low priority until the NetBird decision.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
 | ✅ #816 | Review the zone tiers and rule-set creation; publish how it works | M | L | **Closed 2026-10-13:** review (`docs/design/zone-rules-review.md`, 18 findings, 11 fixed on `main`); published on tappaas.org as *Firewall Rules*, a slimmer *Network Zones* and *IPv6*; open findings are #817–#823, the ADR amendments #824 |
 | ✅ #386 | block-private rules shadow auto-pinholes | M | M | **Closed 2026-10-12:** pinholes sit in a band before the zone baseline; pf order verified on hrossen |
 | ✅ #815 | IPv6 parity: zone policy covers IPv6 before any zone gets an address | M | M | **Done 2026-10-12, on `main` 2026-10-13:** zone and module rules `inet46`, a zone-networks table and ULA blocks for IPv6, ICMPv6 declarable; forced sweep 24/24, isolation over IPv6 verified. Anti-spoofing stays IPv4 (in #26's remainder) |
-| #817 | Egress `to: internet` also passes every private and zone network | M | M | From #816 (D3). Latent: no module declares it today |
-| #818 | `alias:` peers skip the zone-policy check | M | M | From #816 (D5, the part left open). List affected modules first |
-| #819 | `alias:` ingress bound to `lan`; a failed interface lookup falls back silently | M | L | From #816 (D7) |
-| #820 | A description change duplicates a module rule | L | L | From #816 (D9) |
-| #821 | The pinhole check exists twice and the copies can disagree | L | L | From #816 (D12), the #632 drift class |
-| #822 | Block-private misses 100.64/10, 169.254/16 and the firewall's other addresses | M | M | From #816 (D14). Live check on hrossen first; NetBird decision affects 100.64/10 |
-| #823 | Gateway lookup is one unretried API call per zone | L | L | From #816 (D18) |
-| #824 | Amend ADR-014 and ADR-021 to the zone and rule model as built | L | L | From #816; documentation only |
+| ✅ #817 | Egress `to: internet` also passes every private and zone network | M | M | **Closed 2026-10-13** (`g2.1-firewall`): written as "not `tappaas_not_internet`" (private, special ranges, every zone's network); reproduced and verified on hrossen |
+| ✅ #818 | `alias:` peers skip the zone-policy check | M | M | **Closed 2026-10-13** (`g2.1-firewall`): an alias counts as the zones its addresses are in; one spanning zones is refused; derived NFS paths keep their grant. No deployed module affected |
+| #819 | `alias:` ingress bound to `lan`; a failed interface lookup falls back silently | M | L | **Built 2026-10-13** (`g2.1-firewall`, awaits push): alias ingress on its zones' interfaces; a missing interface refuses the module. All 12 modules on hrossen compile |
+| #820 | A description change duplicates a module rule | L | L | **Built 2026-10-13** (`g2.1-firewall`, awaits push): one rule per identity; reproduced and fixed live with coturn |
+| #821 | The pinhole check exists twice and the copies can disagree | L | L | **Built 2026-10-13** (`g2.1-firewall`, awaits push): zone-manager's validator calls rules-manager's predicate; zone peers allowed by `access-to` too. `--summary` identical on hrossen |
+| ✅ #822 | Block-private misses 100.64/10, 169.254/16 and the firewall's other addresses | M | M | **Closed 2026-10-13** (`g2.1-firewall`): zones with internet block `(self)`, 100.64/10, 169.254/16; Caddy reached on `(self)`. WAN 53053/53 closed, verified on hrossen |
+| #823 | Gateway lookup is one unretried API call per zone | L | L | **Built 2026-10-13** (`g2.1-firewall`, awaits push): one batched read per step, a miss re-read with retry; zone reconcile identical on hrossen |
+| #824 | Amend ADR-014 and ADR-021 to the zone and rule model as built | L | L | **Built 2026-10-13** (`g2.1-firewall`, awaits push): ADR-014 v1.2 (new D9), ADR-021 v1.1 |
 | #576 | Zone `serves` as string or array | M | L | Backward compatible |
 | #257 | mDNS in zones.json | M | M | |
 | ✅ #160 | Overlap detection in the rules manager | M | L | **Closed 2026-10-13** (`g2.1-firewall`): `rules-manager overlaps` / `verify-rules --detect-overlap` — shadowed, redundant and conflicting rules on the live rule set, both families; read-only. hrossen: 136 rules, 0 findings |
@@ -374,8 +373,7 @@ Tighter firewall defaults that keep what modules need. Built: the gateway, GUI/S
 | ✅ #162 | Persistent sequence-map artifact | L | L | **Closed 2026-10-13** (`g2.1-firewall`): the map gains `generated`, `covered` and stale-entry clean-up; slot sharing warned; `rules-manager list-slots` |
 | #660 | A declared `aliasType` change cannot be applied | M | M | OPNsense refuses an alias type change, so the apply dies and the alias stays `host` — rules match nothing (#542). Needs detach/delete/create/reattach, and a change class in the schema |
 | #683 | Declared `ports` without `network:rules` are inert | L | L | Modules declaring `ports` but no `network:rules` (makerfloss) get no validation or rules, silently. Decide what such `ports` mean — a `validate` finding or documentation — with 0010's rule |
-| #223 | OPNsense 26.1 InterfaceAssignController | — | — | Park (agreed 2026-05-27); move to *Parking lot* |
-| #706 | A wireless device zone cannot be checked against its type | — | — | **Open, not yet scored** — zone model. Added in the 2026-09-24 issue sweep |
+| #706 | A wireless device zone cannot be checked against its SSID | M | L | **Scored 2026-10-13:** an attachment field (`port`/`ssid`) for `kind: device` and the #668 check extended to SSIDs. Additive check; after #668 (the wired half, open) |
 | #385 | Persist the NetBird OPT1 pass rule | L | M | **Low priority this sprint (2026-10-12)**, pending the NetBird decision (*Decisions*). Land with #222 |
 | #222 | NetBird → srv floating rule is fragile | L | M | **Low priority this sprint (2026-10-12)**, pending the NetBird decision. The #816 review found no code that creates NetBird rules |
 
