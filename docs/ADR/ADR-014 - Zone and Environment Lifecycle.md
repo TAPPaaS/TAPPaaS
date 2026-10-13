@@ -9,7 +9,7 @@
 | **Parent** | [ADR-007 Taxonomy (Overview)](<ADR-007 - TAPPaaS Taxonomy.md>) |
 | **Refines** | [ADR-007c Environments](<ADR-007c - Environments.md>) (env↔zone binding), [ADR-007d Site](<ADR-007d - Site.md>) (`defaultEnvironment`, client-zone naming), [ADR-007f Realization](<ADR-007f - Realization.md>) (managers); ADR-001/002 (VLAN/zone model — the tier dimension) |
 | **Related** | **#258** (origin of the `tier_model` prose in `zones.json` — a documentation/isolation-invariant issue, never an ADR; this ADR is its first design record); #424 (client/IoT zones ↔ environments undefined); #425 (keep client-zone names — closed); #426 (decouple site.name — closed); ADR-002 (dynamic VLAN); ADR-008 (network infrastructure); **owner:** `network-manager` (zones), `environment-manager` (environments) |
-| **Changelog** | **v1.1 (2026-09-23)** — D5 states that `tier` is not an IEC 62443 Security Level and declines the mapping (#707): the scales run in opposite directions, they measure different things, and Tier 3's members would not share an SL. ADR-022's open question on renaming `tier` is answered by it. · **v1.0 — ACCEPTED, reconciled with the implementation.** Three drafting decisions were settled by the operator: **`home` is KEPT** (the `home → private` rename is struck, with it the re-domaining and the generic rename-map machinery — F1); **D6 enforcement is phased** — I1–I4 ship warn-only and no gate is wired to `--strict` in this work (F2); **retired zones are auto-removed when unoccupied** by a new `retire` verb (F3). Four things the draft got wrong or left implicit were corrected while building: **D2's derivation is LOCAL, not symmetric** (the symmetric form invented firewall rules — see D2); **D1 keys on the zone's PRESENCE**, since a missing zone has no type to inspect; **D7 profiles need `grants`** to express the one edge a zone set cannot; and **`wan` belongs in `core`** (the draft omitted it). Adds **D8** (authored vs. effective documents) — the derivation has to be rendered, not written back, or the 3-way merge pins it. The D2 open question (where the back-fill runs) is resolved: inside `merge`. v0.3 — **recast `tier` as a strict trust lattice** (D5): `access-to` flows downward only (R1: `tier(A) ≤ tier(B)`), all upward reach is a `pinhole`; **DMZ drops out of the service class** to Tier 4 (internet-exposed) and **service sits above trusted clients** (client→service becomes a pinhole, #258-aligned); **isolation becomes an orthogonal `isolated` flag** (R2). D6 checks reduce to R1 + R2 + egress + archetype-conformance. Header now cites **#258** as the tier model's provenance. v0.2 — add the **zone tier model as first-class state** (D5: `tier` authored field + archetypes), **tier-based security invariants** in zones-check (D6, promoting the `_README` PR checklist to machine gates), and the **fresh-install default zone set + template cleanup** (D7). D3's IoT `--class` is subsumed by the D5 archetypes. v0.1 — initial draft: env↔service-zone binding (default / override / auto-create); symbolic `serves` link for client & IoT zones (rename-safe, fixes #424); guided IoT creation; filtered zone listing + confirmation that enable/disable already exist. |
+| **Changelog** | **v1.2 (2026-10-13)** — amended to the zone and rule model as built, after the G2.1 review (#816, #824): the `service` archetype seeds `internet` only (ADR-021 D3b had already dropped `dmz`); D6's per-module pinhole check is the single one rules-manager applies, and a cross-zone module rule is allowed by the source zone's `access-to` **or** the target zone's `pinhole-allowed-from`; new **D9** records what the firewall enforces for a zone and its modules — the protective rules every zone gets, what "internet" excludes, covered pinholes, and both address families (ADR-030). The operator-facing description is FIREWALL-RULES.md. · **v1.1 (2026-09-23)** — D5 states that `tier` is not an IEC 62443 Security Level and declines the mapping (#707): the scales run in opposite directions, they measure different things, and Tier 3's members would not share an SL. ADR-022's open question on renaming `tier` is answered by it. · **v1.0 — ACCEPTED, reconciled with the implementation.** Three drafting decisions were settled by the operator: **`home` is KEPT** (the `home → private` rename is struck, with it the re-domaining and the generic rename-map machinery — F1); **D6 enforcement is phased** — I1–I4 ship warn-only and no gate is wired to `--strict` in this work (F2); **retired zones are auto-removed when unoccupied** by a new `retire` verb (F3). Four things the draft got wrong or left implicit were corrected while building: **D2's derivation is LOCAL, not symmetric** (the symmetric form invented firewall rules — see D2); **D1 keys on the zone's PRESENCE**, since a missing zone has no type to inspect; **D7 profiles need `grants`** to express the one edge a zone set cannot; and **`wan` belongs in `core`** (the draft omitted it). Adds **D8** (authored vs. effective documents) — the derivation has to be rendered, not written back, or the 3-way merge pins it. The D2 open question (where the back-fill runs) is resolved: inside `merge`. v0.3 — **recast `tier` as a strict trust lattice** (D5): `access-to` flows downward only (R1: `tier(A) ≤ tier(B)`), all upward reach is a `pinhole`; **DMZ drops out of the service class** to Tier 4 (internet-exposed) and **service sits above trusted clients** (client→service becomes a pinhole, #258-aligned); **isolation becomes an orthogonal `isolated` flag** (R2). D6 checks reduce to R1 + R2 + egress + archetype-conformance. Header now cites **#258** as the tier model's provenance. v0.2 — add the **zone tier model as first-class state** (D5: `tier` authored field + archetypes), **tier-based security invariants** in zones-check (D6, promoting the `_README` PR checklist to machine gates), and the **fresh-install default zone set + template cleanup** (D7). D3's IoT `--class` is subsumed by the D5 archetypes. v0.1 — initial draft: env↔service-zone binding (default / override / auto-create); symbolic `serves` link for client & IoT zones (rename-safe, fixes #424); guided IoT creation; filtered zone listing + confirmation that enable/disable already exist. |
 
 ## Context
 
@@ -275,7 +275,7 @@ reaches it zone-wide (Home Assistant → local IoT), which R2 forbids for `iotCa
   | Archetype | type | tier | isolated | `access-to` seed | reference zone |
   |---|---|---|---|---|---|
   | `control` | Management | 0 | no | all | `mgmt` |
-  | `service` | Service | 1 | no | internet, dmz | `srv` → `<env>` |
+  | `service` | Service | 1 | no | internet *(v1.2: `dmz` dropped — ADR-021 D3b; Caddy is reached by its own rule)* | `srv` → `<env>` |
   | `trusted-client` | Client | 2 | no | internet (svc via **pinhole**) | `home` |
   | `guest` | Guest | 3 | no | internet | `guest` |
   | `iot-cloud` | IoT | 3 | no | internet | `iotCloud` |
@@ -355,7 +355,9 @@ two core rules + two guards.
 
 These reuse the existing `zonescheck.ts` reporter (`note`/`warn`/`error` + `--strict`); no new tool. The
 `pinhole-allowed-from` side is **not** tier-gated (upward is what pinholes are *for*) — it is validated
-per-module against the target zone's `pinhole-allowed-from` list, as today.
+per-module: a module rule that crosses zones is allowed when the source zone's `access-to` includes
+the target zone or the target zone's `pinhole-allowed-from` includes the source zone (v1.2 — one
+predicate, rules-manager's, used by the install and by `zone-manager --summary` alike, #821).
 
 **Exemptions (v1.0, all data-driven from `schemas/zones-fields.json`):**
 
@@ -515,6 +517,35 @@ authored-scope check can no longer see it — a fresh install reported a complet
 rendered one carried the known upward edge. Reporting clean would have been misleading, so `validate`
 can audit the rendered graph, and the authored-scope run emits a scope note naming how many links it
 could not judge.
+
+### D9 — What the firewall enforces for a zone and its modules (added in v1.2)
+
+The tier lattice (D5) and its invariants (D6) say which `access-to` edges may exist. This records
+what the firewall then does, as built after the G2.1 review (#816). FIREWALL-RULES.md is the
+operator-facing description of the same model, with every rule and its place in the evaluation
+order.
+
+- **Every rule-managed zone**, whatever its `access-to`: anti-spoofing (IPv4: source not in the
+  zone's network, #159), the admin guard (the firewall's GUI and SSH, on every firewall address,
+  #384), and its gateway's services — DNS, NTP, DHCP, ICMP/ICMPv6 and nothing else (#399). A
+  no-egress zone (Tier 6, empty `access-to`) gets these too.
+- **`access-to: ["all"]`** is a sentinel expanded where `zones.json` is read (#375); only `mgmt`
+  holds it (D6 I2).
+- **"internet"** is everything that is not the site. A zone with `internet` blocks, ahead of its
+  internet pass: the private ranges, every zone's network (IPv6), unique-local addresses, the
+  firewall's own addresses — its WAN address included — and `100.64.0.0/10`, `169.254.0.0/16`
+  (#822). A module's egress `to: internet` excludes the same set (#817).
+- **Module rules across zones** — ingress, egress, auto-pinholes — follow D6's single predicate,
+  for a zone, a module and an `alias:` peer alike (an alias counts as the zones its addresses are
+  in, #818); a refusal stops the module's install or update. Ingress from the internet, and port
+  forwards, only into a zone that lists `internet` in `pinhole-allowed-from` (the `dmz`), the
+  control plane excepted (review findings D4–D6, #816).
+- **A pinhole the zone edge already covers is not written** (#256): when the source zone's
+  `access-to` reaches the target, the zone's own pass carries the traffic. The rule left out is
+  recorded, and the `network` update writes it again when that `access-to` is narrowed.
+- **Both address families** (ADR-030): zone and module rules apply to IPv4 and IPv6; zones are
+  kept apart over IPv6 by a block on every zone's network, since a zone's IPv6 network is public.
+  Anti-spoofing stays IPv4-only.
 
 ## Command surface (summary)
 
