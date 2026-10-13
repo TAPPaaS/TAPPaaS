@@ -1033,6 +1033,120 @@ if [[ "${DEEP}" -eq 1 && -n "${DEFAULT_ZONE}" && "${NODE_COUNT}" -ge 2 ]]; then
         fi
     fi
 
+    # 7-9. ADR-019: `module-manager migrate` moves a running HA guest to its
+    #      HANode and back — live, the rule re-pointed each time, with its
+    #      `strict` flag and comment carried over, HA settling on `started`
+    #      (never stuck in `migrate`, #528), and config.node left alone.
+    ha_rule_json() {
+        # shellcheck disable=SC2086
+        ssh ${SSH_OPTS} "root@tappaas1.${MGMT}.internal" \
+            "pvesh get /cluster/ha/rules --output-format json" 2>/dev/null \
+            | jq -c --arg res "vm:${HVMID}" '[.[] | select(.resources==$res)][0] // {}' 2>/dev/null
+    }
+    ha_state() {
+        # shellcheck disable=SC2086
+        ssh ${SSH_OPTS} "root@tappaas1.${MGMT}.internal" \
+            "pvesh get /cluster/ha/resources/vm:${HVMID} --output-format json" 2>/dev/null \
+            | jq -r '.state // empty' 2>/dev/null
+    }
+    # The running state the CRM reports (started / migrate / ...), not the request.
+    ha_crm_state() {
+        # shellcheck disable=SC2086
+        ssh ${SSH_OPTS} "root@tappaas1.${MGMT}.internal" "ha-manager status" 2>/dev/null \
+            | awk -v r="vm:${HVMID}" '$1=="service" && $2==r {gsub(/[(),]/," "); print $4}' | head -1
+    }
+    # mig_check <expected node> <label>: placement, rule preference, strict +
+    # comment, settled HA state.
+    mig_check() {
+        local want="$1" label="$2" row on rule pref st i
+        # An offline move stops and starts the guest: allow 4 minutes.
+        for i in $(seq 1 60); do
+            st="$(ha_crm_state)"
+            [[ "${st}" == "started" ]] && break
+            sleep 4
+        done
+        row=$(find_vm "${HVMID}") || true
+        on="${row%% *}"
+        if [[ "${on}" == "${want}" ]]; then
+            pass "${label}: ${THVM} runs on ${want}"
+        else
+            fail "${label}: ${THVM} on ${on:-?}, expected ${want}"
+        fi
+        rule="$(ha_rule_json)"
+        # The preferred node is the one with the highest priority.
+        pref=$(jq -r '.nodes // ""' <<< "${rule}" | tr ',' '\n' | sed '/^$/d' \
+               | awk -F: '{print ($2==""?1:$2), $1}' | sort -rn | head -1 | cut -d' ' -f2)
+        if [[ "${pref}" == "${want}" ]]; then
+            pass "${label}: HA rule prefers ${want}"
+        else
+            fail "${label}: HA rule prefers ${pref:-?}, expected ${want} (nodes: $(jq -r '.nodes // ""' <<< "${rule}"))"
+        fi
+        if [[ "$(jq -r '.strict // 0' <<< "${rule}")" == "1" \
+              && "$(jq -r '.comment // ""' <<< "${rule}")" == "${HA_COMMENT}" ]]; then
+            pass "${label}: rule keeps strict and its comment"
+        else
+            fail "${label}: rule lost strict or its comment ($(jq -c '{strict,comment}' <<< "${rule}"))"
+        fi
+        if [[ "${st}" == "started" ]]; then
+            pass "${label}: HA settled on started"
+        else
+            fail "${label}: HA state '${st:-?}' after 240 s (stuck?)"
+        fi
+    }
+    HA_COMMENT="adr-019 deep test"
+    if [[ "${hdeep_ok}" -eq 1 ]]; then
+        # shellcheck disable=SC2086,SC2029
+        if ssh ${SSH_OPTS} "root@tappaas1.${MGMT}.internal" \
+            "ha-manager rules set node-affinity ha-${THVM} --strict 1 --comment '${HA_COMMENT}'" >/dev/null 2>&1; then
+            pass "HA rule given strict=1 and a comment"
+        else
+            fail "could not set strict/comment on the HA rule"; hdeep_ok=0
+        fi
+    fi
+    if [[ "${hdeep_ok}" -eq 1 ]]; then
+        hrow=$(find_vm "${HVMID}") || true
+        HFROM="${hrow%% *}"
+        HTO=$([[ "${HFROM}" == "tappaas1" ]] && echo tappaas2 || echo tappaas1)
+        info "  module-manager migrate ${THVM} (${HFROM} → ${HTO}, live)..."
+        if module-manager migrate "${THVM}" 2>&1 | indent; then
+            mig_check "${HTO}" "migrate"
+        else
+            fail "module-manager migrate ${THVM} failed"; hdeep_ok=0
+        fi
+        if [[ "$(jq -r '.node' "${CONFIG_DIR}/${THVM}.json")" == "tappaas1" ]]; then
+            pass "migrate left config .node unchanged (placement is runtime only)"
+        else
+            fail "migrate rewrote config .node"
+        fi
+    fi
+    # Failback. With `cpu: host` a guest on a node whose CPU has MORE features
+    # than the one it is going back to can use them (QEMU there answers CPUID
+    # with that host's set), so the move back may only be offline: migrate must
+    # refuse it live (rc 10, asking for --force) rather than stop the guest
+    # unasked, and --force then moves it. Equal CPUs: it simply moves live.
+    if [[ "${hdeep_ok}" -eq 1 ]]; then
+        info "  module-manager migrate ${THVM} again (failback ${HTO} → ${HFROM})..."
+        mig_out="$(module-manager migrate "${THVM}" 2>&1)"; mig_rc=$?
+        indent <<< "${mig_out}"
+        if [[ "${mig_rc}" -eq 0 ]]; then
+            mig_check "${HFROM}" "failback"
+        elif [[ "${mig_rc}" -eq 10 ]] && grep -q -- "--force" <<< "${mig_out}"; then
+            pass "failback refused live (${HFROM}'s CPU lacks features) — asks for --force, guest untouched"
+            row=$(find_vm "${HVMID}") || true
+            [[ "${row%% *}" == "${HTO}" ]] \
+                && pass "failback: guest still running on ${HTO} after the refusal" \
+                || fail "failback: guest moved although the move was refused"
+            info "  module-manager migrate ${THVM} --force (offline failback)..."
+            if module-manager migrate "${THVM}" --force 2>&1 | indent; then
+                mig_check "${HFROM}" "failback --force"
+            else
+                fail "module-manager migrate ${THVM} --force (failback) failed"
+            fi
+        else
+            fail "module-manager migrate ${THVM} (failback) failed (rc ${mig_rc})"
+        fi
+    fi
+
     deep_cleanup_ha
     trap - EXIT
 elif [[ "${DEEP}" -eq 1 && -n "${DEFAULT_ZONE}" && "${NODE_COUNT}" -lt 2 ]]; then
