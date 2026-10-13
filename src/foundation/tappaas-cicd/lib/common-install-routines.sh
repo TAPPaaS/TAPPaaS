@@ -1451,6 +1451,10 @@ function read_module_config() {
 # Port RANGES ("8000:8010") are skipped: there is no single port to connect to,
 # and probing a whole range would be slow and meaningless as a readiness signal.
 #
+# UDP and ICMP ports are skipped too (#826): the probe is a TCP connect, which
+# such a port can never accept, so declaring one cost the full timeout on every
+# update. Only TCP, TCP/UDP and an unset protocol (TCP is the default) count.
+#
 # Usage: module_ready_ports <module>
 # Output: one port per line.
 function module_ready_ports() {
@@ -1465,7 +1469,10 @@ function module_ready_ports() {
   # (`index` returning 0 is truthy in jq, so the first element dedupes fine.)
   jq -r '
       [ (.proxyPort? // empty) ]
-      + [ (.ports? // []) | .[]? | .port? // empty ]
+      + [ (.ports? // []) | .[]?
+          | select(((.protocol? // "TCP") | ascii_upcase) as $pr
+                   | $pr == "TCP" or $pr == "TCP/UDP")
+          | .port? // empty ]
       | map(select(type == "number" or (type == "string" and test("^[0-9]+$"))))
       | map(tostring)
       | reduce .[] as $p ([]; if index($p) then . else . + [$p] end)
@@ -1499,10 +1506,9 @@ function module_ready_ports() {
 #
 # hook-only exists because the port fallback is not a "can this module serve"
 # test at the granularity some callers need. `ports` is the module's DECLARED
-# surface, not its readiness contract: unifi-os declares 3478/UDP and
-# 10001/UDP, which a TCP connect can never satisfy, so the probe cannot pass at
-# all; network's 80/443 are Caddy on the firewall rather than sockets the VM
-# holds. On the reboot paths that rarely bites because everything has settled by
+# surface, not its readiness contract: network's 80/443 are Caddy on the
+# firewall rather than sockets the VM holds. (Declared UDP ports, the other
+# case #509 met, are no longer probed at all — #826.) On the reboot paths that rarely bites because everything has settled by
 # then, but a caller that runs after EVERY apply pays the full timeout for a
 # check that was never going to succeed (#509: two modules burned 180s each and
 # then passed their own tests). Modules that need the guarantee ship a ready.sh;

@@ -87,10 +87,32 @@ cat > "${WORK}/many.json" <<'EOF'
 }
 EOF
 got="$(module_ready_ports many | tr '\n' ' ')"
-if [[ "${got}" == "22 11443 8443 3478 " ]]; then
-    pass "ports[] merged, duplicate proxyPort collapsed, range skipped"
+if [[ "${got}" == "22 11443 8443 " ]]; then
+    pass "ports[] merged, duplicate proxyPort collapsed, range and UDP skipped"
 else
-    fail "many expected '22 11443 8443 3478 ', got '${got}'"
+    fail "many expected '22 11443 8443 ', got '${got}'"
+fi
+
+# Only a port a TCP connect can reach counts (#826): UDP and ICMP never accept
+# one; TCP/UDP and an unset protocol (TCP is the default) do. Case-insensitive.
+cat > "${WORK}/proto.json" <<'EOF'
+{
+  "vmname": "proto",
+  "ports": [
+    { "port": 8080 },
+    { "port": 1900, "protocol": "UDP" },
+    { "port": 3478, "protocol": "TCP/UDP" },
+    { "port": 7,    "protocol": "ICMP" },
+    { "port": 2100, "protocol": "udp" },
+    { "port": 8443, "protocol": "tcp" }
+  ]
+}
+EOF
+got="$(module_ready_ports proto | tr '\n' ' ')"
+if [[ "${got}" == "22 8080 3478 8443 " ]]; then
+    pass "UDP and ICMP ports are not probed; TCP, TCP/UDP and unset are"
+else
+    fail "proto expected '22 8080 3478 8443 ', got '${got}'"
 fi
 
 # A module that declares 22 itself must not produce it twice.

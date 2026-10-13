@@ -285,6 +285,7 @@ Guests sized, placed, started and stopped right: memory defaults from measuremen
 | #403 | Install on the root disk; smarter placement | M | L | |
 | ✅ #663 | Memory defaults are not based on measurement | L | L | **Closed 2026-10-13** (operator): 7-day measurement on hrossen. vaultwarden was too small — 1→1.5 GiB (`bac670ce`); euro-office and deconz-test moved tappaas1→tappaas2, tappaas1 commitment 63→51.5 GiB of 61. The other proposed reductions (nextcloud-hpb, jellyfin, forgejo, litellm default) not applied; `network` 8G→4G still parked |
 | ✅ #825 | update-module: changing a running guest's node does not migrate it | M | M | **Closed 2026-10-13** (`fix(cluster): move a running guest when its node changes`): snapshot and OS update act where the guest runs; `live-ok` refuses local disks with snapshots; `--allow-disruption` does stop → offline migrate → start. Found moving guests for #663 |
+| ✅ #826 | Readiness wait probes UDP ports over TCP — 180 s lost per update | L | L | **Closed 2026-10-13** (`fix(module-ready): do not probe UDP or ICMP ports over TCP`): only TCP, TCP/UDP and unset protocols are probed; deconz-test's wait went 180 s → 0 s. Found during the #825 test |
 | #761 | A composite-module ADR: `cluster`, `kubernetes`, and modules that only provide artefacts | H | M | ADR-022d and ADR-026 defer `cluster`/`kubernetes` to an ADR that does not exist, and `templates` fits no `kind`; interim values in ADR-022d v1.2. With @ErikDaniel007 |
 
 ### G3.2 Identity & SSO wiring — Ease M · Risk L · released: 10 · open: 4
