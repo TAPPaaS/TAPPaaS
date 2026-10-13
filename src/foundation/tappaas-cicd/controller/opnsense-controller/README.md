@@ -138,8 +138,11 @@ Compiles a module's firewall rules from its module JSON + `zones.json` +
 rules-manager add-rules <module>        # compile and apply
 rules-manager reconcile <module>        # diff live vs module.json; apply + prune
 rules-manager remove-rules <module>     # remove all rules/aliases owned by a module
-rules-manager verify-rules <module> [--deep]   # presence (+ connectivity probes)
+rules-manager verify-rules <module> [--deep] [--detect-overlap]   # presence (+ probes, + overlaps)
 rules-manager list-rules [--module <m>] [--orphans]
+rules-manager overlaps [--module <m>]   # shadowed / redundant / conflicting rules (read-only)
+rules-manager list-slots                # the sequence map: slots, rules in use, rules left out
+rules-manager recheck-covered           # rewrite rules a narrowed access-to no longer covers
 rules-manager create-alias <name> --addresses <a,...> [--type host] [--description <d>]
 rules-manager remove-alias <name>
 ```

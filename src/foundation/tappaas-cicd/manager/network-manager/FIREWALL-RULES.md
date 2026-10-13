@@ -198,7 +198,11 @@ interface the order is:
 | 9 | — | **default deny** | OPNsense |
 
 Within the module bands each module has 100 slots, picked by a stable hash of its `vmname`;
-within band 7 each zone has 100 slots by a hash of its name. The bands are why a pinhole
+within band 7 each zone has 100 slots by a hash of its name. Which slot each module has, and
+which of its sequence numbers are in use, is written to `config/firewall/sequence-map.json`
+after every change to its rules (`rules-manager list-slots` prints it). Two modules can land
+on the same slot; their rules then share sequence numbers, which loses nothing because they are
+all passes, and `rules-manager` says so. The bands are why a pinhole
 works: it is evaluated before the destination's private-network block that would otherwise
 drop it.
 
@@ -267,7 +271,13 @@ into rules:
 - **Auto-pinholes** — when a module depends on another module's service (`dependsOn`,
   `integratesWith`), `rules-manager` opens the provider's ports from the consumer's address to
   the provider's, on the consumer's interface — if the provider's zone allows the consumer's
-  zone in `pinhole-allowed-from`, and the consumer's `access-to` does not already cover it.
+  zone in `pinhole-allowed-from`.
+- **What a zone already allows is not written twice.** When the source zone's `access-to`
+  already includes the target zone (or `all`), the zone's own pass lets all of that traffic
+  through, so a module rule or auto-pinhole between the two is left out, with a note saying
+  so. The sequence map records each one left out and the `access-to` it relies on. When an
+  update of the `network` module narrows that `access-to`, it writes the module's rules again
+  in the same update (`rules-manager recheck-covered`).
 - **Aliases** — a module peer is an OPNsense host alias holding the peer's DNS name
   (`<vm>.<zone>.internal`), so a changed DHCP address needs no rule change.
 
@@ -313,8 +323,24 @@ zone-manager --summary                   # zones, their interfaces, pinhole poli
 rules-manager verify-rules <module>      # a module's declared rules vs what OPNsense holds
 rules-manager expected-pinholes <module> # which auto-pinholes it should carry, and why any are not
 rules-manager list-rules --orphans       # TAPPaaS rules nothing declares any more
+rules-manager overlaps                   # rules that are shadowed, redundant or in conflict
+rules-manager list-slots                 # each module's slot, rules in use, rules left out
 ssh root@firewall.mgmt.internal 'pfctl -sr'   # the rules pf actually evaluates, in order
 ```
+
+`rules-manager overlaps` reads the rule set as the firewall holds it — interface networks and
+every alias's current addresses resolved, both address families — and compares the rules on
+each interface in their evaluation order:
+
+- **shadowed** — an earlier rule matches all of a rule's traffic, so the rule never decides
+  anything. A pass behind a block is traffic meant to be allowed that is dropped.
+- **redundant** — a module's pass whose traffic a later, broader pass lets through anyway,
+  with no block in between.
+- **conflict** — part of a module rule's traffic is decided by an earlier rule of the other
+  action.
+
+It changes nothing and always succeeds; `verify-rules <module> --detect-overlap` adds the
+findings for one module to its check.
 
 ## Current limitations
 

@@ -973,7 +973,7 @@ Rules sit in dedicated priority bands. Within each band, each module is assigned
 | 3 | 10000–19999 | Ingress |
 | 4 | 20000–29999 | Egress |
 
-After each successful apply, `rules-manager` writes a non-authoritative artifact at `/home/tappaas/config/firewall/sequence-map.json` documenting the live slot allocation for inspection.
+After each successful `add-rules`, `reconcile` and `remove-rules`, `rules-manager` writes `/home/tappaas/config/firewall/sequence-map.json`: per module its slot, ranges and the sequences in use, a `generated` time, and `covered` — the rules left out because the source zone's `access-to` already passes them, each with the zone edge it relies on. It is regenerated from the module configs (entries for modules no longer deployed are dropped); only `covered` is read back, by `recheck-covered`, which the `network` module's update runs to rewrite the rules of any module whose edge a zone change removed. `list-slots` prints the map and any slot two modules share.
 
 #### Examples
 
