@@ -82,7 +82,8 @@ A port forward is accepted only for a module in a zone that lists `internet` in
 so an operator may expose its SSH as the way in.
 
 **5. The site** — `config/site.json` `ipv6` (default `false`): whether the firewall allows
-IPv6 at all ([Address family](#address-family)).
+IPv6 at all ([Address family](#address-family)). How a site gets IPv6, and which zones carry
+it, is in [IPV6.md](IPV6.md).
 
 ## How the rules get written
 
@@ -100,7 +101,7 @@ which has one procedure for each kind of rule:
 | `rules-manager` | `module-manager`, through the module's `network:rules` service | module ingress and egress, auto-pinholes: `tappaas-module:<vm>:…`, `tappaas-svcdep:<consumer>:…` |
 | `nat-manager` | `module-manager`, through the module's `network:nat` service | port forwards |
 | `snat-manager` | `module-manager`, through the module's `network:snat` service | outbound NAT |
-| `ipv6-manager` | `module-manager`, when it updates the `network` module | the firewall's *Allow IPv6* |
+| `ipv6-manager` | `module-manager`, when it updates the `network` module | the firewall's *Allow IPv6* and the site's IPv6 ([IPV6.md](IPV6.md)) |
 
 The [diagram below](#from-the-configuration-to-the-rule-set) shows the whole path, from the
 configuration through the two managers and the controller to the rule set. The procedures are
@@ -177,7 +178,7 @@ flowchart TD
    dependencies into rules and host aliases, checks them against the effective zones, and
    applies them. Port forwards and source NAT are written by their own tools, and source NAT
    only into a zone whose `snat-allowed-from` names the source.
-5. **IPv6.** Updating the `network` module runs `ipv6-manager`, which sets the firewall's *Allow IPv6* from `site.json`.
+5. **IPv6.** Updating the `network` module runs `ipv6-manager`, which sets the firewall's *Allow IPv6* from `site.json` and gives each zone its IPv6 network ([IPV6.md](IPV6.md)).
 
 ## Evaluation order
 

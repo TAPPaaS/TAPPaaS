@@ -254,7 +254,7 @@
       "default": true
     },
     "ipv6": {
-      "description": "Whether this site supports IPv6 (#149). It is OPNsense's global 'Allow IPv6' setting, applied by the network module's update: when false the firewall drops all inbound and forwarded IPv6 and Unbound resolves over IPv4 only (do-ip6: no). When true the firewall allows IPv6; no zone is given an IPv6 address by this field alone (that is #26).",
+      "description": "Whether this site runs IPv6 next to IPv4, applied by the network module's update. True: the firewall allows IPv6, takes a prefix from the WAN (network.wan.ipv6) and gives every zone with an ipv6Subnet its /64. False: no zone has IPv6, and the firewall drops all IPv6 and Unbound resolves over IPv4 only. See network-manager/IPV6.md.",
       "type": "boolean",
       "default": false,
       "note": "Set it true only when the upstream provides IPv6. Changing it reloads the firewall's filter and Unbound once; IPv4 traffic is not interrupted."

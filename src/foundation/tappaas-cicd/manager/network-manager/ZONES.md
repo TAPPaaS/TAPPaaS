@@ -31,6 +31,7 @@ Two pages complete it:
 | `serves` | For a Client, Guest or IoT zone: the environment whose service zone it uses. |
 | `DHCP-start` / `DHCP-end` | DHCP range offsets within the subnet (default 50–250). |
 | `SSID` | Optional WiFi network broadcast on this zone's VLAN ([below](#wifi-the-ssid-field)). |
+| `ipv6Subnet` | The zone's IPv6 network, 0–255: its `/64` within the site's prefix. Assigned by default; remove it to keep the zone IPv4-only ([IPV6.md](IPV6.md)). |
 | `description` | Human-readable purpose. |
 
 Zone keys are camelCase (`^[a-z][a-zA-Z0-9]*$`), as in `srvHome` / `iotCams`. The client

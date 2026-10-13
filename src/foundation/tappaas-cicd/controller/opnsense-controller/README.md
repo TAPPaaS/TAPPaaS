@@ -25,6 +25,7 @@ Each is its own command on `PATH`.
 | `rules-manager` | Per-module firewall rules compiled from module JSON + `zones.json`. |
 | `acme-manager` | ACME (Let's Encrypt) wildcard certificates via DNS-01. |
 | `syslog-manager` | OPNsense built-in syslog destinations. |
+| `ipv6-manager` | The site's IPv6: *Allow IPv6*, the WAN, each zone's network and advertisements, AAAA records and access lists for published names. |
 | `test-network-manager` | A throwaway isolated test network (create/delete/status). |
 
 ## Credentials & common flags
@@ -170,6 +171,21 @@ syslog-manager delete-destination (--description <d> | --uuid <u>)
 syslog-manager list
 syslog-manager reconfigure
 ```
+
+### `ipv6-manager` — the site's IPv6
+
+```
+ipv6-manager apply [--check-mode] [--config-dir <dir>]   # converge to site.json + zones.json
+ipv6-manager status                                      # does the firewall allow IPv6
+ipv6-manager gateway <zone>                              # the firewall's IPv6 address in a zone (exit 3: none)
+```
+
+`apply` is what the `network` module's update runs: *Allow IPv6* from `site.json` `ipv6`, the
+WAN from `network.wan.ipv6`, and every zone with an `ipv6Subnet` its `/64`, router
+advertisements and AAAA names; then the AAAA records of published names and the IPv6 networks
+in Caddy's access lists, from what the interfaces hold. Switching off withdraws each zone's
+IPv6 route before removing it. What it all means for an operator:
+[IPV6.md](../../manager/network-manager/IPV6.md).
 
 ### `test-network-manager` — isolated test network
 
