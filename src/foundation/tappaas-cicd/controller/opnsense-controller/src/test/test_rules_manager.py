@@ -239,6 +239,10 @@ def _make_manager(zones=None, modules_dir=None, global_aliases=None, firewall_ty
         sequence_map_file=None,
         firewall_type=firewall_type,
     )
+    # The firewall's VLAN -> interface map, as OPNsense would answer it: a rule's
+    # interface must be found, never guessed (#819).
+    mgr._vlan_iface_cache = {z.vlan_tag: f"opt{z.vlan_tag}" for z in mgr.zones.values()
+                             if z.vlan_tag > 0}
     return mgr
 
 
@@ -518,6 +522,49 @@ class TestAddressFamily(unittest.TestCase):
         self.assertEqual(mgr._zone_net(mgr.zones["home"]), "10.3.10.0/24")
 
 
+class TestInterfaceLookup(unittest.TestCase):
+    """#819: a rule's interface is found or the module is refused — never guessed."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self.tmp.name)
+        (self.dir / "litellm.json").write_text(json.dumps(LITELLM_FIXTURE))
+        (self.dir / "vllm.json").write_text(json.dumps(VLLM_FIXTURE))
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_a_zone_without_an_interface_refuses_the_module(self):
+        mgr = _make_manager(modules_dir=self.dir)
+        del mgr._vlan_iface_cache[610]                       # dmz has no interface
+        rules, errors = mgr._compile(load_module(self.dir, "litellm"))
+        self.assertEqual(rules, [])
+        self.assertTrue(any("zone 'dmz' (VLAN 610) has no interface" in str(e) for e in errors),
+                        [str(e) for e in errors])
+
+    def test_an_unreadable_vlan_map_refuses_rather_than_falls_back(self):
+        mgr = _make_manager(modules_dir=self.dir)
+        mgr._vlan_iface_cache = None
+        with patch.object(rm, "VlanManager", side_effect=RuntimeError("API down")):
+            rules, errors = mgr._compile(load_module(self.dir, "litellm"))
+        self.assertEqual(rules, [])
+        self.assertTrue(any("could not be read: API down" in str(e) for e in errors))
+
+    def test_none_mode_keeps_the_bridge(self):
+        mgr = _make_manager(modules_dir=self.dir, firewall_type="NONE")
+        mgr._vlan_iface_cache = {}
+        self.assertEqual(mgr._zone_to_interface(mgr.zones["dmz"]), "lan")
+
+    def test_an_alias_peer_arrives_on_its_zones_interfaces(self):
+        mgr = _make_manager(modules_dir=self.dir)
+        mod = load_module(self.dir, "litellm")
+        mod.aliases["clients"] = {"type": "host", "description": "d",
+                                  "addresses": ["10.3.10.5", "10.6.0.9"]}
+        self.assertEqual(mgr._ingress_interface("alias:clients", mod), ["opt310", "opt610"])
+        mod.aliases["cloud"] = {"type": "host", "description": "d", "addresses": ["9.9.9.9"]}
+        self.assertEqual(mgr._ingress_interface("alias:cloud", mod), "wan")
+
+
 class TestCompile(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -563,11 +610,11 @@ class TestCompile(unittest.TestCase):
         ingress = next(r for r in rules if r.direction == "ingress")
         self.assertEqual(ingress.destination_net, "tm_litellm")
 
-    def test_zone_peer_resolved_to_cidr(self):
+    def test_zone_peer_resolved_to_its_interface_network(self):
         mod = load_module(self.dir, "litellm")
         rules, _ = self.mgr._compile(mod)
         ingress_srv = next(r for r in rules if r.peer == "srvWork")
-        self.assertEqual(ingress_srv.source_net, "10.2.10.0/24")
+        self.assertEqual(ingress_srv.source_net, "opt210")      # both families
 
     def test_peer_module_fqdn_alias_generated(self):
         mod = load_module(self.dir, "litellm")
@@ -1453,8 +1500,8 @@ class TestPeerResolution(unittest.TestCase):
     def test_alias_prefix_stripped(self):
         self.assertEqual(self.mgr._resolve_peer_net("alias:foo", self.module), "foo")
 
-    def test_zone_resolves_to_cidr(self):
-        self.assertEqual(self.mgr._resolve_peer_net("dmz", self.module), "10.6.0.0/24")
+    def test_zone_resolves_to_its_interface_network(self):
+        self.assertEqual(self.mgr._resolve_peer_net("dmz", self.module), "opt610")
 
     def test_module_name_resolves_to_alias(self):
         self.assertEqual(self.mgr._resolve_peer_net("some-module", self.module),

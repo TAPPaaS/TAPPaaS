@@ -263,7 +263,10 @@ into rules:
 
 - **Ingress** — who may reach this module, on which ports. From a zone: the rule is on that
   zone's interface and admits the **whole source zone**. From another module: only that
-  module's addresses (its `tm_<module>` alias). From `alias:X` or `internet`: on the LAN or WAN.
+  module's addresses (its `tm_<module>` alias). From `internet`: on the WAN. From `alias:X`: on
+  the interfaces of the zones its addresses are in, and the WAN for its internet addresses. A
+  zone whose interface cannot be found on the firewall stops the module's install or update;
+  the rule is never written to another interface instead.
 - **Egress** — what this module may reach beyond its zone's `access-to`: a zone, a module, an
   alias, or `internet`. `internet` means everything that is not the site: the rule's
   destination is "not `tappaas_not_internet`", an alias of the private and special-purpose

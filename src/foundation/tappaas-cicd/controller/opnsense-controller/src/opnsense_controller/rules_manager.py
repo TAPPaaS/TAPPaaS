@@ -191,8 +191,12 @@ class ModuleFirewallRule:
     sequence: int
     source_net: str                        # CIDR | alias-name | 'any'
     destination_net: str                   # CIDR | alias-name | 'any'
-    interface: str                         # OPNsense interface identifier
+    interface: str | list[str]             # OPNsense interface identifier(s)
     destination_invert: bool = False       # `to: internet`: not the site's own networks
+
+
+class InterfaceLookupError(Exception):
+    """A rule's interface cannot be determined; writing it elsewhere would be silent (#819)."""
 
 
 @dataclass
@@ -712,6 +716,7 @@ class RulesManager:
         self._peer_module_cache: dict[str, ModuleSpec | None] = {}
         # Cache: VLAN-tag → OPNsense interface identifier (lazy-loaded at first use)
         self._vlan_iface_cache: dict[int, str] | None = None
+        self._vlan_map_error = ""
         # Rules the last compile left out because a zone edge already passes
         # them (#256): {"rule", "from", "to"} each, recorded in the sequence map
         # so a zone change can bring them back (recheck_covered).
@@ -1251,6 +1256,14 @@ class RulesManager:
     # ── Compilation ──────────────────────────────────────────────────────
 
     def _compile(self, module: ModuleSpec) -> tuple[list[ModuleFirewallRule], list[ValidationError]]:
+        try:
+            return self._compile_rules(module)
+        except InterfaceLookupError as exc:
+            return [], [ValidationError(module.vmname, "interface",
+                                        f"{exc} — no rule is written rather than one on an "
+                                        f"interface its traffic never arrives on")]
+
+    def _compile_rules(self, module: ModuleSpec) -> tuple[list[ModuleFirewallRule], list[ValidationError]]:
         errors = self._validate(module)
         if errors:
             return [], errors
@@ -1266,7 +1279,7 @@ class RulesManager:
             if self._skip_covered(module, "ingress", peer, entry["ports"], protocol,
                                   self._peer_zone(peer), module.zone0):
                 continue
-            interface = self._ingress_interface(peer)
+            interface = self._ingress_interface(peer, module)
             src_net = self._resolve_peer_net(peer, module=module)
             dst_net = self._resolve_self(module)
 
@@ -2155,29 +2168,41 @@ class RulesManager:
         self._peer_module_cache[peer_vmname] = peer_module
         return peer_module
 
-    def _ingress_interface(self, peer: str) -> str:
-        """Return the OPNsense interface a rule for inbound traffic from `peer` lives on."""
+    def _ingress_interface(self, peer: str, module: ModuleSpec | None = None) -> str | list[str]:
+        """The OPNsense interface(s) inbound traffic from `peer` arrives on.
+
+        An `alias:` peer arrives where its addresses are (#819): the interfaces
+        of the zones they are in, and the WAN for internet addresses. A peer
+        whose interface cannot be found is an error (InterfaceLookupError), not
+        a rule on some other interface that would never match.
+        """
         if peer == "internet":
             return "wan"
         if peer.startswith("alias:"):
-            # Aliases may span interfaces; use a floating rule keyed on LAN.
-            return "lan"
+            zones, internet, _ = self._alias_peer_places(peer[len("alias:"):], module) \
+                if module is not None else (set(), False, [])
+            ifaces = sorted({self._zone_to_interface(self.zones[z]) for z in zones})
+            if internet:
+                ifaces.append("wan")
+            if not ifaces:
+                raise InterfaceLookupError(f"'{peer}' holds no address in a zone or on the internet")
+            return ifaces[0] if len(ifaces) == 1 else ifaces
         if peer in self.zones:
             return self._zone_to_interface(self.zones[peer])
         # Module-named peer — resolve to that module's zone interface.
-        try:
-            peer_module = load_module(self.modules_dir, peer)
-        except FileNotFoundError:
-            return "lan"
-        peer_zone = self.zones.get(peer_module.zone0)
-        return self._zone_to_interface(peer_zone) if peer_zone else "lan"
+        peer_zone = self.zones.get(self._peer_module_zone(peer) or "")
+        if peer_zone is None:
+            raise InterfaceLookupError(f"module '{peer}' runs in no zone of zones.json")
+        return self._zone_to_interface(peer_zone)
 
     def _egress_interface(self, module: ModuleSpec) -> str:
         """Egress rules sit on the source module's zone interface."""
         zone = self.zones.get(module.zone0)
         if zone:
             return self._zone_to_interface(zone)
-        return module.bridge0 or "lan"
+        if self.is_none_mode:
+            return module.bridge0 or "lan"
+        raise InterfaceLookupError(f"{module.vmname} runs in zone '{module.zone0}', which is not in zones.json")
 
     def _zone_to_interface(self, zone: ZoneSpec) -> str:
         """Map a zone to its OPNsense interface identifier.
@@ -2189,17 +2214,20 @@ class RulesManager:
 
         Non-VLAN zones: the bridge name (lan/wan).
 
-        Falls back to the bridge name if the VLAN→interface lookup fails (the
-        rule API will then reject with a clear error, surfacing the mismatch).
+        A VLAN zone with no interface on the firewall, or a VLAN map that cannot
+        be read, is an InterfaceLookupError (#819): the bridge it used to fall
+        back to is another zone's interface, where the rule never matches. With
+        firewallType NONE there is no firewall to ask, and the bridge stands.
         """
-        if zone.vlan_tag > 0:
+        if zone.vlan_tag > 0 and not self.is_none_mode:
             iface = self._vlan_interface_for_tag(zone.vlan_tag)
             if iface:
                 return iface
-            warn(
-                f"Zone '{zone.name}' (VLAN {zone.vlan_tag}) is not assigned to "
-                f"any OPNsense interface — falling back to bridge '{zone.bridge}'"
-            )
+            raise InterfaceLookupError(
+                f"zone '{zone.name}' (VLAN {zone.vlan_tag}) has no interface on the firewall"
+                + (f" — the VLAN map could not be read: {self._vlan_map_error}"
+                   if self._vlan_map_error else
+                   " — run `module-manager update network` to create it"))
         return zone.bridge.lower()
 
     def _vlan_interface_for_tag(self, vlan_tag: int) -> str | None:
@@ -2218,7 +2246,9 @@ class RulesManager:
                                 except ValueError:
                                     continue
                 except Exception as exc:
-                    warn(f"Could not load VLAN→interface map from OPNsense: {exc}")
+                    self._vlan_map_error = str(exc)
+                    self._vlan_iface_cache = None       # retry on the next lookup
+                    return None
         return self._vlan_iface_cache.get(vlan_tag)
 
     # ── Sequence allocation ──────────────────────────────────────────────
