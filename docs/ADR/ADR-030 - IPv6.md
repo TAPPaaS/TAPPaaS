@@ -198,9 +198,15 @@ change to the WAN or to a zone's IPv6 reloads that interface only.
 
 ### D8 — Turning it off, and changing mode
 
-- `ipv6: false`, `wan.ipv6.mode: none`, or removing a zone's `ipv6Subnet`: the IPv6
-  configuration is removed and router advertisements stop with a zero router lifetime, so
-  devices drop their addresses promptly instead of at their lifetime's end.
+- `ipv6: false`, `wan.ipv6.mode: none`, or removing a zone's `ipv6Subnet`: the zone's
+  advertisements first go out with a **zero router lifetime** (dnsmasq `ra-param`, sent on
+  reload), so devices drop the IPv6 default route within seconds; only then is the zone's
+  IPv6 removed, and only after the zones does *Allow IPv6* go off — the firewall does not
+  send an advertisement once it disallows IPv6. Devices keep their address until it expires,
+  but with no route an IPv6 attempt fails at once and they use IPv4 without delay. Without
+  the zero lifetime they kept the route for its lifetime and every IPv6 attempt hung before
+  falling back (seen on hrossen: 0.2 s per connection with happy eyeballs, a full timeout
+  without). Proven on hrossen: off and on again, IPv4 health identical throughout.
 - `dynamic` → `static`: every zone renumbers into the static prefix (same `ipv6Subnet`). Old
   addresses are deprecated by the advertisements; nothing else changes, because the firewall
   rules name interfaces.
