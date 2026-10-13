@@ -467,6 +467,31 @@ class TestGetZoneInterfaceVlanTagType(unittest.TestCase):
         # This is the case the original issue #179 was filed against.
         self.assertEqual(self._resolve(210), "opt1")
 
+    def test_one_read_serves_every_zone_and_a_miss_is_reread(self):
+        # #823: the step reads the table once; a zone it lacked is re-read.
+        zm = self._make_manager()
+        srv = next(z for z in zm.zones if z.name == "srv")
+        reads = []
+        tables = [[], [{"vlan_tag": "210", "identifier": "opt1", "description": "srv"}]]
+
+        def assigned():
+            reads.append(1)
+            return tables[min(len(reads) - 1, 1)]
+        fake_vlan_mgr = MagicMock()
+        fake_vlan_mgr.get_assigned_vlans.side_effect = assigned
+        fake_ctx = MagicMock()
+        fake_ctx.__enter__ = MagicMock(return_value=fake_vlan_mgr)
+        fake_ctx.__exit__ = MagicMock(return_value=False)
+        with patch("opnsense_controller.zone_manager.VlanManager", return_value=fake_ctx), \
+                patch("opnsense_controller.zone_manager.time.sleep"):
+            self.assertEqual(zm.get_zone_interface(srv), "opt1")   # first read empty, re-read finds it
+            n = len(reads)
+            for _ in range(5):
+                self.assertEqual(zm.get_zone_interface(srv), "opt1")
+        self.assertEqual(len(reads), n)                            # no further reads
+        zm._forget_interfaces()
+        self.assertIsNone(zm._iface_cache)
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # configure_firewall_rules — sequence layout / collision regression (issue #243)

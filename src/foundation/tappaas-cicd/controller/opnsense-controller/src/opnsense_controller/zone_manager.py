@@ -780,6 +780,8 @@ class ZoneManager:
         self.interface = interface
         self.bridge_map = bridge_map or self.DEFAULT_BRIDGE_MAP.copy()
         self.zones: list[Zone] = []
+        # Zone name -> interface identifier, read once per configure step (#823).
+        self._iface_cache: dict[str, str] | None = None
         # Every step that failed to converge; main() exits non-zero when any
         # did, so a caller never reads a partial run as converged (#639).
         self.failures: list[str] = []
@@ -877,26 +879,25 @@ class ZoneManager:
         Returns:
             Interface identifier (e.g., 'lan', 'srv', 'opt1') or None if not found
         """
-        if zone.needs_vlan:
-            # For VLAN zones, find the assigned interface by zone name
-            with VlanManager(self.config) as vlan_mgr:
-                assigned = vlan_mgr.get_assigned_vlans()
-                for v in assigned:
-                    # Check by VLAN tag or by interface description/name.
-                    # Normalise both sides — the OPNsense interfacesInfo endpoint
-                    # has been observed returning vlan_tag as either int or str
-                    # depending on version (issue #179).
-                    if str(v["vlan_tag"]) == str(zone.vlan_tag):
-                        return v["identifier"]
-                    # Also check if the interface label matches the zone name.
-                    # Post-#237 the SSOT is underscore-aligned so labels and
-                    # zone keys match directly with no transformation.
-                    if v.get("description", "").lower() == zone.name.lower():
-                        return v["identifier"]
-            return None
-        else:
+        if not zone.needs_vlan:
             # For untagged zones, use the bridge directly
             return zone.bridge.lower()
+        # One read of the assignment table for every VLAN zone, kept for the
+        # rest of the step; a zone it did not hold is re-read with retry, as
+        # an interface can still be settling (#823 — this was one connection
+        # and one unretried read per zone, per rule set).
+        if self._iface_cache is None:
+            resolved, _ = self._resolve_zone_interfaces(
+                [z for z in self.zones if z.needs_vlan], retries=0)
+            self._iface_cache = dict(resolved)
+        if zone.name not in self._iface_cache:
+            resolved, _ = self._resolve_zone_interfaces([zone])
+            self._iface_cache.update(resolved)
+        return self._iface_cache.get(zone.name)
+
+    def _forget_interfaces(self) -> None:
+        """A step may create or reassign interfaces: read the table again after it."""
+        self._iface_cache = None
 
     @staticmethod
     def _match_assigned_vlan(assigned: list[dict], zone: Zone) -> str | None:
@@ -1076,6 +1077,7 @@ class ZoneManager:
         Returns:
             Dictionary mapping zone names to results
         """
+        self._forget_interfaces()
         results = {}
         vlan_zones = self.get_vlan_zones()
         disabled_zones = self.get_disabled_vlan_zones()
@@ -1412,6 +1414,7 @@ class ZoneManager:
         Returns:
             Dictionary mapping zone names to results
         """
+        self._forget_interfaces()
         results = {}
         dhcp_zones = self.get_dhcp_zones()
         disabled_zones = self.get_disabled_dhcp_zones()
@@ -1907,6 +1910,7 @@ class ZoneManager:
         Returns:
             Dictionary mapping zone names to results
         """
+        self._forget_interfaces()
         results = {}
         firewall_zones = self.get_firewall_zones()
         manual_zones = self.get_manual_zones()
