@@ -276,14 +276,15 @@ Low upgrade risk. Build continuously, in any order within a group.
 
 ### G3.1 cluster:vm lifecycle & capacity — Ease L · Risk M · released: 18 · open: 5
 
-Guests sized, placed, started and stopped right: memory defaults from measurement (#663), hardware drift (#531), shutdown and boot order (#36, #127), storage growth and placement (#100, #403), a composite-module ADR (#761), and a sweep that survives a guest restarting itself (#753).
+Guests sized, placed, started and stopped right: memory defaults from measurement (#663), moving a running guest to another node (#825), hardware drift (#531), shutdown and boot order (#36, #127), storage growth and placement (#100, #403), a composite-module ADR (#761), and a sweep that survives a guest restarting itself (#753).
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
 | #531 | Detect hardware-spec drift | L | M | Once detected, pending changes get applied (reboots): gate on `rebootOk` |
 | #100 | Automatic storage extension | M | L | |
 | #403 | Install on the root disk; smarter placement | M | L | |
-| #663 | Memory defaults are not based on measurement | L | L | Shipped memory defaults were never measured (hrossen: 60G declared, ~20G used). Over-declaring costs commitment. `network` 8G→4G parked until the operator has physical access |
+| ✅ #663 | Memory defaults are not based on measurement | L | L | **Closed 2026-10-13** (operator): 7-day measurement on hrossen. vaultwarden was too small — 1→1.5 GiB (`bac670ce`); euro-office and deconz-test moved tappaas1→tappaas2, tappaas1 commitment 63→51.5 GiB of 61. The other proposed reductions (nextcloud-hpb, jellyfin, forgejo, litellm default) not applied; `network` 8G→4G still parked |
+| ✅ #825 | update-module: changing a running guest's node does not migrate it | M | M | **Closed 2026-10-13** (`fix(cluster): move a running guest when its node changes`): snapshot and OS update act where the guest runs; `live-ok` refuses local disks with snapshots; `--allow-disruption` does stop → offline migrate → start. Found moving guests for #663 |
 | #761 | A composite-module ADR: `cluster`, `kubernetes`, and modules that only provide artefacts | H | M | ADR-022d and ADR-026 defer `cluster`/`kubernetes` to an ADR that does not exist, and `templates` fits no `kind`; interim values in ADR-022d v1.2. With @ErikDaniel007 |
 
 ### G3.2 Identity & SSO wiring — Ease M · Risk L · released: 10 · open: 4
