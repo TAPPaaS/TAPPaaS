@@ -326,7 +326,7 @@ def select_orphan_ranges(
 # every rule the reconcile emits matches, so a new shape cannot be left out.
 ZONE_RULE_RE = re.compile(
     r"^Zone (\S+) (?:-> \S|block rfc1918-|block (?:zone-networks|ula|firewall|cgnat|link-local)$"
-    r"|block spoofed source$|block firewall (?:webgui|ssh)$)"
+    r"|block spoofed source(?: v6)?$|block firewall (?:webgui|ssh)$)"
 )
 
 
@@ -1732,11 +1732,24 @@ class ZoneManager:
             zone_interface, zone_interface, "any",
             RuleAction.BLOCK, self.ANTISPOOF_SEQUENCE,
             check_mode, zone_results,
-            # IPv4 only. For IPv6, OPNsense adds link-local (fe80::/10) to an
-            # interface's network, and negated that reads "not the zone's
-            # network, or link-local" — a block of the link-local traffic IPv6
-            # needs. IPv6 anti-spoofing waits for zones that carry IPv6 (#26).
+            # IPv4 only: for IPv6, OPNsense adds link-local (fe80::/10) to an
+            # interface's network, so "not the zone's network" would leave
+            # link-local sources out of reach. The IPv6 rule below names the
+            # network table instead.
             source_invert=True, ip_protocol=IpProtocol.IPV4,
+        )
+        # IPv6 anti-spoofing (ADR-030 D9): not in the zone's network table —
+        # OPNsense's __<if>_network, the zone's own networks and no link-local.
+        # The link-local control traffic IPv6 needs (neighbour discovery,
+        # router solicitation/advertisement, DHCPv6) is passed by OPNsense's
+        # own rules, which pf evaluates before these.
+        self._create_or_skip_rule(
+            manager, existing_by_desc,
+            f"Zone {zone.name} block spoofed source v6",
+            zone_interface, f"__{zone_interface}_network", "any",
+            RuleAction.BLOCK, self.ANTISPOOF_SEQUENCE + 1,
+            check_mode, zone_results,
+            source_invert=True, ip_protocol=IpProtocol.IPV6,
         )
         for offset, (port, label) in enumerate(self.ADMIN_GUARD_PORTS):
             self._create_or_skip_rule(

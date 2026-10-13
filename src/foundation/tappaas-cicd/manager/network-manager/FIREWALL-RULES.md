@@ -188,7 +188,7 @@ interface the order is:
 | Order | Sequence | Rules | Written by |
 |---|---|---|---|
 | 1 | OPNsense | anti-lockout, DHCP, bogons and system rules | OPNsense |
-| 2 | 970 | **anti-spoofing** — drop any source outside the zone's subnet | zone-manager |
+| 2 | 970 / 971 | **anti-spoofing** — drop any source outside the zone's networks (IPv4 / IPv6) | zone-manager |
 | 3 | 980, 981 | **admin guard** — block TCP 8443 (GUI) and 22 (SSH) to every firewall address | zone-manager |
 | 4 | 990, 991 | **caddy-reach** — pass TCP 443 and 80 to the DMZ gateway (`/32`), where Caddy listens | zone-manager |
 | 5 | 10000–19999 | **module ingress** and **auto-pinholes** | rules-manager |
@@ -209,7 +209,7 @@ drop it.
 ## Zone rules
 
 For each `Active`/`Mandatory` zone, on the zone's own interface (`base` = the zone's slot in
-band 7). A zone with an empty `access-to` gets the three protective rules — anti-spoofing and
+band 7). A zone with an empty `access-to` gets the protective rules — anti-spoofing (IPv4 and IPv6) and
 the admin guard — and its gateway's services, and nothing else.
 
 Zone rules name a zone by its **interface**: its network as the source, its interface address as
@@ -219,6 +219,7 @@ addresses the zone carries, IPv4 and IPv6 alike. The family column says which.
 | Sequence | Rule | Family | Action |
 |---|---|---|---|
 | 970 | `Zone Z block spoofed source` | IPv4 | block, source not in the zone's network |
+| 971 | `Zone Z block spoofed source v6` | IPv6 | block, source not in the zone's network table (`__optN_network`) |
 | 980 / 981 | `Zone Z block firewall webgui` / `ssh` | both | block TCP 8443 / 22 to the firewall itself |
 | 990 / 991 | `Zone Z -> caddy https` / `http` | both | pass TCP 443 / 80 from the zone's network to the firewall's own addresses, where Caddy listens |
 | base+0 | `Zone Z -> gateway dns` | both | pass TCP/UDP 53 to the zone's interface address |
@@ -367,7 +368,5 @@ Where the rules do less than the zone model describes:
   GUI and SSH.
 - **An overlay's caddy-reach source is `10.0.0.0/8`**, not its peers' range: the WireGuard
   interface group has no network of its own to name, and no anti-spoofing narrows it.
-- **Anti-spoofing is IPv4 only**, because a negated IPv6 interface network in OPNsense also
-  covers link-local addresses, which IPv6 needs.
 - **A module with `aliasType: network`** is reached through an alias of its zone's IPv4
   subnet, so its rules cover IPv4 only.

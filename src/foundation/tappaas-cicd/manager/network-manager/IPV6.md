@@ -124,6 +124,9 @@ record; they are clients, not services.
   the IPv6 attempt at once, and Caddy uses IPv4 with no delay.
 - **The internet.** Devices in a zone with IPv6 reach the internet over IPv6 directly — there
   is no address translation for IPv6.
+- **Sources are checked.** A packet arriving on a zone with an IPv6 source outside the zone's
+  own networks is dropped first, as for IPv4; the link-local control traffic IPv6 needs is
+  passed by OPNsense's own rules ahead of it.
 
 ### Access lists and trusted proxies
 
@@ -216,7 +219,5 @@ ipv6: published names and access lists match the interfaces
   internet over IPv6 (see *Reaching Caddy from the internet* above), but TAPPaaS does not write
   public DNS: add the AAAA record wherever the public A record is kept. A module's port forward
   (`natRules`) is IPv4-only; nothing but Caddy is reachable from outside over IPv6.
-- **Spoofed sources.** The firewall blocks IPv4 packets whose source is not in the zone they
-  arrive from; it does not yet do the same for IPv6.
 - **The WAN's IPv4.** `network.wan.ipv4` is part of the schema, but the network update does not
   yet apply it: the WAN's IPv4 is as installed.

@@ -8,7 +8,7 @@
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen |
 | **Related** | **#26** (IPv6, opt-in per site) · **#149** (`site.json` `ipv6`, the site's switch — built) · **#815** (firewall rules cover IPv6 — built) · **#383** (public DNS that follows the WAN) · **#223** (OPNsense interface assignment API) · [ADR-014](<ADR-014 - Zone and Environment Lifecycle.md>) (zones, `changeClass`) · [ADR-021](<ADR-021 - Split-Horizon DNS and Service Reachability.md>) (split-horizon DNS, Caddy) · [ADR-025](<ADR-025 - Config migrations and the upgrade path.md>) (migrations) |
-| **Changelog** | v0.5 (2026-10-13) — **Caddy reachable over IPv6 from the internet (built)**: the Caddy WAN rules carry both families while the site runs IPv6; the public AAAA is the WAN address `ipv6-manager` reports. Switching IPv6 off now withdraws each zone's route first (D8). v0.4 (2026-10-12) — **published names inside the site are dual-stack (built)**: every split-horizon A record that points at a firewall interface gets an AAAA for that interface's IPv6 address, and every TAPPaaS Caddy access list gets the IPv6 network of each zone it names by IPv4. Both are read from the interfaces, so a changed prefix or IPv6 switched off is followed on the next network update; the writers (`unbound-manager add`, `caddy-manager add-accesslist`) add them at once. Proven on hrossen: client → Caddy → service over IPv6, same answers as IPv4 for every published name. v0.3 (2026-10-12, operator request after the first rollout on hrossen) — **internal names resolve to IPv6 too**: router advertisements move from radvd to dnsmasq in `ra-names` mode, which gives every VM with a DHCPv4 lease an AAAA record from its EUI-64 address; the NixOS baseline switches to EUI-64 without temporary addresses. VM to VM and Caddy to a service then work over IPv6 by name; the internal split-horizon answer for a published name gains the DMZ's IPv6 address. Proven by a spike on hrossen's test zone. v0.2 (2026-10-12) — the OPNsense spike on hrossen settles D7's open point: interface IPv6 is `config.xml` through OPNsense's PHP config library, router advertisements are the Radvd API; the WAN's delegation size must be written, a tracked zone's firewall address is EUI-64, a tracked interface advertises *managed* unless told otherwise, and removing IPv6 leaves the address behind. v0.1 — first draft, from the operator discussion of 2026-10-12. |
+| **Changelog** | v0.5 (2026-10-13) — **Caddy reachable over IPv6 from the internet, and IPv6 anti-spoofing (built)**: the Caddy WAN rules carry both families while the site runs IPv6; the public AAAA is the WAN address `ipv6-manager` reports. Switching IPv6 off now withdraws each zone's route first (D8). v0.4 (2026-10-12) — **published names inside the site are dual-stack (built)**: every split-horizon A record that points at a firewall interface gets an AAAA for that interface's IPv6 address, and every TAPPaaS Caddy access list gets the IPv6 network of each zone it names by IPv4. Both are read from the interfaces, so a changed prefix or IPv6 switched off is followed on the next network update; the writers (`unbound-manager add`, `caddy-manager add-accesslist`) add them at once. Proven on hrossen: client → Caddy → service over IPv6, same answers as IPv4 for every published name. v0.3 (2026-10-12, operator request after the first rollout on hrossen) — **internal names resolve to IPv6 too**: router advertisements move from radvd to dnsmasq in `ra-names` mode, which gives every VM with a DHCPv4 lease an AAAA record from its EUI-64 address; the NixOS baseline switches to EUI-64 without temporary addresses. VM to VM and Caddy to a service then work over IPv6 by name; the internal split-horizon answer for a published name gains the DMZ's IPv6 address. Proven by a spike on hrossen's test zone. v0.2 (2026-10-12) — the OPNsense spike on hrossen settles D7's open point: interface IPv6 is `config.xml` through OPNsense's PHP config library, router advertisements are the Radvd API; the WAN's delegation size must be written, a tracked zone's firewall address is EUI-64, a tracked interface advertises *managed* unless told otherwise, and removing IPv6 leaves the address behind. v0.1 — first draft, from the operator discussion of 2026-10-12. |
 
 A site turns IPv6 on with one switch. Its WAN then gets IPv6 the way the site declares —
 **dynamic** (DHCPv6 with a delegated prefix) by default, **static** where the ISP offers it —
@@ -30,7 +30,7 @@ IPv4-only has it removed.
   *Allow IPv6*: off drops all inbound and forwarded IPv6 and makes Unbound resolve over IPv4.
 - The firewall rules cover IPv6 (#815): zone and module rules name interfaces, so they follow
   whatever addresses a zone carries; an alias of every zone's network keeps zones apart over
-  IPv6; ICMPv6 reaches the gateway. Anti-spoofing is IPv4 only (see D9).
+  IPv6; ICMPv6 reaches the gateway. Anti-spoofing covers IPv6 on the zone's network table (see D9).
 - **No zone has an IPv6 address.** Guests accept router advertisements (the NixOS baseline is
   SLAAC) but nothing sends them.
 
@@ -213,10 +213,14 @@ change to the WAN or to a zone's IPv6 reloads that interface only.
 
 ### D9 — What stays to be built on the firewall
 
-- **IPv6 anti-spoofing.** A negated interface network in OPNsense also covers link-local
-  (`fe80::/10`), so the IPv4 rule's form would block traffic IPv6 needs. v1 writes it as a block
-  of sources outside the zone's network *table* (`__optN_network`, which holds no link-local),
-  after a pass for link-local sources to the firewall.
+- **IPv6 anti-spoofing — built (v0.5).** A negated interface network in OPNsense also covers
+  link-local (`fe80::/10`), so the IPv4 rule's form would block traffic IPv6 needs. It is a block
+  of sources outside the zone's network *table* (`__optN_network`, which holds no link-local) at
+  sequence 971. No pass for link-local is needed: neighbour discovery, router solicitation and
+  advertisement and DHCPv6 are passed by OPNsense's own rules ahead of it. Defence in depth: the
+  zone passes already name the zone's networks as source, so a forged source fell to the default
+  deny before; verified on hrossen — a forged home-zone source from a rossen VM is dropped by
+  the new rule.
 - **Published names, inside the site — built (v0.4).** Split-horizon DNS (ADR-021) answers a
   published name with the DMZ gateway's IPv4 address, and AAAA with the DMZ interface's IPv6
   address. The AAAA follows the A: any A record pointing at a firewall interface gets one,

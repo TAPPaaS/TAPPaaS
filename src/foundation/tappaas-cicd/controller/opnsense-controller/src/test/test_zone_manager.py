@@ -610,7 +610,7 @@ class TestConfigureFirewallRulesSequencing(unittest.TestCase):
         zone_rules = [r for r in fake.created if r.sequence >= 1000]
         self.assertTrue(all(
             "-> caddy " in r.description or " block firewall " in r.description
-            or r.description.endswith(" block spoofed source")
+            or r.description.endswith((" block spoofed source", " block spoofed source v6"))
             for r in fake.created if r.sequence < 1000))
         self.assertTrue(zone_rules)
         for rule in zone_rules:
@@ -760,6 +760,18 @@ class TestGatewayAndAdminPorts(TestConfigureFirewallRulesSequencing):
         return {r.description: r for r in fake.created
                 if r.description.startswith(f"Zone {zone} ")}
 
+    def test_ipv6_anti_spoofing_names_the_network_table(self):
+        # ADR-030 D9: not the zone's network table — never a negated interface
+        # network, which in OPNsense also covers link-local for IPv6.
+        fake = self._run(_build_zones())
+        rules = self._zone_rules(fake, "home")
+        r = rules["Zone home block spoofed source v6"]
+        self.assertEqual(r.source_net, "__opt_home_network")
+        self.assertTrue(r.source_invert)
+        self.assertEqual(r.ip_protocol, IpProtocol.IPV6)
+        self.assertEqual(r.sequence, rules["Zone home block spoofed source"].sequence + 1)
+        self.assertTrue(ZONE_RULE_RE.match("Zone home block spoofed source v6"))
+
     def test_a_zone_without_access_to_gets_its_gateway_and_protection_only(self):
         fake = self._run(_build_zones(home={"access_to": []}))
         rules = self._zone_rules(fake, "home")
@@ -768,7 +780,7 @@ class TestGatewayAndAdminPorts(TestConfigureFirewallRulesSequencing):
             "Zone home -> gateway icmp", "Zone home -> gateway icmpv6",
             "Zone home -> gateway ntp",
             "Zone home block firewall ssh", "Zone home block firewall webgui",
-            "Zone home block spoofed source"])
+            "Zone home block spoofed source", "Zone home block spoofed source v6"])
         # The gateway passes reach the gateway's /32 on their own ports only.
         dns = rules["Zone home -> gateway dns"]
         self.assertEqual(dns.destination_net, "opt_homeip")
@@ -804,12 +816,13 @@ class TestGatewayAndAdminPorts(TestConfigureFirewallRulesSequencing):
     def test_zone_rules_name_the_zone_interface_not_its_ipv4_subnet(self):
         rules = self._zone_rules(self._run(_build_zones()), "srv")
         for d, r in rules.items():
-            if " -> caddy " in d:
-                continue
+            if " -> caddy " in d or d.endswith(" spoofed source v6"):
+                continue                      # v6 anti-spoofing names the network table
             self.assertEqual(r.source_net, "opt_srv", d)
         self.assertEqual(rules["Zone srv -> internet"].ip_protocol, IpProtocol.BOTH)
-        # Anti-spoofing stays IPv4: a negated IPv6 interface network would also
-        # block link-local (OPNsense adds fe80::/10 to it).
+        # The interface-network anti-spoofing rule stays IPv4: a negated IPv6
+        # interface network would also cover link-local (OPNsense adds fe80::/10);
+        # IPv6 has its own rule on the network table.
         self.assertEqual(rules["Zone srv block spoofed source"].ip_protocol, IpProtocol.IPV4)
         self.assertEqual(rules["Zone srv -> dmz"].destination_net, "opt_dmz")
         self.assertEqual(rules["Zone srv -> dmz"].ip_protocol, IpProtocol.BOTH)
