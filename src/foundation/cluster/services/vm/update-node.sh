@@ -13,7 +13,8 @@
 #       update-service.sh has always made.
 #
 #   plain module
-#       `qm migrate`, online when the guest is running, offline when it is not.
+#       `qm migrate`, online when the guest is running and can move live; with
+#       --force, stop → offline migrate → start when it cannot.
 #
 # ADR-019 SEAM. ADR-019 (HA and Cross-Node VM Migration Policy) is still
 # Proposed: its live-OK CPU-compatibility verdict and the restructured migrate
@@ -42,6 +43,9 @@ readonly MGMT="mgmt"
 
 # shellcheck source=/home/tappaas/bin/common-install-routines.sh
 . /home/tappaas/bin/common-install-routines.sh
+# The confirmed stop/start an offline migrate of a running guest needs (#825).
+# shellcheck source=/home/tappaas/bin/ha-vm-lib.sh
+. /home/tappaas/bin/ha-vm-lib.sh
 
 SSH_OPTS=(-o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new
           -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o BatchMode=yes)
@@ -101,6 +105,13 @@ if read_module_config "${MODULE}" | jq -e '(.dependsOn // []) | index("cluster:h
 fi
 
 [[ -n "${ACTUAL}" ]] || { error "update-node.sh: the record carries no current node for ${MODULE}"; exit 1; }
+# Run by hand (no --unit) the status is unknown, and an unknown status must not
+# read as "stopped": a running guest would then get `--online 0`, which Proxmox
+# refuses. Ask the node.
+if [[ -z "${STATUS}" ]]; then
+    STATUS="$(ssh "${SSH_OPTS[@]}" "root@${ACTUAL}.${MGMT}.internal" \
+        "qm status ${VMID} 2>/dev/null" 2>/dev/null | awk '{print $2}')" || STATUS=""
+fi
 
 
 # ── Live-OK verdict (ADR-019) ────────────────────────────────────────
@@ -153,10 +164,56 @@ if [[ "${STATUS}" == "running" ]]; then
 fi
 
 # ── Migrate ──────────────────────────────────────────────────────────
+# Proxmox's own output is kept and shown on failure: its reason ("non-replicated
+# snapshot exists", "VM is running") is the only useful part of a refusal (#825).
+migrate_out="$(mktemp "${TMPDIR:-/tmp}/update-node.XXXXXX")"
+trap 'rm -f -- "${migrate_out}"' EXIT
+qm_migrate() {
+    ssh "${SSH_OPTS[@]}" "root@${ACTUAL}.${MGMT}.internal" \
+        "qm migrate ${VMID} ${DESIRED} $*" > "${migrate_out}" 2>&1
+}
+
+# A RUNNING guest cannot be migrated with --online 0: Proxmox refuses. Offline
+# means stop, move, start — confirmed at each step (#825).
+offline_migrate() {
+    warn "  node: stopping ${MODULE} for an offline migrate ${ACTUAL}→${DESIRED}"
+    ssh "${SSH_OPTS[@]}" "root@${ACTUAL}.${MGMT}.internal" \
+        "qm shutdown ${VMID} --timeout 90" >/dev/null 2>&1 || true
+    havm_stop "${ACTUAL}.${MGMT}.internal" "${VMID}" qemu 120 \
+        || { error "  ${MODULE} did not stop on ${ACTUAL} — not migrating"; return 1; }
+    if ! qm_migrate; then
+        sed 's/^/    /' "${migrate_out}" >&2
+        error "  offline migrate ${ACTUAL}→${DESIRED} failed — starting ${MODULE} again on ${ACTUAL}"
+        havm_start "${ACTUAL}.${MGMT}.internal" "${VMID}" qemu 120 || true
+        return 1
+    fi
+    havm_start "${DESIRED}.${MGMT}.internal" "${VMID}" qemu 120 \
+        || { error "  ${MODULE} moved to ${DESIRED} but is not running there"; return 1; }
+    info "  node: ${MODULE} moved offline ${ACTUAL}→${DESIRED} and is running"
+}
+
+if [[ "${STATUS}" == "running" && "${online_flag}" != "1" ]]; then
+    offline_migrate || exit 1
+    exit 0
+fi
+
 debug "  Migrating VM ${VMID} ${ACTUAL}→${DESIRED} (online=${online_flag})..."
-if ! ssh "${SSH_OPTS[@]}" "root@${ACTUAL}.${MGMT}.internal" \
-        "qm migrate ${VMID} ${DESIRED} --online ${online_flag}" >/dev/null; then
+online_args="--online ${online_flag}"
+[[ "${online_flag}" == "1" ]] && online_args+=" --with-local-disks 1"
+if ! qm_migrate "${online_args}"; then
+    sed 's/^/    /' "${migrate_out}" >&2
     error "  qm migrate ${ACTUAL}→${DESIRED} failed for ${MODULE} (vmid ${VMID})"
+    # Live was judged possible and still failed. With downtime authorized, the
+    # move the operator asked for is still available offline.
+    if [[ "${STATUS}" == "running" && "${FORCE}" == "1" ]]; then
+        post_status="$(ssh "${SSH_OPTS[@]}" "root@${ACTUAL}.${MGMT}.internal" \
+            "qm status ${VMID} 2>/dev/null" 2>/dev/null | awk '{print $2}')" || post_status=""
+        if [[ "${post_status}" == "running" ]]; then
+            warn "  live migrate failed; --force given — falling back to an offline migrate"
+            offline_migrate || exit 1
+            exit 0
+        fi
+    fi
     # A failed migrate is not, by itself, a broken guest. Ask where the guest
     # actually is before deciding (#393): a shared-storage check, a resource
     # constraint or an HA lock can refuse the move while the guest carries on

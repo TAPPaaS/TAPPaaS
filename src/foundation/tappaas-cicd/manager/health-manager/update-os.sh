@@ -1141,6 +1141,16 @@ main() {
     local vmid="$2"
     local node="$3"
 
+    # Callers pass the CONFIGURED node. A guest whose node change is deferred
+    # (or failed) still runs on the old one, and asking the new one for its IP
+    # waits five minutes for nothing (#825). Go where the guest is.
+    local holder
+    holder="$(vm_node_holding "${vmid}")"
+    if [[ -n "${holder}" && "${holder}" != "${node}" ]]; then
+        warn "VM ${vmid} runs on ${holder}, not on its configured node ${node} — updating it there"
+        node="${holder}"
+    fi
+
     info "=== TAPPaaS OS Update ==="
     info "VM: ${vmname} (VMID: ${vmid}) on ${node}"
 

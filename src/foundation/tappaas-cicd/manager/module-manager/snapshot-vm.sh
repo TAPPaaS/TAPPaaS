@@ -108,14 +108,22 @@ fi
 
 NODE_FQDN="${NODE}.${MGMT}.internal"
 
-# Detect whether VMID is a QEMU VM or LXC container
-VM_TYPE=$(ssh -n -o ConnectTimeout=5 -o BatchMode=yes -o LogLevel=ERROR root@"${NODE_FQDN}" \
+# Detect whether VMID is a QEMU VM or LXC container, and where it runs. The
+# configured node is where the guest SHOULD be; after a node change in config
+# and before the migrate, it is somewhere else, and the snapshot must be taken
+# there (#825).
+read -r VM_TYPE VM_NODE < <(ssh -n -o ConnectTimeout=5 -o BatchMode=yes -o LogLevel=ERROR root@"${NODE_FQDN}" \
     "pvesh get /cluster/resources --type vm --output-format json" 2>/dev/null \
     | jq -r --argjson id "${VMID}" \
-        '.[] | select(.vmid == $id) | .type // empty' 2>/dev/null || true)
+        '.[] | select(.vmid == $id) | "\(.type) \(.node)"' 2>/dev/null || true) || true
 
-if [[ -z "${VM_TYPE}" ]]; then
+if [[ -z "${VM_TYPE:-}" ]]; then
     die "VM ${VMID} (${VMNAME}) not found on node ${NODE}"
+fi
+if [[ -n "${VM_NODE:-}" && "${VM_NODE}" != "${NODE}" ]]; then
+    debug "VM ${VMID} runs on ${VM_NODE}, not on its configured node ${NODE} — using ${VM_NODE}"
+    NODE="${VM_NODE}"
+    NODE_FQDN="${NODE}.${MGMT}.internal"
 fi
 
 # qm for QEMU VMs, pct for LXC containers
