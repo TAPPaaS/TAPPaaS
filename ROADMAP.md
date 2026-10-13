@@ -351,7 +351,7 @@ Changes to live firewall and DNS behaviour on every installation. Restrictive de
 
 ### G2.1 Firewall exposure & rule order — Ease M · Risk H · released: 7 · open: 14
 
-Tighter firewall defaults that keep what modules need. Built: the gateway, GUI/SSH and anti-spoofing rules. Sprint from 2026-10-12: the review of the tier model and rule creation is done and published (#816), with most of its findings fixed; pinholes no longer shadowed (#386); every zone policy covers IPv6 (#815), and IPv6 itself is built (#26). The rules manager's overlap report, covered pinholes and sequence map are built (#160, #256, #162, on the branch). The review findings are done: #817, #818, #822 closed; #819–#821, #823 and the ADR amendments (#824) closed — on `main` 2026-10-13 after a clean `--deep` (144/0). Next: G2.2 with inbound IPv6, then #576, #257, #660, #683. NetBird rules (#385, #222) are low priority until the NetBird decision.
+Tighter firewall defaults that keep what modules need. Built: the gateway, GUI/SSH and anti-spoofing rules. Sprint from 2026-10-12: the review of the tier model and rule creation is done and published (#816), with most of its findings fixed; pinholes no longer shadowed (#386); every zone policy covers IPv6 (#815), and IPv6 itself is built (#26). The rules manager's overlap report, covered pinholes and sequence map are built (#160, #256, #162, on the branch). The review findings are done: #817, #818, #822 closed; #819–#821, #823 and the ADR amendments (#824) closed — on `main` 2026-10-13 after a clean `--deep` (144/0). Inbound IPv6 to Caddy, IPv6 anti-spoofing, DNSSEC (#263), #576, #257, #660 and #683 followed, on `main` 2026-10-13 after a clean `--deep` (144/0). Open: the NetBird rules below and #706. NetBird rules (#385, #222) are low priority until the NetBird decision.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
@@ -366,13 +366,13 @@ Tighter firewall defaults that keep what modules need. Built: the gateway, GUI/S
 | ✅ #822 | Block-private misses 100.64/10, 169.254/16 and the firewall's other addresses | M | M | **Closed 2026-10-13** (`g2.1-firewall`): zones with internet block `(self)`, 100.64/10, 169.254/16; Caddy reached on `(self)`. WAN 53053/53 closed, verified on hrossen |
 | ✅ #823 | Gateway lookup is one unretried API call per zone | L | L | **Closed 2026-10-13** (on `main`): one batched read per step, a miss re-read with retry; zone reconcile identical on hrossen |
 | ✅ #824 | Amend ADR-014 and ADR-021 to the zone and rule model as built | L | L | **Closed 2026-10-13** (on `main`): ADR-014 v1.2 (new D9), ADR-021 v1.1 |
-| #576 | Zone `serves` as string or array | M | L | Backward compatible |
-| #257 | mDNS in zones.json | M | M | |
+| ✅ #576 | Zone `serves` as string or array | M | L | **Closed 2026-10-13** (on `main` 2026-10-13 after a clean `--deep` (144/0)): `serves` is one environment or a list; `bind --add` / `--unbind --environment`; ADR-014 v1.3 |
+| ✅ #257 | mDNS in zones.json | M | M | **Closed 2026-10-13** (on `main` 2026-10-13 after a clean `--deep` (144/0)): zone field `mdns`; `mdns-manager` converges os-mdns-repeater and one rule (975) from zones and modules' `discoveryMdns`; relay verified on hrossen; ADR-014 D10 |
 | ✅ #160 | Overlap detection in the rules manager | M | L | **Closed 2026-10-13** (`g2.1-firewall`): `rules-manager overlaps` / `verify-rules --detect-overlap` — shadowed, redundant and conflicting rules on the live rule set, both families; read-only. hrossen: 136 rules, 0 findings |
 | ✅ #256 | Skip pinholes already covered by zone access | M | L | **Closed 2026-10-13** (`g2.1-firewall`): a rule `access-to` already passes is left out and recorded; the network update re-checks (`recheck-covered`) and writes it again when `access-to` narrows. Live round trip with coturn on hrossen |
 | ✅ #162 | Persistent sequence-map artifact | L | L | **Closed 2026-10-13** (`g2.1-firewall`): the map gains `generated`, `covered` and stale-entry clean-up; slot sharing warned; `rules-manager list-slots` |
-| #660 | A declared `aliasType` change cannot be applied | M | M | OPNsense refuses an alias type change, so the apply dies and the alias stays `host` — rules match nothing (#542). Needs detach/delete/create/reattach, and a change class in the schema |
-| #683 | Declared `ports` without `network:rules` are inert | L | L | Modules declaring `ports` but no `network:rules` (makerfloss) get no validation or rules, silently. Decide what such `ports` mean — a `validate` finding or documentation — with 0010's rule |
+| ✅ #660 | A declared `aliasType` change cannot be applied | M | M | **Closed 2026-10-13** (on `main` 2026-10-13 after a clean `--deep` (144/0)): the type is changed in place through OPNsense's own API, rules referencing it and all; verified live |
+| ✅ #683 | Declared `ports` without `network:rules` are inert | L | L | **Closed 2026-10-13** (on `main` 2026-10-13 after a clean `--deep` (144/0)): operator decision — such `ports` are documentation (`unwired: documentation`); validate and the merge stay silent |
 | #706 | A wireless device zone cannot be checked against its SSID | M | L | **Scored 2026-10-13:** an attachment field (`port`/`ssid`) for `kind: device` and the #668 check extended to SSIDs. Additive check; after #668 (the wired half, open) |
 | #385 | Persist the NetBird OPT1 pass rule | L | M | **Low priority this sprint (2026-10-12)**, pending the NetBird decision (*Decisions*). Land with #222 |
 | #222 | NetBird → srv floating rule is fragile | L | M | **Low priority this sprint (2026-10-12)**, pending the NetBird decision. The #816 review found no code that creates NetBird rules |
@@ -383,9 +383,9 @@ A resolver that holds up: a working Unbound restart (#387), a written IPv6 stanc
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
-| #387 | Unbound rc.d restart fails (Python mismatch) | L | L | |
+| ✅ #387 | Unbound rc.d restart fails (Python mismatch) | L | L | **Closed 2026-10-13** (operator): TAPPaaS restarts Unbound through `configctl`, never rc.d |
 | ✅ #149 | IPv6 root lookups fail → `do-ip6: no` | L | L | **Done 2026-10-12** (`b03a4840`, awaits push): `ipv6-manager`, round trip live on hrossen with no IPv4 gap. **Every site turns IPv6 off at its next sweep unless `ipv6: true`.** Decided: a `site.json` `ipv6` field, default `false`, says whether the site supports IPv6; Unbound's `do-ip6` follows it. The stance is the IPv6 ADR (#26) |
-| #263 | DNSSEC on Unbound | L | M | Internal split-horizon zones need `domain-insecure` |
+| ✅ #263 | DNSSEC on Unbound | L | M | **Closed 2026-10-13** (on `main` 2026-10-13 after a clean `--deep` (144/0)): site.json `dnssec` (default true); split horizon unaffected; ADR-021 |
 | #383 | Keep wildcard public DNS current on dynamic WAN | M | L | |
 | FW #157 | Default DNS blocklists (DNSBL / maltrail) | M | M | Stretch; only after #387 |
 
