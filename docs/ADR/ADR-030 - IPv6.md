@@ -2,13 +2,13 @@
 
 | | |
 |---|---|
-| **Status** | **Proposed** (v0.4, 2026-10-12) |
+| **Status** | **Proposed** (v0.5, 2026-10-13) |
 | **Version** | 0.3 |
 | **Date** | 2026-10-12 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen |
 | **Related** | **#26** (IPv6, opt-in per site) · **#149** (`site.json` `ipv6`, the site's switch — built) · **#815** (firewall rules cover IPv6 — built) · **#383** (public DNS that follows the WAN) · **#223** (OPNsense interface assignment API) · [ADR-014](<ADR-014 - Zone and Environment Lifecycle.md>) (zones, `changeClass`) · [ADR-021](<ADR-021 - Split-Horizon DNS and Service Reachability.md>) (split-horizon DNS, Caddy) · [ADR-025](<ADR-025 - Config migrations and the upgrade path.md>) (migrations) |
-| **Changelog** | v0.4 (2026-10-12) — **published names inside the site are dual-stack (built)**: every split-horizon A record that points at a firewall interface gets an AAAA for that interface's IPv6 address, and every TAPPaaS Caddy access list gets the IPv6 network of each zone it names by IPv4. Both are read from the interfaces, so a changed prefix or IPv6 switched off is followed on the next network update; the writers (`unbound-manager add`, `caddy-manager add-accesslist`) add them at once. Proven on hrossen: client → Caddy → service over IPv6, same answers as IPv4 for every published name. v0.3 (2026-10-12, operator request after the first rollout on hrossen) — **internal names resolve to IPv6 too**: router advertisements move from radvd to dnsmasq in `ra-names` mode, which gives every VM with a DHCPv4 lease an AAAA record from its EUI-64 address; the NixOS baseline switches to EUI-64 without temporary addresses. VM to VM and Caddy to a service then work over IPv6 by name; the internal split-horizon answer for a published name gains the DMZ's IPv6 address. Proven by a spike on hrossen's test zone. v0.2 (2026-10-12) — the OPNsense spike on hrossen settles D7's open point: interface IPv6 is `config.xml` through OPNsense's PHP config library, router advertisements are the Radvd API; the WAN's delegation size must be written, a tracked zone's firewall address is EUI-64, a tracked interface advertises *managed* unless told otherwise, and removing IPv6 leaves the address behind. v0.1 — first draft, from the operator discussion of 2026-10-12. |
+| **Changelog** | v0.5 (2026-10-13) — **Caddy reachable over IPv6 from the internet (built)**: the Caddy WAN rules carry both families while the site runs IPv6; the public AAAA is the WAN address `ipv6-manager` reports. Switching IPv6 off now withdraws each zone's route first (D8). v0.4 (2026-10-12) — **published names inside the site are dual-stack (built)**: every split-horizon A record that points at a firewall interface gets an AAAA for that interface's IPv6 address, and every TAPPaaS Caddy access list gets the IPv6 network of each zone it names by IPv4. Both are read from the interfaces, so a changed prefix or IPv6 switched off is followed on the next network update; the writers (`unbound-manager add`, `caddy-manager add-accesslist`) add them at once. Proven on hrossen: client → Caddy → service over IPv6, same answers as IPv4 for every published name. v0.3 (2026-10-12, operator request after the first rollout on hrossen) — **internal names resolve to IPv6 too**: router advertisements move from radvd to dnsmasq in `ra-names` mode, which gives every VM with a DHCPv4 lease an AAAA record from its EUI-64 address; the NixOS baseline switches to EUI-64 without temporary addresses. VM to VM and Caddy to a service then work over IPv6 by name; the internal split-horizon answer for a published name gains the DMZ's IPv6 address. Proven by a spike on hrossen's test zone. v0.2 (2026-10-12) — the OPNsense spike on hrossen settles D7's open point: interface IPv6 is `config.xml` through OPNsense's PHP config library, router advertisements are the Radvd API; the WAN's delegation size must be written, a tracked zone's firewall address is EUI-64, a tracked interface advertises *managed* unless told otherwise, and removing IPv6 leaves the address behind. v0.1 — first draft, from the operator discussion of 2026-10-12. |
 
 A site turns IPv6 on with one switch. Its WAN then gets IPv6 the way the site declares —
 **dynamic** (DHCPv6 with a delegated prefix) by default, **static** where the ISP offers it —
@@ -229,9 +229,13 @@ change to the WAN or to a zone's IPv6 reloads that interface only.
   so over IPv6 where the service listens on it.
 - **Public names.** A published name gets an AAAA record: the DMZ's IPv6 address. Static: set
   once. Dynamic: kept current by the same path that follows a changing WAN IPv4 address (#383).
-- **Inbound from the internet.** IPv6 has no port forwarding. The Caddy entry on the WAN gets an
-  IPv6 pass to the DMZ address, and a module's `natRules` (only in a zone that accepts the
-  internet) become IPv6 passes to its address. Nothing else is reachable from outside.
+- **Inbound from the internet — Caddy built (v0.5).** IPv6 has no port forwarding. Caddy runs on
+  the firewall and answers on every firewall address, so its WAN entry — the two pass rules
+  `setup-caddy.sh` writes, `any → wanip` on tcp/80 and 443 — carries both families while `ipv6`
+  is true and the WAN holds an address, IPv4 only otherwise (`ipv6-manager`, the published-names
+  step). The public AAAA is the WAN's IPv6 address, which `ipv6-manager` reports; TAPPaaS does not
+  write public DNS (#383 for wildcard domains). A module's `natRules` stay IPv4 — an IPv6 pass to
+  its address, in a zone that accepts the internet, is not built. Live on hrossen 2026-10-13.
 
 ## Consequences
 

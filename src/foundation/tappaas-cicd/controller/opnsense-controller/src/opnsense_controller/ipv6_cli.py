@@ -399,10 +399,54 @@ def converge_site(mgr, config: Config, host: str, config_dir: Path, check_mode: 
             print(f"ipv6: {len(actions)} change(s) applied")
     if turning_off and not switch():
         return False
-    return converge_published(mgr, config, host, check_mode)
+    return converge_published(mgr, config, host, check_mode, allowed=allowed)
 
 
-def converge_published(mgr, config: Config, host: str, check_mode: bool) -> bool:
+# The WAN rules setup-caddy.sh writes for Caddy (#26 inbound): IPv4-only as
+# written; both families while the site runs IPv6 and the WAN holds an address.
+CADDY_WAN_RULES = ("TAPPaaS: Allow HTTP to Caddy", "TAPPaaS: Allow HTTPS to Caddy")
+
+
+def caddy_wan_family(allowed: bool, wan_v6: list) -> str:
+    """The address family the Caddy WAN rules should carry (pure)."""
+    return "inet46" if allowed and wan_v6 else "inet"
+
+
+def _converge_caddy_wan(config: Config, ifaces, allowed: bool, check_mode: bool) -> int:
+    """Open Caddy on the WAN's IPv6 address too, or close it again. Returns changes."""
+    from .firewall_manager import FirewallManager, FirewallRule, IpProtocol, Protocol, RuleAction
+
+    wan = next((i for i in ifaces if i.identifier == "wan"), None)
+    wan_v6 = list(wan.v6) if wan else []
+    want = caddy_wan_family(allowed, wan_v6)
+    changed = 0
+    with FirewallManager(config) as fm:
+        for desc in CADDY_WAN_RULES:
+            r = fm.get_rule_by_description(desc)
+            if r is None:
+                continue                  # setup-caddy.sh writes them; nothing to follow
+            if (r.ip_protocol or "inet") == want:
+                continue
+            print(f"ipv6: {'would ' if check_mode else ''}{desc}: {r.ip_protocol or 'inet'} -> {want}")
+            changed += 1
+            if check_mode:
+                continue
+            fm.update_rule(FirewallRule(
+                description=r.description, action=RuleAction.PASS, interface=r.interface,
+                ip_protocol=IpProtocol(want), protocol=Protocol.TCP,
+                source_net=r.source_net or "any", destination_net=r.destination_net,
+                destination_port=r.destination_port, log=r.log, quick=r.quick,
+                sequence=r.sequence), apply=False)
+        if changed and not check_mode:
+            fm.apply_changes()
+    if want == "inet46":
+        print(f"ipv6: Caddy answers on the WAN over IPv6 at {wan_v6[0].ip} — the public AAAA "
+              f"for published names (set it where the public A record is kept)")
+    return changed
+
+
+def converge_published(mgr, config: Config, host: str, check_mode: bool,
+                       allowed: bool | None = None) -> bool:
     """Published names and access lists follow the interfaces' IPv6 (ADR-030 D9).
 
     The split-horizon AAAA next to every A that points at the firewall, and the
@@ -449,6 +493,8 @@ def converge_published(mgr, config: Config, host: str, check_mode: bool) -> bool
         raise
     except Exception as exc:  # noqa: BLE001
         print(f"ipv6: Caddy access lists not checked: {exc}")
+    if allowed is not None:
+        changed += _converge_caddy_wan(config, ifaces, allowed, check_mode)
     if not names and not changed:
         print("ipv6: published names and access lists match the interfaces")
     return True

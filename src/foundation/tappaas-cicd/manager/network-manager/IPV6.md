@@ -147,6 +147,20 @@ picked up by the next update.
 Both are reached over IPv4: Caddy falls back for them at once, and a client reaching them
 through Caddy may still use IPv6 to Caddy.
 
+### Reaching Caddy from the internet
+
+While the site runs IPv6 and the WAN holds an IPv6 address, the firewall lets the internet reach
+Caddy on the WAN's IPv6 address, on the same two ports as over IPv4 (80 and 443) — and nothing
+else. `ipv6-manager apply` reports the address:
+
+```
+ipv6: Caddy answers on the WAN over IPv6 at 2001:db8:978c::aba — the public AAAA for published names
+```
+
+Publish it as the AAAA record of each published name (or of the wildcard), next to the A
+record. With a dynamic WAN the address can change when the ISP renumbers; a static WAN keeps it.
+Switching IPv6 off makes the entry IPv4-only again.
+
 ## When IPv6 is not available
 
 IPv4 is used wherever IPv6 does not work, without anyone having to notice:
@@ -198,9 +212,10 @@ ipv6: published names and access lists match the interfaces
 
 ## Current limitations
 
-- **Inbound from the internet.** Published names have no public AAAA record yet, and the
-  firewall passes no IPv6 from the internet to the DMZ. Services are reached from outside over
-  IPv4 only.
+- **Inbound from the internet — the public AAAA is yours to set.** Caddy is reachable from the
+  internet over IPv6 (see *Reaching Caddy from the internet* above), but TAPPaaS does not write
+  public DNS: add the AAAA record wherever the public A record is kept. A module's port forward
+  (`natRules`) is IPv4-only; nothing but Caddy is reachable from outside over IPv6.
 - **Spoofed sources.** The firewall blocks IPv4 packets whose source is not in the zone they
   arrive from; it does not yet do the same for IPv6.
 - **The WAN's IPv4.** `network.wan.ipv4` is part of the schema, but the network update does not
