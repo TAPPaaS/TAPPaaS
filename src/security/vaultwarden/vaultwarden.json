@@ -25,7 +25,7 @@
   "config": {
     "cluster:vm": {
       "cores": 1,
-      "memory": "1024",
+      "memory": "1536",
       "diskSize": "8G",
       "storage": "tanka1",
       "imageType": "clone",
