@@ -107,6 +107,26 @@ cpu_classify_missing "${_W}/m2" "${_W}/hard2" "${_W}/soft2"
 ck "an unrecognised feature fails CLOSED (refuses, not allows)" \
    "some-future-isa " "$(tr '\n' ' ' < "${_W}/hard2")"
 
+# Local disks with snapshots cannot move live (#825). Canned `pvesh get
+# /nodes/<src>/qemu/<vmid>/migrate` output, trimmed to the fields that matter.
+cat > "${_W}/pre" <<'J'
+{"local_disks":[
+ {"drivename":"efidisk0","cdrom":0,"is_cloudinit":0,"shared":0,"replicate":1,"referenced_in_snapshot":{"tappaas-1":1}},
+ {"drivename":"scsi0","cdrom":0,"is_cloudinit":0,"shared":0,"replicate":1,"referenced_in_snapshot":{"tappaas-1":1}},
+ {"drivename":"scsi1","cdrom":1,"is_cloudinit":1,"shared":0,"replicate":1,"referenced_in_snapshot":{"tappaas-1":1}},
+ {"drivename":"scsi2","cdrom":0,"is_cloudinit":0,"shared":0,"replicate":1}]}
+J
+ck "a local disk with snapshots blocks a live migrate; cloud-init and snapshot-free disks do not" \
+   "efidisk0 scsi0 " "$(storage_live_blockers tappaas2 343 < "${_W}/pre" 3<<< '[]' | tr '\n' ' ')"
+ck "a replication job to the target lifts the block" \
+   "" "$(storage_live_blockers tappaas2 343 < "${_W}/pre" 3<<< '[{"guest":"343","target":"tappaas2"}]' | tr '\n' ' ')"
+ck "a replication job to ANOTHER node does not" \
+   "efidisk0 scsi0 " "$(storage_live_blockers tappaas2 343 < "${_W}/pre" 3<<< '[{"guest":"343","target":"tappaas3"}]' | tr '\n' ' ')"
+ck "a disabled replication job does not" \
+   "efidisk0 scsi0 " "$(storage_live_blockers tappaas2 343 < "${_W}/pre" 3<<< '[{"guest":"343","target":"tappaas2","disable":1}]' | tr '\n' ' ')"
+ck "a VM without snapshots is not blocked" \
+   "" "$(storage_live_blockers tappaas2 343 <<< '{"local_disks":[{"drivename":"scsi0","cdrom":0,"is_cloudinit":0,"shared":0}]}' 3<<< '[]' | tr '\n' ' ')"
+
 echo ""
 echo "test-proxmox-manager: ${PASS} passed, ${FAIL} failed"
 [[ "${FAIL}" -eq 0 ]]

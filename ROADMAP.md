@@ -276,14 +276,15 @@ Low upgrade risk. Build continuously, in any order within a group.
 
 ### G3.1 cluster:vm lifecycle & capacity — Ease L · Risk M · released: 18 · open: 5
 
-Guests sized, placed, started and stopped right: memory defaults from measurement (#663), hardware drift (#531), shutdown and boot order (#36, #127), storage growth and placement (#100, #403), a composite-module ADR (#761), and a sweep that survives a guest restarting itself (#753).
+Guests sized, placed, started and stopped right: memory defaults from measurement (#663), moving a running guest to another node (#825), hardware drift (#531), shutdown and boot order (#36, #127), storage growth and placement (#100, #403), a composite-module ADR (#761), and a sweep that survives a guest restarting itself (#753).
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
 | #531 | Detect hardware-spec drift | L | M | Once detected, pending changes get applied (reboots): gate on `rebootOk` |
 | #100 | Automatic storage extension | M | L | |
 | #403 | Install on the root disk; smarter placement | M | L | |
-| #663 | Memory defaults are not based on measurement | L | L | Shipped memory defaults were never measured (hrossen: 60G declared, ~20G used). Over-declaring costs commitment. `network` 8G→4G parked until the operator has physical access |
+| ✅ #663 | Memory defaults are not based on measurement | L | L | **Closed 2026-10-13** (operator): 7-day measurement on hrossen. vaultwarden was too small — 1→1.5 GiB (`bac670ce`); euro-office and deconz-test moved tappaas1→tappaas2, tappaas1 commitment 63→51.5 GiB of 61. The other proposed reductions (nextcloud-hpb, jellyfin, forgejo, litellm default) not applied; `network` 8G→4G still parked |
+| ✅ #825 | update-module: changing a running guest's node does not migrate it | M | M | **Closed 2026-10-13** (`fix(cluster): move a running guest when its node changes`): snapshot and OS update act where the guest runs; `live-ok` refuses local disks with snapshots; `--allow-disruption` does stop → offline migrate → start. Found moving guests for #663 |
 | #761 | A composite-module ADR: `cluster`, `kubernetes`, and modules that only provide artefacts | H | M | ADR-022d and ADR-026 defer `cluster`/`kubernetes` to an ADR that does not exist, and `templates` fits no `kind`; interim values in ADR-022d v1.2. With @ErikDaniel007 |
 
 ### G3.2 Identity & SSO wiring — Ease M · Risk L · released: 10 · open: 4
@@ -350,7 +351,7 @@ Changes to live firewall and DNS behaviour on every installation. Restrictive de
 
 ### G2.1 Firewall exposure & rule order — Ease M · Risk H · released: 7 · open: 14
 
-Tighter firewall defaults that keep what modules need. Built: the gateway, GUI/SSH and anti-spoofing rules. Sprint from 2026-10-12: the review of the tier model and rule creation is done and published (#816), with most of its findings fixed; pinholes no longer shadowed (#386); every zone policy covers IPv6 (#815), and IPv6 itself is built (#26). Next: the rules manager's overlaps, covered pinholes and sequence map (#160, #256, #162), then the open review findings. NetBird rules (#385, #222) are low priority until the NetBird decision.
+Tighter firewall defaults that keep what modules need. Built: the gateway, GUI/SSH and anti-spoofing rules. Sprint from 2026-10-12: the review of the tier model and rule creation is done and published (#816), with most of its findings fixed; pinholes no longer shadowed (#386); every zone policy covers IPv6 (#815), and IPv6 itself is built (#26). The rules manager's overlap report, covered pinholes and sequence map are built (#160, #256, #162, on the branch). Next: the open review findings (#817–#823). NetBird rules (#385, #222) are low priority until the NetBird decision.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
@@ -367,9 +368,9 @@ Tighter firewall defaults that keep what modules need. Built: the gateway, GUI/S
 | #824 | Amend ADR-014 and ADR-021 to the zone and rule model as built | L | L | From #816; documentation only |
 | #576 | Zone `serves` as string or array | M | L | Backward compatible |
 | #257 | mDNS in zones.json | M | M | |
-| #160 | Overlap detection in the rules manager | M | L | Land with #256 |
-| #256 | Skip pinholes already covered by zone access | M | L | |
-| FW #162 | Persistent sequence-map artifact | L | L | **Verified open 2026-09-26** (low-risk sweep): nothing writes `config/firewall/sequence-map.json`. Roll in with #160/#645 |
+| ✅ #160 | Overlap detection in the rules manager | M | L | **Closed 2026-10-13** (`g2.1-firewall`): `rules-manager overlaps` / `verify-rules --detect-overlap` — shadowed, redundant and conflicting rules on the live rule set, both families; read-only. hrossen: 136 rules, 0 findings |
+| ✅ #256 | Skip pinholes already covered by zone access | M | L | **Closed 2026-10-13** (`g2.1-firewall`): a rule `access-to` already passes is left out and recorded; the network update re-checks (`recheck-covered`) and writes it again when `access-to` narrows. Live round trip with coturn on hrossen |
+| ✅ #162 | Persistent sequence-map artifact | L | L | **Closed 2026-10-13** (`g2.1-firewall`): the map gains `generated`, `covered` and stale-entry clean-up; slot sharing warned; `rules-manager list-slots` |
 | #660 | A declared `aliasType` change cannot be applied | M | M | OPNsense refuses an alias type change, so the apply dies and the alias stays `host` — rules match nothing (#542). Needs detach/delete/create/reattach, and a change class in the schema |
 | #683 | Declared `ports` without `network:rules` are inert | L | L | Modules declaring `ports` but no `network:rules` (makerfloss) get no validation or rules, silently. Decide what such `ports` mean — a `validate` finding or documentation — with 0010's rule |
 | #223 | OPNsense 26.1 InterfaceAssignController | — | — | Park (agreed 2026-05-27); move to *Parking lot* |

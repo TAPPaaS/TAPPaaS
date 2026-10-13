@@ -66,7 +66,8 @@ Commands:
   bridge-vids [--apply]   Reconcile node lan bridge-vids (apply is operator-gated)
   show <vmname>           Show resolved-vs-actual trunks for one VM
   live-ok <vmname> <node> Can this guest LIVE-migrate to <node>? (ADR-019)
-                          0 = safe, 2 = would lose CPU features, 1 = unknown
+                          0 = safe, 2 = would lose CPU features or has local
+                          disks with snapshots, 1 = unknown
 
 Without --apply, commands report drift only (dry-run). Exit code is non-zero if
 drift remains after the command (so callers/CI can gate on convergence).
@@ -184,6 +185,39 @@ cpu_missing() {
     comm -23 "$1" "$2"
 }
 
+# Local disks that stop a LIVE migrate to <dst>, one drive name per line (#825).
+# Proxmox refuses online storage migration of a local volume that has snapshots
+# unless a replication job already carries it to the target ("online storage
+# migration not possible if non-replicated snapshot exists"). Every TAPPaaS VM
+# on local ZFS keeps update snapshots, so this is the normal case, not an edge.
+# The cloud-init drive is regenerated on the target and never blocks.
+#   storage_live_blockers <dst> <vmid> < <precondition-json> 3< <replication-json>
+# Pure — the unit test feeds it canned pvesh output.
+storage_live_blockers() {
+    local dst="$1" vmid="$2" repl
+    repl="$(cat <&3 2>/dev/null)"
+    [[ -n "${repl}" ]] || repl='[]'
+    jq -r --arg dst "${dst}" --argjson vmid "${vmid}" --argjson repl "${repl}" '
+        ([$repl[] | select((.guest | tonumber) == $vmid and .target == $dst
+                           and ((.disable // 0) | tonumber) == 0)] | length > 0) as $replicated
+        | .local_disks // [] | .[]
+        | select((.cdrom // 0) == 0 and (.is_cloudinit // 0) == 0 and (.shared // 0) == 0)
+        | select((.referenced_in_snapshot // {}) | length > 0)
+        | select(($replicated and (.replicate // 0) == 1) | not)
+        | .drivename' 2>/dev/null
+}
+
+# The live plumbing for storage_live_blockers: ask the source node what Proxmox
+# itself checks before a migrate. rc 1 = could not ask.
+_vm_storage_blockers() {
+    local vmid="$1" src="$2" dst="$3" pre repl
+    pre=$(ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new "root@${src}.mgmt.internal" \
+        "pvesh get /nodes/${src}/qemu/${vmid}/migrate --target ${dst} --output-format json" 2>/dev/null) || return 1
+    repl=$(ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new "root@${src}.mgmt.internal" \
+        "pvesh get /cluster/replication --output-format json" 2>/dev/null) || repl='[]'
+    storage_live_blockers "${dst}" "${vmid}" <<< "${pre}" 3<<< "${repl}"
+}
+
 # Expand `host` on a node, via the QMP socket of any VM already running there.
 # Starting a throwaway QEMU just to ask would be a heavier operation than the
 # migration it is gating, so a node running nothing yields no answer — and "no
@@ -243,7 +277,8 @@ _node_supports_model() {
 
 # live-ok <vmname> <dst-node>
 #   0  live migration is safe
-#   2  NOT live-safe — the destination lacks features the guest has
+#   2  NOT live-safe — the destination lacks features the guest has, or a
+#      local disk carries snapshots
 #   1  cannot determine (unreachable node, no VM to ask through, unknown guest)
 live_ok() {
     local vmname="$1" dst="$2"
@@ -262,6 +297,21 @@ live_ok() {
     if [[ "$(_guest_type_of "${vmid}")" == "lxc" ]]; then
         warn "live-ok: ${vmname} (VMID ${vmid}) is a CONTAINER — Proxmox cannot live-migrate LXC."
         warn "  Moving it is a restart migration: stop, move, start. That needs --force."
+        return 2
+    fi
+
+    # Storage before CPU: a local disk with snapshots cannot move live whatever
+    # the CPUs say, and a named-model guest returns "safe" below without ever
+    # looking at its disks.
+    local blockers
+    if ! blockers=$(_vm_storage_blockers "${vmid}" "${src}" "${dst}"); then
+        error "live-ok: could not read the migrate preconditions of ${vmname} on ${src}"
+        return 1
+    fi
+    if [[ -n "${blockers}" ]]; then
+        warn "live-ok: ${vmname} has local disk(s) with snapshots: $(tr '\n' ' ' <<< "${blockers}")"
+        warn "  Proxmox cannot move those live. Migrate offline (stop, move, start),"
+        warn "  which needs an explicit --force."
         return 2
     fi
 
