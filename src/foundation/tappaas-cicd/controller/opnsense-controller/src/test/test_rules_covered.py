@@ -104,6 +104,23 @@ class TestCovered(_Base):
         self.assertFalse(m._zone_edge_covers("home", "nowhere"))
 
 
+class TestEgressToInternet(_Base):
+    def test_internet_egress_excludes_the_site(self):
+        # #817: `to: internet` used to be destination any — every zone too.
+        app = dict(APP, egress=APP["egress"] + [
+            {"to": "internet", "ports": [443], "description": "updates"}])
+        (self.dir / "app.json").write_text(json.dumps(app))
+        m = self.mgr()
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            rules, _ = m._compile(load_module(self.dir, "app"))
+        r = next(r for r in rules if r.description == "tappaas-module:app:egress:internet:443")
+        self.assertEqual(r.destination_net, "tappaas_not_internet")
+        self.assertTrue(r.destination_invert)
+        self.assertTrue(m._to_firewall_rule(r).destination_invert)
+        other = next(r for r in rules if r.description == "tappaas-module:app:egress:broker:1883")
+        self.assertFalse(other.destination_invert)
+
+
 class TestSequenceMap(_Base):
     def _write(self, m):
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):

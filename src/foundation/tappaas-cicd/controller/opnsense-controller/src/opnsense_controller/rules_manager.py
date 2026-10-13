@@ -91,6 +91,15 @@ DEFAULT_GLOBAL_ALIASES_FILE = Path(
 )
 DEFAULT_SEQUENCE_MAP_FILE = Path("/home/tappaas/config/firewall/sequence-map.json")
 
+# What `internet` must not reach (#817): a module's egress to the internet is
+# written as "not this alias", so it cannot pass into another zone or a
+# special-purpose range ahead of the zone's own blocks. The zones' networks come
+# in through zone-manager's alias of them, both families.
+NOT_INTERNET_ALIAS = "tappaas_not_internet"
+NOT_INTERNET_RANGES = ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16",
+                       "100.64.0.0/10", "169.254.0.0/16", "fc00::/7"]
+ZONE_NETWORKS_ALIAS = "tappaas_zone_networks"
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Dataclasses
@@ -183,6 +192,7 @@ class ModuleFirewallRule:
     source_net: str                        # CIDR | alias-name | 'any'
     destination_net: str                   # CIDR | alias-name | 'any'
     interface: str                         # OPNsense interface identifier
+    destination_invert: bool = False       # `to: internet`: not the site's own networks
 
 
 @dataclass
@@ -1042,6 +1052,10 @@ class RulesManager:
             )
             result.aliases_created += 1
 
+        if any(r.destination_net == NOT_INTERNET_ALIAS for r in rules):
+            self._ensure_not_internet_alias()
+            result.aliases_created += 1
+
         # 1b. Resolve those aliases into their pf tables. Rules are applied
         #     under a savepoint below; aliases have no equivalent step, and a
         #     rule whose table is empty matches nothing while looking correct
@@ -1283,6 +1297,9 @@ class RulesManager:
             interface = self._egress_interface(module)
             src_net = self._resolve_self(module)
             dst_net = self._resolve_peer_net(peer, module=module)
+            dst_invert = peer == "internet"
+            if dst_invert:
+                dst_net = NOT_INTERNET_ALIAS
 
             for port in entry["ports"]:
                 seq = self._assign_sequence("egress", slot, sum(
@@ -1312,6 +1329,7 @@ class RulesManager:
                         source_net=src_net,
                         destination_net=dst_net,
                         interface=interface,
+                        destination_invert=dst_invert,
                     )
                 )
 
@@ -2134,12 +2152,26 @@ class RulesManager:
             protocol=protocol,
             source_net=r.source_net,
             destination_net=r.destination_net,
+            destination_invert=r.destination_invert,
             destination_port=port_str,
             log=True,
             quick=True,
             enabled=True,
             sequence=r.sequence,
         )
+
+    def _ensure_not_internet_alias(self) -> None:
+        """The network alias `to: internet` egress excludes (#817): private and
+        special-purpose ranges, and every zone's network (zone-manager's alias,
+        nested, so it follows the zones' IPv4 and IPv6 networks)."""
+        desc = "TAPPaaS: what a module's egress to the internet may not reach"
+        try:
+            self._upsert_alias(NOT_INTERNET_ALIAS, "network",
+                               NOT_INTERNET_RANGES + [ZONE_NETWORKS_ALIAS], desc)
+        except Exception as exc:  # noqa: BLE001 - the zones alias may not exist yet
+            warn(f"{NOT_INTERNET_ALIAS}: without {ZONE_NETWORKS_ALIAS} ({exc}) — the zones' "
+                 "IPv6 networks are not excluded until the network module has been updated")
+            self._upsert_alias(NOT_INTERNET_ALIAS, "network", NOT_INTERNET_RANGES, desc)
 
     def _upsert_alias(
         self, name: str, alias_type: str, addresses: list[str], description: str

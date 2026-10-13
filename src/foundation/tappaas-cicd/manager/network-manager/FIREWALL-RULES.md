@@ -265,7 +265,10 @@ into rules:
   zone's interface and admits the **whole source zone**. From another module: only that
   module's addresses (its `tm_<module>` alias). From `alias:X` or `internet`: on the LAN or WAN.
 - **Egress** — what this module may reach beyond its zone's `access-to`: a zone, a module, an
-  alias, or `internet`.
+  alias, or `internet`. `internet` means everything that is not the site: the rule's
+  destination is "not `tappaas_not_internet`", an alias of the private and special-purpose
+  ranges (RFC 1918, `100.64.0.0/10`, `169.254.0.0/16`, `fc00::/7`) and every zone's network.
+  A module that needs another zone names that zone.
 - **The zones decide.** A rule that crosses zones is written only if the zones allow it: the
   source zone has the target zone in `access-to`, or the target zone lists the source zone in
   `pinhole-allowed-from`. A module peer counts as the zone it runs in, and traffic within one
