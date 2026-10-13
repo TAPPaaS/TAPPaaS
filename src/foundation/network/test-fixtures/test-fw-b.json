@@ -45,19 +45,19 @@
       "description": "Egress to module-name peer (return-path tests use this)"
     },
     {
-      "to": "alias:private_ranges",
+      "to": "alias:public_dns",
       "ports": [
         53
       ],
       "protocol": "UDP",
-      "description": "Egress to global alias (RFC1918 DNS) — exercises global aliases.json"
+      "description": "Egress to global alias (public DNS) — exercises global aliases.json"
     }
   ],
   "aliases": {
     "test_admin_ips": {
       "type": "host",
       "addresses": [
-        "10.80.10.50"
+        "10.3.80.50"
       ],
       "description": "Pretend admin IPs from testAllowA — module-local alias used in ingress to validate alias compilation"
     }

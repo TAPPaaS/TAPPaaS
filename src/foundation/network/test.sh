@@ -1697,13 +1697,16 @@ else
 
     section "Deep 6: rules-manager applied rules for test-fw-b"
 
-    # Module-name peer rule
-    if rules-manager list-rules --module test-fw-b --no-ssl-verify --output json 2>/dev/null \
-            | jq -e '.rules // [] | map(.description) | any(. | contains("tappaas-module:test-fw-b:ingress:test-fw-a:9090"))' \
+    # Module-name peer rule. testAllowA's access-to reaches testAllowB, so the
+    # zone's own pass carries this traffic and rules-manager leaves the rule
+    # out, recording it in the sequence map — it comes back if that access-to
+    # is narrowed (covered pinholes). Deep 8 proves the traffic still flows.
+    if rules-manager list-slots --no-ssl-verify --output json 2>/dev/null \
+            | jq -e '.modules["test-fw-b"].covered // [] | map(.rule) | any(. == "tappaas-module:test-fw-b:ingress:test-fw-a:9090")' \
             >/dev/null 2>&1; then
-        pass "ingress from module-name peer (test-fw-a) rule present"
+        pass "ingress from module-name peer (test-fw-a) left out as covered by testAllowA -> testAllowB"
     else
-        fail "ingress from module-name peer (test-fw-a) rule missing"
+        fail "ingress from module-name peer (test-fw-a) not recorded as covered by the zone edge"
     fi
 
     # Module-local alias peer rule
@@ -1762,8 +1765,10 @@ else
     # (Note: pfctl -t ... -T show is unreliable because OPNsense's update_tables.py
     # populates FQDN-host aliases asynchronously on a cron; the table can be empty
     # for minutes after creation even though the rules using it work fine.)
-    if rules-manager list-rules --module test-fw-b --output json --no-ssl-verify 2>/dev/null \
-            | jq -e '.rules[] | select(.description | contains("test-fw-a")) | .uuid' \
+    # test-fw-a's auto-pinhole into testPinhole crosses zones with no zone edge,
+    # so it is written with test-fw-a's FQDN alias as its source.
+    if rules-manager list-rules --module test-fw-a --output json --no-ssl-verify 2>/dev/null \
+            | jq -e '.rules[] | select(.description | startswith("tappaas-svcdep:test-fw-a:")) | .uuid' \
             >/dev/null 2>&1; then
         pass "rules referencing FQDN alias tm_test_fw_a applied to OPNsense"
     else
@@ -1782,7 +1787,7 @@ else
             "tappaas@${TFW_A_FQDN}" \
             "curl -fsS --max-time 5 http://${TFW_B_FQDN}:9090/" 2>/dev/null \
             | grep -q "tappaas-firewall-test-b-ok"; then
-        pass "test-fw-a → test-fw-b:9090 (pinhole permitted)"
+        pass "test-fw-a → test-fw-b:9090 (permitted by the zone edge)"
     else
         fail "test-fw-a → test-fw-b:9090 (expected pinhole to allow)"
     fi

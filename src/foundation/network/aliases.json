@@ -9,6 +9,18 @@
             "172.16.0.0/12",
             "192.168.0.0/16"
         ],
-        "description": "RFC1918 private IPv4 ranges (10/8, 172.16/12, 192.168/16). Use when a rule should match any private network rather than a specific zone CIDR."
+        "description": "RFC1918 private IPv4 ranges (10/8, 172.16/12, 192.168/16). Not usable as a module rule peer: it spans every zone, so the zone policy cannot be checked and rules-manager refuses it — name the zone or module instead."
+    },
+
+    "public_dns": {
+        "type": "host",
+        "addresses": [
+            "9.9.9.9",
+            "149.112.112.112",
+            "1.1.1.1",
+            "2620:fe::fe",
+            "2606:4700:4700::1111"
+        ],
+        "description": "Public DNS resolvers (Quad9, Cloudflare), for a module that resolves directly rather than through the firewall. Counts as the internet in the zone policy."
     }
 }
