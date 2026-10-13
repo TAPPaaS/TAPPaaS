@@ -155,7 +155,7 @@ met gates are recorded in the releases that carried their waves.
 | Secrets management | #58 (in Future Work since 2026-10-02): one secrets-access helper every module uses instead of reading `/etc/secrets`, OpenBao behind it later | G1.6, when #58 returns |
 | VMID convention | #294 — only if it is adopted | G1.7 |
 | Legal/processor | #359 | Wave 4 |
-| IPv6 | #26 — **drafted 2026-10-12 as [ADR-030](docs/ADR/ADR-030%20-%20IPv6.md) (Proposed)** on `g2.1-firewall`: WAN in `site.json` (dynamic default, static), a `/56`-or-larger prefix, an `ipv6Subnet` per zone by default. Next: the OPNsense interface-API spike | #26 parts 4–6; parity (#815) built in G2.1 |
+| IPv6 | #26 — [ADR-030](docs/ADR/ADR-030%20-%20IPv6.md) **Proposed v0.4, built and on `main` 2026-10-13**: WAN in `site.json` (dynamic default, static), a `/56`-or-larger prefix, `ipv6Subnet` per zone, AAAA names, dual-stack Caddy and access lists, IPv4 fallback and switch-off. To accept once the inbound part (public AAAA, Caddy on the WAN) is built | #26 remaining parts (Housekeeping) |
 
 ### Housekeeping
 
@@ -180,7 +180,7 @@ items that belong to a group — FW #40, #83, #157, #158, #162 — are rows in t
 
 | # | Issue | Note |
 |---|-------|------|
-| #26 | IPv6, opt-in per site after install | **Replanned 2026-10-12:** an IPv6 ADR first (*ADRs still to write*); `site.json` `ipv6`, default `false` (#149); firewall parity (#815, G2.1); then probe/enable/disable, DNS and Caddy. Ease H, ~3–4 weeks |
+| #26 | IPv6, opt-in per site after install | **Built 2026-10-12/13 (ADR-030, on `main`), live on hrossen:** `site.json` `ipv6` + `network.wan.ipv6`; each zone with an `ipv6Subnet` gets its `/64` (migration 0016); dnsmasq `ra-names` gives every VM an AAAA; dual-stack rules (#815); AAAA for published names and IPv6 in Caddy access lists; services listen on IPv6 and trust Caddy's IPv6 address; switch-off withdraws the route first; operator page `IPV6.md`. **Left:** inbound — public AAAA and a Caddy IPv6 pass on the WAN (with #383); IPv6 anti-spoofing; a static WAN proven live (hrossen when Netnørden switches); `network.wan.ipv4` applied; an automated IPv6 deep-test tier incl. a simulated prefix change; Euro-Office and Open WebUI stay IPv4 |
 | #39 | Power saving | Documentation |
 | #58 | Secrets management | One secrets-access helper every module uses instead of reading `/etc/secrets`, OpenBao behind it later. Out of G1.6 since 2026-10-02 (operator) |
 | #71 | TAPPaaS way to back up, export and restore user data inside a VM | Open: `backup:filesystem` does not solve it |
@@ -350,13 +350,13 @@ Changes to live firewall and DNS behaviour on every installation. Restrictive de
 
 ### G2.1 Firewall exposure & rule order — Ease M · Risk H · released: 7 · open: 14
 
-Tighter firewall defaults that keep what modules need. Built: the gateway, GUI/SSH and anti-spoofing rules. Sprint from 2026-10-12: first a review of the tier model and rule creation, published (#816); then pinholes shadowed by private-range blocks (#386), every zone policy for IPv6 too (#815), and the rules manager's zones, aliases and overlaps. NetBird rules (#385, #222) are low priority until the NetBird decision.
+Tighter firewall defaults that keep what modules need. Built: the gateway, GUI/SSH and anti-spoofing rules. Sprint from 2026-10-12: the review of the tier model and rule creation is done and published (#816), with most of its findings fixed; pinholes no longer shadowed (#386); every zone policy covers IPv6 (#815), and IPv6 itself is built (#26). Next: the rules manager's overlaps, covered pinholes and sequence map (#160, #256, #162), then the open review findings. NetBird rules (#385, #222) are low priority until the NetBird decision.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
-| #816 | Review the zone tiers and rule-set creation; publish how it works | M | L | **Opened 2026-10-12, first in the sprint:** every rule class, its order in pf and the tier model as built, against ADR-014/021; a design page for tappaas.org; each defect its own issue |
-| #386 | block-private rules shadow auto-pinholes | M | M | Opens intended paths that are silently blocked today |
-| #815 | IPv6 parity: zone policy covers IPv6 before any zone gets an address | M | M | **Opened 2026-10-12**, part 1 of #26: rules `inet46`, block-private plus ULA and link-local. No effect where IPv6 is absent; ships with the dry-run diff and the lockout check |
+| #816 | Review the zone tiers and rule-set creation; publish how it works | M | L | **Review done 2026-10-12** (`docs/design/zone-rules-review.md`, 18 findings, 11 fixed on `main`); published as FIREWALL-RULES.md and a slimmer ZONES.md, plus IPV6.md (tappaas.org Operate menu, once the Documentation push lands). **Left:** an issue each for the open findings D3, D5 (`alias:` peers), D7, D9, D12, D14, D18; ADR-014/021 amended to the model as built |
+| ✅ #386 | block-private rules shadow auto-pinholes | M | M | **Closed 2026-10-12:** pinholes sit in a band before the zone baseline; pf order verified on hrossen |
+| ✅ #815 | IPv6 parity: zone policy covers IPv6 before any zone gets an address | M | M | **Done 2026-10-12, on `main` 2026-10-13:** zone and module rules `inet46`, a zone-networks table and ULA blocks for IPv6, ICMPv6 declarable; forced sweep 24/24, isolation over IPv6 verified. Anti-spoofing stays IPv4 (in #26's remainder) |
 | #576 | Zone `serves` as string or array | M | L | Backward compatible |
 | #257 | mDNS in zones.json | M | M | |
 | #160 | Overlap detection in the rules manager | M | L | Land with #256 |
@@ -429,7 +429,7 @@ summary (`release/roadmap-cut.py`) and leaves this block empty again.
 
 <!-- next-release summary -->
 
-A site now says whether it supports IPv6: `site.json` `ipv6`, default `false` (#149). **The first sweep after upgrading turns IPv6 off on the firewall** — inbound IPv6 dropped, DNS resolved over IPv4 only — unless the site sets `site-manager site modify --ipv6 true` first. No zone has IPv6 yet, so nothing inside the site changes.
+**IPv6, opt-in per site.** A site turns it on with `site.json` `ipv6: true` (default `false`): each zone gets a `/64` from the WAN's prefix, every VM's name resolves to its IPv6 address too, the firewall rules cover both families, and names published through Caddy answer over IPv6 inside the site; everything still works over IPv4, and switching it off withdraws IPv6 cleanly. **The first sweep after upgrading turns IPv6 off on the firewall** — inbound IPv6 dropped, DNS over IPv4 only — unless the site sets `site-manager site modify --ipv6 true` first. Existing zones are given an IPv6 number (migration 0016); it does nothing while `ipv6` is `false`. See *IPv6* and *Firewall Rules* on tappaas.org.
 
 <!-- /next-release summary -->
 
