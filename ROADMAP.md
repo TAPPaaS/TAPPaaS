@@ -104,15 +104,15 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | 4 | G4.1 Alerting & cluster resilience | M | M | 7 | – | 4 |
 | 4 | G4.2 Proxy & ingress | M | L | 3 | – | 4 |
 | 4 | G4.3 Manager verb gaps | M | L | 9 | – | 8 |
-| 4 | G4.4 Storage & physical devices | H | L | 5 | – | 6 |
+| 4 | G4.4 Storage & physical devices | H | L | 5 | – | 7 |
 | 4 | G4.5 Governance, CI & sign-offs | M | L | 5 | – | 5 |
 | 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 18 | – | 5 |
 | 3 | G3.2 Identity & SSO wiring | M | L | 10 | – | 4 |
 | 3 | G3.3 App module fixes | L | L | 10 | – | 11 |
 | 3 | G3.4 AI stack maturity | M | M | 1 | – | 10 |
 | 3 | G3.5 Installer UX | L | L | 1 | – | 3 |
-| 2 | G2.1 Firewall exposure & rule order | M | H | 7 | – | 14 |
-| 2 | G2.2 DNS resolver robustness | L | M | 4 | 1 | 4 |
+| 2 | G2.1 Firewall exposure & rule order | M | H | 7 | 18 | 2 |
+| 2 | G2.2 DNS resolver robustness | L | M | 4 | 3 | 2 |
 | 1 | G1.2 Backup placement model + managed machines (ADR-012, ADR-026) | M | H | 27 | – | 4 |
 | 1 | G1.6 Secrets & privileged access | H | H | 4 | – | 2 |
 | 1 | G1.7 Parked for Erik discussion | – | – | – | – | 5 |
