@@ -2,15 +2,15 @@
 
 | | |
 |---|---|
-| **Status** | **Proposed** — design for the full restructure. The tactical fix (**#528 → PR #529**) is applied first as an interim step; this ADR is the target it is superseded by. |
-| **Version** | 0.3 |
+| **Status** | **Accepted** (v1.0, 2026-10-13) — built (`e18c01be`, #825) and verified live by the `cluster` deep test. |
+| **Version** | 1.0 |
 | **Date** | 2026-09-01 |
 | **Author** | Lars Rossen |
 | **Parent** | [ADR-007f Realization](<ADR-007f - Realization.md>) (managers orchestrate; controllers do the imperative cluster actions) |
 | **Refines** | [ADR-007d Site](<ADR-007d - Site.md>) (module config as the declared source of truth), [ADR-009 Composition Meta-Model](<ADR-009 - Composition Meta-Model.md>) (`cluster:vm`, the `ha` service), [ADR-017 Update scheduling](<ADR-017 - Update scheduling and mothership self-update.md>) (the reboot pass that evacuates nodes) |
 | **Related** | **#528** (restore_ha replayed pre-migration priorities → stuck `migrate`) — **fixed by PR #529** (`ha_nodes_prefer`), applied after the hrossen.dk health check; **#434** (stop-before-migrate sequencing); **#207** (config normalization); the `strict`/`comment` round-trip gap (open); **#525 / #533** (the sudo→root ownership drift the "run as `tappaas`" ownership invariant depends on — the SSH-family root cause, not the migration mechanics); **#526** (reconcile must report node drift — the observability counterpart of this policy) **/ #498** (the missing change-`.node` verb, provided here by `modify`). **owner:** proxmox-controller (migration primitive), `module-manager` (`modify`, `migrate`), `site-manager` (`evacuate`) |
 | **Numbering note** | ADR-018 is reserved by the SSH-identity PR #523. This ADR is **019**. |
-| **Changelog** | v0.1 initial matrix. v0.2 operator input: `cputype: host` too coarse (needs a real compat test), layering established, re-home = `modify`. v0.3 restructure: treat #528/#529 as done; **goal = node placement and HA management reachable only through the managers**; document how Proxmox HA pinning fails over **and back**; split scenarios A/B into `modify` vs `migrate`; add site-manager **evacuate** as scenario C (incl. the "on its HANode, being evacuated" case); catalogue the **known challenges** already fixed so re-implementation does not reintroduce them. |
+| **Changelog** | **v1.0 (2026-10-13) — Accepted.** Every decision is built: `modify` re-homes (#498, #825), `migrate` takes no node and never falls back offline without `--force`, `evacuate` drives `migrate` per module, the live verdict compares CPU features (`proxmox-controller live-ok`), and the HA rule round-trips with `strict` and `comment`. The deep tier is built (`cluster/test.sh --deep`, `02c0df40`) and passed on hrossen: live to the HANode and back, rule re-pointed, `strict` and comment kept, HA `started`. The open questions are answered below, and one limitation found by that test is recorded (*Known limitation: failback to an older CPU*). v0.1 initial matrix. v0.2 operator input: `cputype: host` too coarse (needs a real compat test), layering established, re-home = `modify`. v0.3 restructure: treat #528/#529 as done; **goal = node placement and HA management reachable only through the managers**; document how Proxmox HA pinning fails over **and back**; split scenarios A/B into `modify` vs `migrate`; add site-manager **evacuate** as scenario C (incl. the "on its HANode, being evacuated" case); catalogue the **known challenges** already fixed so re-implementation does not reintroduce them. |
 
 ## Context
 
@@ -238,7 +238,34 @@ refuse-without-`--force`, the re-point) and confirm the *specific* assertion —
   compat test must be built. `ha_nodes_prefer` (PR #529) is retained as the re-pointing primitive.
 - **Superseded:** the current "require `HANode`, toggle, raw `--node`, silent offline" flow.
 
-## Open questions
+## Known limitation: failback to an older CPU
+
+Found by the deep test on hrossen (tappaas2's CPU has nine instruction-set features tappaas1 lacks).
+With `cpu: host`, QEMU on the node a guest runs on answers CPUID with **that node's** features —
+after a live move too, so programs started after the move may use them. Moving such a guest back
+to a node without those features is unsafe live: `live-ok` refuses it, and `migrate` asks for
+`--force` (an offline move: stop, move, start). This is the policy working, not a fault, but it
+means a guest that has been on the newer node comes home only with a short outage.
+
+The same holds for the CRM's own automatic failback, which does **not** consult `live-ok`: a guest
+that failed over to the newer node and was (re)started there is moved back live when its primary
+returns. Two ways to close it, not decided here: give HA guests a named CPU model every node in
+their rule supports (CPUID then no longer depends on the host), or turn off automatic failback for
+rules whose nodes' CPUs differ and fail back through `migrate`.
+
+## Open questions — resolved (v1.0)
+
+1. **CPU compatibility:** resolved by `proxmox-controller live-ok`. For a named model, the
+   destination must offer the model; for `host`, the destination must offer every instruction-set
+   feature the source host exposes (mitigation bits are advisory). It also refuses local disks with
+   snapshots that Proxmox cannot move live (#825). No answer (a node with no running VM to ask
+   through) is treated as unknown, never as safe.
+2. **`strict` override:** modify-first only; there is no `--break-strict`.
+3. **`evacuate` return-home:** left to HA's own failback, which the re-pointed priorities make
+   correct; non-HA guests stay where `modify` put them. See the limitation above for CPUs that
+   differ.
+
+## Open questions (as drafted)
 
 1. **CPU-compatibility test (the key study).** `cputype: host` is too coarse — tappaas1 ↔ tappaas3
    live-migrate today. Study candidates: intersect per-node advertised CPU flags
