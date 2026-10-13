@@ -325,7 +325,7 @@ def select_orphan_ranges(
 # admin guard (labels from ZoneManager.ADMIN_GUARD_PORTS). A test checks that
 # every rule the reconcile emits matches, so a new shape cannot be left out.
 ZONE_RULE_RE = re.compile(
-    r"^Zone (\S+) (?:-> \S|block rfc1918-|block (?:zone-networks|ula)$"
+    r"^Zone (\S+) (?:-> \S|block rfc1918-|block (?:zone-networks|ula|firewall|cgnat|link-local)$"
     r"|block spoofed source$|block firewall (?:webgui|ssh)$)"
 )
 
@@ -842,6 +842,16 @@ class ZoneManager:
         ("ula", "fc00::/7", 94),
     )
     ZONE_RULE_BLOCK_OFFSET = 90        # rfc1918 blocks at base+90/91/92
+    # What else "the internet" must not mean (#822): the firewall's own
+    # addresses — its WAN address is not in any private range, and it serves
+    # dnsmasq's backend, DNS and more there — and the special-purpose IPv4
+    # ranges that are not the public internet. Caddy, the one service meant for
+    # every zone, is reached by its own band-1 rule on (self), ahead of these.
+    FIREWALL_BLOCK_OFFSET = 95
+    SPECIAL_V4_BLOCKS = (
+        ("cgnat", "100.64.0.0/10", 96),         # carrier-grade NAT, overlays
+        ("link-local", "169.254.0.0/16", 97),
+    )
     ZONE_RULE_INTERNET_OFFSET = 99     # internet pass last (lowest priority)
 
     # Caddy reverse-proxy reachability (#366, extended by ADR-021 D3). Split-horizon
@@ -2196,6 +2206,23 @@ class ZoneManager:
                                 ip_protocol=IpProtocol.IPV6,
                             )
 
+                        # Step 3c: the firewall itself, and the special ranges (#822).
+                        self._create_or_skip_rule(
+                            manager, existing_by_desc,
+                            f"Zone {zone.name} block firewall",
+                            zone_interface, zone_interface, "(self)",
+                            RuleAction.BLOCK, base + self.FIREWALL_BLOCK_OFFSET,
+                            check_mode, zone_results, ip_protocol=IpProtocol.BOTH,
+                        )
+                        for label, dest, offset in self.SPECIAL_V4_BLOCKS:
+                            self._create_or_skip_rule(
+                                manager, existing_by_desc,
+                                f"Zone {zone.name} block {label}",
+                                zone_interface, zone_interface, dest,
+                                RuleAction.BLOCK, base + offset,
+                                check_mode, zone_results,
+                            )
+
                         # Step 4: Allow internet (pass to any — only non-private reaches here)
                         self._create_or_skip_rule(
                             manager, existing_by_desc,
@@ -2501,8 +2528,12 @@ class ZoneManager:
                 source, dest, family = self.CADDY_REACH_SOURCE, caddy_dest, IpProtocol.IPV4
             else:
                 # The zone's own network, not every internal address: on a VLAN
-                # anti-spoofing narrowed it anyway; this says so in the rule.
-                source, dest, family = zone_interface, f"{dmz_interface}ip", IpProtocol.BOTH
+                # anti-spoofing narrowed it anyway; this says so in the rule. To
+                # every firewall address: Caddy answers on all of them, and a
+                # client that resolved a published name publicly reaches it on
+                # the WAN address, which the zone's block on the firewall
+                # (#822) would otherwise drop.
+                source, dest, family = zone_interface, "(self)", IpProtocol.BOTH
             for offset, (port, label) in enumerate(self.CADDY_REACH_PORTS):
                 self._create_or_skip_rule(
                     manager, existing_by_desc,

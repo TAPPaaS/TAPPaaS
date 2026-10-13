@@ -946,7 +946,7 @@ class TestCaddyReachability(TestConfigureFirewallRulesSequencing):
         rules = {r.description: r for r in self._caddy_rules(fake)}
         self.assertIn("Zone dmz -> caddy https", rules)
         r = rules["Zone dmz -> caddy https"]
-        self.assertEqual(r.destination_net, "opt_dmzip")   # the DMZ interface's address
+        self.assertEqual(r.destination_net, "(self)")     # every firewall address: Caddy listens on all
         self.assertEqual(r.destination_port, "443")
         self.assertEqual(r.protocol, Protocol.TCP)
 
@@ -977,16 +977,42 @@ class TestCaddyReachability(TestConfigureFirewallRulesSequencing):
         descs = {r.description for r in self._caddy_rules(fake)}
         self.assertNotIn("Zone netbird -> caddy https", descs)
 
-    def test_targets_dmz_gateway_on_tcp_80_and_443(self):
+    def test_targets_the_firewall_on_tcp_80_and_443(self):
         fake = self._run(_build_zones())
         for r in self._caddy_rules(fake):
             zone = r.description.split()[1]
-            self.assertEqual(r.destination_net, "opt_dmzip")      # the DMZ interface address
+            self.assertEqual(r.destination_net, "(self)")         # every firewall address
             self.assertEqual(r.source_net, f"opt_{zone}")         # the zone's own network
             self.assertEqual(r.ip_protocol, IpProtocol.BOTH)
             self.assertEqual(r.action, RuleAction.PASS)
             self.assertEqual(r.protocol, Protocol.TCP)
             self.assertIn(r.destination_port, ("80", "443"))
+
+    def test_the_internet_pass_does_not_reach_the_firewall_or_special_ranges(self):
+        # #822: the firewall's own addresses (its WAN address is public) and
+        # 100.64/10, 169.254/16 are blocked after the private ranges, before the
+        # internet pass; Caddy's pass on (self) comes first in band 1.
+        fake = self._run(_build_zones())
+        s = self._seqs_by_desc(fake)
+        rules = {r.description: r for r in fake.created}
+        for z in ("srv", "home"):
+            fw, cg, ll = (s[f"Zone {z} block firewall"], s[f"Zone {z} block cgnat"],
+                          s[f"Zone {z} block link-local"])
+            self.assertLess(s[f"Zone {z} block rfc1918-10"], fw)
+            self.assertLess(max(fw, cg, ll), s[f"Zone {z} -> internet"])
+            self.assertLess(s[f"Zone {z} -> caddy https"], fw)
+            self.assertEqual(rules[f"Zone {z} block firewall"].destination_net, "(self)")
+            self.assertEqual(rules[f"Zone {z} block firewall"].ip_protocol, IpProtocol.BOTH)
+            self.assertEqual(rules[f"Zone {z} block cgnat"].destination_net, "100.64.0.0/10")
+            self.assertEqual(rules[f"Zone {z} block link-local"].destination_net, "169.254.0.0/16")
+            for label in ("firewall", "cgnat", "link-local"):
+                self.assertTrue(ZONE_RULE_RE.match(f"Zone {z} block {label}"))
+
+    def test_a_zone_without_internet_gets_no_special_blocks(self):
+        fake = self._run(_build_zones(home={"access_to": []}))
+        descs = {r.description for r in fake.created}
+        self.assertNotIn("Zone home block firewall", descs)
+        self.assertNotIn("Zone home block cgnat", descs)
 
     def test_sits_below_rfc1918_block(self):
         # Band 1 < band 5: under first-match-quick the pass beats the zone's

@@ -127,6 +127,18 @@ class TestFindings(unittest.TestCase):
         self.assertEqual(rep.analysed, 1)
 
 
+class TestEmptyNames(unittest.TestCase):
+    def test_a_rule_on_an_empty_alias_is_not_analysed(self):
+        # An empty table matches nothing; it must not read as shadowed by anything.
+        nets = dict(NETS, empty=[])
+        rep = report([
+            info("Zone home -> rossen", 100, dst="opt1", port="", proto="any"),
+            info("Zone home block firewall", 200, action="block", dst="empty", port="", proto="any"),
+        ], nets.get, lambda d: True)
+        self.assertEqual(rep.findings, [])
+        self.assertEqual(rep.unresolved, ["Zone home block firewall"])
+
+
 class TestFromRuleInfo(unittest.TestCase):
     def test_a_rule_on_several_interfaces_is_one_per_interface(self):
         rs = from_rule_info(info("Zone x", 1, iface="opt1,opt8"), NETS.get)

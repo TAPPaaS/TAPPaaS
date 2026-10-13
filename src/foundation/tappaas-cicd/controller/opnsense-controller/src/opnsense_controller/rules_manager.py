@@ -917,7 +917,11 @@ class RulesManager:
                 return cache[name]
             base, is_ip = (name[:-2], True) if name.endswith("ip") and name[:-2] in ifaces else (name, False)
             nets: list[str] | None
-            if base in ifaces:
+            if name == "(self)":
+                # Every address the firewall holds: what pf's (self) matches.
+                nets = [str(a.ip) for i in ifaces.values()
+                        for a in ([i.v4] if i.v4 is not None else []) + list(i.v6)]
+            elif base in ifaces:
                 i = ifaces[base]
                 addrs = ([i.v4] if i.v4 is not None else []) + list(i.v6)
                 nets = [str(a.ip) if is_ip else str(a.network) for a in addrs]

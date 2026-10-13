@@ -275,6 +275,10 @@ def from_rule_info(info, resolve: Resolver) -> list[Rule] | None:
     ports = _ports(info.destination_port)
     if src is None or dst is None or ports is None:
         return None
+    # A name that resolved to nothing (an empty alias table) matches no packet —
+    # not a rule to compare, and "contained in everything" would be a false finding.
+    if not any(src.get(f) and dst.get(f) for f in _families(info.ip_protocol)):
+        return None
     out = []
     for iface in [i.strip() for i in (info.interface or "").split(",") if i.strip()]:
         out.append(Rule(

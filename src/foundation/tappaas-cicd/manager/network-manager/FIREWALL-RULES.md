@@ -220,7 +220,7 @@ addresses the zone carries, IPv4 and IPv6 alike. The family column says which.
 |---|---|---|---|
 | 970 | `Zone Z block spoofed source` | IPv4 | block, source not in the zone's network |
 | 980 / 981 | `Zone Z block firewall webgui` / `ssh` | both | block TCP 8443 / 22 to the firewall itself |
-| 990 / 991 | `Zone Z -> caddy https` / `http` | both | pass TCP 443 / 80 from the zone's network to the DMZ interface address |
+| 990 / 991 | `Zone Z -> caddy https` / `http` | both | pass TCP 443 / 80 from the zone's network to the firewall's own addresses, where Caddy listens |
 | base+0 | `Zone Z -> gateway dns` | both | pass TCP/UDP 53 to the zone's interface address |
 | base+1 … +85 | `Zone Z -> <zone>` | both | pass any, to each zone in `access-to` (its whole network, every port) |
 | base+86 / 87 | `Zone Z -> gateway ntp` / `dhcp` | both | pass UDP 123 / UDP 67 to the zone's interface address |
@@ -228,6 +228,8 @@ addresses the zone carries, IPv4 and IPv6 alike. The family column says which.
 | base+90 … 92 | `Zone Z block rfc1918-10` / `172` / `192` | IPv4 | block every other private network (only when `internet` is in `access-to`) |
 | base+93 | `Zone Z block zone-networks` | IPv6 | block every zone's network: the alias `tappaas_zone_networks` (same condition) |
 | base+94 | `Zone Z block ula` | IPv6 | block unique-local addresses, `fc00::/7` (same condition) |
+| base+95 | `Zone Z block firewall` | both | block the firewall's own addresses, its WAN address included (same condition) |
+| base+96 / 97 | `Zone Z block cgnat` / `link-local` | IPv4 | block `100.64.0.0/10` and `169.254.0.0/16` (same condition) |
 | base+99 | `Zone Z -> internet` | both | pass any (only when `internet` is in `access-to`) |
 
 `tappaas_zone_networks` groups OPNsense's network table of every zone's interface, so it holds
@@ -237,12 +239,15 @@ IPv6 network is public — so this alias is what keeps zones apart over IPv6.
 **What a zone may ask of the firewall.** Its gateway serves it DNS, NTP, DHCP and ICMP, and
 nothing else: the admin GUI and SSH are blocked from every zone on every firewall address,
 because an `access-to` edge grants a whole subnet and every zone's gateway *is* the
-firewall. Fragments need no rule — OPNsense reassembles them before filtering.
+firewall. "The internet" does not include the firewall either: its WAN address is not in a
+private range, so a zone with internet access would otherwise reach everything the firewall
+serves there. Only Caddy is reachable on the firewall's addresses, through its own rule. Fragments need no rule — OPNsense reassembles them before filtering.
 
 **Caddy-reach.** Split-horizon DNS answers every published name with the DMZ gateway, where
 Caddy listens, and no zone may hold `access-to: dmz` (invariant I5). So a
 zone reaches Caddy by its own rule at 990/991 — ahead of its private-network block — on two
-ports, to one address. It is reachability only: Caddy's `proxyAllowedZones` and the identity
+ports, to the firewall's own addresses: Caddy answers on all of them, and a device that
+resolved a published name through public DNS reaches it on the WAN address. It is reachability only: Caddy's `proxyAllowedZones` and the identity
 gate decide who gets in. Candidates are a zone with `internet` (or `all`) in `access-to`, an
 `Overlay` with a non-empty `access-to` (the admin VPN), and `dmz` itself.
 
@@ -348,8 +353,9 @@ Where the rules do less than the zone model describes:
 
 - **Aliases are not checked against the zones.** A rule to or from an `alias:` is written as
   declared.
-- **The private-network block covers RFC 1918 only.** 100.64.0.0/10 (carrier-grade NAT) and
-  169.254.0.0/16 are reachable from every zone with internet access.
+- **An `access-to` edge includes the firewall's address in the target zone.** A zone that may
+  reach another zone reaches that zone's gateway address too, on every port except the admin
+  GUI and SSH.
 - **An overlay's caddy-reach source is `10.0.0.0/8`**, not its peers' range: the WireGuard
   interface group has no network of its own to name, and no anti-spoofing narrows it.
 - **Anti-spoofing is IPv4 only**, because a negated IPv6 interface network in OPNsense also
