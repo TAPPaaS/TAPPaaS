@@ -142,7 +142,7 @@ met gates are recorded in the releases that carried their waves.
 |--------------|------------|
 | 1 · G1.6 | #142 RFC outcome; a *Secrets management* ADR only once #58 comes back from Future Work |
 | 2 | Entry: ADR-014 amended for the `all` sentinel (#375, built), `serves` as an array (#576), anti-spoofing always on (#159, built) and mDNS in zones.json (#257); ADR-021 amended for DNSSEC with split horizon (#263); `site.json` `ipv6` (#149) — the IPv6 stance is its own ADR (#26). Exit: a lockout check on each site — mgmt and the admin VPN reach 8443 and 22, other zones do not; done on hrossen 2026-10-02. NetBird only if the NetBird decision keeps it server-side |
-| 3 | ADR-019 Proposed → Accepted (#36 / #127 boot order) |
+| 3 | Met 2026-10-13: ADR-019 Accepted (v1.0), verified by `cluster/test.sh --deep` — live migrate to the HANode and back. Open from it: HA's automatic failback to a node with an older CPU (see ADR-019 *Known limitation*) |
 | 4 | ADR-023 Proposed → Accepted (#642, #643; render check open); ADR-015 Draft → Accepted (#486); ADR-011 Proposed → Accepted (#143 built); ADR-010 P7 sign-off (#406); ADR-008 amended (#236); ADR-019 amended for a second corosync link (#590) and the migrate verb (#429); ADR-007e amended for logging v2 (#165), or a new ADR if Zabbix is chosen; ADR-029 Proposed → Accepted (#772); the MAC pinning question (#444 / #582); #154 closed or kept; #430 decided before #170 |
 
 ### ADRs still to write
