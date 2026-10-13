@@ -5,7 +5,7 @@ or all at once with `module-manager add-stack ai` once #763 is built. Each modul
 INSTALL.md says what you must do by hand. What the stack is and why: [README.md](README.md).
 
 **Hardware.** Local AI is sized by accelerator memory and the model you want — see the
-[GPU / VRAM guidance](../../hardware-selection.md#sizing-local-ai-gpu-vram-guidance). The
+[GPU / VRAM guidance](../../hardware-selection.md#sizing-local-ai--gpu--vram-guidance). The
 reference AI node is an AMD Ryzen AI MAX+ 395 ("Strix Halo") with 128 GB unified memory;
 discrete GPUs work too.
 

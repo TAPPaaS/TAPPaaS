@@ -25,7 +25,7 @@ switches needs only steps 1, 2, and 5.
 | Step | What happens | Done when |
 |------|--------------|-----------|
 | [**1**](#step-1--install-proxmox-ve-on-the-first-node) | First node: install Proxmox VE (preconfigured media, or stock ISO) | Proxmox VE running on `tappaas1` |
-| [**2**](#step-2--bootstrap-minimal-tappaas-on-the-first-node-mothership) | First node: one command bootstraps minimal TAPPaaS — firewall, network cut-over and the CICD mothership | `tappaas1` runs behind the firewall; `tappaas-cicd` owns the platform |
+| [**2**](#step-2--bootstrap-minimal-tappaas-on-the-first-node) | First node: one command bootstraps minimal TAPPaaS — firewall, network cut-over and the CICD mothership | `tappaas1` runs behind the firewall; `tappaas-cicd` owns the platform |
 | [**3**](#step-3--add-additional-nodes-optional-skip-for-single-node) | Additional nodes join over the network, unattended *(optional)* | all nodes in the cluster |
 | [**4**](#step-4--set-up-certificates-for-the-default-domain-optional) | Certificates for the default domain *(optional)* — wildcard, or per-service | cert strategy configured (or deliberately skipped) |
 | [**5**](#step-5--complete-the-foundation) | Remaining foundation modules + your organisation | the 🎉 foundation summary prints |
@@ -36,7 +36,7 @@ switches needs only steps 1, 2, and 5.
 ## Step 1 — Install Proxmox VE on the first node
 
 Install **Proxmox VE 9.2** on the first machine. **Two ways — pick one option,**
-then continue with [Step 2](#step-2--bootstrap-minimal-tappaas-on-the-first-node-mothership).
+then continue with [Step 2](#step-2--bootstrap-minimal-tappaas-on-the-first-node).
 
 ### Option A — preconfigured install media (recommended)
 

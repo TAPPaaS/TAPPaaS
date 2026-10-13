@@ -13,7 +13,7 @@ what "done" looks like before you move on.
 | 3 | [Install Foundation](src/foundation/INSTALL.md) | Stages 1 + 2 complete | Foundation installed on all nodes; network cut over; you can log in everywhere |
 | 4 | [Configure Environments](INSTALL-ENVIRONMENT.md) *(optional)* | A running foundation | Each tenant/purpose has its own separated environment |
 | 5 | [Add a Satellite](src/foundation/satellite/INSTALL.md) *(optional)* | A VPS, if you planned one | The satellite carries its roles (ingress / backup / VPN) |
-| 6 | [Add Workloads](#stage-6-add-workloads) | A running foundation | The apps you chose are installed and reachable |
+| 6 | [Add Workloads](#stage-6--add-workloads) | A running foundation | The apps you chose are installed and reachable |
 | 7 | [Operate](https://tappaas.org/operate/) | — | Updates, backup and health checks running on schedule |
 
 ---
@@ -59,7 +59,7 @@ experiments — separated environments with network boundaries between them. See
 ## Stage 5 — Add a Satellite *(optional)*
 
 If you planned a **satellite** in stage 1 (public ingress without a public IP, off-site backup,
-admin VPN — see the [hardware guide](hardware-selection.md#the-satellite-the-gap-filler)), enrol the
+admin VPN — see the [hardware guide](hardware-selection.md#the-satellite--the-gap-filler)), enrol the
 VPS now via [the satellite install](src/foundation/satellite/INSTALL.md).
 
 **Done when:** the satellite carries its roles.
