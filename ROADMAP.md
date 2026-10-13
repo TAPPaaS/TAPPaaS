@@ -352,21 +352,21 @@ Changes to live firewall and DNS behaviour on every installation. Restrictive de
 
 ### G2.1 Firewall exposure & rule order — Ease M · Risk H · released: 7 · open: 14
 
-Tighter firewall defaults that keep what modules need. Built: the gateway, GUI/SSH and anti-spoofing rules. Sprint from 2026-10-12: the review of the tier model and rule creation is done and published (#816), with most of its findings fixed; pinholes no longer shadowed (#386); every zone policy covers IPv6 (#815), and IPv6 itself is built (#26). The rules manager's overlap report, covered pinholes and sequence map are built (#160, #256, #162, on the branch). Next: the open review findings (#817–#823). NetBird rules (#385, #222) are low priority until the NetBird decision.
+Tighter firewall defaults that keep what modules need. Built: the gateway, GUI/SSH and anti-spoofing rules. Sprint from 2026-10-12: the review of the tier model and rule creation is done and published (#816), with most of its findings fixed; pinholes no longer shadowed (#386); every zone policy covers IPv6 (#815), and IPv6 itself is built (#26). The rules manager's overlap report, covered pinholes and sequence map are built (#160, #256, #162, on the branch). The review findings are done: #817, #818, #822 closed; #819–#821, #823 and the ADR amendments (#824) built on the branch, awaiting push. Next: a `--deep` run and the batch into `main`. NetBird rules (#385, #222) are low priority until the NetBird decision.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
 | ✅ #816 | Review the zone tiers and rule-set creation; publish how it works | M | L | **Closed 2026-10-13:** review (`docs/design/zone-rules-review.md`, 18 findings, 11 fixed on `main`); published on tappaas.org as *Firewall Rules*, a slimmer *Network Zones* and *IPv6*; open findings are #817–#823, the ADR amendments #824 |
 | ✅ #386 | block-private rules shadow auto-pinholes | M | M | **Closed 2026-10-12:** pinholes sit in a band before the zone baseline; pf order verified on hrossen |
 | ✅ #815 | IPv6 parity: zone policy covers IPv6 before any zone gets an address | M | M | **Done 2026-10-12, on `main` 2026-10-13:** zone and module rules `inet46`, a zone-networks table and ULA blocks for IPv6, ICMPv6 declarable; forced sweep 24/24, isolation over IPv6 verified. Anti-spoofing stays IPv4 (in #26's remainder) |
-| #817 | Egress `to: internet` also passes every private and zone network | M | M | From #816 (D3). Latent: no module declares it today |
-| #818 | `alias:` peers skip the zone-policy check | M | M | From #816 (D5, the part left open). List affected modules first |
-| #819 | `alias:` ingress bound to `lan`; a failed interface lookup falls back silently | M | L | From #816 (D7) |
-| #820 | A description change duplicates a module rule | L | L | From #816 (D9) |
-| #821 | The pinhole check exists twice and the copies can disagree | L | L | From #816 (D12), the #632 drift class |
-| #822 | Block-private misses 100.64/10, 169.254/16 and the firewall's other addresses | M | M | From #816 (D14). Live check on hrossen first; NetBird decision affects 100.64/10 |
-| #823 | Gateway lookup is one unretried API call per zone | L | L | From #816 (D18) |
-| #824 | Amend ADR-014 and ADR-021 to the zone and rule model as built | L | L | From #816; documentation only |
+| ✅ #817 | Egress `to: internet` also passes every private and zone network | M | M | **Closed 2026-10-13** (`g2.1-firewall`): written as "not `tappaas_not_internet`" (private, special ranges, every zone's network); reproduced and verified on hrossen |
+| ✅ #818 | `alias:` peers skip the zone-policy check | M | M | **Closed 2026-10-13** (`g2.1-firewall`): an alias counts as the zones its addresses are in; one spanning zones is refused; derived NFS paths keep their grant. No deployed module affected |
+| #819 | `alias:` ingress bound to `lan`; a failed interface lookup falls back silently | M | L | **Built 2026-10-13** (`g2.1-firewall`, awaits push): alias ingress on its zones' interfaces; a missing interface refuses the module. All 12 modules on hrossen compile |
+| #820 | A description change duplicates a module rule | L | L | **Built 2026-10-13** (`g2.1-firewall`, awaits push): one rule per identity; reproduced and fixed live with coturn |
+| #821 | The pinhole check exists twice and the copies can disagree | L | L | **Built 2026-10-13** (`g2.1-firewall`, awaits push): zone-manager's validator calls rules-manager's predicate; zone peers allowed by `access-to` too. `--summary` identical on hrossen |
+| ✅ #822 | Block-private misses 100.64/10, 169.254/16 and the firewall's other addresses | M | M | **Closed 2026-10-13** (`g2.1-firewall`): zones with internet block `(self)`, 100.64/10, 169.254/16; Caddy reached on `(self)`. WAN 53053/53 closed, verified on hrossen |
+| #823 | Gateway lookup is one unretried API call per zone | L | L | **Built 2026-10-13** (`g2.1-firewall`, awaits push): one batched read per step, a miss re-read with retry; zone reconcile identical on hrossen |
+| #824 | Amend ADR-014 and ADR-021 to the zone and rule model as built | L | L | **Built 2026-10-13** (`g2.1-firewall`, awaits push): ADR-014 v1.2 (new D9), ADR-021 v1.1 |
 | #576 | Zone `serves` as string or array | M | L | Backward compatible |
 | #257 | mDNS in zones.json | M | M | |
 | ✅ #160 | Overlap detection in the rules manager | M | L | **Closed 2026-10-13** (`g2.1-firewall`): `rules-manager overlaps` / `verify-rules --detect-overlap` — shadowed, redundant and conflicting rules on the live rule set, both families; read-only. hrossen: 136 rules, 0 findings |
