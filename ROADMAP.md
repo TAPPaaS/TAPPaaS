@@ -106,7 +106,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | 4 | G4.3 Manager verb gaps | M | L | 9 | – | 8 |
 | 4 | G4.4 Storage & physical devices | H | L | 5 | – | 7 |
 | 4 | G4.5 Governance, CI & sign-offs | M | L | 5 | – | 5 |
-| 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 18 | – | 5 |
+| 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 18 | – | 6 |
 | 3 | G3.2 Identity & SSO wiring | M | L | 10 | – | 4 |
 | 3 | G3.3 App module fixes | L | L | 10 | – | 11 |
 | 3 | G3.4 AI stack maturity | M | M | 1 | – | 10 |
@@ -142,7 +142,7 @@ met gates are recorded in the releases that carried their waves.
 |--------------|------------|
 | 1 · G1.6 | #142 RFC outcome; a *Secrets management* ADR only once #58 comes back from Future Work |
 | 2 | Entry: ADR-014 amended for the `all` sentinel (#375, built), `serves` as an array (#576), anti-spoofing always on (#159, built) and mDNS in zones.json (#257); ADR-021 amended for DNSSEC with split horizon (#263); `site.json` `ipv6` (#149) — the IPv6 stance is its own ADR (#26). Exit: a lockout check on each site — mgmt and the admin VPN reach 8443 and 22, other zones do not; done on hrossen 2026-10-02. NetBird only if the NetBird decision keeps it server-side |
-| 3 | Met 2026-10-13: ADR-019 Accepted (v1.0), verified by `cluster/test.sh --deep` — live migrate to the HANode and back. Open from it: HA's automatic failback to a node with an older CPU (see ADR-019 *Known limitation*) |
+| 3 | Met 2026-10-13: ADR-019 Accepted (v1.0), verified by `cluster/test.sh --deep` — live migrate to the HANode and back. Open from it: HA's automatic failback to a node with an older CPU (#827) |
 | 4 | ADR-023 Proposed → Accepted (#642, #643; render check open); ADR-015 Draft → Accepted (#486); ADR-011 Proposed → Accepted (#143 built); ADR-010 P7 sign-off (#406); ADR-008 amended (#236); ADR-019 amended for a second corosync link (#590) and the migrate verb (#429); ADR-007e amended for logging v2 (#165), or a new ADR if Zabbix is chosen; ADR-029 Proposed → Accepted (#772); the MAC pinning question (#444 / #582); #154 closed or kept; #430 decided before #170 |
 
 ### ADRs still to write
@@ -274,13 +274,14 @@ The project's own machinery: CI runners (#415), community-health files (#486), t
 
 Low upgrade risk. Build continuously, in any order within a group.
 
-### G3.1 cluster:vm lifecycle & capacity — Ease L · Risk M · released: 18 · open: 5
+### G3.1 cluster:vm lifecycle & capacity — Ease L · Risk M · released: 18 · open: 6
 
 Guests sized, placed, started and stopped right: memory defaults from measurement (#663), moving a running guest to another node (#825), a readiness wait that skips UDP ports (#826), hardware drift (#531), shutdown and boot order (#36, #127), storage growth and placement (#100, #403), a composite-module ADR (#761), and a sweep that survives a guest restarting itself (#753).
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
 | #531 | Detect hardware-spec drift | L | M | Once detected, pending changes get applied (reboots): gate on `rebootOk` |
+| #827 | HA failback can move a host-CPU guest live to a node with an older CPU | M | M | **Opened 2026-10-13** from the ADR-019 deep test: the CRM's own failback skips `live-ok`. Options: a named CPU model common to the rule's nodes, or no automatic failback where CPUs differ |
 | #100 | Automatic storage extension | M | L | |
 | #403 | Install on the root disk; smarter placement | M | L | |
 | ✅ #663 | Memory defaults are not based on measurement | L | L | **Closed 2026-10-13** (operator): 7-day measurement on hrossen. vaultwarden was too small — 1→1.5 GiB (`bac670ce`); euro-office and deconz-test moved tappaas1→tappaas2, tappaas1 commitment 63→51.5 GiB of 61. The other proposed reductions (nextcloud-hpb, jellyfin, forgejo, litellm default) not applied; `network` 8G→4G still parked |
