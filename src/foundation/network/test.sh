@@ -1697,14 +1697,14 @@ else
 
     section "Deep 6: rules-manager applied rules for test-fw-b"
 
-    # Module-name peer rule. testAllowA's access-to reaches testAllowB, so the
+    # Module-name peer rule. test-fw-a's zone has test-fw-b's zone in access-to, so the
     # zone's own pass carries this traffic and rules-manager leaves the rule
     # out, recording it in the sequence map — it comes back if that access-to
     # is narrowed (covered pinholes). Deep 8 proves the traffic still flows.
     if rules-manager list-slots --no-ssl-verify --output json 2>/dev/null \
             | jq -e '.modules["test-fw-b"].covered // [] | map(.rule) | any(. == "tappaas-module:test-fw-b:ingress:test-fw-a:9090")' \
             >/dev/null 2>&1; then
-        pass "ingress from module-name peer (test-fw-a) left out as covered by testAllowA -> testAllowB"
+        pass "ingress from module-name peer (test-fw-a) left out as covered by ${TFW_A_ZONE} -> ${TFW_B_ZONE}"
     else
         fail "ingress from module-name peer (test-fw-a) not recorded as covered by the zone edge"
     fi
@@ -1765,7 +1765,7 @@ else
     # (Note: pfctl -t ... -T show is unreliable because OPNsense's update_tables.py
     # populates FQDN-host aliases asynchronously on a cron; the table can be empty
     # for minutes after creation even though the rules using it work fine.)
-    # test-fw-a's auto-pinhole into testPinhole crosses zones with no zone edge,
+    # test-fw-a's auto-pinhole into test-fw-c's zone crosses zones with no zone edge,
     # so it is written with test-fw-a's FQDN alias as its source.
     if rules-manager list-rules --module test-fw-a --output json --no-ssl-verify 2>/dev/null \
             | jq -e '.rules[] | select(.description | startswith("tappaas-svcdep:test-fw-a:")) | .uuid' \
