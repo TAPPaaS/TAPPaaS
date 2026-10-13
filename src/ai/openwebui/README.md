@@ -18,7 +18,7 @@ management, and RAG support.
 ## What is not included
 
 - LLM providers — configured in LiteLLM, not here
-- Voice input — browser-dependent; no server-side STT
+- Server-side speech-to-text — voice input is transcribed in the browser (where the browser supports it), and uploaded audio is not transcribed. The server's audio decoders are never given a user's upload
 - Internet access for the AI — models run via LiteLLM internally
 
 ## Requirements

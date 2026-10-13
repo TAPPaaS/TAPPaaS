@@ -7,6 +7,17 @@ README or the install guide.
 
 - OpenWebUI runs as a Podman container (image from Docker Hub, version pinned
   in `openwebui.nix`).
+- The container's root is not the VM's root: a uid/gid map makes it host uid
+  200000, which owns only `/var/lib/openwebui/data` and `models`. Every
+  capability is dropped and `no-new-privileges` is set. It still shares the
+  VM's network, so it reaches PostgreSQL and Redis on localhost — and
+  PostgreSQL's localhost trust means code running in the container can read
+  the database. That is the remaining exposure.
+- Speech-to-text is browser-only. The STT engine is `web`, and the content
+  types the server would transcribe are set to one no upload carries — Open
+  WebUI converts audio with ffmpeg/PyAV *before* it looks at the engine, so the
+  engine alone would not keep uploads away from the decoders. Both settings
+  live in the database and are reconciled by `openwebui-apply-stt`.
 - PostgreSQL 17 (user accounts, chat history, settings, prompts) and Redis
   (session state, cache, WebSocket streaming) run natively on the NixOS VM.
 - Redis uses AOF persistence — data survives container restarts.

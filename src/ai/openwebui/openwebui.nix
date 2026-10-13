@@ -17,6 +17,11 @@
 # Author: @ErikDaniel007 (Tappaas)
 # Products: openwebui, postgres, redis
 #
+# Changelog (2026-10-13, #810):
+# - The container's root is unprivileged host uid 200000 (uid/gid map), with
+#   every capability dropped and no-new-privileges
+# - Speech-to-text runs in the browser; uploads never reach the server's decoders
+#
 # Changelog v0.11.4 (2026-10-08):
 # - Upgraded OpenWebUI 0.10.2 → 0.11.4 (#765)
 #
@@ -49,6 +54,11 @@ let
   # Version pinning
   # Change versions in one place only
   # ----------------------------------------
+  # The container's root is this unprivileged host uid (#810): an exploit in a
+  # decoder inside the image lands as a user that owns nothing on the VM but the
+  # data directories. 65536 ids from here are the container's uid/gid range.
+  containerRoot = 200000;
+
   versions = {
     # 0.11.4. Never land on 0.11.0–0.11.2: they can skip database migrations
     # without an error (upstream #29280), fixed in 0.11.3.
@@ -185,6 +195,10 @@ in
       exec ${pkgs.podman}/bin/podman run \
         --name openwebui \
         --network=host \
+        --uidmap 0:${toString containerRoot}:65536 \
+        --gidmap 0:${toString containerRoot}:65536 \
+        --cap-drop=ALL \
+        --security-opt=no-new-privileges \
         --log-driver=journald \
         --env-file=/etc/secrets/openwebui.env \
         --env-file=/etc/secrets/openwebui-integrations.env \
@@ -209,6 +223,14 @@ in
           echo "Image $IMAGE already present locally, skipping pull."
         fi
         ${pkgs.podman}/bin/podman rm -f openwebui || true
+        # Data written while the container ran as real root (before #810) is
+        # handed to the container's mapped root once; cheap when already right.
+        for d in /var/lib/openwebui/data /var/lib/openwebui/models; do
+          if [ "$(${pkgs.coreutils}/bin/stat -c %u "$d")" != "${toString containerRoot}" ] \
+             || ${pkgs.findutils}/bin/find "$d" ! -uid ${toString containerRoot} -print -quit | ${pkgs.gnugrep}/bin/grep -q .; then
+            ${pkgs.coreutils}/bin/chown -R ${toString containerRoot}:${toString containerRoot} "$d"
+          fi
+        done
       '';
       TimeoutStartSec = 600;
       Restart = "always";
@@ -500,6 +522,59 @@ EOF
     };
   };
 
+  # ----------------------------------------
+  # Speech-to-text in the browser, never on the server (#810)
+  # ----------------------------------------
+  #
+  # Server-side STT hands any approved user's upload to ffmpeg/ffprobe (Debian's,
+  # in the image) and to PyAV's bundled FFmpeg inside the app process — before
+  # the engine is even consulted: transcribe() converts first. Six decoder CVEs
+  # are rated high in openwebui-vex.json for exactly that path. So:
+  #   * engine "web": the microphone button transcribes in the browser;
+  #   * supported_content_types names a type no upload carries, so neither the
+  #     transcription endpoint nor an uploaded audio file reaches transcribe().
+  #     (An EMPTY list means "audio/*" to Open WebUI, which is why it is not [].)
+  # Both live in the config table, where the database wins over the environment,
+  # so they are reconciled there, like the OpenAI connection below.
+  systemd.services.openwebui-apply-stt = {
+    description = "Keep OpenWebUI's speech-to-text in the browser";
+    wantedBy = [ "multi-user.target" ];
+    after = [ "postgresql.service" "openwebui-wrapper.service" ];
+    requires = [ "postgresql.service" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      ExecStart = pkgs.writeShellScript "openwebui-apply-stt" ''
+        set -uo pipefail
+        PATH="${pkgs.coreutils}/bin:${pkgs.util-linux}/bin:${pkgs.systemd}/bin:${versions.postgresPkg}/bin:$PATH"
+        q() { runuser -u postgres -- psql -d openwebui -tAc "$1" 2>/dev/null; }
+        # Wait for the config table: on a fresh install the app creates it.
+        i=0
+        while [ -z "$(q "SELECT to_regclass('public.config')")" ] && [ "$i" -lt 60 ]; do
+          i=$((i + 1)); sleep 5
+        done
+        [ -n "$(q "SELECT to_regclass('public.config')")" ] || { echo "apply-stt: config table not present yet — next converge"; exit 0; }
+        ENGINE='"web"'
+        TYPES='["application/x-tappaas-no-server-stt"]'
+        CUR_E="$(q "SELECT value::text FROM config WHERE key = 'audio.stt.engine'")"
+        CUR_T="$(q "SELECT value::text FROM config WHERE key = 'audio.stt.supported_content_types'")"
+        if [ "$CUR_E" = "$ENGINE" ] && [ "$CUR_T" = "$TYPES" ]; then
+          echo "apply-stt: speech-to-text already browser-only"
+          exit 0
+        fi
+        runuser -u postgres -- psql -d openwebui -v ON_ERROR_STOP=1 \
+          -c "INSERT INTO config (key, value, updated_at) VALUES ('audio.stt.engine', '$ENGINE'::json, extract(epoch from now())::bigint) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at" \
+          -c "INSERT INTO config (key, value, updated_at) VALUES ('audio.stt.supported_content_types', '$TYPES'::json, extract(epoch from now())::bigint) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at" \
+          >/dev/null 2>&1 \
+          && echo "apply-stt: speech-to-text set to browser-only" \
+          || { echo "apply-stt: failed to update the stored STT settings" >&2; exit 0; }
+        if systemctl is-active --quiet openwebui-wrapper.service; then
+          systemctl restart openwebui-wrapper.service || true
+        fi
+      '';
+    };
+  };
+
   # Template only — actual secrets are auto-generated above
   environment.etc."secrets/openwebui-template.env".text = ''
     DATABASE_URL=postgresql://openwebui@127.0.0.1:5432/openwebui
@@ -519,8 +594,8 @@ EOF
   # ----------------------------------------
   systemd.tmpfiles.rules = [
     "d /var/lib/openwebui 0750 svc_openwebui_admin svc_openwebui -"
-    "d /var/lib/openwebui/data 0750 svc_openwebui_admin svc_openwebui -"
-    "d /var/lib/openwebui/models 0750 svc_openwebui_admin svc_openwebui -"
+    "d /var/lib/openwebui/data 0750 ${toString containerRoot} ${toString containerRoot} -"
+    "d /var/lib/openwebui/models 0750 ${toString containerRoot} ${toString containerRoot} -"
     "d /var/backup/postgresql 0700 postgres postgres -"
     "d /var/backup/redis 0700 redis redis -"
     "d /var/backup/openwebui-data 0700 root root -"
