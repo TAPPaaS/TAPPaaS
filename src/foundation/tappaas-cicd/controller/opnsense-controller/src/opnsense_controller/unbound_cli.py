@@ -17,6 +17,7 @@ Commands:
 
 import argparse
 import ipaddress
+import os
 import sys
 
 from .cli_globals import StrictArgumentParser, make_global_parent, parse_with_globals
@@ -451,6 +452,81 @@ def dnssec(args) -> bool:
     return _verify_resolver_after_write(args.firewall, f"DNSSEC {what}")
 
 
+def _dnsbl_entries(mgr) -> list[dict]:
+    return (_unbound_api(mgr, "settings", "searchDnsbl", "get") or {}).get("rows") or []
+
+
+def _known_lists(mgr) -> set[str]:
+    """The blocklist codes this firewall's DNSBL model offers."""
+    item = (_unbound_api(mgr, "settings", "getDnsbl", "get") or {}).get("blocklist") or {}
+    return {k for k in (item.get("type") or {}) if k}
+
+
+def dnsbl(args) -> bool:
+    """Bring Unbound's DNS blocklists to `site.json` `dnsBlocklists` (#157).
+
+    One TAPPaaS-owned entry; absent from site.json, it is removed. A change
+    downloads the lists and reloads Unbound once; the resolver must answer
+    afterwards.
+    """
+    import json
+    from pathlib import Path
+
+    from .dnsbl_plan import desired, is_ours, needs_change
+    from .dual_stack import read_interfaces, with_v6
+    from .ipv6_cli import load_site_and_zones
+
+    site, zones = load_site_and_zones(Path(args.config_dir))
+    with _client(args) as mgr:
+        ifaces = read_interfaces(mgr.client)
+        want = desired(site, zones, _known_lists(mgr), lambda cidr: with_v6([cidr], ifaces))
+        items = want.items() if want else {}
+        ours = {r.get("description"): r for r in _dnsbl_entries(mgr) if is_ours(r.get("description") or "")}
+        for w in (want.warnings if want else []):
+            print(f"dnsbl: {w}")
+        verb = "would " if args.check_mode else ""
+        drop = [d for d in ours if d not in items]
+        put = {}
+        for d, item in items.items():
+            have = None
+            if d in ours:
+                have = ((_unbound_api(mgr, "settings", "getDnsbl", "get", params=[ours[d].get("uuid")])
+                         or {}).get("blocklist") or {})
+            if have is None or needs_change(item, have):
+                put[d] = item
+        if not drop and not put:
+            print("dnsbl: " + (f"{', '.join(want.lists)} for {', '.join(want.source_nets) or 'every client'} — matches site.json"
+                               if want else "no blocklists — matches site.json"))
+            return True
+        if want and put:
+            print(f"dnsbl: {verb}set {', '.join(want.lists)} for "
+                  f"{', '.join(want.source_nets) or 'every client'}"
+                  + (f", allowing {', '.join(want.allow)}" if want.allow else ""))
+        for d in drop:
+            print(f"dnsbl: {verb}remove '{d}'")
+        if args.check_mode:
+            return True
+        for d in drop:
+            res = _unbound_api(mgr, "settings", "delDnsbl", "post", params=[ours[d].get("uuid")])
+            if res.get("result") != "deleted":
+                print(f"ERROR: dnsbl: delete of '{d}' returned {res}", file=sys.stderr)
+                return False
+        for d, item in put.items():
+            if d in ours:
+                res = _unbound_api(mgr, "settings", "setDnsbl", "post", {"blocklist": item},
+                                   params=[ours[d].get("uuid")])
+            else:
+                res = _unbound_api(mgr, "settings", "addDnsbl", "post", {"blocklist": item})
+            if res.get("result") != "saved":
+                print(f"ERROR: dnsbl: saving '{d}' returned {json.dumps(res)}", file=sys.stderr)
+                return False
+        # Fetch the lists and reload: OPNsense's own dnsbl action, then the
+        # configuration (the entry set) itself.
+        _unbound_api(mgr, "service", "dnsbl", "post")
+        _unbound_api(mgr, "service", "reconfigure", "post")
+    return _verify_resolver_after_write(args.firewall, "DNS blocklists")
+
+
 def _parse_bool(v: str) -> bool:
     if str(v).lower() in ("true", "1", "yes", "on"):
         return True
@@ -504,6 +580,11 @@ Examples:
                            help="Turn DNSSEC validation on or off (site.json dnssec, default true)")
     p_sec.add_argument("--set", type=_parse_bool, required=True, help="true or false")
 
+    p_bl = sub.add_parser("dnsbl", parents=[gp],
+                          help="DNS blocklists from site.json dnsBlocklists (absent: none)")
+    p_bl.add_argument("--config-dir", default=os.environ.get("CONFIG_DIR", "/home/tappaas/config"),
+                      help="where site.json and zones.json are (default: /home/tappaas/config)")
+
     args = parse_with_globals(parser, {
         "firewall": "firewall.mgmt.internal", "port": None,
         "credential_file": None, "no_ssl_verify": False,
@@ -524,6 +605,8 @@ Examples:
             ok = checkconf(args)
         elif args.command == "dnssec":
             ok = dnssec(args)
+        elif args.command == "dnsbl":
+            ok = dnsbl(args)
         else:
             parser.print_help()
             ok = False

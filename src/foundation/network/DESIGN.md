@@ -360,6 +360,37 @@ the internal domain (`internal`) and the private reverse zones `domain-insecure`
 split-horizon answers for published names are local data, which the validator does not judge.
 Turn it off only where an upstream path strips signatures.
 
+## DNS blocklists
+
+Unbound can refuse names on public blocklists (`site.json` `dnsBlocklists`, absent: none; the
+network update applies it with `unbound-manager dnsbl`). A blocked name answers NXDOMAIN.
+
+```jsonc
+"dnsBlocklists": {
+  "lists": ["atf", "hgz011"],      // OPNsense's catalogue codes
+  "zones": ["home", "guest"],      // whose clients are filtered; none listed: every client
+  "allow": ["example.org"]         // never blocked
+}
+```
+
+- **Lists** are OPNsense's own catalogue: `atf` (abuse.ch ThreatFox), `hgz011`–`hgz013`
+  (hagezi threat intelligence), `oisd0`/`oisd1` (OISD), `ag` (AdGuard), `el`/`ep` (EasyList,
+  EasyPrivacy), `sb` (Steven Black), and hagezi's ad, scam, gambling and bypass lists.
+  `unbound-manager dnsbl` refuses an unknown code and names the ones the firewall offers.
+- **Zones.** Filtering applies to the listed zones' networks, IPv4 and IPv6. Leave service
+  zones out: their modules fetch updates, images and models, and a false positive there fails
+  an update rather than a page.
+- **Ownership.** TAPPaaS writes the entries described `TAPPaaS: site blocklists…` — one per
+  address family, as OPNsense requires one entry's networks to share family and size. Entries
+  added by hand in the GUI are left alone.
+- **Timing.** The lists are fetched when the entry changes and by OPNsense's own schedule. A
+  name already in Unbound's cache answers until its TTL runs out, so a new block takes effect
+  within minutes.
+- **Checking a name:** on the firewall,
+  `python3 /usr/local/opnsense/scripts/unbound-dnsbl/dnsbl_match.py --domain <name> --src <client-ip>`
+  prints `Block` with the entry that decides it, or `Pass`. A query from the firewall itself is
+  not a client's view.
+
 ## Troubleshooting: Unbound / DNSBL
 
 **Restart Unbound only through OPNsense:** `configctl unbound restart` (what TAPPaaS

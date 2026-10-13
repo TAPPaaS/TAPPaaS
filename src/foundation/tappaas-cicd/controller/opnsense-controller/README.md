@@ -18,7 +18,7 @@ Each is its own command on `PATH`.
 | `zone-manager` | Reconcile VLANs + DHCP + firewall rules from `zones.json`. The everyday network reconcile. |
 | `dns-manager` | DNS host entries in OPNsense Dnsmasq (and static DHCP reservations). |
 | `dhcp-manager` | DHCP scope options — PXE next-server/bootfile for node provisioning (`pxe enable/disable/status`, design N3). |
-| `unbound-manager` | Unbound host overrides (split-horizon / internal DNS). |
+| `unbound-manager` | Unbound host overrides (split-horizon / internal DNS), DNSSEC, DNS blocklists. |
 | `caddy-manager` | The Caddy reverse proxy: domains, handlers, access lists. |
 | `nat-manager` | Destination-NAT (port-forward) rules. |
 | `opnsense-firewall` | Individual firewall rules (create/list/delete/apply). |
@@ -79,12 +79,18 @@ for dry-run.
 unbound-manager add <hostname> <domain> <ip> [--description <d>]
 unbound-manager delete <hostname> <domain>
 unbound-manager list
+unbound-manager dnssec --set true|false              # site.json dnssec
+unbound-manager dnsbl [--config-dir <dir>]           # site.json dnsBlocklists
 ```
 Use `*` as the hostname for a wildcard override. `--check-mode` for dry-run.
 A wildcard is an Unbound redirect zone, which may hold no other record below it:
 `add` skips a name a wildcard already answers with the same IP, and refuses any
 other nested record (or a wildcard over existing ones). A write that still stops
 the resolver is rolled back.
+
+`dnssec` and `dnsbl` are what the `network` module's update runs. `dnsbl` writes the
+entries described `TAPPaaS: site blocklists…` (one per address family) and leaves
+hand-made ones alone; see [`network/DESIGN.md`](../../../network/DESIGN.md#dns-blocklists).
 
 ### `caddy-manager` — reverse proxy
 

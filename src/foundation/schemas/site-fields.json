@@ -265,6 +265,13 @@
       "default": true,
       "note": "Turn it off only if an upstream path breaks DNSSEC (a middlebox that strips signatures). Changing it reloads Unbound once."
     },
+    "dnsBlocklists": {
+      "description": "DNS blocklists the firewall's resolver applies, by the network module's update. Absent: none. lists are OPNsense's blocklist codes (atf = abuse.ch ThreatFox, hgz011 = hagezi threat intelligence, oisd1 = OISD big, ag = AdGuard, ...); zones limits filtering to those zones' clients, IPv4 and IPv6 (none listed: every client); allow names domains never blocked. A blocked name answers NXDOMAIN.",
+      "type": "object",
+      "default": null,
+      "example": {"lists": ["atf", "hgz011"], "zones": ["home", "guest"], "allow": ["example.org"]},
+      "note": "Service zones are best left out: their modules fetch updates, images and models, and a false positive there fails an update. A change takes effect as cached answers expire (minutes). An unknown list code is refused with the codes the firewall offers."
+    },
     "snapshotRetention": {
       "description": "Number of snapshots to retain. Site-wide until P3 (then moves to Environment).",
       "type": "integer",
