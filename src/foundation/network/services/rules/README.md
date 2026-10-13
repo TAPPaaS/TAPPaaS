@@ -72,7 +72,7 @@ Network ports this module exposes for inbound traffic. Source of truth for ingre
 | Change class | `in-place` |
 | Apply mode | `reconcile` |
 
-**About the field.** Ingress entries must reference ports declared here. Activated when network:rules is in dependsOn.
+**About the field.** Ingress entries must reference ports declared here. Activated when network:rules is in dependsOn. On a module that does not wire network:rules (one published through the proxy only, say) it documents what the module listens on, and opens nothing (#683).
 
 **Why this change class.** The module's declared service surface, from which the default ingress rules are derived.
 

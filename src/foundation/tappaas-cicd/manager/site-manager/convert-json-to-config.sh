@@ -114,6 +114,10 @@ regroup_to_pattern_a() {
                 {kind: "unknown", field: $k}
               elif ($u | index("general")) != null then
                 empty
+              elif $fields[$k].unwired == "documentation" then
+                # #683: declared without its consumer on purpose — it documents
+                # the module (ports on a proxy-only module). Stays at top, silently.
+                empty
               else
                 [ $u[] | select(. as $s | $deps | index($s)) ] as $m
                 # Self-consumed: a usedBy coordinate "<mod>:<svc>" whose <svc> is

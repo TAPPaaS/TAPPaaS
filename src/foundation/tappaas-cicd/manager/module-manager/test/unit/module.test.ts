@@ -889,7 +889,8 @@ function captureList(client: FakeModuleClient, extraArgs: string[] = []): string
   // report belongs here rather than in every three-way merge.
   {
     const SCHEMA = {
-      ports:   { usedBy: ["network:rules"] },
+      ports:   { usedBy: ["network:rules"], unwired: "documentation" },
+      ingress: { usedBy: ["network:rules"] },
       cores:   { usedBy: ["cluster:vm"] },
       zone0:   { usedBy: ["general"] },
       mystery: {},
@@ -907,14 +908,17 @@ function captureList(client: FakeModuleClient, extraArgs: string[] = []): string
       return out;
     };
 
-    // The reported case: ports owned by network:rules, only network:proxy wired.
-    const f = orphans({ dependsOn: ["network:proxy"], ports: [9443, 8000] });
+    // ingress is owned by network:rules; with only network:proxy wired it does nothing.
+    const f = orphans({ dependsOn: ["network:proxy"], ingress: [{ from: "home", ports: [443] }] });
     check(
       f.length === 1 && f[0].severity === "warning" &&
-        f[0].message.includes("ports") && f[0].message.includes("network:rules") &&
+        f[0].message.includes("ingress") && f[0].message.includes("network:rules") &&
         f[0].message.includes("no effect"),
       "validate: a field whose consumer is not wired warns (#683)",
     );
+    // The reported case: ports on a proxy-only module documents what it listens on.
+    check(orphans({ dependsOn: ["network:proxy"], ports: [9443, 8000] }).length === 0,
+      "validate: a field marked unwired=documentation is silent without its consumer (#683)");
     // A warning, never an error — the field may be honest documentation, and
     // failing validate on makerfloss's modules would be wrong.
     check(f.every((x) => x.severity !== "error"), "validate: an unwired field is a warning, not an error (#683)");

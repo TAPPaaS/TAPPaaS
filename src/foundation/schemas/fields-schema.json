@@ -46,6 +46,12 @@
           "type": "string",
           "description": "Longer guidance about the FIELD — history, hazards, when to set it. Distinct from changeNote."
         },
+        "unwired": {
+          "enum": [
+            "documentation"
+          ],
+          "description": "What the field means on a module that wires none of its usedBy consumers. 'documentation': it describes the module and nothing acts on it; it is not an orphan, so validate and the config merge say nothing. Absent: such a field is an orphan, which validate reports (#683)."
+        },
         "format": {
           "type": "string",
           "description": "A format hint (e.g. 'date', 'semver'); advisory."
@@ -192,6 +198,12 @@
         "note": {
           "type": "string",
           "description": "Longer guidance about the FIELD — history, hazards, when to set it. Distinct from changeNote."
+        },
+        "unwired": {
+          "enum": [
+            "documentation"
+          ],
+          "description": "What the field means on a module that wires none of its usedBy consumers. 'documentation': it describes the module and nothing acts on it; it is not an orphan, so validate and the config merge say nothing. Absent: such a field is an orphan, which validate reports (#683)."
         },
         "format": {
           "type": "string",

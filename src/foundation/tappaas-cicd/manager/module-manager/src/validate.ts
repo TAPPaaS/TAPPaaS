@@ -200,14 +200,13 @@ export function validateSourceLocation(
 // which an operator reading a sweep log can neither act on nor silence.
 //
 // So the report moves here, where a module author can act, and the converter
-// stops repeating it. Deliberately a WARNING, not an error: the field may be
-// honest documentation of what a proxy-published module listens on internally,
-// and failing validate on that would be wrong. What #683 still has to settle is
-// whether that documentary use is blessed — if it is, the field's `usedBy`
-// gains "general" and this check falls silent for it by construction.
+// stops repeating it. Deliberately a WARNING, not an error. A field whose
+// definition says `unwired: "documentation"` is meant to be declared without
+// its consumer — `ports` on a module published through the proxy only says what
+// it listens on, and opens nothing — so it is not reported at all.
 export function validateOrphanFields(
   m: ModuleConfig,
-  schema: Record<string, { usedBy?: string[] } | undefined>,
+  schema: Record<string, { usedBy?: string[]; unwired?: string } | undefined>,
   out: ValidateFinding[],
 ): void {
   const raw = m.raw as Record<string, unknown> | undefined;
@@ -226,6 +225,7 @@ export function validateOrphanFields(
     // An unknown field is the converter's `unknown` warning, which stays there.
     if (!usedBy || usedBy.length === 0) continue;
     if (usedBy.includes("general")) continue;
+    if (schema[field]?.unwired === "documentation") continue;
     if (usedBy.some((u) => deps.has(u))) continue;
     // Self-consumed: a coordinate "<mod>:<svc>" whose <svc> this module itself
     // provides. It reads the field from the flattened top level and must not

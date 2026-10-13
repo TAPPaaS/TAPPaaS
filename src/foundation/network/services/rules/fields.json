@@ -141,6 +141,7 @@
       "usedBy": [
         "network:rules"
       ],
+      "unwired": "documentation",
       "default": [],
       "items": {
         "type": "object",
@@ -177,7 +178,7 @@
           "description": "Service API"
         }
       ],
-      "note": "Ingress entries must reference ports declared here. Activated when network:rules is in dependsOn.",
+      "note": "Ingress entries must reference ports declared here. Activated when network:rules is in dependsOn. On a module that does not wire network:rules (one published through the proxy only, say) it documents what the module listens on, and opens nothing (#683).",
       "class": "in-place",
       "apply": "reconcile",
       "changeNote": "The module's declared service surface, from which the default ingress rules are derived."
