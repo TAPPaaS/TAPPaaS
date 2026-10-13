@@ -32,9 +32,11 @@ echo "=== vLLM AMD inspect (VMID: ${VMID} on ${LXC_NODE}) ==="
 echo ""
 
 echo "--- Currently serving (live API query) ---"
-HTTP_CODE=$(pct exec "${VMID}" -- curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 "http://127.0.0.1:8000/v1/models" 2>/dev/null || echo "000")
+# The API needs vLLM's key (#812), kept in the LXC.
+VLLM_KEY="$(pct exec "${VMID}" -- sed -n 's/^VLLM_API_KEY=//p' /opt/vllm/vllm.env 2>/dev/null | head -1 || true)"
+HTTP_CODE=$(pct exec "${VMID}" -- curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 -H "'Authorization: Bearer ${VLLM_KEY:-none}'" "http://127.0.0.1:8000/v1/models" 2>/dev/null || echo "000")
 if [[ "${HTTP_CODE}" == "200" ]]; then
-    pct exec "${VMID}" -- curl -s --connect-timeout 5 "http://127.0.0.1:8000/v1/models" 2>/dev/null \
+    pct exec "${VMID}" -- curl -s --connect-timeout 5 -H "'Authorization: Bearer ${VLLM_KEY:-none}'" "http://127.0.0.1:8000/v1/models" 2>/dev/null \
         | jq -r '.data[] | "  - \(.id)  (max_model_len=\(.max_model_len // "?"))"'
 else
     echo "  (vLLM API not responding — HTTP ${HTTP_CODE}; container may be stopped or model still loading)"

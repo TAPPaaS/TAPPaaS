@@ -125,7 +125,12 @@ echo ""
 echo "--- API Health ---"
 # Query the vLLM API from INSIDE the container (127.0.0.1) via pct exec, so the
 # test does not depend on cicd→LXC network reachability.
-api() { pct exec "${VMID}" -- curl -s --connect-timeout 5 "$@" 2>/dev/null; }
+# vLLM requires its API key (#812); it lives in the LXC, so read it from there.
+VLLM_KEY="$(pct exec "${VMID}" -- sed -n 's/^VLLM_API_KEY=//p' /opt/vllm/vllm.env 2>/dev/null | head -1 || true)"
+# Literal single quotes: pct() hands its words to the remote shell unquoted, so
+# the header would otherwise split at its spaces (as the JSON body below would).
+AUTH=(-H "'Authorization: Bearer ${VLLM_KEY:-none}'")
+api() { pct exec "${VMID}" -- curl -s --connect-timeout 5 "${AUTH[@]}" "$@" 2>/dev/null; }
 
 # Poll rather than probe once. vLLM loads a model before it binds, and this test
 # is reached by the very operation that restarts it — `update-tappaas` failed
@@ -143,7 +148,7 @@ VLLM_API_WAIT="${VLLM_API_WAIT:-10}"
 probe_api_until_ready() { # echo the last HTTP code
     local code="000" i
     for ((i = 1; i <= VLLM_API_RETRIES; i++)); do
-        code=$(pct exec "${VMID}" -- curl -s -o /dev/null -w "%{http_code}" \
+        code=$(pct exec "${VMID}" -- curl -s -o /dev/null -w "%{http_code}" "${AUTH[@]}" \
                  --connect-timeout 5 "http://127.0.0.1:8000/v1/models" 2>/dev/null || echo "000")
         [[ "${code}" == "200" ]] && { VLLM_API_ELAPSED=$(( (i - 1) * VLLM_API_WAIT )); echo "${code}"; return 0; }
         [[ $i -lt $VLLM_API_RETRIES ]] && sleep "${VLLM_API_WAIT}"
@@ -156,6 +161,12 @@ HTTP_CODE="$(probe_api_until_ready)"
 [[ "${VLLM_API_ELAPSED}" -gt 0 ]] && echo "  (API became ready after ~${VLLM_API_ELAPSED}s)"
 if [[ "$HTTP_CODE" == "200" ]]; then
     check "vLLM API responding (127.0.0.1:8000)" "0"
+
+    # Without the key the API must refuse (#812): reaching port 8000 is not
+    # enough to use the model.
+    NOKEY=$(pct exec "${VMID}" -- curl -s -o /dev/null -w "%{http_code}" \
+              --connect-timeout 5 "http://127.0.0.1:8000/v1/models" 2>/dev/null || echo "000")
+    check "vLLM API refuses a request without its key (HTTP ${NOKEY})" "$([[ "${NOKEY}" == "401" ]] && echo 0 || echo 1)"
 
     # Show loaded models
     echo ""
@@ -175,7 +186,7 @@ if [[ "$HTTP_CODE" == "200" ]]; then
         # Wrap the payload in LITERAL single quotes so the remote shell passes it
         # through verbatim. `|| true` keeps a transient inference failure from
         # aborting the script (set -e) before the summary prints.
-        RESPONSE=$(pct exec "${VMID}" -- curl -s --connect-timeout 30 --max-time 60 \
+        RESPONSE=$(pct exec "${VMID}" -- curl -s --connect-timeout 30 --max-time 60 "${AUTH[@]}" \
             -X POST "http://127.0.0.1:8000/v1/chat/completions" \
             -H "Content-Type:application/json" \
             -d "'{\"model\":\"${MODEL}\",\"messages\":[{\"role\":\"user\",\"content\":\"Say hello in exactly 3 words.\"}],\"max_tokens\":20}'" \

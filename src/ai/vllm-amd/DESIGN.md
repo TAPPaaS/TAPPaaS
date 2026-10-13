@@ -14,6 +14,18 @@ Implementation and tuning detail moved out of README/INSTALL (Diataxis: explanat
 - Models live on the host and are bind-mounted into the LXC (see `bindMounts` in
   `vllm-amd.meta.json`); the compose file mounts them into the vLLM container.
 
+## Access
+
+- The API requires a bearer key (`VLLM_API_KEY`, from `/opt/vllm/vllm.env`, mode 0600),
+  so a host that reaches port 8000 in the zone cannot use the model without it. LiteLLM
+  holds it as its `vllm-amd` credential; `vllm-amd:inference` reads it from the LXC and
+  writes it to each consumer. `/health` stays open.
+- sshd in the LXC accepts keys only (`/etc/ssh/sshd_config.d/tappaas.conf`).
+- **The LXC is privileged**: root inside it is root on the node, and vLLM runs in Docker
+  inside it, so an escape from the vLLM image reaches the Proxmox node. An unprivileged
+  LXC needs the GPU devices mapped into its id range and a migration of its root
+  filesystem; that is a separate change.
+
 ## Unified memory on Strix Halo
 
 Strix Halo is a unified-memory APU: a small dedicated VRAM carveout (BIOS UMA) plus a large GTT

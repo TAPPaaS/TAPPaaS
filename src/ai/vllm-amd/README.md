@@ -9,7 +9,7 @@ an OpenAI-compatible API for LiteLLM or direct clients, with no data leaving you
 
 | Capability | Access from | How |
 |------------|-------------|-----|
-| OpenAI-compatible inference API | Internal network / consumers of `vllm-amd:inference` | `http://vllm-amd.<zone>.internal:8000` (TCP 8000 pinhole for cross-zone consumers) |
+| OpenAI-compatible inference API | Consumers of `vllm-amd:inference` | `http://vllm-amd.<zone>.internal:8000`, with the API key `vllm-amd:inference` hands each consumer (TCP 8000 pinhole for cross-zone consumers) |
 | Large model support | API | Up to 120B parameters on 128 GB unified memory |
 | Fast inference | API | ~50 tok/s (7B FP16), ~20 tok/s (30B GPTQ-4bit) |
 
@@ -31,6 +31,9 @@ FP8 is not supported on gfx1151. Use AWQ or GPTQ for large models.
   post-install step (see INSTALL.md).
 - **No public/internet exposure** — the API is internal-only; cross-zone consumers get a
   firewall pinhole on port 8000 via `dependsOn ["vllm-amd:inference"]`.
+- **No unauthenticated use** — every API call needs vLLM's key. It is generated in the LXC
+  on the first update (`/opt/vllm/vllm.env`) and handed to consumers by
+  `vllm-amd:inference`; `vllm.apiKey` in the module JSON sets it instead.
 - **No official AMD support** — ROCm on gfx1151 uses nightly "TheRock" builds. Known issues:
   instability under sustained heavy load
   ([ROCm#5499](https://github.com/ROCm/ROCm/issues/5499)) and memory access faults on specific

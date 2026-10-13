@@ -8,8 +8,10 @@ LiteLLM routes to.
 - **Where vLLM is and what it serves.** Install and update write
   `/etc/secrets/vllm-inference.env` on the consumer: `VLLM_BASE_URL` (the endpoint),
   `VLLM_MODEL_ID` (the model vLLM actually serves, read live) and `VLLM_API_KEY`.
-  vLLM runs without an API key — it is protected by zone policy and the pinhole — so the
-  key is the literal `none` unless `vllm.apiKey` is set in the provider's module JSON.
+  vLLM requires that key on every API call. It is generated in the LXC on the provider's
+  first update and read from there; `vllm.apiKey` in the provider's module JSON sets it
+  instead. Anything without the key gets HTTP 401, so reaching port 8000 in the zone is
+  not enough to use the model.
 - **Network access**: `pinhole.json` opens TCP 8000 from the consumer (auto-pinhole,
   #173).
 - Install and update are one converge (#495), so a change of model reaches consumers on

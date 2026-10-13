@@ -16,12 +16,10 @@
 #   VLLM_MODEL_ID   the model id vLLM actually serves (read live, not guessed)
 #   VLLM_API_KEY    bearer token, or the literal "none" — see below
 #
-# AUTH: this vLLM is served WITHOUT an API key; it is protected by zone policy
-# plus the services/inference/pinhole.json ingress rule, not by a bearer token.
-# VLLM_API_KEY is therefore "none" unless vllm.apiKey is set in the module JSON.
-# Consumers must still send SOME key (OpenAI clients require one) — LiteLLM is
-# configured with this literal value. If you later start vLLM with --api-key,
-# set vllm.apiKey and re-converge; nothing else changes.
+# AUTH (#812): vLLM requires a bearer token. The provider's update.sh keeps it in
+# the LXC (/opt/vllm/vllm.env); this reads it from there through the Proxmox
+# node, so the key is never stored on the mothership. Before the provider has
+# run its update there is no key yet, and VLLM_API_KEY is the literal "none".
 #
 # Usage: update-service.sh <module-name>
 #
@@ -46,7 +44,21 @@ readonly PROVIDER_JSON="${CONFIG_DIR}/${PROVIDER_MODULE}.json"
 VLLM_VMNAME="$(jq -r '.vmname' "${PROVIDER_JSON}")"
 VLLM_ZONE="$(jq -r '.zone0' "${PROVIDER_JSON}")"
 VLLM_PORT="$(jq -r '.vllm.port // 8000' "${PROVIDER_JSON}")"
-VLLM_KEY="$(jq -r '.vllm.apiKey // "none"' "${PROVIDER_JSON}")"
+VLLM_VMID="$(jq -r '.vmid' "${PROVIDER_JSON}")"
+VLLM_KEY=""
+_vllm_node="$(ssh -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR \
+    "root@tappaas1.mgmt.internal" "pvesh get /cluster/resources --type vm --output-format json 2>/dev/null" \
+    | jq -r --argjson id "${VLLM_VMID}" '.[] | select(.vmid==$id) | .node' 2>/dev/null || true)"
+if [[ -n "${_vllm_node}" ]]; then
+    VLLM_KEY="$(ssh -n -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR \
+        "root@${_vllm_node}.mgmt.internal" \
+        "pct exec ${VLLM_VMID} -- sed -n 's/^VLLM_API_KEY=//p' /opt/vllm/vllm.env 2>/dev/null" 2>/dev/null \
+        | head -1 || true)"
+fi
+if [[ -z "${VLLM_KEY}" ]]; then
+    warn "  vLLM's API key could not be read from LXC ${VLLM_VMID} — consumers get 'none' until vllm-amd is updated"
+    VLLM_KEY="none"
+fi
 VLLM_HOST="${VLLM_VMNAME}.${VLLM_ZONE}.internal"
 VLLM_BASE_URL="http://${VLLM_HOST}:${VLLM_PORT}/v1"
 
@@ -102,6 +114,8 @@ fi
 ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR \
     "tappaas@${CONSUMER_HOST}" \
     "systemctl list-unit-files litellm-integrations.service >/dev/null 2>&1 && \
-     sudo systemctl restart litellm-integrations.service" >/dev/null 2>&1 || true
+     sudo systemctl restart litellm-integrations.service; \
+     systemctl list-unit-files litellm-register-vllm.service >/dev/null 2>&1 && \
+     sudo systemctl restart litellm-register-vllm.service" >/dev/null 2>&1 || true
 
 debug "  ${GN}✓${CL} vllm-amd:inference wired for ${MODULE}"

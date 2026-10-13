@@ -86,7 +86,8 @@ into the compose file and runs a smoke prompt in one go.
 | GPU devices in container | `/dev/kfd` and `/dev/dri/renderD128` accessible |
 | Docker daemon | running |
 | vLLM container | `Up` |
-| `http://127.0.0.1:8000/v1/models` (in container) | HTTP 200, lists the loaded model |
+| `http://127.0.0.1:8000/v1/models` (in container), with the key from `/opt/vllm/vllm.env` | HTTP 200, lists the loaded model |
+| the same request without the key | HTTP 401 |
 | Chat completion request | returns a response from the loaded model |
 
 ## Troubleshooting

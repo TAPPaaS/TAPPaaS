@@ -11,7 +11,8 @@ Primary audience: TAPPaaS admin.
      is read live from vLLM — so if vLLM is down at converge time, LiteLLM ends up
      with no model registered. Check:
 
-         curl -s http://<vllm-vmname>.<zone>.internal:8000/v1/models | jq -r '.data[].id'
+         curl -s -H "Authorization: Bearer $(ssh tappaas@<litellm-vmname>.<zone>.internal sudo sed -n 's/^VLLM_API_KEY=//p' /etc/secrets/vllm-inference.env)" \
+             http://<vllm-vmname>.<zone>.internal:8000/v1/models | jq -r '.data[].id'
 
    - **`identity`** (Authentik) — LiteLLM's admin UI signs in via SSO.
 2. The environment owner must exist in identity-manager with a `primaryEmail`; that
@@ -186,7 +187,8 @@ empty. Re-run it:
 The vLLM backend was not registered. Most often vLLM was not serving when the
 converge ran, so no model id could be read. Check vLLM first, then re-converge:
 
-    curl -s http://<vllm-vmname>.<zone>.internal:8000/v1/models | jq -r '.data[].id'
+    curl -s -H "Authorization: Bearer $(ssh tappaas@<litellm-vmname>.<zone>.internal sudo sed -n 's/^VLLM_API_KEY=//p' /etc/secrets/vllm-inference.env)" \
+        http://<vllm-vmname>.<zone>.internal:8000/v1/models | jq -r '.data[].id'
     module-manager reconcile litellm --apply
     ssh tappaas@<vmname>.<zone>.internal "journalctl -u litellm-register-vllm -n 5 | grep register-vllm:"
 

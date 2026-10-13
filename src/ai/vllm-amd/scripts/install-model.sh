@@ -101,7 +101,10 @@ ok "vLLM API healthy (HTTP 200)"
 # --- Smoke test ---
 echo ""
 echo "  === smoke test ==="
+# The API needs vLLM's key (#812), kept in the LXC.
+VLLM_KEY=$(ssh "${TARGET}" "pct exec ${VMID} -- sed -n 's/^VLLM_API_KEY=//p' /opt/vllm/vllm.env" 2>/dev/null | head -1)
 RESPONSE=$(ssh "${TARGET}" "pct exec ${VMID} -- curl -s http://localhost:8000/v1/chat/completions \
+    -H 'Authorization: Bearer ${VLLM_KEY:-none}' \
     -H 'Content-Type: application/json' \
     -d '{\"model\":\"${MODEL_PATH}\",\"messages\":[{\"role\":\"user\",\"content\":\"Reply with one word: working\"}],\"max_tokens\":10}'")
 ANSWER=$(echo "${RESPONSE}" | jq -r '.choices[0].message.content // "no response"')

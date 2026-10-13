@@ -491,8 +491,8 @@ EOF
           exit 0
         fi
         # LiteLLM requires an explicit api_key on every DB model (a check
-        # test-service.sh enforces). vLLM here is unauthenticated, so send the
-        # literal placeholder rather than leaving the field unset.
+        # test-service.sh enforces). Before vllm-amd has generated its key
+        # (#812) there is none, so send the literal placeholder then.
         [ -n "$KEY" ] || KEY="none"
 
         MK="$(grep -m1 '^LITELLM_MASTER_KEY=' /etc/secrets/litellm.env | cut -d= -f2-)"
@@ -514,15 +514,26 @@ EOF
         #     services/models/test-service.sh reads it as "no explicit api_key" and
         #     fails, even though the key is present in the database.
         CRED="vllm-amd"
+        # LiteLLM reports a stored key masked, so the key last written is kept as
+        # a hash here, and the credential is rewritten when vLLM's key changes
+        # (#812: vLLM moved from no key to a generated one).
+        SEEN=/etc/secrets/.litellm-vllm-cred.sha256
+        HASH="$(printf '%s' "$KEY" | sha256sum | cut -d' ' -f1)"
+        BODY="$(jq -nc --arg n "$CRED" --arg k "$KEY" \
+                '{credential_name:$n, credential_values:{api_key:$k}, credential_info:{custom_llm_provider:"openai"}}')"
         if ! curl -fsS -o /dev/null --max-time 20 -H "Authorization: Bearer $MK" \
                "http://127.0.0.1:4000/credentials/by_name/$CRED" 2>/dev/null; then
           curl -fsS --max-time 20 -X POST http://127.0.0.1:4000/credentials \
             -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' \
-            -d "$(jq -nc --arg n "$CRED" --arg k "$KEY" \
-                  '{credential_name:$n, credential_values:{api_key:$k}, credential_info:{custom_llm_provider:"openai"}}')" \
-            >/dev/null 2>&1 \
-            && echo "register-vllm: created credential '$CRED'" \
+            -d "$BODY" >/dev/null 2>&1 \
+            && { echo "register-vllm: created credential '$CRED'"; printf '%s\n' "$HASH" > "$SEEN"; } \
             || echo "register-vllm: could not create credential '$CRED'" >&2
+        elif [ "$(cat "$SEEN" 2>/dev/null)" != "$HASH" ]; then
+          curl -fsS --max-time 20 -X PATCH "http://127.0.0.1:4000/credentials/$CRED" \
+            -H "Authorization: Bearer $MK" -H 'Content-Type: application/json' \
+            -d "$BODY" >/dev/null 2>&1 \
+            && { echo "register-vllm: updated credential '$CRED' to vLLM's current key"; printf '%s\n' "$HASH" > "$SEEN"; } \
+            || echo "register-vllm: could not update credential '$CRED'" >&2
         fi
 
         EXISTING="$(curl -fsS --max-time 20 -H "Authorization: Bearer $MK" \

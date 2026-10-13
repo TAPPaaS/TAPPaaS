@@ -94,6 +94,8 @@ services:
   vllm:
     image: kyuz0/vllm-therock-gfx1151@sha256:c2a4adb2aeac1ec90ffeca8bddda17f66d16ced3742eb16956779a198967afaa
     container_name: vllm
+    env_file:
+      - /opt/vllm/vllm.env
     restart: unless-stopped
     entrypoint: ["python", "-m", "vllm.entrypoints.openai.api_server"]
     devices:
@@ -149,6 +151,67 @@ fi
 NODEEOF
 } | _tag debug
 
+# Step 0c: API key and SSH hardening (#812), idempotent.
+# vLLM requires a bearer token on /v1: without one, anything that reaches port
+# 8000 in its zone used the model directly, bypassing LiteLLM's keys and budgets.
+# The key lives only in the LXC (/opt/vllm/vllm.env, 0600), compose hands it to
+# vLLM as VLLM_API_KEY, and vllm-amd:inference copies it to each consumer.
+# vllm.apiKey in the module JSON overrides the generated key.
+debug "  API key and sshd..."
+KEY_OVERRIDE="$(jq -r '.vllm.apiKey // empty' "$CONFIG_FILE")"
+pct exec "${VMID}" -- bash -c '
+set -e
+CHANGED=0
+ENVF=/opt/vllm/vllm.env
+OVERRIDE="$1"
+CUR="$(sed -n "s/^VLLM_API_KEY=//p" "$ENVF" 2>/dev/null | head -1)"
+if [ -n "$OVERRIDE" ] && [ "$OVERRIDE" != "$CUR" ]; then
+    NEW="$OVERRIDE"
+elif [ -z "$CUR" ]; then
+    NEW="$(head -c 32 /dev/urandom | od -An -tx1 | tr -d " \n")"
+else
+    NEW=""
+fi
+if [ -n "$NEW" ]; then
+    umask 077
+    printf "VLLM_API_KEY=%s\n" "$NEW" > "$ENVF.tmp" && mv -f "$ENVF.tmp" "$ENVF"
+    CHANGED=1
+    echo "vLLM API key set"
+fi
+chmod 600 "$ENVF"
+COMPOSE=/opt/vllm/docker-compose.yml
+if [ -f "$COMPOSE" ] && ! grep -q "^    env_file:" "$COMPOSE"; then
+    sed -i "s|^    container_name: vllm$|    container_name: vllm\n    env_file:\n      - /opt/vllm/vllm.env|" "$COMPOSE"
+    grep -q "^    env_file:" "$COMPOSE" || { echo "ERROR: could not add env_file to $COMPOSE"; exit 1; }
+    CHANGED=1
+    echo "compose: vLLM reads its API key from /opt/vllm/vllm.env"
+fi
+if [ "$CHANGED" = 1 ] && docker ps --format "{{.Names}}" | grep -qx vllm; then
+    (cd /opt/vllm && docker compose up -d >/dev/null 2>&1) \
+        && echo "vLLM container recreated with its API key" \
+        || { echo "ERROR: docker compose up failed after the API key change"; exit 1; }
+fi
+# Root logs in with keys only and there are no other users; say so in sshd too.
+DROP=/etc/ssh/sshd_config.d/tappaas.conf
+WANT="PasswordAuthentication no
+KbdInteractiveAuthentication no"
+if [ "$(cat "$DROP" 2>/dev/null)" != "$WANT" ]; then
+    mkdir -p /etc/ssh/sshd_config.d
+    printf "%s\n" "$WANT" > "$DROP"
+    # sshd -t needs its privilege-separation dir, which a socket-activated ssh
+    # (the Debian LXC default) only creates per connection.
+    mkdir -p /run/sshd
+    sshd -t || { echo "ERROR: sshd rejects $DROP"; rm -f "$DROP"; exit 1; }
+    # Socket-activated: each connection starts an sshd that reads the file, so
+    # nothing to reload — and a reload of an ssh.service running beside the
+    # socket makes it rebind port 22, which the socket holds, and it dies.
+    if ! systemctl is-active --quiet ssh.socket; then
+        systemctl reload ssh 2>/dev/null || true
+    fi
+    echo "sshd: password login off"
+fi
+' _ "${KEY_OVERRIDE}" | _tag info
+
 # Step 1: OS updates inside LXC
 debug "  applying OS updates..."
 # -qq: silent when there is nothing to do (the common case on a converge run),
@@ -169,6 +232,9 @@ debug "  pulling latest vLLM image..."
 pct exec "${VMID}" -- bash -c '
 cd /opt/vllm
 OLD_IMAGE=$(docker inspect vllm --format "{{.Image}}" 2>/dev/null || echo "none")
+# inspect answers "sha256:<id>", compose images -q a bare "<id>": compare the ids,
+# or every update recreates the container and vLLM reloads its model.
+OLD_IMAGE="${OLD_IMAGE#sha256:}"
 # -q still writes "Pulling"/"Pulled" to STDERR, which lands untagged in the
 # sweep log. Silence it and check the status instead: a failed pull must not be
 # discovered later as a confusing "up" failure.
