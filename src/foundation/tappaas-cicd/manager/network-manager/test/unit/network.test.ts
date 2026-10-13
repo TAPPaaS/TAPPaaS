@@ -528,6 +528,26 @@ function tmpZones(): string {
     check(r.errors === 0, `good fixture: 0 errors (got ${r.errors}; warnings ${r.warnings})`);
   }
 
+  // (a2) #257: mdns on two VLAN zones is fine; on mgmt or a non-boolean it is refused.
+  {
+    const raw = goodRaw();
+    (raw.srvHome as Record<string, unknown>).mdns = true;
+    (raw.dmz as Record<string, unknown>).mdns = true;
+    const { zonesFile, configDir } = writeDoc(raw);
+    const r = runChecks(loadZones(zonesFile), configDir, false);
+    check(r.errors === 0, `mdns on two zones: 0 errors (got ${r.errors})`);
+    check(r.lines.some((l) => l.includes("srvHome, dmz share mDNS") || l.includes("dmz, srvHome share mDNS")),
+      "mdns: the group is reported");
+  }
+  {
+    const raw = goodRaw();
+    (raw.mgmt as Record<string, unknown>).mdns = true;
+    (raw.srvHome as Record<string, unknown>).mdns = "yes";
+    const { zonesFile, configDir } = writeDoc(raw);
+    const r = runChecks(loadZones(zonesFile), configDir, false);
+    check(r.errors === 2, `mdns on mgmt and a non-boolean mdns: 2 errors (got ${r.errors})`);
+  }
+
   // (b) dangling access-to ref → hard error
   {
     const raw = goodRaw();

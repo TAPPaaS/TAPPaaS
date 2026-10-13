@@ -44,6 +44,9 @@ export interface Zone {
   // ADR-030 D4: the zone's /64 within the site's first /56 (0-255). Absent = no
   // IPv6 for this zone. Given by default; an operator removes it to opt out.
   ipv6Subnet?: number;
+  // #257: the zone takes part in mDNS discovery across zones — every zone with
+  // `mdns: true` (and any a module's discoveryMdns names) shares one repeater group.
+  mdns?: boolean;
   // Preserve any unknown fields so a load→edit→save round-trips losslessly.
   [k: string]: unknown;
 }

@@ -4,9 +4,11 @@ Relays **mDNS and legacy broadcast discovery** across zone boundaries, so a
 device on one VLAN can find a service on another without the two sharing a
 broadcast domain.
 
-Both are lists of zone pairs, reconciled by rewriting the relay configuration and
-reloading. Removing a relay is as ordinary as adding one, which is what puts them
-on `reconcile`.
+mDNS is one group shared by the whole site: the zones with `"mdns": true` in
+zones.json and, per module, its `zone0` plus the zones `discoveryMdns` names.
+`mdns-manager` converges the firewall's repeater and its rule from all of them, so
+adding or removing a module's declaration is a reconcile like any other. The UDP
+relays are per module and port.
 
 <!-- BEGIN GENERATED FIELDS -- edit the manifest, not this block -->
 
@@ -28,7 +30,7 @@ Consumer zones to bridge with zone0 in the mDNS repeater (os-mdns-repeater). zon
 | Change class | `in-place` |
 | Apply mode | `reconcile` |
 
-**About the field.** Requires network:discovery in dependsOn. Idempotently unions zone0 + declared consumer zones into the repeater interface list. Boolean true is deprecated.
+**About the field.** Requires network:discovery in dependsOn. zone0 and these zones join the one mDNS group, together with every zone that has mdns: true in zones.json; mdns-manager converges the repeater from all of them. Boolean true is deprecated (zone0 only).
 
 **Why this change class.** mDNS service types relayed across zones so a client in one zone can find this module in another. A relay change is a firewall/avahi reload, not a guest change.
 

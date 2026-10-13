@@ -26,6 +26,7 @@ Each is its own command on `PATH`.
 | `acme-manager` | ACME (Let's Encrypt) wildcard certificates via DNS-01. |
 | `syslog-manager` | OPNsense built-in syslog destinations. |
 | `ipv6-manager` | The site's IPv6: *Allow IPv6*, the WAN, each zone's network and advertisements, AAAA records and access lists for published names. |
+| `mdns-manager` | mDNS discovery across zones: the repeater's zones and its rule, from zones.json `mdns` and modules' `discoveryMdns`. |
 | `test-network-manager` | A throwaway isolated test network (create/delete/status). |
 
 ## Credentials & common flags
@@ -189,6 +190,20 @@ advertisements and AAAA names; then the AAAA records of published names and the 
 in Caddy's access lists, from what the interfaces hold. Switching off withdraws each zone's
 IPv6 route before removing it. What it all means for an operator:
 [IPV6.md](../../manager/network-manager/IPV6.md).
+
+### `mdns-manager` — mDNS discovery across zones
+
+```
+mdns-manager apply [--check-mode] [--config-dir <dir>] [--without <module>]
+mdns-manager status                                      # the repeater's interfaces and the rule
+```
+
+`apply` is what the `network` module's update runs, and what `network:discovery` runs for a
+module: the zones with `"mdns": true` plus every module's `zone0` and `discoveryMdns` zones
+form one group; the os-mdns-repeater plugin (installed when first needed) relays among them,
+and the rule `TAPPaaS: mDNS to the repeater` (sequence 975) lets each reach it. Fewer than two
+zones switches the repeater off and removes the rule. `--without` leaves one module out — its
+delete-service. The operator view: [ZONES.md](../../manager/network-manager/ZONES.md#discovery-across-zones-mdns).
 
 ### `test-network-manager` — isolated test network
 

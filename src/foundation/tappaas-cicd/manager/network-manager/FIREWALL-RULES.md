@@ -189,13 +189,14 @@ interface the order is:
 |---|---|---|---|
 | 1 | OPNsense | anti-lockout, DHCP, bogons and system rules | OPNsense |
 | 2 | 970 / 971 | **anti-spoofing** — drop any source outside the zone's networks (IPv4 / IPv6) | zone-manager |
-| 3 | 980, 981 | **admin guard** — block TCP 8443 (GUI) and 22 (SSH) to every firewall address | zone-manager |
-| 4 | 990, 991 | **caddy-reach** — pass TCP 443 and 80 to the DMZ gateway (`/32`), where Caddy listens | zone-manager |
-| 5 | 10000–19999 | **module ingress** and **auto-pinholes** | rules-manager |
-| 6 | 20000–29999 | **module egress** | rules-manager |
-| 7 | 30000–39999 | the **zone baseline** (table below) | zone-manager |
-| 8 | — | rules created without a sequence (other components, the GUI) | various |
-| 9 | — | **default deny** | OPNsense |
+| 3 | 975 | **mDNS** — pass UDP 5353 to `224.0.0.251` on the zones that share discovery ([ZONES.md](ZONES.md#discovery-across-zones-mdns)) | mdns-manager |
+| 4 | 980, 981 | **admin guard** — block TCP 8443 (GUI) and 22 (SSH) to every firewall address | zone-manager |
+| 5 | 990, 991 | **caddy-reach** — pass TCP 443 and 80 to the DMZ gateway (`/32`), where Caddy listens | zone-manager |
+| 6 | 10000–19999 | **module ingress** and **auto-pinholes** | rules-manager |
+| 7 | 20000–29999 | **module egress** | rules-manager |
+| 8 | 30000–39999 | the **zone baseline** (table below) | zone-manager |
+| 9 | — | rules created without a sequence (other components, the GUI) | various |
+| 10 | — | **default deny** | OPNsense |
 
 Within the module bands each module has 100 slots, picked by a stable hash of its `vmname`;
 within band 7 each zone has 100 slots by a hash of its name. Which slot each module has, and
@@ -220,6 +221,7 @@ addresses the zone carries, IPv4 and IPv6 alike. The family column says which.
 |---|---|---|---|
 | 970 | `Zone Z block spoofed source` | IPv4 | block, source not in the zone's network |
 | 971 | `Zone Z block spoofed source v6` | IPv6 | block, source not in the zone's network table (`__optN_network`) |
+| 975 | `TAPPaaS: mDNS to the repeater` | IPv4 | pass UDP 5353 to `224.0.0.251`, where the firewall's mDNS repeater listens; one rule on every zone with `mdns`, none when fewer than two |
 | 980 / 981 | `Zone Z block firewall webgui` / `ssh` | both | block TCP 8443 / 22 to the firewall itself |
 | 990 / 991 | `Zone Z -> caddy https` / `http` | both | pass TCP 443 / 80 from the zone's network to the firewall's own addresses, where Caddy listens |
 | base+0 | `Zone Z -> gateway dns` | both | pass TCP/UDP 53 to the zone's interface address |

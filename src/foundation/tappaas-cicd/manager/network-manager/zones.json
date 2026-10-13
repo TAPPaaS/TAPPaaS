@@ -12,7 +12,7 @@
       "pinhole-allowed-from": "Lists the zones that MAY open per-module pinholes into this zone. The actual narrow rule (specific source VM IP -> specific port) is declared at install time by the module's install.sh, not here."
     },
     "tier_model": "SUPERSEDED BY ADR-014 — the tier model is now STATE, not prose. Each zone carries a 'tier' (0-6) and an 'isolated' flag, and `network-manager validate` enforces them (I1 monotonic access-to, I2 isolation floor, I3 egress boundary, I4 archetype conformance). The authoritative definition lives in schemas/zones-fields.json ('tier_model', 'archetypes', 'invariants', 'tier_exempt_types'), explained in network-manager/ZONES.md. The prose that used to sit here described a DIFFERENT, pre-ADR-014 ranking (dmz at tier 1, guest at tier 5, isolated IoT at tier 4) and was removed rather than left to contradict the enforced model.",
-    "mdns_policy": "Multicast service discovery (Sonos/SSDP, Chromecast) does not cross VLAN boundaries on its own. Where a trusted client or service zone must discover devices in iotCloud, run udpbroadcastrelay to forward UDP port 1900 (SSDP) between the relevant interfaces. Referenced by iotCloud._comment.",
+    "mdns_policy": "Multicast service discovery does not cross VLAN boundaries on its own. mDNS (Chromecast, AirPlay, printers): set \"mdns\": true on each zone that should discover the others, e.g. home and iotCloud; the network update relays among them (discovery only: reaching a found device still needs access-to or a pinhole). SSDP (Sonos, UPnP) is not mDNS: a module relays UDP port 1900 with discoveryUdpRelay. Referenced by iotCloud._comment.",
     "iot_classification": {
       "_comment": "Decision aid for placing a new IoT device into iotLocal / iotCloud / iotCams / iotUntrust. Referenced by iotUntrust._comment.",
       "split_policy_3_questions": [
@@ -231,7 +231,7 @@
     ],
     "tier": 3,
     "serves": "srv",
-    "_comment": "Cloud-connected trusted devices: smart appliances, media (Sonos, Chromecast), HVAC/solar monitoring. srvHome and home reach zone-wide via access-to. Sonos/SSDP needs udpbroadcastrelay port 1900 (see _README.mdns_policy).",
+    "_comment": "Cloud-connected trusted devices: smart appliances, media (Sonos, Chromecast), HVAC/solar monitoring. srvHome and home reach zone-wide via access-to. mDNS across zones: \"mdns\": true here and on the discovering zone; Sonos/SSDP needs a UDP relay of port 1900 (see _README.mdns_policy).",
     "description": "Internet-dependent trusted IoT: smart appliances, media, monitoring"
   },
   "iotCams": {

@@ -132,6 +132,15 @@
       "unset": true,
       "unsetNote": "Removing it keeps the zone IPv4-only: network-manager modify <zone> --unset ipv6Subnet."
     },
+    "mdns": {
+      "description": "The zone takes part in mDNS discovery across zones: devices in it find, and are found by, devices in every other zone with mdns true (printers, media players, smart-home hubs). Off by default.",
+      "type": "boolean",
+      "required": false,
+      "default": false,
+      "note": "One repeater on the firewall relays mDNS (IPv4, 224.0.0.251 port 5353) among all such zones, plus the zones a module's discoveryMdns names. Discovery only: whether a device may then connect is still the zone rules and pinholes. Only VLAN zones that are not Management, WAN or Overlay; network-manager validate checks it.",
+      "changeClass": "in-place",
+      "changeNote": "Adds or removes the zone's interface in the repeater and its mDNS pass rule at the next network update; no guest is touched."
+    },
     "bridge": {
       "description": "Network interface the zone is associated with. For a VLAN zone this is the physical trunk it rides. For a non-VLAN zone (vlantag 0 — Overlay/Manual) it is the OPNsense interface token its traffic arrives on, e.g. 'wireguard' for a WireGuard overlay; ADR-021 D3a needs it to place that overlay's caddy-reach rule",
       "type": "string",

@@ -3,11 +3,12 @@
 # TAPPaaS Discovery Service - Install
 #
 # Configures cross-VLAN discovery on OPNsense for a consuming module:
-#   - discoveryMdns: true  → adds zone0 + home + srvHome to os-mdns-repeater
+#   - discoveryMdns[]      → mdns-manager apply: the repeater relays among zone0,
+#                            these zones and the zones.json zones with mdns: true
 #   - discoveryUdpRelay[]  → adds per-port relay instances to os-udpbroadcastrelay
 #
-# Both operations are idempotent: mDNS uses GET→union→SET, UDP relay checks
-# description "tappaas:<module>:<port>" before adding.
+# Both operations are idempotent: mdns-manager converges the whole repeater,
+# UDP relay checks description "tappaas:<module>:<port>" before adding.
 #
 # When firewallType is "NONE", prints manual instructions and exits 0.
 #
@@ -94,9 +95,26 @@ FW_HOST="${OPNSENSE_HOST:-10.0.0.1}"
 API="https://${FW_HOST}:8443/api"
 CURL=(-sk -u "${KEY}:${SECRET}")
 
-# ── Fetch mDNS interface map ─────────────────────────────────────────
+# ── mDNS repeater ────────────────────────────────────────────────────
+# mdns-manager converges the whole repeater: the zones with "mdns": true in
+# zones.json plus every module's zone0 and discoveryMdns zones (#257).
+
+if [[ "${HAS_MDNS}" == "true" ]]; then
+    [[ -z "${ZONE0}" ]] && die "discoveryMdns set but zone0 not set in ${MODULE_JSON}"
+    debug "  Converging the mDNS repeater (zone0=${ZONE0}, consumer zones: ${MDNS_ZONES_COUNT})..."
+    MDNS_OUT=$(/home/tappaas/bin/mdns-manager --no-ssl-verify apply --config-dir "${CONFIG_DIR}" 2>&1) \
+        || die "mdns-manager apply failed: ${MDNS_OUT}"
+    while IFS= read -r _l; do debug "  ${_l}"; done <<< "${MDNS_OUT}"
+fi
+
+if (( UDP_RELAY_COUNT == 0 )); then
+    debug "${GN}network:discovery install-service completed for ${MODULE}${CL}"
+    exit 0
+fi
+
+# ── Interface map for the UDP relay ─────────────────────────────────
 # Used for zone-name → OPNsense interface-id resolution (e.g. iotCloud → opt21).
-# mDNS GET returns all available interfaces; we parse the value strings.
+# The mDNS repeater's settings list every interface; we parse the value strings.
 # If the endpoint returns an error, os-mdns-repeater is not installed.
 
 MDNS_RESP=$(curl "${CURL[@]}" "${API}/mdnsrepeater/settings/get")
@@ -115,44 +133,6 @@ resolve_iface() {
          | .key' \
         | head -1
 }
-
-# ── mDNS repeater ────────────────────────────────────────────────────
-
-if [[ "${HAS_MDNS}" == "true" ]]; then
-    [[ -z "${ZONE0}" ]] && die "discoveryMdns set but zone0 not set in ${MODULE_JSON}"
-    debug "  Configuring mDNS repeater (zone0=${ZONE0}, consumer zones: ${MDNS_ZONES_COUNT})..."
-
-    ZONE0_IFACE=$(resolve_iface "${ZONE0}")
-    [[ -z "${ZONE0_IFACE}" ]] && die "Cannot resolve OPNsense interface for zone: ${ZONE0}"
-
-    # Resolve each consumer zone declared in discoveryMdns[]
-    CONSUMER_IFACES=""
-    if (( MDNS_ZONES_COUNT > 0 )); then
-        while IFS= read -r zone; do
-            iface=$(resolve_iface "${zone}")
-            [[ -n "${iface}" ]] && CONSUMER_IFACES="${CONSUMER_IFACES} ${iface}"
-        done < <(read_module_config "${MODULE}" | jq -r '.discoveryMdns[]')
-    fi
-
-    # Union current selected interfaces with zone0 + consumer zones (deduplicate)
-    CURRENT=$(echo "${MDNS_RESP}" | jq -r \
-        '.mdnsrepeater.interfaces | to_entries[] | select(.value.selected == 1) | .key')
-    ALL_IFACES=$(printf '%s\n' ${CURRENT} "${ZONE0_IFACE}" ${CONSUMER_IFACES} \
-        | grep -v '^$' | sort -u | tr '\n' ',' | sed 's/,$//')
-
-    debug "  mDNS interfaces set: ${BL}${ALL_IFACES}${CL}"
-
-    SAVE_RESP=$(curl "${CURL[@]}" -X POST -H "Content-Type: application/json" \
-        -d "{\"mdnsrepeater\":{\"enabled\":\"1\",\"interfaces\":\"${ALL_IFACES}\"}}" \
-        "${API}/mdnsrepeater/settings/set")
-    echo "${SAVE_RESP}" | jq -e '.result == "saved"' >/dev/null \
-        || die "mDNS settings/set failed: ${SAVE_RESP}"
-
-    # reconfigure rebuilds the configd config file from config.xml and starts/restarts the daemon.
-    # service/restart alone does not rebuild the config and leaves the daemon stopped.
-    curl "${CURL[@]}" -X POST "${API}/mdnsrepeater/service/reconfigure" >/dev/null
-    debug "  mDNS repeater reconfigured and started."
-fi
 
 # ── UDP broadcast relay ──────────────────────────────────────────────
 

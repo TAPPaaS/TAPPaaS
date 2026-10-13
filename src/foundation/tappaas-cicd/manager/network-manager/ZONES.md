@@ -32,6 +32,7 @@ Two pages complete it:
 | `DHCP-start` / `DHCP-end` | DHCP range offsets within the subnet (default 50–250). |
 | `SSID` | Optional WiFi network broadcast on this zone's VLAN ([below](#wifi-the-ssid-field)). |
 | `ipv6Subnet` | The zone's IPv6 network, 0–255: its `/64` within the site's prefix. Assigned by default; remove it to keep the zone IPv4-only ([IPV6.md](IPV6.md)). |
+| `mdns` | The zone takes part in mDNS discovery across zones ([below](#discovery-across-zones-mdns)). Default `false`. |
 | `description` | Human-readable purpose. |
 
 Zone keys are camelCase (`^[a-z][a-zA-Z0-9]*$`), as in `srvHome` / `iotCams`. The client
@@ -185,6 +186,34 @@ Each is a warning, and an error under `--strict`:
 | **I5** | No zone but `mgmt` has `dmz` in `access-to` | the DMZ is reached through Caddy or by pinhole |
 
 `pinhole-allowed-from` is deliberately not tier-gated: upward is what pinholes are for.
+
+### Discovery across zones: `mdns`
+
+Printers, media players, speakers and smart-home hubs announce themselves with mDNS, which
+stays within one VLAN. A zone with `"mdns": true` joins a single discovery group: a device in
+it finds devices in every other zone of the group, and is found by them.
+
+```bash
+network-manager modify home --set mdns=true
+network-manager modify iotCloud --set mdns=true
+module-manager update network
+```
+
+- **Discovery only.** Finding a device does not let a client reach it: that is still the
+  zone's `access-to` or a module's pinhole. A phone in `home` that discovers a speaker in
+  `iotCloud` connects to it only if `home` may reach `iotCloud`.
+- **One group.** Every zone in it hears every other; there are no pairs. It takes two zones
+  to relay anything.
+- **IPv4.** Announcements are relayed over IPv4; the connection that follows may use either
+  family.
+- **Which zones.** VLAN zones that are not `Management`, `WAN` or `Overlay`; `validate`
+  refuses the others.
+- **Modules.** A module that needs its own zone discoverable declares `discoveryMdns` (the
+  zones that should find it), which adds its zone and those zones to the same group.
+
+The firewall's mDNS repeater carries it, with one rule letting each zone of the group reach
+it ([FIREWALL-RULES.md](FIREWALL-RULES.md)). Setting the field back to `false` takes the zone
+out at the next network update; with fewer than two zones left the repeater is switched off.
 
 ## Zones on a new and an updated site
 

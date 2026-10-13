@@ -588,6 +588,43 @@ export interface ZonesCheckOpts {
   effective?: boolean;
 }
 
+// ── mDNS across zones (#257) ─────────────────────────────────────────
+// The repeater relays between VLAN interfaces; a zone without a VLAN (an
+// overlay) carries no multicast, and the control plane and the WAN never take part.
+const MDNS_EXCLUDED_TYPES = new Set(["Management", "WAN", "Overlay"]);
+
+function checkMdns(doc: ZonesDoc, rep: Reporter): void {
+  const group: string[] = [];
+  for (const [name, z] of doc.zones) {
+    if (z.mdns === undefined) continue;
+    if (typeof z.mdns !== "boolean") {
+      rep.err(`mdns: zone '${name}' has mdns ${JSON.stringify(z.mdns)} — true or false`);
+      continue;
+    }
+    if (!z.mdns) continue;
+    if (MDNS_EXCLUDED_TYPES.has(String(z.type ?? "")) || !z.vlantag) {
+      rep.err(
+        `mdns: zone '${name}' (${z.type ?? "no type"}) cannot take part in mDNS — ` +
+          `only VLAN zones that are not Management, WAN or Overlay`,
+      );
+      continue;
+    }
+    if (isActiveState(z.state)) group.push(name);
+  }
+  if (group.length === 1) {
+    rep.note(
+      `mdns: only zone '${group[0]}' has mdns: true — discovery crosses zones only ` +
+        `between two or more (a module's discoveryMdns may add the other)`,
+    );
+  } else {
+    rep.ok(
+      group.length === 0
+        ? "mdns: no zone relays mDNS"
+        : `mdns: ${group.join(", ")} share mDNS discovery`,
+    );
+  }
+}
+
 // Run every check against an already-loaded doc + config dir. Pure (no I/O on
 // zones.json; reads module configs read-only). Returns the accumulated result.
 export function runChecks(doc: ZonesDoc, configDir: string, strict: boolean): CheckResult {
@@ -600,6 +637,7 @@ export function runChecks(doc: ZonesDoc, configDir: string, strict: boolean): Ch
   checkBootOptions(doc, rep);
   checkTierInvariants(doc, rep);
   checkServes(doc, configDir, rep);
+  checkMdns(doc, rep);
   return result;
 }
 
