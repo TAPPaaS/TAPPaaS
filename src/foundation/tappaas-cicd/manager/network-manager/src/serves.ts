@@ -92,6 +92,21 @@ export interface ResolveResult {
   errors: string[];
 }
 
+// The environments a zone serves (#576): `serves` is one name or a list of
+// them. One environment is written as a plain string, so the common case — and
+// every zones.json from before #576 — is unchanged.
+export function servesList(z: { serves?: unknown } | undefined): string[] {
+  const v = z?.serves;
+  const list = Array.isArray(v) ? v : v === undefined || v === null ? [] : [v];
+  return list.filter((e): e is string => typeof e === "string" && e.length > 0);
+}
+
+// The written form of a list of environments: absent, one string, or a list.
+export function servesValue(envs: string[]): string | string[] | undefined {
+  const uniq = [...new Set(envs)];
+  return uniq.length === 0 ? undefined : uniq.length === 1 ? uniq[0] : uniq;
+}
+
 // Read <configDir>/environments/<env>.json and return its .network.zone.
 // Returns undefined when the file is absent/unreadable or names no zone; the
 // caller turns that into a specific error message.
@@ -140,8 +155,8 @@ export function resolveServes(
   const errors: string[] = [];
 
   for (const [name, z] of doc.zones) {
-    const serves = z.serves;
-    if (typeof serves !== "string" || serves.length === 0) continue;
+    const envs = servesList(z);
+    if (envs.length === 0) continue;
 
     const type = typeof z.type === "string" ? z.type : "";
     if (!SERVES_ALLOWED_TYPES.has(type)) {
@@ -153,40 +168,44 @@ export function resolveServes(
       continue;
     }
 
-    const svc = environmentZone(configDir, serves);
-    if (svc === undefined) {
-      errors.push(
-        `zone '${name}' serves environment '${serves}', which has no readable ` +
-          `${join(configDir, "environments", `${serves}.json`)} with a '.network.zone'. ` +
-          `Create the environment, or re-bind the zone.`,
-      );
-      continue;
-    }
-    if (!doc.zones.has(svc)) {
-      errors.push(
-        `zone '${name}' serves environment '${serves}', whose network.zone '${svc}' ` +
-          `is not defined in zones.json.`,
-      );
-      continue;
-    }
-
-    const self = out[name] as Record<string, unknown> | undefined;
-    if (!self) continue;
-
-    // The edge is always LOCAL to the declaring zone — see the header.
-    const added: string[] = [];
-    if (type === "IoT") {
-      // The environment's modules drive the devices: record who may pinhole in.
-      // Never touches access-to, so R2 holds structurally, isolated or not.
-      if (addRef(self, "pinhole-allowed-from", svc)) {
-        added.push(`${name}.pinhole-allowed-from += ${svc}`);
+    // One edge per environment the zone serves: the union of what each
+    // derives (#576). A single environment is the one-element case.
+    for (const serves of envs) {
+      const svc = environmentZone(configDir, serves);
+      if (svc === undefined) {
+        errors.push(
+          `zone '${name}' serves environment '${serves}', which has no readable ` +
+            `${join(configDir, "environments", `${serves}.json`)} with a '.network.zone'. ` +
+            `Create the environment, or re-bind the zone.`,
+        );
+        continue;
       }
-    } else if (SERVES_DERIVES_ZONE_WIDE_CLIENT_ACCESS) {
-      // Client / Guest: the client consumes the service, zone-wide (F2).
-      if (addRef(self, "access-to", svc)) added.push(`${name}.access-to += ${svc}`);
-    }
+      if (!doc.zones.has(svc)) {
+        errors.push(
+          `zone '${name}' serves environment '${serves}', whose network.zone '${svc}' ` +
+            `is not defined in zones.json.`,
+        );
+        continue;
+      }
 
-    edges.push({ zone: name, environment: serves, serviceZone: svc, added });
+      const self = out[name] as Record<string, unknown> | undefined;
+      if (!self) continue;
+
+      // The edge is always LOCAL to the declaring zone — see the header.
+      const added: string[] = [];
+      if (type === "IoT") {
+        // The environment's modules drive the devices: record who may pinhole in.
+        // Never touches access-to, so R2 holds structurally, isolated or not.
+        if (addRef(self, "pinhole-allowed-from", svc)) {
+          added.push(`${name}.pinhole-allowed-from += ${svc}`);
+        }
+      } else if (SERVES_DERIVES_ZONE_WIDE_CLIENT_ACCESS) {
+        // Client / Guest: the client consumes the service, zone-wide (F2).
+        if (addRef(self, "access-to", svc)) added.push(`${name}.access-to += ${svc}`);
+      }
+
+      edges.push({ zone: name, environment: serves, serviceZone: svc, added });
+    }
   }
 
   return { edges, errors };
@@ -224,9 +243,10 @@ export function effectiveFileFor(zonesFile: string): string {
   return join(dirname(zonesFile), "zones.effective.json");
 }
 
-// A zone's `serves` value, or undefined.
+// A zone's `serves` value as one line of text ("a, b"), or undefined.
 export function zoneServes(z: Zone | undefined): string | undefined {
-  return typeof z?.serves === "string" && z.serves.length > 0 ? z.serves : undefined;
+  const envs = servesList(z);
+  return envs.length ? envs.join(", ") : undefined;
 }
 
 // Load the authored zones.json, render its effective form, and write it beside
@@ -325,7 +345,7 @@ export function backfillServes(raw: Record<string, unknown>, configDir: string):
     const field = type === "IoT" ? "pinhole-allowed-from" : "access-to";
     const refs = Array.isArray(z[field]) ? (z[field] as unknown[]) : [];
 
-    const already = typeof z["serves"] === "string" && (z["serves"] as string).length > 0;
+    const already = servesList(z).length > 0;
     // A zone the operator already bound: still prune the now-derived literal so
     // a re-run converges, but do not re-point the link.
     const targetEnv = already

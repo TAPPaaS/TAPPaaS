@@ -36,7 +36,7 @@ import { join } from "path";
 import { CL, GN, RD, YW } from "../../../lib/ts/src/cli";
 import { Zone, ZonesDoc } from "./types";
 import { NO_IPV6_TYPES, loadZones } from "./zones";
-import { renderEffective, resolveServes } from "./serves";
+import { renderEffective, resolveServes, servesList } from "./serves";
 import {
   CONTROL_PLANE_ZONE,
   TIER_INTERNET,
@@ -552,7 +552,7 @@ function indexRendered(raw: Record<string, unknown>): Map<string, Zone> {
 // absent. Same for `serves` on a zone type that must not carry it.
 function checkServes(doc: ZonesDoc, configDir: string, rep: Reporter): void {
   const linked = Array.from(doc.zones.values()).filter(
-    (z) => typeof z.serves === "string" && z.serves.length > 0,
+    (z) => servesList(z).length > 0,
   );
   if (linked.length === 0) {
     rep.note("serves: no zone declares a 'serves' link (pre-ADR-014, or all links are literal)");
@@ -644,7 +644,7 @@ export function zonesCheck(
   // clean result read as a verdict on the whole firewall.
   if (!opts.effective) {
     const linked = Array.from(doc.zones.values()).filter(
-      (z) => typeof z.serves === "string" && z.serves.length > 0,
+      (z) => servesList(z).length > 0,
     ).length;
     if (linked > 0) {
       log(

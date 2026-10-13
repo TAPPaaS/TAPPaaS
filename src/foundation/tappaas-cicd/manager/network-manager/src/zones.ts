@@ -194,7 +194,7 @@ export interface AddZoneOpts {
   archetype?: string;
   // ADR-014 D2: bind the new Client/IoT/Guest zone to an environment in the
   // same command.
-  serves?: string;
+  serves?: string | string[];
   // #546: DHCP boot options 66/67. On --from-zone these are inherited from the
   // source zone; these flags override (or set) them on the new zone. Both-or-
   // neither — validate rejects a half-configured pair.

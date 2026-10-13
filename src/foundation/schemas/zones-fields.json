@@ -200,8 +200,14 @@
       "changeNote": "Inbound quarantine. Turning it on withdraws every zone-wide pass INTO this zone at the next reconcile \u2014 disruptive to traffic, but not to any guest, and instantly reversible."
     },
     "serves": {
-      "description": "The ENVIRONMENT whose service zone this Client or IoT zone consumes. A symbolic reference resolved on every reconcile against config/environments/<env>.json '.network.zone' \u2014 so it survives the install-time 'srv' -> '<defaultEnvironment>' rename that strands literal service-zone names (issue #424).",
-      "type": "string",
+      "description": "The ENVIRONMENT, or environments, whose service zone this Client or IoT zone consumes: one name, or a list when the zone serves several (#576). A symbolic reference resolved on every reconcile against config/environments/<env>.json '.network.zone' \u2014 so it survives the install-time 'srv' -> '<defaultEnvironment>' rename that strands literal service-zone names (issue #424).",
+      "type": [
+        "string",
+        "array"
+      ],
+      "items": {
+        "type": "string"
+      },
       "required": false,
       "appliesTo": [
         "Client",
@@ -211,7 +217,7 @@
       "example": "warmelo",
       "note": "Authored once via 'network-manager bind <zone> --environment <env>'. Resolution ADDS the environment's service zone to this zone's effective 'access-to', and adds this zone to that service zone's effective 'pinhole-allowed-from'. An isolated zone contributes ONLY the pinhole direction, never an inbound 'access-to' (R2 is preserved). The derived edges are rendered into zones.effective.json and are NEVER written back into zones.json, which stays purely authored.",
       "changeClass": "manual",
-      "changeNote": "Has its own verb: `network-manager bind <zone> --environment <env>` (or --unbind). bind resolves the environment first, so a typo fails at the command rather than three reconciles later (ADR-014 D2)."
+      "changeNote": "Has its own verb: `network-manager bind <zone> --environment <env>` replaces the link, `--add` adds one more, `--unbind` clears them (with `--environment`, only that one). bind resolves the environment first, so a typo fails at the command rather than three reconciles later (ADR-014 D2). Each environment's edges are derived; the union is the effective set."
     },
     "DHCP-start": {
       "description": "Starting offset for DHCP range within the subnet",

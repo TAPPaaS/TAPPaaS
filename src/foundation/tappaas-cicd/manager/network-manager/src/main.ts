@@ -54,6 +54,8 @@ import {
   effectiveFileFor,
   environmentZone,
   refreshEffective,
+  servesList,
+  servesValue,
 } from "./serves";
 import { distributeZones, shouldAutoDistribute } from "./distribute";
 import { isPubliclyResolvableSync, resolveSplitHorizonTarget } from "./splithorizon";
@@ -160,11 +162,15 @@ export const HELP: HelpSpec = {
       name: "bind (link a Client/IoT/Guest zone to an environment — ADR-014 D2)",
       hidden: ["--env <env>"],
       options: [
-        ["--environment <env>", "the environment whose service zone this zone consumes"],
-        ["--unbind", "clear the link"],
+        ["--environment <env>", "the environment whose service zone this zone consumes;\n" +
+          "                      replaces any link the zone has"],
+        ["--add", "with --environment: add the environment to the zone's links\n" +
+          "                      instead of replacing them (a zone may serve several)"],
+        ["--unbind", "clear every link; with --environment, remove only that one"],
       ],
       note:
-        "Sets the zone's `serves` field. The access-to / pinhole-allowed-from edges\n" +
+        "Sets the zone's `serves` field — one environment, or several with --add.\n" +
+        "The access-to / pinhole-allowed-from edges\n" +
         "are DERIVED from it on every reconcile (into zones.effective.json), so they\n" +
         "survive the install-time srv→<environment> rename — this is what closes #424.\n" +
         "zones.json itself stays purely authored.",
@@ -363,6 +369,7 @@ interface Opts {
   // add --archetype / --serves (ADR-014 D5 / D2)
   archetype?: string;
   serves?: string;
+  add?: boolean; // bind --add: one more environment (#576)
   // add --tftp-server-name / --bootfile-name (DHCP options 66/67, #546)
   tftpServerName?: string;
   bootfileName?: string;
@@ -465,6 +472,9 @@ function parseOpts(args: string[]): Opts {
       case "--unbind":
         o.unbind = true;
         break;
+      case "--add":
+        o.add = true;
+        break;
       case "--archetype":
         o.archetype = next();
         break;
@@ -565,7 +575,7 @@ function cmdZone(sub: string, opts: Opts): void {
         const t = zoneTier(z?.tier);
         const iso = z?.isolated === true ? " isolated" : "";
         line += ` ${(t === undefined ? "tier -" : `tier ${t}`).padEnd(7)}` +
-          ` ${(typeof z?.serves === "string" && z.serves ? `serves ${z.serves}` : "").padEnd(18)}${iso}`;
+          ` ${(servesList(z).length ? `serves ${servesList(z).join(",")}` : "").padEnd(18)}${iso}`;
       }
       info(line.trimEnd());
     }
@@ -830,8 +840,8 @@ function cmdBind(opts: Opts): void {
   if (!opts.unbind && !opts.environment) {
     die("bind: expected --environment <env> (or --unbind to clear the link)");
   }
-  if (opts.unbind && opts.environment) {
-    die("bind: --environment and --unbind are mutually exclusive");
+  if (opts.add && (opts.unbind || !opts.environment)) {
+    die("bind: --add goes with --environment <env> (and not with --unbind)");
   }
 
   const doc = loadZones(opts.zonesFile);
@@ -847,18 +857,17 @@ function cmdBind(opts: Opts): void {
   }
 
   const configDir = dirname(opts.zonesFile);
-  const before = typeof z.serves === "string" ? z.serves : "";
+  const before = servesList(z);
+  const shown = (envs: string[]) => (envs.length ? envs.map((e) => `'${e}'`).join(", ") : "(none)");
+  let after: string[];
 
   if (opts.unbind) {
-    if (!before) {
-      info(`${name}: no 'serves' link — no change`);
+    // --unbind clears every link; --unbind --environment E removes only E.
+    after = opts.environment ? before.filter((e) => e !== opts.environment) : [];
+    if (after.length === before.length) {
+      info(`${name}: ${opts.environment ? `does not serve '${opts.environment}'` : "no 'serves' link"} — no change`);
       return;
     }
-    delete z.serves;
-    const rawZone = doc.raw[name] as Record<string, unknown>;
-    delete rawZone.serves;
-    saveZones(opts.zonesFile, doc);
-    info(`${name}: serves '${before}' → ${GN}(cleared)${CL}`);
   } else {
     const env = opts.environment as string;
     // Resolve up front so a typo is caught here, not three commands later.
@@ -872,15 +881,29 @@ function cmdBind(opts: Opts): void {
     if (!zoneExists(doc, svc)) {
       die(`bind: environment '${env}' names service zone '${svc}', which is not defined in zones.json`);
     }
-    if (before === env) {
-      info(`${name}: already serves '${env}' — no change`);
+    // Without --add the link REPLACES what the zone had — said out loud, so a
+    // second bind never drops an edge silently (#576).
+    after = opts.add ? [...before, env] : [env];
+    if (JSON.stringify(servesValue(after)) === JSON.stringify(servesValue(before))) {
+      info(`${name}: already serves ${shown(before)} — no change`);
       return;
     }
-    z.serves = env;
-    (doc.raw[name] as Record<string, unknown>).serves = env;
-    saveZones(opts.zonesFile, doc);
-    info(`${name}: serves ${before ? `'${before}' → ` : ""}${GN}'${env}'${CL} (service zone '${svc}')`);
+    if (!opts.add && before.length && !before.every((e) => e === env)) {
+      info(`${name}: replacing ${shown(before)} — use --add to keep them and add '${env}'`);
+    }
   }
+
+  const value = servesValue(after);
+  const rawZone = doc.raw[name] as Record<string, unknown>;
+  if (value === undefined) {
+    delete z.serves;
+    delete rawZone.serves;
+  } else {
+    z.serves = value;
+    rawZone.serves = value;
+  }
+  saveZones(opts.zonesFile, doc);
+  info(`${name}: serves ${shown(before)} → ${GN}${shown(servesList({ serves: value }))}${CL}`);
 
   // Re-render and show what the link derives, so the operator sees the effect
   // rather than having to reason about it.

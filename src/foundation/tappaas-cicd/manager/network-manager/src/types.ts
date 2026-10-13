@@ -31,7 +31,7 @@ export interface Zone {
   // All three are optional: a zones.json predating ADR-014 keeps working.
   tier?: number;
   isolated?: boolean;
-  serves?: string;
+  serves?: string | string[];   // one environment, or several (#576)
   description?: string;
   parent?: string;
   variant?: string;

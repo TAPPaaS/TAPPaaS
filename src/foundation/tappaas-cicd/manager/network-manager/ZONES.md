@@ -137,9 +137,20 @@ every reconcile:
 
 A Client or Guest zone gets the environment's service zone added to its `access-to`; an IoT
 zone gets it added to its `pinhole-allowed-from`, so an `isolated` zone never gains inbound
-reach. The derived edges live in `config/zones.effective.json`, never in `zones.json`. Set
-it with `network-manager bind <zone> --environment <env>`
-([network-manager](README.md)).
+reach. The derived edges live in `config/zones.effective.json`, never in `zones.json`.
+
+A zone may serve **several environments** — a workstation zone that reaches both a production
+and a development service zone: `"serves": ["warmelo", "lab"]`. Each environment's edge is
+derived, and the zone gets all of them. One environment stays a plain string.
+
+Set it with `network-manager bind` ([network-manager](README.md)):
+
+| Command | Effect |
+|---|---|
+| `bind <zone> --environment <env>` | the zone serves `<env>` — **replacing** any link it had |
+| `bind <zone> --environment <env> --add` | the zone serves `<env>` **as well** |
+| `bind <zone> --unbind --environment <env>` | the zone no longer serves `<env>`; other links stay |
+| `bind <zone> --unbind` | every link is cleared |
 
 ### Archetypes
 

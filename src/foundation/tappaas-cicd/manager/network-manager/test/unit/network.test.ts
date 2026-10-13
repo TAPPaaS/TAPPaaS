@@ -45,7 +45,7 @@ import { reconcileAll } from "../../src/reconcile";
 import { addZone, deleteZone } from "../../src/zonelifecycle";
 import { runChecks } from "../../src/zonescheck";
 import { ARCHETYPES, TIER_EXEMPT_TYPES, archetypeNames } from "../../src/archetypes";
-import { backfillServes, renderEffective } from "../../src/serves";
+import { backfillServes, renderEffective, servesList, servesValue } from "../../src/serves";
 import {
   ZonesFieldsSchema,
   applyZoneSet,
@@ -1442,6 +1442,34 @@ function tmpZones(): string {
     check((z("iotCams")["pinhole-allowed-from"] as string[]).includes("warmelo"), "P3 R2: an isolated IoT zone still records who may pinhole into it");
     check(!(z("warmelo")["access-to"] as string[]).includes("iotCams"), "P3 R2: an isolated IoT zone is added to NOBODY's access-to");
     check(eff.errors.length === 0, "P3: a well-formed serves graph resolves without errors");
+  }
+
+  // (a2) #576: a zone may serve several environments — the union of each one's
+  //      edges; one environment as a plain string is the one-element case.
+  {
+    writeFileSync(join(d, "environments", "lab.json"),
+      JSON.stringify({ name: "lab", network: { zone: "lab" } }), "utf8");
+    const b = base() as Record<string, Record<string, unknown>>;
+    b.lab = { type: "Service", state: "Active", typeId: "2", subId: "1", vlantag: 299, ip: "10.2.99.0/24", tier: 1, "access-to": ["internet"], "pinhole-allowed-from": [] };
+    b.home.serves = ["warmelo", "lab"];
+    b.iotLocal.serves = ["warmelo", "lab"];
+    const eff = renderEffective(loadZones(write(b, "zones-multi.json")), d);
+    const z = (k: string) => eff.raw[k] as Record<string, unknown>;
+    const at = z("home")["access-to"] as string[];
+    check(at.includes("warmelo") && at.includes("lab"), "#576: a client serving two environments reaches both service zones");
+    const paf = z("iotLocal")["pinhole-allowed-from"] as string[];
+    check(paf.includes("warmelo") && paf.includes("lab"), "#576: an IoT zone serving two environments accepts pinholes from both");
+    check(eff.edges.filter((e) => e.zone === "home").length === 2, "#576: one derived edge per environment");
+    check(eff.errors.length === 0, "#576: a list of valid environments resolves without errors");
+    b.home.serves = ["warmelo", "ghost"];
+    const bad = renderEffective(loadZones(write(b, "zones-multi.json")), d);
+    check(bad.errors.length === 1 && bad.errors[0].includes("'ghost'"), "#576: an unknown environment in the list is one error, naming it");
+    check(((bad.raw["home"] as Record<string, unknown>)["access-to"] as string[]).includes("warmelo"),
+      "#576: the valid environments in the list still derive their edges");
+    check(JSON.stringify(servesValue(["a"])) === '"a"' && JSON.stringify(servesValue(["a", "b", "a"])) === '["a","b"]'
+      && servesValue([]) === undefined, "#576: one environment is written as a string, several as a list");
+    check(servesList({ serves: "a" }).length === 1 && servesList({ serves: ["a", "b"] }).length === 2
+      && servesList({}).length === 0, "#576: servesList reads both forms");
   }
 
   // (b) the authored document is never mutated by rendering.
