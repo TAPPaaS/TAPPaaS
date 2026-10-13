@@ -121,6 +121,54 @@ class TestEgressToInternet(_Base):
         self.assertFalse(other.destination_invert)
 
 
+class TestAliasPeers(_Base):
+    """#818: an alias: peer is held to the zone policy of what it contains."""
+
+    def errors(self, egress=None, ingress=None, aliases=None, global_aliases=None):
+        app = dict(APP, egress=egress or [], ingress=ingress or [], aliases=aliases or {})
+        (self.dir / "app.json").write_text(json.dumps(app))
+        m = self.mgr()
+        m.global_aliases = global_aliases or {}
+        return [str(e) for e in m._validate(load_module(self.dir, "app"))]
+
+    def eg(self, alias, port=1883):
+        return [{"to": f"alias:{alias}", "ports": [port], "description": "x"}]
+
+    def test_an_alias_in_a_zone_the_module_may_not_reach_is_refused(self):
+        errs = self.errors(egress=self.eg("dev"), aliases={"dev": {"type": "host", "description": "d",
+                                                             "addresses": ["10.3.10.7"]}})
+        self.assertTrue(any("(zone home) violates policy" in e for e in errs), errs)
+
+    def test_an_alias_in_a_zone_that_allows_it_is_accepted(self):
+        # iot lists srv in pinhole-allowed-from.
+        self.assertEqual(self.errors(egress=self.eg("dev"), aliases={"dev": {
+            "type": "host", "description": "d", "addresses": ["10.4.10.7", "broker.iot.internal"]}}), [])
+
+    def test_an_internal_name_counts_as_its_zone(self):
+        errs = self.errors(egress=self.eg("dev"), aliases={"dev": {
+            "type": "host", "description": "d", "addresses": ["tv.home.internal"]}})
+        self.assertTrue(any("(zone home)" in e for e in errs), errs)
+
+    def test_public_addresses_are_the_internet(self):
+        self.assertEqual(self.errors(egress=self.eg("cloud", 443), aliases={"cloud": {
+            "type": "host", "description": "d", "addresses": ["api.example.com", "9.9.9.9"]}}), [])
+        errs = self.errors(ingress=[{"from": "alias:cloud", "ports": [8080], "description": "x"}],
+                           aliases={"cloud": {"type": "host", "description": "d", "addresses": ["9.9.9.9"]}})
+        self.assertTrue(any("does not accept ingress from the internet" in e for e in errs), errs)
+
+    def test_a_range_spanning_zones_cannot_be_checked(self):
+        errs = self.errors(egress=self.eg("private_ranges"), global_aliases={"private_ranges": {
+            "type": "network", "description": "d", "addresses": ["10.0.0.0/8"]}})
+        self.assertTrue(any("not in one zone" in e for e in errs), errs)
+
+    def test_a_derived_nfs_path_is_left_to_its_grant(self):
+        app = dict(APP, ingress=[], egress=[{"to": "alias:nfs_share_media", "ports": [2049],
+                                             "description": "storage:nfs", "derived": "storage:nfs"}],
+                   aliases={"nfs_share_media": {"type": "host", "description": "d", "addresses": ["10.3.10.9"]}})
+        (self.dir / "app.json").write_text(json.dumps(app))
+        self.assertEqual([str(e) for e in self.mgr()._validate(load_module(self.dir, "app"))], [])
+
+
 class TestSequenceMap(_Base):
     def _write(self, m):
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):

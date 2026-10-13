@@ -293,6 +293,14 @@ def _net_names(net: str | None) -> set[str]:
     return {part.strip().lstrip("!") for part in (net or "").split(",") if part.strip()}
 
 
+def _is_public(net: ipaddress.IPv4Network | ipaddress.IPv6Network) -> bool:
+    """True for an address range on the public internet — not private, link-local,
+    reserved, or carrier-grade NAT (which `ipaddress` does not count as private)."""
+    if net.is_private or net.is_link_local or net.is_reserved or net.is_multicast:
+        return False
+    return not (net.version == 4 and net.overlaps(ipaddress.ip_network("100.64.0.0/10")))
+
+
 def _rule_family(protocol: str, *nets: str) -> IpProtocol:
     """The address family a module rule can match.
 
@@ -642,6 +650,10 @@ def nfs_derived_egress(modules_dir: Path, data: dict, instance: str = "") -> tup
             "ports": [],
             "protocol": proto,
             "description": f"storage:nfs to {label} (ADR-029)",
+            # Derived by the platform from a granted mount, not authored: the
+            # share's grant is its policy, so the zone check on alias: peers
+            # does not apply (#818).
+            "derived": NFS_COORDINATE,
         })
         for p in ports:
             if p not in entry["ports"]:
@@ -1509,6 +1521,8 @@ class RulesManager:
                 continue
             peer = entry["from"]
             self._validate_peer(peer, module, path + ".from", errors)
+            if peer.startswith("alias:") and dest_zone:
+                self._check_alias_peer(module, peer, "ingress", f"{path}.from", errors)
             if dest_zone and peer == "internet" and module.vmname not in FIREWALL_MODULES:
                 if "internet" not in dest_zone.pinhole_allowed_from:
                     errors.append(ValidationError(
@@ -1565,6 +1579,8 @@ class RulesManager:
                 continue
             peer = entry["to"]
             self._validate_peer(peer, module, path + ".to", errors)
+            if peer.startswith("alias:") and source_zone and not entry.get("derived"):
+                self._check_alias_peer(module, peer, "egress", f"{path}.to", errors)
             # Policy: reaching another zone needs that zone in our access-to, or
             # our zone in its pinhole-allowed-from. A module peer is judged by
             # the zone it runs in.
@@ -1578,6 +1594,85 @@ class RulesManager:
                     ))
 
         return errors
+
+    def _alias_peer_places(self, name: str, module: ModuleSpec,
+                           seen: frozenset = frozenset()) -> tuple[set[str], bool, list[str]]:
+        """Where an alias's addresses are (#818): (zones, internet?, unplaced).
+
+        An address or network inside one zone's network is that zone; a
+        `<host>.<zone>.internal` name is that zone; a public address or a name
+        outside `.internal` is the internet. A private range that is no single
+        zone's (or holds several), and anything undefined, cannot be placed.
+        """
+        zones: set[str] = set()
+        internet = False
+        unplaced: list[str] = []
+        definition = (module.aliases or {}).get(name) or self.global_aliases.get(name)
+        if definition is None:
+            return zones, internet, [f"alias '{name}' is not defined"]
+        nets = {z: ipaddress.ip_network(spec.ip_network, strict=False)
+                for z, spec in self.zones.items() if spec.ip_network}
+        for addr in definition.get("addresses") or []:
+            addr = str(addr).strip()
+            try:
+                net = ipaddress.ip_network(addr, strict=False)
+            except ValueError:
+                net = None
+            if net is not None:
+                owner = [z for z, zn in nets.items()
+                         if zn.version == net.version and net.subnet_of(zn)]
+                if owner:
+                    zones.add(owner[0])
+                elif not _is_public(net):
+                    unplaced.append(addr)
+                else:
+                    internet = True
+                continue
+            host = addr.rstrip(".").lower()
+            if host.endswith(".internal"):
+                zone = host.rsplit(".", 2)[-2] if host.count(".") >= 2 else ""
+                match = next((z for z in self.zones if z.lower() == zone), None)
+                if match:
+                    zones.add(match)
+                else:
+                    unplaced.append(addr)
+            elif addr in (module.aliases or {}) or addr in self.global_aliases:
+                if addr in seen or addr == name:
+                    continue
+                z2, i2, u2 = self._alias_peer_places(addr, module, seen | {name})
+                zones |= z2
+                internet |= i2
+                unplaced += u2
+            else:
+                internet = True
+        return zones, internet, unplaced
+
+    def _check_alias_peer(self, module: ModuleSpec, peer: str, direction: str,
+                          path: str, errors: list[ValidationError]) -> None:
+        """An alias: peer is held to the zone policy of what it contains (#818)."""
+        name = peer[len("alias:"):]
+        if name not in (module.aliases or {}) and name not in self.global_aliases:
+            return                                    # _validate_peer reports it
+        zones, internet, unplaced = self._alias_peer_places(name, module)
+        for addr in unplaced:
+            errors.append(ValidationError(
+                module.vmname, path,
+                f"'{peer}' holds {addr}, which is not in one zone and not on the internet, so "
+                f"the zone policy cannot be checked — name the zone or module instead, or "
+                f"narrow the alias to one zone's addresses"))
+        for zone in sorted(zones - {module.zone0}):
+            src, dst = (zone, module.zone0) if direction == "ingress" else (module.zone0, zone)
+            refusal = self._cross_zone_refusal(src, dst)
+            if refusal:
+                errors.append(ValidationError(
+                    module.vmname, path, f"'{peer}' (zone {zone}) violates policy — {refusal}"))
+        if internet and direction == "ingress" and module.vmname not in FIREWALL_MODULES:
+            dest_zone = self.zones.get(module.zone0)
+            if dest_zone and "internet" not in dest_zone.pinhole_allowed_from:
+                errors.append(ValidationError(
+                    module.vmname, path,
+                    f"'{peer}' holds internet addresses — {module.zone0} does not accept ingress "
+                    f"from the internet: {self._fix_hint(module.zone0, 'internet')}"))
 
     def _peer_module_zone(self, peer: str) -> str | None:
         """The zone a module peer runs in; None for a zone, alias, internet or unknown."""

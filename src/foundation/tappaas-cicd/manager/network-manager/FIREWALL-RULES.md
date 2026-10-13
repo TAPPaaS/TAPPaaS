@@ -272,7 +272,11 @@ into rules:
 - **The zones decide.** A rule that crosses zones is written only if the zones allow it: the
   source zone has the target zone in `access-to`, or the target zone lists the source zone in
   `pinhole-allowed-from`. A module peer counts as the zone it runs in, and traffic within one
-  zone is always allowed. Ingress from the internet is accepted only by a zone that lists
+  zone is always allowed. An `alias:` peer counts as the zones its addresses are in: an address
+  or network inside a zone's network, or a `<host>.<zone>.internal` name, is that zone; a public
+  address or an outside name is the internet. An alias holding a private range that is no
+  single zone's cannot be checked and is refused — name the zone instead. The path to an NFS
+  share a module mounts is the exception: its share's grant decides it. Ingress from the internet is accepted only by a zone that lists
   `internet` in `pinhole-allowed-from` (the `dmz`); the firewall's own entry to Caddy is the
   exception. A rule the zones do not allow stops the module's install or update, and the
   message gives the `network-manager modify` command that would allow it.
@@ -354,8 +358,6 @@ findings for one module to its check.
 
 Where the rules do less than the zone model describes:
 
-- **Aliases are not checked against the zones.** A rule to or from an `alias:` is written as
-  declared.
 - **An `access-to` edge includes the firewall's address in the target zone.** A zone that may
   reach another zone reaches that zone's gateway address too, on every port except the admin
   GUI and SSH.
