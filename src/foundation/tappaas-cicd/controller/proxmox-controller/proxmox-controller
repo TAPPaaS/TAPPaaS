@@ -270,10 +270,18 @@ _vmid_of() {
 # config: what matters for migration is the CPUID the guest was given, and an
 # undeclared cputype still resolves to something. Empty output means Proxmox
 # omitted the line, which is its default — kvm64, a named model.
+# The CPU model the guest RUNS, not the one its config names: a changed cputype
+# is held until the guest restarts (#827), and until then the guest still has
+# the old model's features. `qm pending` lists the running value as `cur`.
 _vm_cputype() {
     local vmid="$1" node="$2"
     ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new "root@${node}.mgmt.internal" \
-        "qm config ${vmid} 2>/dev/null" 2>/dev/null | sed -n 's/^cpu: *//p' | cut -d, -f1
+        "qm pending ${vmid} 2>/dev/null" 2>/dev/null | cpu_running_model
+}
+
+# `qm pending` output → the running cpu model. Pure.
+cpu_running_model() {
+    sed -n 's/^cur cpu: *//p' | head -1 | cut -d, -f1
 }
 
 # Does <node> offer the named CPU model <model>?
@@ -339,6 +347,7 @@ cpu_inventory_compute() {
         | (map(.features) | inter) as $cf
         | (map(.models) | inter) as $cm
         | { generated: (now | todate),
+            levels: (($n[0].levels // {}) | map_values(length)),
             nodes: [ $n[] | {node, cpu, vendor, level: best(.levels; .features; .models),
                              featureCount: (.features | length)} ],
             common: { level: best(($n[0].levels // {}); $cf; $cm),

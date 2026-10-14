@@ -254,6 +254,45 @@ rn_drain_targets() {
           end' <<< "${rules}"
 }
 
+# A guest's haCpu, from its module config (named after the VM); common when
+# undeclared. A `host` guest is moved by stop and start, never live (#827).
+rn_ha_cpu_mode() {
+    jq -r '[.. | objects | select(has("haCpu")) | .haCpu][0] // "common"' \
+        "${CONFIG_DIR:-/home/tappaas/config}/$1.json" 2>/dev/null || echo common
+}
+
+# Running haCpu-host HA guests on <node> and where each goes: "<sid> <name> <target>".
+rn_host_guests() {
+    local node="$1" res rules online sid vmid name status t
+    res="$(rn_node_ssh "$node" "pvesh get /cluster/resources --output-format json" 2>/dev/null)" || return 1
+    jq -e 'type == "array"' <<< "${res}" >/dev/null 2>&1 || return 1
+    rules="$(rn_node_ssh "$node" "pvesh get /cluster/ha/rules --output-format json" 2>/dev/null)" || rules="[]"
+    jq -e 'type == "array"' <<< "${rules}" >/dev/null 2>&1 || rules="[]"
+    online="$(jq -r '[.[] | select(.type == "node" and .status == "online") | .node] | join(" ")' <<< "${res}")"
+    for sid in $(rn_ha_vms_on_node "$node"); do
+        vmid="${sid#vm:}"
+        read -r name status < <(jq -r --argjson v "${vmid}" \
+            '.[] | select(.type == "qemu" and .vmid == $v) | "\(.name) \(.status)"' <<< "${res}") || true
+        [[ "${status:-}" == "running" && "$(rn_ha_cpu_mode "${name}")" == "host" ]] || continue
+        t="$(rn_drain_targets "$node" "$sid" "$rules" "$online" | head -1)"
+        [[ -n "${t}" ]] && echo "${sid} ${name} ${t}"
+    done
+}
+
+# Move <sid> to <target> by stop, move, start (HA relocate) and wait until it
+# runs there. Args: <any-node> <sid> <target>
+rn_relocate() {
+    local via="$1" sid="$2" target="$3" waited=0 row
+    rn_node_ssh "$via" "ha-manager crm-command relocate ${sid} ${target}" >/dev/null 2>&1 || return 1
+    while :; do
+        row="$(rn_node_ssh "$target" "pvesh get /cluster/resources --type vm --output-format json" 2>/dev/null \
+            | jq -r --argjson v "${sid#vm:}" '.[] | select(.vmid == $v) | "\(.node) \(.status)"' 2>/dev/null)" || row=""
+        [[ "${row}" == "${target} running" ]] && return 0
+        [[ ${waited} -ge ${RN_DRAIN_MAX:-600} ]] && return 1
+        sleep 5; (( waited+=5 ))
+    done
+}
+
 # Running HA guests on <node> that a drain would move LIVE to a node whose CPU
 # lacks features they may be using (#827) — the CRM's maintenance drain does not
 # ask, so this asks for it: `proxmox-controller live-ok`, per guest, per target.
@@ -271,6 +310,8 @@ rn_live_unsafe_guests() {
         read -r name status < <(jq -r --argjson v "${vmid}" \
             '.[] | select(.type == "qemu" and .vmid == $v) | "\(.name) \(.status)"' <<< "${res}") || true
         [[ "${status:-}" == "running" ]] || continue
+        # haCpu host: relocated (stop/start) before the drain, never moved live.
+        [[ "$(rn_ha_cpu_mode "${name}")" == "host" ]] && continue
         for t in $(rn_drain_targets "$node" "$sid" "$rules" "$online"); do
             "${RN_LIVEOK_BIN:-proxmox-controller}" live-ok "$name" "$t" >/dev/null 2>&1 && continue
             echo "${sid} ${name} → ${t}"
@@ -315,10 +356,25 @@ reboot_one_node() {
     if [[ -n "${unsafe}" ]]; then
         warn "DEFERRED: ${node} not rebooted — draining it would move HA guests LIVE to a CPU lacking features they may use:"
         while IFS= read -r _l; do warn "    ${_l}"; done <<< "${unsafe}"
-        warn "  Nothing was moved. Move them offline first (module-manager migrate <module> --force),"
-        warn "  then reboot ${node}: reboot-node.sh --execute ${node}"
+        warn "  Nothing was moved. Their cluster:ha update sets a CPU model both nodes run (haCpu: common,"
+        warn "  the default) — in effect once each guest restarts — or haCpu: host moves them by stop/start."
+        warn "  Until then: move them offline (module-manager migrate <module> --force), then reboot-node.sh --execute ${node}"
         return 3
     fi
+
+    # haCpu host guests (#827): off this node by stop and start, before the
+    # drain could move them live; back the same way once the node is back.
+    local moved="" _sid _name _to
+    if ! moved="$(rn_host_guests "$node")"; then
+        error "Could not read ${node}'s HA guests — not rebooting"
+        return 1
+    fi
+    while read -r _sid _name _to; do
+        [[ -n "${_sid}" ]] || continue
+        info "  Relocating ${_name} (haCpu host) to ${_to} — stop, move, start..."
+        rn_relocate "$node" "$_sid" "$_to" \
+            || { error "Relocating ${_name} to ${_to} failed — not rebooting ${node}"; return 1; }
+    done <<< "${moved}"
 
     # HA maintenance mode → migrate managed VMs off this node.
     info "  Enabling HA maintenance mode..."
@@ -413,6 +469,15 @@ reboot_one_node() {
         warn "  Check for a stale cloud-init volume blocking migration:"
         warn "    ${RN_LIB_DIR}/../cloudinit-orphans.sh"
     fi
+
+    # The haCpu host guests come back as they left: stop, move, start. Their
+    # failback is off, so the CRM leaves them where they are.
+    while read -r _sid _name _to; do
+        [[ -n "${_sid}" ]] || continue
+        info "  Relocating ${_name} back to ${node}..."
+        rn_relocate "$node" "$_sid" "$node" \
+            || warn "  ${_name} did not return to ${node} — it runs on ${_to}; move it with: ha-manager crm-command relocate ${_sid} ${node}"
+    done <<< "${moved}"
 
     info "  ${GN}✓${CL} ${node} reboot complete"
     return 0

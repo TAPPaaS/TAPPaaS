@@ -42,6 +42,7 @@ rn_node_fqdn()             { echo "$1"; }
 havm_ha_services_on_node() { echo "vm:100"; }    # a VM never drains off → timeout
 rn_node_ssh() { shift; printf '%s\n' "$*" >> "${SSH_LOG}"; return 0; }
 rn_live_unsafe_guests()    { :; }                # #827 guard: every drain live-safe here
+rn_host_guests()           { :; }                # …and no haCpu-host guest to relocate
 
 # ── Drive it ─────────────────────────────────────────────────────────
 reboot_one_node "testnode" >/dev/null 2>&1 && rc=0 || rc=$?
@@ -236,6 +237,40 @@ check_targets ""        n1 vm:110 "n1 n2"       # its only partner is down
     rc=0; reboot_one_node n1 >/dev/null 2>&1 || rc=$?
     [[ ${rc} -eq 3 ]] && ! grep -q 'node-maintenance enable' "${LOG}" \
         && pass "unreadable cluster state: not drained blind (rc 3)" || fail "unreadable state: rc ${rc}"
+
+    # haCpu host: relocated by stop/start before maintenance, back afterwards,
+    # and never counted as a live-unsafe move.
+    export CONFIG_DIR="${WORK}/cfg"; mkdir -p "${CONFIG_DIR}"
+    echo '{"vmname":"network","haCpu":"host"}' > "${CONFIG_DIR}/network.json"
+    echo n1 > "${WORK}/where"
+    : > "${LOG}"
+    rn_node_ssh() {
+        shift; printf '%s\n' "$*" >> "${LOG}"
+        case "$*" in
+            *"crm-command relocate vm:110 "*) echo "${*##* }" > "${WORK}/where" ;;
+            *"--type vm"*) echo "[{\"type\":\"qemu\",\"vmid\":110,\"node\":\"$(cat "${WORK}/where")\",\"status\":\"running\"}]" ;;
+            *"/cluster/resources"*) echo '[{"type":"node","node":"n1","status":"online"},{"type":"node","node":"n3","status":"online"},
+                                          {"type":"qemu","vmid":110,"name":"network","status":"running"}]' ;;
+            *"/cluster/ha/rules"*)  echo "${RULES}" ;;
+            *"ha-manager status"*)  echo "lrm n1 (active, watchdog)" ;;
+        esac
+        return 0
+    }
+    printf '#!/usr/bin/env bash\n[ "$3" = n3 ] && exit 2; exit 0\n' > "${WORK}/liveok"
+    rn_wait_for_node() { return 0; }
+    rn_wait_cluster_member() { return 0; }
+    rn_running_kernel() { echo ""; }
+    rn_sweep_cloudinit_orphans() { :; }
+    rn_disable_maintenance() { return 0; }
+    rn_wait_ha_settled() { return 0; }
+    rn_ha_left_on_node() { :; }
+    out="$(rn_live_unsafe_guests n1)"
+    [[ -z "${out}" ]] && pass "a haCpu-host guest is not a live-unsafe move" || fail "host guest listed as unsafe: ${out}"
+    rc=0; reboot_one_node n1 >/dev/null 2>&1 || rc=$?
+    order="$(grep -E 'relocate|node-maintenance enable|^reboot$' "${LOG}" | tr '\n' ';')"
+    [[ ${rc} -eq 0 && "${order}" == "ha-manager crm-command relocate vm:110 n3;ha-manager crm-command node-maintenance enable n1;reboot;ha-manager crm-command relocate vm:110 n1;" ]] \
+        && pass "host guest: relocated off, node drained and rebooted, relocated back" \
+        || fail "host guest sequence rc=${rc}: ${order}"
     echo "${PASS} ${FAIL}" > "${WORK}/sub.counts"
 )
 read -r _p _f < "${WORK}/sub.counts" && PASS=${_p} && FAIL=${_f}

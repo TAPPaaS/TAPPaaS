@@ -228,6 +228,19 @@ else
     fail "lib/test-disk-grow-lib.sh not found or not executable"
 fi
 
+# haCpu (#827): the CPU model an HA guest runs, from the cluster's inventory.
+info "${BOLD}Test 2a0d: HA CPU model decisions (#827)${CL}"
+if [[ -x "${SCRIPT_DIR}/lib/test-ha-cpu-lib.sh" ]]; then
+    if hc_out=$("${SCRIPT_DIR}/lib/test-ha-cpu-lib.sh" 2>&1); then
+        pass "$(tail -1 <<< "${hc_out}")"
+    else
+        fail "ha-cpu-lib unit tests failed"
+        indent <<< "${hc_out}"
+    fi
+else
+    fail "lib/test-ha-cpu-lib.sh not found or not executable"
+fi
+
 # The installer's pool loop (#405): a pool with no free disk left is not offered.
 info "${BOLD}Test 2a0b: config-storage free disks (#405)${CL}"
 if [[ -x "${SCRIPT_DIR}/lib/test-config-storage-free.sh" ]]; then
@@ -1276,6 +1289,44 @@ if [[ "${DEEP}" -eq 1 && -n "${DEFAULT_ZONE}" && "${NODE_COUNT}" -ge 2 ]]; then
         else
             fail "module-manager migrate ${THVM} (failback) failed (rc ${mig_rc})"
         fi
+    fi
+
+    # 10-12. haCpu (#827). Install gave the guest the CPU model both its nodes
+    #        run (config/cluster-cpu.json); once the guest has restarted — the
+    #        offline failback above did that — a move between them is live-safe.
+    #        haCpu host takes it back to `host` and turns HA failback off.
+    if [[ "${hdeep_ok}" -eq 1 ]]; then
+        # shellcheck source=lib/ha-cpu-lib.sh
+        . "${SCRIPT_DIR}/lib/ha-cpu-lib.sh"
+        hinv="$(cat "${CONFIG_DIR}/cluster-cpu.json" 2>/dev/null)"
+        hpair="$(jq -r '"\(.node) \(.HANode)"' "${HFIX}/${THVM}.json")"
+        # shellcheck disable=SC2086
+        hwant="$(hacpu_common "${hinv}" ${hpair})"
+        hcfg="$(jq -r '[.. | objects | select(has("cputype")) | .cputype][0] // "host"' "${CONFIG_DIR}/${THVM}.json")"
+        if [[ -n "${hwant}" && "${hcfg}" == "${hwant}" ]]; then
+            pass "haCpu common: config cputype is ${hwant}, the level ${hpair/ / and } share"
+        else
+            fail "haCpu common: config cputype '${hcfg}', want '${hwant:-?}' (is config/cluster-cpu.json there?)"
+        fi
+        row=$(find_vm "${HVMID}") || row=""; hnode="${row%% *}"
+        # shellcheck disable=SC2086
+        hrun=$(ssh ${SSH_OPTS} "root@${hnode}.${MGMT}.internal" "qm pending ${HVMID}" 2>/dev/null | sed -n 's/^cur cpu: *//p' | cut -d, -f1)
+        [[ "${hrun}" == "${hwant}" ]] && pass "…and the guest runs it after its restart" || fail "guest runs cpu '${hrun:-?}', want '${hwant}'"
+        hother="${hpair%% *}"; [[ "${hother}" == "${hnode}" ]] && hother="${hpair##* }"
+        if proxmox-controller live-ok "${THVM}" "${hother}" >/dev/null 2>&1; then
+            pass "…so a move ${hnode} → ${hother} is live-safe"
+        else
+            fail "a move ${hnode} → ${hother} is still not live-safe with cpu ${hrun}"
+        fi
+
+        jq_module_write "${THVM}" '.haCpu = "host"' >/dev/null
+        "${HUPSVC}" "${THVM}" 2>&1 | indent
+        hcfg="$(jq -r '[.. | objects | select(has("cputype")) | .cputype][0] // "host"' "${CONFIG_DIR}/${THVM}.json")"
+        [[ "${hcfg}" == "host" ]] && pass "haCpu host: config cputype back to host" || fail "haCpu host: cputype '${hcfg}'"
+        # shellcheck disable=SC2086
+        hfb=$(ssh ${SSH_OPTS} "root@tappaas1.${MGMT}.internal" "pvesh get /cluster/ha/resources --output-format json" 2>/dev/null \
+            | jq -r --arg s "vm:${HVMID}" '.[] | select(.sid == $s) | .failback // 1')
+        [[ "${hfb}" == "0" ]] && pass "…and HA failback is off (the CRM never moves it back live)" || fail "HA failback is '${hfb:-?}', want 0"
     fi
 
     deep_cleanup_ha

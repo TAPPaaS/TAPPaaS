@@ -55,6 +55,9 @@ readonly MGMT="mgmt"
 
 # shellcheck source=/home/tappaas/bin/common-install-routines.sh
 . /home/tappaas/bin/common-install-routines.sh
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=../../lib/ha-cpu-lib.sh disable=SC1091
+. "${SCRIPT_DIR}/../../lib/ha-cpu-lib.sh"
 
 SSH_OPTS=(-o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new
           -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o BatchMode=yes)
@@ -69,6 +72,7 @@ MIGRATE_POLL="${TAPPAAS_MIGRATE_POLL:-5}"
 # ── Arguments ────────────────────────────────────────────────────────
 
 CHECK_MODE="${TAPPAAS_CHECK:-0}"
+ALLOW_DISRUPTION="${TAPPAAS_ALLOW_DISRUPTION:-0}"
 MODULE=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -81,6 +85,9 @@ while [[ $# -gt 0 ]]; do
         # --force` set MODULE=--force and died on config/--force.json, failing
         # every module that dependsOn cluster:ha.
         --force)   ;;
+        # The other lever: authorization to stop and start the guest, needed to
+        # move one live-unsafe guest (haCpu, #827). Also TAPPAAS_ALLOW_DISRUPTION.
+        --allow-disruption) ALLOW_DISRUPTION=1 ;;
         -h|--help) echo "Usage: $0 [--check] [--force] <module-name>"; exit 0 ;;
         # Never let an unknown flag become the module name again. A loud refusal
         # is recoverable; a silently misparsed positional is what cost a sweep.
@@ -121,6 +128,42 @@ REPL_SCHEDULE="$(cfg 'replicationSchedule' '*/15')"
 STORAGE="$(cfg 'storage' 'tanka1')"
 
 readonly HA_RULE_NAME="ha-${MODULE}"
+
+# ── The CPU model the guest runs (haCpu, #827) ───────────────────────
+# common: the richest x86-64 level primary and failover node both offer, so
+# every move between them is live-safe. host: the node's own CPU, and moves
+# between unlike CPUs stop and start the guest instead (failback off).
+HACPU="$(cfg 'haCpu' 'common')"
+[[ "${HACPU}" == "host" || "${HACPU}" == "common" ]] || die "haCpu '${HACPU}': use common or host"
+DECLARED_CPU="$(cfg 'cputype' 'host')"
+VMNAME="$(cfg 'vmname' "${MODULE}")"
+CPU_INVENTORY="${TAPPAAS_CPU_INVENTORY:-${CONFIG_DIR}/cluster-cpu.json}"
+DESIRED_CPU="${DECLARED_CPU}"
+DESIRED_FAILBACK=1
+if [[ "${HACPU}" == "host" ]]; then
+    DESIRED_CPU="host"
+    DESIRED_FAILBACK=0
+elif [[ -n "${HANODE}" && "${HANODE}" != "${DESIRED_PRIMARY}" ]]; then
+    inv="$(cat "${CPU_INVENTORY}" 2>/dev/null || true)"
+    common_lvl=""
+    [[ -n "${inv}" ]] && common_lvl="$(hacpu_common "${inv}" "${DESIRED_PRIMARY}" "${HANODE}")"
+    if [[ -z "${common_lvl}" ]]; then
+        warn "  haCpu common: no CPU inventory for ${DESIRED_PRIMARY} + ${HANODE} — cputype left at ${DECLARED_CPU}"
+        warn "    run: proxmox-controller cpu-inventory --apply"
+    else
+        DESIRED_CPU="${common_lvl}"
+        primary_lvl="$(hacpu_level "${inv}" "${DESIRED_PRIMARY}")"
+        if [[ "$(hacpu_rank "${inv}" "${common_lvl}")" -lt "$(hacpu_rank "${inv}" "${primary_lvl}")" ]]; then
+            better="$(hacpu_matching "${inv}" "${primary_lvl}" "${DESIRED_PRIMARY}" "${HANODE}")"
+            warn "  ${MODULE}: HA pair ${DESIRED_PRIMARY} (${primary_lvl}) + ${HANODE} ($(hacpu_level "${inv}" "${HANODE}")) runs it at ${common_lvl} — ${DESIRED_PRIMARY}'s extra instructions go unused"
+            if [[ -n "${better}" ]]; then
+                warn "    to keep ${primary_lvl}: HANode ${better// / or }, or haCpu: host (moves then stop and start the guest)"
+            else
+                warn "    to keep ${primary_lvl}: haCpu: host (moves then stop and start the guest); no other node offers it"
+            fi
+        fi
+    fi
+fi
 
 debug "${BOLD}cluster:ha update-service: reconciling ${BL}${MODULE}${CL} (VMID ${VMID})"
 [[ "${CHECK_MODE}" == "1" ]] && warn "  CHECK MODE — drift will be reported, not applied"
@@ -175,9 +218,11 @@ debug "  VM ${VMID} is on node ${BL}${actual_node}${CL} (status: ${vm_status})"
 
 # ── Read live HA / replication state ─────────────────────────────────
 
-live_ha_state="$(ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" \
+live_ha_row="$(ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" \
     "pvesh get /cluster/ha/resources --output-format json" 2>/dev/null \
-    | jq -r --arg sid "vm:${VMID}" '.[] | select(.sid == $sid) | .state // empty' 2>/dev/null)" || true
+    | jq -r --arg sid "vm:${VMID}" '.[] | select(.sid == $sid) | "\(.state // "") \(.failback // 1)"' 2>/dev/null)" || true
+live_ha_state="${live_ha_row%% *}"
+live_failback="${live_ha_row##* }"
 
 live_rule_nodes="$(ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" \
     "pvesh get /cluster/ha/rules --output-format json" 2>/dev/null \
@@ -209,6 +254,8 @@ DO_SET_RULE=0
 DO_REPL_RECREATE=0
 DO_REPL_UPDATE=0
 DO_MIGRATE=0
+DO_SET_CPU=0
+DO_SET_FAILBACK=0
 
 # 1. HA resource membership / state
 if [[ -z "${live_ha_state}" ]]; then
@@ -217,6 +264,18 @@ if [[ -z "${live_ha_state}" ]]; then
 elif [[ "${live_ha_state}" != "started" ]]; then
     CHANGES+=("ha-state: ${live_ha_state}→started")
     DO_SET_STATE=1
+fi
+
+# 1b. failback: off for haCpu host — the CRM's failback is a live migration
+if [[ -n "${live_ha_state}" && "${live_failback}" != "${DESIRED_FAILBACK}" ]]; then
+    CHANGES+=("ha-failback: ${live_failback}→${DESIRED_FAILBACK} (haCpu ${HACPU})")
+    DO_SET_FAILBACK=1
+fi
+
+# 1c. the CPU model (haCpu): a declared field of cluster:vm, which applies it
+if [[ "${DESIRED_CPU}" != "${DECLARED_CPU}" ]]; then
+    CHANGES+=("cputype: ${DECLARED_CPU}→${DESIRED_CPU} (haCpu ${HACPU}; takes effect when the guest restarts)")
+    DO_SET_CPU=1
 fi
 
 # 2. node-affinity rule (covers primary-moved and HANode-moved in config)
@@ -295,13 +354,19 @@ fi
 if [[ ${DO_ADD_RESOURCE} -eq 1 ]]; then
     debug "  Adding VM ${VMID} to HA resources (state=started)..."
     ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" \
-        "ha-manager add vm:${VMID} --state started" >/dev/null || die "ha-manager add failed"
+        "ha-manager add vm:${VMID} --state started --failback ${DESIRED_FAILBACK}" >/dev/null || die "ha-manager add failed"
 fi
 
 if [[ ${DO_SET_STATE} -eq 1 ]]; then
     debug "  Setting HA resource vm:${VMID} state=started..."
     ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" \
         "ha-manager set vm:${VMID} --state started" >/dev/null || die "ha-manager set failed"
+fi
+
+if [[ ${DO_SET_FAILBACK} -eq 1 ]]; then
+    debug "  Setting HA resource vm:${VMID} failback=${DESIRED_FAILBACK}..."
+    ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" \
+        "ha-manager set vm:${VMID} --failback ${DESIRED_FAILBACK}" >/dev/null || die "ha-manager set --failback failed"
 fi
 
 if [[ ${DO_SET_RULE} -eq 1 ]]; then
@@ -318,11 +383,28 @@ if [[ ${DO_SET_RULE} -eq 1 ]]; then
     fi
 fi
 
+# A live move only when it is live-safe (#827): the CRM's migrate does not ask.
+# Otherwise a relocate — stop, move, start — when a disruption is authorized,
+# and a DEFERRED: line when it is not.
+MOVE_CMD="migrate"
+PLACEMENT_DEFERRED=0
+if [[ ${DO_MIGRATE} -eq 1 && "${vm_status}" == "running" ]]; then
+    if ! proxmox-controller live-ok "${VMNAME}" "${DESIRED_PRIMARY}" >/dev/null 2>&1; then
+        if [[ "${ALLOW_DISRUPTION}" == "1" ]]; then
+            MOVE_CMD="relocate"
+        else
+            warn "DEFERRED: ${MODULE} placement ${actual_node}→${DESIRED_PRIMARY} is not live-safe — a stop/start move needs --allow-disruption"
+            DO_MIGRATE=0
+            PLACEMENT_DEFERRED=1
+        fi
+    fi
+fi
+
 if [[ ${DO_MIGRATE} -eq 1 ]]; then
-    debug "  Migrating VM ${VMID} ${actual_node}→${DESIRED_PRIMARY} (HA online migrate)..."
+    debug "  Moving VM ${VMID} ${actual_node}→${DESIRED_PRIMARY} (HA ${MOVE_CMD})..."
     ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" \
-        "ha-manager crm-command migrate vm:${VMID} ${DESIRED_PRIMARY}" \
-        >/dev/null || die "ha-manager crm-command migrate failed"
+        "ha-manager crm-command ${MOVE_CMD} vm:${VMID} ${DESIRED_PRIMARY}" \
+        >/dev/null || die "ha-manager crm-command ${MOVE_CMD} failed"
 
     # crm-command only QUEUES the move: it returns once the CRM has accepted the
     # request, seconds to tens of seconds before the guest actually lands (the
@@ -353,6 +435,10 @@ fi
 # may still be sitting on its own failover target. Name that, instead of letting
 # pvesr answer with a bare "Source and target must not be identical" that says
 # nothing about which node to bring back.
+if [[ ${DO_REPL_RECREATE} -eq 1 && "${actual_node}" == "${HANODE}" && ${PLACEMENT_DEFERRED} -eq 1 ]]; then
+    warn "  replication to ${HANODE} waits for the deferred move back to ${DESIRED_PRIMARY}"
+    DO_REPL_RECREATE=0
+fi
 if [[ ${DO_REPL_RECREATE} -eq 1 && "${actual_node}" == "${HANODE}" ]]; then
     die "VM ${VMID} is on its failover node ${HANODE}, so a replication job targeting ${HANODE} would have identical source and target — restore ${DESIRED_PRIMARY} (or migrate the VM back) and re-run"
 fi
@@ -373,6 +459,17 @@ elif [[ ${DO_REPL_UPDATE} -eq 1 ]]; then
     ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" \
         "pvesr update ${live_repl_id} --schedule '${REPL_SCHEDULE}'" \
         >/dev/null || die "pvesr update failed"
+fi
+
+# The CPU model last: it is cluster:vm's field, so cluster:vm applies it — in
+# place in config, then held until the guest restarts unless a restart is
+# authorized (TAPPAAS_ALLOW_DISRUPTION reaches it through the environment).
+if [[ ${DO_SET_CPU} -eq 1 ]]; then
+    jq_module_write "${MODULE}" '.cputype = $v' --arg v "${DESIRED_CPU}" \
+        || die "could not write cputype ${DESIRED_CPU} into ${MODULE}'s config"
+    info "  ${MODULE}: cputype ${DECLARED_CPU}→${DESIRED_CPU} (haCpu ${HACPU})"
+    "${SCRIPT_DIR}/../vm/update-service.sh" "${MODULE}" \
+        || warn "  cluster:vm could not converge cputype for ${MODULE} — the next update retries"
 fi
 
 debug "  ${GN}✓${CL} cluster:ha update-service completed"

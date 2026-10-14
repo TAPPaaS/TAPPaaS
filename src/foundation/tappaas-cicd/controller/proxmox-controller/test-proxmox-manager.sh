@@ -128,6 +128,12 @@ ck "a VM without snapshots is not blocked" \
    "" "$(storage_live_blockers tappaas2 343 <<< '{"local_disks":[{"drivename":"scsi0","cdrom":0,"is_cloudinit":0,"shared":0}]}' 3<<< '[]' | tr '\n' ' ')"
 
 
+# A held cputype is not the running one (#827): live-ok must judge what runs.
+ck "the running cpu model is the cur line, not the held new one" \
+   "host" "$(printf 'cur cores: 2\ncur cpu: host\nnew cpu: x86-64-v3\n' | cpu_running_model)"
+ck "…with its flags cut off" \
+   "x86-64-v3" "$(printf 'cur cpu: x86-64-v3,flags=+aes\n' | cpu_running_model)"
+
 # ── CPU inventory (#827) ────────────────────────────────────────────
 # Pure: canned probe output in, set arithmetic out. The live probe is the
 # deep tier's.

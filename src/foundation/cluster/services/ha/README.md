@@ -3,10 +3,10 @@
 Places a module's guest under **Proxmox HA** and keeps its node-affinity and
 replication in line with the module's declaration. Most of what it repairs has no
 module field behind it — an absent HA resource, a missing rule, a guest on the
-wrong node — which is why it owns only two declared fields but does considerably
-more than two things.
+wrong node — which is why it owns only a few declared fields but does considerably
+more than that.
 
-## Why this service owns only two fields
+## Why this service owns so few fields
 
 Most of what `cluster:ha` repairs has **no module field behind it** — the HA
 resource absent, the affinity rule missing, the guest running on the wrong node.
@@ -20,11 +20,30 @@ them anyway; the manifest only covers the two things an operator actually
 guest and defers to this service — see
 [`node` and `HANode` today](../../../tappaas-cicd/UPDATE-POLICY.md#7-node-and-hanode--what-happens-today-adr-019s-starting-point).
 
+## The CPU an HA guest runs (`haCpu`)
+
+An HA guest moves between its node and its `HANode`, and a move is only safe
+live when the second node runs every instruction the guest may be using. Nodes
+with different CPUs do not, so `haCpu` decides how the guest meets that:
+
+| `haCpu` | CPU model (`cputype`) | Moves between unlike CPUs |
+|---|---|---|
+| `common` (default) | the richest x86-64 level both nodes offer | live — every move is safe |
+| `host` | the node's own CPU, all of it | stop and start: HA failback off, node reboots relocate the guest and bring it back |
+
+The levels come from the cluster's CPU inventory (`config/cluster-cpu.md`,
+written by the cluster update). When the pair runs a guest below what its
+primary node offers, the update says so and names the nodes that would keep
+it — or `haCpu: host`. A changed CPU model takes effect when the guest
+restarts: `module-manager module update <module> --allow-disruption`, or
+`rebootOk` in the scheduled pass. Until then a node reboot will not drain
+the guest's node live (it is reported `DEFERRED`).
+
 <!-- BEGIN GENERATED FIELDS -- edit the manifest, not this block -->
 
 ## Fields
 
-`cluster:ha` owns **2** declared field(s). Each table below carries the field's full definition and, where the service applies it, its ADR-020 change semantics.
+`cluster:ha` owns **3** declared field(s). Each table below carries the field's full definition and, where the service applies it, its ADR-020 change semantics.
 
 ### `HANode`
 
@@ -57,5 +76,22 @@ Cron-style schedule for HA replication interval
 **About the field.** Default is every 15 minutes
 
 **Why this change class.** How often the guest's disk is replicated to the failover node — the bound on how much is lost if the primary dies. A `pvesr update`: it changes when the next run happens, nothing else.
+
+### `haCpu`
+
+The CPU model the HA guest runs. 'common': the richest x86-64 level its node and HANode both offer (config/cluster-cpu.json), so every move between them is live-safe; a newer CPU's extra instructions (AVX-512 …) are not used. 'host': the full CPU of the node it starts on; then a move between nodes with different CPUs is a stop and start (HA failback off, node drains relocate it), never a live migration.
+
+| Attribute | Value |
+|---|---|
+| Type | `string` |
+| Default | `common` |
+| Allowed values | `common` — Live-safe moves; the instructions both nodes share<br>`host` — The node's full CPU; moves between unlike CPUs stop and start the guest |
+| Example | `host` |
+| Required by | *(none)* |
+| Used by | `cluster:ha` |
+| Change class | `in-place` |
+| Apply mode | `reconcile` |
+
+**Why this change class.** Sets the module's cputype (common: the shared level; host: host) and the HA resource's failback. The new CPU model takes effect when the guest restarts — held until a restart is authorized, like any held hardware change.
 
 <!-- END GENERATED FIELDS -->

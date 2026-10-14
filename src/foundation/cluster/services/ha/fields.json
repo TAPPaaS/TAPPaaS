@@ -28,6 +28,23 @@
       "class": "in-place",
       "apply": "reconcile",
       "changeNote": "How often the guest's disk is replicated to the failover node — the bound on how much is lost if the primary dies. A `pvesr update`: it changes when the next run happens, nothing else."
+    },
+    "haCpu": {
+      "description": "The CPU model the HA guest runs. 'common': the richest x86-64 level its node and HANode both offer (config/cluster-cpu.json), so every move between them is live-safe; a newer CPU's extra instructions (AVX-512 …) are not used. 'host': the full CPU of the node it starts on; then a move between nodes with different CPUs is a stop and start (HA failback off, node drains relocate it), never a live migration.",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "cluster:ha"
+      ],
+      "default": "common",
+      "values": {
+        "common": "Live-safe moves; the instructions both nodes share",
+        "host": "The node's full CPU; moves between unlike CPUs stop and start the guest"
+      },
+      "example": "host",
+      "class": "in-place",
+      "apply": "reconcile",
+      "changeNote": "Sets the module's cputype (common: the shared level; host: host) and the HA resource's failback. The new CPU model takes effect when the guest restarts — held until a restart is authorized, like any held hardware change."
     }
   }
 }
