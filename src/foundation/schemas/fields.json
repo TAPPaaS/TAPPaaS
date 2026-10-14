@@ -9,6 +9,11 @@
       "apply": "none",
       "changeNote": "Pushed to the Proxmox summary page when the guest is created and never pushed again, so an edit after install changes config only. Classed by what changing it COSTS (nothing, no disruption), not by today's gap — `qm set --description` works on a live VM, so a hook would make this a real `set` under cluster:vm."
     },
+    "displayName": {
+      "class": "in-place",
+      "apply": "none",
+      "changeNote": "Read by the identity services when they ensure the module's tile on the start page; a change shows at the module's next update. Nothing on the guest changes."
+    },
     "version": {
       "class": "in-place",
       "apply": "none",
@@ -78,6 +83,11 @@
       "class": "immutable",
       "apply": "none",
       "changeNote": "Written by copy-update-json.sh --environment (ADR-007 P5). `module-manager module modify` and `module-manager module delete` resolve the SOURCE module file through it, so a wrong value points the lifecycle at the wrong module."
+    },
+    "icon": {
+      "class": "in-place",
+      "apply": "none",
+      "changeNote": "Read by the identity services, which upload the file under a content-hashed name and point the module's tile at it; a change shows at the module's next update."
     },
     "moduleSource": {
       "class": "immutable",
