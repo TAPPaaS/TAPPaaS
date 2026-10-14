@@ -84,6 +84,7 @@ fails**:
 | `disk-threshold` | SSH `df /` per guest | a reachable guest's `/` usage ≥ threshold (default **80%**, `--threshold PCT`) |
 | `memory-commitment` | one `pvesh /cluster/resources` | a node's COMMITTED memory ≥ threshold of its physical RAM (default **100%**, `--memory-threshold PCT`) |
 | `storage-pools` | `pvesh /cluster/resources` + one `zfs list` per node | a guest-disk pool **≥ 90%** used (**WARN** at 80%, the ceiling automatic disk growth stops at), or **WARN** when a pool's disks add up to more than it holds (thin disks) |
+| `cpu-impact` | `config/cluster-cpu.json` + one SSH probe per HA guest | never — **WARN** when an HA guest's processes use AVX-512 that its shared CPU level (`haCpu: common`) drops (see below) |
 | `guest-memory` | `pvesh` + one `ps`/`qm status` per node | a module **using ≥ 90%** of its declared memory (**WARN** at 75%), or one whose allocated memory exceeds its declared limit |
 | `backup-status` | `backup-manager list --json` | a module is backup-disabled, or enabled but not in the PBS job |
 | `pending-reboot` | one SSH probe per guest | never — **WARN** when a guest is waiting for a reboot (see below) |
@@ -230,6 +231,23 @@ takes about 30 s.
 and the first ten findings to act on per target (`--all` for every one). The
 `cve-status` gate in `validate` only ever WARNs — a CVE published upstream must
 not be able to fail a sweep or a test run.
+
+### What `cpu-impact` measures
+
+An HA guest with `haCpu: common` runs the CPU level its two nodes share, which
+on a mixed pair drops the newer node's extra instructions. For AVX-512 the cost
+can be measured: the kernel records, per process, how long ago it last used it
+(`/proc/<pid>/arch_status`). The gate lists, per HA guest still running its
+node's full CPU, the processes that used AVX-512 in the last minute.
+
+Read it as *what uses it*, not *how much it costs*. glibc picks AVX-512 string
+routines on a CPU that has them, so nearly every process shows up — and falls
+back to AVX2 versions of the same routines at a similar speed. A large impact
+needs compute-heavy work among them (machine learning, media, databases); for
+such a module, benchmark it before restarting it onto the shared level, or set
+`haCpu: host`. There is no counter for AVX2 and below, a guest that already runs
+the shared level has nothing left to lose, and a guest that cannot be reached
+(the firewall) is listed as not measured.
 
 ### What `memory-commitment` counts, and what it deliberately does not
 

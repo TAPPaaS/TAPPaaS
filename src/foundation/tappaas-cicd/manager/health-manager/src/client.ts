@@ -23,7 +23,7 @@ import {
   ssh,
 } from "../../../lib/ts/src/cluster";
 import { defaultConfigDir, siteNodeHostnames } from "./config";
-import { ClusterClient, NodeCapacity, PendingReboot, RunningGuest, StoragePool } from "./types";
+import { Avx512Use, ClusterClient, NodeCapacity, PendingReboot, RunningGuest, StoragePool } from "./types";
 
 export class CliClusterClient implements ClusterClient {
   reachableNodes(): string[] {
@@ -217,6 +217,18 @@ export class CliClusterClient implements ClusterClient {
     return parsePendingReboot(r.stdout);
   }
 
+  // #827: one ssh — does the guest's CPU offer AVX-512, and which processes
+  // used it how long ago.
+  avx512Use(target: string): Avx512Use | null {
+    const probe =
+      "grep -qw avx512f /proc/cpuinfo && echo cpu 1 || echo cpu 0; " +
+      "for p in /proc/[0-9]*; do s=$(sed -n 's/^AVX512_elapsed_ms:[[:space:]]*//p' $p/arch_status 2>/dev/null); " +
+      '[ -n "$s" ] && [ "$s" != -1 ] && echo "use $s $(cat $p/comm 2>/dev/null)"; done; true';
+    const r = ssh("tappaas", target, probe);
+    if (!r.ran || r.rc !== 0) return null;
+    return parseAvx512Use(r.stdout);
+  }
+
   // #100: the pools from the cluster's own resource list, plus one `zfs list`
   // per node for what the zvols on each ZFS pool add up to.
   storagePools(): StoragePool[] {
@@ -274,4 +286,23 @@ export function parsePendingReboot(out: string): PendingReboot | null {
   if (f.length < 2 || (f[1] !== "0" && f[1] !== "1")) return null;
   const os = f[0] === "nixos" || f[0] === "debian" ? f[0] : "other";
   return { os, pending: f[1] === "1", booted: f[2] ?? "", next: f[3] ?? "", active: f[4] === "1" };
+}
+
+// `cpu <0|1>` then `use <ms> <comm>` per process (#827). Pure. A process name
+// is counted once; "recent" means within the last minute.
+export function parseAvx512Use(out: string): Avx512Use {
+  const recent = new Set<string>();
+  const earlier = new Set<string>();
+  let available = false;
+  for (const line of out.split("\n")) {
+    const f = line.trim().split(/\s+/);
+    if (f[0] === "cpu") available = f[1] === "1";
+    if (f[0] === "use" && /^\d+$/.test(f[1] ?? "") && f[2]) {
+      const name = f.slice(2).join(" ");
+      if (Number(f[1]) <= 60000) recent.add(name);
+      else earlier.add(name);
+    }
+  }
+  for (const n of recent) earlier.delete(n);
+  return { available, recent: [...recent].sort(), earlier: [...earlier].sort() };
 }

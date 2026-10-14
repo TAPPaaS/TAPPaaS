@@ -124,6 +124,17 @@ export interface GuestMemory {
   measured: boolean;
 }
 
+// ── AVX-512 use inside a guest (#827) ─────────────────────────────────
+// The kernel keeps, per process, how long ago it last used AVX-512
+// (/proc/<pid>/arch_status, AVX512_elapsed_ms; -1 = never). That is the one
+// instruction family a common CPU level drops on hrossen-like pairs, and the
+// only one with a counter: AVX2 and below have none.
+export interface Avx512Use {
+  available: boolean; // the guest's CPU offers AVX-512 at all
+  recent: string[]; // processes that used it within the last minute
+  earlier: string[]; // used it before that
+}
+
 // ── a storage pool on a node (#100) ───────────────────────────────────
 // Proxmox's own numbers (pvesh /cluster/resources): `used` counts a thick
 // disk's full size, so it is what decides whether a grow fits. `provisioned`
@@ -158,6 +169,8 @@ export interface ClusterClient {
   pendingReboot(target: string): PendingReboot | null;
   // Every active guest-disk pool on every node (#100); backup stores excluded.
   storagePools(): StoragePool[];
+  // AVX-512 use in a guest (via SSH); null if unreachable (#827).
+  avx512Use(target: string): Avx512Use | null;
 }
 
 // ── a guest waiting for a reboot (#730) ───────────────────────────────

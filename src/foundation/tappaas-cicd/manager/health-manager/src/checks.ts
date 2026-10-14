@@ -16,8 +16,9 @@
 
 import { spawnSync } from "child_process";
 import { join } from "path";
-import { isManaged, loadConfigModules, readModuleJson } from "./config";
+import { isManaged, loadConfigModules, readModuleJson, siteNodeHostnames } from "./config";
 import { CheckResult, CheckRow, CheckStatus, ClusterClient, HealthReport, NodeCapacity, StoragePool } from "./types";
+import { existsSync, readFileSync } from "fs";
 import { checkCveStatus } from "./security";
 
 // Resolve a guest's `<vmname>.<zone0>.internal` target, as check-disk-threshold.sh
@@ -25,8 +26,12 @@ import { checkCveStatus } from "./security";
 export function guestTarget(configDir: string, module: string): string | null {
   const raw = readModuleJson(join(configDir, `${module}.json`));
   if (!raw) return null;
-  const vmname = typeof raw.vmname === "string" && raw.vmname ? raw.vmname : module;
-  const zone0 = typeof raw.zone0 === "string" && raw.zone0 ? raw.zone0 : "mgmt";
+  // Pattern A keeps zone0 (and possibly vmname) under .config: a flat read
+  // sent every such guest to <name>.mgmt.internal, which does not resolve.
+  const vn = configField(raw, "vmname");
+  const z0 = configField(raw, "zone0");
+  const vmname = typeof vn === "string" && vn ? vn : module;
+  const zone0 = typeof z0 === "string" && z0 ? z0 : "mgmt";
   return `${vmname}.${zone0}.internal`;
 }
 
@@ -420,12 +425,122 @@ export function checkStoragePools(client: ClusterClient): CheckResult {
   return { name: "storage-pools", status: worst, detail, rows };
 }
 
+// ── cpu-impact report (#827) ──────────────────────────────────────────
+// What an HA guest gives up when haCpu common puts it on the CPU level its two
+// nodes share. Measured, not guessed, for the instructions that can be: the
+// kernel records per process how long ago it last used AVX-512, so a guest
+// still running `host` on an AVX-512 node shows which of its processes would
+// lose it. Nothing to measure for lower levels (no counter), nor once the
+// guest already runs the common level. Never fails: it tells the operator
+// whether to benchmark before restarting the guest onto the shared level.
+
+interface CpuInventory {
+  levels?: Record<string, number>;
+  levelFlags?: Record<string, string[]>;
+  nodes?: { node: string; level: string | null }[];
+  matrix?: { from: string; to: string; liveSafe: boolean }[];
+}
+
+// A field anywhere in a module config (flat, or Pattern A under .config).
+export function configField(raw: Record<string, unknown>, field: string): unknown {
+  if (field in raw) return raw[field];
+  const stack: unknown[] = [raw.config];
+  while (stack.length > 0) {
+    const o = stack.pop();
+    if (!o || typeof o !== "object") continue;
+    const rec = o as Record<string, unknown>;
+    if (field in rec) return rec[field];
+    stack.push(...Object.values(rec));
+  }
+  return undefined;
+}
+
+// The model haCpu common gives a pair (mirrors cluster/lib/ha-cpu-lib.sh):
+// `host` when moves are live-safe both ways, else the lower of their levels.
+export function haCommonCpu(inv: CpuInventory, a: string, b: string): string | null {
+  const safe = (inv.matrix ?? []).filter(
+    (m) => (m.from === a && m.to === b) || (m.from === b && m.to === a));
+  if (safe.length === 2 && safe.every((m) => m.liveSafe)) return "host";
+  const lv = (n: string) => (inv.nodes ?? []).find((x) => x.node === n)?.level ?? null;
+  const la = lv(a), lb = lv(b), r = inv.levels ?? {};
+  if (!la || !lb || r[la] === undefined || r[lb] === undefined) return null;
+  return r[la] <= r[lb] ? la : lb;
+}
+
+export function checkCpuImpact(client: ClusterClient, configDir: string, defaultNode: string): CheckResult {
+  const invPath = join(configDir, "cluster-cpu.json");
+  if (!existsSync(invPath)) {
+    return { name: "cpu-impact", status: "skip", detail: "no CPU inventory (proxmox-controller cpu-inventory --apply)" };
+  }
+  let inv: CpuInventory;
+  try {
+    inv = JSON.parse(readFileSync(invPath, "utf8")) as CpuInventory;
+  } catch {
+    return { name: "cpu-impact", status: "skip", detail: "CPU inventory unreadable" };
+  }
+  const rows: CheckRow[] = [];
+  let worst: CheckStatus = "pass";
+  for (const m of loadConfigModules(configDir, defaultNode).filter(isManaged)) {
+    const raw = readModuleJson(join(configDir, `${m.module}.json`)) ?? {};
+    const deps = configField(raw, "dependsOn");
+    if (!Array.isArray(deps) || !deps.includes("cluster:ha")) continue;
+    if ((configField(raw, "haCpu") ?? "common") === "host") {
+      rows.push({ status: "pass", text: `${m.module}: haCpu host — keeps its node's full CPU` });
+      continue;
+    }
+    // The defaults cluster:ha applies: node = the first site node, HANode =
+    // the first other one (get_default_ha_node).
+    const siteNodes = siteNodeHostnames(configDir);
+    const nodeField = configField(raw, "node");
+    const node = typeof nodeField === "string" && nodeField ? nodeField : siteNodes[0] ?? m.node;
+    const haField = configField(raw, "HANode");
+    const ha = typeof haField === "string" && haField ? haField : siteNodes.find((n) => n !== node);
+    const level = typeof ha === "string" ? haCommonCpu(inv, node, ha) : null;
+    if (!level) continue;
+    const flags = level === "host" ? null : inv.levelFlags?.[level] ?? null;
+    if (level === "host" || (flags && flags.includes("avx512f"))) {
+      rows.push({ status: "pass", text: `${m.module}: ${level} keeps AVX-512 — nothing measurable lost` });
+      continue;
+    }
+    const target = guestTarget(configDir, m.module);
+    const use = target ? client.avx512Use(target) : null;
+    if (!use) {
+      rows.push({ status: "pass", text: `${m.module}: not measured (no answer from ${target ?? "its guest"}) — ${level} drops AVX-512` });
+      continue;
+    }
+    let row: CheckRow;
+    if (!use.available) {
+      row = { status: "pass", text: `${m.module}: its CPU offers no AVX-512 now — ${level} takes nothing it uses` };
+    } else if (use.recent.length > 0) {
+      row = {
+        status: "warn",
+        text: `${m.module}: ${use.recent.length} process(es) used AVX-512 in the last minute (${use.recent.slice(0, 6).join(", ")}) — ${level} removes it; benchmark before restarting it onto ${level}, or set haCpu: host`,
+      };
+    } else if (use.earlier.length > 0) {
+      row = { status: "pass", text: `${m.module}: AVX-512 used earlier, not in the last minute (${use.earlier.slice(0, 6).join(", ")}) — ${level} costs little` };
+    } else {
+      row = { status: "pass", text: `${m.module}: no process uses AVX-512 — ${level} costs nothing measurable` };
+    }
+    rows.push(row);
+    if (row.status === "warn") worst = "warn";
+  }
+  if (rows.length === 0) return { name: "cpu-impact", status: "skip", detail: "no HA guest to assess" };
+  const warns = rows.filter((r) => r.status === "warn").length;
+  return {
+    name: "cpu-impact",
+    status: worst,
+    detail: warns === 0 ? `${rows.length} HA guest(s): no measurable loss` : `${warns} of ${rows.length} HA guest(s) use instructions their shared CPU level drops`,
+    rows,
+  };
+}
+
 export function runHealthGates(client: ClusterClient, opts: ValidateOpts): HealthReport {
   const checks: CheckResult[] = [
     checkServiceLiveness(client, opts.configDir, opts.defaultNode),
     checkDiskThreshold(client, opts.configDir, opts.defaultNode, opts.threshold),
     checkMemoryCommitment(client, opts.memoryThreshold),
     checkStoragePools(client),
+    checkCpuImpact(client, opts.configDir, opts.defaultNode),
     checkGuestMemory(client),
     checkBackupStatus(opts.configDir),
     checkPendingReboot(client, opts.configDir, opts.defaultNode),

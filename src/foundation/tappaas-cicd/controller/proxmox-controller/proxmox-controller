@@ -348,6 +348,7 @@ cpu_inventory_compute() {
         | (map(.models) | inter) as $cm
         | { generated: (now | todate),
             levels: (($n[0].levels // {}) | map_values(length)),
+            levelFlags: ($n[0].levels // {}),
             nodes: [ $n[] | {node, cpu, vendor, level: best(.levels; .features; .models),
                              featureCount: (.features | length)} ],
             common: { level: best(($n[0].levels // {}); $cf; $cm),
