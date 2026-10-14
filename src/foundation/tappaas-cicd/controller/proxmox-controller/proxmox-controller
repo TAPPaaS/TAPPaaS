@@ -65,6 +65,10 @@ Commands:
   trunks    [--apply]     Reconcile per-VM trunks= for all trunk-bearing VMs
   bridge-vids [--apply]   Reconcile node lan bridge-vids (apply is operator-gated)
   show <vmname>           Show resolved-vs-actual trunks for one VM
+  cpu-inventory [--apply] Every node's CPU: guest-visible features, the CPU
+                          models it runs, its x86-64 level; the level common
+                          to all; per node pair whether a live move is safe
+                          (#827). --apply writes config/cluster-cpu.{json,md}
   live-ok <vmname> <node> Can this guest LIVE-migrate to <node>? (ADR-019)
                           0 = safe, 2 = would lose CPU features or has local
                           disks with snapshots, 1 = unknown
@@ -81,6 +85,7 @@ trunks: --apply
 bridge-vids: --apply
 show:
 live-ok:
+cpu-inventory: --apply
 '
 
 # ── Cluster helpers ──────────────────────────────────────────────────
@@ -142,6 +147,7 @@ _cluster_nodes() {
 readonly CPU_ADVISORY_FEATURES="
 amd-no-ssb
 auto-ibrs
+eraps
 flush-l1d
 ibpb
 ibrs
@@ -150,8 +156,11 @@ md-clear
 pschange-mc-no
 rsba
 spec-ctrl
+srso-user-kernel-no
 ssb-no
 stibp
+tsa-l1-no
+tsa-sq-no
 v-vmsave-vmload
 verw-clear
 virt-ssbd
@@ -273,6 +282,154 @@ _node_supports_model() {
     ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new "root@${node}.mgmt.internal" \
         "pvesh get /nodes/${node}/capabilities/qemu/cpu --output-format json 2>/dev/null" 2>/dev/null \
         | jq -e --arg m "${model}" 'any(.[]; .name == $m)' >/dev/null 2>&1
+}
+
+# ── CPU inventory (#827) ─────────────────────────────────────────────
+# What each node's CPU offers a guest, and what that means across the cluster.
+# Deterministic: KVM is asked, never guessed. One throwaway QEMU per node (no
+# VM needed) answers two questions — the features `host` gives a guest
+# (query-cpu-model-expansion) and which named models run there with nothing
+# missing (query-cpu-definitions) — and Proxmox's own file says what its
+# x86-64-v* models require. Everything after that is set arithmetic:
+#   level(node)  the x86-64-v* model with the most flags, all of them offered
+#   common       the same over the intersection of every node's features
+#   matrix       per ordered pair A→B: what A offers and B lacks (hard = an
+#                instruction a guest may execute; soft = advisory bits)
+readonly CPU_INVENTORY_FILE="${CPU_INVENTORY_FILE:-/home/tappaas/config/cluster-cpu}"
+
+# The node-side probe: sections a parser on this side turns into one record.
+# shellcheck disable=SC2016  # expanded on the node, not here
+readonly CPU_PROBE='
+q='"'"'{"execute":"qmp_capabilities"}{"execute":"query-cpu-model-expansion","arguments":{"type":"static","model":{"name":"host"}}}{"execute":"query-cpu-definitions"}{"execute":"quit"}'"'"'
+out=$(printf %s "$q" | timeout 30 qemu-system-x86_64 -machine none,accel=kvm -nodefaults -display none -qmp stdio 2>/dev/null)
+echo "@@features"; printf "%s\n" "$out" | grep "\"model\"" | head -1
+echo "@@definitions"; printf "%s\n" "$out" | grep "\"unavailable-features\"" | head -1
+echo "@@levels"; perl -0777 -ne '"'"'while (/\x27(x86-64-v[0-9][\w-]*)\x27\s*=>\s*\{.*?flags\s*=>\s*"([^"]+)"/gs) { print "$1\t$2\n" }'"'"' /usr/share/perl5/PVE/QemuServer/CPUConfig.pm
+echo "@@cpu"; lscpu | sed -n "s/^Vendor ID: *//p;s/^Model name: *//p"
+'
+
+# A probe's output as one node record. Pure — the unit test feeds it fixtures.
+#   cpu_probe_record <node> < probe-output
+cpu_probe_record() {
+    local node="$1" raw
+    raw="$(cat)"
+    section() { awk -v s="@@$1" '$0 == s {on=1; next} /^@@/ {on=0} on' <<< "${raw}"; }
+    jq -n --arg node "${node}" \
+        --argjson exp "$(section features | head -1 | jq -c . 2>/dev/null || echo null)" \
+        --argjson defs "$(section definitions | head -1 | jq -c . 2>/dev/null || echo null)" \
+        --argjson levels "$(section levels | jq -R 'split("\t") | select(length == 2)
+              | {(.[0]): (.[1] | split(";") | map(select(startswith("+")) | ltrimstr("+")))}' | jq -s 'add // {}')" \
+        --arg vendor "$(section cpu | sed -n 1p)" --arg cpu "$(section cpu | sed -n 2p)" '
+        { node: $node, cpu: $cpu, vendor: $vendor,
+          features: ([($exp.return.model.props // {}) | to_entries[] | select(.value == true) | .key] | sort),
+          models: ([($defs.return // [])[] | select((.["unavailable-features"] // []) | length == 0) | .name] | sort),
+          levels: $levels }'
+}
+
+# Node records (a JSON array on stdin) → the inventory. Pure.
+#   cpu_inventory_compute <advisory-features, newline-separated>
+cpu_inventory_compute() {
+    jq --arg adv "$1" '
+        ($adv | split("\n") | map(select(. != ""))) as $soft
+        | def runs_level($feats; $models): .value - $feats == [] and ($models | index("qemu64") != null);
+          def best($levels; $feats; $models):
+              [$levels | to_entries[] | select(runs_level($feats; $models))] | max_by(.value | length) | .key // null;
+          def inter: if length == 0 then [] else reduce .[1:][] as $x (.[0]; . - (. - $x)) end;
+        . as $n
+        | (map(.features) | inter) as $cf
+        | (map(.models) | inter) as $cm
+        | { generated: (now | todate),
+            nodes: [ $n[] | {node, cpu, vendor, level: best(.levels; .features; .models),
+                             featureCount: (.features | length)} ],
+            common: { level: best(($n[0].levels // {}); $cf; $cm),
+                      vendors: ([$n[].vendor] | unique),
+                      vendorModels: [ $cm[] | select(test("^(host|max|base|qemu|kvm|x86-64)") | not) ] },
+            matrix: [ $n[] as $a | $n[] as $b | select($a.node != $b.node)
+                      | ($a.features - $b.features) as $m
+                      | { from: $a.node, to: $b.node,
+                          liveSafe: (($m - $soft) | length == 0),
+                          hard: ($m - $soft), soft: ($m - ($m - $soft)) } ] }'
+}
+
+# The inventory as a page an operator reads (config/cluster-cpu.md). Pure.
+cpu_inventory_markdown() {
+    jq -r '
+        . as $i
+        | "# Cluster CPUs\n\nGenerated \(.generated) by `proxmox-controller cpu-inventory`. Do not edit.\n",
+          "| Node | CPU | x86-64 level |", "|---|---|---|",
+          (.nodes[] | "| \(.node) | \(.cpu) | \(.level // "?") |"),
+          "", "Common to every node: **\(.common.level // "none")**" +
+              (if .common.vendorModel then "; the richest vendor model all nodes run: **\(.common.vendorModel.name)** (\(.common.vendorModel.featureCount) features)" else "" end) + ".",
+          "", "## Live moves with `cpu: host`", "",
+          "A guest started on the row node and moved live to the column node. ✗ = the column node lacks instructions the guest may be using.", "",
+          ("| from \\ to | " + ([.nodes[].node] | join(" | ")) + " |"),
+          ("|---|" + ([.nodes[] | "---"] | join("|")) + "|"),
+          (.nodes[].node as $f
+           | "| \($f) | " + ([ $i.nodes[].node as $t
+                               | if $t == $f then "—"
+                                 else ($i.matrix[] | select(.from == $f and .to == $t)
+                                       | if .liveSafe then "✓" else "✗ −\(.hard | length)" end) end ]
+                             | join(" | ")) + " |"),
+          "", (.matrix[] | select(.liveSafe | not) | "- \(.from) → \(.to) lacks: \(.hard | join(" "))")'
+}
+
+# The vendor's own models every node runs, sorted by how many features each
+# gives a guest — QEMU expands each (on one node: a model's definition is the
+# same everywhere). Only when every node has the same vendor: a vendor model
+# does not run on the other's CPUs. Adds .common.vendorModel {name, featureCount}.
+cpu_vendor_family() {
+    case "$1" in
+        AuthenticAMD|HygonGenuine) echo '^(EPYC|Opteron|Dhyana)' ;;
+        GenuineIntel) echo '^(Nehalem|Westmere|SandyBridge|IvyBridge|Haswell|Broadwell|Skylake|Cascadelake|Cooperlake|Icelake|SapphireRapids|GraniteRapids|SierraForest|ClearwaterForest|DiamondRapids|Snowridge)' ;;
+    esac
+}
+cpu_best_vendor_model() {
+    local node="$1" inv family names q out best
+    inv="$(cat)"
+    if [[ "$(jq '.common.vendors | length' <<< "${inv}")" != "1" ]]; then echo "${inv}"; return 0; fi
+    family="$(cpu_vendor_family "$(jq -r '.common.vendors[0]' <<< "${inv}")")"
+    [[ -n "${family}" ]] || { echo "${inv}"; return 0; }
+    names="$(jq -r --arg f "${family}" '.common.vendorModels[] | select(test($f))' <<< "${inv}")"
+    [[ -n "${names}" ]] || { echo "${inv}"; return 0; }
+    q='{"execute":"qmp_capabilities"}'
+    while read -r m; do
+        q+="{\"execute\":\"query-cpu-model-expansion\",\"arguments\":{\"type\":\"full\",\"model\":{\"name\":\"${m}\"}}}"
+    done <<< "${names}"
+    q+='{"execute":"quit"}'
+    out="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new "root@${node}.mgmt.internal" \
+        "printf %s '${q}' | timeout 60 qemu-system-x86_64 -machine none,accel=kvm -nodefaults -display none -qmp stdio" 2>/dev/null)" || true
+    best="$(grep '"model"' <<< "${out}" | jq -sc '[ .[] | .return.model
+              | {name, featureCount: ([.props // {} | to_entries[] | select(.value == true)] | length)} ]
+            | sort_by(.featureCount, .name) | last // empty' 2>/dev/null)"
+    if [[ -n "${best}" ]]; then
+        jq --argjson b "${best}" '.common.vendorModel = $b' <<< "${inv}"
+    else
+        echo "${inv}"
+    fi
+}
+
+cpu_inventory() {
+    local apply="$1" node rec recs="[]" inv
+    for node in $(get_all_node_hostnames); do
+        rec="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new "root@${node}.mgmt.internal" \
+                 "bash -s" <<< "${CPU_PROBE}" 2>/dev/null | cpu_probe_record "${node}")" || rec=""
+        if [[ -z "${rec}" ]] || [[ "$(jq '.features | length' <<< "${rec}")" == "0" ]]; then
+            error "cpu-inventory: could not probe ${node}'s CPU"
+            ERRORS=$((ERRORS + 1))
+            continue
+        fi
+        recs="$(jq -c --argjson r "${rec}" '. + [$r]' <<< "${recs}")"
+    done
+    [[ "$(jq length <<< "${recs}")" -gt 0 ]] || return 1
+    inv="$(cpu_inventory_compute "${CPU_ADVISORY_FEATURES}" <<< "${recs}")"
+    inv="$(cpu_best_vendor_model "$(get_node_hostname 0)" <<< "${inv}")"
+    cpu_inventory_markdown <<< "${inv}"
+    if [[ "${apply}" == "1" ]]; then
+        jq . <<< "${inv}" > "${CPU_INVENTORY_FILE}.json"
+        cpu_inventory_markdown <<< "${inv}" > "${CPU_INVENTORY_FILE}.md"
+        info "cpu-inventory: written ${CPU_INVENTORY_FILE}.json and .md"
+    fi
+    [[ "${ERRORS}" -eq 0 ]]
 }
 
 # live-ok <vmname> <dst-node>
@@ -633,6 +790,10 @@ main() {
         show)
             [[ -n "${vmname}" ]] || die "show requires a <vmname>"
             show_vm "${vmname}"
+            ;;
+        cpu-inventory)
+            cpu_inventory "${apply}"
+            exit $?
             ;;
         live-ok)
             # Two positionals, so the generic loop above (which keeps only the

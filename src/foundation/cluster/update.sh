@@ -431,4 +431,14 @@ info "${BOLD}Step 8: Retiring unused node DNS placeholders${CL}"
 # shellcheck disable=SC2086
 retire_node_placeholders "${MGMTVLAN}" ${NODES}
 
+# Step 9: what each node's CPU offers a guest, and which live moves are safe
+# (#827). Re-read every update: a CPU can be swapped or a node added. The page
+# config/cluster-cpu.md is the operator's view; .json is what HA placement reads.
+info "${BOLD}Step 9: CPU inventory of the cluster nodes${CL}"
+if proxmox-controller cpu-inventory --apply > /dev/null; then
+    info "  ${GN}✓${CL} $(jq -r '"common level \(.common.level // "none"); " + ([.nodes[] | "\(.node) \(.level // "?")"] | join(", "))' /home/tappaas/config/cluster-cpu.json)"
+else
+    warn "  CPU inventory incomplete — see: proxmox-controller cpu-inventory"
+fi
+
 info "${GN}✓${CL} Cluster module update completed successfully."

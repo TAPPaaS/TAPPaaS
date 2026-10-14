@@ -127,6 +127,55 @@ ck "a disabled replication job does not" \
 ck "a VM without snapshots is not blocked" \
    "" "$(storage_live_blockers tappaas2 343 <<< '{"local_disks":[{"drivename":"scsi0","cdrom":0,"is_cloudinit":0,"shared":0}]}' 3<<< '[]' | tr '\n' ' ')"
 
+
+# ── CPU inventory (#827) ────────────────────────────────────────────
+# Pure: canned probe output in, set arithmetic out. The live probe is the
+# deep tier's.
+V3='aes popcnt pni sse4.1 sse4.2 ssse3 avx avx2 bmi1 bmi2 f16c fma abm movbe xsave'
+V4="${V3} avx512f avx512bw avx512cd avx512dq avx512vl"
+probe() {  # probe <vendor> <cpu> <features> <runnable models>
+    local f m props="" defs=""
+    for f in $3; do props+="\"${f}\":true,"; done
+    for m in $4; do defs+="{\"name\":\"${m}\",\"unavailable-features\":[]},"; done
+    printf '@@features\n{"return":{"model":{"name":"host","props":{%s"never":false}}}}\n' "${props}"
+    printf '@@definitions\n{"return":[%s{"name":"EPYC-Genoa","unavailable-features":["avx512-bf16"]}]}\n' "${defs}"
+    printf '@@levels\n'
+    printf 'x86-64-v2\t+popcnt;+pni;+sse4.1;+sse4.2;+ssse3\n'
+    printf 'x86-64-v3\t+%s\n' "${V3// /;+}"
+    printf 'x86-64-v4\t+%s\n' "${V4// /;+}"
+    printf '@@cpu\n%s\n%s\n' "$1" "$2"
+}
+r1="$(probe AuthenticAMD "Zen 4" "${V4} gfni flush-l1d" "qemu64 EPYC-Rome EPYC-Milan" | cpu_probe_record n1)"
+r2="$(probe AuthenticAMD "Zen 3" "${V3}" "qemu64 EPYC-Rome" | cpu_probe_record n2)"
+r3="$(probe AuthenticAMD "Odd" "${V4}" "EPYC-Rome" | cpu_probe_record n3)"
+ck "a probe becomes a record: the features the guest gets, not the false ones" \
+   "22 false" "$(jq -r '"\(.features | length) \(.features | index("never") != null)"' <<< "${r1}")"
+ck "…the models that run with nothing missing, not the others" \
+   "EPYC-Milan EPYC-Rome qemu64" "$(jq -r '.models | join(" ")' <<< "${r1}")"
+ck "…and Proxmox's x86-64 level definitions" \
+   "x86-64-v2 x86-64-v3 x86-64-v4" "$(jq -r '.levels | keys | join(" ")' <<< "${r1}")"
+
+inv="$(jq -s . <<< "${r1}${r2}" | cpu_inventory_compute "${CPU_ADVISORY_FEATURES}")"
+ck "a node's level is the richest x86-64 model all of whose flags it offers" \
+   "n1=x86-64-v4 n2=x86-64-v3" "$(jq -r '[.nodes[] | "\(.node)=\(.level)"] | join(" ")' <<< "${inv}")"
+ck "the common level is the richest one inside every node's features" \
+   "x86-64-v3" "$(jq -r '.common.level' <<< "${inv}")"
+ck "common vendor models: those every node runs" \
+   "EPYC-Rome" "$(jq -r '.common.vendorModels | join(" ")' <<< "${inv}")"
+ck "n1 → n2 is not live-safe: n2 lacks instructions n1 offers" \
+   "false avx512bw avx512cd avx512dq avx512f avx512vl gfni" \
+   "$(jq -r '.matrix[] | select(.from == "n1") | "\(.liveSafe) \(.hard | join(" "))"' <<< "${inv}")"
+ck "…a missing mitigation bit is listed apart, as advisory" \
+   "flush-l1d" "$(jq -r '.matrix[] | select(.from == "n1") | .soft | join(" ")' <<< "${inv}")"
+ck "n2 → n1 is live-safe: n1 offers everything n2 does" \
+   "true" "$(jq -r '.matrix[] | select(.from == "n2") | .liveSafe' <<< "${inv}")"
+ck "a node that cannot run qemu64 has no x86-64 level" \
+   "null" "$(jq -s . <<< "${r3}" | cpu_inventory_compute "" | jq -r '.nodes[0].level')"
+md="$(cpu_inventory_markdown <<< "${inv}")"
+ck "the page shows the matrix: ✗ with the count one way, ✓ the other" \
+   "| n1 | — | ✗ −6 |
+| n2 | ✓ | — |" "$(grep -E '^\| n[12] \| (—|✓)' <<< "${md}")"
+
 echo ""
 echo "test-proxmox-manager: ${PASS} passed, ${FAIL} failed"
 [[ "${FAIL}" -eq 0 ]]

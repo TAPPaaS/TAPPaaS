@@ -26,4 +26,7 @@ host="$(sed -n 1p <<< "${facts}")"; id="$(sed -n 2p <<< "${facts}")"; pve="$(sed
 pn_site_member "${INSTANCE}" || die "${INSTANCE} is not in site.json hardware.nodes — join it with 'site-manager node add ${INSTANCE}' first"
 
 info "  ${GN}✓${CL} root by key; ${pve}; a member of this Site's cluster"
+# A new node changes what the cluster's CPUs have in common (#827).
+proxmox-controller cpu-inventory --apply > /dev/null \
+    || warn "  CPU inventory incomplete — see: proxmox-controller cpu-inventory"
 info "${GN}✓${CL} ${INSTANCE} registered — nothing on it was changed; its OS is patched by the cluster module"

@@ -33,6 +33,8 @@ gate on convergence.
 | `trunks [--apply]` | Reconcile per-VM `trunks=` for all trunk-bearing VMs only. |
 | `bridge-vids [--apply]` | Reconcile each node's `lan` bridge VLAN set. **Apply is operator-gated** — applying rewrites a live node's interfaces and runs `ifreload`, which is disruptive. |
 | `show <vmname>` | Show the resolved-vs-actual trunk list for one VM (read-only). |
+| `live-ok <vmname> <node>` | Can this guest move to `<node>` live? 0 safe, 2 not (the node lacks CPU instructions the guest may use, or a local disk has snapshots), 1 unknown. |
+| `cpu-inventory [--apply]` | Every node's CPU as a guest sees it, its x86-64 level, the level all nodes share, and per node pair whether a live move of a `cpu: host` guest is safe. `--apply` writes `config/cluster-cpu.json` and the page `config/cluster-cpu.md`; the cluster update does so every run. |
 
 A compatibility alias `proxmox-manager` is linked to the same binary.
 
@@ -51,6 +53,22 @@ proxmox-controller show firewall
 # Apply the node bridge VLAN set (disruptive — operator-gated):
 proxmox-controller bridge-vids --apply
 ```
+
+### The CPU inventory
+
+Nothing is estimated. On each node one QEMU process with no VM asks KVM two
+things: which features the `host` CPU model gives a guest, and which named CPU
+models run there with nothing missing. Proxmox's own definitions say what its
+`x86-64-v2`…`v4` models require. The rest is set arithmetic:
+
+- a node's **level** is the richest `x86-64-v*` model all of whose flags it offers;
+- the **common level** is the same over what every node offers; with one CPU
+  vendor, the richest vendor model every node runs is named too (QEMU expands
+  each, and the one giving a guest the most features wins);
+- the **matrix** says, for each ordered pair of nodes, what the first offers and
+  the second lacks. A missing instruction set means a `cpu: host` guest started
+  on the first may crash on the second after a live move; a missing mitigation
+  bit is listed but harmless.
 
 ## Helper scripts
 
