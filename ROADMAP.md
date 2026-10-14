@@ -297,7 +297,7 @@ Every app wired to the identity provider the same way: OIDC for hass, Nextcloud 
 |---|-------|:-:|:-:|------|
 | #345 | hass: appliance-aware OIDC staging | M | L | |
 | ✅ #401 | Nextcloud: OIDC redirect, trusted domains | M | L | **Closed 2026-10-14 — already met:** login redirects straight to Authentik (`caface4d`, local `/login?direct=1` kept); trusted domains from the module config (`3ea124b0`). Verified on hrossen |
-| ✅ #479 | Site-specific login page | L | L | **Closed 2026-10-14** (`1a065ddb`, `17ecfb92`): the sign-in page shows the site name and its own logo from `site.json` `branding` (light/dark); live on hrossen |
+| ✅ #479 | Site-specific login page | L | L | **Closed 2026-10-14** (`1a065ddb`, `17ecfb92`): the sign-in page shows the site name and its own logo from `site.json` `branding` (light/dark); live on hrossen. Extended 2026-10-14 (`44724af2`): start-page tiles show each module's icon (dashboard-icons) and `displayName`, generated tile otherwise; providers keyed by slug so a rename keeps the OIDC client |
 | ✅ #701 | logging depends on identity though its own code makes SSO optional | L | L | **Closed 2026-10-14** (`344bc8b8`): logging lists identity in `integratesWith`; Grafana's OIDC switch follows identity. Other consumers keep `dependsOn` — identity is always installed |
 
 ### G3.3 App module fixes — Ease L · Risk L · released: 10 · open: 11
