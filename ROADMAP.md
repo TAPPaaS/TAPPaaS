@@ -106,8 +106,8 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | 4 | G4.3 Manager verb gaps | M | L | 9 | – | 8 |
 | 4 | G4.4 Storage & physical devices | H | L | 5 | – | 7 |
 | 4 | G4.5 Governance, CI & sign-offs | M | L | 5 | – | 5 |
-| 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 21 | – | 3 |
-| 3 | G3.2 Identity & SSO wiring | M | L | 13 | – | 1 |
+| 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 18 | 6 | 2 |
+| 3 | G3.2 Identity & SSO wiring | M | L | 10 | 3 | 1 |
 | 3 | G3.3 App module fixes | L | L | 10 | – | 11 |
 | 3 | G3.4 AI stack maturity | M | M | 1 | – | 10 |
 | 3 | G3.5 Installer UX | L | L | 1 | – | 3 |
@@ -274,7 +274,7 @@ The project's own machinery: CI runners (#415), community-health files (#486), t
 
 Low upgrade risk. Build continuously, in any order within a group.
 
-### G3.1 cluster:vm lifecycle & capacity — Ease L · Risk M · released: 21 · open: 3
+### G3.1 cluster:vm lifecycle & capacity — Ease L · Risk M · released: 18 · done for 2.3: 6 · open: 2
 
 Guests sized, placed, started and stopped right: memory defaults from measurement (#663), moving a running guest to another node (#825), a readiness wait that skips UDP ports (#826), hardware drift (#531), shutdown and boot order (#36, #127), storage growth and placement (#100, #403), a composite-module ADR (#761), and a sweep that survives a guest restarting itself (#753).
 
@@ -289,7 +289,7 @@ Guests sized, placed, started and stopped right: memory defaults from measuremen
 | ✅ #826 | Readiness wait probes UDP ports over TCP — 180 s lost per update | L | L | **Closed 2026-10-13** (`fix(module-ready): do not probe UDP or ICMP ports over TCP`): only TCP, TCP/UDP and unset protocols are probed; deconz-test's wait went 180 s → 0 s; a full `update-module deconz-test` on hrossen now takes 79 s. Found during the #825 test |
 | #761 | A composite-module ADR: `cluster`, `kubernetes`, and modules that only provide artefacts | H | M | ADR-022d and ADR-026 defer `cluster`/`kubernetes` to an ADR that does not exist, and `templates` fits no `kind`; interim values in ADR-022d v1.2. With @ErikDaniel007 |
 
-### G3.2 Identity & SSO wiring — Ease M · Risk L · released: 13 · open: 1
+### G3.2 Identity & SSO wiring — Ease M · Risk L · released: 10 · done for 2.3: 3 · open: 1
 
 Every app wired to the identity provider the same way: OIDC for hass, Nextcloud and forgejo (#345, #401, #282), a site-specific login page (#479), logging's SSO dependency (#701), a test for forward-auth (#752), and Jellyfin behind forward-auth (#805) with Authentik sign-in (#806).
 
