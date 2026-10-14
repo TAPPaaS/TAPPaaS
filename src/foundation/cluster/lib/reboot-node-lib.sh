@@ -235,9 +235,54 @@ rn_ha_left_on_node() {
         | awk '$1 != "" && $3 !~ /^(stopped|disabled|ignored|error)$/'
 }
 
-# Perform a controlled reboot of a single node. Returns 0 on success; non-zero
-# on any failure (caller decides whether to abort the run). Assumes the caller
-# has already confirmed/authorised the action.
+# Where the CRM would put <sid> when <node> drains (#827): the highest-priority
+# other node of its node-affinity rule that is online, else every other online
+# node. Pure. Args: <node> <sid> <rules-json> <online-nodes, space-separated>
+rn_drain_targets() {
+    local node="$1" sid="$2" rules="$3" online="$4"
+    jq -r --arg n "${node}" --arg s "${sid}" --arg on " ${online} " '
+        [ .[] | select((.type // "node-affinity") == "node-affinity")
+              | select(((.resources // "") | split(",")) | index($s)) ][0] as $r
+        | ($on | split(" ") | map(select(. != "" and . != $n))) as $others
+        | if $r == null then $others[]
+          else
+            [ ($r.nodes // "") | split(",")[] | select(. != "")
+              | split(":") | {node: .[0], prio: ((.[1] // "0") | tonumber)}
+              | . as $e | select($e.node != $n and ($others | index($e.node) != null)) ] as $c
+            | if ($c | length) == 0 then empty
+              else ($c | max_by(.prio).prio) as $top | $c[] | select(.prio == $top) | .node end
+          end' <<< "${rules}"
+}
+
+# Running HA guests on <node> that a drain would move LIVE to a node whose CPU
+# lacks features they may be using (#827) — the CRM's maintenance drain does not
+# ask, so this asks for it: `proxmox-controller live-ok`, per guest, per target.
+# Prints "<sid> <name> → <target>" for each; "cannot tell" counts as unsafe.
+# rc 1 when the cluster's guests cannot be read at all.
+rn_live_unsafe_guests() {
+    local node="$1" res rules online sid vmid name status t
+    res="$(rn_node_ssh "$node" "pvesh get /cluster/resources --output-format json" 2>/dev/null)" || res=""
+    jq -e 'type == "array"' <<< "${res}" >/dev/null 2>&1 || return 1
+    rules="$(rn_node_ssh "$node" "pvesh get /cluster/ha/rules --output-format json" 2>/dev/null)" || rules=""
+    jq -e 'type == "array"' <<< "${rules}" >/dev/null 2>&1 || rules="[]"
+    online="$(jq -r '[.[] | select(.type == "node" and .status == "online") | .node] | join(" ")' <<< "${res}")"
+    for sid in $(rn_ha_vms_on_node "$node"); do
+        vmid="${sid#vm:}"
+        read -r name status < <(jq -r --argjson v "${vmid}" \
+            '.[] | select(.type == "qemu" and .vmid == $v) | "\(.name) \(.status)"' <<< "${res}") || true
+        [[ "${status:-}" == "running" ]] || continue
+        for t in $(rn_drain_targets "$node" "$sid" "$rules" "$online"); do
+            "${RN_LIVEOK_BIN:-proxmox-controller}" live-ok "$name" "$t" >/dev/null 2>&1 && continue
+            echo "${sid} ${name} → ${t}"
+        done
+    done
+}
+
+# Perform a controlled reboot of a single node. Returns 0 on success, 3 when
+# the node was left alone because draining it is not live-safe (#827: nothing
+# moved, nothing to undo), other non-zero on any failure (caller decides whether
+# to abort the run). Assumes the caller has already confirmed/authorised the
+# action.
 #
 # Arguments: <node>
 reboot_one_node() {
@@ -259,6 +304,21 @@ reboot_one_node() {
     info "  ${GN}✓${CL} HA quorum OK (${active} alive)"
 
     latest=$(rn_latest_kernel "$node")
+
+    # #827: maintenance moves every HA guest LIVE, and the CRM does not check
+    # that the target can run what the guest may be using. Refuse the drain —
+    # before anything moves — when a guest would land on a CPU missing features.
+    local unsafe=""
+    if ! unsafe="$(rn_live_unsafe_guests "$node")"; then
+        unsafe="(could not read the cluster's guests — not draining blind)"
+    fi
+    if [[ -n "${unsafe}" ]]; then
+        warn "DEFERRED: ${node} not rebooted — draining it would move HA guests LIVE to a CPU lacking features they may use:"
+        while IFS= read -r _l; do warn "    ${_l}"; done <<< "${unsafe}"
+        warn "  Nothing was moved. Move them offline first (module-manager migrate <module> --force),"
+        warn "  then reboot ${node}: reboot-node.sh --execute ${node}"
+        return 3
+    fi
 
     # HA maintenance mode → migrate managed VMs off this node.
     info "  Enabling HA maintenance mode..."

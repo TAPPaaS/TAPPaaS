@@ -31,7 +31,7 @@ A guest is **either** a VM **or** a container, never both.
 | `reconcile-storage-nodes.sh` | Reconcile PVE storage node lists with reality. |
 | `setup-ssd-lifecycle.sh` | Autotrim + TRIM/SMART cron jobs. |
 | `setup-realtek-nic.sh` | Realtek RTL8127 10GbE driver fix for MS-S1 MAX nodes — hardware-gated, idempotent. See [Node hardware quirks](#node-hardware-quirks). |
-| `reboot-node.sh` / `reboot-cluster.sh` | Controlled HA node reboot (single node / orchestrated kernel-reboot pass). |
+| `reboot-node.sh` / `reboot-cluster.sh` | Controlled HA node reboot (single node / orchestrated kernel-reboot pass). A node is drained only when every running HA guest on it can move live to the node HA would choose — `proxmox-controller live-ok` per guest; otherwise it is left alone for a window. |
 | `capture.sh` | Capture helper. |
 | `update.sh` | Cluster module update — apt upgrade on all nodes and re-distribute the provisioners + `zones.json`; re-asserts the Realtek fix. |
 | `test.sh` | Cluster regression tests (see [TEST.md](./TEST.md)). |

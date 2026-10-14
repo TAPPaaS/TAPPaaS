@@ -12,6 +12,9 @@
 #     survives). Other nodes go first, in config order.
 #   - before each node: re-assert HA quorum (>=2 active); reboot via the shared
 #     reboot_one_node routine; verify the new kernel.
+#   - a node whose drain is not live-safe — an HA guest would move LIVE to a CPU
+#     lacking features it may use (#827) — is left alone with a DEFERRED: line;
+#     nothing moves, and the pass continues with the other nodes.
 #   - ABORT the whole pass if any node fails to return (issue #275 requirement).
 #   - on a SINGLE-NODE cluster only report: there is no peer to drain onto, so
 #     a reboot is a full outage (firewall + this cicd VM included).
@@ -169,13 +172,25 @@ fi
 echo
 info "${BOLD}Starting controlled reboot pass (${#ORDER[@]} node(s))${CL}"
 done_count=0
+deferred=()
 for n in "${ORDER[@]}"; do
     echo
-    if ! reboot_one_node "$n"; then
+    rc=0
+    reboot_one_node "$n" || rc=$?
+    if [[ ${rc} -eq 3 ]]; then
+        # Not drained, nothing moved (#827): the other nodes can still go.
+        deferred+=("$n")
+        continue
+    fi
+    if [[ ${rc} -ne 0 ]]; then
         die "Reboot of ${n} failed — aborting further reboots (${done_count}/${#ORDER[@]} completed). Cluster left quorate; investigate ${n} before continuing."
     fi
     done_count=$((done_count + 1))
 done
 
 echo
-info "${BOLD}${GN}✓${CL} Cluster reboot pass complete: ${done_count}/${#ORDER[@]} node(s) rebooted.${CL}"
+if [[ ${#deferred[@]} -gt 0 ]]; then
+    warn "Cluster reboot pass: ${done_count}/${#ORDER[@]} node(s) rebooted; left for a window (not live-safe to drain): ${deferred[*]}"
+else
+    info "${BOLD}${GN}✓${CL} Cluster reboot pass complete: ${done_count}/${#ORDER[@]} node(s) rebooted.${CL}"
+fi

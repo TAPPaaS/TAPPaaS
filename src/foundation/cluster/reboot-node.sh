@@ -157,7 +157,10 @@ read -rp "  Type the node name to confirm (or Ctrl-C to abort): " CONFIRM
 # Step 4: Controlled reboot (shared routine)
 ###############################################################################
 echo
-reboot_one_node "$NODE" || die "Reboot of ${NODE} failed"
+_rc=0
+reboot_one_node "$NODE" || _rc=$?
+[[ ${_rc} -eq 3 ]] && die "${NODE} not rebooted: draining it is not live-safe (see above). Nothing was moved."
+[[ ${_rc} -eq 0 ]] || die "Reboot of ${NODE} failed"
 
 echo
 info "${BOLD}${GN}✓${CL} ${NODE} reboot complete.${BOLD} Verify HA status:${CL}"
