@@ -929,3 +929,43 @@ class TestBrandEnsure(unittest.TestCase):
         self.assertIn('font-size="34"', site_logo_svg("short"))
         self.assertNotIn('font-size="34"', site_logo_svg("a very long site name indeed"))
         self.assertIn(">S</text>", site_icon_svg("smith"))
+
+
+class TestBrandEnsureOwnLogo(TestBrandEnsure):
+    """#479: a site's own logo replaces the generated one."""
+
+    def test_one_file_serves_both_themes(self):
+        mgr, calls = self._mgr(dict(self.BRAND), [])
+        mgr.brand_ensure("rossen", logo=(b"<svg>own</svg>", "svg"))
+        ups = [c for c in calls if c["m"] == "POST" and c["p"] == "/admin/file/"]
+        logo_up = [u for u in ups if "logo" in u["data"]["name"]]
+        self.assertEqual(len(logo_up), 1)
+        self.assertEqual(logo_up[0]["files"]["file"][1], b"<svg>own</svg>")
+        patch = next(c for c in calls if c["m"] == "PATCH" and c["p"] == "/core/brands/B/")
+        self.assertNotIn("%(theme)s", patch["json"]["branding_logo"])
+        self.assertTrue(patch["json"]["branding_logo"].endswith(".svg"))
+
+    def test_light_and_dark_files(self):
+        mgr, calls = self._mgr(dict(self.BRAND), [])
+        mgr.brand_ensure("rossen", logo=(b"PNGL", "png"), logo_dark=(b"PNGD", "png"))
+        names = sorted(c["data"]["name"] for c in calls if c["m"] == "POST" and "logo" in c["data"]["name"])
+        self.assertTrue(names[0].endswith("-dark.png") and names[1].endswith("-light.png"))
+        mimes = {c["files"]["file"][2] for c in calls if c["m"] == "POST" and "logo" in c["data"]["name"]}
+        self.assertEqual(mimes, {"image/png"})
+
+    def test_mixed_types_are_refused(self):
+        mgr, _ = self._mgr(dict(self.BRAND), [])
+        with self.assertRaisesRegex(ValueError, "same file type"):
+            mgr.brand_ensure("rossen", logo=(b"x", "svg"), logo_dark=(b"y", "png"))
+
+    def test_read_logo_checks_type_and_size(self):
+        from identity_controller.authentik_manager import read_logo
+        with TemporaryDirectory() as d:
+            ok = Path(d) / "logo.SVG"; ok.write_bytes(b"<svg/>")
+            self.assertEqual(read_logo(str(ok)), (b"<svg/>", "svg"))
+            bad = Path(d) / "logo.gif"; bad.write_bytes(b"GIF")
+            with self.assertRaisesRegex(ValueError, "use one of"):
+                read_logo(str(bad))
+            empty = Path(d) / "e.png"; empty.write_bytes(b"")
+            with self.assertRaisesRegex(ValueError, "empty"):
+                read_logo(str(empty))

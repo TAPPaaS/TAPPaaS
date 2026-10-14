@@ -23,7 +23,7 @@ Subcommands:
   outpost-attach <slug>                     — attach the app's provider to the embedded outpost
   outpost-set-authentik-host <url>          — set the public URL the outpost redirects to
   recovery-flow-ensure                      — create/reconcile the password-recovery flow
-  brand-ensure --site-name N                — the login page shows the site (#479)
+  brand-ensure --site-name N [--logo F]     — the login page shows the site (#479)
                                               and point the default brand at it
   user-set-password <user> [--password …]   — set a password directly
   user-recovery-link <user>                 — one-time password-reset link (needs the flow above)
@@ -266,7 +266,12 @@ def cmd_recovery_flow_ensure(mgr: AuthentikManager, args: argparse.Namespace) ->
 
 def cmd_brand_ensure(mgr: AuthentikManager, args: argparse.Namespace) -> int:
     """The login page shows the site: logo, page title, flow heading (#479)."""
-    changed = mgr.brand_ensure(args.site_name, flow_title=args.flow_title)
+    from .authentik_manager import read_logo
+    logo = read_logo(args.logo) if args.logo else None
+    logo_dark = read_logo(args.logo_dark) if args.logo_dark else None
+    if logo_dark and not logo:
+        raise SystemExit("--logo-dark needs --logo (the light-theme logo)")
+    changed = mgr.brand_ensure(args.site_name, flow_title=args.flow_title, logo=logo, logo_dark=logo_dark)
     if changed:
         for c in changed:
             print(f"==> {c}")
@@ -472,6 +477,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="brand the login page for the site: its name, 'powered by TAPPaaS', no Authentik logo")
     be.add_argument("--site-name", required=True, help="the name shown on the login page")
     be.add_argument("--flow-title", default="Sign in", help="heading above the login form (default: Sign in)")
+    be.add_argument("--logo", help="the site's own logo (svg, png, jpg, webp); default: generated from the name")
+    be.add_argument("--logo-dark", help="a variant for the dark theme (same type as --logo)")
     be.set_defaults(handler=cmd_brand_ensure)
 
     # ── Groups / Users / Roles (ADR-006) ────────────────────────────────

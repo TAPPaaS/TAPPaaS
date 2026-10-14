@@ -204,9 +204,24 @@ fi
 # Its name with "powered by TAPPaaS" in place of Authentik's logo, the name as the
 # page title, "Sign in" over the form. Non-fatal: a failure leaves the stock
 # branding, and login works the same.
+# site.json `branding.logo` (and `branding.logoDark`) replace the generated logo;
+# paths are relative to the config directory.
 _site_name="$(jq -r '.displayName // .name // empty' /home/tappaas/config/site.json 2>/dev/null)"
+_brand_args=()
+for _k in logo logoDark; do
+    _f="$(jq -r --arg k "${_k}" '.branding[$k] // empty' /home/tappaas/config/site.json 2>/dev/null)"
+    [[ -n "${_f}" ]] || continue
+    [[ "${_f}" == /* ]] || _f="/home/tappaas/config/${_f}"
+    if [[ -f "${_f}" ]]; then
+        [[ "${_k}" == logo ]] && _brand_args+=(--logo "${_f}") || _brand_args+=(--logo-dark "${_f}")
+    else
+        warn "  site.json branding.${_k}: ${_f} not found — the login page keeps its current logo"
+        _brand_args=(); _site_name=""
+        break
+    fi
+done
 if [[ -n "${_site_name}" ]]; then
-    if authentik-manager brand-ensure --site-name "${_site_name}" | _tag debug; then
+    if authentik-manager brand-ensure --site-name "${_site_name}" "${_brand_args[@]}" | _tag debug; then
         debug "  ${GN}✓${CL} login page branded for '${_site_name}'"
     else
         warn "  brand-ensure failed — the login page keeps Authentik's branding"

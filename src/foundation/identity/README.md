@@ -21,6 +21,26 @@ Reference docs in this directory:
   `identity-manager` verbs, password reset).
 - [TEST.md](./TEST.md) — what the module tests cover (fast and deep tiers).
 
+## The sign-in page
+
+The sign-in page shows the site, not Authentik: the site's `displayName` with "powered by
+TAPPaaS" beneath, in a light and a dark variant, and the name as the page title. To use your own
+logo instead, put the image in the config directory and point `site.json` at it:
+
+```bash
+mkdir -p ~/config/branding
+cp my-logo.svg ~/config/branding/
+site-manager site modify --brandingLogo branding/my-logo.svg
+# optional, a variant for the dark theme (same file type):
+site-manager site modify --brandingLogoDark branding/my-logo-dark.svg
+module-manager update identity
+```
+
+SVG, PNG, JPG or WebP, at most 2 MB. One file serves both themes, so pick colours that read on a
+white and on a dark card, or give a dark variant. The logo is shown about 300 px wide; text in
+an SVG should not depend on a particular font being installed. To go back to the generated
+logo, remove `branding` from `site.json` and update identity again.
+
 ## Architecture
 
 ```mermaid

@@ -23,6 +23,25 @@ import hashlib
 from xml.sax.saxutils import escape as _xml_escape
 
 
+# The file types a site's own logo may be.
+LOGO_MIME = {"svg": "image/svg+xml", "png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg",
+             "webp": "image/webp"}
+
+
+def read_logo(path: str) -> tuple[bytes, str]:
+    """A logo file as (content, extension); refuses a type a browser may not show."""
+    ext = path.rsplit(".", 1)[-1].lower() if "." in path else ""
+    if ext not in LOGO_MIME:
+        raise ValueError(f"logo {path}: use one of {', '.join(sorted(LOGO_MIME))}")
+    with open(path, "rb") as f:
+        data = f.read()
+    if not data:
+        raise ValueError(f"logo {path} is empty")
+    if len(data) > 2 * 1024 * 1024:
+        raise ValueError(f"logo {path} is over 2 MB")
+    return data, ext
+
+
 # The login card is white in the light theme and dark in the dark theme: the
 # logo comes in a variant for each, picked by Authentik's %(theme)s file name.
 LOGO_COLOURS = {"light": ("#151515", "#6a6e73"), "dark": ("#ffffff", "#c7c7c7")}
@@ -774,24 +793,40 @@ class AuthentikManager:
                              data={"name": name, "usage": usage})
         r.raise_for_status()
 
-    def brand_ensure(self, site_name: str, flow_title: str = "Sign in") -> list[str]:
+    def brand_ensure(self, site_name: str, flow_title: str = "Sign in",
+                     logo: tuple[bytes, str] | None = None,
+                     logo_dark: tuple[bytes, str] | None = None) -> list[str]:
         """Brand the default brand and its login flow for ``site_name``.
 
+        ``logo``/``logo_dark`` are the site's own logo as (content, extension);
+        without them the logo is generated from the name. One file serves both
+        themes; with ``logo_dark`` too, Authentik picks by the viewer's theme.
         Returns what changed (empty: already so).
         """
         changed: list[str] = []
         brand = self.brand_default()
-        logos = {t: site_logo_svg(site_name, t).encode() for t in LOGO_COLOURS}
-        icon = site_icon_svg(site_name).encode()
-        tag = hashlib.sha256(b"".join(logos[t] for t in sorted(logos))).hexdigest()[:12]
+        if logo is None:
+            variants = {t: (site_logo_svg(site_name, t).encode(), "svg") for t in LOGO_COLOURS}
+        elif logo_dark is None:
+            variants = {"": logo}
+        else:
+            if logo[1] != logo_dark[1]:
+                raise ValueError("the light and dark logos must be the same file type "
+                                 f"(got .{logo[1]} and .{logo_dark[1]})")
+            variants = {"light": logo, "dark": logo_dark}
+        ext = next(iter(variants.values()))[1]
+        tag = hashlib.sha256(b"".join(variants[t][0] for t in sorted(variants))).hexdigest()[:12]
         # Authentik substitutes the viewer's theme for %(theme)s.
-        logo_name = f"tappaas-site-logo-{tag}-%(theme)s.svg"
+        logo_name = (f"tappaas-site-logo-{tag}-%(theme)s.{ext}" if "" not in variants
+                     else f"tappaas-site-logo-{tag}.{ext}")
+        icon = site_icon_svg(site_name).encode()
         icon_name = f"tappaas-site-icon-{hashlib.sha256(icon).hexdigest()[:12]}.svg"
         have = self.file_names()
-        uploads = [(logo_name.replace("%(theme)s", t), logos[t]) for t in sorted(logos)] + [(icon_name, icon)]
-        for name, data in uploads:
+        uploads = [(logo_name.replace("%(theme)s", t), variants[t][0], LOGO_MIME[ext]) for t in sorted(variants)]
+        uploads.append((icon_name, icon, "image/svg+xml"))
+        for name, data, mime in uploads:
             if name not in have:
-                self.file_upload(name, data, "image/svg+xml")
+                self.file_upload(name, data, mime)
                 changed.append(f"uploaded {name}")
         want = {"branding_title": site_name, "branding_logo": logo_name, "branding_favicon": icon_name}
         delta = {k: v for k, v in want.items() if brand.get(k) != v}

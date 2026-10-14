@@ -265,6 +265,13 @@
       "default": true,
       "note": "Turn it off only if an upstream path breaks DNSSEC (a middlebox that strips signatures). Changing it reloads Unbound once."
     },
+    "branding": {
+      "description": "The site's own look on its sign-in page (Authentik). logo: an image file (svg, png, jpg or webp, at most 2 MB) shown above the login form in place of the logo generated from displayName; logoDark: a variant for the dark theme, of the same file type (absent: logo serves both). Paths are relative to the config directory. Applied by the identity module's update.",
+      "type": "object",
+      "default": null,
+      "example": {"logo": "branding/logo.svg", "logoDark": "branding/logo-dark.svg"},
+      "note": "Without branding the logo is generated: the site's displayName with \"powered by TAPPaaS\" beneath, in a light and a dark variant. A missing file leaves the login page as it is and says so."
+    },
     "dnsBlocklists": {
       "description": "DNS blocklists the firewall's resolver applies, by the network module's update. Absent: none. lists are OPNsense's blocklist codes (atf = abuse.ch ThreatFox, hgz011 = hagezi threat intelligence, oisd1 = OISD big, ag = AdGuard, ...); zones limits filtering to those zones' clients, IPv4 and IPv6 (none listed: every client); allow names domains never blocked. A blocked name answers NXDOMAIN.",
       "type": "object",

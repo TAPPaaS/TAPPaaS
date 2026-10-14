@@ -63,6 +63,11 @@ picked by Authentik's `%(theme)s` file name — the name as page title and a sit
 favicon; the login flow's heading becomes "Sign in". Authentik's own footer ("Powered by
 authentik") stays.
 
+`site.json` `branding.logo` (and `branding.logoDark`) replace the generated logo with the
+site's own file — see README *The sign-in page*. Every logo is uploaded under a name that
+carries a hash of its content, so a changed file is uploaded once and an unchanged one never
+again; old files stay in Authentik's media until removed by hand.
+
 Uploads need Authentik's file storage, which it enables only when `/data` is a mount point,
 so the container mounts `/var/lib/authentik/data` at `/data` (media in `data/media`).
 

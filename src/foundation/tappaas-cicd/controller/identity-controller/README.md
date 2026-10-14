@@ -61,7 +61,7 @@ the desired state).
 | Command | Purpose |
 |---------|---------|
 | `recovery-flow-ensure [--slug <s>] [--title <t>] [--authentication none\|require_unauthenticated] [--no-brand]` | Create/reconcile the minimal password-recovery flow (prompt for a new password → write it) and point the default brand's `flow_recovery` at it, which is what makes `user-recovery-link` work. Idempotent; run by `identity/update.sh`. No SMTP involved — the link's `flow_token` carries the account. `--no-brand` builds the flow without touching the brand. |
-| `brand-ensure --site-name <name> [--flow-title <t>]` | Brand the login page for the site: a logo with the site's name and "powered by TAPPaaS" (a light and a dark variant, picked by Authentik's `%(theme)s` file name), the name as page title, a site-initial favicon, and the login flow's heading. Files are uploaded under content-hashed names, so a re-run uploads nothing. Run by `identity/update.sh` with `site.json` `displayName`. |
+| `brand-ensure --site-name <name> [--logo <file> [--logo-dark <file>]] [--flow-title <t>]` | Brand the login page for the site: the site's own logo (`--logo`, one file for both themes, or with `--logo-dark` a variant per theme), else a generated one with the site's name and "powered by TAPPaaS" (light and dark variants, picked by Authentik's `%(theme)s` file name); the name as page title, a site-initial favicon, and the login flow's heading. Files are uploaded under content-hashed names, so a re-run uploads nothing. Run by `identity/update.sh` from `site.json` `displayName` and `branding`. |
 
 ### Groups & roles
 

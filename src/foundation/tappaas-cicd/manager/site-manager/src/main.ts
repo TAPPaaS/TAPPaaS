@@ -64,6 +64,8 @@ export const HELP: HelpSpec = {
         ["--locationTimezone <tz>", "location.timezone"],
         ["--locationLocale <l>", "location.locale"],
         ["--locationKeyboard <kb>", "location.keyboard — the console layout every OS family is set from (#408)"],
+        ["--brandingLogo <path>", "branding.logo — the sign-in page's logo (svg, png, jpg, webp), relative to the config dir; applied by the identity update (#479)"],
+        ["--brandingLogoDark <path>", "branding.logoDark — its dark-theme variant, same file type"],
         ["--locationLatitude <deg>", "location.latitude, decimal degrees (#348)"],
         ["--locationLongitude <deg>", "location.longitude, decimal degrees (#348)"],
         ["--locationCity <c>", "location.city — lets an off-site copy in the same country show it is elsewhere (#609)"],
@@ -484,6 +486,8 @@ function cmdSite(o: Opts): void {
     setStr("--locationTimezone", ["location", "timezone"]);
     setStr("--locationLocale", ["location", "locale"]);
     setStr("--locationKeyboard", ["location", "keyboard"]);
+    setStr("--brandingLogo", ["branding", "logo"]);
+    setStr("--brandingLogoDark", ["branding", "logoDark"]);
     setNum("--locationLatitude", ["location", "latitude"], -90, 90);
     setNum("--locationLongitude", ["location", "longitude"], -180, 180);
     setStr("--locationCity", ["location", "city"]);
