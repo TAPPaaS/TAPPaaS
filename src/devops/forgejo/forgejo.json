@@ -1,5 +1,6 @@
 {
   "description": "Forgejo — self-hosted Git service and DevOps platform (Gitea fork)",
+  "displayName": "Forgejo",
   "kind": "vm",
   "version": "0.2.2",
   "stack": "devops",

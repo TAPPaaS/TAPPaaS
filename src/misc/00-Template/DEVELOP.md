@@ -61,6 +61,9 @@ image/OS choices, providing services, debugging, naming.
 - **`update.sh`** — called on the platform's update schedule; keeps the app patched
   without operator attention.
 - **`test.sh`** — your regression check; the same tests gate updates.
+- **`icon.svg`** and **`displayName`** — if your app signs in through the identity provider,
+  its tile on the start page shows this icon (square, SVG or PNG) and this name. Without an
+  icon the tile is generated from the name.
 
 ## Iterate and debug
 

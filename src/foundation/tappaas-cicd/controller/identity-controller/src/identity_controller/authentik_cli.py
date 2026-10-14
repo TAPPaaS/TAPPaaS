@@ -108,6 +108,16 @@ def cmd_test(mgr: AuthentikManager, _args: argparse.Namespace) -> int:
     return 1
 
 
+def _icon_arg(value: str):
+    """--icon: a file, "auto" (generated), or empty (leave the icon alone)."""
+    if not value:
+        return None
+    if value == "auto":
+        return "auto"
+    from .authentik_manager import read_logo
+    return read_logo(value)
+
+
 def cmd_proxy_app_ensure(mgr: AuthentikManager, args: argparse.Namespace) -> int:
     res = mgr.proxy_app_ensure(ProxyApp(
         name=args.name or args.slug,
@@ -115,6 +125,7 @@ def cmd_proxy_app_ensure(mgr: AuthentikManager, args: argparse.Namespace) -> int
         external_host=args.external_host,
         description=args.description,
         launch_url=args.launch_url,
+        icon=_icon_arg(args.icon),
     ))
     print(f"==> proxy app '{res.slug}': provider_pk={res.provider_pk} application_pk={res.application_pk}")
     if args.attach_outpost:
@@ -300,6 +311,7 @@ def cmd_oidc_app_ensure(mgr: AuthentikManager, args: argparse.Namespace) -> int:
         scopes=args.scope or None,
         description=args.description,
         launch_url=args.launch_url,
+        icon=_icon_arg(args.icon),
     ))
     print(f"==> oidc app '{res.slug}': provider_pk={res.provider_pk} application_pk={res.application_pk}")
     if args.show_secret:
@@ -433,6 +445,8 @@ def main(argv: list[str] | None = None) -> int:
     pa.add_argument("--description", default="")
     pa.add_argument("--launch-url", default="",
                     help="where Authentik's app list opens it (default: --external-host; blank://blank hides it)")
+    pa.add_argument("--icon", default="",
+                    help="the start-page tile's icon: an svg/png file, or 'auto' for a generated one")
     pa.add_argument("--attach-outpost", action="store_true",
                     help="also attach the new provider to the embedded outpost")
     pa.set_defaults(handler=cmd_proxy_app_ensure)
@@ -549,6 +563,8 @@ def main(argv: list[str] | None = None) -> int:
     oe.add_argument("--description", default="")
     oe.add_argument("--launch-url", default="",
                     help="where Authentik's app list opens the app (its SSO entry point); default: unchanged")
+    oe.add_argument("--icon", default="",
+                    help="the start-page tile's icon: an svg/png file, or 'auto' for a generated one")
     oe.add_argument("--show-secret", action="store_true", help="print the client_secret (sensitive)")
     oe.set_defaults(handler=cmd_oidc_app_ensure)
 

@@ -687,6 +687,34 @@ class TestOidcAppEnsure(unittest.TestCase):
         app = next(c for c in calls if c["method"] == "PATCH" and c["path"] == "/core/applications/immich/")
         self.assertNotIn("meta_launch_url", app["json"])
 
+    def test_icon_is_set_on_the_application(self):
+        mgr, calls = _make_manager(self._update_routes([]))
+        mgr.app_icon_ensure = MagicMock(return_value="tappaas-app-immich-abc.svg")
+        mgr.oidc_app_ensure(OidcApp(name="Immich", slug="immich",
+                                    redirect_uris=["https://immich.test/auth/login"], icon="auto"))
+        app = next(c for c in calls if c["method"] == "PATCH" and c["path"] == "/core/applications/immich/")
+        self.assertEqual(app["json"]["meta_icon"], "tappaas-app-immich-abc.svg")
+        self.assertEqual(app["json"]["name"], "Immich")
+
+    def test_a_display_name_keeps_the_provider(self):
+        # Renaming the tile must not create a second OIDC client: the module
+        # holds the first one's credentials.
+        mgr, calls = _make_manager(self._update_routes([]))
+        res = mgr.oidc_app_ensure(OidcApp(name="Immich Photos", slug="immich",
+                                          redirect_uris=["https://immich.test/auth/login"]))
+        self.assertFalse([c for c in calls if c["method"] == "POST" and c["path"] == "/providers/oauth2/"])
+        patch = next(c for c in calls if c["method"] == "PATCH" and c["path"] == "/providers/oauth2/7/")
+        self.assertEqual(patch["json"]["name"], "immich")
+        self.assertEqual(res.client_id, "CID")
+
+    def test_no_icon_leaves_the_icon_alone(self):
+        # An operator's own icon survives a caller that names none.
+        mgr, calls = _make_manager(self._update_routes([]))
+        mgr.oidc_app_ensure(OidcApp(name="immich", slug="immich",
+                                    redirect_uris=["https://immich.test/auth/login"]))
+        app = next(c for c in calls if c["method"] == "PATCH" and c["path"] == "/core/applications/immich/")
+        self.assertNotIn("meta_icon", app["json"])
+
     def test_update_never_narrows_existing_grants(self):
         wide = ["authorization_code", "hybrid", "implicit", "client_credentials", "password"]
         mgr, calls = _make_manager(self._update_routes(wide))
@@ -929,6 +957,37 @@ class TestBrandEnsure(unittest.TestCase):
         self.assertIn('font-size="34"', site_logo_svg("short"))
         self.assertNotIn('font-size="34"', site_logo_svg("a very long site name indeed"))
         self.assertIn(">S</text>", site_icon_svg("smith"))
+
+
+class TestAppIcon(TestBrandEnsure):
+    """App tiles on the start page carry the module's icon, or a generated one."""
+
+    def test_own_icon_is_uploaded_once_under_a_content_name(self):
+        mgr, calls = self._mgr(dict(self.BRAND), [])
+        name = mgr.app_icon_ensure("forgejo", "Forgejo", (b"<svg>f</svg>", "svg"))
+        self.assertRegex(name, r"^tappaas-app-forgejo-[0-9a-f]{12}\.svg$")
+        ups = [c for c in calls if c["m"] == "POST" and c["p"] == "/admin/file/"]
+        self.assertEqual([u["data"]["name"] for u in ups], [name])
+        self.assertEqual(ups[0]["files"]["file"][2], "image/svg+xml")
+        mgr2, calls2 = self._mgr(dict(self.BRAND), [name])
+        self.assertEqual(mgr2.app_icon_ensure("forgejo", "Forgejo", (b"<svg>f</svg>", "svg")), name)
+        self.assertFalse([c for c in calls2 if c["m"] == "POST"])
+
+    def test_a_changed_icon_is_a_new_file(self):
+        mgr, _ = self._mgr(dict(self.BRAND), [])
+        a = mgr.app_icon_ensure("forgejo", "Forgejo", (b"<svg>1</svg>", "svg"))
+        b = mgr.app_icon_ensure("forgejo", "Forgejo", (b"<svg>2</svg>", "svg"))
+        self.assertNotEqual(a, b)
+
+    def test_auto_icon_is_the_initial_on_a_colour(self):
+        from identity_controller.authentik_manager import app_icon_svg
+        mgr, calls = self._mgr(dict(self.BRAND), [])
+        name = mgr.app_icon_ensure("litellm", "LiteLLM", "auto")
+        self.assertTrue(name.endswith(".svg"))
+        svg = app_icon_svg("LiteLLM")
+        self.assertIn(">L</text>", svg)
+        self.assertEqual(svg, app_icon_svg("LiteLLM"))            # stable: same name, same tile
+        self.assertIn("&lt;", app_icon_svg("<x"))                 # escaped
 
 
 class TestBrandEnsureOwnLogo(TestBrandEnsure):

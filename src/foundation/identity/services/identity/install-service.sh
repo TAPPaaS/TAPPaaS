@@ -46,6 +46,8 @@ _IDENTITY_SVC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "${_IDENTITY_SVC_DIR}/../../lib/ensure-authentik-creds.sh"
 # shellcheck source=../../lib/oidc-consumer.sh disable=SC1091
 . "${_IDENTITY_SVC_DIR}/../../lib/oidc-consumer.sh"
+# shellcheck source=../../lib/app-tile.sh
+. "${_IDENTITY_SVC_DIR}/../../lib/app-tile.sh"
 
 AUTHENTIK_MANAGER="${AUTHENTIK_MANAGER:-authentik-manager}"
 DRY_RUN=0
@@ -205,7 +207,8 @@ if [[ "${DRY_RUN}" -eq 0 ]]; then
 fi
 
 # ── Step 3: OIDC provider + application ──────────────────────────────────────
-declare -a oidc_args=("oidc-app-ensure" "${SLUG}" "--name" "${MODULE}" \
+declare -a oidc_args=("oidc-app-ensure" "${SLUG}" "--name" "$(app_tile_name "${MODULE}" "${JSON}")" \
+    "--icon" "$(app_tile_icon "${MODULE}" "${JSON}")" \
     "--description" "TAPPaaS OIDC for ${MODULE} (ADR-006)" "--show-secret")
 for p in "${REDIRECT_PATHS[@]}"; do oidc_args+=("--redirect-uri" "https://${PROXY_DOMAIN}${p}"); done
 for s in "${OIDC_SCOPES[@]}"; do oidc_args+=("--scope" "${s}"); done

@@ -1,5 +1,6 @@
 {
   "description": "LiteLLM AI gateway — one OpenAI-compatible API, with per-user keys and usage tracking, in front of local (vLLM) and remote models.",
+  "displayName": "LiteLLM",
   "kind": "vm",
   "version": "0.7.3",
   "stack": "ai",

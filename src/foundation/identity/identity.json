@@ -1,5 +1,6 @@
 {
   "description": "Authentik SSO identity provider for TAPPaaS",
+  "displayName": "Identity",
   "kind": "vm",
   "version": "0.5.1",
   "stack": "foundation",

@@ -1,5 +1,6 @@
 {
   "description": "TAPPaaS NetBird Client for accessing private zone (so you can operate as if you are local to TAPPaaS)",
+  "displayName": "NetBird",
   "kind": "vm",
   "version": "0.5.0",
   "status": "Development",

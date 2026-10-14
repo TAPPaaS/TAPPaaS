@@ -36,6 +36,8 @@ _ACCESSCONTROL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # predicate (#698); identity:identity and its test-service read the same one.
 # shellcheck source=../../lib/oidc-consumer.sh disable=SC1091
 . "${_ACCESSCONTROL_DIR}/../../lib/oidc-consumer.sh"
+# shellcheck source=../../lib/app-tile.sh
+. "${_ACCESSCONTROL_DIR}/../../lib/app-tile.sh"
 
 MODULE="${1:-}"
 [[ -n "${MODULE}" ]] || die "Usage: $0 <module-name>"
@@ -118,16 +120,21 @@ ensure_authentik_credentials
 # app is the module's tile. A proxy app left under <module> from before the
 # module had OIDC is removed, so identity:identity can create its app there.
 # --only-proxy: never the OIDC app itself.
-declare -a gate_args=()
+# The gate is the module's tile unless an OIDC app is: then it is hidden and
+# keeps its slug as its name.
+declare -a gate_args=(--name "${GATE_SLUG}")
+if [[ "${GATE_SLUG}" == "${MODULE}" ]]; then
+    _mjson="$(normalize_module_config < "${MODULE_JSON}")"
+    gate_args=(--name "$(app_tile_name "${MODULE}" "${_mjson}")" --icon "$(app_tile_icon "${MODULE}" "${_mjson}")")
+fi
 if [[ "${GATE_SLUG}" != "${MODULE}" ]]; then
     authentik-manager app-delete "${MODULE}" --only-proxy >/dev/null \
         || die "could not remove the old forward-auth app '${MODULE}'"
-    gate_args=(--launch-url "blank://blank")
+    gate_args+=(--launch-url "blank://blank")
 fi
 
 debug "  Authentik: ensuring Proxy app/provider '${GATE_SLUG}' (attached to embedded outpost)"
 authentik-manager proxy-app-ensure "${GATE_SLUG}" \
-    --name "${GATE_SLUG}" \
     --external-host "https://${PROXY_DOMAIN}" \
     --description "TAPPaaS forward-auth for ${MODULE} (#45)" \
     "${gate_args[@]}" \

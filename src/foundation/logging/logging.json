@@ -1,5 +1,6 @@
 {
   "description": "Centralized log aggregation with Grafana Loki, Alloy and Grafana UI",
+  "displayName": "Grafana",
   "kind": "vm",
   "version": "0.3.0",
   "stack": "foundation",

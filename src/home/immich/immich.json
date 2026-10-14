@@ -1,5 +1,6 @@
 {
   "description": "Immich self-hosted photo and video backup with ML-powered search, face recognition and mobile auto-upload.",
+  "displayName": "Immich",
   "kind": "vm",
   "version": "0.2.1",
   "stack": "home",

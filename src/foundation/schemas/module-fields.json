@@ -83,6 +83,26 @@
     "provides"
   ],
   "fields": {
+    "displayName": {
+      "description": "The module's name as people see it — the tile on the identity start page (My applications), for example \"Forgejo\" for forgejo. Not declared: the module name.",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "default": "",
+      "example": "Open WebUI"
+    },
+    "icon": {
+      "description": "The module's icon on the identity start page: a file relative to the config directory (the site's own icon, like site.json branding.logo). Not declared: icon.svg (or icon.png) in the module's directory, else a generated tile with the name's initial.",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "default": "",
+      "example": "branding/forgejo.svg"
+    },
     "description": {
       "description": "Descriptive text that appears on the Proxmox summary page for the VM",
       "type": "string",

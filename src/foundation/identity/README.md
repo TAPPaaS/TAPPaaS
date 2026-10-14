@@ -41,6 +41,27 @@ white and on a dark card, or give a dark variant. The logo is shown about 300 px
 an SVG should not depend on a particular font being installed. To go back to the generated
 logo, remove `branding` from `site.json` and update identity again.
 
+## The start page
+
+After signing in, people see the applications they may use (*My applications*). Each tile shows
+the module's `displayName` ("Forgejo", "Open WebUI") and its icon: the project's own logo,
+shipped as `icon.svg` in the module's directory. A module without one gets a generated tile, its
+initial on a colour taken from its name.
+
+To use your own icon or name for an application, put the image in the config directory and set
+it on the module:
+
+```bash
+cp forgejo.svg ~/config/branding/
+module-manager module modify forgejo --set icon=branding/forgejo.svg
+module-manager module modify forgejo --set "displayName=Code"
+module-manager update forgejo
+```
+
+SVG or PNG, at most 2 MB; tiles are small, so a square image works best. A changed icon is
+uploaded under a new name, so browsers show it at once. Remove `icon` to go back to the
+module's own.
+
 ## Architecture
 
 ```mermaid

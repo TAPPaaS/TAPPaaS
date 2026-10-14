@@ -75,6 +75,23 @@ def site_icon_svg(site_name: str) -> str:
     )
 
 
+# App tiles on the start page (My applications): a module's own icon, or this
+# generated one — the name's initial on a colour picked from the name, so two
+# apps without an icon still look different. Pure.
+APP_ICON_COLOURS = ["#2563eb", "#7c3aed", "#db2777", "#dc2626", "#ea580c", "#16a34a", "#0891b2", "#4b5563"]
+
+
+def app_icon_svg(name: str) -> str:
+    initial = _xml_escape((name.strip()[:1] or "?").upper())
+    colour = APP_ICON_COLOURS[int(hashlib.sha256(name.encode()).hexdigest(), 16) % len(APP_ICON_COLOURS)]
+    return (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">'
+        f'<rect width="64" height="64" rx="14" fill="{colour}"/>'
+        '<text x="32" y="44" font-family="Helvetica,Arial,sans-serif" font-size="34" '
+        f'font-weight="700" text-anchor="middle" fill="#ffffff">{initial}</text></svg>'
+    )
+
+
 # Authentik's default well-known slugs (created on first boot, never change).
 DEFAULT_AUTHORIZATION_FLOW_SLUG = "default-provider-authorization-implicit-consent"
 DEFAULT_INVALIDATION_FLOW_SLUG = "default-provider-invalidation-flow"
@@ -117,6 +134,9 @@ class ProxyApp:
     # "blank://blank" hides the app from the list -- for a gate whose module
     # shows its own tile through an OIDC app (#806).
     launch_url: str = ""
+    # The tile's icon: (content, extension), "auto" for a generated one, None to
+    # leave the app's icon as it is.
+    icon: tuple[bytes, str] | str | None = None
 
 
 @dataclass
@@ -137,6 +157,8 @@ class OidcApp:
     # -- the app's front page, i.e. its own login screen. Set to the app's
     # SSO entry point, the user who clicks it in Authentik goes straight in.
     launch_url: str = ""
+    # As ProxyApp.icon.
+    icon: tuple[bytes, str] | str | None = None
 
 
 @dataclass
@@ -291,6 +313,20 @@ class AuthentikManager:
     def _find_by_name(rows: list[dict], name: str) -> dict | None:
         return AuthentikManager._find_by_field(rows, "name", name)
 
+    def _existing_provider(self, provider_rows: list[dict], slug: str) -> dict | None:
+        """The provider behind the app with this slug, else one named by the slug.
+
+        Never by the app's display name: renaming the tile must not look for a
+        different provider and, finding none, create one — a new OIDC client
+        with new credentials the module does not have.
+        """
+        owner = self._find_by_field(self._applications(), "slug", slug)
+        if owner and owner.get("provider") is not None:
+            found = self._find_by_field(provider_rows, "pk", owner["provider"])
+            if found:
+                return found
+        return self._find_by_name(provider_rows, slug)
+
     def _applications(self) -> list[dict]:
         """All applications for management.
 
@@ -333,9 +369,10 @@ class AuthentikManager:
         # client-side; otherwise we'd PATCH whichever row is first in the
         # list and silently mangle unrelated providers (issue #45 PoC bug).
         provider_rows = self._get_json("/providers/proxy/").get("results", [])
-        existing_provider = self._find_by_name(provider_rows, app.name)
+        existing_provider = self._existing_provider(provider_rows, app.slug)
         provider_body = {
-            "name": app.name,
+            # Keyed by slug; an existing provider keeps the name it has.
+            "name": (existing_provider or {}).get("name") or app.slug,
             "authorization_flow": auth_flow_pk,
             "invalidation_flow": invalidation_flow_pk,
             "external_host": app.external_host,
@@ -364,6 +401,8 @@ class AuthentikManager:
             "meta_description": app.description,
             "meta_launch_url": app.launch_url or app.external_host,
         }
+        if app.icon is not None:
+            app_body["meta_icon"] = self.app_icon_ensure(app.slug, app.name, app.icon)
         if existing_app:
             application_pk = existing_app["pk"]
             # Authentik's /core/applications/<x>/ detail endpoint routes on
@@ -793,6 +832,19 @@ class AuthentikManager:
                              data={"name": name, "usage": usage})
         r.raise_for_status()
 
+    def app_icon_ensure(self, slug: str, name: str, icon: tuple[bytes, str] | str) -> str:
+        """Upload an app tile's icon once; return the file name for meta_icon.
+
+        ``icon`` is (content, extension), or "auto" for the generated tile. The
+        name carries a content hash, so a changed icon is a new file (no stale
+        browser cache) and an unchanged one is not uploaded again.
+        """
+        data, ext = (app_icon_svg(name).encode(), "svg") if icon == "auto" else icon  # type: ignore[misc]
+        fname = f"tappaas-app-{slug}-{hashlib.sha256(data).hexdigest()[:12]}.{ext}"
+        if fname not in self.file_names():
+            self.file_upload(fname, data, LOGO_MIME[ext])
+        return fname
+
     def brand_ensure(self, site_name: str, flow_title: str = "Sign in",
                      logo: tuple[bytes, str] | None = None,
                      logo_dark: tuple[bytes, str] | None = None) -> list[str]:
@@ -1039,7 +1091,7 @@ class AuthentikManager:
     def oidc_app_ensure(self, app: OidcApp) -> OidcAppResult:
         """Create or update an OIDC (OAuth2/OpenID) Provider + Application.
 
-        Idempotent on slug/name; the client_secret is generated once by Authentik
+        Idempotent on slug; the client_secret is generated once by Authentik
         and preserved across re-runs. Returns the client_id/secret for the app's
         own OIDC client config (e.g. Nextcloud user_oidc).
         """
@@ -1054,8 +1106,11 @@ class AuthentikManager:
         signing_key = self._default_signing_key_pk()
         redirect_uris = [{"matching_mode": "strict", "url": u} for u in app.redirect_uris]
 
+        provider_rows = self._get_json("/providers/oauth2/", page_size=1000).get("results", [])
+        existing_provider = self._existing_provider(provider_rows, app.slug)
         provider_body = {
-            "name": app.name,
+            # Keyed by slug; an existing provider keeps the name it has.
+            "name": (existing_provider or {}).get("name") or app.slug,
             "authorization_flow": auth_flow_pk,
             "invalidation_flow": invalidation_flow_pk,
             "client_type": "confidential",
@@ -1065,8 +1120,6 @@ class AuthentikManager:
             "sub_mode": "hashed_user_id",
         }
 
-        provider_rows = self._get_json("/providers/oauth2/", page_size=1000).get("results", [])
-        existing_provider = self._find_by_name(provider_rows, app.name)
         if existing_provider:
             provider_pk = existing_provider["pk"]
             # Add the login grants, never narrow: a provider an upgrade gave every
@@ -1095,6 +1148,8 @@ class AuthentikManager:
         }
         if app.launch_url:
             app_body["meta_launch_url"] = app.launch_url
+        if app.icon is not None:
+            app_body["meta_icon"] = self.app_icon_ensure(app.slug, app.name, app.icon)
         if existing_app:
             application_pk = existing_app["pk"]
             self._patch_json(f"/core/applications/{existing_app['slug']}/", app_body)

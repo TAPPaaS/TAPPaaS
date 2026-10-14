@@ -179,7 +179,8 @@ authentik-manager outpost-set-authentik-host "${IDENTITY_PUBLIC}" | _tag debug
 
 debug "  registering the identity self-app..."
 authentik-manager proxy-app-ensure identity \
-    --name identity \
+    --name "$(jq -r '.displayName // "identity"' "${IDENTITY_DIR}/identity.json")" \
+    --icon "${IDENTITY_DIR}/icon.svg" \
     --external-host "${IDENTITY_PUBLIC}" \
     --description "TAPPaaS identity self-app (#45)" \
     --attach-outpost | _tag debug
