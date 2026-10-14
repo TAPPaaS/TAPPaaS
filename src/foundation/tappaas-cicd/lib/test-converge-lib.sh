@@ -307,6 +307,32 @@ EOF
     unset -f converge_pending_fields converge_revert_pending
 }
 
+# ── 11. a held set is applied by a restart only when authorized (#531) ─
+# Without CPU/memory hotplug Proxmox holds cores/memory until the VM restarts.
+# Unauthorized: DEFERRED, no reboot. Authorized: one reboot, counted applied.
+{
+    # shellcheck disable=SC2329  # called by name from converge-lib.sh
+    converge_pending_fields() { printf '%s\n' "${HELD// /$'\n'}"; }
+
+    reset; HELD="cores memory"; mk_record "[$(unit_set cores --cores 3 2),$(unit_set memory --memory 3072 2048)]"
+    run 0 0 >/dev/null
+    contains "unauthorized: held fields are DEFERRED" "${LOG}" "DEFERRED: demo — new cores, memory"
+    lacks "…and nothing reboots" "$(cat "${CMDLOG}")" "FX reboot"
+    check "…counted deferred, not applied" "${CONVERGE_DEFERRED}/${CONVERGE_APPLIED}" "2/0"
+
+    reset; HELD="cores memory"; mk_record "[$(unit_set cores --cores 3 2),$(unit_set memory --memory 3072 2048)]"
+    run 0 1 1 >/dev/null
+    check "authorized: one reboot, then wait for the guest" "$(grep '^FX' "${CMDLOG}" | paste -sd, -)" "FX reboot,FX wait-ip"
+    lacks "…and no DEFERRED line" "${LOG}" "DEFERRED"
+    check "…counted applied" "${CONVERGE_DEFERRED}/${CONVERGE_APPLIED}" "0/2"
+
+    reset; HELD=""; mk_record "[$(unit_set cores --cores 3 2)]"
+    run 0 1 1 >/dev/null
+    lacks "hot-applied: no reboot even when authorized" "$(cat "${CMDLOG}")" "FX reboot"
+
+    unset -f converge_pending_fields
+}
+
 echo ""
 echo "Results: ${pass} passed, ${fail} failed"
 [[ ${fail} -eq 0 ]]

@@ -193,11 +193,11 @@ converge_revert_pending() {
 # shellcheck disable=SC2029
 converge_side_effect_reboot() {
     if [[ "${VMSTATUS}" != "running" ]]; then
-        warn "  VM not running — network change applied to config; DNS will register on next boot"
+        warn "  VM not running — the change is in its config and takes effect on next boot"
         REBOOT_SKIPPED=1
         return 0
     fi
-    debug "  Rebooting VM ${VMID} to apply the network change..."
+    debug "  Rebooting VM ${VMID} to apply the change..."
     ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" "qm reboot ${VMID}" >/dev/null
 }
 

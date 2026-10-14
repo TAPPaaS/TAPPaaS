@@ -155,7 +155,9 @@ converge_apply() {
         [[ "${aactual}" =~ ^-?[0-9]+$ ]] && _vflag=--argjson
         if jq_module_write "${module}" '.[$f] = $v' \
                --arg f "${af}" "${_vflag}" v "${aactual}"; then
-            converge_report "  ${GN}✓${CL} ${af}: adopted ${aactual} into config (was ${adesired}; the guest was already larger)"
+            # A warning, not a debug line: this rewrites the operator's own
+            # config, and a deliberate smaller value lands here too (#531).
+            warn "  ${af} only grows: config asked for ${adesired}, the guest has ${aactual} — config adopted ${aactual}"
             CONVERGE_APPLIED=$((CONVERGE_APPLIED + 1))
         else
             error "  ${af}: could not adopt ${aactual} into config"
@@ -305,11 +307,23 @@ converge_apply() {
             if [[ -n "${_pending}" ]]; then
                 local _p_n; _p_n="$(printf '%s\n' "${_pending}" | grep -c . || true)"
                 local _p_list; _p_list="$(printf '%s\n' "${_pending}" | paste -sd, - | sed 's/,/, /g')"
-                warn "DEFERRED: ${module} — new ${_p_list} saved in the VM config; the running VM keeps its old values"
-                warn "  Proxmox applies them when it restarts the VM (qm reboot, or stop + start); a reboot inside the guest is not enough."
-                CONVERGE_DEFERRED=$(( CONVERGE_DEFERRED + _p_n ))
-                (( _set_n -= _p_n )) || true
-                (( _set_n < 0 )) && _set_n=0
+                if [[ "${allow_disruption}" == "1" ]] && declare -F converge_side_effect_reboot >/dev/null; then
+                    # Authorized: restart the guest so it runs what was held
+                    # (#531). Counted applied — the side-effect pass reboots once,
+                    # together with any network change in the same record.
+                    info "  ${module}: new ${_p_list} take effect on a restart — restarting the VM (authorized)"
+                    converge_contains reboot "${side_effects[@]:-}" || side_effects+=(reboot)
+                    if declare -F converge_side_effect_wait_ip >/dev/null; then
+                        converge_contains wait-ip "${side_effects[@]:-}" || side_effects+=(wait-ip)
+                    fi
+                else
+                    warn "DEFERRED: ${module} — new ${_p_list} saved in the VM config; the running VM keeps its old values"
+                    warn "  Proxmox applies them when it restarts the VM (qm reboot, or stop + start); a reboot inside the guest is not enough."
+                    warn "  Apply in a maintenance window:  module-manager module modify ${module} --force"
+                    CONVERGE_DEFERRED=$(( CONVERGE_DEFERRED + _p_n ))
+                    (( _set_n -= _p_n )) || true
+                    (( _set_n < 0 )) && _set_n=0
+                fi
             fi
             CONVERGE_APPLIED=$(( CONVERGE_APPLIED + _set_n ))
         else

@@ -309,7 +309,7 @@ Disk size with unit suffix
 
 **About the field.** G=gigabytes, M=megabytes, K=kilobytes
 
-**Why this change class.** A grow goes through resize-disk.sh. The direction is only knowable against the live size, so a SHRINK is refused at apply time (hook exit 20), not by the static pre-gate. The schema default 8G is DESIRED state (ADR-020 D9): it is also what both create paths build with, so an undeclared guest is in sync from install. When the guest is later grown outside the config path — check-disk-threshold.sh, resize-disk.sh by hand, qm resize — config falls BEHIND actual, which reads as a shrink and would be refused on every converge forever. That case is now ADOPTED instead: the converge writes the observed size into config, touching nothing on the cluster. Excluding undeclared modules from the comparison, as v0.5 did, never helped here: a DECLARED module — which is all of them — got the permanent refusal anyway.
+**Why this change class.** A grow goes through resize-disk.sh. The direction is only knowable against the live size, so a SHRINK is refused at apply time (hook exit 20), not by the static pre-gate. The schema default 8G is DESIRED state (ADR-020 D9): it is also what both create paths build with, so an undeclared guest is in sync from install. When the guest is later grown outside the config path — check-disk-threshold.sh, resize-disk.sh by hand, qm resize — config falls BEHIND actual, which reads as a shrink and would be refused on every converge forever. That case is now ADOPTED instead: the converge writes the observed size into config, touching nothing on the cluster. A deliberately smaller value lands in the same place: the disk is kept, config is set back to the real size, and the converge warns that the field only grows. Excluding undeclared modules from the comparison, as v0.5 did, never helped here: a DECLARED module — which is all of them — got the permanent refusal anyway.
 
 ### `thinDisk`
 
@@ -618,4 +618,9 @@ that only differs where something is held), and `converge_apply_set` is followed
 by the optional `converge_pending_fields` callback — anything still held is
 counted **deferred**, not applied, and named in a `DEFERRED:` line the sweep
 collects. A service that defines no callback behaves exactly as before.
+
+Authorized (`module-manager module modify <module> --force`, or `rebootOk` in the
+scheduled pass), held values are not left waiting: the converge restarts the VM
+with `qm reboot` — once, together with any network change in the same pass —
+waits for the guest to come back, and counts them applied.
 

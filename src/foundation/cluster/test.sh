@@ -791,6 +791,79 @@ if [[ "${DEEP}" -eq 1 && -n "${DEFAULT_ZONE}" ]]; then
         fi
     fi
 
+    # 2b-2d. Hardware spec (#531): cores, memory and disk follow the config.
+    #   cores/memory are `set` fields; without CPU/memory hotplug Proxmox holds
+    #   them until the VM restarts, and the converge must say so (DEFERRED) rather
+    #   than count them applied. Authorized (--force), it restarts the VM so the
+    #   guest runs the new values. The disk only grows: a smaller size is refused.
+    vm_conf() {
+        local row node; row=$(find_vm 920) || true; node="${row%% *}"
+        # shellcheck disable=SC2086,SC2029
+        ssh ${SSH_OPTS} "root@${node}.${MGMT}.internal" "qm config 920; echo '@@pending'; qm pending 920 | grep '^new'" 2>/dev/null
+    }
+    disk_gb() { sed -n 's/^scsi0:.*size=\([0-9]*\)G.*/\1/p' <<< "$1" | head -1; }
+    guest_mem_mb() {
+        # shellcheck disable=SC2086
+        ssh ${SSH_OPTS} "tappaas@${TVM}.mgmt.internal" "free -m | awk '/^Mem:/ {print \$2}'" 2>/dev/null
+    }
+    if [[ "${deep_ok}" -eq 1 ]]; then
+        mem0="$(guest_mem_mb)"
+        if jq_module_write "${TVM}" '.cores = 3 | .memory = "3072" | .diskSize = "26G"'; then
+            pass "induced drift: cores 2→3, memory 2048→3072, diskSize 24G→26G in config"
+        else
+            fail "could not edit test config"; deep_ok=0
+        fi
+    fi
+    if [[ "${deep_ok}" -eq 1 ]]; then
+        chk="$("${UPSVC}" --check "${TVM}" 2>&1)"
+        for f in cores memory diskSize; do
+            grep -q "${f}" <<< "${chk}" && pass "--check reports ${f} drift" || fail "--check did not report ${f} drift"
+        done
+        info "  Applying reconcile WITHOUT --force (in-place + grow)..."
+        out="$("${UPSVC}" "${TVM}" 2>&1)"; rc=$?
+        indent <<< "${out}"
+        [[ "${rc}" -eq 0 ]] && pass "unauthorized converge exits 0" || fail "unauthorized converge exited ${rc}"
+        conf="$(vm_conf)"
+        grep -q '^cores: 3$' <<< "${conf}" && pass "VM config holds cores 3" || fail "VM config cores not 3"
+        grep -q '^memory: 3072$' <<< "${conf}" && pass "VM config holds memory 3072" || fail "VM config memory not 3072"
+        [[ "$(disk_gb "${conf}")" == "26" ]] && pass "disk grown to 26G live" || fail "disk not 26G ($(disk_gb "${conf}")G)"
+        held="$(sed -n '/@@pending/,$p' <<< "${conf}" | sed -n 's/^new \([^:]*\):.*/\1/p' | paste -sd, -)"
+        if [[ -n "${held}" ]]; then
+            grep -q "DEFERRED: ${TVM}" <<< "${out}" \
+                && pass "held changes (${held}) reported DEFERRED, not counted applied" \
+                || fail "Proxmox holds ${held} but the converge did not say DEFERRED"
+        else
+            pass "nothing held: the changes are live without a restart"
+        fi
+    fi
+    if [[ "${deep_ok}" -eq 1 && -n "${held:-}" ]]; then
+        info "  Applying reconcile WITH --force (a held change may restart the VM)..."
+        out="$("${UPSVC}" --force "${TVM}" 2>&1)"; rc=$?
+        indent <<< "${out}"
+        [[ "${rc}" -eq 0 ]] && pass "authorized converge exits 0" || fail "authorized converge exited ${rc}"
+        sleep 20
+        conf="$(vm_conf)"
+        left="$(sed -n '/@@pending/,$p' <<< "${conf}" | sed -n 's/^new \([^:]*\):.*/\1/p' | paste -sd, -)"
+        [[ -z "${left}" ]] && pass "authorized: nothing held any more" || fail "authorized converge left ${left} held — the guest still runs the old values"
+        for _ in $(seq 1 30); do mem1="$(guest_mem_mb)"; [[ -n "${mem1}" ]] && break; sleep 5; done
+        if [[ -n "${mem1}" && -n "${mem0}" && "${mem1}" -gt $(( mem0 + 512 )) ]]; then
+            pass "the guest runs the new memory (${mem0} → ${mem1} MB)"
+        else
+            fail "the guest still sees ${mem1:-?} MB (was ${mem0:-?})"
+        fi
+    fi
+    if [[ "${deep_ok}" -eq 1 ]]; then
+        jq_module_write "${TVM}" '.diskSize = "20G"' >/dev/null
+        out="$("${UPSVC}" "${TVM}" 2>&1)"; rc=$?
+        indent <<< "${out}"
+        conf="$(vm_conf)"
+        [[ "$(disk_gb "${conf}")" == "26" ]] && pass "a smaller diskSize is not applied (disk stays 26G)" || fail "disk changed to $(disk_gb "${conf}")G on a shrink"
+        grep -q "diskSize only grows" <<< "${out}" && pass "…and the converge says why" || fail "shrink not reported"
+        [[ "$(jq -r "[.. | objects | .diskSize? // empty][0]" "${CONFIG_DIR}/${TVM}.json" 2>/dev/null)" == "26G" ]] \
+            && pass "…and config adopts the real size (26G)" || fail "config diskSize not adopted"
+        jq_module_write "${TVM}" '.diskSize = "26G"' >/dev/null
+    fi
+
     # 3. Induce zone drift mgmt -> <default zone> (Active, VLAN ${DEFAULT_VLAN},
     #    has DHCP — the zone a real module lands in by default).
     if [[ "${deep_ok}" -eq 1 ]]; then
@@ -1239,32 +1312,41 @@ if [[ "${DEEP}" -eq 1 && -n "${DEFAULT_ZONE}" ]]; then
         fi
     fi
 
-    # 5. Induce cores drift (1→2) in config; detect; apply; verify live.
+    # 5. Induce cores (1→2) and memory (1024→1536) drift, plus a disk change;
+    #    detect; apply; verify live (#531). A container takes cores and memory
+    #    live; its rootfs size is `manual` — reported, never resized here.
     if [[ "${ldeep_ok}" -eq 1 ]]; then
         # Pattern A-aware write (#207).
-        if jq_module_write "${TLVM}" '.cores = 2'; then
-            pass "induced drift: cores 1→2 in config"
+        if jq_module_write "${TLVM}" '.cores = 2 | .memory = "1536" | .diskSize = "10G"'; then
+            pass "induced drift: cores 1→2, memory 1024→1536, diskSize 8G→10G in config"
         else
             fail "could not edit test config"; ldeep_ok=0
         fi
     fi
     if [[ "${ldeep_ok}" -eq 1 ]]; then
-        if "${LUPSVC}" --check "${TLVM}" 2>&1 | grep "cores:" >/dev/null; then
-            pass "reconciler detects cores drift"
-        else
-            fail "reconciler did not detect cores drift"
-        fi
+        lchk="$("${LUPSVC}" --check "${TLVM}" 2>&1)"
+        for f in cores memory diskSize; do
+            grep -q "${f}" <<< "${lchk}" && pass "reconciler detects ${f} drift" || fail "reconciler did not detect ${f} drift"
+        done
     fi
     if [[ "${ldeep_ok}" -eq 1 ]]; then
-        info "  Applying LXC reconcile (cores)..."
-        "${LUPSVC}" "${TLVM}" 2>&1 | indent
+        info "  Applying LXC reconcile (cores, memory)..."
+        lout="$("${LUPSVC}" "${TLVM}" 2>&1)"
+        indent <<< "${lout}"
         # shellcheck disable=SC2086,SC2029
-        live_cores=$(ssh ${SSH_OPTS} "root@${LNODE}.${MGMT}.internal" "pct config ${LVMID} | awk -F': ' '/^cores/{print \$2}'" 2>/dev/null) || true
+        lconf=$(ssh ${SSH_OPTS} "root@${LNODE}.${MGMT}.internal" "pct config ${LVMID}" 2>/dev/null) || true
+        live_cores=$(awk -F': ' '/^cores/{print $2}' <<< "${lconf}")
         if [[ "${live_cores}" == "2" ]]; then
             pass "live container reconciled to cores=2"
         else
             fail "live container cores not 2 (got: ${live_cores:-none})"
         fi
+        grep -q '^memory: 1536$' <<< "${lconf}" && pass "live container reconciled to memory=1536" || fail "live container memory not 1536"
+        # shellcheck disable=SC2086,SC2029
+        lmem=$(ssh ${SSH_OPTS} "root@${LNODE}.${MGMT}.internal" "pct exec ${LVMID} -- free -m" 2>/dev/null | awk '/^Mem:/{print $2}') || true
+        [[ "${lmem:-0}" -ge 1400 ]] && pass "the container sees the new memory (${lmem} MB)" || fail "the container sees ${lmem:-?} MB"
+        grep -q 'rootfs:.*size=8G' <<< "${lconf}" && pass "rootfs left at 8G (diskSize is manual for a container)" || fail "rootfs size changed"
+        grep -q "diskSize drift.*operator action" <<< "${lout}" && pass "…and the drift is reported for an operator" || fail "diskSize drift not reported"
     fi
 
     deep_cleanup_lxc
