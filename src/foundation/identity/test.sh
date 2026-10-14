@@ -97,6 +97,21 @@ else
     done
 fi
 
+# ── 1c. no in-VM backup left (#754) ─────────────────────────────────────────
+# Backup is the platform's (backup:vm); the module's own dumps and timers went.
+section "1c: no in-VM backup left (the VM is backed up by Proxmox Backup)"
+_ihost="identity.$(jq -r '.zone0 // "mgmt"' /home/tappaas/config/identity.json 2>/dev/null).internal"
+_left="$(ssh -o ConnectTimeout=10 -o BatchMode=yes "tappaas@${_ihost}" \
+    'ls -d /var/backup/postgresql /var/backup/redis /var/backup/authentik-env 2>/dev/null; \
+     systemctl list-unit-files --no-legend "postgresqlBackup*" "redis-backup*" "authentik-env-backup*" "cleanup-backups*" 2>/dev/null | cut -d" " -f1' 2>/dev/null)"
+if [[ $? -ne 0 && -z "${_left}" ]] && ! ssh -o ConnectTimeout=10 -o BatchMode=yes "tappaas@${_ihost}" true 2>/dev/null; then
+    skip "cannot reach ${_ihost} over ssh"
+elif [[ -z "${_left//[[:space:]]/}" ]]; then
+    pass "no in-VM backup timers or /var/backup directories on ${_ihost}"
+else
+    fail "in-VM backup leftovers on ${_ihost}: $(tr '\n' ' ' <<< "${_left}")"
+fi
+
 # ── 2. identity-manager role groups present ────────────────────────────────────
 # The baseline role groups user/admin/root are reconciled by `identity-manager
 # sync`. The OIDC install allow-list (install-service.sh) ensures they exist via

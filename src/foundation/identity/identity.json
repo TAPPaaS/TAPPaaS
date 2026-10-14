@@ -42,8 +42,7 @@
     "logging:logs": {
       "dropUnits": [
         "generate-authentik-secrets.*",
-        "authentik-env-secrets-only.*",
-        "authentik-env-backup.*"
+        "authentik-env-secrets-only.*"
       ]
     }
   }

@@ -54,6 +54,20 @@ opening without it (vaultwarden DESIGN.md).
   `AUTHENTIK_BOOTSTRAP_TOKEN` all land in `/etc/secrets/authentik.env` (mode 600).
   Nothing is prompted for and nothing is stored in the repo.
 
+## Backup
+
+The platform's: `backup:vm` puts the whole VM in the site's Proxmox Backup job, with the
+site's schedule and retention (ADR-012). The snapshot is taken with the guest agent freezing
+the filesystem, so the database, `/etc/secrets` and Authentik's media are captured together,
+and PostgreSQL recovers from it as after a power cut. Restore is a VM restore:
+[RESTORE.md](../backup/RESTORE.md).
+
+The module keeps no backups of its own. Until 2026-10 it ran a nightly `pg_dump`, a Redis
+snapshot and a tar of `/etc/secrets` and `/var/lib/authentik` into `/var/backup` — a pattern
+copied from other modules, not something Authentik requires. Nothing read them, the tar had
+been empty from the start, and the copies sat on the disk the VM backup already takes. A
+tmpfiles `R` rule removes the directories from VMs that still have them.
+
 ## Upgrading Authentik: one release line per update (#748, #797)
 
 Authentik refuses to skip a release line, moves to each line's latest patch before the

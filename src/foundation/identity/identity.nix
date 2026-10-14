@@ -22,7 +22,7 @@
 # Network: zone "srv" (VLAN 210, 10.2.10.0/24)
 # Firewall: ports 22 (SSH) + 9000 (HTTP) + 9443 (HTTPS)
 # Secrets: Auto-generated AUTHENTIK_SECRET_KEY on first boot
-# Backups: Daily PostgreSQL dump (02:00), config tar (02:45), 30-day retention
+# Backups: the whole VM, by the platform's Proxmox Backup job (backup:vm)
 #
 # Changelog v1.0.0 (2026-02-17):
 # - Removed VaultWarden (moved to separate module in src/security/vaultwarden/)
@@ -39,7 +39,6 @@ let
   # Version pinning - change versions here only
   versions = {
     postgresPkg = pkgs.postgresql_16;
-    redisPkg    = pkgs.redis;
   };
 
   # Authentik moves ONE step per build along its release lines (#748): it
@@ -435,83 +434,10 @@ EOF
     timerConfig = { OnBootSec = "5min"; OnUnitActiveSec = "1h"; };
   };
 
-  # Layer 1: PostgreSQL dumps (daily 02:00)
-  services.postgresqlBackup = {
-    enable = true;
-    databases = [ "authentik" ];
-    startAt = "*-*-* 02:00:00";
-    location = "/var/backup/postgresql";
-    compression = "gzip";
-  };
-
-  # Layer 2: Redis RDB snapshots (daily 02:30) — while Redis is used (< 2025.10)
-  systemd.services.redis-backup = lib.mkIf ak.redis {
-    description = "Redis backup service";
-    serviceConfig = {
-      Type = "oneshot";
-      ExecStart = pkgs.writeShellScript "redis-backup" ''
-        ${versions.redisPkg}/bin/redis-cli SAVE
-        ${pkgs.coreutils}/bin/cp /var/lib/redis-authentik/dump.rdb \
-          /var/backup/redis/dump-$(${pkgs.coreutils}/bin/date +%Y%m%d_%H%M%S).rdb
-      '';
-      User = "redis-authentik";
-      Group = "redis-authentik";
-    };
-  };
-
-  systemd.timers.redis-backup = lib.mkIf ak.redis {
-    description = "Daily Redis backup timer";
-    wantedBy = [ "timers.target" ];
-    timerConfig = {
-      OnCalendar = "*-*-* 02:30:00";
-      Persistent = true;
-    };
-  };
-
-  # Layer 3: Config + secrets + media backup (daily 02:45)
-  systemd.services.authentik-env-backup = {
-    description = "Backup Authentik environment and media files";
-    serviceConfig = {
-      Type = "oneshot";
-      ExecStartPre = "${pkgs.coreutils}/bin/mkdir -p /var/backup/authentik-env";
-      ExecStart = pkgs.writeShellScript "authentik-env-backup" ''
-        ${pkgs.gnutar}/bin/tar -czf /var/backup/authentik-env/authentik-env-$(date +%F).tar.gz \
-          -C / etc/secrets var/lib/authentik 2>/dev/null || true
-      '';
-      User = "root";
-      Group = "root";
-    };
-  };
-
-  systemd.timers.authentik-env-backup = {
-    description = "Daily Authentik environment file backup";
-    wantedBy = [ "timers.target" ];
-    timerConfig = {
-      OnCalendar = "*-*-* 02:45:00";
-      Persistent = true;
-    };
-  };
-
-  # Cleanup old backups (monthly)
-  systemd.services.cleanup-backups = {
-    description = "Cleanup old backups";
-    serviceConfig = {
-      Type = "oneshot";
-      ExecStart = pkgs.writeShellScript "cleanup-backups" ''
-        ${pkgs.findutils}/bin/find /var/backup -type f -mtime +30 -delete
-      '';
-      User = "root";
-    };
-  };
-
-  systemd.timers.cleanup-backups = {
-    description = "Monthly cleanup of old backups";
-    wantedBy = [ "timers.target" ];
-    timerConfig = {
-      OnCalendar = "monthly";
-      Persistent = true;
-    };
-  };
+  # Backup is the platform's: backup:vm puts the whole VM in the site's Proxmox
+  # Backup job (ADR-012), database, secrets and media together, and a restore is
+  # a VM restore (backup/RESTORE.md). The in-VM dumps, Redis snapshots and env
+  # tar this module carried until 2026-10 were read by nothing (#754).
 
   # ============================================================================
   # LOG SHIPPING - journal -> Loki on the logging VM (#770)
@@ -528,19 +454,18 @@ EOF
   # FILESYSTEM STRUCTURE
   # ============================================================================
 
-  # /var/backup/postgresql comes from services.postgresqlBackup itself.
   systemd.tmpfiles.rules = [
-    "d /var/backup/authentik-env 0700 root root -"
+    # The in-VM backups are gone (#754); their directories go with them.
+    "R /var/backup/postgresql - - - -"
+    "R /var/backup/redis - - - -"
+    "R /var/backup/authentik-env - - - -"
     "d /var/lib/authentik 0755 root root -"
     # the precheck (User = postgres) writes its finding here
     "f /var/lib/authentik/tappaas-step-blocked 0644 postgres postgres -"
     "d /var/lib/authentik/media 0755 1000 1000 -"
     "d /var/lib/authentik/templates 0755 1000 1000 -"
     "d /var/lib/authentik/certs 0755 1000 1000 -"
-  ]
-  # Only while Redis is used (< 2025.10): its user goes with it, and a rule
-  # naming a missing user fails every tmpfiles run.
-  ++ lib.optional ak.redis "d /var/backup/redis 0700 redis-authentik redis-authentik -";
+  ];
 
   # ============================================================================
   # SYSTEM STATE VERSION - DO NOT CHANGE after initial install
