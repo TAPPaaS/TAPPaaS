@@ -106,8 +106,8 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | 4 | G4.3 Manager verb gaps | M | L | 9 | – | 8 |
 | 4 | G4.4 Storage & physical devices | H | L | 5 | – | 7 |
 | 4 | G4.5 Governance, CI & sign-offs | M | L | 5 | – | 5 |
-| 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 18 | – | 6 |
-| 3 | G3.2 Identity & SSO wiring | M | L | 10 | – | 4 |
+| 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 19 | – | 5 |
+| 3 | G3.2 Identity & SSO wiring | M | L | 13 | – | 1 |
 | 3 | G3.3 App module fixes | L | L | 10 | – | 11 |
 | 3 | G3.4 AI stack maturity | M | M | 1 | – | 10 |
 | 3 | G3.5 Installer UX | L | L | 1 | – | 3 |
@@ -274,13 +274,13 @@ The project's own machinery: CI runners (#415), community-health files (#486), t
 
 Low upgrade risk. Build continuously, in any order within a group.
 
-### G3.1 cluster:vm lifecycle & capacity — Ease L · Risk M · released: 18 · open: 6
+### G3.1 cluster:vm lifecycle & capacity — Ease L · Risk M · released: 19 · open: 5
 
 Guests sized, placed, started and stopped right: memory defaults from measurement (#663), moving a running guest to another node (#825), a readiness wait that skips UDP ports (#826), hardware drift (#531), shutdown and boot order (#36, #127), storage growth and placement (#100, #403), a composite-module ADR (#761), and a sweep that survives a guest restarting itself (#753).
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
-| #531 | Detect hardware-spec drift | L | M | Once detected, pending changes get applied (reboots): gate on `rebootOk` |
+| ✅ #531 | Detect hardware-spec drift | L | M | **Closed 2026-10-14** (`52c4a1bd`): cores, memory and disk drift were already detected and applied; held cores/memory now restart the VM when authorized (`--force` / `rebootOk`), a smaller disk warns and config adopts the real size. Deep test covers VM and LXC; found and fixed an HA start race in migrate (`d5737177`) |
 | #827 | HA failback can move a host-CPU guest live to a node with an older CPU | M | M | **Opened 2026-10-13** from the ADR-019 deep test: the CRM's own failback skips `live-ok`. Options: a named CPU model common to the rule's nodes, or no automatic failback where CPUs differ |
 | #100 | Automatic storage extension | M | L | |
 | #403 | Install on the root disk; smarter placement | M | L | |
@@ -289,16 +289,16 @@ Guests sized, placed, started and stopped right: memory defaults from measuremen
 | ✅ #826 | Readiness wait probes UDP ports over TCP — 180 s lost per update | L | L | **Closed 2026-10-13** (`fix(module-ready): do not probe UDP or ICMP ports over TCP`): only TCP, TCP/UDP and unset protocols are probed; deconz-test's wait went 180 s → 0 s; a full `update-module deconz-test` on hrossen now takes 79 s. Found during the #825 test |
 | #761 | A composite-module ADR: `cluster`, `kubernetes`, and modules that only provide artefacts | H | M | ADR-022d and ADR-026 defer `cluster`/`kubernetes` to an ADR that does not exist, and `templates` fits no `kind`; interim values in ADR-022d v1.2. With @ErikDaniel007 |
 
-### G3.2 Identity & SSO wiring — Ease M · Risk L · released: 10 · open: 4
+### G3.2 Identity & SSO wiring — Ease M · Risk L · released: 13 · open: 1
 
 Every app wired to the identity provider the same way: OIDC for hass, Nextcloud and forgejo (#345, #401, #282), a site-specific login page (#479), logging's SSO dependency (#701), a test for forward-auth (#752), and Jellyfin behind forward-auth (#805) with Authentik sign-in (#806).
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
 | #345 | hass: appliance-aware OIDC staging | M | L | |
-| #401 | Nextcloud: OIDC redirect, trusted domains | M | L | |
-| #479 | Site-specific login page | L | L | |
-| #701 | logging depends on identity though its own code makes SSO optional | — | — | **Open, not yet scored** — SSO is conditional on publication since `4c9c846a`. Added in the 2026-09-24 issue sweep |
+| ✅ #401 | Nextcloud: OIDC redirect, trusted domains | M | L | **Closed 2026-10-14 — already met:** login redirects straight to Authentik (`caface4d`, local `/login?direct=1` kept); trusted domains from the module config (`3ea124b0`). Verified on hrossen |
+| ✅ #479 | Site-specific login page | L | L | **Closed 2026-10-14** (`1a065ddb`, `17ecfb92`): the sign-in page shows the site name and its own logo from `site.json` `branding` (light/dark); live on hrossen |
+| ✅ #701 | logging depends on identity though its own code makes SSO optional | L | L | **Closed 2026-10-14** (`344bc8b8`): logging lists identity in `integratesWith`; Grafana's OIDC switch follows identity. Other consumers keep `dependsOn` — identity is always installed |
 
 ### G3.3 App module fixes — Ease L · Risk L · released: 10 · open: 11
 
