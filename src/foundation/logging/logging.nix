@@ -785,7 +785,12 @@ in
       # domain this file does not know. logging-configure-oidc.service below
       # fills all five in from the discovery document.
       "auth.generic_oauth" = {
-        enabled       = true;
+        # On only once identity:identity has wired this module (#701): identity
+        # is an optional integration, and with no Authentik behind it an
+        # auto-login to placeholder URLs would leave Grafana with no login.
+        # logging-configure-oidc writes the file: true with credentials, false
+        # without; tmpfiles creates it false.
+        enabled       = oidcSecret "enabled";
         name          = "Authentik";
         client_id     = oidcSecret "client-id";
         client_secret = oidcSecret "client-secret";
@@ -800,7 +805,7 @@ in
         allow_sign_up = true;
         # The login page goes straight to Authentik, as Nextcloud's does; the
         # local admin still signs in at /login?disableAutoLogin.
-        auto_login    = true;
+        auto_login    = oidcSecret "enabled";
         # logging-admins (created because logging.json sets
         # identity.providesAdminRole) becomes GrafanaAdmin; everyone else who
         # can sign in at all gets Viewer. Day-2 access is granted through
@@ -996,8 +1001,28 @@ in
         # failed with no output at all.
         readvar() { ${pkgs.gnugrep}/bin/grep "^$1=" "$ENV_FILE" | ${pkgs.coreutils}/bin/cut -d= -f2- || true; }
 
+        # Owned by grafana because Grafana reads these itself. As root — which
+        # is how the unit runs — that ownership is applied; the unprivileged
+        # branch exists for the test, where no grafana user exists.
+        write() {
+          if [ "$(${pkgs.coreutils}/bin/id -u)" = 0 ]; then
+            ${pkgs.coreutils}/bin/install -m 0600 -o grafana -g grafana /dev/stdin "$SECRETS_DIR/$1" <<< "$2"
+          else
+            ${pkgs.coreutils}/bin/install -m 0600 /dev/stdin "$SECRETS_DIR/$1" <<< "$2"
+          fi
+        }
+
+        # The enabled file follows whether there are credentials. Grafana
+        # reads it at start, so a change restarts it.
+        set_enabled() {
+          [ "$(${pkgs.coreutils}/bin/cat "$SECRETS_DIR/logging-oidc-enabled" 2>/dev/null)" = "$1" ] && return 0
+          write logging-oidc-enabled "$1"
+          ${pkgs.systemd}/bin/systemctl try-restart grafana.service || true
+        }
+
         if ! ${pkgs.gnugrep}/bin/grep -q '^OIDC_CLIENT_ID=' "$ENV_FILE" 2>/dev/null; then
-          echo "No Authentik OIDC credentials in $ENV_FILE yet — identity:identity has not wired this module. Nothing to do."
+          echo "No Authentik OIDC credentials in $ENV_FILE — identity:identity has not wired this module (or is not installed). Grafana keeps its local login."
+          set_enabled false
           exit 0
         fi
 
@@ -1024,21 +1049,12 @@ in
           [ -n "$v" ] || { echo "The discovery document at $DISCOVERY names no authorization/token/userinfo endpoint." >&2; exit 1; }
         done
 
-        # Owned by grafana because Grafana reads these itself. As root — which
-        # is how the unit runs — that ownership is applied; the unprivileged
-        # branch exists for the test, where no grafana user exists.
-        write() {
-          if [ "$(${pkgs.coreutils}/bin/id -u)" = 0 ]; then
-            ${pkgs.coreutils}/bin/install -m 0600 -o grafana -g grafana /dev/stdin "$SECRETS_DIR/$1" <<< "$2"
-          else
-            ${pkgs.coreutils}/bin/install -m 0600 /dev/stdin "$SECRETS_DIR/$1" <<< "$2"
-          fi
-        }
         write logging-oidc-client-id     "$CLIENT_ID"
         write logging-oidc-client-secret "$CLIENT_SECRET"
         write logging-oidc-auth-url      "$AUTH_URL"
         write logging-oidc-token-url     "$TOKEN_URL"
         write logging-oidc-api-url       "$API_URL"
+        write logging-oidc-enabled       true
 
         echo "Grafana OIDC login configured against $DISCOVERY"
         ${pkgs.systemd}/bin/systemctl try-restart grafana.service || true
@@ -1056,6 +1072,9 @@ in
     "d /var/lib/loki/rules             0700 loki     loki     -"
     "d /var/lib/loki/compactor         0700 loki     loki     -"
     "d /etc/secrets                    0750 root     grafana  -"
+    # Grafana's OIDC switch (#701): off until logging-configure-oidc has real
+    # credentials from identity:identity. `f` never overwrites an existing file.
+    "f /etc/secrets/logging-oidc-enabled 0600 grafana grafana -   false"
     # nginx's password files (#165 §1), written by the mothership. Created
     # empty so nginx starts — and refuses everyone — before the first sync.
     "d /etc/loki-auth                  0750 root     nginx    -"

@@ -2,7 +2,9 @@
 #
 # TAPPaaS Identity Service — Install (ADR-006 Phase 4, issue #56).
 #
-# Runs when a module declares `dependsOn: ["identity:identity"]` — i.e. an app
+# Runs when a module declares identity:identity in `dependsOn` (SSO is its login)
+# or `integratesWith` (SSO when identity is installed, a local login otherwise,
+# #701) — i.e. an app
 # with NATIVE OIDC (e.g. Nextcloud user_oidc), as opposed to the header/forward-
 # auth path (identity:accessControl). It is the OIDC counterpart of
 # accessControl/install-service.sh and does NOT layer forward-auth (never stack

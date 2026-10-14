@@ -395,11 +395,11 @@ if [[ "${RUN_DEEP}" -eq 1 ]]; then
     ID_TS="$(cd "$(dirname "$0")" && pwd)/services/identity/test-service.sh"
     _c560=""
     for f in "${CONFIG_DIR:-/home/tappaas/config}"/*.json; do
-        jq -e '(.dependsOn // []) | index("identity:identity")' "${f}" >/dev/null 2>&1 \
+        jq -e '((.dependsOn // []) + (.integratesWith // [])) | index("identity:identity")' "${f}" >/dev/null 2>&1 \
             && { _c560="$(basename "${f}" .json)"; break; }
     done
     if [[ -z "${_c560}" ]]; then
-        skip "no deployed module depends on identity:identity"
+        skip "no deployed module uses identity:identity"
     else
         _out="$(bash "${ID_TS}" "${_c560}" 2>&1 | sed 's/\x1b\[[0-9;]*m//g' || true)"
         grep -q "consumer holds the OIDC client config" <<<"${_out}" \

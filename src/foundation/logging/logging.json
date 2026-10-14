@@ -13,7 +13,9 @@
     "cluster:vm",
     "templates:nixos",
     "backup:vm",
-    "network:proxy",
+    "network:proxy"
+  ],
+  "integratesWith": [
     "identity:identity"
   ],
   "provides": [

@@ -338,6 +338,12 @@ Mitigations in place:
   `$__file{}` substitution. Members of `logging-admins` land in `GrafanaAdmin`, everyone
   else who can sign in gets `Viewer`.
 
+  identity is an optional integration (`integratesWith`, #701): a site without it installs
+  logging and signs in to Grafana with its local admin. Grafana's OIDC switch is the file
+  `/etc/secrets/logging-oidc-enabled` — `false` until `logging-configure-oidc` has real
+  credentials, then `true` — so SSO, and its auto-login, come on only when there is an
+  Authentik behind them.
+
   Two things follow from the public domain rather than being set independently: the
   provider only exists where the site publishes Grafana (no `proxyDomain`, no redirect
   URI for Authentik to call back to), and `cookie_secure` moves with it — a secure

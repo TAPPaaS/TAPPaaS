@@ -45,7 +45,8 @@ oidc_public_domain() {
 # app list (#806 — Jellyfin's API needs the gate, its login needs OIDC; the
 # ADR-006 §4 exception). install, test and delete must agree, so it is here.
 accesscontrol_gate_slug() {
-    if jq -e '(.dependsOn // []) | index("identity:identity")' <<<"$2" >/dev/null 2>&1; then
+    # dependsOn or integratesWith (#701): an optional OIDC consumer is one too.
+    if jq -e '((.dependsOn // []) + (.integratesWith // [])) | index("identity:identity")' <<<"$2" >/dev/null 2>&1; then
         printf '%s-gate\n' "$1"
     else
         printf '%s\n' "$1"

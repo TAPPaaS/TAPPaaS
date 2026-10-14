@@ -5,8 +5,9 @@ Primary audience: TAPPaaS admin.
 ## Prerequisites
 
 1. The foundation bootstrap has finished (cluster, templates, network, tappaas-cicd) and
-   the `backup` and `identity` modules are installed — `logging` is the last module of
-   the standard foundation sequence.
+   the `backup` module is installed — `logging` is the last module of the standard
+   foundation sequence. `identity` is optional: installed (as it is in the standard
+   sequence), Grafana signs in through it; without it, Grafana keeps its local admin login.
 2. You are on the mothership: `ssh tappaas@tappaas-cicd`.
 
 > To deviate from the defaults in `./logging.json` (target node, storage, zone/VLAN,
