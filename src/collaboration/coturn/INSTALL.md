@@ -60,7 +60,7 @@ automatically; they are not something you configure by hand.
 | UDP port 3478 | Answers a STUN binding request |
 | `/etc/secrets/coturn.env` | Exists, mode 0600, `COTURN_SECRET` is 64 hex chars |
 | `/run/coturn/turnserver.conf` | Generated at service start, contains `denied-peer-ip` entries |
-| `coturn-backup-secrets.timer` | Active (skip if not yet started) |
+| No in-VM backup | no `coturn-backup-secrets` timer, no `/var/backup/coturn` (Proxmox Backup takes the VM) |
 | `COTURN_EXTERNAL_IP` | Set in `/etc/secrets/coturn.env` (else external calls fail) |
 | `nat-manager list-rules` | Two `TAPPaaS: coturn` port-forwards (3478 TCP/UDP, 49152-50151 UDP) |
 | Nextcloud `occ talk:turn:list` | Lists `publicDomain:3478` (the `talk` connector) |

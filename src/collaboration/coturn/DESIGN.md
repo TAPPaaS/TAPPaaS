@@ -140,10 +140,11 @@ allocations.
 
 ## Backup & restore
 
-`backup:vm` registers the VM with Proxmox Backup Server. `coturn-backup-secrets.timer`
-backs up `/var/backup/coturn`. Nothing else on this VM holds state a call depends on: a
-restore only needs to reproduce `COTURN_SECRET` and `COTURN_EXTERNAL_IP` in
-`/etc/secrets/coturn.env`, matching the management-plane copy.
+`backup:vm` puts the whole VM in the site's Proxmox Backup job; the module keeps no backup of
+its own. The only state a call depends on is `/etc/secrets/coturn.env` (`COTURN_SECRET`,
+`COTURN_EXTERNAL_IP`), which `coturn:turn` also publishes to the management plane
+(`/home/tappaas/secrets/coturn.env`). A VM restore brings it back; a VM rebuilt from scratch
+generates a new secret, and the consumers align to it on their next converge.
 
 ## Deploy notes & known limitations (0.3.0)
 

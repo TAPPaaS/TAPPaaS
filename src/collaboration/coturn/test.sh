@@ -247,29 +247,17 @@ else
 fi
 
 # ============================================================================
-# Test 9: Backup Directory and Timer
+# Test 9: No in-VM backup (the VM is backed up by Proxmox Backup, #754)
 # ============================================================================
-header "Test 9: Backup Directory and Timer"
+header "Test 9: No in-VM backup"
 
-subheader "Backup directory: /var/backup/coturn"
-BACKUP_DIR=$(remote "test -d /var/backup/coturn && echo exists || echo missing" || echo "missing")
-if [ "$BACKUP_DIR" = "exists" ]; then
-    pass "/var/backup/coturn directory exists"
+LEFT=$(remote "{ test -e /var/backup/coturn && echo /var/backup/coturn; systemctl list-unit-files --no-legend 'coturn-backup-secrets*' 'coturn-cleanup-backups*' 2>/dev/null | cut -d' ' -f1; } | tr '\n' ' '" || echo "unreachable")
+if [ -z "${LEFT// /}" ]; then
+    pass "no in-VM backup timers or /var/backup/coturn"
+elif [ "$LEFT" = "unreachable" ]; then
+    skip "could not ask the VM"
 else
-    skip "/var/backup/coturn not found — will be created on first backup timer run"
-fi
-
-# NixOS names the timer after the unit (systemd.timers.coturn-backup-secrets).
-subheader "Timer: coturn-backup-secrets.timer"
-# Keep the fallback INSIDE the remote shell — a trailing `|| echo` here would append
-# a second line to is-active's own output (e.g. "inactive\nunknown") and break the test.
-BACKUP_TIMER=$(remote "systemctl is-active coturn-backup-secrets.timer 2>/dev/null || echo unknown")
-if [ "$BACKUP_TIMER" = "active" ]; then
-    pass "coturn-backup-secrets.timer is active"
-elif [ "$BACKUP_TIMER" = "unknown" ] || [ "$BACKUP_TIMER" = "inactive" ]; then
-    skip "coturn-backup-secrets.timer is ${BACKUP_TIMER} — not yet configured or not yet started"
-else
-    fail "coturn-backup-secrets.timer is ${BACKUP_TIMER} (expected active)"
+    fail "in-VM backup leftovers: ${LEFT}"
 fi
 
 # ============================================================================

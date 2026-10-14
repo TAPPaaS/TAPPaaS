@@ -260,69 +260,20 @@ CONF
   };
 
   # ============================================================================
-  # BACKUP STRATEGY
+  # BACKUP
   # ============================================================================
 
-  # No database — daily archive of the secrets file only (mode 600)
-  systemd.services.coturn-backup-secrets = {
-    description = "Daily coturn secrets backup";
-    serviceConfig = {
-      Type  = "oneshot";
-      User  = "root";
-      ExecStart = pkgs.writeShellScript "coturn-backup-secrets" ''
-        set -euo pipefail
-
-        BACKUP_DIR="/var/backup/coturn"
-        TIMESTAMP="$(${pkgs.coreutils}/bin/date +%Y%m%d_%H%M%S)"
-
-        ${pkgs.coreutils}/bin/mkdir -p "$BACKUP_DIR"
-
-        if [ -f /etc/secrets/coturn.env ]; then
-          ${pkgs.gnutar}/bin/tar -czf "$BACKUP_DIR/secrets-$TIMESTAMP.tar.gz" \
-            -C / etc/secrets/coturn.env
-          ${pkgs.coreutils}/bin/chmod 600 "$BACKUP_DIR/secrets-$TIMESTAMP.tar.gz"
-        else
-          echo "WARNING: /etc/secrets/coturn.env not found, skipping." >&2
-        fi
-      '';
-    };
-  };
-
-  systemd.timers.coturn-backup-secrets = {
-    description = "Daily coturn secrets backup timer";
-    wantedBy    = [ "timers.target" ];
-    timerConfig = {
-      OnCalendar = "*-*-* 02:00:00";
-      Persistent = true;
-    };
-  };
-
-  systemd.services.coturn-cleanup-backups = {
-    description = "Monthly cleanup of old coturn backups";
-    serviceConfig = {
-      Type      = "oneshot";
-      User      = "root";
-      ExecStart = pkgs.writeShellScript "coturn-cleanup-backups" ''
-        ${pkgs.findutils}/bin/find /var/backup/coturn -type f -mtime +30 -delete
-      '';
-    };
-  };
-
-  systemd.timers.coturn-cleanup-backups = {
-    description = "Monthly cleanup of old coturn backups";
-    wantedBy    = [ "timers.target" ];
-    timerConfig = {
-      OnCalendar = "monthly";
-      Persistent = true;
-    };
-  };
+  # The platform's: backup:vm puts the whole VM in the site's Proxmox Backup job.
+  # The only state is /etc/secrets/coturn.env, which coturn:turn also publishes
+  # to the management plane, and which a fresh VM regenerates (consumers are
+  # re-aligned on their next converge). No in-VM copy (#754).
 
   # ============================================================================
   # FILESYSTEM STRUCTURE
   # ============================================================================
 
   systemd.tmpfiles.rules = [
-    "d /var/backup/coturn  0700 root root -"
+    "R /var/backup/coturn  - - - -"     # the in-VM backup's leftovers (#754)
     "d /etc/secrets        0700 root root -"
   ];
 
