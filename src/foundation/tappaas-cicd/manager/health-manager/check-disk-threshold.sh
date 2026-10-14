@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # TAPPaaS Disk Threshold Check Script
 #
-# Checks if a VM's disk usage exceeds a threshold and automatically
-# expands the disk by 50% if needed.
+# Checks if a VM's disk usage exceeds a threshold and grows the disk — the
+# same decision auto-grow.sh makes on every update (#100), with a threshold
+# chosen here.
 #
 # The grow is issued as `module-manager module modify <vm> --set diskSize=<new>`
 # so config and cluster move together (ADR-020 D9). This script owns the
@@ -83,90 +84,26 @@ if [ ! -f "$JSON_CONFIG" ]; then
   error "Configuration file not found: $JSON_CONFIG"
 fi
 
-# Convert size string to number in GB
-size_to_gb() {
-  local size="$1"
-  local num="${size%[GMTK]}"
-  local unit="${size: -1}"
-  case "$unit" in
-    G) echo "$num" ;;
-    M) echo $((num / 1024)) ;;
-    T) echo $((num * 1024)) ;;
-    K) echo $((num / 1024 / 1024)) ;;
-    *) echo "$num" ;;
-  esac
-}
-
-# Get VM configuration
-VMID="$(get_config_value 'vmid')"
-NODE="$(get_config_value 'node' "$(get_node_hostname 0)")"
-ZONE0="$(get_config_value 'zone0' 'mgmt')"
-CURRENT_SIZE="$(get_config_value 'diskSize' '8G')"
-
-TARGET="${VMNAME}.${ZONE0}.internal"
+# The decision is auto-grow.sh's (#100) — the same one every module update makes:
+# threshold, growth step, diskSizeMax, and room on the disk's pool (and on the
+# HA replica's). Asked in --check mode, so it only answers; the grow below goes
+# through module modify as before.
+AUTOGROW="$(dirname "$(readlink -f "$0")")/../../../cluster/services/vm/auto-grow.sh"
+[ -x "$AUTOGROW" ] || AUTOGROW=/home/tappaas/TAPPaaS/src/foundation/cluster/services/vm/auto-grow.sh
 
 info "${BOLD}TAPPaaS Disk Threshold Check${CL}"
-info "VM: $VMNAME (VMID: $VMID)"
-info "Threshold: ${THRESHOLD}%"
+info "VM: $VMNAME  Threshold: ${THRESHOLD}%"
 
-# Check if VM is reachable
-if ! ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o BatchMode=yes "tappaas@${TARGET}" "exit 0" &>/dev/null; then
-  warn "VM $VMNAME is not reachable via SSH. Skipping check."
+DECISION="$(TAPPAAS_AUTOGROW_THRESHOLD="$THRESHOLD" OPT_DEBUG=1 "$AUTOGROW" --check "$VMNAME" 2>&1)" || true
+echo "$DECISION" | sed 's/^/  /'
+NEW_SIZE="$(echo "$DECISION" | sed -n 's/.*would grow — diskSize [0-9]*G→\([0-9]*G\).*/\1/p' | head -1)"
+if [ -z "$NEW_SIZE" ]; then
+  info "No grow: see the reason above."
   exit 0
 fi
+ACTUAL_SIZE="$(echo "$DECISION" | sed -n 's/.*would grow — diskSize \([0-9]*G\)→.*/\1/p' | head -1)"
+DISK_USAGE="$(echo "$DECISION" | sed -n 's/.*: \/ is \([0-9]*\)% full.*/\1/p' | head -1)"
 
-# Get current disk usage percentage
-DISK_USAGE=$(ssh -o StrictHostKeyChecking=no "tappaas@${TARGET}" \
-  "df / | tail -1 | awk '{print \$5}'" 2>/dev/null | tr -d '%')
-
-if [ -z "$DISK_USAGE" ]; then
-  error "Could not determine disk usage for $VMNAME"
-fi
-
-info "Current disk usage: ${DISK_USAGE}%"
-
-# Check if threshold exceeded
-if [ "$DISK_USAGE" -lt "$THRESHOLD" ]; then
-  info "Disk usage (${DISK_USAGE}%) is below threshold (${THRESHOLD}%). No action needed."
-  exit 0
-fi
-
-info "${YW}Disk usage (${DISK_USAGE}%) exceeds threshold (${THRESHOLD}%)!${CL}"
-
-# Get current disk size from Proxmox
-ACTUAL_SIZE=$(ssh -o StrictHostKeyChecking=no "root@${NODE}.mgmt.internal" \
-  "qm config $VMID | grep -oP 'scsi0:.*size=\K[0-9]+[GMTK]?'" 2>/dev/null || echo "$CURRENT_SIZE")
-
-info "Current disk size: $ACTUAL_SIZE"
-
-# Calculate new size (50% increase)
-CURRENT_GB=$(size_to_gb "$ACTUAL_SIZE")
-INCREASE_GB=$((CURRENT_GB / 2))
-# Minimum increase of 5GB
-if [ "$INCREASE_GB" -lt 5 ]; then
-  INCREASE_GB=5
-fi
-NEW_GB=$((CURRENT_GB + INCREASE_GB))
-NEW_SIZE="${NEW_GB}G"
-
-# Computed from the LIVE size, not config's diskSize: the disk is the truth
-# about the disk, and deriving from actual also repairs a config that has fallen
-# behind (e.g. a pre-D9 grow that never wrote config back).
-info "Calculated new size: ${NEW_SIZE} (50% increase from ${ACTUAL_SIZE})"
-
-# Grow through `module modify --set`, NOT by calling resize-disk.sh directly
-# (ADR-020 D9). diskSize is a declared field, so growing it is a declared-field
-# change: `--set` writes the new size into the deployed config and then converges
-# it through the same gated path every other field change uses. Calling
-# resize-disk.sh here would move the CLUSTER without moving the CONFIG, and the
-# converge reads config-behind-actual as a SHRINK — which `grow-only` refuses
-# (update-disk.sh exit 20), on this pass and on every pass after it, with nothing
-# in the loop able to move config forward. This script decides WHEN to grow; the
-# change model does the growing.
-#
-# No --force: a grow is `grow-only` and non-disruptive, so it needs no disruption
-# authorization. Forwarding --force would authorize downtime that a disk-usage
-# threshold has no business authorizing (ADR-020 D8).
 info "Initiating disk grow via module-manager modify..."
 if module-manager module modify "$VMNAME" --set "diskSize=${NEW_SIZE}"; then
   info "${BOLD}Disk grow completed successfully!${CL}"

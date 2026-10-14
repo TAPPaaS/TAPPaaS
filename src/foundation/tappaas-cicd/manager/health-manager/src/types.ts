@@ -124,6 +124,21 @@ export interface GuestMemory {
   measured: boolean;
 }
 
+// ── a storage pool on a node (#100) ───────────────────────────────────
+// Proxmox's own numbers (pvesh /cluster/resources): `used` counts a thick
+// disk's full size, so it is what decides whether a grow fits. `provisioned`
+// is the sum of the pool's disk sizes, thin ones included — above `total` the
+// pool is overcommitted and only stays healthy while the thin disks stay
+// partly empty. -1 when it could not be read.
+export interface StoragePool {
+  node: string;
+  storage: string;
+  type: string; // plugintype: zfspool, lvmthin, dir, …
+  total: number; // bytes
+  used: number; // bytes
+  provisioned: number; // bytes, -1 = unknown
+}
+
 export interface ClusterClient {
   // Hostnames of the reachable Proxmox nodes (ping-probed).
   reachableNodes(): string[];
@@ -141,6 +156,8 @@ export interface ClusterClient {
   nodeCapacity(): NodeCapacity[];
   // Whether a guest is waiting for a reboot (via SSH); null if unreachable (#730).
   pendingReboot(target: string): PendingReboot | null;
+  // Every active guest-disk pool on every node (#100); backup stores excluded.
+  storagePools(): StoragePool[];
 }
 
 // ── a guest waiting for a reboot (#730) ───────────────────────────────

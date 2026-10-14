@@ -215,6 +215,19 @@ else
     fail "lib/test-zfs-thin.sh not found or not executable"
 fi
 
+# Automatic disk growth (#100): when, by how much, and whether the pool has room.
+info "${BOLD}Test 2a0a: disk auto-grow decisions (#100)${CL}"
+if [[ -x "${SCRIPT_DIR}/lib/test-disk-grow-lib.sh" ]]; then
+    if dg_out=$("${SCRIPT_DIR}/lib/test-disk-grow-lib.sh" 2>&1); then
+        pass "$(tail -1 <<< "${dg_out}")"
+    else
+        fail "disk-grow-lib unit tests failed"
+        indent <<< "${dg_out}"
+    fi
+else
+    fail "lib/test-disk-grow-lib.sh not found or not executable"
+fi
+
 # The installer's pool loop (#405): a pool with no free disk left is not offered.
 info "${BOLD}Test 2a0b: config-storage free disks (#405)${CL}"
 if [[ -x "${SCRIPT_DIR}/lib/test-config-storage-free.sh" ]]; then
@@ -756,6 +769,8 @@ deep_cleanup() {
     # does not touch DNS). Harmless if absent.
     dns-manager --no-ssl-verify delete test-vmdrift "${DEFAULT_ZONE:-srvHome}.internal"  >/dev/null 2>&1 || true
     dns-manager --no-ssl-verify delete test-vmdrift mgmt.internal >/dev/null 2>&1 || true
+    # The auto-grow step logs its grow; the log is for real disks.
+    [[ -f /home/tappaas/logs/disk-resize.log ]] && sed -i '/ - test-vmdrift: /d' /home/tappaas/logs/disk-resize.log
     [[ -f "${CONFIG_DIR}/test-vmdrift.json" ]] || return 0
     info "  Cleaning up test VM (delete-module test-vmdrift)..."
     /home/tappaas/bin/delete-module.sh test-vmdrift --force >/dev/null 2>&1 || true
@@ -862,6 +877,49 @@ if [[ "${DEEP}" -eq 1 && -n "${DEFAULT_ZONE}" ]]; then
         [[ "$(jq -r "[.. | objects | .diskSize? // empty][0]" "${CONFIG_DIR}/${TVM}.json" 2>/dev/null)" == "26G" ]] \
             && pass "…and config adopts the real size (26G)" || fail "config diskSize not adopted"
         jq_module_write "${TVM}" '.diskSize = "26G"' >/dev/null
+    fi
+
+    # 2e. Automatic disk growth (#100). Fill the guest's / past 80%: a pool with
+    #     no room (ceiling forced to 1%) defers without touching anything; with
+    #     room the update grows disk, filesystem and config in one pass; the
+    #     next pass leaves it alone; a module that opts out is never grown.
+    if [[ "${deep_ok}" -eq 1 ]]; then
+        # shellcheck disable=SC2086,SC2016
+        filled=$(ssh ${SSH_OPTS} "tappaas@${TVM}.mgmt.internal" \
+            'set -- $(df -B1G --output=size,used / | tail -1); n=$(( ($1 * 85 + 99) / 100 - $2 )); [ $n -gt 0 ] && fallocate -l ${n}G ~/autogrow-fill; df --output=pcent / | tail -1 | tr -dc 0-9' 2>/dev/null) || true
+        if [[ "${filled:-0}" -ge 80 ]]; then
+            pass "guest / filled to ${filled}%"
+        else
+            fail "could not fill the guest's / past 80% (${filled:-?}%)"; deep_ok=0
+        fi
+    fi
+    if [[ "${deep_ok}" -eq 1 ]]; then
+        out="$(TAPPAAS_AUTOGROW_POOL_CEILING=1 "${UPSVC}" "${TVM}" 2>&1)"; rc=$?
+        [[ "${rc}" -eq 0 ]] && pass "no room on the pool: the update still exits 0" || fail "no-room update exited ${rc}"
+        grep -q "DEFERRED: ${TVM} disk / is .*no room" <<< "${out}" \
+            && pass "…and prints a DEFERRED: line naming the pool" || { fail "no DEFERRED for a pool without room"; indent <<< "${out}"; }
+        [[ "$(disk_gb "$(vm_conf)")" == "26" ]] && pass "…and the disk is untouched (26G)" || fail "disk changed without room"
+
+        out="$("${UPSVC}" "${TVM}" 2>&1)"; rc=$?
+        indent <<< "$(grep -i 'auto-grow\|resize' <<< "${out}")"
+        [[ "${rc}" -eq 0 ]] && pass "auto-grow update exits 0" || fail "auto-grow update exited ${rc}"
+        grep -q "auto-grow ${TVM}: diskSize 26G→39G" <<< "${out}" && pass "auto-grow decided 26G→39G (+50%)" || fail "auto-grow did not decide 26G→39G"
+        [[ "$(disk_gb "$(vm_conf)")" == "39" ]] && pass "the disk is 39G live" || fail "disk not grown to 39G ($(disk_gb "$(vm_conf)")G)"
+        [[ "$(jq -r "[.. | objects | .diskSize? // empty][0]" "${CONFIG_DIR}/${TVM}.json" 2>/dev/null)" == "39G" ]] \
+            && pass "config follows (diskSize 39G)" || fail "config diskSize not 39G"
+        # shellcheck disable=SC2086
+        fs=$(ssh ${SSH_OPTS} "tappaas@${TVM}.mgmt.internal" "df -B1G --output=size / | tail -1 | tr -dc 0-9" 2>/dev/null) || true
+        [[ "${fs:-0}" -ge 37 ]] && pass "the guest's filesystem grew (${fs}G)" || fail "guest filesystem is ${fs:-?}G"
+
+        out="$("${UPSVC}" "${TVM}" 2>&1)"
+        grep -q "auto-grow ${TVM}: diskSize" <<< "${out}" && fail "a second pass grew again" || pass "a second pass leaves it alone"
+
+        jq_module_write "${TVM}" '.diskAutoGrow = false' >/dev/null
+        out="$(TAPPAAS_AUTOGROW_THRESHOLD=1 "${UPSVC}" --check "${TVM}" 2>&1)"
+        grep -q "would grow" <<< "${out}" && fail "diskAutoGrow: false still grows" || pass "diskAutoGrow: false is never grown"
+        jq_module_write "${TVM}" 'del(.diskAutoGrow)' >/dev/null
+        # shellcheck disable=SC2086
+        ssh ${SSH_OPTS} "tappaas@${TVM}.mgmt.internal" "rm -f ~/autogrow-fill" 2>/dev/null || true
     fi
 
     # 3. Induce zone drift mgmt -> <default zone> (Active, VLAN ${DEFAULT_VLAN},

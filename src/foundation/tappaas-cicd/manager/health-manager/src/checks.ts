@@ -17,7 +17,7 @@
 import { spawnSync } from "child_process";
 import { join } from "path";
 import { isManaged, loadConfigModules, readModuleJson } from "./config";
-import { CheckResult, CheckRow, CheckStatus, ClusterClient, HealthReport, NodeCapacity } from "./types";
+import { CheckResult, CheckRow, CheckStatus, ClusterClient, HealthReport, NodeCapacity, StoragePool } from "./types";
 import { checkCveStatus } from "./security";
 
 // Resolve a guest's `<vmname>.<zone0>.internal` target, as check-disk-threshold.sh
@@ -382,11 +382,50 @@ export function checkPendingReboot(
   };
 }
 
+// ── storage-pools gate (#100) ─────────────────────────────────────────
+// Every guest-disk pool on every node. Automatic disk growth stops at its
+// pool ceiling (80%) and says so per module; this is the cluster-wide view of
+// the same limit: warn at 80% used, fail at 90% — a full ZFS pool fails writes
+// for every guest on it, and slows down well before. A pool whose disks add up
+// to more than it holds (thin disks, #773) is a warning however empty it is.
+export const POOL_WARN = 80;
+export const POOL_FAIL = 90;
+
+export function checkStoragePools(client: ClusterClient): CheckResult {
+  let pools: StoragePool[];
+  try {
+    pools = client.storagePools();
+  } catch (e) {
+    return { name: "storage-pools", status: "skip", detail: `unavailable: ${(e as Error).message}` };
+  }
+  if (pools.length === 0) return { name: "storage-pools", status: "skip", detail: "no pools reported" };
+  const rank: Record<CheckStatus, number> = { pass: 0, skip: 0, warn: 1, fail: 2 };
+  let worst: CheckStatus = "pass";
+  const rows: CheckRow[] = [];
+  for (const p of [...pools].sort((a, b) => a.node.localeCompare(b.node) || a.storage.localeCompare(b.storage))) {
+    const pct = (100 * p.used) / p.total;
+    let status: CheckStatus = pct >= POOL_FAIL ? "fail" : pct >= POOL_WARN ? "warn" : "pass";
+    let detail = `${pct.toFixed(0)}% used (${gib(p.used)}/${gib(p.total)}G)`;
+    if (p.provisioned > p.total) {
+      detail += `, disks add up to ${gib(p.provisioned)}G — overcommitted by thin disks`;
+      if (status === "pass") status = "warn";
+    }
+    rows.push({ status, text: `${p.node}/${p.storage}: ${detail}` });
+    if (rank[status] > rank[worst]) worst = status;
+  }
+  const bad = rows.filter((r) => r.status !== "pass");
+  const detail = bad.length === 0
+    ? `${rows.length} pool(s) under ${POOL_WARN}%`
+    : bad.map((r) => r.text).join("; ");
+  return { name: "storage-pools", status: worst, detail, rows };
+}
+
 export function runHealthGates(client: ClusterClient, opts: ValidateOpts): HealthReport {
   const checks: CheckResult[] = [
     checkServiceLiveness(client, opts.configDir, opts.defaultNode),
     checkDiskThreshold(client, opts.configDir, opts.defaultNode, opts.threshold),
     checkMemoryCommitment(client, opts.memoryThreshold),
+    checkStoragePools(client),
     checkGuestMemory(client),
     checkBackupStatus(opts.configDir),
     checkPendingReboot(client, opts.configDir, opts.defaultNode),

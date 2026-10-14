@@ -23,7 +23,7 @@ import {
   ssh,
 } from "../../../lib/ts/src/cluster";
 import { defaultConfigDir, siteNodeHostnames } from "./config";
-import { ClusterClient, NodeCapacity, PendingReboot, RunningGuest } from "./types";
+import { ClusterClient, NodeCapacity, PendingReboot, RunningGuest, StoragePool } from "./types";
 
 export class CliClusterClient implements ClusterClient {
   reachableNodes(): string[] {
@@ -216,6 +216,55 @@ export class CliClusterClient implements ClusterClient {
     if (!r.ran || r.rc !== 0) return null;
     return parsePendingReboot(r.stdout);
   }
+
+  // #100: the pools from the cluster's own resource list, plus one `zfs list`
+  // per node for what the zvols on each ZFS pool add up to.
+  storagePools(): StoragePool[] {
+    const nodes = this.reachableNodes();
+    if (nodes.length === 0) throw new Error("No Proxmox nodes reachable");
+    const r = ssh("root", `${nodes[0]}.${mgmtDomain()}`,
+      "pvesh get /cluster/resources --type storage --output-format json");
+    if (r.rc !== 0) throw new Error("Failed to query cluster storage");
+    const rows = JSON.parse(r.stdout) as Record<string, unknown>[];
+    const pools = parseStoragePools(rows);
+    for (const n of new Set(pools.filter((p) => p.type === "zfspool").map((p) => p.node))) {
+      const z = ssh("root", `${n}.${mgmtDomain()}`, "zfs list -Hp -t volume -o name,volsize");
+      if (!z.ran || z.rc !== 0) continue;
+      const sums = sumVolsizes(z.stdout);
+      for (const p of pools) {
+        if (p.node === n && p.type === "zfspool") p.provisioned = sums.get(p.storage) ?? 0;
+      }
+    }
+    return pools;
+  }
+}
+
+// Active, non-backup pools from `pvesh get /cluster/resources --type storage`.
+// A shared store (PBS, NFS) is listed once per node; it holds no guest disks
+// TAPPaaS grows, and the backup manager watches the backup store.
+export function parseStoragePools(rows: Record<string, unknown>[]): StoragePool[] {
+  const num = (v: unknown): number => (typeof v === "number" ? v : 0);
+  const str = (v: unknown): string => (typeof v === "string" ? v : "");
+  return rows
+    .filter((r) => str(r.type) === "storage" && str(r.status) === "available"
+      && num(r.shared) !== 1 && str(r.plugintype) !== "pbs" && num(r.maxdisk) > 0)
+    .map((r) => ({
+      node: str(r.node), storage: str(r.storage), type: str(r.plugintype),
+      total: num(r.maxdisk), used: num(r.disk), provisioned: -1,
+    }));
+}
+
+// `zfs list -Hp -t volume -o name,volsize` → bytes per top-level pool. A
+// zfspool storage's id is its pool's name on TAPPaaS (tanka1, tankb1, …).
+export function sumVolsizes(out: string): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const line of out.split("\n")) {
+    const [name, size] = line.trim().split(/\s+/);
+    if (!name || !size || !/^\d+$/.test(size)) continue;
+    const pool = name.split("/")[0];
+    m.set(pool, (m.get(pool) ?? 0) + Number(size));
+  }
+  return m;
 }
 
 // `<os> <pending 0|1> [<booted> <next> <active 0|1>]` — the probe's last line

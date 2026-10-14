@@ -143,6 +143,33 @@
       "normalize": "size",
       "changeNote": "A grow goes through resize-disk.sh. The direction is only knowable against the live size, so a SHRINK is refused at apply time (hook exit 20), not by the static pre-gate. The schema default 8G is DESIRED state (ADR-020 D9): it is also what both create paths build with, so an undeclared guest is in sync from install. When the guest is later grown outside the config path — check-disk-threshold.sh, resize-disk.sh by hand, qm resize — config falls BEHIND actual, which reads as a shrink and would be refused on every converge forever. That case is now ADOPTED instead: the converge writes the observed size into config, touching nothing on the cluster. A deliberately smaller value lands in the same place: the disk is kept, config is set back to the real size, and the converge warns that the field only grows. Excluding undeclared modules from the comparison, as v0.5 did, never helped here: a DECLARED module — which is all of them — got the permanent refusal anyway."
     },
+    "diskAutoGrow": {
+      "description": "Grow this guest's disk automatically when its / fills up (site.json diskAutoGrow sets when and by how much). false: never — the disk is only grown by hand.",
+      "type": "boolean",
+      "requiredBy": [],
+      "usedBy": [
+        "cluster:vm"
+      ],
+      "default": true,
+      "example": false,
+      "class": "in-place",
+      "apply": "reconcile",
+      "changeNote": "A policy, not a property of the guest: nothing on the cluster reports it, so there is nothing to diff. auto-grow.sh reads it on every update."
+    },
+    "diskSizeMax": {
+      "description": "The largest size automatic growth takes this guest's disk to. Not declared: no cap beyond the pool's room.",
+      "type": "string",
+      "pattern": "^[0-9]+[GMKT]$",
+      "requiredBy": [],
+      "usedBy": [
+        "cluster:vm"
+      ],
+      "default": null,
+      "example": "200G",
+      "class": "in-place",
+      "apply": "reconcile",
+      "changeNote": "A policy read by auto-grow.sh; nothing on the cluster to compare. A disk already larger is left alone, never shrunk."
+    },
     "thinDisk": {
       "description": "Thin-provision the guest's ZFS disks (#773): every zvol gets refreservation=none, so a disk takes pool space as it fills instead of reserving its full size on day one — on the HA node too, since replication carries the property. Opt-in per module: a thin disk can overcommit its pool, and a full pool fails writes for every guest on it, so choose it for disks that fill slowly from empty (immich's photo library) and watch the pool. Not declared = not managed: the guest keeps what its storage creates (thick on the tank pools).",
       "type": "string",

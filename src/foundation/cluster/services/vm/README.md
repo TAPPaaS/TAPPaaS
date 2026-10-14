@@ -28,7 +28,7 @@ entirely, which is why it normalizes as `optional`.
 
 ## Fields
 
-`cluster:vm` owns **27** declared field(s). Each table below carries the field's full definition and, where the service applies it, its ADR-020 change semantics.
+`cluster:vm` owns **29** declared field(s). Each table below carries the field's full definition and, where the service applies it, its ADR-020 change semantics.
 
 ### `vmname`
 
@@ -311,6 +311,39 @@ Disk size with unit suffix
 
 **Why this change class.** A grow goes through resize-disk.sh. The direction is only knowable against the live size, so a SHRINK is refused at apply time (hook exit 20), not by the static pre-gate. The schema default 8G is DESIRED state (ADR-020 D9): it is also what both create paths build with, so an undeclared guest is in sync from install. When the guest is later grown outside the config path — check-disk-threshold.sh, resize-disk.sh by hand, qm resize — config falls BEHIND actual, which reads as a shrink and would be refused on every converge forever. That case is now ADOPTED instead: the converge writes the observed size into config, touching nothing on the cluster. A deliberately smaller value lands in the same place: the disk is kept, config is set back to the real size, and the converge warns that the field only grows. Excluding undeclared modules from the comparison, as v0.5 did, never helped here: a DECLARED module — which is all of them — got the permanent refusal anyway.
 
+### `diskAutoGrow`
+
+Grow this guest's disk automatically when its / fills up (site.json diskAutoGrow sets when and by how much). false: never — the disk is only grown by hand.
+
+| Attribute | Value |
+|---|---|
+| Type | `boolean` |
+| Default | `true` |
+| Example | `false` |
+| Required by | *(none)* |
+| Used by | `cluster:vm` |
+| Change class | `in-place` |
+| Apply mode | `reconcile` |
+
+**Why this change class.** A policy, not a property of the guest: nothing on the cluster reports it, so there is nothing to diff. auto-grow.sh reads it on every update.
+
+### `diskSizeMax`
+
+The largest size automatic growth takes this guest's disk to. Not declared: no cap beyond the pool's room.
+
+| Attribute | Value |
+|---|---|
+| Type | `string` |
+| Default | *(none)* |
+| Pattern | `^[0-9]+[GMKT]$` |
+| Example | `200G` |
+| Required by | *(none)* |
+| Used by | `cluster:vm` |
+| Change class | `in-place` |
+| Apply mode | `reconcile` |
+
+**Why this change class.** A policy read by auto-grow.sh; nothing on the cluster to compare. A disk already larger is left alone, never shrunk.
+
 ### `thinDisk`
 
 Thin-provision the guest's ZFS disks (#773): every zvol gets refreservation=none, so a disk takes pool space as it fills instead of reserving its full size on day one — on the HA node too, since replication carries the property. Opt-in per module: a thin disk can overcommit its pool, and a full pool fails writes for every guest on it, so choose it for disks that fill slowly from empty (immich's photo library) and watch the pool. Not declared = not managed: the guest keeps what its storage creates (thick on the tank pools).
@@ -572,6 +605,37 @@ Built from `bridge1`, `zone1`, `mac1`, `trunks1`.
 **Why this change class.** The optional second NIC. Adding it, or changing its bridge/tag, reboots; a trunk- or MAC-only change applies live. Removing it (bridge1 gone from config while the guest still has net1) is a `qm set --delete net1` and also reboots.
 
 <!-- END GENERATED FIELDS -->
+
+## Automatic disk growth
+
+Every update of a module checks its VM's disk before the converge
+(`auto-grow.sh`), so a disk is grown before it fills rather than after:
+
+1. **Measure** — how full the guest's `/` is (`df`), and the disk's real size.
+2. **Decide** — at or over `threshold` (80%): grow by `growPercent` (50%), at
+   least `minGrowGB` (5 GB), never past the module's `diskSizeMax`.
+3. **Room** — the disk's pool must hold the increase and stay at or under
+   `poolCeiling` (80%) used, on the guest's node and on its HA replica node.
+   Proxmox's pool use counts a thick disk's full size.
+4. **Act** — with room, the new `diskSize` is written into the module config
+   (a warning in the update log and a line in `logs/disk-resize.log`) and the
+   converge that follows grows the disk, partition and filesystem: no reboot.
+   Without room, a `DEFERRED:` line names the pool and nothing changes.
+
+The step changes only the desired size, as `module modify --set diskSize=`
+would, so check, rollback and adoption work as for any change: a rollback
+returns disk and config to the snapshot's size, and the next update grows it
+again. `module reconcile` (check) reports what it *would* grow.
+
+| Setting | Where | Default |
+|---|---|---|
+| `diskAutoGrow` `{enabled, threshold, growPercent, minGrowGB, poolCeiling}` | `site.json` | on, 80 / 50 / 5 / 80 |
+| `diskAutoGrow: false` | module | grown automatically |
+| `diskSizeMax` | module | no cap |
+
+Linux VMs only; a container's disk is grown by hand (its `diskSize` is
+`manual`). `check-disk-threshold.sh <vm> <threshold>` runs the same decision
+on demand. The `storage-pools` health gate shows every pool's use cluster-wide.
 
 ## When the migrate itself fails (#393)
 

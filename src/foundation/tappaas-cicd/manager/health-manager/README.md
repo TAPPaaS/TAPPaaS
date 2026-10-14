@@ -7,8 +7,8 @@ Because of that, the CRUD verbs (`add`/`modify`/`delete`/`reconcile`) are **N/A*
 here, and `validate` carries a special meaning (see below).
 
 This is the port (ADR-007 §Health). The
-remaining bash scripts (`check-disk-threshold.sh` — its auto-grow is not
-yet ported — and `update-os.sh`) remain in
+remaining bash scripts (`check-disk-threshold.sh` — a manual front end to
+`cluster:vm`'s automatic disk growth — and `update-os.sh`) remain in
 place and working; the manager re-implements the unambiguous read verbs on top
 of a thin `ssh`/`pvesh`/`qm` shell-out boundary (no Proxmox logic is
 re-implemented). health-manager is a **read-mostly orchestrator** under the
@@ -83,6 +83,7 @@ fails**:
 | `service-liveness` | `pvesh /cluster/resources` | a managed config module's VM is not `running` |
 | `disk-threshold` | SSH `df /` per guest | a reachable guest's `/` usage ≥ threshold (default **80%**, `--threshold PCT`) |
 | `memory-commitment` | one `pvesh /cluster/resources` | a node's COMMITTED memory ≥ threshold of its physical RAM (default **100%**, `--memory-threshold PCT`) |
+| `storage-pools` | `pvesh /cluster/resources` + one `zfs list` per node | a guest-disk pool **≥ 90%** used (**WARN** at 80%, the ceiling automatic disk growth stops at), or **WARN** when a pool's disks add up to more than it holds (thin disks) |
 | `guest-memory` | `pvesh` + one `ps`/`qm status` per node | a module **using ≥ 90%** of its declared memory (**WARN** at 75%), or one whose allocated memory exceeds its declared limit |
 | `backup-status` | `backup-manager list --json` | a module is backup-disabled, or enabled but not in the PBS job |
 | `pending-reboot` | one SSH probe per guest | never — **WARN** when a guest is waiting for a reboot (see below) |
@@ -247,8 +248,10 @@ choices are worth knowing:
 - **An idle node is reported at 0%, not hidden.** An empty node beside a full
   one is a placement problem, and the report is where you see it.
 
-**read-only** here — the auto-resize that `check-disk-threshold.sh` performs is a
-mutation and stays in the script (it is not part of the health assertion).
+**read-only** here. Growing a disk is `cluster:vm`'s: every module update grows a
+VM disk that is filling up, when its pool has room (see the `cluster:vm`
+README, *Automatic disk growth*). `check-disk-threshold.sh <vm> <threshold>`
+makes the same decision on demand with a threshold of your choosing.
 
 ### `update-os <name> <vmid> <node>` — OS-patch action (special)
 

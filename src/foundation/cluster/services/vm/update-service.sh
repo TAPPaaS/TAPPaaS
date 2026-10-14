@@ -26,6 +26,7 @@
 #   net0/net1 (bridge, zone→tag, trunks; MAC + queues preserved) -> update-net.sh
 #   cores, memory, cputype, vmtag, vmname                        -> one qm set
 #   diskSize (grow only)                                         -> update-disk.sh
+#     … and grown automatically when the guest's / fills          -> auto-grow.sh
 #   thinDisk (only when the module declares it, #773)            -> update-thin.sh
 #   node (only if the module does NOT dependOn cluster:ha)       -> update-node.sh
 #
@@ -115,6 +116,17 @@ CONVERGE_CHECK="${CHECK_MODE}"
 # Bare invocation asks the manager for one. That keeps every existing caller
 # (update-module.sh, reconcile --apply, an operator at a prompt) working exactly
 # as before while there is still only ONE differ, in the manager.
+
+# ── Automatic disk growth (#100) ─────────────────────────────────────
+# Before the drift record, so a grow it decides is converged in this same pass.
+# Only on a bare invocation: a record handed in was computed against the config
+# as it was, and must not have its desired size moved underneath it.
+if [[ -z "${DRIFT_FILE}" ]]; then
+    _ag=()
+    [[ "${CHECK_MODE}" == "1" ]] && _ag=(--check)
+    "${SCRIPT_DIR}/auto-grow.sh" "${_ag[@]}" "${MODULE}" \
+        || warn "  auto-grow ${MODULE} failed — the update continues without it"
+fi
 
 OWN_DRIFT_FILE=""
 cleanup() { [[ -n "${OWN_DRIFT_FILE}" ]] && rm -f -- "${OWN_DRIFT_FILE}"; return 0; }

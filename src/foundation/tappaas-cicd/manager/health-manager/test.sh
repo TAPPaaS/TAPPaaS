@@ -291,7 +291,10 @@ else
         ok "SKIP stub call-through (no cluster:vm module deployed)"
     else
         _stub="$(mktemp -d)"
-        printf '#!/usr/bin/env bash\necho "CALL: $*" >> "%s/calls"\n' "${_stub}" > "${_stub}/module-manager"
+        # `module resolve` is a read the decision needs (auto-grow.sh): the
+        # real one answers it; everything else is captured, never performed.
+        _real_mm="$(command -v module-manager || echo /home/tappaas/bin/module-manager)"
+        printf '#!/usr/bin/env bash\nif [ "$1 $2" = "module resolve" ]; then exec %q "$@"; fi\necho "CALL: $*" >> "%s/calls"\n' "${_real_mm}" "${_stub}" > "${_stub}/module-manager"
         chmod +x "${_stub}/module-manager"
         # The script logs a success line on the stubbed (i.e. never-performed)
         # grow. Snapshot the real log so the test restores it exactly, instead

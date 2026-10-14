@@ -279,6 +279,13 @@
       "example": {"lists": ["atf", "hgz011"], "zones": ["home", "guest"], "allow": ["example.org"]},
       "note": "Service zones are best left out: their modules fetch updates, images and models, and a false positive there fails an update. A change takes effect as cached answers expire (minutes). An unknown list code is refused with the codes the firewall offers."
     },
+    "diskAutoGrow": {
+      "description": "Automatic disk growth: on every module update, a VM whose / is at or over threshold % full has its disk grown by growPercent % (at least minGrowGB), if the disk's pool — on the guest's node and on its HA replica node — stays at or under poolCeiling % used. Absent: on, with the defaults shown. A module opts out with diskAutoGrow: false and caps growth with diskSizeMax.",
+      "type": "object",
+      "default": {"enabled": true, "threshold": 80, "growPercent": 50, "minGrowGB": 5, "poolCeiling": 80},
+      "example": {"threshold": 85, "poolCeiling": 75},
+      "note": "Linux VMs only; a container's disk is grown by hand. A grow without room prints a DEFERRED: line the update summary collects. Pool use is Proxmox's (pvesm status), which counts a thick disk's full size."
+    },
     "snapshotRetention": {
       "description": "Number of snapshots to retain. Site-wide until P3 (then moves to Environment).",
       "type": "integer",
