@@ -316,7 +316,7 @@ The known rough edges of the app modules, fixed and tested so they stay fixed: N
 | #807 | Immich: bump `unstableSrc` once `jellyfin-ffmpeg` fixes six upload-reachable CVEs | M | L | **Opened 2026-10-09** from the #788 triage (`cc6790a2`): immich-server's jellyfin-ffmpeg 8.1.2-5 has six heap-corruption flaws any logged-in uploader reaches (RISK medium in `immich-vex.json`); nixos-unstable has no fixed jellyfin-ffmpeg yet, and plain ffmpeg 9.0.1 lacks the `tonemapx` filter immich needs |
 | #658 | nextcloud test 12 probes the browser URL from wherever it runs | L | L | Maintainer-owned (@ErikDaniel007). Not "403 = pass": skip with a reason when the test host is outside the route's `proxyAllowedZones` (exit 77), as Test 9z does |
 | #751 | nextcloud:fileservice has no teardown | M | L | `delete-service.sh` is an ADR-027 stub, so a deleted consumer leaves its connector settings in Nextcloud. Remove the env file and unset what `occ` applied; test on hrossen |
-| #754 | In-guest backup timers in six modules: drop for PBS or say why they stay | L | L | After Nextcloud dropped its failing in-guest dump (`ed663fe8`): six modules still dump inside the guest. Per module: drop it (PBS takes the VM) or keep it with the reason in DESIGN.md |
+| #754 | In-guest backup timers: drop for PBS or say why they stay | L | L | **2026-10-14:** identity, coturn, euro-office, vaultwarden dropped (three had produced empty archives every night). **litellm and openwebui assigned to @ErikDaniel007** — openwebui's `restore.sh` reads `/var/backup` |
 
 ### G3.4 AI stack maturity — Ease M · Risk M · released: 1 · open: 10
 
