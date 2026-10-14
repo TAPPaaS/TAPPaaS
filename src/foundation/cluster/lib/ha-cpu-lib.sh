@@ -9,6 +9,8 @@
 #   hacpu_rank <inventory> <level>              how many flags the level requires
 #   hacpu_matching <inventory> <level> <node>...  nodes offering at least <level>,
 #                                               the named ones excluded
+#   hacpu_alike <inventory> <a> <b>             rc 0 when a live move is safe BOTH
+#                                               ways: then `host` is what they share
 #
 # Levels are Proxmox's x86-64-v* models, each a superset of the one below, so
 # the common level of a set of nodes is the lowest of their levels — ranked by
@@ -39,4 +41,10 @@ hacpu_matching() {
         | [ $i.nodes[] | select(.level != null and ($i.levels[.level] // 0) >= $want)
                        | .node | select(. as $x | $ARGS.positional | index($x) | not) ]
         | join(" ")' "$@" <<< "${inv}"
+}
+
+hacpu_alike() {
+    jq -e --arg a "$2" --arg b "$3" '
+        [ .matrix[]? | select((.from == $a and .to == $b) or (.from == $b and .to == $a)) | .liveSafe ]
+        | length == 2 and all' <<< "$1" >/dev/null
 }

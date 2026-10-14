@@ -24,5 +24,11 @@ check "ranked by flags, not by name"    "$(hacpu_rank "${INV}" x86-64-v2-AES)"  
 check "nodes keeping v4, pair excluded" "$(hacpu_matching "${INV}" x86-64-v4 tappaas1 tappaas3)" "tappaas2"
 check "nodes keeping v3"                "$(hacpu_matching "${INV}" x86-64-v3 tappaas1)" "tappaas3 tappaas2"
 
+M='{"matrix":[{"from":"a","to":"b","liveSafe":true},{"from":"b","to":"a","liveSafe":true},
+            {"from":"a","to":"c","liveSafe":true},{"from":"c","to":"a","liveSafe":false}]}'
+hacpu_alike "${M}" a b && r=yes || r=no;  check "safe both ways: alike (host is common)" "${r}" "yes"
+hacpu_alike "${M}" a c && r=yes || r=no;  check "safe one way only: not alike" "${r}" "no"
+hacpu_alike "${M}" a x && r=yes || r=no;  check "unknown pair: not alike" "${r}" "no"
+
 echo "Results: ${pass} passed, ${fail} failed"
 [[ ${fail} -eq 0 ]]

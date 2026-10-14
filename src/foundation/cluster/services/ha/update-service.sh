@@ -150,6 +150,10 @@ elif [[ -n "${HANODE}" && "${HANODE}" != "${DESIRED_PRIMARY}" ]]; then
     if [[ -z "${common_lvl}" ]]; then
         warn "  haCpu common: no CPU inventory for ${DESIRED_PRIMARY} + ${HANODE} — cputype left at ${DECLARED_CPU}"
         warn "    run: proxmox-controller cpu-inventory --apply"
+    elif hacpu_alike "${inv}" "${DESIRED_PRIMARY}" "${HANODE}"; then
+        # Moves are live-safe both ways (same CPU features): what the two share
+        # is the whole CPU, so nothing is given up.
+        DESIRED_CPU="host"
     else
         DESIRED_CPU="${common_lvl}"
         primary_lvl="$(hacpu_level "${inv}" "${DESIRED_PRIMARY}")"
@@ -468,7 +472,9 @@ if [[ ${DO_SET_CPU} -eq 1 ]]; then
     jq_module_write "${MODULE}" '.cputype = $v' --arg v "${DESIRED_CPU}" \
         || die "could not write cputype ${DESIRED_CPU} into ${MODULE}'s config"
     info "  ${MODULE}: cputype ${DECLARED_CPU}→${DESIRED_CPU} (haCpu ${HACPU})"
-    "${SCRIPT_DIR}/../vm/update-service.sh" "${MODULE}" \
+    _vm_args=("${MODULE}")
+    [[ "${ALLOW_DISRUPTION}" == "1" ]] && _vm_args=(--allow-disruption "${MODULE}")
+    "${SCRIPT_DIR}/../vm/update-service.sh" "${_vm_args[@]}" \
         || warn "  cluster:vm could not converge cputype for ${MODULE} — the next update retries"
 fi
 

@@ -28,8 +28,12 @@ with different CPUs do not, so `haCpu` decides how the guest meets that:
 
 | `haCpu` | CPU model (`cputype`) | Moves between unlike CPUs |
 |---|---|---|
-| `common` (default) | the richest x86-64 level both nodes offer | live — every move is safe |
+| `common` (default) | the richest x86-64 level both nodes offer; `host` when both offer the same features | live — every move is safe |
 | `host` | the node's own CPU, all of it | stop and start: HA failback off, node reboots relocate the guest and bring it back |
+
+`cluster:ha` decides the model and `cluster:vm` applies it: after writing a
+changed `cputype` into the config, `cluster:ha` runs the `cluster:vm` converge
+itself, so the order the two services run in does not matter.
 
 The levels come from the cluster's CPU inventory (`config/cluster-cpu.md`,
 written by the cluster update). When the pair runs a guest below what its
@@ -79,7 +83,7 @@ Cron-style schedule for HA replication interval
 
 ### `haCpu`
 
-The CPU model the HA guest runs. 'common': the richest x86-64 level its node and HANode both offer (config/cluster-cpu.json), so every move between them is live-safe; a newer CPU's extra instructions (AVX-512 …) are not used. 'host': the full CPU of the node it starts on; then a move between nodes with different CPUs is a stop and start (HA failback off, node drains relocate it), never a live migration.
+The CPU model the HA guest runs. 'common': the richest x86-64 level its node and HANode both offer (config/cluster-cpu.json) — 'host' when both offer the same features — so every move between them is live-safe; a newer CPU's extra instructions (AVX-512 …) are not used. 'host': the full CPU of the node it starts on; then a move between nodes with different CPUs is a stop and start (HA failback off, node drains relocate it), never a live migration.
 
 | Attribute | Value |
 |---|---|
