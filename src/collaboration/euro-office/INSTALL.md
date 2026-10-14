@@ -38,7 +38,7 @@ monitoring/configuration only) — document editing via Nextcloud does not requi
 | `/healthcheck` | HTTP 200 (connector availability check) |
 | `/web-apps/apps/api/documents/api.js` | HTTP 200 (editor API) |
 | `/etc/secrets/euro-office.env` | Exists, mode 0600, `JWT_SECRET` non-empty |
-| `euro-office-backup.timer` | Active and scheduled |
+| No in-VM backup | no `euro-office-backup` timer, no `/var/backup/euro-office` (Proxmox Backup takes the VM) |
 | `/var/lib/euro-office/data` | Exists |
 | Nextcloud -> Administration -> "Nextcloud Office" | Points at this server; opening a `.docx` works |
 | Connector check, from the Nextcloud VM (needs a TTY) | `ssh -t tappaas@nextcloud.<zone>.internal "sudo nextcloud-occ --no-ansi eurooffice:documentserver --check"` prints "is successfully connected" |

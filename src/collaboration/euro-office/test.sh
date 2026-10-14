@@ -340,21 +340,17 @@ else
 fi
 
 # ============================================================================
-# Test 8: Backup Timer Scheduled
+# Test 8: No in-VM backup (the VM is backed up by Proxmox Backup, #754)
 # ============================================================================
-header "Test 8: Backup Timer Scheduled"
-info "Checking euro-office-backup.timer is active and scheduled..."
+header "Test 8: No in-VM backup"
 
-TIMER_OUTPUT=$(remote "systemctl list-timers euro-office-backup.timer --no-pager 2>/dev/null || true")
-
-if echo "$TIMER_OUTPUT" | grep -q "euro-office-backup.timer"; then
-    pass "euro-office-backup.timer is active and scheduled"
-    # Show next trigger time if available
-    NEXT_TRIGGER=$(echo "$TIMER_OUTPUT" | grep "euro-office-backup.timer" | awk '{print $1, $2}')
-    [ -n "$NEXT_TRIGGER" ] && info "Next trigger: ${NEXT_TRIGGER}"
+LEFT=$(remote "{ test -e /var/backup/euro-office && echo /var/backup/euro-office; systemctl list-unit-files --no-legend 'euro-office-backup*' 'euro-office-cleanup-backups*' 2>/dev/null | cut -d' ' -f1; } | tr '\n' ' '" || echo "unreachable")
+if [ -z "${LEFT// /}" ]; then
+    pass "no in-VM backup timers or /var/backup/euro-office"
+elif [ "$LEFT" = "unreachable" ]; then
+    skip "could not ask the VM"
 else
-    TIMER_STATE=$(remote "systemctl is-active euro-office-backup.timer 2>/dev/null || echo inactive")
-    fail "euro-office-backup.timer not found in list-timers (state: ${TIMER_STATE})"
+    fail "in-VM backup leftovers: ${LEFT}"
 fi
 
 # ============================================================================
@@ -371,22 +367,6 @@ if [ "$DATA_DIR_CHECK" = "yes" ]; then
     info "Directory size: ${DATA_USAGE}"
 else
     fail "/var/lib/euro-office/data directory does not exist"
-fi
-
-# ============================================================================
-# Test 10: Backup Dir Accessible and Writable
-# ============================================================================
-header "Test 10: Backup Directory Accessible"
-info "Checking /var/backup/euro-office directory..."
-
-BACKUP_DIR_CHECK=$(remote "test -d /var/backup/euro-office && echo yes || echo no")
-
-if [ "$BACKUP_DIR_CHECK" = "yes" ]; then
-    pass "/var/backup/euro-office exists"
-    BACKUP_USAGE=$(remote "sudo du -sh /var/backup/euro-office 2>/dev/null | cut -f1 || echo unknown")
-    info "Backup directory size: ${BACKUP_USAGE}"
-else
-    skip "/var/backup/euro-office not found — created on first backup timer run"
 fi
 
 # ============================================================================

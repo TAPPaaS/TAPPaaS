@@ -53,7 +53,7 @@ Health: no in-container `HEALTHCHECK` is declared in `euro-office.nix`; `test.sh
 |-------------|-----|
 | `cluster:vm` | Provisions the VM |
 | `templates:nixos` | NixOS base image the container runs on |
-| `backup:vm` | Whole-VM coverage in the shared Proxmox Backup Server job — separate from this module's own document-tar job (see Backup & restore) |
+| `backup:vm` | Whole-VM coverage in the shared Proxmox Backup Server job, the module's only backup (see Backup & restore) |
 | `network:proxy` | Public HTTPS endpoint for the editor, plus internal `srv`-zone access on port 80 |
 | `network:rules` | Firewall pass rules |
 | `nextcloud:fileservice` | Triggers the connector wiring: `config["nextcloud:fileservice"].connector = "onlyoffice"` tells the `nextcloud` module which connector type to configure |
@@ -112,33 +112,16 @@ guidance is documented for this module.
 
 ## Backup & restore
 
-`euro-office-backup.service` runs daily at 02:00 — stops `podman-euro-office.service`,
-archives `/var/lib/euro-office/data` to
-`/var/backup/euro-office/euro-office-data-<timestamp>.tar.gz` (mode 600), then always
-restarts the container (a `trap` on `EXIT` guarantees the restart even if the archive
-step fails). A separate monthly job deletes archives older than 30 days.
-
-The container runs with `--rm --replace`, which is why the
-backup job uses `systemctl stop`/`start` rather than `podman stop`/`start` directly —
-stopping it with `podman stop` would delete the container, leaving nothing for
-`podman start` to resume.
-
-Restore:
-
-    ssh tappaas@euro-office.<zone>.internal "sudo systemctl stop podman-euro-office && \
-      sudo tar xzf /var/backup/euro-office/<archive>.tar.gz -C /var/lib/euro-office && \
-      sudo systemctl start podman-euro-office"
-
-**Known limitation**: `/var/lib/euro-office/data` holds only the server's
-`secure_link_secret` (and custom fonts, if any) — documents are stored in Nextcloud, not
-on this VM, so this nightly job backs up very little. (Until 2026-10-04 the volume was
-mounted at the wrong container path and was empty altogether.) `backup:vm` covers the whole VM via the shared Proxmox Backup Server job; it
-does not replace this document-tar mechanism, and vice versa.
+`backup:vm` puts the whole VM in the site's Proxmox Backup job; the module keeps no backup of
+its own. There is little to keep: documents are stored in Nextcloud, the JWT secret shared with
+Nextcloud is in `/etc/secrets`, and `/var/lib/euro-office/data` holds only the server's
+`secure_link_secret` (and custom fonts, if any) — a secret the server regenerates when it is
+missing, at the cost of download links in flight. Restore is a VM restore:
+[RESTORE.md](../../foundation/backup/RESTORE.md).
 
 ## Deploy notes and known limitations (0.2.2)
 
 - Module status: `Testing`.
-- `/var/lib/euro-office/data` holds little — see Backup & restore.
 - The document server needs roughly 20-40 seconds after a (re)start before it answers
   its healthcheck; this is expected, not a fault.
 

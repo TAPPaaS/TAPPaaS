@@ -20,7 +20,7 @@
 #
 # Network: srv zone (VMID 343, tappaas1), firewall ports 22 (SSH) + 80 (HTTP)
 # Secrets: Auto-generated JWT_SECRET (64-char hex) on first boot
-# Backups: Daily volume snapshot (stop → tar → restart), 30-day retention
+# Backups: the whole VM, by the platform's Proxmox Backup job (backup:vm)
 # ============================================================================
 
 { config, lib, pkgs, modulesPath, system, ... }:
@@ -240,76 +240,14 @@ EOF
   };
 
   # ============================================================================
-  # BACKUP STRATEGY — Daily volume snapshot
+  # BACKUP
   # ============================================================================
   #
-  # All state (PostgreSQL, Redis, documents) lives inside the container volume.
-  # Strategy: stop container → tar the data directory → restart container.
-  # Run daily at 02:00; clean up backups older than 30 days monthly.
-
-  systemd.services.euro-office-backup = {
-    description = "Euro-Office daily volume backup";
-    serviceConfig = {
-      Type = "oneshot";
-      ExecStart = pkgs.writeShellScript "euro-office-backup" ''
-        set -euo pipefail
-
-        BACKUP_DIR="/var/backup/euro-office"
-        TIMESTAMP="$(${pkgs.coreutils}/bin/date +%Y%m%d_%H%M%S)"
-        ARCHIVE="$BACKUP_DIR/euro-office-data-$TIMESTAMP.tar.gz"
-
-        ${pkgs.coreutils}/bin/mkdir -p "$BACKUP_DIR"
-
-        # Stop and start the systemd unit, not the container: it runs with --rm, so
-        # `podman stop` deletes it and `podman start` had nothing to start. The trap
-        # brings the document server back on every exit, a failed backup included.
-        echo "Stopping euro-office for a consistent snapshot..."
-        ${pkgs.systemd}/bin/systemctl stop podman-euro-office.service
-        trap '${pkgs.systemd}/bin/systemctl start podman-euro-office.service' EXIT
-
-        # tar -z looks gzip up on PATH, which this unit does not have: every archive
-        # was 0 bytes. Name the compressor; write .part so a failure leaves no archive.
-        echo "Archiving /var/lib/euro-office/data to $ARCHIVE ..."
-        ${pkgs.gnutar}/bin/tar -I ${pkgs.gzip}/bin/gzip -cf "$ARCHIVE.part" -C /var/lib/euro-office data
-        ${pkgs.coreutils}/bin/chmod 600 "$ARCHIVE.part"
-        ${pkgs.coreutils}/bin/mv "$ARCHIVE.part" "$ARCHIVE"
-
-        echo "Backup complete: $ARCHIVE"
-      '';
-      User = "root";
-      Group = "root";
-    };
-  };
-
-  systemd.timers.euro-office-backup = {
-    description = "Daily Euro-Office volume backup timer";
-    wantedBy = [ "timers.target" ];
-    timerConfig = {
-      OnCalendar = "*-*-* 02:00:00";
-      Persistent = true;  # Run missed backups on boot
-    };
-  };
-
-  # Cleanup backups older than 30 days (monthly)
-  systemd.services.euro-office-cleanup-backups = {
-    description = "Cleanup old Euro-Office backups";
-    serviceConfig = {
-      Type = "oneshot";
-      ExecStart = pkgs.writeShellScript "euro-office-cleanup-backups" ''
-        ${pkgs.findutils}/bin/find /var/backup/euro-office -type f -mtime +30 -delete
-      '';
-      User = "root";
-    };
-  };
-
-  systemd.timers.euro-office-cleanup-backups = {
-    description = "Monthly cleanup of old Euro-Office backups";
-    wantedBy = [ "timers.target" ];
-    timerConfig = {
-      OnCalendar = "monthly";
-      Persistent = true;
-    };
-  };
+  # The platform's: backup:vm puts the whole VM in the site's Proxmox Backup job,
+  # without stopping anything. The data volume holds only the server's
+  # secure_link_secret, which it regenerates when missing; documents live in
+  # Nextcloud. The nightly stop-tar-start this module ran until 2026-10 took the
+  # editor down to copy that one file, and went (#754).
 
   # ============================================================================
   # FILESYSTEM STRUCTURE
@@ -320,7 +258,7 @@ EOF
     # in the image), setgid. root:root 0700 here would lock the container's
     # `ds` out of its own directory, and `d` re-applies it on every boot.
     "d /var/lib/euro-office/data  2775 105 107 -"
-    "d /var/backup/euro-office    0700 root root -"  # Backup destination
+    "R /var/backup/euro-office    - - - -"           # the in-VM backup's leftovers (#754)
   ];
 
   # ============================================================================
