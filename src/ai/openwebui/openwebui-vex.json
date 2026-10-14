@@ -5281,6 +5281,436 @@
           "ref": "pkg:generic/libsndfile@1.2.2"
         }
       ]
+    },
+    {
+      "id": "CVE-2026-14456",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "OpenSSL linked statically into the cryptography wheel, found by the bundled-library scan (#811). The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy; Python's ssl module uses the interpreter's own OpenSSL, which the OS-package scan reports. This is a TLS/DTLS/QUIC/CMP/OCSP/DANE code path.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/openssl@4.0.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-14457",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "OpenSSL linked statically into the cryptography wheel, found by the bundled-library scan (#811). The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy; Python's ssl module uses the interpreter's own OpenSSL, which the OS-package scan reports. This is a TLS/DTLS/QUIC/CMP/OCSP/DANE code path.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/openssl@4.0.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-18798",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "OpenSSL linked statically into the cryptography wheel, found by the bundled-library scan (#811). The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy; Python's ssl module uses the interpreter's own OpenSSL, which the OS-package scan reports. This is a TLS/DTLS/QUIC/CMP/OCSP/DANE code path.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/openssl@4.0.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-34180",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "OpenSSL linked statically into the cryptography wheel, found by the bundled-library scan (#811). The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy; Python's ssl module uses the interpreter's own OpenSSL, which the OS-package scan reports. Needs a single DER primitive over 2 GB, far beyond any input these applications parse.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/openssl@4.0.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-34181",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "OpenSSL linked statically into the cryptography wheel, found by the bundled-library scan (#811). The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy; Python's ssl module uses the interpreter's own OpenSSL, which the OS-package scan reports. This is CMS, PKCS#7, PKCS#12 or TimeStamp processing, which nothing in the image applies to untrusted input.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/openssl@4.0.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-34182",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "OpenSSL linked statically into the cryptography wheel, found by the bundled-library scan (#811). The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy; Python's ssl module uses the interpreter's own OpenSSL, which the OS-package scan reports. This is CMS, PKCS#7, PKCS#12 or TimeStamp processing, which nothing in the image applies to untrusted input.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/openssl@4.0.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-34183",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "OpenSSL linked statically into the cryptography wheel, found by the bundled-library scan (#811). The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy; Python's ssl module uses the interpreter's own OpenSSL, which the OS-package scan reports. This is a TLS/DTLS/QUIC/CMP/OCSP/DANE code path.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/openssl@4.0.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-42764",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "OpenSSL linked statically into the cryptography wheel, found by the bundled-library scan (#811). The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy; Python's ssl module uses the interpreter's own OpenSSL, which the OS-package scan reports. This is a TLS/DTLS/QUIC/CMP/OCSP/DANE code path.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/openssl@4.0.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-42765",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "OpenSSL linked statically into the cryptography wheel, found by the bundled-library scan (#811). The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy; Python's ssl module uses the interpreter's own OpenSSL, which the OS-package scan reports. This is a TLS/DTLS/QUIC/CMP/OCSP/DANE code path.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/openssl@4.0.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-45445",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "OpenSSL linked statically into the cryptography wheel, found by the bundled-library scan (#811). The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy; Python's ssl module uses the interpreter's own OpenSSL, which the OS-package scan reports. It needs the one-shot EVP_Cipher() call; cryptography drives ciphers and AEADs through EVP_CipherUpdate()/EVP_CipherFinal_ex().",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/openssl@4.0.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-45447",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "OpenSSL linked statically into the cryptography wheel, found by the bundled-library scan (#811). The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy; Python's ssl module uses the interpreter's own OpenSSL, which the OS-package scan reports. This is CMS, PKCS#7, PKCS#12 or TimeStamp processing, which nothing in the image applies to untrusted input.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/openssl@4.0.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-4775",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libtiff bundled in the Pillow wheel (bundled-library scan, #811). The overflow is in tile decoding; uploads are checked with Image.verify(), which does not decode TIFF tiles, and images inside uploaded PDFs are decoded only with rag.pdf_extract_images on — off here. Turning it on makes this reachable by approved users.",
+        "justification": "requires_configuration"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/libtiff@4.7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-54873",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "OpenSSL linked statically into the cryptography wheel, found by the bundled-library scan (#811). The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy; Python's ssl module uses the interpreter's own OpenSSL, which the OS-package scan reports. This is a TLS/DTLS/QUIC/CMP/OCSP/DANE code path.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/openssl@4.0.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-54874",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "OpenSSL linked statically into the cryptography wheel, found by the bundled-library scan (#811). The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy; Python's ssl module uses the interpreter's own OpenSSL, which the OS-package scan reports. This is a TLS/DTLS/QUIC/CMP/OCSP/DANE code path.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/openssl@4.0.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-54876",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "OpenSSL linked statically into the cryptography wheel, found by the bundled-library scan (#811). The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy; Python's ssl module uses the interpreter's own OpenSSL, which the OS-package scan reports. This is a TLS/DTLS/QUIC/CMP/OCSP/DANE code path.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/openssl@4.0.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-63072",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "OpenSSL linked statically into the cryptography wheel, found by the bundled-library scan (#811). The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy; Python's ssl module uses the interpreter's own OpenSSL, which the OS-package scan reports. This is CMS, PKCS#7, PKCS#12 or TimeStamp processing, which nothing in the image applies to untrusted input.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/openssl@4.0.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-63073",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "OpenSSL linked statically into the cryptography wheel, found by the bundled-library scan (#811). The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy; Python's ssl module uses the interpreter's own OpenSSL, which the OS-package scan reports. This is a TLS/DTLS/QUIC/CMP/OCSP/DANE code path.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/openssl@4.0.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-63075",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "OpenSSL linked statically into the cryptography wheel, found by the bundled-library scan (#811). The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy; Python's ssl module uses the interpreter's own OpenSSL, which the OS-package scan reports. This is a TLS/DTLS/QUIC/CMP/OCSP/DANE code path.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/openssl@4.0.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-63076",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "OpenSSL linked statically into the cryptography wheel, found by the bundled-library scan (#811). The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy; Python's ssl module uses the interpreter's own OpenSSL, which the OS-package scan reports. This is a TLS/DTLS/QUIC/CMP/OCSP/DANE code path.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/openssl@4.0.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-66046",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "Python's built-in expat (expat 2.8.3, statically in pyexpat), found by the bundled-library scan (#811). Approved users upload office documents, which openpyxl and docx2txt parse with the standard XML library. A crafted document makes the parse quadratic (attributes) or hash-floods it: denial of service of the worker parsing it. Fixed in expat 2.8.4+; goes away with an image on a newer Python."
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/expat@2.8.3"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-72897",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "OpenSSL linked statically into the cryptography wheel, found by the bundled-library scan (#811). The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy; Python's ssl module uses the interpreter's own OpenSSL, which the OS-package scan reports. This is a TLS/DTLS/QUIC/CMP/OCSP/DANE code path.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/openssl@4.0.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-7383",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "OpenSSL linked statically into the cryptography wheel, found by the bundled-library scan (#811). The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy; Python's ssl module uses the interpreter's own OpenSSL, which the OS-package scan reports. ASN1_mbstring_ncopy() serves OpenSSL's own X.509 name handling; cryptography parses X.509 in Rust, not with OpenSSL.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/openssl@4.0.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-75803",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "OpenSSL linked statically into the cryptography wheel, found by the bundled-library scan (#811). The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy; Python's ssl module uses the interpreter's own OpenSSL, which the OS-package scan reports. It needs the one-shot EVP_Cipher() call; cryptography drives ciphers and AEADs through EVP_CipherUpdate()/EVP_CipherFinal_ex().",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/openssl@4.0.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-76641",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Python's built-in expat (expat 2.8.3, statically in pyexpat). Needs an external entity parser (XML_ExternalEntityParserCreate); ElementTree and minidom do not create one, and defusedxml refuses external entities before any would be.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/expat@2.8.3"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-76956",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "Python's built-in expat (expat 2.8.3, statically in pyexpat), found by the bundled-library scan (#811). Approved users upload office documents, which openpyxl and docx2txt parse with the standard XML library. A crafted document makes the parse quadratic (attributes) or hash-floods it: denial of service of the worker parsing it. Fixed in expat 2.8.4+; goes away with an image on a newer Python."
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/expat@2.8.3"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-76957",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Python's built-in expat (expat 2.8.3, statically in pyexpat). Needs custom encoding callbacks; CPython's unknown-encoding handler gives expat a table with no convert callback.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/expat@2.8.3"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-84782",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "OpenSSL linked statically into the cryptography wheel, found by the bundled-library scan (#811). The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy; Python's ssl module uses the interpreter's own OpenSSL, which the OS-package scan reports. This is a TLS/DTLS/QUIC/CMP/OCSP/DANE code path.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/openssl@4.0.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-84783",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "OpenSSL linked statically into the cryptography wheel, found by the bundled-library scan (#811). The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy; Python's ssl module uses the interpreter's own OpenSSL, which the OS-package scan reports. This is a TLS/DTLS/QUIC/CMP/OCSP/DANE code path.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/openssl@4.0.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-84784",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "OpenSSL linked statically into the cryptography wheel, found by the bundled-library scan (#811). The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy; Python's ssl module uses the interpreter's own OpenSSL, which the OS-package scan reports. This is a TLS/DTLS/QUIC/CMP/OCSP/DANE code path.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/openssl@4.0.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-9076",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "OpenSSL linked statically into the cryptography wheel, found by the bundled-library scan (#811). The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy; Python's ssl module uses the interpreter's own OpenSSL, which the OS-package scan reports. This is CMS, PKCS#7, PKCS#12 or TimeStamp processing, which nothing in the image applies to untrusted input.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/openssl@4.0.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-93990",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "Python's built-in expat (expat 2.8.3, statically in pyexpat). Approved users upload office documents, which openpyxl and docx2txt parse with the standard XML library. A lone UTF-16 high surrogate is passed on unpaired; the application sees a malformed string, at worst a failed request. Fixed in expat 2.8.5."
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/expat@2.8.3"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
     }
   ]
 }

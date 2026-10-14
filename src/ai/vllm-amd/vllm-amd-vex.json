@@ -1987,6 +1987,84 @@
           "ref": "pkg:deb/debian/libgnutls30@3.7.9-2%2Bdeb12u7"
         }
       ]
+    },
+    {
+      "id": "CVE-2026-4775",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libtiff bundled in the Pillow wheel (bundled-library scan, #811). vLLM decodes images only for a multimodal model's image inputs; the served model is text-only, and the API requires vLLM's key (held by LiteLLM).",
+        "justification": "requires_configuration"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/libtiff@4.7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-54873",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "OpenSSL linked statically into the cryptography wheel, found by the bundled-library scan (#811). The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy; Python's ssl module uses the interpreter's own OpenSSL, which the OS-package scan reports. This is a TLS/DTLS/QUIC/CMP/OCSP/DANE code path.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/openssl@4.0.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-72897",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "OpenSSL linked statically into the cryptography wheel, found by the bundled-library scan (#811). The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy; Python's ssl module uses the interpreter's own OpenSSL, which the OS-package scan reports. This is a TLS/DTLS/QUIC/CMP/OCSP/DANE code path.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/openssl@4.0.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-84782",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "OpenSSL linked statically into the cryptography wheel, found by the bundled-library scan (#811). The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy; Python's ssl module uses the interpreter's own OpenSSL, which the OS-package scan reports. This is a TLS/DTLS/QUIC/CMP/OCSP/DANE code path.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/openssl@4.0.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-84783",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "OpenSSL linked statically into the cryptography wheel, found by the bundled-library scan (#811). The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy; Python's ssl module uses the interpreter's own OpenSSL, which the OS-package scan reports. This is a TLS/DTLS/QUIC/CMP/OCSP/DANE code path.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/openssl@4.0.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-84784",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "OpenSSL linked statically into the cryptography wheel, found by the bundled-library scan (#811). The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy; Python's ssl module uses the interpreter's own OpenSSL, which the OS-package scan reports. This is a TLS/DTLS/QUIC/CMP/OCSP/DANE code path.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/openssl@4.0.2"
+        }
+      ]
     }
   ]
 }
