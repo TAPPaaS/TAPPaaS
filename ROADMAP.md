@@ -106,7 +106,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | 4 | G4.3 Manager verb gaps | M | L | 9 | – | 8 |
 | 4 | G4.4 Storage & physical devices | H | L | 5 | – | 7 |
 | 4 | G4.5 Governance, CI & sign-offs | M | L | 5 | – | 5 |
-| 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 19 | – | 5 |
+| 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 20 | – | 4 |
 | 3 | G3.2 Identity & SSO wiring | M | L | 13 | – | 1 |
 | 3 | G3.3 App module fixes | L | L | 10 | – | 11 |
 | 3 | G3.4 AI stack maturity | M | M | 1 | – | 10 |
@@ -274,7 +274,7 @@ The project's own machinery: CI runners (#415), community-health files (#486), t
 
 Low upgrade risk. Build continuously, in any order within a group.
 
-### G3.1 cluster:vm lifecycle & capacity — Ease L · Risk M · released: 19 · open: 5
+### G3.1 cluster:vm lifecycle & capacity — Ease L · Risk M · released: 20 · open: 4
 
 Guests sized, placed, started and stopped right: memory defaults from measurement (#663), moving a running guest to another node (#825), a readiness wait that skips UDP ports (#826), hardware drift (#531), shutdown and boot order (#36, #127), storage growth and placement (#100, #403), a composite-module ADR (#761), and a sweep that survives a guest restarting itself (#753).
 
@@ -282,7 +282,7 @@ Guests sized, placed, started and stopped right: memory defaults from measuremen
 |---|-------|:-:|:-:|------|
 | ✅ #531 | Detect hardware-spec drift | L | M | **Closed 2026-10-14** (`52c4a1bd`): cores, memory and disk drift were already detected and applied; held cores/memory now restart the VM when authorized (`--force` / `rebootOk`), a smaller disk warns and config adopts the real size. Deep test covers VM and LXC; found and fixed an HA start race in migrate (`d5737177`) |
 | #827 | HA failback can move a host-CPU guest live to a node with an older CPU | M | M | **Opened 2026-10-13** from the ADR-019 deep test: the CRM's own failback skips `live-ok`. Options: a named CPU model common to the rule's nodes, or no automatic failback where CPUs differ |
-| #100 | Automatic storage extension | M | L | |
+| ✅ #100 | Automatic storage extension | M | L | **Closed 2026-10-14** (`18427e2c`): every update grows a VM disk whose / is ≥80% by 50% (min 5G, cap `diskSizeMax`) when its pool, and the HA replica's, stays ≤80% — else `DEFERRED:`. Opt-out `diskAutoGrow: false`; settings in `site.json` `diskAutoGrow`. New `storage-pools` health gate (warn 80%, fail 90%, thin overcommit). Rollback after a grow verified clean. Deep test on hrossen 127/0 |
 | #403 | Install on the root disk; smarter placement | M | L | |
 | ✅ #663 | Memory defaults are not based on measurement | L | L | **Closed 2026-10-13** (operator): 7-day measurement on hrossen. vaultwarden was too small — 1→1.5 GiB (`bac670ce`); euro-office and deconz-test moved tappaas1→tappaas2, tappaas1 commitment 63→51.5 GiB of 61. The other proposed reductions (nextcloud-hpb, jellyfin, forgejo, litellm default) not applied; `network` 8G→4G still parked |
 | ✅ #825 | update-module: changing a running guest's node does not migrate it | M | M | **Closed 2026-10-13** (`fix(cluster): move a running guest when its node changes`): snapshot and OS update act where the guest runs; `live-ok` refuses local disks with snapshots; `--allow-disruption` does stop → offline migrate → start. Proven on hrossen (`g2.1-firewall`): deconz-test deferred, then moved tappaas2→tappaas3 and back by `update-module`. Found moving guests for #663 |
