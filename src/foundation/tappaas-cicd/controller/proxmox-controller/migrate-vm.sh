@@ -157,7 +157,6 @@ try_live_migration() {
         info "  VM is HA-managed (state: ${ha_state}) — temporarily removing from HA"
         save_ha_state "${vmid}" "${source_node}"
         remove_ha "${vmid}" "${source_node}"
-        sleep 2
     fi
 
     local migrate_result=0
@@ -218,7 +217,6 @@ do_offline_migration() {
     if [[ "${ha_managed}" == "true" ]]; then
         info "  Removing from HA..."
         remove_ha "${vmid}" "${source_node}"
-        sleep 2
     fi
 
     # Migrate
@@ -313,6 +311,18 @@ remove_ha() {
     # Remove HA resource
     ssh root@"${any_node}.${MGMT}.internal" \
         "ha-manager remove vm:${vmid}" 2>/dev/null || true
+
+    # `ha-manager status` lists the resource until the CRM's next round, and the
+    # start after a migration asks it: a start sent through HA for a resource
+    # that is already gone fails ("no such resource"). Wait until it is gone.
+    local _ in_ha
+    for _ in $(seq 1 30); do
+        in_ha=0
+        havm_ha_probe "${any_node}.${MGMT}.internal" "vm:${vmid}" >/dev/null || in_ha=$?
+        [[ "${in_ha}" -eq 1 ]] && return 0
+        sleep 2
+    done
+    warn "vm:${vmid} is still listed by ha-manager status after 60s"
 }
 
 # Re-point a node-affinity node list at `prefer`, keeping the same membership.
