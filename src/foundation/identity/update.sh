@@ -200,6 +200,19 @@ else
     warn "  recovery-flow-ensure failed — password resets fall back to 'authentik-manager user-set-password <user>'"
 fi
 
+# ── The login page shows the site (#479) ─────────────────────────────────────
+# Its name with "powered by TAPPaaS" in place of Authentik's logo, the name as the
+# page title, "Sign in" over the form. Non-fatal: a failure leaves the stock
+# branding, and login works the same.
+_site_name="$(jq -r '.displayName // .name // empty' /home/tappaas/config/site.json 2>/dev/null)"
+if [[ -n "${_site_name}" ]]; then
+    if authentik-manager brand-ensure --site-name "${_site_name}" | _tag debug; then
+        debug "  ${GN}✓${CL} login page branded for '${_site_name}'"
+    else
+        warn "  brand-ensure failed — the login page keeps Authentik's branding"
+    fi
+fi
+
 # ── OIDC: email_verified stays true (#748) ─────────────────────────────────────
 # Authentik 2025.10 made the stock email scope say email_verified=false. TAPPaaS
 # addresses are set by the operator, so they are verified; a client that matches

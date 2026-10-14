@@ -85,13 +85,19 @@ let
     AUTHENTIK_LISTEN__METRICS = "127.0.0.1:9301";
   };
 
-  # From 2025.12 files are served from /data; the /media mount moves to /data/media.
+  # From 2025.12 files are served from /data, and Authentik manages uploads (a
+  # brand logo, an application icon) only when /data itself is a mount point.
+  # /data/media is a symlink to /media inside the image, so mounting there put
+  # the volume on /media and left uploads refused ("No file management backend
+  # configured"). Mount /data, as upstream's compose does; media is data/media.
   akMedia = if ak.dataMount
-    then "/var/lib/authentik/media:/data/media"
+    then "/var/lib/authentik/data:/data"
     else "/var/lib/authentik/media:/media";
   akAfter = [ "postgresql.service" "generate-authentik-secrets.service" "authentik-env-secrets-only.service" ]
-    ++ lib.optional ak.redis "redis-authentik.service";
-  akRequires = [ "postgresql.service" ] ++ lib.optional ak.redis "redis-authentik.service";
+    ++ lib.optional ak.redis "redis-authentik.service"
+    ++ lib.optional ak.dataMount "authentik-data-dir.service";
+  akRequires = [ "postgresql.service" ] ++ lib.optional ak.redis "redis-authentik.service"
+    ++ lib.optional ak.dataMount "authentik-data-dir.service";
 in
 {
   # ============================================================================
@@ -434,6 +440,25 @@ EOF
     timerConfig = { OnBootSec = "5min"; OnUnitActiveSec = "1h"; };
   };
 
+  # The /data mount (above) holds media under data/media. A guest that ran with
+  # the old /var/lib/authentik/media gets its files moved across once, before
+  # either container starts.
+  systemd.services.authentik-data-dir = lib.mkIf ak.dataMount {
+    description = "Move Authentik's media under /var/lib/authentik/data";
+    wantedBy = [ "multi-user.target" ];
+    after = [ "local-fs.target" "systemd-tmpfiles-setup.service" ];
+    serviceConfig = { Type = "oneshot"; RemainAfterExit = true; };
+    script = ''
+      old=/var/lib/authentik/media new=/var/lib/authentik/data/media
+      ${pkgs.coreutils}/bin/install -d -o 1000 -g 1000 -m 0755 /var/lib/authentik/data "$new"
+      if [ -d "$old" ] && [ ! -L "$old" ]; then
+        ${pkgs.coreutils}/bin/cp -a "$old/." "$new/"
+        ${pkgs.coreutils}/bin/rm -rf "$old"
+        echo "moved $old to $new"
+      fi
+    '';
+  };
+
   # Backup is the platform's: backup:vm puts the whole VM in the site's Proxmox
   # Backup job (ADR-012), database, secrets and media together, and a restore is
   # a VM restore (backup/RESTORE.md). The in-VM dumps, Redis snapshots and env
@@ -462,7 +487,11 @@ EOF
     "d /var/lib/authentik 0755 root root -"
     # the precheck (User = postgres) writes its finding here
     "f /var/lib/authentik/tappaas-step-blocked 0644 postgres postgres -"
+  ] ++ (if ak.dataMount then [
+    "d /var/lib/authentik/data 0755 1000 1000 -"
+  ] else [
     "d /var/lib/authentik/media 0755 1000 1000 -"
+  ]) ++ [
     "d /var/lib/authentik/templates 0755 1000 1000 -"
     "d /var/lib/authentik/certs 0755 1000 1000 -"
   ];

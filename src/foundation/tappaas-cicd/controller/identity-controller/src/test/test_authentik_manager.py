@@ -844,3 +844,88 @@ class TestRecoveryFlowEnsure(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestBrandEnsure(unittest.TestCase):
+    """#479: the login page shows the site, not Authentik."""
+
+    def _mgr(self, brand: dict, files: list[str], flow_title: str = "Welcome to authentik!"):
+        from identity_controller.authentik_manager import AuthentikConfig, AuthentikManager
+        mgr = AuthentikManager(AuthentikConfig(base_url="http://x", token="t"))
+        calls: list[dict] = []
+
+        def resp(payload):
+            r = MagicMock()
+            r.json.return_value = payload
+            r.raise_for_status.return_value = None
+            return r
+
+        def get(path, params=None):
+            calls.append({"m": "GET", "p": path})
+            if path == "/core/brands/":
+                return resp({"results": [brand]})
+            if path == "/admin/file/":
+                return resp([{"name": n} for n in files])
+            if path == "/flows/instances/":
+                return resp({"results": [{"pk": "AUTHFLOW", "slug": "default-authentication-flow",
+                                          "title": flow_title}]})
+            return resp({})
+
+        def post(path, json=None, files=None, data=None):
+            calls.append({"m": "POST", "p": path, "files": files, "data": data})
+            return resp({})
+
+        def patch(path, json=None):
+            calls.append({"m": "PATCH", "p": path, "json": json})
+            return resp({})
+
+        client = MagicMock()
+        client.get.side_effect = get
+        client.post.side_effect = post
+        client.patch.side_effect = patch
+        mgr._client = client
+        return mgr, calls
+
+    BRAND = {"brand_uuid": "B", "default": True, "branding_title": "authentik",
+             "branding_logo": "/static/dist/assets/icons/icon_left_brand.svg",
+             "branding_favicon": "/static/dist/assets/icons/icon.png", "flow_authentication": "AUTHFLOW"}
+
+    def test_fresh_brand_gets_logo_icon_title_and_flow_heading(self):
+        mgr, calls = self._mgr(dict(self.BRAND), [])
+        changed = mgr.brand_ensure("rossen")
+        ups = [c for c in calls if c["m"] == "POST" and c["p"] == "/admin/file/"]
+        self.assertEqual(len(ups), 3)                     # logo, dark + light; icon
+        names = [u["data"]["name"] for u in ups]
+        self.assertTrue(names[0].endswith("-dark.svg") and names[1].endswith("-light.svg"))
+        logo = ups[1]["files"]["file"][1].decode()
+        self.assertIn(">rossen</text>", logo)
+        self.assertIn('fill="#151515"', logo)              # dark text on the light card
+        self.assertIn("powered by TAPPaaS", logo)
+        self.assertEqual(ups[0]["data"]["usage"], "media")
+        brand_patch = next(c for c in calls if c["m"] == "PATCH" and c["p"] == "/core/brands/B/")
+        self.assertEqual(brand_patch["json"]["branding_title"], "rossen")
+        self.assertTrue(brand_patch["json"]["branding_logo"].startswith("tappaas-site-logo-"))
+        self.assertTrue(brand_patch["json"]["branding_logo"].endswith("-%(theme)s.svg"))
+        self.assertTrue(brand_patch["json"]["branding_favicon"].startswith("tappaas-site-icon-"))
+        flow_patch = next(c for c in calls if c["m"] == "PATCH" and c["p"].startswith("/flows/instances/"))
+        self.assertEqual(flow_patch["json"], {"title": "Sign in"})
+        self.assertTrue(changed)
+
+    def test_converged_changes_nothing(self):
+        mgr, calls = self._mgr(dict(self.BRAND), [])
+        mgr.brand_ensure("rossen")
+        done = {c["json"]["branding_logo"] for c in calls if c["m"] == "PATCH" and c["p"] == "/core/brands/B/"}
+        icon = {c["json"]["branding_favicon"] for c in calls if c["m"] == "PATCH" and c["p"] == "/core/brands/B/"}
+        brand = dict(self.BRAND, branding_title="rossen", branding_logo=done.pop(), branding_favicon=icon.pop())
+        files = [brand["branding_logo"].replace("%(theme)s", t) for t in ("dark", "light")] + [brand["branding_favicon"]]
+        mgr2, calls2 = self._mgr(brand, files, flow_title="Sign in")
+        self.assertEqual(mgr2.brand_ensure("rossen"), [])
+        self.assertFalse([c for c in calls2 if c["m"] in ("POST", "PATCH")])
+
+    def test_names_are_escaped_and_long_names_shrink(self):
+        from identity_controller.authentik_manager import site_logo_svg, site_icon_svg
+        svg = site_logo_svg('Smith & <Co>')
+        self.assertIn("Smith &amp; &lt;Co&gt;", svg)
+        self.assertIn('font-size="34"', site_logo_svg("short"))
+        self.assertNotIn('font-size="34"', site_logo_svg("a very long site name indeed"))
+        self.assertIn(">S</text>", site_icon_svg("smith"))

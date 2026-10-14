@@ -54,6 +54,18 @@ opening without it (vaultwarden DESIGN.md).
   `AUTHENTIK_BOOTSTRAP_TOKEN` all land in `/etc/secrets/authentik.env` (mode 600).
   Nothing is prompted for and nothing is stored in the repo.
 
+## The login page
+
+The login page shows the site, not Authentik: `identity/update.sh` runs
+`authentik-manager brand-ensure` with `site.json` `displayName` (else `name`). The default
+brand gets a logo with the site's name and "powered by TAPPaaS" — a light and a dark variant,
+picked by Authentik's `%(theme)s` file name — the name as page title and a site-initial
+favicon; the login flow's heading becomes "Sign in". Authentik's own footer ("Powered by
+authentik") stays.
+
+Uploads need Authentik's file storage, which it enables only when `/data` is a mount point,
+so the container mounts `/var/lib/authentik/data` at `/data` (media in `data/media`).
+
 ## Backup
 
 The platform's: `backup:vm` puts the whole VM in the site's Proxmox Backup job, with the

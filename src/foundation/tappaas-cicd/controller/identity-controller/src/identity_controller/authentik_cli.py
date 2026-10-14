@@ -23,6 +23,7 @@ Subcommands:
   outpost-attach <slug>                     — attach the app's provider to the embedded outpost
   outpost-set-authentik-host <url>          — set the public URL the outpost redirects to
   recovery-flow-ensure                      — create/reconcile the password-recovery flow
+  brand-ensure --site-name N                — the login page shows the site (#479)
                                               and point the default brand at it
   user-set-password <user> [--password …]   — set a password directly
   user-recovery-link <user>                 — one-time password-reset link (needs the flow above)
@@ -263,6 +264,17 @@ def cmd_recovery_flow_ensure(mgr: AuthentikManager, args: argparse.Namespace) ->
     return 0
 
 
+def cmd_brand_ensure(mgr: AuthentikManager, args: argparse.Namespace) -> int:
+    """The login page shows the site: logo, page title, flow heading (#479)."""
+    changed = mgr.brand_ensure(args.site_name, flow_title=args.flow_title)
+    if changed:
+        for c in changed:
+            print(f"==> {c}")
+    else:
+        print(f"==> brand already shows '{args.site_name}'")
+    return 0
+
+
 def cmd_app_bind_groups(mgr: AuthentikManager, args: argparse.Namespace) -> int:
     created = mgr.app_bind_groups(args.slug, args.group)
     print(f"==> app '{args.slug}': {created} new group binding(s); {len(args.group)} requested")
@@ -455,6 +467,12 @@ def main(argv: list[str] | None = None) -> int:
     rf.add_argument("--no-brand", action="store_true",
                     help="create the flow but leave brand.flow_recovery alone")
     rf.set_defaults(handler=cmd_recovery_flow_ensure)
+
+    be = sub.add_parser("brand-ensure",
+                        help="brand the login page for the site: its name, 'powered by TAPPaaS', no Authentik logo")
+    be.add_argument("--site-name", required=True, help="the name shown on the login page")
+    be.add_argument("--flow-title", default="Sign in", help="heading above the login form (default: Sign in)")
+    be.set_defaults(handler=cmd_brand_ensure)
 
     # ── Groups / Users / Roles (ADR-006) ────────────────────────────────
     ge = sub.add_parser("group-ensure", help="create/update a group (role)")

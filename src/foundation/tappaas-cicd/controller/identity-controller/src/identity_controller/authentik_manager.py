@@ -19,6 +19,41 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import httpx
+import hashlib
+from xml.sax.saxutils import escape as _xml_escape
+
+
+# The login card is white in the light theme and dark in the dark theme: the
+# logo comes in a variant for each, picked by Authentik's %(theme)s file name.
+LOGO_COLOURS = {"light": ("#151515", "#6a6e73"), "dark": ("#ffffff", "#c7c7c7")}
+
+
+def site_logo_svg(site_name: str, theme: str = "light") -> str:
+    """The login page's logo: the site's name, "powered by TAPPaaS" beneath (#479).
+
+    ``theme`` is the login card's theme ("light": dark text, "dark": light text). Pure.
+    """
+    name = _xml_escape(site_name)
+    main, sub = LOGO_COLOURS[theme]
+    size = 34 if len(site_name) <= 14 else max(18, int(34 * 14 / len(site_name)))
+    return (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="72" viewBox="0 0 320 72">'
+        '<g font-family="Helvetica,Arial,sans-serif" text-anchor="middle">'
+        f'<text x="160" y="40" font-size="{size}" font-weight="600" fill="{main}">{name}</text>'
+        f'<text x="160" y="64" font-size="14" fill="{sub}">powered by TAPPaaS</text>'
+        '</g></svg>'
+    )
+
+
+def site_icon_svg(site_name: str) -> str:
+    """The favicon: the site's initial on a dark square. Pure."""
+    initial = _xml_escape((site_name.strip()[:1] or "T").upper())
+    return (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">'
+        '<rect width="64" height="64" rx="12" fill="#1f2937"/>'
+        '<text x="32" y="44" font-family="Helvetica,Arial,sans-serif" font-size="36" '
+        f'font-weight="700" text-anchor="middle" fill="#ffffff">{initial}</text></svg>'
+    )
 
 
 # Authentik's default well-known slugs (created on first boot, never change).
@@ -142,10 +177,12 @@ class AuthentikManager:
     def connect(self) -> "AuthentikManager":
         self._client = httpx.Client(
             base_url=self.config.api,
+            # No default Content-Type: httpx sets application/json for a json=
+            # body itself, and a default here overrode the multipart type of a
+            # file upload (415 from /admin/file/, #479).
             headers={
                 "Authorization": f"Bearer {self.config.token}",
                 "Accept": "application/json",
-                "Content-Type": "application/json",
             },
             timeout=self.config.timeout,
             verify=self.config.verify_tls,
@@ -720,6 +757,55 @@ class AuthentikManager:
         if not brand:
             raise RuntimeError("no default brand in Authentik (expected one with default=true)")
         return brand
+
+    # ── site branding (#479) ─────────────────────────────────────────────
+    # The login page shows the site, not Authentik: a logo with the site's name
+    # and "powered by TAPPaaS", the site's name as the page title, a neutral
+    # flow heading. Files are uploaded under a content-hashed name, so a changed
+    # name is a new file and an unchanged one is not uploaded again.
+
+    def file_names(self, usage: str = "media") -> set[str]:
+        r = self.client.get("/admin/file/", params={"usage": usage})
+        r.raise_for_status()
+        return {f.get("name", "") for f in r.json() if isinstance(f, dict)}
+
+    def file_upload(self, name: str, content: bytes, mime: str, usage: str = "media") -> None:
+        r = self.client.post("/admin/file/", files={"file": (name, content, mime)},
+                             data={"name": name, "usage": usage})
+        r.raise_for_status()
+
+    def brand_ensure(self, site_name: str, flow_title: str = "Sign in") -> list[str]:
+        """Brand the default brand and its login flow for ``site_name``.
+
+        Returns what changed (empty: already so).
+        """
+        changed: list[str] = []
+        brand = self.brand_default()
+        logos = {t: site_logo_svg(site_name, t).encode() for t in LOGO_COLOURS}
+        icon = site_icon_svg(site_name).encode()
+        tag = hashlib.sha256(b"".join(logos[t] for t in sorted(logos))).hexdigest()[:12]
+        # Authentik substitutes the viewer's theme for %(theme)s.
+        logo_name = f"tappaas-site-logo-{tag}-%(theme)s.svg"
+        icon_name = f"tappaas-site-icon-{hashlib.sha256(icon).hexdigest()[:12]}.svg"
+        have = self.file_names()
+        uploads = [(logo_name.replace("%(theme)s", t), logos[t]) for t in sorted(logos)] + [(icon_name, icon)]
+        for name, data in uploads:
+            if name not in have:
+                self.file_upload(name, data, "image/svg+xml")
+                changed.append(f"uploaded {name}")
+        want = {"branding_title": site_name, "branding_logo": logo_name, "branding_favicon": icon_name}
+        delta = {k: v for k, v in want.items() if brand.get(k) != v}
+        if delta:
+            self._patch_json(f"/core/brands/{brand['brand_uuid']}/", delta)
+            changed.extend(f"brand {k} → {v}" for k, v in delta.items())
+        flow_pk = brand.get("flow_authentication")
+        if flow_pk:
+            rows = self._get_json("/flows/instances/", page_size=1000).get("results", [])
+            flow = self._find_by_field(rows, "pk", flow_pk)
+            if flow and flow.get("title") != flow_title:
+                self._patch_json(f"/flows/instances/{flow['slug']}/", {"title": flow_title})
+                changed.append(f"flow '{flow['slug']}' title → {flow_title}")
+        return changed
 
     def brand_set_recovery_flow(self, flow_pk: str) -> tuple[bool, str]:
         """Point the default brand's flow_recovery at ``flow_pk``.
