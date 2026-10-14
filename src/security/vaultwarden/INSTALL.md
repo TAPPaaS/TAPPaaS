@@ -60,7 +60,7 @@ its master password and signs in with it.
 | `https://vaultwarden.<domain>/admin` | admin panel accepts the `ADMIN_TOKEN` |
 | `systemctl is-active vaultwarden` on the VM | `active` |
 | Port 8222 on `vaultwarden.dmz.internal` | reachable from the proxy (HTTP API) |
-| `/var/backup/vaultwarden/` on the VM | daily SQLite backups appear |
+| No in-VM backup | no `/var/backup/vaultwarden*` on the VM (Proxmox Backup takes the VM) |
 
 ## Troubleshooting
 

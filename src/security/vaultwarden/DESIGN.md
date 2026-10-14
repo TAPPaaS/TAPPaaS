@@ -50,9 +50,9 @@ SSO is off, and the account keeps its master password.
 
 ## Backup design
 
-- SQLite backup: the upstream backup service (enabled via `services.vaultwarden.backupDir`)
-  copies the database daily to `/var/backup/vaultwarden/`.
-- Archive: `vaultwarden-backup-archive` timer daily at 03:00 tars vault data + the environment
-  file (secrets included) to `/var/backup/vaultwarden-archives/` (mode 0600).
-- Retention: `cleanup-backups` timer runs monthly and deletes files under `/var/backup` older
-  than 30 days.
+`backup:vm` puts the whole VM in the site's Proxmox Backup job; the module keeps no backup of
+its own. The snapshot is taken with the guest agent freezing the filesystem, so the SQLite
+database, `rsa_key.pem` and `/var/lib/vaultwarden/vaultwarden.env` are captured together and
+consistently — SQLite recovers from a frozen snapshot as from a power cut — and the copy is off
+the VM. Restore is a VM restore: [RESTORE.md](../../foundation/backup/RESTORE.md).
+

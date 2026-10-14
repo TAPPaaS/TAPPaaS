@@ -14,7 +14,7 @@ Bitwarden-compatible password manager, published to the internet from the DMZ zo
 | Web vault | Internet + internal | `https://vaultwarden.<domain>` |
 | Bitwarden clients | Desktop, mobile, browser extensions | point the client at `https://vaultwarden.<domain>` |
 | Admin panel | Admin only | `https://vaultwarden.<domain>/admin` with the `ADMIN_TOKEN` |
-| Daily backups | — | SQLite backup + full archive, 30-day retention |
+| Daily backups | — | Automatic: the whole server, nightly, to the platform's backup server |
 
 ## What is not included
 

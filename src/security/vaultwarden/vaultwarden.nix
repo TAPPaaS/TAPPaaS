@@ -21,7 +21,7 @@
 # Network: DMZ zone (VLAN 610, 10.6.0.0/24)
 # Firewall: ports 22 (SSH) + 8222 (VaultWarden HTTP)
 # Secrets: Auto-generated ADMIN_TOKEN on first boot
-# Backups: Daily vault data backup, 30-day retention
+# Backups: the whole VM, by the platform's Proxmox Backup job (backup:vm)
 # ============================================================================
 
 { config, lib, pkgs, modulesPath, system, ... }:
@@ -122,7 +122,6 @@ in
   services.vaultwarden = {
     enable = true;
     package = versions.vaultwardenPkg;
-    backupDir = "/var/backup/vaultwarden";
 
     # ADMIN_TOKEN and SMTP: generated on first boot (generate-vaultwarden-secrets
     # below). DOMAIN: vaultwarden-site-url. Later files win, so its DOMAIN
@@ -270,81 +269,23 @@ EOF
   };
 
   # ============================================================================
-  # BACKUP STRATEGY
+  # BACKUP
   # ============================================================================
 
-  # The built-in services.vaultwarden.backupDir enables the upstream backup
-  # service which copies the SQLite database to /var/backup/vaultwarden daily.
-  #
-  # It also runs at boot, and on a fresh VM that is before vaultwarden has
-  # written anything: its `cp /var/lib/vaultwarden/!(db.*)` matches nothing and
-  # fails, so the first activation fails and the install rolls back (hrossen,
-  # 2026-10-04). Nothing to back up yet is not a failure: wait for the database.
-  # No ordering added: upstream already starts vaultwarden after this backup,
-  # and `after = vaultwarden` closed a cycle systemd broke by dropping the job.
-  systemd.services.backup-vaultwarden.unitConfig.ConditionPathExists =
-    "/var/lib/vaultwarden/db.sqlite3";
-
-  # Daily backup archive of vault data + environment (03:00)
-  systemd.services.vaultwarden-backup-archive = {
-    description = "Archive VaultWarden backup data";
-    serviceConfig = {
-      Type = "oneshot";
-      ExecStart = pkgs.writeShellScript "vaultwarden-backup-archive" ''
-        TIMESTAMP=$(${pkgs.coreutils}/bin/date +%Y%m%d_%H%M%S)
-        ARCHIVE_DIR="/var/backup/vaultwarden-archives"
-        ${pkgs.coreutils}/bin/mkdir -p "$ARCHIVE_DIR"
-
-        ${pkgs.gnutar}/bin/tar -czf "$ARCHIVE_DIR/vaultwarden-backup-$TIMESTAMP.tar.gz" \
-          -C / \
-          var/backup/vaultwarden \
-          var/lib/vaultwarden/vaultwarden.env \
-          2>/dev/null || true
-
-        ${pkgs.coreutils}/bin/chmod 600 "$ARCHIVE_DIR/vaultwarden-backup-$TIMESTAMP.tar.gz"
-      '';
-      User = "root";
-      Group = "root";
-    };
-  };
-
-  systemd.timers.vaultwarden-backup-archive = {
-    description = "Daily VaultWarden backup archive timer";
-    wantedBy = [ "timers.target" ];
-    timerConfig = {
-      OnCalendar = "*-*-* 03:00:00";
-      Persistent = true;
-    };
-  };
-
-  # Cleanup old backups - 30 day retention
-  systemd.services.cleanup-backups = {
-    description = "Cleanup old VaultWarden backups";
-    serviceConfig = {
-      Type = "oneshot";
-      ExecStart = pkgs.writeShellScript "cleanup-backups" ''
-        ${pkgs.findutils}/bin/find /var/backup -type f -mtime +30 -delete
-      '';
-      User = "root";
-    };
-  };
-
-  systemd.timers.cleanup-backups = {
-    description = "Monthly cleanup of old backups";
-    wantedBy = [ "timers.target" ];
-    timerConfig = {
-      OnCalendar = "monthly";
-      Persistent = true;
-    };
-  };
+  # The platform's: backup:vm puts the whole VM in the site's Proxmox Backup job.
+  # The snapshot is taken with the guest agent freezing the filesystem, which
+  # SQLite recovers from as from a power cut, so the database, its key and the
+  # env file are captured consistently, off this disk. The in-VM SQLite copy,
+  # archive and cleanup this module ran until 2026-10 went (#754).
 
   # ============================================================================
   # FILESYSTEM STRUCTURE
   # ============================================================================
 
   systemd.tmpfiles.rules = [
-    "d /var/backup/vaultwarden 0700 vaultwarden vaultwarden -"
-    "d /var/backup/vaultwarden-archives 0700 root root -"
+    # the in-VM backups' leftovers (#754)
+    "R /var/backup/vaultwarden - - - -"
+    "R /var/backup/vaultwarden-archives - - - -"
     "d /var/lib/vaultwarden 0700 vaultwarden vaultwarden -"
   ];
 

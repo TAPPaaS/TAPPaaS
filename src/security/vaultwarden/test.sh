@@ -27,6 +27,7 @@ log()    { echo -e "$1" | tee -a "$LOG_FILE"; }
 pass()   { log "${GN}[PASS]${CL} $1"; PASSED=$((PASSED + 1)); }
 fail()   { log "${RD}[FAIL]${CL} $1"; FAILED=$((FAILED + 1)); }
 inf()    { log "${BL}[INFO]${CL} $1"; }
+skip()   { log "${YW}[SKIP]${CL} $1"; SKIPPED=$((SKIPPED + 1)); }
 header() { log ""; log "${BOLD}═══════════════════════════════════════════════════════════════${CL}"; log "${BOLD}  $1${CL}"; log "${BOLD}═══════════════════════════════════════════════════════════════${CL}"; }
 remote() { $SSH_CMD "$1" 2>/dev/null; }
 
@@ -93,6 +94,17 @@ if [[ "$(remote "sudo test -e /etc/secrets/vaultwarden.env && echo yes || echo n
     pass "No OIDC client on the VM"
 else
     fail "/etc/secrets/vaultwarden.env (an OIDC client) is still on the VM"
+fi
+
+# ── Test 4b: No in-VM backup (Proxmox Backup takes the VM, #754) ─────────────
+header "Test 4b: No In-VM Backup"
+LEFT=$(remote "{ ls -d /var/backup/vaultwarden /var/backup/vaultwarden-archives 2>/dev/null; systemctl list-unit-files --no-legend 'backup-vaultwarden*' 'vaultwarden-backup-archive*' 'cleanup-backups*' 2>/dev/null | cut -d' ' -f1; } | tr '\n' ' '" || echo "unreachable")
+if [[ -z "${LEFT// /}" ]]; then
+    pass "no in-VM backup timers or /var/backup/vaultwarden*"
+elif [[ "${LEFT}" == "unreachable" ]]; then
+    skip "could not ask the VM"
+else
+    fail "in-VM backup leftovers: ${LEFT}"
 fi
 
 # ── Test 5: Resource usage ────────────────────────────────────────────────────
