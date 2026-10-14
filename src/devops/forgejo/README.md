@@ -8,9 +8,9 @@ own infrastructure with no external dependencies.
 
 | Capability | Access from | How |
 |---|---|---|
-| Git repository hosting | `work`, `mgmt` networks | `https://forgejo.<domain>` via Caddy |
-| Web UI (browse, review, settings) | `work`, `mgmt` networks | Same URL as above |
-| REST API | `work`, `mgmt` networks | `https://forgejo.<domain>/api/v1` |
+| Git repository hosting | the internet and the `home`, `work`, `mgmt` networks, behind the site's sign-in | `https://forgejo.<domain>` via Caddy |
+| Web UI (browse, review, settings) | Same as above | Same URL as above |
+| REST API | Same as above | `https://forgejo.<domain>/api/v1` |
 | SSH git clone / push | `work` network, LAN | `git@forgejo.<domain>:org/repo.git` |
 | Incoming webhooks | Other services on `srvWork` | HTTP POST to `http://forgejo.srvWork.internal:3000` |
 
@@ -48,7 +48,7 @@ own infrastructure with no external dependencies.
 |---|---|
 | `cluster:vm` | Creates and manages the NixOS VM |
 | `backup:vm` | PBS backup of the VM (daily snapshot) |
-| `network:proxy` | Caddy reverse proxy — HTTPS endpoint on `work`/`mgmt` |
+| `network:proxy` | Caddy reverse proxy — HTTPS endpoint for the internet and `home`/`work`/`mgmt` (`proxyAllowedZones`) |
 | `network:rules` | Firewall pinholes (dmz → srvWork TCP 3000) |
 | `identity:identity` | Single sign-on with the site's Authentik (#282) — see below |
 

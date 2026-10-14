@@ -21,8 +21,10 @@
   "firewallType": "opnsense",
   "proxyPort": 3000,
   "proxyAllowedZones": [
+    "home",
     "work",
-    "mgmt"
+    "mgmt",
+    "internet"
   ],
   "ports": [
     {

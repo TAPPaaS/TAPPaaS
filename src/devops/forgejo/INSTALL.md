@@ -26,7 +26,7 @@ install-module.sh forgejo
 - VM creation (clone from NixOS template 8080, VMID 350)
 - NixOS configuration deployment via `templates:nixos` (`update-os.sh`, the release's pinned nixpkgs); `update.sh` only checks Forgejo answers
 - Firewall rule registration (`network:rules`)
-- Caddy reverse proxy entry (`network:proxy`) — HTTPS for `work` and `mgmt` zones
+- Caddy reverse proxy entry (`network:proxy`) — HTTPS from the internet and the `home`, `work` and `mgmt` zones (`proxyAllowedZones`; narrow it with `module-manager modify forgejo --set proxyAllowedZones=...`)
 
 ## Post-install
 
