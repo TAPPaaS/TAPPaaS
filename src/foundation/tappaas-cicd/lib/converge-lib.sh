@@ -278,7 +278,7 @@ converge_apply() {
         # Machine-parseable: update-tappaas greps DEFERRED: to build the
         # end-of-sweep "N modules have pending disruptive changes" summary.
         warn "DEFERRED: ${module} ${name} needs a disruptive change (reboot/offline migrate) that is not authorized"
-        warn "  Apply in a maintenance window:  module-manager module modify ${module} --force"
+        warn "  Apply in a maintenance window:  module-manager module update ${module} --allow-disruption"
     done
 
     if [[ "${check}" == "1" ]]; then
@@ -319,7 +319,7 @@ converge_apply() {
                 else
                     warn "DEFERRED: ${module} — new ${_p_list} saved in the VM config; the running VM keeps its old values"
                     warn "  Proxmox applies them when it restarts the VM (qm reboot, or stop + start); a reboot inside the guest is not enough."
-                    warn "  Apply in a maintenance window:  module-manager module modify ${module} --force"
+                    warn "  Apply in a maintenance window:  module-manager module update ${module} --allow-disruption"
                     CONVERGE_DEFERRED=$(( CONVERGE_DEFERRED + _p_n ))
                     (( _set_n -= _p_n )) || true
                     (( _set_n < 0 )) && _set_n=0

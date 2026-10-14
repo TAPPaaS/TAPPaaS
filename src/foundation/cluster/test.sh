@@ -171,7 +171,7 @@ fi
 # case needs a two-node failover to reproduce (deep test-hadrift territory).
 HA_UPSVC="${SCRIPT_DIR}/services/ha/update-service.sh"
 ha_code_line() { grep -n "$1" "${HA_UPSVC}" | grep -vE '^[0-9]+:[[:space:]]*#' | tail -1 | cut -d: -f1; }
-mig_ln=$(ha_code_line 'crm-command migrate')
+mig_ln=$(ha_code_line 'crm-command \${MOVE_CMD}')
 repl_ln=$(ha_code_line 'pvesr create-local-job')
 if [[ -n "${mig_ln}" && -n "${repl_ln}" && "${mig_ln}" -lt "${repl_ln}" ]]; then
     pass "cluster:ha applies placement before replication (pvesr source != target)"

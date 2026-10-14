@@ -220,7 +220,7 @@ EOF
     run 0 0; rc=$?
     check "an unauthorized disruptive change exits 0 — a deferral is not a failure" "${rc}" "0"
     contains "…and is reported as DEFERRED" "${LOG}" "DEFERRED: demo net0"
-    contains "…naming the command that would authorize it" "${LOG}" "module modify demo --force"
+    contains "…naming the command that would authorize it" "${LOG}" "module update demo --allow-disruption"
     contains "the NON-disruptive change still applied" "$(cat "${CMDLOG}")" "--cores 8"
     check "…while the disruptive hook did not run" "$(grep -c '^HOOK ' "${CMDLOG}")" "0"
     check "…and neither did its reboot" "$(grep -c '^FX ' "${CMDLOG}")" "0"

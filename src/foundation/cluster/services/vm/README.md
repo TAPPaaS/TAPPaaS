@@ -683,7 +683,7 @@ by the optional `converge_pending_fields` callback — anything still held is
 counted **deferred**, not applied, and named in a `DEFERRED:` line the sweep
 collects. A service that defines no callback behaves exactly as before.
 
-Authorized (`module-manager module modify <module> --force`, or `rebootOk` in the
+Authorized (`module-manager module update <module> --allow-disruption`, or `rebootOk` in the
 scheduled pass), held values are not left waiting: the converge restarts the VM
 with `qm reboot` — once, together with any network change in the same pass —
 waits for the guest to come back, and counts them applied.
