@@ -103,7 +103,9 @@ test_result "Ping VM by IP ($VMIP)" $?
 
 # Test 2: DNS resolution
 echo "2. DNS resolution test..."
-RESOLVED_IP=$(getent hosts "$DNS_NAME" 2>/dev/null | awk '{print $1}' | head -1)
+# The IPv4 answer: a zone with IPv6 also answers AAAA, and `getent hosts`
+# returns that first, which never equals the VM's IPv4 address.
+RESOLVED_IP=$(getent ahostsv4 "$DNS_NAME" 2>/dev/null | awk '{print $1}' | head -1)
 if [ "$RESOLVED_IP" = "$VMIP" ]; then
     test_result "DNS resolves $DNS_NAME to $VMIP" 0
 else

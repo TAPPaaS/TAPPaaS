@@ -13,7 +13,7 @@
 #
 #   2. logging-configure-oidc survives every state identity:identity can leave
 #      it in: not yet wired (do nothing, let Grafana boot), wired but with no
-#      discovery URI (fail loudly), wired properly (write the five files Grafana
+#      discovery URI (fail loudly), wired properly (write the six files Grafana
 #      reads through $__file{} and restart it).
 #
 # Needs nix to evaluate the module; exits 77 ("cannot run here") without it, as
@@ -138,7 +138,8 @@ run_cfg() { LOGGING_OIDC_ENV="$1" LOGGING_OIDC_SECRETS_DIR="${OUT}" "${SCRIPT}" 
 out="$(run_cfg "${TMP}/empty.env")"; rc=$?
 ck   "unwired: exits 0"                  0 "${rc}"
 ckin "unwired: says why"                 "has not wired this module" "${out}"
-ck   "unwired: writes nothing"           0 "$(find "${OUT}" -type f | wc -l | tr -d ' ')"
+ck   "unwired: writes only the OIDC switch" 1 "$(find "${OUT}" -type f | wc -l | tr -d ' ')"
+ck   "…set off: Grafana keeps its local login" "false" "$(cat "${OUT}/logging-oidc-enabled" 2>/dev/null)"
 
 # (b) wired, but no discovery URI: the endpoints cannot be resolved and guessing
 #     them would bake in Authentik's current URL layout.
@@ -158,7 +159,8 @@ printf 'OIDC_CLIENT_ID=the-client\nOIDC_CLIENT_SECRET=the-secret\nOIDC_DISCOVERY
     "${TMP}/openid.json" > "${TMP}/good.env"
 out="$(run_cfg "${TMP}/good.env")"; rc=$?
 ck "wired: exits 0"                   0 "${rc}"
-ck "wired: writes all five files"     5 "$(find "${OUT}" -type f | wc -l | tr -d ' ')"
+ck "wired: writes all six files"      6 "$(find "${OUT}" -type f | wc -l | tr -d ' ')"
+ck "wired: Grafana's OIDC switch is on" "true" "$(cat "${OUT}/logging-oidc-enabled" 2>/dev/null)"
 ck "wired: the client id is the minted one"  "the-client" "$(cat "${OUT}/logging-oidc-client-id" 2>/dev/null)"
 ck "wired: the secret is the minted one"     "the-secret" "$(cat "${OUT}/logging-oidc-client-secret" 2>/dev/null)"
 ck "wired: the endpoints come from the document, not from string surgery" \

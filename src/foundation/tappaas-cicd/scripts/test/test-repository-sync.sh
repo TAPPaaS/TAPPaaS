@@ -46,7 +46,7 @@ printf '{"moduleSource":"%s/src/apps/bar"}\n' "${R}" > "${cfg}/bar.json"
 
 # The refresh is a stub that records how it was called.
 cat > "${d}/refresh" <<EOF
-#!/bin/bash
+#!/usr/bin/env bash
 echo "NO_GIT_PULL=\${TAPPAAS_NO_GIT_PULL:-unset}" > "${d}/refresh.called"
 EOF
 chmod +x "${d}/refresh"
