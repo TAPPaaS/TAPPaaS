@@ -10,8 +10,8 @@ community modules depending on today's names, schemas and layouts. It is built i
 upgrades safe (0), make the breaking changes (1), harden the network (2), stability (3), new
 capabilities (4) — each made of **groups** of related issues. Two waves stand beside that order:
 **live verification (5)** — tests and sign-offs on real systems, kept apart from development and
-fixes — and **site fabric and user experience (6)**, the switching fabric designed together with
-the physical view of the UI.
+fixes — **site fabric and user experience (6)**, the switching fabric designed together with
+the physical view of the UI — and **enhance the stacks (7)**: new modules and significant upgrades.
 
 This file replaces the security & stability plan (2026-10-06) — kept, closed, as
 [docs/plans/security-and-stability-plan.md](docs/plans/security-and-stability-plan.md) — which was compiled
@@ -104,6 +104,8 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 
 | Wave | Group | Ease | Risk | released | done for 2.3 | open |
 |------|-------|:-:|:-:|---:|---:|---:|
+| 7 | G7.1 DevOps stack | H | M | – | – | 3 |
+| 7 | G7.2 New and reworked app modules | H | M | – | – | 5 |
 | 6 | G6.1 Switching fabric, WAN & ISP | H | H | – | – | 11 |
 | 6 | G6.2 User interface & physical view | H | L | – | – | 3 |
 | 5 | G5.1 Satellite & off-site | H | M | – | – | 7 |
@@ -112,7 +114,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | 4 | G4.2 Proxy & ingress | M | L | 3 | 3 | 1 |
 | 4 | G4.3 Manager verb gaps | M | L | 9 | 7 | 2 |
 | 4 | G4.4 Storage & physical devices | H | L | 5 | – | 1 |
-| 4 | G4.5 Governance, CI & sign-offs | M | L | 5 | – | 4 |
+| 4 | G4.5 Governance, CI & sign-offs | M | L | 5 | – | 2 |
 | 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 18 | 9 | 3 |
 | 3 | G3.2 Identity & SSO wiring | M | L | 10 | 3 | 1 |
 | 3 | G3.3 App module fixes | L | L | 10 | 2 | 8 |
@@ -190,12 +192,9 @@ items that belong to a group — FW #40, #83, #157, #158, #162 — are rows in t
 | #58 | Secrets management | One secrets-access helper every module uses instead of reading `/etc/secrets`, OpenBao behind it later. Out of G1.6 since 2026-10-02 (operator) |
 | #71 | TAPPaaS way to back up, export and restore user data inside a VM | Open: `backup:filesystem` does not solve it |
 | #89 | Manage binaries for TAPPaaS | |
-| #129 | Project Nomad in the Home stack | |
 | #156 | pfSense `aliases.xml` import script | |
-| #170 | LiteLLM declarative control plane | Decide with #430 (G1.7) |
 | #223 | OPNsense 26.1 InterfaceAssignController may break on a future upgrade | Parked 2026-10-13 (agreed 2026-05-27): works on 26.1 as deployed; revisit when an upgrade breaks it. Parking lot on the forge |
 | #250 | `dependsOn` ownership for community modules | Option D, `dependsOn.sh`. Out of G1.3 since 2026-09-20 (operator) |
-| #284 | forgejo: SQLite → PostgreSQL | Out of G3.3 2026-10-06 (operator): SQLite stays the default until load says otherwise |
 | #464 | migrate-firewall-to-network: dry-run reports a step it cannot predict | A dry run that overstates what it will do teaches an operator to distrust dry runs. Parking lot on the forge |
 | #488 | apply-json-merge pins fields the operator never changed | The general case of #736 — see *Decisions*. Parking lot on the forge |
 | #678 | windows-server: time zone, keyboard and locale from the site | From G1.4: its own time-zone vocabulary and a Windows test |
@@ -205,6 +204,32 @@ items that belong to a group — FW #40, #83, #157, #158, #162 — are rows in t
 | #310 | Firewall API certificate verified, not skipped (`--no-ssl-verify`) | **Follows #787:** the same TAPPaaS CA issues the firewall a certificate for `firewall.mgmt.internal`, and the controllers verify it. Rescoped 2026-10-08 out of G2.1: blocking on a pinned self-signed certificate would stop the sweep at every rebuild or renewal for a narrow risk (a foothold on mgmt). Meanwhile a change is detected — `check-firewall-cert`, hourly, mails FirewallCertChanged (`ddf94cdb`) |
 
 ---
+
+## Wave 7 — enhance the stacks
+
+New modules and significant upgrades of existing ones: what a site can run, beyond the foundation and its fixes.
+
+### G7.1 DevOps stack — Ease H · Risk M · open: 3
+
+Forgejo gets its CI: a Woodpecker module wired to it (#840), whose agents can also build TAPPaaS itself (#415), and Forgejo on PostgreSQL when load asks for it (#284).
+
+| # | Issue | Ease | Risk | Note |
+|---|-------|:-:|:-:|------|
+| #840 | devops: a Woodpecker CI module next to Forgejo | H | L | **Opened 2026-10-15.** Forgejo-native CI (OAuth, webhooks); agents on the VM first, KVM agents as an option for #415 |
+| #415 | Self-hosted KVM Woodpecker runners | H | L | |
+| #284 | forgejo: SQLite → PostgreSQL | M | M | Out of G3.3 2026-10-06 (operator): SQLite stays the default until load says otherwise |
+
+### G7.2 New and reworked app modules — Ease H · Risk M · open: 5
+
+New modules — a Markdown website (#841), N.O.M.A.D. for the home stack (#129), Karakeep for bookmarks (#842), a service desk (#63, spike first) — and a rework of LiteLLM's control plane (#170, decided with #430).
+
+| # | Issue | Ease | Risk | Note |
+|---|-------|:-:|:-:|------|
+| #841 | A lazysite module: a Markdown website for the site owner | M | L | **Opened 2026-10-15.** Markdown in the docroot served as HTML, no build step or database; how content gets there to decide |
+| #129 | Project Nomad in the Home stack | M | L |  |
+| #842 | A Karakeep module: bookmarks and read-later, AI tagging via the AI stack | M | L | **Opened 2026-10-15.** OIDC sign-in; its AI tagging through LiteLLM when the AI stack is installed |
+| #63 | Service desk tooling spike | M | L | |
+| #170 | LiteLLM declarative control plane | H | M | Decide with #430 (G1.7) |
 
 ## Wave 6 — site fabric and user experience
 
@@ -319,16 +344,14 @@ Shared storage as a managed part of a site: the rest of the NFS service (#772). 
 |---|-------|:-:|:-:|------|
 | #772 | ADR-029 NFS: remaining work packages from #766 | M | L | Export backup, NAS servers, storage zone, LXC consumers, quota health, `show`/`purge`. **2026-10-05:** ADR-029 v0.8 (shares by name, pending mounts, `subdir`) built, smoke-tested |
 
-### G4.5 Governance, CI & sign-offs — Ease M · Risk L · released: 5 · open: 4
+### G4.5 Governance, CI & sign-offs — Ease M · Risk L · released: 5 · open: 2
 
-The project's own machinery: CI runners (#415), community-health files (#486), the remaining ADRs (#359; the ADR-010 sign-off, #406, is in G5.1), a tool for urgent patches (#746), a logging-function lint (#747), a service-desk spike (#63).
+The project's own machinery (CI runners, #415, moved to G7.1 with the Woodpecker module): community-health files (#486), the remaining ADRs (#359; the ADR-010 sign-off, #406, is in G5.1), a tool for urgent patches (#746), a logging-function lint (#747); the service-desk spike (#63) is in G7.2.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
 | #486 | ADR-015 community-health files | L | L | |
-| #415 | Self-hosted KVM Woodpecker runners | H | L | |
 | #359 | legal/processor ADR | M | L | |
-| #63 | Service desk tooling spike | M | L | |
 
 ---
 
