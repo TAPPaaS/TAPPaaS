@@ -138,13 +138,13 @@ How network:proxy obtains the public TLS certificate for this domain. OMIT IT to
 
 ### `proxyAllowedZones`
 
-Zones (and the literal 'internet') permitted to reach this service through the reverse proxy. network:proxy compiles this into an os-caddy access list (allow-list by client subnet) attached to the handler; non-matching clients get HTTP 403. On a site with IPv6, each zone's IPv6 network is allowed next to its IPv4 one. Under ADR-021 D2 this is the ONLY place a zone restricts a published service: split-horizon DNS returns the same address (the DMZ gateway) to every caller, so the answer encodes no entitlement and the access list is what narrows it.
+Zones (and the literal 'internet') permitted to reach this service through the reverse proxy — or networks named directly, as a.b.c.d/n or x:y::/n: a provider's published caller range, for an endpoint one cloud service must reach without opening it to the whole internet. A malformed network is refused, like an unknown zone. network:proxy compiles this into an os-caddy access list (allow-list by client subnet) attached to the handler; non-matching clients get HTTP 403. On a site with IPv6, each zone's IPv6 network is allowed next to its IPv4 one. Under ADR-021 D2 this is the ONLY place a zone restricts a published service: split-horizon DNS returns the same address (the DMZ gateway) to every caller, so the answer encodes no entitlement and the access list is what narrows it.
 
 | Attribute | Value |
 |---|---|
 | Type | `array` |
 | Default | <internal default: every Active 'Service' zone plus home, work and mgmt — NOT the internet> |
-| Example | `mgmt`, `home`, `work`, `srvHome`, `srvWork` |
+| Example | `mgmt`, `home`, `52.112.0.0/14` |
 | Required by | *(none)* |
 | Used by | `network:proxy` |
 | Change class | `in-place` |

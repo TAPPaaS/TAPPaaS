@@ -97,6 +97,26 @@ proxy_unbound_prune_owned() {
     fi
 }
 
+# proxy_cidr_kind <entry> — "cidr" for a well-formed IPv4 or IPv6 network
+# (a.b.c.d/n, n ≤ 32; or hex groups with ':' and /n, n ≤ 128), "bad" for an entry
+# that tries to be one and is malformed, "" for anything else (a zone name).
+# Pure; the caller decides what a "bad" means (a hard error, like #419).
+proxy_cidr_kind() {
+    local e="$1" a b c d n
+    if [[ "${e}" == */* || "${e}" =~ ^[0-9.]+$ || "${e}" == *:* ]]; then
+        if [[ "${e}" =~ ^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})/([0-9]{1,2})$ ]]; then
+            a=${BASH_REMATCH[1]} b=${BASH_REMATCH[2]} c=${BASH_REMATCH[3]} d=${BASH_REMATCH[4]} n=${BASH_REMATCH[5]}
+            (( 10#$a <= 255 && 10#$b <= 255 && 10#$c <= 255 && 10#$d <= 255 && 10#$n <= 32 )) && { echo cidr; return; }
+        elif [[ "${e}" =~ ^[0-9a-fA-F:]+/([0-9]{1,3})$ && "${e}" == *:* ]]; then
+            n=${BASH_REMATCH[1]}
+            (( 10#$n <= 128 )) && [[ "${e}" != *:::* ]] && { echo cidr; return; }
+        fi
+        echo bad
+        return
+    fi
+    echo ""
+}
+
 # proxy_resolve_access_list <module> <module_json> <zones_file> <description>
 # Echoes the access-list name to attach (empty string when public). Returns
 # non-zero on a hard error (caller should die).
@@ -150,9 +170,17 @@ proxy_resolve_access_list() {
     # away installed clean and locked every private-zone client out of Home
     # Assistant. A reduced allow-list is a security-relevant divergence from the
     # declared intent, and the operator must be told, not left to discover it.
+    # An entry may also be a network itself (#656): a provider's published
+    # caller range, for an endpoint one cloud service must reach. It goes into
+    # the same remote_ip list as the zones' networks. A malformed one is refused
+    # like an unknown zone — a typo must not widen or empty the list.
     local cidrs="" cidr
-    local -a unresolved=()
+    local -a unresolved=() malformed=()
     for z in "${zones[@]}"; do
+        case "$(proxy_cidr_kind "${z}")" in
+            cidr) cidrs="${cidrs:+${cidrs},}${z}"; continue ;;
+            bad)  malformed+=("${z}"); continue ;;
+        esac
         cidr=$(jq -r --arg z "${z}" '.[$z].ip // empty' "${zones_file}" 2>/dev/null)
         if [[ -z "${cidr}" ]]; then
             unresolved+=("${z}")
@@ -160,6 +188,12 @@ proxy_resolve_access_list() {
         fi
         cidrs="${cidrs:+${cidrs},}${cidr}"
     done
+
+    if [[ ${#malformed[@]} -gt 0 ]]; then
+        error "proxyAllowedZones for '${module}' has ${#malformed[@]} malformed network(s): ${malformed[*]}" >&2
+        error "  Write a network as a.b.c.d/n (IPv4) or x:y::/n (IPv6) — refused rather than guessed." >&2
+        return 1
+    fi
 
     if [[ ${#unresolved[@]} -gt 0 ]]; then
         error "proxyAllowedZones for '${module}' names ${#unresolved[@]} zone(s) that do not resolve in ${zones_file}: ${unresolved[*]}" >&2

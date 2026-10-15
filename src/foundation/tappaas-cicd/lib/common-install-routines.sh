@@ -1263,8 +1263,22 @@ validate_module_zone_refs() {
         jq -e --arg z "$r" 'has($z)' "$zones_file" >/dev/null 2>&1
     }
 
+    # proxyAllowedZones may also name a network (#656): a well-formed CIDR is
+    # taken as written, a malformed one is refused here, before anything exists.
+    _zref_cidr() {
+        local e="$1"
+        [[ "$e" =~ ^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})/([0-9]{1,2})$ ]] \
+            && (( 10#${BASH_REMATCH[1]} <= 255 && 10#${BASH_REMATCH[2]} <= 255 && 10#${BASH_REMATCH[3]} <= 255 \
+                  && 10#${BASH_REMATCH[4]} <= 255 && 10#${BASH_REMATCH[5]} <= 32 )) && return 0
+        [[ "$e" == *:* && "$e" =~ ^[0-9a-fA-F:]+/([0-9]{1,3})$ ]] && (( 10#${BASH_REMATCH[1]} <= 128 )) && return 0
+        return 1
+    }
     while IFS= read -r ref; do
         [[ -n "$ref" ]] || continue
+        if [[ "$ref" == */* || "$ref" == *:* ]]; then
+            _zref_cidr "$ref" || bad+=("proxyAllowedZones:${ref} (malformed network)")
+            continue
+        fi
         _zref_known "$ref" || bad+=("proxyAllowedZones:${ref}")
     done < <(jq -r '(.proxyAllowedZones // []) | .[]' "$module_json" 2>/dev/null)
 
@@ -1273,7 +1287,7 @@ validate_module_zone_refs() {
         _zref_known "$ref" || bad+=("egress.to:${ref}")
     done < <(jq -r '(.egress // []) | .[].to // empty' "$module_json" 2>/dev/null)
 
-    unset -f _zref_known
+    unset -f _zref_known _zref_cidr
 
     if [[ ${#bad[@]} -gt 0 ]]; then
         error "Module '${YW}${module}${CL}' references ${#bad[@]} zone(s) that do not exist in zones.json:"
