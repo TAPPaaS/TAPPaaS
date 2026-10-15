@@ -60,7 +60,7 @@ if [[ -n "$gui" ]]; then pass "Firewall web GUI answering on https://${FW_IP}:${
 else warn "Firewall web GUI not answering on 443/8443 (may still be booting)"; fi
 
 # 5. Internal DNS resolves the firewall name to the firewall.
-int_ip="$(getent hosts firewall.mgmt.internal 2>/dev/null | awk '{print $1}' | head -1)"
+int_ip="$(getent ahostsv4 firewall.mgmt.internal 2>/dev/null | awk '{print $1}' | head -1)"
 if [[ "$int_ip" == "$FW_IP" ]]; then pass "Internal DNS: firewall.mgmt.internal → ${FW_IP}"
 elif [[ -n "$int_ip" ]]; then warn "Internal DNS: firewall.mgmt.internal → ${int_ip} (expected ${FW_IP})"
 else fail "Internal DNS cannot resolve firewall.mgmt.internal (resolver = ${FW_IP}?)"; fi

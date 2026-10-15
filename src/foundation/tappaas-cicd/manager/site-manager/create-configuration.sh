@@ -364,7 +364,7 @@ discover_cluster_nodes() {
         local node_fqdn="${node_dns}.${MGMT}.internal"
 
         # Method 1: DNS lookup
-        node_ip=$(getent hosts "$node_fqdn" 2>/dev/null | awk '{print $1}' | head -1 || true)
+        node_ip=$(getent ahostsv4 "$node_fqdn" 2>/dev/null | awk '{print $1}' | head -1 || true)
 
         # Method 2: Query the node directly
         if [[ -z "$node_ip" ]]; then

@@ -51,7 +51,7 @@ coturn_converge_public_name() {
         return 0
     fi
 
-    coturn_ip="$(getent hosts "${coturn_host}" | awk '{print $1; exit}' || true)"
+    coturn_ip="$(getent ahostsv4 "${coturn_host}" | awk '{print $1; exit}' || true)"
     if [[ -z "${coturn_ip}" ]]; then
         warn "  could not resolve ${coturn_host} — split-horizon record for ${COTURN_PUBLIC} not registered"
         return 0

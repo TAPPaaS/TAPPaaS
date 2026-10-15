@@ -74,7 +74,9 @@ coturn_allow_peer() {
         # `|| true`: until the name exists getent fails, and under the callers'
         # `set -euo pipefail` that failed assignment ended the whole service script
         # on the first try — silently, with no wait at all (nextcloud-hpb install).
-        ip="$(getent hosts "${host}" | awk '{print $1; exit}' || true)"
+        # IPv4 only: the allowed-peer list is IPv4 (coturn.nix), and on an IPv6
+        # site `getent hosts` answers with the AAAA first.
+        ip="$(getent ahostsv4 "${host}" | awk '{print $1; exit}' || true)"
         [[ "${ip}" =~ ^[0-9.]+$ ]] && break
         sleep 5
     done
