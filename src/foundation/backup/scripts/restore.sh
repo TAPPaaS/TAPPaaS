@@ -24,6 +24,9 @@
 #                               the backup of --vmid, keeping its name, onboot and
 #                               network devices — RESTORE.md §2, `backup-manager
 #                               restore restore <module> --from <src>` (#729)
+#   -y, --yes                   Overwrite the module's own guest without asking — for a
+#                               script or an agent with no terminal. Not --replace:
+#                               that one restores ANOTHER guest's backup into it
 #   -l, --list                  List available backups for a VMID
 #   --list-all                  List all available backups
 #   -h, --help                  Show this help message
@@ -48,6 +51,8 @@ Options:
                               backup of --vmid, keeping its name, onboot and network
                               devices, so its DNS, DHCP reservation and firewall
                               rules still hold (RESTORE.md §2). Left stopped.
+  -y, --yes                   Overwrite the module's own guest without asking (no
+                              terminal: a script or an agent). Not --replace.
   --start / --no-start        A plain restore (no --target-vmid): start the guest
                               afterwards, or don't. Neither: asked on a terminal;
                               with none (backup-manager over ssh), left stopped.
@@ -125,6 +130,7 @@ TARGET_STORAGE=""
 BACKUP_ID=""
 TARGET_VMID=""
 REPLACE=false
+ASSUME_YES=false
 START=""   # yes | no | "" = ask, when there is someone to ask
 LIST_MODE=false
 LIST_ALL_MODE=false
@@ -154,6 +160,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --replace)
       REPLACE=true
+      shift
+      ;;
+    -y|--yes)
+      ASSUME_YES=true
       shift
       ;;
     --start)
@@ -349,13 +359,16 @@ if [ "$VM_EXISTS" = "yes" ]; then
     printf '%s\n' "${IDENTITY}" | sed 's/^/    /'
   else
     info "VM ${RESTORE_VMID} already exists on ${TARGET_NODE}"
-    # No terminal (backup-manager over ssh, a script): nobody to ask — the
-    # flag that says so is --replace (#729 §3).
-    [ -t 0 ] || die "VM ${RESTORE_VMID} exists and there is no terminal to confirm on — pass --replace to overwrite it"
-    read -p "Do you want to overwrite it? (yes/no): " CONFIRM
-    if [ "$CONFIRM" != "yes" ]; then
-      echo "Restore cancelled by user"
-      exit 0
+    # No terminal (backup-manager over ssh, a script, an agent): nobody to ask,
+    # so the consent is the flag. Not --replace — that restores ANOTHER guest's
+    # backup into this one and leaves it stopped with its links down (#829).
+    if [ "${ASSUME_YES}" != true ]; then
+      [ -t 0 ] || die "VM ${RESTORE_VMID} exists and there is no terminal to confirm on — pass --yes to overwrite it (backup-manager restore restore <module> --yes)"
+      read -p "Do you want to overwrite it? (yes/no): " CONFIRM
+      if [ "$CONFIRM" != "yes" ]; then
+        echo "Restore cancelled by user"
+        exit 0
+      fi
     fi
   fi
   # Stopping an HA-managed VM is NOT `qm stop; sleep`. `qm stop` hands a request

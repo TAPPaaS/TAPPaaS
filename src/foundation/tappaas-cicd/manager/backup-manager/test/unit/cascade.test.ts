@@ -512,6 +512,10 @@ check(!retentionValid("7") && !retentionValid("7x") && !retentionValid(""), "inv
     "--node defaults to the node the module is declared on");
   check(onNode(["--node", "tappaas3"]) === "--vmid 921 --node tappaas3",
     "an explicit --node wins");
+  // #829: an in-place restore is confirmed with --yes, passed to restore.sh — not
+  // turned into --replace, which restores ANOTHER guest and leaves it stopped.
+  check(args(["--yes"]) === "--vmid 921 --yes", "--yes reaches restore.sh for an in-place restore");
+  check(!args(["--yes"]).includes("--replace"), "…and is not turned into --replace");
 }
 
 // ── #544: discovery is shape-based, not a deny-list ───────────────────

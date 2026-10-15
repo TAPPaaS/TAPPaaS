@@ -131,7 +131,12 @@ The direct route: overwrite the running guest with the snapshot.
 
 ```bash
 backup-manager restore restore nextcloud     # prompts before overwriting
+backup-manager restore restore nextcloud --yes   # no prompt: a script or an agent
 ```
+
+Without a terminal (over ssh with no tty, from a script or an agent) there is
+nobody to answer the prompt, so the restore stops unless `--yes` gives the
+consent up front.
 
 This will:
 

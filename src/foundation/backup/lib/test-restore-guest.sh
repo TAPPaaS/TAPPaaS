@@ -44,6 +44,12 @@ ck "a container backup's VMID"    312 "$(restore_volid_vmid backup/ct/312/2026-1
 restore_volid_vmid "vm/311" >/dev/null; rc=$?
 ck "no VMID in it: refused"       1 "${rc}"
 
+echo "── an in-place restore without a terminal (#829) ──"
+ck "--yes is an option of restore.sh"            yes "$(has -- '-y\|--yes)')"
+ck "…which skips the overwrite question"         yes "$(has 'if \[ "\$\{ASSUME_YES\}" != true \]; then')"
+ck "no terminal and no --yes names --yes"        yes "$(has 'pass --yes to overwrite it \(backup-manager restore restore <module> --yes\)')"
+ck "…not --replace, which means another guest"   no  "$(has 'there is no terminal to confirm on — pass --replace')"
+
 echo "── --replace keeps what makes it the platform's guest (RESTORE.md §2) ──"
 qcfg='agent: enabled=1
 boot: order=scsi0

@@ -115,7 +115,7 @@ export const HELP: HelpSpec = {
     },
     { usage: "restore list <module>", name: "restore list" },
     {
-      usage: "restore restore <module> [--from M|VMID] [--node N] [--storage S] [--backup-id ID] [--target-vmid ID]",
+      usage: "restore restore <module> [--from M|VMID] [--node N] [--storage S] [--backup-id ID] [--target-vmid ID] [--yes]",
       name: "restore restore",
       hidden: ["-n N", "-s S", "-b ID", "-t ID"],
       options: [
@@ -124,6 +124,7 @@ export const HELP: HelpSpec = {
         ["--backup-id ID", "The snapshot to restore (default: the latest; see 'restore list')."],
         ["--target-vmid ID", "Restore as a new VM id instead of over the module's own."],
         ["--from M|VMID", "Restore ANOTHER guest's backup into this module's guest, replacing its disks and keeping its network identity (RESTORE.md §2)."],
+        ["--yes", "Overwrite the module's own guest without asking — for a script or an agent with no terminal."],
       ],
     },
     { usage: "restore list-all", name: "restore list-all" },
@@ -1006,7 +1007,9 @@ function cmdRestore(opts: Opts, client: Client): number {
     case "restore": {
       const module = opts.rest[1];
       if (!module) die("restore restore: <module> required");
-      return restoreRun(deps, module, opts.rest.slice(2));
+      // --yes is read as a global flag; restore.sh needs it to overwrite the
+      // module's own guest with no terminal to ask on (#829).
+      return restoreRun(deps, module, [...opts.rest.slice(2), ...(opts.yes ? ["--yes"] : [])]);
     }
     case "list-all":
       return restoreListAll(opts.configDir);
