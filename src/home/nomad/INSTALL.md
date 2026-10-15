@@ -5,8 +5,8 @@ Primary audience: TAPPaaS admin.
 ## Prerequisites
 
 - The foundation installed, identity included.
-- Disk for the libraries you want (see *Choosing content* below); the default 64 GB holds a
-  small selection.
+- Disk for the libraries you want (see *Choosing content* below); the default 128 GB holds a
+  local-language and the English Wikipedia.
 
 ## Install
 

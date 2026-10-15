@@ -39,8 +39,8 @@ courses and tools, running on hardware you own and usable with no internet.
 
 ## Requirements
 
-- Defaults (from `nomad.json`): VM 370, 2 cores, 4 GB RAM, 64 GB disk on `tanka1`. Libraries are
-  large — the English Wikipedia with pictures is about 100 GB — so grow the disk for them
+- Defaults (from `nomad.json`): VM 370, 2 cores, 4 GB RAM, 128 GB disk on `tanka1` — enough for a
+  local-language Wikipedia and the English one. Larger selections need more
   (`module-manager module modify nomad --set diskSize=…`); automatic disk growth also extends it.
 
 ## Dependencies
