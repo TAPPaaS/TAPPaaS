@@ -6,6 +6,7 @@
 # Hashes to refresh:
 #   src.hash        nix-prefetch-git (fetchSubmodules = false)
 #   phpJwt sha256   nix-prefetch-url --unpack <github-archive-of-new-rev>
+#                   (same hash for the submodules; fetchFromGitHub takes it)
 #   npmDepsHash     prefetch-npm-deps <src-path>/npm-shrinkwrap.json
 #   documentFormats / documentTemplates: the submodule commits of the new tag
 #
@@ -15,13 +16,16 @@
 #   without composer (it segfaults on our hosts): copy php-jwt's src there and
 #   rewrite its namespace. No vendor/ directory or composer autoloader is shipped.
 #
-# NODE: pinned to nodejs_22, which builds on both nixos-25.11 and nixos-26.05.
-#   It was nodejs_20 until 26.05 marked that end-of-life and refused to evaluate
-#   it, which stopped the estate's release move dead (the connector is the only
-#   thing in the tree that pinned a Node). Do not "fix" a future refusal with
-#   nixpkgs.config.permittedInsecurePackages: that ships a runtime with known
-#   vulnerabilities to every site running Nextcloud, to avoid a version bump.
-{ lib, stdenv, fetchgit, fetchurl, fetchNpmDeps, buildNpmPackage, nodejs_22 }:
+# NIXPKGS: everything here comes from the estate nixpkgs pin
+#   (src/foundation/templates/flake.lock, applied by update-os.sh): the
+#   default nodejs, fetchgit and fetchFromGitHub. Do not pin a Node version or
+#   reach for nixpkgs.config.permittedInsecurePackages when the pin moves:
+#   fix the build against the pin's default.
+#   The only hand-pins are what nixpkgs cannot provide: the connector release,
+#   its two asset submodules at the commits the tag records, and php-jwt at
+#   the commit in the tag's composer.lock (nixpkgs packages no php-jwt, and
+#   the app needs that exact release under its own namespace).
+{ lib, stdenv, fetchgit, fetchFromGitHub, buildNpmPackage }:
 
 let
   version = "11.0.6";
@@ -40,7 +44,6 @@ let
   jsBuild = buildNpmPackage {
     pname = "eurooffice-nextcloud-js";
     inherit version src;
-    nodejs = nodejs_22;
     npmDepsHash = "sha256-49bL+Nls0p3p74nUYH7MX3BZ5HBexER+wQmgwAWC94g=";
     dontNpmInstall = true;
     buildPhase = "npm run build";
@@ -52,8 +55,10 @@ let
   # an ONLYOFFICE repo up to v11.0.5). fetchgit with fetchSubmodules=false
   # leaves the directory empty; fetch separately. Commit 46995828 is the
   # submodule pin in v11.0.6.
-  documentFormats = builtins.fetchTarball {
-    url = "https://github.com/Euro-Office/document-formats/archive/46995828084d4460112efec579499809f418ca6e.tar.gz";
+  documentFormats = fetchFromGitHub {
+    owner = "Euro-Office";
+    repo = "document-formats";
+    rev = "46995828084d4460112efec579499809f418ca6e";
     sha256 = "1pfsszzlasgxv31a5iqsijdn9m3hjb0c08dh09sv54a2wsqi3hf9";
   };
 
@@ -63,16 +68,18 @@ let
   # Contains new/default/new.docx (and .pdf/.pptx/.xlsx; was default/ before the
   # Euro-Office fork, the app reads new/ since v11.0.6) served by the /empty endpoint
   # that euro-office uses during its health-check conversion round-trip.
-  documentTemplates = builtins.fetchTarball {
-    url = "https://github.com/Euro-Office/document-templates/archive/d697ab3d75dbec104e4a99f47852398752cb2ace.tar.gz";
+  documentTemplates = fetchFromGitHub {
+    owner = "Euro-Office";
+    repo = "document-templates";
+    rev = "d697ab3d75dbec104e4a99f47852398752cb2ace";
     sha256 = "0499b4jrrk2hsjfsbjswkzff6kcyg69j4nq4mm4h837wmwqbx7gv";
   };
 
   # firebase/php-jwt v7.2.1 — the commit in v11.0.6's composer.lock (^7.0).
-  # Uses builtins.fetchTarball (Nix daemon HTTP) to bypass the nixpkgs 25.11
-  # fetchurl curl bug (curl binary missing from nativeBuildInputs).
-  phpJwt = builtins.fetchTarball {
-    url = "https://github.com/firebase/php-jwt/archive/0501f5729b9e2448516674aff07c7d1727869b8e.tar.gz";
+  phpJwt = fetchFromGitHub {
+    owner = "googleapis"; # composer.lock source; github.com/firebase/php-jwt redirects here
+    repo = "php-jwt";
+    rev = "0501f5729b9e2448516674aff07c7d1727869b8e";
     sha256 = "147x7z476ni2i5yxyvs2hk5hza5gb3pz838ahl8jrygipkrm0kdz";
   };
 
