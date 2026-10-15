@@ -136,8 +136,20 @@ let
     [ -n "$url" ] || url="http://$(${pkgs.nettools}/bin/hostname -f):8080"
     sed -i '/^NOMAD_URL=/d' "$env"
     echo "NOMAD_URL=$url" >> "$env"
-    exec ${pkgs.docker-compose}/bin/docker-compose -p project-nomad -f ${compose} \
-      --env-file "$env" up -d --remove-orphans
+    # A first boot can reach this before the VM resolves names (the first pull
+    # failed on "lookup ghcr.io: no such host"): wait for DNS, and retry the
+    # pull rather than fail the activation on a transient.
+    for i in $(seq 1 30); do
+      ${pkgs.glibc.bin}/bin/getent hosts ghcr.io >/dev/null && break
+      sleep 10
+    done
+    for i in 1 2 3 4 5; do
+      ${pkgs.docker-compose}/bin/docker-compose -p project-nomad -f ${compose} \
+        --env-file "$env" up -d --remove-orphans && exit 0
+      echo "project-nomad: up failed (attempt $i of 5), retrying in 30 s" >&2
+      sleep 30
+    done
+    exit 1
   '';
 in
 {
