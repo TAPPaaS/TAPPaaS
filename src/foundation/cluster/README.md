@@ -80,13 +80,17 @@ reaches two nodes, and the health check (`quorum`) keeps saying so.
 
 The fix is a third vote: a **QDevice** — `corosync-qnetd` on a small always-on
 Debian machine that is not a node (a `debianhost`, or the satellite). It holds no
-guests and needs almost no resources; it must reach the nodes on TCP 5403.
+guests and needs almost no resources; the nodes must reach it on TCP 5403.
 
-1. On that machine: `apt install corosync-qnetd`
-2. On every node: `apt install corosync-qdevice`
-3. On one node: `pvecm qdevice setup <machine's address>` — it asks once for the
-   machine's root password, to exchange certificates.
-4. Check: `pvecm status` lists the Qdevice, and *Expected votes* is 3.
+    site-manager node qdevice add <host>        # --user root if not the tappaas user
+    site-manager node qdevice status
+    site-manager node qdevice remove
+
+`add` installs `corosync-qnetd` on the host and `corosync-qdevice` on every node,
+lets the first node log in to the host as root once (to exchange certificates),
+and runs `pvecm qdevice setup`; `pvecm status` then lists the Qdevice and
+*Expected votes* is 3. It restarts corosync on every node, so run it in a quiet
+moment.
 
 A third node does the same and adds capacity. A QDevice with three nodes is not
 needed (and Proxmox advises against it on an odd number of nodes).

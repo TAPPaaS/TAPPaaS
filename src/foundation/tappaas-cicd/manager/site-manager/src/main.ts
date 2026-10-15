@@ -105,6 +105,13 @@ export const HELP: HelpSpec = {
         ["(default)", "Preview the reboot's impact — which HA services drain where. Changes nothing."],
         ["--apply", "Perform the controlled reboot (drain HA services, reboot, rejoin, fail back)."],
       ] },
+    { usage: "node qdevice add <host> [--user <u>] [--force] | remove | status",
+      options: [
+        ["add <host>", "A third vote for a two-node cluster: corosync-qnetd on <host> (a small always-on Debian machine, not a node), corosync-qdevice on every node, then pvecm qdevice setup. Restarts corosync on every node."],
+        ["--user <u>", "How the mothership logs in to <host> (default tappaas, with sudo; root works too)."],
+        ["--force", "Also on an odd number of nodes, which Proxmox does not support."],
+        ["remove", "pvecm qdevice remove; the packages stay."],
+      ] },
     { usage: "node reconcile [--apply]",
       options: [["--apply", "Register nodes that joined the cluster (default is preview)."]] },
     { usage: "repository list [--json]", note: "(alias: repo)" },
@@ -761,6 +768,26 @@ function cmdNode(o: Opts, client: SiteClient): void {
     const r = spawnSync(script, [mode, name], { stdio: "inherit" });
     const rc = r.status ?? -1;
     if (rc !== 0) die(`reboot-node.sh exited ${rc}`);
+    return;
+  }
+
+  if (sub === "qdevice") {
+    const action = o.rest[1];
+    if (!["add", "remove", "status"].includes(action ?? "")) die("node qdevice: add <host> | remove | status");
+    const script = clusterScript("qdevice.sh");
+    if (!script) die("qdevice.sh not found — is the cluster module installed? (module-manager show cluster)");
+    const args = [action as string];
+    if (action === "add") {
+      const host = o.rest[2];
+      if (!host) die("node qdevice add <host>");
+      args.push(host);
+      const user = o.flags.get("--user");
+      if (user) args.push("--user", user);
+      if (o.force) args.push("--force");
+    }
+    const r = spawnSync(script, args, { stdio: "inherit" });
+    const rc = r.status ?? -1;
+    if (rc !== 0) die(`qdevice.sh exited ${rc}`);
     return;
   }
 

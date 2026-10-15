@@ -613,7 +613,7 @@ export function checkQuorum(client: ClusterClient): CheckResult {
     return {
       name: "quorum",
       status: "warn",
-      detail: "two votes, no QDevice: one node down and the other loses quorum and is fenced — add a QDevice (cluster/README.md, Two-node clusters) or a third node",
+      detail: "two votes, no QDevice: one node down and the other loses quorum and is fenced — add one: site-manager node qdevice add <host> — or a third node",
     };
   }
   return { name: "quorum", status: "pass", detail: `${q.expectedVotes} vote(s)${q.qdevice ? " incl. a QDevice" : ""}` };

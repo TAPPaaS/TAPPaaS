@@ -36,6 +36,7 @@ node               node list [--json]
                    node delete <name> [--apply] [--shutdown|--erase|--lost]
                                [--config-only]
                    node reconcile [--apply]
+                   node qdevice add <host> [--user <u>] [--force] | remove | status
 repository         repository list [--json]
                    repository add <url> [--branch <b>] [--managed full|tracked] [--catalog <p>]
                    repository delete <name> [--force]

@@ -33,7 +33,7 @@ check(pool.length === 1 && pool[0].includes("sdc") && !pool[0].includes("disk/by
 check(pxeDiskProblems("sda", ["tanka1=single:nvme0n1"]).length === 2, "both refused at once");
 
 // #835: two votes and no QDevice — the survivor of a node failure fences itself.
-check(quorumAdvice(2, false).includes("loses quorum") && quorumAdvice(2, false).includes("QDevice"),
+check(quorumAdvice(2, false).includes("loses quorum") && quorumAdvice(2, false).includes("node qdevice add"),
   "two nodes without a QDevice: warned, with the way out");
 check(quorumAdvice(3, false) === "" && quorumAdvice(2, true) === "" && quorumAdvice(1, false) === "",
   "three votes, a QDevice, or a single node: nothing to say");

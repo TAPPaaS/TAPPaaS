@@ -572,8 +572,8 @@ function joinAndCapture(
 export function quorumAdvice(expectedVotes: number, qdevice: boolean): string {
   if (expectedVotes !== 2 || qdevice) return "";
   return "the cluster has two votes: when one node is down the other loses quorum and HA fences it, " +
-    "firewall included. Add a third vote — a QDevice on a small always-on machine (cluster/README.md, " +
-    "*Two-node clusters*) — or a third node";
+    "firewall included. Add a third vote — site-manager node qdevice add <host> on a small always-on " +
+    "Debian machine — or a third node";
 }
 
 function twoNodeWarning(nodeIp: string): void {
