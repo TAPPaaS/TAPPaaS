@@ -113,6 +113,35 @@ else
     test_result "DNS resolves $DNS_NAME to $VMIP" 1
 fi
 
+# Test 2b: the AAAA record. A zone with IPv6 gets its addresses from the router,
+# not from zones.json, so what to expect comes from the VM itself (guest agent):
+# with a global IPv6 address, every AAAA answer must be one of its addresses —
+# a missing or stale record fails; without one, there must be no AAAA, which
+# would point at some other machine. No guest agent: nothing to compare.
+echo "2b. DNS resolution test (IPv6)..."
+VMIP6S=$(ssh "root@${NODE}.${MGMT}.internal" "qm guest cmd ${VMID} network-get-interfaces" 2>/dev/null | \
+    jq -r '.[] | select(.name | test("^lo$") | not) | ."ip-addresses"[]? | select(."ip-address-type" == "ipv6") | ."ip-address"' 2>/dev/null | \
+    grep -viE '^(fe80:|::1$)' | tr '[:upper:]' '[:lower:]' | sort -u)
+RESOLVED6=$(getent ahostsv6 "$DNS_NAME" 2>/dev/null | awk '{print tolower($1)}' | grep -v '^::ffff:' | sort -u)
+if [ -z "$VMIP6S" ] && ! ssh "root@${NODE}.${MGMT}.internal" "qm guest cmd ${VMID} ping" >/dev/null 2>&1; then
+    echo "  no guest agent — the VM's IPv6 addresses are unknown, not checked"
+elif [ -n "$VMIP6S" ]; then
+    stale=$(comm -23 <(echo "$RESOLVED6") <(echo "$VMIP6S") | grep . || true)
+    if [ -n "$RESOLVED6" ] && [ -z "$stale" ]; then
+        test_result "DNS resolves $DNS_NAME to its IPv6 address ($(echo "$RESOLVED6" | head -1))" 0
+    else
+        echo "  VM has: $(echo $VMIP6S)  DNS answers: ${RESOLVED6:-nothing}"
+        test_result "DNS resolves $DNS_NAME to its IPv6 address" 1
+    fi
+else
+    if [ -z "$RESOLVED6" ]; then
+        test_result "no AAAA for $DNS_NAME (the VM has no global IPv6 address)" 0
+    else
+        echo "  VM has no global IPv6 address, DNS answers: $(echo $RESOLVED6)"
+        test_result "no AAAA for $DNS_NAME (the VM has no global IPv6 address)" 1
+    fi
+fi
+
 # Test 3: Ping by DNS name
 echo "3. Ping test (by DNS name)..."
 ping -c 3 -W 5 "$DNS_NAME" >/dev/null 2>&1
