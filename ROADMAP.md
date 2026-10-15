@@ -207,7 +207,7 @@ New capabilities with low upgrade risk.
 
 ### G4.1 Alerting & cluster resilience — Ease M · Risk M · released: 7 · done for 2.3: 3 · open: 4
 
-Be told when something breaks, and survive more of it. Built: alerts from Loki by mail, every VM's logs in Loki, a credential per pushing VM, container severities from the line, each line's own timestamp, a release CVE preview with majors gated at the boundary (#788). Next: a notice when a whole site goes dark (#776), a mail relay (#125), a second corosync link (#590).
+Be told when something breaks, and survive more of it. Built: alerts from Loki by mail, every VM's logs in Loki, a credential per pushing VM, container severities from the line, each line's own timestamp, a release CVE preview with majors gated at the boundary (#788); two-node quorum with a QDevice verb (#835), HA failover only to nodes that carry the guest's bridges (#836), a site-timezone gate (#837). Next: a notice when a whole site goes dark (#776), a mail relay (#125), a second corosync link (#590).
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
@@ -281,7 +281,7 @@ Low upgrade risk. Build continuously, in any order within a group.
 
 ### G3.1 cluster:vm lifecycle & capacity — Ease L · Risk M · released: 18 · done for 2.3: 9 · open: 3
 
-Guests sized, placed, started and stopped right: memory defaults from measurement (#663), moving a running guest to another node (#825), a readiness wait that skips UDP ports (#826), hardware drift (#531), shutdown and boot order (#36, #127), storage growth and placement (#100, #403), a composite-module ADR (#761), and a sweep that survives a guest restarting itself (#753).
+Guests sized, placed, started and stopped right: memory defaults from measurement (#663), moving a running guest to another node (#825), a readiness wait that skips UDP ports (#826), hardware drift (#531), shutdown and boot order (#36, #127), storage growth and placement (#100, #403), a composite-module ADR (#761), and a sweep that survives a guest restarting itself (#753). Built from the 2.0→2.2 field report (#832): a capacity pre-flight before the sweep (#833) and visible size changes on legacy sites (#834). Next by design: dynamic placement on PVE 9.2's load balancer (#838).
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
