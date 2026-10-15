@@ -59,6 +59,26 @@ msg_error() {
   echo -e "${BFR} ${CROSS} ${RD}${msg}${CL}"
 }
 
+# with_dots <log> <command...>
+#
+# Run a long command with one dot per line of its output, so a step that takes
+# minutes shows it is alive (#266). The full output goes to <log>; on failure the
+# last lines are shown. Ends the dots with a newline: msg_ok/msg_error clear only
+# the current terminal line, and a long run of dots wraps over several.
+with_dots() {
+  local log="$1" rc=0
+  shift
+  set +e
+  "$@" 2>&1 | tee -a "${log}" | while IFS= read -r _; do printf '.'; done
+  rc=${PIPESTATUS[0]}
+  set -e
+  echo
+  if [ "${rc}" -ne 0 ]; then
+    tail -n 5 "${log}" | sed 's/^/    /'
+  fi
+  return "${rc}"
+}
+
 # fetch <url> <dest> [mode]
 #
 # Robust download used for every remote file in this bootstrap (issue #175).
@@ -560,10 +580,12 @@ fi
 # curl -fsSL https://pkgs.netbird.io/install.sh | sh
 
 
-msg_info "Updating Proxmox VE (Patience)"
-apt update &>/dev/null || msg_error "apt update failed"
-apt -y dist-upgrade &>/dev/null || msg_error "apt dist-upgrade failed"
-msg_ok "Updated Proxmox VE"
+msg_info "Updating Proxmox VE (Patience — a dot per package step; log: /root/tappaas/pve-update.log)"
+: > /root/tappaas/pve-update.log
+_upd_ok=1
+with_dots /root/tappaas/pve-update.log apt-get update || { _upd_ok=0; msg_error "apt update failed"; }
+with_dots /root/tappaas/pve-update.log apt-get -y dist-upgrade || { _upd_ok=0; msg_error "apt dist-upgrade failed"; }
+[ "${_upd_ok}" -eq 1 ] && msg_ok "Updated Proxmox VE"
 
 echo "The TAPPaaS post proxmox install script was run" "$(date)" >/var/log/tappaas.step1
 msg_ok "Completed TAPPaaS base post-install"
