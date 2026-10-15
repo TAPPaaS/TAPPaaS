@@ -86,6 +86,14 @@ alone can say so:
 | `manual` | `storage` | reported; moving a disk stays an operator action |
 | `immutable` / `recreate` | `vmid`, `bios`, `image*` | **rejected before anything is written** |
 
+Fields that describe the module itself, owned by no service, are classed in
+`schemas/fields.json`: `description`, `status`, `displayName` and the other
+metadata are written as given; `kind`, `location`, `environment` and the other
+fields the tooling writes are **rejected**; the wiring fields (`dependsOn`,
+`integratesWith`, `provides`, `roles`) are **rejected** too — set alone they
+declare a dependency without wiring it, so change them in the module's JSON and
+update the module.
+
 A `--set` naming an immutable field is rejected *whole* — if any field in one
 command cannot be applied, none of them are written, so config and cluster never
 move apart. A field none of the module's services use is also rejected: writing

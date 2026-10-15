@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | **Accepted** (2026-09-15; v0.9 same day) — P0–P6, D8 and D9 built. Follow-ups: the D9 `adopt` verb; D10 enforcement (the pre-gate refusal, #654). |
+| **Status** | **Accepted** (2026-09-15; v0.9 same day) — P0–P6, D8 and D9 built. Follow-ups: the D9 `adopt` verb. D10 enforcement (the pre-gate refusal, #654) built 2026-10-15. |
 | **Version** | 0.10 |
 | **Date** | 2026-09-16 |
 | **Author** | Lars Rossen |
@@ -260,7 +260,7 @@ The fix is the one D9 implies everywhere else: an automatic grow is a *declared-
 
 **Known cost — `vmtag`.** This is the one field where the decision makes the platform *more* intrusive. Today an undeclared `vmtag` is left alone; afterwards install records the default `TAPPaaS`, and a tag an operator adds through the Proxmox UI becomes `in-place` drift that the converge reverts. Tags are a namespace TAPPaaS shares with humans and other tooling, and `qm set --tags` replaces the whole list. That is at least deterministic and visible where the old behaviour was silent, and `adopt` is the escape — but if it proves annoying in practice, `vmtag` is the one field worth exempting from install-time recording.
 
-### D10. The module-level fields are declared too — enforcement deferred to #654
+### D10. The module-level fields are declared too — enforced since 2026-10-15 (#654)
 
 D9 governs a field a *service* owns. The other 19 — `usedBy` empty or `general`, describing the module itself rather than anything a provider configures — had **no declaration at all**, and the asymmetry showed up first as a documentation problem: every service-owned field's classification sits beside a machine-readable manifest, while these could only be prose.
 
@@ -270,7 +270,9 @@ That was a symptom. The real gap is that the two managers built from this ADR to
 
 **Deliberately NOT shipped now:** the pre-gate still ignores it. Teaching `converge.ts` `network-manager`'s refusal is **#654**, held until ADR-020 has landed across the estate, because it changes what `modify` accepts and that is disruptive to sequence with a rollout. The machinery is not new — the schema-level `changeClass` path already exists and is exercised by `network-manager`; #567 points it at a second manifest.
 
-One taxonomy question is deferred with it. `apply: "none"` plus `class: "in-place"` reads oddly for a field that no converge ever touches: it means "takes effect at once, nothing to refuse" rather than "the converge applies it live". `converge.ts` already labels this situation `config-only`, and #654 is the natural moment to decide whether that becomes an eighth class or stays a synthetic label.
+**Enforced (2026-10-15, #654):** the pre-gate reads `schemas/fields.json` for a field no service owns. `immutable` is refused (the tooling writes it), `manual` is refused (a wiring field set alone wires nothing: change the module's JSON and update it), a field with no declared class is refused as `network-manager` refuses one, and `in-place` is written. Without the manifest in reach, the old behaviour stands with a warning.
+
+One taxonomy question was deferred with it. `apply: "none"` plus `class: "in-place"` reads oddly for a field that no converge ever touches: it means "takes effect at once, nothing to refuse" rather than "the converge applies it live". `converge.ts` already labels this situation `config-only`, and #654 is the natural moment to decide whether that becomes an eighth class or stays a synthetic label. **Decided with #654: it stays a label** — it says where a change lands (config, no converge), while the class says what the change costs, and those are different questions.
 
 ## Scenarios (module-manager)
 

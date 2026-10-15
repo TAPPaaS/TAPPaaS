@@ -37,7 +37,7 @@ import {
   parseServiceFieldManifest,
 } from "../../../lib/ts/src/service-fields";
 import { BL, CL, GN, RD, YW, emitJson, error, info, warn } from "./shlog";
-import { getModuleDir, resolveProviderModule } from "./config";
+import { getModuleDir, resolveProviderModule, siteRepositories } from "./config";
 import { parseDependency } from "./services";
 import { resolveModuleFromConfig } from "./resolve";
 import { runServiceReporter } from "./report";
@@ -217,11 +217,31 @@ export function parseSetArg(arg: string): SetRequest | null {
   return { field: arg.slice(0, eq), value: arg.slice(eq + 1) };
 }
 
+// The module-level manifest, schemas/fields.json (ADR-020 D10): the change
+// class of every field no service owns. Read from the site's repositories (the
+// TAPPaaS one carries it); null when none has it.
+export type ModuleManifest = Record<string, { class?: string } | undefined>;
+export function loadModuleManifest(configDir: string): ModuleManifest | null {
+  for (const r of siteRepositories(configDir)) {
+    if (!r.path) continue;
+    const f = join(r.path, "src", "foundation", "schemas", "fields.json");
+    if (!existsSync(f)) continue;
+    try {
+      const raw = JSON.parse(readFileSync(f, "utf8")) as { fields?: ModuleManifest };
+      if (raw.fields && typeof raw.fields === "object") return raw.fields;
+    } catch {
+      /* try the next repository */
+    }
+  }
+  return null;
+}
+
 export function preGateSet(
   configDir: string,
   module: string,
   requests: SetRequest[],
   schema: Record<string, { usedBy?: string[] } | undefined>,
+  moduleManifest: ModuleManifest | null = loadModuleManifest(configDir),
 ): PreGateResult {
   const rejections: SetRejection[] = [];
   const warnings: string[] = [];
@@ -280,11 +300,39 @@ export function preGateSet(
 
     const usedBy = Array.isArray(spec.usedBy) ? spec.usedBy : [];
     // A 'general' field (or one with no usedBy at all) belongs to the module
-    // itself, not to a provider service: no manifest classifies it, and the
-    // converge has nothing to apply. That is the plain #557 case — correcting a
-    // policy field without a reinstall — so it is allowed, not rejected.
+    // itself, not to a provider service, and the converge has nothing to apply:
+    // writing the config IS the change (the plain #557 case). Whether it may be
+    // written at all is schemas/fields.json's to say (ADR-020 D10, #654) — the
+    // tooling owns some of these, and a wiring field set alone wires nothing.
+    // `config-only` stays a label, not an eighth class: it describes where the
+    // change lands, while the class says what it costs.
     if (usedBy.length === 0 || usedBy.includes("general")) {
-      plan.push({ ...req, coordinate: "", class: "config-only" });
+      if (moduleManifest === null) {
+        warnings.push(`${req.field}: schemas/fields.json not found in the site's repositories — its change class is unknown`);
+        plan.push({ ...req, coordinate: "", class: "config-only" });
+        continue;
+      }
+      const cls = moduleManifest[req.field]?.class;
+      if (!cls) {
+        rejections.push({
+          field: req.field,
+          reason: `schemas/fields.json declares no change class for it — what changing it costs is unknown; declare one before it can be set`,
+        });
+      } else if (CHANGE_CLASSES[cls]?.preGate) {
+        rejections.push({
+          field: req.field,
+          reason: `${cls} — the tooling writes it (install, update, the environment); it is not set by hand`,
+        });
+      } else if (cls === "manual") {
+        rejections.push({
+          field: req.field,
+          reason:
+            `manual — a wiring field: setting it alone would declare a dependency without wiring anything. ` +
+            `Change it in the module's own JSON and update the module, which wires it`,
+        });
+      } else {
+        plan.push({ ...req, coordinate: "", class: "config-only" });
+      }
       continue;
     }
 

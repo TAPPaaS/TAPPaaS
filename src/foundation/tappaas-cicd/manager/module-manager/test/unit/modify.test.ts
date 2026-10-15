@@ -169,6 +169,32 @@ try {
     check(rejected(unknown, "spelling"), "…and points at the likely cause");
   }
 
+  // ── module-level fields, by schemas/fields.json (ADR-020 D10, #654) ───
+  {
+    const MM = {
+      description: { class: "in-place" },
+      kind: { class: "immutable" },
+      location: { class: "immutable" },
+      dependsOn: { class: "manual" },
+    };
+    const sch = { ...SCHEMA, kind: {}, location: { usedBy: ["general"] }, color: { usedBy: ["general"] } };
+    const g2 = (...pairs: string[]) =>
+      preGateSet(configDir, "demo", pairs.map((p) => parseSetArg(p)!), sch, MM);
+    const ok = g2("description=new");
+    check(ok.ok && ok.plan[0].class === "config-only", "an in-place module field is written, labelled config-only");
+    const kind = g2("kind=widget");
+    check(!kind.ok && rejected(kind, "the tooling writes it"), "kind=widget (immutable) is REJECTED: the tooling owns it");
+    check(!g2("location=/tmp").ok, "location=/tmp (immutable) is REJECTED");
+    const dep = g2("dependsOn=cluster:ha");
+    check(!dep.ok && rejected(dep, "wiring field"), "dependsOn (manual) is REJECTED: set alone it wires nothing");
+    const undeclared = g2("color=red");
+    check(!undeclared.ok && rejected(undeclared, "no change class"), "a module field with no declared class is REJECTED");
+    check(!g2("description=x", "kind=widget").ok, "one refused field rejects the whole --set");
+    const none = preGateSet(configDir, "demo", [parseSetArg("description=x")!], sch, null);
+    check(none.ok && none.warnings.some((w) => w.includes("schemas/fields.json not found")),
+      "no module manifest reachable: accepted with a warning, as before");
+  }
+
   // ── reject the WHOLE command (Resolved Question 5) ───────────────────
   {
     const mixed = gate("cores=8", "vmid=250");
