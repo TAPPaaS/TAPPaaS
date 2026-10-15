@@ -18,7 +18,7 @@ backup nor ingress.
 
 | Tier | For whom | Topology | Per-node baseline | Redundancy |
 |------|----------|----------|-------------------|------------|
-| **Evaluation** | Trying/testing TAPPaaS, dev, labs | 1 node (min spec; nested virt OK) | 4 cores / 16 GB RAM / 256 GB boot + 500 GB `tanka1` | none — disposable |
+| **Evaluation** | Trying/testing TAPPaaS, dev, labs | 1 node (min spec; nested virt OK) | 4 cores / 32 GB RAM / 256 GB boot + 500 GB `tanka1` (16 GB only with the foundation sized down — see below) | none — disposable |
 | **Home** | Technically-capable household | 1 strong node | 8+ cores / 32 GB RAM / 512 GB SSD boot + 2×2 TB mirror `tanka1` | disk mirror; single box |
 | **SMB** | Business / NGO, uptime matters | 3-node HA cluster | ~8 cores / 32 GB **ECC** each | HA + ZFS mirror; 3-2-1 backup |
 | **Scale-out** | Many users/tenants, growth | 3 → N nodes, dedicated roles | as SMB, plus role nodes (compute / GPU / storage) | HA + role separation |
@@ -123,16 +123,32 @@ a given model size.
 
 ## Reference: what the platform itself needs
 
-Budget for the foundation services on top of your workloads:
+Budget for the foundation services on top of your workloads. RAM is what each VM
+is configured with by default — Proxmox reserves it whether the guest uses it or not:
 
-| Service | RAM | Storage |
+| Service | RAM (default) | Storage |
 |---------|-----|---------|
-| Proxmox host | 2 GB | 32 GB |
-| OPNsense firewall | 2 GB | 16 GB |
-| TAPPaaS CICD | 4 GB | 64 GB |
-| NixOS template | 1 GB | 10 GB |
+| Proxmox host (incl. ZFS cache) | 2–4 GB | 32 GB |
+| Firewall (OPNsense, `network`) | 8 GB | 16 GB |
+| TAPPaaS CICD (`tappaas-cicd`) | 16 GB | 64 GB |
 | Identity | 4 GB | 20 GB |
+| Logging | 2 GB | 32 GB |
 | Backup server | 2 GB | sized by `tankc1` |
+
+That is about **32 GB for the foundation alone**. The update refuses to run when a
+node would commit more than 95% of its RAM once every VM is at its configured size
+(`health-manager capacity` shows the numbers), so a node that cannot hold its VMs is
+named before an update runs it out of memory.
+
+**A 16 GB node** works for evaluation with the foundation sized down, for example
+`tappaas-cicd` 6 GB, `network` 4 GB and identity 2 GB:
+
+    module-manager module modify tappaas-cicd --set memory=6144
+
+The CICD VM builds the NixOS guests; with less memory those builds are slower, and a
+node that runs out of memory mid-build can leave a damaged Nix store path behind.
+Check and repair it on the CICD VM with `sudo nix-store --verify --check-contents
+--repair`.
 
 | Stack | RAM | Storage | GPU |
 |-------|-----|---------|-----|

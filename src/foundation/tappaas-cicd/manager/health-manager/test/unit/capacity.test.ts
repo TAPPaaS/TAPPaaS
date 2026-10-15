@@ -6,7 +6,10 @@
 // host overhead live outside any guest — which is why the gate must not be
 // written against `used`.
 
-import { checkGuestMemory, checkMemoryCommitment } from "../../src/checks";
+import { mkdtempSync, writeFileSync } from "fs";
+import { tmpdir } from "os";
+import { join } from "path";
+import { checkGuestMemory, checkMemoryCommitment, checkUpdateCapacity } from "../../src/checks";
 import { NodeCapacity } from "../../src/types";
 import { FakeClusterClient } from "./fake-client";
 
@@ -201,6 +204,26 @@ const withGuests = (gs: ReturnType<typeof guest>[]): NodeCapacity => ({
   const rows = (checkGuestMemory(c).rows ?? []).map((x) => x.text).join("\n");
   check(/── VM totals\s+8\.0G/.test(rows), `the VM total excludes the LXC limit (got: ${rows})`);
   check(/── LXC totals\s+46\.0G/.test(rows), "the LXC total carries it instead");
+}
+
+// ── #833: what the node commits once the update has converged ─────────
+// The reporter's 16 GB node: identity tuned to 1.75G in Proxmox, 4G in config.
+{
+  const dir = mkdtempSync(join(tmpdir(), "hm-cap-"));
+  // vmids follow node()'s numbering: 100 cicd, 101 network, 102 identity.
+  writeFileSync(join(dir, "tappaas-cicd.json"), JSON.stringify({ vmid: 100, memory: 6144 }));
+  writeFileSync(join(dir, "network.json"), JSON.stringify({ vmid: 101, config: { "cluster:vm": { memory: 4096 } } }));
+  writeFileSync(join(dir, "identity.json"), JSON.stringify({ vmid: 102, memory: 4096 }));
+  const c = new FakeClusterClient();
+  c.capacity = [node("tappaas1", 15, 14, [["tappaas-cicd", 6, "running"], ["network", 4, "running"], ["identity", 1.75, "running"]])];
+  check(checkMemoryCommitment(c, 100).status === "pass", "today's sizes fit (78%): the live gate cannot see it coming");
+  const r = checkUpdateCapacity(c, dir, "tappaas1", 90);
+  check(r.status === "fail", "after the update identity is 4G: over 90% of the node — refused");
+  check(r.detail.includes("identity 1.8→4.0G"), `the guest that grows is named (got: ${r.detail})`);
+  const ok = checkUpdateCapacity(c, dir, "tappaas1", 100);
+  check(ok.status === "pass" && (ok.rows?.[0].text.includes("93%") ?? false), `under the threshold it passes, with the projection (got: ${ok.rows?.[0].text})`);
+  writeFileSync(join(dir, "identity.json"), JSON.stringify({ vmid: 102, memory: 1024 }));
+  check(checkUpdateCapacity(c, dir, "tappaas1", 90).status === "pass", "a config smaller than live never counts below live (no shrink assumed)");
 }
 
 console.log(`capacity: ${passed} passed, ${failed} failed`);

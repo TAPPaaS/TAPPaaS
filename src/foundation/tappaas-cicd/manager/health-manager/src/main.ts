@@ -35,7 +35,7 @@ import { hostname } from "os";
 import { join } from "path";
 import { defaultConfigDir, readModuleJson } from "./config";
 import { CliClusterClient } from "./client";
-import { guestTarget, runHealthGates } from "./checks";
+import { checkUpdateCapacity, guestTarget, runHealthGates } from "./checks";
 import {
   CliSecurityIO, loadVex, scanComponentList, scanImageRefs, PREVIOUS_FILE, SITE_CDX_FILE, STATUS_FILE, notify, readStatus, renderReport, runScan, sbomDir,
   sweepIsNewer, writeScan,
@@ -68,6 +68,13 @@ export const HELP: HelpSpec = {
       options: [
         ["--threshold PCT", `Disk-usage threshold percent (default ${DEFAULT_THRESHOLD}).`],
         ["--memory-threshold PCT", `Committed-memory percent of a node's physical RAM before the gate fails (default ${DEFAULT_MEMORY_THRESHOLD}).`],
+      ],
+    },
+    {
+      usage: "capacity [--memory-threshold PCT] [--config-dir DIR]",
+      details: "What each node commits once the update has converged every guest (a guest at the larger of its live and its configured memory). Exit 1 when a node would reach the threshold — the update sweep's pre-flight.",
+      options: [
+        ["--memory-threshold PCT", `Percent of a node's RAM the projected commitment must stay under (default ${DEFAULT_MEMORY_THRESHOLD}).`],
       ],
     },
     {
@@ -387,6 +394,13 @@ export function run(argv: string[], client: ClusterClient): number {
     switch (cmd) {
       case "validate":
         return cmdValidate(opts, client);
+      case "capacity": {
+        const r = checkUpdateCapacity(client, opts.configDir, DEFAULT_NODE, opts.memoryThreshold);
+        const tag = r.status === "fail" ? `${RD}FAIL${CL}` : r.status === "skip" ? `${YW}SKIP${CL}` : `${GN}PASS${CL}`;
+        info(`[${tag}] ${r.name}: ${r.detail}`);
+        for (const row of r.rows ?? []) info(`    ${row.text}`);
+        return r.status === "fail" ? 1 : 0;
+      }
       case "update-os": {
         // update-os STAYS a special action verb (ADR-007). The OS-patch logic
         // (NixOS rebuild / apt, reboot guards, controller-self-reboot protection)

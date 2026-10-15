@@ -233,6 +233,69 @@ export function checkMemoryCommitment(client: ClusterClient, threshold: number):
   return { name: "memory-commitment", status: "pass", detail: parts.join("; ") };
 }
 
+// ── update-capacity pre-flight (#833) ──────────────────────────────────
+// What a node WILL commit once the sweep has converged every guest: a running
+// guest counts at the larger of its live size and its config's `memory`. The
+// memory-commitment gate counts the live size, which is too late for a sweep
+// about to grow a guest — on a 2.0 site with sizes tuned in Proxmox, the first
+// converge took identity 1.75G→4G and the node out of memory, killing cicd's
+// own VM mid-sweep. The sweep runs this before it touches a module and refuses
+// when a node would reach `threshold` percent of its RAM.
+const MIB = 1024 ** 2;
+
+export function checkUpdateCapacity(
+  client: ClusterClient,
+  configDir: string,
+  defaultNode: string,
+  threshold: number,
+): CheckResult {
+  let caps: NodeCapacity[];
+  try {
+    caps = client.nodeCapacity();
+  } catch (e) {
+    return { name: "update-capacity", status: "skip", detail: `cluster capacity unavailable: ${(e as Error).message}` };
+  }
+  if (caps.length === 0) return { name: "update-capacity", status: "skip", detail: "no nodes reported" };
+  const wanted = new Map<number, { module: string; mem: number }>();
+  for (const m of loadConfigModules(configDir, defaultNode).filter(isManaged)) {
+    const raw = readModuleJson(join(configDir, `${m.module}.json`)) ?? {};
+    const mem = Number(configField(raw, "memory"));
+    if (Number.isFinite(mem) && mem > 0) wanted.set(m.vmid, { module: m.module, mem: mem * MIB });
+  }
+  const rows: CheckRow[] = [];
+  let worst: CheckStatus = "pass";
+  for (const c of caps) {
+    let projected = 0;
+    const grows: string[] = [];
+    for (const g of c.guests.filter((x) => x.status === "running")) {
+      const w = wanted.get(g.vmid);
+      if (w && w.mem > g.declaredMem) {
+        projected += w.mem;
+        grows.push(`${w.module} ${gib(g.declaredMem)}→${gib(w.mem)}G`);
+      } else {
+        projected += g.declaredMem;
+      }
+    }
+    const pct = c.physicalMem > 0 ? (100 * projected) / c.physicalMem : 0;
+    const status: CheckStatus = pct >= threshold ? "fail" : "pass";
+    if (status === "fail") worst = "fail";
+    rows.push({
+      status,
+      text: `${c.node}: ${gib(projected)}/${gib(c.physicalMem)}G ${pct.toFixed(0)}% after the update` +
+        (grows.length ? ` (grows ${grows.join(", ")})` : ""),
+    });
+  }
+  const bad = rows.filter((r) => r.status === "fail");
+  return {
+    name: "update-capacity",
+    status: worst,
+    detail: bad.length === 0
+      ? `every node under ${threshold}% of its RAM after the update`
+      : `${bad.map((r) => r.text).join("; ")} — at or over ${threshold}%: lower a guest's memory, move one (modify --set node=), or add RAM`,
+    rows,
+  };
+}
+
 // ── guest-memory report ───────────────────────────────────────────────
 // Three numbers per guest, because two cannot tell the cases apart:
 //

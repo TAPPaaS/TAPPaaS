@@ -868,6 +868,33 @@ def _opnsense_reachable(retries: int = 1) -> bool:
     return _probe_tcp(443, retries=retries) or _probe_tcp(8443, retries=retries)
 
 
+# Percent of a node's RAM its guests may commit once the sweep has converged them
+# (#833). Not 100: the host itself — Proxmox, the ZFS ARC, and on the
+# mothership's node the guest builds — needs the rest.
+CAPACITY_THRESHOLD = 95
+
+
+def check_update_capacity() -> dict | None:
+    """The sweep's capacity pre-flight (#833): `health-manager capacity` projects
+    what each node commits once every guest is at its configured memory. A node
+    at or over CAPACITY_THRESHOLD returns a failure record; anything else —
+    including a health-manager that cannot run — returns None (not refused)."""
+    cmd = os.environ.get("HEALTH_MANAGER_CMD", "/home/tappaas/bin/health-manager")
+    try:
+        r = subprocess.run([cmd, "capacity", "--memory-threshold", str(CAPACITY_THRESHOLD)],
+                           text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=600)
+    except (OSError, subprocess.SubprocessError) as e:
+        log.warning("Capacity pre-flight could not run (%s) — continuing", e)
+        return None
+    if r.returncode == 0:
+        relog_output(r.stdout)
+        return None
+    relog_output(r.stdout)
+    over = [ln.strip() for ln in r.stdout.splitlines() if "after the update" in ln and "%" in ln]
+    return {"dependency": "node-memory",
+            "detail": "a node would be over-committed after the update: " + ("; ".join(over) or r.stdout.strip()[-300:])}
+
+
 def check_shared_dependencies() -> list[dict]:
     """Probe the shared services a mid-sweep outage cascades from.
 
@@ -1315,6 +1342,21 @@ def main():
         checkconf = dep["evidence"].get("unbound_checkconf")
         if checkconf:
             log.error("unbound-checkconf on the firewall reports: %s", checkconf)
+
+    # Capacity pre-flight (#833): a sweep that grows guests past what a node
+    # holds runs it out of memory mid-update — on a small single node that killed
+    # cicd's own VM. Refused before any module is touched; --force overrides.
+    if not dep["down"]:
+        log.info("Phase 0.6: capacity pre-flight (memory each node commits after the update)")
+        over = check_update_capacity()
+        if over and module_force:
+            log.warning("%s — continuing because of --force", over["detail"])
+        elif over:
+            log.error("%s — no module is updated. Lower a guest's memory, move one "
+                      "(module-manager module modify <m> --set node=<n>), add RAM, or run with --force.",
+                      over["detail"])
+            dep["down"] = True
+            dep["failures"] = [over]
 
     # ADR-020 D8: a module that declares rebootOk may have a disruptive change
     # applied only when the window is open (disruption_window_open): the

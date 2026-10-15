@@ -523,6 +523,23 @@ m.check_shared_dependencies = lambda: []  # would be healthy, but dep is already
 failed = []; dep = {"down": True, "culprit": "x", "last_good": "w", "failures": [], "evidence": {}}
 na = m.run_update_phase(["p", "q"], "foundation", failed, dep)
 assert na == ["p", "q"] and failed == [], f"already-down phase skips all: na={na}"
+
+# #833: the capacity pre-flight — health-manager capacity's verdict, or None.
+import os, stat, tempfile
+d = tempfile.mkdtemp()
+hm = os.path.join(d, "hm")
+def stub(rc, out):
+    with open(hm, "w") as f:
+        f.write(f"#!/bin/sh\nprintf '%s\\n' '{out}'\nexit {rc}\n")
+    os.chmod(hm, 0o755)
+os.environ["HEALTH_MANAGER_CMD"] = hm
+stub(0, "tappaas1: 51.5/61.8G 83% after the update")
+assert m.check_update_capacity() is None, "a node with room: not refused"
+stub(1, "tappaas1: 16.0/15.0G 107% after the update (grows identity 1.8→4.0G)")
+over = m.check_update_capacity()
+assert over and over["dependency"] == "node-memory" and "107%" in over["detail"], f"over-committed: refused, named: {over}"
+os.environ["HEALTH_MANAGER_CMD"] = os.path.join(d, "missing")
+assert m.check_update_capacity() is None, "a health-manager that cannot run never blocks the sweep"
 PY
     then
         passed=$((passed + 1))

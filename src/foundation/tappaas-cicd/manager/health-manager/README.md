@@ -22,6 +22,7 @@ pending the `update-os.sh` port.
 
 ```
 health-manager validate [--threshold PCT] [--memory-threshold PCT] [--config-dir DIR]
+health-manager capacity [--memory-threshold PCT] [--config-dir DIR]
 health-manager update-os <name> <vmid> <node>
 health-manager reboot <module>
 health-manager scan security [--if-new-sweep] [--notify]
@@ -266,6 +267,13 @@ choices are worth knowing:
   would report an overcommit the node is not living with.
 - **An idle node is reported at 0%, not hidden.** An empty node beside a full
   one is a placement problem, and the report is where you see it.
+
+`health-manager capacity` answers the same question for **after** an update:
+each running guest counts at the larger of its live size and its config's
+`memory`, because the update converges it to the config. A node whose VMs were
+sized down by hand in Proxmox commits more once it is updated, and that is
+seen here before it happens. The update sweep runs it first (threshold 95%)
+and updates nothing when a node would be over; `--force` overrides.
 
 **read-only** here. Growing a disk is `cluster:vm`'s: every module update grows a
 VM disk that is filling up, when its pool has room (see the `cluster:vm`
