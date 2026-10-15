@@ -101,12 +101,12 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 
 | Wave | Group | Ease | Risk | released | done for 2.3 | open |
 |------|-------|:-:|:-:|---:|---:|---:|
-| 4 | G4.1 Alerting & cluster resilience | M | M | 7 | – | 4 |
-| 4 | G4.2 Proxy & ingress | M | L | 3 | 2 | 2 |
+| 4 | G4.1 Alerting & cluster resilience | M | M | 7 | – | 7 |
+| 4 | G4.2 Proxy & ingress | M | L | 3 | 3 | 1 |
 | 4 | G4.3 Manager verb gaps | M | L | 9 | 7 | 3 |
 | 4 | G4.4 Storage & physical devices | H | L | 5 | – | 7 |
 | 4 | G4.5 Governance, CI & sign-offs | M | L | 5 | – | 5 |
-| 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 18 | 6 | 2 |
+| 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 18 | 7 | 5 |
 | 3 | G3.2 Identity & SSO wiring | M | L | 10 | 3 | 1 |
 | 3 | G3.3 App module fixes | L | L | 10 | 2 | 9 |
 | 3 | G3.4 AI stack maturity | M | M | 1 | 3 | 7 |
@@ -143,7 +143,7 @@ met gates are recorded in the releases that carried their waves.
 | 1 · G1.6 | #142 RFC outcome; a *Secrets management* ADR only once #58 comes back from Future Work |
 | 2 | Entry: ADR-014 amended for the `all` sentinel (#375, built), `serves` as an array (#576), anti-spoofing always on (#159, built) and mDNS in zones.json (#257); ADR-021 amended for DNSSEC with split horizon (#263); `site.json` `ipv6` (#149) — the IPv6 stance is its own ADR (#26). Exit: a lockout check on each site — mgmt and the admin VPN reach 8443 and 22, other zones do not; done on hrossen 2026-10-02. NetBird only if the NetBird decision keeps it server-side |
 | 3 | Met 2026-10-13: ADR-019 Accepted (v1.0), verified by `cluster/test.sh --deep` — live migrate to the HANode and back. Open from it: HA's automatic failback to a node with an older CPU (#827) |
-| 4 | ADR-023 Proposed → Accepted (#642, #643; render check open); ADR-015 Draft → Accepted (#486); ADR-011 Proposed → Accepted (#143 built); ADR-010 P7 sign-off (#406); ADR-008 amended (#236); ADR-019 amended for a second corosync link (#590) and the migrate verb (#429); ADR-007e amended for logging v2 (#165), or a new ADR if Zabbix is chosen; ADR-029 Proposed → Accepted (#772); the MAC pinning question (#444 / #582); #154 closed or kept; #430 decided before #170 |
+| 4 | ADR-023 Accepted and built (#642, #643, #656; done 2026-10-15); ADR-015 Draft → Accepted (#486); ADR-011 Proposed → Accepted (#143 built); ADR-010 P7 sign-off (#406); ADR-008 amended (#236); ADR-019 amended for a second corosync link (#590) and the migrate verb (#429); ADR-007e amended for logging v2 (#165), or a new ADR if Zabbix is chosen; ADR-029 Proposed → Accepted (#772); the MAC pinning question (#444 / #582); #154 closed or kept; #430 decided before #170 |
 
 ### ADRs still to write
 
@@ -205,7 +205,7 @@ items that belong to a group — FW #40, #83, #157, #158, #162 — are rows in t
 
 New capabilities with low upgrade risk.
 
-### G4.1 Alerting & cluster resilience — Ease M · Risk M · released: 7 · open: 4
+### G4.1 Alerting & cluster resilience — Ease M · Risk M · released: 7 · open: 7
 
 Be told when something breaks, and survive more of it. Built: alerts from Loki by mail, every VM's logs in Loki, a credential per pushing VM, container severities from the line, each line's own timestamp, a release CVE preview with majors gated at the boundary (#788). Next: a notice when a whole site goes dark (#776), a mail relay (#125), a second corosync link (#590).
 
@@ -215,14 +215,17 @@ Be told when something breaks, and survive more of it. Built: alerts from Loki b
 | #776 | Report a site that has gone dark (outside heartbeat) | M | L | **Opened 2026-10-06** after makerfloss was dark 2½ days unreported. Proposed: the satellite mails when the home WireGuard handshake is >15 min stale. **Decide:** its mail path (#125?) |
 | #590 | Second corosync link | H | M | |
 | FW #40 | Dedicated sync network recipe | L | L | Roll in with #590 |
+| #835 | Two-node clusters self-fence: warn in `node add`, support a QDevice | M | M | **Opened 2026-10-15** from #832 (one node down = the survivor fences, firewall included) |
+| #836 | HA placement only on nodes that have every bridge the VM uses (firewall WAN) | M | M | **Opened 2026-10-15** from #832. Since `b9d40e98` HA rules are strict (node or HANode only) and `node add` refuses a node without KVM |
+| #837 | Health check: `site.json` location and timezone vs the nodes and guests | L | L | **Opened 2026-10-15** from #832 (a site created with the template's location; cicd on UTC) |
 
-### G4.2 Proxy & ingress — Ease M · Risk L · released: 3 · done for 2.3: 2 · open: 2
+### G4.2 Proxy & ingress — Ease M · Risk L · released: 3 · done for 2.3: 3 · open: 1
 
 Publish less of each app: limit a route to some paths (#642), some zones (#643) or a provider's source addresses (#656), as ADR-023 describes. Decide whether an internal proxy is needed at all (#154).
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
-| #642 | Limit a route to paths | M | L | ADR-023, approved by Erik 2026-09-14 |
+| ✅ #642 | Limit a route to paths | M | L | **Closed 2026-10-15** (`537631a8`): ADR-023 P2/P3 — `proxyAccess` path rules on any route (one handle per path with its own access list), `none` (shared deny-all), `identityGate: false`; undeclared path handles and rule lists pruned. Live on hrossen (nextcloud-hpb): an internet path proxied, a mgmt path only from mgmt, everything else 403, teardown pruned clean |
 | ✅ #643 | Per-route allowed zones | M | L | **Closed 2026-10-15** (`447f4efa`): ADR-023 P1 — a `proxyRoutes` entry may set its own `proxyAllowedZones` and gets its own access list; undeclared lists pruned; the same-port trap warns |
 | ✅ #656 | Limit a route to a provider's source ranges | M | L | **Closed 2026-10-15** (`e85c7da6`): `proxyAllowedZones` takes a network (CIDR) beside zone names, for a provider's caller range; a malformed one is refused at install. A feed that refreshes the ranges stays a follow-up |
 | #154 | `firewall:internal-proxy` | — | — | Close? Lars questioned the need (2026-05-31) |
@@ -276,7 +279,7 @@ The project's own machinery: CI runners (#415), community-health files (#486), t
 
 Low upgrade risk. Build continuously, in any order within a group.
 
-### G3.1 cluster:vm lifecycle & capacity — Ease L · Risk M · released: 18 · done for 2.3: 6 · open: 2
+### G3.1 cluster:vm lifecycle & capacity — Ease L · Risk M · released: 18 · done for 2.3: 7 · open: 5
 
 Guests sized, placed, started and stopped right: memory defaults from measurement (#663), moving a running guest to another node (#825), a readiness wait that skips UDP ports (#826), hardware drift (#531), shutdown and boot order (#36, #127), storage growth and placement (#100, #403), a composite-module ADR (#761), and a sweep that survives a guest restarting itself (#753).
 
@@ -286,6 +289,10 @@ Guests sized, placed, started and stopped right: memory defaults from measuremen
 | ✅ #827 | HA failback can move a host-CPU guest live to a node with an older CPU | M | M | **Closed 2026-10-14** (`625e99a3`, `51dc79f2`, `413510b6`, `d4dde5f8`, `fbc3338b`, `d00c28ae`): the risky move on hrossen was the nightly drain tappaas1 (Zen 4) → tappaas3 (Zen 3), not the failback. Node drains refuse live-unsafe moves; `proxmox-controller cpu-inventory` (KVM-probed levels, n×n live-move matrix); `cluster:ha` `haCpu` common (shared x86-64 level, host for alike pairs) / host (failback off, relocate on drain); `cpu-impact` health gate (AVX-512 use per HA guest). hrossen's five HA guests await a restart onto x86-64-v3 |
 | ✅ #100 | Automatic storage extension | M | L | **Closed 2026-10-14** (`18427e2c`): every update grows a VM disk whose / is ≥80% by 50% (min 5G, cap `diskSizeMax`) when its pool, and the HA replica's, stays ≤80% — else `DEFERRED:`. Opt-out `diskAutoGrow: false`; settings in `site.json` `diskAutoGrow`. New `storage-pools` health gate (warn 80%, fail 90%, thin overcommit). Rollback after a grow verified clean. Deep test on hrossen 127/0 |
 | #403 | Install on the root disk; smarter placement | M | L | |
+| #838 | Dynamic placement of workloads (PVE 9.2 CRS load balancer) | H | M | **Opened 2026-10-15.** Opt-in next to the fixed default: `HANode` as a list, an empty list = dynamic; the CPU level the candidate set shares (#827), capable nodes only (#836). ADR first |
+| #833 | Sweep pre-flight: refuse an over-committed node; a minimum host size | M | L | **Opened 2026-10-15** from #832 (16 GB host OOM-killed cicd mid-sweep) |
+| #834 | First converge on a legacy site applies config sizes over those tuned in Proxmox | M | M | **Opened 2026-10-15** from #832 |
+| ✅ #832 | Field report: a 2.0 site upgraded to 2.2, then a second node | M | M | **Closed 2026-10-15**, reported by @AndreasJe: 27 findings — fixed on `main` (certificate renewal cron and expiry, zones merge and shared VLANs, legacy-site migrations, PXE MAC pinning and NIC, never-deployed modules in the sweep, NFS grant notify, KVM check, strict HA rules, …), the design items split into #833–#838 |
 | ✅ #663 | Memory defaults are not based on measurement | L | L | **Closed 2026-10-13** (operator): 7-day measurement on hrossen. vaultwarden was too small — 1→1.5 GiB (`bac670ce`); euro-office and deconz-test moved tappaas1→tappaas2, tappaas1 commitment 63→51.5 GiB of 61. The other proposed reductions (nextcloud-hpb, jellyfin, forgejo, litellm default) not applied; `network` 8G→4G still parked |
 | ✅ #825 | update-module: changing a running guest's node does not migrate it | M | M | **Closed 2026-10-13** (`fix(cluster): move a running guest when its node changes`): snapshot and OS update act where the guest runs; `live-ok` refuses local disks with snapshots; `--allow-disruption` does stop → offline migrate → start. Proven on hrossen (`g2.1-firewall`): deconz-test deferred, then moved tappaas2→tappaas3 and back by `update-module`. Found moving guests for #663 |
 | ✅ #826 | Readiness wait probes UDP ports over TCP — 180 s lost per update | L | L | **Closed 2026-10-13** (`fix(module-ready): do not probe UDP or ICMP ports over TCP`): only TCP, TCP/UDP and unset protocols are probed; deconz-test's wait went 180 s → 0 s; a full `update-module deconz-test` on hrossen now takes 79 s. Found during the #825 test |
