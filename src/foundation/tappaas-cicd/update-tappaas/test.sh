@@ -133,6 +133,17 @@ assert ("tappaas-nixos", "stack=template") in skipped, f"a VM template is not up
 assert "tappaas-nixos" not in to_update, "a VM template must never be queued for update"
 # #428: a suspended module's guest is stopped on purpose -- nothing to update.
 assert ("paused", "suspended") in skipped and "paused" not in to_update, f"a suspended module is skipped: {skipped}"
+# #832: a config whose VMID no guest on the cluster has was never installed --
+# the sweep skips it (and names `module add`) instead of deferring it nightly.
+w("hosting.json", {"kind": "vm", "vmname": "hosting", "vmid": 777, "moduleSource": "/x/hosting"})
+w("nested.json", {"kind": "vm", "moduleSource": "/x/n", "config": {"cluster:vm": {"vmid": 778}}})
+assert m.module_vmid("hosting") == 777 and m.module_vmid("nested") == 778 and m.module_vmid("old") is None
+tu, sk = m.partition_by_lifecycle(["hosting", "nested", "old"], {778})
+assert "nested" in tu and "old" in tu, f"a deployed guest and one without a vmid are swept: {tu}"
+assert any(n == "hosting" and r.startswith("not deployed") for n, r in sk), f"undeployed skipped: {sk}"
+tu, sk = m.partition_by_lifecycle(["hosting"], None)
+assert tu == ["hosting"], "cluster unknown: nothing is skipped for want of a guest"
+(d / "hosting.json").unlink(); (d / "nested.json").unlink()
 
 # Foundation machines leave the app phase and run right after `cluster`:
 # cluster nodes (pvehost) first, then other machines, each group by name (#665).

@@ -226,6 +226,18 @@ main() {
 
     debug "Config file: ${module_json}"
 
+    # An archived module has no guest by design and a suspended one is stopped on
+    # purpose: their service tests can only fail on what is intended (#832).
+    if [[ -z "${opt_vmid}" ]]; then
+        local _state
+        _state="$(jq -r 'if (.status // "" | ascii_downcase) == "archived" then "archived"
+                         elif .suspended == true then "suspended" else "" end' "${module_json}" 2>/dev/null || true)"
+        case "${_state}" in
+            archived)  info "  ${module} is archived — no guest to test"; exit 0 ;;
+            suspended) info "  ${module} is suspended — its guest is stopped on purpose; resume it to test"; exit 0 ;;
+        esac
+    fi
+
     # ── Step 2: Check dependency test-service.sh availability ────────
     info "${BOLD}Test Step 2: Check dependency test availability${CL}"
 

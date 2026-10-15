@@ -533,9 +533,52 @@ def module_stack(module_name: str) -> str:
         return ""
 
 
-def partition_by_lifecycle(modules: list[str]) -> tuple[list[str], list[tuple[str, str]]]:
+def module_vmid(module_name: str) -> int | None:
+    """A module's declared VMID (flat or under a capability block), or None."""
+    try:
+        with open(CONFIG_DIR / f"{module_name}.json") as f:
+            doc = json.load(f)
+    except (OSError, ValueError):
+        return None
+    candidates = [doc.get("vmid")] + [
+        v.get("vmid") for v in (doc.get("config") or {}).values() if isinstance(v, dict)]
+    for v in candidates:
+        try:
+            if v is not None and int(v) > 0:
+                return int(v)
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def cluster_vmids() -> set[int] | None:
+    """The VMIDs of every guest on the cluster, or None when no node answers —
+    then nothing is skipped for want of a guest (#832)."""
+    try:
+        nodes = [n.get("name") for n in json.loads(CONFIG_PATH.read_text())
+                 .get("hardware", {}).get("nodes", []) if n.get("name")]
+    except (OSError, ValueError, AttributeError):
+        return None
+    for node in nodes:
+        try:
+            r = subprocess.run(
+                ["ssh", "-n", "-o", "BatchMode=yes", "-o", "ConnectTimeout=8",
+                 f"root@{node}.mgmt.internal",
+                 "pvesh get /cluster/resources --type vm --output-format json"],
+                capture_output=True, text=True, timeout=30)
+            if r.returncode == 0:
+                return {int(g["vmid"]) for g in json.loads(r.stdout) if "vmid" in g}
+        except (OSError, subprocess.SubprocessError, ValueError, KeyError, TypeError):
+            continue
+    return None
+
+
+def partition_by_lifecycle(modules: list[str], guests: set[int] | None = None
+                           ) -> tuple[list[str], list[tuple[str, str]]]:
     """Split module names into (to_update, [(name, reason), ...] skipped), the
-    reason being `stack=<s>`, `status=<s>` or `management=unmanaged`.
+    reason being `stack=<s>`, `status=<s>`, `suspended`, `management=unmanaged`
+    or `not deployed` — a config with a VMID no guest on the cluster has
+    (`guests`, when known): there is nothing to update, it was never installed.
 
     Status matching is case-insensitive: module-fields.json spells the lifecycle
     values lowercase (archived/external) but the development ones capitalised
@@ -557,6 +600,9 @@ def partition_by_lifecycle(modules: list[str]) -> tuple[list[str], list[tuple[st
             skipped.append((name, "suspended"))
         elif module_management(name) == "unmanaged":
             skipped.append((name, "management=unmanaged"))
+        elif guests is not None and (vmid := module_vmid(name)) is not None and vmid not in guests:
+            skipped.append((name, f"not deployed (no guest {vmid}; install it with "
+                                  f"module-manager module add {name})"))
         else:
             active.append(name)
     return active, skipped
@@ -1158,7 +1204,8 @@ def main():
     # loses that edge instead of being ordered behind a module we never run.
     discovered = get_installed_apps()
     machines = foundation_machines(discovered)
-    apps, skipped_apps = partition_by_lifecycle([m for m in discovered if m not in machines])
+    guests = cluster_vmids()
+    apps, skipped_apps = partition_by_lifecycle([m for m in discovered if m not in machines], guests)
     sorted_apps = topological_sort(apps)
 
     # Resolve each canonical foundation module to its deployed config name,
@@ -1169,7 +1216,7 @@ def main():
         name
         for m in FOUNDATION_MODULES
         if (name := deployed_foundation_name(m)) is not None
-    ], machines))
+    ], machines), guests)
 
     # automaticReboot (default true) gates the Phase 3 node reboot pass.
     # site.json is flat (ADR-007): .automaticReboot (was .tappaas.automaticReboot).
