@@ -31,6 +31,8 @@ import {
   normalizeKind,
   peerScript,
   removePeerConfig,
+  isEmail,
+  setPeerContact,
   writePeerConfig,
 } from "../../src/peers";
 import { addToBackupJob, modifyBackup, removeFromBackupJob } from "../../src/modify";
@@ -432,6 +434,19 @@ check(!retentionValid("7") && !retentionValid("7x") && !retentionValid(""), "inv
     "other",
     "--force overwrites deliberately",
   );
+
+  // ADR-031 D5: the other site's operator, for the pulse's mail.
+  writePeerConfig(tmp, "pull", { name: "buddy", host: "other", contact: "ops@buddy.example" }, true);
+  eq(JSON.parse(readFileSync(join(tmp, "pull-buddy.json"), "utf8")).contact, "ops@buddy.example",
+    "a pull records the buddy's contact");
+  setPeerContact(tmp, "remote", "buddy", "them@buddy.example");
+  eq(JSON.parse(readFileSync(join(tmp, "remote-buddy.json"), "utf8")).contact, "them@buddy.example",
+    "peer modify sets a contact on an existing peer");
+  setPeerContact(tmp, "remote", "buddy", "");
+  check(JSON.parse(readFileSync(join(tmp, "remote-buddy.json"), "utf8")).contact === undefined,
+    "…and an empty one clears it");
+  check(isEmail("a@b.example") && !isEmail("a@b") && !isEmail("a@b.example,c@d.example") && !isEmail("x"),
+    "a contact is one address — the pulse puts it in a To: line");
 
   eq(removePeerConfig(tmp, "remote", "buddy").kind, "remote", "delete targets the named kind");
   eq(

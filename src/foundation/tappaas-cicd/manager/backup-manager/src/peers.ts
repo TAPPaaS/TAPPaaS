@@ -86,6 +86,9 @@ export interface PeerSpec {
   retention?: Record<string, number>;
   // #796: the WireGuard tunnel under this pull — pull dials it, remote serves it.
   tunnel?: Tunnel;
+  // ADR-031 D5: the other site's operator, mailed by the pulse when their PBS
+  // stops answering — the mail their dark site cannot send itself.
+  contact?: string;
 }
 
 // Build the config document for a peer. Deliberately mirrors the shipped
@@ -100,6 +103,7 @@ export function buildPeerConfig(
   const ns = spec.namespace ?? defaultNamespace(kind, spec.name, siteName);
   const place = spec.physicalLocation ? { physicalLocation: spec.physicalLocation } : {};
   const tun = spec.tunnel ? { tunnel: spec.tunnel } : {};
+  const who = spec.contact ? { contact: spec.contact } : {};
   if (kind === "pull") {
     return {
       name: spec.name,
@@ -121,6 +125,7 @@ export function buildPeerConfig(
       retention: spec.retention ?? { keepLast: 4, keepDaily: 14, keepWeekly: 8, keepMonthly: 12 },
       ...place,
       ...tun,
+      ...who,
     };
   }
   if (kind === "receive") {
@@ -147,6 +152,7 @@ export function buildPeerConfig(
     propagate: spec.propagate ?? false,
     ...place,
     ...tun,
+    ...who,
   };
 }
 
@@ -248,4 +254,22 @@ export function peerFiles(configDir: string): string[] {
   return readdirSync(configDir)
     .filter((f) => f.endsWith(".json") && prefixes.some((p) => f.startsWith(p)))
     .sort();
+}
+
+/** A single e-mail address (ADR-031 D5) — what the pulse can put in a To: line. */
+export function isEmail(v: string): boolean {
+  return /^[^\s@,<>]+@[^\s@,<>]+\.[^\s@,<>]+$/.test(v);
+}
+
+/** Set (or with "" clear) a peer's contact; returns the file written. */
+export function setPeerContact(configDir: string, kind: PeerKind, name: string, contact: string): string {
+  const f = peerConfigPath(configDir, kind, name);
+  if (!existsSync(f)) throw new Error(`no ${kind} peer '${name}' (${f})`);
+  const doc = JSON.parse(readFileSync(f, "utf8")) as Record<string, unknown>;
+  if (contact) doc.contact = contact;
+  else delete doc.contact;
+  const tmp = `${f}.tmp`;
+  writeFileSync(tmp, JSON.stringify(doc, null, 2) + "\n", "utf8");
+  renameSync(tmp, f);
+  return f;
 }

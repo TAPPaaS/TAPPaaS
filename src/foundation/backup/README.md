@@ -22,6 +22,7 @@ with retention, restore tooling and off-site options.
 | Off-site copies of our own data | tappaas-cicd | `backup-manager peer add remote <n>` — they pull from us; we never push to another PBS (ADR-012 §1.4.1) |
 | **Encryption-key escrow + the mandatory out-of-band copy** | tappaas-cicd | `backup-manager key list \| export <dest> \| import <src>` (ADR-012 §2.5.1) |
 | Opt-in WORM-ish immutability (read-only ZFS snapshots of the datastore) | tappaas-cicd | `backup.json .immutableSnapshots` (ADR-012 §3.5) |
+| **The pulse**: the backup node mails when a buddy we pull stops answering — to us and to the buddy's operator — and when this site's uplink, firewall, mothership or PBS stops answering | tappaas-cicd | automatic on a Proxmox-node backup node; `backup-manager pulse`; `peer add … --contact` (see below) |
 
 Reference docs in this directory:
 
@@ -169,6 +170,28 @@ somewhere else, and only data can show that. `backup-manager validate` compares 
 `pull`/`remote` peer and every satellite with `site.json`'s `location` — at the finest level
 both record — and warns about one it cannot show to be elsewhere, or that records nothing.
 Record the Site's own city with `site-manager site modify --locationCity <city>`.
+
+## The pulse — a dark site is reported from outside
+
+A site with no power sends no mail. Its backup buddy can: it reaches the site's PBS through the
+buddy tunnel. So every site's backup node runs a timer, `tappaas-pulse`, every 5 minutes, which:
+
+- connects to the PBS of every buddy we **pull** from, through the tunnel, and checks its
+  certificate. Silent for 15 minutes: one mail to us and to the buddy's operator (the peer's
+  `--contact`), again once a day while it lasts, and one when it answers again;
+- checks this site from its own backup node: our internet, the firewall, the mothership (after 30
+  minutes — a mothership reboot during an update takes minutes) and the PBS itself. While our
+  internet is down, buddies are not judged;
+- mails through the node's own postfix, so it does not depend on the mothership.
+
+```bash
+backup-manager pulse                                   # what it watches, and since when anything is down
+backup-manager peer modify pull <buddy> --contact ops@buddy.example
+```
+
+The backup update writes its config (`/etc/tappaas/pulse.json` on the backup node) and installs
+the timer. Only the pulling side can reach the other PBS: a buddy that pulls us watches us, with
+the same script (BUDDY.md, Setup 3). A backup node that is not a Proxmox node has no pulse yet.
 
 ## Day-to-day operations
 

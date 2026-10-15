@@ -41,6 +41,8 @@ readonly MODULE_DIR
 . "${MODULE_DIR}/lib/pbs-external.sh"
 # shellcheck source=lib/pbs-host.sh disable=SC1091
 . "${MODULE_DIR}/lib/pbs-host.sh"
+# shellcheck source=lib/pbs-pulse.sh disable=SC1091
+. "${MODULE_DIR}/lib/pbs-pulse.sh"
 
 INSTANCE="$(pbs_instance "${1:-}")"
 
@@ -197,6 +199,17 @@ pbs_client_reconcile "${ZONE}" "${IMAGE_LOCATION}" \
 
 info "${BOLD}Ensuring every opted-in VM is registered in the managed backup job${CL}"
 pbs_ensure_declared
+
+# ── the pulse (ADR-031): the backup node watches our buddies and this site ──
+# On a Proxmox node only for now; a backup node that is a machine has no mail
+# path yet (ADR-031 D4). Not fatal: it is a watcher, not the backup.
+_pulse_host="$(pbs_state_node "$(pbs_placement_state)" || true)"
+if [[ -n "${_pulse_host}" ]] && [[ "$(jq -r '.kind // ""' "${CONFIG_DIR:-/home/tappaas/config}/${_pulse_host}.json" 2>/dev/null)" != "machine" ]]; then
+    info "${BOLD}Ensuring the pulse on the backup node${CL}"
+    pulse_ensure "${_pulse_host}" || warn "The pulse is not running on ${_pulse_host} (see above)"
+elif [[ -n "${_pulse_host}" ]]; then
+    info "  The pulse is not installed on ${_pulse_host}: a backup node that is not a Proxmox node needs a mail path first (ADR-031 D4)"
+fi
 
 # ── #760: VM and container backups are encrypted (ADR-012 §2.5) ────────
 # Registered without a key, the storage made vzdump write every VM and container

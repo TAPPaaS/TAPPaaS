@@ -45,6 +45,8 @@ import {
   peerScript,
   readPeerConfig,
   removePeerConfig,
+  isEmail,
+  setPeerContact,
   writePeerConfig,
 } from "./peers";
 import { validate } from "./validate";
@@ -65,10 +67,10 @@ import { KeyTarget, keyTarget, keysUsb } from "./keys";
 import { placeText } from "./offsite";
 import { placementFinishReset, placementReset, placementUseExternal, ResetDeps } from "./placement-reset";
 import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
-import { existsSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import { spawnSync } from "child_process";
 import { stream } from "../../../lib/ts/src/exec";
-import { GN, CL, die, guarded, info, warn } from "../../../lib/ts/src/cli";
+import { GN, CL, RD, die, guarded, info, warn } from "../../../lib/ts/src/cli";
 import { BackupPolicyStatus, Client, JobStatus, ScheduleBucket } from "./types";
 
 const VERSION = "0.1.0";
@@ -172,7 +174,7 @@ export const HELP: HelpSpec = {
       usage: "peer add pull|remote|receive <name> [--host H] [--store S] [--namespace NS] "
         + "[--port P] [--remote-namespace NS] [--max-depth N] "
         + "[--schedule SPEC] [--group-filter F] [--auth-id ID] [--propagate] "
-        + "[--country CC] [--city C] [--building B] "
+        + "[--country CC] [--city C] [--building B] [--contact EMAIL] "
         + "[--tunnel serve|dial] [--tunnel-net CIDR] [--listen-port P] [--endpoint H:P] [--peer-key K] [--mtu N] [--force]",
       name: "peer add",
       options: [
@@ -194,11 +196,18 @@ export const HELP: HelpSpec = {
         ["--listen-port P", "peer add remote --tunnel serve: UDP port to listen on (default the next free from 51830)."],
         ["--endpoint H:P", "peer add pull --tunnel dial: the serving side's public address (or its satellite's) and port."],
         ["--peer-key K", "peer add: the other side's WireGuard public key. serve may add it later: re-run with --force."],
+        ["--contact EMAIL", "peer add: the other site's operator — mailed by the pulse when their PBS stops answering (ADR-031)."],
         ["--mtu N", "peer add: tunnel MTU (e.g. 1340 through a satellite relay; default OPNsense's)."],
         ["--config-only", "peer add: write the config, skip onboarding (no PBS contact)."],
         ["--force", "peer add: overwrite an existing peer config (keeps its tunnel /30 and port unless given)."],
       ],
     },
+    {
+      usage: "peer modify pull|remote <name> --contact EMAIL",
+      name: "peer modify",
+      options: [["--contact EMAIL", "peer modify: the other site's operator, mailed by the pulse (ADR-031); '' clears it."]],
+    },
+    { usage: "pulse", name: "pulse", note: "(ADR-031: what the backup node's pulse watches — buddies, uplink, firewall, mothership, PBS — and since when each is down)" },
     { usage: "peer check pull|remote <name>", name: "peer check", note: "(the buddy tunnel's live state: instance, key, handshake, PBS reach)" },
     {
       usage: "peer delete pull|remote|receive <name> [--purge] [--config-only]",
@@ -304,6 +313,7 @@ interface Opts {
   country?: string;
   city?: string;
   building?: string;
+  contact?: string; // ADR-031 D5: the other site's operator
   peer?: string;
   datastore?: string;
   fingerprint?: string;
@@ -330,7 +340,7 @@ const PEER_VALUE_FLAGS = new Set([
   "--host", "--store", "--namespace", "--schedule", "--group-filter", "--auth-id",
   "--country", "--city", "--building", "--peer", "--datastore", "--fingerprint",
   "--tunnel", "--tunnel-net", "--listen-port", "--endpoint", "--peer-key", "--mtu",
-  "--port", "--remote-namespace", "--max-depth",
+  "--port", "--remote-namespace", "--max-depth", "--contact",
 ]);
 
 function parseOpts(args: string[]): Opts {
@@ -422,6 +432,7 @@ function parseOpts(args: string[]): Opts {
     country: peerFlags["--country"],
     city: peerFlags["--city"],
     building: peerFlags["--building"],
+    contact: peerFlags["--contact"],
     peer: peerFlags["--peer"],
     datastore: peerFlags["--datastore"],
     fingerprint: peerFlags["--fingerprint"],
@@ -664,6 +675,7 @@ function cmdPeer(opts: Opts): number {
   if (sub === "add") return cmdPeerAdd(opts);
   if (sub === "delete" || sub === "remove") return cmdPeerDelete(opts);
   if (sub === "check") return cmdPeerCheck(opts);
+  if (sub === "modify") return cmdPeerModify(opts);
   die("peer: expected 'add <kind> <name>', 'delete <kind> <name>' or 'check <kind> <name>'");
   return 1;
 }
@@ -704,6 +716,11 @@ function cmdPeerAdd(opts: Opts): number {
     maxDepth: intFlag("--max-depth", opts.maxDepth, 0, 7),
     ...(tunnel ? { tunnel } : {}),
   };
+  if (opts.contact !== undefined) {
+    if (k === "receive") die("peer add receive: --contact is for a buddy whose PBS we pull or who pulls ours");
+    if (!isEmail(opts.contact)) die(`peer add: --contact takes one e-mail address, not '${opts.contact}'`);
+    spec.contact = opts.contact;
+  }
   if (k !== "pull" && (opts.port || opts.remoteNamespace || opts.maxDepth)) {
     die(`peer add ${k}: --port, --remote-namespace and --max-depth describe a pull`);
   }
@@ -842,6 +859,36 @@ function cmdPeerCheck(opts: Opts): number {
   const script = join(moduleScriptDir(opts.configDir), "scripts", "tunnel-check.sh");
   if (!existsSync(script)) die(`peer check: ${script} not found`);
   return stream(script, [(t as Tunnel).role, name as string, (t as Tunnel).net], scriptEnv(opts));
+}
+
+// `peer modify <kind> <name> --contact EMAIL` (ADR-031 D5): who the pulse mails at
+// the other site. Config only; the next backup update gives it to the pulse.
+function cmdPeerModify(opts: Opts): number {
+  const kind = normalizeKind(opts.rest[1] ?? "");
+  const name = opts.rest[2];
+  if (!kind || kind === "receive" || !name) die("peer modify: expected pull|remote <name> --contact EMAIL");
+  if (opts.contact === undefined) die("peer modify: nothing to change — --contact EMAIL ('' clears it)");
+  const c = opts.contact as string;
+  if (c !== "" && !isEmail(c)) die(`peer modify: --contact takes one e-mail address, not '${c}'`);
+  const f = setPeerContact(opts.configDir, kind as PeerKind, name as string, c);
+  info(`${GN}✓${CL} ${f}: contact ${c || "cleared"} — the pulse has it after the next backup update`);
+  return 0;
+}
+
+// `pulse` (ADR-031 D8): the backup node's pulse, as it sees things now.
+function cmdPulse(opts: Opts): number {
+  const backup = JSON.parse(readFileSync(join(opts.configDir, "backup.json"), "utf8")) as Record<string, unknown>;
+  const node = typeof backup.node === "string" ? backup.node : "";
+  if (!node) die("pulse: no backup node recorded (backup.json .node)");
+  const host = node.includes(".") ? node : `${node}.mgmt.internal`;
+  info(`The pulse on ${node}`);
+  const timer = spawnSync("ssh", ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10", `root@${host}`,
+    "systemctl is-active tappaas-pulse.timer; /usr/local/sbin/tappaas-pulse --status"], { encoding: "utf8" });
+  if (timer.status !== 0 && !timer.stdout) die(`pulse: ${node} did not answer, or has no pulse (the backup update installs it)`);
+  const [state, ...rows] = (timer.stdout ?? "").split("\n");
+  info(`  timer: ${state === "active" ? `${GN}active${CL}` : `${RD}${state || "not installed"}${CL}`}`);
+  for (const r of rows) if (r.trim()) info(`  ${r}`);
+  return state === "active" ? 0 : 1;
 }
 
 function cmdPeerDelete(opts: Opts): number {
@@ -1200,6 +1247,8 @@ export function run(argv: string[], client: Client): number {
         return 0;
       case "peer":
         return cmdPeer(opts);
+      case "pulse":
+        return cmdPulse(opts);
       case "reconcile":
         cmdReconcile(opts, client);
         return 0;

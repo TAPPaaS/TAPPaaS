@@ -2,13 +2,13 @@
 
 | | |
 |---|---|
-| **Status** | **Proposed** |
-| **Version** | 0.1 |
+| **Status** | **Accepted** (operator, 2026-10-15) — P1 built 2026-10-15. |
+| **Version** | 0.2 |
 | **Date** | 2026-10-15 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen, @ErikDaniel007 |
 | **Closes / addresses** | **#776** (a site that has gone dark is reported by nobody). Builds on the buddy tunnel (#796, `backup/BUDDY.md`), log alerting and its watchdog (#126), and the site mail path (#651). |
-| **Changelog** | v0.1 — first draft, from the operator's idea: the backup buddy watches the site from outside; the local backup node is the local watcher. |
+| **Changelog** | v0.2 (2026-10-15) — **Accepted, P1 built**: the open questions answered (both operators mailed; the mothership after 30 minutes; the standalone watcher in P1), and the satellite becomes a P3 variant: installing a satellite installs a watcher. v0.1 — first draft, from the operator's idea: the backup buddy watches the site from outside; the local backup node is the local watcher. |
 
 ## Context
 
@@ -67,7 +67,7 @@ For every peer we **pull** from, the pulse opens a TLS connection to the peer's 
 address and checks the certificate fingerprint recorded at `peer add` (`pulse.json` carries both).
 An answer with the right fingerprint is *up*; anything else is a failure.
 
-A buddy is **down** after 15 minutes of failures (three probes in a row). Then:
+A buddy is **down** after 15 minutes of failures. Then:
 
 - one mail **"buddy `<name>` unreachable since `<time>`"** — then once a day while it lasts;
 - one mail **"buddy `<name>` back"** when it answers again.
@@ -95,6 +95,8 @@ The pulse also checks its own site, so that the backup node is the **local** wat
 | own PBS | its API answers on `localhost:8007` | backups and the buddy's pull fail |
 
 Each local check has the same down / repeat / back shape as D2, mailed to our own operator only.
+The mothership is down after **30 minutes**, not 15: a mothership reboot during an update takes
+minutes, and that is not an outage.
 
 The mothership's alert watchdog stays as it is. The pulse adds the one thing it cannot do: report
 the mothership itself.
@@ -164,9 +166,9 @@ TAPPaaS site they pull, and nothing else.
 
 | Phase | Content |
 |---|---|
-| **P1** | `pulse.sh` with D2 (pull peers) and D3 (uplink, firewall, mothership, own PBS); `pulse.json` written and the timer installed by the backup update on a Proxmox-node backup node; mail via the node's postfix; `--contact` on peers (D5); `backup-manager pulse`; module test. |
-| **P2** | D6 (last pull on the pulled side); the `pulse` health gate. |
-| **P3** | D7, the standalone watcher and BUDDY.md Setup 3; D4 for a `debianhost` backup node (msmtp). |
+| **P1** — built 2026-10-15 | `backup/pulse/pulse.sh` with D2 (pull peers) and D3 (uplink, firewall, mothership, own PBS); `lib/pbs-pulse.sh` writes `pulse.json` from the PBS's remotes and the peers' contacts and installs the timer from every backup update, on a Proxmox-node backup node; mail via the node's postfix; `peer add … --contact` and `peer modify … --contact` (D5); `backup-manager pulse`. D7 moved here: the same script runs standalone, BUDDY.md Setup 3. |
+| **P2** | D6 (last pull on the pulled side); the `pulse` health gate and the module test (D8). |
+| **P3** | D4 for a `debianhost` backup node (msmtp). **The satellite as a watcher**: installing a satellite installs a pulse on it that watches its home site (the home firewall's end of the infra tunnel), with a mail path of its own — for a site with a satellite and no buddy, and as a second outside watcher. |
 
 ## Testing
 
@@ -179,11 +181,9 @@ TAPPaaS site they pull, and nothing else.
   container destroyed, tunnel and rules gone.
 - **Real case:** hrossen ↔ rasmus once rasmus runs the standalone watcher (D7).
 
-## Open questions
+## Decisions on the open questions (operator, 2026-10-15)
 
-1. **Mail the buddy's operator?** D2 mails both sites' operators. The alternative is our own operator
-   only, who then calls the buddy. Proposed: both — it is the mail the dark site needs.
-2. **Thresholds**: 5-minute probes, down after 15 minutes, daily repeat — the alert watchdog's shape.
-   The same for D3's mothership check, or longer (a mothership reboot during a sweep takes minutes)?
-3. **D7 scope**: a standalone script for non-TAPPaaS buddies is needed for hrossen ↔ rasmus. Is that
-   P1 rather than P3?
+1. **Both operators are mailed** when a buddy stops answering.
+2. **Thresholds**: 5-minute probes, down after 15 minutes, a daily repeat; the mothership after 30.
+3. **The standalone watcher is P1**: hrossen's buddy is not TAPPaaS, and only it can watch hrossen.
+4. **The satellite is a P3 variant**: a satellite install brings its own watcher.

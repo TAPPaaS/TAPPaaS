@@ -125,6 +125,7 @@ satellite.
 | the `/30` it proposes | — |
 | the PBS login: auth-id and password; the TLS fingerprint; the datastore name | — |
 | its country and city (for `--country`/`--city`) | its country and city |
+| its operator's e-mail (for `--contact`) | its operator's e-mail (for `--contact`) |
 
 Send the password over a channel you trust; public keys and fingerprints may go by email.
 
@@ -271,6 +272,41 @@ proxmox-backup-manager sync-job run "tappaas-$SITE"
 `--max-depth 0` matters: the TAPPaaS system grants read on its datastore's root namespace
 *without* propagation, so its `fs/`, `pull/` and `receive/` namespaces stay out of reach — and out
 of the sync.
+
+**Watch the TAPPaaS system.** You are the one site that can tell the TAPPaaS system it has gone
+dark: its PBS answers you through the tunnel, and a site with no power sends no mail. The TAPPaaS
+pulse does it in one script; run it on your PBS host every 5 minutes. It needs `jq`, `openssl`
+and a working `sendmail` (postfix, or msmtp relaying to your mail provider):
+
+```bash
+apt install jq
+curl -fsSL -o /usr/local/sbin/tappaas-pulse \
+    https://codeberg.org/TAPPaaS/TAPPaaS/raw/branch/main/src/foundation/backup/pulse/pulse.sh
+chmod 0755 /usr/local/sbin/tappaas-pulse
+mkdir -p /etc/tappaas
+tappaas-pulse --template > /etc/tappaas/pulse.json   # then edit it:
+#   site     your site's name          email    your own address
+#   buddies  one entry: name "$SITE", host "$THEM", port 8007, fingerprint "$FP",
+#            contact: the TAPPaaS operator's e-mail
+
+cat > /etc/systemd/system/tappaas-pulse.service <<EOF
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/tappaas-pulse
+EOF
+cat > /etc/systemd/system/tappaas-pulse.timer <<EOF
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+[Install]
+WantedBy=timers.target
+EOF
+systemctl daemon-reload && systemctl enable --now tappaas-pulse.timer
+tappaas-pulse --status
+```
+
+When their PBS has not answered for 15 minutes it mails you both, once a day while it lasts, and
+again when it answers. While your own internet is down it says so instead of blaming them.
 
 ## Setup 4: a non-TAPPaaS PBS a TAPPaaS system can pull
 
