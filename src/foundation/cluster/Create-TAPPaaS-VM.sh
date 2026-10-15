@@ -467,6 +467,9 @@ case "$VM_OSTYPE" in
   w*) RTC_LOCALTIME=1 ;;
   *)  RTC_LOCALTIME=0 ;;
 esac
+# 'host' stays the default: a guest outside HA is never moved live behind the
+# operator's back (a node reboot restarts it in place), and a deliberate move is
+# gated by live-ok. HA guests get the level the pair shares (cluster:ha haCpu).
 CPU_TYPE="$(get_config_value 'cputype' 'host')"
 RAM_SIZE="$(get_config_value 'memory' '4096')"
 DISK_SIZE="$(get_config_value 'diskSize' '8G')"

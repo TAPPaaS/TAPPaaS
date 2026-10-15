@@ -27,6 +27,18 @@ pn_site_member "${INSTANCE}" || die "${INSTANCE} is not in site.json hardware.no
 
 info "  ${GN}✓${CL} root by key; ${pve}; a member of this Site's cluster"
 # A new node changes what the cluster's CPUs have in common (#827).
-proxmox-controller cpu-inventory --apply > /dev/null \
-    || warn "  CPU inventory incomplete — see: proxmox-controller cpu-inventory"
+# A node whose CPU differs from the others makes some live moves unsafe: name
+# them now, not on the first failed drain.
+if proxmox-controller cpu-inventory --apply > /dev/null; then
+    _inv=/home/tappaas/config/cluster-cpu.json
+    _unsafe="$(jq -r --arg n "${INSTANCE}" '[.matrix[]? | select(.liveSafe == false and (.from == $n or .to == $n))
+               | "\(.from) → \(.to) (\(.hard | length) feature(s) missing)"] | join(", ")' "${_inv}" 2>/dev/null || true)"
+    if [[ -n "${_unsafe}" ]]; then
+        warn "  ${INSTANCE}'s CPU differs from the other nodes: a live move of a 'cpu: host' guest is not safe for ${_unsafe}"
+        warn "    HA guests with haCpu common use the level all nodes share ($(jq -r '.common.level // "none"' "${_inv}")); a 'host' guest"
+        warn "    moves across these pairs only offline (--force). Details: config/cluster-cpu.md"
+    fi
+else
+    warn "  CPU inventory incomplete — see: proxmox-controller cpu-inventory"
+fi
 info "${GN}✓${CL} ${INSTANCE} registered — nothing on it was changed; its OS is patched by the cluster module"
