@@ -103,7 +103,33 @@ twice.
   `enable` stages it from `$TAPPAAS_IPXE_EFI` or builds `pkgs.ipxe` via
   nix-build on demand.
 
-Legacy BIOS netboot (undionly.kpxe) is out of scope; nodes are assumed UEFI.
+## Firmware: UEFI netboot and the boot order
+
+The provisioner serves a UEFI netboot. On a board whose firmware offers both,
+switch CSM/legacy off (or set the network stack to UEFI) before step 3.
+
+**Legacy-only firmware.** A board that can only netboot in legacy (CSM) mode
+needs the BIOS iPXE loader instead of the UEFI one:
+
+    node-provisioner enable --bootfile undionly.kpxe
+
+`enable` stages the requested file from `pkgs.ipxe` the same way it stages
+`snp.efi`. This path has not been run on hardware; the PVE installer then
+installs in legacy mode.
+
+**Boot order after the install.** The firmware keeps netbooting while the
+network entry is first; the registration is consumed, so the next answer is a
+404 and the installer stops. Put the installed disk first:
+
+- in the firmware setup, move the disk (UEFI: the `proxmox` entry) above the
+  network entries, or
+- on a UEFI node, from its shell after the first boot:
+
+      efibootmgr                  # lists BootOrder and the entries
+      efibootmgr -o <proxmox>,<rest...>
+
+On legacy firmware, the old disk or network entries can stay ahead of the new
+disk: set the installed disk first in the firmware setup.
 
 ## Configuration / paths
 

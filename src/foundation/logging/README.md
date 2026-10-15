@@ -40,6 +40,19 @@ VM that collects logs from every TAPPaaS VM, the Proxmox nodes and the OPNsense 
 | `backup:vm` | PBS snapshot backup of the VM (Loki state included) |
 | `network:proxy` | Caddy entry `logging.<domain>` → Grafana `:3000`, mgmt-only |
 
+## Availability
+
+Logging is not an HA module by default. When its node is down, the senders
+keep what they can and deliver it when it is back: NixOS guests from their
+journal, the firewall and the Proxmox nodes from their syslog buffers (in
+memory, so a long outage loses the oldest lines). Alert rules evaluated by Loki
+do not fire while it is down.
+
+On a site with two or more nodes an operator may make it HA, like any module:
+add `cluster:ha` to its `dependsOn` with an `HANode` (see
+[cluster:ha](../cluster/services/ha/README.md)); its disk then replicates to
+that node.
+
 For installation steps see [INSTALL.md](./INSTALL.md).
 
 Design and implementation detail: [DESIGN.md](./DESIGN.md). Test coverage:
