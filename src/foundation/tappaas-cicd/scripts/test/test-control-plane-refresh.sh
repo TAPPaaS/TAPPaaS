@@ -58,6 +58,9 @@ cp "${CICD_DIR}/lib/common-install-routines.sh" "${CICD_DIR}/lib/repo-sync.sh" "
 printf '#!/usr/bin/env bash\necho marker\n' > "${FIXTURE}/scripts/marker-tool.sh"
 chmod +x "${FIXTURE}/scripts/marker-tool.sh"
 
+# A composer stub: the refresh writes its output as config/module-fields.json.
+printf '#!/usr/bin/env bash\necho '"'"'{"fields":{"newField":{}}}'"'"'\n' > "${FIXTURE}/scripts/compose-fields.sh"
+
 mkdir -p "${TMP}/config"
 cat > "${TMP}/config/site.json" <<JSON
 {"name":"t","repositories":[{"name":"TAPPaaS","url":"${TMP}/origin.git","branch":"main","path":"${TMP}/checkout"}]}
@@ -117,6 +120,11 @@ if [[ -L "${TMP}/bin/marker-tool.sh" ]]; then
     pass "scripts/*.sh relinked into the bin dir"
 else
     fail "marker-tool.sh was not linked into the bin dir"
+fi
+if [[ "$(jq -r '.fields | has("newField")' "${TMP}/config/module-fields.json" 2>/dev/null)" == "true" ]]; then
+    pass "module-fields.json recomposed, so a field the pull brought in is settable"
+else
+    fail "module-fields.json was not recomposed"
 fi
 if [[ "$(sort "${TMP}/stub.log" | tr '\n' ' ')" == "controller manager " ]]; then
     pass "both component dispatchers ran"

@@ -210,6 +210,23 @@ fi
 # are native in the network-manager TS bin linked by the dispatcher above:
 # `network-manager add/delete/enable/disable/manual`; ADR-007 Phase 7.5.)
 
+# ── 4. Recompose the module-field schema ─────────────────────────────
+# config/module-fields.json is every service's fields.json merged (#567): what
+# `module modify --set` accepts and how it types a value. A field a pull just
+# brought in is unknown until it is recomposed — the sweep did that in the
+# tappaas-cicd pre-update, so a hand-run modify after a refresh refused it.
+if [ -f scripts/compose-fields.sh ] && [ -d "${HOLD_DIR_CONFIG}" ]; then
+  _cf_tmp="$(mktemp)"
+  if bash scripts/compose-fields.sh "$(realpath ..)" > "${_cf_tmp}" 2>/dev/null && [ -s "${_cf_tmp}" ]; then
+    chmod 644 "${_cf_tmp}" 2>/dev/null || true
+    mv "${_cf_tmp}" "${HOLD_DIR_CONFIG}/module-fields.json"
+    debug "  composed module-fields.json ($(jq -r '.fields|length' "${HOLD_DIR_CONFIG}/module-fields.json") fields)"
+  else
+    rm -f "${_cf_tmp}"
+    warn "  could not compose module-fields.json — leaving the existing one"
+  fi
+fi
+
 # Report what actually happened. A failed component build stays non-fatal (see
 # the dispatch rationale above), but claiming success afterwards is what let
 # #467 run unnoticed: every nightly logged two warnings and then a ✓ line, so
