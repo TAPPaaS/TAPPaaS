@@ -25,7 +25,7 @@ rc=0
 
 echo "== backup: PBS helper unit tests (offline) =="
 shopt -s nullglob
-for t in "${here}"/lib/test-*.sh; do
+for t in "${here}"/lib/test-*.sh "${here}"/pulse/test-*.sh; do
     echo "-- $(basename "${t}") --"
     bash "${t}" || rc=1
 done
