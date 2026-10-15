@@ -6,7 +6,7 @@
   "vmtag": "TAPPaaS,Test",
   "node": "tappaas1",
   "cores": 2,
-  "memory": "2048",
+  "memory": 2048,
   "diskSize": "24G",
   "storage": "tanka1",
   "imageType": "clone",

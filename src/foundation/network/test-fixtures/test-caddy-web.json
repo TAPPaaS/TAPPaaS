@@ -6,7 +6,7 @@
   "vmtag": "TAPPaaS,Test,Firewall",
   "node": "tappaas1",
   "cores": 1,
-  "memory": "2048",
+  "memory": 2048,
   "diskSize": "16G",
   "storage": "tanka1",
   "imageType": "clone",

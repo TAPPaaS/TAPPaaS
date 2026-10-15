@@ -17,7 +17,8 @@ together with others, in real time.
 
 - Standalone access — the editor is reached through Nextcloud, not directly.
 - Authentication of its own — trust is established with Nextcloud via a shared secret,
-  set up automatically.
+  set up automatically. People sign in to Nextcloud, so euro-office needs no
+  `identity:identity`.
 - The Nextcloud connector app — shipped by the `nextcloud` module (app ID `eurooffice`,
   settings page "Nextcloud Office").
 - Euro-Office-branded client apps — the desktop/mobile clients are OnlyOffice's official

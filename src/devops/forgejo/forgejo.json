@@ -13,7 +13,7 @@
   "vmtag": "TAPPaaS,Community,Testing",
   "node": "tappaas2",
   "cores": 2,
-  "memory": "2048",
+  "memory": 2048,
   "diskSize": "20G",
   "storage": "tanka1",
   "imageType": "clone",

@@ -20,7 +20,7 @@
     "cluster:vm": {
       "ostype": "win11",
       "cores": 4,
-      "memory": "4096",
+      "memory": 4096,
       "diskSize": "64G",
       "imageType": "clone",
       "image": "8081",

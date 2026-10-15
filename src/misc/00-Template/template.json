@@ -25,7 +25,7 @@
       "diskSize": "32G",
       "image": "8080",
       "imageType": "clone",
-      "memory": "8192",
+      "memory": 8192,
       "storage": "tanka1"
     }
   }

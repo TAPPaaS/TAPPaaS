@@ -23,7 +23,7 @@
       "diskSize": "24G",
       "image": "8080",
       "imageType": "clone",
-      "memory": "2048"
+      "memory": 2048
     }
   }
 }

@@ -41,9 +41,6 @@
       "cloudInit": true,
       "bridge0": "lan"
     },
-    "network:proxy": {
-      "proxyPort": 80
-    },
     "identity:identity": {
       "identity": {
         "providesAdminRole": true,

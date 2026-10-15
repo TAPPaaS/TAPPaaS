@@ -836,7 +836,7 @@ if [[ "${DEEP}" -eq 1 && -n "${DEFAULT_ZONE}" ]]; then
     }
     if [[ "${deep_ok}" -eq 1 ]]; then
         mem0="$(guest_mem_mb)"
-        if jq_module_write "${TVM}" '.cores = 3 | .memory = "3072" | .diskSize = "26G"'; then
+        if jq_module_write "${TVM}" '.cores = 3 | .memory = 3072 | .diskSize = "26G"'; then
             pass "induced drift: cores 2→3, memory 2048→3072, diskSize 24G→26G in config"
         else
             fail "could not edit test config"; deep_ok=0
@@ -1426,7 +1426,7 @@ if [[ "${DEEP}" -eq 1 && -n "${DEFAULT_ZONE}" ]]; then
     #    live; its rootfs size is `manual` — reported, never resized here.
     if [[ "${ldeep_ok}" -eq 1 ]]; then
         # Pattern A-aware write (#207).
-        if jq_module_write "${TLVM}" '.cores = 2 | .memory = "1536" | .diskSize = "10G"'; then
+        if jq_module_write "${TLVM}" '.cores = 2 | .memory = 1536 | .diskSize = "10G"'; then
             pass "induced drift: cores 1→2, memory 1024→1536, diskSize 8G→10G in config"
         else
             fail "could not edit test config"; ldeep_ok=0

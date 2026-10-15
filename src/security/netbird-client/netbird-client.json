@@ -21,7 +21,7 @@
   "config": {
     "cluster:vm": {
       "cores": 1,
-      "memory": "1024",
+      "memory": 1024,
       "diskSize": "4G",
       "storage": "tanka1",
       "imageType": "img",

@@ -18,7 +18,7 @@
       "ostype": "win11",
       "cputype": "x86-64-v2-AES",
       "cores": 4,
-      "memory": "8192",
+      "memory": 8192,
       "diskSize": "32G",
       "storage": "tanka1",
       "imageType": "iso",

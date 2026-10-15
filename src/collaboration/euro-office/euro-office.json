@@ -33,9 +33,6 @@
       "image": "8080",
       "bridge0": "lan"
     },
-    "network:proxy": {
-      "proxyPort": 80
-    },
     "nextcloud:fileservice": {
       "connector": "onlyoffice"
     }

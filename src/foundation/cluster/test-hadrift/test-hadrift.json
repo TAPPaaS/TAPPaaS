@@ -8,7 +8,7 @@
   "HANode": "tappaas2",
   "replicationSchedule": "*/15",
   "cores": 2,
-  "memory": "2048",
+  "memory": 2048,
   "diskSize": "24G",
   "storage": "tanka1",
   "imageType": "clone",
