@@ -172,6 +172,9 @@ export interface ClusterClient {
   storagePools(): StoragePool[];
   // AVX-512 use in a guest (via SSH); null if unreachable (#827).
   avx512Use(target: string): Avx512Use | null;
+  // The timezone a node or a guest runs; null if unreachable or it does not say (#837).
+  nodeTimezone(node: string): string | null;
+  guestTimezone(target: string): string | null;
 }
 
 // ── a guest waiting for a reboot (#730) ───────────────────────────────

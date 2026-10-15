@@ -17,6 +17,7 @@ export class FakeClusterClient implements ClusterClient {
   pools: StoragePool[] = []; // #100: seeded storage pools
   avx = new Map<string, Avx512Use | null>(); // #827: target → AVX-512 use (null = unreachable)
   poolsThrow: string | null = null;
+  zones = new Map<string, string | null>(); // #837: target → timezone (null/absent = unreachable)
 
   reachableNodes(): string[] {
     return [...this.nodes];
@@ -49,6 +50,12 @@ export class FakeClusterClient implements ClusterClient {
   avx512Use(target: string): Avx512Use | null {
     const a = this.avx.get(target);
     return a ? { ...a } : null;
+  }
+  nodeTimezone(node: string): string | null {
+    return this.zones.get(node) ?? null;
+  }
+  guestTimezone(target: string): string | null {
+    return this.zones.get(target) ?? null;
   }
   storagePools(): StoragePool[] {
     if (this.poolsThrow) throw new Error(this.poolsThrow);

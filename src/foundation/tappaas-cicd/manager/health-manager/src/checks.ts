@@ -538,6 +538,49 @@ export function checkCpuImpact(client: ClusterClient, configDir: string, default
   };
 }
 
+// ── site-timezone gate (#837) ──────────────────────────────────────────
+// site.json `.location.timezone` is answered once, at the first install, and
+// the guests are converged to it on every OS update. Nothing compares it with
+// what the nodes run, and a site created with the template's location keeps a
+// wrong one: either side may be the wrong one, so the row says how to fix each.
+// WARN, never FAIL: a clock in another zone is wrong logs, not an outage.
+export function checkSiteTimezone(client: ClusterClient, configDir: string, defaultNode: string): CheckResult {
+  const site = readModuleJson(join(configDir, "site.json"));
+  const loc = site?.location as Record<string, unknown> | undefined;
+  const want = typeof loc?.timezone === "string" ? loc.timezone : "";
+  if (!want) {
+    return {
+      name: "site-timezone",
+      status: "warn",
+      detail: "site.json has no location.timezone — guests fall back to UTC; set it: site-manager site modify --locationTimezone <tz>",
+    };
+  }
+  const rows: CheckRow[] = [];
+  let probed = 0;
+  for (const node of client.reachableNodes()) {
+    const tz = client.nodeTimezone(node);
+    if (tz === null) continue;
+    probed++;
+    if (tz !== want) rows.push({ status: "warn", text: `${`node ${node}`.padEnd(16)}${tz} — the next cluster update sets ${want}` });
+  }
+  for (const m of loadConfigModules(configDir, defaultNode).filter(isManaged)) {
+    const target = guestTarget(configDir, m.module);
+    if (!target) continue;
+    const tz = client.guestTimezone(target);
+    if (tz === null) continue;
+    probed++;
+    if (tz !== want) rows.push({ status: "warn", text: `${m.module.padEnd(16)}${tz} — the next update of ${m.module} sets ${want}` });
+  }
+  if (probed === 0) return { name: "site-timezone", status: "skip", detail: "no node or guest answered" };
+  if (rows.length === 0) return { name: "site-timezone", status: "pass", detail: `${probed} node(s)/guest(s) on ${want}` };
+  return {
+    name: "site-timezone",
+    status: "warn",
+    detail: `${rows.length} of ${probed} not on the site's ${want}; if the site's own is wrong: site-manager site modify --locationTimezone <tz>`,
+    rows,
+  };
+}
+
 export function runHealthGates(client: ClusterClient, opts: ValidateOpts): HealthReport {
   const checks: CheckResult[] = [
     checkServiceLiveness(client, opts.configDir, opts.defaultNode),
@@ -548,6 +591,7 @@ export function runHealthGates(client: ClusterClient, opts: ValidateOpts): Healt
     checkGuestMemory(client),
     checkBackupStatus(opts.configDir),
     checkPendingReboot(client, opts.configDir, opts.defaultNode),
+    checkSiteTimezone(client, opts.configDir, opts.defaultNode),
     checkCveStatus(opts.configDir, Date.now()),
   ];
   const failed = checks.filter((c: CheckResult): boolean => c.status === ("fail" as CheckStatus)).length;

@@ -321,6 +321,26 @@ while read -r node; do
 done <<< "$NODES"
 [[ "${_pve_notify_done}" -eq 1 ]] || warn "  no node answered the notifications API — PVE's mails are unchanged"
 
+# Step 5e: every node runs the site's timezone (#837). Guests are converged to
+#   site.json `.location.timezone` on every OS update; the nodes were not, so a
+#   node installed with another answer kept it (and its logs and backup times
+#   with it). Only the timezone: a node's keyboard and locale are the console's.
+_site_tz="$(jq -r '.location.timezone // empty' "${CONFIG_DIR:-/home/tappaas/config}/site.json" 2>/dev/null || true)"
+if [[ -n "${_site_tz}" ]]; then
+    info "${BOLD}Step 5e: node timezone ${_site_tz} (site.json)${CL}"
+    while read -r node; do
+        [[ -n "${node}" ]] || continue
+        NODE_FQDN="$node.$MGMTVLAN.internal"
+        _cur="$(ssh -n -o BatchMode=yes -o ConnectTimeout=10 root@"$NODE_FQDN" 'timedatectl show -p Timezone --value' 2>/dev/null || true)"
+        [[ -n "${_cur}" && "${_cur}" != "${_site_tz}" ]] || continue
+        if ssh -n -o BatchMode=yes -o ConnectTimeout=10 root@"$NODE_FQDN" "timedatectl set-timezone '${_site_tz}'" >/dev/null 2>&1; then
+            info "  ${GN}✓${CL} $node: timezone ${_cur} → ${_site_tz}"
+        else
+            warn "  could not set the timezone on $node (it stays ${_cur})"
+        fi
+    done <<< "$NODES"
+fi
+
 # Step 6: Drift-heal the cluster storage `nodes` lists from site.json.
 # The lists have only one-shot writers (config-storage at pool creation,
 # site-manager node add after a join) — a node that joined by any other

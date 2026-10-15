@@ -47,6 +47,7 @@ the running cluster and **exits non-zero if any FAIL**.
 | `guest-memory` | `pvesh` + one `ps` / `qm status` per node | a module using ≥ 90% of its declared memory (WARN ≥ 75%), or allocated above the declared limit | cluster unreachable / nothing running |
 | `backup-status` | `backup-manager list --json` | a module disabled, or enabled-but-not-in-PBS-job | backup tooling absent / unparseable |
 | `pending-reboot` | one SSH probe per guest (booted system vs profile; Debian `reboot-required`) | never — **WARN** per waiting guest (#730) | no reachable guest |
+| `site-timezone` | `site.json` `.location.timezone` + one `timedatectl` per node and per guest | never — **WARN** per node or guest on another zone, or when site.json has none (#837) | nothing answered |
 | `cve-status` | `config/sbom/cve-status.json` | never — **WARN** on a failed scan, an ACT, or a scan older than 8 days (ADR-011) | no scan yet |
 
 `--threshold` (default 80) and `--memory-threshold` (default 100) apply
@@ -54,7 +55,7 @@ cluster-wide. The disk gate is **read-only**: the 50%-auto-grow that
 `check-disk-threshold.sh` performs is a *mutation* and stays in the script — it
 is not part of the health assertion. The gate order is service-liveness →
 disk-threshold → memory-commitment → guest-memory → backup-status →
-pending-reboot → cve-status; `validate`
+pending-reboot → site-timezone → cve-status; `validate`
 returns 0 only when zero gates FAIL (SKIP does not fail the assertion).
 
 `guest-memory` renders one row per module beneath its own line (`CheckResult.rows`),

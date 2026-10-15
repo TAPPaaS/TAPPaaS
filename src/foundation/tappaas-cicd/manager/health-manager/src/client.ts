@@ -229,6 +229,14 @@ export class CliClusterClient implements ClusterClient {
     return parseAvx512Use(r.stdout);
   }
 
+  // #837: timedatectl names the zone on Debian, Proxmox and NixOS alike.
+  nodeTimezone(node: string): string | null {
+    return readTimezone(ssh("root", `${node}.${mgmtDomain()}`, TZ_PROBE));
+  }
+  guestTimezone(target: string): string | null {
+    return readTimezone(ssh("tappaas", target, TZ_PROBE));
+  }
+
   // #100: the pools from the cluster's own resource list, plus one `zfs list`
   // per node for what the zvols on each ZFS pool add up to.
   storagePools(): StoragePool[] {
@@ -249,6 +257,12 @@ export class CliClusterClient implements ClusterClient {
     }
     return pools;
   }
+}
+
+const TZ_PROBE = "timedatectl show -p Timezone --value";
+function readTimezone(r: { ran: boolean; rc: number; stdout: string }): string | null {
+  if (!r.ran || r.rc !== 0) return null;
+  return r.stdout.trim() || null;
 }
 
 // Active, non-backup pools from `pvesh get /cluster/resources --type storage`.
