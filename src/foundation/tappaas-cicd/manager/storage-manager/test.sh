@@ -64,6 +64,7 @@ SM nfs share add media --server tappaas1 --pool tankb1 --backup true >/dev/null 
 SM nfs share add bad --server tappaas1 --pool tankb1 >/dev/null 2>&1 && bad "add: --backup required" || ok "add: --backup required"
 SM nfs grant media jellyfin rw >/dev/null 2>&1 && ok "grant" || bad "grant"
 [[ "$(jq -r '.nfs.shares.media.grants.jellyfin' "${FIX}/cfg/shares.json")" == "rw" ]] && ok "grant: recorded" || bad "grant: recorded"
+[[ "$(last)" == "converge share media --notify-only jellyfin" ]] && ok "grant: notifies only the consumer it added" || bad "grant: converge call ($(last))"
 SM nfs revoke media jellyfin >/dev/null 2>&1 && bad "revoke: refused while jellyfin mounts media" || ok "revoke: refused while jellyfin mounts media"
 SM nfs share delete media >/dev/null 2>&1 && bad "delete: refused while mounted" || ok "delete: refused while mounted"
 SM nfs share modify media --set quota=8T >/dev/null 2>&1 && ok "modify: quota" || bad "modify: quota"

@@ -247,7 +247,7 @@ export function run(argv: string[]): number {
     const [share, consumer, access] = positional(args, 2, []);
     if (!share || !consumer || !access) die("nfs grant <share> <consumer> ro|rw");
     if (!store.read(consumer)) warn(`${consumer} is not deployed — the grant takes effect when it is`);
-    return change(store, check, (d) => grant(d, share, consumer, access), () => converge(store, ["share", share, "--notify"]));
+    return change(store, check, (d) => grant(d, share, consumer, access), () => converge(store, ["share", share, "--notify-only", consumer]));
   }
   if (verb.startsWith("nfs revoke")) {
     const [share, consumer] = positional(args, 2, []);

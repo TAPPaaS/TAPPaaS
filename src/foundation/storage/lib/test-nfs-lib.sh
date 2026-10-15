@@ -104,6 +104,14 @@ ck "kind: no such instance"                    "missing" "$(nfs_server_kind ghos
 ck "alias target: a node's FQDN address"       "tappaas1 mgmt.internal" "$(nfs_alias_target tappaas1)"
 ck "alias target: an IP-addressed NAS by its instance name" "nas1 home.internal" "$(nfs_alias_target nas1)"
 ck "consumers of a share: granted, deployed, mounting" "jellyfin" "$(nfs_share_consumers media)"
+# A grant tells the consumer it added, not every consumer already served (#832).
+_svc_dir="$(mktemp -d)"; mkdir -p "${_svc_dir}/lib" "${_svc_dir}/services/nfs"
+printf '#!/bin/sh\necho "$1"\n' > "${_svc_dir}/services/nfs/update-service.sh"; chmod +x "${_svc_dir}/services/nfs/update-service.sh"
+_saved_dir="${NFS_CONVERGE_DIR}"; NFS_CONVERGE_DIR="${_svc_dir}/lib"
+has "notify: every mounting consumer"          "jellyfin" "$(nfs_notify media 2>&1)"
+ck  "notify-only: a consumer not named is left alone" "" "$(nfs_notify media someone-else 2>/dev/null | grep -v 'share media')"
+has "notify-only: the named consumer runs"     "jellyfin" "$(nfs_notify media jellyfin 2>&1)"
+NFS_CONVERGE_DIR="${_saved_dir}"; rm -rf "${_svc_dir}"
 
 # ── mounts: pending, the two-key check, subdir (D3, D11, D15) ─────────
 m jellyfin '{"path":"/media","share":"media","subdir":"jellyfin","access":"rw"}' >/dev/null; ck_rc "mount: granted rw passes" 0 $?

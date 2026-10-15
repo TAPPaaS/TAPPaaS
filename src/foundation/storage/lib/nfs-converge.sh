@@ -6,7 +6,7 @@
 # storage:nfs service all come here.
 #
 # As a command (storage-manager calls it):
-#   nfs-converge.sh share <name> [--exclude <consumer>]... [--notify]
+#   nfs-converge.sh share <name> [--exclude <consumer>]... [--notify | --notify-only <consumer>...]
 #   nfs-converge.sh server <instance> [--exclude <consumer>]...
 #   nfs-converge.sh all                     every share, every server (the sweep)
 #   nfs-converge.sh drop <name> <server>    after a share's declaration is deleted
@@ -132,16 +132,19 @@ nfs_share_consumers() {
     done
 }
 
-# nfs_notify <share> — run the storage:nfs update of every consumer that mounts the
-# share, so a pending mount migrates now rather than at the next sweep (D11). The
-# consent a migration needs travels in TAPPAAS_ALLOW_DISRUPTION.
+# nfs_notify <share> [consumer...] — run the storage:nfs update of every consumer
+# that mounts the share (or only of those named: a grant tells the one it added, not
+# every consumer already served), so a pending mount migrates now rather than at the
+# next sweep (D11). The consent a migration needs travels in TAPPAAS_ALLOW_DISRUPTION.
 nfs_notify() {
-    local c svc="${NFS_CONVERGE_DIR}/../services/nfs/update-service.sh"
+    local share="$1" c svc="${NFS_CONVERGE_DIR}/../services/nfs/update-service.sh"; shift
+    local -a only=("$@")
     while IFS= read -r c; do
         [[ -n "${c}" ]] || continue
-        info "  ${c}: share $1 is available to it — running its storage:nfs update"
+        if [[ "${#only[@]}" -gt 0 && " ${only[*]} " != *" ${c} "* ]]; then continue; fi
+        info "  ${c}: share ${share} is available to it — running its storage:nfs update"
         NFS_NO_REVERSE=1 "${svc}" "${c}" || warn "  ${c}: its storage:nfs update failed (above); the next sweep retries"
-    done < <(nfs_share_consumers "$1")
+    done < <(nfs_share_consumers "${share}")
 }
 
 # nfs_converge_share <share> [consumer-to-exclude...] — its server builds it and the
@@ -160,11 +163,12 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
     . /home/tappaas/bin/common-install-routines.sh
     . "${NFS_CONVERGE_DIR}/nfs-lib.sh"
     set -- "${REST[@]}"
-    excludes=(); notify=0; pos=()
+    excludes=(); notify=0; notify_only=(); pos=()
     while [[ "$#" -gt 0 ]]; do
         case "$1" in
             --exclude) excludes+=("${2:?--exclude needs a consumer}"); shift 2 ;;
             --notify)  notify=1; shift ;;
+            --notify-only) notify=1; notify_only+=("${2:?--notify-only needs a consumer}"); shift 2 ;;
             *)         pos+=("$1"); shift ;;
         esac
     done
@@ -172,7 +176,7 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
         share)
             [[ "${#pos[@]}" -eq 1 ]] || die "share <name>"
             nfs_converge_share "${pos[0]}" "${excludes[@]}"
-            [[ "${notify}" -eq 0 ]] || nfs_notify "${pos[0]}" ;;
+            [[ "${notify}" -eq 0 ]] || nfs_notify "${pos[0]}" ${notify_only[@]+"${notify_only[@]}"} ;;
         server)
             [[ "${#pos[@]}" -eq 1 ]] || die "server <instance>"
             nfs_converge_server "${pos[0]}" "${excludes[@]}" ;;
