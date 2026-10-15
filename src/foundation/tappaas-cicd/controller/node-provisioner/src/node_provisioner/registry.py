@@ -196,9 +196,11 @@ class Registry:
     def match(self, macs) -> Registration | None:
         """Match posted machine MACs against pending registrations.
 
-        MAC match first; else, when EXACTLY ONE pending registration exists,
-        it matches (single-pending fallback — warned about when that
-        registration pinned different MACs); else None.
+        MAC match first; else, when EXACTLY ONE pending registration exists
+        and it pins no MACs, it matches (single-pending fallback); else None.
+        A registration that pins MACs answers only a machine posting one of
+        them — another host's request (or one with no MACs) must not consume
+        it and bake its own address.
         """
         posted = set()
         for m in macs or []:
@@ -217,12 +219,11 @@ class Registry:
             reg = pending[0]
             if reg.macs:
                 warn(
-                    f"single-pending fallback: matching '{reg.name}' although "
-                    f"its pinned MACs {reg.macs} differ from the posted "
-                    f"{sorted(posted) or '(none)'}"
+                    f"not matching '{reg.name}': it pins MACs {reg.macs}, the "
+                    f"request posted {sorted(posted) or '(none)'}"
                 )
-            else:
-                debug(f"single-pending fallback -> {reg.name}")
+                return None
+            debug(f"single-pending fallback -> {reg.name}")
             return reg
         return None
 

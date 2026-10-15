@@ -125,6 +125,12 @@ class TestMatching(RegistryCase):
         match = self.registry.match(["de:ad:be:ef:00:01"])
         self.assertEqual(match.name, "tappaas3")
 
+    def test_pinned_registration_refuses_other_macs(self):
+        self.registry.register("tappaas3", macs=["aa:bb:cc:dd:ee:03"])
+        self.assertIsNone(self.registry.match(["de:ad:be:ef:00:01"]))
+        self.assertIsNone(self.registry.match([]))  # a request without MACs
+        self.assertEqual(len(self.registry.list_pending()), 1)
+
     def test_no_match_with_multiple_pending_and_no_mac_hit(self):
         self.registry.register("tappaas3")
         self.registry.register("tappaas4")

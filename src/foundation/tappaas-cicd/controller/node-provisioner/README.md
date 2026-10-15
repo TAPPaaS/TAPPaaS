@@ -66,8 +66,9 @@ The PVE installer POSTs the machine's system info (MACs under
 `network_interfaces[].mac`, DMI serial). Matching, in order:
 
 1. a posted MAC equals a registered MAC → that node;
-2. otherwise, if EXACTLY ONE pending registration exists → that node
-   (warned about when it pinned different MACs);
+2. otherwise, if EXACTLY ONE pending registration exists and it pins no
+   MACs → that node (a `--mac`-pinned registration answers only its own
+   machine, so another host's request cannot consume it);
 3. otherwise → **404, no answer, installer stops**, refusal is logged.
 
 A served answer **consumes** the registration
