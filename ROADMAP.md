@@ -8,7 +8,10 @@ The current plan is **security and stability**: order the backlog so that the ch
 or migrate an existing installation land first, while there are still few installations and few
 community modules depending on today's names, schemas and layouts. It is built in **waves** — make
 upgrades safe (0), make the breaking changes (1), harden the network (2), stability (3), new
-capabilities (4) — each made of **groups** of related issues.
+capabilities (4) — each made of **groups** of related issues. Two waves stand beside that order:
+**live verification (5)** — tests and sign-offs on real systems, kept apart from development and
+fixes — and **site fabric and user experience (6)**, the switching fabric designed together with
+the physical view of the UI.
 
 This file replaces the security & stability plan (2026-10-06) — kept, closed, as
 [docs/plans/security-and-stability-plan.md](docs/plans/security-and-stability-plan.md) — which was compiled
@@ -101,20 +104,24 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 
 | Wave | Group | Ease | Risk | released | done for 2.3 | open |
 |------|-------|:-:|:-:|---:|---:|---:|
-| 4 | G4.1 Alerting & cluster resilience | M | M | 7 | 4 | 3 |
+| 6 | G6.1 Switching fabric, WAN & ISP | H | H | – | – | 11 |
+| 6 | G6.2 User interface & physical view | H | L | – | – | 3 |
+| 5 | G5.1 Satellite & off-site | H | M | – | – | 7 |
+| 5 | G5.2 Test coverage & conventions | H | L | – | – | 5 |
+| 4 | ✅ G4.1 Alerting & cluster resilience | M | M | 7 | 4 | – |
 | 4 | G4.2 Proxy & ingress | M | L | 3 | 3 | 1 |
-| 4 | G4.3 Manager verb gaps | M | L | 9 | 7 | 3 |
-| 4 | G4.4 Storage & physical devices | H | L | 5 | – | 7 |
-| 4 | G4.5 Governance, CI & sign-offs | M | L | 5 | – | 5 |
+| 4 | G4.3 Manager verb gaps | M | L | 9 | 7 | 2 |
+| 4 | G4.4 Storage & physical devices | H | L | 5 | – | 1 |
+| 4 | G4.5 Governance, CI & sign-offs | M | L | 5 | – | 4 |
 | 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 18 | 9 | 3 |
 | 3 | G3.2 Identity & SSO wiring | M | L | 10 | 3 | 1 |
-| 3 | G3.3 App module fixes | L | L | 10 | 2 | 9 |
-| 3 | G3.4 AI stack maturity | M | M | 1 | 3 | 7 |
+| 3 | G3.3 App module fixes | L | L | 10 | 2 | 8 |
+| 3 | G3.4 AI stack maturity | M | M | 1 | 3 | 5 |
 | 3 | G3.5 Installer UX | L | L | 1 | 1 | 2 |
 | 2 | G2.1 Firewall exposure & rule order | M | H | 7 | 18 | 2 |
-| 2 | G2.2 DNS resolver robustness | L | M | 4 | 3 | 3 |
-| 1 | G1.2 Backup placement model + managed machines (ADR-012, ADR-026) | M | H | 27 | – | 4 |
-| 1 | G1.6 Secrets & privileged access | H | H | 4 | – | 2 |
+| 2 | G2.2 DNS resolver robustness | L | M | 4 | 3 | 1 |
+| 1 | ✅ G1.2 Backup placement model + managed machines (ADR-012, ADR-026) | M | H | 27 | – | – |
+| 1 | G1.6 Secrets & privileged access | H | H | 4 | – | 1 |
 | 1 | G1.7 Parked for Erik discussion | – | – | – | – | 5 |
 
 ## Planning items still open
@@ -183,11 +190,9 @@ items that belong to a group — FW #40, #83, #157, #158, #162 — are rows in t
 | #58 | Secrets management | One secrets-access helper every module uses instead of reading `/etc/secrets`, OpenBao behind it later. Out of G1.6 since 2026-10-02 (operator) |
 | #71 | TAPPaaS way to back up, export and restore user data inside a VM | Open: `backup:filesystem` does not solve it |
 | #89 | Manage binaries for TAPPaaS | |
-| #91 | Backstage as a component of tappaas-cicd | |
 | #129 | Project Nomad in the Home stack | |
 | #156 | pfSense `aliases.xml` import script | |
 | #170 | LiteLLM declarative control plane | Decide with #430 (G1.7) |
-| #183 | TAPPaaS service catalog | |
 | #223 | OPNsense 26.1 InterfaceAssignController may break on a future upgrade | Parked 2026-10-13 (agreed 2026-05-27): works on 26.1 as deployed; revisit when an upgrade breaks it. Parking lot on the forge |
 | #250 | `dependsOn` ownership for community modules | Option D, `dependsOn.sh`. Out of G1.3 since 2026-09-20 (operator) |
 | #284 | forgejo: SQLite → PostgreSQL | Out of G3.3 2026-10-06 (operator): SQLite stays the default until load says otherwise |
@@ -201,19 +206,79 @@ items that belong to a group — FW #40, #83, #157, #158, #162 — are rows in t
 
 ---
 
+## Wave 6 — site fabric and user experience
+
+The physical site and how an operator sees and runs it. Not ordered by upgrade risk like Waves 0–4:
+these two groups are designed together — the fabric is what the physical view shows and changes.
+
+### G6.1 Switching fabric, WAN & ISP — Ease H · Risk H · open: 11
+
+The links a site stands on: node uplinks (a bond under `lan`, #40), switch ports and trunks kept in line with the zones (#668, #697, #706, #731), the WAN and the ISP (public DNS that follows the WAN, #383, #830; mail when the ISP blocks port 25, #125). Switch setup needs a systematic model, at install and on day 2. Linked to G6.2: the physical view shows and later changes it.
+
+| # | Issue | Ease | Risk | Note |
+|---|-------|:-:|:-:|------|
+| FW #40 | Redundant lan uplinks: a bond under the `lan` bridge | M | M | **Rescoped 2026-10-15** (from a dedicated sync network; replaces #590): two equal ports to two interconnected switches → LACP (needs a stack/MLAG, `lacp-rate fast`); mixed ports such as 1G + 10G → active-backup with the fast port primary. `config-network.sh` builds the bond, the node model declares it, `health-manager` warns on fencing armed with a single uplink or a degraded bond |
+| #383 | Keep wildcard public DNS current on dynamic WAN | M | L | |
+| #830 | `environment-manager`: no verb creates the public DNS record | M | L | **Deferred (operator, 2026-10-15).** A name under an environment's domain gets a certificate and a route only once it resolves publicly, and nothing creates that record: an environment added after bootstrap needs the A record by hand at the DNS provider. Related to #383. Reported by @ErikDaniel007 |
+| #125 | Mail relay via M365 Graph API | M | L | |
+| #668 | A machine's zone is recorded, not enforced | H | M | A machine's `zone0` says which network its physical NIC is cabled to, and nothing checks the switch port. Record switch and port per NIC, report VLAN drift. Decide with #697 |
+| #697 | Node `lan` trunks and their switch ports are set once at install, maintained by nothing | M | H | Node trunks and switch ports are set at install and maintained by nothing; untagged mgmt survives on PVID 1 by accident. Five candidate fixes on the issue — **decide with #668** |
+| #706 | A wireless device zone cannot be checked against its SSID | M | L | **Scored 2026-10-13:** an attachment field (`port`/`ssid`) for `kind: device` and the #668 check extended to SSIDs. Additive check; after #668 (the wired half, open). Moved from G2.1 2026-10-13: it needs #668's attachment record first |
+| #731 | Controller-architecture modules never register themselves, and inventory drift has no routine check | M | L | A controller plugin (`unifi-os`) installs without registering in `switch-controller`/`ap-controller`; inventory drift is never checked. Reported by @ErikDaniel007 |
+| #155 | Modules for physical devices | L | L | Docs and examples only (Lars, 2026-05-15) |
+| FW #158 | Multi-NIC module firewall rules | M | L | Optional roll-in |
+| #236 | RADIUS MAC Auth Bypass: a device's VLAN from its MAC, on Wi-Fi and wired ports | H | M | Future idea; depends on how switch ports and APs are managed (this group) |
+
+### G6.2 User interface & physical view — Ease H · Risk L · open: 3
+
+A general TAPPaaS user experience, starting with a physical view of the site: nodes, bonds, switches and ports, APs, WAN and satellite, with zones, guests and live state on them (#839; homelable as a starting point). The service catalog (#183) and Backstage (#91) are decided against it. Linked to G6.1.
+
+| # | Issue | Ease | Risk | Note |
+|---|-------|:-:|:-:|------|
+| #839 | TAPPaaS user interface: a general UX, starting with a physical view of the site | H | L | **Opened 2026-10-15.** Design first (an ADR: where it runs, identity, read-only first, calls the managers); [homelable](https://github.com/Pouzor/homelable) (MIT) as a starting point |
+| #183 | TAPPaaS service catalog | H | L |  |
+| #91 | Backstage as a component of tappaas-cicd | H | L |  |
+
+## Wave 5 — live verification
+
+Tests, proofs and sign-offs on real systems, kept apart from development and bug fixes: what is built and waits for a real VPS, a real buddy or a real failure, and the test conventions themselves.
+
+### G5.1 Satellite & off-site — Ease H · Risk M · open: 7
+
+Everything the satellite and the off-site copy still have to prove: the satellite as a module on a real VPS (#671) and makerfloss's satellite converted (#775), the site-liveness watchers in a real outage (#776), the buddy tunnel and relay (#796, #795), the sshPort passthrough (#762) and the ADR-010 hardening sign-off (#406).
+
+| # | Issue | Ease | Risk | Note |
+|---|-------|:-:|:-:|------|
+| #671 | Deep test: satellite as a module on a real VPS | H | L | **Test plan written 2026-10-05** (`docs/plans/satellite-test-plan.md`): six phases on hrossen, each with a teardown. Waits for the operator's VPS and a `sat-test` DNS record |
+| #775 | Convert makerfloss's `satellite1` into a module instance | H | L | Split from #671: ADR-010 §8.4.7 with the operator, then #671's phase 1–2 checks. Not before makerfloss runs 2.2; keep a second way in — `satellite1` carries its admin VPN |
+| #776 | Report a site that has gone dark (outside heartbeat) | M | L | **Built 2026-10-15** (ADR-031, `7654bedd`, `5cdaf047`, `0005a687`, `8a06e666`): the backup node's pulse watches each buddy we pull (mails both operators), the buddies that pull us (last pull), and this site (uplink, firewall, mothership, PBS); a standalone pulse for a non-TAPPaaS buddy (BUDDY.md Setup 3); a satellite watches its home site's tunnel. Mail via postfix (nodes, debianhosts, satellites: direct). Open before closing: a real alert mail delivered, and a real satellite (#775) |
+| #796 | backup: a buddy's WireGuard tunnel set up with the peer (`peer add … --tunnel`) | H | M | **Built 2026-10-07** on `buddy-tunnel-796`: `peer add … --tunnel serve\|dial` creates and removes the PBS-only tunnel; `peer check`; serving side live-tested on hrossen 2026-10-08, dialling side needs a second site |
+| #795 | satellite: relay a buddy's WireGuard tunnel to the home firewall | M | M | **Opened 2026-10-07** from BUDDY.md: a `buddy-relay` role relaying declared UDP ports (the admin VPN's P5 pattern), so a site reached only through its satellite can serve a buddy |
+| #406 | ADR-010 P7 hardening + sign-off | H | L | |
+| #762 | satellite: build the `sshPort` SSH passthrough to `tappaas-cicd` (ADR-010 §4.4.2) | M | L | Designed in ADR-010, never built: a TCP relay satellite `:sshPort` → tunnel → mothership `:22` for sites with no public inbound address. Decide how to limit it; live test needs #671 |
+
+### G5.2 Test coverage & conventions — Ease H · Risk L · open: 5
+
+How tests run (a `test` verb on the managers, #499) and the module tests that still miss their conventions or probe the wrong thing (#119, #120, #409, #658).
+
+| # | Issue | Ease | Risk | Note |
+|---|-------|:-:|:-:|------|
+| #499 | `test` verbs on managers | H | L | |
+| #658 | nextcloud test 12 probes the browser URL from wherever it runs | L | L | Maintainer-owned (@ErikDaniel007). Not "403 = pass": skip with a reason when the test host is outside the route's `proxyAllowedZones` (exit 77), as Test 9z does |
+| #120 | litellm test.sh conventions | L | L | 2 of 6 items done |
+| #119 | openwebui test coverage | L | L | |
+| #409 | vllm-amd: `test-model.sh` drifted from the compose `update.sh` generates | L | L | |
+
 ## Wave 4 — additive capabilities
 
 New capabilities with low upgrade risk.
 
-### G4.1 Alerting & cluster resilience — Ease M · Risk M · released: 7 · done for 2.3: 4 · open: 3
+### ✅ G4.1 Alerting & cluster resilience — Ease M · Risk M · released: 7 · done for 2.3: 4
 
-Be told when something breaks, and survive more of it. Built: alerts from Loki by mail, every VM's logs in Loki, a credential per pushing VM, container severities from the line, each line's own timestamp, a release CVE preview with majors gated at the boundary (#788); two-node quorum with a QDevice verb (#835), HA failover only to nodes that carry the guest's bridges (#836), a site-timezone gate (#837). Next: a notice when a whole site goes dark (#776), a mail relay (#125), a bonded lan uplink so one port or switch cannot drop quorum (#40).
+Be told when something breaks, and survive more of it. Built: alerts from Loki by mail, every VM's logs in Loki, a credential per pushing VM, container severities from the line, each line's own timestamp, a release CVE preview with majors gated at the boundary (#788); two-node quorum with a QDevice verb (#835), HA failover only to nodes that carry the guest's bridges (#836), a site-timezone gate (#837). A site gone dark is now watched from outside (#776, built — its proof is in G5.1); the bonded lan uplink (#40) and the mail relay (#125) moved to G6.1.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
-| #125 | Mail relay via M365 Graph API | M | L | |
-| #776 | Report a site that has gone dark (outside heartbeat) | M | L | **Built 2026-10-15** (ADR-031, `7654bedd`, `5cdaf047`, `0005a687`, `8a06e666`): the backup node's pulse watches each buddy we pull (mails both operators), the buddies that pull us (last pull), and this site (uplink, firewall, mothership, PBS); a standalone pulse for a non-TAPPaaS buddy (BUDDY.md Setup 3); a satellite watches its home site's tunnel. Mail via postfix (nodes, debianhosts, satellites: direct). Open before closing: a real alert mail delivered, and a real satellite (#775) |
-| FW #40 | Redundant lan uplinks: a bond under the `lan` bridge | M | M | **Rescoped 2026-10-15** (from a dedicated sync network; replaces #590): two equal ports to two interconnected switches → LACP (needs a stack/MLAG, `lacp-rate fast`); mixed ports such as 1G + 10G → active-backup with the fast port primary. `config-network.sh` builds the bond, the node model declares it, `health-manager` warns on fencing armed with a single uplink or a degraded bond |
 | ✅ #590 | Second corosync link | H | M | **Closed 2026-10-15, not built (decision):** a node quorate over a private ring keeps its HA resources while its lan is gone, so HA never fails over. Redundancy goes into the lan link instead → #40 |
 | ✅ #835 | Two-node clusters self-fence: warn in `node add`, support a QDevice | M | M | **Closed 2026-10-15** (`618411e4`, `ba4c18c6`): `node add` and a `quorum` health gate warn on two votes without a QDevice; `site-manager node qdevice add <host> \| remove \| status`. Added and removed live on hrossen with a test container (5 votes with it, 3 after) |
 | ✅ #836 | HA placement only on nodes that have every bridge the VM uses (firewall WAN) | M | M | **Closed 2026-10-15** (`2b0360da`): a declared HANode without one of the guest's bridges is refused; the default picks the first node that has them all; the HA test checks it. With strict rules (`b9d40e98`) and the KVM check in `node add` |
@@ -230,16 +295,15 @@ Publish less of each app: limit a route to some paths (#642), some zones (#643) 
 | ✅ #656 | Limit a route to a provider's source ranges | M | L | **Closed 2026-10-15** (`e85c7da6`): `proxyAllowedZones` takes a network (CIDR) beside zone names, for a provider's caller range; a malformed one is refused at install. A feed that refreshes the ranges stays a follow-up |
 | #154 | `firewall:internal-proxy` | — | — | Close? Lars questioned the need (2026-05-31) |
 
-### G4.3 Manager verb gaps — Ease M · Risk L · released: 9 · done for 2.3: 7 · open: 3
+### G4.3 Manager verb gaps — Ease M · Risk L · released: 9 · done for 2.3: 7 · open: 2
 
-The verbs operators otherwise do by hand: install a whole stack (#763), suspend a module (#428), migrate by changing `.node` (#429), `test` verbs (#499), private repositories (#634), module-level `--set` rules (#654). #444/#582 wait on a discussion.
+The verbs operators otherwise do by hand (the `test` verbs, #499, are in G5.2): install a whole stack (#763), suspend a module (#428), migrate by changing `.node` (#429), private repositories (#634), module-level `--set` rules (#654). #444/#582 wait on a discussion.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
 | ✅ #763 | `module-manager add-stack`: install a stack's modules in `dependsOn` order | M | L | **Closed 2026-10-15** (`b894e996`): `module-manager add-stack <stack>` — the INSTALL.md order, skips what is installed, refuses missing outside dependencies and cycles, a free VMID in the module's block for an environment install, `--dry-run`. Live on hrossen: devops into `test` installed and torn down |
 | ✅ #428 | module-manager `suspend` | M | L | **Closed 2026-10-15** (`b894e996`): `module-manager suspend` / `resume` — the guest stays stopped (HA, or `onboot` off), the config is marked `suspended`; the sweep skips it, the health check reports it. Live on hrossen with deconz-test |
 | ✅ #429 | Migrate by modifying `.node` | M | L | **Closed 2026-10-13** per ADR-019 (Accepted v1.0): `module-manager modify <m> --set node=<n>` relocates a module and migrates a running guest (#498, #825); `module-manager migrate <m> [--force]` moves it between node and HANode, live only when `live-ok` says so |
-| #499 | `test` verbs on managers | H | L | |
 | #444 | IP → device lookup | L | L | Blocked on the MAC-pinning question (#582). **Do not implement (operator, 2026-09-26)** until Lars and @ErikDaniel007 have discussed it |
 | #582 | Read back static reservations | L | L | **Do not implement (operator, 2026-09-26):** one question with #444, pending the same discussion. There is no `dhcp-manager`; read back means dnsmasq's own state |
 | ✅ #634 | Private repositories in `repository add` | L | L | **Closed 2026-10-15** (`f5acb156`), docs only as decided: DESIGN-GIT.md *Adding a private repository* — a read-only deploy key and a narrow SSH `insteadOf` rewrite |
@@ -247,29 +311,22 @@ The verbs operators otherwise do by hand: install a whole stack (#763), suspend 
 | ✅ #831 | `module-manager delete`: an archived module still counts as a dependent | L | L | **Closed 2026-10-15** (`13c7fda9`): the reverse-dependency check skips archived configs, so archiving a consumer and then its provider needs no `--force`. Reported by @ErikDaniel007 |
 | ✅ #829 | `backup-manager restore restore` over a module's own guest fails without a terminal | L | L | **Closed 2026-10-15** (`2ce73897`): `--yes` confirms an in-place restore up front and reaches `restore.sh`, whose error names it. Not `--replace`, which restores another guest's backup and leaves it stopped. Reported by @ErikDaniel007 |
 
-### G4.4 Storage & physical devices — Ease H · Risk L · released: 5 · open: 7
+### G4.4 Storage & physical devices — Ease H · Risk L · released: 5 · open: 1
 
-Shared storage and the physical network as managed parts of a site: the rest of the NFS service (#772), a machine's zone enforced at its switch port (#668, #697), controller modules that register their devices (#731), device modules (#155).
+Shared storage as a managed part of a site: the rest of the NFS service (#772). The physical network (#668, #697, #706, #731, #155, #158) moved to G6.1.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
 | #772 | ADR-029 NFS: remaining work packages from #766 | M | L | Export backup, NAS servers, storage zone, LXC consumers, quota health, `show`/`purge`. **2026-10-05:** ADR-029 v0.8 (shares by name, pending mounts, `subdir`) built, smoke-tested |
-| #155 | Modules for physical devices | L | L | Docs and examples only (Lars, 2026-05-15) |
-| #668 | A machine's zone is recorded, not enforced | H | M | A machine's `zone0` says which network its physical NIC is cabled to, and nothing checks the switch port. Record switch and port per NIC, report VLAN drift. Decide with #697 |
-| #697 | Node `lan` trunks and their switch ports are set once at install, maintained by nothing | M | H | Node trunks and switch ports are set at install and maintained by nothing; untagged mgmt survives on PVID 1 by accident. Five candidate fixes on the issue — **decide with #668** |
-| #706 | A wireless device zone cannot be checked against its SSID | M | L | **Scored 2026-10-13:** an attachment field (`port`/`ssid`) for `kind: device` and the #668 check extended to SSIDs. Additive check; after #668 (the wired half, open). Moved from G2.1 2026-10-13: it needs #668's attachment record first |
-| #731 | Controller-architecture modules never register themselves, and inventory drift has no routine check | M | L | A controller plugin (`unifi-os`) installs without registering in `switch-controller`/`ap-controller`; inventory drift is never checked. Reported by @ErikDaniel007 |
-| FW #158 | Multi-NIC module firewall rules | M | L | Optional roll-in |
 
-### G4.5 Governance, CI & sign-offs — Ease M · Risk L · released: 5 · open: 5
+### G4.5 Governance, CI & sign-offs — Ease M · Risk L · released: 5 · open: 4
 
-The project's own machinery: CI runners (#415), community-health files (#486), the remaining sign-offs and ADRs (#406, #359), a tool for urgent patches (#746), a logging-function lint (#747), a service-desk spike (#63).
+The project's own machinery: CI runners (#415), community-health files (#486), the remaining ADRs (#359; the ADR-010 sign-off, #406, is in G5.1), a tool for urgent patches (#746), a logging-function lint (#747), a service-desk spike (#63).
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
 | #486 | ADR-015 community-health files | L | L | |
 | #415 | Self-hosted KVM Woodpecker runners | H | L | |
-| #406 | ADR-010 P7 hardening + sign-off | H | L | |
 | #359 | legal/processor ADR | M | L | |
 | #63 | Service desk tooling spike | M | L | |
 
@@ -309,9 +366,9 @@ Every app wired to the identity provider the same way: OIDC for hass, Nextcloud 
 | ✅ #479 | Site-specific login page | L | L | **Closed 2026-10-14** (`1a065ddb`, `17ecfb92`): the sign-in page shows the site name and its own logo from `site.json` `branding` (light/dark); live on hrossen. Extended 2026-10-14 (`44724af2`): start-page tiles show each module's icon (dashboard-icons) and `displayName`, generated tile otherwise; providers keyed by slug so a rename keeps the OIDC client |
 | ✅ #701 | logging depends on identity though its own code makes SSO optional | L | L | **Closed 2026-10-14** (`344bc8b8`): logging lists identity in `integratesWith`; Grafana's OIDC switch follows identity. Other consumers keep `dependsOn` — identity is always installed |
 
-### G3.3 App module fixes — Ease L · Risk L · released: 10 · done for 2.3: 2 · open: 9
+### G3.3 App module fixes — Ease L · Risk L · released: 10 · done for 2.3: 2 · open: 8
 
-The known rough edges of the app modules, fixed and tested so they stay fixed: Nextcloud Talk end to end (#715), Home Assistant (#552, #568, #571 — maintainer-owned), Nextcloud and euro-office (#332, #658, #751), litellm consumers (#553), windows-server (#411), forgejo (#283, #284), in-guest backups (#754), container stop timeouts (#786).
+The known rough edges of the app modules, fixed and tested so they stay fixed: Nextcloud Talk end to end (#715), Home Assistant (#552, #568, #571 — maintainer-owned), Nextcloud and euro-office (#332, #751; its test 12, #658, is in G5.2), litellm consumers (#553), windows-server (#411), forgejo (#283, #284), in-guest backups (#754), container stop timeouts (#786).
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
@@ -323,18 +380,15 @@ The known rough edges of the app modules, fixed and tested so they stay fixed: N
 | #411 | windows-server: `deploy-instances.sh` missing | L | L | **Verified open 2026-09-26** (low-risk sweep): the script does not exist; writing it is the work |
 | ✅ #332 | euro-office / Nextcloud install findings | M | L | **Closed 2026-10-15** (`aa92f901`): memory and cores are integers in every module (21 wrote strings; compared numerically, so no drift); nextcloud and euro-office no longer declare the default `proxyPort` 80; euro-office's README says why it needs no `identity:identity`. The other findings were already resolved: the connector is re-applied on update and declared in the schema, `nextcloud:fileservice` is the name, zones follow the default zone, coturn finds its WAN address and NAT itself, tappaas2 trunks the service VLANs |
 | #807 | Immich: bump `unstableSrc` once `jellyfin-ffmpeg` fixes six upload-reachable CVEs | M | L | **Opened 2026-10-09** from the #788 triage (`cc6790a2`): immich-server's jellyfin-ffmpeg 8.1.2-5 has six heap-corruption flaws any logged-in uploader reaches (RISK medium in `immich-vex.json`); nixos-unstable has no fixed jellyfin-ffmpeg yet, and plain ffmpeg 9.0.1 lacks the `tonemapx` filter immich needs |
-| #658 | nextcloud test 12 probes the browser URL from wherever it runs | L | L | Maintainer-owned (@ErikDaniel007). Not "403 = pass": skip with a reason when the test host is outside the route's `proxyAllowedZones` (exit 77), as Test 9z does |
 | ✅ #751 | nextcloud:fileservice has no teardown | M | L | **Closed 2026-10-15** (`2b6c7672`): `delete-service.sh` removes the consumer's env file on the Nextcloud VM and the settings `occ` applied — euro-office's document-server settings, coturn's TURN/STUN, the HPB's signaling server — only when the file names that consumer; never fails the delete. Live on hrossen: each connector removed, re-wired by its update, service tests pass |
 | #754 | In-guest backup timers: drop for PBS or say why they stay | L | L | **2026-10-14:** identity, coturn, euro-office, vaultwarden dropped (three had produced empty archives every night). **litellm and openwebui assigned to @ErikDaniel007** — openwebui's `restore.sh` reads `/var/backup` |
 
-### G3.4 AI stack maturity — Ease M · Risk M · released: 1 · done for 2.3: 3 · open: 7
+### G3.4 AI stack maturity — Ease M · Risk M · released: 1 · done for 2.3: 3 · open: 5
 
-A production-grade AI stack: LiteLLM and Open WebUI tested (#119, #120), hardened (#121) and kept current (#621), LiteLLM sized for its workers (#677), and vLLM's models recoverable after a restore (#758).
+A production-grade AI stack (its test conventions, #119 and #120, are in G5.2): hardened (#121) and kept current (#621), LiteLLM sized for its workers (#677), and vLLM's models recoverable after a restore (#758).
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
-| #120 | litellm test.sh conventions | L | L | 2 of 6 items done |
-| #119 | openwebui test coverage | L | L | |
 | #121 | litellm production-grade | M | L | Renamed backups: old backup files must still restore |
 | #621 | Bump litellm / openwebui | M | M | After #121 LLM-003 gives update.sh a health gate |
 | ✅ #810 | openwebui: container runs as root on the host network, with server-side STT on | M | L | **Closed** (`784f1075`, `046980d6`): unprivileged container root, speech-to-text in the browser only; VEX updated |
@@ -387,18 +441,16 @@ Tighter firewall defaults that keep what modules need. Built: the gateway, GUI/S
 | #385 | Persist the NetBird OPT1 pass rule | L | M | **Low priority this sprint (2026-10-12)**, pending the NetBird decision (*Decisions*). Land with #222 |
 | #222 | NetBird → srv floating rule is fragile | L | M | **Low priority this sprint (2026-10-12)**, pending the NetBird decision. The #816 review found no code that creates NetBird rules |
 
-### G2.2 DNS resolver robustness — Ease L · Risk M · released: 4 · done for 2.3: 3 · open: 3
+### G2.2 DNS resolver robustness — Ease L · Risk M · released: 4 · done for 2.3: 3 · open: 1
 
-A resolver that holds up: a working Unbound restart (#387), a written IPv6 stance (#149), DNSSEC with split horizon (#263), public DNS that follows a dynamic WAN address (#383), and optional blocklists (#157).
+A resolver that holds up: a working Unbound restart (#387), a written IPv6 stance (#149), DNSSEC with split horizon (#263), and optional blocklists (#157). Public DNS that follows the WAN (#383, #830) moved to G6.1.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
 | ✅ #387 | Unbound rc.d restart fails (Python mismatch) | L | L | **Closed 2026-10-13** (operator): TAPPaaS restarts Unbound through `configctl`, never rc.d |
 | ✅ #149 | IPv6 root lookups fail → `do-ip6: no` | L | L | **Done 2026-10-12** (`b03a4840`, awaits push): `ipv6-manager`, round trip live on hrossen with no IPv4 gap. **Every site turns IPv6 off at its next sweep unless `ipv6: true`.** Decided: a `site.json` `ipv6` field, default `false`, says whether the site supports IPv6; Unbound's `do-ip6` follows it. The stance is the IPv6 ADR (#26) |
 | ✅ #263 | DNSSEC on Unbound | L | M | **Closed 2026-10-13** (on `main` 2026-10-13 after a clean `--deep` (144/0)): site.json `dnssec` (default true); split horizon unaffected; ADR-021 |
-| #383 | Keep wildcard public DNS current on dynamic WAN | M | L | |
 | FW #157 | Default DNS blocklists (DNSBL / maltrail) | M | M | **Built 2026-10-13** (`e919308b`): `site.json` `dnsBlocklists` drive Unbound's blocklists; the pfBlockerNG replacement guide (`network/docs/pfblockerng-replacement.md`) awaits @ErikDaniel007's review before the issue closes |
-| #830 | `environment-manager`: no verb creates the public DNS record | M | L | **Deferred (operator, 2026-10-15).** A name under an environment's domain gets a certificate and a route only once it resolves publicly, and nothing creates that record: an environment added after bootstrap needs the A record by hand at the DNS provider. Related to #383. Reported by @ErikDaniel007 |
 
 ---
 
@@ -406,25 +458,20 @@ A resolver that holds up: a working Unbound restart (#387), a written IPv6 stanc
 
 Everything that renames, re-schemas or rebuilds, landed while few installations depend on today's shapes — each change with its migration and an upgrade test from the current `stable`, not only a fresh install.
 
-### G1.2 Backup placement model + managed machines (ADR-012, ADR-026) — Ease M · Risk H · released: 27 · open: 4
+### ✅ G1.2 Backup placement model + managed machines (ADR-012, ADR-026) — Ease M · Risk H · released: 27
 
-Backups where the operator chooses — a node, a managed machine, an external PBS or the satellite — encrypted, with every machine TAPPaaS manages a module (ADR-012, ADR-026). Left: the satellite's live test on a real VPS (#671), converting makerfloss's satellite (#775), and backup buddies over WireGuard (#795, #796).
+Backups where the operator chooses — a node, a managed machine, an external PBS or the satellite — encrypted, with every machine TAPPaaS manages a module (ADR-012, ADR-026). The satellite's live test (#671), makerfloss's satellite (#775) and the buddy tunnel and relay (#795, #796) moved to G5.1.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
-| #671 | Deep test: satellite as a module on a real VPS | H | L | **Test plan written 2026-10-05** (`docs/plans/satellite-test-plan.md`): six phases on hrossen, each with a teardown. Waits for the operator's VPS and a `sat-test` DNS record |
-| #775 | Convert makerfloss's `satellite1` into a module instance | H | L | Split from #671: ADR-010 §8.4.7 with the operator, then #671's phase 1–2 checks. Not before makerfloss runs 2.2; keep a second way in — `satellite1` carries its admin VPN |
-| #795 | satellite: relay a buddy's WireGuard tunnel to the home firewall | M | M | **Opened 2026-10-07** from BUDDY.md: a `buddy-relay` role relaying declared UDP ports (the admin VPN's P5 pattern), so a site reached only through its satellite can serve a buddy |
-| #796 | backup: a buddy's WireGuard tunnel set up with the peer (`peer add … --tunnel`) | H | M | **Built 2026-10-07** on `buddy-tunnel-796`: `peer add … --tunnel serve\|dial` creates and removes the PBS-only tunnel; `peer check`; serving side live-tested on hrossen 2026-10-08, dialling side needs a second site |
 
-### G1.6 Secrets & privileged access — Ease H · Risk H · released: 4 · open: 2
+### G1.6 Secrets & privileged access — Ease H · Risk H · released: 4 · open: 1
 
-Least privilege on the platform. Built: nodes hardened to the Proxmox guide, key-only SSH, encrypted backups. Next: how an AI agent may reach the mothership (#142), and SSH to the mothership through the satellite (#762). Secrets management (#58) waits in Future Work.
+Least privilege on the platform. Built: nodes hardened to the Proxmox guide, key-only SSH, encrypted backups. Next: how an AI agent may reach the mothership (#142), SSH to the mothership through the satellite (#762) moved to G5.1. Secrets management (#58) waits in Future Work.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
 | #142 | RFC: AI-agent access to cicd | H | L | Decision |
-| #762 | satellite: build the `sshPort` SSH passthrough to `tappaas-cicd` (ADR-010 §4.4.2) | M | L | Designed in ADR-010, never built: a TCP relay satellite `:sshPort` → tunnel → mothership `:22` for sites with no public inbound address. Decide how to limit it; live test needs #671 |
 
 ### G1.7 Parked for Erik discussion · open: 5
 
