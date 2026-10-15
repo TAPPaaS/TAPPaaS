@@ -24,7 +24,10 @@
 //       from source (see AUTO_FIELDS below for why `serves` joined them).
 //     - every other field: current==orig → adopt source; else pin current.
 //   Zone-level:
-//     - in source, absent in current → ADD (release introduced a new zone).
+//     - in source, absent in current → ADD (release introduced a new zone) —
+//       unless its vlantag is already a current zone's (the operator renamed it:
+//       adding it back would put two zones on one VLAN), or a real baseline has
+//       it (the operator removed it since the last merge). Both are reported.
 //     - in current, absent in source → KEEP + warn (operator-added or
 //       release-removed but the operator still wants it; the documented one-time
 //       surgical cleanup of stale zones — srv, or on installs migrated with the
@@ -109,6 +112,9 @@ export interface MergeReport {
   added: string[];
   // Zones only in current → kept (operator-added / release-removed); warned.
   keptOrphan: string[];
+  // Zones only in source NOT added: their vlantag is a current zone's, or the
+  // operator removed them since the last merge.
+  notAdded: { zone: string; reason: string }[];
   // Per-zone fields where a source change was adopted (current==orig).
   adopted: ZoneFieldDiff[];
   // Per-zone fields where current was pinned over a differing source value.
@@ -178,7 +184,9 @@ function zoneNames(raw: Raw): string[] {
 }
 
 // Compute the 3-way merge. Pure: no I/O. current/baseline/source are raw docs.
-export function mergeZones(current: Raw, baseline: Raw, source: Raw): MergeReport {
+// backfilled: the baseline is a copy of source (no .orig yet), so it cannot
+// tell a zone the operator removed from one the release added.
+export function mergeZones(current: Raw, baseline: Raw, source: Raw, backfilled = false): MergeReport {
   const merged: Raw = {};
   // Carry current's doc blocks (e.g. _README) through untouched.
   for (const [k, v] of Object.entries(current)) {
@@ -186,6 +194,7 @@ export function mergeZones(current: Raw, baseline: Raw, source: Raw): MergeRepor
   }
 
   const added: string[] = [];
+  const notAdded: { zone: string; reason: string }[] = [];
   const keptOrphan: string[] = [];
   const adopted: ZoneFieldDiff[] = [];
   const pinned: ZoneFieldDiff[] = [];
@@ -193,6 +202,7 @@ export function mergeZones(current: Raw, baseline: Raw, source: Raw): MergeRepor
   const cNames = zoneNames(current);
   const sNames = zoneNames(source);
   const allNames = Array.from(new Set<string>([...cNames, ...sNames]));
+  const cVlans = vlanMap(current, cNames);
 
   for (const z of allNames) {
     const inC = cNames.includes(z);
@@ -211,9 +221,18 @@ export function mergeZones(current: Raw, baseline: Raw, source: Raw): MergeRepor
       merged[z] = current[z];
       keptOrphan.push(z);
     } else {
-      // Only in source — added.
-      merged[z] = source[z];
-      added.push(z);
+      // Only in source — added, unless the operator already has it under
+      // another name (same VLAN) or removed it since the last merge.
+      const vt = (source[z] as Record<string, unknown>)["vlantag"];
+      const holder = typeof vt === "number" && vt > 0 ? cVlans.get(vt) : undefined;
+      if (holder !== undefined) {
+        notAdded.push({ zone: z, reason: `vlantag ${vt} is zone '${holder}' here (a rename?)` });
+      } else if (!backfilled && isZoneObject(baseline[z])) {
+        notAdded.push({ zone: z, reason: "removed here since the last merge" });
+      } else {
+        merged[z] = source[z];
+        added.push(z);
+      }
     }
   }
 
@@ -228,7 +247,7 @@ export function mergeZones(current: Raw, baseline: Raw, source: Raw): MergeRepor
     }
   }
 
-  return { merged, added, keptOrphan, adopted, pinned, renames };
+  return { merged, added, notAdded, keptOrphan, adopted, pinned, renames };
 }
 
 function vlanMap(raw: Raw, names: string[]): Map<number, string> {
@@ -330,7 +349,7 @@ export function runZonesMerge(
   }
 
   // 3. merge.
-  const r = mergeZones(current, baseline, source);
+  const r = mergeZones(current, baseline, source, backfilled);
 
   const nAdopted = r.adopted.reduce((a, d) => a + d.fields.length, 0);
   const nPinned = r.pinned.reduce((a, d) => a + d.fields.length, 0);
@@ -338,6 +357,7 @@ export function runZonesMerge(
     `  Merge: ${nAdopted} adopted, ${nPinned} pinned, ${r.added.length} added, ${r.keptOrphan.length} kept (orphan), ${r.renames.length} possible rename(s)`,
   );
   if (r.added.length) log.info(`    added (new in release): ${r.added.join(", ")}`);
+  for (const n of r.notAdded) log.warn(`    not added: ${n.zone} — ${n.reason}`);
   if (r.keptOrphan.length) {
     log.warn("    kept (in current but not in source — operator-added or release-removed):");
     for (const z of r.keptOrphan) log.warn(`      - ${z}`);

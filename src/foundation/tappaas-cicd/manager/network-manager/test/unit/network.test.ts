@@ -1241,6 +1241,23 @@ function tmpZones(): string {
   );
   check((m2.merged["home"] as Record<string, unknown>)["tier"] === 5, "P1: an operator-edited `tier` is pinned over the release value");
 
+  // (c2) a release zone the operator renamed (same VLAN) or removed is not
+  //      added back: two zones on one VLAN tag break the network.
+  {
+    const cur = { private: { state: "Active", vlantag: 310 }, kids: { state: "Active", vlantag: 520 } };
+    const src = { home: { state: "Active", vlantag: 310 }, guest: { state: "Active", vlantag: 510 }, lab: { state: "Active", vlantag: 610 } };
+    const base = { home: { state: "Active", vlantag: 310 }, guest: { state: "Active", vlantag: 510 } };
+    const r1 = mergeZones(cur, base, src);
+    check(!("home" in r1.merged) && r1.notAdded.some((n) => n.zone === "home" && /private/.test(n.reason)),
+      "#832: a release zone on a VLAN a current zone holds is not added (reported as a rename)");
+    check(!("guest" in r1.merged) && r1.notAdded.some((n) => n.zone === "guest" && /removed/.test(n.reason)),
+      "#832: a zone the operator removed since the last merge is not added back");
+    check("lab" in r1.merged && r1.added.includes("lab"), "#832: a zone the release really adds still comes in");
+    const r2 = mergeZones(cur, src, src, true);
+    check(!("home" in r2.merged) && "guest" in r2.merged,
+      "#832: with a backfilled baseline only the VLAN clash holds a zone back");
+  }
+
   // (d) the rename transform carries the new fields through untouched, and does
   //     NOT rewrite a `serves` value (it names an environment, not a zone — a
   //     zone named the same as the renamed key must not drag it along).
