@@ -103,7 +103,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 |------|-------|:-:|:-:|---:|---:|---:|
 | 4 | G4.1 Alerting & cluster resilience | M | M | 7 | – | 4 |
 | 4 | G4.2 Proxy & ingress | M | L | 3 | – | 4 |
-| 4 | G4.3 Manager verb gaps | M | L | 9 | 2 | 8 |
+| 4 | G4.3 Manager verb gaps | M | L | 9 | 3 | 7 |
 | 4 | G4.4 Storage & physical devices | H | L | 5 | – | 7 |
 | 4 | G4.5 Governance, CI & sign-offs | M | L | 5 | – | 5 |
 | 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 18 | 6 | 2 |
@@ -178,7 +178,7 @@ items that belong to a group — FW #40, #83, #157, #158, #162 — are rows in t
 
 | # | Issue | Note |
 |---|-------|------|
-| #26 | IPv6, opt-in per site after install | **Built 2026-10-12/13 (ADR-030, on `main`), live on hrossen:** `site.json` `ipv6` + `network.wan.ipv6`; each zone with an `ipv6Subnet` gets its `/64` (migration 0016); dnsmasq `ra-names` gives every VM an AAAA; dual-stack rules (#815); AAAA for published names and IPv6 in Caddy access lists; services listen on IPv6 and trust Caddy's IPv6 address; switch-off withdraws the route first; operator page `IPV6.md`. **Left:** inbound — public AAAA and a Caddy IPv6 pass on the WAN (with #383); IPv6 anti-spoofing; a static WAN proven live (hrossen when Netnørden switches); `network.wan.ipv4` applied; an automated IPv6 deep-test tier incl. a simulated prefix change; Euro-Office and Open WebUI stay IPv4 |
+| ✅ #26 | IPv6, opt-in per site after install | **Built 2026-10-12/13 (ADR-030, on `main`), live on hrossen:** `site.json` `ipv6` + `network.wan.ipv6`; each zone with an `ipv6Subnet` gets its `/64` (migration 0016); dnsmasq `ra-names` gives every VM an AAAA; dual-stack rules (#815); AAAA for published names and IPv6 in Caddy access lists; services listen on IPv6 and trust Caddy's IPv6 address; switch-off withdraws the route first; operator page `IPV6.md`. **Left:** inbound — public AAAA and a Caddy IPv6 pass on the WAN (with #383); IPv6 anti-spoofing; a static WAN proven live (hrossen when Netnørden switches); `network.wan.ipv4` applied; an automated IPv6 deep-test tier incl. a simulated prefix change; Euro-Office and Open WebUI stay IPv4 |
 | #39 | Power saving | Documentation |
 | #58 | Secrets management | One secrets-access helper every module uses instead of reading `/etc/secrets`, OpenBao behind it later. Out of G1.6 since 2026-10-02 (operator) |
 | #71 | TAPPaaS way to back up, export and restore user data inside a VM | Open: `backup:filesystem` does not solve it |
@@ -227,7 +227,7 @@ Publish less of each app: limit a route to some paths (#642), some zones (#643) 
 | #656 | Limit a route to a provider's source ranges | M | L | Split, folded into ADR-023: a route names explicit CIDRs (`remote_ip`) — an exposure reduction beside #642/#643. The provider-feed half is parked (*Housekeeping*) |
 | #154 | `firewall:internal-proxy` | — | — | Close? Lars questioned the need (2026-05-31) |
 
-### G4.3 Manager verb gaps — Ease M · Risk L · released: 9 · done for 2.3: 2 · open: 8
+### G4.3 Manager verb gaps — Ease M · Risk L · released: 9 · done for 2.3: 3 · open: 7
 
 The verbs operators otherwise do by hand: install a whole stack (#763), suspend a module (#428), migrate by changing `.node` (#429), `test` verbs (#499), private repositories (#634), module-level `--set` rules (#654). #444/#582 wait on a discussion.
 
@@ -235,7 +235,7 @@ The verbs operators otherwise do by hand: install a whole stack (#763), suspend 
 |---|-------|:-:|:-:|------|
 | #763 | `module-manager add-stack`: install a stack's modules in `dependsOn` order | M | L | **Opened 2026-10-03:** the *solution* concept from #421 — install a stack's modules in order; refuses a missing outside dependency, skips installed ones, resumable, `--dry-run` |
 | #428 | module-manager `suspend` | M | L | |
-| #429 | Migrate by modifying `.node` | M | L | Relates to ADR-019 and #498 |
+| ✅ #429 | Migrate by modifying `.node` | M | L | **Closed 2026-10-13** per ADR-019 (Accepted v1.0): `module-manager modify <m> --set node=<n>` relocates a module and migrates a running guest (#498, #825); `module-manager migrate <m> [--force]` moves it between node and HANode, live only when `live-ok` says so |
 | #499 | `test` verbs on managers | H | L | |
 | #444 | IP → device lookup | L | L | Blocked on the MAC-pinning question (#582). **Do not implement (operator, 2026-09-26)** until Lars and @ErikDaniel007 have discussed it |
 | #582 | Read back static reservations | L | L | **Do not implement (operator, 2026-09-26):** one question with #444, pending the same discussion. There is no `dhcp-manager`; read back means dnsmasq's own state |
