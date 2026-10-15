@@ -63,8 +63,7 @@ provides the `vm`, `lxc` and `ha` services (the module's `provides` in
 
 ## Requirements
 
-- One node (or three for a cluster) capable of running **Proxmox VE 9.1** (9.2 is not
-  yet supported), each with **two NICs** (one WAN, one LAN).
+- One node (or three for a cluster) capable of running **Proxmox VE 9.2**, each with **two NICs** (one WAN, one LAN).
 - A dedicated **boot disk** (ext4/LVM) plus separate data disks for the `tankXY` pools.
 - An existing network with a free IP, DHCP and internet for the bootstrap.
 - Multi-node: a switch between the nodes — unmanaged works out of the box; a managed

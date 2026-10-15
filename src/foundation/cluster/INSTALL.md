@@ -8,7 +8,7 @@ the foundation bootstrap. The full first-node story is in the repo-root
 
 ## Prerequisites
 
-1. **Proxmox VE 9.1** installed on the node (9.2 is not yet supported). Either build a
+1. **Proxmox VE 9.2** installed on the node. Either build a
    preconfigured USB stick with `make-install-media.sh` (asks only for the boot disk on
    the target), or use the stock ISO. During install set:
    - Hostname (FQDN): `tappaas1.mgmt.internal` — subsequent nodes `tappaas2`, `tappaas3`, …
