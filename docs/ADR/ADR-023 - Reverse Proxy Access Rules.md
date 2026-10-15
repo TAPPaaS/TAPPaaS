@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | **Accepted** (with @ErikDaniel007, 2026-09-14) — P1 built 2026-10-15; P2 (path rules) waits on the pre-P2 check of the plugin. |
+| **Status** | **Accepted** (with @ErikDaniel007, 2026-09-14) — P1 built 2026-10-15; the pre-P2 check passed the same day, so P2 (path rules) can be built. |
 | **Version** | 0.2 |
 | **Date** | 2026-09-14 |
 | **Author** | Lars Rossen |
@@ -333,7 +333,7 @@ n8n-hooks.example.org {
 | **P2** | `proxyAccess` path rules, `none`, `identityGate`: `caddy-manager add-handler --path` sets `HandlePath`; handles keyed by description + path; path-handle and access-list pruning; update-service's compare-and-recreate covers the handle set. | 2.1 |
 | **P3** | D2 validation, docs (below), `hass` and `litellm` INSTALL guidance. | with P2 |
 
-**Before P2 starts:** on the test system, create one path handle and one inverted deny-all list by hand. Read the generated `/usr/local/etc/caddy/Caddyfile` and run `caddy validate`. This confirms D3 and I1 against the real plugin, not the template as read.
+**Before P2 starts:** on the test system, create one path handle and one inverted deny-all list by hand. Read the generated `/usr/local/etc/caddy/Caddyfile` and run `caddy validate`. This confirms D3 and I1 against the real plugin, not the template as read. **Done 2026-10-15** — see Open question 1.
 
 ## Testing
 
@@ -362,7 +362,7 @@ n8n-hooks.example.org {
 
 ## Open questions
 
-1. **Does the plugin render D3 and I1 as read?** Settled by the pre-P2 check above. Accept this ADR only after that.
+1. **Does the plugin render D3 and I1 as read?** **Yes — checked 2026-10-15 on hrossen's firewall (os-caddy, Caddy validate).** Done offline, without touching the live configuration: a copy of `config.xml` got a domain with a path handle (`/api/webhook/*`, no list) plus a catch-all with a zone list, and a second domain whose catch-all carries the inverted deny-all list (`0.0.0.0/0, ::/0`). The plugin's own template rendered them into a separate root; `caddy validate` passed, and `caddy adapt` shows the path route first with no zone check, the catch-all checking the zones (403 outside) before proxying, and the inverted list matching every client. D3 and I1 hold as written.
 2. **Is `none` needed, or is fallback-to-default always enough?** Example B argues for it. Without it, internal users could also open the n8n editor through the hooks hostname: harmless, but surprising.
 3. **Should `identityGate: false` need a second confirmation** (for example a warning on every install) because it removes the identity gate ADR-021 relies on?
 4. **Upstream contribution to os-caddy** (A6): `respond`, a method matcher, rate limiting. Who files it, and when?
