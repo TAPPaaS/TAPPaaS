@@ -210,7 +210,7 @@ converge_apply() {
     converge_report "  Detected drift:"
 
     # ── plan ─────────────────────────────────────────────────────────
-    local -a set_args=() hook_units=() migrate_units=() deferred_names=()
+    local -a set_args=() set_summaries=() hook_units=() migrate_units=() deferred_names=()
     local -a side_effects=()
     local name unit_class apply hook setflag disruptive
 
@@ -239,6 +239,7 @@ converge_apply() {
                 value="$(jq -r --arg n "${name}" \
                     '.units[] | select(.name == $n) | .fields[0].desired' "${drift_file}")"
                 set_args+=("${setflag}" "${value}")
+                set_summaries+=("${name}: ${summary}")
                 converge_report "  ${name}: ${summary}"
                 ;;
             hook)
@@ -294,6 +295,10 @@ converge_apply() {
         fi
         if converge_apply_set "${set_args[@]}"; then
             local _set_n=$(( ${#set_args[@]} / 2 ))
+            # Said at info, not debug: a size an operator tuned on the guest
+            # itself (a 2.0 site sized its VMs in Proxmox) is replaced by the
+            # config's here, and that must not happen without notice (#834).
+            info "  ${module}: set from config — $(printf '%s; ' "${set_summaries[@]}" | sed 's/; $//')"
             # A `set` that returned 0 has not necessarily taken effect (#532).
             # Proxmox accepts a change it cannot hot-apply and holds it until the
             # guest restarts, so counting all of them applied reported a change

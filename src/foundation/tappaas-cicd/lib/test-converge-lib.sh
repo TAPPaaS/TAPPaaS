@@ -107,6 +107,8 @@ run() { converge_apply demo "${W}" "${W}/drift.json" "${1:-0}" "${2:-1}" "${3:-0
     check "two in-place fields converge cleanly" "${rc}" "0"
     check "…in exactly ONE batched set call" "$(grep -c '^SET ' "${CMDLOG}")" "1"
     contains "…carrying both flags" "$(cat "${CMDLOG}")" "--cores 8 --memory 16384"
+    # #834: a size the guest was given by hand is replaced — say so, not at debug.
+    contains "…and says what it set, at info" "$(grep '^INFO:' <<< "${LOG}")" "memory: 8192→16384"
 }
 
 # ── 2. hooks, and a relocation last ──────────────────────────────────
