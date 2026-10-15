@@ -2,14 +2,14 @@
 
 | | |
 |---|---|
-| **Status** | **Proposed** — under review, not implemented. The design is agreed first, then built. |
-| **Version** | 0.1 |
+| **Status** | **Accepted** (with @ErikDaniel007, 2026-09-14) — P1 built 2026-10-15; P2 (path rules) waits on the pre-P2 check of the plugin. |
+| **Version** | 0.2 |
 | **Date** | 2026-09-14 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen, @ErikDaniel007 |
 | **Parent** | [ADR-021 — Split-Horizon DNS and Service Reachability](<ADR-021 - Split-Horizon DNS and Service Reachability.md>) — ADR-021 decides *how a caller reaches Caddy*; this ADR decides *what Caddy lets through once it is there* |
 | **Closes / addresses** | **#642** (a published route exposes every path of the app) and **#643** (`proxyRoutes` hosts inherit the primary access list) — merged into one design. Builds on **#206** (zones → Caddy access list) and **#597** (`proxyRoutes`). Related: **#419** (an unresolvable zone is a hard error), **#367** (netbird in the default list). |
-| **Changelog** | v0.1 — first draft. Documents the Caddy proxy setup as built, merges #642 (paths) and #643 (per-route zones) into one rule model, works two examples, and records the alternatives and issues from the #642/#643 review. |
+| **Changelog** | v0.2 (2026-10-15) — **P1 built** (#643): a `proxyRoutes` entry may set its own `proxyAllowedZones` and gets its own access list `tappaas-<module>#<route>`; lists no longer declared are pruned (`caddy-manager prune-accesslists`); the same-port trap warns. Also built, from #656: a network (CIDR) may stand in `proxyAllowedZones` beside zone names, for a provider's caller ranges. v0.1 — first draft. Documents the Caddy proxy setup as built, merges #642 (paths) and #643 (per-route zones) into one rule model, works two examples, and records the alternatives and issues from the #642/#643 review. |
 
 ## Context — how the Caddy proxy works today
 

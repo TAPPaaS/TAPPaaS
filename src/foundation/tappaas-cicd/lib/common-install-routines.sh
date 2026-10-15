@@ -1280,7 +1280,7 @@ validate_module_zone_refs() {
             continue
         fi
         _zref_known "$ref" || bad+=("proxyAllowedZones:${ref}")
-    done < <(jq -r '(.proxyAllowedZones // []) | .[]' "$module_json" 2>/dev/null)
+    done < <(jq -r '(.proxyAllowedZones // [])[], ((.proxyRoutes // [])[] | (.proxyAllowedZones // [])[])' "$module_json" 2>/dev/null)
 
     while IFS= read -r ref; do
         [[ -n "$ref" ]] || continue

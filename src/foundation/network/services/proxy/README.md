@@ -156,13 +156,13 @@ Zones (and the literal 'internet') permitted to reach this service through the r
 
 ### `proxyRoutes`
 
-Additional reverse-proxy routes for a VM that serves several endpoints on different ports. Each entry publishes <name>.<domain> — where <domain> is the environment's primary domain, the same suffix proxyDomain defaults to — forwarding to the module's upstream host on the entry's port. The primary proxyDomain/proxyPort route is unaffected. Extra routes inherit the primary route's access list (proxyAllowedZones), TLS strategy (proxyTls/dnsMode) and upstream flags (proxyUpstreamTls, proxyUpstreamHttp1, proxyPreserveHost).
+Additional reverse-proxy routes for a VM that serves several endpoints on different ports. Each entry publishes <name>.<domain> — where <domain> is the environment's primary domain, the same suffix proxyDomain defaults to — forwarding to the module's upstream host on the entry's port. The primary proxyDomain/proxyPort route is unaffected. An entry may set its own proxyAllowedZones (zones, 'internet' or networks) and then gets its own access list; without it the route inherits the primary's. They always inherit the primary route's TLS strategy (proxyTls/dnsMode) and upstream flags (proxyUpstreamTls, proxyUpstreamHttp1, proxyPreserveHost).
 
 | Attribute | Value |
 |---|---|
 | Type | `array` |
 | Default | *(none)* |
-| Example | `[{"name": "admin", "port": 9090}, {"name": "metrics", "port": 3000}]` |
+| Example | `[{"name": "admin", "port": 9090}, {"name": "hooks", "port": 5678, "proxyAllowedZones": ["internet"]}]` |
 | Required by | *(none)* |
 | Used by | `network:proxy` |
 | Change class | `in-place` |

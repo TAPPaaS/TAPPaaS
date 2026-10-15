@@ -150,6 +150,19 @@ proxy_resolve_access_list() {
         debug "  Access: ${BL}${zones[*]}${CL}" >&2
     fi
 
+    proxy_zone_access_list "${module}" "${al_name}" "${zones_file}" "${description}" "${zones[@]}"
+}
+
+# proxy_zone_access_list <module> <list-name> <zones_file> <description> <zone|network>...
+# The access list for one route: `internet` → no restriction (the list is
+# deleted, '' echoed); otherwise every zone's network and every named network in
+# one remote_ip list called <list-name>, whose name is echoed. Returns non-zero on
+# a hard error (an unknown zone, a malformed network, an empty result).
+proxy_zone_access_list() {
+    local module="$1" al_name="$2" zones_file="$3" description="$4"
+    shift 4
+    local -a zones=("$@")
+
     # Internet exposure → no restriction; drop any prior allow-list.
     local z
     for z in "${zones[@]}"; do
@@ -329,7 +342,9 @@ proxy_unbound_add() {
 # "<description>"). Handlers are keyed by description, so a distinct one per route
 # is what stops route N from overwriting route 1's handler.
 #
-# Routes inherit the module's access list (ACL_ARGS) and TLS/domain settings
+# A route may declare its own proxyAllowedZones (ADR-023 D2, #643): it then gets
+# its own access list, tappaas-<module>#<route>. Without one it inherits the
+# module's access list (ACL_ARGS), as before. Routes take TLS/domain settings
 # (CADDY_DOMAIN_ARGS) from the caller, and the proxyUpstream* upstream flags from
 # the module config. Under per-service TLS each route FQDN also gets a
 # split-horizon Unbound override, with the same wildcard-redirect-zone collision
@@ -354,9 +369,9 @@ proxy_add_routes() {
     # the per-route override below is skipped, as for the primary handler.
     local gw="" gw_looked=0
 
-    local -a keep_fqdns=()
-    local name port fqdn route_desc wc
-    while IFS=$'\t' read -r name port; do
+    local -a keep_fqdns=() keep_lists=() route_acl_args=() route_zones=()
+    local name port zones_json fqdn route_desc wc route_acl
+    while IFS=$'\t' read -r name port zones_json; do
         [[ -z "${name}" ]] && continue
         # A malformed entry is a config error — fail loudly rather than push
         # broken config to Caddy.
@@ -368,6 +383,25 @@ proxy_add_routes() {
         fi
         fqdn="${name}.${domain}"
         route_desc="${description}#${name}"
+
+        # This route's own zones, or the module's list.
+        route_acl_args=("${ACL_ARGS[@]+"${ACL_ARGS[@]}"}")
+        if [[ -n "${zones_json}" ]]; then
+            mapfile -t route_zones < <(jq -r '.[]' <<< "${zones_json}")
+            [[ ${#route_zones[@]} -gt 0 ]] || die "proxyRoutes '${name}': proxyAllowedZones is empty — leave it out to inherit the module's, or name who may reach it"
+            route_acl="$(proxy_zone_access_list "${MODULE}" "tappaas-${MODULE}#${name}" "${ZONES_FILE}" "${route_desc}" "${route_zones[@]}")" \
+                || die "proxyRoutes '${name}': its proxyAllowedZones cannot be resolved (see above)"
+            route_acl_args=()
+            if [[ -n "${route_acl}" ]]; then
+                route_acl_args=(--access-list "${route_acl}")
+                keep_lists+=(--keep "${route_acl}")
+            fi
+            # The #643 trap: a second name for the SAME port, more open than the
+            # primary, publishes the whole app under that name.
+            if [[ "${port}" == "${PROXY_PORT:-}" && ${#ACL_ARGS[@]} -gt 0 && -z "${route_acl}" ]]; then
+                warn "  proxyRoutes '${name}' serves the primary port ${port} to the internet while the module itself is restricted — the whole app is public under ${fqdn}"
+            fi
+        fi
         keep_fqdns+=(--keep "${fqdn}")
         debug "  Additional route: ${BL}${fqdn}${CL} -> ${BL}${upstream}:${port}${CL} (${route_desc})"
 
@@ -397,12 +431,13 @@ proxy_add_routes() {
             --upstream "${upstream}" \
             --port "${port}" \
             --description "${route_desc}" \
-            "${ACL_ARGS[@]+"${ACL_ARGS[@]}"}" \
+            "${route_acl_args[@]+"${route_acl_args[@]}"}" \
             "${tls_args[@]+"${tls_args[@]}"}" \
             "${http1_args[@]+"${http1_args[@]}"}" \
             "${preserve_args[@]+"${preserve_args[@]}"}" \
             --no-ssl-verify || die "Failed to create Caddy handler ${fqdn}"
-    done < <(echo "${JSON}" | jq -rc '.proxyRoutes // [] | .[] | [.name, (.port|tostring)] | @tsv')
+    done < <(echo "${JSON}" | jq -rc '.proxyRoutes // [] | .[]
+        | [.name, (.port|tostring), (if .proxyAllowedZones == null then "" else (.proxyAllowedZones|tojson) end)] | @tsv')
 
     # Sweep any route this module previously published but no longer declares.
     # Empty keep list (no proxyRoutes) removes every "<description>#*" route.
@@ -410,6 +445,22 @@ proxy_add_routes() {
     proxy_prune_domains --description-prefix "${description}#" \
         "${keep_fqdns[@]+"${keep_fqdns[@]}"}" \
         --no-ssl-verify || warn "Could not prune undeclared routes for ${MODULE} (non-fatal)"
+    # …and the access lists of routes that no longer declare their own zones.
+    # After the handlers above, so none still points at what is deleted.
+    proxy_prune_route_lists "${MODULE}" "${keep_lists[@]+"${keep_lists[@]}"}"
+}
+
+# proxy_prune_route_lists <module> [--keep <list>]... — delete the module's
+# per-route access lists (tappaas-<module>#*) that are not kept. Non-fatal; a
+# caddy-manager without the verb is reported, not failed.
+proxy_prune_route_lists() {
+    local module="$1"; shift
+    if ! caddy-manager prune-accesslists --help >/dev/null 2>&1; then
+        debug "  caddy-manager has no prune-accesslists — per-route lists not pruned" >&2
+        return 0
+    fi
+    caddy-manager prune-accesslists --name-prefix "tappaas-${module}#" "$@" --no-ssl-verify >/dev/null \
+        || warn "Could not prune undeclared route access lists for ${module} (non-fatal)"
 }
 
 # proxy_unpublish <module> <proxy-domain> <environment-domain> <module-json>
@@ -442,6 +493,7 @@ proxy_unpublish() {
     fi
     proxy_prune_domains --description-prefix "${desc}#" --no-ssl-verify \
         || warn "Could not delete additional routes for ${module}"
+    proxy_prune_route_lists "${module}"
     if [[ -n "${json}" && -n "${env_domain}" ]]; then
         local _rname _rport
         while IFS=$'\t' read -r _rname _rport; do

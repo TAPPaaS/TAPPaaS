@@ -340,6 +340,36 @@ def delete_access_list_cmd(
     return False
 
 
+def prune_access_lists_cmd(
+    manager: CaddyManager,
+    name_prefix: str,
+    keep: list[str],
+    check_mode: bool = False,
+) -> bool:
+    """Delete every access list whose name starts with ``name_prefix`` and is not
+    in ``keep`` (ADR-023 D4): a proxyRoutes entry that stopped declaring its own
+    zones, or was removed, leaves its `tappaas-<module>#<route>` list behind.
+    Idempotent; the caller re-points the handlers first, so nothing still uses
+    what is deleted."""
+    if not name_prefix:
+        print("ERROR: --name-prefix must not be empty (it would match every list)", file=sys.stderr)
+        return False
+    keep_set = set(keep or [])
+    stale = [a for a in manager.list_access_lists() if a.name.startswith(name_prefix) and a.name not in keep_set]
+    ok = True
+    for a in stale:
+        if check_mode:
+            print(f"Would delete access list '{a.name}' (dry-run)")
+            continue
+        result = manager.delete_access_list(a.uuid)
+        if result.get("result") in ("deleted", "ok"):
+            print(f"  Access list '{a.name}' deleted (no longer declared)")
+        else:
+            print(f"ERROR: Failed to delete access list '{a.name}': {result}", file=sys.stderr)
+            ok = False
+    return ok
+
+
 def delete_domain_cmd(
     manager: CaddyManager,
     domain_name: str,
@@ -755,6 +785,13 @@ Examples:
     del_al_parser = subparsers.add_parser("delete-accesslist", parents=[global_parser], help="Delete an access list by name")
     del_al_parser.add_argument("name", help="Access list name to delete")
 
+    # prune-accesslists (ADR-023 D4): per-route lists no longer declared
+    prune_al_parser = subparsers.add_parser(
+        "prune-accesslists", parents=[global_parser],
+        help="Delete access lists whose name starts with a prefix, except the --keep ones")
+    prune_al_parser.add_argument("--name-prefix", required=True, help="e.g. 'tappaas-hass#'")
+    prune_al_parser.add_argument("--keep", action="append", default=[], help="A list name to keep (repeatable)")
+
     # delete-domain
     delete_domain_parser = subparsers.add_parser("delete-domain", parents=[global_parser], help="Delete a reverse proxy domain")
     delete_domain_parser.add_argument("domain", help="Domain FQDN to delete")
@@ -852,6 +889,8 @@ Examples:
                 )
             elif args.command == "delete-accesslist":
                 success = delete_access_list_cmd(manager, args.name, args.check_mode)
+            elif args.command == "prune-accesslists":
+                success = prune_access_lists_cmd(manager, args.name_prefix, args.keep, args.check_mode)
             elif args.command == "delete-domain":
                 success = delete_domain_cmd(manager, args.domain, args.check_mode)
             elif args.command == "prune-domains":

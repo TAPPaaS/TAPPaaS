@@ -262,6 +262,41 @@ def _al_row(**over) -> dict:
     return row
 
 
+class TestPruneAccessLists(unittest.TestCase):
+    """Per-route access lists no longer declared are pruned (ADR-023 D4, #643)."""
+
+    def _mgr(self, names):
+        mgr = CaddyManager(config=MagicMock())
+        mgr._client = MagicMock()  # noqa: SLF001
+        lists = []
+        for i, n in enumerate(names):
+            al = MagicMock()
+            al.name, al.uuid = n, f"U{i}"
+            lists.append(al)
+        mgr.list_access_lists = MagicMock(return_value=lists)  # noqa: SLF001
+        mgr.delete_access_list = MagicMock(return_value={"result": "deleted"})  # noqa: SLF001
+        return mgr
+
+    def test_prunes_only_undeclared_route_lists(self):
+        from opnsense_controller.caddy_cli import prune_access_lists_cmd  # noqa: PLC0415
+        mgr = self._mgr(["tappaas-hass", "tappaas-hass#hooks", "tappaas-hass#old", "tappaas-hass-x#a", "tappaas-other#b"])
+        self.assertTrue(prune_access_lists_cmd(mgr, "tappaas-hass#", ["tappaas-hass#hooks"]))
+        deleted = [c.args[0] for c in mgr.delete_access_list.call_args_list]
+        self.assertEqual(deleted, ["U2"])  # only tappaas-hass#old: not the primary, not hass-x, not other
+
+    def test_empty_prefix_is_refused(self):
+        from opnsense_controller.caddy_cli import prune_access_lists_cmd  # noqa: PLC0415
+        mgr = self._mgr(["tappaas-hass"])
+        self.assertFalse(prune_access_lists_cmd(mgr, "", []))
+        mgr.delete_access_list.assert_not_called()
+
+    def test_check_mode_deletes_nothing(self):
+        from opnsense_controller.caddy_cli import prune_access_lists_cmd  # noqa: PLC0415
+        mgr = self._mgr(["tappaas-hass#old"])
+        self.assertTrue(prune_access_lists_cmd(mgr, "tappaas-hass#", [], check_mode=True))
+        mgr.delete_access_list.assert_not_called()
+
+
 class TestAccessListMessage(unittest.TestCase):
     def test_message_reaches_the_api_body(self):
         captured: list = []
