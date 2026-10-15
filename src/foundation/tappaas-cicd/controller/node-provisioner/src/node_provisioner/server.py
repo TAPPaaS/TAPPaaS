@@ -30,7 +30,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from . import answer as answer_mod
 from .log import debug, info, warn
-from .registry import Registry
+from .registry import Registry, normalize_mac
 from .util import (
     DEFAULT_NODE_DOMAIN,
     DEFAULT_PORT,
@@ -104,6 +104,33 @@ def _reserve_standard_ip(name: str, macs: list, domain: str) -> None:
     else:
         warn(f"could not reserve {ip} for {name}: "
              f"{(result.stderr or result.stdout or '').strip()}")
+
+
+def _pinned_mgmt_network(reg, posted_macs: list) -> dict:
+    """The management network for the answer of a MAC-pinned registration:
+    the registered MAC the machine posted, the node's standard mgmt address and
+    the firewall as gateway and DNS. {} (DHCP) for an unpinned registration or a
+    node name without a standard address."""
+    posted = set()
+    for m in posted_macs or []:
+        try:
+            posted.add(normalize_mac(m))
+        except ValueError:
+            continue
+    mac = next((m for m in reg.macs if m in posted), "")
+    if not mac:
+        return {}
+    try:
+        mgmt_ip = detect_mgmt_ip()
+    except RuntimeError as e:
+        warn(f"{reg.name}: management network from DHCP — {e}")
+        return {}
+    ip = derive_node_ip(reg.name, mgmt_ip)
+    if not ip:
+        return {}
+    gateway = mgmt_ip.rsplit(".", 1)[0] + ".1"
+    info(f"{reg.name}: management on the NIC with MAC {mac}, {ip}/24 via {gateway}")
+    return {"mgmt_mac": mac, "mgmt_cidr": f"{ip}/24", "mgmt_gateway": gateway}
 
 
 def extract_macs(system_info: dict) -> list:
@@ -198,6 +225,7 @@ def handle_answer_post(
                      "(re-enable provisioning and reboot the node)\n")
 
     _reserve_standard_ip(reg.name, macs, domain)
+    net = _pinned_mgmt_network(reg, macs)
 
     password = secrets.token_urlsafe(24)
     secret_path = write_node_secret(reg.name, password, secrets_directory)
@@ -211,6 +239,7 @@ def handle_answer_post(
         ssh_keys=collect_root_ssh_keys(),
         pools=reg.pools,
         boot_disk=boot_disk,
+        **net,
         **settings,
     )
 

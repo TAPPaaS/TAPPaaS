@@ -11,6 +11,7 @@ from __future__ import annotations
 import stat
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 from node_provisioner.answer import (
@@ -56,6 +57,15 @@ class TestRenderAnswer(unittest.TestCase):
 
     def test_network_from_dhcp(self):
         self.assertIn('source = "from-dhcp"', self._render())
+
+    def test_network_pinned_to_the_registered_nic(self):
+        out = self._render(mgmt_mac="AA:BB:CC:DD:EE:03", mgmt_cidr="10.0.0.12/24",
+                           mgmt_gateway="10.0.0.1")
+        self.assertIn('source = "from-answer"', out)
+        self.assertIn('cidr = "10.0.0.12/24"', out)
+        self.assertIn('gateway = "10.0.0.1"', out)
+        self.assertIn('filter.ID_NET_NAME_MAC = "*aabbccddee03"', out)
+        self.assertNotIn("from-dhcp", out)
 
     # ── The installer NEVER touches declared data pools ──────────────
     #
@@ -261,6 +271,22 @@ class TestHandleAnswerPost(unittest.TestCase):
         # a second identical request finds nothing
         status2, _ = self._post(["AA:BB:CC:DD:EE:03"])
         self.assertEqual(status2, 404)
+
+    def test_pinned_registration_gets_its_nic_and_address(self):
+        self.registry.register("tappaas3", macs=["aa:bb:cc:dd:ee:03"])
+        with mock.patch("node_provisioner.server.detect_mgmt_ip", return_value="10.0.0.5"), \
+             mock.patch("node_provisioner.server._reserve_standard_ip"):
+            status, body = self._post(["11:22:33:44:55:66", "AA:BB:CC:DD:EE:03"])
+        self.assertEqual(status, 200)
+        self.assertIn('filter.ID_NET_NAME_MAC = "*aabbccddee03"', body)
+        self.assertIn('cidr = "10.0.0.12/24"', body)
+
+    def test_unpinned_registration_stays_on_dhcp(self):
+        self.registry.register("tappaas4")
+        with mock.patch("node_provisioner.server._reserve_standard_ip"):
+            status, body = self._post(["de:ad:be:ef:00:01"])
+        self.assertEqual(status, 200)
+        self.assertIn('source = "from-dhcp"', body)
 
     def test_single_pending_fallback_serves(self):
         self.registry.register("tappaas4")

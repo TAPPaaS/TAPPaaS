@@ -65,6 +65,9 @@ def render_answer(
     tz: str = DEFAULT_TIMEZONE,
     mailto: str = "",
     keyboard: str = DEFAULT_KEYBOARD,
+    mgmt_mac: str = "",
+    mgmt_cidr: str = "",
+    mgmt_gateway: str = "",
 ) -> str:
     """Render answer.toml for a registered node.
 
@@ -80,6 +83,11 @@ def render_answer(
         boot_disk: The disk the PVE system is installed on, ext4/LVM
             (TAPPaaS standard, cf. tappaas1).
         country / tz / mailto / keyboard: site-level installer settings.
+        mgmt_mac / mgmt_cidr / mgmt_gateway: when all are given (a registration
+            that pins its MACs), the management network is set from the answer
+            on the NIC with that MAC — with DHCP the installer keeps whichever
+            NIC got a lease first, which on a node with a second, WAN-side NIC
+            can be the wrong one. Otherwise from DHCP.
     """
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
     fqdn = f"{name}.{domain}"
@@ -102,7 +110,19 @@ def render_answer(
         f"root-ssh-keys = {_toml_str_list(ssh_keys)}",
         "",
         "[network]",
-        'source = "from-dhcp"',
+    ]
+    if mgmt_mac and mgmt_cidr and mgmt_gateway:
+        lines += [
+            "# the registered management NIC, by MAC, at the node's standard address",
+            'source = "from-answer"',
+            f"cidr = {_toml_str(mgmt_cidr)}",
+            f"gateway = {_toml_str(mgmt_gateway)}",
+            f"dns = {_toml_str(mgmt_gateway)}",
+            f"filter.ID_NET_NAME_MAC = {_toml_str('*' + mgmt_mac.replace(':', '').lower())}",
+        ]
+    else:
+        lines.append('source = "from-dhcp"')
+    lines += [
         "",
         "[disk-setup]",
         "# TAPPaaS standard (cf. tappaas1): PVE system on a dedicated boot",
