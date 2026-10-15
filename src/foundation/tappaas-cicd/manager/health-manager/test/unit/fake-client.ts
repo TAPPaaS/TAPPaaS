@@ -52,6 +52,10 @@ export class FakeClusterClient implements ClusterClient {
     return a ? { ...a } : null;
   }
   quorumState: { expectedVotes: number; qdevice: boolean } | null = null; // #835
+  pulseState: { timer: string; targets: { id: string; state: string }[] } | null = null; // ADR-031
+  pulse(_node: string): { timer: string; targets: { id: string; state: string }[] } | null {
+    return this.pulseState ? { timer: this.pulseState.timer, targets: this.pulseState.targets.map((t) => ({ ...t })) } : null;
+  }
   quorum(): { expectedVotes: number; qdevice: boolean } | null {
     return this.quorumState ? { ...this.quorumState } : null;
   }

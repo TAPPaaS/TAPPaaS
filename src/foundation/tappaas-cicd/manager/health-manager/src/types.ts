@@ -177,6 +177,9 @@ export interface ClusterClient {
   // Corosync's votes and whether a QDevice gives one (pvecm status); null if no
   // node answers (#835).
   quorum(): { expectedVotes: number; qdevice: boolean } | null;
+  // The backup node's pulse (ADR-031): its timer's state and each target's
+  // state (up / failing / DOWN); null if the node does not answer.
+  pulse(node: string): { timer: string; targets: { id: string; state: string }[] } | null;
   guestTimezone(target: string): string | null;
 }
 

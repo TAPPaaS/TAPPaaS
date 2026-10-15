@@ -241,6 +241,16 @@ export class CliClusterClient implements ClusterClient {
     return null;
   }
 
+  pulse(node: string): { timer: string; targets: { id: string; state: string }[] } | null {
+    const r = ssh("root", `${node}.${mgmtDomain()}`,
+      "systemctl is-active tappaas-pulse.timer; /usr/local/sbin/tappaas-pulse --status 2>/dev/null; true");
+    if (!r.ran) return null;
+    const lines = r.stdout.split("\n");
+    const targets = lines.slice(2).map((l) => l.trim().split(/\s+/)).filter((f) => f.length >= 2 && f[0])
+      .map((f) => ({ id: f[0], state: f[1] }));
+    return { timer: (lines[0] ?? "").trim(), targets };
+  }
+
   nodeTimezone(node: string): string | null {
     return readTimezone(ssh("root", `${node}.${mgmtDomain()}`, TZ_PROBE));
   }

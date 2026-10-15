@@ -204,11 +204,12 @@ pbs_ensure_declared
 # On a Proxmox node only for now; a backup node that is a machine has no mail
 # path yet (ADR-031 D4). Not fatal: it is a watcher, not the backup.
 _pulse_host="$(pbs_state_node "$(pbs_placement_state)" || true)"
-if [[ -n "${_pulse_host}" ]] && [[ "$(jq -r '.kind // ""' "${CONFIG_DIR:-/home/tappaas/config}/${_pulse_host}.json" 2>/dev/null)" != "machine" ]]; then
+# A cluster node is a `kind: machine` module too (pvehost): ask the cluster.
+if [[ -n "${_pulse_host}" ]] && get_all_node_hostnames | grep -qx "${_pulse_host}"; then
     info "${BOLD}Ensuring the pulse on the backup node${CL}"
     pulse_ensure "${_pulse_host}" || warn "The pulse is not running on ${_pulse_host} (see above)"
 elif [[ -n "${_pulse_host}" ]]; then
-    info "  The pulse is not installed on ${_pulse_host}: a backup node that is not a Proxmox node needs a mail path first (ADR-031 D4)"
+    info "  The pulse is not installed on ${_pulse_host}: a backup node that is not a cluster node needs a mail path first (ADR-031 D4)"
 fi
 
 # ── #760: VM and container backups are encrypted (ADR-012 §2.5) ────────

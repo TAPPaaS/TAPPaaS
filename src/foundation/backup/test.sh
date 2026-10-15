@@ -66,6 +66,27 @@ if [[ "${TAPPAAS_TEST_DEEP:-0}" == "1" ]]; then
         echo "  SKIP: backup-controller not on PATH (run the module install first)"
     fi
 
+    # ADR-031: the pulse runs on the backup node, and nothing it watches is down.
+    echo "== backup (deep): the pulse on the backup node =="
+    _pnode="$(jq -r '.node // empty' "${CONFIG_DIR:-/home/tappaas/config}/backup.json" 2>/dev/null)"
+    # A cluster node is a `kind: machine` module too (pvehost): it is a node if site.json lists it.
+    _pisnode="$(jq -r --arg n "${_pnode}" '[.hardware.nodes[]?.name] | index($n) != null' "${CONFIG_DIR:-/home/tappaas/config}/site.json" 2>/dev/null)"
+    if [[ -z "${_pnode}" || "${_pisnode}" != "true" ]]; then
+        echo "  SKIP: no pulse here (no backup node, or one that is not a Proxmox node)"
+    else
+        _pout="$(ssh -n -o ConnectTimeout=10 -o BatchMode=yes "root@${_pnode}.mgmt.internal" \
+            "systemctl is-active tappaas-pulse.timer; /usr/local/sbin/tappaas-pulse --status" 2>/dev/null)"
+        if [[ "$(head -1 <<< "${_pout}")" == "active" ]]; then
+            echo "  ✓ the pulse timer runs on ${_pnode}"
+            _pdown="$(awk 'NR>2 && $2=="DOWN"{print $1}' <<< "${_pout}" | paste -sd, -)"
+            if [[ -n "${_pdown}" ]]; then echo "  WARN: the pulse reports down: ${_pdown} (backup-manager pulse)"
+            else echo "  ✓ nothing the pulse watches is down"; fi
+        else
+            echo "  ✗ the pulse is not running on ${_pnode} — the backup update installs it"
+            rc=1
+        fi
+    fi
+
     # #760: VM and container backups are encrypted (ADR-012 §2.5) — the storage
     # carries a key, and the escrow holds the same one. Without the key, vzdump
     # writes plaintext; without the escrowed copy, a rebuilt cluster cannot read

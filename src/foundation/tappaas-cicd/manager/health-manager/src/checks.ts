@@ -601,6 +601,30 @@ export function checkCpuImpact(client: ClusterClient, configDir: string, default
   };
 }
 
+// ── pulse gate (ADR-031) ───────────────────────────────────────────────
+// The backup node watches this site's buddies and this site itself, and mails
+// when something stops answering. The gate says whether that watcher runs and
+// what it reports down. WARN, never FAIL: the pulse has already mailed.
+export function checkPulse(client: ClusterClient, configDir: string): CheckResult {
+  const backup = readModuleJson(join(configDir, "backup.json"));
+  const node = typeof backup?.node === "string" ? backup.node : "";
+  if (!node) return { name: "pulse", status: "skip", detail: "no backup node recorded" };
+  // A cluster node is a `kind: machine` module too (pvehost): ask site.json.
+  if (!siteNodeHostnames(configDir).includes(node)) {
+    return { name: "pulse", status: "skip", detail: `${node} is not a cluster node — no pulse there yet` };
+  }
+  const p = client.pulse(node);
+  if (!p) return { name: "pulse", status: "skip", detail: `${node} did not answer` };
+  if (p.timer !== "active") {
+    return { name: "pulse", status: "warn", detail: `the pulse is not running on ${node} (${p.timer || "not installed"}) — the backup update installs it` };
+  }
+  const down = p.targets.filter((t) => t.state === "DOWN").map((t) => t.id);
+  if (down.length > 0) {
+    return { name: "pulse", status: "warn", detail: `down: ${down.join(", ")} — backup-manager pulse` };
+  }
+  return { name: "pulse", status: "pass", detail: `${p.targets.length} target(s) answering, on ${node}` };
+}
+
 // ── quorum gate (#835) ─────────────────────────────────────────────────
 // Two nodes are two votes and a quorum of two: when either is down the other is
 // not quorate and HA fences it — the whole site, firewall included. A QDevice on
@@ -674,6 +698,7 @@ export function runHealthGates(client: ClusterClient, opts: ValidateOpts): Healt
     checkPendingReboot(client, opts.configDir, opts.defaultNode),
     checkSiteTimezone(client, opts.configDir, opts.defaultNode),
     checkQuorum(client),
+    checkPulse(client, opts.configDir),
     checkCveStatus(opts.configDir, Date.now()),
   ];
   const failed = checks.filter((c: CheckResult): boolean => c.status === ("fail" as CheckStatus)).length;

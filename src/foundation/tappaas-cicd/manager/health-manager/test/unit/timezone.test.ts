@@ -4,7 +4,7 @@
 import { mkdtempSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
-import { checkQuorum, checkSiteTimezone } from "../../src/checks";
+import { checkPulse, checkQuorum, checkSiteTimezone } from "../../src/checks";
 import { FakeClusterClient } from "./fake-client";
 
 let passed = 0;
@@ -73,6 +73,26 @@ const mods = {
   check(checkQuorum(c).status === "pass", "two nodes and a QDevice: pass");
   c.quorumState = { expectedVotes: 3, qdevice: false };
   check(checkQuorum(c).status === "pass", "three nodes: pass");
+}
+
+// ADR-031: the pulse gate.
+{
+  const c = new FakeClusterClient();
+  const dir = configDir(site, {});
+  check(checkPulse(c, dir).status === "skip", "pulse: no backup node — skip");
+  writeFileSync(join(dir, "backup.json"), JSON.stringify({ node: "tappaas3" }));
+  writeFileSync(join(dir, "site.json"), JSON.stringify({ ...site, hardware: { nodes: [{ name: "tappaas3" }] } }));
+  writeFileSync(join(dir, "tappaas3.json"), JSON.stringify({ kind: "machine", moduleSource: "/x/pvehost" }));
+  check(checkPulse(c, dir).status === "skip", "pulse: the node does not answer — skip");
+  c.pulseState = { timer: "inactive", targets: [] };
+  check(checkPulse(c, dir).status === "warn" && checkPulse(c, dir).detail.includes("not running"), "pulse: timer not running — warn");
+  c.pulseState = { timer: "active", targets: [{ id: "uplink", state: "up" }, { id: "buddy-rasmus", state: "DOWN" }] };
+  check(checkPulse(c, dir).status === "warn" && checkPulse(c, dir).detail.includes("buddy-rasmus"), "pulse: a target down — warn, named");
+  c.pulseState = { timer: "active", targets: [{ id: "uplink", state: "up" }, { id: "pbs", state: "failing" }] };
+  check(checkPulse(c, dir).status === "pass", "pulse: all answering (one failing, not yet down) — pass");
+  check(checkPulse(c, dir).status === "pass", "a cluster node is a kind: machine module too — still checked");
+  writeFileSync(join(dir, "backup.json"), JSON.stringify({ node: "nas1" }));
+  check(checkPulse(c, dir).status === "skip", "pulse: a backup node that is not a cluster node — skip");
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

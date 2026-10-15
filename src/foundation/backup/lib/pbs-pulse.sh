@@ -11,7 +11,8 @@
 # The config is derived, never edited on the node: site.json gives the site and
 # the operator's address; the PBS's own remotes give each buddy we pull from
 # (host, port, certificate fingerprint); config/pull-<name>.json gives the
-# buddy's contact (`backup-manager peer add … --contact`).
+# buddy's contact (`backup-manager peer add … --contact`); config/remote-<name>.json
+# gives each buddy that pulls us (its login, for when it last pulled; its contact).
 #
 # PULSE_NODE_SSH (tests) replaces `ssh root@<host>`: `cmd <host> <command…>`.
 
@@ -41,16 +42,23 @@ pulse_config_json() {
         n="$(basename "${f}" .json)"; n="${n#pull-}"
         contacts="$(jq -c --arg n "${n}" --arg c "$(jq -r '.contact // ""' "${f}")" '. + {($n): $c}' <<< "${contacts}")"
     done
+    local pulled="[]"
+    for f in "${cfgdir}"/remote-*.json; do
+        [[ -f "${f}" ]] || continue
+        pulled="$(jq -c --slurpfile r "${f}" '. + [ $r[0] | select((.authId // "") != "")
+                    | {name, authId} + (if (.contact // "") != "" then {contact} else {} end) ]' <<< "${pulled}")"
+    done
     jq -n \
         --arg site "$(jq -r '.name // ""' "${cfgdir}/site.json" 2>/dev/null)" \
         --arg email "$(jq -r '.email // ""' "${cfgdir}/site.json" 2>/dev/null)" \
         --arg fw "${fw}" --arg ms "${ms}" \
-        --argjson remotes "${remotes}" --argjson contacts "${contacts}" '
+        --argjson remotes "${remotes}" --argjson contacts "${contacts}" --argjson pulled "${pulled}" '
         {site: $site, email: $email, uplink: "deb.debian.org",
          firewall: $fw, mothership: $ms, pbs: "localhost",
          buddies: [ $remotes[] | .name as $n | select($contacts | has($n))
                     | {name, host, port: (.port // 8007),
-                       fingerprint: (.fingerprint // ""), contact: $contacts[$n]} ]}
+                       fingerprint: (.fingerprint // ""), contact: $contacts[$n]} ],
+         pulledBy: $pulled}
         | with_entries(select(.value != ""))'
 }
 
@@ -84,5 +92,6 @@ WantedBy=timers.target
 EOF
 systemctl daemon-reload && systemctl enable --now tappaas-pulse.timer >/dev/null 2>&1' </dev/null \
         || { warn "  pulse: could not enable its timer on ${host}"; return 1; }
-    info "  ${GN}✓${CL} pulse on ${host}: $(jq -r '[.buddies[]?.name] | if length == 0 then "no buddy we pull" else "watching buddy " + join(", ") end' <<< "${json}"), and this site"
+    info "  ${GN}✓${CL} pulse on ${host}: $(jq -r '([.buddies[]?.name] | if length == 0 then "no buddy we pull" else "watching buddy " + join(", ") end)
+        + ([.pulledBy[]?.name] | if length == 0 then "" else "; the pull by " + join(", ") end)' <<< "${json}"), and this site"
 }

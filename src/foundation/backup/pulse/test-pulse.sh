@@ -75,6 +75,40 @@ PULSE_NOW="${t}" bash "${PULSE}" --config "${T}/same.json" >/dev/null 2>&1
 PULSE_NOW=$((t+1200)) bash "${PULSE}" --config "${T}/same.json" >/dev/null 2>&1
 ck "our own address as the buddy's contact: one recipient" "$(grep -c '^To: me@home.example$' "${T}/mails")" "1"
 
+# Pulled by (D6): when a buddy that pulls us last pulled, from the PBS task list.
+# The real probe runs here, against a stubbed proxmox-backup-manager.
+mkdir -p "${T}/bin"
+cat > "${T}/bin/proxmox-backup-manager" <<EOF
+#!/usr/bin/env bash
+cat "${T}/tasks.json"
+EOF
+chmod +x "${T}/bin/proxmox-backup-manager"
+cat > "${T}/pb.json" <<'EOF'
+{ "site": "home", "email": "me@home.example",
+  "pulledBy": [ { "name": "rasmus", "authId": "rasmus@pbs", "contact": "r@buddy.example" } ] }
+EOF
+pb() { env -u PULSE_PROBE_CMD PATH="${T}/bin:${PATH}" PULSE_NOW="$1" bash "${PULSE}" --config "${T}/pb.json" >/dev/null 2>&1; }
+task() { printf '{"worker_type":"%s","user":"%s","starttime":%s}' "$1" "$2" "$3"; }
+: > "${T}/mails"; rm -rf "${T}/state"
+echo "[$(task reader 'rasmus@pbs!sync' $((t-3600))),$(task backup rasmus@pbs $t),$(task reader other@pbs $t)]" > "${T}/tasks.json"
+pb "${t}";                                     ck "pulled an hour ago (as a token): fine" "$(mails)" "0"
+pb $((t+2*86400));                             ck "two days later, no newer pull: mailed" "$(grep -c 'ALERT: backup buddy rasmus has not pulled our backups' "${T}/mails")" "1"
+ck "…saying when it last pulled" "$(grep -c 'the last pull of our backups was' "${T}/mails")" "1"
+ck "…to us and to them" "$(grep -c '^To: me@home.example,r@buddy.example$' "${T}/mails")" "1"
+echo "[$(task reader rasmus@pbs $((t+2*86400+600)))]" > "${T}/tasks.json"
+pb $((t+2*86400+900));                         ck "it pulls again: RESOLVED" "$(grep -c 'RESOLVED: backup buddy rasmus pulls our backups again' "${T}/mails")" "1"
+# A buddy that never pulled gets maxAge from when the pulse first saw it.
+: > "${T}/mails"; rm -rf "${T}/state"
+echo '[]' > "${T}/tasks.json"
+pb "${t}"; pb $((t+86400));                    ck "never pulled, watched for a day: not yet" "$(mails)" "0"
+pb $((t+2*86400));                             ck "never pulled, two days: mailed" "$(grep -c 'it has never pulled our backups' "${T}/mails")" "1"
+PULSE_STATE_DIR="${T}/state" bash "${PULSE}" --config "${T}/pb.json" --status > "${T}/st"
+ck "status says it never pulled" "$(grep -c 'pulled-by-rasmus.*DOWN.*never pulled' "${T}/st")" "1"
+# A task list that does not answer is no verdict.
+: > "${T}/mails"; rm -rf "${T}/state"
+echo 'not json' > "${T}/tasks.json"
+pb "${t}"; pb $((t+5*86400));                  ck "no task list: no verdict" "$(mails)" "0"
+
 # Standalone: a buddy's own config, nothing of the site.
 cat > "${T}/alone.json" <<'EOF'
 { "site": "rasmus", "email": "r@buddy.example", "uplink": "deb.debian.org",

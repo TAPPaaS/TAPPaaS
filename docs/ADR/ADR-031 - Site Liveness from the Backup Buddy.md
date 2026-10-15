@@ -2,13 +2,13 @@
 
 | | |
 |---|---|
-| **Status** | **Accepted** (operator, 2026-10-15) — P1 built 2026-10-15. |
+| **Status** | **Accepted** (operator, 2026-10-15) — P1 and P2 built 2026-10-15. |
 | **Version** | 0.2 |
 | **Date** | 2026-10-15 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen, @ErikDaniel007 |
 | **Closes / addresses** | **#776** (a site that has gone dark is reported by nobody). Builds on the buddy tunnel (#796, `backup/BUDDY.md`), log alerting and its watchdog (#126), and the site mail path (#651). |
-| **Changelog** | v0.2 (2026-10-15) — **Accepted, P1 built**: the open questions answered (both operators mailed; the mothership after 30 minutes; the standalone watcher in P1), and the satellite becomes a P3 variant: installing a satellite installs a watcher. v0.1 — first draft, from the operator's idea: the backup buddy watches the site from outside; the local backup node is the local watcher. |
+| **Changelog** | v0.3 (2026-10-15) — **P2 built**: the pulled side reports when its buddy last pulled, to both operators; the `pulse` health gate and the deep module test. v0.2 (2026-10-15) — **Accepted, P1 built**: the open questions answered (both operators mailed; the mothership after 30 minutes; the standalone watcher in P1), and the satellite becomes a P3 variant: installing a satellite installs a watcher. v0.1 — first draft, from the operator's idea: the backup buddy watches the site from outside; the local backup node is the local watcher. |
 
 ## Context
 
@@ -126,8 +126,9 @@ A peer without a contact still gets watched; only our own operator is told.
 
 On the side that is pulled (`remote`), the pulse cannot reach the buddy. It reads instead when the
 buddy last pulled: the newest reader session of the buddy's auth-id in our PBS task log. Older than
-two of the buddy's sync intervals (default 2 days) is a notice to our own operator: **"buddy
-`<name>` has not pulled since `<time>` — your off-site copy is not current"**. This is slower than
+two of the buddy's sync intervals (default 2 days) is a notice to our operator and the buddy's:
+**"backup buddy `<name>` has not pulled our backups"**, with when it last did. A buddy that has
+never pulled gets the same 2 days from when the pulse first saw it. This is slower than
 D2 by design: it watches the copy, not the site.
 
 ### D7. A watcher for a buddy that is not TAPPaaS
@@ -167,7 +168,7 @@ TAPPaaS site they pull, and nothing else.
 | Phase | Content |
 |---|---|
 | **P1** — built 2026-10-15 | `backup/pulse/pulse.sh` with D2 (pull peers) and D3 (uplink, firewall, mothership, own PBS); `lib/pbs-pulse.sh` writes `pulse.json` from the PBS's remotes and the peers' contacts and installs the timer from every backup update, on a Proxmox-node backup node; mail via the node's postfix; `peer add … --contact` and `peer modify … --contact` (D5); `backup-manager pulse`. D7 moved here: the same script runs standalone, BUDDY.md Setup 3. |
-| **P2** | D6 (last pull on the pulled side); the `pulse` health gate and the module test (D8). |
+| **P2** — built 2026-10-15 | D6: `pulledBy` in `pulse.json` from every `remote` peer's login and contact; the newest reader session in the PBS task list. D8: the `pulse` health gate and `module test backup --deep`. |
 | **P3** | D4 for a `debianhost` backup node (msmtp). **The satellite as a watcher**: installing a satellite installs a pulse on it that watches its home site (the home firewall's end of the infra tunnel), with a mail path of its own — for a site with a satellite and no buddy, and as a second outside watcher. |
 
 ## Testing

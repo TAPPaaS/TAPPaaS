@@ -182,6 +182,9 @@ buddy tunnel. So every site's backup node runs a timer, `tappaas-pulse`, every 5
 - checks this site from its own backup node: our internet, the firewall, the mothership (after 30
   minutes — a mothership reboot during an update takes minutes) and the PBS itself. While our
   internet is down, buddies are not judged;
+- watches every buddy that pulls **us**: when it last pulled (its login's newest reader session on
+  our PBS). Not within 2 days — or never, 2 days after the pulse first saw it — is a mail to us and
+  to them: our off-site copy with them is not current;
 - mails through the node's own postfix, so it does not depend on the mothership.
 
 ```bash
@@ -191,7 +194,8 @@ backup-manager peer modify pull <buddy> --contact ops@buddy.example
 
 The backup update writes its config (`/etc/tappaas/pulse.json` on the backup node) and installs
 the timer. Only the pulling side can reach the other PBS: a buddy that pulls us watches us, with
-the same script (BUDDY.md, Setup 3). A backup node that is not a Proxmox node has no pulse yet.
+the same script (BUDDY.md, Setup 3). `module test backup --deep` and the `pulse` health gate say
+whether it runs and what it reports down. A backup node that is not a cluster node has no pulse yet.
 
 ## Day-to-day operations
 
