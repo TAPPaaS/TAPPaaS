@@ -140,6 +140,41 @@ flowchart RL
     localB_priv -->|pull| priv_main
 ```
 
+### Adding a private repository
+
+`site-manager repository add` clones over HTTPS, which a private repository
+refuses without credentials. Give the mothership a read-only **deploy key** and
+let git rewrite your own namespace to SSH; the clone, and every later update's
+pull, then go over SSH without the tooling knowing. On `tappaas-cicd`, as
+`tappaas` (`~/.ssh` and `~/.gitconfig` are not managed by NixOS, so they are
+yours to write):
+
+```bash
+ssh-keygen -t ed25519 -f ~/.ssh/id_tappaas_private -N '' -C 'tappaas-cicd deploy key'
+ssh-keyscan codeberg.org >> ~/.ssh/known_hosts
+cat >> ~/.ssh/config <<'EOF'
+Host codeberg.org
+  IdentityFile ~/.ssh/id_tappaas_private
+  IdentitiesOnly yes
+EOF
+chmod 600 ~/.ssh/config
+# only YOUR namespace goes over SSH:
+git config --global url."git@codeberg.org:me/".insteadOf "https://codeberg.org/me/"
+```
+
+Add `~/.ssh/id_tappaas_private.pub` as a **read-only deploy key** on the private
+repository (Codeberg: the repository's *Settings → Deploy Keys*), then:
+
+```bash
+site-manager repository add codeberg.org/me/private-modules --branch main
+```
+
+Keep the rewrite narrow. A blanket `url."git@codeberg.org:".insteadOf
+"https://codeberg.org/"` would send the TAPPaaS repository's own pull through a
+key the forge only accepts for your private repository, and that pull would
+fail. Keep your user or organisation (`me/`) on both sides, or give the private
+repository its own `Host` alias.
+
 ---
 
 ## Developing TAPPaaS modules

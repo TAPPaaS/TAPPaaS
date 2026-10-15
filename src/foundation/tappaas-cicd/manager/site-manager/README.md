@@ -282,11 +282,12 @@ and `validate` verbs delegate to; `create-site.sh` backs the `add` verb.
 
 ### `repository.sh` — manage module repositories
 
-The current, supported tool for registering the external module repositories
-TAPPaaS pulls modules from (add / remove / modify / list). It stays until the
-site-manager subsumes it as a verb. (It currently reads/writes the
-repository list in the legacy `configuration.json`; repointing it to
-`site.json .repositories` is pending — see DESIGN.md.)
+The tool behind `site-manager repository …`: it registers the module
+repositories TAPPaaS pulls modules from (add / remove / modify / list) in
+`site.json` `repositories[]`, cloning each under `/home/tappaas/<name>/` over
+HTTPS. A repository is always cloned by `add`, never adopted from an existing
+checkout elsewhere. A private repository is reached with a deploy key — see
+[Private repositories](../../DESIGN-GIT.md#adding-a-private-repository).
 
 ```
 repository.sh add <url> [--branch <b>] [--managed full|tracked] [--catalog <path>]
