@@ -103,7 +103,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 |------|-------|:-:|:-:|---:|---:|---:|
 | 4 | G4.1 Alerting & cluster resilience | M | M | 7 | – | 4 |
 | 4 | G4.2 Proxy & ingress | M | L | 3 | – | 4 |
-| 4 | G4.3 Manager verb gaps | M | L | 9 | – | 8 |
+| 4 | G4.3 Manager verb gaps | M | L | 9 | 2 | 8 |
 | 4 | G4.4 Storage & physical devices | H | L | 5 | – | 7 |
 | 4 | G4.5 Governance, CI & sign-offs | M | L | 5 | – | 5 |
 | 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 18 | 6 | 2 |
@@ -112,7 +112,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | 3 | G3.4 AI stack maturity | M | M | 1 | 3 | 7 |
 | 3 | G3.5 Installer UX | L | L | 1 | – | 3 |
 | 2 | G2.1 Firewall exposure & rule order | M | H | 7 | 18 | 2 |
-| 2 | G2.2 DNS resolver robustness | L | M | 4 | 3 | 2 |
+| 2 | G2.2 DNS resolver robustness | L | M | 4 | 3 | 3 |
 | 1 | G1.2 Backup placement model + managed machines (ADR-012, ADR-026) | M | H | 27 | – | 4 |
 | 1 | G1.6 Secrets & privileged access | H | H | 4 | – | 2 |
 | 1 | G1.7 Parked for Erik discussion | – | – | – | – | 5 |
@@ -227,7 +227,7 @@ Publish less of each app: limit a route to some paths (#642), some zones (#643) 
 | #656 | Limit a route to a provider's source ranges | M | L | Split, folded into ADR-023: a route names explicit CIDRs (`remote_ip`) — an exposure reduction beside #642/#643. The provider-feed half is parked (*Housekeeping*) |
 | #154 | `firewall:internal-proxy` | — | — | Close? Lars questioned the need (2026-05-31) |
 
-### G4.3 Manager verb gaps — Ease M · Risk L · released: 9 · open: 8
+### G4.3 Manager verb gaps — Ease M · Risk L · released: 9 · done for 2.3: 2 · open: 8
 
 The verbs operators otherwise do by hand: install a whole stack (#763), suspend a module (#428), migrate by changing `.node` (#429), `test` verbs (#499), private repositories (#634), module-level `--set` rules (#654). #444/#582 wait on a discussion.
 
@@ -241,6 +241,8 @@ The verbs operators otherwise do by hand: install a whole stack (#763), suspend 
 | #582 | Read back static reservations | L | L | **Do not implement (operator, 2026-09-26):** one question with #444, pending the same discussion. There is no `dhcp-manager`; read back means dnsmasq's own state |
 | #634 | Private repositories in `repository add` | L | L | Adopt-mode: won't fix; document the deploy-key method |
 | #654 | `module-manager`: the `--set` pre-gate ignores the module-level field declarations (ADR-020 D10) | M | L | ADR-020 D10 lets a module declare its own field rules; the `--set` pre-gate ignores them, so such a declaration is inert. Belongs with the ADR-020 verb work (#453, #655) |
+| ✅ #831 | `module-manager delete`: an archived module still counts as a dependent | L | L | **Closed 2026-10-15** (`13c7fda9`): the reverse-dependency check skips archived configs, so archiving a consumer and then its provider needs no `--force`. Reported by @ErikDaniel007 |
+| ✅ #829 | `backup-manager restore restore` over a module's own guest fails without a terminal | L | L | **Closed 2026-10-15** (`2ce73897`): `--yes` confirms an in-place restore up front and reaches `restore.sh`, whose error names it. Not `--replace`, which restores another guest's backup and leaves it stopped. Reported by @ErikDaniel007 |
 
 ### G4.4 Storage & physical devices — Ease H · Risk L · released: 5 · open: 7
 
@@ -378,7 +380,7 @@ Tighter firewall defaults that keep what modules need. Built: the gateway, GUI/S
 | #385 | Persist the NetBird OPT1 pass rule | L | M | **Low priority this sprint (2026-10-12)**, pending the NetBird decision (*Decisions*). Land with #222 |
 | #222 | NetBird → srv floating rule is fragile | L | M | **Low priority this sprint (2026-10-12)**, pending the NetBird decision. The #816 review found no code that creates NetBird rules |
 
-### G2.2 DNS resolver robustness — Ease L · Risk M · released: 4 · done for 2.3: 3 · open: 2
+### G2.2 DNS resolver robustness — Ease L · Risk M · released: 4 · done for 2.3: 3 · open: 3
 
 A resolver that holds up: a working Unbound restart (#387), a written IPv6 stance (#149), DNSSEC with split horizon (#263), public DNS that follows a dynamic WAN address (#383), and optional blocklists (#157).
 
@@ -388,7 +390,8 @@ A resolver that holds up: a working Unbound restart (#387), a written IPv6 stanc
 | ✅ #149 | IPv6 root lookups fail → `do-ip6: no` | L | L | **Done 2026-10-12** (`b03a4840`, awaits push): `ipv6-manager`, round trip live on hrossen with no IPv4 gap. **Every site turns IPv6 off at its next sweep unless `ipv6: true`.** Decided: a `site.json` `ipv6` field, default `false`, says whether the site supports IPv6; Unbound's `do-ip6` follows it. The stance is the IPv6 ADR (#26) |
 | ✅ #263 | DNSSEC on Unbound | L | M | **Closed 2026-10-13** (on `main` 2026-10-13 after a clean `--deep` (144/0)): site.json `dnssec` (default true); split horizon unaffected; ADR-021 |
 | #383 | Keep wildcard public DNS current on dynamic WAN | M | L | |
-| FW #157 | Default DNS blocklists (DNSBL / maltrail) | M | M | Stretch; only after #387 |
+| FW #157 | Default DNS blocklists (DNSBL / maltrail) | M | M | **Built 2026-10-13** (`e919308b`): `site.json` `dnsBlocklists` drive Unbound's blocklists; the pfBlockerNG replacement guide (`network/docs/pfblockerng-replacement.md`) awaits @ErikDaniel007's review before the issue closes |
+| #830 | `environment-manager`: no verb creates the public DNS record | M | L | **Deferred (operator, 2026-10-15).** A name under an environment's domain gets a certificate and a route only once it resolves publicly, and nothing creates that record: an environment added after bootstrap needs the A record by hand at the DNS provider. Related to #383. Reported by @ErikDaniel007 |
 
 ---
 
