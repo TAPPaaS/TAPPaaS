@@ -624,7 +624,12 @@ main() {
         # lock rather than failing on it: the two schedules simply met.
         local _vmid _node
         _vmid="$(read_module_config "${module}" | jq -r '(.vmid // (.config? // {} | to_entries[]?.value.vmid?)) // empty' | head -1)"
-        _node="$(read_module_config "${module}" | jq -r '.node // empty')"
+        # The node the guest is on, which a --set node= (or a failover) can make
+        # differ from the declared one; a lock looked for elsewhere is never seen.
+        _node=""
+        [[ -n "${_vmid}" ]] && declare -F vm_node_holding >/dev/null 2>&1 \
+            && _node="$(vm_node_holding "${_vmid}" </dev/null)"
+        [[ -n "${_node}" ]] || _node="$(read_module_config "${module}" | jq -r '.node // empty')"
         if [[ -n "${_vmid}" && -n "${_node}" ]] \
             && declare -F wait_for_vm_unlock >/dev/null 2>&1 \
             && ! wait_for_vm_unlock "${_vmid}" "${_node}" "${TAPPAAS_LOCK_WAIT:-600}"; then
