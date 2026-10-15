@@ -24,8 +24,9 @@
 #   - secrets generated once on the VM (/var/lib/project-nomad/.env), never in
 #     config; the Command Center's URL written by update.sh.
 #
-# The Command Center has no login of its own; Caddy gates it with Authentik
-# (identity:accessControl). Its port 8080 is reachable only through the proxy.
+# NOMAD is not published outside the site and has no login of its own: the
+# client networks reach it at http://nomad.<zone>.internal:8080, and the apps
+# on their own ports, as the module's ingress rules allow.
 # ============================================================================
 
 { config, lib, pkgs, modulesPath, ... }:
@@ -150,8 +151,7 @@ in
   # -- Networking ------------------------------------------------------------
   networking.hostName = lib.mkDefault "nomad";
 
-  # 8080: the Command Center (reached only through Caddy; the zone rules admit
-  # no client to it directly). The content apps' ports are published by Docker,
+  # 8080: the Command Center. The content apps' ports are published by Docker,
   # which programs its own forwarding; the site firewall decides who reaches them.
   networking.firewall = {
     enable = true;

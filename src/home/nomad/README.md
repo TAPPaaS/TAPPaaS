@@ -10,7 +10,7 @@ courses and tools, running on hardware you own and usable with no internet.
 
 | Capability | Access from | How |
 |------------|-------------|-----|
-| The Command Center — installs the apps, downloads libraries and courses | home, netbird (via Caddy) | `https://nomad.<domain>`, signed in through the site's identity (Authentik); a tile on the start page |
+| The Command Center — installs the apps, downloads libraries and courses | home | `http://nomad.<zone>.internal:8080` |
 | The content apps the Command Center installs: the Information Library (Kiwix: Wikipedia and other ZIM libraries), the Education Platform (Kolibri), Notes, Data Tools, and the Supply Depot (Stirling PDF, File Browser, Calibre Web, IT Tools, Excalidraw, …) | home | `http://nomad.<zone>.internal:<port>`, linked from the Command Center |
 | Backups of the VM, its content included | — | `backup:vm` |
 
@@ -22,12 +22,10 @@ courses and tools, running on hardware you own and usable with no internet.
   installed, and neither is Dozzle (an unauthenticated log viewer).
 - Secrets (the app key, the database passwords) are generated on the VM the first time and kept in
   `/var/lib/project-nomad/.env`; they are in no config file.
-- The Command Center has no login of its own. It is published through the proxy and gated by
-  `identity:accessControl`, and its port is open to the proxy only.
-- The content apps are containers the Command Center starts, each on its own port. NOMAD links
-  them as *current host + port*; behind the proxy the current host is the public name, so
-  `update.sh` sets each app's link to the VM's own address, which the home network reaches (the
-  module's ingress rules). The apps are not behind the sign-in.
+- **Inside the site only.** NOMAD is not published through the proxy and has no sign-in: anyone
+  on the home network reaches the Command Center at `http://nomad.<zone>.internal:8080`, and the
+  apps it starts, each a container on its own port, at the same name and that port — which is how
+  NOMAD links them. The module's ingress rules admit the home zone to those ports and no other.
 
 ## What is not included
 
@@ -35,7 +33,9 @@ courses and tools, running on hardware you own and usable with no internet.
   TAPPaaS's. NOMAD's Command Center still offers it; installing it there runs it on this VM.
 - **Content** — which libraries, which languages, which courses — is chosen in the Command Center
   after the install. A minimal and a full selection are described in [INSTALL.md](INSTALL.md).
-- **The apps behind the sign-in, or on their own public names.** They are reached inside the site.
+- **Access from outside the site** (the proxy) and **a sign-in** (identity). The Command Center
+  manages the apps and downloads, so keep it to the home network; an app with accounts of its own
+  (File Browser, Calibre Web) has its own login.
 
 ## Requirements
 
@@ -48,8 +48,7 @@ courses and tools, running on hardware you own and usable with no internet.
 | Depends on | Purpose |
 |------------|---------|
 | `cluster:vm`, `templates:nixos` | the VM, from the NixOS template, and its configuration |
-| `network:proxy`, `identity:accessControl`, `identity:identity` | the Command Center published behind the site's sign-in, with its start-page tile |
-| `network:rules` | the home network reaching the content apps |
+| `network:rules` | the home network reaching the Command Center and the content apps |
 | `backup:vm` | backups |
 
 For installation steps see [INSTALL.md](./INSTALL.md).

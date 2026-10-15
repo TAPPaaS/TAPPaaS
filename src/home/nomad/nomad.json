@@ -14,10 +14,7 @@
     "cluster:vm",
     "templates:nixos",
     "backup:vm",
-    "network:proxy",
-    "identity:accessControl",
-    "network:rules",
-    "identity:identity"
+    "network:rules"
   ],
   "integratesWith": [
     "logging:logs"
@@ -33,16 +30,14 @@
       "imageType": "clone",
       "image": "8080",
       "bridge0": "lan"
-    },
-    "network:proxy": {
-      "proxyPort": 8080,
-      "proxyAllowedZones": [
-        "home",
-        "netbird"
-      ]
     }
   },
   "ports": [
+    {
+      "port": 8080,
+      "protocol": "TCP",
+      "description": "Command Center"
+    },
     {
       "port": 8090,
       "protocol": "TCP",
@@ -73,6 +68,7 @@
     {
       "from": "home",
       "ports": [
+        8080,
         8090,
         8100,
         8200,
@@ -80,7 +76,7 @@
         "8400:8500"
       ],
       "protocol": "TCP",
-      "description": "Client networks open the content apps the Command Center links to; the Command Center itself only through the proxy and its sign-in"
+      "description": "Client networks reach the Command Center and the apps it links to, at nomad.<zone>.internal; nothing is published outside the site"
     }
   ]
 }

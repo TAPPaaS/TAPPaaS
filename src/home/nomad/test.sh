@@ -40,24 +40,12 @@ remote "sudo grep -q '^NOMAD_APP_KEY=.\{32,\}' /var/lib/project-nomad/.env" \
 _images="$(remote "sudo docker ps --format '{{.Image}}'" | grep -E 'crosstalk-solutions' | paste -sd' ' -)"
 [[ -n "${_images}" && "${_images}" != *":latest"* ]] && pass "pinned images: ${_images}" || fail "an image is unpinned or missing: ${_images:-none}"
 
-# 4. Behind the sign-in: through the proxy, an anonymous request is sent to identity.
-_env="$(get_config_value 'environment' '' 2>/dev/null || true)"
-_domain="$(module_public_domain "${VMNAME}" "${_env}" "$(read_module_config "${VMNAME}" 2>/dev/null || echo '{}')" 2>/dev/null || true)"
-if [[ -n "${_domain}" ]]; then
-    _fw="$(getent ahostsv4 firewall.mgmt.internal | awk '{print $1; exit}')"
-    _loc="$(curl -ks -o /dev/null -w '%{http_code} %{redirect_url}' --max-time 15 \
-        --resolve "${_domain}:443:${_fw}" "https://${_domain}/")"
-    case "${_loc}" in
-        30[12378]\ *outpost.goauthentik.io*|30[12378]\ *identity*) pass "https://${_domain}/ redirects to the sign-in (${_loc%% *})" ;;
-        *) fail "https://${_domain}/ is not behind the sign-in (got ${_loc})" ;;
-    esac
-else
-    info "  ${YW}⊘${CL} not published (no public name) — the sign-in gate is not tested"
-fi
-
-# 5. App links point at the VM, not at the public name.
-_bad="$(remote "sudo bash -c '. /var/lib/project-nomad/.env; docker exec -i nomad_mysql mysql -N -unomad_user -p\"\${NOMAD_DB_PASSWORD}\" nomad -e \"SELECT COUNT(*) FROM services WHERE ui_location REGEXP \\\"^(https?:)?[0-9]+\\\$\\\" AND (custom_url IS NULL OR custom_url = \\\"\\\")\" 2>/dev/null'")"
-[[ "${_bad}" == "0" ]] && pass "every app opens at ${TARGET}:<port>" || fail "${_bad:-?} app(s) still open at the public name (update.sh sets them)"
+# 4. Reachable at its internal address, as the client networks reach it.
+[[ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "http://${TARGET}:8080/api/health")" == "200" ]] \
+    && pass "http://${TARGET}:8080 answers" || fail "http://${TARGET}:8080 does not answer"
+[[ "$(remote "sudo cat /var/lib/project-nomad/url 2>/dev/null")" == "http://${TARGET}:8080" ]] \
+    && pass "NOMAD's URL is http://${TARGET}:8080, so its app links open at ${TARGET}:<port>" \
+    || fail "NOMAD's URL is not http://${TARGET}:8080 (update.sh sets it)"
 
 echo ""
 info "Results: ${PASSED} passed, ${FAILED} failed"

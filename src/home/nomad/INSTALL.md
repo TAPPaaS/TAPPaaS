@@ -4,7 +4,7 @@ Primary audience: TAPPaaS admin.
 
 ## Prerequisites
 
-- The foundation installed, identity included.
+- The foundation installed.
 - Disk for the libraries you want (see *Choosing content* below); the default 128 GB holds a
   local-language and the English Wikipedia.
 
@@ -14,18 +14,14 @@ Primary audience: TAPPaaS admin.
 module-manager module add nomad
 ```
 
-This creates the VM, applies its NixOS configuration (Docker and NOMAD's stack), publishes the
-Command Center behind the site's sign-in and sets where its apps open from. The first start pulls
-the container images, which takes a few minutes.
+This creates the VM, applies its NixOS configuration (Docker and NOMAD's stack) and lets the home
+network reach it. The first start pulls the container images, which takes a few minutes.
 
 ## Post-install
 
-1. Open `https://nomad.<domain>` from the home network and sign in with your site account.
+1. Open `http://nomad.<zone>.internal:8080` from the home network.
 2. In the Command Center, run its **Easy Setup**, or install apps and content under *Settings*.
-3. Apps open from the home network at `http://nomad.<zone>.internal:<port>`. An app installed
-   after the module's install gets its link set by the next update
-   (`module-manager module update nomad`); until then it opens at the public name, which the
-   proxy does not serve.
+3. The apps open at `http://nomad.<zone>.internal:<port>`, from the Command Center's tiles.
 
 ### Choosing content
 
@@ -59,14 +55,14 @@ module-manager module test nomad
 | containers `nomad_admin`, `nomad_mysql`, `nomad_redis`, `nomad_disk_collector` | running |
 | `http://localhost:8080/api/health` on the VM | 200 |
 | images | pinned tags, none `:latest` |
-| `https://nomad.<domain>/` without a session | a redirect to the sign-in |
-| app links | every app opens at `nomad.<zone>.internal:<port>` |
+| `http://nomad.<zone>.internal:8080` | answers |
+| NOMAD's URL | `http://nomad.<zone>.internal:8080`, so its apps open at that name |
 
 ## Troubleshooting
 
 **The stack does not start.** `journalctl -u project-nomad` on the VM shows the compose output;
 `sudo docker ps -a` which container stopped.
 
-**An app does not open.** Its link points at the public name: run
-`module-manager module update nomad`, which sets it to the VM's address. From outside the home
-network the apps are not reachable.
+**An app does not open.** From outside the home network it is not reachable, by design. From inside it,
+check that the app's port is in the module's ingress rules (`nomad.json`): a port outside them is
+blocked by the site firewall.
