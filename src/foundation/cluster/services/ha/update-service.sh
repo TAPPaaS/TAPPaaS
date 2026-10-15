@@ -58,6 +58,8 @@ readonly MGMT="mgmt"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=../../lib/ha-cpu-lib.sh disable=SC1091
 . "${SCRIPT_DIR}/../../lib/ha-cpu-lib.sh"
+# shellcheck source=../../lib/ha-bridge-lib.sh disable=SC1091
+. "${SCRIPT_DIR}/../../lib/ha-bridge-lib.sh"
 
 SSH_OPTS=(-o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new
           -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o BatchMode=yes)
@@ -121,8 +123,32 @@ VMID="$(get_config_value 'vmid')"
 DESIRED_PRIMARY="$(cfg 'node' "$(get_node_hostname 0)")"
 [[ "${DESIRED_PRIMARY}" == "null" || -z "${DESIRED_PRIMARY}" ]] && DESIRED_PRIMARY="$(get_node_hostname 0)"
 
-HANODE="$(cfg 'HANode' "$(get_default_ha_node "${DESIRED_PRIMARY}")")"
+# The failover node must carry the guest's network: every bridge its NICs use
+# (#836). A declared HANode without one is refused; without a declared one, the
+# first node that has them all is chosen.
+mapfile -t GUEST_BRIDGES < <(habr_guest_bridges)
+HANODE="$(cfg 'HANode' '')"
 [[ "${HANODE}" == "null" ]] && HANODE=""
+if [[ -n "${HANODE}" ]]; then
+    if _missing="$(habr_missing "${HANODE}" "${GUEST_BRIDGES[@]}")"; then
+        if [[ -n "${_missing}" ]]; then
+            error "  ${MODULE}: HANode ${HANODE} has no bridge $(paste -sd, - <<< "${_missing}") — a failover there could not start the guest"
+            error "    choose a node that has $(printf '%s ' "${GUEST_BRIDGES[@]}")— module-manager module modify ${MODULE} --set HANode=<node>"
+            exit 1
+        fi
+    else
+        warn "  ${HANODE} did not answer — its bridges are not checked"
+    fi
+else
+    HANODE="$(habr_first_capable "${DESIRED_PRIMARY}" "${GUEST_BRIDGES[@]}")"
+    if [[ -z "${HANODE}" ]]; then
+        HANODE="$(get_default_ha_node "${DESIRED_PRIMARY}")"
+        if [[ -n "${HANODE}" ]] && _missing="$(habr_missing "${HANODE}" "${GUEST_BRIDGES[@]}")" && [[ -n "${_missing}" ]]; then
+            warn "  ${MODULE}: no other node has bridge(s) $(printf '%s ' "${GUEST_BRIDGES[@]}")— nowhere to fail over to; not made HA"
+            exit 0
+        fi
+    fi
+fi
 
 REPL_SCHEDULE="$(cfg 'replicationSchedule' '*/15')"
 STORAGE="$(cfg 'storage' 'tanka1')"

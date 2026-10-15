@@ -23,6 +23,8 @@
 set -euo pipefail
 
 . /home/tappaas/bin/common-install-routines.sh
+# shellcheck source=../../lib/ha-bridge-lib.sh disable=SC1091
+. "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../../lib/ha-bridge-lib.sh"
 
 # The one `ha-manager status` parser (#434). Falls back to the repo copy on a
 # system that has not re-run pre-update.sh since it landed.
@@ -72,6 +74,19 @@ if [[ -z "${HANODE}" ]]; then
 fi
 
 info "    Primary: ${NODE}, HA: ${HANODE}"
+
+# The failover node carries the guest's network (#836): a node without one of
+# its bridges cannot start it, so a failover there is an outage.
+mapfile -t _bridges < <(habr_guest_bridges)
+if _missing="$(habr_missing "${HANODE}" "${_bridges[@]}")"; then
+    if [[ -z "${_missing}" ]]; then
+        pass "HANode ${HANODE} has every bridge the guest uses ($(printf '%s ' "${_bridges[@]}" | sed 's/ $//'))"
+    else
+        fail "HANode ${HANODE} has no bridge $(paste -sd, - <<< "${_missing}") — a failover there could not start ${MODULE}"
+    fi
+else
+    warn "    ${HANODE} did not answer — its bridges are not checked"
+fi
 
 # Find a reachable Proxmox node to query
 QUERY_NODE=""

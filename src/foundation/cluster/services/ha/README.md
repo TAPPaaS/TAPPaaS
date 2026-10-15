@@ -28,6 +28,11 @@ than starting on a node that may not carry it — the firewall on a node without
 a WAN port, a guest on a node without its storage or bridges. A rule found
 without strict is made strict by the next update.
 
+The `HANode` must carry the guest's network: every bridge its NICs use
+(`bridge0`, `bridge1` — the firewall's `wan`). A declared `HANode` without one is
+refused, with the bridge it lacks; without a declared one, the first other node
+that has them all is chosen, and a guest no other node can carry is not made HA.
+
 ## The CPU an HA guest runs (`haCpu`)
 
 An HA guest moves between its node and its `HANode`, and a move is only safe

@@ -228,6 +228,19 @@ else
     fail "lib/test-disk-grow-lib.sh not found or not executable"
 fi
 
+# The failover node carries the guest's network (#836).
+info "${BOLD}Test 2a0e: HA failover node bridges (#836)${CL}"
+if [[ -x "${SCRIPT_DIR}/lib/test-ha-bridge-lib.sh" ]]; then
+    if hb_out=$("${SCRIPT_DIR}/lib/test-ha-bridge-lib.sh" 2>&1); then
+        pass "$(tail -1 <<< "${hb_out}")"
+    else
+        fail "ha-bridge-lib unit tests failed"
+        indent <<< "${hb_out}"
+    fi
+else
+    fail "lib/test-ha-bridge-lib.sh not found or not executable"
+fi
+
 # haCpu (#827): the CPU model an HA guest runs, from the cluster's inventory.
 info "${BOLD}Test 2a0d: HA CPU model decisions (#827)${CL}"
 if [[ -x "${SCRIPT_DIR}/lib/test-ha-cpu-lib.sh" ]]; then
