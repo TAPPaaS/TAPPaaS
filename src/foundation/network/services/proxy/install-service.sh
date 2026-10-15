@@ -344,6 +344,14 @@ run_caddy add-handler "${PROXY_DOMAIN}" \
     "${PRESERVE_HOST_ARGS[@]+"${PRESERVE_HOST_ARGS[@]}"}" \
     --no-ssl-verify || die "Failed to create Caddy handler"
 
+# ── Path rules on the primary route (proxyAccess, ADR-023) ──────────
+# One handle per declared path, with the rule's own zones; every other path
+# keeps the route's list above. Undeclared path handles and lists are pruned.
+proxy_add_path_rules "${MODULE}" "${DESCRIPTION}" "${PROXY_DOMAIN}" "${UPSTREAM}" "${PROXY_PORT}" \
+    "tappaas-${MODULE}" "$(normalize_module_config < "${MODULE_JSON}" | jq -c '.proxyAccess // []')" \
+    "$(normalize_module_config < "${MODULE_JSON}" | jq -c '.proxyAllowedZones // null')" \
+    -- "${TLS_ARGS[@]+"${TLS_ARGS[@]}"}" "${HTTP1_ARGS[@]+"${HTTP1_ARGS[@]}"}" "${PRESERVE_HOST_ARGS[@]+"${PRESERVE_HOST_ARGS[@]}"}"
+
 # ── Prune stale routes from a previous domain (#474) ────────────────
 # Domains/handlers are keyed by DESCRIPTION (TAPPaaS: <module>). When the
 # environment domain changes, the add-domain/add-handler above create the new

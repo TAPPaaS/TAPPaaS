@@ -302,6 +302,14 @@ run_caddy add-handler "${PROXY_DOMAIN}" \
     --no-ssl-verify || die "Failed to reconcile Caddy handler"
 CHANGES_MADE=true
 
+# ── Path rules on the primary route (proxyAccess, ADR-023) ──────────
+# One handle per declared path, with the rule's own zones; every other path
+# keeps the route's list above. Undeclared path handles and lists are pruned.
+proxy_add_path_rules "${MODULE}" "${DESCRIPTION}" "${PROXY_DOMAIN}" "${UPSTREAM}" "${PROXY_PORT}" \
+    "tappaas-${MODULE}" "$(normalize_module_config < "${MODULE_JSON}" | jq -c '.proxyAccess // []')" \
+    "$(normalize_module_config < "${MODULE_JSON}" | jq -c '.proxyAllowedZones // null')" \
+    -- "${TLS_ARGS[@]+"${TLS_ARGS[@]}"}" "${HTTP1_ARGS[@]+"${HTTP1_ARGS[@]}"}" "${PRESERVE_HOST_ARGS[@]+"${PRESERVE_HOST_ARGS[@]}"}"
+
 # Retire the route of a previous domain (#474), as install-service does: since
 # #495 a domain change reaches only this script (#809). No-op when unchanged.
 debug "  Pruning stale reverse-proxy routes for ${MODULE}..."

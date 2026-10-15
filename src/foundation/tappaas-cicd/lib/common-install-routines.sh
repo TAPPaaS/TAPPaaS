@@ -1256,7 +1256,7 @@ validate_module_zone_refs() {
 
     _zref_known() {
         local r="$1"
-        [[ "$r" == "internet" || "$r" == "all" ]] && return 0
+        [[ "$r" == "internet" || "$r" == "all" || "$r" == "none" ]] && return 0
         [[ "$r" == alias:* ]] && return 0
         # another module deployed on this system → resolved to a host alias later
         [[ -f "${CONFIG_DIR}/${r}.json" ]] && return 0
@@ -1280,7 +1280,8 @@ validate_module_zone_refs() {
             continue
         fi
         _zref_known "$ref" || bad+=("proxyAllowedZones:${ref}")
-    done < <(jq -r '(.proxyAllowedZones // [])[], ((.proxyRoutes // [])[] | (.proxyAllowedZones // [])[])' "$module_json" 2>/dev/null)
+    done < <(jq -r '(.proxyAllowedZones // [])[], ((.proxyRoutes // [])[] | (.proxyAllowedZones // [])[]),
+                    ((.proxyAccess // [])[] | (.zones // [])[]), ((.proxyRoutes // [])[] | (.proxyAccess // [])[] | (.zones // [])[])' "$module_json" 2>/dev/null)
 
     while IFS= read -r ref; do
         [[ -n "$ref" ]] || continue

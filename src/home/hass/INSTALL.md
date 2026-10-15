@@ -47,6 +47,31 @@ Remaining manual steps:
    (VM -> Hardware -> Add -> USB Device), then in HA: Settings -> Integrations -> add
    the relevant integration.
 
+## Optional: publish webhooks only
+
+Integrations such as IFTTT, Netatmo or Withings call Home Assistant back on
+`/api/webhook/<id>`. To let them in without publishing the UI and API, give that
+path its own zones and leave the rest of the hostname as it is:
+
+    module-manager module modify hass --set 'proxyAccess=[{"paths":["/api/webhook/*"],"zones":["internet"]}]'
+
+Caddy then proxies `/api/webhook/…` from anywhere; every other path still
+answers 403 outside the module's `proxyAllowedZones`. The webhook URL Home
+Assistant shows is already right, because it is built from `external_url`.
+
+On the Home Assistant side:
+
+- A new webhook trigger is *local only* by default. Untick that (or set
+  `local_only: false` in YAML) for each webhook that must be called from the
+  internet — and only for those.
+- `local only` is judged by the caller's address. The install writes
+  `use_x_forwarded_for` and `trusted_proxies`, so Home Assistant sees the real
+  caller behind Caddy. Keep both: without them every call looks like it comes
+  from the proxy, and "local only" protects nothing.
+
+To withdraw it, set `proxyAccess` to `[]` the same way; the path handle and its
+access list are removed.
+
 ## Verification
 
     module-manager module test hass

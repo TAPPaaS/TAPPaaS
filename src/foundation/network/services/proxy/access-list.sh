@@ -163,8 +163,25 @@ proxy_zone_access_list() {
     shift 4
     local -a zones=("$@")
 
-    # Internet exposure → no restriction; drop any prior allow-list.
+    # `none` (ADR-023 D3): no one, except through the route's path rules. One
+    # shared inverted list for every such route; never deleted per module.
     local z
+    for z in "${zones[@]}"; do
+        [[ "${z}" == "none" ]] || continue
+        if [[ ${#zones[@]} -ne 1 ]]; then
+            error "proxyAllowedZones for '${module}': 'none' means no one — it cannot be combined with ${zones[*]}" >&2
+            return 1
+        fi
+        run_caddy add-accesslist tappaas-none --clients "0.0.0.0/0,::/0" --invert \
+            --matcher remote_ip --response-code 403 \
+            --message "${TAPPAAS_ACCESS_DENIED_MESSAGE:-This address only serves the paths it publishes.}" \
+            --description "TAPPaaS: no one (routes that publish only some paths)" \
+            --no-ssl-verify >/dev/null || { error "Failed to create the shared deny-all list tappaas-none" >&2; return 1; }
+        printf '%s' tappaas-none
+        return 0
+    done
+
+    # Internet exposure → no restriction; drop any prior allow-list.
     for z in "${zones[@]}"; do
         if [[ "${z}" == "internet" ]]; then
             debug "  '${module}' is exposed to the ${BL}internet${CL} — no access restriction" >&2
@@ -370,8 +387,13 @@ proxy_add_routes() {
     local gw="" gw_looked=0
 
     local -a keep_fqdns=() keep_lists=() route_acl_args=() route_zones=()
-    local name port zones_json fqdn route_desc wc route_acl
-    while IFS=$'\t' read -r name port zones_json; do
+    # Lists the routes' path rules keep (tappaas-<module>#<route>:<zones>): they
+    # share the route lists' prefix, so the route-list prune below must keep them.
+    PATH_RULE_LISTS=()
+    local name port zones_json access_json fqdn route_desc wc route_acl
+    # Fields joined by US (\x1f), not tab: bash merges consecutive tabs, so an
+    # absent zones field (empty) would shift the rules into its place.
+    while IFS=$'\x1f' read -r name port zones_json access_json; do
         [[ -z "${name}" ]] && continue
         # A malformed entry is a config error — fail loudly rather than push
         # broken config to Caddy.
@@ -394,7 +416,8 @@ proxy_add_routes() {
             route_acl_args=()
             if [[ -n "${route_acl}" ]]; then
                 route_acl_args=(--access-list "${route_acl}")
-                keep_lists+=(--keep "${route_acl}")
+                # Only the module's own lists are pruned; tappaas-none is shared.
+                [[ "${route_acl}" == "tappaas-${MODULE}#"* ]] && keep_lists+=(--keep "${route_acl}")
             fi
             # The #643 trap: a second name for the SAME port, more open than the
             # primary, publishes the whole app under that name.
@@ -436,8 +459,14 @@ proxy_add_routes() {
             "${http1_args[@]+"${http1_args[@]}"}" \
             "${preserve_args[@]+"${preserve_args[@]}"}" \
             --no-ssl-verify || die "Failed to create Caddy handler ${fqdn}"
+
+        # This route's path rules (ADR-023), against its own zones or the module's.
+        proxy_add_path_rules "${MODULE}" "${route_desc}" "${fqdn}" "${upstream}" "${port}" \
+            "tappaas-${MODULE}#${name}" "${access_json:-[]}" "${zones_json:-$(jq -c '.proxyAllowedZones // null' <<< "${JSON}")}" \
+            -- "${tls_args[@]+"${tls_args[@]}"}" "${http1_args[@]+"${http1_args[@]}"}" "${preserve_args[@]+"${preserve_args[@]}"}"
     done < <(echo "${JSON}" | jq -rc '.proxyRoutes // [] | .[]
-        | [.name, (.port|tostring), (if .proxyAllowedZones == null then "" else (.proxyAllowedZones|tojson) end)] | @tsv')
+        | [.name, (.port|tostring), (if .proxyAllowedZones == null then "" else (.proxyAllowedZones|tojson) end),
+           ((.proxyAccess // [])|tojson)] | join("\u001f")')
 
     # Sweep any route this module previously published but no longer declares.
     # Empty keep list (no proxyRoutes) removes every "<description>#*" route.
@@ -447,7 +476,92 @@ proxy_add_routes() {
         --no-ssl-verify || warn "Could not prune undeclared routes for ${MODULE} (non-fatal)"
     # …and the access lists of routes that no longer declare their own zones.
     # After the handlers above, so none still points at what is deleted.
+    local l
+    for l in "${PATH_RULE_LISTS[@]+"${PATH_RULE_LISTS[@]}"}"; do keep_lists+=(--keep "${l}"); done
     proxy_prune_route_lists "${MODULE}" "${keep_lists[@]+"${keep_lists[@]}"}"
+}
+
+# proxy_path_rules_check <rules-json> — validate a route's proxyAccess (ADR-023
+# D2). Prints the problems, one per line; empty output means valid. Pure.
+proxy_path_rules_check() {
+    jq -r '
+        if type != "array" then "proxyAccess must be a list of {paths, zones} rules"
+        else
+          (.[] | select(type != "object") | "a rule must be an object with paths and zones"),
+          (.[] | select(type == "object") |
+             (if ((.paths // []) | length) == 0 then "a rule has no paths" else empty end),
+             (if ((.zones // []) | length) == 0 then "a rule has no zones — delete it instead" else empty end),
+             (if ((.zones // []) | index("none")) != null then "none inside a rule admits no one — delete the rule instead" else empty end),
+             ((.paths // [])[] | tostring |
+                if (startswith("/") | not) then "path \(.) must start with /"
+                elif test("\\s") then "path \(.) contains whitespace"
+                elif . == "/" or . == "/*" then "path \(.) is the whole route — set the route'"'"'s proxyAllowedZones instead"
+                else empty end)),
+          ([.[] | select(type == "object") | (.paths // [])[]] | group_by(.) | map(select(length > 1) | .[0])[]
+             | "path \(.) is in two rules")
+        end' <<< "$1"
+}
+
+# proxy_add_path_rules <module> <route-desc> <fqdn> <upstream> <port> <list-base>
+#                      <rules-json> <route-zones-json> [-- <upstream flags>...]
+# A route's path rules (proxyAccess, ADR-023 D1/D4): one handle per path, before
+# the route's catch-all, with the rule's own access list (none for internet) —
+# never a domain-level list (invariant I1). The handle's forward-auth follows the
+# route's catch-all unless the rule says identityGate false. Path handles and
+# rule lists no longer declared are pruned. Rule lists are named from their
+# content, <list-base>:<zones sorted, joined by +>, so reordering rules churns
+# nothing. Dies on an invalid rule.
+proxy_add_path_rules() {
+    local module="$1" route_desc="$2" fqdn="$3" upstream="$4" port="$5" base="$6" rules="$7" rzones_json="$8"
+    shift 8; [[ "${1:-}" == "--" ]] && shift
+    local -a up_args=("$@")
+    [[ -n "${rules}" && "${rules}" != "null" ]] || rules="[]"
+
+    local problems
+    problems="$(proxy_path_rules_check "${rules}")"
+    [[ -z "${problems}" ]] || die "proxyAccess on ${fqdn}: ${problems//$'\n'/; }"
+
+    local n; n="$(jq 'length' <<< "${rules}")"
+    if (( n > 0 )) && ! caddy-manager add-handler --help 2>/dev/null | grep -q -- '--path'; then
+        die "proxyAccess on ${fqdn} needs a caddy-manager with add-handler --path — rebuild it (refresh-control-plane.sh)"
+    fi
+
+    local -a keep_desc=() keep_lists=() rzones=() rpaths=() acl_args=() gate_args=()
+    local i path acl lname gate desc
+    for (( i = 0; i < n; i++ )); do
+        mapfile -t rzones < <(jq -r --argjson i "${i}" '.[$i].zones | map(tostring) | sort | .[]' <<< "${rules}")
+        mapfile -t rpaths < <(jq -r --argjson i "${i}" '.[$i].paths[]' <<< "${rules}")
+        gate="$(jq -r --argjson i "${i}" '.[$i].identityGate | if . == false then "off" else "route" end' <<< "${rules}")"
+        if [[ -n "${rzones_json}" && "${rzones_json}" != "null" ]] \
+           && [[ "$(jq -c 'map(tostring) | sort' <<< "${rzones_json}")" == "$(printf '%s\n' "${rzones[@]}" | jq -R . | jq -sc .)" ]]; then
+            warn "  proxyAccess on ${fqdn}: a rule's zones equal the route's own — it changes nothing"
+        fi
+        lname="${base}:$(IFS=+; echo "${rzones[*]}")"
+        acl="$(proxy_zone_access_list "${module}" "${lname}" "${ZONES_FILE}" "${route_desc} paths" "${rzones[@]}")" \
+            || die "proxyAccess on ${fqdn}: a rule's zones cannot be resolved (see above)"
+        acl_args=(); [[ -n "${acl}" ]] && { acl_args=(--access-list "${acl}"); keep_lists+=(--keep "${acl}"); PATH_RULE_LISTS+=("${acl}"); }
+        gate_args=(--forward-auth-like "${route_desc}"); [[ "${gate}" == "off" ]] && gate_args=(--no-forward-auth)
+        for path in "${rpaths[@]}"; do
+            desc="${route_desc} ${path}"
+            keep_desc+=(--keep "${desc}")
+            debug "  Path rule: ${BL}${fqdn}${path}${CL} → ${acl:-anyone}${gate:+ (gate: ${gate})}"
+            run_caddy add-handler "${fqdn}" --upstream "${upstream}" --port "${port}" \
+                --description "${desc}" --path "${path}" \
+                "${acl_args[@]+"${acl_args[@]}"}" "${gate_args[@]}" \
+                "${up_args[@]+"${up_args[@]}"}" \
+                --no-ssl-verify || die "Failed to create the path handle ${fqdn}${path}"
+        done
+    done
+
+    # Prune what is no longer declared — the handles first, so no list is in use.
+    if caddy-manager prune-handlers --help >/dev/null 2>&1; then
+        caddy-manager prune-handlers --description-prefix "${route_desc} " \
+            "${keep_desc[@]+"${keep_desc[@]}"}" --no-ssl-verify >/dev/null \
+            || warn "Could not prune undeclared path handles of ${fqdn} (non-fatal)"
+        caddy-manager prune-accesslists --name-prefix "${base}:" \
+            "${keep_lists[@]+"${keep_lists[@]}"}" --no-ssl-verify >/dev/null \
+            || warn "Could not prune undeclared path-rule lists of ${fqdn} (non-fatal)"
+    fi
 }
 
 # proxy_prune_route_lists <module> [--keep <list>]... — delete the module's
@@ -479,6 +593,13 @@ proxy_unpublish() {
     local desc="TAPPaaS: ${module}"
     caddy-manager delete-handler --description "${desc}" --no-ssl-verify \
         || warn "Could not delete handler for ${module}"
+    # Its path handles (ADR-023), then the lists its path rules used.
+    if caddy-manager prune-handlers --help >/dev/null 2>&1; then
+        caddy-manager prune-handlers --description-prefix "${desc} " --no-ssl-verify >/dev/null \
+            || warn "Could not delete the path handles of ${module}"
+        caddy-manager prune-accesslists --name-prefix "tappaas-${module}:" --no-ssl-verify >/dev/null \
+            || warn "Could not delete the path-rule lists of ${module}"
+    fi
     # The handler first, so nothing references the access list any more.
     caddy-manager delete-accesslist "tappaas-${module}" --no-ssl-verify >/dev/null 2>&1 || true
     if [[ -n "${domain}" ]]; then

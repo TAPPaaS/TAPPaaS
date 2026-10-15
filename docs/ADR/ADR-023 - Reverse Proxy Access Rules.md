@@ -2,14 +2,14 @@
 
 | | |
 |---|---|
-| **Status** | **Accepted** (with @ErikDaniel007, 2026-09-14) — P1 built 2026-10-15; the pre-P2 check passed the same day, so P2 (path rules) can be built. |
+| **Status** | **Accepted** (with @ErikDaniel007, 2026-09-14) — P1 built 2026-10-15; P2 and P3 (path rules, `none`, `identityGate`, docs) built 2026-10-15. |
 | **Version** | 0.2 |
 | **Date** | 2026-09-14 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen, @ErikDaniel007 |
 | **Parent** | [ADR-021 — Split-Horizon DNS and Service Reachability](<ADR-021 - Split-Horizon DNS and Service Reachability.md>) — ADR-021 decides *how a caller reaches Caddy*; this ADR decides *what Caddy lets through once it is there* |
 | **Closes / addresses** | **#642** (a published route exposes every path of the app) and **#643** (`proxyRoutes` hosts inherit the primary access list) — merged into one design. Builds on **#206** (zones → Caddy access list) and **#597** (`proxyRoutes`). Related: **#419** (an unresolvable zone is a hard error), **#367** (netbird in the default list). |
-| **Changelog** | v0.2 (2026-10-15) — **P1 built** (#643): a `proxyRoutes` entry may set its own `proxyAllowedZones` and gets its own access list `tappaas-<module>#<route>`; lists no longer declared are pruned (`caddy-manager prune-accesslists`); the same-port trap warns. Also built, from #656: a network (CIDR) may stand in `proxyAllowedZones` beside zone names, for a provider's caller ranges. v0.1 — first draft. Documents the Caddy proxy setup as built, merges #642 (paths) and #643 (per-route zones) into one rule model, works two examples, and records the alternatives and issues from the #642/#643 review. |
+| **Changelog** | v0.3 (2026-10-15) — **P2 and P3 built** (#642): `proxyAccess` on the primary route and on each `proxyRoutes` entry renders one handle per path (`caddy-manager add-handler --path`) with its rule's list, named from its zones; `none` uses the shared inverted `tappaas-none`; `identityGate: false` serves a path without forward-auth, otherwise it copies the catch-all's; path handles and rule lists no longer declared are pruned (`prune-handlers`, `prune-accesslists`); D2's validation refuses before anything is written. Docs: network DESIGN.md, hass and litellm INSTALL.md. v0.2 (2026-10-15) — **P1 built** (#643): a `proxyRoutes` entry may set its own `proxyAllowedZones` and gets its own access list `tappaas-<module>#<route>`; lists no longer declared are pruned (`caddy-manager prune-accesslists`); the same-port trap warns. Also built, from #656: a network (CIDR) may stand in `proxyAllowedZones` beside zone names, for a provider's caller ranges. v0.1 — first draft. Documents the Caddy proxy setup as built, merges #642 (paths) and #643 (per-route zones) into one rule model, works two examples, and records the alternatives and issues from the #642/#643 review. |
 
 ## Context — how the Caddy proxy works today
 

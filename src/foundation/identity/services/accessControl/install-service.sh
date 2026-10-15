@@ -176,6 +176,21 @@ curl -ksS -u "$OPNSENSE_AUTH" -X POST "${CADDY_API}/ReverseProxy/setHandle/${HAN
     -d '{"handle":{"ForwardAuth":"1"}}' | jq -r .result >/dev/null \
     || die "Failed to set ForwardAuth on handler for ${MODULE}"
 
+# The route's path handles (ADR-023) are gated like the route, except the paths
+# of a rule with identityGate false — those serve machine callers that cannot
+# log in. network:proxy copies the gate onto them too, but on a first install it
+# runs before this, while the catch-all is not gated yet.
+mapfile -t GATED_PATHS < <(normalize_module_config < "${MODULE_JSON}" \
+    | jq -r '(.proxyAccess // [])[] | select(.identityGate != false) | .paths[]?')
+for _p in "${GATED_PATHS[@]+"${GATED_PATHS[@]}"}"; do
+    _u="$(curl -ksS -u "$OPNSENSE_AUTH" "${CADDY_API}/ReverseProxy/searchHandle" \
+        | jq -r --arg d "${DESCRIPTION} ${_p}" '.rows[] | select(.description==$d) | .uuid' | head -1)"
+    [[ -n "${_u}" ]] || { warn "  no path handle for ${_p} — network:proxy has not created it yet"; continue; }
+    curl -ksS -u "$OPNSENSE_AUTH" -X POST "${CADDY_API}/ReverseProxy/setHandle/${_u}" \
+        -H 'Content-Type: application/json' -d '{"handle":{"ForwardAuth":"1"}}' | jq -r .result >/dev/null \
+        || die "Failed to set ForwardAuth on the path handle ${_p} of ${MODULE}"
+done
+
 debug "  Caddy: reconfiguring + reloading"
 curl -ksS -u "$OPNSENSE_AUTH" -X POST "${CADDY_API}/service/reconfigure" | jq -r .status >/dev/null
 ssh -o StrictHostKeyChecking=accept-new "root@firewall.mgmt.internal" \

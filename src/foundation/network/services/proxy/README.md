@@ -28,7 +28,7 @@ trusted to have made config true. That is the blind spot recommendation 1 closes
 
 ## Fields
 
-`network:proxy` owns **8** declared field(s). Each table below carries the field's full definition and, where the service applies it, its ADR-020 change semantics.
+`network:proxy` owns **9** declared field(s). Each table below carries the field's full definition and, where the service applies it, its ADR-020 change semantics.
 
 ### `proxyDomain`
 
@@ -138,7 +138,7 @@ How network:proxy obtains the public TLS certificate for this domain. OMIT IT to
 
 ### `proxyAllowedZones`
 
-Zones (and the literal 'internet') permitted to reach this service through the reverse proxy — or networks named directly, as a.b.c.d/n or x:y::/n: a provider's published caller range, for an endpoint one cloud service must reach without opening it to the whole internet. A malformed network is refused, like an unknown zone. network:proxy compiles this into an os-caddy access list (allow-list by client subnet) attached to the handler; non-matching clients get HTTP 403. On a site with IPv6, each zone's IPv6 network is allowed next to its IPv4 one. Under ADR-021 D2 this is the ONLY place a zone restricts a published service: split-horizon DNS returns the same address (the DMZ gateway) to every caller, so the answer encodes no entitlement and the access list is what narrows it.
+Zones (and the literal 'internet') permitted to reach this service through the reverse proxy — or 'none' (no one, except through proxyAccess path rules), or networks named directly, as a.b.c.d/n or x:y::/n: a provider's published caller range, for an endpoint one cloud service must reach without opening it to the whole internet. A malformed network is refused, like an unknown zone. network:proxy compiles this into an os-caddy access list (allow-list by client subnet) attached to the handler; non-matching clients get HTTP 403. On a site with IPv6, each zone's IPv6 network is allowed next to its IPv4 one. Under ADR-021 D2 this is the ONLY place a zone restricts a published service: split-horizon DNS returns the same address (the DMZ gateway) to every caller, so the answer encodes no entitlement and the access list is what narrows it.
 
 | Attribute | Value |
 |---|---|
@@ -153,6 +153,24 @@ Zones (and the literal 'internet') permitted to reach this service through the r
 **About the field.** Zero-trust by default: when omitted, a service is reachable only from the internal trusted zones, never the internet. Add 'internet' to publish it publicly (no restriction). Zone names are resolved to subnets via zones.json. Changing this re-applies on the next install/update of the module. TWO values carry real consequence and the rest is belt-and-braces: leaving it UNSET is the normal, correct configuration for a published service, and adding 'internet' is what makes it publicly reachable. Narrowing to a specific list of internal zones filters IN FRONT OF the identity gate, it is not the mechanism protecting the service (ADR-021 Case 1/3) — a zone list that lets someone through still leaves them at an Authentik login, and one that shuts them out only saves them the round trip. Do not use it to separate two populations who are each entitled to a different environment: that binds entitlement to network position, which breaks the moment a legitimate user connects from another zone (the same person on a laptop in home, a phone on guest wifi and the netbird overlay is ONE identity in three zones). Authentik group membership is where that belongs.
 
 **Why this change class.** Which zones may reach the published name — the difference between an internal service and one exposed to the internet. A live firewall/Caddy change, and the field most worth being able to set through a verb rather than by hand.
+
+### `proxyAccess`
+
+Path exceptions to the route's proxyAllowedZones: a list of rules {paths, zones, identityGate}. A request whose path matches a rule gets that rule's zones; every other path keeps the route's. paths are Caddy path matchers starting with / (a trailing * is a prefix match); zones takes the same values as proxyAllowedZones. identityGate false serves the rule's paths without the Authentik gate, for machine callers that cannot log in (default: as the route). Allowed on the module (primary route) and on each proxyRoutes entry. With proxyAllowedZones ['none'] a route serves only its rules' paths.
+
+| Attribute | Value |
+|---|---|
+| Type | `array` |
+| Default | *(none)* |
+| Example | `[{"paths": ["/api/webhook/*"], "zones": ["internet"], "identityGate": false}]` |
+| Required by | *(none)* |
+| Used by | `network:proxy` |
+| Change class | `in-place` |
+| Apply mode | `reconcile` |
+
+**About the field.** Reachable is not authorized: a public path is protected only by the application (a secret ID in the URL, a signed request). The longest matching path wins. A path of / or /* is refused (set proxyAllowedZones instead), as is the same path in two rules.
+
+**Why this change class.** Reconciled with the route: one Caddy handle per path, before the catch-all, each with its rule's access list; handles and lists no longer declared are pruned.
 
 ### `proxyRoutes`
 

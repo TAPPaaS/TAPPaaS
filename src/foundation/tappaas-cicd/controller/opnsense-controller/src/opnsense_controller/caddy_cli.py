@@ -102,8 +102,16 @@ def add_handler(
     redir_path: str = "",
     upstream_http1: bool = False,
     preserve_host: bool = False,
+    path: str = "",
+    forward_auth_like: str = "",
+    no_forward_auth: bool = False,
 ) -> bool:
     """Add (or reconcile) a reverse-proxy OR redir handler for a domain.
+
+    `path` makes it a path handle (ADR-023 D4). Its forward-auth is either
+    copied from another handle (`forward_auth_like`, the route's catch-all — the
+    identity gate the route has) or explicitly off (`no_forward_auth`, a rule
+    with identityGate false, for machine callers that cannot log in).
 
     Exactly one of `upstream` (reverse_proxy) or `redir` (HTTP redirect) is used.
 
@@ -195,8 +203,18 @@ def add_handler(
             upstream_http_version=("http1" if upstream_http1 else ""),
             host_header=(domain_name if preserve_host else ""),
             forward_auth=forward_auth,
+            path=path,
         )
-        target_desc = f"{upstream}:{port}"
+        target_desc = f"{upstream}:{port}{path}"
+
+    # A path handle's gate is decided, not kept: the route's (copied from its
+    # catch-all), or off on purpose.
+    gate_decided = False
+    if no_forward_auth:
+        handler.forward_auth, gate_decided = False, True
+    elif forward_auth_like:
+        ref = manager.get_handler_by_description(forward_auth_like)
+        handler.forward_auth, gate_decided = bool(ref and ref.forward_auth), True
 
     # Reconcile an existing handler (so the access list / upstream stay current)
     # rather than skipping — important for applying #206 restriction changes.
@@ -207,7 +225,8 @@ def add_handler(
         # "0" here opened every gated module to the internet from network:proxy's
         # reconfigure until accessControl re-ran in the same update (#806).
         # Turning it off is the gate owner's call (or the route's removal).
-        handler.forward_auth = forward_auth or existing.forward_auth
+        if not gate_decided:
+            handler.forward_auth = forward_auth or existing.forward_auth
         if check_mode:
             print(f"Would update handler: {domain_name} -> {target_desc} "
                   f"(access_list={access_list or 'none'}) (dry-run)")
@@ -338,6 +357,36 @@ def delete_access_list_cmd(
         return True
     print(f"ERROR: Failed to delete access list: {result}", file=sys.stderr)
     return False
+
+
+def prune_handlers_cmd(
+    manager: CaddyManager,
+    description_prefix: str,
+    keep: list[str],
+    check_mode: bool = False,
+) -> bool:
+    """Delete handlers whose description starts with ``description_prefix`` and
+    is not in ``keep`` (ADR-023 D4): the path handles of rules no longer
+    declared. The prefix carries the trailing space ('TAPPaaS: hass '), so it
+    never matches the catch-all ('TAPPaaS: hass') nor another module's."""
+    if not description_prefix.strip():
+        print("ERROR: --description-prefix must not be empty", file=sys.stderr)
+        return False
+    keep_set = set(keep or [])
+    stale = [h for h in manager.list_handlers()
+             if h.description.startswith(description_prefix) and h.description not in keep_set]
+    ok = True
+    for h in stale:
+        if check_mode:
+            print(f"Would delete handler '{h.description}' (dry-run)")
+            continue
+        result = manager.delete_handler(h.uuid)
+        if result.get("result") in ("deleted", "ok"):
+            print(f"  Handler '{h.description}' deleted (no longer declared)")
+        else:
+            print(f"ERROR: Failed to delete handler '{h.description}': {result}", file=sys.stderr)
+            ok = False
+    return ok
 
 
 def prune_access_lists_cmd(
@@ -770,6 +819,21 @@ Examples:
                                     "requests through the global Authentik outpost (issue #45). Requires "
                                     "the global AuthProvider to be configured (done by identity install).")
 
+    add_handler_parser.add_argument("--path", default="",
+                                    help="Serve only this request path (a Caddy matcher, e.g. /api/webhook/*) — ADR-023 path handle")
+    gate = add_handler_parser.add_mutually_exclusive_group()
+    gate.add_argument("--forward-auth-like", default="",
+                      help="Copy forward-auth from the handler with this description (the route's catch-all)")
+    gate.add_argument("--no-forward-auth", action="store_true",
+                      help="Forward-auth off on this handle, also if it was on (a path for machine callers)")
+
+    # prune-handlers (ADR-023 D4): path handles no longer declared
+    prune_h_parser = subparsers.add_parser(
+        "prune-handlers", parents=[global_parser],
+        help="Delete handlers whose description starts with a prefix, except the --keep ones")
+    prune_h_parser.add_argument("--description-prefix", required=True, help="e.g. 'TAPPaaS: hass ' (with the space)")
+    prune_h_parser.add_argument("--keep", action="append", default=[], help="A handler description to keep (repeatable)")
+
     # add-accesslist (issue #206)
     add_al_parser = subparsers.add_parser("add-accesslist", parents=[global_parser], help="Create/update an access list (client-IP allow/deny)")
     add_al_parser.add_argument("name", help="Access list name (unique key)")
@@ -880,6 +944,9 @@ Examples:
                     redir=args.redir, redir_path=args.redir_path,
                     upstream_http1=args.upstream_http1,
                     preserve_host=args.preserve_host,
+                    path=args.path,
+                    forward_auth_like=args.forward_auth_like,
+                    no_forward_auth=args.no_forward_auth,
                 )
             elif args.command == "add-accesslist":
                 success = add_access_list_cmd(
@@ -889,6 +956,8 @@ Examples:
                 )
             elif args.command == "delete-accesslist":
                 success = delete_access_list_cmd(manager, args.name, args.check_mode)
+            elif args.command == "prune-handlers":
+                success = prune_handlers_cmd(manager, args.description_prefix, args.keep, args.check_mode)
             elif args.command == "prune-accesslists":
                 success = prune_access_lists_cmd(manager, args.name_prefix, args.keep, args.check_mode)
             elif args.command == "delete-domain":

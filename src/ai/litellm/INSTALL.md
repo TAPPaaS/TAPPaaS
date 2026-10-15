@@ -126,6 +126,16 @@ redirect will point at the old host.
 This lives in the deployed config only: `module-manager module add litellm --reinstall`
 reverts it.
 
+**Publish the API only.** Clients need `/v1/…`; the admin UI does not need to
+be on the internet. Publish just the API paths and keep `/ui` and the rest
+internal:
+
+    module-manager module modify litellm --set 'proxyAccess=[{"paths":["/v1/*","/chat/completions","/completions","/embeddings","/models"],"zones":["internet"]}]'
+
+Every path not listed keeps the module's zones, so the UI, `/key/*` and the
+other admin endpoints still answer 403 from the internet. Set `proxyAccess` to
+`[]` to withdraw it.
+
 ## Verification
 
     module-manager module test litellm

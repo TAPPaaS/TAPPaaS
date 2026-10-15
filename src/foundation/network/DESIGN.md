@@ -280,6 +280,48 @@ rules-manager remove-alias <name>
 The CLI is normally invoked by the `services/rules/*.sh` capability scripts on the
 consumer module's lifecycle hooks, but can be run directly for debugging.
 
+## Reverse proxy: handles and access lists
+
+`network:proxy` gives each published hostname a Caddy domain with one or more
+handles. Who may reach a path is decided by an access list on the handle; the
+rule model is [ADR-023](../../../docs/ADR/ADR-023%20-%20Reverse%20Proxy%20Access%20Rules.md).
+
+**Layout of a route** (the primary hostname and each `proxyRoutes` entry):
+
+| Handle | Path | Access list | Forward-auth |
+|---|---|---|---|
+| catch-all, `TAPPaaS: <module>` (`TAPPaaS: <module>#<route>`) | none | the route's `proxyAllowedZones` | as the module asks (`identity:accessControl`) |
+| one per `proxyAccess` path, `TAPPaaS: <module>[#<route>] <path>` | the path | the rule's zones; none for `internet` | copied from the catch-all, or off with `identityGate: false` |
+
+Caddy tries handles with a path before the catch-all, and the longest path
+first. A request that matches no rule falls to the catch-all and gets the
+route's own zones.
+
+**An access list goes on every handle, never on the domain.** Caddy sorts a
+domain-level list (an IP matcher) after path handles, so a path handle would
+skip the zone check. Every handle of a zone-restricted route carries its list.
+
+**Access list names** are derived from what they hold, so reordering rules
+changes nothing:
+
+| List | Name |
+|---|---|
+| primary route | `tappaas-<module>` |
+| a `proxyRoutes` entry with its own zones | `tappaas-<module>#<route>` |
+| a path rule | `tappaas-<module>[#<route>]:<zones sorted, joined by +>` |
+| `none` (no one but the path rules) | `tappaas-none`, shared: inverted `0.0.0.0/0, ::/0`, answers 403 |
+
+`#` and `:` separate the parts, never `-`: module `hass` with route `hooks`
+and a module `hass-hooks` must not share a name.
+
+**Reconcile and pruning.** Install and update create what is missing, update
+what changed and then prune what is no longer declared: path handles by their
+description prefix (`caddy-manager prune-handlers`), route and rule lists by
+their name prefix (`caddy-manager prune-accesslists`). Unpublishing a module
+removes its handles and lists the same way. The catch-all handle keeps its
+name, so `identity:accessControl` finds it by exact description and turns
+forward-auth on for it and for every path handle that inherits it.
+
 ## Physical network: switches & WiFi (ADR-008)
 
 Beyond OPNsense (L3), `zones.json` is also reconciled onto **Proxmox** bridges/trunks,

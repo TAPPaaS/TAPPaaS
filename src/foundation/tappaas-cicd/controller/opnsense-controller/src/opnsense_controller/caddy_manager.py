@@ -66,6 +66,10 @@ class CaddyHandler:
     # ToPath: for redir, a fixed target path (empty → os-caddy uses "{uri}",
     # preserving the request path/query). For reverse_proxy, a rewrite path.
     to_path: str = ""
+    # The request path this handle serves (os-caddy HandlePath, ADR-023 D4): a
+    # Caddy path matcher such as /api/webhook/*. Empty: the catch-all handle.
+    # HandleType stays `handle`, which keeps the path for the upstream.
+    path: str = ""
 
 
 @dataclass
@@ -144,6 +148,8 @@ class CaddyHandlerInfo:
     # Read so a reconcile can keep it: network:proxy rebuilt the handle without
     # it and left the module ungated until accessControl ran again (#806).
     forward_auth: bool = False
+    # The handle's request path (ADR-023); empty for a catch-all.
+    path: str = ""
 
     @classmethod
     def from_api_response(cls, data: dict) -> "CaddyHandlerInfo":
@@ -171,6 +177,7 @@ class CaddyHandlerInfo:
             upstream_http_version=_option_str(data.get("HttpVersion", "")),
             access_list_uuid=_option_str(data.get("accesslist", "")),
             forward_auth=str(data.get("ForwardAuth", "")) == "1",
+            path=str(data.get("HandlePath", "") or ""),
         )
 
 
@@ -507,6 +514,7 @@ class CaddyManager:
                 "enabled": "1" if handler.enabled else "0",
                 "reverse": handler.domain_uuid,
                 "HandleType": "handle",
+                "HandlePath": handler.path,
                 "HandleDirective": handler.directive,
                 "ToDomain": handler.upstream_domain,
                 "ToPort": str(handler.upstream_port),
@@ -537,6 +545,7 @@ class CaddyManager:
                 "enabled": "1" if handler.enabled else "0",
                 "reverse": handler.domain_uuid,
                 "HandleType": "handle",
+                "HandlePath": handler.path,
                 "HandleDirective": handler.directive,
                 "ToDomain": handler.upstream_domain,
                 "ToPort": str(handler.upstream_port),

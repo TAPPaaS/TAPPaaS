@@ -491,6 +491,74 @@ class TestReconcileKeepsForwardAuth(unittest.TestCase):
         self.assertFalse(CaddyHandlerInfo.from_api_response(row).forward_auth)
 
 
+class TestPathHandles(unittest.TestCase):
+    """ADR-023 D4: a path handle carries HandlePath; its gate is the route's,
+    copied from the catch-all, or off on purpose (identityGate false)."""
+
+    def _run(self, *, existing_fa=None, catchall_fa=False, **kw):
+        from opnsense_controller import caddy_cli  # noqa: PLC0415
+        mgr = MagicMock()
+        mgr.get_domain_by_name.return_value = MagicMock(uuid="D1")
+        mgr.get_access_list_by_name.return_value = MagicMock(uuid="AL")
+        catchall = MagicMock(forward_auth=catchall_fa)
+        path_handle = None if existing_fa is None else MagicMock(uuid="H2", forward_auth=existing_fa)
+        mgr.get_handler_by_description.side_effect = (
+            lambda d: catchall if d == "TAPPaaS: hass" else path_handle)
+        mgr.add_handler.return_value = {"uuid": "NEW"}
+        mgr.update_handler.return_value = {"result": "saved"}
+        self.assertTrue(caddy_cli.add_handler(mgr, "hass.example", "hass.srv.internal", "8123",
+                                              "TAPPaaS: hass /api/webhook/*", **kw))
+        call = mgr.add_handler.call_args or mgr.update_handler.call_args
+        return call.args[-1]
+
+    def test_path_is_sent(self):
+        h = self._run(path="/api/webhook/*")
+        self.assertEqual(h.path, "/api/webhook/*")
+
+    def test_gate_copied_from_the_catch_all(self):
+        self.assertTrue(self._run(path="/a", forward_auth_like="TAPPaaS: hass", catchall_fa=True).forward_auth)
+        self.assertFalse(self._run(path="/a", forward_auth_like="TAPPaaS: hass", catchall_fa=False).forward_auth)
+
+    def test_copy_overrides_a_stale_gate_on_update(self):
+        # The route was ungated since: the path handle must follow, not keep its old "on".
+        h = self._run(path="/a", forward_auth_like="TAPPaaS: hass", catchall_fa=False, existing_fa=True)
+        self.assertFalse(h.forward_auth)
+
+    def test_no_forward_auth_turns_it_off_even_if_on(self):
+        self.assertFalse(self._run(path="/a", no_forward_auth=True, existing_fa=True).forward_auth)
+
+    def test_payload_carries_handle_path(self):
+        from opnsense_controller.caddy_manager import CaddyHandler  # noqa: PLC0415
+        mgr = CaddyManager(config=MagicMock())
+        mgr._api_post = MagicMock(return_value={"uuid": "X"})  # noqa: SLF001
+        mgr.add_handler(CaddyHandler(domain_uuid="D", upstream_domain="u", upstream_port="80", path="/hook/*"))
+        data = mgr._api_post.call_args.args[2]  # noqa: SLF001
+        self.assertEqual(data["handle"]["HandlePath"], "/hook/*")
+        self.assertEqual(data["handle"]["HandleType"], "handle")
+
+
+class TestPruneHandlers(unittest.TestCase):
+    """Path handles no longer declared are pruned; never the catch-all (ADR-023 D4)."""
+
+    def test_prunes_only_undeclared_path_handles(self):
+        from opnsense_controller.caddy_cli import prune_handlers_cmd  # noqa: PLC0415
+        mgr = MagicMock()
+        rows = []
+        for i, d in enumerate(["TAPPaaS: hass", "TAPPaaS: hass /api/webhook/*", "TAPPaaS: hass /old",
+                               "TAPPaaS: hass#r /x", "TAPPaaS: hassx /y"]):
+            m = MagicMock(); m.description, m.uuid = d, f"H{i}"; rows.append(m)
+        mgr.list_handlers.return_value = rows
+        mgr.delete_handler.return_value = {"result": "deleted"}
+        self.assertTrue(prune_handlers_cmd(mgr, "TAPPaaS: hass ", ["TAPPaaS: hass /api/webhook/*"]))
+        self.assertEqual([c.args[0] for c in mgr.delete_handler.call_args_list], ["H2"])
+
+    def test_blank_prefix_is_refused(self):
+        from opnsense_controller.caddy_cli import prune_handlers_cmd  # noqa: PLC0415
+        mgr = MagicMock()
+        self.assertFalse(prune_handlers_cmd(mgr, "  ", []))
+        mgr.delete_handler.assert_not_called()
+
+
 class TestListAllRendersScheme(unittest.TestCase):
     """`list` is the state source every verifier greps, so it must show the scheme."""
 
