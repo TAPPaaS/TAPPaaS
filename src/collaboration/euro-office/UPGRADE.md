@@ -67,7 +67,7 @@ ssh -t tappaas@nextcloud.<zone>.internal "sudo nextcloud-occ --no-ansi eurooffic
 The document-server image is pinned in `euro-office.nix`, and mirrored in `update.sh`:
 
 ```nix
-image = "ghcr.io/euro-office/documentserver:v9.3.3";   # immutable semver tag — never :latest/:nightly
+image = "ghcr.io/euro-office/documentserver:v9.3.5";   # immutable semver tag — never :latest/:nightly
 ```
 
 1. Pick a new **immutable** semver tag (verify it runs: `/healthcheck`, `/web-apps/.../api.js`).

@@ -2,7 +2,8 @@
 # Update eurooffice-nextcloud.nix to the latest release tag.
 #
 # Automatically computes the source and npm dependency hashes.
-# After running, a single nix build is required to capture the PHP vendor hash.
+# The submodule pins (document-formats/-templates) and the php-jwt pin are
+# checked by hand afterwards; the script prints how.
 #
 # Usage: ./update-eurooffice-app.sh
 #
@@ -60,11 +61,10 @@ fi
 echo -e ""
 info "Updating ${CURRENT_VERSION} → ${LATEST_VERSION}"
 
-# Compute source hash (downloads source + submodules into Nix store)
-info "Computing source hash (downloads repo + submodules — may take a moment)..."
+# Compute source hash (downloads the source into the Nix store)
+info "Computing source hash (repo without submodules, as the nix fetchgit does)..."
 PREFETCH_JSON=$(nix-shell -p nix-prefetch-git --run \
     "nix-prefetch-git \
-     --fetch-submodules \
      --rev '${LATEST_TAG}' \
      https://github.com/${REPO}" 2>/dev/null)
 
@@ -103,22 +103,16 @@ if [ -n "$NPM_HASH" ]; then
     sed -i "s|npmDepsHash = \"sha256-[A-Za-z0-9+/=]*\";|npmDepsHash = \"${NPM_HASH}\";|" "$NIX_FILE"
 fi
 
-# Reset vendor hash to placeholder so the next build reveals the correct value
-sed -i "s|outputHash = \"sha256-[A-Za-z0-9+/=]*\";|outputHash = \"${FAKE_HASH}\";|" "$NIX_FILE"
-
 echo -e ""
 echo -e "${GN}${BOLD}Update applied: ${CURRENT_VERSION} → ${LATEST_VERSION}${CL}"
 echo -e ""
 echo -e "Source hash and npm deps hash have been updated."
 echo -e ""
-echo -e "${BOLD}NEXT STEP: update the PHP vendor hash${CL}"
-echo -e "  1. Run:  update-module nextcloud"
-echo -e "     The build will fail with:"
-echo -e "       specified: sha256-AAAA..."
-echo -e "       got:       sha256-<correct hash>"
-echo -e ""
-echo -e "  2. Open ${NIX_FILE}"
-echo -e "     Replace the 'outputHash' placeholder with the 'got:' value."
-echo -e ""
-echo -e "  3. Run:  update-module nextcloud  (succeeds this time)"
+echo -e "${BOLD}NEXT STEP: check the pins the script does not touch${CL}"
+echo -e "  1. Submodules:  git ls-tree ${LATEST_TAG} assets/  (in a clone of ${REPO})"
+echo -e "     Update documentFormats / documentTemplates url + sha256"
+echo -e "     (nix-prefetch-url --unpack <archive-url>)."
+echo -e "  2. php-jwt:  the firebase/php-jwt reference in the tag's composer.lock."
+echo -e "     Update phpJwt url + sha256 the same way."
+echo -e "  3. Run:  update-module.sh nextcloud"
 echo -e ""

@@ -69,8 +69,8 @@ or those sites are refused. Also:
 2. Ensure the nixpkgs template revision (pinned engine-side, in `update-os.sh`) carries the new
    major.
 3. If a newer euro-office connector is required, run `./update-eurooffice-app.sh`. It refreshes
-   the source and npm hashes in `eurooffice-nextcloud.nix`; check the connector's `composer.lock`
-   by hand and update the vendored `firebase/php-jwt` pin to match, then build it once.
+   the source and npm hashes in `eurooffice-nextcloud.nix`; update the submodule pins and the
+   `firebase/php-jwt` pin (from the tag's `composer.lock`) by hand, then build it once.
 4. Test on a separate environment (`install-module.sh nextcloud --environment <test-env>`) before
    production.
 

@@ -13,7 +13,7 @@
 # Product: Euro-Office DocumentServer (collaborative document editing)
 #
 # Architecture:
-# - Single Podman container (ghcr.io/euro-office/documentserver:v9.3.3, pinned in nix)
+# - Single Podman container (ghcr.io/euro-office/documentserver:v9.3.5, pinned in nix)
 # - Container bundles Nginx, PostgreSQL, Redis, RabbitMQ, DocService,
 #   FileConverter, AdminPanel, and an example app internally
 # - Only port 80 (Nginx) is exposed to the host; all other ports are internal
@@ -143,16 +143,15 @@ EOF
   # ============================================================================
 
   virtualisation.oci-containers.containers."euro-office" = {
-    # Pinned to DocumentServer v9.3.3 (was v9.3.1), deliberately NOT the newest
-    # v9.3.4: its startup cannot generate the presentation themes — the doc
-    # renderer hits a V8 fatal error ("could not use 01_blank.pptx"), shown with
-    # a bare container and nothing of ours (hrossen, 2026-10-04). v9.3.3 starts
-    # clean and carries almost all of v9.3.4's fixes: image findings fixable
-    # 975 -> 639, High 6 -> 2 (grype); the two left are one OpenSSL CVE Ubuntu
-    # has fixed and upstream has not rebuilt for. Move on when a release past
-    # v9.3.4 generates its themes. Immutable semver tag — NOT :latest/:nightly.
+    # Pinned to DocumentServer v9.3.5 (was v9.3.3). v9.3.4 could not generate
+    # the presentation themes ("could not use 01_blank.pptx"): V8 crashed on
+    # hosts whose CPU reports MPX (upstream #339), fixed in v9.3.5. Known open
+    # risk: v9.3.5 binaries can stop with "CPU ISA level is lower than
+    # required" on older vCPU models (upstream #415) — keep the VM on
+    # cputype host, x86-64-v3 or better (hrossen: v4, clean 2026-10-15).
+    # Immutable semver tag — NOT :latest/:nightly.
     # Keep in sync with update.sh; src/image-pins.json tracks both (#750).
-    image = "ghcr.io/euro-office/documentserver:v9.3.3";
+    image = "ghcr.io/euro-office/documentserver:v9.3.5";
 
     environment = {
       ALLOW_PRIVATE_IP_ADDRESS = "true";

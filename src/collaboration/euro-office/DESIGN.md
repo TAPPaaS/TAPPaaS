@@ -28,7 +28,7 @@ firewall opens only ports 22 and 80.
 | PostgreSQL / Redis / RabbitMQ | Session storage, cache, internal message bus |
 | Admin Panel | Server monitoring/config UI (`ADMINPANEL_ENABLED=true`); not required for document editing |
 
-Image: `ghcr.io/euro-office/documentserver:v9.3.3` — pinned as an immutable semver tag in
+Image: `ghcr.io/euro-office/documentserver:v9.3.5` — pinned as an immutable semver tag in
 `euro-office.nix`. Do not use the mutable `:latest`/`:nightly` tags. `update.sh` mirrors
 the same tag for its manual pull/restart path; keep the two in sync when bumping
 (see [UPGRADE.md](./UPGRADE.md) "Maintainer: bumping the pinned image").
