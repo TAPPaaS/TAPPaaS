@@ -119,7 +119,8 @@ The unified `install.sh` script handles both NixOS and Debian/Ubuntu VMs. It aut
 The test-vm.sh script checks:
 
 1. **Ping by IP** - Can reach the VM via IP address
-2. **DNS resolution** - Hostname resolves to correct IP
+2. **DNS resolution** - Hostname resolves to the VM's IPv4 address
+   - **IPv6** - with a global IPv6 address on the VM, every AAAA answer is one of its addresses; without one, there is no AAAA
 3. **Ping by DNS** - Can reach the VM via DNS name
 4. **SSH access** - Can SSH as tappaas (or debian) user
 5. **Hostname** - VM reports correct hostname

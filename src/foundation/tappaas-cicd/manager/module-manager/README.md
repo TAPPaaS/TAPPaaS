@@ -413,6 +413,8 @@ delete-module.sh <module-name> [--archive|--remove] [--vmid <id>] [--decommissio
 - `--environment <name>` (alias `--variant`).
 - `--yes` / `-y` — skip the confirmation prompt.
 - `--force` — skip dependency checks; **required** for site-scoped modules (the `foundation` stack).
+- Deleting a provider is refused while a module depends on it. An **archived** module is not a
+  dependent (it has no guest), so archiving the consumer first and then its provider needs no `--force`.
 - A machine (`kind: machine`) is only **unregistered**: the config goes, the machine keeps
   running untouched, `--vmid` is refused, and the module's own `delete.sh` is **not** run
   (ADR-026 D8.1).

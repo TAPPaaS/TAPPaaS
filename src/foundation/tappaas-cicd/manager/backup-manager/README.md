@@ -113,7 +113,10 @@ backup-manager reconcile [--apply] [--config-dir DIR]
 
 backup-manager restore list <module> | restore <module> [opts] | list-all
         SPECIAL recovery verb — delegates to the foundation backup/restore.sh and
-        backup-controller (snapshot listing).
+        backup-controller (snapshot listing). restore <module> overwrites the
+        module's own guest after asking; --yes confirms it up front (a script or
+        an agent has no terminal). --from <module|vmid> restores another guest's
+        backup into it instead. See RESTORE.md §1–§2.
 
 backup-manager coverage <module> [--json]
         Every cluster backup job that covers the module's VM — TAPPaaS's own
