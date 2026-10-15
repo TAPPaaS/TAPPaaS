@@ -272,6 +272,23 @@ def cmd_status(mgr: AcmeManager, args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_ensure_cron(mgr: AcmeManager, args: argparse.Namespace) -> int:
+    """Wire the auto-renewal cron when certificates exist (idempotent). A site
+    whose certificate predates the cron wiring (#547) never re-runs setup, so
+    the network update calls this every sweep (#832)."""
+    if not mgr._api_get("Certificates", "search").get("rows", []):  # noqa: SLF001
+        print("renewal cron: no ACME certificate — nothing to renew")
+        return 0
+    result = mgr.ensure_renewal_cron()
+    if not mgr.renewal_cron_uuid():
+        print("renewal cron: NOT created — certificates will not renew automatically; "
+              "check Services → ACME Client → Settings", file=sys.stderr)
+        return 1
+    state = result.get("result", "ok")
+    print(f"renewal cron: {'created' if state == 'new' else 'present'} ({state})")
+    return 0
+
+
 def cmd_not_after(mgr: AcmeManager, args: argparse.Namespace) -> int:
     """Print a Trust certificate's notAfter (unix; 0 = unknown) — what the proxy
     checks before binding a refid, so an expired one is named, not served."""
@@ -359,6 +376,10 @@ def main(argv: list[str] | None = None) -> int:
                               help="Show the current state of the wildcard certificate")
     p_status.add_argument("--domain", required=True)
     p_status.set_defaults(handler=cmd_status)
+
+    p_cron = sub.add_parser("ensure-cron", parents=[gp],
+                            help="Wire the auto-renewal cron if ACME certificates exist (idempotent)")
+    p_cron.set_defaults(handler=cmd_ensure_cron)
 
     p_na = sub.add_parser("not-after", parents=[gp],
                           help="Print the notAfter (unix; 0 = unknown) of a Trust certificate")

@@ -228,6 +228,19 @@ case "${_sec_rc}:${_sec_out}" in
                   warn "unbound-manager could not bring DNSSEC to site.json (continuing)" ;;
 esac
 
+# ── ACME renewal cron ───────────────────────────────────────────────
+#
+# os-acme-client renews only from a cron job it does not create itself. Setup
+# wires it, but a certificate issued before that never got one and expires
+# unrenewed: make sure it is there on every update (idempotent).
+_cron_out="$(/home/tappaas/bin/acme-manager --no-ssl-verify ensure-cron 2>&1)" && _cron_rc=0 || _cron_rc=$?
+case "${_cron_rc}:${_cron_out}" in
+    0:*created*) info "  ${_cron_out}" ;;
+    0:*)         debug "  ${_cron_out}" ;;
+    *)           printf '%s\n' "${_cron_out}" >&2
+                 warn "acme-manager could not make sure the certificate renewal cron exists (continuing)" ;;
+esac
+
 # ── DNS blocklists (#157) ────────────────────────────────────────────
 #
 # unbound-manager brings Unbound's DNSBL to site.json `dnsBlocklists` (absent:

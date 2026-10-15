@@ -370,6 +370,27 @@ class TestRenewalCron(unittest.TestCase):
         self.assertIsNotNone(set_call)
         self.assertEqual(set_call["data"]["acmeclient"]["settings"]["autoRenewal"], "1")
 
+    def test_ensure_cron_cmd_without_certificates_does_nothing(self):
+        from opnsense_controller.acme_cli import cmd_ensure_cron  # noqa: PLC0415
+        mgr = MagicMock()
+        mgr._api_get.return_value = {"rows": []}  # noqa: SLF001
+        with patch("sys.stdout", new_callable=io.StringIO):
+            self.assertEqual(cmd_ensure_cron(mgr, MagicMock()), 0)
+        mgr.ensure_renewal_cron.assert_not_called()
+
+    def test_ensure_cron_cmd_wires_and_reports(self):
+        from opnsense_controller.acme_cli import cmd_ensure_cron  # noqa: PLC0415
+        mgr = MagicMock()
+        mgr._api_get.return_value = {"rows": [{"uuid": "c1"}]}  # noqa: SLF001
+        mgr.ensure_renewal_cron.return_value = {"result": "new"}
+        mgr.renewal_cron_uuid.return_value = "CRON1"
+        with patch("sys.stdout", new_callable=io.StringIO) as out:
+            self.assertEqual(cmd_ensure_cron(mgr, MagicMock()), 0)
+        self.assertIn("created", out.getvalue())
+        mgr.renewal_cron_uuid.return_value = ""
+        with patch("sys.stderr", new_callable=io.StringIO):
+            self.assertEqual(cmd_ensure_cron(mgr, MagicMock()), 1)
+
     def test_renewal_cron_uuid_reads_selected(self):
         mgr = _make_manager({
             ("Settings", "get"): {"acmeclient": {"settings": {"UpdateCron": {
