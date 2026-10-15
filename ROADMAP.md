@@ -108,7 +108,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | 4 | G4.5 Governance, CI & sign-offs | M | L | 5 | – | 5 |
 | 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 18 | 6 | 2 |
 | 3 | G3.2 Identity & SSO wiring | M | L | 10 | 3 | 1 |
-| 3 | G3.3 App module fixes | L | L | 10 | – | 11 |
+| 3 | G3.3 App module fixes | L | L | 10 | 1 | 10 |
 | 3 | G3.4 AI stack maturity | M | M | 1 | 3 | 7 |
 | 3 | G3.5 Installer UX | L | L | 1 | – | 3 |
 | 2 | G2.1 Firewall exposure & rule order | M | H | 7 | 18 | 2 |
@@ -302,7 +302,7 @@ Every app wired to the identity provider the same way: OIDC for hass, Nextcloud 
 | ✅ #479 | Site-specific login page | L | L | **Closed 2026-10-14** (`1a065ddb`, `17ecfb92`): the sign-in page shows the site name and its own logo from `site.json` `branding` (light/dark); live on hrossen. Extended 2026-10-14 (`44724af2`): start-page tiles show each module's icon (dashboard-icons) and `displayName`, generated tile otherwise; providers keyed by slug so a rename keeps the OIDC client |
 | ✅ #701 | logging depends on identity though its own code makes SSO optional | L | L | **Closed 2026-10-14** (`344bc8b8`): logging lists identity in `integratesWith`; Grafana's OIDC switch follows identity. Other consumers keep `dependsOn` — identity is always installed |
 
-### G3.3 App module fixes — Ease L · Risk L · released: 10 · open: 11
+### G3.3 App module fixes — Ease L · Risk L · released: 10 · done for 2.3: 1 · open: 10
 
 The known rough edges of the app modules, fixed and tested so they stay fixed: Nextcloud Talk end to end (#715), Home Assistant (#552, #568, #571 — maintainer-owned), Nextcloud and euro-office (#332, #658, #751), litellm consumers (#553), windows-server (#411), forgejo (#283, #284), in-guest backups (#754), container stop timeouts (#786).
 
@@ -317,7 +317,7 @@ The known rough edges of the app modules, fixed and tested so they stay fixed: N
 | #332 | euro-office / Nextcloud install findings | M | L | |
 | #807 | Immich: bump `unstableSrc` once `jellyfin-ffmpeg` fixes six upload-reachable CVEs | M | L | **Opened 2026-10-09** from the #788 triage (`cc6790a2`): immich-server's jellyfin-ffmpeg 8.1.2-5 has six heap-corruption flaws any logged-in uploader reaches (RISK medium in `immich-vex.json`); nixos-unstable has no fixed jellyfin-ffmpeg yet, and plain ffmpeg 9.0.1 lacks the `tonemapx` filter immich needs |
 | #658 | nextcloud test 12 probes the browser URL from wherever it runs | L | L | Maintainer-owned (@ErikDaniel007). Not "403 = pass": skip with a reason when the test host is outside the route's `proxyAllowedZones` (exit 77), as Test 9z does |
-| #751 | nextcloud:fileservice has no teardown | M | L | `delete-service.sh` is an ADR-027 stub, so a deleted consumer leaves its connector settings in Nextcloud. Remove the env file and unset what `occ` applied; test on hrossen |
+| ✅ #751 | nextcloud:fileservice has no teardown | M | L | **Closed 2026-10-15** (`2b6c7672`): `delete-service.sh` removes the consumer's env file on the Nextcloud VM and the settings `occ` applied — euro-office's document-server settings, coturn's TURN/STUN, the HPB's signaling server — only when the file names that consumer; never fails the delete. Live on hrossen: each connector removed, re-wired by its update, service tests pass |
 | #754 | In-guest backup timers: drop for PBS or say why they stay | L | L | **2026-10-14:** identity, coturn, euro-office, vaultwarden dropped (three had produced empty archives every night). **litellm and openwebui assigned to @ErikDaniel007** — openwebui's `restore.sh` reads `/var/backup` |
 
 ### G3.4 AI stack maturity — Ease M · Risk M · released: 1 · done for 2.3: 3 · open: 7
