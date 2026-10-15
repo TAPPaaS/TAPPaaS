@@ -72,6 +72,18 @@ sat_ssh() {
         "${SAT_USER}@${ADDRESS}" "$@"
 }
 
+# sat_pulse_ensure — the satellite watches its home site (ADR-031 P3): the pulse,
+# with postfix delivering directly, mails the Site's operator when the home
+# firewall's handshake on the infra tunnel goes stale. Installed on a managed
+# satellite by install and every update; it keeps running after a lockdown.
+sat_pulse_ensure() {
+    local lib="${SAT_LIB_DIR:-$(dirname "${BASH_SOURCE[0]}")}/../../backup/lib/pbs-pulse.sh"
+    [[ -r "${lib}" ]] || { warn "  the pulse is not available (${lib})"; return 1; }
+    # shellcheck source=../../backup/lib/pbs-pulse.sh disable=SC1091
+    . "${lib}"
+    pulse_ensure "${ADDRESS}" "$(pulse_satellite_json)"
+}
+
 # sat_key_only_wanted — rc 0 unless the config says sshKeyOnly=false (#756).
 sat_key_only_wanted() { [[ "$(jq -r 'if has("sshKeyOnly") then .sshKeyOnly else true end' "${SAT_CFG}")" != "false" ]]; }
 
@@ -208,6 +220,7 @@ sat_install() {
     if [[ "${SAT_MGMT}" == managed ]]; then
         sat_ssh true || die "the mothership's key does not reach ${target} — it should have been authorized by provisioning"
         info "  ${GN}✓${CL} managed: the mothership reaches ${ADDRESS}; the sweep patches it"
+        sat_pulse_ensure || warn "  the satellite does not watch the home site yet — the next update retries"
     fi
     info "${GN}✓${CL} satellite ${INSTANCE} provisioned"
 }

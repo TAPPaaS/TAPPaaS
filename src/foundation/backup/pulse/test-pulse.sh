@@ -109,6 +109,27 @@ ck "status says it never pulled" "$(grep -c 'pulled-by-rasmus.*DOWN.*never pulle
 echo 'not json' > "${T}/tasks.json"
 pb "${t}"; pb $((t+5*86400));                  ck "no task list: no verdict" "$(mails)" "0"
 
+# Tunnels (a satellite watching its home site): the newest WireGuard handshake.
+cat > "${T}/bin/wg" <<EOF
+#!/usr/bin/env bash
+cat "${T}/hs"
+EOF
+chmod +x "${T}/bin/wg"
+echo '{ "site": "home", "email": "me@home.example", "tunnels": [ { "name": "home", "iface": "wg-infra" } ] }' > "${T}/sat.json"
+sat() { env -u PULSE_PROBE_CMD PATH="${T}/bin:${PATH}" PULSE_NOW="$1" bash "${PULSE}" --config "${T}/sat.json" >/dev/null 2>&1; }
+: > "${T}/mails"; rm -rf "${T}/state"
+printf 'PUBKEY=\t%s\n' "$((t-60))" > "${T}/hs"
+sat "${t}";                                    ck "a handshake a minute ago: fine" "$(mails)" "0"
+printf 'PUBKEY=\t%s\n' "$((t-60))" > "${T}/hs"
+sat $((t+600)); sat $((t+1500))
+ck "no handshake for 25 minutes: mailed" "$(grep -c 'ALERT: the home site (its WireGuard tunnel wg-infra) not answering' "${T}/mails")" "1"
+ck "…to the home operator" "$(grep -c '^To: me@home.example$' "${T}/mails")" "1"
+printf 'PUBKEY=\t%s\n' "$((t+1700))" > "${T}/hs"
+sat $((t+1800));                               ck "a new handshake: RESOLVED" "$(grep -c 'RESOLVED: the home site' "${T}/mails")" "1"
+: > "${T}/mails"; rm -rf "${T}/state"
+printf 'PUBKEY=\t0\n' > "${T}/hs"
+sat "${t}"; sat $((t+1200));                   ck "never a handshake: mailed after 15 minutes" "$(mails)" "1"
+
 # Standalone: a buddy's own config, nothing of the site.
 cat > "${T}/alone.json" <<'EOF'
 { "site": "rasmus", "email": "r@buddy.example", "uplink": "deb.debian.org",

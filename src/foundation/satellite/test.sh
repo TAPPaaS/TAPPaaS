@@ -54,6 +54,12 @@ if [[ -n "${INST}" ]]; then
             if sat_has_role admin-vpn; then
                 sat_ssh 'nft list table ip adminvpn' >/dev/null 2>&1 && pass "admin-vpn: relay rules loaded" || fail "admin-vpn: relay rules missing"
             fi
+            # ADR-031 P3: it watches the home site.
+            if [[ "$(sat_ssh systemctl is-active tappaas-pulse.timer 2>/dev/null)" == "active" ]]; then
+                pass "the pulse watches the home site ($(sat_ssh /usr/local/sbin/tappaas-pulse --status 2>/dev/null | awk '$1=="tunnel-home"{print $2}'))"
+            else
+                fail "the pulse is not running — the satellite does not watch the home site"
+            fi
             "${here}/../debianhost/test.sh" "${INSTANCE}" || FAIL=$((FAIL + 1))
         else
             fail "the mothership's key does not reach root@${ADDRESS} — a managed satellite must accept it"

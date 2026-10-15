@@ -19,6 +19,10 @@
 #               `maxAge` (default 2 days): our off-site copy is not current.
 #               A buddy that has never pulled gets `maxAge` from when the
 #               pulse first saw it.
+#   tunnels     on a satellite: the home site's WireGuard handshake on the infra
+#               tunnel (`wg show <iface> latest-handshakes`). The home firewall
+#               keeps it alive, so older than `maxAge` (default 300 s) means
+#               the home site is gone: its power, its uplink or its firewall.
 #
 # A target is down after `downAfter` seconds of failed probes (default 900;
 # the mothership 1800, a reboot during a sweep takes minutes). Then one mail,
@@ -93,6 +97,8 @@ targets() {
     [[ -n "${pbs}" ]] && echo "pbs|tcp|this site's PBS|${DOWN_AFTER}||${pbs} 8007"
     jq -r --arg d "${DOWN_AFTER}" '.buddies // [] | .[]
         | "buddy-\(.name)|tls|backup buddy \(.name)|\($d)|\(.contact // "")|\(.host) \(.port // 8007) \(.fingerprint // "")"' "${CONFIG}"
+    jq -r --arg d "${DOWN_AFTER}" '.tunnels // [] | .[]
+        | "tunnel-\(.name)|wg|the \(.name) site (its WireGuard tunnel \(.iface))|\($d)||\(.iface) \(.maxAge // 300)"' "${CONFIG}"
     jq -r '.pulledBy // [] | .[]
         | "pulled-by-\(.name)|lastpull|backup buddy \(.name)|0|\(.contact // "")|\(.authId) \(.maxAge // 172800)"' "${CONFIG}"
 }
@@ -106,6 +112,10 @@ probe() {  # probe <id> <kind> <args…>
         uplink) getent hosts "$1" >/dev/null && tcp "$1" 443 ;;
         ping)   ping -c 1 -W 3 "$1" >/dev/null 2>&1 ;;
         tcp)    tcp "$1" "$2" ;;
+        wg)  # <iface> <max-age>: the newest handshake on the interface is recent
+            local hs
+            hs="$(wg show "$1" latest-handshakes 2>/dev/null | awk '$2 > m {m = $2} END {print m + 0}')"
+            [[ "${hs}" =~ ^[0-9]+$ ]] && (( hs > 0 && NOW - hs <= $2 )) ;;
         lastpull)  # <auth-id> <max-age>: a reader session of that login within max-age
             local auth="$1" maxage="$2" last seen="${STATE_DIR}/${id}.seen"
             last="$(proxmox-backup-manager task list --all --limit 1000 --output-format json 2>/dev/null \
@@ -198,6 +208,7 @@ while IFS='|' read -r id kind label after contact args; do
             case "${id}" in
                 buddy-*) what+=$'\n\n'"Their site may be down: power, its firewall, its uplink or its PBS host. Our off-site copy of them is not being pulled, and theirs of us may not be either." ;;
                 uplink)  what+=$'\n\n'"This site's own internet is down. This mail goes out when it is back." ;;
+                tunnel-*) what+=$'\n\n'"The home firewall keeps this tunnel alive. Without a handshake the site is gone, or at least its firewall or uplink: its own notices cannot go out." ;;
                 mothership) what+=$'\n\n'"No updates run, and the alerts that pass through the mothership do not go out." ;;
                 pulled-by-*)
                     lp="$(cat "${STATE_DIR}/${id}.last" 2>/dev/null || echo 0)"

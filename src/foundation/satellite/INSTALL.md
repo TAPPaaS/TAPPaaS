@@ -24,6 +24,11 @@ reference: [ADR-010](../../../docs/ADR/ADR-010-vps-satellite-reverse-proxy-backu
       key.** It is your out-of-band access; the install authorizes the mothership's key
       itself.
    3. Note its **public IP**, and where it is (country, city).
+4. **Outbound mail (port 25) allowed** from the host. The satellite watches the home site
+   from outside and mails you when it goes dark — directly, since the home site's mail
+   path is what is down then. Hetzner blocks outbound port 25 on new projects until you
+   ask: request it in the Hetzner console (Limits → port 25) once the first invoice is
+   paid. Until then the satellite still watches, and its mail waits in its queue.
 
 > Tier B (opt-in): a Hetzner **API token** lets TAPPaaS create the server through the
 > `hcloud` API. The token can create **and destroy** servers — see ADR-010 §7.3 first.

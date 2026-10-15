@@ -6,7 +6,9 @@
 # library writes its config and installs it, from every backup update:
 #
 #   pulse_config_json <pbs-host>   the pulse.json for this site, on stdout
-#   pulse_ensure <pbs-host>        install script, config and timer on that Host
+#   pulse_ensure <pbs-host> [json] install script, config and timer on that Host
+#                                  (json: another config, e.g. a satellite's)
+#   pulse_satellite_json           a satellite's pulse.json: the home site's tunnel
 #
 # The config is derived, never edited on the node: site.json gives the site and
 # the operator's address; the PBS's own remotes give each buddy we pull from
@@ -106,10 +108,22 @@ pulse_config_json() {
         | with_entries(select(.value != ""))'
 }
 
+# A satellite watches its home site from outside (ADR-031 P3): the home firewall
+# keeps the infra tunnel's handshake fresh, and a stale one means the site is gone.
+pulse_satellite_json() {
+    local cfgdir="${PBS_CONFIG_DIR:-${CONFIG_DIR:-/home/tappaas/config}}"
+    jq -n --arg site "$(jq -r '.name // ""' "${cfgdir}/site.json" 2>/dev/null)" \
+          --arg email "$(jq -r '.email // ""' "${cfgdir}/site.json" 2>/dev/null)" '
+        {site: $site, email: $email, uplink: "deb.debian.org",
+         tunnels: [ {name: "home", iface: "wg-infra"} ]} | with_entries(select(.value != ""))'
+}
+
 pulse_ensure() {
-    local host="$1" json
-    [[ -n "${host}" ]] || { warn "  pulse: no backup node recorded — not installed"; return 1; }
-    json="$(pulse_config_json "${host}")" || { warn "  pulse: could not build its config"; return 1; }
+    local host="$1" json="${2:-}"
+    [[ -n "${host}" ]] || { warn "  pulse: no host given — not installed"; return 1; }
+    if [[ -z "${json}" ]]; then
+        json="$(pulse_config_json "${host}")" || { warn "  pulse: could not build its config"; return 1; }
+    fi
     local _m
     _m="$(pulse_deps_ensure "${host}" 2>&1)" || { warn "  pulse: could not install what it needs on ${host}: ${_m}"; return 1; }
     [[ -n "${_m}" ]] && info "  ${host}: ${_m}"
@@ -139,6 +153,7 @@ WantedBy=timers.target
 EOF
 systemctl daemon-reload && systemctl enable --now tappaas-pulse.timer >/dev/null 2>&1' </dev/null \
         || { warn "  pulse: could not enable its timer on ${host}"; return 1; }
-    info "  ${GN}✓${CL} pulse on ${host}: $(jq -r '([.buddies[]?.name] | if length == 0 then "no buddy we pull" else "watching buddy " + join(", ") end)
-        + ([.pulledBy[]?.name] | if length == 0 then "" else "; the pull by " + join(", ") end)' <<< "${json}"), and this site"
+    info "  ${GN}✓${CL} pulse on ${host}: $(jq -r 'if (.tunnels | length) > 0 then "watching the home site through " + ([.tunnels[].iface] | join(", "))
+        else ([.buddies[]?.name] | if length == 0 then "no buddy we pull" else "watching buddy " + join(", ") end)
+            + ([.pulledBy[]?.name] | if length == 0 then "" else "; the pull by " + join(", ") end) + ", and this site" end' <<< "${json}")"
 }

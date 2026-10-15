@@ -2,13 +2,13 @@
 
 | | |
 |---|---|
-| **Status** | **Accepted** (operator, 2026-10-15) — P1 and P2 built 2026-10-15. |
+| **Status** | **Accepted** (operator, 2026-10-15) — P1, P2 and P3 built 2026-10-15. |
 | **Version** | 0.2 |
 | **Date** | 2026-10-15 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen, @ErikDaniel007 |
 | **Closes / addresses** | **#776** (a site that has gone dark is reported by nobody). Builds on the buddy tunnel (#796, `backup/BUDDY.md`), log alerting and its watchdog (#126), and the site mail path (#651). |
-| **Changelog** | v0.4 (2026-10-15) — **P3, first half built**: a `debianhost` backup node gets the pulse, `jq` and postfix (D4). v0.3 (2026-10-15) — **P2 built**: the pulled side reports when its buddy last pulled, to both operators; the `pulse` health gate and the deep module test. v0.2 (2026-10-15) — **Accepted, P1 built**: the open questions answered (both operators mailed; the mothership after 30 minutes; the standalone watcher in P1), and the satellite becomes a P3 variant: installing a satellite installs a watcher. v0.1 — first draft, from the operator's idea: the backup buddy watches the site from outside; the local backup node is the local watcher. |
+| **Changelog** | v0.5 (2026-10-15) — **P3 built**: the satellite watches its home site (the infra tunnel's handshake), mailing directly (operator's choice: port 25, as the nodes). v0.4 (2026-10-15) — **P3, first half built**: a `debianhost` backup node gets the pulse, `jq` and postfix (D4). v0.3 (2026-10-15) — **P2 built**: the pulled side reports when its buddy last pulled, to both operators; the `pulse` health gate and the deep module test. v0.2 (2026-10-15) — **Accepted, P1 built**: the open questions answered (both operators mailed; the mothership after 30 minutes; the standalone watcher in P1), and the satellite becomes a P3 variant: installing a satellite installs a watcher. v0.1 — first draft, from the operator's idea: the backup buddy watches the site from outside; the local backup node is the local watcher. |
 
 ## Context
 
@@ -171,7 +171,7 @@ TAPPaaS site they pull, and nothing else.
 |---|---|
 | **P1** — built 2026-10-15 | `backup/pulse/pulse.sh` with D2 (pull peers) and D3 (uplink, firewall, mothership, own PBS); `lib/pbs-pulse.sh` writes `pulse.json` from the PBS's remotes and the peers' contacts and installs the timer from every backup update, on a Proxmox-node backup node; mail via the node's postfix; `peer add … --contact` and `peer modify … --contact` (D5); `backup-manager pulse`. D7 moved here: the same script runs standalone, BUDDY.md Setup 3. |
 | **P2** — built 2026-10-15 | D6: `pulledBy` in `pulse.json` from every `remote` peer's login and contact; the newest reader session in the PBS task list. D8: the `pulse` health gate and `module test backup --deep`. |
-| **P3** | D4 for a `debianhost` backup node — **built 2026-10-15** (postfix as on the nodes). **The satellite as a watcher**: installing a satellite installs a pulse on it that watches its home site (the home firewall's end of the infra tunnel), with a mail path of its own — for a site with a satellite and no buddy, and as a second outside watcher. |
+| **P3** — built 2026-10-15 | D4 for a `debianhost` backup node (postfix as on the nodes). **The satellite as a watcher**: a managed satellite's install and every update put a pulse on it that watches the home site through the infra tunnel — the newest WireGuard handshake on `wg-infra`, which the home firewall keeps fresh — and mails the Site's operator, delivering directly (the operator's decision: outbound port 25, unblocked at the VPS provider). It keeps running after a lockdown. A satellite that is also the Site's PBS host gets this watcher only, not the buddy checks. |
 
 ## Testing
 

@@ -44,5 +44,9 @@ stub() { return 1; }
 J="$(pulse_config_json tappaas3)"
 ck "a PBS that does not answer: no buddies, the rest stays" "$(jq -r '(.buddies | length | tostring) + " " + ([.pulledBy[].name] | join(","))' <<< "${J}")" "0 rasmus"
 
+J="$(pulse_satellite_json)"
+ck "a satellite watches the home site's tunnel" "$(jq -r '.tunnels[0].iface + " " + .email' <<< "${J}")" "wg-infra me@home.example"
+ck "…and nothing of the site's inside" "$(jq -r '[has("firewall"), has("mothership"), has("pbs"), has("buddies")] | any' <<< "${J}")" "false"
+
 echo "Results: ${pass} passed, ${fail} failed"
 [[ ${fail} -eq 0 ]]

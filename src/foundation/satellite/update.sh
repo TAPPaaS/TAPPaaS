@@ -28,4 +28,6 @@ sat_edge_rules_ensure || warn "  OPNsense edge rules for ${SAT_ROLES} could not 
 sat_dns_ensure || warn "  ${SAT_NAME}.${SAT_DNS_ZONE}.internal could not be registered at the tunnel end"
 # The Site's PBS on it (ADR-010 §8.4.3): the nodes' path open exactly while it is.
 if sat_is_pbs_host; then sat_pbs_path open; else sat_pbs_path close; fi
+# It watches the home site from outside (ADR-031 P3).
+sat_pulse_ensure || warn "  the satellite does not watch the home site (see above)"
 exec "${HERE}/../debianhost/update.sh" "${INSTANCE}"

@@ -20,6 +20,7 @@ rest of TAPPaaS assumes. It is a `kind: machine` module like any other (ADR-010 
 | Remote admin access (`admin-vpn` role): blind UDP relay of an admin WireGuard session terminating on OPNsense | admin device, anywhere | `network-manager wgvpn add-peer` prints a config whose Endpoint is the satellite |
 | Off-site backup vault (`backup` role, after `--lockdown`): a PBS the home PBS is pulled into | tappaas-cicd | pull-based sync, client-side encrypted at home; nothing at home can log in to it |
 | The Site's PBS (a managed satellite, for a Site with none of its own) | the Site's nodes, through the tunnel | `module-manager module modify backup --set node=<instance>` — PBS on a ZFS pool on an attached volume (ADR-010 §8.4.3) |
+| **Watching the home site** from outside: when the home firewall's handshake on the tunnel goes stale for 15 minutes, a mail to the Site's operator — daily while it lasts, and when it is back | — | the pulse (`tappaas-pulse` timer), installed with a managed satellite and kept by its updates; mail delivered directly (needs outbound port 25, see INSTALL.md) |
 | Lifecycle | tappaas-cicd | `module-manager module add\|update\|test\|delete satellite` — updates by the nightly sweep |
 | Key-only SSH | — | password logins over SSH refused for every user, root by key only, as on the cluster nodes (#19, #756): applied when it is provisioned and re-applied by every update of a managed satellite. `--sshKeyOnly false` at `module add`, or `module modify <instance> --set sshKeyOnly=false`, leaves sshd as the image has it |
 
