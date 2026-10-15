@@ -83,6 +83,7 @@ export function loadConfigModules(configDir: string, defaultNode: string): Confi
       vmid,
       node: asString(raw.node) || defaultNode,
       status: asString(raw.status),
+      suspended: raw.suspended === true,
     });
   }
   return out;

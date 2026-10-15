@@ -514,6 +514,16 @@ def module_management(module_name: str) -> str:
         return ""
 
 
+def module_suspended(module_name: str) -> bool:
+    """True when `module-manager suspend` paused the module (#428): its guest is
+    stopped on purpose, so there is nothing to update until it is resumed."""
+    try:
+        with open(CONFIG_DIR / f"{module_name}.json") as f:
+            return json.load(f).get("suspended") is True
+    except (OSError, ValueError):
+        return False
+
+
 def module_stack(module_name: str) -> str:
     """Return a module's `.stack`, lowercased. '' when absent."""
     try:
@@ -543,6 +553,8 @@ def partition_by_lifecycle(modules: list[str]) -> tuple[list[str], list[tuple[st
             skipped.append((name, f"stack={stack}"))
         elif status in NON_LIFECYCLE_STATUSES:
             skipped.append((name, f"status={status}"))
+        elif module_suspended(name):
+            skipped.append((name, "suspended"))
         elif module_management(name) == "unmanaged":
             skipped.append((name, "management=unmanaged"))
         else:

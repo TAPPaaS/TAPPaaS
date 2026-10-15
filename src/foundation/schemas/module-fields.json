@@ -83,6 +83,16 @@
     "provides"
   ],
   "fields": {
+    "suspended": {
+      "description": "The module is paused: its guest is stopped on purpose by 'module-manager suspend' and stays so until 'module-manager resume'. The nightly update skips it and the health check reports it as suspended, not down. Written by those two verbs only.",
+      "type": "boolean",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "default": false,
+      "example": true
+    },
     "displayName": {
       "description": "The module's name as people see it — the tile on the identity start page (My applications), for example \"Forgejo\" for forgejo. Not declared: the module name.",
       "type": "string",

@@ -25,7 +25,7 @@
 //
 // Exit codes: ok=0, error / non-zero child rc = that rc (1 for config errors).
 
-import { existsSync, readFileSync } from "fs";
+import { existsSync, readFileSync, readdirSync } from "fs";
 import { dirname, join } from "path";
 import { CliModuleClient } from "./client";
 import {
@@ -36,9 +36,14 @@ import {
   listModules,
   loadModule,
   repoCatalogFile,
+  resolveEffectiveModuleName,
+  resolveProviderModule,
   resolveViaCatalog,
+  siteNodeHostnames,
   siteRepositories,
 } from "./config";
+import { NOT_INSTALLABLE, StackModule, hasHandSteps, planStack } from "./stack";
+import { defaultNodeCandidates, queryClusterGuests, reachableNodes as clusterReachableNodes } from "../../../lib/ts/src/cluster";
 import { moduleScope } from "../../../lib/ts/src/scope";
 import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
 import { CL, GN, RD, YW, die, guarded, info, preflightGuard, warn } from "../../../lib/ts/src/cli";
@@ -109,6 +114,21 @@ export const HELP: HelpSpec = {
         "--blueprint reports what a module is made of (ADR-027): a missing MUST is an error, a\n" +
         "missing SHOULD a warning, the same for every module. Exit 1 on any error. It never runs\n" +
         "at install time — an incomplete module still installs.",
+    },
+    {
+      usage: "add-stack <stack> [--environment ENV] [--dry-run] [--allow-fork]",
+      name: "add-stack",
+      note: "(every module of a stack, in dependsOn order — #763)",
+      options: [
+        ["--dry-run", "Print the plan — order, what is skipped, outside dependencies missing, hand steps — and change nothing."],
+        ["--environment ENV", "Install every module into this environment (passed to each add)."],
+        ["--allow-fork", "Passed to each add."],
+      ],
+      details:
+        "The stack's modules are the catalogue entries whose stack it is; the order is the one its\n" +
+        "INSTALL.md shows. Installed modules are skipped. A dependency outside the stack must be\n" +
+        "installed first, or nothing is. The first module that fails stops the run; run it again to\n" +
+        "resume. foundation, template and test are not installable stacks.",
     },
     {
       usage: "add <module> [--environment ENV] [--instance NAME] [--allow-fork] [--reinstall] [--<field> <value>]...",
@@ -192,6 +212,17 @@ export const HELP: HelpSpec = {
         ["--force", "Proceed despite warnings; also implies --yes + --remove."],
       ],
     },
+    {
+      usage: "suspend <module>",
+      name: "suspend",
+      note: "(#428: stop the guest and keep everything else; out of the nightly update until resumed)",
+      details:
+        "The guest stops — through HA for an HA guest, which then keeps it stopped; otherwise with\n" +
+        "onboot cleared, so a node reboot does not start it. Config, backups, DNS and the published\n" +
+        "route stay. The config is marked suspended: the nightly update skips it and the health check\n" +
+        "reports it as suspended, not down. A machine cannot be suspended.",
+    },
+    { usage: "resume <module>", name: "resume", note: "(start a suspended module and clear the mark)" },
     {
       usage: "migrate <module> [--force]",
       name: "migrate",
@@ -853,6 +884,131 @@ function cmdAdd(opts: Opts, client: ModuleClient): number {
   return client.add(module, a);
 }
 
+// ── add-stack (#763) ─────────────────────────────────────────────────
+// The stack's modules from every repository the site declares (a community
+// repository may add to a stack); the first repository to name a module wins.
+function loadStackModules(configDir: string, stack: string): { mods: StackModule[]; stacks: Set<string> } {
+  const mods: StackModule[] = [];
+  const stacks = new Set<string>();
+  const seen = new Set<string>();
+  for (const r of siteRepositories(configDir)) {
+    if (!r.path) continue;
+    const cat = join(r.path, r.catalog || "src/module-catalog.json");
+    if (!existsSync(cat)) continue;
+    let entries: { moduleName?: string; moduleJson?: string; stack?: string; vmid?: number }[] = [];
+    try {
+      entries = (JSON.parse(readFileSync(cat, "utf8")) as { modules?: typeof entries }).modules ?? [];
+    } catch {
+      continue;
+    }
+    for (const e of entries) {
+      if (e.stack) stacks.add(e.stack);
+      if (e.stack !== stack || !e.moduleName || !e.moduleJson || seen.has(e.moduleName)) continue;
+      seen.add(e.moduleName);
+      const jsonPath = join(r.path, e.moduleJson);
+      let mj: Record<string, unknown> = {};
+      try {
+        mj = JSON.parse(readFileSync(jsonPath, "utf8")) as Record<string, unknown>;
+      } catch {
+        /* an unreadable JSON still installs or fails in add, which says why */
+      }
+      const installMd = join(dirname(jsonPath), "INSTALL.md");
+      const list = (k: string): string[] => (Array.isArray(mj[k]) ? (mj[k] as unknown[]).map(String) : []);
+      const v = Number((mj as { vmid?: unknown }).vmid ?? (e as { vmid?: unknown }).vmid);
+      mods.push({
+        name: e.moduleName,
+        vmid: Number.isInteger(v) && v > 0 ? v : undefined,
+        dependsOn: list("dependsOn"),
+        integratesWith: list("integratesWith"),
+        handSteps: existsSync(installMd) && hasHandSteps(readFileSync(installMd, "utf8")),
+      });
+    }
+  }
+  return { mods, stacks };
+}
+
+function cmdAddStack(opts: Opts, client: ModuleClient): number {
+  const stack = opts.rest[0];
+  if (!stack) die("add-stack: expected <stack>");
+  if (NOT_INSTALLABLE.has(stack)) {
+    die(`add-stack: '${stack}' is not an installable stack — foundation is installed with the site, template and test modules one by one`);
+  }
+  const { mods, stacks } = loadStackModules(opts.configDir, stack);
+  if (mods.length === 0) {
+    const known = [...stacks].filter((s) => !NOT_INSTALLABLE.has(s)).sort().join(", ");
+    die(`add-stack: no module in stack '${stack}' — the stacks: ${known || "none found in the site's repositories"}`);
+  }
+  const env = opts.environment;
+  // Taken VMIDs: every deployed config's, and every guest's on the cluster (a
+  // guest no config names still owns its VMID).
+  const used = new Set<number>();
+  for (const f of readdirSync(opts.configDir).filter((n) => n.endsWith(".json"))) {
+    try {
+      const v = Number((JSON.parse(readFileSync(join(opts.configDir, f), "utf8")) as { vmid?: unknown }).vmid);
+      if (Number.isInteger(v) && v > 0) used.add(v);
+    } catch {
+      /* not a module config */
+    }
+  }
+  const nodes = clusterReachableNodes(defaultNodeCandidates(siteNodeHostnames(opts.configDir)));
+  const guests = nodes.length > 0 ? queryClusterGuests(nodes[0]) : null;
+  if (guests === null) warn("add-stack: the cluster could not be asked which VMIDs are taken — checking the configs only");
+  for (const g of guests ?? []) used.add(g.vmid);
+  const plan = planStack(mods, {
+    instanceOf: (m) => resolveEffectiveModuleName(opts.configDir, m, env),
+    installed: (i) => existsSync(join(opts.configDir, `${i}.json`)),
+    providerInstalled: (p) => existsSync(join(opts.configDir, `${resolveProviderModule(opts.configDir, p, env ?? "")}.json`)),
+    vmidUsed: (v) => used.has(v),
+  });
+
+  info(`Stack ${stack}${env ? ` into ${env}` : ""}: ${plan.steps.length} module(s), in this order:`);
+  plan.steps.forEach((s, i) => {
+    const what = s.action === "skip"
+      ? `skip — ${s.instance} is installed`
+      : `install${s.vmid !== undefined ? ` as VMID ${s.vmid} (its own is taken)` : ""}${s.handSteps ? " — then its INSTALL.md has steps for you" : ""}`;
+    info(`  ${i + 1}. ${s.module}: ${what}`);
+  });
+  if (plan.cycle.length > 0) {
+    die(`add-stack: ${plan.cycle.join(", ")} depend on each other in a cycle — no order exists; fix their dependsOn`);
+  }
+  if (plan.noVmid.length > 0) {
+    die(`add-stack: no free VMID in the block of ten of ${plan.noVmid.join(", ")} — install it by hand with 'module-manager add <module> --vmid <n>'`);
+  }
+  if (plan.missing.length > 0) {
+    for (const m of plan.missing) {
+      console.error(`${RD}[Error]${CL} ${m.module} needs ${m.dependency}, which is not installed — module-manager add ${m.dependency.split(":")[0]}`);
+    }
+    console.error(`${RD}[Error]${CL} nothing was installed: install what the stack needs from outside it first`);
+    return 1;
+  }
+  if (opts.dryRun) {
+    info("--dry-run: nothing changed");
+    return 0;
+  }
+
+  const done: string[] = [];
+  const hand: string[] = [];
+  for (const s of plan.steps) {
+    if (s.action === "skip") continue;
+    info(`${GN}── add ${s.module}${CL}`);
+    const rc = client.add(s.module, {
+      environment: env, allowFork: opts.allowFork, reinstall: false,
+      passthrough: s.vmid !== undefined ? ["--vmid", String(s.vmid)] : [],
+    });
+    if (rc !== 0) {
+      console.error(`${RD}[Error]${CL} add ${s.module} failed (rc ${rc}); it rolled itself back. Installed in this run: ${done.join(", ") || "none"}.`);
+      console.error(`${RD}[Error]${CL} Fix it and run 'module-manager add-stack ${stack}${env ? ` --environment ${env}` : ""}' again — what is installed is skipped.`);
+      return rc;
+    }
+    done.push(s.module);
+    if (s.handSteps) hand.push(s.module);
+  }
+  const skipped = plan.steps.filter((s) => s.action === "skip").length;
+  info(`${GN}Stack ${stack}: ${done.length} installed, ${skipped} already there.${CL}`);
+  if (hand.length > 0) info(`  Steps left for you, in each module's INSTALL.md: ${hand.join(", ")}`);
+  return 0;
+}
+
 // `adopt` hands the machine to adopt-module.sh, which reaches it, learns its
 // OS and hostname, and installs the module for that OS (ADR-026 D8.1). Its
 // three options arrive as passthrough (parseOpts knows them for no other verb);
@@ -1150,8 +1306,9 @@ function cmdSnapshot(opts: Opts, client: ModuleClient): number {
 function dispatch(verb: string, opts: Opts, client: ModuleClient): number {
   // --dry-run belongs to one change only: the instance rename (#566). Accepting
   // it silently elsewhere would promise a preview no other verb can give.
-  if (opts.dryRun && verb !== "modify") {
-    die(`${verb} has no --dry-run — it is only for \`modify <instance> --set instance=<new>\``);
+  // add-stack's preview is the plan it prints (#763).
+  if (opts.dryRun && verb !== "modify" && verb !== "add-stack") {
+    die(`${verb} has no --dry-run — it is only for \`modify <instance> --set instance=<new>\` and \`add-stack\``);
   }
   switch (verb) {
     case "list":
@@ -1166,6 +1323,8 @@ function dispatch(verb: string, opts: Opts, client: ModuleClient): number {
       return cmdValidate(opts);
     case "add":
       return cmdAdd(opts, client);
+    case "add-stack":
+      return cmdAddStack(opts, client);
     case "adopt":
       return cmdAdopt(opts, client);
     case "update":
@@ -1180,6 +1339,13 @@ function dispatch(verb: string, opts: Opts, client: ModuleClient): number {
       return cmdTest(opts, client);
     case "migrate":
       return cmdMigrate(opts, client);
+    case "suspend":
+    case "resume": {
+      const module = opts.rest[0];
+      if (!module) die(`${verb}: expected <module>`);
+      if (opts.rest.length > 1) die(`${verb}: one module at a time (got ${opts.rest.join(", ")})`);
+      return client.suspend(module, verb === "resume");
+    }
     case "snapshot-vm":
       return cmdSnapshot(opts, client);
     default:

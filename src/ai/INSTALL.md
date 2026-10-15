@@ -1,7 +1,7 @@
 # Installing the AI stack
 
 Install the modules in the order below, one at a time with `module-manager module add <module>`,
-or all at once with `module-manager add-stack ai` once #763 is built. Each module's
+or all at once with `module-manager add-stack ai` (`--dry-run` shows the plan first). Each module's
 INSTALL.md says what you must do by hand. What the stack is and why: [README.md](README.md).
 
 **Hardware.** Local AI is sized by accelerator memory and the model you want — see the

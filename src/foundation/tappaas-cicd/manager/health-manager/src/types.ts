@@ -22,6 +22,7 @@ export interface ConfigModule {
   vmid: number;
   node: string;
   status: string; // "", "archived", "external", ...
+  suspended?: boolean; // paused by `module-manager suspend` (#428): stopped on purpose
 }
 
 // ── `list vm` (no --diff): one row of the cluster overview ─────────────

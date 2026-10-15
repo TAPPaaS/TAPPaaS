@@ -47,6 +47,7 @@ const BIN = {
   test: process.env.MM_TEST_BIN ?? "test-module.sh",
   snapshot: process.env.MM_SNAPSHOT_BIN ?? "snapshot-vm.sh",
   migrate: process.env.MM_MIGRATE_BIN ?? "migrate-vm.sh",
+  suspend: process.env.MM_SUSPEND_BIN ?? "suspend-module.sh",
 };
 
 // Streaming runner for the lifecycle verbs (lib/ts exec.stream: stdio inherit).
@@ -144,6 +145,10 @@ export class CliModuleClient implements ModuleClient {
     const args: string[] = [module];
     if (opts.force) args.push("--force");
     return run(BIN.migrate, args);
+  }
+
+  suspend(module: string, resume: boolean): number {
+    return run(BIN.suspend, resume ? [module, "--resume"] : [module]);
   }
 
   snapshot(module: string, action: SnapshotAction): number {

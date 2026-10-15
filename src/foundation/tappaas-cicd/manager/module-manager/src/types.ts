@@ -183,6 +183,8 @@ export interface ModuleClient {
   // placement — no node argument. On .node it moves to .HANode, on .HANode it
   // moves back. Anywhere else is `modify --set node=…`, which changes intent.)
   migrate(module: string, opts: MigrateOptions): number;
+  // suspend-module.sh <module> [--resume]  (#428: stop and mark, or start and clear)
+  suspend(module: string, resume: boolean): number;
   // Cluster-wide running guests (pvesh /cluster/resources --type vm), used to
   // fold LIVE running-vs-config state into the default `list`. BEST-EFFORT: it
   // returns [] (never throws) when the cluster is unreachable, so `list` can

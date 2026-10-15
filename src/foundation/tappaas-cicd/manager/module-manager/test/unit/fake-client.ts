@@ -21,7 +21,7 @@ import {
 } from "../../src/types";
 
 export interface Invocation {
-  verb: "add" | "adopt" | "modify" | "delete" | "reconcile" | "inspect" | "test" | "snapshot" | "migrate";
+  verb: "add" | "adopt" | "modify" | "delete" | "reconcile" | "inspect" | "test" | "snapshot" | "migrate" | "suspend" | "resume";
   module: string;
   // The forwarded options, captured for assertions (for `inspect` that is the
   // dependency-service check decision, #458).
@@ -74,6 +74,10 @@ export class FakeModuleClient implements ModuleClient {
   }
   migrate(module: string, opts: MigrateOptions): number {
     this.log.push({ verb: "migrate", module, opts });
+    return this.rc;
+  }
+  suspend(module: string, resume: boolean): number {
+    this.log.push({ verb: resume ? "resume" : "suspend", module, opts: {} });
     return this.rc;
   }
   snapshot(module: string, action: SnapshotAction): number {

@@ -39,6 +39,11 @@
       "apply": "none",
       "changeNote": "Cheap to change, consequential in effect: `archived` and `external` take the module OUT of the update lifecycle entirely — `module-manager module modify` skips it unless --force. Set automatically by `module-manager module delete --archive`."
     },
+    "suspended": {
+      "class": "immutable",
+      "apply": "none",
+      "changeNote": "Written by 'module-manager suspend' and 'resume', which stop and start the guest with it; set by hand it would say a running guest is paused, or hide a stopped one from the update and the health check."
+    },
     "tier": {
       "class": "in-place",
       "apply": "none",

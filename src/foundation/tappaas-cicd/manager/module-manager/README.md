@@ -39,10 +39,12 @@ later retire phase).
 | `module validate [<m>]` | scope/source lint | all modules, or one; `--allow-fork` |
 | `module validate --blueprint [<m>\|<dir>]...` | the ADR-027 blueprint check on module **source** directories | every registered repository's modules, the named ones, or `--repo PATH` (what the release boundary runs) |
 | `module add <m>` | `install-module.sh` | create + provision; `--instance NAME` names the instance (ADR-026 D6.4) |
+| `add-stack <stack>` | `module add`, per module | **a whole stack**: its modules from the catalogue, in the order its INSTALL.md shows (`dependsOn`, then `integratesWith`). Installed ones are skipped; a dependency outside the stack must be installed first, or nothing is; the first failure stops the run, and running it again resumes. `--dry-run` prints the plan, `--environment` installs into an environment. foundation, template and test are not stacks to install |
 | `module adopt <address>` | `adopt-module.sh` | a machine that already runs becomes a module (ADR-026 D8.1); its SSH becomes key-only unless `--set sshKeyOnly=false` (#756) — nothing else on it is changed. `--set field=value` writes any field before the install |
 | `module update <m>` | `update-module.sh` | **release update** (snapshot + test + 3-way merge) — what the sweep runs (#655) |
 | `module modify <m>` | `update-module.sh` | **change the config, then converge**: `--set field=value` (ADR-020) or `--unset field` (#648). Bare, it is the deprecated spelling of `update`. `--set instance=<new>` renames the instance instead (#566); `--lockdown` runs the module's own `lockdown.sh` (a satellite → the off-site vault) |
 | `module delete <m>` | `delete-module.sh` | `--archive` (default) / `--remove`; `--decommission` (a machine) |
+| `module suspend <m>` / `resume <m>` | `suspend-module.sh` | **pause a module**: the guest stops and stays stopped (through HA for an HA guest; otherwise `onboot` cleared, so a node reboot does not start it). Config, backups, DNS and its route stay; its route answers 503 meanwhile. The config is marked `suspended`: the nightly update skips it, the health check reports it as suspended rather than down. `resume` starts it and clears the mark. Not for a machine |
 | `module reconcile <m>` | `src/inspect.ts` | read-only drift report (default); `--apply` → **leaf converge** (`src/reconcile.ts`) |
 | `module test <m>` | `test-module.sh` | `--deep`, `--runtime-only`, `--vmid`, `--zone0` |
 | `module snapshot-vm <m>` | `snapshot-vm.sh` | special VM op (not CRUD) |

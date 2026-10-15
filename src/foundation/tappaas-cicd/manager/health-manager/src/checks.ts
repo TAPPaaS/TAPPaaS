@@ -155,10 +155,14 @@ export function checkServiceLiveness(
   const running = new Set(
     client.clusterResources().filter((g) => g.status === "running").map((g) => g.vmid),
   );
-  const managed = loadConfigModules(configDir, defaultNode).filter(isManaged);
+  // A suspended module is stopped on purpose (#428): reported, never "down".
+  const all = loadConfigModules(configDir, defaultNode).filter(isManaged);
+  const suspended = all.filter((m) => m.suspended).map((m) => m.module);
+  const managed = all.filter((m) => !m.suspended);
+  const paused = suspended.length > 0 ? `; suspended: ${suspended.join(", ")}` : "";
   const down = managed.filter((m) => !running.has(m.vmid)).map((m) => m.module);
   if (down.length > 0) {
-    return { name: "service-liveness", status: "fail", detail: `not running: ${down.join(", ")}` };
+    return { name: "service-liveness", status: "fail", detail: `not running: ${down.join(", ")}${paused}` };
   }
   // Report the population, not just the verdict: a bare "all managed modules
   // running" over an EMPTY set read as PASS for as long as #441 was live.
@@ -168,7 +172,7 @@ export function checkServiceLiveness(
   return {
     name: "service-liveness",
     status: "pass",
-    detail: `${managed.length} managed module(s) running`,
+    detail: `${managed.length} managed module(s) running${paused}`,
   };
 }
 

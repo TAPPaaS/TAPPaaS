@@ -197,6 +197,14 @@ const CONFIG =
   );
 }
 
+// ── 6a. suspend / resume reach suspend-module.sh (#428) ─────────────────
+{
+  const c = new FakeModuleClient();
+  check(run(["module", "suspend", "jellyfin"], c) === 0 && c.log[0].verb === "suspend" && c.log[0].module === "jellyfin",
+    "suspend <m> calls the suspend script for that module");
+  check(run(["resume", "jellyfin"], c) === 0 && c.log[1].verb === "resume", "resume <m> calls it with --resume");
+}
+
 // ── 6b. update is the release update (#655); --force proceeds and
 // --allow-disruption authorizes downtime (ADR-020 v0.10 D8) ──────────────
 {
