@@ -147,6 +147,10 @@ check_reverse_dependencies() {
         # Skip self and .orig backup files
         [[ "${other_module}" == "${module}" ]] && continue
         [[ "${config_file}" == *.orig ]] && continue
+        # An archived module has no guest and consumes nothing: it is not a
+        # dependent, as for a machine's guests below. Counting it made the
+        # natural order — consumer first, then its provider — need --force.
+        [[ "$(jq -r '(.status // "") | ascii_downcase' "${config_file}" 2>/dev/null)" == "archived" ]] && continue
 
         # Skip files that don't have a dependsOn array (not module configs)
         if ! jq -e '.dependsOn' "${config_file}" >/dev/null 2>&1; then

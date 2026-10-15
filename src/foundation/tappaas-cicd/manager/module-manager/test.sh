@@ -553,6 +553,19 @@ else
     bad "delete (#718): the shared provider was blocked by another environment's consumer (rc=${del_b_rc}): ${del_b##*$'\n'}"
 fi
 
+# #831: an archived consumer is not a dependent — archiving the consumer first,
+# then its provider, must not need --force.
+printf '{"tier":"app","moduleSource":"%s/src/ncmod","environment":"test","provides":["fs"]}\n' "${DWORK}" > "${DWORK}/cfg/ncmod-test.json"
+printf '{"tier":"app","status":"Archived","moduleSource":"%s/src/ncmod","environment":"test","dependsOn":["ncmod:fs"]}\n' "${DWORK}" > "${DWORK}/cfg/cons-test.json"
+del_a="$( bash "$DSTUB" ncmod-test --remove --yes 2>&1 )"; del_a_rc=$?
+if [[ $del_a_rc -eq 0 && ! -e "${DWORK}/cfg/ncmod-test.json" ]]; then
+    ok "delete (#831): an archived consumer does not hold its provider"
+else
+    bad "delete (#831): an archived consumer blocked its provider (rc=${del_a_rc}): ${del_a##*$'\n'}"
+fi
+printf '{"tier":"app","moduleSource":"%s/src/ncmod","environment":"test","provides":["fs"]}\n' "${DWORK}" > "${DWORK}/cfg/ncmod-test.json"
+printf '{"tier":"app","moduleSource":"%s/src/ncmod","environment":"test","dependsOn":["ncmod:fs"]}\n' "${DWORK}" > "${DWORK}/cfg/cons-test.json"
+
 # Only the environment's provider exists now: a bare-name lookup cannot find it.
 rm -f "${DWORK}/UNWIRED" "${DWORK}/cfg/ncmod.json"
 del_c="$( bash "$DSTUB" cons-test --remove --yes 2>&1 )"; del_c_rc=$?
