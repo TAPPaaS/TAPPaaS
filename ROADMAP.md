@@ -101,7 +101,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 
 | Wave | Group | Ease | Risk | released | done for 2.3 | open |
 |------|-------|:-:|:-:|---:|---:|---:|
-| 4 | G4.1 Alerting & cluster resilience | M | M | 7 | 3 | 4 |
+| 4 | G4.1 Alerting & cluster resilience | M | M | 7 | 4 | 3 |
 | 4 | G4.2 Proxy & ingress | M | L | 3 | 3 | 1 |
 | 4 | G4.3 Manager verb gaps | M | L | 9 | 7 | 3 |
 | 4 | G4.4 Storage & physical devices | H | L | 5 | – | 7 |
@@ -143,7 +143,7 @@ met gates are recorded in the releases that carried their waves.
 | 1 · G1.6 | #142 RFC outcome; a *Secrets management* ADR only once #58 comes back from Future Work |
 | 2 | Entry: ADR-014 amended for the `all` sentinel (#375, built), `serves` as an array (#576), anti-spoofing always on (#159, built) and mDNS in zones.json (#257); ADR-021 amended for DNSSEC with split horizon (#263); `site.json` `ipv6` (#149) — the IPv6 stance is its own ADR (#26). Exit: a lockout check on each site — mgmt and the admin VPN reach 8443 and 22, other zones do not; done on hrossen 2026-10-02. NetBird only if the NetBird decision keeps it server-side |
 | 3 | Met 2026-10-13: ADR-019 Accepted (v1.0), verified by `cluster/test.sh --deep` — live migrate to the HANode and back. Open from it: HA's automatic failback to a node with an older CPU (#827) |
-| 4 | ADR-023 Accepted and built (#642, #643, #656; done 2026-10-15); ADR-015 Draft → Accepted (#486); ADR-011 Proposed → Accepted (#143 built); ADR-010 P7 sign-off (#406); ADR-008 amended (#236); ADR-019 amended for a second corosync link (#590) and the migrate verb (#429); ADR-007e amended for logging v2 (#165), or a new ADR if Zabbix is chosen; ADR-029 Proposed → Accepted (#772); the MAC pinning question (#444 / #582); #154 closed or kept; #430 decided before #170 |
+| 4 | ADR-023 Accepted and built (#642, #643, #656; done 2026-10-15); ADR-015 Draft → Accepted (#486); ADR-011 Proposed → Accepted (#143 built); ADR-010 P7 sign-off (#406); ADR-008 amended (#236); ADR-019 amended for the bonded lan uplink (#40) and the migrate verb (#429); ADR-007e amended for logging v2 (#165), or a new ADR if Zabbix is chosen; ADR-029 Proposed → Accepted (#772); the MAC pinning question (#444 / #582); #154 closed or kept; #430 decided before #170 |
 
 ### ADRs still to write
 
@@ -205,16 +205,16 @@ items that belong to a group — FW #40, #83, #157, #158, #162 — are rows in t
 
 New capabilities with low upgrade risk.
 
-### G4.1 Alerting & cluster resilience — Ease M · Risk M · released: 7 · done for 2.3: 3 · open: 4
+### G4.1 Alerting & cluster resilience — Ease M · Risk M · released: 7 · done for 2.3: 4 · open: 3
 
-Be told when something breaks, and survive more of it. Built: alerts from Loki by mail, every VM's logs in Loki, a credential per pushing VM, container severities from the line, each line's own timestamp, a release CVE preview with majors gated at the boundary (#788); two-node quorum with a QDevice verb (#835), HA failover only to nodes that carry the guest's bridges (#836), a site-timezone gate (#837). Next: a notice when a whole site goes dark (#776), a mail relay (#125), a second corosync link (#590).
+Be told when something breaks, and survive more of it. Built: alerts from Loki by mail, every VM's logs in Loki, a credential per pushing VM, container severities from the line, each line's own timestamp, a release CVE preview with majors gated at the boundary (#788); two-node quorum with a QDevice verb (#835), HA failover only to nodes that carry the guest's bridges (#836), a site-timezone gate (#837). Next: a notice when a whole site goes dark (#776), a mail relay (#125), a bonded lan uplink so one port or switch cannot drop quorum (#40).
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
 | #125 | Mail relay via M365 Graph API | M | L | |
 | #776 | Report a site that has gone dark (outside heartbeat) | M | L | **Opened 2026-10-06** after makerfloss was dark 2½ days unreported. Proposed: the satellite mails when the home WireGuard handshake is >15 min stale. **Decide:** its mail path (#125?) |
-| #590 | Second corosync link | H | M | |
-| FW #40 | Dedicated sync network recipe | L | L | Roll in with #590 |
+| FW #40 | Redundant lan uplinks: a bond under the `lan` bridge | M | M | **Rescoped 2026-10-15** (from a dedicated sync network; replaces #590): two equal ports to two interconnected switches → LACP (needs a stack/MLAG, `lacp-rate fast`); mixed ports such as 1G + 10G → active-backup with the fast port primary. `config-network.sh` builds the bond, the node model declares it, `health-manager` warns on fencing armed with a single uplink or a degraded bond |
+| ✅ #590 | Second corosync link | H | M | **Closed 2026-10-15, not built (decision):** a node quorate over a private ring keeps its HA resources while its lan is gone, so HA never fails over. Redundancy goes into the lan link instead → #40 |
 | ✅ #835 | Two-node clusters self-fence: warn in `node add`, support a QDevice | M | M | **Closed 2026-10-15** (`618411e4`, `ba4c18c6`): `node add` and a `quorum` health gate warn on two votes without a QDevice; `site-manager node qdevice add <host> \| remove \| status`. Added and removed live on hrossen with a test container (5 votes with it, 3 after) |
 | ✅ #836 | HA placement only on nodes that have every bridge the VM uses (firewall WAN) | M | M | **Closed 2026-10-15** (`2b0360da`): a declared HANode without one of the guest's bridges is refused; the default picks the first node that has them all; the HA test checks it. With strict rules (`b9d40e98`) and the KVM check in `node add` |
 | ✅ #837 | Health check: `site.json` location and timezone vs the nodes and guests | L | L | **Closed 2026-10-15** (`290d2790`): `site-timezone` gate per node and guest; the cluster update sets the nodes' timezone (hrossen's tappaas3 was on Europe/Amsterdam) |
