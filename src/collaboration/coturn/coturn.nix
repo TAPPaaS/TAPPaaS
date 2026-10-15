@@ -229,7 +229,22 @@ denied-peer-ip=192.0.0.0-192.0.0.255
 denied-peer-ip=192.168.0.0-192.168.255.255
 denied-peer-ip=198.18.0.0-198.19.255.255
 denied-peer-ip=240.0.0.0-255.255.255.255
+# IPv6: loopback, ULA, link-local, IPv4-mapped and NAT64 — the private IPv4 ranges
+# above must not come back in through an IPv6 form.
+denied-peer-ip=::1
+denied-peer-ip=fc00::-fdff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+denied-peer-ip=fe80::-febf:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+denied-peer-ip=::ffff:0:0-::ffff:ffff:ffff
+denied-peer-ip=64:ff9b::-64:ff9b::ffff:ffff
 CONF
+
+        # Relay over IPv4 only. On an IPv6 site the VM also holds a global IPv6
+        # address, and coturn would allocate IPv6 relays from it: the site's own
+        # IPv6 hosts are global addresses no deny list above names. An IPv4 relay
+        # address can only reach IPv4 peers, which the list covers.
+        if [ -n "$LOCAL_IP" ]; then
+          echo "relay-ip=$LOCAL_IP" >> "$CONFIG_FILE"
+        fi
 
         # Media servers this relay must reach despite the deny list (the HPB's Janus
         # on a private address). Written by the coturn:turn service, one

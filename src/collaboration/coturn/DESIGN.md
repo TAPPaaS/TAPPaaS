@@ -46,6 +46,11 @@ Client A (NAT) ─[UDP 3478]─▶ coturn (dmz) ─[UDP 3478]─▶ Client B (NA
   arbitrary private address. `100.64.0.0/10` (RFC 6598 shared address space) is deliberately
   **not** blocked: mobile carriers use it for 5G CGNAT, and blocking it would break the
   relay for 5G clients.
+- Relaying is IPv4 only (`relay-ip` is the VM's IPv4 address). On an IPv6 site the VM
+  also has a global IPv6 address, and the site's own IPv6 hosts have global addresses no
+  deny list can name in advance; an IPv4 relay cannot reach them. Clients may still
+  connect over IPv6. The IPv6 loopback, ULA, link-local, IPv4-mapped and NAT64 ranges are
+  denied as well, as a second guard.
 - The one exception to the private-range deny is a consumer that itself needs to reach the
   relay from a private address — today the HPB's Janus. Its IP is added as an explicit
   `allowed-peer-ip`; see "Allow-listing a media server" below. Nothing else on a private
