@@ -1,0 +1,86 @@
+{
+  "description": "Project N.O.M.A.D. — an offline knowledge and education server: Wikipedia and other libraries, courses, books and tools, on hardware you own.",
+  "displayName": "Project N.O.M.A.D.",
+  "kind": "vm",
+  "version": "0.1.0",
+  "stack": "home",
+  "releaseDate": "2026-10-15",
+  "maintainer": "@larsrossen",
+  "status": "Development",
+  "vmname": "nomad",
+  "vmid": 370,
+  "vmtag": "TAPPaaS,App,Knowledge",
+  "dependsOn": [
+    "cluster:vm",
+    "templates:nixos",
+    "backup:vm",
+    "network:proxy",
+    "identity:accessControl",
+    "network:rules",
+    "identity:identity"
+  ],
+  "integratesWith": [
+    "logging:logs"
+  ],
+  "provides": [],
+  "appVersion": "1.35.1",
+  "config": {
+    "cluster:vm": {
+      "cores": 2,
+      "memory": 4096,
+      "diskSize": "64G",
+      "storage": "tanka1",
+      "imageType": "clone",
+      "image": "8080",
+      "bridge0": "lan"
+    },
+    "network:proxy": {
+      "proxyPort": 8080,
+      "proxyAllowedZones": [
+        "home",
+        "netbird"
+      ]
+    }
+  },
+  "ports": [
+    {
+      "port": 8090,
+      "protocol": "TCP",
+      "description": "Information Library (Kiwix: Wikipedia and other ZIM libraries)"
+    },
+    {
+      "port": 8100,
+      "protocol": "TCP",
+      "description": "Data Tools (CyberChef)"
+    },
+    {
+      "port": 8200,
+      "protocol": "TCP",
+      "description": "Notes (Flatnotes)"
+    },
+    {
+      "port": "8310:8311",
+      "protocol": "TCP",
+      "description": "Education Platform (Kolibri)"
+    },
+    {
+      "port": "8400:8500",
+      "protocol": "TCP",
+      "description": "Supply Depot apps (Stirling PDF, File Browser, Calibre Web, IT Tools, Excalidraw, …)"
+    }
+  ],
+  "ingress": [
+    {
+      "from": "home",
+      "ports": [
+        8090,
+        8100,
+        8200,
+        "8310:8311",
+        "8400:8500"
+      ],
+      "protocol": "TCP",
+      "description": "Client networks open the content apps the Command Center links to; the Command Center itself only through the proxy and its sign-in"
+    }
+  ]
+}

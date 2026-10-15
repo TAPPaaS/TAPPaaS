@@ -61,6 +61,24 @@
       "file": "src/home/deconz/deconz.nix",
       "match": "diyhue = \"(sha256:[0-9a-f]+)\";",
       "maintainer": "@ErikDaniel007"
+    },
+    {
+      "module": "nomad",
+      "image": "ghcr.io/crosstalk-solutions/project-nomad",
+      "kind": "tag",
+      "file": "src/home/nomad/nomad.nix",
+      "match": "adminImage = \"ghcr\\.io/crosstalk-solutions/project-nomad:([^\"]+)\";",
+      "tagPattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "maintainer": "@larsrossen"
+    },
+    {
+      "module": "nomad",
+      "image": "ghcr.io/crosstalk-solutions/project-nomad-disk-collector",
+      "kind": "tag",
+      "file": "src/home/nomad/nomad.nix",
+      "match": "diskCollectorImage = \"ghcr\\.io/crosstalk-solutions/project-nomad-disk-collector:([^\"]+)\";",
+      "tagPattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "maintainer": "@larsrossen"
     }
   ]
 }

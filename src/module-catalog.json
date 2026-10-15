@@ -221,6 +221,12 @@
       "stack": "home"
     },
     {
+      "moduleName": "nomad",
+      "moduleJson": "src/home/nomad/nomad.json",
+      "vmid": 370,
+      "stack": "home"
+    },
+    {
       "moduleName": "forgejo",
       "moduleJson": "src/devops/forgejo/forgejo.json",
       "vmid": 350,
