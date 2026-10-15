@@ -101,12 +101,12 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 
 | Wave | Group | Ease | Risk | released | done for 2.3 | open |
 |------|-------|:-:|:-:|---:|---:|---:|
-| 4 | G4.1 Alerting & cluster resilience | M | M | 7 | – | 7 |
+| 4 | G4.1 Alerting & cluster resilience | M | M | 7 | 3 | 4 |
 | 4 | G4.2 Proxy & ingress | M | L | 3 | 3 | 1 |
 | 4 | G4.3 Manager verb gaps | M | L | 9 | 7 | 3 |
 | 4 | G4.4 Storage & physical devices | H | L | 5 | – | 7 |
 | 4 | G4.5 Governance, CI & sign-offs | M | L | 5 | – | 5 |
-| 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 18 | 7 | 5 |
+| 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 18 | 9 | 3 |
 | 3 | G3.2 Identity & SSO wiring | M | L | 10 | 3 | 1 |
 | 3 | G3.3 App module fixes | L | L | 10 | 2 | 9 |
 | 3 | G3.4 AI stack maturity | M | M | 1 | 3 | 7 |
@@ -205,7 +205,7 @@ items that belong to a group — FW #40, #83, #157, #158, #162 — are rows in t
 
 New capabilities with low upgrade risk.
 
-### G4.1 Alerting & cluster resilience — Ease M · Risk M · released: 7 · open: 7
+### G4.1 Alerting & cluster resilience — Ease M · Risk M · released: 7 · done for 2.3: 3 · open: 4
 
 Be told when something breaks, and survive more of it. Built: alerts from Loki by mail, every VM's logs in Loki, a credential per pushing VM, container severities from the line, each line's own timestamp, a release CVE preview with majors gated at the boundary (#788). Next: a notice when a whole site goes dark (#776), a mail relay (#125), a second corosync link (#590).
 
@@ -215,9 +215,9 @@ Be told when something breaks, and survive more of it. Built: alerts from Loki b
 | #776 | Report a site that has gone dark (outside heartbeat) | M | L | **Opened 2026-10-06** after makerfloss was dark 2½ days unreported. Proposed: the satellite mails when the home WireGuard handshake is >15 min stale. **Decide:** its mail path (#125?) |
 | #590 | Second corosync link | H | M | |
 | FW #40 | Dedicated sync network recipe | L | L | Roll in with #590 |
-| #835 | Two-node clusters self-fence: warn in `node add`, support a QDevice | M | M | **Opened 2026-10-15** from #832 (one node down = the survivor fences, firewall included) |
-| #836 | HA placement only on nodes that have every bridge the VM uses (firewall WAN) | M | M | **Opened 2026-10-15** from #832. Since `b9d40e98` HA rules are strict (node or HANode only) and `node add` refuses a node without KVM |
-| #837 | Health check: `site.json` location and timezone vs the nodes and guests | L | L | **Opened 2026-10-15** from #832 (a site created with the template's location; cicd on UTC) |
+| ✅ #835 | Two-node clusters self-fence: warn in `node add`, support a QDevice | M | M | **Closed 2026-10-15** (`618411e4`, `ba4c18c6`): `node add` and a `quorum` health gate warn on two votes without a QDevice; `site-manager node qdevice add <host> \| remove \| status`. Added and removed live on hrossen with a test container (5 votes with it, 3 after) |
+| ✅ #836 | HA placement only on nodes that have every bridge the VM uses (firewall WAN) | M | M | **Closed 2026-10-15** (`2b0360da`): a declared HANode without one of the guest's bridges is refused; the default picks the first node that has them all; the HA test checks it. With strict rules (`b9d40e98`) and the KVM check in `node add` |
+| ✅ #837 | Health check: `site.json` location and timezone vs the nodes and guests | L | L | **Closed 2026-10-15** (`290d2790`): `site-timezone` gate per node and guest; the cluster update sets the nodes' timezone (hrossen's tappaas3 was on Europe/Amsterdam) |
 
 ### G4.2 Proxy & ingress — Ease M · Risk L · released: 3 · done for 2.3: 3 · open: 1
 
@@ -279,7 +279,7 @@ The project's own machinery: CI runners (#415), community-health files (#486), t
 
 Low upgrade risk. Build continuously, in any order within a group.
 
-### G3.1 cluster:vm lifecycle & capacity — Ease L · Risk M · released: 18 · done for 2.3: 7 · open: 5
+### G3.1 cluster:vm lifecycle & capacity — Ease L · Risk M · released: 18 · done for 2.3: 9 · open: 3
 
 Guests sized, placed, started and stopped right: memory defaults from measurement (#663), moving a running guest to another node (#825), a readiness wait that skips UDP ports (#826), hardware drift (#531), shutdown and boot order (#36, #127), storage growth and placement (#100, #403), a composite-module ADR (#761), and a sweep that survives a guest restarting itself (#753).
 
@@ -290,8 +290,8 @@ Guests sized, placed, started and stopped right: memory defaults from measuremen
 | ✅ #100 | Automatic storage extension | M | L | **Closed 2026-10-14** (`18427e2c`): every update grows a VM disk whose / is ≥80% by 50% (min 5G, cap `diskSizeMax`) when its pool, and the HA replica's, stays ≤80% — else `DEFERRED:`. Opt-out `diskAutoGrow: false`; settings in `site.json` `diskAutoGrow`. New `storage-pools` health gate (warn 80%, fail 90%, thin overcommit). Rollback after a grow verified clean. Deep test on hrossen 127/0 |
 | #403 | Install on the root disk; smarter placement | M | L | |
 | #838 | Dynamic placement of workloads (PVE 9.2 CRS load balancer) | H | M | **Opened 2026-10-15.** Opt-in next to the fixed default: `HANode` as a list, an empty list = dynamic; the CPU level the candidate set shares (#827), capable nodes only (#836). ADR first |
-| #833 | Sweep pre-flight: refuse an over-committed node; a minimum host size | M | L | **Opened 2026-10-15** from #832 (16 GB host OOM-killed cicd mid-sweep) |
-| #834 | First converge on a legacy site applies config sizes over those tuned in Proxmox | M | M | **Opened 2026-10-15** from #832 |
+| ✅ #833 | Sweep pre-flight: refuse an over-committed node; a minimum host size | M | L | **Closed 2026-10-15** (`b0622eeb`): `health-manager capacity` projects each node's memory after the update; the sweep updates nothing when a node would pass 95% (`--force` overrides). The hardware guide lists the real default sizes (~32 GB for the foundation) |
+| ✅ #834 | First converge on a legacy site applies config sizes over those tuned in Proxmox | M | M | **Closed 2026-10-15** (`dd0311ae`): every size set from config is said at info; with #833 it never takes a node past its RAM. Config stays the source of truth |
 | ✅ #832 | Field report: a 2.0 site upgraded to 2.2, then a second node | M | M | **Closed 2026-10-15**, reported by @AndreasJe: 27 findings — fixed on `main` (certificate renewal cron and expiry, zones merge and shared VLANs, legacy-site migrations, PXE MAC pinning and NIC, never-deployed modules in the sweep, NFS grant notify, KVM check, strict HA rules, …), the design items split into #833–#838 |
 | ✅ #663 | Memory defaults are not based on measurement | L | L | **Closed 2026-10-13** (operator): 7-day measurement on hrossen. vaultwarden was too small — 1→1.5 GiB (`bac670ce`); euro-office and deconz-test moved tappaas1→tappaas2, tappaas1 commitment 63→51.5 GiB of 61. The other proposed reductions (nextcloud-hpb, jellyfin, forgejo, litellm default) not applied; `network` 8G→4G still parked |
 | ✅ #825 | update-module: changing a running guest's node does not migrate it | M | M | **Closed 2026-10-13** (`fix(cluster): move a running guest when its node changes`): snapshot and OS update act where the guest runs; `live-ok` refuses local disks with snapshots; `--allow-disruption` does stop → offline migrate → start. Proven on hrossen (`g2.1-firewall`): deconz-test deferred, then moved tappaas2→tappaas3 and back by `update-module`. Found moving guests for #663 |
