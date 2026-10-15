@@ -26,6 +26,8 @@ host="$(sed -n 1p <<< "${facts}")"; id="$(sed -n 2p <<< "${facts}")"; pve="$(sed
 pn_site_member "${INSTANCE}" || die "${INSTANCE} is not in site.json hardware.nodes — join it with 'site-manager node add ${INSTANCE}' first"
 
 info "  ${GN}✓${CL} root by key; ${pve}; a member of this Site's cluster"
+pn_ssh 'test -c /dev/kvm' 2>/dev/null \
+    || warn "  ${INSTANCE} has no hardware virtualisation (/dev/kvm missing): no VM can run on it — enable VT-x / AMD-V in its firmware"
 # A new node changes what the cluster's CPUs have in common (#827).
 # A node whose CPU differs from the others makes some live moves unsafe: name
 # them now, not on the first failed drain.

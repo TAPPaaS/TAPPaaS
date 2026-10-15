@@ -128,6 +128,13 @@ if [[ -n "${rule_nodes}" ]]; then
     has_ha=$(echo "${rule_nodes}" | grep -c "${HANODE}" || true)
     if [[ "${has_primary}" -gt 0 && "${has_ha}" -gt 0 ]]; then
         pass "HA rule '${HA_RULE_NAME}' has both nodes (${rule_nodes})"
+        rule_strict=$(echo "${rules_json}" | jq -r --arg rule "${HA_RULE_NAME}" \
+            '.[] | select(.rule == $rule) | .strict // 0' 2>/dev/null) || true
+        if [[ "${rule_strict}" == "1" ]]; then
+            pass "HA rule '${HA_RULE_NAME}' is strict — the guest runs only on ${NODE} or ${HANODE}"
+        else
+            warn "    HA rule '${HA_RULE_NAME}' is not strict: HA may place the guest on any node — the next update makes it strict"
+        fi
     else
         fail "HA rule '${HA_RULE_NAME}' missing expected nodes (want: ${NODE}, ${HANODE}, got: ${rule_nodes})"
     fi

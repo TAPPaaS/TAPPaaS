@@ -228,9 +228,12 @@ live_ha_row="$(ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" \
 live_ha_state="${live_ha_row%% *}"
 live_failback="${live_ha_row##* }"
 
-live_rule_nodes="$(ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" \
+live_rule_row="$(ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" \
     "pvesh get /cluster/ha/rules --output-format json" 2>/dev/null \
-    | jq -r --arg res "vm:${VMID}" '.[] | select(.resources == $res) | .nodes // empty' 2>/dev/null)" || true
+    | jq -r --arg res "vm:${VMID}" '.[] | select(.resources == $res) | select(.nodes) | "\(.nodes) \(.strict // 0)"' 2>/dev/null \
+    | head -1)" || true
+live_rule_nodes="${live_rule_row%% *}"
+live_rule_strict="${live_rule_row##* }"
 
 repl_line="$(ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" \
     "pvesh get /cluster/replication --output-format json" 2>/dev/null \
@@ -242,8 +245,12 @@ live_repl_target="${live_repl_rest%%$'\t'*}"
 live_repl_sched="${live_repl_rest##*$'\t'}"
 [[ "${live_repl_id}" == "${repl_line}" ]] && { live_repl_id=""; live_repl_target=""; live_repl_sched=""; }
 
-# Desired node-affinity: primary outranks failover.
+# Desired node-affinity: primary outranks failover, and strict — the guest runs
+# on its node or its HANode and nowhere else. Without strict, HA places it on any
+# node when both are down: a firewall on a node without WAN, a guest on a node
+# that cannot carry it. Placement beyond the pair is a later design.
 readonly DESIRED_NODES="${DESIRED_PRIMARY}:2,${HANODE}:1"
+readonly DESIRED_STRICT=1
 
 # Proxmox may store the nodes list in any order; compare as a sorted set.
 normalize_nodes() { tr ', ' '\n' <<< "$1" | sed '/^$/d' | sort | paste -sd',' -; }
@@ -290,6 +297,10 @@ else
     RULE_EXISTS=1
     if [[ "$(normalize_nodes "${live_rule_nodes}")" != "$(normalize_nodes "${DESIRED_NODES}")" ]]; then
         CHANGES+=("ha-rule nodes: ${live_rule_nodes}→${DESIRED_NODES}")
+        DO_SET_RULE=1
+    fi
+    if [[ "${live_rule_strict}" != "${DESIRED_STRICT}" ]]; then
+        CHANGES+=("ha-rule strict: ${live_rule_strict:-0}→${DESIRED_STRICT} (only ${DESIRED_PRIMARY} and ${HANODE})")
         DO_SET_RULE=1
     fi
 fi
@@ -377,12 +388,12 @@ if [[ ${DO_SET_RULE} -eq 1 ]]; then
     if [[ ${RULE_EXISTS} -eq 1 ]]; then
         debug "  Updating node-affinity rule ${HA_RULE_NAME} → ${DESIRED_NODES}..."
         ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" \
-            "ha-manager rules set node-affinity ${HA_RULE_NAME} --nodes ${DESIRED_NODES} --resources vm:${VMID}" \
+            "ha-manager rules set node-affinity ${HA_RULE_NAME} --nodes ${DESIRED_NODES} --strict ${DESIRED_STRICT} --resources vm:${VMID}" \
             >/dev/null || die "ha-manager rules set failed"
     else
         debug "  Creating node-affinity rule ${HA_RULE_NAME} → ${DESIRED_NODES}..."
         ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" \
-            "ha-manager rules add node-affinity ${HA_RULE_NAME} --nodes ${DESIRED_NODES} --resources vm:${VMID}" \
+            "ha-manager rules add node-affinity ${HA_RULE_NAME} --nodes ${DESIRED_NODES} --strict ${DESIRED_STRICT} --resources vm:${VMID}" \
             >/dev/null || die "ha-manager rules add failed"
     fi
 fi

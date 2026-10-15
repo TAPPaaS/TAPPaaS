@@ -115,6 +115,18 @@ export const BOOT_FIRST_CMD =
   "[ \"$new\" = \"$ord\" ] && { echo \"unchanged $ord\"; exit 0; }; " +
   "efibootmgr -o \"$new\" >/dev/null && echo \"set $new\"";
 
+// Proxmox installs and runs without hardware virtualisation, but then every VM
+// refuses to start ("KVM virtualisation configured, but not available") — and
+// HA would still move guests there. Refused before the join; reported for a
+// node that is already a member.
+const KVM_CMD = "test -c /dev/kvm && echo KVM || echo NOKVM";
+function kvmProblem(name: string, host: string): string {
+  const r = sshTo(host, KVM_CMD, 10);
+  if (r.rc !== 0 || !r.out.includes("NOKVM")) return "";
+  return `${name} has no hardware virtualisation (/dev/kvm is missing): no VM can run on it. ` +
+    "Enable Intel VT-x / AMD-V (SVM) in its firmware setup, boot it, and run node add again";
+}
+
 function bootFromDiskFirst(host: string): void {
   const r = sshTo(host, BOOT_FIRST_CMD, 10);
   if (r.rc === 0) info(`  ${GN}✓${CL} boot order: the installed disk first (${r.out.trim()})`);
@@ -238,6 +250,8 @@ export function adoptNode(o: ProvisionOpts): void {
   const clustered = sshTo(stdIp, "pvecm status >/dev/null 2>&1 && echo IN-CLUSTER || echo STANDALONE");
   if (clustered.out.includes("IN-CLUSTER")) {
     info(`  ${o.name} is already in a cluster — skipping straight to capture`);
+    const noKvm = kvmProblem(o.name, stdIp);
+    if (noKvm) warn(`  ${noKvm}`);
     step("capturing the node in site.json (node reconcile --apply)");
     runStream("site-manager", ["node", "reconcile", "--apply"]);
     step("registering the node as a pvehost module instance (ADR-026 D4, #665)");
@@ -339,6 +353,9 @@ function joinAndCapture(
 ): void {
   const domain = mgmtDomain();
   const siteName = readSiteName();
+
+  const noKvm = kvmProblem(o.name, nodeIp);
+  if (noKvm) die(noKvm);
 
   // gather the join-time answers (with the node's real hardware) ----------
   step("join-time configuration");

@@ -1146,7 +1146,7 @@ if [[ "${DEEP}" -eq 1 && -n "${DEFAULT_ZONE}" && "${NODE_COUNT}" -ge 2 ]]; then
     if [[ "${hdeep_ok}" -eq 1 ]]; then
         # shellcheck disable=SC2086,SC2029
         if ssh ${SSH_OPTS} "root@${HNODE}.${MGMT}.internal" \
-            "ha-manager rules set node-affinity ha-${THVM} --nodes tappaas1:2,tappaas2:1,tappaas3:1 --resources vm:${HVMID}" \
+            "ha-manager rules set node-affinity ha-${THVM} --nodes tappaas1:2,tappaas2:1,tappaas3:1 --strict 0 --resources vm:${HVMID}" \
             >/dev/null 2>&1; then
             pass "induced drift: HA rule nodes mangled in live state"
         else
@@ -1160,6 +1160,11 @@ if [[ "${DEEP}" -eq 1 && -n "${DEFAULT_ZONE}" && "${NODE_COUNT}" -ge 2 ]]; then
             pass "reconciler detects HA-rule node drift"
         else
             fail "reconciler did not detect HA-rule node drift"
+        fi
+        if "${HUPSVC}" --check "${THVM}" 2>&1 | grep "ha-rule strict" >/dev/null; then
+            pass "reconciler detects a rule that is not strict"
+        else
+            fail "reconciler did not detect a rule that is not strict"
         fi
     fi
     if [[ "${hdeep_ok}" -eq 1 ]]; then
@@ -1175,6 +1180,12 @@ if [[ "${DEEP}" -eq 1 && -n "${DEFAULT_ZONE}" && "${NODE_COUNT}" -ge 2 ]]; then
         else
             fail "live HA rule not reconciled (got: ${live_nodes:-none})"
         fi
+        # shellcheck disable=SC2086
+        live_strict=$(ssh ${SSH_OPTS} "root@${HNODE}.${MGMT}.internal" \
+            "pvesh get /cluster/ha/rules --output-format json" 2>/dev/null \
+            | jq -r --arg res "vm:${HVMID}" '.[] | select(.resources==$res) | .strict // 0' 2>/dev/null) || true
+        [[ "${live_strict}" == "1" ]] && pass "live HA rule is strict again (only its node and HANode)" \
+            || fail "live HA rule not strict after reconcile (strict=${live_strict:-?})"
     fi
 
     # 7-9. ADR-019: `module-manager migrate` moves a running HA guest to its

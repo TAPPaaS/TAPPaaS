@@ -20,6 +20,14 @@ them anyway; the manifest only covers the two things an operator actually
 guest and defers to this service — see
 [`node` and `HANode` today](../../../tappaas-cicd/UPDATE-POLICY.md#7-node-and-hanode--what-happens-today-adr-019s-starting-point).
 
+## Only its node and its `HANode`
+
+The node-affinity rule is **strict**: the guest runs on its `node` (preferred)
+or its `HANode`, and nowhere else. When both are down it stays stopped rather
+than starting on a node that may not carry it — the firewall on a node without
+a WAN port, a guest on a node without its storage or bridges. A rule found
+without strict is made strict by the next update.
+
 ## The CPU an HA guest runs (`haCpu`)
 
 An HA guest moves between its node and its `HANode`, and a move is only safe
