@@ -46,6 +46,23 @@ Nextcloud's PUBLIC base URL (https://<proxyDomain>), stamped into the consumer's
 
 <!-- END GENERATED FIELDS -->
 
+## When a consumer is deleted
+
+`delete-service.sh` takes the consumer's connector out of Nextcloud, so Nextcloud
+stops pointing at a server that is gone:
+
+| Connector | Removed from the Nextcloud VM |
+|---|---|
+| `onlyoffice` (euro-office) | `/etc/secrets/onlyoffice.env`; the `eurooffice` app's DocumentServerUrl, DocumentServerInternalUrl, StorageUrl, jwt_secret, jwt_header and settings_error |
+| `talk` (coturn) | `/etc/secrets/talk.env`; Talk's TURN and STUN servers (Talk falls back to its default STUN server) |
+| `hpb` (nextcloud-hpb) | `/etc/secrets/hpb.env`; Talk's signaling server |
+
+The env file goes first, so the configure unit has nothing to re-apply at the next
+boot. Only the consumer's own wiring is removed: the env file must name it (its
+internal host, or for the HPB its public name); one that names another consumer is
+left as it is. An unreachable Nextcloud does not fail the delete — the warning says
+what to remove by hand. Installing or updating the consumer again wires it back.
+
 ## The OnlyOffice verdict is stored, not probed (#687)
 
 Nextcloud's OnlyOffice app keeps its last self-check in `oc_appconfig`
