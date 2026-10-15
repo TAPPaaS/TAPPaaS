@@ -1,7 +1,7 @@
 // provision.test.ts — disks named before a PXE install (#729 §3: nvme0n1 and
 // nvme1n1 swapped between boots, so a pool declared on nvme0n1 hit the boot disk).
 
-import { isKernelDiskName, pxeDiskProblems } from "../../src/provision";
+import { isKernelDiskName, pxeDiskProblems, quorumAdvice } from "../../src/provision";
 
 let passed = 0;
 let failed = 0;
@@ -31,6 +31,12 @@ const pool = pxeDiskProblems(undefined, ["tankb1=mirror:disk/by-id/a,sdc"]);
 check(pool.length === 1 && pool[0].includes("sdc") && !pool[0].includes("disk/by-id/a is"),
   "only the kernel name in a pool is named");
 check(pxeDiskProblems("sda", ["tanka1=single:nvme0n1"]).length === 2, "both refused at once");
+
+// #835: two votes and no QDevice — the survivor of a node failure fences itself.
+check(quorumAdvice(2, false).includes("loses quorum") && quorumAdvice(2, false).includes("QDevice"),
+  "two nodes without a QDevice: warned, with the way out");
+check(quorumAdvice(3, false) === "" && quorumAdvice(2, true) === "" && quorumAdvice(1, false) === "",
+  "three votes, a QDevice, or a single node: nothing to say");
 
 console.log(`provision: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

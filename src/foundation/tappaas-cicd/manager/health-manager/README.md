@@ -90,6 +90,7 @@ fails**:
 | `backup-status` | `backup-manager list --json` | a module is backup-disabled, or enabled but not in the PBS job |
 | `pending-reboot` | one SSH probe per guest | never — **WARN** when a guest is waiting for a reboot (see below) |
 | `site-timezone` | `site.json` + one SSH probe per node and guest | never — **WARN** when a node or guest runs another timezone than `site.json` `.location.timezone` (the next update of the guest, or the next cluster update for a node, sets it), or when the site has none |
+| `quorum` | `pvecm status` | never — **WARN** when the cluster has two votes and no QDevice: one node down and the other is fenced (see the cluster README, *Two-node clusters*) |
 | `cve-status` | `config/sbom/cve-status.json` (the last `scan security`) | never — **WARN** on a failed scan, a fixable Critical/High CVE, or a scan older than 8 days (see below) |
 
 A gate with nothing to check (e.g. no reachable guests, backup tooling absent)

@@ -4,7 +4,7 @@
 import { mkdtempSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
-import { checkSiteTimezone } from "../../src/checks";
+import { checkQuorum, checkSiteTimezone } from "../../src/checks";
 import { FakeClusterClient } from "./fake-client";
 
 let passed = 0;
@@ -61,6 +61,18 @@ const mods = {
   check(r.status === "warn" && r.detail.includes("no location.timezone"), "a site.json without a timezone warns");
   const r2 = checkSiteTimezone(c, configDir(site, mods), "tappaas1");
   check(r2.status === "skip", "nothing answered: skip, never pass");
+}
+
+// #835: the quorum gate rides along here (same kind of cluster fact).
+{
+  const c = new FakeClusterClient();
+  check(checkQuorum(c).status === "skip", "quorum: nothing answered — skip");
+  c.quorumState = { expectedVotes: 2, qdevice: false };
+  check(checkQuorum(c).status === "warn" && checkQuorum(c).detail.includes("QDevice"), "two votes, no QDevice: warned");
+  c.quorumState = { expectedVotes: 3, qdevice: true };
+  check(checkQuorum(c).status === "pass", "two nodes and a QDevice: pass");
+  c.quorumState = { expectedVotes: 3, qdevice: false };
+  check(checkQuorum(c).status === "pass", "three nodes: pass");
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

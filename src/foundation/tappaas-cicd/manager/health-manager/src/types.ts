@@ -174,6 +174,9 @@ export interface ClusterClient {
   avx512Use(target: string): Avx512Use | null;
   // The timezone a node or a guest runs; null if unreachable or it does not say (#837).
   nodeTimezone(node: string): string | null;
+  // Corosync's votes and whether a QDevice gives one (pvecm status); null if no
+  // node answers (#835).
+  quorum(): { expectedVotes: number; qdevice: boolean } | null;
   guestTimezone(target: string): string | null;
 }
 

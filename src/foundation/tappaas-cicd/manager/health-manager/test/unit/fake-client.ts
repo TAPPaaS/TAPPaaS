@@ -51,6 +51,10 @@ export class FakeClusterClient implements ClusterClient {
     const a = this.avx.get(target);
     return a ? { ...a } : null;
   }
+  quorumState: { expectedVotes: number; qdevice: boolean } | null = null; // #835
+  quorum(): { expectedVotes: number; qdevice: boolean } | null {
+    return this.quorumState ? { ...this.quorumState } : null;
+  }
   nodeTimezone(node: string): string | null {
     return this.zones.get(node) ?? null;
   }

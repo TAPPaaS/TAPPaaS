@@ -71,6 +71,26 @@ provides the `vm`, `lxc` and `ha` services (the module's `provides` in
   switch needs VLAN trunking configured first (see the repo-root
   [INSTALL.md](../INSTALL.md)).
 
+## Two-node clusters
+
+Two nodes are two votes, and Proxmox needs a majority — two — to stay quorate.
+When one node is down the other is not quorate, and HA fences it: the whole site
+goes down, the firewall with it. `site-manager node add` warns when a cluster
+reaches two nodes, and the health check (`quorum`) keeps saying so.
+
+The fix is a third vote: a **QDevice** — `corosync-qnetd` on a small always-on
+Debian machine that is not a node (a `debianhost`, or the satellite). It holds no
+guests and needs almost no resources; it must reach the nodes on TCP 5403.
+
+1. On that machine: `apt install corosync-qnetd`
+2. On every node: `apt install corosync-qdevice`
+3. On one node: `pvecm qdevice setup <machine's address>` — it asks once for the
+   machine's root password, to exchange certificates.
+4. Check: `pvecm status` lists the Qdevice, and *Expected votes* is 3.
+
+A third node does the same and adds capacity. A QDevice with three nodes is not
+needed (and Proxmox advises against it on an odd number of nodes).
+
 ## Alternatives considered
 
 - XCP-ng — seems less polished and with fewer features (though it also seems more "free").

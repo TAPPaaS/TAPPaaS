@@ -230,6 +230,17 @@ export class CliClusterClient implements ClusterClient {
   }
 
   // #837: timedatectl names the zone on Debian, Proxmox and NixOS alike.
+  quorum(): { expectedVotes: number; qdevice: boolean } | null {
+    for (const node of this.reachableNodes()) {
+      const r = ssh("root", `${node}.${mgmtDomain()}`, "pvecm status");
+      if (!r.ran || r.rc !== 0) continue;
+      const votes = Number(/Expected votes:\s*(\d+)/.exec(r.stdout)?.[1] ?? "NaN");
+      if (!Number.isFinite(votes)) continue;
+      return { expectedVotes: votes, qdevice: /Qdevice/i.test(r.stdout) };
+    }
+    return null;
+  }
+
   nodeTimezone(node: string): string | null {
     return readTimezone(ssh("root", `${node}.${mgmtDomain()}`, TZ_PROBE));
   }

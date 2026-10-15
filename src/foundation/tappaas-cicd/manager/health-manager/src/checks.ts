@@ -601,6 +601,24 @@ export function checkCpuImpact(client: ClusterClient, configDir: string, default
   };
 }
 
+// ── quorum gate (#835) ─────────────────────────────────────────────────
+// Two nodes are two votes and a quorum of two: when either is down the other is
+// not quorate and HA fences it — the whole site, firewall included. A QDevice on
+// a third machine is the third vote. WARN: a healthy two-node site is running,
+// it is only one failure away from being down.
+export function checkQuorum(client: ClusterClient): CheckResult {
+  const q = client.quorum();
+  if (!q) return { name: "quorum", status: "skip", detail: "no node answered pvecm status" };
+  if (q.expectedVotes === 2 && !q.qdevice) {
+    return {
+      name: "quorum",
+      status: "warn",
+      detail: "two votes, no QDevice: one node down and the other loses quorum and is fenced — add a QDevice (cluster/README.md, Two-node clusters) or a third node",
+    };
+  }
+  return { name: "quorum", status: "pass", detail: `${q.expectedVotes} vote(s)${q.qdevice ? " incl. a QDevice" : ""}` };
+}
+
 // ── site-timezone gate (#837) ──────────────────────────────────────────
 // site.json `.location.timezone` is answered once, at the first install, and
 // the guests are converged to it on every OS update. Nothing compares it with
@@ -655,6 +673,7 @@ export function runHealthGates(client: ClusterClient, opts: ValidateOpts): Healt
     checkBackupStatus(opts.configDir),
     checkPendingReboot(client, opts.configDir, opts.defaultNode),
     checkSiteTimezone(client, opts.configDir, opts.defaultNode),
+    checkQuorum(client),
     checkCveStatus(opts.configDir, Date.now()),
   ];
   const failed = checks.filter((c: CheckResult): boolean => c.status === ("fail" as CheckStatus)).length;

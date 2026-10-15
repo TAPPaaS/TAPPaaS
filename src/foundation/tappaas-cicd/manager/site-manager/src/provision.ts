@@ -563,4 +563,23 @@ function joinAndCapture(
 
   info(`\n${GN}✓ node '${o.name}' is in the cluster and captured${CL}`);
   info(`  next: run ${YW}site-manager update${CL} to fold HA + replication over the new topology.`);
+  twoNodeWarning(nodeIp);
+}
+
+// Two nodes are two votes and a quorum of two: when one is down the survivor is
+// not quorate, and HA fences it — the whole site, the firewall with it (#835).
+// A third vote (a QDevice) is what keeps a two-node cluster running.
+export function quorumAdvice(expectedVotes: number, qdevice: boolean): string {
+  if (expectedVotes !== 2 || qdevice) return "";
+  return "the cluster has two votes: when one node is down the other loses quorum and HA fences it, " +
+    "firewall included. Add a third vote — a QDevice on a small always-on machine (cluster/README.md, " +
+    "*Two-node clusters*) — or a third node";
+}
+
+function twoNodeWarning(nodeIp: string): void {
+  const r = sshTo(nodeIp, "pvecm status", 10);
+  if (r.rc !== 0) return;
+  const votes = Number(/Expected votes:\s*(\d+)/.exec(r.out)?.[1] ?? "0");
+  const advice = quorumAdvice(votes, /Qdevice/i.test(r.out));
+  if (advice) warn(`  ${advice}`);
 }
