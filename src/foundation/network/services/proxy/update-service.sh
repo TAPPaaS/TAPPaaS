@@ -238,6 +238,13 @@ else
     if [[ -n "${TLS_CERT_REFID}" ]]; then
         debug "  TLS: DNS-01 wildcard (dnsMode=wildcard) — refid ${TLS_CERT_REFID}"
         CADDY_DOMAIN_ARGS=(--custom-certificate "${TLS_CERT_REFID}")
+        # An expired wildcard breaks every OIDC client behind it, and the
+        # failures surface far from here: name the cause where it is bound.
+        _not_after="$(acme-manager --no-ssl-verify not-after --refid "${TLS_CERT_REFID}" 2>/dev/null || true)"
+        if [[ "${_not_after}" =~ ^[0-9]+$ && "${_not_after}" -gt 0 && "${_not_after}" -lt "$(date +%s)" ]]; then
+            warn "  TLS: the wildcard certificate ${TLS_CERT_REFID} expired on $(date -d "@${_not_after}" '+%Y-%m-%d' 2>/dev/null || echo "${_not_after}") — Caddy will serve it expired"
+            warn "       Renew it: environment-manager reconcile '${ENVIRONMENT:-$(default_environment_name)}' --apply"
+        fi
     else
         debug "  TLS: wildcard but no tlsCertRefid for environment '${ENVIRONMENT:-default}' yet."
         debug "       Run: acme-setup.sh --variant '${ENVIRONMENT}' — internal LAN access still works meanwhile."

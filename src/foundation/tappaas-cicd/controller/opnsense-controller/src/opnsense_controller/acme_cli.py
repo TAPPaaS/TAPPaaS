@@ -272,6 +272,13 @@ def cmd_status(mgr: AcmeManager, args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_not_after(mgr: AcmeManager, args: argparse.Namespace) -> int:
+    """Print a Trust certificate's notAfter (unix; 0 = unknown) — what the proxy
+    checks before binding a refid, so an expired one is named, not served."""
+    print(mgr.cert_not_after(args.refid))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     # Keep progress visible when stdout is a pipe. acme-setup.sh runs us through
     # `tee`, and Python block-buffers a non-TTY stdout — so a setup that takes
@@ -352,6 +359,11 @@ def main(argv: list[str] | None = None) -> int:
                               help="Show the current state of the wildcard certificate")
     p_status.add_argument("--domain", required=True)
     p_status.set_defaults(handler=cmd_status)
+
+    p_na = sub.add_parser("not-after", parents=[gp],
+                          help="Print the notAfter (unix; 0 = unknown) of a Trust certificate")
+    p_na.add_argument("--refid", required=True)
+    p_na.set_defaults(handler=cmd_not_after)
 
     args = parse_with_globals(parser, {
         "firewall": os.environ.get("OPNSENSE_HOST", "firewall.mgmt.internal"),

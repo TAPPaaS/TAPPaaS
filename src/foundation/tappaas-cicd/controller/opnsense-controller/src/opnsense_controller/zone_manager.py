@@ -1101,12 +1101,23 @@ class ZoneManager:
             # Convert vlan_tag to int for proper comparison
             assigned_by_tag = {int(v["vlan_tag"]) if isinstance(v["vlan_tag"], str) else v["vlan_tag"]: v for v in assigned_vlans if v.get("vlan_tag")}
 
+            # A tag an enabled or manual zone uses is that zone's VLAN, whatever
+            # disabled zone also names it (a renamed zone's upstream twin):
+            # deleting it would take the live network down.
+            live_tags = {z.vlan_tag: z.name for z in vlan_zones + manual_zones}
+
             # First, delete VLANs for disabled zones
             for zone in disabled_zones:
                 # Only use tag-based lookup for deletion to avoid matching wrong VLANs with duplicate descriptions
                 existing = existing_tags.get(zone.vlan_tag)
 
-                if existing:
+                if existing and zone.vlan_tag in live_tags:
+                    warn(f"{zone.name}: disabled, but VLAN {zone.vlan_tag} belongs to zone "
+                         f"'{live_tags[zone.vlan_tag]}' — kept. Give {zone.name} an unused vlantag "
+                         f"or remove it from zones.json")
+                    results[zone.name] = {"status": "kept_shared_tag", "vlan": zone.vlan_tag,
+                                          "owner": live_tags[zone.vlan_tag]}
+                elif existing:
                     debug(f"  {zone.name}: Deleting VLAN {zone.vlan_tag} (zone disabled)")
                     if check_mode:
                         results[zone.name] = {"status": "would_delete", "vlan": zone.vlan_tag}

@@ -493,6 +493,40 @@ class TestGetZoneInterfaceVlanTagType(unittest.TestCase):
         self.assertIsNone(zm._iface_cache)
 
 
+class TestDisabledZoneSharedVlan(unittest.TestCase):
+    """A disabled zone whose tag an enabled zone uses must not delete that VLAN
+    (a renamed zone's upstream twin on the same tag)."""
+
+    def _run(self, twin_state):
+        zone = lambda state: {"type": "Service", "state": state, "typeId": "3", "subId": "10",
+                              "vlantag": 310, "ip": "10.3.10.0/24", "bridge": "lan",
+                              "access-to": [], "pinhole-allowed-from": [], "description": "private"}
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump({"private": zone("Active"), "home": zone(twin_state)}
+                      if twin_state else {"home": zone("Disabled")}, f)
+        zm = ZoneManager(config=MagicMock(), zones_file=f.name)
+        zm.load_zones()
+        mgr = MagicMock()
+        mgr.list_vlans.return_value = [{"tag": "310", "description": "private", "device": "vlan0.310"}]
+        mgr.get_assigned_vlans.return_value = []
+        ctx = MagicMock()
+        ctx.__enter__ = MagicMock(return_value=mgr)
+        ctx.__exit__ = MagicMock(return_value=False)
+        with patch("opnsense_controller.zone_manager.VlanManager", return_value=ctx):
+            results = zm.configure_vlans(check_mode=False, assign=False)
+        return mgr, results
+
+    def test_shared_tag_is_kept(self):
+        mgr, results = self._run("Disabled")
+        mgr.delete_vlan.assert_not_called()
+        self.assertEqual(results["home"]["status"], "kept_shared_tag")
+        self.assertEqual(results["home"]["owner"], "private")
+
+    def test_a_disabled_zone_alone_still_deletes_its_vlan(self):
+        mgr, results = self._run(None)
+        mgr.delete_vlan.assert_called_once()
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # configure_firewall_rules — sequence layout / collision regression (issue #243)
 # ─────────────────────────────────────────────────────────────────────────────

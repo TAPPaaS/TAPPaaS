@@ -65,8 +65,12 @@ def probe_opnsense_port(
 
     tried = ", ".join(str(p) for p in ports)
     details = "; ".join(f"port {p}: {e}" for p, e in errors)
+    hint = ""
+    if ssl_verify and any(isinstance(e, ssl.SSLCertVerificationError) for _, e in errors):
+        hint = (" The firewall's GUI certificate is not trusted here (self-signed by"
+                " default): pass --no-ssl-verify, or set OPNSENSE_SSL_VERIFY=false.")
     raise ConnectionError(
-        f"Cannot reach OPNsense at {firewall} on any port ({tried}). {details}"
+        f"Cannot reach OPNsense at {firewall} on any port ({tried}). {details}{hint}"
     )
 
 
@@ -87,6 +91,10 @@ class Config:
 
     def __post_init__(self):
         """Validate that credentials are available from at least one source."""
+        # OPNSENSE_SSL_VERIFY=false turns verification off for every CLI, as
+        # --no-ssl-verify does for one call (the GUI certificate is self-signed).
+        if os.environ.get("OPNSENSE_SSL_VERIFY", "").lower() == "false":
+            self.ssl_verify = False
         has_token_secret = self.token and self.secret
         has_env_token = os.environ.get("OPNSENSE_TOKEN") and os.environ.get("OPNSENSE_SECRET")
         has_credential_file = self.credential_file and Path(self.credential_file).exists()
