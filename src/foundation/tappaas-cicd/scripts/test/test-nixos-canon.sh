@@ -37,6 +37,9 @@ for f in "${FILES[@]}"; do
 done
 
 # Only live lines count: a pattern that exists only in a comment is the defect.
+# Searched with grep -c, never -q: -q exits at the first match, sed then dies on
+# SIGPIPE, and under pipefail a match reads as a miss (on Linux, once the file
+# outgrew one pipe write).
 live() { sed -E 's/#.*$//' "$1"; }
 
 for f in "${FILES[@]}"; do
@@ -44,18 +47,18 @@ for f in "${FILES[@]}"; do
     echo "── ${name} ──"
     if [[ "${f}" == */tappaas-common.nix ]]; then
     ck "C4: systemd-networkd is forced off" "yes" \
-       "$(live "$f" | grep -qE 'systemd\.network\.enable[[:space:]]*=[[:space:]]*lib\.mkForce false' && echo yes || echo no)"
+       "$(live "$f" | grep -cE 'systemd\.network\.enable[[:space:]]*=[[:space:]]*lib\.mkForce false' >/dev/null && echo yes || echo no)"
     ck "C4: systemd-networkd wait-online is forced off" "yes" \
-       "$(live "$f" | grep -qE 'systemd\.network\.wait-online\.enable[[:space:]]*=[[:space:]]*lib\.mkForce false' && echo yes || echo no)"
+       "$(live "$f" | grep -cE 'systemd\.network\.wait-online\.enable[[:space:]]*=[[:space:]]*lib\.mkForce false' >/dev/null && echo yes || echo no)"
     ck "C4: NetworkManager is the network owner" "yes" \
-       "$(live "$f" | grep -qE 'networking\.networkmanager\.enable[[:space:]]*=[[:space:]]*true' && echo yes || echo no)"
+       "$(live "$f" | grep -cE 'networking\.networkmanager\.enable[[:space:]]*=[[:space:]]*true' >/dev/null && echo yes || echo no)"
     fi
     ck "C7: the firewall is declared, not only commented" "yes" \
-       "$(live "$f" | grep -qE 'networking\.firewall' && echo yes || echo no)"
+       "$(live "$f" | grep -cE 'networking\.firewall' >/dev/null && echo yes || echo no)"
     ck "C7: it is enabled" "yes" \
-       "$(live "$f" | tr '\n' ' ' | grep -qE 'networking\.firewall[[:space:]]*=[[:space:]]*\{[^}]*enable[[:space:]]*=[[:space:]]*(lib\.mkDefault[[:space:]]+)?true|networking\.firewall\.enable[[:space:]]*=[[:space:]]*(lib\.mkDefault[[:space:]]+)?true' && echo yes || echo no)"
+       "$(live "$f" | tr '\n' ' ' | grep -cE 'networking\.firewall[[:space:]]*=[[:space:]]*\{[^}]*enable[[:space:]]*=[[:space:]]*(lib\.mkDefault[[:space:]]+)?true|networking\.firewall\.enable[[:space:]]*=[[:space:]]*(lib\.mkDefault[[:space:]]+)?true' >/dev/null && echo yes || echo no)"
     ck "C7: SSH (22) is opened explicitly" "yes" \
-       "$(live "$f" | tr '\n' ' ' | grep -qE 'allowedTCPPorts[[:space:]]*=[[:space:]]*\[[^]]*\b22\b' && echo yes || echo no)"
+       "$(live "$f" | tr '\n' ' ' | grep -cE 'allowedTCPPorts[[:space:]]*=[[:space:]]*\[[^]]*\b22\b' >/dev/null && echo yes || echo no)"
 done
 
 # #324: every module NixOS config imports the baseline and restates none of it.
@@ -88,17 +91,17 @@ ck "foundation/tappaas-cicd/tappaas-cicd.nix restates none of it" "" \
 # baseline (#324); until then this is the baseline's own guarantee.
 echo "── foundation/templates/tappaas-common.nix: cloud-init ──"
 ck "cloud-init's network stage is disabled (#448)" "yes" \
-   "$(live "${SRC}/foundation/templates/tappaas-common.nix" | grep -qE 'network\.config[[:space:]]*=[[:space:]]*"disabled"' && echo yes || echo no)"
+   "$(live "${SRC}/foundation/templates/tappaas-common.nix" | grep -cE 'network\.config[[:space:]]*=[[:space:]]*"disabled"' >/dev/null && echo yes || echo no)"
 
 # #324: a module importing the baseline states these itself, with another
 # value — the baseline's must yield, or every such module fails to evaluate.
 echo "── foundation/templates/tappaas-common.nix: values a module overrides (#324) ──"
 for opt in 'system\.stateVersion' 'PasswordAuthentication' 'PermitRootLogin'; do
     ck "${opt//\\/} yields to the module (mkDefault)" "yes" \
-       "$(live "${SRC}/foundation/templates/tappaas-common.nix" | grep -qE "${opt}[[:space:]]*=[[:space:]]*lib\.mkDefault " && echo yes || echo no)"
+       "$(live "${SRC}/foundation/templates/tappaas-common.nix" | grep -cE "${opt}[[:space:]]*=[[:space:]]*lib\.mkDefault " >/dev/null && echo yes || echo no)"
 done
 ck "networking.hostName yields even to a module's mkDefault" "yes" \
-   "$(live "${SRC}/foundation/templates/tappaas-common.nix" | grep -qE 'networking\.hostName[[:space:]]*=[[:space:]]*lib\.mkOptionDefault ' && echo yes || echo no)"
+   "$(live "${SRC}/foundation/templates/tappaas-common.nix" | grep -cE 'networking\.hostName[[:space:]]*=[[:space:]]*lib\.mkOptionDefault ' >/dev/null && echo yes || echo no)"
 
 echo
 echo "── ${PASS} passed, ${FAIL} failed ──"
