@@ -102,8 +102,8 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | Wave | Group | Ease | Risk | released | done for 2.3 | open |
 |------|-------|:-:|:-:|---:|---:|---:|
 | 4 | G4.1 Alerting & cluster resilience | M | M | 7 | – | 4 |
-| 4 | G4.2 Proxy & ingress | M | L | 3 | – | 4 |
-| 4 | G4.3 Manager verb gaps | M | L | 9 | 3 | 7 |
+| 4 | G4.2 Proxy & ingress | M | L | 3 | 2 | 2 |
+| 4 | G4.3 Manager verb gaps | M | L | 9 | 7 | 3 |
 | 4 | G4.4 Storage & physical devices | H | L | 5 | – | 7 |
 | 4 | G4.5 Governance, CI & sign-offs | M | L | 5 | – | 5 |
 | 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 18 | 6 | 2 |
@@ -216,31 +216,31 @@ Be told when something breaks, and survive more of it. Built: alerts from Loki b
 | #590 | Second corosync link | H | M | |
 | FW #40 | Dedicated sync network recipe | L | L | Roll in with #590 |
 
-### G4.2 Proxy & ingress — Ease M · Risk L · released: 3 · open: 4
+### G4.2 Proxy & ingress — Ease M · Risk L · released: 3 · done for 2.3: 2 · open: 2
 
 Publish less of each app: limit a route to some paths (#642), some zones (#643) or a provider's source addresses (#656), as ADR-023 describes. Decide whether an internal proxy is needed at all (#154).
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
 | #642 | Limit a route to paths | M | L | ADR-023, approved by Erik 2026-09-14 |
-| #643 | Per-route allowed zones | M | L | Same ADR |
-| #656 | Limit a route to a provider's source ranges | M | L | Split, folded into ADR-023: a route names explicit CIDRs (`remote_ip`) — an exposure reduction beside #642/#643. The provider-feed half is parked (*Housekeeping*) |
+| ✅ #643 | Per-route allowed zones | M | L | **Closed 2026-10-15** (`447f4efa`): ADR-023 P1 — a `proxyRoutes` entry may set its own `proxyAllowedZones` and gets its own access list; undeclared lists pruned; the same-port trap warns |
+| ✅ #656 | Limit a route to a provider's source ranges | M | L | **Closed 2026-10-15** (`e85c7da6`): `proxyAllowedZones` takes a network (CIDR) beside zone names, for a provider's caller range; a malformed one is refused at install. A feed that refreshes the ranges stays a follow-up |
 | #154 | `firewall:internal-proxy` | — | — | Close? Lars questioned the need (2026-05-31) |
 
-### G4.3 Manager verb gaps — Ease M · Risk L · released: 9 · done for 2.3: 3 · open: 7
+### G4.3 Manager verb gaps — Ease M · Risk L · released: 9 · done for 2.3: 7 · open: 3
 
 The verbs operators otherwise do by hand: install a whole stack (#763), suspend a module (#428), migrate by changing `.node` (#429), `test` verbs (#499), private repositories (#634), module-level `--set` rules (#654). #444/#582 wait on a discussion.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
-| #763 | `module-manager add-stack`: install a stack's modules in `dependsOn` order | M | L | **Opened 2026-10-03:** the *solution* concept from #421 — install a stack's modules in order; refuses a missing outside dependency, skips installed ones, resumable, `--dry-run` |
-| #428 | module-manager `suspend` | M | L | |
+| ✅ #763 | `module-manager add-stack`: install a stack's modules in `dependsOn` order | M | L | **Closed 2026-10-15** (`b894e996`): `module-manager add-stack <stack>` — the INSTALL.md order, skips what is installed, refuses missing outside dependencies and cycles, a free VMID in the module's block for an environment install, `--dry-run`. Live on hrossen: devops into `test` installed and torn down |
+| ✅ #428 | module-manager `suspend` | M | L | **Closed 2026-10-15** (`b894e996`): `module-manager suspend` / `resume` — the guest stays stopped (HA, or `onboot` off), the config is marked `suspended`; the sweep skips it, the health check reports it. Live on hrossen with deconz-test |
 | ✅ #429 | Migrate by modifying `.node` | M | L | **Closed 2026-10-13** per ADR-019 (Accepted v1.0): `module-manager modify <m> --set node=<n>` relocates a module and migrates a running guest (#498, #825); `module-manager migrate <m> [--force]` moves it between node and HANode, live only when `live-ok` says so |
 | #499 | `test` verbs on managers | H | L | |
 | #444 | IP → device lookup | L | L | Blocked on the MAC-pinning question (#582). **Do not implement (operator, 2026-09-26)** until Lars and @ErikDaniel007 have discussed it |
 | #582 | Read back static reservations | L | L | **Do not implement (operator, 2026-09-26):** one question with #444, pending the same discussion. There is no `dhcp-manager`; read back means dnsmasq's own state |
-| #634 | Private repositories in `repository add` | L | L | Adopt-mode: won't fix; document the deploy-key method |
-| #654 | `module-manager`: the `--set` pre-gate ignores the module-level field declarations (ADR-020 D10) | M | L | ADR-020 D10 lets a module declare its own field rules; the `--set` pre-gate ignores them, so such a declaration is inert. Belongs with the ADR-020 verb work (#453, #655) |
+| ✅ #634 | Private repositories in `repository add` | L | L | **Closed 2026-10-15** (`f5acb156`), docs only as decided: DESIGN-GIT.md *Adding a private repository* — a read-only deploy key and a narrow SSH `insteadOf` rewrite |
+| ✅ #654 | `module-manager`: the `--set` pre-gate ignores the module-level field declarations (ADR-020 D10) | M | L | **Closed 2026-10-15** (`a49e111f`): `--set` reads `schemas/fields.json` for a field no service owns — `immutable` and `manual` (wiring) refused, an unclassed field refused, `in-place` written; `config-only` stays a label (ADR-020 D10) |
 | ✅ #831 | `module-manager delete`: an archived module still counts as a dependent | L | L | **Closed 2026-10-15** (`13c7fda9`): the reverse-dependency check skips archived configs, so archiving a consumer and then its provider needs no `--force`. Reported by @ErikDaniel007 |
 | ✅ #829 | `backup-manager restore restore` over a module's own guest fails without a terminal | L | L | **Closed 2026-10-15** (`2ce73897`): `--yes` confirms an in-place restore up front and reaches `restore.sh`, whose error names it. Not `--replace`, which restores another guest's backup and leaves it stopped. Reported by @ErikDaniel007 |
 
