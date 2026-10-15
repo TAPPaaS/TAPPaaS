@@ -57,6 +57,14 @@ for mv in "${MOVES[@]}"; do
         ck "target repository not registered: refused" 1 "$(run "${r}")"
         ck "…and nothing written"                "${old}" "$(jq -r .moduleSource "${r}/user.json")"
     fi
+    # A site from before 2.1: repositories in configuration.json, none in site.json.
+    l="${T}/l${i}"; mkdir -p "${l}"; site "${l}" "${frepo}" "${trepo}"
+    jq '{tappaas: {repositories: .repositories}}' "${l}/site.json" > "${l}/configuration.json"
+    jq 'del(.repositories)' "${l}/site.json" > "${l}/s" && mv "${l}/s" "${l}/site.json"
+    echo "{\"kind\":\"vm\",\"moduleSource\":\"${old}\"}" > "${l}/user.json"
+    ck "repositories only in configuration.json: apply exits 0" 0 "$(run "${l}")"
+    ck "…and the user still follows the move" "${new}" "$(jq -r .moduleSource "${l}/user.json")"
+
     m="${T}/m${i}"; mkdir -p "${m}"; site "${m}" "${frepo}" "${trepo}"
     rmdir "${new}" 2>/dev/null || true
     echo "{\"kind\":\"vm\",\"moduleSource\":\"${old}\"}" > "${m}/user.json"

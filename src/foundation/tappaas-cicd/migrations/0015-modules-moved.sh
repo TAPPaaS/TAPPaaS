@@ -53,9 +53,17 @@ SITE="${CONFIG_DIR}/site.json"
 [[ -f "${SITE}" ]] || stop "no config/site.json — cannot tell where this site's repositories are"
 jq empty "${SITE}" 2>/dev/null || stop "config/site.json is not valid JSON"
 
-# repo_path <name> — this site's checkout of a repository ('' when not registered)
+# repo_path <name> — this site's checkout of a repository ('' when not registered).
+# A site from before 2.1 may still list its repositories in configuration.json
+# (.tappaas.repositories): read there when site.json has none, as repository.sh does.
 repo_path() {
-    jq -r --arg n "$1" '(.repositories // [])[] | select(.name == $n) | .path // empty' "${SITE}" | head -1 | sed 's:/*$::'
+    local src="${SITE}" q='.repositories'
+    if ! jq -e '.repositories | type == "array" and length > 0' "${SITE}" >/dev/null 2>&1 \
+       && [[ -f "${CONFIG_DIR}/configuration.json" ]]; then
+        src="${CONFIG_DIR}/configuration.json"; q='.tappaas.repositories'
+    fi
+    jq -r --arg n "$1" "(${q} // [])[] | select(.name == \$n) | .path // empty" "${src}" 2>/dev/null \
+        | head -1 | sed 's:/*$::'
 }
 
 shopt -s nullglob

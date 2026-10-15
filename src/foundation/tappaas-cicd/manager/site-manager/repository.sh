@@ -813,11 +813,13 @@ cmd_modify() {
         # cannot be run by code whose newest migration is 0009 — that code does
         # not know the shape its own config is now in. Checked against the
         # branch as the forge has it, so no checkout is needed to find out.
-        local _applied _target_max
-        _applied="$(awk '$4 == "applied" {print $1}' "${CONFIG_DIR}/.migrations/applied" 2>/dev/null | sort -n | tail -1)"
+        # A site that never ran a migration has no ledger: nothing to compare.
+        local _applied="" _target_max
+        [[ -f "${CONFIG_DIR}/.migrations/applied" ]] \
+            && _applied="$(awk '$4 == "applied" {print $1}' "${CONFIG_DIR}/.migrations/applied" | sort -n | tail -1)"
         _target_max="$(cd "${current_path}" && git ls-tree -r --name-only "origin/${new_branch}" \
                         -- src/foundation/tappaas-cicd/migrations/ 2>/dev/null \
-                        | sed -n 's#.*/\([0-9][0-9][0-9][0-9]\)-.*#\1#p' | sort -n | tail -1)"
+                        | sed -n 's#.*/\([0-9][0-9][0-9][0-9]\)-.*#\1#p' | sort -n | tail -1 || true)"
         if [[ -n "${_applied}" && -n "${_target_max}" && "${_target_max}" -lt "${_applied}" ]]; then
             warn "  '${new_branch}' carries migrations up to ${_target_max}, but this site has applied ${_applied}."
             warn "    That code predates this site's config: migrations do not run backwards (ADR-025),"

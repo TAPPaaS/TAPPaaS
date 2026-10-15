@@ -79,6 +79,9 @@ grep -q 'git ls-tree -r --name-only "origin/\${new_branch}"' "${REPO}" \
 grep -q 'Refusing to move a site behind its own migrations' "${REPO}" \
     && ok "a branch behind this site's migrations is refused without --force" \
     || bad "the migration floor is not enforced"
+grep -q '\[\[ -f "\${CONFIG_DIR}/.migrations/applied" \]\] \\$' "${REPO}" \
+    && ok "a site that never ran a migration (no ledger) can still switch branch" \
+    || bad "the ledger read is unguarded: a missing ledger aborts modify under pipefail"
 grep -q 'force}" != "true"' "${REPO}" \
     && ok "…and --force is what lifts it" || bad "--force does not lift the migration gate"
 

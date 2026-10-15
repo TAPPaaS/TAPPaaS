@@ -9,8 +9,10 @@ config. (Domain / DNS / identity are *per-environment*, owned by
 ## What it owns
 
 `config/site.json` (default `${TAPPAAS_CONFIG:-/home/tappaas/config}/site.json`),
-validated against `site-fields.json`. It also migrates the legacy
-`config/configuration.json` into `site.json`.
+validated against `site-fields.json`. A site from before 2.1 may still list
+its repositories in the legacy `config/configuration.json`
+(`.tappaas.repositories`); the repository tools and the config migrations read
+them there while `site.json` has none.
 
 ## `site-manager`
 
