@@ -195,7 +195,9 @@ backup-manager peer modify pull <buddy> --contact ops@buddy.example
 The backup update writes its config (`/etc/tappaas/pulse.json` on the backup node) and installs
 the timer. Only the pulling side can reach the other PBS: a buddy that pulls us watches us, with
 the same script (BUDDY.md, Setup 3). `module test backup --deep` and the `pulse` health gate say
-whether it runs and what it reports down. A backup node that is not a cluster node has no pulse yet.
+whether it runs and what it reports down. On a `debianhost` backup node the update also installs
+what the pulse needs (`jq`, and postfix as the nodes have it: loopback only, direct delivery — so it
+needs outbound SMTP, as the nodes do). A satellite backup node has no pulse yet.
 
 ## Day-to-day operations
 

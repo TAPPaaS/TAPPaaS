@@ -242,7 +242,7 @@ export class CliClusterClient implements ClusterClient {
   }
 
   pulse(node: string): { timer: string; targets: { id: string; state: string }[] } | null {
-    const r = ssh("root", `${node}.${mgmtDomain()}`,
+    const r = ssh("root", node.includes(".") ? node : `${node}.${mgmtDomain()}`,
       "systemctl is-active tappaas-pulse.timer; /usr/local/sbin/tappaas-pulse --status 2>/dev/null; true");
     if (!r.ran) return null;
     const lines = r.stdout.split("\n");

@@ -8,7 +8,7 @@
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen, @ErikDaniel007 |
 | **Closes / addresses** | **#776** (a site that has gone dark is reported by nobody). Builds on the buddy tunnel (#796, `backup/BUDDY.md`), log alerting and its watchdog (#126), and the site mail path (#651). |
-| **Changelog** | v0.3 (2026-10-15) — **P2 built**: the pulled side reports when its buddy last pulled, to both operators; the `pulse` health gate and the deep module test. v0.2 (2026-10-15) — **Accepted, P1 built**: the open questions answered (both operators mailed; the mothership after 30 minutes; the standalone watcher in P1), and the satellite becomes a P3 variant: installing a satellite installs a watcher. v0.1 — first draft, from the operator's idea: the backup buddy watches the site from outside; the local backup node is the local watcher. |
+| **Changelog** | v0.4 (2026-10-15) — **P3, first half built**: a `debianhost` backup node gets the pulse, `jq` and postfix (D4). v0.3 (2026-10-15) — **P2 built**: the pulled side reports when its buddy last pulled, to both operators; the `pulse` health gate and the deep module test. v0.2 (2026-10-15) — **Accepted, P1 built**: the open questions answered (both operators mailed; the mothership after 30 minutes; the standalone watcher in P1), and the satellite becomes a P3 variant: installing a satellite installs a watcher. v0.1 — first draft, from the operator's idea: the backup buddy watches the site from outside; the local backup node is the local watcher. |
 
 ## Context
 
@@ -107,9 +107,11 @@ On a Proxmox node the pulse mails through the node's own postfix — the path `s
 already uses (it sends through a node). The pulse calls `sendmail` locally, so it does not depend
 on the mothership.
 
-A backup node that is a `debianhost` machine may have no mail transfer agent. The backup module
-installs a minimal one there (`msmtp` relaying to a node's postfix) as part of the pulse. Until
-then, a pulse on a machine logs its notices and the module's test says that mail is not set up.
+A backup node that is a `debianhost` machine may have no mail transfer agent. The backup update
+installs postfix there as the nodes have it — loopback only, delivering directly — together with
+`jq`; such a machine then needs outbound SMTP, as the nodes do. (Relaying through a node's postfix
+was considered and not chosen: the nodes accept mail from loopback only, and opening them to the
+mgmt network for relaying is more exposure than a second MTA.)
 
 A mail that does not go out is retried on the next run, as the alert watchdog does.
 
@@ -169,7 +171,7 @@ TAPPaaS site they pull, and nothing else.
 |---|---|
 | **P1** — built 2026-10-15 | `backup/pulse/pulse.sh` with D2 (pull peers) and D3 (uplink, firewall, mothership, own PBS); `lib/pbs-pulse.sh` writes `pulse.json` from the PBS's remotes and the peers' contacts and installs the timer from every backup update, on a Proxmox-node backup node; mail via the node's postfix; `peer add … --contact` and `peer modify … --contact` (D5); `backup-manager pulse`. D7 moved here: the same script runs standalone, BUDDY.md Setup 3. |
 | **P2** — built 2026-10-15 | D6: `pulledBy` in `pulse.json` from every `remote` peer's login and contact; the newest reader session in the PBS task list. D8: the `pulse` health gate and `module test backup --deep`. |
-| **P3** | D4 for a `debianhost` backup node (msmtp). **The satellite as a watcher**: installing a satellite installs a pulse on it that watches its home site (the home firewall's end of the infra tunnel), with a mail path of its own — for a site with a satellite and no buddy, and as a second outside watcher. |
+| **P3** | D4 for a `debianhost` backup node — **built 2026-10-15** (postfix as on the nodes). **The satellite as a watcher**: installing a satellite installs a pulse on it that watches its home site (the home firewall's end of the infra tunnel), with a mail path of its own — for a site with a satellite and no buddy, and as a second outside watcher. |
 
 ## Testing
 

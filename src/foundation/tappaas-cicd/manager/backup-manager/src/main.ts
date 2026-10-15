@@ -880,7 +880,14 @@ function cmdPulse(opts: Opts): number {
   const backup = JSON.parse(readFileSync(join(opts.configDir, "backup.json"), "utf8")) as Record<string, unknown>;
   const node = typeof backup.node === "string" ? backup.node : "";
   if (!node) die("pulse: no backup node recorded (backup.json .node)");
-  const host = node.includes(".") ? node : `${node}.mgmt.internal`;
+  // A cluster node by name; a debianhost machine by its recorded address.
+  let host = node.includes(".") ? node : `${node}.mgmt.internal`;
+  try {
+    const site = JSON.parse(readFileSync(join(opts.configDir, "site.json"), "utf8")) as { hardware?: { nodes?: { name?: string }[] } };
+    const isNode = (site.hardware?.nodes ?? []).some((n) => n.name === node);
+    const m = JSON.parse(readFileSync(join(opts.configDir, `${node}.json`), "utf8")) as Record<string, unknown>;
+    if (!isNode && typeof m.address === "string" && m.address) host = m.address;
+  } catch { /* the name as it is */ }
   info(`The pulse on ${node}`);
   const timer = spawnSync("ssh", ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10", `root@${host}`,
     "systemctl is-active tappaas-pulse.timer; /usr/local/sbin/tappaas-pulse --status"], { encoding: "utf8" });

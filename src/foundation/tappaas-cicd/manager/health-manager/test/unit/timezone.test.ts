@@ -92,7 +92,10 @@ const mods = {
   check(checkPulse(c, dir).status === "pass", "pulse: all answering (one failing, not yet down) — pass");
   check(checkPulse(c, dir).status === "pass", "a cluster node is a kind: machine module too — still checked");
   writeFileSync(join(dir, "backup.json"), JSON.stringify({ node: "nas1" }));
-  check(checkPulse(c, dir).status === "skip", "pulse: a backup node that is not a cluster node — skip");
+  writeFileSync(join(dir, "nas1.json"), JSON.stringify({ kind: "machine", address: "10.0.0.50", moduleSource: "/x/debianhost" }));
+  check(checkPulse(c, dir).status === "pass", "pulse: a debianhost backup node is checked by its address");
+  writeFileSync(join(dir, "nas1.json"), JSON.stringify({ kind: "machine", address: "203.0.113.7", moduleSource: "/x/satellite" }));
+  check(checkPulse(c, dir).status === "skip", "pulse: a satellite backup node — skip");
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

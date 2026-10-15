@@ -14,15 +14,59 @@
 # buddy's contact (`backup-manager peer add … --contact`); config/remote-<name>.json
 # gives each buddy that pulls us (its login, for when it last pulled; its contact).
 #
+# The backup node is a cluster node (reached as <node>.mgmt.internal) or a
+# `debianhost` machine (reached by its recorded `address`). A machine has no mail
+# system of its own, so it gets postfix as the nodes have it: loopback only,
+# delivering directly (ADR-031 D4) — it then needs outbound SMTP, as the nodes do.
+#
 # PULSE_NODE_SSH (tests) replaces `ssh root@<host>`: `cmd <host> <command…>`.
 
 PULSE_SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../pulse" && pwd)"
+
+# Where the backup node is reached: a name with a dot as is, a machine by its
+# recorded address, a cluster node as <node>.mgmt.internal.
+pulse_host_addr() {
+    local host="$1" cfgdir="${PBS_CONFIG_DIR:-${CONFIG_DIR:-/home/tappaas/config}}" addr
+    [[ "${host}" == *.* ]] && { printf '%s\n' "${host}"; return 0; }
+    addr="$(jq -r 'if (.kind // "") == "machine" then (.address // "") else "" end' "${cfgdir}/${host}.json" 2>/dev/null)"
+    if [[ -n "${addr}" ]] && ! jq -e --arg n "${host}" '[.hardware.nodes[]?.name] | index($n) != null' "${cfgdir}/site.json" >/dev/null 2>&1; then
+        printf '%s\n' "${addr}"
+    else
+        printf '%s\n' "${host}.mgmt.internal"
+    fi
+}
 
 _pulse_ssh() {  # _pulse_ssh <host> <command…>  (stdin passes through)
     local host="$1"; shift
     if [[ -n "${PULSE_NODE_SSH:-}" ]]; then ${PULSE_NODE_SSH} "${host}" "$@"; return; fi
     ssh -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
-        "root@${host}.mgmt.internal" "$@"
+        "root@$(pulse_host_addr "${host}")" "$@"
+}
+
+# What the pulse needs on the backup node: jq and openssl, and a mail system. A
+# Proxmox node has them all; a Debian machine gets what it lacks, postfix set up
+# as the nodes have it (loopback only, direct delivery).
+pulse_deps_ensure() {
+    local host="$1"
+    _pulse_ssh "${host}" 'bash -s' <<'REMOTE'
+set -e
+need=""
+command -v jq >/dev/null || need="${need} jq"
+command -v openssl >/dev/null || need="${need} openssl"
+[ -x /usr/sbin/sendmail ] || need="${need} postfix"
+[ -n "${need}" ] || exit 0
+export DEBIAN_FRONTEND=noninteractive
+echo "postfix postfix/main_mailer_type select Internet Site" | debconf-set-selections
+echo "postfix postfix/mailname string $(hostname -f 2>/dev/null || hostname)" | debconf-set-selections
+apt-get update -qq >/dev/null
+# shellcheck disable=SC2086
+apt-get install -y -qq ${need} >/dev/null
+if [ -x /usr/sbin/postconf ] && echo "${need}" | grep -qw postfix; then
+    postconf -e inet_interfaces=loopback-only mydestination='$myhostname, localhost'
+    systemctl restart postfix
+fi
+echo "installed${need}"
+REMOTE
 }
 
 _pulse_ipv4() { getent ahostsv4 "$1" 2>/dev/null | awk '{print $1; exit}'; }
@@ -66,6 +110,9 @@ pulse_ensure() {
     local host="$1" json
     [[ -n "${host}" ]] || { warn "  pulse: no backup node recorded — not installed"; return 1; }
     json="$(pulse_config_json "${host}")" || { warn "  pulse: could not build its config"; return 1; }
+    local _m
+    _m="$(pulse_deps_ensure "${host}" 2>&1)" || { warn "  pulse: could not install what it needs on ${host}: ${_m}"; return 1; }
+    [[ -n "${_m}" ]] && info "  ${host}: ${_m}"
     _pulse_ssh "${host}" "install -d -m 0755 /etc/tappaas /var/lib/tappaas/pulse && cat > /usr/local/sbin/tappaas-pulse && chmod 0755 /usr/local/sbin/tappaas-pulse" \
         < "${PULSE_SRC_DIR}/pulse.sh" || { warn "  pulse: could not install the script on ${host}"; return 1; }
     _pulse_ssh "${host}" "cat > /etc/tappaas/pulse.json && chmod 0644 /etc/tappaas/pulse.json" <<< "${json}" \

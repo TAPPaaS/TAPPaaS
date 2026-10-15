@@ -69,12 +69,19 @@ if [[ "${TAPPAAS_TEST_DEEP:-0}" == "1" ]]; then
     # ADR-031: the pulse runs on the backup node, and nothing it watches is down.
     echo "== backup (deep): the pulse on the backup node =="
     _pnode="$(jq -r '.node // empty' "${CONFIG_DIR:-/home/tappaas/config}/backup.json" 2>/dev/null)"
-    # A cluster node is a `kind: machine` module too (pvehost): it is a node if site.json lists it.
-    _pisnode="$(jq -r --arg n "${_pnode}" '[.hardware.nodes[]?.name] | index($n) != null' "${CONFIG_DIR:-/home/tappaas/config}/site.json" 2>/dev/null)"
-    if [[ -z "${_pnode}" || "${_pisnode}" != "true" ]]; then
-        echo "  SKIP: no pulse here (no backup node, or one that is not a Proxmox node)"
+    # A cluster node is a `kind: machine` module too (pvehost): site.json says which
+    # it is. A debianhost is reached by its address; a satellite has no pulse yet.
+    _pcfg="${CONFIG_DIR:-/home/tappaas/config}/${_pnode}.json"
+    _paddr="${_pnode}.mgmt.internal"
+    if ! jq -e --arg n "${_pnode}" '[.hardware.nodes[]?.name] | index($n) != null' \
+            "${CONFIG_DIR:-/home/tappaas/config}/site.json" >/dev/null 2>&1; then
+        _paddr="$(jq -r '.address // empty' "${_pcfg}" 2>/dev/null)"
+        jq -e '(.moduleSource // "") | test("/satellite/?$")' "${_pcfg}" >/dev/null 2>&1 && _paddr=""
+    fi
+    if [[ -z "${_pnode}" || -z "${_paddr}" ]]; then
+        echo "  SKIP: no pulse here (no backup node, a satellite, or one without an address)"
     else
-        _pout="$(ssh -n -o ConnectTimeout=10 -o BatchMode=yes "root@${_pnode}.mgmt.internal" \
+        _pout="$(ssh -n -o ConnectTimeout=10 -o BatchMode=yes "root@${_paddr}" \
             "systemctl is-active tappaas-pulse.timer; /usr/local/sbin/tappaas-pulse --status" 2>/dev/null)"
         if [[ "$(head -1 <<< "${_pout}")" == "active" ]]; then
             echo "  ✓ the pulse timer runs on ${_pnode}"

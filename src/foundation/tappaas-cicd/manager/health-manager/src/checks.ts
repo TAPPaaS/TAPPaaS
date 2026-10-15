@@ -609,11 +609,20 @@ export function checkPulse(client: ClusterClient, configDir: string): CheckResul
   const backup = readModuleJson(join(configDir, "backup.json"));
   const node = typeof backup?.node === "string" ? backup.node : "";
   if (!node) return { name: "pulse", status: "skip", detail: "no backup node recorded" };
-  // A cluster node is a `kind: machine` module too (pvehost): ask site.json.
+  // A cluster node is a `kind: machine` module too (pvehost): ask site.json. A
+  // debianhost machine is reached by its address; a satellite has no pulse yet.
+  let target = node;
   if (!siteNodeHostnames(configDir).includes(node)) {
-    return { name: "pulse", status: "skip", detail: `${node} is not a cluster node — no pulse there yet` };
+    const host = readModuleJson(join(configDir, `${node}.json`));
+    if (/\/satellite\/?$/.test(String(host?.moduleSource ?? ""))) {
+      return { name: "pulse", status: "skip", detail: `${node} is a satellite — no pulse there yet` };
+    }
+    if (typeof host?.address !== "string" || !host.address) {
+      return { name: "pulse", status: "skip", detail: `${node} has no address to reach it by` };
+    }
+    target = host.address;
   }
-  const p = client.pulse(node);
+  const p = client.pulse(target);
   if (!p) return { name: "pulse", status: "skip", detail: `${node} did not answer` };
   if (p.timer !== "active") {
     return { name: "pulse", status: "warn", detail: `the pulse is not running on ${node} (${p.timer || "not installed"}) — the backup update installs it` };

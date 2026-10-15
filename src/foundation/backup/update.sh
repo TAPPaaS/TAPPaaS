@@ -201,15 +201,15 @@ info "${BOLD}Ensuring every opted-in VM is registered in the managed backup job$
 pbs_ensure_declared
 
 # ── the pulse (ADR-031): the backup node watches our buddies and this site ──
-# On a Proxmox node only for now; a backup node that is a machine has no mail
-# path yet (ADR-031 D4). Not fatal: it is a watcher, not the backup.
+# On a cluster node or a debianhost machine. A satellite needs a mail path of its
+# own first (ADR-031 P3). Not fatal: it is a watcher, not the backup.
 _pulse_host="$(pbs_state_node "$(pbs_placement_state)" || true)"
-# A cluster node is a `kind: machine` module too (pvehost): ask the cluster.
-if [[ -n "${_pulse_host}" ]] && get_all_node_hostnames | grep -qx "${_pulse_host}"; then
+if [[ -n "${_pulse_host}" ]] && jq -e '(.moduleSource // "") | test("/satellite/?$")' \
+        "${CONFIG_DIR:-/home/tappaas/config}/${_pulse_host}.json" >/dev/null 2>&1; then
+    info "  The pulse is not installed on ${_pulse_host}: a satellite needs a mail path of its own first (ADR-031 P3)"
+elif [[ -n "${_pulse_host}" ]]; then
     info "${BOLD}Ensuring the pulse on the backup node${CL}"
     pulse_ensure "${_pulse_host}" || warn "The pulse is not running on ${_pulse_host} (see above)"
-elif [[ -n "${_pulse_host}" ]]; then
-    info "  The pulse is not installed on ${_pulse_host}: a backup node that is not a cluster node needs a mail path first (ADR-031 D4)"
 fi
 
 # ── #760: VM and container backups are encrypted (ADR-012 §2.5) ────────
