@@ -32,7 +32,7 @@ import * as fs from "fs";
 
 import { GN, YW, CL, die, info, warn } from "../../../lib/ts/src/cli";
 import { mgmtDomain } from "../../../lib/ts/src/cluster";
-import { defaultConfigDir } from "./config";
+import { clusterScript, defaultConfigDir } from "./config";
 
 const SERVE_UNIT = "tappaas-repo-serve";
 const SERVE_PORT = 8090; // open in the cicd firewall; free while trap is down
@@ -45,6 +45,9 @@ export interface ProvisionOpts {
   macs: string[];
   pools: string[]; // name=layout:disk[,disk...] — created at join time
   wanPort?: string; // NIC for firewall-HA uplink; undefined => ask; "" => none
+  lanPorts?: string; // #40: lan port(s), comma-separated; undefined => ask (empty = auto-detect)
+  lanMode?: string; // active-backup | lacp, for two or more lan ports
+  lanPrimary?: string; // active-backup: the port that carries traffic when up
   ttlSeconds: number;
   yes: boolean;
 }
@@ -226,6 +229,13 @@ function registerNode(name: string): void {
   if (runStream("adopt-module.sh", [addr, "--wait", "0"]) !== 0) {
     warn(`  ${name} is not registered as a module yet — run ${YW}module-manager module adopt ${addr}${CL}, ` +
          `or let the next cluster update do it`);
+    return;
+  }
+  // #40: the lan uplink the node step built becomes its declaration, so a
+  // later drift — or a rebuild under this name — has something to go by.
+  const lu = clusterScript("lan-uplink.sh");
+  if (!lu || runStream(lu, ["capture", name]) !== 0) {
+    warn(`  ${name}'s lan uplink is not recorded yet — the next cluster update records it`);
   }
 }
 
@@ -374,6 +384,32 @@ function joinAndCapture(
       warn(`  '${wanPort}' is not a NIC on ${o.name} — pick one from the list above (or empty for none)`);
     }
   }
+  // #40: the lan port(s). One port is what config-network.sh auto-detects; two
+  // or more bond under lan, so a port or switch failure does not take the
+  // node's management, corosync and guests down with it.
+  // Asked only where the WAN port is asked too: a scripted add (--wan-port,
+  // --yes) keeps today's auto-detected single port.
+  let lanPorts = o.lanPorts;
+  if (lanPorts === undefined && o.wanPort === undefined && !o.yes) {
+    const nics = sshTo(nodeIp,
+      "for d in /sys/class/net/*; do [ -e $d/device ] || continue; n=${d##*/}; " +
+      "printf '%-16s %s  %s  %s\\n' $n $(cat $d/address) $(cat $d/operstate) \"$(cat $d/speed 2>/dev/null || echo -)Mb/s\"; done").out.trimEnd();
+    info(`  physical ports on ${o.name}:\n${nics.replace(/^/gm, "    ")}`);
+    const nicNames = new Set(nics.split("\n").map((l) => l.trim().split(/\s+/)[0]).filter(Boolean));
+    for (;;) {
+      lanPorts = prompt("  LAN port(s), comma-separated — two to two switches for a redundant uplink (empty = auto-detect one): ");
+      const bad = (lanPorts ?? "").split(",").map((p) => p.trim()).filter((p) => p && !nicNames.has(p));
+      if (bad.length === 0) break;
+      warn(`  ${bad.join(", ")} not a physical port on ${o.name} — pick from the list above`);
+    }
+    if (lanPorts && lanPorts.includes(",") && o.lanMode === undefined) {
+      const m = prompt("  bond mode — active-backup (any switches, any speeds) or lacp (equal speeds, switch-side LAG) [active-backup]: ");
+      o.lanMode = m || "active-backup";
+    }
+  }
+  if (lanPorts && wanPort && lanPorts.split(",").map((p) => p.trim()).includes(wanPort)) {
+    die(`${wanPort} cannot be both the WAN port and a LAN port`);
+  }
   const pools = [...o.pools];
   if (pools.length === 0) {
     const disks = sshTo(nodeIp, "lsblk -d -o NAME,SIZE,MODEL,SERIAL,TRAN | grep -v '^sr\\|^loop\\|^zd'").out.trimEnd();
@@ -406,6 +442,9 @@ function joinAndCapture(
     const repoUrl = `http://${cicdIp}:${SERVE_PORT}/`;
     const joinArgs = [`--join`, `--non-interactive`, `--name`, siteName];
     if (wanPort) joinArgs.push("--wan-port", wanPort);
+    if (lanPorts) joinArgs.push("--lan-port", lanPorts.replace(/\s+/g, ""));
+    if (o.lanMode) joinArgs.push("--lan-mode", o.lanMode);
+    if (o.lanPrimary) joinArgs.push("--lan-primary", o.lanPrimary);
     for (const p of pools) joinArgs.push("--pool", p);
     const nodeCmd =
       `cd /root && curl -fsSO ${repoUrl}${branch}/src/foundation/install.sh && chmod +x install.sh && ` +

@@ -130,6 +130,11 @@
       "apply": "none",
       "changeNote": "Records where a machine physically is (#609); changing it moves nothing, it only changes what the off-site check compares with the Site."
     },
+    "uplinks": {
+      "class": "manual",
+      "apply": "none",
+      "changeNote": "A node's lan/wan ports (#40). Writing it changes nothing on the node; converging it re-carries the lan bridge, which drains the node first — `site-manager node network set <node> --apply` does both, one node at a time, under a rollback. Until then health-manager reports the drift."
+    },
     "stack": {
       "class": "in-place",
       "apply": "none",

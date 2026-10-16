@@ -24,7 +24,7 @@
 
 import { DEFAULT_HOLD, describeHold, makeHold, parseUntil, readHolds, releaseHold, validRepoName, writeHold } from "./hold";
 import { UNIT, buildRequest, dropRequest, readResult, repoStatusLine, summaryLine, writeRequest } from "./unitrun";
-import { defaultConfigDir, defaultSchemaDir, loadRaw, loadSite, writeSite } from "./config";
+import { clusterScript, defaultConfigDir, defaultSchemaDir, loadRaw, loadSite, writeSite } from "./config";
 import { CliSiteClient } from "./client";
 import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
 import { evacuateNode, evacuateExitCode } from "./evacuate";
@@ -78,7 +78,7 @@ export const HELP: HelpSpec = {
       ],
     },
     { usage: "node list [--json]" },
-    { usage: "node add <N> [--pxe] [--boot-disk <d>] [--mac <m>] [--wan-port <if>|--no-wan] [--pool <p>] [--ttl <s>] [--config-only] [--yes]",
+    { usage: "node add <N> [--pxe] [--boot-disk <d>] [--mac <m>] [--wan-port <if>|--no-wan] [--lan-ports <a,b>] [--lan-mode <m>] [--lan-primary <if>] [--pool <p>] [--ttl <s>] [--config-only] [--yes]",
       hidden: ["--name <N>", "--provision"],
       options: [
         ["(default)", "Adopt a Proxmox already installed at the node's designated mgmt IP: join the cluster + capture."],
@@ -87,6 +87,9 @@ export const HELP: HelpSpec = {
         ["--mac <m>", "--pxe: the NIC that PXE-boots."],
         ["--wan-port <if>", "the node's WAN interface."],
         ["--no-wan", "the node has no WAN port."],
+        ["--lan-ports <a,b>", "the node's lan port(s); two or more bond under lan as lanbond (#40). Default: auto-detected, one port."],
+        ["--lan-mode <m>", "active-backup (default for 2+ ports: any switches, any speeds) or lacp (equal speeds; the switch side one LAG)."],
+        ["--lan-primary <if>", "active-backup: the port that carries traffic when up (default: the fastest)."],
         ["--pool <p>", "a storage pool on the node (more pools: extra positionals)."],
         ["--ttl <s>", "--pxe: seconds the PXE offer stays open (default 7200)."],
         ["--yes", "do not ask for confirmation."],
@@ -111,6 +114,28 @@ export const HELP: HelpSpec = {
         ["--user <u>", "How the mothership logs in to <host> (default tappaas, with sudo; root works too)."],
         ["--force", "Also on an odd number of nodes, which Proxmox does not support."],
         ["remove", "pvecm qdevice remove; the packages stay."],
+      ] },
+    { usage: "node network show <node> [--json]",
+      options: [
+        ["(default)", "The node's lan uplink, declared next to live: ports, mode, state, speed, the LACP aggregator, the switch each port reaches (LLDP), corosync — and what is wrong with it."],
+        ["--json", "The declaration, the probe and the findings as JSON."],
+      ] },
+    { usage: "node network set <node> [--lan-ports <a,b>] [--lan-mode <m>] [--lan-primary <if>] [--mtu <n>] [--config-only] [--apply] [--yes]",
+      options: [
+        ["(default)", "Declare the uplink in config/<node>.json (uplinks.lan, ports by MAC) and preview the change on the node. Without --lan-ports: the declaration there is."],
+        ["--lan-ports <a,b>", "Ports by name or MAC. One port, or two or more bonded as lanbond."],
+        ["--lan-mode <m>", "active-backup (default: any switches, any speeds — 10G + 1G) or lacp (equal speeds; the switch side one LAG: one switch or a stack/MLAG pair)."],
+        ["--lan-primary <if>", "active-backup: the port that carries traffic when up (default: the fastest)."],
+        ["--mtu <n>", "MTU on the bond and the lan bridge (the switch ports must match)."],
+        ["--config-only", "Declare only, without contacting the node (ports by MAC)."],
+        ["--apply", "Converge: drain the node (HA maintenance), carry lan on the declared ports under a 45s rollback, confirm from the mothership, bring the node back. One node at a time."],
+        ["--yes", "Do not ask for the node name."],
+      ] },
+    { usage: "node network test <node> [--apply] [--yes]",
+      options: [
+        ["(default)", "Preview the failover test."],
+        ["--apply", "Drain the node, then take each lan leg down for 10s in turn: mgmt and corosync must stay up. A timer on the node restores the leg after 30s whatever happens."],
+        ["--yes", "Do not ask for the node name."],
       ] },
     { usage: "node reconcile [--apply]",
       options: [["--apply", "Register nodes that joined the cluster (default is preview)."]] },
@@ -674,6 +699,9 @@ function cmdNode(o: Opts, client: SiteClient): void {
       macs: o.flags.get("--mac") ? [o.flags.get("--mac") as string] : [],
       pools,
       wanPort: o.boolFlags.has("--no-wan") ? "" : o.flags.get("--wan-port"),
+      lanPorts: o.flags.get("--lan-ports"),
+      lanMode: o.flags.get("--lan-mode"),
+      lanPrimary: o.flags.get("--lan-primary"),
       ttlSeconds: Number(o.flags.get("--ttl") ?? 7200),
       yes: o.boolFlags.has("--yes"),
     };
@@ -791,27 +819,34 @@ function cmdNode(o: Opts, client: SiteClient): void {
     return;
   }
 
-  die(`node ${sub}: unknown subcommand`);
-}
-
-// Locate a cluster module script (reboot-node.sh, remove-node.sh). Not on PATH and has no ~/bin symlink
-// (unlike most TAPPaaS tooling), so resolve it from the cluster module's
-// recorded location the same way update-tappaas resolves reboot-cluster.sh.
-function clusterScript(file: string): string | null {
-  const r = spawnSync("module-manager", ["show", "cluster", "--json"], { encoding: "utf8" });
-  if (r.status === 0 && r.stdout) {
-    try {
-      const loc = (JSON.parse(r.stdout) as Record<string, unknown>).location;
-      if (typeof loc === "string" && loc) {
-        const p = `${loc}/${file}`;
-        if (existsSync(p)) return p;
+  if (sub === "network") {
+    // #40: the lan uplink is the cluster module's (lan-uplink.sh), as qdevice is.
+    const action = o.rest[1];
+    const node = o.rest[2];
+    if (!["show", "set", "test"].includes(action ?? "")) die("node network: show | set | test <node>");
+    if (!node) die(`node network ${action}: expected <node>`);
+    const script = clusterScript("lan-uplink.sh");
+    if (!script) die("lan-uplink.sh not found — is the cluster module installed? (module-manager show cluster)");
+    const args = [action as string, node];
+    if (action === "show" && o.json) args.push("--json");
+    if (action === "set") {
+      for (const f of ["--lan-ports", "--lan-mode", "--lan-primary", "--mtu"]) {
+        const v = o.flags.get(f);
+        if (v) args.push(f, v);
       }
-    } catch {
-      // fall through to the well-known path
+      if (o.boolFlags.has("--config-only")) args.push("--config-only");
     }
+    if (action !== "show") {
+      args.push(o.apply ? "--execute" : "--dry-run");
+      if (o.boolFlags.has("--yes")) args.push("--yes");
+    }
+    const r = spawnSync(script, args, { stdio: "inherit" });
+    const rc = r.status ?? -1;
+    if (rc !== 0) process.exit(rc > 0 ? rc : 1);
+    return;
   }
-  const fallback = `/home/tappaas/TAPPaaS/src/foundation/cluster/${file}`;
-  return existsSync(fallback) ? fallback : null;
+
+  die(`node ${sub}: unknown subcommand`);
 }
 
 function collectPools(o: Opts, name: string): string[] {

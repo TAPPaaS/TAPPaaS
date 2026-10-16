@@ -8,6 +8,7 @@
 // `repository` are sub-entities — arrays inside the singleton, each with their
 // own CRUD that loads, mutates, and writes the whole document back atomically.
 
+import { spawnSync } from "child_process";
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import {
@@ -99,4 +100,25 @@ export function loadRaw(siteFile: string): Record<string, unknown> {
 // Atomically write the (whole) site document. Mirrors the bash mktemp+mv idiom.
 export function writeSite(siteFile: string, doc: Record<string, unknown>): void {
   writeJsonAtomic(siteFile, doc);
+}
+
+// Locate a cluster module script (reboot-node.sh, remove-node.sh, lan-uplink.sh).
+// Not on PATH and has no ~/bin symlink (unlike most TAPPaaS tooling), so resolve
+// it from the cluster module's recorded location the same way update-tappaas
+// resolves reboot-cluster.sh.
+export function clusterScript(file: string): string | null {
+  const r = spawnSync("module-manager", ["show", "cluster", "--json"], { encoding: "utf8" });
+  if (r.status === 0 && r.stdout) {
+    try {
+      const loc = (JSON.parse(r.stdout) as Record<string, unknown>).location;
+      if (typeof loc === "string" && loc) {
+        const p = `${loc}/${file}`;
+        if (existsSync(p)) return p;
+      }
+    } catch {
+      // fall through to the well-known path
+    }
+  }
+  const fallback = `/home/tappaas/TAPPaaS/src/foundation/cluster/${file}`;
+  return existsSync(fallback) ? fallback : null;
 }
