@@ -32,12 +32,13 @@ kv() { printf '%s\n' "$lldp" | awk -v p="lldp.$1.$2." -v want="$3" '
     index($0, p) == 1 { k = substr($0, length(p) + 1); k = substr(k, 1, index(k, "=") - 1)
                         if (k ~ "^(" want ")$") { print substr($0, index($0, "=") + 1); exit } }'; }
 port_json() {
-    local n="$1" d="$cls/$1" mac ch
+    local n="$1" d="$cls/$1" mac ch agg
     mac="$(rd "$d/bonding_slave/perm_hwaddr")"; [ -n "$mac" ] || mac="$(rd "$d/address")"
+    agg="$(rd "$d/bonding_slave/ad_aggregator_id")"; [ "$agg" = N/A ] && agg=""   # not 802.3ad
     ch="$(kv "$n" chassis 'mac|local|ip')"
     jq -cn --arg name "$n" --arg mac "$mac" --arg state "$(rd "$d/operstate")" \
         --arg speed "$(rd "$d/speed")" --arg mtu "$(rd "$d/mtu")" \
-        --arg mii "$(rd "$d/bonding_slave/mii_status")" --arg agg "$(rd "$d/bonding_slave/ad_aggregator_id")" \
+        --arg mii "$(rd "$d/bonding_slave/mii_status")" --arg agg "$agg" \
         --arg ch "$ch" --arg nm "$(kv "$n" chassis name)" --arg pt "$(kv "$n" port 'ifname|local|mac')" \
         '{name: $name, mac: ($mac | ascii_downcase), state: $state,
           speed: (($speed | tonumber?) // -1), mtu: (($mtu | tonumber?) // 0),
@@ -65,6 +66,7 @@ if [ -n "$bond" ]; then
     [ "$mode" = 802.3ad ] && mode=lacp
     active="$(rd "$b/active_slave")"; primary="$(rd "$b/primary")"
     agg="$(rd "$b/ad_aggregator")"; partner="$(rd "$b/ad_partner_mac")"; bmtu="$(rd "$cls/$bond/mtu")"
+    [ "$agg" = N/A ] && agg=""; [ "$partner" = N/A ] && partner=""
 fi
 lrm=false; ha-manager status 2>/dev/null | grep -q "^lrm $(hostname -s) (active" && lrm=true
 cs="$(corosync-cfgtool -s 2>/dev/null || true)"

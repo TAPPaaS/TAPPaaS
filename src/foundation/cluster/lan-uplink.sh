@@ -324,7 +324,7 @@ leg_test() {
             || true
         sleep 10
         if rn_node_ssh "${NODE}" true 2>/dev/null \
-           && [[ "$(rn_node_ssh "${NODE}" "corosync-cfgtool -s | grep -c disconnected" 2>/dev/null || echo 1)" == 0 ]]; then
+           && [[ "$(rn_node_ssh "${NODE}" "corosync-cfgtool -s | grep -c disconnected || true" 2>/dev/null)" == 0 ]]; then
             info "  ${GN}✓${CL} without ${m}: mgmt and corosync up"
         else
             warn "  without ${m}: ${NODE} lost mgmt or corosync — the other leg does not carry lan"
