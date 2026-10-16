@@ -112,7 +112,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | 5 | G5.2 Test coverage & conventions | H | L | – | – | 5 |
 | 4 | ✅ G4.1 Alerting & cluster resilience | M | M | 7 | 4 | – |
 | 4 | G4.2 Proxy & ingress | M | L | 3 | 3 | 1 |
-| 4 | G4.3 Manager verb gaps | M | L | 9 | 7 | 2 |
+| 4 | ✅ G4.3 Manager verb gaps | M | L | 9 | 7 | – |
 | 4 | G4.4 Storage & physical devices | H | L | 5 | – | 1 |
 | 4 | G4.5 Governance, CI & sign-offs | M | L | 5 | – | 2 |
 | 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 18 | 9 | 3 |
@@ -124,7 +124,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | 2 | G2.2 DNS resolver robustness | L | M | 4 | 3 | 1 |
 | 1 | ✅ G1.2 Backup placement model + managed machines (ADR-012, ADR-026) | M | H | 27 | – | – |
 | 1 | G1.6 Secrets & privileged access | H | H | 4 | – | 1 |
-| 1 | G1.7 Parked for Erik discussion | – | – | – | – | 5 |
+| 1 | G1.7 Parked for Erik discussion | – | – | – | – | 7 |
 
 ## Planning items still open
 
@@ -138,7 +138,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | #142 | AI-agent access to the mothership: SSH + sudo, or a REST API (which would need an ADR) | RFC outcome (G1.6) |
 | #675 | What a managed repository may contribute to the control plane's own NixOS configuration, and what happens when that fails to build. Today a site's own host-level modules are dropped by every scheduled rebuild while the unit reports success (`tappaas-cicd.nix` has no extension point — confirmed) | An ADR first; Ease H · Risk M |
 | #488 | `apply-json-merge`: should a field that `.orig` never recorded be adopted from the release, or kept? #736 made each refused value visible; the rule itself is open | Operator |
-| #444 / #582 | What reading back a static DHCP reservation means (MAC pinning) — one question, not two | Lars and @ErikDaniel007 |
+| #444 / #582 | What reading back a static DHCP reservation means (MAC pinning) — one question, not two | Lars and @ErikDaniel007 (G1.7) |
 | #154 | Is `firewall:internal-proxy` needed at all? | Operator (questioned 2026-05-31) |
 | #385 / #222 | NetBird: keep its server-side integration (zone, OPT1 and floating rules), or make it a pure client-side tool and reserve management access to the WireGuard admin VPN | Operator (considering, 2026-10-12) |
 
@@ -322,17 +322,15 @@ Publish less of each app: limit a route to some paths (#642), some zones (#643) 
 | ✅ #656 | Limit a route to a provider's source ranges | M | L | **Closed 2026-10-15** (`e85c7da6`): `proxyAllowedZones` takes a network (CIDR) beside zone names, for a provider's caller range; a malformed one is refused at install. A feed that refreshes the ranges stays a follow-up |
 | #154 | `firewall:internal-proxy` | — | — | Close? Lars questioned the need (2026-05-31) |
 
-### G4.3 Manager verb gaps — Ease M · Risk L · released: 9 · done for 2.3: 7 · open: 2
+### ✅ G4.3 Manager verb gaps — Ease M · Risk L · released: 9 · done for 2.3: 7
 
-The verbs operators otherwise do by hand (the `test` verbs, #499, are in G5.2): install a whole stack (#763), suspend a module (#428), migrate by changing `.node` (#429), private repositories (#634), module-level `--set` rules (#654). #444/#582 wait on a discussion.
+The verbs operators otherwise do by hand (the `test` verbs, #499, are in G5.2): install a whole stack (#763), suspend a module (#428), migrate by changing `.node` (#429), private repositories (#634), module-level `--set` rules (#654). The IP → device lookup (#444/#582) is parked in G1.7.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
 | ✅ #763 | `module-manager add-stack`: install a stack's modules in `dependsOn` order | M | L | **Closed 2026-10-15** (`b894e996`): `module-manager add-stack <stack>` — the INSTALL.md order, skips what is installed, refuses missing outside dependencies and cycles, a free VMID in the module's block for an environment install, `--dry-run`. Live on hrossen: devops into `test` installed and torn down |
 | ✅ #428 | module-manager `suspend` | M | L | **Closed 2026-10-15** (`b894e996`): `module-manager suspend` / `resume` — the guest stays stopped (HA, or `onboot` off), the config is marked `suspended`; the sweep skips it, the health check reports it. Live on hrossen with deconz-test |
 | ✅ #429 | Migrate by modifying `.node` | M | L | **Closed 2026-10-13** per ADR-019 (Accepted v1.0): `module-manager modify <m> --set node=<n>` relocates a module and migrates a running guest (#498, #825); `module-manager migrate <m> [--force]` moves it between node and HANode, live only when `live-ok` says so |
-| #444 | IP → device lookup | L | L | Blocked on the MAC-pinning question (#582). **Do not implement (operator, 2026-09-26)** until Lars and @ErikDaniel007 have discussed it |
-| #582 | Read back static reservations | L | L | **Do not implement (operator, 2026-09-26):** one question with #444, pending the same discussion. There is no `dhcp-manager`; read back means dnsmasq's own state |
 | ✅ #634 | Private repositories in `repository add` | L | L | **Closed 2026-10-15** (`f5acb156`), docs only as decided: DESIGN-GIT.md *Adding a private repository* — a read-only deploy key and a narrow SSH `insteadOf` rewrite |
 | ✅ #654 | `module-manager`: the `--set` pre-gate ignores the module-level field declarations (ADR-020 D10) | M | L | **Closed 2026-10-15** (`a49e111f`): `--set` reads `schemas/fields.json` for a field no service owns — `immutable` and `manual` (wiring) refused, an unclassed field refused, `in-place` written; `config-only` stays a label (ADR-020 D10) |
 | ✅ #831 | `module-manager delete`: an archived module still counts as a dependent | L | L | **Closed 2026-10-15** (`13c7fda9`): the reverse-dependency check skips archived configs, so archiving a consumer and then its provider needs no `--force`. Reported by @ErikDaniel007 |
@@ -498,9 +496,9 @@ Least privilege on the platform. Built: nodes hardened to the Proxmox guide, key
 |---|-------|:-:|:-:|------|
 | #142 | RFC: AI-agent access to cicd | H | L | Decision |
 
-### G1.7 Parked for Erik discussion · open: 5
+### G1.7 Parked for Erik discussion · open: 7
 
-Waiting on a conversation between Lars and @ErikDaniel007, not on work: the firewall rebuild runbook (#439), the controller pattern (#430), VMID ranges (#294), hass locale (#348) and Erik's image pins (#765).
+Waiting on a conversation between Lars and @ErikDaniel007, not on work: the firewall rebuild runbook (#439), the controller pattern (#430), VMID ranges (#294), hass locale (#348), Erik's image pins (#765) and the MAC-pinning question behind the IP → device lookup (#444/#582).
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
@@ -509,6 +507,8 @@ Waiting on a conversation between Lars and @ErikDaniel007, not on work: the fire
 | #294 | Zone-aligned VMID ranges | H | H | Renumbering means backup/restore to a new VMID. **Proposal:** new scheme for new installs and variants only; never renumber in place. Spikes from 2026-06-04 still open |
 | #348 | hass locale from site master data | M | L | **Parked 2026-09-21:** no test site runs hass. The fix is written on the issue — `core_config` at `lib/config.sh:158` plus a converge for onboarded instances, from `.location` |
 | #765 | Container image pins: list litellm, openwebui, vllm-amd, deconz; move the stale ones | L | L | From #750, for @ErikDaniel007: list his modules in `src/image-pins.json` and move the stale pins — euro-office v9.3.1 → v9.3.4 first; litellm and openwebui overlap #621 |
+| #444 | IP → device lookup | L | L | Blocked on the MAC-pinning question (#582). **Do not implement (operator, 2026-09-26)** until Lars and @ErikDaniel007 have discussed it |
+| #582 | Read back static reservations | L | L | **Do not implement (operator, 2026-09-26):** one question with #444, pending the same discussion. There is no `dhcp-manager`; read back means dnsmasq's own state |
 
 ---
 
