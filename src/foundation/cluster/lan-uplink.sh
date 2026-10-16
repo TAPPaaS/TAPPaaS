@@ -160,7 +160,7 @@ declaration_from_flags() {
     if [[ -n "${live}" ]]; then
         LB_SPEED_CMD=live_speed; LIVE_FOR_SPEED="${live}"
         if [[ "${mode}" == lacp ]] && ! err="$(lb_equal_speeds "${names}" 2>&1)"; then
-            [[ "${err}" == *=-1* ]] && warn "lacp: a port's speed is unknown (${err}) — LACP needs equal speeds" \
+            [[ "${err}" == *=-1* ]] && warn "lacp: a port's speed is unknown (${err}) — LACP needs equal speeds" >&2 \
                 || die "lacp needs ports of equal speed (${err}) — use --lan-mode active-backup"
         fi
         if [[ "${mode}" == active-backup ]]; then
@@ -175,7 +175,8 @@ declaration_from_flags() {
         primary="${LAN_PRIMARY,,}"
         [[ " ${macs} " == *" ${primary} "* ]] || die "--lan-primary ${LAN_PRIMARY} is not one of the lan ports"
     fi
-    [[ "${mode}" == active-backup || -z "${LAN_PRIMARY}" ]] || warn "--lan-primary applies to active-backup only — ignored"
+    # stdout is the declaration: everything said here goes to stderr.
+    [[ "${mode}" == active-backup || -z "${LAN_PRIMARY}" ]] || warn "--lan-primary applies to active-backup only — ignored" >&2
     jq -cn --arg macs "${macs}" --arg mode "${mode}" --arg p "${primary}" --arg mtu "${LAN_MTU}" \
         '{lan: ({ports: ($macs | split(" ")), mode: $mode}
                 + (if $p != "" then {primary: $p} else {} end)
@@ -229,7 +230,7 @@ converge() {  # <decl-lan>
     fi
     args="$(setlan_args "${live}" "${decl}")" || exit 1
 
-    info "${BOLD}Converging ${NODE}'s lan uplink${CL}: config-network.sh --set-lan ${args}"
+    info "${BOLD}Converging ${NODE}'s lan uplink${CL}: config-network.sh --set-lan ${args//\'/}"
     # The node shows the exact change; nothing is written.
     rn_node_ssh "${NODE}" "mkdir -p /root/tappaas/lan-uplink" \
         && scp -q -o BatchMode=yes "${SCRIPT_DIR}/config-network.sh" "${SCRIPT_DIR}/lib/lan-bond-lib.sh" \
@@ -380,7 +381,8 @@ conf=/etc/lldpd.d/tappaas.conf
 want='# TAPPaaS (#40): learn which switch each port reaches; announce nothing.
 configure lldp status rx-only'
 if ! command -v lldpd >/dev/null 2>&1; then
-    DEBIAN_FRONTEND=noninteractive apt-get install -y -q lldpd >/dev/null
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -q lldpd >/dev/null 2>/tmp/lldpd-apt.err \
+        || { cat /tmp/lldpd-apt.err >&2; exit 1; }
     echo "lldpd installed"
 fi
 mkdir -p /etc/lldpd.d
