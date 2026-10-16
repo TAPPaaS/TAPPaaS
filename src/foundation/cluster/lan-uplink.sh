@@ -234,7 +234,7 @@ verified() {
     live="$(probe 2>/dev/null)" || return 1
     r="$(jq -cn --argjson l "${live}" --argjson d "$1" --arg n "${NODE}" '{node: $n, live: $l, declared: $d}' | lu_findings)"
     # Drift, a leg down, no LAG, corosync down: not confirmed. LLDP and the like are advice.
-    ! jq -e '[.[] | select(.level == "warn") | select(.text | test("^drift:|is down|LACP partner|outside the active aggregator|corosync"))] | length > 0' <<<"${r}" >/dev/null
+    ! jq -e '[.[] | select(.level == "warn") | select(.text | test("^drift:|is down|LACP partner|outside the active aggregator|not carrying traffic|corosync"))] | length > 0' <<<"${r}" >/dev/null
 }
 
 # ── the switch side of lacp (#40) ──────────────────────────────────────
@@ -449,7 +449,7 @@ leg_test() {
     members="$(jq -r '.lan.members[].name' <<<"${live}")"
     [[ "$(wc -l <<<"${members}")" -ge 2 ]] || die "${NODE}'s lan has one port — nothing to fail over to"
     jq -cn --arg n "${NODE}" --argjson l "${live}" '{node: $n, live: $l, declared: null}' | lu_findings \
-        | jq -e '[.[] | select(.text | test("is down|LACP partner|outside the active aggregator|corosync"))] | length == 0' >/dev/null \
+        | jq -e '[.[] | select(.text | test("is down|LACP partner|outside the active aggregator|not carrying traffic|corosync"))] | length == 0' >/dev/null \
         || die "${NODE}'s lan is not healthy now — fix that first (site-manager node network show ${NODE})"
     info "${BOLD}Failover test on ${NODE}${CL}: each of $(paste -sd' ' - <<<"${members}") goes down for 10s in turn"
     if [[ "${EXECUTE}" != 1 ]]; then

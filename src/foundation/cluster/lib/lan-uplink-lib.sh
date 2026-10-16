@@ -8,7 +8,8 @@
 # The probe runs on the node (as root, `bash -s`) and prints one JSON object:
 #   ports      every physical port: name, mac (the permanent one, also inside a
 #              bond), state, speed (Mb/s, -1 unknown), mtu, mii and aggregator
-#              (bond members), lldp {chassis, name, port} or null
+#              (bond members), actorState/partnerState (802.3ad port state
+#              bits, -1 when not lacp), lldp {chassis, name, port} or null
 #   lan        mtu, bond ("" when a single port), mode (single | active-backup |
 #              lacp | the kernel's word), active, primary, primaryMac,
 #              aggregator, partnerMac, bondMtu, members (port objects)
@@ -39,10 +40,12 @@ port_json() {
     jq -cn --arg name "$n" --arg mac "$mac" --arg state "$(rd "$d/operstate")" \
         --arg speed "$(rd "$d/speed")" --arg mtu "$(rd "$d/mtu")" \
         --arg mii "$(rd "$d/bonding_slave/mii_status")" --arg agg "$agg" \
+        --arg as "$(rd "$d/bonding_slave/ad_actor_oper_port_state")" --arg ps "$(rd "$d/bonding_slave/ad_partner_oper_port_state")" \
         --arg ch "$ch" --arg nm "$(kv "$n" chassis name)" --arg pt "$(kv "$n" port 'ifname|local|mac')" \
         '{name: $name, mac: ($mac | ascii_downcase), state: $state,
           speed: (($speed | tonumber?) // -1), mtu: (($mtu | tonumber?) // 0),
           mii: $mii, aggregator: $agg,
+          actorState: (($as | tonumber?) // -1), partnerState: (($ps | tonumber?) // -1),
           lldp: (if $ch == "" then null else {chassis: $ch, name: $nm, port: $pt} end)}'
 }
 arr() { local o="" x; for x in "$@"; do o+="${o:+,}${x}"; done; printf '[%s]' "$o"; }
@@ -125,7 +128,15 @@ lu_findings() {
                 {level: "warn", text: "no LACP partner — the switch ports are not configured as one LAG"}
               else
                 ( $M[] | select(.aggregator != $L.lan.aggregator)
-                  | {level: "warn", text: "\(.name) is outside the active aggregator — its switch port is not in the LAG"} )
+                  | {level: "warn", text: "\(.name) is outside the active aggregator — its switch port is not in the LAG"} ),
+                # 802.3ad port state bits: 2 short timeout, 8 in sync, 16 collecting,
+                # 32 distributing, 64 defaulted, 128 expired.
+                ( $M[] | select(.aggregator == $L.lan.aggregator and (.actorState // -1) >= 0)
+                  | select(((.actorState / 8 | floor) % 8) != 7 or .actorState >= 64)
+                  | {level: "warn", text: "\(.name) is not carrying traffic in the LAG (LACP state \(.actorState)\(if .actorState >= 128 then ", the LACP from the switch on it expired" elif .actorState >= 64 then ", no LACP from the switch on it" else "" end))"} ),
+                ( [ $M[] | select((.partnerState // -1) >= 0 and ((.partnerState / 2 | floor) % 2) == 0 and .actorState < 64) ] | first
+                  | select(. != null)
+                  | {level: "warn", text: "the switch asks for the slow LACP rate: a leg that fails with its link still up is noticed only after ~90s (link loss is noticed at once)"} )
               end )
           else empty end ),
         ( if ($M | length) > 1 then

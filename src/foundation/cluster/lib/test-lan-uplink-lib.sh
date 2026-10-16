@@ -54,6 +54,19 @@ check "LACP without a partner: no LAG"     "$(has "$(live "[${TG0},${TG1}]" lacp
 TG1B="$(port tg1 aa:00:00:00:00:02 10000 up 2 sw2)"
 check "a leg outside the aggregator"       "$(has "$(live "[${TG0},${TG1B}]" lacp lanbond true '' '' 1 02:11:22:33:44:55)" '' 'tg1 is outside the active aggregator')" yes
 
+# LACP port state (#40, seen on tappaas1 2026-10-16): 63 actor / 61 partner is a
+# leg in the LAG with a switch asking for the slow rate; 199 is expired, 7 not in sync.
+lstate() { jq -c --argjson a "$2" --argjson p "$3" '. + {actorState: $a, partnerState: $p}' <<<"$1"; }
+SYNC_FAST="$(live "[$(lstate "${TG0}" 63 63),$(lstate "${TG1}" 63 63)]" lacp lanbond true '' '' 1 02:11:22:33:44:55)"
+check "both legs in sync, fast partner: nothing to say" "$(findings "${SYNC_FAST}" "$(lu_declaration <<<"${SYNC_FAST}")")" "[]"
+SLOW="$(live "[$(lstate "${TG0}" 63 61),$(lstate "${TG1}" 63 61)]" lacp lanbond true '' '' 1 02:11:22:33:44:55)"
+check "a partner on the slow rate: warned once" "1" "$(findings "${SLOW}" | jq '[.[] | select(.text | test("slow LACP rate"))] | length')"
+EXPIRED="$(live "[$(lstate "${TG0}" 63 63),$(lstate "${TG1}" 199 2)]" lacp lanbond true '' '' 1 02:11:22:33:44:55)"
+check "a leg whose LACP expired: not carrying traffic" "$(has "${EXPIRED}" '' "tg1 is not carrying traffic in the LAG (LACP state 199, the LACP from the switch on it expired)")" yes
+NOSYNC="$(live "[$(lstate "${TG0}" 63 63),$(lstate "${TG1}" 7 197)]" lacp lanbond true '' '' 1 02:11:22:33:44:55)"
+check "a leg not in sync: not carrying traffic" "$(has "${NOSYNC}" '' 'tg1 is not carrying traffic in the LAG (LACP state 7)')" yes
+check "…and the healthy leg is not named" "$(has "${NOSYNC}" '' 'tg0 is not carrying')" no
+
 TG1S="$(port tg1 aa:00:00:00:00:02 10000 up 1 sw1)"
 check "both legs on one switch"            "$(has "$(live "[${TG0},${TG1S}]" lacp lanbond true '' '' 1 02:11:22:33:44:55)" '' 'same switch (sw1)')" yes
 TG1N="$(port tg1 aa:00:00:00:00:02 10000 up 1)"
