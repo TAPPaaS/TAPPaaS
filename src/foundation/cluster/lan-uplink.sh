@@ -281,6 +281,14 @@ switch_lag() {  # set <switch> <ports> | remove <switch> — indented, rc of swi
     return "${rc}"
 }
 
+# The node's LRM holds no watchdog: it is in maintenance or idle, and no HA
+# service is on the node any more.
+watchdog_released() {
+    rn_node_ssh "${NODE}" "jq -r .state /etc/pve/nodes/${NODE}/lrm_status; \
+        jq -r --arg n ${NODE} '[.service_status // {} | .[] | select(.node == \$n and .state != \"stopped\")] | length' /etc/pve/ha/manager_status" \
+        2>/dev/null | { read -r st; read -r n; [[ "${st}" =~ ^(maintenance|wait_for_agent_lock)$ && "${n}" == 0 ]]; }
+}
+
 # What keeps the node from verifying, for the wait above. <declaration>
 missing() {
     local live
@@ -348,21 +356,20 @@ converge() {  # <declaration>
 
     # A rollback past the watchdog's 60s is only safe on a node whose LRM has
     # released it: a node cut off longer than that would otherwise fence itself.
-    # The LRM lets go of it only after idling for a while (some ten minutes),
-    # so wait for that — at most WATCHDOG_WAIT — rather than refusing at once.
+    # `ha-manager status` says "watchdog active" for any LRM in maintenance, so
+    # ask what the LRM does instead: in maintenance (or idle) with no HA service
+    # left on the node it gives the watchdog up (PVE::HA::LRM). Wait for that.
     if (( ROLLBACK_SECS > 45 )); then
-        local w=0 armed
-        while armed="$(rn_node_ssh "${NODE}" "ha-manager status" 2>/dev/null | grep -E "^lrm ${NODE} ")" \
-              && grep -q "watchdog active" <<<"${armed}"; do
-            (( w == 0 )) && info "  Waiting for ${NODE}'s HA watchdog to be released before a ${ROLLBACK_SECS}s rollback window (the LRM idles first, ~10 min)..."
-            if (( w >= ${WATCHDOG_WAIT:-900} )); then
+        local w=0
+        until watchdog_released; do
+            (( w == 0 )) && info "  Waiting for ${NODE}'s LRM to release its HA watchdog before a ${ROLLBACK_SECS}s rollback window..."
+            if (( w >= ${WATCHDOG_WAIT:-300} )); then
                 rn_undrain_node "${NODE}" || true
-                die "${NODE}'s HA watchdog was still armed after ${w}s drained — a ${ROLLBACK_SECS}s rollback could fence it. Nothing changed."
+                die "${NODE}'s HA watchdog was still held after ${w}s drained — a ${ROLLBACK_SECS}s rollback could fence it. Nothing changed."
             fi
-            sleep 15; w=$((w + 15))
-            (( w % 120 == 0 )) && info "  …still armed after ${w}s: ${armed#lrm ${NODE} }"
+            sleep 10; w=$((w + 10))
         done
-        (( w == 0 )) || info "  ${GN}✓${CL} ${NODE}'s watchdog released after ${w}s"
+        info "  ${GN}✓${CL} ${NODE}'s HA watchdog is released"
     fi
     # Out of lacp: the aggregate goes first. The node keeps talking LACP to no
     # partner on one leg meanwhile; were the aggregate left while the node went
