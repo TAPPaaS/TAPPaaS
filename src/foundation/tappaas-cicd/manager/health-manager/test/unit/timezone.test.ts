@@ -4,7 +4,8 @@
 import { mkdtempSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
-import { checkPulse, checkQuorum, checkSiteTimezone } from "../../src/checks";
+import { checkLanUplink, checkPulse, checkQuorum, checkSiteTimezone } from "../../src/checks";
+import { parseLanUplink } from "../../src/client";
 import { FakeClusterClient } from "./fake-client";
 
 let passed = 0;
@@ -73,6 +74,27 @@ const mods = {
   check(checkQuorum(c).status === "pass", "two nodes and a QDevice: pass");
   c.quorumState = { expectedVotes: 3, qdevice: false };
   check(checkQuorum(c).status === "pass", "three nodes: pass");
+}
+
+// #40: the lan-uplink gate.
+{
+  const c = new FakeClusterClient();
+  c.nodes = ["tappaas1", "tappaas2"];
+  check(checkLanUplink(c).status === "skip", "lan-uplink: nothing could be read — skip");
+  c.uplinks.set("tappaas1", { mode: "active-backup", ports: ["tg0", "ge0"], findings: [] });
+  c.uplinks.set("tappaas2", { mode: "single", ports: ["eno1"], findings: [{ level: "info", text: "no uplinks declared — the next cluster update records this layout" }] });
+  const ok = checkLanUplink(c);
+  check(ok.status === "pass" && ok.detail.includes("tappaas1 active-backup (tg0+ge0)"), "lan-uplink: a bond and an advisory — pass, with the layout");
+  check(ok.rows?.length === 1 && ok.rows[0].status === "skip", "lan-uplink: an advisory is a row, not a warning");
+  c.uplinks.set("tappaas2", { mode: "single", ports: ["eno1"], findings: [{ level: "warn", text: "fencing is armed and lan has one port (eno1)" }] });
+  const w = checkLanUplink(c);
+  check(w.status === "warn" && (w.rows ?? []).some((r) => r.status === "warn" && r.text.startsWith("tappaas2") && r.text.includes("fencing")), "lan-uplink: fencing armed on one port — warn, by node");
+  const p = parseLanUplink({
+    live: { lan: { mode: "lacp", members: [{ name: "tg0" }, { name: "tg1" }] } },
+    findings: [{ level: "warn", text: "no LACP partner" }, { level: "info", text: "x" }, { level: "warn" }],
+  });
+  check(p.mode === "lacp" && p.ports.join(",") === "tg0,tg1" && p.findings.length === 2 && p.findings[0].level === "warn",
+    "lan-uplink.sh's JSON parses: mode, ports, findings (a finding without text dropped)");
 }
 
 // ADR-031: the pulse gate.

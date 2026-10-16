@@ -181,6 +181,18 @@ export interface ClusterClient {
   // state (up / failing / DOWN); null if the node does not answer.
   pulse(node: string): { timer: string; targets: { id: string; state: string }[] } | null;
   guestTimezone(target: string): string | null;
+  // #40: the node's lan uplink as the cluster module's lan-uplink.sh judges it
+  // (declared vs live, legs, LACP, LLDP, fencing); null if it cannot say.
+  lanUplink(node: string): LanUplink | null;
+}
+
+// ── a node's lan uplink (#40) ──────────────────────────────────────────
+// What lan-uplink.sh show --json reports: the live mode and ports, and its
+// findings. The rules live in the cluster module, beside the converge.
+export interface LanUplink {
+  mode: string; // single | active-backup | lacp
+  ports: string[]; // the lan bridge's physical ports
+  findings: { level: "warn" | "info"; text: string }[];
 }
 
 // ── a guest waiting for a reboot (#730) ───────────────────────────────

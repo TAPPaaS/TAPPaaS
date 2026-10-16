@@ -652,6 +652,40 @@ export function checkQuorum(client: ClusterClient): CheckResult {
   return { name: "quorum", status: "pass", detail: `${q.expectedVotes} vote(s)${q.qdevice ? " incl. a QDevice" : ""}` };
 }
 
+// ── lan-uplink gate (#40) ──────────────────────────────────────────────
+// A node's lan bridge carries management, corosync, backup sync and its guests.
+// On one port behind one switch a port or switch failure takes all of it down,
+// and with the HA watchdog armed the node resets. The rules (fencing armed on a
+// single port, a leg down, no LAG, both legs on one switch, MTU, drift from the
+// declaration) live in the cluster module's lan-uplink.sh; this collects them.
+// WARN, never FAIL: every one of them is a running node one failure from down.
+export function checkLanUplink(client: ClusterClient): CheckResult {
+  const rows: CheckRow[] = [];
+  let probed = 0;
+  let warned = 0;
+  const modes: string[] = [];
+  for (const node of client.reachableNodes()) {
+    const u = client.lanUplink(node);
+    if (!u) continue;
+    probed++;
+    modes.push(`${node} ${u.mode}${u.ports.length > 1 ? ` (${u.ports.join("+")})` : ""}`);
+    for (const f of u.findings) {
+      if (f.level === "warn") warned++;
+      rows.push({ status: f.level === "warn" ? "warn" : "skip", text: `${node.padEnd(16)}${f.text}` });
+    }
+  }
+  if (probed === 0) return { name: "lan-uplink", status: "skip", detail: "no node's lan uplink could be read (lan-uplink.sh)" };
+  if (warned === 0) {
+    return { name: "lan-uplink", status: "pass", detail: modes.join(", "), ...(rows.length > 0 ? { rows } : {}) };
+  }
+  return {
+    name: "lan-uplink",
+    status: "warn",
+    detail: `${warned} finding(s) on ${probed} node(s) — site-manager node network show <node>`,
+    rows,
+  };
+}
+
 // ── site-timezone gate (#837) ──────────────────────────────────────────
 // site.json `.location.timezone` is answered once, at the first install, and
 // the guests are converged to it on every OS update. Nothing compares it with
@@ -707,6 +741,7 @@ export function runHealthGates(client: ClusterClient, opts: ValidateOpts): Healt
     checkPendingReboot(client, opts.configDir, opts.defaultNode),
     checkSiteTimezone(client, opts.configDir, opts.defaultNode),
     checkQuorum(client),
+    checkLanUplink(client),
     checkPulse(client, opts.configDir),
     checkCveStatus(opts.configDir, Date.now()),
   ];

@@ -192,6 +192,17 @@ let
       query = ''{host="tappaas-cicd", unit="check-firewall-cert.service"} |= "tappaas-firewall-cert"'';
     })
     (alertRule {
+      uid = "tappaas-lan-leg-down"; title = "LanLegDown"; kind = "event"; window = 300;
+      headline = "lan uplink lost a leg";
+      # A node's lan bridge on a bond (#40) keeps running when one leg goes: that
+      # is the point, and also why nothing else would tell. The kernel's bonding
+      # driver logs the line when it takes a member out (miimon). Nodes only:
+      # the rule's own query text, logged on this VM, is not from a node.
+      expr = ''sum by (host) (count_over_time(${pve} |~ "lanbond: .*link status definitely down" [5m]))'';
+      summary = "A leg of a node's bonded lan uplink went down. The node runs on the rest; one more port or switch failure cuts it off. See: site-manager node network show <host>.";
+      query = ''${pve} |= "lanbond"'';
+    })
+    (alertRule {
       uid = "tappaas-heartbeat"; title = "Heartbeat"; kind = "heartbeat"; window = 300;
       # Fires for as long as logs arrive and rules run; its webhook proves the
       # whole path reaches the mothership. Never mailed: the receiver records

@@ -2,7 +2,7 @@
 // tests. No SSH, no Proxmox; tests seed running guests + per-VM config and
 // disk-usage answers, then assert the classification the pure logic produces.
 
-import { Avx512Use, ClusterClient, NodeCapacity, PendingReboot, RunningGuest, StoragePool } from "../../src/types";
+import { Avx512Use, ClusterClient, LanUplink, NodeCapacity, PendingReboot, RunningGuest, StoragePool } from "../../src/types";
 
 export class FakeClusterClient implements ClusterClient {
   nodes: string[] = ["tappaas1"];
@@ -50,6 +50,11 @@ export class FakeClusterClient implements ClusterClient {
   avx512Use(target: string): Avx512Use | null {
     const a = this.avx.get(target);
     return a ? { ...a } : null;
+  }
+  uplinks = new Map<string, LanUplink | null>(); // #40: node → lan uplink (absent = cannot say)
+  lanUplink(node: string): LanUplink | null {
+    const u = this.uplinks.get(node);
+    return u ? { ...u, ports: [...u.ports], findings: u.findings.map((f) => ({ ...f })) } : null;
   }
   quorumState: { expectedVotes: number; qdevice: boolean } | null = null; // #835
   pulseState: { timer: string; targets: { id: string; state: string }[] } | null = null; // ADR-031

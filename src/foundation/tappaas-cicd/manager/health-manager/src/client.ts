@@ -22,8 +22,10 @@ import {
   reachableNodes as pingReachableNodes,
   ssh,
 } from "../../../lib/ts/src/cluster";
+import { spawnSync } from "child_process";
+import { existsSync } from "fs";
 import { defaultConfigDir, siteNodeHostnames } from "./config";
-import { Avx512Use, ClusterClient, NodeCapacity, PendingReboot, RunningGuest, StoragePool } from "./types";
+import { Avx512Use, ClusterClient, LanUplink, NodeCapacity, PendingReboot, RunningGuest, StoragePool } from "./types";
 
 export class CliClusterClient implements ClusterClient {
   reachableNodes(): string[] {
@@ -251,6 +253,19 @@ export class CliClusterClient implements ClusterClient {
     return { timer: (lines[0] ?? "").trim(), targets };
   }
 
+  // #40: lan-uplink.sh probes the node and applies the rules; this runs it.
+  lanUplink(node: string): LanUplink | null {
+    const script = clusterScriptPath("lan-uplink.sh");
+    if (!script) return null;
+    const r = spawnSync(script, ["show", node, "--json"], { encoding: "utf8", timeout: 60_000 });
+    if (r.status !== 0 || !r.stdout) return null;
+    try {
+      return parseLanUplink(JSON.parse(r.stdout) as Record<string, unknown>);
+    } catch {
+      return null;
+    }
+  }
+
   nodeTimezone(node: string): string | null {
     return readTimezone(ssh("root", `${node}.${mgmtDomain()}`, TZ_PROBE));
   }
@@ -340,4 +355,35 @@ export function parseAvx512Use(out: string): Avx512Use {
   }
   for (const n of recent) earlier.delete(n);
   return { available, recent: [...recent].sort(), earlier: [...earlier].sort() };
+}
+
+// The cluster module's script <file>: where module-manager says the module is,
+// else the site's checkout. null when neither has it.
+function clusterScriptPath(file: string): string | null {
+  const r = spawnSync("module-manager", ["show", "cluster", "--json"], { encoding: "utf8" });
+  if (r.status === 0 && r.stdout) {
+    try {
+      const loc = (JSON.parse(r.stdout) as Record<string, unknown>).location;
+      if (typeof loc === "string" && loc && existsSync(`${loc}/${file}`)) return `${loc}/${file}`;
+    } catch {
+      // fall through to the checkout
+    }
+  }
+  const fallback = `/home/tappaas/TAPPaaS/src/foundation/cluster/${file}`;
+  return existsSync(fallback) ? fallback : null;
+}
+
+// lan-uplink.sh show --json → LanUplink. Pure.
+export function parseLanUplink(r: Record<string, unknown>): LanUplink {
+  const live = (r.live ?? {}) as Record<string, unknown>;
+  const lan = (live.lan ?? {}) as Record<string, unknown>;
+  const members = Array.isArray(lan.members) ? (lan.members as Record<string, unknown>[]) : [];
+  const findings = Array.isArray(r.findings) ? (r.findings as Record<string, unknown>[]) : [];
+  return {
+    mode: typeof lan.mode === "string" ? lan.mode : "",
+    ports: members.map((m) => String(m.name ?? "")).filter(Boolean),
+    findings: findings
+      .filter((f) => typeof f.text === "string")
+      .map((f) => ({ level: f.level === "warn" ? "warn" : "info", text: String(f.text) })),
+  };
 }
