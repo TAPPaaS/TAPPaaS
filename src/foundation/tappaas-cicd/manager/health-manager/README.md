@@ -92,6 +92,7 @@ fails**:
 | `site-timezone` | `site.json` + one SSH probe per node and guest | never — **WARN** when a node or guest runs another timezone than `site.json` `.location.timezone` (the next update of the guest, or the next cluster update for a node, sets it), or when the site has none |
 | `pulse` | the backup node's pulse (a cluster node, or a `debianhost` machine by its address) | never — **WARN** when the pulse is not running on the backup node, or reports something down (a backup buddy, the uplink, the firewall, the mothership, the PBS); `backup-manager pulse` shows it |
 | `quorum` | `pvecm status` | never — **WARN** when the cluster has two votes and no QDevice: one node down and the other is fenced (see the cluster README, *Two-node clusters*) |
+| `lan-uplink` | the cluster module's `lan-uplink.sh show --json`, one SSH probe per node | never — **WARN** when a node with HA's watchdog armed has its `lan` on one port, a bonded leg is down, active-backup runs on its backup, LACP has no partner or a leg outside the aggregator, both legs reach the same switch (LLDP), MTUs differ, or the live layout differs from the declaration (see the cluster README, *Redundant LAN uplink*) |
 | `cve-status` | `config/sbom/cve-status.json` (the last `scan security`) | never — **WARN** on a failed scan, a fixable Critical/High CVE, or a scan older than 8 days (see below) |
 
 A gate with nothing to check (e.g. no reachable guests, backup tooling absent)

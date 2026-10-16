@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Status** | **Accepted** (v1.0, 2026-10-13) — built (`e18c01be`, #825) and verified live by the `cluster` deep test. |
-| **Version** | 1.0 |
+| **Status** | **Accepted** (v1.0, 2026-10-13) — built (`e18c01be`, #825) and verified live by the `cluster` deep test. v1.1 (2026-10-16) adds *Node uplink redundancy* (#40). |
+| **Version** | 1.1 |
 | **Date** | 2026-09-01 |
 | **Author** | Lars Rossen |
 | **Parent** | [ADR-007f Realization](<ADR-007f - Realization.md>) (managers orchestrate; controllers do the imperative cluster actions) |
@@ -227,6 +227,37 @@ refuse-without-`--force`, the re-point) and confirm the *specific* assertion —
 2. **CPU-compatibility experiment (feeds Open Question 1):** for each ordered node pair, attempt a live
    migrate of a `cputype: host` fixture and record success/failure → the empirical matrix the real
    live-vs-offline predicate is built from. Cluster-specific, run rarely, never on production VMs.
+
+## Node uplink redundancy (v1.1, #40)
+
+HA's fencing makes a node's `lan` uplink part of this policy: everything HA depends on —
+corosync, management, the replication and backup traffic, every guest VLAN — crosses it,
+and a node that loses it for longer than the watchdog allows resets. On 2026-09-06 a
+switch re-provisioning dropped both nodes' single uplinks for 28 s; both lost quorum and
+the pair reset itself 13 times in 70 minutes (#590).
+
+**Decision.** Redundancy goes **below the `lan` bridge**, not beside it: two or more
+ports bonded as `lanbond`, cabled to two interconnected switches.
+- `active-backup` is the default (any switches, any mix of speeds, primary = the fastest
+  port) — the mode Proxmox supports for cluster traffic. `lacp` (802.3ad, fast rate) is
+  available where the ports are equal and the switches present one LAG (stack/MLAG).
+- **Not a second corosync link (#590, rejected).** Corosync keeps a node quorate while
+  any of its links is up. A node that lost its `lan` would stay quorate over a private
+  link, keep its HA guests while it can serve none of them, and never be fenced: the
+  second ring blocks the failover this ADR exists for. One link, made redundant
+  underneath, keeps "a node without its network is fenced and its guests move" true.
+
+**Declared and converged like placement.** The uplink is the pvehost instance's
+`uplinks` (ports by MAC). `site-manager node network set <node> --apply` converges it
+through the same drain as a reboot (`rn_drain_node` → change → `rn_undrain_node`), one
+node at a time, under a node-side rollback (45 s, below the 60 s watchdog) that the
+mothership confirms only after it has seen the node reachable, every leg up, LACP
+aggregated and corosync connected. The cluster update records an undeclared node's
+layout and never converges one. `health-manager validate` (`lan-uplink`) warns on a
+single uplink with the watchdog armed, a leg down, no LAG, both legs on one switch
+(LLDP), MTU mismatch, and drift; `LanLegDown` mails a leg going down.
+
+**Switch work** goes one switch at a time, gated on every node's bond showing all legs.
 
 ## Consequences
 

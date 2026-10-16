@@ -119,6 +119,29 @@ config-network.sh [--lan-port <if>] [--wan-port <if>] [--mgmt-ip <CIDR>]
 | `--no-rollback` | Apply without the auto-rollback safety (not recommended). |
 | `--non-interactive` | Fail rather than prompt (requires `--lan-port`). |
 
+### lan uplink as a bond (#40)
+
+`config-network.sh --lan-port a,b` puts the ports under `lanbond` and makes it the
+`lan` bridge's port (`lib/lan-bond-lib.sh` renders the stanza; `active-backup` by
+default with the fastest port primary, `lacp` on request with `lacp-rate fast` and
+`layer2+3`). `--set-lan` re-carries a running node's `lan`: only the bridge's port,
+the bond stanza and the MTU change, under a rollback timer (45 s, below the 60 s
+watchdog) that the caller confirms by touching `/run/tappaas-net-ok`.
+
+`lan-uplink.sh` (behind `site-manager node network`) owns the rest: the node-side
+probe (sysfs bonding state, permanent MACs, LLDP neighbours, LRM state, corosync
+links) and the rules that judge it live in `lib/lan-uplink-lib.sh`, so the health
+gate and `show` agree. The declaration is the pvehost instance's `uplinks` (ports by
+MAC). Converging drains the node with the reboot drain (`rn_drain_node` /
+`rn_undrain_node` in `lib/reboot-node-lib.sh`), so a re-carried uplink follows the
+same HA rules as a reboot. The cluster update records an undeclared node's layout
+and installs lldpd receive-only; it never converges, because that drains a node.
+
+Why not a second corosync link (#590): corosync keeps a node quorate while any link
+is up, so a node that lost its lan would keep quorum over the private link and keep
+HA guests it can no longer serve. Redundancy below the bridge keeps one link and
+keeps a node without its lan fenceable.
+
 ## Cluster (phase 3, runs before storage)
 
 Runs **before** storage — a ZFS pool created on a standalone node (before it is a

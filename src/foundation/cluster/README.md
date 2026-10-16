@@ -63,7 +63,8 @@ provides the `vm`, `lxc` and `ha` services (the module's `provides` in
 
 ## Requirements
 
-- One node (or three for a cluster) capable of running **Proxmox VE 9.2**, each with **two NICs** (one WAN, one LAN).
+- One node (or three for a cluster) capable of running **Proxmox VE 9.2**, each with **two NICs** (one WAN, one LAN) —
+  three or more for a redundant LAN uplink (see *Redundant LAN uplink*).
 - A dedicated **boot disk** (ext4/LVM) plus separate data disks for the `tankXY` pools.
 - An existing network with a free IP, DHCP and internet for the bootstrap.
 - Multi-node: a switch between the nodes — unmanaged works out of the box; a managed
@@ -93,6 +94,70 @@ moment.
 
 A third node does the same and adds capacity. A QDevice with three nodes is not
 needed (and Proxmox advises against it on an odd number of nodes).
+
+## Redundant LAN uplink
+
+A node's `lan` bridge carries everything that keeps it in the cluster: management,
+corosync, backup sync and every guest VLAN. On one port behind one switch, a pulled
+cable, a dead port or a switch being re-provisioned takes all of it down at once —
+and with HA's watchdog armed (the default), a node that loses quorum resets itself.
+The health check (`lan-uplink`) warns about exactly that combination.
+
+The fix is redundancy in the link itself: two (or more) ports bonded under the
+`lan` bridge as `lanbond`, cabled to **two different switches that are connected to
+each other**. The node keeps one address and one corosync link; a failed port, cable
+or switch is absorbed below corosync, and a node that really loses its LAN is still
+fenced and its guests move.
+
+**Pick the mode by your ports and switches:**
+
+| Ports | Switches | Mode | Behaviour |
+|---|---|---|---|
+| any mix (10G + 1G) | any two, interconnected | `active-backup` (default) | one leg carries traffic — the primary (the fastest) when it is up; the other takes over |
+| equal speeds (2 × 10G) | one switch, or two acting as one (stack, MLAG) | `lacp` | both legs carry traffic (802.3ad) |
+
+Proxmox documents `active-backup` as the bond mode for cluster traffic; `lacp` across
+two switches works only where the switches present **one** LAG to the node — two
+independent switches cannot, and the bond will not aggregate.
+
+**Switch side.**
+- `active-backup`: both ports are ordinary trunks with **identical** VLANs and MTU —
+  a VLAN missing on the backup port only shows on failover. No LAG.
+- `lacp`: one LAG per node spanning both switch ports, LACP active, fast rate, the
+  same VLANs as the node's current uplink.
+
+**Commands.**
+
+    site-manager node network show tappaas2                         # declared vs live, and what is wrong
+    site-manager node network set tappaas2 --lan-ports nic2,nic3    # declare and preview the change
+    site-manager node network set tappaas2 --apply                  # converge it
+    site-manager node network test tappaas2 --apply                 # fail each leg over in turn
+
+`--lan-mode lacp`, `--lan-primary <port>` and `--mtu <n>` go with `set`; ports may be
+given by name or MAC address. A new node gets the same flags on `node add`.
+
+`set --apply` changes one node at a time: it moves the node's HA guests off (HA
+maintenance), re-carries `lan` on the declared ports with a 45-second automatic
+rollback, checks from the mothership that the node is reachable, every leg is up,
+LACP has aggregated and corosync is connected — and only then keeps the change.
+Anything else and the node goes back to its previous uplink on its own. Then the
+node returns to HA placement.
+
+`test --apply` (on a drained node too) takes each leg down for ten seconds and
+checks management and corosync stay up; a timer on the node brings the leg back
+after 30 seconds whatever happens. Pulling one cable at a time while watching
+`site-manager node network show <node>` is the test that also proves the switch side.
+
+**What is recorded and watched.** The ports are declared in the node's config
+(`config/<node>.json`, `uplinks`, by MAC — interface names can move). A node that
+has none gets its current layout recorded by the next cluster update, which also
+installs `lldpd` in receive-only mode so `show` can say which switch and port each
+leg reaches. The health check warns when a leg is down, a bond runs on its backup,
+LACP has no partner, both legs reach the same switch, MTUs differ, or the live
+layout differs from the declaration; a leg going down is also mailed (`LanLegDown`).
+
+**When you work on the switches,** change one switch at a time and wait until
+`site-manager node network show` reports every leg up again before the next.
 
 ## Alternatives considered
 
