@@ -63,7 +63,7 @@ SCHEMA="$(mktemp)"
 # Case 1: valid camelCase zone0 passes the format regex.
 F1="${WORK}/case1.json"; mkmod "${F1}"
 out=$(cj "${F1}" "${SCHEMA}" || true)
-if echo "${out}" | grep -qE "zone0.*does not match format"; then
+if echo "${out}" | grep -cE "zone0.*does not match format" >/dev/null; then
     fail "camelCase zone0 (srvHome) was flagged"
 else
     pass "camelCase zone0 (srvHome) passes regex"
@@ -73,7 +73,7 @@ fi
 F2="${WORK}/case2.json"; mkmod "${F2}"
 jq '.zone0 = "srv-home"' "${F2}" > "${F2}.tmp" && mv "${F2}.tmp" "${F2}"
 out=$(cj "${F2}" "${SCHEMA}" || true)
-if echo "${out}" | grep -qE "zone0.*does not match format"; then
+if echo "${out}" | grep -cE "zone0.*does not match format" >/dev/null; then
     pass "hyphenated zone0 (srv-home) rejected by regex"
 else
     fail "hyphenated zone0 (srv-home) NOT rejected"
@@ -84,7 +84,7 @@ fi
 F3="${WORK}/case3.json"; mkmod "${F3}"
 jq '.bridge1 = "lan" | .zone1 = "iot-local"' "${F3}" > "${F3}.tmp" && mv "${F3}.tmp" "${F3}"
 out=$(cj "${F3}" "${SCHEMA}" || true)
-if echo "${out}" | grep -qE "zone1.*does not match format"; then
+if echo "${out}" | grep -cE "zone1.*does not match format" >/dev/null; then
     pass "hyphenated zone1 (iot-local) rejected by regex"
 else
     fail "hyphenated zone1 (iot-local) NOT rejected"
@@ -94,7 +94,7 @@ fi
 F4="${WORK}/case4.json"; mkmod "${F4}"
 jq '.trunks0 = "srvHome;iot-local;dmz"' "${F4}" > "${F4}.tmp" && mv "${F4}.tmp" "${F4}"
 out=$(cj "${F4}" "${SCHEMA}" || true)
-if echo "${out}" | grep -qE "trunks0.*does not match format"; then
+if echo "${out}" | grep -cE "trunks0.*does not match format" >/dev/null; then
     pass "trunks0 with hyphenated entry rejected"
 else
     fail "trunks0 with hyphenated entry NOT rejected"
@@ -106,7 +106,7 @@ all_ok=1
 for sentinel in "ALL" "NONE" "*"; do
     jq --arg s "${sentinel}" '.trunks0 = $s' "${F5}" > "${F5}.tmp" && mv "${F5}.tmp" "${F5}"
     out=$(cj "${F5}" "${SCHEMA}" || true)
-    if echo "${out}" | grep -qE "trunks0.*does not match format"; then
+    if echo "${out}" | grep -cE "trunks0.*does not match format" >/dev/null; then
         fail "trunks0 sentinel '${sentinel}' rejected"
         all_ok=0
     fi
@@ -117,7 +117,7 @@ done
 F6="${WORK}/case6.json"; mkmod "${F6}"
 jq '.zone0 = "SrvHome"' "${F6}" > "${F6}.tmp" && mv "${F6}.tmp" "${F6}"
 out=$(cj "${F6}" "${SCHEMA}" || true)
-if echo "${out}" | grep -qE "zone0.*does not match format"; then
+if echo "${out}" | grep -cE "zone0.*does not match format" >/dev/null; then
     pass "starts-uppercase zone0 (SrvHome) rejected by regex"
 else
     fail "starts-uppercase zone0 (SrvHome) NOT rejected"
@@ -127,7 +127,7 @@ fi
 F7="${WORK}/case7.json"; mkmod "${F7}"
 jq '.zone0 = "srv_home"' "${F7}" > "${F7}.tmp" && mv "${F7}.tmp" "${F7}"
 out=$(cj "${F7}" "${SCHEMA}" || true)
-if echo "${out}" | grep -qE "zone0.*does not match format"; then
+if echo "${out}" | grep -cE "zone0.*does not match format" >/dev/null; then
     pass "underscore zone0 (srv_home) rejected by regex"
 else
     fail "underscore zone0 (srv_home) NOT rejected — format pattern may not enforce camelCase"
@@ -139,14 +139,14 @@ fi
 F8="${WORK}/case8.json"; mkmod "${F8}"
 jq '. + {"_README":"why this module is shaped this way","_note":"and this field"}' "${F8}" > "${F8}.tmp" && mv "${F8}.tmp" "${F8}"
 out=$(cj "${F8}" "${SCHEMA}" || true)
-if ! echo "${out}" | grep -q "Unknown field"; then
+if ! echo "${out}" | grep -c "Unknown field" >/dev/null; then
     pass "documentation keys (_README, _note) are not reported as unknown fields"
 else
     fail "a documentation key was reported as an unknown field: $(echo "${out}" | grep 'Unknown field' | head -2 | tr '\n' ' ')"
 fi
 jq '. + {"realTypo":"x"}' "${F8}" > "${F8}.tmp" && mv "${F8}.tmp" "${F8}"
 out=$(cj "${F8}" "${SCHEMA}" || true)
-if echo "${out}" | grep -q "Unknown field.*realTypo"; then
+if echo "${out}" | grep -c "Unknown field.*realTypo" >/dev/null; then
     pass "…while a field that is not documentation still is"
 else
     fail "an unknown field is no longer reported"

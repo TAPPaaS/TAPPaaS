@@ -173,7 +173,7 @@ info "Checking 'installed' flag in /var/lib/nextcloud/config/config.php..."
 
 INSTALLED_LINE=$(remote "sudo -u nextcloud grep \"'installed'\" /var/lib/nextcloud/config/config.php 2>/dev/null" || echo "")
 
-if echo "$INSTALLED_LINE" | grep -q "true"; then
+if echo "$INSTALLED_LINE" | grep -c "true" >/dev/null; then
     pass "Nextcloud reports installed: true"
 elif [ -n "$INSTALLED_LINE" ]; then
     fail "Nextcloud config.php shows installed: false or unknown"
@@ -184,7 +184,7 @@ fi
 
 # Maintenance mode — only present in config.php when enabled
 MAINT_LINE=$(remote "sudo -u nextcloud grep \"'maintenance'\" /var/lib/nextcloud/config/config.php 2>/dev/null" || echo "")
-if echo "$MAINT_LINE" | grep -q "true"; then
+if echo "$MAINT_LINE" | grep -c "true" >/dev/null; then
     log "${YW}[WARN]${CL} Nextcloud is in maintenance mode"
 else
     info "Maintenance mode: off"
@@ -457,7 +457,7 @@ elif [ -z "${TD_LIST}" ]; then
     # 2, and a warning let the suite report zero failures while the public route
     # answered HTTP 400. The update still runs; this failure is its baseline.
     fail "trusted_domains is empty — Nextcloud answers HTTP 400 for every Host but loopback"
-elif printf '%s\n' "${TD_LIST}" | grep -qxF "${TD_EXPECT}"; then
+elif printf '%s\n' "${TD_LIST}" | grep -cxF "${TD_EXPECT}" >/dev/null; then
     pass "Public domain ${TD_EXPECT} is present in trusted_domains"
 else
     fail "Public domain '${TD_EXPECT}' is not in trusted_domains — the public route gets HTTP 400"

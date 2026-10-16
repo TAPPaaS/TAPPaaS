@@ -170,8 +170,8 @@ JSON
         printf '#!/usr/bin/env bash\ntouch %q\nexit 0\n' "${ZD_MARKER}" > "${ZD_DIR}/scp"
         chmod +x "${ZD_DIR}/scp"
         ZD_OUT="$(run_ts "CONFIG_DIR='${ZD_DIR}' NM_SCP_BIN='${ZD_DIR}/scp' node '${DIST_TEST}/manager/network-manager/src/main.js' distribute --zones '${ZD_DIR}/zones.json' --dry-run" 2>&1)"
-        if echo "${ZD_OUT}" | grep -q "root@tappaas1.mgmt.internal:/root/tappaas/zones.json" \
-            && echo "${ZD_OUT}" | grep -q "root@tappaas2.mgmt.internal:/root/tappaas/zones.json" \
+        if echo "${ZD_OUT}" | grep -c "root@tappaas1.mgmt.internal:/root/tappaas/zones.json" >/dev/null \
+            && echo "${ZD_OUT}" | grep -c "root@tappaas2.mgmt.internal:/root/tappaas/zones.json" >/dev/null \
             && [[ ! -f "${ZD_MARKER}" ]]; then
             ok "distribute --dry-run enumerates node targets without scp"
         else

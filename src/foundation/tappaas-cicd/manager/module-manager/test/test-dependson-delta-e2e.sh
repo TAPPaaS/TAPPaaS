@@ -113,7 +113,7 @@ if ( cd "${CONSUMER_DIR}" && "${BIN}/install-module.sh" "${CONSUMER}" ) >"${WORK
 else
     bad "install ${CONSUMER} failed — see ${WORK}/install-cons.log"; tail -n 20 "${WORK}/install-cons.log"; exit 1
 fi
-if installed_depends_on | grep -qx "${DEP}"; then
+if installed_depends_on | grep -cx "${DEP}" >/dev/null; then
     bad "consumer already depends on ${DEP} before the test (unexpected)"
 else
     ok "consumer starts WITHOUT ${DEP}"
@@ -159,7 +159,7 @@ grep -qx "delete ${CONSUMER}" "${MARKER}" \
     && bad "delete-service.sh unexpectedly ran on an ADD" \
     || ok "delete-service.sh did NOT run on an add"
 
-if installed_depends_on | grep -qx "${DEP}"; then
+if installed_depends_on | grep -cx "${DEP}" >/dev/null; then
     ok "merged config now carries ${DEP} (released list adopted — default behaviour intact)"
 else
     bad "merged config did not adopt ${DEP}"
@@ -186,7 +186,7 @@ grep -qx "install ${CONSUMER}" "${MARKER}" \
     && bad "install-service.sh unexpectedly ran on a REMOVE" \
     || ok "install-service.sh did NOT run on a remove"
 
-if installed_depends_on | grep -qx "${DEP}"; then
+if installed_depends_on | grep -cx "${DEP}" >/dev/null; then
     bad "merged config still carries ${DEP} after removal"
 else
     ok "merged config dropped ${DEP} (released removal adopted)"

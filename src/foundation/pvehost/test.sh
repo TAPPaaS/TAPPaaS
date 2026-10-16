@@ -40,7 +40,7 @@ pve="$(pn_ssh 'pveversion 2>/dev/null | head -1' 2>/dev/null)"
 [[ "${host}" == "${INSTANCE}" ]] && pass "calls itself ${host}" || fail "calls itself '${host}', not '${INSTANCE}'"
 
 pn_site_member "${INSTANCE}" && pass "in site.json hardware.nodes" || fail "not in site.json hardware.nodes"
-if pn_ssh "pvecm status 2>/dev/null | grep -qE '^Quorate:[[:space:]]+Yes'"; then pass "cluster quorate"
+if pn_ssh "pvecm status 2>/dev/null | grep -cE '^Quorate:[[:space:]]+Yes' >/dev/null"; then pass "cluster quorate"
 else fail "the cluster ${INSTANCE} sees is not quorate (pvecm status)"; fi
 
 use="$(pn_ssh "df --output=pcent / | tail -1 | tr -dc '0-9'" 2>/dev/null || true)"

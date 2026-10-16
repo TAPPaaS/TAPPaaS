@@ -696,7 +696,7 @@ if bash -n "${TESTNET_SH}" >/dev/null 2>&1; then
 else
     fail "test-network.sh has syntax errors"
 fi
-if bash "${TESTNET_SH}" --help 2>/dev/null | grep -q -- "--delete"; then
+if bash "${TESTNET_SH}" --help 2>/dev/null | grep -c -- "--delete" >/dev/null; then
     pass "test-network.sh --help advertises --delete"
 else
     fail "test-network.sh --help missing or incomplete"
@@ -715,7 +715,7 @@ else
 fi
 
 if [[ -n "${TESTNET_CLI}" ]]; then
-    if ${TESTNET_CLI} --help 2>/dev/null | grep -q "create"; then
+    if ${TESTNET_CLI} --help 2>/dev/null | grep -c "create" >/dev/null; then
         pass "test-network CLI exposes create/delete/status"
     else
         fail "test-network CLI help missing subcommands"
@@ -1637,7 +1637,7 @@ else
     section "Deep 3: Verify test-fw-a webserver"
 
     if curl -fsS --max-time 5 "http://${TFW_A_FQDN}:8080/" 2>/dev/null \
-            | grep -q "tappaas-firewall-test-a-ok"; then
+            | grep -c "tappaas-firewall-test-a-ok" >/dev/null; then
         pass "test-fw-a webserver returns marker"
     else
         fail "test-fw-a webserver did not return marker"
@@ -1668,12 +1668,12 @@ else
             network-manager split-horizon-target "${proxy_domain}" >/dev/null 2>&1 || [[ $? -ne 3 ]] || _tfa_unpub=1
         fi
         if [[ "${_tfa_unpub}" -eq 1 ]]; then
-            if caddy-manager list --no-ssl-verify 2>/dev/null | grep -q "${proxy_domain}"; then
+            if caddy-manager list --no-ssl-verify 2>/dev/null | grep -c "${proxy_domain}" >/dev/null; then
                 fail "Caddy has an entry for ${proxy_domain}, which has no public DNS record (#778: it should not)"
             else
                 pass "no Caddy entry for ${proxy_domain} — not published (no public DNS record), as #778 intends"
             fi
-        elif caddy-manager list --no-ssl-verify 2>/dev/null | grep -q "test-fw-a\|${proxy_domain}"; then
+        elif caddy-manager list --no-ssl-verify 2>/dev/null | grep -c "test-fw-a\|${proxy_domain}" >/dev/null; then
             pass "Caddy domain entry for test-fw-a present"
         else
             fail "Caddy domain entry for test-fw-a missing"
@@ -1786,7 +1786,7 @@ else
     if ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
             "tappaas@${TFW_A_FQDN}" \
             "curl -fsS --max-time 5 http://${TFW_B_FQDN}:9090/" 2>/dev/null \
-            | grep -q "tappaas-firewall-test-b-ok"; then
+            | grep -c "tappaas-firewall-test-b-ok" >/dev/null; then
         pass "test-fw-a → test-fw-b:9090 (permitted by the zone edge)"
     else
         fail "test-fw-a → test-fw-b:9090 (expected pinhole to allow)"
@@ -1799,7 +1799,7 @@ else
     if ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
             "tappaas@${TFW_B_FQDN}" \
             "curl -fsS --max-time 5 http://${TFW_A_FQDN}:8080/" 2>/dev/null \
-            | grep -q "tappaas-firewall-test-a-ok"; then
+            | grep -c "tappaas-firewall-test-a-ok" >/dev/null; then
         pass "test-fw-b → test-fw-a:8080 (declared pinhole permitted)"
     else
         fail "test-fw-b → test-fw-a:8080 (declared pinhole expected)"
@@ -1930,7 +1930,7 @@ EVIDENCE
         if ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
                 "tappaas@${TFW_A_FQDN}" \
                 "curl -fsS --max-time 5 http://${TFW_C_FQDN}:9091/" 2>/dev/null \
-                | grep -q "tappaas-firewall-test-c-ok"; then
+                | grep -c "tappaas-firewall-test-c-ok" >/dev/null; then
             autopinhole_curl_ok=1
             break
         fi
@@ -1978,7 +1978,7 @@ EVIDENCE
             -o ConnectTimeout=3 \
             "tappaas@${TFW_A_FQDN}" \
             "timeout 5 bash -c 'echo > /dev/tcp/${TFW_C_FQDN}/22' 2>&1; echo rc=\$?" \
-            2>/dev/null | grep -qE 'rc=(1|124|2)'; then
+            2>/dev/null | grep -cE 'rc=(1|124|2)' >/dev/null; then
         pass "test-fw-a → test-fw-c:22 BLOCKED (no auto-pinhole, no zone access)"
     else
         fail "test-fw-a → test-fw-c:22 should be blocked (auto-pinhole only opens 9091)"
@@ -2051,7 +2051,7 @@ EVIDENCE
         # (a) External passthrough: connect to the public IP (NAT reflection),
         #     Caddy terminates the wildcard TLS and proxies to the upstream.
         if curl -fsS --max-time 15 --resolve "${PROXY_FQDN}:443:${PUBLIC_IP}" \
-                "https://${PROXY_FQDN}/" 2>/dev/null | grep -q "${TFW_A_MARKER}"; then
+                "https://${PROXY_FQDN}/" 2>/dev/null | grep -c "${TFW_A_MARKER}" >/dev/null; then
             pass "Deep 11a: ${PROXY_FQDN} reachable via public IP ${PUBLIC_IP} (TLS + passthrough through Caddy)"
         else
             fail "Deep 11a: no passthrough via public IP ${PUBLIC_IP} (needs public A record, NAT reflection, valid wildcard cert, and Caddy->upstream:8080)"
@@ -2067,7 +2067,7 @@ EVIDENCE
             fail "Deep 11b: internal DNS for ${PROXY_FQDN} is '${INTERNAL_IP:-none}', expected DMZ gateway '${DMZ_GW:-?}'"
         fi
 
-        if curl -fsS --max-time 15 "https://${PROXY_FQDN}/" 2>/dev/null | grep -q "${TFW_A_MARKER}"; then
+        if curl -fsS --max-time 15 "https://${PROXY_FQDN}/" 2>/dev/null | grep -c "${TFW_A_MARKER}" >/dev/null; then
             pass "Deep 11c: ${PROXY_FQDN} reachable internally via split-horizon DNS + Caddy"
         else
             fail "Deep 11c: not reachable internally via split-horizon (needs DMZ access from this host + Caddy->upstream:8080)"
@@ -2297,7 +2297,7 @@ EVIDENCE
         # ── half 1: no masquerade declared -> the device must NOT answer ──
         if [[ "${_iot_live}" != "1" ]]; then
             skip "source-NAT reachability (device never came up — see above)"
-        elif _probe | grep -q "tappaas-snat-test-iot-ok"; then
+        elif _probe | grep -c "tappaas-snat-test-iot-ok" >/dev/null; then
             fail "device answered from ${SNAT_SRC_ZONE} WITHOUT masquerade — the subnet filter is not in effect, so the test proves nothing"
         else
             pass "device unreachable from ${SNAT_SRC_ZONE} without masquerade (the #239 symptom)"
@@ -2355,7 +2355,7 @@ EVIDENCE
         fi
 
         # ── half 2: same device, same client, masquerade in place ──
-        if _probe | grep -q "tappaas-snat-test-iot-ok"; then
+        if _probe | grep -c "tappaas-snat-test-iot-ok" >/dev/null; then
             pass "device reachable from ${SNAT_SRC_ZONE} WITH masquerade (#239 closed)"
         else
             fail "device still unreachable from ${SNAT_SRC_ZONE} with masquerade applied"

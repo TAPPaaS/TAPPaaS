@@ -37,7 +37,7 @@ PYTHONPATH="${here}/src" "${py}" -m unittest discover -s "${here}/src/test" -v
 # step 1 (the credentials skeleton) ran.
 echo "== opnsense-ensure-patches: --help and unknown arguments run nothing =="
 _eh="$(mktemp -d)"
-if HOME="${_eh}" "${here}/opnsense-ensure-patches" --help | grep -q 'Usage: opnsense-ensure-patches' \
+if HOME="${_eh}" "${here}/opnsense-ensure-patches" --help | grep -c 'Usage: opnsense-ensure-patches' >/dev/null \
    && [ ! -e "${_eh}/.opnsense-credentials.txt" ]; then
     echo "  ok: --help prints usage and changes nothing"
 else
@@ -74,7 +74,7 @@ if [ "${TAPPAAS_TEST_DEEP:-0}" = "1" ]; then
             # stock-iPXE self-download loop — inexpressible via the API,
             # stage-1 finding).
             if printf 'grep -q "tag:!tappaas-ipxe" /usr/local/etc/dnsmasq.conf.d/tappaas-pxe.conf && echo NEGATED\n' \
-                 | ssh -o BatchMode=yes "root@${_fw}" 'sh -s' 2>/dev/null | grep -q NEGATED; then
+                 | ssh -o BatchMode=yes "root@${_fw}" 'sh -s' 2>/dev/null | grep -c NEGATED >/dev/null; then
                 echo "  ok: drop-in carries the negated iPXE tag"
             else
                 echo "[Error]   drop-in lacks the negated tag (or is missing)" >&2; _pxe_ok=0
@@ -83,19 +83,19 @@ if [ "${TAPPAAS_TEST_DEEP:-0}" = "1" ]; then
             # the PXE drop-in (that is the whole point of conf.d).
             # Guard: skip if tappaas9 is a REAL pinned node on this site.
             if printf 'grep -E "dhcp-host=.*tappaas9" /usr/local/etc/dnsmasq.conf && echo REAL\n' \
-                 | ssh -o BatchMode=yes "root@${_fw}" 'sh -s' 2>/dev/null | grep -q REAL; then
+                 | ssh -o BatchMode=yes "root@${_fw}" 'sh -s' 2>/dev/null | grep -c REAL >/dev/null; then
                 echo "  SKIP: tappaas9 has a live MAC pinning — not touching it"
             else
                 if dhcp-manager --no-ssl-verify host set tappaas9 --ip 10.0.0.18 --mac de:ad:be:ef:99:99 >/dev/null 2>&1 \
                    && printf 'grep -q "de:ad:be:ef:99:99" /usr/local/etc/dnsmasq.conf && echo PINNED\n' \
-                        | ssh -o BatchMode=yes "root@${_fw}" 'sh -s' 2>/dev/null | grep -q PINNED; then
+                        | ssh -o BatchMode=yes "root@${_fw}" 'sh -s' 2>/dev/null | grep -c PINNED >/dev/null; then
                     echo "  ok: host set renders a dhcp-host reservation"
                 else
                     echo "[Error]   host set did not render a reservation" >&2; _pxe_ok=0
                 fi
                 dhcp-manager --no-ssl-verify host del tappaas9 >/dev/null 2>&1 || _pxe_ok=0
                 if printf 'grep -q "de:ad:be:ef:99:99" /usr/local/etc/dnsmasq.conf || echo CLEARED\n' \
-                     | ssh -o BatchMode=yes "root@${_fw}" 'sh -s' 2>/dev/null | grep -q CLEARED; then
+                     | ssh -o BatchMode=yes "root@${_fw}" 'sh -s' 2>/dev/null | grep -c CLEARED >/dev/null; then
                     echo "  ok: host del clears the pinning again"
                 else
                     echo "[Error]   host del left the reservation behind" >&2; _pxe_ok=0

@@ -150,13 +150,13 @@ SUBNET="$(jq -r --arg z "${VAR}" '.[$z].ip // empty' "${ZONES_FILE}" | cut -d/ -
 
 # ── 2. the fix: VLAN must be on EVERY node's bridge-vids (the gap-closer) ──
 section "2. node bridge-vids — new VLAN ${VLAN} on every node (the fix)"
-if proxmox-manager bridge-vids 2>&1 | grep -q "Proxmox network in sync"; then
+if proxmox-manager bridge-vids 2>&1 | grep -c "Proxmox network in sync" >/dev/null; then
     pass "bridge-vids in sync across all nodes (no drift after add)"
 else
     fail "bridge-vids drift remains after add — the gap is NOT closed"
 fi
 if ssh -o ConnectTimeout=6 root@"${DEST_NODE}".mgmt.internal \
-        "bridge vlan show | grep -qw ${VLAN}" >/dev/null 2>&1; then
+        "bridge vlan show | grep -cw ${VLAN} >/dev/null" >/dev/null 2>&1; then
     pass "VLAN ${VLAN} present on ${DEST_NODE} lan bridge"
 else
     fail "VLAN ${VLAN} ABSENT from ${DEST_NODE} lan bridge — VMs there will get no IP"
@@ -208,7 +208,7 @@ else
     # The NIC must be tagged onto the zone's VLAN — the sharp intermediate
     # check that separates "VM placed in the wrong zone" from "DHCP broken".
     if ssh -o ConnectTimeout=6 root@"${DEST_NODE}".mgmt.internal \
-            "qm config ${VMID} 2>/dev/null | grep '^net0:' | grep -qw 'tag=${VLAN}'"; then
+            "qm config ${VMID} 2>/dev/null | grep '^net0:' | grep -cw 'tag=${VLAN}' >/dev/null"; then
         pass "VM net0 is tagged onto VLAN ${VLAN}"
     else
         fail "VM net0 is NOT tagged onto VLAN ${VLAN} — placed outside zone '${VAR}' (zone0 precedence?)"

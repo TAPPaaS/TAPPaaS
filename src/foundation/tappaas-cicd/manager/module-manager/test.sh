@@ -139,7 +139,7 @@ warn_out="$(CONFIG_DIR="$C4" bash -c '
     . "'"$FNFILE"'"
     resolve_default_zone >/dev/null
 ' 2>&1)"
-echo "$warn_out" | grep -q 'WARN:.*falling back' \
+echo "$warn_out" | grep -c 'WARN:.*falling back' >/dev/null \
     && ok "(4) emits a clear warn on mgmt fallback" \
     || bad "(4) expected a fallback warn, got: ${warn_out}"
 
@@ -345,7 +345,7 @@ cat > "${FCFG}/environments/foo.json" <<'JSON'
 JSON
 
 rej_out="$( cd "$MDIR" && CONFIG_DIR="$FCFG" bash "$SINSTALL" foundmod --environment foo 2>&1 )"; rej_rc=$?
-if [[ $rej_rc -ne 0 ]] && echo "$rej_out" | grep -qi "only be installed in the 'mgmt' environment"; then
+if [[ $rej_rc -ne 0 ]] && echo "$rej_out" | grep -ci "only be installed in the 'mgmt' environment" >/dev/null; then
     ok "install: site-scoped (stack foundation) → non-mgmt env is rejected (offline, before provisioning)"
 else
     bad "install: foundation→non-mgmt should be rejected (rc=${rej_rc}); out: ${rej_out##*$'\n'}"
@@ -356,7 +356,7 @@ cat > "${MDIR}/forkmod.json" <<'JSON'
 { "stack": "foundation", "source": "community", "vmname": "forkmod" }
 JSON
 fork_out="$( cd "$MDIR" && CONFIG_DIR="$FCFG" bash "$SINSTALL" forkmod --environment mgmt 2>&1 )"; fork_rc=$?
-if [[ $fork_rc -ne 0 ]] && echo "$fork_out" | grep -qi "scope/source lint failed"; then
+if [[ $fork_rc -ne 0 ]] && echo "$fork_out" | grep -ci "scope/source lint failed" >/dev/null; then
     ok "install: stack foundation + source:community is rejected by the lint at Step 0"
 else
     bad "install: foundation+community should fail lint (rc=${fork_rc}); out: ${fork_out##*$'\n'}"
@@ -384,7 +384,7 @@ BCFG="${WORK}/bcfg"; mkdir -p "$BCFG"
 legacy_out="$( cd "$MDIR" && CONFIG_DIR="$BCFG" bash "$SINSTALL" legacymod 2>&1 )"
 # It will likely fail later (stub copy/check_json), but must NOT fail at Step 0
 # classification or the foundation guard. Assert no foundation/lint rejection.
-if echo "$legacy_out" | grep -qiE "only be installed in the 'mgmt'|scope/source lint failed"; then
+if echo "$legacy_out" | grep -ciE "only be installed in the 'mgmt'|scope/source lint failed" >/dev/null; then
     bad "back-compat: tier-less/app module wrongly rejected at Step 0: ${legacy_out##*$'\n'}"
 else
     ok "back-compat: app/tier-less module is NOT rejected at Step 0 (legacy path preserved)"
@@ -424,7 +424,7 @@ printf '%s\n' '{"stack":"foundation","source":"official","vmname":"fmod"}' > "${
 printf '%s\n' '{"stack":"ai","source":"official","vmname":"amod"}'         > "${DWORK}/cfg/amod.json"
 
 del_nf="$( bash "$DSTUB" fmod 2>&1 )"; del_nf_rc=$?
-if [[ $del_nf_rc -ne 0 ]] && echo "$del_nf" | grep -qi "without --force"; then
+if [[ $del_nf_rc -ne 0 ]] && echo "$del_nf" | grep -ci "without --force" >/dev/null; then
     ok "delete: a site-scoped module (stack foundation) without --force is refused"
 else
     bad "delete: foundation without --force should be refused (rc=${del_nf_rc})"
@@ -433,7 +433,7 @@ fi
 # With --force the foundation gate is passed (it proceeds; teardown is config-only
 # here since there is no cluster — exits 0 after removing the config).
 del_f="$( bash "$DSTUB" fmod --force 2>&1 )"; del_f_rc=$?
-if [[ $del_f_rc -eq 0 ]] && ! echo "$del_f" | grep -qi "without --force"; then
+if [[ $del_f_rc -eq 0 ]] && ! echo "$del_f" | grep -ci "without --force" >/dev/null; then
     ok "delete: a site-scoped module with --force proceeds (gate passed)"
 else
     bad "delete: foundation with --force should proceed (rc=${del_f_rc})"
@@ -441,7 +441,7 @@ fi
 
 # An app module is NOT subject to the foundation gate.
 del_app="$( bash "$DSTUB" amod 2>&1 )"
-if ! echo "$del_app" | grep -qi "without --force"; then
+if ! echo "$del_app" | grep -ci "without --force" >/dev/null; then
     ok "delete: app module is not subject to the foundation --force gate"
 else
     bad "delete: app module wrongly hit the foundation gate"
@@ -479,7 +479,7 @@ export DNS_CALLS="${DWORK}/dnscalls"; : > "${DNS_CALLS}"
 printf '{"kind":"machine","tier":"foundation","address":"10.0.0.90","zone0":"mgmt","moduleSource":"%s/src/debianhost"}\n' "${DWORK}" > "${DWORK}/cfg/hostm.json"
 printf '%s\n' '{"kind":"application","node":"hostm","tier":"foundation"}' > "${DWORK}/cfg/pbsx.json"
 del_h="$( bash "$DSTUB" hostm --force 2>&1 )"; del_h_rc=$?
-if [[ $del_h_rc -ne 0 && -e "${DWORK}/cfg/hostm.json" ]] && echo "$del_h" | grep -q "still the Host (node) of: pbsx"; then
+if [[ $del_h_rc -ne 0 && -e "${DWORK}/cfg/hostm.json" ]] && echo "$del_h" | grep -c "still the Host (node) of: pbsx" >/dev/null; then
     ok "delete: a machine that is still a Host is refused (names its dependants), even with --force"
 else
     bad "delete: a Host machine should be refused (rc=${del_h_rc}): ${del_h##*$'\n'}"
@@ -588,7 +588,7 @@ bare718="$(grep -rnE 'provider(_module)?="\$\{(dep|entry)%%:\*\}"|get_module_dir
 # network:rules assigns the bare prefix and resolves it on the next line — the
 # one legitimate form, excluded by name above and re-checked here.
 grep -A4 'provider="${dep%%:\*}"' "${SRC_TREE}/foundation/network/services/rules/install-service.sh" \
-    | grep -q 'resolve_provider_module "${provider}"' \
+    | grep -c 'resolve_provider_module "${provider}"' >/dev/null \
     && ok "guard (#718): network:rules still resolves the prefix it takes" \
     || bad "guard (#718): network:rules takes a bare provider prefix without resolving it"
 [[ -z "${bare718}" ]] \

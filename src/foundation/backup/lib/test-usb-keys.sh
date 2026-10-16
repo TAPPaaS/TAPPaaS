@@ -63,7 +63,7 @@ ck "key export runs quietly (its PLAIN-copy advice is not for this script)" yes 
 ck "the restore script travels on the stick" yes "$(grep -q 'cat > ${qm}/keys-from-usb.sh' "${TO}" && echo yes || echo no)"
 
 echo "── round trip with openssl (the restore's own command) ──"
-if command -v openssl >/dev/null && openssl enc -help 2>&1 | grep -q -- '-pbkdf2'; then
+if command -v openssl >/dev/null && openssl enc -help 2>&1 | grep -c -- '-pbkdf2' >/dev/null; then
     T="$(mktemp -d)"; trap 'rm -rf "${T}"' EXIT
     mkdir -p "${T}/src/${USBK_KEYDIR}"; printf '{"kdf":null,"key":"k1"}' > "${T}/src/${USBK_KEYDIR}/pve-storage-x.key"
     # shellcheck disable=SC2086

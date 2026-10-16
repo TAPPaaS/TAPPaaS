@@ -139,7 +139,7 @@ info "Checking if the euro-office Podman container is up..."
 
 CONTAINER_STATUS=$(remote "sudo podman ps --filter name=euro-office --format '{{.Status}}' 2>/dev/null" || echo "")
 
-if echo "$CONTAINER_STATUS" | grep -qi "^Up"; then
+if echo "$CONTAINER_STATUS" | grep -ci "^Up" >/dev/null; then
     pass "euro-office container is running (${CONTAINER_STATUS})"
     CONTAINER_OK=true
 else

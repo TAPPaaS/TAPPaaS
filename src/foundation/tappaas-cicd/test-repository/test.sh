@@ -220,7 +220,7 @@ check_condition "list-shows-fixture" "list shows the new repo (from site.json)" 
 # dir, so it is expected to fail — but it must locate the entry in site.json
 # (i.e. not report 'not found in configuration'). Verify the lookup resolves.
 check_condition "get-repo-from-site" "get_repo_by_name resolves from site.json" \
-    "repo modify '${TEST_REPO_NAME}' 2>&1 | grep -q 'Current branch: main'"
+    "repo modify '${TEST_REPO_NAME}' 2>&1 | grep -c 'Current branch: main' >/dev/null"
 
 # remove the entry (no installed modules, no dir) — should update site.json.
 run_test "remove-fixture" "pass" repo remove "${TEST_REPO_NAME}"
@@ -293,7 +293,7 @@ MODJSON
     run_test "net-modify-branch" "pass" repo modify "${NET_REPO_NAME}" --branch develop
 
     check_condition "net-modify-config" "site.json branch updated to develop" \
-        "jq -r --arg n '${NET_REPO_NAME}' '.repositories[] | select(.name == \$n) | .branch' '${SITE_FILE}' | grep -q 'develop'"
+        "jq -r --arg n '${NET_REPO_NAME}' '.repositories[] | select(.name == \$n) | .branch' '${SITE_FILE}' | grep -c 'develop' >/dev/null"
 
     run_test "net-remove" "pass" repo remove "${NET_REPO_NAME}"
 

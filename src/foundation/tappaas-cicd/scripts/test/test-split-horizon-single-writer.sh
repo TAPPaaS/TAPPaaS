@@ -88,9 +88,9 @@ _cmd_body="$(sed -n '/function cmdSplitHorizonTarget/,/^}/p' \
              src/foundation/tappaas-cicd/manager/network-manager/src/main.ts 2>/dev/null)"
 if [ -z "${_cmd_body}" ]; then
     fail "cmdSplitHorizonTarget() not found in main.ts"
-elif printf '%s' "${_cmd_body}" | grep -qE '^[[:space:]]*(info|warn)\('; then
+elif printf '%s' "${_cmd_body}" | grep -cE '^[[:space:]]*(info|warn)\(' >/dev/null; then
     fail "cmdSplitHorizonTarget() logs via info()/warn() — those write to STDOUT and would corrupt the address a caller command-substitutes"
-elif printf '%s' "${_cmd_body}" | grep -q 'process.stderr.write'; then
+elif printf '%s' "${_cmd_body}" | grep -c 'process.stderr.write' >/dev/null; then
     pass "split-horizon-target keeps stdout clean (diagnostics go to stderr)"
 else
     fail "split-horizon-target has no stderr diagnostics — check stdout is still address-only"

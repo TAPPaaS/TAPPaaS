@@ -95,7 +95,7 @@ declare -A HAD_NFSD=() HAD_PARENT=() TOUCHED=()
 HAD_SHARES=0; [[ -f "${CFG}/shares.json" ]] && HAD_SHARES=1
 for n in "${NODE}" ${NODE2}; do
     cp -p "${CFG}/${n}.json" "${WORK}/${n}.json.orig"; TOUCHED["${n}"]=1
-    node_ssh "${n}" "dpkg-query -W -f='\${Status}' nfs-kernel-server 2>/dev/null | grep -q 'install ok installed'" && HAD_NFSD["${n}"]=1
+    node_ssh "${n}" "dpkg-query -W -f='\${Status}' nfs-kernel-server 2>/dev/null | grep -c 'install ok installed' >/dev/null" && HAD_NFSD["${n}"]=1
     node_ssh "${n}" "zfs list -H -o name '$(pool_on "${n}")/${NFS_PARENT}'" >/dev/null 2>&1 && HAD_PARENT["${n}"]=1
 done
 
@@ -114,7 +114,7 @@ teardown() {
             || fail "teardown: storage-manager nfs share delete ${SHARE} (see ${WORK}/td-delete.log)"
     fi
     for n in "${!TOUCHED[@]}"; do
-        node_ssh "${n}" "zfs list -H -o name -r 2>/dev/null | grep -q '/${NFS_PARENT}/${SHARE}\$'" || continue
+        node_ssh "${n}" "zfs list -H -o name -r 2>/dev/null | grep -c '/${NFS_PARENT}/${SHARE}\$' >/dev/null" || continue
         storage-manager nfs share purge "${SHARE}" --server "${n}" --yes > "${WORK}/td-purge-${n}.log" 2>&1 \
             || fail "teardown: storage-manager nfs share purge ${SHARE} --server ${n} (see ${WORK}/td-purge-${n}.log)"
     done
@@ -131,17 +131,17 @@ teardown() {
     done
     for n in "${!TOUCHED[@]}"; do
         p="$(pool_on "${n}")"
-        node_ssh "${n}" "zfs list -H -o name -r 2>/dev/null | grep -q '/${NFS_PARENT}/${SHARE}\$'" && { fail "leftover: a ${SHARE} dataset on ${n}"; left=1; }
+        node_ssh "${n}" "zfs list -H -o name -r 2>/dev/null | grep -c '/${NFS_PARENT}/${SHARE}\$' >/dev/null" && { fail "leftover: a ${SHARE} dataset on ${n}"; left=1; }
         [[ -z "${HAD_PARENT[${n}]:-}" ]] && node_ssh "${n}" "zfs list -H -o name '${p}/${NFS_PARENT}'" >/dev/null 2>&1 \
             && { fail "leftover: ${p}/${NFS_PARENT} on ${n} (the suite's share created it)"; left=1; }
         node_ssh "${n}" "test -e /tappaas-nfs/${SHARE}" && { fail "leftover: /tappaas-nfs/${SHARE} on ${n}"; left=1; }
     done
-    dns-manager --no-ssl-verify alias list 2>/dev/null | grep -q "$(nfs_share_alias "${SHARE}")" && { fail "leftover: the share alias"; left=1; }
-    rules-manager --no-ssl-verify list-rules 2>/dev/null | grep -q "tappaas-module:${FIX}:" && { fail "leftover: firewall rules of ${FIX}"; left=1; }
+    dns-manager --no-ssl-verify alias list 2>/dev/null | grep -c "$(nfs_share_alias "${SHARE}")" >/dev/null && { fail "leftover: the share alias"; left=1; }
+    rules-manager --no-ssl-verify list-rules 2>/dev/null | grep -c "tappaas-module:${FIX}:" >/dev/null && { fail "leftover: firewall rules of ${FIX}"; left=1; }
     [[ "$(fw "ls /var/db/aliastables" 2>/dev/null | grep -cE "^(nfs_share_${SHARE}|tm_${FIX//-/_})\.")" -eq 0 ]] \
         || { fail "leftover: OPNsense alias table files of ${FIX} / ${SHARE}"; left=1; }
     for n in "${NODES[@]}"; do
-        node_ssh "${n}" "dpkg-query -W -f='\${Status}' nfs-common 2>/dev/null | grep -q 'install ok installed' && ! test -d /etc/nfs.conf.d" \
+        node_ssh "${n}" "dpkg-query -W -f='\${Status}' nfs-common 2>/dev/null | grep -c 'install ok installed' >/dev/null && ! test -d /etc/nfs.conf.d" \
             && { fail "leftover: /etc/nfs.conf.d (nfs-common's) missing on ${n}"; left=1; }
     done
 
@@ -160,7 +160,7 @@ teardown() {
         [[ -z "${HAD_PARENT[${n}]:-}" ]] && dropparent="zfs destroy '${p}/${NFS_PARENT}' 2>/dev/null"
         node_ssh "${n}" "ds='$(dataset_on "${n}" "${p}")'; zfs list \"\${ds}\" >/dev/null 2>&1 && { zfs set sharenfs=off \"\${ds}\"; exportfs -ra; ${stop};
             for i in 1 2 3 4 5 6; do zfs destroy -r \"\${ds}\" 2>/dev/null && break; sleep 5; done; } 2>/dev/null;
-            zfs list -H -o name -r '${p}/${NFS_PARENT}' 2>/dev/null | grep -q /${NFS_PARENT}/ || ${dropparent};
+            zfs list -H -o name -r '${p}/${NFS_PARENT}' 2>/dev/null | grep -c /${NFS_PARENT}/ >/dev/null || ${dropparent};
             rmdir '/tappaas-nfs/${SHARE}' /tappaas-nfs 2>/dev/null; true"
         if [[ -z "${HAD_NFSD[${n}]:-}" && -z "$(nfs_exports "${n}")" ]]; then
             # /etc/nfs.conf.d belongs to nfs-common, which every node has: only
@@ -178,7 +178,7 @@ FWEOF
     for n in "${!TOUCHED[@]}"; do
         cmp -s "${WORK}/${n}.json.orig" "${CFG}/${n}.json" || { fail "restore: config/${n}.json differs from before"; left=1; }
         if [[ -z "${HAD_NFSD[${n}]:-}" && -z "$(nfs_exports "${n}")" ]]; then
-            node_ssh "${n}" "dpkg-query -W -f='\${Status}' nfs-kernel-server 2>/dev/null | grep -q 'install ok installed'" \
+            node_ssh "${n}" "dpkg-query -W -f='\${Status}' nfs-kernel-server 2>/dev/null | grep -c 'install ok installed' >/dev/null" \
                 && { fail "restore: nfs-kernel-server still on ${n} (the suite installed it)"; left=1; }
         fi
     done
@@ -215,7 +215,7 @@ ok "the fragment carries NFS support but no entry for a pending mount" \
 ok "the guest can mount NFS for a later migration" "guest 'command -v mount.nfs && command -v rsync'"
 module-manager validate "${FIX}" > "${WORK}/validate1.log" 2>&1; vrc=$?
 [[ "${vrc}" -eq 0 ]] && grep -q "pending" "${WORK}/validate1.log" && pass "validate warns pending, passes" || fail "validate warns pending, passes (rc ${vrc})"
-rules-manager --no-ssl-verify list-rules 2>/dev/null | grep -q "tappaas-module:${FIX}:egress:alias:nfs_share" \
+rules-manager --no-ssl-verify list-rules 2>/dev/null | grep -c "tappaas-module:${FIX}:egress:alias:nfs_share" >/dev/null \
     && fail "a pending mount has no firewall rule" || pass "a pending mount has no firewall rule"
 
 # ── 2 not granted ─────────────────────────────────────────────────────
@@ -231,9 +231,9 @@ step "3 granted — the node builds the share, the consumer waits for consent"
 TAPPAAS_ALLOW_DISRUPTION="" storage-manager nfs grant "${SHARE}" "${FIX}" rw > "${WORK}/node3.log" 2>&1 || fail "storage-manager grants it (see ${WORK}/node3.log)"
 DS="$(dataset_on "${NODE}" "${POOL}")"
 ok "the dataset is at /tappaas-nfs/${SHARE}" "[ \"\$(node_ssh '${NODE}' 'zfs get -H -o value mountpoint ${DS}')\" = '/tappaas-nfs/${SHARE}' ]"
-ok "the share alias follows ${NODE}" "dns-manager --no-ssl-verify alias list | grep -q '$(nfs_share_alias "${SHARE}") *-> *$(nfs_instance_address_of "${NODE}")'"
+ok "the share alias follows ${NODE}" "dns-manager --no-ssl-verify alias list | grep -c '$(nfs_share_alias "${SHARE}") *-> *$(nfs_instance_address_of "${NODE}")' >/dev/null"
 grep -q "migration pending" "${WORK}/node3.log" && pass "the grant ran the consumer's update; without consent it waits" || fail "the grant ran the consumer's update; without consent it waits"
-rules-manager --no-ssl-verify list-rules 2>/dev/null | grep -q "tappaas-module:${FIX}:egress:alias:nfs_share_${SHARE}:2049" \
+rules-manager --no-ssl-verify list-rules 2>/dev/null | grep -c "tappaas-module:${FIX}:egress:alias:nfs_share_${SHARE}:2049" >/dev/null \
     && pass "the consumer's update compiled its own firewall rule (v0.9, D11)" || fail "the consumer's update compiled its own firewall rule (v0.9, D11)"
 ok "the directory is still local" "guest '! findmnt -n --mountpoint /srv/deep/a && test -f /srv/deep/a/seed-1'"
 
@@ -310,17 +310,17 @@ if [[ -n "${NODE2}" ]]; then
     shares_edit ".nfs.shares[\"${SHARE}\"].server = \"${NODE2}\" | .nfs.shares[\"${SHARE}\"].pool = \"${POOL2}\""
     storage-manager nfs converge --server "${NODE}" > "${WORK}/node10a.log" 2>&1 || fail "the old node unshares it (see ${WORK}/node10a.log)"
     storage-manager nfs converge "${SHARE}" > "${WORK}/node10b.log" 2>&1 || fail "the new node builds it, the alias follows (see ${WORK}/node10b.log)"
-    ok "the alias now follows ${NODE2}" "dns-manager --no-ssl-verify alias list | grep -q '$(nfs_share_alias "${SHARE}") *-> *$(nfs_instance_address_of "${NODE2}")'"
+    ok "the alias now follows ${NODE2}" "dns-manager --no-ssl-verify alias list | grep -c '$(nfs_share_alias "${SHARE}") *-> *$(nfs_instance_address_of "${NODE2}")' >/dev/null"
     # OPNsense caches a host alias's resolution for its TTL (300 s) and re-resolves
     # only after that, on its refresh: a consumer behind the firewall reaches a
     # moved share within about five minutes (ADR-029 D2b). Wait for it.
     N2IP="$(getent ahostsv4 "$(nfs_instance_address_of "${NODE2}")" | awk 'NR==1{print $1}')"
     t0=$SECONDS
-    until fw "pfctl -t nfs_share_${SHARE} -T show" 2>/dev/null | grep -qw "${N2IP}"; do
+    until fw "pfctl -t nfs_share_${SHARE} -T show" 2>/dev/null | grep -cw "${N2IP}" >/dev/null; do
         (( SECONDS - t0 > 600 )) && break
         fw "configctl filter refresh_aliases" >/dev/null 2>&1; sleep 15
     done
-    if fw "pfctl -t nfs_share_${SHARE} -T show" 2>/dev/null | grep -qw "${N2IP}"; then
+    if fw "pfctl -t nfs_share_${SHARE} -T show" 2>/dev/null | grep -cw "${N2IP}" >/dev/null; then
         pass "the firewall follows the alias to ${NODE2} after $(( SECONDS - t0 )) s"
     else
         fail "the firewall follows the alias to ${NODE2} within 10 minutes"
@@ -338,7 +338,7 @@ if [[ -n "${NODE2}" ]]; then
             echo "firewall alias table:"; ssh -o BatchMode=yes -i /home/tappaas/.ssh/tappaas-fw root@firewall.mgmt.internal "pfctl -t nfs_share_${SHARE} -T show" 2>&1 | sed 's/^/    /'
         } >&2
     fi
-    ok "and reaches it on ${NODE2}" "node_ssh '${NODE2}' \"ss -tn state established '( sport = :2049 )' | grep -q '${CIP}:'\""
+    ok "and reaches it on ${NODE2}" "node_ssh '${NODE2}' \"ss -tn state established '( sport = :2049 )' | grep -c '${CIP}:' >/dev/null\""
     [[ "$(md5sum "${CFG}/${FIX}.json" | cut -d' ' -f1)" == "${before}" ]] && pass "the consumer's config did not change" || fail "the consumer's config did not change"
     DS="$(dataset_on "${NODE2}" "${POOL2}")"; HOLDER="${NODE2}"
 else

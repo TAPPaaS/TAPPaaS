@@ -21,7 +21,7 @@ done
 
 # CLI loads + help
 if "${BC}" help >/dev/null 2>&1; then ok "CLI help works"; else bad "help failed"; fi
-if "${BC}" --selftest 2>&1 | grep -q "pure-function checks passed"; then
+if "${BC}" --selftest 2>&1 | grep -c "pure-function checks passed" >/dev/null; then
     ok "pure-function selftest passes (reuses pbs-job/pbs-namespace helpers)"
 else
     bad "selftest failed"
@@ -241,7 +241,7 @@ for _args in "apply-schedule daily --help" "add-to-job 100 --bucket weekly -h"; 
     # shellcheck disable=SC2086  # word-split on purpose
     if "${BC}" ${_args} >/dev/null 2>&1; then ok "'${_args}': help, rc 0"; else bad "'${_args}' did not print help"; fi
 done
-if "${BC}" add-to-job --help | grep -q -- '--retention'; then
+if "${BC}" add-to-job --help | grep -c -- '--retention' >/dev/null; then
     ok "add-to-job --help prints add-to-job's usage"
 else
     bad "add-to-job --help does not show its options"

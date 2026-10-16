@@ -828,7 +828,7 @@ _main_before="$(git -C "${TMP}/w" rev-parse origin/main)"
 FAKE_NOW=$(( 1790000000 + 20*86400 )) run boundary --resume
 [[ "${RC}" -eq 0 ]] && ok "the boundary runs" || bad "boundary failed: ${OUT}"
 [[ "$(tags_on origin/staging)" == *"v2.2"* ]] && ok "staging's new revision is tagged v2.2" || bad "no v2.2 on staging: $(tags_on origin/staging)"
-git -C "${TMP}/w" ls-remote --tags "${TMP}/origin" | grep -q 'refs/tags/v2.2$' \
+git -C "${TMP}/w" ls-remote --tags "${TMP}/origin" | grep -c 'refs/tags/v2.2$' >/dev/null \
     && ok "…and the tag is published" || bad "v2.2 not pushed"
 _msg="$(git -C "${TMP}/w" tag -l --format='%(contents)' v2.2)"
 [[ "${_msg}" == *"TAPPaaS 2.2"* && "${_msg}" == *"Cut into staging 2026-10-11"* && "${_msg}" == *"Previous:   v2.1"* ]] \
@@ -840,7 +840,7 @@ _r="$(releases_on_main)"
     && ok "release/releases.json on main records 2.2 entering staging" || bad "2.2 not recorded: ${_r}"
 [[ "$(jq -r '.releases[] | select(.version=="2.1") | .production' <<<"${_r}")" == "2026-10-11" ]] \
     && ok "…and 2.1 reaching production" || bad "2.1 production not recorded: ${_r}"
-git -C "${TMP}/w" show origin/main:RELEASES.md | grep -q '^| 2.2 | ' \
+git -C "${TMP}/w" show origin/main:RELEASES.md | grep -c '^| 2.2 | ' >/dev/null \
     && ok "RELEASES.md is rendered from it" || bad "RELEASES.md missing the row"
 [[ "$(git -C "${TMP}/w" log -1 --format=%s origin/main)" == "chore(release): 2.2 to staging, 2.1 to production" ]] \
     && ok "one commit on main says what moved" || bad "record commit: $(git -C "${TMP}/w" log -1 --format=%s origin/main)"
@@ -859,7 +859,7 @@ _rm="$(git -C "${TMP}/w" show v2.2:ROADMAP.md)"
     && ok "the group heading counts it as released" || bad "heading not recounted"
 [[ "${_rm}" == *"## Release 2.1 — staging 2026-09-25 · production 2026-10-11"* ]] \
     && ok "2.1's section records it reached production" || bad "2.1 production date not written"
-git -C "${TMP}/w" show origin/main:RELEASES.md | grep -q '^| 2.2 | `v2.2` |' \
+git -C "${TMP}/w" show origin/main:RELEASES.md | grep -c '^| 2.2 | `v2.2` |' >/dev/null \
     && ok "RELEASES.md names the tag while the commit cannot name itself" || bad "RELEASES.md 2.2 row: $(git -C "${TMP}/w" show origin/main:RELEASES.md | grep '^| 2.2')"
 _st="${TMP}/cfg/release-train.json"
 [[ "$(jq -r '.channels.staging.version, .channels.production.version, .lastBoundary.cut, .nextBoundary' "${_st}" | tr '\n' ' ')" \

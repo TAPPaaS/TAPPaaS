@@ -71,7 +71,7 @@ is_public_ip() {
 curl_marker() {
     local fqdn="$1" ip="$2" label="$3"
     for _ in 1 2 3 4 5 6 7 8; do
-        if curl -fsS --max-time 12 --resolve "${fqdn}:443:${ip}" "https://${fqdn}/" 2>/dev/null | grep -q "${PROV_MARKER}"; then
+        if curl -fsS --max-time 12 --resolve "${fqdn}:443:${ip}" "https://${fqdn}/" 2>/dev/null | grep -c "${PROV_MARKER}" >/dev/null; then
             pass "${label}: https://${fqdn} via ${ip} returned the marker"
             return 0
         fi

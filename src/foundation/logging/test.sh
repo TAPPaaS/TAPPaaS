@@ -157,7 +157,7 @@ check_syslog_port() {
     info "Check 7: Syslog receiver listening on tcp/1514"
     # shellcheck disable=SC2086
     if ssh ${SSH_OPTS} "tappaas@${VM_HOST}" \
-        "ss -lnt 'sport = :1514' | grep -q LISTEN" &>/dev/null; then
+        "ss -lnt 'sport = :1514' | grep -c LISTEN >/dev/null" &>/dev/null; then
         check_pass "Syslog ingest port 1514/tcp is listening"
     else
         check_fail "Syslog ingest port 1514/tcp is NOT listening"

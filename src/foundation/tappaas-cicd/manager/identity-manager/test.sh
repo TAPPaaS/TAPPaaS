@@ -395,7 +395,7 @@ JSON
 
     # 2. idempotent re-run → empty plan (preview is the default now)
     plan_out="$("$PM_BIN" reconcile --config-dir "$CFG" 2>/dev/null || true)"
-    if printf '%s' "$plan_out" | grep -qiE 'in sync|nothing to do'; then
+    if printf '%s' "$plan_out" | grep -ciE 'in sync|nothing to do' >/dev/null; then
         ok "live: second reconcile is idempotent (in sync)"
     else
         bad "live: second reconcile should be idempotent"

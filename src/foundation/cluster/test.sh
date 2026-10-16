@@ -603,7 +603,7 @@ else
                 if ssh -o BatchMode=yes -o ConnectTimeout=10 \
                        -o StrictHostKeyChecking=accept-new \
                        "root@${rnode}.mgmt.internal" "qm config ${rvmid}" 2>/dev/null \
-                     | grep -qE "^[a-z]+[0-9]+:[^,]*vm-${rvmid}-cloudinit"; then
+                     | grep -cE "^[a-z]+[0-9]+:[^,]*vm-${rvmid}-cloudinit" >/dev/null; then
                     ci_live=true
                 fi
                 if [[ "${ci}" == "${ci_live}" ]]; then
@@ -1655,7 +1655,7 @@ if [[ "${DEEP}" == "1" ]]; then
     _co_vmid=""; _co_owner=""
     while read -r _id _nd; do
         [[ -n "${_id}" ]] || continue
-        printf '%s\n' "${_co_ha}" | grep -qx "${_id}" && continue
+        printf '%s\n' "${_co_ha}" | grep -cx "${_id}" >/dev/null && continue
         _co_vmid="${_id}"; _co_owner="${_nd}"; break
     done <<< "${_co_vms}"
 

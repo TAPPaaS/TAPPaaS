@@ -324,7 +324,7 @@ if [[ -f "${_prov}" ]]; then
     else
         bad "the backup reconcile is not sequenced after node capture/storage registration"
     fi
-    if grep -A 4 'modify", "backup"' "${_prov}" | grep -q "warn("; then
+    if grep -A 4 'modify", "backup"' "${_prov}" | grep -c "warn(" >/dev/null; then
         ok "a failed reconcile warns (the node is already joined — it must not fail the join)"
     else
         bad "a failed backup reconcile is fatal to node add — it should warn and name the remedy"

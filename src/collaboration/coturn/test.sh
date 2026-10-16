@@ -171,7 +171,7 @@ header "Test 5: Port 3478 UDP — STUN Binding"
 info "Sending STUN binding request to ${TARGET}:3478/udp..."
 
 # Check if nc supports -u on this host
-if ! nc --help 2>&1 | grep -q '\-u'; then
+if ! nc --help 2>&1 | grep -c '\-u' >/dev/null; then
     skip "Port 3478 UDP: nc does not support -u on this host — skipping STUN probe"
 else
     # Send a minimal STUN binding request (RFC 5389) and check for a response

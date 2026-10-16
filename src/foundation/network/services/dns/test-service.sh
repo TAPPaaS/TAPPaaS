@@ -74,7 +74,7 @@ fi
 
 # When an ip is declared, confirm the entry resolves to it.
 if [[ -n "${DNS_IP}" && "${DNS_IP}" != "null" ]]; then
-    if ! grep -E "${FQDN}" <<< "${LIST_OUTPUT}" | grep -qF "${DNS_IP}"; then
+    if ! grep -E "${FQDN}" <<< "${LIST_OUTPUT}" | grep -cF "${DNS_IP}" >/dev/null; then
         error "${RD}DNS host ${FQDN} exists but does not resolve to expected ${DNS_IP}${CL}"
         exit 1
     fi

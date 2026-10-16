@@ -49,7 +49,7 @@ info "${BOLD}Testing: ${VMNAME} (VMID: ${VMID}) on ${NODE}${CL}"
 
 # Test 1: VM is running
 VM_STATUS="$(ssh -o StrictHostKeyChecking=no "root@${NODE}.mgmt.internal" "qm status ${VMID}" 2>/dev/null || echo "error")"
-if echo "${VM_STATUS}" | grep -q "status: running"; then
+if echo "${VM_STATUS}" | grep -c "status: running" >/dev/null; then
     run_test "VM is running" "pass"
 else
     run_test "VM is running (got: ${VM_STATUS})" "fail"
@@ -127,7 +127,7 @@ fi
 # was left undone, so HA kept redirecting to onboarding.)
 if [[ -n "${VM_IP}" ]]; then
     REDIR="$(curl -s -o /dev/null -w '%{redirect_url}' --max-time 10 "http://${VM_IP}:8123/" 2>/dev/null; true)"
-    if echo "${REDIR}" | grep -q 'onboarding'; then
+    if echo "${REDIR}" | grep -c 'onboarding' >/dev/null; then
         run_test "Onboarding complete (still redirects to onboarding: ${REDIR})" "fail"
     else
         run_test "Onboarding complete (no /onboarding.html redirect)" "pass"
@@ -144,7 +144,7 @@ if [[ -n "${LLAT}" && -n "${VM_IP}" ]]; then
     EXT="$(echo "${CFG}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('external_url') or '')" 2>/dev/null || echo '')"
     if [[ -z "${INT}" || -z "${EXT}" ]]; then
         run_test "internal_url + external_url configured (internal='${INT}' external='${EXT}')" "fail"
-    elif echo "${INT}" | grep -qE '\.internal:8123$'; then
+    elif echo "${INT}" | grep -cE '\.internal:8123$' >/dev/null; then
         run_test "URLs set (internal=${INT}, external=${EXT})" "pass"
     else
         run_test "internal_url must be the direct .internal LAN URL (got: ${INT}) — hassanova lesson" "fail"

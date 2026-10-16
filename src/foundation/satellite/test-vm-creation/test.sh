@@ -129,10 +129,10 @@ done
 rm -f /tmp/sat-hello-body.$$
 
 [[ "${ok}" -eq 1 ]] || die "no HTTP 200 through the satellite (last code='${code}')"
-echo "${body}" | grep -q "sat-hello OK" || die "unexpected body through the satellite: '${body}'"
+echo "${body}" | grep -c "sat-hello OK" >/dev/null || die "unexpected body through the satellite: '${body}'"
 # Cert issuer check is best-effort (openssl SNI quirks); warn rather than fail if empty.
 if [[ -n "${issuer}" ]]; then
-    echo "${issuer}" | grep -qi "Let's Encrypt" \
+    echo "${issuer}" | grep -ci "Let's Encrypt" >/dev/null \
         && info "  cert issuer: ${issuer#*= }" \
         || die "served cert is not Let's Encrypt: ${issuer}"
 else

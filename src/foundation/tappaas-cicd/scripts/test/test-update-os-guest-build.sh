@@ -51,7 +51,7 @@ ck "the system profile is set to the system sent" "yes" \
 ck "activation runs under systemd-run and waits" "yes" \
    "$([[ "${CMD}" == *"systemd-run "*"--wait ${SYS}/bin/switch-to-configuration switch" ]] && echo yes || echo no)"
 ck "a release move is staged with boot" "yes" \
-   "$(bash -c 'source "$1"; guest_activate_cmd "$2" boot' _ "${TMP}/fns.sh" "${SYS}" | grep -q 'switch-to-configuration boot$' && echo yes || echo no)"
+   "$(bash -c 'source "$1"; guest_activate_cmd "$2" boot' _ "${TMP}/fns.sh" "${SYS}" | grep -c 'switch-to-configuration boot$' >/dev/null && echo yes || echo no)"
 ck "nothing is evaluated on the guest" "" \
    "$(grep -oE 'nixos-rebuild|nix-build|nix-instantiate' <<< "${CMD}")"
 

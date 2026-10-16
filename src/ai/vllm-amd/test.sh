@@ -52,7 +52,7 @@ echo ""
 
 # Test 1: Container running
 echo "--- LXC Container ---"
-pct status "${VMID}" | grep -q "running"
+pct status "${VMID}" | grep -c "running" >/dev/null
 check "LXC container is running" "$?"
 
 # Test 2: SSH / exec access

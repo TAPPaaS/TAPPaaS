@@ -75,7 +75,7 @@ else
 fi
 
 # ── Test 5: Web UI port 3000 ──────────────────────────────────────────────────
-if nc -zv -w 5 "${VM_HOST}" 3000 2>&1 | grep -q "succeeded"; then
+if nc -zv -w 5 "${VM_HOST}" 3000 2>&1 | grep -c "succeeded" >/dev/null; then
     pass "Web UI reachable on TCP 3000"
 else
     fail "Web UI NOT reachable on TCP 3000 — check forgejo service and firewall"
@@ -100,7 +100,7 @@ else
 fi
 
 # ── Test 8: SSH port 22 ───────────────────────────────────────────────────────
-if nc -zv -w 5 "${VM_HOST}" 22 2>&1 | grep -q "succeeded"; then
+if nc -zv -w 5 "${VM_HOST}" 22 2>&1 | grep -c "succeeded" >/dev/null; then
     pass "SSH git port 22 reachable"
 else
     fail "SSH git port 22 NOT reachable"

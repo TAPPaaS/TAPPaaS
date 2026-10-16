@@ -282,7 +282,7 @@ else
     fail "update-tappaas.timer runs '${_have_cal}', site.json asks for '${_want_cal}' (systemctl start update-tappaas-schedule.service)"
 fi
 
-if crontab -l 2>/dev/null | grep -q "update-tappaas"; then
+if crontab -l 2>/dev/null | grep -c "update-tappaas" >/dev/null; then
     fail "stale update-tappaas crontab entry present (cron retired in #150; remove it)"
 else
     pass "no legacy update-tappaas cron entry"
@@ -389,12 +389,12 @@ trap - EXIT
 # #453: `add` installs; it never re-writes a deployed config. --force is gone,
 # and the refusal names the paths that do exist.
 _IM="${SCRIPT_DIR}/manager/module-manager/install-module.sh"
-if "${_IM}" --help 2>&1 | grep -q -- '--reinstall'; then
+if "${_IM}" --help 2>&1 | grep -c -- '--reinstall' >/dev/null; then
     pass "install-module.sh --help documents --reinstall"
 else
     fail "install-module.sh --help missing --reinstall"
 fi
-if "${_IM}" --help 2>&1 | grep -qE '^[[:space:]]+--force\b'; then
+if "${_IM}" --help 2>&1 | grep -cE '^[[:space:]]+--force\b' >/dev/null; then
     fail "install-module.sh still advertises --force (#453)"
 else
     pass "install-module.sh no longer advertises --force (#453)"
@@ -798,7 +798,7 @@ fi
 # backup-controller: pure-function selftest (no PBS contact)
 _bc="${SCRIPT_DIR}/controller/backup-controller/backup-controller"
 if [[ -x "${_bc}" ]]; then
-    if "${_bc}" --selftest 2>&1 | grep -q "pure-function checks passed"; then
+    if "${_bc}" --selftest 2>&1 | grep -c "pure-function checks passed" >/dev/null; then
         pass "backup-controller: pure-function selftest passes"
     else
         fail "backup-controller: selftest failed"
@@ -959,7 +959,7 @@ if [[ "${DEEP}" != "1" ]]; then
 elif ! command -v systemd-run >/dev/null 2>&1 || ! systemctl cat update-tappaas.service >/dev/null 2>&1; then
     skip "the sweep's context (no update-tappaas.service here — not a mothership)"
 else
-    if "${_ur}" -- bash -c '[ -t 0 ] && echo TTY || echo NOTTY' 2>/dev/null | grep -qx NOTTY; then
+    if "${_ur}" -- bash -c '[ -t 0 ] && echo TTY || echo NOTTY' 2>/dev/null | grep -cx NOTTY >/dev/null; then
         pass "tappaas-unit-run runs as a service: no terminal"
     else
         fail "tappaas-unit-run did not reproduce the unit's context (a terminal, or it did not run)"

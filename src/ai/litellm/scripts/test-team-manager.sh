@@ -145,7 +145,7 @@ check "every jq in key delete has an input" \
   "$(sed -n '/^cmd_key_delete()/,/^}/p' "${TARGET}" | grep -E "jq -r " | grep -vcE '<<<|\| *jq|jq [^|]*\$\{|jq -cn')" "0"
 
 check "usage documents key delete" \
-  "$(bash "${TARGET}" --help 2>&1 | grep -q 'key delete' && echo yes)" "yes"
+  "$(bash "${TARGET}" --help 2>&1 | grep -c 'key delete' >/dev/null && echo yes)" "yes"
 
 # ── team delete must not orphan what points at the team ─────────────────────
 # The old prompt WARNED — "Virtual keys scoped to this team will lose their

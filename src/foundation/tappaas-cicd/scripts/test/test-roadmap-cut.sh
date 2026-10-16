@@ -105,7 +105,7 @@ ck "the release keeps the wave and group headings"       yes "$(grep -q '^### Wa
 ck "…the finished group's intent"                        yes "$(grep -q 'Finished intent.' <<< "${rel}" && echo yes || echo no)"
 ck "…and the sub-table under its own heading"            yes "$(grep -q '^##### Sub table' <<< "${rel}" && grep -q '| ✅ #12 | sub done' <<< "${rel}" && echo yes || echo no)"
 ck "Future Work's ✅ row moves too"                       yes "$(grep -q '| ✅ #51 | finished outside a wave' <<< "${rel}" && echo yes || echo no)"
-ck "…and its open row stays"                             yes "$(sed -n '/^## Future Work/,/^## Wave/p' "${F}" | grep -q '| #50 | later' && echo yes || echo no)"
+ck "…and its open row stays"                             yes "$(sed -n '/^## Future Work/,/^## Wave/p' "${F}" | grep -c '| #50 | later' >/dev/null && echo yes || echo no)"
 ck "At a glance is recomputed"                           yes "$(has "${F}" '| Wave | Group | Ease | Risk | released | done for 2.2 | open |')"
 cp "${F}" "${T}/once"
 python3 "${CUT}" --file "${F}" --version 2.1 --date 2026-10-09 --promoted 2.0 >/dev/null
@@ -120,8 +120,8 @@ s = s.replace("<!-- next-release summary -->\n\n<!-- /next-release summary -->",
 open(p, "w").write(s)
 PY
 python3 "${CUT}" --file "${F}" --version 2.1 --date 2026-10-09 >/dev/null
-ck "Next release becomes the summary"                    yes "$(sed -n '/^## Release 2.1/,/^## Release 2.0/p' "${F}" | grep -q 'Alerting and storage.' && echo yes || echo no)"
-ck "…and is left empty"                                  no "$(sed -n '/^## Next release/,/^## Release 2.1/p' "${F}" | grep -q 'Alerting and storage.' && echo yes || echo no)"
+ck "Next release becomes the summary"                    yes "$(sed -n '/^## Release 2.1/,/^## Release 2.0/p' "${F}" | grep -c 'Alerting and storage.' >/dev/null && echo yes || echo no)"
+ck "…and is left empty"                                  no "$(sed -n '/^## Next release/,/^## Release 2.1/p' "${F}" | grep -c 'Alerting and storage.' >/dev/null && echo yes || echo no)"
 
 echo "── --normalize ──"
 cp "${T}/orig" "${F}"

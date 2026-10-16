@@ -115,7 +115,7 @@ if (( UDP_RELAY_COUNT > 0 )); then
     while IFS= read -r entry; do
         PORT=$(echo "${entry}" | jq -r '.port')
         DESC="tappaas_${MODULE_SAFE}_${PORT}"
-        if echo "${EXISTING_DESCS}" | grep -qF "${DESC}"; then
+        if echo "${EXISTING_DESCS}" | grep -cF "${DESC}" >/dev/null; then
             info "  UDP relay port ${PORT} (${DESC}): ${GN}present${CL}"
         else
             error "  UDP relay port ${PORT} (${DESC}): ${RD}MISSING${CL}"

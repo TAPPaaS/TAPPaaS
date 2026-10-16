@@ -53,7 +53,7 @@ fi
 
 info "  Check 2: namespace exists on the PBS"
 NS="$(pbs_fs_namespace "${MODULE}")"
-if pbs_ns_list 2>/dev/null | grep -qx "${NS}"; then ok "namespace ${NS} present"
+if pbs_ns_list 2>/dev/null | grep -cx "${NS}" >/dev/null; then ok "namespace ${NS} present"
 else bad "namespace ${NS} missing on $(pbs_storage_name)"; fi
 
 info "  Check 3: the runner is deployed on the guest"

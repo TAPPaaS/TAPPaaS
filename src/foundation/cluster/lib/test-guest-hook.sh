@@ -44,7 +44,7 @@ printf 'name: new\n' > "${q}/131.conf"
 out="$(run apply 110)"
 ck "a guest that appears is attached on the next apply" "yes" "$(grep -q 'attached to 131' <<<"${out}" && echo yes || echo no)"
 ck "no firewall VM ('-'): settings emptied, check says so" "yes" \
-   "$(run apply - >/dev/null; [[ ! -s ${r}/etc/tappaas/firewall-wait.env || -z $(grep FW_VMID "${r}/etc/tappaas/firewall-wait.env") ]] && run check | grep -q 'no firewall VM' && echo yes || echo no)"
+   "$(run apply - >/dev/null; [[ ! -s ${r}/etc/tappaas/firewall-wait.env || -z $(grep FW_VMID "${r}/etc/tappaas/firewall-wait.env") ]] && run check | grep -c 'no firewall VM' >/dev/null && echo yes || echo no)"
 ck "a bad firewall id is a usage error" "2" "$(run apply abc >/dev/null; echo $?)"
 
 # ── the hookscript itself ──

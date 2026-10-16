@@ -179,7 +179,7 @@ next_free_net_index() {
     local node_fqdn="$1" i
     for i in $(seq 0 15); do
         if ! ssh -n -o BatchMode=yes root@"${node_fqdn}" "qm config ${VMID}" 2>/dev/null \
-                | grep -q "^net${i}:"; then
+                | grep -c "^net${i}:" >/dev/null; then
             echo "$i"; return 0
         fi
     done
@@ -317,13 +317,13 @@ set -euo pipefail
 [[ -e "/sys/class/net/${PORT}/device" ]] || { echo "Port ${PORT} is not a physical NIC" >&2; exit 1; }
 # Refuse a port that is in use — guards against enslaving the node's mgmt NIC
 # and locking it out (no auto-rollback timer here, unlike config-network.sh).
-if ip -o link show "${PORT}" 2>/dev/null | grep -qoE 'master [^ ]+'; then
+if ip -o link show "${PORT}" 2>/dev/null | grep -cE 'master [^ ]+' >/dev/null; then
     echo "Port ${PORT} is already enslaved to a bridge/bond — refusing" >&2; exit 1
 fi
-if ip -o -4 addr show "${PORT}" 2>/dev/null | grep -q 'inet '; then
+if ip -o -4 addr show "${PORT}" 2>/dev/null | grep -c 'inet ' >/dev/null; then
     echo "Port ${PORT} has an IPv4 address configured — refusing" >&2; exit 1
 fi
-if ip route show default 2>/dev/null | grep -qE "dev ${PORT}( |\$)"; then
+if ip route show default 2>/dev/null | grep -cE "dev ${PORT}( |\$)" >/dev/null; then
     echo "Port ${PORT} carries the default route — refusing" >&2; exit 1
 fi
 if ! grep -qF "${MARK_BEGIN}" "${INTERFACES}"; then

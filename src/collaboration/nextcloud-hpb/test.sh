@@ -171,7 +171,7 @@ info "Fetching http://${TARGET}:8080/api/v1/welcome..."
 # /api/v1/welcome is the public, unauthenticated health endpoint; /stats requires the
 # stats grant (IP allowlist/token) and returns non-JSON 403 to tappaas-cicd by default.
 WELCOME=$(curl -sf --max-time 10 "http://${TARGET}:8080/api/v1/welcome" 2>/dev/null || true)
-if echo "${WELCOME}" | grep -q '"nextcloud-spreed-signaling"'; then
+if echo "${WELCOME}" | grep -c '"nextcloud-spreed-signaling"' >/dev/null; then
     pass "HPB welcome endpoint responded (signaling server healthy)"
 else
     fail "HPB welcome endpoint did not return expected JSON — service may not be ready"
@@ -219,7 +219,7 @@ else
         config:app:get spreed signaling_servers 2>/dev/null" | tr -d '\r' || true)
     if [ -z "${SIG_CONF}" ]; then
         fail "Nextcloud Talk has NO signaling server registered (signaling_servers is empty) — the hpb connector has not run"
-    elif echo "${SIG_CONF}" | grep -qF "${HPB_PROXY_DOMAIN}"; then
+    elif echo "${SIG_CONF}" | grep -cF "${HPB_PROXY_DOMAIN}" >/dev/null; then
         pass "Nextcloud Talk signaling_servers contains ${HPB_PROXY_DOMAIN}"
     else
         fail "Nextcloud Talk signaling_servers does not reference the HPB (${HPB_PROXY_DOMAIN}): $(echo "${SIG_CONF}" | tr -d '\n' | cut -c1-160)"
@@ -239,7 +239,7 @@ else
     # check if the Talk app is enabled as a proxy for service health
     TALK_STATUS=$($NC_SSH "sudo nextcloud-occ \
         app:list 2>/dev/null | grep -w spreed | head -1" || true)
-    if echo "${TALK_STATUS}" | grep -q 'spreed'; then
+    if echo "${TALK_STATUS}" | grep -c 'spreed' >/dev/null; then
         pass "Nextcloud Talk (spreed) app is enabled"
     else
         skip "Could not confirm Nextcloud Talk app status — check manually"
@@ -262,7 +262,7 @@ fi
 
 # Loopback only: the WebSocket API must be bound to 127.0.0.1, never a routable address.
 JANUS_LISTEN=$(remote "ss -ltnH 2>/dev/null | awk '{print \$4}' | grep ':8188\$' | head -3 | tr '\n' ' '" || true)
-if echo "${JANUS_LISTEN}" | grep -q '^127\.0\.0\.1:8188'; then
+if echo "${JANUS_LISTEN}" | grep -c '^127\.0\.0\.1:8188' >/dev/null; then
     pass "Janus WebSocket API listens on 127.0.0.1:8188 only"
 elif [ -n "${JANUS_LISTEN}" ]; then
     fail "Janus WebSocket API listens on ${JANUS_LISTEN} — must be loopback only"
@@ -277,9 +277,9 @@ header "Test 10: Signaling Server Connected to Janus (MCU)"
 info "Checking nextcloud-spreed-signaling reports its Janus MCU..."
 
 MCU_LOG=$(remote "sudo journalctl -u nextcloud-spreed-signaling -b --no-pager 2>/dev/null | grep -iE 'janus|mcu' | tail -5" || true)
-if echo "${MCU_LOG}" | grep -qiE 'connected to janus|janus .*(version|ready)|using janus'; then
+if echo "${MCU_LOG}" | grep -ciE 'connected to janus|janus .*(version|ready)|using janus' >/dev/null; then
     pass "Signaling server connected to Janus: $(echo "${MCU_LOG}" | grep -iE 'connected|version|ready|using' | tail -1 | cut -c1-140)"
-elif echo "${MCU_LOG}" | grep -qiE 'error|fail|refused'; then
+elif echo "${MCU_LOG}" | grep -ciE 'error|fail|refused' >/dev/null; then
     fail "Signaling server cannot reach Janus: $(echo "${MCU_LOG}" | grep -iE 'error|fail|refused' | tail -1 | cut -c1-160)"
 else
     fail "Signaling server log shows no Janus MCU connection this boot — is mcu.type=janus in server.conf?"
@@ -299,7 +299,7 @@ if [ -n "${FACT_TURN}" ]; then
 else
     fail "turnHost missing in the companion JSON — the HPB advertises coturn's internal name (coturn:turn did not run before the rebuild)"
 fi
-if [ -n "${FACT_NC}" ] && echo "${FACT_NC}" | grep -q '^https://'; then
+if [ -n "${FACT_NC}" ] && echo "${FACT_NC}" | grep -c '^https://' >/dev/null; then
     pass "nextcloudPublicUrl stamped: ${FACT_NC}"
 else
     fail "nextcloudPublicUrl missing in the companion JSON — Talk rejects the HPB with invalid_backend (nextcloud:fileservice did not run before the rebuild)"

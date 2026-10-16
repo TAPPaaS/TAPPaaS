@@ -176,7 +176,7 @@ aj="$(BM "list --json --config-dir '${ARCH}'")"
     && ok "archived module still reports its opt-in" || bad "archived optedIn"
 [[ "$(jq -r '.[0].archived' <<<"$aj")" == "true" ]] \
     && ok "list surfaces status=archived" || bad "archived flag"
-BM "list --config-dir '${ARCH}'" 2>&1 | grep -q "OPTED-IN" \
+BM "list --config-dir '${ARCH}'" 2>&1 | grep -c "OPTED-IN" >/dev/null \
     && ok "list table has a separate OPTED-IN column" || bad "OPTED-IN column missing"
 
 # ── membership read from the JOB (the fix), via a stub controller ─────

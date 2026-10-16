@@ -60,7 +60,7 @@ out="$(ko apply)"; rc=$?
 ck "apply succeeds"                               0 "${rc}"
 ck "…writes the drop-in"                          yes "$([[ -f "${SSH_KEY_ONLY_DROPIN}" ]] && echo yes || echo no)"
 ck "…with the three settings"                     3 "$(grep -c -E '^(PermitRootLogin prohibit-password|PasswordAuthentication no|KbdInteractiveAuthentication no)$' "${SSH_KEY_ONLY_DROPIN}")"
-ck "…marked as TAPPaaS's"                         yes "$(head -1 "${SSH_KEY_ONLY_DROPIN}" | grep -q '^# Managed by TAPPaaS' && echo yes || echo no)"
+ck "…marked as TAPPaaS's"                         yes "$(head -1 "${SSH_KEY_ONLY_DROPIN}" | grep -c '^# Managed by TAPPaaS' >/dev/null && echo yes || echo no)"
 ck "…and reloads sshd once"                       1 "$(reloads)"
 out="$(ko apply)"; rc=$?
 ck "a second apply succeeds"                      0 "${rc}"
