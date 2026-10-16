@@ -133,6 +133,11 @@ required=(
     lib/remove-node-lib.sh
     lib/test-remove-node.sh
     remove-node.sh
+    lan-uplink.sh
+    lib/lan-bond-lib.sh
+    lib/lan-uplink-lib.sh
+    lib/test-lan-bond-lib.sh
+    lib/test-lan-uplink-lib.sh
     services/vm/install-service.sh
     services/vm/update-service.sh
     services/vm/delete-service.sh
@@ -240,6 +245,21 @@ if [[ -x "${SCRIPT_DIR}/lib/test-ha-bridge-lib.sh" ]]; then
 else
     fail "lib/test-ha-bridge-lib.sh not found or not executable"
 fi
+
+# The lan uplink as a bond (#40): rendering, findings, port names.
+info "${BOLD}Test 2a0f: lan uplink — bond rendering and findings (#40)${CL}"
+for _t in test-lan-bond-lib.sh test-lan-uplink-lib.sh; do
+    if [[ -x "${SCRIPT_DIR}/lib/${_t}" ]]; then
+        if lu_out=$("${SCRIPT_DIR}/lib/${_t}" 2>&1); then
+            pass "${_t}: $(tail -1 <<< "${lu_out}")"
+        else
+            fail "${_t} failed"
+            indent <<< "${lu_out}"
+        fi
+    else
+        fail "lib/${_t} not found or not executable"
+    fi
+done
 
 # haCpu (#827): the CPU model an HA guest runs, from the cluster's inventory.
 info "${BOLD}Test 2a0d: HA CPU model decisions (#827)${CL}"

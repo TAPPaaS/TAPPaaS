@@ -11,6 +11,8 @@
 #   6. Reconciles the storage node lists from site.json
 #   7. Registers each node as a `pvehost` module instance, if it is not one yet
 #      (ADR-026 D4 stage 1, #665) — inert: nothing on the node changes
+#   7b. lldpd (receive-only) on each node, and its lan uplink recorded as its
+#      declaration when it has none (#40) — the uplink itself is not changed
 #
 # Usage: ./update.sh [module-name]
 #
@@ -409,6 +411,26 @@ while read -r node; do
         warn "  ${node}: not registered — $(tail -1 "/tmp/adopt-${node}.err" | sed 's/\x1b\[[0-9;]*m//g')"
     fi
     rm -f "/tmp/adopt-${node}.err"
+done <<< "$NODES"
+
+# Step 7b: each node's lan uplink (#40).
+#   lldpd, receive-only, so each port can say which switch it reaches; and a node
+#   with no `uplinks` in its config gets the layout it runs recorded as its
+#   declaration — nothing on the node changes. Converging a declaration is never
+#   done here: re-carrying a lan bridge drains the node, so it is the operator's
+#   `site-manager node network set <node> --apply`. Drift is reported by
+#   health-manager (lan-uplink). Report-and-continue, as Step 5b.
+info "${BOLD}Step 7b: lan uplinks — lldpd and the recorded declaration${CL}"
+while read -r node; do
+    [[ -n "${node}" ]] || continue
+    [[ "$(module_of "${node}" 2>/dev/null)" == pvehost ]] || continue
+    if _lu_out="$("${SCRIPT_DIR}/lan-uplink.sh" ensure-lldp "${node}" 2>&1)"; then
+        while IFS= read -r _l; do [[ -n "${_l}" ]] && debug "${node}: ${_l}"; done <<<"${_lu_out}"
+    else
+        printf '%s\n' "${_lu_out}" >&2
+        warn "${node}: lldpd not in place — see above"
+    fi
+    "${SCRIPT_DIR}/lan-uplink.sh" capture "${node}" || warn "${node}: lan uplink not recorded"
 done <<< "$NODES"
 
 # ── Step 8: retire the shipped node placeholders (#673) ──────────────

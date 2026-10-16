@@ -326,12 +326,15 @@ rn_live_unsafe_guests() {
 # action.
 #
 # Arguments: <node>
-reboot_one_node() {
-    local node="$1"
-    local latest active local_wait=0 new_running stuck old_boot_id
-
-    info "${BOLD}Rebooting ${node}${CL}"
-
+# Empty <node> of its HA guests, as a reboot does (#40 shares it with the lan
+# uplink change): quorum check, the #827 live-safety guard, haCpu host guests
+# relocated by stop/start, HA maintenance mode, wait for the drain. Leaves the
+# node in maintenance on success; rn_undrain_node brings it back. Sets RN_MOVED
+# (the relocated host guests, for rn_undrain_node). RN_DRAIN_FOR names what the
+# drain is for in its refusal ("rebooted").
+# Returns 0 drained, 1 failed (maintenance restored), 3 unsafe (nothing moved).
+rn_drain_node() {
+    local node="$1" active local_wait=0
     # Reachability.
     rn_node_ssh "$node" "true" 2>/dev/null || { error "Cannot reach ${node}"; return 1; }
 
@@ -344,8 +347,6 @@ reboot_one_node() {
     fi
     info "  ${GN}✓${CL} HA quorum OK (${active} alive)"
 
-    latest=$(rn_latest_kernel "$node")
-
     # #827: maintenance moves every HA guest LIVE, and the CRM does not check
     # that the target can run what the guest may be using. Refuse the drain —
     # before anything moves — when a guest would land on a CPU missing features.
@@ -354,27 +355,27 @@ reboot_one_node() {
         unsafe="(could not read the cluster's guests — not draining blind)"
     fi
     if [[ -n "${unsafe}" ]]; then
-        warn "DEFERRED: ${node} not rebooted — draining it would move HA guests LIVE to a CPU lacking features they may use:"
+        warn "DEFERRED: ${node} not ${RN_DRAIN_FOR:-rebooted} — draining it would move HA guests LIVE to a CPU lacking features they may use:"
         while IFS= read -r _l; do warn "    ${_l}"; done <<< "${unsafe}"
         warn "  Nothing was moved. Their cluster:ha update sets a CPU model both nodes run (haCpu: common,"
         warn "  the default) — in effect once each guest restarts — or haCpu: host moves them by stop/start."
-        warn "  Until then: move them offline (module-manager migrate <module> --force), then reboot-node.sh --execute ${node}"
+        warn "  Until then: move them offline (module-manager migrate <module> --force), then try again"
         return 3
     fi
 
     # haCpu host guests (#827): off this node by stop and start, before the
     # drain could move them live; back the same way once the node is back.
-    local moved="" _sid _name _to
-    if ! moved="$(rn_host_guests "$node")"; then
-        error "Could not read ${node}'s HA guests — not rebooting"
+    RN_MOVED=""; local _sid _name _to
+    if ! RN_MOVED="$(rn_host_guests "$node")"; then
+        error "Could not read ${node}'s HA guests — not draining it"
         return 1
     fi
     while read -r _sid _name _to; do
         [[ -n "${_sid}" ]] || continue
         info "  Relocating ${_name} (haCpu host) to ${_to} — stop, move, start..."
         rn_relocate "$node" "$_sid" "$_to" \
-            || { error "Relocating ${_name} to ${_to} failed — not rebooting ${node}"; return 1; }
-    done <<< "${moved}"
+            || { error "Relocating ${_name} to ${_to} failed — ${node} not drained"; return 1; }
+    done <<< "${RN_MOVED}"
 
     # HA maintenance mode → migrate managed VMs off this node.
     info "  Enabling HA maintenance mode..."
@@ -395,48 +396,22 @@ reboot_one_node() {
             # stuck maintenance flag on every reboot attempt. Unlike the
             # post-reboot-unreachable path below, keeping maintenance here buys
             # nothing: the node never went down.
-            info "  Disabling HA maintenance mode (drain timed out; node not rebooted)..."
+            info "  Disabling HA maintenance mode (drain timed out; nothing else done)..."
             rn_node_ssh "$node" "ha-manager crm-command node-maintenance disable ${node}" \
                 || warn "  Could not disable maintenance mode on ${node} — run manually: ha-manager crm-command node-maintenance disable ${node}"
             return 1
         fi
     done
     info "  ${GN}✓${CL} HA VMs migrated off ${node}"
+    return 0
+}
 
-    # Reboot — the SSH connection drops, which is expected. Remember the boot id
-    # first, so the wait can tell a node that has really rebooted from one that
-    # is merely slow to go down and still answering SSH.
-    old_boot_id=$(rn_node_ssh "$node" "cat /proc/sys/kernel/random/boot_id" 2>/dev/null || true)
-    info "  Issuing reboot..."
-    rn_node_ssh "$node" "reboot" || true
-    sleep 15
-    if ! rn_wait_for_node "$node" "" "$old_boot_id"; then
-        error "Node ${node} did not return after reboot (left in maintenance mode so HA keeps its VMs elsewhere)"
-        return 1
-    fi
-    info "  ${GN}✓${CL} ${node} is back online"
-
-    # "Answers SSH" is not "is a cluster member" — see rn_node_is_cluster_member.
-    # Everything below this point talks to the HA stack, so gate on membership
-    # rather than reachability, or the maintenance-disable races the boot.
-    if ! rn_wait_cluster_member "$node"; then
-        error "${node} rebooted but did not rejoin the cluster within ${RN_CLUSTER_WAIT_MAX:-120}s"
-        error "  It is STILL IN MAINTENANCE MODE and excluded from HA placement. Investigate, then clear with:"
-        error "    ha-manager crm-command node-maintenance disable ${node}"
-        return 1
-    fi
-    info "  ${GN}✓${CL} ${node} rejoined the cluster"
-
-    # Verify the new kernel is the one actually running.
-    new_running=$(rn_running_kernel "$node")
-    if [[ -z "$latest" ]]; then
-        info "  ${GN}✓${CL} Running kernel: ${new_running} (no newer kernel pending)"
-    elif [[ "$new_running" == "$latest" ]]; then
-        info "  ${GN}✓${CL} New kernel active: ${new_running}"
-    else
-        warn "  ${node} running ${new_running} (expected ${latest}) — check grub default"
-    fi
-
+# Bring a drained <node> back into HA placement: sweep stranded cloud-init
+# volumes, clear maintenance (confirmed), wait for the failback to settle, and
+# move the haCpu host guests in RN_MOVED back. Non-zero only when maintenance
+# could not be cleared.
+rn_undrain_node() {
+    local node="$1" stuck _sid _name _to
     # Clear any cloud-init volume stranded here, so failback cannot wedge (#146).
     rn_sweep_cloudinit_orphans "$node"
 
@@ -477,7 +452,58 @@ reboot_one_node() {
         info "  Relocating ${_name} back to ${node}..."
         rn_relocate "$node" "$_sid" "$node" \
             || warn "  ${_name} did not return to ${node} — it runs on ${_to}; move it with: ha-manager crm-command relocate ${_sid} ${node}"
-    done <<< "${moved}"
+    done <<< "${RN_MOVED}"
+
+    return 0
+}
+
+reboot_one_node() {
+    local node="$1"
+    local latest new_running old_boot_id
+
+    info "${BOLD}Rebooting ${node}${CL}"
+
+    latest=$(rn_latest_kernel "$node")
+
+    local _drc=0
+    rn_drain_node "$node" || _drc=$?
+    [[ ${_drc} -eq 0 ]] || return "${_drc}"
+
+    # Reboot — the SSH connection drops, which is expected. Remember the boot id
+    # first, so the wait can tell a node that has really rebooted from one that
+    # is merely slow to go down and still answering SSH.
+    old_boot_id=$(rn_node_ssh "$node" "cat /proc/sys/kernel/random/boot_id" 2>/dev/null || true)
+    info "  Issuing reboot..."
+    rn_node_ssh "$node" "reboot" || true
+    sleep 15
+    if ! rn_wait_for_node "$node" "" "$old_boot_id"; then
+        error "Node ${node} did not return after reboot (left in maintenance mode so HA keeps its VMs elsewhere)"
+        return 1
+    fi
+    info "  ${GN}✓${CL} ${node} is back online"
+
+    # "Answers SSH" is not "is a cluster member" — see rn_node_is_cluster_member.
+    # Everything below this point talks to the HA stack, so gate on membership
+    # rather than reachability, or the maintenance-disable races the boot.
+    if ! rn_wait_cluster_member "$node"; then
+        error "${node} rebooted but did not rejoin the cluster within ${RN_CLUSTER_WAIT_MAX:-120}s"
+        error "  It is STILL IN MAINTENANCE MODE and excluded from HA placement. Investigate, then clear with:"
+        error "    ha-manager crm-command node-maintenance disable ${node}"
+        return 1
+    fi
+    info "  ${GN}✓${CL} ${node} rejoined the cluster"
+
+    # Verify the new kernel is the one actually running.
+    new_running=$(rn_running_kernel "$node")
+    if [[ -z "$latest" ]]; then
+        info "  ${GN}✓${CL} Running kernel: ${new_running} (no newer kernel pending)"
+    elif [[ "$new_running" == "$latest" ]]; then
+        info "  ${GN}✓${CL} New kernel active: ${new_running}"
+    else
+        warn "  ${node} running ${new_running} (expected ${latest}) — check grub default"
+    fi
+
+    rn_undrain_node "$node" || return 1
 
     info "  ${GN}✓${CL} ${node} reboot complete"
     return 0
