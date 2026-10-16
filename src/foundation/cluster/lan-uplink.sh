@@ -348,10 +348,21 @@ converge() {  # <declaration>
 
     # A rollback past the watchdog's 60s is only safe on a node whose LRM has
     # released it: a node cut off longer than that would otherwise fence itself.
-    if (( ROLLBACK_SECS > 45 )) && rn_node_ssh "${NODE}" "ha-manager status" 2>/dev/null \
-            | grep -E "^lrm ${NODE} " | grep -q "watchdog active"; then
-        rn_undrain_node "${NODE}" || true
-        die "--switch-wait: ${NODE}'s HA watchdog is still armed after the drain — a ${ROLLBACK_SECS}s rollback could fence it. Nothing changed."
+    # The LRM lets go of it only after idling for a while (some ten minutes),
+    # so wait for that — at most WATCHDOG_WAIT — rather than refusing at once.
+    if (( ROLLBACK_SECS > 45 )); then
+        local w=0 armed
+        while armed="$(rn_node_ssh "${NODE}" "ha-manager status" 2>/dev/null | grep -E "^lrm ${NODE} ")" \
+              && grep -q "watchdog active" <<<"${armed}"; do
+            (( w == 0 )) && info "  Waiting for ${NODE}'s HA watchdog to be released before a ${ROLLBACK_SECS}s rollback window (the LRM idles first, ~10 min)..."
+            if (( w >= ${WATCHDOG_WAIT:-900} )); then
+                rn_undrain_node "${NODE}" || true
+                die "${NODE}'s HA watchdog was still armed after ${w}s drained — a ${ROLLBACK_SECS}s rollback could fence it. Nothing changed."
+            fi
+            sleep 15; w=$((w + 15))
+            (( w % 120 == 0 )) && info "  …still armed after ${w}s: ${armed#lrm ${NODE} }"
+        done
+        (( w == 0 )) || info "  ${GN}✓${CL} ${NODE}'s watchdog released after ${w}s"
     fi
     # Out of lacp: the aggregate goes first. The node keeps talking LACP to no
     # partner on one leg meanwhile; were the aggregate left while the node went
