@@ -21,7 +21,7 @@
 #       Declared next to live: members, mode, state, speed, LACP aggregator, the
 #       switch each port reaches (LLDP), corosync — and what is wrong with it.
 #   lan-uplink.sh set <node> [--lan-ports <a,b>] [--lan-mode active-backup|lacp]
-#                            [--lan-primary <p>] [--mtu <n>] [--no-wan] [--config-only]
+#                            [--lan-primary <p>] [--mtu <n>] [--no-wan] [--switch-wait <s>] [--config-only]
 #                            [--dry-run|--execute] [--yes]
 #       Declares the uplink (ports by name or MAC), then converges the node to it:
 #       a preview by default; --execute drains the node (HA maintenance), carries
@@ -31,6 +31,10 @@
 #       there is. --config-only declares without contacting the node (MACs only).
 #       --no-wan: the wan bridge gives up its port (declared wan.ports []), so it
 #       can join the lan bond — the node can no longer carry the firewall's WAN.
+#       --switch-wait <s>: wait up to <s> seconds (instead of 30) for the change to
+#       verify — time to configure the switch side, e.g. the LAG for lacp, after
+#       the node already speaks it. The rollback grows with it, so it is refused
+#       unless the drained node's HA watchdog is released (LRM not active).
 #   lan-uplink.sh test <node> [--dry-run|--execute] [--yes]
 #       Fails each leg over in turn on a drained node: the leg goes down for ~10s
 #       while mgmt and corosync must stay up; a timer on the node brings it back
@@ -57,8 +61,8 @@ readonly SCRIPT_DIR
 # shellcheck source=lib/lan-bond-lib.sh disable=SC1091
 . "${SCRIPT_DIR}/lib/lan-bond-lib.sh"
 
-readonly ROLLBACK_SECS=45             # under the 60s HA watchdog
-readonly CONFIRM_BY=30                # seconds this side has to confirm in
+ROLLBACK_SECS=45                      # under the 60s HA watchdog
+CONFIRM_BY=30                         # seconds this side has to confirm in
 readonly LOCK=/tmp/tappaas-lan-uplink.lock
 
 usage() { sed -n '2,/^set -euo/p' "$0" | sed 's/^# \{0,1\}//; /^set -euo/d'; }
@@ -74,6 +78,7 @@ while [[ $# -gt 0 ]]; do
         --mtu)         LAN_MTU="${2:-}"; shift ;;
         --config-only) CONFIG_ONLY=1 ;;
         --no-wan)      NO_WAN=1 ;;
+        --switch-wait) CONFIRM_BY="${2:-}"; shift ;;
         --dry-run)     EXECUTE=0 ;;
         --execute)     EXECUTE=1 ;;
         --yes)         YES=1 ;;
@@ -85,6 +90,9 @@ while [[ $# -gt 0 ]]; do
 done
 [[ -n "${CMD}" && -n "${NODE}" ]] || { usage; exit 2; }
 [[ -z "${LAN_MTU}" || "${LAN_MTU}" =~ ^[0-9]+$ ]] || die "--mtu: not a number"
+[[ "${CONFIRM_BY}" =~ ^[0-9]+$ && "${CONFIRM_BY}" -ge 30 && "${CONFIRM_BY}" -le 1800 ]] \
+    || die "--switch-wait: seconds, 30 to 1800"
+(( CONFIRM_BY + 15 > ROLLBACK_SECS )) && ROLLBACK_SECS=$(( CONFIRM_BY + 15 ))
 CFG="${CONFIG_DIR}/${NODE}.json"
 
 # ── reading ────────────────────────────────────────────────────────────
@@ -229,6 +237,14 @@ verified() {
     ! jq -e '[.[] | select(.level == "warn") | select(.text | test("^drift:|is down|LACP partner|outside the active aggregator|corosync"))] | length > 0' <<<"${r}" >/dev/null
 }
 
+# What keeps the node from verifying, for the wait above. <declaration>
+missing() {
+    local live
+    live="$(probe 2>/dev/null)" || { echo "no answer from ${NODE}"; return; }
+    jq -cn --argjson l "${live}" --argjson d "$1" --arg n "${NODE}" '{node: $n, live: $l, declared: $d}' | lu_findings \
+        | jq -r '[.[] | select(.level == "warn") | .text | split(" — ")[0]] | join("; ") | if . == "" then "settling" else . end'
+}
+
 converge() {  # <declaration>
     local decl="$1" live args res t
     live="$(probe)" || die "cannot reach ${NODE}"
@@ -261,8 +277,16 @@ converge() {  # <declaration>
     rn_drain_node "${NODE}" || drc=$?
     [[ ${drc} -eq 0 ]] || { [[ ${drc} -eq 3 ]] && exit 3; die "${NODE} not drained — nothing changed"; }
 
-    local ok=0
+    # A rollback past the watchdog's 60s is only safe on a node whose LRM has
+    # released it: a node cut off longer than that would otherwise fence itself.
+    if (( ROLLBACK_SECS > 45 )) && rn_node_ssh "${NODE}" "ha-manager status" 2>/dev/null \
+            | grep -E "^lrm ${NODE} " | grep -q "watchdog active"; then
+        rn_undrain_node "${NODE}" || true
+        die "--switch-wait: ${NODE}'s HA watchdog is still armed after the drain — a ${ROLLBACK_SECS}s rollback could fence it. Nothing changed."
+    fi
+    local ok=0 said=""
     info "  Applying on ${NODE} (it reverts by itself unless confirmed within ${ROLLBACK_SECS}s)..."
+    (( CONFIRM_BY > 30 )) && info "  ${BOLD}Configure the switch side now${CL} — waiting up to ${CONFIRM_BY}s for it to verify."
     rn_node_ssh "${NODE}" "systemd-run --quiet --collect --unit=tappaas-set-lan /root/tappaas/lan-uplink/config-network.sh --set-lan --apply --non-interactive --confirm-external --rollback-secs ${ROLLBACK_SECS} ${args}" \
         || warn "  could not start the change on ${NODE}"
     for (( t=0; t<CONFIRM_BY; t+=3 )); do
@@ -273,6 +297,8 @@ converge() {  # <declaration>
             ok)
                 if verified "${decl}"; then
                     rn_node_ssh "${NODE}" "touch /run/tappaas-net-ok" && { ok=1; break; }
+                elif (( CONFIRM_BY > 30 )) && [[ -z "${said}" || $(( t % 30 )) -eq 0 ]]; then
+                    said=1; info "  still waiting ($(( CONFIRM_BY - t ))s left): $(missing "${decl}")"
                 fi ;;
             fail*) warn "  ${NODE}: ${res#fail }"; break ;;
         esac

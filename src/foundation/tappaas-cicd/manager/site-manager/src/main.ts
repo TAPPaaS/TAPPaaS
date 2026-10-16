@@ -120,7 +120,7 @@ export const HELP: HelpSpec = {
         ["(default)", "The node's lan uplink, declared next to live: ports, mode, state, speed, the LACP aggregator, the switch each port reaches (LLDP), corosync — and what is wrong with it."],
         ["--json", "The declaration, the probe and the findings as JSON."],
       ] },
-    { usage: "node network set <node> [--lan-ports <a,b>] [--lan-mode <m>] [--lan-primary <if>] [--mtu <n>] [--no-wan] [--config-only] [--apply] [--yes]",
+    { usage: "node network set <node> [--lan-ports <a,b>] [--lan-mode <m>] [--lan-primary <if>] [--mtu <n>] [--no-wan] [--switch-wait <s>] [--config-only] [--apply] [--yes]",
       options: [
         ["(default)", "Declare the uplink in config/<node>.json (uplinks.lan, ports by MAC) and preview the change on the node. Without --lan-ports: the declaration there is."],
         ["--lan-ports <a,b>", "Ports by name or MAC. One port, or two or more bonded as lanbond."],
@@ -128,6 +128,7 @@ export const HELP: HelpSpec = {
         ["--lan-primary <if>", "active-backup: the port that carries traffic when up (default: the fastest)."],
         ["--mtu <n>", "MTU on the bond and the lan bridge (the switch ports must match)."],
         ["--no-wan", "The wan bridge gives up its port, so it can join the lan bond (e.g. a 1G wan port as lan's backup leg). The node can then no longer carry the firewall's WAN; refused while a guest uses the wan bridge."],
+        ["--switch-wait <s>", "With --apply: wait up to <s> seconds (30–1800, default 30) for the change to verify, to configure the switch side meanwhile — e.g. the LAG for lacp, once the node speaks it. Needs the drained node's HA watchdog released."],
         ["--config-only", "Declare only, without contacting the node (ports by MAC)."],
         ["--apply", "Converge: drain the node (HA maintenance), carry lan on the declared ports under a 45s rollback, confirm from the mothership, bring the node back. One node at a time."],
         ["--yes", "Do not ask for the node name."],
@@ -831,7 +832,7 @@ function cmdNode(o: Opts, client: SiteClient): void {
     const args = [action as string, node];
     if (action === "show" && o.json) args.push("--json");
     if (action === "set") {
-      for (const f of ["--lan-ports", "--lan-mode", "--lan-primary", "--mtu"]) {
+      for (const f of ["--lan-ports", "--lan-mode", "--lan-primary", "--mtu", "--switch-wait"]) {
         const v = o.flags.get(f);
         if (v) args.push(f, v);
       }
