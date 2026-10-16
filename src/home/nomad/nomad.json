@@ -39,29 +39,14 @@
       "description": "Command Center"
     },
     {
-      "port": 8090,
+      "port": "8090:8100",
       "protocol": "TCP",
-      "description": "Information Library (Kiwix: Wikipedia and other ZIM libraries)"
+      "description": "Information Library (Kiwix, 8090), Data Tools (8100). Ranges, not single ports: an app's port opens only when it is installed in the Command Center, so the readiness wait must not wait for it"
     },
     {
-      "port": 8100,
+      "port": "8200:8500",
       "protocol": "TCP",
-      "description": "Data Tools (CyberChef)"
-    },
-    {
-      "port": 8200,
-      "protocol": "TCP",
-      "description": "Notes (Flatnotes)"
-    },
-    {
-      "port": "8310:8311",
-      "protocol": "TCP",
-      "description": "Education Platform (Kolibri)"
-    },
-    {
-      "port": "8400:8500",
-      "protocol": "TCP",
-      "description": "Supply Depot apps (Stirling PDF, File Browser, Calibre Web, IT Tools, Excalidraw, …)"
+      "description": "Notes (8200), Education Platform (Kolibri, 8310-8311), Supply Depot apps (8400-8500)"
     }
   ],
   "ingress": [
@@ -69,11 +54,8 @@
       "from": "home",
       "ports": [
         8080,
-        8090,
-        8100,
-        8200,
-        "8310:8311",
-        "8400:8500"
+        "8090:8100",
+        "8200:8500"
       ],
       "protocol": "TCP",
       "description": "Client networks reach the Command Center and the apps it links to, at nomad.<zone>.internal; nothing is published outside the site"
