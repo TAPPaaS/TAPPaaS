@@ -105,9 +105,9 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | Wave | Group | Ease | Risk | released | done for 2.3 | open |
 |------|-------|:-:|:-:|---:|---:|---:|
 | 7 | G7.1 DevOps stack | H | M | – | – | 3 |
-| 7 | G7.2 New and reworked app modules | H | M | – | – | 5 |
-| 6 | G6.1 Switching fabric, WAN & ISP | H | H | – | – | 11 |
-| 6 | G6.2 User interface & physical view | H | L | – | – | 3 |
+| 7 | G7.2 New and reworked app modules | H | M | – | 1 | 3 |
+| 6 | G6.1 Switching fabric, WAN, ISP & site operations | H | H | – | – | 13 |
+| 6 | G6.2 User interface & physical view | H | L | – | – | 4 |
 | 5 | G5.1 Satellite & off-site | H | M | – | – | 7 |
 | 5 | G5.2 Test coverage & conventions | H | L | – | – | 5 |
 | 4 | ✅ G4.1 Alerting & cluster resilience | M | M | 7 | 4 | – |
@@ -219,16 +219,15 @@ Forgejo gets its CI: a Woodpecker module wired to it (#840), whose agents can al
 | #415 | Self-hosted KVM Woodpecker runners | H | L | |
 | #284 | forgejo: SQLite → PostgreSQL | M | M | Out of G3.3 2026-10-06 (operator): SQLite stays the default until load says otherwise |
 
-### G7.2 New and reworked app modules — Ease H · Risk M · open: 5
+### G7.2 New and reworked app modules — Ease H · Risk M · done for 2.3: 1 · open: 3
 
-New modules — a Markdown website (#841), N.O.M.A.D. for the home stack (#129), Karakeep for bookmarks (#842), a service desk (#63, spike first) — and a rework of LiteLLM's control plane (#170, decided with #430).
+New modules — a Markdown website (#841), N.O.M.A.D. for the home stack (#129), Karakeep for bookmarks (#842) — and a rework of LiteLLM's control plane (#170, decided with #430).
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
 | #841 | A lazysite module: a Markdown website for the site owner | M | L | **Opened 2026-10-15.** Markdown in the docroot served as HTML, no build step or database; how content gets there to decide |
-| #129 | Project Nomad in the Home stack | M | L |  |
+| ✅ #129 | Project N.O.M.A.D. in the home stack | M | L | **Closed 2026-10-16** (`34fe2f3b`…`c41b1885`): `src/home/nomad`, inside the site only (no proxy, no identity), pinned images, secrets on the VM; installed and tested on hrossen (11/11). Kiwix has Wikipedia in Danish |
 | #842 | A Karakeep module: bookmarks and read-later, AI tagging via the AI stack | M | L | **Opened 2026-10-15.** OIDC sign-in; its AI tagging through LiteLLM when the AI stack is installed |
-| #63 | Service desk tooling spike | M | L | |
 | #170 | LiteLLM declarative control plane | H | M | Decide with #430 (G1.7) |
 
 ## Wave 6 — site fabric and user experience
@@ -236,9 +235,9 @@ New modules — a Markdown website (#841), N.O.M.A.D. for the home stack (#129),
 The physical site and how an operator sees and runs it. Not ordered by upgrade risk like Waves 0–4:
 these two groups are designed together — the fabric is what the physical view shows and changes.
 
-### G6.1 Switching fabric, WAN & ISP — Ease H · Risk H · open: 11
+### G6.1 Switching fabric, WAN, ISP & site operations — Ease H · Risk H · open: 13
 
-The links a site stands on: node uplinks (a bond under `lan`, #40), switch ports and trunks kept in line with the zones (#668, #697, #706, #731), the WAN and the ISP (public DNS that follows the WAN, #383, #830; mail when the ISP blocks port 25, #125). Switch setup needs a systematic model, at install and on day 2. Linked to G6.2: the physical view shows and later changes it.
+The links a site stands on: node uplinks (a bond under `lan`, #40), switch ports and trunks kept in line with the zones (#668, #697, #706, #731), the WAN and the ISP (public DNS that follows the WAN, #383, #830; mail when the ISP blocks port 25, #125). Switch setup needs a systematic model, at install and on day 2. Operating the site belongs here too: a service desk (#63) and a SIEM (#843, Wazuh the best candidate). Linked to G6.2: the physical view shows and later changes it.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
@@ -253,13 +252,16 @@ The links a site stands on: node uplinks (a bond under `lan`, #40), switch ports
 | #155 | Modules for physical devices | L | L | Docs and examples only (Lars, 2026-05-15) |
 | FW #158 | Multi-NIC module firewall rules | M | L | Optional roll-in |
 | #236 | RADIUS MAC Auth Bypass: a device's VLAN from its MAC, on Wi-Fi and wired ports | H | M | Future idea; depends on how switch ports and APs are managed (this group) |
+| #63 | Service desk tooling spike | M | L | |
+| #843 | Create a SIEM for TAPPaaS | H | M | **Opened 2026-10-16.** Wazuh the best candidate (agents, syslog from OPNsense/Proxmox, FIM, vulnerability detection); placement, sizing and its overlap with logging to decide |
 
-### G6.2 User interface & physical view — Ease H · Risk L · open: 3
+### G6.2 User interface & physical view — Ease H · Risk L · open: 4
 
-A general TAPPaaS user experience, starting with a physical view of the site: nodes, bonds, switches and ports, APs, WAN and satellite, with zones, guests and live state on them (#839; homelable as a starting point). The service catalog (#183) and Backstage (#91) are decided against it. Linked to G6.1.
+A general TAPPaaS user experience, starting with a physical view of the site: nodes, bonds, switches and ports, APs, WAN and satellite, with zones, guests and live state on them (#839; homelable as a starting point), designed first in a spike and an ADR (#844). The service catalog (#183) and Backstage (#91) are decided against it. Linked to G6.1.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
+| #844 | Spike and ADR: design the TAPPaaS user interface | M | L | **Opened 2026-10-16.** Spike on homelable fed from TAPPaaS's records, then the UI ADR (where it runs, identity, read-only first, its physical-site model shared with G6.1). Before #839 |
 | #839 | TAPPaaS user interface: a general UX, starting with a physical view of the site | H | L | **Opened 2026-10-15.** Design first (an ADR: where it runs, identity, read-only first, calls the managers); [homelable](https://github.com/Pouzor/homelable) (MIT) as a starting point |
 | #183 | TAPPaaS service catalog | H | L |  |
 | #91 | Backstage as a component of tappaas-cicd | H | L |  |
