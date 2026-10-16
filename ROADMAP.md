@@ -124,7 +124,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | 2 | G2.2 DNS resolver robustness | L | M | 4 | 3 | 1 |
 | 1 | ✅ G1.2 Backup placement model + managed machines (ADR-012, ADR-026) | M | H | 27 | – | – |
 | 1 | G1.6 Secrets & privileged access | H | H | 4 | – | 1 |
-| 1 | G1.7 Parked for Erik discussion | – | – | – | – | 7 |
+| 1 | G1.7 Parked for Erik discussion | – | – | – | – | 5 |
 
 ## Planning items still open
 
@@ -138,7 +138,6 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | #142 | AI-agent access to the mothership: SSH + sudo, or a REST API (which would need an ADR) | RFC outcome (G1.6) |
 | #675 | What a managed repository may contribute to the control plane's own NixOS configuration, and what happens when that fails to build. Today a site's own host-level modules are dropped by every scheduled rebuild while the unit reports success (`tappaas-cicd.nix` has no extension point — confirmed) | An ADR first; Ease H · Risk M |
 | #488 | `apply-json-merge`: should a field that `.orig` never recorded be adopted from the release, or kept? #736 made each refused value visible; the rule itself is open | Operator |
-| #444 / #582 | What reading back a static DHCP reservation means (MAC pinning) — one question, not two | Lars and @ErikDaniel007 (G1.7) |
 | #154 | Is `firewall:internal-proxy` needed at all? | Operator (questioned 2026-05-31) |
 | #385 / #222 | NetBird: keep its server-side integration (zone, OPT1 and floating rules), or make it a pure client-side tool and reserve management access to the WireGuard admin VPN | Operator (considering, 2026-10-12) |
 
@@ -152,7 +151,7 @@ met gates are recorded in the releases that carried their waves.
 | 1 · G1.6 | #142 RFC outcome; a *Secrets management* ADR only once #58 comes back from Future Work |
 | 2 | Entry: ADR-014 amended for the `all` sentinel (#375, built), `serves` as an array (#576), anti-spoofing always on (#159, built) and mDNS in zones.json (#257); ADR-021 amended for DNSSEC with split horizon (#263); `site.json` `ipv6` (#149) — the IPv6 stance is its own ADR (#26). Exit: a lockout check on each site — mgmt and the admin VPN reach 8443 and 22, other zones do not; done on hrossen 2026-10-02. NetBird only if the NetBird decision keeps it server-side |
 | 3 | Met 2026-10-13: ADR-019 Accepted (v1.0), verified by `cluster/test.sh --deep` — live migrate to the HANode and back. Open from it: HA's automatic failback to a node with an older CPU (#827) |
-| 4 | ADR-023 Accepted and built (#642, #643, #656; done 2026-10-15); ADR-015 Draft → Accepted (#486); ADR-011 Proposed → Accepted (#143 built); ADR-010 P7 sign-off (#406); ADR-008 amended (#236); ADR-019 amended for the bonded lan uplink (#40) and the migrate verb (#429); ADR-007e amended for logging v2 (#165), or a new ADR if Zabbix is chosen; ADR-029 Proposed → Accepted (#772); the MAC pinning question (#444 / #582); #154 closed or kept; #430 decided before #170 |
+| 4 | ADR-023 Accepted and built (#642, #643, #656; done 2026-10-15); ADR-015 Draft → Accepted (#486); ADR-011 Proposed → Accepted (#143 built); ADR-010 P7 sign-off (#406); ADR-008 amended (#236); ADR-019 amended for the bonded lan uplink (#40) and the migrate verb (#429); ADR-007e amended for logging v2 (#165), or a new ADR if Zabbix is chosen; ADR-029 Proposed → Accepted (#772); #154 closed or kept; #430 decided before #170 |
 
 ### ADRs still to write
 
@@ -169,7 +168,7 @@ met gates are recorded in the releases that carried their waves.
 ### Housekeeping
 
 - **Merge pairs** the issues themselves say belong together: #385 + #222,
-  #160 + #256, #642 + #643, #444 + #582, #119 / #120 / #121.
+  #160 + #256, #642 + #643, #119 / #120 / #121.
 - **Close or park:** #154 → *Parking lot* (#223 parked 2026-10-13) (#284 went to Future Work 2026-10-06). The forge's *Release 2.0: Build out Stacks* milestone still has 4 open issues —
   move them per this plan and close it.
 - **Parked, half of #656:** a proxy access list kept current from a provider's published feed (an
@@ -324,7 +323,7 @@ Publish less of each app: limit a route to some paths (#642), some zones (#643) 
 
 ### ✅ G4.3 Manager verb gaps — Ease M · Risk L · released: 9 · done for 2.3: 7
 
-The verbs operators otherwise do by hand (the `test` verbs, #499, are in G5.2): install a whole stack (#763), suspend a module (#428), migrate by changing `.node` (#429), private repositories (#634), module-level `--set` rules (#654). The IP → device lookup (#444/#582) is parked in G1.7.
+The verbs operators otherwise do by hand (the `test` verbs, #499, are in G5.2): install a whole stack (#763), suspend a module (#428), migrate by changing `.node` (#429), private repositories (#634), module-level `--set` rules (#654).
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
@@ -496,9 +495,9 @@ Least privilege on the platform. Built: nodes hardened to the Proxmox guide, key
 |---|-------|:-:|:-:|------|
 | #142 | RFC: AI-agent access to cicd | H | L | Decision |
 
-### G1.7 Parked for Erik discussion · open: 7
+### G1.7 Parked for Erik discussion · open: 5
 
-Waiting on a conversation between Lars and @ErikDaniel007, not on work: the firewall rebuild runbook (#439), the controller pattern (#430), VMID ranges (#294), hass locale (#348), Erik's image pins (#765) and the MAC-pinning question behind the IP → device lookup (#444/#582).
+Waiting on a conversation between Lars and @ErikDaniel007, not on work: the firewall rebuild runbook (#439), the controller pattern (#430), VMID ranges (#294), hass locale (#348) and Erik's image pins (#765).
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
@@ -507,8 +506,6 @@ Waiting on a conversation between Lars and @ErikDaniel007, not on work: the fire
 | #294 | Zone-aligned VMID ranges | H | H | Renumbering means backup/restore to a new VMID. **Proposal:** new scheme for new installs and variants only; never renumber in place. Spikes from 2026-06-04 still open |
 | #348 | hass locale from site master data | M | L | **Parked 2026-09-21:** no test site runs hass. The fix is written on the issue — `core_config` at `lib/config.sh:158` plus a converge for onboarded instances, from `.location` |
 | #765 | Container image pins: list litellm, openwebui, vllm-amd, deconz; move the stale ones | L | L | From #750, for @ErikDaniel007: list his modules in `src/image-pins.json` and move the stale pins — euro-office v9.3.1 → v9.3.4 first; litellm and openwebui overlap #621 |
-| #444 | IP → device lookup | L | L | Blocked on the MAC-pinning question (#582). **Do not implement (operator, 2026-09-26)** until Lars and @ErikDaniel007 have discussed it |
-| #582 | Read back static reservations | L | L | **Do not implement (operator, 2026-09-26):** one question with #444, pending the same discussion. There is no `dhcp-manager`; read back means dnsmasq's own state |
 
 ---
 
