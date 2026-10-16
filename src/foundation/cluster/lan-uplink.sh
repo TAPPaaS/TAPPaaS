@@ -237,6 +237,49 @@ verified() {
     ! jq -e '[.[] | select(.level == "warn") | select(.text | test("^drift:|is down|LACP partner|outside the active aggregator|corosync"))] | length > 0' <<<"${r}" >/dev/null
 }
 
+# ── the switch side of lacp (#40) ──────────────────────────────────────
+# A LACP bond needs its switch ports to be one aggregate. switch-controller
+# declares and programs it (`lag set|remove … --apply`); the ports are the ones
+# its inventory records as this node's lan NICs (type node, target <node>,
+# targetPort <nic>). The aggregate is named <node>-lan.
+SW_ACTUAL="${CONFIG_DIR}/switch-configuration-actual.json"
+LAG_NAME=""
+lag_name() { echo "${NODE}-lan"; }
+have_switch_controller() { command -v switch-controller >/dev/null 2>&1 && [[ -f "${SW_ACTUAL}" ]]; }
+
+# "<switch>\t<p,p>" for the lan NICs in <names>; non-zero naming what is missing.
+switch_ports_for() {
+    local names="$1" rows sw
+    rows=$(jq -r --arg n "${NODE}" --arg nics " ${names} " '
+        .switches // {} | to_entries[] | .key as $sw | .value.ports // {} | to_entries[]
+        | select(.value.type == "node" and .value.target == $n and ($nics | contains(" \(.value.targetPort) ")))
+        | "\($sw)\t\(.key)\t\(.value.targetPort)"' "${SW_ACTUAL}" 2>/dev/null)
+    local nic missing=""
+    for nic in ${names}; do grep -qP "\t${nic}\$" <<<"${rows}" || missing+=" ${nic}"; done
+    if [[ -n "${missing}" ]]; then
+        echo "switch-controller does not know which switch port${missing} reach(es) — register it: switch-controller add-port <switch> <port> --type node --target ${NODE} --target-port <nic>" >&2
+        return 1
+    fi
+    sw=$(cut -f1 <<<"${rows}" | sort -u)
+    [[ "$(wc -l <<<"${sw}")" -eq 1 ]] || { echo "the lan NICs reach different switches (${sw//$'\n'/, }): one LAG cannot span them (that needs MC-LAG) — use active-backup" >&2; return 1; }
+    printf '%s\t%s\n' "${sw}" "$(cut -f2 <<<"${rows}" | sort -n | paste -sd, -)"
+}
+# The switch that holds this node's LAG in the declaration, if any.
+switch_with_lag() {
+    jq -r --arg l "$(lag_name)" '.switches // {} | to_entries[] | select(any(.value.ports[]?; .lag == $l)) | .key' "${SW_ACTUAL}" 2>/dev/null | head -1
+}
+switch_lag() {  # set <switch> <ports> | remove <switch> — indented, rc of switch-controller
+    local rc=0
+    if [[ "$1" == set ]]; then
+        switch-controller lag set "$2" "$(lag_name)" --ports "$3" --apply 2>&1 | sed 's/^/    /' || true
+        rc=${PIPESTATUS[0]}
+    else
+        switch-controller lag remove "$2" "$(lag_name)" --apply 2>&1 | sed 's/^/    /' || true
+        rc=${PIPESTATUS[0]}
+    fi
+    return "${rc}"
+}
+
 # What keeps the node from verifying, for the wait above. <declaration>
 missing() {
     local live
@@ -254,6 +297,29 @@ converge() {  # <declaration>
     fi
     args="$(setlan_args "${live}" "${decl}")" || exit 1
 
+    # The switch side (#40): into lacp the aggregate is formed after the node
+    # speaks LACP; out of it, taken apart before. Both through switch-controller,
+    # when it knows the ports; otherwise the operator does it within --switch-wait.
+    local want_lacp=0 live_lacp=0 sw_set="" sw_ports="" sw_remove="" names
+    [[ "$(jq -r '.lan.mode // ""' <<<"${decl}")" == lacp ]] && want_lacp=1
+    [[ "$(jq -r '.lan.mode' <<<"${live}")" == lacp ]] && live_lacp=1
+    if have_switch_controller; then
+        sw_remove="$(switch_with_lag)"
+        if [[ "${want_lacp}" == 1 ]]; then
+            names="$(jq -r --argjson l "${live}" '[.lan.ports[] | ascii_downcase as $m | $l.ports[] | select(.mac == $m) | .name] | join(" ")' <<<"${decl}")"
+            local sp
+            sp="$(switch_ports_for "${names}")" || die "lacp: $(switch_ports_for "${names}" 2>&1 >/dev/null)"
+            sw_set="${sp%%$'\t'*}"; sw_ports="${sp#*$'\t'}"
+            [[ "${sw_remove}" == "${sw_set}" ]] && sw_remove=""   # set re-declares it there
+            # Forming the aggregate and its LACP negotiation take longer than 30s.
+            (( CONFIRM_BY < 180 )) && { CONFIRM_BY=180; ROLLBACK_SECS=195; }
+        elif [[ "${live_lacp}" != 1 ]]; then
+            sw_remove=""                                       # no LACP on either side
+        fi
+    elif [[ "${want_lacp}" == 1 || "${live_lacp}" == 1 ]]; then
+        warn "  switch-controller does not know this site's switches: configure the aggregate by hand, within --switch-wait"
+    fi
+
     info "${BOLD}Converging ${NODE}'s lan uplink${CL}: config-network.sh --set-lan ${args//\'/}"
     # The node shows the exact change; nothing is written.
     rn_node_ssh "${NODE}" "mkdir -p /root/tappaas/lan-uplink" \
@@ -262,6 +328,8 @@ converge() {  # <declaration>
         || die "could not copy config-network.sh to ${NODE}"
     rn_node_ssh "${NODE}" "/root/tappaas/lan-uplink/config-network.sh --set-lan --dry-run --non-interactive ${args}" \
         || die "the node refused the change (above) — nothing written"
+    [[ -n "${sw_remove}" ]] && info "  switch side: take apart LAG $(lag_name) on ${sw_remove} first (switch-controller)"
+    [[ -n "${sw_set}" ]] && info "  switch side: ports ${sw_ports} of ${sw_set} become LAG $(lag_name) once ${NODE} speaks LACP (switch-controller)"
     if [[ "${EXECUTE}" != 1 ]]; then
         info "${YW}Preview only.${CL} To apply: site-manager node network set ${NODE} --apply"
         info "  It drains ${NODE} (HA maintenance), applies under a ${ROLLBACK_SECS}s rollback, checks from here, brings ${NODE} back."
@@ -284,7 +352,19 @@ converge() {  # <declaration>
         rn_undrain_node "${NODE}" || true
         die "--switch-wait: ${NODE}'s HA watchdog is still armed after the drain — a ${ROLLBACK_SECS}s rollback could fence it. Nothing changed."
     fi
-    local ok=0 said=""
+    # Out of lacp: the aggregate goes first. The node keeps talking LACP to no
+    # partner on one leg meanwhile; were the aggregate left while the node went
+    # active-backup, the switch would hash half its frames onto the idle leg.
+    local sw_restore=""
+    if [[ -n "${sw_remove}" ]]; then
+        info "  Taking apart LAG $(lag_name) on ${sw_remove}..."
+        if ! switch_lag remove "${sw_remove}"; then
+            rn_undrain_node "${NODE}" || true
+            die "the switch did not take the aggregate apart — ${NODE} left as it was"
+        fi
+        [[ "${live_lacp}" == 1 ]] && sw_restore="${sw_remove}"
+    fi
+    local ok=0 said="" sw_done=0
     info "  Applying on ${NODE} (it reverts by itself unless confirmed within ${ROLLBACK_SECS}s)..."
     (( CONFIRM_BY > 30 )) && info "  ${BOLD}Configure the switch side now${CL} — waiting up to ${CONFIRM_BY}s for it to verify."
     rn_node_ssh "${NODE}" "systemd-run --quiet --collect --unit=tappaas-set-lan /root/tappaas/lan-uplink/config-network.sh --set-lan --apply --non-interactive --confirm-external --rollback-secs ${ROLLBACK_SECS} ${args}" \
@@ -295,6 +375,17 @@ converge() {  # <declaration>
                'cat /run/tappaas-net-set-lan 2>/dev/null' 2>/dev/null || true)"
         case "${res}" in
             ok)
+                # Into lacp: the node speaks it now (on one leg) — form the aggregate.
+                if [[ -n "${sw_set}" && "${sw_done}" == 0 ]]; then
+                    sw_done=1
+                    info "  ${NODE} speaks LACP — forming LAG $(lag_name) on ${sw_set} ports ${sw_ports}..."
+                    local src=0; switch_lag set "${sw_set}" "${sw_ports}" || src=$?
+                    case "${src}" in
+                        0) ;;
+                        2) warn "  ${sw_set} is configured by hand: form the aggregate of ports ${sw_ports} now" ;;
+                        *) warn "  ${sw_set} did not form the aggregate"; break ;;
+                    esac
+                fi
                 if verified "${decl}"; then
                     rn_node_ssh "${NODE}" "touch /run/tappaas-net-ok" && { ok=1; break; }
                 elif (( CONFIRM_BY > 30 )) && [[ -z "${said}" || $(( t % 30 )) -eq 0 ]]; then
@@ -306,12 +397,25 @@ converge() {  # <declaration>
     if [[ "${ok}" == 1 ]]; then
         info "  ${GN}✓${CL} ${NODE} is on its declared uplink — change confirmed"
     else
+        # Back as it was on the switch too: an aggregate formed for this change
+        # goes; one taken apart for it comes back.
+        if [[ "${sw_done}" == 1 ]]; then
+            warn "  Taking LAG $(lag_name) apart again on ${sw_set}..."
+            switch_lag remove "${sw_set}" || warn "  …it did not: take ports ${sw_ports} of ${sw_set} out of the aggregate by hand"
+        fi
         warn "  Not confirmed — ${NODE} reverts to its previous uplink. Waiting for it..."
         sleep $(( ROLLBACK_SECS + 10 ))
         res="$(ssh -n -o BatchMode=yes -o ConnectTimeout=5 "root@$(rn_node_fqdn "${NODE}")" \
                'cat /run/tappaas-net-set-lan 2>/dev/null' 2>/dev/null || true)"
         [[ "${res}" == reverted ]] && info "  ${NODE} reverted and answers again" \
             || warn "  ${NODE} does not answer as reverted (${res:-no answer}) — check its console before anything else"
+        if [[ -n "${sw_restore}" ]]; then
+            local back
+            back="$(switch_ports_for "$(jq -r '[.lan.members[].name] | join(" ")' <<<"${live}")" 2>/dev/null | cut -f2)"
+            warn "  Forming LAG $(lag_name) on ${sw_restore} again (ports ${back:-?})..."
+            [[ -n "${back}" ]] && switch_lag set "${sw_restore}" "${back}" \
+                || warn "  …it did not: put ${NODE}'s ports of ${sw_restore} back into one aggregate by hand"
+        fi
     fi
     rn_undrain_node "${NODE}" || warn "  ${NODE} is still in HA maintenance — clear it: ha-manager crm-command node-maintenance disable ${NODE}"
     [[ "${ok}" == 1 ]] || die "${NODE}'s lan uplink was not changed (reverted)"

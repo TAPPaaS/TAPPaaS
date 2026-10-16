@@ -173,6 +173,31 @@ EOF
 ck "the run's session reaches the plugin" "0" "$(PLUGIN_DIR="${STUBDIR}" rc_of "${SM}" interrogate)"
 "${SM}" remove-switch StubSw >/dev/null 2>&1; "${SM}" remove-controller cstub >/dev/null 2>&1
 
+# ── lag: a link aggregate across two node ports (#40) ───────────────
+"${SM}" add-port core 11 --type node --target tappaas1 --target-port nic3 >/dev/null 2>&1
+"${SM}" add-port core 12 --type node --target tappaas1 --target-port nic2 >/dev/null 2>&1
+ck "lag set needs two ports (rc)"    "1"      "$(rc_of "${SM}" lag set core t1-lan --ports 11)"
+ck "lag set refuses an unregistered port (rc)" "1" "$(rc_of "${SM}" lag set core t1-lan --ports 11,13)"
+"${SM}" lag set core t1-lan --ports 12,11 >/dev/null 2>&1
+ck "lag set marks both ports"        "t1-lan,t1-lan" "$(jq -r '[.switches.core.ports["11","12"].lag] | join(",")' "${ACT}")"
+"${SM}" update-desired >/dev/null 2>&1
+ck "the lowest port leads the LAG"   "11,12"  "$(jq -r '.switches.core.ports["11"].lagMembers | join(",")' "${DES}")"
+ck "the other member lists none"     "0"      "$(jq -r '.switches.core.ports["12"].lagMembers | length' "${DES}")"
+ck "an unmanaged port gets no lagMembers" "null" "$(jq -r '.switches.core.ports["99"].lagMembers // "null"' "${DES}")"
+ck "delta: the aggregate to form" "yes" "$(has "$("${SM}" delta 2>&1)" 'ports 11+12 as one LACP aggregate')"
+ck "lag list shows it, not formed"   "yes"    "$(has "$("${SM}" lag list core 2>&1)" 'LAG t1-lan: ports 11+12  (live: not formed)')"
+"${SM}" confirm core >/dev/null 2>&1
+ck "confirm records the live members" "11,12" "$(jq -r '.switches.core.ports["11"].lagMembers | join(",")' "${ACT}")"
+ck "…and the aggregate is in sync"   "no"     "$(has "$("${SM}" delta 2>&1)" 'aggregate')"
+ck "a port in another LAG is refused (rc)" "1" "$(rc_of "${SM}" lag set core other --ports 11,12)"
+"${SM}" lag remove core t1-lan >/dev/null 2>&1
+ck "lag remove clears the ports"     "0"      "$(jq -r '[.switches.core.ports[] | select(.lag)] | length' "${ACT}")"
+"${SM}" update-desired >/dev/null 2>&1
+ck "delta: the aggregate to take apart" "yes" "$(has "$("${SM}" delta 2>&1)" 'take apart the aggregate of ports 11+12')"
+ck "manual switch: lag --apply prints the step, rc 2" "2" "$(rc_of "${SM}" lag remove core t1-lan --apply)"
+"${SM}" confirm core >/dev/null 2>&1
+"${SM}" remove-port core 11 >/dev/null 2>&1; "${SM}" remove-port core 12 >/dev/null 2>&1
+
 # ── list / show / remove / guards ───────────────────────────────────
 ck "show switch"                     "tplink" "$("${SM}" show core | jq -r '.vendor')"
 ck "show controller"                 "unifi"  "$("${SM}" show ctrl1 | jq -r '.vendor')"

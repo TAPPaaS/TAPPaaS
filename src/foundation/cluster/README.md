@@ -149,12 +149,17 @@ LACP has aggregated and corosync is connected — and only then keeps the change
 Anything else and the node goes back to its previous uplink on its own. Then the
 node returns to HA placement.
 
-**Switching to `lacp`** needs both ends at once: the node speaking LACP and the switch
-ports configured as one LAG. Run `set --lan-mode lacp --apply --switch-wait 600`, and
-configure the LAG while it waits: the node already speaks LACP (on one leg until the
-switch answers), and the change is kept once the partner shows up — or rolled back
-when the time runs out. Configuring the LAG first, against a node still in
-`active-backup`, can cut the node off.
+**Switching to `lacp`** needs both ends: the node speaking LACP and its switch ports
+one aggregate (LAG). When the switch controller knows which switch ports the node's
+LAN NICs reach (`switch-controller add-port <switch> <port> --type node --target
+<node> --target-port <nic>`) and the switch has a vendor plugin (UniFi), `set
+--lan-mode lacp --apply` does both: the node switches to LACP first (running on one
+leg until the switch answers), then the aggregate `<node>-lan` is formed, and the
+change is kept once LACP has aggregated — otherwise the aggregate is taken apart and
+the node reverts. Leaving `lacp` takes the aggregate apart first. On a switch that
+is configured by hand, the step is printed, and `--switch-wait 600` gives you time
+to do it while the node waits. Never form the aggregate first, against a node still
+in `active-backup`: the switch would send half its frames to the leg the node ignores.
 
 `test --apply` (on a drained node too) takes each leg down for ten seconds and
 checks management and corosync stay up; a timer on the node brings the leg back

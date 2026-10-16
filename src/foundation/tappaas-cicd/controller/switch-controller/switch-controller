@@ -17,6 +17,9 @@
 #   switch      managed:auto (ports uploaded by interrogate, via a controller or
 #               its own API) or managed:manual (ports added by hand).
 #   port        {type,target,targetPort,...}; type ∈ node|switch|ap|device|uplink.
+#               `lag: <name>` puts it in a link aggregate (802.3ad LAG) with the
+#               switch's other ports of that name; the lowest-numbered one leads
+#               it, and carries `lagMembers` in desired and actual.
 #
 # Five-verb provider contract (ADR-008 order):
 #   interrogate     live/controller/manual state → actual.json (via vendor plugin)
@@ -71,6 +74,11 @@ Inventory (recorded in switch-configuration-actual.json):
         [--zone <z>] [--native <vlan>] [--tagged 210,220] [--description <d>]
   update-port <switch> <port> [ ...same flags... ]
   remove-port <switch> <port>
+  lag set <switch> <name> --ports <p,p,...> [--apply]
+                          ports become one LACP aggregate (a LAG named <name>);
+                          --apply programs that switch at once
+  lag remove <switch> <name> [--apply]
+  lag list [<switch>]
   list
   list-ports [<switch>]   one line per port: actual config + drift vs zones.json
   show <controller|switch>
@@ -99,6 +107,7 @@ remove-switch:
 add-port: ${PORT_OPTS}
 update-port: ${PORT_OPTS}
 remove-port:
+lag: --ports= --apply
 list:
 list-ports:
 show:
@@ -272,6 +281,76 @@ cmd_remove_port() {
     info "${GN}✓${CL} removed port '${port}' from '${sw}'"
 }
 
+# ── lag: a link aggregate (LACP) across ports of one switch (#40) ────
+# Declared like the VLANs: the ports carry `lag: <name>`, update-desired gives
+# the lead port its members, and the plugin forms (or takes apart) the aggregate.
+# A LAG spans one switch: across two it needs MC-LAG, which this does not model.
+cmd_lag() {
+    local sub="${1:-}"; shift || true
+    local sw="" name="" ports="" apply=0
+    while [[ $# -gt 0 ]]; do case "$1" in
+        --ports) ports="$2"; shift 2 ;;
+        --apply) apply=1; shift ;;
+        -*) die "lag ${sub}: unknown option '$1'" ;;
+        *) if [[ -z "${sw}" ]]; then sw="$1"; elif [[ -z "${name}" ]]; then name="$1"; else die "lag ${sub}: unexpected '$1'"; fi; shift ;;
+    esac; done
+    case "${sub}" in
+        list)
+            jq -r --arg sw "${sw}" '.switches // {} | to_entries[] | select($sw == "" or .key == $sw) | .key as $s
+                | [ .value.ports // {} | to_entries[] | select((.value.lag // "") != "") | {lag: .value.lag, p: .key, live: (.value.lagMembers // [])} ]
+                | group_by(.lag)[] | "\($s)  LAG \(.[0].lag): ports \(map(.p) | join("+"))  (live: \([.[].live[]] | unique | map(tostring) | join("+") | if . == "" then "not formed" else . end))"' "${ACTUAL}"
+            return 0 ;;
+        set|remove) ;;
+        *) die "lag: set | remove | list" ;;
+    esac
+    [[ -n "${sw}" && -n "${name}" ]] || die "lag ${sub} <switch> <name>"
+    jq -e --arg n "${sw}" '.switches | has($n)' "${ACTUAL}" >/dev/null || die "Switch '${sw}' not found"
+    if [[ "${sub}" == set ]]; then
+        local pj
+        pj=$(tr ',;' '\n' <<<"${ports}" | sed '/^$/d' | jq -R . | jq -sc 'unique')
+        [[ "$(jq length <<<"${pj}")" -ge 2 ]] || die "lag set: --ports needs two or more ports of ${sw}"
+        local bad
+        bad=$(jq -r --arg n "${sw}" --argjson pj "${pj}" '[ $pj[] as $p | select((.switches[$n].ports[$p].type // null) == null) | $p ] | join(", ")' "${ACTUAL}")
+        [[ -z "${bad}" ]] || die "lag set: port(s) ${bad} not registered on ${sw} — add-port <switch> <port> --type node --target <node> --target-port <nic> first"
+        bad=$(jq -r --arg n "${sw}" --arg l "${name}" --argjson pj "${pj}" '[ $pj[] as $p | .switches[$n].ports[$p].lag // "" | select(. != "" and . != $l) ] | unique | join(", ")' "${ACTUAL}")
+        [[ -z "${bad}" ]] || die "lag set: a port is in LAG ${bad} already — lag remove it first"
+        jq_actual '.switches[$n].ports |= with_entries(
+                if (.key as $k | $pj | index($k)) != null then .value.lag = $l
+                elif (.value.lag // "") == $l then .value |= del(.lag) else . end)' \
+            --arg n "${sw}" --arg l "${name}" --argjson pj "${pj}"
+        info "${GN}✓${CL} ${sw}: LAG ${name} on ports $(jq -r 'join("+")' <<<"${pj}")"
+    else
+        jq -e --arg n "${sw}" --arg l "${name}" '[.switches[$n].ports[] | select(.lag == $l)] | length > 0' "${ACTUAL}" >/dev/null \
+            || { info "${sw}: no LAG ${name} — nothing to remove"; [[ "${apply}" == 1 ]] || return 0; }
+        jq_actual '.switches[$n].ports |= map_values(if (.lag // "") == $l then del(.lag) else . end)' --arg n "${sw}" --arg l "${name}"
+        info "${GN}✓${CL} ${sw}: LAG ${name} removed from the declaration"
+    fi
+    [[ "${apply}" == 1 ]] || { info "  programs the switch at the next: switch-controller reconcile --apply  (or lag ${sub} … --apply)"; return 0; }
+    apply_one "${sw}"
+}
+
+# Program ONE switch now: refresh its state, regenerate desired, push its delta
+# and confirm it — the slice of reconcile --apply a LAG change needs, without
+# touching other switches. Non-zero when the switch was not programmed.
+apply_one() {
+    local sw="$1" changes plugin rc=0
+    cmd_interrogate >/dev/null || die "${sw}: could not read the switches — nothing applied"
+    cmd_update_desired >/dev/null
+    changes=$(compute_delta | jq -c --arg s "${sw}" '{changes: (.[$s].changes // [])}')
+    if [[ "$(jq '.changes | length' <<<"${changes}")" -eq 0 ]]; then
+        info "  ${GN}✓${CL} ${sw}: in sync"; return 0
+    fi
+    jq -r '.changes[] | "    \(.action): \(.description)"' <<<"${changes}"
+    plugin=$(plugin_for_switch "${sw}")
+    # shellcheck disable=SC1090
+    ( . "${plugin}"; plugin_apply "${sw}" "${changes}" ) || rc=$?
+    if [[ "${rc}" -ne 0 ]]; then
+        error "${sw}: not programmed ($(basename "${plugin}" .sh))"; return 2
+    fi
+    cmd_confirm "${sw}" >/dev/null
+    info "  ${GN}✓${CL} ${sw}: applied via $(basename "${plugin}" .sh)"
+}
+
 # ── list / show ──────────────────────────────────────────────────────
 
 cmd_list() {
@@ -331,6 +410,8 @@ cmd_list_ports() {
               + "  | actual: \($amode) "
               + (if $amode=="access" then "vlan \($anat)" else (if ($atag|length)>0 then ($atag|map(tostring)|join(",")) else "-" end) end)
               + "  | \($status)"
+              + (if ($p.lag // "") != "" then "  | LAG \($p.lag)" else "" end)
+              + (if (($p.lagMembers // []) | length) > 0 then " (live: \($p.lagMembers | map(tostring) | join("+")))" else "" end)
         ' "${ACTUAL}"
     done < <(if [[ -n "${target}" ]]; then echo "${target}"; else jq -r '.switches // {} | keys[]' "${ACTUAL}"; fi)
     [[ -n "${target}" || "$(jq -r '.switches // {} | length' "${ACTUAL}")" -gt 0 ]] || info "  (no switches in inventory)"
@@ -470,6 +551,15 @@ cmd_update_desired() {
                                  nativeVlan: (if ($zn!="" and ($zones[$zn].vlantag != null)) then $zones[$zn].vlantag else (.nativeVlan // 0) end)})
                       else $p end
                 )) }
+                # A LAG (#40): its lowest port leads and lists the members;
+                # every other managed port lists none.
+                | ([ .ports | to_entries[] | select((.value.lag // "") != "") | {lag: .value.lag, idx: (.key | tonumber)} ]
+                   | group_by(.lag) | map(map(.idx) | sort)) as $groups
+                | .ports |= with_entries(
+                    (.key | tonumber) as $i
+                    | if (.value.type // null) == null then .
+                      else .value.lagMembers = ([ $groups[] | select(.[0] == $i and length > 1) ][0] // [])
+                      end)
               )) }' "${ACTUAL}" > "${tmp}" && mv "${tmp}" "${DESIRED}"
     info "  active VLAN set: $(echo "${active}" | jq -rc 'join(",")')"
     info "  desired regenerated for $(jq -r '.switches // {} | length' "${DESIRED}") switch(es)"
@@ -498,7 +588,16 @@ compute_delta() {
                        {action:"access-vlan", port:$p.key,
                         description:"port \($p.key) access VLAN \(($ap.nativeVlan)//0) -> \($p.value.nativeVlan // 0)"}
                      else empty end)
-                  else empty end
+                  else empty end,
+                  # A LAG to form or take apart (#40). Only where desired says
+                  # (managed ports), against what the switch reports.
+                  ( select($p.value.lagMembers != null)
+                    | (($ap.lagMembers) // []) as $alag
+                    | select(($p.value.lagMembers | sort) != ($alag | sort))
+                    | {action:"lag", port:$p.key,
+                       description: (if ($p.value.lagMembers | length) > 0
+                         then "ports \($p.value.lagMembers | map(tostring) | join("+")) as one LACP aggregate (LAG \($p.value.lag // "")), led by port \($p.key)"
+                         else "port \($p.key): take apart the aggregate of ports \($alag | map(tostring) | join("+"))" end)} )
               ]
           }})
     '
@@ -587,7 +686,7 @@ cmd_confirm() {
                 {key:$sw, value: ($s + {ports: (($s.ports // {}) | to_entries | map(
                   .key as $pk | .value as $p
                   | {key:$pk, value: ($p + (($des[$sw].ports[$pk] // {})
-                      | {mode, nativeVlan, taggedVlans} | with_entries(select(.value != null))))}
+                      | {mode, nativeVlan, taggedVlans, lagMembers} | with_entries(select(.value != null))))}
                 ) | from_entries)})}
               end
           ) | from_entries)' "${ACTUAL}" > "${tmp}" && mv "${tmp}" "${ACTUAL}"
@@ -663,6 +762,7 @@ main() {
         add-port)          cmd_add_port "$@" ;;
         update-port)       cmd_update_port "$@" ;;
         remove-port)       cmd_remove_port "${1:-}" "${2:-}" ;;
+        lag)               cmd_lag "$@" ;;
         list)              cmd_list ;;
         list-ports|--list-ports) cmd_list_ports "${1:-}" ;;
         show)              cmd_show "${1:-}" ;;

@@ -273,6 +273,49 @@ CONFIG_DIR="${ATMP}" plugin_apply sw1 2>/dev/null
 ck "large site: apply PUT unchanged (#792)"  "${SMALL}" "$(jq -c . "${ATMP}/put.json" 2>/dev/null)"
 rm -rf "${ATMP}"
 
+# ── a LAG (#40): read, formed, verified, taken apart ────────────────
+LTMP="$(mktemp -d)"
+LIVE_PT='[{"port_idx":5,"op_mode":"switch"},{"port_idx":11,"op_mode":"switch"},{"port_idx":12,"op_mode":"switch"}]'
+CUR_PO='[{"port_idx":12,"forward":"customize","native_networkconf_id":"def","tagged_vlan_mgmt":"custom","excluded_networkconf_ids":[]}]'
+_unifi_get() {
+    case "$1" in
+        /rest/networkconf) echo '{"data":[{"_id":"def","name":"Default","vlan":null},{"_id":"n200","vlan":200}]}' ;;
+        /stat/device) jq -cn --argjson pt "${LIVE_PT}" --argjson po "${CUR_PO}" \
+            '{data:[{_id:"d1",mac:"aa:bb",name:"sw1",ip:"1.2.3.4",type:"usw",model:"USWX",port_table:$pt,port_overrides:$po}]}' ;;
+    esac
+}
+_unifi_send() { printf '%s' "$3" > "${LTMP}/put.json"; echo '{"meta":{"rc":"ok"}}'; }
+sleep() { :; }
+cat > "${LTMP}/switch-configuration-desired.json" <<'JSON'
+{"switches":{"sw1":{"managementIp":"1.2.3.4","ports":{
+  "5":{"mode":"access","nativeVlan":200,"type":"device","lagMembers":[]},
+  "11":{"mode":"trunk","nativeVlan":0,"taggedVlans":[200],"type":"node","lag":"t1-lan","lagMembers":[11,12]},
+  "12":{"mode":"trunk","nativeVlan":0,"taggedVlans":[200],"type":"node","lag":"t1-lan","lagMembers":[]}}}}}
+JSON
+ck "interrogate: no aggregate, no members" "[]" "$(plugin_interrogate sw1 1.2.3.4 | jq -c '.ports["11"].lagMembers')"
+UNIFI_LAG_WAIT=0 CONFIG_DIR="${LTMP}" plugin_apply sw1 >/dev/null 2>&1; rc=$?
+ck "form: the lead port aggregates both" "aggregate:11,12" \
+   "$(jq -r '.port_overrides[] | select(.port_idx==11) | "\(.op_mode):\(.aggregate_members | join(","))"' "${LTMP}/put.json")"
+ck "form: the follower loses its own override" "0" "$(jq '[.port_overrides[] | select(.port_idx==12)] | length' "${LTMP}/put.json")"
+ck "form: a port outside the LAG gets no op_mode" "null" "$(jq -r '.port_overrides[] | select(.port_idx==5) | .op_mode // "null"' "${LTMP}/put.json")"
+ck "form: the switch never shows it — apply fails" "1" "${rc}"
+LIVE_PT='[{"port_idx":5,"op_mode":"switch"},{"port_idx":11,"op_mode":"aggregate","aggregate_members":[12,11]},{"port_idx":12,"op_mode":"switch","aggregated_by":11}]'
+UNIFI_LAG_WAIT=0 CONFIG_DIR="${LTMP}" plugin_apply sw1 >/dev/null 2>&1; rc=$?
+ck "form: the switch shows it — apply succeeds" "0" "${rc}"
+ck "interrogate: the lead lists its members" "[11,12]" "$(plugin_interrogate sw1 1.2.3.4 | jq -c '.ports["11"].lagMembers')"
+ck "interrogate: a follower lists none" "[]" "$(plugin_interrogate sw1 1.2.3.4 | jq -c '.ports["12"].lagMembers')"
+ck "controller interrogate: same" "[11,12]" "$(plugin_controller_interrogate c 1.2.3.4 | jq -c '.switches.sw1.ports["11"].lagMembers')"
+CUR_PO='[{"port_idx":11,"op_mode":"aggregate","aggregate_members":[11,12]}]'
+jq '.switches.sw1.ports |= map_values(.lagMembers = [] | del(.lag))' "${LTMP}/switch-configuration-desired.json" > "${LTMP}/d" && mv "${LTMP}/d" "${LTMP}/switch-configuration-desired.json"
+LIVE_PT='[{"port_idx":5,"op_mode":"switch"},{"port_idx":11,"op_mode":"switch"},{"port_idx":12,"op_mode":"switch"}]'
+UNIFI_LAG_WAIT=0 CONFIG_DIR="${LTMP}" plugin_apply sw1 >/dev/null 2>&1; rc=$?
+ck "take apart: the lead goes back to switch" "switch:null" \
+   "$(jq -r '.port_overrides[] | select(.port_idx==11) | "\(.op_mode):\(.aggregate_members // null)"' "${LTMP}/put.json")"
+ck "take apart: port 12 gets its own trunk again" "customize" "$(jq -r '.port_overrides[] | select(.port_idx==12) | .forward' "${LTMP}/put.json")"
+ck "take apart: verified" "0" "${rc}"
+unset -f sleep
+rm -rf "${LTMP}"
+
 echo ""
 echo "test-unifi-plugin: ${PASS} passed, ${FAIL} failed"
 [[ "${FAIL}" -eq 0 ]]

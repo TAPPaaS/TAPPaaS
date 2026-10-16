@@ -105,6 +105,11 @@ _unifi_get() {
 # POST/PUT with a JSON body.
 _unifi_send() { local m="$1" path="$2" body="$3"; curl -sk -m 25 -b "${_UNIFI_JAR}" ${_UNIFI_CSRF:+-H "X-CSRF-Token: ${_UNIFI_CSRF}"} -H "Content-Type: application/json" -X "${m}" -d "${body}" "${_UNIFI_URL}/proxy/network/api/s/${UNIFI_SITE}${path}" 2>/dev/null; }
 
+# A port's live aggregate (#40): the lead port of a LAG lists its members in
+# port_table.aggregate_members (op_mode "aggregate"); every other port lists none.
+_UNIFI_LAG_JQ='def _lag: if (.op_mode // "") == "aggregate" and ((.aggregate_members // []) | length) > 1
+                           then (.aggregate_members | sort) else [] end;'
+
 # ── Contract: supports + management metadata ────────────────────────
 plugin_supports() { [[ "${1:-}" == "unifi" ]]; }
 
@@ -133,7 +138,7 @@ plugin_interrogate() {
     echo "${nets}" | jq -e . >/dev/null 2>&1 || nets='{"data":[]}'
 
     jq -n --arg name "${name}" --arg ip "${mgmt_ip}" \
-          --slurpfile devs <(printf '%s' "${devs}") --slurpfile nets <(printf '%s' "${nets}") '
+          --slurpfile devs <(printf '%s' "${devs}") --slurpfile nets <(printf '%s' "${nets}") "${_UNIFI_LAG_JQ}"'
         $devs[0] as $devs | $nets[0] as $nets
         # vlan map: networkconf _id -> vlan id (0 when untagged/Default)
         | (reduce (($nets.data // [])[]) as $n ({}; .[$n._id] = ($n.vlan // 0))) as $id2vlan
@@ -155,7 +160,7 @@ plugin_interrogate() {
                   | (if $nat == null then 0 else ($id2vlan[$nat] // 0) end) as $natvlan
                   | (($o.excluded_networkconf_ids) // []) as $excl
                   | ([ $excl[] | ($id2vlan[.] // empty) ]) as $exclv
-                  | . + { ($k): (
+                  | . + { ($k): ((
                       if $fwd == "native" then
                         { mode:"access", nativeVlan:$natvlan, source:"discovered" }
                       elif $fwd == "disabled" then
@@ -164,7 +169,7 @@ plugin_interrogate() {
                         { mode:"trunk", nativeVlan:$natvlan, taggedVlans:($allvlans - $exclv), source:"discovered" }
                       else   # "all"
                         { mode:"trunk", nativeVlan:$natvlan, taggedVlans:$allvlans, source:"discovered" }
-                      end) }
+                      end) + { lagMembers: ($p | _lag) }) }
               ))
           }
         end'
@@ -187,7 +192,7 @@ plugin_controller_interrogate() {
     nets=$(_unifi_get /rest/networkconf)
     echo "${nets}" | jq -e . >/dev/null 2>&1 || nets='{"data":[]}'
 
-    jq -n --slurpfile devs <(printf '%s' "${devs}") --slurpfile nets <(printf '%s' "${nets}") '
+    jq -n --slurpfile devs <(printf '%s' "${devs}") --slurpfile nets <(printf '%s' "${nets}") "${_UNIFI_LAG_JQ}"'
         $devs[0] as $devs | $nets[0] as $nets
         | (reduce (($nets.data // [])[]) as $n ({}; .[$n._id] = ($n.vlan // 0))) as $id2vlan
         | ([ ($nets.data // [])[] | (.vlan // 0) | select(. > 0) ] | sort | unique) as $allvlans
@@ -207,11 +212,12 @@ plugin_controller_interrogate() {
                     | (if $nat == null then 0 else ($id2vlan[$nat] // 0) end) as $natvlan
                     | (($o.excluded_networkconf_ids) // []) as $excl
                     | ([ $excl[] | ($id2vlan[.] // empty) ]) as $exclv
-                    | . + { ($k): (
+                    | . + { ($k): ((
                         if $fwd == "native" then { mode:"access", nativeVlan:$natvlan, source:"discovered" }
                         elif $fwd == "disabled" then { mode:"access", nativeVlan:0, disabled:true, source:"discovered" }
                         elif $fwd == "customize" then { mode:"trunk", nativeVlan:$natvlan, taggedVlans:($allvlans - $exclv), source:"discovered" }
-                        else { mode:"trunk", nativeVlan:$natvlan, taggedVlans:$allvlans, source:"discovered" } end) }
+                        else { mode:"trunk", nativeVlan:$natvlan, taggedVlans:$allvlans, source:"discovered" } end)
+                        + { lagMembers: ($p | _lag) }) }
                   ))
               } )),
             # APs (type "uap") with their wired uplink resolved to a switch + port,
@@ -290,7 +296,12 @@ plugin_apply() {
         | ([ $nets.data[] | select(.vlan == null) ][0]._id // $nets.data[0]._id) as $def
         | ([ $nets.data[] | select(.vlan != null and .vlan > 0) | ._id ]) as $allvlannets
         | (reduce ($cur[]?) as $o ({}; .[($o.port_idx|tostring)] = $o)) as $curmap
-        | ($desired | to_entries | map(
+        # A LAG (#40): its lead carries op_mode aggregate + the members; the other
+        # members follow the lead, so they lose their own override.
+        | ([ $desired[] | (.lagMembers // []) | select(length > 1) | .[1:][] ]) as $followers
+        | ($desired | to_entries
+            | map(select((.key | tonumber) as $i | $followers | index($i) | not))
+            | map(
             (.key|tonumber) as $idx | .value as $p
             | ($p.nativeVlan // 0) as $nv
             | (if $nv > 0 then ($vid[($nv|tostring)] // $def) else $def end) as $native_id
@@ -301,17 +312,44 @@ plugin_apply() {
                 | {port_idx:$idx, forward:"customize", native_networkconf_id:$native_id,
                    tagged_vlan_mgmt:"custom",
                    excluded_networkconf_ids: ($allvlannets - $tagids - [$native_id])}
-              end)) as $new
-        | (reduce $new[] as $np ($curmap; .[($np.port_idx|tostring)] = $np)) | [ .[] ]
+              end
+            # op_mode only where an aggregate is formed, or one is taken apart.
+            | . + (if (($p.lagMembers // []) | length) > 1
+                   then {op_mode:"aggregate", aggregate_members: ($p.lagMembers | sort)}
+                   elif ($curmap[($idx | tostring)].op_mode // "") == "aggregate" then {op_mode:"switch"}
+                   else {} end))) as $new
+        | (reduce $new[] as $np ($curmap; .[($np.port_idx|tostring)] = $np))
+        | with_entries(select((.key | tonumber) as $i | $followers | index($i) | not)) | [ .[] ]
     ')
 
     resp=$(_unifi_send PUT "/rest/device/${devid}" "$(jq -nc --argjson po "${overrides}" '{port_overrides:$po}')")
     if [[ "$(echo "${resp}" | jq -r '.meta.rc // empty')" == "ok" ]]; then
         _unifi_log_ok "${name}: applied $(echo "${desired}" | jq 'length') port(s) to UniFi"
+        _unifi_lag_settled "${devid}" "${desired}" || return 1
         return 0
     fi
     _unifi_warn "${name}: device PUT failed: $(echo "${resp}" | jq -rc '.meta.msg // .' 2>/dev/null | head -c 200)"
     return 1
+}
+
+# After a PUT that forms or takes apart a LAG (#40): the device re-provisions,
+# and only its port_table says what it did. Wait until every port's live members
+# match desired; non-zero (naming the port) if they do not within UNIFI_LAG_WAIT.
+_unifi_lag_settled() {
+    local devid="$1" desired="$2" want t=0 got wrong
+    want=$(jq -c '[ to_entries[] | select(.value.lagMembers != null) | {k: .key, m: (.value.lagMembers | sort)} ]' <<<"${desired}")
+    [[ "$(jq '[.[] | select((.m | length) > 0)] | length' <<<"${want}")" -gt 0 ]] \
+        || [[ "$(jq 'length' <<<"${want}")" -gt 0 ]] || return 0
+    while :; do
+        got=$(_unifi_get /stat/device | jq -c --arg id "${devid}" "${_UNIFI_LAG_JQ}"'
+            [ .data[] | select(._id == $id) | .port_table[]? | {k: (.port_idx | tostring), m: _lag} ]' 2>/dev/null)
+        wrong=$(jq -rn --argjson w "${want}" --argjson g "${got:-[]}" '
+            [ $w[] as $x | select(($g | map(select(.k == $x.k))[0].m // []) != $x.m and (($x.m | length) > 0 or (($g | map(select(.k == $x.k))[0].m // []) | length) > 0))
+              | "port \($x.k): want \($x.m | map(tostring) | join("+") | if . == "" then "no LAG" else . end), live \(($g | map(select(.k == $x.k))[0].m // []) | map(tostring) | join("+") | if . == "" then "no LAG" else . end)" ] | join("; ")')
+        [[ -n "${wrong}" ]] || { (( t == 0 )) || _unifi_log_ok "aggregates as declared"; return 0; }
+        (( t >= ${UNIFI_LAG_WAIT:-90} )) && { _unifi_warn "the switch did not take the aggregate within ${UNIFI_LAG_WAIT:-90}s: ${wrong}"; return 1; }
+        sleep 5; t=$((t + 5))
+    done
 }
 
 _unifi_log_ok() { if command -v info >/dev/null 2>&1; then info "  ${GN:-}✓${CL:-} $*"; else echo "unifi.sh: $*" >&2; fi; }

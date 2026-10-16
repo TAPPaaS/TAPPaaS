@@ -36,9 +36,19 @@ switch-controller <command> [args]
 | `add-port <switch> <port> --type node\|switch\|ap\|device\|uplink [--target <t>] [--target-port <tp>] [--mode trunk\|access] [--zone <z>] [--native <vlan>] [--tagged 210,220] [--description <d>]` | Register a port and what it connects to. |
 | `update-port <switch> <port> [ ...same flags... ]` | Change a port's settings. |
 | `remove-port <switch> <port>` | Remove a port. |
+| `lag set <switch> <name> --ports <p,p> [--apply]` | Make registered ports one LACP aggregate (LAG). The lowest-numbered port leads it. `--apply` programs that switch at once; otherwise the next `reconcile --apply` does. |
+| `lag remove <switch> <name> [--apply]` | Take the aggregate apart again. |
+| `lag list [<switch>]` | The declared aggregates, and whether the switch has formed them. |
 | `list` | List controllers and switches. |
 | `list-ports [<switch>]` | One line per port: actual config and drift vs `zones.json`. |
 | `show <controller\|switch>` | Show one inventory entry. |
+
+An aggregate spans ports of **one** switch. Across two switches it needs MC-LAG
+(both switches of one vendor that supports it), which is not modelled. A
+node's bonded LAN uplink in `lacp` mode drives this itself: `site-manager node
+network set <node> --lan-mode lacp --apply` forms the aggregate named
+`<node>-lan` once the node speaks LACP, and takes it apart before the node
+leaves `lacp`. On a manually managed switch the step is printed instead.
 
 Port types `node`, `switch`, `ap` and `uplink` are treated as **VLAN trunks**
 and carry the full active VLAN set; `device` ports are access ports.
