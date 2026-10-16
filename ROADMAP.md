@@ -106,7 +106,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 |------|-------|:-:|:-:|---:|---:|---:|
 | 7 | G7.1 DevOps stack | H | M | – | – | 3 |
 | 7 | G7.2 New and reworked app modules | H | M | – | 1 | 3 |
-| 6 | G6.1 Switching fabric, WAN, ISP & site operations | H | H | – | – | 13 |
+| 6 | G6.1 Switching fabric, WAN, ISP & site operations | H | H | – | 1 | 12 |
 | 6 | G6.2 User interface & physical view | H | L | – | – | 4 |
 | 5 | G5.1 Satellite & off-site | H | M | – | – | 7 |
 | 5 | G5.2 Test coverage & conventions | H | L | – | – | 5 |
@@ -235,13 +235,13 @@ New modules — a Markdown website (#841), N.O.M.A.D. for the home stack (#129),
 The physical site and how an operator sees and runs it. Not ordered by upgrade risk like Waves 0–4:
 these two groups are designed together — the fabric is what the physical view shows and changes.
 
-### G6.1 Switching fabric, WAN, ISP & site operations — Ease H · Risk H · open: 13
+### G6.1 Switching fabric, WAN, ISP & site operations — Ease H · Risk H · done for 2.3: 1 · open: 12
 
 The links a site stands on: node uplinks (a bond under `lan`, #40), switch ports and trunks kept in line with the zones (#668, #697, #706, #731), the WAN and the ISP (public DNS that follows the WAN, #383, #830; mail when the ISP blocks port 25, #125). Switch setup needs a systematic model, at install and on day 2. Operating the site belongs here too: a service desk (#63) and a SIEM (#843, Wazuh the best candidate). Linked to G6.2: the physical view shows and later changes it.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
-| FW #40 | Redundant lan uplinks: a bond under the `lan` bridge | M | M | **Rescoped 2026-10-15** (from a dedicated sync network; replaces #590): two equal ports to two interconnected switches → LACP (needs a stack/MLAG, `lacp-rate fast`); mixed ports such as 1G + 10G → active-backup with the fast port primary. `config-network.sh` builds the bond, the node model declares it, `health-manager` warns on fencing armed with a single uplink or a degraded bond |
+| ✅ FW #40 | Redundant lan uplinks: a bond under the `lan` bridge | M | M | **Closed 2026-10-16** (`01730e51`): `site-manager node network show\|set\|test`, declared as the node's `uplinks` (ports by MAC). `set --apply` drains the node and re-carries `lan` under a rollback confirmed from the mothership; into `lacp` it forms the switch aggregate through `switch-controller lag` (UniFi), out of it takes it apart first. `lan-uplink` health gate (single uplink with fencing armed, legs, LACP state, slow-rate partner, same switch, drift) and the `LanLegDown` alert. Live on hrossen: tappaas2 10G + 1G active-backup, tappaas1 10G + 10G LACP — both survived pulling either cable (a flaky fibre on tappaas1 found on the way) |
 | #383 | Keep wildcard public DNS current on dynamic WAN | M | L | |
 | #830 | `environment-manager`: no verb creates the public DNS record | M | L | **Deferred (operator, 2026-10-15).** A name under an environment's domain gets a certificate and a route only once it resolves publicly, and nothing creates that record: an environment added after bootstrap needs the A record by hand at the DNS provider. Related to #383. Reported by @ErikDaniel007 |
 | #125 | Mail relay via M365 Graph API | M | L | |
