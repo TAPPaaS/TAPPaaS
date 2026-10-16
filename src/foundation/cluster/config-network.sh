@@ -34,11 +34,30 @@
 #   --drop-upstream  Hardening (run later): remove the node's upstream (wan-side)
 #                    host IP so Proxmox is reachable only on the mgmt net / via the
 #                    firewall (or netbird).
+#   --set-lan        Running node (#40): carry the existing `lan` bridge on the
+#                    --lan-port list — one port, or a bond of several (`lanbond`).
+#                    Only lan's uplink changes: its address, gateway and the wan
+#                    bridge are kept. Guarded by a --rollback-secs timer (default
+#                    45s, under the 60s HA watchdog) that restores the previous
+#                    file unless the change is confirmed; with --confirm-external
+#                    the caller confirms (touch /run/tappaas-net-ok) once it has
+#                    checked the node from outside. Normally run by
+#                    lan-uplink.sh (site-manager node network set), not by hand.
+#
+# lan uplink (#40):
+#   --lan-port a,b   Two or more ports bond under `lan` as `lanbond`.
+#   --lan-mode m     active-backup (default for 2+ ports; any switches, any speeds)
+#                    or lacp (802.3ad: equal speeds, and the switch side one LAG).
+#   --lan-primary p  active-backup: the port that carries traffic when it is up
+#                    (default: the fastest).
+#   --mtu n          MTU on the bond and the lan bridge (default: unchanged).
 #
 # Usage:
-#   config-network.sh [--lan-port <ifname>] [--wan-port <ifname>]
+#   config-network.sh [--lan-port <ifname>[,<ifname>...]] [--wan-port <ifname>]
+#                     [--lan-mode active-backup|lacp] [--lan-primary <ifname>] [--mtu <n>]
 #                     [--mgmt-ip <CIDR>] [--gateway <ip>] [--fw-ip <ip>]
-#                     [--swap-gateway [--admin-route <CIDR>] | --drop-upstream]
+#                     [--swap-gateway [--admin-route <CIDR>] | --drop-upstream
+#                      | --set-lan [--rollback-secs <s>] [--confirm-external]]
 #                     [--no-rollback] [--apply|--dry-run] [--non-interactive]
 #                     [-h|--help]
 #
@@ -62,15 +81,28 @@ die()   { error "$*"; exit 1; }
 readonly INTERFACES=/etc/network/interfaces
 readonly ROLLBACK_BIN=/usr/local/sbin/tappaas-net-rollback.sh
 readonly ROLLBACK_OK=/run/tappaas-net-ok
+readonly SET_LAN_RESULT=/run/tappaas-net-set-lan   # --set-lan: "ok" | "fail <why>"
 readonly MGMT_SUBNET="10.0.0"   # /24 management network prefix
 readonly MGMT_POOL_START=100    # mgmt DHCP pool starts here: .10-.99 are the nodes' (#673)
 
 usage() { sed -n '2,/^set -euo/p' "$0" | sed 's/^# \{0,1\}//; /^set -euo/d'; }
 
+# The lan uplink's bond rendering (#40). Fetched beside this script by the node
+# step (cluster/install.sh), copied beside it by lan-uplink.sh, and in lib/ in
+# the repository.
+_here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+for _lib in "${_here}/lib/lan-bond-lib.sh" "${_here}/lan-bond-lib.sh"; do
+  # shellcheck source=lib/lan-bond-lib.sh disable=SC1090
+  [[ -r "${_lib}" ]] && { . "${_lib}"; break; }
+done
+declare -F lb_set_lan >/dev/null || { echo "config-network.sh: lan-bond-lib.sh not found beside it" >&2; exit 1; }
+
 # ── Arguments ────────────────────────────────────────────────────────
 LAN_PORT="" WAN_PORT="" MGMT_IP="" GATEWAY="" ADMIN_ROUTE=""
-DO_ROLLBACK=1 INTERACTIVE=1 DRY_RUN=0 ROLLBACK_SECS=90
+DO_ROLLBACK=1 INTERACTIVE=1 DRY_RUN=0 ROLLBACK_SECS=""
 SWAP_GATEWAY=0 DROP_UPSTREAM=0 FW_IP="${MGMT_SUBNET}.1"
+LAN_MODE="" LAN_PRIMARY="" LAN_MTU="" SET_LAN=0 CONFIRM_EXTERNAL=0
+LAN_PORTS="" LAN_BRIDGE_PORT="" LAN_STANZA=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -82,6 +114,12 @@ while [[ $# -gt 0 ]]; do
     --admin-route)     ADMIN_ROUTE="${2:-}"; shift 2 ;;
     --drop-upstream)   DROP_UPSTREAM=1; shift ;;
     --fw-ip)           FW_IP="${2:-}"; shift 2 ;;
+    --lan-mode)        LAN_MODE="${2:-}"; shift 2 ;;
+    --lan-primary)     LAN_PRIMARY="${2:-}"; shift 2 ;;
+    --mtu)             LAN_MTU="${2:-}"; shift 2 ;;
+    --set-lan)         SET_LAN=1; shift ;;
+    --rollback-secs)   ROLLBACK_SECS="${2:-}"; shift 2 ;;
+    --confirm-external) CONFIRM_EXTERNAL=1; shift ;;
     --no-rollback)     DO_ROLLBACK=0; shift ;;
     --dry-run)         DRY_RUN=1; shift ;;
     --apply)           DRY_RUN=0; shift ;;
@@ -90,6 +128,12 @@ while [[ $# -gt 0 ]]; do
     *) error "Unknown argument: $1"; usage; exit 2 ;;
   esac
 done
+
+# 90s for a bootstrap (an operator watches it); 45s for --set-lan on a running
+# node, which has to revert before the HA watchdog (60s) could fence it.
+[[ -n "$ROLLBACK_SECS" ]] || { [[ "$SET_LAN" == 1 ]] && ROLLBACK_SECS=45 || ROLLBACK_SECS=90; }
+[[ "$ROLLBACK_SECS" =~ ^[0-9]+$ ]] || { echo "--rollback-secs: not a number of seconds" >&2; exit 2; }
+[[ -z "$LAN_MTU" || "$LAN_MTU" =~ ^[0-9]+$ ]] || { echo "--mtu: not a number" >&2; exit 2; }
 
 [[ $EUID -eq 0 ]] || die "Must run as root."
 command -v ifreload >/dev/null || warn "ifreload not found — will fall back to 'systemctl restart networking'."
@@ -116,6 +160,31 @@ node_mgmt_ip() {
 
 # Address currently held on bridge $1 (CIDR), empty if none.
 bridge_ip() { ip -o -4 addr show "$1" 2>/dev/null | awk '{print $4; exit}'; }
+
+# ── Auto-rollback guard (prevents permanent lockout) ─────────────────
+# A one-shot timer restores the backup unless the operator confirms connectivity
+# (which removes the guard). If applying the new config drops the operator's
+# session, the node self-heals back to the working config.
+arm_rollback() {
+  rm -f "$ROLLBACK_OK"
+  cat >"$ROLLBACK_BIN" <<EOF
+#!/bin/sh
+if [ -f "${ROLLBACK_OK}" ]; then
+  logger -t tappaas "config-network: rollback skipped (operator confirmed)"
+else
+  logger -t tappaas "config-network: AUTO-REVERTING to ${BACKUP} (no confirmation)"
+  cp -a "${BACKUP}" "${INTERFACES}"
+  echo reverted > "${SET_LAN_RESULT}"
+  ifreload -a 2>/dev/null || systemctl restart networking
+fi
+rm -f "${ROLLBACK_BIN}"
+EOF
+  chmod 755 "$ROLLBACK_BIN"
+  systemd-run --on-active="${ROLLBACK_SECS}" /bin/sh "$ROLLBACK_BIN" >/dev/null 2>&1 \
+    || warn "Could not arm systemd rollback timer (proceeding without auto-rollback)."
+}
+
+apply_network() { ifreload -a 2>/dev/null || systemctl restart networking; }
 
 # ── Mode: gateway cutover (additive — preserves the upstream IP) ──────
 swap_gateway() {
@@ -265,6 +334,95 @@ done
 info "Physical ports found: ${#PORTS[@]}"
 for i in "${!PORTS[@]}"; do echo "    ${BL}${PORTS[$i]}${CL}  ${PORT_DESCS[$i]}"; done
 
+# Comma-separated list of a bridge's member ports ("" if none), glob-based so it
+# needs no `ls` parsing and is safe on an empty bridge.
+bridge_members() {
+  local p out=""
+  for p in "/sys/class/net/$1/brif"/*; do
+    [[ -e "$p" ]] || continue
+    out+="${out:+,}${p##*/}"
+  done
+  printf '%s' "$out"
+}
+
+# ── The lan uplink: one port, or a bond of several (#40) ──────────────
+# Sets LAN_PORTS (space-separated), LAN_MODE, LAN_PRIMARY, LAN_BRIDGE_PORT and
+# LAN_STANZA (the bond's stanza, empty for one port) from --lan-port & co.
+in_ports() { local x; for x in "${PORTS[@]}"; do [[ "$x" == "$1" ]] && return 0; done; return 1; }
+resolve_lan() {
+  local p n err
+  err="$(lb_ports "$LAN_PORT" 2>&1 >/dev/null)" || die "--lan-port: ${err}"
+  LAN_PORTS="$(lb_ports "$LAN_PORT")"
+  for p in $LAN_PORTS; do in_ports "$p" || die "LAN port '${p}' is not a physical port."; done
+  n="$(wc -w <<<"$LAN_PORTS" | tr -d ' ')"
+  err="$(lb_mode "$n" "$LAN_MODE" 2>&1 >/dev/null)" || die "${err}"
+  LAN_MODE="$(lb_mode "$n" "$LAN_MODE")"
+  if [[ "$LAN_MODE" == lacp ]] && ! err="$(lb_equal_speeds "$LAN_PORTS" 2>&1)"; then
+    # A port without link reads -1: unknown, not unequal — the switch may be off.
+    [[ "$err" == *=-1* ]] && warn "lacp: a port's speed is unknown (${err}) — LACP needs equal speeds"       || die "lacp needs ports of equal speed (${err}) — use --lan-mode active-backup"
+  fi
+  if [[ "$LAN_MODE" == active-backup ]]; then
+    [[ -n "$LAN_PRIMARY" ]] || LAN_PRIMARY="$(lb_default_primary "$LAN_PORTS")"
+    [[ " $LAN_PORTS " == *" $LAN_PRIMARY "* ]] || die "--lan-primary ${LAN_PRIMARY} is not one of the lan ports (${LAN_PORTS})"
+  else
+    [[ -z "$LAN_PRIMARY" ]] || warn "--lan-primary applies to active-backup only — ignored for ${LAN_MODE}"
+    LAN_PRIMARY=""
+  fi
+  LAN_BRIDGE_PORT="$(lb_bridge_port "$LAN_PORTS")"
+  LAN_STANZA="$(lb_bond_stanza "$LAN_PORTS" "$LAN_MODE" "$LAN_PRIMARY" "$LAN_MTU")"
+}
+lan_desc() { echo "${LAN_PORTS}$([[ "$LAN_MODE" == single ]] || echo " as ${LB_BOND} (${LAN_MODE}${LAN_PRIMARY:+, primary ${LAN_PRIMARY}})")${LAN_MTU:+, mtu ${LAN_MTU}}"; }
+
+# ── Mode: re-carry a running node's lan bridge (#40) ──────────────────
+set_lan() {
+  local p wanm cur new gw ok _i
+  ip link show lan &>/dev/null || die "--set-lan: this node has no lan bridge — bootstrap it first"
+  [[ -n "$LAN_PORT" ]] || die "--set-lan needs --lan-port"
+  resolve_lan
+  wanm=",$(bridge_members wan),"
+  for p in $LAN_PORTS; do
+    [[ "$wanm" == *",${p},"* ]] && die "${p} is the wan bridge's port — it cannot carry lan as well"
+    [[ -z "$(ip -o -4 addr show "$p" 2>/dev/null)" ]] || die "${p} has an address of its own — not a free port"
+  done
+  cur="$(cat "$INTERFACES")"
+  new="$(lb_set_lan "$LAN_BRIDGE_PORT" "$LAN_STANZA" "$LAN_MTU" <<<"$cur")"
+  info "${BOLD}lan uplink${CL} ← $(lan_desc)"
+  if [[ "$new" == "$cur" ]]; then
+    info "${GN}✓${CL} ${INTERFACES} already says so — nothing to change."
+    [[ "$DRY_RUN" == 1 ]] || echo ok > "$SET_LAN_RESULT"
+    exit 0
+  fi
+  diff -u <(printf '%s\n' "$cur") <(printf '%s\n' "$new") | tail -n +3 || true
+  if [[ "$DRY_RUN" == 1 ]]; then info "Dry-run: not writing or applying. Re-run with --apply to commit."; exit 0; fi
+
+  BACKUP="${INTERFACES}.tappaas.$(date +%Y%m%d-%H%M%S).bak"
+  cp -a "$INTERFACES" "$BACKUP"
+  printf '%s\n' "$new" > "$INTERFACES"
+  rm -f "$SET_LAN_RESULT"
+  info "Backed up → ${BACKUP}; arming a ${ROLLBACK_SECS}s rollback, then applying ..."
+  arm_rollback
+  apply_network || warn "Apply returned non-zero — checking connectivity."
+
+  # The node's own check: its gateway on lan answers through the new uplink.
+  gw="$(awk '/^iface lan /{f=1;next} /^[^ \t]/{f=0} f&&$1=="gateway"{print $2;exit}' "$INTERFACES")"
+  gw="${gw:-$FW_IP}"
+  ok=0
+  for _i in $(seq 1 10); do ping -c1 -W2 "$gw" >/dev/null 2>&1 && { ok=1; break; }; sleep 1; done
+  if [[ "$ok" != 1 ]]; then
+    echo "fail gateway ${gw} unreachable on the new uplink" > "$SET_LAN_RESULT"
+    warn "Gateway ${gw} not reachable on the new uplink — the node reverts to ${BACKUP} within ${ROLLBACK_SECS}s."
+    exit 1
+  fi
+  echo ok > "$SET_LAN_RESULT"
+  if [[ "$CONFIRM_EXTERNAL" == 1 ]]; then
+    info "${GN}✓${CL} gateway ${gw} answers — waiting for the caller to confirm (touch ${ROLLBACK_OK}) within ${ROLLBACK_SECS}s."
+  else
+    touch "$ROLLBACK_OK"
+    info "${GN}✓${CL} gateway ${gw} answers — change kept."
+  fi
+}
+if [[ "$SET_LAN" == "1" ]]; then set_lan; exit 0; fi
+
 # ── Idempotency: is the node network already built? (early, clean no-op) ──
 # Once `lan` holds this node's mgmt IP with both bridges present, the node's
 # network model is already in place and a re-run must change nothing. Bail HERE,
@@ -276,16 +434,6 @@ for i in "${!PORTS[@]}"; do echo "    ${BL}${PORTS[$i]}${CL}  ${PORT_DESCS[$i]}"
 # --drop-upstream returned above). A --dry-run still falls through to preview the
 # plan; a genuine rebuild still proceeds if either bridge is missing or the mgmt IP
 # differs (partial / mis-config self-heals).
-# Comma-separated list of a bridge's member ports ("" if none), glob-based so it
-# needs no `ls` parsing and is safe on an empty bridge.
-bridge_members() {
-  local p out=""
-  for p in "/sys/class/net/$1/brif"/*; do
-    [[ -e "$p" ]] || continue
-    out+="${out:+,}${p##*/}"
-  done
-  printf '%s' "$out"
-}
 if [[ "$DRY_RUN" != "1" ]] && ip link show lan &>/dev/null && ip link show wan &>/dev/null; then
   want_mgmt="$(node_mgmt_ip)/24"
   cur_lan_ip="$(ip -o -4 addr show lan 2>/dev/null | awk '{print $4; exit}')"
@@ -345,6 +493,15 @@ else
   DEFAULT_LAN="$INSTALL_NIC"
   DEFAULT_WAN="$(other_port "$INSTALL_NIC" || true)"
 fi
+# Ports given for lan are never the WAN default: with two lan ports the "other"
+# NIC above may be one of them (#40).
+if [[ -n "$LAN_PORT" ]]; then
+  _lan_given=" $(lb_ports "$LAN_PORT" 2>/dev/null || true) "
+  if [[ "$_lan_given" == *" ${DEFAULT_WAN} "* ]]; then
+    DEFAULT_WAN=""
+    for _p in "${PORTS[@]}"; do [[ "$_lan_given" == *" ${_p} "* ]] || { DEFAULT_WAN="$_p"; break; }; done
+  fi
+fi
 
 # ── Port selection (auto-detected defaults; operator may override) ───
 pick_port() {
@@ -397,8 +554,8 @@ if [[ -z "$LAN_PORT" ]]; then
     info "Auto-selected LAN port ${BL}${LAN_PORT}${CL}."
   fi
 fi
-valid_port "$LAN_PORT" || die "LAN port '${LAN_PORT}' is not a physical port."
-[[ -n "$WAN_PORT" && "$WAN_PORT" == "$LAN_PORT" ]] && die "LAN and WAN ports must differ."
+resolve_lan
+[[ -n "$WAN_PORT" && " $LAN_PORTS " == *" ${WAN_PORT} "* ]] && die "LAN and WAN ports must differ."
 
 # ── Render the new /etc/network/interfaces ───────────────────────────
 # first node : wan keeps the install IP + upstream gateway (internet during
@@ -427,10 +584,12 @@ iface wan inet static
 	bridge-stp off
 	bridge-fd 0
 
-auto lan
+${LAN_STANZA:+${LAN_STANZA}
+
+}auto lan
 iface lan inet static
 	address ${LAN_MGMT_IP}
-	bridge-ports ${LAN_PORT}
+	bridge-ports ${LAN_BRIDGE_PORT}
 	bridge-stp off
 	bridge-fd 0
 	bridge-vlan-aware yes
@@ -445,11 +604,13 @@ iface wan inet manual
 	bridge-stp off
 	bridge-fd 0
 
-auto lan
+${LAN_STANZA:+${LAN_STANZA}
+
+}auto lan
 iface lan inet static
 	address ${LAN_MGMT_IP}
 	gateway ${FW_IP}
-	bridge-ports ${LAN_PORT}
+	bridge-ports ${LAN_BRIDGE_PORT}
 	bridge-stp off
 	bridge-fd 0
 	bridge-vlan-aware yes
@@ -464,9 +625,9 @@ echo ""
 info "${BOLD}Planned network configuration (${ROLE} node):${CL}"
 if [[ "$ROLE" == "first" ]]; then
   info "  wan  ← port ${BL}${WAN_PORT:-<none>}${CL}   ip ${BL}${INSTALL_CIDR:-?}${CL}  gw ${BL}${INSTALL_GW:-?}${CL}  (upstream uplink + node internet)"
-  info "  lan  ← port ${BL}${LAN_PORT}${CL}   ip ${BL}${LAN_MGMT_IP}${CL}  (mgmt; gateway set at cutover)  (vlan-aware trunk 2-4094)"
+  info "  lan  ← port ${BL}$(lan_desc)${CL}   ip ${BL}${LAN_MGMT_IP}${CL}  (mgmt; gateway set at cutover)  (vlan-aware trunk 2-4094)"
 else
-  info "  lan  ← port ${BL}${LAN_PORT}${CL}   ip ${BL}${LAN_MGMT_IP}${CL}  gw ${BL}${FW_IP}${CL}  (vlan-aware trunk 2-4094)"
+  info "  lan  ← port ${BL}$(lan_desc)${CL}   ip ${BL}${LAN_MGMT_IP}${CL}  gw ${BL}${FW_IP}${CL}  (vlan-aware trunk 2-4094)"
   info "  wan  ← port ${BL}${WAN_PORT:-<none>}${CL}   (wired for firewall HA; no IP)"
 fi
 # The full generated file is useful on a dry-run preview (or when debugging), but
@@ -505,7 +666,7 @@ fi
 if [[ "$INTERACTIVE" == "1" ]]; then
   if [[ "$HAVE_WHIPTAIL" == "1" ]]; then
     whiptail --title "TAPPaaS network" --yesno \
-      "Apply this network configuration?\n\nrole: ${ROLE}\nlan ← ${LAN_PORT} (${LAN_MGMT_IP})\nwan ← ${WAN_PORT:-none}\n\nA ${ROLLBACK_SECS}s auto-rollback protects against lockout." 16 72 \
+      "Apply this network configuration?\n\nrole: ${ROLE}\nlan ← $(lan_desc) (${LAN_MGMT_IP})\nwan ← ${WAN_PORT:-none}\n\nA ${ROLLBACK_SECS}s auto-rollback protects against lockout." 16 72 \
       || { info "Aborted by operator."; exit 0; }
   else
     read -r -p "Apply this configuration? [y/N]: " yn
@@ -521,30 +682,6 @@ BACKUP="${INTERFACES}.tappaas.$(date +%Y%m%d-%H%M%S).bak"
 cp -a "$INTERFACES" "$BACKUP"
 info "Backed up current config → ${BACKUP}"
 printf '%s\n' "$NEW_CONFIG" >"$INTERFACES"
-
-# ── Auto-rollback guard (prevents permanent lockout) ─────────────────
-# A one-shot timer restores the backup unless the operator confirms connectivity
-# (which removes the guard). If applying the new config drops the operator's
-# session, the node self-heals back to the working config.
-arm_rollback() {
-  rm -f "$ROLLBACK_OK"
-  cat >"$ROLLBACK_BIN" <<EOF
-#!/bin/sh
-if [ -f "${ROLLBACK_OK}" ]; then
-  logger -t tappaas "config-network: rollback skipped (operator confirmed)"
-else
-  logger -t tappaas "config-network: AUTO-REVERTING to ${BACKUP} (no confirmation)"
-  cp -a "${BACKUP}" "${INTERFACES}"
-  ifreload -a 2>/dev/null || systemctl restart networking
-fi
-rm -f "${ROLLBACK_BIN}"
-EOF
-  chmod 755 "$ROLLBACK_BIN"
-  systemd-run --on-active="${ROLLBACK_SECS}" /bin/sh "$ROLLBACK_BIN" >/dev/null 2>&1 \
-    || warn "Could not arm systemd rollback timer (proceeding without auto-rollback)."
-}
-
-apply_network() { ifreload -a 2>/dev/null || systemctl restart networking; }
 
 if [[ "$DO_ROLLBACK" == "1" ]]; then
   info "Arming ${ROLLBACK_SECS}s auto-rollback ..."
@@ -587,4 +724,4 @@ if [[ "$DO_ROLLBACK" == "1" ]]; then
 fi
 
 info "${GN}Network configuration complete.${CL}"
-info "  role=${ROLE}  lan=${LAN_PORT} (${LAN_MGMT_IP})  wan=${WAN_PORT:-none}"
+info "  role=${ROLE}  lan=$(lan_desc) (${LAN_MGMT_IP})  wan=${WAN_PORT:-none}"
