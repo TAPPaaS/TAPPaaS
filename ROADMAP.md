@@ -124,7 +124,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | 2 | G2.2 DNS resolver robustness | L | M | 4 | 3 | 1 |
 | 1 | ✅ G1.2 Backup placement model + managed machines (ADR-012, ADR-026) | M | H | 27 | – | – |
 | 1 | G1.6 Secrets & privileged access | H | H | 4 | – | 1 |
-| 1 | G1.7 Parked for Erik discussion | – | – | – | – | 5 |
+| 1 | G1.7 Parked for Erik discussion | – | – | – | – | 3 |
 
 ## Planning items still open
 
@@ -133,7 +133,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | # | Question | Waits on |
 |---|----------|----------|
 | #801 | Default update schedule: daily on every channel — on `stable`/`staging` 13 of 14 runs change nothing, but urgent fixes and OS patches arrive within a day; what to do with sites on the old weekly default | Operator (proposed 2026-10-08, from #797) |
-| #294 | VMID scheme: zone-aligned ranges for new installs only, or not at all — never renumber in place | Lars and @ErikDaniel007 (G1.7) |
+| #294 | VMID scheme: zone-aligned ranges for new installs only, or not at all — never renumber in place | Lars and @ErikDaniel007 (Future Work) |
 | #430 | Controller/manager pattern for app modules (Ansible first?) — decide before #170 | Lars and @ErikDaniel007 (G1.7) |
 | #142 | AI-agent access to the mothership: SSH + sudo, or a REST API (which would need an ADR) | RFC outcome (G1.6) |
 | #675 | What a managed repository may contribute to the control plane's own NixOS configuration, and what happens when that fails to build. Today a site's own host-level modules are dropped by every scheduled rebuild while the unit reports success (`tappaas-cicd.nix` has no extension point — confirmed) | An ADR first; Ease H · Risk M |
@@ -161,7 +161,7 @@ met gates are recorded in the releases that carried their waves.
 | Composite modules | #761: `cluster`, `kubernetes`, and modules that only provide artefacts (`templates`) — a `kind` for them; with @ErikDaniel007 | G3.1 |
 | Control-plane extension | #675 | — |
 | Secrets management | #58 (in Future Work since 2026-10-02): one secrets-access helper every module uses instead of reading `/etc/secrets`, OpenBao behind it later | G1.6, when #58 returns |
-| VMID convention | #294 — only if it is adopted | G1.7 |
+| VMID convention | #294 — only if it is adopted | Future Work |
 | Legal/processor | #359 | Wave 4 |
 | IPv6 | #26 — [ADR-030](docs/ADR/ADR-030%20-%20IPv6.md) **Accepted v1.0 2026-10-13**: built and on `main`; inbound verified from a phone over IPv6 via the public AAAA. Remaining outside it: public DNS that follows a dynamic WAN (#383) | #26 closable |
 
@@ -194,6 +194,7 @@ items that belong to a group — FW #40, #83, #157, #158, #162 — are rows in t
 | #156 | pfSense `aliases.xml` import script | |
 | #223 | OPNsense 26.1 InterfaceAssignController may break on a future upgrade | Parked 2026-10-13 (agreed 2026-05-27): works on 26.1 as deployed; revisit when an upgrade breaks it. Parking lot on the forge |
 | #250 | `dependsOn` ownership for community modules | Option D, `dependsOn.sh`. Out of G1.3 since 2026-09-20 (operator) |
+| #294 | Zone-aligned VMID ranges | Renumbering means backup/restore to a new VMID. **Proposal:** new scheme for new installs and variants only; never renumber in place. Out of G1.7 since 2026-10-16 (operator) |
 | #464 | migrate-firewall-to-network: dry-run reports a step it cannot predict | A dry run that overstates what it will do teaches an operator to distrust dry runs. Parking lot on the forge |
 | #488 | apply-json-merge pins fields the operator never changed | The general case of #736 — see *Decisions*. Parking lot on the forge |
 | #678 | windows-server: time zone, keyboard and locale from the site | From G1.4: its own time-zone vocabulary and a Windows test |
@@ -495,15 +496,13 @@ Least privilege on the platform. Built: nodes hardened to the Proxmox guide, key
 |---|-------|:-:|:-:|------|
 | #142 | RFC: AI-agent access to cicd | H | L | Decision |
 
-### G1.7 Parked for Erik discussion · open: 5
+### G1.7 Parked for Erik discussion · open: 3
 
-Waiting on a conversation between Lars and @ErikDaniel007, not on work: the firewall rebuild runbook (#439), the controller pattern (#430), VMID ranges (#294), hass locale (#348) and Erik's image pins (#765).
+Waiting on a conversation between Lars and @ErikDaniel007, not on work: the controller pattern (#430), hass locale (#348) and Erik's image pins (#765).
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
-| #439 | Firewall rebuild: **document the procedure, do not run it** | M | L | Decided 2026-09-14: only one installation runs the nano image. Write a runbook (build beside on a spare VMID, move config, cut over, keep the old VM); no automation |
 | #430 | Controller/manager pattern for app modules | M | L | Decision (Ansible first) — **parked 2026-09-20** until the operator has agreed it with Erik |
-| #294 | Zone-aligned VMID ranges | H | H | Renumbering means backup/restore to a new VMID. **Proposal:** new scheme for new installs and variants only; never renumber in place. Spikes from 2026-06-04 still open |
 | #348 | hass locale from site master data | M | L | **Parked 2026-09-21:** no test site runs hass. The fix is written on the issue — `core_config` at `lib/config.sh:158` plus a converge for onboarded instances, from `.location` |
 | #765 | Container image pins: list litellm, openwebui, vllm-amd, deconz; move the stale ones | L | L | From #750, for @ErikDaniel007: list his modules in `src/image-pins.json` and move the stale pins — euro-office v9.3.1 → v9.3.4 first; litellm and openwebui overlap #621 |
 
