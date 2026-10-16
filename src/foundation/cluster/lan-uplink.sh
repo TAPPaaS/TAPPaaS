@@ -252,10 +252,11 @@ switch_ports_for() {
     local names="$1" rows sw
     rows=$(jq -r --arg n "${NODE}" --arg nics " ${names} " '
         .switches // {} | to_entries[] | .key as $sw | .value.ports // {} | to_entries[]
-        | select(.value.type == "node" and .value.target == $n and ($nics | contains(" \(.value.targetPort) ")))
+        | (.value.targetPort // "") as $tp
+        | select(.value.type == "node" and .value.target == $n and $tp != "" and ($nics | contains(" \($tp) ")))
         | "\($sw)\t\(.key)\t\(.value.targetPort)"' "${SW_ACTUAL}" 2>/dev/null)
     local nic missing=""
-    for nic in ${names}; do grep -qP "\t${nic}\$" <<<"${rows}" || missing+=" ${nic}"; done
+    for nic in ${names}; do awk -F'\t' -v n="${nic}" '$3 == n {f=1} END {exit !f}' <<<"${rows}" || missing+=" ${nic}"; done
     if [[ -n "${missing}" ]]; then
         echo "switch-controller does not know which switch port${missing} reach(es) — register it: switch-controller add-port <switch> <port> --type node --target ${NODE} --target-port <nic>" >&2
         return 1
