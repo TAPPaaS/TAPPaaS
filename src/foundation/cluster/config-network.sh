@@ -43,6 +43,9 @@
 #                    the caller confirms (touch /run/tappaas-net-ok) once it has
 #                    checked the node from outside. Normally run by
 #                    lan-uplink.sh (site-manager node network set), not by hand.
+#                    With --no-wan the wan bridge gives up its port (bridge-ports
+#                    none, as on a node added with --no-wan), so that port can join
+#                    the lan bond; refused while a guest is on the wan bridge.
 #
 # lan uplink (#40):
 #   --lan-port a,b   Two or more ports bond under `lan` as `lanbond`.
@@ -101,7 +104,7 @@ declare -F lb_set_lan >/dev/null || { echo "config-network.sh: lan-bond-lib.sh n
 LAN_PORT="" WAN_PORT="" MGMT_IP="" GATEWAY="" ADMIN_ROUTE=""
 DO_ROLLBACK=1 INTERACTIVE=1 DRY_RUN=0 ROLLBACK_SECS=""
 SWAP_GATEWAY=0 DROP_UPSTREAM=0 FW_IP="${MGMT_SUBNET}.1"
-LAN_MODE="" LAN_PRIMARY="" LAN_MTU="" SET_LAN=0 CONFIRM_EXTERNAL=0
+LAN_MODE="" LAN_PRIMARY="" LAN_MTU="" SET_LAN=0 CONFIRM_EXTERNAL=0 NO_WAN=0
 LAN_PORTS="" LAN_BRIDGE_PORT="" LAN_STANZA=""
 
 while [[ $# -gt 0 ]]; do
@@ -120,6 +123,7 @@ while [[ $# -gt 0 ]]; do
     --set-lan)         SET_LAN=1; shift ;;
     --rollback-secs)   ROLLBACK_SECS="${2:-}"; shift 2 ;;
     --confirm-external) CONFIRM_EXTERNAL=1; shift ;;
+    --no-wan)          NO_WAN=1; shift ;;
     --no-rollback)     DO_ROLLBACK=0; shift ;;
     --dry-run)         DRY_RUN=1; shift ;;
     --apply)           DRY_RUN=0; shift ;;
@@ -380,13 +384,20 @@ set_lan() {
   [[ -n "$LAN_PORT" ]] || die "--set-lan needs --lan-port"
   resolve_lan
   wanm=",$(bridge_members wan),"
+  if [[ "$NO_WAN" == 1 ]]; then
+    # The wan bridge's own guests (the firewall's WAN NIC) would lose their uplink.
+    for p in ${wanm//,/ }; do
+      is_physical "$p" || die "--no-wan: ${p} is on the wan bridge — a guest uses it (the firewall's WAN?); move it first"
+    done
+  fi
   for p in $LAN_PORTS; do
-    [[ "$wanm" == *",${p},"* ]] && die "${p} is the wan bridge's port — it cannot carry lan as well"
+    [[ "$NO_WAN" != 1 && "$wanm" == *",${p},"* ]] && die "${p} is the wan bridge's port — it cannot carry lan as well (--no-wan gives it up)"
     [[ -z "$(ip -o -4 addr show "$p" 2>/dev/null)" ]] || die "${p} has an address of its own — not a free port"
   done
   cur="$(cat "$INTERFACES")"
   new="$(lb_set_lan "$LAN_BRIDGE_PORT" "$LAN_STANZA" "$LAN_MTU" <<<"$cur")"
-  info "${BOLD}lan uplink${CL} ← $(lan_desc)"
+  [[ "$NO_WAN" == 1 ]] && new="$(lb_wan_none <<<"$new")"
+  info "${BOLD}lan uplink${CL} ← $(lan_desc)$([[ "$NO_WAN" == 1 ]] && echo "; wan ← no port")"
   if [[ "$new" == "$cur" ]]; then
     info "${GN}✓${CL} ${INTERFACES} already says so — nothing to change."
     [[ "$DRY_RUN" == 1 ]] || echo ok > "$SET_LAN_RESULT"

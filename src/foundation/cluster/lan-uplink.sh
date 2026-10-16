@@ -21,7 +21,7 @@
 #       Declared next to live: members, mode, state, speed, LACP aggregator, the
 #       switch each port reaches (LLDP), corosync — and what is wrong with it.
 #   lan-uplink.sh set <node> [--lan-ports <a,b>] [--lan-mode active-backup|lacp]
-#                            [--lan-primary <p>] [--mtu <n>] [--config-only]
+#                            [--lan-primary <p>] [--mtu <n>] [--no-wan] [--config-only]
 #                            [--dry-run|--execute] [--yes]
 #       Declares the uplink (ports by name or MAC), then converges the node to it:
 #       a preview by default; --execute drains the node (HA maintenance), carries
@@ -29,6 +29,8 @@
 #       here (mgmt, members up, LACP aggregated, corosync) and only then confirms,
 #       and brings the node back. Without --lan-ports it converges the declaration
 #       there is. --config-only declares without contacting the node (MACs only).
+#       --no-wan: the wan bridge gives up its port (declared wan.ports []), so it
+#       can join the lan bond — the node can no longer carry the firewall's WAN.
 #   lan-uplink.sh test <node> [--dry-run|--execute] [--yes]
 #       Fails each leg over in turn on a drained node: the leg goes down for ~10s
 #       while mgmt and corosync must stay up; a timer on the node brings it back
@@ -62,7 +64,7 @@ readonly LOCK=/tmp/tappaas-lan-uplink.lock
 usage() { sed -n '2,/^set -euo/p' "$0" | sed 's/^# \{0,1\}//; /^set -euo/d'; }
 
 CMD="${1:-}"; shift || true
-NODE="" JSON=0 LAN_PORTS="" LAN_MODE="" LAN_PRIMARY="" LAN_MTU="" CONFIG_ONLY=0 EXECUTE=0 YES=0
+NODE="" JSON=0 LAN_PORTS="" LAN_MODE="" LAN_PRIMARY="" LAN_MTU="" CONFIG_ONLY=0 EXECUTE=0 YES=0 NO_WAN=0
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --json)        JSON=1 ;;
@@ -71,6 +73,7 @@ while [[ $# -gt 0 ]]; do
         --lan-primary) LAN_PRIMARY="${2:-}"; shift ;;
         --mtu)         LAN_MTU="${2:-}"; shift ;;
         --config-only) CONFIG_ONLY=1 ;;
+        --no-wan)      NO_WAN=1 ;;
         --dry-run)     EXECUTE=0 ;;
         --execute)     EXECUTE=1 ;;
         --yes)         YES=1 ;;
@@ -148,7 +151,9 @@ declaration_from_flags() {
         macs="$(awk '{print $2}' <<<"${pairs}" | paste -sd' ' -)"
         local wanm
         wanm=" $(jq -r '[.wan.members[].mac] | join(" ")' <<<"${live}") "
-        for m in ${macs}; do [[ "${wanm}" == *" ${m} "* ]] && die "$(awk -v m="$m" '$2==m{print $1}' <<<"${pairs}") is the wan bridge's port"; done
+        [[ "${NO_WAN}" == 1 ]] || for m in ${macs}; do
+            [[ "${wanm}" == *" ${m} "* ]] && die "$(awk -v m="$m" '$2==m{print $1}' <<<"${pairs}") is the wan bridge's port (--no-wan moves it into the lan bond)"
+        done
     else
         names="$(lb_ports "${LAN_PORTS}")" || exit 2
         for m in ${names}; do [[ "${m,,}" =~ ^([0-9a-f]{2}:){5}[0-9a-f]{2}$ ]] || die "--config-only names ports by MAC (${m} is not one) — nothing can look the name up"; done
@@ -177,10 +182,11 @@ declaration_from_flags() {
     fi
     # stdout is the declaration: everything said here goes to stderr.
     [[ "${mode}" == active-backup || -z "${LAN_PRIMARY}" ]] || warn "--lan-primary applies to active-backup only — ignored" >&2
-    jq -cn --arg macs "${macs}" --arg mode "${mode}" --arg p "${primary}" --arg mtu "${LAN_MTU}" \
+    jq -cn --arg macs "${macs}" --arg mode "${mode}" --arg p "${primary}" --arg mtu "${LAN_MTU}" --argjson nowan "${NO_WAN}" \
         '{lan: ({ports: ($macs | split(" ")), mode: $mode}
                 + (if $p != "" then {primary: $p} else {} end)
-                + (if $mtu != "" then {mtu: ($mtu | tonumber)} else {} end))}'
+                + (if $mtu != "" then {mtu: ($mtu | tonumber)} else {} end))}
+         + (if $nowan == 1 then {wan: {ports: []}} else {} end)'
 }
 LIVE_FOR_SPEED=""
 live_speed() { jq -r --arg n "$1" '.ports[] | select(.name == $n) | .speed' <<<"${LIVE_FOR_SPEED}"; }
@@ -188,16 +194,18 @@ live_speed() { jq -r --arg n "$1" '.ports[] | select(.name == $n) | .speed' <<<"
 # ── converging ─────────────────────────────────────────────────────────
 
 # The config-network.sh arguments that carry the declaration on <live>'s ports.
-setlan_args() {  # <live> <decl-lan>
+setlan_args() {  # <live> <declaration>
     local gone
-    gone="$(jq -r --argjson l "$1" '[.ports[] | ascii_downcase | select(. as $m | [$l.ports[].mac] | index($m) | not)] | join(", ")' <<<"$2")"
+    gone="$(jq -r --argjson l "$1" '[.lan.ports[] | ascii_downcase | select(. as $m | [$l.ports[].mac] | index($m) | not)] | join(", ")' <<<"$2")"
     [[ -z "${gone}" ]] || { error "declared port(s) ${gone} not on ${NODE} — declare again: --lan-ports"; return 1; }
     jq -r --argjson l "$1" '
         def name($m): [$l.ports[] | select(.mac == ($m | ascii_downcase)) | .name][0];
-        ["--lan-port", ([.ports[] | name(.)] | join(","))]
+        (.wan.ports? // null) as $wan | .lan
+        | ["--lan-port", ([.ports[] | name(.)] | join(","))]
         + (if (.ports | length) > 1 then ["--lan-mode", (.mode // "active-backup")] else [] end)
         + (if (.primary // "") != "" and (.mode // "active-backup") == "active-backup" then ["--lan-primary", name(.primary)] else [] end)
         + (if .mtu then ["--mtu", (.mtu | tostring)] else [] end)
+        + (if $wan == [] and ($l.wan.members | length) > 0 then ["--no-wan"] else [] end)
         | @sh' <<<"$2"
 }
 
@@ -212,16 +220,16 @@ confirm() {  # <what>
     [[ "${_c}" == "${NODE}" ]] || die "confirmation mismatch — nothing changed"
 }
 
-# Is the node, seen from here, on its declared uplink and healthy? <decl-lan>
+# Is the node, seen from here, on its declared uplink and healthy? <declaration>
 verified() {
     local live r
     live="$(probe 2>/dev/null)" || return 1
-    r="$(jq -cn --argjson l "${live}" --argjson d "{\"lan\": $1}" --arg n "${NODE}" '{node: $n, live: $l, declared: $d}' | lu_findings)"
+    r="$(jq -cn --argjson l "${live}" --argjson d "$1" --arg n "${NODE}" '{node: $n, live: $l, declared: $d}' | lu_findings)"
     # Drift, a leg down, no LAG, corosync down: not confirmed. LLDP and the like are advice.
     ! jq -e '[.[] | select(.level == "warn") | select(.text | test("^drift:|is down|LACP partner|outside the active aggregator|corosync"))] | length > 0' <<<"${r}" >/dev/null
 }
 
-converge() {  # <decl-lan>
+converge() {  # <declaration>
     local decl="$1" live args res t
     live="$(probe)" || die "cannot reach ${NODE}"
     if ! drift "$(report "${live}")"; then
@@ -346,7 +354,10 @@ case "${CMD}" in
         ;;
     set)
         need_pvehost
-        if [[ -n "${LAN_PORTS}" ]]; then
+        if [[ -z "${LAN_PORTS}" && "${NO_WAN}" == 1 ]]; then
+            write_declared '{"wan": {"ports": []}}'
+            info "${GN}✓${CL} declared in config/${NODE}.json: no wan port"
+        elif [[ -n "${LAN_PORTS}" ]]; then
             if [[ "${CONFIG_ONLY}" == 1 ]]; then
                 d="$(declaration_from_flags)"
             else
@@ -354,13 +365,13 @@ case "${CMD}" in
                 d="$(declaration_from_flags "${live}")"
             fi
             write_declared "${d}"
-            info "${GN}✓${CL} declared in config/${NODE}.json: $(jq -c .lan <<<"${d}")"
+            info "${GN}✓${CL} declared in config/${NODE}.json: $(jq -c . <<<"${d}")"
         else
             [[ -z "${LAN_MODE}${LAN_PRIMARY}${LAN_MTU}" ]] || die "--lan-mode/--lan-primary/--mtu go with --lan-ports"
             [[ "$(declared | jq -c '.lan // null')" != null ]] || die "nothing declared for ${NODE} — give --lan-ports"
         fi
         [[ "${CONFIG_ONLY}" == 1 ]] && exit 0
-        converge "$(declared | jq -c .lan)"
+        converge "$(declared)"
         ;;
     test)
         need_pvehost

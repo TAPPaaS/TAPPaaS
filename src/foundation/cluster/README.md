@@ -136,6 +136,12 @@ independent switches cannot, and the bond will not aggregate.
 `--lan-mode lacp`, `--lan-primary <port>` and `--mtu <n>` go with `set`; ports may be
 given by name or MAC address. A new node gets the same flags on `node add`.
 
+A node whose second port is its `wan` bridge's — a node that will never run the
+firewall — can give it to the bond: `--no-wan` with `set` moves it from `wan` into
+`lan` (e.g. `--lan-ports enp97s0,enp98s0 --no-wan`, 10G primary, 1G backup). Its switch
+port must first carry the same VLANs as the `lan` port. It is refused while a guest
+is on the node's `wan` bridge.
+
 `set --apply` changes one node at a time: it moves the node's HA guests off (HA
 maintenance), re-carries `lan` on the declared ports with a 45-second automatic
 rollback, checks from the mothership that the node is reachable, every leg is up,

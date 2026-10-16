@@ -64,6 +64,10 @@ check "declared MAC gone: a replaced NIC" "$(has "${SINGLE}" '{"lan":{"ports":["
 check "declared primary differs: drift"   "$(has "${AB}" '{"lan":{"ports":["aa:00:00:00:00:01","aa:00:00:00:00:03"],"mode":"active-backup","primary":"aa:00:00:00:00:03"}}' 'drift')" yes
 check "declared MACs match in any case"   "$(has "${AB}" '{"lan":{"ports":["AA:00:00:00:00:03","aa:00:00:00:00:01"],"mode":"active-backup"}}' 'drift')" no
 
+check "wan declared as no port, live still on ge1: drift" "$(has "${AB}" '{"lan":{"ports":["aa:00:00:00:00:01","aa:00:00:00:00:03"],"mode":"active-backup"},"wan":{"ports":[]}}' 'drift: declared wan on no port, live wan on aa:00:00:00:00:04')" yes
+check "wan as declared: no wan drift"    "$(has "${AB}" '{"wan":{"ports":["AA:00:00:00:00:04"]}}' 'drift: declared wan')" no
+check "wan not declared: not compared"   "$(has "${AB}" '{"lan":{"ports":["aa:00:00:00:00:01","aa:00:00:00:00:03"],"mode":"active-backup"}}' 'wan')" no
+
 check "names resolve to name and MAC"     "$(lu_resolve_ports "${AB}" tg1,ge0 | paste -sd' ' -)" "tg1 aa:00:00:00:00:02 ge0 aa:00:00:00:00:03"
 check "a MAC resolves to its port"        "$(lu_resolve_ports "${AB}" AA:00:00:00:00:04)" "ge1 aa:00:00:00:00:04"
 lu_resolve_ports "${AB}" eth9 >/dev/null 2>&1 && r=resolved || r=refused

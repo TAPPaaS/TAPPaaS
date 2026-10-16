@@ -83,5 +83,11 @@ MTU="$(lb_set_lan lanbond "$(lb_bond_stanza 'tg0 tg1' lacp '' 9000)" 9000 <<<"${
 check "mtu is set on lan"                  "$(sed -n '/^iface lan /,$p' <<<"${MTU}" | grep -c $'^\tmtu 9000$')" "1"
 check "mtu set twice stays one line"       "$(lb_set_lan lanbond "$(lb_bond_stanza 'tg0 tg1' lacp '' 9000)" 9000 <<<"${MTU}" | sed -n '/^iface lan /,$p' | grep -c 'mtu')" "1"
 
+NOWAN="$(lb_wan_none <<<"${ORIG}")"
+check "no-wan: wan keeps its stanza, without its port" "$(sed -n '/^iface wan/,/^$/p' <<<"${NOWAN}" | grep bridge-ports)" $'\tbridge-ports none'
+check "no-wan: the route on wan stays"   "$(grep -c 'post-up ip route' <<<"${NOWAN}")" "1"
+check "no-wan: lan untouched"            "$(sed -n '/^iface lan/,$p' <<<"${NOWAN}")" "$(sed -n '/^iface lan/,$p' <<<"${ORIG}")"
+check "ge0 moves from wan into the bond" "$(lb_set_lan lanbond "$(lb_bond_stanza 'tg0 ge0' active-backup tg0 '')" <<<"${NOWAN}" | grep -c 'bridge-ports ge0')" "0"
+
 echo "Results: ${pass} passed, ${fail} failed"
 [[ ${fail} -eq 0 ]]

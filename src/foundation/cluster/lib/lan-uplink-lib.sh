@@ -161,6 +161,13 @@ lu_findings() {
                      or (($DL.mtu // null) != null and $DL.mtu != $L.lan.mtu) then
                     {level: "warn", text: "drift: declared \($dm) on \($dp | join(", ")), live \($L.lan.mode) on \($lp | join(", ")) — converge: site-manager node network set \($n) --apply"}
                   else empty end )
-          end )
+          end ),
+        ( if ($D.wan.ports? // null) != null then
+            ( [$D.wan.ports[] | ascii_downcase] | sort ) as $dw
+            | ( [$L.wan.members[].mac] | sort ) as $lw
+            | if $dw != $lw then
+                {level: "warn", text: "drift: declared wan on \(if $dw == [] then "no port" else ($dw | join(", ")) end), live wan on \(if $lw == [] then "no port" else ($lw | join(", ")) end) — converge: site-manager node network set \($n) --apply"}
+              else empty end
+          else empty end )
       ]'
 }

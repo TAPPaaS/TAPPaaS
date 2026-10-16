@@ -92,6 +92,17 @@ lb_set_lan() {
     '
 }
 
+# The wan bridge gives up its port(s) (stdin → stdout): `bridge-ports none`, as a
+# node added with --no-wan has, so a port can move into the lan bond. The wan
+# stanza otherwise — address, post-up routes — is kept.
+lb_wan_none() {
+    awk '
+        /^[^ \t]/ { inwan = ($0 ~ /^iface wan( |$)/) }
+        inwan && /^[ \t]+bridge-ports[ \t]/ { print "\tbridge-ports none"; next }
+        { print }
+    '
+}
+
 # The port to prefer in active-backup: the fastest, the first named on a tie.
 # Args: <ports>; speeds from LB_SPEED_CMD <port> (Mb/s, -1 or empty = unknown).
 lb_speed() { cat "/sys/class/net/$1/speed" 2>/dev/null || echo -1; }

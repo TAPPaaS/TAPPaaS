@@ -40,7 +40,7 @@ node               node list [--json]
                    node qdevice add <host> [--user <u>] [--force] | remove | status
                    node network show <node> [--json]
                    node network set <node> [--lan-ports <a,b>] [--lan-mode <m>]
-                            [--lan-primary <if>] [--mtu <n>] [--config-only] [--apply] [--yes]
+                            [--lan-primary <if>] [--mtu <n>] [--no-wan] [--config-only] [--apply] [--yes]
                    node network test <node> [--apply] [--yes]
 repository         repository list [--json]
                    repository add <url> [--branch <b>] [--managed full|tracked] [--catalog <p>]
