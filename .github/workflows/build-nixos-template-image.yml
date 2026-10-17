@@ -10,8 +10,8 @@
 # in src/foundation/templates/flake.lock, and --no-write-lock-file makes a
 # mismatch fail the build instead of re-locking. The release ships SHA256SUMS
 # for its artefacts; a release manager signs it afterwards
-# (release/sign-image-release.sh — the signing key is a hardware token, so CI
-# cannot).
+# (release/sign-image-release.sh — the signing keys stay in the signers' own
+# vaults and SSH agents, so CI cannot).
 #
 # Trigger: push a tag of the form `nixos-template-v<version>` (e.g.
 # `nixos-template-v1.0`), or run the workflow manually (workflow_dispatch).

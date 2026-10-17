@@ -4,14 +4,14 @@
 #
 # The image builds (.github/workflows/build-*-image.yml) publish SHA256SUMS with
 # every release. The signature cannot come from CI: the signing keys are the
-# release managers' hardware tokens. A release manager runs this on their own
-# machine after the build, and before release/bump-version.sh points the
+# signers' own, kept in their Bitwarden/Vaultwarden vault and used through its
+# SSH agent. A signer runs this on their own machine after the build, and before release/bump-version.sh points the
 # configs at the release:
 #
 #   1. downloads the release's SHA256SUMS,
 #   2. checks it lists every artefact of the release, with the digest GitHub
 #      recorded for each upload,
-#   3. signs it: ssh-keygen -Y sign -n tappaas-image (touch the token),
+#   3. signs it: ssh-keygen -Y sign -n tappaas-image (approve it in your SSH agent),
 #   4. checks the signature against .tappaas/allowed_signers,
 #   5. uploads SHA256SUMS.sig to the release.
 #
@@ -20,8 +20,8 @@
 #   <tag>             nixos-template-v1.5, opnsense-firewall-v1.2, ...
 #
 # Options:
-#   --key <file>      The signing key (its .pub is enough when the key is in
-#                     ssh-agent). Default: git config user.signingkey.
+#   --key <file>      The signing key's public half; the agent holds the
+#                     private one. Default: git config user.signingkey.
 #   --generate        The release has no SHA256SUMS (built before they were
 #                     published): download every artefact, hash it, and upload
 #                     SHA256SUMS too.
@@ -126,7 +126,7 @@ done <"${WORK}/assets.tsv"
 [[ "${bad}" -eq 0 ]] || die "SHA256SUMS does not describe this release — not signing it"
 
 # ── 3-4. Sign, then check the signature the way a verifier will ──────
-step "Signing SHA256SUMS (namespace ${NAMESPACE}) — touch the token if it asks"
+step "Signing SHA256SUMS (namespace ${NAMESPACE}) — approve it in your SSH agent"
 ssh-keygen -Y sign -f "${KEY}" -n "${NAMESPACE}" "${WORK}/SHA256SUMS" >/dev/null \
     || die "ssh-keygen -Y sign failed"
 

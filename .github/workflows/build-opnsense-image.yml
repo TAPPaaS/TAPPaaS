@@ -20,8 +20,8 @@
 # checksum file, so the statement is the asset digest of the GitHub release,
 # pinned below and compared to the release's own record at build time. The
 # release ships SHA256SUMS for its artefacts; a release manager signs it
-# afterwards (release/sign-image-release.sh — the signing key is a hardware
-# token, so CI cannot).
+# afterwards (release/sign-image-release.sh — the signing keys stay in the
+# signers' own vaults and SSH agents, so CI cannot).
 #
 # Trigger: push a tag `opnsense-firewall-v<version>`, or run manually.
 name: Build OPNsense firewall image
