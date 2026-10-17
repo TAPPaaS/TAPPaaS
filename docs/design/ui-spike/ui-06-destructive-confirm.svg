@@ -1,0 +1,58 @@
+<svg xmlns='http://www.w3.org/2000/svg' width='1280' height='820' viewBox='0 0 1280 820' font-family='Inter, Helvetica, Arial, sans-serif' font-size='13'>
+<title>TAPPaaS UI — destructive verb: typed confirmation</title>
+<rect width='1280' height='820' fill='#f6f7f9'/>
+<rect x='0' y='0' width='196' height='820' rx='0' fill='#1f2a37' stroke='#1f2a37' stroke-width='1' opacity='1'/>
+<text x='20' y='34' font-size='16' fill='#fff' font-weight='700' text-anchor='start'>TAPPaaS</text>
+<text x='20' y='52' font-size='11' fill='#9aa4b2' font-weight='normal' text-anchor='start'>rossen · hrossen.dk</text>
+<text x='24' y='89' font-size='13' fill='#c9d1dc' font-weight='normal' text-anchor='start'>Overview</text>
+<text x='24' y='123' font-size='13' fill='#c9d1dc' font-weight='normal' text-anchor='start'>Physical</text>
+<rect x='10' y='138' width='176' height='28' rx='6' fill='#334155' stroke='#334155' stroke-width='1' opacity='1'/>
+<text x='24' y='157' font-size='13' fill='#fff' font-weight='600' text-anchor='start'>Modules</text>
+<text x='24' y='191' font-size='13' fill='#c9d1dc' font-weight='normal' text-anchor='start'>Environments</text>
+<text x='24' y='225' font-size='13' fill='#c9d1dc' font-weight='normal' text-anchor='start'>Identity</text>
+<text x='24' y='259' font-size='13' fill='#c9d1dc' font-weight='normal' text-anchor='start'>Backup</text>
+<text x='24' y='293' font-size='13' fill='#c9d1dc' font-weight='normal' text-anchor='start'>Site</text>
+<text x='24' y='327' font-size='13' fill='#c9d1dc' font-weight='normal' text-anchor='start'>Security</text>
+<text x='24' y='361' font-size='13' fill='#c9d1dc' font-weight='normal' text-anchor='start'>Activity</text>
+<rect x='10' y='728' width='176' height='40' rx='8' fill='#334155' stroke='#4b5c73' stroke-width='1' opacity='1'/>
+<text x='24' y='753' font-size='13' fill='#fff' font-weight='600' text-anchor='start'>✦ Assistant</text>
+<text x='104' y='753' font-size='10' fill='#9aa4b2' font-weight='normal' text-anchor='start'>via LiteLLM</text>
+<text x='20' y='784' font-size='10' fill='#9aa4b2' font-weight='normal' text-anchor='start'>TAPPaaS 2.2.2+235</text>
+<text x='20' y='798' font-size='10' fill='#9aa4b2' font-weight='normal' text-anchor='start'>unstable · tappaas-cicd</text>
+<rect x='196' y='0' width='1084' height='56' rx='0' fill='#ffffff' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<text x='220' y='34' font-size='17' fill='#1f2328' font-weight='700' text-anchor='start'>deconz-test</text>
+<text x='334.5' y='34' font-size='12' fill='#6b7280' font-weight='normal' text-anchor='start'>› Modules › test</text>
+<rect x='1130' y='14' width='96' height='28' rx='6' fill='#ffffff' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<text x='1178.0' y='32' font-size='12' fill='#1f2328' font-weight='600' text-anchor='middle'>Open in ▾</text>
+<text x='1110' y='34' font-size='12' fill='#6b7280' font-weight='normal' text-anchor='end'>lars · Installer</text>
+<rect x='196' y='56' width='1084' height='764' rx='0' fill='#e9ebee' stroke='none' stroke-width='1' opacity='1'/>
+<rect x='416' y='166' width='640' height='470' rx='10' fill='#fff' stroke='#d64545' stroke-width='1.5' opacity='1'/>
+<text x='444' y='204' font-size='16' fill='#1f2328' font-weight='700' text-anchor='start'>Delete module deconz-test — and remove its VM</text>
+<text x='444' y='226' font-size='12' fill='#6b7280' font-weight='normal' text-anchor='start'>This cannot be undone from the UI. Backups in PBS stay until purged.</text>
+<rect x='444' y='246' width='584' height='30' rx='6' fill='#1f2a37' stroke='#1f2a37' stroke-width='1' opacity='1'/>
+<text x='456' y='266' font-size='12' fill='#e5e7eb' font-weight='normal' text-anchor='start' font-family='JetBrains Mono, Menlo, monospace'>$ module-manager module delete deconz-test --remove</text>
+<text x='444' y='302' font-size='12' fill='#6b7280' font-weight='600' text-anchor='start'>What the manager will do (from its --help and a dry run of the plan):</text>
+<circle cx='456' cy='322' r='4' fill='#d64545'/>
+<text x='470' y='326' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>stop and destroy VM 213 on tappaas2, with its disks on tanka1</text>
+<circle cx='456' cy='346' r='4' fill='#d64545'/>
+<text x='470' y='350' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>delete config/deconz-test.json (not archived: --remove)</text>
+<circle cx='456' cy='370' r='4' fill='#e8a317'/>
+<text x='470' y='374' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>remove its Caddy route deconz-test.hrossen.dk and firewall pinholes</text>
+<circle cx='456' cy='394' r='4' fill='#e8a317'/>
+<text x='470' y='398' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>remove its Authentik application</text>
+<circle cx='456' cy='418' r='4' fill='#2f9e44'/>
+<text x='470' y='422' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>keep its PBS backups (backup-manager purge deconz-test removes them)</text>
+<circle cx='456' cy='442' r='4' fill='#2f9e44'/>
+<text x='470' y='446' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>zone test keeps its VLAN; environment test is untouched</text>
+<text x='444' y='486' font-size='12' fill='#1f2328' font-weight='600' text-anchor='start'>Type the module's name to confirm</text>
+<rect x='444' y='496' width='300' height='30' rx='6' fill='#fff' stroke='#d64545' stroke-width='1' opacity='1'/>
+<text x='456' y='516' font-size='13' fill='#1f2328' font-weight='normal' text-anchor='start' font-family='JetBrains Mono, Menlo, monospace'>deconz-te|</text>
+<text x='756' y='516' font-size='11' fill='#6b7280' font-weight='normal' text-anchor='start' font-family='JetBrains Mono, Menlo, monospace'>expected: deconz-test</text>
+<rect x='444' y='540' width='14' height='14' rx='3' fill='#fff' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<text x='466' y='552' font-size='11.5' fill='#6b7280' font-weight='normal' text-anchor='start'>I also want to purge its backups afterwards (a second, separate confirmation)</text>
+<rect x='878' y='584' width='150' height='28' rx='6' fill='#f3c6c6' stroke='#f3c6c6' stroke-width='1' opacity='1'/>
+<text x='953.0' y='602' font-size='12' fill='#fff' font-weight='600' text-anchor='middle'>Delete deconz-test</text>
+<rect x='444' y='584' width='66' height='28' rx='6' fill='#ffffff' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<text x='477.0' y='602' font-size='12' fill='#1f2328' font-weight='600' text-anchor='middle'>Cancel</text>
+<text x='616' y='603' font-size='10.5' fill='#6b7280' font-weight='normal' text-anchor='start'>Enabled when the name matches. Installer role required (X-Authentik-Groups).</text>
+</svg>

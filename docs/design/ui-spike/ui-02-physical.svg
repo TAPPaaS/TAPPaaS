@@ -1,0 +1,297 @@
+<svg xmlns='http://www.w3.org/2000/svg' width='1280' height='820' viewBox='0 0 1280 820' font-family='Inter, Helvetica, Arial, sans-serif' font-size='13'>
+<title>TAPPaaS UI — Physical view of hrossen</title>
+<rect width='1280' height='820' fill='#f6f7f9'/>
+<rect x='0' y='0' width='196' height='820' rx='0' fill='#1f2a37' stroke='#1f2a37' stroke-width='1' opacity='1'/>
+<text x='20' y='34' font-size='16' fill='#fff' font-weight='700' text-anchor='start'>TAPPaaS</text>
+<text x='20' y='52' font-size='11' fill='#9aa4b2' font-weight='normal' text-anchor='start'>rossen · hrossen.dk</text>
+<text x='24' y='89' font-size='13' fill='#c9d1dc' font-weight='normal' text-anchor='start'>Overview</text>
+<rect x='10' y='104' width='176' height='28' rx='6' fill='#334155' stroke='#334155' stroke-width='1' opacity='1'/>
+<text x='24' y='123' font-size='13' fill='#fff' font-weight='600' text-anchor='start'>Physical</text>
+<text x='24' y='157' font-size='13' fill='#c9d1dc' font-weight='normal' text-anchor='start'>Modules</text>
+<text x='24' y='191' font-size='13' fill='#c9d1dc' font-weight='normal' text-anchor='start'>Environments</text>
+<text x='24' y='225' font-size='13' fill='#c9d1dc' font-weight='normal' text-anchor='start'>Identity</text>
+<text x='24' y='259' font-size='13' fill='#c9d1dc' font-weight='normal' text-anchor='start'>Backup</text>
+<text x='24' y='293' font-size='13' fill='#c9d1dc' font-weight='normal' text-anchor='start'>Site</text>
+<text x='24' y='327' font-size='13' fill='#c9d1dc' font-weight='normal' text-anchor='start'>Security</text>
+<text x='24' y='361' font-size='13' fill='#c9d1dc' font-weight='normal' text-anchor='start'>Activity</text>
+<rect x='10' y='728' width='176' height='40' rx='8' fill='#334155' stroke='#4b5c73' stroke-width='1' opacity='1'/>
+<text x='24' y='753' font-size='13' fill='#fff' font-weight='600' text-anchor='start'>✦ Assistant</text>
+<text x='104' y='753' font-size='10' fill='#9aa4b2' font-weight='normal' text-anchor='start'>via LiteLLM</text>
+<text x='20' y='784' font-size='10' fill='#9aa4b2' font-weight='normal' text-anchor='start'>TAPPaaS 2.2.2+235</text>
+<text x='20' y='798' font-size='10' fill='#9aa4b2' font-weight='normal' text-anchor='start'>unstable · tappaas-cicd</text>
+<rect x='196' y='0' width='1084' height='56' rx='0' fill='#ffffff' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<text x='220' y='34' font-size='17' fill='#1f2328' font-weight='700' text-anchor='start'>Physical</text>
+<text x='306.0' y='34' font-size='12' fill='#6b7280' font-weight='normal' text-anchor='start'>hrossen as cabled · live state 18:01 · layout: automatic</text>
+<rect x='1130' y='14' width='96' height='28' rx='6' fill='#ffffff' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<text x='1178.0' y='32' font-size='12' fill='#1f2328' font-weight='600' text-anchor='middle'>Open in ▾</text>
+<text x='1110' y='34' font-size='12' fill='#6b7280' font-weight='normal' text-anchor='end'>lars · Installer</text>
+<rect x='196' y='56' width='754' height='764' rx='0' fill='#fbfbfc' stroke='none' stroke-width='1' opacity='1'/>
+<text x='220' y='84' font-size='11' fill='#6b7280' font-weight='normal' text-anchor='start'>Show:</text>
+<rect x='262' y='70' width='104' height='20' rx='10' fill='#eef3fd' stroke='#c7d6f5' stroke-width='1' opacity='1'/>
+<text x='314' y='84' font-size='10' fill='#3b6fd4' font-weight='normal' text-anchor='middle'>zones on links</text>
+<rect x='374' y='70' width='104' height='20' rx='10' fill='#eef3fd' stroke='#c7d6f5' stroke-width='1' opacity='1'/>
+<text x='426' y='84' font-size='10' fill='#3b6fd4' font-weight='normal' text-anchor='middle'>guests</text>
+<rect x='486' y='70' width='104' height='20' rx='10' fill='#eef3fd' stroke='#c7d6f5' stroke-width='1' opacity='1'/>
+<text x='538' y='84' font-size='10' fill='#3b6fd4' font-weight='normal' text-anchor='middle'>drift</text>
+<rect x='598' y='70' width='104' height='20' rx='10' fill='#fff' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<text x='650' y='84' font-size='10' fill='#6b7280' font-weight='normal' text-anchor='middle'>IPv6</text>
+<text x='926' y='84' font-size='10' fill='#6b7280' font-weight='normal' text-anchor='end'>Export SVG · Open in UniFi · Open in OPNsense</text>
+<rect x='236' y='126' width='150' height='50' rx='25' fill='#eef0f3' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<text x='311' y='148' font-size='12' fill='#1f2328' font-weight='600' text-anchor='middle'>Internet · ISP</text>
+<text x='311' y='164' font-size='10' fill='#6b7280' font-weight='normal' text-anchor='middle'>80.248.138.190 · 2a0x::/56</text>
+<rect x='476' y='116' width='196' height='470' rx='6' fill='#fff' stroke='#9aa4b2' stroke-width='1.5' opacity='1'/>
+<text x='574.0' y='136' font-size='12' fill='#1f2328' font-weight='600' text-anchor='middle'>USW Pro XG 10 PoE</text>
+<text x='574.0' y='150' font-size='10' fill='#6b7280' font-weight='normal' text-anchor='middle'>unifi · auto via unifi-os</text>
+<rect x='486' y='166' width='30' height='22' rx='3' fill='#f0f2f5' stroke='#c3c8cf' stroke-width='1.5' opacity='1'/>
+<text x='501' y='181' font-size='11' fill='#1f2328' font-weight='600' text-anchor='middle'>1</text>
+<text x='524' y='176' font-size='9.5' fill='#1f2328' font-weight='normal' text-anchor='start'>—</text>
+<text x='524' y='186' font-size='9' fill='#6b7280' font-weight='normal' text-anchor='start' font-family='JetBrains Mono, Menlo, monospace'>trunk all</text>
+<rect x='486' y='200' width='30' height='22' rx='3' fill='#f0f2f5' stroke='#2f9e44' stroke-width='1.5' opacity='1'/>
+<text x='501' y='215' font-size='11' fill='#1f2328' font-weight='600' text-anchor='middle'>2</text>
+<text x='524' y='210' font-size='9.5' fill='#1f2328' font-weight='normal' text-anchor='start'>tappaas2 enp97s0</text>
+<text x='524' y='220' font-size='9' fill='#6b7280' font-weight='normal' text-anchor='start' font-family='JetBrains Mono, Menlo, monospace'>trunk</text>
+<rect x='636' y='202' width='3' height='18' rx='0' fill='#3b6fd4' stroke='none' stroke-width='1' opacity='1'/>
+<rect x='639.5' y='202' width='3' height='18' rx='0' fill='#9c6ade' stroke='none' stroke-width='1' opacity='1'/>
+<rect x='643.0' y='202' width='3' height='18' rx='0' fill='#2f9e44' stroke='none' stroke-width='1' opacity='1'/>
+<rect x='646.5' y='202' width='3' height='18' rx='0' fill='#e8a317' stroke='none' stroke-width='1' opacity='1'/>
+<rect x='650.0' y='202' width='3' height='18' rx='0' fill='#f08c3a' stroke='none' stroke-width='1' opacity='1'/>
+<rect x='653.5' y='202' width='3' height='18' rx='0' fill='#c2410c' stroke='none' stroke-width='1' opacity='1'/>
+<rect x='657.0' y='202' width='3' height='18' rx='0' fill='#0ea5a4' stroke='none' stroke-width='1' opacity='1'/>
+<rect x='660.5' y='202' width='3' height='18' rx='0' fill='#d64545' stroke='none' stroke-width='1' opacity='1'/>
+<rect x='486' y='234' width='30' height='22' rx='3' fill='#f0f2f5' stroke='#2f9e44' stroke-width='1.5' opacity='1'/>
+<text x='501' y='249' font-size='11' fill='#1f2328' font-weight='600' text-anchor='middle'>3</text>
+<text x='524' y='244' font-size='9.5' fill='#1f2328' font-weight='normal' text-anchor='start'>tappaas3 eno1</text>
+<text x='524' y='254' font-size='9' fill='#6b7280' font-weight='normal' text-anchor='start' font-family='JetBrains Mono, Menlo, monospace'>trunk</text>
+<rect x='636' y='236' width='3' height='18' rx='0' fill='#3b6fd4' stroke='none' stroke-width='1' opacity='1'/>
+<rect x='639.5' y='236' width='3' height='18' rx='0' fill='#9c6ade' stroke='none' stroke-width='1' opacity='1'/>
+<rect x='643.0' y='236' width='3' height='18' rx='0' fill='#2f9e44' stroke='none' stroke-width='1' opacity='1'/>
+<rect x='646.5' y='236' width='3' height='18' rx='0' fill='#e8a317' stroke='none' stroke-width='1' opacity='1'/>
+<rect x='650.0' y='236' width='3' height='18' rx='0' fill='#f08c3a' stroke='none' stroke-width='1' opacity='1'/>
+<rect x='653.5' y='236' width='3' height='18' rx='0' fill='#c2410c' stroke='none' stroke-width='1' opacity='1'/>
+<rect x='657.0' y='236' width='3' height='18' rx='0' fill='#0ea5a4' stroke='none' stroke-width='1' opacity='1'/>
+<rect x='660.5' y='236' width='3' height='18' rx='0' fill='#d64545' stroke='none' stroke-width='1' opacity='1'/>
+<rect x='486' y='268' width='30' height='22' rx='3' fill='#f0f2f5' stroke='#c3c8cf' stroke-width='1.5' opacity='1'/>
+<text x='501' y='283' font-size='11' fill='#1f2328' font-weight='600' text-anchor='middle'>4</text>
+<text x='524' y='278' font-size='9.5' fill='#1f2328' font-weight='normal' text-anchor='start'>—</text>
+<text x='524' y='288' font-size='9' fill='#6b7280' font-weight='normal' text-anchor='start' font-family='JetBrains Mono, Menlo, monospace'>trunk all</text>
+<rect x='486' y='302' width='30' height='22' rx='3' fill='#f0f2f5' stroke='#2f9e44' stroke-width='1.5' opacity='1'/>
+<text x='501' y='317' font-size='11' fill='#1f2328' font-weight='600' text-anchor='middle'>5</text>
+<text x='524' y='312' font-size='9.5' fill='#1f2328' font-weight='normal' text-anchor='start'>ISP uplink ?</text>
+<text x='524' y='322' font-size='9' fill='#6b7280' font-weight='normal' text-anchor='start' font-family='JetBrains Mono, Menlo, monospace'>access 100</text>
+<rect x='636' y='304' width='28' height='18' rx='2' fill='#8e8e8e' stroke='none' stroke-width='1' opacity='0.7'/>
+<rect x='486' y='336' width='30' height='22' rx='3' fill='#f0f2f5' stroke='#2f9e44' stroke-width='1.5' opacity='1'/>
+<text x='501' y='351' font-size='11' fill='#1f2328' font-weight='600' text-anchor='middle'>6</text>
+<text x='524' y='346' font-size='9.5' fill='#1f2328' font-weight='normal' text-anchor='start'>tappaas1 nic4 (wan)</text>
+<text x='524' y='356' font-size='9' fill='#6b7280' font-weight='normal' text-anchor='start' font-family='JetBrains Mono, Menlo, monospace'>access 100</text>
+<rect x='636' y='338' width='28' height='18' rx='2' fill='#8e8e8e' stroke='none' stroke-width='1' opacity='0.7'/>
+<rect x='486' y='370' width='30' height='22' rx='3' fill='#f0f2f5' stroke='#2f9e44' stroke-width='1.5' opacity='1'/>
+<text x='501' y='385' font-size='11' fill='#1f2328' font-weight='600' text-anchor='middle'>7</text>
+<text x='524' y='380' font-size='9.5' fill='#1f2328' font-weight='normal' text-anchor='start'>tappaas3 enp3s0 (wan)</text>
+<text x='524' y='390' font-size='9' fill='#6b7280' font-weight='normal' text-anchor='start' font-family='JetBrains Mono, Menlo, monospace'>access 100</text>
+<rect x='636' y='372' width='28' height='18' rx='2' fill='#8e8e8e' stroke='none' stroke-width='1' opacity='0.7'/>
+<rect x='486' y='404' width='30' height='22' rx='3' fill='#f0f2f5' stroke='#c3c8cf' stroke-width='1.5' opacity='1'/>
+<text x='501' y='419' font-size='11' fill='#1f2328' font-weight='600' text-anchor='middle'>8</text>
+<text x='524' y='414' font-size='9.5' fill='#1f2328' font-weight='normal' text-anchor='start'>—</text>
+<text x='524' y='424' font-size='9' fill='#6b7280' font-weight='normal' text-anchor='start' font-family='JetBrains Mono, Menlo, monospace'>trunk all</text>
+<rect x='486' y='438' width='30' height='22' rx='3' fill='#f0f2f5' stroke='#2f9e44' stroke-width='1.5' opacity='1'/>
+<text x='501' y='453' font-size='11' fill='#1f2328' font-weight='600' text-anchor='middle'>9</text>
+<text x='524' y='448' font-size='9.5' fill='#1f2328' font-weight='normal' text-anchor='start'>Nano HD (AP)</text>
+<text x='524' y='458' font-size='9' fill='#6b7280' font-weight='normal' text-anchor='start' font-family='JetBrains Mono, Menlo, monospace'>trunk</text>
+<rect x='636' y='440' width='3' height='18' rx='0' fill='#3b6fd4' stroke='none' stroke-width='1' opacity='1'/>
+<rect x='639.5' y='440' width='3' height='18' rx='0' fill='#9c6ade' stroke='none' stroke-width='1' opacity='1'/>
+<rect x='643.0' y='440' width='3' height='18' rx='0' fill='#2f9e44' stroke='none' stroke-width='1' opacity='1'/>
+<rect x='646.5' y='440' width='3' height='18' rx='0' fill='#e8a317' stroke='none' stroke-width='1' opacity='1'/>
+<rect x='650.0' y='440' width='3' height='18' rx='0' fill='#f08c3a' stroke='none' stroke-width='1' opacity='1'/>
+<rect x='653.5' y='440' width='3' height='18' rx='0' fill='#c2410c' stroke='none' stroke-width='1' opacity='1'/>
+<rect x='657.0' y='440' width='3' height='18' rx='0' fill='#0ea5a4' stroke='none' stroke-width='1' opacity='1'/>
+<rect x='660.5' y='440' width='3' height='18' rx='0' fill='#d64545' stroke='none' stroke-width='1' opacity='1'/>
+<rect x='486' y='472' width='30' height='22' rx='3' fill='#f0f2f5' stroke='#c3c8cf' stroke-width='1.5' opacity='1'/>
+<text x='501' y='487' font-size='11' fill='#1f2328' font-weight='600' text-anchor='middle'>10</text>
+<text x='524' y='482' font-size='9.5' fill='#1f2328' font-weight='normal' text-anchor='start'>—</text>
+<text x='524' y='492' font-size='9' fill='#6b7280' font-weight='normal' text-anchor='start' font-family='JetBrains Mono, Menlo, monospace'>trunk all</text>
+<rect x='486' y='506' width='30' height='22' rx='3' fill='#f0f2f5' stroke='#e8a317' stroke-width='1.5' opacity='1'/>
+<text x='501' y='521' font-size='11' fill='#1f2328' font-weight='600' text-anchor='middle'>11</text>
+<text x='524' y='516' font-size='9.5' fill='#1f2328' font-weight='normal' text-anchor='start'>tappaas1 nic3 · LAG</text>
+<text x='524' y='526' font-size='9' fill='#6b7280' font-weight='normal' text-anchor='start' font-family='JetBrains Mono, Menlo, monospace'>trunk</text>
+<rect x='636' y='508' width='3' height='18' rx='0' fill='#3b6fd4' stroke='none' stroke-width='1' opacity='1'/>
+<rect x='639.5' y='508' width='3' height='18' rx='0' fill='#9c6ade' stroke='none' stroke-width='1' opacity='1'/>
+<rect x='643.0' y='508' width='3' height='18' rx='0' fill='#2f9e44' stroke='none' stroke-width='1' opacity='1'/>
+<rect x='646.5' y='508' width='3' height='18' rx='0' fill='#e8a317' stroke='none' stroke-width='1' opacity='1'/>
+<rect x='650.0' y='508' width='3' height='18' rx='0' fill='#f08c3a' stroke='none' stroke-width='1' opacity='1'/>
+<rect x='653.5' y='508' width='3' height='18' rx='0' fill='#c2410c' stroke='none' stroke-width='1' opacity='1'/>
+<rect x='657.0' y='508' width='3' height='18' rx='0' fill='#0ea5a4' stroke='none' stroke-width='1' opacity='1'/>
+<rect x='660.5' y='508' width='3' height='18' rx='0' fill='#d64545' stroke='none' stroke-width='1' opacity='1'/>
+<rect x='486' y='540' width='30' height='22' rx='3' fill='#f0f2f5' stroke='#e8a317' stroke-width='1.5' opacity='1'/>
+<text x='501' y='555' font-size='11' fill='#1f2328' font-weight='600' text-anchor='middle'>12</text>
+<text x='524' y='550' font-size='9.5' fill='#1f2328' font-weight='normal' text-anchor='start'>tappaas1 nic2 · LAG</text>
+<text x='524' y='560' font-size='9' fill='#6b7280' font-weight='normal' text-anchor='start' font-family='JetBrains Mono, Menlo, monospace'>trunk</text>
+<rect x='636' y='542' width='3' height='18' rx='0' fill='#3b6fd4' stroke='none' stroke-width='1' opacity='1'/>
+<rect x='639.5' y='542' width='3' height='18' rx='0' fill='#9c6ade' stroke='none' stroke-width='1' opacity='1'/>
+<rect x='643.0' y='542' width='3' height='18' rx='0' fill='#2f9e44' stroke='none' stroke-width='1' opacity='1'/>
+<rect x='646.5' y='542' width='3' height='18' rx='0' fill='#e8a317' stroke='none' stroke-width='1' opacity='1'/>
+<rect x='650.0' y='542' width='3' height='18' rx='0' fill='#f08c3a' stroke='none' stroke-width='1' opacity='1'/>
+<rect x='653.5' y='542' width='3' height='18' rx='0' fill='#c2410c' stroke='none' stroke-width='1' opacity='1'/>
+<rect x='657.0' y='542' width='3' height='18' rx='0' fill='#0ea5a4' stroke='none' stroke-width='1' opacity='1'/>
+<rect x='660.5' y='542' width='3' height='18' rx='0' fill='#d64545' stroke='none' stroke-width='1' opacity='1'/>
+<path d='M 386 151 C 456 151, 416 313, 486 313' stroke='#8e8e8e' stroke-width='2.5' fill='none'/>
+<text x='406' y='186' font-size='10' fill='#6b7280' font-weight='normal' text-anchor='start'>wan vlan 100</text>
+<rect x='776' y='116' width='290' height='150' rx='6' fill='#fff' stroke='#9aa4b2' stroke-width='1.5' opacity='1'/>
+<circle cx='792' cy='132' r='5' fill='#2f9e44'/>
+<text x='804' y='136' font-size='13' fill='#1f2328' font-weight='600' text-anchor='start'>tappaas1</text>
+<text x='1054' y='136' font-size='10' fill='#6b7280' font-weight='normal' text-anchor='end'>Open in Proxmox</text>
+<text x='790' y='152' font-size='10' fill='#374151' font-weight='normal' text-anchor='start' font-family='JetBrains Mono, Menlo, monospace'>lan  lanbond lacp 802.3ad · nic2+nic3 10G → ports 12+11</text>
+<text x='790' y='166' font-size='10' fill='#374151' font-weight='normal' text-anchor='start' font-family='JetBrains Mono, Menlo, monospace'>wan  nic4 → port 6 (vlan 100)</text>
+<text x='790' y='180' font-size='10' fill='#374151' font-weight='normal' text-anchor='start' font-family='JetBrains Mono, Menlo, monospace'>61 GiB · 51.5 committed · HA watchdog armed</text>
+<line x1='786' y1='190' x2='1056' y2='190' stroke='#eceef1' stroke-width='1'/>
+<rect x='790' y='194' width='106' height='18' rx='9' fill='#f6f7f9' stroke='#3b6fd4' stroke-width='1' opacity='1'/>
+<text x='843.0' y='207' font-size='10' fill='#1f2328' font-weight='normal' text-anchor='middle'>network 110 ●fw</text>
+<rect x='902' y='194' width='112' height='18' rx='9' fill='#f6f7f9' stroke='#3b6fd4' stroke-width='1' opacity='1'/>
+<text x='958.0' y='207' font-size='10' fill='#1f2328' font-weight='normal' text-anchor='middle'>tappaas-cicd 130</text>
+<rect x='790' y='216' width='88' height='18' rx='9' fill='#f6f7f9' stroke='#2f9e44' stroke-width='1' opacity='1'/>
+<text x='834.0' y='229' font-size='10' fill='#1f2328' font-weight='normal' text-anchor='middle'>identity 140</text>
+<rect x='884' y='216' width='82' height='18' rx='9' fill='#f6f7f9' stroke='#e8a317' stroke-width='1' opacity='1'/>
+<text x='925.0' y='229' font-size='10' fill='#1f2328' font-weight='normal' text-anchor='middle'>logging 150</text>
+<rect x='790' y='238' width='94' height='18' rx='9' fill='#f6f7f9' stroke='#2f9e44' stroke-width='1' opacity='1'/>
+<text x='837.0' y='251' font-size='10' fill='#1f2328' font-weight='normal' text-anchor='middle'>nextcloud 340</text>
+<rect x='890' y='238' width='76' height='18' rx='9' fill='#f6f7f9' stroke='#d64545' stroke-width='1' opacity='1'/>
+<text x='928.0' y='251' font-size='10' fill='#1f2328' font-weight='normal' text-anchor='middle'>immich 361</text>
+<rect x='790' y='260' width='88' height='18' rx='9' fill='#f6f7f9' stroke='#d64545' stroke-width='1' opacity='1'/>
+<text x='834.0' y='273' font-size='10' fill='#1f2328' font-weight='normal' text-anchor='middle'>jellyfin 360</text>
+<rect x='884' y='260' width='70' height='18' rx='9' fill='#f6f7f9' stroke='#2f9e44' stroke-width='1' opacity='1'/>
+<text x='919.0' y='273' font-size='10' fill='#1f2328' font-weight='normal' text-anchor='middle'>nomad 370</text>
+<rect x='960' y='260' width='76' height='18' rx='9' fill='#f6f7f9' stroke='#2f9e44' stroke-width='1' opacity='1'/>
+<text x='998.0' y='273' font-size='10' fill='#1f2328' font-weight='normal' text-anchor='middle'>coturn 341</text>
+<rect x='790' y='282' width='106' height='18' rx='9' fill='#f6f7f9' stroke='#2f9e44' stroke-width='1' opacity='1'/>
+<text x='843.0' y='295' font-size='10' fill='#1f2328' font-weight='normal' text-anchor='middle'>vaultwarden 610</text>
+<rect x='776' y='286' width='290' height='130' rx='6' fill='#fff' stroke='#9aa4b2' stroke-width='1.5' opacity='1'/>
+<circle cx='792' cy='302' r='5' fill='#2f9e44'/>
+<text x='804' y='306' font-size='13' fill='#1f2328' font-weight='600' text-anchor='start'>tappaas2</text>
+<text x='1054' y='306' font-size='10' fill='#6b7280' font-weight='normal' text-anchor='end'>Open in Proxmox</text>
+<text x='790' y='322' font-size='10' fill='#374151' font-weight='normal' text-anchor='start' font-family='JetBrains Mono, Menlo, monospace'>lan  enp97s0 10G → port 2</text>
+<text x='790' y='336' font-size='10' fill='#374151' font-weight='normal' text-anchor='start' font-family='JetBrains Mono, Menlo, monospace'>wan  —</text>
+<text x='790' y='350' font-size='10' fill='#374151' font-weight='normal' text-anchor='start' font-family='JetBrains Mono, Menlo, monospace'>64 GiB · 29.0 committed</text>
+<line x1='786' y1='360' x2='1056' y2='360' stroke='#eceef1' stroke-width='1'/>
+<rect x='790' y='364' width='106' height='18' rx='9' fill='#f6f7f9' stroke='#2f9e44' stroke-width='1' opacity='1'/>
+<text x='843.0' y='377' font-size='10' fill='#1f2328' font-weight='normal' text-anchor='middle'>euro-office 343</text>
+<rect x='902' y='364' width='82' height='18' rx='9' fill='#f6f7f9' stroke='#2f9e44' stroke-width='1' opacity='1'/>
+<text x='943.0' y='377' font-size='10' fill='#1f2328' font-weight='normal' text-anchor='middle'>forgejo 350</text>
+<rect x='790' y='386' width='82' height='18' rx='9' fill='#f6f7f9' stroke='#e8a317' stroke-width='1' opacity='1'/>
+<text x='831.0' y='399' font-size='10' fill='#1f2328' font-weight='normal' text-anchor='middle'>litellm 310</text>
+<rect x='878' y='386' width='94' height='18' rx='9' fill='#f6f7f9' stroke='#d64545' stroke-width='1' opacity='1'/>
+<text x='925.0' y='399' font-size='10' fill='#1f2328' font-weight='normal' text-anchor='middle'>openwebui 311</text>
+<rect x='790' y='408' width='118' height='18' rx='9' fill='#f6f7f9' stroke='#2f9e44' stroke-width='1' opacity='1'/>
+<text x='849.0' y='421' font-size='10' fill='#1f2328' font-weight='normal' text-anchor='middle'>nextcloud-hpb 342</text>
+<rect x='914' y='408' width='106' height='18' rx='9' fill='#f6f7f9' stroke='#2f9e44' stroke-width='1' opacity='1'/>
+<text x='967.0' y='421' font-size='10' fill='#1f2328' font-weight='normal' text-anchor='middle'>deconz-test 213</text>
+<rect x='790' y='430' width='112' height='18' rx='9' fill='#f6f7f9' stroke='#2f9e44' stroke-width='1' opacity='1'/>
+<text x='846.0' y='443' font-size='10' fill='#1f2328' font-weight='normal' text-anchor='middle'>vllm-amd 312 lxc</text>
+<rect x='776' y='436' width='290' height='120' rx='6' fill='#fff' stroke='#9aa4b2' stroke-width='1.5' opacity='1'/>
+<circle cx='792' cy='452' r='5' fill='#2f9e44'/>
+<text x='804' y='456' font-size='13' fill='#1f2328' font-weight='600' text-anchor='start'>tappaas3</text>
+<text x='1054' y='456' font-size='10' fill='#6b7280' font-weight='normal' text-anchor='end'>Open in Proxmox · PBS</text>
+<text x='790' y='472' font-size='10' fill='#374151' font-weight='normal' text-anchor='start' font-family='JetBrains Mono, Menlo, monospace'>lan  eno1 1G → port 3</text>
+<text x='790' y='486' font-size='10' fill='#374151' font-weight='normal' text-anchor='start' font-family='JetBrains Mono, Menlo, monospace'>wan  enp3s0 → port 7 (vlan 100)</text>
+<text x='790' y='500' font-size='10' fill='#374151' font-weight='normal' text-anchor='start' font-family='JetBrains Mono, Menlo, monospace'>32 GiB · 13.5 committed · PBS · pulse</text>
+<line x1='786' y1='510' x2='1056' y2='510' stroke='#eceef1' stroke-width='1'/>
+<rect x='790' y='514' width='88' height='18' rx='9' fill='#f6f7f9' stroke='#e8a317' stroke-width='1' opacity='1'/>
+<text x='834.0' y='527' font-size='10' fill='#1f2328' font-weight='normal' text-anchor='middle'>unifi-os 811</text>
+<rect x='884' y='514' width='112' height='18' rx='9' fill='#f6f7f9' stroke='#2f9e44' stroke-width='1' opacity='1'/>
+<text x='940.0' y='527' font-size='10' fill='#1f2328' font-weight='normal' text-anchor='middle'>backup (PBS) app</text>
+<rect x='790' y='536' width='82' height='18' rx='9' fill='#f6f7f9' stroke='#2f9e44' stroke-width='1' opacity='1'/>
+<text x='831.0' y='549' font-size='10' fill='#1f2328' font-weight='normal' text-anchor='middle'>pulse timer</text>
+<path d='M 672 551 C 732 551, 716 156, 776 156' stroke='#3b6fd4' stroke-width='2.5' fill='none'/>
+<path d='M 672 517 C 732 517, 716 162, 776 162' stroke='#3b6fd4' stroke-width='2.5' fill='none'/>
+<path d='M 672 347 C 732 347, 716 172, 776 172' stroke='#8e8e8e' stroke-width='2' fill='none' stroke-dasharray='4 3'/>
+<path d='M 672 211 C 732 211, 716 326, 776 326' stroke='#3b6fd4' stroke-width='2.5' fill='none'/>
+<path d='M 672 245 C 732 245, 716 476, 776 476' stroke='#3b6fd4' stroke-width='2.5' fill='none'/>
+<path d='M 672 381 C 732 381, 716 490, 776 490' stroke='#8e8e8e' stroke-width='2' fill='none' stroke-dasharray='4 3'/>
+<text x='574.0' y='602' font-size='9.5' fill='#e8a317' font-weight='normal' text-anchor='middle'>LAG tappaas1-lan = ports 11+12 (live) · ⚠ both legs on this switch</text>
+<rect x='776' y='576' width='190' height='46' rx='6' fill='#fff' stroke='#9aa4b2' stroke-width='1.5' opacity='1'/>
+<circle cx='792' cy='592' r='5' fill='#2f9e44'/>
+<text x='804' y='596' font-size='12' fill='#1f2328' font-weight='600' text-anchor='start'>Nano HD · AP</text>
+<text x='804' y='612' font-size='10' fill='#6b7280' font-weight='normal' text-anchor='start'>10.0.0.184 · 0 SSIDs mapped</text>
+<path d='M 672 449 C 732 449, 716 599, 776 599' stroke='#3b6fd4' stroke-width='2' fill='none'/>
+<rect x='236' y='226' width='200' height='90' rx='6' fill='#fff' stroke='#3b6fd4' stroke-width='1.5' stroke-dasharray='5 3' opacity='1'/>
+<text x='248' y='246' font-size='11' fill='#1f2328' font-weight='600' text-anchor='start'>network · OPNsense (VM 110)</text>
+<text x='248' y='262' font-size='10' fill='#6b7280' font-weight='normal' text-anchor='start'>wan bridge ← vlan 100 · lan trunk</text>
+<text x='248' y='276' font-size='10' fill='#6b7280' font-weight='normal' text-anchor='start'>gateways 10.x.y.1 · Caddy · Unbound</text>
+<text x='248' y='292' font-size='10' fill='#6b7280' font-weight='normal' text-anchor='start'>HA: tappaas1 → tappaas3</text>
+<text x='248' y='308' font-size='10' fill='#3b6fd4' font-weight='normal' text-anchor='start'>Open in OPNsense</text>
+<path d='M 436 256 L 466 256 L 466 347' stroke='#3b6fd4' stroke-width='1' fill='none' stroke-dasharray='3 3'/>
+<rect x='236' y='356' width='200' height='70' rx='6' fill='#fff' stroke='#6b7280' stroke-width='1.2' stroke-dasharray='5 3' opacity='1'/>
+<text x='248' y='376' font-size='11' fill='#1f2328' font-weight='600' text-anchor='start'>buddy rasmus · Hareskov, DK</text>
+<text x='248' y='392' font-size='10' fill='#6b7280' font-weight='normal' text-anchor='start'>remote: pulls our PBS copy</text>
+<circle cx='254' cy='410' r='4' fill='#e8a317'/>
+<text x='264' y='414' font-size='10' fill='#6b7280' font-weight='normal' text-anchor='start'>tunnel serves 10.255.2.0/30 · never pulled</text>
+<rect x='236' y='440' width='200' height='44' rx='6' fill='#fff' stroke='#d0d4da' stroke-width='1' stroke-dasharray='5 3' opacity='1'/>
+<text x='248' y='460' font-size='11' fill='#6b7280' font-weight='normal' text-anchor='start'>satellite · none installed</text>
+<text x='248' y='476' font-size='10' fill='#6b7280' font-weight='normal' text-anchor='start'>ADR-010 · would show the edge tunnel</text>
+<path d='M 436 391 C 476 391, 296 196, 311 176' stroke='#6b7280' stroke-width='1.2' fill='none' stroke-dasharray='4 3'/>
+<text x='236' y='526' font-size='11' fill='#6b7280' font-weight='600' text-anchor='start'>Zones on links</text>
+<rect x='236' y='535' width='10' height='10' rx='2' fill='#8e8e8e' stroke='none' stroke-width='1' opacity='1'/>
+<text x='252' y='544' font-size='10' fill='#1f2328' font-weight='normal' text-anchor='start'>100 wan</text>
+<rect x='236' y='550' width='10' height='10' rx='2' fill='#3b6fd4' stroke='none' stroke-width='1' opacity='1'/>
+<text x='252' y='559' font-size='10' fill='#1f2328' font-weight='normal' text-anchor='start'>200 rossen</text>
+<rect x='236' y='565' width='10' height='10' rx='2' fill='#9c6ade' stroke='none' stroke-width='1' opacity='1'/>
+<text x='252' y='574' font-size='10' fill='#1f2328' font-weight='normal' text-anchor='start'>299 test</text>
+<rect x='236' y='580' width='10' height='10' rx='2' fill='#2f9e44' stroke='none' stroke-width='1' opacity='1'/>
+<text x='252' y='589' font-size='10' fill='#1f2328' font-weight='normal' text-anchor='start'>310 home</text>
+<rect x='236' y='595' width='10' height='10' rx='2' fill='#e8a317' stroke='none' stroke-width='1' opacity='1'/>
+<text x='252' y='604' font-size='10' fill='#1f2328' font-weight='normal' text-anchor='start'>410 iotLocal</text>
+<rect x='236' y='610' width='10' height='10' rx='2' fill='#f08c3a' stroke='none' stroke-width='1' opacity='1'/>
+<text x='252' y='619' font-size='10' fill='#1f2328' font-weight='normal' text-anchor='start'>420 iotCloud</text>
+<rect x='236' y='625' width='10' height='10' rx='2' fill='#c2410c' stroke='none' stroke-width='1' opacity='1'/>
+<text x='252' y='634' font-size='10' fill='#1f2328' font-weight='normal' text-anchor='start'>430 iotCams</text>
+<rect x='236' y='640' width='10' height='10' rx='2' fill='#0ea5a4' stroke='none' stroke-width='1' opacity='1'/>
+<text x='252' y='649' font-size='10' fill='#1f2328' font-weight='normal' text-anchor='start'>510 guest</text>
+<rect x='236' y='655' width='10' height='10' rx='2' fill='#d64545' stroke='none' stroke-width='1' opacity='1'/>
+<text x='252' y='664' font-size='10' fill='#1f2328' font-weight='normal' text-anchor='start'>610 dmz</text>
+<text x='346' y='544' font-size='10' fill='#6b7280' font-weight='normal' text-anchor='start'>— trunk (node, ap, switch)</text>
+<text x='346' y='559' font-size='10' fill='#6b7280' font-weight='normal' text-anchor='start'>- - wan access</text>
+<text x='346' y='574' font-size='10' fill='#6b7280' font-weight='normal' text-anchor='start'>● live state  ⚠ finding</text>
+<text x='346' y='596' font-size='9.5' fill='#6b7280' font-weight='normal' text-anchor='start'>Data: site.json · node network show</text>
+<text x='346' y='609' font-size='9.5' fill='#6b7280' font-weight='normal' text-anchor='start'>switch-configuration-actual.json · zones.json</text>
+<text x='346' y='622' font-size='9.5' fill='#6b7280' font-weight='normal' text-anchor='start'>module list · backup peers · pulse · pvesh</text>
+<rect x='950' y='56' width='330' height='764' rx='0' fill='#fff' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<text x='970' y='88' font-size='14' fill='#1f2328' font-weight='700' text-anchor='start'>Port 11 · USW Pro XG 10 PoE</text>
+<rect x='970' y='100' width='66.1' height='18' rx='9' fill='#fff' stroke='#2f9e44' stroke-width='1' opacity='1'/>
+<circle cx='980' cy='109' r='4' fill='#2f9e44'/>
+<text x='987' y='113' font-size='11' fill='#1f2328' font-weight='normal' text-anchor='start'>in sync</text>
+<rect x='1046' y='100' width='78.69999999999999' height='18' rx='9' fill='#fff' stroke='#e8a317' stroke-width='1' opacity='1'/>
+<circle cx='1056' cy='109' r='4' fill='#e8a317'/>
+<text x='1063' y='113' font-size='11' fill='#1f2328' font-weight='normal' text-anchor='start'>1 warning</text>
+<text x='970' y='146' font-size='11' fill='#6b7280' font-weight='normal' text-anchor='start'>type</text>
+<text x='1046' y='146' font-size='11' fill='#1f2328' font-weight='normal' text-anchor='start' font-family='JetBrains Mono, Menlo, monospace'>node → tappaas1 / nic3</text>
+<text x='970' y='168' font-size='11' fill='#6b7280' font-weight='normal' text-anchor='start'>mode</text>
+<text x='1046' y='168' font-size='11' fill='#1f2328' font-weight='normal' text-anchor='start' font-family='JetBrains Mono, Menlo, monospace'>trunk</text>
+<text x='970' y='190' font-size='11' fill='#6b7280' font-weight='normal' text-anchor='start'>native</text>
+<text x='1046' y='190' font-size='11' fill='#1f2328' font-weight='normal' text-anchor='start' font-family='JetBrains Mono, Menlo, monospace'>—</text>
+<text x='970' y='212' font-size='11' fill='#6b7280' font-weight='normal' text-anchor='start'>tagged</text>
+<text x='1046' y='212' font-size='11' fill='#1f2328' font-weight='normal' text-anchor='start' font-family='JetBrains Mono, Menlo, monospace'>200 299 310 410 420 430 510 610</text>
+<text x='970' y='234' font-size='11' fill='#6b7280' font-weight='normal' text-anchor='start'>aggregate</text>
+<text x='1046' y='234' font-size='11' fill='#1f2328' font-weight='normal' text-anchor='start' font-family='JetBrains Mono, Menlo, monospace'>tappaas1-lan (lacp) · live 11+12</text>
+<text x='970' y='256' font-size='11' fill='#6b7280' font-weight='normal' text-anchor='start'>partner</text>
+<text x='1046' y='256' font-size='11' fill='#1f2328' font-weight='normal' text-anchor='start' font-family='JetBrains Mono, Menlo, monospace'>a8:9c:6c:b0:8d:76 (LLDP)</text>
+<text x='970' y='278' font-size='11' fill='#6b7280' font-weight='normal' text-anchor='start'>speed</text>
+<text x='1046' y='278' font-size='11' fill='#1f2328' font-weight='normal' text-anchor='start' font-family='JetBrains Mono, Menlo, monospace'>10G · up</text>
+<text x='970' y='300' font-size='11' fill='#6b7280' font-weight='normal' text-anchor='start'>PoE</text>
+<text x='1046' y='300' font-size='11' fill='#1f2328' font-weight='normal' text-anchor='start' font-family='JetBrains Mono, Menlo, monospace'>off</text>
+<line x1='970' y1='322' x2='1260' y2='322' stroke='#d0d4da' stroke-width='1'/>
+<text x='970' y='344' font-size='11' fill='#1f2328' font-weight='600' text-anchor='start'>Finding (health-manager lan-uplink)</text>
+<text x='970' y='362' font-size='11' fill='#1f2328' font-weight='normal' text-anchor='start'>Every leg of tappaas1's bond reaches this</text>
+<text x='970' y='377' font-size='11' fill='#1f2328' font-weight='normal' text-anchor='start'>switch: redundant ports, not switches.</text>
+<text x='970' y='404' font-size='11' fill='#1f2328' font-weight='600' text-anchor='start'>Actions</text>
+<rect x='970' y='414' width='170' height='28' rx='6' fill='#ffffff' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<text x='1055.0' y='432' font-size='12' fill='#1f2328' font-weight='600' text-anchor='middle'>Change VLANs / zone…</text>
+<rect x='1148' y='414' width='90' height='28' rx='6' fill='#ffffff' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<text x='1193.0' y='432' font-size='12' fill='#1f2328' font-weight='600' text-anchor='middle'>Describe…</text>
+<rect x='970' y='450' width='140' height='28' rx='6' fill='#ffffff' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<text x='1040.0' y='468' font-size='12' fill='#1f2328' font-weight='600' text-anchor='middle'>Take out of LAG…</text>
+<text x='970' y='500' font-size='11' fill='#1f2328' font-weight='600' text-anchor='start'>Open in</text>
+<text x='970' y='518' font-size='11' fill='#3b6fd4' font-weight='normal' text-anchor='start'>UniFi · port 11 of USW Pro XG 10 PoE</text>
+<text x='970' y='534' font-size='11' fill='#3b6fd4' font-weight='normal' text-anchor='start'>Proxmox · tappaas1 › Network</text>
+<text x='970' y='550' font-size='11' fill='#3b6fd4' font-weight='normal' text-anchor='start'>Grafana · logs host=tappaas1 unit=lldpd</text>
+<text x='970' y='580' font-size='11' fill='#1f2328' font-weight='600' text-anchor='start'>Recent changes (Activity)</text>
+<text x='970' y='598' font-size='10' fill='#6b7280' font-weight='normal' text-anchor='start' font-family='JetBrains Mono, Menlo, monospace'>2026-10-14 lars · lag set tappaas1-lan --apply</text>
+<text x='970' y='612' font-size='10' fill='#6b7280' font-weight='normal' text-anchor='start' font-family='JetBrains Mono, Menlo, monospace'>2026-10-14 sweep · reconcile --apply (no delta)</text>
+</svg>

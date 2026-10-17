@@ -1,0 +1,176 @@
+<svg xmlns='http://www.w3.org/2000/svg' width='1280' height='820' viewBox='0 0 1280 820' font-family='Inter, Helvetica, Arial, sans-serif' font-size='13'>
+<title>TAPPaaS UI — module detail (immich)</title>
+<rect width='1280' height='820' fill='#f6f7f9'/>
+<rect x='0' y='0' width='196' height='820' rx='0' fill='#1f2a37' stroke='#1f2a37' stroke-width='1' opacity='1'/>
+<text x='20' y='34' font-size='16' fill='#fff' font-weight='700' text-anchor='start'>TAPPaaS</text>
+<text x='20' y='52' font-size='11' fill='#9aa4b2' font-weight='normal' text-anchor='start'>rossen · hrossen.dk</text>
+<text x='24' y='89' font-size='13' fill='#c9d1dc' font-weight='normal' text-anchor='start'>Overview</text>
+<text x='24' y='123' font-size='13' fill='#c9d1dc' font-weight='normal' text-anchor='start'>Physical</text>
+<rect x='10' y='138' width='176' height='28' rx='6' fill='#334155' stroke='#334155' stroke-width='1' opacity='1'/>
+<text x='24' y='157' font-size='13' fill='#fff' font-weight='600' text-anchor='start'>Modules</text>
+<text x='24' y='191' font-size='13' fill='#c9d1dc' font-weight='normal' text-anchor='start'>Environments</text>
+<text x='24' y='225' font-size='13' fill='#c9d1dc' font-weight='normal' text-anchor='start'>Identity</text>
+<text x='24' y='259' font-size='13' fill='#c9d1dc' font-weight='normal' text-anchor='start'>Backup</text>
+<text x='24' y='293' font-size='13' fill='#c9d1dc' font-weight='normal' text-anchor='start'>Site</text>
+<text x='24' y='327' font-size='13' fill='#c9d1dc' font-weight='normal' text-anchor='start'>Security</text>
+<text x='24' y='361' font-size='13' fill='#c9d1dc' font-weight='normal' text-anchor='start'>Activity</text>
+<rect x='10' y='728' width='176' height='40' rx='8' fill='#334155' stroke='#4b5c73' stroke-width='1' opacity='1'/>
+<text x='24' y='753' font-size='13' fill='#fff' font-weight='600' text-anchor='start'>✦ Assistant</text>
+<text x='104' y='753' font-size='10' fill='#9aa4b2' font-weight='normal' text-anchor='start'>via LiteLLM</text>
+<text x='20' y='784' font-size='10' fill='#9aa4b2' font-weight='normal' text-anchor='start'>TAPPaaS 2.2.2+235</text>
+<text x='20' y='798' font-size='10' fill='#9aa4b2' font-weight='normal' text-anchor='start'>unstable · tappaas-cicd</text>
+<rect x='196' y='0' width='1084' height='56' rx='0' fill='#ffffff' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<text x='220' y='34' font-size='17' fill='#1f2328' font-weight='700' text-anchor='start'>immich</text>
+<text x='287.0' y='34' font-size='12' fill='#6b7280' font-weight='normal' text-anchor='start'>› Modules › rossen › home stack</text>
+<rect x='1130' y='14' width='96' height='28' rx='6' fill='#ffffff' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<text x='1178.0' y='32' font-size='12' fill='#1f2328' font-weight='600' text-anchor='middle'>Open in ▾</text>
+<text x='1110' y='34' font-size='12' fill='#6b7280' font-weight='normal' text-anchor='end'>lars · Installer</text>
+<rect x='220' y='76' width='192.1' height='18' rx='9' fill='#fff' stroke='#2f9e44' stroke-width='1' opacity='1'/>
+<circle cx='230' cy='85' r='4' fill='#2f9e44'/>
+<text x='237' y='89' font-size='11' fill='#1f2328' font-weight='normal' text-anchor='start'>running · tappaas1 · VM 361</text>
+<rect x='420.1' y='76' width='116.5' height='18' rx='9' fill='#fff' stroke='#d64545' stroke-width='1' opacity='1'/>
+<circle cx='430.1' cy='85' r='4' fill='#d64545'/>
+<text x='437.1' y='89' font-size='11' fill='#1f2328' font-weight='normal' text-anchor='start'>memory 95% FAIL</text>
+<rect x='544.6' y='76' width='110.2' height='18' rx='9' fill='#fff' stroke='#2f9e44' stroke-width='1' opacity='1'/>
+<circle cx='554.6' cy='85' r='4' fill='#2f9e44'/>
+<text x='561.6' y='89' font-size='11' fill='#1f2328' font-weight='normal' text-anchor='start'>backup covered</text>
+<rect x='662.8000000000001' y='76' width='85.0' height='18' rx='9' fill='#fff' stroke='#2f9e44' stroke-width='1' opacity='1'/>
+<circle cx='672.8000000000001' cy='85' r='4' fill='#2f9e44'/>
+<text x='679.8000000000001' y='89' font-size='11' fill='#1f2328' font-weight='normal' text-anchor='start'>drift none</text>
+<rect x='755.8000000000001' y='76' width='78.69999999999999' height='18' rx='9' fill='#fff' stroke='#2f9e44' stroke-width='1' opacity='1'/>
+<circle cx='765.8000000000001' cy='85' r='4' fill='#2f9e44'/>
+<text x='772.8000000000001' y='89' font-size='11' fill='#1f2328' font-weight='normal' text-anchor='start'>CVE 0 act</text>
+<rect x='842.5' y='76' width='66.1' height='18' rx='9' fill='#fff' stroke='#3b6fd4' stroke-width='1' opacity='1'/>
+<circle cx='852.5' cy='85' r='4' fill='#3b6fd4'/>
+<text x='859.5' y='89' font-size='11' fill='#1f2328' font-weight='normal' text-anchor='start'>Testing</text>
+<rect x='916.6' y='76' width='173.2' height='18' rx='9' fill='#fff' stroke='#3b6fd4' stroke-width='1' opacity='1'/>
+<circle cx='926.6' cy='85' r='4' fill='#3b6fd4'/>
+<text x='933.6' y='89' font-size='11' fill='#1f2328' font-weight='normal' text-anchor='start'>env rossen · zone rossen</text>
+<rect x='220' y='110' width='80.0' height='30' rx='6' fill='#fff' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<rect x='220' y='138' width='80.0' height='3' rx='0' fill='#3b6fd4' stroke='none' stroke-width='1' opacity='1'/>
+<text x='260.0' y='130' font-size='12' fill='#1f2328' font-weight='600' text-anchor='middle'>Overview</text>
+<text x='336.5' y='130' font-size='12' fill='#6b7280' font-weight='normal' text-anchor='middle'>Config</text>
+<text x='401.75' y='130' font-size='12' fill='#6b7280' font-weight='normal' text-anchor='middle'>Drift</text>
+<text x='474.5' y='130' font-size='12' fill='#6b7280' font-weight='normal' text-anchor='middle'>Services</text>
+<text x='551.0' y='130' font-size='12' fill='#6b7280' font-weight='normal' text-anchor='middle'>Backup</text>
+<text x='612.5' y='130' font-size='12' fill='#6b7280' font-weight='normal' text-anchor='middle'>Logs</text>
+<text x='681.5' y='130' font-size='12' fill='#6b7280' font-weight='normal' text-anchor='middle'>Security</text>
+<text x='765.5' y='130' font-size='12' fill='#6b7280' font-weight='normal' text-anchor='middle'>Activity</text>
+<rect x='220' y='156' width='640' height='170' rx='6' fill='#ffffff' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<text x='234' y='178' font-size='12' fill='#6b7280' font-weight='600' text-anchor='start'>Health (ADR-007e lens) — gates that mention this module</text>
+<line x1='220' y1='188' x2='860' y2='188' stroke='#d0d4da' stroke-width='1'/>
+<line x1='221' y1='216' x2='859' y2='216' stroke='#eceef1' stroke-width='1'/>
+<circle cx='235' cy='203.0' r='4' fill='#d64545'/>
+<text x='245' y='207.0' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>guest-memory</text>
+<text x='381' y='207.0' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>declared 8.0G · allocated 7.5G · used 7.6G (95%)</text>
+<text x='761' y='207.0' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>Modify memory…</text>
+<line x1='221' y1='242' x2='859' y2='242' stroke='#eceef1' stroke-width='1'/>
+<circle cx='235' cy='229.0' r='4' fill='#2f9e44'/>
+<text x='245' y='233.0' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>service-liveness</text>
+<text x='381' y='233.0' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>VM 361 running on tappaas1 (HA: no)</text>
+<text x='761' y='233.0' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'></text>
+<line x1='221' y1='268' x2='859' y2='268' stroke='#eceef1' stroke-width='1'/>
+<circle cx='235' cy='255.0' r='4' fill='#2f9e44'/>
+<text x='245' y='259.0' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>disk-threshold</text>
+<text x='381' y='259.0' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>/ 61% of 64G · diskAutoGrow on</text>
+<text x='761' y='259.0' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'></text>
+<line x1='221' y1='294' x2='859' y2='294' stroke='#eceef1' stroke-width='1'/>
+<circle cx='235' cy='281.0' r='4' fill='#2f9e44'/>
+<text x='245' y='285.0' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>backup-status</text>
+<text x='381' y='285.0' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>in PBS job · last 2026-10-17 01:30 · retention 7y</text>
+<text x='761' y='285.0' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>Restore…</text>
+<line x1='221' y1='320' x2='859' y2='320' stroke='#eceef1' stroke-width='1'/>
+<circle cx='235' cy='307.0' r='4' fill='#2f9e44'/>
+<text x='245' y='311.0' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>cve-status</text>
+<text x='381' y='311.0' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>0 fixable critical/high · VEX pinned to v2.4.1</text>
+<text x='761' y='311.0' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>Report</text>
+<rect x='220' y='342' width='640' height='190' rx='6' fill='#ffffff' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<text x='234' y='364' font-size='12' fill='#6b7280' font-weight='600' text-anchor='start'>Services — what this module depends on, and the fields each one owns</text>
+<line x1='220' y1='374' x2='860' y2='374' stroke='#d0d4da' stroke-width='1'/>
+<rect x='221' y='376' width='638' height='25' rx='0' fill='#f0f2f5' stroke='none' stroke-width='1' opacity='1'/>
+<text x='231' y='393' font-size='11' fill='#6b7280' font-weight='600' text-anchor='start'>service</text>
+<text x='381' y='393' font-size='11' fill='#6b7280' font-weight='600' text-anchor='start'>declared</text>
+<text x='741' y='393' font-size='11' fill='#6b7280' font-weight='600' text-anchor='start'>change class</text>
+<line x1='221' y1='426' x2='859' y2='426' stroke='#eceef1' stroke-width='1'/>
+<text x='231' y='417.5' font-size='11' fill='#1f2328' font-weight='normal' text-anchor='start'>cluster:vm</text>
+<text x='381' y='417.5' font-size='11' fill='#1f2328' font-weight='normal' text-anchor='start'>cores 4 · memory 8192 · diskSize 64G · storage tanka1 · node tappaas1</text>
+<text x='741' y='417.5' font-size='11' fill='#1f2328' font-weight='normal' text-anchor='start'>in-place · grow-only</text>
+<line x1='221' y1='451' x2='859' y2='451' stroke='#eceef1' stroke-width='1'/>
+<text x='231' y='442.5' font-size='11' fill='#1f2328' font-weight='normal' text-anchor='start'>templates:nixos</text>
+<text x='381' y='442.5' font-size='11' fill='#1f2328' font-weight='normal' text-anchor='start'>image 8080 (tappaas-nixos) · built on the mothership</text>
+<text x='741' y='442.5' font-size='11' fill='#1f2328' font-weight='normal' text-anchor='start'>recreate</text>
+<line x1='221' y1='476' x2='859' y2='476' stroke='#eceef1' stroke-width='1'/>
+<text x='231' y='467.5' font-size='11' fill='#1f2328' font-weight='normal' text-anchor='start'>network:proxy</text>
+<text x='381' y='467.5' font-size='11' fill='#1f2328' font-weight='normal' text-anchor='start'>immich.hrossen.dk → :2283 · zones internet, home · proxyAuth app</text>
+<text x='741' y='467.5' font-size='11' fill='#1f2328' font-weight='normal' text-anchor='start'>reconcile</text>
+<line x1='221' y1='501' x2='859' y2='501' stroke='#eceef1' stroke-width='1'/>
+<text x='231' y='492.5' font-size='11' fill='#1f2328' font-weight='normal' text-anchor='start'>identity:identity</text>
+<text x='381' y='492.5' font-size='11' fill='#1f2328' font-weight='normal' text-anchor='start'>OIDC client immich · group users</text>
+<text x='741' y='492.5' font-size='11' fill='#1f2328' font-weight='normal' text-anchor='start'>reconcile</text>
+<line x1='221' y1='526' x2='859' y2='526' stroke='#eceef1' stroke-width='1'/>
+<text x='231' y='517.5' font-size='11' fill='#1f2328' font-weight='normal' text-anchor='start'>network:rules</text>
+<text x='381' y='517.5' font-size='11' fill='#1f2328' font-weight='normal' text-anchor='start'>pinholes: none · egress internet</text>
+<text x='741' y='517.5' font-size='11' fill='#1f2328' font-weight='normal' text-anchor='start'>reconcile</text>
+<line x1='221' y1='551' x2='859' y2='551' stroke='#eceef1' stroke-width='1'/>
+<text x='231' y='542.5' font-size='11' fill='#1f2328' font-weight='normal' text-anchor='start'>backup:vm</text>
+<text x='381' y='542.5' font-size='11' fill='#1f2328' font-weight='normal' text-anchor='start'>daily · 7y · PBS backup.mgmt.internal</text>
+<text x='741' y='542.5' font-size='11' fill='#1f2328' font-weight='normal' text-anchor='start'>reconcile</text>
+<rect x='880' y='156' width='376' height='250' rx='6' fill='#ffffff' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<text x='894' y='178' font-size='12' fill='#6b7280' font-weight='600' text-anchor='start'>Operate — every verb runs through module-manager</text>
+<line x1='880' y1='188' x2='1256' y2='188' stroke='#d0d4da' stroke-width='1'/>
+<rect x='894' y='202' width='150' height='28' rx='6' fill='#ffffff' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<text x='969.0' y='220' font-size='12' fill='#1f2328' font-weight='600' text-anchor='middle'>Update (release)</text>
+<text x='1056' y='220' font-size='10.5' fill='#6b7280' font-weight='normal' text-anchor='start' font-family='JetBrains Mono, Menlo, monospace'>module update immich</text>
+<rect x='894' y='234' width='150' height='28' rx='6' fill='#ffffff' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<text x='969.0' y='252' font-size='12' fill='#1f2328' font-weight='600' text-anchor='middle'>Modify a field…</text>
+<text x='1056' y='252' font-size='10.5' fill='#6b7280' font-weight='normal' text-anchor='start' font-family='JetBrains Mono, Menlo, monospace'>module modify immich --set …</text>
+<rect x='894' y='266' width='150' height='28' rx='6' fill='#ffffff' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<text x='969.0' y='284' font-size='12' fill='#1f2328' font-weight='600' text-anchor='middle'>Reconcile</text>
+<text x='1056' y='284' font-size='10.5' fill='#6b7280' font-weight='normal' text-anchor='start' font-family='JetBrains Mono, Menlo, monospace'>preview, then --apply</text>
+<rect x='894' y='298' width='150' height='28' rx='6' fill='#ffffff' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<text x='969.0' y='316' font-size='12' fill='#1f2328' font-weight='600' text-anchor='middle'>Test</text>
+<text x='1056' y='316' font-size='10.5' fill='#6b7280' font-weight='normal' text-anchor='start' font-family='JetBrains Mono, Menlo, monospace'>fast · --deep</text>
+<rect x='894' y='330' width='150' height='28' rx='6' fill='#ffffff' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<text x='969.0' y='348' font-size='12' fill='#1f2328' font-weight='600' text-anchor='middle'>Snapshot VM</text>
+<text x='1056' y='348' font-size='10.5' fill='#6b7280' font-weight='normal' text-anchor='start' font-family='JetBrains Mono, Menlo, monospace'>module snapshot-vm immich</text>
+<rect x='894' y='362' width='150' height='28' rx='6' fill='#ffffff' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<text x='969.0' y='380' font-size='12' fill='#1f2328' font-weight='600' text-anchor='middle'>Suspend</text>
+<text x='1056' y='380' font-size='10.5' fill='#6b7280' font-weight='normal' text-anchor='start' font-family='JetBrains Mono, Menlo, monospace'>stops and keeps stopped</text>
+<rect x='894' y='394' width='150' height='28' rx='6' fill='#d64545' stroke='#d64545' stroke-width='1' opacity='1'/>
+<text x='969.0' y='412' font-size='12' fill='#fff' font-weight='600' text-anchor='middle'>Delete…</text>
+<text x='1056' y='412' font-size='10.5' fill='#6b7280' font-weight='normal' text-anchor='start' font-family='JetBrains Mono, Menlo, monospace'>--archive · --remove</text>
+<rect x='880' y='422' width='376' height='110' rx='6' fill='#ffffff' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<text x='894' y='444' font-size='12' fill='#6b7280' font-weight='600' text-anchor='start'>Open in — for debugging only; nothing is changed there</text>
+<line x1='880' y1='454' x2='1256' y2='454' stroke='#d0d4da' stroke-width='1'/>
+<text x='894' y='448' font-size='11' fill='#3b6fd4' font-weight='600' text-anchor='start'>Proxmox</text>
+<text x='990' y='448' font-size='10.5' fill='#6b7280' font-weight='normal' text-anchor='start'>tappaas1 › VM 361 › Summary</text>
+<text x='894' y='466' font-size='11' fill='#3b6fd4' font-weight='600' text-anchor='start'>Grafana</text>
+<text x='990' y='466' font-size='10.5' fill='#6b7280' font-weight='normal' text-anchor='start'>Explore · {host="immich"} last 1h</text>
+<text x='894' y='484' font-size='11' fill='#3b6fd4' font-weight='600' text-anchor='start'>PBS</text>
+<text x='990' y='484' font-size='10.5' fill='#6b7280' font-weight='normal' text-anchor='start'>backups of vm/361</text>
+<text x='894' y='502' font-size='11' fill='#3b6fd4' font-weight='600' text-anchor='start'>SIEM (Wazuh)</text>
+<text x='990' y='502' font-size='10.5' fill='#6b7280' font-weight='normal' text-anchor='start'>agent immich · alerts 24h  (not installed)</text>
+<rect x='220' y='548' width='1036' height='248' rx='6' fill='#ffffff' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<text x='234' y='570' font-size='12' fill='#6b7280' font-weight='600' text-anchor='start'>Activity — this module (sweep, UI, assistant, CLI on tappaas-cicd)</text>
+<line x1='220' y1='580' x2='1256' y2='580' stroke='#d0d4da' stroke-width='1'/>
+<rect x='221' y='582' width='1034' height='24' rx='0' fill='#f0f2f5' stroke='none' stroke-width='1' opacity='1'/>
+<text x='231' y='599' font-size='11' fill='#6b7280' font-weight='600' text-anchor='start'>when</text>
+<text x='371' y='599' font-size='11' fill='#6b7280' font-weight='600' text-anchor='start'>who</text>
+<text x='471' y='599' font-size='11' fill='#6b7280' font-weight='600' text-anchor='start'>verb</text>
+<text x='801' y='599' font-size='11' fill='#6b7280' font-weight='600' text-anchor='start'>result</text>
+<line x1='221' y1='630' x2='1255' y2='630' stroke='#eceef1' stroke-width='1'/>
+<text x='231' y='622.0' font-size='11' fill='#1f2328' font-weight='normal' text-anchor='start'>2026-10-17 03:12</text>
+<text x='371' y='622.0' font-size='11' fill='#1f2328' font-weight='normal' text-anchor='start'>sweep</text>
+<text x='471' y='622.0' font-size='11' fill='#1f2328' font-weight='normal' text-anchor='start'>module update immich</text>
+<text x='801' y='622.0' font-size='11' fill='#1f2328' font-weight='normal' text-anchor='start'>ok · 2.4.1 → 2.4.1 (no change) · test 11/11</text>
+<line x1='221' y1='654' x2='1255' y2='654' stroke='#eceef1' stroke-width='1'/>
+<text x='231' y='646.0' font-size='11' fill='#1f2328' font-weight='normal' text-anchor='start'>2026-10-13 21:40</text>
+<text x='371' y='646.0' font-size='11' fill='#1f2328' font-weight='normal' text-anchor='start'>lars · UI</text>
+<text x='471' y='646.0' font-size='11' fill='#1f2328' font-weight='normal' text-anchor='start'>module modify immich --set memory=8192</text>
+<text x='801' y='646.0' font-size='11' fill='#1f2328' font-weight='normal' text-anchor='start'>ok · in-place · 6144 → 8192</text>
+<line x1='221' y1='678' x2='1255' y2='678' stroke='#eceef1' stroke-width='1'/>
+<text x='231' y='670.0' font-size='11' fill='#1f2328' font-weight='normal' text-anchor='start'>2026-10-09 10:02</text>
+<text x='371' y='670.0' font-size='11' fill='#1f2328' font-weight='normal' text-anchor='start'>lars · cicd</text>
+<text x='471' y='670.0' font-size='11' fill='#1f2328' font-weight='normal' text-anchor='start'>module test immich --deep</text>
+<text x='801' y='670.0' font-size='11' fill='#1f2328' font-weight='normal' text-anchor='start'>ok · 19/19</text>
+</svg>

@@ -1,0 +1,75 @@
+<svg xmlns='http://www.w3.org/2000/svg' width='1280' height='820' viewBox='0 0 1280 820' font-family='Inter, Helvetica, Arial, sans-serif' font-size='13'>
+<title>TAPPaaS UI — the assistant proposes, the operator runs</title>
+<rect width='1280' height='820' fill='#f6f7f9'/>
+<rect x='0' y='0' width='196' height='820' rx='0' fill='#1f2a37' stroke='#1f2a37' stroke-width='1' opacity='1'/>
+<text x='20' y='34' font-size='16' fill='#fff' font-weight='700' text-anchor='start'>TAPPaaS</text>
+<text x='20' y='52' font-size='11' fill='#9aa4b2' font-weight='normal' text-anchor='start'>rossen · hrossen.dk</text>
+<text x='24' y='89' font-size='13' fill='#c9d1dc' font-weight='normal' text-anchor='start'>Overview</text>
+<text x='24' y='123' font-size='13' fill='#c9d1dc' font-weight='normal' text-anchor='start'>Physical</text>
+<rect x='10' y='138' width='176' height='28' rx='6' fill='#334155' stroke='#334155' stroke-width='1' opacity='1'/>
+<text x='24' y='157' font-size='13' fill='#fff' font-weight='600' text-anchor='start'>Modules</text>
+<text x='24' y='191' font-size='13' fill='#c9d1dc' font-weight='normal' text-anchor='start'>Environments</text>
+<text x='24' y='225' font-size='13' fill='#c9d1dc' font-weight='normal' text-anchor='start'>Identity</text>
+<text x='24' y='259' font-size='13' fill='#c9d1dc' font-weight='normal' text-anchor='start'>Backup</text>
+<text x='24' y='293' font-size='13' fill='#c9d1dc' font-weight='normal' text-anchor='start'>Site</text>
+<text x='24' y='327' font-size='13' fill='#c9d1dc' font-weight='normal' text-anchor='start'>Security</text>
+<text x='24' y='361' font-size='13' fill='#c9d1dc' font-weight='normal' text-anchor='start'>Activity</text>
+<rect x='10' y='728' width='176' height='40' rx='8' fill='#334155' stroke='#4b5c73' stroke-width='1' opacity='1'/>
+<text x='24' y='753' font-size='13' fill='#fff' font-weight='600' text-anchor='start'>✦ Assistant</text>
+<text x='104' y='753' font-size='10' fill='#9aa4b2' font-weight='normal' text-anchor='start'>via LiteLLM</text>
+<text x='20' y='784' font-size='10' fill='#9aa4b2' font-weight='normal' text-anchor='start'>TAPPaaS 2.2.2+235</text>
+<text x='20' y='798' font-size='10' fill='#9aa4b2' font-weight='normal' text-anchor='start'>unstable · tappaas-cicd</text>
+<rect x='196' y='0' width='1084' height='56' rx='0' fill='#ffffff' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<text x='220' y='34' font-size='17' fill='#1f2328' font-weight='700' text-anchor='start'>immich</text>
+<text x='287.0' y='34' font-size='12' fill='#6b7280' font-weight='normal' text-anchor='start'>› Modules › rossen</text>
+<rect x='1130' y='14' width='96' height='28' rx='6' fill='#ffffff' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<text x='1178.0' y='32' font-size='12' fill='#1f2328' font-weight='600' text-anchor='middle'>Open in ▾</text>
+<text x='1110' y='34' font-size='12' fill='#6b7280' font-weight='normal' text-anchor='end'>lars · Installer</text>
+<rect x='196' y='56' width='624' height='764' rx='0' fill='#eef0f3' stroke='none' stroke-width='1' opacity='1'/>
+<text x='220' y='86' font-size='11' fill='#6b7280' font-weight='normal' text-anchor='start'>(module page behind the drawer — the assistant knows what you are looking at)</text>
+<rect x='820' y='56' width='460' height='764' rx='0' fill='#fff' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<text x='840' y='86' font-size='14' fill='#1f2328' font-weight='700' text-anchor='start'>✦ Assistant</text>
+<text x='930' y='86' font-size='10.5' fill='#6b7280' font-weight='normal' text-anchor='start'>context: module immich · site rossen</text>
+<text x='1260' y='86' font-size='10' fill='#6b7280' font-weight='normal' text-anchor='end'>LiteLLM · site default model</text>
+<line x1='820' y1='100' x2='1280' y2='100' stroke='#d0d4da' stroke-width='1'/>
+<rect x='860' y='116' width='400' height='42' rx='10' fill='#eef3fd' stroke='none' stroke-width='1' opacity='1'/>
+<text x='874' y='132' font-size='10' fill='#6b7280' font-weight='600' text-anchor='start'>lars</text>
+<text x='874' y='150' font-size='11.5' fill='#111827' font-weight='normal' text-anchor='start'>why does immich fail the memory gate?</text>
+<rect x='840' y='170' width='400' height='204' rx='10' fill='#f6f7f9' stroke='none' stroke-width='1' opacity='1'/>
+<text x='854' y='186' font-size='10' fill='#6b7280' font-weight='600' text-anchor='start'>assistant · read: health-manager validate, module show, guest-memory-report</text>
+<text x='854' y='204' font-size='11.5' fill='#111827' font-weight='normal' text-anchor='start'>immich declares 8.0 GiB and uses 7.6 GiB (95%); the gate fails</text>
+<text x='854' y='222' font-size='11.5' fill='#111827' font-weight='normal' text-anchor='start'>from 90%. Its use grew 0.9 GiB over 7 days, mostly machine-</text>
+<text x='854' y='240' font-size='11.5' fill='#111827' font-weight='normal' text-anchor='start'>learning jobs at night (Grafana: logs host=immich, 02:00–04:00).</text>
+<text x='854' y='258' font-size='11.5' fill='#111827' font-weight='normal' text-anchor='start'></text>
+<text x='854' y='276' font-size='11.5' fill='#111827' font-weight='normal' text-anchor='start'>Two ways out:</text>
+<text x='854' y='294' font-size='11.5' fill='#111827' font-weight='normal' text-anchor='start'>1. raise memory to 10 GiB — tappaas1 goes 51.5 → 53.5 of 61 GiB</text>
+<text x='854' y='312' font-size='11.5' fill='#111827' font-weight='normal' text-anchor='start'>   committed (88%), under the sweep's 95% pre-flight;</text>
+<text x='854' y='330' font-size='11.5' fill='#111827' font-weight='normal' text-anchor='start'>2. move it to tappaas2 (29 of 64 GiB committed) with</text>
+<text x='854' y='348' font-size='11.5' fill='#111827' font-weight='normal' text-anchor='start'>   module modify immich --set node=tappaas2 (a migration).</text>
+<text x='854' y='366' font-size='11.5' fill='#111827' font-weight='normal' text-anchor='start'>I suggest 1: the change is in-place, no downtime.</text>
+<rect x='840' y='386' width='420' height='118' rx='10' fill='#fff' stroke='#3b6fd4' stroke-width='1.5' opacity='1'/>
+<text x='854' y='408' font-size='11' fill='#3b6fd4' font-weight='600' text-anchor='start'>Proposed change</text>
+<rect x='970' y='394' width='160.6' height='18' rx='9' fill='#fff' stroke='#2f9e44' stroke-width='1' opacity='1'/>
+<circle cx='980' cy='403' r='4' fill='#2f9e44'/>
+<text x='987' y='407' font-size='11' fill='#1f2328' font-weight='normal' text-anchor='start'>in-place · no downtime</text>
+<rect x='854' y='420' width='392' height='30' rx='6' fill='#1f2a37' stroke='#1f2a37' stroke-width='1' opacity='1'/>
+<text x='864' y='440' font-size='11.5' fill='#e5e7eb' font-weight='normal' text-anchor='start' font-family='JetBrains Mono, Menlo, monospace'>$ module-manager module modify immich --set memory=10240</text>
+<text x='854' y='470' font-size='10.5' fill='#6b7280' font-weight='normal' text-anchor='start'>Runs as lars through the job runner; preview first, recorded in Activity.</text>
+<rect x='854' y='474' width='84' height='28' rx='6' fill='#ffffff' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<text x='896.0' y='492' font-size='12' fill='#1f2328' font-weight='600' text-anchor='middle'>Preview</text>
+<rect x='946' y='474' width='70' height='28' rx='6' fill='#3b6fd4' stroke='#3b6fd4' stroke-width='1' opacity='1'/>
+<text x='981.0' y='492' font-size='12' fill='#fff' font-weight='600' text-anchor='middle'>Run</text>
+<rect x='1024' y='474' width='80' height='28' rx='6' fill='#ffffff' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<text x='1064.0' y='492' font-size='12' fill='#1f2328' font-weight='600' text-anchor='middle'>Dismiss</text>
+<rect x='860' y='516' width='400' height='42' rx='10' fill='#eef3fd' stroke='none' stroke-width='1' opacity='1'/>
+<text x='874' y='532' font-size='10' fill='#6b7280' font-weight='600' text-anchor='start'>lars</text>
+<text x='874' y='550' font-size='11.5' fill='#111827' font-weight='normal' text-anchor='start'>ok, run it</text>
+<rect x='840' y='570' width='400' height='78' rx='10' fill='#f6f7f9' stroke='none' stroke-width='1' opacity='1'/>
+<text x='854' y='586' font-size='10' fill='#6b7280' font-weight='600' text-anchor='start'>assistant</text>
+<text x='854' y='604' font-size='11.5' fill='#111827' font-weight='normal' text-anchor='start'>I don't run changes myself — the Run button above does, so the</text>
+<text x='854' y='622' font-size='11.5' fill='#111827' font-weight='normal' text-anchor='start'>record shows you decided. The preview is ready: 8192 → 10240,</text>
+<text x='854' y='640' font-size='11.5' fill='#111827' font-weight='normal' text-anchor='start'>change class in-place, applied live.</text>
+<rect x='840' y='750' width='420' height='40' rx='20' fill='#fff' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<text x='856' y='775' font-size='11.5' fill='#9aa4b2' font-weight='normal' text-anchor='start'>Ask about the site, a module, a zone, a finding…</text>
+<text x='840' y='806' font-size='9.5' fill='#6b7280' font-weight='normal' text-anchor='start'>Reads freely (list, show, drift, validate, logs). Changes only through a Run you click.</text>
+</svg>

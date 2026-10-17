@@ -1,0 +1,151 @@
+<svg xmlns='http://www.w3.org/2000/svg' width='1280' height='820' viewBox='0 0 1280 820' font-family='Inter, Helvetica, Arial, sans-serif' font-size='13'>
+<title>TAPPaaS UI — Overview (site health)</title>
+<rect width='1280' height='820' fill='#f6f7f9'/>
+<rect x='0' y='0' width='196' height='820' rx='0' fill='#1f2a37' stroke='#1f2a37' stroke-width='1' opacity='1'/>
+<text x='20' y='34' font-size='16' fill='#fff' font-weight='700' text-anchor='start'>TAPPaaS</text>
+<text x='20' y='52' font-size='11' fill='#9aa4b2' font-weight='normal' text-anchor='start'>rossen · hrossen.dk</text>
+<rect x='10' y='70' width='176' height='28' rx='6' fill='#334155' stroke='#334155' stroke-width='1' opacity='1'/>
+<text x='24' y='89' font-size='13' fill='#fff' font-weight='600' text-anchor='start'>Overview</text>
+<text x='24' y='123' font-size='13' fill='#c9d1dc' font-weight='normal' text-anchor='start'>Physical</text>
+<text x='24' y='157' font-size='13' fill='#c9d1dc' font-weight='normal' text-anchor='start'>Modules</text>
+<text x='24' y='191' font-size='13' fill='#c9d1dc' font-weight='normal' text-anchor='start'>Environments</text>
+<text x='24' y='225' font-size='13' fill='#c9d1dc' font-weight='normal' text-anchor='start'>Identity</text>
+<text x='24' y='259' font-size='13' fill='#c9d1dc' font-weight='normal' text-anchor='start'>Backup</text>
+<text x='24' y='293' font-size='13' fill='#c9d1dc' font-weight='normal' text-anchor='start'>Site</text>
+<text x='24' y='327' font-size='13' fill='#c9d1dc' font-weight='normal' text-anchor='start'>Security</text>
+<text x='24' y='361' font-size='13' fill='#c9d1dc' font-weight='normal' text-anchor='start'>Activity</text>
+<rect x='10' y='728' width='176' height='40' rx='8' fill='#334155' stroke='#4b5c73' stroke-width='1' opacity='1'/>
+<text x='24' y='753' font-size='13' fill='#fff' font-weight='600' text-anchor='start'>✦ Assistant</text>
+<text x='104' y='753' font-size='10' fill='#9aa4b2' font-weight='normal' text-anchor='start'>via LiteLLM</text>
+<text x='20' y='784' font-size='10' fill='#9aa4b2' font-weight='normal' text-anchor='start'>TAPPaaS 2.2.2+235</text>
+<text x='20' y='798' font-size='10' fill='#9aa4b2' font-weight='normal' text-anchor='start'>unstable · tappaas-cicd</text>
+<rect x='196' y='0' width='1084' height='56' rx='0' fill='#ffffff' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<text x='220' y='34' font-size='17' fill='#1f2328' font-weight='700' text-anchor='start'>Overview</text>
+<text x='306.0' y='34' font-size='12' fill='#6b7280' font-weight='normal' text-anchor='start'>site rossen · 3 nodes · 24 modules · updated 18:01</text>
+<rect x='1130' y='14' width='96' height='28' rx='6' fill='#ffffff' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<text x='1178.0' y='32' font-size='12' fill='#1f2328' font-weight='600' text-anchor='middle'>Open in ▾</text>
+<text x='1110' y='34' font-size='12' fill='#6b7280' font-weight='normal' text-anchor='end'>lars · Installer</text>
+<rect x='220' y='80' width='168' height='86' rx='6' fill='#ffffff' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<rect x='220' y='80' width='4' height='86' rx='2' fill='#d64545' stroke='#d64545' stroke-width='1' opacity='1'/>
+<text x='234' y='102' font-size='11' fill='#6b7280' font-weight='600' text-anchor='start'>Health gates</text>
+<text x='234' y='126' font-size='13' fill='#1f2328' font-weight='600' text-anchor='start'>1 FAIL · 5 WARN · 7 PASS</text>
+<text x='234' y='148' font-size='10' fill='#6b7280' font-weight='normal' text-anchor='start'>health-manager validate · 18:01</text>
+<rect x='400' y='80' width='168' height='86' rx='6' fill='#ffffff' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<rect x='400' y='80' width='4' height='86' rx='2' fill='#2f9e44' stroke='#2f9e44' stroke-width='1' opacity='1'/>
+<text x='414' y='102' font-size='11' fill='#6b7280' font-weight='600' text-anchor='start'>Pulse (tappaas3)</text>
+<text x='414' y='126' font-size='13' fill='#1f2328' font-weight='600' text-anchor='start'>5 of 5 targets up</text>
+<text x='414' y='148' font-size='10' fill='#6b7280' font-weight='normal' text-anchor='start'>uplink · firewall · mothership · PBS · rasmus</text>
+<rect x='580' y='80' width='168' height='86' rx='6' fill='#ffffff' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<rect x='580' y='80' width='4' height='86' rx='2' fill='#2f9e44' stroke='#2f9e44' stroke-width='1' opacity='1'/>
+<text x='594' y='102' font-size='11' fill='#6b7280' font-weight='600' text-anchor='start'>Last sweep</text>
+<text x='594' y='126' font-size='13' fill='#1f2328' font-weight='600' text-anchor='start'>2026-10-17 03:10 · succeeded</text>
+<text x='594' y='148' font-size='10' fill='#6b7280' font-weight='normal' text-anchor='start'>24 modules · 0 failed · 2 reboots pending</text>
+<rect x='760' y='80' width='168' height='86' rx='6' fill='#ffffff' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<rect x='760' y='80' width='4' height='86' rx='2' fill='#e8a317' stroke='#e8a317' stroke-width='1' opacity='1'/>
+<text x='774' y='102' font-size='11' fill='#6b7280' font-weight='600' text-anchor='start'>Backups</text>
+<text x='774' y='126' font-size='13' fill='#1f2328' font-weight='600' text-anchor='start'>24 modules covered</text>
+<text x='774' y='148' font-size='10' fill='#6b7280' font-weight='normal' text-anchor='start'>buddy rasmus: never pulled</text>
+<rect x='940' y='80' width='168' height='86' rx='6' fill='#ffffff' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<rect x='940' y='80' width='4' height='86' rx='2' fill='#3b6fd4' stroke='#3b6fd4' stroke-width='1' opacity='1'/>
+<text x='954' y='102' font-size='11' fill='#6b7280' font-weight='600' text-anchor='start'>Release</text>
+<text x='954' y='126' font-size='13' fill='#1f2328' font-weight='600' text-anchor='start'>2.2.2+235 · unstable</text>
+<text x='954' y='148' font-size='10' fill='#6b7280' font-weight='normal' text-anchor='start'>preview: 0 majors · 1 new CVE</text>
+<rect x='1120' y='80' width='168' height='86' rx='6' fill='#ffffff' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<rect x='1120' y='80' width='4' height='86' rx='2' fill='#e8a317' stroke='#e8a317' stroke-width='1' opacity='1'/>
+<text x='1134' y='102' font-size='11' fill='#6b7280' font-weight='600' text-anchor='start'>Security</text>
+<text x='1134' y='126' font-size='13' fill='#1f2328' font-weight='600' text-anchor='start'>6 ACT · 15 triage · 10 watch</text>
+<text x='1134' y='148' font-size='10' fill='#6b7280' font-weight='normal' text-anchor='start'>CVE scan 0 days ago · SIEM: not installed</text>
+<rect x='220' y='186' width='640' height='420' rx='6' fill='#ffffff' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<text x='234' y='208' font-size='12' fill='#6b7280' font-weight='600' text-anchor='start'>Attention — what needs a person (gates, sweep, pulse, CVE, drift)</text>
+<line x1='220' y1='218' x2='860' y2='218' stroke='#d0d4da' stroke-width='1'/>
+<circle cx='240' cy='238' r='5' fill='#d64545'/>
+<text x='254' y='242' font-size='11' fill='#6b7280' font-weight='normal' text-anchor='start' font-family='JetBrains Mono, Menlo, monospace'>guest-memory</text>
+<text x='370' y='242' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>immich uses 7.6G of 8.0G declared (95%)</text>
+<rect x='740' y='226' width='104' height='22' rx='11' fill='#fff' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<text x='792.0' y='241' font-size='10' fill='#6b7280' font-weight='normal' text-anchor='middle'>Open in Grafana</text>
+<rect x='627.8' y='226' width='104.2' height='22' rx='11' fill='#eef3fd' stroke='#c7d6f5' stroke-width='1' opacity='1'/>
+<text x='679.9' y='241' font-size='10' fill='#3b6fd4' font-weight='600' text-anchor='middle'>Modify memory…</text>
+<circle cx='240' cy='278' r='5' fill='#d64545'/>
+<text x='254' y='282' font-size='11' fill='#6b7280' font-weight='normal' text-anchor='start' font-family='JetBrains Mono, Menlo, monospace'>guest-memory</text>
+<text x='370' y='282' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>openwebui 92% · jellyfin 92% · logging 92%</text>
+<rect x='746.1' y='266' width='97.89999999999999' height='22' rx='11' fill='#eef3fd' stroke='#c7d6f5' stroke-width='1' opacity='1'/>
+<text x='795.0500000000001' y='281' font-size='10' fill='#3b6fd4' font-weight='600' text-anchor='middle'>Review sizes…</text>
+<circle cx='240' cy='318' r='5' fill='#e8a317'/>
+<text x='254' y='322' font-size='11' fill='#6b7280' font-weight='normal' text-anchor='start' font-family='JetBrains Mono, Menlo, monospace'>pending-reboot</text>
+<text x='370' y='322' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>tappaas-cicd and unifi-os wait for a reboot</text>
+<rect x='783.9' y='306' width='60.1' height='22' rx='11' fill='#eef3fd' stroke='#c7d6f5' stroke-width='1' opacity='1'/>
+<text x='813.9499999999999' y='321' font-size='10' fill='#3b6fd4' font-weight='600' text-anchor='middle'>Reboot…</text>
+<circle cx='240' cy='358' r='5' fill='#e8a317'/>
+<text x='254' y='362' font-size='11' fill='#6b7280' font-weight='normal' text-anchor='start' font-family='JetBrains Mono, Menlo, monospace'>lan-uplink</text>
+<text x='370' y='362' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>tappaas1: both LACP legs reach the same switch</text>
+<rect x='734' y='346' width='110' height='22' rx='11' fill='#fff' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<text x='789.0' y='361' font-size='10' fill='#6b7280' font-weight='normal' text-anchor='middle'>Open in Physical</text>
+<rect x='602.9' y='346' width='123.1' height='22' rx='11' fill='#eef3fd' stroke='#c7d6f5' stroke-width='1' opacity='1'/>
+<text x='664.4499999999999' y='361' font-size='10' fill='#3b6fd4' font-weight='600' text-anchor='middle'>Show node network</text>
+<circle cx='240' cy='398' r='5' fill='#e8a317'/>
+<text x='254' y='402' font-size='11' fill='#6b7280' font-weight='normal' text-anchor='start' font-family='JetBrains Mono, Menlo, monospace'>lan-uplink</text>
+<text x='370' y='402' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>tappaas1: switch asks for the slow LACP rate (~90 s)</text>
+<rect x='752' y='386' width='92' height='22' rx='11' fill='#fff' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<text x='798.0' y='401' font-size='10' fill='#6b7280' font-weight='normal' text-anchor='middle'>Open in UniFi</text>
+<circle cx='240' cy='438' r='5' fill='#e8a317'/>
+<text x='254' y='442' font-size='11' fill='#6b7280' font-weight='normal' text-anchor='start' font-family='JetBrains Mono, Menlo, monospace'>cve-status</text>
+<text x='370' y='442' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>nomad_admin: 98 critical/high fixable (ACT)</text>
+<rect x='740' y='426' width='104' height='22' rx='11' fill='#fff' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<text x='792.0' y='441' font-size='10' fill='#6b7280' font-weight='normal' text-anchor='middle'>Report security</text>
+<rect x='671.9' y='426' width='60.1' height='22' rx='11' fill='#eef3fd' stroke='#c7d6f5' stroke-width='1' opacity='1'/>
+<text x='701.9499999999999' y='441' font-size='10' fill='#3b6fd4' font-weight='600' text-anchor='middle'>Triage…</text>
+<circle cx='240' cy='478' r='5' fill='#e8a317'/>
+<text x='254' y='482' font-size='11' fill='#6b7280' font-weight='normal' text-anchor='start' font-family='JetBrains Mono, Menlo, monospace'>cve-status</text>
+<text x='370' y='482' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>openwebui 11 · diyhue 7 · authentik 1 fixable</text>
+<rect x='783.9' y='466' width='60.1' height='22' rx='11' fill='#eef3fd' stroke='#c7d6f5' stroke-width='1' opacity='1'/>
+<text x='813.9499999999999' y='481' font-size='10' fill='#3b6fd4' font-weight='600' text-anchor='middle'>Triage…</text>
+<circle cx='240' cy='518' r='5' fill='#e8a317'/>
+<text x='254' y='522' font-size='11' fill='#6b7280' font-weight='normal' text-anchor='start' font-family='JetBrains Mono, Menlo, monospace'>backup</text>
+<text x='370' y='522' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>buddy rasmus has never pulled our copy</text>
+<rect x='765.0' y='506' width='79.0' height='22' rx='11' fill='#eef3fd' stroke='#c7d6f5' stroke-width='1' opacity='1'/>
+<text x='804.5' y='521' font-size='10' fill='#3b6fd4' font-weight='600' text-anchor='middle'>Peer check</text>
+<circle cx='240' cy='558' r='5' fill='#3b6fd4'/>
+<text x='254' y='562' font-size='11' fill='#6b7280' font-weight='normal' text-anchor='start' font-family='JetBrains Mono, Menlo, monospace'>drift</text>
+<text x='370' y='562' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>0 modules drift from their declared state</text>
+<rect x='734' y='546' width='110' height='22' rx='11' fill='#fff' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<text x='789.0' y='561' font-size='10' fill='#6b7280' font-weight='normal' text-anchor='middle'>module reconcile</text>
+<rect x='880' y='186' width='376' height='250' rx='6' fill='#ffffff' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<text x='894' y='208' font-size='12' fill='#6b7280' font-weight='600' text-anchor='start'>Nodes — cluster members (site.json · pvesh)</text>
+<line x1='880' y1='218' x2='1256' y2='218' stroke='#d0d4da' stroke-width='1'/>
+<rect x='894' y='232' width='348' height='58' rx='6' fill='#fbfbfc' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<circle cx='910' cy='248' r='5' fill='#2f9e44'/>
+<text x='922' y='252' font-size='13' fill='#1f2328' font-weight='600' text-anchor='start'>tappaas1</text>
+<text x='922' y='269' font-size='11' fill='#6b7280' font-weight='normal' text-anchor='start'>61 GiB · 51.5 committed (84%)</text>
+<text x='922' y='283' font-size='10' fill='#6b7280' font-weight='normal' text-anchor='start'>10 guests · HA · LACP 2×10G → USW Pro XG 10 PoE</text>
+<rect x='894' y='298' width='348' height='58' rx='6' fill='#fbfbfc' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<circle cx='910' cy='314' r='5' fill='#2f9e44'/>
+<text x='922' y='318' font-size='13' fill='#1f2328' font-weight='600' text-anchor='start'>tappaas2</text>
+<text x='922' y='335' font-size='11' fill='#6b7280' font-weight='normal' text-anchor='start'>64 GiB · 29.0 committed (45%)</text>
+<text x='922' y='349' font-size='10' fill='#6b7280' font-weight='normal' text-anchor='start'>8 guests · 1×10G</text>
+<rect x='894' y='364' width='348' height='58' rx='6' fill='#fbfbfc' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<circle cx='910' cy='380' r='5' fill='#2f9e44'/>
+<text x='922' y='384' font-size='13' fill='#1f2328' font-weight='600' text-anchor='start'>tappaas3</text>
+<text x='922' y='401' font-size='11' fill='#6b7280' font-weight='normal' text-anchor='start'>32 GiB · 13.5 committed (42%)</text>
+<text x='922' y='415' font-size='10' fill='#6b7280' font-weight='normal' text-anchor='start'>2 guests · PBS · pulse · 1×1G</text>
+<rect x='880' y='452' width='376' height='154' rx='6' fill='#ffffff' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<text x='894' y='474' font-size='12' fill='#6b7280' font-weight='600' text-anchor='start'>Environments and zones</text>
+<line x1='880' y1='484' x2='1256' y2='484' stroke='#d0d4da' stroke-width='1'/>
+<text x='894' y='482' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>mgmt (site)  ·  rossen (default)  ·  test</text>
+<rect x='894' y='502' width='79.0' height='18' rx='9' fill='#3b6fd4' stroke='#3b6fd4' stroke-width='1' opacity='1'/>
+<text x='933.5' y='515' font-size='11' fill='#fff' font-weight='600' text-anchor='middle'>rossen 200</text>
+<rect x='979.0' y='502' width='66.4' height='18' rx='9' fill='#9c6ade' stroke='#9c6ade' stroke-width='1' opacity='1'/>
+<text x='1012.2' y='515' font-size='11' fill='#fff' font-weight='600' text-anchor='middle'>test 299</text>
+<rect x='1051.4' y='502' width='66.4' height='18' rx='9' fill='#2f9e44' stroke='#2f9e44' stroke-width='1' opacity='1'/>
+<text x='1084.6000000000001' y='515' font-size='11' fill='#fff' font-weight='600' text-anchor='middle'>home 310</text>
+<rect x='1123.8000000000002' y='502' width='91.6' height='18' rx='9' fill='#e8a317' stroke='#e8a317' stroke-width='1' opacity='1'/>
+<text x='1169.6000000000001' y='515' font-size='11' fill='#fff' font-weight='600' text-anchor='middle'>iotLocal 410</text>
+<rect x='894' y='526' width='91.6' height='18' rx='9' fill='#f08c3a' stroke='#f08c3a' stroke-width='1' opacity='1'/>
+<text x='939.8' y='539' font-size='11' fill='#fff' font-weight='600' text-anchor='middle'>iotCloud 420</text>
+<rect x='991.6' y='526' width='85.3' height='18' rx='9' fill='#c2410c' stroke='#c2410c' stroke-width='1' opacity='1'/>
+<text x='1034.25' y='539' font-size='11' fill='#fff' font-weight='600' text-anchor='middle'>iotCams 430</text>
+<rect x='1082.9' y='526' width='72.69999999999999' height='18' rx='9' fill='#0ea5a4' stroke='#0ea5a4' stroke-width='1' opacity='1'/>
+<text x='1119.25' y='539' font-size='11' fill='#fff' font-weight='600' text-anchor='middle'>guest 510</text>
+<rect x='894' y='550' width='60.1' height='18' rx='9' fill='#d64545' stroke='#d64545' stroke-width='1' opacity='1'/>
+<text x='924.05' y='563' font-size='11' fill='#fff' font-weight='600' text-anchor='middle'>dmz 610</text>
+<text x='894' y='586' font-size='10' fill='#6b7280' font-weight='normal' text-anchor='start'>work 320 inactive · iotUntrust 440 disabled · admin, buddy, edge, netbird, mgmt, wan manual</text>
+</svg>

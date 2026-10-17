@@ -1,0 +1,85 @@
+<svg xmlns='http://www.w3.org/2000/svg' width='1100' height='700' viewBox='0 0 1100 700' font-family='Inter, Helvetica, Arial, sans-serif' font-size='13'>
+<title>TAPPaaS UI — site owner view (read-only, from home and work zones)</title>
+<rect width='1100' height='700' fill='#f6f7f9'/>
+<rect x='0' y='0' width='196' height='700' rx='0' fill='#1f2a37' stroke='#1f2a37' stroke-width='1' opacity='1'/>
+<text x='20' y='34' font-size='16' fill='#fff' font-weight='700' text-anchor='start'>TAPPaaS</text>
+<text x='20' y='52' font-size='11' fill='#9aa4b2' font-weight='normal' text-anchor='start'>rossen · hrossen.dk</text>
+<rect x='10' y='70' width='176' height='28' rx='6' fill='#334155' stroke='#334155' stroke-width='1' opacity='1'/>
+<text x='24' y='89' font-size='13' fill='#fff' font-weight='600' text-anchor='start'>Overview</text>
+<text x='24' y='123' font-size='13' fill='#c9d1dc' font-weight='normal' text-anchor='start'>Physical</text>
+<text x='24' y='157' font-size='13' fill='#c9d1dc' font-weight='normal' text-anchor='start'>Modules</text>
+<text x='20' y='664' font-size='10' fill='#9aa4b2' font-weight='normal' text-anchor='start'>TAPPaaS 2.2.2+235</text>
+<text x='20' y='678' font-size='10' fill='#9aa4b2' font-weight='normal' text-anchor='start'>unstable · tappaas-cicd</text>
+<rect x='196' y='0' width='904' height='56' rx='0' fill='#ffffff' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<text x='220' y='34' font-size='17' fill='#1f2328' font-weight='700' text-anchor='start'>Your site: rossen</text>
+<text x='391.5' y='34' font-size='12' fill='#6b7280' font-weight='normal' text-anchor='start'>status.hrossen.dk · read-only</text>
+<text x='1076' y='34' font-size='12' fill='#6b7280' font-weight='normal' text-anchor='end'>lars · site owner · read-only</text>
+<rect x='220' y='80' width='856' height='72' rx='6' fill='#fff' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<circle cx='244' cy='116' r='10' fill='#e8a317'/>
+<text x='268' y='110' font-size='14' fill='#1f2328' font-weight='600' text-anchor='start'>Everything is running. Two services are short of memory; your operator has been told.</text>
+<text x='268' y='132' font-size='11.5' fill='#6b7280' font-weight='normal' text-anchor='start'>Last check 18:01 · last backup tonight 01:30 (24 services) · internet up · firewall up · IPv6 on</text>
+<rect x='220' y='172' width='540' height='400' rx='6' fill='#ffffff' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<text x='234' y='194' font-size='12' fill='#6b7280' font-weight='600' text-anchor='start'>Services</text>
+<line x1='220' y1='204' x2='760' y2='204' stroke='#d0d4da' stroke-width='1'/>
+<line x1='221' y1='240' x2='759' y2='240' stroke='#eceef1' stroke-width='1'/>
+<circle cx='235' cy='223.0' r='4' fill='#2f9e44'/>
+<text x='245' y='227.0' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>Nextcloud</text>
+<text x='421' y='227.0' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>nextcloud.hrossen.dk</text>
+<text x='611' y='227.0' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>running · backed up</text>
+<line x1='221' y1='274' x2='759' y2='274' stroke='#eceef1' stroke-width='1'/>
+<circle cx='235' cy='257.0' r='4' fill='#e8a317'/>
+<text x='245' y='261.0' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>Immich (photos)</text>
+<text x='421' y='261.0' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>immich.hrossen.dk</text>
+<text x='611' y='261.0' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>running · short of memory</text>
+<line x1='221' y1='308' x2='759' y2='308' stroke='#eceef1' stroke-width='1'/>
+<circle cx='235' cy='291.0' r='4' fill='#e8a317'/>
+<text x='245' y='295.0' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>Jellyfin</text>
+<text x='421' y='295.0' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>jellyfin.hrossen.dk</text>
+<text x='611' y='295.0' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>running · short of memory</text>
+<line x1='221' y1='342' x2='759' y2='342' stroke='#eceef1' stroke-width='1'/>
+<circle cx='235' cy='325.0' r='4' fill='#2f9e44'/>
+<text x='245' y='329.0' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>Forgejo</text>
+<text x='421' y='329.0' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>forgejo.hrossen.dk</text>
+<text x='611' y='329.0' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>running · backed up</text>
+<line x1='221' y1='376' x2='759' y2='376' stroke='#eceef1' stroke-width='1'/>
+<circle cx='235' cy='359.0' r='4' fill='#2f9e44'/>
+<text x='245' y='363.0' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>Open WebUI (AI chat)</text>
+<text x='421' y='363.0' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>openwebui.hrossen.dk</text>
+<text x='611' y='363.0' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>running</text>
+<line x1='221' y1='410' x2='759' y2='410' stroke='#eceef1' stroke-width='1'/>
+<circle cx='235' cy='393.0' r='4' fill='#2f9e44'/>
+<text x='245' y='397.0' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>Euro Office</text>
+<text x='421' y='397.0' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>office.hrossen.dk</text>
+<text x='611' y='397.0' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>running · backed up</text>
+<line x1='221' y1='444' x2='759' y2='444' stroke='#eceef1' stroke-width='1'/>
+<circle cx='235' cy='427.0' r='4' fill='#2f9e44'/>
+<text x='245' y='431.0' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>Vaultwarden</text>
+<text x='421' y='431.0' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>vault.hrossen.dk</text>
+<text x='611' y='431.0' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>running · backed up</text>
+<line x1='221' y1='478' x2='759' y2='478' stroke='#eceef1' stroke-width='1'/>
+<circle cx='235' cy='461.0' r='4' fill='#2f9e44'/>
+<text x='245' y='465.0' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>N.O.M.A.D.</text>
+<text x='421' y='465.0' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>nomad.rossen.internal</text>
+<text x='611' y='465.0' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>running · inside the site only</text>
+<line x1='221' y1='512' x2='759' y2='512' stroke='#eceef1' stroke-width='1'/>
+<circle cx='235' cy='495.0' r='4' fill='#3b6fd4'/>
+<text x='245' y='499.0' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>Home Assistant</text>
+<text x='421' y='499.0' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>—</text>
+<text x='611' y='499.0' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>not a TAPPaaS module</text>
+<rect x='780' y='172' width='296' height='190' rx='6' fill='#ffffff' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<text x='794' y='194' font-size='12' fill='#6b7280' font-weight='600' text-anchor='start'>The site</text>
+<line x1='780' y1='204' x2='1076' y2='204' stroke='#d0d4da' stroke-width='1'/>
+<text x='794' y='228' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>3 servers · 1 switch · 1 access point · 1 firewall</text>
+<text x='794' y='248' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>Off-site copy: rasmus (Hareskov) — not yet pulled</text>
+<text x='794' y='268' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>Release 2.2.2 · updates nightly · 2 restarts pending</text>
+<text x='794' y='288' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>Operator: lars@hrossen.dk</text>
+<text x='794' y='322' font-size='12' fill='#3b6fd4' font-weight='normal' text-anchor='start'>Open the physical view (read-only) →</text>
+<rect x='780' y='378' width='296' height='194' rx='6' fill='#ffffff' stroke='#d0d4da' stroke-width='1' opacity='1'/>
+<text x='794' y='400' font-size='12' fill='#6b7280' font-weight='600' text-anchor='start'>What you can do here</text>
+<line x1='780' y1='410' x2='1076' y2='410' stroke='#d0d4da' stroke-width='1'/>
+<text x='794' y='412' font-size='11.5' fill='#1f2328' font-weight='normal' text-anchor='start'>See which services run and whether they are backed up.</text>
+<text x='794' y='432' font-size='11.5' fill='#1f2328' font-weight='normal' text-anchor='start'>See the site as it is cabled.</text>
+<text x='794' y='462' font-size='11.5' fill='#6b7280' font-weight='normal' text-anchor='start'>Nothing can be changed from this address: operating the</text>
+<text x='794' y='478' font-size='11.5' fill='#6b7280' font-weight='normal' text-anchor='start'>site needs the management network or the admin VPN</text>
+<text x='794' y='494' font-size='11.5' fill='#6b7280' font-weight='normal' text-anchor='start'>and the Installer or Admin role.</text>
+</svg>
