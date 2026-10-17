@@ -63,6 +63,15 @@ elif [[ "${HTTP_CODE}" == "301" || "${HTTP_CODE}" == "302" ]]; then
 else
     fail "Jellyfin /health returned HTTP ${HTTP_CODE}"
 fi
+_WANT="$(get_config_value 'appVersion' '' 2>/dev/null || true)"
+_HAVE="$(remote "curl -s --max-time 10 http://localhost:8096/System/Info/Public" | jq -r '.Version // empty' 2>/dev/null || true)"
+if [[ -z "${_WANT}" ]]; then
+    skip "no appVersion in the module config to compare with (running ${_HAVE:-unknown})"
+elif [[ "${_HAVE}" == "${_WANT}" || "${_HAVE}" == "${_WANT}".* ]]; then
+    pass "Jellyfin ${_HAVE} runs (appVersion ${_WANT})"
+else
+    fail "Jellyfin ${_HAVE:-unknown} runs, appVersion is ${_WANT}"
+fi
 
 # ── Test 3: Media share (storage:nfs) ─────────────────────────────────────────
 # /media is the share "media" (subdir jellyfin) once a server declares it. Until
@@ -128,6 +137,15 @@ else
         pass "/sso/OID/start/authentik redirects to Authentik"
     else
         fail "/sso/OID/start/authentik did not redirect to Authentik (${START:-no answer})"
+    fi
+    # Jellyfin accepts the empty password for an account without one, and the
+    # plugin before 5.x created SSO accounts without one. 5.x seals them at
+    # start-up; none may be left.
+    OPEN=$(remote "sudo sqlite3 -readonly /var/lib/jellyfin/data/jellyfin.db \"SELECT group_concat(Username, ', ') FROM Users WHERE Password IS NULL OR Password = '';\"" || echo "?")
+    if [[ -z "${OPEN}" ]]; then
+        pass "every Jellyfin account has a password (none signs in with an empty one)"
+    else
+        fail "accounts without a password, open to an empty-password login: ${OPEN}"
     fi
 fi
 

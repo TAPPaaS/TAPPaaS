@@ -14,7 +14,7 @@ server declares — before or after Jellyfin is installed.
 | Zone | the environment's zone (`zone0` from `config/environments/<env>.json`) |
 | Port | 8096 |
 | VM ID | 360 |
-| App version | 10.11.11 |
+| App version | 12.2 |
 | VM disk | 32G on `tanka1` — OS and Jellyfin's own data (`/var/lib/jellyfin`, metadata, cache) |
 | Media | `/media` — subdir `jellyfin` of the NFS share `media` (`storage:nfs`); a local directory while the share is pending |
 
@@ -140,10 +140,11 @@ in Authentik's app list goes straight through
 - **Name collisions:** the plugin links an Authentik user to an EXISTING Jellyfin
   account of the same name. Don't give an Authentik user the name `admin`,
   `stream` or `local`, or it gets that local account.
-- **Plugin version:** 9p4/jellyfin-plugin-sso 4.0.0.4, pinned in `jellyfin.nix`.
-  Upstream is archived, and this is its last release (for Jellyfin 10.11). It's a
-  store path of its own (`jellyfin-plugin-sso-4.0.0.4`), so the security scan
-  lists it.
+- **Plugin version:** K0lin/jellyfin-plugin-sso 5.1.1, pinned in `jellyfin.nix`:
+  the maintained continuation of the archived 9p4 plugin, for Jellyfin 12. It
+  gives every account it creates or links a random password, so an SSO account
+  can't be signed into with an empty one. It's a store path of its own
+  (`jellyfin-plugin-sso-5.1.1`), so the security scan lists it.
 
 **Native TV and mobile apps do not work.** They log in to Jellyfin's API with a
 username and password, and cannot pass forward-auth. There is no direct route

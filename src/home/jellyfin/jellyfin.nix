@@ -30,16 +30,31 @@
 { config, lib, pkgs, modulesPath, ... }:
 
 let
+  # Jellyfin 12 comes from nixos-unstable: the pinned release only has 10.11,
+  # which gets no more upstream releases and misses fixes that are only in 12
+  # (#850). Only the package is taken from it -- it brings its own jellyfin-web
+  # and jellyfin-ffmpeg; the service module stays the pinned release's. Drop
+  # this once the pinned release carries Jellyfin 12 (NixOS 26.11).
+  # Bump: new rev + `nix-prefetch-url --unpack <url>`.
+  unstableSrc = builtins.fetchTarball {
+    url    = "https://github.com/NixOS/nixpkgs/archive/55bfb4d7437bd4e09ab7cba58a43bd68eb310044.tar.gz";
+    sha256 = "02sljlk6abwqsx32nhjmfbm7hki7nvcsg442ldp0yx9f5qz0c5lc";
+  };
+  unstable = import unstableSrc { inherit (pkgs.stdenv.hostPlatform) system; };
+
   # -- SSO-Auth plugin (OIDC "Sign in with Authentik", #806) ------------------
-  # 9p4/jellyfin-plugin-sso, pinned: upstream is archived, 4.0.0.4 is its last
-  # release and targets Jellyfin 10.11. A store path of its own, so the closure
-  # (and the security scan) names it. Hash = the release's published sha256.
-  ssoPluginVersion = "4.0.0.4";
+  # K0lin/jellyfin-plugin-sso, the maintained continuation of the archived
+  # 9p4 plugin (same plugin id, same configuration). 5.1.x targets Jellyfin
+  # 12; it also gives every account it creates or links a random password, so
+  # an SSO account cannot be signed into with an empty password. A store path
+  # of its own, so the closure (and the security scan) names it. Hash = the
+  # release's published sha256.
+  ssoPluginVersion = "5.1.1";
   ssoPlugin = pkgs.runCommand "jellyfin-plugin-sso-${ssoPluginVersion}" {
     nativeBuildInputs = [ pkgs.unzip ];
     src = pkgs.fetchurl {
-      url  = "https://github.com/9p4/jellyfin-plugin-sso/releases/download/v${ssoPluginVersion}/sso-authentication_${ssoPluginVersion}.zip";
-      hash = "sha256-wJ8WujEFmkNN3X+BHk+WCNS0xFFMyApb8cozvuYeEQc=";
+      url  = "https://github.com/K0lin/jellyfin-plugin-sso/releases/download/v${ssoPluginVersion}/sso-authentication_${ssoPluginVersion}.zip";
+      hash = "sha256-2xJrR2O9o6N1T6IQMjL8A+8b+SnP7aNfLprznIdSM7E=";
     };
   } ''
     mkdir -p $out
@@ -231,11 +246,12 @@ in
   # -- Packages --------------------------------------------------------------
   # vim, wget, curl, htop and git come from the baseline.
   # NFS client support comes with the mount (tappaas-nfs.nix).
-  environment.systemPackages = with pkgs; [ jq ];
+  environment.systemPackages = with pkgs; [ jq sqlite ];
 
   # -- Jellyfin media server -------------------------------------------------
   services.jellyfin = {
     enable    = true;
+    package   = unstable.jellyfin;
     openFirewall = true;
     dataDir   = "/var/lib/jellyfin";
     cacheDir  = "/var/cache/jellyfin";
@@ -248,6 +264,18 @@ in
   # store into its directory (a symlink would be read-only), and only when the
   # store path changed. Older copies are removed so one version loads.
   systemd.services.jellyfin.preStart = ''
+    # Jellyfin 12 makes user names case-insensitive, and its database
+    # migration fails on two users whose names differ only in case. Name them
+    # here, before Jellyfin starts, instead of a failed migration in its log.
+    db=${config.services.jellyfin.dataDir}/data/jellyfin.db
+    if [ -s "$db" ]; then
+      clash="$(${pkgs.sqlite}/bin/sqlite3 -readonly "$db" \
+        "SELECT group_concat(Username, ' / ') FROM Users GROUP BY lower(Username) HAVING count(*) > 1;" 2>/dev/null || true)"
+      if [ -n "$clash" ]; then
+        echo "jellyfin: user names that differ only in case: $clash -- rename or remove one of each pair, then start Jellyfin again" >&2
+        exit 1
+      fi
+    fi
     plugins=${config.services.jellyfin.dataDir}/plugins
     target="$plugins/SSO-Auth_${ssoPluginVersion}"
     mkdir -p "$plugins"

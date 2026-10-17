@@ -55,7 +55,7 @@ done
 # ── Bootstrap admin via startup wizard ───────────────────────────────────────
 # Only runs if the startup wizard has not been completed yet.
 STARTUP_STATUS=$(curl -sf "${JELLYFIN_URL}/Startup/Configuration" \
-    -H 'X-Emby-Authorization: MediaBrowser Client="install",Device="cicd",DeviceId="tappaas-cicd",Version="1"' \
+    -H 'Authorization: MediaBrowser Client="install",Device="cicd",DeviceId="tappaas-cicd",Version="1"' \
     2>/dev/null | jq -r '.StartupWizardCompleted // false' 2>/dev/null || echo "false")
 
 if [[ "${STARTUP_STATUS}" == "false" ]]; then
@@ -67,7 +67,7 @@ if [[ "${STARTUP_STATUS}" == "false" ]]; then
     # "Sequence contains no elements" if hit before that user exists.
     for i in $(seq 1 15); do
         curl -sf "${JELLYFIN_URL}/Startup/User" \
-            -H 'X-Emby-Authorization: MediaBrowser Client="install",Device="cicd",DeviceId="tappaas-cicd",Version="1"' \
+            -H 'Authorization: MediaBrowser Client="install",Device="cicd",DeviceId="tappaas-cicd",Version="1"' \
             >/dev/null 2>&1 && break
         [[ $i -eq 15 ]] && warn "  Default startup user never became available — proceeding anyway"
         sleep 1
@@ -75,7 +75,7 @@ if [[ "${STARTUP_STATUS}" == "false" ]]; then
 
     ADMIN_PASS=$(python3 -c "import secrets, string; print(''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(20)))")
 
-    INSTALL_AUTH_HEADER='X-Emby-Authorization: MediaBrowser Client="install",Device="cicd",DeviceId="tappaas-cicd",Version="1"'
+    INSTALL_AUTH_HEADER='Authorization: MediaBrowser Client="install",Device="cicd",DeviceId="tappaas-cicd",Version="1"'
 
     # Complete startup wizard
     jf_call POST /Startup/User "{\"Name\":\"admin\",\"Password\":\"${ADMIN_PASS}\"}" \
@@ -89,7 +89,7 @@ if [[ "${STARTUP_STATUS}" == "false" ]]; then
     TOKEN=$(jf_call POST /Users/AuthenticateByName "{\"Username\":\"admin\",\"Pw\":\"${ADMIN_PASS}\"}" \
         -H "$INSTALL_AUTH_HEADER" | jq -r '.AccessToken')
 
-    AUTH_HEADER="X-Emby-Authorization: MediaBrowser Token=\"${TOKEN}\""
+    AUTH_HEADER="Authorization: MediaBrowser Token=\"${TOKEN}\""
 
     # ── stream user: transcoding on, client-adaptive bitrate, remote access allowed
     STREAM_PASS=$(python3 -c "import secrets, string; print(''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(20)))")
