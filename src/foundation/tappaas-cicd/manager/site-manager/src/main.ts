@@ -55,6 +55,7 @@ export const HELP: HelpSpec = {
         ["--email <addr>", "admin email"],
         ["--automaticReboot true|false", "allow update reboots"],
         ["--ipv6 true|false", "the site supports IPv6 (#149): OPNsense's 'Allow IPv6', applied by the next network update (default false)"],
+        ["--requireSigned true|false", "refuse to update a staging/production repository that signs no releases (ADR-033 D9; default false). A repository that lists signing keys is verified either way."],
         ["--snapshotRetention <n>", "VM snapshots kept per module"],
         ["--backupTarget <s>", "backup.target"],
         ["--backupOffsite <s>", "backup.offsite"],
@@ -363,7 +364,17 @@ function cmdSite(o: Opts): void {
     info(`${lbl("Network")}publicIp=${net.publicIp ?? "(unset)"}  isp=${net.isp ?? "(none)"}  ipv6=${site.ipv6 ? "yes" : "no"}`);
     info(`${lbl("Update")}${schedStr}  (auto-reboot: ${site.automaticReboot ? "yes" : "no"}, keep ${site.snapshotRetention ?? "?"})`);
     info(`${lbl("Nodes")}${nodes.length ? nodes.map((n) => `${n.name} [${n.storagePools.join(", ")}]`).join("  ") : "(none)"}`);
-    info(`${lbl("Repositories")}${repos.length ? repos.map((r) => `${r.name}${r.branch ? "@" + r.branch : ""}`).join("  ") : "(none)"}`);
+    // ADR-033 D10: what each repository runs, from the last signature check.
+    const sigFile = `${o.configDir.replace(/\/$/, "")}/sbom/signatures.json`;
+    let sigs: Record<string, string> = {};
+    try {
+      const doc = JSON.parse(readFileSync(sigFile, "utf8")) as { repositories?: { name: string; status: string; tag?: string }[] };
+      for (const r of doc.repositories ?? []) sigs[r.name] = r.status === "verified" ? `verified ${r.tag ?? ""}`.trim() : r.status;
+    } catch {
+      sigs = {};
+    }
+    info(`${lbl("Repositories")}${repos.length ? repos.map((r) => `${r.name}${r.branch ? "@" + r.branch : ""}${sigs[r.name] ? ` [${sigs[r.name]}]` : ""}`).join("  ") : "(none)"}` +
+      (site.requireSigned ? "  — signed releases required" : ""));
     info(`${lbl("Orgs")}${orgs.length ? orgs.join(", ") : "(none)"}`);
     info(`${lbl("Backup")}${site.backup ? JSON.stringify(site.backup) : "(none)"}`);
     return;
@@ -509,6 +520,7 @@ function cmdSite(o: Opts): void {
     setStr("--email", ["email"]);
     setBool("--automaticReboot", ["automaticReboot"]);
     setBool("--ipv6", ["ipv6"]);
+    setBool("--requireSigned", ["requireSigned"]);
     setInt("--snapshotRetention", ["snapshotRetention"]);
     setStr("--backupTarget", ["backup", "target"]);
     setStr("--backupOffsite", ["backup", "offsite"]);

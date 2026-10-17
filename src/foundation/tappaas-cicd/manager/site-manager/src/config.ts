@@ -82,6 +82,7 @@ export function loadSite(siteFile: string): Site {
       : undefined,
     automaticReboot: typeof raw.automaticReboot === "boolean" ? raw.automaticReboot : undefined,
     ipv6: typeof raw.ipv6 === "boolean" ? raw.ipv6 : undefined,
+    requireSigned: typeof raw.requireSigned === "boolean" ? raw.requireSigned : undefined,
     snapshotRetention:
       typeof raw.snapshotRetention === "number" ? raw.snapshotRetention : undefined,
     repositories,

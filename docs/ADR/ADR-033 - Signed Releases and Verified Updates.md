@@ -2,13 +2,13 @@
 
 | | |
 |---|---|
-| **Status** | **Draft** |
-| **Version** | 0.2 |
+| **Status** | **Draft** — implementation started (#848): verifier, update gate, signed train tags, health check |
+| **Version** | 0.3 |
 | **Date** | 2026-10-17 |
 | **Author** | Lars Rossen (drafted with Claude) |
 | **Deciders** | @LarsRossen, @ErikDaniel007, @AndreasJe |
 | **Closes / addresses** | Implementation: **#848**. Builds on [ADR-028](<ADR-028 - Release Cadence and Patching.md>) (D11 `channels.json`, D13 release tags, D15 urgent fixes), [ADR-011](<ADR-011 - SBOM Governance.md>) (supply-chain inventory), [ADR-007e](<ADR-007e - Health.md>) (the Health lens), [ADR-007d](<ADR-007d - Site.md>) (`site.json` repositories), [ADR-017](<ADR-017 - Update scheduling and mothership self-update.md>) (the sweep and the self-update). |
-| **Changelog** | v0.2 (2026-10-17) — operator decisions: the signers are the TAPPaaS owners, Erik and Lars; Community stays unsigned for now; `requireSigned` defaults to not required; signed commits on `main` become a future option; SHA-256 object format investigated and rejected for now (Nix cannot read it, GitHub cannot host it) — the open questions are closed; regulatory references removed. · v0.1 — first draft, from the operator's brief of 2026-10-17: every repository needs a signature, signer ownership is recorded, binaries are signed, the update verifies before it moves, NixOS fits the same chain, only staging and production are signed, and every repository's signing status is part of the health check. |
+| **Changelog** | v0.3 (2026-10-17) — as built, first slice (#848): `tree-sha256` is a SHA-256 manifest of the tree's content, computable without Nix (D3); the last verified release is run state in `config/.trust/<repository>.json`, not a `site.json` field, and a site with no record yet takes the revision it runs as its base, so existing sites start verifying without an introduction (D5); the update converges on the exact commit it verified (D6); a repository that does not move is never refused, only reported (D6). The introduction for fresh clones, images (D7) and the Nix items (D8) are still to build. · v0.2 (2026-10-17) — operator decisions: the signers are the TAPPaaS owners, Erik and Lars; Community stays unsigned for now; `requireSigned` defaults to not required; signed commits on `main` become a future option; SHA-256 object format investigated and rejected for now (Nix cannot read it, GitHub cannot host it) — the open questions are closed; regulatory references removed. · v0.1 — first draft, from the operator's brief of 2026-10-17: every repository needs a signature, signer ownership is recorded, binaries are signed, the update verifies before it moves, NixOS fits the same chain, only staging and production are signed, and every repository's signing status is part of the health check. |
 
 How a TAPPaaS site knows that the code and images it is about to run are the ones the
 repository's owners released — and refuses them when it cannot tell.
@@ -59,9 +59,8 @@ point. Nothing new has to be computed. Two caveats shape the decisions below:
 
 1. **The object format is SHA-1.** Git hardens it (collision detection), and the SHA-256
    object format exists — but TAPPaaS cannot move to it yet (see *SHA-256 object format*
-   below). A release tag therefore carries a second, SHA-256 content hash of the tree — the
-   `narHash` Nix already computes (`nix hash path`) — so the signature does not rest on SHA-1
-   alone (D3).
+   below). A release tag therefore carries a second, SHA-256 content hash of the tree, so the
+   signature does not rest on SHA-1 alone (D3).
 2. **A signature proves who, not which.** A validly signed *old* release is still validly
    signed. Verification must also refuse going backwards (D6).
 
@@ -166,13 +165,17 @@ The tag is cut by `tappaas-train` as today, and signed. Its message keeps what D
 (date, forced or not, estate pin, blueprint result, previous version) and gains:
 
 ```
-tree-sha256: <nix hash path --type sha256 of the tagged tree>
+tree-sha256: sha256:<hex>   (the tree's content, defined below)
 images:      <sha256 of each published image, as in the image pointer files>
 signers-at:  <commit of .tappaas/allowed_signers that authorized this signature>
 ```
 
 The `tree-sha256` line gives the signature a SHA-256 anchor that does not depend on git's
-SHA-1 (Context §How to hash). The image hashes make the tag the single signed statement of a
+SHA-1 (Context §How to hash). It is one line per tree entry, in git's tree order —
+`<mode> <SHA-256 of the file's content> <path>` (a symlink hashes its target, a submodule its
+commit id) — hashed with SHA-256. It needs only git and a SHA-256, so it is computed the same way
+on the mothership, on an operator's laptop and in a test, where `nix hash path` would need Nix
+and a checkout on disk. *(v0.3: replaces the draft's `nix hash path`.)* The image hashes make the tag the single signed statement of a
 release: verifying the tag verifies the image hashes, and the images are then checked by hash
 (D7).
 
@@ -221,8 +224,7 @@ A repository cannot vouch for its own first key (R3). Each repository entry in `
   "trust": {
     "introduction": "v2.4",
     "introductionCommit": "<commit id>",
-    "signer": "SHA256:<fingerprint>",
-    "lastVerified": "v2.6"
+    "signer": "SHA256:<fingerprint>"
   }
 }
 ```
@@ -233,8 +235,14 @@ A repository cannot vouch for its own first key (R3). Each repository entry in `
 - **A repository added later** (`site-manager repository add`) is introduced explicitly: the
   operator gives the tag and the expected fingerprint, obtained from the repository's owner out
   of band; the command shows both and refuses without them unless `--unsigned` is given (D9).
-- `lastVerified` moves forward on every successful update and is the base for D4's rule and
-  D6's rollback check.
+- **The last verified release is run state, not declaration** *(v0.3)*. It moves forward on
+  every verified update and is kept in `config/.trust/<repository>.json` (tag, commit, signer,
+  tree hash, time) — `site.json` says what the operator decided, not what the last run found.
+  It is the base for D4's rule and D6's rollback check.
+- **A site with no record yet takes the revision it runs as its base** *(v0.3)*. That code is
+  already executing on the site, so trusting its `allowed_signers` is no weaker than today, and
+  it lets every existing site start verifying at its next update without an introduction. The
+  introduction is what a **fresh clone** needs, where there is nothing running to start from.
 
 ### D6 — Update verifies before git moves
 
@@ -249,12 +257,17 @@ goes.
 2. Resolve the target: the tip of the branch the repository declares for the site's channel
    (ADR-028 D11).
 3. On **staging/production**: require a release tag that points **exactly** at that commit.
-4. Verify its signature: `git verify-tag` against the `allowed_signers` **from the commit of
-   `lastVerified`** (D4), not from the fetched tree.
+4. Verify its signature: `git verify-tag` against the `allowed_signers` **of the last verified
+   release** (D4, D5), not of the fetched tree.
 5. Check `tree-sha256` from the tag message against the fetched tree.
-6. Refuse going backwards: the new tag must descend from `lastVerified` (`git merge-base
-   --is-ancestor`). A deliberate rollback is an operator command, never a fetch result.
-7. Only then fast-forward the checkout, and record the new `lastVerified`.
+6. Refuse going backwards: the new tag must descend from the last verified release (`git
+   merge-base --is-ancestor`). A deliberate rollback is an operator command, never a fetch
+   result.
+7. Only then move the checkout — to the **commit that was verified**, not to whatever a second
+   fetch would bring — and record it as the last verified release.
+
+A repository whose tip has not moved is never refused: what it already runs is the health
+check's to report (D10), not a reason to fail the sweep.
 
 A failure stops the update of **that repository** before anything changes, leaves the site on
 its last verified release, is logged, and is mailed through the site notification target

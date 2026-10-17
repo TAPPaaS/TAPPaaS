@@ -1,0 +1,15 @@
+# Keys allowed to sign TAPPaaS release tags (ADR-033 D4). git's allowed_signers
+# format: <principal> [options] <key type> <key> [comment]. Who owns each key is
+# in SIGNERS.md beside this file.
+#
+# The rule: a release tag counts only if its signer is listed here AS OF THE
+# PREVIOUSLY VERIFIED RELEASE. A key added in a release signs the release after
+# it. Retire a key with valid-before="YYYYMMDD" — never delete its line, or the
+# releases it signed stop verifying.
+#
+# While this file lists no key, the repository signs nothing and every site
+# reports it as unsigned (declared). The release that adds the first keys is
+# the last unsigned one.
+#
+# lars@tappaas.org namespaces="git,tappaas-image" sk-ssh-ed25519@openssh.com AAAA... lars-token-1
+# erik@tappaas.org namespaces="git,tappaas-image" sk-ssh-ed25519@openssh.com AAAA... erik-token-1

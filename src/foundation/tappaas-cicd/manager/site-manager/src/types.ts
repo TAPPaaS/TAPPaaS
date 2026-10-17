@@ -70,6 +70,9 @@ export interface Site {
   // #149: whether the site supports IPv6 — OPNsense's global "Allow IPv6".
   // Absent reads as false.
   ipv6?: boolean;
+  // ADR-033 D9: refuse to update a staging/production repository that signs
+  // no releases. Absent reads as false.
+  requireSigned?: boolean;
   snapshotRetention?: number;
   repositories: Repository[];
   // NOTE: environments are NOT a site field — they are enumerated from the
@@ -90,6 +93,7 @@ export type SiteModifiableField =
   | "email"
   | "automaticReboot"
   | "ipv6"
+  | "requireSigned"
   | "snapshotRetention"
   | "backupTarget"
   | "backupOffsite"

@@ -87,5 +87,15 @@ check(opts.includes("--updateFrequency") && opts.includes("--updateWeekday") && 
   check(ipv6() === false, "…and --ipv6 false writes false");
 }
 
+// ── requireSigned (ADR-033 D9): a boolean; absent reads as false ──
+{
+  const req = (): unknown => JSON.parse(readFileSync(siteFile, "utf8")).requireSigned;
+  writeFileSync(siteFile, JSON.stringify({ name: "s" }));
+  check(run(["site", "modify", "--requireSigned", "true", "--config-dir", dir], c) === 0 && req() === true,
+    "site modify --requireSigned true writes a boolean true");
+  run(["site", "modify", "--requireSigned", "false", "--config-dir", dir], c);
+  check(req() === false, "…and --requireSigned false writes false");
+}
+
 console.log(`schedule: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

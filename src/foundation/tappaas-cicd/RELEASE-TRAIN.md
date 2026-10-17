@@ -215,6 +215,44 @@ A site on `main` between boundaries shows as `2.2+14`: fourteen commits past 2.2
   It changes several times within one run, so it is not committed. It is written to be read:
   dates, and each channel with its version and the day it last moved.
 
+## Signing releases (ADR-033)
+
+Every release tag carries `tree-sha256:` — a SHA-256 over the content of every file in the
+revision — and `signers-at:`, the commit whose `.tappaas/allowed_signers` authorizes it. Once
+that file lists a key, every tag the train cuts **must be signed**: `boundary` and `patch` check
+for a signing key before any channel moves, refuse without one, and check the signature against
+the listed keys before publishing the tag.
+
+A site on staging or production then moves only to a tag that verifies: signed by a key listed
+in the **last release it verified**, tree hash matching, and not older than what it runs. Sites
+on `main` are not verified. `health-manager validate` reports each repository's status
+(`signature-status`), and `~/config/sbom/signatures.json` is the record.
+
+**Enrolling a key** (once per release manager, on their own machine — the key never leaves the
+token):
+
+```bash
+ssh-keygen -t ed25519-sk -O resident -O verify-required -C "<you>-token-1" -f ~/.ssh/tappaas-release
+```
+
+Add the public key to [`.tappaas/allowed_signers`](../../../.tappaas/allowed_signers) and a row to
+[`.tappaas/SIGNERS.md`](../../../.tappaas/SIGNERS.md), and land it on `main`. It counts from the
+release **after** the one that carries it: the release that adds the first key is the last unsigned
+one.
+
+**Signing a boundary.** The train runs on the mothership; the token stays on your laptop. Forward
+your agent and tell git which key to ask it for:
+
+```bash
+ssh-add ~/.ssh/tappaas-release                 # on your laptop
+ssh -A tappaas@<mothership>
+git -C ~/TAPPaaS config user.signingkey "key::$(cat ~/.ssh/tappaas-release.pub)"   # once, on the mothership
+tappaas-train.sh boundary                      # touch the token when it asks
+```
+
+**Retiring a key**: give its line `valid-before="YYYYMMDD"`. Do not delete it — the releases it
+signed would stop verifying.
+
 ## One pin for the estate
 
 Every TAPPaaS-managed NixOS system — the mothership and all its guests — is built from the single
