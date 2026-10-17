@@ -180,3 +180,31 @@ class TestReleaseMachineHost(unittest.TestCase):
                              {"u1": {"hwaddr": _sel(), "cnames": _sel()}})
         m.delete_host_by_uuid.return_value = {"changed": False, "error": "nope"}
         self.assertFalse(release_machine_host(m, "dh-test1", "mgmt.internal"))
+
+
+from opnsense_controller.dns_manager_cli import delete_dns_host  # noqa: E402
+
+
+class DeleteDnsHostTests(unittest.TestCase):
+    """A delete of a name with no entry is the state asked for, not an error.
+
+    cluster:vm's zone change deletes the name the guest leaves; when that name
+    came from a DHCP lease there is no entry, and the delete logged ERROR.
+    """
+
+    def test_missing_entry_is_success_and_deletes_nothing(self):
+        m = MagicMock()
+        m.list_hosts.return_value = [
+            {"uuid": "u1", "host": "nomad", "domain": "dmz.internal", "ip": "10.6.0.152"},
+        ]
+        self.assertTrue(delete_dns_host(m, "nomad", "rossen.internal"))
+        m.delete_host_by_uuid.assert_not_called()
+
+    def test_existing_entry_is_deleted_by_uuid(self):
+        m = MagicMock()
+        m.list_hosts.return_value = [
+            {"uuid": "u1", "host": "nomad", "domain": "rossen.internal", "ip": "10.2.0.40"},
+        ]
+        m.delete_host_by_uuid.return_value = {"changed": True}
+        self.assertTrue(delete_dns_host(m, "nomad", "rossen.internal"))
+        m.delete_host_by_uuid.assert_called_once_with("u1", check_mode=False)

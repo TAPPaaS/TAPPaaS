@@ -64,7 +64,7 @@ ssh root@"${NODE_FQDN}" "qm destroy ${VMID} --purge" || {
 if command -v dns-manager >/dev/null 2>&1; then
     debug "  Removing any DNS pin/reservation for ${VMNAME}.${ZONE0NAME}.internal"
     dns-manager --no-ssl-verify delete "${VMNAME}" "${ZONE0NAME}.internal" >/dev/null 2>&1 \
-        || debug "  no DNS record to remove for ${VMNAME}.${ZONE0NAME}.internal"
+        || warn "  could not remove the DNS record ${VMNAME}.${ZONE0NAME}.internal"
 fi
 
 debug "VM ${VMNAME} (VMID: ${VMID}) destroyed successfully"

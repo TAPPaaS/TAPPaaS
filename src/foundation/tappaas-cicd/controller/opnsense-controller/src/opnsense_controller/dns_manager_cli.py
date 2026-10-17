@@ -127,9 +127,12 @@ def delete_dns_host(
                 matching_host = host
                 break
 
+        # Nothing to delete is the state the caller asked for, not an error: a
+        # guest's name often resolves from its DHCP lease, which has no entry
+        # here (cluster:vm's zone change deletes the name it is leaving).
         if not matching_host:
-            print(f"ERROR: No DNS entry found for {hostname}.{domain}", file=sys.stderr)
-            return False
+            print(f"No DNS entry for {hostname}.{domain} — nothing to delete")
+            return True
 
         uuid = matching_host.get('uuid')
         if not uuid:

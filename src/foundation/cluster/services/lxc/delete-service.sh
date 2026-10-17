@@ -51,6 +51,6 @@ fi
 # Remove the DNS record (harmless if absent — install may not have registered it).
 debug "  Removing DNS: ${VMNAME}.${ZONE0}.internal"
 dns-manager --no-ssl-verify delete "${VMNAME}" "${ZONE0}.internal" \
-    || debug "  no DNS record to remove for ${VMNAME}.${ZONE0}.internal"
+    || warn "  could not remove the DNS record ${VMNAME}.${ZONE0}.internal"
 
 debug "LXC ${VMNAME} (VMID: ${VMID}) destroyed successfully"
