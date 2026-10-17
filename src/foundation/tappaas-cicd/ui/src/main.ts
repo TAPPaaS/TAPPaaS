@@ -52,7 +52,8 @@ export const HELP: HelpSpec = {
   common: [["--config-dir DIR", "Config root (default: $TAPPAAS_CONFIG, $CONFIG_DIR or /home/tappaas/config)."]],
   notes: [
     "Environment: CONSOLE_LISTEN, CONSOLE_ALLOW, CONSOLE_WEB_DIR, CONSOLE_STATE_DIR,\n" +
-      "CONSOLE_FIREWALL (the firewall's address), CONSOLE_SETUP_ALLOW, CONSOLE_SETUP_TOKEN_FILE\n" +
+      "CONSOLE_FIREWALL (the firewall's address; default the gateway of mgmt's network in zones.json),\n" +
+      "CONSOLE_SETUP_ALLOW, CONSOLE_SETUP_TOKEN_FILE\n" +
       "(default <config>/console-setup-token), CONSOLE_JOURNAL_DAYS (default 7).",
   ],
 };
@@ -132,14 +133,28 @@ function resolve4(host: string): Promise<string | null> {
   return new Promise((r) => lookup(host, { family: 4 }, (err, address) => r(err ? null : address)));
 }
 
-// The firewall's address: CONSOLE_FIREWALL, else firewall.<mgmt domain> (pinned
-// in /etc/hosts on the mothership), else the first address of mgmt's network.
-export async function firewallAddress(net: string | null): Promise<string[]> {
+// A zone's gateway: the first address of its network, which is the firewall's
+// interface on that zone (zones.json `ip`, e.g. 10.0.0.0/24 → 10.0.0.1).
+export function zoneGateway(net: string | null): string | null {
+  const m = net ? /^(\d+)\.(\d+)\.(\d+)\.(\d+)\/(\d+)$/.exec(net) : null;
+  if (!m) return null;
+  const bits = Number(m[5]);
+  if (bits < 1 || bits > 30 || m.slice(1, 5).some((x) => Number(x) > 255)) return null;
+  const ip = m.slice(1, 5).reduce((a, x) => a * 256 + Number(x), 0);
+  const size = 2 ** (32 - bits);
+  const first = ip - (ip % size) + 1;
+  return [24, 16, 8, 0].map((s) => Math.floor(first / 2 ** s) % 256).join(".");
+}
+
+// The firewall's address: CONSOLE_FIREWALL, else the gateway of mgmt's network
+// in zones.json (the record), and only when zones.json has no usable mgmt
+// network, firewall.<mgmt domain> as DNS answers it.
+export async function firewallAddress(net: string | null, resolve: (h: string) => Promise<string | null> = resolve4): Promise<string[]> {
   if (process.env.CONSOLE_FIREWALL) return list(process.env.CONSOLE_FIREWALL);
-  const a = await resolve4(`firewall.${mgmtDomain()}`);
-  if (a) return [a];
-  const m = net ? /^(\d+\.\d+\.\d+)\.\d+\/\d+$/.exec(net) : null;
-  return m ? [`${m[1]}.1`] : [];
+  const gw = zoneGateway(net);
+  if (gw) return [gw];
+  const a = await resolve(`firewall.${mgmtDomain()}`);
+  return a ? [a] : [];
 }
 
 async function serve(o: ServeOpts): Promise<number> {

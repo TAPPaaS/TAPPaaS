@@ -293,33 +293,42 @@ if [[ -d "${PEOPLE_DIR}/organizations" ]]; then
     if [[ -z "${OWNER_USER}" ]]; then
         warn "  no site-owner user resolved (site.json .owner → organizations/<org>.json .owner) — skipping the ${AK_ADMIN_GROUP} grant"
     else
-        debug "Granting Authentik admin to the site owner '${OWNER_USER}'"
-        # Config first, so the membership survives every later reconcile.
-        # --no-reconcile (issue #482): a people write normally pushes itself, but
-        # these two are incidental to a MODULE update, not an operator's people
-        # edit — a module update must not push whatever else an operator has
-        # staged in config/identities, nor reconcile while identity is mid-setup.
-        if [[ ! -f "${PEOPLE_DIR}/groups/${AK_ADMIN_GROUP}.json" ]]; then
-            identity-manager group add "${AK_ADMIN_GROUP}" --no-reconcile \
-                --displayName "Authentik Admins" --type access-set --ownerOrg "${OWNER_ORG}" \
+        # Two groups the site owner belongs to: Authentik's admin group (#476) and
+        # `installer`, the console's Installer group (ADR-034 D3). Each: config
+        # first, so the membership survives every later reconcile. --no-reconcile
+        # (issue #482): a people write normally pushes itself, but these are
+        # incidental to a MODULE update, not an operator's people edit — a module
+        # update must not push whatever else an operator has staged in
+        # config/identities, nor reconcile while identity is mid-setup.
+        for _grp in "${AK_ADMIN_GROUP}|Authentik Admins" "installer|Installer"; do
+            _gname="${_grp%%|*}"; _gdisplay="${_grp#*|}"
+            debug "Putting the site owner '${OWNER_USER}' in '${_gname}'"
+            if [[ "${_gname}" != "${AK_ADMIN_GROUP}" ]]; then
+                authentik-manager group-ensure "${_gname}" >/dev/null \
+                    || warn "  group-ensure '${_gname}' failed"
+            fi
+            if [[ ! -f "${PEOPLE_DIR}/groups/${_gname}.json" ]]; then
+                identity-manager group add "${_gname}" --no-reconcile \
+                    --displayName "${_gdisplay}" --type access-set --ownerOrg "${OWNER_ORG}" \
+                    | _tag debug \
+                    || warn "  identity-manager group add '${_gname}' failed"
+            fi
+            # identity-manager reports the config write and advises running its own
+            # reconcile; both are incidental here (--no-reconcile is deliberate,
+            # #482) and the ✓ below is the line that matters.
+            identity-manager user modify "${OWNER_USER}" --add-groups "${_gname}" --no-reconcile \
                 | _tag debug \
-                || warn "  identity-manager group add '${AK_ADMIN_GROUP}' failed"
-        fi
-        # identity-manager reports the config write and advises running its own
-        # reconcile; both are incidental here (--no-reconcile is deliberate,
-        # #482) and the ✓ below is the line that matters.
-        identity-manager user modify "${OWNER_USER}" --add-groups "${AK_ADMIN_GROUP}" --no-reconcile \
-            | _tag debug \
-            || warn "  identity-manager user modify ${OWNER_USER} --add-groups failed"
-        # Then converge just this membership in Authentik — the targeted call the
-        # skipped reconcile would otherwise have made.
-        if authentik-manager get-user --name "${OWNER_USER}" | jq -e '. != null' >/dev/null 2>&1; then
-            authentik-manager add-member --user "${OWNER_USER}" --group "${AK_ADMIN_GROUP}" >/dev/null \
-                && debug "  ${GN}✓${CL} ${OWNER_USER} ∈ ${AK_ADMIN_GROUP}" \
-                || warn "  add-member ${OWNER_USER} → ${AK_ADMIN_GROUP} failed"
-        else
-            info "  ${OWNER_USER} not in Authentik yet — 'identity-manager reconcile --apply' will create it and apply the membership"
-        fi
+                || warn "  identity-manager user modify ${OWNER_USER} --add-groups ${_gname} failed"
+            # Then converge just this membership in Authentik — the targeted call the
+            # skipped reconcile would otherwise have made.
+            if authentik-manager get-user --name "${OWNER_USER}" | jq -e '. != null' >/dev/null 2>&1; then
+                authentik-manager add-member --user "${OWNER_USER}" --group "${_gname}" >/dev/null \
+                    && debug "  ${GN}✓${CL} ${OWNER_USER} ∈ ${_gname}" \
+                    || warn "  add-member ${OWNER_USER} → ${_gname} failed"
+            else
+                info "  ${OWNER_USER} not in Authentik yet — 'identity-manager reconcile --apply' will create it and apply the membership"
+            fi
+        done
     fi
 fi
 

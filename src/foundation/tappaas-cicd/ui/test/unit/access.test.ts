@@ -6,7 +6,8 @@
 import { mkdtempSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
-import { AccessConfig, addrMatches, decide, peerAllowed, presentedToken, roleOf, setupState, splitGroups } from "../../src/access";
+import { AccessConfig, Me, addrMatches, decide, mayWrite, peerAllowed, presentedToken, roleOf, setupState, splitGroups } from "../../src/access";
+import { zoneGateway } from "../../src/main";
 import { check, done } from "./check";
 
 const dir = mkdtempSync(join(tmpdir(), "console-access-"));
@@ -82,6 +83,30 @@ d = decide("127.0.0.1", H({ authorization: "Bearer s3cret-token" }), null, cfg, 
 check(d.ok && d.me.via === "local", "loopback with a stale token is just loopback");
 d = decide("10.0.0.1", H({ authorization: "Bearer s3cret-token" }), null, cfg, s);
 check(!d.ok && d.status === 401, "through the firewall, a token instead of the gate: 401 (T6)");
+
+// ── writes: the gate or the token, never bare loopback (T1, T6) ───────
+const me = (over: Partial<Me>): Me => ({ user: "lars", name: null, email: null, groups: [], role: "admin", via: "gate", route: "console", ...over });
+const closed = { active: false, identityInstalled: true, tokenPresent: false };
+const open_ = { active: true, identityInstalled: false, tokenPresent: true };
+check(mayWrite(me({}), closed, false).ok, "Admin through the gate writes");
+check(!mayWrite(me({}), closed, true).ok, "…but not a destructive verb (T1)");
+check(mayWrite(me({ role: "installer" }), closed, true).ok, "Installer runs a destructive verb");
+let w = mayWrite(me({ via: "local", user: null, role: "read" }), closed, false);
+check(!w.ok && w.status === 403, "loopback without the gate's headers reads only");
+w = mayWrite(me({ via: "local", role: "installer" }), closed, false);
+check(!w.ok, "…whatever role it would claim");
+w = mayWrite(me({ role: "read" }), closed, false);
+check(!w.ok && w.status === 403, "users through the gate may not write");
+w = mayWrite(me({ role: "installer", route: "status" }), closed, false);
+check(!w.ok && w.status === 403, "the status route never writes");
+check(mayWrite(me({ via: "setup-token", user: "setup", role: "installer" }), open_, true).ok, "the setup token acts as Installer while setup is open");
+w = mayWrite(me({ via: "setup-token", user: "setup", role: "installer" }), closed, false);
+check(!w.ok && w.status === 401, "…and not once identity is installed (T6)");
+
+// ── the firewall's address comes from the mgmt zone's record ──────────
+check(zoneGateway("10.0.0.0/24") === "10.0.0.1", "mgmt 10.0.0.0/24: the firewall is 10.0.0.1");
+check(zoneGateway("10.0.0.0/24") === zoneGateway("10.0.0.77/24"), "the first address of the network, whatever host the ip names");
+check(zoneGateway("172.16.4.0/22") === "172.16.4.1" && zoneGateway(null) === null && zoneGateway("bogus") === null, "other prefixes; no network, no gateway");
 
 rmSync(dir, { recursive: true, force: true });
 done("access");

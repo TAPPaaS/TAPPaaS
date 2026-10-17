@@ -13,6 +13,7 @@ single sign-on across all modules.
 | Forward-auth gating for apps without native SSO (e.g. Jellyfin) | consumer modules | module declares `dependsOn: ["identity:accessControl"]` — wired automatically at its install |
 | OIDC provider for native-OIDC apps (e.g. Nextcloud) | consumer modules | module declares `dependsOn: ["identity:identity"]` — OAuth2/OpenID provider, app, group bindings and VM secrets wired automatically |
 | Role-based access (people reconciled by `identity-manager`) | admin (tappaas-cicd) | `identity-manager reconcile --apply`; also manageable in the Authentik admin UI |
+| The console's roles (ADR-034 D3): groups `installer` (Installer), `admin` (the `admin` role: Admin), `users` (read) | the console (`console.<domain>`) | created by the bootstrap; an existing site gets `installer` on update — see [USERS.md](./USERS.md#what-a-fresh-install-has) |
 | Authentik API access for tooling | tappaas-cicd | `authentik-manager` with auto-bootstrapped `~/.authentik-credentials.txt` |
 
 Reference docs in this directory:

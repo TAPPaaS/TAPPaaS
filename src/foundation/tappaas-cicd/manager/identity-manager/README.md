@@ -26,7 +26,7 @@ identity presence), `active` (full access), `suspended` (disabled + roles
 stripped), `terminated` (deleted).
 
 The repo also ships `minimal-org/` — the canonical bootstrap content (3 roles, 1
-org, the `users` and `authentik Admins` groups, and 2 users: `root` + the
+org, the `users`, `authentik Admins` and `installer` groups, and 2 users: `root` + the
 installer) with `__ORG__` / `__USER__` / `__EMAIL__` / `__ROOT_EMAIL__`
 placeholders, seeded by `identity-manager bootstrap`.
 
@@ -36,6 +36,10 @@ the only thing that grants the Authentik admin UI — the `admin`/`root` *roles*
 are labels TAPPaaS passes to apps and confer nothing there. The installer (= the
 site / default-environment owner) is a member, so day-2 user administration does
 not need the `akadmin` break-glass login; `root` is deliberately not.
+
+`installer` is the console's Installer group (ADR-034 D3); the installer is its member.
+The console's Admin is the `admin` role, which Authentik carries as a group named `admin`
+(see `identity/USERS.md`).
 
 ## Commands
 

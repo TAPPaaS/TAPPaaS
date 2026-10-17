@@ -55,7 +55,7 @@ seeds the minimal org:
 
 - **roles** `root`, `admin`, `user`
 - **org** — your installation name, owned by the installer
-- **groups** `users` (everyone; carries the `user` role) and `authentik Admins`
+- **groups** `users` (everyone; carries the `user` role), `authentik Admins` and `installer`
 - **users** `root` (the platform-root account) and the **installer** (you)
 
 **`authentik Admins` is Authentik's own built-in superuser group**, adopted by name
@@ -64,6 +64,22 @@ that grants the Authentik admin UI — the `admin` / `root` **roles** are labels
 passes to apps and confer nothing there. The installer (the site owner) is a member, so
 day-2 user administration never needs the `akadmin` break-glass login; `root` deliberately
 is not.
+
+**`installer` is the console's Installer group** ([ADR-034](../../../docs/ADR/ADR-034%20-%20TAPPaaS%20User%20Interface.md)
+D3). The console reads its role from the groups the gate sends:
+
+| Authentik group | From | Console role | May |
+|---|---|---|---|
+| `installer` | this group; the installer is a member | Installer | every verb, destructive ones (`delete`, `purge`, …) included |
+| `admin` | the `admin` **role** (a role is an Authentik group of the same name) | Admin | every read and every non-destructive change |
+| `users` | the team group | read | the reads (and the owner view on `status.<domain>`) |
+
+There is no separate `admin` group: the `admin` role already reaches Authentik as a group
+named `admin`, and a second, config-level group of that name would collide with it. Give
+another operator the console with `identity-manager user modify <name> --add-roles admin`
+(Admin) or `--add-groups installer` (Installer). An existing site gets the `installer` group
+and the site owner's membership from the identity module's update (`module-manager update
+identity`), as it got `authentik Admins`.
 
 Group names are free-form identifiers (internal spaces allowed, so an Authentik-created
 group can be named). The bootstrap ships flat names (`users`); for org-scoped groups the

@@ -32,8 +32,10 @@ module-manager add console --proxyDomain console.<domain>
 `network:proxy` publishes `console.<domain>` to `mgmt` and `admin` only, upstream
 `tappaas-cicd.mgmt.internal:9097`; `identity:accessControl` puts the Authentik gate in front.
 Who may log in is Authentik's: members of `users` by default. The console's role table reads the
-groups — **Installer**, **Admin**, **users** (ADR-034 D3); create the first two with
-`identity-manager` and put the operators in them.
+groups by their TAPPaaS names (ADR-034 D3): `installer` (Installer: every verb), `admin` (the
+`admin` role: Admin, no destructive verb) and `users` (read). The identity bootstrap creates
+`installer` with the installer in it, and an existing site gets it from `module-manager update
+identity`; the installer has the `admin` role already (`identity/USERS.md`).
 
 ## Verify
 

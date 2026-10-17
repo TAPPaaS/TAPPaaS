@@ -62,14 +62,20 @@ other method is 405: P1 has no write endpoint.
 | From | Accepted | Identity |
 |---|---|---|
 | the firewall (Caddy + the Authentik gate) | always | `X-Authentik-Username` / `-Groups`; a request without them is 401 (a route without the gate) |
-| loopback (and `--allow`) | always | none: role `read` (a dev port-forward arrives as loopback) |
+| loopback (and `--allow`) | always | none: role `read`, for reads only (a dev port-forward arrives as loopback) |
 | mgmt and the admin VPN | only while setup is open (below), with the token | `setup`, role `installer` |
 | anything else | refused on connect | — |
 
 The headers are believed only from the firewall's address, which is why nothing else on
-mgmt may connect. Roles come from the Authentik groups: **Installer** → installer,
-**Admin** → admin, **users** → read; `status.<domain>` caps every role at read. P1 reports
-the role (`/api/v1/me`); P2 enforces it on the jobs.
+mgmt may connect. The firewall's address is the gateway of mgmt's network in `zones.json`
+(its `ip`, first address: `10.0.0.0/24` → `10.0.0.1`); only when that is unreadable does the
+console ask DNS for `firewall.<mgmt domain>` (`CONSOLE_FIREWALL` overrides both).
+
+Roles come from the Authentik groups, by their TAPPaaS names (identity creates them,
+`identity/USERS.md`): `installer` → **Installer**, `admin` (the `admin` role, which Authentik
+carries as a group) → **Admin**, `users` → read; `status.<domain>` caps every role at read.
+A write — any job — needs the gate (Admin, or Installer for a destructive verb) or the setup
+token while it is active; loopback without the gate's headers reads only.
 
 **The setup token (ADR-034 D10).** `bootstrap.sh` writes `~/config/console-setup-token` and
 the install summary prints it. While `config/identity.json` does not exist, the console

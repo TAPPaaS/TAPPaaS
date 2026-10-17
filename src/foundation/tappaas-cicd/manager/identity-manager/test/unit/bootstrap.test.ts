@@ -60,7 +60,7 @@ const OPTS = {
 {
   const d = tmpPeople();
   const res = bootstrapPeople({ peopleDir: d, ...OPTS });
-  check(res.written.length === 8, `writes the 8 template files (got ${res.written.length})`);
+  check(res.written.length === 9, `writes the 9 template files (got ${res.written.length})`);
   check(res.rootEmail === "root@example.com", "derives root email from the installer domain");
   check(res.minimalOrgDir === MINIMAL_ORG, "PM_MINIMAL_ORG_DIR override is honoured");
   check(existsSync(join(d, "organizations", "acme-site.json")), "org file named after --org");
@@ -113,6 +113,10 @@ const OPTS = {
     "installer user (site owner) is in 'authentik Admins' — grants the Authentik UI (#476)",
   );
   check(
+    existsSync(join(d, "groups", "installer.json")) && lars.memberOf.includes("installer") && !root.memberOf.includes("installer"),
+    "the 'installer' group (the console's Installer, ADR-034 D3) has the installer user and not root",
+  );
+  check(
     !root.memberOf.includes("authentik Admins"),
     "root is NOT in 'authentik Admins' — stays a label-only break-glass account",
   );
@@ -130,7 +134,7 @@ const OPTS = {
 
   // ── 3. --force overwrites (and still validates) ────────────────────────
   const res2 = bootstrapPeople({ peopleDir: d, ...OPTS, force: true });
-  check(res2.written.length === 8, "--force re-run overwrites");
+  check(res2.written.length === 9, "--force re-run overwrites");
   check(
     res2.warnings.some((w) => w.includes("--force")),
     "--force re-run warns about the non-empty destination",

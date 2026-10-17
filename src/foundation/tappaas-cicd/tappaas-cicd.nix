@@ -369,10 +369,9 @@ in
   # the console up. It listens on the mothership's mgmt address and loopback,
   # TCP 9097, and accepts the firewall (Caddy and the Authentik gate) and
   # loopback only; before identity exists, mgmt and the admin VPN with the setup
-  # token bootstrap.sh wrote (D10). It reads the site through the managers and
-  # writes nothing but its state directory. PrivateTmp: the bash controllers it
-  # runs make their scratch directories in /tmp; ~/.ssh: the managers' ssh
-  # records a re-provisioned node's host key.
+  # token bootstrap.sh wrote (D10). It reads the site through the managers and,
+  # from P2, changes it only by running their verbs as jobs (the operator's own
+  # verbs, as tappaas, in this unit's sandbox): what they write is listed below.
   systemd.paths.tappaas-console = {
     description = "Start the TAPPaaS console once its bin is built (ADR-034)";
     wantedBy = [ "multi-user.target" ];
@@ -395,9 +394,42 @@ in
           + ":/run/current-system/sw/bin")
       ];
       ProtectSystem = "strict";
-      PrivateTmp = true;
+      # The console's own files: Activity (jobs.jsonl) and the health document
+      # it hands to `network-manager topology`.
       StateDirectory = "tappaas/console";
-      ReadWritePaths = [ "/home/tappaas/config" "/home/tappaas/.ssh" ];
+      ReadWritePaths = [
+        # The verbs the console runs write all over the operator's home, as they
+        # do from a shell: config/ (every manager's records), the repository
+        # clones (`repository add/sync/hold` make and pull ~/<name>, ~/TAPPaaS),
+        # the credential files the Setup wizard writes where the scripts read
+        # them (~/.acme-dns-credentials.txt, ~/.unifi-os-credentials.txt,
+        # ~/.wlan-secrets.txt, created on a fresh install, so no per-file entry
+        # can name them in advance), ~/.ssh/known_hosts (a re-provisioned node's
+        # host key), ~/logs, and nix's ~/.cache and ~/.tappaas-gcroots for the
+        # builds `module add/update` run; ~/bin, which `repository sync` of the
+        # release repository relinks (refresh-control-plane.sh). Read-only
+        # below: what would let a compromised console log in, or plant code in
+        # the next login shell or git run.
+        "/home/tappaas"
+        # /tmp itself, not a private one: `site-manager node add --pxe` stages
+        # the netboot files in /tmp/tappaas-serve and serves them from a
+        # transient unit, which sees the real /tmp; the bash controllers make
+        # their scratch directories there too.
+        "/tmp"
+        # `node add --pxe` runs `sudo node-provisioner`, which writes the PXE
+        # asset tree as root (still inside this unit's sandbox); sudo records
+        # its timestamp under /run/sudo. "-": absent until first used.
+        "-/var/lib/tappaas-pxe"
+        "-/run/sudo"
+      ];
+      ReadOnlyPaths = [
+        "-/home/tappaas/.ssh/authorized_keys"
+        "-/home/tappaas/.bashrc"
+        "-/home/tappaas/.profile"
+        "-/home/tappaas/.bash_profile"
+        "-/home/tappaas/.gitconfig"
+        "-/home/tappaas/.config/git"
+      ];
     };
   };
 

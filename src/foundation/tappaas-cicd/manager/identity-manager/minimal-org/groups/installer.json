@@ -1,0 +1,7 @@
+{
+  "name": "installer",
+  "type": "access-set",
+  "displayName": "Installer",
+  "ownerOrg": "__ORG__",
+  "roles": []
+}
