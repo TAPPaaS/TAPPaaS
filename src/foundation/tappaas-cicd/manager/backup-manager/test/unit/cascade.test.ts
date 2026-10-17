@@ -918,7 +918,7 @@ check(!retentionValid("7") && !retentionValid("7x") && !retentionValid(""), "inv
 {
   const t = (v: "export" | "import", a: string[]) => {
     const r = keyTarget(v, a);
-    return "error" in r ? `ERROR ${r.error}` : r.kind === "usb" ? `usb ${r.node ?? "-"}` : `file ${r.dir}`;
+    return "error" in r ? `ERROR ${r.error}` : r.kind === "usb" ? `usb ${r.node ?? "-"}${r.format ? " format" : ""}` : `file ${r.dir}`;
   };
   eq(t("export", ["--usb"]), "usb -", "--usb: a stick in the default node");
   eq(t("export", ["--usb", "--node", "tappaas2"]), "usb tappaas2", "--usb --node: a stick in another node");
@@ -928,6 +928,9 @@ check(!retentionValid("7") && !retentionValid("7x") && !retentionValid(""), "inv
   check(t("export", ["--usb", "--file", "/x"]).includes("not both"), "both: refused");
   check(t("import", ["--file", "/x", "--node", "n"]).includes("--node goes with --usb"), "--node without --usb: refused");
   check(t("export", ["--file"]).includes("a directory is required"), "--file without a directory: refused");
+  eq(t("export", ["--usb", "--format"]), "usb - format", "export --usb --format: erase even a key stick");
+  check(t("import", ["--usb", "--format"]).includes("--format goes with export --usb"), "--format on import: refused");
+  check(t("export", ["--file", "/x", "--format"]).includes("--format goes with export --usb"), "--format with --file: refused");
 
   // --usb runs the module's own script, on this terminal; a missing script is a failure.
   const tmp = mkdtempSync(join(tmpdir(), "bm-keys-"));
@@ -939,6 +942,9 @@ check(!retentionValid("7") && !retentionValid("7x") && !retentionValid(""), "inv
   const runner = (bin: string, args: string[]) => { calls.push(`${bin.split("/").slice(-2).join("/")} ${args.join(" ")}`.trim()); return 0; };
   eq(keysUsb("export", "tappaas2", tmp, runner), 0, "key export --usb runs");
   eq(calls.join(" | "), "scripts/keys-to-usb.sh --node tappaas2", "…as the module's keys-to-usb.sh, with the node");
+  calls.length = 0;
+  keysUsb("export", null, tmp, runner, true);
+  eq(calls.join(" | "), "scripts/keys-to-usb.sh --format", "…and passes --format on");
   const errs: string[] = [];
   const origErr = console.error;
   console.error = (...x: unknown[]) => void errs.push(x.join(" "));

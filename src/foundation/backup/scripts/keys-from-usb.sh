@@ -66,6 +66,33 @@ usbk_labelled() {
     jq -r --arg l "${USBK_LABEL}" '.blockdevices[] | select(.label == $l) | .path' <<<"$1"
 }
 
+# usbk_key_partition <lsblk-json> — the partition of a key stick this script's
+# twin wrote: label TAPPAASKEYS and a FAT file system. lsblk -J -l -o
+# PATH,LABEL,TYPE,FSTYPE on the chosen disk. Empty when there is none.
+usbk_key_partition() {
+    jq -r --arg l "${USBK_LABEL}" '
+        [.blockdevices[] | select(.type == "part" and .label == $l and .fstype == "vfat") | .path]
+        | first // empty' <<<"$1"
+}
+
+# usbk_probe_cmd <partition> — node-side: mount it read-only, and say whether it
+# holds the encrypted keys (USBK_KEYSTICK), when it was written (USBK_WRITTEN,
+# the README's first line) and every other top-level entry on it (USBK_KEEP), the
+# things a rewrite leaves alone. Unmounted again whatever happens.
+usbk_probe_cmd() {
+    local p; p="$(printf %q "$1")"
+    printf '%s' "m=\$(mktemp -d /run/tappaas-keys.XXXXXX) || exit 1
+mount -o ro ${p} \"\$m\" 2>/dev/null || { rmdir \"\$m\"; exit 1; }
+[ -f \"\$m/${USBK_BLOB}\" ] && echo USBK_KEYSTICK
+[ -f \"\$m/README.txt\" ] && head -1 \"\$m/README.txt\" | sed 's/^TAPPaaS backup encryption keys — //; s/^/USBK_WRITTEN /'
+for f in \"\$m\"/* \"\$m\"/.[!.]*; do
+  [ -e \"\$f\" ] || continue
+  case \"\${f##*/}\" in ${USBK_BLOB}|${USBK_BLOB}.sha256|${USBK_BLOB}.new|keys-from-usb.sh|README.txt) continue ;; esac
+  if [ -d \"\$f\" ]; then echo \"USBK_KEEP \${f##*/}/\"; else echo \"USBK_KEEP \${f##*/}\"; fi
+done
+umount \"\$m\"; rmdir \"\$m\""
+}
+
 # usbk_human <bytes> — 31.0 GB
 usbk_human() { awk -v b="$1" 'BEGIN { printf "%.1f GB", b / 1e9 }'; }
 
