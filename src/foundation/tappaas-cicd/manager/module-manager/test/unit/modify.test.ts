@@ -282,6 +282,22 @@ try {
       check(client.log.length === 0, "…and does not converge");
     }
 
+    // A zone0 change hands the OLD zone to the update's pre-update gate: the
+    // write replaces it, but the guest stays there until the converge moves it
+    // (hrossen 2026-10-17: the gate waited 300 s for the new name and failed).
+    {
+      writeFileSync(join(configDir, "mover.json"),
+        JSON.stringify({ vmname: "mover", vmid: 301, kind: "module", zone0: "rossen", dependsOn: ["cluster:vm"] }));
+      delete process.env.TAPPAAS_PRE_GATE_ZONE0;
+      const client = new FakeModuleClient();
+      const rc = run(["modify", "mover", "--set", "zone0=dmz", "--config-dir", configDir], client);
+      check(rc === 0 && process.env.TAPPAAS_PRE_GATE_ZONE0 === "rossen",
+        "modify --set zone0=dmz hands the old zone (rossen) to the pre-update gate");
+      delete process.env.TAPPAAS_PRE_GATE_ZONE0;
+      run(["modify", "mover", "--set", "cores=4", "--config-dir", configDir], client);
+      check(process.env.TAPPAAS_PRE_GATE_ZONE0 === undefined, "…and a change that moves nothing hands over no zone");
+    }
+
     // --force is forwarded to the converge as disruption authorization (D8).
     {
       const client = new FakeModuleClient();

@@ -1426,6 +1426,13 @@ function get_config_value() {
   local has_default=0
   local default=""
   if [[ $# -ge 2 ]]; then has_default=1; default="$2"; fi
+  # test-module.sh --zone0 (and an update's pre-update gate, which tests a
+  # moving guest where it still is) exports TAPPAAS_ZONE0_OVERRIDE; only the
+  # test run sees it. Honoured here, every test.sh that reads zone0 follows it.
+  if [[ "$key" == "zone0" && -n "${TAPPAAS_ZONE0_OVERRIDE:-}" ]]; then
+    echo -n "${TAPPAAS_ZONE0_OVERRIDE}"
+    return 0
+  fi
   if ! echo "$JSON" | jq -e --arg K "$key" 'has($K)' >/dev/null ; then
     # JSON lacks the key
     if [[ "${has_default}" -eq 0 ]]; then
