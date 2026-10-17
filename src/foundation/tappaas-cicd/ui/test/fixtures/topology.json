@@ -1,0 +1,1474 @@
+{
+ "version": 1,
+ "generated": "2026-10-17T18:55:11.656Z",
+ "site": {
+  "name": "rossen",
+  "displayName": "rossen",
+  "wan": {
+   "publicIp": "auto",
+   "ipv6": true,
+   "isp": null,
+   "zone": "wan",
+   "vlan": 100,
+   "handoff": {
+    "switch": "USW Pro XG 10 PoE",
+    "port": "5",
+    "description": "WAN modem (ISP hand-off)"
+   },
+   "firewall": {
+    "module": "network",
+    "vmid": 110,
+    "node": "tappaas1",
+    "standby": null
+   },
+   "paths": [
+    {
+     "node": "tappaas1",
+     "nic": "nic4",
+     "switch": "USW Pro XG 10 PoE",
+     "port": "6",
+     "active": true
+    },
+    {
+     "node": "tappaas3",
+     "nic": "enp3s0",
+     "switch": "USW Pro XG 10 PoE",
+     "port": "7",
+     "active": false
+    }
+   ]
+  }
+ },
+ "nodes": [
+  {
+   "name": "tappaas1",
+   "kind": "cluster-member",
+   "storagePools": [
+    "tanka1",
+    "tankb1"
+   ],
+   "roles": [
+    "firewall",
+    "mothership"
+   ],
+   "ha": {
+    "lrm": "active"
+   },
+   "corosync": {
+    "links": 1,
+    "disconnected": 0
+   },
+   "lldpd": "active",
+   "uplinks": [
+    {
+     "name": "lan",
+     "mode": "lacp",
+     "bond": "lanbond",
+     "mtu": 1500,
+     "declared": {
+      "mode": "lacp",
+      "ports": [
+       "00:07:43:38:aa:f0",
+       "00:07:43:38:aa:f8"
+      ]
+     },
+     "legs": [
+      {
+       "nic": "nic2",
+       "mac": "00:07:43:38:aa:f0",
+       "speed": "10G",
+       "up": true,
+       "peer": {
+        "switch": "USW Pro XG 10 PoE",
+        "port": "12",
+        "known": true,
+        "via": "lldp"
+       }
+      },
+      {
+       "nic": "nic3",
+       "mac": "00:07:43:38:aa:f8",
+       "speed": "10G",
+       "up": true,
+       "peer": {
+        "switch": "USW Pro XG 10 PoE",
+        "port": "11",
+        "known": true,
+        "via": "lldp"
+       }
+      }
+     ]
+    },
+    {
+     "name": "wan",
+     "mode": "single",
+     "bond": null,
+     "mtu": 1500,
+     "declared": null,
+     "legs": [
+      {
+       "nic": "nic4",
+       "mac": "30:c5:99:56:2b:70",
+       "speed": "10G",
+       "up": true,
+       "peer": {
+        "switch": "USW Pro XG 10 PoE",
+        "port": "6",
+        "known": true,
+        "via": "lldp"
+       }
+      }
+     ]
+    }
+   ],
+   "guests": [
+    {
+     "module": "network",
+     "vmid": 110,
+     "kind": "vm",
+     "zone": "mgmt",
+     "environment": "mgmt",
+     "stack": "foundation",
+     "maturity": "Production",
+     "state": "running"
+    },
+    {
+     "module": "tappaas-cicd",
+     "vmid": 130,
+     "kind": "vm",
+     "zone": "mgmt",
+     "environment": "mgmt",
+     "stack": "foundation",
+     "maturity": "Production",
+     "state": "running"
+    },
+    {
+     "module": "identity",
+     "vmid": 140,
+     "kind": "vm",
+     "zone": "mgmt",
+     "environment": "mgmt",
+     "stack": "foundation",
+     "maturity": "Development",
+     "state": "running"
+    },
+    {
+     "module": "logging",
+     "vmid": 150,
+     "kind": "vm",
+     "zone": "mgmt",
+     "environment": "mgmt",
+     "stack": "foundation",
+     "maturity": "Development",
+     "state": "running"
+    },
+    {
+     "module": "nextcloud",
+     "vmid": 340,
+     "kind": "vm",
+     "zone": "rossen",
+     "environment": "rossen",
+     "stack": "collaboration",
+     "maturity": "Testing",
+     "state": "running"
+    },
+    {
+     "module": "coturn",
+     "vmid": 341,
+     "kind": "vm",
+     "zone": "dmz",
+     "environment": "rossen",
+     "stack": "collaboration",
+     "maturity": "Testing",
+     "state": "running"
+    },
+    {
+     "module": "jellyfin",
+     "vmid": 360,
+     "kind": "vm",
+     "zone": "rossen",
+     "environment": "rossen",
+     "stack": "home",
+     "maturity": "Testing",
+     "state": "running"
+    },
+    {
+     "module": "immich",
+     "vmid": 361,
+     "kind": "vm",
+     "zone": "rossen",
+     "environment": "rossen",
+     "stack": "home",
+     "maturity": "Testing",
+     "state": "running"
+    },
+    {
+     "module": "nomad",
+     "vmid": 370,
+     "kind": "vm",
+     "zone": "dmz",
+     "environment": "rossen",
+     "stack": "home",
+     "maturity": "Development",
+     "state": "running"
+    },
+    {
+     "module": "vaultwarden",
+     "vmid": 610,
+     "kind": "vm",
+     "zone": "dmz",
+     "environment": "rossen",
+     "stack": "security",
+     "maturity": "Development",
+     "state": "running"
+    }
+   ]
+  },
+  {
+   "name": "tappaas3",
+   "kind": "cluster-member",
+   "storagePools": [
+    "tanka1",
+    "tankc1"
+   ],
+   "roles": [
+    "backup"
+   ],
+   "ha": {
+    "lrm": "idle"
+   },
+   "corosync": {
+    "links": 1,
+    "disconnected": 0
+   },
+   "lldpd": "active",
+   "uplinks": [
+    {
+     "name": "lan",
+     "mode": "single",
+     "bond": null,
+     "mtu": 1500,
+     "declared": {
+      "mode": "single",
+      "ports": [
+       "c8:ff:bf:05:0d:30"
+      ]
+     },
+     "legs": [
+      {
+       "nic": "eno1",
+       "mac": "c8:ff:bf:05:0d:30",
+       "speed": "2.5G",
+       "up": true,
+       "peer": {
+        "switch": "USW Pro XG 10 PoE",
+        "port": "3",
+        "known": true,
+        "via": "lldp"
+       }
+      }
+     ]
+    },
+    {
+     "name": "wan",
+     "mode": "single",
+     "bond": null,
+     "mtu": 1500,
+     "declared": {
+      "mode": null,
+      "ports": [
+       "c8:ff:bf:05:0d:31"
+      ]
+     },
+     "legs": [
+      {
+       "nic": "enp3s0",
+       "mac": "c8:ff:bf:05:0d:31",
+       "speed": "2.5G",
+       "up": true,
+       "peer": {
+        "switch": "USW Pro XG 10 PoE",
+        "port": "7",
+        "known": true,
+        "via": "lldp"
+       }
+      }
+     ]
+    }
+   ],
+   "guests": [
+    {
+     "module": "unifi-os",
+     "vmid": 811,
+     "kind": "vm",
+     "zone": "mgmt",
+     "environment": "rossen",
+     "stack": null,
+     "maturity": "Development",
+     "state": "running"
+    },
+    {
+     "module": "backup",
+     "vmid": null,
+     "kind": "application",
+     "zone": "mgmt",
+     "environment": "mgmt",
+     "stack": "foundation",
+     "maturity": "Testing",
+     "state": "-"
+    }
+   ]
+  },
+  {
+   "name": "tappaas2",
+   "kind": "cluster-member",
+   "storagePools": [
+    "tanka1"
+   ],
+   "roles": [],
+   "ha": {
+    "lrm": "idle"
+   },
+   "corosync": {
+    "links": 1,
+    "disconnected": 0
+   },
+   "lldpd": "active",
+   "uplinks": [
+    {
+     "name": "lan",
+     "mode": "single",
+     "bond": null,
+     "mtu": 1500,
+     "declared": {
+      "mode": "single",
+      "ports": [
+       "38:05:25:33:b5:f7"
+      ]
+     },
+     "legs": [
+      {
+       "nic": "enp97s0",
+       "mac": "38:05:25:33:b5:f7",
+       "speed": "10G",
+       "up": true,
+       "peer": {
+        "switch": "USW Pro XG 10 PoE",
+        "port": "2",
+        "known": true,
+        "via": "lldp"
+       }
+      }
+     ]
+    }
+   ],
+   "guests": [
+    {
+     "module": "deconz-test",
+     "vmid": 213,
+     "kind": "vm",
+     "zone": "test",
+     "environment": "test",
+     "stack": "home",
+     "maturity": "Development",
+     "state": "running"
+    },
+    {
+     "module": "litellm",
+     "vmid": 310,
+     "kind": "vm",
+     "zone": "rossen",
+     "environment": "rossen",
+     "stack": "ai",
+     "maturity": "Development",
+     "state": "running"
+    },
+    {
+     "module": "openwebui",
+     "vmid": 311,
+     "kind": "vm",
+     "zone": "rossen",
+     "environment": "rossen",
+     "stack": "ai",
+     "maturity": "Development",
+     "state": "running"
+    },
+    {
+     "module": "vllm-amd",
+     "vmid": 312,
+     "kind": "lxc",
+     "zone": "rossen",
+     "environment": "rossen",
+     "stack": "ai",
+     "maturity": "Development",
+     "state": "running"
+    },
+    {
+     "module": "nextcloud-hpb",
+     "vmid": 342,
+     "kind": "vm",
+     "zone": "rossen",
+     "environment": "rossen",
+     "stack": "collaboration",
+     "maturity": "Testing",
+     "state": "running"
+    },
+    {
+     "module": "euro-office",
+     "vmid": 343,
+     "kind": "vm",
+     "zone": "rossen",
+     "environment": "rossen",
+     "stack": "collaboration",
+     "maturity": "Testing",
+     "state": "running"
+    },
+    {
+     "module": "forgejo",
+     "vmid": 350,
+     "kind": "vm",
+     "zone": "rossen",
+     "environment": "rossen",
+     "stack": "devops",
+     "maturity": "Testing",
+     "state": "running"
+    }
+   ]
+  }
+ ],
+ "switches": [
+  {
+   "name": "USW Pro XG 10 PoE",
+   "lldpName": "USW-Pro-XG-10-PoE",
+   "vendor": "unifi",
+   "model": "USWED77",
+   "managementIp": "10.0.0.201",
+   "managed": "auto",
+   "controller": "unifi-controller",
+   "controllerAddress": "https://unifi-os.mgmt.internal:11443",
+   "ports": [
+    {
+     "port": "1",
+     "role": "unmanaged",
+     "type": null,
+     "mode": "trunk",
+     "native": 0,
+     "tagged": [
+      100,
+      200,
+      298,
+      299,
+      310,
+      410,
+      420,
+      430,
+      510,
+      610
+     ],
+     "zones": [
+      "wan",
+      "rossen",
+      "test",
+      "home",
+      "iotLocal",
+      "iotCloud",
+      "iotCams",
+      "guest",
+      "dmz"
+     ],
+     "target": null,
+     "description": null,
+     "lag": null,
+     "drift": "unmanaged",
+     "add": [],
+     "remove": [],
+     "seen": null
+    },
+    {
+     "port": "2",
+     "role": "node-lan",
+     "type": "node",
+     "mode": "trunk",
+     "native": 0,
+     "tagged": [
+      200,
+      299,
+      310,
+      410,
+      420,
+      430,
+      510,
+      610
+     ],
+     "zones": [
+      "rossen",
+      "test",
+      "home",
+      "iotLocal",
+      "iotCloud",
+      "iotCams",
+      "guest",
+      "dmz"
+     ],
+     "target": {
+      "kind": "node",
+      "name": "tappaas2",
+      "port": "enp97s0"
+     },
+     "description": null,
+     "lag": null,
+     "drift": "in-sync",
+     "add": [],
+     "remove": [],
+     "seen": {
+      "node": "tappaas2",
+      "nic": "enp97s0"
+     }
+    },
+    {
+     "port": "3",
+     "role": "node-lan",
+     "type": "node",
+     "mode": "trunk",
+     "native": 0,
+     "tagged": [
+      200,
+      299,
+      310,
+      410,
+      420,
+      430,
+      510,
+      610
+     ],
+     "zones": [
+      "rossen",
+      "test",
+      "home",
+      "iotLocal",
+      "iotCloud",
+      "iotCams",
+      "guest",
+      "dmz"
+     ],
+     "target": {
+      "kind": "node",
+      "name": "tappaas3",
+      "port": "eno1"
+     },
+     "description": null,
+     "lag": null,
+     "drift": "in-sync",
+     "add": [],
+     "remove": [],
+     "seen": {
+      "node": "tappaas3",
+      "nic": "eno1"
+     }
+    },
+    {
+     "port": "4",
+     "role": "unmanaged",
+     "type": null,
+     "mode": "trunk",
+     "native": 0,
+     "tagged": [
+      100,
+      200,
+      298,
+      299,
+      310,
+      410,
+      420,
+      430,
+      510,
+      610
+     ],
+     "zones": [
+      "wan",
+      "rossen",
+      "test",
+      "home",
+      "iotLocal",
+      "iotCloud",
+      "iotCams",
+      "guest",
+      "dmz"
+     ],
+     "target": null,
+     "description": null,
+     "lag": null,
+     "drift": "unmanaged",
+     "add": [],
+     "remove": [],
+     "seen": null
+    },
+    {
+     "port": "5",
+     "role": "isp",
+     "type": "device",
+     "mode": "access",
+     "native": 100,
+     "tagged": [
+      200,
+      310,
+      410,
+      420,
+      430,
+      510,
+      610
+     ],
+     "zones": [
+      "wan"
+     ],
+     "target": {
+      "kind": "isp",
+      "name": null,
+      "port": null
+     },
+     "description": "WAN modem (ISP hand-off)",
+     "lag": null,
+     "drift": "in-sync",
+     "add": [],
+     "remove": [],
+     "seen": null
+    },
+    {
+     "port": "6",
+     "role": "node-wan",
+     "type": "device",
+     "mode": "access",
+     "native": 100,
+     "tagged": [
+      200,
+      310,
+      410,
+      420,
+      430,
+      510,
+      610
+     ],
+     "zones": [
+      "wan"
+     ],
+     "target": {
+      "kind": "node",
+      "name": "tappaas1",
+      "port": "nic4"
+     },
+     "description": "tappaas1 WAN NIC",
+     "lag": null,
+     "drift": "in-sync",
+     "add": [],
+     "remove": [],
+     "seen": {
+      "node": "tappaas1",
+      "nic": "nic4"
+     }
+    },
+    {
+     "port": "7",
+     "role": "node-wan",
+     "type": "device",
+     "mode": "access",
+     "native": 100,
+     "tagged": [
+      200,
+      310,
+      410,
+      420,
+      430,
+      510,
+      610
+     ],
+     "zones": [
+      "wan"
+     ],
+     "target": {
+      "kind": "node",
+      "name": "tappaas3",
+      "port": "enp3s0"
+     },
+     "description": "tappaas3 WAN NIC",
+     "lag": null,
+     "drift": "in-sync",
+     "add": [],
+     "remove": [],
+     "seen": {
+      "node": "tappaas3",
+      "nic": "enp3s0"
+     }
+    },
+    {
+     "port": "8",
+     "role": "unmanaged",
+     "type": null,
+     "mode": "trunk",
+     "native": 0,
+     "tagged": [
+      100,
+      200,
+      298,
+      299,
+      310,
+      410,
+      420,
+      430,
+      510,
+      610
+     ],
+     "zones": [
+      "wan",
+      "rossen",
+      "test",
+      "home",
+      "iotLocal",
+      "iotCloud",
+      "iotCams",
+      "guest",
+      "dmz"
+     ],
+     "target": null,
+     "description": null,
+     "lag": null,
+     "drift": "unmanaged",
+     "add": [],
+     "remove": [],
+     "seen": null
+    },
+    {
+     "port": "9",
+     "role": "ap",
+     "type": "ap",
+     "mode": "trunk",
+     "native": 0,
+     "tagged": [
+      200,
+      299,
+      310,
+      410,
+      420,
+      430,
+      510,
+      610
+     ],
+     "zones": [
+      "rossen",
+      "test",
+      "home",
+      "iotLocal",
+      "iotCloud",
+      "iotCams",
+      "guest",
+      "dmz"
+     ],
+     "target": {
+      "kind": "ap",
+      "name": "Nano HD",
+      "port": null
+     },
+     "description": null,
+     "lag": null,
+     "drift": "in-sync",
+     "add": [],
+     "remove": [],
+     "seen": null
+    },
+    {
+     "port": "10",
+     "role": "unmanaged",
+     "type": null,
+     "mode": "trunk",
+     "native": 0,
+     "tagged": [
+      100,
+      200,
+      298,
+      299,
+      310,
+      410,
+      420,
+      430,
+      510,
+      610
+     ],
+     "zones": [
+      "wan",
+      "rossen",
+      "test",
+      "home",
+      "iotLocal",
+      "iotCloud",
+      "iotCams",
+      "guest",
+      "dmz"
+     ],
+     "target": null,
+     "description": null,
+     "lag": null,
+     "drift": "unmanaged",
+     "add": [],
+     "remove": [],
+     "seen": null
+    },
+    {
+     "port": "11",
+     "role": "node-lan",
+     "type": "node",
+     "mode": "trunk",
+     "native": 0,
+     "tagged": [
+      200,
+      299,
+      310,
+      410,
+      420,
+      430,
+      510,
+      610
+     ],
+     "zones": [
+      "rossen",
+      "test",
+      "home",
+      "iotLocal",
+      "iotCloud",
+      "iotCams",
+      "guest",
+      "dmz"
+     ],
+     "target": {
+      "kind": "node",
+      "name": "tappaas1",
+      "port": "nic3"
+     },
+     "description": null,
+     "lag": "tappaas1-lan",
+     "drift": "in-sync",
+     "add": [],
+     "remove": [],
+     "seen": {
+      "node": "tappaas1",
+      "nic": "nic3"
+     }
+    },
+    {
+     "port": "12",
+     "role": "node-lan",
+     "type": "node",
+     "mode": "trunk",
+     "native": 0,
+     "tagged": [
+      200,
+      299,
+      310,
+      410,
+      420,
+      430,
+      510,
+      610
+     ],
+     "zones": [
+      "rossen",
+      "test",
+      "home",
+      "iotLocal",
+      "iotCloud",
+      "iotCams",
+      "guest",
+      "dmz"
+     ],
+     "target": {
+      "kind": "node",
+      "name": "tappaas1",
+      "port": "nic2"
+     },
+     "description": null,
+     "lag": "tappaas1-lan",
+     "drift": "in-sync",
+     "add": [],
+     "remove": [],
+     "seen": {
+      "node": "tappaas1",
+      "nic": "nic2"
+     }
+    }
+   ],
+   "lags": [
+    {
+     "name": "tappaas1-lan",
+     "ports": [
+      "11",
+      "12"
+     ],
+     "formed": true,
+     "live": [
+      "11",
+      "12"
+     ],
+     "node": "tappaas1",
+     "bond": "lanbond"
+    }
+   ]
+  }
+ ],
+ "accessPoints": [
+  {
+   "name": "Nano HD",
+   "vendor": "unifi",
+   "model": "U7NHD",
+   "address": "10.0.0.184",
+   "uplink": {
+    "switch": "USW Pro XG 10 PoE",
+    "port": "9"
+   },
+   "ssids": []
+  }
+ ],
+ "zones": [
+  {
+   "name": "mgmt",
+   "vlan": 0,
+   "state": "Manual",
+   "type": "Management",
+   "tier": 0,
+   "bridge": "lan",
+   "ip": "10.0.0.0/24",
+   "serves": []
+  },
+  {
+   "name": "netbird",
+   "vlan": 0,
+   "state": "Manual",
+   "type": "Overlay",
+   "tier": null,
+   "bridge": "lan",
+   "ip": "100.64.0.0/10",
+   "serves": []
+  },
+  {
+   "name": "edge",
+   "vlan": 0,
+   "state": "Manual",
+   "type": "Overlay",
+   "tier": null,
+   "bridge": "lan",
+   "ip": "10.255.0.0/31",
+   "serves": []
+  },
+  {
+   "name": "admin",
+   "vlan": 0,
+   "state": "Manual",
+   "type": "Overlay",
+   "tier": null,
+   "bridge": "wireguard",
+   "ip": "10.255.1.0/24",
+   "serves": []
+  },
+  {
+   "name": "rossen",
+   "vlan": 200,
+   "state": "Active",
+   "type": "Service",
+   "tier": 1,
+   "bridge": "lan",
+   "ip": "10.2.0.0/24",
+   "serves": []
+  },
+  {
+   "name": "work",
+   "vlan": 320,
+   "state": "Inactive",
+   "type": "Client",
+   "tier": null,
+   "bridge": "lan",
+   "ip": "10.3.20.0/24",
+   "serves": []
+  },
+  {
+   "name": "iotLocal",
+   "vlan": 410,
+   "state": "Active",
+   "type": "IoT",
+   "tier": 6,
+   "bridge": "lan",
+   "ip": "10.4.10.0/24",
+   "serves": [
+    "rossen"
+   ]
+  },
+  {
+   "name": "iotCloud",
+   "vlan": 420,
+   "state": "Active",
+   "type": "IoT",
+   "tier": 3,
+   "bridge": "lan",
+   "ip": "10.4.20.0/24",
+   "serves": [
+    "rossen"
+   ]
+  },
+  {
+   "name": "iotCams",
+   "vlan": 430,
+   "state": "Active",
+   "type": "IoT",
+   "tier": 6,
+   "bridge": "lan",
+   "ip": "10.4.30.0/24",
+   "serves": [
+    "rossen"
+   ]
+  },
+  {
+   "name": "iotUntrust",
+   "vlan": 440,
+   "state": "Disabled",
+   "type": "IoT",
+   "tier": 3,
+   "bridge": "lan",
+   "ip": "10.4.40.0/24",
+   "serves": []
+  },
+  {
+   "name": "dmz",
+   "vlan": 610,
+   "state": "Mandatory",
+   "type": "DMZ",
+   "tier": 4,
+   "bridge": "lan",
+   "ip": "10.6.0.0/24",
+   "serves": []
+  },
+  {
+   "name": "home",
+   "vlan": 310,
+   "state": "Active",
+   "type": "Client",
+   "tier": 2,
+   "bridge": "lan",
+   "ip": "10.3.10.0/24",
+   "serves": [
+    "rossen"
+   ]
+  },
+  {
+   "name": "guest",
+   "vlan": 510,
+   "state": "Active",
+   "type": "Guest",
+   "tier": 3,
+   "bridge": "lan",
+   "ip": "10.5.10.0/24",
+   "serves": []
+  },
+  {
+   "name": "wan",
+   "vlan": 100,
+   "state": "Manual",
+   "type": "WAN",
+   "tier": null,
+   "bridge": "lan",
+   "ip": "10.1.0.0/24",
+   "serves": []
+  },
+  {
+   "name": "buddy",
+   "vlan": 0,
+   "state": "Manual",
+   "type": "Overlay",
+   "tier": null,
+   "bridge": "wireguard",
+   "ip": "10.255.2.0/24",
+   "serves": []
+  },
+  {
+   "name": "test",
+   "vlan": 299,
+   "state": "Active",
+   "type": "Service",
+   "tier": 1,
+   "bridge": "lan",
+   "ip": "10.2.99.0/24",
+   "serves": []
+  }
+ ],
+ "outside": [
+  {
+   "kind": "buddy",
+   "name": "rasmus",
+   "role": "remote",
+   "location": "Hareskov, DK",
+   "tunnel": "serve 10.255.2.0/30 :51830",
+   "address": null,
+   "state": "down"
+  }
+ ],
+ "findings": [
+  {
+   "gate": "guest-memory",
+   "level": "warn",
+   "text": "tappaas-cicd 16.0G 13.7G 12.9G 80% of declared, gap 0.8G",
+   "on": {
+    "kind": "module",
+    "name": "tappaas-cicd"
+   },
+   "refs": [
+    {
+     "kind": "node",
+     "name": "tappaas1"
+    }
+   ]
+  },
+  {
+   "gate": "guest-memory",
+   "level": "warn",
+   "text": "litellm 6.0G 5.3G 4.9G 82% of declared, gap 0.4G",
+   "on": {
+    "kind": "module",
+    "name": "litellm"
+   },
+   "refs": [
+    {
+     "kind": "node",
+     "name": "tappaas2"
+    }
+   ]
+  },
+  {
+   "gate": "guest-memory",
+   "level": "fail",
+   "text": "openwebui 4.0G 3.9G 3.7G 92% of declared, gap 0.3G",
+   "on": {
+    "kind": "module",
+    "name": "openwebui"
+   },
+   "refs": [
+    {
+     "kind": "node",
+     "name": "tappaas2"
+    }
+   ]
+  },
+  {
+   "gate": "guest-memory",
+   "level": "warn",
+   "text": "forgejo 2.0G 1.8G 1.6G 82% of declared, gap 0.2G",
+   "on": {
+    "kind": "module",
+    "name": "forgejo"
+   },
+   "refs": [
+    {
+     "kind": "node",
+     "name": "tappaas2"
+    }
+   ]
+  },
+  {
+   "gate": "guest-memory",
+   "level": "warn",
+   "text": "identity 4.0G 3.5G 3.4G 85% of declared, gap 0.1G",
+   "on": {
+    "kind": "module",
+    "name": "identity"
+   },
+   "refs": [
+    {
+     "kind": "node",
+     "name": "tappaas1"
+    }
+   ]
+  },
+  {
+   "gate": "guest-memory",
+   "level": "fail",
+   "text": "logging 2.0G 1.9G 1.8G 90% of declared, gap 0.1G",
+   "on": {
+    "kind": "module",
+    "name": "logging"
+   },
+   "refs": [
+    {
+     "kind": "node",
+     "name": "tappaas1"
+    }
+   ]
+  },
+  {
+   "gate": "guest-memory",
+   "level": "fail",
+   "text": "immich 8.0G 7.6G 7.6G 95% of declared, gap 0.0G",
+   "on": {
+    "kind": "module",
+    "name": "immich"
+   },
+   "refs": [
+    {
+     "kind": "node",
+     "name": "tappaas1"
+    }
+   ]
+  },
+  {
+   "gate": "guest-memory",
+   "level": "warn",
+   "text": "coturn 2.0G 1.4G 1.6G 80% of declared, gap 0.0G",
+   "on": {
+    "kind": "module",
+    "name": "coturn"
+   },
+   "refs": [
+    {
+     "kind": "node",
+     "name": "tappaas1"
+    }
+   ]
+  },
+  {
+   "gate": "guest-memory",
+   "level": "warn",
+   "text": "vaultwarden 1.5G 1.2G 1.3G 90% of declared, gap 0.0G",
+   "on": {
+    "kind": "module",
+    "name": "vaultwarden"
+   },
+   "refs": [
+    {
+     "kind": "node",
+     "name": "tappaas1"
+    }
+   ]
+  },
+  {
+   "gate": "pending-reboot",
+   "level": "warn",
+   "text": "tappaas-cicd booted 26.05.20261008.7c8764b, next boot 26.05.20261008.7c8764b",
+   "on": {
+    "kind": "module",
+    "name": "tappaas-cicd"
+   },
+   "refs": [
+    {
+     "kind": "node",
+     "name": "tappaas1"
+    }
+   ]
+  },
+  {
+   "gate": "pending-reboot",
+   "level": "warn",
+   "text": "unifi-os the OS asks for a reboot",
+   "on": {
+    "kind": "module",
+    "name": "unifi-os"
+   },
+   "refs": [
+    {
+     "kind": "node",
+     "name": "tappaas3"
+    }
+   ]
+  },
+  {
+   "gate": "lan-uplink",
+   "level": "warn",
+   "text": "tappaas1 the switch asks for the slow LACP rate: a leg that fails with its link still up is noticed only after ~90s (link loss is noticed at once)",
+   "on": {
+    "kind": "node",
+    "name": "tappaas1"
+   },
+   "refs": [
+    {
+     "kind": "lag",
+     "name": "tappaas1-lan",
+     "switch": "USW Pro XG 10 PoE"
+    },
+    {
+     "kind": "port",
+     "name": "12",
+     "switch": "USW Pro XG 10 PoE"
+    },
+    {
+     "kind": "port",
+     "name": "11",
+     "switch": "USW Pro XG 10 PoE"
+    }
+   ]
+  },
+  {
+   "gate": "lan-uplink",
+   "level": "warn",
+   "text": "tappaas1 every leg reaches the same switch (USW-Pro-XG-10-PoE) — redundant ports, not redundant switches",
+   "on": {
+    "kind": "node",
+    "name": "tappaas1"
+   },
+   "refs": [
+    {
+     "kind": "lag",
+     "name": "tappaas1-lan",
+     "switch": "USW Pro XG 10 PoE"
+    },
+    {
+     "kind": "port",
+     "name": "12",
+     "switch": "USW Pro XG 10 PoE"
+    },
+    {
+     "kind": "port",
+     "name": "11",
+     "switch": "USW Pro XG 10 PoE"
+    }
+   ]
+  },
+  {
+   "gate": "pulse",
+   "level": "warn",
+   "text": "pulled-by-rasmus DOWN",
+   "on": {
+    "kind": "peer",
+    "name": "rasmus"
+   },
+   "refs": []
+  },
+  {
+   "gate": "cve-status",
+   "level": "warn",
+   "text": "diyhue (deconz-test) ACT: 7 critical/high fixable",
+   "on": {
+    "kind": "module",
+    "name": "deconz-test"
+   },
+   "refs": [
+    {
+     "kind": "node",
+     "name": "tappaas2"
+    }
+   ]
+  },
+  {
+   "gate": "cve-status",
+   "level": "warn",
+   "text": "authentik-server, authentik-… ACT: 1 critical/high fixable",
+   "on": {
+    "kind": "module",
+    "name": "identity"
+   },
+   "refs": [
+    {
+     "kind": "node",
+     "name": "tappaas1"
+    }
+   ]
+  },
+  {
+   "gate": "cve-status",
+   "level": "warn",
+   "text": "nomad_admin (nomad) ACT: 98 critical/high fixable",
+   "on": {
+    "kind": "module",
+    "name": "nomad"
+   },
+   "refs": [
+    {
+     "kind": "node",
+     "name": "tappaas1"
+    }
+   ]
+  },
+  {
+   "gate": "cve-status",
+   "level": "warn",
+   "text": "nomad_mysql (nomad) ACT: 89 critical/high fixable",
+   "on": {
+    "kind": "module",
+    "name": "nomad"
+   },
+   "refs": [
+    {
+     "kind": "node",
+     "name": "tappaas1"
+    }
+   ]
+  },
+  {
+   "gate": "cve-status",
+   "level": "warn",
+   "text": "nomad_redis (nomad) ACT: 1 critical/high fixable",
+   "on": {
+    "kind": "module",
+    "name": "nomad"
+   },
+   "refs": [
+    {
+     "kind": "node",
+     "name": "tappaas1"
+    }
+   ]
+  },
+  {
+   "gate": "cve-status",
+   "level": "warn",
+   "text": "openwebui (openwebui) ACT: 11 critical/high fixable",
+   "on": {
+    "kind": "module",
+    "name": "openwebui"
+   },
+   "refs": [
+    {
+     "kind": "node",
+     "name": "tappaas2"
+    }
+   ]
+  }
+ ],
+ "sources": [
+  {
+   "name": "site.json",
+   "ok": true
+  },
+  {
+   "name": "site-manager node list",
+   "ok": true
+  },
+  {
+   "name": "site-manager node network show",
+   "ok": true
+  },
+  {
+   "name": "switch-controller list",
+   "ok": true
+  },
+  {
+   "name": "switch-controller list-ports",
+   "ok": true
+  },
+  {
+   "name": "switch-controller lag list",
+   "ok": true
+  },
+  {
+   "name": "ap-controller list",
+   "ok": true
+  },
+  {
+   "name": "zones.json",
+   "ok": true
+  },
+  {
+   "name": "module-manager module list",
+   "ok": true
+  },
+  {
+   "name": "backup-manager peers",
+   "ok": true
+  },
+  {
+   "name": "health-manager validate",
+   "ok": true
+  }
+ ]
+}

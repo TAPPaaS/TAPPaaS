@@ -1,0 +1,13 @@
+{
+  "name": "console",
+  "version": "0.1.0",
+  "description": "TAPPaaS console backend (ADR-034) — TypeScript, no npm dependencies",
+  "license": "MIT",
+  "private": true,
+  "bin": {
+    "console": "dist/ui/src/main.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  }
+}

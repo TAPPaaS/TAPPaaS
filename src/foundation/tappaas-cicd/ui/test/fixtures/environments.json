@@ -1,0 +1,38 @@
+[
+  {
+    "name": "mgmt",
+    "displayName": "Management",
+    "ownerOrg": "rossen",
+    "network": {
+      "zone": "mgmt"
+    },
+    "domains": {
+      "primary": "hrossen.dk",
+      "aliases": [],
+      "aliasMode": "redirect",
+      "dnsMode": "per-service"
+    }
+  },
+  {
+    "name": "rossen",
+    "displayName": "Rossen",
+    "ownerOrg": "rossen",
+    "network": {
+      "zone": "rossen"
+    },
+    "domains": {
+      "primary": "hrossen.dk",
+      "aliases": [],
+      "aliasMode": "redirect",
+      "dnsMode": "per-service"
+    }
+  },
+  {
+    "name": "test",
+    "displayName": "Test",
+    "ownerOrg": "rossen",
+    "network": {
+      "zone": "test"
+    }
+  }
+]

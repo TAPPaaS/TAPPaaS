@@ -1,0 +1,78 @@
+// node.d.ts — the Node built-ins the console backend uses beyond what the
+// managers need (lib/ts/src/env.d.ts): an HTTP server, asynchronous children,
+// timers, crypto and the interface list. Same zero-dependency trick: no
+// @types/node, every type the code touches declared here and merged into the
+// lib's ambient modules.
+
+declare function setTimeout(cb: () => void, ms: number): unknown;
+declare function clearTimeout(handle: unknown): void;
+declare function setInterval(cb: () => void, ms: number): unknown;
+declare function clearInterval(handle: unknown): void;
+
+declare const Buffer: {
+  from(s: string, encoding?: string): NodeBuffer;
+  concat(list: NodeBuffer[]): NodeBuffer;
+  byteLength(s: string): number;
+};
+
+declare class URLSearchParams {
+  get(name: string): string | null;
+}
+declare class URL {
+  constructor(input: string, base?: string);
+  pathname: string;
+  searchParams: URLSearchParams;
+}
+
+declare module "http" {
+  export interface Socket {
+    remoteAddress?: string;
+    destroy(): void;
+  }
+  export interface IncomingMessage {
+    method?: string;
+    url?: string;
+    headers: Record<string, string | string[] | undefined>;
+    socket: Socket;
+  }
+  export interface ServerResponse {
+    statusCode: number;
+    headersSent: boolean;
+    setHeader(name: string, value: string | number | string[]): void;
+    end(data?: string | NodeBuffer): void;
+  }
+  export interface Server {
+    listen(port: number, host: string, cb?: () => void): Server;
+    on(event: "connection", cb: (s: Socket) => void): Server;
+    on(event: "error", cb: (e: Error) => void): Server;
+    close(cb?: () => void): void;
+    address(): { address: string; port: number } | string | null;
+  }
+  export function createServer(handler: (req: IncomingMessage, res: ServerResponse) => void): Server;
+}
+
+declare module "crypto" {
+  export function timingSafeEqual(a: NodeBuffer, b: NodeBuffer): boolean;
+  export function randomBytes(n: number): NodeBuffer;
+  export function createHash(alg: string): { update(s: string): { digest(enc: "hex"): string } };
+}
+
+declare module "os" {
+  export function networkInterfaces(): Record<string, { address: string; family: string | number; internal: boolean }[] | undefined>;
+}
+
+declare module "dns" {
+  export function lookup(host: string, opts: { family: number }, cb: (err: Error | null, address: string) => void): void;
+}
+
+declare module "child_process" {
+  export interface ChildStream {
+    on(event: "data", cb: (chunk: NodeBuffer) => void): void;
+  }
+  export interface ChildProcess {
+    stdout: ChildStream | null;
+    stderr: ChildStream | null;
+    on(event: "close", cb: (code: number | null) => void): void;
+    on(event: "error", cb: (e: Error) => void): void;
+  }
+}

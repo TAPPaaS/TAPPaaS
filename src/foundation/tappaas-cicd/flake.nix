@@ -45,6 +45,7 @@
       node-provisioner    = component ./controller/node-provisioner;
       opnsense-controller = component ./controller/opnsense-controller;
       update-tappaas      = component ./update-tappaas;
+      console             = component ./ui;
     };
 
     nixosConfigurations.tappaas-cicd = nixpkgs.lib.nixosSystem {

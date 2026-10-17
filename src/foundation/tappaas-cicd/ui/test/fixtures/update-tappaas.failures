@@ -1,0 +1,12 @@
+2026-10-04T14:08:26+02:00 update-tappaas.service FAILED — see config/last-update-result.json (journalctl -u update-tappaas for detail)
+2026-10-04T14:08:26+02:00 failure notice sent to owner@example.org through tappaas1
+2026-10-04T17:08:34+02:00 update-tappaas.service FAILED — see config/last-update-result.json (journalctl -u update-tappaas for detail)
+2026-10-04T17:08:35+02:00 failure notice sent to owner@example.org through tappaas1
+2026-10-10T02:31:00+02:00 update-tappaas.service FAILED — see config/last-update-result.json (journalctl -u update-tappaas for detail)
+2026-10-10T02:31:01+02:00 failure notice sent to owner@example.org through tappaas1
+2026-10-10T09:50:02+02:00 update-tappaas.service FAILED — see config/last-update-result.json (journalctl -u update-tappaas for detail)
+2026-10-10T09:50:02+02:00 failure notice sent to owner@example.org through tappaas1
+2026-10-10T12:19:07+02:00 update-tappaas.service FAILED — see config/last-update-result.json (journalctl -u update-tappaas for detail)
+2026-10-10T12:19:08+02:00 failure notice sent to owner@example.org through tappaas1
+2026-10-14T02:33:22+02:00 update-tappaas.service FAILED — see config/last-update-result.json (journalctl -u update-tappaas for detail)
+2026-10-14T02:33:22+02:00 failure notice sent to owner@example.org through tappaas1
