@@ -190,8 +190,9 @@ done
 
 # --- ADR-007 S0: two-level dispatch links relocated components' bins ---
 # scripts/*.sh above only covers not-yet-relocated scripts; components moved into
-# manager/<x>/ + controller/<x>/ link their own bins via their install.sh.
-for _disp in manager controller; do
+# manager/<x>/ + controller/<x>/ link their own bins via their install.sh;
+# ui/ is one component, the console (ADR-034), whose install.sh builds and links it.
+for _disp in manager controller ui; do
   if [ -x "${_disp}/install.sh" ]; then
     _info "  linking ${_disp}/ components..."
     "./${_disp}/install.sh" || _error "  ${_disp}/install.sh reported non-zero rc"
@@ -379,3 +380,13 @@ touch /home/tappaas/config/.tappaas-cicd-installed
 
 echo ""
 info "${GN}✓${CL} TAPPaaS-CICD installation completed successfully."
+
+# The console (ADR-034 D10): reachable now, from mgmt or the admin VPN, with the
+# setup token bootstrap.sh wrote — until identity is installed and puts it behind
+# the Authentik gate at console.<domain>.
+_CONSOLE_TOKEN=/home/tappaas/config/console-setup-token
+if [ -s "${_CONSOLE_TOKEN}" ] && [ ! -f /home/tappaas/config/identity.json ]; then
+    _cicd_addr="$(ip -4 -o addr show scope global 2>/dev/null | awk '{split($4, a, "/"); print a[1]; exit}')"
+    info "The console: http://${_cicd_addr:-tappaas-cicd.mgmt.internal}:9097/?token=$(cat "${_CONSOLE_TOKEN}")"
+    info "  from mgmt or the admin VPN, until identity is installed (then: console.<domain>, behind the gate)"
+fi

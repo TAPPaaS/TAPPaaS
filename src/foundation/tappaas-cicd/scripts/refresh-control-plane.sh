@@ -193,7 +193,8 @@ done
 # as a hard error — the previous (stale) bins keep working and the Test-11 smoke
 # slice is what surfaces a broken build.
 _comp_failed=0
-for _disp in manager controller; do
+# ui/ is the console (ADR-034): one component, built and linked the same way.
+for _disp in manager controller ui; do
   if [ -x "${_disp}/install.sh" ]; then
     info "  linking ${_disp}/ components..."
     "./${_disp}/install.sh" || { warn "  ${_disp}/install.sh reported non-zero rc"; _comp_failed=$((_comp_failed + 1)); }

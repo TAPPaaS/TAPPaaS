@@ -360,6 +360,47 @@ in
     };
   };
 
+  # ----------------------------------------
+  # The console (ADR-034): the site's web UI
+  # ----------------------------------------
+  # ~/bin/console is built by the control-plane refresh (ui/install.sh, like the
+  # managers), which runs after this system is first built — so a path unit
+  # starts the service the moment the bin appears, and a fresh install ends with
+  # the console up. It listens on the mothership's mgmt address and loopback,
+  # TCP 9097, and accepts the firewall (Caddy and the Authentik gate) and
+  # loopback only; before identity exists, mgmt and the admin VPN with the setup
+  # token bootstrap.sh wrote (D10). It reads the site through the managers and
+  # writes nothing but its state directory. PrivateTmp: the bash controllers it
+  # runs make their scratch directories in /tmp; ~/.ssh: the managers' ssh
+  # records a re-provisioned node's host key.
+  systemd.paths.tappaas-console = {
+    description = "Start the TAPPaaS console once its bin is built (ADR-034)";
+    wantedBy = [ "multi-user.target" ];
+    pathConfig.PathExists = "/home/tappaas/bin/console";
+  };
+
+  systemd.services.tappaas-console = {
+    description = "TAPPaaS console — the site's web UI (ADR-034)";
+    after = [ "network-online.target" ];
+    wants = [ "network-online.target" ];
+    unitConfig.ConditionPathExists = "/home/tappaas/bin/console";
+    serviceConfig = {
+      User = "tappaas";
+      ExecStart = "/home/tappaas/bin/console serve";
+      Restart = "on-failure";
+      RestartSec = 10;
+      Environment = [
+        ("PATH=/home/tappaas/bin:/run/wrappers/bin:/home/tappaas/.nix-profile/bin"
+          + ":/etc/profiles/per-user/tappaas/bin:/nix/var/nix/profiles/default/bin"
+          + ":/run/current-system/sw/bin")
+      ];
+      ProtectSystem = "strict";
+      PrivateTmp = true;
+      StateDirectory = "tappaas/console";
+      ReadWritePaths = [ "/home/tappaas/config" "/home/tappaas/.ssh" ];
+    };
+  };
+
   # The alerting watches itself (#126): Grafana's Heartbeat rule reaches the
   # receiver hourly while logs flow and rules run; this timer — here, not on the
   # logging VM it watches — mails when that stops for two hours, so a dead
@@ -657,6 +698,7 @@ in
   networking.firewall.allowedTCPPorts = [
     8090  # node-provisioner (above)
     9095  # tappaas-alert-receiver: Grafana's alert webhook (#126)
+    9097  # tappaas-console (ADR-034): the console filters its peers itself
   ];
   networking.firewall.allowedUDPPorts = [ 69 ];
 

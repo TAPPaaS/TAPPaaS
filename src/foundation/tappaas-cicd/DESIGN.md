@@ -34,6 +34,7 @@ src/foundation/tappaas-cicd/
 ├── controller/                        # infrastructure control (RUNTIME state)
 │   ├── install.sh / update.sh / test.sh   # dispatcher: loop child components
 │   └── <name>-controller/            # one dir per controller component
+├── ui/                                # the console (ADR-034): one component, driven like a dispatcher
 ├── lib/                               # shared libraries, sourced (never copied per component)
 └── scripts/                           # foundation bring-up + unit tests (scripts/test/)
 ```
@@ -99,7 +100,7 @@ The control plane is driven by three trivial levels — adding a component never
 anything above it:
 
 1. **Top level** — `tappaas-cicd/{install,update,test}.sh` call `manager/<verb>.sh` and
-   `controller/<verb>.sh`.
+   `controller/<verb>.sh` (and `ui/<verb>.sh`, the console, which is a single component).
 2. **Dispatcher level** — `manager/<verb>.sh` and `controller/<verb>.sh` each loop their
    child component directories and run the matching verb script. There is no shared
    runner; each dispatcher is a few lines:
@@ -249,6 +250,17 @@ written after each success, so a migration interrupted mid-apply is simply re-ru
 which is safe because every migration is idempotent.
 
 `migrations/README.md` is the contract for writing one.
+
+## The console service (ADR-034)
+
+`ui/` is the console: a TypeScript backend built like a manager (`lib/nix/ts-manager.nix`, no
+npm dependencies) and a React front end built from `ui/web/package-lock.json`, one package,
+`~/bin/console`. `tappaas-console.service` (in `tappaas-cicd.nix`, started by a path unit once
+the bin exists) runs it as `tappaas` with `ProtectSystem=strict`. It reads the site only
+through the managers' `--json` and `lib/ts`, caches the answers on per-read timers, and
+writes nothing but its state directory, `/var/lib/tappaas/console/`. It accepts the firewall's
+address (Caddy and the Authentik gate) and loopback; before identity exists, `mgmt` and the
+admin VPN with the setup token `bootstrap.sh` writes. See [ui/README.md](./ui/README.md).
 
 ## Preferred language
 

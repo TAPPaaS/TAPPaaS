@@ -97,6 +97,17 @@ grep -qxF "$(cat /home/tappaas/.ssh/id_ed25519.pub)" /home/tappaas/.ssh/authoriz
   || cat /home/tappaas/.ssh/id_ed25519.pub >> /home/tappaas/.ssh/authorized_keys
 chmod 600 /home/tappaas/.ssh/authorized_keys
 
+# The console's setup token (ADR-034 D10). Until identity is installed there is
+# no Authentik gate in front of the console, so it accepts mgmt and the admin VPN
+# with this token instead; install.sh's summary prints it. Written once, and only
+# before identity exists; the console refuses it once config/identity.json does.
+CONSOLE_TOKEN=/home/tappaas/config/console-setup-token
+if [ ! -f /home/tappaas/config/identity.json ] && [ ! -s "$CONSOLE_TOKEN" ]; then
+  mkdir -p /home/tappaas/config
+  (umask 077 && head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n' > "$CONSOLE_TOKEN")
+  msg_info "Wrote the console setup token to $CONSOLE_TOKEN"
+fi
+
 chmod +x /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/bootstrap.sh
 chmod +x /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/install.sh
 

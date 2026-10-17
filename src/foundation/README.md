@@ -14,6 +14,7 @@ from modules, **named, not numbered** — install order is derived from each mod
 | [storage/](storage/README.md) | NFS shares for consumer modules: declared with `storage-manager`, served by the cluster nodes, mounted by `storage:nfs` (ADR-029) |
 | [templates/](templates/README.md) | The prebuilt VM templates (NixOS, Windows) modules deploy from |
 | [tappaas-cicd/](tappaas-cicd/README.md) | The mothership: managers and controllers that run the platform |
+| [console/](console/README.md) | The site's web UI, served by the mothership; this module publishes it behind the gate (ADR-034) |
 | [backup/](backup/README.md) | Proxmox Backup Server: scheduled, verified, off-site capable |
 | [identity/](identity/README.md) | Authentik: SSO, users, groups, organisations; secrets |
 | [logging/](logging/README.md) | Loki / Grafana / Promtail: central logs |

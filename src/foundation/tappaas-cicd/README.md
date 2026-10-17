@@ -21,6 +21,7 @@ configures every other module in the system.
 | Unattended node adding (PXE) | mothership CLI | `site-manager node add <name> --pxe` (netboot assets staged at install) |
 | Admin VPN termination on OPNsense | anywhere (WireGuard) | set up at install; enrol devices with `network-manager wgvpn` per [ADMIN-VPN.md](./manager/network-manager/ADMIN-VPN.md) |
 | Module store registration | mothership CLI | `repository.sh add <repo>` for community module stores |
+| The console: the site's web UI (ADR-034, P1 read-only) | mgmt, admin VPN | `tappaas-console.service` on port 9097, built from [`ui/`](./ui/README.md); published at `console.<domain>` behind the gate by the [`console`](../console/README.md) module; before identity exists, with the setup token the install summary prints |
 | The mothership's SSH key | mothership CLI | `cicd-key.sh status` · `rotate` · `recover` — see [Mothership SSH key](#mothership-ssh-key) below (#122, #755) |
 
 ## Mothership SSH key

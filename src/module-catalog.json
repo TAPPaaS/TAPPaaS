@@ -62,6 +62,11 @@
       "stack": "foundation"
     },
     {
+      "moduleName": "console",
+      "moduleJson": "src/foundation/console/console.json",
+      "stack": "foundation"
+    },
+    {
       "moduleName": "debianhost",
       "moduleJson": "src/foundation/debianhost/debianhost.json",
       "stack": "foundation"

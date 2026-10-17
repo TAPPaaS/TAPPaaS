@@ -725,6 +725,23 @@ if [[ -x /home/tappaas/bin/opnsense-controller ]]; then
 else
     skip "opnsense-controller not installed"
 fi
+# The console (ADR-034): the linked bin loads, and the service answers on loopback.
+if [[ -x /home/tappaas/bin/console ]]; then
+    if /home/tappaas/bin/console --help >/dev/null 2>&1; then
+        pass "console: linked CLI loads"
+    else
+        fail "console: linked CLI fails to load (broken/stale build)"
+    fi
+    if systemctl is-active --quiet tappaas-console.service 2>/dev/null; then
+        curl -fsS --max-time 10 http://127.0.0.1:9097/api/v1/status >/dev/null 2>&1 \
+            && pass "console: tappaas-console answers /api/v1/status" \
+            || fail "console: tappaas-console is active but does not answer on 127.0.0.1:9097"
+    else
+        skip "console: tappaas-console.service not active"
+    fi
+else
+    skip "console not installed"
+fi
 if [[ -x /home/tappaas/bin/update-tappaas ]]; then
     if /home/tappaas/bin/update-tappaas --help >/dev/null 2>&1; then
         pass "update-tappaas: linked CLI loads"
@@ -884,8 +901,8 @@ if [[ "${DEEP}" -eq 1 ]]; then
     # cicd deep gate. Placed in the deep section so the fast unit gate stays green;
     # a known pre-existing component failure (e.g. ap-controller ADR-008 WIP) is
     # judged against the batch baseline ("no NEW failures"), not absolute zero.
-    info "${BOLD}Deep Test: manager/ + controller/ component dispatchers${CL}"
-    for _disp in manager controller; do
+    info "${BOLD}Deep Test: manager/ + controller/ component dispatchers, and the console${CL}"
+    for _disp in manager controller ui; do
         if [[ -x "${SCRIPT_DIR}/${_disp}/test.sh" ]]; then
             # TAPPAAS_TEST_DEEP=1 so fast/deep-aware components also run their
             # live tiers (Authentik mutation etc.) in the deep gate.
