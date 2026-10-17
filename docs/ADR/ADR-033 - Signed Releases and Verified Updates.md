@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | **Status** | **Draft** |
-| **Version** | 0.1 |
+| **Version** | 0.2 |
 | **Date** | 2026-10-17 |
 | **Author** | Lars Rossen (drafted with Claude) |
 | **Deciders** | @LarsRossen, @ErikDaniel007, @AndreasJe |
 | **Closes / addresses** | Implementation: **#848**. Builds on [ADR-028](<ADR-028 - Release Cadence and Patching.md>) (D11 `channels.json`, D13 release tags, D15 urgent fixes), [ADR-011](<ADR-011 - SBOM Governance.md>) (supply-chain inventory), [ADR-007e](<ADR-007e - Health.md>) (the Health lens), [ADR-007d](<ADR-007d - Site.md>) (`site.json` repositories), [ADR-017](<ADR-017 - Update scheduling and mothership self-update.md>) (the sweep and the self-update). |
-| **Changelog** | v0.1 — first draft, from the operator's NIS2 brief of 2026-10-17: every repository needs a signature, signer ownership is recorded, binaries are signed, the update verifies before it moves, NixOS fits the same chain, only staging and production are signed, and every repository's signing status is part of the health check. |
+| **Changelog** | v0.2 (2026-10-17) — operator decisions: the signers are the TAPPaaS owners, Erik and Lars; Community stays unsigned for now; `requireSigned` defaults to not required; signed commits on `main` become a future option; SHA-256 object format investigated and rejected for now (Nix cannot read it, GitHub cannot host it) — the open questions are closed; regulatory references removed. · v0.1 — first draft, from the operator's brief of 2026-10-17: every repository needs a signature, signer ownership is recorded, binaries are signed, the update verifies before it moves, NixOS fits the same chain, only staging and production are signed, and every repository's signing status is part of the health check. |
 
 How a TAPPaaS site knows that the code and images it is about to run are the ones the
 repository's owners released — and refuses them when it cannot tell.
@@ -17,13 +17,10 @@ repository's owners released — and refuses them when it cannot tell.
 
 ### The requirement
 
-NIS2 (Directive (EU) 2022/2555, Art. 21(2)(d) supply-chain security and (e) security in the
-acquisition, development and maintenance of systems) and its Implementing Regulation (EU)
-2024/2690 expect an operator to show that software in operation came from where it claims and
-was not changed on the way. In practice that is read as: **software is obtained from a source
-that signs what it publishes, and the signature is checked before the software is installed.**
-The Cyber Resilience Act asks the same of the updates a product distributes. An operator who
-runs TAPPaaS under NIS2 must be able to point at that check. Today there is none to point at.
+An operator must be able to show that the software they run came from where it claims and was
+not changed on the way: **software is obtained from a source that signs what it publishes, and
+the signature is checked before the software is installed.** An operator of TAPPaaS needs to be
+able to point at that check. Today there is none to point at.
 
 ### How a site gets its software today
 
@@ -60,12 +57,35 @@ its tree, every file in it, and its whole history** (a Merkle tree). Signing a c
 annotated tag that names one, therefore signs the exact content of the repository at that
 point. Nothing new has to be computed. Two caveats shape the decisions below:
 
-1. **The default object format is SHA-1.** Git hardens it (collision detection), and the
-   SHA-256 object format exists but is not yet supported everywhere a site may fetch from.
-   A release tag can carry a second, SHA-256 content hash of the tree — the `narHash` Nix
-   already computes (`nix hash path`) — so the signature does not rest on SHA-1 alone (D3).
+1. **The object format is SHA-1.** Git hardens it (collision detection), and the SHA-256
+   object format exists — but TAPPaaS cannot move to it yet (see *SHA-256 object format*
+   below). A release tag therefore carries a second, SHA-256 content hash of the tree — the
+   `narHash` Nix already computes (`nix hash path`) — so the signature does not rest on SHA-1
+   alone (D3).
 2. **A signature proves who, not which.** A validly signed *old* release is still validly
    signed. Verification must also refuse going backwards (D6).
+
+### SHA-256 object format (investigated 2026-10-17)
+
+| Where | SHA-256 repositories | Evidence |
+|---|---|---|
+| git | supported since 2.29; SHA-1↔SHA-256 interoperability work began in 2.52 | git hash-function-transition docs |
+| Codeberg (Forgejo 16) | **yes** — `object_format_name: sha256` on repository create; ours is `sha1` | Codeberg API, 2026-10-17 |
+| GitHub | **no**, nothing announced | — |
+| Nix 2.34 (the estate's) | **no** — `unknown object format 'sha256' (libgit2 error code = 6)` from both a flake and `builtins.fetchGit` | tested on the test site's mothership, 2026-10-17 |
+
+Moving is not possible today, and would be costly when it is:
+
+- **Nix cannot read the checkout.** The managers and every NixOS rebuild evaluate flakes that
+  live in the repository; a SHA-256 checkout would stop the control plane from building.
+- **A repository cannot be converted in place.** The history is rewritten into a new
+  repository: every commit id and every release tag changes, `releases.json` and `RELEASES.md`
+  point at ids that no longer exist, and every site must re-clone.
+- **SHA-1 and SHA-256 repositories cannot fetch from each other**, so the GitHub mirror and
+  any fork would stop.
+
+So the repositories stay SHA-1 and the tag's `tree-sha256` (D3) carries the SHA-256 anchor.
+The move is re-examined when Nix's git fetcher reads SHA-256 repositories (Future options).
 
 ### Prior art
 
@@ -119,8 +139,7 @@ The train already produces one object per release; signing it costs one signatur
 fortnight (R6). Why not merely the branch tip: a branch is a mutable pointer the forge
 controls; a tag signature is the release manager's statement about one commit.
 
-Contributors **may** sign commits on `main` and the forge shows it; it is encouraged, not
-required.
+Signed commits on `main` are not part of this decision; they are a future option.
 
 ### D2 — SSH signatures, keys on hardware
 
@@ -176,8 +195,8 @@ manager, module maintainer), the date it was added, and how to reach them. `CODE
 
 | Repository | Signers |
 |---|---|
-| TAPPaaS (this repository) | the release managers — at least two, so one lost token does not stop releases |
-| Community | its maintainers |
+| TAPPaaS (this repository) | the TAPPaaS owners, **Erik Daniel and Lars Rossen** — two, so one lost token or one absence does not stop releases |
+| Community | **none for now** — it stays `unsigned (declared)` (D9) |
 | A site's own module repository | the site operator |
 | A third party's repository | whoever releases it; their file, their keys |
 
@@ -306,7 +325,7 @@ Three further Nix points:
 
 ### D9 — An unsigned repository is allowed, but declared and visible
 
-Some repositories will not sign — Community before its maintainers have keys, a site's own
+Some repositories will not sign — Community, which stays unsigned for now, or a site's own
 scratch repository. Refusing them would break sites (R8). So:
 
 - A repository with **no `.tappaas/allowed_signers`**, or added with `--unsigned`, is
@@ -315,9 +334,9 @@ scratch repository. Refusing them would break sites (R8). So:
   that is a failure (D6). Once a site has verified a repository it keeps expecting signatures:
   a later release that drops `allowed_signers` is accepted only if a previously trusted key
   signed it, and the site then reports the downgrade rather than silently relaxing.
-- A site may set **`site.json` `requireSigned: true`** (the NIS2 setting): then an unsigned
-  repository on staging/production is refused, not just reported. Default `false` in 2.x; the
-  default is reviewed once the core repositories sign.
+- A site may set **`site.json` `requireSigned: true`**: then an unsigned repository on
+  staging/production is refused, not just reported. **The default is `false` (not required)** —
+  an operator who must prove signed sources opts in.
 
 ### D10 — Signing status is part of the health check
 
@@ -340,7 +359,7 @@ The result is:
 - a line per repository in `site-manager site show` and `health-manager report`;
 - mailed to the site owner **when a status changes**, not every night;
 - an exportable **evidence record** (`config/sbom/signatures.json`: repository, channel, tag,
-  commit, signer, time verified) — the artefact an operator hands an auditor for NIS2.
+  commit, signer, time verified) — the artefact an operator hands an auditor.
 
 ## Consequences
 
@@ -351,7 +370,7 @@ The result is:
   train.
 - The installer's fingerprint becomes a published, long-lived value; rotating it is a
   documented, two-release procedure (D4).
-- Repositories that do not sign keep working but are visibly not NIS2-ready.
+- Repositories that do not sign keep working, and are visibly unsigned.
 - `main` is unchanged for developers.
 
 ## Alternatives considered
@@ -377,7 +396,7 @@ The result is:
 Tracked in **#848**.
 
 1. Signer record: `.tappaas/allowed_signers` + `SIGNERS.md` in TAPPaaS (and offered to
-   Community); release managers enrol hardware keys; fingerprint published on tappaas.org.
+   Community stays unsigned); Erik and Lars enrol hardware keys; fingerprint published on tappaas.org.
 2. `tappaas-train`: signed boundary and patch tags carrying D3's lines; refuse to cut without a
    signing key.
 3. Image release (the `build-*-image` workflows): verify upstream inputs, publish `SHA256SUMS`
@@ -404,18 +423,23 @@ Tracked in **#848**.
   and moves; a tampered tag stops the self-update before the rebuild and mails; teardown restores
   the real anchors.
 
-## Open questions
+## Decided in review (v0.2)
 
-1. **The exact NIS2 / 2024/2690 clause** an operator should cite — confirm the wording before
-   the operator-facing page claims compliance.
-2. **Who the TAPPaaS release managers are** (the signer list) and the second token's owner.
-3. **SHA-256 object format**: does Codeberg/Forgejo support it well enough to move the
-   repositories, making D3's `tree-sha256` redundant?
-4. **Community**: sign now with its maintainers' keys, or stay `unsigned (declared)` until it
-   cuts releases (ADR-028 D11 already warns that it declares no production branch)?
-5. **`requireSigned` default**: when does it become `true` for new installs — 3.0?
-6. **Signed commits on `main`**: require them on the forge for the core repository anyway, as
-   cheap provenance for unstable?
+1. **Signers** — the TAPPaaS owners, Erik Daniel and Lars Rossen (D4).
+2. **SHA-256 object format** — not now: Nix cannot read it and GitHub cannot host it; the tag's
+   `tree-sha256` carries the SHA-256 anchor (Context, D3).
+3. **Community** — stays `unsigned (declared)` for now (D9).
+4. **`requireSigned`** — defaults to not required (D9).
+5. **Signed commits on `main`** — not required; a future option.
+
+## Future options
+
+- **Signed commits on `main`**, possibly required on the forge for the core repository: cheap
+  provenance for unstable, and the base for verifying every commit with D4's rule (the Guix
+  model) rather than only release tags.
+- **SHA-256 repositories**, once Nix's git fetcher reads them; it is a one-off history rewrite
+  and re-clone of every site.
+- **Signing Community**, once it has maintainers who release it on a channel (ADR-028 D11).
 
 ## Documentation impact (ADR-013)
 
