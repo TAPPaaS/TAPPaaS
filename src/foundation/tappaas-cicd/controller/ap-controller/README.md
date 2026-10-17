@@ -28,7 +28,7 @@ ap-controller <command> [args]
 |---------|---------|
 | `add <name> --vendor <v> [--ip <ip>] [--model <m>] [--location <l>]` | Register an AP. |
 | `remove <name>` | Remove an AP. |
-| `list` | List access points. |
+| `list [--json]` | List access points, with their uplink port and SSIDs. |
 | `show <name>` | Show one AP. |
 | `link <ap> --switch <switch> --port <port>` | Associate an AP's uplink with a switch port. |
 

@@ -49,7 +49,7 @@ Usage: ap-controller <command> [args]
 Inventory:
   add <name> --vendor <v> [--ip <ip>] [--model <m>] [--location <l>]
   remove <name>
-  list
+  list [--json]
   show <name>
 
 SSID configuration:
@@ -76,7 +76,7 @@ EOF
 readonly CLI_SPEC='
 add: --vendor= --ip= --model= --location=
 remove:
-list:
+list: --json
 show:
 link: --switch= --port=
 ssid * add: --zone= --security= --vlan= --radius= --captive --disabled
@@ -145,6 +145,12 @@ cmd_remove() {
 }
 
 cmd_list() {
+    if [[ "${1:-}" == --json ]]; then
+        jq '[.accessPoints // {} | to_entries[] | {name: .key} + (.value | del(.ssids, .uplinkSwitch, .uplinkPort))
+             + {uplink: (if .value.uplinkSwitch then {switch: .value.uplinkSwitch, port: .value.uplinkPort} else null end),
+                ssids: [.value.ssids // {} | to_entries[] | {name: .key} + .value]}]' "${DESIRED}"
+        return 0
+    fi
     local count
     count=$(jq -r '.accessPoints // {} | length' "${DESIRED}")
     info "${BOLD}Access points (${count}):${CL}"
@@ -498,7 +504,7 @@ main() {
     case "${cmd}" in
         add)            cmd_add "$@" ;;
         remove)         cmd_remove "${1:-}" ;;
-        list)           cmd_list ;;
+        list)           cmd_list "${1:-}" ;;
         show)           cmd_show "${1:-}" ;;
         link)           cmd_link "$@" ;;
         ssid)           cmd_ssid "$@" ;;

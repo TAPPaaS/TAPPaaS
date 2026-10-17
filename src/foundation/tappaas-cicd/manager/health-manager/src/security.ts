@@ -34,7 +34,7 @@ import { RemoteResult, mgmtDomain, operatorHome, sshIdentity } from "../../../li
 import { moduleOfLocation, moduleSourceOf } from "../../../lib/ts/src/instance";
 import { isManaged, loadConfigModules, readModuleJson, siteNodeHostnames } from "./config";
 import { guestTarget } from "./checks";
-import { CheckResult, CheckRow, CheckStatus, ClusterClient } from "./types";
+import { CheckResult, CheckRow, CheckStatus, CheckSubject, ClusterClient } from "./types";
 
 export const SBOM_DIRNAME = "sbom";
 export const STATUS_FILE = "cve-status.json";
@@ -1609,12 +1609,22 @@ export function renderReport(s: ScanStatus, all: boolean, now: number): string[]
 // the gate makes the scan visible, the mail and the report make it actionable.
 export const STALE_DAYS = 8;
 
+// The node or deployed module a scan target belongs to, from its id: "node:<n>",
+// "image:<module>/<image>", or the module's own name.
+export function targetSubject(t: TargetStatus): CheckSubject {
+  if (t.id.startsWith("node:")) return { kind: "node", name: t.id.slice(5) };
+  const img = /^image:([^/]+)\//.exec(t.id);
+  return { kind: "module", name: img ? img[1] : t.id };
+}
+
 export function checkCveStatus(configDir: string, now: number): CheckResult {
   const s = readStatus(join(sbomDir(configDir), STATUS_FILE));
   if (!s) return { name: "cve-status", status: "skip", detail: "no security scan yet — health-manager scan security" };
   const rows: CheckRow[] = [];
   for (const t of s.targets) {
-    if (t.verdict === "failed" || t.verdict === "act") rows.push({ status: "warn", text: `${fit(t.name, 30)}${verdictLine(t)}` });
+    if (t.verdict === "failed" || t.verdict === "act") {
+      rows.push({ status: "warn", text: `${fit(t.name, 30)}${verdictLine(t)}`, subject: targetSubject(t) });
+    }
   }
   const days = Math.floor((now - Date.parse(s.generated)) / 86_400_000);
   const count = (v: Verdict): number => s.targets.filter((t) => t.verdict === v).length;

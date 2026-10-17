@@ -64,6 +64,7 @@ ck "ssid captive flag"               "true"   "$(jq -r '.accessPoints["ap-living
 "${AM}" link ap-living --switch core-sw1 --port 12 >/dev/null 2>&1
 ck "AP-03 link uplinkSwitch"         "core-sw1" "$(jq -r '.accessPoints["ap-living"].uplinkSwitch' "${DES}")"
 ck "AP-03 link uplinkPort"           "12"     "$(jq -r '.accessPoints["ap-living"].uplinkPort' "${DES}")"
+ck "AP-03 list --json uplink"         "core-sw1:12" "$("${AM}" list --json | jq -r '.[] | select(.name=="ap-living") | "\(.uplink.switch):\(.uplink.port)"')"
 
 # update-desired tracks SSID VLAN when its zone is renumbered
 jq '.home.vlantag=311' "${TMP}/zones.json" > "${TMP}/z2" && mv "${TMP}/z2" "${TMP}/zones.json"
@@ -99,6 +100,7 @@ ck "after confirm + full coverage → in sync (rc)" "0" "$(rc_of "${AM}" reconci
 ck "--help (rc)"                     "0"      "$(rc_of "${AM}" --help)"
 ck "unknown command (rc)"            "1"      "$(rc_of "${AM}" bogus)"
 ck "ssid on missing AP (rc)"         "1"      "$(rc_of "${AM}" ssid nope list)"
+ck "list --json: SSIDs by name"       "yes"    "$("${AM}" list --json | jq -r 'if ([.[].ssids[].name] | length) > 0 and all(.[].ssids[]; .zone != null) then "yes" else "no" end')"
 
 # #644: --help in any position runs nothing; an option the verb lacks is refused
 before="$(md5sum < "${DES}")"

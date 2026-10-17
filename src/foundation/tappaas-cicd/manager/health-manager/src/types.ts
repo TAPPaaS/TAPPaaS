@@ -223,6 +223,16 @@ export type CheckStatus = "pass" | "fail" | "warn" | "skip";
 export interface CheckRow {
   status: CheckStatus;
   text: string;
+  // What the row is about, for a reader that places it (validate --json, the
+  // console): absent on a total or a site-wide line.
+  subject?: CheckSubject;
+}
+
+// The object a finding mentions. A module is named as config/<module>.json
+// names it; a pool is "<node>/<storage>"; a peer is a backup buddy (ADR-031).
+export interface CheckSubject {
+  kind: "module" | "node" | "pool" | "peer" | "site";
+  name: string;
 }
 
 export interface CheckResult {
@@ -230,6 +240,9 @@ export interface CheckResult {
   status: CheckStatus;
   detail: string;
   rows?: CheckRow[];
+  // Per-object findings of a gate that prints none beneath its line (its detail
+  // carries them): validate --json reports these, the text output does not.
+  findings?: CheckRow[];
 }
 
 export interface HealthReport {

@@ -54,6 +54,7 @@ readonly ACTUAL="${CONFIG_DIR}/switch-configuration-actual.json"
 readonly DESIRED="${CONFIG_DIR}/switch-configuration-desired.json"
 
 readonly PORT_TYPES="node switch ap device uplink"
+JSON=0
 # Port types that are VLAN trunks (carry the full active VLAN set).
 _is_trunk_type() { case " ${1} " in *" node "*|*" switch "*|*" ap "*|*" uplink "*) return 0;; *) return 1;; esac; }
 
@@ -78,10 +79,13 @@ Inventory (recorded in switch-configuration-actual.json):
                           ports become one LACP aggregate (a LAG named <name>);
                           --apply programs that switch at once
   lag remove <switch> <name> [--apply]
-  lag list [<switch>]
-  list
-  list-ports [<switch>]   one line per port: actual config + drift vs zones.json
+  lag list [<switch>] [--json]
+  list [--json]
+  list-ports [<switch>] [--json]
+                          one line per port: actual config + drift vs zones.json
   show <controller|switch>
+
+--json on list, list-ports and lag list prints the same facts as JSON.
 
 Reconciliation (five-verb provider contract, run in this order):
   interrogate             controller/auto switches -> actual.json (via plugin)
@@ -107,9 +111,9 @@ remove-switch:
 add-port: ${PORT_OPTS}
 update-port: ${PORT_OPTS}
 remove-port:
-lag: --ports= --apply
-list:
-list-ports:
+lag: --ports= --apply --json
+list: --json
+list-ports: --json
 show:
 interrogate:
 update-desired:
@@ -296,6 +300,13 @@ cmd_lag() {
     esac; done
     case "${sub}" in
         list)
+            if [[ "${JSON}" == 1 ]]; then
+                jq --arg sw "${sw}" '[.switches // {} | to_entries[] | select($sw == "" or .key == $sw) | .key as $s
+                    | [ .value.ports // {} | to_entries[] | select((.value.lag // "") != "") | {lag: .value.lag, p: .key, live: (.value.lagMembers // [])} ]
+                    | group_by(.lag)[] | ([.[].live[]] | unique) as $live
+                    | {switch: $s, name: .[0].lag, ports: map(.p), live: $live, formed: ($live | length > 0)}]' "${ACTUAL}"
+                return 0
+            fi
             jq -r --arg sw "${sw}" '.switches // {} | to_entries[] | select($sw == "" or .key == $sw) | .key as $s
                 | [ .value.ports // {} | to_entries[] | select((.value.lag // "") != "") | {lag: .value.lag, p: .key, live: (.value.lagMembers // [])} ]
                 | group_by(.lag)[] | "\($s)  LAG \(.[0].lag): ports \(map(.p) | join("+"))  (live: \([.[].live[]] | unique | map(tostring) | join("+") | if . == "" then "not formed" else . end))"' "${ACTUAL}"
@@ -354,6 +365,13 @@ apply_one() {
 # ── list / show ──────────────────────────────────────────────────────
 
 cmd_list() {
+    if [[ "${JSON}" == 1 ]]; then
+        jq '{controllers: [.controllers // {} | to_entries[] | {name: .key} + .value],
+             switches: [.switches // {} | to_entries[]
+                        | {name: .key} + (.value | del(.ports)) + {ports: (.value.ports // {} | length)}],
+             accessPoints: (.accessPoints // {} | length)}' "${ACTUAL}"
+        return 0
+    fi
     local cc sc
     cc=$(jq -r '.controllers // {} | length' "${ACTUAL}")
     sc=$(jq -r '.switches // {} | length' "${ACTUAL}")
@@ -386,32 +404,52 @@ cmd_list_ports() {
     [[ -z "${target}" ]] || jq -e --arg n "${target}" '.switches | has($n)' "${ACTUAL}" >/dev/null \
         || die "Switch '${target}' not found"
     active=$(active_vlans_json)
-    while IFS= read -r sw; do
-        [[ -z "${sw}" ]] && continue
-        info "${BOLD}${sw}${CL} — actual port config (drift vs zones.json):"
-        jq -r --argjson active "${active}" --slurpfile z "${ZONES_FILE}" --arg sw "${sw}" '
-            ($z[0]) as $zones
-            | (.switches[$sw].ports // {}) | to_entries | sort_by(.key|tonumber) | .[]
-            | .key as $k | .value as $p
+    # One view per port — what it is, what it carries, what zones.json wants on it
+    # and the drift between the two — rendered as text or (--json) as is.
+    local view='
+        def port_view($active; $zones):
+            .key as $k | .value as $p
             | ($p.type // "") as $t
             | ($p.taggedVlans // []) as $atag
             | ($p.nativeVlan // 0) as $anat
-            | ($p.mode // "?") as $amode
             | (if ($t=="node" or $t=="switch" or $t=="uplink" or $t=="ap") then {mode:"trunk", tagged:$active, nat:0}
                elif $t=="device" then {mode:"access", tagged:[],
                      nat:(($p.zone // "") as $zn | if ($zn!="" and ($zones[$zn].vlantag!=null)) then $zones[$zn].vlantag else $anat end)}
                else null end) as $d
-            | (if $d==null then "untouched (unmanaged)"
-               elif $d.mode=="trunk" then (($d.tagged - $atag) as $add | ($atag - $d.tagged) as $rem
-                    | if (($add|length)>0 or ($rem|length)>0) then "DRIFT +\($add|join(",")) -\($rem|join(","))" else "in sync" end)
-               else (if ($d.nat != $anat) then "DRIFT native \($anat) -> \($d.nat)" else "in sync" end) end) as $status
-            | "  port \($k): "
-              + (if $t=="" then "—" else "\($t) → \($p.target // "?")\(if $p.targetPort then "/"+$p.targetPort else "" end)" end)
-              + "  | actual: \($amode) "
-              + (if $amode=="access" then "vlan \($anat)" else (if ($atag|length)>0 then ($atag|map(tostring)|join(",")) else "-" end) end)
+            | (if $d==null or $d.mode!="trunk" then [] else $d.tagged - $atag end) as $add
+            | (if $d==null or $d.mode!="trunk" then [] else $atag - $d.tagged end) as $rem
+            | {port: $k, type: (if $t=="" then null else $t end), target: ($p.target // null),
+               targetPort: ($p.targetPort // null), zone: ($p.zone // null), description: ($p.description // null),
+               mode: ($p.mode // "?"), nativeVlan: $anat, taggedVlans: $atag,
+               desired: (if $d==null then null else {mode: $d.mode, nativeVlan: $d.nat, taggedVlans: $d.tagged} end),
+               drift: (if $d==null then "unmanaged"
+                       elif (($add|length)>0 or ($rem|length)>0 or ($d.mode=="access" and $d.nat != $anat)) then "drift"
+                       else "in-sync" end),
+               add: $add, remove: $rem, lag: ($p.lag // null), lagMembers: ($p.lagMembers // [])};
+        def ports_of($sw; $active; $zones):
+            (.switches[$sw].ports // {}) | to_entries | sort_by(.key|tonumber) | .[] | port_view($active; $zones);'
+    if [[ "${JSON}" == 1 ]]; then
+        jq --argjson active "${active}" --slurpfile z "${ZONES_FILE}" --arg sw "${target}" "${view}"'
+            [.switches // {} | keys[] | select($sw == "" or . == $sw)] as $names
+            | [$names[] as $n | {switch: $n, ports: [ports_of($n; $active; $z[0])]}]' "${ACTUAL}"
+        return 0
+    fi
+    while IFS= read -r sw; do
+        [[ -z "${sw}" ]] && continue
+        info "${BOLD}${sw}${CL} — actual port config (drift vs zones.json):"
+        jq -r --argjson active "${active}" --slurpfile z "${ZONES_FILE}" --arg sw "${sw}" "${view}"'
+            ports_of($sw; $active; $z[0])
+            | (if .drift=="unmanaged" then "untouched (unmanaged)"
+               elif .drift=="in-sync" then "in sync"
+               elif .desired.mode=="trunk" then "DRIFT +\(.add|join(",")) -\(.remove|join(","))"
+               else "DRIFT native \(.nativeVlan) -> \(.desired.nativeVlan)" end) as $status
+            | "  port \(.port): "
+              + (if .type==null then "—" else "\(.type) → \(.target // "?")\(if .targetPort then "/"+.targetPort else "" end)" end)
+              + "  | actual: \(.mode) "
+              + (if .mode=="access" then "vlan \(.nativeVlan)" else (if (.taggedVlans|length)>0 then (.taggedVlans|map(tostring)|join(",")) else "-" end) end)
               + "  | \($status)"
-              + (if ($p.lag // "") != "" then "  | LAG \($p.lag)" else "" end)
-              + (if (($p.lagMembers // []) | length) > 0 then " (live: \($p.lagMembers | map(tostring) | join("+")))" else "" end)
+              + (if (.lag // "") != "" then "  | LAG \(.lag)" else "" end)
+              + (if (.lagMembers | length) > 0 then " (live: \(.lagMembers | map(tostring) | join("+")))" else "" end)
         ' "${ACTUAL}"
     done < <(if [[ -n "${target}" ]]; then echo "${target}"; else jq -r '.switches // {} | keys[]' "${ACTUAL}"; fi)
     [[ -n "${target}" || "$(jq -r '.switches // {} | length' "${ACTUAL}")" -gt 0 ]] || info "  (no switches in inventory)"
@@ -747,6 +785,11 @@ main() {
     [[ -z "${cmd}" ]] && { usage; exit 0; }
     cli_gate usage "${CLI_SPEC}" "$@"
     shift || true
+    # --json (list, list-ports, lag list; the gate refuses it elsewhere) may sit anywhere.
+    local -a rest=()
+    local a
+    for a in "$@"; do if [[ "${a}" == --json ]]; then JSON=1; else rest+=("${a}"); fi; done
+    set -- ${rest[@]+"${rest[@]}"}
     [[ -f "${ZONES_FILE}" ]] || die "zones.json not found: ${ZONES_FILE}"
     ensure_files
     # One vendor login per run, shared by every device's plugin subshell (#733).

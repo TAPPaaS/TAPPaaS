@@ -109,6 +109,12 @@ lp="$("${SM}" list-ports core 2>&1)"
 ck "list-ports: node port 4 in sync"  "yes" "$(grep -qE 'port 4: node .*\| in sync' <<<"${lp}" && echo yes || echo no)"
 ck "list-ports: ap port 11 drift"     "yes" "$(grep -qE 'port 11: ap .*DRIFT' <<<"${lp}" && echo yes || echo no)"
 ck "list-ports: unknown switch (rc)"  "1"   "$(rc_of "${SM}" list-ports nope)"
+lj="$("${SM}" list-ports core --json 2>/dev/null)"
+ck "list-ports --json: node port 4 in sync" "in-sync" "$(jq -r '.[0].ports[] | select(.port=="4") | .drift' <<<"${lj}")"
+ck "list-ports --json: ap port 11 drift adds" "200,310,610" "$(jq -r '.[0].ports[] | select(.port=="11") | .add | join(",")' <<<"${lj}")"
+ck "list-ports --json: device port wants its zone" "310" "$(jq -r '.[0].ports[] | select(.port=="10") | .desired.nativeVlan' <<<"${lj}")"
+ck "list-ports --json: one line per port as the text" "$(grep -c '^  port ' <<<"${lp}")" "$(jq '.[0].ports | length' <<<"${lj}")"
+ck "list-ports --json before the switch (rc)" "0" "$(rc_of "${SM}" list-ports --json core)"
 
 # ── controller inventory + graceful interrogate skip (no plugin hook) ─
 "${SM}" add-controller ctrl1 --vendor unifi --ip https://unifi >/dev/null 2>&1
@@ -186,9 +192,11 @@ ck "the other member lists none"     "0"      "$(jq -r '.switches.core.ports["12
 ck "an unmanaged port gets no lagMembers" "null" "$(jq -r '.switches.core.ports["99"].lagMembers // "null"' "${DES}")"
 ck "delta: the aggregate to form" "yes" "$(has "$("${SM}" delta 2>&1)" 'ports 11+12 as one LACP aggregate')"
 ck "lag list shows it, not formed"   "yes"    "$(has "$("${SM}" lag list core 2>&1)" 'LAG t1-lan: ports 11+12  (live: not formed)')"
+ck "lag list --json: not formed"     "t1-lan 11+12 false" "$("${SM}" lag list core --json | jq -r '.[0] | "\(.name) \(.ports | join("+")) \(.formed)"')"
 "${SM}" confirm core >/dev/null 2>&1
 ck "confirm records the live members" "11,12" "$(jq -r '.switches.core.ports["11"].lagMembers | join(",")' "${ACT}")"
 ck "…and the aggregate is in sync"   "no"     "$(has "$("${SM}" delta 2>&1)" 'aggregate')"
+ck "lag list --json: formed, live members" "true 11,12" "$("${SM}" lag list --json | jq -r '.[0] | "\(.formed) \(.live | join(","))"')"
 ck "a port in another LAG is refused (rc)" "1" "$(rc_of "${SM}" lag set core other --ports 11,12)"
 "${SM}" lag remove core t1-lan >/dev/null 2>&1
 ck "lag remove clears the ports"     "0"      "$(jq -r '[.switches.core.ports[] | select(.lag)] | length' "${ACT}")"
@@ -202,6 +210,9 @@ ck "manual switch: lag --apply prints the step, rc 2" "2" "$(rc_of "${SM}" lag r
 ck "show switch"                     "tplink" "$("${SM}" show core | jq -r '.vendor')"
 ck "show controller"                 "unifi"  "$("${SM}" show ctrl1 | jq -r '.vendor')"
 ck "show missing (rc)"               "1"      "$(rc_of "${SM}" show nope)"
+ck "list --json: the switch"         "core manual" "$("${SM}" list --json | jq -r '.switches[0] | "\(.name) \(.managed)"')"
+ck "list --json: the controller"     "ctrl1"  "$("${SM}" list --json | jq -r '.controllers[0].name')"
+ck "--json refused where it means nothing (rc)" "1" "$(rc_of "${SM}" delta --json)"
 
 # #644: --help in any position runs nothing; an option the verb lacks is refused
 before="$(md5sum < "${ACT}")$(md5sum < "${DES}")"

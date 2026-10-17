@@ -17,12 +17,15 @@
 import { spawnSync } from "child_process";
 import { join } from "path";
 import { isManaged, loadConfigModules, readModuleJson, siteNodeHostnames } from "./config";
-import { CheckResult, CheckRow, CheckStatus, ClusterClient, HealthReport, NodeCapacity, StoragePool } from "./types";
+import { CheckResult, CheckRow, CheckStatus, CheckSubject, ClusterClient, HealthReport, NodeCapacity, StoragePool } from "./types";
 import { existsSync, readFileSync } from "fs";
 import { checkCveStatus } from "./security";
 
 // Resolve a guest's `<vmname>.<zone0>.internal` target, as check-disk-threshold.sh
 // does (defaulting zone0 to "mgmt"), for the gates that probe a guest over SSH.
+const mod = (name: string): CheckSubject => ({ kind: "module", name });
+const nodeOf = (name: string): CheckSubject => ({ kind: "node", name });
+
 export function guestTarget(configDir: string, module: string): string | null {
   const raw = readModuleJson(join(configDir, `${module}.json`));
   if (!raw) return null;
@@ -49,6 +52,7 @@ export function checkDiskThreshold(
 ): CheckResult {
   const modules = loadConfigModules(configDir, defaultNode).filter(isManaged);
   const over: string[] = [];
+  const findings: CheckRow[] = [];
   let probed = 0;
   for (const m of modules) {
     const target = guestTarget(configDir, m.module);
@@ -56,7 +60,10 @@ export function checkDiskThreshold(
     const pct = client.diskUsagePct(target);
     if (pct === null) continue; // unreachable → skip this guest
     probed++;
-    if (pct >= threshold) over.push(`${m.module} (${pct}%)`);
+    if (pct >= threshold) {
+      over.push(`${m.module} (${pct}%)`);
+      findings.push({ status: "fail", text: `/ at ${pct}%, over ${threshold}%`, subject: mod(m.module) });
+    }
   }
   if (probed === 0) {
     return { name: "disk-threshold", status: "skip", detail: "no reachable guests probed" };
@@ -66,6 +73,7 @@ export function checkDiskThreshold(
       name: "disk-threshold",
       status: "fail",
       detail: `over ${threshold}%: ${over.join(", ")}`,
+      findings,
     };
   }
   return {
@@ -121,14 +129,20 @@ export function checkBackupStatus(configDir: string): CheckResult {
   }
   const disabled: string[] = [];
   const uncovered: string[] = [];
+  const findings: CheckRow[] = [];
   for (const e of arr) {
     const o = e as Record<string, unknown>;
     const mod = typeof o.module === "string" ? o.module : "?";
-    if (o.enabled === false) disabled.push(mod);
+    if (o.enabled === false) {
+      disabled.push(mod);
+      findings.push({ status: "fail", text: "backup disabled", subject: { kind: "module", name: mod } });
+    }
     // archived: the VM was deliberately destroyed and its snapshots kept, so
     // absence from the job is the correct state, not a coverage gap.
-    else if (o.enabled === true && o.optedIn === true && o.archived !== true && o.inPbsJob === false)
+    else if (o.enabled === true && o.optedIn === true && o.archived !== true && o.inPbsJob === false) {
       uncovered.push(mod);
+      findings.push({ status: "fail", text: "opted in, not in the PBS job", subject: { kind: "module", name: mod } });
+    }
   }
   if (disabled.length === 0 && uncovered.length === 0) {
     return { name: "backup-status", status: "pass", detail: `${arr.length} module(s) covered` };
@@ -136,7 +150,7 @@ export function checkBackupStatus(configDir: string): CheckResult {
   const parts: string[] = [];
   if (disabled.length) parts.push(`disabled: ${disabled.join(", ")}`);
   if (uncovered.length) parts.push(`not in PBS job: ${uncovered.join(", ")}`);
-  return { name: "backup-status", status: "fail", detail: parts.join("; ") };
+  return { name: "backup-status", status: "fail", detail: parts.join("; "), findings };
 }
 
 // ── service-liveness gate ─────────────────────────────────────────────
@@ -161,8 +175,12 @@ export function checkServiceLiveness(
   const managed = all.filter((m) => !m.suspended);
   const paused = suspended.length > 0 ? `; suspended: ${suspended.join(", ")}` : "";
   const down = managed.filter((m) => !running.has(m.vmid)).map((m) => m.module);
+  const findings: CheckRow[] = [
+    ...down.map((m): CheckRow => ({ status: "fail", text: "not running", subject: mod(m) })),
+    ...suspended.map((m): CheckRow => ({ status: "skip", text: "suspended", subject: mod(m) })),
+  ];
   if (down.length > 0) {
-    return { name: "service-liveness", status: "fail", detail: `not running: ${down.join(", ")}${paused}` };
+    return { name: "service-liveness", status: "fail", detail: `not running: ${down.join(", ")}${paused}`, findings };
   }
   // Report the population, not just the verdict: a bare "all managed modules
   // running" over an EMPTY set read as PASS for as long as #441 was live.
@@ -173,6 +191,7 @@ export function checkServiceLiveness(
     name: "service-liveness",
     status: "pass",
     detail: `${managed.length} managed module(s) running${paused}`,
+    ...(findings.length > 0 ? { findings } : {}),
   };
 }
 
@@ -218,19 +237,26 @@ export function checkMemoryCommitment(client: ClusterClient, threshold: number):
   }
   const parts: string[] = [];
   const over: string[] = [];
+  const findings: CheckRow[] = [];
   for (const c of caps) {
     const pct = c.physicalMem > 0 ? (100 * c.committedMem) / c.physicalMem : 0;
     parts.push(`${c.node} ${gib(c.committedMem)}/${gib(c.physicalMem)}G ${pct.toFixed(0)}%`);
     if (pct >= threshold) over.push(`${c.node} at ${pct.toFixed(0)}%`);
+    findings.push({
+      status: pct >= threshold ? "fail" : "pass",
+      text: `${gib(c.committedMem)}/${gib(c.physicalMem)}G committed, ${pct.toFixed(0)}%`,
+      subject: nodeOf(c.node),
+    });
   }
   if (over.length > 0) {
     return {
       name: "memory-commitment",
       status: "fail",
       detail: `committed memory at or over ${threshold}% of physical: ${over.join(", ")} — [${parts.join("; ")}]`,
+      findings,
     };
   }
-  return { name: "memory-commitment", status: "pass", detail: parts.join("; ") };
+  return { name: "memory-commitment", status: "pass", detail: parts.join("; "), findings };
 }
 
 // ── update-capacity pre-flight (#833) ──────────────────────────────────
@@ -283,6 +309,7 @@ export function checkUpdateCapacity(
       status,
       text: `${c.node}: ${gib(projected)}/${gib(c.physicalMem)}G ${pct.toFixed(0)}% after the update` +
         (grows.length ? ` (grows ${grows.join(", ")})` : ""),
+      subject: nodeOf(c.node),
     });
   }
   const bad = rows.filter((r) => r.status === "fail");
@@ -352,14 +379,15 @@ export function checkGuestMemory(client: ClusterClient): CheckResult {
 
   const out: CheckRow[] = rows.map(({ g, gap, pct, status }) => {
     const name = pad(g.name || String(g.vmid), 16);
-    if (g.status !== "running") return { status, text: `${name}${pad("(stopped)", 30)}` };
+    const subject = g.name ? { subject: mod(g.name) } : {};
+    if (g.status !== "running") return { status, text: `${name}${pad("(stopped)", 30)}`, ...subject };
     const used = g.measured ? col(g.usedMem) : pad("unmeasured", 8);
     const note = !g.measured
       ? "  usage figure is the host's, not the guest's"
       : g.type === "lxc"
         ? `  ${pct.toFixed(0)}% of its LXC limit`
         : `  ${pct.toFixed(0)}% of declared, gap ${gib(gap)}G`;
-    return { status, text: `${name}${col(g.declaredMem)}${col(g.residentMem)}${used}${note}` };
+    return { status, text: `${name}${col(g.declaredMem)}${col(g.residentMem)}${used}${note}`, ...subject };
   });
 
   // TWO totals, because the columns do not mean the same thing for both kinds.
@@ -438,7 +466,7 @@ export function checkPendingReboot(
             ? `release move ${from} -> ${to} active, still on the ${from} kernel`
             : `release move ${from} -> ${to} staged, still running ${from}`
           : `booted ${p.booted || "?"}, next boot ${p.next || "?"}`;
-    rows.push({ status: "warn", text: `${m.module.padEnd(16)}${what}` });
+    rows.push({ status: "warn", text: `${m.module.padEnd(16)}${what}`, subject: mod(m.module) });
   }
   if (probed === 0) {
     return { name: "pending-reboot", status: "skip", detail: "no reachable guests probed" };
@@ -482,7 +510,7 @@ export function checkStoragePools(client: ClusterClient): CheckResult {
       detail += `, disks add up to ${gib(p.provisioned)}G — overcommitted by thin disks`;
       if (status === "pass") status = "warn";
     }
-    rows.push({ status, text: `${p.node}/${p.storage}: ${detail}` });
+    rows.push({ status, text: `${p.node}/${p.storage}: ${detail}`, subject: { kind: "pool", name: `${p.node}/${p.storage}` } });
     if (rank[status] > rank[worst]) worst = status;
   }
   const bad = rows.filter((r) => r.status !== "pass");
@@ -552,7 +580,7 @@ export function checkCpuImpact(client: ClusterClient, configDir: string, default
     const deps = configField(raw, "dependsOn");
     if (!Array.isArray(deps) || !deps.includes("cluster:ha")) continue;
     if ((configField(raw, "haCpu") ?? "common") === "host") {
-      rows.push({ status: "pass", text: `${m.module}: haCpu host — keeps its node's full CPU` });
+      rows.push({ status: "pass", text: `${m.module}: haCpu host — keeps its node's full CPU`, subject: mod(m.module) });
       continue;
     }
     // The defaults cluster:ha applies: node = the first site node, HANode =
@@ -566,13 +594,13 @@ export function checkCpuImpact(client: ClusterClient, configDir: string, default
     if (!level) continue;
     const flags = level === "host" ? null : inv.levelFlags?.[level] ?? null;
     if (level === "host" || (flags && flags.includes("avx512f"))) {
-      rows.push({ status: "pass", text: `${m.module}: ${level} keeps AVX-512 — nothing measurable lost` });
+      rows.push({ status: "pass", text: `${m.module}: ${level} keeps AVX-512 — nothing measurable lost`, subject: mod(m.module) });
       continue;
     }
     const target = guestTarget(configDir, m.module);
     const use = target ? client.avx512Use(target) : null;
     if (!use) {
-      rows.push({ status: "pass", text: `${m.module}: not measured (no answer from ${target ?? "its guest"}) — ${level} drops AVX-512` });
+      rows.push({ status: "pass", text: `${m.module}: not measured (no answer from ${target ?? "its guest"}) — ${level} drops AVX-512`, subject: mod(m.module) });
       continue;
     }
     let row: CheckRow;
@@ -588,7 +616,7 @@ export function checkCpuImpact(client: ClusterClient, configDir: string, default
     } else {
       row = { status: "pass", text: `${m.module}: no process uses AVX-512 — ${level} costs nothing measurable` };
     }
-    rows.push(row);
+    rows.push({ ...row, subject: mod(m.module) });
     if (row.status === "warn") worst = "warn";
   }
   if (rows.length === 0) return { name: "cpu-impact", status: "skip", detail: "no HA guest to assess" };
@@ -628,10 +656,24 @@ export function checkPulse(client: ClusterClient, configDir: string): CheckResul
     return { name: "pulse", status: "warn", detail: `the pulse is not running on ${node} (${p.timer || "not installed"}) — the backup update installs it` };
   }
   const down = p.targets.filter((t) => t.state === "DOWN").map((t) => t.id);
+  const findings = p.targets.map((t): CheckRow => ({
+    status: t.state === "DOWN" ? "warn" : "pass",
+    text: `${t.id} ${t.state}`,
+    subject: pulseSubject(t.id),
+  }));
   if (down.length > 0) {
-    return { name: "pulse", status: "warn", detail: `down: ${down.join(", ")} — backup-manager pulse` };
+    return { name: "pulse", status: "warn", detail: `down: ${down.join(", ")} — backup-manager pulse`, findings };
   }
-  return { name: "pulse", status: "pass", detail: `${p.targets.length} target(s) answering, on ${node}` };
+  return { name: "pulse", status: "pass", detail: `${p.targets.length} target(s) answering, on ${node}`, findings };
+}
+
+// What a pulse target watches (backup/scripts/tappaas-pulse): this site's own
+// parts by role, a buddy by its name — `pulled-by-<buddy>` when it pulls from us.
+export function pulseSubject(id: string): CheckSubject {
+  const own: Record<string, string> = { firewall: "network", mothership: "tappaas-cicd", pbs: "backup" };
+  if (own[id]) return mod(own[id]);
+  if (id === "uplink") return { kind: "site", name: "uplink" };
+  return { kind: "peer", name: id.replace(/^pulled-by-/, "") };
 }
 
 // ── quorum gate (#835) ─────────────────────────────────────────────────
@@ -647,6 +689,7 @@ export function checkQuorum(client: ClusterClient): CheckResult {
       name: "quorum",
       status: "warn",
       detail: "two votes, no QDevice: one node down and the other loses quorum and is fenced — add one: site-manager node qdevice add <host> — or a third node",
+      findings: [{ status: "warn", text: "two votes, no QDevice", subject: { kind: "site", name: "quorum" } }],
     };
   }
   return { name: "quorum", status: "pass", detail: `${q.expectedVotes} vote(s)${q.qdevice ? " incl. a QDevice" : ""}` };
@@ -671,7 +714,7 @@ export function checkLanUplink(client: ClusterClient): CheckResult {
     modes.push(`${node} ${u.mode}${u.ports.length > 1 ? ` (${u.ports.join("+")})` : ""}`);
     for (const f of u.findings) {
       if (f.level === "warn") warned++;
-      rows.push({ status: f.level === "warn" ? "warn" : "skip", text: `${node.padEnd(16)}${f.text}` });
+      rows.push({ status: f.level === "warn" ? "warn" : "skip", text: `${node.padEnd(16)}${f.text}`, subject: nodeOf(node) });
     }
   }
   if (probed === 0) return { name: "lan-uplink", status: "skip", detail: "no node's lan uplink could be read (lan-uplink.sh)" };
@@ -709,7 +752,9 @@ export function checkSiteTimezone(client: ClusterClient, configDir: string, defa
     const tz = client.nodeTimezone(node);
     if (tz === null) continue;
     probed++;
-    if (tz !== want) rows.push({ status: "warn", text: `${`node ${node}`.padEnd(16)}${tz} — the next cluster update sets ${want}` });
+    if (tz !== want) {
+      rows.push({ status: "warn", text: `${`node ${node}`.padEnd(16)}${tz} — the next cluster update sets ${want}`, subject: nodeOf(node) });
+    }
   }
   for (const m of loadConfigModules(configDir, defaultNode).filter(isManaged)) {
     const target = guestTarget(configDir, m.module);
@@ -717,7 +762,9 @@ export function checkSiteTimezone(client: ClusterClient, configDir: string, defa
     const tz = client.guestTimezone(target);
     if (tz === null) continue;
     probed++;
-    if (tz !== want) rows.push({ status: "warn", text: `${m.module.padEnd(16)}${tz} — the next update of ${m.module} sets ${want}` });
+    if (tz !== want) {
+      rows.push({ status: "warn", text: `${m.module.padEnd(16)}${tz} — the next update of ${m.module} sets ${want}`, subject: mod(m.module) });
+    }
   }
   if (probed === 0) return { name: "site-timezone", status: "skip", detail: "no node or guest answered" };
   if (rows.length === 0) return { name: "site-timezone", status: "pass", detail: `${probed} node(s)/guest(s) on ${want}` };

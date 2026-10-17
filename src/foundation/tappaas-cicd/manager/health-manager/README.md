@@ -21,7 +21,7 @@ pending the `update-os.sh` port.
 ## Verb surface
 
 ```
-health-manager validate [--threshold PCT] [--memory-threshold PCT] [--config-dir DIR]
+health-manager validate [--threshold PCT] [--memory-threshold PCT] [--json] [--config-dir DIR]
 health-manager capacity [--memory-threshold PCT] [--config-dir DIR]
 health-manager update-os <name> <vmid> <node>
 health-manager reboot <module>
@@ -335,8 +335,10 @@ guest's pending state before and after, and hands the reboot to
 
 - `--config-dir DIR` — config root (default: `$CONFIG_DIR` or
   `/home/tappaas/config`). The one true common option across managers.
-- `--json` — machine-readable output for `list` / `show` (the typed result
-  object, pretty-printed). Scriptable; `validate`/`update-os` are unaffected.
+- `--json` — `validate`: every gate as `{name, status, detail, findings}`, each
+  finding `{status, text, subject}` where `subject` is the `module`, `node`,
+  `pool`, `peer` or `site` it is about (null on a total). The exit code is the
+  text run's. The console (ADR-034) and `network-manager topology` read it.
 - `--diff` — `list vm` only: the per-VM three-way rollup.
 - `--threshold PCT` — `validate` only: the disk-usage gate threshold (1–99).
 - `--memory-threshold PCT` — `validate` only: committed memory as a percent of a

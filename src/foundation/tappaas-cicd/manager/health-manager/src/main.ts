@@ -40,7 +40,7 @@ import {
   CliSecurityIO, loadVex, scanComponentList, scanImageRefs, PREVIOUS_FILE, SITE_CDX_FILE, STATUS_FILE, notify, readStatus, renderReport, runScan, sbomDir,
   sweepIsNewer, writeScan,
 } from "./security";
-import { ClusterClient } from "./types";
+import { CheckStatus, ClusterClient, HealthReport } from "./types";
 import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
 import { CL, GN, RD, YW, die, guarded, info, preflightGuard } from "../../../lib/ts/src/cli";
 
@@ -64,10 +64,11 @@ export const HELP: HelpSpec = {
   tagline: "TAPPaaS cluster health manager (read-only)",
   verbs: [
     {
-      usage: "validate [--threshold PCT] [--memory-threshold PCT] [--config-dir DIR]",
+      usage: "validate [--threshold PCT] [--memory-threshold PCT] [--json] [--config-dir DIR]",
       options: [
         ["--threshold PCT", `Disk-usage threshold percent (default ${DEFAULT_THRESHOLD}).`],
         ["--memory-threshold PCT", `Committed-memory percent of a node's physical RAM before the gate fails (default ${DEFAULT_MEMORY_THRESHOLD}).`],
+        ["--json", "Print every gate as JSON: status, detail and its findings, each with the module, node, pool or peer it is about."],
       ],
     },
     {
@@ -193,6 +194,29 @@ export function parseOpts(args: string[]): Opts {
 }
 
 // ── validate (health gate) ────────────────────────────────────────────
+// validate --json: every gate, typed, with the objects its findings are about —
+// what the console's strip, Attention list and badges are built from (ADR-034).
+// A gate's findings are its rows, or the per-object findings of a gate whose
+// text carries them in its detail line.
+export function validateDoc(report: HealthReport, now: Date): Record<string, unknown> {
+  const rank: Record<CheckStatus, number> = { skip: 0, pass: 0, warn: 1, fail: 2 };
+  let worst: CheckStatus = "pass";
+  for (const c of report.checks) if (rank[c.status] > rank[worst]) worst = c.status;
+  return {
+    version: 1,
+    generated: now.toISOString(),
+    status: worst,
+    failed: report.failed,
+    warned: report.checks.filter((c) => c.status === "warn").length,
+    gates: report.checks.map((c) => ({
+      name: c.name,
+      status: c.status,
+      detail: c.detail,
+      findings: (c.findings ?? c.rows ?? []).map((r) => ({ status: r.status, text: r.text, subject: r.subject ?? null })),
+    })),
+  };
+}
+
 function cmdValidate(opts: Opts, client: ClusterClient): number {
   const report = runHealthGates(client, {
     configDir: opts.configDir,
@@ -200,6 +224,10 @@ function cmdValidate(opts: Opts, client: ClusterClient): number {
     threshold: opts.threshold,
     memoryThreshold: opts.memoryThreshold,
   });
+  if (opts.rest.includes("--json")) {
+    process.stdout.write(JSON.stringify(validateDoc(report, new Date()), null, 1) + "\n");
+    return report.failed === 0 ? 0 : 1;
+  }
   info(`${BOLD}TAPPaaS Health Validation${CL}`);
   const tagOf = (s: string): string =>
     s === "pass"
