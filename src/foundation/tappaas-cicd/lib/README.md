@@ -11,5 +11,6 @@ imported / built in.
 | `cli-gate.sh` | `cli_gate` — the argument gate the bash controllers call before dispatch: `-h`/`--help` in any position prints that verb's usage and runs nothing; an option the verb does not declare in the CLI's `CLI_SPEC` is refused (#644). |
 | `apply-json-merge.sh`, `audit-jq-readers.sh`, `test-config-readers.sh` | Module-config merge + reader-audit tools. |
 | `verify-repo.sh`, `test-verify-repo.sh` | Signed releases (ADR-033): the tree's SHA-256, a release tag's signature checked against the `.tappaas/allowed_signers` of the last verified release, rollback refusal, and the trust record in `config/.trust/`. `repo-sync.sh` gates every staging/production checkout move through it; `tappaas-train.sh` uses it to cut signed tags. |
+| `nix-site-key.sh` | The mothership's Nix signing key (ADR-033 D8) in `/etc/nix/tappaas-site-signing.{sec,pub}`: created once by `tappaas-render-fragments.sh` (or `update-os.sh`), its public half rendered into every guest's `tappaas-site.nix`; `update-os.sh` signs each guest closure with it before a signature-checked `nix copy`. |
 | `ts/` | The shared TypeScript library the TS managers compile in (see [`ts/README.md`](ts/README.md)). |
 | `nix/ts-manager.nix` | The one nix derivation builder every TS manager's `default.nix` imports. |

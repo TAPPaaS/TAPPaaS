@@ -30,6 +30,8 @@ readonly MGMT="mgmt"
 # mothership that has not deployed it yet updates as before, without the facts.
 # shellcheck source=site-locale.sh
 [[ -f /home/tappaas/bin/site-locale.sh ]] && . /home/tappaas/bin/site-locale.sh
+# shellcheck source=nix-site-key.sh
+[[ -f /home/tappaas/bin/nix-site-key.sh ]] && . /home/tappaas/bin/nix-site-key.sh
 # shellcheck source=log-shipping.sh
 [[ -f /home/tappaas/bin/log-shipping.sh ]] && . /home/tappaas/bin/log-shipping.sh
 
@@ -529,6 +531,22 @@ pinned_nixpkgs_source() {
     nix eval --impure --raw --expr "(${expr}).outPath" 2>/dev/null
 }
 
+# The pinned nixpkgs fetched ON THE GUEST, for the fallback where the guest
+# builds its own system: fetchTarball with the lock's narHash (ADR-033 D8), so
+# what GitHub serves is checked against the hash the signed release covers —
+# never a bare tarball URL. Prints the guest's store path; fails when the lock
+# carries no narHash, or the fetch fails or does not match.
+guest_pinned_nixpkgs() {
+    local ip="$1" lock="$2" owner repo rev hash out
+    IFS=$'\t' read -r owner repo rev hash < <(jq -r '.nodes.nixpkgs.locked
+        | select(.type == "github") | [.owner, .repo, .rev, .narHash] | @tsv' "${lock}" 2>/dev/null) || return 1
+    [[ "${owner}/${repo}" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ && "${rev}" =~ ^[0-9a-f]{40}$ \
+        && "${hash}" =~ ^sha256-[A-Za-z0-9+/]{43}=$ ]] || return 1
+    out="$(ssh -n -o BatchMode=yes "tappaas@${ip}" "nix eval --impure --raw --expr 'builtins.fetchTarball { url = \"https://github.com/${owner}/${repo}/archive/${rev}.tar.gz\"; sha256 = \"${hash}\"; }'" 2>/dev/null)" || return 1
+    [[ "${out}" =~ ^/nix/store/[a-z0-9]{32}-[^/[:space:]]+$ ]] || return 1
+    printf '%s' "${out}"
+}
+
 # Whether any binary cache the mothership's Nix is configured with answers. Not
 # a formality: before building a derivation Nix asks the cache for its output,
 # and with the cache unreachable that lookup is fatal (fallback = false) — so a
@@ -577,14 +595,38 @@ guest_build_on_cicd() {
     out="$(readlink -f "${link}")"
     [[ "${out}" == /nix/store/*-nixos-system-* ]] || return 1
 
+    # Signed with the site key (ADR-033 D8), the whole closure: what came from
+    # cache.nixos.org keeps Hydra's signature as well. Unsigned, nothing is sent.
+    local key="" check=()
+    if ! declare -F nix_site_key_ensure >/dev/null 2>&1 || ! nix_site_key_ensure \
+        || ! key="$(nix_site_key_public)" || ! nix_site_key_sign "${out}" >&2; then
+        warn "could not sign ${vmname}'s system with the site's Nix key (ADR-033 D8)" >&2
+        return 1
+    fi
+    # The guest checks every path against the keys it trusts. One that has not
+    # learnt the site key yet (built before D8, or its tappaas-site.nix not
+    # written) takes this copy unchecked, ONCE: the system it activates trusts
+    # the key, so the next copy is checked. Skipping the check needs a trusted
+    # user — tappaas is, through the baseline's trusted-users = @wheel.
     # No --substitute-on-destination: the guest is to fetch nothing itself.
-    # --no-check-sigs: what the mothership built carries no signature, and without
-    # it the guest refuses it. Only a trusted user may skip the check — tappaas is,
-    # through the baseline's trusted-users = @wheel.
+    if ! guest_trusts_site_key "${vm_ip}" "${key}"; then
+        warn "${vmname} does not trust the site's Nix key yet — this copy is unchecked; the system it gets trusts ${key%%:*} (ADR-033 D8)" >&2
+        check=(--no-check-sigs)
+    fi
     run_quiet_rc "copying ${vmname}'s system to ${vm_ip}" \
         env NIX_SSHOPTS="-o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=6" \
-        nix copy --no-check-sigs --to "ssh-ng://tappaas@${vm_ip}" "${out}" >&2 || return 1
+        nix copy ${check[@]+"${check[@]}"} --to "ssh-ng://tappaas@${vm_ip}" "${out}" >&2 || return 1
     printf '%s' "${out}"
+}
+
+# Whether the guest's Nix daemon trusts <public key> — read from the nix.conf
+# it runs with (not the user's merged view), so a key only built into a system
+# that is not activated yet does not count.
+guest_trusts_site_key() {
+    local ip="$1" key="$2"
+    ssh -n -o BatchMode=yes "tappaas@${ip}" "cat /etc/nix/nix.conf" 2>/dev/null \
+        | sed -n 's/^[[:space:]]*trusted-public-keys[[:space:]]*=//p' \
+        | tr -s ' \t' '\n\n' | grep -qxF -- "${key}"
 }
 
 # After a successful switch: <vmname>.new becomes .current, the old .current
@@ -781,15 +823,15 @@ update_nixos() {
     # whatever channel the VM happens to carry in its imperative `nix-channel`.
     # This makes module rebuilds deterministic and version-controlled in git, and
     # keeps every TAPPaaS NixOS VM on the same release as the template (currently
-    # 25.11) regardless of when the VM was provisioned. -I nixpkgs=<tarball> takes
+    # 25.11) regardless of when the VM was provisioned. -I nixpkgs=<path> takes
     # precedence over NIX_PATH, so the VM's channel no longer determines the build.
+    # The pin is fetched by its narHash on whichever host builds (ADR-033 D8).
     local flake_lock="/home/tappaas/TAPPaaS/src/foundation/templates/flake.lock"
     local nixpkgs_arg="" pinned_rev=""
     if [[ -f "${flake_lock}" ]]; then
         pinned_rev="$(jq -r '.nodes.nixpkgs.locked.rev // empty' "${flake_lock}" 2>/dev/null)"
     fi
     if [[ -n "${pinned_rev}" ]]; then
-        nixpkgs_arg="-I nixpkgs=https://github.com/NixOS/nixpkgs/archive/${pinned_rev}.tar.gz"
         info "Pinning nixpkgs to template rev ${pinned_rev:0:12} (reproducible — not the VM's channel)"
         # A guest last built from a NEWER revision moves backwards on this switch,
         # silently — and an application whose data ratchets forward then refuses to
@@ -810,7 +852,7 @@ update_nixos() {
     # mid-run. Every other exit is nixos-rebuild's own verdict and deterministic, so
     # retrying it just repeats the failure under a misleading connectivity banner.
     local attempt rebuilt=0 rc staged=0 _move=""
-    local _rebuild_cmd="sudo nixos-rebuild switch ${nixpkgs_arg} -I nixos-config=${remote_nix_path}"
+    local _rebuild_cmd=""
 
     # A release move is STAGED, not switched (#728) — as the mothership does it
     # (#725, tappaas-self-rebuild.sh). Across a nixpkgs release `switch` applies
@@ -842,6 +884,14 @@ update_nixos() {
         _move="$(release_move_to "${vm_ip}" "${_built}")" || _move=""
         _stage_cmd="$(guest_activate_cmd "${_built}" boot)"
     else
+        # The guest builds: it fetches the pin itself, checked by narHash.
+        if [[ -n "${pinned_rev}" ]]; then
+            local _gsrc
+            _gsrc="$(guest_pinned_nixpkgs "${vm_ip}" "${flake_lock}")" \
+                || die "could not fetch the pinned nixpkgs on ${vmname} by the narHash in ${flake_lock} (ADR-033 D8) — not building against an unchecked one"
+            nixpkgs_arg="-I nixpkgs=${_gsrc}"
+        fi
+        _rebuild_cmd="sudo nixos-rebuild switch ${nixpkgs_arg} -I nixos-config=${remote_nix_path}"
         info "Building the target system on ${vm_ip}..."
         _move="$(release_move_of "${vm_ip}" "${nixpkgs_arg}" "${remote_nix_path}")" || _move=""
         _stage_cmd="sudo nixos-rebuild boot ${nixpkgs_arg} -I nixos-config=${remote_nix_path}"
