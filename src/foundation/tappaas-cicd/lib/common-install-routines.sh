@@ -1981,6 +1981,25 @@ tappaas_ssh_repin_host() {
     return 0
 }
 
+# tappaas_forget_guest_host_keys <name-or-ip>... — drop the known_hosts entries
+# for an address TAPPaaS has just given a guest (IPv4 and IPv6) and for its new
+# name, so the first connection re-learns the key with accept-new. Clearing the
+# name alone is not enough: OpenSSH's CheckHostIP also compares the IP, and an
+# entry left by an earlier guest that had the address fails the connection with
+# "Host key verification failed" (nomad's move to dmz, 2026-10-17). Nothing is
+# scanned — the guest may still be booting. Always returns 0.
+tappaas_forget_guest_host_keys() {
+    local kh="${HOME}/.ssh/known_hosts" h
+    [[ -f "${kh}" ]] || return 0
+    for h in "$@"; do
+        [[ -n "${h}" ]] || continue
+        ssh-keygen -F "${h}" -f "${kh}" >/dev/null 2>&1 || continue
+        ssh-keygen -R "${h}" -f "${kh}" >/dev/null 2>&1 || true
+        debug "  dropped the known_hosts entry for ${h}" >&2
+    done
+    return 0
+}
+
 # tappaas_ssh_host_key_changed <host> — 0 when the host is pinned in
 # known_hosts and NONE of the keys it offers NOW matches that pin.
 #

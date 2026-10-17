@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # test-common-install-routines.sh — hermetic unit tests for helpers in
-# common-install-routines.sh. Currently covers ensure_scripts_executable()
+# common-install-routines.sh. Covers ensure_scripts_executable()
 # (#524): it must chmod +x only files that need it, skip ones already
 # executable, and never abort the caller when a chmod cannot succeed (a
 # root-owned file left by an earlier sudo run) under `set -euo pipefail`.
@@ -260,6 +260,41 @@ rc=0; tappaas_scp_guest /l/f tappaas@h:/r/f >/dev/null 2>&1 || rc=$?
 
 unset -f scp ssh-keygen ssh-keyscan ncalls; rm -f "$calls_f"
 HOME="$OLD_HOME"; rm -rf "$kh_home"
+
+echo
+echo "tappaas_forget_guest_host_keys tests:"
+
+# Real ssh-keygen on a throwaway known_hosts: the point is what OpenSSH itself
+# matches, hashed entries and bracketed IPv6 included.
+if command -v ssh-keygen >/dev/null 2>&1; then
+    fk_home="$(mktemp -d)"; mkdir -p "$fk_home/.ssh"; HOME="$fk_home"
+    fk_kh="$fk_home/.ssh/known_hosts"
+    ssh-keygen -q -t ed25519 -N '' -f "$fk_home/k" >/dev/null
+    key="$(cut -d' ' -f1-2 "$fk_home/k.pub")"
+    {
+        echo "10.6.0.152 ${key}"
+        echo "fd00:6::152 ${key}"
+        echo "nomad.dmz.internal ${key}"
+        echo "keep.dmz.internal ${key}"
+        echo "10.6.0.15 ${key}"
+    } > "$fk_kh"
+    ssh-keygen -H -f "$fk_kh" >/dev/null 2>&1; rm -f "$fk_kh.old"   # hash them, as ssh-keyscan -H does
+    echo "10.6.0.153 ${key}" >> "$fk_kh"                             # and one plain
+    rc=0; tappaas_forget_guest_host_keys nomad.dmz.internal 10.6.0.152 fd00:6::152 10.6.0.153 "" || rc=$?
+    [[ "$rc" -eq 0 ]] && ok "returns 0" || bad "returns 0 (rc=$rc)"
+    for h in nomad.dmz.internal 10.6.0.152 fd00:6::152 10.6.0.153; do
+        ssh-keygen -F "$h" -f "$fk_kh" >/dev/null 2>&1 && bad "$h forgotten" || ok "$h forgotten"
+    done
+    for h in keep.dmz.internal 10.6.0.15; do
+        ssh-keygen -F "$h" -f "$fk_kh" >/dev/null 2>&1 && ok "$h kept" || bad "$h kept"
+    done
+    rm -f "$fk_kh"
+    rc=0; tappaas_forget_guest_host_keys 10.6.0.152 || rc=$?
+    [[ "$rc" -eq 0 && ! -e "$fk_kh" ]] && ok "no known_hosts -> 0, none created" || bad "no known_hosts (rc=$rc)"
+    HOME="$OLD_HOME"; rm -rf "$fk_home"
+else
+    echo "  (ssh-keygen not found — tappaas_forget_guest_host_keys not tested here)"
+fi
 
 echo "----"
 printf 'passed %d, failed %d\n' "$pass" "$fail"

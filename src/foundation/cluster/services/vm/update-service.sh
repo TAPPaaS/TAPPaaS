@@ -220,6 +220,7 @@ converge_side_effect_reboot() {
 # may briefly still report it — which would register a wrong, cross-zone DNS
 # record. So derive the target /24 prefix and prefer a match.
 NEW_IP=""
+NEW_IP6S=""
 IP_SRC=""
 REBOOT_SKIPPED=0
 # shellcheck disable=SC2029
@@ -273,6 +274,15 @@ converge_side_effect_wait_ip() {
         fi
         [[ -n "${NEW_IP}" ]] && break
     done
+    # The guest's routable IPv6 addresses, for the known_hosts clear below; a
+    # link-local one is never what ssh connects to.
+    if [[ -n "${NEW_IP}" && -n "${qm_iface}" ]]; then
+        NEW_IP6S=$(jq -r '.[] | select(.name | test("^(lo|docker)") | not)
+                          | ."ip-addresses"[]?
+                          | select(."ip-address-type" == "ipv6")
+                          | ."ip-address"' <<< "${qm_iface}" 2>/dev/null \
+                   | grep -viE '^(fe80:|::1$)' || true)
+    fi
     return 0
 }
 
@@ -296,6 +306,10 @@ converge_side_effect_dns() {
             --description "${MODULE} (cluster:vm converge)" \
             || warn "  dns-manager add failed for ${VMNAME}.${new_domain}"
     fi
+    # The name and address are new to this guest but maybe not to known_hosts:
+    # an entry left by an earlier guest fails the first ssh, readiness included.
+    # shellcheck disable=SC2086  # NEW_IP6S is a newline list of addresses
+    tappaas_forget_guest_host_keys "${VMNAME}.${new_domain}" "${NEW_IP}" ${NEW_IP6S}
 
     # Stale record from the zone the guest LEFT. The record's actual state holds
     # the pre-change tag, so the old zone is derivable without a second read.
@@ -303,10 +317,10 @@ converge_side_effect_dns() {
     old_zone="$(vmnet_zone_for_tag "${old_tag:-0}" "${ZONES_FILE}")"
     if [[ -n "${old_zone}" && "${old_zone}" != "${ZONE0}" ]]; then
         debug "  Removing stale DNS: ${VMNAME}.${old_zone}.internal"
-        # A missing old record is normal (install-service registers no DNS), so
-        # a failure here is informational, not a warning.
+        # A missing old record is normal (a leased name has none) and succeeds;
+        # a failure is the control plane's, and the stale record stays.
         dns-manager --no-ssl-verify delete "${VMNAME}" "${old_zone}.internal" \
-            || debug "  no stale DNS to remove for ${VMNAME}.${old_zone}.internal"
+            || warn "  could not remove the stale DNS record ${VMNAME}.${old_zone}.internal"
     fi
 
     # An IP in the new subnet means the guest has re-DHCPed, not that the module

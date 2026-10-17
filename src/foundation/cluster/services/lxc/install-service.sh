@@ -98,6 +98,9 @@ if [[ -z "${ip}" ]]; then
 else
     debug "  Container came up with IP ${BL}${ip}${CL} — DNS via masqdns lease (${VMNAME}.${ZONE0}.internal)"
 fi
+# A recreated container keeps its name and may get an address an earlier guest
+# had: drop both known_hosts entries so the first ssh re-learns the key.
+tappaas_forget_guest_host_keys "${VMNAME}.${ZONE0}.internal" "${ip}"
 
 # Best-effort: remove any LEGACY static pin from an older install of this module,
 # so it can't shadow the live lease. Harmless no-op when none exists.

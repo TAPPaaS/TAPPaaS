@@ -39,8 +39,9 @@ MGMT="mgmt"
 # framework + module install/wiring scripts that use StrictHostKeyChecking=accept-new
 # (it adds unknown hosts but REJECTS changed keys). Clear the stale hostname key ONCE
 # here, at (re)creation, so downstream scripts need no per-script `ssh-keygen -R`.
-# (The framework already clears the IP key in update-os.sh; this covers the hostname
-# path that modules actually connect on.)
+# (The framework already clears the IP key in update-os.sh for cloud-init guests,
+# and the DNS pins below clear it for the guests they pin; this covers the
+# hostname path that modules actually connect on.)
 for _z in "${ZONE0NAME}" "$(get_config_value 'zone1' '')" "$(get_config_value 'zone2' '')"; do
     [[ -n "${_z}" ]] || continue
     ssh-keygen -R "${VMNAME}.${_z}.internal" >/dev/null 2>&1 || true
@@ -355,6 +356,7 @@ except Exception:
         [[ -n "$_mac" ]] && _macarg=(--mac "$_mac")
         dns-manager --no-ssl-verify delete "${VMNAME}" "${ZONE0NAME}.internal" >/dev/null 2>&1 || true
         dns-manager --no-ssl-verify add    "${VMNAME}" "${ZONE0NAME}.internal" "${_vm_ip}" ${_macarg[@]+"${_macarg[@]}"} >/dev/null 2>&1 || true
+        tappaas_forget_guest_host_keys "${_vm_ip}"   # an earlier guest's key for this IP
         debug "  ${GN}✓${CL} DNS: ${VMNAME}.${ZONE0NAME}.internal → ${_vm_ip}${_mac:+ (MAC-reserved ${_mac})}"
     fi
 fi
@@ -401,6 +403,7 @@ except Exception:
         [[ -n "$_mac" ]] && _macarg=(--mac "$_mac")
         dns-manager --no-ssl-verify delete "${VMNAME}" "${ZONE0NAME}.internal" >/dev/null 2>&1 || true
         dns-manager --no-ssl-verify add    "${VMNAME}" "${ZONE0NAME}.internal" "${_appliance_ip}" ${_macarg[@]+"${_macarg[@]}"} >/dev/null 2>&1 || true
+        tappaas_forget_guest_host_keys "${_appliance_ip}"   # an earlier guest's key for this IP
         debug "  ${GN}✓${CL} DNS: ${VMNAME}.${ZONE0NAME}.internal → ${_appliance_ip}${_mac:+ (MAC-reserved ${_mac})} (after ${_ip_wait}s)"
     else
         warn "  Could not determine IP for ${VMNAME} after ${_ip_wait}s — DNS NOT registered (VM may still be booting; re-run update-module.sh once it is up)"

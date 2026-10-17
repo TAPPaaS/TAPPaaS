@@ -196,6 +196,9 @@ converge_side_effect_dns() {
     [[ "${RESTART_SKIPPED}" == "1" ]] && return 0
     debug "  DNS via masqdns lease (${VMNAME}.${ZONE0}.internal) — clearing any stale static pin"
     dns-manager --no-ssl-verify delete "${VMNAME}" "${ZONE0}.internal" >/dev/null 2>&1 || true
+    # The name and address are new to this container but maybe not to
+    # known_hosts: an entry left by an earlier guest fails the first ssh.
+    tappaas_forget_guest_host_keys "${VMNAME}.${ZONE0}.internal" "${NEW_IP}"
 
     local old_tag old_zone
     old_tag="$(jq -r '(.actual["net0.tag"]) // ""' "${DRIFT_FILE}")"
