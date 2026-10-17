@@ -187,6 +187,92 @@ verify_moves_forward() {
     git -C "$1" merge-base --is-ancestor "$2" "$3" 2>/dev/null
 }
 
+# ── The introduction: first trust for a fresh clone (D5) ───────────────
+# A fresh clone runs nothing yet, so there is no base to read signers from. Its
+# first trust comes from outside the repository: a release tag, the commit it
+# names, and the fingerprint of the key that signed it — from site.json
+# repositories[].trust, written by the installer (TAPPaaS) or `repository add`.
+
+# verify_introduction <path> <tag> <commit> <fingerprints> <target>
+# Is <target> trusted, starting from the introduction? <fingerprints> is one
+# SHA256:... or several, space-separated (any of them may have signed it).
+#   - <tag> is an annotated release tag that points exactly at <commit> (the
+#     full id: a short one could name another commit later);
+#   - it is signed by a key listed in <commit>'s allowed_signers whose
+#     fingerprint is one of <fingerprints>, and its tree-sha256 matches;
+#   - <target> descends from <commit>, and is itself a release the signers at
+#     <commit> authorized (verify_target), unless it is <commit>.
+# Sets VERIFY_* as verify_target does, for <target>; VERIFY_INTRO_SIGNER is
+# the introduction's `<principal> <fingerprint>`. Returns 0 trusted, 1 not.
+verify_introduction() {
+    local path="$1" tag="$2" commit="$3" fps="$4" target="$5" at signers sig fp want got
+    VERIFY_STATUS="failed" VERIFY_TAG="" VERIFY_SIGNER="" VERIFY_TREE="" VERIFY_REASON="" VERIFY_INTRO_SIGNER=""
+    commit="$(printf '%s' "${commit}" | tr '[:upper:]' '[:lower:]')"
+    if [[ ! "${tag}" =~ ${VERIFY_TAG_RE} ]]; then
+        VERIFY_REASON="introduction '${tag}' is not a release tag (v<MAJOR>.<MINOR>[.N])"; return 1
+    fi
+    if [[ ! "${commit}" =~ ^[0-9a-f]{40}([0-9a-f]{24})?$ ]]; then
+        VERIFY_REASON="introductionCommit '${commit}' is not a full commit id"; return 1
+    fi
+    if [[ -z "${fps// /}" ]]; then
+        VERIFY_REASON="no signer fingerprint given for the introduction"; return 1
+    fi
+    if [[ "$(git -C "${path}" cat-file -t "refs/tags/${tag}" 2>/dev/null)" != tag ]]; then
+        VERIFY_REASON="introduction ${tag} is not an annotated tag in this repository"; return 1
+    fi
+    at="$(git -C "${path}" rev-parse -q --verify "refs/tags/${tag}^{commit}" 2>/dev/null || true)"
+    if [[ "${at}" != "${commit}" ]]; then
+        VERIFY_REASON="introduction ${tag} points at ${at:-nothing}, not ${commit}"; return 1
+    fi
+    signers="$(mktemp)"
+    if ! verify_signers_at "${path}" "${commit}" "${signers}"; then
+        rm -f "${signers}"
+        VERIFY_REASON="introduction ${tag} lists no keys in ${VERIFY_SIGNERS_PATH}"; return 1
+    fi
+    sig="$(verify_tag_signature "${path}" "${tag}" "${signers}")" || {
+        rm -f "${signers}"; VERIFY_REASON="introduction ${tag}: ${sig}"; return 1; }
+    rm -f "${signers}"
+    fp="${sig##* }"
+    case " ${fps} " in
+        *" ${fp} "*) ;;
+        *) VERIFY_REASON="introduction ${tag} is signed by ${sig}, not by ${fps}"; return 1 ;;
+    esac
+    want="$(verify_tag_field "${path}" "${tag}" tree-sha256)"
+    got="$(verify_tree_sha256 "${path}" "${commit}")"
+    if [[ -z "${want}" || "${want}" != "${got}" ]]; then
+        VERIFY_REASON="introduction ${tag}: tree-sha256 ${want:-missing} does not match the tree (${got})"; return 1
+    fi
+    # shellcheck disable=SC2034  # read by callers (repo_sync_introduce)
+    VERIFY_INTRO_SIGNER="${sig}"
+    if ! verify_moves_forward "${path}" "${commit}" "${target}"; then
+        VERIFY_REASON="$(git -C "${path}" rev-parse --short "${target}" 2>/dev/null || echo "${target}") does not descend from the introduction ${tag}"
+        return 1
+    fi
+    if [[ "$(git -C "${path}" rev-parse -q --verify "${target}^{commit}" 2>/dev/null)" == "${commit}" ]]; then
+        VERIFY_STATUS="verified" VERIFY_TAG="${tag}" VERIFY_SIGNER="${sig}" VERIFY_TREE="${got}"
+        return 0
+    fi
+    verify_target "${path}" "${target}" "${commit}" && return 0
+    VERIFY_STATUS="failed"
+    return 1
+}
+
+# verify_introduce <path> <state-dir> <name> <tag> <commit> <fingerprints> <target>
+# verify_introduction, then record <target> as the last verified release, so
+# the next update takes its signers from there (the normal base rule).
+# shellcheck disable=SC2034  # VERIFY_* are this library's results
+verify_introduce() {
+    local path="$1" dir="$2" name="$3" target
+    target="$(git -C "${path}" rev-parse -q --verify "$7^{commit}" 2>/dev/null)" \
+        || { VERIFY_STATUS="failed" VERIFY_REASON="no commit '$7'"; return 1; }
+    verify_introduction "${path}" "$4" "$5" "$6" "${target}" || return 1
+    verify_state_record "${dir}" "${name}" "${target}" \
+        || { VERIFY_REASON="verified, but could not record it in ${dir}"; return 1; }
+}
+
+# verify_fingerprint_ok <fp> — 0 when <fp> looks like ssh-keygen's SHA256:... .
+verify_fingerprint_ok() { [[ "$1" =~ ^SHA256:[A-Za-z0-9+/]{43}$ ]]; }
+
 # ── Trust state (run state, not declaration) ────────────────────────────
 # The last release a site verified per repository, in <dir>/<name>.json. It is
 # the base for the next verification. site.json holds what the operator declares

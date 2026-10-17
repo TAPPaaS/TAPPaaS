@@ -46,6 +46,22 @@ const TAPPAAS: Repository = {
   check(c.clones.has(TAPPAAS.path!), "apply created the clone");
 }
 
+// 1b. ADR-033 D5: a repository with a trust anchor is cloned WITH it, so the
+//     client verifies the fresh clone against its introduction.
+{
+  const c = new FakeSiteClient();
+  const anchored: Repository = {
+    ...TAPPAAS,
+    trust: { introduction: "v2.4", introductionCommit: "a".repeat(40), signer: "SHA256:" + "x".repeat(43) },
+  };
+  applyPlan(c, computePlan(site([anchored]), c, { deep: false, apply: true, siteFile: "x" }));
+  check(c.log.some((l) => l.startsWith("clone ") && l.endsWith("trust=TAPPaaS@v2.4")), "anchored clone passes its introduction");
+  c.log.length = 0;
+  const d = new FakeSiteClient();
+  applyPlan(d, computePlan(site([TAPPAAS]), d, { deep: false, apply: true, siteFile: "x" }));
+  check(d.log.some((l) => l.startsWith("clone ") && !l.includes("trust=")), "unanchored clone passes none");
+}
+
 // 2. Idempotent: present clone on correct branch → no actions.
 {
   const c = new FakeSiteClient();

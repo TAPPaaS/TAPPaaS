@@ -42,8 +42,18 @@ export interface Repository {
   path?: string;
   managed?: "full" | "tracked";
   catalog?: string;
-  // repositories[] is additionalProperties:true in the schema — keep extras.
+  // ADR-033 D5: the first trusted release, for a fresh clone.
+  trust?: RepositoryTrust;
+  // Fields this reader does not model are kept as they are.
   [k: string]: unknown;
+}
+
+// ADR-033 D5: a repository's introduction — the release tag trust starts from,
+// the commit it names, and the fingerprint of the key that signed it.
+export interface RepositoryTrust {
+  introduction: string;
+  introductionCommit: string;
+  signer: string;
 }
 
 // The canonical Site document (singleton).
@@ -163,8 +173,10 @@ export interface SiteClient {
   // (1) own concern.
   // Whether a repository's clone exists on disk at `path`.
   repoCloneExists(path: string): boolean;
-  // Clone <url> into <path> (git clone https://<url> <path>).
-  cloneRepo(url: string, path: string, branch: string): void;
+  // Clone <url> into <path> (git clone https://<url> <path>). With <trust>
+  // the clone is checked against its introduction (ADR-033 D5) and removed
+  // again when it does not verify; the error says why.
+  cloneRepo(url: string, path: string, branch: string, name?: string, trust?: RepositoryTrust): void;
   // The branch currently checked out at <path>, or null if unknown.
   currentBranch(path: string): string | null;
   // Check out <branch> at <path>.
@@ -233,6 +245,8 @@ export interface SiteClient {
   repositoryRemove(name: string, force: boolean): number;
   //   repository validate-catalog → repository.sh validate-catalog [<name>] [--strict]
   repositoryValidateCatalog(args: string[]): number;
+  //   repository introduce → repository.sh introduce <name> [--introduction t --signer fp] (ADR-033 D5)
+  repositoryIntroduce(args: string[]): number;
   //   repository stash  → repository.sh stash [list|show|restore|discard] … (#681)
   repositoryStash(args: string[]): number;
   //   repository sync   → repository.sh sync <name> [--dry-run] (#814)

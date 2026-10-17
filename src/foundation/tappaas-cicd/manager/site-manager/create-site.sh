@@ -36,7 +36,9 @@
 #                        ADR-028 D9)
 #   snapshotRetention <- preserved from existing site.json, else 5
 #   repositories[]    <- built from --upstream-git/--branch (default TAPPaaS repo),
-#                        preserving any existing operator-set repositories
+#                        preserving any existing operator-set repositories; the
+#                        TAPPaaS entry's trust from config/.trust/TAPPaaS.introduction.json
+#                        (bootstrap.sh, ADR-033 D5), verified against the checkout
 #   organizations     <- [config/identities/organizations/<org>.json]
 #                        (identity-manager may extend this later)
 #   (environments are NOT a site.json field — they are enumerated from
@@ -134,7 +136,7 @@ _set_branch=false _set_upstream=false _set_email=false
 _set_schedule=false _set_weekday=false _set_hour=false _set_org=false
 
 usage() {
-    sed -n '2,71p' "$_SELF" | sed 's/^# \{0,1\}//'
+    sed -n '2,78p' "$_SELF" | sed 's/^# \{0,1\}//'
 }
 
 # ---------------------------------------------------------------------------
@@ -511,6 +513,40 @@ build_repos_json() {
 }
 
 # ---------------------------------------------------------------------------
+# ADR-033 D5: the TAPPaaS repository's trust anchor. bootstrap.sh verified the
+# release it installed against the signer fingerprints published in INSTALL.md
+# and left the anchor in config/.trust/TAPPaaS.introduction.json; it goes into
+# the TAPPaaS entry here unless that entry already has one. Whichever it is, it
+# is checked against the checkout: site.json is never written with an anchor
+# that does not hold. Messages go to stderr — stdout is the JSON.
+# ---------------------------------------------------------------------------
+apply_tappaas_anchor() {
+    local repos="$1" f="${CONFIG_DIR}/.trust/TAPPaaS.introduction.json" anchor path tag commit signer
+    if [[ -r "$f" ]] && jq -e '.introduction and .introductionCommit and .signer' "$f" >/dev/null 2>&1; then
+        repos="$(jq -c --slurpfile a "$f" \
+            'map(if .name == "TAPPaaS" and (.trust == null) then .trust = $a[0] else . end)' <<<"$repos")"
+    fi
+    anchor="$(jq -c '.[] | select(.name == "TAPPaaS") | .trust // empty' <<<"$repos")"
+    if [[ -z "$anchor" ]]; then printf '%s\n' "$repos"; return 0; fi
+    path="$(jq -r '.[] | select(.name == "TAPPaaS") | .path // empty' <<<"$repos")"
+    if [[ ! -d "${path}/.git" ]]; then
+        warn "TAPPaaS checkout not found at ${path:-?} — its trust anchor is kept but not checked" >&2
+        printf '%s\n' "$repos"; return 0
+    fi
+    tag="$(jq -r '.introduction' <<<"$anchor")"
+    commit="$(jq -r '.introductionCommit' <<<"$anchor")"
+    signer="$(jq -r '.signer' <<<"$anchor")"
+    # shellcheck source=../../lib/verify-repo.sh
+    declare -F verify_introduction >/dev/null 2>&1 || . "${HERE}/../../lib/verify-repo.sh"
+    verify_introduction "$path" "$tag" "$commit" "$signer" "$commit" \
+        || die "TAPPaaS trust anchor does not hold (ADR-033 D5): ${VERIFY_REASON}"
+    verify_moves_forward "$path" "$commit" HEAD \
+        || die "TAPPaaS trust anchor does not hold (ADR-033 D5): ${path} does not descend from ${tag}"
+    info "TAPPaaS trust anchor: ${tag} signed by ${signer} — the fingerprint published in INSTALL.md" >&2
+    printf '%s\n' "$repos"
+}
+
+# ---------------------------------------------------------------------------
 # Build and write site.json.
 # ---------------------------------------------------------------------------
 build_and_write_site() {
@@ -525,6 +561,7 @@ build_and_write_site() {
     nodes_json="$(build_nodes_json)"
     schedule_json="$(build_schedule_json)"
     repos_json="$(build_repos_json)"
+    repos_json="$(apply_tappaas_anchor "$repos_json")"
 
     # Email precedence: explicit --email > existing site.json > Proxmox-discovered > "".
     if [[ -n "$EMAIL" ]]; then
