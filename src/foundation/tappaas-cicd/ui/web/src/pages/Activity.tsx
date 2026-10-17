@@ -1,10 +1,12 @@
-// Activity — what was done to the site (P1: the sweep). Each run of
-// update-tappaas.service with the errors and warnings it logged, the failures
-// ledger, and the last run's result. The console's own jobs join it in P2.
+// Activity — what was done to the site: the console's own jobs (who, from
+// where, the command, the preview and the output; jobs.jsonl) beside the
+// sweep's runs of update-tappaas.service with the errors and warnings they
+// logged, the failures ledger, and the last run's result.
 
 import { useState } from "react";
 import { useRead } from "../api";
-import { Activity as ActivityDoc, SweepRun } from "../types";
+import { JobList } from "../jobs";
+import { Activity as ActivityDoc, Envelope, JobSummary, SweepRun } from "../types";
 import { Badge, ReadState, Section, Tag, levelOf, since, when } from "../ui";
 
 function duration(r: SweepRun): string {
@@ -53,17 +55,21 @@ function Run({ r }: { r: SweepRun }) {
 }
 
 export function Activity() {
-  const a = useRead<ActivityDoc>("activity");
+  const a = useRead<ActivityDoc>("activity", 15_000);
   const d = a.env?.data;
+  const jobs = (a.env as (Envelope<ActivityDoc> & { jobs?: JobSummary[] }) | null)?.jobs ?? [];
   const last = d?.lastResult as { ok?: boolean; total?: number; succeeded?: number; failed?: number; failed_modules?: string[]; end_time?: string; control_plane?: string; reboot?: string } | null | undefined;
   return (
     <div className="page">
       <div className="page-head">
         <h1>Activity</h1>
-        <span className="muted">the sweep's journal (7 days) and failures ledger · read {since(a.env?.at)}</span>
+        <span className="muted">the console's jobs, the sweep's journal (7 days) and failures ledger · read {since(a.env?.at)}</span>
       </div>
       <ReadState env={a.env} failure={a.failure} what="activity" />
       {d?.sweepActive ? <div className="readstate readstate-warn">A sweep is running now (update-tappaas.service is active).</div> : null}
+      <Section title="Console jobs" aside={`${jobs.length} job(s) · state dir jobs.jsonl`}>
+        <JobList jobs={jobs.slice(0, 100)} />
+      </Section>
       {last ? (
         <Section title="Last sweep" aside="config/last-update-result.json">
           <p>

@@ -1,5 +1,5 @@
 // server.test.ts — the HTTP surface, driven without a socket: routes, the
-// read-only rule (P1 has no write endpoint), the route cap on jumps, argument
+// reads-are-GET rule (a change is a job, jobs.test.ts), the route cap on jumps, argument
 // hygiene on module names, the static front end and the setup-token cookie.
 
 import { mkdirSync, mkdtempSync, writeFileSync } from "fs";
@@ -105,7 +105,7 @@ async function main(): Promise<void> {
   check(r.status === 400, "an unknown jump kind: 400");
 
   r = await call("POST", "/api/v1/modules/immich");
-  check(r.status === 405, "P1 has no write endpoint: 405");
+  check(r.status === 405, "a read is GET; a change is a job: 405");
   r = await call("DELETE", "/api/v1/modules/immich");
   check(r.status === 405, "…nor delete");
   r = await call("POST", "/api/v1/refresh?what=modules");

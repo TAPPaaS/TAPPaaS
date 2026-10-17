@@ -9,6 +9,7 @@ import { get, useRead } from "../api";
 import { Envelope, ModuleDetail } from "../types";
 import { Badge, Dot, KV, Link, OpenIn, ReadState, Section, Tag, levelOf, since, when } from "../ui";
 import { ModuleBadges } from "./Modules";
+import { JobList } from "../jobs";
 
 const TABS = ["Overview", "Config", "Drift", "Services", "Backup", "Activity"] as const;
 type TabName = (typeof TABS)[number];
@@ -169,7 +170,11 @@ function Backup({ d }: { d: ModuleDetail }) {
 function ActivityTab({ d }: { d: ModuleDetail }) {
   const lines = d.activity ?? [];
   return (
-    <Section title="Activity — the sweep's errors and warnings that name this module" aside="update-tappaas journal">
+    <>
+    <Section title="Activity — the console's jobs on this module" aside="jobs.jsonl">
+      <JobList jobs={d.jobs ?? []} empty={`No console job has named ${d.summary.name} yet.`} />
+    </Section>
+    <Section title="The sweep's errors and warnings that name this module" aside="update-tappaas journal">
       {lines.length === 0 ? <p className="muted">Nothing in the sweep's recent runs names {d.summary.name}.</p> : null}
       <table className="table compact">
         <tbody>
@@ -183,6 +188,7 @@ function ActivityTab({ d }: { d: ModuleDetail }) {
         </tbody>
       </table>
     </Section>
+    </>
   );
 }
 

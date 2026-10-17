@@ -61,3 +61,35 @@ export async function runJson<T>(run: Runner, bin: string, args: string[], opts:
     throw new Error(`${what}: output is not JSON`);
   }
 }
+
+// A job's child: its output as it comes (stdout and stderr in one stream, the
+// order the child wrote them), its exit code at the end. stdin is closed, so a
+// script that would prompt fails rather than waits.
+export type Streamer = (bin: string, args: string[], onOutput: (chunk: string) => void, timeoutMs?: number) => Promise<{ rc: number; ran: boolean; error: string | null }>;
+
+export const streamAsync: Streamer = (bin, args, onOutput, timeoutMs = 4 * 3600_000) =>
+  new Promise((resolve) => {
+    let child: ChildProcess;
+    try {
+      child = spawn(bin, args, { env: { ...configEnv(), NO_COLOR: "1", TERM: "dumb" }, stdio: ["ignore", "pipe", "pipe"] });
+    } catch (e) {
+      resolve({ rc: -1, ran: false, error: (e as Error).message });
+      return;
+    }
+    let settled = false;
+    const done = (r: { rc: number; ran: boolean; error: string | null }): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(r);
+    };
+    const timer = setTimeout(() => {
+      child.kill("SIGTERM");
+      onOutput(`\n[console] timed out after ${Math.round(timeoutMs / 60_000)} min: stopped\n`);
+      done({ rc: -1, ran: true, error: "timed out" });
+    }, timeoutMs);
+    child.stdout?.on("data", (c) => onOutput(c.toString("utf8")));
+    child.stderr?.on("data", (c) => onOutput(c.toString("utf8")));
+    child.on("error", (e) => done({ rc: -1, ran: false, error: e.message }));
+    child.on("close", (code) => done({ rc: code ?? -1, ran: true, error: null }));
+  });

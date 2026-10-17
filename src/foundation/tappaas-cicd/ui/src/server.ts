@@ -1,7 +1,8 @@
-// server.ts — the console's HTTP surface (ADR-034): /api/v1 (typed reads, P1 has
-// no write endpoint) and the built front end. Every connection is filtered on
-// arrival (access.ts peerAllowed) and every request decided (access.ts decide)
-// before any route runs.
+// server.ts — the console's HTTP surface (ADR-034): /api/v1 (typed reads, and
+// from P2 the jobs: every change a manager verb run as a job, jobs.ts) and the
+// built front end. Every connection is filtered on arrival (access.ts
+// peerAllowed) and every request decided (access.ts decide) before any route
+// runs; a job is authorized again as a write (access.ts mayWrite).
 
 import { createServer, IncomingMessage, Server, ServerResponse } from "http";
 import { existsSync, readFileSync, statSync } from "fs";
@@ -11,6 +12,7 @@ import { linesNaming } from "./activity";
 import { attention, findingsFor, moduleSummaries } from "./badges";
 import { Entry, envelope } from "./cache";
 import { JumpKind, jumpsFor } from "./jumps";
+import { Jobs, jobsNaming, summary } from "./jobs";
 import { Manifests } from "./manifest";
 import { MODULE_NAME, Reads } from "./reads";
 
@@ -74,7 +76,7 @@ export class ConsoleServer {
   // The verb manifests (manifest.ts), loaded once the console has started.
   manifests: Manifests | null = null;
 
-  constructor(private readonly cfg: ServerConfig, private readonly reads: Reads) {}
+  constructor(private readonly cfg: ServerConfig, private readonly reads: Reads, readonly jobs: Jobs | null = null) {}
 
   listen(host: string, port: number): Promise<Server> {
     return new Promise((resolve, reject) => {
@@ -120,7 +122,7 @@ export class ConsoleServer {
         res.end();
         return;
       }
-      if (path.startsWith("/api/")) return await this.api(req.method ?? "GET", path, url, d.me, res);
+      if (path.startsWith("/api/")) return await this.api(req.method ?? "GET", path, url, d.me, res, req);
       return this.serveStatic(path, res);
     } catch (e) {
       this.cfg.log(`${req.method} ${path}: ${(e as Error).message}`);
@@ -128,7 +130,7 @@ export class ConsoleServer {
     }
   }
 
-  private async api(method: string, path: string, url: URL, me: Me, res: ServerResponse): Promise<void> {
+  private async api(method: string, path: string, url: URL, me: Me, res: ServerResponse, req?: IncomingMessage): Promise<void> {
     const r = this.reads;
     const parts = path.replace(/\/+$/, "").split("/").slice(3).map((p) => decodeURIComponent(p)); // after /api/v1
     if (!path.startsWith("/api/v1/")) return sendJson(res, 404, { error: "unknown API version" });
@@ -141,7 +143,8 @@ export class ConsoleServer {
       r.refresh(what).catch((e: Error) => this.cfg.log(`refresh ${what}: ${e.message}`));
       return sendJson(res, 202, { refreshing: what });
     }
-    if (method !== "GET") return sendJson(res, 405, { error: "P1 is read-only: no write endpoints" });
+    if (head === "jobs") return this.jobsApi(method, a, b, me, res, req);
+    if (method !== "GET") return sendJson(res, 405, { error: `${method} /api/v1/${head ?? ""}: reads are GET; a change is a job (POST /api/v1/jobs)` });
 
     const env = <T>(e: Entry<T>, data?: unknown): Record<string, unknown> => ({ ...envelope(e), ...(data !== undefined ? { data } : {}) });
 
@@ -191,10 +194,12 @@ export class ConsoleServer {
       case "security":
         return sendJson(res, 200, envelope(await r.security.get()));
       case "activity": {
+        // The sweep's journal and the console's own jobs, side by side.
         const act = await r.activity.get();
         const mod = url.searchParams.get("module");
-        if (mod && act.value) return sendJson(res, 200, env(act, { module: mod, lines: linesNaming(act.value.runs, mod) }));
-        return sendJson(res, 200, envelope(act));
+        const jobs = this.jobs ? this.jobs.list() : [];
+        if (mod && act.value) return sendJson(res, 200, env(act, { module: mod, lines: linesNaming(act.value.runs, mod), jobs: jobsNaming(jobs, mod) }));
+        return sendJson(res, 200, { ...envelope(act), jobs });
       }
       case "modules":
         return this.modules(a, b, url, res);
@@ -248,8 +253,77 @@ export class ConsoleServer {
         resolve: envelope(resolve),
         backup: backup ? envelope(backup) : null,
         activity: act.value ? linesNaming(act.value.runs, name) : null,
+        jobs: this.jobs ? jobsNaming(this.jobs.list(), name) : [],
       },
     });
+  }
+
+  // ── jobs (ADR-034 D4) ─────────────────────────────────────────────
+  //   GET  /jobs                 every job, newest first, and the queue
+  //   POST /jobs {argv, preview}  a preview (or a read); a write never starts here
+  //   POST /jobs/<id>/apply {confirm?}  the preview's argv with its applying flag
+  //   GET  /jobs/<id>            the job with its output; as text/event-stream,
+  //                              the output as it comes (server-sent events)
+  private async jobsApi(method: string, id: string | undefined, sub: string | undefined, me: Me, res: ServerResponse, req?: IncomingMessage): Promise<void> {
+    const jobs = this.jobs;
+    if (!jobs) return sendJson(res, 503, { error: "this console runs no jobs" });
+    if (method === "GET" && !id) {
+      return sendJson(res, 200, { data: { jobs: jobs.list(), queue: jobs.queued(), sweep: await jobs.sweep() } });
+    }
+    if (method === "GET" && id && !sub) {
+      const job = jobs.get(id);
+      if (!job) return sendJson(res, 404, { error: `no job ${id}` });
+      const accept = req ? String(req.headers["accept"] ?? "") : "";
+      if (!accept.includes("text/event-stream") || !req) return sendJson(res, 200, { data: job });
+      return this.streamJob(id, req, res);
+    }
+    if (method !== "POST") return sendJson(res, 405, { error: "jobs: GET or POST" });
+    // A write must be JSON: a cross-site form cannot send that without CORS.
+    const ctype = req ? String(req.headers["content-type"] ?? "") : "";
+    if (!/^application\/json\b/i.test(ctype)) return sendJson(res, 415, { error: "a job is posted as application/json" });
+    let body: Record<string, unknown>;
+    try {
+      body = req ? await readJsonBody(req) : {};
+    } catch (e) {
+      return sendJson(res, 400, { error: (e as Error).message });
+    }
+    const setup = setupState(this.cfg.access);
+    let r;
+    if (!id) r = await jobs.create(me, setup, { argv: body.argv, preview: body.preview });
+    else if (sub === "apply") r = await jobs.applyPreview(me, setup, id, { confirm: body.confirm });
+    else return sendJson(res, 404, { error: `jobs/${id}/${sub ?? ""}` });
+    if (r.job) this.cfg.log(`job ${r.job.id} ${r.job.kind} ${r.job.state}${r.job.refused ? ` (${r.job.refused})` : ""}: ${r.job.argv.join(" ")}`);
+    if (r.status >= 400) return sendJson(res, r.status, { error: r.error, ...(r.job ? { data: summary(r.job) } : {}), ...(r.sweep ? { sweep: r.sweep } : {}) });
+    return sendJson(res, r.status, { data: r.job });
+  }
+
+  private streamJob(id: string, req: IncomingMessage, res: ServerResponse): void {
+    const jobs = this.jobs!;
+    const job = jobs.get(id)!;
+    res.statusCode = 200;
+    res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("X-Accel-Buffering", "no");
+    const send = (event: string, data: unknown): void => {
+      res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    };
+    // What has been said so far, then what follows.
+    send("job", job);
+    if (job.state === "done" || job.state === "refused") {
+      send("end", summary(job));
+      res.end();
+      return;
+    }
+    const off = jobs.subscribe(id, (ev) => {
+      if (ev.type === "output") send("output", ev.chunk);
+      else if (ev.type === "state") send("state", ev.job);
+      else {
+        send("end", ev.job);
+        off();
+        res.end();
+      }
+    });
+    req.on("close", () => off());
   }
 
   private serveStatic(path: string, res: ServerResponse): void {
@@ -290,4 +364,29 @@ export class ConsoleServer {
     res.setHeader("Cache-Control", segs[0] === "assets" ? "public, max-age=31536000, immutable" : "no-cache");
     res.end(readFileSync(file));
   }
+}
+
+// A request's JSON body, at most 64 KiB.
+export function readJsonBody(req: IncomingMessage, limit = 64 * 1024): Promise<Record<string, unknown>> {
+  return new Promise((resolve, reject) => {
+    const parts: NodeBuffer[] = [];
+    let size = 0;
+    req.on("data", (c) => {
+      size += c.length;
+      if (size <= limit) parts.push(c);
+    });
+    req.on("error", (e) => reject(e));
+    req.on("end", () => {
+      if (size > limit) return reject(new Error("the body is larger than 64 KiB"));
+      const text = Buffer.concat(parts).toString("utf8").trim();
+      if (!text) return resolve({});
+      try {
+        const v = JSON.parse(text) as unknown;
+        if (v === null || typeof v !== "object" || Array.isArray(v)) return reject(new Error("the body is not a JSON object"));
+        resolve(v as Record<string, unknown>);
+      } catch {
+        reject(new Error("the body is not JSON"));
+      }
+    });
+  });
 }

@@ -77,6 +77,7 @@ export interface ModuleDetail {
   resolve: Envelope<{ module: string; dependsOn?: string[]; integratesWith?: string[]; fields?: Record<string, ResolvedField> }>;
   backup: Envelope<{ policy: Record<string, unknown>; coverage: Record<string, unknown> }> | null;
   activity: { run: string; line: RunLine }[] | null;
+  jobs: JobSummary[];
 }
 export interface ResolvedField {
   value: unknown;
@@ -254,4 +255,71 @@ export interface Topology {
   outside: TopoOutside[];
   findings: TopoFinding[];
   sources: { name: string; ok: boolean; error?: string }[];
+}
+
+// ── jobs (ADR-034 D4) ─────────────────────────────────────────────────
+export type JobPreview = { kind: "read" } | { kind: "apply-flag"; flag: string } | { kind: "dry-run-flag"; flag: string } | { kind: "none"; touches: string };
+export interface JobSummary {
+  id: string;
+  kind: "preview" | "apply" | "read";
+  state: "queued" | "running" | "done" | "refused";
+  who: { user: string | null; name: string | null; role: string; via: string };
+  route: string;
+  origin: string;
+  bin: string;
+  verb: string;
+  argv: string[];
+  ran: string[] | null;
+  preview: JobPreview;
+  previewOf: string | null;
+  destructive: boolean;
+  object: string;
+  created: string;
+  started: string | null;
+  ended: string | null;
+  durationMs: number | null;
+  exit: number | null;
+  truncated: boolean;
+  refused: string | null;
+}
+export interface Job extends JobSummary {
+  output: string;
+}
+export interface SweepState {
+  active: boolean;
+  state: string;
+  since: string | null;
+  stage: string | null;
+}
+
+// ── the verb manifest (GET /api/v1/manifests) ─────────────────────────
+export interface ManifestOption {
+  flag: string;
+  takesValue: boolean;
+  arg: string | null;
+  choices: string[] | null;
+  repeatable: boolean;
+  description: string;
+}
+export interface ManifestVerb {
+  verb: string;
+  keys: string[][];
+  usage: string;
+  note: string | null;
+  details: string | null;
+  positionals: { name: string; optional: boolean; repeatable: boolean }[];
+  options: ManifestOption[];
+  open: boolean;
+  effect: "read" | "write";
+  preview: JobPreview;
+  destructive: boolean;
+  destructiveWhen: string[];
+  readWhen: string[];
+  disruptions: { flag: string; consequence: string }[];
+}
+export interface Manifest {
+  name: string;
+  version: string;
+  tagline: string;
+  verbs: ManifestVerb[];
 }

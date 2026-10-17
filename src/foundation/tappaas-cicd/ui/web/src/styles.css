@@ -189,3 +189,18 @@ h3 { font-size: .85rem; margin: 1rem 0 .4rem; color: var(--muted); text-transfor
 .chip-id { color: var(--muted); }
 .chip-fw { color: #5b21b6; font-weight: 700; }
 .react-flow__edge-text { font-size: 11px; }
+
+/* ── jobs (P2) ─────────────────────────────────────────────────────── */
+.command { display: flex; align-items: center; gap: 8px; background: #0f172a; color: #e2e8f0; border-radius: 6px; padding: 8px 10px; margin: 8px 0; overflow-x: auto; }
+.command code { white-space: pre-wrap; word-break: break-all; flex: 1; }
+.command-label { font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: .05em; }
+.command .btn-small { background: #1e293b; color: #e2e8f0; border-color: #334155; }
+.btn-small { font-size: 12px; padding: 2px 8px; }
+.output { background: #0b1020; color: #d1d5db; font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 10px 12px; border-radius: 6px; max-height: 420px; overflow: auto; white-space: pre-wrap; word-break: break-word; margin: 6px 0; }
+.output-live { border-left: 3px solid var(--warn); }
+.job-row { cursor: pointer; }
+.job-row:hover td { background: #f8fafc; }
+.kind { font-size: 11px; padding: 1px 6px; border-radius: 4px; background: #eef1f4; color: #374151; }
+.kind-apply { background: var(--info-bg); color: #2d4f9a; }
+.kind-preview { background: #f3f4f6; color: #4b5563; }
+.job-detail { padding: 4px 0; }

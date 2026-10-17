@@ -1,10 +1,11 @@
 # console — the TAPPaaS console (ADR-034)
 
 The site's web UI: its health at a glance, the site drawn as it is cabled, the modules and
-what the sweep did. A service of the mothership (`tappaas-console.service`, run as
-`tappaas`), published through Caddy and the Authentik gate by the thin `console` module
-([`../../console/`](../../console/)). This is phase **P1 — see**: every page reads; nothing
-writes. The job model (P2), the assistant (P3) and agents (P4) come later
+what the sweep did, and every change to the site as a job that runs a manager verb with its own
+preview. A service of the mothership (`tappaas-console.service`, run as `tappaas`), published
+through Caddy and the Authentik gate by the thin `console` module
+([`../../console/`](../../console/)). Phases **P1 — see** and **P2 — operate**; the
+assistant (P3) and agents (P4) come later
 ([ADR-034](../../../../docs/ADR/ADR-034%20-%20TAPPaaS%20User%20Interface.md), Implementation plan).
 
 ```
@@ -49,13 +50,35 @@ A page is served from the last answer with its age; a failed refresh keeps the l
 answer and says why. `POST /api/v1/refresh[?what=<read>]` refreshes the console's own cache
 now (it changes nothing on the site).
 
-## API (`/api/v1`, all GET)
+## API (`/api/v1`)
 
-`me` · `status` · `health` · `gates` · `pulse` · `site` · `modules` · `modules/<m>` ·
+Reads (GET): `me` · `status` · `health` · `gates` · `pulse` · `site` · `modules` · `modules/<m>` ·
 `modules/<m>/drift[?refresh=1]` · `zones` · `environments` · `topology` · `security` ·
-`activity[?module=<m>]` · `jumps/<kind>/<id>[?switch=<s>]` (kind: node, module, switch, port,
-lag, ap, zone, peer, site). Each answers `{data, at, ageSeconds, refreshing, error}`. Any
-other method is 405: P1 has no write endpoint.
+`activity[?module=<m>]` (the sweep's runs, and `jobs`) · `manifests` ·
+`jumps/<kind>/<id>[?switch=<s>]` (kind: node, module, switch, port, lag, ap, zone, peer, site).
+Each answers `{data, at, ageSeconds, refreshing, error}`.
+
+## Jobs — every change (ADR-034 D4)
+
+| | |
+|---|---|
+| `POST /jobs {argv, preview: true}` | a **preview**: the verb's own dry run (`reconcile` without `--apply`, `--check`, `--dry-run`, `modify`'s pre-gate). A verb with no dry run gets a preview that runs nothing and says what the verb touches and the exact command apply will run. |
+| `POST /jobs {argv}` | a **read** verb (`module test`, `node network show`, `wgvpn list`): runs at once. A write without a preview is refused (T3). |
+| `POST /jobs/<id>/apply {confirm?}` | the **apply** of a finished preview, less than an hour old: its own argv plus the applying flag (or without the dry run). A destructive call (`delete`, `purge`, `retire`, `erase`, `--remove`, `--decommission`, `key import`, …) needs `confirm` = the object's name, and the Installer role. |
+| `GET /jobs` | every job (newest first), the queue, and the sweep's state |
+| `GET /jobs/<id>` | the job with its output; with `Accept: text/event-stream` its output as it comes (`job`, `output`, `state`, `end` events) |
+
+A job is posted as `application/json` (a cross-site form cannot). Who may: the gate's Admin
+(every non-destructive verb) or Installer (every verb), or the setup token while setup is
+open; loopback without the gate's headers and the `status` route start no job (T1, T6).
+**One runner**: previews and applies run one at a time, in order (a second operator's job
+queues; `GET /jobs` shows the queue); reads run beside it. **The sweep**: while
+`update-tappaas.service` is active (or starting or stopping) no job starts; the refusal says
+since when and in which stage (`config/.update-stage`), and a queued job whose turn comes
+during a sweep is refused too. **Activity**: every job — who, via, route, the argv as asked and
+as run, its preview, its output (1 MiB), exit code and duration — is a line in
+`<state dir>/jobs.jsonl`; the last 500 are read back at start. After an apply the module list,
+topology, zones, environments, site and backup reads are refreshed.
 
 ## The verb manifest
 
@@ -111,5 +134,7 @@ from the laptop.
 
 `test.sh`: `tsc` on the backend and the unit suite (`test/unit/*.test.ts`) — the connection
 filter, the gate's headers, the role table and route cap, the setup-token rule (ADR-034 T6),
-the reads and their cache, every route, Activity and the jumps — over hrossen's captured
+the reads and their cache, every route, Activity and the jumps; the verb manifest and the argv
+check (T2); the job model: preview before apply (T3), the roles on every write (T1), the typed
+confirmation, the sweep refusal, the serial runner and jobs.jsonl — over hrossen's captured
 outputs with a fake runner. `--deep`: the installed service answers `/api/v1/status`.

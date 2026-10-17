@@ -137,6 +137,16 @@ export class Reads {
     return [what];
   }
 
+  // After a job changed the site: what it may have changed is read again now
+  // (health keeps its own ten-minute timer; validate takes half a minute).
+  refreshAfterJob(): Promise<void> {
+    this.moduleShow.clear();
+    this.moduleResolve.clear();
+    this.moduleBackup.clear();
+    this.moduleDrift.clear();
+    return Promise.all([this.modules, this.topology, this.zones, this.environments, this.site, this.backup, this.peers, this.activity].map((c) => (c as Cached<unknown>).refresh())).then(() => undefined);
+  }
+
   private async loadTopology(): Promise<TopologyDoc & Record<string, unknown>> {
     // The topology places the health findings: hand it the document this cache
     // already holds rather than have it run validate a second time.

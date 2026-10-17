@@ -4,7 +4,7 @@
 // re-run its reads now.
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Envelope, Jump } from "./types";
+import { Envelope, Job, JobSummary, Jump, Manifest, ManifestVerb, SweepState } from "./types";
 
 export class ApiError extends Error {
   constructor(readonly status: number, message: string) {
@@ -102,4 +102,89 @@ export function useJumps(kind: string, id: string | null, sw?: string): Jump[] {
     };
   }, [kind, id, sw]);
   return list;
+}
+
+// ── jobs (ADR-034 D4): every change is a job ──────────────────────────
+
+export interface Posted<T> {
+  ok: boolean;
+  status: number;
+  data: T | null;
+  error: string | null;
+  sweep?: SweepState;
+}
+
+export async function post<T>(path: string, body: unknown): Promise<Posted<T>> {
+  const r = await fetch(`/api/v1/${path}`, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify(body),
+  });
+  const j = (await r.json().catch(() => ({}))) as { data?: T; error?: string; sweep?: SweepState };
+  return { ok: r.ok, status: r.status, data: j.data ?? null, error: j.error ?? (r.ok ? null : `HTTP ${r.status}`), sweep: j.sweep };
+}
+
+// A preview (or a read) of argv; then the apply of that preview.
+export const previewJob = (argv: string[]) => post<Job>("jobs", { argv, preview: true });
+export const readJob = (argv: string[]) => post<Job>("jobs", { argv });
+export const applyJob = (previewId: string, confirm?: string) => post<Job>(`jobs/${encodeURIComponent(previewId)}/apply`, confirm ? { confirm } : {});
+
+// A job as it runs: its output streamed (server-sent events), then its end.
+export function useJob(id: string | null): Job | null {
+  const [job, setJob] = useState<Job | null>(null);
+  useEffect(() => {
+    setJob(null);
+    if (!id) return;
+    const es = new EventSource(`/api/v1/jobs/${encodeURIComponent(id)}`, { withCredentials: true });
+    es.addEventListener("job", (e) => setJob(JSON.parse((e as MessageEvent).data) as Job));
+    es.addEventListener("output", (e) => {
+      const chunk = JSON.parse((e as MessageEvent).data) as string;
+      setJob((j) => (j ? { ...j, output: j.output + chunk } : j));
+    });
+    es.addEventListener("state", (e) => {
+      const s = JSON.parse((e as MessageEvent).data) as JobSummary;
+      setJob((j) => (j ? { ...j, ...s } : j));
+    });
+    es.addEventListener("end", (e) => {
+      const s = JSON.parse((e as MessageEvent).data) as JobSummary;
+      setJob((j) => (j ? { ...j, ...s } : j));
+      es.close();
+      reloadAll();
+    });
+    es.onerror = () => {
+      es.close();
+      // The stream broke (a restart, a proxy timeout): read the job once instead.
+      void get<Job>(`jobs/${encodeURIComponent(id)}`).then((e) => e.data && setJob(e.data)).catch(() => undefined);
+    };
+    return () => es.close();
+  }, [id]);
+  return job;
+}
+
+let manifestsP: Promise<Manifest[]> | null = null;
+export function manifests(): Promise<Manifest[]> {
+  if (!manifestsP) {
+    manifestsP = get<{ manifests: Manifest[] }>("manifests")
+      .then((e) => e.data?.manifests ?? [])
+      .catch((e) => {
+        manifestsP = null;
+        throw e;
+      });
+  }
+  return manifestsP;
+}
+
+export function useVerb(bin: string, verb: string): ManifestVerb | null {
+  const [v, setV] = useState<ManifestVerb | null>(null);
+  useEffect(() => {
+    let live = true;
+    void manifests()
+      .then((ms) => live && setV(ms.find((m) => m.name === bin)?.verbs.find((x) => x.verb === verb) ?? null))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [bin, verb]);
+  return v;
 }

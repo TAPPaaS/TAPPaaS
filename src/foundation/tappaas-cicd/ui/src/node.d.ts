@@ -34,12 +34,17 @@ declare module "http" {
     url?: string;
     headers: Record<string, string | string[] | undefined>;
     socket: Socket;
+    on(event: "data", cb: (chunk: NodeBuffer) => void): IncomingMessage;
+    on(event: "end" | "close", cb: () => void): IncomingMessage;
+    on(event: "error", cb: (e: Error) => void): IncomingMessage;
   }
   export interface ServerResponse {
     statusCode: number;
     headersSent: boolean;
     setHeader(name: string, value: string | number | string[]): void;
+    write(data: string): boolean;
     end(data?: string | NodeBuffer): void;
+    on(event: "close", cb: () => void): ServerResponse;
   }
   export interface Server {
     listen(port: number, host: string, cb?: () => void): Server;
@@ -49,6 +54,11 @@ declare module "http" {
     address(): { address: string; port: number } | string | null;
   }
   export function createServer(handler: (req: IncomingMessage, res: ServerResponse) => void): Server;
+}
+
+declare module "fs" {
+  export function appendFileSync(path: string, data: string, encoding?: "utf8"): void;
+  export function writeFileSync(path: string, data: string, options: { encoding?: "utf8"; mode?: number }): void;
 }
 
 declare module "crypto" {

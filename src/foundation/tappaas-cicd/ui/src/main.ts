@@ -1,10 +1,12 @@
-// console — the TAPPaaS console's backend (ADR-034), phase P1 "see".
+// console — the TAPPaaS console's backend (ADR-034).
 //
 // A service of the mothership, run as `tappaas` by tappaas-console.service
 // (tappaas-cicd.nix). It reads the site only through the managers' --json
-// (run.ts, reads.ts), caches what they say, and serves it with the built front
-// end. It writes nothing on the site; its one file is the health document it
-// hands to `network-manager topology --health` under the state directory.
+// (run.ts, reads.ts) and caches what they say; it changes the site only by
+// running manager verbs as jobs (jobs.ts), each validated against the verb
+// manifests (manifest.ts), previewed before it is applied and recorded in
+// Activity. Its own files are the state directory's: jobs.jsonl and the health
+// document it hands to `network-manager topology --health`.
 //
 //   console serve [--listen <addr:port>[,...]] [--allow <addr>[,...]] [--web <dir>]
 //                 [--state-dir <dir>] [--config-dir DIR]
@@ -17,9 +19,10 @@ import { lookup } from "dns";
 import { networkInterfaces } from "os";
 import { join } from "path";
 import { AccessConfig, addrMatches, setupState } from "./access";
+import { Jobs } from "./jobs";
 import { loadManifests } from "./manifest";
 import { Reads } from "./reads";
-import { runAsync } from "./run";
+import { runAsync, streamAsync } from "./run";
 import { ConsoleServer } from "./server";
 import { HelpSpec, checkArgs, renderHelp } from "../../lib/ts/src/help";
 import { DieError, die, guarded, info, requireOperator, warn } from "../../lib/ts/src/cli";
@@ -32,7 +35,7 @@ export const DEFAULT_PORT = 9097;
 export const HELP: HelpSpec = {
   name: "console",
   version: VERSION,
-  tagline: "the TAPPaaS console backend (ADR-034, P1: read-only)",
+  tagline: "the TAPPaaS console backend (ADR-034)",
   verbs: [
     {
       usage: "serve [--listen <addr:port>] [--allow <addr>] [--web <dir>] [--state-dir <dir>] [--trust-local-headers]",
@@ -40,7 +43,7 @@ export const HELP: HelpSpec = {
         ["--listen <addr:port>", `Where to listen, comma-separated (default: the mothership's mgmt address and 127.0.0.1, port ${DEFAULT_PORT}).`],
         ["--allow <addr>", "Peers accepted besides the firewall, comma-separated addresses or a.b.c.d/n (default: loopback)."],
         ["--web <dir>", "The built front end (default: the one packaged with the console)."],
-        ["--state-dir <dir>", "Where the health document for the topology is kept (default: /var/lib/tappaas/console)."],
+        ["--state-dir <dir>", "Where Activity's jobs.jsonl and the health document for the topology are kept (default: /var/lib/tappaas/console)."],
         ["--trust-local-headers", "Development: believe X-Authentik-* from an --allow peer too, to try the roles."],
       ],
       details:
@@ -184,7 +187,17 @@ async function serve(o: ServeOpts): Promise<number> {
     journalDays: Number(process.env.CONSOLE_JOURNAL_DAYS ?? 7) || 7,
   });
   const log = (l: string): void => console.log(`[console] ${l}`);
-  const server = new ConsoleServer({ access, webDir: existsSync(webDir) ? webDir : null, mgmtDomain: mgmtDomain(), version: VERSION, log }, reads);
+  let server: ConsoleServer | null = null;
+  const jobs = new Jobs({
+    stateDir: o.stateDir,
+    configDir: o.configDir,
+    manifests: () => server?.manifests ?? null,
+    stream: streamAsync,
+    run: runAsync,
+    log,
+    onWriteDone: () => void reads.refreshAfterJob(),
+  });
+  server = new ConsoleServer({ access, webDir: existsSync(webDir) ? webDir : null, mgmtDomain: mgmtDomain(), version: VERSION, log }, reads, jobs);
   for (const l of listen) {
     await server.listen(l.host, l.port).catch((e: Error) => die(`listen ${l.host}:${l.port}: ${e.message}`));
     info(`console ${VERSION} listening on ${l.host}:${l.port}`);
@@ -197,8 +210,9 @@ async function serve(o: ServeOpts): Promise<number> {
   reads.start();
   // What a job may run: every manager's `--help --json` and the declared bash verbs.
   const bashFile = process.env.CONSOLE_MANIFEST_FILE ?? join(__dirname, "..", "..", "..", "manifest", "bash-verbs.json");
+  const srv = server;
   void loadManifests(runAsync, bashFile).then((ms) => {
-    server.manifests = ms;
+    srv.manifests = ms;
     info(`  verb manifests: ${ms.byBin.size} (${[...ms.byBin.keys()].join(", ")})`);
     for (const e of ms.errors) warn(`  no manifest from ${e.bin}: ${e.error}`);
   });
