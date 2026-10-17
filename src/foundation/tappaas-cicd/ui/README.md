@@ -15,6 +15,18 @@ ui/
 └── default.nix, install.sh, update.sh, test.sh
 ```
 
+## Pages (P1)
+
+**Overview** — the strip (gates, pulse, last sweep, backups, release, security) and Attention:
+every FAIL and WARN with the object it names, a link to it in the console and its "Open in"
+jumps. **Physical** — the topology laid out under the spike's rules (ISP top-left, the firewall
+as a callout on the WAN path, the switch in the centre with its ports coloured by VLAN, the
+nodes to the right with their uplinks and guests, APs below, buddies and the satellite on the
+left); a click opens the object's records, findings and jumps. **Modules** — the list with its
+badges; a module's page has Overview, Config, Drift (on demand), Services, Backup and Activity.
+**Activity** — the sweep's runs, the failures ledger and the last result. The other navigation
+entries are later phases.
+
 ## How it reads the site
 
 Only through the managers' `--json` (and `lib/ts`), never `pvesh` or `ssh` of its own:
