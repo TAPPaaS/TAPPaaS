@@ -19,4 +19,4 @@ release **after** the one that carries it: sites read the signers from the last 
 verified, never from the release being checked. To retire a key, give its line
 `valid-before="YYYYMMDD"`; do not delete it.
 
-How to enrol a key and sign a boundary: [`RELEASE-TRAIN.md`](../src/foundation/tappaas-cicd/RELEASE-TRAIN.md#signing-releases-adr-033).
+How to enrol a key, sign a release, and recover from a lost or stolen key: [`SIGNING.md`](../src/foundation/tappaas-cicd/SIGNING.md).

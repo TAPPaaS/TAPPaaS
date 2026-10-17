@@ -217,102 +217,16 @@ A site on `main` between boundaries shows as `2.2+14`: fourteen commits past 2.2
 
 ## Signing releases (ADR-033)
 
-Every release tag carries `tree-sha256:` — a SHA-256 over the content of every file in the
-revision — and `signers-at:`, the commit whose `.tappaas/allowed_signers` authorizes it. Once
-that file lists a key, every tag the train cuts **must be signed**: `boundary` and `patch` check
-for a signing key before any channel moves, refuse without one, and check the signature against
-the listed keys before publishing the tag.
+Every release tag carries `tree-sha256:` and `signers-at:`. Once
+[`.tappaas/allowed_signers`](../../../.tappaas/allowed_signers) lists a key, every tag the train
+cuts **must be signed**: `boundary` and `patch` check for a signing key before any channel moves,
+refuse without one, and check the signature against the listed keys before publishing the tag.
+Staging and production sites then move only to a tag that verifies. Image releases are signed
+separately (`release/sign-image-release.sh`).
 
-A site on staging or production then moves only to a tag that verifies: signed by a key listed
-in the **last release it verified**, tree hash matching, and not older than what it runs. Sites
-on `main` are not verified. `health-manager validate` reports each repository's status
-(`signature-status`), and `~/config/sbom/signatures.json` is the record.
-
-**Enrolling a key** (once a year per signer). Each signer's key lives in their own Bitwarden or
-Vaultwarden vault, and signs through the Bitwarden desktop app's SSH agent, which asks you to
-approve every signature:
-
-1. In the Bitwarden desktop app: *New → SSH key*, type ed25519, name it `tappaas-release-<year>`.
-   Turn on the SSH agent in its settings, set to ask for approval on every use.
-2. Copy its public key into [`.tappaas/allowed_signers`](../../../.tappaas/allowed_signers) with a
-   `valid-before` one year out (the format is in that file), add a row to
-   [`.tappaas/SIGNERS.md`](../../../.tappaas/SIGNERS.md), and land it on `main`.
-3. It counts from the release **after** the one that carries it. The release that adds the first
-   keys is the last unsigned one; a yearly replacement goes in while the old key still works.
-
-Keep the vault behind two-factor login, and not on a TAPPaaS site that these releases update.
-`health-manager validate` warns 60 days before a key expires.
-
-**Signing a boundary.** The train runs on the mothership; the key stays in your vault. Forward
-your agent and tell git which key to ask it for:
-
-```bash
-ssh -A tappaas@<mothership>                    # with the Bitwarden agent running on your laptop
-git -C ~/TAPPaaS config user.signingkey "key::<your public key>"   # once, on the mothership
-tappaas-train.sh boundary                      # approve the signature when the agent asks
-```
-
-**Retiring a key**: give its line `valid-before="YYYYMMDD"`. Do not delete it — the releases it
-signed would stop verifying. A stolen key gets `valid-before` of today, in an urgent fix
-(`tappaas-train.sh patch … --why "security: signing key stolen"`) signed by the other signer.
-
-**The recovery key** — for when both signers have lost their keys. It is listed as
-`recovery@tappaas.org` and may sign **only** a release that changes nothing outside `.tappaas/`;
-on anything else its signature fails verification. Made once, offline:
-
-```bash
-ssh-keygen -t ed25519 -C recovery-offline -f tappaas-recovery     # on a machine with no network; set a passphrase
-```
-
-Its public key goes into `allowed_signers` (no `valid-before`). The private key is kept offline in
-two places you both control — an encrypted USB stick in a safe and a paper copy — and **not** in
-either everyday vault. To use it: a branch off the channel's tip that only edits
-`allowed_signers` (new keys in, lost ones retired), merged to `main`, then
-
-```bash
-git -C ~/TAPPaaS config user.signingkey /path/to/tappaas-recovery
-tappaas-train.sh patch staging <commit> --why "security: signer recovery"
-tappaas-train.sh patch production <commit> --why "security: signer recovery"
-git -C ~/TAPPaaS config --unset user.signingkey                  # and take the key offline again
-```
-
-The next boundary is signed with the new keys. If the recovery key is lost too, no release can
-be verified again: publish the new fingerprints out of band, and every operator re-anchors their
-site by hand (ADR-033 D4b).
-
-### Signing image releases
-
-The VM images (`nixos-template-v*`, `opnsense-firewall-v*`) are checked by hash: the image
-pointers (`templates/tappaas-nixos.json`, `network/network.json`) carry `imageSha256` next to
-`imageLocation`, and the install refuses a download that does not match before importing it. The
-build checks its own inputs first — the OPNsense base image against the digest its publisher
-states, the NixOS build against the hashes in `flake.lock` — and publishes `SHA256SUMS` with the
-release. CI cannot sign it (the key stays in your vault), so after the build, with the Bitwarden
-agent running:
-
-```bash
-release/sign-image-release.sh nixos-template-v1.5   # checks SHA256SUMS; approve the signature in your SSH agent
-release/bump-version.sh --nixos 1.5                 # checks the signature, writes the URL and the SHA-256
-```
-
-`sign-image-release.sh` uses `git config user.signingkey` unless given `--key`, refuses a
-`SHA256SUMS` that does not list every artefact with the digest GitHub recorded, and checks the
-signature against `.tappaas/allowed_signers` (namespace `tappaas-image`) before uploading
-`SHA256SUMS.sig`. The recovery key is listed for `git` only, so it cannot sign images.
-`--dry-run` signs without uploading; `--generate` backfills a release built before `SHA256SUMS`
-was published. Once `allowed_signers` lists a key, `bump-version.sh` refuses an unsigned
-`SHA256SUMS`. Anyone can check a download by hand:
-
-```bash
-ssh-keygen -Y verify -f .tappaas/allowed_signers -I lars@tappaas.org -n tappaas-image \
-  -s SHA256SUMS.sig < SHA256SUMS && sha256sum -c SHA256SUMS
-```
-
-To move the OPNsense base image, change `OPNSENSE_BASE_URL` and `OPNSENSE_BASE_SHA256` together in
-`.github/workflows/build-opnsense-image.yml`; the build stops when the pin differs from the
-upstream release's digest. `cluster/make-install-media.sh` checks the Proxmox ISO against
-Proxmox's `SHA256SUMS` (or `--iso-sha256`) and the install assistant through Proxmox's signed
-repository index.
+Keys, enrolment, signing a boundary from your vault, image signing, and what to do when a key is
+lost or stolen: [SIGNING.md](SIGNING.md). What a site checks and reports:
+[VERIFIED-UPDATES.md](VERIFIED-UPDATES.md).
 
 ## One pin for the estate
 

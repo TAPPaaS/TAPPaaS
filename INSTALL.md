@@ -66,7 +66,8 @@ TAPPaaS v2.4: signed by SHA256:… — compare it with the fingerprint in INSTAL
 | Erik Daniel | *not published yet — the release keys are being enrolled* |
 
 Check the same fingerprints on [tappaas.org](https://tappaas.org) and in the release notes; if they
-differ anywhere, stop and ask before installing. Until the keys are published TAPPaaS releases are
+differ anywhere, stop and ask before installing. What the site checks from then on, and how to
+read it: [Verified updates](src/foundation/tappaas-cicd/VERIFIED-UPDATES.md). Until the keys are published TAPPaaS releases are
 unsigned and the install says so (`TAPPaaS signs no releases yet`). The `main` branch is never
 signed.
 

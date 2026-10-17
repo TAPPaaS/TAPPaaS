@@ -24,7 +24,7 @@ flowchart LR
 | [`roadmap-cut.py`](roadmap-cut.py) | **The ROADMAP.md cut**, run by the boundary just before `main` reaches staging: every ✅ row leaves the waves for a `## Release <version>` section, `## Next release` becomes its summary, the promoted release gets its production date. `--check` shows what it would do; `--normalize` rewrites counts without cutting. Tested by `scripts/test/test-roadmap-cut.sh`. |
 | `changelog.sh` | Release notes between two refs: the issues delivered and the changes, grouped, plus the config migrations added (ADR-025 D6). `--enrich` adds issue titles from the forge. |
 | `bump-version.sh` | Repoints `templates/tappaas-nixos.json` and `network/network.json` at newly built VM images and writes each image's SHA-256 beside its URL, from the release's signed `SHA256SUMS`; `--check` reports drift. Tested by `scripts/test/test-image-hashes.sh`. |
-| `sign-image-release.sh` | Signs an image release's `SHA256SUMS` with a release manager's key and uploads `SHA256SUMS.sig` — the step CI cannot do. See RELEASE-TRAIN.md, *Signing image releases*. |
+| `sign-image-release.sh` | Signs an image release's `SHA256SUMS` with a release manager's key and uploads `SHA256SUMS.sig` — the step CI cannot do. See `src/foundation/tappaas-cicd/SIGNING.md`, *Signing an image release*. |
 | `lib.sh` | Logging helpers shared by the release scripts (sourced, not run). |
 
 `make-release.sh`, the driver for the procedure before the train (cut `rc/<ver>`, tag it,
