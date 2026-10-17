@@ -45,6 +45,7 @@ REPO="TAPPaaS/TAPPaaS"
 DRY_RUN=0
 NAMESPACE="tappaas-image"
 SIGNERS=".tappaas/allowed_signers"
+REVOKED=".tappaas/revoked_signers"
 
 usage() { sed -n '2,/^set -euo/p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//; $d'; }
 usage_err() { error "$*"; exit 2; }
@@ -133,10 +134,12 @@ ssh-keygen -Y sign -f "${KEY}" -n "${NAMESPACE}" "${WORK}/SHA256SUMS" >/dev/null
 if grep -qvE '^[[:space:]]*(#|$)' "${SIGNERS}" 2>/dev/null; then
     who="$(ssh-keygen -Y find-principals -f "${SIGNERS}" -n "${NAMESPACE}" \
              -s "${WORK}/SHA256SUMS.sig" 2>/dev/null | head -1 || true)"
-    [[ -n "${who}" ]] || die "this key is not listed in ${SIGNERS} for ${NAMESPACE} — enrol it first (RELEASE-TRAIN.md)"
-    ssh-keygen -Y verify -f "${SIGNERS}" -I "${who}" -n "${NAMESPACE}" \
+    [[ -n "${who}" ]] || die "this key is not listed in ${SIGNERS} for ${NAMESPACE} — enrol it first (src/foundation/tappaas-cicd/SIGNING.md)"
+    rev=()
+    if grep -vE '^[[:space:]]*(#|$)' "${REVOKED}" >"${WORK}/revoked" 2>/dev/null; then rev=(-r "${WORK}/revoked"); fi
+    ssh-keygen -Y verify -f "${SIGNERS}" -I "${who}" ${rev[@]+"${rev[@]}"} -n "${NAMESPACE}" \
         -s "${WORK}/SHA256SUMS.sig" <"${WORK}/SHA256SUMS" >/dev/null \
-        || die "the signature does not verify against ${SIGNERS}"
+        || die "the signature does not verify against ${SIGNERS} (expired, or revoked in ${REVOKED}?)"
     info "${GN}signature verifies${CL} as ${who}"
 else
     warn "${SIGNERS} lists no key yet — the signature cannot be checked, and sites will not count it"

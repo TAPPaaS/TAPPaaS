@@ -17,6 +17,7 @@ both does not stop it for good. Signer keys are replaced every year.
 A change to `allowed_signers` is an ordinary commit, reviewed like code, and takes effect for the
 release **after** the one that carries it: sites read the signers from the last release they
 verified, never from the release being checked. To retire a key, give its line
-`valid-before="YYYYMMDD"`; do not delete it.
+`valid-before="YYYYMMDD"`; do not delete it. A stolen key is revoked instead, in
+[`revoked_signers`](revoked_signers).
 
 How to enrol a key, sign a release, and recover from a lost or stolen key: [`SIGNING.md`](../src/foundation/tappaas-cicd/SIGNING.md).

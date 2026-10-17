@@ -175,6 +175,14 @@ mkrel nixos-template-v9.6 tappaas-nixos.qcow2.zst
 ssh-keygen -q -Y sign -f "${T}/stranger" -n tappaas-image "${REL}/nixos-template-v9.6/SHA256SUMS" >/dev/null 2>&1
 out="$(bump --nixos 9.6)"; rc=$?
 ck "a signature by an unlisted key is refused" "1" "${rc}"
+mkrel nixos-template-v9.61 tappaas-nixos.qcow2.zst
+ssh-keygen -q -Y sign -f "${T}/key" -n tappaas-image "${REL}/nixos-template-v9.61/SHA256SUMS" >/dev/null 2>&1
+printf '# stolen\n%s\n' "$(cut -d' ' -f1,2 "${T}/key.pub")" >"${R}/.tappaas/revoked_signers"
+out="$(bump --nixos 9.61)"; rc=$?
+ck "a signature by a revoked key is refused, though the key is listed" "1" "${rc}"
+rm -f "${R}/.tappaas/revoked_signers"
+out="$(bump --nixos 9.61)"; rc=$?
+ck "… and accepted once it is not revoked" "0" "${rc}"
 
 echo "── release/sign-image-release.sh (gh stubbed) ──"
 GHD="${T}/gh"; mkdir -p "${GHD}/bin"

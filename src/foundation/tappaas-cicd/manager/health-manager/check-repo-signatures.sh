@@ -47,6 +47,10 @@ info() { echo "$*"; }; warn() { echo "WARN: $*" >&2; }; error() { echo "ERROR: $
 . "${LIB}/channels-lib.sh"
 # shellcheck source=../../lib/verify-repo.sh
 . "${LIB}/verify-repo.sh"
+# What a checkout already runs is judged by the date its tag was signed: a
+# release signed while its key was valid stays verified after the key expires.
+# (A site MOVING to a release is checked against today — lib/repo-sync.sh.)
+VERIFY_AT=tag
 
 [[ -r "${SITE}" ]] || { error "no site.json at ${SITE}"; exit 1; }
 

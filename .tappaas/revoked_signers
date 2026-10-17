@@ -1,0 +1,8 @@
+# Keys that must never verify again (ADR-033 D4b) — a stolen signing key goes
+# here, as one public key per line ("ssh-ed25519 AAAA... comment"), with a
+# comment line above it saying when and why. A key listed here is refused
+# whatever date its tag claims, for release tags and for image SHA256SUMS.
+#
+# Like allowed_signers, this file counts as of the release a site last
+# verified: the release that adds a key here is signed by another key, and the
+# revocation holds from the next release on. Release it as an urgent fix.

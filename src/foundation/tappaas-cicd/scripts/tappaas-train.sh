@@ -266,11 +266,14 @@ make_release_tag() {
             # Not through g(): the token's prompt is on stderr.
             git -C "${REPO_DIR}" -c gpg.format=ssh tag -s "${t}" -m "${msg}" -m "${lines}" "${commit}" \
                 || { error "could not sign ${t}"; return 1; }
-            signers="$(mktemp)"; verify_signers_at "${REPO_DIR}" "${commit}" "${signers}"
-            sig="$(verify_tag_signature "${REPO_DIR}" "${t}" "${signers}")" || {
-                rm -f "${signers}"; g tag -d "${t}" >/dev/null
-                error "${t} was signed by a key ${commit:0:8} does not list (${sig}) — not published"; return 1; }
-            rm -f "${signers}"
+            # Against today's date and the revocation list: an expired, retired or
+            # revoked key is refused here, before any site has to refuse it.
+            local revoked; signers="$(mktemp)"; revoked="$(mktemp)"
+            VERIFY_AT=now verify_keyring "${REPO_DIR}" "${commit}" "${signers}" "${revoked}"
+            sig="$(verify_tag_signature "${REPO_DIR}" "${t}" "${signers}" "${revoked}")" || {
+                rm -f "${signers}" "${revoked}"; g tag -d "${t}" >/dev/null
+                error "${t} was not signed by a key ${commit:0:8} lists as valid today (${sig}) — not published"; return 1; }
+            rm -f "${signers}" "${revoked}"
             info "  ${t} signed by ${sig%% *}"
         else
             g tag -a "${t}" -m "${msg}" -m "${lines}" "${commit}" || { error "could not tag ${t}"; return 1; }
@@ -286,9 +289,32 @@ make_release_tag() {
 # changed, not after the branch is already published (ADR-033 D1).
 signing_ready() {
     verify_repo_signs "${REPO_DIR}" "$1" || return 0
-    [[ -n "$(g config user.signingkey)" ]] && return 0
-    error "${2:-the release tag} must be signed (ADR-033): this repository lists signers in ${VERIFY_SIGNERS_PATH}, and no signing key is configured"
-    error "  git -C ${REPO_DIR} config user.signingkey 'key::<your public key>'   (the key in your vault's SSH agent, via ssh -A)"
+    local key pub blob signers revoked ok=0
+    key="$(g config user.signingkey)"
+    if [[ -z "${key}" ]]; then
+        error "${2:-the release tag} must be signed (ADR-033): this repository lists signers in ${VERIFY_SIGNERS_PATH}, and no signing key is configured"
+        error "  git -C ${REPO_DIR} config user.signingkey 'key::<your public key>'   (the key in your vault's SSH agent, via ssh -A)"
+        return 1
+    fi
+    # The configured key must be one <commit> lists as valid TODAY and has not
+    # revoked — else the tag would be refused by every site, after the channel
+    # had already moved.
+    case "${key}" in
+        key::*) pub="${key#key::}" ;;
+        *)      pub="$(cat "${key%.pub}.pub" 2>/dev/null || true)" ;;
+    esac
+    blob="$(awk '{print $2}' <<<"${pub}")"
+    if [[ -z "${blob}" ]]; then
+        warn "  cannot read the public half of ${key} — the signature is checked after signing instead"
+        return 0
+    fi
+    signers="$(mktemp)"; revoked="$(mktemp)"
+    VERIFY_AT=now verify_keyring "${REPO_DIR}" "$1" "${signers}" "${revoked}"
+    grep -vE '^[[:space:]]*#' "${signers}" | grep -qF " ${blob}" && ok=1
+    grep -qF "${blob}" "${revoked}" && ok=0
+    rm -f "${signers}" "${revoked}"
+    [[ "${ok}" == 1 ]] && return 0
+    error "${2:-the release tag} cannot be signed with ${key:0:40}…: ${VERIFY_SIGNERS_PATH} at $(g rev-parse --short "$1") does not list it as valid today, or ${VERIFY_REVOKED_PATH} revokes it"
     return 1
 }
 

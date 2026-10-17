@@ -1094,6 +1094,11 @@ FAKE_NOW=$(( 1790000000 + 3*86400 )) run patch staging "${_fix}" --why "service 
 [[ "${RC}" -ne 0 && "${OUT}" == *"must be signed"* ]] && ok "a repository with signers refuses an unsigned tag" || bad "no refusal without a key: ${OUT}"
 [[ -z "$(git -C "${TMP}/w" tag -l v2.1.1)" ]] && ok "…and cuts nothing" || bad "an unsigned v2.1.1 was cut"
 [[ "$(git -C "${TMP}/w" rev-parse origin/staging)" != "${_fix}" ]] && ok "…before staging moves" || bad "staging moved without a tag"
+ssh-keygen -q -t ed25519 -N '' -C other -f "${TMP}/other" </dev/null
+git -C "${TMP}/w" config user.signingkey "${TMP}/other"
+FAKE_NOW=$(( 1790000000 + 3*86400 )) run patch staging "${_fix}" --why "service down: x"
+[[ "${RC}" -ne 0 && "${OUT}" == *"does not list it as valid today"* ]] && ok "a key the repository does not list (or lists as expired or revoked) is refused" || bad "unlisted key accepted: ${OUT}"
+[[ "$(git -C "${TMP}/w" rev-parse origin/staging)" != "${_fix}" ]] && ok "…before staging moves" || bad "staging moved with an unusable key"
 git -C "${TMP}/w" config user.signingkey "${TMP}/rm"
 FAKE_NOW=$(( 1790000000 + 3*86400 )) run patch staging "${_fix}" --why "service down: x"
 [[ "${RC}" -eq 0 ]] && ok "with a key configured the patch runs" || bad "signed patch failed: ${OUT}"

@@ -22,6 +22,18 @@ command -v warn  >/dev/null 2>&1 || warn()  { echo "WARN: $*" >&2; }
 command -v error >/dev/null 2>&1 || error() { echo "ERROR: $*" >&2; }
 
 VERIFY_SIGNERS_PATH=".tappaas/allowed_signers"
+# Keys that must never verify again, whatever date a tag claims: a stolen key
+# goes here (one public key per line, `#` comments allowed).
+VERIFY_REVOKED_PATH=".tappaas/revoked_signers"
+# Which clock a key's valid-after/valid-before is read against:
+#   now  (default) today — for anything about to be TRUSTED: a site moving to a
+#        release, a fresh clone, a tag being cut. Git itself reads the tag's own
+#        date, which whoever signs it chooses, so an expired or retired key
+#        could otherwise sign a back-dated tag.
+#   tag  the tag's date — for reporting on a release already running, so a
+#        release signed while its key was valid stays verified after the key
+#        expires.
+VERIFY_AT="${VERIFY_AT:-now}"
 VERIFY_TAG_RE='^v[0-9]+\.[0-9]+(\.[0-9]+)?$'
 # The recovery key (ADR-033 D4a) is any key whose principal is recovery@<...>.
 # It is kept offline and may sign only a release that changes nothing but
@@ -80,6 +92,45 @@ verify_signers_at() {
     grep -qvE '^[[:space:]]*(#|$)' "${out}"
 }
 
+# verify_keyring <path> <commit> <signers-out> <revoked-out>
+# The keys that may sign, as of <commit>: its allowed_signers — without the
+# keys whose validity window excludes today when VERIFY_AT=now — and its
+# revoked_signers (comments stripped; empty when there are none). Returns as
+# verify_signers_at does, on the file as written: a repository whose keys have
+# all expired still SIGNS, so its releases fail rather than read as unsigned.
+verify_keyring() {
+    local path="$1" commit="$2" out="$3" revoked="$4" raw now
+    : >"${revoked}"
+    git -C "${path}" show "${commit}:${VERIFY_REVOKED_PATH}" 2>/dev/null \
+        | grep -vE '^[[:space:]]*(#|$)' >"${revoked}" || true
+    raw="$(mktemp)"
+    if ! verify_signers_at "${path}" "${commit}" "${raw}"; then
+        cp "${raw}" "${out}"; rm -f "${raw}"; return 1
+    fi
+    if [[ "${VERIFY_AT}" == tag ]]; then
+        cp "${raw}" "${out}"; rm -f "${raw}"; return 0
+    fi
+    now="${VERIFY_NOW:-$(date -u +%Y%m%d%H%M%S)}"
+    # A timestamp is YYYYMMDD[HHMM[SS]]; right-padded to 14 digits it compares
+    # as a string. valid-before is exclusive, valid-after inclusive (ssh-keygen).
+    awk -v now="${now}" '
+        function ts(line, opt,   m) {
+            if (match(line, opt "=\"?[0-9]+")) {
+                m = substr(line, RSTART, RLENGTH); sub(/^[^0-9]*/, "", m)
+                while (length(m) < 14) m = m "0"
+                return m
+            }
+            return ""
+        }
+        /^[[:space:]]*(#|$)/ { print; next }
+        { vb = ts($0, "valid-before"); va = ts($0, "valid-after")
+          if (vb != "" && now >= vb) next
+          if (va != "" && now <  va) next
+          print }' "${raw}" >"${out}"
+    rm -f "${raw}"
+    return 0
+}
+
 # verify_release_tags <path> <commit> — the annotated release tags naming
 # <commit>, highest version first.
 verify_release_tags() {
@@ -97,20 +148,22 @@ verify_tag_field() {
         | sed -n "s/^$3:[[:space:]]*//p" | head -1
 }
 
-# verify_tag_signature <path> <tag> <signers-file>
+# verify_tag_signature <path> <tag> <signers-file> [<revoked-file>]
 # Prints `<principal> <key fingerprint>` for a good signature by a listed key
 # and returns 0; otherwise prints why (git's own words) and returns 1. Reasons go
 # to stdout because callers run it in $(...). The tag object must
 # also carry the name it is published under: a signed v2.1 object re-published
 # as v2.9 names an old revision under a new number.
 verify_tag_signature() {
-    local path="$1" tag="$2" signers="$3" out name
+    local path="$1" tag="$2" signers="$3" revoked="${4:-}" out name
+    local -a rev=()
+    [[ -n "${revoked}" && -s "${revoked}" ]] && rev=(-c gpg.ssh.revocationFile="${revoked}")
     name="$(git -C "${path}" cat-file tag "refs/tags/${tag}" 2>/dev/null | sed -n 's/^tag //p' | head -1)"
     if [[ "${name}" != "${tag}" ]]; then
         printf "tag object is named '%s', published as '%s'\n" "${name:-?}" "${tag}"
         return 1
     fi
-    out="$(git -C "${path}" -c gpg.ssh.allowedSignersFile="${signers}" verify-tag --raw "${tag}" 2>&1)" || {
+    out="$(git -C "${path}" -c gpg.ssh.allowedSignersFile="${signers}" ${rev[@]+"${rev[@]}"} verify-tag --raw "${tag}" 2>&1)" || {
         out="$(printf '%s\n' "${out}" | grep -v '^$' | tail -1)"
         printf '%s\n' "${out:-no valid signature}"
         return 1
@@ -127,25 +180,25 @@ verify_tag_signature() {
 # Going backwards is the caller's check (verify_moves_forward): the base of a
 # fresh clone has no history to compare with.
 verify_target() {
-    local path="$1" target="$2" base="$3" signers t sig want got
+    local path="$1" target="$2" base="$3" signers revoked t sig want got
     VERIFY_STATUS="" VERIFY_TAG="" VERIFY_SIGNER="" VERIFY_TREE="" VERIFY_REASON=""
-    signers="$(mktemp)"
-    if ! verify_signers_at "${path}" "${base}" "${signers}"; then
-        rm -f "${signers}"
+    signers="$(mktemp)"; revoked="$(mktemp)"
+    if ! verify_keyring "${path}" "${base}" "${signers}" "${revoked}"; then
+        rm -f "${signers}" "${revoked}"
         VERIFY_STATUS="unsigned-declared"
         VERIFY_REASON="no keys in ${VERIFY_SIGNERS_PATH} at $(git -C "${path}" rev-parse --short "${base}" 2>/dev/null || echo "${base}")"
         return 4
     fi
     local tags; tags="$(verify_release_tags "${path}" "${target}")"
     if [[ -z "${tags}" ]]; then
-        rm -f "${signers}"
+        rm -f "${signers}" "${revoked}"
         VERIFY_STATUS="failed"
         VERIFY_REASON="$(git -C "${path}" rev-parse --short "${target}" 2>/dev/null) is not a release tag"
         return 1
     fi
     VERIFY_REASON=""
     while IFS= read -r t; do
-        sig="$(verify_tag_signature "${path}" "${t}" "${signers}")" || {
+        sig="$(verify_tag_signature "${path}" "${t}" "${signers}" "${revoked}")" || {
             VERIFY_REASON="${VERIFY_REASON:+${VERIFY_REASON}; }${t}: ${sig}"; continue; }
         want="$(verify_tag_field "${path}" "${t}" tree-sha256)"
         got="$(verify_tree_sha256 "${path}" "${target}")"
@@ -158,11 +211,11 @@ verify_target() {
         if [[ "${sig%% *}" =~ ${VERIFY_RECOVERY_RE} ]] && ! verify_only_signers_changed "${path}" "${base}" "${target}"; then
             VERIFY_REASON="${VERIFY_REASON:+${VERIFY_REASON}; }${t}: signed by the recovery key, which may sign only a release that changes nothing outside .tappaas/"; continue
         fi
-        rm -f "${signers}"
+        rm -f "${signers}" "${revoked}"
         VERIFY_STATUS="verified" VERIFY_TAG="${t}" VERIFY_SIGNER="${sig}" VERIFY_TREE="${got}" VERIFY_REASON=""
         return 0
     done <<<"${tags}"
-    rm -f "${signers}"
+    rm -f "${signers}" "${revoked}"
     VERIFY_STATUS="failed"
     return 1
 }
@@ -224,14 +277,14 @@ verify_introduction() {
     if [[ "${at}" != "${commit}" ]]; then
         VERIFY_REASON="introduction ${tag} points at ${at:-nothing}, not ${commit}"; return 1
     fi
-    signers="$(mktemp)"
-    if ! verify_signers_at "${path}" "${commit}" "${signers}"; then
-        rm -f "${signers}"
+    signers="$(mktemp)"; local revoked; revoked="$(mktemp)"
+    if ! verify_keyring "${path}" "${commit}" "${signers}" "${revoked}"; then
+        rm -f "${signers}" "${revoked}"
         VERIFY_REASON="introduction ${tag} lists no keys in ${VERIFY_SIGNERS_PATH}"; return 1
     fi
-    sig="$(verify_tag_signature "${path}" "${tag}" "${signers}")" || {
-        rm -f "${signers}"; VERIFY_REASON="introduction ${tag}: ${sig}"; return 1; }
-    rm -f "${signers}"
+    sig="$(verify_tag_signature "${path}" "${tag}" "${signers}" "${revoked}")" || {
+        rm -f "${signers}" "${revoked}"; VERIFY_REASON="introduction ${tag}: ${sig}"; return 1; }
+    rm -f "${signers}" "${revoked}"
     fp="${sig##* }"
     case " ${fps} " in
         *" ${fp} "*) ;;

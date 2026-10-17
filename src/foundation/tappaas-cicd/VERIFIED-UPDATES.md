@@ -85,7 +85,7 @@ TAPPaaS: REFUSED — 3f2a91c on 'stable' (production) is not a verified release
 | Reason | What it means | What to do |
 |---|---|---|
 | `is not a release tag` | the branch tip is not exactly a release | wait for the release; the branch was moved without one |
-| `No principal matched` / `no valid signature` | signed by a key the last release does not list | do not override; ask the repository's owners — this is the case the check exists for |
+| `No principal matched` / `no valid signature` | signed by a key the last release does not list, lists as expired today, or has revoked | do not override; ask the repository's owners — this is the case the check exists for |
 | `tree-sha256 mismatch` | the files do not match what was signed | do not override; report it |
 | `does not descend from the last verified release` | the branch was moved back to an older release | ask the repository's owners; an update never goes back on its own — going back is a deliberate operator act, not a fetch result |
 | `the site requires signed releases` | `requireSigned` is on and the repository signs nothing | ask its owner to sign, or accept it knowingly with `--requireSigned false` |

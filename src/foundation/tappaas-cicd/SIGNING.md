@@ -54,7 +54,10 @@ approval on every signature. The private key is never written to disk outside th
 - The vault is not hosted on a TAPPaaS site that these releases update — a broken update must not
   lock its signer out of the key that signs the fix.
 - Each key is valid for one year (`valid-before`) and is replaced before then.
-  `health-manager validate` warns 60 days ahead.
+  `health-manager validate` warns 60 days ahead. Once its year is over a key can no longer sign a
+  new release: sites check a key against **today's** date when they move to a release, not
+  against the date written in the tag (which the signer chooses). A release already running stays
+  verified after its key expires.
 - A hardware key (FIDO2, `sk-ssh-ed25519`) works the same way, for a signer who prefers one.
 
 ### Enrolling a key (once a year)
@@ -108,15 +111,20 @@ ssh-keygen -Y verify -f .tappaas/allowed_signers -I lars@tappaas.org -n tappaas-
 
 **One key lost.** The other signer carries on; enrol a new key as above.
 
-**A key stolen.** The other signer gives the stolen line `valid-before` of today, as an urgent
-fix:
+**A key stolen.** Expiry does not stop a thief, so the key is **revoked**: the other signer adds
+its public key to [`.tappaas/revoked_signers`](../../../.tappaas/revoked_signers) — one key per
+line, with a comment saying when and why — and releases that as an urgent fix:
 
 ```bash
 tappaas-train.sh patch staging <commit> --why "security: signing key stolen"
 tappaas-train.sh patch production <commit> --why "security: signing key stolen"
 ```
 
-Releases the thief signed before that still verify, so also announce which versions not to trust.
+A revoked key is refused whatever date its tag claims, for releases and for images. Like any
+change to the signer list it counts from the release after the one that carries it, so get the
+revoking release out fast: a site that has moved to it refuses the thief, one still on an older
+release does not. Releases the thief signed before still verify, so also announce which versions
+not to trust.
 
 **Both keys lost: the recovery key.** `allowed_signers` lists a third key, `recovery@tappaas.org`,
 that may sign **only a release that changes nothing outside `.tappaas/`** — enough to enrol new

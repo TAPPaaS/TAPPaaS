@@ -10,7 +10,9 @@
 #                    added in the same release (refused) and then trusted at the
 #                    next; tree-sha256 missing or wrong; a re-published tag
 #                    object; an expired key on a new tag and on an old one; no
-#                    signers at the base (unsigned by declaration); the recovery
+#                    signers at the base (unsigned by declaration); expiry read
+#                    against today when moving, a revoked key refused at any date;
+#                    the recovery
 #                    key enrols signers but may not sign code.
 #   verify_moves_forward: a rollback is refused.
 #   the gate:        a staging checkout moves to a signed release and records it;
@@ -119,16 +121,51 @@ verify_target "${R}" "${T16}" "${T12}"; rc=$?
 check "re-published tag object refused" "${rc}" "1"
 case "${VERIFY_REASON}" in *"named 'v1.6'"*) ok ;; *) no "reason names the real tag (${VERIFY_REASON})" ;; esac
 
-# 7. an expired key: a new tag fails, a tag made while it was valid still verifies
+# 7. an expired key. Moving to a release (VERIFY_AT=now, the default) reads its
+#    validity against today, so a back-dated tag by an expired key is refused;
+#    reporting on a running release (VERIFY_AT=tag) reads the tag's own date.
 E="${W}/e"; git init -q -b main "${E}"; mkdir -p "${E}/.tappaas"
 signer_line alice@x alice ',valid-before="20200101"' > "${E}/.tappaas/allowed_signers"
 commit "${E}" base; EBASE="$(git -C "${E}" rev-parse HEAD)"
 GIT_COMMITTER_DATE="2019-06-01T00:00:00Z" stag "${E}" alice v0.1
+VERIFY_AT=tag verify_target "${E}" HEAD "${EBASE}"; rc=$?
+check "retired key, tag from before, reported on" "${rc}" "0"
 verify_target "${E}" HEAD "${EBASE}"; rc=$?
-check "retired key, tag from before" "${rc}" "0"
+check "retired key, back-dated tag, moved to: refused" "${rc}/${VERIFY_STATUS}" "1/failed"
 commit "${E}" new; stag "${E}" alice v0.2
+VERIFY_AT=tag verify_target "${E}" HEAD "${EBASE}"; rc=$?
+check "retired key, tag from after, reported on" "${rc}" "1"
 verify_target "${E}" HEAD "${EBASE}"; rc=$?
-check "retired key, tag from after" "${rc}" "1"
+check "retired key, tag from after, moved to" "${rc}" "1"
+#    the clock is today's: a key valid until tomorrow still signs, one not valid
+#    until tomorrow does not
+VERIFY_NOW=20191231235959 verify_target "${E}" "v0.1^{commit}" "${EBASE}"; rc=$?
+check "a key still inside its window" "${rc}" "0"
+F2="${W}/f2"; git init -q -b main "${F2}"; mkdir -p "${F2}/.tappaas"
+signer_line alice@x alice ',valid-after="20990101"' > "${F2}/.tappaas/allowed_signers"
+commit "${F2}" base; F2BASE="$(git -C "${F2}" rev-parse HEAD)"
+GIT_COMMITTER_DATE="2099-06-01T00:00:00Z" stag "${F2}" alice v0.1
+verify_target "${F2}" HEAD "${F2BASE}"; rc=$?
+check "a key not valid yet, forward-dated tag: refused" "${rc}" "1"
+
+# 7a. a revoked key: refused whatever the tag's date, when moving and when reporting
+V="${W}/v"; git init -q -b main "${V}"; mkdir -p "${V}/.tappaas"
+{ signer_line alice@x alice; signer_line bob@x bob; } > "${V}/.tappaas/allowed_signers"
+commit "${V}" base
+GIT_COMMITTER_DATE="2019-06-01T00:00:00Z" stag "${V}" bob v0.9
+VOLD="$(git -C "${V}" rev-parse HEAD)"
+printf '# bob-2026: stolen\n%s\n' "$(cut -d' ' -f1-2 "${W}/bob.pub")" > "${V}/.tappaas/revoked_signers"
+commit "${V}" "revoke bob"; stag "${V}" alice v1.0; VREV="$(git -C "${V}" rev-parse HEAD)"
+verify_target "${V}" "${VREV}" "${VOLD}"; rc=$?
+check "the revoking release, signed by the other key" "${rc}" "0"
+commit "${V}" "thief"; GIT_COMMITTER_DATE="2019-06-01T00:00:00Z" stag "${V}" bob v1.1
+verify_target "${V}" HEAD "${VREV}"; rc=$?
+check "a revoked key, back-dated tag: refused" "${rc}" "1"
+case "${VERIFY_REASON}" in *v1.1:*) ok ;; *) no "reason names the tag (${VERIFY_REASON})" ;; esac
+VERIFY_AT=tag verify_target "${V}" HEAD "${VREV}"; rc=$?
+check "…and refused when reported on" "${rc}" "1"
+verify_target "${V}" "${VOLD}" "${VOLD}"; rc=$?
+check "a release before the revocation, judged by its own list, still verifies" "${rc}" "0"
 
 # 7b. the recovery key (D4a): both signers lost — it may enrol new ones, nothing else
 ssh-keygen -q -t ed25519 -N '' -C recovery -f "${W}/rec" </dev/null

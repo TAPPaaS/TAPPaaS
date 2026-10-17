@@ -5,7 +5,9 @@
 # The rule: a release tag counts only if its signer is listed here AS OF THE
 # PREVIOUSLY VERIFIED RELEASE. A key added in a release signs the release after
 # it. Retire a key with valid-before="YYYYMMDD" — never delete its line, or the
-# releases it signed stop verifying.
+# releases it signed stop verifying. A STOLEN key is not retired but revoked:
+# add it to revoked_signers beside this file. Sites read a key's validity
+# against today's date, not the tag's, whenever they move to a release.
 #
 # Signer keys live in their owner's vault and are valid for one year. The
 # recovery key (principal recovery@...) is kept offline, has no expiry, and may

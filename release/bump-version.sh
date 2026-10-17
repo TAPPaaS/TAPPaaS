@@ -52,6 +52,7 @@ REL_NIXOS="src/foundation/templates/tappaas-nixos.json"
 REL_OPNSENSE="src/foundation/network/network.json"
 BASE_URL="${TAPPAAS_IMAGE_RELEASE_BASE:-https://github.com/TAPPaaS/TAPPaaS/releases/download}"
 SIGNERS=".tappaas/allowed_signers"
+REVOKED=".tappaas/revoked_signers"
 
 usage() { sed -n '2,/^set -euo/p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//; $d'; }
 
@@ -126,12 +127,15 @@ release_sha() {
     grep -qvE '^[[:space:]]*(#|$)' "${SIGNERS}" 2>/dev/null && signed=1
     if curl -fsSL "${loc}SHA256SUMS.sig" -o "${d}/SHA256SUMS.sig" 2>/dev/null; then
         [[ "${signed}" -eq 1 ]] || { rm -rf "${d}"; die "${loc}SHA256SUMS is signed, but ${SIGNERS} lists no key to check it with"; }
+        # A key in revoked_signers never verifies (ssh-keygen -r), whatever it signed.
+        local -a rev=()
+        if grep -vE '^[[:space:]]*(#|$)' "${REVOKED}" >"${d}/revoked" 2>/dev/null; then rev=(-r "${d}/revoked"); fi
         principals="$(ssh-keygen -Y find-principals -f "${SIGNERS}" -n tappaas-image \
                         -s "${d}/SHA256SUMS.sig" 2>/dev/null | head -1 || true)"
-        if [[ -z "${principals}" ]] || ! ssh-keygen -Y verify -f "${SIGNERS}" -I "${principals}" \
+        if [[ -z "${principals}" ]] || ! ssh-keygen -Y verify -f "${SIGNERS}" -I "${principals}" ${rev[@]+"${rev[@]}"} \
                 -n tappaas-image -s "${d}/SHA256SUMS.sig" <"${d}/SHA256SUMS" >/dev/null 2>&1; then
             rm -rf "${d}"
-            die "SHA256SUMS.sig in ${loc} does not verify against ${SIGNERS} (namespace tappaas-image)"
+            die "SHA256SUMS.sig in ${loc} does not verify against ${SIGNERS} (namespace tappaas-image), or its key is revoked"
         fi
         info "SHA256SUMS signed by ${principals}" >&2
     elif [[ "${signed}" -eq 1 ]]; then
