@@ -299,6 +299,11 @@ export function preGateSet(
     }
 
     const usedBy = Array.isArray(spec.usedBy) ? spec.usedBy : [];
+    // A field can be both: zone0, zone1 and os are 'general' (a machine records
+    // them) AND owned by cluster:vm / cluster:lxc (a guest applies them). When the
+    // module declares one of those services, the service's manifest says what the
+    // change costs; only a module that declares none takes the 'general' path.
+    const declaredOwners = usedBy.filter((u) => u !== "general" && declared.has(u));
     // A 'general' field (or one with no usedBy at all) belongs to the module
     // itself, not to a provider service, and the converge has nothing to apply:
     // writing the config IS the change (the plain #557 case). Whether it may be
@@ -306,7 +311,7 @@ export function preGateSet(
     // tooling owns some of these, and a wiring field set alone wires nothing.
     // `config-only` stays a label, not an eighth class: it describes where the
     // change lands, while the class says what it costs.
-    if (usedBy.length === 0 || usedBy.includes("general")) {
+    if (usedBy.length === 0 || (usedBy.includes("general") && declaredOwners.length === 0)) {
       if (moduleManifest === null) {
         warnings.push(`${req.field}: schemas/fields.json not found in the site's repositories — its change class is unknown`);
         plan.push({ ...req, coordinate: "", class: "config-only" });

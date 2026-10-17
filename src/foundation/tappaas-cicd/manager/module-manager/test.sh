@@ -1596,6 +1596,43 @@ new_diff="$(comm -13 <(fc "$PRE") <(fc "$POST_NEW"))"
     && ok "baseline: a genuinely new ✗ after the update is reported as new" \
     || bad "baseline: expected new failure 'check C failed', got '${new_diff}'"
 
+# (5) A module's own test.sh reports its checks as [FAIL] or FAIL: lines, and
+# test-module.sh adds one ✗ line for the whole test.sh. Each check is graded on
+# its own; a bare count from a summary is not a check, nor is FAIL: mid-line.
+L5="${GW}/l5.log"
+printf '%s\n' \
+    $'\x1b[01;31m[FAIL]\x1b[m SSO-Auth plugin is not active' \
+    '  FAIL: the share is not mounted' \
+    '  FAIL: 3' \
+    'Results: 2 passed, FAIL: 1' \
+    '[Error]   ✗ Module test.sh failed' \
+    > "$L5"
+got5="$(fc "$L5" | tr '\n' ';')"
+[[ "${got5}" == "Module test.sh failed;SSO-Auth plugin is not active;the share is not mounted;" ]] \
+    && ok "failed_checks grades a test.sh's [FAIL] and FAIL: lines, not a bare count or a mid-line FAIL:" \
+    || bad "failed_checks: [FAIL]/FAIL: lines not graded as expected, got '${got5}'"
+
+# (6) Measured on hrossen 2026-10-17: test.sh failed before the update on one
+# check and after it on ANOTHER. Both runs carry the same ✗ line for the whole
+# test.sh; the new check must still be graded new, not hidden behind it.
+PRE6="${GW}/pre6.log"
+printf '%s\n' '[FAIL] Jellyfin 10.11.11 runs, appVersion is 12.2' '[Error]   ✗ Module test.sh failed' > "$PRE6"
+POST6="${GW}/post6.log"
+printf '%s\n' '[FAIL] SSO-Auth plugin is not active' '[Error]   ✗ Module test.sh failed' > "$POST6"
+new6="$(comm -13 <(fc "$PRE6") <(fc "$POST6"))"
+[[ "${new6}" == "SSO-Auth plugin is not active" ]] \
+    && ok "baseline: a check that newly fails inside an already-failing test.sh is graded new" \
+    || bad "baseline: new check inside a failing test.sh not graded new (new='${new6}')"
+
+# (7) The same check with another number (a timing, a count, a version) is the
+# same check: graded old, not new.
+PRE7="${GW}/pre7.log";  printf '%s\n' '[FAIL] backup older than 26h (last 31h ago)' > "$PRE7"
+POST7="${GW}/post7.log"; printf '%s\n' '[FAIL] backup older than 26h (last 32h ago)' > "$POST7"
+new7="$(comm -13 <(fc "$PRE7") <(fc "$POST7"))"; old7="$(comm -12 <(fc "$PRE7") <(fc "$POST7"))"
+[[ -z "${new7}" && -n "${old7}" ]] \
+    && ok "baseline: a check differing only in its numbers before/after is the same, OLD failure" \
+    || bad "baseline: numbers made the same check look new (new='${new7}' old='${old7}')"
+
 # ── resolve-module.sh --field scope: a deployed module that says nothing
 # resolves to the default (#561, ADR-022e) ─────────────────────────────
 #

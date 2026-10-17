@@ -1,264 +1,190 @@
-# ADR-032 — Service Exposure: Ports, Native Clients and Machine Callers
+# ADR-032 — Service Exposure: Machine Callers, Native Clients and Unpublished Modules
 
 | | |
 |---|---|
 | **Status** | **Proposed** |
-| **Version** | 0.1 |
-| **Date** | 2026-10-16 |
+| **Version** | 0.2 |
+| **Date** | 2026-10-17 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen, @ErikDaniel007, @AndreasJe |
-| **Closes / addresses** | **#845**. Amends ADR-021 R1 and extends ADR-023. Related: #129, #154, #597, #642, #643, #656, #806. |
-| **Changelog** | v0.1 — first draft, from the three cases in #845 and research into what Authentik's forward-auth, the os-caddy plugin and Jellyfin's clients can do. |
+| **Closes / addresses** | **#845**. Amends ADR-021 R1 and extends ADR-023. Related: #129, #154, #597, #642, #643, #656, #806, #850. |
+| **Changelog** | v0.2 (2026-10-17) — **smaller, after the operator's review and the P0 tests.** No new `proxyAuth` field: ADR-023 stays the model and gains three things — the gate authenticates machine callers (D1), a module without `network:proxy` is unpublished by design and an amended R1 says so (D2), and Jellyfin is published without the gate for friends and family, hardened (D3). Several ports per hostname are verified possible but not built (D4). LDAP for Jellyfin is dropped: the SSO plugin and Quick Connect cover its clients. NetBird is not the answer for friends and family (operator). NOMAD moves to the DMZ. P0 results recorded (T1–T3, on Jellyfin 10.11 and 12.2). v0.1 (2026-10-16) — first draft: a `proxyAuth` field with four values on every route. |
 
 ## Context
 
 ADR-021 R1 says Caddy is always in the path and the identity gate is not optional. ADR-023 gave
-routes their own zones, path rules, and `identityGate: false`. Three cases have since shown that
-"the gate" means more than one thing, and that the model has no word for them.
+routes their own zones, path rules, and `identityGate: false`. Three cases did not fit (#845):
 
 1. **Several services on several ports — NOMAD (#129).** A Command Center plus apps, each a
-   container on its own port, linked as *the current host + port*. Caddy publishes a hostname on
-   443, and `identity:accessControl` gates one hostname per module. The apps can not be published,
-   so NOMAD was made internal-only: reached at `nomad.<zone>.internal`, around Caddy, outside R1.
-2. **Native app clients — Jellyfin (#806, with @AndreasJe).** The web UI signs in through
-   Authentik behind forward-auth, but TV, phone and desktop clients can not do a browser sign-in in
-   front of the app. So they can not reach Jellyfin from outside at all.
-3. **Machine callers — APIs and webhooks (@ErikDaniel007, #642, #643, #656).** A caller that can
-   not sign in in a browser gets `identityGate: false` on its path. That opens the path; it does not
+   container on its own port, linked as *the current host + port*. It was made internal-only,
+   reached at `nomad.<zone>.internal`, around Caddy.
+2. **Native app clients — Jellyfin (#806, with @AndreasJe).** TV, phone and desktop apps log in to
+   Jellyfin's own API with a username and password; they cannot do a browser sign-in in front of
+   it. Behind the gate, friends and family cannot use Jellyfin's apps from outside at all.
+3. **Machine callers — APIs and webhooks (@ErikDaniel007, #642, #643, #656).** A caller that cannot
+   sign in in a browser gets `identityGate: false` on its path. That opens the path; it does not
    authenticate the caller.
 
-### What exists today
+### What the P0 tests showed (hrossen, 2026-10-16/17)
 
-How a module's routes are authenticated is implied by its dependencies, not declared:
+All three ran on Jellyfin 10.11 and again on 12.2, and were torn down without leftovers.
 
-| What the module does | Who authenticates | Example |
-|---|---|---|
-| Depends on `identity:accessControl` | Authentik forward-auth at Caddy, one proxy provider (`forward_single`) per hostname | Jellyfin |
-| Depends on `identity:identity` only | The app itself, by OIDC against Authentik | Nextcloud, Forgejo, Immich, Open WebUI, LiteLLM |
-| A `proxyAccess` rule with `identityGate: false` | Nobody at Caddy; the app, if it checks a key | HA and n8n webhooks |
-| No `proxyDomain` | Nobody at Caddy; reached at `.internal` | NOMAD |
-
-### What the components can do
-
-These are the findings from the research for #845.
-
-**Authentik forward-auth**
-
-- **One gate per hostname (`forward_single`) is how we use it and it fits.** Each hostname has its
-  own policy (who may use it) and its own session.
-- **Domain-level mode (`forward_domain`)** gates every name under a cookie domain with one
-  provider. It shares one access policy and one session cookie across all of them: a user allowed
-  into one app is allowed into all. With a non-standard port it is very likely broken.
-- **A gate on another port.** A `forward_single` provider whose external host includes the port
-  (`https://nomad.example.org:8090`) matches by `X-Forwarded-Host`, which Caddy sends with the port.
-  This should work, but it is **untested** (T1).
-- **Machine credentials at the gate.** With *intercept header auth* on (the default), the outpost
-  accepts `Authorization: Basic` with a user's **app password**, a Basic pair with the username
-  `goauthentik.io/token` and a JWT, or `Authorization: Bearer` with a JWT that Authentik issued
-  for that provider (client-credentials grant). A bad header gets 401, not a redirect.
-- **Limits.** Authentik can not require a token on one path and allow a session on another; it only
-  has *unauthenticated paths*, as regexes. It caches a result for 60 seconds and creates a session,
-  so a revoked credential keeps working for a short while. It does not remove the `Authorization`
-  header, so the app sees the caller's Authentik credential unless Caddy removes it.
-
-**os-caddy (Caddy on the firewall)**
-
-- A domain can listen on another port (`FromPort`). Forward-auth is set per handler. There is one
-  forward-auth provider (the Authentik outpost) for the whole Caddy.
-- Rate limiting and CrowdSec are not known to be available in the plugin (O2).
-
-**Jellyfin**
-
-- Native clients only know username and password (`/Users/AuthenticateByName`). None do OIDC.
-- **Quick Connect** (a code shown on the TV, approved from a signed-in session) works in most
-  clients, but not in Kodi or Infuse.
-- The SSO-Auth plugin used for #806 (9p4/jellyfin-plugin-sso) was **archived on 2026-05-12**.
-- The working pattern elsewhere (SWAG, YunoHost, Cloudron, the Authentik docs) is: no
-  forward-auth on the Jellyfin host; Jellyfin's own login, with the users kept in the directory
-  through **LDAP** (`jellyfin-plugin-ldapauth` against an LDAP server — here Authentik's LDAP
-  outpost); Quick Connect for TVs; rate limiting and banning on the login path.
-- Jellyfin has had unauthenticated CVEs as recently as 10.11; an internet-facing Jellyfin must be
-  kept current.
+| Test | Result |
+|---|---|
+| **T1** A gate on another port of the same hostname (`jellyfin.<domain>:9443`, its own Authentik provider, external host with the port) | Works: the sign-in redirect, the callback on `:9443` and the session. The session does not open the 443 gate: each provider has its own cookie. |
+| **T2** Machine credentials at the gate | An Authentik **app password** (HTTP Basic) and a **client-credentials JWT** (Bearer) both pass. Caddy can remove `Authorization` before the app (`header_up -Authorization`). A bad credential gets a **302** to the login, not a 401. An app password opens **every gate its user is allowed through**; a JWT only its own provider. Revoking a credential takes up to **60 s** (the outpost's cache). |
+| **T3** Jellyfin native login against Authentik over LDAP | Works (LDAP outpost + LDAP-Auth plugin 23/24): login from the native-client API, refusals, Quick Connect, a removed group member refused at the next login. But **a Jellyfin session from before the removal keeps working.** |
+| Sign in with Authentik on Jellyfin 12.2, through the gate and the SSO plugin | Works. Accounts the plugin creates get a random password (plugin 5.x), so none can be signed into with an empty one. |
 
 ## Requirements
 
-- **E1. Every route says how its callers are authenticated.** Not implied by a dependency.
-- **E2. Every caller is authenticated by someone.** Caddy's gate or the app. A route nobody
-  authenticates is allowed only when it says why, and it is narrowed (zones, networks, paths).
-- **E3. One gate per hostname and port.** Each with its own policy and session.
-- **E4. A module may publish several services on several hostnames or ports**, without each one
-  becoming a module of its own.
-- **E5. A module may be internal-only**, as a declared choice, not a missing field.
-- **E6. No new network path around the firewall.** Everything published still enters through
-  Caddy on the firewall (ADR-021 D2/D3).
+- **E1. Every caller is authenticated by someone** — Caddy's gate or the app. A path nobody
+  authenticates is allowed only with a stated reason, and narrowed (zones, networks, paths).
+- **E2. Friends and family use Jellyfin's apps from their own homes**, without a VPN client.
+- **E3. A module may stay unpublished**, as a choice, reached only from the zones its ingress allows.
+- **E4. No new network path around the firewall.** Everything published enters through Caddy.
 
 ## Decision
 
-### D1. `proxyAuth` — one field, four values, on every route and path rule
+### D1. The gate authenticates machine callers
 
-Each route (the primary and each `proxyRoutes` entry) and each `proxyAccess` rule carries
-`proxyAuth`:
+A route behind `identity:accessControl` already accepts a machine credential in the
+`Authorization` header (T2); this ADR makes that the way a machine caller gets through.
 
-| Value | Who authenticates | Caddy does | Use for |
-|---|---|---|---|
-| **`gate`** | Authentik at Caddy | forward-auth; browsers sign in; machine callers send an Authentik credential (D3) | apps with no login of their own, or one we do not trust on the internet |
-| **`app`** | the app | no forward-auth; the hardening of D4 when the route is reachable from the internet | apps with OIDC (Nextcloud, Forgejo, Immich), apps with native clients (Jellyfin), APIs with their own keys (LiteLLM) |
-| **`none`** | nobody | no forward-auth; **requires** `reason` and a narrowing (zones other than `internet`, networks, or a `none` route with path rules) | callers that can not hold a credential, e.g. a webhook that is signed in its payload |
-| *(module)* **`internal`** | the app | no route at all | D5 |
+- **Each calling system gets an Authentik service account**, allowed by the same policy as people
+  (the app's group binding). It uses the **client-credentials grant** and sends the JWT as
+  `Authorization: Bearer`: a JWT opens only the provider it was issued for. An **app password**
+  (Basic) works too, but it opens every gate its user may use, so it is for a service account that
+  has access to one app only.
+- `identity:accessControl` makes sure **intercept header auth** is on for every provider it creates.
+- On a gated route, Caddy **removes the `Authorization` header** before the app, so the app never sees
+  the caller's Authentik credential. A route whose app needs its own `Authorization` header behind
+  the gate is a contradiction (the gate would take the header as its own) and is refused.
+- Callers should know: a wrong or expired credential gets a 302 to the login page, not a 401; a
+  revoked one stops working within a minute.
 
-Defaults keep today's behaviour: `gate` where the module depends on `identity:accessControl`,
-otherwise `app`. A path rule inherits its route's value.
+**`identityGate: false` stays**, for a caller that cannot hold a credential at all — a webhook that
+signs its payload (Home Assistant, n8n). Such a rule must carry a `description` that says why, and
+must be narrowed by its zones, networks or a `none` route. Validation refuses one without.
 
-`identityGate: false` becomes `proxyAuth: none` (or `app`, when the app checks a key). It is kept
-as an alias for one release and migrated by a config migration (ADR-025).
+### D2. A module without `network:proxy` is unpublished — by design
 
-Validation (refuse before writing): `gate` without `identity:accessControl`; `none` without a
-`reason` or with `internet` and no path; `app` on a route reachable from the internet on a module
-whose catalog entry does not say it has a login of its own (`auth.own: true`).
+A module that does not depend on `network:proxy` has no published name. It is reached at
+`<vm>.<zone>.internal`, from the zones its ingress rules allow, and authenticates its users itself
+— or not at all, for a module like NOMAD that holds no user data. No new field: the dependency is
+the declaration.
 
-### D2. Several services — a route per service, a gate per route
+**ADR-021 R1 is amended** to: *Caddy is in the path of every published name. A module that is not
+published is reached only from the zones its ingress allows.*
 
-A module publishes each service as a `proxyRoutes` entry. Each entry gets a hostname and,
-under `gate`, its **own** Authentik provider (`forward_single`, external host = that hostname and
-port) — never a domain-level provider (E3).
+**Placement.** An unpublished module that runs third-party code on its own (installs and updates
+containers) and keeps no user data lives in the **`dmz`** zone: a compromised one then reaches the
+internet and nothing else on the site. NOMAD is the first (`zone0: dmz`); the home network reaches
+it through its ingress rules.
 
-- **Default: one hostname per service** (`<route>.<domain>` or an explicit `proxyDomain`), on 443.
-  This needs nothing new beyond #597 (several hostnames per module).
-- **When the app links by port** (NOMAD builds links as *current host + port*), a route may set
-  **`proxyListenPort`**: Caddy serves the module's hostname on that port (`FromPort`), the WAN rule
-  and the caddy-reach rule open that port to the same zones, and the provider's external host is
-  `https://<host>:<port>`. Only after T1 shows the forward-auth callback works on a non-443 port.
+### D3. Jellyfin is published without the gate, for friends and family
 
-NOMAD stays internal (D5) until there is a reason to publish it. If that happens, its apps become
-`proxyListenPort` routes on its hostname, each `gate`.
+Jellyfin's apps must work from other people's homes, without a VPN (E2), and no gate lets a native
+client through (A2). So Jellyfin is the one published module **without** forward-auth. Its own
+login decides who gets in:
 
-### D3. Machine callers — a credential at the gate, a key at the app, or a stated exception
+- **Web:** *Sign in with Authentik* (the SSO plugin, OIDC). Who may use Jellyfin is the Authentik
+  group bound to its application. A friend gets an Authentik account in that group.
+- **Apps and TVs:** **Quick Connect** — the TV shows a code; the friend approves it from a signed-in
+  web session. Accounts the SSO plugin creates have a random password, so a code is how they reach
+  an app. Clients without Quick Connect (Kodi, Infuse) are not supported for SSO accounts.
+- **Local accounts** (`admin`, `stream`, `local`) keep their passwords; `admin` is not allowed to
+  sign in from outside the site (Jellyfin's per-user *remote access* policy).
 
-A caller that can not sign in through a browser has three ways in, in this order of preference:
+What being on the internet without a gate costs is mostly Jellyfin's own history of endpoints that
+skip the authorization check (an unauthenticated file read open on 10.11 until #850). So the
+hardening is part of the decision, not an option:
 
-1. **On a `gate` route: an Authentik credential.** The caller gets an Authentik **app password**
-   (a user or a service account) and sends it as `Authorization: Basic`, or uses the
-   client-credentials grant and sends the JWT. `identity:accessControl` turns *intercept header
-   auth* on for every provider it makes. Who may call is the provider's policy, as for people.
-   Caddy removes the `Authorization` header before the app, unless the route sets
-   `proxyPassAuthorization: true` (T2). Revocation takes up to a minute (the outpost's cache).
-2. **On an `app` route: the app's own key.** LiteLLM virtual keys, Nextcloud app passwords, Immich
-   API keys. The app authenticates; Caddy narrows (zones, networks, paths).
-3. **`none`, with a `reason`.** For webhooks: the zones or provider networks (ADR-023, #656)
-   narrow it, and the payload's signature is the app's job.
+| Measure | Where |
+|---|---|
+| Jellyfin sees the client's real address: the firewall is a **known proxy**, so the per-user remote-access policy and the login lockout act per client, not per Caddy | Jellyfin `network.xml` |
+| **Login attempts limited** per account (Jellyfin's `MaxLoginAttempts`) and **rate-limited** per client at Caddy on `/Users/AuthenticateByName` and `/QuickConnect/*` | Jellyfin; Caddy (O1) |
+| **Admin and diagnostic paths closed from outside**: `/metrics`, `/Startup/*`, `/System/Restart`, `/System/Shutdown`, `/System/Logs`, the dashboard — an ADR-023 `proxyAccess` rule to the site's zones | `network:proxy` |
+| **Kept current**: Jellyfin follows its releases (12.x from a pinned nixos-unstable, #850); a security advisory is an update, not a wait for the next NixOS release | the module |
+| **Removing someone ends their sessions**: deleting or disabling a user, or removing them from Jellyfin's group, also revokes their Jellyfin sessions and devices (T3 showed they survive) | `identity` (O3) |
 
-The gate can not *require* a token on `/api` while it allows a session elsewhere (it would also
-accept a browser's session cookie there). That is acceptable: either credential is a person or
-service account allowed by the same policy.
+The VEX triage of #850 is unchanged by this: the open jellyfin-ffmpeg findings need a crafted file
+in the library or a signed-in user either way.
 
-Client certificates (mTLS) are not adopted now: the plugin has no per-handler client-CA setting
-we have tested, and no caller has asked for them.
+### D4. Several ports on one hostname — possible, not built
 
-### D4. Apps that do their own login — `app`, with hardening at Caddy
-
-An `app` route that is reachable from the internet gets, from network:proxy:
-
-- **A rate limit on the login paths** the catalog entry names (`auth.loginPaths`, e.g.
-  `/Users/AuthenticateByName` for Jellyfin), if os-caddy can express it (O2); otherwise
-  CrowdSec or fail2ban on the firewall, fed by Caddy's access log (O2).
-- **Admin and metrics paths closed from the internet**, as a `proxyAccess` rule
-  (`auth.adminPaths` → the site's internal zones and `netbird`).
-- **A version floor**, from the module's pin, enforced by the normal update cadence (ADR-028).
-
-For **native-client apps**, identity is still Authentik's, through LDAP:
-
-- **`identity:ldap`** — a new identity service: an Authentik LDAP outpost, a bind account per
-  consuming module, and the group that may use the app. Reachable only from the consuming module's
-  VM.
-- **Jellyfin** moves from `identity:accessControl` to `identity:ldap` and `proxyAuth: app`:
-  the LDAP-Auth plugin, users from the Authentik group, **Quick Connect** on for TVs. The web UI
-  signs in the same way (the archived SSO plugin and #806's forward-auth are removed).
-  Clients without Quick Connect (Kodi, Infuse) use the username and password.
-
-### D5. Internal-only — a declared exception to R1
-
-A module may declare **`exposure: "internal"`**. It has no `proxyDomain`, no Caddy route and no
-external DNS. It is reached at `<vm>.<zone>.internal`, from the zones its ingress rules allow, and
-authenticates its users itself, or not at all on a trusted zone. R3's "not published" message is
-not shown for it, because it is intended.
-
-**ADR-021 R1 is amended** to: *Caddy is in the path of every published name. A module declared
-`internal` has no published name and is reached only from the zones its ingress allows.*
-
-NOMAD is the first such module. A module with `exposure: internal` that sets a `proxyDomain` is
-refused.
+T1 showed a gate works on another port of a published hostname. A module whose apps link as
+*host + port* (NOMAD) could publish each port as a route with its own gate. Each port then needs
+its own WAN rule and caddy-reach rule, and the module's ports are on the internet. Not built until a
+module needs it; NOMAD stays unpublished (D2).
 
 ## Use cases
 
-| Module | Today | Under this ADR |
-|---|---|---|
-| NOMAD | no `proxyDomain`, R3 warns | `exposure: internal`; later, if published: one hostname, the apps as `proxyListenPort` routes, each `gate` |
-| Jellyfin | `gate`, SSO plugin (archived), clients can not log in from outside | `app` + `identity:ldap`, Quick Connect, rate limit on login, admin and `/metrics` internal |
-| Home Assistant | webhook path `identityGate: false` | the webhook path `none` + `reason`; the rest `app` (HA's own login) |
-| n8n | webhook host `none` route + path rule | same, `proxyAuth: none` + `reason` on the rule |
-| LiteLLM | OIDC UI, API key | `app`; API callers use LiteLLM keys (D3.2) |
-| An app with no login of its own, used by a script | not possible without `identityGate: false` | `gate`; the script sends an Authentik app password (D3.1) |
+| Module | Under this ADR |
+|---|---|
+| NOMAD | unpublished (D2), in the `dmz` zone, reached from home at `nomad.dmz.internal` |
+| Jellyfin | published without the gate (D3): SSO for the web, Quick Connect for apps, hardened |
+| Home Assistant, n8n webhooks | `identityGate: false` with a description of the signature they carry (D1) |
+| A script calling a gated app | a service account and a client-credentials JWT (D1) |
+| Nextcloud, Immich, Forgejo, Open WebUI, LiteLLM | unchanged: their own OIDC login, their own API keys and app passwords |
 
 ## Alternatives considered
 
 | | Alternative | Why not |
 |---|---|---|
-| A1 | **Domain-level forward-auth** for a module's names | One policy and one session for all names; broken with ports. Fails E3. |
-| A2 | **Forward-auth in front of Jellyfin with its clients' paths excluded** | The clients' paths are the API, i.e. all of Jellyfin. The gate would cover only the web UI, which Jellyfin's own login already covers. |
-| A3 | **Jellyfin only over NetBird** | Secure, but every TV and family phone needs a NetBird client. Kept as the choice for sites that do not want Jellyfin on the internet: `proxyAllowedZones: ["netbird", …]`. |
-| A4 | **Keep `identityGate: false` as the only machine path** | Opens instead of authenticating (E2). |
-| A5 | **mTLS for machine callers** | Untested in the plugin; nobody needs it yet. Can be added as a fifth `proxyAuth` value. |
-| A6 | **A second, internal reverse proxy (#154)** for internal-only modules | A second TLS and gate stack for modules that chose not to be published. Out of scope; #154 stays open on its own. |
+| A1 | **A `proxyAuth` field with four values on every route** (v0.1) | More model than the cases need: machine callers are D1, unpublished modules are a dependency already, and one module needs the no-gate decision. |
+| A2 | **The gate in front of Jellyfin with its clients' paths excluded** | The clients' paths are the API, so all of Jellyfin. The gate would cover only the web UI, which Jellyfin's login covers anyway. |
+| A3 | **NetBird for friends and family** | Not workable for people outside the household (operator, 2026-10-17). Stays the way for the household's own devices. |
+| A4 | **LDAP for Jellyfin** (Authentik LDAP outpost, LDAP-Auth plugin) | Works (T3), but SSO plus Quick Connect covers every client except Kodi and Infuse, without an outpost to run, reach and patch. Can be added later for those. |
+| A5 | **Authentik domain-level forward-auth** for a module's names | One policy and one session for all names, broken with ports. |
+| A6 | **mTLS for machine callers** | Untested in the plugin; nobody needs it yet. |
+| A7 | **A second, internal reverse proxy (#154)** for unpublished modules | A second TLS and gate stack for modules that chose not to be published. #154 stays open on its own. |
 
 ## Consequences
 
-- Every route's authentication is visible in its module JSON, and validated.
-- `identity:accessControl` gains header auth on its providers; `network:proxy` gains
-  `proxyAuth`, `proxyListenPort`, `proxyPassAuthorization`, and hardening for `app` routes.
-- A new identity service (`identity:ldap`), and an LDAP outpost to keep running and patched.
-- Jellyfin becomes reachable from the internet with its own login in front. That is a larger attack
-  surface than a gate; D4 and the update cadence are what limit it.
-- `none` routes need a `reason`; the existing ones are migrated.
+- Machine callers authenticate as service accounts; `identityGate: false` shrinks to webhooks with a
+  stated reason.
+- Jellyfin is reachable from the internet with its own login in front. That is a larger attack
+  surface than a gate; D3's measures and keeping it current are what limit it.
+- `identity` gains session revocation in the apps that keep sessions (Jellyfin first).
+- Unpublished is explicit in ADR-021, and modules like NOMAD are contained in the DMZ.
 
 ## Implementation plan
 
-| Phase | What | Notes |
-|---|---|---|
-| **P0** | Tests T1–T3 on hrossen | decides `proxyListenPort` and header stripping |
-| **P1** | `proxyAuth` field, defaults, validation, `identityGate` alias and migration; `exposure: internal` (NOMAD) | no behaviour change |
-| **P2** | Header auth on accessControl providers; `Authorization` stripping; docs for app passwords | D3.1 |
-| **P3** | `identity:ldap`; Jellyfin on LDAP + Quick Connect; `app` hardening (rate limit or CrowdSec, admin paths) | with @AndreasJe |
-| **P4** | `proxyListenPort` | only if T1 passes and a module needs it |
+| Phase | What |
+|---|---|
+| **P0** | Tests T1–T3 — **done** (above). |
+| **P1** | NOMAD in the `dmz` zone (repo default and hrossen); ADR-021 R1 amended. |
+| **P2** | D1: header auth asserted on accessControl providers; `Authorization` removed on gated routes; `identityGate: false` requires a description; a service-account helper (O2); docs. |
+| **P3** | D3: Jellyfin leaves `identity:accessControl`; known proxy, login limits, admin paths closed, admin without remote access; rate limiting (O1). With @AndreasJe. |
+| **P4** | Session revocation on user removal, Jellyfin first (O3). |
 
 ## Testing
 
-- **T1 — forward-auth on a non-443 port.** A test route on `FromPort` 8443 with a
-  `forward_single` provider at `https://<host>:8443`: the sign-in redirect returns to the right
-  host and port, and the session holds.
-- **T2 — the `Authorization` header.** Through a `gate` route with an app password: the upstream
-  sees no `Authorization` header when stripped, and the caller's header when
-  `proxyPassAuthorization` is set; a wrong password gets 401, not a redirect.
-- **T3 — LDAP for Jellyfin.** Authentik LDAP outpost + LDAP-Auth plugin: a user in the group logs
-  in from a native client and with Quick Connect; a user outside the group is refused; a removed
-  user is refused at the next login.
-- Unit: `proxyAuth` validation, defaults, the migration from `identityGate`.
-- Module tests: Jellyfin's login rate limit and admin paths from WAN; NOMAD has no Caddy route.
+- **T1–T3** — done; results in *Context*.
+- **T4 (P3)** — from outside the site, through the public name: a native client signs in with Quick
+  Connect; the web signs in with Authentik; `/metrics`, `/Startup/*` and the dashboard get 403; the
+  login is rate-limited; `admin` is refused from outside and works from home; Jellyfin's log shows
+  the client's address, not the firewall's.
+- **T5 (P2)** — a gated route: a service account's JWT passes and the app sees no `Authorization`
+  header; an `identityGate: false` rule without a description is refused.
+- **T6 (P4)** — a user removed from Jellyfin's group loses an open Jellyfin session.
 
 ## Open questions
 
-1. **O1 — Is `app` acceptable for Jellyfin on the internet**, or do sites default to A3 (NetBird)
-   and opt in to public exposure?
-2. **O2 — Rate limiting.** Does os-caddy expose Caddy's `rate_limit`, or is CrowdSec (os-crowdsec,
-   reading Caddy's log) the way? This decides D4's mechanism.
-3. **O3 — Service accounts.** Should accessControl create an Authentik service account per
-   calling system (with its app password in the vault), or do operators make them by hand?
+1. **O1 — Rate limiting.** The firewall's Caddy has the `rate_limit` module built in. Does os-caddy
+   expose it, or is it a Caddyfile snippet (`caddy.d`), or CrowdSec reading Caddy's log?
+2. **O2 — Service accounts.** Should `identity-manager` create a service account per calling system
+   (with its credential in the vault), or do operators make them by hand?
+3. **O3 — Revoking Jellyfin sessions.** From `identity` on user removal (it needs a Jellyfin admin
+   API key), or from Jellyfin on its next contact with Authentik?
 
 ## Documentation impact (ADR-013)
 
 | File | Change |
 |---|---|
-| `src/foundation/network/services/proxy/fields.json` → `README.md` | `proxyAuth`, `proxyListenPort`, `proxyPassAuthorization`; `identityGate` deprecated |
-| `src/foundation/identity/README.md` | header auth and app passwords; `identity:ldap` |
-| `src/home/jellyfin/INSTALL.md` | LDAP sign-in, Quick Connect, what is reachable from outside |
-| `src/home/nomad/README.md` | `exposure: internal` |
-| ADR-021 | R1 as amended by D5 |
+| `src/foundation/network/services/proxy/fields.json` → `README.md` | `identityGate: false` needs a description; `Authorization` removed on gated routes |
+| `src/foundation/identity/README.md` | machine callers: service accounts, client-credentials JWT, app passwords; session revocation |
+| `src/home/jellyfin/README.md`, `INSTALL.md` | published without the gate; Quick Connect for friends and family; what is closed from outside |
+| `src/home/nomad/README.md` | in the DMZ, and why |
+| ADR-021 | R1 as amended by D2 |

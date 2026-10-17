@@ -26,6 +26,10 @@ courses and tools, running on hardware you own and usable with no internet.
   on the home network reaches the Command Center at `http://nomad.<zone>.internal:8080`, and the
   apps it starts, each a container on its own port, at the same name and that port — which is how
   NOMAD links them. The module's ingress rules admit the home zone to those ports and no other.
+- **In the DMZ.** NOMAD runs public containers it installs and updates on its own, and it keeps no
+  user data. It lives in the `dmz` zone, so a compromised NOMAD reaches only the internet (for its
+  downloads), never the site's other zones; the home network reaches it through the module's ingress
+  rules. The `<zone>` in its address is therefore `dmz`.
 
 ## What is not included
 
