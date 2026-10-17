@@ -38,7 +38,8 @@ Two things, deliberately kept together:
 - GitHub Actions builds the image from `flake.nix`/`tappaas-common.nix` and publishes it
   as a `nixos-template-v*` Release — see
   `.github/workflows/build-nixos-template-image.yml`.
-- `tappaas-nixos.json` pins the `version` and `imageLocation` consumed on-cluster. The
+- `tappaas-nixos.json` pins the `version`, `imageLocation` and `imageSha256` consumed
+  on-cluster; a download that does not match `imageSha256` is not imported. The
   target version is therefore **branch-controlled**: stable branches stay on tested
   versions while `main` can point at newer builds.
 - At bootstrap, `cluster/install-platform.sh` (Phase A) imports the image via
@@ -64,12 +65,14 @@ cheap to run regularly:
 
 1. Compares the pinned version against the tag recorded on the template's node in
    `/root/tappaas/nixos-template.version`. Already current → exit 0, nothing downloaded.
-2. **Pre-flight**: confirms the release asset URL answers HTTP 200 *before* destroying
-   the existing template, so a bad release leaves the cluster untouched.
+2. **Pre-flight**: confirms the release asset URL answers HTTP 200, then downloads the
+   image on the node (~700 MB — the only expensive step) and checks it against
+   `imageSha256`, all *before* destroying the existing template, so a bad or altered
+   release leaves the cluster untouched. A pointer without `imageSha256` is warned about
+   and the download is left to step 3, unchecked.
 3. Stages `Create-TAPPaaS-VM.sh` + the module json (with `imageLocation` pinned to the
-   resolved release tag) to the node, destroys the old 8080, recreates it from the new
-   image (~700 MB download — the only expensive step), converts it to a template and
-   records the new tag in the marker file.
+   resolved release tag) to the node, destroys the old 8080, recreates it from the
+   verified image, converts it to a template and records the new tag in the marker file.
 
 Updating the template affects only **new** clones; VMs already cloned from an older
 template are independent (full clones) and update via their own nixos-rebuild.

@@ -22,7 +22,8 @@
 #   make-install-media.sh --iso proxmox-ve_9.x.iso \
 #       [--email <e>] [--country <cc>] [--keyboard <kb>] [--timezone <tz>] \
 #       [--password-file <f>] [--disk <serial|dev>] [--fqdn <host.domain>] \
-#       [--filesystem ext4|zfs] [--ssh-key <pubkey-file>] [--out <out.iso>]
+#       [--filesystem ext4|zfs] [--ssh-key <pubkey-file>] [--out <out.iso>] \
+#       [--iso-sha256 <hex>]
 #
 # Anything not given is prompted for — EXCEPT the boot disk: like the PXE
 # flow, network comes from DHCP and the disk is asked ON THE TARGET'S
@@ -44,10 +45,10 @@ warn()  { echo -e "${YW}[Warning]${CL} $*"; }
 die()   { echo -e "${RD}[Error]${CL} $*" >&2; exit 1; }
 debug() { [[ "${TAPPAAS_DEBUG:-0}" == 1 ]] || return 0; echo "[Debug] $*" >&2; }
 
-usage() { sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'; exit 0; }
+usage() { sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'; exit 0; }
 
 ISO="" OUT="" EMAIL="" COUNTRY="" KEYBOARD="" TIMEZONE="" PASSWORD="" \
-  PASSWORD_FILE="" DISK="" FQDN="" FILESYSTEM="ext4"
+  PASSWORD_FILE="" DISK="" FQDN="" FILESYSTEM="ext4" ISO_SHA256=""
 SSH_KEYS=()
 
 while [[ $# -gt 0 ]]; do
@@ -63,10 +64,101 @@ while [[ $# -gt 0 ]]; do
     --fqdn)          FQDN="${2:?}"; shift 2 ;;
     --filesystem)    FILESYSTEM="${2:?}"; shift 2 ;;
     --ssh-key)       SSH_KEYS+=("${2:?}"); shift 2 ;;
+    --iso-sha256)    ISO_SHA256="${2:?}"; shift 2 ;;
     -h|--help)       usage ;;
     *) die "Unknown argument: $1 (see --help)" ;;
   esac
 done
+
+# >>> media-checks (ADR-033 D7)
+# What this script takes from Proxmox is checked against Proxmox's own statement
+# before it is used, and a failed check stops the build:
+#   - the operator's ISO against Proxmox's published SHA256SUMS (or --iso-sha256
+#     when the ISO is not listed there, e.g. an offline build);
+#   - the assistant .deb by the SHA-256 in the repository's Packages index, the
+#     index by the SHA-256 in InRelease, and InRelease by Proxmox's archive key
+#     (download.proxmox.com is plain HTTP, so the hash alone would prove nothing).
+# The URLs can be overridden for tests (scripts/test/test-image-hashes.sh).
+PVE_ISO_SUMS_URL="${PVE_ISO_SUMS_URL:-https://enterprise.proxmox.com/iso/SHA256SUMS}"
+PVE_REPO_BASE="${PVE_REPO_BASE:-http://download.proxmox.com/debian/pve}"
+PVE_KEY_BASE="${PVE_KEY_BASE:-https://enterprise.proxmox.com/debian}"
+
+# media_fetch <url> <out>
+media_fetch() {
+  if command -v curl >/dev/null 2>&1; then curl -fsSL "$1" -o "$2"
+  else wget -q "$1" -O "$2"; fi
+}
+
+# media_sha256 <file>
+media_sha256() {
+  if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | awk '{print $1}'
+  else shasum -a 256 "$1" | awk '{print $1}'; fi
+}
+
+# iso_check <iso> [<expected hex>] — dies unless the ISO matches.
+iso_check() {
+  local iso="$1" want="${2:-}" name have sums
+  name="$(basename "$iso")"
+  if [[ -z "$want" ]]; then
+    sums="$(mktemp)"
+    media_fetch "$PVE_ISO_SUMS_URL" "$sums" \
+      || { rm -f "$sums"; die "cannot fetch Proxmox's ISO checksums (${PVE_ISO_SUMS_URL}) — pass --iso-sha256 <hash from proxmox.com/downloads>."; }
+    want="$(awk -v f="$name" '{n=$2; sub(/^\*/, "", n)} n == f {print $1; exit}' "$sums")"
+    rm -f "$sums"
+    [[ -n "$want" ]] || die "${name} is not listed in ${PVE_ISO_SUMS_URL} — use an ISO under its downloaded name, or pass --iso-sha256 <hash from proxmox.com/downloads>."
+  fi
+  want="$(printf '%s' "$want" | tr '[:upper:]' '[:lower:]')"; want="${want#sha256:}"
+  [[ "$want" =~ ^[0-9a-f]{64}$ ]] || die "not a SHA-256 hash: ${want}"
+  info "Checking ${name} against its published SHA-256..."
+  have="$(media_sha256 "$iso")"
+  [[ "$have" == "$want" ]] || die "${name} does not match its published SHA-256 (expected ${want}, got ${have}) — download it again."
+  info "ISO verified: ${name}"
+}
+
+# paia_fetch <dir> — download the newest proxmox-auto-install-assistant .deb into
+# <dir>/paia.deb through the signed chain above. Dies when any link fails.
+paia_fetch() {
+  local dir="$1" codename key comp="pve-no-subscription/binary-amd64/Packages" want line ver file
+  command -v gpgv >/dev/null 2>&1 || die "gpgv is needed to check the Proxmox repository signature (apt install gpgv)."
+  for codename in trixie bookworm; do
+    case "$codename" in
+      trixie)   key="proxmox-archive-keyring-trixie.gpg" ;;
+      bookworm) key="proxmox-release-bookworm.gpg" ;;
+    esac
+    media_fetch "${PVE_KEY_BASE}/${key}" "${dir}/${codename}.gpg" 2>/dev/null || continue
+    media_fetch "${PVE_REPO_BASE}/dists/${codename}/InRelease" "${dir}/InRelease" 2>/dev/null || continue
+    gpgv --keyring "${dir}/${codename}.gpg" --output "${dir}/Release" "${dir}/InRelease" >/dev/null 2>&1 \
+      || die "the Proxmox ${codename} InRelease does not verify against ${PVE_KEY_BASE}/${key}."
+    want="$(awk -v f="$comp" '/^[A-Za-z0-9]+:/ {sec=$1} sec == "SHA256:" && $3 == f {print $1; exit}' "${dir}/Release")"
+    [[ -n "$want" ]] || continue
+    media_fetch "${PVE_REPO_BASE}/dists/${codename}/${comp}" "${dir}/Packages" 2>/dev/null || continue
+    [[ "$(media_sha256 "${dir}/Packages")" == "$want" ]] \
+      || die "the Proxmox ${codename} Packages index does not match its signed InRelease."
+    # Pick the LATEST version's .deb — the Packages file lists every pooled
+    # version, and grabbing the first Filename yields a STALE build (e.g.
+    # 9.0.6, which wants the old underscore answer keys and rejects the
+    # kebab-case answer this script writes; the current 9.2.x wants kebab).
+    line="$(awk '
+        /^Package: proxmox-auto-install-assistant$/ {inpkg=1; ver=""; fn=""; sha=""; next}
+        /^Package: / {inpkg=0}
+        inpkg && /^Version: /  {ver=$2}
+        inpkg && /^Filename: / {fn=$2}
+        inpkg && /^SHA256: /   {sha=$2}
+        inpkg && /^$/ && fn != "" {print ver"\t"fn"\t"sha; inpkg=0}
+        END {if (inpkg && fn != "") print ver"\t"fn"\t"sha}
+      ' "${dir}/Packages" | sort -V | tail -1)"
+    [[ -n "$line" ]] || continue
+    IFS=$'\t' read -r ver file want <<<"$line"
+    [[ "$want" =~ ^[0-9a-f]{64}$ ]] || die "the Packages entry for proxmox-auto-install-assistant ${ver} has no SHA-256."
+    media_fetch "${PVE_REPO_BASE}/${file}" "${dir}/paia.deb" || die "assistant .deb download failed."
+    [[ "$(media_sha256 "${dir}/paia.deb")" == "$want" ]] \
+      || { rm -f "${dir}/paia.deb"; die "the assistant .deb (${ver}) does not match the SHA-256 in the signed Packages index."; }
+    info "proxmox-auto-install-assistant ${ver} verified (${codename})"
+    return 0
+  done
+  die "could not locate proxmox-auto-install-assistant in the Proxmox repo — install it manually."
+}
+# <<< media-checks
 
 # ── Assistant bootstrap (first-node chicken-and-egg) ───────────────────
 if ! command -v proxmox-auto-install-assistant >/dev/null 2>&1; then
@@ -83,33 +175,17 @@ if ! command -v proxmox-auto-install-assistant >/dev/null 2>&1; then
       # DIRECTLY (no apt repo). We do NOT add the Proxmox apt repo — Debian
       # trixie's apt (sqv verifier) rejects '[trusted=yes]', and Proxmox ships no
       # 'proxmox-release-trixie.gpg' key to pin with 'signed-by', so an apt
-      # install of the assistant fails. The direct .deb fetch needs no key.
+      # install of the assistant fails. The direct .deb fetch checks the
+      # repository's signature itself (paia_fetch), with gpgv.
       exec docker run --rm -it --platform linux/amd64 -v "$PWD:/work" -w /work debian:trixie bash -c "
         apt-get update -qq >/dev/null &&
-        apt-get install -y -qq wget ca-certificates zstd cpio xorriso >/dev/null &&
+        apt-get install -y -qq wget ca-certificates zstd cpio xorriso gpgv >/dev/null &&
         exec ./$(basename "$0") $(printf '%q ' "${ORIG_ARGS[@]}")"
       ;;
     Linux)
       info "assistant not found — fetching the .deb from the Proxmox repo (no install needed)..."
       _PAIA_DIR="$(mktemp -d)"
-      _pve_base="http://download.proxmox.com/debian/pve"
-      _pkg=""
-      for _codename in trixie bookworm; do
-        # Pick the LATEST version's .deb — the Packages file lists every pooled
-        # version, and grabbing the first Filename yields a STALE build (e.g.
-        # 9.0.6, which wants the old underscore answer keys and rejects the
-        # kebab-case answer this script writes; the current 9.2.x wants kebab).
-        _pkg="$(wget -qO- "${_pve_base}/dists/${_codename}/pve-no-subscription/binary-amd64/Packages" 2>/dev/null \
-                | awk '
-                    /^Package: proxmox-auto-install-assistant$/ {inpkg=1; ver=""; next}
-                    /^Package: / {inpkg=0}
-                    inpkg && /^Version: / {ver=$2}
-                    inpkg && /^Filename: / {print ver"\t"$2}
-                  ' | sort -V | tail -1 | cut -f2)" \
-          && [[ -n "$_pkg" ]] && break
-      done
-      [[ -n "$_pkg" ]] || die "could not locate proxmox-auto-install-assistant in the Proxmox repo — install it manually."
-      wget -q "${_pve_base}/${_pkg}" -O "${_PAIA_DIR}/paia.deb" || die "assistant .deb download failed."
+      paia_fetch "${_PAIA_DIR}"
       if command -v dpkg-deb >/dev/null 2>&1; then
         dpkg-deb -x "${_PAIA_DIR}/paia.deb" "${_PAIA_DIR}"
       else
@@ -123,6 +199,7 @@ if ! command -v proxmox-auto-install-assistant >/dev/null 2>&1; then
   esac
 fi
 [[ -n "$ISO" && -f "$ISO" ]] || die "--iso <proxmox-ve.iso> is required (download from proxmox.com)."
+iso_check "$ISO" "$ISO_SHA256"
 
 # ── The four #404 operator answers (prompt for whatever is missing) ────
 #

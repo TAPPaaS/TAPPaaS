@@ -43,6 +43,7 @@
     "imageType",
     "image",
     "imageLocation",
+    "imageSha256",
     "os",
     "cloudInit",
     "sshAccess",

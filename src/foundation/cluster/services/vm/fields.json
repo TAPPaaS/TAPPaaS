@@ -319,6 +319,18 @@
       "class": "immutable",
       "apply": "none"
     },
+    "imageSha256": {
+      "description": "SHA-256 of the file downloaded from imageLocation. A download that does not match is removed and not imported. Written by release/bump-version.sh for TAPPaaS-built images; for any other image, the hash its publisher states. Without it the download is used unchecked, with a warning.",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "cluster:vm"
+      ],
+      "format": "^(sha256:)?[0-9a-fA-F]{64}$",
+      "example": "4e522d9011118f0bbeaea0df58ff517a45c71e6138a22af32a2151749ea87083",
+      "class": "immutable",
+      "apply": "none"
+    },
     "cloudInit": {
       "description": "Whether the VM supports cloud-init for initial configuration",
       "type": "string",

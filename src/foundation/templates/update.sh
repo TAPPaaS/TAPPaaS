@@ -46,6 +46,7 @@ VMID="$(jq -r '.vmid' <<< "$NIX_JSON_FLAT")"
 VMNAME="$(jq -r '.vmname' <<< "$NIX_JSON_FLAT")"
 IMAGE="$(jq -r '.image' <<< "$NIX_JSON_FLAT")"
 IMAGE_LOCATION="$(jq -r '.imageLocation' <<< "$NIX_JSON_FLAT")"
+IMAGE_SHA256="$(jq -r '.imageSha256 // empty' <<< "$NIX_JSON_FLAT")"
 JSON_VERSION="$(jq -r '.version' "$NIX_JSON")"
 [[ -n "$VMID" && "$VMID" != "null" ]] || die "vmid missing from ${NIX_JSON}"
 [[ -n "$IMAGE" && "$IMAGE" != "null" ]] || die "image missing from ${NIX_JSON}"
@@ -96,6 +97,29 @@ asset_url="${TAG_URL}/${IMAGE#/}"
 info "Verifying release asset is reachable: ${asset_url}"
 http_code="$(curl -fsIL -o /dev/null -w '%{http_code}' "$asset_url" 2>/dev/null || echo 000)"
 [[ "$http_code" == "200" ]] || die "Release asset not reachable (HTTP ${http_code}): ${asset_url}"
+
+# prefetch_image <url> <image> <sha256> — download the image on the node and check
+# it against the pointer's hash (ADR-033 D7) while the old template still stands;
+# Create-TAPPaaS-VM.sh then moves the verified file into place instead of
+# fetching it again.
+# A mismatch removes the download and stops here, leaving the template untouched.
+# Without a recorded hash: warn, and leave the download to Create-TAPPaaS-VM.sh.
+prefetch_image() {
+  local url="$1" image="$2" want="$3" dir="${IMAGE_PREFETCH_DIR:-/root/tappaas}"
+  if [[ -z "$want" ]]; then
+    warn "tappaas-nixos.json records no imageSha256 — the image is not checked (ADR-033 D7)."
+    return 0
+  fi
+  [[ "$want" =~ ^([Ss][Hh][Aa]256:)?[0-9a-fA-F]{64}$ ]] || die "imageSha256 '${want}' in ${NIX_JSON} is not a SHA-256 hash."
+  want="$(printf '%s' "$want" | tr '[:upper:]' '[:lower:]')"; want="${want#sha256:}"
+  info "Downloading and checking ${image} on ${NODE} before the template is replaced..."
+  if ! node_run "mkdir -p '${dir}' && cd '${dir}' && rm -f '${image}' && curl -fsSLo '${image}.part' '${url}' && printf '%s  %s\\n' '${want}' '${image}.part' | sha256sum -c --status - && mv '${image}.part' '${image}'"; then
+    node_run "rm -f '${dir}/${image}.part'" || true
+    die "${image} failed its SHA-256 check (or did not download) — expected ${want}. The template is unchanged."
+  fi
+  info "SHA-256 verified: ${image}"
+}
+prefetch_image "$asset_url" "${IMAGE##*/}" "$IMAGE_SHA256"
 
 # ── 5. Stage the current provisioner + module JSON on the node. ────────────────
 info "Staging provisioner files to ${NODE}..."
