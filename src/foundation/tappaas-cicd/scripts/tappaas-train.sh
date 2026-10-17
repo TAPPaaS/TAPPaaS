@@ -262,7 +262,7 @@ make_release_tag() {
         lines="$(verify_tag_lines "${REPO_DIR}" "${commit}")" || { error "could not hash the tree of ${commit}"; return 1; }
         if verify_repo_signs "${REPO_DIR}" "${commit}"; then
             signing_ready "${commit}" "${t}" || return 1
-            info "  signing ${t} — touch your key if it asks"
+            info "  signing ${t} — approve it in your SSH agent when it asks"
             # Not through g(): the token's prompt is on stderr.
             git -C "${REPO_DIR}" -c gpg.format=ssh tag -s "${t}" -m "${msg}" -m "${lines}" "${commit}" \
                 || { error "could not sign ${t}"; return 1; }
@@ -288,7 +288,7 @@ signing_ready() {
     verify_repo_signs "${REPO_DIR}" "$1" || return 0
     [[ -n "$(g config user.signingkey)" ]] && return 0
     error "${2:-the release tag} must be signed (ADR-033): this repository lists signers in ${VERIFY_SIGNERS_PATH}, and no signing key is configured"
-    error "  git -C ${REPO_DIR} config user.signingkey 'key::<your sk-ssh-ed25519 public key>'   (the token on your laptop, via ssh -A)"
+    error "  git -C ${REPO_DIR} config user.signingkey 'key::<your public key>'   (the key in your vault's SSH agent, via ssh -A)"
     return 1
 }
 

@@ -23,6 +23,11 @@ command -v error >/dev/null 2>&1 || error() { echo "ERROR: $*" >&2; }
 
 VERIFY_SIGNERS_PATH=".tappaas/allowed_signers"
 VERIFY_TAG_RE='^v[0-9]+\.[0-9]+(\.[0-9]+)?$'
+# The recovery key (ADR-033 D4a) is any key whose principal is recovery@<...>.
+# It is kept offline and may sign only a release that changes nothing but
+# .tappaas/ — enough to enrol new signers after both have lost theirs, never
+# enough to ship code.
+VERIFY_RECOVERY_RE='^recovery@'
 
 # verify_tree_sha256 <path> <commit>
 # A SHA-256 over the tree's CONTENT, so a signature on the tag does not rest on
@@ -150,6 +155,9 @@ verify_target() {
         if [[ "${want}" != "${got}" ]]; then
             VERIFY_REASON="${VERIFY_REASON:+${VERIFY_REASON}; }${t}: tree-sha256 mismatch (tag ${want}, tree ${got})"; continue
         fi
+        if [[ "${sig%% *}" =~ ${VERIFY_RECOVERY_RE} ]] && ! verify_only_signers_changed "${path}" "${base}" "${target}"; then
+            VERIFY_REASON="${VERIFY_REASON:+${VERIFY_REASON}; }${t}: signed by the recovery key, which may sign only a release that changes nothing outside .tappaas/"; continue
+        fi
         rm -f "${signers}"
         VERIFY_STATUS="verified" VERIFY_TAG="${t}" VERIFY_SIGNER="${sig}" VERIFY_TREE="${got}" VERIFY_REASON=""
         return 0
@@ -157,6 +165,19 @@ verify_target() {
     rm -f "${signers}"
     VERIFY_STATUS="failed"
     return 1
+}
+
+# verify_only_signers_changed <path> <base> <target> — 0 when every file that
+# differs between <base> and <target> is under .tappaas/. What a recovery-key
+# signature may cover (D4a).
+verify_only_signers_changed() {
+    local f changed
+    # Fails closed: a diff git cannot compute is not "nothing changed".
+    changed="$(git -C "$1" diff --name-only "$2" "$3" 2>/dev/null)" || return 1
+    while IFS= read -r f; do
+        [[ -z "${f}" || "${f}" == .tappaas/* ]] || return 1
+    done <<<"${changed}"
+    return 0
 }
 
 # verify_moves_forward <path> <base> <target> — 0 when <target> descends from

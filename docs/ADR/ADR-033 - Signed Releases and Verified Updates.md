@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | **Status** | **Draft** — implementation started (#848): verifier, update gate, signed train tags, health check |
-| **Version** | 0.3 |
+| **Version** | 0.4 |
 | **Date** | 2026-10-17 |
 | **Author** | Lars Rossen (drafted with Claude) |
 | **Deciders** | @LarsRossen, @ErikDaniel007, @AndreasJe |
 | **Closes / addresses** | Implementation: **#848**. Builds on [ADR-028](<ADR-028 - Release Cadence and Patching.md>) (D11 `channels.json`, D13 release tags, D15 urgent fixes), [ADR-011](<ADR-011 - SBOM Governance.md>) (supply-chain inventory), [ADR-007e](<ADR-007e - Health.md>) (the Health lens), [ADR-007d](<ADR-007d - Site.md>) (`site.json` repositories), [ADR-017](<ADR-017 - Update scheduling and mothership self-update.md>) (the sweep and the self-update). |
-| **Changelog** | v0.3 (2026-10-17) — as built, first slice (#848): `tree-sha256` is a SHA-256 manifest of the tree's content, computable without Nix (D3); the last verified release is run state in `config/.trust/<repository>.json`, not a `site.json` field, and a site with no record yet takes the revision it runs as its base, so existing sites start verifying without an introduction (D5); the update converges on the exact commit it verified (D6); a repository that does not move is never refused, only reported (D6). The introduction for fresh clones, images (D7) and the Nix items (D8) are still to build. · v0.2 (2026-10-17) — operator decisions: the signers are the TAPPaaS owners, Erik and Lars; Community stays unsigned for now; `requireSigned` defaults to not required; signed commits on `main` become a future option; SHA-256 object format investigated and rejected for now (Nix cannot read it, GitHub cannot host it) — the open questions are closed; regulatory references removed. · v0.1 — first draft, from the operator's brief of 2026-10-17: every repository needs a signature, signer ownership is recorded, binaries are signed, the update verifies before it moves, NixOS fits the same chain, only staging and production are signed, and every repository's signing status is part of the health check. |
+| **Changelog** | v0.4 (2026-10-17) — operator decision on the signers' keys: **software keys kept in each signer's own Bitwarden/Vaultwarden vault**, signing through its SSH agent with approval on every use, each key valid for one year (D2); an **offline recovery key** that may sign only a release changing nothing outside `.tappaas/`, so losing both signers' keys is recoverable without touching every site (D4a, built); what to do when every key is lost or one is stolen (D4b). · v0.3 (2026-10-17) — as built, first slice (#848): `tree-sha256` is a SHA-256 manifest of the tree's content, computable without Nix (D3); the last verified release is run state in `config/.trust/<repository>.json`, not a `site.json` field, and a site with no record yet takes the revision it runs as its base, so existing sites start verifying without an introduction (D5); the update converges on the exact commit it verified (D6); a repository that does not move is never refused, only reported (D6). The introduction for fresh clones, images (D7) and the Nix items (D8) are still to build. · v0.2 (2026-10-17) — operator decisions: the signers are the TAPPaaS owners, Erik and Lars; Community stays unsigned for now; `requireSigned` defaults to not required; signed commits on `main` become a future option; SHA-256 object format investigated and rejected for now (Nix cannot read it, GitHub cannot host it) — the open questions are closed; regulatory references removed. · v0.1 — first draft, from the operator's brief of 2026-10-17: every repository needs a signature, signer ownership is recorded, binaries are signed, the update verifies before it moves, NixOS fits the same chain, only staging and production are signed, and every repository's signing status is part of the health check. |
 
 How a TAPPaaS site knows that the code and images it is about to run are the ones the
 repository's owners released — and refuses them when it cannot tell.
@@ -140,7 +140,7 @@ controls; a tag signature is the release manager's statement about one commit.
 
 Signed commits on `main` are not part of this decision; they are a future option.
 
-### D2 — SSH signatures, keys on hardware
+### D2 — SSH signatures, software keys in each signer's own vault
 
 Signatures are **git SSH signatures** (`gpg.format = ssh`, `ssh-keygen -Y sign/verify`).
 
@@ -150,9 +150,23 @@ Signatures are **git SSH signatures** (`gpg.format = ssh`, `ssh-keygen -Y sign/v
 - Codeberg shows SSH-signed tags as verified.
 - The same key and the same tool sign the images (D7), so there is one mechanism, not two.
 
-Release keys are **hardware-backed** (`sk-ssh-ed25519`, a FIDO2 token with touch), so a key
-cannot be copied off a laptop and a signature needs a person present. The train is already run
-by a person at each boundary; the touch is the operator's consent to release.
+**Release keys are software `ed25519` keys, each kept in its signer's own Bitwarden or
+Vaultwarden vault** and used through the Bitwarden desktop app's SSH agent *(v0.4)*:
+
+- **The private key never leaves the vault in the clear.** The agent signs; git asks it for the
+  key named by `user.signingkey`, so the train runs unchanged.
+- **Every signature is approved** in the agent's prompt — the person's consent to release, as a
+  touch would be on a hardware token. The train is already run by a person at each boundary.
+- **The vault is protected by two-factor login**, and is not hosted on a TAPPaaS site these
+  releases update: a broken update must not lock its signer out of the key that signs the fix.
+- **Each key is valid for one year** (`valid-before` in `allowed_signers`) and is replaced before
+  then; the health check warns 60 days ahead (D10). A stolen key therefore stops working on its
+  own, and a rotation is a practised routine rather than an emergency.
+
+A software key can be copied by whoever gets into its vault or its unlocked laptop, and that would
+go unnoticed — the cost against a FIDO2 token (`sk-ssh-ed25519`), which cannot be copied but also
+cannot be backed up. The vault's two-factor login, the per-use approval and the one-year life
+bound that risk; a signer who wants a hardware token may use one, as the format is the same.
 
 OpenPGP (Guix, sequoia-git) was considered: richer key lifecycle, but a keyring to manage on
 every site, and tooling most operators do not have. Sigstore gitsign was considered: no long-lived
@@ -186,8 +200,9 @@ key allowed to sign its release tags:
 
 ```
 # principal                   namespace     key
-lars@tappaas.org  namespaces="git,tappaas-image" sk-ssh-ed25519@openssh.com AAAA... lars-yubikey-1
-erik@tappaas.org  namespaces="git,tappaas-image" sk-ssh-ed25519@openssh.com AAAA... erik-yubikey-1
+lars@tappaas.org      namespaces="git,tappaas-image",valid-before="20271101" ssh-ed25519 AAAA... lars-2026
+erik@tappaas.org      namespaces="git,tappaas-image",valid-before="20271101" ssh-ed25519 AAAA... erik-2026
+recovery@tappaas.org  namespaces="git" ssh-ed25519 AAAA... recovery-offline
 ```
 
 and a short **`.tappaas/SIGNERS.md`** naming, for each key: its owner, their role (release
@@ -198,7 +213,7 @@ manager, module maintainer), the date it was added, and how to reach them. `CODE
 
 | Repository | Signers |
 |---|---|
-| TAPPaaS (this repository) | the TAPPaaS owners, **Erik Daniel and Lars Rossen** — two, so one lost token or one absence does not stop releases |
+| TAPPaaS (this repository) | the TAPPaaS owners, **Erik Daniel and Lars Rossen** — two, so one lost key or one absence does not stop releases — plus the offline **recovery key** (D4a) |
 | Community | **none for now** — it stays `unsigned (declared)` (D9) |
 | A site's own module repository | the site operator |
 | A third party's repository | whoever releases it; their file, their keys |
@@ -209,6 +224,41 @@ removing a signer is an ordinary commit that lands in the next release, and take
 release **after** that. So a pusher who adds their own key to the file cannot sign the very
 release that adds it; an attacker needs a key that was already trusted. A key is retired with
 `valid-before`, not by deleting its line, so old releases still verify.
+
+### D4a — The recovery key: enrolling signers when both keys are lost
+
+If both signers lose their keys, nothing breaks — staging and production sites refuse new
+releases and stay on the last one they verified — but nothing can be released either: a new key
+counts only once a key the last release trusted has signed the release that adds it (D4).
+
+So the repository lists a third key, the **recovery key** — any principal `recovery@<…>` — and
+the verifier gives it one power only: **it may sign a release that changes nothing outside
+`.tappaas/`** compared with the last verified release. That is enough to enrol new signers and
+never enough to ship code. A recovery signature on a release that changes anything else fails
+verification like an unknown key.
+
+- **It is generated offline**, protected by a passphrase, and kept off-line in two places the
+  signers control (e.g. an encrypted USB stick in a safe, and a paper copy) — not in either
+  signer's everyday vault, so one compromised vault does not yield both a release key and the
+  recovery key.
+- **It has no expiry**, because it may have to work years after it was made; its narrow power is
+  what makes that acceptable.
+- **Using it**: a commit off the channel's tip that only edits `.tappaas/allowed_signers` (new
+  keys in, lost ones given `valid-before`), merged to `main`, moved to each channel with
+  `tappaas-train patch <channel> <commit> --why "security: signer recovery …"` and signed with the
+  recovery key. The next boundary is signed with the new keys. Sites follow on their own.
+
+### D4b — When every key is lost, or one is stolen
+
+- **All keys lost, the recovery key included.** No release can be verified again, by design. The
+  owners publish the new signers' fingerprints out of band (tappaas.org, a mail to operators), and
+  each operator re-anchors their site by hand to a release signed by them — the same introduction
+  a fresh clone takes (D5). Per site and by a person, deliberately: an automatic path would be the
+  first thing an attacker used.
+- **A key is stolen.** The other signer cuts a release that gives the stolen key `valid-before`
+  of today, as an urgent fix (ADR-028 D12, `security:`). Releases the thief signed before that
+  still verify, so the owners also announce which versions not to trust. If both signers' keys
+  are stolen, the recovery key does the same.
 
 ### D5 — First trust comes from outside the repository: the introduction
 
@@ -378,9 +428,11 @@ The result is:
 
 - A production site can state, with evidence, that every TAPPaaS-layer component it runs was
   released by a named person and checked before use; the OS layers below were already signed.
-- A boundary needs a release manager with a hardware token. A boundary or urgent fix cannot be
-  cut by automation alone — intended, and a cost: two signers so one absence does not stop the
-  train.
+- A boundary needs a release manager who approves the signature in their vault's agent. A
+  boundary or urgent fix cannot be cut by automation alone — intended, and a cost: two signers so
+  one absence does not stop the train, and an offline recovery key so losing both does not stop it
+  for good.
+- Keys are rotated every year.
 - The installer's fingerprint becomes a published, long-lived value; rotating it is a
   documented, two-release procedure (D4).
 - Repositories that do not sign keep working, and are visibly unsigned.
@@ -400,7 +452,10 @@ The result is:
 - **Only checksums, no signatures.** Proves integrity of a download, not who released it — does
   not meet the requirement.
 - **Trust the forge (Codeberg protected branches).** The forge is a third party and an account
-  compromise is the attack; a signature taken on the release manager's token is not.
+  compromise is the attack; a signature approved by the release manager on their own key is not.
+- **Hardware tokens only (FIDO2).** A key that cannot be copied, but cannot be backed up either,
+  and a token per signer to buy, carry and replace. Rejected as the rule in v0.4 in favour of vault
+  keys with approval and a one-year life (D2); a signer may still use one.
 - **Sign with a key on the mothership.** Automatable, but a key on the machine that is updated
   by what it signs; a compromise of one mothership would sign releases for all sites.
 
@@ -409,7 +464,8 @@ The result is:
 Tracked in **#848**.
 
 1. Signer record: `.tappaas/allowed_signers` + `SIGNERS.md` in TAPPaaS (and offered to
-   Community stays unsigned); Erik and Lars enrol hardware keys; fingerprint published on tappaas.org.
+   Community stays unsigned); Erik and Lars enrol vault keys, the recovery key is made offline;
+   fingerprints published on tappaas.org.
 2. `tappaas-train`: signed boundary and patch tags carrying D3's lines; refuse to cut without a
    signing key.
 3. Image release (the `build-*-image` workflows): verify upstream inputs, publish `SHA256SUMS`

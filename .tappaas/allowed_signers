@@ -7,9 +7,14 @@
 # it. Retire a key with valid-before="YYYYMMDD" — never delete its line, or the
 # releases it signed stop verifying.
 #
+# Signer keys live in their owner's vault and are valid for one year. The
+# recovery key (principal recovery@...) is kept offline, has no expiry, and may
+# sign only a release that changes nothing outside .tappaas/ (ADR-033 D4a).
+#
 # While this file lists no key, the repository signs nothing and every site
 # reports it as unsigned (declared). The release that adds the first keys is
 # the last unsigned one.
 #
-# lars@tappaas.org namespaces="git,tappaas-image" sk-ssh-ed25519@openssh.com AAAA... lars-token-1
-# erik@tappaas.org namespaces="git,tappaas-image" sk-ssh-ed25519@openssh.com AAAA... erik-token-1
+# lars@tappaas.org     namespaces="git,tappaas-image",valid-before="20271101" ssh-ed25519 AAAA... lars-2026
+# erik@tappaas.org     namespaces="git,tappaas-image",valid-before="20271101" ssh-ed25519 AAAA... erik-2026
+# recovery@tappaas.org namespaces="git" ssh-ed25519 AAAA... recovery-offline

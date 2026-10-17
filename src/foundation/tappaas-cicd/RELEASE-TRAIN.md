@@ -228,30 +228,57 @@ in the **last release it verified**, tree hash matching, and not older than what
 on `main` are not verified. `health-manager validate` reports each repository's status
 (`signature-status`), and `~/config/sbom/signatures.json` is the record.
 
-**Enrolling a key** (once per release manager, on their own machine — the key never leaves the
-token):
+**Enrolling a key** (once a year per signer). Each signer's key lives in their own Bitwarden or
+Vaultwarden vault, and signs through the Bitwarden desktop app's SSH agent, which asks you to
+approve every signature:
 
-```bash
-ssh-keygen -t ed25519-sk -O resident -O verify-required -C "<you>-token-1" -f ~/.ssh/tappaas-release
-```
+1. In the Bitwarden desktop app: *New → SSH key*, type ed25519, name it `tappaas-release-<year>`.
+   Turn on the SSH agent in its settings, set to ask for approval on every use.
+2. Copy its public key into [`.tappaas/allowed_signers`](../../../.tappaas/allowed_signers) with a
+   `valid-before` one year out (the format is in that file), add a row to
+   [`.tappaas/SIGNERS.md`](../../../.tappaas/SIGNERS.md), and land it on `main`.
+3. It counts from the release **after** the one that carries it. The release that adds the first
+   keys is the last unsigned one; a yearly replacement goes in while the old key still works.
 
-Add the public key to [`.tappaas/allowed_signers`](../../../.tappaas/allowed_signers) and a row to
-[`.tappaas/SIGNERS.md`](../../../.tappaas/SIGNERS.md), and land it on `main`. It counts from the
-release **after** the one that carries it: the release that adds the first key is the last unsigned
-one.
+Keep the vault behind two-factor login, and not on a TAPPaaS site that these releases update.
+`health-manager validate` warns 60 days before a key expires.
 
-**Signing a boundary.** The train runs on the mothership; the token stays on your laptop. Forward
+**Signing a boundary.** The train runs on the mothership; the key stays in your vault. Forward
 your agent and tell git which key to ask it for:
 
 ```bash
-ssh-add ~/.ssh/tappaas-release                 # on your laptop
-ssh -A tappaas@<mothership>
-git -C ~/TAPPaaS config user.signingkey "key::$(cat ~/.ssh/tappaas-release.pub)"   # once, on the mothership
-tappaas-train.sh boundary                      # touch the token when it asks
+ssh -A tappaas@<mothership>                    # with the Bitwarden agent running on your laptop
+git -C ~/TAPPaaS config user.signingkey "key::<your public key>"   # once, on the mothership
+tappaas-train.sh boundary                      # approve the signature when the agent asks
 ```
 
 **Retiring a key**: give its line `valid-before="YYYYMMDD"`. Do not delete it — the releases it
-signed would stop verifying.
+signed would stop verifying. A stolen key gets `valid-before` of today, in an urgent fix
+(`tappaas-train.sh patch … --why "security: signing key stolen"`) signed by the other signer.
+
+**The recovery key** — for when both signers have lost their keys. It is listed as
+`recovery@tappaas.org` and may sign **only** a release that changes nothing outside `.tappaas/`;
+on anything else its signature fails verification. Made once, offline:
+
+```bash
+ssh-keygen -t ed25519 -C recovery-offline -f tappaas-recovery     # on a machine with no network; set a passphrase
+```
+
+Its public key goes into `allowed_signers` (no `valid-before`). The private key is kept offline in
+two places you both control — an encrypted USB stick in a safe and a paper copy — and **not** in
+either everyday vault. To use it: a branch off the channel's tip that only edits
+`allowed_signers` (new keys in, lost ones retired), merged to `main`, then
+
+```bash
+git -C ~/TAPPaaS config user.signingkey /path/to/tappaas-recovery
+tappaas-train.sh patch staging <commit> --why "security: signer recovery"
+tappaas-train.sh patch production <commit> --why "security: signer recovery"
+git -C ~/TAPPaaS config --unset user.signingkey                  # and take the key offline again
+```
+
+The next boundary is signed with the new keys. If the recovery key is lost too, no release can
+be verified again: publish the new fingerprints out of band, and every operator re-anchors their
+site by hand (ADR-033 D4b).
 
 ## One pin for the estate
 

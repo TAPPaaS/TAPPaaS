@@ -10,7 +10,8 @@
 #                    added in the same release (refused) and then trusted at the
 #                    next; tree-sha256 missing or wrong; a re-published tag
 #                    object; an expired key on a new tag and on an old one; no
-#                    signers at the base (unsigned by declaration).
+#                    signers at the base (unsigned by declaration); the recovery
+#                    key enrols signers but may not sign code.
 #   verify_moves_forward: a rollback is refused.
 #   the gate:        a staging checkout moves to a signed release and records it;
 #                    an unsigned tip is refused and nothing moves; an old signed
@@ -125,6 +126,26 @@ check "retired key, tag from before" "${rc}" "0"
 commit "${E}" new; stag "${E}" alice v0.2
 verify_target "${E}" HEAD "${EBASE}"; rc=$?
 check "retired key, tag from after" "${rc}" "1"
+
+# 7b. the recovery key (D4a): both signers lost — it may enrol new ones, nothing else
+ssh-keygen -q -t ed25519 -N '' -C recovery -f "${W}/rec" </dev/null
+ssh-keygen -q -t ed25519 -N '' -C carol -f "${W}/carol" </dev/null
+K="${W}/k"; git init -q -b main "${K}"; mkdir -p "${K}/.tappaas"
+{ signer_line alice@x alice; signer_line recovery@x rec; } > "${K}/.tappaas/allowed_signers"
+commit "${K}" base; KBASE="$(git -C "${K}" rev-parse HEAD)"
+signer_line carol@x carol >> "${K}/.tappaas/allowed_signers"
+git -C "${K}" add -A; git -C "${K}" commit -qm "signers: + carol (alice's key is lost)"
+stag "${K}" rec v1.1; KREC="$(git -C "${K}" rev-parse HEAD)"
+verify_target "${K}" "${KREC}" "${KBASE}"; rc=$?
+check "recovery key signs a signers-only release" "${rc}/${VERIFY_SIGNER%% *}" "0/recovery@x"
+commit "${K}" "code"; stag "${K}" rec v1.2
+verify_target "${K}" HEAD "${KREC}"; rc=$?
+check "recovery key may not sign code" "${rc}" "1"
+case "${VERIFY_REASON}" in *"recovery key"*) ok ;; *) no "reason names the recovery rule (${VERIFY_REASON})" ;; esac
+git -C "${K}" tag -d v1.2 >/dev/null; stag "${K}" carol v1.2
+verify_target "${K}" HEAD "${KREC}"; rc=$?
+check "the signer it enrolled counts from the next release" "${rc}/${VERIFY_TAG}" "0/v1.2"
+verify_only_signers_changed "${K}" "${KBASE}" no-such-rev && no "a diff git cannot compute passed" || ok
 
 # 8. no signers at the base
 verify_target "${R}" "${T1}" "${UNSIGNED_BASE}"; rc=$?
