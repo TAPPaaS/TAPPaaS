@@ -238,6 +238,11 @@ if [[ -f "$UNIT_TSCONFIG" ]]; then
         else
             bad "TypeScript bootstrap unit tests FAILED"
         fi
+        if run_ts "node '${DIST_TEST}/manager/identity-manager/test/unit/sessions.test.js'"; then
+            ok "TypeScript session-revocation unit tests pass (ADR-032 P4)"
+        else
+            bad "TypeScript session-revocation unit tests FAILED (ADR-032 P4)"
+        fi
         if run_ts "node '${DIST_TEST}/manager/identity-manager/test/unit/write-push.test.js'"; then
             ok "TypeScript write-verb push unit tests pass (#482)"
         else

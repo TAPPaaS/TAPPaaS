@@ -2,13 +2,13 @@
 
 | | |
 |---|---|
-| **Status** | **Accepted** (operator, 2026-10-17) — P0, P1, P2 and P3 built; P4 open. |
-| **Version** | 0.4 |
+| **Status** | **Accepted** (operator, 2026-10-17) — **built**: P0–P4. Rate limiting is #851. |
+| **Version** | 1.0 |
 | **Date** | 2026-10-17 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen, @ErikDaniel007, @AndreasJe |
 | **Closes / addresses** | **#845**. Amends ADR-021 R1 and extends ADR-023. Related: #129, #154, #597, #642, #643, #656, #806, #850. |
-| **Changelog** | v0.4 (2026-10-17) — **P2 and P3 built.** P2: `caddy-manager set-gate` turns the gate on and off, and a gated handle always carries `header_up -Authorization` (added by caddy-manager from the handle's forward-auth, so network:proxy's re-renders keep it); accessControl asserts header auth on its providers; `authentik-manager service-account-ensure`; an `identityGate: false` rule needs a `description`. D1's *narrowed* clarified: a path rule never covers the whole route — its zones or networks narrow it further where its callers allow. T5 green. P3: Jellyfin published without the gate, T4 green from the internet. v0.3 (2026-10-17) — **Accepted** by the operator. O1 answered by the plugin: os-caddy takes extra Caddyfile config only globally, never inside one site, so a per-site `rate_limit` is not possible through it; P3 relies on the machine-generated passwords and Jellyfin's login lockout, and rate limiting moves to a CrowdSec issue. O3 deferred to P4. v0.2 (2026-10-17) — **smaller, after the operator's review and the P0 tests.** No new `proxyAuth` field: ADR-023 stays the model and gains three things — the gate authenticates machine callers (D1), a module without `network:proxy` is unpublished by design and an amended R1 says so (D2), and Jellyfin is published without the gate for friends and family, hardened (D3). Several ports per hostname are verified possible but not built (D4). LDAP for Jellyfin is dropped: the SSO plugin and Quick Connect cover its clients. NetBird is not the answer for friends and family (operator). NOMAD moves to the DMZ. P0 results recorded (T1–T3, on Jellyfin 10.11 and 12.2). v0.1 (2026-10-16) — first draft: a `proxyAuth` field with four values on every route. |
+| **Changelog** | v1.0 (2026-10-17) — **P4 built, all phases done.** O3 answered: `identity-manager` ends app sessions after a reconcile takes access from someone, through a module's `revoke-sessions.sh <username>` (Jellyfin: deletes the person's devices with the TAPPaaS API key). T6 green. v0.4 (2026-10-17) — **P2 and P3 built.** P2: `caddy-manager set-gate` turns the gate on and off, and a gated handle always carries `header_up -Authorization` (added by caddy-manager from the handle's forward-auth, so network:proxy's re-renders keep it); accessControl asserts header auth on its providers; `authentik-manager service-account-ensure`; an `identityGate: false` rule needs a `description`. D1's *narrowed* clarified: a path rule never covers the whole route — its zones or networks narrow it further where its callers allow. T5 green. P3: Jellyfin published without the gate, T4 green from the internet. v0.3 (2026-10-17) — **Accepted** by the operator. O1 answered by the plugin: os-caddy takes extra Caddyfile config only globally, never inside one site, so a per-site `rate_limit` is not possible through it; P3 relies on the machine-generated passwords and Jellyfin's login lockout, and rate limiting moves to a CrowdSec issue. O3 deferred to P4. v0.2 (2026-10-17) — **smaller, after the operator's review and the P0 tests.** No new `proxyAuth` field: ADR-023 stays the model and gains three things — the gate authenticates machine callers (D1), a module without `network:proxy` is unpublished by design and an amended R1 says so (D2), and Jellyfin is published without the gate for friends and family, hardened (D3). Several ports per hostname are verified possible but not built (D4). LDAP for Jellyfin is dropped: the SSO plugin and Quick Connect cover its clients. NetBird is not the answer for friends and family (operator). NOMAD moves to the DMZ. P0 results recorded (T1–T3, on Jellyfin 10.11 and 12.2). v0.1 (2026-10-16) — first draft: a `proxyAuth` field with four values on every route. |
 
 ## Context
 
@@ -159,7 +159,7 @@ module needs it; NOMAD stays unpublished (D2).
 | **P1** | NOMAD in the `dmz` zone (repo default and hrossen); ADR-021 R1 amended. **Done.** |
 | **P2** | D1: header auth asserted on accessControl providers; `Authorization` removed on gated routes; `identityGate: false` requires a description; a service-account helper (O2); docs. **Done** (T5). |
 | **P3** | D3: Jellyfin leaves `identity:accessControl`; known proxy, login limits, admin paths closed, admin without remote access; rate limiting (O1, now #851). **Done** (T4). |
-| **P4** | Session revocation on user removal, Jellyfin first (O3). |
+| **P4** | Session revocation on user removal, Jellyfin first (O3). **Done** (T6). |
 
 ## Testing
 
@@ -177,7 +177,11 @@ module needs it; NOMAD stays unpublished (D2).
 - **T4 (P3)** — **done, 17/17** from the internet: Sign in with Authentik and a Quick Connect
   sign-in from outside; eleven admin paths 403 in any letter case; Jellyfin logs the client's own
   address.
-- **T6 (P4)** — a user removed from Jellyfin's group loses an open Jellyfin session.
+- **T6 (P4)** — **done** (hrossen): a test user signed in through the public name on the web and on
+  a "TV" (Quick Connect); `identity-manager user modify --remove-groups users` reported
+  `Ended app sessions: jellyfin: t6test`, the hook ended the account's devices (four: Quick Connect
+  and the SSO round trip each register one), and both tokens got 401 afterwards. A person without a
+  Jellyfin account is no error. Unit: `identity-manager/test/unit/sessions.test.ts`.
 
 ## Open questions
 
@@ -188,8 +192,10 @@ module needs it; NOMAD stays unpublished (D2).
    locks an account after repeated failures; per-client limiting comes with CrowdSec, its own issue.
 2. **O2 — Service accounts.** Should `identity-manager` create a service account per calling system
    (with its credential in the vault), or do operators make them by hand?
-3. **O3 — Revoking Jellyfin sessions.** From `identity` on user removal (it needs a Jellyfin admin
-   API key), or from Jellyfin on its next contact with Authentik?
+3. **O3 — Revoking Jellyfin sessions.** *Answered (v1.0):* from `identity-manager`, after a reconcile
+   that takes access from someone (deleted, disabled, out of a group), through a module hook
+   `revoke-sessions.sh <username>`; Jellyfin's deletes the person's devices with the TAPPaaS API key.
+   A change made directly in Authentik's admin UI does not run it.
 
 ## Documentation impact (ADR-013)
 

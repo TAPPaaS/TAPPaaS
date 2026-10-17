@@ -165,6 +165,10 @@ anywhere — the point: friends and family use them from their own homes.
 - **The TAPPaaS API key:** the VM adds one Jellyfin API key, named `TAPPaaS`, kept
   root-only in `/var/lib/jellyfin-tappaas/api-key`; `jellyfin-tappaas-policy`
   uses it to keep `admin` to the site.
+- **Removing someone ends their sessions:** when `identity-manager` takes a person
+  out of Authentik or out of a group, it runs `revoke-sessions.sh`, which deletes
+  that person's Jellyfin devices — their apps and TVs are signed out at once, not
+  just refused at the next sign-in.
 
 ## Quick Start
 

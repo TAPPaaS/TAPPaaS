@@ -142,6 +142,24 @@ A path whose callers cannot hold a credential at all — a webhook that signs it
 payload — is served without the gate by a `proxyAccess` rule with
 `identityGate: false`, which must say why in its `description` (network:proxy).
 
+## Ending app sessions when someone loses access
+
+Removing a person in Authentik — deleting them, disabling them, or taking them out
+of a group — stops their next sign-in. An app that issued its own session tokens
+(Jellyfin's apps and TVs) would keep honouring those. So after a reconcile that
+takes access from someone, `identity-manager` runs `revoke-sessions.sh <username>`
+in every deployed module that ships one, and says so:
+
+```
+Ended app sessions: jellyfin: jane
+```
+
+It ends the person's sessions in those apps whichever group they lost; if they
+still may use an app, they sign in again. A hook that fails is a warning, not a
+failed reconcile — Authentik has already changed — so run that module's script by
+hand. A change made directly in the Authentik admin UI, or with
+`authentik-manager user-delete`, does not run the hooks.
+
 ## What is not included
 
 - Emailed one-time enrollment links — deferred until SMTP is set up; the fallback is a
