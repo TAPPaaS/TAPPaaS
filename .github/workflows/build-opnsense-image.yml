@@ -15,6 +15,14 @@
 # + root password and then deletes the bootstrap key. The bootstrap creds are
 # only ever usable on the isolated bootstrap LAN during install.
 #
+# INTEGRITY (ADR-033 D7): the base image is checked against the SHA-256 its
+# publisher states before anything is built from it — maurice-w publishes no
+# checksum file, so the statement is the asset digest of the GitHub release,
+# pinned below and compared to the release's own record at build time. The
+# release ships SHA256SUMS for its artefacts; a release manager signs it
+# afterwards (release/sign-image-release.sh — the signing key is a hardware
+# token, so CI cannot).
+#
 # Trigger: push a tag `opnsense-firewall-v<version>`, or run manually.
 name: Build OPNsense firewall image
 
@@ -36,6 +44,10 @@ env:
   # Pinned base image (installed OPNsense on UFS, EFI console). Bump to upgrade
   # OPNsense; keep in sync with firewall.json's OPNsense major version.
   OPNSENSE_BASE_URL: "https://github.com/maurice-w/opnsense-vm-images/releases/download/26.1.2/OPNsense-26.1.2-ufs-efi-vm-amd64.qcow2.bz2"
+  # SHA-256 of that file, as published with the release (its asset digest):
+  #   gh api repos/maurice-w/opnsense-vm-images/releases/tags/<ver> --jq '.assets[] | [.name, .digest] | @tsv'
+  # Bump together with OPNSENSE_BASE_URL.
+  OPNSENSE_BASE_SHA256: "5be8658c1c3e4c2c300db848b29f9ef37d73ee3551328ee4d36a0452206234c9"
   # Bootstrap credentials baked into the PUBLIC image — intentionally well-known.
   # config-firewall.sh rotates these to unique values on first boot, then deletes
   # the bootstrap api key. Never leave a deployed firewall on these.
@@ -56,6 +68,21 @@ jobs:
           sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android \
                       /usr/local/share/boost "$AGENT_TOOLSDIRECTORY" || true
           df -h /
+
+      # The pin must still be what upstream states: a pin that drifted from the
+      # release's record (re-uploaded asset, typo) stops the build here.
+      - name: Check the base-image pin against upstream's published digest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="$(echo "${OPNSENSE_BASE_URL}" | awk -F/ '{print $(NF-1)}')"
+          name="${OPNSENSE_BASE_URL##*/}"
+          published="$(gh api "repos/maurice-w/opnsense-vm-images/releases/tags/${tag}" \
+            --jq ".assets[] | select(.name == \"${name}\") | .digest")"
+          echo "published: ${published:-<none>}  pinned: sha256:${OPNSENSE_BASE_SHA256}"
+          [ "${published}" = "sha256:${OPNSENSE_BASE_SHA256}" ] \
+            || { echo "::error::base image digest does not match the pin"; exit 1; }
 
       - name: Determine version
         id: ver
@@ -98,13 +125,18 @@ jobs:
           copyback: true
           # Forward the runner env vars into the VM (vmactions runs the script in
           # a fresh SSH shell that does not inherit the job `env:`).
-          envs: "OPNSENSE_BASE_URL ASSET"
+          envs: "OPNSENSE_BASE_URL OPNSENSE_BASE_SHA256 ASSET"
           prepare: |
             pkg install -y qemu-tools curl zstd
           run: |
             set -e
             echo "Downloading base image..."
             curl -fSL "${OPNSENSE_BASE_URL}" -o base.qcow2.bz2
+            # Nothing is built from an input that does not match (ADR-033 D7).
+            got="$(sha256 -q base.qcow2.bz2)"
+            [ "${got}" = "${OPNSENSE_BASE_SHA256}" ] \
+              || { echo "ERROR: base image SHA-256 ${got} != pinned ${OPNSENSE_BASE_SHA256}"; exit 1; }
+            echo "Base image verified: ${got}"
             bunzip2 -f base.qcow2.bz2
             echo "Converting to raw + extending to 16G (avoids the #182 disk-full trap)..."
             qemu-img convert -O raw base.qcow2 base.raw
@@ -131,6 +163,12 @@ jobs:
             rm -f out.qcow2
             ls -lh "${ASSET}"
 
+      - name: Checksums
+        run: |
+          set -euo pipefail
+          sha256sum "${ASSET}" > SHA256SUMS
+          cat SHA256SUMS
+
       - name: Release notes
         run: |
           {
@@ -141,6 +179,14 @@ jobs:
             echo "Ships bootstrap API key \`${BOOTSTRAP_API_KEY}\` + default root password;"
             echo "config-firewall.sh rotates both to unique values on first deploy and"
             echo "deletes the bootstrap key. Do not expose a firewall left on bootstrap creds."
+            echo ""
+            echo "Built from \`${OPNSENSE_BASE_URL##*/}\` (SHA-256 \`${OPNSENSE_BASE_SHA256}\`)."
+            echo ""
+            echo "Verify the download (\`SHA256SUMS.sig\` is added by a release manager):"
+            echo '```'
+            echo "ssh-keygen -Y verify -f allowed_signers -I <signer> -n tappaas-image -s SHA256SUMS.sig < SHA256SUMS"
+            echo "sha256sum -c SHA256SUMS"
+            echo '```'
           } >release-notes.md
 
       - name: Publish the Release
@@ -149,4 +195,6 @@ jobs:
           tag_name: ${{ steps.ver.outputs.tag }}
           name: OPNsense firewall ${{ steps.ver.outputs.version }}
           body_path: release-notes.md
-          files: ${{ env.ASSET }}
+          files: |
+            ${{ env.ASSET }}
+            SHA256SUMS

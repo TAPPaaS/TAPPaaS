@@ -280,6 +280,38 @@ The next boundary is signed with the new keys. If the recovery key is lost too, 
 be verified again: publish the new fingerprints out of band, and every operator re-anchors their
 site by hand (ADR-033 D4b).
 
+### Signing image releases
+
+The VM images (`nixos-template-v*`, `opnsense-firewall-v*`) are checked by hash: the image
+pointers (`templates/tappaas-nixos.json`, `network/network.json`) carry `imageSha256` next to
+`imageLocation`, and the install refuses a download that does not match before importing it. The
+build checks its own inputs first — the OPNsense base image against the digest its publisher
+states, the NixOS build against the hashes in `flake.lock` — and publishes `SHA256SUMS` with the
+release. CI cannot sign it (the key is on your token), so after the build:
+
+```bash
+release/sign-image-release.sh nixos-template-v1.5   # checks SHA256SUMS, signs it, uploads SHA256SUMS.sig
+release/bump-version.sh --nixos 1.5                 # checks the signature, writes the URL and the SHA-256
+```
+
+`sign-image-release.sh` uses `git config user.signingkey` unless given `--key`, refuses a
+`SHA256SUMS` that does not list every artefact with the digest GitHub recorded, and checks the
+signature against `.tappaas/allowed_signers` (namespace `tappaas-image`) before uploading.
+`--dry-run` signs without uploading; `--generate` backfills a release built before `SHA256SUMS`
+was published. Once `allowed_signers` lists a key, `bump-version.sh` refuses an unsigned
+`SHA256SUMS`. Anyone can check a download by hand:
+
+```bash
+ssh-keygen -Y verify -f .tappaas/allowed_signers -I lars@tappaas.org -n tappaas-image \
+  -s SHA256SUMS.sig < SHA256SUMS && sha256sum -c SHA256SUMS
+```
+
+To move the OPNsense base image, change `OPNSENSE_BASE_URL` and `OPNSENSE_BASE_SHA256` together in
+`.github/workflows/build-opnsense-image.yml`; the build stops when the pin differs from the
+upstream release's digest. `cluster/make-install-media.sh` checks the Proxmox ISO against
+Proxmox's `SHA256SUMS` (or `--iso-sha256`) and the install assistant through Proxmox's signed
+repository index.
+
 ## One pin for the estate
 
 Every TAPPaaS-managed NixOS system — the mothership and all its guests — is built from the single

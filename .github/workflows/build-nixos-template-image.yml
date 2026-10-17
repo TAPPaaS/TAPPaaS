@@ -6,6 +6,13 @@
 # tappaas-common.nix). It is an EFI qcow2 — Proxmox imports it with
 # `qm importdisk` and boots it under OVMF (see install-platform.sh).
 #
+# INTEGRITY (ADR-033 D7): every build input is a flake input pinned by narHash
+# in src/foundation/templates/flake.lock, and --no-write-lock-file makes a
+# mismatch fail the build instead of re-locking. The release ships SHA256SUMS
+# for its artefacts; a release manager signs it afterwards
+# (release/sign-image-release.sh — the signing key is a hardware token, so CI
+# cannot).
+#
 # Trigger: push a tag of the form `nixos-template-v<version>` (e.g.
 # `nixos-template-v1.0`), or run the workflow manually (workflow_dispatch).
 # Open-source repo ⇒ Actions minutes and Release hosting/bandwidth are free.
@@ -79,6 +86,8 @@ jobs:
           ls -lh "$out"
           # Record the uncompressed disk size for the consumer (diskSize sanity).
           echo "asset=${out}" >>"$GITHUB_OUTPUT"
+          sha256sum "$out" > SHA256SUMS
+          cat SHA256SUMS
           {
             echo "## tappaas-nixos ${{ steps.ver.outputs.version }}"
             echo ""
@@ -91,6 +100,12 @@ jobs:
             echo '```'
             echo ""
             echo "Or just run \`install-platform.sh\` on the first node, which does this for you."
+            echo ""
+            echo "Verify the download (\`SHA256SUMS.sig\` is added by a release manager):"
+            echo '```'
+            echo "ssh-keygen -Y verify -f allowed_signers -I <signer> -n tappaas-image -s SHA256SUMS.sig < SHA256SUMS"
+            echo "sha256sum -c SHA256SUMS"
+            echo '```'
           } >release-notes.md
 
       - name: Publish the Release
@@ -99,4 +114,6 @@ jobs:
           tag_name: ${{ steps.ver.outputs.tag }}
           name: NixOS template ${{ steps.ver.outputs.version }}
           body_path: release-notes.md
-          files: ${{ steps.pack.outputs.asset }}
+          files: |
+            ${{ steps.pack.outputs.asset }}
+            SHA256SUMS
