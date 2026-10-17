@@ -203,6 +203,7 @@ items that belong to a group — FW #40, #83, #157, #158, #162 — are rows in t
 | #787 | logging: TLS for syslog ingest and Loki's ports | From #165 §3 (2026-10-06). Waits for a TAPPaaS CA; traffic stays inside mgmt / the site network meanwhile |
 | #310 | Firewall API certificate verified, not skipped (`--no-ssl-verify`) | **Follows #787:** the same TAPPaaS CA issues the firewall a certificate for `firewall.mgmt.internal`, and the controllers verify it. Rescoped 2026-10-08 out of G2.1: blocking on a pinned self-signed certificate would stop the sweep at every rebuild or renewal for a narrow risk (a foothold on mgmt). Meanwhile a change is detected — `check-firewall-cert`, hourly, mails FirewallCertChanged (`ddf94cdb`) |
 | #847 | switch-controller: MikroTik (RouterOS) support, including MLAG | From #40 (2026-10-17): a MikroTik plugin (REST API: VLAN trunks, 802.3ad bonds) and MLAG pairs, so a node's `lacp` uplink can span two switches — 20G when healthy, still connected while one switch reboots. Also `lan-uplink` falls back to manual switch steps instead of refusing. Needs MikroTik MLAG hardware for the live test |
+| #849 | node network: USB NICs as bond members, and `set --wan-port` | From #40 (2026-10-17): a USB NIC as an `active-backup` lan leg (udev re-adds it after a late boot or replug, autosuspend off) for nodes without a free PCIe slot; and `--wan-port` to give the wan bridge a port again, so the firewall's WAN role can move between nodes |
 
 ---
 
